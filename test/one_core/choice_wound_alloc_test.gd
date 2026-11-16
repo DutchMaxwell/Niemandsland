@@ -1,4 +1,6 @@
 extends GdUnitTestSuite
+## P4.D-24 (below the D-23 cases): the owner's #172 prompt answers the choice - a click PREVIEWS, the slot list is the
+## answer, the core lands it.
 ## P4.D-23: the wound-allocation choice (`wound_alloc:<shooter>:<target>:<group>`) on the table - the switch and the owner
 ## routing, no prompt yet. The REAL core opens the choice where the volley's landing has one (a Tough(3) target, 3 wounds in
 ## a pool of 9); every die is supplied up front, so the only thing asked is the choice. Its OWNER is the target's owner:
@@ -41,6 +43,26 @@ class FakeNet extends "res://scripts/network_manager.gd":
 
 	func broadcast_model_wounds(_m: Variant) -> void:
 		pass
+
+
+## The step API as the driver sees it (a recording double, for the cases that script the core's answers).
+class FakeCore extends RefCounted:
+	var answers: Array = []
+
+	func step_activation(_h: int, _unit: String, _t: Array, _enforce: bool) -> Dictionary:
+		if not answers.is_empty():
+			return answers.pop_front()
+		return {"step": "done", "state": 0, "lines": [], "landings": [], "delta": [], "handle": 7}
+
+	func release(_h: int) -> void:
+		pass
+
+
+class FakeSolo extends "res://scripts/solo/solo_controller.gd":
+	var fake_core: Object
+
+	func _core_node_ready() -> Object:
+		return fake_core
 
 
 var _runner: GdUnitSceneRunner
@@ -233,8 +255,8 @@ func test_a_silent_owner_leaves_the_automatic_landing_with_one_line(timeout := 1
 	assert_int(text.count("no answer to the wound allocation")).override_failure_message(text).is_equal(1)
 
 
-## An AI owner and a human on THIS machine are answered automatic without a word on the wire or a prompt.
-func test_an_ai_owner_and_a_local_human_are_answered_automatic(timeout := 120000) -> void:
+## An AI owner is answered automatic without a word on the wire or a prompt (a human on this machine is prompted: below).
+func test_an_ai_owner_is_answered_automatic(timeout := 120000) -> void:
 	_session({GUEST_PEER: 2})
 	_main.solo_ai_slots = {2: true}   # seat 2 is NACHTMAHR's
 	var sc := _scenario(2)
@@ -242,17 +264,8 @@ func test_an_ai_owner_and_a_local_human_are_answered_automatic(timeout := 120000
 	_start(sc, out)
 	await _finish(sc, out)
 	assert_array(_requests()).override_failure_message("an AI owner was asked over the wire").is_empty()
+	assert_bool(_main._solo_model_pick.is_empty()).override_failure_message("a prompt opened for an AI owner").is_true()
 	assert_array(_wounds(sc["target"])).is_equal([3, 3])
-	CoreActivation.reset_all(_main)
-	_main.solo_ai_slots = {}
-	_net.sent.clear()
-	var mine := _scenario(1)   # a human owner on this machine: the prompt arrives with P4.D-24
-	var out2 := {}
-	_start(mine, out2)
-	await _finish(mine, out2)
-	assert_array(_requests()).override_failure_message("the local owner was asked over the wire").is_empty()
-	assert_bool(_main._solo_model_pick.is_empty()).override_failure_message("a prompt opened before it exists").is_true()
-	assert_array(_wounds(mine["target"])).is_equal([3, 3])
 
 
 ## The one test an answer passes: an option of the choice, or - the wound allocation only - a list of them.
@@ -264,3 +277,141 @@ func test_answer_fits_is_one_option_or_a_slot_list_for_the_wound_allocation() ->
 		assert_bool(CoreActivation.answer_fits("wound_alloc:a:b:0", options, bad)).override_failure_message(bad).is_false()
 	assert_bool(CoreActivation.answer_fits("takedown_model:a:b", options, "slot:1")).is_true()
 	assert_bool(CoreActivation.answer_fits("takedown_model:a:b", options, "slot:0,slot:1")).override_failure_message("a list is no Takedown pick").is_false()
+
+
+## ---- P4.D-24: the prompt answers the choice ----
+
+## The owner's clicks, fed whenever the prompt waits: a model index, or -1 = right-click. `seen` gets the models' wounds at
+## every feed - the state the prompt left behind before the NEXT click, i.e. what a preview must not have touched.
+func _feed_clicks(target: GameUnit, clicks: Array, seen: Array) -> void:
+	var timer := Timer.new()
+	timer.wait_time = 0.05
+	_main.add_child(timer)
+	var queue := clicks.duplicate()
+	timer.timeout.connect(func() -> void:
+		if _main._solo_model_pick.is_empty() or queue.is_empty() or not (_main._solo_model_pick["outcome"] as Array).is_empty():
+			return
+		seen.append(target.models.map(func(m: ModelInstance) -> int: return m.wounds_current))
+		var i := int(queue.pop_front())
+		(_main._solo_model_pick["outcome"] as Array).append({} if i < 0 else {"unit": target, "index": i}))
+	timer.start()
+
+
+func _alive(target: GameUnit) -> Array:
+	return target.models.map(func(m: ModelInstance) -> bool: return m.is_alive)
+
+
+## A human on THIS machine owns the target: each click only previews (no wound while the prompt waits), the clicked models
+## in order are the answer, and the core lands exactly those wounds (slot 2 twice, slot 1 once).
+func test_a_local_owner_previews_each_click_and_the_core_lands_the_clicked_models(timeout := 120000) -> void:
+	_session({GUEST_PEER: 2})
+	var sc := _scenario(1)
+	var target: GameUnit = sc["target"]
+	var seen: Array = []
+	_feed_clicks(target, [2, 2, 1, -1], seen)
+	var out := {}
+	_start(sc, out)
+	await _finish(sc, out)
+	assert_int(seen.size()).override_failure_message("the prompt did not take 3 clicks and a right-click: %s" % str(seen)).is_equal(4)
+	for state in seen:
+		assert_array(state).override_failure_message("a click wounded a model before the core landed it: %s" % str(seen)).is_equal([3, 3, 3])
+	assert_array(_requests()).override_failure_message("a local owner was asked over the wire").is_empty()
+	assert_array(_wounds(target)).override_failure_message("the clicked models did not take the wounds: %s" % str(_wounds(target))).is_equal([3, 2, 1])
+	assert_array(_alive(target)).is_equal([true, true, true])
+	assert_bool((sc["t"] as Array).any(func(e: Dictionary) -> bool:
+		return str(e["t"]) == "choice" and str(e["option"]) == "slot:2,slot:2,slot:1")).is_true()
+
+
+## A right-click ends the list: the clicked wounds land first, the core's order takes the rest (the wounded model dies).
+func test_a_right_click_ends_the_list_and_the_core_lands_the_rest(timeout := 120000) -> void:
+	_session({GUEST_PEER: 2})
+	var sc := _scenario(1)
+	var target: GameUnit = sc["target"]
+	_feed_clicks(target, [2, 2, -1], [])
+	var out := {}
+	_start(sc, out)
+	await _finish(sc, out)
+	assert_array(_alive(target)).override_failure_message("the clicked model must take the wounds first").is_equal([true, true, false])
+	assert_bool((sc["t"] as Array).any(func(e: Dictionary) -> bool:
+		return str(e["t"]) == "choice" and str(e["option"]) == "slot:2,slot:2")).is_true()
+
+
+## No click at all (right-click at once): no answer, the core's automatic order, as before this step.
+func test_an_immediate_right_click_leaves_the_automatic_landing(timeout := 120000) -> void:
+	_session({GUEST_PEER: 2})
+	var sc := _scenario(1)
+	_feed_clicks(sc["target"], [-1], [])
+	var out := {}
+	_start(sc, out)
+	await _finish(sc, out)
+	assert_array(_alive(sc["target"])).is_equal([false, true, true])
+	assert_bool((sc["t"] as Array).any(func(e: Dictionary) -> bool: return str(e["t"]) == "choice")).is_false()
+
+
+## A known wound count ends the prompt by itself, a click on a model the preview already took down is skipped (as the core
+## skips a pick on a dead model), and nothing is wounded.
+func test_a_counted_prompt_ends_itself_and_skips_a_previewed_dead_model(timeout := 120000) -> void:
+	var wall: GameUnit = ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Wall", "models": 3, "x_in": 12.0,
+		"tough": 3}, true), {})
+	var seen: Array = []
+	_feed_clicks(wall, [2, 2, 2, 2, 1], seen)   # the 4th click on slot 2 is skipped; 4 wounds are placed
+	var picks: Array = []
+	var left: int = await _main._solo_prompt_wound_allocation(wall, 4, 1, Callable(), "", picks)
+	assert_int(left).is_equal(0)
+	assert_array(picks).is_equal([2, 2, 2, 1])
+	assert_array(_wounds(wall)).override_failure_message("a preview wounded a model").is_equal([3, 3, 3])
+	assert_bool(_main._solo_model_pick.is_empty()).is_true()
+
+
+## The owner's machine (another human's unit asked over `request_roll`) runs the prompt for the host's request and answers with
+## the slot list; it wounds nothing itself - the host's core lands the wounds, this table sees them with the sync.
+func test_the_owners_machine_answers_the_request_with_the_slot_list(timeout := 120000) -> void:
+	_session({GUEST_PEER: 1})
+	_net.my_slot = 2
+	var wall: GameUnit = ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Wall", "models": 3, "x_in": 12.0,
+		"tough": 3}, true), {})
+	var rq := {"req": 5, "rs": "s", "unit": wall.unit_id, "ask": {"choice": {"id": "wound_alloc:e2e_p1_Gun:%s:0" % wall.unit_id,
+		"options": ["slot:0", "slot:1", "slot:2"], "wounds": 3}}}
+	var seen: Array = []
+	_feed_clicks(wall, [2, 2, 1], seen)
+	await _main._rpc_request_roll(rq, GUEST_PEER)
+	var results := _net.sent.filter(func(f: Dictionary) -> bool: return str(f["t"]) == "roll_result")
+	assert_int(results.size()).is_equal(1)
+	assert_array((results[0]["p"] as Dictionary)["faces"]).is_equal(["slot:2,slot:2,slot:1"])
+	assert_array(_wounds(wall)).override_failure_message("the owner's machine wounded its own model").is_equal([3, 3, 3])
+
+
+## The driver counts the saves the defender failed and hands the count to the remote owner's prompt (the request carries it).
+func test_the_remote_owner_is_told_how_many_saves_failed(timeout := 120000) -> void:
+	_session({GUEST_PEER: 2})
+	var shooter: GameUnit = ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Gun", "models": 3, "x_in": 0.0}, true), {})
+	var wall: GameUnit = ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Wall", "models": 3, "x_in": 12.0,
+		"tough": 3}, true), {})
+	var core := FakeCore.new()
+	core.answers = [
+		{"step": "need_roll", "index": 0, "faces": 3, "kind": "defense", "count": 3, "target": 4, "owner": "Wall",
+			"owner_key": wall.unit_id, "lines": [], "landings": []},
+		{"step": "need_choice", "id": "wound_alloc:%s:%s:0" % [shooter.unit_id, wall.unit_id],
+			"options": ["slot:0", "slot:1", "slot:2"], "owner": wall.unit_id}]
+	var sc := auto_free(FakeSolo.new()) as SoloController
+	sc.fake_core = core
+	_main.solo_controller = sc
+	var out := {}
+	var run := func() -> void:
+		out["r"] = await CoreActivation.drive(_main, 1, shooter, [{"t": "begin"}], false)
+	run.call()
+	await _until(func() -> bool: return _requests().size() >= 1)
+	_main._rpc_roll_result(int((_requests()[0]["p"] as Dictionary)["req"]), [1, 2, 5])   # two saves fail, one is made
+	await _until(func() -> bool: return _requests().size() >= 2)
+	var ask: Dictionary = ((_requests()[1]["p"] as Dictionary)["ask"] as Dictionary).get("choice", {})
+	assert_int(int(ask.get("wounds", -1))).override_failure_message("the choice ask: %s" % str(_requests())).is_equal(2)
+	_main._rpc_roll_result(int((_requests()[1]["p"] as Dictionary)["req"]), ["slot:0"])
+	await _until(func() -> bool: return out.has("r"))
+	assert_bool(out.has("r")).is_true()
+
+
+## The core's save rule, for the prompt's count only: a 6 saves, a 1 fails, the rest need the target.
+func test_failed_saves_follow_the_cores_rule() -> void:
+	assert_int(CoreActivation.failed_saves([1, 2, 3, 4, 5, 6], 4)).is_equal(3)
+	assert_int(CoreActivation.failed_saves([1, 2, 6, 6], 2)).is_equal(1)   # a 1 fails even on a 2+ save
+	assert_int(CoreActivation.failed_saves([5, 6, 6], 7)).is_equal(1)   # a 7+ save: only a 6 saves

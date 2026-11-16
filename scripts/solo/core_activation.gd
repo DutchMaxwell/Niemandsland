@@ -186,6 +186,12 @@ static func choice_purpose(id: String) -> String:
 	return "choice"
 
 
+## The saves a defense batch failed: a 6 always saves, a 1 never, anything else needs `target`+ (the core's rule). Only the
+## wound prompt's count - the core's own pool is what lands, and a wrong count never changes it.
+static func failed_saves(faces: Array, target: int) -> int:
+	return faces.filter(func(f: Variant) -> bool: return int(f) < 6 and (int(f) == 1 or int(f) < target)).size()
+
+
 ## Whether an owner's answer fits the choice the core opened: one of its options, or - the wound allocation - a list of
 ## them (`slot:1,slot:1,slot:0`, a slot may repeat). The one test both the owner's reply and the driver go through.
 static func answer_fits(id: String, options: Array, option: String) -> bool:
@@ -219,6 +225,7 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 	var max_us := 0
 	var r: Dictionary = {}
 	var probes := pending_choices(main, unit, transcript)
+	var unsaved := {}   # P4.D-24: the saves each defender failed (by key) in this call's throws - the wound prompt's count
 	for step in MAX_STEPS:
 		var inputs := transcript
 		if not probes.is_empty():
@@ -234,7 +241,8 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 			var options: Array = r.get("options", [])
 			# The choice's owner is a roster KEY (the Takedown shooter, the wounded target): never the shooter by default.
 			var owner := _roller_of(main, unit, transcript, str(r["owner"]), str(r["owner"]))
-			var option: String = await main._owner_choice(owner, str(r["id"]), options, choice_purpose(str(r["id"])))
+			var wounds := int(unsaved.get(str(r["owner"]), 0)) + int(unsaved.get("", 0))
+			var option: String = await main._owner_choice(owner, str(r["id"]), options, choice_purpose(str(r["id"])), wounds)
 			probes.erase(str(r["id"]))   # asked once: the answer follows, or the core's automatic pick stands
 			if answer_fits(str(r["id"]), options, option):
 				transcript.append({"t": "choice", "id": str(r["id"]), "option": option})
@@ -270,6 +278,9 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		var faces: Array = await main._owner_roll(roller, int(r["faces"]), int(r["target"]), str(r["kind"]), "",
 			{"label": label, "what": "%s dice" % r["kind"]})
 		transcript.append({"t": "faces", "faces": faces})
+		if str(r["kind"]) == "defense":
+			var defender := str(r.get("owner_key", ""))
+			unsaved[defender] = int(unsaved.get(defender, 0)) + failed_saves(faces, int(r["target"]))
 		if str(r["kind"]) == "morale":
 			# P4.0-4c: the table spends a once morale buff right after the morale die (`_solo_morale_test`), for the unit
 			# that rolled; the core spent its own copy of the ledger, which the capture never sends. A volley's test has no

@@ -11859,9 +11859,9 @@ func _owner_roll_fallback(unit: GameUnit, count: int, target: int, roll_kind: St
 ## `request_roll` with `ask.choice` and answers `roll_result` with its option id. No answer (vacant seat or
 ## the timeout) leaves the core's automatic pick and says so in ONE battle-log line. The caller validates
 ## the returned option against the core's options; "" always means "automatic".
-func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String) -> String:
+func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String, wounds := 0) -> String:
 	if _solo_is_ai_unit(unit) or _solo_i_own_unit(unit):
-		return await _solo_choice_local(unit, id, options)
+		return await _solo_choice_local(unit, id, options, wounds)
 	var owner_peer := _solo_peer_for_slot(unit_owner_slot(unit.unit_properties))
 	if owner_peer == 0 and _rejoin_handshake_pending():
 		var wait_until := Time.get_ticks_msec() + int(OWNER_REJOIN_WAIT_S * 1000.0)
@@ -11870,7 +11870,7 @@ func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String) 
 			owner_peer = _solo_peer_for_slot(unit_owner_slot(unit.unit_properties))
 	if owner_peer != 0:
 		var reply: Dictionary = await _owner_request(owner_peer, {"unit": unit.unit_id, "kind": "choice",
-			"count": 0, "target": 0, "purpose": purpose, "ask": {"choice": {"id": id, "options": options}}})
+			"count": 0, "target": 0, "purpose": purpose, "ask": {"choice": {"id": id, "options": options, "wounds": wounds}}})
 		if bool(reply.get("done", false)):
 			var answered: Array = reply.get("faces", [])
 			var option := str(answered[0]) if not answered.is_empty() else ""
@@ -11885,8 +11885,12 @@ func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String) 
 ## P4.0-6: the answer on the choice's OWN machine. An AI unit (or the headless batch) keeps the core's
 ## automatic pick, so nothing waits. The first real choice is the Takedown model pick: the table's own
 ## click prompt, handed back as one of the core's options ("" when no option fits or the pick was skipped).
-func _solo_choice_local(unit: GameUnit, id: String, options: Array) -> String:
-	if _solo_is_ai_unit(unit) or _solo_batch or id.get_slice(":", 0) != "takedown_model":
+func _solo_choice_local(unit: GameUnit, id: String, options: Array, wounds := 0) -> String:
+	if _solo_is_ai_unit(unit) or _solo_batch:
+		return ""
+	if id.get_slice(":", 0) == "wound_alloc":
+		return await _solo_pick_wound_slots(opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2)), options, wounds)
+	if id.get_slice(":", 0) != "takedown_model":
 		return ""
 	var target := opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2))
 	if target == null or target.get_alive_models().size() < 2:
@@ -11900,6 +11904,18 @@ func _solo_choice_local(unit: GameUnit, id: String, options: Array) -> String:
 	var slot: int = target.get_alive_models().find(picked.models[idx])
 	var option := "slot:%d" % slot
 	return option if slot >= 0 and options.has(option) else ""
+
+
+## P4.D-24: the owner's answer to the core's wound allocation (`wound_alloc:...`) - the #172 prompt in collect mode. A click
+## only PREVIEWS (a pip on this screen, no wound); the clicked models in order are the answer and the core lands them.
+## `wounds` = the failed saves the driver counted (0 = unknown: the prompt stays open until right-click). "" = nothing was
+## clicked, or the options do not match the models on this table: the core's own order stands.
+func _solo_pick_wound_slots(target: GameUnit, options: Array, wounds: int) -> String:
+	if target == null or target.get_alive_models().size() != options.size():
+		return ""
+	var picks: Array = []
+	await _solo_prompt_wound_allocation(target, wounds, int(target.unit_properties.get("player_id", 1)), Callable(), "", picks)
+	return ",".join(picks.map(func(i: Variant) -> String: return str(options[int(i)])))
 
 
 ## Owner side: a roll request arrived for OUR unit — a save batch opens our prompt, a cast our
@@ -11927,7 +11943,7 @@ func _rpc_request_roll(rq: Dictionary, from_peer: int) -> void:
 	if ask.has("choice"):
 		# P4.0-6: OUR pick for the core's choice; a skipped pick answers nothing, so the core falls back.
 		var c: Dictionary = ask["choice"]
-		var option: String = await _solo_choice_local(unit, str(c.get("id", "")), c.get("options", []))
+		var option: String = await _solo_choice_local(unit, str(c.get("id", "")), c.get("options", []), int(c.get("wounds", 0)))
 		faces = [option] if not option.is_empty() else []
 	elif ask.has("spell"):
 		# #1719: an online cast at our side — the interference is OUR player's choice (`_solo_remote_interference`).
@@ -17109,19 +17125,27 @@ func _solo_wound_choice_matters(target: GameUnit, wounds: int) -> bool:
 ## the auto path), RMB or the strip button = auto-allocate the rest. Returns the count
 ## left for the auto path (0 when every wound was clicked). D17: `apply_pick` (Callable(unit, model)) replaces
 ## the one-wound apply for a click — Deadly lands X wounds on the clicked model; `label` prefixes the prompt.
+## P4.D-24 `collect` (an Array): the core lands the wounds. A click wounds nothing - it appends the model's place among
+## the target's living models and previews a pip on this screen; the strip/right-click ends the list. `wounds` 0 = unknown.
 func _solo_prompt_wound_allocation(target: GameUnit, wounds: int, pid: int, apply_pick: Callable = Callable(),
-		label: String = "") -> int:
+		label: String = "", collect: Variant = null) -> int:
 	var chain: Array = _solo_joined_chain(target)
 	_solo_model_pick = {"unit": target, "chain": chain, "recommended": {}, "outcome": []}
 	var outcome: Array = _solo_model_pick["outcome"]
 	var skipped: Array = []
+	var shown := {}   # collect mode: model -> wounds previewed on it
+	var open := collect is Array and wounds <= 0
 	var left := wounds
+	if open:
+		for m in target.get_alive_models():
+			left += maxi(int((m as ModelInstance).wounds_current), 1)
+	var count := func(n: int) -> String: return "the wounds" if open else "%d wound%s" % [n, "" if n == 1 else "s"]
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"%s%s: allocate %d wound%s — CLICK a model per wound; right-click auto-allocates the rest" % [
-			label, target.get_name(), wounds, ("" if wounds == 1 else "s")], false)
+			"%s%s: allocate %s — CLICK a model per wound; right-click auto-allocates the rest" % [
+			label, target.get_name(), count.call(wounds)], false)
 	_solo_deploy_ui_show(
-		"%sAllocate %d wound%s to %s — click a model per wound." % [label, wounds, ("" if wounds == 1 else "s"), target.get_name()],
+		"%sAllocate %s to %s — click a model per wound." % [label, count.call(wounds), target.get_name()],
 		"Auto-allocate the rest",
 		func() -> void: skipped.append(true))
 	while left > 0:
@@ -17152,14 +17176,22 @@ func _solo_prompt_wound_allocation(target: GameUnit, wounds: int, pid: int, appl
 					"%s is part of %s — its own models take wounds first (%s)" % [
 					pu.get_name(), target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], false)
 			continue
-		left -= 1
-		if apply_pick.is_valid():
+		if collect is Array:
+			# A click on a model the preview already took down is skipped, as the core skips a pick on a dead model.
+			var at := target.get_alive_models().find(mi)
+			if pu != target or at < 0 or int(mi.wounds_current) - int(shown.get(mi, 0)) <= 0:
+				continue
+			shown[mi] = int(shown.get(mi, 0)) + 1
+			(collect as Array).append(at)
+			_vfx_pip(ResultPips.Kind.KILL if int(mi.wounds_current) - int(shown[mi]) <= 0 else ResultPips.Kind.WOUND, mi, 1, true)
+		elif apply_pick.is_valid():
 			apply_pick.call(pu, mi)
 		else:
 			await _solo_apply_picked_wound(pu, mi, pid)
+		left -= 1
 		if left > 0:
 			_solo_deploy_ui_show(
-				"%sAllocate %d wound%s to %s — click a model per wound." % [label, left, ("" if left == 1 else "s"), target.get_name()],
+				"%sAllocate %s to %s — click a model per wound." % [label, count.call(left), target.get_name()],
 				"Auto-allocate the rest",
 				func() -> void: skipped.append(true))
 	_solo_deploy_ui_hide()
@@ -17257,7 +17289,8 @@ func _vfx_unit_eye(unit: GameUnit) -> Vector3:
 
 
 ## VFX #1: one result mark over a model's LOS eye, from the allocation that just happened.
-func _vfx_pip(kind: ResultPips.Kind, mi: ModelInstance, count: int) -> void:
+## `preview` (P4.D-24): the owner's placement before the core lands it - drawn on this screen only, no collapse, no cue sent.
+func _vfx_pip(kind: ResultPips.Kind, mi: ModelInstance, count: int, preview := false) -> void:
 	var eye := ResultPips.eye_of(mi)
 	if eye == Vector3.INF or count <= 0:
 		return
@@ -17265,8 +17298,14 @@ func _vfx_pip(kind: ResultPips.Kind, mi: ModelInstance, count: int) -> void:
 		"b": mi.node.global_position}
 	if kind == ResultPips.Kind.KILL:
 		cue["hv"] = int(mi.wounds_max) >= 3   # a heavy kill (Tough 3+) shakes the camera a little
-		if casualty_show != null:
+		if casualty_show != null and not preview:
 			casualty_show.collapse(mi.node, mi.node.get_instance_id())   # local picture: peers get the dust burst
+	if preview:
+		_vfx_seq += 1
+		cue["id"] = _vfx_seq
+		cue["s"] = _vfx_session
+		_vfx_draw(cue, 0)
+		return
 	_vfx_emit(cue)
 
 
