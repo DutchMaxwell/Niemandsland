@@ -20,7 +20,14 @@ extends RefCounted
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const ParityMelee := preload("res://test/parity/parity_table_melee.gd")
 
-const SCHEMA := "nml-golden-witness-v1"
+## v1 fixtures (the three P4.0-10 families) carry counts and sums only; v2 adds the per-model identity ("slots") and
+## the tray RNG state after the exchange. The comparator reads either schema and compares a v2 key only when the
+## fixture has it, so a v1 fixture stays valid; a fresh capture always writes v2.
+const SCHEMA_V1 := "nml-golden-witness-v1"
+const SCHEMA := "nml-golden-witness-v2"
+const SCHEMAS := [SCHEMA_V1, SCHEMA]
+## The runner a scenario without a "runner" key uses: one AI volley through main._solo_resolve_ai_volley.
+const RUNNER_AI_VOLLEY := "ai_volley"
 const FAMILY := "shooting_volley"
 const FIXTURE_PATH := "res://test/fixtures/one_core/golden_shoot_volley.json"
 const MELEE_FAMILY := "melee"
@@ -198,6 +205,14 @@ static func provenance() -> Dictionary:
 ## through main._solo_resolve_ai_volley, and record what it did. The units are removed again so the next case
 ## starts from the same table.
 static func _run_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
+	var runner := str(sc.get("runner", RUNNER_AI_VOLLEY))
+	match runner:
+		RUNNER_AI_VOLLEY:
+			return await _run_ai_volley_case(main, sc, seed)
+	return {"scenario": str(sc["name"]), "seed": seed, "error": "unknown runner %s" % runner}
+
+
+static func _run_ai_volley_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
 	var weapon: Dictionary = (sc["weapon"] as Dictionary).duplicate(true)
 	var att := ParityTable._make_unit(main, sc["attacker"], weapon)
 	var dfn := ParityTable._make_unit(main, sc["defender"], {})
@@ -226,7 +241,7 @@ static func _run_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
 	await main._solo_resolve_ai_volley(att, dfn, shots)
 	main.battle_log.entry_added.disconnect(tap)
 	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
-		"lines": lines, "final": _final([att, dfn])}
+		"lines": lines, "final": _final([att, dfn]), "rng": _rng_state(main)}
 	_unpaint_cover(main, painted)
 	_free_units(main, [att, dfn])
 	await main.get_tree().process_frame
@@ -247,7 +262,7 @@ static func _run_melee_case(main: Node, sc: Dictionary, seed: int) -> Dictionary
 	await main._run_ai_melee({"unit": att, "target": dfn, "charge_from_in": ParityMelee._charge_from_in(sc)})
 	main.battle_log.entry_added.disconnect(tap)
 	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
-		"lines": lines, "final": _final([att, dfn])}
+		"lines": lines, "final": _final([att, dfn]), "rng": _rng_state(main)}
 	_free_units(main, [att, dfn])
 	await main.get_tree().process_frame
 	return rec
@@ -270,7 +285,7 @@ static func _run_morale_case(main: Node, sc: Dictionary, seed: int) -> Dictionar
 	main.battle_log.entry_added.disconnect(tap)
 	main._solo_spell_mods.erase(unit.get_instance_id())
 	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
-		"lines": lines, "final": _final([unit])}
+		"lines": lines, "final": _final([unit]), "rng": _rng_state(main)}
 	_free_units(main, [unit])
 	await main.get_tree().process_frame
 	return rec
@@ -284,17 +299,26 @@ static func _kill_models(unit: GameUnit, n: int) -> void:
 			(unit.models[unit.models.size() - 1 - i] as ModelInstance).is_alive = false
 
 
-## What "final state" means for the witness: models left, wounds left on them, and whether the unit is Shaken.
+## What "final state" means for the witness: models left, wounds left on them, whether the unit is Shaken, and (v2)
+## which model slot is alive with how many wounds left, so "which models died" is part of the record.
 static func _final(units: Array) -> Array:
 	var out: Array = []
 	for u in units:
 		var gu := u as GameUnit
 		var wounds := 0
-		for m in gu.models:
-			wounds += int((m as ModelInstance).wounds_current)
+		var slots: Array = []
+		for i in gu.models.size():
+			var m := gu.models[i] as ModelInstance
+			wounds += int(m.wounds_current)
+			slots.append([i, m.is_alive, int(m.wounds_current)])
 		out.append({"unit": gu.get_name(), "alive": gu.get_alive_count(), "wounds": wounds,
-			"shaken": gu.is_shaken})
+			"shaken": gu.is_shaken, "slots": slots})
 	return out
+
+
+## The tray RNG state after the exchange, as a string: it is a 64-bit value and JSON numbers are doubles.
+static func _rng_state(main: Node) -> String:
+	return str((main._tray_rng as RandomNumberGenerator).state)
 
 
 ## Paints a forest block around the defender and returns the touched cells as cell -> {had, value} (0 is a valid
@@ -372,8 +396,8 @@ static func save_fixture(fixture: Dictionary, path: String = FIXTURE_PATH) -> Er
 ## caller prints the recorded sha as context (see describe_provenance()).
 static func compare(expected: Dictionary, got: Dictionary) -> Array:
 	var problems: Array = []
-	if str(expected.get("schema", "")) != SCHEMA:
-		problems.append("fixture: schema %s, want %s" % [str(expected.get("schema", "<none>")), SCHEMA])
+	if not SCHEMAS.has(str(expected.get("schema", ""))):
+		problems.append("fixture: schema %s, want one of %s" % [str(expected.get("schema", "<none>")), str(SCHEMAS)])
 	if str(expected.get("family", "")) != str(got.get("family", "")):
 		problems.append("fixture: family %s, want %s" % [
 			str(expected.get("family", "<none>")), str(got.get("family", "<none>"))])
@@ -421,6 +445,13 @@ static func _compare_case(key: String, want: Dictionary, got: Dictionary) -> Arr
 	var gf := _final_rows(got.get("final", []))
 	if wf != gf:
 		problems.append("%s: final state %s, fixture %s" % [key, JSON.stringify(gf), JSON.stringify(wf)])
+	# v2 keys: compared only when the fixture has them (a v1 fixture has neither).
+	var ws := _slot_rows(want.get("final", []))
+	if not ws.is_empty() and ws != _slot_rows(got.get("final", [])):
+		problems.append("%s: model slots %s, fixture %s" % [
+			key, JSON.stringify(_slot_rows(got.get("final", []))), JSON.stringify(ws)])
+	if want.has("rng") and str(want["rng"]) != str(got.get("rng", "<none>")):
+		problems.append("%s: tray rng state %s, fixture %s" % [key, str(got.get("rng", "<none>")), str(want["rng"])])
 	var wl: Array = want.get("lines", [])
 	var gl: Array = got.get("lines", [])
 	for i in range(maxi(wl.size(), gl.size())):
@@ -439,6 +470,20 @@ static func _final_rows(rows: Array) -> Array:
 		var row := r as Dictionary
 		out.append({"unit": str(row.get("unit", "")), "alive": int(row.get("alive", 0)),
 			"wounds": int(row.get("wounds", 0)), "shaken": bool(row.get("shaken", false))})
+	return out
+
+
+## Per unit, the normalised [slot, alive, wounds] triples; [] when a row has no "slots" key (a v1 fixture).
+static func _slot_rows(rows: Array) -> Array:
+	var out: Array = []
+	for r in rows:
+		var row := r as Dictionary
+		if not row.has("slots"):
+			return []
+		var triples: Array = []
+		for t in row["slots"]:
+			triples.append([int(t[0]), bool(t[1]), int(t[2])])
+		out.append(triples)
 	return out
 
 
