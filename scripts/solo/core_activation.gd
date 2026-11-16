@@ -122,7 +122,33 @@ static func capture(main) -> int:
 		sc._core_refresh_terrain()
 	var plain := BattleSim.state_to_plain(state)
 	AiActRecorder._stamp_gate_reads(state, plain)
+	_stamp_spent_ignore_feats(state, plain)
 	return int(core.capture_plain(plain))
+
+
+## P4.D-38a: the once-per-game ignore feat (the Protection Feat family) a table roll spent closes the core's latch: its name
+## joins the unit's `feats_used` in THIS capture (the recorder's ledger, a recorded corpus format, is not touched).
+static func _stamp_spent_ignore_feats(state: Dictionary, plain: Dictionary) -> void:
+	for key in state["units"]:
+		var u: GameUnit = (state["units"][key] as Dictionary)["unit"]
+		var spent: Array = ignore_feats_of(u).filter(func(n: String) -> bool: return bool(u.unit_properties.get(_ignore_flag(n), false)))
+		if not spent.is_empty():
+			var ledger: Dictionary = plain["units"][str(key)]["ledger"]
+			ledger["feats_used"] = (ledger.get("feats_used", []) as Array) + spent
+
+
+## The once-per-game ignore rules `gu` carries (Regeneration-primitive entries with `uses_per_game`) and the flag that closes one
+## (main.gd `_solo_ignore_feat_flag`).
+static func ignore_feats_of(gu: GameUnit) -> Array:
+	var out: Array = []
+	for e in RulesRegistry.unit_rules_of_primitive(gu, "Regeneration"):
+		if int(((e as Dictionary).get("params", {}) as Dictionary).get("uses_per_game", 0)) > 0:
+			out.append(str((e as Dictionary)["name"]))
+	return out
+
+
+static func _ignore_flag(rule_name: String) -> String:
+	return "ignore_feat_used_%s" % rule_name.to_snake_case()
 
 
 ## Calls per activation before the driver gives up (a plain volley asks three to four times).
@@ -718,6 +744,21 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		_land_stamps(main, gu, d)
 		_land_pools(main, gu, d)
 		_land_versatile_mode(main, gu, d)
+		_land_feats(main, gu, d)
+
+
+## P4.D-38a: the once-per-game feat latches the core SPENT in this activation (the delta's `feats_used`, inventory row of the
+## same name). The core spent them in its own copy; the table's flag is what its own roll and the next capture read. Closed for the ignore feats (the Protection Feat family), with the
+## table's own sentence and the synced flag; any other name is a core/table split nobody mapped yet (reported).
+static func _land_feats(main, gu: GameUnit, d: Dictionary) -> void:
+	for name in d.get("feats_used", []):
+		if bool(gu.unit_properties.get(_ignore_flag(str(name)), false)):
+			continue
+		if not ignore_feats_of(gu).has(str(name)):
+			push_error("CoreActivation.land_delta: %s spent the feat %s, which no table flag closes yet" % [gu.get_name(), name])
+			continue
+		main._sync_unit_property(gu, _ignore_flag(str(name)), true)
+		main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s spends its once-per-game ignore roll" % [name, gu.get_name()], true)
 
 
 ## P4.0-4g: the latched Versatile pick the delta now carries (inventory class (a)). The table holds it as the

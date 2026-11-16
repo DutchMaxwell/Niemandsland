@@ -407,6 +407,9 @@ pub struct UnitDelta {
     /// P4.0-4g: the latched Versatile pick AFTER (inventory class (a)): 0 = none, 1 = +1 to hit,
     /// 2 = AP(+1). `land_delta` maps it onto the table's `versatile_pick` Dictionary.
     pub versatile_pick_mode: i64,
+    /// P4.D-38a: the once-per-game feat latches this activation SPENT (inventory class (a)): the names `State::feats_used`
+    /// gained, in the order they were spent. `land_delta` closes the table's flag for each, so the next capture sends it back.
+    pub feats_used: Vec<String>,
 }
 
 /// P4.0-4f: the marker pools the inventory marks table-owned, in `State` declaration order, AFTER.
@@ -464,6 +467,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
             || before.fatigued[u] != after.fatigued[u] || before.casts[u] != after.casts[u]
             || stamps_changed || pools_changed
             || before.versatile_pick_mode[u] != after.versatile_pick_mode[u]
+            || before.feats_used[u] != after.feats_used[u]
         {
             out.push(UnitDelta {
                 key: key.clone(),
@@ -477,6 +481,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 stamps: stamps_of(after, u),
                 pools: pools_of(after, u),
                 versatile_pick_mode: after.versatile_pick_mode[u],
+                feats_used: after.feats_used[u].iter().filter(|n| !before.feats_used[u].contains(n)).cloned().collect(),
             });
         }
     }
@@ -1118,6 +1123,21 @@ mod tests {
         let (got, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], 7);
         let ActStep::Done { state, .. } = got else { panic!("seed 7: {got:?}") };
         assert!(delta_of(&st, &state).iter().all(|x| x.pools.len() == 4), "a core row carries the pools");
+    }
+
+    /// P4.D-38a: a unit whose only change is a spent feat gets a row naming the feat; a latch already spent in `before` is no news.
+    /// RED: drop the `feats_used` term from the change test -> no row; drop the field from the push -> an empty list.
+    #[test]
+    fn the_delta_carries_the_spent_feats() {
+        let (st, _) = volley_line();
+        let mut after = st.clone();
+        std::rc::Rc::make_mut(&mut after.feats_used)[2].push("Protection Feat".to_string());
+        let d = delta_of(&st, &after);
+        assert_eq!(d.len(), 1, "a spent feat is a change: {d:?}");
+        assert_eq!(d[0].feats_used, vec!["Protection Feat".to_string()]);
+        assert!(delta_of(&st, &st).is_empty(), "no spend, no row");
+        let again = delta_of(&after, &after);
+        assert!(again.is_empty(), "a latch that was already spent is no news: {again:?}");
     }
 
     // ---- step 14: allowance and move check ----
