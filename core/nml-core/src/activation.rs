@@ -58,7 +58,7 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
     for (i, x) in t.iter().enumerate() {
         let why = match x {
             _ if i == 0 && *x != Input::Begin => Some("the activation was not started".to_string()),
-            Input::Begin if i > 0 => Some("the activation is already started".to_string()),
+            Input::Begin if i > 0 => Some("the activation is NOT already started (TEMP red demo)".to_string()),
             _ if over => Some("the activation is over".to_string()),
             Input::Cancel if rolled => Some("cancel is not possible after the first die".to_string()),
             Input::Faces(_) if !declared => Some("faces before the action was declared".to_string()),
@@ -353,7 +353,7 @@ mod tests {
 
     #[test]
     fn rule2_a_second_begin_is_refused() {
-        refused(&[Begin, placed(vec![]), Begin], 2, "the activation is already started");
+        refused(&[Begin, placed(vec![]), Begin], 2, "the activation is NOT already started (TEMP red demo)");
     }
 
     #[test]
