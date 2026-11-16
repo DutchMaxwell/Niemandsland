@@ -1,7 +1,7 @@
 """One-core P4.0-11 — the Python binding of the step API, `Core.step_activation`.
 
 The same entry the Godot binding exposes as `NmlCore.step_activation`: one unit's
-activation as the table's ordered inputs, answered `need_roll` / `open` / `refused`
+activation as the table's ordered inputs, answered `need_roll` / `open` / `need_choice` / `refused`
 / `done` / `cancelled`. This test drives one plain volley (a HOLD shot) with
 supplied faces to `done` and compares every answer to the recorded fixture.
 
@@ -49,3 +49,38 @@ def test_the_python_step_activation_matches_the_recorded_binding_answer():
     # One malformed entry is the binding's refusal with the entry's index, never a silent drop.
     refused = core.step_activation(state, record["unit"], [{"t": "begin"}, {"t": "wat"}], record["enforce"])
     assert refused == {"step": "refused", "index": 1, "reason": "input 1 is not understood"}
+
+
+def test_a_takedown_choice_is_asked_answered_and_refused_through_the_python_binding():
+    """P4.0-5 on the Python seam: `{"t": "choice"}` goes in, `need_choice` comes out (the Godot seam's shape).
+
+    The recorded shooter's rifle gets the Takedown rule (the header's profile is the only change); the
+    target keeps its three living models, so the choice is open. An empty `option` asks the core."""
+    import nml_core
+
+    source = json.loads(SOURCE.read_text())
+    record = json.loads(RECORD.read_text())
+    unit, target = record["unit"], record["target"]
+    for weapon in source["header"]["profiles"][unit]["weapons"]:
+        if weapon["name"] == "Heavy Rifle":
+            weapon["rules"].append("Takedown")
+    core = nml_core.load(str(REPO))
+    core.set_header(source["header"])
+    state = core.state_of(source["state"])
+    choice_id = f"takedown_model:{unit}:{target}"
+    start = [{"t": "begin"}, {"t": "intent", "kind": 0, "shoot": target}]
+
+    asked = core.step_activation(state, unit, start + [{"t": "choice", "id": choice_id}], False)
+    assert asked == {"step": "need_choice", "id": choice_id, "options": ["slot:0", "slot:1", "slot:2"], "owner": unit}
+
+    # A valid answer reaches the dice: the core now asks for the volley's first roll.
+    answered = core.step_activation(state, unit, start + [{"t": "choice", "id": choice_id, "option": "slot:1"}], False)
+    assert answered["step"] == "need_roll"
+
+    # A wrong option is the core's refusal at the choice's index, never a silent acceptance.
+    wrong = core.step_activation(state, unit, start + [{"t": "choice", "id": choice_id, "option": "slot:9"}], False)
+    assert (wrong["step"], wrong["index"]) == ("refused", 2) and "slot:9" in wrong["reason"]
+
+    # A choice entry without an `id` is still the binding's own "not understood" refusal.
+    bad = core.step_activation(state, unit, start + [{"t": "choice"}], False)
+    assert bad == {"step": "refused", "index": 2, "reason": "input 2 is not understood"}
