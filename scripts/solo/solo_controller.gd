@@ -8123,6 +8123,9 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	var gate_flying := unit.has_special_rule("Flying")   # Bug 20: wall clamp must not revert legal fly-overs
 	var gate_traversal := is_traversal(unit)   # Traversal: the gate chord may cut through another unit's base; walls/terrain still clamp
 	var obstacles := _external_obstacle_shapes(unit)
+	# The wall board, captured ONCE for this gate call and handed to the coherency repair (terrain rest
+	# checks + projections). Empty when no provider is wired; identical to the repair's own cache read.
+	var gate_walls: Array = _rest_walls()
 	# NML-230 Breach A: the gate's physical corrections (terrain projection + overlap push + straggler
 	# pull) share ONE per-model displacement budget — the band slack the walked route left over
 	# (disp_caps_m, metres, from _gate_disp_caps_m) — because _retrace_to appends the total
@@ -8172,7 +8175,7 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 			var charge_chain: float = CoherencyChecker.SKIRMISH_CHAIN_DISTANCE_INCHES \
 				if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
 			if not _config_coherent_world(models, cfg, charge_chain):
-				_pull_stragglers_coherent_world(models, cfg, obstacles, charge_chain)
+				_pull_stragglers_coherent_world(models, cfg, obstacles, charge_chain, [], [], gate_walls)
 		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, gate_traversal, obstacles)   # charge: contact reached; single model: done
 	# (coherency) If the unit is coherent AND overlap-free, keep the full move. Otherwise shorten the whole
 	# move back along its taut line toward the coherent, overlap-free START until BOTH hold — the unit began
@@ -8182,7 +8185,7 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	var max_chain: float = CoherencyChecker.SKIRMISH_CHAIN_DISTANCE_INCHES \
 		if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
-			and _config_terrain_clear(models, cfg):
+			and _config_terrain_clear(models, cfg, gate_walls):
 		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, gate_traversal, obstacles)
 	# MINIMAL per-model coherency repair FIRST (field-test round 6 findings 2/3): pull only the stragglers into
 	# the coherent set, leaving the models that advanced correctly at their FULL move. The whole-unit shorten
@@ -8191,11 +8194,11 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	# arrives coherent, so this rarely fires; when it does it is a nudge, not a retreat. Fall back to the
 	# whole-unit shorten only if the minimal repair can't restore a legal config (guarantees coherency: t=0 is
 	# the coherent start).
-	_pull_stragglers_coherent_world(models, cfg, obstacles, max_chain, planned_world if not caps.is_empty() else [], caps)
+	_pull_stragglers_coherent_world(models, cfg, obstacles, max_chain, planned_world if not caps.is_empty() else [], caps, gate_walls)
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
-			and _config_terrain_clear(models, cfg):
+			and _config_terrain_clear(models, cfg, gate_walls):
 		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, gate_traversal, obstacles)
-	return _clamp_gate_walls(planned_world, _shorten_world_to_legal(start_world, cfg, models, obstacles, max_chain), models, gate_flying, gate_traversal, obstacles)
+	return _clamp_gate_walls(planned_world, _shorten_world_to_legal(start_world, cfg, models, obstacles, max_chain, gate_walls), models, gate_flying, gate_traversal, obstacles)
 
 
 ## GATE CLAMP on the placement gate (watch-loop bug 12a; bases: NML-009): the gate's own displacements —
@@ -8294,7 +8297,7 @@ const COH_REPAIR_PASSES := 12   # bounded per-model coherency-repair sweeps (fin
 ## clears any residual stack. A MINIMAL correction — the models that advanced correctly keep their full move
 ## (unlike the whole-unit shorten). Mutates `cfg`; returns true when it ends coherent.
 func _pull_stragglers_coherent_world(models: Array, cfg: Array, obstacles: Array, max_chain: float,
-		planned_world: Array = [], disp_caps_m: Array = []) -> bool:
+		planned_world: Array = [], disp_caps_m: Array = [], walls: Array = []) -> bool:
 	var n := models.size()
 	if n <= 1:
 		return true
@@ -8338,7 +8341,7 @@ func _pull_stragglers_coherent_world(models: Array, cfg: Array, obstacles: Array
 				continue
 			var cand := _clamp_to_bounds(Vector3((cfg[i] as Vector3).x + to_n.x / dist * close,
 				(cfg[i] as Vector3).y, (cfg[i] as Vector3).z + to_n.y / dist * close))
-			cand = _project_out_forbidden_world(cand, model_base_radius_m(models[i] as ModelInstance))
+			cand = _project_out_forbidden_world(cand, model_base_radius_m(models[i] as ModelInstance), walls)
 			if capped:
 				cand = _cap_gate_disp(cand, planned_world[i] as Vector3, float(disp_caps_m[i]), i)
 				if _xz_dist_m(cand, cfg[i] as Vector3) <= OVERLAP_EPS_M:
@@ -8357,7 +8360,7 @@ func _pull_stragglers_coherent_world(models: Array, cfg: Array, obstacles: Array
 					var stepc: float = minf(link_step, dc)
 					var cand := _clamp_to_bounds(Vector3((cfg[far] as Vector3).x + to_c.x / dc * stepc,
 						(cfg[far] as Vector3).y, (cfg[far] as Vector3).z + to_c.y / dc * stepc))
-					cand = _project_out_forbidden_world(cand, model_base_radius_m(models[far] as ModelInstance))
+					cand = _project_out_forbidden_world(cand, model_base_radius_m(models[far] as ModelInstance), walls)
 					if capped:
 						cand = _cap_gate_disp(cand, planned_world[far] as Vector3, float(disp_caps_m[far]), far)
 					if not capped or _xz_dist_m(cand, cfg[far] as Vector3) > OVERLAP_EPS_M:
@@ -8520,14 +8523,15 @@ func _rest_walls() -> Array:
 	return _rest_walls_cache
 
 
-func _world_forbidden(pos: Vector3, radius_m: float = 0.0) -> bool:
+## `walls` = the caller's captured wall board; empty means "read the live board" (the per-frame cache).
+func _world_forbidden(pos: Vector3, radius_m: float = 0.0, walls: Array = []) -> bool:
 	if TerrainRules.base_in_terrain(pos, radius_m, terrain_type_at, TerrainRules.is_forbidden_rest):
 		return true
 	# A base overlapping a ruin/container WALL SEGMENT is forbidden rest too. The ruin FLOOR became legal
 	# rest (2026-07-16), which exposed that nothing pushed a shifted unit off the WALLS — the deploy
 	# overlap cleanup translated a whole unit into a ruin and parked models on the wall line (Windows
 	# playtest bug 1). A model may stand IN a ruin, never ON its wall.
-	for wseg in _rest_walls():
+	for wseg in (walls if not walls.is_empty() else _rest_walls()):
 		if MovementPlanner.point_seg_distance(Vector2(pos.x, pos.z), wseg[0], wseg[1]) <= radius_m + WALL_REST_CLEARANCE_M:
 			return true
 	return false
@@ -8537,8 +8541,8 @@ func _world_forbidden(pos: Vector3, radius_m: float = 0.0) -> bool:
 ## whose whole BASE is clear (16 compass directions × expanding 1 cm rings; edge-aware — finding 6), world-frame
 ## tie-break within a ring for determinism. A model with no clear point in range is left where it is (the
 ## overlap pass + coherency-shorten still act on it). No-op when the base is already clear.
-func _project_out_forbidden_world(pos: Vector3, radius_m: float = 0.0) -> Vector3:
-	if not _world_forbidden(pos, radius_m):
+func _project_out_forbidden_world(pos: Vector3, radius_m: float = 0.0, walls: Array = []) -> Vector3:
+	if not _world_forbidden(pos, radius_m, walls):
 		return pos
 	var dist := TERRAIN_OUT_STEP_M
 	while dist <= TERRAIN_OUT_MAX_M + OVERLAP_EPS_M:
@@ -8547,7 +8551,7 @@ func _project_out_forbidden_world(pos: Vector3, radius_m: float = 0.0) -> Vector
 		for k in range(TERRAIN_OUT_DIRS):
 			var ang := TAU * float(k) / float(TERRAIN_OUT_DIRS)
 			var c := _clamp_to_bounds(pos + Vector3(cos(ang) * dist, 0.0, sin(ang) * dist))
-			if _world_forbidden(c, radius_m):
+			if _world_forbidden(c, radius_m, walls):
 				continue
 			if not found or (c.x < best.x - OVERLAP_EPS_M or (absf(c.x - best.x) <= OVERLAP_EPS_M and c.z < best.z - OVERLAP_EPS_M)):
 				best = c
@@ -8595,10 +8599,10 @@ func _config_coherent_world(models: Array, cfg: Array, max_chain: float) -> bool
 
 ## True when NO model in the config has its BASE in forbidden terrain (impassable + dangerous), edge-aware:
 ## each model is tested at its real base radius (finding 6), so a base whose edge overlaps a container counts.
-func _config_terrain_clear(models: Array, cfg: Array) -> bool:
+func _config_terrain_clear(models: Array, cfg: Array, walls: Array = []) -> bool:
 	for i in range(cfg.size()):
 		var r: float = model_base_radius_m(models[i] as ModelInstance) if i < models.size() else 0.0
-		if _world_forbidden(cfg[i] as Vector3, r):
+		if _world_forbidden(cfg[i] as Vector3, r, walls):
 			return false
 	return true
 
@@ -8625,9 +8629,10 @@ func _config_overlap_free(models: Array, cfg: Array, obstacles: Array) -> bool:
 ## a legal placement, as far forward as the rules allow and no further ("or as close as possible" — GF/AoF
 ## v3.5.1 p.7). Retreating toward the start also moves the unit AWAY from whatever it overlapped, so making
 ## the predicate overlap-aware stops the pull-back from dragging a model back into a friendly unit.
-func _shorten_world_to_legal(start_world: Array, cfg: Array, models: Array, obstacles: Array, max_chain: float) -> Array:
+func _shorten_world_to_legal(start_world: Array, cfg: Array, models: Array, obstacles: Array, max_chain: float,
+		walls: Array = []) -> Array:
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
-			and _config_terrain_clear(models, cfg):
+			and _config_terrain_clear(models, cfg, walls):
 		return cfg.duplicate()
 	var lo := 0.0
 	var hi := 1.0
@@ -8635,7 +8640,7 @@ func _shorten_world_to_legal(start_world: Array, cfg: Array, models: Array, obst
 		var mid := (lo + hi) * 0.5
 		var blended := _blend_world(start_world, cfg, mid)
 		if _config_coherent_world(models, blended, max_chain) and _config_overlap_free(models, blended, obstacles) \
-				and _config_terrain_clear(models, blended):
+				and _config_terrain_clear(models, blended, walls):
 			lo = mid
 		else:
 			hi = mid
