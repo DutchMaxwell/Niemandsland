@@ -38,6 +38,18 @@ fn coords(v: &Value, n: usize) -> Option<Vec<f64>> {
     a.iter().map(|x| f64_of(x).map(|f| f as f32 as f64)).collect()
 }
 
+/// A choice's `option`: text as it is, or an array of slots (ints, or `slot:<n>` text) joined as the core reads the owner's
+/// ordered wound-allocation answer (`slot:2,slot:2,slot:0`); absent or null = "" (an ask). Any other shape is not understood:
+/// a refusal, never an ask in disguise (the Godot seam's `option_of`).
+fn option_of(v: Option<&Value>) -> Option<String> {
+    match v {
+        None | Some(Value::Null) => Some(String::new()),
+        Some(Value::String(s)) => Some(s.clone()),
+        Some(Value::Array(a)) => a.iter().map(|s| s.as_i64().map(|n| format!("slot:{n}")).or_else(|| s.as_str().map(str::to_string))).collect::<Option<Vec<_>>>().map(|s| s.join(",")),
+        Some(_) => None,
+    }
+}
+
 fn input_of(v: &Value) -> Option<Input> {
     let o = v.as_object()?;
     Some(match o.get("t")?.as_str()? {
@@ -46,7 +58,7 @@ fn input_of(v: &Value) -> Option<Input> {
         "intent" => Input::Intent { kind: int(o.get("kind")?)?, shoot: o.get("shoot").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string), split: None },
         "faces" => Input::Faces(o.get("faces")?.as_array()?.iter().map(|f| int(f).map(|n| n.clamp(0, 6) as u8)).collect::<Option<Vec<_>>>()?),
         // P4.0-5: `{"t": "choice", "id": ..., "option": ...}`; an empty/absent `option` asks the core.
-        "choice" => Input::Choice { id: o.get("id")?.as_str()?.to_string(), option: o.get("option").and_then(Value::as_str).unwrap_or_default().to_string() },
+        "choice" => Input::Choice { id: o.get("id")?.as_str()?.to_string(), option: option_of(o.get("option"))? },
         "placed" => {
             let at = o.get("positions")?.as_array()?.iter().map(|p| coords(p, 3).map(|c| [c[0], c[1], c[2]])).collect::<Option<Vec<_>>>()?;
             let trails = match o.get("trails") {
@@ -123,4 +135,31 @@ pub(crate) fn answer(core: &mut Core, py: Python<'_>, state: &PyState, unit: &st
         answer.bind(py).cast::<PyDict>()?.set_item("state", Py::new(py, PyState { inner: next, prof })?)?;
     }
     Ok(answer)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn choice(option: Value) -> Option<Input> {
+        input_of(&json!({"t": "choice", "id": "wound_alloc:a:b:0", "option": option}))
+    }
+
+    /// The owner's wound-allocation answer reaches the core as the slot list it reads, however the caller spells it; any shape
+    /// that is no text and no array of slots is refused (`None` = "input not understood"), never read as an ask.
+    #[test]
+    fn a_choice_option_is_a_slot_list_or_it_is_not_understood() {
+        let option = |i: Option<Input>| match i {
+            Some(Input::Choice { option, .. }) => Some(option),
+            other => panic!("not a choice: {other:?}"),
+        };
+        assert_eq!(option(choice(json!([1, 1, 0]))).as_deref(), Some("slot:1,slot:1,slot:0"));
+        assert_eq!(option(choice(json!(["slot:2", 0]))).as_deref(), Some("slot:2,slot:0"));
+        assert_eq!(option(choice(json!("slot:1,slot:0"))).as_deref(), Some("slot:1,slot:0"));
+        assert_eq!(option(choice(Value::Null)).as_deref(), Some(""), "null asks");
+        assert_eq!(option(input_of(&json!({"t": "choice", "id": "x"}))).as_deref(), Some(""), "absent asks");
+        for odd in [json!(3), json!(1.5), json!({"slot": 1}), json!([1.5]), json!(true)] {
+            assert!(choice(odd.clone()).is_none(), "{odd}");
+        }
+    }
 }

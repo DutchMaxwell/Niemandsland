@@ -28,6 +28,21 @@ fn split_of(v: Option<Variant>) -> Option<Vec<SplitShot>> {
         .collect()
 }
 
+/// A choice's `option`: text as it is, or an array of slots (ints, or `slot:<n>` text) joined as the core reads the owner's
+/// ordered wound-allocation answer (`slot:2,slot:2,slot:0`); absent = "" (an ask). Any other shape is not understood: a
+/// refusal, never an ask in disguise.
+fn option_of(v: Option<Variant>) -> Option<String> {
+    let Some(v) = v else { return Some(String::new()) };
+    if let Ok(s) = v.try_to::<GString>() {
+        return Some(s.to_string());
+    }
+    if !matches!(v.get_type(), VariantType::ARRAY | VariantType::PACKED_INT32_ARRAY | VariantType::PACKED_INT64_ARRAY | VariantType::PACKED_STRING_ARRAY) {
+        return None;
+    }
+    let slot = |s: Variant| s.try_to::<i64>().map(|n| format!("slot:{n}")).ok().or_else(|| s.try_to::<GString>().ok().map(|t| t.to_string()));
+    plain::any_array(&v).iter_shared().map(slot).collect::<Option<Vec<_>>>().map(|s| s.join(","))
+}
+
 fn input_of(v: &Variant) -> Option<Input> {
     let d = v.try_to::<VarDictionary>().ok()?;
     let field = |k: &str| d.get(k);
@@ -41,7 +56,7 @@ fn input_of(v: &Variant) -> Option<Input> {
         },
         "faces" => Input::Faces(plain::any_array(&field("faces")?).iter_shared().map(|f| plain::int(&f).clamp(0, 6) as u8).collect()),
         // P4.0-5: `{"t": "choice", "id": ..., "option": ...}`; an empty/absent `option` asks the core.
-        "choice" => Input::Choice { id: plain::text(&field("id")?), option: field("option").map(|o| plain::text(&o)).unwrap_or_default() },
+        "choice" => Input::Choice { id: plain::text(&field("id")?), option: option_of(field("option"))? },
         "placed" => Input::Placed {
             at: plain::any_array(&field("positions")?).iter_shared().map(|p| p.try_to::<Vector3>().ok().map(|p| [p.x as f64, p.y as f64, p.z as f64])).collect::<Option<Vec<_>>>()?,
             // Optional: per model its walked path (Vector2 = world XZ metres); absent = none.
