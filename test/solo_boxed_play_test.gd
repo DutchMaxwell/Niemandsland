@@ -146,46 +146,46 @@ func test_a_boxed_unit_never_ends_its_activation_on_the_spot() -> void:
 		.is_greater(1.0)
 
 
-## Flying flies OVER terrain (p.13). The placement gate used to shorten a Flying move whose endpoint
-## rested on a container footprint back to the footprint's near edge — the play-test's 1.2"/1.7" of an
-## 11-12" band. The same board must still stop a GROUND unit (the rest rule is not weakened for it).
-func _container_strip_board(flying: bool) -> Array:
-	var mover := _unit(2, [Vector3.ZERO, Vector3(0, 0, 1.2 * IN2M)], "Mover")
-	if flying:
-		mover.unit_properties["special_rules"] = ["Flying"]
+## Flying (GF 3.6) may move through units and terrain, but a base may not END on impassable ground. The gate
+## refused a flier's end spot on a wall line / container (its projection costs more than the band slack) and
+## shortened the move whole; the flier's OWN route is now cut back to its first rest-legal spot instead.
+func _flier_move(positions: Array, goal_z_in: float, kind: int, box: Rect2, walls: Array) -> Array:
+	var mover := _unit(2, positions, "Flier")
+	mover.unit_properties["special_rules"] = ["Flying"]
 	var sc := _controller([mover])
 	sc.terrain_type_at = func(p: Vector3) -> int:
-		var z_in := p.z / IN2M
-		return TerrainRules.TerrainType.CONTAINER if z_in >= 1.5 and z_in <= 18.0 \
-			else TerrainRules.TerrainType.NONE
+		return kind if box.has_point(Vector2(p.x, p.z) / IN2M) else TerrainRules.TerrainType.NONE
+	sc.walls_provider = func() -> Array: return walls
+	sc._execute_move(mover, Vector3(0, 0, goal_z_in * IN2M), 12.0, false)
 	return [sc, mover]
 
 
-func _moved_z_in(u: GameUnit) -> float:
-	var z := 0.0
+func _models_on_forbidden_ground(sc: SoloController, u: GameUnit) -> int:
+	var n := 0
 	for m in u.get_alive_models():
-		z = maxf(z, (m as ModelInstance).node.global_position.z / IN2M)
-	return z
+		if sc._world_forbidden((m as ModelInstance).node.global_position, sc.model_base_radius_m(m as ModelInstance)):
+			n += 1
+	return n
 
 
-func test_a_flying_unit_flies_over_a_container_instead_of_stalling() -> void:
-	var board := _container_strip_board(true)
+func test_a_flier_ending_on_a_wall_line_stops_just_short_of_it() -> void:
+	var wall := [[Vector2(-3, 12) * IN2M, Vector2(3, 12) * IN2M]]   # the 12" end spot lies on this wall line
+	var board := _flier_move([Vector3.ZERO, Vector3(0, 0, 1.2 * IN2M)], 13.0, TerrainRules.TerrainType.NONE, Rect2(), wall)
 	var sc: SoloController = board[0]
-	var mover: GameUnit = board[1]
-	sc._execute_move(mover, Vector3(0, 0, 13.0 * IN2M), 12.0, false)
-	var rec := _move_record(sc)
-	var data := rec.get("data", {}) as Dictionary
+	var data := _move_record(sc).get("data", {}) as Dictionary
+	assert_int(_models_on_forbidden_ground(sc, board[1])).override_failure_message("a flier ended on the wall line").is_equal(0)
 	assert_float(float(data.get("achieved_in", 0.0))) \
-		.override_failure_message("the flying unit advanced only %.2f\" of its 12\" band at the terrain edge" % float(data.get("achieved_in", 0.0))) \
-		.is_greater(10.0)
-	assert_float(_moved_z_in(mover)).is_greater(10.0)
+		.override_failure_message("the flier lost %.1f\" of its 12\" band to the whole-unit shorten" % (12.0 - float(data.get("achieved_in", 0.0)))) \
+		.is_greater(11.0)
+	assert_str("\n".join(sc.board_clamp_notes)).contains("Flying")   # rules-must-log
 
 
-func test_a_ground_unit_still_stops_at_the_container_edge() -> void:
-	var board := _container_strip_board(false)
+func test_a_flier_never_ends_inside_a_container() -> void:
+	var box := Rect2(Vector2(-3, 3), Vector2(6, 15))   # inches: x -3..3, z 3..18, straight ahead of the 12" end spot
+	var board := _flier_move([Vector3.ZERO], 13.0, TerrainRules.TerrainType.CONTAINER, box, [])
 	var sc: SoloController = board[0]
-	var mover: GameUnit = board[1]
-	sc._execute_move(mover, Vector3(0, 0, 13.0 * IN2M), 12.0, false)
-	assert_float(_moved_z_in(mover)) \
-		.override_failure_message("a ground unit ended inside/over the container footprint") \
-		.is_less(3.0)
+	var z_in := ((board[1] as GameUnit).get_alive_models()[0] as ModelInstance).node.global_position.z / IN2M
+	assert_int(_models_on_forbidden_ground(sc, board[1])).override_failure_message("a flier ended inside the container (z=%.1f\")" % z_in).is_equal(0)
+	assert_float(z_in).override_failure_message("the flier did not stop at the last legal spot before the box (z=%.2f\")" % z_in) \
+		.is_between(1.5, 3.0)
+	assert_str("\n".join(sc.board_clamp_notes)).contains("Flying")

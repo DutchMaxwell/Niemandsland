@@ -6242,6 +6242,14 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			if not cut.is_empty():
 				var fin := cut.back() as Vector3
 				new_positions[i] = Vector3(fin.x, (new_positions[i] as Vector3).y, fin.z)
+	# Flying (GF 3.6): may move through units and terrain, but a base may not END on impassable ground
+	# (a container, a wall line). Cut each flier's OWN route back to its first rest-legal spot BEFORE the
+	# gate, so the gate sees legal ends and keeps the formation instead of shortening it whole.
+	if flying and not allow_contact:
+		var fly_cut := _cut_fliers_to_rest_legal(models, new_positions, trails)
+		if fly_cut > 0:   # rules-must-log: the cut models say which book rule held them
+			board_clamp_notes.append("%s: %d model%s stop short of a container or wall (Flying: may move through terrain, but may not end a move on it)"
+				% [unit.get_name(), fly_cut, "" if fly_cut == 1 else "s"])
 	# Nothing actually moved (clamped to zero) → keep the old early-out (no state write, no broadcast).
 	var moved := false
 	for i in range(mini(positions.size(), new_positions.size())):
@@ -7934,11 +7942,7 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 	for m in models:
 		radii_in.append(model_base_radius_m(m as ModelInstance) / INCHES_TO_METERS)
 	opts["radii"] = radii_in
-	# Flying flies OVER terrain (p.13): the no-rest cell set would only reshape the formation away from a
-	# footprint it is allowed to cross, stalling long moves at the terrain edge (play-test bug: 1.2-1.7"
-	# of an 11-12" band). Ground units keep the exact rest projection in _finalize_placement.
-	opts["forbid_cells"] = {} if unit.has_special_rule("Flying") \
-		else _forbid_cells_in(mpos, mdelta, board_in, off, own_r_m, board_y_in)
+	opts["forbid_cells"] = _forbid_cells_in(mpos, mdelta, board_in, off, own_r_m, board_y_in)
 	# NML-230 Breach B: hand the planner the p.11 cap so EVERY generated polyline that enters difficult
 	# terrain is trimmed to 6" at the source — the gate-collapse-ladder and boxed/sidestep replans (and
 	# the solver's projections) bypass the unit-wide pre-plan reach clamp in _execute_move, which only
@@ -8138,7 +8142,7 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	# should not REST in either). A charge keeps its CONTACT models untouched (base contact owns their
 	# spot), but every NON-contact model still may not rest inside a container (container wave: a charge
 	# next to a box parked bases edge-in — "may never move through", and resting inside is worse).
-	if not allow_contact and not gate_flying:
+	if not allow_contact:
 		for i in range(n):
 			var proj := _project_out_forbidden_world(cfg[i], model_base_radius_m(models[i] as ModelInstance))
 			if not caps.is_empty() and _xz_dist_m(proj, planned_world[i] as Vector3) > float(caps[i]):
@@ -8186,7 +8190,7 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	var max_chain: float = CoherencyChecker.SKIRMISH_CHAIN_DISTANCE_INCHES \
 		if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
-			and (gate_flying or _config_terrain_clear(models, cfg)):
+			and _config_terrain_clear(models, cfg):
 		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, gate_traversal, obstacles)
 	# MINIMAL per-model coherency repair FIRST (field-test round 6 findings 2/3): pull only the stragglers into
 	# the coherent set, leaving the models that advanced correctly at their FULL move. The whole-unit shorten
@@ -8197,9 +8201,9 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	# the coherent start).
 	_pull_stragglers_coherent_world(models, cfg, obstacles, max_chain, planned_world if not caps.is_empty() else [], caps)
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
-			and (gate_flying or _config_terrain_clear(models, cfg)):
+			and _config_terrain_clear(models, cfg):
 		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, gate_traversal, obstacles)
-	return _clamp_gate_walls(planned_world, _shorten_world_to_legal(start_world, cfg, models, obstacles, max_chain, gate_flying), models, gate_flying, gate_traversal, obstacles)
+	return _clamp_gate_walls(planned_world, _shorten_world_to_legal(start_world, cfg, models, obstacles, max_chain), models, gate_flying, gate_traversal, obstacles)
 
 
 ## GATE CLAMP on the placement gate (watch-loop bug 12a; bases: NML-009): the gate's own displacements —
@@ -8629,10 +8633,9 @@ func _config_overlap_free(models: Array, cfg: Array, obstacles: Array) -> bool:
 ## a legal placement, as far forward as the rules allow and no further ("or as close as possible" — GF/AoF
 ## v3.5.1 p.7). Retreating toward the start also moves the unit AWAY from whatever it overlapped, so making
 ## the predicate overlap-aware stops the pull-back from dragging a model back into a friendly unit.
-func _shorten_world_to_legal(start_world: Array, cfg: Array, models: Array, obstacles: Array, max_chain: float,
-		flying: bool = false) -> Array:
+func _shorten_world_to_legal(start_world: Array, cfg: Array, models: Array, obstacles: Array, max_chain: float) -> Array:
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
-			and (flying or _config_terrain_clear(models, cfg)):
+			and _config_terrain_clear(models, cfg):
 		return cfg.duplicate()
 	var lo := 0.0
 	var hi := 1.0
@@ -8640,7 +8643,7 @@ func _shorten_world_to_legal(start_world: Array, cfg: Array, models: Array, obst
 		var mid := (lo + hi) * 0.5
 		var blended := _blend_world(start_world, cfg, mid)
 		if _config_coherent_world(models, blended, max_chain) and _config_overlap_free(models, blended, obstacles) \
-				and (flying or _config_terrain_clear(models, blended)):
+				and _config_terrain_clear(models, blended):
 			lo = mid
 		else:
 			hi = mid
@@ -8706,6 +8709,24 @@ func _retrace_wall_true(unit: GameUnit, route: Array, start: Vector3, gated: Vec
 			var end := cut.back() as Vector3
 			return [cut, Vector3(end.x, gated.y, end.z), true]
 	return [trail, gated, false]
+
+
+## Flying: cut every model whose end rests on forbidden ground back along its OWN route to the first
+## rest-legal spot (`_rest_legal_cut`, the gate's own predicate). Mutates both arrays; returns the models cut.
+func _cut_fliers_to_rest_legal(models: Array, new_positions: Array, trails: Array) -> int:
+	var cut_n := 0
+	for i in range(mini(trails.size(), new_positions.size())):
+		var r := model_base_radius_m(models[i] as ModelInstance)
+		if not _world_forbidden(new_positions[i] as Vector3, r):
+			continue
+		var cut := _rest_legal_cut(trails[i] as Array, r)
+		if cut.is_empty():
+			continue
+		trails[i] = cut
+		var end := cut.back() as Vector3
+		new_positions[i] = Vector3(end.x, (new_positions[i] as Vector3).y, end.z)
+		cut_n += 1
+	return cut_n
 
 
 ## AIG-L6b (EPOCH_73_V36): walk a route back from its end to the first point a base of `radius_m` may rest on - 1 cm

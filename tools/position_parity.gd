@@ -66,10 +66,10 @@ class TableProbe extends SoloController:
 				"obstacles": external_obstacles.size()})
 
 	func _shorten_world_to_legal(start_world: Array, cfg: Array, models: Array,
-			obstacles: Array, max_chain: float, flying: bool = false) -> Array:
+			obstacles: Array, max_chain: float) -> Array:
 		shorten_calls += 1
 		stages["whole_unit_shorten"] = true
-		var out: Array = super._shorten_world_to_legal(start_world, cfg, models, obstacles, max_chain, flying)
+		var out: Array = super._shorten_world_to_legal(start_world, cfg, models, obstacles, max_chain)
 		if trace:
 			shorten_trace.append({"in": _trace_points(cfg), "chain_in": max_chain,
 				"out": _trace_points(out)})
