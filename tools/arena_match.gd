@@ -50,8 +50,8 @@ const LAYOUT_SEED := 20260710
 const MAX_BOOT_FRAMES := 1200
 const SPAWN_SETTLE_FRAMES := 90
 const RESULT_SCHEMA := 1
-## Off-board audit (#215): shared with tools/solo_selfplay.gd so BOTH harnesses emit the identical
-## parseable line that tools/tactic_audit.py counts as d9.
+## Off-board audit (#215): emits the parseable line that tools/tactic_audit.py counts as d9
+## (the format is pinned in tools/offboard_audit.gd).
 const OffboardAudit := preload("res://tools/offboard_audit.gd")
 # NML-1152 dump=pregame: the pregame fixture builder (design §4.1) — new file, the arena diff stays thin.
 const PregameDump := preload("res://tools/pregame_dump.gd")
