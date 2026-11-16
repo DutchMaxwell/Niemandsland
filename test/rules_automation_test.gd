@@ -3,6 +3,14 @@ extends GdUnitTestSuite
 ## Nothing in gameplay reads it yet; this suite pins the pure helpers and the save round trip.
 
 
+func before_test() -> void:
+	CoreActivation.offer_override = 1   # M-3: this suite tests the offered solo / Automatic flow, not the core
+
+
+func after_test() -> void:
+	CoreActivation.offer_override = -1
+
+
 func _mgr() -> OPRArmyManager:
 	var mgr := OPRArmyManager.new()
 	add_child(mgr)

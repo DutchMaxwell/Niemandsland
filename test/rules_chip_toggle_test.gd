@@ -7,10 +7,12 @@ const L := RulesAutomation.Level
 
 
 func before_test() -> void:
+	CoreActivation.offer_override = 1   # M-3: this suite tests the offered solo / Automatic flow, not the core
 	RulesAutomation.ui_enabled_override = true
 
 
 func after_test() -> void:
+	CoreActivation.offer_override = -1
 	RulesAutomation.ui_enabled_override = false
 	RulesAutomation.ui_disabled_override = false
 

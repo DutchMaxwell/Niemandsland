@@ -912,7 +912,7 @@ func _ready() -> void:
 	save_manager.terrain_overlay = terrain_overlay
 	save_manager.radial_menu_controller = radial_menu_controller
 	save_manager.ai_slots_getter = func() -> Array: return ai_slots_sync_payload(solo_ai_slots)
-	save_manager.ai_slots_setter = _rpc_sync_ai_slots   # the same adopt + roster + grade + panel refresh a late joiner runs
+	save_manager.ai_slots_setter = _adopt_saved_ai_slots   # the same adopt + roster + grade + panel refresh a late joiner runs
 	save_manager.solo_mission_id_getter = func() -> String: return _solo_mission_id
 	save_manager.solo_mission_id_setter = func(mission_id: String) -> void: _solo_mission_id = mission_id
 
@@ -1065,7 +1065,7 @@ func _run_solo_ai_turn() -> void:
 	# advertise it. Ungated it was the worst of them: _solo_ensure_playing_phase() below deploys the AI's
 	# remainder and flips to PLAYING, and then the whole AI side runs at once against a human army that
 	# may still be standing on its tray.
-	if _deployment_gate_refuses_start():
+	if _engine_refused_without_core() or _deployment_gate_refuses_start():
 		return
 	_solo_ensure_playing_phase()
 	if opr_army_manager == null or movement_range_controller == null:
@@ -17946,6 +17946,8 @@ func _update_round_button() -> void:
 func set_rules_automation(level: int, who: String) -> bool:
 	if opr_army_manager == null or not RulesAutomation.change_allowed(level, not solo_ai_slots.is_empty(), _solo_resolution_pending()):
 		return false
+	if level == RulesAutomation.Level.AUTOMATIC and _engine_refused_without_core():
+		return false
 	if network_manager != null and network_manager.is_multiplayer_active():
 		if level == RulesAutomation.Level.AUTOMATIC:
 			return propose_rules_automation()   # plan 3.0: Automatic online needs the other player's confirm
@@ -18058,6 +18060,9 @@ func _on_rules_proposal(from_peer: int) -> void:
 		return
 	if _rules_agreement_card != null and is_instance_valid(_rules_agreement_card):
 		return
+	if _engine_refused_without_core():   # M-3: this peer cannot run Automatic - decline without asking the player
+		network_manager.send_command("decline_rules_automation", {})
+		return
 	_rules_agreement_mode = 2
 	_rules_proposal_timed_out = false
 	var card := PromptCard.new("Turn on automatic rules?",
@@ -18119,6 +18124,17 @@ func _apply_rules_automatic_agreed() -> void:
 func _log_rules_line(text: String) -> void:
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, text)
+
+
+## M-3 (maintainer 16.11.): the rules core is mandatory for NACHTMAHR and Automatic play. A door that would seat the
+## AI or switch Automatic on asks this first: true = refused, with one battle-log line and a toast saying why.
+func _engine_refused_without_core() -> bool:
+	if CoreActivation.engine_offered():
+		return false
+	_log_rules_line(CoreLoadNotice.ENGINE_OFF_LINE)
+	if is_inside_tree():
+		_solo_show_toast(CoreLoadNotice.ENGINE_OFF_LINE, 8.0)
+	return true
 
 
 ## The one other peer's id (two-player rooms); 2 as a safe fallback.
@@ -19765,7 +19781,7 @@ func _on_peer_version_validated(peer_id: int) -> void:
 ## Host, second player seated: is the one-time "play with rules automation?" question due? Never on a local
 ## table, with an AI seat ticked (automation is locked on there), once Automatic is on, or twice in a room.
 func _rules_start_question_due() -> bool:
-	return RulesAutomation.ui_enabled() and not _rules_start_asked and solo_ai_slots.is_empty() \
+	return RulesAutomation.ui_enabled() and not _rules_start_asked and solo_ai_slots.is_empty() and CoreActivation.engine_offered() \
 		and network_manager != null and network_manager.is_multiplayer_active() and opr_army_manager != null \
 		and opr_army_manager.rules_automation == RulesAutomation.Level.MANUAL
 
@@ -20911,6 +20927,13 @@ func _rpc_sync_ai_slots(slots: Array) -> void:
 	_refresh_solo_panel.call_deferred()
 
 
+## M-3: a save's AI seat comes back only where the core is loaded (a co-op peer adopts the host's designation untouched).
+func _adopt_saved_ai_slots(slots: Array) -> void:
+	if not slots.is_empty() and _engine_refused_without_core():
+		slots = []
+	_rpc_sync_ai_slots(slots)
+
+
 ## Called on the host when a client requests the current game state.
 ## The client's binary packet also makes Godot's SceneMultiplayer detect
 ## the peer, which is required for all subsequent RPCs to work.
@@ -21181,6 +21204,8 @@ func _on_import_opr_army() -> void:
 ## repo); public builds fetch index + list from the CDN at runtime with a user:// cache for offline
 ## replay. No source at all → toast; the own-army import with the AI checkbox stays the fallback.
 func _open_ai_opponent_dialog() -> void:
+	if _engine_refused_without_core():
+		return
 	var manifest := await _load_ai_list_manifest()
 	if manifest.is_empty():
 		_solo_show_toast("No AI lists available (no connection yet?) — import any list with the AI checkbox instead")
@@ -21375,6 +21400,8 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_contro
 	if ai_controlled and network_manager != null and network_manager.slot_has_human_peer(player_id):
 		ai_controlled = false
 		_solo_show_toast("P%d is a connected human player — AI designation refused" % player_id)
+	if ai_controlled and _engine_refused_without_core():
+		ai_controlled = false   # M-3: the army still imports, as a human army
 	# Solo (goal 001): remember the designation; the Solo panel + F11 read it. Re-importing the slot
 	# without the checkbox clears a stale designation.
 	var was_designated: bool = solo_ai_slots.has(player_id)
@@ -22281,7 +22308,17 @@ func _refresh_solo_panel() -> void:
 	# The difficulty ladder (grill 25.09.2026): the grade picker sits in the AI seat's row — the one slot
 	# the controller plays — and only where the AI runs (solo, or the co-op host).
 	var mp: bool = network_manager != null and network_manager.is_multiplayer_active()
+	var offered := CoreActivation.engine_offered()
+	if not offered:   # M-3: no core, no NACHTMAHR seat - say why instead of the tick (a seat a save or peer brought stays tickable off)
+		var why := Label.new()
+		why.text = CoreLoadNotice.ENGINE_OFF_LINE
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		why.theme_type_variation = HouseStyle.CAPTION
+		why.custom_minimum_size.x = 220.0   # a wrapping Label measures width 0 in a container without a floor
+		solo_panel_box.add_child(why)
 	for pid in pids:
+		if not offered and not solo_ai_slots.has(int(pid)):
+			continue
 		var cb := CheckButton.new()
 		var seat_name := _solo_army_name(int(pid))
 		cb.text = "AI plays P%d — %s" % [int(pid), seat_name if not seat_name.is_empty() else _remote_seat_label(int(pid))]
@@ -22380,6 +22417,9 @@ func _on_solo_ai_toggled(pressed: bool, player_id: int) -> void:
 	if pressed and network_manager != null and network_manager.slot_has_human_peer(player_id):
 		_solo_show_toast("P%d is a connected human player — NACHTMAHR can't take that slot" % player_id)
 		_refresh_solo_panel.call_deferred()   # snap the checkbox back to off
+		return
+	if pressed and _engine_refused_without_core():
+		_refresh_solo_panel.call_deferred()
 		return
 	if pressed:
 		solo_ai_slots[player_id] = true

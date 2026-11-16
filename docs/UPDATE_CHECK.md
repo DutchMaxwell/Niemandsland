@@ -48,13 +48,13 @@ release, and restores all backups if any copy fails — never a half-swapped ins
 (`SelfUpdater.windows_helper_script`, `scripts/self_updater.gd:173-208`).
 
 The `0.3.12.0` helper replaced only the `.exe`, so an in-game update from `0.3.12.0` leaves the new
-build without its core file and NACHTMAHR would quietly play the decision tree. On its first start a
+build without its core file and NACHTMAHR and Automatic rules would be switched off (Manual play only). On its first start a
 Windows export without `NmlCore` therefore looks in the release the old updater left in
 `user://_update/extracted`. Only if that staged `Niemandsland.exe` is byte-identical (sha256) to the
 running one does it copy `nml_core_godot.dll` next to the game and restart once
 (`CoreSelfHeal`, started from `UpdateChecker._ready`). A marker in `user://core_selfheal.txt` is
-written before the restart, so a start that is still without the core gives up: the tree plays and
-the game never restarts again. A failed copy, or no matching staged release, also restarts nothing. Every outcome prints exactly one log line starting with `core self-heal:`; after a successful
+written before the restart, so a start that is still without the core gives up: the game stays on Manual play and
+never restarts again. A failed copy, or no matching staged release, also restarts nothing. Every outcome prints exactly one log line starting with `core self-heal:`; after a successful
 heal it reads `core self-heal: NmlCore loaded after the self-heal relaunch`. Updates that start from
 `0.3.13.0` or later install every file, and the self-heal stays silent. The self-heal restores only
 the core file: an in-game update from `0.3.12.0` or older to `0.3.15.0` or newer also lacks

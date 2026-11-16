@@ -15,6 +15,18 @@ static func enabled() -> bool:
 	return _env == 1
 
 
+## M-3 (maintainer 16.11.): the rules core (NmlCore) is MANDATORY for engine play. Solo (an AI seat) and Automatic are
+## OFFERED only while it is loaded; a build without it plays Manual. Every door that offers either asks this (`applies`
+## below asks the class table itself). Test seam: -1 asks ClassDB, 0 / 1 stands in for an absent / loaded core.
+static var offer_override := -1
+
+
+static func engine_offered() -> bool:
+	if offer_override >= 0:
+		return offer_override == 1
+	return ClassDB.class_exists("NmlCore")
+
+
 ## The engine resolves at this table: an AI seat, or an agreed Automatic online room. Hotseat and Manual rooms: false.
 static func applies(main) -> bool:
 	return enabled() and ClassDB.class_exists("NmlCore") \

@@ -18,7 +18,7 @@ const PARITY_MELEE := "res://test/parity/parity_table_melee.gd"
 const BLOCKERS: Array[Dictionary] = [
 	{"name": "kill switch CoreActivation.enabled", "retire": "P4.D-41/-43", "file": ACTIVATION,
 		"header": "static func enabled() -> bool:", "needles": ["NML_ONE_CORE_ACTIVATION"]},
-	{"name": "NmlCore-less build (applies needs the class)", "retire": "P4.D-40", "file": ACTIVATION,
+	{"name": "NmlCore-less build (applies needs the class)", "retire": "P4.D-41 (P4.D-40 made the core mandatory at the doors)", "file": ACTIVATION,
 		"header": "static func applies(main) -> bool:", "needles": ["ClassDB.class_exists(\"NmlCore\")"]},
 	{"name": "non-OPR clause of is_plain (the attacker side; the target side went with P4.D-13b)",
 		"retire": "the P4.D-13 follow-up, before P4.D-41", "file": SLICE,
