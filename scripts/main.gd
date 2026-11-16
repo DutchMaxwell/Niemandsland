@@ -5000,7 +5000,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 	CoreActivation.note_legacy(self, "ai_volley", unit, order.map(func(id) -> GameUnit: return groups[id]["target"]), ",".join(why))
 	for id in order:
 		var g := groups[id] as Dictionary
-		if (g["target"] as GameUnit).get_alive_count() == 0:
+		if _solo_combined_alive(g["target"]) == 0:   # combined: a host with no model left still stands while its joined hero lives
 			continue   # P4.D-37: the move-through attacks the table paid just now (a refused core call) took its last model
 		await _solo_resolve_ai_volley(unit, g["target"], g["shots"], moved)
 
