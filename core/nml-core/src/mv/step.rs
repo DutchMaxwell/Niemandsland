@@ -26,7 +26,7 @@ use crate::geom::{self, V3};
 use crate::state::State;
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
-use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_74_CLIMB_COST, EPOCH_8_PLANNER_MENU, EPOCH_73_V36};
+use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_74_CLIMB_COST, EPOCH_8_PLANNER_MENU, EPOCH_73_V36, EPOCH_77_CHARGE_CAP};
 
 use super::cost::{ledge_cost, trim_polyline_priced, CellSet, Grid, Ledge, Wall, Zone};
 use super::entry::plan_unit_step_call;
@@ -46,6 +46,10 @@ const OVERLAP_EPS_M: f64 = 0.0005;
 /// `SoloController.GATE_SLACK_EPS_IN` :159 — the packed-contact epsilon every
 /// gate displacement budget carries on top of its band slack.
 const GATE_SLACK_EPS_IN: f64 = 0.05;
+/// `SoloController.CHARGE_CAP_MARGIN_IN` / `CHARGE_CAP_BISECT` (#183): a capped charge trail ends strictly inside
+/// band + contact epsilon; twelve bisections on the pre-gate -> gated segment.
+const CHARGE_CAP_MARGIN_IN: f64 = 0.001;
+const CHARGE_CAP_BISECT: usize = 12;
 /// Rules 3.6: a ruin is Unstable for a model whose OWN move is longer than
 /// this (an Advance of 6" never triggers it).
 const UNSTABLE_MOVE_IN: f64 = 6.0;
@@ -95,6 +99,8 @@ pub struct Landing {
     /// the bounds-clamped delta was zero and no call was ever made. Kept for
     /// the gate, which holds it against the recorded `moves_calls.jsonl` line.
     pub call: Option<MoveCall>,
+    /// #183 (`EPOCH_77_CHARGE_CAP`): the charge arc cap slid at least one model back toward its pre-gate end.
+    pub charge_cut: bool,
 }
 
 impl Landing {
@@ -472,6 +478,7 @@ pub(crate) fn placed_landing(state: &State, si: usize, t: &Terrain, trails: &[Ve
         trails: inch,
         movers,
         call: None,
+        charge_cut: false,
     }
 }
 
@@ -706,6 +713,11 @@ fn trim_to_band(&self, leg: &mut Vec<V2>, reach_in: f64) -> Option<(V2, V2)> {
     leg.last().copied().map(|p| (p, super::gate::to_world_f32(p, self.t.board_in())))
 }
 
+/// #183 `_charge_band_in`: the model's band — the granted reach, 6" when its own route entered difficult (p.11).
+fn charge_band_in(&self, leg: &[V2], r: f64, reach_in: f64) -> f64 {
+    if !self.ignores_difficult && leg_crosses(leg, r, self.t, terrain::is_difficult) { reach_in.min(DIFFICULT_MOVE_CAP_IN) } else { reach_in }
+}
+
 fn gate_caps(&self, trails: &[Vec<V2>], radii_m: &[f64], reach_in: f64) -> Vec<f64> {
     let ledges_w = self.world_ledges();
     trails
@@ -884,6 +896,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
     // 1-4, the epoch-gated whole-unit shorten and the wall clamp are ported
     // (`mv::gate`). Epoch-6 charges enter the uncapped contact-aware arm;
     // the collapse ladder remains exclusive to ordinary movement.
+    let mut pre_gate: Vec<V2> = Vec::new(); // #183: the charge arc cap slides back toward these
     if stirred && (!self.allow_contact || rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)) {
         let planned_in = achieved_in(&starts, &planned);
         let radii_in: Vec<f64> = radii_m.iter().map(|r| r / IN2M).collect();
@@ -911,7 +924,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
             Some(t),
             flags,
         );
-        planned = fixed;
+        if self.allow_contact { pre_gate = std::mem::replace(&mut planned, fixed); } else { planned = fixed; }
         // :4890-4931 GATE-COLLAPSE LADDER (S6): re-plan shorter when the gate
         // nearly erased pass 1 (`rescue_should_fire`); a coherent rung always
         // beats a torn one, and more distance wins within a class.
@@ -965,7 +978,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
             if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) && !best_coherent && start_coherent {
                 return Landing { sidestep_spent: false, shorten_covered: true, budget_in: 0.0,
                     movers: self.movers.clone(), end: self.pos.clone(), arc_in: 0.0, climb_in: 0.0,
-                    dangerous: vec![false; self.movers.len()], trails: Vec::new(), call: best_call };
+                    dangerous: vec![false; self.movers.len()], trails: Vec::new(), call: best_call, charge_cut: false };
             }
             (planned, trails, budget_in, call) = (best_pos, best_trails, best_reach, best_call);
         }
@@ -1024,35 +1037,62 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
     }
     let (walls, ledges) = self.walls_and_ledges();
     let mut climb_in = 0.0f64;
-    for (i, leg) in trails.iter_mut().enumerate() {
-        // :5068-5071 — and THEN the trail is retraced to the endpoint, which is
-        // the polyline `last_move_paths` publishes and :8659 measures.
-        let mut trail = retrace_to(leg, starts[i], planned.get(i).copied().unwrap_or(starts[i]));
+    // The retrace (:5068-5071) and the AIG-L6/L6b wall truth (`_retrace_wall_true`) as one step, so the #183 cap can
+    // re-run it on a shortened end. Returns the published polyline and the end it lands on.
+    let wall_true = |leg: &[V2], i: usize, gated: V2| -> (Vec<V2>, V2) {
+        let mut trail = retrace_to(leg, starts[i], gated);
+        let mut end_p = gated;
         // AIG-L6 (`EPOCH_73_V36`, table twin `_retrace_wall_true`): the retrace closes the trimmed route with ONE
         // straight leg, which can run through a wall the route bent around once the gate moved the end off the
         // route (a charge's coherency pull). That model keeps its route-true endpoint; walls here are the
         // planner's own (container edges are climbs, a Flying unit has none).
         let n = trail.len();
-        if rule_on(self.rules_epoch, EPOCH_73_V36) && n >= 2 && i < planned.len()
+        if rule_on(self.rules_epoch, EPOCH_73_V36) && n >= 2
             && walls.iter().any(|w| g2::segments_cross(trail[n - 2], trail[n - 1], w[0], w[1])) {
             if let Some(&end) = leg.last() {
-                planned[i] = end;
-                trail = leg.clone();
+                end_p = end;
+                trail = leg.to_vec();
             }
-        } else if rule_on(self.rules_epoch, EPOCH_73_V36) && !self.flying && n >= 2 && leg.len() >= 2 && i < planned.len() {
+        } else if rule_on(self.rules_epoch, EPOCH_73_V36) && !self.flying && n >= 2 && leg.len() >= 2 {
             // AIG-L6b (`EPOCH_73_V36`, table twin `_retrace_wall_true`): a model never ends with its base where it may
             // not rest (a container, its wall). The gate's push-out is reverted by the wall clamp when it starts
             // inside the wall clearance, so a climber that came down a container edge stayed ON it: it stops at the
             // first rest-legal point of its own route instead.
             let r_in = radii_m.get(i).copied().unwrap_or(0.0) / IN2M;
-            let end = [planned[i][0] as f64, planned[i][1] as f64];
-            if super::gate::overlaps_block(end, r_in, t) {
+            if super::gate::overlaps_block([end_p[0] as f64, end_p[1] as f64], r_in, t) {
                 if let Some(cut) = super::gate::rest_legal_cut(leg, r_in, t) {
-                    planned[i] = *cut.last().unwrap_or(&planned[i]);
+                    end_p = *cut.last().unwrap_or(&end_p);
                     trail = cut;
                 }
             }
         }
+        (trail, end_p)
+    };
+    let priced = |tr: &[V2]| g2::polyline_length(tr) + tr.windows(2).map(|w| ledge_cost(w[0], w[1], &ledges)).sum::<f64>();
+    let cap = self.allow_contact && rule_on(self.rules_epoch, EPOCH_77_CHARGE_CAP) && pre_gate.len() == planned.len();
+    let mut charge_cut = false;
+    for (i, leg) in trails.iter_mut().enumerate() {
+        let trail = if i < planned.len() {
+            let (mut tr, mut end_p) = wall_true(leg, i, planned[i]);
+            // #183 (`EPOCH_77_CHARGE_CAP`, table twin `_charge_arc_cap`): a gate correction that stretched the trail
+            // past band + contact epsilon slides back along pre-gate -> gated to the farthest end that still fits.
+            let limit = if cap { self.charge_band_in(leg, radii_m.get(i).copied().unwrap_or(0.0), budget_in)
+                + crate::sim::BASE_CONTACT_EPSILON_IN - CHARGE_CAP_MARGIN_IN } else { f64::INFINITY };
+            if priced(&tr) > limit {
+                (tr, end_p) = wall_true(leg, i, pre_gate[i]);
+                let (mut lo, mut hi) = (0.0f64, 1.0f64);
+                for _ in 0..CHARGE_CAP_BISECT {
+                    let mid = (lo + hi) * 0.5;
+                    let c = wall_true(leg, i, g2::lerp(pre_gate[i], planned[i], mid));
+                    if priced(&c.0) <= limit { lo = mid; (tr, end_p) = c; } else { hi = mid; }
+                }
+                charge_cut = true;
+            }
+            planned[i] = end_p;
+            tr
+        } else {
+            retrace_to(leg, starts[i], starts[i])
+        };
         *leg = trail;
         // :6317-6322 — the climb is movement spent: it joins the arc, and the largest one is logged.
         let climb: f64 = leg.windows(2).map(|w| ledge_cost(w[0], w[1], &ledges)).sum();
@@ -1076,7 +1116,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         })
         .collect();
     Landing { sidestep_spent, shorten_covered: !self.allow_contact && rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES),
-        movers: self.movers.clone(), end, budget_in, arc_in, climb_in, dangerous, trails, call }
+        movers: self.movers.clone(), end, budget_in, arc_in, climb_in, dangerous, trails, call, charge_cut }
 }
 }
 
@@ -1383,6 +1423,7 @@ fn charge_landing(self, state: &State, t: &Terrain, si: usize, ci: usize,
         allow_contact: true,
     };
     let land = ch.execute(band_in, avoid_diff, &radii_m);
+    let ext = if land.charge_cut { ch.external_discs() } else { Vec::new() };
     // #857. The table RE-GATES a charge whose executable corridor cannot reach
     // base contact within the band to a RUSH (`charge_illegal_why` :1473 ->
     // `charge_path_probe` :8764) and then runs `_move_toward` toward the target
@@ -1411,6 +1452,11 @@ fn charge_landing(self, state: &State, t: &Terrain, si: usize, ci: usize,
         // formation must fit the band it was granted (a trailing model can walk further than the cap).
         short |= rule_on(self.rules_epoch, EPOCH_73_V36)
             && land.arc_in > land.budget_in + crate::sim::BASE_CONTACT_EPSILON_IN;
+        // #183 (`EPOCH_77_CHARGE_CAP`, table twin `_charge_path_probe_impl`): a charge has no ladder to settle debts, so
+        // an end the arc cap slid back onto another base is not declared. Coherency is not asked (log-only default).
+        short |= land.charge_cut && !super::gate::overlap_free(&land.movers.iter()
+            .zip(&land.end).map(|(m, p)| { let c = t.to_inch(*p); super::gate::Disc { c: [c[0] as f64, c[1] as f64],
+                r: radius_of(state, *m) / IN2M, shape: state.base_shape(m.unit) } }).collect::<Vec<_>>(), &ext);
     }
     Some((land, short))
 }
@@ -1740,6 +1786,7 @@ pub(crate) mod tests {
             dangerous: dang,
             trails: Vec::new(),
             call: None,
+            charge_cut: false,
         };
         let tough1 = vec![UnitStatic { wounds_max: vec![1, 1, 1], ..Default::default() }];
         let mut shot = crate::dice::ShootResult::default();

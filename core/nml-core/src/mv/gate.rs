@@ -996,6 +996,12 @@ mod shape_tests {
     }
 }
 
+/// `_config_overlap_free`: no moving base overlaps another moving base or an external one (#183 charge probe).
+pub fn overlap_free(cfg: &[Disc], external: &[Disc]) -> bool {
+    (0..cfg.len()).all(|i| (i + 1..cfg.len()).all(|j| edge(&cfg[i], &cfg[j]) >= -RESOLVE_EPS_IN)
+        && external.iter().all(|o| edge(&cfg[i], o) >= -RESOLVE_EPS_IN))
+}
+
 /// The table's three final predicates, shared by each bisection probe.
 fn config_legal(cfg: &[Disc], external: &[Disc], terrain: Option<&Terrain>, chain: f64) -> bool {
     config_coherent(cfg, chain)
