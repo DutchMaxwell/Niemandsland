@@ -8229,7 +8229,7 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 		if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
 			and _config_terrain_clear(models, cfg, gate_walls):
-		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, gate_traversal, obstacles)
+		return _clamp_gate_walls_keep_coherent(planned_world, cfg, models, gate_flying, gate_traversal, obstacles, start_world, max_chain)
 	# MINIMAL per-model coherency repair FIRST (field-test round 6 findings 2/3): pull only the stragglers into
 	# the coherent set, leaving the models that advanced correctly at their FULL move. The whole-unit shorten
 	# below blends the ENTIRE unit back toward the start, which systematically under-moved the advance (and so
@@ -8240,8 +8240,24 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	_pull_stragglers_coherent_world(models, cfg, obstacles, max_chain, planned_world if not caps.is_empty() else [], caps, gate_walls)
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
 			and _config_terrain_clear(models, cfg, gate_walls):
-		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, gate_traversal, obstacles)
-	return _clamp_gate_walls(planned_world, _shorten_world_to_legal(start_world, cfg, models, obstacles, max_chain, gate_walls), models, gate_flying, gate_traversal, obstacles)
+		return _clamp_gate_walls_keep_coherent(planned_world, cfg, models, gate_flying, gate_traversal, obstacles, start_world, max_chain)
+	return _clamp_gate_walls_keep_coherent(planned_world, _shorten_world_to_legal(start_world, cfg, models, obstacles, max_chain, gate_walls),
+		models, gate_flying, gate_traversal, obstacles, start_world, max_chain)
+
+
+## The wall clamp for a REPAIRED gate result, with a coherency guard (Stalkers coherency hold, playtest 1116). The
+## strict clamp reverts every model whose planned -> repaired chord crosses a wall to its FULL-plan endpoint; mixed
+## with repaired peers that can tear the chain again, and the collapse ladder then holds the unit. When the strict
+## result is torn, retry as a PARTIAL revert (a model keeps its repaired endpoint when its straight start -> endpoint
+## chord keeps clear of every wall, so it is no tunnel) and take that only if it is coherent. Never worse: a
+## coherent strict result is returned untouched, and a still-torn partial falls back to the strict one.
+func _clamp_gate_walls_keep_coherent(planned_world: Array, cfg: Array, models: Array, flying: bool,
+		traversal: bool, obstacles: Array, start_world: Array, max_chain: float) -> Array:
+	var strict := _clamp_gate_walls(planned_world, cfg.duplicate(), models, flying, traversal, obstacles)
+	if _config_coherent_world(models, strict, max_chain):
+		return strict
+	var partial := _clamp_gate_walls(planned_world, cfg.duplicate(), models, flying, traversal, obstacles, start_world)
+	return partial if _config_coherent_world(models, partial, max_chain) else strict
 
 
 ## GATE CLAMP on the placement gate (watch-loop bug 12a; bases: NML-009): the gate's own displacements —
@@ -8253,8 +8269,10 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 ## displacement (planned → final) crosses a wall segment or cuts through an external base is reverted to
 ## its planned (route-true, legal) endpoint. The residual overlap/coherency debt is the caller ladder's
 ## to settle at a shorter reach — route truth wins.
+## With `start_world` (PARTIAL REVERT, see _clamp_gate_walls_keep_coherent) a model whose straight start -> endpoint
+## chord keeps clear of every wall keeps its endpoint instead of snapping back to the full plan; without it the revert is strict.
 func _clamp_gate_walls(planned_world: Array, cfg: Array, models: Array = [], flying: bool = false,
-		traversal: bool = false, obstacles: Array = []) -> Array:
+		traversal: bool = false, obstacles: Array = [], start_world: Array = []) -> Array:
 	if flying:
 		return cfg   # Flying crosses walls legally (GF v3.5.1) — a wall-crossing gate push is no tunnel
 	var walls := _rest_walls()
@@ -8271,15 +8289,23 @@ func _clamp_gate_walls(planned_world: Array, cfg: Array, models: Array = [], fly
 		var r_m: float = model_base_radius_m(models[i] as ModelInstance) if i < models.size() else 0.0
 		var a2 := Vector2(a.x, a.z)
 		var b2 := Vector2(b.x, b.z)
-		var clamped := false
-		for wseg in walls:
-			if MovementPlanner.seg_seg_distance(a2, b2, wseg[0] as Vector2, wseg[1] as Vector2) < r_m + 0.001:
-				cfg[i] = a
-				clamped = true
-				break
-		if not clamped and not traversal and gate_chord_crosses_base(a2, b2, r_m, obstacles):
+		var clamped := not _chord_clear_of_walls(a2, b2, r_m, walls)
+		if clamped and i < start_world.size():
+			var s0: Vector3 = start_world[i]
+			clamped = not _chord_clear_of_walls(Vector2(s0.x, s0.z), b2, r_m, walls)   # partial revert: keep `b`
+		if clamped:
+			cfg[i] = a
+		elif not traversal and gate_chord_crosses_base(a2, b2, r_m, obstacles):
 			cfg[i] = a   # Traversal: a base-crossing chord is legal (walls above still clamped it)
 	return cfg
+
+
+## True when the chord a -> b keeps `r_m` (+1 mm) clear of every wall segment — neither crossing nor sliding along one.
+static func _chord_clear_of_walls(a: Vector2, b: Vector2, r_m: float, walls: Array) -> bool:
+	for wseg in walls:
+		if MovementPlanner.seg_seg_distance(a, b, wseg[0] as Vector2, wseg[1] as Vector2) < r_m + 0.001:
+			return false
+	return true
 
 
 ## NML-009 — does the straight gate chord a→b (a base of radius r_m, metres) cut THROUGH one of the
