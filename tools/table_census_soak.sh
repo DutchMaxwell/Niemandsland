@@ -15,7 +15,7 @@ merge() {
 	python3 - "$1" <<'PY'
 import glob, json, sys
 out = sys.argv[1]
-legacy, runs, games = {}, 0, 0
+legacy, sets, runs, games = {}, {}, 0, 0
 for path in sorted(glob.glob(out + "/game_*.json")):
     data = json.load(open(path))
     games += 1
@@ -23,10 +23,13 @@ for path in sorted(glob.glob(out + "/game_*.json")):
     for door, reasons in data.get("legacy", {}).items():
         for reason, n in reasons.items():
             legacy.setdefault(door, {})[reason] = legacy.get(door, {}).get(reason, 0) + int(n)
+    for door, by_set in data.get("legacy_sets", {}).items():
+        for key, n in by_set.items():
+            sets.setdefault(door, {})[key] = sets.get(door, {}).get(key, 0) + int(n)
 table = legacy.get("ai_volley", {}).get("_all", 0)
 total = table + runs
 share = {r: round(100.0 * n / total, 1) for r, n in legacy.get("ai_volley", {}).items() if total}
-json.dump({"games": games, "core_ai_runs": runs, "ai_volleys": total, "legacy": legacy,
+json.dump({"games": games, "core_ai_runs": runs, "ai_volleys": total, "legacy": legacy, "legacy_sets": sets,
            "ai_volley_share_pct": share}, open(out + "/census.json", "w"), indent=1, sort_keys=True)
 print("games %d  ai_volleys %d  on the table %d" % (games, total, table))
 for r, n in sorted(legacy.get("ai_volley", {}).items(), key=lambda kv: (-kv[1], kv[0]))[:16]:
