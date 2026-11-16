@@ -76,3 +76,59 @@ func test_direct_wound_models_still_parks_casualties(timeout := 240000) -> void:
 	assert_int(remaining).is_equal(0)
 	assert_int(_index_of("WoundOrderDirect destroyed")).is_greater_equal(0)
 	await E2EBoot.settle(get_tree())
+
+
+## Your shooter with real OPR weapons, so the volley reads production's own profile dicts.
+func _armed_shooter(specs: Array) -> GameUnit:
+	var shooter := E2EBoot.make_unit(_main, 1, "WoundOrderShooter", [Vector3.ZERO])
+	shooter.unit_properties["quality"] = 2
+	var opr := OPRApiClient.OPRUnit.new()
+	for spec in specs:
+		var w := OPRApiClient.OPRWeapon.new()
+		w.name = str(spec["name"])
+		w.range_value = 24
+		w.attacks = int(spec.get("attacks", 4))
+		var rules: Array[String] = []
+		for r in spec.get("rules", []):
+			rules.append(str(r))
+		w.special_rules = rules
+		opr.weapons.append(w)
+	shooter.source_type = "opr"
+	shooter.source_data = opr
+	_main.opr_army_manager.game_units[shooter.unit_id] = shooter
+	return shooter
+
+
+## One Tough model with room for the volley's whole state change (no death mid-fixture).
+func _tough_target(wounds: int) -> GameUnit:
+	var target := E2EBoot.make_unit(_main, 2, "WoundOrderTough", [Vector3(0.2, 0.0, 0.0)])
+	target.unit_properties["special_rules"] = ["Tough(%d)" % wounds]
+	(target.models[0] as ModelInstance).wounds_max = wounds
+	(target.models[0] as ModelInstance).wounds_current = wounds
+	_main.opr_army_manager.game_units[target.unit_id] = target
+	return target
+
+
+## Play-test R2: "Scavenger Beast takes 2 wounds (1/6 wounds)" after a Deadly(3) weapon had already
+## dealt 3 of the 5 wounds (6 -> 1). The pooled landing printed only its OWN 2, so the number beside
+## the counter contradicted the state. The "takes" line must count every wound the volley dealt.
+func test_volley_wound_line_counts_the_deadly_wounds_it_dealt(timeout := 240000) -> void:
+	var shooter := _armed_shooter([{"name": "Poolgun", "rules": ["AP(6)"]},
+		{"name": "Deadlygun", "rules": ["AP(6)", "Deadly(3)"]}])
+	var foe := _tough_target(24)
+	var before: int = int((foe.models[0] as ModelInstance).wounds_current)
+	_main.seed_tray_rng(20261116)
+	await _main._run_human_shooting(shooter, foe)
+	var taken: int = before - int((foe.models[0] as ModelInstance).wounds_current)
+	var text := ""
+	for e in _main.battle_log.entries():
+		text += str((e as Dictionary)["text"]) + "\n"
+	assert_str(text).override_failure_message("fixture: the Deadly(3) weapon must have landed\n%s" % text) \
+		.contains("Deadly(3)")
+	assert_bool(text.contains("WoundOrderTough takes")) \
+		.override_failure_message("fixture: the pooled landing must have printed its line\n%s" % text).is_true()
+	assert_int(taken).override_failure_message("fixture: the volley must have taken wounds\n%s" % text).is_greater(0)
+	assert_str(text).override_failure_message(
+		"the \"takes\" line must count every wound the volley dealt (%d), Deadly included\n%s" % [taken, text]) \
+		.contains("WoundOrderTough takes %d wound" % taken)
+	await E2EBoot.settle(get_tree())
