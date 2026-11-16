@@ -351,7 +351,7 @@ impl NmlCore {
     }
 
     /// One-core P3: one step of `unit`'s activation on handle `h`, over the table's ordered `transcript`
-    /// (`{"t":"begin"|"cancel"}`, `{"t":"intent","kind","shoot"}`, `{"t":"faces","faces":[int]}`,
+    /// (`{"t":"begin"|"cancel"}`, `{"t":"intent","kind","shoot","split"?: [{"member","weapon","target"}]}`, `{"t":"faces","faces":[int]}`,
     /// `{"t":"placed","positions":[Vector3]}`). Returns `{"step": "need_roll"|"open"|"refused"|"done"|"cancelled", ..}`;
     /// on `done` a new slot holds the state (`"handle"`). `enforce` = "Enforce Movement Limit": an overrun of the
     /// unit's allowance is refused when on, accepted with one log line naming it when off.

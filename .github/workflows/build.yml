@@ -49,6 +49,7 @@ jobs:
     outputs:
       not_core_only: ${{ steps.filter.outputs.not_core_only }}
       macos_relevant: ${{ steps.macos_filter.outputs.macos_relevant }}
+      rust_relevant: ${{ steps.rust_filter.outputs.rust_relevant }}
       shard_count: ${{ steps.shards.outputs.shard_count }}
       shards: ${{ steps.shards.outputs.shards }}
     steps:
@@ -87,6 +88,23 @@ jobs:
               - 'tools/assert_ship_probe.py'
               - 'scripts/solo/**'
               - 'assets/solo/brains/**'
+      # The Rust workspace checks (rust-gate below) run for a pull request only when it touches a path
+      # they read. This list MUST equal rust.yml's push `paths:` list; tools/ci_rust_paths_test.py fails
+      # the PR when the two drift apart.
+      - uses: dorny/paths-filter@v3
+        id: rust_filter
+        with:
+          filters: |
+            rust_relevant:
+              - 'core/**'
+              - 'rust-toolchain.toml'
+              - '.github/workflows/rust.yml'
+              - 'tools/**'
+              - 'assets/solo/**'
+              - 'assets/model_manifest.json'
+              - 'data/**'
+              - 'test/fixtures/**'
+              - 'farm/patches/preserve-core-identity.patch'
 
   # Builds the Rust core once per run for the test shards, which load it (one-core P1, step 5).
   # Shares the export-linux rust cache entry instead of adding a second ~1 GB one; no debug-symbol
@@ -236,6 +254,11 @@ jobs:
       - name: Gate - NmlCore loads in the test lane
         run: |
           godot --headless --path . -s res://tools/core_dormant_check.gd 2>&1 | tee /tmp/core_load.log
+          # `-s` runs before the autoloads exist: a script chain that names GraphicsSettings (or any autoload) bare dies
+          # here with "Compile Error: Identifier not found" - and tools/arena_match.gd (every A/B and the box fleet) with it.
+          if grep -a "Compile Error" /tmp/core_load.log; then
+            echo "::error::a -s tool script failed to compile (an autoload named bare in a script its chain reaches?)"; exit 1
+          fi
           python3 - <<'PY'
           import json, sys
           lines = [l for l in open("/tmp/core_load.log") if "NML_DORMANT_CHECK " in l]
@@ -347,11 +370,13 @@ jobs:
       # test/shard_weights.json): the balance check (max shard within 15 % of the mean) and the
       # real-tree coverage check. rust.yml runs it too, but only when its path filter matches;
       # weights and suite files change on most GDScript PRs, so the guard lives here, on every PR.
-      - name: Shard assignment tests (balance and real-tree coverage)
+      # tools/ci_rust_paths_test.py rides along: a PR that edits only a workflow's path list does not
+      # match rust.yml's own filter, so the rust-gate wiring is guarded here too.
+      - name: Shard assignment tests (balance and real-tree coverage) and rust-gate wiring
         run: |
           set -euo pipefail
           python3 -m pip install --quiet pytest
-          python3 -m pytest tools/shard_assign_test.py -q
+          python3 -m pytest tools/shard_assign_test.py tools/ci_rust_paths_test.py -q
 
   relay-tests:
     name: Relay tests
@@ -375,12 +400,13 @@ jobs:
   # The one name branch protection requires (besides `hygiene`). It is green when every job it needs
   # is `success`, or `skipped` (the docs/tools fast lane skips the test shards). It runs with
   # `if: always()` so a failed or cancelled need shows up as a red check instead of a missing one.
-  # Add every new gating job to `needs` below.
+  # Add every new gating job to `needs` below. rust-gate is in `needs` because a check from another
+  # workflow cannot be required by name here: a PR with red core tests was mergeable while this was green.
   all-required:
     name: All required checks
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [changes, core-linux, core-py-linux, test, shards-coverage, relay-tests]
+    needs: [changes, core-linux, core-py-linux, test, shards-coverage, relay-tests, rust-gate]
     if: always()
     steps:
       - name: Every required job is green or skipped
@@ -491,6 +517,11 @@ jobs:
           done
           echo "OK: exported build started, loaded NmlCore, no GDExtension/script/parse errors"
 
+      # THE PROOF (twin of export-macos'): the smoke above only shows the class exists, which a build without the
+      # packed net or the tract feature also passes. This plays the exported build and fails on `opponent: tree`.
+      - name: Ship probe - the exported build plays erlkoenig
+        run: tools/ci/linux_ship_probe.sh build/linux
+
       # Best-effort: a failed artifact upload (e.g. the account's Actions artifact-storage
       # quota is full) must not red-fail the export job. Releases use the self-contained
       # release job below, not these artifacts.
@@ -566,6 +597,23 @@ jobs:
           fi
           echo "OK: no MinGW runtime imports"
 
+      # Second export with the probe as main scene (twin of export-macos'). Only its .pck is uploaded: windows-load-proof
+      # runs it with the shipping .exe and .dll, so the binaries are the shipping ones by construction.
+      - name: Export the proof .pck (probe scene as main scene)
+        run: |
+          set -euo pipefail
+          sed -i 's|^run/main_scene=.*|run/main_scene="res://tools/core_ship_probe.tscn"|' project.godot
+          mkdir -p build/windows-probe
+          godot --headless --verbose --export-release "Windows Desktop" build/windows-probe/$EXPORT_NAME.exe
+          test -f build/windows-probe/$EXPORT_NAME.pck
+
+      - name: Upload Windows proof .pck
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-probe-pck
+          path: build/windows-probe/${{ env.EXPORT_NAME }}.pck
+
       - name: Upload Windows Artifact
         continue-on-error: true
         uses: actions/upload-artifact@v4
@@ -585,11 +633,24 @@ jobs:
     needs: [changes, export-windows]
     if: ${{ !startsWith(github.ref, 'refs/tags/v') && (github.event_name != 'pull_request' || (needs.changes.outputs.not_core_only == 'true' && !github.event.pull_request.draft)) }}
     steps:
+      # First: checkout cleans the workspace. Only the judge script is needed.
+      - name: Checkout (tools/assert_ship_probe.py only)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/assert_ship_probe.py
+          sparse-checkout-cone-mode: false
+
       - name: Download the Windows export
         uses: actions/download-artifact@v4
         with:
           name: windows-build
           path: build/windows
+
+      - name: Download the proof .pck
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-probe-pck
+          path: build/windows-probe-pck
 
       # Run 1 of this step wrote no log at all: a killed .exe leaves no proof, so ask it to quit by itself
       # (--quit-after), and capture all three channels (--log-file, stdout, stderr) plus the exit code and
@@ -615,6 +676,30 @@ jobs:
           }
           if (-not $found) { Write-Output "::error::no output channel carried 'core: NmlCore loaded' - the core did not load, or the .exe never started"; exit 1 }
           Write-Output "OK: the Windows build loaded NmlCore"
+
+      # THE PROOF (twin of export-macos'): shipping .exe and .dll with the probe .pck swapped in, headless; --log-file
+      # carries the print() output of a GUI-subsystem .exe. Advisory, like the job.
+      - name: Run the proof build - NmlCore loads, the opponent is erlkoenig
+        shell: pwsh
+        run: |
+          $dir = Join-Path $PWD 'build\windows-probe'
+          Copy-Item -Recurse 'build\windows' $dir
+          Copy-Item (Join-Path $PWD "build\windows-probe-pck\$env:EXPORT_NAME.pck") $dir -Force
+          $out = @{ log = Join-Path $env:RUNNER_TEMP 'probe.log'; stdout = Join-Path $env:RUNNER_TEMP 'probe.stdout.txt'; stderr = Join-Path $env:RUNNER_TEMP 'probe.stderr.txt' }
+          $p = Start-Process -FilePath (Join-Path $dir "$env:EXPORT_NAME.exe") -WorkingDirectory $dir -PassThru -RedirectStandardOutput $out.stdout -RedirectStandardError $out.stderr `
+            -ArgumentList '--headless', '--log-file', "`"$($out.log)`""
+          $null = $p.Handle
+          $rc = 124
+          if ($p.WaitForExit(300000)) { $rc = $p.ExitCode } else { Stop-Process -Id $p.Id -Force }
+          Write-Output "probe exit code: $rc"
+          $all = Join-Path $env:RUNNER_TEMP 'probe_all.log'
+          foreach ($k in 'log', 'stdout', 'stderr') {
+            $f = $out[$k]; if (-not (Test-Path $f)) { continue }
+            Write-Output "::group::$k"; Get-Content $f; Write-Output '::endgroup::'
+            Get-Content $f | Add-Content -Encoding utf8 $all
+          }
+          python tools/assert_ship_probe.py $all --os Windows --arch x86_64 --exit-code $rc
+          exit $LASTEXITCODE
 
   # macOS core + proof (maintainer decision, board D40, 26.09.2026). tract-linalg assembles hand-written
   # SIMD kernels per target and needs Apple's toolchain, so the Rust core is built natively on a macos-15
@@ -796,13 +881,16 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # Tag-only invocation of rust.yml's own job (as a reusable workflow) so the
-  # release below can `needs` it — cross-workflow `needs` doesn't exist, and
-  # rust.yml has no tag trigger of its own (tags don't touch main/PR). Every
-  # non-tag push/PR is still covered by rust.yml running directly.
+  # rust.yml's jobs, called as a reusable workflow so that `all-required` and the release below can
+  # `needs` them — cross-workflow `needs` doesn't exist, and a separate rust.yml run is invisible to
+  # all-required, the one name branch protection requires. Runs on a tag push, and on a pull request
+  # that touches a path rust.yml reads (changes.rust_relevant: a PR that does not touch core skips
+  # this job, which all-required counts as green). rust.yml no longer has a pull_request trigger of
+  # its own, so each PR still gets exactly one Rust run; pushes to main keep rust.yml's own trigger.
   rust-gate:
-    name: Rust workspace checks (release gate)
-    if: startsWith(github.ref, 'refs/tags/v')
+    name: Rust workspace checks
+    needs: changes
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'pull_request' && needs.changes.outputs.rust_relevant == 'true') }}
     uses: ./.github/workflows/rust.yml
 
   # Tag-gated: pushing a "v*" tag (e.g. v0.3.7-alpha) builds both platforms and
@@ -900,6 +988,11 @@ jobs:
               echo "::error::the Linux release build never printed '$LINE' - the core did not load"; exit 1; }
           done
           echo "OK: the Linux release build loaded NmlCore"
+
+      # export-linux's proof on the build that ships (that job never runs on a tag): a failed probe fails the release,
+      # like export-macos. It exports into build/, so dist/ is untouched.
+      - name: Ship probe - the Linux release build plays erlkoenig
+        run: tools/ci/linux_ship_probe.sh dist/linux
 
       - name: Guard - no debug symbols in the release tree
         run: |

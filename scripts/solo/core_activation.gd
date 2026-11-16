@@ -32,6 +32,37 @@ static func is_plain(gu: GameUnit) -> bool:
 	return true
 
 
+## P4.D-13b: the TARGET half of `is_plain`. The core takes a target's profile from unit_properties
+## (`BattleSim._unit_profile`), so a target needs no OPR profile: a loaded save from before the profile was saved is shot
+## like any other unit. What it needs is a statline the core can hand a save to. A target that has an OPR profile keeps
+## the weapon-rule clause of `is_plain`.
+static func is_plain_target(gu: GameUnit) -> bool:
+	if not (gu.unit_properties.get("special_rules", []) as Array).is_empty() \
+			or gu.has_attached_heroes() or gu.is_attached() or not has_statline(gu):
+		return false
+	var src := gu.source_data as OPRApiClient.OPRUnit
+	for w in src.weapons if src != null else []:
+		if not w.special_rules.is_empty():
+			return false
+	return true
+
+
+## Quality and defense both in 2..6 (the rules' range). A hand-written foreign save may carry none: get_quality() and
+## get_defense() then answer 0, and there is nothing to hand the core.
+static func has_statline(gu: GameUnit) -> bool:
+	return gu.get_quality() in range(2, 7) and gu.get_defense() in range(2, 7)
+
+
+## P4.D-13c: a unit with no statline cannot be shot at a core table. True = the shot must not happen; ONE battle-log line
+## says why. False when the core door is not on (kill switch, hotseat): the table shoots as it always did.
+static func refuses_statlineless(main, attacker: GameUnit, target: GameUnit) -> bool:
+	if not applies(main) or has_statline(target):
+		return false
+	main._log_rule_event(BattleLog.Category.COMBAT, "%s cannot shoot %s: it has no Quality or Defense (a hand-written save), so it is not a valid target" % [
+		attacker.get_name(), target.get_name()], main._solo_is_ai_unit(attacker))
+	return true
+
+
 ## (1) A human unit of this table's player while the game is PLAYING: it gets the explicit activation (O14 (1b)).
 static func is_lifecycle_unit(main, gu: GameUnit) -> bool:
 	return gu != null and applies(main) and not main._solo_is_ai_unit(gu) and main._solo_i_own_unit(gu) \
@@ -75,6 +106,15 @@ static func capture(main) -> int:
 
 ## Calls per activation before the driver gives up (a plain volley asks three to four times).
 const MAX_STEPS := 64
+
+## The movement selector's values and the metre-inch factor, mirrored from ObjectManager (MovementCap, METERS_TO_INCHES)
+## on purpose: naming the ObjectManager class here made every `-s` tool that reaches this file (arena_match,
+## core_dormant_check) compile object_manager.gd and its scene-side chain before the autoloads exist, which died with
+## "Identifier not found: GraphicsSettings". test/one_core/core_activation_object_manager_parity_test.gd pins the match.
+const CAP_ADVANCE := 1
+const CAP_RUSH := 2
+const CAP_CHARGE := 3
+const METERS_TO_INCHES := 39.3701
 
 
 ## One activation through the core: ask, print the lines not printed yet, land, throw on the owner's tray, ask again.
@@ -176,6 +216,73 @@ static var ai_runs := 0
 static var ai_refusals := 0
 
 
+## P4.D-3 census: volleys the TABLE resolved instead of the core, door -> reason -> count ("_all" = the door's table
+## calls). Counting only: no RNG, no log line, nothing the game reads.
+static var legacy := {}
+## The same volleys by their whole reason SET (door -> "reason|reason" sorted -> volleys): what allowing groups would unlock.
+static var legacy_sets := {}
+
+
+## "Tough(3)" -> "Tough", "Fear (spell)" -> "Fear" (a rule entry is a string or a {"name": ...} dictionary).
+static func _rule_label(r) -> String:
+	return (str((r as Dictionary).get("name", "")) if r is Dictionary else str(r)).get_slice("(", 0).strip_edges()
+
+
+## The refusals of one unit as the table sees them (what `is_plain` says no to; for a target, `is_plain_target`: no OPR
+## profile is not a reason there, P4.D-13b).
+static func _refusals(gu: GameUnit, as_target := false) -> Array:
+	var out: Array = (gu.get_special_rules() as Array).map(func(r) -> String: return "unit_rule:" + _rule_label(r))
+	if gu.has_attached_heroes() or gu.is_attached():
+		out.append("attached")
+	if not gu.source_data is OPRApiClient.OPRUnit:
+		return out if as_target else out + ["non_opr"]
+	for w in (gu.source_data as OPRApiClient.OPRUnit).weapons:
+		out.append_array(w.special_rules.map(func(r) -> String: return "weapon_rule:" + _rule_label(r)))
+	return out
+
+
+## Why the core door refuses this shooter (and target): "no_core", "attached", "non_opr", "unit_rule:<name>",
+## "weapon_rule:<name>" for the shooter; the target's carry a "target_" prefix ("target_rule:<name>" = its unit rules).
+static func why_not(main, unit: GameUnit, target: GameUnit) -> Array:
+	var out: Array = [] if applies(main) else ["no_core"]
+	out.append_array(_refusals(unit) if unit != null else [])
+	for r in (_refusals(target, true) if target != null else []):
+		out.append("target_rule:" + r.trim_prefix("unit_rule:") if r.begins_with("unit_rule:") else "target_" + r)
+	return out
+
+
+## One table volley, counted once per reason. `extra` = comma-joined door facts ("split", "dangerous", "no_handle").
+static func note_legacy(main, door: String, unit: GameUnit, targets: Array, extra: String = "") -> void:
+	var why: Array = why_not(main, unit, null)
+	for t in targets:
+		for r in why_not(main, null, t as GameUnit):
+			if not why.has(r):
+				why.append(r)
+	why.append_array(Array(extra.split(",", false)))
+	var d: Dictionary = legacy.get(door, {})
+	d["_all"] = int(d.get("_all", 0)) + 1
+	var seen := {}
+	for r in (why if not why.is_empty() else ["other"]):
+		if not seen.has(r):
+			seen[r] = true
+			d[r] = int(d.get(r, 0)) + 1
+	legacy[door] = d
+	var reasons: Array = seen.keys()
+	reasons.sort()
+	var key := "|".join(PackedStringArray(reasons))
+	var sets: Dictionary = legacy_sets.get(door, {})
+	sets[key] = int(sets.get(key, 0)) + 1
+	legacy_sets[door] = sets
+
+
+## NML_TABLE_CENSUS=<path>: a both-AI game writes the census when it ends (the core's own AI volleys ride along).
+static func dump_legacy() -> void:
+	var path := OS.get_environment("NML_TABLE_CENSUS")
+	var f := FileAccess.open(path, FileAccess.WRITE) if path != "" else null
+	if f != null:
+		f.store_string(JSON.stringify({"legacy": legacy, "legacy_sets": legacy_sets, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals}))
+
+
 ## Step 42: the AI's volley through the core - Hold or Advance, the unit and its one target (the table's own pick) plain,
 ## no Dangerous test this activation (the table rolled it already; the core would roll it again). `h` is the board
 ## before the move (the AI body captured it and releases it). True = the core resolved the volley. A refusal is a
@@ -183,7 +290,15 @@ static var ai_refusals := 0
 static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h: int, shots: Array = []) -> bool:
 	var kind := int(report.get("action", -1))
 	if h == 0 or not (kind in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE]) or not is_plain(unit) \
-			or not is_plain(target) or int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0:
+			or not is_plain_target(target) or int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0:
+		return false
+	# #172 interim: the core lands its own casualty order, so a human owner who has a wound-allocation choice (a Tough
+	# model, or mixed loadouts among the alive models) would never be asked. That volley stays on the table, which
+	# prompts. The real wound count is unknown before the roll: one wound keeps the Tough and loadout checks. Goes away
+	# once the core asks the allocation as a NeedChoice.
+	if main._solo_wound_choice_matters(target, 1):
+		main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s's owner chooses the casualties - the table resolves this volley" % [
+			unit.get_name(), target.get_name()], true)
 		return false
 	var at: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
 	# Step 42c: each model's walked route (the planner's, world XZ) rides along, so the core's move check measures the
@@ -227,6 +342,14 @@ static func _record_shots(main, unit: GameUnit, target: GameUnit, shots: Array, 
 	return rolling if not rolling.is_empty() else shots
 
 
+## P4.D-30b1: the Piercing Tag pool of the target. The core spent its own copy (and applied the +AP), so the table's
+## pool never moved and the spend line was never written. The table's own spend, once per volley, at the volley's first
+## hit roll (a refusal never gets here, so the table's volley after it cannot spend twice): the pool, the sync and the line.
+## The AP it returns is not used: the core's volley carries it.
+static func _spend_tag(main, target: GameUnit) -> void:
+	main._solo_spend_piercing_tag(target)
+
+
 ## Step 42b: the table's show around an AI volley (_solo_resolve_ai_volley's calls in its order) on the core's steps:
 ## at the first hit roll the announce (the core says its line), the fan and the Declaration beat; a tracer before each
 ## hit roll (`shots`: the shots that roll, in the table's order); a weapon's hit strip and beat after its saves, or at
@@ -237,6 +360,7 @@ static func _present(main, unit: GameUnit, target: GameUnit, shots: Array, st: D
 	var kind := str(a.get("kind", ""))
 	# Step 42c-2: the rows at the first hit roll, or at the end; never at a refusal (the table then writes them).
 	if not st.has("rolling") and (ev == "done" or (ev == "throw" and kind == "attack")):
+		_spend_tag(main, target)
 		st["rolling"] = _record_shots(main, unit, target, shots, st["moved"])
 	shots = st.get("rolling", shots)
 	var n: int = st["n"]
@@ -302,6 +426,9 @@ static func _human_shots(main, unit: GameUnit, target: GameUnit) -> Array:
 static func _present_human(main, unit: GameUnit, target: GameUnit, shots: Array, st: Dictionary, ev: String, a: Dictionary,
 		faces: Array) -> void:
 	var kind := str(a.get("kind", ""))
+	if not st.has("tagged") and (ev == "done" or (ev == "throw" and kind == "attack")):
+		st["tagged"] = true
+		_spend_tag(main, target)
 	var n: int = st["n"]
 	var prev := str((shots[clampi(n - 1, 0, shots.size() - 1)]["profile"] as Dictionary).get("name", "weapon"))
 	if ev == "throw" and kind == "attack":
@@ -440,6 +567,55 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		if bool(d["shaken"]) != gu.is_shaken:
 			main.radial_menu_controller.card_toggle_shaken(gu)
 			main._solo_mirror_shaken(gu)
+		_land_ledger(main, gu, d)
+		_land_stamps(main, gu, d)
+		_land_pools(main, gu, d)
+
+
+## P4.0-4e: the `State` field names whose table property is spelled differently (every other stamp is 1:1).
+const STAMP_KEYS := {"spot_round": "spotted_round", "growth_strike_round": "regenerative_strength_round"}
+
+
+## P4.0-4e: the per-unit once-per-round stamps the delta now carries (inventory class (a)). The table's own writer
+## owns each on this path, so a difference is a core/table split (reported) and the core's value lands, as `shaken` does.
+static func _land_stamps(main, gu: GameUnit, d: Dictionary) -> void:
+	for key in d.get("stamps", {}):
+		var prop := str(STAMP_KEYS.get(key, key))
+		var value := int(d["stamps"][key])
+		var was := int(gu.unit_properties.get(prop, -1))
+		if value == was:
+			continue
+		push_error("CoreActivation.land_delta: %s.%s differs (table %d, core %d)" % [gu.get_name(), prop, was, value])
+		main._sync_unit_property(gu, prop, value)
+
+
+## P4.0-4f: the marker pools the delta now carries (inventory class (a)). Every name is the table's own property
+## name and an absent pool reads 0, so a difference is a core/table split (reported) and the core's count lands.
+static func _land_pools(main, gu: GameUnit, d: Dictionary) -> void:
+	for key in d.get("pools", {}):
+		var value := int(d["pools"][key])
+		var was := int(gu.unit_properties.get(key, 0))
+		if value == was:
+			continue
+		push_error("CoreActivation.land_delta: %s.%s differs (table %d, core %d)" % [gu.get_name(), key, was, value])
+		main._sync_unit_property(gu, key, value)
+
+
+## P4.0-4d: the table-owned per-activation ledger the delta now carries (inventory class (a)): the fatigue flag and the
+## unspent spell tokens. A plain activation changes neither and the table's own writer owns both, so a difference is a
+## core/table split (reported); the core's value lands either way, as `shaken` does.
+static func _land_ledger(main, gu: GameUnit, d: Dictionary) -> void:
+	if d.has("fatigued") and bool(d["fatigued"]) != gu.is_fatigued:
+		push_error("CoreActivation.land_delta: %s fatigue differs (table %s, core %s)" % [
+			gu.get_name(), gu.is_fatigued, bool(d["fatigued"])])
+		if main.radial_menu_controller != null:
+			main.radial_menu_controller.card_toggle_fatigued(gu)
+	if d.has("casts") and int(d["casts"]) != gu.casts_current:
+		push_error("CoreActivation.land_delta: %s casts differ (table %d, core %d)" % [
+			gu.get_name(), gu.casts_current, int(d["casts"])])
+		gu.set_caster_points(int(d["casts"]))
+		if main.network_manager != null and main.network_manager.has_method("broadcast_unit_casts"):
+			main.network_manager.broadcast_unit_casts(gu)
 
 
 ## Step 28: the open activations, unit_id -> {handle, transcript, start_models, start_pos, start_rot, moved_round_before
@@ -486,7 +662,7 @@ static func open_session(main, gu: GameUnit) -> bool:
 		main.save_manager.note_activation_start(gu.get_name())   # P4.0-7 (D5): what a mid-step save stores
 	last_target = null   # step 50: a new activation never inherits the target of a cancelled one
 	if on_move_path(main, gu):   # step 31 (O1/O2): every activation of a move-path unit starts on Advance
-		main.object_manager.set_movement_cap(ObjectManager.MovementCap.ADVANCE)
+		main.object_manager.set_movement_cap(CAP_ADVANCE)
 	main._update_movement_cap_display()
 	_refresh_card(main)
 	return true
@@ -666,7 +842,7 @@ static func session_trails(main, gu: GameUnit, now: Dictionary) -> Array:
 ## ended and the last ends at `end`, all within the core's 0.01" trail tolerance; else an empty path.
 static func _unbroken(paths: Array, start: Vector2, end: Vector2) -> PackedVector2Array:
 	var out := PackedVector2Array()
-	var tol := 0.01 / ObjectManager.METERS_TO_INCHES
+	var tol := 0.01 / METERS_TO_INCHES
 	for p: PackedVector2Array in paths:
 		if p.size() < 2 or (out[out.size() - 1] if not out.is_empty() else start).distance_to(p[0]) > tol:
 			return PackedVector2Array()
@@ -678,18 +854,18 @@ static func _unbroken(paths: Array, start: Vector2, end: Vector2) -> PackedVecto
 ## Charge 3 (the core's kinds, sim.rs). Anything else is a defect: reported, and 0 means no core call.
 static func declared_mode(main) -> int:
 	match int(main.object_manager._movement_cap):
-		ObjectManager.MovementCap.ADVANCE:
+		CAP_ADVANCE:
 			return 1
-		ObjectManager.MovementCap.RUSH:
+		CAP_RUSH:
 			return 2
-		ObjectManager.MovementCap.CHARGE:
+		CAP_CHARGE:
 			return 3
 	push_error("declared_mode: the movement selector is %d - not Advance, Rush or Charge" % int(main.object_manager._movement_cap))
 	return 0
 
 
 ## Step 38 (O15 (1)): the human attack door. False = not taken, the old path runs: `attacker` is not a core unit, the
-## target is not plain, the selector says Charge (a melee action) or is no declaration (declared_mode reports it). True =
+## target is not plain (`is_plain_target`), the selector says Charge (a melee action) or is no declaration (declared_mode reports it). True =
 ## taken. No open activation: "Activate <Unit> first.", nothing rolls. Else the declared intent (the selector's mode,
 ## never the distance; the core turns it into Hold when nothing moved) and the shot go through the core with the
 ## session's transcript; the session's own transcript is not touched, so a refusal can be tried again. `done`: the steps
@@ -697,10 +873,16 @@ static func declared_mode(main) -> int:
 ## toggle that completes a shot ends it only while the session is open - with none, "Activate" would start a new one),
 ## and the door closes it after. `refused` below the transcript's size (an order rule, the O3 Rush sentence): logged and
 ## toasted, nothing was shot, the session stays open (the caller returns then). `refused` at the transcript's size is the
-## core's own defect: reported, nothing toasted, the session stays open.
-static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Callable = Callable()) -> bool:
-	if not is_core_unit(main, attacker) or not is_plain(target) \
-			or int(main.object_manager._movement_cap) == ObjectManager.MovementCap.CHARGE:
+## core's own defect: reported, nothing toasted, the session stays open. `auto` (the Auto verbs' shot after the engine's own
+## move): not taken. P4.D-13c: a target with no statline is no valid
+## target: one line, nothing shot, the session stays open (the caller returns).
+static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Callable = Callable(), auto := false) -> bool:
+	if refuses_statlineless(main, attacker, target):
+		return true   # nothing was shot: `last_target` is not the target, the caller returns and the activation stays open
+	if auto:
+		return false   # an Auto verb moved the unit through the engine, not through the session's drop: the core would shoot from the start
+	if not is_core_unit(main, attacker) or not is_plain_target(target) \
+			or int(main.object_manager._movement_cap) == CAP_CHARGE:
 		return false
 	if main.core_door_refused(attacker):
 		return true

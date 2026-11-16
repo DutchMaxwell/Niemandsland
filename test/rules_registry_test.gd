@@ -338,8 +338,9 @@ func test_lookup_falls_back_from_faction_to_common() -> void:
 func test_system_scoping_banner_and_musician_params_diverge() -> void:
 	# THE cross-system divergence proof (wave-5 gate 4): the full-scale games (GF / AoF / AoF
 	# Regiments) grant Banner/Musician to the bearer's UNIT; the skirmish-scale games (GFF / AoF
-	# Skirmish) rewrite them to "bearer + up to 3 picked friendly units". Same rule NAME — different
-	# parameters per system, so a name-only lookup would be WRONG.
+	# Skirmish) rewrite them to "bearer + up to 2 picked friendly units" in the 3.6 books (3.5 said
+	# three picks). Same rule NAME — different parameters per system, so a name-only lookup would
+	# be WRONG.
 	for s in ["gf", "aof", "aofr"]:
 		assert_str(str(RulesRegistry.param(str(s), "", "Banner", "scope", ""))).is_equal("unit")
 		assert_str(str(RulesRegistry.param(str(s), "", "Musician", "scope", ""))).is_equal("unit")
@@ -347,7 +348,10 @@ func test_system_scoping_banner_and_musician_params_diverge() -> void:
 	for s in ["gff", "aofs"]:
 		assert_str(str(RulesRegistry.param(str(s), "", "Banner", "scope", ""))).is_equal("picked")
 		assert_str(str(RulesRegistry.param(str(s), "", "Musician", "scope", ""))).is_equal("picked")
-		assert_int(int(RulesRegistry.param(str(s), "", "Banner", "picked_units", 0))).is_equal(3)
+	# gff and aofs are both ported to the 3.6 two-pick scope (3.5 said three).
+	for s in ["gff", "aofs"]:
+		assert_int(int(RulesRegistry.param(str(s), "", "Banner", "picked_units", 0))).is_equal(2)
+		assert_int(int(RulesRegistry.param(str(s), "", "Musician", "picked_units", 0))).is_equal(2)
 	# The bonus itself is identical everywhere (+1) — only the scope diverges.
 	for s in RulesRegistry.SYSTEMS:
 		assert_int(int(RulesRegistry.param(str(s), "", "Banner", "morale_bonus", 0))).is_equal(1)

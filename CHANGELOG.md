@@ -121,6 +121,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   Before, a failed write could leave a cut-off file and still report success. (#2718)
 
 ### Fixed
+- **Solo: a Piercing Tag marker is used up by the volley the rules engine resolved, and the
+  battle log says so.** Against the AI and in an online room set to Automatic, a unit with
+  markers on it kept them after being shot (the +1 AP applied again on every later volley) and
+  no "token spent" line was written. (#2870)
 - **Online: wounding a Tough model no longer logs a false return to the battle on the other
   table.**
 - **Online: a Precision Tag now shows up on the other table when it is placed.**
@@ -140,6 +144,18 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   to one morale test, stayed on its unit after the shot or the morale test the rules engine
   resolved, so the next one used it again. It is now spent right after, and the battle log says so.
   (#2803, #2804)
+- **Solo: the wound-allocation choice is back when the AI shoots a unit with mixed weapons.** Since
+  the rules engine became the default, the AI's volley at your unit landed its casualties without
+  asking you, so a squad with different weapons or a Tough model lost models you did not pick. You
+  click your own casualties again, and the battle log says when the table resolves such a volley.
+  (#172)
+- **The casting-modifier line states both numbers.** A caster with Spell Amplifier +1 used to be
+  logged as "base target is 3+", which read as if the +1 had been ignored (the base is 4+). The line
+  now reads "casts on 3+ (base 4+)". The roll itself did not change.
+- **Solo: a unit loaded from an old save is shot at by the rules engine like any other.** A unit
+  saved before the army-list profile was stored (or a hand-written one) kept the old, slower path
+  when it was the target of a volley. A unit with no Quality or Defense at all is not a valid target
+  there: the battle log says so and nobody shoots it. (#2867)
 
 ### Internal
 - CI and test groundwork for running the tests against the Rust core: a new job "All required

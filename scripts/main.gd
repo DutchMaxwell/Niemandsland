@@ -2280,6 +2280,7 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 		if solo_round_done.is_valid():
 			await solo_round_done.call(round_no)   # harness: the board round_no ENDED on, nothing else acting
 	_solo_ai_busy = false
+	CoreActivation.dump_legacy()   # P4.D-3: NML_TABLE_CENSUS=<path> writes the table-volley census
 
 
 ## One both-AI round: alternate one activation per side (OPR one-for-one), starting with `opener`, until both
@@ -4856,6 +4857,7 @@ func _solo_apply_strafing(unit: GameUnit, human_trails: Array = []) -> void:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s: %s passes over %s — attacks it as if shooting (once per activation)" % [
 			rule_name, unit.get_name(), target.get_name()], true)
+	CoreActivation.note_legacy(self, "ai_strafe", unit, [target])
 	await _solo_resolve_ai_volley(unit, target, shots, true)
 
 
@@ -4935,11 +4937,17 @@ func _run_ai_shooting(report: Dictionary) -> void:
 	# Target validity is PER MODEL (GF v3.5.1 p.8): the shot's MEMBER needs a model with range+LOS.
 	var groups: Dictionary = {}   # target unit_id -> {"target": GameUnit, "shots": Array}
 	var order: Array = []
+	var unshootable: Dictionary = {}   # P4.D-13c: target unit_id -> true, one line each
 	for shot in shots:
 		var overlay: int = AiTargeting.weapon_overlay((shot["profile"] as Dictionary).get("rules", []))
 		var tgt: GameUnit = _solo_pick_overlay_target(shot["member"], overlay, float(shot["reach"]), shot["profile"] as Dictionary,
 			not bool(report.get("moved", false)))
 		if tgt == null:
+			continue
+		if unshootable.has(tgt.unit_id):
+			continue
+		if not groups.has(tgt.unit_id) and CoreActivation.refuses_statlineless(self, unit, tgt):
+			unshootable[tgt.unit_id] = true   # no Quality/Defense: not a valid target; the line is written, the shot is not
 			continue
 		if not groups.has(tgt.unit_id):
 			groups[tgt.unit_id] = {"target": tgt, "shots": []}
@@ -4949,7 +4957,8 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		# NML-1035: every weapon lost its target (out of range / no LOS) — without a
 		# line the whole activation is invisible (a HOLD with no tree target writes
 		# no movement line either).
-		_solo_log_no_volley(unit, report, "no target in range or sight")
+		if unshootable.is_empty():
+			_solo_log_no_volley(unit, report, "no target in range or sight")
 		return
 	# Indirect (wave 5): "-1 to hit rolls when shooting after moving" — the activation's action says
 	# whether this unit moved before firing (HOLD = it did not).
@@ -4959,6 +4968,14 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		if await CoreActivation.run_ai(self, unit, report, groups[order[0]]["target"], _solo_core_ai_h,
 				groups[order[0]]["shots"]):
 			return
+	var why: PackedStringArray = []   # P4.D-3 census: why this volley stays on the table beyond the units' own rules
+	if _solo_core_ai_h == 0:
+		why.append("no_handle")
+	if order.size() > 1:
+		why.append("split")
+	if int(report.get("dangerous_dice", report.get("dangerous_models", 0))) > 0:
+		why.append("dangerous")
+	CoreActivation.note_legacy(self, "ai_volley", unit, order.map(func(id) -> GameUnit: return groups[id]["target"]), ",".join(why))
 	for id in order:
 		var g := groups[id] as Dictionary
 		await _solo_resolve_ai_volley(unit, g["target"], g["shots"], moved)
@@ -5366,7 +5383,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		else:
 			regenable += w
 		await _solo_stage_phase(str(profile.get("name", "weapon")))
-	var landed: int = await _solo_land_wounds(target, regenable, regen_proof, false, dist_in)
+	var landed: int = await _solo_land_wounds(target, regenable, regen_proof, false, dist_in, -1.0, landed_extra)
 	if _solo_combined_alive(target) <= 0:
 		_solo_growth_on_kill(attacker)   # Defensive Frenzy: volley kill credit
 		_solo_vengeance_on_destroyed(target, attacker)
@@ -5544,10 +5561,12 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	var casting_mod := int(cast_net["net"])
 	var cast_mod_notes: PackedStringArray = cast_net["notes"]
 	if casting_mod != 0:
+		var unmodified_target := base_target
 		base_target = clampi(base_target - casting_mod, 2, 6)
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%+d to casting rolls (%s) — %s's base target is %d+" % [
-				casting_mod, ", ".join(cast_mod_notes), caster.get_name(), base_target], true)
+			# State BOTH numbers: the modified roll and the unmodified base it started from.
+			battle_log.log_event(BattleLog.Category.COMBAT, "%+d to casting rolls (%s) — %s casts on %d+ (base %d+)" % [
+				casting_mod, ", ".join(cast_mod_notes), caster.get_name(), base_target, unmodified_target], true)
 	# ANNOUNCE (announce → resist? → roll → saves → effect): attribution highlights + one log line
 	# stating cost, boost/interference and the needed roll BEFORE any die is thrown.
 	var announce := _solo_show_attack_announce(caster_unit, targets[0], "casts %s at" % spell_name)
@@ -9269,6 +9288,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	var caused := 0
 	var regenable := 0
 	var regen_proof := 0
+	var landed_extra := 0   # Deadly/Takedown wounds land per model BEFORE the pooled strike — counted into the "takes" line
 	# MEL-10r (`EPOCH_73_V36`): the melee tally counts wounds TAKEN — Regeneration-cancelled wounds
 	# do not count, so each landing swaps the pre-Regeneration count for what actually landed.
 	var v36_tally: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
@@ -9553,6 +9573,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				else:
 					td_dealt = await _solo_land_takedown_wounds(defender, str(profile.get("name", "?")), td_pick, td_w, 0)
 				caused += td_dealt
+				landed_extra += td_dealt
 			elif m_deadly and w > 0:
 				# Deadly (GF v3.5.1 p.14, no carry-over): each unsaved wound ×X on one model; the DEALT
 				# wounds feed the melee wound-comparison so the multiply still decides who wins.
@@ -9562,6 +9583,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				else:
 					dealt = await _solo_land_deadly_wounds(defender, str(profile.get("name", "?")), int(eff.get("deadly", 0)), w, 0)
 				caused += dealt
+				landed_extra += dealt
 			else:
 				caused += w
 				if _solo_ignores_regen(group.get("member"), eff, defender):
@@ -9610,7 +9632,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	if regenable + regen_proof > 0:
 		# MOR-17a: a charge hands its pre-charge gap; a strike-back rides 0.0 (it did the charging).
 		var m_landed: int = await _solo_land_wounds(defender, regenable, regen_proof, false, -1.0,
-			charge_from_in if charging else 0.0)
+			charge_from_in if charging else 0.0, landed_extra)
 		if v36_tally:
 			_solo_regen_ignored += regenable + regen_proof - m_landed
 			caused += m_landed - (regenable + regen_proof)
@@ -10549,7 +10571,7 @@ func _solo_morale_bonus(unit: GameUnit) -> int:
 ## (Bane / Rending / Unstoppable wounds bypass it — GF Advanced Rules v3.5.1: those rules "ignore
 ## Regeneration"; Lacerate does not), then everything lands through the normal wound machinery. Returns landed wounds.
 func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_spell: bool = false,
-		shot_in: float = -1.0, charged_in: float = -1.0) -> int:
+		shot_in: float = -1.0, charged_in: float = -1.0, taken_before: int = 0) -> int:
 	# DAT-17a: from EPOCH 73 the grant is spent by wounds COMING IN, before the Regeneration roll —
 	# an all-ignored exchange still spends it, a zero-incoming exchange does not. Below 73 the landing
 	# adds no mark; only _solo_apply_wounds marks there (the old unconditional spend stays in charge).
@@ -10557,7 +10579,7 @@ func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_
 		_solo_mark_regen_grant_used(target)
 	var landed: int = await _solo_ignore_wounds(target, regenable, regen_proof, from_spell, {}, shot_in, charged_in)
 	if landed > 0:
-		await _solo_apply_wounds(target, landed)
+		await _solo_apply_wounds(target, landed, true, taken_before)
 	return landed
 
 
@@ -14490,6 +14512,7 @@ func _solo_split_commit() -> void:
 	_solo_end_targeting()
 	if attacker == null or a == null or b == null:
 		return
+	CoreActivation.note_legacy(self, "human_split", attacker, [a, b])
 	await _run_human_attack_split(attacker, a, b, sb)
 
 
@@ -15182,7 +15205,8 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 		elif target != null and not target.is_destroyed() and _solo_is_ai_unit(target) and battle_log != null \
 				and not solo_controller.last_hit_and_run_note.is_empty():   # UX-19: only some models carry it
 			battle_log.log_event(BattleLog.Category.MOVEMENT, solo_controller.last_hit_and_run_note, true)
-	elif not await CoreActivation.human_shoot(self, attacker, target):   # step 38 (O15 (1)): a core unit's volley
+	elif not await CoreActivation.human_shoot(self, attacker, target, Callable(), auto):   # step 38 (O15 (1)): a core unit's volley
+		CoreActivation.note_legacy(self, "human_shoot", attacker, [target])
 		await _run_human_shooting(attacker, target)
 	elif CoreActivation.last_target != target:
 		return   # the core refused the shot (it notes the target of a shot it resolved): nothing was shot, the activation stays open
@@ -15669,6 +15693,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	var blast_models_start: int = _solo_combined_alive(target) if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else -1
 	var regenable := 0
 	var regen_proof := 0
+	var landed_extra := 0   # Deadly/Takedown wounds land per model BEFORE the pooled volley — counted into the "takes" line
 	# Armor(X) (wave 5) sets the working Defense, then every Defense contribution of the parts seam
 	# folds in (Shielded and its data aliases, growth markers, spell tokens — each NAMED in the log,
 	# NML-932); Cover (+1 Defense majority-in-cover, GF v3.5.1 p.11) is shooting-only and ignored by
@@ -15895,14 +15920,14 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				# Resolver wave A: Deadly multiplies on the picked model (see the AI branch).
 				var td_w: int = w * maxi(int(profile.get("deadly", 0)), 1)
 				if _solo_ignores_regen(group.get("member"), profile, target):
-					await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, 0, td_w)
+					landed_extra += await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, 0, td_w)
 				else:
-					await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, td_w, 0)
+					landed_extra += await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, td_w, 0)
 			elif is_deadly and w > 0:
 				if _solo_ignores_regen(group.get("member"), profile, target):
-					await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w, false, dist)
+					landed_extra += await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w, false, dist)
 				else:
-					await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), w, 0, false, dist)
+					landed_extra += await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), w, 0, false, dist)
 			elif _solo_ignores_regen(group.get("member"), profile, target):
 				regen_proof += w
 			else:
@@ -15913,7 +15938,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	if not fired_any and battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
 			"%s has no weapon in range of %s — no shots" % [attacker.get_name(), target.get_name()], true)
-	await _solo_land_wounds(target, regenable, regen_proof, false, dist)
+	await _solo_land_wounds(target, regenable, regen_proof, false, dist, -1.0, landed_extra)
 	if _solo_combined_alive(target) <= 0:
 		_solo_growth_on_kill(attacker)   # Defensive Frenzy: your volley kill counts too (symmetry)
 		_solo_vengeance_on_destroyed(target, attacker)
@@ -16865,7 +16890,7 @@ func _solo_reset_all_fatigue() -> void:
 ## regiments take pooled wounds; loose units lose whole models back-rank-first (defender-optimal
 ## default), Tough models absorb wounds before dying.
 ## `pips` = VFX #1 result marks over the struck models; a rout wipe passes false (a rout is no wound).
-func _solo_apply_wounds(target: GameUnit, wounds: int, pips: bool = true) -> void:
+func _solo_apply_wounds(target: GameUnit, wounds: int, pips: bool = true, taken_before: int = 0) -> void:
 	if wounds <= 0 or opr_army_manager == null:
 		return
 	_solo_mark_regen_grant_used(target)
@@ -16920,7 +16945,9 @@ func _solo_apply_wounds(target: GameUnit, wounds: int, pips: bool = true) -> voi
 		# (the old own-models total printed impossible "(4/3)" shapes once the hero soaked the spill).
 		# Log the wounds that actually LANDED, not the requested amount — the rout wipe passes an overkill
 		# figure and printed "takes 120 wounds" (Windows playtest bug 6); spill past the pool is no wound.
-		var landed: int = maxi(0, requested - maxi(remaining, 0))
+		# `taken_before` carries the wounds the SAME event already dealt through another landing (Deadly /
+		# Takedown land per model BEFORE the pooled volley), so the line counts the event's whole state change.
+		var landed: int = maxi(0, requested - maxi(remaining, 0)) + maxi(taken_before, 0)
 		# NML-1091: a unit that IS one multi-wound model has no model counter to print — "(1/1)" stood
 		# there unchanged from full health to the last wound. Its own remaining wounds are the figure
 		# the reader needs. Read off the model (wounds_max > 1 = what Tough(N) grants) rather than the
@@ -18815,7 +18842,7 @@ func _on_battle_log_regiment_wounds(unit_name: String, delta: int, remaining: in
 func _on_battle_log_dropped(moves: Array) -> void:
 	if battle_log == null:
 		return
-	var per_unit := {}   # unit name -> {count, max_in, climb_in, alive, whole}
+	var per_unit := {}   # unit name -> {count, max_in, climb_in, step_in, alive, whole}
 	for mv in moves:
 		var node: Node3D = mv.get("node")
 		var unit_name := _battle_log_unit_name(node)
@@ -18828,7 +18855,7 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		if res_gu != null and SoloController.unit_in_reserve(res_gu):
 			continue
 		if not per_unit.has(unit_name):
-			per_unit[unit_name] = {"count": 0, "max_in": 0.0, "climb_in": 0.0,
+			per_unit[unit_name] = {"count": 0, "max_in": 0.0, "climb_in": 0.0, "step_in": 0.0,
 				"alive": _battle_log_unit_alive(node), "whole": false, "node": node}
 		var e: Dictionary = per_unit[unit_name]
 		e["count"] = int(e["count"]) + 1
@@ -18840,6 +18867,9 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		if mv_in >= float(e["max_in"]):
 			e["max_in"] = mv_in
 			e["climb_in"] = float(mv.get("climb_in", 0.0))
+		# The impassable verdict is about the biggest SINGLE step of any model of the unit, not the
+		# climb cost (the sum of every step up and down) — so it does not follow the max-arc pairing.
+		e["step_in"] = maxf(float(e["step_in"]), float(mv.get("max_step_in", 0.0)))
 		if node is RegimentTray:
 			e["whole"] = true
 	var summaries: Array = []
@@ -18847,11 +18877,13 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		var e: Dictionary = per_unit[unit_name]
 		summaries.append({"unit": unit_name, "count": int(e["count"]), "alive": int(e["alive"]),
 			"max_in": float(e["max_in"]), "climb_in": float(e["climb_in"]), "whole": bool(e["whole"])})
-		# GF p.11: a step over 3" is impassable under mass-battle rules — the drag itself is
-		# a sandbox aid (D5a, no hard stop without Strict), so the drop's own line flags it.
-		if float(e["climb_in"]) > MoveLedger.CLIMB_MAX_IN:
+		# GF 3.6 (Climbable terrain): a terrain piece over 3" tall is impassable, one up to 3" may be
+		# climbed — so the verdict reads the biggest single step, never the summed climb cost. The
+		# drag itself is a sandbox aid (D5a, no hard stop without Strict), so the drop's own line
+		# flags it. Not in DEPLOYMENT: placing a model over terrain is not a move.
+		if not _is_placement_phase() and float(e["step_in"]) > MoveLedger.CLIMB_MAX_IN:
 			_log_rule_event(BattleLog.Category.MOVEMENT,
-				"%s climbs %.1f\" — over 3\", impassable (%s)" % [unit_name, float(e["climb_in"]), OPRApiClient.rules_cite(_solo_rules_system())])
+				"%s climbs %.1f\" — over 3\", impassable (%s)" % [unit_name, float(e["step_in"]), OPRApiClient.rules_cite(_solo_rules_system())])
 	_log_move_summaries(summaries)
 	# Rules-must-log (DAT-16a): a move-band rule (Agile, Scurry, Highborn, …) widened this move's
 	# reach silently. ONE line per moved unit, naming the unit's own rules that did it.
@@ -18938,6 +18970,12 @@ func _print_rule_notes(report: Dictionary) -> void:
 			battle_log.log_event(BattleLog.Category.COMBAT, str(note), true)
 
 
+## A drag during DEPLOYMENT places models, it does not move them: no movement line, no climb verdict.
+func _is_placement_phase() -> bool:
+	return opr_army_manager != null and opr_army_manager.has_method("is_deployment_phase") \
+			and opr_army_manager.is_deployment_phase()
+
+
 ## Write per-unit movement summaries into the battle log — same lines for local and remote movers.
 func _log_move_summaries(summaries: Array) -> void:
 	if battle_log == null:
@@ -18946,8 +18984,7 @@ func _log_move_summaries(summaries: Array) -> void:
 	# table wrote "Saurian Warriors moves 57\"" into the battle log). During DEPLOYMENT the ledger
 	# still measures the drag — the trail and the ruler want that — but the log must not report a
 	# 57-inch march that never happened.
-	if opr_army_manager != null and opr_army_manager.has_method("is_deployment_phase") \
-			and opr_army_manager.is_deployment_phase():
+	if _is_placement_phase():
 		return
 	for entry in summaries:
 		var e: Dictionary = entry as Dictionary

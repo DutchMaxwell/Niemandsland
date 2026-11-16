@@ -3,7 +3,8 @@ extends RefCounted
 ## (schema nml-scenario-v1, inches), runs one AI volley per seed through main's real _solo_resolve_ai_volley and
 ## writes one JSONL record per seed: {"seed","epoch","def_alive","rolls":[{kind,count,target,faces,owner}]}.
 ## The faces are the ones the table's own dice recorder (NML_DICE_DUMP) wrote for that seed.
-## `override` replaces table-side rules only (red test): {"weapon_rules": [...], "attacker_rules": [...], "epoch": n}.
+## `override` replaces table-side rules only (red test): {"weapon_rules": [...], "attacker_rules": [...], "epoch": n,
+## "defender_ledger": {...}}. A unit may carry "ledger": {unit_property: value} (e.g. piercing_tag_markers), written onto the table's unit.
 ## A scenario may carry "volleys" (n volleys at the SAME defender per seed, one tray stream: a once-per-game latch spends
 ## in the first) or "strafe": {"dest_x_in": x} (the attacker moves x_in -> dest_x_in through the defender, then the
 ## move-through volley).
@@ -30,6 +31,8 @@ static func _make_unit(main: Node, u: Dictionary, weapon: Dictionary) -> GameUni
 	g.unit_properties["game_system"] = str(u["game_system"])
 	g.unit_properties["faction_folder"] = str(u["faction_folder"])
 	g.unit_properties["special_rules"] = rules
+	for k in (u.get("ledger", {}) as Dictionary):   # table-owned ledger keys: the names the core's ledger reads
+		g.unit_properties[k] = u["ledger"][k]
 	for m in g.models:
 		(m as ModelInstance).wounds_max = int(u["tough"])
 		(m as ModelInstance).wounds_current = int(u["tough"])
@@ -90,7 +93,8 @@ static func run(main: Node, sc: Dictionary, seeds: int, out_path: String, dump_d
 		if sc.has("strafe"):
 			shooter["x_in"] = float(sc["strafe"]["dest_x_in"])   # the table's strafe volley starts after the move
 		var att := _make_unit(main, shooter, weapon)
-		var dfn := _make_unit(main, sc["defender"], {})
+		var dfn := _make_unit(main, (sc["defender"] as Dictionary).merged({"ledger": override["defender_ledger"]}, true)
+			if override.has("defender_ledger") else sc["defender"], {})
 		main.seed_tray_rng(s)
 		if sc.has("strafe"):
 			var legs: Array = []
