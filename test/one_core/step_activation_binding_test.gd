@@ -559,3 +559,92 @@ func test_a_malformed_split_is_refused_not_dropped() -> void:
 		var r: Dictionary = _core.step_activation(_split_handle(), "a", t, false)
 		assert_str(r["step"]).override_failure_message("split %s" % [bad]).is_equal("refused")
 		assert_str(str(r.get("reason", ""))).override_failure_message("split %s" % [bad]).is_equal("input 1 is not understood")
+
+
+## ---- P4.D-22: the wound-allocation choice through the binding ----
+## "a" (3 models, a 24" Rifle) shoots "b": two Tough(3) models at 12" and 14" carrying a Rifle and a Pistol (a mixed
+## loadout), under a stamped header of epoch 76. Every attack hits and every save fails: 3 unsaved wounds, a pool of 6.
+func _alloc_handle(core: Object) -> int:
+	var a := _unit(1, [Vector3.ZERO, Vector3(1.0 * IN2M, 0, 0), Vector3(2.0 * IN2M, 0, 0)], "a")
+	var b := _unit(2, [Vector3(12.0 * IN2M, 0, 0), Vector3(14.0 * IN2M, 0, 0)], "b")
+	for u in [a, b]:
+		(u as GameUnit).unit_properties["game_system"] = "gf"
+		(u as GameUnit).unit_properties["faction_folder"] = "robot_legions"
+	for i in 2:
+		var m: ModelInstance = (b as GameUnit).models[i]
+		m.properties = {"weapons": [{"name": ["Rifle", "Pistol"][i]}], "equipment": []}
+		m.wounds_max = 3
+		m.wounds_current = 3
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "Rifle"
+	w.range_value = 24
+	w.attacks = 1
+	w.count = 3
+	a.source_type = "opr"
+	a.source_data = OPRApiClient.OPRUnit.new()
+	(a.source_data as OPRApiClient.OPRUnit).weapons.append(w)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"a": a, "b": b}
+	var state := BattleSim.capture(army, func() -> Array: return [], func(_i: int) -> int: return 0, 1, 4)
+	var head: Dictionary = AiActRecorder._header_line(state, Callable())
+	(head["knobs"] as Dictionary)["rules_epoch"] = 76
+	assert_bool(core.set_game_header(head)).override_failure_message("set_game_header: " + str(core.last_error())).is_true()
+	return core.capture_plain(BattleSim.state_to_plain(state))
+
+
+## The activation to its next answer: attacks hit, saves fail, morale fails; `choice` is the wound-allocation choice sent
+## first ({} = none, `option` "" = only asked).
+func _alloc_step(core: Object, h: int, choice: Dictionary) -> Dictionary:
+	var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": "b"}]
+	if not choice.is_empty():
+		t.append(choice.merged({"t": "choice", "id": "wound_alloc:a:b:0"}))
+	var r: Dictionary = core.step_activation(h, "a", t, false)
+	while r["step"] == "need_roll" and t.size() < 12:
+		t.append({"t": "faces", "faces": range(int(r["faces"])).map(func(_i: int) -> int: return 6 if r["kind"] == "attack" else 1)})
+		r = core.step_activation(h, "a", t, false)
+	return r
+
+
+## "b" after a `done` answer (-1 / [] for any other answer, so a failed case reports instead of crashing).
+func _units_of(core: Object, r: Dictionary) -> Dictionary:
+	return core.plain_of(int(r["handle"]))["units"] if str(r.get("step")) == "done" else {}
+
+
+func _alive_of_b(core: Object, r: Dictionary) -> int:
+	return int((_units_of(core, r).get("b", {}) as Dictionary).get("alive", -1))
+
+
+func _wounds_of_b(core: Object, r: Dictionary) -> Array:
+	return (_units_of(core, r).get("b", {}) as Dictionary).get("wounds", [])
+
+
+func test_the_wound_allocation_choice_is_asked_and_answered_through_the_binding() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var h := _alloc_handle(core)
+	var ask := _alloc_step(core, h, {"option": ""})
+	assert_str(str(ask.get("step"))).override_failure_message(str(ask)).is_equal("need_choice")
+	assert_str(str(ask.get("id"))).is_equal("wound_alloc:a:b:0")
+	assert_array(ask.get("options", [])).is_equal(["slot:0", "slot:1"])
+	assert_str(str(ask.get("owner"))).is_equal("b")
+	# Without any choice in the transcript the landing is the automatic one: the lead model takes the three wounds and dies.
+	var auto := _alloc_step(core, h, {})
+	assert_str(str(auto.get("step"))).override_failure_message(str(auto)).is_equal("done")
+	assert_int(_alive_of_b(core, auto)).is_equal(1)
+	# The owner's slots, as an Array of ints or as text: one wound on slot 0, two on slot 1 - both models survive.
+	for option in [[0, 1, 1], "slot:0,slot:1,slot:1", PackedInt32Array([0, 1, 1])]:
+		var done := _alloc_step(core, h, {"option": option})
+		assert_str(str(done.get("step"))).override_failure_message("%s: %s" % [option, done]).is_equal("done")
+		assert_int(_alive_of_b(core, done)).override_failure_message(str(option)).is_equal(2)
+		assert_array(_wounds_of_b(core, done)).override_failure_message(str(option)).is_equal([2, 1])
+
+
+func test_a_wrong_slot_or_a_malformed_answer_is_refused_not_dropped() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var h := _alloc_handle(core)
+	for bad in [[7], "slot:0,slot:9", "b"]:
+		var r := _alloc_step(core, h, {"option": bad})
+		assert_str(str(r.get("step"))).override_failure_message("%s: %s" % [bad, r]).is_equal("refused")
+	# An option that is no text and no array of slots is not understood by the binding itself - never an ask in disguise.
+	for odd in [3, 1.5, {"slot": 1}, [1.5]]:
+		var r := _alloc_step(core, h, {"option": odd})
+		assert_str(str(r.get("reason"))).override_failure_message("%s: %s" % [odd, r]).is_equal("input 2 is not understood")
