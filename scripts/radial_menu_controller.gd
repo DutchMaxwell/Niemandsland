@@ -644,6 +644,10 @@ func _toggle_shaken(context: Dictionary, manual: bool = false) -> void:
 	if manual:
 		_log_manual_toggle(game_unit, "Shaken", game_unit.is_shaken)
 
+	# Broadcast shaken change to remote peers
+	if network_manager:
+		network_manager.broadcast_unit_marker(game_unit, "ShakenMarker", game_unit.is_shaken)
+
 
 ## Plan 2.8: in an Automatic game one "Manual: ..." line via the channel owner's _log_rule_event (main).
 func _log_manual_correction(text: String) -> void:
@@ -666,10 +670,6 @@ func _log_manual_toggle(game_unit: GameUnit, status: String, on: bool) -> void:
 func _log_manual_revive(game_unit: GameUnit, scope: String) -> void:
 	var pid: int = int(game_unit.unit_properties.get("player_id", 1))
 	_log_manual_correction("P%d revives %s%s" % [pid, scope, game_unit.get_name()])
-
-	# Broadcast shaken change to remote peers
-	if network_manager:
-		network_manager.broadcast_unit_marker(game_unit, "ShakenMarker", game_unit.is_shaken)
 
 
 ## Helper to get GameUnit from context (supports both unit and model selection)
