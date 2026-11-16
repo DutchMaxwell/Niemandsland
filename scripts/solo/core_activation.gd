@@ -800,11 +800,14 @@ static func declared_mode(main) -> int:
 ## toggle that completes a shot ends it only while the session is open - with none, "Activate" would start a new one),
 ## and the door closes it after. `refused` below the transcript's size (an order rule, the O3 Rush sentence): logged and
 ## toasted, nothing was shot, the session stays open (the caller returns then). `refused` at the transcript's size is the
-## core's own defect: reported, nothing toasted, the session stays open. P4.D-13c: a target with no statline is no valid
+## core's own defect: reported, nothing toasted, the session stays open. `auto` (the Auto verbs' shot after the engine's own
+## move): not taken. P4.D-13c: a target with no statline is no valid
 ## target: one line, nothing shot, the session stays open (the caller returns).
-static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Callable = Callable()) -> bool:
+static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Callable = Callable(), auto := false) -> bool:
 	if refuses_statlineless(main, attacker, target):
 		return true   # nothing was shot: `last_target` is not the target, the caller returns and the activation stays open
+	if auto:
+		return false   # an Auto verb moved the unit through the engine, not through the session's drop: the core would shoot from the start
 	if not is_core_unit(main, attacker) or not is_plain_target(target) \
 			or int(main.object_manager._movement_cap) == CAP_CHARGE:
 		return false

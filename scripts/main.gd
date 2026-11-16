@@ -15199,7 +15199,7 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 		elif target != null and not target.is_destroyed() and _solo_is_ai_unit(target) and battle_log != null \
 				and not solo_controller.last_hit_and_run_note.is_empty():   # UX-19: only some models carry it
 			battle_log.log_event(BattleLog.Category.MOVEMENT, solo_controller.last_hit_and_run_note, true)
-	elif not await CoreActivation.human_shoot(self, attacker, target):   # step 38 (O15 (1)): a core unit's volley
+	elif not await CoreActivation.human_shoot(self, attacker, target, Callable(), auto):   # step 38 (O15 (1)): a core unit's volley
 		CoreActivation.note_legacy(self, "human_shoot", attacker, [target])
 		await _run_human_shooting(attacker, target)
 	elif CoreActivation.last_target != target:

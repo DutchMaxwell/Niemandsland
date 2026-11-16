@@ -268,7 +268,7 @@ func test_a_non_opr_attacker_fires_nothing_on_the_human_door() -> void:
 ## One human volley (seat 1: 10 Rifles, Hold) at 5 models of a profile-less target of `defense` (seat 2, AI), through the
 ## window door `_run_human_attack`; the pattern of e2e_one_core_human_test. `core_run`: the flag is on and the unit is
 ## started. Returns what the comparison reads, and whether the core's declaration line ("<Att> fires at <Target>") is in.
-func _human_volley(s: int, defense: int, core_run: bool) -> Dictionary:
+func _human_volley(s: int, defense: int, core_run: bool, auto := false) -> Dictionary:
 	_main.solo_ai_slots = {2: true}   # seat 1 is the human: the shooter is a lifecycle unit
 	_main._solo_auto_saves = true
 	_main._solo_fast = true
@@ -286,7 +286,7 @@ func _human_volley(s: int, defense: int, core_run: bool) -> Dictionary:
 	var on_entry := func(e: Dictionary) -> void: lines.append(str(e["text"]))
 	_main.battle_log.entry_added.connect(on_entry)
 	_main.seed_tray_rng(s)
-	await _main._run_human_attack(att, foe, false)
+	await _main._run_human_attack(att, foe, false, auto)
 	_main.battle_log.entry_added.disconnect(on_entry)
 	var survivors: Array = foe.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
 	survivors.sort()
@@ -303,6 +303,15 @@ func test_a_non_opr_target_is_shot_by_the_core_on_the_human_door() -> void:
 	var core := await _human_volley(1, 4, true)
 	assert_bool(core["core"]).override_failure_message("the table shot a non-OPR target: %s" % [_log_texts()]).is_true()
 	assert_int(core["alive"]).override_failure_message("the volley hurt nobody (seed 1 wounds)").is_less(5)
+
+
+## The Auto verbs move the unit through the engine, outside the session's drop, so the core would shoot from the START spot
+## (the two-instance harness's Advance & Shoot saw `done` with no roll once its target became takeable). Their shot stays
+## on the table. RED: drop the `auto` clause from `human_shoot` -> the core's declaration line is there and nothing hurt it.
+func test_an_auto_verbs_shot_stays_on_the_table() -> void:
+	var out := await _human_volley(1, 4, true, true)
+	assert_bool(out["core"]).override_failure_message("the core took an auto verb's shot: %s" % [_log_texts()]).is_false()
+	assert_int(out["alive"]).override_failure_message("the table's volley hurt nobody (seed 1 wounds)").is_less(5)
 
 
 func test_the_core_shoots_a_non_opr_target_like_the_table_on_the_human_door(timeout := 900000) -> void:
