@@ -45,6 +45,8 @@ fn input_of(v: &Value) -> Option<Input> {
         "cancel" => Input::Cancel,
         "intent" => Input::Intent { kind: int(o.get("kind")?)?, shoot: o.get("shoot").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string) },
         "faces" => Input::Faces(o.get("faces")?.as_array()?.iter().map(|f| int(f).map(|n| n.clamp(0, 6) as u8)).collect::<Option<Vec<_>>>()?),
+        // P4.0-5: `{"t": "choice", "id": ..., "option": ...}`; an empty/absent `option` asks the core.
+        "choice" => Input::Choice { id: o.get("id")?.as_str()?.to_string(), option: o.get("option").and_then(Value::as_str).unwrap_or_default().to_string() },
         "placed" => {
             let at = o.get("positions")?.as_array()?.iter().map(|p| coords(p, 3).map(|c| [c[0], c[1], c[2]])).collect::<Option<Vec<_>>>()?;
             let trails = match o.get("trails") {
@@ -92,6 +94,8 @@ pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain,
             "lines": lines_of(&lines), "landings": landings_of(state, &landings),
         }),
         ActStep::Open => json!({"step": "open"}),
+        // P4.0-5: the same answer shape as the Godot seam's `need_choice`.
+        ActStep::NeedChoice { id, options, owner } => json!({"step": "need_choice", "id": id, "options": options, "owner": owner}),
         ActStep::Refused { index, reason } => refused(index, &reason),
         ActStep::Cancelled { lines } => json!({"step": "cancelled", "lines": lines_of(&lines)}),
         ActStep::Done { state: s, lines, landings } => {
