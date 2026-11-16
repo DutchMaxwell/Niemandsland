@@ -109,6 +109,24 @@ func test_red_a_table_only_ap2_is_caught(do_skip := not ClassDB.class_exists("Nm
 
 
 @warning_ignore('unused_parameter')
+func test_ap_piercing_volleys_match_the_core(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded") -> void:
+	# P4.D-30 (a): AP(1) volleys at a defender with 2 Piercing Tag markers (one token per volley, +1 AP), two volleys per seed.
+	var r := await _gate("ap_piercing")
+	assert_int(int(r["rc"])).override_failure_message(str(r["problems"]) + str(r["first_mismatches"])).is_equal(0)
+	assert_int(int(r["identical"])).is_equal(SEEDS)
+
+
+@warning_ignore('unused_parameter')
+func test_red_a_table_only_missing_marker_is_caught(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded") -> void:
+	# The table's defender carries NO marker (the core's still has two): no +1 AP on the table side, so the saves differ.
+	var r := await _gate("ap_piercing", {"defender_ledger": {"piercing_tag_markers": 0, "piercing_tag_source": ""}})
+	assert_int(int(r["rc"])).is_equal(1)
+	assert_int((r["mismatching_seeds"] as Array).size()).is_greater_equal(1)
+
+
+@warning_ignore('unused_parameter')
 func test_warbound_control_matches_the_core(do_skip := not ClassDB.class_exists("NmlCore"),
 		skip_reason := "NmlCore extension not loaded") -> void:
 	# Control for EXC-1: the base Warbound alone at 6" keeps the distance gate on both sides, no exception applies.
