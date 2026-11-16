@@ -553,12 +553,126 @@
    ],
    "scenario": "deadly",
    "seed": 225
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 3,
+     "shaken": true,
+     "unit": "Def",
+     "wounds": 3
+    }
+   ],
+   "lines": [
+    "COMBAT|Piercing Tag: one token spent — +1 AP on this volley (1 left)",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 6 6 4 4 3 1 1 → 7 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 7 hits",
+    "COMBAT|Def saves on 6+ (Def 4+, AP 2)",
+    "COMBAT|AI (Def) defends: 5 4 2 2 2 2 1 → 0 blocks (6+)",
+    "COMBAT|Def takes 7 wounds (3/10)",
+    "COMBAT|Def loses 7 models (3/10)",
+    "COMBAT|AI (Def): 3 → failed (4+)",
+    "COMBAT|Def fails morale — Shaken"
+   ],
+   "scenario": "ap_marked_target",
+   "seed": 0
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Piercing Tag: one token spent — +1 AP on this volley (1 left)",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 5 4 3 2 2 1 1 1 1 → 3 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 3 hits",
+    "COMBAT|Def saves on 6+ (Def 4+, AP 2)",
+    "COMBAT|AI (Def) defends: 6 4 2 → 1 block (6+)",
+    "COMBAT|Def takes 2 wounds (8/10)",
+    "COMBAT|Def loses 2 models (8/10)"
+   ],
+   "scenario": "ap_marked_target",
+   "seed": 17
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 9,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 9
+    }
+   ],
+   "lines": [
+    "COMBAT|Piercing Tag: one token spent — +1 AP on this volley (1 left)",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 5 3 3 3 2 2 2 1 1 1 → 1 hit (4+)",
+    "COMBAT|Att fires Rifle at Def — 1 hit",
+    "COMBAT|Def saves on 6+ (Def 4+, AP 2)",
+    "COMBAT|AI (Def) defends: 1 → 0 blocks (6+)",
+    "COMBAT|Def takes 1 wound (9/10)",
+    "COMBAT|Def loses a model (9/10)"
+   ],
+   "scenario": "ap_marked_target",
+   "seed": 49
+  },
+  {
+   "epoch": 76,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 10,
+     "shaken": false,
+     "unit": "Def",
+     "wounds": 10
+    }
+   ],
+   "lines": [
+    "COMBAT|Piercing Tag: one token spent — +1 AP on this volley (1 left)",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 3 3 3 3 3 2 2 1 1 1 → 0 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 0 hits"
+   ],
+   "scenario": "ap_marked_target",
+   "seed": 225
   }
  ],
  "family": "shooting_volley",
  "provenance": {
   "epoch": 76,
-  "git_sha": "091f42287c6601b17cd569d8277cc48d4a83ef3f",
+  "git_sha": "010cb205848f7ce0a368dc99b6874238746b2621",
   "registry_sha256": "425decb0652c95d5718359a87107f2f3738e3287e9d67a13369b0a00a3f0df0e",
   "registry_system": "gf"
  },

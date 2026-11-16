@@ -69,6 +69,9 @@ static func scenarios() -> Array:
 		{"name": "deadly", "note": "Deadly(3) vs Tough(3): each unsaved wound kills one model",
 			"weapon": _weapon(["Deadly(3)"]), "attacker": ATTACKER,
 			"defender": _with(DEFENDER, {"tough": 3})},
+		{"name": "ap_marked_target", "note": "AP(1) vs a defender with 2 Piercing Tag markers: one token spent, +1 AP (P4.D-30)",
+			"weapon": _weapon(["AP(1)"]), "attacker": ATTACKER,
+			"defender": _with(DEFENDER, {"ledger": {"piercing_tag_markers": 2, "piercing_tag_source": ""}})},
 	]
 
 
