@@ -12920,7 +12920,9 @@ func _run_ai_melee(report: Dictionary) -> void:
 		_solo_stage_end()
 		return
 	# The snap spends REMAINING budget (maintainer 2026-07-22: path 6.0" + snap 0.9" = illegal 6.9").
-	var snapped_ai: float = solo_controller.snap_charge(unit, target, solo_controller.last_move_remaining_in())
+	# #183 (EPOCH_77_CHARGE_CAP): each model spends its OWN leftover (GF 3.6 p.9); a model without one stays at its band.
+	var snapped_ai: float = solo_controller.snap_charge_per_model(unit, target) if SoloController.charge_cap_on() \
+		else solo_controller.snap_charge(unit, target, solo_controller.last_move_remaining_in())
 	if snapped_ai < 0.0:
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.COMBAT,
@@ -12931,6 +12933,9 @@ func _run_ai_melee(report: Dictionary) -> void:
 	if snapped_ai > 0.05 and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s charges into base contact (+%.1f\") — %s" % [unit.get_name(), snapped_ai, OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))], true)
+		if SoloController.charge_cap_on() and solo_controller.last_snap_stayed > 0:   # rules-must-log (#183)
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d model%s stay at their band (Charge: up to 12\"; Unit Coherency as close as possible)"
+				% [unit.get_name(), solo_controller.last_snap_stayed, "" if solo_controller.last_snap_stayed == 1 else "s"], true)
 	# PILE-IN (GF v3.5.1 p.9, live-test Bug 18 + NML-208): once the chargers stand, every defender
 	# model without base contact MUST move up to 3" into contact — mandatory, so automated for both
 	# sides, VISIBLY (the models glide; a teleport read as "nothing happened" in the live test).
