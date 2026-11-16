@@ -725,16 +725,34 @@ class Run:
 
         atomic_json(self.run_dir / "snapshots.json", self.checkpoints)
 
+    def guest_notice_lag(self, sent: float) -> float:
+        """Seconds from `sent` until the guest recorded that the host left; inf if it never did within 5 s.
+        The value that ended the wait is the answer: a second read of the guest's state file can find it
+        missing (the peer replaces it by remove + rename), and a missing file reads as {} = "never"."""
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            left_at = self.clients["guest"].state().get("host_left_at")
+            if left_at:
+                return left_at - sent
+            time.sleep(0.05)
+        return float("inf")
+
     def leave_scenario(self) -> None:
         """Bugs 9+10: the host leaves to the menu (End Battle): the guest is told within 2 s, the host's
         relay peer is closed, a saved-game load works in the next scene, no peer count goes negative."""
         sent = time.time()
         self.command("host", "leave_to_menu")
-        deadline = time.monotonic() + 5
-        while not self.states()["guest"].get("host_left_at") and time.monotonic() < deadline:
-            time.sleep(0.05)
-        guest, left = self.states()["guest"], self.states()["host"].get("left_state", {})
-        lag = (guest.get("host_left_at") or float("inf")) - sent
+        lag = self.guest_notice_lag(sent)
+        # The ack lands before the host's state file does, and that file is replaced by remove + rename every
+        # 100 ms (a read in between finds it missing = {}): wait for the state that carries the answer instead
+        # of reading whatever is on disk the instant the ack shows ("load after leaving returned None").
+        left = self.wait_value(
+            "the host's state with left_state",
+            lambda: self.clients["host"].state().get("left_state") or None,
+            timeout=5,
+            clients=(self.clients["host"],),
+        )
+        assert isinstance(left, dict)
         # The guest goes too: a host relay peer that outlived the scene would hand the next scene's
         # NetworkManager a peer_disconnected it never saw connect ("remaining peers: -1").
         self.seq["guest"] += 1
@@ -758,10 +776,7 @@ class Run:
         self.seq["host"] += 1
         atomic_json(self.clients["host"].command_path, {"seq": self.seq["host"], "action": "close_window"})
         self.clients["host"].proc.wait(timeout=20)
-        deadline = time.monotonic() + 5
-        while not self.states()["guest"].get("host_left_at") and time.monotonic() < deadline:
-            time.sleep(0.05)
-        lag = (self.states()["guest"].get("host_left_at") or float("inf")) - sent
+        lag = self.guest_notice_lag(sent)
         if not 0 < lag <= 2.0:
             raise HarnessFailure(f"close: guest notice after {lag:.2f}s (inf = never; limit 2 s)")
         print(f"[mp2] PASS host-closes-window (guest notice after {lag:.2f}s)")
