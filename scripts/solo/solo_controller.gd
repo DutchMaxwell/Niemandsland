@@ -326,6 +326,13 @@ const OVERLAP_EPS_M := 0.0005         # sub-0.5 mm world moves are noise (matche
 ## mm-scale un-stack nudge; a strict slack=0 cap would route every packed full-band move into the
 ## shorten/ladder (the trip-band freeze). Mirrors MovementPlanner.CONTACT_SLIDE_EPS_IN.
 const GATE_SLACK_EPS_IN := 0.05
+## #183 (EPOCH_77_CHARGE_CAP): a charging model's retraced trail is cut back to band + contact epsilon minus this
+## margin (inches), so it ends strictly inside the declaration's band tolerance (no float flicker).
+const CHARGE_CAP_MARGIN_IN := 0.001
+const CHARGE_CAP_BISECT := 12   # bisections on the planned -> gated segment (~0.03 mm on a 12" correction)
+## #183, pending a maintainer decision: a charge that lands out of coherency is only LOGGED (GF p.9 "as close as
+## possible"). true = the declaration probe refuses such a charge instead.
+const CHARGE_CAP_COHERENCY_REFUSES := false
 
 var army_manager: OPRArmyManager = null
 var network_manager: Node = null
@@ -506,6 +513,9 @@ static func climb_on() -> bool:
 ## truth, gate slack) pay the climb too. Below it they measure flat length, as every record stamped 73 was made.
 static func climb_cost_on() -> bool:
 	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_74_CLIMB_COST
+## #183 EPOCH_77_CHARGE_CAP: no charging model's retraced trail outruns its band (GF p.9 "up to 12\"").
+static func charge_cap_on() -> bool:
+	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_77_CHARGE_CAP
 ## Largest climb (inches) any model of the last move paid — main logs it.
 var last_move_climb_in: float = 0.0
 
@@ -6280,12 +6290,15 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# far the unit may legally walk SIDEWAYS, so the lateral escape below measures itself against this
 	# number rather than against the ladder's remnant (see there).
 	var granted_reach := reach
+	var pre_gate: Array = []
 	if not _is_regiment(unit):
 		var planned_m := _achieved_m(positions, new_positions)   # pre-gate displacement, post-trim
 		# NML-230 Breach A: hand the gate per-model displacement budgets (band slack after the walked
 		# route) so its physical un-stack can never stretch a retraced trail past the band. A charge
 		# keeps the unbounded contact push (the snap owns the endpoint, pushing back off the target).
 		var gate_caps: Array = [] if allow_contact else _gate_disp_caps_m(trails, trail_radii_m, reach, ignores_difficult, ledges_paid)
+		if allow_contact:
+			pre_gate = new_positions.duplicate()   # #183: the charge arc cap slides back toward these
 		new_positions = _finalize_placement(unit, models, positions, new_positions, allow_contact, charge_target, gate_caps)
 		band_clamp_models = _gate_clamped_models.size()
 		# GATE-COLLAPSE LADDER (round 7, finding 2 — "a constraint gate truncates the whole move"): the gate
@@ -6486,9 +6499,18 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		# Retrace each animation trail to its GATED endpoint so the glide ends exactly where the state now is.
 		var wall_kept := 0
 		var container_cut := 0
+		var charge_cut := 0
 		for i in range(mini(trails.size(), new_positions.size())):
-			var kept := _retrace_wall_true(unit, trails[i] as Array, positions[i] as Vector3, new_positions[i] as Vector3,
+			var route := trails[i] as Array
+			var kept := _retrace_wall_true(unit, route, positions[i] as Vector3, new_positions[i] as Vector3,
 				model_base_radius_m(models[i] as ModelInstance))
+			if allow_contact and charge_cap_on() and i < pre_gate.size():
+				kept = _charge_arc_cap(unit, route, positions[i], pre_gate[i], new_positions[i], kept,
+					model_base_radius_m(models[i] as ModelInstance),
+					_charge_band_in(route, float(trail_radii_m[i]), reach, ignores_difficult), ledges_paid)
+				if bool(kept[3]):
+					charge_cut += 1
+					new_positions[i] = kept[1]
 			trails[i] = kept[0]
 			if (kept[1] as Vector3) != (new_positions[i] as Vector3):
 				new_positions[i] = kept[1]
@@ -6496,6 +6518,11 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 					container_cut += 1
 				else:
 					wall_kept += 1
+		if charge_cut > 0:   # rules-must-log (#183)
+			board_clamp_notes.append("%s: %d model%s stop at the %.0f\" charge band (Charge: move up to the band, or as close as possible)"
+				% [unit.get_name(), charge_cut, "" if charge_cut == 1 else "s", reach])
+		if allow_contact and charge_cap_on() and not _config_coherent_world(models, new_positions, chain_in):
+			board_clamp_notes.append("%s: out of Unit Coherency after the charge (Coherency: or as close as possible)" % unit.get_name())
 		if wall_kept > 0:   # rules-must-log (AIG-L6): the kept-back models say which book rule held them
 			board_clamp_notes.append("%s: %d model%s stay on their own side of a wall (Charge: no moving through walls; Unit Coherency waits)"
 				% [unit.get_name(), wall_kept, "" if wall_kept == 1 else "s"])
@@ -8747,6 +8774,36 @@ func _retrace_to(route: Array, start: Vector3, gated: Vector3) -> Array:
 	if (trimmed.back() as Vector3).distance_to(gated) > OVERLAP_EPS_M:
 		trimmed.append(gated)
 	return trimmed
+
+
+## #183 EPOCH_77_CHARGE_CAP: the model's band — the granted reach, 6" when its own route entered difficult (p.11).
+func _charge_band_in(route: Array, radius_m: float, reach_in: float, ignores_difficult: bool) -> float:
+	if not ignores_difficult and _trails_cross_difficult([route], [radius_m]):
+		return minf(reach_in, DIFFICULT_MOVE_CAP_IN)
+	return reach_in
+
+
+## #183 EPOCH_77_CHARGE_CAP (GF p.9 "up to 12\""): when the gate's correction stretched a charging model's retraced
+## trail past band + contact epsilon, its end slides back along planned -> gated to the farthest point whose
+## retraced trail still fits (t = 0 is the trimmed route end). Backward pulls never lengthen the trail and stay.
+## Returns `kept` ([trail, end, container_cut]) plus a 4th entry: true when the cap cut.
+func _charge_arc_cap(unit: GameUnit, route: Array, start: Vector3, planned: Vector3, gated: Vector3, kept: Array,
+		radius_m: float, band_in: float, ledges: Array) -> Array:
+	var limit_m := (band_in + SeparationChecker.BASE_CONTACT_EPSILON_INCHES - CHARGE_CAP_MARGIN_IN) * INCHES_TO_METERS
+	if _priced_len_m(kept[0], ledges) <= limit_m:
+		return kept + [false]
+	var best := _retrace_wall_true(unit, route, start, planned, radius_m)
+	var lo := 0.0
+	var hi := 1.0
+	for _b in range(CHARGE_CAP_BISECT):
+		var mid := (lo + hi) * 0.5
+		var cand := _retrace_wall_true(unit, route, start, planned.lerp(gated, mid), radius_m)
+		if _priced_len_m(cand[0], ledges) <= limit_m:
+			lo = mid
+			best = cand
+		else:
+			hi = mid
+	return best + [true]
 
 
 ## AIG-L6 (EPOCH_73_V36): `_retrace_to` closes the trimmed route with ONE straight leg to the gate-corrected end,
@@ -11280,11 +11337,17 @@ func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -
 				var endpoint := trimmed.back() as Vector3
 				planned[i] = Vector3(endpoint.x, (planned[i] as Vector3).y, endpoint.z)
 	var finalized := planned
+	var charge_cut := false
 	if not _is_regiment(unit):
 		finalized = _finalize_placement(unit, models, positions, planned, true, target)
 		for i in range(mini(trails.size(), finalized.size())):
 			var kept := _retrace_wall_true(unit, trails[i] as Array, positions[i] as Vector3, finalized[i] as Vector3,
 				model_base_radius_m(models[i] as ModelInstance))
+			if charge_cap_on():   # #183: the SAME arc cap the execution applies
+				kept = _charge_arc_cap(unit, trails[i], positions[i], planned[i], finalized[i], kept,
+					model_base_radius_m(models[i] as ModelInstance),
+					_charge_band_in(trails[i], float(radii_m[i]), effective_band, ignores_difficult), ledges_w)
+				charge_cut = charge_cut or bool(kept[3])
 			trails[i] = kept[0]
 			finalized[i] = kept[1]
 
@@ -11307,6 +11370,18 @@ func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -
 	var remaining_in := maxf(0.0, effective_band - longest_arc_in)
 	result["arc_in"] = longest_arc_in
 	result["remaining_in"] = remaining_in
+	if charge_cap_on() and not _is_regiment(unit):
+		# #183: a charge has no ladder to settle debts — an end the arc cap slid back may overlap another base.
+		var refuse := "overlap" if charge_cut and not _config_overlap_free(models, finalized, _external_obstacle_shapes(unit)) else ""
+		if refuse == "" and CHARGE_CAP_COHERENCY_REFUSES and not _config_coherent_world(models, finalized,
+				CoherencyChecker.SKIRMISH_CHAIN_DISTANCE_INCHES if CoherencyChecker.is_skirmish_system(unit)
+				else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES):
+			refuse = "coherency"   # off by default: the execution logs the coherency debt instead
+		if refuse != "":
+			result["reachable"] = false
+			result["failed_clauses"] = refuse
+			result["reason"] = "charge placement fails %s" % refuse
+			return result
 	var best_residual_in := INF
 	var best_model := -1
 	for i in range(mini(models.size(), mini(finalized.size(), trails.size()))):
