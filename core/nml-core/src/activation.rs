@@ -353,7 +353,7 @@ mod tests {
 
     #[test]
     fn rule2_a_second_begin_is_refused() {
-        refused(&[Begin, placed(vec![]), Begin], 2, "the activation is NOT already started (TEMP red demo)");
+        refused(&[Begin, placed(vec![]), Begin], 2, "the activation is already started");
     }
 
     #[test]
