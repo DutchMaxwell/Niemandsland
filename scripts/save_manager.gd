@@ -38,6 +38,11 @@ var ai_slots_setter: Callable  # (slots: Array) -> void: adopts the designation 
 var solo_mission_id_getter: Callable  # () -> String
 var solo_mission_id_setter: Callable  # (mission_id: String) -> void
 var network_manager: Node  # Session role: a guest never loads a save into a shared game (see load_game)
+## P4.0-7 (D5): the unit whose activation a load just rewound ("" = none); game state carries it for the one log line.
+var core_restart := ""
+## P4.0-7 (D5): an activation's start snapshot ({"game_units", "game_state"}) and its unit; set at a Start, cleared at an end.
+var activation_start: Dictionary = {}
+var activation_unit := ""
 
 
 func _ready() -> void:
@@ -340,6 +345,20 @@ func _serialize_game_state() -> Dictionary:
 const SCENARIO_RESTORE_TMP := "user://_scenario_restore.nml"
 
 
+## P4.0-7 (D5): a Start captures the board as a load consumes it, so the snapshot restores that start exactly.
+func note_activation_start(unit_name: String) -> void:
+	if unit_name.is_empty():
+		return
+	activation_start = {"game_units": _serialize_game_units(), "game_state": _serialize_game_state()}
+	activation_unit = unit_name
+
+
+## P4.0-7 (D5): the activation is over (End, Cancel, round end, AI body exit or a load's reset): later saves are ordinary.
+func note_activation_end() -> void:
+	activation_start = {}
+	activation_unit = ""
+
+
 ## Save the current game state to file (serialize + write + save_completed signal).
 func save_game(path: String) -> Error:
 	var state := serialize_game_state()
@@ -348,6 +367,13 @@ func save_game(path: String) -> Error:
 	# reasoning as rule_state in _deserialize_game_state).
 	if ai_slots_getter.is_valid():
 		state["solo_ai_slots"] = ai_slots_getter.call()
+	# P4.0-7 (D5): a save mid-activation stores the activation's START snapshot, so a load rewinds instead of resuming
+	# a half-run volley. Outside an activation the serializer above stands untouched (byte-identical save).
+	if not activation_start.is_empty():
+		state["game_units"] = activation_start["game_units"]
+		var gs: Dictionary = (activation_start["game_state"] as Dictionary).duplicate(true)
+		gs["core_activation_restart"] = activation_unit
+		state["game_state"] = gs
 	# Lead D15 c: a deleted free terrain piece only waits for an undo, and no undo survives a reload, so a FILE save
 	# leaves it out (it would come back as a hidden ghost node). The peer push keeps it: an undo there must find it.
 	state["objects"] = state["objects"].filter(func(o: Dictionary) -> bool:
@@ -1052,6 +1078,8 @@ func _restore_dead_parking_after_load() -> void:
 
 ## Deserialize game state (round, turn, etc.)
 func _deserialize_game_state(state_data: Dictionary) -> void:
+	# P4.0-7 (D5): the optional restart marker rides the game state (a save without it is an ordinary load).
+	core_restart = str(state_data.get("core_activation_restart", ""))
 	if army_manager:
 		army_manager.set_current_round(int(state_data.get("current_round", 1)))
 		# Restore the game phase. Older saves without the key predate the phase gate; a loaded battle
