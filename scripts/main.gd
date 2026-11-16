@@ -5538,10 +5538,12 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	var casting_mod := int(cast_net["net"])
 	var cast_mod_notes: PackedStringArray = cast_net["notes"]
 	if casting_mod != 0:
+		var unmodified_target := base_target
 		base_target = clampi(base_target - casting_mod, 2, 6)
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%+d to casting rolls (%s) — %s's base target is %d+" % [
-				casting_mod, ", ".join(cast_mod_notes), caster.get_name(), base_target], true)
+			# State BOTH numbers: the modified roll and the unmodified base it started from.
+			battle_log.log_event(BattleLog.Category.COMBAT, "%+d to casting rolls (%s) — %s casts on %d+ (base %d+)" % [
+				casting_mod, ", ".join(cast_mod_notes), caster.get_name(), base_target, unmodified_target], true)
 	# ANNOUNCE (announce → resist? → roll → saves → effect): attribution highlights + one log line
 	# stating cost, boost/interference and the needed roll BEFORE any die is thrown.
 	var announce := _solo_show_attack_announce(caster_unit, targets[0], "casts %s at" % spell_name)
