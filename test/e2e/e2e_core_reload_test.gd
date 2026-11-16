@@ -106,8 +106,11 @@ func test_reload_rebuilds_the_core_node_and_header(timeout := 120000) -> void:
 		var d := OPRApiClient.OPRUnit.new(); d.weapons.append(w)
 		u.source_type = "opr"; u.source_data = d; u.models[0].wounds_current = 1
 		_main.opr_army_manager.game_units[u.unit_id] = u
+	CoreActivation.legacy.erase("plan_decline")
 	assert_object(_pick(sc)).is_not_null()
 	assert_int(sc._core_calls).is_greater(0)
+	assert_int(CoreActivation.legacy.get("plan_decline", {}).get("core:used", 0)).override_failure_message(
+		"P4.D-61: every answered core pick is counted: %s" % [CoreActivation.legacy.get("plan_decline", {})]).is_equal(sc._core_calls)
 	assert_bool(sc._core_header_done).is_true()
 	assert_str(str(sc._core_declines)).not_contains("rules registry").not_contains("unreadable")
 	await E2EBoot.settle(get_tree())
