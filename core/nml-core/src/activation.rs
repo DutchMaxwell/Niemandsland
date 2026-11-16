@@ -398,6 +398,9 @@ pub struct UnitDelta {
     /// P4.0-4f: the per-unit marker pools AFTER (inventory class (a)), keyed by the table's own
     /// property name (every name is 1:1; absent on the table reads 0).
     pub pools: Vec<(&'static str, i64)>,
+    /// P4.0-4g: the latched Versatile pick AFTER (inventory class (a)): 0 = none, 1 = +1 to hit,
+    /// 2 = AP(+1). `land_delta` maps it onto the table's `versatile_pick` Dictionary.
+    pub versatile_pick_mode: i64,
 }
 
 /// P4.0-4f: the marker pools the inventory marks table-owned, in `State` declaration order, AFTER.
@@ -454,6 +457,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
         if b != a || before.alive[u] != after.alive[u] || before.shaken[u] != after.shaken[u] || moved
             || before.fatigued[u] != after.fatigued[u] || before.casts[u] != after.casts[u]
             || stamps_changed || pools_changed
+            || before.versatile_pick_mode[u] != after.versatile_pick_mode[u]
         {
             out.push(UnitDelta {
                 key: key.clone(),
@@ -466,6 +470,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 casts: after.casts[u],
                 stamps: stamps_of(after, u),
                 pools: pools_of(after, u),
+                versatile_pick_mode: after.versatile_pick_mode[u],
             });
         }
     }
@@ -1008,6 +1013,18 @@ mod tests {
         let (got, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], 7);
         let ActStep::Done { state, .. } = got else { panic!("seed 7: {got:?}") };
         assert!(delta_of(&st, &state).iter().all(|x| x.stamps.len() == 12), "a core row carries the stamps");
+    }
+    /// P4.0-4g: a core-resolved Versatile volley carries the latched pick in its delta (the int mode the table's
+    /// `versatile_pick` Dictionary is built from). RED: drop `versatile_pick_mode` from the push -> 0, no pick.
+    #[test]
+    fn a_core_versatile_volley_carries_the_pick_mode() {
+        let (st, mut statics) = volley_line();
+        statics[0].shoot[0].versatile_attack = true;
+        let (got, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], 7);
+        let ActStep::Done { state, .. } = got else { panic!("seed 7: {got:?}") };
+        assert!(matches!(state.versatile_pick_mode[0], 1 | 2), "the core picked: {:?}", state.versatile_pick_mode);
+        assert_eq!(state.versatile_pick_round[0], state.round);
+        assert_eq!(delta_of(&st, &state)[0].versatile_pick_mode, state.versatile_pick_mode[0], "the delta carries the pick");
     }
     /// P4.0-4f: a unit whose only change is a marker pool gets a row carrying all four, AFTER; a core-resolved
     /// volley's rows carry them too (RED: drop the pool term -> no row; drop a pair -> the count is 3).

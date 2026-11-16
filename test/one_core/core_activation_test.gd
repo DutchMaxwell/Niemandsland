@@ -416,11 +416,17 @@ func test_land_delta_lands_the_ledger_and_reports_a_split() -> void:
 
 ## P4.0-4d: a core-resolved volley carries the ledger of the unit it moved (the row exists as before); RED when the
 ## binding drops `fatigued`/`casts` from the delta, and the landing leaves the table's own values alone.
+## P4.0-4h: the same driven rows carry the two producer keys in between — the stamp the placed move set
+## (`moved_round`, -1 -> 1) and the marker pool the volley spent on its target (`tag_markers`, 2 -> 1) — and the
+## landing writes both to the table. RED when `delta_array` renames either key: the rows have no "stamps"/"pools"
+## entry and the table keeps -1/2.
 func test_a_core_volley_delta_carries_the_ledger() -> void:
 	var units := _volley_units()
 	var att: GameUnit = units[0]
+	var foe: GameUnit = units[1]
 	att.is_fatigued = true
 	att.set_caster_points(2)
+	foe.unit_properties["tag_markers"] = 2
 	_main.seed_tray_rng(7)
 	var at: Array = att.get_alive_models() \
 		.map(func(m: ModelInstance) -> Vector3: return m.node.global_position + Vector3(2.0 * 0.0254, 0.0, 0.0))
@@ -429,12 +435,22 @@ func test_a_core_volley_delta_carries_the_ledger() -> void:
 	var r: Dictionary = await CoreActivation.drive(_main, CoreActivation.capture(_main), att, t, true)
 	assert_str(str(r["step"])).is_equal("done")
 	var row := {}
+	var foe_row := {}
 	for e in r.get("delta", []):
 		row = e if str(e["unit"]) == att.unit_id else row
+		foe_row = e if str(e["unit"]) == foe.unit_id else foe_row
 	assert_bool(row.get("fatigued", false)).override_failure_message("the delta row: %s" % [r.get("delta", [])]).is_true()
 	assert_int(int(row.get("casts", -1))).is_equal(2)
 	assert_bool(att.is_fatigued).override_failure_message("the table's own fatigue survived the landing").is_true()
 	assert_int(att.casts_current).override_failure_message("the table's own tokens survived the landing").is_equal(2)
+	var stamps: Dictionary = row.get("stamps", {})
+	var pools: Dictionary = foe_row.get("pools", {})
+	assert_int(int(stamps.get("moved_round", -99))) \
+		.override_failure_message("the stamp the move set: %s" % [r.get("delta", [])]).is_equal(1)
+	assert_int(int(pools.get("tag_markers", -99))) \
+		.override_failure_message("the pool the volley spent: %s" % [r.get("delta", [])]).is_equal(1)
+	assert_int(int(att.unit_properties.get("moved_round", -99))).is_equal(1)
+	assert_int(int(foe.unit_properties.get("tag_markers", -99))).is_equal(1)
 
 
 ## P4.0-4e: the delta's round stamps land under the table's own property names (`spot_round` is the table's
@@ -461,6 +477,29 @@ func test_land_delta_lands_the_marker_pools() -> void:
 		"CoreActivation.land_delta: %s.tag_markers differs (table 0, core 2)" % u.get_name())
 	assert_int(int(u.unit_properties.get("tag_markers", 0))).override_failure_message("the pool landed").is_equal(2)
 	assert_bool(u.unit_properties.has("spot_markers")).override_failure_message("an equal pool wrote nothing").is_false()
+
+
+## P4.0-4g: a core-resolved Versatile activation lands the pick on the table exactly as the old path holds it —
+## the `versatile_pick` Dictionary `{"hit_mod", "ap"}` the table's own latch writer stores — so the old path's
+## reader returns the core's pick and the round stamp gates it. RED when the delta drops `versatile_pick_mode`:
+## the core picks, the table never gets the key, the reader returns {}.
+func test_a_core_versatile_activation_lands_the_pick_the_old_path_reads() -> void:
+	var units := _volley_units()
+	var att: GameUnit = units[0]
+	att.unit_properties["special_rules"].append("Versatile Attack")
+	_main.seed_tray_rng(7)
+	var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": units[1].unit_id}]
+	var r: Dictionary = await CoreActivation.drive(_main, CoreActivation.capture(_main), att, t, true)
+	assert_str(str(r["step"])).is_equal("done")
+	var row := {}
+	for e in r.get("delta", []):
+		row = e if str(e["unit"]) == att.unit_id else row
+	var mode := int(row.get("versatile_pick_mode", 0))
+	assert_int(mode).override_failure_message("the core picked a mode: %s" % [r.get("delta", [])]).is_greater(0)
+	var want := {"hit_mod": 1, "ap": 0} if mode == 1 else {"hit_mod": 0, "ap": 1}
+	assert_dict(att.unit_properties.get("versatile_pick", {})).override_failure_message("the table's key/shape").is_equal(want)
+	assert_dict(_main._solo_versatile_latch_read(att)).override_failure_message("the old path's reader").is_equal(want)
+	assert_int(int(att.unit_properties.get("versatile_pick_round", -1))).is_equal(1)
 
 
 ## Step 42 (O21): the AI's volley at this table's human unit shows the table's "Incoming fire!" card before the save dice

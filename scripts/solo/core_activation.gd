@@ -15,36 +15,57 @@ static func enabled() -> bool:
 	return _env == 1
 
 
+## M-3 (maintainer 16.11.): the rules core (NmlCore) is MANDATORY for engine play. Solo (an AI seat) and Automatic are
+## OFFERED only while it is loaded; a build without it plays Manual. Every door that offers either asks this (`applies`
+## below asks the class table itself). Test seam: -1 asks ClassDB, 0 / 1 stands in for an absent / loaded core.
+static var offer_override := -1
+
+
+static func engine_offered() -> bool:
+	if offer_override >= 0:
+		return offer_override == 1
+	return ClassDB.class_exists("NmlCore")
+
+
 ## The engine resolves at this table: an AI seat, or an agreed Automatic online room. Hotseat and Manual rooms: false.
 static func applies(main) -> bool:
 	return enabled() and ClassDB.class_exists("NmlCore") \
 		and (not main.solo_ai_slots.is_empty() or main._online_turn_room())
 
 
-## No unit rule, no attachment, no weapon rule: the volley the core resolves exactly as the table does.
+## P4.0-6: the per-choice switch. A choice id's prefix (`takedown_model:<shooter>:<target>`) names its
+## switch; a switch is ON only for `NML_ONE_CORE_CHOICE_<PREFIX>` = "1"/"on", so OFF is the default and the
+## core's automatic pick resolves exactly as before this step. Tests set the entry per kind.
+const CHOICE_KINDS := ["takedown_model"]
+static var _choice_on: Dictionary = {}
+
+
+static func choice_enabled(id: String) -> bool:
+	var kind := id.get_slice(":", 0)
+	if not _choice_on.has(kind):
+		var raw := OS.get_environment("NML_ONE_CORE_CHOICE_%s" % kind.to_upper()).to_lower()
+		_choice_on[kind] = raw == "1" or raw == "on"
+	return bool(_choice_on[kind])
+
+
+static func any_choice_enabled() -> bool:
+	for kind in CHOICE_KINDS:
+		if choice_enabled(str(kind)):
+			return true
+	return false
+
+
+## The volley the core resolves exactly as the table does: `CoreSlice` takes the unit (today: no unit rule, no attachment,
+## no weapon rule, an OPR profile - the slice's groups widen it).
 static func is_plain(gu: GameUnit) -> bool:
-	if not (gu.unit_properties.get("special_rules", []) as Array).is_empty() \
-			or gu.has_attached_heroes() or gu.is_attached() or not gu.source_data is OPRApiClient.OPRUnit:
-		return false
-	for w in (gu.source_data as OPRApiClient.OPRUnit).weapons:
-		if not w.special_rules.is_empty():
-			return false
-	return true
+	return CoreSlice.takes(gu)
 
 
 ## P4.D-13b: the TARGET half of `is_plain`. The core takes a target's profile from unit_properties
 ## (`BattleSim._unit_profile`), so a target needs no OPR profile: a loaded save from before the profile was saved is shot
-## like any other unit. What it needs is a statline the core can hand a save to. A target that has an OPR profile keeps
-## the weapon-rule clause of `is_plain`.
+## like any other unit. What it needs is a statline the core can hand a save to.
 static func is_plain_target(gu: GameUnit) -> bool:
-	if not (gu.unit_properties.get("special_rules", []) as Array).is_empty() \
-			or gu.has_attached_heroes() or gu.is_attached() or not has_statline(gu):
-		return false
-	var src := gu.source_data as OPRApiClient.OPRUnit
-	for w in src.weapons if src != null else []:
-		if not w.special_rules.is_empty():
-			return false
-	return true
+	return has_statline(gu) and CoreSlice.takes(gu, true)
 
 
 ## Quality and defense both in 2..6 (the rules' range). A hand-written foreign save may carry none: get_quality() and
@@ -117,6 +138,43 @@ const CAP_CHARGE := 3
 const METERS_TO_INCHES := 39.3701
 
 
+## P4.0-6: the choice the step API will open for this activation, as its stable id, or "". Only a choice
+## whose switch is ON is built, and only when the table can see what the core's `takedown_choice` sees (a
+## Takedown shooting profile on the actor, 2+ living models on the shot's target): the probe can never ask
+## for a choice the core would not open. An empty answer means "no probe", i.e. the automatic pick.
+static func pending_choice(main, unit: GameUnit, transcript: Array) -> String:
+	if not any_choice_enabled():
+		return ""
+	for i in range(transcript.size() - 1, -1, -1):
+		var e: Dictionary = transcript[i]
+		if str(e.get("t", "")) == "choice":
+			return ""   # already asked in this transcript: never a second probe
+		if str(e.get("t", "")) != "intent":
+			continue
+		var target = main.opr_army_manager.game_units.get(str(e.get("shoot", "")))
+		if not target is GameUnit or not choice_enabled("takedown_model") \
+				or (target as GameUnit).get_alive_models().size() < 2 or not _takedown_weapon(unit):
+			return ""
+		return "takedown_model:%s:%s" % [unit.unit_id, (target as GameUnit).unit_id]
+	return ""
+
+
+## Whether `unit` carries a Takedown shooting profile — the core's `ShootProfile.takedown` is stamped from
+## the same weapon entries (`weapon_has(w, "Takedown")`).
+static func _takedown_weapon(unit: GameUnit) -> bool:
+	var src := unit.source_data as OPRApiClient.OPRUnit
+	for w in src.weapons if src != null else []:
+		for r in (w as OPRApiClient.OPRWeapon).special_rules:
+			if GameUnit.rule_name_matches(str(r), "Takedown"):
+				return true
+	return false
+
+
+## The sentence the fallback line and the owner's request use for a choice id.
+static func choice_purpose(id: String) -> String:
+	return "Takedown model pick" if id.get_slice(":", 0) == "takedown_model" else "choice"
+
+
 ## One activation through the core: ask, print the lines not printed yet, land, throw on the owner's tray, ask again.
 ## `transcript` gains one faces entry per throw; `on_throw(kind, index)` runs before each throw (a test seam).
 ## `beat(event, answer, faces)` (step 42b, the table's presentation) is awaited before each throw ("throw"), after it
@@ -124,6 +182,8 @@ const METERS_TO_INCHES := 39.3701
 ## Returns the core's last answer plus "steps" (calls), "core_us" (their total time) and "max_us" (the slowest).
 ## A `done` answer's state handle is released once the table landed it (R4); `keep_handle` hands it to the caller instead,
 ## who releases it.
+## P4.0-6: a choice whose switch is ON is probed once; a `need_choice` answer asks its OWNER (local, or over the
+## owner-request path), and only an answer the core offered is appended; no answer leaves the core's automatic pick.
 static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		on_throw: Callable = Callable(), keep_handle := false, beat: Callable = Callable()) -> Dictionary:
 	var core: Object = (main.solo_controller as SoloController)._core_node_ready()
@@ -134,12 +194,25 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 	var core_us := 0
 	var max_us := 0
 	var r: Dictionary = {}
+	var choice := pending_choice(main, unit, transcript)
 	for step in MAX_STEPS:
+		var inputs := transcript
+		if not choice.is_empty():
+			inputs = transcript.duplicate()
+			inputs.append({"t": "choice", "id": choice, "option": ""})
 		var t0 := Time.get_ticks_usec()
-		r = core.step_activation(h, unit.unit_id, transcript, enforce)
+		r = core.step_activation(h, unit.unit_id, inputs, enforce)
 		var us := Time.get_ticks_usec() - t0
 		core_us += us
 		max_us = maxi(max_us, us)
+		if str(r["step"]) == "need_choice":
+			var options: Array = r.get("options", [])
+			var owner := _roller_of(main, unit, transcript, str(r["owner"]))
+			var option: String = await main._owner_choice(owner, str(r["id"]), options, choice_purpose(str(r["id"])))
+			choice = ""   # asked once: the answer follows, or the core's automatic pick stands
+			if options.has(option):
+				transcript.append({"t": "choice", "id": str(r["id"]), "option": option})
+			continue
 		var lines: Array = r.get("lines", [])
 		for i in range(printed, lines.size()):
 			var line: Dictionary = lines[i]
@@ -223,30 +296,12 @@ static var legacy := {}
 static var legacy_sets := {}
 
 
-## "Tough(3)" -> "Tough", "Fear (spell)" -> "Fear" (a rule entry is a string or a {"name": ...} dictionary).
-static func _rule_label(r) -> String:
-	return (str((r as Dictionary).get("name", "")) if r is Dictionary else str(r)).get_slice("(", 0).strip_edges()
-
-
-## The refusals of one unit as the table sees them (what `is_plain` says no to; for a target, `is_plain_target`: no OPR
-## profile is not a reason there, P4.D-13b).
-static func _refusals(gu: GameUnit, as_target := false) -> Array:
-	var out: Array = (gu.get_special_rules() as Array).map(func(r) -> String: return "unit_rule:" + _rule_label(r))
-	if gu.has_attached_heroes() or gu.is_attached():
-		out.append("attached")
-	if not gu.source_data is OPRApiClient.OPRUnit:
-		return out if as_target else out + ["non_opr"]
-	for w in (gu.source_data as OPRApiClient.OPRUnit).weapons:
-		out.append_array(w.special_rules.map(func(r) -> String: return "weapon_rule:" + _rule_label(r)))
-	return out
-
-
 ## Why the core door refuses this shooter (and target): "no_core", "attached", "non_opr", "unit_rule:<name>",
 ## "weapon_rule:<name>" for the shooter; the target's carry a "target_" prefix ("target_rule:<name>" = its unit rules).
 static func why_not(main, unit: GameUnit, target: GameUnit) -> Array:
 	var out: Array = [] if applies(main) else ["no_core"]
-	out.append_array(_refusals(unit) if unit != null else [])
-	for r in (_refusals(target, true) if target != null else []):
+	out.append_array(CoreSlice.refusals(unit) if unit != null else [])
+	for r in (CoreSlice.refusals(target, true) if target != null else []):
 		out.append("target_rule:" + r.trim_prefix("unit_rule:") if r.begins_with("unit_rule:") else "target_" + r)
 	return out
 
@@ -570,6 +625,22 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		_land_ledger(main, gu, d)
 		_land_stamps(main, gu, d)
 		_land_pools(main, gu, d)
+		_land_versatile_mode(main, gu, d)
+
+
+## P4.0-4g: the latched Versatile pick the delta now carries (inventory class (a)). The table holds it as the
+## Dictionary `versatile_pick` (`{"hit_mod": int, "ap": int}`), the shape the old path's own writer stores, so the
+## core's int mode maps onto it. A difference is a core/table split (reported); mode 0 means "no pick", nothing lands.
+static func _land_versatile_mode(main, gu: GameUnit, d: Dictionary) -> void:
+	var mode := int(d.get("versatile_pick_mode", 0))
+	if mode == 0:
+		return
+	var vm := {"hit_mod": 1, "ap": 0} if mode == 1 else {"hit_mod": 0, "ap": 1}
+	var was: Dictionary = gu.unit_properties.get("versatile_pick", {})
+	if was == vm:
+		return
+	push_error("CoreActivation.land_delta: %s.versatile_pick differs (table %s, core %s)" % [gu.get_name(), str(was), str(vm)])
+	main._sync_unit_property(gu, "versatile_pick", vm)
 
 
 ## P4.0-4e: the `State` field names whose table property is spelled differently (every other stamp is 1:1).
@@ -658,6 +729,8 @@ static func open_session(main, gu: GameUnit) -> bool:
 	for u in [gu] + gu.get_attached_heroes():   # step 32: each moved_round before the Start (null = none), for the reset
 		s["moved_before"][u.unit_id] = u.unit_properties.get("moved_round")
 	_sessions[gu.unit_id] = s
+	if main.save_manager != null:
+		main.save_manager.note_activation_start(gu.get_name())   # P4.0-7 (D5): what a mid-step save stores
 	last_target = null   # step 50: a new activation never inherits the target of a cancelled one
 	if on_move_path(main, gu):   # step 31 (O1/O2): every activation of a move-path unit starts on Advance
 		main.object_manager.set_movement_cap(CAP_ADVANCE)
@@ -703,6 +776,8 @@ static func close_session(main, unit_id: String) -> void:
 	if core != null:
 		core.release(int(_sessions[unit_id]["handle"]))
 	_sessions.erase(unit_id)
+	if main != null and main.save_manager != null:
+		main.save_manager.note_activation_end()   # P4.0-7 (D5): an ended activation saves as the table stands
 	if main != null:
 		main._refresh_movement_cap_row()   # step 31: an ended unit shows Off again
 	_refresh_card(main)
@@ -1019,6 +1094,8 @@ static func start_rows(gu: GameUnit) -> Array:
 static func reset_all(main) -> void:
 	for id in _sessions.keys():
 		close_session(main, id)
+	if main != null and main.save_manager != null:
+		main.save_manager.note_activation_end()   # P4.0-7 (D5): a reset (a load) ends the activation on the save side too
 	_announced.clear()
 	_ending.clear()   # step 69
 	last_target = null

@@ -104,6 +104,12 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **A rules core that fails to load is reported at start.** Every start writes a line to the log
   saying whether the Rust rules core loaded. An exported build whose core did not load also shows a
   "Rules core missing" warning dialog that asks the player to reinstall the game. (#2619, #2623)
+- **Without the rules core the game offers Manual play only, and says so.** NACHTMAHR and Automatic
+  rules need the Rust rules core. Where it did not load, the AI Opponent button, the AI tick on
+  import, the Solo panel's AI seats, F11 and the Automatic switch each refuse with one line (battle
+  log and message) instead of starting a game the table cannot resolve. A saved game with an AI seat
+  or Automatic rules opens as a Manual game. Release builds ship the core, so only a build whose core
+  library is missing sees this. (#2865)
 
 ### Changed — saves
 - **A damaged save file no longer wipes the table.** Loading a file whose sections have the wrong

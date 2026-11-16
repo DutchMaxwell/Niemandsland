@@ -33,6 +33,7 @@ var _fake: FakeNet
 
 
 func before_test() -> void:
+	CoreActivation.offer_override = 1   # M-3: this suite tests the offered solo / Automatic flow, not the core
 	RulesAutomation.ui_enabled_override = true
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
@@ -46,6 +47,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.offer_override = -1
 	RulesAutomation.ui_enabled_override = false
 	RulesAutomation.ui_disabled_override = false
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)

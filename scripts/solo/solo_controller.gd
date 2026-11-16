@@ -2482,7 +2482,11 @@ func _act(unit: GameUnit) -> Dictionary:
 			"candidates": [], "chosen": "%s instead" % fallback_name,
 			"why": str(charge_probe.get("reason", "charge corridor falls short")),
 			"data": {"gap_in": charge_gap, "band_in": charge_band,
-				"effective_band_in": float(charge_probe.get("effective_band_in", charge_band))}})
+				"effective_band_in": float(charge_probe.get("effective_band_in", charge_band)),
+				"arc_in": float(charge_probe.get("arc_in", -1.0)),
+				"remaining_in": float(charge_probe.get("remaining_in", -1.0)),
+				"residual_in": float(charge_probe.get("residual_in", -1.0)),
+				"failed_clauses": str(charge_probe.get("failed_clauses", ""))}})
 	var action_data := {"arch": archetype, "role": archetype_role_label(archetype),
 		"objective": bool(ctx["objective"]), "in_way": bool(ctx["in_way"]),
 		"enemy_in_charge": bool(ctx["enemy_in_charge"]), "shoot_after_advance": bool(ctx["shoot_after_advance"]),
@@ -6183,6 +6187,10 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# itself is dangerous, going around is impossible, so the model routes in and takes its dangerous test.
 	var goal_in_danger: bool = not flying and _targets_in_dangerous(positions, goal, reach, own_r_m)
 	var avoid_dangerous: bool = not flying and not goal_in_danger
+	# Rules 3.6 ruins: the delta _plan_positions judges, to NAME the regime in the move record.
+	var delta0 := _clamp_delta_to_bounds(positions, MoveIntent.plan_unit_move(positions, goal, reach))
+	var unstable_long := _long_unstable_move(unit, delta0)
+	var goal_in_unstable := unstable_long and _rigid_targets_unstable(positions, delta0, own_r_m)
 	var stall_through := false   # the stall escalation's through-plan was accepted (logged as the dangerous_why cause)
 	var trails: Array = []
 	var trail_radii_m: Array = []
@@ -6242,6 +6250,14 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			if not cut.is_empty():
 				var fin := cut.back() as Vector3
 				new_positions[i] = Vector3(fin.x, (new_positions[i] as Vector3).y, fin.z)
+	# Flying (GF 3.6): may move through units and terrain, but a base may not END on impassable ground
+	# (a container, a wall line). Cut each flier's OWN route back to its first rest-legal spot BEFORE the
+	# gate, so the gate sees legal ends and keeps the formation instead of shortening it whole.
+	if flying and not allow_contact:
+		var fly_cut := _cut_fliers_to_rest_legal(models, new_positions, trails)
+		if fly_cut > 0:   # rules-must-log: the cut models say which book rule held them
+			board_clamp_notes.append("%s: %d model%s stop short of a container or wall (Flying: may move through terrain, but may not end a move on it)"
+				% [unit.get_name(), fly_cut, "" if fly_cut == 1 else "s"])
 	# Nothing actually moved (clamped to zero) → keep the old early-out (no state write, no broadcast).
 	var moved := false
 	for i in range(mini(positions.size(), new_positions.size())):
@@ -6519,6 +6535,9 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		achieved_arc_m = maxf(achieved_arc_m, MovementPlanner.polyline_length(t as Array) + climb_in * INCHES_TO_METERS)
 	var centroid_m := _achieved_m(positions, new_positions)
 	var why := "difficult cap" if reach < inches else ("around difficult" if avoid else "direct")
+	var unstable_avoid := unstable_long and avoid_dangerous and not goal_in_unstable   # the avoid held for the accepted route
+	if unstable_avoid and why in ["direct", "around difficult"]:
+		why = ("around difficult + " if avoid else "around ") + "unstable ruins (move over 6\")"
 	if gate_shortened:
 		why = "gate-legal shorten"   # the collapse ladder chose a shorter move with a LEGAL end state
 	if boxed_repositioned:
@@ -6529,11 +6548,15 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		"achieved_in": achieved_arc_m / INCHES_TO_METERS, "centroid_in": centroid_m / INCHES_TO_METERS,
 		"dangerous_models": dang,
 		"goal_gap_in": MoveIntent.distance_inches(MoveIntent.anchor_of(positions), goal)}
+	if unstable_avoid:
+		move_data["unstable_avoid"] = true
 	if dang > 0:
 		# rules-must-log: WHY avoidance was off or did not hold (playtest 14.10., the R2 cause was unreadable).
 		var why_parts: Array = []
 		if goal_in_danger:
 			why_parts.append("goal inside DANGEROUS ground")
+		if goal_in_unstable:
+			why_parts.append("goal inside an Unstable ruin")
 		if stall_through:
 			why_parts.append("stall through-plan (toll %.1f, cap %.1f)" % [float(dang_dice) / 6.0, maxf(1.0, 0.1 * float(_unit_wounds_now(models)))])
 		if stood_n > 0:
@@ -6645,6 +6668,23 @@ func _targets_in_dangerous(positions: Array, goal: Vector3, reach_in: float, rad
 	return false
 
 
+## Rules 3.6: is the rigid move over 6" for a non-Flying unit? Same epsilon as `_dangerous_trail_flags` (float32 noise).
+func _long_unstable_move(unit: GameUnit, delta: Vector3) -> bool:
+	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and not unit.has_special_rule("Flying") \
+		and Vector2(delta.x, delta.z).length() > MovementPlanner.UNSTABLE_MOVE_IN * INCHES_TO_METERS + 1e-6
+
+
+## Would the rigid move's per-model TARGETS land in UNSTABLE (ruin) ground? A destination INSIDE a ruin is
+## legal rest, so avoidance must not wall it off (same exception as `_targets_in_dangerous`).
+func _rigid_targets_unstable(positions: Array, delta: Vector3, radius_m: float) -> bool:
+	if not terrain_type_at.is_valid():
+		return false
+	for p in positions:
+		if TerrainRules.base_in_terrain((p as Vector3) + delta, radius_m, terrain_type_at, TerrainRules.is_unstable):
+			return true
+	return false
+
+
 ## EPOCH_27_TERRAIN_DEBUFF (sweep A) — the granted-terrain-debuff read over the JOINED chain
 ## (host + attached heroes), the same walk the core's `mods::granted` chain read does: a debuff
 ## cast on ANY member of the moving formation marks the whole move.
@@ -6742,7 +6782,7 @@ func _spacing_zones_world(unit: GameUnit, own_radius_m: float, charge_target: Ga
 ## {"grid": {Vector2i: TerrainType}, "avoid": {Vector2i: true}} — Impassable cells are always avoided;
 ## Difficult cells only when the route should go around them (solo overlay p.57).
 func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool, avoid_dangerous: bool = false,
-		board_y_in: float = 0.0) -> Dictionary:
+		board_y_in: float = 0.0, avoid_unstable: bool = false) -> Dictionary:
 	var grid := {}
 	var avoid := {}
 	if not terrain_type_at.is_valid():
@@ -6767,7 +6807,8 @@ func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool, avoi
 			# 3" cells no longer fatten a 6x3 box into a ~9x6 no-go field. Difficult/Dangerous
 			# keep cell avoidance (they are areas, not solid boxes).
 			if (avoid_difficult and TerrainRules.is_difficult(t)) \
-					or (avoid_dangerous and TerrainRules.is_dangerous(t)):
+					or (avoid_dangerous and TerrainRules.is_dangerous(t)) \
+					or (avoid_unstable and TerrainRules.is_unstable(t)):
 				avoid[cell] = true
 	return {"grid": grid, "avoid": avoid}
 
@@ -6784,7 +6825,8 @@ func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool, avoi
 ## centre). Sampled over the move AABB only (the _forbid_cells_in pattern); ADDITIVE — the coarse
 ## 3" avoid set and its consumers stay untouched, this feeds the planner's fine checks.
 func _avoid_fine_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Vector2,
-		clearance_m: float, avoid_difficult: bool, avoid_dangerous: bool, board_y_in: float = 0.0) -> Dictionary:
+		clearance_m: float, avoid_difficult: bool, avoid_dangerous: bool, board_y_in: float = 0.0,
+		avoid_unstable: bool = false) -> Dictionary:
 	var fine := {}
 	if not terrain_type_at.is_valid() or mpos.is_empty():
 		return fine
@@ -6812,7 +6854,8 @@ func _avoid_fine_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Ve
 	var pred := func(t: int) -> bool:
 		# CONTAINER handled by the exact wall channel (container wave) — cells only for areas.
 		return (avoid_difficult and TerrainRules.is_difficult(t)) \
-			or (avoid_dangerous and TerrainRules.is_dangerous(t))
+			or (avoid_dangerous and TerrainRules.is_dangerous(t)) \
+			or (avoid_unstable and TerrainRules.is_unstable(t))
 	for cy in range(cy0, cy1 + 1):
 		for cx in range(cx0, cx1 + 1):
 			var centre_in := Vector2((float(cx) + 0.5) * cell, (float(cy) + 0.5) * cell)
@@ -7919,11 +7962,15 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 		opts["zones"] = zones_in
 	if is_traversal(unit) or flies_through_units(unit):
 		opts["zones_rest_only"] = true   # Traversal / Flying: unit-spacing zones stop blocking the ROUTE; rest legality stays strict
-	var sampled := _terrain_grid_in(board_in, off, avoid_difficult, avoid_dangerous, board_y_in)
+	# Rules 3.6 ruins: a move over 6" through one takes the Dangerous test, so route around it like Dangerous
+	# ground; a destination inside a ruin stays reachable and the stall escalation can lift it (avoid_dangerous).
+	var avoid_unstable := avoid_dangerous and _long_unstable_move(unit, delta) \
+		and not _rigid_targets_unstable(positions, delta, own_r_m)
+	var sampled := _terrain_grid_in(board_in, off, avoid_difficult, avoid_dangerous, board_y_in, avoid_unstable)
 	opts["avoid_cells"] = sampled["avoid"]
-	if avoid_difficult or avoid_dangerous:
+	if avoid_difficult or avoid_dangerous or avoid_unstable:
 		# Fine, base-radius-inflated avoidance so the routed BASE EDGE clears the terrain too.
-		opts["avoid_fine"] = _avoid_fine_cells_in(mpos, mdelta, board_in, off, own_r_m, avoid_difficult, avoid_dangerous, board_y_in)
+		opts["avoid_fine"] = _avoid_fine_cells_in(mpos, mdelta, board_in, off, own_r_m, avoid_difficult, avoid_dangerous, board_y_in, avoid_unstable)
 	# Unified-solver inputs (real-game path only): the presence of "radii" selects the C-space / Theta* /
 	# funnel + unified-constraint-solver pipeline inside plan_unit_step. SoloSim never sets it, so its
 	# steer+A* path and the mirror-fairness oracle stay byte-identical. radii = per-model base radius (inches)
@@ -8123,6 +8170,9 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	var gate_flying := unit.has_special_rule("Flying")   # Bug 20: wall clamp must not revert legal fly-overs
 	var gate_traversal := is_traversal(unit)   # Traversal: the gate chord may cut through another unit's base; walls/terrain still clamp
 	var obstacles := _external_obstacle_shapes(unit)
+	# The wall board, captured ONCE for this gate call and handed to the coherency repair (terrain rest
+	# checks + projections). Empty when no provider is wired; identical to the repair's own cache read.
+	var gate_walls: Array = _rest_walls()
 	# NML-230 Breach A: the gate's physical corrections (terrain projection + overlap push + straggler
 	# pull) share ONE per-model displacement budget — the band slack the walked route left over
 	# (disp_caps_m, metres, from _gate_disp_caps_m) — because _retrace_to appends the total
@@ -8172,7 +8222,7 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 			var charge_chain: float = CoherencyChecker.SKIRMISH_CHAIN_DISTANCE_INCHES \
 				if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
 			if not _config_coherent_world(models, cfg, charge_chain):
-				_pull_stragglers_coherent_world(models, cfg, obstacles, charge_chain)
+				_pull_stragglers_coherent_world(models, cfg, obstacles, charge_chain, [], [], gate_walls)
 		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, gate_traversal, obstacles)   # charge: contact reached; single model: done
 	# (coherency) If the unit is coherent AND overlap-free, keep the full move. Otherwise shorten the whole
 	# move back along its taut line toward the coherent, overlap-free START until BOTH hold — the unit began
@@ -8182,8 +8232,8 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	var max_chain: float = CoherencyChecker.SKIRMISH_CHAIN_DISTANCE_INCHES \
 		if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
-			and _config_terrain_clear(models, cfg):
-		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, gate_traversal, obstacles)
+			and _config_terrain_clear(models, cfg, gate_walls):
+		return _clamp_gate_walls_keep_coherent(planned_world, cfg, models, gate_flying, gate_traversal, obstacles, start_world, max_chain)
 	# MINIMAL per-model coherency repair FIRST (field-test round 6 findings 2/3): pull only the stragglers into
 	# the coherent set, leaving the models that advanced correctly at their FULL move. The whole-unit shorten
 	# below blends the ENTIRE unit back toward the start, which systematically under-moved the advance (and so
@@ -8191,11 +8241,27 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	# arrives coherent, so this rarely fires; when it does it is a nudge, not a retreat. Fall back to the
 	# whole-unit shorten only if the minimal repair can't restore a legal config (guarantees coherency: t=0 is
 	# the coherent start).
-	_pull_stragglers_coherent_world(models, cfg, obstacles, max_chain, planned_world if not caps.is_empty() else [], caps)
+	_pull_stragglers_coherent_world(models, cfg, obstacles, max_chain, planned_world if not caps.is_empty() else [], caps, gate_walls)
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
-			and _config_terrain_clear(models, cfg):
-		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, gate_traversal, obstacles)
-	return _clamp_gate_walls(planned_world, _shorten_world_to_legal(start_world, cfg, models, obstacles, max_chain), models, gate_flying, gate_traversal, obstacles)
+			and _config_terrain_clear(models, cfg, gate_walls):
+		return _clamp_gate_walls_keep_coherent(planned_world, cfg, models, gate_flying, gate_traversal, obstacles, start_world, max_chain)
+	return _clamp_gate_walls_keep_coherent(planned_world, _shorten_world_to_legal(start_world, cfg, models, obstacles, max_chain, gate_walls),
+		models, gate_flying, gate_traversal, obstacles, start_world, max_chain)
+
+
+## The wall clamp for a REPAIRED gate result, with a coherency guard (Stalkers coherency hold, playtest 1116). The
+## strict clamp reverts every model whose planned -> repaired chord crosses a wall to its FULL-plan endpoint; mixed
+## with repaired peers that can tear the chain again, and the collapse ladder then holds the unit. When the strict
+## result is torn, retry as a PARTIAL revert (a model keeps its repaired endpoint when its straight start -> endpoint
+## chord keeps clear of every wall, so it is no tunnel) and take that only if it is coherent. Never worse: a
+## coherent strict result is returned untouched, and a still-torn partial falls back to the strict one.
+func _clamp_gate_walls_keep_coherent(planned_world: Array, cfg: Array, models: Array, flying: bool,
+		traversal: bool, obstacles: Array, start_world: Array, max_chain: float) -> Array:
+	var strict := _clamp_gate_walls(planned_world, cfg.duplicate(), models, flying, traversal, obstacles)
+	if _config_coherent_world(models, strict, max_chain):
+		return strict
+	var partial := _clamp_gate_walls(planned_world, cfg.duplicate(), models, flying, traversal, obstacles, start_world)
+	return partial if _config_coherent_world(models, partial, max_chain) else strict
 
 
 ## GATE CLAMP on the placement gate (watch-loop bug 12a; bases: NML-009): the gate's own displacements —
@@ -8207,8 +8273,10 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 ## displacement (planned → final) crosses a wall segment or cuts through an external base is reverted to
 ## its planned (route-true, legal) endpoint. The residual overlap/coherency debt is the caller ladder's
 ## to settle at a shorter reach — route truth wins.
+## With `start_world` (PARTIAL REVERT, see _clamp_gate_walls_keep_coherent) a model whose straight start -> endpoint
+## chord keeps clear of every wall keeps its endpoint instead of snapping back to the full plan; without it the revert is strict.
 func _clamp_gate_walls(planned_world: Array, cfg: Array, models: Array = [], flying: bool = false,
-		traversal: bool = false, obstacles: Array = []) -> Array:
+		traversal: bool = false, obstacles: Array = [], start_world: Array = []) -> Array:
 	if flying:
 		return cfg   # Flying crosses walls legally (GF v3.5.1) — a wall-crossing gate push is no tunnel
 	var walls := _rest_walls()
@@ -8225,15 +8293,23 @@ func _clamp_gate_walls(planned_world: Array, cfg: Array, models: Array = [], fly
 		var r_m: float = model_base_radius_m(models[i] as ModelInstance) if i < models.size() else 0.0
 		var a2 := Vector2(a.x, a.z)
 		var b2 := Vector2(b.x, b.z)
-		var clamped := false
-		for wseg in walls:
-			if MovementPlanner.seg_seg_distance(a2, b2, wseg[0] as Vector2, wseg[1] as Vector2) < r_m + 0.001:
-				cfg[i] = a
-				clamped = true
-				break
-		if not clamped and not traversal and gate_chord_crosses_base(a2, b2, r_m, obstacles):
+		var clamped := not _chord_clear_of_walls(a2, b2, r_m, walls)
+		if clamped and i < start_world.size():
+			var s0: Vector3 = start_world[i]
+			clamped = not _chord_clear_of_walls(Vector2(s0.x, s0.z), b2, r_m, walls)   # partial revert: keep `b`
+		if clamped:
+			cfg[i] = a
+		elif not traversal and gate_chord_crosses_base(a2, b2, r_m, obstacles):
 			cfg[i] = a   # Traversal: a base-crossing chord is legal (walls above still clamped it)
 	return cfg
+
+
+## True when the chord a -> b keeps `r_m` (+1 mm) clear of every wall segment — neither crossing nor sliding along one.
+static func _chord_clear_of_walls(a: Vector2, b: Vector2, r_m: float, walls: Array) -> bool:
+	for wseg in walls:
+		if MovementPlanner.seg_seg_distance(a, b, wseg[0] as Vector2, wseg[1] as Vector2) < r_m + 0.001:
+			return false
+	return true
 
 
 ## NML-009 — does the straight gate chord a→b (a base of radius r_m, metres) cut THROUGH one of the
@@ -8294,7 +8370,7 @@ const COH_REPAIR_PASSES := 12   # bounded per-model coherency-repair sweeps (fin
 ## clears any residual stack. A MINIMAL correction — the models that advanced correctly keep their full move
 ## (unlike the whole-unit shorten). Mutates `cfg`; returns true when it ends coherent.
 func _pull_stragglers_coherent_world(models: Array, cfg: Array, obstacles: Array, max_chain: float,
-		planned_world: Array = [], disp_caps_m: Array = []) -> bool:
+		planned_world: Array = [], disp_caps_m: Array = [], walls: Array = []) -> bool:
 	var n := models.size()
 	if n <= 1:
 		return true
@@ -8338,7 +8414,7 @@ func _pull_stragglers_coherent_world(models: Array, cfg: Array, obstacles: Array
 				continue
 			var cand := _clamp_to_bounds(Vector3((cfg[i] as Vector3).x + to_n.x / dist * close,
 				(cfg[i] as Vector3).y, (cfg[i] as Vector3).z + to_n.y / dist * close))
-			cand = _project_out_forbidden_world(cand, model_base_radius_m(models[i] as ModelInstance))
+			cand = _project_out_forbidden_world(cand, model_base_radius_m(models[i] as ModelInstance), walls)
 			if capped:
 				cand = _cap_gate_disp(cand, planned_world[i] as Vector3, float(disp_caps_m[i]), i)
 				if _xz_dist_m(cand, cfg[i] as Vector3) <= OVERLAP_EPS_M:
@@ -8357,7 +8433,7 @@ func _pull_stragglers_coherent_world(models: Array, cfg: Array, obstacles: Array
 					var stepc: float = minf(link_step, dc)
 					var cand := _clamp_to_bounds(Vector3((cfg[far] as Vector3).x + to_c.x / dc * stepc,
 						(cfg[far] as Vector3).y, (cfg[far] as Vector3).z + to_c.y / dc * stepc))
-					cand = _project_out_forbidden_world(cand, model_base_radius_m(models[far] as ModelInstance))
+					cand = _project_out_forbidden_world(cand, model_base_radius_m(models[far] as ModelInstance), walls)
 					if capped:
 						cand = _cap_gate_disp(cand, planned_world[far] as Vector3, float(disp_caps_m[far]), far)
 					if not capped or _xz_dist_m(cand, cfg[far] as Vector3) > OVERLAP_EPS_M:
@@ -8520,14 +8596,15 @@ func _rest_walls() -> Array:
 	return _rest_walls_cache
 
 
-func _world_forbidden(pos: Vector3, radius_m: float = 0.0) -> bool:
+## `walls` = the caller's captured wall board; empty means "read the live board" (the per-frame cache).
+func _world_forbidden(pos: Vector3, radius_m: float = 0.0, walls: Array = []) -> bool:
 	if TerrainRules.base_in_terrain(pos, radius_m, terrain_type_at, TerrainRules.is_forbidden_rest):
 		return true
 	# A base overlapping a ruin/container WALL SEGMENT is forbidden rest too. The ruin FLOOR became legal
 	# rest (2026-07-16), which exposed that nothing pushed a shifted unit off the WALLS — the deploy
 	# overlap cleanup translated a whole unit into a ruin and parked models on the wall line (Windows
 	# playtest bug 1). A model may stand IN a ruin, never ON its wall.
-	for wseg in _rest_walls():
+	for wseg in (walls if not walls.is_empty() else _rest_walls()):
 		if MovementPlanner.point_seg_distance(Vector2(pos.x, pos.z), wseg[0], wseg[1]) <= radius_m + WALL_REST_CLEARANCE_M:
 			return true
 	return false
@@ -8537,8 +8614,8 @@ func _world_forbidden(pos: Vector3, radius_m: float = 0.0) -> bool:
 ## whose whole BASE is clear (16 compass directions × expanding 1 cm rings; edge-aware — finding 6), world-frame
 ## tie-break within a ring for determinism. A model with no clear point in range is left where it is (the
 ## overlap pass + coherency-shorten still act on it). No-op when the base is already clear.
-func _project_out_forbidden_world(pos: Vector3, radius_m: float = 0.0) -> Vector3:
-	if not _world_forbidden(pos, radius_m):
+func _project_out_forbidden_world(pos: Vector3, radius_m: float = 0.0, walls: Array = []) -> Vector3:
+	if not _world_forbidden(pos, radius_m, walls):
 		return pos
 	var dist := TERRAIN_OUT_STEP_M
 	while dist <= TERRAIN_OUT_MAX_M + OVERLAP_EPS_M:
@@ -8547,7 +8624,7 @@ func _project_out_forbidden_world(pos: Vector3, radius_m: float = 0.0) -> Vector
 		for k in range(TERRAIN_OUT_DIRS):
 			var ang := TAU * float(k) / float(TERRAIN_OUT_DIRS)
 			var c := _clamp_to_bounds(pos + Vector3(cos(ang) * dist, 0.0, sin(ang) * dist))
-			if _world_forbidden(c, radius_m):
+			if _world_forbidden(c, radius_m, walls):
 				continue
 			if not found or (c.x < best.x - OVERLAP_EPS_M or (absf(c.x - best.x) <= OVERLAP_EPS_M and c.z < best.z - OVERLAP_EPS_M)):
 				best = c
@@ -8595,10 +8672,10 @@ func _config_coherent_world(models: Array, cfg: Array, max_chain: float) -> bool
 
 ## True when NO model in the config has its BASE in forbidden terrain (impassable + dangerous), edge-aware:
 ## each model is tested at its real base radius (finding 6), so a base whose edge overlaps a container counts.
-func _config_terrain_clear(models: Array, cfg: Array) -> bool:
+func _config_terrain_clear(models: Array, cfg: Array, walls: Array = []) -> bool:
 	for i in range(cfg.size()):
 		var r: float = model_base_radius_m(models[i] as ModelInstance) if i < models.size() else 0.0
-		if _world_forbidden(cfg[i] as Vector3, r):
+		if _world_forbidden(cfg[i] as Vector3, r, walls):
 			return false
 	return true
 
@@ -8625,9 +8702,10 @@ func _config_overlap_free(models: Array, cfg: Array, obstacles: Array) -> bool:
 ## a legal placement, as far forward as the rules allow and no further ("or as close as possible" — GF/AoF
 ## v3.5.1 p.7). Retreating toward the start also moves the unit AWAY from whatever it overlapped, so making
 ## the predicate overlap-aware stops the pull-back from dragging a model back into a friendly unit.
-func _shorten_world_to_legal(start_world: Array, cfg: Array, models: Array, obstacles: Array, max_chain: float) -> Array:
+func _shorten_world_to_legal(start_world: Array, cfg: Array, models: Array, obstacles: Array, max_chain: float,
+		walls: Array = []) -> Array:
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
-			and _config_terrain_clear(models, cfg):
+			and _config_terrain_clear(models, cfg, walls):
 		return cfg.duplicate()
 	var lo := 0.0
 	var hi := 1.0
@@ -8635,7 +8713,7 @@ func _shorten_world_to_legal(start_world: Array, cfg: Array, models: Array, obst
 		var mid := (lo + hi) * 0.5
 		var blended := _blend_world(start_world, cfg, mid)
 		if _config_coherent_world(models, blended, max_chain) and _config_overlap_free(models, blended, obstacles) \
-				and _config_terrain_clear(models, blended):
+				and _config_terrain_clear(models, blended, walls):
 			lo = mid
 		else:
 			hi = mid
@@ -8701,6 +8779,24 @@ func _retrace_wall_true(unit: GameUnit, route: Array, start: Vector3, gated: Vec
 			var end := cut.back() as Vector3
 			return [cut, Vector3(end.x, gated.y, end.z), true]
 	return [trail, gated, false]
+
+
+## Flying: cut every model whose end rests on forbidden ground back along its OWN route to the first
+## rest-legal spot (`_rest_legal_cut`, the gate's own predicate). Mutates both arrays; returns the models cut.
+func _cut_fliers_to_rest_legal(models: Array, new_positions: Array, trails: Array) -> int:
+	var cut_n := 0
+	for i in range(mini(trails.size(), new_positions.size())):
+		var r := model_base_radius_m(models[i] as ModelInstance)
+		if not _world_forbidden(new_positions[i] as Vector3, r):
+			continue
+		var cut := _rest_legal_cut(trails[i] as Array, r)
+		if cut.is_empty():
+			continue
+		trails[i] = cut
+		var end := cut.back() as Vector3
+		new_positions[i] = Vector3(end.x, (new_positions[i] as Vector3).y, end.z)
+		cut_n += 1
+	return cut_n
 
 
 ## AIG-L6b (EPOCH_73_V36): walk a route back from its end to the first point a base of `radius_m` may rest on - 1 cm
@@ -11105,10 +11201,22 @@ func charge_path_probe(unit: GameUnit, target: GameUnit, band_in: float) -> Dict
 
 static func charge_snap_fits_unit_budget(residual_in: float, longest_arc_in: float,
 		band_in: float) -> bool:
+	return charge_snap_failed_clauses(residual_in, longest_arc_in, band_in).is_empty()
+
+
+## The three clauses of charge_snap_fits_unit_budget, by name, for the ones that fail
+## (empty = fits). A rejected declaration logs this so the record says WHY.
+static func charge_snap_failed_clauses(residual_in: float, longest_arc_in: float,
+		band_in: float) -> PackedStringArray:
 	var remaining_in := maxf(0.0, band_in - longest_arc_in)
-	return longest_arc_in <= band_in + SeparationChecker.BASE_CONTACT_EPSILON_INCHES \
-		and residual_in <= MELEE_ENGAGE_IN \
-		and residual_in <= remaining_in + SeparationChecker.BASE_CONTACT_EPSILON_INCHES
+	var failed := PackedStringArray()
+	if longest_arc_in > band_in + SeparationChecker.BASE_CONTACT_EPSILON_INCHES:
+		failed.append("arc_over_band")
+	if residual_in > MELEE_ENGAGE_IN:
+		failed.append("residual_over_engage")
+	if residual_in > remaining_in + SeparationChecker.BASE_CONTACT_EPSILON_INCHES:
+		failed.append("residual_over_remaining")
+	return failed
 
 
 func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -> Dictionary:
@@ -11199,6 +11307,8 @@ func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -
 	var remaining_in := maxf(0.0, effective_band - longest_arc_in)
 	result["arc_in"] = longest_arc_in
 	result["remaining_in"] = remaining_in
+	var best_residual_in := INF
+	var best_model := -1
 	for i in range(mini(models.size(), mini(finalized.size(), trails.size()))):
 		var mover_shape := SeparationChecker.shape_for_model(models[i] as ModelInstance)
 		if mover_shape == null:
@@ -11214,7 +11324,15 @@ func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -
 			result["contact_model"] = i
 			result["residual_in"] = residual_in
 			return result
+		if residual_in < best_residual_in:
+			best_residual_in = residual_in
+			best_model = i
 
+	# Why it was refused: the clause values of the model that came closest (-1 = no model shape).
+	result["residual_in"] = best_residual_in if best_model >= 0 else -1.0
+	result["residual_model"] = best_model
+	result["failed_clauses"] = "no_model_shape" if best_model < 0 else ",".join(
+		charge_snap_failed_clauses(best_residual_in, longest_arc_in, effective_band))
 	result["reachable"] = false
 	result["reason"] = "executable corridor cannot reach base contact within %.1f\"" % effective_band
 	return result

@@ -1,0 +1,86 @@
+"""One-core P4.0-11 — the Python binding of the step API, `Core.step_activation`.
+
+The same entry the Godot binding exposes as `NmlCore.step_activation`: one unit's
+activation as the table's ordered inputs, answered `need_roll` / `open` / `need_choice` / `refused`
+/ `done` / `cancelled`. This test drives one plain volley (a HOLD shot) with
+supplied faces to `done` and compares every answer to the recorded fixture.
+
+THE RECORD. `fixtures/step_activation/sho_par_f3_volley.json` was recorded from
+`nml_core::activation::step_activation` on the Godot binding's step seams
+(`moved_shoot`, `sighting`, `shelf_sight` — `actcall.rs::seams_for_step`) and in
+`actcall::run`'s answer shape. The header and state come verbatim from the
+recorded activation `fixtures/sho_par_f3/act15.json` (the "Pathfinders" HOLD
+shot at "Hive Swarms"). The binding's `"handle"` is the state object under
+`"state"` here; every other key is the binding's.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[4]
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+SOURCE = FIXTURES / "sho_par_f3" / "act15.json"
+RECORD = FIXTURES / "step_activation" / "sho_par_f3_volley.json"
+
+
+def test_the_python_step_activation_matches_the_recorded_binding_answer():
+    import nml_core
+
+    source = json.loads(SOURCE.read_text())
+    record = json.loads(RECORD.read_text())
+    core = nml_core.load(str(REPO))
+    core.set_header(source["header"])
+    state = core.state_of(source["state"])
+
+    calls = record["calls"]
+    assert [call["answer"]["step"] for call in calls] == ["need_roll", "need_roll", "done"]
+    assert calls[-1]["answer"]["delta"][0]["removed"] == [0]
+
+    for i, call in enumerate(calls):
+        answer = core.step_activation(state, record["unit"], call["transcript"], record["enforce"])
+        plain = {k: v for k, v in answer.items() if k != "state"}
+        assert plain == call["answer"], f"call {i} ({call['answer']['step']}) differs from the record"
+
+    # The `done` answer's new state is the volley's: "Hive Swarms" lost model slot 0.
+    assert answer["state"].plain()["units"][record["target"]]["alive"] == 2
+
+    # One malformed entry is the binding's refusal with the entry's index, never a silent drop.
+    refused = core.step_activation(state, record["unit"], [{"t": "begin"}, {"t": "wat"}], record["enforce"])
+    assert refused == {"step": "refused", "index": 1, "reason": "input 1 is not understood"}
+
+
+def test_a_takedown_choice_is_asked_answered_and_refused_through_the_python_binding():
+    """P4.0-5 on the Python seam: `{"t": "choice"}` goes in, `need_choice` comes out (the Godot seam's shape).
+
+    The recorded shooter's rifle gets the Takedown rule (the header's profile is the only change); the
+    target keeps its three living models, so the choice is open. An empty `option` asks the core."""
+    import nml_core
+
+    source = json.loads(SOURCE.read_text())
+    record = json.loads(RECORD.read_text())
+    unit, target = record["unit"], record["target"]
+    for weapon in source["header"]["profiles"][unit]["weapons"]:
+        if weapon["name"] == "Heavy Rifle":
+            weapon["rules"].append("Takedown")
+    core = nml_core.load(str(REPO))
+    core.set_header(source["header"])
+    state = core.state_of(source["state"])
+    choice_id = f"takedown_model:{unit}:{target}"
+    start = [{"t": "begin"}, {"t": "intent", "kind": 0, "shoot": target}]
+
+    asked = core.step_activation(state, unit, start + [{"t": "choice", "id": choice_id}], False)
+    assert asked == {"step": "need_choice", "id": choice_id, "options": ["slot:0", "slot:1", "slot:2"], "owner": unit}
+
+    # A valid answer reaches the dice: the core now asks for the volley's first roll.
+    answered = core.step_activation(state, unit, start + [{"t": "choice", "id": choice_id, "option": "slot:1"}], False)
+    assert answered["step"] == "need_roll"
+
+    # A wrong option is the core's refusal at the choice's index, never a silent acceptance.
+    wrong = core.step_activation(state, unit, start + [{"t": "choice", "id": choice_id, "option": "slot:9"}], False)
+    assert (wrong["step"], wrong["index"]) == ("refused", 2) and "slot:9" in wrong["reason"]
+
+    # A choice entry without an `id` is still the binding's own "not understood" refusal.
+    bad = core.step_activation(state, unit, start + [{"t": "choice"}], False)
+    assert bad == {"step": "refused", "index": 2, "reason": "input 2 is not understood"}

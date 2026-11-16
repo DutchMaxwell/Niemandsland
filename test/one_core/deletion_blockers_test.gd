@@ -8,6 +8,7 @@ extends GdUnitTestSuite
 ## removed, or the whole function removed) and expects the checker to report exactly that blocker and its step.
 
 const ACTIVATION := "res://scripts/solo/core_activation.gd"
+const SLICE := "res://scripts/solo/core_slice.gd"
 const MAIN := "res://scripts/main.gd"
 const PARITY_SHOOT := "res://test/parity/parity_table.gd"
 const PARITY_MELEE := "res://test/parity/parity_table_melee.gd"
@@ -17,11 +18,11 @@ const PARITY_MELEE := "res://test/parity/parity_table_melee.gd"
 const BLOCKERS: Array[Dictionary] = [
 	{"name": "kill switch CoreActivation.enabled", "retire": "P4.D-41/-43", "file": ACTIVATION,
 		"header": "static func enabled() -> bool:", "needles": ["NML_ONE_CORE_ACTIVATION"]},
-	{"name": "NmlCore-less build (applies needs the class)", "retire": "P4.D-40", "file": ACTIVATION,
+	{"name": "NmlCore-less build (applies needs the class)", "retire": "P4.D-41 (P4.D-40 made the core mandatory at the doors)", "file": ACTIVATION,
 		"header": "static func applies(main) -> bool:", "needles": ["ClassDB.class_exists(\"NmlCore\")"]},
 	{"name": "non-OPR clause of is_plain (the attacker side; the target side went with P4.D-13b)",
-		"retire": "the P4.D-13 follow-up, before P4.D-41", "file": ACTIVATION,
-		"header": "static func is_plain(gu: GameUnit) -> bool:", "needles": ["not gu.source_data is OPRApiClient.OPRUnit"]},
+		"retire": "the P4.D-13 follow-up, before P4.D-41", "file": SLICE,
+		"header": "static func refusals(", "needles": ["not gu.source_data is OPRApiClient.OPRUnit"]},
 	{"name": "parity_table.gd calls the AI volley resolver", "retire": "P4.D-38", "file": PARITY_SHOOT, "header": "",
 		"needles": ["main._solo_resolve_ai_volley("]},
 	{"name": "parity_table_melee.gd drives the melee resolver", "retire": "P4.D-49", "file": PARITY_MELEE, "header": "",

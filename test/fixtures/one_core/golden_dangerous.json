@@ -1,0 +1,3595 @@
+{
+ "cases": [
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "10"
+   },
+   "final": [
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 8
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (10 dice)",
+    "COMBAT|AI (Att): 6 6 6 6 6 4 4 3 1 1 → 5 hits (6+)",
+    "COMBAT|Att takes 2 wounds (8/10)",
+    "COMBAT|Att loses 2 models (8/10)",
+    "COMBAT|Att takes 2 wounds from dangerous terrain",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 5 4 3 2 2 2 2 1 → 2 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 2 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 2 → 1 block (4+)",
+    "COMBAT|Def takes 1 wound (4/5)",
+    "COMBAT|Def loses a model (4/5)"
+   ],
+   "rng": "-1209786616679012618",
+   "scenario": "dangerous_advance",
+   "seed": 0
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "10"
+   },
+   "final": [
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       false,
+       0
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 6
+    },
+    {
+     "alive": 2,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       false,
+       0
+      ],
+      [
+       4,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 2
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (10 dice)",
+    "COMBAT|AI (Att): 6 5 4 3 2 2 1 1 1 1 → 1 hit (6+)",
+    "COMBAT|Att takes 4 wounds (6/10)",
+    "COMBAT|Att loses 4 models (6/10)",
+    "COMBAT|Att takes 4 wounds from dangerous terrain",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 4 4 2 1 → 4 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 4 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 3 3 3 → 1 block (4+)",
+    "COMBAT|Def takes 3 wounds (2/5)",
+    "COMBAT|Def loses 3 models (2/5)",
+    "COMBAT|AI (Def): 1 → failed (4+)",
+    "COMBAT|Def fails morale — Shaken"
+   ],
+   "rng": "5999520760023382054",
+   "scenario": "dangerous_advance",
+   "seed": 17
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "10"
+   },
+   "final": [
+    {
+     "alive": 7,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 7
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (10 dice)",
+    "COMBAT|AI (Att): 5 3 3 3 2 2 2 1 1 1 → 0 hits (6+)",
+    "COMBAT|Att takes 3 wounds (7/10)",
+    "COMBAT|Att loses 3 models (7/10)",
+    "COMBAT|Att takes 3 wounds from dangerous terrain",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 5 4 2 2 2 1 1 → 2 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 2 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 2 → 1 block (4+)",
+    "COMBAT|Def takes 1 wound (4/5)",
+    "COMBAT|Def loses a model (4/5)"
+   ],
+   "rng": "8621109762807509908",
+   "scenario": "dangerous_advance",
+   "seed": 49
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "10"
+   },
+   "final": [
+    {
+     "alive": 7,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 7
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (10 dice)",
+    "COMBAT|AI (Att): 3 3 3 3 3 2 2 1 1 1 → 0 hits (6+)",
+    "COMBAT|Att takes 3 wounds (7/10)",
+    "COMBAT|Att loses 3 models (7/10)",
+    "COMBAT|Att takes 3 wounds from dangerous terrain",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 5 4 4 2 1 1 → 4 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 4 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 5 4 4 → 4 blocks (4+)"
+   ],
+   "rng": "4909878218113281654",
+   "scenario": "dangerous_advance",
+   "seed": 225
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "10"
+   },
+   "final": [
+    {
+     "alive": 7,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 7
+    },
+    {
+     "alive": 2,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       false,
+       0
+      ],
+      [
+       4,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 2
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (10 dice)",
+    "COMBAT|AI (Att): 6 5 4 4 4 3 2 1 1 1 → 1 hit (6+)",
+    "COMBAT|Att takes 3 wounds (7/10)",
+    "COMBAT|Att loses 3 models (7/10)",
+    "COMBAT|Att takes 3 wounds from dangerous terrain",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 6 5 4 4 3 → 6 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 6 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 5 4 3 3 3 → 3 blocks (4+)",
+    "COMBAT|Def takes 3 wounds (2/5)",
+    "COMBAT|Def loses 3 models (2/5)",
+    "COMBAT|AI (Def): 1 → failed (4+)",
+    "COMBAT|Def fails morale — Shaken"
+   ],
+   "rng": "5439787400378390769",
+   "scenario": "dangerous_advance",
+   "seed": 3
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "10"
+   },
+   "final": [
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 8
+    },
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 3
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (10 dice)",
+    "COMBAT|AI (Att): 6 6 5 5 5 5 4 3 1 1 → 2 hits (6+)",
+    "COMBAT|Att takes 2 wounds (8/10)",
+    "COMBAT|Att loses 2 models (8/10)",
+    "COMBAT|Att takes 2 wounds from dangerous terrain",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 5 4 4 2 1 1 1 → 4 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 4 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 4 4 3 1 → 2 blocks (4+)",
+    "COMBAT|Def takes 2 wounds (3/5)",
+    "COMBAT|Def loses 2 models (3/5)"
+   ],
+   "rng": "6676699348569885425",
+   "scenario": "dangerous_advance",
+   "seed": 101
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "10"
+   },
+   "final": [
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 8
+    },
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 3
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (10 dice)",
+    "COMBAT|AI (Att): 5 5 5 2 2 2 2 2 1 1 → 0 hits (6+)",
+    "COMBAT|Att takes 2 wounds (8/10)",
+    "COMBAT|Att loses 2 models (8/10)",
+    "COMBAT|Att takes 2 wounds from dangerous terrain",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 6 3 3 3 3 2 1 → 2 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 2 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 3 1 → 0 blocks (4+)",
+    "COMBAT|Def takes 2 wounds (3/5)",
+    "COMBAT|Def loses 2 models (3/5)"
+   ],
+   "rng": "5669729384706990326",
+   "scenario": "dangerous_advance",
+   "seed": 512
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "10"
+   },
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 3
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (10 dice)",
+    "COMBAT|AI (Att): 6 5 5 5 4 4 4 3 3 2 → 1 hit (6+)",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 5 5 5 4 4 3 3 3 1 → 6 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 6 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 6 5 4 3 1 → 4 blocks (4+)",
+    "COMBAT|Def takes 2 wounds (3/5)",
+    "COMBAT|Def loses 2 models (3/5)"
+   ],
+   "rng": "2656324831535583903",
+   "scenario": "dangerous_advance",
+   "seed": 999
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 6 4 3 1 → 1 hit (6+)",
+    "COMBAT|Att takes 1 wound (3/10)",
+    "COMBAT|Att loses a model (3/10)",
+    "COMBAT|Att takes 1 wound from dangerous terrain",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 4 1 → 2 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 2 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 6 → 2 blocks (4+)",
+    "COMBAT|AI (Att): 6 → passed (4+)",
+    "COMBAT|Att passes morale"
+   ],
+   "rng": "4884245368506490396",
+   "scenario": "dangerous_half",
+   "seed": 0
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 4 2 2 1 → 0 hits (6+)",
+    "COMBAT|Att takes 1 wound (3/10)",
+    "COMBAT|Att loses a model (3/10)",
+    "COMBAT|Att takes 1 wound from dangerous terrain",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 3 1 1 → 0 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 0 hits",
+    "COMBAT|AI (Att): 5 → passed (4+)",
+    "COMBAT|Att passes morale"
+   ],
+   "rng": "-6805516889352236393",
+   "scenario": "dangerous_half",
+   "seed": 17
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 3,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 3 3 2 1 → 0 hits (6+)",
+    "COMBAT|Att takes 1 wound (3/10)",
+    "COMBAT|Att loses a model (3/10)",
+    "COMBAT|Att takes 1 wound from dangerous terrain",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 5 1 1 → 1 hit (4+)",
+    "COMBAT|Att fires Rifle at Def — 1 hit",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 2 → 0 blocks (4+)",
+    "COMBAT|Def takes 1 wound (4/5)",
+    "COMBAT|Def loses a model (4/5)",
+    "COMBAT|AI (Att): 2 → failed (4+)",
+    "COMBAT|Att fails morale — Shaken"
+   ],
+   "rng": "-8673838468792241846",
+   "scenario": "dangerous_half",
+   "seed": 49
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 3 3 3 2 → 0 hits (6+)",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 3 3 1 1 → 0 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 0 hits"
+   ],
+   "rng": "-2341933425837651673",
+   "scenario": "dangerous_half",
+   "seed": 225
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 2,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       false,
+       0
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 8
+    },
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 3
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 4 4 1 1 → 0 hits (6+)",
+    "COMBAT|Att takes 2 wounds (2/10)",
+    "COMBAT|Att loses 2 models (2/10)",
+    "COMBAT|Att takes 2 wounds from dangerous terrain",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 4 → 2 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 2 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 3 1 → 0 blocks (4+)",
+    "COMBAT|Def takes 2 wounds (3/5)",
+    "COMBAT|Def loses 2 models (3/5)",
+    "COMBAT|AI (Att): 2 → failed (4+)",
+    "COMBAT|Att fails morale — Shaken"
+   ],
+   "rng": "-1030824447198228564",
+   "scenario": "dangerous_half",
+   "seed": 3
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 3
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 6 5 5 3 → 1 hit (6+)",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 6 5 4 1 → 3 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 3 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 1 1 → 1 block (4+)",
+    "COMBAT|Def takes 2 wounds (3/5)",
+    "COMBAT|Def loses 2 models (3/5)"
+   ],
+   "rng": "539391467723548128",
+   "scenario": "dangerous_half",
+   "seed": 101
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 5 2 2 2 → 0 hits (6+)",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 5 2 2 1 → 1 hit (4+)",
+    "COMBAT|Att fires Rifle at Def — 1 hit",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 → 1 block (4+)"
+   ],
+   "rng": "-6602249544384556655",
+   "scenario": "dangerous_half",
+   "seed": 512
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 6 5 5 4 → 1 hit (6+)",
+    "COMBAT|Att fires at Def",
+    "COMBAT|AI (Att): 5 4 3 2 → 2 hits (4+)",
+    "COMBAT|Att fires Rifle at Def — 2 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 4 3 → 1 block (4+)",
+    "COMBAT|Def takes 1 wound (4/5)",
+    "COMBAT|Def loses a model (4/5)"
+   ],
+   "rng": "-7094803362978858097",
+   "scenario": "dangerous_half",
+   "seed": 999
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 6 4 3 1 → 1 hit (6+)",
+    "COMBAT|Att takes 1 wound (3/10)",
+    "COMBAT|Att loses a model (3/10)",
+    "COMBAT|Att takes 1 wound from dangerous terrain",
+    "COMBAT|Att: no volley — no target in range or sight — the unit holds",
+    "COMBAT|AI (Att): 4 → passed (4+)",
+    "COMBAT|Att passes morale"
+   ],
+   "rng": "5295815986678782797",
+   "scenario": "dangerous_no_target",
+   "seed": 0
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 3,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 4 2 2 1 → 0 hits (6+)",
+    "COMBAT|Att takes 1 wound (3/10)",
+    "COMBAT|Att loses a model (3/10)",
+    "COMBAT|Att takes 1 wound from dangerous terrain",
+    "COMBAT|Att: no volley — no target in range or sight — the unit holds",
+    "COMBAT|AI (Att): 3 → failed (4+)",
+    "COMBAT|Att fails morale — Shaken"
+   ],
+   "rng": "4817640240139861334",
+   "scenario": "dangerous_no_target",
+   "seed": 17
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 3,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 3 3 2 1 → 0 hits (6+)",
+    "COMBAT|Att takes 1 wound (3/10)",
+    "COMBAT|Att loses a model (3/10)",
+    "COMBAT|Att takes 1 wound from dangerous terrain",
+    "COMBAT|Att: no volley — no target in range or sight — the unit holds",
+    "COMBAT|AI (Att): 1 → failed (4+)",
+    "COMBAT|Att fails morale — Shaken"
+   ],
+   "rng": "6087749902385368182",
+   "scenario": "dangerous_no_target",
+   "seed": 49
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 3 3 3 2 → 0 hits (6+)",
+    "COMBAT|Att: no volley — no target in range or sight — the unit holds"
+   ],
+   "rng": "-537297970520806013",
+   "scenario": "dangerous_no_target",
+   "seed": 225
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 2,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       false,
+       0
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 8
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 4 4 1 1 → 0 hits (6+)",
+    "COMBAT|Att takes 2 wounds (2/10)",
+    "COMBAT|Att loses 2 models (2/10)",
+    "COMBAT|Att takes 2 wounds from dangerous terrain",
+    "COMBAT|Att: no volley — no target in range or sight — the unit holds",
+    "COMBAT|AI (Att): 6 → passed (4+)",
+    "COMBAT|Att passes morale"
+   ],
+   "rng": "1956124253693758136",
+   "scenario": "dangerous_no_target",
+   "seed": 3
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 6 5 5 3 → 1 hit (6+)",
+    "COMBAT|Att: no volley — no target in range or sight — the unit holds"
+   ],
+   "rng": "-1753346568698654985",
+   "scenario": "dangerous_no_target",
+   "seed": 101
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 5 2 2 2 → 0 hits (6+)",
+    "COMBAT|Att: no volley — no target in range or sight — the unit holds"
+   ],
+   "rng": "3021086449201697318",
+   "scenario": "dangerous_no_target",
+   "seed": 512
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 6 5 5 4 → 1 hit (6+)",
+    "COMBAT|Att: no volley — no target in range or sight — the unit holds"
+   ],
+   "rng": "-5145454414508936079",
+   "scenario": "dangerous_no_target",
+   "seed": 999
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 6 4 3 1 → 1 hit (6+)",
+    "COMBAT|Att takes 1 wound (3/10)",
+    "COMBAT|Att loses a model (3/10)",
+    "COMBAT|Att takes 1 wound from dangerous terrain",
+    "COMBAT|AI (Att): 4 → passed (4+)",
+    "COMBAT|Att passes morale"
+   ],
+   "rng": "5295815986678782797",
+   "scenario": "dangerous_cannot_shoot",
+   "seed": 0
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 3,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 4 2 2 1 → 0 hits (6+)",
+    "COMBAT|Att takes 1 wound (3/10)",
+    "COMBAT|Att loses a model (3/10)",
+    "COMBAT|Att takes 1 wound from dangerous terrain",
+    "COMBAT|AI (Att): 3 → failed (4+)",
+    "COMBAT|Att fails morale — Shaken"
+   ],
+   "rng": "4817640240139861334",
+   "scenario": "dangerous_cannot_shoot",
+   "seed": 17
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 3,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 3 3 2 1 → 0 hits (6+)",
+    "COMBAT|Att takes 1 wound (3/10)",
+    "COMBAT|Att loses a model (3/10)",
+    "COMBAT|Att takes 1 wound from dangerous terrain",
+    "COMBAT|AI (Att): 1 → failed (4+)",
+    "COMBAT|Att fails morale — Shaken"
+   ],
+   "rng": "6087749902385368182",
+   "scenario": "dangerous_cannot_shoot",
+   "seed": 49
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 3 3 3 2 → 0 hits (6+)"
+   ],
+   "rng": "-537297970520806013",
+   "scenario": "dangerous_cannot_shoot",
+   "seed": 225
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 2,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       false,
+       0
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 8
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 4 4 1 1 → 0 hits (6+)",
+    "COMBAT|Att takes 2 wounds (2/10)",
+    "COMBAT|Att loses 2 models (2/10)",
+    "COMBAT|Att takes 2 wounds from dangerous terrain",
+    "COMBAT|AI (Att): 6 → passed (4+)",
+    "COMBAT|Att passes morale"
+   ],
+   "rng": "1956124253693758136",
+   "scenario": "dangerous_cannot_shoot",
+   "seed": 3
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 6 5 5 3 → 1 hit (6+)"
+   ],
+   "rng": "-1753346568698654985",
+   "scenario": "dangerous_cannot_shoot",
+   "seed": 101
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 5 2 2 2 → 0 hits (6+)"
+   ],
+   "rng": "3021086449201697318",
+   "scenario": "dangerous_cannot_shoot",
+   "seed": 512
+  },
+  {
+   "epoch": 76,
+   "extra": {
+    "dice": "4"
+   },
+   "final": [
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ],
+      [
+       8,
+       false,
+       1
+      ],
+      [
+       9,
+       false,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|Att takes one Dangerous terrain test for the whole unit (4 dice)",
+    "COMBAT|AI (Att): 6 5 5 4 → 1 hit (6+)"
+   ],
+   "rng": "-5145454414508936079",
+   "scenario": "dangerous_cannot_shoot",
+   "seed": 999
+  }
+ ],
+ "family": "dangerous",
+ "provenance": {
+  "epoch": 76,
+  "git_sha": "6fee98e38b98fc4d98c4450aebab532080fd7d0a",
+  "registry_sha256": "425decb0652c95d5718359a87107f2f3738e3287e9d67a13369b0a00a3f0df0e",
+  "registry_system": "gf"
+ },
+ "schema": "nml-golden-witness-v2"
+}

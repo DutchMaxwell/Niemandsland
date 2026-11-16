@@ -1,7 +1,7 @@
 extends SceneTree
 ## P4.0-10 golden witness CLI. Boots the real main.tscn with the one-core kill switch OFF (the OLD table path),
 ## runs one combat family's grid through GoldenWitness, and either writes the committed fixture or compares a run
-## against it. `--family shooting_volley|melee|morale|human_shoot` picks the family (default: the shooting volley).
+## against it. `--family shooting_volley|melee|morale|human_shoot|split|dangerous` picks the family (default: the shooting volley).
 ##
 ## Capture (writes res://test/fixtures/one_core/golden_<family>.json):
 ##   godot --headless -s res://test/one_core/golden_witness.gd -- --capture --family melee
