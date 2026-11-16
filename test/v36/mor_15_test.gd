@@ -76,6 +76,17 @@ func test_a_weapon_borne_spell_amplifier_lowers_the_cast_target_at_epoch_73() ->
 	await Boot.settle(get_tree())
 
 
+func test_the_casting_modifier_line_names_both_the_cast_target_and_the_base() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var caster := _armed(1, "Amplified", ["Spell Amplifier"], ["Caster(1)"])
+	var ally := _armed(1, "Ally", [], [])
+	var text := await _cast_log(caster, ally)
+	var msg := "the +1 line must state the 3+ roll AND the unmodified base 4+:\n%s" % text
+	assert_str(text).override_failure_message(msg).contains("casts on 3+ (base 4+)")
+	assert_str(text).override_failure_message(msg).not_contains("base target is 3+")
+	await Boot.settle(get_tree())
+
+
 func test_a_caster_without_the_rule_stays_at_four_plus_at_epoch_73() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var caster := _armed(1, "Plain", [], ["Caster(1)"])

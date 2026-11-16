@@ -145,6 +145,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   asking you, so a squad with different weapons or a Tough model lost models you did not pick. You
   click your own casualties again, and the battle log says when the table resolves such a volley.
   (#172)
+- **The casting-modifier line states both numbers.** A caster with Spell Amplifier +1 used to be
+  logged as "base target is 3+", which read as if the +1 had been ignored (the base is 4+). The line
+  now reads "casts on 3+ (base 4+)". The roll itself did not change.
 
 ### Internal
 - CI and test groundwork for running the tests against the Rust core: a new job "All required
