@@ -1066,7 +1066,7 @@ func _deserialize_game_state(state_data: Dictionary) -> void:
 		army_manager.rule_state = (rs as Dictionary).duplicate(true) if rs is Dictionary else {}
 		# Rules-automation level: optional key, no SAVE_VERSION bump (same reasoning as rule_state);
 		# a save without it loads as Manual.
-		army_manager.rules_automation = RulesAutomation.from_game_state(state_data)
+		army_manager.rules_automation = RulesAutomation.playable(RulesAutomation.from_game_state(state_data))   # M-3: no core, no Automatic
 	# S1-15: a load REPLACES the Solo mission state whole (before load_completed fires). Optional key, no
 	# SAVE_VERSION bump (the rule_state reasoning above): a save without it carried no mission, and "no
 	# mission" with the default scoring is how such a save has always played.

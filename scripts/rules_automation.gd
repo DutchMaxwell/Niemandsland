@@ -20,6 +20,11 @@ static func from_game_state(d: Dictionary) -> int:
 	return Level.MANUAL
 
 
+## M-3: the level this build can actually run - Automatic needs the rules core, so without it everything is Manual.
+static func playable(level: int) -> int:
+	return level if CoreActivation.engine_offered() else Level.MANUAL
+
+
 static func label(level: int) -> String:
 	return "Automatic" if level == Level.AUTOMATIC else "Manual"
 
@@ -49,9 +54,9 @@ static func ui_enabled() -> bool:
 
 
 ## The pick a fresh table-setup dialog starts on: the remembered one for a local game (default AUTOMATIC),
-## always MANUAL online and while the row is hidden.
+## always MANUAL online, while the row is hidden and in a build without the rules core (M-3).
 static func default_pick(online: bool, cfg_path: String = MENU_CFG) -> int:
-	if online or not ui_enabled():
+	if online or not ui_enabled() or not CoreActivation.engine_offered():
 		return Level.MANUAL
 	var cfg := ConfigFile.new()
 	if cfg.load(cfg_path) != OK:
@@ -60,6 +65,8 @@ static func default_pick(online: bool, cfg_path: String = MENU_CFG) -> int:
 
 
 static func remember_pick(level: int, cfg_path: String = MENU_CFG) -> void:
+	if not CoreActivation.engine_offered():
+		return   # M-3: a build without the core was forced to Manual - that is not the player's choice to remember
 	var cfg := ConfigFile.new()
 	cfg.load(cfg_path)   # keep the other menu keys (biome); a missing file is fine
 	cfg.set_value("menu", SAVE_KEY, level)
