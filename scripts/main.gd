@@ -11497,11 +11497,7 @@ func _solo_owner_name(unit: GameUnit) -> String:
 func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 	if unit == null or dice_roller_control == null or model_count <= 0:
 		return
-	if battle_log != null:
-		# UX-20 (EPOCH_73_V36, rules 3.6): the dice are ONE test of the whole joined unit.
-		var line: String = "%s takes one Dangerous terrain test for the whole unit (%d dice)" \
-			if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else "%s takes %d Dangerous terrain test dice"
-		_log_rule_event(BattleLog.Category.COMBAT, line % [unit.get_name(), model_count], true)
+	_solo_log_dangerous_test(unit, model_count)
 	# A1 (NML-202): a player-driven auto intent can land here too (execute_intent's dangerous-terrain
 	# tap doesn't know which side moved) — the tray label must say "You"/the co-op owner, not "AI".
 	var faces: Array = await _solo_tray_roll(model_count, 6, _roller_label(unit), "dangerous",
@@ -11513,13 +11509,29 @@ func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 	if wounds <= 0:
 		return
 	await _solo_apply_wounds(unit, wounds)
-	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "%s takes %d wound%s from dangerous terrain" % [
-			unit.get_name(), wounds, ("" if wounds == 1 else "s")], true)
+	_solo_log_dangerous_wounds(unit, wounds)
 	# NOTE (field-test finding 7): the morale test from these wounds is NOT rolled here — dangerous-terrain
 	# damage neither consumes the activation nor prevents shooting (GF/AoF v3.5.1 p.12). Morale is tested at
 	# the END of the activation (in _solo_activate_one_ai), after the unit has acted, so a surviving unit
 	# still shoots this turn.
+
+
+## The sentence that opens a Dangerous terrain test. One writer for the table's roll and for the core door's (P4.D-19:
+## the core prints no sentence for the test).
+func _solo_log_dangerous_test(unit: GameUnit, dice: int) -> void:
+	if battle_log == null:
+		return
+	# UX-20 (EPOCH_73_V36, rules 3.6): the dice are ONE test of the whole joined unit.
+	var line: String = "%s takes one Dangerous terrain test for the whole unit (%d dice)" \
+		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else "%s takes %d Dangerous terrain test dice"
+	_log_rule_event(BattleLog.Category.COMBAT, line % [unit.get_name(), dice], true)
+
+
+## The sentence after a Dangerous terrain test that wounded the unit (see _solo_log_dangerous_test).
+func _solo_log_dangerous_wounds(unit: GameUnit, wounds: int) -> void:
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s takes %d wound%s from dangerous terrain" % [
+			unit.get_name(), wounds, ("" if wounds == 1 else "s")], true)
 
 
 ## NML-954 — the destroyed-transport spill's DICE half. GF v3.5.1 Transport: "When a transport is
