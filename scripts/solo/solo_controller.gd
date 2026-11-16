@@ -3563,6 +3563,18 @@ func _commander_ranged_hold(unit: GameUnit, target: GameUnit, weapons: Array, ac
 	return {"why": "commander hold-and-shoot standing order — keep the clean shot"}
 
 
+## NML-210: the planner prices every march with the RUSH band, but the tree turns a shooter with a shot into an
+## ADVANCE (6"). True when advancing now would break the promised arrival: the marches left (this one
+## included) are fewer than "advance now, rush after" needs. Reads the cached plan; false for a non-runner.
+func _plan_arrival_needs_rush(unit: GameUnit, obj_dist: float, advance: float, rush: float) -> bool:
+	var task: Dictionary = _plan_for_round().get(unit.unit_id, {})
+	if str(task.get("kind", "")) != "seize":
+		return false
+	var marches_left := maxi(int(task.get("arrive_round", 0)) - _current_round() + 1, 1)
+	var left_after_advance := maxf(obj_dist - OBJECTIVE_CONTROL_IN - advance, 0.0)
+	return 1 + int(ceil(left_after_advance / maxf(rush, 0.5))) > marches_left
+
+
 ## Bug 22 (GF v3.5.1 p.11, wording verified): "if ANY model in a unit moves in or through difficult
 ## terrain at any point of its move, then ALL models may not move more than 6"" — a charge needing
 ## more than the cap whose EVERY corridor to the target crosses difficult terrain cannot reach.
@@ -8944,18 +8956,6 @@ func _nearest_uncontrolled_objective(from: Vector3, activating_unit: GameUnit = 
 			best_tier = tier
 			best_d = d
 	return best
-
-
-## NML-210: the planner prices every march with the RUSH band, but the tree turns a shooter with a shot into an
-## ADVANCE (6"). True when advancing now would break the promised arrival: the marches left (this one
-## included) are fewer than "advance now, rush after" needs. Reads the cached plan; false for a non-runner.
-func _plan_arrival_needs_rush(unit: GameUnit, obj_dist: float, advance: float, rush: float) -> bool:
-	var task: Dictionary = _plan_for_round().get(unit.unit_id, {})
-	if str(task.get("kind", "")) != "seize":
-		return false
-	var marches_left := maxi(int(task.get("arrive_round", 0)) - _current_round() + 1, 1)
-	var left_after_advance := maxf(obj_dist - OBJECTIVE_CONTROL_IN - advance, 0.0)
-	return 1 + int(ceil(left_after_advance / maxf(rush, 0.5))) > marches_left
 
 
 ## NML-210 — per-(round, side) plan cache: the global assignment is built ONCE per round per acting
