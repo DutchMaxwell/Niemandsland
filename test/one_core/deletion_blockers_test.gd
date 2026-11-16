@@ -28,6 +28,8 @@ const BLOCKERS: Array[Dictionary] = [
 		"needles": ["main._solo_resolve_ai_volley("]},
 	{"name": "parity_table_melee.gd drives the melee resolver", "retire": "P4.D-49", "file": PARITY_MELEE, "header": "",
 		"needles": ["main._run_ai_melee("]},
+	{"name": "the core door shows the table's volley outcome sentence", "retire": "P4.D-41", "file": ACTIVATION,
+		"header": "static func _present(", "needles": ["main._solo_volley_outcome("]},
 	{"name": "Strafing hands its volley to the AI resolver", "retire": "P4.D-37", "file": MAIN,
 		"header": "func _solo_apply_strafing(", "needles": ["await _solo_resolve_ai_volley(unit, target, shots, true)"]},
 ]
@@ -75,7 +77,7 @@ func test_every_deletion_blocker_still_holds() -> void:
 
 
 func test_the_list_is_not_empty_and_names_a_step_per_row() -> void:
-	assert_int(BLOCKERS.size()).is_greater_equal(7)
+	assert_int(BLOCKERS.size()).is_greater_equal(8)
 	for b in BLOCKERS:
 		assert_str(String(b["retire"])).override_failure_message("%s names no step" % b["name"]).contains("P4.D-")
 
