@@ -23,7 +23,7 @@ REPO = Path(__file__).resolve().parents[4]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 
-def _menu_offers_the_charge(fixture: str, rules_epoch: int | None = None) -> bool:
+def _core(fixture: str, rules_epoch: int | None = None):
     import nml_core
 
     fix = json.loads((FIXTURES / fixture).read_text())
@@ -33,6 +33,11 @@ def _menu_offers_the_charge(fixture: str, rules_epoch: int | None = None) -> boo
         knobs["rules_epoch"] = rules_epoch
     core = nml_core.load(str(REPO))
     core.set_header({"profiles": head["profiles"], "terrain": head["terrain"], "knobs": knobs})
+    return core, fix
+
+
+def _menu_offers_the_charge(fixture: str, rules_epoch: int | None = None) -> bool:
+    core, fix = _core(fixture, rules_epoch)
     menu = core.candidates(core.state_of(fix["state"]), fix["charger"])
     return any(isinstance(c, dict) and c.get("charge") == fix["victim"] for c in menu)
 
@@ -52,3 +57,14 @@ def test_below_epoch_73_the_charge_is_still_offered():
 
 def test_a_charge_the_table_executed_stays_on_the_menu():
     assert _menu_offers_the_charge("g4_c2/port_executed_act11.json"), "the route fits the band: the charge must stay"
+
+
+def test_from_epoch_77_the_capped_charge_is_offered_and_stays_inside_the_band():
+    """#183 (EPOCH_77_CHARGE_CAP): the arc cap stops the trailing model at its 6" band (7.55" at 73-76), so the charge the
+    table could not execute becomes executable and is offered; at 76 it stays off the menu (byte-identical leg)."""
+    assert not _menu_offers_the_charge("g4_c6/arc_act30.json", rules_epoch=76)
+    assert _menu_offers_the_charge("g4_c6/arc_act30.json", rules_epoch=77)
+    core, fix = _core("g4_c6/arc_act30.json", 77)
+    land = core.charge_move(core.state_of(fix["state"]), fix["charger"], fix["victim"])
+    assert land["budget_in"] == 6.0 and land["arc_in"] <= 6.0 + 0.05, land["arc_in"]
+    assert land["snap_in"] is not None and land["snap_in"] >= 0.0, land["snap_in"]

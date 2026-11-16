@@ -35,7 +35,7 @@ use crate::acts::{
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
     EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_75_TABLE_FIXES,
-    EPOCH_76_MOVE_FIXES,
+    EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::landing::{LandedModel, Landing};
@@ -9633,6 +9633,7 @@ fn resolve_with(
     let mut charge_remaining_in = if seams.movement && !seams.plain_only && rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
         band_in.max(0.0)
     } else { f64::INFINITY };
+    let mut charge_arcs: Option<(Vec<f64>, f64)> = None;
     // D5-2, seam-gated: the CHARGE moves per model through the M4 movement port
     // instead of as one rigid delta — the table's own aim (`_charge_move`
     // solo_controller.gd:8582), its own arc budget and its own route. It runs
@@ -9733,6 +9734,7 @@ fn resolve_with(
         // engage snap gate refuses charges D5-1-off never refused.
         if seams.charge_landing || rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
             charge_remaining_in = land.remaining_in();
+            charge_arcs = Some((land.arcs(), land.budget_in)); // #183: per-model snap budgets (EPOCH_77)
         }
         // battle_sim.gd:598-600 — the mover's cover follows it, probed at the
         // POST-move unit centre, which is now the solved formation's centre.
@@ -10744,13 +10746,26 @@ fn resolve_with(
             // last_move_remaining_in())` returning negative is a falls-short
             // and no fight (main.gd:8015-8022, solo_controller.gd:8639/8644).
             // A gap already inside the contact epsilon snaps for free.
-            if engage_gap_in <= MELEE_ENGAGE_IN
-                && (engage_gap_in <= BASE_CONTACT_EPSILON_IN
-                    || engage_gap_in <= charge_remaining_in + BASE_CONTACT_EPSILON_IN)
+            // #183 (`EPOCH_77_CHARGE_CAP`, main.gd `snap_charge_per_model`): each model spends its OWN leftover; the
+            // fight needs the picked model's snap to land (a negative snap is the falls-short).
+            let per_model = charge_arcs.as_ref().filter(|_| rule_on(seams.rules_epoch, EPOCH_77_CHARGE_CAP)
+                && seams.movement && !seams.plain_only).map(|(arcs, band)| {
+                let mut trial = next.clone();
+                let snap = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch })
+                    .snap_charge_state_per_model(&mut trial, si, ti, arcs, *band, seams.hero_attach);
+                snap.filter(|s| *s >= 0.0).map(|_| trial)
+            });
+            if engage_gap_in <= MELEE_ENGAGE_IN && per_model.as_ref().map_or(engage_gap_in <= BASE_CONTACT_EPSILON_IN
+                    || engage_gap_in <= charge_remaining_in + BASE_CONTACT_EPSILON_IN, |t| t.is_some())
             {
+                if let Some(Some(snapped)) = per_model {
+                    next = snapped;
+                }
                 if seams.movement && !seams.plain_only {
-                    (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch })
-                        .snap_charge_state(&mut next, si, ti, charge_remaining_in, seams.hero_attach);
+                    if !rule_on(seams.rules_epoch, EPOCH_77_CHARGE_CAP) || charge_arcs.is_none() {
+                        (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch })
+                            .snap_charge_state(&mut next, si, ti, charge_remaining_in, seams.hero_attach);
+                    }
                     // G4-C8b: the defender's mandatory pile-in, before Counter, Impact and every strike.
                     if let (true, Cover::Board(t)) = (rule_on(seams.rules_epoch, EPOCH_73_V36), cover) {
                         let n = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).pile_in_state(&mut next, t, si, ti, seams.hero_attach);

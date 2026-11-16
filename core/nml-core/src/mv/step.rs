@@ -50,6 +50,8 @@ const GATE_SLACK_EPS_IN: f64 = 0.05;
 /// band + contact epsilon; twelve bisections on the pre-gate -> gated segment.
 const CHARGE_CAP_MARGIN_IN: f64 = 0.001;
 const CHARGE_CAP_BISECT: usize = 12;
+/// `SeparationResolver.RESOLVE_EPSILON_INCHES` — the per-model snap leaves a mover behind below this overlap.
+const SNAP_OVERLAP_TOL_IN: f64 = 0.01;
 /// Rules 3.6: a ruin is Unstable for a model whose OWN move is longer than
 /// this (an Advance of 6" never triggers it).
 const UNSTABLE_MOVE_IN: f64 = 6.0;
@@ -112,9 +114,19 @@ impl Landing {
     pub fn snap_charge(&mut self, state: &State, target: usize, rules_epoch: u32) -> Option<f64> {
         if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) { return None; }
         let pose = ChargePose { state, positions: &self.end };
+        if rule_on(rules_epoch, EPOCH_77_CHARGE_CAP) { // #183: each model spends its OWN leftover (GF 3.6 p.9)
+            let (snap, delta, moving) = pose.snap_per_model(&self.movers, &movers_of(state, target), &self.arcs(), self.budget_in)?;
+            for (p, _) in self.end.iter_mut().zip(&moving).filter(|(_, m)| **m) { *p = geom::add(*p, delta); }
+            return Some(snap);
+        }
         let (snap, delta) = pose.snap(&self.movers, &movers_of(state, target), self.remaining_in())?;
         for p in &mut self.end { *p = geom::add(*p, delta); }
         Some(snap)
+    }
+
+    /// #183: each mover's own published trail length (inches), 0 for a mover without one.
+    pub fn arcs(&self) -> Vec<f64> {
+        (0..self.movers.len()).map(|i| self.trails.get(i).map_or(0.0, |t| g2::polyline_length(t))).collect()
     }
 
     /// `SoloController.last_move_remaining_in` :8659-8667.
@@ -198,6 +210,36 @@ fn nearest(&self, from: &[Mover], to: &[Mover]) -> (f64, V2) {
     (best_gap, g2::normalized(best_dir))
 }
 
+/// #183 `SoloController.snap_charge_per_model`: the picked model closes its residual, movers whose own leftover covers
+/// the snap go with it, one that would land on a staying or foreign base stays (fixed point, lowest index first).
+/// `(snap, delta, moving)`; snap < 0 = the residual when no model may close or the picked one must stay.
+fn snap_per_model(&self, from: &[Mover], to: &[Mover], arcs: &[f64], band_in: f64) -> Option<(f64, V3, Vec<bool>)> {
+    let (state, n, eps) = (self.state, from.len(), crate::sim::BASE_CONTACT_EPSILON_IN);
+    let at = |i: usize| self.positions.get(i).copied().unwrap_or_else(|| pos_of(state, from[i]));
+    let near: Vec<(f64, V2)> = (0..n).map(|i| ChargePose { state, positions: &[at(i)] }.nearest(&from[i..=i], to)).collect();
+    let res: Vec<f64> = near.iter().map(|g| g.0).collect();
+    let low = res.iter().copied().fold(f64::INFINITY, f64::min);
+    if low > crate::sim::MELEE_ENGAGE_IN { return None; }
+    let stay = |snap: f64| Some((snap, [0.0; 3], vec![false; n]));
+    let Some(p) = snap_pick(&res, arcs, band_in).filter(|&p| near[p].1 != [0.0, 0.0]) else { return stay(-low); };
+    let gap = res[p];
+    if gap <= eps { return stay(0.0); }
+    let delta = geom::mul([near[p].1[0], 0.0, near[p].1[1]], gap * IN2M);
+    let mut moving: Vec<bool> = (0..n).map(|i| (band_in - arcs.get(i).copied().unwrap_or(0.0)).max(0.0) + eps >= gap).collect();
+    let si = from[0].unit;
+    let ext: Vec<Mover> = (0..state.units()).filter(|&u| u != si && state.attached_to[u] != Some(si)
+        && !state.dormant[u] && !state.aircraft[u]).flat_map(|u| (0..state.positions[u].len()).map(move |model| Mover { unit: u, model })).collect();
+    let overlap = |a: V3, ma: Mover, b: V3, mb: Mover| geom::pair_gap_m(a, radius_of(state, ma), state.base_shape(ma.unit),
+        b, radius_of(state, mb), state.base_shape(mb.unit)) / IN2M < -SNAP_OVERLAP_TOL_IN;
+    loop {
+        let end = |i: usize, mv: &[bool]| if mv[i] { geom::add(at(i), delta) } else { at(i) };
+        let drop = (0..n).find(|&i| moving[i] && ((0..n).any(|j| !moving[j] && overlap(end(i, &moving), from[i], at(j), from[j]))
+            || ext.iter().any(|e| overlap(end(i, &moving), from[i], pos_of(state, *e), *e))));
+        match drop { None => break, Some(d) if d == p => return stay(-gap), Some(d) => moving[d] = false }
+    }
+    Some((gap, delta, moving))
+}
+
 fn snap(&self, from: &[Mover], to: &[Mover], remaining_in: f64) -> Option<(f64, V3)> {
     let (gap, dir) = self.nearest(from, to);
     if gap > crate::sim::MELEE_ENGAGE_IN { return None; }
@@ -208,6 +250,18 @@ fn snap(&self, from: &[Mover], to: &[Mover], remaining_in: f64) -> Option<(f64, 
     if gap > remaining_in + eps { return Some((-gap, [0.0; 3])); }
     Some((gap, geom::mul([dir[0], 0.0, dir[1]], gap * IN2M)))
 }
+}
+
+/// #183 (`EPOCH_77_CHARGE_CAP`) `SoloController.charge_snap_pick`: among models whose own trail fits the band, within the
+/// engage ring and whose OWN leftover covers the residual, the one with the smallest residual.
+pub fn snap_pick(residuals: &[f64], arcs: &[f64], band_in: f64) -> Option<usize> {
+    let eps = crate::sim::BASE_CONTACT_EPSILON_IN;
+    let mut best: Option<usize> = None;
+    for (i, (&res, &arc)) in residuals.iter().zip(arcs).enumerate() {
+        if arc <= band_in + eps && res <= crate::sim::MELEE_ENGAGE_IN && res <= (band_in - arc).max(0.0) + eps
+            && best.is_none_or(|b| res < residuals[b]) { best = Some(i); }
+    }
+    best
 }
 
 /// `SoloController._clamp_to_bounds` :8879, `half` in METRES.
@@ -1248,6 +1302,19 @@ pub struct MoveRules {
 
 impl MoveRules {
 /// Apply the same snap to the simulator's surviving models, after movement hazards.
+/// #183 (`EPOCH_77_CHARGE_CAP`): `snap_charge_state` with each mover's own trail length (`Landing::arcs`, movers order).
+pub(crate) fn snap_charge_state_per_model(self, state: &mut State, si: usize, ci: usize, arcs: &[f64], band_in: f64,
+    hero_attach: bool) -> Option<f64> {
+    let (mut from, mut to) = (movers_of(state, si), movers_of(state, ci));
+    if !hero_attach { from.retain(|m| m.unit == si); to.retain(|m| m.unit == ci); }
+    let (snap, delta, moving) = ChargePose { state, positions: &[] }.snap_per_model(&from, &to, arcs, band_in)?;
+    for (m, _) in from.iter().zip(&moving).filter(|(_, mv)| **mv) {
+        state.positions[m.unit][m.model] = geom::to_f64(geom::add(pos_of(state, *m), delta));
+    }
+    state.moved_round[si] = state.round;
+    Some(snap)
+}
+
 pub(crate) fn snap_charge_state(self, state: &mut State, si: usize, ci: usize,
     remaining_in: f64, hero_attach: bool) -> Option<f64> {
     if !rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) { return None; }
@@ -1434,12 +1501,14 @@ fn charge_landing(self, state: &State, t: &Terrain, si: usize, ci: usize,
     if rule_on(self.rules_epoch, EPOCH_8_PLANNER_MENU) {
         let to = movers_of(state, ci);
         let mut closest = f64::INFINITY;
+        let mut res = vec![f64::INFINITY; land.movers.len()];
         for (i, m) in land.movers.iter().enumerate() {
             let p = land.end[i];
             let (rc, sc) = (radius_of(state, *m), state.base_shape(m.unit));
             for e in &to {
                 let gap = geom::pair_gap_m(p, rc, sc, pos_of(state, *e),
                     radius_of(state, *e), state.base_shape(e.unit)) / IN2M;
+                res[i] = res[i].min(gap);
                 if gap < closest { closest = gap; }
             }
         }
@@ -1452,6 +1521,12 @@ fn charge_landing(self, state: &State, t: &Terrain, si: usize, ci: usize,
         // formation must fit the band it was granted (a trailing model can walk further than the cap).
         short |= rule_on(self.rules_epoch, EPOCH_73_V36)
             && land.arc_in > land.budget_in + crate::sim::BASE_CONTACT_EPSILON_IN;
+        // #183 (`EPOCH_77_CHARGE_CAP`, table twin `charge_snap_pick`): clause 1 stays; the closing model's OWN leftover
+        // pays its snap (GF 3.6 p.9), not the unit's shared remainder.
+        if rule_on(self.rules_epoch, EPOCH_77_CHARGE_CAP) {
+            short = land.arc_in > land.budget_in + crate::sim::BASE_CONTACT_EPSILON_IN
+                || snap_pick(&res, &land.arcs(), land.budget_in).is_none();
+        }
         // #183 (`EPOCH_77_CHARGE_CAP`, table twin `_charge_path_probe_impl`): a charge has no ladder to settle debts, so
         // an end the arc cap slid back onto another base is not declared. Coherency is not asked (log-only default).
         short |= land.charge_cut && !super::gate::overlap_free(&land.movers.iter()
@@ -1811,6 +1886,26 @@ pub(crate) mod tests {
         assert_eq!(dangerous_wounds(&[1, 6, 3, 1]), 2);
         assert_ne!(dangerous_wounds(&[6, 6, 6]), 3, "counting 6s is the RED reading");
     }
+
+    /// #183 twin parity: the same deterministic grid the table's `solo_charge_band_cap_test.gd` sums over
+    /// `charge_snap_pick` gives the same checksum here (`(pick + 2) * running index`, -1 = none).
+    #[test]
+    fn snap_pick_grid_checksum_matches_the_table() {
+        let (mut sum, mut k) = (0i64, 0i64);
+        for band in [3.0f64, 6.0, 12.0] {
+            for ra in 0..13 { for rb in 0..13 { for aa in 0..14 { for ab in 0..14 {
+                k += 1;
+                let pick = snap_pick(&[ra as f64 * 0.1, rb as f64 * 0.1],
+                    &[aa as f64 * band / 12.0, ab as f64 * band / 12.0], band).map_or(-1, |p| p as i64);
+                sum += (pick + 2) * k;
+            } } } }
+        }
+        assert_eq!(sum, PICK_GRID_CHECKSUM, "the table pins the same number");
+        // The closing model's OWN budget: model 1 is nearer but spent its band, model 0 affords its 0.8".
+        assert_eq!(snap_pick(&[0.8, 0.3], &[1.5, 11.9], 12.0), Some(0));
+        assert_eq!(snap_pick(&[1.2, 0.3], &[1.5, 11.9], 12.0), None);
+    }
+    const PICK_GRID_CHECKSUM: i64 = 11_715_374_026;
 
     /// `_retrace_to` :6912 is the whole arc measure, so it gets its own red-green.
     /// GREEN: a route that walks 3" of arc to displace 1" is republished trimmed
