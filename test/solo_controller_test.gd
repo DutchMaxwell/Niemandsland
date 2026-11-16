@@ -106,10 +106,10 @@ func test_lesson_hold_ai_activates_but_does_not_move() -> void:
 	assert_bool(solo.last_report.get("can_shoot", true)).is_false()
 
 
-func test_lesson_hold_is_absent_from_arena_and_selfplay() -> void:
-	# D3's flag must stay a tutorial-only seam: arena and selfplay never set it, so their numbers
+func test_lesson_hold_is_absent_from_arena() -> void:
+	# D3's flag must stay a tutorial-only seam: the arena harness never sets it, so their numbers
 	# cannot change. A mention there is the bug this test exists to catch.
-	for path in ["res://tools/arena_match.gd", "res://tools/solo_selfplay.gd"]:
+	for path in ["res://tools/arena_match.gd"]:
 		var body := FileAccess.get_file_as_string(path)
 		assert_bool(body.contains("lesson_hold")) \
 			.override_failure_message("%s must never mention the lesson_hold seam" % path) \

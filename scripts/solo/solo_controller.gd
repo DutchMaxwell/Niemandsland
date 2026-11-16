@@ -4675,7 +4675,7 @@ func _terrain_meter_on() -> bool:
 ## "can_shoot" is the ONE post-move gate BOTH brains flow through (_act re-gates range + line
 ## of sight from the settled position, and the Bug-27/28 retarget opens it even when the plan
 ## said no), and it is the exact predicate every driver fires on (main._solo_activate_one_ai
-## and tools/solo_selfplay: can_shoot ⇒ _run_ai_shooting). A meter reading the planner's
+## and the arena harness: can_shoot ⇒ _run_ai_shooting). A meter reading the planner's
 ## intention keeps drifting from what happens on the table; this one reads the trigger.
 ## Residual (named, not hidden): _run_ai_shooting can still find no per-weapon target at
 ## resolution time, so "shot" is "the volley was opened", one step short of "dice rolled".

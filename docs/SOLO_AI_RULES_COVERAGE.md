@@ -680,7 +680,7 @@ other** — the formation jams into nonsense. The new placement, in `MovementPla
 
 ### Self-play audit (real board + real armies, before → after)
 
-Both mirror armies run the identical AI; the geometry audit (`tools/solo_selfplay.gd`, harness from
+Both mirror armies run the identical AI; the geometry audit (the since-retired `tools/solo_selfplay.gd`, harness from
 `feat/solo-selfplay-harness`) flags every base overlap, coherency break, and model resting in impassable /
 dangerous terrain per activation. Three matches were run (Battle Brothers vs Robot Legions, real board):
 s424242 and s2024 on the default board, s777 on an alternate board (layout 13371337).

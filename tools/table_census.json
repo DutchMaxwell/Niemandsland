@@ -2,7 +2,7 @@
   "schema": "nml-table-census-v1",
   "notes": [
     "Counts come from the script, not from this file; the notes record callers a reader would not guess.",
-    "tools/solo_selfplay.gd:_drive_activation calls _run_ai_dangerous, _run_ai_melee and _solo_shooting_morale directly and reaches the AI volley through _run_ai_shooting (P4.D-39 decides: delete the file or move it to the core door).",
+    "tools/solo_selfplay.gd (the headless harness that drove the table directly) was deleted by P4.D-39; tools/arena_match.gd plays through the game loop and its core door.",
     "test/parity/parity_table.gd:114 calls _solo_resolve_ai_volley directly; test/parity/parity_table_melee.gd:66 calls _run_ai_melee (P4.D-38 moves both parity harnesses).",
     "_solo_volley_outcome has a prod caller outside main.gd: scripts/solo/core_activation.gd:_present (the core path shows the same toast).",
     "A listed caller that disappears is fine on purpose; only an unlisted NEW prod caller turns --check red. To allow one, add 'file:function' to allowed_callers of the callee in the same diff as a plan step that says so.",
@@ -18,8 +18,8 @@
     "planner_shared": ["scripts/solo/ai_ev.gd", "scripts/solo/ai_combat_math.gd"]
   },
   "allowed_callers": {
-    "scripts/main.gd:_run_ai_dangerous": ["scripts/main.gd:_on_transport_spill_dangerous", "scripts/main.gd:_run_player_intent", "scripts/main.gd:_solo_activate_one_ai_body", "@melee_charge", "tools/solo_selfplay.gd:_drive_activation"],
-    "scripts/main.gd:_run_ai_melee": ["scripts/main.gd:_solo_activate_one_ai_body", "tools/solo_selfplay.gd:_drive_activation"],
+    "scripts/main.gd:_run_ai_dangerous": ["scripts/main.gd:_on_transport_spill_dangerous", "scripts/main.gd:_run_player_intent", "scripts/main.gd:_solo_activate_one_ai_body", "@melee_charge"],
+    "scripts/main.gd:_run_ai_melee": ["scripts/main.gd:_solo_activate_one_ai_body"],
     "scripts/main.gd:_run_human_attack_split": ["scripts/main.gd:_solo_split_commit"],
     "scripts/main.gd:_run_human_melee": ["scripts/main.gd:_run_human_attack"],
     "scripts/main.gd:_run_human_shooting": ["scripts/main.gd:_run_human_attack", "@human_shoot"],
@@ -38,7 +38,7 @@
     "scripts/main.gd:_solo_resolve_saves": ["@human_shoot", "scripts/main.gd:_solo_apply_breath_attack", "@melee_charge", "scripts/main.gd:_solo_deathstrike_hits", "@ai_volley", "scripts/main.gd:_solo_secret_trap_hits", "scripts/main.gd:_solo_self_destruct_post_melee"],
     "scripts/main.gd:_solo_retreating_strike": ["scripts/main.gd:_run_human_attack", "scripts/main.gd:_solo_activate_one_ai_body"],
     "scripts/main.gd:_solo_save_batch": ["scripts/main.gd:_solo_apply_storm_attack", "scripts/main.gd:_solo_apply_surprise_attack", "@hit_save_shared", "scripts/main.gd:_solo_resolve_spell_damage"],
-    "scripts/main.gd:_solo_shooting_morale": ["@human_shoot", "scripts/main.gd:_solo_activate_one_ai_body", "scripts/main.gd:_solo_apply_breath_attack", "scripts/main.gd:_solo_apply_storm_attack", "scripts/main.gd:_solo_apply_surprise_attack", "@ai_volley", "scripts/main.gd:_solo_resolve_spell_damage", "tools/solo_selfplay.gd:_drive_activation"],
+    "scripts/main.gd:_solo_shooting_morale": ["@human_shoot", "scripts/main.gd:_solo_activate_one_ai_body", "scripts/main.gd:_solo_apply_breath_attack", "scripts/main.gd:_solo_apply_storm_attack", "scripts/main.gd:_solo_apply_surprise_attack", "@ai_volley", "scripts/main.gd:_solo_resolve_spell_damage"],
     "scripts/main.gd:_solo_takedown_pick": ["@human_shoot", "@melee_charge", "@ai_volley"],
     "scripts/main.gd:_solo_volley_outcome": ["@ai_volley", "scripts/solo/core_activation.gd:_present"]
   }

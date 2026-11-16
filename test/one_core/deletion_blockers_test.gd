@@ -9,7 +9,6 @@ extends GdUnitTestSuite
 
 const ACTIVATION := "res://scripts/solo/core_activation.gd"
 const MAIN := "res://scripts/main.gd"
-const SELFPLAY := "res://tools/solo_selfplay.gd"
 const PARITY_SHOOT := "res://test/parity/parity_table.gd"
 const PARITY_MELEE := "res://test/parity/parity_table_melee.gd"
 
@@ -22,8 +21,6 @@ const BLOCKERS: Array[Dictionary] = [
 		"header": "static func applies(main) -> bool:", "needles": ["ClassDB.class_exists(\"NmlCore\")"]},
 	{"name": "non-OPR clause of is_plain", "retire": "the P4.D-13 follow-up, before P4.D-41", "file": ACTIVATION,
 		"header": "static func is_plain(gu: GameUnit) -> bool:", "needles": ["not gu.source_data is OPRApiClient.OPRUnit"]},
-	{"name": "tools/solo_selfplay.gd drives the table", "retire": "P4.D-39", "file": SELFPLAY, "header": "",
-		"needles": ["main._run_ai_shooting(", "main._run_ai_dangerous(", "main._solo_shooting_morale("]},
 	{"name": "parity_table.gd calls the AI volley resolver", "retire": "P4.D-38", "file": PARITY_SHOOT, "header": "",
 		"needles": ["main._solo_resolve_ai_volley("]},
 	{"name": "parity_table_melee.gd drives the melee resolver", "retire": "P4.D-49", "file": PARITY_MELEE, "header": "",
@@ -77,7 +74,7 @@ func test_every_deletion_blocker_still_holds() -> void:
 
 
 func test_the_list_is_not_empty_and_names_a_step_per_row() -> void:
-	assert_int(BLOCKERS.size()).is_greater_equal(8)
+	assert_int(BLOCKERS.size()).is_greater_equal(7)
 	for b in BLOCKERS:
 		assert_str(String(b["retire"])).override_failure_message("%s names no step" % b["name"]).contains("P4.D-")
 
