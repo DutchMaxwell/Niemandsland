@@ -62,10 +62,20 @@ def test_check_is_green_on_the_committed_state(tmp_path):
 def test_check_is_red_on_a_stale_counter(tmp_path):
     root = repo(tmp_path)
     txt = committed(root)
-    txt.write_text(txt.read_text().replace("old_b 3 0 1", "old_b 3 0 2"))
+    txt.write_text(txt.read_text().replace("old_b 3 0 1", "old_b 3 1 1"))   # a prod-caller count
     res = run(root, "--check")
     assert res.returncode == 1 and "counter is stale" in res.stdout
     assert run(root, "--write").returncode == 0 and run(root, "--check").returncode == 0
+
+
+def test_a_moved_test_caller_count_is_reported_but_not_red(tmp_path):
+    root = repo(tmp_path)
+    txt = committed(root)
+    txt.write_text(txt.read_text().replace("old_b 3 0 1", "old_b 3 0 7").replace("grp TOTAL 7 2 3", "grp TOTAL 7 2 9"))
+    res = run(root, "--check")
+    assert res.returncode == 0 and "only test-caller counts moved" in res.stdout and "stale" not in res.stdout
+    txt.write_text(txt.read_text().replace("old_b 3 0 7", "old_b 4 0 7"))   # the same edit on the LINES column is red
+    assert run(root, "--check").returncode == 1
 
 
 def test_check_is_red_on_a_new_prod_caller_and_green_once_listed(tmp_path):
@@ -118,3 +128,38 @@ def test_runtime_census_never_reaches_the_committed_report(tmp_path):
     assert run(root, "--check", "--runtime", str(census)).returncode == 2
     committed(root)
     assert "RUNTIME" not in (root / "test/one_core/table_census.txt").read_text()
+
+
+def test_runtime_census_reports_what_one_group_alone_would_unlock(tmp_path):
+    root = repo(tmp_path)
+    census = tmp_path / "census.json"
+    census.write_text(json.dumps({"ai_volleys": 40, "legacy": {"ai_volley": {"_all": 25}}, "legacy_sets": {"ai_volley": {
+        "no_handle|weapon_rule:AP": 10,                                   # AP alone
+        "no_handle|target_weapon_rule:AP|weapon_rule:AP": 6,              # shooter and target side of AP = still AP alone
+        "no_handle|weapon_rule:AP|weapon_rule:Blast": 4,                  # needs two groups
+        "no_handle|unit_rule:Tough": 3,
+        "no_handle|split|weapon_rule:Blast": 2}}}))                       # the door fact `split` is a group of its own
+    out = run(root, "--runtime", str(census)).stdout
+
+    def block(title):   # the lines under `title` up to the next all-caps header
+        lines = out.split(title + "\n")[1].splitlines()
+        return lines[:next((i for i, ln in enumerate(lines) if ln[:1].isupper()), len(lines))]
+    assert block("UNLOCKED IF THIS GROUP ALONE WERE ALLOWED:") == ["   40.0 %      16  AP", "    7.5 %       3  Tough"]
+    assert block("VOLLEYS BY NUMBER OF GROUPS THEY NEED:") == ["   47.5 %      19  1 group(s)", "   15.0 %       6  2 group(s)"]
+    assert block("MOST COMMON GROUPS ALLOWED FIRST (cumulative unlocked):") == [   # AP 20 volleys, Blast 6, Tough 3, split 2
+        "   40.0 %      16  + AP (group 1)", "   50.0 %      20  + Blast (group 2)",
+        "   57.5 %      23  + Tough (group 3)", "   62.5 %      25  + split (group 4)"]
+    sets = block("TOP REASON SETS (no_handle left out):")
+    assert sets[:3] == ["   25.0 %      10  weapon_rule:AP",
+                        "   15.0 %       6  target_weapon_rule:AP + weapon_rule:AP",
+                        "   10.0 %       4  weapon_rule:AP + weapon_rule:Blast"]
+    assert len(sets) == 5
+
+
+def test_runtime_census_says_so_when_no_volley_needs_a_single_group(tmp_path):
+    root = repo(tmp_path)
+    census = tmp_path / "census.json"
+    census.write_text(json.dumps({"ai_volleys": 3, "legacy": {"ai_volley": {"_all": 3}},
+                                  "legacy_sets": {"ai_volley": {"no_handle|weapon_rule:AP|weapon_rule:Blast": 3}}}))
+    out = run(root, "--runtime", str(census)).stdout
+    assert "UNLOCKED IF THIS GROUP ALONE WERE ALLOWED:\n  (none: no volley needs fewer than 2 groups)\n" in out

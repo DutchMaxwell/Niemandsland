@@ -22,10 +22,12 @@ class StubMain extends RefCounted:
 
 func before_test() -> void:
 	CoreActivation.legacy.clear()
+	CoreActivation.legacy_sets.clear()
 
 
 func after_test() -> void:
 	CoreActivation.legacy.clear()
+	CoreActivation.legacy_sets.clear()
 	if _main != null:
 		E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
@@ -96,6 +98,21 @@ func test_door_facts_and_the_target_are_counted() -> void:
 	assert_int(CoreActivation.legacy.get("human_split", {}).get("_all", 0)).is_equal(1)
 
 
+func test_the_whole_reason_set_of_each_volley_is_counted() -> void:
+	for rules in [["Blast(3)", "AP(1)"], ["AP(1)", "Blast(3)"]]:   # the same set found in two orders counts as one set
+		CoreActivation.note_legacy(StubMain.new(), "ai_volley", _unit([], [rules]), [_unit(["Tough(3)"], [[]])], "no_handle")
+	CoreActivation.note_legacy(StubMain.new(), "ai_volley", _unit([], [["AP(1)"]]), [_unit([], [[]])], "no_handle")
+	var sets: Dictionary = CoreActivation.legacy_sets.get("ai_volley", {})
+	var extra := [] if ClassDB.class_exists("NmlCore") else ["no_core"]   # `applies` adds no_core on a build without the core
+	var a := extra + ["no_handle", "target_rule:Tough", "weapon_rule:AP", "weapon_rule:Blast"]
+	var b := extra + ["no_handle", "weapon_rule:AP"]
+	a.sort()
+	b.sort()
+	assert_int(sets.get("|".join(PackedStringArray(a)), 0)).override_failure_message("sets: %s" % [sets]).is_equal(2)
+	assert_int(sets.get("|".join(PackedStringArray(b)), 0)).override_failure_message("sets: %s" % [sets]).is_equal(1)
+	assert_int(sets.size()).is_equal(2)
+
+
 func test_the_dump_is_written_only_when_the_env_names_a_path() -> void:
 	var path := "user://table_census_dump_test.json"
 	DirAccess.remove_absolute(path)
@@ -110,6 +127,7 @@ func test_the_dump_is_written_only_when_the_env_names_a_path() -> void:
 	DirAccess.remove_absolute(path)
 	assert_int(int(got.get("legacy", {}).get("ai_strafe", {}).get("weapon_rule:Blast", 0))).is_equal(1)
 	assert_bool(got.has("core_ai_runs")).is_true()
+	assert_int(got.get("legacy_sets", {}).get("ai_strafe", {}).size()).is_equal(1)
 
 
 func test_counting_draws_no_dice_and_writes_no_line() -> void:
