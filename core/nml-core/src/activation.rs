@@ -203,6 +203,23 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
     Check::Ok { lines: vec![LogLine { rule: "move_overrun", category: Category::Movement, side: state.player[si], text, detail }] }
 }
 
+/// P4.0-5: the one choice the step API offers so far — the Takedown model pick (`sim::takedown_pick`'s
+/// automatic answer). `Some((id, options, owner))` when the activation shoots a Takedown weapon at a
+/// target with 2+ living models: `id` = `takedown_model:<shooter key>:<target key>`, `options` = the
+/// target's living capture slots as `slot:<n>`, `owner` = the shooter's roster key (its side answers,
+/// as on the table). `None` otherwise, so every other transcript sees no choice at all.
+fn takedown_choice(statics: &[UnitStatic], state: &State, si: usize, shoot: Option<&str>) -> Option<(String, Vec<String>, String)> {
+    let target = shoot?;
+    let ti = *state.roster.index.get(target)?;
+    let living: Vec<usize> = (0..state.wounds[ti].len()).filter(|&i| state.wounds[ti][i] > 0).collect();
+    if living.len() < 2 || !statics[state.roster.profile[si]].shoot.iter().any(|p| p.takedown) {
+        return None;
+    }
+    let owner = state.roster.keys[si].clone();
+    let id = format!("takedown_model:{owner}:{target}");
+    Some((id, living.iter().map(|i| format!("slot:{i}")).collect(), owner))
+}
+
 /// One activation through the step API: the order rules, then the declared
 /// action (not moving = Hold) on the supplied faces and the LAST placement (`check_move` first).
 /// A new entry: the AI's resolver path is untouched. `NeedRoll.index` is the
@@ -235,6 +252,27 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let kind = effective_kind(declared, start, placed.as_ref().map(|(p, _)| p.as_slice()));
     if kind == RUSH && shoot.is_some() {
         return ActStep::Refused { index: at_intent, reason: format!("{name} rushed this activation - it cannot shoot.") };
+    }
+    // P4.0-5: the last `Choice` in the transcript answers (or asks) the open choice; without one the
+    // core's automatic pick stands and nothing below changes.
+    let mut seams = seams;
+    if let Some((i, id, option)) = t.iter().enumerate().rev().find_map(|(i, x)| match x {
+        Input::Choice { id, option } => Some((i, id, option)),
+        _ => None,
+    }) {
+        let Some((want, options, owner)) = at.and_then(|si| takedown_choice(statics, state, si, shoot.as_deref())) else {
+            return ActStep::Refused { index: i, reason: format!("no choice is open in this activation (got {id})") };
+        };
+        if *id != want {
+            return ActStep::Refused { index: i, reason: format!("the open choice is {want}, not {id}") };
+        }
+        if option.is_empty() {
+            return ActStep::NeedChoice { id: want, options, owner };
+        }
+        let Some(slot) = option.strip_prefix("slot:").and_then(|n| n.parse::<usize>().ok()).filter(|_| options.iter().any(|o| o == option)) else {
+            return ActStep::Refused { index: i, reason: format!("{option} is not an option of {want} (options: {})", options.join(", ")) };
+        };
+        seams = Seams { takedown_pick: Some(slot), ..seams };
     }
     // Not HOLD: a mode was declared and the last placement moved (or does not match the models).
     let mut moved = Vec::new();
