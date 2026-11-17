@@ -40,8 +40,6 @@ func test_advance_label_follows_direction() -> void:
 	var toward_shoot := {"unit": "Me", "kind": AiDecision.Action.ADVANCE, "dest": Vector3(30.0 * IN2M, 0, 0), "shoot": "Foe"}
 	assert_str(AiPlanner._describe(state, toward)).is_equal("advance")
 	assert_str(AiPlanner._describe(state, toward_shoot)).is_equal("advance and shoot Foe")
-	var retreats := AiPlanner.candidates(state, "Me").filter(
-		func(c: Dictionary) -> bool: return int(c["kind"]) == AiDecision.Action.ADVANCE and (c["dest"] as Vector3).x < 0.0)
-	assert_int(retreats.size()).is_greater(0)
-	for c in retreats:
-		assert_str(AiPlanner._describe(state, c)).is_equal("fall back")
+	# the retreat point (away from the nearest threat): the label says "fall back"
+	var retreat := {"unit": "Me", "kind": AiDecision.Action.ADVANCE, "dest": Vector3(-20.0 * IN2M, 0, 0)}
+	assert_str(AiPlanner._describe(state, retreat)).is_equal("fall back")

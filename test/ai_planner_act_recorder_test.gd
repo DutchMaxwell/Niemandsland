@@ -406,21 +406,18 @@ func test_begin_and_finish_write_header_and_act_line() -> void:
 	assert_bool(a_state.has("bands")).is_true()
 
 
-## NML-1073 M2-0b: plan_with_rollout's search TRACE — root menus, the sorted
-## 1-ply list, the rollout pool, every pool candidate's rolled score, and the
-## winner/runner-up — rides on AiActRecorder.finish()'s act line, gated by
-## AiActRecorder.active() (env NML_ACT_DUMP set, true here). top_k=1 keeps the
-## rollout pool to exactly A's own best candidate — the only engaged unit on
-## this objective-less fixture, where _safe_advance/_second_wave both return
-## {} for both units — so len(menus) == len(pool_idx) == 1 is provable, and
-## with a single-candidate pool no runner is ever set (runner_idx == -1).
-func test_trace_carries_search_and_flattens_menu_dests() -> void:
+## NML-1073 M2-0b: the search TRACE (root menus, the sorted 1-ply list, the rollout pool, every pool candidate's rolled score, the
+## winner/runner-up) rides on AiActRecorder.finish()'s act line, gated by AiActRecorder.active() (env NML_ACT_DUMP set, true here),
+## and is read once: finish() resets AiPlanner.trace so the next activation never carries it. The trace is filled by hand here (P4.D-103):
+## the writers are the Rust search's _core_pick_of and the GDScript search, and the recorder only transports the dictionary.
+func test_trace_rides_on_the_act_line_and_is_read_once() -> void:
 	var state := _state()
 	var pool: Array = [(state["units"]["A"] as Dictionary)["unit"]]
 	var pending := AiActRecorder.begin(state, 1, pool, Callable())
-	var pick := AiPlanner.plan_with_rollout(state, 1, 1)
-	AiActRecorder.finish(pending, pick)
-
+	AiPlanner.trace = {"menus": {"A": [{"kind": AiDecision.Action.HOLD}]}, "scored": [{"unit_key": "A", "idx": 0, "score": 0.5}],
+		"pool_idx": [0], "rs": [0.5], "best_idx": 0, "runner_idx": -1, "arbitration": null}
+	AiActRecorder.finish(pending, {"used": true, "unit_key": "A", "action": {"kind": AiDecision.Action.HOLD}})
+	assert_dict(AiPlanner.trace).is_empty()
 	var f := FileAccess.open(_DUMP_DIR.path_join("acts.jsonl"), FileAccess.READ)
 	var lines: Array = []
 	while not f.eof_reached():
@@ -433,18 +430,9 @@ func test_trace_carries_search_and_flattens_menu_dests() -> void:
 	var trace := act["trace"] as Dictionary
 	for key in ["menus", "scored", "pool_idx", "rs", "best_idx", "runner_idx", "arbitration"]:
 		assert_bool(trace.has(key)).is_true()
-	var menus := trace["menus"] as Dictionary
-	var pool_idx := trace["pool_idx"] as Array
-	assert_bool(menus.has("A")).is_true()
-	assert_int(menus.size()).is_equal(pool_idx.size())
 	assert_int(int(trace["best_idx"])).is_equal(0)
 	assert_int(int(trace["runner_idx"])).is_equal(-1)
-	assert_object(trace["arbitration"]).is_null()   # playout_search is off by default
-	for cand in (menus["A"] as Array):
-		var dest = (cand as Dictionary).get("dest")
-		if dest != null:
-			assert_bool(dest is Array).is_true()
-			assert_int((dest as Array).size()).is_equal(3)
+	assert_object(trace["arbitration"]).is_null()
 
 
 ## NML-1073 M2-0d: BattleSim.charge_illegal_plain reproduces
