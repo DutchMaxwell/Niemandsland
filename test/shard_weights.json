@@ -693,7 +693,6 @@
 "test/solo_planner_tree_knob_test.gd": 0.1,
 "test/solo_plausibility_test.gd": 1.5,
 "test/solo_player_intent_test.gd": 0.6,
-"test/solo_playout_fidelity_test.gd": 0.3,
 "test/solo_playout_search_test.gd": 0.3,
 "test/solo_points_strength_test.gd": 0.2,
 "test/solo_record_candidates_test.gd": 0.1,
