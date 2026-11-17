@@ -97,19 +97,19 @@ func _mirror_tie(ours: Array, gold: Array) -> bool:
 @warning_ignore('unused_parameter')
 func test_both_prompt_variants_through_the_core_door_equal_the_golden(timeout := 900000,
 		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "NmlCore extension not loaded") -> void:
-	CoreActivation._choice_on = {"wound_alloc": true}
+	CoreActivation._choice_on = {}   # P4.D-27: ON is the default
 	var diffs := await _differences()
 	assert_array(diffs).override_failure_message("core door vs golden:\n" + "\n".join(diffs.slice(0, 8))).is_empty()
 	# Pinned: exactly these two seeds hit the exact tie. If the two orders ever agree on them, delete the exception.
 	assert_array(_ties).override_failure_message("the tie cases changed: %s" % str(_ties)).is_equal(["mixed_click seed 49", "mixed_click seed 512"])
 
 
-## Switch OFF (the default): the core lands its automatic order and nobody is asked, so the harness's prompt never opens in
+## Switch OFF (`NML_ONE_CORE_CHOICE_WOUND_ALLOC=0`): the core lands its automatic order and nobody is asked, so the harness's prompt never opens in
 ## ANY variant - the owner's clicks cannot reach the core. This is what the switch buys, and proves the comparison can fail.
 @warning_ignore('unused_parameter')
 func test_with_the_switch_off_the_owner_is_never_asked(timeout := 900000,
 		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "NmlCore extension not loaded") -> void:
-	CoreActivation._choice_on = {}
+	CoreActivation._choice_on = {"wound_alloc": false}
 	var diffs := await _differences("mixed_click")
 	assert_int(diffs.size()).override_failure_message("the clicks reached the core with the switch off: %s" % str(diffs)).is_equal(8)
 	for d in diffs:
