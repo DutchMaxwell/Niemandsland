@@ -35,7 +35,7 @@ use crate::acts::{
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
     EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_75_TABLE_FIXES,
-    EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP,
+    EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_79_EV_MOVED_ROUND,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::landing::{LandedModel, Landing};
@@ -10253,7 +10253,11 @@ fn resolve_with(
                     let mut att = ctx_of(us, &next, si);
                     // SHO-06e: the volley's own action decides the Artillery shooter's Hold.
                     att.held = !moved;
-                    let def = ctx_of(ut, &next, ti);
+                    let mut def = ctx_of(ut, &next, ti);
+                    // FAB-A5 (`EPOCH_79_EV_MOVED_ROUND`, table twin `_held_for`): the target's own move stamp.
+                    if rule_on(seams.rules_epoch, EPOCH_79_EV_MOVED_ROUND) {
+                        (def.moved_round, def.round) = (next.moved_round[ti], next.round);
+                    }
                     let shooting = shoot_ev(
                         folded_slice(&us.shoot, &sc), &sc.keep, &sc.attacks, &att, &def, d_ev,
                     );
