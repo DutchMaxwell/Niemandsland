@@ -255,9 +255,14 @@ pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain,
             out.set("step", "cancelled");
             out.set("lines", &lines_of(&lines));
         }
-        ActStep::Done { state: s, lines, landings } => {
+        ActStep::Done { state: s, lines, landings, unported } => {
             out.set("step", "done");
             out.set("lines", &lines_of(&lines));
+            let mut marks = VarArray::new();
+            for m in &unported {
+                marks.push(&m.to_variant());
+            }
+            out.set("unported", &marks);
             out.set("landings", &landings_of(state, &landings));
             out.set("delta", &delta_array(state, &s));
             next = Some(s);
