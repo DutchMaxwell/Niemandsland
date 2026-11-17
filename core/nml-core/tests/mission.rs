@@ -107,6 +107,39 @@ fn carry_pickup_uses_capture_order_for_equal_gaps() {
     assert_eq!(st.objectives[0].pos, [0.04, 0.0, 0.0]);
 }
 
+/// The seizing side's NEAREST eligible unit takes the marker and the marker moves onto it —
+/// a farther unit of the same side is not chosen even when it comes first in roster order.
+#[test]
+fn carry_pickup_takes_the_nearest_unit() {
+    let mut st = carry_state();
+    let near = (0..st.units()).find(|&i| st.player[i] == 1 && st.positions[i][0][0] < 0.0).unwrap();
+    let far = (0..st.units()).find(|&i| st.player[i] == 1 && st.positions[i][0][0] > 0.0).unwrap();
+    assert!(near > far, "the nearer unit must come later in the roster, else this test is blind");
+    st.positions[far][0] = [0.06, 0.0, 0.0];
+    st.positions[near][0] = [0.02, 0.0, 0.0];
+    apply_carry_step(&mut st, &[1]);
+    assert_eq!(st.markers_meta[0].carried_by, near as i64);
+    assert_eq!(st.objectives[0].pos, [0.02, 0.0, 0.0]);
+}
+
+/// A shaken carrier stops owning the marker: `playout_seize` falls back to the ring test,
+/// which finds nobody near, so the owner stays as it was.
+#[test]
+fn a_shaken_carrier_stops_owning_the_marker() {
+    let mut st = carry_state();
+    for i in 0..st.units() {
+        st.positions[i][0] = [2.0, 0.0, 2.0];
+    }
+    let carrier = (0..st.units()).find(|&i| st.player[i] == 1).unwrap();
+    st.positions[carrier][0] = [0.508, 0.0, 0.0];
+    st.shaken[carrier] = true;
+    st.markers_meta[0].carried_by = carrier as i64;
+    let mut owners = [0];
+    playout_seize(&mut st, &mut owners);
+    assert_eq!(owners, [0], "a shaken carrier may not keep the marker");
+    assert_eq!(st.objectives[0].owner, 0);
+}
+
 #[test]
 fn carried_marker_stays_owned_outside_the_ring() {
     let mut st = carry_state();
