@@ -5,16 +5,18 @@ tools/table_census.json maps groups to "file:function" ids (a whole file when th
 no ':'). Per id: lines (function = its column-0 `func` up to the next top-level
 declaration; whole file = its line count) and callers: `name(` call sites (plus
 Callable/call("name") references) in scripts/ + tools/ (prod) and test/ (test). The
-report ends with `TABLE LINES LEFT: N`, committed as test/one_core/table_census.txt. The manifest's planner_tags
+report ends with `TABLE LINES LEFT: N`, committed as test/one_core/table_census.txt. The committed report carries
+two numbers per row (lines, prod callers); the printed report adds the test-caller column, so a test edit never
+moves the file. The manifest's planner_tags
 list EVERY column-0 function of the planner files under exactly one tag of tag_vocabulary; the report prints the
 function count and code lines per tag (no trailing blank/comment lines) just above the counter, which is unchanged.
 
   python3 tools/table_census.py            print the report
-  python3 tools/table_census.py --write    rewrite the committed report
+  python3 tools/table_census.py --write    rewrite the committed report (lines and prod callers only)
   python3 tools/table_census.py --runtime census.json   print the report + the soak's table share of AI volleys
                                            (+ the SHADOW section when the soak ran with NML_CORE_SHADOW=1)
   python3 tools/table_census.py --check    exit 1 if the report is stale (lines and prod callers; test-caller counts
-                                           are reported but not compared), if a planner function has no tag, or if a prod caller appears that
+                                           are printed but never compared or committed), if a planner function has no tag, or if a prod caller appears that
                                            allowed_callers does not list ("file:function" or "@group"). A listed
                                            caller that is gone is fine on purpose.
 """
@@ -145,7 +147,8 @@ def render(rows, tags=None):
 
 
 def prod_only(text):
-    """The report without its test-caller column: a test added or removed must not turn --check red."""
+    """The report without its test-caller column: the text `--write` commits. A test added or removed must not
+    move the committed file nor turn --check red; the printed report keeps the column."""
     return "".join(" ".join(p[:-1] if len(p) == 5 else p) + "\n" for p in (ln.split() for ln in text.splitlines()))
 
 
@@ -252,17 +255,16 @@ def main(argv=None):
         print(f"::error::{problem}")
     if untagged and (args.write or args.check):
         return 1
+    want = prod_only(text)
     if args.write:
-        txt_path.write_text(text)
+        txt_path.write_text(want)
     elif args.check:
         old = txt_path.read_text() if txt_path.exists() else ""
-        stale = prod_only(old) != prod_only(text)   # lines and prod callers only; test counts are reported, never gated
+        stale = prod_only(old) != want   # lines and prod callers only; test counts are printed, never committed
         if stale:
             print("::error::table census counter is stale - run: python3 tools/table_census.py --write")
-            sys.stdout.writelines(difflib.unified_diff(prod_only(old).splitlines(1), prod_only(text).splitlines(1),
+            sys.stdout.writelines(difflib.unified_diff(prod_only(old).splitlines(1), want.splitlines(1),
                                                        "committed", "current"))
-        elif old != text:
-            print("::notice::only test-caller counts moved; `python3 tools/table_census.py --write` refreshes them")
         for callee, caller in bad:
             print(f"::error::new caller of {callee}: {caller} (not in allowed_callers of tools/table_census.json)")
         return int(stale or bool(bad))
