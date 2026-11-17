@@ -141,6 +141,13 @@ fn delta_array(before: &State, after: &State) -> VarArray {
             feats.push(&name.as_str().to_variant());
         }
         d.set("feats_used", &feats);
+        for (key, names) in [("limited_used", &u.limited_used), ("storm_used", &u.storm_used), ("precision_used", &u.precision_used)] {
+            let mut list = VarArray::new();
+            for name in names {
+                list.push(&name.as_str().to_variant());
+            }
+            d.set(key, &list);
+        }
         out.push(&d.to_variant());
     }
     out
