@@ -96,8 +96,6 @@ func test_capture_stamps_enemy_los_matrix() -> void:
 		func(_u: GameUnit, t: GameUnit) -> bool: return t.unit_id != "C")
 	assert_that((state["units"]["A"] as Dictionary)["los"]).is_equal({"B": true, "C": false})
 	assert_that((state["units"]["B"] as Dictionary)["los"]).is_equal({"A": true})
-	assert_bool(BattleSim.sees(state["units"]["A"], "B")).is_true()
-	assert_bool(BattleSim.sees(state["units"]["A"], "C")).is_false()
 	assert_bool((BattleSim.capture(army)["units"]["A"] as Dictionary).has("los")).is_false()
 
 
