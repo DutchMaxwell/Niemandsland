@@ -87,6 +87,21 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 	return out
 
 
+## C-18 (shadow only): `refusals` under the slice file at `path` (e.g. DENY_PATH) without switching the live slice.
+static var _cache_by_path := {}
+
+
+static func refusals_in(path: String, gu: GameUnit, as_target := false) -> Array:
+	var live := [path_override, _loaded]
+	path_override = path
+	_loaded = _cache_by_path.get(path, {})
+	var out := refusals(gu, as_target)
+	_cache_by_path[path] = _loaded
+	path_override = live[0]
+	_loaded = live[1]
+	return out
+
+
 static func takes(gu: GameUnit, as_target := false) -> bool:
 	return refusals(gu, as_target).is_empty()
 

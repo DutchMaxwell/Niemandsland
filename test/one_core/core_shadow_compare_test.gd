@@ -75,6 +75,7 @@ func test_a_plain_pair_replays_equal() -> void:
 		var rec := await _shadowed(Harness.RIFLE, Harness.DEFENDER, seed)
 		assert_dict(rec).override_failure_message("seed %d: %s" % [seed, rec]).contains_key_value("equal", true)
 		assert_array(rec["unported"]).is_empty()
+		assert_array(rec["deny"]).override_failure_message("C-18: the deny-mode slice takes a plain pair").is_empty()
 
 
 ## The first hit roll's faces all set to 6 (the table had misses): the core asks a save roll of another size.
@@ -97,4 +98,5 @@ func test_a_wound_ignore_by_name_pair_is_not_equal() -> void:
 		var rec := await _shadowed(Harness._weapon(["Bane"]), Harness._with(Harness.DEFENDER, {"rules": ["Self-Repair"]}), seed)
 		unequal += 0 if bool(rec["equal"]) else 1
 		assert_bool(rec["labels"].has("target_rule:Self-Repair")).override_failure_message("labels %s" % [rec["labels"]]).is_true()
+		assert_array(rec["deny"]).override_failure_message("C-18: Self-Repair is on the deny list").contains(["target_unit_rule:Self-Repair"])
 	assert_int(unequal).override_failure_message("Self-Repair vs Bane replayed equal on every seed").is_greater(0)
