@@ -914,7 +914,12 @@ pub const EPOCH_84_IGNORE_GROUPS: u32 = 84;
 /// Indirect gun fired nothing at a unit hidden behind a blocker, the table fired. Records stamped 84 or below replay byte-exact. Every
 /// call site reads THIS constant, not `85`. The recorder mirror stamps 85 with it.
 pub const EPOCH_85_INDIRECT_GATE: u32 = 85;
-pub const CURRENT_RULES_EPOCH: u32 = 85;
+/// The played volley's modifier distance (Valiant gate, over-9" modifiers) counts only the model pairs within the vertical reach (3", `melee_vertical_in`),
+/// and a unit with no pair in reach keeps the horizontal unit-centre distance: the table's `_solo_ai_volley_distance_in` over `nearest_melee_gap_in`.
+/// Before, a unit on a platform measured as close as the ground beside it (the soak's Hive Bond +1, table 4+ vs core 5+). Step path only. Records
+/// stamped 85 or below replay byte-exact. Every call site reads THIS constant, not `86`. The recorder mirror stamps 86 with it.
+pub const EPOCH_86_VOLLEY_HEIGHT_REACH: u32 = 86;
+pub const CURRENT_RULES_EPOCH: u32 = 86;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2233,6 +2238,7 @@ mod tests {
         EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_73_V36,
         EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT, EPOCH_79_EV_MOVED_ROUND, EPOCH_80_ROLLOUT_CUMBERSOME,
         EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME, EPOCH_83_LONE_HERO_TARGET, EPOCH_84_IGNORE_GROUPS, EPOCH_85_INDIRECT_GATE,
+        EPOCH_86_VOLLEY_HEIGHT_REACH,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2253,7 +2259,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 85, "the live epoch is EPOCH_85_INDIRECT_GATE");
+        assert_eq!(CURRENT_RULES_EPOCH, 86, "the live epoch is EPOCH_86_VOLLEY_HEIGHT_REACH");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2263,11 +2269,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":85}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":86}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 85"
+            "a fresh play_game() now stamps the bumped epoch, 86"
         );
     }
 
@@ -2374,6 +2380,15 @@ mod tests {
         assert!(rule_on(EPOCH_85_INDIRECT_GATE, EPOCH_85_INDIRECT_GATE), "a record at 85 lets an Indirect weapon open the gate");
         assert!(rule_on(EPOCH_85_INDIRECT_GATE, EPOCH_84_IGNORE_GROUPS), "85 keeps the ignore groups on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_85_INDIRECT_GATE), "a fresh play_game() stamps it on");
+    }
+
+    /// Epoch 86: a record stamped 85 replays the plain base gap, a fresh record honours the vertical reach.
+    #[test]
+    fn epoch_86_gate_is_closed_at_epoch_85_and_open_from_86() {
+        assert!(!rule_on(EPOCH_85_INDIRECT_GATE, EPOCH_86_VOLLEY_HEIGHT_REACH), "a record at 85 replays the height-blind distance");
+        assert!(rule_on(EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_86_VOLLEY_HEIGHT_REACH), "a record at 86 honours the vertical reach");
+        assert!(rule_on(EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_85_INDIRECT_GATE), "86 keeps the Indirect gate on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_86_VOLLEY_HEIGHT_REACH), "a fresh play_game() stamps it on");
     }
 
     /// The WAVE 3 GATE's own reservation (05.09.): `EPOCH_6_TABLE_RULES` must

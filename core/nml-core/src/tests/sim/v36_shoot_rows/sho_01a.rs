@@ -192,3 +192,29 @@ use super::super::*;
         short[0].range = 2;
         assert!(!opens(short, true), "the Indirect gun still has to reach");
     }
+
+    /// The soak's Hive Bond +1 (Battle Tank -> Hive Swarms, table 4+ vs core 5+): the table's volley distance (`_solo_ai_volley_distance_in`
+    /// over `nearest_melee_gap_in`) skips model pairs more than the vertical reach apart and keeps the HORIZONTAL centre distance when no pair
+    /// is in reach, so a unit on a platform is "beyond 9"" there; the core measured the plain base gap. RED at 85, GREEN from 86.
+    #[test]
+    fn the_volley_distance_honours_the_vertical_reach_from_epoch_86() {
+        let (flat, _) = buff_line();
+        let seams = |epoch| Seams { sighting: true, rules_epoch: epoch, ..Default::default() };
+        let raised = |h: f64| {
+            let mut st = flat.clone();
+            for p in st.positions[2].iter_mut() {
+                p[1] = h * IN2M;
+            }
+            st
+        };
+        let (e85, e86) = (crate::acts::EPOCH_85_INDIRECT_GATE, crate::acts::EPOCH_86_VOLLEY_HEIGHT_REACH);
+        let ground = super::super::modifier_distance_in(&flat, 0, 2, seams(e86));
+        let volley = |st: &State, epoch| super::super::volley_distance_in(st, 0, 2, seams(epoch));
+        let centre: f64 = 12.02 - 0.01; // the horizontal unit-centre distance of the fixture
+        assert!(ground < 11.0 && centre > 11.5, "fixture: the base gap {ground} is inside the centre distance {centre}");
+        assert_eq!(volley(&raised(5.0), e85), ground, "a record at 85 replays the height-blind gap");
+        assert!((volley(&raised(5.0), e86) - centre).abs() < 0.01, "no pair in reach: the horizontal centre distance");
+        assert_eq!(volley(&flat, e86), ground, "level ground: unchanged");
+        assert_eq!(volley(&raised(2.0), e86), super::super::modifier_distance_in(&raised(2.0), 0, 2, seams(e86)), "a pair in reach counts");
+        assert_eq!(super::super::modifier_distance_in(&raised(5.0), 0, 2, seams(e86)), ground, "the charge measure stays height-blind");
+    }
