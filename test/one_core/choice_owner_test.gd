@@ -75,7 +75,7 @@ func before_test() -> void:
 	_main.solo_ai_slots = {}
 	_main._solo_batch = false
 	CoreActivation._env = 1
-	CoreActivation._choice_on = {"takedown_model": false}
+	CoreActivation._choice_on = {"takedown_model": false, "wound_alloc": false}
 
 
 func after_test() -> void:
@@ -149,7 +149,7 @@ func test_switch_off_sends_no_choice_input() -> void:
 
 ## The owner answers locally: the click pick names slot 1, and that option is what reaches the core.
 func test_the_owner_answers_and_the_answer_reaches_the_core(timeout := 120000) -> void:
-	CoreActivation._choice_on = {"takedown_model": true}
+	CoreActivation._choice_on = {"takedown_model": true, "wound_alloc": false}
 	var pair := _pair()
 	var core := FakeCore.new()
 	core.answers = [{"step": "need_choice", "id": "takedown_model:%s:%s" % [pair[0].unit_id, pair[1].unit_id],
@@ -185,7 +185,7 @@ func test_a_non_owner_does_not_answer(timeout := 120000) -> void:
 ## Nobody answers in time: the automatic pick stands, with exactly one battle-log line and no choice
 ## input in the next call.
 func test_a_timeout_falls_back_to_the_automatic_pick_with_one_line(timeout := 120000) -> void:
-	CoreActivation._choice_on = {"takedown_model": true}
+	CoreActivation._choice_on = {"takedown_model": true, "wound_alloc": false}
 	_session({GUEST_PEER: 2})
 	_main._owner_roll_timeout_s = 0.2
 	var pair := _pair(2)
