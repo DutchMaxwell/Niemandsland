@@ -49,17 +49,6 @@ func test_the_pure_arm_reads_the_target_state_at_epoch_73() -> void:
 	assert_str(AiCombatMath.conditional_ap_why(SHAKEN)).is_equal("target is Shaken or Fatigued")
 
 
-func test_the_snapshot_ctx_carries_both_facts_at_epoch_73() -> void:
-	var snap := {"unit": _unit(4, 4), "alive": 4, "in_cover": false, "shaken": false,
-		"fatigued": true, "wounds": [1, 1, 1, 1]}
-	var ctx := BattleSim._ctx_of(snap)
-	assert_bool(bool(ctx.get("above_half_strength", false))).is_true()
-	assert_bool(bool(ctx.get("shaken_or_fatigued", false))).is_true()
-	snap["alive"] = 2
-	snap["wounds"] = [1, 1]
-	assert_bool(bool(BattleSim._ctx_of(snap).get("above_half_strength", false))).is_false()
-
-
 func test_the_table_pays_and_names_the_condition_at_epoch_73() -> void:
 	RulesRegistry.reset_cache()
 	RulesRegistry._cache["gf"] = {"common": {

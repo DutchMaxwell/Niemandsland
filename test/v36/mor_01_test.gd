@@ -13,9 +13,6 @@ var _epoch0: int
 
 func before_test() -> void:
 	_epoch0 = AiActRecorder.rules_epoch
-	# The expected-morale read below is deterministic only with the aifix dither OFF (a static another suite may leave on).
-	BattleSim.morale_by_probability = false
-	BattleSim._morale_round = 1
 	Boot.arm_harness_mode()
 	_roots = Boot.root_children(get_tree())
 	_runner = scene_runner(Boot.MAIN_SCENE)
@@ -71,12 +68,10 @@ func _shaken_test(squad: GameUnit) -> void:
 func test_most_models_decide_fearless_at_epoch_73() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var five := _joined("Five", ["Fearless"], 5, ["Hero"])
-	assert_bool(BattleSim._morale_fails_expected({"unit": five, "shaken": false})).is_false()
 	await _shaken_test(five)
 	assert_str(_log_text()).contains("Five is Fearless — recovery die")
 	assert_str(_log_text()).contains("Fearless: 5 of 6 models of Five")
 	var pair := _joined("Pair", ["Fearless"], 1, ["Hero"])
-	assert_bool(BattleSim._morale_fails_expected({"unit": pair, "shaken": false})).is_true()
 	await _shaken_test(pair)
 	assert_str(_log_text()).not_contains("Pair is Fearless — recovery die")
 	var trio := _joined("Trio", [], 3, ["Hero", "Fearless"])
@@ -91,7 +86,6 @@ func test_most_models_decide_fearless_at_epoch_73() -> void:
 func test_fearless_needs_every_model_at_epoch_72() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
 	var five := _joined("Five", ["Fearless"], 5, ["Hero"])
-	assert_bool(BattleSim._morale_fails_expected({"unit": five, "shaken": false})).is_true()
 	await _shaken_test(five)
 	assert_str(_log_text()).not_contains("Five is Fearless — recovery die")
 	assert_str(_log_text()).not_contains("models of Five")

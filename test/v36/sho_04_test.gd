@@ -1,20 +1,16 @@
 extends GdUnitTestSuite
 ## Rules 3.6 wave, row SHO-04 (folds AI-02): Artillery may move like any unit from the rules 3.6
 ## epoch (73) on; below it (72) it keeps to Hold actions. Immobile keeps to Hold actions at both.
-## Every reader of the hold-only gate answers alike: the player's move feeder, the AI's own
-## gate and the enemy reply model the planner prices.
+## The player's move feeder and the AI's own gate answer alike (the enemy reply model the planner prices
+## is pinned in the core: core/nml-core/src/tests/sim/v36_shoot.rs).
 
 const IN2M := 0.0254
 
 var _epoch0: int
-var _reply_v2_0: bool
-var _hold_gate_0: bool
 
 
 func before_test() -> void:
 	_epoch0 = AiActRecorder.rules_epoch
-	_reply_v2_0 = BattleSim.reply_v2
-	_hold_gate_0 = BattleSim.reply_hold_gate
 	MovementPlanner.fast_planner = false
 	MovementPlanner.fast_planner_guard = MovementPlanner.FAST_PLANNER_GUARD
 
@@ -22,8 +18,6 @@ func before_test() -> void:
 func after_test() -> void:
 	# statics leak across gdUnit tests — restore
 	AiActRecorder.rules_epoch = _epoch0
-	BattleSim.reply_v2 = _reply_v2_0
-	BattleSim.reply_hold_gate = _hold_gate_0
 
 
 func _unit(pid: int, unit_name: String, positions: Array, rules: Array = [], weapons: Array = []) -> GameUnit:
@@ -63,15 +57,6 @@ func _controller(units: Array) -> SoloController:
 	add_child(solo)
 	solo.setup(army, null, null, 1, 2)
 	return solo
-
-
-func _capture(units: Array) -> Dictionary:
-	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
-	var gu := {}
-	for u in units:
-		gu[(u as GameUnit).unit_id] = u
-	army.game_units = gu
-	return BattleSim.capture(army)
 
 
 func _notes(report: Dictionary) -> PackedStringArray:
@@ -120,27 +105,3 @@ func test_immobile_rush_is_still_refused_at_epoch_73() -> void:
 	var target := _unit(1, "Target", [Vector3(20 * IN2M, 0, 0)])
 	var solo := _controller([turret, target])
 	assert_str(str(solo.player_intent(turret, AiDecision.Action.RUSH, target).get("refused", ""))).contains("Hold")
-
-
-## The reply model (AI-02): an ENEMY gun 28" away with a 24" cannon, hold gate on.
-func _gun_reply_at(epoch: int) -> Dictionary:
-	AiActRecorder.rules_epoch = epoch
-	BattleSim.reply_v2 = true
-	BattleSim.reply_hold_gate = true
-	var gun := _unit(1, "Gun", [Vector3.ZERO], ["Artillery"], [{"name": "Cannon", "range": 24}])
-	var squad := _unit(2, "Squad", [Vector3(28.0 * IN2M, 0, 0)], [], [{"name": "CCW", "range": 0}])
-	return BattleSim.reply_threat(_capture([gun, squad]), 2)
-
-
-func test_enemy_artillery_reply_is_zero_out_of_range_at_epoch_72() -> void:
-	var threat := _gun_reply_at(AiActRecorder.EPOCH_72_PLAYTEST_RULES)
-	assert_float(float(threat.get("squad", 0.0))) \
-		.override_failure_message("rules 3.5: the gun holds, 28\" is out of its 24\" reach") \
-		.is_equal(0.0)
-
-
-func test_enemy_artillery_reply_fires_after_an_advance_at_epoch_73() -> void:
-	var threat := _gun_reply_at(AiActRecorder.EPOCH_73_V36)
-	assert_float(float(threat.get("squad", 0.0))) \
-		.override_failure_message("rules 3.6: the gun may advance 6\" and fire, got %s" % threat) \
-		.is_greater(0.0)
