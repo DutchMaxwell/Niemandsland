@@ -473,7 +473,10 @@ static func dump_legacy() -> void:
 	var path := OS.get_environment("NML_TABLE_CENSUS")
 	var f := FileAccess.open(path, FileAccess.WRITE) if path != "" else null
 	if f != null:
-		f.store_string(JSON.stringify({"legacy": legacy, "legacy_sets": legacy_sets, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals}))
+		var out := {"legacy": legacy, "legacy_sets": legacy_sets, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals}
+		if not CoreShadow.records.is_empty():
+			out["shadow"] = CoreShadow.records   # C-4: the shadow run's volleys (NML_CORE_SHADOW=1)
+		f.store_string(JSON.stringify(out))
 
 
 ## Step 42: the AI's volley through the core - Hold or Advance (P4.D-37: a Rush too, for a unit that moves through), the unit and its one target (the table's own pick) plain,
