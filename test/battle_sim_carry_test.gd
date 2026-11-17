@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
-## NML-1010 wave C, step C1: BattleSim.apply_carry_step / the carried branch of
-## playout_seize (Relic Hunt, Capture & Hold). The pickup tie, carried-marker ownership, contested pickup, drop and
-## attacker-only halves are the core's: core/nml-core/tests/mission.rs. Fixtures
+## NML-1010 wave C, step C1: escort / extract / role verdicts and the capture fog views
+## (Relic Hunt, Capture & Hold). The pickup, carried-marker ownership, contested pickup,
+## drop and attacker-only halves are the core's: core/nml-core/tests/mission.rs. Fixtures
 ## follow ai_mission_eval_test.gd's style (real GameUnit + BattleSim.capture).
 
 const IN2M := 0.0254
@@ -33,32 +33,6 @@ func _state(units: Array, objectives: Array, owners: Array, round_no := 1) -> Di
 	army.game_units = gu
 	return BattleSim.capture(army, func() -> Array: return objectives,
 		func(i: int) -> int: return owners[i], round_no, 4)
-
-
-## The seizing side's NEAREST eligible unit becomes the carrier, and the
-## marker's position moves onto it.
-func test_pickup_by_the_nearest() -> void:
-	var near := _unit(1, [Vector3(1.0 * IN2M, 0, 0)], "Near")
-	var far := _unit(1, [Vector3(2.9 * IN2M, 0, 0)], "Far")
-	var state := _state([near, far], [Vector3.ZERO], [1])
-	var markers := [{"carry": true, "carried_by": ""}]
-	var owners := [1]
-	BattleSim.apply_carry_step(state, markers, owners)
-	assert_str(String(markers[0]["carried_by"])).is_equal("Near")
-	assert_vector(state["objectives"][0]["pos"]).is_equal_approx(
-		Vector3(1.0 * IN2M, 0, 0), Vector3(0.001, 0.001, 0.001))
-
-
-## A shaken carrier no longer holds the marker — playout_seize falls back to the
-## ordinary ring test, which finds nobody near.
-func test_shaken_carrier_stops_owning_it() -> void:
-	var carrier := _unit(1, [Vector3(20.0 * IN2M, 0, 0)], "Carrier")
-	var state := _state([carrier], [Vector3.ZERO], [0])
-	(state["units"]["Carrier"] as Dictionary)["shaken"] = true
-	state["markers_meta"] = [{"carry": true, "carried_by": "Carrier"}]
-	var owners := [0]
-	BattleSim.playout_seize(state, owners)
-	assert_int(owners[0]).is_equal(0)
 
 
 ## D9 (R11a): escort/extract verdicts — escort = the defender wins within 6" of
