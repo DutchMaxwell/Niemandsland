@@ -6434,35 +6434,11 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 				reach = granted_reach
 	# Flying ignores terrain effects whilst moving (p.13) — no Dangerous tests for its crossings. Counted on
 	# the ROUTE (pre-gate endpoints of the CHOSEN plan): the model still traversed those cells even if the
-	# gate nudges its rest spot.
-	# Bug 23 (PDF p.12, wording verified): "moves IN or THROUGH dangerous terrain, OR is ACTIVATED in it"
-	# — the ACTIVATED-in-it trigger was missing (a unit holding inside a minefield never tested). Per
-	# model: trail-crossing OR standing-in-dangerous at activation start, one test per model (union);
-	# the test rolls the model's TOUGH value in dice (p.12), summed into report["dangerous_dice"].
-	var dang := 0
-	var dang_dice := 0
-	var stood_n := 0   # models counted only because they stood in/at the field at activation start
+	# gate nudges its rest spot. From EPOCH_87_WALKED_DANGEROUS the count is redone below on the route the models WALKED
+	# (the retraced trails), because a gate that holds a model back at a container or wall cancels the crossing.
+	var counted := {"models": 0, "dice": 0, "stood": 0}
 	if not flying:
-		var cross_flags := _dangerous_trail_flags(trails, trail_radii_m)
-		for i in range(models.size()):
-			# EPOCH_27_TERRAIN_DEBUFF: the carried rule is a hazard the cells never are —
-			# the debuffed unit counts as being in Dangerous Terrain whatever it walks.
-			var affected: bool = dangerous_debuff or (i < cross_flags.size() and bool(cross_flags[i]))
-			if terrain_type_at.is_valid():
-				var p0: Vector3 = positions[i]
-				# Edge-aware (2026-07-22): standing with the base EDGE in the minefield counts.
-				var stood: bool = TerrainRules.base_in_terrain(p0, model_base_radius_m(models[i] as ModelInstance),
-					terrain_type_at, TerrainRules.is_dangerous)
-				if stood:
-					stood_n += 1
-				affected = affected or stood
-			if affected:
-				dang += 1
-				dang_dice += maxi(1, int((models[i] as ModelInstance).wounds_max))
-	# UX-20 (EPOCH_73_V36, rules 3.6): one affected model is enough - the whole joined unit takes ONE test.
-	if dang > 0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
-		dang_dice = OPRArmyManager.dangerous_dice_for(unit)
-	last_dangerous_dice = dang_dice
+		counted = _dangerous_count(unit, models, positions, _dangerous_trail_flags(trails, trail_radii_m), dangerous_debuff)
 	# The decision-log / label arc is the PLANNED within-budget move (pre-gate route), so the move-band audit
 	# and the "X / Y" label stay truthful; the gate's physical un-stack nudge is not counted as extra distance.
 	var longest_arc_m := 0.0
@@ -6506,6 +6482,12 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		if container_cut > 0:   # rules-must-log (AIG-L6b): the pulled-back models say which book rule held them
 			board_clamp_notes.append("%s: %d model%s stop short of a container or wall (Terrain height: a base may not end its move on a container or its wall; Unit Coherency waits)"
 				% [unit.get_name(), container_cut, "" if container_cut == 1 else "s"])
+	if not flying and not _is_regiment(unit) and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_87_WALKED_DANGEROUS:
+		counted = _dangerous_count(unit, models, positions, _dangerous_trail_flags(trails, trail_radii_m), dangerous_debuff)
+	var dang := int(counted["models"])
+	var dang_dice := int(counted["dice"])
+	var stood_n := int(counted["stood"])   # models counted only because they stood in/at the field at activation start
+	last_dangerous_dice = dang_dice
 	_apply_model_positions(models, new_positions)
 	# Publish the per-model routes + base radii for the presentation layer (glide + swept corridor +
 	# distance label) — the STATE is already final (applied + broadcast above); the replay is local.
@@ -8873,6 +8855,34 @@ func _count_dangerous_trails(trails: Array) -> int:
 
 ## Per-trail-index dangerous-crossing flags (Bug 23: the union with the activated-in-it trigger needs
 ## per-MODEL identity, not just a count — trail order matches the moving-models order).
+## One move's Dangerous count (Bug 23, UX-20): per model its route flag (`flags`) OR standing in the field at activation start, one test per
+## model; the dice are the Tough dice of the models counted, or the whole unit's from EPOCH_73_V36 (one test for the joined unit).
+## Returns {models, dice, stood}: `stood` = models counted only because they stood in/at the field.
+func _dangerous_count(unit: GameUnit, models: Array, positions: Array, flags: Array, debuffed: bool) -> Dictionary:
+	var dang := 0
+	var dice := 0
+	var stood_n := 0
+	for i in range(models.size()):
+		# EPOCH_27_TERRAIN_DEBUFF: the carried rule is a hazard the cells never are —
+		# the debuffed unit counts as being in Dangerous Terrain whatever it walks.
+		var affected: bool = debuffed or (i < flags.size() and bool(flags[i]))
+		if terrain_type_at.is_valid():
+			var p0: Vector3 = positions[i]
+			# Edge-aware (2026-07-22): standing with the base EDGE in the minefield counts.
+			var stood: bool = TerrainRules.base_in_terrain(p0, model_base_radius_m(models[i] as ModelInstance),
+				terrain_type_at, TerrainRules.is_dangerous)
+			if stood:
+				stood_n += 1
+			affected = affected or stood
+		if affected:
+			dang += 1
+			dice += maxi(1, int((models[i] as ModelInstance).wounds_max))
+	# UX-20 (EPOCH_73_V36, rules 3.6): one affected model is enough - the whole joined unit takes ONE test.
+	if dang > 0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
+		dice = OPRArmyManager.dangerous_dice_for(unit)
+	return {"models": dang, "dice": dice, "stood": stood_n}
+
+
 func _dangerous_trail_flags(trails: Array, radii_m: Array = []) -> Array:
 	var flags: Array = []
 	var unstable_epoch: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36

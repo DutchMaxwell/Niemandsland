@@ -919,7 +919,13 @@ pub const EPOCH_85_INDIRECT_GATE: u32 = 85;
 /// Before, a unit on a platform measured as close as the ground beside it (the soak's Hive Bond +1, table 4+ vs core 5+). Step path only. Records
 /// stamped 85 or below replay byte-exact. Every call site reads THIS constant, not `86`. The recorder mirror stamps 86 with it.
 pub const EPOCH_86_VOLLEY_HEIGHT_REACH: u32 = 86;
-pub const CURRENT_RULES_EPOCH: u32 = 86;
+/// The table's Dangerous count of a move (`SoloController._execute_move`) reads the route the models WALKED: a gate that holds a model back at a
+/// container or wall retraces its trail to the gated end, and a crossing the model never reached no longer costs a test. Before, the count read
+/// the planned route, so S1's soak had a Mega-Giant held at its start (a 0.002" trail) roll 15 Dangerous dice the core never asked for. A table-side
+/// epoch (the core has nothing to change: its landing already reads the walked trail); records stamped 86 or below replay the planned-route count.
+/// The recorder mirror stamps 87 with it.
+pub const EPOCH_87_WALKED_DANGEROUS: u32 = 87;
+pub const CURRENT_RULES_EPOCH: u32 = 87;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2238,7 +2244,7 @@ mod tests {
         EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_73_V36,
         EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT, EPOCH_79_EV_MOVED_ROUND, EPOCH_80_ROLLOUT_CUMBERSOME,
         EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME, EPOCH_83_LONE_HERO_TARGET, EPOCH_84_IGNORE_GROUPS, EPOCH_85_INDIRECT_GATE,
-        EPOCH_86_VOLLEY_HEIGHT_REACH,
+        EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_87_WALKED_DANGEROUS,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2259,7 +2265,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 86, "the live epoch is EPOCH_86_VOLLEY_HEIGHT_REACH");
+        assert_eq!(CURRENT_RULES_EPOCH, 87, "the live epoch is EPOCH_87_WALKED_DANGEROUS");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2269,11 +2275,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":86}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":87}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 86"
+            "a fresh play_game() now stamps the bumped epoch, 87"
         );
     }
 
@@ -2389,6 +2395,15 @@ mod tests {
         assert!(rule_on(EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_86_VOLLEY_HEIGHT_REACH), "a record at 86 honours the vertical reach");
         assert!(rule_on(EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_85_INDIRECT_GATE), "86 keeps the Indirect gate on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_86_VOLLEY_HEIGHT_REACH), "a fresh play_game() stamps it on");
+    }
+
+    /// Epoch 87 (table side): a record stamped 86 replays the planned-route Dangerous count, a fresh record counts the walked route.
+    #[test]
+    fn epoch_87_gate_is_closed_at_epoch_86_and_open_from_87() {
+        assert!(!rule_on(EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_87_WALKED_DANGEROUS), "a record at 86 replays the planned-route count");
+        assert!(rule_on(EPOCH_87_WALKED_DANGEROUS, EPOCH_87_WALKED_DANGEROUS), "a record at 87 counts the walked route");
+        assert!(rule_on(EPOCH_87_WALKED_DANGEROUS, EPOCH_86_VOLLEY_HEIGHT_REACH), "87 keeps the volley height reach on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_87_WALKED_DANGEROUS), "a fresh play_game() stamps it on");
     }
 
     /// The WAVE 3 GATE's own reservation (05.09.): `EPOCH_6_TABLE_RULES` must
