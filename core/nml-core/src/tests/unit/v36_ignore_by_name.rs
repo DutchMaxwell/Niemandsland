@@ -3,8 +3,20 @@
 //! rolls the bypassed wounds. RED at epoch 81 (the folded roll, skipped whole), GREEN at 82.
 
 use super::*;
-use crate::acts::{EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME};
+use crate::acts::{EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME, EPOCH_84_IGNORE_GROUPS};
 use crate::dice::{ShootResult, Tray};
+
+/// `volley` with the target's ignore groups stated (slot 0 Regeneration, then the other names): the folded `regen_target` is the best of them.
+fn grouped(epoch: u32, groups: [i64; 4], rending: bool) -> ShootResult {
+    let att = Ctx { quality: 2, models: 1, v36_rules: true, rules_epoch: epoch, ..Default::default() };
+    let best = groups.iter().copied().filter(|&t| t > 0).min().unwrap_or(0);
+    let def = Ctx {
+        defense: 6, tough: 1, models: 20, regeneration: true, regen_target: best, regen_named: groups[0] > 0, regen_groups: groups,
+        v36_rules: true, playtest_rules: true, rules_epoch: epoch, ..Default::default()
+    };
+    let prof = ShootProfile { name: "Gun".into(), attacks: 24, count: 1, range: 24, rending, ..Default::default() };
+    crate::dice::resolve_shooting_with_tray(&[prof], &[0], &[24], &att, &def, 12.0, &mut Tray::seeded(27))
+}
 
 /// One 24-attack volley of a Rending weapon (every shot wounds past a Defense 6+ save the target cannot make) at a target whose
 /// ignore roll is `regen_target`+ and is (`named`) / is not the rule named Regeneration, at `epoch`.
@@ -69,4 +81,38 @@ fn the_regeneration_group_is_the_rule_its_aura_and_medical_training() {
     assert!(g("Regeneration", "") && g("Regeneration Buff", "") && g("Regeneration Aura", "") && g("Medical Training", ""));
     assert!(g("Enhanced Regeneration", "Regeneration"));
     assert!(!g("Self-Repair", "") && !g("Resistance", "") && !g("Plaguebound", "") && !g("Enhanced Self-Repair", "Self-Repair"));
+}
+
+/// Two differently named rules (Plaguebound and Protected, both 6+) roll one after the other on the wounds still standing; below
+/// epoch 82 the family is one roll at the best target.
+#[test]
+fn two_named_groups_roll_one_after_the_other_from_epoch_84() {
+    let old = grouped(EPOCH_82_IGNORE_BY_NAME, [0, 6, 6, 0], false);
+    let new = grouped(EPOCH_84_IGNORE_GROUPS, [0, 6, 6, 0], false);
+    let dice = |o: &ShootResult| o.rolls.iter().filter(|r| r.target == 6 && r.kind == "attack").map(|r| r.count).collect::<Vec<_>>();
+    assert_eq!(dice(&old).len(), 1, "epoch 82: one folded roll: {:?}", old.rolls);
+    let new_dice = dice(&new);
+    assert_eq!(new_dice.len(), 2, "epoch 84: one roll per name: {:?}", new.rolls);
+    assert_eq!(new_dice[0], new.caused, "the first group rolls every wound");
+    assert!(new_dice[1] < new_dice[0] && new_dice[1] > 0, "the second rolls what the first left: {new_dice:?}");
+    assert!(new.wounds <= new_dice[1], "what the second roll leaves lands: {} of {}", new.wounds, new_dice[1]);
+}
+
+/// Regeneration beside another rule: a bypass skips only the Regeneration roll and meets the other rule (RED at epoch 82 before the
+/// groups: the whole fold was skipped; at 81 it still is).
+#[test]
+fn a_bypass_skips_the_regeneration_group_and_meets_the_other_name() {
+    let old = grouped(EPOCH_82_IGNORE_BY_NAME, [5, 6, 0, 0], true);
+    assert_eq!(ignore_dice(&old), 0, "epoch 82 skips the whole fold: {:?}", old.rolls);
+    let new = grouped(EPOCH_84_IGNORE_GROUPS, [5, 6, 0, 0], true);
+    assert_eq!(new.rolls.iter().filter(|r| r.target == 5).count(), 0, "no Regeneration roll for a bypassed wound: {:?}", new.rolls);
+    assert_eq!(ignore_dice(&new), new.caused, "the other rule rolls every bypassed wound: {:?}", new.rolls);
+    assert!(new.wounds < new.caused);
+}
+
+#[test]
+fn the_group_key_and_the_roll_order_are_the_tables() {
+    use crate::unit::ignore_group_key as k;
+    assert_eq!((k("Enhanced Knightborn", "").as_str(), k("Plaguebound Boost", "").as_str(), k("Cursed Undead Aura", "").as_str()), ("Knightborn", "Plaguebound", "Cursed Undead"));
+    assert_eq!((k("Self-Repair Boost", "Self-Repair").as_str(), k("Spell Resistance", "").as_str(), k("Regeneration Buff", "").as_str()), ("Self-Repair", "Spell Resistance", "Regeneration"));
 }
