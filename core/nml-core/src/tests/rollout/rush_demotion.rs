@@ -179,3 +179,17 @@ fn a_capped_rush_without_a_target_in_range_keeps_the_rush() {
         "a capped rush with no shot keeps RUSH, like the table"
     );
 }
+
+
+/// Rules 3.6 (SHO-16, `EPOCH_80_ROLLOUT_CUMBERSOME`, table twin `_policy_candidates`): a Cumbersome unit's rollout
+/// menu is the hold row plus one plain Advance - no Rush, no Charge, no Advance that shoots. RED at 79.
+#[test]
+fn the_rollout_menu_of_a_cumbersome_unit_is_hold_or_a_plain_advance_from_epoch_80() {
+    let header = HEADER.replacen(r#""special_rules":[]"#, r#""special_rules":["Cumbersome"]"#, 1);
+    let bad = |m: &[Candidate]| m.iter().any(|c| c.kind == RUSH || c.kind == crate::sim::CHARGE
+        || (c.kind == ADVANCE && c.shoot.is_some()));
+    let new = menu_h(&header, PLAIN, crate::acts::EPOCH_80_ROLLOUT_CUMBERSOME);
+    assert!(!bad(&new), "a Cumbersome unit was offered a rush, a charge or a moving shot: {new:?}");
+    assert!(new.iter().any(|c| c.kind == ADVANCE && c.shoot.is_none()), "the plain advance stays: {new:?}");
+    assert!(bad(&menu_h(&header, PLAIN, crate::acts::EPOCH_79_EV_MOVED_ROUND)), "79 keeps the old rollout menu");
+}
