@@ -1174,9 +1174,11 @@ impl NmlCore {
     /// The table's activation step path (`step_activation`, `check_move`, `move_allowance`): the header epoch's seams
     /// with the moving shot ON — at the table a unit that advanced may still shoot — and the table's sight: each model
     /// fires only with its own line of sight (`sighting`), and free shelf pieces block it too (`shelf_sight`), as
-    /// `main._solo_sighted_count` reads the board (review B2). `resolve` keeps the planner's reading.
+    /// `main._solo_sighted_count` reads the board (review B2). `resolve` keeps the planner's reading. The joined-hero fold
+    /// (`hero_attach`) is forced ON: the header's value is the AI preset's search knob, while the table plays a hero inside
+    /// its host's activation whichever seat asks, so the placed chain moves it and its own weapons fire.
     fn seams_for_step(&mut self) -> Seams {
-        Seams { moved_shoot: true, sighting: true, shelf_sight: true, ..self.seams_at_header_epoch() }
+        Seams { moved_shoot: true, sighting: true, shelf_sight: true, hero_attach: true, ..self.seams_at_header_epoch() }
     }
 
     fn root(&mut self) -> String {

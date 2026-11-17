@@ -648,3 +648,48 @@ func test_a_wrong_slot_or_a_malformed_answer_is_refused_not_dropped() -> void:
 	for odd in [3, 1.5, {"slot": 1}, [1.5]]:
 		var r := _alloc_step(core, h, {"option": odd})
 		assert_str(str(r.get("reason"))).override_failure_message("%s: %s" % [odd, r]).is_equal("input 2 is not understood")
+
+
+## ---- the step path folds a joined hero whatever the header's search knob says ----
+## "Host" (3 one-wound models, no weapon) plus a joined "Hero" with its own 12" Pistol, a foe at 16"; the placement carries
+## the table's chain (host models, then the hero). The header's `hero_attach` is the AI preset's search knob (OFF for the
+## legacy kriegsherr grade), while at the table the hero moves and fires with its host in EVERY seat's activation.
+func _fold_handle(core: Object) -> int:
+	var at := func(x: float) -> Vector3: return Vector3(x * IN2M, 0, 0)
+	var host := _unit(2, [0.0, 1.0, 2.0].map(at), "Host")
+	var hero := _unit(2, [0.5].map(at), "Hero")
+	var foe := _unit(1, [16.0].map(at), "Foe")
+	host.unit_properties["attached_heroes"] = [hero]
+	hero.unit_properties["attached_to"] = host
+	for u in [host, hero, foe]:
+		(u as GameUnit).unit_properties["game_system"] = "gf"
+		(u as GameUnit).unit_properties["faction_folder"] = "robot_legions"
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "Pistol"
+	w.range_value = 12
+	w.attacks = 1
+	w.count = 1
+	hero.source_type = "opr"
+	hero.source_data = OPRApiClient.OPRUnit.new()
+	(hero.source_data as OPRApiClient.OPRUnit).weapons.append(w)
+	host.source_type = "opr"
+	host.source_data = OPRApiClient.OPRUnit.new()
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Host": host, "Hero": hero, "Foe": foe}
+	var state := BattleSim.capture(army, func() -> Array: return [], func(_i: int) -> int: return 0, 1, 4)
+	var head: Dictionary = AiActRecorder._header_line(state, Callable())
+	(head["knobs"] as Dictionary)["hero_attach"] = false
+	assert_bool(core.set_game_header(head)).override_failure_message("set_game_header: " + str(core.last_error())).is_true()
+	return core.capture_plain(BattleSim.state_to_plain(state))
+
+
+func test_the_step_path_folds_a_joined_hero_whatever_the_headers_search_knob_says() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var h := _fold_handle(core)
+	var placed := [4.0, 5.0, 6.0, 4.5].map(func(x: float) -> Vector3: return Vector3(x * IN2M, 0, 0))
+	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": placed},
+		{"t": "intent", "kind": AiDecision.Action.ADVANCE, "shoot": "Foe"}]
+	var r: Dictionary = core.step_activation(h, "Host", t, false)
+	assert_str("%s %s" % [r.get("step"), r.get("kind")]).override_failure_message(
+		"the hero's own pistol must fire from the placed chain: %s" % [r]).is_equal("need_roll attack")
+	assert_int(int(r.get("faces", 0))).is_equal(1)
