@@ -51,7 +51,7 @@ func after_test() -> void:
 ## One run on fresh units. `rifle`: the bearer also carries a Rifle and shoots after the Advance (Fire), else it ends its
 ## activation (End). `core_run`: flag on, the Start/drop/Fire/End doors; else the table's own path. Returns what the comparison
 ## reads plus how many strike sentences stood before the Fire/End and in all.
-func _run(s: int, rifle: bool, core_run: bool) -> Dictionary:
+func _run(s: int, rifle: bool, core_run: bool, foe_rules := []) -> Dictionary:
 	var att := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Att", "models": 10, "x_in": 0.0}), STRAFE_GUN)
 	if rifle:
 		var w := OPRApiClient.OPRWeapon.new()
@@ -60,7 +60,7 @@ func _run(s: int, rifle: bool, core_run: bool) -> Dictionary:
 		w.attacks = 1
 		w.count = 10
 		(att.source_data as OPRApiClient.OPRUnit).weapons.append(w)
-	var foe := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Def", "models": 20, "x_in": 3.0}), RIFLE.merged({"count": 20}, true))
+	var foe := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Def", "models": 20, "x_in": 3.0, "rules": foe_rules}, true), RIFLE.merged({"count": 20}, true))
 	for i in foe.models.size():   # a uniform lattice ties the casualty order on a float's last bit: nudge each model
 		(foe.models[i] as ModelInstance).node.global_position.z += float((i * 7) % 5) * 0.0001
 	foe.is_activated = true   # the AI has nothing left to do: no reply, in either run
@@ -100,7 +100,7 @@ func _run(s: int, rifle: bool, core_run: bool) -> Dictionary:
 	rest.sort()
 	var out := {"survivors": survivors, "shaken": foe.is_shaken, "rng": _main._tray_rng.state, "lines": rest, "at_drop": at_drop,
 		"strikes": lines.filter(func(l: String) -> bool: return l.contains("passes over Def")).size(),
-		"core_unit": CoreActivation.is_core_unit(_main, att)}
+		"core_unit": CoreActivation.is_core_unit(_main, att), "table_struck": CoreActivation.table_struck(att)}
 	CoreActivation.close_session(_main, att.unit_id)
 	for u in [att, foe, spare]:
 		_main.opr_army_manager.game_units.erase((u as GameUnit).unit_id)
@@ -110,20 +110,23 @@ func _run(s: int, rifle: bool, core_run: bool) -> Dictionary:
 	return out
 
 
-func _sweep(name: String, rifle: bool) -> void:
+func _sweep(name: String, rifle: bool, foe_rules := []) -> void:
 	var seeds := int(OS.get_environment("NML_ONE_CORE_SEEDS")) if OS.has_environment("NML_ONE_CORE_SEEDS") else 20
-	await _run(0, rifle, false)   # warm-up: the AI's first turn of a game says its opening line once, in whichever run is first
+	var table_strikes: bool = not foe_rules.is_empty()   # a crossed enemy that is no plain target: the drop hands the strike to the table
+	await _run(0, rifle, false, foe_rules)   # warm-up: the AI's first turn of a game says its opening line once, in whichever run is first
 	var bad: Array = []
 	var hurt := 0
 	for s in seeds:
-		var table := await _run(s, rifle, false)
-		var core := await _run(s, rifle, true)
+		var table := await _run(s, rifle, false, foe_rules)
+		var core := await _run(s, rifle, true, foe_rules)
 		hurt += 20 - (core["survivors"] as Array).size()
 		if not core["core_unit"] or table["core_unit"]:
 			bad.append("seed %d: core unit: core run %s, table run %s" % [s, core["core_unit"], table["core_unit"]])
 		# The strike moved from the drop to the Fire / End: none at the drop in the core run, one in all in both.
-		if int(table["at_drop"]) != 1 or int(core["at_drop"]) != 0 or int(table["strikes"]) != 1 or int(core["strikes"]) != 1:
+		if int(table["at_drop"]) != 1 or int(core["at_drop"]) != (1 if table_strikes else 0) or int(table["strikes"]) != 1 or int(core["strikes"]) != 1:
 			bad.append("seed %d: strikes at the drop / in all: table %d/%d, core %d/%d" % [s, table["at_drop"], table["strikes"], core["at_drop"], core["strikes"]])
+		if core["table_struck"] != table_strikes:
+			bad.append("seed %d: the drop handed the strike to the table: %s (want %s)" % [s, core["table_struck"], table_strikes])
 		for k in ["survivors", "shaken", "rng", "lines"]:
 			if table[k] != core[k]:
 				bad.append("seed %d: %s: table %s, core %s" % [s, k, table[k], core[k]])
@@ -142,3 +145,11 @@ func test_a_human_strafe_bearer_strikes_with_its_fire() -> void:
 ## the drop AND the core at the End (two strike sentences).
 func test_a_human_strafe_bearer_strikes_with_its_end() -> void:
 	await _sweep("end", false)
+
+
+## P4.D-37c: every enemy the drop's legs cross must be a plain target. A crossed Regeneration unit (the slice does not list the
+## rule) hands the strike to the table at the drop, and the activation's End is the table's too: ONE strike, the table's own run
+## (survivors, RNG, lines). RED (the flag dropped from `drop_refused`): the core strikes the Regeneration unit at the End, after
+## the table's strike at the drop; or without the table's strike, a strike the table never made.
+func test_a_crossed_enemy_with_an_unsupported_rule_hands_the_strike_to_the_table() -> void:
+	await _sweep("end, crossed Regeneration", false, ["Regeneration"])
