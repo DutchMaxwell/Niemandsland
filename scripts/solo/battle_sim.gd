@@ -80,9 +80,9 @@ static func hero_fold_enabled() -> bool:
 ## core/nml_core.gdextension.in by core/install_gdextension.sh, only when the
 ## .so is built). Rule R1 — the library is OPTIONAL: if it is missing or failed
 ## to load the class does not exist and this returns false, so the GDScript
-## path runs unchanged. Rule R2 — DEFAULT OFF: without NML_CORE=1 nothing here
-## is even asked. One warning, once, when the seam was ASKED for and the
-## library is absent; never an error, never a warning on the default path.
+## path runs unchanged. Rule R2 — wanted unless NML_CORE=0 (every build, see core_wanted).
+## One warning, once, when the seam was ASKED for and the library is absent; never an
+## error, never a warning on a checkout without the built crate when nothing asked.
 static var _core_env := -1
 static func core_enabled() -> bool:
 	if _core_env < 0:
@@ -95,15 +95,12 @@ static func core_enabled() -> bool:
 	return _core_env == 1
 
 
-## The switch as a pure function (ship path 22.09.): a RELEASE build wants the core
-## unless NML_CORE=0 says otherwise; a debug build keeps the explicit NML_CORE=1, so
-## every measurement stays a deliberate switch and the tests' default path is unchanged.
-static func core_wanted(env: String, debug_build: bool) -> bool:
-	if env == "1":
-		return true
-	if env == "0":
-		return false
-	return env.is_empty() and not debug_build
+## The switch as a pure function (ship path 22.09., P4.D-68): every build wants the core
+## unless NML_CORE=0 says otherwise - release builds since 22.09., debug builds and the
+## test binary since P4.D-68, so the tests play the path the player's game plays. "1" asks
+## explicitly; any other value is not a switch. `debug_build` stays in the signature for the callers.
+static func core_wanted(env: String, _debug_build: bool) -> bool:
+	return env.is_empty() or env == "1"
 
 ## NML-1072: wall-clock profile of the trainer path — env-gated NML_PROFILE=1
 ## (unset = byte-identical: the hot path pays exactly one cached bool check,
