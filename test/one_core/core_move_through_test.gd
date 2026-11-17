@@ -247,17 +247,19 @@ func test_a_refused_core_call_leaves_the_strafe_to_the_table_once() -> void:
 	assert_array(bad).override_failure_message("fallback vs table:\n" + "\n".join(bad.slice(0, 6))).is_empty()
 
 
-## The human door keeps a move-through bearer on the table: its drop is struck at the drop (`_solo_human_strafing`), so a core End
-## would strike twice. The slice takes the unit (`is_plain`), the core UNIT predicate does not. RED: drop `not moves_through`
-## from `is_core_unit` -> the human bearer is a core unit.
-func test_the_human_door_keeps_a_move_through_bearer_on_the_table() -> void:
+## The human door (P4.D-37b): a Strafing bearer is a core unit (its strike comes with the activation's Fire / End), a Crossing
+## Attack bearer stays on the table (the table never rolled that rule for a human unit; the core would). The slice takes both
+## (`is_plain`). RED: drop the Crossing Attack clause from `is_core_unit` -> the human Crossing Attack bearer is a core unit.
+func test_the_human_door_takes_a_strafe_bearer_but_not_a_crossing_attack_bearer() -> void:
 	_main.solo_ai_slots = {2: true}
-	var bearer := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Bearer", "models": 2, "x_in": 0.0}), STRAFE_GUN)
+	var strafer := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Strafer", "models": 2, "x_in": 0.0}), STRAFE_GUN)
+	var crosser := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Crosser", "models": 2, "x_in": 10.0, "rules": ["Crossing Attack(2)"]}, true), RIFLE)
 	var plain := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Plain", "models": 2, "x_in": 20.0}), RIFLE)
-	assert_bool(CoreActivation.is_plain(bearer)).override_failure_message("the slice no longer takes the bearer").is_true()
+	assert_bool(CoreActivation.is_plain(crosser)).override_failure_message("the slice no longer takes the Crossing Attack bearer").is_true()
 	assert_bool(CoreActivation.is_core_unit(_main, plain)).override_failure_message("a plain human unit is not a core unit").is_true()
-	assert_bool(CoreActivation.is_core_unit(_main, bearer)).override_failure_message("the human bearer is a core unit").is_false()
-	_free([bearer, plain])
+	assert_bool(CoreActivation.is_core_unit(_main, strafer)).override_failure_message("the human Strafing bearer is no core unit").is_true()
+	assert_bool(CoreActivation.is_core_unit(_main, crosser)).override_failure_message("the human Crossing Attack bearer is a core unit").is_false()
+	_free([strafer, crosser, plain])
 
 
 ## A refused core call pays the move-through attacks on the table BEFORE the volley, which was aimed earlier: a target the strafe
