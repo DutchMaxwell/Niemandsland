@@ -289,13 +289,13 @@ func test_rollout_intent_is_executed_not_rederived() -> void:
 
 
 ## NML-1073 M2-5 (R1 + R2): the SEARCH SEAM is never load-bearing.
-## R2 — without NML_CORE=1 BattleSim.core_enabled() is false, _planner_pick_unit
-## never touches _core_plan (the NmlCore node stays null) and the pick is the
-## GDScript one this suite already pins.
+## R2 — with the core not wanted (NML_CORE=0) or not loaded BattleSim.core_enabled() is
+## false, _planner_pick_unit never touches _core_plan (the NmlCore node stays null) and
+## the pick is the GDScript one this suite already pins.
 ## R1 — the seam's own decline log is one line per REASON per game, so a corpus
 ## of 200 activations that all decline for the same reason says so ONCE.
 func test_core_seam_stays_off_and_declines_once_per_reason() -> void:
-	var want := OS.get_environment("NML_CORE") == "1"
+	var want := BattleSim.core_wanted(OS.get_environment("NML_CORE"), OS.is_debug_build())
 	assert_bool(BattleSim.core_enabled()).is_equal(want and ClassDB.class_exists("NmlCore"))
 	var sc := _controller()
 	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
