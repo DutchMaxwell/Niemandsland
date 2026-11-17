@@ -92,7 +92,7 @@ static func is_lifecycle_unit(main, gu: GameUnit) -> bool:
 
 ## (2) A lifecycle unit whose shot, End and digest resolve in the core.
 static func is_core_unit(main, gu: GameUnit) -> bool:
-	return is_lifecycle_unit(main, gu) and is_plain(gu) and not moves_through(gu)
+	return is_lifecycle_unit(main, gu) and is_plain(gu) and not CoreSlice.carries(gu, ["Crossing Attack"])
 
 
 ## (3) Equal to (2) for now; step 82 widens it by movement rule.
@@ -368,7 +368,9 @@ static func _dangerous_mismatch(unit: GameUnit, dice: int, why: String) -> void:
 
 ## P4.D-37: the activation_level group (core_slice_allow.json): a unit whose rules fire when it moves through an enemy
 ## (a Strafing weapon, Crossing Attack). The core's activation resolves them from the trails it is handed, in its
-## pre-attack slots; the human door still resolves them on the table (`_solo_human_strafing`), so it never takes such a unit.
+## pre-attack slots. The AI door takes both. The human door takes a Strafing bearer (P4.D-37b: its strike moves from the drop to
+## the activation's Fire / End, `_solo_human_strafing` leaves it to the core); a Crossing Attack bearer stays on the table there,
+## which never rolled that rule for a human unit (the core would).
 const MOVE_THROUGH := ["Strafing", "Crossing Attack"]
 
 
