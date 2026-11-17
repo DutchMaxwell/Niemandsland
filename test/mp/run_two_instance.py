@@ -401,7 +401,6 @@ class Run:
         env["XDG_DATA_HOME"] = str(xdg)
         if self.one_core:
             env["NML_ONE_CORE_ACTIVATION"] = "1"
-            env["NML_ONE_CORE_CHOICE_WOUND_ALLOC"] = "1"   # P4.D-25: the choice goes to the owner's click
         cmd = shlex.split(self.args.godot) + [
             "--headless",
             "--path",
@@ -1332,7 +1331,7 @@ class Run:
         self._wound_alloc_phase()
 
     def _wound_alloc_phase(self) -> None:
-        """P4.D-25 (the wound-allocation choice, NML_ONE_CORE_CHOICE_WOUND_ALLOC=1 on both peers): the host shoots the guest's three
+        """P4.D-25 (the wound-allocation choice, the switch at its default - ON since P4.D-27): the host shoots the guest's three
         plain models with two loadouts. The core asks the wound allocation of the OWNER, the guest clicks the last model (the
         prompt previews, the core lands), and both tables end with that model dead. The automatic order takes the first models
         first: an answer routed to the host (which answers automatic) leaves the last model alive and the wait times out."""
