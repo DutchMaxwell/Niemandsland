@@ -52,3 +52,29 @@ func test_a_split_aim_rides_the_intent_and_no_target_sends_no_shoot() -> void:
 	assert_dict(t[2]).is_equal({"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": "b", "split": aim})
 	assert_dict(CoreActivation.ai_transcript(StubMain.new(), a, {"action": AiDecision.Action.HOLD}, null)[2]) \
 		.is_equal({"t": "intent", "kind": AiDecision.Action.HOLD})
+
+
+func _shot(member: GameUnit, weapon: String) -> Dictionary:
+	return {"member": member, "profile": {"name": weapon}}
+
+
+## C-17: `split_aim` is the aim `sim.rs split_plan` reads: the member's NAME (the core finds it by name), the weapon, the target's key,
+## the groups in the table's order; one group has none. RED: send the member's unit id and the core drops every weapon.
+func test_the_split_aim_names_member_weapon_and_target_key_in_group_order() -> void:
+	var a := _unit("a", [Vector3.ZERO])
+	var b := _unit("b", [Vector3.ZERO])
+	var c := _unit("c", [Vector3.ZERO])
+	var parts := [{"target": b, "shots": [_shot(a, "Rifle")]}, {"target": c, "shots": [_shot(a, "Lance"), _shot(a, "Pistol")]}]
+	assert_array(CoreActivation.split_aim(parts)).is_equal([{"member": "a", "weapon": "Rifle", "target": "b"},
+		{"member": "a", "weapon": "Lance", "target": "c"}, {"member": "a", "weapon": "Pistol", "target": "c"}])
+	assert_array(CoreActivation.split_aim(parts.slice(0, 1))).is_empty()
+
+
+## One (member, weapon) named for two targets is what the core pools (`split_weapon_reaimed`); the door refuses it. The same weapon twice at
+## ONE target is no re-aim.
+func test_an_aim_naming_one_weapon_for_two_targets_is_ambiguous() -> void:
+	var one := {"member": "a", "weapon": "Gun", "target": "b"}
+	assert_bool(CoreActivation._aim_ambiguous([one, {"member": "a", "weapon": "Gun", "target": "c"}])).is_true()
+	assert_bool(CoreActivation._aim_ambiguous([one, one])).is_false()
+	assert_bool(CoreActivation._aim_ambiguous([one, {"member": "a", "weapon": "Lance", "target": "c"}])).is_false()
+	assert_bool(CoreActivation._aim_ambiguous([])).is_false()

@@ -4996,13 +4996,12 @@ func _run_ai_shooting(report: Dictionary) -> void:
 	# Indirect (wave 5): "-1 to hit rolls when shooting after moving" — the activation's action says
 	# whether this unit moved before firing (HOLD = it did not).
 	var moved: bool = bool(report.get("moved", false))
-	# One-core P3 step 42 (flag on): the volley at the table's ONE pick resolves in the core when both units are plain.
-	# P4.D-19: that one call also takes the activation's Dangerous test when the body left it to the core.
-	if order.size() == 1:
-		if await _solo_ai_core_call(unit, report, groups[order[0]]["target"], groups[order[0]]["shots"]):
-			return
-	else:
-		await _solo_pay_dangerous(unit, report)   # a split volley is the table's: its test comes first, as in the body
+	# One-core P3 step 42 (flag on): the volley at the table's pick resolves in the core when the units are plain; split fire (P4.D-14)
+	# rides along as the further groups, each its own target. P4.D-19: that one call also takes the activation's Dangerous test when
+	# the body left it to the core; a refused call pays it here, so the test still comes first.
+	var parts: Array = order.map(func(id) -> Dictionary: return groups[id])
+	if await _solo_ai_core_call(unit, report, parts[0]["target"], parts[0]["shots"], parts.slice(1)):
+		return
 	if _solo_activation_unit_gone(unit):   # the test just paid took the last model: no volley
 		return
 	var why: PackedStringArray = []   # P4.D-3 census: why this volley stays on the table beyond the units' own rules
@@ -5030,14 +5029,15 @@ func _solo_log_no_volley(unit: GameUnit, report: Dictionary, why: String) -> voi
 		unit.get_name(), why, hold_note], true)
 
 
-## One core P4.D-19: the core's one call for this AI activation: the volley at `target` (null = none), and the Dangerous
+## One core P4.D-19: the core's one call for this AI activation: the volley at `target` (null = none; `rest` = split fire's further
+## groups, P4.D-14), and the Dangerous
 ## test the body left to the core (`report["core_dangerous"]` = its dice, an end morale from its wounds included). True =
 ## the core took the activation. Anything else (no board, a refused call) leaves the table to resolve the volley, and
 ## pays an owed test first, on the table, so a refusal costs nothing but the old order.
-func _solo_ai_core_call(unit: GameUnit, report: Dictionary, target: GameUnit, shots: Array) -> bool:
+func _solo_ai_core_call(unit: GameUnit, report: Dictionary, target: GameUnit, shots: Array, rest: Array = []) -> bool:
 	var owed := report.has("core_dangerous") or report.has("core_through")
 	if _solo_core_ai_h != 0 and (target != null or owed) \
-			and await CoreActivation.run_ai(self, unit, report, target, _solo_core_ai_h, shots, owed):
+			and await CoreActivation.run_ai(self, unit, report, target, _solo_core_ai_h, shots, owed, rest):
 		if report.erase("core_dangerous"):
 			report["core_took_dangerous"] = true
 		report.erase("core_through")
