@@ -1,0 +1,26 @@
+{
+  "schema": "nml-core-slice-v1",
+  "door": "shoot",
+  "mode": "deny",
+  "note": "C-15 (deny by evidence): read only with NML_CORE_SLICE=deny. A unit carrying a listed primitive (unit or weapon rule) stays on the table; every other rule the registry automates goes to the core. Unknown or unautomated rules stay refused in both modes. Measured in the 24-game shadow soak of 17.11. (wave1116/shadow_soak_C6.md); the list only shrinks.",
+  "groups": {
+    "wound_ignore_by_name": {
+      "primitives": ["Regeneration", "Self-Repair", "Resistance"],
+      "kind": "table_ahead",
+      "why": "#2595: each differently named wound-ignore rule rolls on its own and a bypass skips only Regeneration; the core rolls one family (slice design 1a). Measured: 5 soak mismatches (Self-Repair vs Unstoppable / Rending).",
+      "leaves_with": "C-R1"
+    },
+    "measured_never_equal": {
+      "primitives": ["Caster", "Tear", "Guarded"],
+      "kind": "measured",
+      "why": "Caster Group, Tear, Guarded: no volley with them replayed equal in the shadow soak (casts are cut from the replay).",
+      "leaves_with": "a shadow re-soak that shows them equal"
+    },
+    "ledger_not_round_tripped": {
+      "primitives": ["Piercing Tag", "Vengeance", "Teleport", "Infiltrate"],
+      "kind": "ledger",
+      "why": "Their marker pools / once-per-game stamps do not come back from the core's delta yet (slice design 1d).",
+      "leaves_with": "C-12 / C-13 and the activation-level steps"
+    }
+  }
+}

@@ -267,6 +267,28 @@ func test_a_missing_or_malformed_file_is_the_empty_slice() -> void:
 	assert_bool(CoreSlice.takes(_unit([], [[]]))).override_failure_message("a plain unit must stay taken").is_true()
 
 
+## C-15: env NML_CORE_SLICE=deny reads the measured deny-list file instead of the shipped allowlist; unset, the shipped
+## file as before. The deny file refuses its listed primitives (a wound-ignore target, a Tear weapon) and takes a unit whose
+## rules are automated and not listed (AP, Tough); an unknown name stays refused. The list only shrinks: CEILING.
+## RED: read PATH regardless of the switch -> the first assertion reads mode "allow".
+const DENY_CEILING := 10
+
+
+func test_the_deny_switch_reads_the_measured_deny_list() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	assert_str(str(CoreSlice.config()["mode"])).is_equal("deny")
+	assert_array(CoreSlice.refusals(_unit(["Regeneration"], [["AP(1)"]]))).is_equal(["unit_rule:Regeneration"])
+	assert_array(CoreSlice.refusals(_unit(["Tough(3)"], [["Tear"]]))).is_equal(["weapon_rule:Tear"])
+	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
+	assert_array(CoreSlice.refusals(_unit(["No Such Rule"], []))).is_equal(["unit_rule:No Such Rule"])
+	assert_int((CoreSlice.config()["primitives"] as Dictionary).size()).override_failure_message(
+		"the deny list only shrinks (ceiling %d)" % DENY_CEILING).is_less_equal(DENY_CEILING)
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+	assert_str(str(CoreSlice.config()["mode"])).is_equal("allow")
+
+
 ## `applies` reads only these two members (the census test's stub).
 class _StubMain extends RefCounted:
 	var solo_ai_slots := {1: true}
