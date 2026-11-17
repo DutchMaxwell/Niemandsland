@@ -35,7 +35,7 @@ use crate::acts::{
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
     EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_75_TABLE_FIXES,
-    EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_79_EV_MOVED_ROUND, EPOCH_83_LONE_HERO_TARGET,
+    EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_79_EV_MOVED_ROUND, EPOCH_83_LONE_HERO_TARGET, EPOCH_88_SPLIT_LONE_HERO,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::landing::{LandedModel, Landing};
@@ -8473,6 +8473,9 @@ fn split_plan(
             marks.push("split_unknown_target");
             continue;
         };
+        // EPOCH_88_SPLIT_LONE_HERO: a split group aimed at a host with no models left is shot as its living joined hero, as
+        // the one-target volley is from EPOCH_83_LONE_HERO_TARGET (the table: `_solo_defense_holder` for every group).
+        let ti = if rule_on(seams.rules_epoch, EPOCH_88_SPLIT_LONE_HERO) { lone_hero_of(state, ti, seams).unwrap_or(ti) } else { ti };
         // B11 (main.gd:4098-4104): the table measures shooting range base-EDGE
         // to base-edge — the centre-space equivalent subtracts BOTH base radii
         // from every pair distance. The group exists because the TABLE's own
@@ -10439,6 +10442,10 @@ fn resolve_with(
                         }];
                         let gs: &[SplitGroup] = plan.as_deref().unwrap_or(&pooled);
                         for (gi, g) in gs.iter().enumerate() {
+                            if plan.is_some() && next.roster.index.get(g.key.as_str()).is_some_and(|&k| k != g.ti) {
+                                shot.log.push(format!("Hero: {} is the unit now — shots from {} at {} are measured and saved as the hero",
+                                    statics[next.roster.profile[g.ti]].name, statics[pi_s].name, g.key));
+                            }
                             // main.gd:3042 — the Mark is picked and recorded
                             // BEFORE this group's profiles and contexts are
                             // read (:3082), so the grant reaches this volley.

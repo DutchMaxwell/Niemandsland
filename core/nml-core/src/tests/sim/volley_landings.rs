@@ -111,3 +111,29 @@ use super::*;
         let (_, old) = run(crate::acts::EPOCH_82_IGNORE_BY_NAME);
         assert!(!old.rolls.iter().any(|r| r.kind == "defense" && r.target == 3), "82 replays the old reading: {:?}", old.rolls);
     }
+
+    /// EPOCH_88_SPLIT_LONE_HERO (wide-gate prep soak: Organ Tank -> Blood Battle Brothers, a split volley): a split group aimed at
+    /// "b", whose own models are gone while its joined hero "bh" (Defense 3+) lives, saves on the hero's Defense from 88; at 87
+    /// the record replays the host's (RED: drop the split redirect -> the 88 run saves at the host's 6+).
+    #[test]
+    fn a_split_group_at_a_host_with_no_models_is_saved_as_its_lone_hero() {
+        let (mut st, mut statics) = volley_line();
+        (st.positions[2], st.wounds[2], st.alive[2]) = (vec![], vec![], 0);
+        Rc::make_mut(&mut st.radii)[2] = vec![];
+        (st.positions[3], st.wounds[3], st.alive[3]) = (vec![[12.0 * IN2M, 0.0, 0.0]], vec![1], 1);
+        Rc::make_mut(&mut st.radii)[3] = vec![IN2M];
+        (statics[2].ctx.defense, statics[3].ctx.defense, statics[3].model_count, statics[3].wounds_max) = (6, 3, 1, vec![1]);
+        // The recorded key names the hero, the aim names the empty host: `split_plan` builds a group for "b".
+        let aim = vec![crate::io::SplitShot { member: "a".into(), weapon: "rifle".into(), target: "b".into() }];
+        let action = Action {
+            kind: HOLD, unit: "a".into(), dest: None, shoot: Some("bh".into()), charge: None,
+            patient: false, split: Some(aim), traced: None, teleport: None,
+        };
+        let saves = |epoch: u32| {
+            let seams = Seams { rules_epoch: epoch, tray_exact: true, hero_attach: true, ..Seams::default() };
+            let (_, shot) = resolve_stochastic_tray_on_board(&statics, &st, &action, &Terrain::default(), seams, &mut GodotRng::new(0), &mut Tray::seeded(3)).unwrap();
+            shot.rolls.iter().filter(|r| r.kind == "defense").map(|r| r.target).collect::<Vec<_>>()
+        };
+        assert_eq!(saves(crate::acts::EPOCH_88_SPLIT_LONE_HERO), vec![3], "the hero's Defense 3+");
+        assert!(!saves(crate::acts::EPOCH_87_WALKED_DANGEROUS).contains(&3), "87 replays the host group");
+    }

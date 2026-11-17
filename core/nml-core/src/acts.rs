@@ -925,7 +925,12 @@ pub const EPOCH_86_VOLLEY_HEIGHT_REACH: u32 = 86;
 /// epoch (the core has nothing to change: its landing already reads the walked trail); records stamped 86 or below replay the planned-route count.
 /// The recorder mirror stamps 87 with it.
 pub const EPOCH_87_WALKED_DANGEROUS: u32 = 87;
-pub const CURRENT_RULES_EPOCH: u32 = 87;
+/// Split fire at a lone hero (S1 wide-gate prep): a split-fire group aimed at a host with no models left while a joined hero
+/// lives is shot as that hero (`split_plan`), as the one-target volley is from `EPOCH_83_LONE_HERO_TARGET` and as the table
+/// does for every group (`_solo_defense_holder`). Records stamped 87 or below replay byte-exact. Every call site reads THIS
+/// constant, not `88`. The recorder mirror (`act_recorder.gd`) stamps 88 in the same change.
+pub const EPOCH_88_SPLIT_LONE_HERO: u32 = 88;
+pub const CURRENT_RULES_EPOCH: u32 = 88;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2244,7 +2249,7 @@ mod tests {
         EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_73_V36,
         EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT, EPOCH_79_EV_MOVED_ROUND, EPOCH_80_ROLLOUT_CUMBERSOME,
         EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME, EPOCH_83_LONE_HERO_TARGET, EPOCH_84_IGNORE_GROUPS, EPOCH_85_INDIRECT_GATE,
-        EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_87_WALKED_DANGEROUS,
+        EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_87_WALKED_DANGEROUS, EPOCH_88_SPLIT_LONE_HERO,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2265,7 +2270,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 87, "the live epoch is EPOCH_87_WALKED_DANGEROUS");
+        assert_eq!(CURRENT_RULES_EPOCH, 88, "the live epoch is EPOCH_88_SPLIT_LONE_HERO");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2275,11 +2280,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":87}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":88}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 87"
+            "a fresh play_game() now stamps the bumped epoch, 88"
         );
     }
 
@@ -2404,6 +2409,15 @@ mod tests {
         assert!(rule_on(EPOCH_87_WALKED_DANGEROUS, EPOCH_87_WALKED_DANGEROUS), "a record at 87 counts the walked route");
         assert!(rule_on(EPOCH_87_WALKED_DANGEROUS, EPOCH_86_VOLLEY_HEIGHT_REACH), "87 keeps the volley height reach on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_87_WALKED_DANGEROUS), "a fresh play_game() stamps it on");
+    }
+
+    /// Epoch 88 (S1): a record stamped 87 replays the split group at the empty host, a fresh record shoots its lone hero.
+    #[test]
+    fn epoch_88_gate_is_closed_at_epoch_87_and_open_from_88() {
+        assert!(!rule_on(EPOCH_87_WALKED_DANGEROUS, EPOCH_88_SPLIT_LONE_HERO), "a record at 87 replays the host group");
+        assert!(rule_on(EPOCH_88_SPLIT_LONE_HERO, EPOCH_88_SPLIT_LONE_HERO), "a record at 88 shoots the lone hero");
+        assert!(rule_on(EPOCH_88_SPLIT_LONE_HERO, EPOCH_87_WALKED_DANGEROUS), "88 keeps the walked-route count on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_88_SPLIT_LONE_HERO), "a fresh play_game() stamps it on");
     }
 
     /// The WAVE 3 GATE's own reservation (05.09.): `EPOCH_6_TABLE_RULES` must
