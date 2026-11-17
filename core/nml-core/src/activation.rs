@@ -412,6 +412,17 @@ pub struct UnitDelta {
     /// P4.D-38a: the once-per-game feat latches this activation SPENT (inventory class (a)): the names `State::feats_used`
     /// gained, in the order they were spent. `land_delta` closes the table's flag for each, so the next capture sends it back.
     pub feats_used: Vec<String>,
+    /// C-11: the once-per-game name lists this activation SPENT (inventory class (a)), the `feats_used` shape: the names
+    /// `State::limited_used` / `storm_used` / `precision_used` gained, in the order they were spent. `land_delta` closes the
+    /// table's latch for each (the weapon through `mark_limited_used`, the other two through their flag).
+    pub limited_used: Vec<String>,
+    pub storm_used: Vec<String>,
+    pub precision_used: Vec<String>,
+}
+
+/// The names `after` holds that `before` did not, in `after`'s order.
+fn gained(before: &[String], after: &[String]) -> Vec<String> {
+    after.iter().filter(|n| !before.contains(n)).cloned().collect()
 }
 
 /// P4.0-4f: the marker pools the inventory marks table-owned, in `State` declaration order, AFTER.
@@ -470,6 +481,9 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
             || stamps_changed || pools_changed
             || before.versatile_pick_mode[u] != after.versatile_pick_mode[u]
             || before.feats_used[u] != after.feats_used[u]
+            || before.limited_used[u] != after.limited_used[u]
+            || before.storm_used[u] != after.storm_used[u]
+            || before.precision_used[u] != after.precision_used[u]
         {
             out.push(UnitDelta {
                 key: key.clone(),
@@ -483,7 +497,10 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 stamps: stamps_of(after, u),
                 pools: pools_of(after, u),
                 versatile_pick_mode: after.versatile_pick_mode[u],
-                feats_used: after.feats_used[u].iter().filter(|n| !before.feats_used[u].contains(n)).cloned().collect(),
+                feats_used: gained(&before.feats_used[u], &after.feats_used[u]),
+                limited_used: gained(&before.limited_used[u], &after.limited_used[u]),
+                storm_used: gained(&before.storm_used[u], &after.storm_used[u]),
+                precision_used: gained(&before.precision_used[u], &after.precision_used[u]),
             });
         }
     }
@@ -1155,6 +1172,40 @@ mod tests {
         assert!(delta_of(&st, &st).is_empty(), "no spend, no row");
         let again = delta_of(&after, &after);
         assert!(again.is_empty(), "a latch that was already spent is no news: {again:?}");
+    }
+
+    /// C-11: a unit whose only change is a spent Limited weapon / Storm Attack / Precision latch gets a row naming each; a name
+    /// already spent in `before` is no news. RED: drop a term from the change test -> no row; drop a field from the push -> [].
+    #[test]
+    fn the_delta_carries_the_spent_once_lists() {
+        let (st, _) = volley_line();
+        for (field, set) in [("limited_used", 0), ("storm_used", 1), ("precision_used", 2)] {
+            let mut after = st.clone();
+            let list = match set {
+                0 => &mut after.limited_used,
+                1 => &mut after.storm_used,
+                _ => &mut after.precision_used,
+            };
+            std::rc::Rc::make_mut(list)[2].push("Spent Rule".to_string());
+            let d = delta_of(&st, &after);
+            assert_eq!(d.len(), 1, "{field}: a spend is a change: {d:?}");
+            let named = [&d[0].limited_used, &d[0].storm_used, &d[0].precision_used];
+            assert_eq!(named[set], &vec!["Spent Rule".to_string()], "{field}");
+            assert_eq!(named.iter().map(|l| l.len()).sum::<usize>(), 1, "{field}: only its own list names it");
+            assert!(delta_of(&after, &after).is_empty(), "{field}: already spent is no news");
+        }
+    }
+    /// C-11: a core-resolved volley of a Limited weapon spends it in the core's state and its delta says so (the table path
+    /// writes it through `mark_limited_used`, a core door must land it). RED: drop `limited_used` from the push -> [].
+    #[test]
+    fn a_core_limited_volley_carries_its_spend() {
+        let (st, mut statics) = volley_line();
+        statics[0].shoot[0].limited = true;
+        let (got, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], 7);
+        let ActStep::Done { state, .. } = got else { panic!("seed 7: {got:?}") };
+        assert_eq!(state.limited_used[0], vec!["rifle".to_string()], "the core spent it");
+        let d = delta_of(&st, &state);
+        assert_eq!(d.iter().find(|x| x.key == "a").map(|x| x.limited_used.clone()), Some(vec!["rifle".to_string()]), "{d:?}");
     }
 
     // ---- step 14: allowance and move check ----
