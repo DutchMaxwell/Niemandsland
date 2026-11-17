@@ -1,0 +1,342 @@
+extends RefCounted
+## One core C-7 (shadow-run slice, lane S2): the ROSTER SWEEP harness. Real army lists, every unit of every list fires one AI
+## volley at a unit of an opposing list and is the target of one, per seed, on BOTH paths:
+##   table = the old table, the AI body's own shooting (`main._run_ai_shooting`) with no core handle, kill switch OFF;
+##   core  = the one-core door minus the slice gate: the live capture (`CoreActivation.capture`) and the step driver
+##           (`CoreActivation.drive`) with the same transcript the AI door sends, so units with rules (which the shipped slice
+##           refuses) go through it too.
+## Same seed (`main.seed_tray_rng`) for both halves. Per volley the harness records the dice stream (the table's own dice tap,
+## NML_DICE_DUMP, as test/parity/parity_table.gd) and the end state of both units (alive, wounds, Shaken, Fatigued and the ledger
+## `AiActRecorder._ledger_of`). Rolls are compared by `tools/parity/parity_compare.py` (the established gate reading); state and
+## ledger here. Output: one JSONL per half (the parity files), the per-volley verdict, and the COVERAGE table (rule name x shooter /
+## target volleys), which is a gate: an uncovered rule name is red.
+##
+## Both seats are AI (the soak's setting): a human target's wound-allocation prompt is out of scope here (it stays on the table).
+## Lists: any gf / aof list JSON (the importer's own format), e.g. assets/arena_lists, test/fixtures, or a fleet directory of
+## per-faction lists (<faction>_<points>.json): pairings are a ring over the lists of one system.
+## Loaded by test/one_core/roster_sweep_test.gd and by the CLI test/one_core/roster_sweep_cli.gd, after main.tscn is up.
+
+const ParityTable := preload("res://test/parity/parity_table.gd")
+const INCH := 0.0254
+const SEAT_SHOOTER := 2
+const SEAT_TARGET := 1
+## Centre-to-centre distance of the two unit blocks in inches: inside every weapon range a list carries, outside 9" (the rules
+## that gate on it are exercised), before terrain exists.
+const DISTANCE_IN := 14.0
+const ROW := 5
+
+
+## The units of one list file: [{"unit": OPRUnit, "faction": "<registry key>", "system": "gf"|"aof"}] and the list's name.
+static func load_list(path: String) -> Dictionary:
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if not data is Dictionary:
+		return {}
+	var client := OPRApiClient.new()
+	var army: OPRApiClient.OPRArmy = client.build_army_offline(data as Dictionary)
+	client.free()
+	if army == null:
+		return {}
+	var units: Array = []
+	for u in army.units:
+		units.append({"unit": u, "faction": army.faction_folder, "system": army.game_system_abbrev})
+	return {"path": path, "name": str(data.get("name", path)), "system": army.game_system_abbrev, "units": units}
+
+
+## The ring of pairings over `lists` (of one system each): list i against list i+1, so every list is in two pairings.
+static func ring(lists: Array) -> Array:
+	var out: Array = []
+	if lists.size() < 2:
+		return out
+	for i in lists.size():
+		var a: Dictionary = lists[i]
+		var b: Dictionary = lists[(i + 1) % lists.size()]
+		if str(a["system"]) == str(b["system"]) and (lists.size() > 2 or i == 0):
+			out.append([a, b])
+	return out
+
+
+## Every rule name the registry map of `system` knows (the common rules and every faction's), sorted: what the coverage gate asks for.
+static func rule_names(system: String) -> Array:
+	var m := RulesRegistry.map_for(system)
+	var seen := {}
+	for n in (m.get("common", {}) as Dictionary):
+		seen[n] = true
+	for f in (m.get("factions", {}) as Dictionary):
+		for n in (m["factions"][f] as Dictionary):
+			seen[n] = true
+	var out: Array = seen.keys()
+	out.sort()
+	return out
+
+
+## One real unit on the table: the importer's own `create_from_opr_unit` over fresh model nodes in `ROW`-wide ranks, centred on
+## (`x_in`, 0), registered with the table. Rules, weapons and loadouts are the list's; only the position is the harness's.
+static func spawn(main: Node, entry: Dictionary, seat: int, x_in: float) -> GameUnit:
+	var ou: OPRApiClient.OPRUnit = entry["unit"]
+	var nodes: Array[Node3D] = []
+	var step := maxf(1.4, float(maxf(ou.base_size_round, ou.base_width_mm)) / 25.4 + 0.2)
+	var n := maxi(ou.size, 1)
+	for i in n:
+		var nd := Node3D.new()
+		main.add_child(nd)
+		nd.global_position = Vector3((x_in + float(i / ROW) * step * (1.0 if seat == SEAT_TARGET else -1.0)) * INCH, 0.0,
+			(float(i % ROW) - float(mini(n, ROW) - 1) / 2.0) * step * INCH)
+		nodes.append(nd)
+	var gu := EquipmentDistributor.create_from_opr_unit(ou, nodes, seat)
+	gu.unit_properties["faction_folder"] = str(entry["faction"])
+	gu.unit_properties["network_id"] = gu.unit_id
+	main.opr_army_manager.game_units[gu.unit_id] = gu
+	return gu
+
+
+static func free_units(main: Node, units: Array) -> void:
+	for u in units:
+		main.opr_army_manager.game_units.erase((u as GameUnit).unit_id)
+		for m in (u as GameUnit).models:
+			var nd: Node = (m as ModelInstance).node
+			if nd != null and is_instance_valid(nd):
+				nd.free()
+	main.solo_controller._peeked_unit = null
+
+
+## The rule names `gu` carries, parameters stripped: unit rules, then the weapon rules of its source (what the census labels are).
+static func labels_of(gu: GameUnit) -> Array:
+	var out: Array = []
+	for r in gu.get_special_rules():
+		out.append(_rule_name(r))
+	var src := gu.source_data as OPRApiClient.OPRUnit
+	for w in src.weapons if src != null else []:
+		for r in w.special_rules:
+			out.append(_rule_name(r))
+	return out
+
+
+static func _rule_name(r: Variant) -> String:
+	return (str((r as Dictionary).get("name", "")) if r is Dictionary else str(r)).get_slice("(", 0).strip_edges()
+
+
+## What the comparison reads off the two units after the volley.
+static func state_of(att: GameUnit, tgt: GameUnit) -> Dictionary:
+	var out := {}
+	for pair in [["att", att], ["tgt", tgt]]:
+		var gu: GameUnit = pair[1]
+		var wounds: Array = gu.get_alive_models().map(func(m: ModelInstance) -> int: return m.wounds_current)
+		wounds.sort()
+		out[pair[0]] = {"alive": gu.get_alive_count(), "wounds": wounds, "shaken": gu.is_shaken, "fatigued": gu.is_fatigued,
+			"ledger": JSON.parse_string(JSON.stringify(AiActRecorder._ledger_of(gu), "", true, true))}
+	return out
+
+
+## The first part in which two `state_of` readings differ ("" = equal); a ledger difference names its keys ("att.ledger:limited_used").
+static func first_state_diff(t: Dictionary, c: Dictionary) -> String:
+	for who in ["tgt", "att"]:
+		for k in ["alive", "wounds", "shaken", "fatigued"]:
+			if t[who][k] != c[who][k]:
+				return "%s.%s" % [who, k]
+		var keys: Array = (t[who]["ledger"] as Dictionary).keys().filter(func(x: String) -> bool: return t[who]["ledger"][x] != c[who]["ledger"].get(x))
+		for x in (c[who]["ledger"] as Dictionary).keys():
+			if not (t[who]["ledger"] as Dictionary).has(x) and not keys.has(x):
+				keys.append(x)
+		if not keys.is_empty():
+			keys.sort()
+			return "%s.ledger:%s" % [who, ",".join(keys)]
+	return ""
+
+
+## One volley on one path. `core` false = the table's AI body, true = capture + step driver. Returns {"rolls", "state", ...}.
+## `opts` plants a state or a fault: "ledger" {"att"|"tgt": {property: value}} is written on both halves (a fact the table keeps);
+## the core half alone can drop properties before the capture ("core_drop": {"att"|"tgt": [property]}), edit one weapon rule of the
+## shooter for the volley ("core_edit_rule": {"from", "to"}) or swap one face of the roll stream it recorded ("core_swap_face": roll
+## index). Nothing is planted unless asked: the sweep itself never touches either half.
+static func volley(main: Node, entry_a: Dictionary, entry_b: Dictionary, seed_n: int, core: bool, dump_dir: String, opts := {}) -> Dictionary:
+	var att := spawn(main, entry_a, SEAT_SHOOTER, 0.0)
+	var tgt := spawn(main, entry_b, SEAT_TARGET, DISTANCE_IN)
+	var by := {"att": att, "tgt": tgt}
+	for who in opts.get("ledger", {}):
+		for prop in opts["ledger"][who]:
+			(by[who] as GameUnit).unit_properties[prop] = opts["ledger"][who][prop]
+	var edited: Array = []
+	if core:
+		for who in opts.get("core_drop", {}):
+			for prop in opts["core_drop"][who]:
+				(by[who] as GameUnit).unit_properties.erase(prop)
+		if opts.has("core_edit_rule"):
+			for w in (att.source_data as OPRApiClient.OPRUnit).weapons:
+				var i: int = (w.special_rules as Array).find(opts["core_edit_rule"]["from"])
+				if i >= 0:
+					w.special_rules[i] = opts["core_edit_rule"]["to"]
+					edited.append([w, i])
+	main.seed_tray_rng(seed_n)
+	if core:
+		CoreActivation.reset_all(main)   # a new game per volley: the header carries the profiles of THESE two units
+		var h := CoreActivation.capture(main)
+		var at: Array = att.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
+		var trails: Array = att.get_alive_models().map(func(_m: ModelInstance) -> Array: return [])   # the AI door's own transcript (run_ai)
+		var t: Array = [{"t": "begin"}, {"t": "placed", "positions": at, "trails": trails},
+			{"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": tgt.unit_id}]
+		var r: Dictionary = await CoreActivation.drive(main, h, att, t, true)
+		if str(r["step"]) != "done":
+			push_warning("roster sweep: the core answered %s (%s) for %s" % [r["step"], r.get("reason", ""), att.get_name()])
+			if h != 0:
+				main.solo_controller._core_node_ready().release(h)
+		for e in edited:
+			(e[0].special_rules as Array)[e[1]] = opts["core_edit_rule"]["from"]
+	else:
+		main._solo_core_ai_h = 0
+		await main._run_ai_shooting({"unit": att, "moved": false, "action": AiDecision.Action.HOLD})
+	AiDiceRecorder.close()
+	var rolls: Array = ParityTable._read_dice(dump_dir)
+	if core and opts.has("core_swap_face") and int(opts["core_swap_face"]) < rolls.size():
+		var faces: Array = rolls[int(opts["core_swap_face"])]["faces"]
+		if not faces.is_empty():
+			faces[0] = int(faces[0]) % 6 + 1
+	var out := {"rolls": rolls, "state": state_of(att, tgt),
+		"labels": {"att": labels_of(att), "tgt": labels_of(tgt)}, "names": [att.get_name(), tgt.get_name()]}
+	free_units(main, [att, tgt])
+	await main.get_tree().process_frame
+	return out
+
+
+## The AI seats, the batch tray and the dice tap, exactly as the parity gate and the soak set them.
+static func arm(main: Node, dump_dir: String) -> void:
+	main.solo_ai_slots = {1: true, 2: true}
+	main._ensure_solo_controller()
+	main.solo_controller.ai_slot = SEAT_SHOOTER
+	main.solo_controller.human_slot = SEAT_TARGET
+	main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
+	main.opr_army_manager.current_round = 1
+	main._solo_batch = true
+	main._solo_auto_saves = true
+	main._solo_fast = true
+	main._autosave_controller.set_lesson_paused(true)
+	DirAccess.make_dir_recursive_absolute(dump_dir)
+	OS.set_environment("NML_DICE_DUMP", dump_dir)
+	AiDiceRecorder._checked = false
+	AiDiceRecorder._stream = null
+	AiDiceRecorder._count = 0
+	CoreActivation._env = 0   # the table half: kill switch OFF; the core half calls the driver directly
+
+
+static func disarm(main: Node) -> void:
+	AiDiceRecorder.close()
+	OS.set_environment("NML_DICE_DUMP", "")
+	CoreActivation.reset_all(main)
+	CoreActivation._env = -1
+
+
+## One pairing (`a` shoots at `b` and `b` at `a`, unit i of one against unit i of the other, round robin over the longer list), each
+## `seeds` times. Rows: {"id", "pair", "dir", "seed", "att", "tgt", "table", "core"}; the ids are unique ints (the parity files' seed).
+static func sweep_pair(main: Node, a: Dictionary, b: Dictionary, seeds: int, dump_dir: String, first_id := 0, opts := {}) -> Array:
+	var rows: Array = []
+	var id := first_id
+	var n: int = maxi((a["units"] as Array).size(), (b["units"] as Array).size())
+	for dir in 2:
+		var shooters: Array = a["units"] if dir == 0 else b["units"]
+		var targets: Array = b["units"] if dir == 0 else a["units"]
+		for i in n:
+			for s in seeds:
+				var sh: Dictionary = shooters[i % shooters.size()]
+				var tg: Dictionary = targets[i % targets.size()]
+				var table := await volley(main, sh, tg, s, false, dump_dir, opts)
+				var core := await volley(main, sh, tg, s, true, dump_dir, opts)
+				rows.append({"id": id, "pair": "%s | %s" % [a["name"], b["name"]], "dir": dir, "seed": s,
+					"att": (table["names"] as Array)[0], "tgt": (table["names"] as Array)[1], "table": table, "core": core})
+				id += 1
+	return rows
+
+
+## The two parity files of `rows` (the format of test/parity: {"seed","epoch","def_alive","rolls"}), owner names normalised on both
+## halves ("AI (x)" -> "x") so the comparison reads kind, count, target and faces.
+static func write_parity(rows: Array, table_path: String, core_path: String) -> void:
+	for half in ["table", "core"]:
+		var f := FileAccess.open(table_path if half == "table" else core_path, FileAccess.WRITE)
+		for r in rows:
+			var v: Dictionary = r[half]
+			var rolls: Array = (v["rolls"] as Array).map(func(x: Dictionary) -> Dictionary:
+				var o := str(x["owner"])
+				return x.merged({"owner": o.substr(4, o.length() - 5) if o.begins_with("AI (") and o.ends_with(")") else o}, true))
+			f.store_line(JSON.stringify({"seed": r["id"], "epoch": AiActRecorder.rules_epoch,
+				"def_alive": (v["state"]["tgt"] as Dictionary)["alive"], "rolls": rolls}, "", true, true))
+		f.close()
+
+
+## The per-volley verdict: roll mismatches (ids from parity_compare.py) and the first state / ledger difference.
+static func verdicts(rows: Array, mismatching_ids: Array) -> Array:
+	var out: Array = []
+	for r in rows:
+		var first := "rolls" if mismatching_ids.has(r["id"]) else first_state_diff(r["table"]["state"], r["core"]["state"])
+		out.append({"id": r["id"], "pair": r["pair"], "att": r["att"], "tgt": r["tgt"], "seed": r["seed"], "first_diff": first,
+			"fired": not (r["table"]["rolls"] as Array).is_empty() or not (r["core"]["rolls"] as Array).is_empty(),
+			"labels": r["table"]["labels"]})
+	return out
+
+
+## The coverage table: per rule name, the volleys that FIRED with it on the shooter and the volleys that had it on the target.
+static func coverage(verdict_rows: Array) -> Dictionary:
+	var out := {}
+	for v in verdict_rows:
+		if not bool(v["fired"]):
+			continue
+		for side in ["att", "tgt"]:
+			var seen := {}
+			for l in (v["labels"][side] as Array):
+				seen[l] = true
+			for l in seen:
+				var e: Dictionary = out.get(l, {"att": 0, "tgt": 0})
+				e[side] = int(e[side]) + 1
+				out[l] = e
+	return out
+
+
+## The rule names `required` (the registry's, minus the "cannot occur in a volley" list) a coverage table leaves under `min_volleys`
+## on either side. Empty = covered.
+static func uncovered(cov: Dictionary, required: Array, min_volleys: int) -> Array:
+	return required.filter(func(n: String) -> bool:
+		var e: Dictionary = cov.get(n, {"att": 0, "tgt": 0})
+		return int(e["att"]) < min_volleys or int(e["tgt"]) < min_volleys)
+
+
+## The python of the parity gate (`NML_PARITY_PYTHON` / `NML_DOCTRINE_PYO3_PYTHON`), else `python3`: parity_compare.py needs only the
+## standard library.
+static func python() -> String:
+	for k in ["NML_PARITY_PYTHON", "NML_DOCTRINE_PYO3_PYTHON"]:
+		if OS.get_environment(k) != "":
+			return OS.get_environment(k)
+	return "python3"
+
+
+## Rolls and survivors through tools/parity/parity_compare.py (gate reading), then the state / ledger reading here. Returns
+## {"verdicts": [...], "roll_mismatches": n, "rc": int, "problems": [...]}; the files are left in `out_dir`.
+static func compare(rows: Array, out_dir: String) -> Dictionary:
+	DirAccess.make_dir_recursive_absolute(out_dir)
+	var table := ProjectSettings.globalize_path(out_dir.path_join("sweep_table.jsonl"))
+	var core := ProjectSettings.globalize_path(out_dir.path_join("sweep_core.jsonl"))
+	var exc := ProjectSettings.globalize_path(out_dir.path_join("sweep_exceptions.json"))
+	var res := ProjectSettings.globalize_path(out_dir.path_join("sweep_result.json"))
+	write_parity(rows, table, core)
+	var f := FileAccess.open(exc, FileAccess.WRITE)
+	f.store_string("[]")
+	f.close()
+	var rc := OS.execute(python(), [ProjectSettings.globalize_path("res://tools/parity/parity_compare.py"), "--table", table, "--core", core,
+		"--scenario", "roster_sweep", "--exceptions", exc, "--out", res], [])
+	var result: Variant = JSON.parse_string(FileAccess.get_file_as_string(res)) if FileAccess.file_exists(res) else null
+	if not result is Dictionary:
+		return {"verdicts": [], "roll_mismatches": -1, "rc": rc, "problems": ["parity_compare.py wrote no result (exit %d)" % rc]}
+	var bad: Array = (result["mismatching_seeds"] as Array).map(func(x: Variant) -> int: return int(x))
+	return {"verdicts": verdicts(rows, bad), "roll_mismatches": bad.size(), "rc": rc, "problems": result["problems"]}
+
+
+## The gate on a compare result: every mismatching volley must carry a rule name of the deny list (`deny`: rule name -> why). Returns
+## {"mismatches", "explained", "unexplained": [verdicts]}. The deny list only shrinks (a ceiling test of its own belongs with it).
+static func gate(verdict_rows: Array, deny: Dictionary) -> Dictionary:
+	var explained := 0
+	var unexplained: Array = []
+	for v in verdict_rows:
+		if str(v["first_diff"]) == "":
+			continue
+		var names: Array = (v["labels"]["att"] as Array) + (v["labels"]["tgt"] as Array)
+		if names.any(func(n: String) -> bool: return deny.has(n)):
+			explained += 1
+		else:
+			unexplained.append(v)
+	return {"mismatches": explained + unexplained.size(), "explained": explained, "unexplained": unexplained}
