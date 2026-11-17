@@ -1732,6 +1732,7 @@ mod deadly_landing;
 mod deathstrike;
 mod dest_side_arms;
 mod entrenched;
+mod v36_fab_a5;
 mod ev_live_grants;
 mod ev_move_grants;
 mod ledger_cow;
