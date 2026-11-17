@@ -3,6 +3,11 @@
   "door": "shoot",
   "mode": "deny",
   "note": "C-15 (deny by evidence): read only with NML_CORE_SLICE=deny. A unit carrying a listed primitive (unit or weapon rule) stays on the table; every other rule the registry automates goes to the core. Unknown or unautomated rules stay refused in both modes. Measured in the 24-game shadow soak of 17.11. (wave1116/shadow_soak_C6.md); the list only shrinks.",
+  "inert": {
+    "Unique": "A list-building restriction only (army book); no effect on a volley.",
+    "Army Standard Bearer": "An upgrade's own label; the rules it grants (Fear(2)) are carried and checked on their own.",
+    "Courage": "The bare base the Courage Aura expansion stamps; no map entry on either side - the +1 morale rides the aura's own Banner entry."
+  },
   "groups": {
     "wound_ignore_by_name": {
       "primitives": ["Regeneration", "Self-Repair", "Resistance"],
