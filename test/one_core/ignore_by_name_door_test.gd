@@ -98,3 +98,18 @@ func test_a_bypass_still_skips_the_regeneration_rule_at_both_epochs() -> void:
 	for epoch in [81, 82]:
 		var r := await _run(gun, regen, epoch)
 		assert_int(int(r["bad"])).override_failure_message("epoch %d: Regeneration vs Rending differs" % epoch).is_equal(0)
+
+
+## C-R1b: differently named rules roll ONE AFTER THE OTHER on the wounds still standing (the table's groups), a bypass skips only the
+## Regeneration roll and meets the rest. The soak's Plague Hauler (Plaguebound + Protected) and a Regeneration + Plaguebound unit:
+## unequal at 83 (the folded single roll), equal from 84 (`EPOCH_84_IGNORE_GROUPS`).
+func test_differently_named_rules_roll_in_sequence_from_epoch_84() -> void:
+	var rifle := _entry("Gunners", 10, [], [], "battle_brothers")
+	var hauler := _entry("Hauler", 10, ["Plaguebound", "Protected"], [], "plague_disciples", 0)
+	var medic := _entry("Daemons", 10, ["Regeneration", "Plaguebound"], [], "daemons_of_plague", 0)
+	var rending := _entry("Gunners", 10, [], ["Rending"], "battle_brothers")
+	for f in [["Plaguebound + Protected", rifle, hauler], ["Regeneration + Plaguebound", rifle, medic], ["Regeneration + Plaguebound vs Rending", rending, medic]]:
+		var old := await _run(f[1], f[2], 83)
+		assert_int(int(old["bad"])).override_failure_message("%s: epoch 83 must differ (the red leg)" % f[0]).is_greater(0)
+		var now := await _run(f[1], f[2], 84)
+		assert_int(int(now["bad"])).override_failure_message("%s: epoch 84 table and core differ" % f[0]).is_equal(0)

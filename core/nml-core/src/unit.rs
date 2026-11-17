@@ -399,6 +399,11 @@ pub struct Ctx {
     /// Regeneration (the rule itself, Medical Training, a Regeneration Buff / Aura form). A bypass skips only THAT group's roll,
     /// so a unit whose ignore rules are all other names (Self-Repair, Resistance, Plaguebound, ...) still rolls bypassed wounds.
     pub regen_named: bool,
+    /// `EPOCH_84_IGNORE_GROUPS` — the wound-ignore rules told apart by NAME, as the table's `_solo_regen_pick` groups them: slot 0 is
+    /// the group named Regeneration (0 = none), slots 1..3 the other names in the table's roll order (most generous target first, then
+    /// name; any further name folds into the last slot). Only the flat static rules are here: `Ctx::groups_valid` says when the live
+    /// legs (grants, terrain, once-per-game, distance gates) left them alone. All 0 below epoch 84.
+    pub regen_groups: [i64; 4],
     /// The DYNAMIC melee flag `BattleSim._ctx_of(su, true)` writes over the
     /// template (battle_sim.gd:705-707): a fatigued striker hits only on 6s.
     pub fatigued: bool,
@@ -732,6 +737,20 @@ impl Ctx {
     /// Does a bypass (Bane, Rending, Unstoppable, ...) skip this unit's ignore roll? From `EPOCH_82_IGNORE_BY_NAME` only a roll of the
     /// group named Regeneration is skipped, so a unit whose ignore rules carry other names still rolls the bypassed wounds. Below it
     /// (and for a unit with no roll at all, where the answer changes nothing) the bypass skips the whole folded roll, as it always did.
+    /// Do the ignore groups answer this save moment? Two or more named groups, and nothing live folded in beside them: the folded
+    /// target is still the best of the groups, no terrain / once-per-game / distance-gated entry is pending.
+    pub fn groups_valid(&self) -> bool {
+        let live: Vec<i64> = self.regen_groups.iter().copied().filter(|&t| t > 0).collect();
+        rule_on(self.rules_epoch, crate::acts::EPOCH_84_IGNORE_GROUPS)
+            && live.len() >= 2
+            && self.regeneration
+            && live.iter().copied().min() == Some(self.regen_target)
+            && self.regen_pending == 0
+            && self.regen_feat == 0
+            && self.regen_gate_over_in == 0.0
+            && self.regen_gate_charge_in == 0.0
+    }
+
     pub fn bypass_skips_ignore(&self) -> bool {
         !rule_on(self.rules_epoch, crate::acts::EPOCH_82_IGNORE_BY_NAME) || !self.regeneration || self.regen_named
     }
@@ -2975,7 +2994,7 @@ pub fn capture_reads_for_epoch(
 /// recorded flat fold replays and the tail stays zeros.
 fn regen_targets(
     reg: &mut Registries, p: &Profile, rules_epoch: u32, trace73: bool,
-) -> (i64, i64, i64, i64, f64, f64, i64, bool) {
+) -> (i64, i64, i64, i64, f64, f64, i64, bool, [i64; 4]) {
     let regen = if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
         regen_family_on(p, "Regeneration", rules_epoch)
     } else {
@@ -2998,6 +3017,23 @@ fn regen_targets(
     };
     let mut picked = (base, base, 0i64, 0i64);
     let mut feat = 0i64;
+    // EPOCH_82_IGNORE_BY_NAME: the flat rules by NAME (the table's groups); the Self-Repair group is kept even beside Regeneration.
+    let mut groups: Vec<(String, i64)> = Vec::new();
+    let put = |groups: &mut Vec<(String, i64)>, key: String, target: i64| {
+        if target > 0 {
+            match groups.iter_mut().find(|g| g.0 == key) {
+                Some(g) => g.1 = g.1.min(target),
+                None => groups.push((key, target)),
+            }
+        }
+    };
+    if regen || has_special_rule(&p.special_rules, "Medical Training") {
+        put(&mut groups, "Regeneration".into(), base);
+    }
+    if regen_family_on(p, "Self-Repair", rules_epoch) {
+        let t = reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Self-Repair").map_or(SELF_REPAIR_TARGET, |e| e.param_i("ignore_target", SELF_REPAIR_TARGET));
+        put(&mut groups, "Self-Repair".into(), t);
+    }
     // EPOCH_82_IGNORE_BY_NAME: does a rule of the group named Regeneration contribute to the fold (the table's `regen` group)?
     let mut named = base > 0 && (regen || has_special_rule(&p.special_rules, "Medical Training"));
     // MOR-17a (rules 3.6): the names that share Warding's distance gate.
@@ -3035,6 +3071,7 @@ fn regen_targets(
             Some(e) => e.param_i("ignore_target_spell", RESISTANCE_TARGET_SPELL),
             None => RESISTANCE_TARGET_SPELL,
         };
+        put(&mut groups, ignore_group_key(name, ""), rs);
         if rs > 0 && (picked.0 == 0 || rs < picked.0) {
             picked.0 = rs;
         }
@@ -3142,6 +3179,7 @@ fn regen_targets(
                 picked.1 = spell;
             }
             named = named || (normal > 0 && regeneration_group(&n, e.param_s("upgrades")));
+            put(&mut groups, ignore_group_key(&n, e.param_s("upgrades")), normal);
             if gated {
                 if normal > 0 {
                     warding = Some((
@@ -3167,18 +3205,51 @@ fn regen_targets(
             }
         }
     }
-    (picked.0, picked.1, picked.2, picked.3, gates.0, gates.1, feat, named)
+    let grouped = if rule_on(rules_epoch, crate::acts::EPOCH_84_IGNORE_GROUPS) { lay_out_groups(groups) } else { [0; 4] };
+    (picked.0, picked.1, picked.2, picked.3, gates.0, gates.1, feat, named, grouped)
 }
 
-/// Table `_solo_ignore_group_key`, the one question the core asks of it: does this rule belong to the group named Regeneration? An
-/// entry that upgrades another rule takes that rule's group; else the rule itself, its Aura / Buff forms (`Regeneration ...`) and
-/// Medical Training are the one group.
-pub(crate) fn regeneration_group(name: &str, upgrades: &str) -> bool {
+/// Table `_solo_ignore_group_key`: forms of ONE wound-ignore rule (an Enhanced / Boost / Aura / Buff form, an entry that upgrades
+/// another) share a key and make one roll; differently named rules keep their own key. Regeneration, its Aura / Buff forms and Medical
+/// Training are one group.
+pub(crate) fn ignore_group_key(name: &str, upgrades: &str) -> String {
     if !upgrades.is_empty() {
-        return upgrades == "Regeneration";
+        return upgrades.to_string();
     }
     let lower = name.to_lowercase();
-    lower.starts_with("regeneration") || lower == "medical training"
+    if lower.starts_with("regeneration") || lower == "medical training" {
+        return "Regeneration".into();
+    }
+    match lower.as_str() {
+        "self-repair" => return "Self-Repair".into(),
+        "resistance" => return "Resistance".into(),
+        _ => {}
+    }
+    let mut key = name.strip_prefix("Enhanced ").unwrap_or(name);
+    while let Some(k) = [" Aura", " Buff", " Boost"].iter().find_map(|suf| key.strip_suffix(suf)) {
+        key = k;
+    }
+    key.to_string()
+}
+
+/// Does this rule belong to the group named Regeneration?
+pub(crate) fn regeneration_group(name: &str, upgrades: &str) -> bool {
+    ignore_group_key(name, upgrades) == "Regeneration"
+}
+
+/// The table's roll order of the ignore groups (`_solo_regen_pick`): Regeneration first, then the most generous target, then the name;
+/// laid out as `Ctx::regen_groups` (slot 0 Regeneration, slots 1..3 the others, extras folded into the last).
+fn lay_out_groups(mut groups: Vec<(String, i64)>) -> [i64; 4] {
+    let mut out = [0i64; 4];
+    if let Some(i) = groups.iter().position(|g| g.0 == "Regeneration") {
+        out[0] = groups.remove(i).1;
+    }
+    groups.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+    for (n, g) in groups.iter().enumerate() {
+        let slot = 1 + n.min(2);
+        out[slot] = if out[slot] == 0 { g.1 } else { out[slot].min(g.1) };
+    }
+    out
 }
 
 /// The SHOOTING leg's three die params (`ap_bonus`/`hit_bonus`/`low_roll_max`)
@@ -3727,6 +3798,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         regen_gate_over_in: regen_targets.4,
         regen_gate_charge_in: regen_targets.5,
         regen_named: regen_targets.7,
+        regen_groups: regen_targets.8,
         fatigued: false,
         retaliate_hits_per_wound: retaliate_hits_per_wound(reg, p),
         death_hits_per_kill: death_hits_per_kill(reg, p),

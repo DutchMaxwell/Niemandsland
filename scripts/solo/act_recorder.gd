@@ -204,8 +204,9 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## EPOCH_80_ROLLOUT_CUMBERSOME, and a Shaken unit's auto-failed morale test keeping a once morale buff to 81 with
 ## EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, and a bypass rolling by name against a wound-ignore rule not named Regeneration to 82 with
 ## EPOCH_82_IGNORE_BY_NAME.
-## The lone hero as the shot target is stamped 83 with EPOCH_83_LONE_HERO_TARGET.
-static var rules_epoch: int = 83
+## The lone hero as the shot target is stamped 83 with EPOCH_83_LONE_HERO_TARGET, and differently named wound-ignore rules rolling one
+## after the other 84 with EPOCH_84_IGNORE_GROUPS.
+static var rules_epoch: int = 84
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -254,6 +255,9 @@ const EPOCH_82_IGNORE_BY_NAME := 82
 ## The core's frozen `EPOCH_83_LONE_HERO_TARGET` (acts.rs): a volley at a host with no models left is shot and saved as
 ## its living joined hero, as `_solo_defense_holder` does on the table. Nothing in the table gates on it.
 const EPOCH_83_LONE_HERO_TARGET := 83
+## The core's frozen `EPOCH_84_IGNORE_GROUPS` (acts.rs): the core rolls differently named wound-ignore rules one after the other, as
+## `_solo_ignore_wounds` does. Nothing in the table gates on it.
+const EPOCH_84_IGNORE_GROUPS := 84
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

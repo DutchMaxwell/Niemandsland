@@ -1881,7 +1881,7 @@ pub fn resolve_volley_leg(
             // Tray-exact S7 — the table's Takedown landing: w x max(Deadly, 1) BEFORE the
             // picked model's own Regeneration roll, all of it for that one model (the drain).
             let td = w * p.deadly.max(1);
-            out.takedown_groups.push(if ignores_regen { td } else { regen_batch(td, def, def_owner, tray, &mut out.rolls) });
+            out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, def, def_owner, tray, &mut out.rolls));
             out.deadly_tally += w;
         } else if deadly_per_model && p.deadly > 0 {
             push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, def, def_owner, tray);
@@ -1944,7 +1944,7 @@ pub fn resolve_volley_leg(
         });
     }
     out.caused = regen_proof + regenable + out.deadly_tally;
-    out.wounds = regen_proof + regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
+    out.wounds = ignore_batch(regenable, regen_proof, def, def_owner, tray, &mut out.rolls);
     out
 }
 
@@ -1967,7 +1967,7 @@ fn push_deadly_groups(out: &mut ShootResult, w: i64, x: i64, ignores_regen: bool
         }
         return;
     }
-    let post = if ignores_regen { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
+    let post = ignore_batch(if ignores_regen { 0 } else { w }, if ignores_regen { w } else { 0 }, def, def_owner, tray, &mut out.rolls);
     out.deadly_groups.push((post, x));
 }
 
@@ -1978,20 +1978,56 @@ pub(crate) fn regen_batch(
     tray: &mut Tray,
     rolls: &mut Vec<Roll>,
 ) -> i64 {
-    if w <= 0 || !def.regeneration || def.regen_target <= 0 {
+    ignore_batch(w, 0, def, def_owner, tray, rolls)
+}
+
+/// One ignore roll: a die per wound of `w`, each `target`+ ignoring it; the wounds that survive come back.
+fn roll_ignore_group(w: i64, target: i64, def: &Ctx, def_owner: &str, tray: &mut Tray, rolls: &mut Vec<Roll>) -> i64 {
+    if w <= 0 || !def.regeneration || target <= 0 {
         return w.max(0);
     }
     tray.owner_next(def.unit);
     let faces = tray.roll(w as usize);
-    let ignored = faces.iter().filter(|&&f| f as i64 >= def.regen_target).count() as i64;
+    let ignored = faces.iter().filter(|&&f| f as i64 >= target).count() as i64;
     rolls.push(Roll {
         kind: "attack",
         count: w,
-        target: def.regen_target,
+        target,
         faces,
         owner: def_owner.into(),
     });
     (w - ignored).max(0)
+}
+
+/// `main._solo_ignore_wounds`: the wounds of `pool` (regenable) and `bypass` (a Bane / Rending / Unstoppable weapon's) meet the ignore
+/// groups in the table's order. The bypassed wounds skip only the group named Regeneration and join the pool at the first other group;
+/// each group rolls on the wounds still standing. Returns ALL wounds that land. Without valid groups (below epoch 82, or one name, or a
+/// live leg beside them) it is today's single roll on `pool` plus the bypassed wounds untouched.
+pub(crate) fn ignore_batch(
+    pool: i64,
+    bypass: i64,
+    def: &Ctx,
+    def_owner: &str,
+    tray: &mut Tray,
+    rolls: &mut Vec<Roll>,
+) -> i64 {
+    let bypass = bypass.max(0);
+    if !def.groups_valid() {
+        return bypass + roll_ignore_group(pool, def.regen_target, def, def_owner, tray, rolls);
+    }
+    let mut pool = pool.max(0);
+    let mut joined = false;
+    for (slot, &target) in def.regen_groups.iter().enumerate() {
+        if target <= 0 {
+            continue;
+        }
+        if slot > 0 && !joined {
+            joined = true;
+            pool += bypass;
+        }
+        pool = roll_ignore_group(pool, target, def, def_owner, tray, rolls);
+    }
+    if joined { pool } else { pool + bypass }
 }
 
 /// Block B13 — Retaliate(X)'s saves on the tray, `_solo_melee_strike_phase`
@@ -2809,7 +2845,7 @@ pub fn resolve_melee_leg_wipe(
                 // Tray-exact S9 — the melee twin of S7 (Takedown Strike included, main.gd:7275-7283):
                 // w x max(Deadly, 1) through the pick's Regeneration, one model, overkill lost.
                 let td = w * p.deadly.max(1);
-                out.takedown_groups.push(if ignores_regen { td } else { regen_batch(td, def, def_owner, tray, &mut out.rolls) });
+                out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, def, def_owner, tray, &mut out.rolls));
                 out.deadly_tally += w;
             } else if deadly_per_model && p.deadly > 0 {
                 push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, def, def_owner, tray);
@@ -2859,8 +2895,7 @@ pub fn resolve_melee_leg_wipe(
     if pool_lands_on_dead {
         out.log.push(format!("Regeneration: {def_owner} is already destroyed by the Deadly wounds - no ignore roll for the other wounds"));
     }
-    let landed_regenable = if pool_lands_on_dead { regenable } else { regen_batch(regenable, def, def_owner, tray, &mut out.rolls) };
-    out.wounds += regen_proof + landed_regenable;
+    out.wounds += if pool_lands_on_dead { regen_proof + regenable } else { ignore_batch(regenable, regen_proof, def, def_owner, tray, &mut out.rolls) };
     // MEL-10r — a wound Regeneration cancels is not TAKEN: the 73 tally counts what landed.
     out.taken = if tally_post_regen { out.wounds + out.deadly_tally } else { out.caused };
     out

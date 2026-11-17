@@ -902,7 +902,13 @@ pub const EPOCH_82_IGNORE_BY_NAME: u32 = 82;
 /// morale test still reads the chain (`morale_root`). Records stamped 82 or below replay byte-exact. Every call site
 /// reads THIS constant, not `83`. The recorder mirror (`act_recorder.gd`) stamps 83 in the same change.
 pub const EPOCH_83_LONE_HERO_TARGET: u32 = 83;
-pub const CURRENT_RULES_EPOCH: u32 = 83;
+/// Differently named wound-ignore rules roll one after the other (#2595, table twin `_solo_regen_pick` / `_solo_ignore_wounds`): the
+/// core's `Ctx::regen_groups` hold the ignore rules by NAME (Regeneration first, then the most generous target, then the name), a
+/// bypassed wound skips only the Regeneration roll and joins the pool at the first other group; before, the family was one roll at the
+/// best target. Records stamped 83 or below replay byte-exact. Every call site reads THIS constant, not `84`. The recorder mirror
+/// stamps 84 with it.
+pub const EPOCH_84_IGNORE_GROUPS: u32 = 84;
+pub const CURRENT_RULES_EPOCH: u32 = 84;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2220,7 +2226,7 @@ mod tests {
         read_act_header, record_rules_epoch, rule_on, MeleeReach, SearchMode, TreeDice, TreeLeaf, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
         EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_73_V36,
         EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT, EPOCH_79_EV_MOVED_ROUND, EPOCH_80_ROLLOUT_CUMBERSOME,
-        EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME, EPOCH_83_LONE_HERO_TARGET,
+        EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME, EPOCH_83_LONE_HERO_TARGET, EPOCH_84_IGNORE_GROUPS,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2241,7 +2247,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 83, "the live epoch is EPOCH_83_LONE_HERO_TARGET");
+        assert_eq!(CURRENT_RULES_EPOCH, 84, "the live epoch is EPOCH_84_IGNORE_GROUPS");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2251,11 +2257,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":83}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":84}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 83"
+            "a fresh play_game() now stamps the bumped epoch, 84"
         );
     }
 
@@ -2343,6 +2349,16 @@ mod tests {
         assert!(rule_on(EPOCH_83_LONE_HERO_TARGET, EPOCH_83_LONE_HERO_TARGET), "a record at 83 shoots the lone hero");
         assert!(rule_on(EPOCH_83_LONE_HERO_TARGET, EPOCH_82_IGNORE_BY_NAME), "83 keeps the by-name roll on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_83_LONE_HERO_TARGET), "a fresh play_game() stamps it on");
+    }
+
+    /// Epoch 84: a record stamped 83 replays the one folded ignore roll, a fresh record rolls differently named rules in sequence.
+    #[test]
+    fn epoch_84_gate_is_closed_at_epoch_83_and_open_from_84() {
+        assert!(!rule_on(EPOCH_83_LONE_HERO_TARGET, EPOCH_84_IGNORE_GROUPS), "a record at 83 replays the folded roll");
+        assert!(rule_on(EPOCH_84_IGNORE_GROUPS, EPOCH_84_IGNORE_GROUPS), "a record at 84 rolls the groups in sequence");
+        assert!(rule_on(EPOCH_84_IGNORE_GROUPS, EPOCH_82_IGNORE_BY_NAME), "84 keeps the by-name bypass on");
+        assert!(rule_on(EPOCH_84_IGNORE_GROUPS, EPOCH_83_LONE_HERO_TARGET), "84 keeps the lone hero target on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_84_IGNORE_GROUPS), "a fresh play_game() stamps it on");
     }
 
     /// The WAVE 3 GATE's own reservation (05.09.): `EPOCH_6_TABLE_RULES` must
