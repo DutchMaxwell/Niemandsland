@@ -96,3 +96,26 @@ use super::*;
             ground.iter().map(|c| c.kind).collect::<Vec<_>>()
         );
     }
+
+    /// hold_only: the entry is a switch, not decoration — the very same
+    /// Immobile carrier whose entry says `hold_only = false` gets its move
+    /// option back (the core twin of the table fold's
+    /// `hold_only.unwrap_or(true)`).
+    #[test]
+    fn a_hold_only_carrier_whose_entry_clears_the_param_may_move() {
+        let (st, mut statics) = hold_line(true);
+        assert_eq!(statics[0].hold_only, None, "setup: no entry, the constant holds");
+        let held = crate::menu::candidates(&st, &small_board(), &statics, 0);
+        assert!(
+            held.iter().all(|c| c.kind == HOLD),
+            "setup: the Immobile carrier is hold-only by name: {:?}",
+            held.iter().map(|c| c.kind).collect::<Vec<_>>()
+        );
+        statics[0].hold_only = Some(false);
+        let menu = crate::menu::candidates(&st, &small_board(), &statics, 0);
+        assert!(
+            menu.iter().any(|c| c.kind == RUSH),
+            "hold_only = false must reopen the move menu: {:?}",
+            menu.iter().map(|c| c.kind).collect::<Vec<_>>()
+        );
+    }
