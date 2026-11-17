@@ -57,7 +57,9 @@ pub enum ActStep {
     /// The activation was cancelled before its first die; the state is untouched
     /// and the table puts the models back. `lines` is the one cancel sentence.
     Cancelled { lines: Vec<LogLine> },
-    Done { state: State, lines: Vec<LogLine>, landings: Vec<Landing> },
+    /// `unported`: the resolver's own `ShootResult.unported` marks (dice.rs `mark`), so a core that
+    /// knows it diverged from the table says so; `[]` on a fully ported volley.
+    Done { state: State, lines: Vec<LogLine>, landings: Vec<Landing>, unported: Vec<&'static str> },
 }
 
 /// The order rules, checked in their numbered order on each input; the error
@@ -353,7 +355,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             ActStep::NeedRoll { index, faces, kind, count, target, owner, owner_key, lines: [moved, lines].concat(), landings }
         }
         Step::Refused { reason, .. } => ActStep::Refused { index: t.len(), reason },
-        Step::Done(Ok((state, _)), lines, landings) => ActStep::Done { state, lines: [moved, lines].concat(), landings },
+        Step::Done(Ok((state, shot)), lines, landings) => ActStep::Done { state, lines: [moved, lines].concat(), landings, unported: shot.unported },
         Step::Done(Err(u), ..) => ActStep::Refused { index: t.len(), reason: format!("{u:?}") },
     }
 }
@@ -615,6 +617,21 @@ mod tests {
                 other => return (other, rolls),
             }
         }
+    }
+
+    /// C-1: the step answer keeps the resolver's `unported` marks. A Strafing rifle in a normal volley
+    /// (dice.rs `mark("strafing")`, the per-model split is not ported) answers `["strafing"]`, the
+    /// plain rifle `[]` (RED: drop the field at the `Step::Done` arm and the Strafing side reads `[]`).
+    #[test]
+    fn a_done_step_answers_the_unported_marks() {
+        let (st, mut statics) = volley_line();
+        let marks = |statics: &[UnitStatic]| match drive(statics, &st, vec![Begin, intent(HOLD, Some("b"))], 7).0 {
+            ActStep::Done { unported, .. } => unported,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(marks(&statics), Vec::<&str>::new());
+        statics[0].shoot[0].strafing = true;
+        assert_eq!(marks(&statics), vec!["strafing"]);
     }
 
     /// The stepped activation equals one straight seeded run, state and roll records alike; the
