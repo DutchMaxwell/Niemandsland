@@ -140,3 +140,55 @@ use super::super::*;
         let blind = crate::menu::best_shoot_from(&st, &statics, 0, &moved, &mut sc, crate::menu::Tuning::default());
         assert_eq!(blind, None, "an unseen enemy is never the advance-and-shoot aim, Indirect or not");
     }
+
+    /// `sho01_fires` for the door's pooled volley: "a" fires at "b" (blocked in the sight matrix) with NO recorded split aim, the shape
+    /// of the AI door's single-target intent. The split-aim fixtures above pass the gate through the plan; this one meets it.
+    fn sho01_pooled_fires(shoot: Vec<crate::unit::ShootProfile>, kind: i64, epoch: u32) -> bool {
+        let (mut st, mut statics) = buff_line();
+        let mut dark = vec![true; 16];
+        dark[2] = false; // los_pairs[0*4+2] - a does not see b
+        st.los_pairs = Some(Rc::new(dark));
+        statics[0].shoot = shoot;
+        let mut act = buff_action(Some("b"));
+        act.kind = kind;
+        if kind == ADVANCE {
+            act.dest = Some([-IN2M, 0.0, 0.0]);
+        }
+        let seams = Seams { sighting: true, moved_shoot: true, rules_epoch: epoch, ..Default::default() };
+        let mut tray = Tray::seeded(11);
+        let (_, shot) = resolve_stochastic_tray_on_board(&statics, &st, &act, &crate::terrain::Terrain::default(), seams, &mut crate::rng::GodotRng::new(0), &mut tray)
+            .expect("the volley resolves");
+        shot.rolls.iter().any(|r| r.kind == "attack" && r.count == 1)
+    }
+
+    /// The soak's holding Artillery beast (S1, 17.11.): an Indirect gun at a target nobody sees fired nothing in the core, the table fired.
+    /// RED at 84 (the pooled gate asked for sight only), GREEN from 85.
+    #[test]
+    fn a_holding_indirect_gun_fires_at_an_unseen_pooled_target_from_epoch_85() {
+        let build = |epoch| sho01_mortar(&repo_root(), "", epoch);
+        assert!(!sho01_pooled_fires(build(crate::acts::EPOCH_84_IGNORE_GROUPS), HOLD, crate::acts::EPOCH_84_IGNORE_GROUPS),
+            "a record at 84 replays the sighted-only gate");
+        assert!(sho01_pooled_fires(build(crate::acts::EPOCH_85_INDIRECT_GATE), HOLD, crate::acts::EPOCH_85_INDIRECT_GATE),
+            "from 85 the Indirect gun opens the gate");
+    }
+
+    /// The helper's own reading: Hold keeps the waiver, an Advance gives it up (3.6: it needs Hold), a gun without Indirect never had it, and
+    /// the Indirect gun still has to reach ("b" stands 12" away).
+    #[test]
+    fn the_indirect_gate_keeps_the_hold_need_and_asks_for_an_indirect_weapon() {
+        let e = crate::acts::EPOCH_85_INDIRECT_GATE;
+        let seams = Seams { sighting: true, moved_shoot: true, rules_epoch: e, ..Default::default() };
+        let opens = |shoot: Vec<crate::unit::ShootProfile>, held: bool| {
+            let (st, mut statics) = buff_line();
+            statics[0].shoot = shoot;
+            super::super::indirect_waives_gate(&statics, &st, 0, 2, held, seams)
+        };
+        assert!(opens(sho01_mortar(&repo_root(), "", e), true), "a holding Indirect gun opens the gate");
+        assert!(!opens(sho01_mortar(&repo_root(), "", e), false), "a moved Indirect gun needs sight");
+        let mut plain = sho01_mortar(&repo_root(), "", e);
+        plain[0].indirect = false;
+        assert!(!opens(plain, true), "a gun without Indirect needs sight");
+        let mut short = sho01_mortar(&repo_root(), "", e);
+        short[0].range = 2;
+        assert!(!opens(short, true), "the Indirect gun still has to reach");
+    }

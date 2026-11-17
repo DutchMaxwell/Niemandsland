@@ -3006,6 +3006,23 @@ fn has_shoot_target(statics: &[UnitStatic], state: &State, arty: usize) -> bool 
     false
 }
 
+/// `EPOCH_85_INDIRECT_GATE` (table twin `_solo_pick_overlay_target`, whose per-shot sight count ignores LOS for a weapon's own Indirect;
+/// rules 3.6 SHO-01a: a Hold not kept loses the waiver where the entry says so): a living chain member's Indirect weapon that waives the
+/// sight test and reaches the target (base-edge gap against its reach) makes the target a legal pick, seen or not. `sighted_profiles_of`
+/// still counts the sighted models per weapon, so only what the table would shoot is shot.
+fn indirect_waives_gate(statics: &[UnitStatic], state: &State, si: usize, ti: usize, held: bool, seams: Seams) -> bool {
+    let def = &statics[state.roster.profile[ti]].ctx;
+    let chain = std::iter::once(si).chain(state.attached[si].iter().copied().filter(|_| seams.hero_attach));
+    chain.filter(|&m| state.alive[m] > 0).any(|m| {
+        let um = &statics[state.roster.profile[m]];
+        let gap = chain_gap_in(state, ti, seams, |t| range_gap_in(state, &state.positions[m], m, t));
+        um.shoot.iter().any(|p| {
+            p.indirect && p.indirect_ignores_los.unwrap_or(true) && !(p.indirect_los_needs_hold && !held)
+                && gap <= sight_reach_in(p.range as f64 + p.reach_bonus_in.max(granted_reach(um, state, m).0), state.aircraft[ti], def)
+        })
+    })
+}
+
 /// `SoloController.nearest_human_unit` :1183-1210 — the primary key only
 /// (not-yet-activated first, then nearest centre-to-centre); a melee-only
 /// bearer (no ranged profile) skips Aircraft, same as the table. A genuine
@@ -10243,6 +10260,10 @@ fn resolve_with(
             } else {
                 (next.sees(si, &shoot_key) && los_clear(&next, si, ti)) || mark_indirect
             };
+            // EPOCH_85_INDIRECT_GATE: a weapon's own Indirect opens the pooled gate (the per-weapon sight counts decide what fires).
+            let sighted = sighted
+                || (seams.sighting && rule_on(sc.rules_epoch, crate::acts::EPOCH_85_INDIRECT_GATE)
+                    && indirect_waives_gate(statics, &next, si, ti, kind == HOLD, seams));
             if mark_indirect && !(next.sees(si, &shoot_key) && los_clear(&next, si, ti)) {
                 trace_rule("volley", "Indirect Mark",
                     &format!("{} may target {} without line of sight", statics[pi_s].name, statics[next.roster.profile[ti]].name));
