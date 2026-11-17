@@ -32,7 +32,7 @@ static func reset_cache() -> void:
 static func config() -> Dictionary:
 	if not _loaded.is_empty():
 		return _loaded
-	_loaded = {"mode": "allow", "primitives": {}, "attached": false}
+	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}}
 	var path := path_override if not path_override.is_empty() else (DENY_PATH if deny_switched() else PATH)
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
 	if not (data is Dictionary) or str(data.get("schema", "")) != SCHEMA or str(data.get("door", "")) != "shoot" \
@@ -44,6 +44,10 @@ static func config() -> Dictionary:
 		for p in data["groups"][g].get("primitives", []):
 			_loaded["primitives"][str(p)] = str(g)
 	_loaded["attached"] = (data.get("groups", {}) as Dictionary).has("attached_heroes")
+	# Deny mode only: rule names with no effect on a volley (list-building rules, an item's own label) - taken although the
+	# registry gives them no primitive. Each carries its reason in the file.
+	if _loaded["mode"] == "deny":
+		_loaded["inert"] = data.get("inert", {})
 	return _loaded
 
 
@@ -60,6 +64,8 @@ static func rule_label(r) -> String:
 ## `gu`'s rule `label` is one the slice takes: listed in "allow", not listed in "deny"; no primitive = no.
 static func _rule_taken(gu: GameUnit, label: String) -> bool:
 	var c := config()
+	if (c["inert"] as Dictionary).has(label):
+		return true
 	var prims: Dictionary = c["primitives"]
 	var allow: bool = c["mode"] == "allow"
 	if allow and prims.is_empty():

@@ -163,7 +163,7 @@ func test_pool1_rollout_is_off_when_explicitly_disabled() -> void:
 
 
 ## Knob ON (env seam): the same one-unit pool goes through the rollout pick — planner record written
-## and the intent cached, so _solve_planner executes it instead of re-deriving it 1-ply.
+## and the intent cached, so _solve_planner executes it.
 func test_pool1_rollout_routes_the_last_unit_through_the_planner_when_on() -> void:
 	OS.set_environment("NML_POOL1_ROLLOUT", "1")
 	var sc := _controller()
@@ -224,6 +224,7 @@ func test_solve_planner_maps_pick_to_adoption_shape() -> void:
 	var sc := _controller()
 	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
 	var taker: GameUnit = sc.army_manager.game_units["Taker"]
+	assert_object(sc._select_ai_unit([taker])).is_same(taker)   # the unit pick caches the rollout intent (planner_v0: pool1 rollout)
 	var sol := sc._solve_planner(taker)
 	assert_bool(sol.get("used", false)).is_true()
 	assert_int(int(sol["action"])).is_equal(AiDecision.Action.RUSH)
@@ -233,10 +234,21 @@ func test_solve_planner_maps_pick_to_adoption_shape() -> void:
 	assert_str(sc.plain_reason_for(taker)).contains("rush objective 1")
 
 
+## P4.D-93 (G3 decision 3): with no cached rollout intent for the unit there is nothing to execute and `_solve_planner` answers {}
+## (the decision tree plays the activation); the GDScript 1-ply AiPlanner.plan that used to answer here is gone.
+func test_without_a_cached_intent_solve_planner_leaves_the_activation_to_the_tree() -> void:
+	var sc := _controller()
+	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
+	var taker: GameUnit = sc.army_manager.game_units["Taker"]
+	assert_dict(sc._solve_planner(taker)).is_empty()
+	assert_that(_kinds(sc)).not_contains(["planner"])
+
+
 func test_act_executes_the_planned_rush() -> void:
 	var sc := _controller()
 	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
 	var taker: GameUnit = sc.army_manager.game_units["Taker"]
+	assert_object(sc._select_ai_unit([taker])).is_same(taker)   # the unit pick caches the rollout intent _act executes
 	var report := sc._act(taker)
 	assert_int(int(report["action"])).is_equal(AiDecision.Action.RUSH)
 	var pos: Vector3 = (taker.models[0] as ModelInstance).node.global_position
@@ -256,8 +268,7 @@ func test_tree_paths_stay_planner_free() -> void:
 ## Last-round gunline fixture (the R2 discriminator through the controller):
 ## the pick opens with the bait and keeps the striker back; _solve_planner
 ## consumes exactly that intent (the "kept back" suffix only exists on rollout
-## intents — a 1-ply re-plan can never produce it). A mismatched unit falls
-## back to the re-plan without the suffix.
+## intents). A mismatched unit has no intent to execute and falls to the tree ({}).
 func test_rollout_intent_is_executed_not_rederived() -> void:
 	BattleSim._core_env = 0   # P4.D-66: pinned to the GDScript AI; with the core up the shipped brain and the Rust search decide
 	var gunner := _unit(1, [Vector3.ZERO, Vector3(1.0 * IN2M, 0, 0), Vector3(2.0 * IN2M, 0, 0)], "Gunner")
@@ -282,10 +293,8 @@ func test_rollout_intent_is_executed_not_rederived() -> void:
 	var sol := sc._solve_planner(picked)
 	assert_bool(sol.get("used", false)).is_true()
 	assert_str(str(sol["why"])).contains("kept back")
-	# cache consumed: a second solve for another unit re-plans without the suffix
-	var again := sc._solve_planner(striker)
-	if bool(again.get("used", false)):
-		assert_str(str(again["why"])).not_contains("kept back")
+	# cache consumed: a second solve for another unit has no intent to execute and falls to the tree ({}, P4.D-93)
+	assert_dict(sc._solve_planner(striker)).is_empty()
 
 
 ## NML-1073 M2-5 (R1 + R2): the SEARCH SEAM is never load-bearing.
@@ -342,8 +351,8 @@ func _regate_scene(epoch: int) -> Dictionary:
 	taker.unit_properties["special_rules"] = ["Royal Legion"]
 	(taker.models[0] as ModelInstance).node.global_position = Vector3.ZERO
 	(enemy.models[0] as ModelInstance).node.global_position = Vector3(15.0 * IN2M, 0, 0)
-	sc._planner_intent = {"unit": taker, "round": 1, "target": enemy,
-		"action": {"kind": AiDecision.Action.CHARGE}, "expectation": {"before": 0.4, "after": 0.5},
+	sc._planner_intent = {"unit": taker, "round": sc._current_round(), "target": enemy,   # a VALID cached intent (it used to be
+		"action": {"kind": AiDecision.Action.CHARGE}, "expectation": {"before": 0.4, "after": 0.5},   # ignored: round 1 != 0)
 		"why": "adopted charge"}
 	var bands: Dictionary = SoloController.move_bands_for_unit(taker, null)
 	var gap: float = sc.nearest_melee_gap_in(taker, enemy)
