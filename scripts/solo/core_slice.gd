@@ -12,6 +12,8 @@ extends RefCounted
 ## Each group is `{"primitives": [...], "step": "P4.D-n", "golden": "<fixture>", "parity": "<scenario>"}`.
 
 const PATH := "res://assets/solo/core_slice_allow.json"
+## C-15: the measured deny-list (mode "deny"), read instead of PATH only with env NML_CORE_SLICE=deny. Default OFF.
+const DENY_PATH := "res://assets/solo/core_slice_deny.json"
 const SCHEMA := "nml-core-slice-v1"
 const MODES := ["allow", "deny"]
 
@@ -31,7 +33,7 @@ static func config() -> Dictionary:
 	if not _loaded.is_empty():
 		return _loaded
 	_loaded = {"mode": "allow", "primitives": {}, "attached": false}
-	var path := path_override if not path_override.is_empty() else PATH
+	var path := path_override if not path_override.is_empty() else (DENY_PATH if deny_switched() else PATH)
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
 	if not (data is Dictionary) or str(data.get("schema", "")) != SCHEMA or str(data.get("door", "")) != "shoot" \
 			or not MODES.has(str(data.get("mode", "allow"))):
@@ -43,6 +45,11 @@ static func config() -> Dictionary:
 			_loaded["primitives"][str(p)] = str(g)
 	_loaded["attached"] = (data.get("groups", {}) as Dictionary).has("attached_heroes")
 	return _loaded
+
+
+## C-15: env NML_CORE_SLICE=deny selects the deny-list file (read with the slice, cached with it).
+static func deny_switched() -> bool:
+	return OS.get_environment("NML_CORE_SLICE").to_lower() == "deny"
 
 
 ## "Tough(3)" -> "Tough", "Fear (spell)" -> "Fear" (a rule entry is a string or a {"name": ...} dictionary).
