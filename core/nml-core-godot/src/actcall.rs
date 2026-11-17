@@ -148,6 +148,7 @@ fn delta_array(before: &State, after: &State) -> VarArray {
             }
             d.set(key, &list);
         }
+        d.set("growth_markers", u.growth_markers);
         out.push(&d.to_variant());
     }
     out
