@@ -26,12 +26,12 @@ melee_charge scripts/main.gd:_solo_melee_strike_phase 434 6 42
 melee_charge scripts/main.gd:_solo_parry_strike 28 1 0
 melee_charge scripts/main.gd:_solo_retreating_strike 35 2 0
 melee_charge TOTAL 996 19 90
-planner scripts/solo/ai_planner.gd 1904 8 25
+planner scripts/solo/ai_planner.gd 1904 8 23
 planner scripts/solo/ai_position.gd 400 1 1
 planner scripts/solo/ai_spell.gd 633 4 15
-planner scripts/solo/battle_sim.gd 2608 23 56
+planner scripts/solo/battle_sim.gd 2608 23 54
 planner scripts/solo/solo_sim.gd 1234 3 6
-planner TOTAL 6779 39 103
+planner TOTAL 6779 39 99
 planner_shared scripts/solo/ai_combat_math.gd 724 9 18
 planner_shared scripts/solo/ai_ev.gd 1331 10 71
 planner_shared TOTAL 2055 19 89
