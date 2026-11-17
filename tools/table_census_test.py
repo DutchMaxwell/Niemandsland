@@ -62,19 +62,33 @@ def test_check_is_green_on_the_committed_state(tmp_path):
 def test_check_is_red_on_a_stale_counter(tmp_path):
     root = repo(tmp_path)
     txt = committed(root)
-    txt.write_text(txt.read_text().replace("old_b 3 0 1", "old_b 3 1 1"))   # a prod-caller count
+    txt.write_text(txt.read_text().replace("old_b 3 0", "old_b 3 1"))   # a prod-caller count
     res = run(root, "--check")
     assert res.returncode == 1 and "counter is stale" in res.stdout
     assert run(root, "--write").returncode == 0 and run(root, "--check").returncode == 0
 
 
+def test_the_committed_report_has_no_test_caller_column(tmp_path):
+    root = repo(tmp_path)
+    txt = committed(root).read_text().splitlines()
+    assert "grp scripts/a.gd:old_a 4 2" in txt             # lines and prod callers only
+    assert "grp TOTAL 7 2" in txt
+    assert "whole scripts/a.gd 13 0" in txt
+    assert all(len(ln.split()) == 4 for ln in txt if ln.split()[0] in ("grp", "whole"))
+    assert "old_a 4 2 2" not in "\n".join(txt)             # the test caller count is not committed
+    assert "grp scripts/a.gd:old_a 4 2 2" in run(root).stdout   # the printed report still shows it
+
+
 def test_a_moved_test_caller_count_is_reported_but_not_red(tmp_path):
     root = repo(tmp_path)
     txt = committed(root)
-    txt.write_text(txt.read_text().replace("old_b 3 0 1", "old_b 3 0 7").replace("grp TOTAL 7 2 3", "grp TOTAL 7 2 9"))
-    res = run(root, "--check")
-    assert res.returncode == 0 and "only test-caller counts moved" in res.stdout and "stale" not in res.stdout
-    txt.write_text(txt.read_text().replace("old_b 3 0 7", "old_b 4 0 7"))   # the same edit on the LINES column is red
+    before = txt.read_text()
+    with (root / "test/x_test.gd").open("a") as f:
+        f.write("\tFixture.old_b()\n")                     # one more test caller: never committed, never red
+    assert run(root, "--check").returncode == 0
+    assert txt.read_text() == before                       # the committed text does not move
+    assert "old_b 3 0 2" in run(root).stdout               # the printed report shows the new test count
+    txt.write_text(before.replace("old_b 3 0", "old_b 4 0"))   # the same edit on the LINES column is red
     assert run(root, "--check").returncode == 1
 
 

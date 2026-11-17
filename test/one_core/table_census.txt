@@ -1,40 +1,40 @@
-ai_volley scripts/main.gd:_solo_resolve_ai_volley 354 2 42
-ai_volley scripts/main.gd:_solo_volley_outcome 9 2 1
-ai_volley TOTAL 363 4 43
-dangerous_morale scripts/main.gd:_run_ai_dangerous 24 7 4
-dangerous_morale scripts/main.gd:_solo_shooting_morale 43 7 5
-dangerous_morale TOTAL 67 14 9
-hit_save_shared scripts/main.gd:_solo_apply_vs_marks 56 4 20
-hit_save_shared scripts/main.gd:_solo_hazardous_self_wounds 28 3 8
-hit_save_shared scripts/main.gd:_solo_hits 136 4 19
-hit_save_shared scripts/main.gd:_solo_land_deadly_wounds 79 7 17
-hit_save_shared scripts/main.gd:_solo_land_takedown_wounds 35 6 2
-hit_save_shared scripts/main.gd:_solo_land_wounds 18 20 3
-hit_save_shared scripts/main.gd:_solo_resolve_saves 122 10 22
-hit_save_shared scripts/main.gd:_solo_save_batch 231 7 22
-hit_save_shared scripts/main.gd:_solo_takedown_pick 34 3 1
-hit_save_shared TOTAL 739 64 114
-human_shoot scripts/main.gd:_run_human_attack_split 28 1 4
-human_shoot scripts/main.gd:_run_human_shooting 288 3 37
-human_shoot TOTAL 316 4 41
-melee_charge scripts/main.gd:_run_ai_melee 190 1 23
-melee_charge scripts/main.gd:_run_human_melee 106 1 9
-melee_charge scripts/main.gd:_solo_charge_impact 82 4 10
-melee_charge scripts/main.gd:_solo_consolidate_melee 81 2 1
-melee_charge scripts/main.gd:_solo_log_melee_result 40 2 5
-melee_charge scripts/main.gd:_solo_melee_strike_phase 434 6 42
-melee_charge scripts/main.gd:_solo_parry_strike 28 1 0
-melee_charge scripts/main.gd:_solo_retreating_strike 35 2 0
-melee_charge TOTAL 996 19 90
-planner scripts/solo/ai_planner.gd 1904 8 23
-planner scripts/solo/ai_position.gd 400 1 1
-planner scripts/solo/ai_spell.gd 633 4 15
-planner scripts/solo/battle_sim.gd 2608 23 54
-planner scripts/solo/solo_sim.gd 1234 3 6
-planner TOTAL 6779 39 99
-planner_shared scripts/solo/ai_combat_math.gd 724 9 18
-planner_shared scripts/solo/ai_ev.gd 1331 10 71
-planner_shared TOTAL 2055 19 89
+ai_volley scripts/main.gd:_solo_resolve_ai_volley 354 2
+ai_volley scripts/main.gd:_solo_volley_outcome 9 2
+ai_volley TOTAL 363 4
+dangerous_morale scripts/main.gd:_run_ai_dangerous 24 7
+dangerous_morale scripts/main.gd:_solo_shooting_morale 43 7
+dangerous_morale TOTAL 67 14
+hit_save_shared scripts/main.gd:_solo_apply_vs_marks 56 4
+hit_save_shared scripts/main.gd:_solo_hazardous_self_wounds 28 3
+hit_save_shared scripts/main.gd:_solo_hits 136 4
+hit_save_shared scripts/main.gd:_solo_land_deadly_wounds 79 7
+hit_save_shared scripts/main.gd:_solo_land_takedown_wounds 35 6
+hit_save_shared scripts/main.gd:_solo_land_wounds 18 20
+hit_save_shared scripts/main.gd:_solo_resolve_saves 122 10
+hit_save_shared scripts/main.gd:_solo_save_batch 231 7
+hit_save_shared scripts/main.gd:_solo_takedown_pick 34 3
+hit_save_shared TOTAL 739 64
+human_shoot scripts/main.gd:_run_human_attack_split 28 1
+human_shoot scripts/main.gd:_run_human_shooting 288 3
+human_shoot TOTAL 316 4
+melee_charge scripts/main.gd:_run_ai_melee 190 1
+melee_charge scripts/main.gd:_run_human_melee 106 1
+melee_charge scripts/main.gd:_solo_charge_impact 82 4
+melee_charge scripts/main.gd:_solo_consolidate_melee 81 2
+melee_charge scripts/main.gd:_solo_log_melee_result 40 2
+melee_charge scripts/main.gd:_solo_melee_strike_phase 434 6
+melee_charge scripts/main.gd:_solo_parry_strike 28 1
+melee_charge scripts/main.gd:_solo_retreating_strike 35 2
+melee_charge TOTAL 996 19
+planner scripts/solo/ai_planner.gd 1904 8
+planner scripts/solo/ai_position.gd 400 1
+planner scripts/solo/ai_spell.gd 633 4
+planner scripts/solo/battle_sim.gd 2608 23
+planner scripts/solo/solo_sim.gd 1234 3
+planner TOTAL 6779 39
+planner_shared scripts/solo/ai_combat_math.gd 724 9
+planner_shared scripts/solo/ai_ev.gd 1331 10
+planner_shared TOTAL 2055 19
 planner_tag dead 1 2
 planner_tag erlkoenig 54 670
 planner_tag gd_search 88 2301
