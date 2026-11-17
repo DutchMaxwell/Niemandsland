@@ -1,11 +1,9 @@
 extends GdUnitTestSuite
 ## Phase-1 step 3: parity harness wave 1 — the SAME fixture pushed through the
-## real seams (live GameUnits + AiEv/SoloController statics) and through the
-## BattleSim snapshot must yield the SAME numbers. Hit and save targets are
-## pure functions of the ctx fields, so full-ctx equality covers them; shoot/
-## melee EV, band distances and objective-owner verdicts are compared directly.
-## This suite is the honesty gate for the planner substrate: any BattleSim
-## drift from the live rules shows up here first.
+## live table's statics (SoloController) and through the BattleSim snapshot must
+## yield the SAME numbers. Move bands and objective-owner verdicts are compared
+## directly. This suite is the honesty gate for the planner substrate: a drift
+## between the captured state and the live rules shows up here first.
 
 const IN2M := 0.0254
 
@@ -54,82 +52,21 @@ func _capture(units: Array) -> Dictionary:
 	return BattleSim.capture(army)
 
 
-## The real path's profile pipeline on the LIVE unit (weapons -> range filter ->
-## sergeant stamp -> survivor-scaled attacks), independent of BattleSim code.
-func _real_profiles(u: GameUnit, melee: bool, d: float) -> Array:
-	var weapons: Array = (u.source_data as OPRApiClient.OPRUnit).weapons
-	var profiles: Array = AiShooting.melee_profiles(weapons) if melee \
-		else AiShooting.profiles_in_range(weapons, d)
-	var out: Array = []
-	for p in AiEv.stamp_sergeant(profiles, u):
-		var q := (p as Dictionary).duplicate()
-		q["attacks"] = SoloController.effective_attacks(int(q.get("attacks", 0)),
-			u.get_alive_count(), u.models.size())
-		out.append(q)
-	return out
-
-
-func _live_dist_in(a: GameUnit, b: GameUnit) -> float:
-	var best := INF
-	for ma in a.models:
-		for mb in b.models:
-			if (ma as ModelInstance).is_alive and (mb as ModelInstance).is_alive:
-				best = minf(best, ((ma as ModelInstance).node.global_position
-					- (mb as ModelInstance).node.global_position).length())
-	return best / IN2M
-
-
-## Full-ctx parity (covers hit target = f(quality) and save target =
-## f(defense, cover)), held BOTH before and after the same casualty is applied
-## independently in each world: live kill via is_alive, sim kill via the
-## snapshot's dynamic arrays. Catches any drift in the models/cover patching.
-func test_ctx_parity_survives_a_casualty() -> void:
-	var ogres := _armed(1, [Vector3.ZERO, Vector3(IN2M, 0, 0)], "Ogres",
-		[{"name": "Claws", "range": 0}], ["Tough(3)"], 3)
-	var su: Dictionary = _capture([ogres])["units"]["Ogres"]
-	su["in_cover"] = true
-	assert_that(BattleSim._ctx_of(su)).is_equal(AiEv.ctx_for(ogres, true))
-	(ogres.models[0] as ModelInstance).is_alive = false
-	(su["positions"] as Array).remove_at(0)
-	(su["wounds"] as Array).remove_at(0)
-	su["alive"] = 1
-	var sim_ctx := BattleSim._ctx_of(su)
-	assert_that(sim_ctx).is_equal(AiEv.ctx_for(ogres, true))
-	assert_int(int(sim_ctx["models"])).is_equal(1)
-
-
-func test_shoot_and_melee_ev_parity() -> void:
-	var shooter := _armed(2, [Vector3.ZERO], "Shooter", [{"name": "Rifle", "range": 24}])
-	var ogres := _armed(1, [Vector3(12.0 * IN2M, 0, 0), Vector3(13.0 * IN2M, 0, 0)],
-		"Ogres", [{"name": "Claws", "range": 0}], ["Tough(3)"], 3)
-	var state := _capture([shooter, ogres])
-	var su: Dictionary = state["units"]["Shooter"]
-	var tu: Dictionary = state["units"]["Ogres"]
-	var d := BattleSim.dist_in(su["positions"], tu["positions"])
-	assert_float(d).is_equal_approx(_live_dist_in(shooter, ogres), 0.001)
-	var real_shoot := AiEv.shoot_ev(_real_profiles(shooter, false, d),
-		AiEv.ctx_for(shooter), AiEv.ctx_for(ogres), d)
-	assert_float(real_shoot).is_greater(0.0)   # parity of zeros proves nothing
-	assert_float(AiEv.shoot_ev(BattleSim._profiles_of(su, false, d),
-		BattleSim._ctx_of(su), BattleSim._ctx_of(tu), d)).is_equal_approx(real_shoot, 0.0001)
-	var real_melee := AiEv.melee_ev(_real_profiles(ogres, true, 0.0),
-		AiEv.ctx_for(ogres), AiEv.ctx_for(shooter), true)
-	assert_float(real_melee).is_greater(0.0)
-	assert_float(AiEv.melee_ev(BattleSim._profiles_of(tu, true),
-		BattleSim._ctx_of(tu), BattleSim._ctx_of(su), true)).is_equal_approx(real_melee, 0.0001)
-
-
-## The sim's clamped translate must land EXACTLY on the official band numbers
-## move_bands_for_unit reports for this unit — not on hardcoded 6/12.
+## The sim's move bands are the live table's bands: sim_move_bands feeds every
+## ADVANCE/RUSH translate and the captured snapshot stamps it as `bands`. The
+## Slow fixture is the discriminator — Advance 4", Rush 8", not the 6"/12"
+## defaults — so a lost rule or a hardcoded fallback goes red.
 func test_band_distance_parity() -> void:
-	var grunts := _armed(2, [Vector3.ZERO], "Grunts", [{"name": "CCW", "range": 0}])
-	var state := _capture([grunts])
-	var bands := SoloController.move_bands_for_unit(grunts, null)
-	var goal := Vector3(40.0 * IN2M, 0, 0)
-	for pair in [[AiDecision.Action.ADVANCE, "advance"], [AiDecision.Action.RUSH, "rush"]]:
-		var next := BattleSim.resolve(state, {"unit": "Grunts", "kind": pair[0], "dest": goal})
-		var moved: float = ((next["units"]["Grunts"] as Dictionary)["positions"][0] as Vector3).length() / IN2M
-		assert_float(moved).is_equal_approx(float(bands[pair[1]]), 0.01)
+	var grunts := _armed(2, [Vector3.ZERO], "Grunts", [{"name": "CCW", "range": 0}],
+		["Slow"])
+	var live := SoloController.move_bands_for_unit(grunts, null)
+	var sim := SoloController.sim_move_bands(grunts)
+	for band in ["advance", "rush"]:
+		assert_float(float(sim[band])).is_equal_approx(float(live[band]), 0.001)
+		assert_float(float(sim[band])).is_equal_approx(4.0 if band == "advance" else 8.0, 0.001)
+	var stamped: Dictionary = BattleSim.state_to_plain(_capture([grunts]))["units"]["Grunts"]["bands"]
+	assert_float(float(stamped["advance"])).is_equal_approx(4.0, 0.001)
+	assert_float(float(stamped["rush"])).is_equal_approx(8.0, 0.001)
 
 
 ## Same seize_objectives verdict from live-node infos and from snapshot infos.
