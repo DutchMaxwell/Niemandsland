@@ -494,26 +494,34 @@ static func dump_legacy() -> void:
 ## the end-of-activation morale from its wounds ride this call). Only then may `target` be null (a unit that cannot shoot
 ## or has no target: the activation has no shot). Default false = the table's own roll stays authoritative: a report that
 ## names Dangerous dice is refused, as before.
+## P4.D-14: `rest` = split fire's further groups ({target, shots}, the table's order); `target` and `shots` are the first. The core
+## fires them from the aim (`split_aim`) and the table stages each group as its own volley. A group that is not plain, or an aim the
+## core would pool, keeps the whole activation on the table (false before any die).
 static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h: int, shots: Array = [],
-		owns_dangerous := false) -> bool:
+		owns_dangerous := false, rest: Array = []) -> bool:
 	if bool(report.get("through_refused", false)):
 		return false   # P4.D-37c: the body left the strike to the table (a crossed enemy is not a plain target)
 	var kind := int(report.get("action", -1))
 	var reported := int(report.get("dangerous_dice", report.get("dangerous_models", 0)))
 	var table_rolled := not owns_dangerous and reported > 0
-	if h == 0 or not takes_action(unit, kind) or not is_plain(unit) or table_rolled \
-			or (target == null and not owns_dangerous) or (target != null and not is_plain_target(target)):
+	var parts: Array = [{"target": target, "shots": shots}] + rest
+	var aim := split_aim(parts)
+	if h == 0 or not takes_action(unit, kind) or not is_plain(unit) or table_rolled or _aim_ambiguous(aim) \
+			or (target == null and not owns_dangerous) or (target != null and not is_plain_target(target)) \
+			or rest.any(func(p: Dictionary) -> bool: return not is_plain_target(p["target"])):
 		return false
 	# #172 interim: the core lands its own casualty order, so a human owner who has a wound-allocation choice (a Tough
 	# model, or mixed loadouts among the alive models) would never be asked. That volley stays on the table, which
 	# prompts. The real wound count is unknown before the roll: one wound keeps the Tough and loadout checks. With the
 	# wound_alloc switch ON (P4.D-26) the core asks the allocation as a NeedChoice and the owner's prompt answers it, so the
 	# guard applies only with the switch OFF; the guard and the switch go together (P4.D-27).
-	if target != null and not choice_enabled("wound_alloc") and main._solo_wound_choice_matters(target, 1):
+	var chooser: Array = [] if choice_enabled("wound_alloc") else parts.filter(
+		func(p: Dictionary) -> bool: return p["target"] != null and main._solo_wound_choice_matters(p["target"], 1))
+	if not chooser.is_empty():
 		main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s's owner chooses the casualties - the table resolves this volley" % [
-			unit.get_name(), target.get_name()], true)
+			unit.get_name(), chooser[0]["target"].get_name()], true)
 		return false
-	var t: Array = ai_transcript(main, unit, report, target)
+	var t: Array = ai_transcript(main, unit, report, target, aim)
 	# Step 42b: the table's presentation of the volley (_present); its stage opens before the core's first line.
 	# P4.D-19: the core prints no sentence for the Dangerous test (its first throw): the table's own two stand in for it, in
 	# the table's words and places - the test line before the roll, the wound line right after it - and the staged volley
@@ -523,6 +531,11 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	var st := {"n": 0, "open": false, "result": false, "hits": 0, "landed": 0, "announce": [], "first": dice > 0, "test": false,
 		"before": main._solo_combined_alive(target) if target != null else 0, "moved": bool(report.get("moved", false))}
 	var shows := target != null and not shots.is_empty()   # a shotless activation has no volley to stage
+	var sts: Array = [st]   # split fire: one stage state per group (the first is `st`, which also holds the Dangerous test's)
+	for p in rest:
+		sts.append(st.merged({"n": 0, "open": false, "result": false, "hits": 0, "landed": 0, "announce": [], "first": false, "test": false,
+			"before": main._solo_combined_alive(p["target"])}, true))
+	var at := [0]   # the group being shown
 	var beat := func(ev: String, a: Dictionary, faces: Array) -> void:
 		if ev == "throw" and st["first"]:
 			st["first"] = false
@@ -539,7 +552,16 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 					main._solo_log_dangerous_wounds(unit, wounds)
 			return
 		if shows:
-			await _present(main, unit, target, shots, st, ev, a, faces)
+			var g: Dictionary = parts[at[0]]
+			var cur: Dictionary = sts[at[0]]
+			if ev == "throw" and str(a.get("kind", "")) == "attack" and at[0] < parts.size() - 1 and cur.has("rolling") \
+					and int(cur["n"]) >= (cur["rolling"] as Array).size():
+				await _present(main, unit, g["target"], g["shots"], cur, "done", {}, [])   # the group's last weapon fired: close its stage
+				at[0] += 1
+				g = parts[at[0]]
+				cur = sts[at[0]]
+				main._solo_stage_begin("%s fires at %s" % [unit.get_name(), g["target"].get_name()])
+			await _present(main, unit, g["target"], g["shots"], cur, ev, a, faces)
 	if shows:
 		main._solo_stage_begin("%s fires at %s" % [unit.get_name(), target.get_name()])
 	var r: Dictionary = await drive(main, h, unit, t, true, Callable(), false, beat if shows or dice > 0 else Callable())
@@ -574,6 +596,27 @@ static func ai_transcript(main, unit: GameUnit, report: Dictionary, target: Game
 	if not split.is_empty():
 		intent["split"] = split
 	return [{"t": "begin"}, {"t": "placed", "positions": at, "trails": trails}, intent]
+
+
+## P4.D-14: split fire's aim of `parts` (the volley's groups, {target, shots}): one {member, weapon, target} per shot in the table's
+## group order; [] for one group. The member is the unit NAME (`sim.rs split_plan` finds it by name), the target its roster key.
+static func split_aim(parts: Array) -> Array:
+	var aim: Array = []
+	for p in parts if parts.size() > 1 else []:
+		for shot in p["shots"]:
+			aim.append({"member": (shot["member"] as GameUnit).get_name(), "weapon": str(shot["profile"].get("name", "")), "target": (p["target"] as GameUnit).unit_id})
+	return aim
+
+
+## An aim that names one (member, weapon) for two targets: the core fires that weapon once and pools the rest (`split_weapon_reaimed`).
+static func _aim_ambiguous(aim: Array) -> bool:
+	var seen := {}
+	for e in aim:
+		var key := "%s|%s" % [e["member"], e["weapon"]]
+		if seen.get(key, e["target"]) != e["target"]:
+			return true
+		seen[key] = e["target"]
+	return false
 
 
 ## Step 42c-2: the table's shot rows of one AI volley (`_solo_resolve_ai_volley` writes one per shot, in `shots` order,
