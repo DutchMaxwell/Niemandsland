@@ -29,9 +29,9 @@ melee_charge TOTAL 996 19 90
 planner scripts/solo/ai_planner.gd 1904 8 31
 planner scripts/solo/ai_position.gd 400 1 1
 planner scripts/solo/ai_spell.gd 633 4 15
-planner scripts/solo/battle_sim.gd 2608 22 77
+planner scripts/solo/battle_sim.gd 2608 22 72
 planner scripts/solo/solo_sim.gd 1234 3 6
-planner TOTAL 6779 38 130
+planner TOTAL 6779 38 125
 planner_shared scripts/solo/ai_combat_math.gd 724 9 18
 planner_shared scripts/solo/ai_ev.gd 1331 10 70
 planner_shared TOTAL 2055 19 88
