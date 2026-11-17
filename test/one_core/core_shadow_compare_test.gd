@@ -103,7 +103,8 @@ func _self_repair_vs_bane_unequal(epoch: int) -> int:
 		var rec := await _shadowed(Harness._weapon(["Bane"]), Harness._with(Harness.DEFENDER, {"rules": ["Self-Repair"]}), seed)
 		unequal += 0 if bool(rec["equal"]) else 1
 		assert_bool(rec["labels"].has("target_rule:Self-Repair")).override_failure_message("labels %s" % [rec["labels"]]).is_true()
-		assert_array(rec["deny"]).override_failure_message("C-18: Self-Repair is on the deny list").contains(["target_unit_rule:Self-Repair"])
+		# C-R1 lifted the wound-ignore entry: deny mode no longer refuses the Self-Repair target (the pair's own verdict is the gate).
+		assert_array(rec["deny"]).override_failure_message("Self-Repair left the deny list with C-R1").not_contains(["target_unit_rule:Self-Repair"])
 	return unequal
 
 
