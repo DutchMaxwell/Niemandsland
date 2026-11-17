@@ -370,6 +370,50 @@ pub fn build_roster(plain: &VarDictionary) -> Result<(Profiles, Roster), String>
     Ok((profiles, roster))
 }
 
+/// C-10: the table latches `AiActRecorder._ledger_of` does not carry (it is a recorded corpus format and the AI search's input, so it
+/// stays byte-identical), sent per unit under `step_ledger` by the live door's capture only. A key the table never wrote keeps the
+/// fresh-game default the `State` already holds.
+#[derive(Debug, PartialEq)]
+pub struct StepLedger {
+    pub versatile_pick_round: i64,
+    pub versatile_pick_mode: i64,
+    pub reckless_rolled_round: i64,
+    pub reckless_ap_round: i64,
+    pub reckless_backfire_round: i64,
+    pub retreating_strike_round: i64,
+    pub mind_control_moved_round: i64,
+    pub growth_strike_round: i64,
+    pub piercing_spot_round: i64,
+}
+
+impl StepLedger {
+    fn read(d: &VarDictionary) -> StepLedger {
+        StepLedger {
+            versatile_pick_round: dint(d, "versatile_pick_round", -1),
+            versatile_pick_mode: dint(d, "versatile_pick_mode", 0),
+            reckless_rolled_round: dint(d, "reckless_rolled_round", -1),
+            reckless_ap_round: dint(d, "reckless_ap_round", -1),
+            reckless_backfire_round: dint(d, "reckless_backfire_round", -1),
+            retreating_strike_round: dint(d, "retreating_strike_round", -1),
+            mind_control_moved_round: dint(d, "mind_control_moved_round", -1),
+            growth_strike_round: dint(d, "growth_strike_round", -1),
+            piercing_spot_round: dint(d, "piercing_spot_round", -1),
+        }
+    }
+
+    pub fn apply(&self, st: &mut State, ui: usize) {
+        st.versatile_pick_round[ui] = self.versatile_pick_round;
+        st.versatile_pick_mode[ui] = self.versatile_pick_mode;
+        st.reckless_rolled_round[ui] = self.reckless_rolled_round;
+        st.reckless_ap_round[ui] = self.reckless_ap_round;
+        st.reckless_backfire_round[ui] = self.reckless_backfire_round;
+        st.retreating_strike_round[ui] = self.retreating_strike_round;
+        st.mind_control_moved_round[ui] = self.mind_control_moved_round;
+        st.growth_strike_round[ui] = self.growth_strike_round;
+        st.piercing_spot_round[ui] = self.piercing_spot_round;
+    }
+}
+
 /// The dynamic layer: everything but the profile table and the roster, which the
 /// caller supplies (they are interned across every node of one game).
 /// `rules_epoch` is the header's (0 without one), for the ledger fold's gates.
@@ -536,6 +580,7 @@ pub fn build_state(
     let mut attached_keys: Vec<Vec<String>> = Vec::with_capacity(n);
     let mut host_keys: Vec<String> = Vec::with_capacity(n);
     let mut ledgers: Vec<Option<PlainLedger>> = Vec::with_capacity(n);
+    let mut step_ledgers: Vec<Option<StepLedger>> = Vec::with_capacity(n);
     for key in roster.keys.iter() {
         let u = units
             .get(key.as_str())
@@ -619,6 +664,7 @@ pub fn build_state(
             }
             parsed
         }));
+        step_ledgers.push(u.get("step_ledger").and_then(|v| v.try_to::<VarDictionary>().ok()).map(|d| StepLedger::read(&d)));
         match u.get("los").and_then(|v| v.try_to::<VarDictionary>().ok()) {
             Some(m) => {
                 has_los = true;
@@ -652,6 +698,14 @@ pub fn build_state(
             fold_ledger(&mut st, ui, l, rules_epoch, alive, !host_keys[ui].is_empty(), arrived);
         }
     }
+    for (ui, sl) in step_ledgers.iter().enumerate() {
+        if let Some(sl) = sl {
+            sl.apply(&mut st, ui);
+        }
+    }
+    // C-10: Second Wind's army-wide grants of the round (`SoloController._second_wind_round_uses`), the cap the core reads.
+    let sw = sub_dict(plain, "second_wind");
+    (st.second_wind_round, st.second_wind_uses) = (dint(&sw, "round", st.second_wind_round), dint(&sw, "uses", st.second_wind_uses));
     st.rebuild_sees();
     Ok(Captured { state: st, extras, mask, has_los, dropped })
 }
@@ -1333,6 +1387,31 @@ mod tests {
         assert!(nml_core::casualty::casualty_order(&st, 0).is_none());
         nml_core::sim::land_wounds_with(&mut st, 0, 1, true);
         assert_eq!(st.positions[0], vec![[0.05, 0.0, 0.0], [0.5, 0.0, 0.0]]);
+    }
+
+    /// C-10: a step ledger writes the nine table latches onto its unit and no other; an unsent one is the fresh-game default.
+    /// RED: drop a line from `apply` -> that field stays at the default.
+    #[test]
+    fn a_step_ledger_lands_on_its_unit_only() {
+        let mut st = state_with_kits(EPOCH_75_TABLE_FIXES);
+        let before = st.clone();
+        let sl = super::StepLedger {
+            versatile_pick_round: 3, versatile_pick_mode: 2, reckless_rolled_round: 4, reckless_ap_round: 5, reckless_backfire_round: 6,
+            retreating_strike_round: 7, mind_control_moved_round: 8, growth_strike_round: 9, piercing_spot_round: 10,
+        };
+        sl.apply(&mut st, 0);
+        let got = (st.versatile_pick_round[0], st.versatile_pick_mode[0], st.reckless_rolled_round[0], st.reckless_ap_round[0],
+            st.reckless_backfire_round[0], st.retreating_strike_round[0], st.mind_control_moved_round[0], st.growth_strike_round[0],
+            st.piercing_spot_round[0]);
+        assert_eq!(got, (3, 2, 4, 5, 6, 7, 8, 9, 10));
+        // The all-default ledger is what a fresh capture already holds: applying it changes nothing.
+        let mut fresh = before.clone();
+        super::StepLedger { versatile_pick_round: -1, versatile_pick_mode: 0, reckless_rolled_round: -1, reckless_ap_round: -1,
+            reckless_backfire_round: -1, retreating_strike_round: -1, mind_control_moved_round: -1, growth_strike_round: -1,
+            piercing_spot_round: -1 }.apply(&mut fresh, 0);
+        assert_eq!(fresh.versatile_pick_round, before.versatile_pick_round);
+        assert_eq!(fresh.reckless_rolled_round, before.reckless_rolled_round);
+        assert_eq!(fresh.piercing_spot_round, before.piercing_spot_round);
     }
 
     /// The capture mask carries the `kits` bit (the last) from epoch 75 and not below it; no other bit moves.
