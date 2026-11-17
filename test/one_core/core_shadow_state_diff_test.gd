@@ -50,3 +50,14 @@ func test_a_joined_hero_reads_its_hosts_core_shaken() -> void:
 
 func test_a_host_the_core_did_not_shake_is_still_a_difference() -> void:
 	assert_str(CoreShadow._state_diff(_main_with_shaken_chain(), _core(false))).is_equal("shaken")
+
+
+## The table signs a joined hero's save with its unit's label ("AI (Assault Brothers)") where the core names the hero
+## (C-18 lift soak: 4 such volleys). One unit, one roller: the keys match through the hero's host, and only through it.
+## RED: plain key equality -> the first case is a mismatch.
+func test_a_hero_signed_roll_matches_its_hosts_label() -> void:
+	var host_of := {"Elite Pathfinder": "Assault Brothers"}
+	assert_bool(CoreShadow.same_roll(["defense", 2, 5, "Elite Pathfinder"], ["defense", 2, 5, "Assault Brothers"], host_of)).is_true()
+	assert_bool(CoreShadow.same_roll(["defense", 2, 4, "Elite Pathfinder"], ["defense", 2, 5, "Assault Brothers"], host_of)).is_false()
+	assert_bool(CoreShadow.same_roll(["defense", 2, 5, "Elite Pathfinder"], ["defense", 2, 5, "Assault Brothers"], {})).is_false()
+	assert_bool(CoreShadow.same_roll(["attack", 3, 5, "Grunt Veteran"], ["attack", 3, 5, "Grunt Veteran"], host_of)).is_true()

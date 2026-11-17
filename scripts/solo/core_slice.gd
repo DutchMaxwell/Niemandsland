@@ -78,6 +78,13 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 	var c := config()
 	if (gu.has_attached_heroes() or gu.is_attached()) and c["attached"] != (c["mode"] == "allow"):
 		out.append("attached")
+	# Deny mode takes a joined hero with its unit, so the hero's own unit and weapon rules must pass the list too (allow
+	# mode refuses every attachment above; its labels stay as they were).
+	if c["mode"] == "deny":
+		for hero in gu.get_attached_heroes():
+			for r in refusals(hero as GameUnit, true):
+				if r != "attached" and not out.has(r):
+					out.append(r)
 	if not gu.source_data is OPRApiClient.OPRUnit:
 		return out if as_target else out + ["non_opr"]
 	for w in (gu.source_data as OPRApiClient.OPRUnit).weapons:

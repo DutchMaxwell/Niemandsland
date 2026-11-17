@@ -294,6 +294,17 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	assert_str(str(CoreSlice.config()["mode"])).is_equal("allow")
 
 
+## Deny mode takes a joined hero with its unit, so a rule the hero carries is read too: a host whose only listed rule
+## sits on its joined hero is refused by that rule (C-18 soak: Piercing Growth on a joined Grunt Veteran). RED: read only
+## the host's own rules -> the host is taken.
+func test_deny_mode_reads_the_joined_heros_rules() -> void:
+	_allow({"g": ["Tear"]}, "deny")
+	var host := _unit(["Tough(3)"], [["AP(1)"]])
+	EquipmentDistributor.attach_hero_to_unit(_unit(["Hero"], [["Tear"]]), host)
+	assert_array(CoreSlice.refusals(host)).contains(["weapon_rule:Tear"])
+	assert_bool(CoreSlice.takes(host, true)).is_false()
+
+
 ## `applies` reads only these two members (the census test's stub).
 class _StubMain extends RefCounted:
 	var solo_ai_slots := {1: true}

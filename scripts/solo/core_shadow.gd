@@ -75,11 +75,18 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 	var diff := ""
 	var i := 0
 	_detail = {}
+	# The table signs a roll with the UNIT's label even when its joined hero holds the models (a lone hero saves "as the
+	# hero" but the tray still reads "AI (<unit>)"); the core names the hero. One unit, one roller: a hero's name also
+	# matches its host's.
+	var host_of := {}
+	for gu in [unit] + order.map(func(id) -> GameUnit: return groups[id]["target"]):
+		for hero in (gu as GameUnit).get_attached_heroes():
+			host_of[(hero as GameUnit).get_name()] = (gu as GameUnit).get_name()
 	while str(r["step"]) == "need_roll" and diff == "":
 		if i >= rolls.size():
 			diff = "core_rolls_more"
 			_detail = {"core": gate_key(r, false)}
-		elif gate_key(r, false) != gate_key(rolls[i], true) or (rolls[i]["faces"] as Array).size() != int(r["faces"]):
+		elif not same_roll(gate_key(r, false), gate_key(rolls[i], true), host_of) or (rolls[i]["faces"] as Array).size() != int(r["faces"]):
 			diff = "rolls"
 			_detail = {"core": gate_key(r, false), "table": _raw(rolls[i])}
 		else:
@@ -110,6 +117,11 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 		deny.append("split")   # the door keeps a split volley on the table (`order.size() == 1`)
 	records.append({"deny": deny, "equal": diff == "", "first_diff": diff, "labels": labels, "unported": r.get("unported", []),
 		"detail": _detail, "shooter": unit.get_name(), "targets": order.map(func(id) -> String: return groups[id]["target"].get_name())})
+
+
+## Two gate keys are one roll: equal, or equal but for a core owner that is a joined hero of the table's owner.
+static func same_roll(core_key: Array, table_key: Array, host_of: Dictionary) -> bool:
+	return core_key == table_key or (core_key.slice(0, 3) == table_key.slice(0, 3) and host_of.get(core_key[3], "") == table_key[3])
 
 
 ## A roll by the replay gates' reading: (kind, count, target, owner); the table's owner "AI (<name>)" reads "<name>".
