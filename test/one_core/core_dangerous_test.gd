@@ -299,3 +299,22 @@ func test_a_test_the_core_did_not_roll_is_counted_not_written() -> void:
 		Harness._unpaint_cover(_main, painted)
 		Harness._free_units(_main, [att, dfn])
 		await _main.get_tree().process_frame
+
+
+## A unit that cast this activation keeps its volley on the table: the casts resolved after the door's capture, so the core's
+## board has no spell effect (the shadow soak's Caster entry). No die is thrown by the refusal; the same call without the
+## cast is taken. RED: drop the `cast` clause in `run_ai` -> the first call is taken.
+func test_a_unit_that_cast_this_activation_stays_on_the_table() -> void:
+	var sc: Dictionary = Harness.dangerous_scenarios()[0]
+	var att := ParityTable._make_unit(_main, sc["attacker"], (sc["weapon"] as Dictionary).duplicate(true))
+	var dfn := ParityTable._make_unit(_main, sc["defender"], (sc["weapon"] as Dictionary).merged({"count": 5}, true))
+	_main.seed_tray_rng(7)
+	var rng_before := Harness._rng_state(_main)
+	var h := CoreActivation.capture(_main)
+	var cast_report := {"action": AiDecision.Action.HOLD, "moved": false, "casts": [{"caster": att}]}
+	assert_bool(await CoreActivation.run_ai(_main, att, cast_report, dfn, h, [])).override_failure_message(
+		"the core took a volley after this activation's cast").is_false()
+	assert_str(Harness._rng_state(_main)).override_failure_message("a die was thrown").is_equal(rng_before)
+	assert_bool(await CoreActivation.run_ai(_main, att, {"action": AiDecision.Action.HOLD, "moved": false}, dfn, h, [])) \
+		.override_failure_message("control: the same volley without a cast is the core's").is_true()
+	_main.solo_controller._core_node_ready().release(h)
