@@ -2,7 +2,7 @@ extends GdUnitTestSuite
 ## One core P4.D-19: the AI body hands a plain Hold/Advance's whole activation to the core - its Dangerous test and the
 ## end-of-activation morale from the test's wounds included - and the table rolls neither (no double roll). The ONE core
 ## call sits in `_run_ai_shooting` (the volley and its two early returns) or, for a unit that cannot shoot, in the body.
-## A call the core does not take (a refusal, a split volley) pays the test on the table first, in the old order.
+## A call the core does not take (a refusal) pays the test on the table first, in the old order; a split volley is the core's (P4.D-14).
 ## Real: the main scene, NmlCore, the AI's decision and move, the body (`_solo_activate_one_ai`), the table's volley and
 ## tray. Constructed: plain units (ParityTable), a painted Dangerous block under the attacker (the golden harness's own),
 ## both seats AI (no save card waits for a click).
@@ -181,7 +181,8 @@ func _shooting(act: Callable, seed: int) -> Dictionary:
 
 
 ## Every exit of `_run_ai_shooting` pays an owed test exactly once: the core's volley, no target, no ranged weapon (the
-## core takes the shotless activation); a split volley and a refused call (the table rolls it in front of its own volley).
+## core takes the shotless activation) and a split volley (the core's, its groups in one call); a refused call (the table rolls it in
+## front of its own volley).
 ## RED: an exit with no call or payment -> zero sentences; a refusal path that pays twice -> two.
 func test_every_exit_of_the_volley_code_pays_an_owed_test_once() -> void:
 	var cases := {
@@ -198,7 +199,7 @@ func test_every_exit_of_the_volley_code_pays_an_owed_test_once() -> void:
 			return [att, [a, b]],
 		"refused": func() -> Array: return [_att(5), [_def(8.0, ["Fast"])]],   # a target with a unit rule: not plain
 	}
-	var core_runs := {"volley": 1, "no target": 1, "no ranged weapon": 1, "split": 0, "refused": 0}
+	var core_runs := {"volley": 1, "no target": 1, "no ranged weapon": 1, "split": 1, "refused": 0}
 	for name in cases:
 		var r := await _shooting(cases[name], 3)
 		var tally: Dictionary = r["tally"]

@@ -61,11 +61,7 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 	if int(main._solo_core_shadow_h) == 0 or order.is_empty():
 		return
 	var core: Object = main.solo_controller._core_node_ready()
-	var split: Array = []
-	if order.size() > 1:
-		for id in order:
-			for shot in groups[id]["shots"]:
-				split.append({"member": (shot["member"] as GameUnit).get_name(), "weapon": str(shot["profile"].get("name", "")), "target": id})
+	var split: Array = CoreActivation.split_aim(order.map(func(id) -> Dictionary: return groups[id]))   # the door's own aim
 	var t := CoreActivation.ai_transcript(main, unit, report, groups[order[0]]["target"], split)
 	if not placed.is_empty():
 		t = placed + t.slice(2)
@@ -113,8 +109,6 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 	var deny: Array = CoreSlice.refusals_in(CoreSlice.DENY_PATH, unit)
 	for id in order:
 		deny.append_array(CoreSlice.refusals_in(CoreSlice.DENY_PATH, groups[id]["target"], true).map(func(x): return "target_" + x))
-	if order.size() > 1:
-		deny.append("split")   # the door keeps a split volley on the table (`order.size() == 1`)
 	records.append({"deny": deny, "equal": diff == "", "first_diff": diff, "labels": labels, "unported": r.get("unported", []),
 		"detail": _detail, "shooter": unit.get_name(), "targets": order.map(func(id) -> String: return groups[id]["target"].get_name())})
 
