@@ -109,6 +109,8 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 	var deny: Array = CoreSlice.refusals_in(CoreSlice.DENY_PATH, unit)
 	for id in order:
 		deny.append_array(CoreSlice.refusals_in(CoreSlice.DENY_PATH, groups[id]["target"], true).map(func(x): return "target_" + x))
+	if not (report.get("casts", []) as Array).is_empty():
+		deny.append("cast")   # the door keeps a volley after this activation's casts on the table (`run_ai`)
 	records.append({"deny": deny, "equal": diff == "", "first_diff": diff, "labels": labels, "unported": r.get("unported", []),
 		"detail": _detail, "shooter": unit.get_name(), "targets": order.map(func(id) -> String: return groups[id]["target"].get_name())})
 

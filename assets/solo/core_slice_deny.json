@@ -16,9 +16,9 @@
       "leaves_with": "C-R1"
     },
     "measured_never_equal": {
-      "primitives": ["Caster", "Tear", "Guarded"],
+      "primitives": ["Tear", "Guarded"],
       "kind": "measured",
-      "why": "Caster Group, Tear, Guarded: no volley with them replayed equal in the shadow soak (casts are cut from the replay).",
+      "why": "Tear, Guarded: no volley with them replayed equal in the shadow soak. (Caster left 17.11.: the door keeps a volley after this activation's casts on the table, #2935.)",
       "leaves_with": "a shadow re-soak that shows them equal"
     },
     "measured_unequal_taken": {
