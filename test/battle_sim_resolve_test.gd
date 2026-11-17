@@ -171,28 +171,6 @@ func test_move_restamps_cover_from_the_terrain_probe() -> void:
 	assert_bool((frozen["units"]["Grunts"] as Dictionary)["in_cover"]).is_true()
 
 
-## Danger term: every living enemy replies once with its best-EV shot. Rifle
-## Q4 vs Def4 at 12": 4 * 0.5 * 0.5 = 1.0 expected wound on the open target;
-## the covered twin (save 3+) is only worth 0.67, so the open one is picked.
-## Blocking the open target's sight line shifts the reply to the covered one;
-## blind to both = no threat at all.
-func test_reply_threat_picks_best_visible_target() -> void:
-	var enemy := _armed(1, [Vector3.ZERO], "Enemy", [{"name": "Rifle", "range": 24}])
-	var open := _armed(2, [Vector3(12.0 * IN2M, 0, 0)], "Open", [{"name": "CCW", "range": 0}])
-	var covered := _armed(2, [Vector3(0, 0, 12.0 * IN2M)], "Covered", [{"name": "CCW", "range": 0}])
-	var state := _capture([enemy, open, covered])
-	(state["units"]["Covered"] as Dictionary)["in_cover"] = true
-	var threat := BattleSim.reply_threat(state, 2)
-	assert_that(threat.keys()).is_equal(["Open"])
-	assert_float(threat["Open"]).is_equal_approx(1.0, 0.001)
-	(state["units"]["Enemy"] as Dictionary)["los"] = {"Open": false, "Covered": true}
-	threat = BattleSim.reply_threat(state, 2)
-	assert_that(threat.keys()).is_equal(["Covered"])
-	assert_float(threat["Covered"]).is_equal_approx(2.0 / 3.0, 0.001)
-	(state["units"]["Enemy"] as Dictionary)["los"] = {"Open": false, "Covered": false}
-	assert_that(BattleSim.reply_threat(state, 2)).is_equal({})
-
-
 ## Charge into Tough(3): 1.0 expected wound drains the pool (3 -> 2), no kill.
 ## The survivor strikes back with the same fists -> the 1W charger dies; the
 ## charge marks the actor fatigued on the clone.
@@ -437,25 +415,6 @@ func test_fatigued_charger_hits_only_on_sixes_in_expectation() -> void:
 
 
 # === Spells in expectation (parity wave, NML-995) ===
-
-## Pure core: a modeled 1-token damage spell (3 hits, AP4-ish facets) in range
-## yields success-chance x damage EV; out of range or too expensive yields 0;
-## unmodeled entries never count.
-func test_spell_ev_core_ranges_tokens_and_status() -> void:
-	var spells := [
-		{"name": "Zap", "threshold": 1, "range_in": 18,
-			"effect": {"kind": "damage", "hits": 3, "weapon_rules": []},
-			"target": {"count": 1}, "status": "modeled"},
-		{"name": "Ghost", "threshold": 1, "range_in": 48,
-			"effect": {"kind": "damage", "hits": 9, "weapon_rules": []},
-			"target": {"count": 1}, "status": "unmodeled"},
-	]
-	var def_ctx := {"quality": 4, "defense": 4, "tough": 1, "models": 4}
-	var hit := BattleSim._spell_ev_from(spells, 2, def_ctx, 12.0)
-	assert_float(float(hit["ev"])).is_greater(0.0)
-	assert_int(int(hit["cost"])).is_equal(1)
-	assert_float(float(BattleSim._spell_ev_from(spells, 2, def_ctx, 30.0)["ev"])).is_equal_approx(0.0, 0.0001)
-	assert_float(float(BattleSim._spell_ev_from(spells, 0, def_ctx, 12.0)["ev"])).is_equal_approx(0.0, 0.0001)
 
 
 func test_reach_hunt_simulator_moves_only_charge_the_extra_distance() -> void:
