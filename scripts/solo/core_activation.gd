@@ -289,8 +289,6 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		if str(r["step"]) != "need_roll":
 			if beat.is_valid():
 				await beat.call(str(r["step"]), r, [])
-			if str(r["step"]) == "done":
-				spend_once_after_volley(main, unit, transcript)
 			r.merge({"steps": step + 1, "core_us": core_us, "max_us": max_us}, true)
 			return r
 		var owner := str(r["owner"])
@@ -309,35 +307,11 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		if str(r["kind"]) == "defense":
 			var defender := str(r.get("owner_key", ""))
 			unsaved[defender] = int(unsaved.get(defender, 0)) + failed_saves(faces, int(r["target"]))
-		if str(r["kind"]) == "morale":
-			# P4.0-4c: the table spends a once morale buff right after the morale die (`_solo_morale_test`), for the unit
-			# that rolled; the core spent its own copy of the ledger (the capture sends it) and no delta key carries a buff spend
-			# back. A volley's test has no other cause, so no buff is kept back. A Shaken unit rolls no die, so this is never
-			# reached for it.
-			main._solo_spend_once_kind(roller, ["morale"])
 		if beat.is_valid():
 			await beat.call("thrown", r, faces)
 	push_error("CoreActivation.drive: %s still needs dice after %d steps" % [unit.get_name(), MAX_STEPS])
 	r.merge({"steps": MAX_STEPS, "core_us": core_us, "max_us": max_us}, true)
 	return r
-
-
-## P4.0-4b: the volley a `done` activation resolved spends the table's once buffs, with the table's own spend
-## (`_solo_consume_once_mods`, the call every table volley ends with), after the presentation, as on the table. The
-## core spends in its own copy of the ledger (the live capture DOES send it: `_stamp_gate_reads` writes `ledger`, `plain.rs`
-## folds it) and no delta key carries a buff spend back, so the table's record would survive and the next volley would apply
-## it again. The table stays the owner of the spend:
-## its record, its token, its log line and its wire message. A transcript whose last intent names no target (an End
-## without a shot) fired nothing and spends nothing. Both units are plain at every door, so neither holds a
-## Regeneration grant (a grant stamps a rule onto its holder): the spend is unconditional, exactly as the table's.
-static func spend_once_after_volley(main, unit: GameUnit, transcript: Array) -> void:
-	for i in range(transcript.size() - 1, -1, -1):
-		if str((transcript[i] as Dictionary).get("t", "")) != "intent":
-			continue
-		var target: GameUnit = main.opr_army_manager.game_units.get(str((transcript[i] as Dictionary).get("shoot", "")))
-		if target != null:
-			main._solo_consume_once_mods(unit, target, false)
-		return
 
 
 ## Step 42 (O21): the weapon named by the core's last shot line ("<shooter> fires <weapon> at <target> — <n> hits",
@@ -801,6 +775,7 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 				push_error("CoreActivation.land_delta: %s moved and lost models the steps did not land" % gu.get_name())
 				done["unknown"] = true
 				return
+		var was_shaken := gu.is_shaken
 		if bool(d["shaken"]) != gu.is_shaken:
 			main.radial_menu_controller.card_toggle_shaken(gu)
 			main._solo_mirror_shaken(gu)
@@ -811,6 +786,7 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		_land_feats(main, gu, d)
 		_land_once_latches(main, gu, d)
 		_land_growth(main, gu, d)
+		_land_buffs(main, gu, d, was_shaken)
 
 
 ## C-11: the rule name of each Precision latch and the table flag that closes it.
@@ -854,6 +830,29 @@ static func _land_growth(main, gu: GameUnit, d: Dictionary) -> void:
 			gu.get_name(), count, held, keys.size()])
 		return
 	main._sync_unit_property(gu, keys[0], count)
+
+
+## C-15: the once buffs the core SPENT in this activation (the delta's `buffs_spent`: per record its name and scope; the core's own
+## morale / hit / defense / grant spends, Great Banner and Regeneration grant rules included). The core is the authority: each named
+## once-record of the table (same spell, scope, duration "once") is spent with the table's own spend (`_solo_spend_records`: its record,
+## token, log line, wire message); a record the table no longer holds is no news. This replaces the table's own spend after a volley
+## and after the morale die (P4.0-4b / -4c), which picked the records by role and knew no grant. One difference is kept on the
+## table's side: a unit that was ALREADY Shaken fails its morale test without a die and keeps a once morale buff (#2804), the core
+## spends it anyway, so a pure morale record of a Shaken unit is not spent here.
+static func _land_buffs(main, gu: GameUnit, d: Dictionary, was_shaken: bool) -> void:
+	for e in d.get("buffs_spent", []):
+		var records: Array = main._solo_spell_mods.get(gu.get_instance_id(), [])
+		var hit: Array = records.filter(func(rd: Variant) -> bool: return str((rd as Dictionary).get("spell", "")) == str(e[0]) \
+			and str((rd as Dictionary).get("scope", "")) == str(e[1]) and str((rd as Dictionary).get("duration", "")) == "once" \
+			and not (was_shaken and _morale_only(rd as Dictionary)))
+		if not hit.is_empty():
+			main._solo_spend_records(gu, [hit[0]])
+
+
+## A spell record whose only effect is a morale roll bonus.
+static func _morale_only(rd: Dictionary) -> bool:
+	return int(rd.get("morale_mod", 0)) != 0 and str(rd.get("grants_rule", "")) == "" \
+		and ["hit_mod", "def_mod", "casting_mod", "range_in", "advance_in", "rush_in"].all(func(k: String) -> bool: return int(rd.get(k, 0)) == 0)
 
 
 ## P4.D-38a: the once-per-game feat latches the core SPENT in this activation (the delta's `feats_used`, inventory row of the

@@ -76,7 +76,7 @@ same commit as the struct change.
 | `shroud` | main.gd:5118 | no | no | no (capture input) |
 | `charge_no_difficult` | act_recorder.gd:846 | no | no | no (capture input) |
 | `charge_probe_r` | act_recorder.gd:845 | no | no | no (capture input) |
-| `buffs` | main.gd:447 | no | no | **YES** |
+| `buffs` | main.gd:447 | spent once buffs (`land_delta`, C-15); a buff the core ADDS is not carried | no | no (delta) |
 | `vs_mark_round` | main.gd:24332 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `hit_and_run_round` | solo_controller.gd:12793 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `moved_round` | main.gd:1761 | yes (`land_delta`, P4.0-4e) | X/Z only | no (delta) |
@@ -116,6 +116,9 @@ same commit as the struct change.
 - 79 `State` fields; **13 gap rows** (P4.0-4d landed `fatigued` and `casts`; P4.0-4e the twelve round
   stamps; P4.0-4f the four marker pools; P4.0-4g `versatile_pick_mode`; C-11 the three once-per-game name lists
   `limited_used`, `storm_used`, `precision_used`; C-13 `growth_markers`, -22).
+- 79 `State` fields; **12 gap rows** (P4.0-4d landed `fatigued` and `casts`; P4.0-4e the twelve round
+  stamps; P4.0-4f the four marker pools; P4.0-4g `versatile_pick_mode`; C-11 the three once-per-game name lists
+  `limited_used`, `storm_used`, `precision_used`; C-13 `growth_markers`; C-15 the once-buff spend (`buffs`), -22).
 - No gap among the board facts an activation moves: model wounds, deaths and positions ride the
   per-step landings, `shaken` rides `delta_of`, `activated` and `shaken` ride the MP rows.
 - Every remaining gap is a once-per-game latch the dice path reads again later: the live buff ledger
@@ -149,7 +152,7 @@ and the `buffs` spend (`sim.rs:10594`).
 |---|---|---|
 | (a) | `fatigued` | `sim.rs:2108,3292` (Second Wind branch); `battle_sim.gd:2124`; the table's own fatigue toggle is the writer |
 | (a) | `casts` | `sim.rs:1925-1928` (Vengeance branch); `battle_sim.gd:2126`; table cast path writes it |
-| (b), fixed | `buffs` | core spends at `sim.rs:10594` (`spend_exchange_wounded`) in its own copy of the ledger (the capture DOES send it: `_stamp_gate_reads` writes `ledger`, `fold_ledger` reads it), no delta key carries the spend back, and the table's `_solo_spend_once_mods` (`main.gd:6161`) never ran on the core path; read `main.gd:447`. Fixed by #2803 (the volley's once buffs; the table's own spend after a `done` activation); the once morale buff fixed by #2804 (spent right after the morale die) |
+| (b), fixed (#2803/#2804, then C-15) | `buffs` | core spends at `sim.rs:10594` (`spend_exchange_wounded`) in its own copy of the ledger (the capture DOES send it: `_stamp_gate_reads` writes `ledger`, `fold_ledger` reads it), no delta key carries the spend back, and the table's `_solo_spend_once_mods` (`main.gd:6161`) never ran on the core path; read `main.gd:447`. Fixed by #2803 (the volley's once buffs; the table's own spend after a `done` activation); the once morale buff fixed by #2804 (spent right after the morale die) |
 | (a) | `vs_mark_round` | `sim.rs:1911,1964` (Vengeance branch); `main.gd:24332`; table writer runs |
 | (a) | `hit_and_run_round` | `sim.rs:3171,3197` (Hit-and-Run branch); `solo_controller.gd:12793`; table writer runs |
 | (a) | `moved_round` | `sim.rs:9770` writes it on the P3 placed move, but `_on_units_dropped` (`main.gd:22883`) and `_solo_animate_move` (`main.gd:12255`) set the table's copy on the same move; the delta's `moved` is a guard, P4.0-4e lands the round stamp; read `main.gd:1761` |

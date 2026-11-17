@@ -7,6 +7,7 @@ use crate::gate::INCHES_TO_METERS;
 use crate::io::{Action, Seams, SplitShot};
 use crate::landing::Landing;
 use crate::logline::{Category, LogLine};
+use crate::mods::LiveMod;
 use crate::mv::step::{leg_crosses, DIFFICULT_MOVE_CAP_IN};
 use crate::rng::GodotRng;
 use crate::sim::{band_parts, resolve_stochastic_tray_on_board, terrain_debuff_folds, Cover, ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
@@ -421,6 +422,27 @@ pub struct UnitDelta {
     /// C-13: the unit's Growth Markers counter AFTER (inventory class (a), `State::growth_markers`). One counter per unit
     /// whatever rules it carries; `land_delta` writes it through the unit's Growth Markers rule.
     pub growth_markers: i64,
+    /// C-15: the once buffs this activation SPENT (inventory class (b)): per record its own name (the table's `spell`) and scope, in
+    /// `before`'s order. The core spends in its own copy of the ledger; `land_delta` spends the matching table records. Records the
+    /// core ADDED (a pre-attack placement) are not carried.
+    pub buffs_spent: Vec<(String, String)>,
+}
+
+/// The once buffs of `before` that `after` no longer holds, as (record name, scope). Each record is first matched to an identical
+/// one in `after`, so a buff the activation did not touch is never named.
+fn spent_buffs(before: &[LiveMod], after: &[LiveMod]) -> Vec<(String, String)> {
+    let mut kept: Vec<&LiveMod> = after.iter().collect();
+    let mut out = Vec::new();
+    for b in before {
+        match kept.iter().position(|a| *a == b) {
+            Some(i) => {
+                kept.remove(i);
+            }
+            None if b.once => out.push((b.name.to_string(), b.scope.to_string())),
+            None => {}
+        }
+    }
+    out
 }
 
 /// The names `after` holds that `before` did not, in `after`'s order.
@@ -488,6 +510,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
             || before.storm_used[u] != after.storm_used[u]
             || before.precision_used[u] != after.precision_used[u]
             || before.growth_markers[u] != after.growth_markers[u]
+            || before.buffs[u] != after.buffs[u]
         {
             out.push(UnitDelta {
                 key: key.clone(),
@@ -506,6 +529,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 storm_used: gained(&before.storm_used[u], &after.storm_used[u]),
                 precision_used: gained(&before.precision_used[u], &after.precision_used[u]),
                 growth_markers: after.growth_markers[u],
+                buffs_spent: spent_buffs(&before.buffs[u], &after.buffs[u]),
             });
         }
     }
@@ -1238,6 +1262,34 @@ mod tests {
             }
         }
         assert!(kills > 0, "no seed destroyed the target: the volley proves nothing");
+    }
+
+    fn once_buff(name: &str, scope: &str, once: bool) -> LiveMod {
+        LiveMod {
+            hit_mod: 1, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, move_mod: 0,
+            grants_rule: "".into(), scope: scope.into(), attackers: false, once, name: name.into(),
+        }
+    }
+    /// C-15: a unit whose only change is a spent once buff gets a row naming it (name, scope); a buff it still holds, a round buff
+    /// and a buff the core ADDED are no spend. A core volley spends the shooter's own once hit mod and says so.
+    /// RED: drop the `buffs` term from the change test -> no row; drop the field from the push -> [].
+    #[test]
+    fn the_delta_carries_the_spent_once_buffs() {
+        let (mut st, statics) = volley_line();
+        st.buffs[0] = vec![once_buff("Fury", "shooting", true), once_buff("Fury", "shooting", true), once_buff("Round", "", false)];
+        let mut after = st.clone();
+        after.buffs[0].remove(0);
+        let d = delta_of(&st, &after);
+        assert_eq!((d.len(), d[0].buffs_spent.clone()), (1, vec![("Fury".to_string(), "shooting".to_string())]), "{d:?}");
+        after.buffs[0] = vec![once_buff("Fury", "shooting", true)];
+        let d = delta_of(&st, &after);
+        assert_eq!(d[0].buffs_spent.len(), 1, "one Fury is spent and one kept; the removed round buff is no spend: {d:?}");
+        let mut added = st.clone();
+        added.buffs[0].push(once_buff("New", "melee", true));
+        assert!(delta_of(&st, &added)[0].buffs_spent.is_empty(), "an addition is not a spend");
+        let (got, _) = drive(&statics, &{ let mut s = st.clone(); s.buffs[0] = vec![once_buff("Fury", "shooting", true)]; s }, vec![Begin, intent(HOLD, Some("b"))], 7);
+        let ActStep::Done { state, .. } = got else { panic!("seed 7: {got:?}") };
+        assert!(state.buffs[0].is_empty(), "the core spent the once hit mod on its volley");
     }
 
     // ---- step 14: allowance and move check ----

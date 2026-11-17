@@ -18,7 +18,7 @@ const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_s
 	"faction_folder": "robot_legions", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
 ## The delta row of a unit, key for key (sorted): what the core hands back. A key added there is a field the landing must map.
-const DELTA_KEYS := ["alive", "casts", "fatigued", "feats_used", "growth_markers", "limited_used", "moved", "pools", "precision_used", "removed", "shaken",
+const DELTA_KEYS := ["alive", "buffs_spent", "casts", "fatigued", "feats_used", "growth_markers", "limited_used", "moved", "pools", "precision_used", "removed", "shaken",
 	"stamps", "storm_used", "unit", "unknown", "versatile_pick_mode"]
 ## The round stamps the capture does NOT send (`_ledger_of` has no key for them), with the table property each is landed under.
 const UNSENT_STAMPS := {"reckless_rolled_round": "reckless_rolled_round", "reckless_ap_round": "reckless_ap_round",
@@ -241,12 +241,14 @@ func test_out_precision_used_comes_back() -> void:
 	assert_bool(u[0].unit_properties.get("precision_tag_used", false)).is_true()
 
 
-## The core spends its own copy of a once buff; the table repeats the spend itself (`spend_once_after_volley`), nothing comes back.
-func test_out_a_once_buff_is_lost() -> void:
+## The core spends its own copy of a once buff; the delta names the record and `land_delta` spends the table's (its record, token, log
+## line and wire message), so the next capture no longer sends it. The table's own spend after a volley is gone.
+func test_out_a_once_buff_comes_back() -> void:
 	var u := _pair()
 	_main._solo_record_spell_mod(u[0], "Fury", {"modifier": {"hit_mod": 1}, "scope": "shooting", "duration": "once"})
 	_main._solo_mirror_spell_state()
-	await _chain("buffs", u, "hit", "attack x10 @3", "attack x10 @4", "attack x10 @3")
+	await _chain("buffs", u, "hit", "attack x10 @3", "attack x10 @4", "attack x10 @4", null, true)
+	assert_array(_main._solo_spell_mods.get(u[0].get_instance_id(), [])).override_failure_message("the table's record is spent").is_empty()
 
 
 ## Growth gained by a kill: the core's second volley reads the marker its own first volley gained; the delta carries the count and

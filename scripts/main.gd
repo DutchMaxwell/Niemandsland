@@ -6314,8 +6314,17 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: 
 				if _solo_is_regen_grant(rd as Dictionary) and not bool((rd as Dictionary).get("used", false)):
 					continue
 				spent.append(rd)
+	_solo_spend_records(uu, spent)
+
+
+## C-15: the spend of the once-records `spent` on ONE unit: the record goes, its grant overlay and library token come off, each spend is
+## logged, the stamps follow and the change travels to the peer and into the save mirror. `_solo_spend_once_mods` picks the records by
+## role; the one-core landing hands over the records the core's delta names.
+func _solo_spend_records(uu: GameUnit, spent: Array) -> void:
 	if spent.is_empty():
 		return
+	var key := uu.get_instance_id()
+	var records: Array = _solo_spell_mods.get(key, [])
 	for rd in spent:
 		records.erase(rd)
 		_solo_revoke_grant(rd as Dictionary)

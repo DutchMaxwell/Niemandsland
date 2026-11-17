@@ -1,12 +1,12 @@
 extends GdUnitTestSuite
-## One core P4.0-4b: the (b) row of the state-delta inventory, fixed. A once buff is spent after a volley the core
-## resolves.
+## One core P4.0-4b / C-15: the (b) row of the state-delta inventory, fixed. A once buff is spent by the volley the core resolves.
 ##
-## `buffs` was the one lost row: a plain activation spends the once record in the core (`sim.rs`,
-## `spend_exchange_wounded`), but the live capture never sends the ledger (`plain.rs`, buffs start empty) and the table's
-## own spend (`_solo_consume_once_mods`) was not called on the core path, so the record survived and the next table volley
-## applied the once buff a second time. `CoreActivation.drive` now ends a `done` volley with the table's own spend
-## (`spend_once_after_volley`); the table stays the owner of the ledger, the token, the log line and the wire message.
+## `buffs` was the one lost row: a core volley spends the once record in the core's own copy of the ledger (`sim.rs`,
+## `spend_exchange_wounded`; the capture sends the ledger, `_stamp_gate_reads`), but no delta key brought the spend back, so the record
+## survived on the table and the next volley applied the once buff a second time. P4.0-4b ended a `done` volley with the table's own
+## spend by role (`spend_once_after_volley`, and `_solo_spend_once_kind` after the morale die); C-15 replaced it: the delta names the
+## records the core spent (`buffs_spent`) and `land_delta` spends exactly those with the table's own spend (`_solo_spend_records`:
+## its record, token, log line and wire message). One kept table rule: a unit that was already Shaken keeps a once morale buff.
 ## The buffs here are recorded through the table's own recorder (`_solo_record_spell_mod`) and mirrored (`SOLO_SPELL_RECORDS_KEY`),
 ## the copy the capture reads, so the core's volley applies them as in play.
 
