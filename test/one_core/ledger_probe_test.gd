@@ -18,8 +18,9 @@ const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_s
 	"faction_folder": "robot_legions", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
 ## The delta row of a unit, key for key (sorted): what the core hands back. A key added there is a field the landing must map.
-const DELTA_KEYS := ["alive", "buffs_spent", "casts", "fatigued", "feats_used", "growth_markers", "limited_used", "moved", "pools", "precision_used", "removed", "shaken",
-	"stamps", "storm_used", "unit", "unknown", "versatile_pick_mode"]
+const DELTA_KEYS := ["alive", "buffs_spent", "casts", "fatigued", "feats_used", "growth_markers", "limited_used", "moved",
+	"piercing_tag_persistent", "piercing_tag_used", "pools", "precision_used", "removed", "shaken", "stamps", "storm_used", "unit",
+	"unknown", "versatile_pick_mode"]
 ## The round stamps the capture does NOT send (`_ledger_of` has no key for them), with the table property each is landed under.
 const UNSENT_STAMPS := {"reckless_rolled_round": "reckless_rolled_round", "reckless_ap_round": "reckless_ap_round",
 	"reckless_backfire_round": "reckless_backfire_round", "versatile_pick_round": "versatile_pick_round",
@@ -197,11 +198,11 @@ func test_in_the_versatile_pick_is_sent() -> void:
 		att.unit_properties["versatile_pick"] = {"hit_mod": 1, "ap": 0}, "save", "defense x10 @5", "defense x10 @4")
 
 
-## NOT sent (the Piercing Tag latches are another lane's): `piercing_tag_used` has no ledger key and rides no step ledger. A Piercing Tag
-## bearer whose table latch is closed is placed again by the core.
-func test_in_the_piercing_tag_latch_is_not_sent() -> void:
+## C-12: `piercing_tag_used` rides the ledger (the second_wind_used shape). A Piercing Tag bearer whose table latch
+## is closed places nothing: the core's save target stays the profile's own (it placed the tag again before the fix).
+func test_in_the_piercing_tag_latch_is_sent() -> void:
 	await _flip("piercing_tag_used", _pair({"faction_folder": "alien_hives", "rules": ["Piercing Tag(1)"]}), func(att: GameUnit, _f: GameUnit) -> void:
-		att.unit_properties["piercing_tag_used"] = true, "save", "defense x10 @5", "defense x10 @5")
+		att.unit_properties["piercing_tag_used"] = true, "save", "defense x10 @5", "defense x10 @4")
 
 
 ## C-10: Second Wind's army cap of the round is sent. The last unit of the round (the only carrier, the enemy already activated) is
@@ -309,6 +310,43 @@ func test_out_the_marker_pools_land() -> void:
 		0, "vengeance_markers", 0, 5)
 
 
+## C-12: carried and landed: the bearer's once-per-game latch. The core's placement closed its own copy; the table's
+## flag is what its next placement reads, so the delta closes it (a split is reported: the table's own placement did
+## not run here). The target's pool is pre-set to what the core's placement + spend leaves, so the latch is the only
+## difference this landing reports. RED: drop `piercing_tag_used` from the delta -> the flag stays open.
+func test_out_the_piercing_tag_latch_lands() -> void:
+	var u := _pair({"faction_folder": "alien_hives", "rules": ["Piercing Tag(1)"]})
+	u[1].unit_properties["piercing_tag_markers"] = 1
+	u[1].unit_properties["piercing_tag_source"] = ""
+	var v := await _volley(u[0], u[1])
+	_end([v])
+	print("LEDGER_PROBE out piercing_tag_used: table false, core %s" % _row(v, u[0]).get("piercing_tag_used", "no row"))
+	assert_bool(bool(_row(v, u[0]).get("piercing_tag_used", false))).override_failure_message("the delta carries the latch").is_true()
+	await assert_error(func() -> void: CoreActivation.land_delta(_main, v["delta"], [], {})).is_push_error(
+		"CoreActivation.land_delta: %s.piercing_tag_used differs (table false, core true)" % u[0].get_name())
+	assert_bool(bool(u[0].unit_properties.get("piercing_tag_used", false))).override_failure_message("the latch landed").is_true()
+	assert_int(int(u[1].unit_properties.get("piercing_tag_markers", 0))).override_failure_message("the pool the core left lands equal").is_equal(1)
+
+
+## C-12: carried and landed: the standing pool's source. A core "Piercing Target" placement sets the core's persistent
+## flag; the table keeps the NAME that placed it, so the landing writes "Piercing Target" — the next table volley reads
+## a standing pool, not a spend-whole one. The placed pool and the bearer's latch land with it (their splits are
+## reported too: the table's own placement did not run here). RED: drop `piercing_tag_persistent` from the delta ->
+## the source stays empty and the pool would spend.
+func test_out_the_piercing_target_source_lands() -> void:
+	var u := _pair({"faction_folder": "alien_hives", "rules": ["Piercing Target"]})
+	var v := await _volley(u[0], u[1])
+	_end([v])
+	print("LEDGER_PROBE out piercing_tag_persistent: table , core %s" % _row(v, u[1]).get("piercing_tag_persistent", "no row"))
+	assert_bool(bool(_row(v, u[1]).get("piercing_tag_persistent", false))).override_failure_message("the delta carries the standing flag").is_true()
+	assert_int(int(_row(v, u[1]).get("pools", {}).get("piercing_tag_markers", -1))).override_failure_message("the placed token").is_equal(1)
+	await assert_error(func() -> void: CoreActivation.land_delta(_main, v["delta"], [], {})).is_push_error(
+		"CoreActivation.land_delta: %s.piercing_tag_source differs (table , core Piercing Target)" % u[1].get_name())
+	assert_str(str(u[1].unit_properties.get("piercing_tag_source", ""))).override_failure_message("the source landed").is_equal("Piercing Target")
+	assert_int(int(u[1].unit_properties.get("piercing_tag_markers", 0))).override_failure_message("the pool landed").is_equal(1)
+	assert_bool(bool(u[0].unit_properties.get("piercing_tag_used", false))).override_failure_message("the bearer's latch landed too").is_true()
+
+
 ## The table's latch stands: the core reads it, picks nothing new and reports no split (the delta of C-9 overwrote it before C-10).
 func test_out_the_tables_versatile_latch_stands() -> void:
 	var u := _pair({"faction_folder": "battle_brothers", "rules": ["Versatile Attack"]})
@@ -341,7 +379,7 @@ func test_the_round_stamps_come_back_equal() -> void:
 func test_the_wire_keys_of_the_fields_a_volley_does_not_exercise() -> void:
 	var wired := {"second_wind_used": ["second_wind_used", true], "surprise_attack_used": ["surprise_attack_used", true],
 		"reinforcement_spent": ["reinforcement_used", true], SoloController.DELAYED_ACTION_STAMP: ["delayed_action_round", 3],
-		"activated_via_coordinate": ["activated_via_coordinate", true]}
+		"activated_via_coordinate": ["activated_via_coordinate", true], "piercing_tag_used": ["piercing_tag_used", true]}
 	for prop in wired:
 		var gu := GameUnit.new()
 		gu.unit_properties[prop] = (wired[prop] as Array)[1]
@@ -349,15 +387,16 @@ func test_the_wire_keys_of_the_fields_a_volley_does_not_exercise() -> void:
 	var tp := GameUnit.new()
 	tp.unit_properties["teleport_used_this_activation"] = true
 	assert_bool(AiActRecorder._ledger_of(tp).has("teleport")).is_true()
-	# The recorder's ledger (a corpus format) stays byte-identical: the latches below ride the door's `step_ledger` instead.
-	for prop in ["versatile_pick", "versatile_pick_round", "piercing_tag_used", "reckless_rolled_round", "reckless_ap_round", "reckless_backfire_round",
+	# The recorder's ledger (a corpus format) stays byte-identical for the step-ledger latches: they ride the door's `step_ledger`
+	# instead. `piercing_tag_used` is the exception: C-12 stamps it into the ledger itself (the second_wind_used shape).
+	for prop in ["versatile_pick", "versatile_pick_round", "reckless_rolled_round", "reckless_ap_round", "reckless_backfire_round",
 			"retreating_strike_round", "mind_control_moved_round", "regenerative_strength_round", "piercing_spot_round"]:
 		var gu := GameUnit.new()
 		gu.unit_properties[prop] = {"hit_mod": 1, "ap": 0} if prop == "versatile_pick" else 1
 		assert_dict(AiActRecorder._ledger_of(gu)).override_failure_message("%s has no ledger key" % prop).is_empty()
 		# (the Versatile pick needs its round AND the pick: a lone half is nothing to send)
 		assert_bool(CoreActivation.step_ledger_of(gu).is_empty()).override_failure_message("%s rides the step ledger" % prop) \
-			.is_equal(prop in ["versatile_pick", "versatile_pick_round", "piercing_tag_used"])
+			.is_equal(prop in ["versatile_pick", "versatile_pick_round"])
 	var vp := GameUnit.new()
 	vp.unit_properties.merge({"versatile_pick_round": 2, "versatile_pick": {"hit_mod": 0, "ap": 1}})
 	assert_dict(CoreActivation.step_ledger_of(vp)).is_equal({"versatile_pick_round": 2, "versatile_pick_mode": 2})

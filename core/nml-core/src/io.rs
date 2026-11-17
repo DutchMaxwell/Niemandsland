@@ -377,6 +377,11 @@ pub struct PlainLedger {
     piercing_tag_markers: i64,
     #[serde(default)]
     piercing_tag_source: String,
+    /// C-12 — `unit_properties["piercing_tag_used"]` (main.gd `_solo_apply_piercing_tag`): the bearer's
+    /// once-per-game placement latch, the `second_wind_used` shape. Absent from every corpus recorded
+    /// before this key, and `false` there — an old act replays with the tag unplaced, exactly as it did.
+    #[serde(default)]
+    piercing_tag_used: bool,
 }
 
 /// The `teleport` block; `to` is a `[x, y]` pair or a `"(x, y)"` string.
@@ -1115,13 +1120,9 @@ pub(crate) fn state_of(
         second_wind_uses: 0,
         sidestep_budget: plain.sidestep_budget,
         limited_used: Rc::new(vec![Vec::new(); n]),
-        // Wave 3 — the `used` flag is still NOT a recorded corpus input:
-        // `AiActRecorder._ledger_of` never stamps `piercing_tag_used`, so a
-        // captured state always starts that flag false (a bearer could, in
-        // principle, place twice across a replay boundary; no shipped corpus
-        // exercises it). `markers`/`persistent` below ARE folded from the
-        // ledger (batch D, D42 a) — the fresh literal here is only the
-        // pre-fold default for a unit whose record carries no `ledger` key.
+        // C-12: the `used` flag folds from the ledger below (the bearer's once-per-game placement
+        // latch); the fresh literal here is only the pre-fold default for a unit whose record carries
+        // no `ledger` key. `markers`/`persistent` fold the same way (batch D, D42 a).
         piercing_tag_used: vec![false; n],
         piercing_tag_markers: vec![0; n],
         piercing_tag_persistent: vec![false; n],
@@ -1294,6 +1295,9 @@ pub fn fold_ledger(
     st.piercing_tag_markers[ui] = ledger.piercing_tag_markers;
     st.piercing_tag_persistent[ui] =
         rule_on(rules_epoch, EPOCH_67_MARKERS_BURSTS) && ledger.piercing_tag_source == "Piercing Target";
+    // C-12: the bearer's once-per-game latch folds too, so a replayed activation does not place the
+    // tag the table already placed. Below EPOCH_6_TABLE_RULES the placement never reads it (dead data).
+    st.piercing_tag_used[ui] = ledger.piercing_tag_used;
     Rc::make_mut(&mut st.precision_used)[ui] = ledger.precision_used.clone();
     // `growth_round` has no key of its own on the wire (see
     // `_ledger_of`'s doc comment, act_recorder.gd): it is DERIVED
@@ -1773,6 +1777,24 @@ mod tests {
         let mut absent = state_of(LEDGER_PLAIN);
         super::fold_ledger(&mut absent, 1, &none, crate::acts::EPOCH_73_V36, 1, false, -1);
         assert_eq!(absent.moved_round[1], -1, "an act without the key keeps -1");
+    }
+
+    /// C-12 — the Piercing-Tag bearer's once-per-game placement latch rides the act ledger
+    /// (`piercing_tag_used`, act_recorder.gd `_ledger_of`, the `second_wind_used` shape): `fold_ledger`
+    /// closes the core's own flag so a replayed activation does not place the tag the table already
+    /// placed. An act without the key keeps the latch open — every corpus recorded before this key
+    /// replays exactly as it did.
+    #[test]
+    fn fold_ledger_reads_the_piercing_tag_latch() {
+        let ledger: super::PlainLedger = serde_json::from_str(r#"{"piercing_tag_used":true}"#).expect("ledger");
+        let none: super::PlainLedger = serde_json::from_str("{}").expect("ledger");
+        let mut st = state_of(LEDGER_PLAIN);
+        super::fold_ledger(&mut st, 1, &ledger, crate::acts::CURRENT_RULES_EPOCH, 1, false, -1);
+        assert!(st.piercing_tag_used[1], "the latch lands on the named unit");
+        assert!(!st.piercing_tag_used[0], "unit 0 is untouched");
+        let mut absent = state_of(LEDGER_PLAIN);
+        super::fold_ledger(&mut absent, 1, &none, crate::acts::CURRENT_RULES_EPOCH, 1, false, -1);
+        assert!(!absent.piercing_tag_used[1], "an act without the key keeps the latch open");
     }
 
     /// `p1_0_a` on the tray: the shape `battle_sim.gd:1477-1489` + `:1539-1543`

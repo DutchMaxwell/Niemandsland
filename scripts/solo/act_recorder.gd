@@ -951,6 +951,10 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 	if ptm > 0:
 		ledger["piercing_tag_markers"] = ptm
 		ledger["piercing_tag_source"] = str(u.unit_properties.get("piercing_tag_source", ""))
+	# C-12: the bearer's once-per-game placement latch (main.gd _solo_apply_piercing_tag), the
+	# second_wind_used shape: without it the core places the tag again on every activation.
+	if bool(u.unit_properties.get("piercing_tag_used", false)):
+		ledger["piercing_tag_used"] = true
 	var pu: Array = []
 	if bool(u.unit_properties.get("precision_tag_used", false)):
 		pu.append("Precision Tag")

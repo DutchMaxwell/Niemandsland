@@ -430,6 +430,14 @@ pub struct UnitDelta {
     /// C-13: the unit's Growth Markers counter AFTER (inventory class (a), `State::growth_markers`). One counter per unit
     /// whatever rules it carries; `land_delta` writes it through the unit's Growth Markers rule.
     pub growth_markers: i64,
+    /// C-12: the Piercing-Tag bearer's once-per-game placement latch AFTER (inventory row of the same name):
+    /// the core's placement closed its own copy; `land_delta` closes the table's flag, so the next capture
+    /// sends it back and neither side places the tag twice.
+    pub piercing_tag_used: bool,
+    /// C-12: whether the unit's Piercing-Tag pool STANDS after the activation (`State::piercing_tag_persistent`,
+    /// the "Piercing Target" name). The table keeps the NAME that placed it (`piercing_tag_source`);
+    /// `land_delta` maps the bool onto that name.
+    pub piercing_tag_persistent: bool,
     /// C-15: the once buffs this activation SPENT (inventory class (b)): per record its own name (the table's `spell`) and scope, in
     /// `before`'s order. The core spends in its own copy of the ledger; `land_delta` spends the matching table records. Records the
     /// core ADDED (a pre-attack placement) are not carried.
@@ -518,6 +526,8 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
             || before.storm_used[u] != after.storm_used[u]
             || before.precision_used[u] != after.precision_used[u]
             || before.growth_markers[u] != after.growth_markers[u]
+            || before.piercing_tag_used[u] != after.piercing_tag_used[u]
+            || before.piercing_tag_persistent[u] != after.piercing_tag_persistent[u]
             || before.buffs[u] != after.buffs[u]
         {
             out.push(UnitDelta {
@@ -537,6 +547,8 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 storm_used: gained(&before.storm_used[u], &after.storm_used[u]),
                 precision_used: gained(&before.precision_used[u], &after.precision_used[u]),
                 growth_markers: after.growth_markers[u],
+                piercing_tag_used: after.piercing_tag_used[u],
+                piercing_tag_persistent: after.piercing_tag_persistent[u],
                 buffs_spent: spent_buffs(&before.buffs[u], &after.buffs[u]),
             });
         }
@@ -1240,6 +1252,26 @@ mod tests {
         assert!(delta_of(&st, &st).is_empty(), "no spend, no row");
         let again = delta_of(&after, &after);
         assert!(again.is_empty(), "a latch that was already spent is no news: {again:?}");
+    }
+
+    /// C-12: a unit whose only change is a Piercing-Tag latch gets a row carrying both AFTER: the bearer's
+    /// once-per-game `piercing_tag_used` and the target's standing-pool flag `piercing_tag_persistent`.
+    /// RED: drop a term from the change test -> no row; drop a field from the push -> the false default.
+    #[test]
+    fn the_delta_carries_the_piercing_tag_latches() {
+        let (st, _) = volley_line();
+        let mut after = st.clone();
+        after.piercing_tag_used[0] = true;
+        after.piercing_tag_persistent[2] = true;
+        let d = delta_of(&st, &after);
+        assert_eq!(d.len(), 2, "each latch is a change: {d:?}");
+        assert!(d[0].piercing_tag_used, "the bearer's latch rides its row");
+        assert!(!d[0].piercing_tag_persistent);
+        assert!(d[1].piercing_tag_persistent, "the standing flag rides the target's row");
+        assert!(!d[1].piercing_tag_used);
+        assert!(delta_of(&st, &st).is_empty(), "no placement, no row");
+        let again = delta_of(&after, &after);
+        assert!(again.is_empty(), "a latch already closed is no news: {again:?}");
     }
 
     /// C-11: a unit whose only change is a spent Limited weapon / Storm Attack / Precision latch gets a row naming each; a name

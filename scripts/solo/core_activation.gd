@@ -820,6 +820,7 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		_land_ledger(main, gu, d)
 		_land_stamps(main, gu, d)
 		_land_pools(main, gu, d)
+		_land_piercing(main, gu, d)
 		_land_versatile_mode(main, gu, d)
 		_land_feats(main, gu, d)
 		_land_once_latches(main, gu, d)
@@ -941,6 +942,25 @@ static func _land_pools(main, gu: GameUnit, d: Dictionary) -> void:
 			continue
 		push_error("CoreActivation.land_delta: %s.%s differs (table %d, core %d)" % [gu.get_name(), key, was, value])
 		main._sync_unit_property(gu, key, value)
+
+
+## C-12: the two Piercing-Tag latches the delta now carries (inventory rows of the same names). The bearer's
+## once-per-game `piercing_tag_used` is a bool on both sides; the target's standing pool the table keeps as the
+## NAME that placed it (`piercing_tag_source`): only "Piercing Target" stands, so the core's bool maps onto that
+## name. A difference is a core/table split (reported) and the core's value lands, as the pools do.
+static func _land_piercing(main, gu: GameUnit, d: Dictionary) -> void:
+	var used := bool(d.get("piercing_tag_used", false))
+	var was_used := bool(gu.unit_properties.get("piercing_tag_used", false))
+	if used != was_used:
+		push_error("CoreActivation.land_delta: %s.piercing_tag_used differs (table %s, core %s)" % [gu.get_name(), was_used, used])
+		main._sync_unit_property(gu, "piercing_tag_used", used)
+	var standing := bool(d.get("piercing_tag_persistent", false))
+	var source := str(gu.unit_properties.get("piercing_tag_source", ""))
+	if standing == (source == "Piercing Target"):
+		return
+	var core_source := "Piercing Target" if standing else ""
+	push_error("CoreActivation.land_delta: %s.piercing_tag_source differs (table %s, core %s)" % [gu.get_name(), source, core_source])
+	main._sync_unit_property(gu, "piercing_tag_source", core_source)
 
 
 ## P4.0-4d: the table-owned per-activation ledger the delta now carries (inventory class (a)): the fatigue flag and the
