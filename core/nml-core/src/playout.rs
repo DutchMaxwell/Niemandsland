@@ -18,7 +18,7 @@
 //!   * the build order of the candidate list is part of the contract, because
 //!     `_policy_step`'s tie-break is "first seen wins".
 
-use crate::acts::{rule_on, EPOCH_8_PLANNER_MENU};
+use crate::acts::{rule_on, EPOCH_80_ROLLOUT_CUMBERSOME, EPOCH_8_PLANNER_MENU};
 use crate::gate;
 use crate::io::{Action, Seams};
 use crate::menu::{best_charge, best_shoot, safe_advance_at, Candidate, Tuning};
@@ -131,6 +131,16 @@ impl<'a> Policy<'a> {
             .map(|o| (geom::length(geom::sub(geom::to_f32(o.pos), centre)) as f64, *o))
             .collect();
         sorted.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+        // Rules 3.6 (SHO-16, `EPOCH_80_ROLLOUT_CUMBERSOME`, table twin `_policy_candidates`): a Cumbersome unit may only
+        // Hold or Advance and fires no volley after moving: the hold row plus one plain Advance per nearest objective.
+        if rule_on(self.seams.rules_epoch, EPOCH_80_ROLLOUT_CUMBERSOME) && crate::menu::cumbersome_at(state, self.statics, unit) {
+            for (_, o) in sorted.into_iter().take(self.tuning.rush_k) {
+                let mut c = Candidate::new(key, ADVANCE);
+                c.dest = Some(o.pos);
+                out.push(c);
+            }
+            return out;
+        }
         for (_, o) in sorted.into_iter().take(self.tuning.rush_k) {
             // #812 core half — GF v3.5.1 p.7: Rush forbids shooting, so a rush
             // whose EXECUTABLE distance (p.11 difficult cap, mv/step.rs:598)
