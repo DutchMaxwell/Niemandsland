@@ -1188,7 +1188,12 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# the flight, then the recovery.
 	if bool(report.get("idle_shaken", false)):
 		if int(report.get("dangerous_dice", 0)) > 0:
-			await _run_ai_dangerous(unit, int(report["dangerous_dice"]))
+			# P4.D-36: a plain unit's idle Dangerous test is the core's - one call, a Hold that tests and recovers
+			if CoreActivation.takes_ai_activation(self, unit, report) and not bool(report.get("aircraft", false)):
+				report["core_dangerous"] = int(report["dangerous_dice"])
+				await _solo_ai_core_call(unit, report, null, [])
+			else:
+				await _run_ai_dangerous(unit, int(report["dangerous_dice"]))
 			if unit.is_destroyed():
 				return unit
 		if bool(report.get("aircraft", false)) and not solo_controller.last_move_paths.is_empty():
