@@ -201,8 +201,9 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## with EPOCH_76_MOVE_FIXES, and the #183 charge cap to 77 with EPOCH_77_CHARGE_CAP, and the core twin of the
 ## flier cut (#2827, applied by the table since its merge) to 78 with EPOCH_78_FLIER_CUT, and the core EV's
 ## move stamp (FAB-A5) to 79 with EPOCH_79_EV_MOVED_ROUND, and Cumbersome in the core rollouts to 80 with
-## EPOCH_80_ROLLOUT_CUMBERSOME.
-static var rules_epoch: int = 80
+## EPOCH_80_ROLLOUT_CUMBERSOME, and a Shaken unit's auto-failed morale test keeping a once morale buff to 81 with
+## EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF.
+static var rules_epoch: int = 81
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -242,6 +243,9 @@ const EPOCH_79_EV_MOVED_ROUND := 79
 ## The core's frozen `EPOCH_80_ROLLOUT_CUMBERSOME` (acts.rs): the core rollout menu restricts a Cumbersome unit to
 ## Hold or a plain Advance, as `AiPlanner._policy_candidates` does. Nothing in the table gates on it.
 const EPOCH_80_ROLLOUT_CUMBERSOME := 80
+## The core's frozen `EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF` (acts.rs): the core keeps a once morale buff through a Shaken unit's
+## auto-failed morale test, as `_solo_morale_test` does (#2804). Nothing in the table gates on it.
+const EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF := 81
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
