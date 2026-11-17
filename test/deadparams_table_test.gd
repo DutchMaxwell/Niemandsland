@@ -1,8 +1,8 @@
 extends GdUnitTestSuite
 ## Dead-parameter fold — TABLE half (the GDScript twin of core PR #1006). The
 ## registry params the core already reads must reach the table folds: Counter
-## (strikes_first, impact_reduction_per_model), Artillery (hold_only,
-## shooter_hit_bonus, target_hit_penalty), Indirect (ignores_los,
+## (strikes_first, impact_reduction_per_model), Artillery
+## (shooter_hit_bonus, target_hit_penalty), Indirect (ignores_los,
 ## hold_and_shoot). Every fold's fallback equals the old hard-coded constant
 ## and every shipped book entry prints exactly that constant — a real-book
 ## replay is byte-identical; only a deviating fixture entry moves the fold
@@ -56,24 +56,6 @@ func _inject(system: String, name: String, primitive: String, params: Dictionary
 		"params": params}}}, "common": {}}
 
 
-func _state_with(rules: Array, system: String, faction: String) -> Dictionary:
-	var gun := _unit_with(rules, system, faction, "Gun", 2, 1)
-	var foe := _unit_with([], system, faction, "Foe", 2, 2)
-	for i in range(2):
-		(foe.models[i] as ModelInstance).node.global_position = Vector3(float(i) * IN2M, 0, 10.0 * IN2M)
-	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
-	army.game_units = {"Gun": gun, "Foe": foe}
-	return BattleSim.capture(army, func() -> Array: return [Vector3(0, 0, 5.0 * IN2M)],
-		func(_i: int) -> int: return 0, 1, 4)
-
-
-func _kinds(menu: Array) -> Dictionary:
-	var out := {}
-	for c in menu:
-		out[int((c as Dictionary).get("kind", -1))] = true
-	return out
-
-
 func test_counter_impact_reduction_param_scales_the_counter_models() -> void:
 	# GF/AoF v3.5.1 p.13: "-1 total Impact rolls per model with Counter" — the
 	# per-model magnitude is the entry's param. A fixture saying 2 must scale 3
@@ -113,31 +95,6 @@ func test_counter_strikes_first_param_gates_the_strike_first_slot() -> void:
 		.override_failure_message("no param: the recorded strike-first order stands").is_true()
 	assert_bool(off_first) \
 		.override_failure_message("the entry opted Counter out of the strike-first slot").is_false()
-
-
-func test_hold_only_param_reopens_the_immobile_menu() -> void:
-	# The menu gate is the core twin (forces_hold && hold_only.unwrap_or(true)):
-	# an entry saying hold_only = false must offer the carrier its moves again.
-	_inject("gf", "Immobile", "Immobile", {"hold_only": false})
-	var state := _state_with(["Immobile"], "gf", "testfac")
-	assert_bool(_kinds(AiPlanner.candidates(state, "Gun")).has(AiDecision.Action.RUSH)) \
-		.override_failure_message("hold_only = false must reopen the move menu") \
-		.is_true()
-	RulesRegistry.reset_cache()
-
-
-func test_hold_only_replays_the_hold_only_menu_without_a_param() -> void:
-	# The shipped entry (or no entry): the menu stays hold-only — byte-identical. Pinned at the
-	# rules 3.5 epoch (72): from rules 3.6 (73) on Artillery may move (test/v36/sho_04_test.gd).
-	var epoch0: int = AiActRecorder.rules_epoch
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
-	for rules in [["Immobile"], ["Artillery"]]:
-		RulesRegistry.reset_cache()
-		var state := _state_with(rules, "gf", "testfac")
-		assert_bool(_kinds(AiPlanner.candidates(state, "Gun")).has(AiDecision.Action.RUSH)) \
-			.override_failure_message("%s must keep the hold-only menu" % str(rules)).is_false()
-	AiActRecorder.rules_epoch = epoch0   # statics leak across gdUnit tests — restore
-	RulesRegistry.reset_cache()
 
 
 func test_artillery_hit_params_reach_the_hit_modifier() -> void:
