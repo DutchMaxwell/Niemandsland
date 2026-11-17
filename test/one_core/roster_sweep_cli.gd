@@ -93,6 +93,10 @@ func _run(args: Array) -> void:
 	_write(out.path_join("verdicts.jsonl"), (cmp["verdicts"] as Array).map(func(v: Dictionary) -> String: return JSON.stringify(v, "", true, true)))
 	_write(out.path_join("coverage.json"), [JSON.stringify(cov, " ", true, true)])
 	var fired := (cmp["verdicts"] as Array).filter(func(v: Dictionary) -> bool: return bool(v["fired"])).size()
+	var share: Dictionary = h.deny_share(cmp["verdicts"])
+	printerr("ROSTER-SWEEP-DENY-MODE fired=%d taken=%d equal=%d" % [share["fired"], share["taken"], share["equal"]])
+	for v in share["unequal"]:
+		printerr("ROSTER-SWEEP-DENY-UNEQUAL: %s | %s -> %s seed %d: %s" % [v["pair"], v["att"], v["tgt"], v["seed"], v["first_diff"]])
 	printerr("ROSTER-SWEEP-SUMMARY lists=%d pairs=%d volleys=%d fired=%d roll_mismatches=%d mismatches=%d explained=%d unexplained=%d uncovered=%d (min %d)" % [
 		lists.size(), pairs.size(), rows.size(), fired, cmp["roll_mismatches"], gate["mismatches"], gate["explained"], (gate["unexplained"] as Array).size(), missing.size(), min_volleys])
 	for p in cmp["problems"]:

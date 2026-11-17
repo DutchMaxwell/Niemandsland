@@ -3,21 +3,18 @@
   "door": "shoot",
   "mode": "deny",
   "note": "C-15 (deny by evidence): read only with NML_CORE_SLICE=deny. A unit carrying a listed primitive (unit or weapon rule) stays on the table; every other rule the registry automates goes to the core. Unknown or unautomated rules stay refused in both modes. Measured in the 24-game shadow soak of 17.11. (wave1116/shadow_soak_C6.md); the list only shrinks.",
+  "unmapped_inert": true,
+  "unmapped_inert_why": "A rule name no rules map knows for the unit's system and faction (an upgrade's own label such as Wandering Mystic, War Paint, Combat Shield): the registry gives neither side anything to read, and the rules the upgrade grants are carried and checked on their own.",
   "inert": {
     "Unique": "A list-building restriction only (army book); no effect on a volley.",
     "Army Standard Bearer": "An upgrade's own label; the rules it grants (Fear(2)) are carried and checked on their own.",
     "Courage": "The bare base the Courage Aura expansion stamps; no map entry on either side - the +1 morale rides the aura's own Banner entry."
   },
   "deny_names": {
+    "Unstoppable when Shooting": "Measured (shadow soak with unmapped names taken): 3 Eternals volleys at Change units, the core asks a 2+ defense roll of 3 dice the table never rolls. Its primitive (Lacerate) is shared with names that replay equal, so the name alone is refused until diagnosed.",
     "Point-Blank Surge": "Measured (shadow soak after the C-R1 lift): Pistoleer Sisters -> Blood Death Brothers, the core counted 2 hits where the table counted 1. Its primitive (Surge) is shared with plain Surge, which replays equal, so the name alone is refused until diagnosed."
   },
   "groups": {
-    "measured_unequal_taken": {
-      "primitives": ["Indirect"],
-      "kind": "measured",
-      "why": "Lifted with #2939 in a re-soak, the Indirect volleys taken still showed 2 unequal: a Mega-Giant's Dangerous test on its move (the core asks no test) and a Battle Tank's target's Hive Bond morale bonus (table 4+, core 5+, the Valiant distance). Stays until those two are fixed.",
-      "leaves_with": "the Mega-Giant Dangerous and the Valiant-distance fixes, and a shadow re-soak with them equal"
-    },
     "measured_never_equal": {
       "primitives": ["Tear", "Guarded"],
       "kind": "measured",
