@@ -506,7 +506,10 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	var table_rolled := not owns_dangerous and reported > 0
 	var parts: Array = [{"target": target, "shots": shots}] + rest
 	var aim := split_aim(parts)
-	if h == 0 or not takes_action(unit, kind) or not is_plain(unit) or table_rolled or _aim_ambiguous(aim) \
+	# A unit that cast this activation: the table resolved the casts after the capture (`_solo_resolve_ai_casts`), so the
+	# board `h` holds no spell effect - the volley stays on the table (the shadow's "cast" reason names it).
+	var cast := not (report.get("casts", []) as Array).is_empty()
+	if h == 0 or not takes_action(unit, kind) or not is_plain(unit) or table_rolled or cast or _aim_ambiguous(aim) \
 			or (target == null and not owns_dangerous) or (target != null and not is_plain_target(target)) \
 			or rest.any(func(p: Dictionary) -> bool: return not is_plain_target(p["target"])):
 		return false
