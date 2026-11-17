@@ -726,6 +726,7 @@
 "test/surface_placement_test.gd": 0.2,
 "test/surge_bonus_param_test.gd": 0.1,
 "test/surge_low_test.gd": 0.1,
+"test/support/core_resolve_test.gd": 0.1,
 "test/surprise_attack_human_burst_test.gd": 0.1,
 "test/surprise_attack_test.gd": 0.1,
 "test/table_battlemap_decode_test.gd": 2.1,
