@@ -4133,6 +4133,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         // ledger stays blind and the static stamp alone decides.
         if rule_on(rules_epoch, EPOCH_73_V36) && grants && mods::granted(state, i, "Regeneration") {
             c.regeneration = true;
+            c.regen_named = true;
             c.regen_target = fold_min(c.regen_target, REGENERATION_TARGET);
             c.regen_target_spell = fold_min(c.regen_target_spell, REGENERATION_TARGET);
         }
@@ -4154,8 +4155,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
                 }).collect();
             match crate::unit::regen_family_live(host, state.alive[i],
                 (c.regen_target, c.regen_target_spell), &heroes, rules_epoch) {
-                Some((target, spell)) => {
+                Some((target, spell, regen_named)) => {
                     c.regeneration = true;
+                    c.regen_named = c.regen_named || regen_named;
                     c.regen_target = fold_min(c.regen_target, target);
                     c.regen_target_spell = fold_min(c.regen_target_spell, spell);
                 }
@@ -4173,6 +4175,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
                     if !own && crate::unit::REGEN_MOST_MODELS.iter()
                         .any(|n| crate::unit::regen_family_on(host, n, rules_epoch)) {
                         c.regeneration = false;
+                        c.regen_named = false;
                     }
                 }
                 None => {}

@@ -1024,6 +1024,7 @@ mod v36_aig_g2;
 mod v36_data;
 mod v36_data_rows;
 mod v36_dat_16b;
+mod v36_ignore_by_name;
 mod v36_dat_17b;
 mod v36_melee;
 mod v36_melee_rows;

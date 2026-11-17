@@ -1836,19 +1836,20 @@ pub fn resolve_volley_leg(
         // registry arm, main.gd:7133-7137): the stamp carries the rule NAME,
         // so an empty field is the pre-46 silence, replay-exact.
         let disintegrate_regen = !p.regen_bypass_rule.is_empty();
-        let ignores_regen = p.bypass_regen
+        let ignores_regen = (p.bypass_regen
             || p.rending
             || p.unstoppable
             || att.rending_grant
             || att.unstoppable_grant
-            || disintegrate_regen;
+            || disintegrate_regen)
+            && def.bypass_skips_ignore();
         // Rules-must-log: the refusal names the rule — the table's
         // Bane-in-Melee arm's own line (main.gd:7175-7176). DAT-16b: from rules 3.6
         // the line is written only when the target really has a Regeneration-family
         // roll to skip (the pool's own `regeneration` / `regen_target` seam); below
         // 73 the old line stays byte-identical for replay.
         if disintegrate_regen && w > 0
-            && (!att.v36_rules || (def.regeneration && def.regen_target > 0))
+            && (!att.v36_rules || (def.regeneration && def.regen_target > 0 && def.bypass_skips_ignore()))
         {
             out.log.push(format!("{}: Regeneration ignored", p.regen_bypass_rule));
         }
@@ -2778,17 +2779,18 @@ pub fn resolve_melee_leg_wipe(
             // volley seam: the registry-driven weapon-rule bypass joins the
             // SAME union (the table's arm is reach-blind, main.gd:7133-7137).
             let disintegrate_regen = !p.regen_bypass_rule.is_empty();
-            let ignores_regen = p.bypass_regen
+            let ignores_regen = (p.bypass_regen
                 || p.rending
                 || p.unstoppable
                 || sh.att.rending_grant
                 || sh.att.unstoppable_regen_melee
-                || disintegrate_regen;
+                || disintegrate_regen)
+                && def.bypass_skips_ignore();
             // Rules-must-log: the refusal names the rule, the volley fold's
             // twin (main.gd:7175-7176). DAT-16b: same target gate as the ranged
             // leg — from 73 only a real Regeneration roll is named.
             if disintegrate_regen && w > 0
-                && (!sh.att.v36_rules || (def.regeneration && def.regen_target > 0))
+                && (!sh.att.v36_rules || (def.regeneration && def.regen_target > 0 && def.bypass_skips_ignore()))
             {
                 out.log.push(format!("{}: Regeneration ignored", p.regen_bypass_rule));
             }

@@ -890,7 +890,13 @@ pub const EPOCH_80_ROLLOUT_CUMBERSOME: u32 = 80;
 /// auto-failed test of an already Shaken unit (or of a dead Shaken host's unit). Records stamped 80 or below replay byte-exact.
 /// Every call site reads THIS constant, not `81`. The recorder mirror stamps 81 with it.
 pub const EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF: u32 = 81;
-pub const CURRENT_RULES_EPOCH: u32 = 81;
+/// Wound-ignore rules by name (#2595, table twin `_solo_ignore_wounds`): a bypass (Bane, Rending, Unstoppable, ...) skips only the
+/// roll of the rule named Regeneration (own, aura / buff granted, Medical Training); a unit whose ignore rule is anything else
+/// (Self-Repair, Resistance, Plaguebound, Angelic Blessing, ...) still rolls the bypassed wounds with the rest. Before, the core
+/// folded the whole family into one roll that a bypass skipped entirely. Records stamped 81 or below replay byte-exact. Every call
+/// site reads THIS constant, not `82`. The recorder mirror stamps 82 with it.
+pub const EPOCH_82_IGNORE_BY_NAME: u32 = 82;
+pub const CURRENT_RULES_EPOCH: u32 = 82;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2208,7 +2214,7 @@ mod tests {
         read_act_header, record_rules_epoch, rule_on, MeleeReach, SearchMode, TreeDice, TreeLeaf, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
         EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_73_V36,
         EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT, EPOCH_79_EV_MOVED_ROUND, EPOCH_80_ROLLOUT_CUMBERSOME,
-        EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF,
+        EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2229,7 +2235,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 81, "the live epoch is EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF");
+        assert_eq!(CURRENT_RULES_EPOCH, 82, "the live epoch is EPOCH_82_IGNORE_BY_NAME");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2239,11 +2245,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":81}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":82}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 81"
+            "a fresh play_game() now stamps the bumped epoch, 82"
         );
     }
 
@@ -2313,6 +2319,15 @@ mod tests {
         assert!(rule_on(EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF), "a record at 81 keeps the buff");
         assert!(rule_on(EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_80_ROLLOUT_CUMBERSOME), "81 keeps the Cumbersome menu on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF), "a fresh play_game() stamps it on");
+    }
+
+    /// Epoch 82: a record stamped 81 replays the folded family roll, a fresh record rolls a bypass by name.
+    #[test]
+    fn epoch_82_gate_is_closed_at_epoch_81_and_open_from_82() {
+        assert!(!rule_on(EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME), "a record at 81 replays the folded roll");
+        assert!(rule_on(EPOCH_82_IGNORE_BY_NAME, EPOCH_82_IGNORE_BY_NAME), "a record at 82 rolls by name");
+        assert!(rule_on(EPOCH_82_IGNORE_BY_NAME, EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF), "82 keeps the Shaken buff rule on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_82_IGNORE_BY_NAME), "a fresh play_game() stamps it on");
     }
 
     /// The WAVE 3 GATE's own reservation (05.09.): `EPOCH_6_TABLE_RULES` must
