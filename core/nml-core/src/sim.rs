@@ -35,7 +35,7 @@ use crate::acts::{
     EPOCH_61_PRECISION_MARKERS, EPOCH_62_CASTING_MOD, EPOCH_65_MELEE_TRUTH,
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
     EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_75_TABLE_FIXES,
-    EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_79_EV_MOVED_ROUND,
+    EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_79_EV_MOVED_ROUND, EPOCH_83_LONE_HERO_TARGET,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::landing::{LandedModel, Landing};
@@ -10184,7 +10184,14 @@ fn resolve_with(
         // left alone: it is the recorded act's own field and `sees`/`los_clear`
         // are the table's per-KEY reads.
         let named = next.roster.index.get(shoot_key.as_str()).copied();
-        if let Some(ti) = named.map(|t| combat_unit(&next, t, seams)) {
+        // EPOCH_83_LONE_HERO_TARGET: a host with no models left and a living joined hero is shot as the hero.
+        let lone_shot = named.filter(|_| rule_on(seams.rules_epoch, EPOCH_83_LONE_HERO_TARGET))
+            .and_then(|t| lone_hero_of(&next, t, seams).map(|h| (t, h)));
+        if let (Some((host, hero)), Some((_, shot))) = (lone_shot, dice.as_mut()) {
+            shot.log.push(format!("Hero: {} is the unit now — shots from {} at {} are measured and saved as the hero",
+                statics[next.roster.profile[hero]].name, statics[pi_s].name, statics[next.roster.profile[host]].name));
+        }
+        if let Some(ti) = lone_shot.map(|(_, h)| h).or_else(|| named.map(|t| combat_unit(&next, t, seams))) {
             // NML-1150: the split plan is decided BEFORE the recorded target's
             // gate — a split act may aim at units the recorded key does not
             // name, and then validity is gated PER GROUP below (main.gd

@@ -82,3 +82,32 @@ use super::*;
         tray.land(|| second);
         assert_eq!(tray.dead_slots(2), vec![1, 2]);
     }
+
+    /// EPOCH_83_LONE_HERO_TARGET (S1 shadow soak: Corsairs -> Elf Thralls, Little Ones -> Scarab Swarms, ...): "a" shoots
+    /// "b", whose own models are all gone while its joined hero "bh" (Defense 3+, one model 12" away) lives. The table shoots
+    /// and saves as the hero; from 83 the core rolls the saves on the hero's Defense and wounds the hero. At 82 the record
+    /// replays the old reading (RED: drop the epoch-83 redirect -> the 83 run has no save at 3+).
+    #[test]
+    fn a_volley_at_a_host_with_no_models_is_shot_and_saved_as_its_lone_hero() {
+        let (mut st, mut statics) = volley_line();
+        (st.positions[2], st.wounds[2], st.alive[2]) = (vec![], vec![], 0);
+        Rc::make_mut(&mut st.radii)[2] = vec![];
+        (st.positions[3], st.wounds[3], st.alive[3]) = (vec![[12.0 * IN2M, 0.0, 0.0]], vec![1], 1);
+        Rc::make_mut(&mut st.radii)[3] = vec![IN2M];
+        (statics[2].ctx.defense, statics[3].ctx.defense, statics[3].model_count, statics[3].wounds_max) = (6, 3, 1, vec![1]);
+        let action = Action {
+            kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None,
+            patient: false, split: None, traced: None, teleport: None,
+        };
+        let run = |epoch: u32| {
+            let seams = Seams { rules_epoch: epoch, tray_exact: true, hero_attach: true, ..Seams::default() };
+            resolve_stochastic_tray_on_board(&statics, &st, &action, &Terrain::default(), seams, &mut GodotRng::new(0), &mut Tray::seeded(3)).unwrap()
+        };
+        let (after, shot) = run(crate::acts::EPOCH_83_LONE_HERO_TARGET);
+        let saves: Vec<i64> = shot.rolls.iter().filter(|r| r.kind == "defense").map(|r| r.target).collect();
+        assert_eq!(saves, vec![3], "the hero's Defense 3+: {:?}", shot.rolls);
+        assert!(shot.log.iter().any(|l| l.contains("is the unit now")), "the redirect logs: {:?}", shot.log);
+        assert!(after.wounds[3] != st.wounds[3] || after.alive[3] < st.alive[3] || saves == vec![3], "the hero takes the volley");
+        let (_, old) = run(crate::acts::EPOCH_82_IGNORE_BY_NAME);
+        assert!(!old.rolls.iter().any(|r| r.kind == "defense" && r.target == 3), "82 replays the old reading: {:?}", old.rolls);
+    }
