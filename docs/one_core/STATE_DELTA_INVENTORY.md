@@ -99,9 +99,9 @@ same commit as the struct change.
 | `second_wind_round` | solo_controller.gd:13833 | no | no | **YES** |
 | `second_wind_uses` | solo_controller.gd:13833 | no | no | **YES** |
 | `limited_used` | solo_controller.gd:9772 | no | no | **YES** |
-| `piercing_tag_used` | main.gd:24614 | no | no | **YES** |
+| `piercing_tag_used` | main.gd:24614 | yes (`land_delta`, C-12) | no | no (delta) |
 | `piercing_tag_markers` | main.gd:24674 | yes (`land_delta`, P4.0-4f) | no | no (delta) |
-| `piercing_tag_persistent` | main.gd:24677 | no | no | **YES** |
+| `piercing_tag_persistent` | main.gd:24677 | yes (`land_delta`, C-12) | no | no (delta) |
 | `piercing_spot_round` | main.gd:24612 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `storm_used` | main.gd:25124 | no | no | **YES** |
 | `feats_used` | solo_controller.gd:2002 | Protection Feat family only (`land_delta`, P4.D-38a) | Protection Feat family only (door capture, P4.D-38a) | **YES** (every other feat family: reported, `land_delta` push_error) |
@@ -113,17 +113,17 @@ same commit as the struct change.
 
 ## Summary
 
-- 79 `State` fields; **17 gap rows** (P4.0-4d landed `fatigued` and `casts`; P4.0-4e the twelve round
-  stamps; P4.0-4f the four marker pools; P4.0-4g `versatile_pick_mode`, -19).
+- 79 `State` fields; **15 gap rows** (P4.0-4d landed `fatigued` and `casts`; P4.0-4e the twelve round
+  stamps; P4.0-4f the four marker pools; P4.0-4g `versatile_pick_mode`, -19; C-12 the two Piercing-Tag
+  latches `piercing_tag_used` / `piercing_tag_persistent`, -2).
 - No gap among the board facts an activation moves: model wounds, deaths and positions ride the
   per-step landings, `shaken` rides `delta_of`, `activated` and `shaken` ride the MP rows.
 - Every remaining gap is a once-per-game latch the dice path reads again later: the live buff ledger
   and the once-per-game flags (`second_wind_used`, the Limited / Storm / feat / Precision name lists,
-  `piercing_tag_used`, `surprise_attack_used`, `reinforcement_used`, `teleport_used`,
-  `piercing_tag_persistent`), plus `growth_markers` / `growth_round` (per-rule keys). The delta stops
-  at `shaken`, the ledger, the round stamps, the pools and the Versatile pick, and the MP rows compare
-  only activation, Shaken and per-model wounds/life/XZ — so a table and the core can disagree on any of
-  these without a local or MP signal.
+  `surprise_attack_used`, `reinforcement_used`, `teleport_used`), plus `growth_markers` / `growth_round`
+  (per-rule keys). The delta stops at `shaken`, the ledger, the round stamps, the pools, the Versatile
+  pick and the Piercing-Tag latches, and the MP rows compare only activation, Shaken and per-model
+  wounds/life/XZ — so a table and the core can disagree on any of these without a local or MP signal.
 
 ## Classification (One core P4.0-4a)
 
@@ -171,9 +171,9 @@ and the `buffs` spend (`sim.rs:10594`).
 | (a) | `second_wind_round` | `sim.rs:3286` (Second Wind branch); `solo_controller.gd:13833`; table writer runs |
 | (a) | `second_wind_uses` | `sim.rs:3289` (Second Wind branch); `solo_controller.gd:13833`; table writer runs |
 | (a) | `limited_used` | `sim.rs:1405,6060` (`mark_spent_limited`, limited-weapon branch); `solo_controller.gd:9772`; table writer runs |
-| (a) | `piercing_tag_used` | `sim.rs:2449` (Piercing tag branch); `main.gd:24614`; table writer runs |
+| (a) | `piercing_tag_used` | `sim.rs:2449` (Piercing tag branch); `main.gd:24614`; table writer runs; C-12 lands the core's latch (the capture sends it too) |
 | (a) | `piercing_tag_markers` | `sim.rs:2455,2464,2514` (Piercing tag branch); `main.gd:24674`; table writer runs |
-| (a) | `piercing_tag_persistent` | `sim.rs:2456,2475`, fold `io.rs:1288`; `main.gd:24677`; table writer runs |
+| (a) | `piercing_tag_persistent` | `sim.rs:2456,2475`, fold `io.rs:1288`; `main.gd:24677`; table writer runs; C-12 lands the core's standing flag onto `piercing_tag_source` |
 | (a) | `piercing_spot_round` | `sim.rs:2436` (Piercing Spot branch); `main.gd:24612`; table writer runs |
 | (a) | `storm_used` | `sim.rs:1449` (Storm branch); `main.gd:25124`; table writer runs |
 | (a) | `feats_used` | `sim.rs:1840,5852,5936,9468` (feat branches); `solo_controller.gd:2002`; table writer runs |

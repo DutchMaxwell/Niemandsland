@@ -141,6 +141,8 @@ fn delta_array(before: &State, after: &State) -> VarArray {
             feats.push(&name.as_str().to_variant());
         }
         d.set("feats_used", &feats);
+        d.set("piercing_tag_used", u.piercing_tag_used);
+        d.set("piercing_tag_persistent", u.piercing_tag_persistent);
         out.push(&d.to_variant());
     }
     out

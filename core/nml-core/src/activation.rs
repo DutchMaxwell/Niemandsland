@@ -410,6 +410,14 @@ pub struct UnitDelta {
     /// P4.D-38a: the once-per-game feat latches this activation SPENT (inventory class (a)): the names `State::feats_used`
     /// gained, in the order they were spent. `land_delta` closes the table's flag for each, so the next capture sends it back.
     pub feats_used: Vec<String>,
+    /// C-12: the Piercing-Tag bearer's once-per-game placement latch AFTER (inventory row of the same name):
+    /// the core's placement closed its own copy; `land_delta` closes the table's flag, so the next capture
+    /// sends it back and neither side places the tag twice.
+    pub piercing_tag_used: bool,
+    /// C-12: whether the unit's Piercing-Tag pool STANDS after the activation (`State::piercing_tag_persistent`,
+    /// the "Piercing Target" name). The table keeps the NAME that placed it (`piercing_tag_source`);
+    /// `land_delta` maps the bool onto that name.
+    pub piercing_tag_persistent: bool,
 }
 
 /// P4.0-4f: the marker pools the inventory marks table-owned, in `State` declaration order, AFTER.
@@ -468,6 +476,8 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
             || stamps_changed || pools_changed
             || before.versatile_pick_mode[u] != after.versatile_pick_mode[u]
             || before.feats_used[u] != after.feats_used[u]
+            || before.piercing_tag_used[u] != after.piercing_tag_used[u]
+            || before.piercing_tag_persistent[u] != after.piercing_tag_persistent[u]
         {
             out.push(UnitDelta {
                 key: key.clone(),
@@ -482,6 +492,8 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 pools: pools_of(after, u),
                 versatile_pick_mode: after.versatile_pick_mode[u],
                 feats_used: after.feats_used[u].iter().filter(|n| !before.feats_used[u].contains(n)).cloned().collect(),
+                piercing_tag_used: after.piercing_tag_used[u],
+                piercing_tag_persistent: after.piercing_tag_persistent[u],
             });
         }
     }
@@ -1138,6 +1150,26 @@ mod tests {
         assert!(delta_of(&st, &st).is_empty(), "no spend, no row");
         let again = delta_of(&after, &after);
         assert!(again.is_empty(), "a latch that was already spent is no news: {again:?}");
+    }
+
+    /// C-12: a unit whose only change is a Piercing-Tag latch gets a row carrying both AFTER: the bearer's
+    /// once-per-game `piercing_tag_used` and the target's standing-pool flag `piercing_tag_persistent`.
+    /// RED: drop a term from the change test -> no row; drop a field from the push -> the false default.
+    #[test]
+    fn the_delta_carries_the_piercing_tag_latches() {
+        let (st, _) = volley_line();
+        let mut after = st.clone();
+        after.piercing_tag_used[0] = true;
+        after.piercing_tag_persistent[2] = true;
+        let d = delta_of(&st, &after);
+        assert_eq!(d.len(), 2, "each latch is a change: {d:?}");
+        assert!(d[0].piercing_tag_used, "the bearer's latch rides its row");
+        assert!(!d[0].piercing_tag_persistent);
+        assert!(d[1].piercing_tag_persistent, "the standing flag rides the target's row");
+        assert!(!d[1].piercing_tag_used);
+        assert!(delta_of(&st, &st).is_empty(), "no placement, no row");
+        let again = delta_of(&after, &after);
+        assert!(again.is_empty(), "a latch already closed is no news: {again:?}");
     }
 
     // ---- step 14: allowance and move check ----
