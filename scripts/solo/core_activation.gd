@@ -389,8 +389,38 @@ static func takes_action(unit: GameUnit, kind: int) -> bool:
 ## exists, the action is one the door takes (`takes_action`), and the unit is plain. True = the activation's Dangerous test
 ## and the end morale from its wounds are the core's: the body rolls neither (see `run_ai`'s `owns_dangerous`).
 static func takes_ai_activation(main, unit: GameUnit, report: Dictionary) -> bool:
-	return main._solo_core_ai_h != 0 and main.dice_roller_control != null and is_plain(unit) \
+	var takes: bool = main._solo_core_ai_h != 0 and main.dice_roller_control != null and is_plain(unit) \
 		and takes_action(unit, int(report.get("action", -1)))
+	if takes and moves_through(unit) and not main.solo_controller.last_move_paths.is_empty() \
+			and not crossed_plain(main, unit, chords_of(main.solo_controller.last_move_paths)):
+		report["through_refused"] = true   # P4.D-37c: the decision is made once, here; `run_ai` honours it after the table struck
+		return false
+	return takes
+
+
+## The planner's walked paths ({"model", "path"}) as the core's strike legs: one start-to-end leg per model that moved.
+static func chords_of(paths: Array) -> Array:
+	return paths.filter(func(p: Dictionary) -> bool: return (p["path"] as Array).size() >= 2).map(
+		func(p: Dictionary) -> Array: return [(p["path"] as Array)[0], (p["path"] as Array)[-1]])
+
+
+## P4.D-37c: every enemy the core's strike legs (`chords`: one start-to-end leg per model) cross is a plain target. The core strikes
+## what those legs cross with the rules it ports; the slice vouches only for units it lists, so any other crossed enemy
+## (even one the strike would not pick) leaves the strike to the table, as before.
+static func crossed_plain(main, gu: GameUnit, chords: Array) -> bool:
+	for e in main.opr_army_manager.get_game_units_for_player(main.solo_controller.enemy_slot_of(gu)):
+		var eu := e as GameUnit
+		if eu == null or eu.get_alive_count() <= 0 or SoloController.unit_in_reserve(eu) or eu.is_attached():
+			continue
+		if SoloController.trails_cross_unit_bases(chords, eu.models) and not is_plain_target(eu):
+			return false
+	return true
+
+
+## P4.D-37c: a drop of this human unit handed its strike to the table (a crossed enemy is not a plain target): the activation's
+## Fire and End are the table's too, so the strike is not made twice.
+static func table_struck(gu: GameUnit) -> bool:
+	return bool((_sessions.get(gu.unit_id, {}) as Dictionary).get("table_strike", false))
 
 
 ## P4.D-3 census: volleys the TABLE resolved instead of the core, door -> reason -> count ("_all" = the door's table
@@ -452,6 +482,8 @@ static func dump_legacy() -> void:
 ## names Dangerous dice is refused, as before.
 static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h: int, shots: Array = [],
 		owns_dangerous := false) -> bool:
+	if bool(report.get("through_refused", false)):
+		return false   # P4.D-37c: the body left the strike to the table (a crossed enemy is not a plain target)
 	var kind := int(report.get("action", -1))
 	var reported := int(report.get("dangerous_dice", report.get("dangerous_models", 0)))
 	var table_rolled := not owns_dangerous and reported > 0
@@ -1031,6 +1063,12 @@ static func drop_refused(main, gu: GameUnit) -> bool:
 		return true
 	s["transcript"] = (s["transcript"] as Array).filter(func(e: Dictionary) -> bool: return str(e["t"]) != "placed") \
 		+ [{"t": "placed", "positions": at, "trails": trails}]
+	if CoreSlice.carries(gu, ["Strafing"]) and not table_struck(gu):   # P4.D-37c: sticky for the activation (one strike, one resolver)
+		var from: Dictionary = {}
+		for e in s["start_models"]:
+			from[e["model"]] = e["at"]
+		var alive: Array = gu.get_alive_models()
+		s["table_strike"] = not crossed_plain(main, gu, range(at.size()).map(func(i: int) -> Array: return [from.get(alive[i], at[i]), at[i]]))
 	for line in r.get("lines", []):
 		main._log_rule_event(BattleLog.Category.MOVEMENT, str(line["text"]), false, str(line["detail"]))
 	return false
@@ -1105,7 +1143,7 @@ static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Ca
 	if auto:
 		return false   # an Auto verb moved the unit through the engine, not through the session's drop: the core would shoot from the start
 	if not is_core_unit(main, attacker) or not is_plain_target(target) \
-			or int(main.object_manager._movement_cap) == CAP_CHARGE:
+			or int(main.object_manager._movement_cap) == CAP_CHARGE or table_struck(attacker):
 		return false
 	if main.core_door_refused(attacker):
 		return true
@@ -1149,7 +1187,7 @@ static var _ending: Dictionary = {}
 ## (the reason is logged and toasted, the player sees why), or answered otherwise (a defect, reported), or this End is
 ## already running (a second press while the dice roll).
 static func end(main, gu: GameUnit, on_throw: Callable = Callable()) -> bool:
-	if not is_core_unit(main, gu) or not _sessions.has(gu.unit_id) or last_target != null:
+	if not is_core_unit(main, gu) or not _sessions.has(gu.unit_id) or last_target != null or table_struck(gu):
 		return false
 	if _ending.has(gu.unit_id):
 		return true

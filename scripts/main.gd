@@ -4901,7 +4901,9 @@ func _solo_human_strafing(moves: Array) -> void:
 				return
 			await get_tree().process_frame
 		if CoreActivation.is_core_unit(self, unit) and CoreActivation.session_open((unit as GameUnit).unit_id):
-			continue   # P4.D-37b: the core strikes with the activation's Fire / End, from the trails the session holds
+			if not CoreActivation.table_struck(unit as GameUnit):
+				continue   # P4.D-37b: the core strikes with the activation's Fire / End, from the trails the session holds
+			CoreActivation.note_commit(self, unit as GameUnit, "strike")   # P4.D-37c: the table's strike is a die: no Cancel after it
 		await _solo_apply_strafing(unit as GameUnit, legs[unit])
 
 
