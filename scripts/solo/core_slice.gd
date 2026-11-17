@@ -32,7 +32,7 @@ static func reset_cache() -> void:
 static func config() -> Dictionary:
 	if not _loaded.is_empty():
 		return _loaded
-	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}}
+	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}, "unmapped_inert": false}
 	var path := path_override if not path_override.is_empty() else (DENY_PATH if deny_switched() else PATH)
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
 	if not (data is Dictionary) or str(data.get("schema", "")) != SCHEMA or str(data.get("door", "")) != "shoot" \
@@ -49,6 +49,7 @@ static func config() -> Dictionary:
 	if _loaded["mode"] == "deny":
 		_loaded["inert"] = data.get("inert", {})
 		_loaded["deny_names"] = data.get("deny_names", {})   # one rule NAME refused where its primitive is shared
+		_loaded["unmapped_inert"] = bool(data.get("unmapped_inert", false))
 	return _loaded
 
 
@@ -73,7 +74,10 @@ static func _rule_taken(gu: GameUnit, label: String) -> bool:
 	var allow: bool = c["mode"] == "allow"
 	if allow and prims.is_empty():
 		return false
-	var p: Variant = RulesRegistry.lookup(RulesRegistry.system_of_unit(gu), RulesRegistry.faction_of_unit(gu), label).get("primitive")
+	var entry: Dictionary = RulesRegistry.lookup(RulesRegistry.system_of_unit(gu), RulesRegistry.faction_of_unit(gu), label)
+	if entry.is_empty() and bool(c["unmapped_inert"]):
+		return true   # a name no map knows (an upgrade's own label): neither side reads it, the rules it grants are listed apart
+	var p: Variant = entry.get("primitive")
 	return p is String and prims.has(p) == allow
 
 

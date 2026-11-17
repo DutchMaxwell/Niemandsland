@@ -269,7 +269,7 @@ func test_a_missing_or_malformed_file_is_the_empty_slice() -> void:
 
 ## C-15: env NML_CORE_SLICE=deny reads the measured deny-list file instead of the shipped allowlist; unset, the shipped
 ## file as before. The deny file refuses its listed primitives (a Tear weapon) and takes a unit whose
-## rules are automated and not listed (AP, Tough); an unknown name stays refused. The list only shrinks: CEILING.
+## rules are automated and not listed (AP, Tough); a name no map knows is taken (unmapped_inert). The list only shrinks: CEILING.
 ## RED: read PATH regardless of the switch -> the first assertion reads mode "allow".
 const DENY_CEILING := 9   # C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); only shrinks
 
@@ -284,14 +284,16 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	var sisters := _unit(["Point-Blank Surge"], [])
 	sisters.unit_properties["faction_folder"] = "blessed_sisters"   # the faction whose map entry gives it primitive Surge
 	assert_array(CoreSlice.refusals(sisters)).is_equal(["unit_rule:Point-Blank Surge"])
-	assert_array(CoreSlice.refusals(_unit(["Tough(3)"], [["Tear"]]))).is_equal(["weapon_rule:Tear"])
+	var tearer := _unit(["Tough(3)"], [["Tear"]])
+	tearer.unit_properties["faction_folder"] = "custodian_brothers"   # a faction whose map gives Tear its primitive
+	assert_array(CoreSlice.refusals(tearer)).is_equal(["weapon_rule:Tear"])
 	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
 	# An Indirect weapon stays on the table (2 measured gaps left); a joined hero is taken (the lone-hero target, epoch 81).
 	assert_array(CoreSlice.refusals(_unit([], [["Indirect"]]))).is_equal(["weapon_rule:Indirect"])
 	var host := _unit(["Tough(3)"], [["AP(1)"]])
 	EquipmentDistributor.attach_hero_to_unit(_unit(["Hero"], []), host)
 	assert_array(CoreSlice.refusals(host, true)).not_contains(["attached"])
-	assert_array(CoreSlice.refusals(_unit(["No Such Rule"], []))).is_equal(["unit_rule:No Such Rule"])
+	assert_bool(CoreSlice.takes(_unit(["No Such Rule"], []))).is_true()   # unmapped_inert: a name no map knows
 	assert_int((CoreSlice.config()["primitives"] as Dictionary).size()).override_failure_message(
 		"the deny list only shrinks (ceiling %d)" % DENY_CEILING).is_less_equal(DENY_CEILING)
 	OS.unset_environment("NML_CORE_SLICE")
@@ -305,7 +307,9 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 func test_deny_mode_reads_the_joined_heros_rules() -> void:
 	_allow({"g": ["Tear"]}, "deny")
 	var host := _unit(["Tough(3)"], [["AP(1)"]])
-	EquipmentDistributor.attach_hero_to_unit(_unit(["Hero"], [["Tear"]]), host)
+	var hero := _unit(["Hero"], [["Tear"]])
+	hero.unit_properties["faction_folder"] = "custodian_brothers"   # Tear's map entry, so the refusal is the list's
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
 	assert_array(CoreSlice.refusals(host)).contains(["weapon_rule:Tear"])
 	assert_bool(CoreSlice.takes(host, true)).is_false()
 
@@ -319,6 +323,17 @@ func test_deny_mode_takes_the_inert_names() -> void:
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 	assert_array(CoreSlice.refusals(_unit(["Unique"], []))).is_equal(["unit_rule:Unique"])
+
+
+## Deny mode takes a name no rules map knows (an upgrade's own label); allow mode still refuses it. RED: drop the unmapped
+## read -> the upgrade label is refused in deny mode.
+func test_deny_mode_takes_an_unmapped_upgrade_label() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	assert_bool(CoreSlice.takes(_unit(["Some Upgrade Label"], [["AP(1)"]]))).is_true()
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+	assert_array(CoreSlice.refusals(_unit(["Some Upgrade Label"], []))).is_equal(["unit_rule:Some Upgrade Label"])
 
 
 ## `applies` reads only these two members (the census test's stub).
