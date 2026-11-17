@@ -305,6 +305,17 @@ func test_deny_mode_reads_the_joined_heros_rules() -> void:
 	assert_bool(CoreSlice.takes(host, true)).is_false()
 
 
+## Deny mode takes the measured inert names (no primitive, no effect on a volley): Unique, Army Standard Bearer, Courage.
+## Allow mode never reads them. RED: drop the inert read -> a Unique unit is refused in deny mode.
+func test_deny_mode_takes_the_inert_names() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	assert_bool(CoreSlice.takes(_unit(["Unique", "Army Standard Bearer", "Courage"], [["AP(1)"]]))).is_true()
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+	assert_array(CoreSlice.refusals(_unit(["Unique"], []))).is_equal(["unit_rule:Unique"])
+
+
 ## `applies` reads only these two members (the census test's stub).
 class _StubMain extends RefCounted:
 	var solo_ai_slots := {1: true}
