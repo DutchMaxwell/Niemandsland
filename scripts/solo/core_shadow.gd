@@ -125,8 +125,14 @@ static func _state_diff(main, core_plain: Dictionary) -> String:
 		var a: Dictionary = table["units"].get(uid, none)
 		var b: Dictionary = core_units.get(uid, none)
 		for k in ["alive", "wounds", "shaken", "fatigued"]:
-			if _field(a, k) != _field(b, k):
-				_detail = {"unit": str(uid), "table": _field(a, k), "core": _field(b, k)}
+			var core_v: Variant = _field(b, k)
+			# The core shakes the host only; landing its delta mirrors that onto the joined hero (`land_delta` ->
+			# `_solo_mirror_shaken`, as the table's own morale does), so a hero reads its host's core Shaken here.
+			var host := str(a.get("attached_to", ""))
+			if k == "shaken" and host != "" and core_units.has(host):
+				core_v = maxi(int(core_v), _field(core_units[host], k))
+			if _field(a, k) != core_v:
+				_detail = {"unit": str(uid), "table": _field(a, k), "core": core_v}
 				return k
 	return ""
 
