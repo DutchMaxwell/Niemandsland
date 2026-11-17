@@ -31,6 +31,10 @@ func _run(capture: bool, family: String) -> void:
 	ProjectSettings.set_setting("niemandsland/harness_mode", true)
 	# Set before any door asks; the harness clears the once-cached decision after it is loaded.
 	OS.set_environment("NML_ONE_CORE_ACTIVATION", "0")
+	# Hermetic like golden_witness_test.gd (P4.D-66 `BattleSim._core_env = 0`): the witness pins the RULES of the old table
+	# path, not the net. With the core up an onnx-built extension loads the shipped Erlkoenig brain and the AI's picks
+	# (and the "Erlkoenig did not load" start line) follow the build; NML_CORE=0 keeps the GDScript AI on every build.
+	OS.set_environment("NML_CORE", "0")
 	change_scene_to_file("res://scenes/main.tscn")
 	var main := await _boot()
 	if main == null:
