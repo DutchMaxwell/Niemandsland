@@ -418,6 +418,9 @@ pub struct UnitDelta {
     pub limited_used: Vec<String>,
     pub storm_used: Vec<String>,
     pub precision_used: Vec<String>,
+    /// C-13: the unit's Growth Markers counter AFTER (inventory class (a), `State::growth_markers`). One counter per unit
+    /// whatever rules it carries; `land_delta` writes it through the unit's Growth Markers rule.
+    pub growth_markers: i64,
 }
 
 /// The names `after` holds that `before` did not, in `after`'s order.
@@ -484,6 +487,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
             || before.limited_used[u] != after.limited_used[u]
             || before.storm_used[u] != after.storm_used[u]
             || before.precision_used[u] != after.precision_used[u]
+            || before.growth_markers[u] != after.growth_markers[u]
         {
             out.push(UnitDelta {
                 key: key.clone(),
@@ -501,6 +505,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 limited_used: gained(&before.limited_used[u], &after.limited_used[u]),
                 storm_used: gained(&before.storm_used[u], &after.storm_used[u]),
                 precision_used: gained(&before.precision_used[u], &after.precision_used[u]),
+                growth_markers: after.growth_markers[u],
             });
         }
     }
@@ -1206,6 +1211,33 @@ mod tests {
         assert_eq!(state.limited_used[0], vec!["rifle".to_string()], "the core spent it");
         let d = delta_of(&st, &state);
         assert_eq!(d.iter().find(|x| x.key == "a").map(|x| x.limited_used.clone()), Some(vec!["rifle".to_string()]), "{d:?}");
+    }
+
+    /// C-13: a unit whose only change is its Growth marker count gets a row carrying the count AFTER; a core volley that fully
+    /// destroys a target spends the kill into the shooter's counter and the row says so (the table's `_solo_growth_on_kill` did not
+    /// run on that path). RED: drop the term from the change test -> no row; drop the field from the push -> 0.
+    #[test]
+    fn the_delta_carries_the_growth_markers() {
+        let (st, mut statics) = volley_line();
+        let mut after = st.clone();
+        after.growth_markers[2] = 3;
+        let d = delta_of(&st, &after);
+        assert_eq!((d.len(), d[0].growth_markers), (1, 3), "{d:?}");
+        assert!(delta_of(&st, &st).is_empty());
+        statics[0].growth = vec![crate::unit::GrowthRule { name: "Frenzy".into(), on_kill: true, max_markers: 2, ..Default::default() }];
+        let mut st = st;
+        (st.wounds[2], statics[2].wounds_max, statics[2].ctx.tough) = (vec![1, 1], vec![1, 1], 1);
+        let mut kills = 0;
+        for seed in 0..40i64 {
+            let (got, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], seed);
+            let ActStep::Done { state, .. } = got else { panic!("seed {seed}: {got:?}") };
+            if state.alive[2] == 0 {
+                kills += 1;
+                assert_eq!(state.growth_markers[0], 1, "seed {seed}: the kill banks a marker");
+                assert_eq!(delta_of(&st, &state).iter().find(|x| x.key == "a").map(|x| x.growth_markers), Some(1), "seed {seed}");
+            }
+        }
+        assert!(kills > 0, "no seed destroyed the target: the volley proves nothing");
     }
 
     // ---- step 14: allowance and move check ----
