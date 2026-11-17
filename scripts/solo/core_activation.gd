@@ -810,6 +810,7 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		_land_versatile_mode(main, gu, d)
 		_land_feats(main, gu, d)
 		_land_once_latches(main, gu, d)
+		_land_growth(main, gu, d)
 
 
 ## C-11: the rule name of each Precision latch and the table flag that closes it.
@@ -833,6 +834,26 @@ static func _land_once_latches(main, gu: GameUnit, d: Dictionary) -> void:
 			push_error("CoreActivation.land_delta: %s spent the precision rule %s, which no table flag closes yet" % [gu.get_name(), name])
 		elif not bool(gu.unit_properties.get(PRECISION_FLAGS[str(name)], false)):
 			main._sync_unit_property(gu, PRECISION_FLAGS[str(name)], true)
+
+
+## C-13: the unit's Growth Markers count after the activation (the delta's `growth_markers`). `State` keeps ONE counter per unit, the
+## table one property per rule (`growth_<rule>`, what `_ledger_of` sums): the table's writers (`_solo_growth_on_kill`, the ignore-wound
+## bank) did not run on a path the core resolved, so the core's count lands on the unit's rule. A unit with no such rule or with two
+## cannot be attributed: reported, nothing written. A count the table already holds is no news.
+static func _land_growth(main, gu: GameUnit, d: Dictionary) -> void:
+	var keys: Array = RulesRegistry.unit_rules_of_primitive(gu, "Growth Markers").map(
+		func(e: Variant) -> String: return "growth_%s" % str((e as Dictionary)["name"]).to_snake_case())
+	var held := 0
+	for k in keys:
+		held += int(gu.unit_properties.get(k, 0))
+	var count := int(d.get("growth_markers", 0))
+	if count == held:
+		return
+	if keys.size() != 1:
+		push_error("CoreActivation.land_delta: %s holds %d Growth markers in the core (table %d) but carries %d Growth Markers rules" % [
+			gu.get_name(), count, held, keys.size()])
+		return
+	main._sync_unit_property(gu, keys[0], count)
 
 
 ## P4.D-38a: the once-per-game feat latches the core SPENT in this activation (the delta's `feats_used`, inventory row of the

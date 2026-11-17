@@ -89,7 +89,7 @@ same commit as the struct change.
 | `versatile_pick_mode` | main.gd:15471 | yes (`land_delta`, P4.0-4g) | no | no (delta) |
 | `retreating_strike_round` | main.gd:8888 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `mind_control_moved_round` | main.gd:24569 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
-| `growth_markers` | main.gd:24962 | no | no | **YES** |
+| `growth_markers` | main.gd:24962 | yes (`land_delta`, C-13) | no | no (delta) |
 | `growth_round` | main.gd:24968 | no | no | **YES** |
 | `growth_strike_round` | main.gd:9335 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `vengeance_markers` | main.gd:8827 | yes (`land_delta`, P4.0-4f) | no | no (delta) |
@@ -113,16 +113,16 @@ same commit as the struct change.
 
 ## Summary
 
-- 79 `State` fields; **14 gap rows** (P4.0-4d landed `fatigued` and `casts`; P4.0-4e the twelve round
+- 79 `State` fields; **13 gap rows** (P4.0-4d landed `fatigued` and `casts`; P4.0-4e the twelve round
   stamps; P4.0-4f the four marker pools; P4.0-4g `versatile_pick_mode`; C-11 the three once-per-game name lists
-  `limited_used`, `storm_used`, `precision_used`, -22).
+  `limited_used`, `storm_used`, `precision_used`; C-13 `growth_markers`, -22).
 - No gap among the board facts an activation moves: model wounds, deaths and positions ride the
   per-step landings, `shaken` rides `delta_of`, `activated` and `shaken` ride the MP rows.
 - Every remaining gap is a once-per-game latch the dice path reads again later: the live buff ledger
   and the once-per-game flags (`second_wind_used`, the feat name list,
   `piercing_tag_used`, `surprise_attack_used`, `reinforcement_used`, `teleport_used`,
-  `piercing_tag_persistent`), plus `growth_markers` / `growth_round` (per-rule keys). The delta stops
-  at `shaken`, the ledger, the round stamps, the pools, the Versatile pick and the spent name lists, and the MP rows compare
+  `piercing_tag_persistent`), plus `growth_round` (derived). The delta stops
+  at `shaken`, the ledger, the round stamps, the pools, the Versatile pick, the spent name lists and the growth count, and the MP rows compare
   only activation, Shaken and per-model wounds/life/XZ — so a table and the core can disagree on any of
   these without a local or MP signal.
 
