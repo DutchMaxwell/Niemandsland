@@ -7,13 +7,19 @@ const IN2M := 0.0254
 const EPS := 0.05
 
 
+var _epoch_before := 0
+
+
 func before_test() -> void:
+	_epoch_before = AiActRecorder.rules_epoch
 	MovementPlanner.fast_planner = false
 	MovementPlanner.fast_planner_guard = MovementPlanner.FAST_PLANNER_GUARD
 
 
+## Restore the live epoch this test found: pinning a fixed epoch here leaked into every suite that ran after it in
+## the same process (the golden witness then read "epoch 80 in the fixture, 77 now").
 func after_test() -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_77_CHARGE_CAP
+	AiActRecorder.rules_epoch = _epoch_before
 
 
 func _unit(pid: int, unit_name: String, positions: Array, oval: bool, rules: Array = []) -> GameUnit:
