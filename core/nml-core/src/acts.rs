@@ -880,7 +880,12 @@ pub const EPOCH_78_FLIER_CUT: u32 = 78;
 /// target that moved this round hands the shooter no -1 to hit (table twin `BattleSim._held_for`). Records stamped 78
 /// or below replay byte-exact. Every call site reads THIS constant, not `79`. The recorder mirror stamps 79 with it.
 pub const EPOCH_79_EV_MOVED_ROUND: u32 = 79;
-pub const CURRENT_RULES_EPOCH: u32 = 79;
+/// Cumbersome in the rollouts (ai_03b): the Rust rollout policy menu (`Policy::policy_candidates`) gives a Cumbersome
+/// unit only Hold or a plain Advance (GF 3.6 "May only use Hold or Advance actions, but can't shoot when moving"),
+/// as the hand menu and the table twin `_policy_candidates` already do. Records stamped 79 or below replay byte-exact.
+/// Every call site reads THIS constant, not `80`. The recorder mirror stamps 80 with it.
+pub const EPOCH_80_ROLLOUT_CUMBERSOME: u32 = 80;
+pub const CURRENT_RULES_EPOCH: u32 = 80;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2197,7 +2202,7 @@ mod tests {
     use super::{
         read_act_header, record_rules_epoch, rule_on, MeleeReach, SearchMode, TreeDice, TreeLeaf, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
         EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_73_V36,
-        EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT, EPOCH_79_EV_MOVED_ROUND,
+        EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT, EPOCH_79_EV_MOVED_ROUND, EPOCH_80_ROLLOUT_CUMBERSOME,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2218,7 +2223,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 79, "the live epoch is EPOCH_79_EV_MOVED_ROUND");
+        assert_eq!(CURRENT_RULES_EPOCH, 80, "the live epoch is EPOCH_80_ROLLOUT_CUMBERSOME");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2228,11 +2233,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":79}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":80}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 79"
+            "a fresh play_game() now stamps the bumped epoch, 80"
         );
     }
 
@@ -2284,6 +2289,15 @@ mod tests {
         assert!(rule_on(EPOCH_79_EV_MOVED_ROUND, EPOCH_79_EV_MOVED_ROUND), "a record at 79 gets the EV stamp");
         assert!(rule_on(EPOCH_79_EV_MOVED_ROUND, EPOCH_78_FLIER_CUT), "79 keeps the flier cut on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_79_EV_MOVED_ROUND), "a fresh play_game() stamps the EV stamp on");
+    }
+
+    /// Epoch 80 (ai_03b): a record stamped 79 replays the old rollout menu, a fresh record restricts Cumbersome.
+    #[test]
+    fn epoch_80_gate_is_closed_at_epoch_79_and_open_from_80() {
+        assert!(!rule_on(EPOCH_79_EV_MOVED_ROUND, EPOCH_80_ROLLOUT_CUMBERSOME), "a record at 79 replays the old menu");
+        assert!(rule_on(EPOCH_80_ROLLOUT_CUMBERSOME, EPOCH_80_ROLLOUT_CUMBERSOME), "a record at 80 gets the restriction");
+        assert!(rule_on(EPOCH_80_ROLLOUT_CUMBERSOME, EPOCH_79_EV_MOVED_ROUND), "80 keeps the EV stamp on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_80_ROLLOUT_CUMBERSOME), "a fresh play_game() stamps it on");
     }
 
     /// The WAVE 3 GATE's own reservation (05.09.): `EPOCH_6_TABLE_RULES` must
