@@ -34,9 +34,11 @@ static func applies(main) -> bool:
 
 
 ## P4.0-6: the per-choice switch. A choice id's prefix (`takedown_model:<shooter>:<target>`) names its
-## switch; a switch is ON only for `NML_ONE_CORE_CHOICE_<PREFIX>` = "1"/"on", so OFF is the default and the
-## core's automatic pick resolves exactly as before this step. Tests set the entry per kind.
+## switch: ON only for `NML_ONE_CORE_CHOICE_<PREFIX>` = "1"/"on", so the core's automatic pick resolves exactly as before
+## unless it is turned on. P4.D-27: the kinds in CHOICE_DEFAULT_ON start ON instead - `NML_ONE_CORE_CHOICE_WOUND_ALLOC=0`
+## (or "off") is the way back until the switch and the #172 guard are deleted. Tests set the entry per kind.
 const CHOICE_KINDS := ["takedown_model", "wound_alloc"]
+const CHOICE_DEFAULT_ON := ["wound_alloc"]
 static var _choice_on: Dictionary = {}
 
 
@@ -44,7 +46,7 @@ static func choice_enabled(id: String) -> bool:
 	var kind := id.get_slice(":", 0)
 	if not _choice_on.has(kind):
 		var raw := OS.get_environment("NML_ONE_CORE_CHOICE_%s" % kind.to_upper()).to_lower()
-		_choice_on[kind] = raw == "1" or raw == "on"
+		_choice_on[kind] = (raw != "0" and raw != "off") if CHOICE_DEFAULT_ON.has(kind) else (raw == "1" or raw == "on")
 	return bool(_choice_on[kind])
 
 

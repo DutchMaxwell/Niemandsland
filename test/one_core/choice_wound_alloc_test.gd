@@ -6,7 +6,7 @@ extends GdUnitTestSuite
 ## a pool of 9); every die is supplied up front, so the only thing asked is the choice. Its OWNER is the target's owner:
 ## an AI owner and a human on this machine are answered automatic (no prompt exists yet), a human on another machine is
 ## asked over the owner-request path, its first answer applies once and a stale second one never overwrites it. The
-## switch `NML_ONE_CORE_CHOICE_WOUND_ALLOC` is OFF by default: nothing is probed, nobody is asked, the landing is today's.
+## switch `NML_ONE_CORE_CHOICE_WOUND_ALLOC` was OFF by default (ON since P4.D-27, `=0` is the way back): OFF, nothing is probed, nobody is asked, the landing is the automatic one.
 ## Constructed: the units (ParityTable) and the peer (a recording NetworkManager whose owner this test plays).
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -178,12 +178,31 @@ func _frames_asking_for_the_choice() -> Array:
 		return ask.has("choice") and str((ask["choice"] as Dictionary)["id"]).begins_with("wound_alloc:"))
 
 
-## OFF is the default: with no environment and no test override the switch reads false, the transcript is sent as it
-## always was, nobody is asked, and the core lands its automatic order (the lead model takes the three wounds and dies).
-func test_the_switch_is_off_by_default_and_the_landing_is_the_automatic_one(timeout := 120000) -> void:
+## The default is ON since P4.D-27 (the Takedown pick stays OFF); `NML_ONE_CORE_CHOICE_WOUND_ALLOC=0` or "off" is the way back.
+func test_the_switch_is_on_by_default_and_the_environment_turns_it_off() -> void:
+	var saved := OS.get_environment("NML_ONE_CORE_CHOICE_WOUND_ALLOC")
+	OS.unset_environment("NML_ONE_CORE_CHOICE_WOUND_ALLOC")
 	CoreActivation._choice_on = {}
-	assert_bool(OS.has_environment("NML_ONE_CORE_CHOICE_WOUND_ALLOC")).override_failure_message("the environment sets the switch").is_false()
-	assert_bool(CoreActivation.choice_enabled("wound_alloc:a:b:0")).is_false()
+	assert_bool(CoreActivation.choice_enabled("wound_alloc:a:b:0")).override_failure_message("the switch is not ON by default").is_true()
+	assert_bool(CoreActivation.choice_enabled("takedown_model:a:b")).override_failure_message("the Takedown pick turned on too").is_false()
+	for raw in ["0", "off", "OFF"]:
+		OS.set_environment("NML_ONE_CORE_CHOICE_WOUND_ALLOC", raw)
+		CoreActivation._choice_on = {}
+		assert_bool(CoreActivation.choice_enabled("wound_alloc:a:b:0")).override_failure_message("'%s' did not turn it off" % raw).is_false()
+	OS.set_environment("NML_ONE_CORE_CHOICE_WOUND_ALLOC", "1")
+	CoreActivation._choice_on = {}
+	assert_bool(CoreActivation.choice_enabled("wound_alloc:a:b:0")).is_true()
+	if saved.is_empty():
+		OS.unset_environment("NML_ONE_CORE_CHOICE_WOUND_ALLOC")
+	else:
+		OS.set_environment("NML_ONE_CORE_CHOICE_WOUND_ALLOC", saved)
+	CoreActivation._choice_on = {}
+
+
+## Switch OFF: the transcript is sent as it always was, nobody is asked, and the core lands its automatic order (the lead
+## model takes the three wounds and dies).
+func test_with_the_switch_off_the_landing_is_the_automatic_one(timeout := 120000) -> void:
+	CoreActivation._choice_on = {"wound_alloc": false}
 	assert_bool(CoreActivation.any_choice_enabled()).is_false()
 	_session({GUEST_PEER: 2})
 	var sc := _scenario(2)
