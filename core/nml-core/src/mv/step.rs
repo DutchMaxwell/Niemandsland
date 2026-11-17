@@ -519,7 +519,8 @@ pub(crate) fn placed_landing(state: &State, si: usize, t: &Terrain, trails: &[Ve
     let ledges_w = world_ledges_of(t, flying, rules_epoch);
     let movers: Vec<Mover> = movers_of(state, si).into_iter().filter(|m| hero_attach || m.unit == si).collect();
     let none = Vec::new();
-    let trail = |i: usize| trails.get(i).filter(|_| movers[i].unit == si).unwrap_or(&none);
+    // `movers` is host first, then each joined hero (`movers_of`), the order a chain placement sends its trails in.
+    let trail = |i: usize| trails.get(i).unwrap_or(&none);
     let walks: Vec<(f64, f64)> = (0..movers.len()).map(|i| trail_walk_in(trail(i), &ledges_w)).collect();
     let inch: Vec<Vec<V2>> = (0..movers.len()).map(|i| trail(i).iter().map(|p| t.to_inch([p[0] as f32, 0.0, p[1] as f32])).collect()).collect();
     Landing {
@@ -529,7 +530,15 @@ pub(crate) fn placed_landing(state: &State, si: usize, t: &Terrain, trails: &[Ve
         budget_in,
         arc_in: walks.iter().map(|w| w.0).fold(0.0, f64::max),
         climb_in: walks.iter().map(|w| w.1).fold(0.0, f64::max),
-        dangerous: inch.iter().zip(&movers).map(|(leg, m)| !flying && leg_crosses(leg, radius_of(state, *m), t, terrain::is_dangerous)).collect(),
+        dangerous: inch.iter().enumerate().map(|(i, leg)| {
+            let r = radius_of(state, movers[i]);
+            // Rules 3.6 (`EPOCH_73_V36`), as the move solver's `crosses_dangerous` and the table's `_dangerous_trail_flags`:
+            // a model whose own walked move is over 6" and meets an Unstable ruin takes the same test.
+            let walked_in = trail(i).windows(2).map(|w| (w[0][0] - w[1][0]).hypot(w[0][1] - w[1][1])).sum::<f64>() / IN2M;
+            !flying && (leg_crosses(leg, r, t, terrain::is_dangerous)
+                || (rule_on(rules_epoch, EPOCH_73_V36) && walked_in > UNSTABLE_MOVE_IN + UNSTABLE_SLACK_IN
+                    && leg_crosses(leg, r, t, terrain::is_unstable)))
+        }).collect(),
         trails: inch,
         movers,
         call: None,

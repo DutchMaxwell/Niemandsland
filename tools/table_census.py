@@ -12,6 +12,7 @@ function count and code lines per tag (no trailing blank/comment lines) just abo
   python3 tools/table_census.py            print the report
   python3 tools/table_census.py --write    rewrite the committed report
   python3 tools/table_census.py --runtime census.json   print the report + the soak's table share of AI volleys
+                                           (+ the SHADOW section when the soak ran with NML_CORE_SHADOW=1)
   python3 tools/table_census.py --check    exit 1 if the report is stale (lines and prod callers; test-caller counts
                                            are reported but not compared), if a planner function has no tag, or if a prod caller appears that
                                            allowed_callers does not list ("file:function" or "@group"). A listed
@@ -184,6 +185,49 @@ def runtime_report(path):
             out.append(row(sum(n for k, n in sets.items() if need[k] <= set(order[:i])), f"+ {order[i - 1]} (group {i})"))
         out += ["TOP REASON SETS (no_handle left out):"]
         out += [row(n, " + ".join(r for r in k if r != "no_handle") or "(no_handle only)") for k, n in best(sets)]
+    return "\n".join(out) + "\n" + shadow_report(data.get("shadow", []))
+
+
+def shadow_report(rows):
+    """C-5: the shadow run's volleys (NML_CORE_SHADOW=1, `CoreShadow` records {equal, first_diff, labels, unported}):
+    the equal share, mismatches by their first differing part, rule groups by lift (mismatch rate of the volleys that
+    carry the group / of those that do not), DENY CANDIDATES (groups none of whose volleys match) and UNEXPLAINED
+    (mismatching volleys that carry no group: a core difference no rule label accounts for). Empty without records."""
+    if not rows:
+        return ""
+    n, bad = len(rows), [r for r in rows if not r.get("equal")]
+    pct = lambda k, of: f"{100.0 * k / of if of else 0.0:5.1f} %"
+    groups = lambda r: {group_of(x) for x in r.get("labels", []) if x != "no_handle"}
+    out = [f"SHADOW: {n} volleys replayed in the core, {n - len(bad)} equal ({pct(n - len(bad), n).strip()})",
+           "MISMATCHES BY FIRST DIFF:"]
+    diffs = {}
+    for r in bad:
+        diffs[r.get("first_diff", "?")] = diffs.get(r.get("first_diff", "?"), 0) + 1
+    out += [f"  {pct(k, n)}  {k:6d}  {d}" for d, k in sorted(diffs.items(), key=lambda kv: (-kv[1], kv[0]))]
+    stats = {}
+    for r in rows:
+        for g in groups(r):
+            s = stats.setdefault(g, [0, 0])
+            s[0], s[1] = s[0] + 1, s[1] + (not r.get("equal"))
+    total_bad = len(bad)
+
+    def lift(g):
+        with_n, with_bad = stats[g]
+        rest_n, rest_bad = n - with_n, total_bad - with_bad
+        rate_with, rate_rest = with_bad / with_n, (rest_bad / rest_n if rest_n else 0.0)
+        return rate_with / rate_rest if rate_rest else float("inf") if rate_with else 0.0
+    ranked = sorted(stats, key=lambda g: (-lift(g), -stats[g][1], g))
+    out += ["RULE GROUPS BY LIFT (volleys, mismatching, mismatch rate, lift):"]
+    out += [f"  {stats[g][0]:6d}  {stats[g][1]:6d}  {pct(stats[g][1], stats[g][0])}  {lift(g):6.2f}  {g}"
+            for g in ranked[:20]]
+    out += ["RULE GROUPS BY MISMATCHING VOLLEYS:"]
+    out += [f"  {stats[g][1]:6d} of {stats[g][0]:6d}  {g}"
+            for g in sorted(stats, key=lambda g: (-stats[g][1], g))[:15] if stats[g][1]]
+    deny = sorted(g for g in stats if stats[g][0] == stats[g][1])
+    out += ["DENY CANDIDATES (no volley with the group matches): " + (", ".join(deny) or "(none)")]
+    loose = [r for r in bad if not groups(r)]
+    out += [f"UNEXPLAINED (mismatching, no rule group): {len(loose)}"]
+    out += [f"  {r.get('first_diff', '?')}  unported={','.join(r.get('unported', [])) or '-'}" for r in loose[:10]]
     return "\n".join(out) + "\n"
 
 

@@ -18,8 +18,8 @@ const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_s
 	"faction_folder": "robot_legions", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
 ## The delta row of a unit, key for key (sorted): what the core hands back. A key added there is a field the landing must map.
-const DELTA_KEYS := ["alive", "casts", "fatigued", "feats_used", "moved", "piercing_tag_persistent", "piercing_tag_used", "pools",
-	"removed", "shaken", "stamps", "unit", "unknown", "versatile_pick_mode"]
+const DELTA_KEYS := ["alive", "casts", "fatigued", "feats_used", "growth_markers", "limited_used", "moved", "piercing_tag_persistent",
+	"piercing_tag_used", "pools", "precision_used", "removed", "shaken", "stamps", "storm_used", "unit", "unknown", "versatile_pick_mode"]
 ## The round stamps the capture does NOT send (`_ledger_of` has no key for them), with the table property each is landed under.
 const UNSENT_STAMPS := {"reckless_rolled_round": "reckless_rolled_round", "reckless_ap_round": "reckless_ap_round",
 	"reckless_backfire_round": "reckless_backfire_round", "versatile_pick_round": "versatile_pick_round",
@@ -201,12 +201,15 @@ func test_in_the_piercing_tag_latch_is_sent() -> void:
 
 
 ## Two volleys on ONE core state (the second on the handle the first left, at `second`: the same target unless a case needs a live one)
-## against the same second volley on a fresh capture (what the table sends next). The core's change is never written back to the
-## table's property: the delta rows carry exactly `DELTA_KEYS`, none of them the field.
-func _chain(field: String, units: Array, what: String, first_r: String, core_r: String, fresh_r: String, second: GameUnit = null) -> void:
+## against the same second volley on a fresh capture (what the table sends next). A field that is not carried back keeps the
+## table's property: the fresh second volley differs from the core's. With `lands` the first volley's delta is landed on the table
+## first (the real `land_delta`), so a carried field makes the two second volleys equal. The delta rows carry exactly `DELTA_KEYS`.
+func _chain(field: String, units: Array, what: String, first_r: String, core_r: String, fresh_r: String, second: GameUnit = null, lands := false) -> void:
 	var foe2: GameUnit = second if second != null else units[1]
 	var first := await _volley(units[0], units[1])
 	var core_second := await _volley(units[0], foe2, int(first["handle"]))
+	if lands:
+		await CoreActivation.land_delta(_main, first["delta"], [], {})
 	var fresh_second := await _volley(units[0], foe2)
 	_end([first, core_second, fresh_second])
 	print("LEDGER_PROBE out %s: first %s, core second %s, fresh second %s" % [field, _read(first, what), _read(core_second, what), _read(fresh_second, what)])
@@ -220,18 +223,23 @@ func _chain(field: String, units: Array, what: String, first_r: String, core_r: 
 		assert_array(keys).override_failure_message("the delta row's keys: %s" % [keys]).is_equal(DELTA_KEYS)
 
 
-func test_out_limited_is_lost() -> void:
+func test_out_limited_comes_back() -> void:
 	var u := _pair()
 	_add_weapon(u[0], "Pod", 3, ["Limited"])
-	await _chain("limited_used", u, "pod", "true", "false", "true")
+	await _chain("limited_used", u, "pod", "true", "false", "false", null, true)
+	assert_array(u[0].unit_properties.get("limited_used", [])).is_equal(["Pod"])
 
 
-func test_out_storm_is_lost() -> void:
-	await _chain("storm_used", _pair({"faction_folder": "daemons_of_change", "rules": ["Storm of Change"]}), "storm", "true", "false", "true")
+func test_out_storm_comes_back() -> void:
+	var u := _pair({"faction_folder": "daemons_of_change", "rules": ["Storm of Change"]})
+	await _chain("storm_used", u, "storm", "true", "false", "false", null, true)
+	assert_bool(u[0].unit_properties.get("storm_used_storm_of_change", false)).is_true()
 
 
-func test_out_precision_used_is_lost() -> void:
-	await _chain("precision_used", _pair({"faction_folder": "jackals", "rules": ["Precision Tag"]}), "hit", "attack x10 @3", "attack x10 @4", "attack x10 @3")
+func test_out_precision_used_comes_back() -> void:
+	var u := _pair({"faction_folder": "jackals", "rules": ["Precision Tag"]})
+	await _chain("precision_used", u, "hit", "attack x10 @3", "attack x10 @4", "attack x10 @4", null, true)
+	assert_bool(u[0].unit_properties.get("precision_tag_used", false)).is_true()
 
 
 ## The core spends its own copy of a once buff; the table repeats the spend itself (`spend_once_after_volley`), nothing comes back.
@@ -242,11 +250,13 @@ func test_out_a_once_buff_is_lost() -> void:
 	await _chain("buffs", u, "hit", "attack x10 @3", "attack x10 @4", "attack x10 @3")
 
 
-## Growth gained by a kill: the core's second volley reads the marker its own first volley gained, the table never hears of it.
-func test_out_growth_is_lost() -> void:
+## Growth gained by a kill: the core's second volley reads the marker its own first volley gained; the delta carries the count and
+## `land_delta` writes it onto the unit's rule, so the next capture sends it.
+func test_out_growth_comes_back() -> void:
 	var u := _pair({"faction_folder": "dwarf_guilds", "rules": ["Precision Frenzy"]}, {}, 5)   # the first target dies: that is the kill
 	var next := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Def2", "models": 40, "x_in": 16.0}), {})
-	await _chain("growth_markers", u, "hit", "attack x10 @4", "attack x10 @3", "attack x10 @4", next)
+	await _chain("growth_markers", u, "hit", "attack x10 @4", "attack x10 @3", "attack x10 @3", next, true)
+	assert_int(int(u[0].unit_properties.get("growth_precision_frenzy", 0))).is_equal(1)
 
 
 ## Carried by NAME, landed for the Protection Feat family only: any other feat is reported and its table flag stays open.

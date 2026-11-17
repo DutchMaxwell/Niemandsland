@@ -9706,7 +9706,7 @@ fn resolve_with(
     // One-core P3: a supplied tray may carry the player's own per-model end positions for an
     // ADVANCE/RUSH; they replace every move arm below. Seeded trays never carry one (inert).
     let placed: Option<Vec<[f64; 3]>> = dice.as_ref().and_then(|d| d.0.placed().map(|p| p.to_vec()))
-        .filter(|p| p.len() == next.positions[si].len())
+        .filter(|p| p.len() == next.positions[si].len() || p.len() == crate::activation::placed_chain_len(&next, si))
         .filter(|_| matches!(kind, ADVANCE | RUSH));
     if placed.is_none() && matches!(kind, ADVANCE | RUSH) && next.aircraft[si] && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
         if let Some(d) = if let Cover::Board(t) = cover { aircraft_delta(statics, &next, si, t, seams.shelf_sight, seams.rules_epoch) } else { None } {
@@ -9912,7 +9912,18 @@ fn resolve_with(
         // One-core P3 step 61: the walked paths the tray carries become the move's landing, so the Dangerous test
         // below reads each model's route, not only its end (`dangerous_dice`'s end-only arm); a climb names its rule.
         let trails = dice.as_ref().and_then(|d| d.0.placed_trails()).filter(|t| !t.is_empty()).map(|t| t.to_vec());
-        next.positions[si] = p;
+        // S1: a placement past the host's models moves the joined heroes with it (host first, then each hero in
+        // `attached` order); a host-only placement leaves them where they stood, as before.
+        let host_n = next.positions[si].len();
+        if seams.hero_attach && p.len() == crate::activation::placed_chain_len(&next, si) {
+            let mut at = host_n;
+            for h in next.attached[si].clone() {
+                let n = next.positions[h].len();
+                next.positions[h] = p[at..at + n].to_vec();
+                at += n;
+            }
+        }
+        next.positions[si] = p.into_iter().take(host_n).collect();
         moved = true;
         next.moved_round[si] = next.round;
         if let (Some(trails), Cover::Board(t)) = (trails, cover) {

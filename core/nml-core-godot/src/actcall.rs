@@ -141,6 +141,14 @@ fn delta_array(before: &State, after: &State) -> VarArray {
             feats.push(&name.as_str().to_variant());
         }
         d.set("feats_used", &feats);
+        for (key, names) in [("limited_used", &u.limited_used), ("storm_used", &u.storm_used), ("precision_used", &u.precision_used)] {
+            let mut list = VarArray::new();
+            for name in names {
+                list.push(&name.as_str().to_variant());
+            }
+            d.set(key, &list);
+        }
+        d.set("growth_markers", u.growth_markers);
         d.set("piercing_tag_used", u.piercing_tag_used);
         d.set("piercing_tag_persistent", u.piercing_tag_persistent);
         out.push(&d.to_variant());
@@ -250,9 +258,14 @@ pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain,
             out.set("step", "cancelled");
             out.set("lines", &lines_of(&lines));
         }
-        ActStep::Done { state: s, lines, landings } => {
+        ActStep::Done { state: s, lines, landings, unported } => {
             out.set("step", "done");
             out.set("lines", &lines_of(&lines));
+            let mut marks = VarArray::new();
+            for m in &unported {
+                marks.push(&m.to_variant());
+            }
+            out.set("unported", &marks);
             out.set("landings", &landings_of(state, &landings));
             out.set("delta", &delta_array(state, &s));
             next = Some(s);

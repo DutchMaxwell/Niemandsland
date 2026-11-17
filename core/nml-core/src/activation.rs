@@ -57,7 +57,9 @@ pub enum ActStep {
     /// The activation was cancelled before its first die; the state is untouched
     /// and the table puts the models back. `lines` is the one cancel sentence.
     Cancelled { lines: Vec<LogLine> },
-    Done { state: State, lines: Vec<LogLine>, landings: Vec<Landing> },
+    /// `unported`: the resolver's own `ShootResult.unported` marks (dice.rs `mark`), so a core that
+    /// knows it diverged from the table says so; `[]` on a fully ported volley.
+    Done { state: State, lines: Vec<LogLine>, landings: Vec<Landing>, unported: Vec<&'static str> },
 }
 
 /// The order rules, checked in their numbered order on each input; the error
@@ -148,6 +150,12 @@ pub enum Check { Ok { lines: Vec<LogLine> }, Refused { reason: String } }
 /// most 6" for every model once any model's path crosses Difficult terrain or the unit carries the Difficult debuff (not
 /// for Flying or Strider). An
 /// overrun is refused with the O3 sentence when `enforce`, else accepted with that sentence as one log line.
+/// The model count of a placement that also moves the unit's joined heroes: the host's models, then each attached
+/// hero's in `attached` order (the table's `get_alive_models_with_attached`).
+pub fn placed_chain_len(state: &State, si: usize) -> usize {
+    state.positions[si].len() + state.attached[si].iter().map(|&h| state.positions[h].len()).sum::<usize>()
+}
+
 pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams, terrain: &Terrain, drop: &Drop, enforce: bool) -> Check {
     let (mode, m) = match drop.mode {
         ADVANCE => ("Advance", 0),
@@ -156,7 +164,9 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
         _ => return Check::Refused { reason: "movement mode not declared".to_string() },
     };
     let start = &state.positions[si];
-    if drop.placed.len() != start.len() {
+    // S1: the placement may carry the joined heroes' models after the host's (`placed_chain_len`); the allowance below
+    // reads the host's models (the zip stops there), as the table measures the unit's own move.
+    if drop.placed.len() != start.len() && drop.placed.len() != placed_chain_len(state, si) {
         return Check::Refused { reason: "placement does not match the unit's models".to_string() };
     }
     let inch = |p: [f64; 2], q: [f64; 2]| (p[0] - q[0]).hypot(p[1] - q[1]) / INCHES_TO_METERS;
@@ -353,7 +363,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             ActStep::NeedRoll { index, faces, kind, count, target, owner, owner_key, lines: [moved, lines].concat(), landings }
         }
         Step::Refused { reason, .. } => ActStep::Refused { index: t.len(), reason },
-        Step::Done(Ok((state, _)), lines, landings) => ActStep::Done { state, lines: [moved, lines].concat(), landings },
+        Step::Done(Ok((state, shot)), lines, landings) => ActStep::Done { state, lines: [moved, lines].concat(), landings, unported: shot.unported },
         Step::Done(Err(u), ..) => ActStep::Refused { index: t.len(), reason: format!("{u:?}") },
     }
 }
@@ -410,6 +420,15 @@ pub struct UnitDelta {
     /// P4.D-38a: the once-per-game feat latches this activation SPENT (inventory class (a)): the names `State::feats_used`
     /// gained, in the order they were spent. `land_delta` closes the table's flag for each, so the next capture sends it back.
     pub feats_used: Vec<String>,
+    /// C-11: the once-per-game name lists this activation SPENT (inventory class (a)), the `feats_used` shape: the names
+    /// `State::limited_used` / `storm_used` / `precision_used` gained, in the order they were spent. `land_delta` closes the
+    /// table's latch for each (the weapon through `mark_limited_used`, the other two through their flag).
+    pub limited_used: Vec<String>,
+    pub storm_used: Vec<String>,
+    pub precision_used: Vec<String>,
+    /// C-13: the unit's Growth Markers counter AFTER (inventory class (a), `State::growth_markers`). One counter per unit
+    /// whatever rules it carries; `land_delta` writes it through the unit's Growth Markers rule.
+    pub growth_markers: i64,
     /// C-12: the Piercing-Tag bearer's once-per-game placement latch AFTER (inventory row of the same name):
     /// the core's placement closed its own copy; `land_delta` closes the table's flag, so the next capture
     /// sends it back and neither side places the tag twice.
@@ -418,6 +437,11 @@ pub struct UnitDelta {
     /// the "Piercing Target" name). The table keeps the NAME that placed it (`piercing_tag_source`);
     /// `land_delta` maps the bool onto that name.
     pub piercing_tag_persistent: bool,
+}
+
+/// The names `after` holds that `before` did not, in `after`'s order.
+fn gained(before: &[String], after: &[String]) -> Vec<String> {
+    after.iter().filter(|n| !before.contains(n)).cloned().collect()
 }
 
 /// P4.0-4f: the marker pools the inventory marks table-owned, in `State` declaration order, AFTER.
@@ -476,6 +500,10 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
             || stamps_changed || pools_changed
             || before.versatile_pick_mode[u] != after.versatile_pick_mode[u]
             || before.feats_used[u] != after.feats_used[u]
+            || before.limited_used[u] != after.limited_used[u]
+            || before.storm_used[u] != after.storm_used[u]
+            || before.precision_used[u] != after.precision_used[u]
+            || before.growth_markers[u] != after.growth_markers[u]
             || before.piercing_tag_used[u] != after.piercing_tag_used[u]
             || before.piercing_tag_persistent[u] != after.piercing_tag_persistent[u]
         {
@@ -491,7 +519,11 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 stamps: stamps_of(after, u),
                 pools: pools_of(after, u),
                 versatile_pick_mode: after.versatile_pick_mode[u],
-                feats_used: after.feats_used[u].iter().filter(|n| !before.feats_used[u].contains(n)).cloned().collect(),
+                feats_used: gained(&before.feats_used[u], &after.feats_used[u]),
+                limited_used: gained(&before.limited_used[u], &after.limited_used[u]),
+                storm_used: gained(&before.storm_used[u], &after.storm_used[u]),
+                precision_used: gained(&before.precision_used[u], &after.precision_used[u]),
+                growth_markers: after.growth_markers[u],
                 piercing_tag_used: after.piercing_tag_used[u],
                 piercing_tag_persistent: after.piercing_tag_persistent[u],
             });
@@ -629,6 +661,21 @@ mod tests {
         }
     }
 
+    /// C-1: the step answer keeps the resolver's `unported` marks. A Strafing rifle in a normal volley
+    /// (dice.rs `mark("strafing")`, the per-model split is not ported) answers `["strafing"]`, the
+    /// plain rifle `[]` (RED: drop the field at the `Step::Done` arm and the Strafing side reads `[]`).
+    #[test]
+    fn a_done_step_answers_the_unported_marks() {
+        let (st, mut statics) = volley_line();
+        let marks = |statics: &[UnitStatic]| match drive(statics, &st, vec![Begin, intent(HOLD, Some("b"))], 7).0 {
+            ActStep::Done { unported, .. } => unported,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(marks(&statics), Vec::<&str>::new());
+        statics[0].shoot[0].strafing = true;
+        assert_eq!(marks(&statics), vec!["strafing"]);
+    }
+
     /// The stepped activation equals one straight seeded run, state and roll records alike; the
     /// straight run's non-tray stream differs (seed vs 0), so a draw from it would show here too.
     #[test]
@@ -662,6 +709,37 @@ mod tests {
         (statics[3].model_count, statics[3].wounds_max, statics[3].ctx.defense) = (1, vec![1], 4);
         let aim = |weapon: &str, target: &str| SplitShot { member: "a".into(), weapon: weapon.into(), target: target.into() };
         (st, statics, vec![aim("rifle", "b"), aim("pistol", "bh")])
+    }
+
+    /// S1 shadow soak (a joined hero's weapons missing from the core's volley): "a" (at 0") advances 4" with its joined
+    /// hero "ah" (at 2", a 6" pistol) and shoots "b" (at 12"). The table moves the hero with the host, so it stands 5" from
+    /// "b" and fires; a placement that carries the hero's model after the host's does the same in the core. A host-only
+    /// placement leaves "ah" behind at 10" and its pistol silent (the soak's mismatch). RED: drop the hero half of the
+    /// placement in `resolve_with` -> the chain placement's volley has no "ah" roll either.
+    #[test]
+    fn a_chain_placement_moves_the_joined_hero_and_its_weapon_fires() {
+        let (mut st, mut statics) = volley_line();
+        let p = st.profiles.list[0].clone();
+        st.profiles = std::rc::Rc::new(crate::state::Profiles { list: vec![p; 4], index: Default::default() }); // one per roster slot
+        statics[1].shoot = vec![ShootProfile { name: "pistol".into(), attacks: 1, count: 1, range: 6, ..Default::default() }];
+        let seams = Seams { hero_attach: true, moved_shoot: true, ..seams() };
+        let x = |v: f64| [v * INCHES_TO_METERS, 0.0, 0.0];
+        let hero_rolls = |at: Vec<[f64; 3]>| {
+            let mut t = vec![Begin, Input::Placed { at, trails: Vec::new() }, intent(ADVANCE, Some("b"))];
+            let mut n = 0;
+            loop {
+                match step_activation(&statics, &st, "a", &Terrain::default(), seams, &t, true) {
+                    ActStep::NeedRoll { faces, owner, .. } => {
+                        n += (owner == "ah") as i32;
+                        t.push(Faces(vec![6; faces]));
+                    }
+                    ActStep::Done { .. } => return n,
+                    other => panic!("{other:?}"),
+                }
+            }
+        };
+        assert_eq!(hero_rolls(vec![x(4.0)]), 0, "host-only placement: the hero stays at 10\" and its pistol is out of range");
+        assert_eq!(hero_rolls(vec![x(4.0), x(7.0)]), 1, "the chain placement moves the hero to 5\": its pistol fires");
     }
 
     /// Split fire on the step API: an intent that carries `split` equals one straight seeded run with the
@@ -1170,6 +1248,67 @@ mod tests {
         assert!(delta_of(&st, &st).is_empty(), "no placement, no row");
         let again = delta_of(&after, &after);
         assert!(again.is_empty(), "a latch already closed is no news: {again:?}");
+    }
+
+    /// C-11: a unit whose only change is a spent Limited weapon / Storm Attack / Precision latch gets a row naming each; a name
+    /// already spent in `before` is no news. RED: drop a term from the change test -> no row; drop a field from the push -> [].
+    #[test]
+    fn the_delta_carries_the_spent_once_lists() {
+        let (st, _) = volley_line();
+        for (field, set) in [("limited_used", 0), ("storm_used", 1), ("precision_used", 2)] {
+            let mut after = st.clone();
+            let list = match set {
+                0 => &mut after.limited_used,
+                1 => &mut after.storm_used,
+                _ => &mut after.precision_used,
+            };
+            std::rc::Rc::make_mut(list)[2].push("Spent Rule".to_string());
+            let d = delta_of(&st, &after);
+            assert_eq!(d.len(), 1, "{field}: a spend is a change: {d:?}");
+            let named = [&d[0].limited_used, &d[0].storm_used, &d[0].precision_used];
+            assert_eq!(named[set], &vec!["Spent Rule".to_string()], "{field}");
+            assert_eq!(named.iter().map(|l| l.len()).sum::<usize>(), 1, "{field}: only its own list names it");
+            assert!(delta_of(&after, &after).is_empty(), "{field}: already spent is no news");
+        }
+    }
+    /// C-11: a core-resolved volley of a Limited weapon spends it in the core's state and its delta says so (the table path
+    /// writes it through `mark_limited_used`, a core door must land it). RED: drop `limited_used` from the push -> [].
+    #[test]
+    fn a_core_limited_volley_carries_its_spend() {
+        let (st, mut statics) = volley_line();
+        statics[0].shoot[0].limited = true;
+        let (got, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], 7);
+        let ActStep::Done { state, .. } = got else { panic!("seed 7: {got:?}") };
+        assert_eq!(state.limited_used[0], vec!["rifle".to_string()], "the core spent it");
+        let d = delta_of(&st, &state);
+        assert_eq!(d.iter().find(|x| x.key == "a").map(|x| x.limited_used.clone()), Some(vec!["rifle".to_string()]), "{d:?}");
+    }
+
+    /// C-13: a unit whose only change is its Growth marker count gets a row carrying the count AFTER; a core volley that fully
+    /// destroys a target spends the kill into the shooter's counter and the row says so (the table's `_solo_growth_on_kill` did not
+    /// run on that path). RED: drop the term from the change test -> no row; drop the field from the push -> 0.
+    #[test]
+    fn the_delta_carries_the_growth_markers() {
+        let (st, mut statics) = volley_line();
+        let mut after = st.clone();
+        after.growth_markers[2] = 3;
+        let d = delta_of(&st, &after);
+        assert_eq!((d.len(), d[0].growth_markers), (1, 3), "{d:?}");
+        assert!(delta_of(&st, &st).is_empty());
+        statics[0].growth = vec![crate::unit::GrowthRule { name: "Frenzy".into(), on_kill: true, max_markers: 2, ..Default::default() }];
+        let mut st = st;
+        (st.wounds[2], statics[2].wounds_max, statics[2].ctx.tough) = (vec![1, 1], vec![1, 1], 1);
+        let mut kills = 0;
+        for seed in 0..40i64 {
+            let (got, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], seed);
+            let ActStep::Done { state, .. } = got else { panic!("seed {seed}: {got:?}") };
+            if state.alive[2] == 0 {
+                kills += 1;
+                assert_eq!(state.growth_markers[0], 1, "seed {seed}: the kill banks a marker");
+                assert_eq!(delta_of(&st, &state).iter().find(|x| x.key == "a").map(|x| x.growth_markers), Some(1), "seed {seed}");
+            }
+        }
+        assert!(kills > 0, "no seed destroyed the target: the volley proves nothing");
     }
 
     // ---- step 14: allowance and move check ----
