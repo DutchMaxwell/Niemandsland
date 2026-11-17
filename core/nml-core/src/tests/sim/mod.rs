@@ -1738,6 +1738,7 @@ mod ev_move_grants;
 mod ledger_cow;
 mod spacing_skip;
 mod reply_ctx_cache;
+mod reply_threat_pick;
 mod ev_terrain_debuff;
 mod extended_buff_range;
 mod feat_precision_piercing;

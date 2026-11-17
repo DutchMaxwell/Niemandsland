@@ -596,4 +596,26 @@ mod tests {
         assert_eq!(plan_boost(0.5, 10, 0), 2, "the blind read stays as-is");
         assert_eq!(plan_boost(0.5, 10, 1), 1, "3+ has one step left, not two");
         assert_eq!(plan_boost(1.0, 10, 2), 0, "a 2+ target has no step left");
-    }}
+    }
+
+    /// `BattleSim._spell_ev_from` battle_sim.gd:778-795 -- the best AFFORDABLE
+    /// modelled DAMAGE spell in range (inclusive at `range_in`); an `unmodeled`
+    /// entry never counts, so the 48" ghost stays out at 30" while 18.5" is past
+    /// the 18" zap (a 19" bound would let it in).
+    #[test]
+    fn spell_ev_from_prices_only_an_affordable_modelled_damage_spell_in_range() {
+        let zap = Spell { name: "Zap".into(), threshold: 1, range_in: 18.0, effect_hits: 3,
+            effect_kind: "damage".into(), target_count: 1, status: "modeled".into(), ..Default::default() };
+        let ghost = Spell { name: "Ghost".into(), threshold: 1, range_in: 48.0, effect_hits: 9,
+            effect_kind: "damage".into(), target_count: 1, status: "unmodeled".into(), ..Default::default() };
+        let spells = [zap, ghost];
+        let def = Ctx { quality: 4, defense: 4, tough: 1, models: 4, ..Default::default() };
+        let e = crate::acts::CURRENT_RULES_EPOCH;
+        let (ev, cost) = spell_ev_from(&spells, 2, &def, 12.0, e);
+        assert!(ev > 0.0 && cost == 1, "{ev} at 12\"");
+        assert!(spell_ev_from(&spells, 2, &def, 18.0, e).0 > 0.0, "exactly at the range is in");
+        assert_eq!(spell_ev_from(&spells, 2, &def, 18.5, e), (0.0, 0), "a 19\" bound would let it in");
+        assert_eq!(spell_ev_from(&spells, 2, &def, 30.0, e), (0.0, 0), "the unmodeled 48\" entry stays out");
+        assert_eq!(spell_ev_from(&spells, 0, &def, 12.0, e), (0.0, 0), "no token, no cast");
+    }
+}

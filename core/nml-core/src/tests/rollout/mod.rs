@@ -35,6 +35,7 @@
     mod coordinate;
     mod delayed_action;
     mod policy_memo;
+    mod round_cycle;
     mod rush_demotion;
     mod steadfast;
     mod v36_ux;

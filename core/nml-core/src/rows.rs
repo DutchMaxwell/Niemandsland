@@ -765,6 +765,22 @@ mod tests {
         (state, statics)
     }
 
+    /// A third SIDE-1 unit inserted between A and B, so a dead MIDDLE slot can
+    /// be told apart from a renumbering of the living ones.
+    const UNIT_C_PROFILE: &str = r#""p1_1_c":{"unit_id":"p1_1_c","name":"C","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},"#;
+    const UNIT_C: &str = r#""p1_1_c":{"player":1,"alive":1,"wounds":[1],"radii":[0.016],"positions":[[0.508,0.0,0.0]],"in_cover":false,"shaken":false,"fatigued":false,"activated":false,"casts":0,"morale_bonus":0,"aircraft":false,"dormant":false,"ambush_arrived_round":-1,"earliest_arrival_round":-1,"wound_frac":0.0,"mods":{},"mods_base":{},"bands":{"advance":6.0,"rush":12.0}},"#;
+
+    fn three_unit_state() -> crate::State {
+        let header = read_act_header(
+            &HEADER.replace(r#""p2_0_b":"#, &format!("{UNIT_C_PROFILE}\"p2_0_b\":")),
+        )
+        .expect("header");
+        let mut cache = ProfileCache::new(header.profiles);
+        let mut roster = None;
+        let plain = PLAIN.replace(r#""p2_0_b":"#, &format!("{UNIT_C}\"p2_0_b\":"));
+        state_from_json(&plain, &mut cache, &mut roster).expect("state")
+    }
+
     /// NML-1134 RED-GREEN — the vocabulary version is LOAD-BEARING on the board
     /// rows themselves, which is why the bump and the oracle re-record had to
     /// land together. One appended name (`Warden`, unit slot 137) on one unit:
@@ -870,6 +886,45 @@ mod tests {
                 Cell::I(0)
             ],
             "type, round, rounds_total, vp 0/0, scoring 'end', majority 'end', no first-seize"
+        );
+        assert_eq!(g.len(), 21);
+    }
+
+    /// NML-1006 — a dead unit leaves the LIST but keeps its roster SLOT, so
+    /// per-board ids still map into the game-long roster.
+    #[test]
+    fn a_dead_unit_keeps_its_roster_slot_in_the_row_indices() {
+        let mut state = three_unit_state();
+        assert_eq!(board_row_indices(&state), vec![0, 1, 2]);
+        state.alive[1] = 0;
+        assert_eq!(board_row_indices(&state), vec![0, 2]);
+    }
+
+    /// NML-1012 input v1 — the game-state row reads the live ledger: round_vp
+    /// with 3/1 and a round majority is codes 1 and 2; `end` is the default
+    /// when no flavour carries a majority.
+    #[test]
+    fn the_game_state_row_carries_round_vp_and_its_majority_code() {
+        let (mut state, statics) = two_unit_state();
+        state.scoring = "round_vp".into();
+        state.vp = Some(std::rc::Rc::new(serde_json::json!([3, 1])));
+        state.vp_flavour = Some(std::rc::Rc::new(serde_json::json!({"majority": "round"})));
+        let mut enc = RowEncoder::new(&repo_root());
+        let rows = enc.board_rows(&state, &statics);
+        let g = rows.last().expect("the game-state row is last");
+        assert_eq!(
+            &g[..8],
+            &[
+                Cell::I(4),
+                Cell::I(2),
+                Cell::I(4),
+                Cell::I(3),
+                Cell::I(1),
+                Cell::I(1),
+                Cell::I(2),
+                Cell::I(0)
+            ],
+            "type, round, rounds_total, vp 3/1, scoring round_vp, majority round, no first-seize"
         );
         assert_eq!(g.len(), 21);
     }
