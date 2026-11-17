@@ -1489,7 +1489,7 @@ pub(crate) fn tray_strafing(
     // volley resolver — main.gd:3007's `_solo_resolve_ai_volley(unit, target,
     // shots, true)`: the activation's modifier distance, the
     // defender's live context, the members at their own Quality.
-    let d = modifier_distance_in(next, si, target, seams);
+    let d = volley_distance_in(next, si, target, seams);
     let ut = &statics[next.roster.profile[target]];
     let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut, next, target), statics, next, target, false, seams.rules_epoch), statics, next, target, seams), seams.rules_epoch);
     stamp_blast_models(&mut def, next, target, seams);
@@ -3677,6 +3677,20 @@ fn chain_gap_in(state: &State, ti: usize, seams: Seams, gap: impl Fn(usize) -> f
 /// Live table modifier distance: nearest alive model bases, including joined
 /// heroes when that seam is active. Older recordings keep the centre measure.
 fn modifier_distance_in(state: &State, si: usize, ti: usize, seams: Seams) -> f64 {
+    distance_in(state, si, ti, seams, None)
+}
+
+/// `EPOCH_86_VOLLEY_HEIGHT_REACH` (table twin `_solo_ai_volley_distance_in` over `nearest_melee_gap_in`): the played volley's modifier distance
+/// counts only the model pairs within the vertical reach (3" from `EPOCH_73_V36`, `melee_vertical_in`), and a unit with no pair in reach keeps
+/// the HORIZONTAL unit-centre distance. Before, a unit on a platform measured as close as the ground beside it, so the Valiant gate and the
+/// over-9" modifiers read "inside 9"" in the core and "beyond" on the table. Step path only (`sighting`), like the sight gate.
+fn volley_distance_in(state: &State, si: usize, ti: usize, seams: Seams) -> f64 {
+    let reach = (seams.sighting && rule_on(seams.rules_epoch, crate::acts::EPOCH_86_VOLLEY_HEIGHT_REACH)).then_some(3.0 * IN2M);
+    distance_in(state, si, ti, seams, reach)
+}
+
+/// The nearest-base gap of two units' chains; `reach_m` = the vertical reach that pairs must be within (see `volley_distance_in`).
+fn distance_in(state: &State, si: usize, ti: usize, seams: Seams, reach_m: Option<f64>) -> f64 {
     let centre = || geom::centre_dist_in(&state.positions[si], &state.positions[ti]);
     if !rule_on(seams.rules_epoch, EPOCH_66_DISTANCE_TRUTH) {
         return centre();
@@ -3698,14 +3712,33 @@ fn modifier_distance_in(state: &State, si: usize, ti: usize, seams: Seams) -> f6
         if state.alive[a] <= 0 { continue; }
         for b in side(ti) {
             if state.alive[b] <= 0 { continue; }
-            gap = gap.min(geom::edge_gap_shaped_in(
-                &state.positions[a], &state.radii[a], shape(a),
-                &state.positions[b], &state.radii[b], shape(b),
-                DEFAULT_BASE_RADIUS_M,
-            ));
+            let Some(reach) = reach_m else {
+                gap = gap.min(geom::edge_gap_shaped_in(
+                    &state.positions[a], &state.radii[a], shape(a),
+                    &state.positions[b], &state.radii[b], shape(b),
+                    DEFAULT_BASE_RADIUS_M,
+                ));
+                continue;
+            };
+            for (i, pa) in state.positions[a].iter().enumerate() {
+                for (j, pb) in state.positions[b].iter().enumerate().filter(|(_, pb)| (pa[1] - pb[1]).abs() <= reach) {
+                    gap = gap.min(geom::edge_gap_shaped_in(
+                        std::slice::from_ref(pa), state.radii[a].get(i..=i).unwrap_or(&[]), shape(a),
+                        std::slice::from_ref(pb), state.radii[b].get(j..=j).unwrap_or(&[]), shape(b),
+                        DEFAULT_BASE_RADIUS_M,
+                    ));
+                }
+            }
         }
     }
-    if gap.is_finite() { gap } else { centre() }
+    if gap.is_finite() { return gap; }
+    match reach_m {
+        None => centre(),
+        Some(_) => {
+            let flat = |ps: &[[f64; 3]]| { let c = geom::centre(ps); [c[0], 0.0, c[2]] };
+            (geom::length(geom::sub(flat(&state.positions[si]), flat(&state.positions[ti]))) / IN2M as f32) as f64
+        }
+    }
 }
 
 /// `BattleSim._expected_shooting_morale` battle_sim.gd:1096-1105 /
@@ -8450,7 +8483,7 @@ fn split_plan(
         });
         // Epoch 66 follows the table's nearest-base modifier measure; older
         // records keep the centre gap independently of this range gate.
-        let mod_d = modifier_distance_in(state, si, ti, seams);
+        let mod_d = volley_distance_in(state, si, ti, seams);
         groups.push(SplitGroup { ti, key: key.clone(), d, mod_d, weapons: Some(HashMap::new()) });
     }
     // The member lookup by name: one host plus its own attached heroes, alive
@@ -10276,7 +10309,7 @@ fn resolve_with(
                 });
                 // The table's epoch-66 nearest-base modifier measure remains
                 // separate from this pooled range-validity distance.
-                let mod_d = modifier_distance_in(&next, si, ti, seams);
+                let mod_d = volley_distance_in(&next, si, ti, seams);
                 // NML-1132: the EXPECTED-VALUE half measures over the table's folded
                 // model set (`fold_dist_in`); the TRAY half below keeps the plain
                 // host-to-host `d`, because it already measures per FIRING MEMBER

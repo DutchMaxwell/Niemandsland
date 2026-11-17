@@ -206,8 +206,8 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## EPOCH_82_IGNORE_BY_NAME.
 ## The lone hero as the shot target is stamped 83 with EPOCH_83_LONE_HERO_TARGET, and differently named wound-ignore rules rolling one
 ## after the other 84 with EPOCH_84_IGNORE_GROUPS, and a weapon's own Indirect opening a step volley's target gate to 85 with
-## EPOCH_85_INDIRECT_GATE.
-static var rules_epoch: int = 85
+## EPOCH_85_INDIRECT_GATE, and the played volley's distance honouring the vertical reach to 86 with EPOCH_86_VOLLEY_HEIGHT_REACH.
+static var rules_epoch: int = 86
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -262,6 +262,9 @@ const EPOCH_84_IGNORE_GROUPS := 84
 ## The core's frozen `EPOCH_85_INDIRECT_GATE` (acts.rs): the core lets a weapon's own Indirect open the pooled target gate of a step
 ## volley, as the table's per-shot sight count does. Nothing in the table gates on it.
 const EPOCH_85_INDIRECT_GATE := 85
+## The core's frozen `EPOCH_86_VOLLEY_HEIGHT_REACH` (acts.rs): the core measures the played volley's modifier distance with the table's vertical
+## reach (`nearest_melee_gap_in`). Nothing in the table gates on it.
+const EPOCH_86_VOLLEY_HEIGHT_REACH := 86
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
