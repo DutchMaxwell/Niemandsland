@@ -52,12 +52,6 @@ func test_the_pure_arm_reads_the_target_surroundings_at_epoch_73() -> void:
 	assert_str(AiCombatMath.conditional_ap_why(NEAR)).is_equal("target stands within 1\" of terrain")
 
 
-func test_the_snapshot_ctx_is_blind_without_a_board_at_epoch_73() -> void:
-	var snap := {"unit": _unit(4, 4), "alive": 4, "in_cover": false, "shaken": false,
-		"fatigued": false, "wounds": [1, 1, 1, 1]}
-	assert_bool(bool(BattleSim._ctx_of(snap).get("near_terrain", false))).is_false()
-
-
 func test_the_table_pays_and_names_the_condition_at_epoch_73() -> void:
 	RulesRegistry.reset_cache()
 	RulesRegistry._cache["gf"] = {"common": {

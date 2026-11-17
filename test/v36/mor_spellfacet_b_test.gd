@@ -30,7 +30,7 @@ func _defender(alive: int) -> Dictionary:
 		m.wounds_max = 1
 		m.wounds_current = 1
 		u.models.append(m)
-	return BattleSim._ctx_of({"unit": u, "alive": alive, "in_cover": false, "wounds": []})
+	return AiEv.ctx_for(u)   # the live table-side ctx (above_half_strength from the living models)
 
 
 func _facets(system: String, faction: String, spell_name: String, epoch: int) -> Dictionary:
