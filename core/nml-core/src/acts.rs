@@ -876,7 +876,11 @@ pub const EPOCH_77_CHARGE_CAP: u32 = 77;
 /// shortening the whole move. Records stamped 77 or below replay byte-exact. Every call site reads THIS constant, not
 /// `78`. The recorder mirror (`act_recorder.gd`) stamps 78 in the same change.
 pub const EPOCH_78_FLIER_CUT: u32 = 78;
-pub const CURRENT_RULES_EPOCH: u32 = 78;
+/// FAB-A5 (#G3 port): the sim's shoot EV builds the defender with its `moved_round`/`round` stamp, so an Artillery
+/// target that moved this round hands the shooter no -1 to hit (table twin `BattleSim._held_for`). Records stamped 78
+/// or below replay byte-exact. Every call site reads THIS constant, not `79`. The recorder mirror stamps 79 with it.
+pub const EPOCH_79_EV_MOVED_ROUND: u32 = 79;
+pub const CURRENT_RULES_EPOCH: u32 = 79;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2193,7 +2197,7 @@ mod tests {
     use super::{
         read_act_header, record_rules_epoch, rule_on, MeleeReach, SearchMode, TreeDice, TreeLeaf, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
         EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_73_V36,
-        EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT,
+        EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT, EPOCH_79_EV_MOVED_ROUND,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2214,7 +2218,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 78, "the live epoch is EPOCH_78_FLIER_CUT");
+        assert_eq!(CURRENT_RULES_EPOCH, 79, "the live epoch is EPOCH_79_EV_MOVED_ROUND");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2224,11 +2228,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":78}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":79}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 78"
+            "a fresh play_game() now stamps the bumped epoch, 79"
         );
     }
 
@@ -2271,6 +2275,15 @@ mod tests {
         assert!(rule_on(EPOCH_78_FLIER_CUT, EPOCH_78_FLIER_CUT), "a record at 78 gets the flier cut");
         assert!(rule_on(EPOCH_78_FLIER_CUT, EPOCH_77_CHARGE_CAP), "78 keeps the charge cap on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_78_FLIER_CUT), "a fresh play_game() stamps the flier cut on");
+    }
+
+    /// Epoch 79 (FAB-A5): a record stamped 78 replays the stamp-blind EV defender, a fresh record reads the stamp.
+    #[test]
+    fn epoch_79_gate_is_closed_at_epoch_78_and_open_from_79() {
+        assert!(!rule_on(EPOCH_78_FLIER_CUT, EPOCH_79_EV_MOVED_ROUND), "a record at 78 replays without the EV stamp");
+        assert!(rule_on(EPOCH_79_EV_MOVED_ROUND, EPOCH_79_EV_MOVED_ROUND), "a record at 79 gets the EV stamp");
+        assert!(rule_on(EPOCH_79_EV_MOVED_ROUND, EPOCH_78_FLIER_CUT), "79 keeps the flier cut on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_79_EV_MOVED_ROUND), "a fresh play_game() stamps the EV stamp on");
     }
 
     /// The WAVE 3 GATE's own reservation (05.09.): `EPOCH_6_TABLE_RULES` must
