@@ -540,7 +540,8 @@ jobs:
     needs: [changes]
     # 30.10. (3.6 wave): draft PRs skip the exports - ~20 parallel builders queued 55 runs; the RED/GREEN
     # proof runs in the test jobs, and every PR gets this job once it is marked ready (and again on update-branch).
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') && (github.event_name != 'pull_request' || (needs.changes.outputs.not_core_only == 'true' && !github.event.pull_request.draft)) }}
+    # 17.11.: pull requests skip the Windows export, its load proof and the macOS export (none is in all-required); main and tags still build them.
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') && github.event_name != 'pull_request' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -632,7 +633,7 @@ jobs:
     timeout-minutes: 15
     # `changes` too: the `if` below reads its output, and `needs` only exposes direct dependencies.
     needs: [changes, export-windows]
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') && (github.event_name != 'pull_request' || (needs.changes.outputs.not_core_only == 'true' && !github.event.pull_request.draft)) }}
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') && github.event_name != 'pull_request' }}
     steps:
       # First: checkout cleans the workspace. Only the judge script is needed.
       - name: Checkout (tools/assert_ship_probe.py only)
@@ -714,7 +715,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 60
     needs: [changes]
-    if: ${{ github.event_name != 'pull_request' || (needs.changes.outputs.macos_relevant == 'true' && !github.event.pull_request.draft) }}
+    if: ${{ github.event_name != 'pull_request' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
