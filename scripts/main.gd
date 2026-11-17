@@ -1278,6 +1278,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# One core P4.D-19: a plain Hold/Advance's Dangerous test (and the end morale from its wounds) is the core's: the ONE
 	# core call (`_run_ai_shooting`, or the attack block below for a unit that cannot shoot) pays it. The table rolls it
 	# here only when the core does not take the activation, or later, in front of its own volley, when the core refuses.
+	CoreShadow.note_placed(self, unit, report)   # C-4: the shadow replay's placement, before any table die of the activation
 	var core_takes: bool = CoreActivation.takes_ai_activation(self, unit, report)
 	var core_dangerous: bool = dangerous_dice > 0 and core_takes
 	if core_dangerous:
@@ -5015,6 +5016,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		if _solo_combined_alive(g["target"]) == 0:   # combined: a host with no model left still stands while its joined hero lives
 			continue   # P4.D-37: the move-through attacks the table paid just now (a refused core call) took its last model
 		await _solo_resolve_ai_volley(unit, g["target"], g["shots"], moved)
+	CoreShadow.compare(self, unit, report, groups, order)   # C-4: NML_CORE_SHADOW=1 only (no handle otherwise): counting
 
 
 ## NML-1035: a shooting activation that resolves NO volley still writes one COMBAT

@@ -519,7 +519,8 @@ pub(crate) fn placed_landing(state: &State, si: usize, t: &Terrain, trails: &[Ve
     let ledges_w = world_ledges_of(t, flying, rules_epoch);
     let movers: Vec<Mover> = movers_of(state, si).into_iter().filter(|m| hero_attach || m.unit == si).collect();
     let none = Vec::new();
-    let trail = |i: usize| trails.get(i).filter(|_| movers[i].unit == si).unwrap_or(&none);
+    // `movers` is host first, then each joined hero (`movers_of`), the order a chain placement sends its trails in.
+    let trail = |i: usize| trails.get(i).unwrap_or(&none);
     let walks: Vec<(f64, f64)> = (0..movers.len()).map(|i| trail_walk_in(trail(i), &ledges_w)).collect();
     let inch: Vec<Vec<V2>> = (0..movers.len()).map(|i| trail(i).iter().map(|p| t.to_inch([p[0] as f32, 0.0, p[1] as f32])).collect()).collect();
     Landing {

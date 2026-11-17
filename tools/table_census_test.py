@@ -212,3 +212,31 @@ def test_a_stale_tag_line_is_red_and_a_tagged_function_that_is_gone_is_an_error(
     gone = {**TAGGED, "planner_tags": {"scripts/a.gd": {"tree": "old_a old_b door vanished"}}}
     res = run(tagged(root, gone))
     assert res.returncode != 0 and "scripts/a.gd:vanished not found" in res.stderr
+
+
+def test_runtime_census_shadow_section_ranks_groups_and_names_deny_and_unexplained(tmp_path):
+    root = repo(tmp_path)
+    census = tmp_path / "census.json"
+    eq = lambda *labels: {"equal": True, "first_diff": "", "labels": list(labels), "unported": []}
+    ne = lambda diff, *labels: {"equal": False, "first_diff": diff, "labels": list(labels), "unported": []}
+    census.write_text(json.dumps({"ai_volleys": 8, "legacy": {"ai_volley": {"_all": 8}}, "shadow": [
+        eq("weapon_rule:AP"), eq("weapon_rule:AP"), eq("no_handle"),
+        ne("rolls", "weapon_rule:AP", "target_rule:Regeneration"), ne("rolls", "target_rule:Regeneration"),
+        ne("state", "unit_rule:Tough", "weapon_rule:AP"), eq("unit_rule:Tough"),
+        {**ne("faces", "no_handle"), "unported": ["strafing"]}]}))
+    out = run(root, "--runtime", str(census)).stdout.split("SHADOW:")[1].splitlines()
+    assert out[0] == " 8 volleys replayed in the core, 4 equal (50.0 %)"
+    assert out[1:5] == ["MISMATCHES BY FIRST DIFF:", "   25.0 %       2  rolls",
+                        "   12.5 %       1  faces", "   12.5 %       1  state"]
+    # Regeneration: 2 of 2 mismatch, the other 6 volleys 2 of 6 -> lift 3; AP 2 of 4 vs 2 of 4 -> 1; Tough 1 of 2 vs 3 of 6.
+    assert out[6].split() == ["2", "2", "100.0", "%", "3.00", "Regeneration"]
+    assert [ln.split()[-1] for ln in out[6:9]] == ["Regeneration", "AP", "Tough"]
+    assert "DENY CANDIDATES (no volley with the group matches): Regeneration" in out
+    assert out[-2:] == ["UNEXPLAINED (mismatching, no rule group): 1", "  faces  unported=strafing"]
+
+
+def test_runtime_census_without_shadow_records_prints_no_shadow_section(tmp_path):
+    root = repo(tmp_path)
+    census = tmp_path / "census.json"
+    census.write_text(json.dumps({"ai_volleys": 1, "legacy": {"ai_volley": {"_all": 1}}}))
+    assert "SHADOW" not in run(root, "--runtime", str(census)).stdout

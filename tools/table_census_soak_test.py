@@ -33,7 +33,8 @@ def test_merge_equals_the_hand_sum(tmp_path):
                                             "ai_strafe": {"_all": 1, "no_core": 1}},
               "legacy_sets": {"ai_volley": {"split": 2, "weapon_rule:Blast": 3}}},
              {"core_ai_runs": 9, "legacy": {"ai_volley": {"_all": 7, "split": 1, "unit_rule:Tough": 6}},
-              "legacy_sets": {"ai_volley": {"split": 1, "split|unit_rule:Tough": 6}}}]
+              "legacy_sets": {"ai_volley": {"split": 1, "split|unit_rule:Tough": 6}},
+              "shadow": [{"equal": True}, {"equal": False, "first_diff": "rolls"}]}]
     for i, g in enumerate(games):
         (tmp_path / f"game_{i}.json").write_text(json.dumps(g))
     res = run("merge", str(tmp_path))
@@ -42,6 +43,7 @@ def test_merge_equals_the_hand_sum(tmp_path):
     assert out["legacy"]["ai_volley"] == {"_all": 12, "split": 3, "weapon_rule:Blast": 3, "unit_rule:Tough": 6}
     assert out["legacy"]["ai_strafe"] == {"_all": 1, "no_core": 1}
     assert out["legacy_sets"] == {"ai_volley": {"split": 3, "weapon_rule:Blast": 3, "split|unit_rule:Tough": 6}}
+    assert out["shadow"] == [{"equal": True}, {"equal": False, "first_diff": "rolls"}]   # C-5: records concatenated
     assert out["ai_volleys"] == 24                       # 12 on the table + 12 through the core
     assert out["ai_volley_share_pct"]["unit_rule:Tough"] == 25.0 and out["ai_volley_share_pct"]["_all"] == 50.0
     assert "games 2  ai_volleys 24  on the table 12" in res.stdout
