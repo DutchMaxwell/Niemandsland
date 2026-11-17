@@ -311,8 +311,9 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 			unsaved[defender] = int(unsaved.get(defender, 0)) + failed_saves(faces, int(r["target"]))
 		if str(r["kind"]) == "morale":
 			# P4.0-4c: the table spends a once morale buff right after the morale die (`_solo_morale_test`), for the unit
-			# that rolled; the core spent its own copy of the ledger, which the capture never sends. A volley's test has no
-			# other cause, so no buff is kept back. A Shaken unit rolls no die, so this is never reached for it.
+			# that rolled; the core spent its own copy of the ledger (the capture sends it) and no delta key carries a buff spend
+			# back. A volley's test has no other cause, so no buff is kept back. A Shaken unit rolls no die, so this is never
+			# reached for it.
 			main._solo_spend_once_kind(roller, ["morale"])
 		if beat.is_valid():
 			await beat.call("thrown", r, faces)
@@ -323,8 +324,9 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 
 ## P4.0-4b: the volley a `done` activation resolved spends the table's once buffs, with the table's own spend
 ## (`_solo_consume_once_mods`, the call every table volley ends with), after the presentation, as on the table. The
-## core spends in its own copy of the ledger, which the live capture never sends (`plain.rs`: buffs start empty), so
-## the table's record would survive and the next volley would apply it again. The table stays the owner of the spend:
+## core spends in its own copy of the ledger (the live capture DOES send it: `_stamp_gate_reads` writes `ledger`, `plain.rs`
+## folds it) and no delta key carries a buff spend back, so the table's record would survive and the next volley would apply
+## it again. The table stays the owner of the spend:
 ## its record, its token, its log line and its wire message. A transcript whose last intent names no target (an End
 ## without a shot) fired nothing and spends nothing. Both units are plain at every door, so neither holds a
 ## Regeneration grant (a grant stamps a rule onto its holder): the spend is unconditional, exactly as the table's.
@@ -501,17 +503,7 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 		main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s's owner chooses the casualties - the table resolves this volley" % [
 			unit.get_name(), target.get_name()], true)
 		return false
-	var at: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
-	# Step 42c: each model's walked route (the planner's, world XZ) rides along, so the core's move check measures the
-	# route, not the chord (R3); a model that did not move sends none.
-	var routes := {}
-	for p in main.solo_controller.last_move_paths:
-		routes[p["model"]] = (p["path"] as Array).map(func(v: Vector3) -> Vector2: return Vector2(v.x, v.z))
-	var trails: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Array: return routes.get(m, []))
-	var intent := {"t": "intent", "kind": kind}
-	if target != null:
-		intent["shoot"] = target.unit_id
-	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": at, "trails": trails}, intent]
+	var t: Array = ai_transcript(main, unit, report, target)
 	# Step 42b: the table's presentation of the volley (_present); its stage opens before the core's first line.
 	# P4.D-19: the core prints no sentence for the Dangerous test (its first throw): the table's own two stand in for it, in
 	# the table's words and places - the test line before the roll, the wound line right after it - and the staged volley
@@ -550,6 +542,25 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	ai_refusals += 1
 	push_error("CoreActivation.run_ai: %s - the core answered %s: %s" % [unit.get_name(), r["step"], r.get("reason", "")])
 	return t.any(func(e: Dictionary) -> bool: return str(e["t"]) == "faces")
+
+
+## C-2: the AI activation's transcript before its first die: begin, the models where they stand now (with the routes they
+## walked) and the intent (`target` null = no shot). `split` (an array of {member, weapon, target}, P4.D-14) is split fire's
+## aim; empty = none, the intent then carries no "split" key. Shared by `run_ai` and the shadow replay (C-4).
+static func ai_transcript(main, unit: GameUnit, report: Dictionary, target: GameUnit, split: Array = []) -> Array:
+	var at: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
+	# Step 42c: each model's walked route (the planner's, world XZ) rides along, so the core's move check measures the
+	# route, not the chord (R3); a model that did not move sends none.
+	var routes := {}
+	for p in main.solo_controller.last_move_paths:
+		routes[p["model"]] = (p["path"] as Array).map(func(v: Vector3) -> Vector2: return Vector2(v.x, v.z))
+	var trails: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Array: return routes.get(m, []))
+	var intent := {"t": "intent", "kind": int(report.get("action", -1))}
+	if target != null:
+		intent["shoot"] = target.unit_id
+	if not split.is_empty():
+		intent["split"] = split
+	return [{"t": "begin"}, {"t": "placed", "positions": at, "trails": trails}, intent]
 
 
 ## Step 42c-2: the table's shot rows of one AI volley (`_solo_resolve_ai_volley` writes one per shot, in `shots` order,
@@ -798,6 +809,30 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		_land_pools(main, gu, d)
 		_land_versatile_mode(main, gu, d)
 		_land_feats(main, gu, d)
+		_land_once_latches(main, gu, d)
+
+
+## C-11: the rule name of each Precision latch and the table flag that closes it.
+const PRECISION_FLAGS := {"Precision Tag": "precision_tag_used", "Precision Target": "precision_target_used"}
+
+
+## C-11: the once-per-game name lists the core SPENT in this activation (the delta's `limited_used`, `storm_used`, `precision_used`:
+## the names `State` gained, inventory class (a)). The table's own writer for each ran only on the table path, so on this one the
+## core's after is the first writer: the weapon through `mark_limited_used` (the controller's record, the MP latch and the
+## decision record), the other two through their `unit_properties` flag (MP-synced). A name the table already holds is no news.
+static func _land_once_latches(main, gu: GameUnit, d: Dictionary) -> void:
+	for name in d.get("limited_used", []):
+		if not (gu.unit_properties.get("limited_used", []) as Array).has(str(name)):
+			main.solo_controller.mark_limited_used(gu, {"name": str(name)})
+	for name in d.get("storm_used", []):
+		var flag := "storm_used_%s" % str(name).to_snake_case()
+		if not bool(gu.unit_properties.get(flag, false)):
+			main._sync_unit_property(gu, flag, true)
+	for name in d.get("precision_used", []):
+		if not PRECISION_FLAGS.has(str(name)):
+			push_error("CoreActivation.land_delta: %s spent the precision rule %s, which no table flag closes yet" % [gu.get_name(), name])
+		elif not bool(gu.unit_properties.get(PRECISION_FLAGS[str(name)], false)):
+			main._sync_unit_property(gu, PRECISION_FLAGS[str(name)], true)
 
 
 ## P4.D-38a: the once-per-game feat latches the core SPENT in this activation (the delta's `feats_used`, inventory row of the
