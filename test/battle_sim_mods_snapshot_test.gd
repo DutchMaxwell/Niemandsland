@@ -2,7 +2,7 @@ extends GdUnitTestSuite
 ## A1b-1 — BattleSim.capture stamps "mods": SoloController.active_mod_net_of(u), the NET of a
 ## unit's active spell/token records (durable mirror at unit_properties["spell_records"], shaped
 ## exactly like main.gd:3652-3665 writes them). Not wired to a consumer yet — this only proves the
-## snapshot carries the numbers and that clone_state gives every rollout its own copy.
+## snapshot carries the numbers (a rollout's own copy is the Rust `Clone`: tests/parity.rs::clone_is_deep_where_the_gdscript_clone_is_deep).
 
 const IN2M := 0.0254
 
@@ -58,16 +58,6 @@ func test_capture_stamps_zero_mods_with_no_records() -> void:
 	assert_float(float(mods["range_in"])).is_equal(0.0)
 	assert_float(float(mods["advance"])).is_equal(0.0)
 	assert_float(float(mods["rush"])).is_equal(0.0)
-
-
-func test_clone_state_gives_mods_its_own_copy() -> void:
-	var buffed := _unit(1, [Vector3.ZERO], "Buffed")
-	buffed.unit_properties["spell_records"] = [_record(1, 0)]
-	var state := BattleSim.capture(_army([buffed]))
-	var clone := BattleSim.clone_state(state)
-	(clone["units"]["Buffed"] as Dictionary)["mods"]["hit"] = 99
-	assert_int(int((state["units"]["Buffed"] as Dictionary)["mods"]["hit"])).is_equal(1)
-	assert_int(int((clone["units"]["Buffed"] as Dictionary)["mods"]["hit"])).is_equal(99)
 
 
 func test_capture_stamps_a_def_debuff_into_mods() -> void:
