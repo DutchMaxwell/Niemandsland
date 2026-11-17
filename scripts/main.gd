@@ -398,6 +398,7 @@ var _solo_fast: bool = false                 # fast-forward: shrink pacing holds
 var _solo_auto_saves: bool = false           # A3 (NML-202): skip _solo_prompt_saves' dialog, roll straight to the tray
 var _solo_batch: bool = false                # headless sweeps: instant (non-physics) dice + zero pacing holds (implies fast)
 var _solo_core_ai_h: int = 0                 # one-core P3 step 42: the AI activation's board before its move (0 = none)
+var _solo_core_shadow_h: int = 0             # C-3: NML_CORE_SHADOW=1 only - the same board for EVERY OPR AI unit (0 = none)
 var _solo_relic_drop_queue: Array = []
 var _solo_relic_drop_active: Dictionary = {}
 # One loss line per volley and unit: while a volley parks its casualties (one signal each, all with the same
@@ -1118,6 +1119,7 @@ func _solo_activate_one_ai() -> GameUnit:
 	if _solo_core_ai_h != 0:   # one-core P3 step 42: the body's capture, released on every path of the body
 		solo_controller._core_node_ready().release(_solo_core_ai_h)
 		_solo_core_ai_h = 0
+	CoreShadow.release(self)   # C-3: the shadow board and its tap end with the body too
 	save_manager.note_activation_end()   # P4.0-7 (D5): a save after the AI activation is an ordinary one
 	if done != null and solo_activation_done.is_valid():
 		await solo_activation_done.call(done)
@@ -1145,6 +1147,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# One-core P3 step 42 (flag on): a plain unit's board BEFORE its move, for the core's volley (_run_ai_shooting).
 	_solo_core_ai_h = CoreActivation.capture(self) \
 		if peek != null and CoreActivation.applies(self) and CoreActivation.is_plain(peek) else 0
+	_solo_core_shadow_h = CoreShadow.capture(self, peek)   # C-3: 0 unless NML_CORE_SHADOW=1 (counting only)
 	# P4.0-7 (D5): the AI's activation-start snapshot for a save taken mid-volley (the body's end clears it).
 	if _solo_core_ai_h != 0:
 		save_manager.note_activation_start(peek.get_name())
@@ -11721,6 +11724,7 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 			# AI-G4 H1a: the replay gates cut the cast and spell legs (the core rolls no cast die), keep the rest.
 			dice_rec["leg"] = "dangerous" if roll_kind == "dangerous" else _solo_leg
 		AiDiceRecorder.record(dice_rec)
+	CoreShadow.note_roll(roll_kind, count, success_target, faces, owner, "dangerous" if roll_kind == "dangerous" else _solo_leg)   # C-3
 	_dice_count = prev_count
 	_update_dice_set(prev_count)
 	_success_target = prev_target
