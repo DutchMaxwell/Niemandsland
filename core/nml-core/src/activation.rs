@@ -150,6 +150,12 @@ pub enum Check { Ok { lines: Vec<LogLine> }, Refused { reason: String } }
 /// most 6" for every model once any model's path crosses Difficult terrain or the unit carries the Difficult debuff (not
 /// for Flying or Strider). An
 /// overrun is refused with the O3 sentence when `enforce`, else accepted with that sentence as one log line.
+/// The model count of a placement that also moves the unit's joined heroes: the host's models, then each attached
+/// hero's in `attached` order (the table's `get_alive_models_with_attached`).
+pub fn placed_chain_len(state: &State, si: usize) -> usize {
+    state.positions[si].len() + state.attached[si].iter().map(|&h| state.positions[h].len()).sum::<usize>()
+}
+
 pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams, terrain: &Terrain, drop: &Drop, enforce: bool) -> Check {
     let (mode, m) = match drop.mode {
         ADVANCE => ("Advance", 0),
@@ -158,7 +164,9 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
         _ => return Check::Refused { reason: "movement mode not declared".to_string() },
     };
     let start = &state.positions[si];
-    if drop.placed.len() != start.len() {
+    // S1: the placement may carry the joined heroes' models after the host's (`placed_chain_len`); the allowance below
+    // reads the host's models (the zip stops there), as the table measures the unit's own move.
+    if drop.placed.len() != start.len() && drop.placed.len() != placed_chain_len(state, si) {
         return Check::Refused { reason: "placement does not match the unit's models".to_string() };
     }
     let inch = |p: [f64; 2], q: [f64; 2]| (p[0] - q[0]).hypot(p[1] - q[1]) / INCHES_TO_METERS;
@@ -689,6 +697,37 @@ mod tests {
         (statics[3].model_count, statics[3].wounds_max, statics[3].ctx.defense) = (1, vec![1], 4);
         let aim = |weapon: &str, target: &str| SplitShot { member: "a".into(), weapon: weapon.into(), target: target.into() };
         (st, statics, vec![aim("rifle", "b"), aim("pistol", "bh")])
+    }
+
+    /// S1 shadow soak (a joined hero's weapons missing from the core's volley): "a" (at 0") advances 4" with its joined
+    /// hero "ah" (at 2", a 6" pistol) and shoots "b" (at 12"). The table moves the hero with the host, so it stands 5" from
+    /// "b" and fires; a placement that carries the hero's model after the host's does the same in the core. A host-only
+    /// placement leaves "ah" behind at 10" and its pistol silent (the soak's mismatch). RED: drop the hero half of the
+    /// placement in `resolve_with` -> the chain placement's volley has no "ah" roll either.
+    #[test]
+    fn a_chain_placement_moves_the_joined_hero_and_its_weapon_fires() {
+        let (mut st, mut statics) = volley_line();
+        let p = st.profiles.list[0].clone();
+        st.profiles = std::rc::Rc::new(crate::state::Profiles { list: vec![p; 4], index: Default::default() }); // one per roster slot
+        statics[1].shoot = vec![ShootProfile { name: "pistol".into(), attacks: 1, count: 1, range: 6, ..Default::default() }];
+        let seams = Seams { hero_attach: true, moved_shoot: true, ..seams() };
+        let x = |v: f64| [v * INCHES_TO_METERS, 0.0, 0.0];
+        let hero_rolls = |at: Vec<[f64; 3]>| {
+            let mut t = vec![Begin, Input::Placed { at, trails: Vec::new() }, intent(ADVANCE, Some("b"))];
+            let mut n = 0;
+            loop {
+                match step_activation(&statics, &st, "a", &Terrain::default(), seams, &t, true) {
+                    ActStep::NeedRoll { faces, owner, .. } => {
+                        n += (owner == "ah") as i32;
+                        t.push(Faces(vec![6; faces]));
+                    }
+                    ActStep::Done { .. } => return n,
+                    other => panic!("{other:?}"),
+                }
+            }
+        };
+        assert_eq!(hero_rolls(vec![x(4.0)]), 0, "host-only placement: the hero stays at 10\" and its pistol is out of range");
+        assert_eq!(hero_rolls(vec![x(4.0), x(7.0)]), 1, "the chain placement moves the hero to 5\": its pistol fires");
     }
 
     /// Split fire on the step API: an intent that carries `split` equals one straight seeded run with the

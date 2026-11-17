@@ -548,13 +548,16 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 ## walked) and the intent (`target` null = no shot). `split` (an array of {member, weapon, target}, P4.D-14) is split fire's
 ## aim; empty = none, the intent then carries no "split" key. Shared by `run_ai` and the shadow replay (C-4).
 static func ai_transcript(main, unit: GameUnit, report: Dictionary, target: GameUnit, split: Array = []) -> Array:
-	var at: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
+	# S1: the joined heroes' models follow the host's (get_alive_models_with_attached), so the core moves them with the unit
+	# as the table does; a hero left at its start would be out of range of the volley it fires in.
+	var chain: Array = unit.get_alive_models_with_attached()
+	var at: Array = chain.map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
 	# Step 42c: each model's walked route (the planner's, world XZ) rides along, so the core's move check measures the
 	# route, not the chord (R3); a model that did not move sends none.
 	var routes := {}
 	for p in main.solo_controller.last_move_paths:
 		routes[p["model"]] = (p["path"] as Array).map(func(v: Vector3) -> Vector2: return Vector2(v.x, v.z))
-	var trails: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Array: return routes.get(m, []))
+	var trails: Array = chain.map(func(m: ModelInstance) -> Array: return routes.get(m, []))
 	var intent := {"t": "intent", "kind": int(report.get("action", -1))}
 	if target != null:
 		intent["shoot"] = target.unit_id
