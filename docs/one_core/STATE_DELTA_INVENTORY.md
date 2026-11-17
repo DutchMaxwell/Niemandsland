@@ -23,6 +23,11 @@ same commit as the struct change.
   `[unit_id, is_activated, is_shaken, [[model_index, wounds_current, is_alive, [x_mm, z_mm]], ...]]`.
   `rows_match` (:1062) compares them, `on_mismatch` (:1101) pushes the differing wounds, moves,
   rotations, Shaken marker and activation flag back.
+- **Capture side (IN)** — what the core is told before the activation: the recorder's `ledger` (`AiActRecorder._ledger_of`,
+  a recorded corpus format and the AI search's input, so unchanged) and, from the one-core door's capture only (C-10),
+  `step_ledger` per unit (the Versatile pick, the reckless / retreating-strike / mind-control / regenerative-strength /
+  piercing-spot round stamps) and the top-level `second_wind` (the army's grants of the round). Not on the wire yet:
+  `piercing_tag_used` (the Piercing Tag latches are another lane's), `second_wind_used`'s per-unit flag rides the `ledger`.
 - **Gap** — `YES` when the table reads/uses the field, an activation can change it, and none of the
   surfaces above carries the change back. Those are the fields where a core/table split stays
   invisible locally and, for most of them, also across the MP check.

@@ -91,7 +91,9 @@ func _volley(att: GameUnit, foe: GameUnit, handle := 0) -> Dictionary:
 		t.append({"t": "faces", "faces": faces})
 	if handle == 0:
 		core.release(h)
-	return {"step": str(r["step"]), "reason": str(r.get("reason", "")), "asks": asks, "delta": r.get("delta", []), "handle": int(r.get("handle", 0))}
+	var after: Dictionary = core.plain_of(int(r["handle"])).get("units", {}) if int(r.get("handle", 0)) != 0 else {}
+	return {"step": str(r["step"]), "reason": str(r.get("reason", "")), "asks": asks, "delta": r.get("delta", []), "handle": int(r.get("handle", 0)),
+		"activated": after.keys().filter(func(k: String) -> bool: return bool(after[k].get("activated", false)))}
 
 
 func _end(volleys: Array) -> void:
@@ -118,6 +120,7 @@ func _read(v: Dictionary, what: String, gu: GameUnit = null) -> String:
 		"pod": return str((v["asks"] as Array).has("attack x3 @4"))
 		"storm": return str((v["asks"] as Array).has("attack x3 @2"))
 		"mode": return str(_row(v, gu).get("versatile_pick_mode", "no row"))
+		"activated": return str((v["activated"] as Array).has(gu.unit_id))
 	return str(_row(v, gu).get("pools", {}).get(what, "no row"))
 
 
@@ -186,17 +189,28 @@ func test_in_growth_markers_are_sent() -> void:
 		att.unit_properties["growth_precision_growth"] = 2, "hit", "attack x10 @4", "attack x10 @3")
 
 
-## NOT sent: the table's latched Versatile pick (and its round). The core picks again (mode 2 = AP(+1)) whatever the table latched.
-func test_in_the_versatile_pick_is_not_sent() -> void:
+## C-10: the table's latched Versatile pick (its round and the int mode) is sent: the core keeps the table's +1 to hit (saves stay at 4+)
+## instead of picking AP(+1) again (saves at 5+).
+func test_in_the_versatile_pick_is_sent() -> void:
 	await _flip("versatile_pick_mode", _pair({"faction_folder": "battle_brothers", "rules": ["Versatile Attack"]}), func(att: GameUnit, _f: GameUnit) -> void:
 		att.unit_properties["versatile_pick_round"] = 1
-		att.unit_properties["versatile_pick"] = {"hit_mod": 1, "ap": 0}, "mode", "2", "2", 0)
+		att.unit_properties["versatile_pick"] = {"hit_mod": 1, "ap": 0}, "save", "defense x10 @5", "defense x10 @4")
 
 
-## NOT sent: `piercing_tag_used` (no ledger key). A Piercing Tag bearer whose table latch is closed is placed again by the core.
+## NOT sent (the Piercing Tag latches are another lane's): `piercing_tag_used` has no ledger key and rides no step ledger. A Piercing Tag
+## bearer whose table latch is closed is placed again by the core.
 func test_in_the_piercing_tag_latch_is_not_sent() -> void:
 	await _flip("piercing_tag_used", _pair({"faction_folder": "alien_hives", "rules": ["Piercing Tag(1)"]}), func(att: GameUnit, _f: GameUnit) -> void:
 		att.unit_properties["piercing_tag_used"] = true, "save", "defense x10 @5", "defense x10 @5")
+
+
+## C-10: Second Wind's army cap of the round is sent. The last unit of the round (the only carrier, the enemy already activated) is
+## granted a second activation (not Activated any more) unless the table's cap for the round is spent.
+func test_in_second_winds_round_cap_is_sent() -> void:
+	var u := _pair({"faction_folder": "dark_elf_raiders", "rules": ["Martial Prowess"]})
+	u[1].is_activated = true
+	await _flip("second_wind_round/uses", u, func(_a: GameUnit, _f: GameUnit) -> void:
+		_main.solo_controller._second_wind_round_uses[str(_main.opr_army_manager.current_round)] = 1, "activated", "false", "true", 0)
 
 
 ## Two volleys on ONE core state (the second on the handle the first left, at `second`: the same target unless a case needs a live one)
@@ -295,33 +309,32 @@ func test_out_the_marker_pools_land() -> void:
 		0, "vengeance_markers", 0, 5)
 
 
-## Carried but NOT sent: the core's own pick lands over the table's different latch (reported as a split).
-func test_out_a_versatile_pick_lands_over_the_tables_latch() -> void:
+## The table's latch stands: the core reads it, picks nothing new and reports no split (the delta of C-9 overwrote it before C-10).
+func test_out_the_tables_versatile_latch_stands() -> void:
 	var u := _pair({"faction_folder": "battle_brothers", "rules": ["Versatile Attack"]})
 	u[0].unit_properties["versatile_pick_round"] = 1
 	u[0].unit_properties["versatile_pick"] = {"hit_mod": 1, "ap": 0}
 	var v := await _volley(u[0], u[1])
 	_end([v])
-	await assert_error(func() -> void: CoreActivation.land_delta(_main, v["delta"], [], {})).is_push_error(
-		"CoreActivation.land_delta: %s.versatile_pick differs (table %s, core %s)" % [u[0].get_name(), str({"hit_mod": 1, "ap": 0}), str({"hit_mod": 0, "ap": 1})])
-	assert_dict(u[0].unit_properties["versatile_pick"]).is_equal({"hit_mod": 0, "ap": 1})
+	await assert_error(func() -> void: CoreActivation.land_delta(_main, v["delta"], [], {})).is_success()
+	assert_dict(u[0].unit_properties["versatile_pick"]).is_equal({"hit_mod": 1, "ap": 0})
 
 
-## The trap: a round stamp the capture does not send comes back as the core's fresh -1 and is landed over the table's real stamp as soon
-## as the unit has a delta row (here: the wounded target). A stamp the capture DOES send (`vs_mark_round`) comes back equal.
-func test_the_unsent_round_stamps_are_overwritten_with_minus_one() -> void:
+## C-10: the round stamps the capture sent come back equal. Before the step ledger the eight table stamps below were not on the wire:
+## the core's fresh -1 was landed over the table's real stamp as soon as the unit had a delta row (here: the wounded target), one
+## `push_error` each. `vs_mark_round` rides the recorder's ledger and always came back equal.
+func test_the_round_stamps_come_back_equal() -> void:
 	var u := _pair()
 	u[1].unit_properties["vs_mark_round"] = 1
+	for key in UNSENT_STAMPS:
+		u[1].unit_properties[UNSENT_STAMPS[key]] = 1
+	u[1].unit_properties["versatile_pick"] = {"hit_mod": 1, "ap": 0}   # the pick that goes with `versatile_pick_round`
 	var v := await _volley(u[0], u[1])
 	_end([v])
+	assert_dict(_row(v, u[1])["stamps"]).override_failure_message("the core read the stamps").contains_key_value("reckless_ap_round", 1)
 	await assert_error(func() -> void: CoreActivation.land_delta(_main, v["delta"], [], {})).is_success()
-	assert_int(int(u[1].unit_properties["vs_mark_round"])).override_failure_message("a sent stamp survives the landing").is_equal(1)
-	for key in UNSENT_STAMPS:
-		var prop: String = UNSENT_STAMPS[key]
-		u[1].unit_properties[prop] = 1
-		await assert_error(func() -> void: CoreActivation.land_delta(_main, v["delta"], [], {})).is_push_error(
-			"CoreActivation.land_delta: %s.%s differs (table 1, core -1)" % [u[1].get_name(), prop])
-		assert_int(int(u[1].unit_properties[prop])).override_failure_message("%s was overwritten" % prop).is_equal(-1)
+	for prop in ["vs_mark_round"] + UNSENT_STAMPS.values():
+		assert_int(int(u[1].unit_properties[prop])).override_failure_message("%s survives the landing" % prop).is_equal(1)
 
 
 ## Wire only: ledger keys of fields a shoot volley cannot exercise, and properties that have no key at all.
@@ -336,11 +349,18 @@ func test_the_wire_keys_of_the_fields_a_volley_does_not_exercise() -> void:
 	var tp := GameUnit.new()
 	tp.unit_properties["teleport_used_this_activation"] = true
 	assert_bool(AiActRecorder._ledger_of(tp).has("teleport")).is_true()
+	# The recorder's ledger (a corpus format) stays byte-identical: the latches below ride the door's `step_ledger` instead.
 	for prop in ["versatile_pick", "versatile_pick_round", "piercing_tag_used", "reckless_rolled_round", "reckless_ap_round", "reckless_backfire_round",
 			"retreating_strike_round", "mind_control_moved_round", "regenerative_strength_round", "piercing_spot_round"]:
 		var gu := GameUnit.new()
-		gu.unit_properties[prop] = 1
+		gu.unit_properties[prop] = {"hit_mod": 1, "ap": 0} if prop == "versatile_pick" else 1
 		assert_dict(AiActRecorder._ledger_of(gu)).override_failure_message("%s has no ledger key" % prop).is_empty()
+		# (the Versatile pick needs its round AND the pick: a lone half is nothing to send)
+		assert_bool(CoreActivation.step_ledger_of(gu).is_empty()).override_failure_message("%s rides the step ledger" % prop) \
+			.is_equal(prop in ["versatile_pick", "versatile_pick_round", "piercing_tag_used"])
+	var vp := GameUnit.new()
+	vp.unit_properties.merge({"versatile_pick_round": 2, "versatile_pick": {"hit_mod": 0, "ap": 1}})
+	assert_dict(CoreActivation.step_ledger_of(vp)).is_equal({"versatile_pick_round": 2, "versatile_pick_mode": 2})
 
 
 ## Surprise: a Precision Spotter's placement die has no roll record, so the step API REFUSES the whole activation: the spotter's markers

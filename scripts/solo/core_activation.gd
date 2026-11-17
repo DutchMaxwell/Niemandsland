@@ -125,7 +125,40 @@ static func capture(main) -> int:
 	var plain := BattleSim.state_to_plain(state)
 	AiActRecorder._stamp_gate_reads(state, plain)
 	_stamp_spent_ignore_feats(state, plain)
+	_stamp_step_ledger(state, plain, sc)
 	return int(core.capture_plain(plain))
+
+
+## C-10: the table's round stamps and latches `_ledger_of` does not carry, the table property each is read from (the State name where
+## it differs). `_ledger_of` is a recorded corpus format and the AI search's input, so it stays byte-identical; the door's capture sends
+## these under each unit's `step_ledger` and Second Wind's army cap of the round under `second_wind`, for THIS capture only.
+const STEP_STAMPS := {"reckless_rolled_round": "reckless_rolled_round", "reckless_ap_round": "reckless_ap_round",
+	"reckless_backfire_round": "reckless_backfire_round", "retreating_strike_round": "retreating_strike_round",
+	"mind_control_moved_round": "mind_control_moved_round", "growth_strike_round": "regenerative_strength_round",
+	"piercing_spot_round": "piercing_spot_round"}
+
+
+## The step ledger of one unit: the stamps above (absent = never stamped), the latched Versatile pick as the round and the int mode the
+## core keeps (1 = +1 to hit, 2 = AP(+1)). {} for a unit with none.
+static func step_ledger_of(gu: GameUnit) -> Dictionary:
+	var out := {}
+	for key in STEP_STAMPS:
+		if int(gu.unit_properties.get(STEP_STAMPS[key], -1)) != -1:
+			out[key] = int(gu.unit_properties[STEP_STAMPS[key]])
+	var pick: Dictionary = gu.unit_properties.get("versatile_pick", {})
+	if int(gu.unit_properties.get("versatile_pick_round", -1)) != -1 and (int(pick.get("ap", 0)) > 0 or int(pick.get("hit_mod", 0)) > 0):
+		out["versatile_pick_round"] = int(gu.unit_properties["versatile_pick_round"])
+		out["versatile_pick_mode"] = 2 if int(pick.get("ap", 0)) > 0 else 1
+	return out
+
+
+static func _stamp_step_ledger(state: Dictionary, plain: Dictionary, sc: SoloController) -> void:
+	for key in state["units"]:
+		var sl := step_ledger_of((state["units"][key] as Dictionary)["unit"])
+		if not sl.is_empty() and plain["units"].has(str(key)):
+			plain["units"][str(key)]["step_ledger"] = sl
+	var round_no := sc._second_wind_round_no()
+	plain["second_wind"] = {"round": round_no, "uses": int(sc._second_wind_round_uses.get(str(round_no), 0))}
 
 
 ## P4.D-38a: the once-per-game ignore feat (the Protection Feat family) a table roll spent closes the core's latch: its name
