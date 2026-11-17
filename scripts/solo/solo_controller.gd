@@ -1283,8 +1283,8 @@ func _select_ai_unit(eligible: Array) -> GameUnit:
 	var pool: Array = fresh if not fresh.is_empty() else shaken
 	# NML-1073 M5 (EXPERIMENT, default off): with the knob OFF this is the shipped shortcut, byte for
 	# byte — a one-unit pool returns here, above everything. With it ON the unit falls through to the
-	# planner block: no choice of UNIT is left, but there is still a choice of ACTION, and today that
-	# choice is made by the 1-ply plan() in _solve_planner instead of the rollout every other pick uses.
+	# planner block: no choice of UNIT is left, but there is still a choice of ACTION, and with the knob OFF
+	# the decision tree makes it (the 1-ply plan() that used to answer in _solve_planner is gone, P4.D-93).
 	var one_left := pool.size() == 1
 	if one_left and not _pool1_rollout_active():
 		return pool[0]
@@ -4598,8 +4598,8 @@ func _move_v2_same(a: Vector2, b: Vector2) -> bool:
 ## has not ported), a decline STORM is a finding, and 200 identical lines hide it.
 ## P4.D-61 (inert): who still reaches the GDScript search, counted into CoreActivation.legacy["plan_decline"] (the
 ## NML_TABLE_CENSUS dump). "core:used" = `_core_plan` answered; "core:<reason>" = it declined; "rollout:used|unused" =
-## what AiPlanner.plan_with_rollout then answered (with NML_CORE=1 every rollout follows a decline); "plan1:used|unused"
-## = what the 1-ply AiPlanner.plan answered for `_solve_planner`. Counting only: no RNG, no log line, no game state.
+## what AiPlanner.plan_with_rollout then answered (with NML_CORE=1 every rollout follows a decline). The 1-ply
+## "plan1:*" key of the soak (0 of 13 used) went with the fallback it counted. Counting only: no RNG, no log line, no game state.
 static func note_plan(what: String) -> void:
 	var d: Dictionary = CoreActivation.legacy.get("plan_decline", {})
 	d[what] = int(d.get(what, 0)) + 1
@@ -4996,11 +4996,9 @@ func _state_key_of(state: Dictionary, unit: GameUnit) -> String:
 	return ""
 
 
-## The planner as a position-solver-style overlay: capture the LIVE game into a BattleSim state,
-## constrain the pick to THIS unit (every other own unit is marked activated on the captured copy,
-## so plan() chooses only among its actions), and map the winning action onto the solver-adoption
-## shape. {} ⇒ the caller keeps the decision-tree plan byte-identically. Emits the "planner"
-## explainability record (intent sentence + expectation numbers + runner-up).
+## The planner as a position-solver-style overlay: executes the rollout intent the unit pick cached (R3) and maps it onto
+## the solver-adoption shape. {} (no valid cached intent) => the caller keeps the decision-tree plan byte-identically.
+## Emits the "planner" explainability record (intent sentence + expectation numbers).
 func _solve_planner(unit: GameUnit) -> Dictionary:
 	var sp_diff := active_difficulty()
 	AiMissionEval.fit_mode = sp_diff != null and sp_diff.eval_fit   # E4: leaf choice per preset
@@ -5009,8 +5007,8 @@ func _solve_planner(unit: GameUnit) -> Dictionary:
 	AiMissionEval.eval_variant = _eval_variant_for(sp_diff)
 	_apply_aifix(sp_diff)
 	# R3: execute the rollout intent when it is still valid (same unit, same
-	# round, target still alive) — re-deriving 1-ply here would undo the tempo
-	# choice the unit pick just made. Any mismatch falls through to the re-plan.
+	# round, target still alive) — re-deriving 1-ply would undo the tempo choice the
+	# unit pick just made. Any mismatch falls through to the decision tree ({}).
 	if not _planner_intent.is_empty() and _planner_intent["unit"] == unit \
 			and int(_planner_intent["round"]) == _current_round():
 		var cached: Dictionary = _planner_intent
@@ -5034,58 +5032,10 @@ func _solve_planner(unit: GameUnit) -> Dictionary:
 			if tgt != null:
 				cout["target"] = tgt
 			return cout
+	# No cached rollout intent for this unit: the search declined it (or none was asked), so the decision tree plays the
+	# activation. The GDScript 1-ply AiPlanner.plan that used to answer here said `used:false` in 13 of 13 soak cases (P4.D-62).
 	_planner_intent = {}
-	var _ph_cap2 := 0
-	if act_wall_enabled():
-		_ph_cap2 = _phase_enter()
-	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
-		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
-		terrain_type_at, int(ai_slot))
-	if act_wall_enabled():
-		_phase_mark("capture", _ph_cap2)
-	state["charge_illegal"] = charge_candidate_illegal   # head wave 1: menu-side rule gates
-	state["los_at"] = los_checker   # review find: playout tuples need the trained sight feature
-	var unit_key := ""
-	for k in state["units"]:
-		if (state["units"][k] as Dictionary)["unit"] == unit:
-			unit_key = str(k)
-			break
-	if unit_key == "":
-		return {}
-	var me: int = int((state["units"][unit_key] as Dictionary)["player"])
-	for k in state["units"]:
-		var su: Dictionary = state["units"][k]
-		if str(k) != unit_key and int(su["player"]) == me:
-			su["activated"] = true
-	var _ph_gd2 := 0
-	if act_wall_enabled():
-		_ph_gd2 = _phase_enter()
-	var pick := AiPlanner.plan(state, me)
-	note_plan("plan1:used" if bool(pick.get("used", false)) else "plan1:unused")
-	if act_wall_enabled():
-		_phase_mark("gdsearch", _ph_gd2)
-	if not bool(pick.get("used", false)) or str(pick["unit_key"]) != unit_key:
-		return {}
-	var act: Dictionary = pick["action"]
-	var kind := int(act.get("kind", AiDecision.Action.HOLD))
-	var exp: Dictionary = pick["expectation"]
-	var runner: Dictionary = pick.get("runner_up", {})
-	record_decision({"kind": "planner", "unit": unit.get_name(),
-		"rule": "PLANNER_V0 (NML-995): every candidate action rolled through the parity-bound BattleSim and scored as projected win probability",
-		"candidates": [], "chosen": AiDecision.action_name(kind),
-		"why": str(pick["intent"]),
-		"data": {"win_before": float(exp["before"]), "win_after": float(exp["after"]),
-			"runner_up_score": float(runner.get("score", -1.0))}})
-	var out := {"used": true, "action": kind, "shoot": act.has("shoot"),
-		"toward": AiDecision.Toward.OBJECTIVE if kind == AiDecision.Action.RUSH \
-			else AiDecision.Toward.ENEMY,
-		"why": str(pick["intent"])}
-	if act.has("dest"):
-		out["goal"] = act["dest"]
-	var victim_key := str(act.get("charge", act.get("shoot", "")))
-	if victim_key != "" and state["units"].has(victim_key):
-		out["target"] = (state["units"][victim_key] as Dictionary)["unit"]
-	return out
+	return {}
 
 
 ## Difficulty → position-band width: the ev_noise knob finally gets a real surface (POSITION choice). A

@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## P4.D-61: the planner decline counter. `SoloController.note_plan` counts who still reaches the GDScript search into
 ## CoreActivation.legacy["plan_decline"]: "core:<reason>" when `_core_plan` declines, "rollout:used|unused" for the
-## GDScript AiPlanner.plan_with_rollout answer that follows, "plan1:used|unused" for `_solve_planner`'s 1-ply AiPlanner.plan.
+## GDScript AiPlanner.plan_with_rollout answer that follows (the 1-ply "plan1" key went with its fallback, P4.D-93).
 ## Counting only: a declining core must decide exactly like no core. Constructed: bare units, a stub core node.
 
 const IN2M := 0.0254
@@ -112,15 +112,6 @@ func test_a_refused_game_header_is_counted_as_a_decline() -> void:
 	var d := _plan_decline()
 	assert_int(d.get("core:header_refused", 0)).override_failure_message("counts: %s" % [d]).is_equal(1)
 	assert_int(d.get("core:PlantedReason", 0)).is_equal(0)
-
-
-func test_the_one_ply_plan_of_solve_planner_is_counted_with_its_answer() -> void:
-	var sc := _controller(null)
-	var out := sc._solve_planner(sc.army_manager.game_units["Taker"])
-	var d := _plan_decline()
-	assert_int(d.get("plan1:used", 0) + d.get("plan1:unused", 0)).override_failure_message("counts: %s" % [d]).is_equal(1)
-	assert_int(d.get("plan1:used", 0)).is_equal(1 if bool(out.get("used", false)) else 0)   # the count is the answer's `used`
-	assert_bool(d.has("core:PlantedReason")).is_false()
 
 
 func test_a_declining_core_decides_exactly_like_no_core() -> void:
