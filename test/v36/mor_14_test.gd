@@ -2,7 +2,8 @@ extends GdUnitTestSuite
 ## Rules 3.6 row MOR-14 (lead ruling D-SPELL-LOS): a spell needs line of sight only when its own entry
 ## carries `needs_los: true`; everything else reaches a target in range even when nobody can see it.
 ## Rules 3.5 (the frozen EPOCH_72 leg) still required sight for every spell — the `_at_epoch_72`
-## controls below pin that, and the twin + real-engine pickers are read through their live seams.
+## controls below pin that, read through the real engine's live seam (the twin's version of these three
+## rules is the core's: core/nml-core/src/tests/sim/v36_mor_14.rs).
 
 const IN2M := 0.0254
 
@@ -39,32 +40,6 @@ func _unit(pid: int, uid: String, positions: Array, rules: Array = [],
 	return u
 
 
-func _capture(units: Array) -> Dictionary:
-	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
-	var gu := {}
-	for u in units:
-		gu[(u as GameUnit).unit_id] = u
-	army.game_units = gu
-	return BattleSim.capture(army)
-
-
-## The twin fixture: a Caster(1) of `faction` at the origin and an enemy squad 3" east, with a sight
-## checker that answers "no" for every pair — a wall between all. The spell BOOK arrives through the
-## real registry (the faction slug on the unit properties), never by hand-built entries.
-func _twin_hidden(faction: String, tokens: int = 1) -> Dictionary:
-	var caster := _unit(1, "Wizard", [Vector3.ZERO], ["Caster(1)"], faction, tokens)
-	var squad := _unit(2, "Squad", [Vector3(3.0 * IN2M, 0, 0)])
-	var state := _capture([caster, squad])
-	state["los_blocked"] = func(_a: Vector3, _b: Vector3) -> bool: return true
-	return state
-
-
-func _twin_target(state: Dictionary, entry: Dictionary) -> String:
-	var su: Dictionary = state["units"]["Wizard"]
-	var origins: Array = [{"su": su, "mod": 0, "is_caster": true}]
-	return str(BattleSim._best_spell_target(state, su, entry, origins).get("target", ""))
-
-
 ## The real-engine fixture: the SoloController fixture style, P1 caster vs P2 enemy 3" away, with a
 ## sight checker that answers "no" for every pair.
 func _solo_hidden() -> Dictionary:
@@ -86,28 +61,6 @@ func _candidate_ids(table: Dictionary, entry: Dictionary) -> Array:
 			table["caster"] as GameUnit, entry, 1, 2):
 		ids.append((c as GameUnit).unit_id)
 	return ids
-
-
-# --- the twin (battle_sim.gd) -----------------------------------------------------------------
-
-func test_twin_a_spell_without_the_clause_targets_a_hidden_unit_at_epoch_73() -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
-	var entry := SpellsRegistry.entry_for("gf", "dao_union", "Deadly Surge")
-	assert_bool(entry.is_empty()).override_failure_message("the real gf spell book carries Deadly Surge").is_false()
-	assert_str(_twin_target(_twin_hidden("dao_union"), entry)).is_equal("Squad")
-
-
-func test_twin_a_spell_with_the_clause_refuses_a_hidden_unit_at_epoch_73() -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
-	var entry := SpellsRegistry.entry_for("gf", "alien_hives", "Hive Shriek")
-	assert_bool(entry.is_empty()).override_failure_message("the real gf spell book carries Hive Shriek").is_false()
-	assert_str(_twin_target(_twin_hidden("alien_hives"), entry)).is_equal("")
-
-
-func test_twin_every_spell_needs_sight_at_epoch_72() -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
-	var entry := SpellsRegistry.entry_for("gf", "dao_union", "Deadly Surge")
-	assert_str(_twin_target(_twin_hidden("dao_union"), entry)).is_equal("")
 
 
 # --- the real engine (SoloController.spell_candidates) ----------------------------------------
