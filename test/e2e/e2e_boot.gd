@@ -94,6 +94,12 @@ static func free_stray_root_nodes(tree: SceneTree, before: Array) -> void:
 	if tree == null or tree.root == null:
 		return
 	flush_pending_frees(tree)
+	reset_ai_statics()
+	# A test that leaves a game (e2e_owner_roll_seam_test's failed reconnect) nulls the tree's multiplayer peer; the engine
+	# default is an OfflineMultiplayerPeer (main.gd puts it back in play). Without it get_my_player_slot() is 0 and the next
+	# suite's unit dock shows every unit (e2e_unit_card_info_test saw the AI's strip cards).
+	if not tree.get_multiplayer().has_multiplayer_peer():
+		tree.get_multiplayer().multiplayer_peer = OfflineMultiplayerPeer.new()
 	for child in tree.root.get_children():
 		if before.has(child):
 			continue
@@ -101,6 +107,30 @@ static func free_stray_root_nodes(tree: SceneTree, before: Array) -> void:
 			continue
 		tree.root.remove_child(child)
 		child.free()
+
+
+## The planner statics the AI stamps per pick from its preset (SoloController._apply_aifix, _planner_pick_unit). With the
+## core up (the default since P4.D-68) every AI game in a suite plays the shipped planner preset, so these outlive the test
+## and change the next suite's twin asserts: BattleSim._morale_fails_expected reads morale_by_probability, and
+## e2e_arena_pass_turn_test left it true for e2e_fearless_all_models_test. Back to the declared defaults at every teardown.
+static func reset_ai_statics() -> void:
+	AiPlanner.opener_by_finish = false
+	AiPlanner.no_end_threat = false
+	AiPlanner.brain_knobs = false
+	AiPlanner.leaf_opener = false
+	AiPlanner.brain_breadth = 0
+	AiPlanner.points_strength = false
+	AiPlanner.table_fidelity = false
+	AiPlanner.playout_search = false
+	AiPlanner.playout_net = {}
+	AiPlanner.opener_seat = false
+	BattleSim.morale_by_probability = false
+	BattleSim.reply_v2 = false
+	BattleSim.reply_skip_activated = false
+	BattleSim.reply_hold_gate = false
+	BattleSim.hero_fold = false
+	AiMissionEval.fit_mode = false
+	AiMissionEval.eval_variant = 0
 
 
 ## Push a real mouse button event through the viewport's full input pipeline (_input -> GUI ->
