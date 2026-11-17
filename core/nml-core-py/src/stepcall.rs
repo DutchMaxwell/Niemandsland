@@ -110,7 +110,7 @@ pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain,
         ActStep::NeedChoice { id, options, owner } => json!({"step": "need_choice", "id": id, "options": options, "owner": owner}),
         ActStep::Refused { index, reason } => refused(index, &reason),
         ActStep::Cancelled { lines } => json!({"step": "cancelled", "lines": lines_of(&lines)}),
-        ActStep::Done { state: s, lines, landings } => {
+        ActStep::Done { state: s, lines, landings, .. } => {
             let answer = json!({"step": "done", "lines": lines_of(&lines), "landings": landings_of(state, &landings), "delta": delta_array(state, &s)});
             next = Some(s);
             answer
