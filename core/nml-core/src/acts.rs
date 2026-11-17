@@ -908,7 +908,13 @@ pub const EPOCH_83_LONE_HERO_TARGET: u32 = 83;
 /// best target. Records stamped 83 or below replay byte-exact. Every call site reads THIS constant, not `84`. The recorder mirror
 /// stamps 84 with it.
 pub const EPOCH_84_IGNORE_GROUPS: u32 = 84;
-pub const CURRENT_RULES_EPOCH: u32 = 84;
+/// The pooled target gate of a step-path volley lets through a target nobody sees when a living chain member's weapon carries an Indirect
+/// that waives the sight test and reaches it (table twin `_solo_pick_overlay_target`, whose per-shot sight count ignores LOS for a weapon's
+/// own Indirect; rules 3.6 SHO-01a: a Hold not kept loses the waiver where the entry says so). Before, a holding Artillery beast with an
+/// Indirect gun fired nothing at a unit hidden behind a blocker, the table fired. Records stamped 84 or below replay byte-exact. Every
+/// call site reads THIS constant, not `85`. The recorder mirror stamps 85 with it.
+pub const EPOCH_85_INDIRECT_GATE: u32 = 85;
+pub const CURRENT_RULES_EPOCH: u32 = 85;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2226,7 +2232,7 @@ mod tests {
         read_act_header, record_rules_epoch, rule_on, MeleeReach, SearchMode, TreeDice, TreeLeaf, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
         EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_73_V36,
         EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT, EPOCH_79_EV_MOVED_ROUND, EPOCH_80_ROLLOUT_CUMBERSOME,
-        EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME, EPOCH_83_LONE_HERO_TARGET, EPOCH_84_IGNORE_GROUPS,
+        EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME, EPOCH_83_LONE_HERO_TARGET, EPOCH_84_IGNORE_GROUPS, EPOCH_85_INDIRECT_GATE,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2247,7 +2253,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 84, "the live epoch is EPOCH_84_IGNORE_GROUPS");
+        assert_eq!(CURRENT_RULES_EPOCH, 85, "the live epoch is EPOCH_85_INDIRECT_GATE");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2257,11 +2263,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":84}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":85}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 84"
+            "a fresh play_game() now stamps the bumped epoch, 85"
         );
     }
 
@@ -2359,6 +2365,15 @@ mod tests {
         assert!(rule_on(EPOCH_84_IGNORE_GROUPS, EPOCH_82_IGNORE_BY_NAME), "84 keeps the by-name bypass on");
         assert!(rule_on(EPOCH_84_IGNORE_GROUPS, EPOCH_83_LONE_HERO_TARGET), "84 keeps the lone hero target on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_84_IGNORE_GROUPS), "a fresh play_game() stamps it on");
+    }
+
+    /// Epoch 85: a record stamped 84 replays the pooled gate that ignored a weapon's own Indirect, a fresh record opens it.
+    #[test]
+    fn epoch_85_gate_is_closed_at_epoch_84_and_open_from_85() {
+        assert!(!rule_on(EPOCH_84_IGNORE_GROUPS, EPOCH_85_INDIRECT_GATE), "a record at 84 replays the sighted-only gate");
+        assert!(rule_on(EPOCH_85_INDIRECT_GATE, EPOCH_85_INDIRECT_GATE), "a record at 85 lets an Indirect weapon open the gate");
+        assert!(rule_on(EPOCH_85_INDIRECT_GATE, EPOCH_84_IGNORE_GROUPS), "85 keeps the ignore groups on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_85_INDIRECT_GATE), "a fresh play_game() stamps it on");
     }
 
     /// The WAVE 3 GATE's own reservation (05.09.): `EPOCH_6_TABLE_RULES` must
