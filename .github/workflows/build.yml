@@ -459,8 +459,9 @@ jobs:
       - name: Import project (generates .godot/)
         run: godot --headless --editor --quit --path .
 
-      # Dormant proof: installed -> class PRESENT + core_enabled FALSE; manifest moved
-      # away -> class ABSENT. Both stamp sections must be byte-identical.
+      # Dormant proof: installed -> class PRESENT + core_enabled TRUE (the core is the default in every build,
+      # debug ones too since P4.D-68); manifest moved away -> class ABSENT + core_enabled FALSE. Both stamp
+      # sections must be byte-identical.
       - name: Dormant check (extension installed vs manifest moved away)
         run: |
           set -euo pipefail
@@ -472,7 +473,7 @@ jobs:
           mv /tmp/nml_core.gdextension.moved core/nml_core.gdextension
           grep 'NML_DORMANT_CHECK ' /tmp/dormant_installed.log > /tmp/installed.marker
           grep 'NML_DORMANT_CHECK ' /tmp/dormant_absent.log > /tmp/absent.marker
-          python3 -c 'import json; a=json.loads(open("/tmp/installed.marker").read().split("NML_DORMANT_CHECK ",1)[1]); b=json.loads(open("/tmp/absent.marker").read().split("NML_DORMANT_CHECK ",1)[1]); assert a["class_present"] and a["core_enabled"] is False, a; assert b["class_present"] is False, b; print("installed %s/%s absent %s" % (a["class_present"], a["core_enabled"], b["class_present"]))'
+          python3 -c 'import json; a=json.loads(open("/tmp/installed.marker").read().split("NML_DORMANT_CHECK ",1)[1]); b=json.loads(open("/tmp/absent.marker").read().split("NML_DORMANT_CHECK ",1)[1]); assert a["class_present"] and a["core_enabled"] is True, a; assert b["class_present"] is False and b["core_enabled"] is False, b; print("installed %s/%s absent %s/%s" % (a["class_present"], a["core_enabled"], b["class_present"], b["core_enabled"]))'
           diff /tmp/stamps_installed.json /tmp/stamps_absent.json
           echo "OK: the two stamp sections are byte-identical — the extension is dormant"
 
