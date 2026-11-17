@@ -65,6 +65,7 @@ func test_the_sweep_fires_every_unit_and_targets_every_unit_on_both_paths() -> v
 	for half in ["table", "core"]:
 		var lines := FileAccess.get_file_as_string(OUT.path_join("sweep_%s.jsonl" % half)).split("\n", false)
 		assert_int(lines.size()).override_failure_message("one parity row per volley (%s)" % half).is_equal(rows.size())
+	assert_bool((cmp["verdicts"] as Array).all(func(x: Dictionary) -> bool: return x.has("deny"))).override_failure_message("every verdict says what deny mode would refuse").is_true()
 	var cov := RosterSweep.coverage(cmp["verdicts"])
 	assert_bool(cov.has("AP") and int(cov["AP"]["att"]) > 0 and int(cov["AP"]["tgt"]) > 0).override_failure_message("coverage: %s" % [cov.keys()]).is_true()
 
@@ -85,6 +86,18 @@ func test_a_mismatch_is_explained_only_by_a_label_of_the_deny_list() -> void:
 	assert_int(int(g["explained"])).is_equal(1)
 	assert_int((g["unexplained"] as Array).size()).is_equal(1)
 	assert_int((RosterSweep.gate(v, {})["unexplained"] as Array).size()).is_equal(2)
+
+
+## The deny-mode share counts only fired volleys the deny slice takes ("deny" empty) and lists the unequal ones. RED: count every
+## fired volley as taken -> taken 3.
+func test_the_deny_mode_share_counts_only_taken_fired_volleys() -> void:
+	var v := [{"fired": true, "first_diff": "", "deny": []},
+		{"fired": true, "first_diff": "rolls", "deny": []},
+		{"fired": true, "first_diff": "rolls", "deny": ["unit_rule:Tear"]},
+		{"fired": false, "first_diff": "", "deny": []}]
+	var s := RosterSweep.deny_share(v)
+	assert_dict(s).contains_key_value("fired", 3).contains_key_value("taken", 2).contains_key_value("equal", 1)
+	assert_int((s["unequal"] as Array).size()).is_equal(1)
 
 
 func test_the_ring_puts_every_list_in_two_pairings() -> void:

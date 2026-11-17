@@ -191,7 +191,10 @@ static func volley(main: Node, entry_a: Dictionary, entry_b: Dictionary, seed_n:
 		if not faces.is_empty():
 			faces[0] = int(faces[0]) % 6 + 1
 	var out := {"rolls": rolls, "state": state_of(att, tgt),
-		"labels": {"att": labels_of(att), "tgt": labels_of(tgt)}, "names": [att.get_name(), tgt.get_name()]}
+		"labels": {"att": labels_of(att), "tgt": labels_of(tgt)}, "names": [att.get_name(), tgt.get_name()],
+		# What the deny-mode slice (NML_CORE_SLICE=deny) would refuse here, as the shadow record says it: [] = taken.
+		"deny": CoreSlice.refusals_in(CoreSlice.DENY_PATH, att) \
+			+ CoreSlice.refusals_in(CoreSlice.DENY_PATH, tgt, true).map(func(x: String) -> String: return "target_" + x)}
 	free_units(main, [att, tgt])
 	await main.get_tree().process_frame
 	return out
@@ -267,8 +270,17 @@ static func verdicts(rows: Array, mismatching_ids: Array) -> Array:
 		var first := "rolls" if mismatching_ids.has(r["id"]) else first_state_diff(r["table"]["state"], r["core"]["state"])
 		out.append({"id": r["id"], "pair": r["pair"], "att": r["att"], "tgt": r["tgt"], "seed": r["seed"], "first_diff": first,
 			"fired": not (r["table"]["rolls"] as Array).is_empty() or not (r["core"]["rolls"] as Array).is_empty(),
-			"labels": r["table"]["labels"]})
+			"labels": r["table"]["labels"], "deny": r["table"].get("deny", [])})
 	return out
+
+
+## The deny-mode share (C-19's gate): the fired volleys the deny-mode slice would take (`deny` empty), how many of those are equal,
+## and every taken volley that is not.
+static func deny_share(verdict_rows: Array) -> Dictionary:
+	var fired := verdict_rows.filter(func(v: Dictionary) -> bool: return bool(v["fired"]))
+	var taken := fired.filter(func(v: Dictionary) -> bool: return (v.get("deny", ["?"]) as Array).is_empty())
+	var unequal := taken.filter(func(v: Dictionary) -> bool: return str(v["first_diff"]) != "")
+	return {"fired": fired.size(), "taken": taken.size(), "equal": taken.size() - unequal.size(), "unequal": unequal}
 
 
 ## The coverage table: per rule name, the volleys that FIRED with it on the shooter and the volleys that had it on the target.
