@@ -1,6 +1,7 @@
 extends GdUnitTestSuite
-## NML-1010 wave C, step C1: BattleSim.apply_carry_step / drop_carried / the
-## carried branch of playout_seize (Relic Hunt, Capture & Hold). Fixtures
+## NML-1010 wave C, step C1: BattleSim.apply_carry_step / the carried branch of
+## playout_seize (Relic Hunt, Capture & Hold). The pickup tie, carried-marker ownership, contested pickup, drop and
+## attacker-only halves are the core's: core/nml-core/tests/mission.rs. Fixtures
 ## follow ai_mission_eval_test.gd's style (real GameUnit + BattleSim.capture).
 
 const IN2M := 0.0254
@@ -48,32 +49,8 @@ func test_pickup_by_the_nearest() -> void:
 		Vector3(1.0 * IN2M, 0, 0), Vector3(0.001, 0.001, 0.001))
 
 
-## Equal gap: the tie goes to whichever unit `state["units"]` iterates FIRST
-## (capture order). RED: swapping the `<` for `<=` in apply_carry_step's scan
-## makes the LAST equal-gap unit win instead, and this test dies.
-func test_pickup_tie_goes_to_capture_order() -> void:
-	var first := _unit(1, [Vector3(1.0 * IN2M, 0, 0)], "First")
-	var second := _unit(1, [Vector3(-1.0 * IN2M, 0, 0)], "Second")
-	var state := _state([first, second], [Vector3.ZERO], [1])
-	var markers := [{"carry": true, "carried_by": ""}]
-	BattleSim.apply_carry_step(state, markers, [1])
-	assert_str(String(markers[0]["carried_by"])).is_equal("First")
-
-
-## Once carried, playout_seize hands the marker to the carrier's side no
-## matter the ring — the carrier can stand 20" away from the marker's own
-## recorded position and still own it, as long as it is alive and unshaken.
-func test_carried_marker_is_owned_regardless_of_ring() -> void:
-	var carrier := _unit(1, [Vector3(20.0 * IN2M, 0, 0)], "Carrier")
-	var state := _state([carrier], [Vector3.ZERO], [0])
-	state["markers_meta"] = [{"carry": true, "carried_by": "Carrier"}]
-	var owners := [0]
-	BattleSim.playout_seize(state, owners)
-	assert_int(owners[0]).is_equal(1)
-
-
-## A shaken carrier no longer holds the marker — playout_seize falls back to
-## the ordinary ring test, which finds nobody near.
+## A shaken carrier no longer holds the marker — playout_seize falls back to the
+## ordinary ring test, which finds nobody near.
 func test_shaken_carrier_stops_owning_it() -> void:
 	var carrier := _unit(1, [Vector3(20.0 * IN2M, 0, 0)], "Carrier")
 	var state := _state([carrier], [Vector3.ZERO], [0])
@@ -82,30 +59,6 @@ func test_shaken_carrier_stops_owning_it() -> void:
 	var owners := [0]
 	BattleSim.playout_seize(state, owners)
 	assert_int(owners[0]).is_equal(0)
-
-
-## A marker BOTH sides contest this round (owners[i] == 0, neutral) is never
-## picked up, even though a `carry` flag is set — the book's seize must
-## resolve to one side first.
-func test_no_pickup_while_contested() -> void:
-	var p1 := _unit(1, [Vector3(1.0 * IN2M, 0, 0)], "P1")
-	var p2 := _unit(2, [Vector3(-1.0 * IN2M, 0, 0)], "P2")
-	var state := _state([p1, p2], [Vector3.ZERO], [0])
-	var markers := [{"carry": true, "carried_by": ""}]
-	BattleSim.apply_carry_step(state, markers, [0])
-	assert_str(String(markers[0]["carried_by"])).is_equal("")
-
-
-## drop_carried clears carried_by and moves the marker's position to the
-## drop point; a marker carried by a DIFFERENT unit is untouched.
-func test_drop_carried_moves_the_marker_and_clears_the_flag() -> void:
-	var objectives := [{"pos": Vector3(1.0 * IN2M, 0, 0)}, {"pos": Vector3(5.0 * IN2M, 0, 0)}]
-	var markers := [{"carry": true, "carried_by": "Carrier"}, {"carry": true, "carried_by": "Other"}]
-	BattleSim.drop_carried(markers, objectives, "Carrier", Vector3(9.0 * IN2M, 0, 0))
-	assert_str(String(markers[0]["carried_by"])).is_equal("")
-	assert_vector(objectives[0]["pos"]).is_equal_approx(
-		Vector3(9.0 * IN2M, 0, 0), Vector3(0.001, 0.001, 0.001))
-	assert_str(String(markers[1]["carried_by"])).is_equal("Other")
 
 
 ## D9 (R11a): escort/extract verdicts — escort = the defender wins within 6" of
@@ -194,15 +147,6 @@ func test_the_defenders_capture_and_the_unseated_capture_keep_the_secrets() -> v
 ## D14.5d (Rescue): an `attacker_only` relic is picked up only by the ATTACKER's units — the roles
 ## stamp `attacker` on the captured state; the defender's unit on the marker leaves it where it lies.
 func test_an_attacker_only_relic_is_not_carried_by_the_defender() -> void:
-	var holder := _unit(1, [Vector3(1.0 * IN2M, 0, 0)], "Holder")
-	var state := _state([holder], [Vector3.ZERO], [1])
-	state["attacker"] = 2   # side 1 defends
-	var markers := [{"carry": true, "carried_by": "", "attacker_only": true}]
-	BattleSim.apply_carry_step(state, markers, [1])
-	assert_str(String(markers[0]["carried_by"])).is_equal("")
-	state["attacker"] = 1
-	BattleSim.apply_carry_step(state, markers, [1])
-	assert_str(String(markers[0]["carried_by"])).is_equal("Holder")
 	var infos := [{"unit_id": "H", "name": "H", "player": 1, "pos": Vector3(1.0 * IN2M, 0, 0), "models": [Vector3(1.0 * IN2M, 0, 0)], "radii": [0.016]}]
 	SoloController.mission_roles = {"attacker": 2, "defender": 1}
 	var live_markers := [{"carry": true, "carried_by": "", "attacker_only": true}]
