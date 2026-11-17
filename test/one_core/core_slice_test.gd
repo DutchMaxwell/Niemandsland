@@ -268,20 +268,25 @@ func test_a_missing_or_malformed_file_is_the_empty_slice() -> void:
 
 
 ## C-15: env NML_CORE_SLICE=deny reads the measured deny-list file instead of the shipped allowlist; unset, the shipped
-## file as before. The deny file refuses its listed primitives (a wound-ignore target, a Tear weapon) and takes a unit whose
+## file as before. The deny file refuses its listed primitives (a Tear weapon) and takes a unit whose
 ## rules are automated and not listed (AP, Tough); an unknown name stays refused. The list only shrinks: CEILING.
 ## RED: read PATH regardless of the switch -> the first assertion reads mode "allow".
-const DENY_CEILING := 12   # C-18: Indirect added; the attached_heroes group lifted for Growth Markers; from here it only shrinks
+const DENY_CEILING := 9   # C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); only shrinks
 
 
 func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
 	assert_str(str(CoreSlice.config()["mode"])).is_equal("deny")
-	assert_array(CoreSlice.refusals(_unit(["Regeneration"], [["AP(1)"]]))).is_equal(["unit_rule:Regeneration"])
+	# C-R1 (epochs 82 + 84) ported the wound-ignore rules by name: Regeneration is no longer listed.
+	assert_bool(CoreSlice.takes(_unit(["Regeneration"], [["AP(1)"]]))).is_true()
+	# A rule refused by NAME where its primitive is shared (Point-Blank Surge = Surge; plain Surge stays taken).
+	var sisters := _unit(["Point-Blank Surge"], [])
+	sisters.unit_properties["faction_folder"] = "blessed_sisters"   # the faction whose map entry gives it primitive Surge
+	assert_array(CoreSlice.refusals(sisters)).is_equal(["unit_rule:Point-Blank Surge"])
 	assert_array(CoreSlice.refusals(_unit(["Tough(3)"], [["Tear"]]))).is_equal(["weapon_rule:Tear"])
 	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
-	# C-18 measured: an Indirect weapon stays on the table; a joined hero no longer does (the lone-hero target, epoch 81).
+	# An Indirect weapon stays on the table (2 measured gaps left); a joined hero is taken (the lone-hero target, epoch 81).
 	assert_array(CoreSlice.refusals(_unit([], [["Indirect"]]))).is_equal(["weapon_rule:Indirect"])
 	var host := _unit(["Tough(3)"], [["AP(1)"]])
 	EquipmentDistributor.attach_hero_to_unit(_unit(["Hero"], []), host)

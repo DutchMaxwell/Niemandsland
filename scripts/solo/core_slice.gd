@@ -32,7 +32,7 @@ static func reset_cache() -> void:
 static func config() -> Dictionary:
 	if not _loaded.is_empty():
 		return _loaded
-	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}}
+	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}}
 	var path := path_override if not path_override.is_empty() else (DENY_PATH if deny_switched() else PATH)
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
 	if not (data is Dictionary) or str(data.get("schema", "")) != SCHEMA or str(data.get("door", "")) != "shoot" \
@@ -48,6 +48,7 @@ static func config() -> Dictionary:
 	# registry gives them no primitive. Each carries its reason in the file.
 	if _loaded["mode"] == "deny":
 		_loaded["inert"] = data.get("inert", {})
+		_loaded["deny_names"] = data.get("deny_names", {})   # one rule NAME refused where its primitive is shared
 	return _loaded
 
 
@@ -66,6 +67,8 @@ static func _rule_taken(gu: GameUnit, label: String) -> bool:
 	var c := config()
 	if (c["inert"] as Dictionary).has(label):
 		return true
+	if (c["deny_names"] as Dictionary).has(label):
+		return false
 	var prims: Dictionary = c["primitives"]
 	var allow: bool = c["mode"] == "allow"
 	if allow and prims.is_empty():
