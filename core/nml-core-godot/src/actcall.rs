@@ -149,6 +149,11 @@ fn delta_array(before: &State, after: &State) -> VarArray {
             d.set(key, &list);
         }
         d.set("growth_markers", u.growth_markers);
+        let mut spent = VarArray::new();
+        for (spell, scope) in &u.buffs_spent {
+            spent.push(&varray![spell.as_str(), scope.as_str()].to_variant());
+        }
+        d.set("buffs_spent", &spent);
         out.push(&d.to_variant());
     }
     out
