@@ -814,7 +814,6 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 				push_error("CoreActivation.land_delta: %s moved and lost models the steps did not land" % gu.get_name())
 				done["unknown"] = true
 				return
-		var was_shaken := gu.is_shaken
 		if bool(d["shaken"]) != gu.is_shaken:
 			main.radial_menu_controller.card_toggle_shaken(gu)
 			main._solo_mirror_shaken(gu)
@@ -825,7 +824,7 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		_land_feats(main, gu, d)
 		_land_once_latches(main, gu, d)
 		_land_growth(main, gu, d)
-		_land_buffs(main, gu, d, was_shaken)
+		_land_buffs(main, gu, d)
 
 
 ## C-11: the rule name of each Precision latch and the table flag that closes it.
@@ -875,23 +874,15 @@ static func _land_growth(main, gu: GameUnit, d: Dictionary) -> void:
 ## morale / hit / defense / grant spends, Great Banner and Regeneration grant rules included). The core is the authority: each named
 ## once-record of the table (same spell, scope, duration "once") is spent with the table's own spend (`_solo_spend_records`: its record,
 ## token, log line, wire message); a record the table no longer holds is no news. This replaces the table's own spend after a volley
-## and after the morale die (P4.0-4b / -4c), which picked the records by role and knew no grant. One difference is kept on the
-## table's side: a unit that was ALREADY Shaken fails its morale test without a die and keeps a once morale buff (#2804), the core
-## spends it anyway, so a pure morale record of a Shaken unit is not spent here.
-static func _land_buffs(main, gu: GameUnit, d: Dictionary, was_shaken: bool) -> void:
+## and after the morale die (P4.0-4b / -4c), which picked the records by role and knew no grant. From epoch 81 the core keeps a
+## once morale buff through a Shaken unit's auto-failed test, as the table does (#2804).
+static func _land_buffs(main, gu: GameUnit, d: Dictionary) -> void:
 	for e in d.get("buffs_spent", []):
 		var records: Array = main._solo_spell_mods.get(gu.get_instance_id(), [])
 		var hit: Array = records.filter(func(rd: Variant) -> bool: return str((rd as Dictionary).get("spell", "")) == str(e[0]) \
-			and str((rd as Dictionary).get("scope", "")) == str(e[1]) and str((rd as Dictionary).get("duration", "")) == "once" \
-			and not (was_shaken and _morale_only(rd as Dictionary)))
+			and str((rd as Dictionary).get("scope", "")) == str(e[1]) and str((rd as Dictionary).get("duration", "")) == "once")
 		if not hit.is_empty():
 			main._solo_spend_records(gu, [hit[0]])
-
-
-## A spell record whose only effect is a morale roll bonus.
-static func _morale_only(rd: Dictionary) -> bool:
-	return int(rd.get("morale_mod", 0)) != 0 and str(rd.get("grants_rule", "")) == "" \
-		and ["hit_mod", "def_mod", "casting_mod", "range_in", "advance_in", "rush_in"].all(func(k: String) -> bool: return int(rd.get(k, 0)) == 0)
 
 
 ## P4.D-38a: the once-per-game feat latches the core SPENT in this activation (the delta's `feats_used`, inventory row of the

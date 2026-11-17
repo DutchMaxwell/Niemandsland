@@ -885,7 +885,12 @@ pub const EPOCH_79_EV_MOVED_ROUND: u32 = 79;
 /// as the hand menu and the table twin `_policy_candidates` already do. Records stamped 79 or below replay byte-exact.
 /// Every call site reads THIS constant, not `80`. The recorder mirror stamps 80 with it.
 pub const EPOCH_80_ROLLOUT_CUMBERSOME: u32 = 80;
-pub const CURRENT_RULES_EPOCH: u32 = 80;
+/// A Shaken unit's morale test fails without a die and spends no once morale buff: the table's `_solo_morale_test` spends the
+/// once-mods only after the die it throws (#2804), the core spent them at both of its morale-test sites even for the
+/// auto-failed test of an already Shaken unit (or of a dead Shaken host's unit). Records stamped 80 or below replay byte-exact.
+/// Every call site reads THIS constant, not `81`. The recorder mirror stamps 81 with it.
+pub const EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF: u32 = 81;
+pub const CURRENT_RULES_EPOCH: u32 = 81;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2203,6 +2208,7 @@ mod tests {
         read_act_header, record_rules_epoch, rule_on, MeleeReach, SearchMode, TreeDice, TreeLeaf, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
         EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_73_V36,
         EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT, EPOCH_79_EV_MOVED_ROUND, EPOCH_80_ROLLOUT_CUMBERSOME,
+        EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2223,7 +2229,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 80, "the live epoch is EPOCH_80_ROLLOUT_CUMBERSOME");
+        assert_eq!(CURRENT_RULES_EPOCH, 81, "the live epoch is EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2233,11 +2239,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":80}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":81}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 80"
+            "a fresh play_game() now stamps the bumped epoch, 81"
         );
     }
 
@@ -2298,6 +2304,15 @@ mod tests {
         assert!(rule_on(EPOCH_80_ROLLOUT_CUMBERSOME, EPOCH_80_ROLLOUT_CUMBERSOME), "a record at 80 gets the restriction");
         assert!(rule_on(EPOCH_80_ROLLOUT_CUMBERSOME, EPOCH_79_EV_MOVED_ROUND), "80 keeps the EV stamp on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_80_ROLLOUT_CUMBERSOME), "a fresh play_game() stamps it on");
+    }
+
+    /// Epoch 81: a record stamped 80 replays the old morale-buff spend, a fresh record keeps the buff of a Shaken unit's auto-failed test.
+    #[test]
+    fn epoch_81_gate_is_closed_at_epoch_80_and_open_from_81() {
+        assert!(!rule_on(EPOCH_80_ROLLOUT_CUMBERSOME, EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF), "a record at 80 replays the old spend");
+        assert!(rule_on(EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF), "a record at 81 keeps the buff");
+        assert!(rule_on(EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_80_ROLLOUT_CUMBERSOME), "81 keeps the Cumbersome menu on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF), "a fresh play_game() stamps it on");
     }
 
     /// The WAVE 3 GATE's own reservation (05.09.): `EPOCH_6_TABLE_RULES` must

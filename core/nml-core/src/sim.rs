@@ -2202,9 +2202,12 @@ fn control_morale_passed(
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
         &ctx, source.owner, None, false, false, next.shaken[ti], wounds_left(next, ti), tray,
     );
-    mods::spend_once_except(next, ti, &[mods::Role::Morale], false, |r| {
-        rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) && &*r.name == "Great Banner"
-    });
+    // EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF: an auto-failed test (no die) spends no once morale buff (table `_solo_morale_test`, #2804).
+    if !(next.shaken[ti] && rule_on(seams.rules_epoch, crate::acts::EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF)) {
+        mods::spend_once_except(next, ti, &[mods::Role::Morale], false, |r| {
+            rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) && &*r.name == "Great Banner"
+        });
+    }
     let self_wounds = shot.absorb(rolled);
     land_wounds_with(next, ti, self_wounds, seams.tray_exact);
     if outcome == Morale::Passed { return true; }
@@ -6759,10 +6762,13 @@ pub(crate) fn tray_morale_for(
             shot.log.push(format!("Fearless: {with} of {total} models of {} have it — most do, so the whole unit counts", us.name));
         }
     }
-    mods::spend_once_except(state, i, &[mods::Role::Morale], melee, |r| {
-        cause.is_some() && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
-            && &*r.name == "Great Banner"
-    });
+    // EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF: an auto-failed test (no die) spends no once morale buff (table `_solo_morale_test`, #2804).
+    if !(shaken && rule_on(seams.rules_epoch, crate::acts::EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF)) {
+        mods::spend_once_except(state, i, &[mods::Role::Morale], melee, |r| {
+            cause.is_some() && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
+                && &*r.name == "Great Banner"
+        });
+    }
     let self_wounds = shot.absorb(r);
     land_wounds_with(state, i, self_wounds, seams.tray_exact);
     // One-core P3 step 26: the table's outcome line after the last morale die (`_solo_morale_test`'s match,
