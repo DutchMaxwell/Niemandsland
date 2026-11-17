@@ -69,3 +69,27 @@ use super::*;
         assert_eq!(dangerous(&run(Vec::new()).1), Vec::<i64>::new(), "no trails: the ends are in the open");
     }
 
+
+    /// S1 shadow soak (giants missing a Dangerous test): rules 3.6 Unstable ruins on the PLACED path. Unit "a"'s model A walks
+    /// through a ruin bar (the `dangerous_bar_board` cells as RUINS); a walked move over 6" takes the unit's test, one of 6"
+    /// or less does not, as the move solver's `crosses_dangerous` and the table's `_dangerous_trail_flags` read it
+    /// (RED: `placed_landing` without the Unstable clause -> no test on the long walk).
+    #[test]
+    fn a_placed_move_over_six_inches_through_a_ruin_takes_the_dangerous_test() {
+        let (mut st, statics) = buff_line();
+        st.positions[0] = vec![[0.0, 0.0, 0.0], [-2.0 * IN2M, 0.0, 0.0]];
+        let cells = [[16.0, 14.0], [16.0, 15.0], [17.0, 14.0], [17.0, 15.0]].map(|c| [c[0], c[1], crate::terrain::RUINS as f64]).to_vec();
+        let cell_params = crate::terrain::CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: IN2M };
+        let ruins = crate::terrain::Terrain::build(&crate::terrain::PlainTerrain { cells, sandbox: vec![], walls: vec![], pieces: vec![], containers: Vec::new(), cell_params });
+        let w = |p: &[[f64; 2]]| p.iter().map(|q| [q[0] * IN2M, q[1] * IN2M]).collect::<Vec<_>>();
+        let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact: true, ..Seams::default() };
+        let run = |end_x: f64| {
+            let placed = vec![[end_x * IN2M, 0.0, 0.0], [-2.0 * IN2M, 0.0, -IN2M]];
+            let mut tray = Tray::supplied(vec![vec![6, 6]]);
+            tray.place(placed, vec![w(&[[0.0, 0.0], [end_x, 0.0]]), w(&[[-2.0, 0.0], [-2.0, -1.0]])]);
+            let shot = resolve_stochastic_tray_on_board(&statics, &st, &advance_to(20.0), &ruins, seams, &mut GodotRng::new(0), &mut tray).unwrap().1;
+            shot.rolls.iter().filter(|r| r.target == DANGEROUS_TARGET).map(|r| r.count).collect::<Vec<_>>()
+        };
+        assert_eq!(run(10.0), vec![2], "a 10\" walk through the ruin: one test for the unit");
+        assert_eq!(run(5.5), Vec::<i64>::new(), "a 5.5\" walk into the ruin: no test");
+    }

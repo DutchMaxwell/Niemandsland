@@ -501,17 +501,7 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 		main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s's owner chooses the casualties - the table resolves this volley" % [
 			unit.get_name(), target.get_name()], true)
 		return false
-	var at: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
-	# Step 42c: each model's walked route (the planner's, world XZ) rides along, so the core's move check measures the
-	# route, not the chord (R3); a model that did not move sends none.
-	var routes := {}
-	for p in main.solo_controller.last_move_paths:
-		routes[p["model"]] = (p["path"] as Array).map(func(v: Vector3) -> Vector2: return Vector2(v.x, v.z))
-	var trails: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Array: return routes.get(m, []))
-	var intent := {"t": "intent", "kind": kind}
-	if target != null:
-		intent["shoot"] = target.unit_id
-	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": at, "trails": trails}, intent]
+	var t: Array = ai_transcript(main, unit, report, target)
 	# Step 42b: the table's presentation of the volley (_present); its stage opens before the core's first line.
 	# P4.D-19: the core prints no sentence for the Dangerous test (its first throw): the table's own two stand in for it, in
 	# the table's words and places - the test line before the roll, the wound line right after it - and the staged volley
@@ -550,6 +540,25 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	ai_refusals += 1
 	push_error("CoreActivation.run_ai: %s - the core answered %s: %s" % [unit.get_name(), r["step"], r.get("reason", "")])
 	return t.any(func(e: Dictionary) -> bool: return str(e["t"]) == "faces")
+
+
+## C-2: the AI activation's transcript before its first die: begin, the models where they stand now (with the routes they
+## walked) and the intent (`target` null = no shot). `split` (an array of {member, weapon, target}, P4.D-14) is split fire's
+## aim; empty = none, the intent then carries no "split" key. Shared by `run_ai` and the shadow replay (C-4).
+static func ai_transcript(main, unit: GameUnit, report: Dictionary, target: GameUnit, split: Array = []) -> Array:
+	var at: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
+	# Step 42c: each model's walked route (the planner's, world XZ) rides along, so the core's move check measures the
+	# route, not the chord (R3); a model that did not move sends none.
+	var routes := {}
+	for p in main.solo_controller.last_move_paths:
+		routes[p["model"]] = (p["path"] as Array).map(func(v: Vector3) -> Vector2: return Vector2(v.x, v.z))
+	var trails: Array = unit.get_alive_models().map(func(m: ModelInstance) -> Array: return routes.get(m, []))
+	var intent := {"t": "intent", "kind": int(report.get("action", -1))}
+	if target != null:
+		intent["shoot"] = target.unit_id
+	if not split.is_empty():
+		intent["split"] = split
+	return [{"t": "begin"}, {"t": "placed", "positions": at, "trails": trails}, intent]
 
 
 ## Step 42c-2: the table's shot rows of one AI volley (`_solo_resolve_ai_volley` writes one per shot, in `shots` order,
