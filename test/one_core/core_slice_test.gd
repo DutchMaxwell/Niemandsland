@@ -288,8 +288,8 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	tearer.unit_properties["faction_folder"] = "custodian_brothers"   # a faction whose map gives Tear its primitive
 	assert_array(CoreSlice.refusals(tearer)).is_equal(["weapon_rule:Tear"])
 	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
-	# An Indirect weapon stays on the table (2 measured gaps left); a joined hero is taken (the lone-hero target, epoch 81).
-	assert_array(CoreSlice.refusals(_unit([], [["Indirect"]]))).is_equal(["weapon_rule:Indirect"])
+	# An Indirect weapon (lifted after #2939/#2942/#2947) and a joined hero are taken (the lone-hero target, epoch 81).
+	assert_bool(CoreSlice.takes(_unit([], [["Indirect"]]))).is_true()   # lifted with #2939 / #2942 / #2947
 	var host := _unit(["Tough(3)"], [["AP(1)"]])
 	EquipmentDistributor.attach_hero_to_unit(_unit(["Hero"], []), host)
 	assert_array(CoreSlice.refusals(host, true)).not_contains(["attached"])
