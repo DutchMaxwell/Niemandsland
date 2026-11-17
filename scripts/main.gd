@@ -4905,6 +4905,8 @@ func _solo_human_strafing(moves: Array) -> void:
 			if not is_inside_tree():
 				return
 			await get_tree().process_frame
+		if CoreActivation.is_core_unit(self, unit) and CoreActivation.session_open((unit as GameUnit).unit_id):
+			continue   # P4.D-37b: the core strikes with the activation's Fire / End, from the trails the session holds
 		await _solo_apply_strafing(unit as GameUnit, legs[unit])
 
 
