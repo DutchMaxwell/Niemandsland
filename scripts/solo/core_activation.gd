@@ -1310,6 +1310,7 @@ static func reset_all(main) -> void:
 			if core != null:
 				core.release(int(main._solo_core_ai_h))
 		main._solo_core_ai_h = 0
+		CoreShadow.release(main)   # C-3
 
 
 ## Step 37 (O9, O15 (4)): the unit properties a Cancel-reachable one-time spend writes, each with the rule its line names.
