@@ -16,6 +16,18 @@
       "why": "Caster Group, Tear, Guarded: no volley with them replayed equal in the shadow soak (casts are cut from the replay).",
       "leaves_with": "a shadow re-soak that shows them equal"
     },
+    "measured_unequal_taken": {
+      "primitives": ["Indirect"],
+      "kind": "measured",
+      "why": "C-18 soak: 3 of the 8 taken-but-unequal volleys carry an Indirect weapon (Artillery Great Beast fires nothing in the core; Mega-Giant's Dangerous test; Battle Tank's morale die). Cause not yet located.",
+      "leaves_with": "a diagnosed fix and a shadow re-soak with them equal"
+    },
+    "attached_heroes": {
+      "primitives": [],
+      "kind": "measured",
+      "why": "C-18 soak: 7 of the 8 taken-but-unequal volleys have a joined hero on the shooter or the target (save target order, a hero's pooled attacks on an unmoved host, morale). Listing this group refuses attachments in deny mode.",
+      "leaves_with": "the joined-hero volley fixes and a shadow re-soak with them equal"
+    },
     "ledger_not_round_tripped": {
       "primitives": ["Piercing Tag", "Vengeance", "Teleport", "Infiltrate"],
       "kind": "ledger",
