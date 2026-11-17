@@ -2,7 +2,7 @@ extends GdUnitTestSuite
 ## C-4 (shadow run): `CoreShadow.compare` replays the table's AI volley in the core on the shadow board with the table's
 ## own faces and records {equal, first_diff, labels, unported}. A plain pair is equal; a planted face in the tap is a
 ## roll-stream difference; a wound-ignore rule not named Regeneration against a Bane weapon (the #2595 table-ahead
-## exception, slice design 1a) is NOT equal - pinned as a live fact. RED: compare without feeding the faces (or a
+## exception, slice design 1a) was NOT equal up to epoch 81 - pinned as a live fact - and is equal from 82 (C-R1a). RED: compare without feeding the faces (or a
 ## comparator that always says equal) turns the second and third case red; a comparator that never says equal, the first.
 ## Real: the main scene, NmlCore, the table's `_solo_resolve_ai_volley`, its tray and the tap. Constructed: golden-grid units.
 
@@ -13,9 +13,11 @@ const ParityTable := preload("res://test/parity/parity_table.gd")
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
+var _epoch_before: int
 
 
 func before_test() -> void:
+	_epoch_before = AiActRecorder.rules_epoch
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -35,6 +37,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch_before
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
 	CoreShadow._env = -1
@@ -75,6 +78,7 @@ func test_a_plain_pair_replays_equal() -> void:
 		var rec := await _shadowed(Harness.RIFLE, Harness.DEFENDER, seed)
 		assert_dict(rec).override_failure_message("seed %d: %s" % [seed, rec]).contains_key_value("equal", true)
 		assert_array(rec["unported"]).is_empty()
+		assert_array(rec["deny"]).override_failure_message("C-18: the deny-mode slice takes a plain pair").is_empty()
 
 
 ## The first hit roll's faces all set to 6 (the table had misses): the core asks a save roll of another size.
@@ -89,12 +93,23 @@ func test_a_planted_face_is_a_roll_stream_difference() -> void:
 	assert_dict(rec).contains_key_value("equal", false).contains_key_value("first_diff", "rolls")
 
 
-## Slice design 1a: Self-Repair (a wound-ignore rule not named Regeneration) still rolls against Bane on the table; the
-## core's one-family roll is bypassed whole. Some seed with an unsaved wound shows it; a plain seed never differs here.
-func test_a_wound_ignore_by_name_pair_is_not_equal() -> void:
+## Slice design 1a, closed by C-R1a (epoch 82): Self-Repair (a wound-ignore rule not named Regeneration) still rolls against Bane on the
+## table. Up to epoch 81 the core's one-family roll was bypassed whole, so some seed with an unsaved wound replayed unequal (the red leg,
+## the difference pinned as a live fact); from 82 the core rolls the bypassed wounds too and every seed replays equal.
+func _self_repair_vs_bane_unequal(epoch: int) -> int:
+	AiActRecorder.rules_epoch = epoch
 	var unequal := 0
 	for seed in [1, 2, 3, 4, 5, 6]:
 		var rec := await _shadowed(Harness._weapon(["Bane"]), Harness._with(Harness.DEFENDER, {"rules": ["Self-Repair"]}), seed)
 		unequal += 0 if bool(rec["equal"]) else 1
 		assert_bool(rec["labels"].has("target_rule:Self-Repair")).override_failure_message("labels %s" % [rec["labels"]]).is_true()
-	assert_int(unequal).override_failure_message("Self-Repair vs Bane replayed equal on every seed").is_greater(0)
+		assert_array(rec["deny"]).override_failure_message("C-18: Self-Repair is on the deny list").contains(["target_unit_rule:Self-Repair"])
+	return unequal
+
+
+func test_a_wound_ignore_by_name_pair_is_not_equal_at_epoch_81() -> void:
+	assert_int(await _self_repair_vs_bane_unequal(81)).override_failure_message("Self-Repair vs Bane replayed equal on every seed").is_greater(0)
+
+
+func test_a_wound_ignore_by_name_pair_is_equal_from_epoch_82() -> void:
+	assert_int(await _self_repair_vs_bane_unequal(82)).override_failure_message("Self-Repair vs Bane still differs at 82").is_equal(0)

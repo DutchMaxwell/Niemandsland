@@ -125,7 +125,40 @@ static func capture(main) -> int:
 	var plain := BattleSim.state_to_plain(state)
 	AiActRecorder._stamp_gate_reads(state, plain)
 	_stamp_spent_ignore_feats(state, plain)
+	_stamp_step_ledger(state, plain, sc)
 	return int(core.capture_plain(plain))
+
+
+## C-10: the table's round stamps and latches `_ledger_of` does not carry, the table property each is read from (the State name where
+## it differs). `_ledger_of` is a recorded corpus format and the AI search's input, so it stays byte-identical; the door's capture sends
+## these under each unit's `step_ledger` and Second Wind's army cap of the round under `second_wind`, for THIS capture only.
+const STEP_STAMPS := {"reckless_rolled_round": "reckless_rolled_round", "reckless_ap_round": "reckless_ap_round",
+	"reckless_backfire_round": "reckless_backfire_round", "retreating_strike_round": "retreating_strike_round",
+	"mind_control_moved_round": "mind_control_moved_round", "growth_strike_round": "regenerative_strength_round",
+	"piercing_spot_round": "piercing_spot_round"}
+
+
+## The step ledger of one unit: the stamps above (absent = never stamped), the latched Versatile pick as the round and the int mode the
+## core keeps (1 = +1 to hit, 2 = AP(+1)). {} for a unit with none.
+static func step_ledger_of(gu: GameUnit) -> Dictionary:
+	var out := {}
+	for key in STEP_STAMPS:
+		if int(gu.unit_properties.get(STEP_STAMPS[key], -1)) != -1:
+			out[key] = int(gu.unit_properties[STEP_STAMPS[key]])
+	var pick: Dictionary = gu.unit_properties.get("versatile_pick", {})
+	if int(gu.unit_properties.get("versatile_pick_round", -1)) != -1 and (int(pick.get("ap", 0)) > 0 or int(pick.get("hit_mod", 0)) > 0):
+		out["versatile_pick_round"] = int(gu.unit_properties["versatile_pick_round"])
+		out["versatile_pick_mode"] = 2 if int(pick.get("ap", 0)) > 0 else 1
+	return out
+
+
+static func _stamp_step_ledger(state: Dictionary, plain: Dictionary, sc: SoloController) -> void:
+	for key in state["units"]:
+		var sl := step_ledger_of((state["units"][key] as Dictionary)["unit"])
+		if not sl.is_empty() and plain["units"].has(str(key)):
+			plain["units"][str(key)]["step_ledger"] = sl
+	var round_no := sc._second_wind_round_no()
+	plain["second_wind"] = {"round": round_no, "uses": int(sc._second_wind_round_uses.get(str(round_no), 0))}
 
 
 ## P4.D-38a: the once-per-game ignore feat (the Protection Feat family) a table roll spent closes the core's latch: its name
@@ -289,8 +322,6 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		if str(r["step"]) != "need_roll":
 			if beat.is_valid():
 				await beat.call(str(r["step"]), r, [])
-			if str(r["step"]) == "done":
-				spend_once_after_volley(main, unit, transcript)
 			r.merge({"steps": step + 1, "core_us": core_us, "max_us": max_us}, true)
 			return r
 		var owner := str(r["owner"])
@@ -309,35 +340,11 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		if str(r["kind"]) == "defense":
 			var defender := str(r.get("owner_key", ""))
 			unsaved[defender] = int(unsaved.get(defender, 0)) + failed_saves(faces, int(r["target"]))
-		if str(r["kind"]) == "morale":
-			# P4.0-4c: the table spends a once morale buff right after the morale die (`_solo_morale_test`), for the unit
-			# that rolled; the core spent its own copy of the ledger (the capture sends it) and no delta key carries a buff spend
-			# back. A volley's test has no other cause, so no buff is kept back. A Shaken unit rolls no die, so this is never
-			# reached for it.
-			main._solo_spend_once_kind(roller, ["morale"])
 		if beat.is_valid():
 			await beat.call("thrown", r, faces)
 	push_error("CoreActivation.drive: %s still needs dice after %d steps" % [unit.get_name(), MAX_STEPS])
 	r.merge({"steps": MAX_STEPS, "core_us": core_us, "max_us": max_us}, true)
 	return r
-
-
-## P4.0-4b: the volley a `done` activation resolved spends the table's once buffs, with the table's own spend
-## (`_solo_consume_once_mods`, the call every table volley ends with), after the presentation, as on the table. The
-## core spends in its own copy of the ledger (the live capture DOES send it: `_stamp_gate_reads` writes `ledger`, `plain.rs`
-## folds it) and no delta key carries a buff spend back, so the table's record would survive and the next volley would apply
-## it again. The table stays the owner of the spend:
-## its record, its token, its log line and its wire message. A transcript whose last intent names no target (an End
-## without a shot) fired nothing and spends nothing. Both units are plain at every door, so neither holds a
-## Regeneration grant (a grant stamps a rule onto its holder): the spend is unconditional, exactly as the table's.
-static func spend_once_after_volley(main, unit: GameUnit, transcript: Array) -> void:
-	for i in range(transcript.size() - 1, -1, -1):
-		if str((transcript[i] as Dictionary).get("t", "")) != "intent":
-			continue
-		var target: GameUnit = main.opr_army_manager.game_units.get(str((transcript[i] as Dictionary).get("shoot", "")))
-		if target != null:
-			main._solo_consume_once_mods(unit, target, false)
-		return
 
 
 ## Step 42 (O21): the weapon named by the core's last shot line ("<shooter> fires <weapon> at <target> — <n> hits",
@@ -818,6 +825,7 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		_land_feats(main, gu, d)
 		_land_once_latches(main, gu, d)
 		_land_growth(main, gu, d)
+		_land_buffs(main, gu, d)
 
 
 ## C-11: the rule name of each Precision latch and the table flag that closes it.
@@ -861,6 +869,21 @@ static func _land_growth(main, gu: GameUnit, d: Dictionary) -> void:
 			gu.get_name(), count, held, keys.size()])
 		return
 	main._sync_unit_property(gu, keys[0], count)
+
+
+## C-15: the once buffs the core SPENT in this activation (the delta's `buffs_spent`: per record its name and scope; the core's own
+## morale / hit / defense / grant spends, Great Banner and Regeneration grant rules included). The core is the authority: each named
+## once-record of the table (same spell, scope, duration "once") is spent with the table's own spend (`_solo_spend_records`: its record,
+## token, log line, wire message); a record the table no longer holds is no news. This replaces the table's own spend after a volley
+## and after the morale die (P4.0-4b / -4c), which picked the records by role and knew no grant. From epoch 81 the core keeps a
+## once morale buff through a Shaken unit's auto-failed test, as the table does (#2804).
+static func _land_buffs(main, gu: GameUnit, d: Dictionary) -> void:
+	for e in d.get("buffs_spent", []):
+		var records: Array = main._solo_spell_mods.get(gu.get_instance_id(), [])
+		var hit: Array = records.filter(func(rd: Variant) -> bool: return str((rd as Dictionary).get("spell", "")) == str(e[0]) \
+			and str((rd as Dictionary).get("scope", "")) == str(e[1]) and str((rd as Dictionary).get("duration", "")) == "once")
+		if not hit.is_empty():
+			main._solo_spend_records(gu, [hit[0]])
 
 
 ## P4.D-38a: the once-per-game feat latches the core SPENT in this activation (the delta's `feats_used`, inventory row of the

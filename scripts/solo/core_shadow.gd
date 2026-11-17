@@ -102,7 +102,13 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 				labels.append(w)
 	if order.size() > 1:
 		labels.append("split")
-	records.append({"equal": diff == "", "first_diff": diff, "labels": labels, "unported": r.get("unported", []),
+	# C-18: what the deny-mode slice (NML_CORE_SLICE=deny) would refuse here: [] = the core door would take this volley.
+	var deny: Array = CoreSlice.refusals_in(CoreSlice.DENY_PATH, unit)
+	for id in order:
+		deny.append_array(CoreSlice.refusals_in(CoreSlice.DENY_PATH, groups[id]["target"], true).map(func(x): return "target_" + x))
+	if order.size() > 1:
+		deny.append("split")   # the door keeps a split volley on the table (`order.size() == 1`)
+	records.append({"deny": deny, "equal": diff == "", "first_diff": diff, "labels": labels, "unported": r.get("unported", []),
 		"detail": _detail, "shooter": unit.get_name(), "targets": order.map(func(id) -> String: return groups[id]["target"].get_name())})
 
 

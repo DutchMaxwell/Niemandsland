@@ -2202,9 +2202,12 @@ fn control_morale_passed(
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
         &ctx, source.owner, None, false, false, next.shaken[ti], wounds_left(next, ti), tray,
     );
-    mods::spend_once_except(next, ti, &[mods::Role::Morale], false, |r| {
-        rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) && &*r.name == "Great Banner"
-    });
+    // EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF: an auto-failed test (no die) spends no once morale buff (table `_solo_morale_test`, #2804).
+    if !(next.shaken[ti] && rule_on(seams.rules_epoch, crate::acts::EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF)) {
+        mods::spend_once_except(next, ti, &[mods::Role::Morale], false, |r| {
+            rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) && &*r.name == "Great Banner"
+        });
+    }
     let self_wounds = shot.absorb(rolled);
     land_wounds_with(next, ti, self_wounds, seams.tray_exact);
     if outcome == Morale::Passed { return true; }
@@ -4130,6 +4133,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         // ledger stays blind and the static stamp alone decides.
         if rule_on(rules_epoch, EPOCH_73_V36) && grants && mods::granted(state, i, "Regeneration") {
             c.regeneration = true;
+            c.regen_named = true;
             c.regen_target = fold_min(c.regen_target, REGENERATION_TARGET);
             c.regen_target_spell = fold_min(c.regen_target_spell, REGENERATION_TARGET);
         }
@@ -4151,8 +4155,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
                 }).collect();
             match crate::unit::regen_family_live(host, state.alive[i],
                 (c.regen_target, c.regen_target_spell), &heroes, rules_epoch) {
-                Some((target, spell)) => {
+                Some((target, spell, regen_named)) => {
                     c.regeneration = true;
+                    c.regen_named = c.regen_named || regen_named;
                     c.regen_target = fold_min(c.regen_target, target);
                     c.regen_target_spell = fold_min(c.regen_target_spell, spell);
                 }
@@ -4170,6 +4175,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
                     if !own && crate::unit::REGEN_MOST_MODELS.iter()
                         .any(|n| crate::unit::regen_family_on(host, n, rules_epoch)) {
                         c.regeneration = false;
+                        c.regen_named = false;
                     }
                 }
                 None => {}
@@ -6759,10 +6765,13 @@ pub(crate) fn tray_morale_for(
             shot.log.push(format!("Fearless: {with} of {total} models of {} have it — most do, so the whole unit counts", us.name));
         }
     }
-    mods::spend_once_except(state, i, &[mods::Role::Morale], melee, |r| {
-        cause.is_some() && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
-            && &*r.name == "Great Banner"
-    });
+    // EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF: an auto-failed test (no die) spends no once morale buff (table `_solo_morale_test`, #2804).
+    if !(shaken && rule_on(seams.rules_epoch, crate::acts::EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF)) {
+        mods::spend_once_except(state, i, &[mods::Role::Morale], melee, |r| {
+            cause.is_some() && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
+                && &*r.name == "Great Banner"
+        });
+    }
     let self_wounds = shot.absorb(r);
     land_wounds_with(state, i, self_wounds, seams.tray_exact);
     // One-core P3 step 26: the table's outcome line after the last morale die (`_solo_morale_test`'s match,

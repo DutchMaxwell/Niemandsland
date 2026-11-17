@@ -395,6 +395,10 @@ pub struct Ctx {
     /// from over this many inches (a strike-back rides 0.0, which never
     /// clears it — it did the charging). 0.0 = ungated.
     pub regen_gate_charge_in: f64,
+    /// `EPOCH_82_IGNORE_BY_NAME` (table `_solo_ignore_group_key`): the folded ignore roll includes a rule of the group named
+    /// Regeneration (the rule itself, Medical Training, a Regeneration Buff / Aura form). A bypass skips only THAT group's roll,
+    /// so a unit whose ignore rules are all other names (Self-Repair, Resistance, Plaguebound, ...) still rolls bypassed wounds.
+    pub regen_named: bool,
     /// The DYNAMIC melee flag `BattleSim._ctx_of(su, true)` writes over the
     /// template (battle_sim.gd:705-707): a fatigued striker hits only on 6s.
     pub fatigued: bool,
@@ -725,6 +729,13 @@ pub struct Ctx {
 }
 
 impl Ctx {
+    /// Does a bypass (Bane, Rending, Unstoppable, ...) skip this unit's ignore roll? From `EPOCH_82_IGNORE_BY_NAME` only a roll of the
+    /// group named Regeneration is skipped, so a unit whose ignore rules carry other names still rolls the bypassed wounds. Below it
+    /// (and for a unit with no roll at all, where the answer changes nothing) the bypass skips the whole folded roll, as it always did.
+    pub fn bypass_skips_ignore(&self) -> bool {
+        !rule_on(self.rules_epoch, crate::acts::EPOCH_82_IGNORE_BY_NAME) || !self.regeneration || self.regen_named
+    }
+
     /// The floor every per-modifier defence step clamps at: the hard 2+ below
     /// `EPOCH_68_MODIFIER_SUM`, none from it (`save_batch` clamps the SUM once).
     pub fn def_floor(&self) -> i64 {
@@ -1803,7 +1814,8 @@ pub(crate) fn regen_family_on(p: &Profile, rule: &str, rules_epoch: u32) -> bool
 
 /// Row W1.4b — the LIVE twin of `regen_family_on`: a family name holds while a strict
 /// majority of the joined unit's living models carry it (model_count read at USE time, a
-/// living hero one model). `Some` folds the members' printed `(target, spell)` MIN; `None`
+/// living hero one model). `Some` folds the members' printed `(target, spell)` MIN and says whether the name Regeneration
+/// itself holds the majority (`EPOCH_82_IGNORE_BY_NAME`); `None`
 /// below `EPOCH_73_V36` and when no family name has the majority.
 pub(crate) fn regen_family_live(
     host: &Profile,
@@ -1811,7 +1823,7 @@ pub(crate) fn regen_family_live(
     host_targets: (i64, i64),
     heroes: &[(&Profile, i64, (i64, i64))],
     rules_epoch: u32,
-) -> Option<(i64, i64)> {
+) -> Option<(i64, i64, bool)> {
     if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
         return None;
     }
@@ -1820,6 +1832,7 @@ pub(crate) fn regen_family_live(
     let fold = |have: i64, cand: i64| if cand > 0 && (have == 0 || cand < have) { cand } else { have };
     let mut best = (0i64, 0i64);
     let mut on = false;
+    let mut regen_named = false;
     for name in REGEN_MOST_MODELS {
         let host_with = if has_special_rule(&host.special_rules, name) { host_alive } else { 0 };
         let hero_with = heroes
@@ -1831,6 +1844,7 @@ pub(crate) fn regen_family_live(
             continue;
         }
         on = true;
+        regen_named = regen_named || *name == "Regeneration";
         if host_with > 0 {
             best = (fold(best.0, host_targets.0), fold(best.1, host_targets.1));
         }
@@ -1840,7 +1854,7 @@ pub(crate) fn regen_family_live(
             }
         }
     }
-    on.then_some(best)
+    on.then_some((best.0, best.1, regen_named))
 }
 
 /// MOR-05 — the Fortified and Shielded family names whose 3.6 wording says "most models" (the
@@ -2961,7 +2975,7 @@ pub fn capture_reads_for_epoch(
 /// recorded flat fold replays and the tail stays zeros.
 fn regen_targets(
     reg: &mut Registries, p: &Profile, rules_epoch: u32, trace73: bool,
-) -> (i64, i64, i64, i64, f64, f64, i64) {
+) -> (i64, i64, i64, i64, f64, f64, i64, bool) {
     let regen = if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
         regen_family_on(p, "Regeneration", rules_epoch)
     } else {
@@ -2984,6 +2998,8 @@ fn regen_targets(
     };
     let mut picked = (base, base, 0i64, 0i64);
     let mut feat = 0i64;
+    // EPOCH_82_IGNORE_BY_NAME: does a rule of the group named Regeneration contribute to the fold (the table's `regen` group)?
+    let mut named = base > 0 && (regen || has_special_rule(&p.special_rules, "Medical Training"));
     // MOR-17a (rules 3.6): the names that share Warding's distance gate.
     // `other_min` is the best target NO gated name supplies; `warding` the
     // gated name's own reading. The gate is stamped only when the gated
@@ -3125,6 +3141,7 @@ fn regen_targets(
             if spell > 0 && (picked.1 == 0 || spell < picked.1) {
                 picked.1 = spell;
             }
+            named = named || (normal > 0 && regeneration_group(&n, e.param_s("upgrades")));
             if gated {
                 if normal > 0 {
                     warding = Some((
@@ -3150,7 +3167,18 @@ fn regen_targets(
             }
         }
     }
-    (picked.0, picked.1, picked.2, picked.3, gates.0, gates.1, feat)
+    (picked.0, picked.1, picked.2, picked.3, gates.0, gates.1, feat, named)
+}
+
+/// Table `_solo_ignore_group_key`, the one question the core asks of it: does this rule belong to the group named Regeneration? An
+/// entry that upgrades another rule takes that rule's group; else the rule itself, its Aura / Buff forms (`Regeneration ...`) and
+/// Medical Training are the one group.
+pub(crate) fn regeneration_group(name: &str, upgrades: &str) -> bool {
+    if !upgrades.is_empty() {
+        return upgrades == "Regeneration";
+    }
+    let lower = name.to_lowercase();
+    lower.starts_with("regeneration") || lower == "medical training"
 }
 
 /// The SHOOTING leg's three die params (`ap_bonus`/`hit_bonus`/`low_roll_max`)
@@ -3698,6 +3726,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         regen_feat: regen_targets.6,
         regen_gate_over_in: regen_targets.4,
         regen_gate_charge_in: regen_targets.5,
+        regen_named: regen_targets.7,
         fatigued: false,
         retaliate_hits_per_wound: retaliate_hits_per_wound(reg, p),
         death_hits_per_kill: death_hits_per_kill(reg, p),

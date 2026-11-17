@@ -5,7 +5,7 @@
 //! flag). A non-combat cause skips the +1, names it, and leaves the record
 //! unspent; epoch 72 keeps the old always-on reading.
 use super::*;
-use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_80_ROLLOUT_CUMBERSOME, EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF};
 use crate::dice::{ShootResult, Tray};
 use crate::io::Seams;
 use crate::mods::LiveMod;
@@ -89,6 +89,45 @@ fn great_banner_helps_a_shooting_test_at_epoch_73() {
     assert_eq!((die.faces[0], die.target), (3, 3), "shooting: the +1 makes the 3 a pass: {die:?}");
     assert!(!st.shaken[2], "shooting: the target holds");
     assert!(st.buffs[2].iter().all(|r| &*r.name != "Great Banner"), "the combat test spends the one-shot");
+}
+
+// ------------------- Epoch 81: a Shaken unit's auto-failed test spends no once morale buff -----
+
+/// One morale test on the Shaken target "b" carrying a once morale buff (the table's `_solo_morale_test` throws no die for it and
+/// spends nothing, #2804), at `epoch`, with the buff's name `named` ("Great Banner" has its own cause rule).
+fn shaken_run(epoch: u32, cause: Option<&str>) -> (crate::state::State, ShootResult) {
+    let (mut st, statics) = great_banner_line();
+    st.buffs[2][0].name = Rc::from("Fury");
+    st.shaken[2] = true;
+    let mut tray = Tray::seeded(1);
+    let mut shot = ShootResult::default();
+    let seams = Seams { rules_epoch: epoch, ..Seams::default() };
+    tray_morale_for(&mut st, &statics, 2, false, true, cause, seams, &mut tray, &mut shot, None, None);
+    (st, shot)
+}
+
+/// RED at epoch 80 (the old reading): the auto-failed test throws no die yet spends the once buff. GREEN from 81: the buff stays.
+#[test]
+fn a_shaken_units_auto_failed_test_keeps_its_once_morale_buff_from_epoch_81() {
+    for cause in [None, Some("Mind Control")] {
+        let (old, shot) = shaken_run(EPOCH_80_ROLLOUT_CUMBERSOME, cause);
+        assert!(shot.rolls.iter().all(|r| r.count != 1 || r.owner != "b"), "a Shaken unit throws no morale die: {:?}", shot.rolls);
+        assert!(old.buffs[2].is_empty(), "epoch 80 spends the buff on an auto-fail ({cause:?}): {:?}", old.buffs[2]);
+        let (new, _) = shaken_run(EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, cause);
+        assert_eq!(new.buffs[2].len(), 1, "epoch 81 keeps it ({cause:?}): {:?}", new.buffs[2]);
+    }
+}
+
+/// Control: an unShaken unit's test still spends the buff at 81 (the die is thrown).
+#[test]
+fn an_unshaken_units_test_still_spends_its_once_morale_buff_at_epoch_81() {
+    let (mut st, statics) = great_banner_line();
+    st.buffs[2][0].name = Rc::from("Fury");
+    let mut tray = Tray::seeded(seed_rolling_a_three());
+    let mut shot = ShootResult::default();
+    let seams = Seams { rules_epoch: EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, ..Seams::default() };
+    tray_morale_for(&mut st, &statics, 2, false, true, None, seams, &mut tray, &mut shot, None, None);
+    assert!(st.buffs[2].is_empty(), "the die was thrown: {:?}", st.buffs[2]);
 }
 
 // ------------------- MOR-19 rule 3: Speed Debuff targets one enemy MODEL -----

@@ -23,6 +23,11 @@ same commit as the struct change.
   `[unit_id, is_activated, is_shaken, [[model_index, wounds_current, is_alive, [x_mm, z_mm]], ...]]`.
   `rows_match` (:1062) compares them, `on_mismatch` (:1101) pushes the differing wounds, moves,
   rotations, Shaken marker and activation flag back.
+- **Capture side (IN)** — what the core is told before the activation: the recorder's `ledger` (`AiActRecorder._ledger_of`,
+  a recorded corpus format and the AI search's input, so unchanged) and, from the one-core door's capture only (C-10),
+  `step_ledger` per unit (the Versatile pick, the reckless / retreating-strike / mind-control / regenerative-strength /
+  piercing-spot round stamps) and the top-level `second_wind` (the army's grants of the round). Not on the wire yet:
+  `piercing_tag_used` (the Piercing Tag latches are another lane's), `second_wind_used`'s per-unit flag rides the `ledger`.
 - **Gap** — `YES` when the table reads/uses the field, an activation can change it, and none of the
   surfaces above carries the change back. Those are the fields where a core/table split stays
   invisible locally and, for most of them, also across the MP check.
@@ -76,7 +81,7 @@ same commit as the struct change.
 | `shroud` | main.gd:5118 | no | no | no (capture input) |
 | `charge_no_difficult` | act_recorder.gd:846 | no | no | no (capture input) |
 | `charge_probe_r` | act_recorder.gd:845 | no | no | no (capture input) |
-| `buffs` | main.gd:447 | no | no | **YES** |
+| `buffs` | main.gd:447 | spent once buffs (`land_delta`, C-15); a buff the core ADDS is not carried | no | no (delta) |
 | `vs_mark_round` | main.gd:24332 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `hit_and_run_round` | solo_controller.gd:12793 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `moved_round` | main.gd:1761 | yes (`land_delta`, P4.0-4e) | X/Z only | no (delta) |
@@ -113,17 +118,17 @@ same commit as the struct change.
 
 ## Summary
 
-- 79 `State` fields; **11 gap rows** (P4.0-4d landed `fatigued` and `casts`; P4.0-4e the twelve round
+- 79 `State` fields; **10 gap rows** (P4.0-4d landed `fatigued` and `casts`; P4.0-4e the twelve round
   stamps; P4.0-4f the four marker pools; P4.0-4g `versatile_pick_mode`; C-11 the three once-per-game name lists
-  `limited_used`, `storm_used`, `precision_used`; C-13 `growth_markers`; C-12 the two Piercing-Tag latches
-  `piercing_tag_used` / `piercing_tag_persistent`, -24).
+  `limited_used`, `storm_used`, `precision_used`; C-13 `growth_markers`; C-15 the once-buff spend (`buffs`);
+  C-12 the two Piercing-Tag latches `piercing_tag_used` / `piercing_tag_persistent`, -26).
 - No gap among the board facts an activation moves: model wounds, deaths and positions ride the
   per-step landings, `shaken` rides `delta_of`, `activated` and `shaken` ride the MP rows.
-- Every remaining gap is a once-per-game latch the dice path reads again later: the live buff ledger
-  and the once-per-game flags (`second_wind_used`, the feat name list,
-  `surprise_attack_used`, `reinforcement_used`, `teleport_used`), plus `growth_round` (derived). The delta stops
-  at `shaken`, the ledger, the round stamps, the pools, the Versatile pick, the spent name lists, the growth count
-  and the Piercing-Tag latches, and the MP rows compare
+- Every remaining gap is a once-per-game latch the dice path reads again later: the once-per-game flags
+  (`second_wind_used`, the feat name list, `surprise_attack_used`, `reinforcement_used`, `teleport_used`),
+  plus `growth_round` (derived). The delta stops
+  at `shaken`, the ledger, the round stamps, the pools, the Versatile pick, the spent name lists, the growth count,
+  the once-buff spend and the Piercing-Tag latches, and the MP rows compare
   only activation, Shaken and per-model wounds/life/XZ — so a table and the core can disagree on any of
   these without a local or MP signal.
 
@@ -150,7 +155,7 @@ and the `buffs` spend (`sim.rs:10594`).
 |---|---|---|
 | (a) | `fatigued` | `sim.rs:2108,3292` (Second Wind branch); `battle_sim.gd:2124`; the table's own fatigue toggle is the writer |
 | (a) | `casts` | `sim.rs:1925-1928` (Vengeance branch); `battle_sim.gd:2126`; table cast path writes it |
-| (b), fixed | `buffs` | core spends at `sim.rs:10594` (`spend_exchange_wounded`) in its own copy of the ledger (the capture DOES send it: `_stamp_gate_reads` writes `ledger`, `fold_ledger` reads it), no delta key carries the spend back, and the table's `_solo_spend_once_mods` (`main.gd:6161`) never ran on the core path; read `main.gd:447`. Fixed by #2803 (the volley's once buffs; the table's own spend after a `done` activation); the once morale buff fixed by #2804 (spent right after the morale die) |
+| (b), fixed (#2803/#2804, then C-15) | `buffs` | core spends at `sim.rs:10594` (`spend_exchange_wounded`) in its own copy of the ledger (the capture DOES send it: `_stamp_gate_reads` writes `ledger`, `fold_ledger` reads it), no delta key carries the spend back, and the table's `_solo_spend_once_mods` (`main.gd:6161`) never ran on the core path; read `main.gd:447`. Fixed by #2803 (the volley's once buffs; the table's own spend after a `done` activation); the once morale buff fixed by #2804 (spent right after the morale die) |
 | (a) | `vs_mark_round` | `sim.rs:1911,1964` (Vengeance branch); `main.gd:24332`; table writer runs |
 | (a) | `hit_and_run_round` | `sim.rs:3171,3197` (Hit-and-Run branch); `solo_controller.gd:12793`; table writer runs |
 | (a) | `moved_round` | `sim.rs:9770` writes it on the P3 placed move, but `_on_units_dropped` (`main.gd:22883`) and `_solo_animate_move` (`main.gd:12255`) set the table's copy on the same move; the delta's `moved` is a guard, P4.0-4e lands the round stamp; read `main.gd:1761` |

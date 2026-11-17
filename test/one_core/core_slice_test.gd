@@ -271,7 +271,7 @@ func test_a_missing_or_malformed_file_is_the_empty_slice() -> void:
 ## file as before. The deny file refuses its listed primitives (a wound-ignore target, a Tear weapon) and takes a unit whose
 ## rules are automated and not listed (AP, Tough); an unknown name stays refused. The list only shrinks: CEILING.
 ## RED: read PATH regardless of the switch -> the first assertion reads mode "allow".
-const DENY_CEILING := 10
+const DENY_CEILING := 11   # C-18 measurement added Indirect (the first soak of the taken share); from here it only shrinks
 
 
 func test_the_deny_switch_reads_the_measured_deny_list() -> void:
@@ -281,6 +281,11 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	assert_array(CoreSlice.refusals(_unit(["Regeneration"], [["AP(1)"]]))).is_equal(["unit_rule:Regeneration"])
 	assert_array(CoreSlice.refusals(_unit(["Tough(3)"], [["Tear"]]))).is_equal(["weapon_rule:Tear"])
 	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
+	# C-18 measured: an Indirect weapon and a joined hero (either side) stay on the table.
+	assert_array(CoreSlice.refusals(_unit([], [["Indirect"]]))).is_equal(["weapon_rule:Indirect"])
+	var host := _unit(["Tough(3)"], [["AP(1)"]])
+	EquipmentDistributor.attach_hero_to_unit(_unit(["Hero"], []), host)
+	assert_array(CoreSlice.refusals(host, true)).contains(["attached"])
 	assert_array(CoreSlice.refusals(_unit(["No Such Rule"], []))).is_equal(["unit_rule:No Such Rule"])
 	assert_int((CoreSlice.config()["primitives"] as Dictionary).size()).override_failure_message(
 		"the deny list only shrinks (ceiling %d)" % DENY_CEILING).is_less_equal(DENY_CEILING)
