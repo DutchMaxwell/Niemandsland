@@ -10,7 +10,7 @@ extends SceneTree
 ## `--deny` is a JSON object {rule name: why}: a mismatching volley carrying one of them is explained, any other is red. `--min-volleys`
 ## turns the coverage into a gate: every registry rule name (minus the `--exempt` array, the "cannot occur in a volley" names) must
 ## appear on a firing unit or weapon AND on a target in that many volleys. Exit 0 = green, 1 = a mismatch outside the deny list or an
-## uncovered rule name, 2 = nothing to sweep. The same NOTE as golden_witness.gd: the harness loads only after main.tscn is up.
+## uncovered rule name, 2 = nothing to sweep or another sweep holds `--out`. The same NOTE as golden_witness.gd: the harness loads only after main.tscn is up.
 
 const HARNESS_PATH := "res://test/one_core/roster_sweep.gd"
 const MAX_BOOT_FRAMES := 1800
@@ -73,12 +73,18 @@ func _run(args: Array) -> void:
 	var out := _arg(args, "--out", "user://roster_sweep_cli")
 	var dice := ProjectSettings.globalize_path(out.path_join("dice"))
 	var seeds := int(_arg(args, "--seeds", "20"))
+	var held: String = h.claim(dice)   # one process per --out: two share dice.jsonl and read each other's dice
+	if held != "":
+		printerr("ROSTER-SWEEP-FAIL: %s" % held)
+		quit(2)
+		return
 	h.arm(main, dice)
 	var rows: Array = []
 	for p in pairs:
 		rows.append_array(await h.sweep_pair(main, p[0], p[1], seeds, dice, rows.size()))
 		printerr("ROSTER-SWEEP: %d volleys (%s)" % [rows.size(), p[0]["name"]])
 	h.disarm(main)
+	h.release(dice)
 	var cmp: Dictionary = h.compare(rows, out)
 	var gate: Dictionary = h.gate(cmp["verdicts"], _json(_arg(args, "--deny"), {}))
 	var cov: Dictionary = h.coverage(cmp["verdicts"])

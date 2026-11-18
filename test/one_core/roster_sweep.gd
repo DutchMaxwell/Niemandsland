@@ -233,6 +233,49 @@ static func arm(main: Node, dump_dir: String) -> void:
 	CoreActivation._env = 0   # the table half: kill switch OFF; the core half calls the driver directly
 
 
+## The lock directory one sweep process holds on its dice directory (`claim`).
+const LOCK_DIR := "sweep.lock"
+
+
+## One sweep process per dice directory. Two processes with the same `--out` (the gate script started twice on 18.11.) share
+## `dice.jsonl`: each truncates, appends to and deletes the other's file, so a volley reads another row's dice, a torn line or
+## none at all, and the sweep reports misaligned "rolls" differences the rules never made. `mkdir` is atomic, so the first
+## process wins; a lock whose holder is gone (a killed run) is taken over. Returns "" when this process holds it, else why not.
+static func claim(dump_dir: String) -> String:
+	DirAccess.make_dir_recursive_absolute(dump_dir)
+	var lock := dump_dir.path_join(LOCK_DIR)
+	for _attempt in 2:
+		if DirAccess.make_dir_absolute(lock) == OK:
+			var f := FileAccess.open(lock.path_join("pid"), FileAccess.WRITE)
+			f.store_string(str(OS.get_process_id()))
+			f.close()
+			return ""
+		var holder := int(FileAccess.get_file_as_string(lock.path_join("pid")))
+		if holder == OS.get_process_id():
+			return ""
+		if holder <= 0 or _alive(holder):   # no pid yet = another process is between mkdir and write
+			return "%s is held by sweep process %d (remove %s if no sweep runs)" % [dump_dir, holder, lock]
+		release(dump_dir, holder)
+	return "%s: the lock %s could not be taken" % [dump_dir, lock]
+
+
+## Whether process `pid` runs. `OS.is_process_running` knows only this process's own children (a waitpid), so another sweep
+## would always read as gone; Linux answers for any process through /proc.
+static func _alive(pid: int) -> bool:
+	if DirAccess.dir_exists_absolute("/proc/self"):
+		return DirAccess.dir_exists_absolute("/proc/%d" % pid)
+	return OS.is_process_running(pid)
+
+
+## Drops the lock `claim` took, if `holder` (default: this process) holds it.
+static func release(dump_dir: String, holder := -1) -> void:
+	var pid_path := dump_dir.path_join(LOCK_DIR).path_join("pid")
+	if int(FileAccess.get_file_as_string(pid_path)) != (OS.get_process_id() if holder < 0 else holder):
+		return
+	DirAccess.remove_absolute(pid_path)
+	DirAccess.remove_absolute(dump_dir.path_join(LOCK_DIR))
+
+
 static func disarm(main: Node) -> void:
 	AiDiceRecorder.close()
 	OS.set_environment("NML_DICE_DUMP", "")

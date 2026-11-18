@@ -101,6 +101,44 @@ func test_the_deny_mode_share_counts_only_taken_fired_volleys() -> void:
 	assert_int((s["unequal"] as Array).size()).is_equal(1)
 
 
+## Gate 18.11. (main 213bbbf6d): the gate script ran twice, two sweep processes wrote one `dice.jsonl`, and 1513 volleys read
+## another row's dice. A second process must not get the dice directory while the first holds it; a dead holder's lock is
+## taken over; the holder's own release frees it. RED without `claim`'s lock (a claim that always answers ""): the live
+## holder is not refused; RED with `OS.is_process_running` as the liveness check: the foreign holder (pid 1) reads as gone.
+func test_one_sweep_process_holds_a_dice_directory() -> void:
+	var dice := ProjectSettings.globalize_path("user://roster_sweep_claim")
+	var lock := dice.path_join(RosterSweep.LOCK_DIR)
+	RosterSweep.release(dice)
+	assert_str(RosterSweep.claim(dice)).override_failure_message("a free directory is taken").is_empty()
+	assert_str(RosterSweep.claim(dice)).override_failure_message("the holder claims again").is_empty()
+	RosterSweep.release(dice)
+	assert_bool(DirAccess.dir_exists_absolute(lock)).override_failure_message("release frees the lock").is_false()
+	_plant_lock(lock, 1)   # a live process that is NOT this one's child (OS.is_process_running reads those as gone)
+	assert_str(RosterSweep.claim(dice)).override_failure_message("a live foreign holder must refuse a second sweep").contains("held by sweep process 1")
+	var other := OS.create_process("sleep", ["30"])   # a live process of this user stands in for a second sweep
+	assert_int(other).is_greater(0)
+	_plant_lock(lock, other)
+	assert_str(RosterSweep.claim(dice)).override_failure_message("a live holder must refuse a second sweep").contains("held by sweep process %d" % other)
+	RosterSweep.release(dice)
+	assert_bool(DirAccess.dir_exists_absolute(lock)).override_failure_message("release leaves another holder's lock").is_true()
+	OS.kill(other)   # the holder is gone (reaped below): its lock is stale
+	for _i in 50:
+		if not OS.is_process_running(other):
+			break
+		OS.delay_msec(20)
+	assert_str(RosterSweep.claim(dice)).override_failure_message("a stale lock is taken over").is_empty()
+	assert_int(int(FileAccess.get_file_as_string(lock.path_join("pid")))).is_equal(OS.get_process_id())
+	RosterSweep.release(dice)
+	assert_bool(DirAccess.dir_exists_absolute(lock)).is_false()
+
+
+func _plant_lock(lock: String, pid: int) -> void:
+	DirAccess.make_dir_recursive_absolute(lock)
+	var f := FileAccess.open(lock.path_join("pid"), FileAccess.WRITE)
+	f.store_string(str(pid))
+	f.close()
+
+
 func test_the_ring_puts_every_list_in_two_pairings() -> void:
 	var ls := [{"system": "gf", "name": "a"}, {"system": "gf", "name": "b"}, {"system": "gf", "name": "c"}]
 	var pairs := RosterSweep.ring(ls)
