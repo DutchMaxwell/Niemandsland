@@ -26,8 +26,9 @@ same commit as the struct change.
 - **Capture side (IN)** — what the core is told before the activation: the recorder's `ledger` (`AiActRecorder._ledger_of`,
   a recorded corpus format and the AI search's input, so unchanged) and, from the one-core door's capture only (C-10),
   `step_ledger` per unit (the Versatile pick, the reckless / retreating-strike / mind-control / regenerative-strength /
-  piercing-spot round stamps) and the top-level `second_wind` (the army's grants of the round). Not on the wire yet:
-  `piercing_tag_used` (the Piercing Tag latches are another lane's), `second_wind_used`'s per-unit flag rides the `ledger`.
+  piercing-spot round stamps) and the top-level `second_wind` (the army's grants of the round). The per-unit
+  once-per-game latches ride the `ledger`: `piercing_tag_used` since #2926, `second_wind_used`, the spent
+  limited / storm / precision name lists (#2915).
 - **Gap** — `YES` when the table reads/uses the field, an activation can change it, and none of the
   surfaces above carries the change back. Those are the fields where a core/table split stays
   invisible locally and, for most of them, also across the MP check.
@@ -81,7 +82,7 @@ same commit as the struct change.
 | `shroud` | main.gd:5118 | no | no | no (capture input) |
 | `charge_no_difficult` | act_recorder.gd:846 | no | no | no (capture input) |
 | `charge_probe_r` | act_recorder.gd:845 | no | no | no (capture input) |
-| `buffs` | main.gd:447 | spent once buffs (`land_delta`, C-15); a buff the core ADDS is not carried | no | no (delta) |
+| `buffs` | main.gd:447 | spent once buffs (`land_delta`, C-15 / #2924); a buff the core ADDS is not carried | no | no (delta) |
 | `vs_mark_round` | main.gd:24332 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `hit_and_run_round` | solo_controller.gd:12793 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `moved_round` | main.gd:1761 | yes (`land_delta`, P4.0-4e) | X/Z only | no (delta) |
@@ -91,46 +92,66 @@ same commit as the struct change.
 | `reckless_ap_round` | main.gd:24502 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `reckless_backfire_round` | main.gd:24507 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `versatile_pick_round` | main.gd:15462 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
-| `versatile_pick_mode` | main.gd:15471 | yes (`land_delta`, P4.0-4g) | no | no (delta) |
+| `versatile_pick_mode` | main.gd:15471 | yes (`land_delta`, P4.0-4g / #2927) | no | no (delta) |
 | `retreating_strike_round` | main.gd:8888 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `mind_control_moved_round` | main.gd:24569 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
-| `growth_markers` | main.gd:24962 | yes (`land_delta`, C-13) | no | no (delta) |
+| `growth_markers` | main.gd:24962 | yes (`land_delta`, C-13 / #2921) | no | no (delta) |
 | `growth_round` | main.gd:24968 | no | no | **YES** |
 | `growth_strike_round` | main.gd:9335 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
-| `vengeance_markers` | main.gd:8827 | yes (`land_delta`, P4.0-4f) | no | no (delta) |
+| `vengeance_markers` | main.gd:8827 | yes (`land_delta`, P4.0-4f / #2823) | no | no (delta) |
 | `second_wind_used` | solo_controller.gd:13886 | no | no | **YES** |
 | `surprise_attack_used` | main.gd:25248 | no | no | **YES** |
 | `reinforcement_used` | main.gd:16256 | no | no | **YES** |
-| `second_wind_round` | solo_controller.gd:13833 | no | no | **YES** |
-| `second_wind_uses` | solo_controller.gd:13833 | no | no | **YES** |
-| `limited_used` | solo_controller.gd:9772 | yes (`land_delta`, C-11) | no | no (delta) |
-| `piercing_tag_used` | main.gd:24614 | yes (`land_delta`, C-12) | no | no (delta) |
-| `piercing_tag_markers` | main.gd:24674 | yes (`land_delta`, P4.0-4f) | no | no (delta) |
-| `piercing_tag_persistent` | main.gd:24677 | yes (`land_delta`, C-12) | no | no (delta) |
+| `second_wind_round` | solo_controller.gd:13833 | no | no | **YES** (sent in since #2927, no OUT surface) |
+| `second_wind_uses` | solo_controller.gd:13833 | no | no | **YES** (sent in since #2927, no OUT surface) |
+| `limited_used` | solo_controller.gd:9772 | yes (`land_delta`, C-11 / #2915) | no | no (delta) |
+| `piercing_tag_used` | main.gd:24614 | yes (`land_delta`, C-12 / #2926) | no | no (delta) |
+| `piercing_tag_markers` | main.gd:24674 | yes (`land_delta`, P4.0-4f / #2823) | no | no (delta) |
+| `piercing_tag_persistent` | main.gd:24677 | yes (`land_delta`, C-12 / #2926) | no | no (delta) |
 | `piercing_spot_round` | main.gd:24612 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
-| `storm_used` | main.gd:25124 | yes (`land_delta`, C-11) | no | no (delta) |
-| `feats_used` | solo_controller.gd:2002 | Protection Feat family only (`land_delta`, P4.D-38a) | Protection Feat family only (door capture, P4.D-38a) | **YES** (every other feat family: reported, `land_delta` push_error) |
+| `storm_used` | main.gd:25124 | yes (`land_delta`, C-11 / #2915) | no | no (delta) |
+| `feats_used` | solo_controller.gd:2002 | Protection Feat family only (`land_delta`, P4.D-38a / #2888) | Protection Feat family only (door capture, P4.D-38a) | **YES** (measured partial: any other feat family is reported, `land_delta` push_error) |
 | `teleport_used` | main.gd:25312 | no | no | **YES** |
-| `spot_markers` | main.gd:15256 | yes (`land_delta`, P4.0-4f) | no | no (delta) |
-| `tag_markers` | main.gd:15714 | yes (`land_delta`, P4.0-4f) | no | no (delta) |
+| `spot_markers` | main.gd:15256 | yes (`land_delta`, P4.0-4f / #2823) | no | no (delta) |
+| `tag_markers` | main.gd:15714 | yes (`land_delta`, P4.0-4f / #2823) | no | no (delta) |
 | `spot_round` | main.gd:15222 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
-| `precision_used` | main.gd:24773 | yes (`land_delta`, C-11) | no | no (delta) |
+| `precision_used` | main.gd:24773 | yes (`land_delta`, C-11 / #2915) | no | no (delta) |
 
 ## Summary
 
-- 79 `State` fields; **10 gap rows** (P4.0-4d landed `fatigued` and `casts`; P4.0-4e the twelve round
-  stamps; P4.0-4f the four marker pools; P4.0-4g `versatile_pick_mode`; C-11 the three once-per-game name lists
-  `limited_used`, `storm_used`, `precision_used`; C-13 `growth_markers`; C-15 the once-buff spend (`buffs`);
-  C-12 the two Piercing-Tag latches `piercing_tag_used` / `piercing_tag_persistent`, -26).
+- 79 `State` fields; **10 gap rows** (9 open, 1 partial). P4.0-4d landed `fatigued` and `casts`; P4.0-4e the twelve
+  round stamps; P4.0-4f the four marker pools (#2823); P4.0-4g `versatile_pick_mode` (#2927); C-11 the three
+  once-per-game name lists `limited_used`, `storm_used`, `precision_used` (#2915); C-13 `growth_markers` (#2921);
+  C-15 the once-buff spend (`buffs`, #2924); C-12 the two Piercing-Tag latches `piercing_tag_used` /
+  `piercing_tag_persistent` (#2926); P4.D-38a the Protection Feat family of `feats_used` (#2888).
 - No gap among the board facts an activation moves: model wounds, deaths and positions ride the
   per-step landings, `shaken` rides `delta_of`, `activated` and `shaken` ride the MP rows.
-- Every remaining gap is a once-per-game latch the dice path reads again later: the once-per-game flags
-  (`second_wind_used`, the feat name list, `surprise_attack_used`, `reinforcement_used`, `teleport_used`),
-  plus `growth_round` (derived). The delta stops
+- Every remaining gap is a once-per-game latch the dice path reads again later, plus one derived round:
+  `second_wind_used`, `second_wind_round` / `second_wind_uses` (sent in since #2927, not carried back),
+  `surprise_attack_used`, `reinforcement_used`, `teleport_used`, the `feats_used` families beyond Protection
+  Feat (#2888), `delayed_action_round`, `coordinate_via_round` and `growth_round`. The delta stops
   at `shaken`, the ledger, the round stamps, the pools, the Versatile pick, the spent name lists, the growth count,
   the once-buff spend and the Piercing-Tag latches, and the MP rows compare
   only activation, Shaken and per-model wounds/life/XZ — so a table and the core can disagree on any of
   these without a local or MP signal.
+
+## Measured ledger round trip (17.11.2026, tree of #2953)
+
+`test/one_core/ledger_probe_test.gd` (24 cases, 0 errors, 0 failures) reads the ledger's IN and OUT for the 22
+fields the ledger round trip names and prints one `LEDGER_PROBE` line per reading. Measured: **12 clean, 1
+partial, 9 open**. Those 22 fields are a subset of the 79 rows above, and the measured split is this table's
+`Gap?` column: the nine open are the `Gap? = YES` rows minus `feats_used`, and `feats_used` is the one partial.
+
+- **clean (12)** — `buffs` (#2924); `versatile_pick_mode` (#2927); `growth_markers` (#2921);
+  `vengeance_markers`, `piercing_tag_markers`, `spot_markers`, `tag_markers` (#2823); `limited_used`,
+  `storm_used`, `precision_used` (#2915); `piercing_tag_used`, `piercing_tag_persistent` (#2926).
+- **partial (1)** — `feats_used`: the delta carries every spent feat name, `land_delta` closes the Protection
+  Feat family only (#2888).
+- **open (9)** — `teleport_used`, `delayed_action_round`, `coordinate_via_round`, `second_wind_used`,
+  `second_wind_round`, `second_wind_uses`, `surprise_attack_used`, `reinforcement_used`, `growth_round`.
+
+All nine open sit in class (a) or (c) on today's plain path, so the table's own writer still runs and
+no live activation loses them yet; the two Second Wind round fields are sent in (#2927) but not carried back.
 
 ## Classification (One core P4.0-4a)
 
@@ -155,7 +176,7 @@ and the `buffs` spend (`sim.rs:10594`).
 |---|---|---|
 | (a) | `fatigued` | `sim.rs:2108,3292` (Second Wind branch); `battle_sim.gd:2124`; the table's own fatigue toggle is the writer |
 | (a) | `casts` | `sim.rs:1925-1928` (Vengeance branch); `battle_sim.gd:2126`; table cast path writes it |
-| (b), fixed (#2803/#2804, then C-15) | `buffs` | core spends at `sim.rs:10594` (`spend_exchange_wounded`) in its own copy of the ledger (the capture DOES send it: `_stamp_gate_reads` writes `ledger`, `fold_ledger` reads it), no delta key carries the spend back, and the table's `_solo_spend_once_mods` (`main.gd:6161`) never ran on the core path; read `main.gd:447`. Fixed by #2803 (the volley's once buffs; the table's own spend after a `done` activation); the once morale buff fixed by #2804 (spent right after the morale die) |
+| (b), fixed (#2803/#2804, then C-15 / #2924) | `buffs` | core spends at `sim.rs:10594` (`spend_exchange_wounded`) in its own copy of the ledger (the capture DOES send it: `_stamp_gate_reads` writes `ledger`, `fold_ledger` reads it), no delta key carries the spend back, and the table's `_solo_spend_once_mods` (`main.gd:6161`) never ran on the core path; read `main.gd:447`. Fixed by #2803 (the volley's once buffs; the table's own spend after a `done` activation); the once morale buff fixed by #2804 (spent right after the morale die) |
 | (a) | `vs_mark_round` | `sim.rs:1911,1964` (Vengeance branch); `main.gd:24332`; table writer runs |
 | (a) | `hit_and_run_round` | `sim.rs:3171,3197` (Hit-and-Run branch); `solo_controller.gd:12793`; table writer runs |
 | (a) | `moved_round` | `sim.rs:9770` writes it on the P3 placed move, but `_on_units_dropped` (`main.gd:22883`) and `_solo_animate_move` (`main.gd:12255`) set the table's copy on the same move; the delta's `moved` is a guard, P4.0-4e lands the round stamp; read `main.gd:1761` |
@@ -165,31 +186,32 @@ and the `buffs` spend (`sim.rs:10594`).
 | (a) | `reckless_ap_round` | `sim.rs:2353` (Reckless branch); `main.gd:24502`; table writer runs |
 | (a) | `reckless_backfire_round` | `sim.rs:2354` (Reckless branch); `main.gd:24507`; table writer runs |
 | (a) | `versatile_pick_round` | `sim.rs:8220` (Versatile branch); `main.gd:15462`; table writer runs |
-| (a) | `versatile_pick_mode` | `sim.rs:8221` (Versatile branch); `main.gd:15471`; table writer runs; P4.0-4g lands the int mode onto the table's `versatile_pick` Dictionary |
+| (a) | `versatile_pick_mode` | `sim.rs:8221` (Versatile branch); `main.gd:15471`; table writer runs; P4.0-4g / #2927 lands the int mode onto the table's `versatile_pick` Dictionary |
 | (a) | `retreating_strike_round` | `sim.rs:3081` (Retreating Strike branch); `main.gd:8888`; table writer runs |
 | (a) | `mind_control_moved_round` | `sim.rs:2175` (Mind Control branch, `EPOCH_73_V36`); `main.gd:24569`; table writer runs |
-| (a) | `growth_markers` | `sim.rs:4253,4268` (Growth branch); `main.gd:24962`; table writer runs |
+| (a) | `growth_markers` | `sim.rs:4253,4268` (Growth branch); `main.gd:24962`; table writer runs; C-13 / #2921 lands the marker |
 | (a) | `growth_round` | `sim.rs:4251` (Growth branch), plus the fold at `io.rs:1308` (no ledger key on the wire); `main.gd:24968`; table writer runs |
 | (a) | `growth_strike_round` | `sim.rs:5901` (Growth strike); `main.gd:9335`; table writer runs |
 | (a) | `vengeance_markers` | `io.rs:1278` folds the ledger, read at `sim.rs:3822`; `main.gd:8827`; table writer runs |
 | (a) | `second_wind_used` | `sim.rs:3290` (Second Wind branch); `solo_controller.gd:13886`; table writer runs |
 | (a) | `surprise_attack_used` | `sim.rs:1121` (Surprise Attack branch); `main.gd:25248`; table writer runs |
 | (a) | `reinforcement_used` | `deployment.rs:3631` (reinforcement step), fold `io.rs:1264`; `main.gd:16256`; never an activation |
-| (a) | `second_wind_round` | `sim.rs:3286` (Second Wind branch); `solo_controller.gd:13833`; table writer runs |
-| (a) | `second_wind_uses` | `sim.rs:3289` (Second Wind branch); `solo_controller.gd:13833`; table writer runs |
-| (a) | `limited_used` | `sim.rs:1405,6060` (`mark_spent_limited`, limited-weapon branch); `solo_controller.gd:9772`; table writer runs |
-| (a) | `piercing_tag_used` | `sim.rs:2449` (Piercing tag branch); `main.gd:24614`; table writer runs; C-12 lands the core's latch (the capture sends it too) |
+| (a) | `second_wind_round` | `sim.rs:3286` (Second Wind branch); `solo_controller.gd:13833`; table writer runs; #2927 sends it in (no OUT surface) |
+| (a) | `second_wind_uses` | `sim.rs:3289` (Second Wind branch); `solo_controller.gd:13833`; table writer runs; #2927 sends it in (no OUT surface) |
+| (a) | `limited_used` | `sim.rs:1405,6060` (`mark_spent_limited`, limited-weapon branch); `solo_controller.gd:9772`; table writer runs; C-11 / #2915 lands the latch |
+| (a) | `piercing_tag_used` | `sim.rs:2449` (Piercing tag branch); `main.gd:24614`; table writer runs; C-12 / #2926 lands the core's latch (the capture sends it too) |
 | (a) | `piercing_tag_markers` | `sim.rs:2455,2464,2514` (Piercing tag branch); `main.gd:24674`; table writer runs |
-| (a) | `piercing_tag_persistent` | `sim.rs:2456,2475`, fold `io.rs:1288`; `main.gd:24677`; table writer runs; C-12 lands the core's standing flag onto `piercing_tag_source` |
+| (a) | `piercing_tag_persistent` | `sim.rs:2456,2475`, fold `io.rs:1288`; `main.gd:24677`; table writer runs; C-12 / #2926 lands the core's standing flag onto `piercing_tag_source` |
 | (a) | `piercing_spot_round` | `sim.rs:2436` (Piercing Spot branch); `main.gd:24612`; table writer runs |
-| (a) | `storm_used` | `sim.rs:1449` (Storm branch); `main.gd:25124`; table writer runs |
-| (a) | `feats_used` | `sim.rs:1840,5852,5936,9468` (feat branches); `solo_controller.gd:2002`; table writer runs |
+| (a) | `storm_used` | `sim.rs:1449` (Storm branch); `main.gd:25124`; table writer runs; C-11 / #2915 lands the latch |
+| (a) | `feats_used` | `sim.rs:1840,5852,5936,9468` (feat branches); `solo_controller.gd:2002`; table writer runs; P4.D-38a / #2888 lands the Protection Feat family only |
 | (a) | `teleport_used` | `sim.rs:2221` (Teleport branch); `main.gd:25312`; table writer runs |
 | (a) | `spot_markers` | `sim.rs:2638,2742` (Spotter branch); `main.gd:15256`; table writer runs |
 | (a) | `tag_markers` | `sim.rs:2675,2753` (Tagger branch); `main.gd:15714`; table writer runs |
 | (a) | `spot_round` | `sim.rs:2619` (Spotter branch); `main.gd:15222`; table writer runs |
-| (a) | `precision_used` | `sim.rs:2653` (Precision branch); `main.gd:24773`; table writer runs |
+| (a) | `precision_used` | `sim.rs:2653` (Precision branch); `main.gd:24773`; table writer runs; C-11 / #2915 lands the latch |
 
 Counts: **33 (a), 1 (b), 2 (c)**; the (b) is fixed by #2803 (volley) and #2804 (morale). The single (b) was the live buff ledger: the core's `spend_once`
-is the one plain-path write whose result no surface carries (the capture sends the ledger, the core
-spends in its copy, no delta key brings the spend back) and the table's own spend is skipped on the core path.
+was the one plain-path write whose result no surface carried (the capture sends the ledger, the core
+spends in its copy) and the table's own spend is skipped on the core path. C-15 / #2924 closed it: the
+delta's `buffs_spent` (per record its name and scope) lands in `_land_buffs`.
