@@ -191,7 +191,8 @@ def tagged(root, manifest=TAGGED):
 def test_planner_tags_print_functions_and_code_lines_per_tag_above_an_unchanged_counter(tmp_path):
     out = run(tagged(repo(tmp_path))).stdout.splitlines()
     # old_a: 4 lines to the next declaration, minus the blank and the column-0 comment before old_b = 2 code lines
-    assert out[-4:] == ["planner_tag erlkoenig 1 2", "planner_tag tree 2 5", "planner_tag TOTAL 3 7", "TABLE LINES LEFT: 20"]
+    head = out[:out.index("TEST CALLERS BY TAG") - 1]   # the printed-only section comes last, after a blank line
+    assert head[-4:] == ["planner_tag erlkoenig 1 2", "planner_tag tree 2 5", "planner_tag TOTAL 3 7", "TABLE LINES LEFT: 20"]
 
 
 def test_check_is_red_on_an_untagged_planner_function_and_green_once_tagged(tmp_path):
@@ -254,3 +255,79 @@ def test_runtime_census_without_shadow_records_prints_no_shadow_section(tmp_path
     census = tmp_path / "census.json"
     census.write_text(json.dumps({"ai_volleys": 1, "legacy": {"ai_volley": {"_all": 1}}}))
     assert "SHADOW" not in run(root, "--runtime", str(census)).stdout
+
+
+def test_the_test_caller_section_is_printed_and_never_committed(tmp_path):
+    root = tagged(repo(tmp_path))
+    out = run(root).stdout.splitlines()
+    assert out[-4:] == ["", "TEST CALLERS BY TAG", "test_callers erlkoenig 1 2", "test_callers tree 1 1"]
+    txt = committed(root).read_text()              # old_a: name( plus call("old_a"); old_b: one call; door: none
+    assert "TEST CALLERS BY TAG" not in txt and "test_callers" not in txt
+    assert run(root, "--check").returncode == 0    # the section never moves the committed counter
+
+
+GATE_PROD = """class_name Fixture
+extends RefCounted
+
+func old_a(x: int) -> int:
+	return x + 1
+
+func old_b() -> void:
+	pass
+"""
+GATE_TEST = "func t():\n\tFixture.old_a(4)\n"
+GATE = {**MANIFEST, "tag_vocabulary": "gd_search keep",
+        "planner_tags": {"scripts/a.gd": {"gd_search": "old_a", "keep": "old_b"}}}
+
+
+def gate_repo(root, test_text=GATE_TEST):
+    for rel, text in (("scripts/a.gd", GATE_PROD), ("test/x_test.gd", test_text)):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text)
+    (root / "tools").mkdir(parents=True, exist_ok=True)
+    (root / "tools/table_census.json").write_text(json.dumps(GATE))
+    (root / "test/one_core").mkdir()
+    return root
+
+
+def test_gate_tag_is_red_on_one_test_caller(tmp_path):
+    res = run(gate_repo(tmp_path), "--gate-tag", "gd_search")
+    assert res.returncode == 1
+    assert "test_callers gd_search 1 1" in res.stdout
+    assert "::error::test caller of gd_search: scripts/a.gd:old_a" in res.stdout
+
+
+def test_gate_tag_is_green_once_the_test_call_is_removed(tmp_path):
+    root = gate_repo(tmp_path)
+    (root / "test/x_test.gd").write_text("func t():\n\tpass\n")   # planted fault: the call is gone
+    res = run(root, "--gate-tag", "gd_search")
+    assert res.returncode == 0
+    assert "test_callers gd_search 0 0" in res.stdout
+
+
+def test_gate_tag_is_green_for_a_tag_no_test_calls(tmp_path):
+    res = run(gate_repo(tmp_path), "--gate-tag", "keep")
+    assert res.returncode == 0 and "test_callers keep 0 0" in res.stdout
+
+
+def test_gate_tag_rejects_an_unknown_tag_and_never_writes(tmp_path):
+    root = gate_repo(tmp_path)
+    res = run(root, "--gate-tag", "nope")
+    assert res.returncode == 2 and "unknown planner tag" in res.stderr
+    assert run(root, "--write", "--gate-tag", "gd_search").returncode == 2
+    assert not (root / "test/one_core/table_census.txt").exists()
+
+
+QUAL = {**MANIFEST, "tag_vocabulary": "gd_search keep", "planner_tags": {
+    "scripts/p.gd": {"gd_search": "shared_fn"}, "scripts/o.gd": {"keep": "shared_fn"}}}
+
+
+def test_a_test_caller_counts_only_for_the_class_of_the_file(tmp_path):
+    root = repo(tmp_path)
+    (root / "scripts/p.gd").write_text("class_name Planner\nextends RefCounted\n\nfunc shared_fn() -> void:\n\tpass\n")
+    (root / "scripts/o.gd").write_text("class_name Other\nextends RefCounted\n\nfunc shared_fn() -> void:\n\tpass\n")
+    (root / "test/x_test.gd").write_text("func t():\n\tOther.shared_fn()\n")   # the same name, another class
+    (root / "tools/table_census.json").write_text(json.dumps(QUAL))
+    out = run(root).stdout
+    assert "test_callers gd_search 0 0" in out and "test_callers keep 1 1" in out
+    assert run(root, "--gate-tag", "gd_search").returncode == 0
