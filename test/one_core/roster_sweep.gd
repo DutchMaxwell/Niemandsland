@@ -184,6 +184,7 @@ static func volley(main: Node, entry_a: Dictionary, entry_b: Dictionary, seed_n:
 	else:
 		main._solo_core_ai_h = 0
 		await main._run_ai_shooting({"unit": att, "moved": false, "action": AiDecision.Action.HOLD})
+		main.solo_controller.hit_and_run_move(att, true)   # DS-HR1: the body's post-shot tail (main.gd:1347-1349)
 	AiDiceRecorder.close()
 	var rolls: Array = ParityTable._read_dice(dump_dir)
 	if core and opts.has("core_swap_face") and int(opts["core_swap_face"]) < rolls.size():

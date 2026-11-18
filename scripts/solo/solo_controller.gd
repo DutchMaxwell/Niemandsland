@@ -13102,6 +13102,9 @@ func hit_and_run_move(unit: GameUnit, after_shoot: bool = true) -> bool:
 		moved = true
 	if moved:
 		unit.unit_properties["hit_and_run_round"] = round_no
+		# DS-HR1 (lead ruling): a unit that stepped away has MOVED this round — the core stamps moved_round on its
+		# Hit & Run step (sim.rs tray_hit_and_run), so Entrenched / Artillery / the stationary reads agree.
+		_sync_unit_latch(unit, "moved_round", round_no)
 		record_decision({"kind": "move", "unit": unit.get_name(),
 			"rule": "Hit & Run: once per round, up to 3\" after shooting or being in melee — EV-scored spot, else a step away from the nearest enemy",
 			"candidates": [], "chosen": "hit-and-run %.0f\"" % move_in, "why": "hit-and-run step",
