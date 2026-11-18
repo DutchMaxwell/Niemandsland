@@ -1,12 +1,11 @@
 extends GdUnitTestSuite
 ## P4.D-65 (gate G2): `_planner_pick_unit` computes the per-pick position features (AiMissionEval.features +
 ## BattleSim.reply_threat, stamped by `_with_reserves`) only when a consumer is attached: the harness capture
-## (`decision_sink`) or NML_ROLLOUT_TRACE. The shipped game has neither. Everything the player sees is unchanged.
+## (`decision_sink`). The shipped game has none. Everything the player sees is unchanged.
 ## Constructed: bare units, GDScript search (core off). `_with_reserves` reads `ambush_reserve` once per feature
 ## computation, so a spy unit in that list counts the computations.
 
 const IN2M := 0.0254
-const _TRACE_PATH := "user://pick_features_gate_trace.jsonl"
 
 
 ## Counts how often `_with_reserves` looks at it = how often the features were computed.
@@ -18,12 +17,6 @@ class SpyUnit extends GameUnit:
 
 
 func after_test() -> void:
-	AiRolloutTrace.close()
-	AiRolloutTrace._checked = false
-	AiRolloutTrace._stream = null
-	AiRolloutTrace._count = 0
-	OS.set_environment("NML_ROLLOUT_TRACE", "")
-	DirAccess.remove_absolute(_TRACE_PATH)
 	BattleSim._core_env = -1
 	OS.unset_environment("NML_AIFIX")
 	OS.unset_environment("NML_EVAL_VARIANT")
@@ -130,17 +123,6 @@ func test_a_harness_sink_gets_the_vector_and_the_leaf_row_as_before() -> void:
 	assert_array(_data(planner, 0).keys()).is_equal(["kept_back", "value", "features"])
 	assert_bool((_data(planner, 0).get("features", {}) as Dictionary).is_empty()).is_false()
 	assert_bool(bool(_data(planner, 1).get("leaf", false))).is_true()
-
-
-func test_a_rollout_trace_asks_for_the_features_too() -> void:
-	OS.set_environment("NML_ROLLOUT_TRACE", _TRACE_PATH)
-	AiRolloutTrace._checked = false
-	AiRolloutTrace._stream = null
-	var got := _run()
-	AiRolloutTrace.close()
-	assert_int(got["looks"]).override_failure_message("the trace got no features").is_greater(0)
-	var line: Variant = JSON.parse_string(FileAccess.get_file_as_string(_TRACE_PATH).split("\n")[0])
-	assert_bool(line is Dictionary and not ((line as Dictionary).get("features", {}) as Dictionary).is_empty()).is_true()
 
 
 func test_the_pick_and_every_line_the_player_can_see_are_the_same_with_and_without_the_features() -> void:
