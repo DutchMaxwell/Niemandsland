@@ -94,8 +94,8 @@ func test_seam_off_the_mover_ends_fully_overlapping_the_blocker() -> void:
 	var mover := _unit_at(1, [Vector3.ZERO], "Mover")
 	var blocker := _unit_at(2, [Vector3(6.0 * IN2M, 0, 0)], "Blocker")
 	var state := _capture(mover, blocker)
-	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
-		"dest": Vector3(6.0 * IN2M, 0, 0)})
+	var next := CoreResolve.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
+		"dest": Vector3(6.0 * IN2M, 0, 0)}, {"spacing": false})
 	var mp: Vector3 = (next["units"]["Mover"] as Dictionary)["positions"][0]
 	var bp: Vector3 = (next["units"]["Blocker"] as Dictionary)["positions"][0]
 	assert_float((mp - bp).length() / IN2M).is_less(1.0)
@@ -110,8 +110,8 @@ func test_seam_on_the_mover_stops_outside_the_blockers_spacing_disc() -> void:
 	var mover := _unit_at(1, [Vector3.ZERO], "Mover")
 	var blocker := _unit_at(2, [Vector3(2.3 * IN2M, 0, 0)], "Blocker")
 	var state := _capture(mover, blocker)
-	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
-		"dest": Vector3(2.3 * IN2M, 0, 0)})
+	var next := CoreResolve.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
+		"dest": Vector3(2.3 * IN2M, 0, 0)}, {"spacing": true})
 	var mp: Vector3 = (next["units"]["Mover"] as Dictionary)["positions"][0]
 	var bp: Vector3 = (next["units"]["Blocker"] as Dictionary)["positions"][0]
 	var r_in := SeparationChecker.DEFAULT_BASE_RADIUS_M / IN2M
@@ -126,10 +126,10 @@ func test_seam_on_a_move_far_from_any_other_unit_is_untouched() -> void:
 	var blocker := _unit_at(2, [Vector3(100.0 * IN2M, 0, 0)], "Blocker")
 	var state := _capture(mover, blocker)
 	var action := {"unit": "Mover", "kind": AiDecision.Action.RUSH, "dest": Vector3(4.0 * IN2M, 0, 0)}
-	var off := BattleSim.resolve(state, action)
+	var off := CoreResolve.resolve(state, action, {"spacing": false})
 	OS.set_environment("NML_SIM_SPACING", "1")
 	_reset_spacing_cache()
-	var on := BattleSim.resolve(state, action)
+	var on := CoreResolve.resolve(state, action, {"spacing": true})
 	assert_that((on["units"]["Mover"] as Dictionary)["positions"]).is_equal(
 		(off["units"]["Mover"] as Dictionary)["positions"])
 
@@ -146,8 +146,8 @@ func test_seam_on_a_mover_starting_inside_a_disc_moves_to_a_clear_destination() 
 	var blocker := _unit_at(2, [Vector3(1.0 * IN2M, 0, 0)], "Blocker")
 	var state := _capture(mover, blocker)
 	var dest := Vector3(-6.0 * IN2M, 0, 0)
-	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
-		"dest": dest})
+	var next := CoreResolve.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
+		"dest": dest}, {"spacing": true})
 	var mp: Vector3 = (next["units"]["Mover"] as Dictionary)["positions"][0]
 	assert_that(mp).is_equal(dest)
 
@@ -163,8 +163,8 @@ func test_seam_on_start_and_destination_both_blocked_picks_the_open_middle() -> 
 	var mover := _unit_at(1, [Vector3.ZERO], "Mover")
 	var blocker := _unit_at(2, [Vector3(1.0 * IN2M, 0, 0), Vector3(8.0 * IN2M, 0, 0)], "Blocker")
 	var state := _capture(mover, blocker)
-	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
-		"dest": Vector3(8.0 * IN2M, 0, 0)})
+	var next := CoreResolve.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
+		"dest": Vector3(8.0 * IN2M, 0, 0)}, {"spacing": true})
 	var mp: Vector3 = (next["units"]["Mover"] as Dictionary)["positions"][0]
 	assert_float(mp.x / IN2M).is_equal_approx(5.0, 0.001)
 	var r_in := SeparationChecker.DEFAULT_BASE_RADIUS_M / IN2M
@@ -188,8 +188,8 @@ func test_a_charge_may_end_the_mover_in_base_contact_with_its_target() -> void:
 	var mover := _unit_at(1, [Vector3.ZERO], "Mover")
 	var blocker := _unit_at(2, [Vector3(6.0 * IN2M, 0, 0)], "Blocker")
 	var state := _capture(mover, blocker)
-	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
-		"dest": Vector3(6.0 * IN2M, 0, 0), "charge": "Blocker"})
+	var next := CoreResolve.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(6.0 * IN2M, 0, 0), "charge": "Blocker"}, {"spacing": true})
 	var mp: Vector3 = (next["units"]["Mover"] as Dictionary)["positions"][0]
 	var bp: Vector3 = (next["units"]["Blocker"] as Dictionary)["positions"][0]
 	var gap_m: float = (mp - bp).length() - 2.0 * SeparationChecker.DEFAULT_BASE_RADIUS_M
@@ -207,8 +207,8 @@ func test_a_rush_toward_the_same_point_still_keeps_the_spacing_buffer() -> void:
 	var mover := _unit_at(1, [Vector3.ZERO], "Mover")
 	var blocker := _unit_at(2, [Vector3(6.0 * IN2M, 0, 0)], "Blocker")
 	var state := _capture(mover, blocker)
-	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
-		"dest": Vector3(6.0 * IN2M, 0, 0)})
+	var next := CoreResolve.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
+		"dest": Vector3(6.0 * IN2M, 0, 0)}, {"spacing": true})
 	var mp: Vector3 = (next["units"]["Mover"] as Dictionary)["positions"][0]
 	var bp: Vector3 = (next["units"]["Blocker"] as Dictionary)["positions"][0]
 	var r_in := SeparationChecker.DEFAULT_BASE_RADIUS_M / IN2M
@@ -245,15 +245,15 @@ func test_an_attached_hero_does_not_block_its_hosts_rush() -> void:
 	mover.unit_properties["attached_heroes"] = [hero]
 	var state := _capture_with_hero(mover, hero)
 	var dest := Vector3(1.0 * IN2M, 0, 0)
-	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
-		"dest": dest})
+	var next := CoreResolve.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
+		"dest": dest}, {"spacing": true})
 	var mp: Vector3 = (next["units"]["Mover"] as Dictionary)["positions"][0]
 	assert_that(mp).is_equal(dest)
 	var decoy_mover := _unit_at(1, [Vector3.ZERO], "Mover")
 	var decoy := _unit_at(2, [Vector3.ZERO], "Blocker")
 	var decoy_state := _capture(decoy_mover, decoy)
-	var clamped := BattleSim.resolve(decoy_state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
-		"dest": dest})
+	var clamped := CoreResolve.resolve(decoy_state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
+		"dest": dest}, {"spacing": true})
 	var cmp: Vector3 = (clamped["units"]["Mover"] as Dictionary)["positions"][0]
 	assert_that(cmp).is_not_equal(dest)
 
@@ -271,8 +271,8 @@ func test_a_charge_reaching_base_contact_resolves_melee() -> void:
 	var mover := _armed_at(1, [Vector3.ZERO], "Mover")
 	var blocker := _armed_at(2, [Vector3(6.0 * IN2M, 0, 0)], "Blocker")
 	var state := _capture(mover, blocker)
-	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
-		"dest": Vector3(6.0 * IN2M, 0, 0), "charge": "Blocker"})
+	var next := CoreResolve.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(6.0 * IN2M, 0, 0), "charge": "Blocker"}, {"spacing": true})
 	var b: Dictionary = next["units"]["Blocker"]
 	assert_int(int(b["alive"])).is_equal(0)
 
@@ -290,8 +290,8 @@ func test_a_charge_short_of_contact_by_the_reach_band_applies_no_melee() -> void
 	var mover := _armed_at(1, [Vector3.ZERO], "Mover")
 	var blocker := _armed_at(2, [Vector3(target_x_in * IN2M, 0, 0)], "Blocker")
 	var state := _capture(mover, blocker)
-	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
-		"dest": Vector3(target_x_in * IN2M, 0, 0), "charge": "Blocker"})
+	var next := CoreResolve.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(target_x_in * IN2M, 0, 0), "charge": "Blocker"}, {"spacing": true})
 	var b: Dictionary = next["units"]["Blocker"]
 	assert_int(int(b["alive"])).is_equal(1)
 	assert_int(int(b["wounds"][0])).is_equal(1)
@@ -310,8 +310,8 @@ func test_a_charge_landing_inside_the_engage_distance_resolves_melee() -> void:
 	var mover := _armed_at(1, [Vector3.ZERO], "Mover")
 	var blocker := _armed_at(2, [Vector3(target_x_in * IN2M, 0, 0)], "Blocker")
 	var state := _capture(mover, blocker)
-	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
-		"dest": Vector3(target_x_in * IN2M, 0, 0), "charge": "Blocker"})
+	var next := CoreResolve.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(target_x_in * IN2M, 0, 0), "charge": "Blocker"}, {"spacing": true})
 	assert_bool(bool((next["units"]["Mover"] as Dictionary).get("fatigued", false))).is_true()
 	assert_int(int((next["units"]["Blocker"] as Dictionary)["alive"])).is_equal(0)
 
@@ -328,8 +328,8 @@ func test_a_charge_landing_outside_the_engage_distance_applies_no_melee() -> voi
 	var mover := _armed_at(1, [Vector3.ZERO], "Mover")
 	var blocker := _armed_at(2, [Vector3(target_x_in * IN2M, 0, 0)], "Blocker")
 	var state := _capture(mover, blocker)
-	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
-		"dest": Vector3(target_x_in * IN2M, 0, 0), "charge": "Blocker"})
+	var next := CoreResolve.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(target_x_in * IN2M, 0, 0), "charge": "Blocker"}, {"spacing": true})
 	assert_bool(bool((next["units"]["Mover"] as Dictionary).get("fatigued", false))).is_false()
 	assert_int(int((next["units"]["Blocker"] as Dictionary)["alive"])).is_equal(1)
 
@@ -355,8 +355,8 @@ func test_a_charge_at_a_joined_hero_still_buffers_the_hosts_own_body() -> void:
 	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
 	army.game_units = {"Mover": mover, "Hero": hero, "Host": host}
 	var state := BattleSim.capture(army)
-	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
-		"dest": Vector3(3.0 * IN2M, 0, 0), "charge": "Hero"})
+	var next := CoreResolve.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(3.0 * IN2M, 0, 0), "charge": "Hero"}, {"spacing": true})
 	var mp: Vector3 = (next["units"]["Mover"] as Dictionary)["positions"][0]
 	var hp: Vector3 = (next["units"]["Hero"] as Dictionary)["positions"][0]
 	var hop: Vector3 = (next["units"]["Host"] as Dictionary)["positions"][0]
