@@ -271,7 +271,7 @@ func test_a_missing_or_malformed_file_is_the_empty_slice() -> void:
 ## file as before. The deny file refuses its listed primitives (a Teleport unit) and takes a unit whose
 ## rules are automated and not listed (AP, Tough); a name no map knows is taken (unmapped_inert). The list only shrinks: CEILING.
 ## RED: read PATH regardless of the switch -> the first assertion reads mode "allow".
-const DENY_CEILING := 9   # C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
+const DENY_CEILING := 11   # 18.11. G10: Hit & Run + Hit & Run Shooter re-denied (the core step does not land through the delta); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
 
 
 func test_the_deny_switch_reads_the_measured_deny_list() -> void:
@@ -288,6 +288,10 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	teleporter.unit_properties["faction_folder"] = "elven_jesters"   # a faction whose map gives Teleport its primitive
 	assert_array(CoreSlice.refusals(teleporter)).is_equal(["unit_rule:Teleport"])
 	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
+	# G10 (18.11.): the after-volley step does not come back through the delta, so Hit & Run stays on the table.
+	var raider := _unit(["Hit & Run"], [["AP(1)"]])
+	raider.unit_properties["faction_folder"] = "dao_union"   # a faction whose map gives Hit & Run its primitive
+	assert_array(CoreSlice.refusals(raider)).is_equal(["unit_rule:Hit & Run"])
 	# An Indirect weapon (lifted after #2939/#2942/#2947) and a joined hero are taken (the lone-hero target, epoch 81).
 	assert_bool(CoreSlice.takes(_unit([], [["Indirect"]]))).is_true()   # lifted with #2939 / #2942 / #2947
 	var host := _unit(["Tough(3)"], [["AP(1)"]])
