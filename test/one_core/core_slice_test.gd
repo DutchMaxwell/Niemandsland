@@ -271,7 +271,7 @@ func test_a_missing_or_malformed_file_is_the_empty_slice() -> void:
 ## file as before. The deny file refuses its listed primitives (a Teleport unit) and takes a unit whose
 ## rules are automated and not listed (AP, Tough); a name no map knows is taken (unmapped_inert). The list only shrinks: CEILING.
 ## RED: read PATH regardless of the switch -> the first assertion reads mode "allow".
-const DENY_CEILING := 9   # HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
+const DENY_CEILING := 9   # BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
 
 
 func test_the_deny_switch_reads_the_measured_deny_list() -> void:
@@ -328,6 +328,41 @@ func test_deny_mode_takes_the_lifted_equal_probes() -> void:
 	sisters.unit_properties["faction_folder"] = "blessed_sisters"
 	assert_bool(CoreSlice.takes(sisters)).override_failure_message(
 		"deny mode takes a unit that carries Point-Blank Surge").is_true()
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+
+
+## BEATS (19.11.): a unit that carries a pre-attack beat rule (main.gd, the block between the casts and the volley) stays on
+## the table in deny mode: the table resolves the beat, and a core that took the activation would resolve it a second time
+## from its stale capture (door probe on one real AI activation: Mend 8/8, Breath Attack 8/8, Mind Control, Storm Attack,
+## Reckless Piercing, a Utility Buff once-record). Each case is [system, faction folder, rule]; the faction folder is the map
+## that gives the rule its primitive. Piercing Tag stays taken (LD-6, measured equal through the door). RED: take the group
+## out of assets/solo/core_slice_deny.json -> every case below is taken instead of refused.
+func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	var cases := [
+		["gf", "battle_brothers", "Mend"], ["gf", "alien_hives", "Breath Attack"], ["gf", "jackals", "Mind Control"],
+		["gf", "daemons_of_war", "Fatigue Debuff"], ["gf", "daemons_of_war", "Storm of War"],
+		["aof", "daemons_of_war", "Reckless Piercing"], ["gf", "human_defense_force", "Precision Shooter Buff"],
+		["gf", "jackals", "Precision Tag"], ["gf", "battle_brothers", "Re-Position Artillery"]]
+	for c in cases:
+		var bearer := _unit([c[2], "Tough(3)"], [["AP(1)"]])
+		bearer.unit_properties["game_system"] = c[0]
+		bearer.unit_properties["faction_folder"] = c[1]
+		assert_array(CoreSlice.refusals(bearer)).override_failure_message(
+			"%s (%s/%s) must stay on the table in deny mode" % [c[2], c[0], c[1]]).is_equal(["unit_rule:" + c[2]])
+	# The same unit without the beat rule is taken (the group refuses the rule, not the faction).
+	var plain := _unit(["Tough(3)"], [["AP(1)"]])
+	plain.unit_properties["faction_folder"] = "battle_brothers"
+	assert_array(CoreSlice.refusals(plain)).is_empty()
+	# A joined hero's beat rule keeps its host on the table (deny mode reads the hero's rules too).
+	var host := _unit(["Tough(3)"], [["AP(1)"]])
+	host.unit_properties["faction_folder"] = "battle_brothers"
+	var healer := _unit(["Hero", "Mend"], [])
+	healer.unit_properties["faction_folder"] = "battle_brothers"
+	EquipmentDistributor.attach_hero_to_unit(healer, host)
+	assert_array(CoreSlice.refusals(host)).contains(["unit_rule:Mend"])
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 
