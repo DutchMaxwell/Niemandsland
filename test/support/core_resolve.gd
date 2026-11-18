@@ -4,12 +4,19 @@ class_name CoreResolve
 ## legacy epoch — then the seams, the capture, the resolve, and the answer back as a live state. Same order as
 ## CoreActivation.capture and SoloController._core_plan; precedent test/one_core/round_binding_test.gd.
 ## `seams` = {"spacing": bool, "cast": bool}; an absent key reads the table's own switch.
+## A core WITH a header takes its seams from the header's own knobs (resolve asks for the
+## header epoch's seams), so the dict is stamped there; set_seams alone only reaches a
+## headerless core.
 
 static func resolve(state: Dictionary, action: Dictionary, seams := {}) -> Dictionary:
 	var core: Object = ClassDB.instantiate("NmlCore")
 	if core == null:
 		return {}
 	var head := AiActRecorder._header_line(state, state.get("terrain_at", Callable()))
+	if seams.has("spacing"):
+		head["knobs"]["seam_spacing"] = bool(seams["spacing"])
+	if seams.has("cast"):
+		head["knobs"]["seam_cast"] = bool(seams["cast"])
 	if not bool(core.set_game_header(head)):
 		return {}
 	core.set_seams(bool(seams.get("spacing", BattleSim.spacing_enabled())),
