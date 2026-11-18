@@ -27,10 +27,29 @@ static func engine_offered() -> bool:
 	return ClassDB.class_exists("NmlCore")
 
 
-## The engine resolves at this table: an AI seat, or an agreed Automatic online room. Hotseat and Manual rooms: false.
+## P4.D-43c: the hotseat switch, read once (the master flag's pattern). OFF unless `NML_ONE_CORE_HOTSEAT` is "1" or "on":
+## a local Automatic table with no AI seat then resolves its two human sides through the core like a solo or an agreed
+## online room. Manual rooms never enter the core door.
+static var _hotseat_env := -1
+
+
+static func hotseat_enabled() -> bool:
+	if _hotseat_env < 0:
+		var raw := OS.get_environment("NML_ONE_CORE_HOTSEAT").to_lower()
+		_hotseat_env = 1 if (raw == "1" or raw == "on") else 0
+	return _hotseat_env == 1
+
+
+## P4.D-43c: a local hotseat Automatic table (two human sides, no AI seat, no peer).
+static func hotseat_room(main) -> bool:
+	return hotseat_enabled() and main._solo_hotseat_automatic()
+
+
+## The engine resolves at this table: an AI seat, an agreed Automatic online room, or (P4.D-43c, behind its switch) a
+## local hotseat Automatic table. Manual rooms: false.
 static func applies(main) -> bool:
 	return enabled() and ClassDB.class_exists("NmlCore") \
-		and (not main.solo_ai_slots.is_empty() or main._online_turn_room())
+		and (not main.solo_ai_slots.is_empty() or main._online_turn_room() or hotseat_room(main))
 
 
 ## P4.0-6: the per-choice switch. A choice id's prefix (`takedown_model:<shooter>:<target>`) names its
@@ -77,7 +96,7 @@ static func has_statline(gu: GameUnit) -> bool:
 
 
 ## P4.D-13c: a unit with no statline cannot be shot at a core table. True = the shot must not happen; ONE battle-log line
-## says why. False when the core door is not on (kill switch, hotseat): the table shoots as it always did.
+## says why. False when the core door is not on (kill switch, hotseat with its switch off): the table shoots as it always did.
 static func refuses_statlineless(main, attacker: GameUnit, target: GameUnit) -> bool:
 	if not applies(main) or has_statline(target):
 		return false
