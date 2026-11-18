@@ -99,7 +99,8 @@
             ],
             "shaken": false,
             "unit": "1793355998.29986_2537673570",
-            "unknown": false
+            "unknown": false,
+            "surprise_attack_used": false
           }
         ],
         "landings": [

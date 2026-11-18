@@ -100,7 +100,7 @@ same commit as the struct change.
 | `growth_strike_round` | main.gd:9335 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `vengeance_markers` | main.gd:8827 | yes (`land_delta`, P4.0-4f / #2823) | no | no (delta) |
 | `second_wind_used` | solo_controller.gd:13886 | no | no | **YES** |
-| `surprise_attack_used` | main.gd:25248 | no | no | **YES** |
+| `surprise_attack_used` | main.gd:25248 | yes (`land_delta`, D19) | no | no (delta) |
 | `reinforcement_used` | main.gd:16256 | no | no | **YES** |
 | `second_wind_round` | solo_controller.gd:13833 | no | no | **YES** (sent in since #2927, no OUT surface) |
 | `second_wind_uses` | solo_controller.gd:13833 | no | no | **YES** (sent in since #2927, no OUT surface) |
@@ -119,19 +119,20 @@ same commit as the struct change.
 
 ## Summary
 
-- 79 `State` fields; **10 gap rows** (9 open, 1 partial). P4.0-4d landed `fatigued` and `casts`; P4.0-4e the twelve
+- 79 `State` fields; **9 gap rows** (8 open, 1 partial). P4.0-4d landed `fatigued` and `casts`; P4.0-4e the twelve
   round stamps; P4.0-4f the four marker pools (#2823); P4.0-4g `versatile_pick_mode` (#2927); C-11 the three
   once-per-game name lists `limited_used`, `storm_used`, `precision_used` (#2915); C-13 `growth_markers` (#2921);
   C-15 the once-buff spend (`buffs`, #2924); C-12 the two Piercing-Tag latches `piercing_tag_used` /
-  `piercing_tag_persistent` (#2926); P4.D-38a the Protection Feat family of `feats_used` (#2888).
+  `piercing_tag_persistent` (#2926); P4.D-38a the Protection Feat family of `feats_used` (#2888); D19 the
+  Surprise-Attack latch `surprise_attack_used`.
 - No gap among the board facts an activation moves: model wounds, deaths and positions ride the
   per-step landings, `shaken` rides `delta_of`, `activated` and `shaken` ride the MP rows.
 - Every remaining gap is a once-per-game latch the dice path reads again later, plus one derived round:
   `second_wind_used`, `second_wind_round` / `second_wind_uses` (sent in since #2927, not carried back),
-  `surprise_attack_used`, `reinforcement_used`, `teleport_used`, the `feats_used` families beyond Protection
+  `reinforcement_used`, `teleport_used`, the `feats_used` families beyond Protection
   Feat (#2888), `delayed_action_round`, `coordinate_via_round` and `growth_round`. The delta stops
   at `shaken`, the ledger, the round stamps, the pools, the Versatile pick, the spent name lists, the growth count,
-  the once-buff spend and the Piercing-Tag latches, and the MP rows compare
+  the once-buff spend, the Piercing-Tag latches and the Surprise-Attack latch, and the MP rows compare
   only activation, Shaken and per-model wounds/life/XZ — so a table and the core can disagree on any of
   these without a local or MP signal.
 
@@ -147,11 +148,14 @@ partial, 9 open**. Those 22 fields are a subset of the 79 rows above, and the me
   `storm_used`, `precision_used` (#2915); `piercing_tag_used`, `piercing_tag_persistent` (#2926).
 - **partial (1)** — `feats_used`: the delta carries every spent feat name, `land_delta` closes the Protection
   Feat family only (#2888).
-- **open (9)** — `teleport_used`, `delayed_action_round`, `coordinate_via_round`, `second_wind_used`,
-  `second_wind_round`, `second_wind_uses`, `surprise_attack_used`, `reinforcement_used`, `growth_round`.
+- **open (8)** — `teleport_used`, `delayed_action_round`, `coordinate_via_round`, `second_wind_used`,
+  `second_wind_round`, `second_wind_uses`, `reinforcement_used`, `growth_round`.
 
-All nine open sit in class (a) or (c) on today's plain path, so the table's own writer still runs and
+All eight open sit in class (a) or (c) on today's plain path, so the table's own writer still runs and
 no live activation loses them yet; the two Second Wind round fields are sent in (#2927) but not carried back.
+D19 (this PR) closes `surprise_attack_used` (13 clean, 1 partial, 8 open); `teleport_used` stays open because its
+only core writer runs in a Reposition activation, which the step path refuses
+(`core/nml-core/src/activation.rs:80`).
 
 ## Classification (One core P4.0-4a)
 
@@ -194,7 +198,7 @@ and the `buffs` spend (`sim.rs:10594`).
 | (a) | `growth_strike_round` | `sim.rs:5901` (Growth strike); `main.gd:9335`; table writer runs |
 | (a) | `vengeance_markers` | `io.rs:1278` folds the ledger, read at `sim.rs:3822`; `main.gd:8827`; table writer runs |
 | (a) | `second_wind_used` | `sim.rs:3290` (Second Wind branch); `solo_controller.gd:13886`; table writer runs |
-| (a) | `surprise_attack_used` | `sim.rs:1121` (Surprise Attack branch); `main.gd:25248`; table writer runs |
+| (a) | `surprise_attack_used` | `sim.rs:1121` (Surprise Attack branch); `main.gd:25248`; table writer runs; D19 lands the core's burned latch (the capture sends it too) |
 | (a) | `reinforcement_used` | `deployment.rs:3631` (reinforcement step), fold `io.rs:1264`; `main.gd:16256`; never an activation |
 | (a) | `second_wind_round` | `sim.rs:3286` (Second Wind branch); `solo_controller.gd:13833`; table writer runs; #2927 sends it in (no OUT surface) |
 | (a) | `second_wind_uses` | `sim.rs:3289` (Second Wind branch); `solo_controller.gd:13833`; table writer runs; #2927 sends it in (no OUT surface) |
@@ -205,7 +209,7 @@ and the `buffs` spend (`sim.rs:10594`).
 | (a) | `piercing_spot_round` | `sim.rs:2436` (Piercing Spot branch); `main.gd:24612`; table writer runs |
 | (a) | `storm_used` | `sim.rs:1449` (Storm branch); `main.gd:25124`; table writer runs; C-11 / #2915 lands the latch |
 | (a) | `feats_used` | `sim.rs:1840,5852,5936,9468` (feat branches); `solo_controller.gd:2002`; table writer runs; P4.D-38a / #2888 lands the Protection Feat family, DS-066 the once-per-game shot feats |
-| (a) | `teleport_used` | `sim.rs:2221` (Teleport branch); `main.gd:25312`; table writer runs |
+| (a) | `teleport_used` | `sim.rs:2221` (Teleport branch); `main.gd:25312`; table writer runs; only a Reposition activation spends it, and the step path refuses that kind (`activation.rs:80`) |
 | (a) | `spot_markers` | `sim.rs:2638,2742` (Spotter branch); `main.gd:15256`; table writer runs |
 | (a) | `tag_markers` | `sim.rs:2675,2753` (Tagger branch); `main.gd:15714`; table writer runs |
 | (a) | `spot_round` | `sim.rs:2619` (Spotter branch); `main.gd:15222`; table writer runs |

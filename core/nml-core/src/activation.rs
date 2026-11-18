@@ -438,6 +438,11 @@ pub struct UnitDelta {
     /// the "Piercing Target" name). The table keeps the NAME that placed it (`piercing_tag_source`);
     /// `land_delta` maps the bool onto that name.
     pub piercing_tag_persistent: bool,
+    /// D19 (a): the unit's once-per-game Surprise Attack latch AFTER (`State::surprise_attack_used`, the
+    /// "first time this unit is activated" trigger). The core fires the burst from its own copy; `land_delta`
+    /// closes the table's flag with the writer its own beat uses, so a replay neither bursts twice nor
+    /// re-opens a burned latch.
+    pub surprise_attack_used: bool,
     /// C-15: the once buffs this activation SPENT (inventory class (b)): per record its own name (the table's `spell`) and scope, in
     /// `before`'s order. The core spends in its own copy of the ledger; `land_delta` spends the matching table records. Records the
     /// core ADDED (a pre-attack placement) are not carried.
@@ -528,6 +533,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
             || before.growth_markers[u] != after.growth_markers[u]
             || before.piercing_tag_used[u] != after.piercing_tag_used[u]
             || before.piercing_tag_persistent[u] != after.piercing_tag_persistent[u]
+            || before.surprise_attack_used[u] != after.surprise_attack_used[u]
             || before.buffs[u] != after.buffs[u]
         {
             out.push(UnitDelta {
@@ -549,6 +555,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 growth_markers: after.growth_markers[u],
                 piercing_tag_used: after.piercing_tag_used[u],
                 piercing_tag_persistent: after.piercing_tag_persistent[u],
+                surprise_attack_used: after.surprise_attack_used[u],
                 buffs_spent: spent_buffs(&before.buffs[u], &after.buffs[u]),
             });
         }
@@ -1270,6 +1277,22 @@ mod tests {
         assert!(d[1].piercing_tag_persistent, "the standing flag rides the target's row");
         assert!(!d[1].piercing_tag_used);
         assert!(delta_of(&st, &st).is_empty(), "no placement, no row");
+        let again = delta_of(&after, &after);
+        assert!(again.is_empty(), "a latch already closed is no news: {again:?}");
+    }
+
+    /// D19 (a): a unit whose only change is the Surprise Attack latch gets a row carrying it AFTER (`tray_surprise_attack`
+    /// stamps the bearer before the candidate search, so a bearer with no target burns it too). RED: drop the change term ->
+    /// no row; plant `false` in the push -> the false default.
+    #[test]
+    fn the_delta_carries_the_surprise_attack_latch() {
+        let (st, _) = volley_line();
+        let mut after = st.clone();
+        after.surprise_attack_used[0] = true;
+        let d = delta_of(&st, &after);
+        assert_eq!(d.len(), 1, "the latch is a change: {d:?}");
+        assert!(d[0].surprise_attack_used, "the burned latch rides its row");
+        assert!(delta_of(&st, &st).is_empty(), "no burst, no row");
         let again = delta_of(&after, &after);
         assert!(again.is_empty(), "a latch already closed is no news: {again:?}");
     }
