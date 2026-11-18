@@ -4958,6 +4958,17 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		AiEv.stamp_sergeant(member_profiles, member)
 		_solo_stamp_alias_markers(member, member_profiles)
 		AiEv.stamp_conditional_ap(member_profiles, member)   # value Shatter/Tear/Melee Slayer/Disintegrate AP
+		# Growth markers belong to the carrier and enrich the carrier's OWN attacks (lead ruling 18.11.; the core
+		# folds them the same way: core/nml-core/src/sim.rs:4403 growth_bonus_of into core/nml-core/src/dice.rs:1715 ap).
+		# The human/melee path already does this per member (scripts/main.gd:6979); without it the AI volley body
+		# rolled a joined hero's own gun at its printed AP while the core added his markers.
+		var growth := _solo_growth_attack_bonus(member)
+		var growth_ap: int = int(growth.get("ap", 0))
+		if growth_ap > 0:
+			var growth_names: String = ", ".join(PackedStringArray(growth.get("ap_names", [])))
+			for prof in member_profiles:
+				(prof as Dictionary)["ap"] = int((prof as Dictionary).get("ap", 0)) + growth_ap
+				(prof as Dictionary)["_growth_ap"] = {"name": growth_names, "bonus": growth_ap}
 	if shots.is_empty():
 		_solo_log_no_volley(unit, report, "no ready ranged weapon")
 		await _solo_ai_core_call(unit, report, null, [])   # P4.D-19: no volley, but the Dangerous test may still be owed

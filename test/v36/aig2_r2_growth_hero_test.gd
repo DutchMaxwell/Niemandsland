@@ -8,7 +8,10 @@ extends GdUnitTestSuite
 ## first (gdUnit drops cases declared after a failing one in a scene suite).
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
+const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
+const ParityTable := preload("res://test/parity/parity_table.gd")
 const INCH := 0.0254
+const PG_DICE := "user://aig2_r2_growth_dice"
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -125,3 +128,49 @@ func test_a_joined_heros_defensive_frenzy_counts_the_chains_kill_at_73() -> void
 		.override_failure_message("the kill never reached the joined hero's rule (log: %s)" % _log_text()).is_equal(1)
 	assert_str(_log_text()).contains("Defensive Frenzy: Champion of Plague gains a marker for the kill (1/2)")
 	assert_int(_markers(pair[0], "growth_defensive_frenzy")).is_equal(0)
+
+
+## A real statline as an OPRUnit (the AI volley reads the importer's own weapons); `wname` "" = none.
+func _opr_entry(n: String, size: int, rules: Array, wname: String) -> Dictionary:
+	var ou := OPRApiClient.OPRUnit.new()
+	ou.name = n
+	ou.size = size
+	ou.quality = 5
+	ou.defense = 3
+	ou.game_system = "gf"
+	ou.special_rules.assign(rules)
+	if wname != "":
+		var w := OPRApiClient.OPRWeapon.new()
+		w.name = wname
+		w.range_value = 12
+		w.attacks = 4 if wname == "Spine Shooter" else 3
+		w.count = 3 if wname == "Spine Shooter" else 1
+		w.special_rules.assign(["AP(1)"] if wname == "Spine Shooter" else [])
+		ou.weapons.append(w)
+	return {"unit": ou, "faction": "alien_hives", "system": "gf"}
+
+
+## DS-PG: the carrier's Growth AP reaches the carrier's OWN attacks in the AI volley BODY, as the core folds it
+## (sim.rs:4403 growth_bonus_of into dice.rs:1715) and the human/melee path already did (main.gd:6979). RED: the
+## joined hero's own gun saves at the target's printed Defense (3+) again.
+func test_a_joined_heros_piercing_growth_reaches_the_ai_volley_at_73() -> void:
+	var host := RosterSweep.spawn(_main, _opr_entry("DS-PG Host", 3, [], "Spine Shooter"), RosterSweep.SEAT_SHOOTER, 0.0)
+	var hero := RosterSweep.spawn(_main, _opr_entry("DS-PG Hero", 1, ["Hero", "Piercing Growth"], "Veteran Bio-Borer"),
+		RosterSweep.SEAT_SHOOTER, 0.0)
+	host.unit_properties["attached_heroes"] = [hero]
+	hero.unit_properties["attached_to"] = host
+	hero.unit_properties["growth_piercing_growth"] = 2
+	var tgt := RosterSweep.spawn(_main, _opr_entry("DS-PG Target", 10, [], ""), RosterSweep.SEAT_TARGET, 9.0)
+	RosterSweep.arm(_main, ProjectSettings.globalize_path(PG_DICE))
+	_main.seed_tray_rng(0)
+	_main._solo_core_ai_h = 0
+	await _main._run_ai_shooting({"unit": host, "moved": false, "action": AiDecision.Action.HOLD})
+	AiDiceRecorder.close()
+	var rolls: Array = ParityTable._read_dice(ProjectSettings.globalize_path(PG_DICE))
+	var saves: Array = rolls.filter(func(x: Dictionary) -> bool: return str(x["kind"]) == "defense").map(
+		func(x: Dictionary) -> int: return int(x["target"]))
+	var log_text := _log_text()
+	RosterSweep.free_units(_main, [host, hero, tgt])
+	RosterSweep.disarm(_main)
+	assert_array(saves).override_failure_message("host AP(1) and hero AP(+1) save at 4+ (saves: %s)" % str(saves)).contains_exactly([4, 4])
+	assert_str(log_text).contains("Piercing Growth: DS-PG Hero adds AP(+1) from its growth markers")
