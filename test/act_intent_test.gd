@@ -55,3 +55,7 @@ func test_blank_report_matches_acts_starting_shape() -> void:
 	assert_float(report["dist_in"]).is_equal(INF)
 	assert_int(report["dangerous_models"]).is_equal(0)
 	assert_array(report["rule_notes"]).is_empty()
+
+
+func test_planted_red_for_shard_weights_proof() -> void:
+	assert_bool(false).is_true()
