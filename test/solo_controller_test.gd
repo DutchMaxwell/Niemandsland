@@ -869,17 +869,26 @@ func test_host_move_carries_the_attached_hero() -> void:
 
 # === Per-model line of sight (GF v3.5.1 p.8 "Who Can Shoot") ===
 
+## The container strip the sight queries run against: x in [0,24)", z in [3,6)", 2.5" tall. It blocks the
+## southern half of the shooting line, so shooters at x=26,29 see PAST its end and x=2,5 are blocked.
+func _container_strip() -> Array:
+	var k := VolumetricLos.INCHES_TO_METERS
+	return [{"kind": "box", "c": Vector2(12.0, 4.5) * k, "he": Vector2(12.0, 1.5) * k, "yaw": 0.0,
+		"y0": 0.0, "y1": TerrainRules.volume_height_inches(TerrainRules.TerrainType.CONTAINER) * k,
+		"solid": true}]
+
+
+## A shooter/target point as the volumetric sight truth sees it: no footprint, eye at the 32 mm base height.
+func _sight_model(p: Vector3) -> Dictionary:
+	return {"c": Vector2(p.x, p.z), "r": 0.0, "y0": 0.0,
+		"y1": VolumetricLos.height_in_for_base_mm(32.0) * VolumetricLos.INCHES_TO_METERS}
+
+
 func test_sighted_models_gates_per_model_behind_a_blocker() -> void:
 	# A CONTAINER strip blocks the southern half of the shooting line: only the 2 clear models fire.
-	var grid := {}
-	for x in range(0, 8):
-		grid[Vector2i(x, 1)] = TerrainRules.TerrainType.CONTAINER   # wall row at y in [3,6)"
-	# Blocker only spans x in [0,24)": shooters at x=26,29 see PAST its end, x=2,5 are blocked.
-	for x in range(8, 16):
-		grid.erase(Vector2i(x, 1))
+	var strip := _container_strip()
 	var los := func(a: Vector3, b: Vector3) -> bool:
-		return SoloSim.terrain_has_los(grid,
-			Vector2(a.x, a.z) / 0.0254, Vector2(b.x, b.z) / 0.0254)
+		return VolumetricLos.has_los(_sight_model(a), _sight_model(b), strip)
 	var m := 0.0254
 	var shooters := [Vector3(2 * m, 0, 0), Vector3(5 * m, 0, 0), Vector3(26 * m, 0, 0), Vector3(29 * m, 0, 0)]
 	var targets := [Vector3(2 * m, 0, 12 * m), Vector3(26 * m, 0, 12 * m)]
@@ -895,11 +904,9 @@ func test_sighted_models_gates_per_model_behind_a_blocker() -> void:
 ## call cleared (the nearest visible one) — and asking for them never changes the count.
 func test_sighted_models_reports_the_pairs_it_counted() -> void:
 	var m := 0.0254
-	var grid := {}
-	for x in range(0, 8):
-		grid[Vector2i(x, 1)] = TerrainRules.TerrainType.CONTAINER   # blocks x in [0,24)" between the lines
+	var strip := _container_strip()   # blocks x in [0,24)" between the lines
 	var los := func(a: Vector3, b: Vector3) -> bool:
-		return SoloSim.terrain_has_los(grid, Vector2(a.x, a.z) / m, Vector2(b.x, b.z) / m)
+		return VolumetricLos.has_los(_sight_model(a), _sight_model(b), strip)
 	var shooters := [Vector3(2 * m, 0, 0), Vector3(5 * m, 0, 0), Vector3(26 * m, 0, 0), Vector3(29 * m, 0, 0)]
 	var targets := [Vector3(2 * m, 0, 12 * m), Vector3(26 * m, 0, 12 * m)]
 	var pairs: Array = []
