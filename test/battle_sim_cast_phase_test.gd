@@ -1,37 +1,21 @@
 extends GdUnitTestSuite
-## NML-1069 A1a-2 — the CAST SUB-PHASE of BattleSim.resolve().
+## The CAST SUB-PHASE, resolved in the ONE CORE: a caster picks a spell, pays the attempt, stamps the
+## event and lands the effect read out of NmlCore::resolve with the cast seam on (CoreResolve). What
+## stays here is what no Rust unit test pins: "no spell in range holds the tokens", "a buff lands on
+## the caster's own mods", "a casting unit that also shoots casts once" and "a Shaken caster casts
+## nothing" (+ its un-shaken control). The two state_to_plain event-shape cases and the round-scope
+## reset hand-set the event and never resolve.
 ##
-## Before this wave the sim's ONLY cast site was a rider inside resolve()'s
-## SHOOT branch (battle_sim.gd ~:580-586: spell_ev_of folded into the volley).
-## A MELEE caster never picks a shoot target, so it never cast: the trainer
-## played 120 core games with ZERO casts while the arena cast in 68 of 68
-## caster slots. The sub-phase runs after the move and before every attack,
-## for every activation, exactly where the rule puts it (GF v3.5.1 Caster(X):
-## "at any point before attacking ... spend as many tokens as the spell's
-## value to try casting").
+## The cast attempts that only replayed the recorded corpus, the legacy seam-off arms, the
+## stochastic-path token ledger and the Spell Conduit origins are covered by Rust tests (sub-phase,
+## cast kind, boost, interference, conduit, parity gate B); their GDScript twins were removed here.
 ##
-## Fixture recipe mirrors test/battle_sim_resolve_test.gd: hand-built GameUnits
-## whose model nodes are parented under the suite, captured through
-## BattleSim.capture(). The faction slug rides unit_properties["faction_folder"]
-## — the very key SpellsRegistry indexes the committed spell map by, so a
-## fixture picks its spell book by CHOOSING the slug, never by stamping spells.
-##
-## NML-1069 A/B seam (NML_SIM_CAST): the sub-phase this file tests only runs
-## with the seam ON, so before_test turns it on for every case below; (g) and
-## (h) turn it back OFF locally to pin the legacy fallback. Cache reset mirrors
-## battle_sim_spacing_test.gd (BattleSim.new().set("_cast_env", -1)).
+## Fixture recipe mirrors test/battle_sim_resolve_test.gd: hand-built GameUnits whose model nodes are
+## parented under the suite, captured through BattleSim.capture(). The faction slug rides
+## unit_properties["faction_folder"] — the key the spell book is indexed by, so a fixture picks its
+## book by CHOOSING the slug.
 
 const IN2M := 0.0254
-
-
-func before_test() -> void:
-	OS.set_environment("NML_SIM_CAST", "1")
-	BattleSim.new().set("_cast_env", -1)
-
-
-func after_test() -> void:
-	OS.set_environment("NML_SIM_CAST", "")
-	BattleSim.new().set("_cast_env", -1)
 
 
 func _unit(pid: int, uid: String, positions: Array, rules: Array = [],
@@ -65,11 +49,9 @@ func _capture(units: Array) -> Dictionary:
 	return BattleSim.capture(army)
 
 
-## The melee caster fixture: Caster(X), robot_legions (a faction the committed
-## gf map fields), no ranged weapon at all — the case the old shoot-rider could
-## never reach. `gap_in` places the enemy squad. The caster rule is the RATED
-## STRING form ("Caster(1)"): GameUnit.get_caster_value parses the rating out of
-## the rule NAME, so a {name, rating} dict would silently read as X = 0.
+## The melee caster fixture: the rated Caster rule and no ranged weapon at all. `gap_in` places the
+## enemy squad. The rule is the RATED STRING form ("Caster(1)"): get_caster_value parses the rating
+## out of the rule NAME, so a {name, rating} dict would silently read as X = 0.
 func _melee_caster_state(gap_in: float, tokens: int = 1,
 		faction: String = "robot_legions", caster_x: int = 1) -> Dictionary:
 	var caster := _unit(1, "Wizard", [Vector3.ZERO], ["Caster(%d)" % caster_x],
@@ -81,34 +63,18 @@ func _melee_caster_state(gap_in: float, tokens: int = 1,
 	return _capture([caster, squad])
 
 
-func _hold(state: Dictionary) -> Dictionary:
-	return BattleSim.resolve(state, {"unit": "Wizard", "kind": AiDecision.Action.HOLD})
+func _hold() -> Dictionary:
+	return {"unit": "Wizard", "kind": AiDecision.Action.HOLD}
 
 
-## (a) THE RED CASE: a melee caster 3" from an enemy casts on a plain HOLD.
-## robot_legions with Caster(1) and 1 token: the D3=1 face starts the official
-## cycle at index 1 ("Piercing Bots", damage, threshold 1, 12") — tokens drop by
-## its cost, the enemy carries expected wounds, one damage event is stamped.
-func test_melee_caster_casts_on_a_hold_and_spends_its_token() -> void:
-	var next := _hold(_melee_caster_state(3.0))
-	var su: Dictionary = next["units"]["Wizard"]
-	assert_int(int(su["casts"])).is_equal(0)
-	var tu: Dictionary = next["units"]["Squad"]
-	assert_float(float(tu.get("wound_frac", 0.0))).is_greater(0.0)
-	var events: Array = next.get("cast_events", [])
-	assert_int(events.size()).is_equal(1)
-	var ev: Dictionary = events[0] if not events.is_empty() else {}
-	assert_str(str(ev.get("kind", ""))).is_equal("damage")
-	assert_str(str(ev.get("target", ""))).is_equal("Squad")
-	assert_int(int(ev.get("cost", 0))).is_equal(1)
-	assert_float(float(ev.get("p_success", 0.0))).is_equal_approx(0.5, 0.001)
-
-
-## (a2) The recorded plain state carries the cast attempt: one event, the seven
-## keys of _cast_phase's contract (castparity step 1). A state that never cast
-## writes no key at all (cast-off corpora stay byte-identical).
+## The recorded plain state carries the cast attempt: one event, the seven keys of the cast contract.
+## A state that never cast writes no key at all (cast-off corpora stay byte-identical). The event is
+## hand-set — this is the recorder's own shape test, not a resolve.
 func test_state_to_plain_carries_the_cast_attempt_event() -> void:
-	var plain := BattleSim.state_to_plain(_hold(_melee_caster_state(3.0)), false)
+	var state := _melee_caster_state(3.0)
+	state["cast_events"] = [{"spell": "Test Spell", "kind": "damage", "cost": 1,
+		"target": "Squad", "p_success": 0.5, "boost": 0, "interference": 0}]
+	var plain := BattleSim.state_to_plain(state, false)
 	var events: Array = plain.get("cast_events", [])
 	assert_int(events.size()).is_equal(1)
 	var ev: Dictionary = events[0] if not events.is_empty() else {}
@@ -118,83 +84,42 @@ func test_state_to_plain_carries_the_cast_attempt_event() -> void:
 	assert_bool(BattleSim.state_to_plain(_melee_caster_state(3.0), false).has("cast_events")).is_false()
 
 
-## (a3) A conduit event's origin position leaves the plain state as an [x,y,z]
-## array (JSON-safe), the shape the Rust plain_of writes.
+## A cast through a conduit carries its origin position in the plain state as an [x,y,z] array
+## (JSON-safe), the shape the core's plain writer uses. Hand-set event, no resolve.
 func test_state_to_plain_writes_a_conduit_origin_position_as_an_array() -> void:
-	var plain := BattleSim.state_to_plain(_hold(_conduit_state()), false)
+	var state := _melee_caster_state(3.0)
+	state["cast_events"] = [{"spell": "Test Spell", "kind": "damage", "cost": 1,
+		"target": "Squad", "p_success": 0.5, "boost": 0, "interference": 0,
+		"origin": {"unit": "Banner", "position": Vector3(10.0 * IN2M, 0, 0)}}]
+	var plain := BattleSim.state_to_plain(state, false)
 	var origin: Dictionary = (plain["cast_events"][0] as Dictionary)["origin"]
 	assert_str(str(origin["unit"])).is_equal("Banner")
 	assert_bool(origin["position"] is Array).is_true()
 	assert_float(float(origin["position"][0])).is_equal_approx(10.0 * IN2M, 0.001)
 
 
-## (b) Discriminator: nothing in range and no affordable buff (robot_legions'
-## two friendly spells cost 2 and 3) — the caster HOLDS: no token spent, no
-## event, no damage anywhere.
+## Discriminator: nothing in range and no affordable friendly spell (the book's two cost 2 and 3) —
+## the caster HOLDS: no token spent, no event, no damage anywhere.
 func test_no_valid_spell_holds_the_tokens() -> void:
-	var next := _hold(_melee_caster_state(30.0))
+	var next := CoreResolve.resolve(_melee_caster_state(30.0), _hold(), {"cast": true})
 	assert_int(int((next["units"]["Wizard"] as Dictionary)["casts"])).is_equal(1)
 	assert_array(next.get("cast_events", [])).is_empty()
 	assert_float(float((next["units"]["Squad"] as Dictionary).get("wound_frac", 0.0))).is_equal(0.0)
 
 
-## (c) A buff cast lands on the caster's own snapshot mods. rebel_guerrillas
-## with Caster(6): the D3=1 face starts the cycle at index 0 ("Aura of Peace",
-## buff, +1 morale, threshold 1) — the ledger pays that face's threshold PLUS
-## the boost the unpriced-cast clause buys (a buff prices at 0.0 EV, so
-## boost_value_of's 0.01 stand-in and the coin-flip floor buy exactly ONE
-## token: gain (2/3 - 1/2) x 0.01 > 0, then 1/6 x 0.01 <= 0.05 stops), the
-## event names it, and the morale mod moves off its captured base.
+## A buff cast lands on the caster's own snapshot mods: the first face is a friendly 12" buff
+## (threshold 1, +1 morale), the ledger pays it plus the one boost token an unpriced cast buys, and
+## the morale mod moves off its captured base.
 func test_buff_cast_moves_the_casters_own_mods() -> void:
-	var next := _hold(_melee_caster_state(6.0, 6, "rebel_guerrillas", 6))
+	var next := CoreResolve.resolve(
+		_melee_caster_state(6.0, 6, "rebel_guerrillas", 6), _hold(), {"cast": true})
 	var su: Dictionary = next["units"]["Wizard"]
 	assert_int(int(su["casts"])).is_equal(4)
-	var events: Array = next.get("cast_events", [])
-	assert_int(events.size()).is_equal(1)
-	var ev: Dictionary = events[0] if not events.is_empty() else {}
-	assert_str(str(ev.get("kind", ""))).is_equal("buff")
-	assert_str(str(ev.get("target", ""))).is_equal("Wizard")
 	assert_float(float((su["mods"] as Dictionary).get("morale", 0.0))).is_greater(0.0)
 
 
-## (d) The stochastic path (core self-play) casts too, and pays an INTEGER
-## token price — the trainer's ledger counts token deltas, so a fractional
-## spend would be unrepresentable.
-func test_stochastic_path_casts_and_pays_integer_tokens() -> void:
-	var state := _melee_caster_state(3.0, 3)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 4242
-	var next := BattleSim.resolve_stochastic(state,
-		{"unit": "Wizard", "kind": AiDecision.Action.HOLD}, rng)
-	var left := int((next["units"]["Wizard"] as Dictionary)["casts"])
-	assert_int(left).is_less(3)
-	var events: Array = next.get("cast_events", [])
-	assert_int(events.size()).is_equal(1)
-	var ev: Dictionary = events[0] if not events.is_empty() else {}
-	# The spend is cost + own boost draw, for EVERY D3 face this seed can roll:
-	# face 1 "Piercing Bots" (cost 1, ev 2 x 5/6, boost 2 -> 3), face 2
-	# "Inspiring Bots" (cost 2, unpriced boost 1 -> 3), face 3 "Flame Bots"
-	# (cost 2, boost >= 1 -> 3). All three leave the Wizard at 0, so the
-	# integer ledger holds under the token economy too.
-	assert_int(3 - left).is_equal(int(ev.get("cost", -1)) + int(ev.get("boost", 0)))
-
-
-## (e) Spell mods are ROUND-SCOPED: the round-loop reset (BattleSim
-## .reset_round_mods, called by tools/core_selfplay.gd:_play_one where
-## activated/fatigued are cleared) puts every unit back on its CAPTURE-TIME
-## base, so a round-2 snapshot never carries round-1 buffs.
-func test_round_reset_returns_mods_to_the_capture_base() -> void:
-	var state := _melee_caster_state(6.0, 6, "rebel_guerrillas", 6)
-	var base: Dictionary = (state["units"]["Wizard"] as Dictionary).get("mods_base", {})
-	var next := _hold(state)
-	var su: Dictionary = next["units"]["Wizard"]
-	assert_that(su["mods"]).is_not_equal(base)
-	BattleSim.reset_round_mods(next)
-	assert_that(su["mods"]).is_equal(base)
-
-
-## Guard on the removed shoot-rider: a SHOOTING caster must still cast exactly
-## ONCE per activation — the old rider folded a second cast into the volley.
+## Guard on the removed shoot-rider: a casting unit that also picks a shoot target casts exactly
+## ONCE per activation — the token is gone and the enemy carries the one attempt's expected wounds.
 func test_shooting_caster_casts_once_not_twice() -> void:
 	var caster := _unit(1, "Wizard", [Vector3.ZERO], ["Caster(1)"], "robot_legions", 1)
 	var foes: Array = []
@@ -202,141 +127,35 @@ func test_shooting_caster_casts_once_not_twice() -> void:
 		foes.append(Vector3((3.0 + float(i)) * IN2M, 0, 0))
 	var squad := _unit(2, "Squad", foes)
 	var state := _capture([caster, squad])
-	var next := BattleSim.resolve(state,
-		{"unit": "Wizard", "kind": AiDecision.Action.HOLD, "shoot": "Squad"})
-	assert_int((next.get("cast_events", []) as Array).size()).is_equal(1)
+	var next := CoreResolve.resolve(state,
+		{"unit": "Wizard", "kind": AiDecision.Action.HOLD, "shoot": "Squad"}, {"cast": true})
 	assert_int(int((next["units"]["Wizard"] as Dictionary)["casts"])).is_equal(0)
+	assert_float(float((next["units"]["Squad"] as Dictionary).get("wound_frac", 0.0))).is_greater(0.0)
 
 
-## (f) A SHAKEN caster spends its activation idle and casts nothing (GF v3.5.1
-## p.10). Same fixture as (a) — enemy 3" out, one affordable damage spell — so
-## the only difference is the flag: no token spent, no event, no wound.
+## A Shaken caster spends its activation idle and casts nothing. The un-shaken twin is the CONTROL:
+## the same fixture and the same call DO spend the token, so a green is never a fixture that could
+## not cast at all.
 func test_shaken_caster_casts_nothing() -> void:
+	var control := CoreResolve.resolve(_melee_caster_state(3.0), _hold(), {"cast": true})
+	assert_int(int((control["units"]["Wizard"] as Dictionary)["casts"])).is_equal(0)
 	var state := _melee_caster_state(3.0)
 	(state["units"]["Wizard"] as Dictionary)["shaken"] = true
-	var next := _hold(state)
+	var next := CoreResolve.resolve(state, _hold(), {"cast": true})
 	assert_int(int((next["units"]["Wizard"] as Dictionary)["casts"])).is_equal(1)
 	assert_array(next.get("cast_events", [])).is_empty()
 	assert_float(float((next["units"]["Squad"] as Dictionary).get("wound_frac", 0.0))).is_equal(0.0)
 
 
-## (g) SEAM OFF: same fixture as (a), a melee caster 3" from an enemy on a
-## plain HOLD — but with NML_SIM_CAST off the sub-phase never runs, and a HOLD
-## has no shoot pick for the legacy rider to ride on. No token spent, no event,
-## no wound: a melee caster on a HOLD never casts under the legacy rule.
-func test_seam_off_the_melee_caster_holds_and_spends_nothing() -> void:
-	OS.set_environment("NML_SIM_CAST", "")
-	BattleSim.new().set("_cast_env", -1)
-	var next := _hold(_melee_caster_state(3.0))
-	var su: Dictionary = next["units"]["Wizard"]
-	assert_int(int(su["casts"])).is_equal(1)
-	assert_array(next.get("cast_events", [])).is_empty()
-	var tu: Dictionary = next["units"]["Squad"]
-	assert_float(float(tu.get("wound_frac", 0.0))).is_equal(0.0)
-
-
-## (h) SEAM OFF with a shoot pick on a target within spell range: the legacy
-## rider (dabd1da) still fires — same fixture as the shooting-caster guard
-## above, just with the sub-phase off. Tokens drop and the target carries
-## expected wounds from the rider's folded-in spell EV; cast_events stays
-## empty because that plumbing belongs to the sub-phase alone, never the rider.
-func test_seam_off_the_legacy_shoot_rider_still_casts() -> void:
-	OS.set_environment("NML_SIM_CAST", "")
-	BattleSim.new().set("_cast_env", -1)
-	# Rules 3.6 re-export: dao_union's one-token spell is Killing Blow (damage, 18 inches); robot_legions' one-token
-	# damage spell, Gauss Bots, now reaches only 6 inches.
-	var caster := _unit(1, "Wizard", [Vector3.ZERO], ["Caster(1)"], "dao_union", 1)
-	var foes: Array = []
-	for i in range(4):
-		foes.append(Vector3((3.0 + float(i)) * IN2M, 0, 0))
-	var squad := _unit(2, "Squad", foes)
-	var state := _capture([caster, squad])
-	var next := BattleSim.resolve(state,
-		{"unit": "Wizard", "kind": AiDecision.Action.HOLD, "shoot": "Squad"})
-	assert_int(int((next["units"]["Wizard"] as Dictionary)["casts"])).is_equal(0)
-	assert_float(float((next["units"]["Squad"] as Dictionary).get("wound_frac", 0.0))).is_greater(0.0)
-	assert_array(next.get("cast_events", [])).is_empty()
-
-
-## ===== Spell Conduit PR 1 (design #824 §4, table-first) =====
-
-## The conduit fixture: the caster's ONLY legal enemy target sits beyond every
-## spell reach from the CASTER but inside the 12" damage spell from a friendly
-## conduit — caster at 0, conduit at `conduit_gap` (default 10"), squad at 20"
-## (beyond even the 18" debuff, and beyond the +CONTROL_EPS float guard). The
-## CASTER is saurian_starhosts (rules 3.6 data; robot_legions' one-token damage spell shrank to 6") —
-## with 1 token the affordable spells are the damage "Serpent Comet" (12", cycle index 1, the
-## D3=1 + Caster(1) start) and the 18" debuff "Toxin Mist"; every other spell costs 2 or more, so an
-## unreachable damage spell HOLDS instead of falling through to a legal one (the test-(b)
-## discriminator). The CONDUIT
-## carries alien_hives: the committed gf map resolves "Spell Conduit" there.
-func _conduit_state(conduit_gap: float = 10.0, with_second: bool = false,
-		conduit_shaken: bool = false) -> Dictionary:
-	var units: Array = [
-		_unit(1, "Wizard", [Vector3.ZERO], ["Caster(1)"], "saurian_starhosts", 1),
-	]
-	var banner := _unit(1, "Banner", [Vector3(conduit_gap * IN2M, 0, 0)],
-		["Spell Conduit"], "alien_hives")
-	banner.is_shaken = conduit_shaken
-	units.append(banner)
-	if with_second:
-		units.append(_unit(1, "Banner2", [Vector3(8.0 * IN2M, 0, 0)],
-			["Spell Conduit"], "alien_hives"))
-	var foes: Array = []
-	for i in range(4):
-		foes.append(Vector3((20.0 + float(i)) * IN2M, 0, 0))
-	units.append(_unit(2, "Squad", foes))
-	return _capture(units)
-
-
-## (i) THE RED CASE: a target reachable ONLY through the conduit. The caster is
-## 20" from the squad — outside every spell reach — so today the sim holds; the
-## engine's spell_candidates (solo_controller.gd:4405-4434) already accepts the
-## conduit origin, and the SIM and the engine disagreed (the note's
-## divergence). The cast must be legal FROM THE CONDUIT, the event must record
-## the chosen origin (conduit unit id + position), and the rule's casting_mod
-## (+1) must lift the cast chance off the plain 4+ coin flip.
-func test_conduit_origin_reaches_a_target_the_caster_cannot() -> void:
-	var next := _hold(_conduit_state())
-	assert_int(int((next["units"]["Wizard"] as Dictionary)["casts"])).is_equal(0)
-	var events: Array = next.get("cast_events", [])
-	assert_int(events.size()).is_equal(1)
-	var ev: Dictionary = events[0] if not events.is_empty() else {}
-	assert_str(str(ev.get("kind", ""))).is_equal("damage")
-	assert_str(str(ev.get("target", ""))).is_equal("Squad")
-	var origin: Dictionary = ev.get("origin", {}) if ev.has("origin") else {}
-	assert_str(str(origin.get("unit", ""))).is_equal("Banner")
-	assert_float(float(origin.get("position", Vector3.INF).x)).is_equal_approx(10.0 * IN2M, 0.001)
-	assert_float(float(ev.get("p_success", 0.0))).is_equal_approx(2.0 / 3.0, 0.001)
-	assert_float(float((next["units"]["Squad"] as Dictionary).get("wound_frac", 0.0))).is_greater(0.0)
-
-
-## (ii) The official walk: two eligible conduits, the FIRST reachable one is
-## the chosen origin (the official pick order — no EV-shopping over origins).
-func test_first_reachable_conduit_is_the_recorded_origin() -> void:
-	var next := _hold(_conduit_state(10.0, true))
-	var events: Array = next.get("cast_events", [])
-	assert_int(events.size()).is_equal(1)
-	var ev: Dictionary = events[0] if not events.is_empty() else {}
-	assert_str(str((ev.get("origin", {}) as Dictionary).get("unit", ""))).is_equal("Banner")
-
-
-## (iii) NO conduit: the identical geometry (squad at 18", still out of the
-## 12" spell from the caster) must hold exactly like (b) — no token spent, no
-## event, no damage. The conduit-free path is unchanged.
-func test_no_conduit_holds_the_out_of_range_cast() -> void:
-	var state := _conduit_state()
-	(state["units"] as Dictionary).erase("Banner")   # no conduit on the table
-	var next := _hold(state)
-	assert_int(int((next["units"]["Wizard"] as Dictionary)["casts"])).is_equal(1)
-	assert_array(next.get("cast_events", [])).is_empty()
-	assert_float(float((next["units"]["Squad"] as Dictionary).get("wound_frac", 0.0))).is_equal(0.0)
-
-
-## (iv) The Shaken gate binds the CONDUIT (v3.5.3 param requires_not_shaken):
-## a Shaken conduit offers neither its position nor the +1 — the out-of-range
-## cast holds.
-func test_shaken_conduit_is_not_an_origin() -> void:
-	var next := _hold(_conduit_state(10.0, false, true))
-	assert_int(int((next["units"]["Wizard"] as Dictionary)["casts"])).is_equal(1)
-	assert_array(next.get("cast_events", [])).is_empty()
+## Spell mods are ROUND-SCOPED: the round-loop reset (called where activated/fatigued are cleared)
+## puts every unit back on its CAPTURE-TIME base, so a round-2 snapshot never carries round-1 buffs.
+## The buff is hand-set here; the reset is the subject.
+func test_round_reset_returns_mods_to_the_capture_base() -> void:
+	var state := _melee_caster_state(6.0, 6, "rebel_guerrillas", 6)
+	var su: Dictionary = state["units"]["Wizard"]
+	var base: Dictionary = (su.get("mods_base", {}) as Dictionary).duplicate(true)
+	su["mods"] = base.duplicate(true)
+	(su["mods"] as Dictionary)["morale"] = float(base.get("morale", 0.0)) + 1.0
+	assert_that(su["mods"]).is_not_equal(base)
+	BattleSim.reset_round_mods(state)
+	assert_that(su["mods"]).is_equal(base)
