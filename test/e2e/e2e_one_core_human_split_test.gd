@@ -109,6 +109,47 @@ func _volley(shape: Dictionary, seed_n: int, core: bool, fault: String) -> Dicti
 	return out
 
 
+## P4.D-43a: one split activation through the production door (`_run_human_attack_split`). `core` = the kill switch on
+## and the player's Start (a session) before the call; else the table's own path. Returns the dice stream, the three
+## units' end state and the door's side effects (the declared line, `shot_round`, `human_attack_resolved` with the
+## `last_target` it saw, the completed activation, the closed session, the census).
+func _door(shape: Dictionary, seed_n: int, core: bool) -> Dictionary:
+	var att := _kit(1, "Squad", 10, 0.0, 0.0, KIT, int(shape["attacks"]), int(shape["quality"]))
+	var a := _kit(2, "DefA", int(shape["a_models"]), 18.0, -8.0, [["Rifle", int(shape["a_models"]), 24]], 1, 4,
+		int(shape["a_defense"]))
+	var b := _kit(2, "DefB", 5, 10.0, 12.0, [["Rifle", 5, 24]], 1, 4)
+	_main.seed_tray_rng(seed_n)
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = 1 if core else 0
+	if core:
+		assert_bool(_main.core_activation_start(att)).override_failure_message("the core opened no session").is_true()
+	var lines: Array = []
+	var tap := func(e: Dictionary) -> void: lines.append("%s|%s" % [BattleLog.Category.keys()[int(e["category"])], str(e["text"])])
+	_main.battle_log.entry_added.connect(tap)
+	var resolved := [0]
+	var seen_target := [null]
+	var on_resolved := func(_u: GameUnit, _m: bool) -> void:
+		resolved[0] += 1
+		seen_target[0] = CoreActivation.last_target
+	_main.human_attack_resolved.connect(on_resolved)
+	var legacy_before := int((CoreActivation.legacy.get("human_split", {}) as Dictionary).get("_all", 0))
+	_main._solo_ai_busy = true   # the AI's reply is not part of this gate: no pump dice in the dump
+	await _main._run_human_attack_split(att, a, b, B_NAMES)
+	_main._solo_ai_busy = false
+	_main.human_attack_resolved.disconnect(on_resolved)
+	_main.battle_log.entry_added.disconnect(tap)
+	AiDiceRecorder.close()
+	var out := {"rolls": ParityTable._read_dice(ProjectSettings.globalize_path(DICE)),
+		"state_a": RosterSweep.state_of(att, a), "state_b": RosterSweep.state_of(att, b), "lines": lines,
+		"shot": int(att.unit_properties.get("shot_round", -1)), "activated": att.is_activated,
+		"session": CoreActivation.session_open(att.unit_id), "resolved": resolved[0], "seen_target": seen_target[0],
+		"legacy": int((CoreActivation.legacy.get("human_split", {}) as Dictionary).get("_all", 0)) - legacy_before}
+	CoreActivation.close_session(_main, att.unit_id)
+	RosterSweep.free_units(_main, [att, a, b])
+	await _main.get_tree().process_frame
+	return out
+
+
 func _run(shape: Dictionary, fault := "") -> Dictionary:
 	var rows: Array = []
 	var b_bad := 0
@@ -156,3 +197,43 @@ func test_the_first_group_empties_its_target_and_the_second_still_fires(timeout 
 func test_a_swapped_second_group_turns_the_gate_red(timeout := 600000) -> void:
 	var r := await _run(TWO, "swap")
 	assert_int(int(r["bad"]) + int(r["b_bad"])).override_failure_message("the gate did not see the swapped second group").is_greater(0)
+
+
+## P4.D-43a: the declared split through the production door. The core run opens the player's Start (a session) and
+## `_run_human_attack_split` hands the split to `CoreActivation.human_shoot_split`; the table run is the same call with
+## the kill switch off. Seed for seed: the same dice and end state, and the door's side effects - the declared line
+## once, `shot_round`, `human_attack_resolved` (with `last_target` = the first group's target), the completed
+## activation, the closed session, the census. RED on main: the core run stays on the table (no core "fires at" line,
+## the census counts it, `last_target` is null at the signal).
+func test_the_human_split_ran_through_the_core(timeout := 600000) -> void:
+	var bad: Array = []
+	var core_runs := 0
+	for s in SEEDS:
+		var table := await _door(TWO, s, false)
+		var core := await _door(TWO, s, true)
+		var cl: Array = core["lines"]
+		if int(core["legacy"]) == 0 and cl.any(func(l: String) -> bool: return l.contains(" fires at DefA")) \
+				and cl.any(func(l: String) -> bool: return l.contains(" fires at DefB")):
+			core_runs += 1
+		if table["rolls"] != core["rolls"]:
+			bad.append("seed %d: dice differ" % s)
+		if RosterSweep.first_state_diff(table["state_a"], core["state_a"]) != "":
+			bad.append("seed %d: the first target ends differently" % s)
+		if RosterSweep.first_state_diff(table["state_b"], core["state_b"]) != "":
+			bad.append("seed %d: the second target ends differently" % s)
+		for k in ["shot", "activated", "session", "resolved"]:
+			if table[k] != core[k]:
+				bad.append("seed %d: %s: table %s, core %s" % [s, k, table[k], core[k]])
+		if int(table["legacy"]) != 1:
+			bad.append("seed %d: the table run is not counted once (%d)" % [s, int(table["legacy"])])
+		if int(core["legacy"]) != 0:
+			bad.append("seed %d: the core run is counted as a table volley (%d)" % [s, int(core["legacy"])])
+		if core["seen_target"] == null:
+			bad.append("seed %d: the core run noted no last_target" % s)
+		if (table["lines"] as Array).filter(func(l: String) -> bool: return l.contains("Split fire:")).size() != 1:
+			bad.append("seed %d: the declared line is not once on the table" % s)
+		if cl.filter(func(l: String) -> bool: return l.contains("Split fire:")).size() != 1:
+			bad.append("seed %d: the declared line is not once through the core" % s)
+	print("ONE_CORE_HUMAN_SPLIT_DOOR seeds=%d core_runs=%d problems=%d" % [SEEDS, core_runs, bad.size()])
+	assert_int(core_runs).override_failure_message("the core did not take the split (the red leg)").is_equal(SEEDS)
+	assert_array(bad).override_failure_message("door vs table:\n" + "\n".join(bad.slice(0, 10))).is_empty()

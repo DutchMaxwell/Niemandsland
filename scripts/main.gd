@@ -14706,7 +14706,6 @@ func _solo_split_commit() -> void:
 	_solo_end_targeting()
 	if attacker == null or a == null or b == null:
 		return
-	CoreActivation.note_legacy(self, "human_split", attacker, [a, b])
 	await _run_human_attack_split(attacker, a, b, sb)
 
 
@@ -15648,6 +15647,16 @@ func _run_human_attack_split(attacker: GameUnit, target_a: GameUnit, target_b: G
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Split fire: %s fires at %s and %s (declared before rolling — %s)" % [
 			attacker.get_name(), target_a.get_name(), target_b.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(attacker))], false)
+	# P4.D-43a: the declared split through the core, with the table's side effects below (once).
+	if await CoreActivation.human_shoot_split(self, attacker, target_a, target_b, b_names):
+		if CoreActivation.last_target == null:
+			return   # the core refused the split: nothing was shot, the activation stays open
+		attacker.unit_properties["shot_round"] = opr_army_manager.current_round
+		human_attack_resolved.emit(attacker, false)
+		await _solo_complete_human_attack(attacker)
+		CoreActivation.close_session(self, attacker.unit_id)
+		return
+	CoreActivation.note_legacy(self, "human_split", attacker, [target_a, target_b])
 	await _run_human_shooting(attacker, target_a, b_names, true)
 	await _run_human_shooting(attacker, target_b, b_names, false)
 	if attacker != null:
