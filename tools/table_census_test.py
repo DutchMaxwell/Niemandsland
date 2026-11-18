@@ -425,3 +425,19 @@ def test_gate_file_notices_a_tagged_function_that_is_gone_instead_of_counting_ze
     (root / "scripts/a.gd").write_text(GATE_PROD.replace("func old_a", "func renamed_a"))   # the tag line is now blind
     res = run(root, "--gate-file", "tools/x.gd", "--gate-tag", "gd_search")
     assert res.returncode != 0 and "scripts/a.gd:old_a not found" in res.stderr
+
+# CC-1: the cast resolvers are a census group of the REAL manifest (the plan's deletion gate counts their callers).
+REPO = Path(__file__).resolve().parents[1]
+CAST_GROUP = ["scripts/main.gd:_solo_resolve_ai_casts", "scripts/main.gd:_solo_resolve_one_cast",
+              "scripts/main.gd:_solo_resolve_spell_damage"]
+
+
+def test_the_real_manifest_lists_the_cast_resolvers_as_group_cast():
+    manifest = json.loads((REPO / "tools/table_census.json").read_text())
+    assert sorted(manifest["groups"].get("cast", [])) == CAST_GROUP
+    printed = run(REPO).stdout.splitlines()
+    for ident in CAST_GROUP:   # one row per resolver: group, id, lines, prod callers, test callers
+        assert any(ln.startswith(f"cast {ident} ") and len(ln.split()) == 5 for ln in printed), ident
+    assert any(ln.startswith("cast TOTAL ") for ln in printed)
+    committed_rows = (REPO / "test/one_core/table_census.txt").read_text().splitlines()
+    assert sum(ln.startswith("cast scripts/main.gd:") for ln in committed_rows) == 3   # lines + prod callers only
