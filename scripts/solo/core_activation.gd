@@ -1334,6 +1334,68 @@ static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Ca
 	return true
 
 
+## P4.D-43a: the human's declared split through the core. `b_names` = the weapons the player sent at `target_b`; the
+## table's `_run_human_attack_split` fires the rest at `target_a`. False = not taken, the table resolves the split (a
+## group with nothing to fire, an aim the core would pool, a target whose owner has a wound-allocation choice). True =
+## the core took it: `last_target` is `target_a` when the split resolved (a refusal leaves it null and the session open,
+## the caller returns). The caller does the table's side effects (the declared line, `shot_round`,
+## `human_attack_resolved`, `_solo_complete_human_attack`) and closes the session.
+static func human_shoot_split(main, attacker: GameUnit, target_a: GameUnit, target_b: GameUnit, b_names: Array) -> bool:
+	if not is_core_unit(main, attacker) or not is_plain_target(target_a) or not is_plain_target(target_b) \
+			or int(main.object_manager._movement_cap) == CAP_CHARGE or table_struck(attacker):
+		return false
+	if main.core_door_refused(attacker):
+		return true
+	var mode := declared_mode(main)
+	var s: Dictionary = _sessions.get(attacker.unit_id, {})
+	if mode == 0:
+		return false
+	if s.is_empty():
+		push_error("human_shoot_split: %s has no session after the door let it through" % attacker.get_name())
+		return true
+	var parts: Array = [
+		{"target": target_a, "shots": _human_shots(main, attacker, target_a).filter(
+			func(sh: Dictionary) -> bool: return not b_names.has(str((sh["profile"] as Dictionary).get("name", ""))))},
+		{"target": target_b, "shots": _human_shots(main, attacker, target_b).filter(
+			func(sh: Dictionary) -> bool: return b_names.has(str((sh["profile"] as Dictionary).get("name", ""))))}]
+	if (parts[0]["shots"] as Array).is_empty() or (parts[1]["shots"] as Array).is_empty():
+		return false   # a group with nothing to fire is the table's (its own "no volley" line)
+	var aim := split_aim(parts)
+	if aim.is_empty() or _aim_ambiguous(aim):
+		return false
+	var chooser: Array = [] if choice_enabled("wound_alloc") else parts.filter(
+		func(p: Dictionary) -> bool: return main._solo_wound_choice_matters(p["target"], 1))
+	if not chooser.is_empty():
+		main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s's owner chooses the casualties - the table resolves this split" % [
+			attacker.get_name(), chooser[0]["target"].get_name()], true)
+		return false
+	var t: Array = (s["transcript"] as Array).duplicate()
+	t.append({"t": "intent", "kind": mode, "shoot": target_a.unit_id, "split": aim})
+	var sts: Array = parts.map(func(p: Dictionary) -> Dictionary: return {"n": 0, "open": false, "result": false})
+	var at := [0]
+	var beat := func(ev: String, a: Dictionary, faces: Array) -> void:
+		var g: Dictionary = parts[at[0]]
+		var cur: Dictionary = sts[at[0]]
+		if ev == "throw" and str(a.get("kind", "")) == "attack" and at[0] < parts.size() - 1 \
+				and int(cur["n"]) >= (g["shots"] as Array).size():
+			await _present_human(main, attacker, g["target"], g["shots"], cur, "done", {}, [])
+			at[0] += 1
+			g = parts[at[0]]
+			cur = sts[at[0]]
+			main._solo_stage_begin("%s fires at %s" % [attacker.get_name(), g["target"].get_name()])
+		await _present_human(main, attacker, g["target"], g["shots"], cur, ev, a, faces)
+	main._solo_stage_begin("%s fires at %s" % [attacker.get_name(), target_a.get_name()])
+	var r: Dictionary = await drive(main, int(s["handle"]), attacker, t, false, Callable(), false, beat)
+	if str(r["step"]) == "done":
+		last_target = target_a
+	elif str(r["step"]) == "refused" and int(r["index"]) < t.size():
+		main._log_rule_event(BattleLog.Category.MOVEMENT, str(r["reason"]))
+		main._show_toast(str(r["reason"]))
+	else:
+		push_error("human_shoot_split: the core answered %s for %s's split" % [r, attacker.get_name()])
+	return true
+
+
 ## Step 69: the units whose End is running through the core (unit_id -> true).
 static var _ending: Dictionary = {}
 
