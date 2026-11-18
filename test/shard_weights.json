@@ -531,6 +531,7 @@
 "test/one_core/ai_transcript_test.gd": 0.1,
 "test/one_core/choice_owner_test.gd": 11.5,
 "test/one_core/choice_wound_alloc_test.gd": 41.1,
+"test/one_core/consolidation_honest_log_test.gd": 17.0,
 "test/one_core/core_activation_mp_test.gd": 116.0,
 "test/one_core/core_activation_object_manager_parity_test.gd": 0.1,
 "test/one_core/core_activation_test.gd": 218.1,
