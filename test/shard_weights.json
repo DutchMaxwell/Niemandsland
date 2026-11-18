@@ -531,6 +531,7 @@
 "test/one_core/core_doors_test.gd": 11.5,
 "test/one_core/core_reset_test.gd": 4.7,
 "test/one_core/golden_witness_test.gd": 78.5,
+"test/one_core/golden_witness_melee_fear_hero_test.gd": 56.0,
 "test/one_core/plain_volley_wording_test.gd": 3.0,
 "test/one_core/round_binding_test.gd": 0.1,
 "test/one_core/state_delta_inventory_test.gd": 0.1,
