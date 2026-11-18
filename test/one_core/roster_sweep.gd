@@ -200,10 +200,22 @@ static func volley(main: Node, entry_a: Dictionary, entry_b: Dictionary, seed_n:
 	return out
 
 
+## The game's table-fidelity setting before `arm()` stamped it, so `disarm()` leaves the process as it found it.
+static var _fidelity_was := false
+
+
 ## The AI seats, the batch tray and the dice tap, exactly as the parity gate and the soak set them.
 static func arm(main: Node, dump_dir: String) -> void:
 	main.solo_ai_slots = {1: true, 2: true}
 	main._ensure_solo_controller()
+	# DS-RG: the shipped presets (planner_v0/V0S/V0_pool1) all carry `table_fidelity`, and _apply_aifix —
+	# which _ensure_solo_controller runs — stamps AiPlanner.table_fidelity from it, so the header carries
+	# `range_by_base_edge` and the six sibling fidelity knobs the LIVE core reads. The sweep arms no preset,
+	# so without this line the core measured range centre to centre while the table measures base edge to
+	# base edge: every 12 in weapon at the fixed 14 in distance was a false G1. AFTER the controller, because
+	# the difficulty application overwrites the static.
+	_fidelity_was = AiPlanner.table_fidelity
+	AiPlanner.table_fidelity = true
 	main.solo_controller.ai_slot = SEAT_SHOOTER
 	main.solo_controller.human_slot = SEAT_TARGET
 	main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
@@ -223,6 +235,7 @@ static func arm(main: Node, dump_dir: String) -> void:
 static func disarm(main: Node) -> void:
 	AiDiceRecorder.close()
 	OS.set_environment("NML_DICE_DUMP", "")
+	AiPlanner.table_fidelity = _fidelity_was
 	CoreActivation.reset_all(main)
 	CoreActivation._env = -1
 
