@@ -305,6 +305,12 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         wound.retain(|w| w.1 != *id);
         wound.push((i, id.clone(), slots.filter(|_| !option.is_empty())));
     }
+    // P4.D-48: a charge on the step path is the TABLE's charge (the move, the snap, the pile-in), whatever the header's
+    // search knobs say: the ported movement is ON and the plain-only imagination OFF. Without it the resolver skips the move,
+    // finds no contact and answers a fightless `Done` (measured at the Godot door: empty lines, empty delta).
+    if kind == CHARGE {
+        seams = Seams { movement: true, plain_only: false, ..seams };
+    }
     // Not HOLD: a mode was declared and the last placement moved (or does not match the models).
     let mut moved = Vec::new();
     if let (true, Some((p, trails)), Some(pi), Some(si)) = (kind != HOLD, &placed, t.iter().rposition(|x| matches!(x, Input::Placed { .. })), at) {
