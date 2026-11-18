@@ -1177,8 +1177,18 @@ impl NmlCore {
     /// `main._solo_sighted_count` reads the board (review B2). `resolve` keeps the planner's reading. The joined-hero fold
     /// (`hero_attach`) is forced ON: the header's value is the AI preset's search knob, while the table plays a hero inside
     /// its host's activation whichever seat asks, so the placed chain moves it and its own weapons fire.
+    /// The six table-fidelity rule seams (`AiPlanner.table_fidelity_stamp`) are forced ON for the same reason: the header
+    /// stamps them only when the preset carries `table_fidelity`, which the legacy `nachtmahr` grade does not, yet the
+    /// table always measures base edge to base edge, fire per model in range, keeps special bearers last, counts a hero in
+    /// the unit's size, prices charge paths and rolls Fearless when Shaken (`main._solo_sighted_count`,
+    /// `_solo_below_half_strength`, `_solo_morale_test`). `charge_needs_path` is a menu knob, not a seam: untouched.
     fn seams_for_step(&mut self) -> Seams {
-        Seams { moved_shoot: true, sighting: true, shelf_sight: true, hero_attach: true, ..self.seams_at_header_epoch() }
+        Seams {
+            moved_shoot: true, sighting: true, shelf_sight: true, hero_attach: true,
+            range_by_base_edge: true, fire_in_range_only: true, casualties_bearers_last: true,
+            hero_counts_in_size: true, reply_threat_by_speed: true, fearless_roll_when_shaken: true,
+            ..self.seams_at_header_epoch()
+        }
     }
 
     fn root(&mut self) -> String {

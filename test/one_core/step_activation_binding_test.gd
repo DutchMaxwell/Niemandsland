@@ -693,3 +693,45 @@ func test_the_step_path_folds_a_joined_hero_whatever_the_headers_search_knob_say
 	assert_str("%s %s" % [r.get("step"), r.get("kind")]).override_failure_message(
 		"the hero's own pistol must fire from the placed chain: %s" % [r]).is_equal("need_roll attack")
 	assert_int(int(r.get("faces", 0))).is_equal(1)
+
+
+## ---- the step path measures range by the table's rule, not the preset's knobs ----
+## "a" (one model, a 12" Pistol) and "b" (one model, 32 mm bases) stand 12.96" centre to centre, i.e. 11.7" base edge to
+## base edge, so the table's 12" reaches. The header is a real stamped one WITHOUT the table-fidelity keys (the nachtmahr
+## preset leaves `table_fidelity` off), so a centre-to-centre step would answer `done` with no die.
+func _edge_handle(core: Object) -> int:
+	var at := func(x: float) -> Vector3: return Vector3(x * IN2M, 0, 0)
+	var a := _unit(1, [0.0].map(at), "a")
+	var b := _unit(2, [12.96].map(at), "b")
+	for u in [a, b]:
+		(u as GameUnit).unit_properties["game_system"] = "gf"
+		(u as GameUnit).unit_properties["faction_folder"] = "robot_legions"
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "Pistol"
+	w.range_value = 12
+	w.attacks = 1
+	w.count = 1
+	a.source_type = "opr"
+	a.source_data = OPRApiClient.OPRUnit.new()
+	(a.source_data as OPRApiClient.OPRUnit).weapons.append(w)
+	b.source_type = "opr"
+	b.source_data = OPRApiClient.OPRUnit.new()
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"a": a, "b": b}
+	var state := BattleSim.capture(army, func() -> Array: return [], func(_i: int) -> int: return 0, 1, 4)
+	var head: Dictionary = AiActRecorder._header_line(state, Callable())
+	for key in ["table_fidelity", "range_by_base_edge", "fire_in_range_only", "casualties_bearers_last",
+			"hero_counts_in_size", "reply_threat_by_speed", "charge_needs_path", "fearless_roll_when_shaken"]:
+		(head["knobs"] as Dictionary).erase(key)
+	assert_bool(core.set_game_header(head)).override_failure_message("set_game_header: " + str(core.last_error())).is_true()
+	return core.capture_plain(BattleSim.state_to_plain(state))
+
+
+func test_the_step_path_measures_range_by_the_base_edge_whatever_the_headers_knobs_say() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var h := _edge_handle(core)
+	var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": "b"}]
+	var r: Dictionary = core.step_activation(h, "a", t, false)
+	assert_str("%s %s" % [r.get("step"), r.get("kind")]).override_failure_message(
+		"the 12\" pistol must reach the 11.7\" base-edge gap: %s" % [r]).is_equal("need_roll attack")
+	assert_int(int(r.get("faces", 0))).is_equal(1)
