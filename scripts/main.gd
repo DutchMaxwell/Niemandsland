@@ -5440,7 +5440,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# Deadly/Takedown weapons return RAW unsaved (apply_deadly=false) so their wounds land per-model
 		# instead of the pooled defender-optimal removal — Deadly's "no carry-over" and Takedown's
 		# "unit of [1]" are both per-model rules.
-		var w: int = await _solo_resolve_saves(member, save_unit, str(profile.get("name", "?")), faces, hits, save_def, profile, not _solo_is_ai_unit(target), false, not (is_deadly or is_takedown), false, dist_in, td_pick)
+		var w: int = await _solo_resolve_saves(member, save_unit, str(profile.get("name", "?")), faces, hits, save_def, profile, not _solo_is_ai_unit(target), false, not (is_deadly or is_takedown), false, dist_in, td_pick, true)
 		total_caused += w
 		if is_takedown and w > 0 and not td_pick.is_empty():
 			# Takedown (GF v3.5.1 p.14, Bug 25): resolved as a unit of [1] against the model picked
@@ -9979,7 +9979,7 @@ func _solo_fortified_aura_loss_log(defender: GameUnit, aura_name: String) -> voi
 func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: String, to_hit_faces: Array,
 		hits: int, base_defense: int, profile: Dictionary, human_defends: bool, melee: bool,
 		apply_deadly: bool = true, charging: bool = false, dist_in: float = -1.0,
-		solo: Dictionary = {}) -> int:
+		solo: Dictionary = {}, shooting: bool = false) -> int:
 	if hits <= 0:
 		return 0
 	_vfx_saves_made = 0   # VFX #1: the save batches below add the saves they made
@@ -10072,7 +10072,7 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d hit%s on a 6 → AP(+%d)" % [
 				ap4_label, ap4_hits, ("" if ap4_hits == 1 else "s"), on6_bonus], true)
 		total += await _solo_save_batch(striker, defender, "%s (%s)" % [weapon_name, ap4_label], ap4_hits,
-			base_defense, ap + on6_bonus, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo, dist_in, alias_charge)
+			base_defense, ap + on6_bonus, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo, dist_in, alias_charge, AiCombatMath.UNMODIFIED_SIX, shooting)
 	var normal: int = hits - ap4_hits
 	# Row MOR-12 (EPOCH_73_V36, stamped only from 73 by AiEv.stamp_sergeant): the Sergeant bearer's
 	# share of the plain hits (its attacks over the profile's, rounded; the EV metric's same fraction)
@@ -10086,10 +10086,10 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s strikes %d hit%s with AP(+%d)" % [
 				sgt_rule, striker.get_name(), sgt_hits, ("" if sgt_hits == 1 else "s"), sgt_ap], true)
 		total += await _solo_save_batch(striker, defender, "%s (%s)" % [weapon_name, sgt_rule], sgt_hits,
-			base_defense, ap + sgt_ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo, dist_in, alias_charge)
+			base_defense, ap + sgt_ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo, dist_in, alias_charge, AiCombatMath.UNMODIFIED_SIX, shooting)
 		normal -= sgt_hits
 	if normal > 0:
-		total += await _solo_save_batch(striker, defender, weapon_name, normal, base_defense, ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo, dist_in, alias_charge)
+		total += await _solo_save_batch(striker, defender, weapon_name, normal, base_defense, ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo, dist_in, alias_charge, AiCombatMath.UNMODIFIED_SIX, shooting)
 	_vfx_hit_strip(defender, hits, _vfx_saves_made)
 	return total
 
@@ -10101,14 +10101,16 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String, count: int,
 		base_defense: int, ap: int, profile: Dictionary, human_defends: bool, bane: bool,
 		apply_deadly: bool = true, over9: bool = false, solo: Dictionary = {},
-		dist_in: float = -1.0, charge_from_in: float = 0.0, bane_from: int = 6) -> int:
+		dist_in: float = -1.0, charge_from_in: float = 0.0, bane_from: int = 6, shooting: bool = false) -> int:
 	if count <= 0:
 		return 0
 	var shred_alias_live: bool = true
 	# PF-b (EPOCH_73_V36): an Enhanced form of the alias (Enhanced Warbound / Destroyer / Infected) pays at any distance
 	# on a shot and on a charge. A strike-back (no charge gap, no shot distance) is not a charge: its gate stays.
 	var shred_enhanced := _solo_shred_enhanced_name(striker)
-	var shred_enhanced_live: bool = not shred_enhanced.is_empty() and (charge_from_in > 0.0 or dist_in > 0.0)
+	# C-19: a volley at base contact measures an edge gap of 0 inches or less, so `dist_in > 0.0` alone read it as a strike-back
+	# and the Enhanced form paid nothing; the shooting callers say so (`shooting`), exactly as `_solo_hits` is told.
+	var shred_enhanced_live: bool = not shred_enhanced.is_empty() and (shooting or charge_from_in > 0.0 or dist_in > 0.0)
 	# R-1 (A2): a scoped form of Shred is the rule Shred itself - only an alias of ANOTHER name is distance-gated.
 	if typeof(profile.get("_shred_alias")) == TYPE_STRING and str(profile["_shred_alias"]) != "" \
 			and _solo_shred_group_key(str(profile["_shred_alias"])) != "Shred":
@@ -16123,7 +16125,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			var save_unit: GameUnit = target if td_pick.is_empty() else (td_pick["unit"] as GameUnit)
 			if not td_ctx.is_empty():
 				_solo_log_takedown_context(str(profile.get("name", "?")), td_pick, td_ctx, to_hit, save_def, false)
-			var w: int = await _solo_resolve_saves(group.get("member"), save_unit, str(profile.get("name", "?")), faces, hits, save_def, profile, not _solo_is_ai_unit(save_unit), false, not (is_deadly or is_takedown), false, dist, td_pick)
+			var w: int = await _solo_resolve_saves(group.get("member"), save_unit, str(profile.get("name", "?")), faces, hits, save_def, profile, not _solo_is_ai_unit(save_unit), false, not (is_deadly or is_takedown), false, dist, td_pick, true)
 			if is_takedown and w > 0 and not td_pick.is_empty():
 				# Resolver wave A: Deadly multiplies on the picked model (see the AI branch).
 				var td_w: int = w * maxi(int(profile.get("deadly", 0)), 1)
