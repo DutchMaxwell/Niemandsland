@@ -5396,7 +5396,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# like the shot's own dice (the core signs it so); below 73 the host unit signs it as before.
 		var hit_signer: String = shooter_name if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else attacker.get_name()
 		var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist_in, target, false, "AI (%s)" % hit_signer,
-			0.0, models_before if at_declaration else -1)
+			0.0, models_before if at_declaration else -1, true)
 		if battle_log != null:
 			var sight_note: String = "" if sighted >= member.get_alive_count() else " (%d/%d models sighted)" % [sighted, member.get_alive_count()]
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s%s — %d hit%s" % [
@@ -7129,7 +7129,7 @@ func _solo_cover_defense(target: GameUnit, base_defense: int) -> int:
 ## only for the CHARGING unit — `charging`). Those extra hits resolve BEFORE Blast(X) (GF v3.5.1: Blast
 ## multiplies "after resolving other special rules"), which then scales each hit ×min(X, target models).
 ## Every multiplication is battle-logged so it is VISIBLE. Uses the shared AiCombatMath.
-func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, target: GameUnit = null, charging: bool = false, roller: String = "", charge_from_in: float = 0.0, blast_models: int = -1) -> int:
+func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, target: GameUnit = null, charging: bool = false, roller: String = "", charge_from_in: float = 0.0, blast_models: int = -1, shooting: bool = false) -> int:
 	# `to_hit` is the caller's UNCLAMPED summed target (D21): Precise's flat +1 folds into that sum and the
 	# one clamp happens here, so a penalty the old per-step clamp swallowed still counts against the +1.
 	# AIG-G2 (EPOCH_73_V36): a weapon-borne Imprecise is Precise's mirror, folded into the same sum.
@@ -7160,7 +7160,10 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 		var surge_alias := str(profile.get("_surge_alias", ""))
 		# The 3.6 "no distance condition" sentinel (over_in 0) loosens the SHOT leg only:
 		# a melee strike-back and a short charge keep the charge/shot gate (SHO-18b).
-		var sentinel_shot: bool = dist_in > 0.0 and not charging \
+		# C-19 (gate soak 18.11., Pistoleer Sisters): a volley fired at base contact measures an edge gap of 0" or less,
+		# so `dist_in > 0.0` alone read it as melee and the alias paid nothing; the shooting callers say so (`shooting`).
+		var shot_leg: bool = shooting or dist_in > 0.0
+		var sentinel_shot: bool = shot_leg and not charging \
 			and float(profile.get("surge_over_in", 0.0)) < 0.0
 		var surge_alias_live: bool = surge_alias.is_empty() \
 			or sentinel_shot or (
@@ -7185,7 +7188,7 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 					battle_log.log_event(BattleLog.Category.COMBAT,
 						"%s: charged from over %d\" — bonus hits on unmodified 6s" % [
 							surge_alias, int(AiCombatMath.CHARGE_LONG_RANGE_IN)], true)
-				elif not surge_alias.is_empty() and dist_in > 0.0:
+				elif not surge_alias.is_empty() and shot_leg:
 					if sentinel_shot and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 						# Rules 3.6: a plain alias pays at any range, so its line names no 9" band.
 						battle_log.log_event(BattleLog.Category.COMBAT,
@@ -16080,7 +16083,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
 			await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
 			var hits: int = await _solo_hits(faces, to_hit_raw, profile, dist, target, false, _roller_label(attacker),
-				0.0, blast_models_start)
+				0.0, blast_models_start, true)
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")])
