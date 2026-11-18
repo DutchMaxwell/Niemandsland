@@ -687,7 +687,7 @@ static func _present(main, unit: GameUnit, target: GameUnit, shots: Array, st: D
 			st["result"] = true
 			main._solo_clear_announce(st["announce"])
 			main._solo_clear_auto_fan()
-			await main._solo_show_outcome(main._solo_volley_outcome(target, st["hits"], st["landed"],
+			await main._solo_show_outcome(CoreActivation.volley_outcome(target, st["hits"], st["landed"],
 				int(st["before"]) - main._solo_combined_alive(target)))
 			await main._solo_stage_phase("Result")
 		if ev == "done" and int(st["landed"]) > 0:
@@ -698,6 +698,13 @@ static func _present(main, unit: GameUnit, target: GameUnit, shots: Array, st: D
 		main._solo_clear_announce(st["announce"])
 		main._solo_clear_auto_fan()
 		main._solo_stage_end()
+
+
+## P4.D-41: the outcome sentence the AI volley toast shows, moved verbatim out of the table so the core door owns it.
+## The table's `_solo_volley_outcome` now only delegates here; its other caller is the AI volley resolver.
+static func volley_outcome(target: GameUnit, hits: int, wounds: int, lost: int) -> String:
+	return "%s: %d hit%s → %d wound%s land — %s loses %d model%s" % [target.get_name(), hits, ("" if hits == 1 else "s"),
+		wounds, ("" if wounds == 1 else "s"), target.get_name(), lost, ("" if lost == 1 else "s")]
 
 
 ## Step 38b: the weapons of a human volley in the table's order (`_run_human_shooting`: the attack groups, each profile
