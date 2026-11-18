@@ -27,8 +27,6 @@ const BLOCKERS: Array[Dictionary] = [
 		"needles": ["main._solo_resolve_ai_volley("]},
 	{"name": "parity_table_melee.gd drives the melee resolver", "retire": "P4.D-49", "file": PARITY_MELEE, "header": "",
 		"needles": ["main._run_ai_melee("]},
-	{"name": "the core door shows the table's volley outcome sentence", "retire": "P4.D-41", "file": ACTIVATION,
-		"header": "static func _present(", "needles": ["main._solo_volley_outcome("]},
 	{"name": "Strafing hands its volley to the AI resolver", "retire": "P4.D-37", "file": MAIN,
 		"header": "func _solo_apply_strafing(", "needles": ["await _solo_resolve_ai_volley(unit, target, shots, true)"]},
 ]
@@ -76,7 +74,7 @@ func test_every_deletion_blocker_still_holds() -> void:
 
 
 func test_the_list_is_not_empty_and_names_a_step_per_row() -> void:
-	assert_int(BLOCKERS.size()).is_greater_equal(7)
+	assert_int(BLOCKERS.size()).is_greater_equal(6)
 	for b in BLOCKERS:
 		assert_str(String(b["retire"])).override_failure_message("%s names no step" % b["name"]).contains("P4.D-")
 
@@ -107,3 +105,23 @@ func test_the_target_side_of_the_non_opr_clause_is_gone() -> void:
 		assert_str(body).override_failure_message("%s not found" % header).is_not_empty()
 		assert_bool(body.contains("is_plain(target)")).override_failure_message("%s asks is_plain(target) again" % header).is_false()
 		assert_bool(body.contains("is_plain_target(target)")).override_failure_message("%s lost is_plain_target(target)" % header).is_true()
+
+
+## P4.D-41 retired the row "the core door shows the table's volley outcome sentence": `_present` asks the door's own
+## `volley_outcome` (the table's sentence, moved verbatim), and the table function now only delegates to it.
+## RED: put `main._solo_volley_outcome(` back into `_present`, or drop either `volley_outcome` call.
+func test_the_core_door_owns_the_volley_outcome_sentence() -> void:
+	var door := _span(_source(ACTIVATION), "static func _present(")
+	assert_str(door).override_failure_message("_present not found").is_not_empty()
+	assert_bool(door.contains("main._solo_volley_outcome(")).override_failure_message(
+		"_present calls the table's sentence again").is_false()
+	assert_bool(door.contains("CoreActivation.volley_outcome(")).override_failure_message(
+		"_present lost the door's own sentence").is_true()
+	var table := _span(_source(MAIN), "func _solo_volley_outcome(")
+	assert_bool(table.contains("CoreActivation.volley_outcome(")).override_failure_message(
+		"the table's _solo_volley_outcome no longer delegates").is_true()
+	assert_bool(_span(_source(ACTIVATION), "static func volley_outcome(").contains("loses %d model%s")).override_failure_message(
+		"the door does not build the sentence itself").is_true()
+	for b in BLOCKERS:
+		assert_str(String(b["name"])).override_failure_message("the retired row is still in BLOCKERS").is_not_equal(
+			"the core door shows the table's volley outcome sentence")

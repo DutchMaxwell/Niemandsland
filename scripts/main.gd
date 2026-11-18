@@ -5484,10 +5484,9 @@ func _solo_record_shot(attacker: GameUnit, member: GameUnit, target: GameUnit, p
 		"indirect": bool(profile.get("indirect", false))})
 
 
-## The AI volley's outcome toast; one-core P3 step 42b: the core path shows it too.
+## The AI volley's outcome toast; P4.D-41 moved the sentence into CoreActivation.volley_outcome, this only delegates.
 func _solo_volley_outcome(target: GameUnit, hits: int, wounds: int, lost: int) -> String:
-	return "%s: %d hit%s → %d wound%s land — %s loses %d model%s" % [target.get_name(), hits, ("" if hits == 1 else "s"),
-		wounds, ("" if wounds == 1 else "s"), target.get_name(), lost, ("" if lost == 1 else "s")]
+	return CoreActivation.volley_outcome(target, hits, wounds, lost)
 
 
 ## VFX #2: one tracer per firing model along the eye-to-eye segment the LOS rule tested (same heights as

@@ -7,6 +7,8 @@ extends GdUnitTestSuite
 ## turns this red too. Pinned per seed: every entry the volley adds, in order, as "<CATEGORY>|<text>".
 ## Not pinned: the `ai` flag, the `detail` text, the prompt path of a human-seat target, a volley with no hit (seed
 ## 225 stops after the hit line) and the singular "1 block".
+## P4.D-41 adds the outcome toast as a last entry ("TOAST|<text>"): the sentence lives in CoreActivation now, and no
+## battle-log line carries it, so without this the wording pin would be blind to it. RED: any word changed there.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -24,6 +26,7 @@ const PINNED := {
 		"COMBAT|Def loses 5 models (5/10)",
 		"COMBAT|AI (Def): 3 → failed (4+)",
 		"COMBAT|Def fails morale — Shaken",
+		"TOAST|Def: 7 hits → 5 wounds land — Def loses 5 models",
 	],
 	57: [   # no save holds, the morale test passes
 		"COMBAT|Att fires at Def",
@@ -35,6 +38,7 @@ const PINNED := {
 		"COMBAT|Def loses 7 models (3/10)",
 		"COMBAT|AI (Def): 6 → passed (4+)",
 		"COMBAT|Def passes morale",
+		"TOAST|Def: 7 hits → 7 wounds land — Def loses 7 models",
 	],
 	49: [   # the singular forms: one hit, one wound, a model
 		"COMBAT|Att fires at Def",
@@ -44,6 +48,7 @@ const PINNED := {
 		"COMBAT|AI (Def) defends: 1 → 0 blocks (4+)",
 		"COMBAT|Def takes 1 wound (9/10)",
 		"COMBAT|Def loses a model (9/10)",
+		"TOAST|Def: 1 hit → 1 wound land — Def loses 1 model",
 	],
 }
 
@@ -92,6 +97,7 @@ func _volley_lines(sc: Dictionary, seed_value: int) -> Array:
 	_main.battle_log.entry_added.connect(on_entry)
 	await _main._solo_resolve_ai_volley(att, dfn, shots)
 	_main.battle_log.entry_added.disconnect(on_entry)
+	got.append("TOAST|%s" % _main._solo_toast.text)
 	for u in [att, dfn]:
 		_main.opr_army_manager.game_units.erase((u as GameUnit).unit_id)
 		for m in (u as GameUnit).models:
