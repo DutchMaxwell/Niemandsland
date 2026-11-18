@@ -66,7 +66,7 @@ same commit as the struct change.
 | `ambush_arrived_round` | battle_sim.gd:2107 | no | no | no (round state) |
 | `earliest_arrival_round` | battle_sim.gd:2133 | no | no | no (capture input) |
 | `wound_frac` | battle_sim.gd:1844 | no | no | no (playout-only accumulator) |
-| `positions` | battle_sim.gd:2109 | landings only | X/Z mm per living model | no |
+| `positions` | battle_sim.gd:2109 | landings; `land_delta` for a core step (HR-POS, `UnitDelta::positions`) | X/Z mm per living model | no |
 | `wounds` | battle_sim.gd:2111 | landings only | per model | no |
 | `radii` | battle_sim.gd:2098 | no | no | no (capture input) |
 | `kits` | battle_sim.gd:2099 | no | no | no (capture input) |
