@@ -59,6 +59,15 @@ const RUNNER_AI_INTO_HUMAN := "ai_into_human"
 const MOVE_THROUGH_FAMILY := "move_through"
 const MOVE_THROUGH_FIXTURE_PATH := "res://test/fixtures/one_core/golden_move_through.json"
 const RUNNER_AI_MOVE_THROUGH := "ai_move_through"
+## P4.D-47: the melee shapes the charge/strike/strike-back family resolves outside the one `_run_ai_melee` body —
+## the human charge, the bare strike-back, Impact, Counter and consolidation. One runner kind per shape.
+const MELEE_SHAPES_FAMILY := "melee_shapes"
+const MELEE_SHAPES_FIXTURE_PATH := "res://test/fixtures/one_core/golden_melee_shapes.json"
+const RUNNER_HUMAN_CHARGE := "human_charge"
+const RUNNER_STRIKE_BACK := "melee_strike_back"
+const RUNNER_MELEE_IMPACT := "melee_impact"
+const RUNNER_MELEE_COUNTER := "melee_counter"
+const RUNNER_CONSOLIDATION := "melee_consolidation"
 ## Rolls of the volley before the wounds land: the to-hit batch and the defender's save batch. The click prompt needs
 ## _solo_batch false, the batch tray needs it true, so the flag drops after this many rolls and returns with the
 ## first pick (the pattern of test/e2e/e2e_volley_morale_test.gd).
@@ -233,6 +242,27 @@ static func move_through_scenarios() -> Array:
 	]
 
 
+## The melee-shape grid: each shape drives ONE table function of the melee path on the parity gate's board, with
+## the dice a real exchange would roll. `kill_defender` empties the defender before a consolidation case, so the
+## winner branch is recorded beside the neither-destroyed back-step.
+static func melee_shape_scenarios() -> Array:
+	var base := {"attacker": MELEE_ATTACKER, "defender": MELEE_DEFENDER, "charge": CHARGE, "weapon": BLADE, "defender_weapon": DEF_BLADE, "seeds": SEEDS}
+	return [
+		_with(base, {"name": "human_charge", "runner": RUNNER_HUMAN_CHARGE,
+			"note": "the player's charge through main._run_human_melee (auto intent: its consolidation runs)"}),
+		_with(base, {"name": "strike_back", "runner": RUNNER_STRIKE_BACK,
+			"note": "the charged defender's strike-back as its own phase"}),
+		_with(base, {"name": "impact", "runner": RUNNER_MELEE_IMPACT, "attacker": _with(MELEE_ATTACKER, {"rules": ["Impact(1)"]}),
+			"note": "Impact(1) on the charger: ten auto-hit dice before the strikes"}),
+		_with(base, {"name": "counter", "runner": RUNNER_MELEE_COUNTER, "defender_weapon": _with(DEF_BLADE, {"rules": ["Counter"]}),
+			"note": "Counter on the defender's blade: the strike-first phase alone"}),
+		_with(base, {"name": "consolidation_back", "runner": RUNNER_CONSOLIDATION,
+			"note": "neither unit destroyed: the charger separates 1\" back"}),
+		_with(base, {"name": "consolidation_win", "runner": RUNNER_CONSOLIDATION, "kill_defender": true,
+			"note": "enemy destroyed: the survivor consolidates, or holds when no goal is left"}),
+	]
+
+
 ## The prompt grid: 20 Rifle shots (2 attacks per model) at a human 10-model defender, so a volley lands several wounds.
 ## `mixed`: five Rifle bearers and five "Plasma Stub" bearers (two loadouts, every model Tough 1); `tough`: one loadout,
 ## every model Tough(3). Each shape is answered two ways: `auto` (right-click at once) and `click` (the owner clicks
@@ -293,6 +323,8 @@ static func capture(main: Node, family: String = FAMILY) -> Dictionary:
 		return await capture_grid(main, MIXED_FAMILY, mixed_scenarios())
 	if family == MOVE_THROUGH_FAMILY:
 		return await capture_grid(main, MOVE_THROUGH_FAMILY, move_through_scenarios())
+	if family == MELEE_SHAPES_FAMILY:
+		return await capture_grid(main, MELEE_SHAPES_FAMILY, melee_shape_scenarios())
 	var out := {"schema": SCHEMA, "family": FAMILY, "provenance": provenance(), "cases": []}
 	for sc in scenarios():
 		for seed in SEEDS:
@@ -362,6 +394,8 @@ static func _run_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
 			return await _run_into_human_case(main, sc, seed)
 		RUNNER_AI_MOVE_THROUGH:
 			return await _run_move_through_case(main, sc, seed)
+		RUNNER_HUMAN_CHARGE, RUNNER_STRIKE_BACK, RUNNER_MELEE_IMPACT, RUNNER_MELEE_COUNTER, RUNNER_CONSOLIDATION:
+			return await _run_melee_shape_case(main, sc, seed)
 	return {"scenario": str(sc["name"]), "seed": seed, "error": "unknown runner %s" % runner}
 
 
@@ -535,6 +569,44 @@ static func _run_move_through_case(main: Node, sc: Dictionary, seed: int) -> Dic
 		"lines": lines, "final": _final([att, dfn]), "rng": _rng_state(main)}
 	if not lines.any(func(l: Variant) -> bool: return str(l).contains("passes over") or str(l).contains("Crossing Attack")):
 		rec = {"scenario": str(sc["name"]), "seed": seed, "error": "no move-through line was logged"}
+	_free_units(main, [att, dfn])
+	await main.get_tree().process_frame
+	return rec
+
+
+## One melee-shape scenario x seed: the parity gate's board, then the shape's own table function. Both seats are AI
+## (a human seat would wait for a card) except the human charge, whose owner saves go through the auto-saves seam.
+static func _run_melee_shape_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
+	var pair: Array = ParityMelee._units(main, sc, {})
+	var att := pair[0] as GameUnit
+	var dfn := pair[1] as GameUnit
+	if bool(sc.get("kill_defender", false)):
+		_kill_models(dfn, dfn.models.size())
+	var runner := str(sc["runner"])
+	var seats: Dictionary = (main.solo_ai_slots as Dictionary).duplicate()
+	main.solo_ai_slots = {2: true} if runner == RUNNER_HUMAN_CHARGE else {1: true, 2: true}
+	if runner == RUNNER_HUMAN_CHARGE:
+		main._solo_auto_saves = true   # the human charger's saves against the strike-back roll on the tray, no card
+	main.seed_tray_rng(seed)
+	var lines: Array = []
+	var tap := _line_tap(lines)
+	main.battle_log.entry_added.connect(tap)
+	match runner:
+		RUNNER_HUMAN_CHARGE:
+			await main._run_human_melee(att, dfn, true, ParityMelee._charge_from_in(sc))
+		RUNNER_STRIKE_BACK:
+			await main._solo_melee_strike_phase(dfn, att, false, 0)   # 0 = SoloStrike.ALL
+		RUNNER_MELEE_IMPACT:
+			await main._solo_charge_impact(att, dfn, false, ParityMelee._charge_from_in(sc))
+		RUNNER_MELEE_COUNTER:
+			await main._solo_melee_strike_phase(dfn, att, false, 1)   # 1 = SoloStrike.COUNTER_ONLY
+		RUNNER_CONSOLIDATION:
+			await main._solo_consolidate_melee(att, dfn, true)
+	main.battle_log.entry_added.disconnect(tap)
+	main._solo_auto_saves = false   # only this runner raises it (unset is the game default: the card is asked)
+	main.solo_ai_slots = seats
+	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
+		"lines": lines, "final": _final([att, dfn]), "rng": _rng_state(main)}
 	_free_units(main, [att, dfn])
 	await main.get_tree().process_frame
 	return rec
@@ -808,6 +880,8 @@ static func fixture_path(family: String = FAMILY) -> String:
 		return MIXED_FIXTURE_PATH
 	if family == MOVE_THROUGH_FAMILY:
 		return MOVE_THROUGH_FIXTURE_PATH
+	if family == MELEE_SHAPES_FAMILY:
+		return MELEE_SHAPES_FIXTURE_PATH
 	return FIXTURE_PATH
 
 

@@ -324,3 +324,24 @@ func test_a_planted_move_through_fixture_line_is_reported() -> void:
 	assert_int(problems.size()).override_failure_message(
 		"a changed move-through fixture line went unnoticed - the witness cannot fail").is_equal(1)
 	assert_str("\n".join(problems)).contains("planted")
+
+
+func test_the_melee_shapes_fixture_matches_the_old_table_path() -> void:
+	var want := Harness.load_fixture(Harness.fixture_path(Harness.MELEE_SHAPES_FAMILY))
+	assert_bool(want.is_empty()).override_failure_message(
+		"fixture missing: %s - capture it with --family melee_shapes" % Harness.MELEE_SHAPES_FIXTURE_PATH).is_false()
+	var got: Dictionary = await Harness.capture(_main, Harness.MELEE_SHAPES_FAMILY)
+	var problems := Harness.compare(want, got)
+	assert_array(problems).override_failure_message("melee-shapes witness differs (%s):\n%s" % [
+		Harness.describe_provenance(want, got), "\n".join(problems)]).is_empty()
+
+
+func test_a_planted_melee_shapes_fixture_line_is_reported() -> void:
+	var want := Harness.load_fixture(Harness.fixture_path(Harness.MELEE_SHAPES_FAMILY))
+	assert_bool(want.is_empty()).override_failure_message("melee-shapes fixture missing").is_false()
+	var got: Dictionary = await Harness.capture(_main, Harness.MELEE_SHAPES_FAMILY)
+	want["cases"][0]["lines"][0] = "%s (planted)" % str(want["cases"][0]["lines"][0])
+	var problems := Harness.compare(want, got)
+	assert_int(problems.size()).override_failure_message(
+		"a changed melee-shapes line went unnoticed - the witness cannot fail").is_equal(1)
+	assert_str("\n".join(problems)).contains("planted")

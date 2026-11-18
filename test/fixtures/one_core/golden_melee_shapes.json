@@ -1,0 +1,2928 @@
+{
+ "cases": [
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ],
+      [
+       3,
+       false,
+       0
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ],
+      [
+       6,
+       false,
+       0
+      ],
+      [
+       7,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 0
+    }
+   ],
+   "lines": [
+    "COMBAT|Att charges Def into melee",
+    "COMBAT|You: 6 6 6 6 6 4 4 3 1 1 → 7 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 7 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 4 2 2 2 2 1 → 2 blocks (4+)",
+    "COMBAT|Def takes 5 wounds (3/8)",
+    "COMBAT|Def loses 5 models (3/8)",
+    "COMBAT|AI (Def): 6 3 2 → 1 hit (4+)",
+    "COMBAT|Def strikes with Blade at Att — 1 hit",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|You defend: 4 → 1 block (4+)",
+    "COMBAT|Melee result: Att took 0, Def took 5 — Def loses the melee",
+    "COMBAT|AI (Def): 1 → failed (4+)",
+    "COMBAT|Def fails morale at half strength — ROUTS",
+    "COMBAT|Def takes 3 wounds (0/8)",
+    "COMBAT|Def destroyed",
+    "COMBAT|Consolidation: Att holds its ground (enemy destroyed, no room to move — GF 3.6)"
+   ],
+   "rng": "-5074988193645769352",
+   "scenario": "human_charge",
+   "seed": 0
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 8
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Att charges Def into melee",
+    "COMBAT|You: 6 5 4 3 2 2 1 1 1 1 → 3 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 3 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 4 2 → 2 blocks (4+)",
+    "COMBAT|Def takes 1 wound (7/8)",
+    "COMBAT|Def loses a model (7/8)",
+    "COMBAT|AI (Def): 6 5 4 3 3 3 1 → 3 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 3 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|You defend: 5 3 1 → 1 block (4+)",
+    "COMBAT|Att takes 2 wounds (8/10)",
+    "COMBAT|Att loses 2 models (8/10)",
+    "COMBAT|Melee result: Att took 2, Def took 1 — Att loses the melee",
+    "COMBAT|You: 4 → passed (4+)",
+    "COMBAT|Att passes morale",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "rng": "-1297277400429683801",
+   "scenario": "human_charge",
+   "seed": 17
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 7,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 7
+    },
+    {
+     "alive": 7,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 7
+    }
+   ],
+   "lines": [
+    "COMBAT|Att charges Def into melee",
+    "COMBAT|You: 5 3 3 3 2 2 2 1 1 1 → 1 hit (4+)",
+    "COMBAT|Att strikes with Blade at Def — 1 hit",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 1 → 0 blocks (4+)",
+    "COMBAT|Def takes 1 wound (7/8)",
+    "COMBAT|Def loses a model (7/8)",
+    "COMBAT|AI (Def): 6 5 4 2 2 2 1 → 3 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 3 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|You defend: 2 2 1 → 0 blocks (4+)",
+    "COMBAT|Att takes 3 wounds (7/10)",
+    "COMBAT|Att loses 3 models (7/10)",
+    "COMBAT|Melee result: Att took 3, Def took 1 — Att loses the melee",
+    "COMBAT|You: 1 → failed (4+)",
+    "COMBAT|Att fails morale — Shaken",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "rng": "443684534026087405",
+   "scenario": "human_charge",
+   "seed": 49
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Att charges Def into melee",
+    "COMBAT|You: 3 3 3 3 3 2 2 1 1 1 → 0 hits (4+)",
+    "COMBAT|Att strikes with Blade at Def — 0 hits",
+    "COMBAT|AI (Def): 6 5 4 4 4 2 1 1 → 5 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 5 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|You defend: 6 6 5 5 4 → 5 blocks (4+)",
+    "COMBAT|Melee result: Att took 0, Def took 0 — a draw — no morale test",
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "rng": "152681930371637496",
+   "scenario": "human_charge",
+   "seed": 225
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 8
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Def): 6 6 6 4 4 3 1 1 → 5 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 5 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 6 6 4 2 2 → 3 blocks (4+)",
+    "COMBAT|Att takes 2 wounds (8/10)",
+    "COMBAT|Att loses 2 models (8/10)"
+   ],
+   "rng": "8961705596088246293",
+   "scenario": "strike_back",
+   "seed": 0
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 9,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Def): 5 4 3 2 2 1 1 1 → 2 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 2 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 6 1 → 1 block (4+)",
+    "COMBAT|Att takes 1 wound (9/10)",
+    "COMBAT|Att loses a model (9/10)"
+   ],
+   "rng": "3258576577604702209",
+   "scenario": "strike_back",
+   "seed": 17
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 9,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Def): 5 3 3 2 2 1 1 1 → 1 hit (4+)",
+    "COMBAT|Def strikes with Blade at Att — 1 hit",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 2 → 0 blocks (4+)",
+    "COMBAT|Att takes 1 wound (9/10)",
+    "COMBAT|Att loses a model (9/10)"
+   ],
+   "rng": "-8673838468792241846",
+   "scenario": "strike_back",
+   "seed": 49
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Def): 3 3 3 3 3 2 1 1 → 0 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 0 hits"
+   ],
+   "rng": "-2341933425837651673",
+   "scenario": "strike_back",
+   "seed": 225
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 2,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       false,
+       0
+      ],
+      [
+       6,
+       false,
+       0
+      ],
+      [
+       7,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 2
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Att): 6 6 6 6 6 4 4 3 1 1 → 8 hits (2+)",
+    "COMBAT|Att: Impact(1) rolls 10 dice → 8 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 4 3 2 2 2 2 1 → 2 blocks (4+)",
+    "COMBAT|Def takes 6 wounds (2/8)",
+    "COMBAT|Def loses 6 models (2/8)"
+   ],
+   "rng": "5199619729904717764",
+   "scenario": "impact",
+   "seed": 0
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Att): 6 5 4 3 2 2 1 1 1 1 → 6 hits (2+)",
+    "COMBAT|Att: Impact(1) rolls 10 dice → 6 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 6 4 4 2 1 → 4 blocks (4+)",
+    "COMBAT|Def takes 2 wounds (6/8)",
+    "COMBAT|Def loses 2 models (6/8)"
+   ],
+   "rng": "-1927169593825025377",
+   "scenario": "impact",
+   "seed": 17
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       false,
+       0
+      ],
+      [
+       7,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 3
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Att): 5 3 3 3 2 2 2 1 1 1 → 7 hits (2+)",
+    "COMBAT|Att: Impact(1) rolls 10 dice → 7 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 5 4 2 2 2 1 1 → 2 blocks (4+)",
+    "COMBAT|Def takes 5 wounds (3/8)",
+    "COMBAT|Def loses 5 models (3/8)"
+   ],
+   "rng": "-4581731633632133454",
+   "scenario": "impact",
+   "seed": 49
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 5,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       false,
+       0
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 5
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Att): 3 3 3 3 3 2 2 1 1 1 → 7 hits (2+)",
+    "COMBAT|Att: Impact(1) rolls 10 dice → 7 hits",
+    "COMBAT|Def saves on 4+",
+    "COMBAT|AI (Def) defends: 6 5 4 4 2 1 1 → 4 blocks (4+)",
+    "COMBAT|Def takes 3 wounds (5/8)",
+    "COMBAT|Def loses 3 models (5/8)"
+   ],
+   "rng": "-1824240960649889054",
+   "scenario": "impact",
+   "seed": 225
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       false,
+       0
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 8
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Def): 6 6 6 4 4 3 1 1 → 5 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 5 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 6 6 4 2 2 → 3 blocks (4+)",
+    "COMBAT|Att takes 2 wounds (8/10)",
+    "COMBAT|Att loses 2 models (8/10)"
+   ],
+   "rng": "8961705596088246293",
+   "scenario": "counter",
+   "seed": 0
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 9,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Def): 5 4 3 2 2 1 1 1 → 2 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 2 hits",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 6 1 → 1 block (4+)",
+    "COMBAT|Att takes 1 wound (9/10)",
+    "COMBAT|Att loses a model (9/10)"
+   ],
+   "rng": "3258576577604702209",
+   "scenario": "counter",
+   "seed": 17
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 9,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 9
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Def): 5 3 3 2 2 1 1 1 → 1 hit (4+)",
+    "COMBAT|Def strikes with Blade at Att — 1 hit",
+    "COMBAT|Att saves on 4+",
+    "COMBAT|AI (Att) defends: 2 → 0 blocks (4+)",
+    "COMBAT|Att takes 1 wound (9/10)",
+    "COMBAT|Att loses a model (9/10)"
+   ],
+   "rng": "-8673838468792241846",
+   "scenario": "counter",
+   "seed": 49
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|AI (Def): 3 3 3 3 3 2 1 1 → 0 hits (4+)",
+    "COMBAT|Def strikes with Blade at Att — 0 hits"
+   ],
+   "rng": "-2341933425837651673",
+   "scenario": "counter",
+   "seed": 225
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "rng": "-8330585842245805678",
+   "scenario": "consolidation_back",
+   "seed": 0
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "rng": "7626009594601917327",
+   "scenario": "consolidation_back",
+   "seed": 17
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "rng": "8364183946894225711",
+   "scenario": "consolidation_back",
+   "seed": 49
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 8,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+   ],
+   "rng": "3200770847647146015",
+   "scenario": "consolidation_back",
+   "seed": 225
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       1
+      ],
+      [
+       1,
+       false,
+       1
+      ],
+      [
+       2,
+       false,
+       1
+      ],
+      [
+       3,
+       false,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Consolidation: Att holds its ground (enemy destroyed, no room to move — GF 3.6)"
+   ],
+   "rng": "-8330585842245805678",
+   "scenario": "consolidation_win",
+   "seed": 0
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       1
+      ],
+      [
+       1,
+       false,
+       1
+      ],
+      [
+       2,
+       false,
+       1
+      ],
+      [
+       3,
+       false,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Consolidation: Att holds its ground (enemy destroyed, no room to move — GF 3.6)"
+   ],
+   "rng": "7626009594601917327",
+   "scenario": "consolidation_win",
+   "seed": 17
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       1
+      ],
+      [
+       1,
+       false,
+       1
+      ],
+      [
+       2,
+       false,
+       1
+      ],
+      [
+       3,
+       false,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Consolidation: Att holds its ground (enemy destroyed, no room to move — GF 3.6)"
+   ],
+   "rng": "8364183946894225711",
+   "scenario": "consolidation_win",
+   "seed": 49
+  },
+  {
+   "epoch": 88,
+   "final": [
+    {
+     "alive": 10,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ],
+      [
+       6,
+       true,
+       1
+      ],
+      [
+       7,
+       true,
+       1
+      ],
+      [
+       8,
+       true,
+       1
+      ],
+      [
+       9,
+       true,
+       1
+      ]
+     ],
+     "unit": "Att",
+     "wounds": 10
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       1
+      ],
+      [
+       1,
+       false,
+       1
+      ],
+      [
+       2,
+       false,
+       1
+      ],
+      [
+       3,
+       false,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ],
+      [
+       6,
+       false,
+       1
+      ],
+      [
+       7,
+       false,
+       1
+      ]
+     ],
+     "unit": "Def",
+     "wounds": 8
+    }
+   ],
+   "lines": [
+    "COMBAT|Consolidation: Att holds its ground (enemy destroyed, no room to move — GF 3.6)"
+   ],
+   "rng": "3200770847647146015",
+   "scenario": "consolidation_win",
+   "seed": 225
+  }
+ ],
+ "family": "melee_shapes",
+ "provenance": {
+  "epoch": 88,
+  "git_sha": "2abece540731f88ccc0630c8b3e7073c54278d96",
+  "registry_sha256": "425decb0652c95d5718359a87107f2f3738e3287e9d67a13369b0a00a3f0df0e",
+  "registry_system": "gf"
+ },
+ "schema": "nml-golden-witness-v2"
+}
