@@ -110,7 +110,7 @@ same commit as the struct change.
 | `piercing_tag_persistent` | main.gd:24677 | yes (`land_delta`, C-12 / #2926) | no | no (delta) |
 | `piercing_spot_round` | main.gd:24612 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `storm_used` | main.gd:25124 | yes (`land_delta`, C-11 / #2915) | no | no (delta) |
-| `feats_used` | solo_controller.gd:2002 | Protection Feat family only (`land_delta`, P4.D-38a / #2888) | Protection Feat family only (door capture, P4.D-38a) | **YES** (measured partial: any other feat family is reported, `land_delta` push_error) |
+| `feats_used` | solo_controller.gd:2002 | Protection Feat family + the once-per-game shot feats (`land_delta`, P4.D-38a / #2888, shot feats DS-066) | Protection Feat family only (door capture, P4.D-38a) | **YES** (every other feat family: reported, `land_delta` push_error) |
 | `teleport_used` | main.gd:25312 | no | no | **YES** |
 | `spot_markers` | main.gd:15256 | yes (`land_delta`, P4.0-4f / #2823) | no | no (delta) |
 | `tag_markers` | main.gd:15714 | yes (`land_delta`, P4.0-4f / #2823) | no | no (delta) |
@@ -204,7 +204,7 @@ and the `buffs` spend (`sim.rs:10594`).
 | (a) | `piercing_tag_persistent` | `sim.rs:2456,2475`, fold `io.rs:1288`; `main.gd:24677`; table writer runs; C-12 / #2926 lands the core's standing flag onto `piercing_tag_source` |
 | (a) | `piercing_spot_round` | `sim.rs:2436` (Piercing Spot branch); `main.gd:24612`; table writer runs |
 | (a) | `storm_used` | `sim.rs:1449` (Storm branch); `main.gd:25124`; table writer runs; C-11 / #2915 lands the latch |
-| (a) | `feats_used` | `sim.rs:1840,5852,5936,9468` (feat branches); `solo_controller.gd:2002`; table writer runs; P4.D-38a / #2888 lands the Protection Feat family only |
+| (a) | `feats_used` | `sim.rs:1840,5852,5936,9468` (feat branches); `solo_controller.gd:2002`; table writer runs; P4.D-38a / #2888 lands the Protection Feat family, DS-066 the once-per-game shot feats |
 | (a) | `teleport_used` | `sim.rs:2221` (Teleport branch); `main.gd:25312`; table writer runs |
 | (a) | `spot_markers` | `sim.rs:2638,2742` (Spotter branch); `main.gd:15256`; table writer runs |
 | (a) | `tag_markers` | `sim.rs:2675,2753` (Tagger branch); `main.gd:15714`; table writer runs |

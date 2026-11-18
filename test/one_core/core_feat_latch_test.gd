@@ -12,8 +12,11 @@ const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const TMP := "user://feat_latch_slice.json"
 const FLAG := "ignore_feat_used_protection_feat"
+const SHOT_FLAG := "shot_feat_used_precision_feat"
 const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 	"faction_folder": "robot_legions", "rules": []}
+const SHOT_SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "aof",
+	"faction_folder": "ghostly_undead", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
 
 var _runner: GdUnitSceneRunner
@@ -42,6 +45,7 @@ func before_test() -> void:
 	CoreActivation.ai_refusals = 0
 	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.PATH))
 	data["groups"]["regen_test"] = {"primitives": ["Regeneration"], "step": "P4.D-0", "golden": "x", "parity": "x"}
+	data["groups"]["shot_test"] = {"primitives": ["Shot Modifier"], "step": "P4.D-0", "golden": "x", "parity": "x"}
 	var f := FileAccess.open(TMP, FileAccess.WRITE)
 	f.store_string(JSON.stringify(data))
 	f.close()
@@ -134,3 +138,56 @@ func test_a_defender_without_the_feat_spends_none() -> void:
 	var core := await _two_volleys(3, true, [])
 	assert_bool(core["flag"]).is_false()
 	assert_int(core["spends"]).is_equal(0)
+
+
+## Two volleys through the door (else the table's own) with the SHOOTER carrying Precision Feat: the aof once-per-game
+## Shot Modifier (+1 to hit on every attack, `uses_per_game`). The table spends it through `_solo_spend_shot_feats`
+## (`shot_feat_used_<snake>`); the defender is plain. Returns what the comparison reads.
+func _two_shot_volleys(s: int, core_run: bool) -> Dictionary:
+	var att := ParityTable._make_unit(_main, SHOT_SIDE.merged({"player": 2, "name": "Att", "models": 10, "x_in": 0.0,
+		"rules": ["Precision Feat"]}, true), RIFLE)
+	var foe := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Def", "models": 10, "x_in": 8.0}), RIFLE)
+	for i in foe.models.size():
+		(foe.models[i] as ModelInstance).node.global_position.z += float((i * 7) % 5) * 0.0001
+	var lines: Array = []
+	var tap := func(e: Dictionary) -> void: lines.append(str(e["text"]))
+	_main.battle_log.entry_added.connect(tap)
+	_main.seed_tray_rng(s)
+	var runs := CoreActivation.ai_runs
+	for _v in 2:
+		var h := CoreActivation.capture(_main) if core_run else 0
+		_main._solo_core_ai_h = h
+		await _main._run_ai_shooting({"unit": att, "moved": false, "action": AiDecision.Action.HOLD})
+		_main._solo_core_ai_h = 0
+		if h != 0:
+			(_main.solo_controller as SoloController)._core_node_ready().release(h)
+	_main.battle_log.entry_added.disconnect(tap)
+	var survivors: Array = foe.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
+	survivors.sort()
+	var out := {"alive": foe.get_alive_count(), "survivors": survivors, "shaken": foe.is_shaken, "rng": _main._tray_rng.state,
+		"flag": bool(att.unit_properties.get(SHOT_FLAG, false)), "core": CoreActivation.ai_runs - runs,
+		"spends": lines.filter(func(l: String) -> bool: return l.contains("spends its once-per-game feat on this attack")).size()}
+	_free([att, foe])
+	return out
+
+
+## The once-per-game SHOT feat the core spends closes the table's own latch, so the second volley's capture sends it CLOSED:
+## volley 2 keeps no +1, and the door's outcome (survivors, Shaken, tray RNG, flag) is the table's own two volleys seed for seed.
+## RED: filter the shot-feat names out of `_land_feats` -> the flag stays open, the second capture sends it open, and the core
+## grants the +1 a second time (survivors/RNG drift from the table run).
+func test_the_door_closes_the_shot_feat_latch_the_core_spends() -> void:
+	var seeds := int(OS.get_environment("NML_ONE_CORE_SEEDS")) if OS.has_environment("NML_ONE_CORE_SEEDS") else 20
+	var bad: Array = []
+	var spent := 0
+	for s in seeds:
+		var table := await _two_shot_volleys(s, false)
+		var core := await _two_shot_volleys(s, true)
+		spent += 1 if bool(core["flag"]) else 0
+		if int(table["spends"]) != 1:
+			bad.append("seed %d: the table run says %d spend sentence(s), want 1" % [s, table["spends"]])
+		for k in ["alive", "survivors", "shaken", "rng", "flag", "spends"]:
+			if table[k] != core[k]:
+				bad.append("seed %d: %s: table %s, core %s" % [s, k, table[k], core[k]])
+	print("SHOT_FEAT_LATCH seeds=%d spent=%d mismatches=%d" % [seeds, spent, bad.size()])
+	assert_int(spent).override_failure_message("no seed spent the shot feat: the sweep compares nothing").is_greater(0)
+	assert_array(bad).override_failure_message("core vs table:\n" + "\n".join(bad.slice(0, 10))).is_empty()

@@ -182,6 +182,17 @@ static func ignore_feats_of(gu: GameUnit) -> Array:
 	return out
 
 
+## P4.D-38a follow-up: the once-per-game SHOT feats `gu` carries, the two families main.gd `_solo_spend_shot_feats` spends (a Shot
+## Modifier or Piercing Assault entry with `uses_per_game`), and the flag that closes one (`SoloController.shot_feat_flag`).
+static func shot_feats_of(gu: GameUnit) -> Array:
+	var out: Array = []
+	for primitive in ["Shot Modifier", "Piercing Assault"]:
+		for e in RulesRegistry.unit_rules_of_primitive(gu, primitive):
+			if int(((e as Dictionary).get("params", {}) as Dictionary).get("uses_per_game", 0)) > 0:
+				out.append(str((e as Dictionary)["name"]))
+	return out
+
+
 static func _ignore_flag(rule_name: String) -> String:
 	return "ignore_feat_used_%s" % rule_name.to_snake_case()
 
@@ -940,17 +951,26 @@ static func _land_buffs(main, gu: GameUnit, d: Dictionary) -> void:
 
 
 ## P4.D-38a: the once-per-game feat latches the core SPENT in this activation (the delta's `feats_used`, inventory row of the
-## same name). The core spent them in its own copy; the table's flag is what its own roll and the next capture read. Closed for the ignore feats (the Protection Feat family), with the
-## table's own sentence and the synced flag; any other name is a core/table split nobody mapped yet (reported).
+## same name). The core spent them in its own copy; the table's flag is what its own roll and the next capture read. Closed for
+## the ignore feats (the Protection Feat family) and, the same follow-up, the once-per-game shot feats the table's own
+## `_solo_spend_shot_feats` spends (main.gd), each with that writer's flag and sentence; any other name is a core/table split
+## nobody mapped yet (reported).
 static func _land_feats(main, gu: GameUnit, d: Dictionary) -> void:
 	for name in d.get("feats_used", []):
-		if bool(gu.unit_properties.get(_ignore_flag(str(name)), false)):
+		if ignore_feats_of(gu).has(str(name)):
+			if bool(gu.unit_properties.get(_ignore_flag(str(name)), false)):
+				continue
+			main._sync_unit_property(gu, _ignore_flag(str(name)), true)
+			main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s spends its once-per-game ignore roll" % [name, gu.get_name()], true)
 			continue
-		if not ignore_feats_of(gu).has(str(name)):
-			push_error("CoreActivation.land_delta: %s spent the feat %s, which no table flag closes yet" % [gu.get_name(), name])
+		if shot_feats_of(gu).has(str(name)):
+			var flag := SoloController.shot_feat_flag(str(name))
+			if bool(gu.unit_properties.get(flag, false)):
+				continue
+			main._sync_unit_property(gu, flag, true)
+			main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s spends its once-per-game feat on this attack" % [name, gu.get_name()], true)
 			continue
-		main._sync_unit_property(gu, _ignore_flag(str(name)), true)
-		main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s spends its once-per-game ignore roll" % [name, gu.get_name()], true)
+		push_error("CoreActivation.land_delta: %s spent the feat %s, which no table flag closes yet" % [gu.get_name(), name])
 
 
 ## P4.0-4g: the latched Versatile pick the delta now carries (inventory class (a)). The table holds it as the
