@@ -12,7 +12,13 @@
   },
   "deny_names": {
     "Unstoppable when Shooting": "Measured (shadow soak with unmapped names taken): 3 Eternals volleys at Change units, the core asks a 2+ defense roll of 3 dice the table never rolls. Its primitive (Lacerate) is shared with names that replay equal, so the name alone is refused until diagnosed.",
-    "Point-Blank Surge": "Measured (shadow soak after the C-R1 lift): Pistoleer Sisters -> Blood Death Brothers, the core counted 2 hits where the table counted 1. Its primitive (Surge) is shared with plain Surge, which replays equal, so the name alone is refused until diagnosed."
+    "Point-Blank Surge": "Measured (shadow soak after the C-R1 lift): Pistoleer Sisters -> Blood Death Brothers, the core counted 2 hits where the table counted 1. Its primitive (Surge) is shared with plain Surge, which replays equal, so the name alone is refused until diagnosed.",
+    "Experimental Tinctures": "Measured (5-seed sweep): 25 taken volleys at Zairetia, the core opens a 12 in shot the table refuses; refused by name until diagnosed.",
+    "Changebound": "Measured (5-seed sweep): 8 taken volleys, the core applies a target-side hit penalty the table does not.",
+    "Stealth Aura": "Measured (5-seed sweep): 8 taken volleys, the same target-side hit penalty as Changebound.",
+    "Hazardous": "Measured (5-seed sweep): 6 taken volleys, the attacker's wounds differ on a natural 1; direction not in the dump.",
+    "Gleaming Armour": "Measured (5-seed sweep): 5 taken volleys, the target's Defense differs by one.",
+    "Relentless Aura": "Measured (5-seed sweep): 1 taken volley, the core pays one defense die more on a natural 6."
   },
   "groups": {
     "measured_never_equal": {
