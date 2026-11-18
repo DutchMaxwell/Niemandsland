@@ -68,6 +68,11 @@ const RUNNER_STRIKE_BACK := "melee_strike_back"
 const RUNNER_MELEE_IMPACT := "melee_impact"
 const RUNNER_MELEE_COUNTER := "melee_counter"
 const RUNNER_CONSOLIDATION := "melee_consolidation"
+## P4.D-47b: Fear and a joined hero through the whole charge — the melee-result comparison, the hero's own strikes and
+## wounds, the chain's consolidation — on the AI charge (`_run_ai_melee`) and the human charge, with positions recorded.
+const MELEE_FEAR_HERO_FAMILY := "melee_fear_hero"
+const MELEE_FEAR_HERO_FIXTURE_PATH := "res://test/fixtures/one_core/golden_melee_fear_hero.json"
+const RUNNER_AI_CHARGE := "ai_charge"
 ## Rolls of the volley before the wounds land: the to-hit batch and the defender's save batch. The click prompt needs
 ## _solo_batch false, the batch tray needs it true, so the flag drops after this many rolls and returns with the
 ## first pick (the pattern of test/e2e/e2e_volley_morale_test.gd).
@@ -105,6 +110,21 @@ const MELEE_DEFENDER := {"key": "def", "player": 2, "name": "Def", "models": 8, 
 const BLADE := {"name": "Blade", "range_in": 0, "attacks": 1, "count": 10, "rules": []}
 const DEF_BLADE := {"name": "Blade", "range_in": 0, "attacks": 1, "count": 8, "rules": []}
 const CHARGE := {"dest_x_in": 6.74}
+## A joined hero: one Tough(3) model with a three-attack blade, standing in base contact beside the first model of its
+## host's rank (`stand_*` is where the model goes after the unit is built; the host's own x is the post-charge one).
+const ATT_HERO := {"key": "att_hero", "player": 1, "name": "AttHero", "models": 1, "quality": 3, "defense": 4,
+	"tough": 3, "x_in": 0.0, "z_step_in": 1.2, "base_radius_in": 0.63, "game_system": "gf",
+	"faction_folder": "robot_legions", "rules": ["Hero"], "stand_x_in": 6.74, "stand_z_in": -1.2,
+	"weapon": {"name": "Hero Blade", "range_in": 0, "attacks": 3, "count": 1, "rules": []}}
+const DEF_HERO := {"key": "def_hero", "player": 2, "name": "DefHero", "models": 1, "quality": 3, "defense": 4,
+	"tough": 3, "x_in": 0.0, "z_step_in": 1.3, "base_radius_in": 0.63, "game_system": "gf",
+	"faction_folder": "robot_legions", "rules": ["Hero"], "stand_x_in": 8.0, "stand_z_in": -1.3,
+	"weapon": {"name": "Hero Blade", "range_in": 0, "attacks": 3, "count": 1, "rules": []}}
+## A lone enemy far down the table: the "next target" a winner's consolidation walks toward. Without one the survivor
+## has no goal and holds ("no room to move"), so the move itself would never be recorded. It never fights.
+const BYSTANDER := {"key": "by", "player": 2, "name": "By", "models": 1, "quality": 4, "defense": 4, "tough": 1,
+	"x_in": 20.0, "z_step_in": 1.3, "base_radius_in": 0.63, "game_system": "gf", "faction_folder": "robot_legions",
+	"rules": []}
 
 ## The morale grid: one AI-owned unit (player 2, so no save prompt), 10 models, no weapon needed.
 const MORALE_UNIT := {"player": 2, "name": "Mor", "models": 10, "quality": 2, "defense": 4, "tough": 1,
@@ -263,6 +283,53 @@ static func melee_shape_scenarios() -> Array:
 	]
 
 
+## The Fear / joined-hero grid (P4.D-47b). Same board as the melee shapes; every case also records where the models
+## stand afterwards (`extra.pos`, inches, 2 decimals): the charge snap, pile-in and consolidation move them, and the
+## older shapes only keep alive/wounds/lines. Fear(2) shifts the melee-result comparison only (never a wound), a hero
+## adds its own strikes and its own Fear to the chain, and heroes take wounds after the host's models.
+static func melee_fear_hero_scenarios() -> Array:
+	var base := {"attacker": MELEE_ATTACKER, "defender": MELEE_DEFENDER, "charge": CHARGE, "weapon": BLADE,
+		"defender_weapon": DEF_BLADE, "seeds": SEEDS, "positions": true, "runner": RUNNER_AI_CHARGE,
+		"bystander": BYSTANDER}
+	var fear_hero := _with(ATT_HERO, {"rules": ["Hero", "Fear(2)"]})
+	var small := _with(MELEE_ATTACKER, {"models": 3})
+	# Seeds picked from a 40-seed scan: each Fear grid holds seeds where the same dice WITHOUT Fear end the melee
+	# another way (a loss becomes a draw, a draw a loss, the loser changes) and one where Fear changes nothing.
+	var fear_seeds: Array[int] = [0, 3, 4, 9]
+	var no_dice: Array[int] = [0, 17]
+	return [
+		_with(base, {"name": "fear_charger", "attacker": _with(MELEE_ATTACKER, {"rules": ["Fear(2)"]}), "seeds": fear_seeds,
+			"note": "AI charge, Fear(2) on the charger: the enemy's tally counts two wounds more in the result"}),
+		_with(base, {"name": "fear_defender", "defender": _with(MELEE_DEFENDER, {"rules": ["Fear(2)"]}),
+			"seeds": [1, 4, 6, 8] as Array[int],
+			"note": "AI charge, Fear(2) on the defender: the strike-back side carries the bonus"}),
+		_with(base, {"name": "fear_human", "runner": RUNNER_HUMAN_CHARGE, "seeds": fear_seeds,
+			"attacker": _with(MELEE_ATTACKER, {"rules": ["Fear(2)"]}),
+			"note": "the player's charge with Fear(2) on the charger"}),
+		_with(base, {"name": "furious_human", "runner": RUNNER_HUMAN_CHARGE,
+			"attacker": _with(MELEE_ATTACKER, {"rules": ["Furious"]}),
+			"note": "the player's charge with Furious: sixes add a hit on the charge"}),
+		_with(base, {"name": "hero_charger", "attacker_hero": ATT_HERO,
+			"note": "AI charge, a hero joined to the charger: its blade strikes with the host's"}),
+		_with(base, {"name": "hero_defender", "defender_hero": DEF_HERO,
+			"note": "AI charge into a host with a joined hero: the hero strikes back and soaks wounds last"}),
+		_with(base, {"name": "hero_fear_chain", "attacker_hero": fear_hero, "seeds": [2, 4, 9, 12] as Array[int],
+			"note": "the hero carries Fear(2), the host none: the chain's rating is the sum of the living"}),
+		_with(base, {"name": "hero_human", "runner": RUNNER_HUMAN_CHARGE, "attacker_hero": ATT_HERO,
+			"note": "the player's charge with a joined hero"}),
+		_with(base, {"name": "consolidation_back", "runner": RUNNER_CONSOLIDATION, "attacker": small, "seeds": no_dice,
+			"note": "neither destroyed, a 3-model charger (a 10-model rank does not move on this board): it separates 1\" back"}),
+		_with(base, {"name": "consolidation_win", "runner": RUNNER_CONSOLIDATION, "attacker": small, "kill_defender": true,
+			"seeds": no_dice, "note": "enemy destroyed, a far enemy left: the survivor consolidates up to 3\" toward it"}),
+		_with(base, {"name": "hero_consolidation_back", "runner": RUNNER_CONSOLIDATION, "attacker": small,
+			"attacker_hero": ATT_HERO, "seeds": no_dice,
+			"note": "neither destroyed, a hero joined to the 3-model charger: where does the hero stand afterwards"}),
+		_with(base, {"name": "hero_consolidation_win", "runner": RUNNER_CONSOLIDATION, "attacker": small,
+			"attacker_hero": ATT_HERO, "kill_defender": true, "seeds": no_dice,
+			"note": "enemy destroyed, a hero joined to the 3-model survivor: does the hero consolidate with the unit"}),
+	]
+
+
 ## The prompt grid: 20 Rifle shots (2 attacks per model) at a human 10-model defender, so a volley lands several wounds.
 ## `mixed`: five Rifle bearers and five "Plasma Stub" bearers (two loadouts, every model Tough 1); `tough`: one loadout,
 ## every model Tough(3). Each shape is answered two ways: `auto` (right-click at once) and `click` (the owner clicks
@@ -325,6 +392,8 @@ static func capture(main: Node, family: String = FAMILY) -> Dictionary:
 		return await capture_grid(main, MOVE_THROUGH_FAMILY, move_through_scenarios())
 	if family == MELEE_SHAPES_FAMILY:
 		return await capture_grid(main, MELEE_SHAPES_FAMILY, melee_shape_scenarios())
+	if family == MELEE_FEAR_HERO_FAMILY:
+		return await capture_grid(main, MELEE_FEAR_HERO_FAMILY, melee_fear_hero_scenarios())
 	var out := {"schema": SCHEMA, "family": FAMILY, "provenance": provenance(), "cases": []}
 	for sc in scenarios():
 		for seed in SEEDS:
@@ -394,7 +463,8 @@ static func _run_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
 			return await _run_into_human_case(main, sc, seed)
 		RUNNER_AI_MOVE_THROUGH:
 			return await _run_move_through_case(main, sc, seed)
-		RUNNER_HUMAN_CHARGE, RUNNER_STRIKE_BACK, RUNNER_MELEE_IMPACT, RUNNER_MELEE_COUNTER, RUNNER_CONSOLIDATION:
+		RUNNER_HUMAN_CHARGE, RUNNER_STRIKE_BACK, RUNNER_MELEE_IMPACT, RUNNER_MELEE_COUNTER, RUNNER_CONSOLIDATION, \
+		RUNNER_AI_CHARGE:
 			return await _run_melee_shape_case(main, sc, seed)
 	return {"scenario": str(sc["name"]), "seed": seed, "error": "unknown runner %s" % runner}
 
@@ -580,6 +650,14 @@ static func _run_melee_shape_case(main: Node, sc: Dictionary, seed: int) -> Dict
 	var pair: Array = ParityMelee._units(main, sc, {})
 	var att := pair[0] as GameUnit
 	var dfn := pair[1] as GameUnit
+	var chain: Array = [att, dfn]   # every unit the case built, the heroes last: recorded and freed together
+	if sc.has("attacker_hero"):
+		chain.append(_join_hero(main, att, sc["attacker_hero"]))
+	if sc.has("defender_hero"):
+		chain.append(_join_hero(main, dfn, sc["defender_hero"]))
+	var idle: Array = []   # built, never recorded: freed with the rest
+	if sc.has("bystander"):
+		idle.append(ParityTable._make_unit(main, sc["bystander"], {}))
 	if bool(sc.get("kill_defender", false)):
 		_kill_models(dfn, dfn.models.size())
 	var runner := str(sc["runner"])
@@ -602,14 +680,55 @@ static func _run_melee_shape_case(main: Node, sc: Dictionary, seed: int) -> Dict
 			await main._solo_melee_strike_phase(dfn, att, false, 1)   # 1 = SoloStrike.COUNTER_ONLY
 		RUNNER_CONSOLIDATION:
 			await main._solo_consolidate_melee(att, dfn, true)
+		RUNNER_AI_CHARGE:
+			await main._run_ai_melee({"unit": att, "target": dfn, "charge_from_in": ParityMelee._charge_from_in(sc)})
 	main.battle_log.entry_added.disconnect(tap)
 	main._solo_auto_saves = false   # only this runner raises it (unset is the game default: the card is asked)
 	main.solo_ai_slots = seats
 	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
-		"lines": lines, "final": _final([att, dfn]), "rng": _rng_state(main)}
-	_free_units(main, [att, dfn])
+		"lines": lines, "final": _final(chain), "rng": _rng_state(main)}
+	if bool(sc.get("positions", false)):
+		rec["extra"] = {"pos": _positions_in(chain)}
+	_free_units(main, chain + idle)
 	await main.get_tree().process_frame
 	return rec
+
+
+## Builds the hero of `spec`, stands its model at the spec's own spot and joins it to `host` the way the army import
+## does (`attached_to` on the hero, `attached_heroes` on the host); the host's chain then counts it everywhere.
+static func _join_hero(main: Node, host: GameUnit, spec: Dictionary) -> GameUnit:
+	var weapon: Dictionary = (spec["weapon"] as Dictionary).duplicate(true)
+	var hero := ParityTable._make_unit(main, spec, weapon)
+	ParityMelee._equip(hero, weapon)
+	hero.unit_properties["base_size_round"] = roundi(float(spec["base_radius_in"]) * 50.8)
+	var nd := (hero.models[0] as ModelInstance).node as Node3D
+	nd.global_position = Vector3(float(spec["stand_x_in"]) * 0.0254, 0.0, float(spec["stand_z_in"]) * 0.0254)
+	hero.unit_properties["attached_to"] = host
+	host.unit_properties["attached_heroes"] = [hero]
+	return hero
+
+
+## Metres as inches text with 2 decimals ("-0.00" folded to "0.00"): text, not a float, so no representation noise.
+static func _inch_text(metres: float) -> String:
+	var v := snappedf(metres / 0.0254, 0.01)
+	return "%.2f" % (0.0 if absf(v) < 0.005 else v)
+
+
+## Where every model of every unit stands, in inches rounded to 2 decimals, [unit name, [[x, z] per model slot]]; a
+## dead model keeps its slot (its token is where it fell), so the rows always line up with `final.slots`.
+static func _positions_in(units: Array) -> Array:
+	var out: Array = []
+	for u in units:
+		var gu := u as GameUnit
+		var spots: Array = []
+		for m in gu.models:
+			var nd := (m as ModelInstance).node as Node3D
+			if nd == null or not is_instance_valid(nd):
+				spots.append([])   # the node is gone (freed with the casualty): no spot to record
+				continue
+			spots.append([_inch_text(nd.global_position.x), _inch_text(nd.global_position.z)])
+		out.append([gu.get_name(), spots])
+	return out
 
 
 ## One prompt scenario x seed: the AI attacker's volley through main._solo_resolve_ai_volley at the human defender, with
@@ -882,6 +1001,8 @@ static func fixture_path(family: String = FAMILY) -> String:
 		return MOVE_THROUGH_FIXTURE_PATH
 	if family == MELEE_SHAPES_FAMILY:
 		return MELEE_SHAPES_FIXTURE_PATH
+	if family == MELEE_FEAR_HERO_FAMILY:
+		return MELEE_FEAR_HERO_FIXTURE_PATH
 	return FIXTURE_PATH
 
 
