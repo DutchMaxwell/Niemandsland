@@ -29,14 +29,14 @@ melee_charge TOTAL 996 19
 planner scripts/solo/ai_planner.gd 1825 8
 planner scripts/solo/ai_position.gd 400 1
 planner scripts/solo/ai_spell.gd 633 4
-planner scripts/solo/battle_sim.gd 2608 23
+planner scripts/solo/battle_sim.gd 2612 23
 planner scripts/solo/solo_sim.gd 1234 3
-planner TOTAL 6700 39
+planner TOTAL 6704 39
 planner_shared scripts/solo/ai_combat_math.gd 724 9
 planner_shared scripts/solo/ai_ev.gd 1331 10
 planner_shared TOTAL 2055 19
 planner_tag dead 1 2
-planner_tag erlkoenig 54 670
+planner_tag erlkoenig 54 674
 planner_tag gd_search 87 2233
 planner_tag live_helper 16 184
 planner_tag table_dead 21 106
@@ -44,5 +44,5 @@ planner_tag table_live 68 1217
 planner_tag test_only 9 54
 planner_tag tools_only 71 1028
 planner_tag tree 27 536
-planner_tag TOTAL 354 6030
-TABLE LINES LEFT: 11245
+planner_tag TOTAL 354 6034
+TABLE LINES LEFT: 11249
