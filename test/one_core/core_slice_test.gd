@@ -268,10 +268,10 @@ func test_a_missing_or_malformed_file_is_the_empty_slice() -> void:
 
 
 ## C-15: env NML_CORE_SLICE=deny reads the measured deny-list file instead of the shipped allowlist; unset, the shipped
-## file as before. The deny file refuses its listed primitives (a Tear weapon) and takes a unit whose
+## file as before. The deny file refuses its listed primitives (a Teleport unit) and takes a unit whose
 ## rules are automated and not listed (AP, Tough); a name no map knows is taken (unmapped_inert). The list only shrinks: CEILING.
 ## RED: read PATH regardless of the switch -> the first assertion reads mode "allow".
-const DENY_CEILING := 9   # C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); only shrinks
+const DENY_CEILING := 9   # C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
 
 
 func test_the_deny_switch_reads_the_measured_deny_list() -> void:
@@ -280,13 +280,13 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	assert_str(str(CoreSlice.config()["mode"])).is_equal("deny")
 	# C-R1 (epochs 82 + 84) ported the wound-ignore rules by name: Regeneration is no longer listed.
 	assert_bool(CoreSlice.takes(_unit(["Regeneration"], [["AP(1)"]]))).is_true()
-	# A rule refused by NAME where its primitive is shared (Point-Blank Surge = Surge; plain Surge stays taken).
-	var sisters := _unit(["Point-Blank Surge"], [])
-	sisters.unit_properties["faction_folder"] = "blessed_sisters"   # the faction whose map entry gives it primitive Surge
-	assert_array(CoreSlice.refusals(sisters)).is_equal(["unit_rule:Point-Blank Surge"])
-	var tearer := _unit(["Tough(3)"], [["Tear"]])
-	tearer.unit_properties["faction_folder"] = "custodian_brothers"   # a faction whose map gives Tear its primitive
-	assert_array(CoreSlice.refusals(tearer)).is_equal(["weapon_rule:Tear"])
+	# A rule refused by NAME where its primitive is shared (Changebound = Stealth; plain Stealth stays taken).
+	var changed := _unit(["Changebound"], [])
+	changed.unit_properties["faction_folder"] = "change_disciples"   # the faction whose map entry gives it primitive Stealth
+	assert_array(CoreSlice.refusals(changed)).is_equal(["unit_rule:Changebound"])
+	var teleporter := _unit(["Teleport"], [])
+	teleporter.unit_properties["faction_folder"] = "elven_jesters"   # a faction whose map gives Teleport its primitive
+	assert_array(CoreSlice.refusals(teleporter)).is_equal(["unit_rule:Teleport"])
 	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
 	# An Indirect weapon (lifted after #2939/#2942/#2947) and a joined hero are taken (the lone-hero target, epoch 81).
 	assert_bool(CoreSlice.takes(_unit([], [["Indirect"]]))).is_true()   # lifted with #2939 / #2942 / #2947
@@ -299,6 +299,27 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 	assert_str(str(CoreSlice.config()["mode"])).is_equal("allow")
+
+
+## LD-6 (18.11.): the deny list's EQUAL-probe names leave in one batch. Each name's volley replays equal 16/16
+## (wave1116/ds/probe_*.md) and its state comes back from the core (STATE_DELTA_INVENTORY). RED on the old list:
+## every name below is refused by its primitive; the failure message names it.
+func test_deny_mode_takes_the_lifted_equal_probes() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	var unit_rules := {"Unstoppable when Shooting": "", "Point-Blank Surge": "blessed_sisters",
+		"Guarded": "blessed_sisters", "Piercing Tag": "alien_hives", "Vengeance": "eternal_dynasty"}
+	for name in unit_rules:
+		var gu := _unit([name], [])
+		gu.unit_properties["faction_folder"] = unit_rules[name]
+		assert_bool(CoreSlice.takes(gu)).override_failure_message(
+			"deny mode takes a unit that carries %s" % name).is_true()
+	var tearer := _unit(["Tough(3)"], [["Tear"]])
+	tearer.unit_properties["faction_folder"] = "custodian_brothers"
+	assert_bool(CoreSlice.takes(tearer)).override_failure_message(
+		"deny mode takes a unit that carries Tear").is_true()
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
 
 
 ## Deny mode takes a joined hero with its unit, so a rule the hero carries is read too: a host whose only listed rule
