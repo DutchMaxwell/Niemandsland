@@ -20,9 +20,9 @@
   },
   "groups": {
     "ledger_not_round_tripped": {
-      "primitives": ["Teleport", "Infiltrate", "Growth Markers", "Hit & Run", "Hit & Run Shooter"],
+      "primitives": ["Teleport", "Infiltrate", "Growth Markers"],
       "kind": "ledger",
-      "why": "Their marker pools / once-per-game stamps do not come back from the core's delta yet (slice design 1d). Growth Markers measured: a joined hero's Piercing Growth AP differs between the core and the table (C-18 soak, Hive Swarms + Grunt Veteran). Hit & Run (and its Shooter form, the same step after a volley) measured (18.11. door probe, 8/8): the core steps the unit 3 in but the delta does not carry the new positions, while the landed once-per-round stamp then blocks the table's own step.",
+      "why": "Their marker pools / once-per-game stamps do not come back from the core's delta yet (slice design 1d). Growth Markers measured: a joined hero's Piercing Growth AP differs between the core and the table (C-18 soak, Hive Swarms + Grunt Veteran). Hit & Run and Hit & Run Shooter lifted again (HR-POS): the delta carries the stepped positions and the table lands them (door probe 8/8).",
       "leaves_with": "C-12 / C-13 and the activation-level steps"
     }
   }

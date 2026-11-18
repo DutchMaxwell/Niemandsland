@@ -55,7 +55,7 @@ fn input_of(v: &Value) -> Option<Input> {
     Some(match o.get("t")?.as_str()? {
         "begin" => Input::Begin,
         "cancel" => Input::Cancel,
-        "intent" => Input::Intent { kind: int(o.get("kind")?)?, shoot: o.get("shoot").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string), split: None },
+        "intent" => Input::Intent { kind: int(o.get("kind")?)?, shoot: o.get("shoot").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string), split: None, charge: None },
         "faces" => Input::Faces(o.get("faces")?.as_array()?.iter().map(|f| int(f).map(|n| n.clamp(0, 6) as u8)).collect::<Option<Vec<_>>>()?),
         // P4.0-5: `{"t": "choice", "id": ..., "option": ...}`; an empty/absent `option` asks the core.
         "choice" => Input::Choice { id: o.get("id")?.as_str()?.to_string(), option: option_of(o.get("option"))? },
@@ -88,7 +88,7 @@ fn landings_of(state: &State, landings: &[Landing]) -> Value {
 }
 
 fn delta_array(before: &State, after: &State) -> Value {
-    Value::Array(delta_of(before, after).into_iter().map(|u| json!({"unit": u.key, "removed": u.removed.iter().map(|&i| i as i64).collect::<Vec<_>>(), "shaken": u.shaken, "alive": u.alive, "moved": u.moved, "unknown": u.unknown, "surprise_attack_used": u.surprise_attack_used})).collect())
+    Value::Array(delta_of(before, after).into_iter().map(|u| json!({"unit": u.key, "removed": u.removed.iter().map(|&i| i as i64).collect::<Vec<_>>(), "shaken": u.shaken, "alive": u.alive, "moved": u.moved, "unknown": u.unknown, "positions": u.positions, "surprise_attack_used": u.surprise_attack_used})).collect())
 }
 
 /// A refusal that is not the core's: the call itself was wrong (a malformed entry).

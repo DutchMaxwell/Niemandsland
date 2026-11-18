@@ -94,6 +94,7 @@
           {
             "alive": 2,
             "moved": false,
+            "positions": [],
             "removed": [
               0
             ],

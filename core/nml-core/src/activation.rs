@@ -23,7 +23,8 @@ pub enum Input {
     Begin,
     /// The declared action (`sim::HOLD` ..); `shoot` is `Some` when it shoots. `split` is split fire's aim,
     /// per (member, weapon) the target key it fires at; `None` (or empty) = the one `shoot` target.
-    Intent { kind: i64, shoot: Option<String>, split: Option<Vec<SplitShot>> },
+    /// P4.D-46: `charge` is a `sim::CHARGE`'s target key (the core lands the charge with `charge_move`, then strikes).
+    Intent { kind: i64, shoot: Option<String>, split: Option<Vec<SplitShot>>, charge: Option<String> },
     /// One thrown face group, in the order the core asked for them.
     Faces(Vec<u8>),
     /// The unit's model positions after a drag (`at`) and each model's walked path this
@@ -77,7 +78,8 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
             Input::Choice { .. } if !declared => Some("the choice was answered before the action was declared".to_string()),
             Input::Intent { .. } if declared => Some("one action per activation".to_string()),
             Input::Placed { .. } if shot => Some(format!("{name} has already shot this round — it cannot move now")),
-            Input::Intent { kind, .. } if *kind == CHARGE || *kind == REPOSITION => Some("not on the step path yet".to_string()),
+            Input::Intent { kind, .. } if *kind == REPOSITION => Some("not on the step path yet".to_string()),
+            Input::Intent { kind, charge: None, .. } if *kind == CHARGE => Some("a charge names its target".to_string()),
             _ => None,
         };
         if let Some(reason) = why {
@@ -252,10 +254,10 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         return ActStep::Cancelled { lines: vec![LogLine { rule: "activation_cancel", category: Category::Movement, side, text, detail: None }] };
     }
     let declared = t.iter().enumerate().find_map(|(i, x)| match x {
-        Input::Intent { kind, shoot, split } => Some((i, *kind, shoot.clone(), split.clone())),
+        Input::Intent { kind, shoot, split, charge } => Some((i, *kind, shoot.clone(), split.clone(), charge.clone())),
         _ => None,
     });
-    let Some((at_intent, declared, shoot, split)) = declared else {
+    let Some((at_intent, declared, shoot, split, charge)) = declared else {
         return ActStep::Open;
     };
     let placed = t.iter().rev().find_map(|x| match x {
@@ -313,7 +315,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             Check::Ok { lines } => moved = lines,
         }
     }
-    let action = Action { kind, unit: unit.to_string(), dest: None, shoot, charge: None, patient: false, split, traced: None, teleport: None };
+    let action = Action { kind, unit: unit.to_string(), dest: None, shoot, charge, patient: false, split, traced: None, teleport: None };
     let faces: Vec<Vec<u8>> = t.iter().filter_map(|x| if let Input::Faces(f) = x { Some(f.clone()) } else { None }).collect();
     // The spike's non-tray seed: a plain activation never draws from it.
     let reached = std::cell::RefCell::new(Vec::new());
@@ -405,6 +407,12 @@ pub struct UnitDelta {
     pub alive: i64,
     pub moved: bool,
     pub unknown: bool,
+    /// HR-POS: the unit's surviving model positions AFTER (world metres), in capture slot order with the dead left out
+    /// (removal keeps the survivors' order), carried whenever the unit moved. The core's own steps (the Hit & Run
+    /// sidestep after a volley) move models the table never placed; `land_delta` puts each surviving model there. A unit
+    /// can lose models in the same activation and still step (Hazardous self-wounds land in the volley, `sim.rs`
+    /// `land_hazardous_self`, before `tray_hit_and_run`): its survivors ride too. Empty when nothing moved.
+    pub positions: Vec<[f64; 3]>,
     /// P4.0-4d: the table-owned per-activation ledger AFTER — the fatigue flag and the unspent spell
     /// tokens. A plain activation changes neither; carrying them makes a table/core split visible.
     pub fatigued: bool,
@@ -543,6 +551,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 alive: after.alive[u],
                 moved,
                 unknown,
+                positions: if moved { a.clone() } else { Vec::new() },
                 fatigued: after.fatigued[u],
                 casts: after.casts[u],
                 stamps: stamps_of(after, u),
@@ -574,7 +583,7 @@ mod tests {
     }
 
     fn intent(kind: i64, shoot: Option<&str>) -> Input {
-        Input::Intent { kind, shoot: shoot.map(String::from), split: None }
+        Input::Intent { kind, shoot: shoot.map(String::from), split: None, charge: None }
     }
 
     fn refused(t: &[Input], index: usize, reason: &str) {
@@ -619,9 +628,11 @@ mod tests {
     }
 
     #[test]
-    fn rule8_charge_and_reposition_are_not_on_the_step_path() {
-        refused(&[Begin, intent(CHARGE, None)], 1, "not on the step path yet");
+    fn rule8_reposition_is_not_on_the_step_path_and_a_charge_names_its_target() {
         refused(&[Begin, placed(vec![]), intent(REPOSITION, None)], 2, "not on the step path yet");
+        refused(&[Begin, intent(CHARGE, None)], 1, "a charge names its target");
+        let charge = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("b".into()) };
+        assert_eq!(order_check("Squad", &[Begin, charge, Faces(vec![4])]), Ok(()));
     }
 
     #[test]
@@ -783,7 +794,7 @@ mod tests {
         for seed in 0..200i64 {
             let split = |split: Option<Vec<SplitShot>>| Action { kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None, patient: false, split, traced: None, teleport: None };
             let (want, shot) = resolve_stochastic_tray_on_board(&statics, &st, &split(Some(aim.clone())), &Terrain::default(), seams(), &mut GodotRng::new(seed), &mut Tray::seeded(seed)).unwrap();
-            let (got, rolls) = drive(&statics, &st, vec![Begin, Input::Intent { kind: HOLD, shoot: Some("b".into()), split: Some(aim.clone()) }], seed);
+            let (got, rolls) = drive(&statics, &st, vec![Begin, Input::Intent { kind: HOLD, shoot: Some("b".into()), split: Some(aim.clone()), charge: None }], seed);
             let ActStep::Done { state, lines, .. } = got else { panic!("seed {seed}: {got:?}") };
             let fold = |r: Roll| Roll { kind: if r.kind == "morale" { "attack" } else { r.kind }, ..r };
             assert_eq!(rolls.into_iter().map(fold).collect::<Vec<_>>(), shot.rolls, "seed {seed}");
@@ -1217,6 +1228,33 @@ mod tests {
         let (got, _) = drive(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], 7);
         let ActStep::Done { state, .. } = got else { panic!("seed 7: {got:?}") };
         assert!(delta_of(&st, &state).iter().all(|x| x.stamps.len() == 12), "a core row carries the stamps");
+    }
+    /// HR-POS: a unit whose models moved carries its surviving AFTER positions in slot order (the Hit & Run step the core
+    /// takes after a volley), also when it lost models; a unit that only lost models carries none, its losses ride
+    /// `removed`. RED: drop the field from the push -> empty, the table's landing has nothing to put the stepped models on.
+    #[test]
+    fn the_delta_carries_the_stepped_positions() {
+        let (st, _) = volley_line();
+        let mut after = st.clone();
+        for p in after.positions[0].iter_mut() {
+            p[0] += 0.0762;
+        }
+        let d = delta_of(&st, &after);
+        assert_eq!(d.len(), 1, "a step is a change: {d:?}");
+        assert!(d[0].moved);
+        assert_eq!(d[0].positions, after.positions[0], "the stepped positions ride the row, slot by slot");
+        let mut lost = st.clone();
+        lost.positions[2].remove(0);
+        lost.alive[2] -= 1;
+        let d = delta_of(&st, &lost);
+        assert_eq!((d.len(), d[0].removed.len()), (1, 1), "{d:?}");
+        assert!(d[0].positions.is_empty(), "a loss is no step: {d:?}");
+        // Lost a model (a Hazardous self-wound) AND stepped: the survivor's new spot rides, in order.
+        let mut both = lost.clone();
+        both.positions[2][0][0] += 0.0762;
+        let d = delta_of(&st, &both);
+        assert!(d[0].moved && d[0].unknown, "{d:?}");
+        assert_eq!(d[0].positions, both.positions[2], "the survivors' stepped positions ride the row");
     }
     /// P4.0-4g: a core-resolved Versatile volley carries the latched pick in its delta (the int mode the table's
     /// `versatile_pick` Dictionary is built from). RED: drop `versatile_pick_mode` from the push -> 0, no pick.

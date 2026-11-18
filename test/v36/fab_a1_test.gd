@@ -148,7 +148,7 @@ class ProbeLabel extends "res://scripts/main.gd":
 	func _solo_save_batch(_striker: GameUnit, _defender: GameUnit, weapon_name: String, count: int,
 			_base_defense: int, ap: int, _profile: Dictionary, _human_defends: bool, _bane: bool,
 			_apply_deadly: bool = true, _over9: bool = false, _solo: Dictionary = {},
-			_dist_in: float = -1.0, _charge_from_in: float = 0.0, _bane_from: int = 6) -> int:
+			_dist_in: float = -1.0, _charge_from_in: float = 0.0, _bane_from: int = 6, _shooting: bool = false) -> int:
 		batches.append({"name": weapon_name, "count": count, "ap": ap})
 		return 0
 
