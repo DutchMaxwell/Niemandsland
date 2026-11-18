@@ -641,12 +641,21 @@ pub(crate) fn round_start_refresh(statics: &[UnitStatic], state: &mut State, i: 
 /// in the trace below. Sweep E row Battleborn: from the FROZEN
 /// `EPOCH_43_BATTLEBORN_ROLL` the plain "Battleborn" entry rides it too
 /// (the alias stamp's plain-name arm, lowest-wins with the four aliases).
+///
+/// `joined_once` (from the FROZEN `EPOCH_90_JOINED_ONE_RECOVERY`): a hero joined to a unit is part of that unit, so the
+/// pair rolls ONE die on the host and the result carries to its heroes (main.gd `_solo_battleborn_recovery` skips an
+/// attached GameUnit, `_solo_mirror_shaken` copies the host). Before 90 the hero drew its own die and the pair could
+/// split (host Shaken, hero cleared).
 pub(crate) fn battleborn_recovery_roll(
     statics: &[UnitStatic],
     state: &mut State,
     i: usize,
     rng: &mut GodotRng,
+    joined_once: bool,
 ) {
+    if joined_once && state.attached_to.get(i).copied().flatten().is_some() {
+        return;
+    }
     let target = statics[state.roster.profile[i]].battleborn_recover_target;
     if target == 0 || !state.shaken[i] || state.alive[i] == 0 {
         return;
@@ -654,6 +663,12 @@ pub(crate) fn battleborn_recovery_roll(
     let face = rng.randi_range(1, 6);
     if face >= target as i64 {
         state.shaken[i] = false;
+    }
+    if joined_once {
+        let heroes: Vec<usize> = state.attached.get(i).cloned().unwrap_or_default();
+        for h in heroes {
+            state.shaken[h] = state.shaken[i];
+        }
     }
     // Rules-must-log: one stderr line when NML_TRACE_RULES=1, same shape as
     // sim.rs's S10 arms.
@@ -1160,7 +1175,7 @@ mod tests {
             st.shaken[0] = true;
             let face = GodotRng::new(seed).randi_range(1, 6);
             let mut rng = GodotRng::new(seed);
-            rollout::battleborn_recovery_roll(&statics, &mut st, 0, &mut rng);
+            rollout::battleborn_recovery_roll(&statics, &mut st, 0, &mut rng, true);
             if face >= 4 {
                 assert!(!st.shaken[0], "face {face} reaches the 4+ target");
                 recovered += 1;
@@ -1175,8 +1190,70 @@ mod tests {
         for seed in 0..64i64 {
             st.shaken[0] = true;
             let mut rng = GodotRng::new(seed);
-            rollout::battleborn_recovery_roll(&statics0, &mut st, 0, &mut rng);
+            rollout::battleborn_recovery_roll(&statics0, &mut st, 0, &mut rng, true);
             assert!(st.shaken[0], "no rule, no recovery");
         }
     }
+
+    /// T-JOINED-ONE-RECOVERY (epoch 90): a Shaken hero joined to a Shaken Battleborn host. With `joined_once` the
+    /// pair draws ONE die (the host's) and ends in one state; the hero's own call is a no-op. Without it (records
+    /// at 89 or below) each draws its own die and some seed splits the pair - the soak's `first_diff: shaken`.
+    #[test]
+    fn a_joined_pair_rolls_one_battleborn_recovery_from_epoch_90() {
+        use crate::acts::read_act_header;
+        use crate::state::ProfileCache;
+        use crate::{io, rollout};
+        use std::rc::Rc;
+        const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+          "p1_0_a":{"unit_id":"p1_0_a","name":"A","quality":4,"defense":3,"tough":1,
+            "wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,
+            "game_system":"gf","faction_folder":"robot_legions","special_rules":[],
+            "item_grants":[],"attached_hero_rules":[],
+            "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]},
+          "p1_1_h":{"unit_id":"p1_1_h","name":"H","quality":4,"defense":3,"tough":3,
+            "wounds_max":[3],"model_count":1,"caster_value":0,"base_radius":0.016,
+            "game_system":"gf","faction_folder":"robot_legions","special_rules":[],
+            "item_grants":[],"attached_hero_rules":[],
+            "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}}}"#;
+        const UNIT: &str = r#"{"player":1,"alive":1,"wounds":[1],"radii":[0.016],
+            "positions":[[0.0,0.0,0.0]],"in_cover":false,"shaken":true,
+            "fatigued":false,"activated":false,"casts":0,"morale_bonus":0,
+            "aircraft":false,"dormant":false,"ambush_arrived_round":-1,
+            "earliest_arrival_round":-1,"wound_frac":0.0,"mods":{},"mods_base":{},
+            "bands":{"advance":6.0,"rush":12.0}}"#;
+        let plain = format!(r#"{{"round":2,"rounds_total":4,"scoring":"end","units":{{"p1_0_a":{UNIT},"p1_1_h":{UNIT}}}}}"#);
+        let header = read_act_header(HEADER).expect("header");
+        let mut cache = ProfileCache::new(header.profiles);
+        let mut roster = None;
+        let mut st = io::state_from_json(&plain, &mut cache, &mut roster).expect("state");
+        let at = |k: &str| (0..st.units()).find(|&i| st.key(i) == k).expect(k);
+        let (host, hero) = (at("p1_0_a"), at("p1_1_h"));
+        let mut attached = vec![Vec::new(); st.units()];
+        attached[host] = vec![hero];
+        let mut attached_to = vec![None; st.units()];
+        attached_to[hero] = Some(host);
+        st.attached = Rc::new(attached);
+        st.attached_to = Rc::new(attached_to);
+        let statics = vec![UnitStatic { battleborn_recover_target: 4, ..Default::default() }; 2];
+        let mut split_before_90 = 0;
+        for seed in 0..64i64 {
+            for joined_once in [true, false] {
+                st.shaken[host] = true;
+                st.shaken[hero] = true;
+                let mut rng = GodotRng::new(seed);
+                for k in 0..st.units() {
+                    rollout::battleborn_recovery_roll(&statics, &mut st, k, &mut rng, joined_once);
+                }
+                if joined_once {
+                    assert_eq!(st.shaken[host], st.shaken[hero], "seed {seed}: one roll, one state for the pair");
+                    let face = GodotRng::new(seed).randi_range(1, 6);
+                    assert_eq!(!st.shaken[host], face >= 4, "seed {seed}: the host's die decides");
+                } else if st.shaken[host] != st.shaken[hero] {
+                    split_before_90 += 1;
+                }
+            }
+        }
+        assert!(split_before_90 > 0, "the pre-90 reading must split some pair, or this test proves nothing");
+    }
+
 }

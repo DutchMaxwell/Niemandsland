@@ -210,7 +210,8 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## table counting a move's Dangerous test on the route the models walked to 87 with EPOCH_87_WALKED_DANGEROUS.
 ## The split group at a lone hero is stamped 88 with EPOCH_88_SPLIT_LONE_HERO.
 ## Two profiles of one weapon sharing their sighted bearers is stamped 89 with EPOCH_89_SHARED_BEARERS.
-static var rules_epoch: int = 89
+## A joined hero rolling one Battleborn recovery with its host is stamped 90 with EPOCH_90_JOINED_ONE_RECOVERY.
+static var rules_epoch: int = 90
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -276,6 +277,9 @@ const EPOCH_88_SPLIT_LONE_HERO := 88
 ## The core's frozen `EPOCH_89_SHARED_BEARERS` (acts.rs): two profiles of one weapon share their sighted living
 ## bearers in the core volley, as the table's `_solo_resolve_ai_volley` split already does. Nothing in the table gates on it.
 const EPOCH_89_SHARED_BEARERS := 89
+## The core's frozen `EPOCH_90_JOINED_ONE_RECOVERY` (acts.rs): the playout's round boundary rolls one Battleborn-family
+## recovery per joined pair, as the table's `_solo_battleborn_recovery` already does. Nothing in the table gates on it.
+const EPOCH_90_JOINED_ONE_RECOVERY := 90
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

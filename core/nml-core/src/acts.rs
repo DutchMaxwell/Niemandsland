@@ -938,7 +938,12 @@ pub const EPOCH_88_SPLIT_LONE_HERO: u32 = 88;
 /// Records stamped 88 or below replay byte-exact. Every call site reads THIS constant, not `89`. The recorder mirror
 /// (`act_recorder.gd`) stamps 89 in the same change.
 pub const EPOCH_89_SHARED_BEARERS: u32 = 89;
-pub const CURRENT_RULES_EPOCH: u32 = 89;
+/// A hero joined to a unit rolls ONE Battleborn-family recovery with its host (T-JOINED-ONE-RECOVERY): the playout's
+/// round boundary skips an attached hero and copies the host's result to it, as the table does (main.gd
+/// `_solo_battleborn_recovery`, `_solo_mirror_shaken`). Before 90 the hero drew its own die and the pair could split.
+/// Records stamped 89 or below replay byte-exact. The recorder mirror (`act_recorder.gd`) stamps 90 in the same change.
+pub const EPOCH_90_JOINED_ONE_RECOVERY: u32 = 90;
+pub const CURRENT_RULES_EPOCH: u32 = 90;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2258,6 +2263,7 @@ mod tests {
         EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT, EPOCH_79_EV_MOVED_ROUND, EPOCH_80_ROLLOUT_CUMBERSOME,
         EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME, EPOCH_83_LONE_HERO_TARGET, EPOCH_84_IGNORE_GROUPS, EPOCH_85_INDIRECT_GATE,
         EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_87_WALKED_DANGEROUS, EPOCH_88_SPLIT_LONE_HERO, EPOCH_89_SHARED_BEARERS,
+        EPOCH_90_JOINED_ONE_RECOVERY,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2278,7 +2284,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 89, "the live epoch is EPOCH_89_SHARED_BEARERS");
+        assert_eq!(CURRENT_RULES_EPOCH, 90, "the live epoch is EPOCH_90_JOINED_ONE_RECOVERY");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2288,11 +2294,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":89}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":90}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 89"
+            "a fresh play_game() now stamps the bumped epoch, 90"
         );
     }
 
@@ -2426,6 +2432,14 @@ mod tests {
         assert!(rule_on(EPOCH_88_SPLIT_LONE_HERO, EPOCH_88_SPLIT_LONE_HERO), "a record at 88 shoots the lone hero");
         assert!(rule_on(EPOCH_88_SPLIT_LONE_HERO, EPOCH_87_WALKED_DANGEROUS), "88 keeps the walked-route count on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_88_SPLIT_LONE_HERO), "a fresh play_game() stamps it on");
+    }
+
+    #[test]
+    fn epoch_90_gate_is_closed_at_epoch_89_and_open_from_90() {
+        assert!(!rule_on(EPOCH_89_SHARED_BEARERS, EPOCH_90_JOINED_ONE_RECOVERY), "a record at 89 replays the hero's own die");
+        assert!(rule_on(EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_90_JOINED_ONE_RECOVERY), "a record at 90 rolls once per pair");
+        assert!(rule_on(EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_89_SHARED_BEARERS), "90 keeps the shared bearers on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_90_JOINED_ONE_RECOVERY), "a fresh play_game() stamps it on");
     }
 
     #[test]

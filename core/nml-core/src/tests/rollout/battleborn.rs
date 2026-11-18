@@ -73,11 +73,11 @@ use crate::rng::GodotRng;
         assert_eq!(GodotRng::new(1).randi_range(1, 6), 4, "seed 1 forces the 4");
         let (mut st, statics, i) = shaken_battleborn(EPOCH_43_BATTLEBORN_ROLL);
         round_start_refresh(&statics, &mut st, i);
-        battleborn_recovery_roll(&statics, &mut st, i, &mut GodotRng::new(8));
+        battleborn_recovery_roll(&statics, &mut st, i, &mut GodotRng::new(8), true);
         assert!(st.shaken[i], "face 3 misses the 4+ recovery: the unit stays Shaken");
         let (mut st, statics, i) = shaken_battleborn(EPOCH_43_BATTLEBORN_ROLL);
         round_start_refresh(&statics, &mut st, i);
-        battleborn_recovery_roll(&statics, &mut st, i, &mut GodotRng::new(1));
+        battleborn_recovery_roll(&statics, &mut st, i, &mut GodotRng::new(1), true);
         assert!(!st.shaken[i], "face 4 reaches the 4+ recovery");
     }
 
@@ -97,7 +97,7 @@ use crate::rng::GodotRng;
             let face = GodotRng::new(seed).randi_range(1, 6);
             let (mut st, statics, i) = shaken_battleborn(EPOCH_43_BATTLEBORN_ROLL);
             round_start_refresh(&statics, &mut st, i);
-            battleborn_recovery_roll(&statics, &mut st, i, &mut GodotRng::new(seed));
+            battleborn_recovery_roll(&statics, &mut st, i, &mut GodotRng::new(seed), true);
             if face <= 3 {
                 assert!(
                     st.shaken[i],
