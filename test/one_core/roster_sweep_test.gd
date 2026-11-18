@@ -9,6 +9,7 @@ extends GdUnitTestSuite
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
 const LISTS := ["res://assets/arena_lists/p1_2000.json", "res://assets/arena_lists/p2_2000.json"]
+const WOLF := "res://test/fixtures/wolf_brothers_3000.json"
 const DICE := "user://roster_sweep_dice"
 const OUT := "user://roster_sweep_out"
 
@@ -107,3 +108,30 @@ func test_the_ring_puts_every_list_in_two_pairings() -> void:
 	for l in ls:
 		assert_int(pairs.filter(func(p: Array) -> bool: return p[0] == l or p[1] == l).size()).is_equal(2)
 	assert_array(RosterSweep.ring([ls[0]])).is_empty()
+
+
+## DS-RG: a 12 in weapon at the sweep's 14 in centre distance. The nearest bases are 11.7 in apart, inside the weapon, so the
+## table fires; the core reads the same measure only when the header carries the shipped preset's table-fidelity switch
+## (`range_by_base_edge`, AiPlanner.table_fidelity_stamp), which `arm()` must stamp or every such volley is a false G1.
+## RED before the stamp: the core half records no roll at all.
+func test_a_twelve_inch_weapon_fires_across_the_base_edge_on_both_paths() -> void:
+	var l := RosterSweep.load_list(WOLF)
+	var att := {}
+	var tgt := {}
+	for e in l["units"]:
+		var nm := str((e["unit"] as OPRApiClient.OPRUnit).name)
+		if nm == "Wolf Support Brothers" and att.is_empty():
+			att = e
+		if nm == "Wolf Battle Tank" and tgt.is_empty():
+			tgt = e
+	RosterSweep.arm(_main, ProjectSettings.globalize_path(DICE))
+	var dice := ProjectSettings.globalize_path(DICE)
+	var t := await RosterSweep.volley(_main, att, tgt, 0, false, dice)
+	var c := await RosterSweep.volley(_main, att, tgt, 0, true, dice)
+	var table_attacks := _attacks(t["rolls"])
+	assert_int(table_attacks).override_failure_message("the table never fired the 12 in flamer: %s" % [t["rolls"]]).is_greater(0)
+	assert_int(_attacks(c["rolls"])).override_failure_message("the core fired nothing at 11.7 in base edge: %s" % [c["rolls"]]).is_equal(table_attacks)
+
+
+func _attacks(rolls: Array) -> int:
+	return rolls.filter(func(r: Dictionary) -> bool: return str(r["kind"]) == "attack").size()
