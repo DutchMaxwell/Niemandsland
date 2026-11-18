@@ -25,6 +25,10 @@ printed, never committed.
                                            caller that is gone is fine on purpose.
   python3 tools/table_census.py --gate-tag gd_search   exit 1 while a test still calls a function of that tag and
                                            list each one as file:function (the gate for clearing the GDScript search)
+  python3 tools/table_census.py --gate-file tools/x.gd --gate-tag gd_search,tools_only   the same gate for a tool
+                                           script: prints `tool_callers <tag> <file> <sites>` per tag and file (sites counted
+                                           like the test callers: class-qualified calls, comments ignored), exit 1 while any
+                                           is > 0, exit 2 when a file is missing unless --allow-missing (a retired tool)
 """
 import argparse
 import bisect
@@ -139,6 +143,22 @@ def planner_tags(root, manifest):
     return rows, bad
 
 
+def _count_calls(src, name, klass):
+    """Lines of `src` (a Source) that call `name` of a planner file whose class is `klass`: `name(` or a Callable/call
+    reference, but only when the line also names `klass`, so a same-named function of another class is not charged;
+    comments and the definition itself never count. No class (a file without class_name) = nothing is countable."""
+    if not klass or name not in src.text:
+        return 0
+    call, ref = re.compile(r"\b%s\(" % name), re.compile(r"[\"']%s[\"']" % name)
+    qual, n = re.compile(r"\b%s\b" % klass), 0
+    for code in src.code:
+        if (m := FUNC.match(code)) and m.group(1) == name:
+            continue
+        if qual.search(code) and (call.search(code) or (ref.search(code) and CALLISH.search(code))):
+            n += 1
+    return n
+
+
 def test_callers(root, manifest):
     """Return (rows, hits). rows: every planner tag -> [functions with a caller in test/, call sites]; hits: tag ->
     the "file:function" ids a test still calls. A test line counts like a group caller (`name(` or a Callable/call
@@ -152,18 +172,29 @@ def test_callers(root, manifest):
         for tag, names in sorted(tags.items()):
             row = rows.setdefault(tag, [0, 0])
             for name in names.split():
-                call, ref = re.compile(r"\b%s\(" % name), re.compile(r"[\"']%s[\"']" % name)
-                qual = re.compile(r"\b%s\b" % klass) if klass else None
-                n = 0
-                for other in tests:
-                    for i, code in enumerate(other.code if name in other.text else ()):
-                        if (m := FUNC.match(code)) and m.group(1) == name:
-                            continue
-                        if qual and qual.search(code) and (call.search(code) or (ref.search(code) and CALLISH.search(code))):
-                            n += 1
+                n = sum(_count_calls(other, name, klass) for other in tests)
                 if n:
                     row[0], row[1] = row[0] + 1, row[1] + n
                     hits.setdefault(tag, []).append(f"{file}:{name}")
+    return rows, hits
+
+
+def tool_callers(root, manifest, files):
+    """Return (rows, hits) for tool scripts (`files`, paths relative to root, all present). rows: file -> planner tag ->
+    [functions called, call sites]; hits: file -> tag -> ["planner file:function xN"]. Counted by _count_calls, the same
+    matcher as test_callers: a call site is a line that names the class of the function's file."""
+    rows, hits = {}, {}
+    for rel in files:
+        tool = Source(root / rel, rel)
+        for file, tags in sorted(manifest.get("planner_tags", {}).items()):
+            src = Source(root / file, file)
+            klass = next((m.group(1) for ln in src.lines if (m := CLASS.match(ln))), None)
+            for tag, names in sorted(tags.items()):
+                row = rows.setdefault(rel, {}).setdefault(tag, [0, 0])
+                for name in names.split():
+                    if n := _count_calls(tool, name, klass):
+                        row[0], row[1] = row[0] + 1, row[1] + n
+                        hits.setdefault(rel, {}).setdefault(tag, []).append(f"{file}:{name} x{n}")
     return rows, hits
 
 
@@ -297,6 +328,29 @@ def deny_report(rows):
     return "\n".join(out) + "\n"
 
 
+def tool_gate(args, manifest, gate_tags):
+    """The --gate-file mode: one `tool_callers <tag> <file> <sites>` line per tag and file, the functions behind every
+    non-zero count as ::error lines. 0 = no site, 1 = a site left, 2 = a missing file (unless --allow-missing)."""
+    missing = [f for f in args.gate_file if not (args.root / f).is_file()]
+    if missing and not args.allow_missing:
+        print(f"::error::--gate-file {', '.join(missing)}: no such file (--allow-missing counts a retired tool as 0)", file=sys.stderr)
+        return 2
+    planner_tags(args.root, manifest)   # a tagged function that is gone from its file raises here: the count would be blind
+    present = [f for f in args.gate_file if f not in missing]
+    rows, hits = tool_callers(args.root, manifest, present)
+    left = 0
+    for rel in args.gate_file:
+        for tag in gate_tags:
+            sites = rows.get(rel, {}).get(tag, [0, 0])[1]
+            left += sites
+            print(f"tool_callers {tag} {rel} {sites}")
+            for hit in hits.get(rel, {}).get(tag, []):
+                print(f"::error::tool caller of {tag}: {rel} calls {hit}")
+        if rel in missing:
+            print(f"::notice::{rel} is missing (allowed): counted as 0 sites")
+    return int(left > 0)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
@@ -306,16 +360,32 @@ def main(argv=None):
     mode.add_argument("--write", action="store_true")
     mode.add_argument("--check", action="store_true")
     ap.add_argument("--runtime", type=Path, help="soak census.json: append the runtime table share to the printed report")
-    ap.add_argument("--gate-tag", metavar="TAG", help="exit 1 while a test still calls a function of that planner tag")
+    ap.add_argument("--gate-tag", metavar="TAG", help="exit 1 while a test still calls a function of that planner tag "
+                    "(with --gate-file: a comma list of tags judged against the tool files)")
+    ap.add_argument("--gate-file", metavar="PATH", action="append", default=[],
+                    help="a tool script (repeatable): exit 1 while it calls a function of a --gate-tag tag; prints "
+                    "`tool_callers <tag> <file> <sites>`; exit 2 when PATH is missing unless --allow-missing")
+    ap.add_argument("--allow-missing", action="store_true", help="a --gate-file that does not exist counts 0 sites (a retired tool)")
     args = ap.parse_args(argv)
+    if args.gate_file and not args.gate_tag:
+        ap.error("--gate-file needs --gate-tag (the tag or comma list of tags to count)")
+    if args.allow_missing and not args.gate_file:
+        ap.error("--allow-missing only applies to --gate-file")
+    if args.gate_file and (args.write or args.check or args.runtime):
+        ap.error("--gate-file only judges the tool files (it prints no report and writes nothing)")
     if args.runtime and (args.write or args.check):
         ap.error("--runtime only extends the printed report (it is not deterministic, never committed)")
     if args.gate_tag and args.write:
         ap.error("--gate-tag only judges the printed report (nothing is written)")
     txt_path = args.txt or args.root / "test/one_core/table_census.txt"
     manifest = json.loads((args.manifest or args.root / "tools/table_census.json").read_text())
-    if args.gate_tag and args.gate_tag not in set(manifest.get("tag_vocabulary", "").split()):
-        ap.error(f"--gate-tag {args.gate_tag}: unknown planner tag (tag_vocabulary)")
+    vocab = set(manifest.get("tag_vocabulary", "").split())
+    gate_tags = [t for t in args.gate_tag.split(",") if t] if args.gate_file else [args.gate_tag] if args.gate_tag else []
+    for t in gate_tags:
+        if t not in vocab:
+            ap.error(f"--gate-tag {t}: unknown planner tag (tag_vocabulary)")
+    if args.gate_file:
+        return tool_gate(args, manifest, gate_tags)
     rows, bad = census(args.root, manifest)
     tags, untagged = planner_tags(args.root, manifest)
     callers, hits = test_callers(args.root, manifest)

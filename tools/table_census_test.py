@@ -356,3 +356,72 @@ def test_a_test_caller_counts_only_for_the_class_of_the_file(tmp_path):
     out = run(root).stdout
     assert "test_callers gd_search 0 0" in out and "test_callers keep 1 1" in out
     assert run(root, "--gate-tag", "gd_search").returncode == 0
+
+
+TOOL_CALL = "extends SceneTree\n\nfunc _init():\n\tvar r = Fixture.old_a(1)   # one qualified call\n"
+
+
+def tool_repo(root, x=TOOL_CALL, y="extends SceneTree\n\nfunc _init():\n\tpass\n"):
+    gate_repo(root)
+    for rel, text in (("tools/x.gd", x), ("tools/y.gd", y)):
+        (root / rel).write_text(text)
+    return root
+
+
+def test_gate_file_is_red_on_one_qualified_call_in_the_tool(tmp_path):
+    res = run(tool_repo(tmp_path), "--gate-file", "tools/x.gd", "--gate-tag", "gd_search")
+    assert res.returncode == 1
+    assert "tool_callers gd_search tools/x.gd 1" in res.stdout.splitlines()
+    assert "::error::tool caller of gd_search: tools/x.gd calls scripts/a.gd:old_a x1" in res.stdout
+
+
+def test_gate_file_is_green_for_a_comment_only_mention_and_once_the_call_is_removed(tmp_path):
+    root = tool_repo(tmp_path, x="extends SceneTree\n\nfunc _init():\n\tpass   # Fixture.old_a(1) is gone\n# Fixture.old_a(2)\n")
+    res = run(root, "--gate-file", "tools/x.gd", "--gate-tag", "gd_search")
+    assert res.returncode == 0 and res.stdout.splitlines() == ["tool_callers gd_search tools/x.gd 0"]
+    (root / "tools/x.gd").write_text(TOOL_CALL)                       # the call is back: red
+    assert run(root, "--gate-file", "tools/x.gd", "--gate-tag", "gd_search").returncode == 1
+    (root / "tools/x.gd").write_text(TOOL_CALL.replace("Fixture.old_a(1)", "0"))   # planted fault reversed: green
+    assert run(root, "--gate-file", "tools/x.gd", "--gate-tag", "gd_search").returncode == 0
+
+
+def test_gate_file_counts_only_calls_that_name_the_class_of_the_function(tmp_path):
+    root = tool_repo(tmp_path, x="func _init():\n\tOther.old_a(1)\n\told_a(2)\n")   # another class / no class: not charged
+    assert run(root, "--gate-file", "tools/x.gd", "--gate-tag", "gd_search").returncode == 0
+
+
+def test_gate_file_takes_a_tag_list_and_several_files_and_judges_each(tmp_path):
+    root = tool_repo(tmp_path, x=TOOL_CALL + "\tFixture.old_b()\n")
+    res = run(root, "--gate-file", "tools/x.gd", "--gate-file", "tools/y.gd", "--gate-tag", "gd_search,keep")
+    assert res.returncode == 1
+    assert [ln for ln in res.stdout.splitlines() if ln.startswith("tool_callers")] == [
+        "tool_callers gd_search tools/x.gd 1", "tool_callers keep tools/x.gd 1",
+        "tool_callers gd_search tools/y.gd 0", "tool_callers keep tools/y.gd 0"]
+    assert run(root, "--gate-file", "tools/y.gd", "--gate-tag", "gd_search,keep").returncode == 0
+
+
+def test_gate_file_on_a_missing_path_is_exit_2_unless_allowed(tmp_path):
+    root = tool_repo(tmp_path)
+    res = run(root, "--gate-file", "tools/gone.gd", "--gate-tag", "gd_search")
+    assert res.returncode == 2 and "no such file" in res.stderr and "tool_callers" not in res.stdout
+    res = run(root, "--gate-file", "tools/gone.gd", "--gate-tag", "gd_search", "--allow-missing")
+    assert res.returncode == 0 and "tool_callers gd_search tools/gone.gd 0" in res.stdout
+    # a missing file next to a red one must not hide the red one
+    assert run(root, "--gate-file", "tools/gone.gd", "--gate-file", "tools/x.gd", "--gate-tag", "gd_search",
+               "--allow-missing").returncode == 1
+
+
+def test_gate_file_rejects_a_missing_tag_an_unknown_tag_and_report_modes(tmp_path):
+    root = tool_repo(tmp_path)
+    assert run(root, "--gate-file", "tools/x.gd").returncode == 2
+    assert run(root, "--gate-file", "tools/x.gd", "--gate-tag", "gd_search,nope").returncode == 2
+    assert run(root, "--gate-file", "tools/x.gd", "--gate-tag", "gd_search", "--write").returncode == 2
+    assert run(root, "--allow-missing", "--gate-tag", "gd_search").returncode == 2
+    assert not (root / "test/one_core/table_census.txt").exists()
+
+
+def test_gate_file_notices_a_tagged_function_that_is_gone_instead_of_counting_zero(tmp_path):
+    root = tool_repo(tmp_path)
+    (root / "scripts/a.gd").write_text(GATE_PROD.replace("func old_a", "func renamed_a"))   # the tag line is now blind
+    res = run(root, "--gate-file", "tools/x.gd", "--gate-tag", "gd_search")
+    assert res.returncode != 0 and "scripts/a.gd:old_a not found" in res.stderr
