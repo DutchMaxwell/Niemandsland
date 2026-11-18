@@ -68,6 +68,8 @@ func _sim_unit(id: String, pid: int, n: int, rules: Array) -> GameUnit:
 	return u
 
 
+## The charge resolves through the core (`CoreResolve.resolve`): the surviving
+## defender strikes back there too, and both sides come home fatigued.
 func test_resolve_stamps_defender_fatigue_after_strike_back() -> void:
 	var a := _sim_unit("A", 1, 3, [])
 	var b := _sim_unit("B", 2, 3, [])
@@ -76,6 +78,6 @@ func test_resolve_stamps_defender_fatigue_after_strike_back() -> void:
 	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
 	army.game_units = {"A": a, "B": b}
 	var state := BattleSim.capture(army)
-	var next := BattleSim.resolve(state, {"unit": "A", "kind": AiDecision.Action.CHARGE, "charge": "B"})
+	var next := CoreResolve.resolve(state, {"unit": "A", "kind": AiDecision.Action.CHARGE, "charge": "B"})
 	assert_bool(bool((next["units"]["A"] as Dictionary)["fatigued"])).is_true()
 	assert_bool(bool((next["units"]["B"] as Dictionary)["fatigued"])).is_true()

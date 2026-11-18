@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## Rules 3.6 wave, row W1.3: a named hero carries "Unique Hero" in place of a separate "Hero" rule, and
-## "Unique Hero" is a Hero for every purpose (join, hero morale, solo sims, modeled lists). The core's twin
+## "Unique Hero" is a Hero for every purpose (join, hero morale, modeled lists). The core's twin
 ## in core/nml-core/src/tests/unit/v36_w1.rs pins the same hero cases on the profile stamp.
 
 const MainScript := preload("res://scripts/main.gd")
@@ -41,13 +41,6 @@ func test_the_targeting_overlay_marks_a_unique_hero() -> void:
 		assert_bool(bool(desc.get("is_hero", false))) \
 			.override_failure_message("%s: want overlay is_hero %s" % [c[0], c[1]]) \
 			.is_equal(c[1])
-
-
-## The solo sim's own reader is a substring test, so it already counts the named hero; this pins it.
-func test_the_solo_sim_counts_a_unique_hero() -> void:
-	assert_bool(SoloSim._is_hero({"rules": ["Unique Hero"]})).is_true()
-	assert_bool(SoloSim._is_hero({"rules": ["Hero"]})).is_true()
-	assert_bool(SoloSim._is_hero({"rules": ["Fearless"]})).is_false()
 
 
 ## The rule inventory battle-log line names the rule by the name the unit carries: a Unique Hero is
