@@ -1499,6 +1499,33 @@ TREE_KNOB_DEFAULTS = {
 
 # ------------------------------------------------------------------- game ----
 
+#: `Marker.secret` only ever rides a mission scored by "extract" (Smash & Grab, `markers.secret` in
+#: `assets/solo/missions.json`), so `_seat_view` skips its state read for every other game.
+#: `tests/python/test_seat_fog.py` pins the set against the catalog.
+FOG_SCORINGS = frozenset({"extract"})
+
+
+def _seat_view(core, state, player: int):
+    """R9a fog of war, twin of `core_selfplay.gd` `_seat_view` over `BattleSim.mask_secret_for`: both
+    seats play on ONE state, so each seat plans on its own VIEW of it. The ATTACKER's view of an
+    unrevealed secret marker carries no `secret` / `carry` / `carried_by` (they would give the relic
+    away) and says `secret_hidden` instead, which the mission eval prices at 1/n relic, 1/n trap
+    (score.rs `role_term`). The defender's view is the state itself, and so is the view of a game with
+    no hidden marker: the very same object, untouched. The shared state is never edited."""
+    if state.scoring not in FOG_SCORINGS:
+        return state
+    plain = state.plain()
+    if int(plain.get("attacker") or 0) != player:
+        return state
+    hidden = [m for m in plain.get("markers_meta") or [] if m.get("secret") is not None and not m.get("revealed")]
+    if not hidden:
+        return state
+    for m in hidden:
+        for key in ("secret", "carry", "carried_by"):
+            m.pop(key, None)
+        m["secret_hidden"] = True
+    return core.state_of(plain)
+
 
 def _pick_for(
     core, state, player: int, net_player: int = 0, eps: float = 0.0, explore_seed: int = 0,
@@ -1568,6 +1595,7 @@ def _pick_for(
     for `player` never reaches the binding's new kwargs at all."""
     if not state.pool(player, bool(core.knobs().get("hero_attach", True))):
         return {}
+    state = _seat_view(core, state, player)  # R9a: the seat plans (and its hooks read) on ITS view
     # NML-1142: `AiMissionEval.fit_mode` is per-ACTIVATION on the table and the
     # net is per-PROCESS, so the crate makes the caller say both. A trainer that
     # armed a net plays every activation with it — unless `net_player` names ONE
@@ -1860,10 +1888,10 @@ def _fork_run_activations(core, state, turn: int, frng) -> tuple[Any, int]:
     guard = state.units * 2 + 4
     while guard > 0:
         guard -= 1
-        action = core.policy_step(state, turn, True)
+        action = core.policy_step(_seat_view(core, state, turn), turn, True)
         if action is None:
             other = 2 if turn == 1 else 1
-            action = core.policy_step(state, other, True)
+            action = core.policy_step(_seat_view(core, state, other), other, True)
             if action is None:
                 break
             turn = other
