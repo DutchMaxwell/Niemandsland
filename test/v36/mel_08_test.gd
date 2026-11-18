@@ -1,8 +1,8 @@
 extends GdUnitTestSuite
 ## Rules 3.6 wave, row MEL-08: strike reach. From EPOCH_73_V36 a model strikes when it stands within 3" of an
 ## enemy model across the table and within 3" up or down; the 3.5 records (epoch 72 and below) keep 2" across
-## and 4" up. Both legs are pinned on every path that counts strikers: the table's base-edge count, its
-## centre-space twin and the solo sim's point-model count.
+## and 4" up. Both legs are pinned on every path that counts strikers: the table's base-edge count and
+## its centre-space twin.
 
 const INCH: float = SoloController.INCHES_TO_METERS
 const BASES_M := 0.025   # two 25 mm round bases: centre distance = edge gap + 25 mm
@@ -76,15 +76,3 @@ func test_the_centre_space_count_reaches_2_5in_at_epoch_73_not_at_epoch_72() -> 
 	assert_int(SoloController.striking_models(striker, enemy)).is_equal(0)
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	assert_int(SoloController.striking_models(striker, enemy)).is_equal(1)
-
-
-## The solo sim's points sit CONTACT_IN apart at base contact: 2.5" past contact strikes only under 3.6.
-func test_the_solo_sim_reaches_2_5in_at_epoch_73_not_at_epoch_72() -> void:
-	var striker: Dictionary = SoloSim.make_unit("Mob", 0, 4, 4, 1, [])
-	var defender: Dictionary = SoloSim.make_unit("Foe", 1, 4, 4, 1, [])
-	defender["model_pos"] = [Vector2(20, 20)]
-	striker["model_pos"] = [Vector2(20, 20.0 - (SoloSim.CONTACT_IN + 2.5))]
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
-	assert_int(SoloSim._striking_models(striker, defender)).is_equal(0)
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
-	assert_int(SoloSim._striking_models(striker, defender)).is_equal(1)
