@@ -822,9 +822,23 @@ fn save_batch(
 /// on the save target, Bane's re-roll, Shred, the per-model Deadly groups
 /// (audit 2026-09-13 §2.1) and the pooled Regeneration roll.
 ///
-/// NOT PORTED. Nothing here is a silent skip: everything the trainer's own
-/// profile model can SEE is flagged per activation in `unported`; everything
-/// below the line has no field to detect it by and is listed instead.
+/// PORTED SINCE THE DOOR PROBES — each measured EQUAL 16/16 on the AI body
+/// against this door at epoch 88: the Stealth / Evasive / stationary data
+/// aliases (`unit.rs::stealth_alias_of`, tests/dice/stealth_alias.rs), the
+/// Fortified aliases Guardian / Primeborn (tests/dice/fortified.rs), Fortified
+/// Growth's marker-driven AP (`EPOCH_6_TABLE_RULES`,
+/// tests/sim/growth_markers_epoch6.rs), the unit-level Lacerate sixes re-roll
+/// (`EPOCH_72_PLAYTEST_RULES`, `unit.rs::stamp_unit_strikers`), Instinctive
+/// (tests/sim/instinctive.rs), Sergeant's bearer share
+/// (tests/dice/g4r4_sergeant_scale.rs), the Takedown unit-of-[1] pick
+/// (tests/dice/takedown_unit_of_one.rs) and the hero's own range gap
+/// (`EPOCH_73_V36`, `att.member_gap_in`). The unit-level Bane re-roll rides
+/// the same stamp; its Regeneration half diverges (below).
+///
+/// NOT PORTED OR DIVERGENT, by the door's measurement. Nothing here is a
+/// silent skip: everything the trainer's own profile model can SEE is flagged
+/// per activation in `unported`; everything below the line has no field to
+/// detect it by and is listed instead.
 ///
 /// FLAGGED (a counter per activation):
 ///   * `surge_gates` — LEGACY REPLAY ONLY since the epoch-3 surge-gates port:
@@ -844,24 +858,21 @@ fn save_batch(
 ///     that model's own Defense (:3155).
 ///   * `strafing`    — the table splits a Strafing weapon per model (:2918).
 ///
-/// STREAM-DESYNCING DRAWS — these ROLL DICE on the table and nothing here does,
-/// so from the first one onward a `dice="table"` corpus is on a different
-/// stream than the recording. They are the top of the B5+ list for that reason:
-///   * the Unpredictable die, ONE per volley before any weapon fires (:3114).
-///     PORTED in B12 for the SHOOTING leg (`resolve_volley_with_tray`: the
-///     exact "Unpredictable"/"Unpredictable Shooter" pair, never the
-///     melee-only Fighter); the MELEE leg was already in
-///     `resolve_melee_with_tray` (block D1-B5a).
-///     (Block B6 ported the OTHER stream-desyncing draw this list used to
-///     name here — the extra-ATTACK dice of the Bloodborn/Primal/Predator/Clan
-///     Warrior family, :4454 — see `surge_attack_hits` and the PORTED line
-///     above.)
+/// STREAM-DESYNCING DRAWS: the two this list used to name are both PORTED and
+/// roll in the table's own slot. The Unpredictable die, ONE per volley before
+/// any weapon fires (:3114), came in block B12 for the SHOOTING leg
+/// (`resolve_volley_with_tray`: the exact "Unpredictable"/"Unpredictable
+/// Shooter" pair, never the melee-only Fighter); the MELEE leg was already in
+/// `resolve_melee_with_tray` (block D1-B5a). The extra-ATTACK dice of the
+/// Bloodborn/Primal/Predator/Clan Warrior family (:4454) came in block B6 —
+/// see `surge_attack_hits`.
 ///
 /// SHOT SELECTION AND SCALING (all of them change the die COUNT, which is the
 /// largest divergence class the replay gate measures):
 ///   * per-model SIGHTING — the table scales attacks by `_solo_sighted_count`
 ///     (:4131), a per-model geometric LOS plus base-edge range gate
-///     (:4283-4304); this port scales by `alive` through `effective_attacks`.
+///     (:4283-4304); this port scales by `alive` through `effective_attacks`
+///     (not re-measured on the door).
 ///   * PORTED in D1-B4b: attached HEROES fire as their own shots inside the
 ///     host's volley (:2954-2990), through `resolve_volley_with_tray`. With
 ///     `hero_attach="off"` the state carries no attachment at all, so that
@@ -873,34 +884,41 @@ fn save_batch(
 ///     (87 -> 88 of 670 FULL-equal acts with no hero shots added) — a
 ///     deliberate B4 fidelity fix, declared rather than smuggled.
 ///   * per-copy bearer scaling of a weapon's carriers
-///     (solo_controller.gd:457-467).
+///     (solo_controller.gd:457-467) — not measured on the door.
 ///
 /// PORTED in NML-1150: SPLIT FIRE (:2996-3005) — one call of THIS function per
 /// target group, in the table's group order, on the same tray (sim.rs builds
 /// the groups from the act's `split` aim). A multi-member volley at ONE target
 /// is not split fire and no longer raises any flag.
 ///
-/// TO-HIT AND SAVE MODIFIERS with no field in the profile/context model:
+/// TO-HIT AND SAVE MODIFIERS — the measured state:
 ///   * Indirect's moved -1 (:3163-3169) — PORTED in the quick-readjustment
 ///     wave: the weapon's `indirect_moved_hit_penalty` stamp (the registry
 ///     `moved_hit_penalty`) folds -N into the to-hit sum whenever the
 ///     shooter moved this activation (Ctx::moved_this_round), unless the
 ///     unit carries "Quick Readjustment" (Ctx::quick_readjustment, the
 ///     `no_moved_penalty` opt-out) — both behind the FROZEN
-///     `EPOCH_7_TABLE_RULES`. Still DECLARED, not ported: the GH #325
-///     GRANTED-INDIRECT leg of main.gd:3220's gate (`granted_indirect`) —
-///     no attacker-side granted-Indirect field reaches this fold.
+///     `EPOCH_7_TABLE_RULES` (tests/dice/indirect_moved.rs). The GH #325
+///     GRANTED-INDIRECT leg of main.gd:3220's gate has no attacker-side field
+///     here, but needs none: the grant's sight waiver is stamped on the
+///     profile (`unit.rs`, the `indirect` facet) and the table stops folding
+///     the moved penalty itself at `EPOCH_73_V36`, so a granted-Indirect
+///     volley measured EQUAL 16/16 with the target hidden behind a screen.
 ///   * Spot markers, Reckless AP, `AiEv.stamp_conditional_ap`
-///     (Shatter / Tear / Disintegrate). The Piercing tag PORTED in wave 3
-///     (the marker pool + the `tag_ap_mod` fold above); vs-target Marks
-///     PORTED in B2b (`tray_vs_marks`).
+///     (Shatter / Tear / Disintegrate) — not measured on the door. The
+///     Piercing tag PORTED in wave 3 (the marker pool + the `tag_ap_mod` fold
+///     above); vs-target Marks PORTED in B2b (`tray_vs_marks`).
 ///   * unit-level Bane / Lacerate — the STRIKER's own special rules, not just
-///     the weapon's (:6490-6500) — so a unit-level Bane neither re-rolls the
-///     defender's 6s nor bypasses Regeneration here.
-///   * the Fortified DATA ALIASES (Guardian, Primeborn and their over-9" gate)
-///     and Fortified Growth's marker-driven AP reduction (:6411-6441): only the
-///     plain `Fortified` flag reaches this port.
-///   * Stealth / Evasive data aliases, Vengeance, Instinctive. `Shot Modifier`
+///     the weapon's (:6490-6500) — PORTED (`EPOCH_72_PLAYTEST_RULES`,
+///     `unit.rs::stamp_unit_strikers`): the sixes re-roll fires from the unit
+///     rule alone, measured EQUAL 16/16 for Lacerate. DECLARED DIVERGENCE for
+///     a plain unit-level `Bane`: the core also sets the Regeneration bypass
+///     (`u_bypass`), the table's `_solo_ignores_regen` does not — measured
+///     UNEQUAL 16/16, first difference the Regeneration roll (the table heals,
+///     the core refuses).
+///   * Vengeance and the charge-/terrain-/movement-gated Stealth/Evasive alias
+///     shapes (auras, boosts, melee) — not measured on the door. The plain and
+///     over-9" aliases themselves are PORTED (above). `Shot Modifier`
 ///     itself: PORTED for its three flat/over-9" carriers (block B4 — Good
 ///     Shot, Bad Shot, Targeting Visor; `unit.rs::stamp_shot_modifier`). The
 ///     melee-/charge-/terrain-scoped family members (Grounded Precision,
@@ -965,17 +983,26 @@ pub struct Shooter<'a> {
 /// Regeneration stays pooled over the WHOLE volley (`_solo_land_wounds` :6623),
 /// not per member.
 ///
-/// STILL NOT PORTED here, and now visible because the members are:
+/// THE MEMBERS' measured state, now visible because the members are:
 ///
-///   * The hero's RANGE is the host's. `dist_in` is the one distance the caller
-///     measured between the host and the target (sim.rs) — the hero's own model
-///     positions are never read, so a hero standing 3" behind its unit is gated
-///     and modified as if it stood in the front rank. The table measures per
-///     member (`_solo_nearest_model_gap_in` :4370-4386).
-///   * The Takedown SHOT bonus groups (`_solo_takedown_bonus_groups`, appended
-///     to the shot list at :3057-3062 before the sort) are absent: this port has
-///     no ranged spend seam yet. That group IS the family's "Takedown Shot"
-///     rule (resolver wave A, main.gd:3046-3086). Its MELEE sibling "Takedown
+///   * The hero's RANGE: the LIVE door measures per member — `EPOCH_73_V36`,
+///     `sim.rs`'s `hero_own_gap` stamps `att.member_gap_in` and the dice fold's
+///     `reach_gate` prefers it — measured EQUAL 16/16 with the hero's 12"
+///     pistol 14" off the target. The table measures per member
+///     (`_solo_nearest_model_gap_in` :4370-4386); only the single-shooter
+///     convenience wrapper below still gates every member by the host's one
+///     `dist_in`.
+///   * The Takedown SHOT bonus group (that family's "Takedown Shot" rule,
+///     resolver wave A, main.gd:3046-3086) is STAMPED
+///     (`unit.rs::stamp_takedown_shot_named`, `EPOCH_7_TABLE_RULES`,
+///     tests/sim/feat_takedown_shot.rs) but measured UNEQUAL 16/16: the table
+///     scales the bonus to one die per SIGHTED model of the carrier (a
+///     synthetic `alive=1`/`max=1` profile handed `sighted` through
+///     `effective_attacks`), this port rolls its own single `attacks` die
+///     (`sim.rs::profiles_of`'s `extra_attack_q` arm). The first difference is
+///     the die COUNT (8 vs 1), never the faces. Its once-per-game latch also
+///     has no write-back through the door, so `feats_used` differs even on a
+///     one-model carrier. Its MELEE sibling "Takedown
 ///     Strike" left this note in the wave-4 follow-up port: the stamp appends
 ///     the synthetic limited melee profile (unit.rs
 ///     `stamp_takedown_strike_named`) and the melee fold rolls it at its own
@@ -987,8 +1014,10 @@ pub struct Shooter<'a> {
 /// (`SortArray::__introsort_loop`, INTROSORT_THRESHOLD), below which the final
 /// insertion sort leaves equal-priority shots where they were. `sort_by_key` is
 /// stable ALWAYS, so a volley of more than 16 shots may order its equal-priority
-/// shots differently from the table's. Nothing in the reference corpus is that
-/// wide, and the gate would show it as a `kind`/`count` part.
+/// shots differently from the table's. Measured: 16 and 17 equal-priority shots
+/// stayed EQUAL 16/16, 20 shots came out UNEQUAL 16/16 — the table led with the
+/// second weapon of the build order, this port kept the build order (same batch
+/// multiset, same end state; the gate reads it as a `kind`/`count` part).
 ///
 /// DEADLY'S TWO LEGS (audit 2026-09-13 §2.1, `EPOCH_14_DEADLY_LANDING`): this wrapper is the
 /// LEGACY leg (the pool carries the multiply against the unit's printed Tough, verbatim, and the
