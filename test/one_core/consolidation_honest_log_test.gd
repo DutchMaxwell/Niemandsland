@@ -122,7 +122,7 @@ func _report(r: Dictionary) -> String:
 	return "moved %d of %d models, lines: %s" % [r["moved"], r["models"], str(r["lines"])]
 
 
-# --- neither side destroyed: the charger backs off 1" (if possible) --------------------------------------------------
+# --- neither side destroyed: the charger backs off 1" when it has room ------------------------------------------------
 
 func test_a_back_step_that_moves_nothing_is_not_logged_as_a_move() -> void:
 	# A 10-model rank (hero joined or not) in base contact has no legal end spot for the planner: nothing moves.
