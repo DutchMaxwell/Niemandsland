@@ -159,3 +159,43 @@ func test_a_shaken_target_keeps_its_once_morale_buff() -> void:
 		var run: Dictionary = await _morale_run(seed_n, true)
 		assert_bool(run["asked"]).override_failure_message("seed %d: a Shaken unit rolls no morale die" % seed_n).is_false()
 		assert_bool(run["kept"]).override_failure_message("seed %d: no die, no spend" % seed_n).is_true()
+
+
+## A Surprise Attack bearer (gf `alien_hives`, the rule's own registry entry) and a plain target `foe_x` inches east.
+func _surprise_units(foe_x: float) -> Array:
+	_main.solo_ai_slots = {2: true}
+	_main._ensure_solo_controller()
+	_main._solo_batch = true
+	_main._solo_auto_saves = true
+	var side := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
+		"faction_folder": "alien_hives", "rules": ["Surprise Attack(2)"]}
+	var att := ParityTable._make_unit(_main, side.merged({"player": 2, "name": "Att", "models": 10, "x_in": 0.0}, true),
+		{"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []})
+	var foe := ParityTable._make_unit(_main, side.merged({"player": 1, "name": "Def", "models": 5, "x_in": foe_x,
+		"faction_folder": "robot_legions", "rules": []}, true), {})
+	return [att, foe]
+
+
+func _surprise_used(gu: GameUnit) -> bool:
+	return bool(gu.unit_properties.get("surprise_attack_used", false))
+
+
+## D19 (a): the once-per-game Surprise Attack latch (`State::surprise_attack_used`, the "first time this unit is activated"
+## trigger) burns whether or not a target is in range (the table stamps it BEFORE the candidate search), so a bearer with
+## nothing to strike still closes its burst — the core's latch must land the same way.
+func test_the_surprise_attack_latch_burns_without_a_target() -> void:
+	var units := _surprise_units(20.0)
+	var att: GameUnit = units[0]
+	await _activate(att, units[1], false)
+	assert_bool(_surprise_used(att)).override_failure_message("a first activation with no target in range still burns it").is_true()
+
+
+## D19 (a): the core fires the burst at the activation trigger in its own copy of the latch, and the table's own beat stamps
+## its flag only on the table path: without a delta key the table's latch stays open and the next meet bursts a second time.
+## The delta carries the AFTER; `land_delta` closes the table flag with the writer the table's own beat uses.
+func test_the_spent_surprise_attack_latch_comes_back() -> void:
+	var units := _surprise_units(4.0)
+	var att: GameUnit = units[0]
+	assert_bool(_surprise_used(att)).override_failure_message("the latch starts open").is_false()
+	await _activate(att, units[1])
+	assert_bool(_surprise_used(att)).override_failure_message("the core's burned latch lands on the table flag").is_true()

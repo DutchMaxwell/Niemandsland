@@ -904,6 +904,7 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		_land_stamps(main, gu, d)
 		_land_pools(main, gu, d)
 		_land_piercing(main, gu, d)
+		_land_surprise(main, gu, d)
 		_land_versatile_mode(main, gu, d)
 		_land_feats(main, gu, d)
 		_land_once_latches(main, gu, d)
@@ -1053,6 +1054,17 @@ static func _land_piercing(main, gu: GameUnit, d: Dictionary) -> void:
 	var core_source := "Piercing Target" if standing else ""
 	push_error("CoreActivation.land_delta: %s.piercing_tag_source differs (table %s, core %s)" % [gu.get_name(), source, core_source])
 	main._sync_unit_property(gu, "piercing_tag_source", core_source)
+
+
+## D19 (a): the unit's once-per-game Surprise Attack latch after the activation (the delta's `surprise_attack_used`). The core
+## fires the burst at the activation trigger from its own copy (`sim.rs`, `tray_surprise_attack`), so on this path it is the
+## first writer for a bearer the table's beat did not reach. It lands with the writer that beat uses (`_sync_unit_property`,
+## MP-synced), which stamps BEFORE the candidate search: a bearer with no target in range burns the latch too. Monotone, like
+## the table's own latch: a `false` row never re-opens a once-per-game burst the table already spent.
+static func _land_surprise(main, gu: GameUnit, d: Dictionary) -> void:
+	if not bool(d.get("surprise_attack_used", false)) or bool(gu.unit_properties.get("surprise_attack_used", false)):
+		return
+	main._sync_unit_property(gu, "surprise_attack_used", true)
 
 
 ## P4.0-4d: the table-owned per-activation ledger the delta now carries (inventory class (a)): the fatigue flag and the

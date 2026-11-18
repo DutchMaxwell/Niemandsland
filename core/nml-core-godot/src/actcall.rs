@@ -151,6 +151,7 @@ fn delta_array(before: &State, after: &State) -> VarArray {
         d.set("growth_markers", u.growth_markers);
         d.set("piercing_tag_used", u.piercing_tag_used);
         d.set("piercing_tag_persistent", u.piercing_tag_persistent);
+        d.set("surprise_attack_used", u.surprise_attack_used);
         let mut spent = VarArray::new();
         for (spell, scope) in &u.buffs_spent {
             spent.push(&varray![spell.as_str(), scope.as_str()].to_variant());
