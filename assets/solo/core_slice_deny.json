@@ -11,8 +11,6 @@
     "Courage": "The bare base the Courage Aura expansion stamps; no map entry on either side - the +1 morale rides the aura's own Banner entry."
   },
   "deny_names": {
-    "Unstoppable when Shooting": "Measured (shadow soak with unmapped names taken): 3 Eternals volleys at Change units, the core asks a 2+ defense roll of 3 dice the table never rolls. Its primitive (Lacerate) is shared with names that replay equal, so the name alone is refused until diagnosed.",
-    "Point-Blank Surge": "Measured (shadow soak after the C-R1 lift): Pistoleer Sisters -> Blood Death Brothers, the core counted 2 hits where the table counted 1. Its primitive (Surge) is shared with plain Surge, which replays equal, so the name alone is refused until diagnosed.",
     "Experimental Tinctures": "Measured (5-seed sweep): 25 taken volleys at Zairetia, the core opens a 12 in shot the table refuses; refused by name until diagnosed.",
     "Changebound": "Measured (5-seed sweep): 8 taken volleys, the core applies a target-side hit penalty the table does not.",
     "Stealth Aura": "Measured (5-seed sweep): 8 taken volleys, the same target-side hit penalty as Changebound.",
@@ -21,14 +19,8 @@
     "Relentless Aura": "Measured (5-seed sweep): 1 taken volley, the core pays one defense die more on a natural 6."
   },
   "groups": {
-    "measured_never_equal": {
-      "primitives": ["Tear", "Guarded"],
-      "kind": "measured",
-      "why": "Tear, Guarded: no volley with them replayed equal in the shadow soak. (Caster left 17.11.: the door keeps a volley after this activation's casts on the table, #2935.)",
-      "leaves_with": "a shadow re-soak that shows them equal"
-    },
     "ledger_not_round_tripped": {
-      "primitives": ["Piercing Tag", "Vengeance", "Teleport", "Infiltrate", "Growth Markers"],
+      "primitives": ["Teleport", "Infiltrate", "Growth Markers"],
       "kind": "ledger",
       "why": "Their marker pools / once-per-game stamps do not come back from the core's delta yet (slice design 1d). Growth Markers measured: a joined hero's Piercing Growth AP differs between the core and the table (C-18 soak, Hive Swarms + Grunt Veteran).",
       "leaves_with": "C-12 / C-13 and the activation-level steps"
