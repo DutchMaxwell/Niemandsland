@@ -17,7 +17,6 @@
 "test/ai_planner_menu_probe_test.gd": 0.1,
 "test/ai_planner_node_epoch_test.gd": 0.1,
 "test/ai_position_test.gd": 0.1,
-"test/ai_rollout_trace_test.gd": 0.1,
 "test/ai_round_planner_test.gd": 0.1,
 "test/ai_shooting_test.gd": 0.1,
 "test/ai_shot_recorder_test.gd": 0.1,

@@ -3933,10 +3933,6 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	record_decision({"kind": "planner", "unit": chosen.get_name(),
 		"rule": "PLANNER_V0 unit pick (NML-995): the round is played out for the best openers; the strongest end-of-round position activates first",
 		"candidates": [], "chosen": "activates next", "why": str(pick["intent"]), "data": pick_data})
-	# NML-1114: env NML_ROLLOUT_TRACE=<path> dumps the per-unit fold behind
-	# presence_*/tail_* for THIS pick (the pair that diverged in the 28.08. Gate C
-	# capture). Unset = a cached env check and an immediate return, no disk.
-	AiRolloutTrace.write(state, me, str(pick["unit_key"]), chosen.get_name(), pick_features)
 	# Leaf row (glasses v4): the winning candidate's horizon-end state — the
 	# distribution the leaf eval actually judges. Same record kind, flagged.
 	# NML-1073 M2-0b: TAKE it — the leaf is a live state (GameUnit refs, this
@@ -4610,10 +4606,10 @@ func _core_warn_once(reason: String) -> void:
 
 
 ## P4.D-65 (gate G2): the per-pick position features (AiMissionEval.features + BattleSim.reply_threat) feed only the
-## harness capture (`decision_sink`: the arena's position rows) and NML_ROLLOUT_TRACE. The player's log strips them
-## (render_decision_for_player) and the shipped game attaches neither, so it never computes them.
+## harness capture (`decision_sink`: the arena's position rows). The player's log strips them
+## (render_decision_for_player) and the shipped game attaches no sink, so it never computes them.
 func _pick_features_wanted() -> bool:
-	return decision_sink.is_valid() or AiRolloutTrace.active()
+	return decision_sink.is_valid()
 
 
 ## Feature wave: annotate a captured state with per-side off-table reserve
