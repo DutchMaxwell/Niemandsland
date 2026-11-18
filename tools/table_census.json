@@ -62,7 +62,7 @@
     "scripts/solo/ai_planner.gd": {
       "dead": "_holder_or_unactivated",
       "erlkoenig": "_advance_label _centre _describe _enemy_keys _intent _menu_holders_on _name_of _nearest_enemy _tail_cap_for brain_breadth_stamp brain_knob_stamp close_margin depth_discount horizon imagined_round_end_enabled intent_line leaf_opener_stamp menu_advance_k_on menu_wide_on playout_rich playout_rush_k_on points_knob_stamp seat_mode set_search_budget table_fidelity_stamp top_k_default tree_knobs",
-      "gd_search": "_advance_shoots _below_half _best_charge _best_shoot _blend_score _can_activate _can_shoot_at _clamp_to_band _cross_round _end_threat _gap_m _imagined_round_end _marker_holder _node_dump_stream _order_mode _other_player _plain_candidates _playout_pick _playout_round_tail _playout_sig _policy_candidates _policy_step _policy_step_net _record_node _reorder_within_unit _round_start_refresh _safe_advance _second_wave _unactivated candidates candidates_wide doctrine_pick full_playout menu_covers menu_covers_in plan plan_with_rollout rollout_boundaries take_last_leaf",
+      "gd_search": "_advance_shoots _below_half _best_charge _best_shoot _blend_score _can_activate _can_shoot_at _clamp_to_band _cross_round _end_threat _gap_m _imagined_round_end _marker_holder _node_dump_stream _order_mode _other_player _plain_candidates _playout_pick _playout_round_tail _playout_sig _policy_candidates _policy_step _policy_step_net _record_node _reorder_within_unit _round_start_refresh _safe_advance _second_wave _unactivated candidates candidates_wide full_playout menu_covers menu_covers_in plan plan_with_rollout rollout_boundaries take_last_leaf",
       "test_only": "full_playout_seeded rollout",
       "tools_only": "close close_node_dump"
     },

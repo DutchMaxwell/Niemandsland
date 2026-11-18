@@ -3868,20 +3868,15 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	var act_rec := AiActRecorder.begin(state, me, pool, terrain_type_at)
 	var pick := {}
 	var seam_leaf := {}
-	var doct := OS.get_environment("NML_OPENER_DOCTRINE")
-	var doctrine_on := doct != "" and AiPlanner.opener_seat and _current_round() == 1
 	# NML-1072: ONE timer around the whole decision — the search seam (Rust,
 	# _core_plan) or the GDScript fallback, whichever ran — so the split reads
 	# "search total" regardless of NML_CORE.
 	var _prof_srch_t0 := BattleSim.prof_t0()
-	if doctrine_on:
-		pick = AiPlanner.doctrine_pick(state, me, doct)   # research probe, env-gated
 	# NML-1073 M2-5: the SEARCH SEAM. With NML_CORE=1 AND the GDExtension loaded
 	# (BattleSim.core_enabled(), R1+R2) this activation is decided by the Rust
 	# core instead of the loop below; a DECLINE (net playout, fitted eval, an
 	# unported branch) falls straight through to the GDScript search, unchanged.
-	# The doctrine probe keeps precedence — it is a different decision entirely.
-	if not doctrine_on and not bool(pick.get("used", false)) and BattleSim.core_enabled():
+	if not bool(pick.get("used", false)) and BattleSim.core_enabled():
 		var _ph_core := 0
 		if act_wall_enabled():
 			_ph_core = _phase_enter()

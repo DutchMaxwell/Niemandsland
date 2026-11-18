@@ -299,7 +299,7 @@ static func active() -> bool:
 
 
 ## Pre-pick capture (INPUT): call right after the un-activated-pool loop and
-## BEFORE doctrine_pick/plan_with_rollout. Returns {} when the env seam is off
+## BEFORE plan_with_rollout. Returns {} when the env seam is off
 ## or the line cap is already hit — the caller's finish() then no-ops too.
 ## `school_world` (NML-1073 M3-0): core_selfplay's SchoolTerrain dict, used only as
 ## a terrain fallback when `terrain_cb` is invalid (core_selfplay has no overlay).
@@ -333,7 +333,7 @@ static func begin(state: Dictionary, me: int, pool: Array, terrain_cb: Callable,
 		"charge_illegal_grid": _charge_illegal_grid(state), "pool": pool_keys}
 
 
-## Post-pick write (OUTPUT): call once the final pick (doctrine_pick or
+## Post-pick write (OUTPUT): call once the final pick (a core-seam pick or
 ## plan_with_rollout) is settled. `pending` is begin()'s return value — {}
 ## (env off / cap hit) is a silent no-op.
 static func finish(pending: Dictionary, pick: Dictionary) -> void:
@@ -341,7 +341,7 @@ static func finish(pending: Dictionary, pick: Dictionary) -> void:
 		return
 	pending["pick"] = _flatten_vec3(pick)
 	# NML-1073 M2-0b: plan_with_rollout's search-trace bookkeeping — read once,
-	# then reset so the NEXT activation (or a doctrine_pick that never calls
+	# then reset so the NEXT activation (or a core-seam pick that never calls
 	# plan_with_rollout) never carries this one's stale trace forward.
 	pending["trace"] = AiPlanner.trace
 	AiPlanner.trace = {}
