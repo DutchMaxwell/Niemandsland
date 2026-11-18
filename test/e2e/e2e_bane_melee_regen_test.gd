@@ -85,3 +85,16 @@ func test_bane_when_shooting_does_not_inherit_the_melee_bypass() -> void:
 func test_weapon_level_bane_still_bypasses() -> void:
 	var striker := _carrier([])
 	assert_bool(_main._solo_ignores_regen(striker, {"range": 0, "rules": ["Bane"]})).is_true()
+
+
+## DS-TB: the unit-level Bane family bypasses as the core stamps it — the plain name on any
+## profile, the shooting name on a ranged one — and the Lacerate-primitive shooting entry
+## ("Unstoppable when Shooting") grants the Defense-6 re-roll, its shooting scope kept.
+func test_unit_level_plain_bane_bypasses_and_the_shooting_lacerate_rerolls() -> void:
+	var striker := _carrier(["Bane"])
+	assert_bool(_main._solo_ignores_regen(striker, {"range": 0, "rules": []})).is_true()
+	assert_bool(_main._solo_ignores_regen(striker, {"range": 24, "rules": []})).is_true()
+	assert_bool(_main._solo_ignores_regen(_carrier(["Bane when Shooting"]), {"range": 24, "rules": []})).is_true()
+	var uws := _carrier(["Unstoppable when Shooting"])
+	assert_bool(_main._solo_striker_has_bane(uws, {"range": 24, "rules": []}, false)).is_true()
+	assert_bool(_main._solo_striker_has_bane(uws, {"range": 0, "rules": []}, true)).is_false()

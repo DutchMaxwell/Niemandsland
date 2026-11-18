@@ -10353,6 +10353,17 @@ func _solo_bane_facet_name(striker: GameUnit, profile_range: int) -> String:
 		if not n.begins_with("Bane") and not n.ends_with("Aura") \
 				and bool(params.get("reroll_save_sixes", false)) and AiEv.facet_applies(params, profile_range):
 			return n
+	# DS-036/DS-TB: the Lacerate-primitive unit entries that share Bane's sixes leg ("Unstoppable
+	# in Melee" / "when Shooting") — the core's Lacerate loop stamps them to the facet's Bane flag
+	# (unit.rs stamp_unit_strikers); the prefix read in _solo_striker_has_bane never saw them. The
+	# plain Lacerate name keeps its own branch there and answers every facet.
+	for e in RulesRegistry.unit_rules_of_primitive(striker, "Lacerate"):
+		var el := e as Dictionary
+		var nl := str(el["name"])
+		if nl.begins_with("Lacerate") or not bool((el.get("params", {}) as Dictionary).get("bypass_regen", false)):
+			continue
+		if AiEv.facet_applies(el.get("params", {}), profile_range):
+			return nl
 	return ""
 
 
@@ -11333,20 +11344,29 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary, target: GameUn
 		# Sweep E (2026-09-14): "Bane in Melee" / "Bane in Melee Buff" sit on the MODEL too (gf
 		# common / human_defense_force), and every arm above reads only the weapon's printed
 		# rules or other primitives — the table granted the Regeneration heal the core refuses
-		# (unit.rs:2519, the melee-scoped arm at 2549-2551). The melee scope IS the name
-		# (main.gd:6672's ladder; the entries carry no melee_only param), so the prefix read
-		# never touches plain "Bane" (the #489 lesson) or "Bane when Shooting", and a ranged
-		# profile stays Regeneration-able. Rules-must-log: the refusal names the rule.
+		# (unit.rs:2519, the melee-scoped arm at 2549-2551). The scope IS the name
+		# (main.gd:6672's ladder; the Bane entries carry no melee_only param): the plain name on
+		# any profile, "Bane in Melee" in melee only, "Bane when Shooting" on a ranged profile
+		# only — the core's prefix read mirrors this (unit.rs stamp_unit_strikers). Aura variants
+		# grant the rule to OTHER units and never fire here. Rules-must-log: the refusal names
+		# the rule.
+		var unit_shooting := int(profile.get("range", 0)) > 0
 		for e in RulesRegistry.unit_rules_of_primitive(attacker, "Bane"):
 			var edb := e as Dictionary
-			if not str(edb["name"]).begins_with("Bane in Melee"):
+			var nb := str(edb["name"])
+			if not nb.begins_with("Bane") or nb.ends_with("Aura"):
+				continue
+			if nb.begins_with("Bane in Melee") and unit_shooting:
+				continue
+			if nb.begins_with("Bane when Shooting") and not unit_shooting:
 				continue
 			var pb: Dictionary = edb.get("params", {})
-			if bool(pb.get("bypass_regen", false)) and int(profile.get("range", 0)) <= 0:
-				if _solo_regen_bypass_named(target):
-					_log_rule_event(BattleLog.Category.COMBAT,
-						"%s: Regeneration ignored" % str(edb["name"]), _solo_is_ai_unit(attacker))
-				return true
+			if not bool(pb.get("bypass_regen", false)):
+				continue
+			if _solo_regen_bypass_named(target):
+				_log_rule_event(BattleLog.Category.COMBAT,
+					"%s: Regeneration ignored" % nb, _solo_is_ai_unit(attacker))
+			return true
 	# EXACT name (the Ferocious lesson): has_special_rule matches by PREFIX, so the plain-Unstoppable
 	# fallback also answered for "Unstoppable in Melee" / "Unstoppable when Shooting" — which is how
 	# both half-variants cut through Regeneration in BOTH halves no matter what their gate said — and
