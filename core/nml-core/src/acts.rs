@@ -930,7 +930,15 @@ pub const EPOCH_87_WALKED_DANGEROUS: u32 = 87;
 /// does for every group (`_solo_defense_holder`). Records stamped 87 or below replay byte-exact. Every call site reads THIS
 /// constant, not `88`. The recorder mirror (`act_recorder.gd`) stamps 88 in the same change.
 pub const EPOCH_88_SPLIT_LONE_HERO: u32 = 88;
-pub const CURRENT_RULES_EPOCH: u32 = 88;
+/// Two profiles of one weapon share its sighted bearers (T-DUP-WEAPON-BEARERS): a unit that lists one weapon twice
+/// (the Jesters' Atom Pistol x8 plain + x2 AP(1)) fires ONE die per sighted living bearer in total, not per entry.
+/// `living_bearers` keys the kits by weapon NAME, so both entries read every bearer and the core double-counted
+/// (8 sighted pistols rolled 8+8=16 dice where the table rolls 8). From this epoch the entries split the bearers in
+/// order, each capped by its own copies, as the table does (main.gd `_solo_resolve_ai_volley`, key `_solo_bearer_key`).
+/// Records stamped 88 or below replay byte-exact. Every call site reads THIS constant, not `89`. The recorder mirror
+/// (`act_recorder.gd`) stamps 89 in the same change.
+pub const EPOCH_89_SHARED_BEARERS: u32 = 89;
+pub const CURRENT_RULES_EPOCH: u32 = 89;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2249,7 +2257,7 @@ mod tests {
         EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_73_V36,
         EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT, EPOCH_79_EV_MOVED_ROUND, EPOCH_80_ROLLOUT_CUMBERSOME,
         EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME, EPOCH_83_LONE_HERO_TARGET, EPOCH_84_IGNORE_GROUPS, EPOCH_85_INDIRECT_GATE,
-        EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_87_WALKED_DANGEROUS, EPOCH_88_SPLIT_LONE_HERO,
+        EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_87_WALKED_DANGEROUS, EPOCH_88_SPLIT_LONE_HERO, EPOCH_89_SHARED_BEARERS,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2270,7 +2278,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 88, "the live epoch is EPOCH_88_SPLIT_LONE_HERO");
+        assert_eq!(CURRENT_RULES_EPOCH, 89, "the live epoch is EPOCH_89_SHARED_BEARERS");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2280,11 +2288,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":88}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":89}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 88"
+            "a fresh play_game() now stamps the bumped epoch, 89"
         );
     }
 
@@ -2418,6 +2426,14 @@ mod tests {
         assert!(rule_on(EPOCH_88_SPLIT_LONE_HERO, EPOCH_88_SPLIT_LONE_HERO), "a record at 88 shoots the lone hero");
         assert!(rule_on(EPOCH_88_SPLIT_LONE_HERO, EPOCH_87_WALKED_DANGEROUS), "88 keeps the walked-route count on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_88_SPLIT_LONE_HERO), "a fresh play_game() stamps it on");
+    }
+
+    #[test]
+    fn epoch_89_gate_is_closed_at_epoch_88_and_open_from_89() {
+        assert!(!rule_on(EPOCH_88_SPLIT_LONE_HERO, EPOCH_89_SHARED_BEARERS), "a record at 88 replays the by-name count");
+        assert!(rule_on(EPOCH_89_SHARED_BEARERS, EPOCH_89_SHARED_BEARERS), "a record at 89 shares the sighted bearers");
+        assert!(rule_on(EPOCH_89_SHARED_BEARERS, EPOCH_88_SPLIT_LONE_HERO), "89 keeps the split lone hero on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_89_SHARED_BEARERS), "a fresh play_game() stamps it on");
     }
 
     /// The WAVE 3 GATE's own reservation (05.09.): `EPOCH_6_TABLE_RULES` must

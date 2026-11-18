@@ -209,7 +209,8 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## EPOCH_85_INDIRECT_GATE, the played volley's distance honouring the vertical reach to 86 with EPOCH_86_VOLLEY_HEIGHT_REACH, and the
 ## table counting a move's Dangerous test on the route the models walked to 87 with EPOCH_87_WALKED_DANGEROUS.
 ## The split group at a lone hero is stamped 88 with EPOCH_88_SPLIT_LONE_HERO.
-static var rules_epoch: int = 88
+## Two profiles of one weapon sharing their sighted bearers is stamped 89 with EPOCH_89_SHARED_BEARERS.
+static var rules_epoch: int = 89
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -272,6 +273,9 @@ const EPOCH_87_WALKED_DANGEROUS := 87
 ## The core's frozen `EPOCH_88_SPLIT_LONE_HERO` (acts.rs): a split group aimed at a host with no models left is shot as its
 ## living joined hero, as `_solo_defense_holder` does on the table. Nothing in the table gates on it.
 const EPOCH_88_SPLIT_LONE_HERO := 88
+## The core's frozen `EPOCH_89_SHARED_BEARERS` (acts.rs): two profiles of one weapon share their sighted living
+## bearers in the core volley, as the table's `_solo_resolve_ai_volley` split already does. Nothing in the table gates on it.
+const EPOCH_89_SHARED_BEARERS := 89
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
