@@ -83,7 +83,6 @@
 "test/core_selfplay_caster_test.gd": 0.1,
 "test/core_selfplay_fog_test.gd": 0.1,
 "test/core_selfplay_import_path_test.gd": 0.1,
-"test/core_selfplay_magic_stamp_test.gd": 0.1,
 "test/corrections_log_test.gd": 0.2,
 "test/cover_fully_inside_test.gd": 0.1,
 "test/ctex_loader_test.gd": 0.1,
