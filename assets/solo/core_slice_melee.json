@@ -1,0 +1,7 @@
+{
+  "schema": "nml-core-slice-v1",
+  "door": "melee",
+  "mode": "allow",
+  "why": "P4.D-48: the AI charge door starts with units that carry no rule at all, on both sides. Every melee rule (Impact, Counter, Furious, Fear, Unwieldy, Regeneration, Deadly, the move-through rules, attachments, ...) stays on the table until its own widening proves it equal on the door (W template, P4.D-80 on). This file is read only by the charge door; NML_CORE_SLICE=deny does not touch it.",
+  "groups": {}
+}

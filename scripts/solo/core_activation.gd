@@ -341,7 +341,9 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		var lines: Array = r.get("lines", [])
 		for i in range(printed, lines.size()):
 			var line: Dictionary = lines[i]
-			main._log_rule_event(int(line["category"]), str(line["text"]), ai, str(line["detail"]))
+			# P4.D-48: a melee line carries "{cite}" where the table cites its rules book (the core holds no book version).
+			main._log_rule_event(int(line["category"]), str(line["text"]).replace("{cite}",
+				OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))), ai, str(line["detail"]))
 		printed = maxi(printed, lines.size())
 		await land_step(main, unit, r.get("landings", []), start_models, landed)
 		if str(r["step"]) == "done":
@@ -613,6 +615,74 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	return t.any(func(e: Dictionary) -> bool: return str(e["t"]) == "faces")
 
 
+## P4.D-48: the AI charges the core resolved through the charge door (the AI smoke and the door test read them).
+static var ai_charges := 0
+## True while the charge door drives: the core moves both units before it wounds them, so a landing names its model by slot
+## (the table's start positions are the planner's, not the core's), and the fatigue the fight writes is the core's own.
+static var _charge_landing := false
+
+
+## P4.D-48: does the charge door take this AI charge? A board captured before the move, the tray, a CHARGE at a target, both
+## units taken by the melee slice (`CoreSlice.MELEE_PATH`: no rule at all to start), a target with a statline, no Dangerous
+## test the table rolled and no cast (the board holds neither). An AI defender only: a human defender's strike-back is
+## its owner's choice on the table (`_solo_confirm_strike_back`), which the core does not ask yet.
+## WIP switch, default OFF (`NML_ONE_CORE_CHARGE=1` turns it on): the core's tray melee does not yet say the table's
+## melee lines nor land its strike losses per step (measured, test/one_core/core_charge_door_test.gd), so no game takes it.
+static var _charge_env := -1
+
+
+static func charge_door_enabled() -> bool:
+	if _charge_env < 0:
+		var raw := OS.get_environment("NML_ONE_CORE_CHARGE").to_lower()
+		_charge_env = 1 if (raw == "1" or raw == "on") else 0
+	return _charge_env == 1
+
+
+## Lead decision (#3025): a melee winner of 10+ models consolidates differently on the table (0 models moved) and in the core
+## (2; both legal, the core is the reference). Until the table follows, a unit of that size on either side stays on the table.
+const MELEE_MAX_MODELS := 10
+
+
+static func takes_ai_charge(main, unit: GameUnit, report: Dictionary) -> bool:
+	var target = report.get("target")
+	return charge_door_enabled() and main._solo_core_ai_h != 0 and unit != null and target is GameUnit \
+		and main._solo_combined_alive(unit) < MELEE_MAX_MODELS and main._solo_combined_alive(target) < MELEE_MAX_MODELS \
+		and main.dice_roller_control != null and int(report.get("action", -1)) == AiDecision.Action.CHARGE and main._solo_is_ai_unit(target) \
+		and CoreSlice.melee_refusals(unit).is_empty() and CoreSlice.melee_refusals(target, true).is_empty() \
+		and has_statline(target) and int(report.get("dangerous_dice", report.get("dangerous_models", 0))) == 0 \
+		and (report.get("casts", []) as Array).is_empty()
+
+
+## P4.D-48: the AI charge through the core's step path (`_run_ai_melee` hands over). The core lands the charge with its own
+## `charge_move` from the board before the move (authoritative, lead decision: the planner's drop is not sent), then
+## the snap, the pile-in, the strikes, the melee result, the loser's morale and the consolidation, and writes their lines;
+## the delta lands Shaken, Fatigue and every moved model's end position. The target's pre-melee wounds (`target_wounds_start`)
+## are the core's own read of the same board. True = the core resolved it (or a refusal after a die: never twice).
+static func run_ai_charge(main, unit: GameUnit, report: Dictionary) -> bool:
+	var target: GameUnit = report["target"]
+	# No placement: the core's charge move is the landing (lead decision), so the planner's drop is neither checked nor used
+	# (its routes may end where a later separation nudge moved a model, which the core's trail check refuses).
+	var t: Array = [{"t": "begin"}, {"t": "intent", "kind": int(report.get("action", -1)), "charge": target.unit_id}]
+	var wounds := [main._solo_unit_wounds_now(unit), main._solo_unit_wounds_now(target), main._solo_combined_alive(target)]
+	main._solo_stage_begin("%s charges %s" % [unit.get_name(), target.get_name()])
+	_charge_landing = true
+	var r: Dictionary = await drive(main, main._solo_core_ai_h, unit, t, true)
+	_charge_landing = false
+	if str(r["step"]) == "done":
+		ai_charges += 1
+		var lost: int = wounds[2] - main._solo_combined_alive(target)
+		await main._solo_show_outcome("Melee: %s deals %d — takes %d back — %s loses %d model%s" % [unit.get_name(),
+			wounds[1] - main._solo_unit_wounds_now(target), wounds[0] - main._solo_unit_wounds_now(unit), target.get_name(),
+			lost, "" if lost == 1 else "s"])
+		main._solo_stage_end()
+		announce(main, unit, target)
+		return true
+	main._solo_stage_end()
+	ai_refusals += 1
+	push_error("CoreActivation.run_ai_charge: %s - the core answered %s: %s" % [unit.get_name(), r["step"], r.get("reason", "")])
+	return t.any(func(e: Dictionary) -> bool: return str(e["t"]) == "faces")
+
+
 ## C-2: the AI activation's transcript before its first die: begin, the models where they stand now (with the routes they
 ## walked) and the intent (`target` null = no shot). `split` (an array of {member, weapon, target}, P4.D-14) is split fire's
 ## aim; empty = none, the intent then carries no "split" key. Shared by `run_ai` and the shadow replay (C-4).
@@ -858,6 +928,8 @@ static func land_step(main, _gu: GameUnit, landings: Array, start_models: Array,
 		var died: Array[ModelInstance] = []
 		for lm in entry["models"]:
 			var m: ModelInstance = _model_at(start_models, lgu, lm["at"]) if lgu != null else null
+			if _charge_landing and int(lm["slot"]) >= 0 and int(lm["slot"]) < by_slot.size():
+				m = by_slot[int(lm["slot"])]   # P4.D-48: the core moved the model first; its slot names it
 			if m == null:
 				push_error("CoreActivation.land_step: no model of %s at %s" % [entry["unit"], lm["at"]])
 				continue
@@ -1123,8 +1195,9 @@ static func _land_surprise(main, gu: GameUnit, d: Dictionary) -> void:
 ## core/table split (reported); the core's value lands either way, as `shaken` does.
 static func _land_ledger(main, gu: GameUnit, d: Dictionary) -> void:
 	if d.has("fatigued") and bool(d["fatigued"]) != gu.is_fatigued:
-		push_error("CoreActivation.land_delta: %s fatigue differs (table %s, core %s)" % [
-			gu.get_name(), gu.is_fatigued, bool(d["fatigued"])])
+		if not _charge_landing:   # P4.D-48: the fight's fatigue is the core's outcome, not a split
+			push_error("CoreActivation.land_delta: %s fatigue differs (table %s, core %s)" % [
+				gu.get_name(), gu.is_fatigued, bool(d["fatigued"])])
 		if main.radial_menu_controller != null:
 			main.radial_menu_controller.card_toggle_fatigued(gu)
 	if d.has("casts") and int(d["casts"]) != gu.casts_current:
