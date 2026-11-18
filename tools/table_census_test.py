@@ -250,6 +250,31 @@ def test_runtime_census_shadow_section_ranks_groups_and_names_deny_and_unexplain
     assert out[-2:] == ["UNEXPLAINED (mismatching, no rule group): 1", "  faces  unported=strafing"]
 
 
+def test_runtime_census_deny_mode_names_taken_equal_unequal_and_blockers(tmp_path):
+    root = repo(tmp_path)
+    census = tmp_path / "census.json"
+    rec = lambda deny, equal=True, diff="": {"deny": deny, "equal": equal, "first_diff": diff, "labels": [],
+                                             "shooter": "Hive Swarms", "targets": ["Assault Brothers", "Flamer Beast"],
+                                             "unported": []}
+    census.write_text(json.dumps({"ai_volleys": 3, "legacy": {"ai_volley": {"_all": 3}}, "shadow": [
+        rec([]), rec([], equal=False, diff="rolls"), rec(["unit_rule:Sturdy"], equal=False, diff="state")]}))
+    out = run(root, "--runtime", str(census)).stdout.split("DENY MODE")[1].splitlines()
+    assert "taken 2 of 3" in out[0] and "equal 1" in out[0]
+    assert out[1] == "  UNEQUAL Hive Swarms -> Assault Brothers, Flamer Beast: rolls"
+    assert out[2] == "BLOCKERS (volleys, one per label):"
+    assert out[3].split() == ["1", "Sturdy"]
+
+
+def test_runtime_census_deny_mode_is_silent_without_deny_fields(tmp_path):
+    root = repo(tmp_path)
+    census = tmp_path / "census.json"
+    census.write_text(json.dumps({"ai_volleys": 1, "legacy": {"ai_volley": {"_all": 1}},
+                                  "shadow": [{"equal": True, "first_diff": "", "labels": [], "unported": []}]}))
+    out = run(root, "--runtime", str(census)).stdout
+    assert "DENY MODE" not in out
+    assert out.rstrip().endswith("UNEXPLAINED (mismatching, no rule group): 0")
+
+
 def test_runtime_census_without_shadow_records_prints_no_shadow_section(tmp_path):
     root = repo(tmp_path)
     census = tmp_path / "census.json"
