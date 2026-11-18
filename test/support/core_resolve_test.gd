@@ -20,6 +20,44 @@ func test_a_hold_volley_through_the_core_matches_the_table_hand_number_at_the_li
 		.override_failure_message("the core ran at epoch 0: no game header, no kits").is_true()
 
 
+## The seams dict must reach a core that HAS a header: NmlCore.resolve takes its seams off the header
+## knobs, so set_seams alone is headerless-only. Spacing off lands the mover on the blocker's centre
+## (a negative base-edge gap); spacing on keeps the UNIT_SPACING_IN disc. Without the header stamp
+## both runs clamp and the off assertion reads ~0.99" -> RED.
+func test_the_seams_dict_reaches_a_core_that_has_a_header() -> void:
+	var mover := _bare(1, [Vector3.ZERO], "Mover")
+	var blocker := _bare(2, [Vector3(2.3 * IN2M, 0, 0)], "Blocker")
+	var state := _capture([mover, blocker])
+	var action := {"unit": "Mover", "kind": AiDecision.Action.RUSH, "dest": Vector3(2.3 * IN2M, 0, 0)}
+	var on := CoreResolve.resolve(state, action, {"spacing": true})
+	var off := CoreResolve.resolve(state, action, {"spacing": false})
+	assert_float(_gap_in(on)).is_greater_equal(SoloController.UNIT_SPACING_IN - 0.01)
+	assert_float(_gap_in(off)).is_less(0.0)
+
+
+func _bare(pid: int, positions: Array, uid: String) -> GameUnit:
+	var u := GameUnit.new()
+	u.unit_id = uid
+	u.unit_properties = {"player_id": pid, "name": uid, "quality": 4, "defense": 4, "special_rules": []}
+	for p in positions:
+		var m := ModelInstance.new()
+		m.is_alive = true
+		m.wounds_current = 1
+		m.unit = u
+		var n := Node3D.new()
+		add_child(n)
+		n.global_position = p
+		m.node = n
+		u.models.append(m)
+	return u
+
+
+func _gap_in(next: Dictionary) -> float:
+	var mp: Vector3 = (next["units"]["Mover"] as Dictionary)["positions"][0]
+	var bp: Vector3 = (next["units"]["Blocker"] as Dictionary)["positions"][0]
+	return (mp - bp).length() / IN2M - 2.0 * SeparationChecker.DEFAULT_BASE_RADIUS_M / IN2M
+
+
 func _armed(pid: int, positions: Array, uid: String) -> GameUnit:
 	var u := GameUnit.new()
 	u.unit_id = uid
