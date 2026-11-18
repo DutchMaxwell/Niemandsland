@@ -18,7 +18,7 @@ printed, never committed.
   python3 tools/table_census.py            print the report
   python3 tools/table_census.py --write    rewrite the committed report (lines and prod callers only)
   python3 tools/table_census.py --runtime census.json   print the report + the soak's table share of AI volleys
-                                           (+ the SHADOW section when the soak ran with NML_CORE_SHADOW=1)
+                                           (+ the SHADOW and DENY MODE sections when the soak carries them)
   python3 tools/table_census.py --check    exit 1 if the report is stale (lines and prod callers; test-caller counts
                                            are printed but never compared or committed), if a planner function has no tag, or if a prod caller appears that
                                            allowed_callers does not list ("file:function" or "@group"). A listed
@@ -228,7 +228,7 @@ def runtime_report(path):
             out.append(row(sum(n for k, n in sets.items() if need[k] <= set(order[:i])), f"+ {order[i - 1]} (group {i})"))
         out += ["TOP REASON SETS (no_handle left out):"]
         out += [row(n, " + ".join(r for r in k if r != "no_handle") or "(no_handle only)") for k, n in best(sets)]
-    return "\n".join(out) + "\n" + shadow_report(data.get("shadow", []))
+    return "\n".join(out) + "\n" + shadow_report(data.get("shadow", [])) + deny_report(data.get("shadow", []))
 
 
 def shadow_report(rows):
@@ -271,6 +271,29 @@ def shadow_report(rows):
     loose = [r for r in bad if not groups(r)]
     out += [f"UNEXPLAINED (mismatching, no rule group): {len(loose)}"]
     out += [f"  {r.get('first_diff', '?')}  unported={','.join(r.get('unported', [])) or '-'}" for r in loose[:10]]
+    return "\n".join(out) + "\n"
+
+
+def deny_report(rows):
+    """The deny mode's share of a soak census: `deny` holds the refusal labels of a volley ([] = taken) and `equal`
+    says whether the core matched the table. Prints how many volleys were taken, the equal share among those, every
+    unequal taken volley with its shooter, targets and first diff, and BLOCKERS: each refusal label (text after the
+    first ':') with the number of volleys it blocks, most first. Empty for a census without `deny` fields."""
+    if not any("deny" in r for r in rows):
+        return ""
+    taken = [r for r in rows if not r.get("deny")]
+    equal = [r for r in taken if r.get("equal")]
+    pct = lambda k, of: f"{100.0 * k / of if of else 0.0:5.1f} %".strip()
+    out = [f"DENY MODE: taken {len(taken)} of {len(rows)} ({pct(len(taken), len(rows))}), "
+           f"equal {len(equal)} among taken ({pct(len(equal), len(taken))})"]
+    out += [f"  UNEQUAL {r.get('shooter', '?')} -> {', '.join(r.get('targets', []))}: {r.get('first_diff', '?')}"
+            for r in taken if not r.get("equal")]
+    blocked = {}
+    for r in rows:
+        for label in {group_of(x) for x in r.get("deny") or []}:
+            blocked[label] = blocked.get(label, 0) + 1
+    out += ["BLOCKERS (volleys, one per label):"]
+    out += [f"  {n:6d}  {label}" for label, n in sorted(blocked.items(), key=lambda kv: (-kv[1], kv[0]))] or ["  (none)"]
     return "\n".join(out) + "\n"
 
 
