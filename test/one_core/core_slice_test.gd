@@ -307,7 +307,7 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 func test_deny_mode_takes_the_lifted_equal_probes() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
-	var unit_rules := {"Unstoppable when Shooting": "", "Point-Blank Surge": "blessed_sisters",
+	var unit_rules := {"Unstoppable when Shooting": "",
 		"Guarded": "blessed_sisters", "Piercing Tag": "alien_hives", "Vengeance": "eternal_dynasty"}
 	for name in unit_rules:
 		var gu := _unit([name], [])
@@ -318,6 +318,10 @@ func test_deny_mode_takes_the_lifted_equal_probes() -> void:
 	tearer.unit_properties["faction_folder"] = "custodian_brothers"
 	assert_bool(CoreSlice.takes(tearer)).override_failure_message(
 		"deny mode takes a unit that carries Tear").is_true()
+	# Re-listed 18.11. (gate soak): the probe was equal, a split volley was not.
+	var sisters := _unit(["Point-Blank Surge"], [])
+	sisters.unit_properties["faction_folder"] = "blessed_sisters"
+	assert_array(CoreSlice.refusals(sisters)).is_equal(["unit_rule:Point-Blank Surge"])
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 

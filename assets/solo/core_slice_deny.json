@@ -11,6 +11,7 @@
     "Courage": "The bare base the Courage Aura expansion stamps; no map entry on either side - the +1 morale rides the aura's own Banner entry."
   },
   "deny_names": {
+    "Point-Blank Surge": "Measured twice: the C-R1 soak (Pistoleer Sisters -> Blood Death Brothers, core 2 hits, table 1) and the 18.11. gate soak after the batch lift (Pistoleer Sisters split volley -> Blood Guard Brothers, core 6 defense dice, table 4). The 16/16 door probe does not reach the split-volley case; refused by name until diagnosed.",
     "Experimental Tinctures": "Measured (5-seed sweep): 25 taken volleys at Zairetia, the core opens a 12 in shot the table refuses; refused by name until diagnosed.",
     "Changebound": "Measured (5-seed sweep): 8 taken volleys, the core applies a target-side hit penalty the table does not.",
     "Stealth Aura": "Measured (5-seed sweep): 8 taken volleys, the same target-side hit penalty as Changebound.",
