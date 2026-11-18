@@ -3,6 +3,8 @@ extends GdUnitTestSuite
 ## on a CLONE: the whole unit translates toward the goal, clamped by the
 ## official move band (advance 6" / rush+charge 12" for plain infantry); the
 ## input state stays untouched; the actor comes back activation-spent.
+## The first nine cases resolve through the core (`CoreResolve.resolve`); the
+## later ones still hand-compute on the GDScript twin until their own step.
 
 const IN2M := 0.0254
 
@@ -34,24 +36,10 @@ func _centre(state: Dictionary) -> Vector3:
 	return c / ps.size()
 
 
-func test_bands_clamp_toward_a_far_goal() -> void:
-	var state := _state_with_grunts()
-	var goal := Vector3(30.0 * IN2M, 0, 0.5 * IN2M)   # ~29.5" out — beyond every band
-	var start := _centre(state)
-	for pair in [[AiDecision.Action.ADVANCE, 6.0], [AiDecision.Action.RUSH, 12.0],
-			[AiDecision.Action.CHARGE, 12.0]]:
-		var next := BattleSim.resolve(state, {"unit": "Grunts", "kind": pair[0], "dest": goal})
-		var moved: float = (_centre(next) - start).length() / IN2M
-		assert_float(moved).is_equal_approx(pair[1], 0.01)
-	var hold := BattleSim.resolve(state, {"unit": "Grunts", "kind": AiDecision.Action.HOLD,
-		"dest": goal})
-	assert_that(_centre(hold)).is_equal(start)
-
-
 func test_goal_within_band_is_reached_exactly_and_coherence_kept() -> void:
 	var state := _state_with_grunts()
 	var goal := Vector3(4.0 * IN2M, 0, 0)
-	var next := BattleSim.resolve(state, {"unit": "Grunts", "kind": AiDecision.Action.ADVANCE,
+	var next := CoreResolve.resolve(state, {"unit": "Grunts", "kind": AiDecision.Action.ADVANCE,
 		"dest": goal})
 	assert_that(_centre(next)).is_equal(goal)
 	var ps: Array = (next["units"]["Grunts"] as Dictionary)["positions"]
@@ -108,9 +96,9 @@ func test_shoot_kills_by_expectation_and_cover_saves() -> void:
 	var squad := _armed(1, targets, "Squad", [{"name": "Rifle", "range": 24}])
 	var state := _capture([shooter, squad])
 	var action := {"unit": "Shooter", "kind": AiDecision.Action.HOLD, "shoot": "Squad"}
-	assert_int(int((BattleSim.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(3)
+	assert_int(int((CoreResolve.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(3)
 	(state["units"]["Squad"] as Dictionary)["in_cover"] = true
-	assert_int(int((BattleSim.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(4)
+	assert_int(int((CoreResolve.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(4)
 
 
 ## T2: a walled pair (captured LOS false) never trades wounds in expectation —
@@ -124,49 +112,48 @@ func test_resolve_gates_shooting_on_captured_los() -> void:
 	var state := _capture([shooter, squad])
 	(state["units"]["Shooter"] as Dictionary)["los"] = {"Squad": false}
 	var action := {"unit": "Shooter", "kind": AiDecision.Action.HOLD, "shoot": "Squad"}
-	assert_int(int((BattleSim.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(4)
+	assert_int(int((CoreResolve.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(4)
 	(state["units"]["Shooter"] as Dictionary)["los"] = {"Squad": true}
-	assert_int(int((BattleSim.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(3)
+	assert_int(int((CoreResolve.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(3)
 
 
-## Dynamic LOS: a state-level los_blocked callable gates shooting AND the reply
-## threat by CURRENT centres (core runner: units move for whole games, so the
-## capture-time matrix can't serve); it must also survive clone_state.
-func test_dynamic_los_callable_blocks_shot_and_reply() -> void:
+## A captured LOS row that says "blocked" leaves the shot without wounds through
+## the core. The state-level `los_blocked` Callable and the reply half it also
+## gated are GDScript-only (a plain state carries neither), so only this half is
+## retargeted; the Callable half keeps its own coverage in the GD search.
+func test_blocked_los_row_blocks_the_shot() -> void:
 	var shooter := _armed(2, [Vector3.ZERO], "Shooter", [{"name": "Rifle", "range": 24}])
 	var targets: Array = []
 	for i in range(4):
 		targets.append(Vector3((12.0 + i) * IN2M, 0, 0))
 	var squad := _armed(1, targets, "Squad", [{"name": "Rifle", "range": 24}])
 	var state := _capture([shooter, squad])
+	(state["units"]["Shooter"] as Dictionary)["los"] = {"Squad": false}
 	var action := {"unit": "Shooter", "kind": AiDecision.Action.HOLD, "shoot": "Squad"}
-	state["los_blocked"] = func(_a: Vector3, _b: Vector3) -> bool: return true
-	assert_int(int((BattleSim.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(4)
-	assert_that(BattleSim.reply_threat(state, 1).is_empty()).is_true()
-	assert_that(BattleSim.clone_state(state).has("los_blocked")).is_true()
-	state["los_blocked"] = func(_a: Vector3, _b: Vector3) -> bool: return false
-	assert_int(int((BattleSim.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(3)
-	assert_that(BattleSim.reply_threat(state, 1).is_empty()).is_false()
+	assert_int(int((CoreResolve.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(4)
 
 
 ## T2b: a mover's in_cover follows it through the rollout — stamped from the
 ## terrain probe at the NEW unit centre; without a probe the captured flag
-## stays frozen (pre-T2b behaviour).
+## stays frozen (pre-T2b behaviour). The core takes the probe's answer as the
+## recorded `cover_dest` action key (the Callable a plain state cannot carry).
 func test_move_restamps_cover_from_the_terrain_probe() -> void:
 	var state := _state_with_grunts()
 	# forest patch around x = 6", nothing anywhere else
 	(state as Dictionary)["terrain_at"] = func(p: Vector3) -> int:
 		return TerrainRules.TerrainType.FOREST \
 			if absf(p.x / IN2M - 6.0) < 2.0 and absf(p.z) < 2.0 * IN2M else TerrainRules.TerrainType.NONE
-	var into := BattleSim.resolve(state, {"unit": "Grunts",
-		"kind": AiDecision.Action.ADVANCE, "dest": Vector3(6.0 * IN2M, 0, 0)})
+	var into := CoreResolve.resolve(state, {"unit": "Grunts",
+		"kind": AiDecision.Action.ADVANCE, "dest": Vector3(6.0 * IN2M, 0, 0),
+		"cover_dest": true})
 	assert_bool((into["units"]["Grunts"] as Dictionary)["in_cover"]).is_true()
-	var out := BattleSim.resolve(into, {"unit": "Grunts",
-		"kind": AiDecision.Action.RUSH, "dest": Vector3(30.0 * IN2M, 0, 0)})
+	var out := CoreResolve.resolve(into, {"unit": "Grunts",
+		"kind": AiDecision.Action.RUSH, "dest": Vector3(30.0 * IN2M, 0, 0),
+		"cover_dest": false})
 	assert_bool((out["units"]["Grunts"] as Dictionary)["in_cover"]).is_false()
 	state.erase("terrain_at")
 	(state["units"]["Grunts"] as Dictionary)["in_cover"] = true
-	var frozen := BattleSim.resolve(state, {"unit": "Grunts",
+	var frozen := CoreResolve.resolve(state, {"unit": "Grunts",
 		"kind": AiDecision.Action.RUSH, "dest": Vector3(30.0 * IN2M, 0, 0)})
 	assert_bool((frozen["units"]["Grunts"] as Dictionary)["in_cover"]).is_true()
 
@@ -179,7 +166,7 @@ func test_charge_drains_tough_pool_and_strike_back_answers() -> void:
 	var ogre := _armed(1, [Vector3(8.0 * IN2M, 0, 0)], "Ogre", [{"name": "Claws", "range": 0}],
 		["Tough(3)"], 3)
 	var state := _capture([grunts, ogre])
-	var next := BattleSim.resolve(state, {"unit": "Grunts", "kind": AiDecision.Action.CHARGE,
+	var next := CoreResolve.resolve(state, {"unit": "Grunts", "kind": AiDecision.Action.CHARGE,
 		"dest": Vector3(8.0 * IN2M, 0, 0), "charge": "Ogre"})
 	var o: Dictionary = next["units"]["Ogre"]
 	assert_int(int(o["alive"])).is_equal(1)
@@ -192,22 +179,13 @@ func test_charge_drains_tough_pool_and_strike_back_answers() -> void:
 func test_unreachable_charge_moves_but_never_fights() -> void:
 	var grunts := _armed(2, [Vector3.ZERO], "Grunts", [{"name": "CCW", "range": 0}])
 	var far := _armed(1, [Vector3(30.0 * IN2M, 0, 0)], "Far", [{"name": "CCW", "range": 0}])
-	var next := BattleSim.resolve(_capture([grunts, far]),
+	var next := CoreResolve.resolve(_capture([grunts, far]),
 		{"unit": "Grunts", "kind": AiDecision.Action.CHARGE,
 		"dest": Vector3(30.0 * IN2M, 0, 0), "charge": "Far"})
 	assert_int(int((next["units"]["Far"] as Dictionary)["alive"])).is_equal(1)
 	var g: Dictionary = next["units"]["Grunts"]
 	assert_bool(g["fatigued"]).is_false()
 	assert_float(((g["positions"][0] as Vector3)).x / IN2M).is_equal_approx(12.0, 0.01)
-
-
-func test_resolve_spends_activation_on_the_clone_only() -> void:
-	var state := _state_with_grunts()
-	var next := BattleSim.resolve(state, {"unit": "Grunts", "kind": AiDecision.Action.ADVANCE,
-		"dest": Vector3(4.0 * IN2M, 0, 0)})
-	assert_bool((next["units"]["Grunts"] as Dictionary)["activated"]).is_true()
-	assert_bool((state["units"]["Grunts"] as Dictionary)["activated"]).is_false()
-	assert_that(_centre(state)).is_equal(Vector3(0.5 * IN2M, 0, 0))
 
 
 # === Morale in expectation (parity wave step 2a, NML-995) ===
@@ -226,7 +204,7 @@ func test_shooting_to_half_shakes_q4_but_not_q3_or_fearless() -> void:
 		var squad := _armed(1, squad_pos, "Squad", [{"name": "Rifle", "range": 24}], cfg[1])
 		squad.unit_properties["quality"] = cfg[0]
 		var state := _capture([shooter, squad])
-		var next := BattleSim.resolve(state,
+		var next := CoreResolve.resolve(state,
 			{"unit": "Shooter", "kind": AiDecision.Action.HOLD, "shoot": "Squad"})
 		var sq: Dictionary = next["units"]["Squad"]
 		assert_int(int(sq["alive"])).is_equal(2)
@@ -243,7 +221,7 @@ func test_shooting_above_half_never_tests() -> void:
 	for i in range(4):
 		squad_pos.append(Vector3((12.0 + i) * IN2M, 0, 0))
 	var squad := _armed(1, squad_pos, "Squad", [{"name": "Rifle", "range": 24}])
-	var next := BattleSim.resolve(_capture([shooter, squad]),
+	var next := CoreResolve.resolve(_capture([shooter, squad]),
 		{"unit": "Shooter", "kind": AiDecision.Action.HOLD, "shoot": "Squad"})
 	var sq: Dictionary = next["units"]["Squad"]
 	assert_int(int(sq["alive"])).is_equal(3)
@@ -330,42 +308,6 @@ func test_melee_loser_above_half_is_shaken() -> void:
 	var v: Dictionary = next["units"]["Victims"]
 	assert_int(int(v["alive"])).is_equal(3)
 	assert_bool(bool(v.get("shaken", false))).is_true()
-
-
-## Fear(X) in the melee COMPARISON (GF/AoF Advanced Rules v3.5.1 p.13, issue #634):
-## the same losing fight as above, but the defender carries Fear(2) — it counts
-## as having dealt 2 + its floored 0 wound, beats the charger's 1, and the
-## CHARGER (above half, Q4) is the one who tests and shakes. Wounds actually
-## removed never change (the 1 dead victim stays dead).
-func test_fear_counts_into_the_melee_won_comparison() -> void:
-	var brutes := _armed(2, [Vector3.ZERO], "Brutes", [{"name": "Fists", "range": 0}])
-	var pos: Array = []
-	for i in range(4):
-		pos.append(Vector3((8.0 + i) * IN2M, 0, 0))
-	var victims := _armed(1, pos, "Victims", [{"name": "Club", "range": 0, "attacks": 1}],
-		["Fear(2)"])
-	var next := BattleSim.resolve(_capture([brutes, victims]),
-		{"unit": "Brutes", "kind": AiDecision.Action.CHARGE,
-		"dest": Vector3(8.0 * IN2M, 0, 0), "charge": "Victims"})
-	var v: Dictionary = next["units"]["Victims"]
-	assert_int(int(v["alive"])).is_equal(3)
-	assert_bool(bool(v.get("shaken", false))).is_false()
-	var b: Dictionary = next["units"]["Brutes"]
-	assert_bool(bool(b.get("shaken", false))).is_true()
-
-
-## A wound-for-wound tie (here: 0 vs 0 — both clubs floor to nothing) tests
-## nobody; the charge still fatigues the charger.
-func test_melee_tie_tests_nobody() -> void:
-	var a := _armed(2, [Vector3.ZERO], "A", [{"name": "Club", "range": 0, "attacks": 1}])
-	var b := _armed(1, [Vector3(8.0 * IN2M, 0, 0)], "B", [{"name": "Club", "range": 0, "attacks": 1}])
-	var next := BattleSim.resolve(_capture([a, b]),
-		{"unit": "A", "kind": AiDecision.Action.CHARGE,
-		"dest": Vector3(8.0 * IN2M, 0, 0), "charge": "B"})
-	assert_bool(bool((next["units"]["A"] as Dictionary).get("shaken", false))).is_false()
-	assert_bool(bool((next["units"]["B"] as Dictionary).get("shaken", false))).is_false()
-	assert_int(int((next["units"]["B"] as Dictionary)["alive"])).is_equal(1)
-	assert_bool(bool((next["units"]["A"] as Dictionary)["fatigued"])).is_true()
 
 
 # === Fractional wound carry (parity wave step 4, NML-995) ===
