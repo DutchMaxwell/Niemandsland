@@ -20,8 +20,13 @@ concurrency:
 
 env:
   ORT_VERSION: "1.28.0"
-  ORT_LINUX_SHA256: "a3e1b79d7bb1bf09696ce675f49e4064e6c81f6202b8225624fff0e93f8d6407"
-  ORT_WIN_SHA256: "abef733dacbe2f571547a7150b479b5cb9cc0df22f96c24983a42cadb1b4f8bc"
+  # The ort legs fetched github.com/microsoft/onnxruntime/releases/... until 2026-11-17; since 2026-11-18 that repo and
+  # its assets answer 404 (curl without --fail then wrote "Not Found" into ort-linux.tgz: the sha256 check failed).
+  # The official NuGet package Microsoft.ML.OnnxRuntime carries the SAME native builds (byte sizes equal to the last
+  # green run: libonnxruntime.so 24268848, onnxruntime.dll 15809848). SHA512 as published by nuget.org
+  # (registration catalogEntry.packageHash, base64 2X2D0DH6dEzW...Salw==), here as hex.
+  ORT_NUPKG_URL: "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.28.0/microsoft.ml.onnxruntime.1.28.0.nupkg"
+  ORT_NUPKG_SHA512: "d97d83d031fa744cd67dab61e88deecc8b6c3c11b1a98951b0fcf73852bb4bd4df935d0c71674a19e80d8d3f0a98e02d9129e8df24c5f5ea38de60ef9fdb1a97"
   REMAP: "--remap-path-prefix=/home/runner/.cargo=/cargo --remap-path-prefix=/home/runner/work=/workspace --remap-path-prefix=/home/runner=/build"
 
 jobs:
@@ -35,6 +40,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
+          # Only main saves: a PR-scoped save wrote ~1 GB per spike run (repo cache cap 10 GB).
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Golden vectors (tract)
         # Fat LTO (core/Cargo.toml) stays, so the goldens test the shipped optimisation level. Debug info off and 2 jobs
         # keep the four fat-LTO test links under the hosted-runner memory (they were killed with exit 143 since #1804).
@@ -83,14 +90,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
+          # Only main saves: a PR-scoped save wrote ~1 GB per spike run (repo cache cap 10 GB).
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Fetch ONNX Runtime (linux-x64)
         run: |
           set -euo pipefail
-          curl -sSL -o ort-linux.tgz \
-            "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-linux-x64-${ORT_VERSION}.tgz"
-          echo "${ORT_LINUX_SHA256}  ort-linux.tgz" | sha256sum -c -
-          tar xzf ort-linux.tgz
-          DYLIB="$PWD/onnxruntime-linux-x64-${ORT_VERSION}/lib/libonnxruntime.so.${ORT_VERSION}"
+          curl -sSL --fail --retry 3 -o ort.nupkg "${ORT_NUPKG_URL}"
+          echo "${ORT_NUPKG_SHA512}  ort.nupkg" | sha512sum -c -
+          unzip -q ort.nupkg 'runtimes/linux-x64/native/*' -d ort-runtime
+          DYLIB="$PWD/ort-runtime/runtimes/linux-x64/native/libonnxruntime.so"
           test -f "$DYLIB"
           echo "NML_ORT_DYLIB=$DYLIB" >> "$GITHUB_ENV"
       - name: Golden vectors (ort)
@@ -130,6 +138,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
+          # Only main saves: a PR-scoped save wrote ~1 GB per spike run (repo cache cap 10 GB).
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Windows-gnu target
         run: rustup target add x86_64-pc-windows-gnu
       - name: MinGW toolchain (x86_64 only, cached)
@@ -163,6 +173,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
+          # Only main saves: a PR-scoped save wrote ~1 GB per spike run (repo cache cap 10 GB).
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Windows-gnu target
         run: rustup target add x86_64-pc-windows-gnu
       - name: MinGW toolchain (x86_64 only, cached)
@@ -170,10 +182,9 @@ jobs:
       - name: Fetch ONNX Runtime (win-x64)
         run: |
           set -euo pipefail
-          curl -sSL -o ort-win.zip \
-            "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-win-x64-${ORT_VERSION}.zip"
-          echo "${ORT_WIN_SHA256}  ort-win.zip" | sha256sum -c -
-          unzip -q ort-win.zip -d ort-runtime
+          curl -sSL --fail --retry 3 -o ort.nupkg "${ORT_NUPKG_URL}"
+          echo "${ORT_NUPKG_SHA512}  ort.nupkg" | sha512sum -c -
+          unzip -q ort.nupkg 'runtimes/win-x64/native/*' -d ort-runtime
       - name: Build, strip, size (ort, cross)
         continue-on-error: true
         run: |
@@ -205,6 +216,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
+          # Only main saves: a PR-scoped save wrote ~1 GB per spike run (repo cache cap 10 GB).
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: MinGW on PATH and windows-gnu target
         shell: bash
         run: |
@@ -241,6 +254,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
+          # Only main saves: a PR-scoped save wrote ~1 GB per spike run (repo cache cap 10 GB).
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: MinGW on PATH and windows-gnu target
         shell: bash
         run: |
@@ -249,11 +264,15 @@ jobs:
       - name: Fetch ONNX Runtime (win-x64)
         shell: pwsh
         run: |
-          $url = "https://github.com/microsoft/onnxruntime/releases/download/v$env:ORT_VERSION/onnxruntime-win-x64-$env:ORT_VERSION.zip"
-          Invoke-WebRequest -Uri $url -OutFile ort-win.zip
-          $actual = (Get-FileHash ort-win.zip -Algorithm SHA256).Hash.ToLower()
-          if ($actual -ne "$env:ORT_WIN_SHA256") { Write-Error "sha256 mismatch: $actual"; exit 1 }
-          Expand-Archive -Path ort-win.zip -DestinationPath ort-runtime -Force
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri "$env:ORT_NUPKG_URL" -OutFile ort.nupkg
+          $actual = (Get-FileHash ort.nupkg -Algorithm SHA512).Hash.ToLower()
+          if ($actual -ne "$env:ORT_NUPKG_SHA512") { Write-Error "sha512 mismatch: $actual"; exit 1 }
+          # Only the win-x64 library: the package also holds a win-arm64 onnxruntime.dll.
+          New-Item -ItemType Directory -Force ort-runtime | Out-Null
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [IO.Compression.ZipFile]::OpenRead((Join-Path $PWD ort.nupkg))
+          try { [IO.Compression.ZipFileExtensions]::ExtractToFile($zip.GetEntry('runtimes/win-x64/native/onnxruntime.dll'), (Join-Path $PWD 'ort-runtime/onnxruntime.dll'), $true) } finally { $zip.Dispose() }
           $dll = (Get-ChildItem ort-runtime -Recurse -Filter onnxruntime.dll | Select-Object -First 1).FullName
           if (-not $dll) { Write-Error "onnxruntime.dll not found"; exit 1 }
           "NML_ORT_DYLIB=$dll" | Out-File -FilePath $env:GITHUB_ENV -Append
