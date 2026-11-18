@@ -1119,6 +1119,7 @@ func _solo_activate_one_ai() -> GameUnit:
 	if _solo_core_ai_h != 0:   # one-core P3 step 42: the body's capture, released on every path of the body
 		solo_controller._core_node_ready().release(_solo_core_ai_h)
 		_solo_core_ai_h = 0
+	CoreShadow.flush(self)   # C-19 s2: a held compare of a body that returned early
 	CoreShadow.release(self)   # C-3: the shadow board and its tap end with the body too
 	save_manager.note_activation_end()   # P4.0-7 (D5): a save after the AI activation is an ordinary one
 	if done != null and solo_activation_done.is_valid():
@@ -1364,6 +1365,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 			"Dangerous terrain")
 	if unit != null and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
 		await _solo_try_precision_spot(unit)   # wave B: once per activation
+	CoreShadow.flush(self)   # C-19 s2: the shadow compare, after the last die the core's one call also rolls
 	# Ambush Re-Deployment fires "when a unit ... ENDS its activation" — the very last beat, after
 	# every attack and follow-up step, so the unit leaves with everything it did already resolved.
 	if unit != null and not unit.is_destroyed():
@@ -5026,7 +5028,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		if _solo_combined_alive(g["target"]) == 0:   # combined: a host with no model left still stands while its joined hero lives
 			continue   # P4.D-37: the move-through attacks the table paid just now (a refused core call) took its last model
 		await _solo_resolve_ai_volley(unit, g["target"], g["shots"], moved)
-	CoreShadow.compare(self, unit, report, groups, order)   # C-4: NML_CORE_SHADOW=1 only (no handle otherwise): counting
+	CoreShadow.hold(self, unit, report, groups, order)   # C-4: NML_CORE_SHADOW=1 only; compared once the body's end morale is thrown
 
 
 ## NML-1035: a shooting activation that resolves NO volley still writes one COMBAT
