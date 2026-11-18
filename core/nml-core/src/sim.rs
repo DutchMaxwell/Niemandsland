@@ -6360,6 +6360,9 @@ fn strike_phase(
     // defender unit's own alive count — nothing else moves `alive[ti]` inside
     // this phase.
     let alive_before = next.alive[ti];
+    // P4.D-48: a supplied tray (the step path) keeps the phase's landing and says the table's wound and loss lines
+    // (`land_chain_report`, shared with the volley); a seeded tray snapshots nothing, so no draw or outcome moves.
+    let landed = chain_snapshot(next, ti, tray);
     if !seams.tray_exact {
         land_pool_wounds(next, ti, w, false, seams, &mut shot.log);
     }
@@ -6380,6 +6383,7 @@ fn strike_phase(
     if seams.tray_exact {
         land_pool_wounds(next, ti, w, true, seams, &mut shot.log);
     }
+    land_chain_report(statics, next, tray, ti, landed);
     caused = caused - raw_deadly + dealt;
     // rules-wave3-growthmark (epoch 6) — the ignore-wound marker AFTER the
     // landing: a bearer that ignored some of these wounds banks for them.
@@ -10982,6 +10986,8 @@ fn resolve_with(
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.
                         if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) || morale_side_alive(&next, li, seams) {
+                            // P4.D-48: a rout removes the loser; the step path lands it with the table's lines.
+                            let routed = chain_snapshot(&next, li, tray);
                             // MOR-09b: the loser's own charge keeps Banner but drops the
                             // Valiant share; only a unit that WAS charged keeps the band.
                             if li == si {
@@ -10991,6 +10997,7 @@ fn resolve_with(
                                 tray_morale(&mut next, statics, li, true, seams, tray, shot, None,
                                     Some(charge_from_in));
                             }
+                            land_chain_report(statics, &next, tray, li, routed);
                         }
                     }
                     // Coverage wave — growth markers (Defensive Frenzy):
