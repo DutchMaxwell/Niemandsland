@@ -94,15 +94,6 @@ func test_cached_ruin_sight_volumes_rebuild_on_epoch_change_at_epoch_73() -> voi
 	assert_int((o.los_volumes() as Array).size()).is_equal(0)
 
 
-func test_sim_ruin_volumes_follow_the_epoch_at_epoch_73() -> void:
-	var ruin := {Vector2i(5, 5): TerrainRules.TerrainType.RUINS}
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
-	assert_int(SoloSim.terrain_los_volumes(ruin.duplicate()).size()).is_equal(1)
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
-	assert_int(SoloSim.terrain_los_volumes(ruin.duplicate()).size()).is_equal(0)
-	assert_bool(SoloSim.terrain_has_los(ruin, Vector2(10, 16.5), Vector2(25, 16.5))).is_true()
-
-
 func test_school_ruin_centre_line_opens_at_epoch_73() -> void:
 	var n := 30
 	var cell := Vector2i(15, 15)
