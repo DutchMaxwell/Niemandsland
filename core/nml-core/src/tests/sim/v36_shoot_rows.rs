@@ -13,6 +13,7 @@ mod sho_19live;
 mod sho_21b;
 mod sho_23;
 mod g4r3_surge_grant;
+mod g4r3_dup_bearers;
 mod sho_par_f3;
 mod sho_par_f4;
 mod sho_sight_oval_height;
