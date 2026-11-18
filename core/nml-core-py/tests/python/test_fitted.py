@@ -220,6 +220,8 @@ class _StubCore:
 
 
 class _StubState:
+    scoring = "end"  # `_pick_for` asks it (selfplay._seat_view): a duel has no secret marker to hide
+
     def pool(self, _player, _fold):
         return ["a_unit"]
 
