@@ -10,6 +10,10 @@ two numbers per row (lines, prod callers); the printed report adds the test-call
 moves the file. The manifest's planner_tags
 list EVERY column-0 function of the planner files under exactly one tag of tag_vocabulary; the report prints the
 function count and code lines per tag (no trailing blank/comment lines) just above the counter, which is unchanged.
+Below the tag table the printed report adds `TEST CALLERS BY TAG`: per tag the functions that have a caller in test/
+and their call sites, counted like the group callers (`name(` and Callable/call("name")) but only when the line names
+the class of the function's file, so a same-named function of another planner file is not charged. The section is
+printed, never committed.
 
   python3 tools/table_census.py            print the report
   python3 tools/table_census.py --write    rewrite the committed report (lines and prod callers only)
@@ -19,6 +23,8 @@ function count and code lines per tag (no trailing blank/comment lines) just abo
                                            are printed but never compared or committed), if a planner function has no tag, or if a prod caller appears that
                                            allowed_callers does not list ("file:function" or "@group"). A listed
                                            caller that is gone is fine on purpose.
+  python3 tools/table_census.py --gate-tag gd_search   exit 1 while a test still calls a function of that tag and
+                                           list each one as file:function (the gate for clearing the GDScript search)
 """
 import argparse
 import bisect
@@ -31,6 +37,7 @@ from pathlib import Path
 FUNC = re.compile(r"^(?:static\s+)?func\s+(\w+)")
 TOP = re.compile(r"^(?:static\b|func\b|class\b|const\b|var\b|signal\b|enum\b|extends\b|@)")
 CALLISH = re.compile(r"\b(?:call|call_deferred|callv|Callable|bind)\b")
+CLASS = re.compile(r"^class_name\s+(\w+)")
 
 
 def strip_comment(line):
@@ -132,7 +139,35 @@ def planner_tags(root, manifest):
     return rows, bad
 
 
-def render(rows, tags=None):
+def test_callers(root, manifest):
+    """Return (rows, hits). rows: every planner tag -> [functions with a caller in test/, call sites]; hits: tag ->
+    the "file:function" ids a test still calls. A test line counts like a group caller (`name(` or a Callable/call
+    reference) but only when it also names the class of the function's file (AiPlanner, BattleSim, ...), so a
+    same-named function of another planner file is not charged. Test files only; nothing here reaches the report."""
+    tests = [Source(p, p.relative_to(root).as_posix()) for p in sorted((root / "test").rglob("*.gd"))]
+    rows, hits = {}, {}
+    for file, tags in sorted(manifest.get("planner_tags", {}).items()):
+        src = Source(root / file, file)
+        klass = next((m.group(1) for ln in src.lines if (m := CLASS.match(ln))), None)
+        for tag, names in sorted(tags.items()):
+            row = rows.setdefault(tag, [0, 0])
+            for name in names.split():
+                call, ref = re.compile(r"\b%s\(" % name), re.compile(r"[\"']%s[\"']" % name)
+                qual = re.compile(r"\b%s\b" % klass) if klass else None
+                n = 0
+                for other in tests:
+                    for i, code in enumerate(other.code if name in other.text else ()):
+                        if (m := FUNC.match(code)) and m.group(1) == name:
+                            continue
+                        if qual and qual.search(code) and (call.search(code) or (ref.search(code) and CALLISH.search(code))):
+                            n += 1
+                if n:
+                    row[0], row[1] = row[0] + 1, row[1] + n
+                    hits.setdefault(tag, []).append(f"{file}:{name}")
+    return rows, hits
+
+
+def render(rows, tags=None, callers=None):
     out, total = [], 0
     for group in sorted({r[0] for r in rows}):
         mine = [r for r in rows if r[0] == group]
@@ -143,13 +178,18 @@ def render(rows, tags=None):
         out.append(f"planner_tag {tag} {n} {lines}")
     if tags:
         out.append(f"planner_tag TOTAL {sum(n for n, _ in tags.values())} {sum(ln for _, ln in tags.values())}")
-    return "\n".join(out + [f"TABLE LINES LEFT: {total}"]) + "\n"
+    out.append(f"TABLE LINES LEFT: {total}")
+    if callers:
+        out += ["", "TEST CALLERS BY TAG"] + [f"test_callers {tag} {n} {sites}" for tag, (n, sites) in sorted(callers.items())]
+    return "\n".join(out) + "\n"
 
 
 def prod_only(text):
-    """The report without its test-caller column: the text `--write` commits. A test added or removed must not
-    move the committed file nor turn --check red; the printed report keeps the column."""
-    return "".join(" ".join(p[:-1] if len(p) == 5 else p) + "\n" for p in (ln.split() for ln in text.splitlines()))
+    """The report without its printed-only parts (the test-caller column and the TEST CALLERS BY TAG section):
+    the text `--write` commits. A test added or removed must not move the committed file nor turn --check red; the
+    printed report keeps both."""
+    head = text.split("TEST CALLERS BY TAG", 1)[0].rstrip()
+    return "".join(" ".join(p[:-1] if len(p) == 5 else p) + "\n" for p in (ln.split() for ln in head.splitlines()))
 
 
 def group_of(reason):
@@ -243,14 +283,23 @@ def main(argv=None):
     mode.add_argument("--write", action="store_true")
     mode.add_argument("--check", action="store_true")
     ap.add_argument("--runtime", type=Path, help="soak census.json: append the runtime table share to the printed report")
+    ap.add_argument("--gate-tag", metavar="TAG", help="exit 1 while a test still calls a function of that planner tag")
     args = ap.parse_args(argv)
     if args.runtime and (args.write or args.check):
         ap.error("--runtime only extends the printed report (it is not deterministic, never committed)")
+    if args.gate_tag and args.write:
+        ap.error("--gate-tag only judges the printed report (nothing is written)")
     txt_path = args.txt or args.root / "test/one_core/table_census.txt"
     manifest = json.loads((args.manifest or args.root / "tools/table_census.json").read_text())
+    if args.gate_tag and args.gate_tag not in set(manifest.get("tag_vocabulary", "").split()):
+        ap.error(f"--gate-tag {args.gate_tag}: unknown planner tag (tag_vocabulary)")
     rows, bad = census(args.root, manifest)
     tags, untagged = planner_tags(args.root, manifest)
-    text = render(rows, tags)
+    callers, hits = test_callers(args.root, manifest)
+    gate = hits.get(args.gate_tag, []) if args.gate_tag else []
+    for ident in gate:
+        print(f"::error::test caller of {args.gate_tag}: {ident}")
+    text = render(rows, tags, callers)
     for problem in untagged:
         print(f"::error::{problem}")
     if untagged and (args.write or args.check):
@@ -267,10 +316,10 @@ def main(argv=None):
                                                        "committed", "current"))
         for callee, caller in bad:
             print(f"::error::new caller of {callee}: {caller} (not in allowed_callers of tools/table_census.json)")
-        return int(stale or bool(bad))
+        return int(stale or bool(bad) or bool(gate))
     else:
         sys.stdout.write(text + (runtime_report(args.runtime) if args.runtime else ""))
-    return 0
+    return int(bool(gate))
 
 
 if __name__ == "__main__":
