@@ -36,6 +36,7 @@ use crate::acts::{
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
     EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_75_TABLE_FIXES,
     EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_79_EV_MOVED_ROUND, EPOCH_83_LONE_HERO_TARGET, EPOCH_88_SPLIT_LONE_HERO,
+    EPOCH_89_SHARED_BEARERS,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::landing::{LandedModel, Landing};
@@ -5360,11 +5361,15 @@ fn shot_bearers(p: &ShootProfile, model_count: i64, state: &State, unit: usize, 
 /// `shot_bearers` over a `profiles_of` fill (`sc.keep` indexes `us.shoot`, `sc.attacks` parallel to it): the plain
 /// legs call `profiles_of` with no state, so the living bearers are applied here. Knob off (`bearers_last`) = pro rata.
 fn shoot_bearers_rescale(us: &UnitStatic, state: &State, unit: usize, rules_epoch: u32, sc: &mut Scratch) {
+    let mut share = BearerShare::new(&us.shoot, &sc.keep, rules_epoch);
     for (a, &i) in sc.attacks.iter_mut().zip(&sc.keep) {
         let p = &us.shoot[i];
         let living = if sc.bearers_last && p.extra_attack_q <= 0 { shot_bearers(p, us.model_count, state, unit, rules_epoch) } else { None };
         if living.is_some() {
             *a = bearer_scaled_attacks(p, state.alive[unit], us.model_count, state.alive[unit], living);
+        }
+        if let Some(s) = &mut share {
+            *a = s.dice(p, *a, living, state.alive[unit], &us.name);
         }
     }
 }
@@ -5644,6 +5649,56 @@ fn bearer_scaled_attacks(p: &ShootProfile, alive: i64, model_count: i64, sighted
     effective_attacks(p.attacks, sighted, model_count)
 }
 
+/// T-DUP-WEAPON-BEARERS (`EPOCH_89_SHARED_BEARERS`) — a unit that lists one weapon twice (two profiles of one
+/// name, same attacks per copy: the Jesters' Atom Pistol x8 plain + x2 AP(1)) fires ONE die per sighted living
+/// bearer in total, not per entry. `living_bearers` keys the kits by NAME, so both entries read every bearer; the
+/// table splits them in order (main.gd:5262-5274, the key at main.gd:5091-5094): each entry rolls for its own
+/// copies out of what the earlier entries of the same name and per-copy attacks left. Below the epoch the by-name
+/// count stays, so recorded games replay unchanged.
+#[allow(clippy::type_complexity)]
+struct BearerShare<'a>(Vec<(&'a str, i64, i64, i64)>); // name, per-copy attacks, entries, guns taken
+
+impl<'a> BearerShare<'a> {
+    /// None when the gate is off or no weapon is listed twice among the kept entries.
+    fn new(profiles: &'a [ShootProfile], keep: &[usize], epoch: u32) -> Option<Self> {
+        if !rule_on(epoch, EPOCH_89_SHARED_BEARERS) {
+            return None;
+        }
+        let mut v: Vec<(&str, i64, i64, i64)> = Vec::new();
+        for &i in keep {
+            let p = &profiles[i];
+            if p.extra_attack_q > 0 {
+                continue;
+            }
+            let k = (p.name.as_str(), (p.attacks / p.count.max(1)).max(0));
+            match v.iter_mut().find(|c| (c.0, c.1) == k) {
+                Some(c) => c.2 += 1,
+                None => v.push((k.0, k.1, 1, 0)),
+            }
+        }
+        v.iter().any(|c| c.2 > 1).then_some(Self(v))
+    }
+
+    /// The entry's dice after the share: `base` is its by-name count, `seen` its sighted models.
+    fn dice(&mut self, p: &'a ShootProfile, base: i64, living: Option<i64>, seen: i64, owner: &str) -> i64 {
+        let Some(b) = living.filter(|&b| b >= 0) else { return base };
+        if base <= 0 || p.extra_attack_q > 0 {
+            return base;
+        }
+        let pc = (p.attacks / p.count.max(1)).max(0);
+        let Some(c) = self.0.iter_mut().find(|c| c.0 == p.name.as_str() && c.1 == pc && c.2 > 1) else { return base };
+        let guns = (b.min(seen) - c.3).min(p.count.max(1)).max(0);
+        c.3 += guns;
+        let n = guns * pc.max(1);
+        if n != base {
+            trace_rule("volley", "Shared Bearers", &format!(
+                "{owner}: {} is listed {} times — its {b} bearers fire once, this entry rolls for {guns} of them",
+                p.name, c.2));
+        }
+        n
+    }
+}
+
 /// `profiles_of` with the die count the TABLE draws: per weapon, the member's
 /// models that have BOTH range and line of sight to the target
 /// (`main._solo_sighted_count` :4125-4147, GF Advanced Rules v3.5.1 p.8). The
@@ -5684,6 +5739,13 @@ fn sighted_profiles_of(
         0.0
     };
     let granted = granted_reach(us, state, mi).0;
+    let mut share = None;
+    if rule_on(sc.rules_epoch, EPOCH_89_SHARED_BEARERS) {
+        let keep_pre: Vec<usize> = us.shoot.iter().enumerate()
+            .filter(|(_, p)| (p.range as f64) + p.reach_bonus_in.max(granted) + mark_range >= d)
+            .map(|(i, _)| i).collect();
+        share = BearerShare::new(&us.shoot, &keep_pre, sc.rules_epoch);
+    }
     for (i, p) in us.shoot.iter().enumerate() {
         let bonus = p.reach_bonus_in.max(granted);
         if (p.range as f64) + bonus + mark_range < d {
@@ -5722,11 +5784,15 @@ fn sighted_profiles_of(
         if let Some(why) = sc.silent.get_mut(i) {
             *why = if living == Some(0) { "no living bearers" } else { "no attacks" };
         }
-        sc.attacks.push(if p.extra_attack_q > 0 {
-            p.attacks
-        } else {
-            bearer_scaled_attacks(p, state.alive[mi], us.model_count, seen, living)
-        });
+        let base = if p.extra_attack_q > 0 { p.attacks } else { bearer_scaled_attacks(p, state.alive[mi], us.model_count, seen, living) };
+        let n = match &mut share {
+            Some(s) => s.dice(p, base, living, seen, &statics[state.roster.profile[mi]].name),
+            None => base,
+        };
+        if n <= 0 && base > 0 {
+            if let Some(why) = sc.silent.get_mut(i) { *why = "its bearers already fire another entry of it"; }
+        }
+        sc.attacks.push(n);
     }
 }
 
