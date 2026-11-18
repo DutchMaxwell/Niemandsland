@@ -27,10 +27,29 @@ static func engine_offered() -> bool:
 	return ClassDB.class_exists("NmlCore")
 
 
-## The engine resolves at this table: an AI seat, or an agreed Automatic online room. Hotseat and Manual rooms: false.
+## P4.D-43c: the hotseat switch, read once (the master flag's pattern). OFF unless `NML_ONE_CORE_HOTSEAT` is "1" or "on":
+## a local Automatic table with no AI seat then resolves its two human sides through the core like a solo or an agreed
+## online room. Manual rooms never enter the core door.
+static var _hotseat_env := -1
+
+
+static func hotseat_enabled() -> bool:
+	if _hotseat_env < 0:
+		var raw := OS.get_environment("NML_ONE_CORE_HOTSEAT").to_lower()
+		_hotseat_env = 1 if (raw == "1" or raw == "on") else 0
+	return _hotseat_env == 1
+
+
+## P4.D-43c: a local hotseat Automatic table (two human sides, no AI seat, no peer).
+static func hotseat_room(main) -> bool:
+	return hotseat_enabled() and main._solo_hotseat_automatic()
+
+
+## The engine resolves at this table: an AI seat, an agreed Automatic online room, or (P4.D-43c, behind its switch) a
+## local hotseat Automatic table. Manual rooms: false.
 static func applies(main) -> bool:
 	return enabled() and ClassDB.class_exists("NmlCore") \
-		and (not main.solo_ai_slots.is_empty() or main._online_turn_room())
+		and (not main.solo_ai_slots.is_empty() or main._online_turn_room() or hotseat_room(main))
 
 
 ## P4.0-6: the per-choice switch. A choice id's prefix (`takedown_model:<shooter>:<target>`) names its
@@ -77,7 +96,7 @@ static func has_statline(gu: GameUnit) -> bool:
 
 
 ## P4.D-13c: a unit with no statline cannot be shot at a core table. True = the shot must not happen; ONE battle-log line
-## says why. False when the core door is not on (kill switch, hotseat): the table shoots as it always did.
+## says why. False when the core door is not on (kill switch, hotseat with its switch off): the table shoots as it always did.
 static func refuses_statlineless(main, attacker: GameUnit, target: GameUnit) -> bool:
 	if not applies(main) or has_statline(target):
 		return false
@@ -179,6 +198,17 @@ static func ignore_feats_of(gu: GameUnit) -> Array:
 	for e in RulesRegistry.unit_rules_of_primitive(gu, "Regeneration"):
 		if int(((e as Dictionary).get("params", {}) as Dictionary).get("uses_per_game", 0)) > 0:
 			out.append(str((e as Dictionary)["name"]))
+	return out
+
+
+## P4.D-38a follow-up: the once-per-game SHOT feats `gu` carries, the two families main.gd `_solo_spend_shot_feats` spends (a Shot
+## Modifier or Piercing Assault entry with `uses_per_game`), and the flag that closes one (`SoloController.shot_feat_flag`).
+static func shot_feats_of(gu: GameUnit) -> Array:
+	var out: Array = []
+	for primitive in ["Shot Modifier", "Piercing Assault"]:
+		for e in RulesRegistry.unit_rules_of_primitive(gu, primitive):
+			if int(((e as Dictionary).get("params", {}) as Dictionary).get("uses_per_game", 0)) > 0:
+				out.append(str((e as Dictionary)["name"]))
 	return out
 
 
@@ -940,17 +970,26 @@ static func _land_buffs(main, gu: GameUnit, d: Dictionary) -> void:
 
 
 ## P4.D-38a: the once-per-game feat latches the core SPENT in this activation (the delta's `feats_used`, inventory row of the
-## same name). The core spent them in its own copy; the table's flag is what its own roll and the next capture read. Closed for the ignore feats (the Protection Feat family), with the
-## table's own sentence and the synced flag; any other name is a core/table split nobody mapped yet (reported).
+## same name). The core spent them in its own copy; the table's flag is what its own roll and the next capture read. Closed for
+## the ignore feats (the Protection Feat family) and, the same follow-up, the once-per-game shot feats the table's own
+## `_solo_spend_shot_feats` spends (main.gd), each with that writer's flag and sentence; any other name is a core/table split
+## nobody mapped yet (reported).
 static func _land_feats(main, gu: GameUnit, d: Dictionary) -> void:
 	for name in d.get("feats_used", []):
-		if bool(gu.unit_properties.get(_ignore_flag(str(name)), false)):
+		if ignore_feats_of(gu).has(str(name)):
+			if bool(gu.unit_properties.get(_ignore_flag(str(name)), false)):
+				continue
+			main._sync_unit_property(gu, _ignore_flag(str(name)), true)
+			main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s spends its once-per-game ignore roll" % [name, gu.get_name()], true)
 			continue
-		if not ignore_feats_of(gu).has(str(name)):
-			push_error("CoreActivation.land_delta: %s spent the feat %s, which no table flag closes yet" % [gu.get_name(), name])
+		if shot_feats_of(gu).has(str(name)):
+			var flag := SoloController.shot_feat_flag(str(name))
+			if bool(gu.unit_properties.get(flag, false)):
+				continue
+			main._sync_unit_property(gu, flag, true)
+			main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s spends its once-per-game feat on this attack" % [name, gu.get_name()], true)
 			continue
-		main._sync_unit_property(gu, _ignore_flag(str(name)), true)
-		main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s spends its once-per-game ignore roll" % [name, gu.get_name()], true)
+		push_error("CoreActivation.land_delta: %s spent the feat %s, which no table flag closes yet" % [gu.get_name(), name])
 
 
 ## P4.0-4g: the latched Versatile pick the delta now carries (inventory class (a)). The table holds it as the

@@ -11,6 +11,8 @@ extends GdUnitTestSuite
 ##    addressed to its peer) and not thrown on the local tray; the End that closes the volley sends the activation fact,
 ##    then one check;
 ##  - a Start off turn: the turn refusal and no frame.
+##  - P4.D-43c: a LOCAL hotseat Automatic table enters the same door once `NML_ONE_CORE_HOTSEAT` is on; with it off (the
+##    default) and in a Manual room nothing changes.
 ## Real: the main scene, the drag machine, the radial doors, NmlCore. Constructed: plain units (ParityTable).
 
 const INCH := 0.0254
@@ -25,9 +27,10 @@ const ParityTable := preload("res://test/parity/parity_table.gd")
 ## Presence traffic (cursor, camera) is not game state and is not written down.
 class WireNet extends "res://scripts/network_manager.gd":
 	var wire: Array = []
+	var online := true   # false = a local hotseat table (no peer, no client)
 	const PRESENCE := ["sync_cursor_position", "sync_camera_direction", "sync_camera_position"]
 	func is_multiplayer_active() -> bool:
-		return true
+		return online
 	func _validate_rpc_ready(_context: String = "") -> bool:
 		return true
 	func send_command(type: String, payload: Variant = {}, target_peer: int = 0) -> bool:
@@ -83,6 +86,7 @@ func before_test() -> void:
 func after_test() -> void:
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
+	CoreActivation._hotseat_env = -1
 	if _main != null:
 		_main.network_manager = _real_net
 		_main.radial_menu_controller.network_manager = _real_net
@@ -246,3 +250,31 @@ func test_a_start_off_turn_is_refused_and_sends_nothing() -> void:
 	assert_int(_main.battle_log.entries().filter(func(e: Dictionary) -> bool: return str(e["text"]) == "It is P2's turn").size()) \
 		.override_failure_message("lines: %s" % [_main.battle_log.entries().slice(-3)]).is_equal(1)
 	assert_array(_names()).override_failure_message("frames: %s" % [_names()]).is_empty()
+
+
+## P4.D-43c: a LOCAL hotseat Automatic table (two human sides, no AI seat, no peer) is a core room once the hotseat
+## switch is on: both sides' plain units are lifecycle units, Start opens the core session, its bands come from the
+## core, and the End that closes it is the core's. The switch off (the default) and a Manual room stay on the table.
+func test_a_hotseat_automatic_room_with_the_switch_on_goes_through_the_core_door() -> void:
+	var p1 := _plain(1, "Rifles", 0.0)
+	var p2 := _plain(2, "Guards", 18.0)
+	_net.online = false   # no peer, no client: the table plays itself, both sides human
+	assert_bool(_main._solo_hotseat_automatic()).override_failure_message("fixture: not a hotseat table").is_true()
+	CoreActivation._hotseat_env = 0   # NML_ONE_CORE_HOTSEAT unset: OFF is the default
+	assert_bool(CoreActivation.applies(_main)).override_failure_message("the door opened with the switch off").is_false()
+	assert_bool(CoreActivation.is_core_unit(_main, p1)).is_false()
+	CoreActivation._hotseat_env = 1   # NML_ONE_CORE_HOTSEAT=1
+	assert_bool(CoreActivation.applies(_main)).override_failure_message("the switch did not open the door").is_true()
+	assert_bool(CoreActivation.is_core_unit(_main, p1)).override_failure_message("P1's unit is no lifecycle unit").is_true()
+	assert_bool(CoreActivation.is_core_unit(_main, p2)).override_failure_message("P2's unit is no lifecycle unit").is_true()
+	_main.opr_army_manager.rules_automation = RulesAutomation.Level.MANUAL
+	assert_bool(CoreActivation.applies(_main)).override_failure_message("a Manual room entered the door").is_false()
+	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
+	await _main.radial_menu_controller.card_start_activation(p1)
+	assert_bool(CoreActivation.session_open(p1.unit_id)).override_failure_message("Start did not open a core session").is_true()
+	assert_bool(p1.is_activated).is_false()
+	assert_bool(CoreActivation.bands(_main, p1).has("advance")) \
+		.override_failure_message("no core move bands: %s" % [CoreActivation.bands(_main, p1)]).is_true()
+	await _main.radial_menu_controller.card_end_activation(p1)
+	assert_bool(p1.is_activated).override_failure_message("the End did not activate").is_true()
+	assert_bool(CoreActivation.session_open(p1.unit_id)).override_failure_message("the session stays open").is_false()
