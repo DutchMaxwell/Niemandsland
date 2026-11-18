@@ -2131,21 +2131,25 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 	# NML-1081: an imported/AI army never calls EquipmentDistributor.attach_hero_to_unit
 	# (MP-only), so runtime attachment above is always empty — derive it from the list's
 	# join_to_unit/selectionId instead. Runtime attachment, when present, always wins.
+	# G8: selectionIds are only unique WITHIN an army (a mirror match brings two lists
+	# of one faction), so the index and the hero's lookup are scoped by player — the
+	# same per-army scope the table's attach_joined_heroes_of uses.
 	var by_sel := {}
 	for k in units:
 		var od: Variant = (units[k]["unit"] as GameUnit).source_data
 		if od is OPRApiClient.OPRUnit and not (od as OPRApiClient.OPRUnit).selection_id.is_empty():
-			by_sel[(od as OPRApiClient.OPRUnit).selection_id] = k
+			by_sel["%d|%s" % [int(units[k]["player"]), (od as OPRApiClient.OPRUnit).selection_id]] = k
 	for k in units:
 		var su: Dictionary = units[k]
 		if not String(su["attached_to"]).is_empty():
 			continue
 		var od: Variant = (su["unit"] as GameUnit).source_data
 		var join_to: String = (od as OPRApiClient.OPRUnit).join_to_unit if od is OPRApiClient.OPRUnit else ""
-		if join_to.is_empty() or not by_sel.has(join_to):
+		var key := "%d|%s" % [int(su["player"]), join_to]
+		if join_to.is_empty() or not by_sel.has(key):
 			continue
-		su["attached_to"] = by_sel[join_to]
-		(units[by_sel[join_to]]["attached"] as Array).append(k)
+		su["attached_to"] = by_sel[key]
+		(units[by_sel[key]]["attached"] as Array).append(k)
 	_stamp_hero_aura(units)
 	if los_of.is_valid():
 		for k in units:
