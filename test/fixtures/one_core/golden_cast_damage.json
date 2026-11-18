@@ -1,0 +1,1998 @@
+{
+ "cases": [
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|6",
+     "spell|defense|6x4+|AI (Foe)|4,3,1,4,1,6",
+     "spell|morale|1x4+|AI (Foe)|6"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 3
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 6 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 6 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 4+",
+    "COMBAT|AI (Foe) defends: 6 4 4 3 1 1 → 3 blocks (4+)",
+    "COMBAT|Foe takes 3 wounds (3/6)",
+    "COMBAT|Foe loses 3 models (3/6)",
+    "COMBAT|AI (Foe): 6 → passed (4+)",
+    "COMBAT|Foe passes morale"
+   ],
+   "rng": "-8057191695202445318",
+   "scenario": "bolt_saves",
+   "seed": 0
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|4",
+     "spell|defense|6x4+|AI (Foe)|1,2,5,4,6,2",
+     "spell|morale|1x4+|AI (Foe)|6"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 3
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 4 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 4 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 4+",
+    "COMBAT|AI (Foe) defends: 6 5 4 2 2 1 → 3 blocks (4+)",
+    "COMBAT|Foe takes 3 wounds (3/6)",
+    "COMBAT|Foe loses 3 models (3/6)",
+    "COMBAT|AI (Foe): 6 → passed (4+)",
+    "COMBAT|Foe passes morale"
+   ],
+   "rng": "-1472948210019650105",
+   "scenario": "bolt_saves",
+   "seed": 1
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|5",
+     "spell|defense|6x4+|AI (Foe)|4,1,3,2,5,5",
+     "spell|morale|1x4+|AI (Foe)|5"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 3
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 5 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 5 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 4+",
+    "COMBAT|AI (Foe) defends: 5 5 4 3 2 1 → 3 blocks (4+)",
+    "COMBAT|Foe takes 3 wounds (3/6)",
+    "COMBAT|Foe loses 3 models (3/6)",
+    "COMBAT|AI (Foe): 5 → passed (4+)",
+    "COMBAT|Foe passes morale"
+   ],
+   "rng": "5111295275163145108",
+   "scenario": "bolt_saves",
+   "seed": 2
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|1"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 1 → 0 hits (2+)",
+    "COMBAT|Test Bolt: cast roll 1 vs 2+ — FAILED"
+   ],
+   "rng": "3439983728589879556",
+   "scenario": "bolt_saves",
+   "seed": 3
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|4",
+     "spell|defense|6x4+|AI (Foe)|4,1,3,5,2,2",
+     "spell|morale|1x4+|AI (Foe)|1"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 2,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 2
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 4 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 4 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 4+",
+    "COMBAT|AI (Foe) defends: 5 4 3 2 2 1 → 2 blocks (4+)",
+    "COMBAT|Foe takes 4 wounds (2/6)",
+    "COMBAT|Foe loses 4 models (2/6)",
+    "COMBAT|AI (Foe): 1 → failed (4+)",
+    "COMBAT|Foe fails morale — Shaken"
+   ],
+   "rng": "-166961828180816082",
+   "scenario": "bolt_saves",
+   "seed": 4
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|6",
+     "spell|defense|6x4+|AI (Foe)|2,6,1,5,6,5"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 6 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 6 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 4+",
+    "COMBAT|AI (Foe) defends: 6 6 5 5 2 1 → 4 blocks (4+)",
+    "COMBAT|Foe takes 2 wounds (4/6)",
+    "COMBAT|Foe loses 2 models (4/6)"
+   ],
+   "rng": "-3211254310361879220",
+   "scenario": "bolt_saves",
+   "seed": 5
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|5",
+     "spell|defense|6x4+|AI (Foe)|3,3,6,3,5,4",
+     "spell|morale|1x4+|AI (Foe)|3"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 3,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 3
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 5 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 5 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 4+",
+    "COMBAT|AI (Foe) defends: 6 5 4 3 3 3 → 3 blocks (4+)",
+    "COMBAT|Foe takes 3 wounds (3/6)",
+    "COMBAT|Foe loses 3 models (3/6)",
+    "COMBAT|AI (Foe): 3 → failed (4+)",
+    "COMBAT|Foe fails morale — Shaken"
+   ],
+   "rng": "-5445218931524777272",
+   "scenario": "bolt_saves",
+   "seed": 6
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|6",
+     "spell|defense|6x4+|AI (Foe)|2,5,6,4,6,1"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 6 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 6 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 4+",
+    "COMBAT|AI (Foe) defends: 6 6 5 4 2 1 → 4 blocks (4+)",
+    "COMBAT|Foe takes 2 wounds (4/6)",
+    "COMBAT|Foe loses 2 models (4/6)"
+   ],
+   "rng": "4515714005346723726",
+   "scenario": "bolt_saves",
+   "seed": 7
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|6",
+     "spell|defense|6x5+|AI (Foe)|4,3,1,4,1,6",
+     "spell|morale|1x4+|AI (Foe)|6"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 1
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 6 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 6 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 5+ (Def 4+, AP 1)",
+    "COMBAT|AI (Foe) defends: 6 4 4 3 1 1 → 1 block (5+)",
+    "COMBAT|Foe takes 5 wounds (1/6)",
+    "COMBAT|Foe loses 5 models (1/6)",
+    "COMBAT|AI (Foe): 6 → passed (4+)",
+    "COMBAT|Foe passes morale"
+   ],
+   "rng": "-8057191695202445318",
+   "scenario": "bolt_morale",
+   "seed": 0
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|4",
+     "spell|defense|6x5+|AI (Foe)|1,2,5,4,6,2",
+     "spell|morale|1x4+|AI (Foe)|6"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 2,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 2
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 4 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 4 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 5+ (Def 4+, AP 1)",
+    "COMBAT|AI (Foe) defends: 6 5 4 2 2 1 → 2 blocks (5+)",
+    "COMBAT|Foe takes 4 wounds (2/6)",
+    "COMBAT|Foe loses 4 models (2/6)",
+    "COMBAT|AI (Foe): 6 → passed (4+)",
+    "COMBAT|Foe passes morale"
+   ],
+   "rng": "-1472948210019650105",
+   "scenario": "bolt_morale",
+   "seed": 1
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|5",
+     "spell|defense|6x5+|AI (Foe)|4,1,3,2,5,5",
+     "spell|morale|1x4+|AI (Foe)|5"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 2,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 2
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 5 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 5 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 5+ (Def 4+, AP 1)",
+    "COMBAT|AI (Foe) defends: 5 5 4 3 2 1 → 2 blocks (5+)",
+    "COMBAT|Foe takes 4 wounds (2/6)",
+    "COMBAT|Foe loses 4 models (2/6)",
+    "COMBAT|AI (Foe): 5 → passed (4+)",
+    "COMBAT|Foe passes morale"
+   ],
+   "rng": "5111295275163145108",
+   "scenario": "bolt_morale",
+   "seed": 2
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|1"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 1 → 0 hits (2+)",
+    "COMBAT|Test Bolt: cast roll 1 vs 2+ — FAILED"
+   ],
+   "rng": "3439983728589879556",
+   "scenario": "bolt_morale",
+   "seed": 3
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|4",
+     "spell|defense|6x5+|AI (Foe)|4,1,3,5,2,2",
+     "spell|morale|1x4+|AI (Foe)|1"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 1,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 1
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 4 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 4 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 5+ (Def 4+, AP 1)",
+    "COMBAT|AI (Foe) defends: 5 4 3 2 2 1 → 1 block (5+)",
+    "COMBAT|Foe takes 5 wounds (1/6)",
+    "COMBAT|Foe loses 5 models (1/6)",
+    "COMBAT|AI (Foe): 1 → failed (4+)",
+    "COMBAT|Foe fails morale — Shaken"
+   ],
+   "rng": "-166961828180816082",
+   "scenario": "bolt_morale",
+   "seed": 4
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|6",
+     "spell|defense|6x5+|AI (Foe)|2,6,1,5,6,5"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 4,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 4
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 6 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 6 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 5+ (Def 4+, AP 1)",
+    "COMBAT|AI (Foe) defends: 6 6 5 5 2 1 → 4 blocks (5+)",
+    "COMBAT|Foe takes 2 wounds (4/6)",
+    "COMBAT|Foe loses 2 models (4/6)"
+   ],
+   "rng": "-3211254310361879220",
+   "scenario": "bolt_morale",
+   "seed": 5
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|5",
+     "spell|defense|6x5+|AI (Foe)|3,3,6,3,5,4",
+     "spell|morale|1x4+|AI (Foe)|3"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 2,
+     "shaken": true,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 2
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 5 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 5 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 5+ (Def 4+, AP 1)",
+    "COMBAT|AI (Foe) defends: 6 5 4 3 3 3 → 2 blocks (5+)",
+    "COMBAT|Foe takes 4 wounds (2/6)",
+    "COMBAT|Foe loses 4 models (2/6)",
+    "COMBAT|AI (Foe): 3 → failed (4+)",
+    "COMBAT|Foe fails morale — Shaken"
+   ],
+   "rng": "-5445218931524777272",
+   "scenario": "bolt_morale",
+   "seed": 6
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|6",
+     "spell|defense|6x5+|AI (Foe)|2,5,6,4,6,1",
+     "spell|morale|1x4+|AI (Foe)|6"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       false,
+       0
+      ],
+      [
+       5,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 3
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 6 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 6 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 5+ (Def 4+, AP 1)",
+    "COMBAT|AI (Foe) defends: 6 6 5 4 2 1 → 3 blocks (5+)",
+    "COMBAT|Foe takes 3 wounds (3/6)",
+    "COMBAT|Foe loses 3 models (3/6)",
+    "COMBAT|AI (Foe): 6 → passed (4+)",
+    "COMBAT|Foe passes morale"
+   ],
+   "rng": "1139024553658017941",
+   "scenario": "bolt_morale",
+   "seed": 7
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|6",
+     "spell|defense|12x8+|AI (Foe)|4,3,1,4,1,6,6,6,6,2,4,2"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 0
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 6 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 6 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 6 only (Def 4+, AP 4 — a natural 6 always saves)",
+    "COMBAT|AI (Foe) defends: 6 6 6 6 4 4 4 3 2 2 1 1 → 4 blocks (8+)",
+    "COMBAT|Foe takes 3 wounds (0/3)",
+    "COMBAT|Foe destroyed"
+   ],
+   "rng": "8961705596088246293",
+   "scenario": "bolt_kill",
+   "seed": 0
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|4",
+     "spell|defense|12x8+|AI (Foe)|1,2,5,4,6,2,6,4,6,2,5,3"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 0
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 4 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 4 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 6 only (Def 4+, AP 4 — a natural 6 always saves)",
+    "COMBAT|AI (Foe) defends: 6 6 6 5 5 4 4 3 2 2 2 1 → 3 blocks (8+)",
+    "COMBAT|Foe takes 3 wounds (0/3)",
+    "COMBAT|Foe destroyed"
+   ],
+   "rng": "-5431493399772463442",
+   "scenario": "bolt_kill",
+   "seed": 1
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|5",
+     "spell|defense|12x8+|AI (Foe)|4,1,3,2,5,5,5,1,1,1,6,1"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 0
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 5 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 5 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 6 only (Def 4+, AP 4 — a natural 6 always saves)",
+    "COMBAT|AI (Foe) defends: 6 5 5 5 4 3 2 1 1 1 1 1 → 1 block (8+)",
+    "COMBAT|Foe takes 3 wounds (0/3)",
+    "COMBAT|Foe destroyed"
+   ],
+   "rng": "-1377948321923621561",
+   "scenario": "bolt_kill",
+   "seed": 2
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|1"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 3,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 3
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 1 → 0 hits (2+)",
+    "COMBAT|Test Bolt: cast roll 1 vs 2+ — FAILED"
+   ],
+   "rng": "3439983728589879556",
+   "scenario": "bolt_kill",
+   "seed": 3
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|4",
+     "spell|defense|12x8+|AI (Foe)|4,1,3,5,2,2,1,6,4,3,2,4"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 0
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 4 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 4 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 6 only (Def 4+, AP 4 — a natural 6 always saves)",
+    "COMBAT|AI (Foe) defends: 6 5 4 4 4 3 3 2 2 2 1 1 → 1 block (8+)",
+    "COMBAT|Foe takes 3 wounds (0/3)",
+    "COMBAT|Foe destroyed"
+   ],
+   "rng": "6729141833774062201",
+   "scenario": "bolt_kill",
+   "seed": 4
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|6",
+     "spell|defense|12x8+|AI (Foe)|2,6,1,5,6,5,6,6,4,2,4,1"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 0
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 6 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 6 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 6 only (Def 4+, AP 4 — a natural 6 always saves)",
+    "COMBAT|AI (Foe) defends: 6 6 6 6 5 5 4 4 2 2 1 1 → 4 blocks (8+)",
+    "COMBAT|Foe takes 3 wounds (0/3)",
+    "COMBAT|Foe destroyed"
+   ],
+   "rng": "-7664057162086647534",
+   "scenario": "bolt_kill",
+   "seed": 5
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|5",
+     "spell|defense|12x8+|AI (Foe)|3,3,6,3,5,4,3,6,6,5,1,4"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 0
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 5 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 5 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 6 only (Def 4+, AP 4 — a natural 6 always saves)",
+    "COMBAT|AI (Foe) defends: 6 6 6 5 5 4 4 3 3 3 3 1 → 3 blocks (8+)",
+    "COMBAT|Foe takes 3 wounds (0/3)",
+    "COMBAT|Foe destroyed"
+   ],
+   "rng": "-3610512084237805653",
+   "scenario": "bolt_kill",
+   "seed": 6
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x2+|AI (Mystic)|6",
+     "spell|defense|12x8+|AI (Foe)|2,5,6,4,6,1,6,2,4,5,2,2"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       0
+      ],
+      [
+       1,
+       false,
+       0
+      ],
+      [
+       2,
+       false,
+       0
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 0
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Test Bolt at Foe",
+    "COMBAT|Mystic casts Test Bolt at Foe — needs 2+ (1 token)",
+    "COMBAT|AI (Mystic): 6 → 1 hit (2+)",
+    "COMBAT|Test Bolt: cast roll 6 vs 2+ — SUCCESS",
+    "COMBAT|Foe saves on 6 only (Def 4+, AP 4 — a natural 6 always saves)",
+    "COMBAT|AI (Foe) defends: 6 6 6 5 5 4 4 2 2 2 2 1 → 3 blocks (8+)",
+    "COMBAT|Foe takes 3 wounds (0/3)",
+    "COMBAT|Foe destroyed"
+   ],
+   "rng": "443032993611036228",
+   "scenario": "bolt_kill",
+   "seed": 7
+  }
+ ],
+ "family": "cast_damage",
+ "provenance": {
+  "epoch": 90,
+  "git_sha": "702fff0f3c6255d83ef339520859793a608b8377",
+  "registry_sha256": "425decb0652c95d5718359a87107f2f3738e3287e9d67a13369b0a00a3f0df0e",
+  "registry_system": "gf"
+ },
+ "schema": "nml-golden-witness-v2"
+}
