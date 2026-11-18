@@ -275,16 +275,15 @@ func test_out_growth_comes_back() -> void:
 	assert_int(int(u[0].unit_properties.get("growth_precision_frenzy", 0))).is_equal(1)
 
 
-## Carried by NAME, landed for the Protection Feat family only: any other feat is reported and its table flag stays open.
-func test_out_a_spent_feat_is_carried_but_not_landed() -> void:
+## Carried by NAME and landed: a spent shot feat closes its table flag.
+func test_out_a_spent_shot_feat_is_carried_and_landed() -> void:
 	var aof := {"game_system": "aof", "faction_folder": "ghostly_undead"}
 	var u := _pair(aof.merged({"rules": ["Precision Feat"]}), aof)
 	var first := await _volley(u[0], u[1])
 	_end([first])
 	assert_array(_row(first, u[0]).get("feats_used", [])).override_failure_message("the delta names the spent feat").is_equal(["Precision Feat"])
-	await assert_error(func() -> void: CoreActivation.land_delta(_main, first["delta"], [], {})) \
-		.is_push_error("CoreActivation.land_delta: %s spent the feat Precision Feat, which no table flag closes yet" % u[0].get_name())
-	assert_bool(u[0].unit_properties.has(SoloController.shot_feat_flag("Precision Feat"))).is_false()
+	CoreActivation.land_delta(_main, first["delta"], [], {})
+	assert_bool(u[0].unit_properties.has(SoloController.shot_feat_flag("Precision Feat"))).is_true()
 
 
 ## Carried and landed: a marker pool. A split is reported (the table's own spend did not run here) and the core's count lands.
