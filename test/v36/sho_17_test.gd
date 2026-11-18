@@ -15,7 +15,7 @@ class Probe extends "res://scripts/main.gd":
 	func _solo_resolve_saves(_striker: GameUnit, _defender: GameUnit, _weapon: String, _faces: Array,
 			_hits: int, base_defense: int, _profile: Dictionary, _human: bool, _melee: bool,
 			_deadly: bool = true, _charging: bool = false, _dist: float = -1.0,
-			_solo: Dictionary = {}) -> int:
+			_solo: Dictionary = {}, _shooting: bool = false) -> int:
 		defense_seen = base_defense
 		return 0
 
