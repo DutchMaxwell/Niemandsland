@@ -9373,23 +9373,28 @@ fn consolidate_after_melee(next: &mut State, statics: &[UnitStatic], cover: Cove
     if next.alive[winner] <= 0 || (sep && next.alive[ti] <= 0) {
         return;
     }
+    // P4.D-48: the table's consolidation lines (`_solo_consolidate_melee`): the separation always, a win's move or its hold.
+    let wname = statics[next.roster.profile[winner]].name.clone();
+    let side = next.player[winner];
+    let say = |dice: &mut Option<(&mut Tray, &mut ShootResult)>, text: String| if let (true, Some((tray, _))) = (v36, dice.as_mut()) { say_melee(tray, side, text) };
+    if sep {
+        say(&mut dice, format!("Consolidation: {wname} moves back 1\" (the charger separates — {CITE})"));
+    }
+    let holds = format!("Consolidation: {wname} holds its ground (enemy destroyed, no room to move — {CITE})");
     let (goal, band_in, what) = if sep {
         let (c, d) = (geom::centre(&next.positions[si]), geom::centre(&next.positions[ti]));
         (geom::sub(geom::mul(c, 2.0), d), 1.0, "moves back 1\" (the charger separates)")
     } else {
-        let Some(goal) = consolidation_goal(next, winner) else { return };
+        let Some(goal) = consolidation_goal(next, winner) else { return say(&mut dice, holds) };
         (goal, CONSOLIDATE_WIN_IN, "consolidates up to 3\" (enemy destroyed)")
     };
-    if let Some(land) = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).plain_move(
-        next,
-        t,
-        winner,
-        goal,
-        band_in,
-        seams.hero_attach,
-        true,
-        crate::mv::FAST_PLANNER_GUARD,
-    ) {
+    let land = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).plain_move(
+        next, t, winner, goal, band_in, seams.hero_attach, true, crate::mv::FAST_PLANNER_GUARD);
+    if !sep {
+        let moved = land.as_ref().is_some_and(|l| l.movers.iter().zip(&l.end).any(|(m, e)| geom::length(geom::sub(*e, geom::to_f32(next.positions[m.unit][m.model]))) > 0.0005));
+        say(&mut dice, if moved { format!("{wname} consolidates up to 3\" (enemy destroyed — {CITE})") } else { holds });
+    }
+    if let Some(land) = land {
         // `_execute_move` tests only a move that moved (its 0.0005 m early-out); the count reads the pre-move state.
         let moved = land.movers.iter().zip(&land.end).any(|(m, e)| geom::length(geom::sub(*e, geom::to_f32(next.positions[m.unit][m.model]))) > 0.0005);
         let name = statics[next.roster.profile[winner]].name.clone();
