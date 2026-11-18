@@ -17,6 +17,10 @@ static var records: Array = []
 static var placed: Array = []
 ## The first difference in words (which roll, which unit), for the report's diagnosis; set by `compare`/`_state_diff`.
 static var _detail := {}
+## C-19 s2: the volley's compare, held until the activation's last table die (`flush`). The core's one call also rolls
+## the end-of-activation morale from Dangerous wounds, which the table throws only after the volley code returned
+## (main.gd's AI body); comparing at the volley's end read that die as "core_rolls_more". [unit, report, groups, order].
+static var _held: Array = []
 ## The replay gates' reading (tools/parity/parity_compare.py): these kinds fold to "attack", a defense target clamps to 2..6.
 const FOLD := ["morale", "fearless", "no_retreat", "regeneration", "ravage", "battleborn", "dangerous"]
 
@@ -51,6 +55,22 @@ static func note_roll(kind: String, count: int, target: int, faces: Array, owner
 static func note_placed(main, unit: GameUnit, report: Dictionary) -> void:
 	if int(main._solo_core_shadow_h) != 0:
 		placed = CoreActivation.ai_transcript(main, unit, report, null).slice(0, 2)
+
+
+## C-19 s2: the volley code's hand-off: the compare waits for `flush` (the AI body, after its end-of-activation morale).
+static func hold(main, unit: GameUnit, report: Dictionary, groups: Dictionary, order: Array) -> void:
+	if int(main._solo_core_shadow_h) != 0 and not order.is_empty():
+		_held = [unit, report, groups, order]
+
+
+## C-19 s2: the held compare, now that the table has thrown every die of the activation it shares with the core's one
+## call (the AI body calls it before Ambush re-deployment and Coordinate, and its wrapper on every early exit).
+static func flush(main) -> void:
+	if _held.is_empty():
+		return
+	var h: Array = _held
+	_held = []
+	compare(main, h[0], h[1], h[2], h[3])
 
 
 ## C-4: after the table resolved this AI activation's volley(s) at `order` (`groups`: target id -> {target, shots}),
@@ -173,6 +193,7 @@ static func release(main) -> void:
 		if core != null:
 			core.release(int(main._solo_core_shadow_h))
 	main._solo_core_shadow_h = 0
+	_held = []
 	placed = []
 	tap.clear()
 	tapping = false
