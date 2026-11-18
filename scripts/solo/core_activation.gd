@@ -900,6 +900,7 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		if bool(d["shaken"]) != gu.is_shaken:
 			main.radial_menu_controller.card_toggle_shaken(gu)
 			main._solo_mirror_shaken(gu)
+		_land_positions(main, gu, d, start_models)
 		_land_ledger(main, gu, d)
 		_land_stamps(main, gu, d)
 		_land_pools(main, gu, d)
@@ -910,6 +911,35 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		_land_once_latches(main, gu, d)
 		_land_growth(main, gu, d)
 		_land_buffs(main, gu, d)
+
+
+## HR-POS: the unit's model positions after the activation (the delta's `positions`, capture slot order, world metres),
+## present only when a model moved and none was lost. The core's own steps move models the table never placed (the Hit & Run
+## sidestep after a volley, `sim.rs` `tray_hit_and_run`, whose line the core already logged): each model that does not stand
+## where the core left it (XZ, within a millimetre) is put there with the table's own writer (`_apply_model_positions`:
+## MP move batch, surface height). A model the table already placed there (a walked move) is no news.
+static func _land_positions(main, gu: GameUnit, d: Dictionary, start_models: Array) -> void:
+	var at: Array = d.get("positions", [])
+	if at.is_empty():
+		return
+	var by_slot := _models_by_slot(start_models, gu)
+	if by_slot.size() != at.size():
+		push_error("CoreActivation.land_delta: %s moved %d models in the core, the table holds %d" % [gu.get_name(), at.size(), by_slot.size()])
+		return
+	var models: Array = []
+	var to: Array = []
+	for i in at.size():
+		var m: ModelInstance = by_slot[i]
+		var p: Vector3 = at[i]
+		if not m.is_alive or m.node == null or not is_instance_valid(m.node):
+			continue
+		var now: Vector3 = m.node.global_position
+		if Vector2(now.x, now.z).distance_to(Vector2(p.x, p.z)) < 0.001:
+			continue
+		models.append(m)
+		to.append(p)
+	if not models.is_empty():
+		main.solo_controller._apply_model_positions(models, to)
 
 
 ## C-11: the rule name of each Precision latch and the table flag that closes it.

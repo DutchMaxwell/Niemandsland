@@ -88,7 +88,7 @@ fn landings_of(state: &State, landings: &[Landing]) -> Value {
 }
 
 fn delta_array(before: &State, after: &State) -> Value {
-    Value::Array(delta_of(before, after).into_iter().map(|u| json!({"unit": u.key, "removed": u.removed.iter().map(|&i| i as i64).collect::<Vec<_>>(), "shaken": u.shaken, "alive": u.alive, "moved": u.moved, "unknown": u.unknown, "surprise_attack_used": u.surprise_attack_used})).collect())
+    Value::Array(delta_of(before, after).into_iter().map(|u| json!({"unit": u.key, "removed": u.removed.iter().map(|&i| i as i64).collect::<Vec<_>>(), "shaken": u.shaken, "alive": u.alive, "moved": u.moved, "unknown": u.unknown, "positions": u.positions, "surprise_attack_used": u.surprise_attack_used})).collect())
 }
 
 /// A refusal that is not the core's: the call itself was wrong (a malformed entry).

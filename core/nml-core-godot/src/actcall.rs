@@ -123,6 +123,11 @@ fn delta_array(before: &State, after: &State) -> VarArray {
         d.set("alive", u.alive);
         d.set("moved", u.moved);
         d.set("unknown", u.unknown);
+        let mut positions = VarArray::new();
+        for p in &u.positions {
+            positions.push(&Vector3::new(p[0] as f32, p[1] as f32, p[2] as f32).to_variant());
+        }
+        d.set("positions", &positions);
         d.set("fatigued", u.fatigued);
         d.set("casts", u.casts);
         let mut stamps = VarDictionary::new();
