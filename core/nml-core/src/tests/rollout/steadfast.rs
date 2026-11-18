@@ -75,7 +75,7 @@ use crate::rng::GodotRng;
             let face = GodotRng::new(seed).randi_range(1, 6);
             let (mut st, statics, i) = shaken_steadfast(40);
             round_start_refresh(&statics, &mut st, i);
-            battleborn_recovery_roll(&statics, &mut st, i, &mut GodotRng::new(seed));
+            battleborn_recovery_roll(&statics, &mut st, i, &mut GodotRng::new(seed), true);
             if face <= 3 {
                 assert!(
                     st.shaken[i],
