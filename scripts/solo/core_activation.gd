@@ -913,8 +913,10 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		_land_buffs(main, gu, d)
 
 
-## HR-POS: the unit's model positions after the activation (the delta's `positions`, capture slot order, world metres),
-## present only when a model moved and none was lost. The core's own steps move models the table never placed (the Hit & Run
+## HR-POS: the unit's surviving model positions after the activation (the delta's `positions`, capture slot order with the
+## dead left out, world metres), present when the unit moved. A unit that lost models in the same activation (a Hazardous
+## self-wound in the volley) and then stepped carries its survivors: they map onto the start models still alive, in order
+## (the per-step landings already removed the same dead). The core's own steps move models the table never placed (the Hit & Run
 ## sidestep after a volley, `sim.rs` `tray_hit_and_run`, whose line the core already logged): each model that does not stand
 ## where the core left it (XZ, within a millimetre) is put there with the table's own writer (`_apply_model_positions`:
 ## MP move batch, surface height). A model the table already placed there (a walked move) is no news.
@@ -922,24 +924,34 @@ static func _land_positions(main, gu: GameUnit, d: Dictionary, start_models: Arr
 	var at: Array = d.get("positions", [])
 	if at.is_empty():
 		return
-	var by_slot := _models_by_slot(start_models, gu)
-	if by_slot.size() != at.size():
-		push_error("CoreActivation.land_delta: %s moved %d models in the core, the table holds %d" % [gu.get_name(), at.size(), by_slot.size()])
+	var alive: Array = _models_by_slot(start_models, gu).filter(func(m: ModelInstance) -> bool: return m.is_alive)
+	if alive.size() != at.size():
+		push_error("CoreActivation.land_delta: %s moved %d models in the core, the table holds %d" % [gu.get_name(), at.size(), alive.size()])
 		return
 	var models: Array = []
 	var to: Array = []
 	for i in at.size():
-		var m: ModelInstance = by_slot[i]
+		var m: ModelInstance = alive[i]
 		var p: Vector3 = at[i]
-		if not m.is_alive or m.node == null or not is_instance_valid(m.node):
+		if m.node == null or not is_instance_valid(m.node):
 			continue
 		var now: Vector3 = m.node.global_position
 		if Vector2(now.x, now.z).distance_to(Vector2(p.x, p.z)) < 0.001:
 			continue
 		models.append(m)
 		to.append(p)
-	if not models.is_empty():
-		main.solo_controller._apply_model_positions(models, to)
+	if models.is_empty():
+		return
+	main.solo_controller._apply_model_positions(models, to)
+	# The landed step IS the table's Hit & Run step (the table's tail never runs it on this path), so the two stamps that step
+	# writes on the table (`hit_and_run_move`: `hit_and_run_round` and, since #3002, `moved_round`) are written here with
+	# the same writers; `_land_stamps` then finds the table agreeing instead of reporting a split.
+	var stamps: Dictionary = d.get("stamps", {})
+	var round_no := int(main.solo_controller._current_round())
+	if int(stamps.get("hit_and_run_round", -1)) == round_no:
+		gu.unit_properties["hit_and_run_round"] = round_no
+		if int(stamps.get("moved_round", -1)) == round_no:
+			main.solo_controller._sync_unit_latch(gu, "moved_round", round_no)
 
 
 ## C-11: the rule name of each Precision latch and the table flag that closes it.
@@ -1042,6 +1054,10 @@ static func _land_versatile_mode(main, gu: GameUnit, d: Dictionary) -> void:
 const STAMP_KEYS := {"spot_round": "spotted_round", "growth_strike_round": "regenerative_strength_round"}
 
 
+## HR-POS: how many stamp differences `_land_stamps` reported (a test reads it; each is also a push_error).
+static var stamp_splits := 0
+
+
 ## P4.0-4e: the per-unit once-per-round stamps the delta now carries (inventory class (a)). The table's own writer
 ## owns each on this path, so a difference is a core/table split (reported) and the core's value lands, as `shaken` does.
 static func _land_stamps(main, gu: GameUnit, d: Dictionary) -> void:
@@ -1051,6 +1067,7 @@ static func _land_stamps(main, gu: GameUnit, d: Dictionary) -> void:
 		var was := int(gu.unit_properties.get(prop, -1))
 		if value == was:
 			continue
+		stamp_splits += 1
 		push_error("CoreActivation.land_delta: %s.%s differs (table %d, core %d)" % [gu.get_name(), prop, was, value])
 		main._sync_unit_property(gu, prop, value)
 

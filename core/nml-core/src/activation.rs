@@ -405,10 +405,11 @@ pub struct UnitDelta {
     pub alive: i64,
     pub moved: bool,
     pub unknown: bool,
-    /// HR-POS: the unit's model positions AFTER (world metres, capture slot order), carried only when a survivor
-    /// moved and no model was lost (slot i of `before` is slot i of `after`). The core's own steps (the Hit & Run
-    /// sidestep after a volley) move models the table never placed; `land_delta` puts each moved model there.
-    /// Empty otherwise: a volley's losses ride `removed`, a moved-and-lost unit is `unknown`.
+    /// HR-POS: the unit's surviving model positions AFTER (world metres), in capture slot order with the dead left out
+    /// (removal keeps the survivors' order), carried whenever the unit moved. The core's own steps (the Hit & Run
+    /// sidestep after a volley) move models the table never placed; `land_delta` puts each surviving model there. A unit
+    /// can lose models in the same activation and still step (Hazardous self-wounds land in the volley, `sim.rs`
+    /// `land_hazardous_self`, before `tray_hit_and_run`): its survivors ride too. Empty when nothing moved.
     pub positions: Vec<[f64; 3]>,
     /// P4.0-4d: the table-owned per-activation ledger AFTER — the fatigue flag and the unspent spell
     /// tokens. A plain activation changes neither; carrying them makes a table/core split visible.
@@ -548,7 +549,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 alive: after.alive[u],
                 moved,
                 unknown,
-                positions: if a.len() == b.len() && a != b { a.clone() } else { Vec::new() },
+                positions: if moved { a.clone() } else { Vec::new() },
                 fatigued: after.fatigued[u],
                 casts: after.casts[u],
                 stamps: stamps_of(after, u),
@@ -1224,9 +1225,9 @@ mod tests {
         let ActStep::Done { state, .. } = got else { panic!("seed 7: {got:?}") };
         assert!(delta_of(&st, &state).iter().all(|x| x.stamps.len() == 12), "a core row carries the stamps");
     }
-    /// HR-POS: a unit whose models moved and lost none carries its AFTER positions in slot order (the Hit & Run step the
-    /// core takes after a volley); a unit that only lost models carries none, its losses ride `removed`. RED: drop the
-    /// field from the push -> empty, the table's landing has nothing to put the stepped models on.
+    /// HR-POS: a unit whose models moved carries its surviving AFTER positions in slot order (the Hit & Run step the core
+    /// takes after a volley), also when it lost models; a unit that only lost models carries none, its losses ride
+    /// `removed`. RED: drop the field from the push -> empty, the table's landing has nothing to put the stepped models on.
     #[test]
     fn the_delta_carries_the_stepped_positions() {
         let (st, _) = volley_line();
@@ -1244,6 +1245,12 @@ mod tests {
         let d = delta_of(&st, &lost);
         assert_eq!((d.len(), d[0].removed.len()), (1, 1), "{d:?}");
         assert!(d[0].positions.is_empty(), "a loss is no step: {d:?}");
+        // Lost a model (a Hazardous self-wound) AND stepped: the survivor's new spot rides, in order.
+        let mut both = lost.clone();
+        both.positions[2][0][0] += 0.0762;
+        let d = delta_of(&st, &both);
+        assert!(d[0].moved && d[0].unknown, "{d:?}");
+        assert_eq!(d[0].positions, both.positions[2], "the survivors' stepped positions ride the row");
     }
     /// P4.0-4g: a core-resolved Versatile volley carries the latched pick in its delta (the int mode the table's
     /// `versatile_pick` Dictionary is built from). RED: drop `versatile_pick_mode` from the push -> 0, no pick.

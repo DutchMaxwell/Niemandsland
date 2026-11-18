@@ -6,7 +6,8 @@ extends GdUnitTestSuite
 ## Per seed two readings on the same board and tray seed:
 ##   door - capture + `_run_ai_shooting` (the core takes the volley and lands its delta), then the table's own tail call,
 ##   core - capture + `CoreActivation.drive` (keep_handle): the positions the core's own state holds after the activation.
-## RED (before HR-POS): the door leaves the models where they stood in 8/8 while the core's state moved them 3.00".
+## RED (before HR-POS): the door leaves the models where they stood in 8/8 while the core's state moved them 3.00";
+## without the stamp write in `_land_positions`, `land_delta` reports hit_and_run_round and moved_round split (2 per seed).
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -134,12 +135,13 @@ func _door(s: int) -> Dictionary:
 	_main.solo_controller._sidestep_budget = SoloController.SIDESTEP_BUDGET_PER_ROUND
 	_main.seed_tray_rng(s)
 	var runs := CoreActivation.ai_runs
+	var splits := CoreActivation.stamp_splits
 	_main._solo_core_ai_h = CoreActivation.capture(_main)
 	var report := {"unit": att, "moved": false, "action": AiDecision.Action.HOLD, "can_shoot": true}
 	await _main._run_ai_shooting(report)
 	var landed := _positions(att)
 	var tail: bool = _main.solo_controller.hit_and_run_move(att, true)
-	var out := {"took": CoreActivation.ai_runs - runs, "tail": tail, "hnr": int(att.unit_properties.get("hit_and_run_round", -1)),
+	var out := {"took": CoreActivation.ai_runs - runs, "tail": tail, "splits": CoreActivation.stamp_splits - splits, "hnr": int(att.unit_properties.get("hit_and_run_round", -1)),
 		"centre_in": _centre_in(before, landed), "landed": landed, "after_tail": _positions(att),
 		"foe_alive": (units[1] as GameUnit).get_alive_count()}
 	if int(_main._solo_core_ai_h) != 0:
@@ -189,5 +191,32 @@ func test_the_core_hit_and_run_step_lands_on_the_table() -> void:
 		assert_float(absf(float(door["centre_in"]) - float(core["centre_in"]))).override_failure_message(
 			"moved by the core's distance: " + why).is_less(0.05)
 		assert_int(int(door["hnr"])).override_failure_message("the once-per-round stamp landed: " + why).is_equal(1)
+		assert_int(int(door["splits"])).override_failure_message(
+			"the landed step leaves no stamp split (land_delta reports none): " + why).is_equal(0)
 		assert_bool(bool(door["tail"])).override_failure_message("the table's own step does not run again: " + why).is_false()
 		assert_bool(_same_spots(door["after_tail"], door["landed"])).override_failure_message("no second step: " + why).is_true()
+
+
+## HR-POS: a unit that lost a model in its own activation (a Hazardous self-wound in the volley) and then stepped: the delta
+## row is `unknown` (moved and lost) and carries the SURVIVORS' positions in slot order. Once the step landings removed the dead,
+## `land_delta` puts every survivor on its spot. Constructed: the delta row (the core's shape, `UnitDelta::positions`).
+## RED: map the row onto all start models instead of the living ones -> a count split, nothing moves.
+func test_a_unit_that_lost_a_model_still_lands_its_step() -> void:
+	CoreActivation.reset_all(_main)
+	var units := _pair()
+	var att: GameUnit = units[0]
+	var start := CoreActivation._start_models(_main)
+	var dead: ModelInstance = att.get_alive_models()[0]
+	dead.apply_damage(dead.wounds_current)
+	var step := Vector3(-3.0 * INCH, 0.0, 0.0)
+	var to: Array = att.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position + step)
+	var row := {"unit": att.unit_id, "removed": [], "shaken": false, "alive": 9, "moved": true, "unknown": true,
+		"positions": to, "stamps": {}}
+	await CoreActivation.land_delta(_main, [row], start, {"0:%s:0" % att.unit_id: dead})
+	var got: Array = att.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
+	assert_int(got.size()).is_equal(9)
+	for i in got.size():
+		assert_float(Vector2((got[i] as Vector3).x, (got[i] as Vector3).z).distance_to(
+			Vector2((to[i] as Vector3).x, (to[i] as Vector3).z))).override_failure_message(
+			"survivor %d stands on the core's spot: %s vs %s" % [i, got[i], to[i]]).is_less(0.001)
+	_free(units)
