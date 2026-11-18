@@ -16628,6 +16628,11 @@ func _solo_battleborn_recovery() -> void:
 		var gu := u as GameUnit
 		if gu == null or not gu.is_shaken:
 			continue
+		# A joined hero is part of its host's unit (p.14: one state), so the combined unit rolls ONE
+		# die — on the host; _solo_mirror_shaken then carries the result to the heroes. Rolling the
+		# hero too would split the pair whenever only one side passes (soak S1: host 1 / hero 0).
+		if gu.is_attached():
+			continue
 		var rule := _solo_round_start_recovery_rule(gu)
 		if rule.is_empty():
 			continue
