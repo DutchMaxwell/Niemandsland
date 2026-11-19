@@ -164,7 +164,7 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 	# inline, so a later weapon of the same volley can see fewer models and says so ("Simultaneous fire: ...", Blast's "cap read when the
 	# volley started"); the core lands after all the dice and has no such line. Refused as a shooter only, by the weapons of the unit and
 	# its joined heroes (they fire in one volley); a single ranged weapon, or Deadly alone, stays on the core.
-	if not as_target and out.is_empty() and config()["mode"] == "deny" and config()["simultaneous_fire_line"] and _deadly_beside_other_weapons(gu):
+	if not as_target and out.is_empty() and config()["mode"] == "deny" and bool(config().get("simultaneous_fire_line", false)) and _deadly_beside_other_weapons(gu):
 		out.append("deadly_beside_other_weapons")
 	return out
 
