@@ -36,7 +36,7 @@ use crate::acts::{
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
     EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_75_TABLE_FIXES,
     EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_79_EV_MOVED_ROUND, EPOCH_83_LONE_HERO_TARGET, EPOCH_88_SPLIT_LONE_HERO,
-    EPOCH_89_SHARED_BEARERS,
+    EPOCH_89_SHARED_BEARERS, EPOCH_91_JOINED_HERO_FATIGUE,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::landing::{LandedModel, Landing};
@@ -962,6 +962,20 @@ fn combined_alive(state: &State, i: usize, seams: Seams) -> i64 {
         } else {
             0
         }
+}
+
+/// A melee tires unit `i` (the charger after its strike phase, the defender after its strike-back). From
+/// `EPOCH_91_JOINED_HERO_FATIGUE` the tiredness reaches every hero joined to it as well — the hero is part of the unit and
+/// carries no state of its own (the table's `_solo_set_fatigued` loops the attached heroes; `ctx_of_melee` reads each
+/// member's own flag, so a hero left fresh would keep striking at full Quality). Before 91, or without the hero fold,
+/// only the host index is set, byte for byte as before. It writes no log line: the table's own mirror is silent too.
+fn set_melee_fatigue(next: &mut State, i: usize, seams: Seams) {
+    next.fatigued[i] = true;
+    if seams.hero_attach && rule_on(seams.rules_epoch, EPOCH_91_JOINED_HERO_FATIGUE) {
+        for &h in &next.attached[i] {
+            next.fatigued[h] = true;
+        }
+    }
 }
 
 /// Rules 3.6 (`EPOCH_73_V36`, the Hero rule) — a melee side still STANDS while its host has a model OR a joined hero
@@ -7202,7 +7216,7 @@ fn tray_charge_with_self_wounds(
                 by_tu += rc;
                 charger_self_wounds += h;
                 scourge_on_defender += s;
-                next.fatigued[si] = true;
+                set_melee_fatigue(next, si, seams);
             }
         } else if side_up(next, ti, seams) && side_up(next, si, seams) {
             // :8100 — and so does the strike-back, in both directions.
@@ -7225,7 +7239,7 @@ fn tray_charge_with_self_wounds(
                 by_su += rc;
                 defender_self_wounds += h;
                 scourge_on_charger += s;
-                next.fatigued[ti] = true;
+                set_melee_fatigue(next, ti, seams);
             }
         }
     }
@@ -11487,7 +11501,7 @@ fn resolve_with(
                         (ev, phantom)
                     };
                     apply_expected_wounds(&mut next, ti, ev, rng.as_deref_mut());
-                    next.fatigued[si] = true;
+                    set_melee_fatigue(&mut next, si, seams);
                     let mut phantom_on_su = 0.0;
                     if next.alive[ti] > 0 {
                         // Survivors strike back, already survivor-scaled by the
@@ -11514,7 +11528,7 @@ fn resolve_with(
                                 (ev, phantom)
                             };
                             apply_expected_wounds(&mut next, si, ev_back, rng.as_deref_mut());
-                            next.fatigued[ti] = true;
+                            set_melee_fatigue(&mut next, ti, seams);
                             phantom_on_su = phantom;
                         }
                     }
