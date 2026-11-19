@@ -94,7 +94,8 @@ use crate::logline::Category;
             st.morale_bonus[2] = bonus;
             let mut tray = Tray::supplied(vec![vec![6]]);
             tray_morale_for(&mut st, &statics, 2, false, true, Some("Dangerous terrain"), seams, &mut tray, &mut ShootResult::default(), None, None);
-            tray.lines_upto(0).into_iter().map(|l| l.text).collect::<Vec<_>>()
+            // only the bonus line: the Banner share taken back says its own line (door_morale_lines.rs)
+            tray.lines_upto(0).into_iter().map(|l| l.text).filter(|t| t.contains(" gets +")).collect::<Vec<_>>()
         };
         assert!(say(1, 0).is_empty(), "the Banner's +1 does not help a rule-forced test, so there is nothing to name");
         assert_eq!(say(3, 2), ["Morale(2): Def gets +2 to morale test rolls (passes on 2+)"], "the rating stays, the Banner share goes");
