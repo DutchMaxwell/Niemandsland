@@ -272,7 +272,7 @@ func test_a_missing_or_malformed_file_is_the_empty_slice() -> void:
 ## The deny file refuses its listed primitives (a Teleport unit) and takes a unit whose
 ## rules are automated and not listed (AP, Tough); a name no map knows is taken (unmapped_inert). The list only shrinks: CEILING.
 ## RED: read PATH regardless of the switch -> the first assertion reads mode "allow".
-const DENY_CEILING := 19   # DLINES3 train 3: Shred, Self-Repair and Resistance left with their lines (19 -> 16), then the probes at 1500 / 2000 / 3000 pts showed three more families whose line the door omits: Armor, Disintegrate, Tear (+3 -> 19). DLINES2 train 2: Ranged Shrouding, Lacerate, Shielded, Fortified and Regeneration left with their lines (24 -> 19). 19.11.: +15 primitives in eight `rule_line` groups (a rule whose table line the door omits stays on the table until the line exists, dlines_gap rows 2, 3, 7, 13, 15, 16, 17, 21), they leave group by group with their lines. BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
+const DENY_CEILING := 12   # DLINES train 4 (DS-GHITN): the to-hit note (6 primitives: Artillery, Stealth, Evasive, Aircraft, Shot Modifier, Instinctive) and Takedown left with their lines (19 -> 12). DLINES3 train 3: Shred, Self-Repair and Resistance left with their lines (19 -> 16), then the probes at 1500 / 2000 / 3000 pts showed three more families whose line the door omits: Armor, Disintegrate, Tear (+3 -> 19). DLINES2 train 2: Ranged Shrouding, Lacerate, Shielded, Fortified and Regeneration left with their lines (24 -> 19). 19.11.: +15 primitives in eight `rule_line` groups (a rule whose table line the door omits stays on the table until the line exists, dlines_gap rows 2, 3, 7, 13, 15, 16, 17, 21), they leave group by group with their lines. BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
 
 
 func test_the_deny_switch_reads_the_measured_deny_list() -> void:
@@ -319,9 +319,7 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
 	var rep: Array = [
-		["Artillery", ""], ["Stealth", ""], ["Evasive", "battle_brothers"], ["Aircraft", ""], ["Precision Fighter", ""],
-		["Instinctive", "goblin_reclaimers"],
-		["Takedown", ""], ["Grounded Protection", "soul_snatcher_cults"], ["Protection Feat", "alien_hives"],
+		["Grounded Protection", "soul_snatcher_cults"], ["Protection Feat", "alien_hives"],
 		["Armor", ""], ["Disintegrate", "custodian_brothers"], ["Tear", "custodian_brothers"],
 	]
 	for row in rep:
@@ -341,7 +339,9 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 	for lifted in [["Ranged Shrouding", "custodian_brothers"], ["Bane", ""], ["Lacerate", "battle_brothers"], ["Anti-Regen", ""],
 			["Mischievous", "goblin_reclaimers"], ["Vicious", "goblin_reclaimers"], ["Unstoppable when Shooting", ""],
 			["Shielded", "battle_brothers"], ["Fortified", "alien_hives"], ["Regeneration", ""], ["Regeneration Aura", "alien_hives"],
-			["Shred", ""], ["Warbound", "war_disciples"], ["Self-Repair", "robot_legions"], ["Resistance", "alien_hives"], ["Plaguebound", "plague_disciples"]]:
+			["Shred", ""], ["Warbound", "war_disciples"], ["Self-Repair", "robot_legions"], ["Resistance", "alien_hives"], ["Plaguebound", "plague_disciples"],
+			["Artillery", ""], ["Stealth", ""], ["Evasive", "battle_brothers"], ["Aircraft", ""],
+			["Precision Fighter", ""], ["Instinctive", "goblin_reclaimers"], ["Takedown", ""]]:
 		var lifted_unit := _unit([lifted[0]], [[lifted[0]]])
 		if lifted[1] != "":
 			lifted_unit.unit_properties["faction_folder"] = lifted[1]
@@ -364,6 +364,8 @@ func test_deny_mode_refuses_a_deadly_weapon_beside_another_ranged_weapon() -> vo
 	assert_array(CoreSlice.refusals(both)).is_equal(["deadly_beside_other_weapons"])
 	assert_array(CoreSlice.refusals(both, true)).override_failure_message("as a target the weapons do not matter").is_empty()
 	assert_bool(CoreSlice.takes(_ranged_unit([["Deadly(3)"]]))).override_failure_message("Deadly alone stays on the core").is_true()
+	assert_bool(CoreSlice.takes(_ranged_unit([["Takedown"]]))).override_failure_message("Takedown alone stays on the core").is_true()
+	assert_array(CoreSlice.refusals(_ranged_unit([["Takedown"], ["AP(1)"]]))).override_failure_message("Takedown beside another ranged weapon lands inline").is_equal(["deadly_beside_other_weapons"])
 	assert_bool(CoreSlice.takes(_ranged_unit([["AP(1)"], ["Blast(3)"]]))).override_failure_message("no Deadly: no inline casualties").is_true()
 	assert_bool(CoreSlice.takes(_ranged_unit([["Deadly(3)"]], [["Reliable"]]))).override_failure_message("a melee weapon (range 0) is no second ranged weapon").is_true()
 	var host := _ranged_unit([["AP(1)"]])
@@ -660,3 +662,121 @@ func test_an_own_shred_beside_an_alias_is_refused() -> void:
 	SlicePin.release_dice_only()
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
+
+
+## DLINES train 4 (DS-GHITN part 3): refuse BY STATE (not by rule name) any activation whose ledger carries a shooting
+## spell-token hit modifier or Vengeance markers. Both ways: a plain unit (or a Vengeance carrier with 0 markers, or a unit
+## with a non-hit / melee-only / opposite-side spell record) stays taken; a live shooting hit spell or Vengeance markers > 0
+## is refused on the affected side (including through a joined hero).
+func test_state_refusals_for_spell_hit_modifiers_and_vengeance_markers() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	var shooter := _unit([], [["AP(1)"]])
+	var target := _unit(["Vengeance"], [])
+	target.unit_properties["faction_folder"] = "eternal_dynasty"
+	# Without live state, both are taken (Vengeance is NOT refused by rule name).
+	assert_array(CoreSlice.refusals(shooter)).is_empty()
+	assert_array(CoreSlice.refusals(target, true)).is_empty()
+	# Non-hit / melee-only / opposite-role spell records stay taken.
+	shooter.unit_properties["spell_records"] = [
+		{"spell": "Iron Skin", "def_mod": 1, "scope": "all"},
+		{"spell": "Fury", "hit_mod": 1, "scope": "melee"},
+		{"spell": "Mark", "hit_mod": 1, "beneficiary": "attackers", "scope": "shooting"},
+	]
+	assert_array(CoreSlice.refusals(shooter)).override_failure_message("non-shooting / wrong-role spell must stay taken").is_empty()
+	# Live attacker_own shooting hit spell refuses the shooter, not a target.
+	shooter.unit_properties["spell_records"] = [{"spell": "Aim", "hit_mod": 1, "scope": "shooting"}]
+	assert_array(CoreSlice.refusals(shooter)).is_equal(["spell_hit_mod"])
+	assert_array(CoreSlice.refusals(shooter, true)).override_failure_message("attacker_own spell does not apply to a target").is_empty()
+	# Live vs_target shooting hit spell refuses the target, not a shooter.
+	target.unit_properties["spell_records"] = [{"spell": "Eagle-Eyed Focus", "hit_mod": 1, "beneficiary": "attackers", "scope": "all"}]
+	assert_array(CoreSlice.refusals(target, true)).is_equal(["spell_hit_mod"])
+	assert_array(CoreSlice.refusals(target)).override_failure_message("vs_target spell does not apply to a shooter").is_empty()
+	target.unit_properties.erase("spell_records")
+	# Vengeance markers refuse the target (> 0), not a shooter, and not when 0.
+	target.unit_properties["vengeance_markers"] = 2
+	assert_array(CoreSlice.refusals(target, true)).is_equal(["vengeance_markers"])
+	assert_array(CoreSlice.refusals(target)).override_failure_message("Vengeance markers apply when attacked, not when shooting").is_empty()
+	target.unit_properties["vengeance_markers"] = 0
+	assert_array(CoreSlice.refusals(target, true)).is_empty()
+	# Joined hero: shooter's hero carrying attacker_own hit spell refuses host as shooter; hero's Vengeance refuses host as target.
+	var host := _unit([], [["AP(1)"]])
+	var hero := _unit(["Hero"], [])
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	hero.unit_properties["spell_records"] = [{"spell": "Aim", "hit_mod": -1, "scope": "all"}]
+	assert_array(CoreSlice.refusals(host)).is_equal(["spell_hit_mod"])
+	assert_array(CoreSlice.refusals(host, true)).is_empty()
+	hero.unit_properties.erase("spell_records")
+	hero.unit_properties["vengeance_markers"] = 1
+	assert_array(CoreSlice.refusals(host, true)).is_equal(["vengeance_markers"])
+	assert_array(CoreSlice.refusals(host)).is_empty()
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+
+
+## DLINES train 4 (review): the core latches a Versatile Attack pick on the plain Quality, the table on the MODIFIED to-hit number, so a
+## Versatile shooter and any to-hit modifier in play (a Stealth / Evasive / Artillery / Aircraft target, or the shooter's own Artillery) are
+## refused as a PAIR (found by the 3000 pts roster sweep once the to-hit families left the deny list: 6 volleys with different dice).
+## Both ways: either side alone, a plain pair, the allow slice (no group) stay taken; the dice-only pin keeps the refusal (a state difference).
+func test_a_versatile_shooter_against_a_to_hit_modifier_is_refused_as_a_pair() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	var vers := _unit(["Versatile Attack"], [[]])
+	vers.unit_properties["faction_folder"] = "battle_brothers"
+	var plain := _unit([], [[]])
+	for rule in ["Stealth", "Evasive", "Artillery", "Aircraft"]:
+		var tgt := _unit([rule], [[]])
+		tgt.unit_properties["faction_folder"] = "battle_brothers"   # Evasive is a faction entry
+		assert_array(CoreSlice.pair_refusals(vers, tgt)).override_failure_message("a Versatile shooter at a %s target picks on a modified number" % rule).is_equal(["versatile_pick_modified_to_hit"])
+		assert_array(CoreSlice.pair_refusals(plain, tgt)).override_failure_message("no Versatile pick, nothing to differ on").is_empty()
+	assert_array(CoreSlice.pair_refusals(vers, plain)).override_failure_message("a Versatile shooter at a plain target stays on the core").is_empty()
+	var art_vers := _unit(["Versatile Attack", "Artillery"], [[]])
+	art_vers.unit_properties["faction_folder"] = "battle_brothers"
+	assert_array(CoreSlice.pair_refusals(art_vers, plain)).override_failure_message("the shooter's own Artillery modifies the number too").is_equal(["versatile_pick_modified_to_hit"])
+	var host := _unit([], [[]])
+	var hero := _unit(["Versatile Attack"], [])
+	hero.unit_properties["faction_folder"] = "battle_brothers"
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	assert_array(CoreSlice.pair_refusals(host, _unit(["Stealth"], [[]]))).override_failure_message("a joined hero's Versatile Attack picks in the host's volley").is_equal(["versatile_pick_modified_to_hit"])
+	assert_array(CoreSlice.pair_refusals(vers, null)).is_empty()
+	assert_array(CoreSlice.pair_refusals_in(CoreSlice.DENY_PATH, vers, _unit(["Stealth"], [[]]))).is_equal(["versatile_pick_modified_to_hit"])
+	SlicePin.dice_only()
+	assert_array(CoreSlice.pair_refusals(vers, _unit(["Stealth"], [[]]))).override_failure_message("a state difference stays refused in the dice-only slice").is_equal(["versatile_pick_modified_to_hit"])
+	SlicePin.release_dice_only()
+	SlicePin.narrow()
+	assert_array(CoreSlice.pair_refusals(vers, _unit(["Stealth"], [[]]))).override_failure_message("the allow slice has no such group").is_empty()
+	SlicePin.release()
+
+
+## DLINES train 4 (review): the table names a Takedown's picked model by its first item when it is no Tough and no special-weapon model; the core holds
+## only an item count, so its line says "trooper" (door test, one Banner carrier: 12 of 12 seeds differ). A Takedown shooter at a target with a living
+## item-carrying model is refused as a pair; no item, a dead carrier, no Takedown, and the dice-only pin (it drops line refusals) stay taken.
+func test_a_takedown_shooter_against_an_item_carrier_is_refused_as_a_pair() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	var sniper := _ranged_unit([["Takedown"]])
+	var plain_shooter := _ranged_unit([["AP(1)"]])
+	var carrier := _unit([], [[]])
+	var banner := ModelInstance.new()
+	banner.properties["equipment"] = ["Banner"]
+	carrier.models.append(banner)
+	assert_array(CoreSlice.pair_refusals(sniper, carrier)).override_failure_message("the table would say `the Banner`, the core `trooper`").is_equal(["takedown_label_equipment"])
+	assert_array(CoreSlice.pair_refusals(plain_shooter, carrier)).override_failure_message("no Takedown: no label").is_empty()
+	var bare := _unit([], [[]])
+	bare.models.append(ModelInstance.new())
+	assert_array(CoreSlice.pair_refusals(sniper, bare)).override_failure_message("no item on any model: `trooper` on both sides").is_empty()
+	banner.is_alive = false
+	assert_array(CoreSlice.pair_refusals(sniper, carrier)).override_failure_message("a dead carrier is no pick").is_empty()
+	banner.is_alive = true
+	var host := _unit([], [[]])
+	host.models.append(ModelInstance.new())
+	var hero := _unit(["Hero"], [])
+	var hero_model := ModelInstance.new()
+	hero_model.properties["equipment"] = ["Banner"]
+	hero.models.append(hero_model)
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	assert_array(CoreSlice.pair_refusals(sniper, host)).override_failure_message("a joined hero can be the pick").is_equal(["takedown_label_equipment"])
+	SlicePin.dice_only()
+	assert_array(CoreSlice.pair_refusals(sniper, carrier)).override_failure_message("a missing line is not a dice difference").is_empty()
+	SlicePin.release_dice_only()
+	SlicePin.release()

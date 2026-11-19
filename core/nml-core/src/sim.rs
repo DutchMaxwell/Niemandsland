@@ -651,13 +651,42 @@ fn takedown_pick(state: &State, ti: usize) -> usize {
     crate::casualty::casualty_order(state, ti).and_then(|o| o.last().copied()).unwrap_or(state.positions[ti].len() - 1)
 }
 
-/// Tray-exact S8 — `_solo_model_in_cover` for the Takedown pick: the centre probe of ITS square.
-/// The table picks per profile (main.gd:4171), after the earlier Takedown groups of the volley landed
-/// inline, so this replays `land_takedown_groups` on a scratch copy of the target's slots: a killed
-/// pick is gone, a wounded one ranks first for removal and so never last for the sniper. A recorded
-/// node carries no board, so it keeps the unit's flag.
+/// Table's `_solo_model_label` (main.gd:11009-11021): Tough(X) model, else last weapon name when >1 weapons, else "trooper".
+fn takedown_model_label(kits: &[crate::state::Kit], names: &[String], fallback_wounds: i64, slot: usize) -> String {
+    if let Some(k) = kits.get(slot) {
+        if k.wounds_max > 1 {
+            return format!("Tough({}) model", k.wounds_max);
+        }
+        if k.weapons.len() > 1 {
+            return k.weapons.last()
+                .and_then(|&id| names.get(id as usize))
+                .filter(|s| !s.is_empty())
+                .cloned()
+                .unwrap_or_else(|| "special weapon".into());
+        }
+    } else if fallback_wounds > 1 {
+        return format!("Tough({fallback_wounds}) model");
+    }
+    "trooper".into()
+}
+
+#[cfg(test)]
 fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: bool, groups: &[i64], picked: Option<usize>) -> bool {
-    let Cover::Board(t) = cover else { return unit_flag };
+    takedown_pick_info_after(&[], state, ti, cover, unit_flag, groups, picked).0
+}
+
+/// Tray-exact S8 — `_solo_model_in_cover` and `_solo_model_label` for the Takedown pick: the centre probe of ITS square
+/// and the model's label. The table picks per profile (main.gd:4171), after the earlier Takedown groups of the volley landed
+/// inline, so this replays `land_takedown_groups` on a scratch copy of the target's slots: a killed pick is gone, a wounded
+/// one ranks first for removal and so never last for the sniper. A recorded node carries no board, so it keeps the unit's flag.
+fn takedown_pick_info_after(
+    statics: &[UnitStatic], state: &State, ti: usize, cover: Cover, unit_flag: bool, groups: &[i64], picked: Option<usize>,
+) -> (bool, String) {
+    let names: &[String] = state.kit_names.get(ti).map_or(&[], |v| v.as_slice());
+    let fallback_w = state.roster.profile.get(ti)
+        .and_then(|&pi| statics.get(pi))
+        .and_then(|u| u.wounds_max.first().copied())
+        .unwrap_or(1);
     let (mut pos, mut wounds) = (state.positions[ti].clone(), state.wounds[ti].clone());
     let mut picked = picked;
     let mut kits: Vec<crate::state::Kit> = state.kits.get(ti).map(|k| k.to_vec()).unwrap_or_default();
@@ -670,7 +699,7 @@ fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: 
     };
     for &g in groups.iter().filter(|&&g| g > 0) {
         if pos.is_empty() || wounds.len() != pos.len() {
-            return unit_flag;
+            return (unit_flag, "trooper".into());
         }
         // P4.0-5: the step API's answer names the first group's model; later groups keep the auto pick.
         let p = picked.take().filter(|&p| p < pos.len()).unwrap_or_else(|| pick(&kits, &pos, &wounds));
@@ -684,10 +713,14 @@ fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: 
         }
     }
     if pos.is_empty() || wounds.len() != pos.len() {
-        return unit_flag;
+        return (unit_flag, "trooper".into());
     }
-    let p = pos[picked.take().filter(|&p| p < pos.len()).unwrap_or_else(|| pick(&kits, &pos, &wounds))];
-    crate::terrain::gives_cover(t.type_at([p[0] as f32, p[1] as f32, p[2] as f32]))
+    let idx = picked.take().filter(|&p| p < pos.len()).unwrap_or_else(|| pick(&kits, &pos, &wounds));
+    let in_cover = match cover {
+        Cover::Board(t) => crate::terrain::gives_cover(t.type_at([pos[idx][0] as f32, pos[idx][1] as f32, pos[idx][2] as f32])),
+        _ => unit_flag,
+    };
+    (in_cover, takedown_model_label(&kits, names, fallback_w, idx))
 }
 
 /// Tray-exact S7 — `_solo_land_takedown_wounds` (main.gd, Bug 25 / TC-023): each Takedown group
@@ -696,9 +729,15 @@ fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: 
 /// overkill is lost (a unit of [1] has nowhere to spill). Without kits the pick is the core's own
 /// inverse slot order, the last living slot. Each landing names itself (rules-must-log).
 /// P4.0-5: `pick` is the step API's answer for the FIRST group (a slot at the choice, `None` = auto).
-fn land_takedown_groups(state: &mut State, ti: usize, shot: &mut ShootResult, pick: Option<usize>) {
+fn land_takedown_groups(
+    state: &mut State, ti: usize, shot: &mut ShootResult, pick: Option<usize>,
+    mut tray: Option<(&mut Tray, &str, i64)>,
+) -> i64 {
     let mut pick = pick;
+    let mut dealt = 0;
+    let mut lines = std::mem::take(&mut shot.takedown_lines).into_iter();
     for w in std::mem::take(&mut shot.takedown_groups) {
+        let line_info = lines.next();
         let n = state.wounds[ti].len();
         if w <= 0 || n == 0 {
             continue;
@@ -708,6 +747,7 @@ fn land_takedown_groups(state: &mut State, ti: usize, shot: &mut ShootResult, pi
         let chosen = pick.take().filter(|&p| state.wounds[ti].get(p).is_some_and(|&x| x > 0));
         let pick = chosen.unwrap_or_else(|| takedown_pick(state, ti));
         let take = w.min(state.wounds[ti][pick]);
+        dealt += take;
         state.wounds[ti][pick] -= take;
         let killed = state.wounds[ti][pick] <= 0;
         if killed {
@@ -722,7 +762,12 @@ fn land_takedown_groups(state: &mut State, ti: usize, shot: &mut ShootResult, pi
         state.alive[ti] = state.positions[ti].len() as i64;
         let what = if killed { "killed" } else { "wounded" };
         shot.log.push(format!("Takedown: {take} of {w} wounds on the picked model of {} - {what}", state.key(ti)));
+        if let (Some((t, def_name, side)), Some((weapon, label))) = (tray.as_mut(), line_info) {
+            let lbl = if label.is_empty() { "trooper" } else { label.as_str() };
+            crate::dice::say_rule(t, "takedown", *side, || format!("Takedown ({weapon}): the {lbl} of {def_name} is {what}"));
+        }
     }
+    dealt
 }
 
 /// Deadly(X) landing PER MODEL — the table's `SoloController.apply_deadly_wounds`
@@ -1600,7 +1645,7 @@ pub(crate) fn tray_strafing(
         }).collect();
     // The SAME gate pack the normal volley's `resolve_volley_leg` call passes
     // (sim.rs's shoot branch) — the strafe is "as if shooting".
-    let r = crate::dice::resolve_volley_leg(
+    let r = crate::dice::resolve_volley_with_pick_label(
         &shooters, &def, &ut.name, d, d,
         seams.cond_ap_dice || rule_on(seams.rules_epoch, 1),
         rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES),
@@ -1608,7 +1653,7 @@ pub(crate) fn tray_strafing(
         shred_boost_active(seams.rules_epoch),
         rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
         seams.tray_exact,
-        &|gr: &[i64]| takedown_pick_cover_after(next, target, cover, def.in_cover, gr, seams.takedown_pick),
+        &|gr: &[i64]| takedown_pick_info_after(statics, next, target, cover, def.in_cover, gr, seams.takedown_pick),
         &|_, _| None,
         tray,
     );
@@ -1626,7 +1671,8 @@ pub(crate) fn tray_strafing(
     if !seams.tray_exact {
         land_pool_wounds(next, target, w, false, seams, &mut shot.log);
     }
-    land_takedown_groups(next, target, shot, seams.takedown_pick);
+    let side = next.player[si];
+    let td_dealt = land_takedown_groups(next, target, shot, seams.takedown_pick, Some((tray, &ut.name, side)));
     shot.deadly_lines.clear(); // the volley's per-weapon lines are said at the AI volley's own landing only
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
         let dl = land_deadly_wounds(next, target, post, dx, seams);
@@ -1635,7 +1681,7 @@ pub(crate) fn tray_strafing(
     if seams.tray_exact {
         land_pool_wounds(next, target, w, true, seams, &mut shot.log); // the table's order: Takedown, Deadly, then the pool
     }
-    land_chain_report(statics, next, tray, target, before);
+    land_chain_report_inline(statics, next, tray, target, before, td_dealt);
     if scourge_morale_trigger(next, statics, seams, ut, target, alive_before, wounds_before, phantom, &mut shot.log) {
         tray_morale(next, statics, target, false, seams, tray, shot, Some(d), None);
     }
@@ -2954,26 +3000,24 @@ fn precision_markers_spend(
     ti: usize,
     rules_epoch: u32,
     log: &mut Vec<String>,
-) -> i64 {
+) -> (i64, i64) {
     if !rule_on(rules_epoch, EPOCH_61_PRECISION_MARKERS) {
-        return 0;
+        return (0, 0);
     }
-    let mut total = 0;
     let spot = next.spot_markers[ti].max(0);
     if spot > 0 {
         next.spot_markers[ti] = 0;
-        total += spot;
         log.push(format!(
             "Precision Spotter: {spot} marker{} removed — +{spot} to hit this volley",
             if spot == 1 { "" } else { "s" }));
     }
     let tag = next.tag_markers[ti].max(0);
+    let mut tag_spent = 0;
     if tag > 0 {
         // Rules 3.6 (`EPOCH_73_V36`): a friendly attack spends ONE token for +1.
         let v36 = rule_on(rules_epoch, crate::acts::EPOCH_73_V36);
-        let spent = if v36 { 1 } else { tag };
-        next.tag_markers[ti] = tag - spent;
-        total += spent;
+        tag_spent = if v36 { 1 } else { tag };
+        next.tag_markers[ti] = tag - tag_spent;
         log.push(if v36 {
             format!("Precision Tag: one token spent — +1 to hit this volley ({} left)", tag - 1)
         } else {
@@ -2982,7 +3026,7 @@ fn precision_markers_spend(
                 if tag == 1 { "" } else { "s" })
         });
     }
-    total
+    (spot, tag_spent)
 }
 
 /// `tray_charge`'s strike-order leg: the static Unwieldy flag, or — wave 2
@@ -6472,7 +6516,7 @@ fn strike_phase(
     // LANDED, overkill included (`caused += td_dealt`, main.gd:7284), and the
     // table's order holds: Takedown, Deadly, then the pool.
     let mut dealt: i64 = shot.takedown_groups.iter().sum();
-    land_takedown_groups(next, ti, shot, seams.takedown_pick);
+    land_takedown_groups(next, ti, shot, seams.takedown_pick, None);
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
         let d = land_deadly_wounds(next, ti, post, dx, seams);
         dealt += d;
@@ -10960,7 +11004,8 @@ fn resolve_with(
                             // Wave 6 — Precision Spotter/Tag: the marked
                             // target's pools spend EVERY marker on THIS
                             // volley (+1 to hit per marker), once per group.
-                            let precision_hit = precision_markers_spend(&mut next, g.ti, seams.rules_epoch, &mut shot.log);
+                            let (spot_hit, tag_hit) = precision_markers_spend(&mut next, g.ti, seams.rules_epoch, &mut shot.log);
+                            let precision_hit = spot_hit + tag_hit;
                             let ut_g = &statics[next.roster.profile[g.ti]];
                             let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch), statics, &next, g.ti, seams), seams.rules_epoch);
                             stamp_blast_models(&mut def, &next, g.ti, seams);
@@ -11126,6 +11171,7 @@ fn resolve_with(
                                     && instinctive_applies(&next, *mi, g.ti)
                                 {
                                     att.hit_mod += att.instinctive_hit_bonus;
+                                    att.instinctive_applied = att.instinctive_hit_bonus;
                                 }
                                 att.tag_ap_mod = tag_ap;
                                 // Wave 6 — the Precision pools' +1-per-marker
@@ -11133,6 +11179,8 @@ fn resolve_with(
                                 // instinctive bonus folds into (both legs
                                 // read `att.hit_mod` at the roll).
                                 att.hit_mod += precision_hit;
+                                att.spot_hit_note = spot_hit;
+                                att.tag_hit_note = tag_hit;
                                 // Reckless Piercing (epoch 7, main.gd:9877):
                                 // the chain's buff stamp and the TARGET's
                                 // backfire stamp — `_solo_reckless_ap`'s net.
@@ -11189,7 +11237,7 @@ fn resolve_with(
                             // melee half above.
                             // A lone hero's hit lines call the target by its host's name, as the table does.
                             tray.aim(lone_host.map(|h| statics[next.roster.profile[h]].name.clone()));
-                            let r = crate::dice::resolve_volley_leg(
+                            let r = crate::dice::resolve_volley_with_pick_label(
                                 &shooters_of(&parts, statics, &next),
                                 &def, &ut_g.name, g.d, g.mod_d,
                                 seams.cond_ap_dice || rule_on(seams.rules_epoch, 1),
@@ -11206,7 +11254,7 @@ fn resolve_with(
                                 // `EPOCH_14_DEADLY_LANDING`, pool multiply below.
                                 rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
                                 seams.tray_exact,
-                                &|gr: &[i64]| takedown_pick_cover_after(&next, g.ti, cover, def.in_cover, gr, seams.takedown_pick),
+                                &|gr: &[i64]| takedown_pick_info_after(statics, &next, g.ti, cover, def.in_cover, gr, seams.takedown_pick),
                                 &|i, pi| parts.get(i).and_then(|(mi, msc, _)| msc.sighted.get(pi)
                                     .map(|&n| (n, next.alive[*mi], msc.silent.get(pi).copied().unwrap_or("")))),
                                 tray,
@@ -11257,7 +11305,8 @@ fn resolve_with(
                             let mut alloc = if seams.tray_exact { open_alloc(&next, si, g.ti, gi, (w, deadly), tray) } else { None };
                             // Tray-exact S7: the table lands Takedown and Deadly INLINE per weapon
                             // (Takedown first, main.gd:4054-4067) and the pool at the volley's end.
-                            land_takedown_groups(&mut next, g.ti, shot, seams.takedown_pick);
+                            let side = next.player[si];
+                            let takedown_dealt = land_takedown_groups(&mut next, g.ti, shot, seams.takedown_pick, Some((tray, &ut_g.name, side)));
                             // Audit 2026-09-13 §2.1 — Deadly lands PER MODEL
                             // with no carry-over (the table's
                             // `apply_deadly_wounds`, solo_controller.gd:8333):
@@ -11265,7 +11314,6 @@ fn resolve_with(
                             // remaining wounds, capped there, surplus wasted.
                             let mut groups = std::mem::take(&mut shot.deadly_groups).into_iter();
                             let mut deadly_dealt = 0;
-                            let side = next.player[si];
                             for (weapon, unsaved, dx, n) in std::mem::take(&mut shot.deadly_lines) {
                                 let (mut dealt, mut forced) = (0, 0);
                                 for (post, gx) in groups.by_ref().take(n) {
@@ -11296,7 +11344,7 @@ fn resolve_with(
                                 land_pool_wounds(&mut next, g.ti, left, true, seams, &mut shot.log);
                             }
                             // One-core P3 steps 7/25/27: the landing's lines and its landings, stamped BEFORE the group's morale test below draws.
-                            land_chain_report_inline(statics, &next, tray, rep, chain_before, deadly_dealt);
+                            land_chain_report_inline(statics, &next, tray, rep, chain_before, deadly_dealt + takedown_dealt);
                             // rules-wave3-growthmark (epoch 6) — the
                             // ignore-wound marker AFTER the landing.
                             if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {

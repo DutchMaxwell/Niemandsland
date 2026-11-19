@@ -21,6 +21,11 @@ const DENY_PATH := "res://assets/solo/core_slice_deny.json"
 ## the group (a test's own, the dice-only pin for the line-only one) refuses nothing of the kind.
 const SIMULTANEOUS_FIRE_GROUP := "door_omits_simultaneous_fire_line"
 const OWN_SHRED_GROUP := "door_own_shred_beside_alias"
+const VERSATILE_PAIR_GROUP := "door_versatile_pick_modified_to_hit"
+const TAKEDOWN_LABEL_GROUP := "door_takedown_names_an_equipment_carrier"
+## The primitives whose rules move a SHOOTING to-hit number: on the target (Artillery's -1, the Stealth and Evasive families, Aircraft) and on the shooter.
+const TO_HIT_ON_TARGET := ["Artillery", "Stealth", "Evasive", "Aircraft"]
+const TO_HIT_ON_SHOOTER := ["Artillery", "Shot Modifier", "Instinctive"]
 
 
 static func _has_group(group: String) -> bool:
@@ -157,8 +162,11 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 			out.append("lone_hero_target")
 		for hero in gu.get_attached_heroes():
 			for r in refusals(hero as GameUnit, true):
-				if r != "attached" and not out.has(r):
+				if r != "attached" and r != "spell_hit_mod" and r != "vengeance_markers" and not out.has(r):
 					out.append(r)
+	for r in _ledger_hit_refusals(gu, as_target):
+		if not out.has(r):
+			out.append(r)
 	if not gu.source_data is OPRApiClient.OPRUnit:
 		return out if as_target else out + ["non_opr"]
 	for w in (gu.source_data as OPRApiClient.OPRUnit).weapons:
@@ -179,18 +187,85 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 	return out
 
 
-## `gu` (with its joined heroes) carries a Deadly ranged weapon and at least one OTHER ranged weapon entry.
+## Deny mode, a PAIR (two groups). Versatile: the core latches a Versatile Attack pick on the plain Quality, the table on the MODIFIED to-hit
+## number, so a Versatile shooter and any to-hit modifier in play (on the target, or on the shooter itself) can pick differently: a state
+## difference, kept by the dice-only pin. Takedown: a line difference (the picked model's label), dropped by it.
+## `pair_refusals_in` reads a named slice file like `refusals_in` (the shadow's census reads the deny file whatever the live slice is).
+static func pair_refusals(shooter: GameUnit, target: GameUnit) -> Array:
+	var out: Array = []
+	if shooter == null or target == null or config()["mode"] != "deny":
+		return out
+	if _has_group(VERSATILE_PAIR_GROUP) and _chain_carries(shooter, ["Versatile Attack"]) \
+			and (_chain_carries(target, TO_HIT_ON_TARGET) or _chain_carries(shooter, TO_HIT_ON_SHOOTER)):
+		out.append("versatile_pick_modified_to_hit")
+	# The table labels a Takedown pick that is no Tough and no special-weapon model by its first item (`_solo_model_label`); the core holds only an item COUNT.
+	if _has_group(TAKEDOWN_LABEL_GROUP) and _chain_carries(shooter, ["Takedown"]) \
+			and ([target] + target.get_attached_heroes()).any(func(u) -> bool: return u is GameUnit and (u as GameUnit).models.any(
+				func(m: ModelInstance) -> bool: return m.is_alive and not (m.properties.get("equipment", []) as Array).is_empty())):
+		out.append("takedown_label_equipment")
+	return out
+
+
+static func pair_refusals_in(path: String, shooter: GameUnit, target: GameUnit) -> Array:
+	var live := [path_override, _loaded]
+	path_override = path
+	_loaded = _cache_by_path.get(path, {})
+	var out := pair_refusals(shooter, target)
+	_cache_by_path[path] = _loaded
+	path_override = live[0]
+	_loaded = live[1]
+	return out
+
+
+## `gu` or one of its joined heroes carries a rule of one of `primitives` (`carries`).
+static func _chain_carries(gu: GameUnit, primitives: Array) -> bool:
+	return ([gu] + gu.get_attached_heroes()).any(func(u) -> bool: return u is GameUnit and carries(u as GameUnit, primitives))
+
+
+## DLINES train 4 (DS-GHITN part 3): refuse BY STATE (not by rule name) any shooting activation whose ledger carries
+## a spell-token hit modifier (attacker_own on the shooter, vs_target on the target) or Vengeance markers on the target.
+static func _ledger_hit_refusals(gu: GameUnit, as_target: bool) -> Array:
+	var out: Array = []
+	var chain: Array = [gu] + gu.get_attached_heroes()
+	if gu.has_method("get_attached_to") and gu.get_attached_to() != null:
+		chain.append(gu.get_attached_to())
+	for u in chain:
+		var m := u as GameUnit
+		if m == null:
+			continue
+		if not out.has("spell_hit_mod") and _has_shooting_hit_record(m.unit_properties.get("spell_records", []) as Array, as_target):
+			out.append("spell_hit_mod")
+		if as_target and not out.has("vengeance_markers") and int(m.unit_properties.get("vengeance_markers", 0)) > 0:
+			out.append("vengeance_markers")
+	return out
+
+
+## A live spell-token record that moves a SHOOTING to-hit roll: `hit_mod` != 0, not melee- or charge-scoped, and the
+## table's side (`AiSpell.mods_for`, roles "attacker_own" / "vs_target"): the bearer's own roll, or the roll of those who attack it.
+static func _has_shooting_hit_record(records: Array, as_target: bool) -> bool:
+	for r in records:
+		var rd := r as Dictionary
+		var scope := str(rd.get("scope", ""))
+		if scope == "charging" or scope == "melee" or int(rd.get("hit_mod", 0)) == 0:
+			continue
+		if (str(rd.get("beneficiary", "")) == "attackers") == as_target:
+			return true
+	return false
+
+
+## `gu` (with its joined heroes) carries an inline-landing ranged weapon (Deadly or Takedown) beside at least one OTHER ranged weapon entry.
 static func _deadly_beside_other_weapons(gu: GameUnit) -> bool:
 	var ranged := 0
 	var deadly := false
 	for u in [gu] + gu.get_attached_heroes():
 		if not (u is GameUnit and (u as GameUnit).source_data is OPRApiClient.OPRUnit):
 			continue
+		var unit_td: bool = (u as GameUnit).get_special_rules().any(func(r) -> bool: return rule_label(r) == "Takedown when Shooting")
 		for w in ((u as GameUnit).source_data as OPRApiClient.OPRUnit).weapons:
 			if w.range_value <= 0:
 				continue
 			ranged += 1
-			deadly = deadly or (w.special_rules as Array).any(func(r) -> bool: return rule_label(r) == "Deadly")
+			deadly = deadly or unit_td or (w.special_rules as Array).any(func(r) -> bool: return rule_label(r) == "Deadly" or rule_label(r) == "Takedown")
 	return deadly and ranged >= 2
 
 

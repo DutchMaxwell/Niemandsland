@@ -202,7 +202,8 @@ static func volley(main: Node, entry_a: Dictionary, entry_b: Dictionary, seed_n:
 		"labels": {"att": labels_of(att), "tgt": labels_of(tgt)}, "names": [att.get_name(), tgt.get_name()],
 		# What the deny-mode slice (NML_CORE_SLICE=deny) would refuse here, as the shadow record says it: [] = taken.
 		"deny": CoreSlice.refusals_in(CoreSlice.DENY_PATH, att) \
-			+ CoreSlice.refusals_in(CoreSlice.DENY_PATH, tgt, true).map(func(x: String) -> String: return "target_" + x)}
+			+ CoreSlice.refusals_in(CoreSlice.DENY_PATH, tgt, true).map(func(x: String) -> String: return "target_" + x) \
+			+ CoreSlice.pair_refusals_in(CoreSlice.DENY_PATH, att, tgt)}
 	free_units(main, [att, tgt])
 	await main.get_tree().process_frame
 	return out

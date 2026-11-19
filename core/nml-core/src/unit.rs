@@ -102,6 +102,17 @@ impl ShieldedAlias {
     }
 }
 
+/// One active shooting `Shot Modifier` rule stamped onto `Ctx` in profile order (`""` = empty).
+/// `kind`: 0 = static (flat or over `over_in`), 1 = stationary (`Mobile Artillery`),
+/// 2 = terrain (`Grounded Precision`), 3 = once-per-game feat (`Precision Feat`).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct ShotModNote {
+    pub name: &'static str,
+    pub bonus: i64,
+    pub over_in: f64,
+    pub kind: u8,
+}
+
 /// `AiEv` unit context — `ctx_for`'s dictionary as a struct. `models`,
 /// `in_cover` and `fatigued` are the DYNAMIC three `BattleSim._ctx_of`
 /// (battle_sim.gd:701-712) writes over the template per call.
@@ -231,6 +242,8 @@ pub struct Ctx {
     /// The alias's own `over_in` gate (0.0 = unconditional for shooting, the
     /// same `gate <= 0.0` reading `_solo_hit_mod_info` uses, main.gd:5602).
     pub stealth_alias_over_in: f64,
+    /// Rule name of the non-stationary Stealth alias (for the to-hit note); "" = none.
+    pub stealth_alias_name: &'static str,
     /// Wave 4 (port-entrenched) — the alias walk's SPLIT, stationary half:
     /// the best `hit_penalty` among the defender's Stealth-primitive names
     /// with `requires_stationary: true` (main.gd:5699-5702); 0 = none.
@@ -270,6 +283,8 @@ pub struct Ctx {
     /// "" = no Boost. A `&'static str`, not a `String`: `Ctx` is `Copy` and
     /// every name here is a literal in `ctx_for`'s own arms.
     pub evasive_alias_name: &'static str,
+    /// Evasive Boost that stands down its base rule in the table's to-hit note ("Enhanced Empyrean Spirit"); "" = plain "Evasive -1".
+    pub evasive_stand_down_name: &'static str,
     /// `Melee Evasion` — the melee twin of Evasive (ai_ev.gd:150).
     pub melee_evasion: bool,
     /// `Dodge` (rules 3.6) — MOST models carry it. The melee -1 itself is a resolution-time read
@@ -469,6 +484,12 @@ pub struct Ctx {
     /// volley builder add it into the member's `hit_mod`, and only when
     /// `sim::instinctive_applies` says the attacked unit IS the closest enemy.
     pub instinctive_hit_bonus: i64,
+    /// Rule name of the Instinctive entry ("" = none) and the live bonus applied at the volley seam (0 = not closest target).
+    pub instinctive_name: &'static str,
+    pub instinctive_applied: i64,
+    /// Per-volley spent Precision Spotter / Tag hit bonuses for the to-hit note (0 = none).
+    pub spot_hit_note: i64,
+    pub tag_hit_note: i64,
     // --- NML block B2b, the live-buff fold (`sim::ctx_live`). ZERO on every
     // `ctx_of`, which is what keeps the EV imagination buff-blind exactly like
     // `BattleSim._ctx_of` (it never sets `AiEv.profile_ev`'s `spell_hit_mod`
@@ -660,6 +681,8 @@ pub struct Ctx {
     /// Aircraft (the map's `Aircraft.target_hit_penalty`, beside the range penalty). Stamped
     /// in `ctx_for` off the record's own epoch; 0 for every other unit and below 73.
     pub aircraft_hit_penalty: i64,
+    /// Rule name for the Aircraft to-hit penalty ("Aircraft" when active, "" otherwise).
+    pub aircraft_hit_name: &'static str,
     // --- Ambush family (rules-wave2-ambush). ZERO on every `ctx_of` (baked
     // into `ctx_for`), like `growth_ap_mod` — only `sim::ctx_live` reads the
     // arrival stamp and folds it in, so the EV imagination stays blind to it
@@ -729,6 +752,8 @@ pub struct Ctx {
     /// (`_solo_majority_in_cover`, main.gd:7065-7083; the snapshot's cover
     /// is the unit-centre probe, battle_sim.gd:753).
     pub grounded_precision_hit: i64,
+    /// Active shooting Shot Modifier entries in profile order (for the to-hit note).
+    pub shot_mod_notes: [ShotModNote; 4],
     /// The act-scope `moved` flag, stamped at sim.rs's volley call site over
     /// the template. Default TRUE — a context nobody stamped counts as
     /// moved, so the Mobile Artillery bonus stays OFF (#489's direction:
@@ -1989,7 +2014,7 @@ fn hit_and_run_boost_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
 /// the terrain half: the split walk now also reports the terrain-gated kind
 /// (`Ctx::stealth_alias_near_terrain`) and the def builds resolve the
 /// per-model read live; `requires_stationary` still is.
-fn stealth_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, f64, bool) {
+fn stealth_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, f64, bool, &'static str) {
     stealth_alias_of_excluding(reg, p, "", rules_epoch)
 }
 
@@ -1999,10 +2024,11 @@ fn stealth_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64
 /// two must never stack. `skip` "" = the plain walk, byte-exact.
 fn stealth_alias_of_excluding(
     reg: &mut Registries, p: &Profile, skip: &str, rules_epoch: u32,
-) -> (i64, f64, bool) {
+) -> (i64, f64, bool, &'static str) {
     let mut best_penalty = 0;
     let mut best_over_in = 0.0;
     let mut best_applies_charged = false;
+    let mut best_name: &'static str = "";
     let map = reg.rules_for(&p.game_system);
     for r in &p.special_rules {
         let name = base_rule_name(r);
@@ -2025,9 +2051,10 @@ fn stealth_alias_of_excluding(
             best_penalty = pen;
             best_over_in = if legacy_stealth_buff { 9.0 } else { e.param_f("over_in", 0.0) };
             best_applies_charged = e.param_b_or("applies_charged", false);
+            best_name = crate::rules::intern(&name);
         }
     }
-    (best_penalty, best_over_in, best_applies_charged)
+    (best_penalty, best_over_in, best_applies_charged, best_name)
 }
 
 /// Rules 3.6 (ruling D-MOST) — the Stealth-family names whose 3.6 text reads "most models";
@@ -2129,11 +2156,12 @@ pub(crate) fn most_models_family_live(
 /// false only the unconditional ones, below the FROZEN gate never called.
 fn stealth_alias_split_walk(
     reg: &mut Registries, p: &Profile, skip: &str, want_stationary: bool, rules_epoch: u32,
-) -> (i64, f64, bool, bool) {
+) -> (i64, f64, bool, bool, &'static str) {
     let mut best_penalty = 0;
     let mut best_over_in = 0.0;
     let mut best_applies_charged = false;
     let mut best_terrain_gated = false;
+    let mut best_name: &'static str = "";
     let map = reg.rules_for(&p.game_system);
     for r in &p.special_rules {
         let name = base_rule_name(r);
@@ -2156,9 +2184,10 @@ fn stealth_alias_split_walk(
             best_over_in = if legacy_stealth_buff { 9.0 } else { e.param_f("over_in", 0.0) };
             best_applies_charged = e.param_b_or("applies_charged", false);
             best_terrain_gated = e.param_f("terrain_within_in", 0.0) > 0.0;
+            best_name = crate::rules::intern(&name);
         }
     }
-    (best_penalty, best_over_in, best_applies_charged, best_terrain_gated)
+    (best_penalty, best_over_in, best_applies_charged, best_terrain_gated, best_name)
 }
 
 /// The terrain-conditional Stealth alias's own proximity, in inches —
@@ -2171,9 +2200,9 @@ fn stealth_alias_split_walk(
 pub(crate) const STEALTH_ALIAS_TERRAIN_WITHIN_IN: f64 = 1.0;
 
 /// The split's SIBLING fn — the `requires_stationary` members only.
-fn stationary_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, f64, bool) {
-    let (pen, over, charged, _) = stealth_alias_split_walk(reg, p, "", true, rules_epoch);
-    (pen, over, charged)
+fn stationary_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, f64, bool, &'static str) {
+    let (pen, over, charged, _, name) = stealth_alias_split_walk(reg, p, "", true, rules_epoch);
+    (pen, over, charged, name)
 }
 /// Battleborn family wave 3 (rules-wave3-battleborn) — main.gd
 /// `:_solo_round_start_recovery_rule`'s generic Battleborn-primitive alias
@@ -3535,18 +3564,18 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     };
     // Wave 4 (port-entrenched) — below the FROZEN gate the OLD unconditional
     // fold stays byte-identical; AT 7 the walk splits (main.gd:5694-5702).
-    let (stealth_alias_penalty, stealth_alias_over_in, stealth_alias_applies_charged, stealth_alias_near_terrain, stationary_alias_penalty, stationary_alias_over_in) =
+    let (stealth_alias_penalty, stealth_alias_over_in, stealth_alias_applies_charged, stealth_alias_near_terrain, stealth_alias_name, stationary_alias_penalty, stationary_alias_over_in, stationary_alias_name) =
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
             let skip = if machine_fog_boost { "Machine-Fog" }
                 else if empyrean_spirit_boost { "Empyrean Spirit" } else { "" };
-            let (ap, ao, ac, near) = stealth_alias_split_walk(reg, p, skip, false, rules_epoch);
-            let (sp, so, _) = stationary_alias_of(reg, p, rules_epoch);
-            (ap, ao, ac, near, sp, so)
+            let (ap, ao, ac, near, an) = stealth_alias_split_walk(reg, p, skip, false, rules_epoch);
+            let (sp, so, _, sn) = stationary_alias_of(reg, p, rules_epoch);
+            (ap, ao, ac, near, an, sp, so, sn)
         } else {
-            let (ap, ao, ac) = if machine_fog_boost { stealth_alias_of_excluding(reg, p, "Machine-Fog", rules_epoch) }
+            let (ap, ao, ac, an) = if machine_fog_boost { stealth_alias_of_excluding(reg, p, "Machine-Fog", rules_epoch) }
                 else if empyrean_spirit_boost { stealth_alias_of_excluding(reg, p, "Empyrean Spirit", rules_epoch) }
                 else { stealth_alias_of(reg, p, rules_epoch) };
-            (ap, ao, ac, false, 0, 0.0)
+            (ap, ao, ac, false, an, 0, 0.0, "")
         };
     trace_stamp(trace73 && stealth_alias_penalty != 0, "stealth-alias-stamp", "Stealth",
         &format!("{}: Stealth alias stamped -{} to hit", p.name, stealth_alias_penalty));
@@ -3633,6 +3662,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // until sim.rs's volley site stamps the act-scope flag over it.
     let (mobile_artillery_hit, mobile_artillery_over_in, grounded_precision_hit) =
         shot_modifier_runtime_of(reg, p, rules_epoch);
+    let shot_mod_notes = shot_mod_notes_of(reg, p, rules_epoch);
     let shielded_alias = shielded_alias_of(reg, p, rules_epoch);
     if trace73 {
         if let Some((kind, terrain)) = shielded_alias {
@@ -3801,6 +3831,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         stealth_grant: false,
         stealth_alias_penalty,
         stealth_alias_over_in,
+        stealth_alias_name,
         stealth_alias_applies_charged,
         // D-STEALTH — the terrain gate rides the FROZEN `EPOCH_60_GROUNDED_STEALTH`:
         // below 57 the stamp stays false and the def builds never consult a
@@ -3809,10 +3840,11 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
             && stealth_alias_near_terrain,
         stationary_alias_penalty,
         stationary_alias_over_in,
-        stationary_alias_name: if stationary_alias_penalty > 0 { "Entrenched" } else { "" },
+        stationary_alias_name,
         evasive: evasive_on,
         evasive_alias: !evasive_boost.is_empty(),
         evasive_alias_name: evasive_boost,
+        evasive_stand_down_name: if empyrean_spirit_boost { "Enhanced Empyrean Spirit" } else { "" },
         melee_evasion: most_models_family_on(p, "Melee Evasion", rules_epoch),
         dodge: unit_rule_active(reg, p, "Dodge") && rule_on_most_models(p, p.model_count, "Dodge", false),
         fortified: rule_on_defence_family(p, "Fortified", rules_epoch)
@@ -3844,6 +3876,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         mobile_artillery_hit,
         mobile_artillery_over_in,
         grounded_precision_hit,
+        shot_mod_notes,
         moved_this_round: true,
         strafe_volley: false,
         held: false,
@@ -3925,6 +3958,10 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         death_hits_per_kill: death_hits_per_kill(reg, p),
         self_destruct_rating: self_destruct_rating(reg, p),
         instinctive_hit_bonus,
+        instinctive_name: if instinctive_hit_bonus > 0 { "Instinctive" } else { "" },
+        instinctive_applied: 0,
+        spot_hit_note: 0,
+        tag_hit_note: 0,
         hit_mod: 0,
         vs_hit_mod: 0,
         ap_mod: 0,
@@ -3967,6 +4004,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         playtest_rules: rule_on(rules_epoch, EPOCH_72_PLAYTEST_RULES),
         rules_epoch,
         aircraft_hit_penalty,
+        aircraft_hit_name: if aircraft_hit_penalty > 0 { "Aircraft" } else { "" },
         ambush_arrival_ap: 0,
         tag_ap_mod: 0,
         reckless_ap: 0,
@@ -4799,6 +4837,22 @@ fn precision_base_stands_down(p: &Profile, name: &str, rules_epoch: u32) -> bool
         && (!rule_on(rules_epoch, EPOCH_73_V36) || has_special_rule(&p.special_rules, &format!("{name} Aura")))
 }
 
+/// The eight shooting `Shot Modifier` names `stamp_shot_modifier` folds flat or over 9" (also read by `shot_mod_notes_of`).
+const SHOOT_SHOT_MODS: [&str; 8] = [
+    "Good Shot",
+    "Bad Shot",
+    "Targeting Visor",
+    "Enhanced Targeting Visor",
+    "Precision Shooter Aura",
+    "Buccaneer",
+    "Enhanced Buccaneer",
+    // Rung C data port (AUDIT_armybook_flanks_2026-09-02.md): Precision
+    // Hunter is Targeting Visor's word-for-word twin ("+1 to hit rolls
+    // when shooting at enemies over 9\" away") — same primitive, same
+    // params shape, added here rather than a new name-literal branch.
+    "Precision Hunter",
+];
+
 /// `RulesRegistry.unit_rules_of_primitive(shooter, "Shot Modifier")`,
 /// main.gd:5681-5701 — scoped to this port's eight named carriers: B4's
 /// (Good Shot, Bad Shot, Targeting Visor) plus block C3's four flat/over-9"
@@ -4825,20 +4879,7 @@ fn stamp_shot_modifier(
 ) {
     let mut flat = 0;
     let mut over9 = 0;
-    for name in [
-        "Good Shot",
-        "Bad Shot",
-        "Targeting Visor",
-        "Enhanced Targeting Visor",
-        "Precision Shooter Aura",
-        "Buccaneer",
-        "Enhanced Buccaneer",
-        // Rung C data port (AUDIT_armybook_flanks_2026-09-02.md): Precision
-        // Hunter is Targeting Visor's word-for-word twin ("+1 to hit rolls
-        // when shooting at enemies over 9\" away") — same primitive, same
-        // params shape, added here rather than a new name-literal branch.
-        "Precision Hunter",
-    ] {
+    for name in SHOOT_SHOT_MODS {
         if !unit_rule_active(reg, p, name) {
             continue;
         }
@@ -4898,6 +4939,31 @@ fn shot_modifier_runtime_of(reg: &mut Registries, p: &Profile, rules_epoch: u32)
         }
     }
     (mobile_hit, mobile_over, grounded_hit)
+}
+
+/// Active shooting `Shot Modifier` entries in profile order (`_solo_hit_mod_info` main.gd:8884-8905),
+/// for the door's to-hit note composer. Covers the 8 static names plus the runtime-gated and feat entries.
+fn shot_mod_notes_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> [ShotModNote; 4] {
+    let mut out = [ShotModNote::default(); 4];
+    let mut n = 0usize;
+    let map = reg.rules_for(&p.game_system);
+    for r in &p.special_rules {
+        if n >= out.len() { break; }
+        let name = base_rule_name(r);
+        if name.is_empty() || out[..n].iter().any(|x| x.name == name) { continue; }
+        let kind = if SHOOT_SHOT_MODS.contains(&name.as_str()) { 0u8 }
+            else if name == "Mobile Artillery" && rule_on(rules_epoch, EPOCH_6_TABLE_RULES) { 1 }
+            else if name == "Grounded Precision" && rule_on(rules_epoch, EPOCH_6_TABLE_RULES) { 2 }
+            else if name == "Precision Feat" && rule_on(rules_epoch, EPOCH_7_TABLE_RULES) { 3 }
+            else { continue };
+        let Some(e) = map.lookup(&p.faction_folder, &name) else { continue };
+        if e.primitive.as_deref() != Some("Shot Modifier") { continue; }
+        let bonus = e.param_i("hit_bonus", 0);
+        if bonus == 0 || (kind == 2 && e.param_f("terrain_within_in", 0.0) <= 0.0) { continue; }
+        out[n] = ShotModNote { name: crate::rules::intern(&name), bonus, over_in: e.param_f("over_in", 0.0), kind };
+        n += 1;
+    }
+    out
 }
 
 /// One "Utility Buff" registry entry's params — `_solo_apply_utility_buffs`
