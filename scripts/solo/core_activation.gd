@@ -663,11 +663,12 @@ static func takes_ai_charge(main, unit: GameUnit, report: Dictionary) -> bool:
 
 ## Plan E (melee shadow): why the charge door's slice refuses this AI charge, by reason ([] = it takes it); the door's own
 ## predicate apart from the switch, the board and the tray. Read before the table fights (the sizes are the start's).
-static func charge_refusals(main, unit: GameUnit, report: Dictionary) -> Array:
+## `deny` reads `CoreSlice.MELEE_DENY_PATH` instead of the live allow file (shadow deny view only; the door leaves it false).
+static func charge_refusals(main, unit: GameUnit, report: Dictionary, deny := false) -> Array:
 	var target = report.get("target")
 	if unit == null or not target is GameUnit or int(report.get("action", -1)) != AiDecision.Action.CHARGE:
 		return ["no_charge"]
-	var out: Array = CoreSlice.melee_refusals(unit) + CoreSlice.melee_refusals(target, true).map(func(r): return "target_" + r)
+	var out: Array = CoreSlice.melee_refusals(unit, false, deny) + CoreSlice.melee_refusals(target, true, deny).map(func(r): return "target_" + r)
 	if not main._solo_is_ai_unit(target):
 		out.append("human_defender")
 	if main._solo_combined_alive(unit) >= MELEE_MAX_MODELS or main._solo_combined_alive(target) >= MELEE_MAX_MODELS:

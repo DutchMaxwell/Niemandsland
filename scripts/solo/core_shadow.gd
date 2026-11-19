@@ -194,36 +194,80 @@ static func release(main) -> void:
 			core.release(int(main._solo_core_shadow_h))
 	main._solo_core_shadow_h = 0
 	melee_end(main)
+	_melee = {}
+	_core_rolls = []
 	_held = []
 	placed = []
 	tap.clear()
 	tapping = false
 
 
-## Plan E (melee shadow, P4.D-48): env NML_CORE_SHADOW_MELEE=1 (soaks only, default OFF). With the charge door off the table
-## fights every AI charge; for each one the door's slice WOULD take (`CoreActivation.charge_refusals` = []) the shadow board
-## replays it through the core's step path with the table's own faces and compares the rolls, each unit's end state,
-## the living models' positions (XZ, within 0.01") and the table's melee lines against the core's. Counting only.
-static var _melee_env := -1
-## One record per AI charge seen: {charger, target, taken, why, equal, first_diff, detail}; the census writes them.
+## Plan E (melee shadow, P4.D-48): env NML_CORE_SHADOW_MELEE=1|on|deny (soaks only, default OFF). With the charge door off
+## the table fights every AI charge; for each one the active view's slice WOULD take (`1`/`on`: live allow file; `deny`:
+## the melee deny file) the shadow board replays it through the core's step path with the table's own faces and compares
+## rolls, end state, positions (XZ, within 0.01") and lines. Counting only; the charge door is untouched.
+static var _melee_env := -1   # -1 unread, 0 off, 1 allow view (1/on), 2 deny view (deny)
+## One record per AI charge seen: {charger, target, taken, why, deny, rules, equal, first_diff, detail, core_rolls}.
 static var melee_records: Array = []
-## The charge in flight: {why, lines}; {} = none. `_line_fn` taps the battle log while the table fights it.
+## The charge in flight: {why, deny, charger, target, rules, lines}; {} = none. `_line_fn` taps the battle log while the table fights it.
 static var _melee: Dictionary = {}
 static var _line_fn: Callable
+## Full core `need_roll` stream emitted during the last `_melee_diff` replay, in order (up through any diverging roll).
+static var _core_rolls: Array = []
+
+
+static func _read_melee_env() -> int:
+	if _melee_env < 0:
+		var raw := OS.get_environment("NML_CORE_SHADOW_MELEE").to_lower()
+		_melee_env = 2 if raw == "deny" else (1 if raw in ["1", "on"] else 0)
+	return _melee_env
 
 
 static func melee_enabled() -> bool:
-	if _melee_env < 0:
-		_melee_env = 1 if OS.get_environment("NML_CORE_SHADOW_MELEE").to_lower() in ["1", "on"] else 0
-	return _melee_env == 1
+	return _read_melee_env() > 0
 
 
-## Before the table fights the charge: the slice's reading (start sizes) and the battle-log tap.
+static func melee_deny_view() -> bool:
+	return _read_melee_env() == 2
+
+
+## Rule labels carried by `gu` (unit rules, weapon rules, joined heroes' rules), base names deduplicated in order.
+static func _rule_labels(gu: GameUnit) -> Array:
+	var out: Array = []
+	if gu == null:
+		return out
+	var add := func(r: Variant) -> void:
+		var l := CoreSlice.rule_label(r)
+		if l != "" and not out.has(l):
+			out.append(l)
+	for r in gu.get_special_rules():
+		add.call(r)
+	if gu.source_data is OPRApiClient.OPRUnit:
+		for w in (gu.source_data as OPRApiClient.OPRUnit).weapons:
+			for r in w.special_rules:
+				add.call(r)
+	for hero in gu.get_attached_heroes():
+		for l in _rule_labels(hero as GameUnit):
+			if not out.has(l):
+				out.append(l)
+	return out
+
+
+## One core `need_roll` step as the melee shadow record keeps it: unfolded kind, count, target, owner, expected face count.
+static func _core_roll(r: Dictionary) -> Dictionary:
+	return {"kind": str(r["kind"]), "count": int(r["count"]), "target": int(r["target"]), "owner": str(r["owner"]), "faces": int(r["faces"])}
+
+
+## Before the table fights the charge: the slice's reading (start sizes), both names/rules, and the battle-log tap.
 static func melee_begin(main, unit: GameUnit, report: Dictionary) -> void:
 	melee_end(main)
 	if not melee_enabled() or int(main._solo_core_shadow_h) == 0:
 		return
-	_melee = {"why": CoreActivation.charge_refusals(main, unit, report), "lines": []}
+	var target: GameUnit = report.get("target") as GameUnit
+	var deny: Array = CoreActivation.charge_refusals(main, unit, report, true)
+	var why: Array = deny.duplicate() if melee_deny_view() else CoreActivation.charge_refusals(main, unit, report, false)
+	_melee = {"why": why, "deny": deny, "charger": unit.get_name() if unit != null else "", "target": target.get_name() if target != null else "",
+		"rules": {"charger": _rule_labels(unit), "target": _rule_labels(target)}, "lines": []}
 	var lines: Array = _melee["lines"]
 	_line_fn = func(e: Dictionary) -> void: lines.append("%s|%s" % [BattleLog.Category.keys()[int(e["category"])], str(e["text"])])
 	main.battle_log.entry_added.connect(_line_fn)
@@ -236,19 +280,20 @@ static func melee_end(main) -> void:
 	_line_fn = Callable()
 
 
-## After the table fought the charge: one record; a charge the slice takes is replayed and compared.
+## After the table fought the charge: one record; a charge the active view takes is replayed and compared.
 static func melee_compare(main, unit: GameUnit, report: Dictionary) -> void:
 	if _melee.is_empty():
 		return
 	melee_end(main)
 	var m := _melee
 	_melee = {}
-	var rec := {"charger": unit.get_name(), "target": (report["target"] as GameUnit).get_name(), "taken": (m["why"] as Array).is_empty(),
-		"why": m["why"], "equal": false, "first_diff": "", "detail": {}}
+	var rec := {"charger": m["charger"], "target": m["target"], "taken": (m["why"] as Array).is_empty(),
+		"why": m["why"], "deny": m["deny"], "rules": m["rules"], "equal": false, "first_diff": "", "detail": {}, "core_rolls": []}
 	if rec["taken"]:
 		rec["first_diff"] = _melee_diff(main, unit, report, m["lines"])
 		rec["equal"] = rec["first_diff"] == ""
 		rec["detail"] = _detail
+		rec["core_rolls"] = _core_rolls
 	melee_records.append(rec)
 
 
@@ -259,8 +304,10 @@ static func _melee_diff(main, unit: GameUnit, report: Dictionary, table_lines: A
 	var rolls: Array = tap.filter(func(r: Dictionary) -> bool: return not ["cast", "spell"].has(str(r["leg"])))
 	var r: Dictionary = core.step_activation(h, unit.unit_id, t, false)
 	_detail = {}
+	_core_rolls = []
 	var i := 0
 	while str(r["step"]) == "need_roll":
+		_core_rolls.append(_core_roll(r))
 		if i >= rolls.size() or not same_roll(gate_key(r, false), gate_key(rolls[i], true), {}) or (rolls[i]["faces"] as Array).size() != int(r["faces"]):
 			_detail = {"core": gate_key(r, false), "table": _raw(rolls[i]) if i < rolls.size() else []}
 			return "rolls"
