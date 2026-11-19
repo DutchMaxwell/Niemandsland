@@ -106,3 +106,18 @@ func test_reduce_motion_uses_static_path_and_suppresses_flash_strobe(timeout := 
 	assert_float(float(mat.get_shader_parameter("life"))).is_equal_approx(BurstScript.REDUCED_LIFE_S, 1e-5)
 	await get_tree().create_timer(BurstScript.REDUCED_LIFE_S + 0.25).timeout
 	assert_int(h.get_child_count()).override_failure_message("static reduced-motion burst freed cleanly").is_equal(0)
+
+
+func test_blast_looks_a_short_hot_fireball_and_a_light_smoke_column_that_rises_and_lingers(timeout := 5000) -> void:
+	var fire: Array = BurstScript.LOOKS[BurstScript.Look.FIREBALL]
+	var col: Array = BurstScript.LOOKS[BurstScript.Look.COLUMN]
+	assert_bool(fire[2]).override_failure_message("fireball is additive").is_true()
+	assert_float(float(fire[7])).is_between(0.2, 0.4)
+	assert_bool(col[2]).override_failure_message("smoke is not additive").is_false()
+	assert_float((col[0] as Color).a).override_failure_message("smoke never hides the struck model (alpha <= 0.40)").is_less_equal(0.4001)
+	assert_float(float(col[6])).override_failure_message("rises: negative gravity").is_less(0.0)
+	assert_float(float(col[7])).is_greater_equal(1.4)
+	var h := _host()
+	var b: FxBurst = BurstScript.spawn(h, BurstScript.Look.SPARK, Vector3.ZERO, Vector3.UP, 4, 5, 2, 1.0, Color.WHITE, false, 0.0, 2.0)
+	assert_float(float((b.material_override as ShaderMaterial).get_shader_parameter("life"))) \
+		.override_failure_message("life_k stretches the look's life").is_equal_approx(float(BurstScript.LOOKS[BurstScript.Look.SPARK][7]) * 2.0, 1e-5)

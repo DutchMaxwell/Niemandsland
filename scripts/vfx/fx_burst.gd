@@ -7,7 +7,7 @@ extends MultiMeshInstance3D
 ## (CHIP / BONE / SPARK / DROP), 2.2 s wind-drifting cordite smoke (PUFF, alpha <= 0.35), sand-contrast rim, and
 ## a WCAG 2.3.3 reduced-motion static keyframe path (no strobe, no flight motion).
 
-enum Look { PUFF, SPARK, EMBER, MIST, DUST, FLASH, SHARD, FROST, WISP, MOTE, BONE, DROP, CHIP }
+enum Look { PUFF, SPARK, EMBER, MIST, DUST, FLASH, SHARD, FROST, WISP, MOTE, BONE, DROP, CHIP, FIREBALL, COLUMN }
 enum Channel { PUFF_R = 0, SMOKE_G = 1, SPARK_B = 2, CLOD_A = 3 }
 
 const ATLAS_SIZE := 256
@@ -31,6 +31,10 @@ const LOOKS := {
 	Look.BONE: [Color(0.86, 0.82, 0.72, 0.90), Color(0.62, 0.58, 0.50, 0.0), false, 0.004, 0.009, 0.14, 1.2, 0.75, 1.0],
 	Look.DROP: [Color(0.54, 0.03, 0.03, 0.92), Color(0.32, 0.02, 0.02, 0.0), false, 0.0026, 0.002, 0.24, 1.4, 0.55, 0.9],
 	Look.CHIP: [Color(0.88, 0.84, 0.74, 0.95), Color(0.68, 0.64, 0.56, 0.0), false, 0.0034, 0.003, 0.28, 1.5, 0.75, 0.9],
+	# a blast's second beat: white-hot soft puffs that swell and cool to red (additive, eroded edge), 0.30 s
+	Look.FIREBALL: [Color(4.0, 2.0, 0.6, 1.0), Color(1.2, 0.25, 0.04, 0.0), true, 0.007, 0.026, 0.16, -0.10, 0.30, 0.6],
+	# its third beat: a dark smoke column that rises and lingers (alpha <= 0.40, so it never hides the struck models)
+	Look.COLUMN: [Color(0.30, 0.28, 0.25, 0.40), Color(0.52, 0.50, 0.48, 0.0), false, 0.007, 0.030, 0.10, -0.05, 1.6, 0.30],
 }
 
 ## look -> [channel_mode, stretch (neg = star-flash), bounce (y=0 damping), wind Vector3, contrast_rim, alpha_cap]
@@ -48,6 +52,8 @@ const LOOK_V3 := {
 	Look.BONE: [Channel.CLOD_A, 0.0, 0.40, Vector3.ZERO, 0.60, 0.95],
 	Look.DROP: [Channel.CLOD_A, 0.0, 0.28, Vector3.ZERO, 0.40, 0.95],
 	Look.CHIP: [Channel.CLOD_A, 0.0, 0.45, Vector3.ZERO, 0.65, 0.96],
+	Look.FIREBALL: [Channel.SMOKE_G, 0.0, 0.0, Vector3.ZERO, 0.0, 1.0],
+	Look.COLUMN: [Channel.SMOKE_G, 0.0, 0.0, FireProp.SMOKE_WIND_DRIFT, 0.0, 0.40],
 }
 
 static var _atlas: ImageTexture
@@ -129,9 +135,9 @@ static func instances(look: Look, dir: Vector3, n: int, rng_seed: int, scale := 
 
 
 ## Spawn a burst under `parent` at `at`, thrown along `dir` (zero = all around), its colours multiplied by `tint`;
-## null when the budget is 0 (or FLASH under Reduce Motion).
+## null when the budget is 0 (or FLASH under Reduce Motion). `life_k` stretches or shortens the look's life.
 static func spawn(parent: Node, look: Look, at: Vector3, dir: Vector3, count: int, rng_seed: int, preset: int,
-		scale := 1.0, tint := Color.WHITE, flat := false, ground_y := 0.0) -> FxBurst:
+		scale := 1.0, tint := Color.WHITE, flat := false, ground_y := 0.0, life_k := 1.0) -> FxBurst:
 	var n := budget(count, preset)
 	if n <= 0 or parent == null:
 		return null
@@ -149,7 +155,7 @@ static func spawn(parent: Node, look: Look, at: Vector3, dir: Vector3, count: in
 	mat.set_shader_parameter("s0", float(cfg[3]) * scale)
 	mat.set_shader_parameter("s1", float(cfg[4]) * scale)
 	mat.set_shader_parameter("gravity", float(cfg[6]))
-	var life_s: float = REDUCED_LIFE_S if reduced else float(cfg[7])
+	var life_s: float = REDUCED_LIFE_S if reduced else float(cfg[7]) * life_k
 	mat.set_shader_parameter("life", life_s)
 	mat.set_shader_parameter("progress", 0.0)
 	mat.set_shader_parameter("channel_mode", int(v3[0]))

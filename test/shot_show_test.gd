@@ -166,6 +166,38 @@ func test_a_blast_draws_a_ring_on_the_ground() -> void:
 	assert_float((rings[0] as Node3D).global_position.y).override_failure_message("on the ground").is_less(0.02)
 
 
+func _planes(show: Node3D, code: String) -> Array:
+	return show.get_children().filter(func(c: Node) -> bool: return c is MeshInstance3D and (c as MeshInstance3D).mesh is PlaneMesh \
+		and ((c as MeshInstance3D).material_override as ShaderMaterial).shader.code == code)
+
+
+func test_a_blast_goes_in_three_beats_flash_fireball_and_smoke_that_lingers() -> void:
+	var show := _show()
+	show._impact(Vector3(0.3, 0.05, 0), Vector3.LEFT, VolleyCue.Family.ARTILLERY, 1, 2, 3, 0.04)
+	var lives: Array = show.get_children().filter(func(c: Node) -> bool: return c is FxBurst) \
+		.map(func(c: Node) -> float: return float(((c as FxBurst).material_override as ShaderMaterial).get_shader_parameter("life")))
+	lives.sort()
+	assert_float(lives[0]).override_failure_message("beat 1: a very short flash").is_less_equal(0.08)
+	assert_bool(lives.any(func(l: float) -> bool: return l >= 0.25 and l <= 0.35)).override_failure_message("beat 2: a fireball").is_true()
+	assert_float(lives[-1]).override_failure_message("beat 3: smoke that lingers").is_greater_equal(1.4)
+	assert_int(_planes(show, ShotScript.BLAST_WAVE).size()).override_failure_message("the ring front").is_equal(1)
+
+
+func test_a_shell_marks_its_landing_before_it_lands_and_not_on_low(timeout := 6000) -> void:
+	var show := _show()
+	var a := Vector3(0, 0.03, 0)
+	var b := Vector3(0.3, 0.03, 0)
+	var flight: float = ShotScript.SHOTS[VolleyCue.Family.ARTILLERY][0]
+	show._fire(a, b, VolleyCue.Family.ARTILLERY, 3, 2, 1.0, false, 3, 0.03)
+	show._fire(a, b + Vector3(0, 0, 0.2), VolleyCue.Family.ARTILLERY, 4, 1, 1.0, false, 3, 0.03)   # Low: no reticle
+	assert_int(_planes(show, ShotScript.BLAST_RETICLE).size()).is_equal(0)
+	await get_tree().create_timer(flight - ShotScript.RETICLE_S + 0.08).timeout
+	assert_int(_planes(show, ShotScript.BLAST_RETICLE).size()).override_failure_message("one reticle, Medium only").is_equal(1)
+	await get_tree().create_timer(ShotScript.RETICLE_S + 0.1).timeout
+	assert_int(_planes(show, ShotScript.BLAST_RETICLE).size()).override_failure_message("gone when it lands").is_equal(0)
+	assert_int(_planes(show, ShotScript.BLAST_WAVE).size()).is_greater_equal(1)
+
+
 func test_batched_hdr_ribbons_and_light_pool_cap_create_and_free(timeout := 5000) -> void:
 	var show := _show()
 	for i in 10:

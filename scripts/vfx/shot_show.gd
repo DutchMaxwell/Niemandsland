@@ -20,7 +20,7 @@ const SHOTS := {
 	F.FLAME: [0.3, Color(4.0, 1.6, 0.4), 0.0, 0.0, 0.0],
 	F.ENERGY: [0.26, Color(1.2, 3.6, 5.0), 0.012, 0.004, 0.0],
 	F.AUTO: [0.16, Color(5.0, 3.0, 1.1), 0.014, 0.0008, 0.0],
-	F.ARTILLERY: [0.6, Color(2.0, 1.2, 0.5), 0.011, 0.0035, 0.3],
+	F.ARTILLERY: [0.6, Color(3.0, 1.8, 0.75), 0.011, 0.005, 0.3],   # the shell: bigger and hotter, it is the warning
 	F.THROWN: [0.5, Color(1.0, 0.92, 0.75), 0.035, 0.0015, 0.32],
 	F.BEAM: [0.12, Color(4.0, 1.1, 1.3), 0.0, 0.0011, 0.0],
 }
@@ -50,12 +50,36 @@ const LIGHT_ENERGY := 2.2
 const LIGHT_LIFT_M := 0.018     # the light hangs this high over the muzzle / impact point and grazes the ground
 const LIGHT_POOL_IDLE_S := 0.35
 const STATIC_THREAD_LIFE_S := 0.5
+const WAVE_S := 0.28            # the blast's ring front: fast out, 1.6x the blast radius at the end
+const WAVE_END_K := 1.6
+const RETICLE_S := 0.25         # the dark ground mark that warns of the shell, this long before it lands
+const RETICLE_START_K := 1.4    # ... shrinking from 1.4x the blast radius to 1.0x
 const BLAST_RING := "shader_type spatial;
 render_mode unshaded, blend_add, cull_disabled, depth_draw_never;
 uniform float progress = 0.0;
 void fragment() {
 	float r = length(UV * 2.0 - 1.0); float at = mix(0.2, 1.0, progress);
 	ALBEDO = vec3(1.6, 1.0, 0.5); ALPHA = (1.0 - smoothstep(0.0, 0.08, abs(r - at))) * (1.0 - progress) * 0.8;
+}"
+
+## The blast's ring: a thick orange front, fast out (cubic ease), soft glow behind it, cooling from white-orange to red.
+const BLAST_WAVE := "shader_type spatial;
+render_mode unshaded, blend_add, cull_disabled, depth_draw_never;
+uniform float progress = 0.0;
+void fragment() {
+	float r = length(UV * 2.0 - 1.0); float e = 1.0 - pow(1.0 - progress, 3.0);
+	float d = r - mix(0.12, 0.95, e);
+	float a = smoothstep(-0.22, 0.0, d) * (1.0 - smoothstep(0.0, 0.05, d));
+	ALBEDO = mix(vec3(2.6, 0.9, 0.2), vec3(1.0, 0.25, 0.05), progress); ALPHA = a * (1.0 - progress) * 0.8;
+}"
+## The shell's warning: a dark ring (plus a faint dark disc) on the ground that shrinks onto the landing point.
+const BLAST_RETICLE := "shader_type spatial;
+render_mode unshaded, blend_mix, cull_disabled, depth_draw_never;
+uniform float progress = 0.0;
+void fragment() {
+	float r = length(UV * 2.0 - 1.0); float at = mix(1.0, 1.0 / 1.4, progress);
+	float ring = 1.0 - smoothstep(0.0, 0.07, abs(r - at));
+	ALBEDO = vec3(0.02, 0.015, 0.01); ALPHA = (ring * 0.35 + (1.0 - smoothstep(0.0, at, r)) * 0.10) * smoothstep(0.0, 0.25, progress);
 }"
 
 var enabled := true
@@ -74,6 +98,8 @@ var _volley_open := {}          # volley id -> rounds that have not landed yet (
 var light_starts := 0           # lights lit since this show exists (tests and the capture read it)
 static var _meshes := {}
 static var _ring_shader: Shader
+static var _wave_shader: Shader
+static var _reticle_shader: Shader
 
 
 func _ready() -> void:
@@ -279,6 +305,10 @@ func _fire(a: Vector3, b: Vector3, family: int, s: int, p: int, muzzle_k := 1.0,
 		_:
 			FxBurst.spawn(self, FxBurst.Look.PUFF, muzzle, Vector3.UP, 3, s, p, 0.5)
 	var shot: Array = SHOTS.get(family, SHOTS[F.NEUTRAL])
+	if family == F.ARTILLERY and blast > 0 and p >= 2:   # anticipation: the landing point is marked before the shell arrives
+		var warn := create_tween()
+		warn.tween_interval(maxf(float(shot[0]) - RETICLE_S, 0.0))
+		warn.tween_callback(_blast_reticle.bind(b - Vector3.UP * ground_drop, blast))
 	var tw := create_tween()
 	if family == F.ENERGY or family == F.BEAM:
 		tw.tween_interval(0.12 if family == F.ENERGY else 0.05)   # the charge-up before it leaves
@@ -385,11 +415,14 @@ func _impact(at: Vector3, back: Vector3, family: int, s: int, p: int, blast := 0
 		F.BOW, F.THROWN:
 			FxBurst.spawn(self, FxBurst.Look.DUST, at, back + Vector3.UP, 4 if family == F.BOW else 6, s, p, 0.6)
 			FxBurst.spawn(self, FxBurst.Look.CHIP, at, back + Vector3.UP, 3, s + 1, p, 0.6)
-		F.ARTILLERY:
-			FxBurst.spawn(self, FxBurst.Look.FLASH, at, Vector3.ZERO, 1, s, p, 1.2)
-			FxBurst.spawn(self, FxBurst.Look.DUST, at, Vector3.UP, 14, s + 1, p, 1.4)
-			FxBurst.spawn(self, FxBurst.Look.CHIP, at, Vector3.UP, 8, s + 2, p, 1.0)
-			FxBurst.spawn(self, FxBurst.Look.DUST, at - Vector3.UP * ground_drop, Vector3.ZERO, 16, s + 3, p, 1.6, Color.WHITE, true)
+		F.ARTILLERY:   # three beats: a very short flash, the fireball, then smoke that rises and lingers (+ debris, dust ring)
+			var bk := _blast_radius(blast) / _blast_radius(3)   # 1.0 for Blast(3); a bigger blast is a bigger fire
+			var low := at - Vector3.UP * ground_drop * 0.5
+			FxBurst.spawn(self, FxBurst.Look.FLASH, at, Vector3.ZERO, 1, s, p, 3.0 * bk, Color.WHITE, false, 0.0, 0.7)
+			FxBurst.spawn(self, FxBurst.Look.FIREBALL, low, Vector3.ZERO, 8, s + 1, p, bk)
+			FxBurst.spawn(self, FxBurst.Look.CHIP, low, Vector3.UP, 18, s + 2, p, 1.6 * bk, Color(0.6, 0.45, 0.32))   # earth, not confetti
+			FxBurst.spawn(self, FxBurst.Look.COLUMN, low, Vector3.UP, 10, s + 4, p, 2.0 * bk)
+			FxBurst.spawn(self, FxBurst.Look.DUST, at - Vector3.UP * ground_drop, Vector3.ZERO, 24, s + 3, p, 1.6 * bk, Color.WHITE, true)
 			_impact_light(at, Color(1.0, 0.65, 0.35), p, LIGHT_LIFE_S, volley_id, primary)
 		F.AUTO:
 			FxBurst.spawn(self, FxBurst.Look.DUST, at, back + Vector3.UP, 3, s, p, 0.6)
@@ -410,28 +443,49 @@ func _impact(at: Vector3, back: Vector3, family: int, s: int, p: int, blast := 0
 			_volley_open[volley_id] = left
 
 
-## Blast(X): a ring of light runs out over the ground where the round lands, wider for a bigger X (cosmetic: it does
-## not draw the rule's hit area).
+static func _blast_radius(blast: int) -> float:
+	return 0.02 + 0.008 * clampi(blast, 1, 12)
+
+
+## A flat shader plane lying on the ground at `ground`, `size_m` wide, whose `progress` uniform a tween drives 0 -> 1.
+func _ground_plane(code: String, shader_cache: Shader, ground: Vector3, size_m: float) -> Array:
+	var shader := shader_cache
+	if shader == null:
+		shader = Shader.new()
+		shader.code = code
+	var plane := PlaneMesh.new()
+	plane.size = Vector2.ONE * size_m
+	var mat := ShaderMaterial.new()
+	mat.shader = shader
+	mat.set_shader_parameter("progress", 0.0)   # an unset uniform cannot be tweened
+	var node := MeshInstance3D.new()
+	node.mesh = plane
+	node.material_override = mat
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(node)
+	node.global_position = ground + Vector3.UP * 0.003
+	return [node, mat, shader]
+
+
+## Blast(X): the ring of light runs out over the ground where the round lands, wider for a bigger X (cosmetic: it does
+## not draw the rule's hit area). Thick and orange, expo ease-out, WAVE_S long, ending at WAVE_END_K x the blast radius.
 func _blast_ring(ground: Vector3, blast: int, p: int) -> void:
 	if p <= 0:
 		return
-	if _ring_shader == null:
-		_ring_shader = Shader.new()
-		_ring_shader.code = BLAST_RING
-	var plane := PlaneMesh.new()
-	plane.size = Vector2.ONE * (0.02 + 0.008 * clampi(blast, 1, 12)) * 2.0
-	var mat := ShaderMaterial.new()
-	mat.shader = _ring_shader
-	mat.set_shader_parameter("progress", 0.0)   # an unset uniform cannot be tweened
-	var ring := MeshInstance3D.new()
-	ring.mesh = plane
-	ring.material_override = mat
-	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(ring)
-	ring.global_position = ground + Vector3.UP * 0.003
-	var tw := ring.create_tween()
-	tw.tween_property(mat, "shader_parameter/progress", 1.0, 0.35).set_ease(Tween.EASE_OUT)
-	tw.tween_callback(ring.queue_free)
+	var made := _ground_plane(BLAST_WAVE, _wave_shader, ground, _blast_radius(blast) * 2.0 * WAVE_END_K)
+	_wave_shader = made[2]
+	var tw := (made[0] as Node).create_tween()
+	tw.tween_property(made[1], "shader_parameter/progress", 1.0, WAVE_S)
+	tw.tween_callback((made[0] as Node).queue_free)
+
+
+## The shell's warning on the ground, RETICLE_S before it lands (not on Low: the caller skips it).
+func _blast_reticle(ground: Vector3, blast: int) -> void:
+	var made := _ground_plane(BLAST_RETICLE, _reticle_shader, ground, _blast_radius(blast) * 2.0 * RETICLE_START_K)
+	_reticle_shader = made[2]
+	var tw := (made[0] as Node).create_tween()
+	tw.tween_property(made[1], "shader_parameter/progress", 1.0, RETICLE_S)
+	tw.tween_callback((made[0] as Node).queue_free)
 
 
 func _static_blast_ring(ground: Vector3, blast: int) -> void:
@@ -439,7 +493,7 @@ func _static_blast_ring(ground: Vector3, blast: int) -> void:
 		_ring_shader = Shader.new()
 		_ring_shader.code = BLAST_RING
 	var plane := PlaneMesh.new()
-	plane.size = Vector2.ONE * (0.02 + 0.008 * clampi(blast, 1, 12)) * 2.0
+	plane.size = Vector2.ONE * _blast_radius(blast) * 2.0
 	var mat := ShaderMaterial.new()
 	mat.shader = _ring_shader
 	mat.set_shader_parameter("progress", 0.65)
