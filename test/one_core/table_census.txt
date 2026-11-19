@@ -1,6 +1,10 @@
 ai_volley scripts/main.gd:_solo_resolve_ai_volley 354 2
 ai_volley scripts/main.gd:_solo_volley_outcome 8 1
 ai_volley TOTAL 362 3
+cast scripts/main.gd:_solo_resolve_ai_casts 20 1
+cast scripts/main.gd:_solo_resolve_one_cast 128 2
+cast scripts/main.gd:_solo_resolve_spell_damage 122 1
+cast TOTAL 270 4
 dangerous_morale scripts/main.gd:_run_ai_dangerous 24 7
 dangerous_morale scripts/main.gd:_solo_shooting_morale 43 7
 dangerous_morale TOTAL 67 14
@@ -45,4 +49,4 @@ planner_tag test_only 9 54
 planner_tag tools_only 71 1027
 planner_tag tree 27 536
 planner_tag TOTAL 354 6033
-TABLE LINES LEFT: 11253
+TABLE LINES LEFT: 11523
