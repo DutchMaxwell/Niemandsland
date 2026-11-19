@@ -39,7 +39,14 @@ const BOUNDS_MARGIN_M: f64 = 0.02;
 /// `SoloController.DIFFICULT_MOVE_CAP_IN` :67 — GF/AoF v3.5.1 p.11.
 pub(crate) const DIFFICULT_MOVE_CAP_IN: f64 = 6.0;
 /// #3090 (`PENDING_EPOCH_DANGER_AVOID`): the sideways goal shifts tried, in order (table twin `DANGER_SIDESTEP_IN`).
-const DANGER_SIDESTEP_IN: [i32; 8] = [1, -1, 2, -2, 3, -3, 4, -4];
+const DANGER_SIDESTEP_IN: [f64; 24] = [0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.0, -2.0, 2.5, -2.5, 3.0, -3.0, 3.5, -3.5,
+    4.0, -4.0, 4.5, -4.5, 5.0, -5.0, 5.5, -5.5, 6.0, -6.0];
+/// #3090: full plans at most in the sidestep; the rest is the cheap rigid sweep (table twin `DANGER_SIDESTEP_PLANS`).
+const DANGER_SIDESTEP_PLANS: usize = 2;
+/// #3090: the stop-short reach steps down by this much (table twin `DANGER_STOP_STEP_IN`).
+const DANGER_STOP_STEP_IN: f64 = 0.5;
+/// #3090 gain proxy: one expected wound is worth this much forward distance (table twin `DANGER_INCHES_PER_WOUND`).
+const DANGER_INCHES_PER_WOUND: f64 = 6.0;
 /// `SoloController.UNIT_SPACING_IN` :74.
 const UNIT_SPACING_IN: f64 = 1.0;
 /// `SeparationChecker.DEFAULT_BASE_RADIUS_M` separation_checker.gd:81.
@@ -913,32 +920,75 @@ fn execute(&self, band_in: f64, avoid_diff: bool, radii_m: &[f64]) -> Landing {
         trails = re.1;
         call = re.2;
     }
-    // #3090 (`PENDING_EPOCH_DANGER_AVOID`, table twin in `_execute_move`): the solver routes model by model, so an edge
-    // model hemmed in by its neighbour can keep a route through Dangerous ground the whole unit could skirt. Shift the
-    // goal sideways (perpendicular to the move, + = right of travel) and keep the FIRST plan that crosses no Dangerous
-    // ground and keeps the p.11 regime; the rest of the move runs on that goal. None clears: today's plan.
+    // #3090 (`PENDING_EPOCH_DANGER_AVOID`, table twin in `_execute_move`): a plan that still crosses Dangerous ground
+    // first tries a sideways goal shift, then stopping short (`danger_detour`).
     if rule_on(self.rules_epoch, PENDING_EPOCH_DANGER_AVOID) && self.avoid_dang && !self.flying && !self.allow_contact
         && self.any_dangerous(&trails, radii_m)
     {
-        let d = clamp_delta_to_bounds(&self.pos, plan_unit_move(&self.pos, self.goal, band_in), self.half);
-        let (sx, sz) = (-d[2], d[0]); // Vector2(-delta.z, delta.x).normalized(), f32 like the table's
-        let lensq = sx * sx + sz * sz;
-        if lensq != 0.0 {
-            let side = [sx / lensq.sqrt(), sz / lensq.sqrt()];
-            for k in DANGER_SIDESTEP_IN {
-                let s = (k as f64 * IN2M) as f32;
-                let shifted = Self { goal: [self.goal[0] + side[0] * s, self.goal[1], self.goal[2] + side[1] * s],
-                    ..self.clone() };
-                let (p5, t5, c5) = shifted.plan_once(reach, avoid_diff && !capped, self.avoid_dang);
-                if self.any_dangerous(&t5, radii_m)
-                    || (!self.ignores_difficult && !capped && trails_cross_difficult(&t5, radii_m, t)) {
-                    continue;
-                }
-                return shifted.execute_from(band_in, avoid_diff, radii_m, (reach, p5, t5, c5));
-            }
+        let check_diff = !self.ignores_difficult && !capped;
+        if let Some((mv, r, plan)) = self.danger_detour(band_in, reach, avoid_diff && !capped, check_diff, radii_m) {
+            return mv.execute_from(band_in, avoid_diff, radii_m, (r, plan.0, plan.1, plan.2));
         }
     }
     self.execute_from(band_in, avoid_diff, radii_m, (reach, planned, trails, call))
+}
+
+/// #3090 (table twin `_rigid_sweep_dangerous`): how many models' RIGID straight legs toward `goal` (reach `reach_in`)
+/// would take the p.12 test? Cheap: one straight leg per model, no planner.
+fn rigid_sweep_dangerous(&self, goal: V3, reach_in: f64, radii_m: &[f64]) -> usize {
+    let d = clamp_delta_to_bounds(&self.pos, plan_unit_move(&self.pos, goal, reach_in), self.half);
+    self.pos.iter().enumerate().filter(|(i, p)| {
+        let leg = [self.t.to_inch(**p), self.t.to_inch(geom::add(**p, d))];
+        self.crosses_dangerous(&leg, radii_m.get(*i).copied().unwrap_or(0.0))
+    }).count()
+}
+
+/// #3090 (`PENDING_EPOCH_DANGER_AVOID`, table twin `_danger_detour`): the planned route still crosses Dangerous ground.
+/// A: shift the goal sideways (+ = right of travel); rank the `DANGER_SIDESTEP_IN` shifts by how many models' rigid
+/// straight sweep crosses (fewest first, then list order), full-plan the best `DANGER_SIDESTEP_PLANS`, first clean wins. C: else stop at the farthest
+/// clear rigid reach (`DANGER_STOP_STEP_IN` steps) when the expected toll (whole unit, one die per wound left, 1/6 each)
+/// times `DANGER_INCHES_PER_WOUND` is at least the distance given up. Clean = no Dangerous crossing and, when
+/// `check_diff` (uncapped move), no difficult crossing. Answers the move to run on, its reach and its plan.
+#[allow(clippy::type_complexity)]
+fn danger_detour(&self, band_in: f64, reach: f64, avoid_diff: bool, check_diff: bool, radii_m: &[f64])
+    -> Option<(Self, f64, (Vec<V2>, Vec<Vec<V2>>, Option<MoveCall>))> {
+    let t = self.t;
+    let clean = |tr: &[Vec<V2>]| !self.any_dangerous(tr, radii_m) && !(check_diff && trails_cross_difficult(tr, radii_m, t));
+    let d = clamp_delta_to_bounds(&self.pos, plan_unit_move(&self.pos, self.goal, band_in), self.half);
+    let (sx, sz) = (-d[2], d[0]); // Vector2(-delta.z, delta.x).normalized(), f32 like the table's
+    let lensq = sx * sx + sz * sz;
+    let shift = |k: f64| {
+        let (s, side) = ((k * IN2M) as f32, [sx / lensq.sqrt(), sz / lensq.sqrt()]);
+        [self.goal[0] + side[0] * s, self.goal[1], self.goal[2] + side[1] * s]
+    };
+    // crossers * 1000 + list index, as the table's `ranked`: fewest crossers first, ties in list order.
+    let mut ranked: Vec<usize> = if lensq == 0.0 { Vec::new() } else {
+        DANGER_SIDESTEP_IN.iter().enumerate()
+            .map(|(i, k)| self.rigid_sweep_dangerous(shift(*k), reach, radii_m) * 1000 + i).collect()
+    };
+    ranked.sort_unstable();
+    for key in ranked.into_iter().take(DANGER_SIDESTEP_PLANS) {
+        let goal = shift(DANGER_SIDESTEP_IN[key % 1000]);
+        let shifted = Self { goal, ..self.clone() };
+        let plan = shifted.plan_once(reach, avoid_diff, true);
+        if clean(&plan.1) {
+            return Some((shifted, reach, plan));
+        }
+    }
+    let dice: i64 = self.movers.iter()
+        .map(|m| self.state.wounds[m.unit].get(m.model).copied().unwrap_or(1).max(1)).sum();
+    let mut steps = 1.0f64;
+    while reach - steps * DANGER_STOP_STEP_IN >= DANGER_STOP_STEP_IN
+        && self.rigid_sweep_dangerous(self.goal, reach - steps * DANGER_STOP_STEP_IN, radii_m) > 0
+    {
+        steps += 1.0;
+    }
+    let r_free = reach - steps * DANGER_STOP_STEP_IN;
+    if r_free < DANGER_STOP_STEP_IN || dice as f64 / 6.0 * DANGER_INCHES_PER_WOUND < reach - r_free {
+        return None;
+    }
+    let plan = self.plan_once(r_free, avoid_diff, true);
+    clean(&plan.1).then(|| (self.clone(), r_free, plan))
 }
 
 /// Does any model's routed trail take the p.12 test (`_dangerous_trail_flags(...).has(true)`)?
@@ -2801,14 +2851,34 @@ pub(crate) mod tests {
 
     /// A 5-wide line (1.5" apart, 32 mm bases) Rushes 12" toward (0, 14"): (any route crosses Dangerous, centroid x").
     fn rush_past_patch(rules_epoch: u32, x0: f64, z0: f64) -> (bool, f64) {
+        let (crossed, cx, _) = rush_rows(rules_epoch, 5, x0, z0);
+        (crossed, cx)
+    }
+
+    /// `n` models in rows of 5 (1.5" apart, rows 1.5" back) Rush 12" toward (0, 14"): (crosses, centroid x", front z").
+    fn rush_rows(rules_epoch: u32, n: usize, x0: f64, z0: f64) -> (bool, f64, f64) {
         let t = patch_board(x0, z0);
-        let pos: Vec<V3> = (0..5).map(|k| [(((k as f64) - 2.0) * 1.5 * IN2M) as f32, 0.0, 0.0]).collect();
-        let state = units_state(vec![pos], vec![vec![0.016; 5]], vec![vec![]]);
+        let pos: Vec<V3> = (0..n)
+            .map(|k| [((((k % 5) as f64) - 2.0) * 1.5 * IN2M) as f32, 0.0, (-((k / 5) as f64) * 1.5 * IN2M) as f32])
+            .collect();
+        let state = units_state(vec![pos], vec![vec![0.016; n]], vec![vec![]]);
         let land = MoveRules { rules_epoch }
             .plain_move(&state, &t, 0, [0.0, 0.0, (14.0 * IN2M) as f32], 12.0, false, true, crate::mv::FAST_PLANNER_GUARD)
             .expect("a real board");
         let cx = land.end.iter().map(|p| p[0] as f64).sum::<f64>() / land.end.len() as f64 / IN2M;
-        (land.dangerous.iter().any(|d| *d), cx)
+        let front = land.end.iter().map(|p| p[2] as f64 / IN2M).fold(f64::MIN, f64::max);
+        (land.dangerous.iter().any(|d| *d), cx, front)
+    }
+
+    /// #3090 part 2, option C (`PENDING_EPOCH_DANGER_AVOID`): ten models, a patch dead ahead mid-route that no sideways
+    /// shift clears. The expected toll (10 dice, 1.67 wounds, x 6") outweighs the ~8.6" given up, so the unit stops
+    /// short of the patch instead of walking through. RED below the gate (crosses), GREEN at it.
+    #[test]
+    fn a_big_unit_stops_short_of_a_patch_it_cannot_skirt() {
+        let (old, _, _) = rush_rows(crate::acts::CURRENT_RULES_EPOCH, 10, -1.5, 4.0);
+        let (new, _, front) = rush_rows(PENDING_EPOCH_DANGER_AVOID, 10, -1.5, 4.0);
+        assert!(old, "below the gate the unit walks through");
+        assert!(!new && front < 4.0, "at the gate it stops short of the patch, front z {front:.2}\"");
     }
 
     /// #3090 part 2, cause 2 (`PENDING_EPOCH_DANGER_AVOID`): the right-hand model's own route clips a patch mid-route
