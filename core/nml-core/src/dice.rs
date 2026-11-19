@@ -113,7 +113,7 @@ impl Tray {
     /// instead of drawing. Past the last group it serves 1s and records where it
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
-        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), casts: Vec::new() };
+        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), casts: Vec::new(), cast_hit: None };
         Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new() }
     }
 
@@ -177,6 +177,13 @@ impl Tray {
     pub fn offer_casts(&mut self, casts: Vec<CastInput>) {
         if let Some(feed) = self.feed.as_mut() {
             feed.casts = casts;
+        }
+    }
+
+    /// CC-5c: the cast `seq` succeeded at its die, and its effect is not the core's yet. The first one is kept; the step API reads it.
+    pub fn note_cast_hit(&mut self, seq: i64) {
+        if let Some(feed) = self.feed.as_mut() {
+            feed.cast_hit.get_or_insert(seq);
         }
     }
 
@@ -261,6 +268,8 @@ pub struct Feed {
     pub wound_choices: Vec<WoundChoice>,
     /// CC-5a: the transcript's planned casts (`Tray::offer_casts`).
     casts: Vec<CastInput>,
+    /// CC-5c: the first offered cast that succeeded (`Tray::note_cast_hit`).
+    pub cast_hit: Option<i64>,
 }
 
 /// One-core P4.D-20: the step API's wound-allocation choice as the volley's landing sees it. `answer` = the

@@ -7,12 +7,15 @@ extends RefCounted
 ##   mode "allow": a unit is taken when every rule it carries is LISTED (allow by group). With no group, nothing with a rule.
 ##   mode "deny":  a unit is taken when no rule it carries is listed (the groups are the deny-list; allow by default).
 ## In both modes a rule the registry has no primitive for (unknown name, unautomated entry) is refused, and a shooter with no
-## OPR profile never passes (a target needs none: `as_target`). The shipped file is mode "allow" with NO group: exactly the old
-## `CoreActivation.is_plain`. Melee is not part of it: the human door's Charge selector stays refused in `human_shoot`.
+## OPR profile never passes (a target needs none: `as_target`). C-19: the slice the AI door reads is the measured deny-list
+## (DENY_PATH, mode "deny") unless `NML_CORE_SLICE=allow` (or `plain`) asks for the old shipped allow file (PATH: mode "allow"
+## with one group, the move-through rules), the way back for one release. The HUMAN door (`*_human` below) is not switched
+## by C-19 (the gate measured the AI door): it reads PATH until DS-109, or the live slice when the env or a test seam names one.
+## Melee is not part of it: the human door's Charge selector stays refused in `human_shoot`.
 ## Each group is `{"primitives": [...], "step": "P4.D-n", "golden": "<fixture>", "parity": "<scenario>"}`.
 
 const PATH := "res://assets/solo/core_slice_allow.json"
-## C-15: the measured deny-list (mode "deny"), read instead of PATH only with env NML_CORE_SLICE=deny. Default OFF.
+## C-19: the measured deny-list (mode "deny"), the AI door's slice unless env NML_CORE_SLICE=allow|plain picks PATH (the way back).
 const DENY_PATH := "res://assets/solo/core_slice_deny.json"
 const SCHEMA := "nml-core-slice-v1"
 const MODES := ["allow", "deny"]
@@ -35,7 +38,8 @@ static func config() -> Dictionary:
 	if not _loaded.is_empty():
 		return _loaded
 	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}, "unmapped_inert": false}
-	var path := path_override if not path_override.is_empty() else (DENY_PATH if deny_switched() else PATH)
+	var live := path_override.is_empty()
+	var path := live_path()
 	# Each file belongs to one door: the melee file only through MELEE_PATH, every other path (shipped, deny, a test file) is the shoot door's.
 	var door := "melee" if path == MELEE_PATH else "shoot"
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
@@ -54,12 +58,44 @@ static func config() -> Dictionary:
 		_loaded["inert"] = data.get("inert", {})
 		_loaded["deny_names"] = data.get("deny_names", {})   # one rule NAME refused where its primitive is shared
 		_loaded["unmapped_inert"] = bool(data.get("unmapped_inert", false))
+	if live:
+		print(mode_line())   # C-19: one line per load of the live slice (once per process outside the tests), so a log names the slice in use
 	return _loaded
 
 
-## C-15: env NML_CORE_SLICE=deny selects the deny-list file (read with the slice, cached with it).
-static func deny_switched() -> bool:
-	return OS.get_environment("NML_CORE_SLICE").to_lower() == "deny"
+## C-19: env NML_CORE_SLICE=allow (or plain) is the way back to the shipped allow file. Unset, `deny` or any other value:
+## the deny-list, the default (read with the slice, cached with it).
+static func allow_switched() -> bool:
+	var raw := OS.get_environment("NML_CORE_SLICE").to_lower()
+	return raw == "allow" or raw == "plain"
+
+
+## C-19: the file the AI door's slice reads (the test seam first, then the env, then the deny-list).
+static func live_path() -> String:
+	if not path_override.is_empty():
+		return path_override
+	return PATH if allow_switched() else DENY_PATH
+
+
+## C-19: the file the HUMAN door reads. Not switched by C-19: PATH unless the env or a test seam names a slice (an explicit
+## `NML_CORE_SLICE=deny` still selects the deny-list for both doors, as before). DS-109 makes this `live_path()`.
+static func human_path() -> String:
+	if path_override.is_empty() and OS.get_environment("NML_CORE_SLICE").to_lower() != "deny":
+		return PATH
+	return live_path()
+
+
+## C-19: the startup line that names the slice in use (what `config()` prints when the live slice loads).
+static func mode_line() -> String:
+	var ai := live_path()
+	var human := human_path()
+	return "[CORE] shoot slice: AI door %s (%s), human door %s (%s)%s" % [
+		_mode_of(ai), ai.get_file(), _mode_of(human), human.get_file(),
+		"; the way back is NML_CORE_SLICE=allow" if ai == DENY_PATH else ""]
+
+
+static func _mode_of(path: String) -> String:
+	return "deny" if path == DENY_PATH else "allow"
 
 
 ## "Tough(3)" -> "Tough", "Fear (spell)" -> "Fear" (a rule entry is a string or a {"name": ...} dictionary).
@@ -98,6 +134,12 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 	# Deny mode takes a joined hero with its unit, so the hero's own unit and weapon rules must pass the list too (allow
 	# mode refuses every attachment above; its labels stay as they were).
 	if c["mode"] == "deny":
+		# C-19: a joined unit whose own models are all dead is shot as its living hero, and the table says so in the log ("X is
+		# the unit now"). The core's step path writes no such line (the v36 lone-hero tests went red on the flipped default), so a
+		# volley at such a target stays on the table. Leaves with the step path's Hero line.
+		if as_target and gu.get_alive_count() <= 0 and gu.get_attached_heroes().any(
+				func(h) -> bool: return h is GameUnit and (h as GameUnit).get_alive_count() > 0):
+			out.append("lone_hero_target")
 		for hero in gu.get_attached_heroes():
 			for r in refusals(hero as GameUnit, true):
 				if r != "attached" and not out.has(r):
@@ -128,6 +170,17 @@ static func refusals_in(path: String, gu: GameUnit, as_target := false) -> Array
 
 static func takes(gu: GameUnit, as_target := false) -> bool:
 	return refusals(gu, as_target).is_empty()
+
+
+## C-19: `refusals` / `takes` for the HUMAN door (`human_path`): the live slice when the human door reads it too, else the file
+## the human door keeps until DS-109 (read through `refusals_in`, cached apart, the live slice untouched).
+static func refusals_human(gu: GameUnit, as_target := false) -> Array:
+	var path := human_path()
+	return refusals(gu, as_target) if path == live_path() else refusals_in(path, gu, as_target)
+
+
+static func takes_human(gu: GameUnit, as_target := false) -> bool:
+	return refusals_human(gu, as_target).is_empty()
 
 
 ## P4.D-48: why the charge door refuses `gu` (charger, or the charged `as_target`), the same labels as `refusals`.

@@ -3,6 +3,7 @@ extends GdUnitTestSuite
 ## (51) and the correction (52). Real: the main scene, its NetworkManager class with only the transport swapped out (every
 ## frame - the former @rpc calls and the command types alike - lands in ONE ordered list), the NmlCore extension.
 
+const SlicePin := preload("res://test/one_core/slice_pin.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 
@@ -49,6 +50,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	SlicePin.release()
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
 	if _main != null:
@@ -194,6 +196,7 @@ func test_no_check_for_a_unit_with_a_special_rule() -> void:
 
 ## A plain AI unit this table runs announces too (step 42 calls this at the end of the AI body); a non-plain one not.
 func test_a_plain_ai_unit_announces_and_a_non_plain_one_does_not() -> void:
+	SlicePin.narrow()   # C-19: the case is about a unit the narrow slice refuses
 	_room(true, RulesAutomation.Level.AUTOMATIC, {2: true})
 	var ai := _plain(2, "Bots", 18.0)
 	var odd := _plain(2, "Brutes", 24.0, ["Furious"])

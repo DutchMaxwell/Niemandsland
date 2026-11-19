@@ -21,6 +21,7 @@ extends GdUnitTestSuite
 ## Constructed: bare units (E2EBoot.make_unit, ParityTable._make_unit), the OPR profile of the armed ones.
 ## NML_ONE_CORE_SEEDS overrides the 20 seeds per defense (200 for the sweep run).
 
+const SlicePin := preload("res://test/one_core/slice_pin.gd")
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const INCH := 0.0254
@@ -52,6 +53,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	SlicePin.release()
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
@@ -160,6 +162,7 @@ func test_is_plain_needs_the_opr_profile() -> void:
 ## P4.D-13b: the target half asks for a statline (quality and defense in 2..6), not for a profile.
 ## RED: drop the 2..6 check from `has_statline` -> the 0, 1 and 7 rows fail.
 func test_is_plain_target_needs_a_statline_not_a_profile() -> void:
+	SlicePin.narrow()   # C-19: the case is about a unit the narrow slice refuses
 	var bare := _unit(2, "Bare", 0.0, 2, false)
 	for row in [[4, 4, true], [2, 6, true], [0, 4, false], [4, 0, false], [1, 4, false], [4, 7, false]]:
 		bare.unit_properties["quality"] = row[0]

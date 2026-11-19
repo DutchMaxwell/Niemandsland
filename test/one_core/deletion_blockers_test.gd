@@ -96,15 +96,16 @@ func test_the_checker_names_a_blocker_whose_fact_is_gone() -> void:
 		assert_str(_check(b, _source(b["file"]))).is_empty()
 
 
-## P4.D-13b retired the TARGET side of the non-OPR clause: both core doors ask `is_plain_target`, never `is_plain`, about
-## the target. RED: put `is_plain(target)` back into either door.
+## P4.D-13b retired the TARGET side of the non-OPR clause: both core doors ask `is_plain_target` (C-19: the human door its
+## `_human` twin), never `is_plain`, about the target. RED: put `is_plain(target)` back into either door.
 func test_the_target_side_of_the_non_opr_clause_is_gone() -> void:
 	var src := _source(ACTIVATION)
 	for header in ["static func run_ai(", "static func human_shoot("]:
 		var body := _span(src, header)
+		var asks := "is_plain_target(target)" if header == "static func run_ai(" else "is_plain_target_human(target)"
 		assert_str(body).override_failure_message("%s not found" % header).is_not_empty()
 		assert_bool(body.contains("is_plain(target)")).override_failure_message("%s asks is_plain(target) again" % header).is_false()
-		assert_bool(body.contains("is_plain_target(target)")).override_failure_message("%s lost is_plain_target(target)" % header).is_true()
+		assert_bool(body.contains(asks)).override_failure_message("%s lost %s" % [header, asks]).is_true()
 
 
 ## P4.D-41 retired the row "the core door shows the table's volley outcome sentence": `_present` asks the door's own
