@@ -213,7 +213,11 @@ const NO_OBJECTIVE := Vector3(INF, INF, INF)   # _nearest_uncontrolled_objective
 ## than 6” for that movement." — a 6" CAP on the whole move, NOT a halving.
 const DIFFICULT_MOVE_CAP_IN := 6.0
 ## #3090 (PENDING_EPOCH_DANGER_AVOID): the sideways goal shifts `_execute_move` tries, in order (core twin `DANGER_SIDESTEP_IN`).
-const DANGER_SIDESTEP_IN: Array[int] = [1, -1, 2, -2, 3, -3, 4, -4]
+const DANGER_SIDESTEP_IN: Array[float] = [0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.0, -2.0, 2.5, -2.5, 3.0, -3.0,
+	3.5, -3.5, 4.0, -4.0, 4.5, -4.5, 5.0, -5.0, 5.5, -5.5, 6.0, -6.0]
+const DANGER_SIDESTEP_PLANS := 2   # full plans at most; the rest is the cheap rigid sweep
+const DANGER_STOP_STEP_IN := 0.5   # the stop-short reach steps down by this much
+const DANGER_INCHES_PER_WOUND := 6.0   # gain proxy: one expected wound is worth this much forward distance
 ## Unit spacing (GF/AoF Advanced Rules v3.5.1 p.7 "General Movement": "Models may never be within 1” of
 ## models from OTHER UNITS, unless they are taking a Charge action, and may never move through other
 ## models or units (friendly or enemy), even if they are taking a Charge action.") — applies to ALL
@@ -6217,27 +6221,17 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		capped = true
 		trails = []
 		new_positions = _plan_move(unit, models, positions, goal, reach, allow_contact, false, avoid_dangerous, trails, charge_target)
-	# #3090 (PENDING_EPOCH_DANGER_AVOID, core twin `Move::execute`): the solver routes model by model, so an edge model
-	# hemmed in by its neighbour can keep a route through Dangerous ground the whole unit could skirt. Shift the goal
-	# sideways (perpendicular to the move, + = right of travel) and keep the FIRST plan that crosses no Dangerous ground
-	# and keeps the p.11 regime; the rest of the move runs on that goal. None clears: today's plan. A player's order is
-	# never re-aimed.
+	# #3090 (PENDING_EPOCH_DANGER_AVOID, core twin `Move::execute`): a plan that still crosses Dangerous ground first tries
+	# a sideways goal shift, then stopping short (`_danger_detour`). A player's order is never re-aimed.
 	if danger_avoid and avoid_dangerous and not flying and not _player_move \
 			and _dangerous_trail_flags(trails, trail_radii_m).has(true):
-		var side := Vector2(-delta0.z, delta0.x).normalized()
-		if side != Vector2.ZERO:
-			for k: int in DANGER_SIDESTEP_IN:
-				var g5 := goal + Vector3(side.x, 0.0, side.y) * (float(k) * INCHES_TO_METERS)
-				var t5: Array = []
-				var p5 := _plan_move(unit, models, positions, g5, reach, allow_contact, avoid and not capped, avoid_dangerous, t5, charge_target)
-				if _dangerous_trail_flags(t5, trail_radii_m).has(true) \
-						or (not ignores_difficult and not capped and _trails_cross_difficult(t5, trail_radii_m)):
-					continue
-				goal = g5
-				new_positions = p5
-				trails = t5
-				board_clamp_notes.append("%s sidesteps Dangerous ground (%d\" %s)" % [unit.get_name(), absi(k), "right" if k > 0 else "left"])
-				break
+		var det := _danger_detour(unit, models, positions, goal, delta0, reach, avoid and not capped,
+			not ignores_difficult and not capped, trail_radii_m, charge_target)
+		if not det.is_empty():
+			goal = det["goal"]
+			reach = float(det["reach"])
+			new_positions = det["positions"]
+			trails = det["trails"]
 	# STALL ESCALATION as its OWN gate, not an elif (Windows playtest bug 4b): chained behind the
 	# difficult-cap branch it was UNREACHABLE whenever that branch fired — and the capped re-plan still
 	# avoids DANGEROUS cells, so a route hard-blocked by a dangerous field kept its bounded-search stub and
@@ -6700,6 +6694,58 @@ func _targets_in_dangerous(positions: Array, goal: Vector3, reach_in: float, rad
 		if TerrainRules.base_in_terrain((p as Vector3) + delta, radius_m, terrain_type_at, TerrainRules.is_dangerous):
 			return true
 	return false
+
+
+## #3090 (PENDING_EPOCH_DANGER_AVOID, core twin `rigid_sweep_dangerous`): how many models' RIGID straight legs toward
+## `g` (reach `r_in`) would take the p.12 test? Cheap: one straight leg per model, no planner.
+func _rigid_sweep_dangerous(positions: Array, g: Vector3, r_in: float, radii_m: Array) -> int:
+	var d := _clamp_delta_to_bounds(positions, MoveIntent.plan_unit_move(positions, g, r_in))
+	var legs: Array = []
+	for p in positions:
+		legs.append([p, (p as Vector3) + d])
+	return _dangerous_trail_flags(legs, radii_m).count(true)
+
+
+## #3090 (PENDING_EPOCH_DANGER_AVOID, core twin `Move::danger_detour`): the planned route still crosses Dangerous ground.
+## A: shift the goal sideways (perpendicular to the move, + = right of travel); rank the DANGER_SIDESTEP_IN shifts by how
+## many models' rigid straight sweep crosses (fewest first, then list order), full-plan the best DANGER_SIDESTEP_PLANS,
+## first clean plan wins.
+## C: else stop at the farthest clear rigid reach (DANGER_STOP_STEP_IN steps) when the expected toll (whole unit, one die
+## per wound left, 1/6 each) times DANGER_INCHES_PER_WOUND is at least the distance given up. A plan is clean when it
+## crosses no Dangerous ground and, on an uncapped move (`difficult_check`), no difficult ground. {} = keep today's plan.
+func _danger_detour(unit: GameUnit, models: Array, positions: Array, goal: Vector3, delta0: Vector3, reach: float,
+		avoid_difficult: bool, difficult_check: bool, radii_m: Array, charge_target: GameUnit) -> Dictionary:
+	var side := Vector2(-delta0.z, delta0.x).normalized()
+	var ranked: Array[int] = []   # crossers * 1000 + list index: fewest crossers first, ties in list order
+	for i in range(DANGER_SIDESTEP_IN.size() if side != Vector2.ZERO else 0):
+		var gi := goal + Vector3(side.x, 0.0, side.y) * (DANGER_SIDESTEP_IN[i] * INCHES_TO_METERS)
+		ranked.append(_rigid_sweep_dangerous(positions, gi, reach, radii_m) * 1000 + i)
+	ranked.sort()
+	for key in ranked.slice(0, DANGER_SIDESTEP_PLANS):
+		var k: float = DANGER_SIDESTEP_IN[key % 1000]
+		var g5 := goal + Vector3(side.x, 0.0, side.y) * (k * INCHES_TO_METERS)
+		var t5: Array = []
+		var p5 := _plan_move(unit, models, positions, g5, reach, false, avoid_difficult, true, t5, charge_target)
+		if not _dangerous_trail_flags(t5, radii_m).has(true) and not (difficult_check and _trails_cross_difficult(t5, radii_m)):
+			board_clamp_notes.append("%s sidesteps Dangerous ground (%.1f\" %s)" % [unit.get_name(), absf(k), "right" if k > 0.0 else "left"])
+			return {"goal": g5, "reach": reach, "positions": p5, "trails": t5}
+	var dice := 0
+	for m in models:
+		dice += maxi(1, int((m as ModelInstance).wounds_current))
+	var steps := 1
+	while reach - float(steps) * DANGER_STOP_STEP_IN >= DANGER_STOP_STEP_IN \
+			and _rigid_sweep_dangerous(positions, goal, reach - float(steps) * DANGER_STOP_STEP_IN, radii_m) > 0:
+		steps += 1
+	var r_free := reach - float(steps) * DANGER_STOP_STEP_IN
+	if r_free < DANGER_STOP_STEP_IN or float(dice) / 6.0 * DANGER_INCHES_PER_WOUND < reach - r_free:
+		return {}
+	var t6: Array = []
+	var p6 := _plan_move(unit, models, positions, goal, r_free, false, avoid_difficult, true, t6, charge_target)
+	if _dangerous_trail_flags(t6, radii_m).has(true) or (difficult_check and _trails_cross_difficult(t6, radii_m)):
+		return {}
+	board_clamp_notes.append("%s stops short of Dangerous ground (%.1f\" of %.1f\", expected toll %.1f wounds)"
+		% [unit.get_name(), r_free, reach, float(dice) / 6.0])
+	return {"goal": goal, "reach": r_free, "positions": p6, "trails": t6}
 
 
 ## #3090 (PENDING_EPOCH_DANGER_AVOID, core twin `goal_in`): does the unit's own GOAL, its centre at the end of the rigid
