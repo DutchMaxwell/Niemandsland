@@ -161,8 +161,11 @@ pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain,
             "lines": lines_of(&lines), "landings": landings_of(state, &landings),
         }),
         ActStep::Open => json!({"step": "open"}),
-        // P4.0-5: the same answer shape as the Godot seam's `need_choice`.
-        ActStep::NeedChoice { id, options, owner } => json!({"step": "need_choice", "id": id, "options": options, "owner": owner}),
+        // P4.0-5 / CC-9a: the same answer shape as the Godot seam's `need_choice`, with lines and landings before the choice.
+        ActStep::NeedChoice { id, options, owner, lines, landings } => json!({
+            "step": "need_choice", "id": id, "options": options, "owner": owner,
+            "lines": lines_of(&lines), "landings": landings_of(state, &landings),
+        }),
         ActStep::Refused { index, reason } => refused(index, &reason),
         ActStep::Cancelled { lines } => json!({"step": "cancelled", "lines": lines_of(&lines)}),
         ActStep::Done { state: s, lines, landings, .. } => {

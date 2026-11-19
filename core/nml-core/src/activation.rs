@@ -75,10 +75,11 @@ pub enum ActStep {
     NeedRoll { index: usize, faces: usize, kind: &'static str, count: i64, target: i64, owner: String, owner_key: String, lines: Vec<LogLine>, landings: Vec<Landing> },
     /// The activation is open and waits for the next input.
     Open,
-    /// P4.0-5: the core needs one answer before it can resolve (`option: ""` asked). `id` and every
-    /// option are stable ids (a target unit key and `slot:<n>` model slots), `owner` is the roster
-    /// key of the unit whose side answers. Answer with `Input::Choice { id, option }`.
-    NeedChoice { id: String, options: Vec<String>, owner: String },
+    /// P4.0-5 / CC-9a: the core needs one answer before it can resolve (`option: ""` asked). `id` and every
+    /// option are stable ids (a target unit key and `slot:<n>` model slots), `owner` is the roster key of the unit
+    /// whose side answers. `lines` and `landings` are only those before the choice point (cumulative, like
+    /// `NeedRoll`). Answer with `Input::Choice { id, option }`.
+    NeedChoice { id: String, options: Vec<String>, owner: String, lines: Vec<LogLine>, landings: Vec<Landing> },
     /// Input `index` breaks an order rule; `reason` is the sentence the player sees.
     Refused { index: usize, reason: String },
     /// The activation was cancelled before its first die; the state is untouched
@@ -401,7 +402,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             return ActStep::Refused { index: i, reason: format!("the open choice is {want}, not {id}") };
         }
         if option.is_empty() {
-            return ActStep::NeedChoice { id: want, options, owner };
+            return ActStep::NeedChoice { id: want, options, owner, lines: Vec::new(), landings: Vec::new() };
         }
         let Some(slot) = option.strip_prefix("slot:").and_then(|n| n.parse::<usize>().ok()).filter(|_| options.iter().any(|o| o == option)) else {
             return ActStep::Refused { index: i, reason: format!("{option} is not an option of {want} (options: {})", options.join(", ")) };
@@ -489,7 +490,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             return ActStep::Refused { index: at_input(&c.id), reason: format!("slot:{s} is not an option of {}", c.id) };
         }
         if c.answer.is_none() {
-            return ActStep::NeedChoice { id: c.id.clone(), options: options.iter().map(|s| format!("slot:{s}")).collect(), owner: owner.clone() };
+            return ActStep::NeedChoice { id: c.id.clone(), options: options.iter().map(|s| format!("slot:{s}")).collect(), owner: owner.clone(), lines: [moved, c.lines.clone()].concat(), landings: c.landings.clone() };
         }
     }
     match first {
@@ -1006,7 +1007,7 @@ mod tests {
         let (st, statics) = takedown_line();
         let t = [Begin, intent(HOLD, Some("b")), Input::Choice { id: TAKEDOWN_ID.into(), option: String::new() }];
         match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) {
-            ActStep::NeedChoice { id, options, owner } => {
+            ActStep::NeedChoice { id, options, owner, .. } => {
                 assert_eq!((id.as_str(), owner.as_str()), (TAKEDOWN_ID, "a"));
                 assert_eq!(options, vec!["slot:0".to_string(), "slot:1".to_string()]);
             }
@@ -1079,7 +1080,7 @@ mod tests {
     fn a_wound_allocation_ask_opens_after_the_saves() {
         let (st, statics) = mixed_line();
         match alloc(&st, &statics, Some("")) {
-            ActStep::NeedChoice { id, options, owner } => {
+            ActStep::NeedChoice { id, options, owner, .. } => {
                 assert_eq!((id.as_str(), owner.as_str()), (ALLOC_ID, "b"));
                 assert_eq!(options, vec!["slot:0".to_string(), "slot:1".to_string()]);
             }
@@ -2110,7 +2111,7 @@ mod tests {
         };
         // Deadly(2): unanswered ask opens NeedChoice after the saves, naming slot:0 and slot:1 for owner "b".
         let (ask, _) = run(&["Deadly(2)"], Some(""));
-        assert!(matches!(ask, ActStep::NeedChoice { ref id, ref options, ref owner } if id == "wound_alloc:a:b:cast:0" && options == &["slot:0", "slot:1"] && owner == "b"), "{ask:?}");
+        assert!(matches!(ask, ActStep::NeedChoice { ref id, ref options, ref owner, .. } if id == "wound_alloc:a:b:cast:0" && options == &["slot:0", "slot:1"] && owner == "b"), "{ask:?}");
         // Deadly(2) auto (no choice) kills slot 0; answered "slot:1,slot:0" puts wound 1 on slot 1 (2/3) and FORCES wound 2 onto slot 1 -> slot 0 stands untouched.
         let (ActStep::Done { state: auto_st, .. }, start) = run(&["Deadly(2)"], None) else { panic!("auto") };
         assert_eq!(auto_st.positions[2], vec![start.positions[2][1]], "auto kills lead slot 0");
@@ -2775,6 +2776,44 @@ mod tests {
         let c1_hero = CastInput { seq: 1, targets: vec!["bh".into()], ..test_bolt() };
         let hero_t = vec![Begin, intent(HOLD, None), Input::Cast(CastInput { seq: 0, spell: "Withering".into(), targets: vec!["b".into()], base: 4, threshold: 1, once: false, ..bolt(0) }), Input::Cast(c1_hero), Faces(vec![6])];
         assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &hero_t, true), ActStep::Refused { index: 3, reason } if reason == "cast 1: bh meets Test Bolt with a rule the core does not say for spell damage yet"));
+    }
+
+    // ---- CC-9a: NeedChoice carries lines and landings ----
+
+    /// CC-9a: `ActStep::NeedChoice` carries the lines said and landings made BEFORE the choice point, never the
+    /// speculative automatic landing's wounds or loss lines. Here "a" stands in Dangerous terrain (1 dies, producing
+    /// a prior landing) and shoots mixed-kit "b" with `wound_alloc` probed: `NeedChoice` carries the Dangerous landing
+    /// and the volley's pre-allocation lines, and NONE of "b"'s automatic wound/loss lines or landings.
+    #[test]
+    fn a_need_choice_carries_lines_and_landings_before_the_choice_only() {
+        use crate::terrain::{CellParams, PlainTerrain, DANGEROUS};
+        let (mut st, statics) = mixed_line();
+        st.positions[0] = vec![[4.0 * INCHES_TO_METERS, 0.0, 0.0], [5.0 * INCHES_TO_METERS, 0.0, 0.0]];
+        (st.wounds[0], st.alive[0]) = (vec![1, 1], 2);
+        Rc::make_mut(&mut st.radii)[0] = vec![INCHES_TO_METERS / 2.0; 2];
+        let cells = vec![[16.0, 14.0, DANGEROUS as f64], [16.0, 15.0, DANGEROUS as f64]];
+        let cell_params = CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: INCHES_TO_METERS };
+        let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params });
+        let mut t = vec![Begin, intent(HOLD, Some("b")), Input::Choice { id: ALLOC_ID.into(), option: String::new() }];
+        let mut step_n = 0;
+        let ask = loop {
+            match step_activation(&statics, &st, "a", &board, Seams { dangerous_end_morale: true, ..seams() }, &t, true) {
+                ActStep::NeedRoll { faces, kind, .. } => {
+                    step_n += 1;
+                    // Roll 1 = Dangerous on "a" ([1, 6] kills 1 of "a" -> prior landing); roll 2 = attack (6s); roll 3 = defense (1s).
+                    let g = if step_n == 1 { vec![1, 6] } else if kind == "defense" { vec![1; faces] } else { vec![6; faces] };
+                    t.push(Faces(g));
+                }
+                other => break other,
+            }
+            assert!(t.len() < 12, "{t:?}");
+        };
+        let ActStep::NeedChoice { id, lines, landings, .. } = ask else { panic!("expected NeedChoice, got {ask:?}") };
+        assert_eq!(id, ALLOC_ID);
+        assert!(lines.iter().any(|l| l.text.contains("saves on")), "pre-choice lines must be present: {lines:?}");
+        assert!(lines.iter().all(|l| !l.text.contains("b takes ") && !l.text.contains("b loses ")), "speculative automatic landing lines must not leak: {lines:?}");
+        assert!(landings.iter().any(|l| l.unit == 0), "prior Dangerous landing on unit 0 must be present: {landings:?}");
+        assert!(landings.iter().all(|l| l.unit != 2), "speculative automatic landing on target 2 must not leak: {landings:?}");
     }
 
     // ---- step 12: cancel ----

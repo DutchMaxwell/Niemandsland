@@ -71,7 +71,7 @@ def test_a_takedown_choice_is_asked_answered_and_refused_through_the_python_bind
     start = [{"t": "begin"}, {"t": "intent", "kind": 0, "shoot": target}]
 
     asked = core.step_activation(state, unit, start + [{"t": "choice", "id": choice_id}], False)
-    assert asked == {"step": "need_choice", "id": choice_id, "options": ["slot:0", "slot:1", "slot:2"], "owner": unit}
+    assert asked == {"step": "need_choice", "id": choice_id, "options": ["slot:0", "slot:1", "slot:2"], "owner": unit, "lines": [], "landings": []}
 
     # A valid answer reaches the dice: the core now asks for the volley's first roll.
     answered = core.step_activation(state, unit, start + [{"t": "choice", "id": choice_id, "option": "slot:1"}], False)

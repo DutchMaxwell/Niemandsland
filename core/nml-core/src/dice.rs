@@ -184,7 +184,7 @@ impl Tray {
     /// target group. A supplied tray keeps it; a seeded tray ignores the call, so every seeded path lands automatically as before.
     pub fn offer_wound_alloc(&mut self, id: String, answer: Option<Vec<usize>>) {
         if let Some(feed) = self.feed.as_mut() {
-            feed.wound_choices.push(WoundChoice { id, answer, reached: None, bad: None });
+            feed.wound_choices.push(WoundChoice { id, answer, reached: None, bad: None, lines: Vec::new(), landings: Vec::new() });
         }
     }
 
@@ -196,6 +196,10 @@ impl Tray {
         let c = feed.wound_choices.iter_mut().find(|c| c.id == id)?;
         c.reached = Some((feed.next, options.clone(), owner.to_string()));
         c.bad = c.answer.as_ref().and_then(|a| a.iter().find(|s| !options.contains(s)).copied());
+        if c.answer.is_none() {
+            c.lines = self.lines.iter().map(|(_, l)| l.clone()).collect();
+            c.landings = self.landings.iter().map(|(_, l)| l.clone()).collect();
+        }
         c.answer.clone().filter(|_| c.bad.is_none())
     }
 
@@ -329,13 +333,16 @@ pub struct Feed {
 
 /// One-core P4.D-20: the step API's wound-allocation choice as the volley's landing sees it. `answer` = the
 /// owner's ordered capture slots (`None` = only asked). `reached` = (draws so far, options, owner) once a group's
-/// landing came to it; `bad` = the first answered slot that is no option.
+/// landing came to it; `bad` = the first answered slot that is no option. CC-9a: `lines` and `landings` hold
+/// everything said/landed on this tray BEFORE this choice was reached (when `answer` is `None`).
 #[derive(Debug, Clone)]
 pub struct WoundChoice {
     pub id: String,
     pub answer: Option<Vec<usize>>,
     pub reached: Option<(usize, Vec<usize>, String)>,
     pub bad: Option<usize>,
+    pub lines: Vec<LogLine>,
+    pub landings: Vec<Landing>,
 }
 
 impl Feed {

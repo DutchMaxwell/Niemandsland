@@ -305,7 +305,7 @@ pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain,
             out.set("landings", &landings_of(state, &landings));
         }
         ActStep::Open => out.set("step", "open"),
-        ActStep::NeedChoice { id, options, owner } => {
+        ActStep::NeedChoice { id, options, owner, lines, landings } => {
             out.set("step", "need_choice");
             out.set("id", id.as_str());
             let mut all = VarArray::new();
@@ -314,6 +314,8 @@ pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain,
             }
             out.set("options", &all);
             out.set("owner", owner.as_str());
+            out.set("lines", &lines_of(&lines));
+            out.set("landings", &landings_of(state, &landings));
         }
         ActStep::Refused { index, reason } => out = refused(index, &reason),
         ActStep::Cancelled { lines } => {
