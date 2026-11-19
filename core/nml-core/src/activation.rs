@@ -2287,7 +2287,7 @@ mod tests {
             }
         }
         let ActStep::Done { state: s2, lines: l2, .. } = step_activation(&statics2, &st2, "a", &board, dang_seams, &t2, true) else { panic!("expected Done") };
-        assert_eq!(asked2, ["attack|4x6+|Host", "cast|1x2+|Hero", "spell_defense|2x4+|Foe", "attack|1x4+|Hero"]);
+        assert_eq!(asked2, ["dangerous|4x6+|Host", "cast|1x2+|Hero", "spell_defense|2x4+|Foe", "attack|1x4+|Hero"]);
         assert_eq!((s2.alive[0], s2.alive[1], s2.casts[0], s2.casts[1]), (0, 1, 0, 0), "host dead (cast 0 token still spent), hero alive");
         assert!(l2.iter().any(|l| l.text == "Host is destroyed but its joined hero lives - the unit is not destroyed and goes on"), "{l2:?}");
     }
@@ -3341,7 +3341,7 @@ mod tests {
             t.push(Faces(match asked.len() { 1 => vec![1, 6], 3 => vec![1; faces], _ => vec![6; faces] }));
             assert!(asked.len() < 8, "{asked:?}");
         }
-        let want = [("attack", "a"), ("attack", "a"), ("defense", "b"), ("morale", "b"), ("morale", "a")];
+        let want = [("dangerous", "a"), ("attack", "a"), ("defense", "b"), ("morale", "b"), ("morale", "a")];
         assert_eq!(asked, want.map(|(k, o)| (k, o.to_string())));
     }
 
