@@ -860,6 +860,8 @@ func _ready() -> void:
 	# NML-001: the overlay reads the free-placed shelf pieces as typed OBBs (frame-cached, they are draggable) in EVERY
 	# game. Wired here: wiring it only when a Solo AI controller is built left human/MP/tutorial games blind to them.
 	terrain_overlay.sandbox_shapes_provider = _sandbox_terrain_shapes
+	# Dev view (debug build, NML_BOARDGEN_SEED=<seed>): the seeded boardgen board as a greybox on the table. Visual only.
+	BoardgenGreybox.attach_from_env(table)
 
 	# Connect object_manager signals for deployment checking
 	object_manager.drag_ended.connect(_on_unit_moved)
