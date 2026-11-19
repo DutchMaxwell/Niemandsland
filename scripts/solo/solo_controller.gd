@@ -6666,10 +6666,10 @@ func _targets_in_dangerous(positions: Array, goal: Vector3, reach_in: float, rad
 	return false
 
 
-## Rules 3.6: is the rigid move over 6" for a non-Flying unit? Same epsilon as `_dangerous_trail_flags` (float32 noise).
+## Rules 3.6: is the rigid move over 6" for a non-Flying unit? Same slack as `_dangerous_trail_flags` (`UNSTABLE_SLACK_IN`).
 func _long_unstable_move(unit: GameUnit, delta: Vector3) -> bool:
 	return AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 and not unit.has_special_rule("Flying") \
-		and Vector2(delta.x, delta.z).length() > MovementPlanner.UNSTABLE_MOVE_IN * INCHES_TO_METERS + 1e-6
+		and Vector2(delta.x, delta.z).length() > (MovementPlanner.UNSTABLE_MOVE_IN + MovementPlanner.UNSTABLE_SLACK_IN) * INCHES_TO_METERS
 
 
 ## Would the rigid move's per-model TARGETS land in UNSTABLE (ruin) ground? A destination INSIDE a ruin is
