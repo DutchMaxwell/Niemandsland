@@ -106,9 +106,9 @@ func _self_repair_vs_bane_unequal(epoch: int) -> int:
 		var rec := await _shadowed(Harness._weapon(["Bane"]), Harness._with(Harness.DEFENDER, {"rules": ["Self-Repair"]}), seed)
 		unequal += 0 if bool(rec["equal"]) else 1
 		assert_bool(rec["labels"].has("target_rule:Self-Repair")).override_failure_message("labels %s" % [rec["labels"]]).is_true()
-		# C-R1 lifted the wound-ignore entry (the dice are equal); DLINES2 denies it again for the missing line, not the dice: the table
-		# writes the roll line of every ignore group and the door none (dlines_gap row 3). It leaves with the wound-ignore train.
-		assert_array(rec["deny"]).override_failure_message("Self-Repair is refused until the door says its roll line (dlines2)").contains(["target_unit_rule:Self-Repair"])
+		# C-R1 lifted the wound-ignore entry: deny mode no longer refuses the Self-Repair target (the pair's own verdict is the gate).
+		# DLINES2 refused it again for the missing roll line; DLINES3 says the line and lifts it once more.
+		assert_array(rec["deny"]).override_failure_message("Self-Repair left the deny list with C-R1 (and again with dlines3)").not_contains(["target_unit_rule:Self-Repair"])
 	return unequal
 
 

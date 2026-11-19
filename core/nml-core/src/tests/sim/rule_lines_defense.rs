@@ -5,7 +5,7 @@ use super::volley_landings::volley_line;
 
     /// The lines one volley of `Att`'s `Rifle` (4 attacks, Quality 2+) at `Def` (two Tough(3) models, Defense 4+) says on the
     /// supplied faces; `tune` edits the fixture first. Epoch = the current one, so a wording change on an epoch turns it red.
-    fn rule_lines(tune: impl FnOnce(&mut State, &mut [UnitStatic]), faces: Vec<Vec<u8>>) -> Vec<String> {
+    pub(super) fn rule_lines(tune: impl FnOnce(&mut State, &mut [UnitStatic]), faces: Vec<Vec<u8>>) -> Vec<String> {
         let (mut st, mut statics) = volley_line();
         st.player = vec![1, 1, 0, 0];
         st.profiles = Rc::new(Profiles { list: vec![st.profiles.list[0].clone(); 4], index: HashMap::new() }); // one profile per roster slot
@@ -101,5 +101,12 @@ use super::volley_landings::volley_line;
         let at = |t: &str| both.iter().position(|l| l == t).unwrap_or_else(|| panic!("{t}: {both:?}"));
         assert!(at("Def: 4 wounds ignore Regeneration — no regeneration roll") < at("Def: 4 wounds ignore only Regeneration — Self-Repair still rolls"), "{both:?}");
         assert!(at("Def: 4 wounds ignore only Regeneration — Self-Repair still rolls") < at("Def rolls 4 self-repair dice (6+) — 0 wounds ignored"), "{both:?}");
+        // a group not named Regeneration: the bypass weapon's wounds join the pool and the group still rolls them (dlines3)
+        let repair = rule_lines(regen([0, 6, 0, 0], names, true), vec![vec![6, 6, 6, 6], vec![1, 1, 1, 1], vec![1, 1, 1, 1]]);
+        let at = |t: &str| repair.iter().position(|l| l == t).unwrap_or_else(|| panic!("{t}: {repair:?}"));
+        assert!(at("Def: 4 wounds ignore only Regeneration — Self-Repair still rolls") < at("Def rolls 4 self-repair dice (6+) — 0 wounds ignored"), "{repair:?}");
+        assert!(repair.iter().all(|l| !l.contains("no regeneration roll")), "no Regeneration group, no skip line: {repair:?}");
+        let plain = rule_lines(regen([0, 6, 0, 0], names, false), vec![vec![6, 6, 6, 6], vec![1, 1, 1, 1], vec![1, 1, 1, 1]]);
+        assert!(plain.iter().all(|l| !l.contains("ignore only Regeneration")), "no bypass weapon, no line: {plain:?}");
         assert!(rule_lines(|_, _| {}, vec![vec![6, 6, 6, 6], vec![1, 1, 1, 1]]).iter().all(|l| !l.contains("ignore")), "no ignore rule, no line");
     }

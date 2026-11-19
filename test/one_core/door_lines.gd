@@ -33,12 +33,14 @@ static func named(lines: Array, prefix: String) -> Array:
 
 
 ## `seeds` volleys of `shooter` at `target` on both halves; `opts` as `RosterSweep.volley`'s (a planted ledger fact). Returns
-## {"fired": seeds where the table said a line of the rule, "bad": one text per seed where the two halves' lines of the rule differ}.
+## {"fired": seeds where the table said a line of the rule, "bad": one text per seed where the two halves' lines of the rule differ,
+## "state_bad": seeds where the end states differ (wounds, losses)}.
 ## "with_text": the seeds where a compared table line contains `needle` (a line of the rule that only some volleys write).
 ## The caller has armed the harness (`RosterSweep.arm`).
 static func compare(main: Node, shooter: Dictionary, target: Dictionary, prefix: String, seeds: int, dump_dir: String, opts := {}, needle := "") -> Dictionary:
 	var fired := 0
 	var with_text := 0
+	var state_bad := 0   # seeds whose end state (wounds, losses) differs: a line test over a pair whose dice differ proves nothing
 	var bad: Array = []
 	for s in seeds:
 		var table := await RosterSweep.volley(main, shooter, target, s, false, dump_dir, opts)
@@ -47,6 +49,8 @@ static func compare(main: Node, shooter: Dictionary, target: Dictionary, prefix:
 		var c := named(core["lines"], prefix)
 		fired += 1 if not t.is_empty() else 0
 		with_text += 1 if needle != "" and t.any(func(l: String) -> bool: return l.contains(needle)) else 0
+		if RosterSweep.first_state_diff(table["state"], core["state"]) != "":
+			state_bad += 1
 		if t != c:
 			bad.append("seed %d: table %s | door %s" % [s, JSON.stringify(t), JSON.stringify(c)])
-	return {"fired": fired, "with_text": with_text, "bad": bad}
+	return {"fired": fired, "with_text": with_text, "bad": bad, "state_bad": state_bad}

@@ -95,3 +95,26 @@ func test_the_regeneration_group_names_its_roll_and_the_bypass() -> void:
 	await _same("regeneration", _striker([], []), DoorLines.entry("Ranks", 10, ["Regeneration"], [], "battle_brothers", 0), "Ranks rolls", 6)
 	await _same("regeneration aura", _striker([], []), DoorLines.entry("Ranks", 10, ["Regeneration Aura"], [], "alien_hives", 0), "Ranks rolls", 6)
 	await _same("bypass", _striker(["Bane"], []), DoorLines.entry("Ranks", 10, ["Regeneration"], [], "battle_brothers", 0), "Ranks:", 6)
+
+
+func _ignorer(rules: Array, faction: String, system := "gf") -> Dictionary:
+	var e := DoorLines.entry("Ranks", 10, rules, [], faction, 0)
+	(e["unit"] as OPRApiClient.OPRUnit).game_system = system
+	e["system"] = system
+	return e
+
+
+## The other wound-ignore groups name their roll the way the table spells it (the rule's own name, "self-repair" / "resistance" in lower case), and a
+## bypass weapon (Bane / Rending) at a group not named Regeneration names the "ignore only Regeneration - X still rolls" line, the count of the
+## bypass wounds that joined the pool. The aliases with a distance gate, a terrain condition or a once-per-game latch stay refused by name.
+func test_the_other_ignore_groups_name_their_roll() -> void:
+	await _same("self-repair", _striker([], []), _ignorer(["Self-Repair"], "robot_legions"), "Ranks rolls", 6)
+	await _same("enhanced self-repair", _striker([], []), _ignorer(["Self-Repair", "Enhanced Self-Repair"], "robot_legions"), "Ranks rolls", 6)
+	await _same("resistance", _striker([], []), _ignorer(["Resistance"], "alien_hives"), "Ranks rolls", 6)
+	await _same("plaguebound", _striker([], []), _ignorer(["Plaguebound"], "plague_disciples"), "Ranks rolls", 6)
+	await _same("enhanced plaguebound", _striker([], []), _ignorer(["Plaguebound", "Enhanced Plaguebound"], "plague_disciples"), "Ranks rolls", 6)
+	await _same("protected", _striker([], []), _ignorer(["Protected"], "plague_disciples"), "Ranks rolls", 6)
+	await _same("cursed undead", _striker([], []), _ignorer(["Cursed Undead"], "vampiric_undead", "aof"), "Ranks rolls", 6)
+	await _same("self-repair vs bane", _striker(["Bane"], []), _ignorer(["Self-Repair"], "robot_legions"), "Ranks:", 6)
+	await _same("plaguebound vs bane", _striker(["Bane"], []), _ignorer(["Plaguebound"], "plague_disciples"), "Ranks:", 6)
+	await _same("regeneration + self-repair vs bane", _striker(["Bane"], []), _ignorer(["Regeneration", "Self-Repair"], "robot_legions"), "Ranks:", 6)

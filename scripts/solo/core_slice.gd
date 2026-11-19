@@ -17,9 +17,14 @@ extends RefCounted
 const PATH := "res://assets/solo/core_slice_allow.json"
 ## C-19: the measured deny-list (mode "deny"), the AI door's slice unless env NML_CORE_SLICE=allow|plain picks PATH (the way back).
 const DENY_PATH := "res://assets/solo/core_slice_deny.json"
-## DLINES2: the deny file's group that switches the `deadly_beside_other_weapons` refusal on (a group with no primitives: the refusal is a
-## predicate, not a rule name). A slice file without it (a test's own, the dice-only pin) refuses nothing of the kind.
+## DLINES2/3: the deny file's primitive-less groups that switch a refusal PREDICATE on (a refusal that is no rule name). A slice file without
+## the group (a test's own, the dice-only pin for the line-only one) refuses nothing of the kind.
 const SIMULTANEOUS_FIRE_GROUP := "door_omits_simultaneous_fire_line"
+const OWN_SHRED_GROUP := "door_own_shred_beside_alias"
+
+
+static func _has_group(group: String) -> bool:
+	return (config().get("group_names", []) as Array).has(group)
 const SCHEMA := "nml-core-slice-v1"
 const MODES := ["allow", "deny"]
 ## P4.D-48: the AI charge door's own slice (door "melee"), read through `refusals_in`. Allow mode, no group = no rule at all.
@@ -42,7 +47,7 @@ static func reset_cache() -> void:
 static func config() -> Dictionary:
 	if not _loaded.is_empty():
 		return _loaded
-	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}, "unmapped_inert": false, "simultaneous_fire_line": false}
+	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}, "unmapped_inert": false, "group_names": []}
 	var live := path_override.is_empty()
 	var path := live_path()
 	# Each file belongs to one door: the melee files only through MELEE_PATH / MELEE_DENY_PATH, every other path (shipped, deny, a test file) is the shoot door's.
@@ -57,7 +62,7 @@ static func config() -> Dictionary:
 		for p in data["groups"][g].get("primitives", []):
 			_loaded["primitives"][str(p)] = str(g)
 	_loaded["attached"] = (data.get("groups", {}) as Dictionary).has("attached_heroes")
-	_loaded["simultaneous_fire_line"] = (data.get("groups", {}) as Dictionary).has(SIMULTANEOUS_FIRE_GROUP)
+	_loaded["group_names"] = (data.get("groups", {}) as Dictionary).keys()
 	# Deny mode only: rule names with no effect on a volley (list-building rules, an item's own label) - taken although the
 	# registry gives them no primitive. Each carries its reason in the file.
 	if _loaded["mode"] == "deny":
@@ -164,8 +169,13 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 	# inline, so a later weapon of the same volley can see fewer models and says so ("Simultaneous fire: ...", Blast's "cap read when the
 	# volley started"); the core lands after all the dice and has no such line. Refused as a shooter only, by the weapons of the unit and
 	# its joined heroes (they fire in one volley); a single ranged weapon, or Deadly alone, stays on the core.
-	if not as_target and out.is_empty() and config()["mode"] == "deny" and bool(config().get("simultaneous_fire_line", false)) and _deadly_beside_other_weapons(gu):
+	if not as_target and out.is_empty() and config()["mode"] == "deny" and _has_group(SIMULTANEOUS_FIRE_GROUP) and _deadly_beside_other_weapons(gu):
 		out.append("deadly_beside_other_weapons")
+	# Deny mode, a SHOOTER: a weapon's own Shred beside a unit-level Shred rule of ANOTHER name (Warbound, Destroyer, Infected, ...) is two
+	# rules in the table (R-1 A2: each pays its extra wounds, the alias gated by distance); the core pays the unmodified 1s once. A STATE
+	# difference (the target's wounds), not a missing line, so the dice-only pin keeps this refusal.
+	if not as_target and out.is_empty() and config()["mode"] == "deny" and _has_group(OWN_SHRED_GROUP) and _own_shred_beside_alias(gu):
+		out.append("own_shred_beside_alias")
 	return out
 
 
@@ -182,6 +192,41 @@ static func _deadly_beside_other_weapons(gu: GameUnit) -> bool:
 			ranged += 1
 			deadly = deadly or (w.special_rules as Array).any(func(r) -> bool: return rule_label(r) == "Deadly")
 	return deadly and ranged >= 2
+
+
+## One of `gu`'s units (itself, a joined hero: each stamps its own profiles) has a weapon with its own Shred and a unit-level rule of the Shred
+## primitive whose group is not plain Shred (the table's `_solo_shred_group_key`: Enhanced / Aura / Buff / Boost / in Melee / when Shooting forms
+## belong to their base).
+static func _own_shred_beside_alias(gu: GameUnit) -> bool:
+	for u in [gu] + gu.get_attached_heroes():
+		if not (u is GameUnit and (u as GameUnit).source_data is OPRApiClient.OPRUnit):
+			continue
+		var unit := u as GameUnit
+		var own := ((unit.source_data as OPRApiClient.OPRUnit).weapons as Array).any(func(w) -> bool:
+			return (w.special_rules as Array).any(func(r) -> bool: return rule_label(r) == "Shred"))
+		if not own:
+			continue
+		var system := RulesRegistry.system_of_unit(unit)
+		var faction := RulesRegistry.faction_of_unit(unit)
+		for r in unit.get_special_rules():
+			var label := rule_label(r)
+			if RulesRegistry.lookup(system, faction, label).get("primitive") == "Shred" and _shred_group_key(label) != "Shred":
+				return true
+	return false
+
+
+static func _shred_group_key(rule_name: String) -> String:
+	var n := rule_name.strip_edges()
+	if n.begins_with("Enhanced "):
+		n = n.substr(9)
+	var trimmed := true
+	while trimmed:
+		trimmed = false
+		for suffix in [" Aura", " Buff", " Boost", " in Melee", " when Shooting"]:
+			if n.ends_with(suffix):
+				n = n.left(n.length() - suffix.length())
+				trimmed = true
+	return n
 
 
 ## C-18 (shadow only): `refusals` under the slice file at `path` (e.g. DENY_PATH) without switching the live slice.

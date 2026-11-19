@@ -3316,7 +3316,7 @@ pub(crate) fn tray_retreating_strike(
             kind: "ravage", count: dice, target: RAVAGE_WOUND_TARGET,
             faces: faces.clone(), owner: statics[next.roster.profile[bearer]].name.clone(),
         });
-        let landed = crate::dice::regen_batch(w, &def, &def_owner, tray, &mut shot.rolls);
+        let landed = crate::dice::regen_batch(w, 0, &def, &def_owner, tray, &mut shot.rolls);
         land_wounds_with(next, ti, landed, seams.tray_exact);
         shot.log.push(format!(
             "{}: {} strikes while retreating -- {} dice -> {} wound(s) on {} (no save)",
