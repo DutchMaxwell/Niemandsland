@@ -23,6 +23,7 @@ const SEAT_TARGET := 1
 ## Centre-to-centre distance of the two unit blocks in inches: inside every weapon range a list carries, outside 9" (the rules
 ## that gate on it are exercised), before terrain exists.
 const DISTANCE_IN := 14.0
+const CHARGE_GAP_IN := 7.0
 const ROW := 5
 
 
@@ -280,8 +281,10 @@ static func disarm(main: Node) -> void:
 	AiDiceRecorder.close()
 	OS.set_environment("NML_DICE_DUMP", "")
 	AiPlanner.table_fidelity = _fidelity_was
+	CoreActivation._charge_landing = false
 	CoreActivation.reset_all(main)
 	CoreActivation._env = -1
+	CoreActivation._charge_env = -1
 
 
 ## One pairing (`a` shoots at `b` and `b` at `a`, unit i of one against unit i of the other, round robin over the longer list), each
@@ -409,3 +412,93 @@ static func gate(verdict_rows: Array, deny: Dictionary) -> Dictionary:
 		else:
 			unexplained.append(v)
 	return {"mismatches": explained + unexplained.size(), "explained": explained, "unexplained": unexplained}
+
+
+static func _pos(u: GameUnit) -> Array:
+	var a: Array = u.get_alive_models().map(func(m: ModelInstance) -> Vector2: return Vector2(m.node.global_position.x, m.node.global_position.z) / INCH)
+	a.sort()
+	return a
+
+
+## Whether two sorted position lists agree within 0.01" per model.
+static func positions_near(a: Array, b: Array) -> bool:
+	if a.size() != b.size():
+		return false
+	for i in a.size():
+		if (a[i] as Vector2).distance_to(b[i]) > 0.01:
+			return false
+	return true
+
+
+static func _spawn_side(main: Node, spec: Variant, seat: int, x_in: float) -> GameUnit:
+	return (spec as Callable).call() if spec is Callable else spawn(main, spec as Dictionary, seat, x_in)
+
+
+## One half of a charge comparison (`core_run` false = table's `_run_ai_melee`, true = board capture before the move + AI charge
+## door). `att_spec` and `foe_spec` are either `load_list` entries (spawned at 0" and `gap_in`) or `Callable` factories.
+static func _charge_half(main: Node, att_spec: Variant, foe_spec: Variant, seed_n: int, core_run: bool, opts := {}) -> Dictionary:
+	var att := _spawn_side(main, att_spec, SEAT_SHOOTER, 0.0)
+	var foe := _spawn_side(main, foe_spec, SEAT_TARGET, float(opts.get("gap_in", CHARGE_GAP_IN)))
+	var labels := {"att": labels_of(att), "tgt": labels_of(foe)}
+	var names := [att.get_name(), foe.get_name()]
+	var lines: Array = []
+	var tap := func(e: Dictionary) -> void:
+		lines.append("%s|%s" % [BattleLog.Category.keys()[int(e["category"])], str(e["text"])])
+	main.battle_log.entry_added.connect(tap)
+	main.seed_tray_rng(seed_n)
+	var charges := CoreActivation.ai_charges
+	var sc: SoloController = main.solo_controller
+	var h := 0
+	if core_run:
+		CoreActivation.reset_all(main)
+		h = CoreActivation.capture(main)
+	main._solo_core_ai_h = h
+	var from_in: float = sc.charge_from_in(att, foe, MoveIntent.distance_inches(sc.unit_centre(att), sc.unit_centre(foe)))
+	sc._charge_move(att, foe, float(opts.get("band_in", 12.0)))
+	att.unit_properties["moved_round"] = 1
+	var report := {"unit": att, "target": foe, "action": AiDecision.Action.CHARGE, "charge_from_in": from_in, "moved": true}
+	var refusals: Array = CoreActivation.charge_refusals(main, att, report)
+	# The body's hand-over (`_solo_activate_one_ai_body`): the door when it takes the charge (or forced by `bypass_slice`), else table.
+	if core_run and bool(opts.get("bypass_slice", false)):
+		if h != 0:
+			await CoreActivation.run_ai_charge(main, att, report)
+	elif not (CoreActivation.takes_ai_charge(main, att, report) and await CoreActivation.run_ai_charge(main, att, report)):
+		await main._run_ai_melee(report)
+	if core_run and opts.has("core_fault"):
+		(opts["core_fault"] as Callable).call(att, foe)
+	main._solo_core_ai_h = 0
+	if h != 0:
+		sc._core_node_ready().release(h)
+	main.battle_log.entry_added.disconnect(tap)
+	var out := {"att": _pos(att), "foe": _pos(foe), "wounds": [main._solo_unit_wounds_now(att), main._solo_unit_wounds_now(foe)],
+		"alive": [att.get_alive_count(), foe.get_alive_count()], "shaken": [att.is_shaken, foe.is_shaken],
+		"fatigued": [att.is_fatigued, foe.is_fatigued], "rng": main._tray_rng.state, "lines": lines,
+		"core": CoreActivation.ai_charges - charges, "refusals": refusals, "labels": labels, "names": names}
+	free_units(main, [att, foe])
+	await main.get_tree().process_frame
+	return out
+
+
+## Compares a `table` and a `core` half from `_charge_half`: positions (0.01"), wounds, alive, Shaken, Fatigue, RNG, lines.
+static func compare_charge(table: Dictionary, core: Dictionary) -> Dictionary:
+	var diffs: Array = []
+	var first := ""
+	for k in ["att", "foe"]:
+		if not positions_near(table[k], core[k]):
+			first = k if first == "" else first
+			diffs.append("%s positions: table %s, core %s" % [k, table[k], core[k]])
+	for k in ["wounds", "alive", "shaken", "fatigued", "rng", "lines"]:
+		if table[k] != core[k]:
+			first = k if first == "" else first
+			diffs.append("%s: table %s, core %s" % [k, table[k], core[k]])
+	return {"first_diff": first, "diffs": diffs}
+
+
+## Plan E (step 4a): one AI charge compared door-vs-table (`table` = `_run_ai_melee`, `core` = capture before the move + door).
+static func charge(main: Node, att: Variant, foe: Variant, seed_n: int, opts := {}) -> Dictionary:
+	var table := await _charge_half(main, att, foe, seed_n, false, opts)
+	var core := await _charge_half(main, att, foe, seed_n, true, opts)
+	var cmp := compare_charge(table, core)
+	return {"table": table, "core": core, "taken": int(core["core"]) == 1 and int(table["core"]) == 0,
+		"refusals": table["refusals"], "labels": table["labels"], "names": table["names"],
+		"equal": (cmp["diffs"] as Array).is_empty(), "first_diff": cmp["first_diff"], "diffs": cmp["diffs"]}
