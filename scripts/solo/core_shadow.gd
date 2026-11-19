@@ -23,6 +23,16 @@ static var _detail := {}
 static var _held: Array = []
 ## The replay gates' reading (tools/parity/parity_compare.py): these kinds fold to "attack", a defense target clamps to 2..6.
 const FOLD := ["morale", "fearless", "no_retreat", "regeneration", "ravage", "battleborn", "dangerous"]
+## CC-10c: the core's cast legs as the door names them on the tray: [kind, leg]. `cast` is the die (tray kind attack, leg
+## cast); every `spell_*` leg is a plain kind with leg spell (the table's own tags, main.gd:5548/:5688).
+const CAST_KINDS := {"cast": ["attack", "cast"], "spell_attack": ["attack", "spell"],
+	"spell_defense": ["defense", "spell"], "spell_morale": ["morale", "spell"],
+	"spell_fearless": ["fearless", "spell"], "spell_no_retreat": ["no_retreat", "spell"]}
+## CC-10c: env NML_CORE_SHADOW_CAST=1|on (soaks only, default OFF). The replay carries the activation's cast inputs and
+## keeps the tap's cast/spell legs, so the core's cast slot is compared too - a cast-only activation included.
+static var _cast_env := -1
+## CC-10c: the cast-only activation waiting for the body's `flush` (no volley holds a compare): [unit, report].
+static var _cast_pending: Array = []
 
 
 ## The flag, read once: ON only for "1" / "on".
@@ -33,12 +43,20 @@ static func enabled() -> bool:
 	return _env == 1
 
 
+## CC-10c: the cast switch, read once: ON only for "1" / "on".
+static func cast_enabled() -> bool:
+	if _cast_env < 0:
+		var raw := OS.get_environment("NML_CORE_SHADOW_CAST").to_lower()
+		_cast_env = 1 if (raw == "1" or raw == "on") else 0
+	return _cast_env == 1
+
+
 ## The shadow board of the AI activation about to start (`peek`, before its move): a core handle, 0 with the flag off,
 ## no core at this table or a non-OPR unit. Opens the tap on a handle, empties it either way.
 static func capture(main, peek: GameUnit) -> int:
 	tap.clear()
 	tapping = false
-	if not (enabled() or melee_enabled()) or peek == null or not CoreActivation.applies(main) or not peek.source_data is OPRApiClient.OPRUnit:
+	if not (enabled() or melee_enabled() or cast_enabled()) or peek == null or not CoreActivation.applies(main) or not peek.source_data is OPRApiClient.OPRUnit:
 		return 0
 	var h := CoreActivation.capture(main)
 	tapping = h != 0
@@ -55,18 +73,26 @@ static func note_roll(kind: String, count: int, target: int, faces: Array, owner
 static func note_placed(main, unit: GameUnit, report: Dictionary) -> void:
 	if int(main._solo_core_shadow_h) != 0:
 		placed = CoreActivation.ai_transcript(main, unit, report, null).slice(0, 2)
+		# CC-10c: a cast-only activation waits for the body's `flush` (no volley code holds a compare then).
+		if cast_enabled() and not (report.get("casts", []) as Array).is_empty():
+			_cast_pending = [unit, report]
 
 
 ## C-19 s2: the volley code's hand-off: the compare waits for `flush` (the AI body, after its end-of-activation morale).
 static func hold(main, unit: GameUnit, report: Dictionary, groups: Dictionary, order: Array) -> void:
-	if enabled() and int(main._solo_core_shadow_h) != 0 and not order.is_empty():
+	if (enabled() or cast_enabled()) and int(main._solo_core_shadow_h) != 0 and not order.is_empty():
 		_held = [unit, report, groups, order]
 
 
 ## C-19 s2: the held compare, now that the table has thrown every die of the activation it shares with the core's one
-## call (the AI body calls it before Ambush re-deployment and Coordinate, and its wrapper on every early exit).
+## call (the AI body calls it before Ambush re-deployment and Coordinate, and its wrapper on every early exit). CC-10c: a
+## cast-only activation (no volley held a compare) is replayed here, with no aim and no targets.
 static func flush(main) -> void:
 	if _held.is_empty():
+		if not _cast_pending.is_empty() and int(main._solo_core_shadow_h) != 0:
+			var p: Array = _cast_pending
+			_cast_pending = []
+			compare(main, p[0], p[1], {}, [])
 		return
 	var h: Array = _held
 	_held = []
@@ -77,15 +103,20 @@ static func flush(main) -> void:
 ## replay the activation in the core on the shadow board with the table's own faces (the cast and spell legs left out,
 ## as the replay gates do), then compare the roll stream by gate reading and each unit's end state (alive, the living
 ## models' wounds as a multiset, shaken, fatigued). No landing, no line, no die: the core's answer is only read.
+## CC-10c: with NML_CORE_SHADOW_CAST=1 the cast inputs ride after the intent, the cast/spell legs stay in the stream, and
+## an empty `order` (a cast-only activation) is a compare of the casts alone.
 static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary, order: Array) -> void:
-	if int(main._solo_core_shadow_h) == 0 or order.is_empty():
+	if int(main._solo_core_shadow_h) == 0 or (order.is_empty() and not cast_enabled()):
 		return
 	var core: Object = main.solo_controller._core_node_ready()
 	var split: Array = CoreActivation.split_aim(order.map(func(id) -> Dictionary: return groups[id]))   # the door's own aim
-	var t := CoreActivation.ai_transcript(main, unit, report, groups[order[0]]["target"], split)
+	var target: GameUnit = groups[order[0]]["target"] if not order.is_empty() else null
+	var t := CoreActivation.ai_transcript(main, unit, report, target, split)
 	if not placed.is_empty():
 		t = placed + t.slice(2)
-	var rolls: Array = tap.filter(func(r: Dictionary) -> bool: return not ["cast", "spell"].has(str(r["leg"])))
+	if cast_enabled():
+		t.append_array(CoreActivation.cast_inputs(report))
+	var rolls: Array = tap if cast_enabled() else tap.filter(func(r: Dictionary) -> bool: return not ["cast", "spell"].has(str(r["leg"])))
 	var enforce: bool = main.object_manager._strict_movement_enforced()
 	var r: Dictionary = core.step_activation(int(main._solo_core_shadow_h), unit.unit_id, t, enforce)
 	var diff := ""
@@ -102,7 +133,8 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 		if i >= rolls.size():
 			diff = "core_rolls_more"
 			_detail = {"core": gate_key(r, false)}
-		elif not same_roll(gate_key(r, false), gate_key(rolls[i], true), host_of) or (rolls[i]["faces"] as Array).size() != int(r["faces"]):
+		elif not same_roll(gate_key(r, false), gate_key(rolls[i], true), host_of) or (rolls[i]["faces"] as Array).size() != int(r["faces"]) \
+				or not _leg_ok(r, rolls[i]):
 			diff = "rolls"
 			_detail = {"core": gate_key(r, false), "table": _raw(rolls[i])}
 		else:
@@ -130,7 +162,7 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 	for id in order:
 		deny.append_array(CoreSlice.refusals_in(CoreSlice.DENY_PATH, groups[id]["target"], true).map(func(x): return "target_" + x))
 		deny.append_array(CoreSlice.pair_refusals_in(CoreSlice.DENY_PATH, unit, groups[id]["target"]))
-	if not (report.get("casts", []) as Array).is_empty():
+	if not (report.get("casts", []) as Array).is_empty() and not cast_enabled():
 		deny.append("cast")   # the door keeps a volley after this activation's casts on the table (`run_ai`)
 	records.append({"deny": deny, "equal": diff == "", "first_diff": diff, "labels": labels, "unported": r.get("unported", []),
 		"detail": _detail, "shooter": unit.get_name(), "targets": order.map(func(id) -> String: return groups[id]["target"].get_name())})
@@ -142,13 +174,24 @@ static func same_roll(core_key: Array, table_key: Array, host_of: Dictionary) ->
 
 
 ## A roll by the replay gates' reading: (kind, count, target, owner); the table's owner "AI (<name>)" reads "<name>".
+## CC-10c: the core's cast legs read as the tray's own kind (the door's map, `CAST_KINDS`).
 static func gate_key(r: Dictionary, table: bool) -> Array:
-	var kind := "attack" if FOLD.has(str(r["kind"])) else str(r["kind"])
+	var kind := str(r["kind"])
+	if not table and CAST_KINDS.has(kind):
+		kind = str((CAST_KINDS[kind] as Array)[0])
+	kind = "attack" if FOLD.has(kind) else kind
 	var target := clampi(int(r["target"]), 2, 6) if kind == "defense" else int(r["target"])
 	var owner := str(r["owner"])
 	if table and owner.begins_with("AI (") and owner.ends_with(")"):
 		owner = owner.substr(4, owner.length() - 5)
 	return [kind, int(r["count"]), target, owner]
+
+
+## CC-10c: the table's leg of a core cast leg ("cast" / "spell"); a plain kind reads "" and any table leg fits it (the
+## table tags a plain volley "main").
+static func _leg_ok(core_roll: Dictionary, table_roll: Dictionary) -> bool:
+	var leg := str((CAST_KINDS.get(str(core_roll["kind"]), ["", ""]) as Array)[1])
+	return leg.is_empty() or leg == str(table_roll["leg"])
 
 
 ## The first unit field where the core's end state differs from the table's board now: "" = equal, else "<field>".
@@ -186,6 +229,7 @@ static func _field(u: Dictionary, k: String) -> Variant:
 	return int(u.get(k, 0))
 
 
+
 ## Closes the activation's shadow board (every exit of the AI body, and a game reset): the handle is released, the tap
 ## emptied.
 static func release(main) -> void:
@@ -199,6 +243,7 @@ static func release(main) -> void:
 	_core_rolls = []
 	_held = []
 	placed = []
+	_cast_pending = []
 	tap.clear()
 	tapping = false
 
