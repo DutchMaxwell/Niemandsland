@@ -87,6 +87,7 @@ static var wall_cull_stats: Variant = null
 const DIFFICULT_COST_MULT := 2.0            # Theta* soft cost: route AROUND Difficult when cheaper (research §1.3/3.3)
 const DANGEROUS_COST_MULT := 6.0            # Dangerous DEALS DAMAGE — avoid it hard (route around unless the detour is >6x)
 const UNSTABLE_MOVE_IN := 6.0               # rules 3.6: a leg over 6" through a ruin risks the Dangerous test
+const UNSTABLE_SLACK_IN := 1e-3             # float32 route noise: a 6" Advance must not read as longer (core mv::step, same value)
 const THETA_DIAG := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
 	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]   # 8-connected (any-angle)
 const SOLVE_PASSES := 24                     # iterative-projection sweeps (compact AI units converge well within this)
