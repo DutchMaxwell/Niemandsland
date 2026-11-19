@@ -94,21 +94,6 @@ use crate::mods::LiveMod;
         assert_eq!(lines, ["Champion (Tough 9+) lends its Quality to Def's morale test (Q2+)"]);
     }
 
-    /// A Shaken unit rolls no die and the table says why (`<U> is already Shaken - automatically fails morale (<book>)`), in place of the
-    /// bonus lines.
-    #[test]
-    fn a_shaken_unit_says_why_it_rolls_no_die() {
-        let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact: true, ..Seams::default() };
-        let (mut st, mut statics) = att_def(5, 1);
-        (statics[2].model_count, statics[2].ctx.quality) = (10, 4);
-        (st.shaken[2], st.morale_bonus[2]) = (true, 1);
-        let mut tray = Tray::supplied(vec![]);
-        tray_morale_for(&mut st, &statics, 2, false, true, None, seams, &mut tray, &mut ShootResult::default(), None, None);
-        let lines: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).collect();
-        assert_eq!(lines[0], "Def is already Shaken — automatically fails morale ({cite})", "{lines:?}");
-        assert!(lines.iter().all(|l| !l.contains("to morale test rolls")), "{lines:?}");
-    }
-
     /// A lone hero's test (its host has no model left, the hero lives) is its host's in the table's log: every morale line names the host,
     /// the Hero who lends the Quality tests "on behalf of" it, and the outcome says the host fails.
     #[test]

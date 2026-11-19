@@ -6852,7 +6852,7 @@ fn drop_banner_for_cause(
     vt
 }
 
-/// The table's lines before the test die (`_solo_morale_test`): a Shaken unit says why it rolls none, any other the rating and the Banner family name the
+/// The table's lines before the test die (`_solo_morale_test`), for a unit that rolls one: the rating and the Banner family name the
 /// bonus they add (the bonus is the stamped share minus what a cause or the Valiant band took back out, so spell tokens stay out of
 /// it), then the live spell tokens ("<spell> +1: ... passes on N+"), a Great Banner token left out when a rule forced the test.
 /// The target is the one the die is rolled against. Shared by the ordinary test and the Mind Control family's.
@@ -6866,9 +6866,7 @@ fn say_morale_bonus(
     let us = &statics[state.roster.profile[i]];
     let shown = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
     if unit_shaken(state, i, seams) {
-        // A Shaken unit rolls no die: the table says why instead of the bonus lines.
-        say_rule(tray, "morale", state.player[i], || format!("{shown} is already Shaken — automatically fails morale ({CITE})"));
-        return;
+        return; // a Shaken unit rolls no die and the table writes no bonus line (its "already Shaken" line: see the gap list, not said here)
     }
     let target = morale_target(ctx.quality, ctx.morale_bonus);
     let bonus = state.morale_bonus[i] - banner_gone(statics, state, i, seams) - banner_dropped;
