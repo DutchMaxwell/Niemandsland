@@ -48,12 +48,6 @@
       "why": "A weapon's own Shred beside a unit-level Shred rule of another name (Warbound, Destroyer, Infected, ...) is two rules in the table (R-1 A2: each pays its extra wounds, the alias gated by distance); the core pays the unmodified 1s once, so the target's wounds differ (5 of 12 seeds, dlines3 door test). Not a rule name: `CoreSlice` refuses it by predicate (`own_shred_beside_alias`), switched on by this group; a state difference, so the dice-only pin keeps it.",
       "leaves_with": "the core paying the own part and the alias part apart (R-1 A2 on the step path)"
     },
-    "door_warding_gate_beside_other_ignore": {
-      "primitives": [],
-      "kind": "state_difference",
-      "why": "A target with a Warding-family rule (Warding, Knightborn, Angelic Blessing: 6+ ignore only when shot from over 9in) beside ANOTHER wound-ignore group: the core stamps the distance gate only when the gated rule is the best ignore (`unit.rs`, `normal < other_min`), so beside another group the gate is never stamped. Measured 19.11. (door probe, one plain AP(1) rifle, 12 seeds per pair, table against door, shot from 14in and from 5in): Regeneration + Warding, + Knightborn, + Angelic Blessing (also Regeneration Aura and Medical Training for Regeneration): from 14in the `Warding: <U> ignores wounds on 6+ (shot from over 9in)` line is missing 12/12 (end state equal); from 5in the door rolls the gated group the table refuses, lines differ 12/12 and the end state 7/12. Spell Resistance + Knightborn: lines differ 12/12 at both distances, end state 8/12 from 14in and 10/12 from 5in. Warding + Knightborn: from 14in the table rolls both groups and the door one (end state 8/12). Each rule alone, and Angelic Blessing + Enhanced Angelic Blessing (one group), measured equal 0/12. Not a rule name and whatever the shooter carries: `CoreSlice.pair_refusals` refuses the PAIR by the target's rules (`warding_gate_beside_other_ignore`), switched on by this group; a state difference, so the dice-only pin keeps it.",
-      "leaves_with": "the core stamping the gate beside another group and rolling the gated group only from over its distance (wdeny PR 2)"
-    },
     "door_omits_armor_line": {
       "primitives": ["Armor"],
       "kind": "rule_line",
