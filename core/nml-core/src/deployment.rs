@@ -594,6 +594,52 @@ pub fn zones_contain(zones: &[Zone], p: (f64, f64)) -> bool {
     })
 }
 
+/// FIREFIGHT step 8: the catalogue's per-board-size key. Only a board the
+/// catalogue carries a `boards` section for gets one; every other size keeps
+/// the legacy `styles` read (`None`), so 72x48 is unchanged.
+pub fn board_size_key(board_in: [f64; 2]) -> Option<&'static str> {
+    match (board_in[0].round() as i64, board_in[1].round() as i64) {
+        (48, 48) => Some("48x48"),
+        _ => None,
+    }
+}
+
+/// A zone set fits the board when every polygon vertex — and every disc's whole
+/// circle — stays inside the half extents. The 72x48 polygons reach x = ±36,
+/// past a 48-in board's ±24, so they are refused there.
+pub fn zones_fit_board(zones: &[Zone], board_in: [f64; 2]) -> bool {
+    let (hw, hd) = (board_in[0] * 0.5, board_in[1] * 0.5);
+    zones.iter().all(|z| match z {
+        Zone::Poly(poly) => poly.iter().all(|p| (p[0] as f64).abs() <= hw && (p[1] as f64).abs() <= hd),
+        Zone::Disc { c, r } => {
+            (c[0].abs() as f64) + (*r as f64) <= hw && (c[1].abs() as f64) + (*r as f64) <= hd
+        }
+    })
+}
+
+/// `id`'s zones on a board `board_in` inches across. A board with its own
+/// catalogue key reads only that `boards.<key>` section, standard family only —
+/// a style the section does not carry (or one whose zones do not fit the board)
+/// is refused (`None`). Boards without a key keep reading `styles`, gated by the
+/// same fit test, so 72x48 is byte-identical to the old read.
+pub fn catalog_zones_for_board(cat: &serde_json::Value, id: &str, board_in: [f64; 2]) -> Option<Vec<Zone>> {
+    let style = match board_size_key(board_in) {
+        Some(key) => {
+            let s = cat.get("boards").and_then(|b| b.get(key)).and_then(|b| b.get(id))?;
+            if s.get("family").and_then(|f| f.as_str()) != Some("standard") {
+                return None;
+            }
+            s
+        }
+        None => cat.get("styles").and_then(|s| s.get(id))?,
+    };
+    let zones = crate::objectives::zones_of_style(style);
+    if zones.is_empty() || !zones_fit_board(&zones, board_in) {
+        return None;
+    }
+    Some(zones)
+}
+
 /// `best_spot`'s scan step at the call site (solo_controller.gd:9121).
 pub const DEPLOY_SPOT_STEP_M: f64 = 0.025;
 /// `least_blocked_spot`'s coarser step (solo_controller.gd:9144).

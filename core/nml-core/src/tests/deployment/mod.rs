@@ -50,6 +50,7 @@
         Terrain::build(&plain)
     }
 
+    mod board_48;
     mod deploy_coherency;
     mod deploy_exit;
     mod deploy_large;
