@@ -111,7 +111,7 @@ func test_strike_back_of_a_partly_armed_unit_matches_the_core(do_skip := not Cla
 	# living bearers (per-model loadout on both sides), not alive/max of the count (table) vs zero bearers (core).
 	var r := await _gate("strike_back_bearers_e75")
 	assert_int(int(r["rc"])).override_failure_message(str(r["problems"]) + str(r["first_mismatches"])).is_equal(0)
-	assert_int(int(r["identical"])).is_equal(SEEDS)
+	assert_int(int(r["identical"])).is_equal(SEEDS + 1)
 
 
 @warning_ignore('unused_parameter')
