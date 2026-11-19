@@ -102,9 +102,10 @@ func _write_slot_visual(slot: int) -> void:
 		var fade := 1.0 - smoothstep(0.65, 1.0, u)
 		_mm.set_instance_custom_data(slot, Color(1.0, 0.0, _width[slot], -maxf(fade, 0.002)))
 	else:
-		var head := clampf(u * 1.24 + 0.08, 0.0, 1.0)
-		var tail := clampf(head - 0.36, 0.0, 1.0)
-		var fade := 1.0 - smoothstep(0.85, 1.0, u)
+		var raw_head := u * 1.38 + 0.08
+		var head := clampf(raw_head, 0.0, 1.0)
+		var tail := clampf(raw_head - 0.50, 0.0, 1.0)
+		var fade := 1.0 - smoothstep(0.88, 1.0, u)
 		_mm.set_instance_custom_data(slot, Color(head, tail, _width[slot], maxf(fade, 0.002)))
 
 

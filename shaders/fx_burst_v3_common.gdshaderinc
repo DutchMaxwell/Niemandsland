@@ -84,9 +84,13 @@ void fragment() {
 		mask = atlas.r;
 		if (stretch < -0.5) {
 			vec2 p = UV * 2.0 - 1.0;
-			float star_h = exp(-abs(p.y) * 10.0) * (1.0 - abs(p.x));
-			float star_v = exp(-abs(p.x) * 10.0) * (1.0 - abs(p.y));
-			mask = max(mask, clamp((star_h + star_v) * 0.95, 0.0, 1.0));
+			float core = exp(-dot(p, p) * 20.0);
+			float star_h = exp(-abs(p.y) * 11.0) * max(0.0, 1.0 - abs(p.x));
+			float star_v = exp(-abs(p.x) * 11.0) * max(0.0, 1.0 - abs(p.y));
+			vec2 d = vec2(p.x + p.y, p.x - p.y) * 0.70710678;
+			float diag = (exp(-abs(d.y) * 13.5) * max(0.0, 1.0 - abs(d.x) * 1.4)
+				+ exp(-abs(d.x) * 13.5) * max(0.0, 1.0 - abs(d.y) * 1.4)) * 0.6;
+			mask = clamp(max(core, (star_h + star_v + diag) * 0.88), 0.0, 1.0);
 		}
 	} else if (channel_mode == 1) {
 		// FBM eroded smoke (G channel eroded by age into organic tendrils)

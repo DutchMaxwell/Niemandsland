@@ -166,22 +166,51 @@ func test_a_blast_draws_a_ring_on_the_ground() -> void:
 	assert_float((rings[0] as Node3D).global_position.y).override_failure_message("on the ground").is_less(0.02)
 
 
-func test_batched_hdr_ribbons_and_eight_light_pool_create_and_free(timeout := 5000) -> void:
+func test_batched_hdr_ribbons_and_light_pool_cap_create_and_free(timeout := 5000) -> void:
 	var show := _show()
 	for i in 10:
-		var a := Vector3(0.0, 0.03, i * 0.02)
-		var b := Vector3(0.3, 0.03, i * 0.02)
+		var a := Vector3(0.0, 0.03, i * 0.08)
+		var b := Vector3(0.3, 0.03, i * 0.08)
 		show._fire(a, b, VolleyCue.Family.BALLISTIC, 200 + i, 2)
 	await get_tree().process_frame
 	var batches := show.get_children().filter(func(c: Node) -> bool: return c is VfxRibbonBatch)
 	var lights := show.get_children().filter(func(c: Node) -> bool: return c is OmniLight3D)
 	assert_int(batches.size()).override_failure_message("all 10 tracers batched in 1 MultiMesh draw call").is_equal(1)
 	assert_int((batches[0] as VfxRibbonBatch).active_count()).is_equal(10)
-	assert_int(lights.size()).override_failure_message("8-light ring buffer pool").is_equal(ShotScript.MAX_LIGHTS)
+	assert_int(lights.size()).override_failure_message("pooled ring buffer capped at MAX_LIGHTS").is_equal(ShotScript.MAX_LIGHTS)
 	assert_float((lights[0] as OmniLight3D).omni_range).is_equal_approx(ShotScript.LIGHT_RANGE_M, 1e-4)
+	assert_float(ShotScript.LIGHT_RANGE_M).override_failure_message("muzzle light stays base-local").is_less_equal(0.08)
+	assert_float(ShotScript.LIGHT_ENERGY).override_failure_message("no whiteout blowout energy").is_less_equal(0.8)
 	assert_bool((lights[0] as OmniLight3D).shadow_enabled).is_false()
 	await get_tree().create_timer(2.6).timeout
 	assert_int(show.get_child_count()).override_failure_message("ribbon batch, light pool and bursts all freed").is_equal(0)
+
+
+func test_volley_caps_pooled_lights_per_volley(timeout := 5000) -> void:
+	var show := _show()
+	var wide_pairs: Array = []
+	for i in 9:
+		wide_pairs.append([Vector3(0.0, 0.03, i * 0.12), Vector3(0.3, 0.03, i * 0.12)])
+	show.volley(wide_pairs, VolleyCue.Family.BALLISTIC, 77)
+	await get_tree().create_timer(ShotScript.CHAOS_S + 0.1).timeout
+	var vid: int = show._next_volley_id - 1
+	assert_int(int(show._volley_lights.get(vid, 0))) \
+		.override_failure_message("pooled lights per volley stay within MAX_LIGHTS_PER_VOLLEY") \
+		.is_less_equal(ShotScript.MAX_LIGHTS_PER_VOLLEY)
+	await get_tree().create_timer(2.5).timeout
+	assert_int(show.get_child_count()).is_equal(0)
+
+
+func test_ensure_ribbon_batch_replaces_batch_queued_for_deletion() -> void:
+	var show := _show()
+	var first: VfxRibbonBatch = show._ensure_ribbon_batch()
+	first.queue_free()
+	assert_bool(first.is_queued_for_deletion()).is_true()
+	var second: VfxRibbonBatch = show._ensure_ribbon_batch()
+	assert_object(second).is_not_null()
+	assert_object(second).override_failure_message("must not push into a batch queued for deletion").is_not_same(first)
+	assert_bool(second.is_queued_for_deletion()).is_false()
+	second.queue_free()
 
 
 func test_low_preset_uses_zero_lights_and_reduce_motion_draws_static_threads(timeout := 5000) -> void:

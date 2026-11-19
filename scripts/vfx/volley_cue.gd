@@ -11,13 +11,15 @@ const TINTS := [Color(0.93, 0.92, 0.86), Color(1.0, 0.84, 0.52), Color(0.8, 0.66
 	Color(0.45, 0.9, 1.0), Color(1.0, 0.76, 0.42), Color(0.92, 0.72, 0.5), Color(0.78, 0.72, 0.62), Color(1.0, 0.42, 0.48)]
 ## Which family a weapon draws is data (assets/vfx/weapon_families.json): name words first, then the rules.
 const DATA := "res://assets/vfx/weapon_families.json"
-const LINE_R := 0.0014
-const SLUG_R := 0.0024
+const LINE_R := 0.0008
+const SLUG_R := 0.0015
 const TRAVEL_S := 0.22
 const LINGER_S := 0.6
 const STILL_LINGER_S := 0.5
 const STAGGER_S := 0.03
 const MAX_LIVE := 24
+const HDR_TINTS := [Color(0.95, 0.92, 0.82), Color(1.0, 0.64, 0.16), Color(0.85, 0.68, 0.40), Color(1.0, 0.46, 0.10),
+	Color(0.24, 0.88, 1.0), Color(1.0, 0.54, 0.12), Color(0.96, 0.66, 0.34), Color(0.80, 0.74, 0.62), Color(1.0, 0.34, 0.42)]
 
 var enabled: bool = true
 var force_for_tests: bool = false
@@ -43,10 +45,10 @@ static func still_form(preset: int, reduce_motion: bool) -> bool:
 	return reduce_motion or preset <= 1
 
 
-## Family glow tint for batched HDR ribbon tracers.
+## Family glow tint for batched HDR ribbon tracers (richer saturation than the subtle chalk sight lines).
 static func hdr_tint(family: int) -> Color:
-	var idx := clampi(family, 0, TINTS.size() - 1)
-	return TINTS[idx]
+	var idx := clampi(family, 0, HDR_TINTS.size() - 1)
+	return HDR_TINTS[idx]
 
 
 ## The family a weapon NAME names: the first family in the table with a word starting with one of its prefixes or
@@ -91,6 +93,7 @@ func fire(pairs: Array, family: Family) -> int:
 			remove_child(oldest)
 			oldest.queue_free()
 		var line := _segment(pair[0], pair[1], LINE_R, TINTS[family], false)
+		line.transparency = 0.55 if not still else 0.60
 		var tw := line.create_tween()
 		if still:
 			tw.tween_property(line, "transparency", 1.0, STILL_LINGER_S)
@@ -102,6 +105,7 @@ func fire(pairs: Array, family: Family) -> int:
 			var dir: Vector3 = (pair[1] - pair[0]).normalized()
 			var slug_len := minf(0.05, (pair[1] - pair[0]).length() * 0.3)
 			var slug := _segment(pair[0], pair[0] + dir * slug_len, SLUG_R, TINTS[family].lightened(0.3), true)
+			slug.transparency = 0.35
 			var tm := slug.create_tween()
 			tm.tween_interval(n * STAGGER_S)
 			tm.tween_property(slug, "global_position", pair[1] - dir * slug_len * 0.5, TRAVEL_S)
@@ -131,7 +135,7 @@ func _segment(a: Vector3, b: Vector3, r: float, tint: Color, bright := false) ->
 		mat.albedo_color = tint
 		mat.emission_enabled = true
 		mat.emission = tint
-		mat.emission_energy_multiplier = 1.9 if bright else 1.35
+		mat.emission_energy_multiplier = 1.4 if bright else 0.7
 		_materials[key] = mat
 	var seg := MeshInstance3D.new()
 	seg.mesh = _unit_cylinder

@@ -6,14 +6,14 @@ extends Node3D
 ## resolver's own allocation, never rolled or written back, no RNG.
 
 enum Kind { WOUND, KILL, HIT, SAVE }
-const COLORS := [Color(0.94, 0.36, 0.27), Color(0.62, 0.05, 0.05), Color(0.96, 0.93, 0.84), Color(0.4, 0.85, 1.0)]
+const COLORS := [Color(1.0, 0.76, 0.14), Color(0.76, 0.08, 0.10), Color(0.96, 0.93, 0.84), Color(0.28, 0.88, 1.0)]
 const NEUTRAL_KILL := Color(0.8, 0.78, 0.72)   # the casualty marker with Gore Off
 const EXTRA_KILL_K := 1.25                      # Gore Extra: a bigger splat/rim
 const SIZE_M := 0.018
 const LIFT_M := 0.01
 const RISE_M := 0.012
-const RIM_Y_M := 0.002                          # base-rim arcs hug y = 2 mm above the tabletop
-const BADGE_LIFT_M := 0.045                     # compact unit summary badge floats +45 mm above unit/model center
+const RIM_Y_M := 0.004                          # base-rim arcs sit just above the turf/unit outline (0% torso occlusion)
+const BADGE_LIFT_M := 0.048                     # compact unit summary badge floats +48 mm above unit/model center
 const DEFAULT_BASE_R := 0.016                   # 32 mm base radius fallback when mark() is called without ModelInstance
 const CLUSTER_RADIUS_M := 0.18                  # coalesce nearby pips into 1 unit summary badge
 const CLUSTER_WINDOW_MS := 350
@@ -106,7 +106,8 @@ func mark(kind: Kind, eye: Vector3, count: int, base_y: float = NAN, base_r: flo
 	mat.set_shader_parameter("count", shown)
 	mat.set_shader_parameter("fade", 1.0)
 	var ring_y := (base_y if is_finite(base_y) else maxf(0.0, eye.y - 0.036)) + RIM_Y_M
-	var ring_r := maxf(base_r, 0.012) * (1.28 if kind == Kind.SAVE else 1.22) * gore_scale
+	var rim_mult := 1.78 if kill else (1.66 if kind == Kind.SAVE else 1.62)
+	var ring_r := maxf(base_r, 0.014) * rim_mult * gore_scale
 	mat.set_shader_parameter("ring_radius", ring_r)
 	mat.set_shader_parameter("ring_y", ring_y)
 	var quad := QuadMesh.new()
@@ -137,7 +138,8 @@ func _attach_unit_badge(pip: MeshInstance3D, kind: Kind, count: int, accent: Col
 	var xz := Vector2(eye.x, eye.z)
 	for entry in _clusters:
 		var old_badge: Variant = entry.get("badge")
-		if now_ms - int(entry.get("ms", 0)) > CLUSTER_WINDOW_MS or old_badge == null or not is_instance_valid(old_badge):
+		if now_ms - int(entry.get("ms", 0)) > CLUSTER_WINDOW_MS or old_badge == null \
+				or not is_instance_valid(old_badge) or (old_badge as Node).is_queued_for_deletion():
 			continue
 		if cluster.is_empty() and (entry.get("xz", Vector2.INF) as Vector2).distance_to(xz) <= CLUSTER_RADIUS_M:
 			cluster = entry
@@ -145,7 +147,7 @@ func _attach_unit_badge(pip: MeshInstance3D, kind: Kind, count: int, accent: Col
 			kept.append(entry)
 	if not cluster.is_empty():
 		var prev := cluster["badge"] as Label3D
-		if is_instance_valid(prev):
+		if is_instance_valid(prev) and not prev.is_queued_for_deletion():
 			prev.visible = false
 	else:
 		cluster = {"xz": xz, "wounds": 0, "kills": 0, "hits": 0, "saves": 0}
@@ -163,11 +165,11 @@ func _attach_unit_badge(pip: MeshInstance3D, kind: Kind, count: int, accent: Col
 	badge.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	badge.no_depth_test = false
 	badge.fixed_size = false
-	badge.pixel_size = 0.00055
-	badge.font_size = 24
-	badge.outline_size = 10
-	badge.modulate = Color(0.95, 0.95, 0.91, 1.0).lerp(accent, 0.35)
-	badge.outline_modulate = Color(0.05, 0.08, 0.10, 0.92)
+	badge.pixel_size = 0.00058
+	badge.font_size = 28
+	badge.outline_size = 14
+	badge.modulate = Color(1.0, 0.98, 0.92, 1.0).lerp(accent, 0.28)
+	badge.outline_modulate = Color(0.03, 0.04, 0.06, 0.96)
 	badge.text = _badge_text(cluster)
 	badge.position = Vector3(0.0, BADGE_LIFT_M, 0.0)
 	pip.add_child(badge)
@@ -185,9 +187,9 @@ static func _badge_text(cluster: Dictionary) -> String:
 	var saves := int(cluster.get("saves", 0))
 	var hits := int(cluster.get("hits", 0))
 	if kills > 0:
-		parts.append("-%d KILL%s" % [kills, "S" if kills != 1 else ""])
+		parts.append("%d KILLED" % kills)
 	if wounds > 0:
-		parts.append("-%d" % wounds if kills > 0 else "-%d WOUND%s" % [wounds, "S" if wounds != 1 else ""])
+		parts.append("-%d WOUND%s" % [wounds, "S" if wounds != 1 else ""])
 	if saves > 0:
 		parts.append("SAVED x%d" % saves)
 	if parts.is_empty() and hits > 0:

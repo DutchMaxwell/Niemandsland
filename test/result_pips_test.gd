@@ -169,3 +169,20 @@ func test_reduce_motion_keeps_badge_static_and_suppresses_hit_flash(timeout := 5
 	assert_float(badge.position.y).override_failure_message("static badge does not rise").is_equal_approx(y0, 1e-6)
 	GraphicsSettings.reduce_motion = motion_before
 	GraphicsSettings.current_preset = preset_before
+
+
+func test_wound_color_is_distinct_rings_sit_outside_base_and_kill_wound_badge_is_explicit() -> void:
+	var wound_col: Color = ResultPipsScript.COLORS[ResultPipsScript.Kind.WOUND]
+	assert_float(wound_col.g).override_failure_message("amber-gold wound colour distinct from red unit outline").is_greater(0.6)
+	var p = _pips()
+	var mi1 := _model_at(Vector3(0.0, 0.0, 0.0))
+	var mi2 := _model_at(Vector3(0.04, 0.0, 0.0))
+	var base_r := VolumetricLos.model_base_radius_m(mi1)
+	var w_pip: MeshInstance3D = p.mark_model(ResultPipsScript.Kind.WOUND, mi1, 1)
+	var k_pip: MeshInstance3D = p.mark_model(ResultPipsScript.Kind.KILL, mi2, 1)
+	var w_ring_r := float((w_pip.material_override as ShaderMaterial).get_shader_parameter("ring_radius"))
+	var k_ring_r := float((k_pip.material_override as ShaderMaterial).get_shader_parameter("ring_radius"))
+	assert_float(w_ring_r * 0.76).override_failure_message("wound arc sits outside the model base disc").is_greater(base_r)
+	assert_float(k_ring_r * 0.76).override_failure_message("kill ring sits outside the model base disc").is_greater(base_r)
+	var badge := k_pip.get_node("UnitDeltaBadge") as Label3D
+	assert_str(badge.text).override_failure_message("explicit kill and wound labels, no bare -1").is_equal("1 KILLED · -1 WOUND")

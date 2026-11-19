@@ -35,8 +35,10 @@ void vertex() {
 			vec3 ref_up = abs(dir.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
 			side = normalize(cross(dir, ref_up));
 		}
-		float taper = v_mode > 0.5 ? 1.0 : mix(0.45, 1.0, UV.y);
-		wp += side * (UV.x * 2.0 - 1.0) * half_w * taper;
+		float taper = v_mode > 0.5 ? 1.0 : mix(0.28, 1.0, pow(UV.y, 0.7));
+		float cam_len = length(to_cam);
+		vec3 cam_dir = cam_len > 0.0001 ? (to_cam / cam_len) : vec3(0.0, 1.0, 0.0);
+		wp += side * (UV.x * 2.0 - 1.0) * half_w * taper + cam_dir * 0.003;
 		VERTEX = (VIEW_MATRIX * vec4(wp, 1.0)).xyz;
 	}
 }
@@ -48,29 +50,30 @@ void fragment() {
 	float across = abs(UV.x * 2.0 - 1.0);
 	vec3 dark_back = vec3(0.04, 0.03, 0.02);
 	if (v_mode > 0.5) {
-		// Reduced-motion static sight-line thread: steady dashed line with dark contrast edge
-		float dash = step(0.32, fract(UV.y * max(4.0, v_len_m * 45.0)));
-		float core = (1.0 - smoothstep(0.0, 0.45, across)) * dash;
-		float edge = (1.0 - smoothstep(0.45, 0.98, across)) * dash * 0.48;
-		float a = max(core * 0.82, edge) * v_alpha;
+		// Reduced-motion static sight-line thread: crisp dashed line with dark contrast edge
+		float dash = step(0.38, fract(UV.y * max(5.0, v_len_m * 36.0)));
+		float core = (1.0 - smoothstep(0.0, 0.48, across)) * dash;
+		float edge = (1.0 - smoothstep(0.48, 0.98, across)) * dash * 0.62;
+		float a = max(core * 0.92, edge) * v_alpha;
 		if (a <= 0.005) {
 			discard;
 		}
-		ALBEDO = mix(dark_back, v_color.rgb * 1.15, core);
+		ALBEDO = mix(dark_back, v_color.rgb * 1.35, core);
 		ALPHA = a;
 	} else {
-		// Animated HDR tapered tracer: dark sand-contrast edge + family glow + white-hot core
-		float along_fade = smoothstep(0.0, 0.35, UV.y);
-		float back = (1.0 - smoothstep(0.50, 1.0, across)) * 0.44 * along_fade;
-		float glow = (1.0 - smoothstep(0.16, 0.86, across)) * along_fade;
-		float core = (1.0 - smoothstep(0.0, 0.28, across)) * smoothstep(0.15, 0.95, UV.y);
-		float a = clamp(max(max(back, glow * 0.82), core), 0.0, 1.0) * v_alpha;
+		// Animated HDR tapered tracer: dark sand-contrast edge + rich family glow + blazing comet core
+		float along_fade = smoothstep(0.0, 0.22, UV.y);
+		float head_flare = smoothstep(0.62, 1.0, UV.y);
+		float back = (1.0 - smoothstep(0.55, 1.0, across)) * 0.50 * along_fade;
+		float glow = (1.0 - smoothstep(0.18, 0.90, across)) * along_fade;
+		float core = (1.0 - smoothstep(0.0, 0.26 + 0.10 * head_flare, across)) * smoothstep(0.08, 0.84, UV.y);
+		float a = clamp(max(max(back, glow * 0.85), core), 0.0, 1.0) * v_alpha;
 		if (a <= 0.005) {
 			discard;
 		}
 		float boost = max(v_color.a, 1.0);
-		vec3 hdr = mix(dark_back, v_color.rgb * boost, smoothstep(0.08, 0.55, glow));
-		hdr = mix(hdr, vec3(2.8, 2.75, 2.55), core);
+		vec3 hdr = mix(dark_back, v_color.rgb * boost, smoothstep(0.06, 0.42, glow));
+		hdr = mix(hdr, vec3(3.1, 2.95, 2.55) * (1.0 + 0.30 * head_flare), core);
 		ALBEDO = hdr;
 		ALPHA = a;
 	}
