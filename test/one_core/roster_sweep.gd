@@ -148,10 +148,10 @@ static func first_state_diff(t: Dictionary, c: Dictionary) -> String:
 ## `opts` plants a state or a fault: "ledger" {"att"|"tgt": {property: value}} is written on both halves (a fact the table keeps);
 ## the core half alone can drop properties before the capture ("core_drop": {"att"|"tgt": [property]}), edit one weapon rule of the
 ## shooter for the volley ("core_edit_rule": {"from", "to"}) or swap one face of the roll stream it recorded ("core_swap_face": roll
-## index). Nothing is planted unless asked: the sweep itself never touches either half.
+## index); "distance_in" puts the target that far (centre to centre, inches) from the shooter instead of `DISTANCE_IN` on both halves. Nothing is planted unless asked: the sweep itself never touches either half.
 static func volley(main: Node, entry_a: Dictionary, entry_b: Dictionary, seed_n: int, core: bool, dump_dir: String, opts := {}) -> Dictionary:
 	var att := spawn(main, entry_a, SEAT_SHOOTER, 0.0)
-	var tgt := spawn(main, entry_b, SEAT_TARGET, DISTANCE_IN)
+	var tgt := spawn(main, entry_b, SEAT_TARGET, float(opts.get("distance_in", DISTANCE_IN)))
 	var by := {"att": att, "tgt": tgt}
 	for who in opts.get("ledger", {}):
 		for prop in opts["ledger"][who]:

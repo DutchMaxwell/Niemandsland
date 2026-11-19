@@ -1786,6 +1786,7 @@ mod place_d3;
 mod placed_move;
 pub(crate) mod volley_landings;
 mod dangerous_landing;
+mod door_morale_lines;
 mod hit_lines;
 mod save_lines;
 mod morale_lines;
