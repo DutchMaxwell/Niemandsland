@@ -8266,12 +8266,37 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
     CastEnd::Landed
 }
 
-/// CC-6a/6b/7a/8a: a damage spell's hits on one target (`_solo_resolve_spell_damage` main.gd:5747). The printed hits are fixed
-/// (no to-hit die); the trigger roll (`spell_attack`, 6+, caster owner) runs for Surge / on-6 AP / Hazardous (CC-7a), the on-6 AP
-/// batch saving first. Shielded, Cover and the over-9" family do not count against a spell (NML-104); saves are `spell_defense` and
-/// Regeneration / Resistance (at the spell threshold, obeying `ignores_regen`) are `spell_attack`. CC-6b lands Deadly(X) per model and
-/// honours `wound_alloc` when open; CC-7a lands Hazardous trigger-1 wounds on `host` (no save/regen) before the target's morale test
-/// (`spell_morale`, O2).
+/// CC-7b: the rules-3.6 "applied facets" clauses for `_solo_resolve_spell_damage` (main.gd:5756-5784), in table order.
+fn spell_applied_facets(spell: &Spell, facets: &crate::spell::Facets, def: &Ctx, state: &State, ti: usize) -> Vec<String> {
+    let has = |name: &str| crate::rules::has_special_rule(&spell.weapon_rules, name);
+    let state_name = match (state.shaken[ti], state.fatigued[ti]) {
+        (true, true) => "Shaken + Fatigued",
+        (true, false) => "Shaken",
+        _ => "Fatigued",
+    };
+    let mut applied = Vec::new();
+    if has("Destructive") {
+        applied.push(if def.above_half_strength { "Destructive +1 AP (above half)" } else { "Destructive not applied (target at or below half)" }.into());
+    }
+    if has("Fracture") { applied.push("Fracture — sixes get AP(+2)".into()); }
+    if has("Puncture") { applied.push("Puncture — ignores Regeneration, AP(+2) vs Defense 3 or less".into()); }
+    if has("Disintegrate") { applied.push("Disintegrate — ignores Regeneration, AP(+2) vs Tough(3)+".into()); }
+    if has("Shatter") { applied.push("Shatter — sixes get AP(+3)".into()); }
+    if facets.ap_vs_shaken > 0 && def.shaken_or_fatigued { applied.push(format!("Purge +{} AP vs {state_name}", facets.ap_vs_shaken)); }
+    if facets.bane_above_half && def.above_half_strength { applied.push("Decimate — Bane vs a target above half".into()); }
+    if facets.bane_tough3_low > 1 && def.tough.max(1) >= 3 { applied.push("Obliterate — save window 5+ vs Tough(3)+, Regeneration bypassed".into()); }
+    if facets.bane_shaken_low > 1 && def.shaken_or_fatigued { applied.push(format!("Reap — save window 5+ vs {state_name}")); }
+    if facets.bane_def56_low > 1 && def.defense >= 5 { applied.push("Fragment — save window 5+ vs Defense 5+".into()); }
+    applied
+}
+
+/// CC-6a/6b/7a/7b/8a: a damage spell's hits on one target (`_solo_resolve_spell_damage` main.gd:5747). The printed hits are fixed
+/// (no to-hit die); rules-3.6 applied facets log before the trigger roll (`spell_attack`, 6+, caster owner for Surge / on-6 AP /
+/// Hazardous). CC-7b multiplies Blast(X) by `min(X, models)` (`1` for a `"model"` target, else `combined_alive`) and applies
+/// `effective_ap` and `bane_window` (and Shred) through `save_batch` (on-6 AP batch first, CC-7a). Shielded, Cover and the over-9"
+/// family do not count against a spell (NML-104); saves are `spell_defense` and Regeneration / Resistance (at the spell threshold,
+/// obeying `ignores_regen`) are `spell_attack`. CC-6b lands Deadly(X) per model and honours `wound_alloc` when open; CC-7a lands
+/// Hazardous trigger-1 wounds on `host` (no save/regen) before the target's morale test (`spell_morale`, O2).
 #[allow(clippy::too_many_arguments)]
 fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, host: usize, ti: usize, seq: i64, spell: &Spell, seams: Seams, tray: &mut Tray, shot: &mut ShootResult) {
     if spell.effect_hits <= 0 {
@@ -8280,12 +8305,18 @@ fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, host:
     let ut = &statics[state.roster.profile[ti]];
     let alive_before = morale_alive(state, ti, seams);
     let wounds_before = morale_wounds_left(state, ti, seams);
-    let mut def = with_modifier_sum(ctx_live(ctx_of(ut, state, ti), statics, state, ti, false, seams.rules_epoch), seams.rules_epoch);
+    let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut, state, ti), statics, state, ti, false, seams.rules_epoch), statics, state, ti, seams), seams.rules_epoch);
     def.side = state.player[ti];
     def.playtest_rules = rule_on(seams.rules_epoch, EPOCH_72_PLAYTEST_RULES);
     def.rules_epoch = seams.rules_epoch;
     let facets = crate::spell::spell_facets(&spell.weapon_rules, seams.rules_epoch);
     let caster_side = state.player[ci];
+    if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        let applied = spell_applied_facets(spell, &facets, &def, state, ti);
+        if !applied.is_empty() {
+            spell_say(tray, caster_side, format!("{}: {}", spell.name, applied.join(", ")));
+        }
+    }
     let hazardous = crate::rules::has_special_rule(&spell.weapon_rules, "Hazardous");
     let (mut trigger_sixes, mut trigger_ones) = (0i64, 0i64);
     if facets.surge || facets.on6_ap > 0 || hazardous {
@@ -8298,16 +8329,23 @@ fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, host:
             faces, owner: statics[state.roster.profile[ci]].name.clone(),
         });
     }
-    let total_hits = spell.effect_hits + if facets.surge { trigger_sixes } else { 0 };
+    let mut total_hits = spell.effect_hits + if facets.surge { trigger_sixes } else { 0 };
+    // CC-7b: Blast ×min(X, models) — a "model"-targeted spell resolves as a unit of 1 (no fan-out, main.gd:5804-5805).
+    let fanout = if spell.target_kind == "model" { 1 } else { combined_alive(state, ti, seams) };
+    if facets.blast > 1 {
+        total_hits *= facets.blast.clamp(1, fanout.max(1));
+    }
     if state.in_cover[ti] {
         spell_say(tray, state.player[ti], format!("Cover does not apply to spell damage (its +1 is against shooting) — {} saves on {}+", ut.name, def.defense.clamp(2, 6)));
     }
+    let ap = crate::spell::effective_ap(&facets, &def);
+    let bane = crate::spell::bane_window(&facets, &def);
     let upgraded = if facets.on6_ap > 0 { trigger_sixes.min(total_hits) } else { 0 };
     if upgraded > 0 {
         spell_say(tray, caster_side, format!("{}: {upgraded} hit{} on a 6 → AP(+{})", spell.name, if upgraded == 1 { "" } else { "s" }, facets.on6_ap));
     }
     let mut out = crate::dice::resolve_spell_hits_with_tray(
-        total_hits, upgraded, facets.ap, facets.on6_ap, facets.deadly, facets.ignores_regen, &spell.name, &def, &ut.name, tray,
+        total_hits, upgraded, ap, facets.on6_ap, facets.deadly, facets.ignores_regen, bane, facets.shred, &spell.weapon_rules, &spell.name, &def, &ut.name, tray,
     );
     for r in &mut out.rolls {
         r.kind = if r.kind == "defense" { "spell_defense" } else { "spell_attack" };

@@ -3418,22 +3418,25 @@ pub fn resolve_breath_attack_with_tray(
     out
 }
 
-/// CC-6a/6b/7a: a damage spell's fixed hits saved on the tray, `_solo_resolve_spell_damage` main.gd:5747 -> `_solo_save_batch` at
+/// CC-6a/6b/7a/7b: a damage spell's fixed hits saved on the tray, `_solo_resolve_spell_damage` main.gd:5747 -> `_solo_save_batch` at
 /// the Defense a SPELL hit meets (NML-104): the unit's own Defense, Armor already in it, and neither Shielded nor Cover nor the over-9"
 /// family (their wording limits them to attacks), so the batch saves at `def.defense`, never the volley's ladder.
 /// CC-7a: when `upgraded > 0`, the on-6 AP batch (`ap + on6_ap`) saves FIRST, then `hits - upgraded` at `ap`, combined into one landing.
+/// CC-7b: Bane / widened `bane` window `(active, from)`, Lacerate (`rules`), and `shred` ride the shared `save_batch`.
 /// CC-6b: Deadly(X) pushes per-model groups (`push_deadly_groups`), Regeneration / Resistance roll at the SPELL threshold
 /// (`def.regen_target_spell`, falling back to `def.regen_target`), and `ignores_regen` bypasses only when `bypass_skips_ignore()` holds.
 #[allow(clippy::too_many_arguments)]
 pub fn resolve_spell_hits_with_tray(
-    hits: i64, upgraded: i64, ap: i64, on6_ap: i64, deadly: i64, ignores_regen: bool, spell_name: &str, def: &Ctx, def_owner: &str, tray: &mut Tray,
+    hits: i64, upgraded: i64, ap: i64, on6_ap: i64, deadly: i64, ignores_regen: bool,
+    bane: (bool, i64), shred: bool, rules: &[String], spell_name: &str, def: &Ctx, def_owner: &str, tray: &mut Tray,
 ) -> ShootResult {
     let mut out = ShootResult::default();
     if hits <= 0 {
         return out;
     }
+    out.bane_low = if bane.0 && bane.1 < 6 { bane.1 } else { 0 };
     let upgraded = upgraded.clamp(0, hits);
-    let base = ShootProfile { ap, deadly, ..Default::default() };
+    let base = ShootProfile { ap, deadly, bane: bane.0, shred, rules: rules.to_vec(), ..Default::default() };
     let mut w = 0;
     if upgraded > 0 {
         let hi = ShootProfile { ap: ap + on6_ap, ..base.clone() };
