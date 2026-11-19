@@ -2653,6 +2653,10 @@ pub fn resolve_melee_leg_wipe(
                 }
                 hits = boosted;
             }
+            // P4.D-48: the table's line after each melee hit roll (`_solo_melee_strike_phase`), a miss included.
+            tray.say(|| LogLine { rule: "melee", category: Category::Combat, side: sh.att.side,
+                text: format!("{} strikes with {} at {def_owner} — {hits} hit{}", sh.owner, p.name, if hits == 1 { "" } else { "s" }),
+                detail: None });
             if hits <= 0 {
                 continue;
             }
