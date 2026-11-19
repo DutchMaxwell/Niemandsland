@@ -1193,6 +1193,9 @@ pub struct UnitStatic {
     /// rules-must-log line the volley/melee orchestrators push. "" = none.
     pub fortified_alias_name: String,
     pub fortified_boost_name: String,
+    /// The Banner-family source the table's morale line names (`SoloController.morale_bonus_named_of`'s `name`:
+    /// "Banner", an alias such as "Hold the Line", or "<rest> + Bravery Aura"). "" (an unbuilt static) reads as "Banner".
+    pub morale_family: String,
     pub model_count: i64,
     pub wounds_max: Vec<i64>,
     pub quality: i64,
@@ -2669,6 +2672,54 @@ fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String], rules_ep
         }
     }
     (best, bravery)
+}
+
+/// `SoloController.morale_bonus_named_of`'s `name`: which Banner-family entry the table's morale line shows as the
+/// source of the bonus. The walk of `banner_bonus_of` (host, then each joined hero; the plain "Banner" first, then
+/// every other Banner-primitive entry once each, in rule order), keeping the FIRST entry that beats the best so far;
+/// the Bravery family is its own best-of that joins with " + ". "Banner" when nothing names a source (the table's fallback).
+fn banner_family_name(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> String {
+    let split = rule_on(rules_epoch, EPOCH_75_TABLE_FIXES);
+    let map = reg.rules_for(&p.game_system);
+    let valiant_ok = rule_on(rules_epoch, EPOCH_73_V36)
+        && rule_on_most_models(p, p.model_count.max(1), "Valiant", false);
+    let (mut best, mut best_name, mut bravery, mut bravery_name) = (0, String::new(), 0, String::new());
+    for rules in std::iter::once(&p.special_rules).chain(p.attached_hero_rules.iter()) {
+        if has_special_rule(rules, "Banner") && (map.empty || map.has_primitive(&p.faction_folder, "Banner")) {
+            let plain = match map.lookup(&p.faction_folder, "Banner") {
+                Some(e) => e.param_i("morale_bonus", BANNER_MORALE_BONUS),
+                None => BANNER_MORALE_BONUS,
+            };
+            if plain > best {
+                (best, best_name) = (plain, "Banner".to_string());
+            }
+        }
+        let mut seen: Vec<String> = Vec::new();
+        for raw in rules {
+            let n = base_rule_name(raw);
+            if n.is_empty() || n == "Banner" || seen.contains(&n) {
+                continue;
+            }
+            if n == "Valiant" && rule_on(rules_epoch, EPOCH_73_V36) && !valiant_ok {
+                continue;
+            }
+            seen.push(n.clone());
+            let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
+            if e.primitive.as_deref() != Some("Banner") {
+                continue;
+            }
+            let bonus = e.param_i("morale_bonus", 0);
+            if split && BRAVERY_FAMILY.contains(&n.as_str()) {
+                if bonus > bravery {
+                    (bravery, bravery_name) = (bonus, n);
+                }
+            } else if bonus > best {
+                (best, best_name) = (bonus, n);
+            }
+        }
+    }
+    let shown = if best_name.is_empty() { "Banner".to_string() } else { best_name };
+    if bravery == 0 { shown } else if best == 0 { bravery_name } else { format!("{shown} + {bravery_name}") }
 }
 
 /// Maintainer ruling (`EPOCH_75_TABLE_FIXES`, the table's `SoloController.BRAVERY_FAMILY`): the
@@ -7644,6 +7695,7 @@ impl UnitStatic {
             parry_weapons: parry_weapons_of(reg, p, rules_epoch),
             fortified_alias_name: fa.alias_name,
             fortified_boost_name: fa.boost_name,
+            morale_family: banner_family_name(reg, p, rules_epoch),
             hold_only,
             rules_epoch,
             shoot,

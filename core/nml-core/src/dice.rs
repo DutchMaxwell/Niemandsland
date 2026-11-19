@@ -64,6 +64,9 @@ pub struct Tray {
     lines: Vec<(usize, LogLine)>,
     /// One-core P3: `land` landings, each stamped with the feed's draws so far.
     landings: Vec<(usize, Landing)>,
+    /// The index of a morale outcome line the wounds of the SAME test are still to be reported ahead of: No Retreat's
+    /// self-wounds land (and say so) before the table writes "passes morale". Set by `hold_outcome`, spent by `say_wounds`.
+    outcome_at: Option<usize>,
 }
 
 impl Tray {
@@ -73,13 +76,13 @@ impl Tray {
     /// engine and what `GodotRng::new` mirrors; a negative seed must land on
     /// the same stream on both sides.
     pub fn seeded(seed: i64) -> Tray {
-        Tray { rng: GodotRng::new(seed), feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new() }
+        Tray { rng: GodotRng::new(seed), feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None }
     }
 
     /// A tray that continues a generator already in flight — how a replay
     /// reaches a recorded position in the stream.
     pub fn from_rng(rng: GodotRng) -> Tray {
-        Tray { rng, feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new() }
+        Tray { rng, feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None }
     }
 
     /// Re-seeds in place, as a second `seed_tray_rng` call would.
@@ -114,7 +117,7 @@ impl Tray {
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
         let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), casts: Vec::new(), cast_hit: None };
-        Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new() }
+        Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None }
     }
 
     /// The supplied feed, if this tray has one.
@@ -203,6 +206,33 @@ impl Tray {
         if let Some(feed) = self.feed.as_ref() {
             self.lines.push((feed.next, f()));
         }
+    }
+
+    /// The line just said is a morale outcome the test's own wounds (No Retreat's self-wounds) are to be reported ahead of:
+    /// the table logs "has No Retreat", the wounds it dealt, and only then "passes morale". Seeded trays keep nothing.
+    pub fn hold_outcome(&mut self) {
+        if self.feed.is_some() && !self.lines.is_empty() {
+            self.outcome_at = Some(self.lines.len() - 1);
+        }
+    }
+
+    /// A wound or loss line of a landing report: ahead of the held outcome line when there is one and nothing was said
+    /// since, else at the end like `say`.
+    pub fn say_wounds(&mut self, f: impl FnOnce() -> LogLine) {
+        let Some(feed) = self.feed.as_ref() else { return };
+        let line = (feed.next, f());
+        match self.outcome_at {
+            Some(at) if at + 1 == self.lines.len() => {
+                self.lines.insert(at, line);
+                self.outcome_at = Some(at + 1);
+            }
+            _ => self.lines.push(line),
+        }
+    }
+
+    /// The landing report is done: the held outcome line (if any) stays where it now stands.
+    pub fn release_outcome(&mut self) {
+        self.outcome_at = None;
     }
 
     /// The lines said before draw `draw` was taken (stamp <= `draw`): what a
@@ -481,6 +511,12 @@ fn sergeant_hits(p: &ShootProfile, attacks: i64, normal: i64, att: &Ctx) -> i64 
     let share = (attacks as f64 / alive).round().max(1.0);
     let hits = (normal as f64 * share / attacks as f64).round() as i64;
     hits.min(normal).max(0)
+}
+
+/// Row MOR-12c's rules-must-log line, the table's same text (`_solo_resolve_saves`): said before the bearer's own
+/// save batch, on the tray and in the resolve's `log` alike. The rule's own name, as the registry carries it.
+fn sergeant_line(p: &ShootProfile, owner: &str, hits: i64) -> String {
+    format!("{}: {owner} strikes {hits} hit{} with AP(+{})", p.sergeant_rule, if hits == 1 { "" } else { "s" }, p.sergeant_ap)
 }
 
 /// The Shielded-family alias's rules-must-log line, the volley and melee
@@ -1864,9 +1900,9 @@ pub fn resolve_volley_leg(
         let sgt_hits = sergeant_hits(p, p.attacks.max(n), normal, att);
         let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, shred_alias_fires, shred_low, deadly_per_model, tray, &mut out);
         if sgt_hits > 0 {
-            out.log.push(format!(
-                "{}: {} strikes {} hit{} with AP(+{})",
-                p.sergeant_rule, sh.owner, sgt_hits, if sgt_hits == 1 { "" } else { "s" }, p.sergeant_ap));
+            let line = sergeant_line(p, sh.owner, sgt_hits);
+            tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: att.side, text: line.clone(), detail: None });
+            out.log.push(line);
             w += save_batch(p, def, def_owner, sgt_hits, save_def, ap + p.sergeant_ap, att.shred_grant, shred_alias_fires, shred_low, deadly_per_model, tray, &mut out);
         }
         w += save_batch(p, def, def_owner, normal - sgt_hits, save_def, ap, att.shred_grant, shred_alias_fires, shred_low, deadly_per_model, tray, &mut out);
@@ -2789,9 +2825,9 @@ pub fn resolve_melee_leg_wipe(
             let sgt_hits = sergeant_hits(p, n, normal, sh.att);
             let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, sh.att.shred_grant, shred_alias_fires, 1, deadly_per_model, tray, &mut out);
             if sgt_hits > 0 {
-                out.log.push(format!(
-                    "{}: {} strikes {} hit{} with AP(+{})",
-                    p.sergeant_rule, sh.owner, sgt_hits, if sgt_hits == 1 { "" } else { "s" }, p.sergeant_ap));
+                let line = sergeant_line(p, sh.owner, sgt_hits);
+                tray.say(|| LogLine { rule: "melee", category: Category::Combat, side: sh.att.side, text: line.clone(), detail: None });
+                out.log.push(line);
                 w += save_batch(p, def, def_owner, sgt_hits, save_def, ap + p.sergeant_ap, sh.att.shred_grant, shred_alias_fires, 1, deadly_per_model, tray, &mut out);
             }
             // Wave 4 follow-up — the batch's OWN blocked unmodified 1s (the
@@ -3200,6 +3236,8 @@ pub enum Morale {
 ///
 /// The morale die is stamped `roll_kind` "attack" like every other tray roll
 /// (main.gd:8336), so the replay gate can only tell it apart by where it sits.
+/// The step API names the three dice as the table does (`Tray::name_next`: "morale", "fearless", "no_retreat"),
+/// and the Fearless recovery die and the No Retreat self-wound dice say the table's line after the roll.
 ///
 /// Returns the outcome and the report; `wounds` are No Retreat's self-wounds,
 /// which land DIRECTLY — "can't be ignored", so no Regeneration roll follows.
@@ -3235,6 +3273,7 @@ pub fn resolve_morale_with_tray(
         }
     };
     if result != Morale::Passed && unit.fearless {
+        tray.name_next("fearless"); // the table's kind (main.gd `_solo_morale_test`): the recovery die is its own kind
         tray.owner_next(owner_unit);
         let faces = tray.roll(1);
         let passed = faces_to_hits(&faces, FEARLESS_RECOVER_TARGET as u8) > 0;
@@ -3248,11 +3287,15 @@ pub fn resolve_morale_with_tray(
         if passed {
             result = Morale::Passed;
         }
+        // The table's line after the recovery die, same words for both outcomes (rule name exact, target as the table prints it).
+        tray.say(|| LogLine { rule: "morale", category: Category::Combat, side: unit.side, detail: None,
+            text: format!("{owner} is Fearless — recovery die ({FEARLESS_RECOVER_TARGET}+) {}", if passed { "holds" } else { "fails" }) });
     }
     if result != Morale::Passed && unit.no_retreat {
         // `maxi(1, wounds_to_destroy)` :8364 — the zero-die rule applies here
         // too, and the recorded target is the SAFE face, `MAX + 1`.
         let n = wounds_to_destroy.max(1);
+        tray.name_next("no_retreat"); // the table's kind (main.gd `_solo_morale_test`): the self-wound dice are their own kind
         tray.owner_next(owner_unit);
         let faces = tray.roll(n as usize);
         out.wounds =
@@ -3266,6 +3309,11 @@ pub fn resolve_morale_with_tray(
             owner: owner.into(),
         });
         result = Morale::Passed;
+        // The table's line after the self-wound dice, before the wounds land (`_solo_morale_test`).
+        let w = out.wounds;
+        tray.say(|| LogLine { rule: "morale", category: Category::Combat, side: unit.side, detail: None,
+            text: format!("{owner} has No Retreat — the test counts as passed; {w} self-wound{} (1-{NO_RETREAT_SELF_WOUND_MAX} on {n} dice, can't be ignored)",
+                if w == 1 { "" } else { "s" }) });
     }
     (result, out)
 }

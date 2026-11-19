@@ -77,3 +77,36 @@ fn below_73_the_sergeant_never_strikes() {
     let (log, _) = volley_log(&us, 1, 2);
     assert!(sergeant_lines(&log).is_empty(), "{log:?}");
 }
+
+// ------ The bearer's strike is said on the tray, as the table says it (`_solo_resolve_saves`) ------
+
+/// The whole squad strikes with 10 of 20 dice hitting: one Sergeant hit. The supplied replay of a seeded run says the
+/// table's line right before the bearer's save batch (the one at AP 1), on the volley leg and on the melee leg alike.
+/// RED on main: the line is only in the resolve's own `log`, never on the tray, so nothing reaches the battle log.
+#[test]
+fn the_bearers_strike_is_said_before_its_save_batch_on_the_volley_and_the_melee_leg() {
+    let us = squad(EPOCH_73_V36);
+    let n = effective_attacks(us.shoot[0].attacks, MODELS, MODELS);
+    let att = Ctx { quality: 4, models: MODELS, side: 1, ..Default::default() };
+    let seed = (0..5000i64)
+        .find(|&s| faces_to_hits(&Tray::seeded(s).roll(n as usize), 4) as i64 == 10)
+        .expect("a seed with the wanted hits");
+    let shoot = [us.shoot[0].clone()];
+    let melee = [ShootProfile { range: 0, ..us.shoot[0].clone() }];
+    for (leg, rule) in [("volley", "shoot"), ("melee", "melee")] {
+        let run = |tray: &mut Tray| match leg {
+            "volley" => resolve_volley_with_tray(&[striker(&shoot, &[0], &[n], &att)], &defender(4, 5), "Target", 12.0, 12.0, true, true, true, false, tray),
+            _ => resolve_melee_with_tray(&[striker(&melee, &[0], &[n], &att)], &defender(4, 5), "Target", true, true, true, tray),
+        };
+        let seeded = run(&mut Tray::seeded(seed));
+        let mut tray = Tray::supplied(seeded.rolls.iter().map(|r| r.faces.clone()).collect());
+        let again = run(&mut tray);
+        assert_eq!(again.rolls, seeded.rolls, "{leg}: the same dice either way");
+        let lines = tray.all_lines();
+        let at = lines.iter().position(|l| l.text == "Sergeant: Striker strikes 1 hit with AP(+1)")
+            .unwrap_or_else(|| panic!("{leg}: no Sergeant line on the tray: {lines:?}"));
+        assert_eq!((lines[at].rule, lines[at].category, lines[at].side), (rule, crate::logline::Category::Combat, 1), "{leg}");
+        assert_eq!(lines[at + 1].text, "Target saves on 5+ (Def 4+, AP 1)", "{leg}: the bearer's own save batch follows");
+        assert_eq!(lines.iter().filter(|l| l.text.starts_with("Sergeant:")).count(), 1, "{leg}: said once");
+    }
+}
