@@ -965,6 +965,13 @@ pub const PENDING_EPOCH_MELEE_GMC3: u32 = CURRENT_RULES_EPOCH + 1;
 /// `CURRENT_RULES_EPOCH` is not touched, so every recorded game replays byte-exact; the lead batches
 /// this placeholder into the next daily epoch bump (it may share the number of `PENDING_EPOCH_MELEE_GMC3`).
 pub const PENDING_EPOCH_MELEE_GMC2: u32 = CURRENT_RULES_EPOCH + 1;
+/// Placeholder gate for #3090 part 2 (the AI steps into Dangerous ground it could skirt), plain moves only.
+/// First, the "destination is Dangerous, route straight in" exception reads the unit's own goal (its centre at the end
+/// of the rigid move, base edge included), no longer any single model's rigid end point. Second, a plan that still
+/// crosses Dangerous re-plans with the goal shifted sideways, perpendicular to the move (+1, -1, +2, -2, +3, -3, +4,
+/// -4 inches, + = right of travel), and keeps the FIRST plan that crosses none.
+/// Table twin `SoloController._execute_move` / `PENDING_EPOCH_DANGER_AVOID` in `act_recorder.gd`. The lead assigns 93.
+pub const PENDING_EPOCH_DANGER_AVOID: u32 = 93;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff

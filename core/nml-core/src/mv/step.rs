@@ -27,7 +27,7 @@ use crate::state::State;
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
 use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_74_CLIMB_COST, EPOCH_8_PLANNER_MENU, EPOCH_73_V36, EPOCH_77_CHARGE_CAP,
-    EPOCH_78_FLIER_CUT, PENDING_EPOCH_MELEE_GMC2};
+    EPOCH_78_FLIER_CUT, PENDING_EPOCH_DANGER_AVOID, PENDING_EPOCH_MELEE_GMC2};
 
 use super::cost::{ledge_cost, trim_polyline_priced, CellSet, Grid, Ledge, Wall, Zone};
 use super::entry::plan_unit_step_call;
@@ -38,6 +38,8 @@ use super::io::{CallOpts, MoveCall};
 const BOUNDS_MARGIN_M: f64 = 0.02;
 /// `SoloController.DIFFICULT_MOVE_CAP_IN` :67 — GF/AoF v3.5.1 p.11.
 pub(crate) const DIFFICULT_MOVE_CAP_IN: f64 = 6.0;
+/// #3090 (`PENDING_EPOCH_DANGER_AVOID`): the sideways goal shifts tried, in order (table twin `DANGER_SIDESTEP_IN`).
+const DANGER_SIDESTEP_IN: [i32; 8] = [1, -1, 2, -2, 3, -3, 4, -4];
 /// `SoloController.UNIT_SPACING_IN` :74.
 const UNIT_SPACING_IN: f64 = 1.0;
 /// `SeparationChecker.DEFAULT_BASE_RADIUS_M` separation_checker.gd:81.
@@ -325,6 +327,17 @@ fn targets_in(
     }
     let delta = clamp_delta_to_bounds(pos, plan_unit_move(pos, goal, reach_in), half);
     pos.iter().any(|p| terrain::base_in_terrain(geom::add(*p, delta), radius_m, t, class))
+}
+
+/// #3090 (`PENDING_EPOCH_DANGER_AVOID`, table twin `_goal_in_dangerous`): does the unit's own GOAL, its centre at the
+/// end of the rigid move, land (base edge included) in that class? One model's rigid corner no longer decides.
+fn goal_in(pos: &[V3], goal: V3, reach_in: f64, radius_m: f64, t: &Terrain, half: [f64; 2], class: fn(i32) -> bool) -> bool {
+    if !t.is_valid() || pos.is_empty() {
+        return false;
+    }
+    let delta = clamp_delta_to_bounds(pos, plan_unit_move(pos, goal, reach_in), half);
+    let owned: Vec<[f64; 3]> = pos.iter().map(|p| geom::to_f64(*p)).collect();
+    terrain::base_in_terrain(geom::add(geom::centre(&owned), delta), radius_m, t, class)
 }
 
 /// `_terrain_grid_in` :5254 — the typed 3" cell grid plus its avoid set.
@@ -881,23 +894,63 @@ fn crosses_dangerous(&self, leg: &[V2], r: f64) -> bool {
 /// The table runs ONE body here for a charge and for a plain move; everything
 /// the two disagree about was already decided when `Move` was built, so the
 /// two entries below must not each carry their own copy of this ordering.
-fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landing {
-    let (state, t) = (self.state, self.t);
+fn execute(&self, band_in: f64, avoid_diff: bool, radii_m: &[f64]) -> Landing {
+    let t = self.t;
     let mut reach = band_in;
-    let mut avoid_dang = self.avoid_dang;
-    let starts: Vec<V2> = self.movers.iter().map(|m| t.to_inch(pos_of(state, *m))).collect();
-    let (mut planned, mut trails, mut call) = self.plan_once(reach, avoid_diff, avoid_dang);
+    let mut capped = false;
+    let (mut planned, mut trails, mut call) = self.plan_once(reach, avoid_diff, self.avoid_dang);
     // :4816-4820 — the ROUTE entered difficult terrain, so p.11 caps the whole
     // move at 6" and it is re-planned THROUGH (dangerous is still avoided).
     if !self.ignores_difficult
         && (trails_cross_difficult(&trails, radii_m, t) || self.difficult_debuff())
     {
         reach = band_in.min(DIFFICULT_MOVE_CAP_IN);
-        let re = self.plan_once(reach, false, avoid_dang);
+        capped = true;
+        let re = self.plan_once(reach, false, self.avoid_dang);
         planned = re.0;
         trails = re.1;
         call = re.2;
     }
+    // #3090 (`PENDING_EPOCH_DANGER_AVOID`, table twin in `_execute_move`): the solver routes model by model, so an edge
+    // model hemmed in by its neighbour can keep a route through Dangerous ground the whole unit could skirt. Shift the
+    // goal sideways (perpendicular to the move, + = right of travel) and keep the FIRST plan that crosses no Dangerous
+    // ground and keeps the p.11 regime; the rest of the move runs on that goal. None clears: today's plan.
+    if rule_on(self.rules_epoch, PENDING_EPOCH_DANGER_AVOID) && self.avoid_dang && !self.flying && !self.allow_contact
+        && self.any_dangerous(&trails, radii_m)
+    {
+        let d = clamp_delta_to_bounds(&self.pos, plan_unit_move(&self.pos, self.goal, band_in), self.half);
+        let (sx, sz) = (-d[2], d[0]); // Vector2(-delta.z, delta.x).normalized(), f32 like the table's
+        let lensq = sx * sx + sz * sz;
+        if lensq != 0.0 {
+            let side = [sx / lensq.sqrt(), sz / lensq.sqrt()];
+            for k in DANGER_SIDESTEP_IN {
+                let s = (k as f64 * IN2M) as f32;
+                let shifted = Self { goal: [self.goal[0] + side[0] * s, self.goal[1], self.goal[2] + side[1] * s],
+                    ..self.clone() };
+                let (p5, t5, c5) = shifted.plan_once(reach, avoid_diff && !capped, self.avoid_dang);
+                if self.any_dangerous(&t5, radii_m)
+                    || (!self.ignores_difficult && !capped && trails_cross_difficult(&t5, radii_m, t)) {
+                    continue;
+                }
+                return shifted.execute_from(band_in, avoid_diff, radii_m, (reach, p5, t5, c5));
+            }
+        }
+    }
+    self.execute_from(band_in, avoid_diff, radii_m, (reach, planned, trails, call))
+}
+
+/// Does any model's routed trail take the p.12 test (`_dangerous_trail_flags(...).has(true)`)?
+fn any_dangerous(&self, trails: &[Vec<V2>], radii_m: &[f64]) -> bool {
+    trails.iter().enumerate().any(|(i, leg)| self.crosses_dangerous(leg, radii_m.get(i).copied().unwrap_or(0.0)))
+}
+
+/// `_execute_move` from the stall escalation onward, on the pass-1 plan `first` = (reach, planned, trails, call).
+fn execute_from(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64],
+    first: (f64, Vec<V2>, Vec<Vec<V2>>, Option<MoveCall>)) -> Landing {
+    let (state, t) = (self.state, self.t);
+    let mut avoid_dang = self.avoid_dang;
+    let starts: Vec<V2> = self.movers.iter().map(|m| t.to_inch(pos_of(state, *m))).collect();
+    let (mut reach, mut planned, mut trails, mut call) = first;
     // :4829-4850 STALL ESCALATION (S7), its OWN gate — not chained onto the
     // p.11 branch above (Windows playtest bug 4b: chaining made it unreachable
     // whenever that branch fired). A route hemmed in by its own avoided cells
@@ -1640,8 +1693,13 @@ fn plain_move_fresh(
     // land in them, in which case going around is impossible.
     let avoid_diff = !ignores_difficult
         && !targets_in(&pos, goal, band_in, own_r_m, t, half, terrain::is_difficult);
-    let avoid_dang =
-        !flying && !targets_in(&pos, goal, band_in, own_r_m, t, half, terrain::is_dangerous);
+    // #3090 (`PENDING_EPOCH_DANGER_AVOID`): the exception reads the unit's goal, not one model's rigid corner.
+    let goal_in_danger = if rule_on(self.rules_epoch, PENDING_EPOCH_DANGER_AVOID) {
+        goal_in(&pos, goal, band_in, own_r_m, t, half, terrain::is_dangerous)
+    } else {
+        targets_in(&pos, goal, band_in, own_r_m, t, half, terrain::is_dangerous)
+    };
+    let avoid_dang = !flying && !goal_in_danger;
     let mv = Move {
         rules_epoch: self.rules_epoch,
         state,
@@ -2718,5 +2776,53 @@ pub(crate) mod tests {
         for i in 0..3 {
             assert_eq!(stay.end[i], pos_of(&stay_st, Mover { unit: 0, model: i }), "unmoved model {i} drifted");
         }
+    }
+
+    /// #3090 part 2 board: ONE Dangerous patch, x `x0`..`x0`+3", z `z0`..`z0`+4" (table twin
+    /// `test/solo_danger_sidestep_test.gd`, same geometry), on an otherwise empty 6x4 ft table.
+    fn patch_board(x0: f64, z0: f64) -> Terrain {
+        Terrain::build(&PlainTerrain {
+            cells: vec![],
+            sandbox: vec![Obb { c: [(x0 + 1.5) * IN2M, (z0 + 2.0) * IN2M], he: [1.5 * IN2M, 2.0 * IN2M], yaw: 0.0,
+                kind: terrain::DANGEROUS, slabs: vec![] }],
+            pieces: Vec::new(),
+            containers: Vec::new(),
+            walls: vec![],
+            cell_params: CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0,
+                inches_to_meters: IN2M },
+        })
+    }
+
+    /// A 5-wide line (1.5" apart, 32 mm bases) Rushes 12" toward (0, 14"): (any route crosses Dangerous, centroid x").
+    fn rush_past_patch(rules_epoch: u32, x0: f64, z0: f64) -> (bool, f64) {
+        let t = patch_board(x0, z0);
+        let pos: Vec<V3> = (0..5).map(|k| [(((k as f64) - 2.0) * 1.5 * IN2M) as f32, 0.0, 0.0]).collect();
+        let state = units_state(vec![pos], vec![vec![0.016; 5]], vec![vec![]]);
+        let land = MoveRules { rules_epoch }
+            .plain_move(&state, &t, 0, [0.0, 0.0, (14.0 * IN2M) as f32], 12.0, false, true, crate::mv::FAST_PLANNER_GUARD)
+            .expect("a real board");
+        let cx = land.end.iter().map(|p| p[0] as f64).sum::<f64>() / land.end.len() as f64 / IN2M;
+        (land.dangerous.iter().any(|d| *d), cx)
+    }
+
+    /// #3090 part 2, cause 2 (`PENDING_EPOCH_DANGER_AVOID`): the right-hand model's own route clips a patch mid-route
+    /// although the unit could skirt it. RED below the gate (today: crosses); GREEN at it: a sideways goal shift clears.
+    #[test]
+    fn a_line_sidesteps_a_dangerous_patch_mid_route() {
+        let (old, old_cx) = rush_past_patch(crate::acts::CURRENT_RULES_EPOCH, 2.5, 4.0);
+        let (new, cx) = rush_past_patch(PENDING_EPOCH_DANGER_AVOID, 2.5, 4.0);
+        assert!(old, "below the gate the route still crosses (centroid x {old_cx:.2}\")");
+        assert!(!new, "at the gate the sidestep clears the patch (centroid x {cx:.2}\")");
+        assert!(cx < old_cx - 0.5, "the unit stepped LEFT, away from the patch: {old_cx:.2}\" -> {cx:.2}\"");
+    }
+
+    /// #3090 part 2, cause 1: one edge model's rigid end clips a patch at the destination. Below the gate that switched
+    /// avoidance off for the whole unit; at the gate the goal (unit centre) is clear, so the unit routes around.
+    #[test]
+    fn one_clipped_corner_no_longer_switches_avoidance_off() {
+        let (old, _) = rush_past_patch(crate::acts::CURRENT_RULES_EPOCH, 2.5, 10.0);
+        let (new, cx) = rush_past_patch(PENDING_EPOCH_DANGER_AVOID, 2.5, 10.0);
+        assert!(old, "below the gate the clipped corner walks in");
+        assert!(!new, "at the gate the unit keeps out (centroid x {cx:.2}\")");
     }
 }
