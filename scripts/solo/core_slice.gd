@@ -21,6 +21,8 @@ const SCHEMA := "nml-core-slice-v1"
 const MODES := ["allow", "deny"]
 ## P4.D-48: the AI charge door's own slice (door "melee"), read through `refusals_in`. Allow mode, no group = no rule at all.
 const MELEE_PATH := "res://assets/solo/core_slice_melee.json"
+## Plan E: the melee deny slice (door "melee", mode "deny"), read beside MELEE_PATH by the shadow until step 20 flips the default.
+const MELEE_DENY_PATH := "res://assets/solo/core_slice_melee_deny.json"
 
 ## TEST SEAM (the RulesRegistry.map_path_override pattern): a path that replaces PATH. Empty in production, always.
 static var path_override := ""
@@ -40,8 +42,8 @@ static func config() -> Dictionary:
 	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}, "unmapped_inert": false}
 	var live := path_override.is_empty()
 	var path := live_path()
-	# Each file belongs to one door: the melee file only through MELEE_PATH, every other path (shipped, deny, a test file) is the shoot door's.
-	var door := "melee" if path == MELEE_PATH else "shoot"
+	# Each file belongs to one door: the melee files only through MELEE_PATH / MELEE_DENY_PATH, every other path (shipped, deny, a test file) is the shoot door's.
+	var door := "melee" if path == MELEE_PATH or path == MELEE_DENY_PATH else "shoot"
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
 	if not (data is Dictionary) or str(data.get("schema", "")) != SCHEMA or str(data.get("door", "")) != door \
 			or not MODES.has(str(data.get("mode", "allow"))):
@@ -183,9 +185,10 @@ static func takes_human(gu: GameUnit, as_target := false) -> bool:
 	return refusals_human(gu, as_target).is_empty()
 
 
-## P4.D-48: why the charge door refuses `gu` (charger, or the charged `as_target`), the same labels as `refusals`.
-static func melee_refusals(gu: GameUnit, as_target := false) -> Array:
-	return refusals_in(MELEE_PATH, gu, as_target)
+## P4.D-48 / Plan E: why the charge door refuses `gu` (charger, or the charged `as_target`), the same labels as `refusals`.
+## `deny` reads `MELEE_DENY_PATH` beside the live allow file (shadow / probes until step 20 flips the melee default).
+static func melee_refusals(gu: GameUnit, as_target := false, deny := false) -> Array:
+	return refusals_in(MELEE_DENY_PATH if deny else MELEE_PATH, gu, as_target)
 
 
 ## P4.D-37: `gu` carries a unit or weapon rule whose registry primitive is one of `primitives` (the slice's own lookup).
