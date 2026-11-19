@@ -24,6 +24,7 @@ const SEAT_TARGET := 1
 ## that gate on it are exercised), before terrain exists.
 const DISTANCE_IN := 14.0
 const CHARGE_GAP_IN := 7.0
+const CHARGE_STRUCTURAL := ["no_charge", "human_defender", "size", "no_statline", "dangerous", "cast"]
 const ROW := 5
 
 
@@ -323,19 +324,26 @@ static func write_parity(rows: Array, table_path: String, core_path: String) -> 
 			var rolls: Array = (v["rolls"] as Array).map(func(x: Dictionary) -> Dictionary:
 				var o := str(x["owner"])
 				return x.merged({"owner": o.substr(4, o.length() - 5) if o.begins_with("AI (") and o.ends_with(")") else o}, true))
+			var def_alive: int = int((v["alive"] as Array)[1]) if v.has("alive") else int((v["state"]["tgt"] as Dictionary)["alive"])
 			f.store_line(JSON.stringify({"seed": r["id"], "epoch": AiActRecorder.rules_epoch,
-				"def_alive": (v["state"]["tgt"] as Dictionary)["alive"], "rolls": rolls}, "", true, true))
+				"def_alive": def_alive, "rolls": rolls}, "", true, true))
 		f.close()
 
 
-## The per-volley verdict: roll mismatches (ids from parity_compare.py) and the first state / ledger difference.
+## The per-volley (or per-charge, Plan E step 4b) verdict: roll mismatches (ids from parity_compare.py) and the first state / charge diff.
 static func verdicts(rows: Array, mismatching_ids: Array) -> Array:
 	var out: Array = []
 	for r in rows:
-		var first := "rolls" if mismatching_ids.has(r["id"]) else first_state_diff(r["table"]["state"], r["core"]["state"])
-		out.append({"id": r["id"], "pair": r["pair"], "att": r["att"], "tgt": r["tgt"], "seed": r["seed"], "first_diff": first,
+		var melee: bool = r.has("charge_first_diff")
+		var first := "rolls" if mismatching_ids.has(r["id"]) else (str(r["charge_first_diff"]) if melee else first_state_diff(r["table"]["state"], r["core"]["state"]))
+		var deny: Array = r.get("deny", r["table"].get("deny", []))
+		var row := {"id": r["id"], "pair": r["pair"], "att": r["att"], "tgt": r["tgt"], "seed": r["seed"], "first_diff": first,
 			"fired": not (r["table"]["rolls"] as Array).is_empty() or not (r["core"]["rolls"] as Array).is_empty(),
-			"labels": r["table"]["labels"], "deny": r["table"].get("deny", [])})
+			"labels": r["table"]["labels"], "deny": deny}
+		if melee:
+			row["taken"] = deny.is_empty()
+			row["equal"] = first == ""
+		out.append(row)
 	return out
 
 
@@ -463,6 +471,7 @@ static func _charge_half(main: Node, att_spec: Variant, foe_spec: Variant, seed_
 	att.unit_properties["moved_round"] = 1
 	var report := {"unit": att, "target": foe, "action": AiDecision.Action.CHARGE, "charge_from_in": from_in, "moved": true}
 	var refusals: Array = CoreActivation.charge_refusals(main, att, report)
+	var deny: Array = melee_deny_refusals(att, foe, refusals)
 	# The body's hand-over (`_solo_activate_one_ai_body`): the door when it takes the charge (or forced by `bypass_slice`), else table.
 	if core_run and bool(opts.get("bypass_slice", false)):
 		if h != 0:
@@ -475,10 +484,19 @@ static func _charge_half(main: Node, att_spec: Variant, foe_spec: Variant, seed_
 	if h != 0:
 		sc._core_node_ready().release(h)
 	main.battle_log.entry_added.disconnect(tap)
+	var rolls: Array = []
+	var dump_dir := str(opts.get("dump_dir", ""))
+	if dump_dir != "":
+		AiDiceRecorder.close()
+		rolls = ParityTable._read_dice(dump_dir)
+		if core_run and opts.has("core_swap_face") and int(opts["core_swap_face"]) < rolls.size():
+			var faces: Array = rolls[int(opts["core_swap_face"])]["faces"]
+			if not faces.is_empty():
+				faces[0] = int(faces[0]) % 6 + 1
 	var out := {"att": _pos(att), "foe": _pos(foe), "wounds": [main._solo_unit_wounds_now(att), main._solo_unit_wounds_now(foe)],
 		"alive": [att.get_alive_count(), foe.get_alive_count()], "shaken": [att.is_shaken, foe.is_shaken],
-		"fatigued": [att.is_fatigued, foe.is_fatigued], "rng": main._tray_rng.state, "lines": lines,
-		"core": CoreActivation.ai_charges - charges, "refusals": refusals, "labels": labels, "names": names}
+		"fatigued": [att.is_fatigued, foe.is_fatigued], "rng": main._tray_rng.state, "lines": lines, "rolls": rolls,
+		"core": CoreActivation.ai_charges - charges, "refusals": refusals, "deny": deny, "labels": labels, "names": names}
 	free_units(main, [att, foe])
 	await main.get_tree().process_frame
 	return out
@@ -505,5 +523,36 @@ static func charge(main: Node, att: Variant, foe: Variant, seed_n: int, opts := 
 	var core := await _charge_half(main, att, foe, seed_n, true, opts)
 	var cmp := compare_charge(table, core)
 	return {"table": table, "core": core, "taken": int(core["core"]) == 1 and int(table["core"]) == 0,
-		"refusals": table["refusals"], "labels": table["labels"], "names": table["names"],
+		"refusals": table["refusals"], "deny": table["deny"], "labels": table["labels"], "names": table["names"],
 		"equal": (cmp["diffs"] as Array).is_empty(), "first_diff": cmp["first_diff"], "diffs": cmp["diffs"]}
+
+
+## Plan E (step 4b): whether a `load_list` entry carries at least one melee weapon (`range_value <= 0`, `attacks > 0`).
+static func has_melee(entry: Dictionary) -> bool:
+	var ou: OPRApiClient.OPRUnit = entry["unit"]
+	return ou.weapons.any(func(w: OPRApiClient.OPRWeapon) -> bool: return w.range_value <= 0 and w.attacks > 0 and w.count > 0)
+
+
+## Plan E (step 4b): what `MELEE_DENY_PATH` plus `charge_refusals`'s structural gates would refuse for this charge.
+static func melee_deny_refusals(att: GameUnit, foe: GameUnit, refusals: Array) -> Array:
+	var out: Array = CoreSlice.melee_refusals(att, false, true) + CoreSlice.melee_refusals(foe, true, true).map(func(r: String) -> String: return "target_" + r)
+	return out + refusals.filter(func(r: String) -> bool: return CHARGE_STRUCTURAL.has(r) and not out.has(r))
+
+
+## Plan E (step 4b): melee sweep over one ring pairing: every melee unit of one list charges every enemy unit of the other, `seeds` times.
+static func sweep_melee_pair(main: Node, a: Dictionary, b: Dictionary, seeds: int, dump_dir: String, first_id := 0, opts := {}) -> Array:
+	var rows: Array = []
+	var id := first_id
+	var call_opts: Dictionary = opts.merged({"bypass_slice": true, "dump_dir": dump_dir})
+	for dir in 2:
+		var chargers: Array = ((a["units"] if dir == 0 else b["units"]) as Array).filter(has_melee)
+		var foes: Array = b["units"] if dir == 0 else a["units"]
+		for att in chargers:
+			for foe in foes:
+				for s in seeds:
+					var r: Dictionary = await charge(main, att, foe, s, call_opts)
+					rows.append({"id": id, "pair": "%s | %s" % [a["name"], b["name"]], "dir": dir, "seed": s,
+						"att": (r["names"] as Array)[0], "tgt": (r["names"] as Array)[1], "table": r["table"], "core": r["core"],
+						"deny": r["deny"], "charge_first_diff": r["first_diff"], "diffs": r["diffs"]})
+					id += 1
+	return rows

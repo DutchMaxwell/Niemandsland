@@ -5,7 +5,7 @@ extends SceneTree
 ## on the table and on the core. Writes <out>/{sweep_table,sweep_core}.jsonl (the parity files), verdicts.jsonl, coverage.json, uncovered.txt.
 ##
 ##   godot --headless --path . -s res://test/one_core/roster_sweep_cli.gd -- --lists <dir> [--lists <dir2>] [--points 1000,2000]
-##       [--seeds 20] [--out <dir>] [--deny <deny.json>] [--exempt <names.json>] [--min-volleys 20] [--max-pairs N]
+##       [--door shoot|melee] [--seeds 20] [--out <dir>] [--deny <deny.json>] [--exempt <names.json>] [--min-volleys 20] [--max-pairs N]
 ##
 ## `--deny` is a JSON object {rule name: why}: a mismatching volley carrying one of them is explained, any other is red. `--min-volleys`
 ## turns the coverage into a gate: every registry rule name (minus the `--exempt` array, the "cannot occur in a volley" names) must
@@ -43,8 +43,14 @@ func _json(path: String, fallback: Variant) -> Variant:
 
 
 func _run(args: Array) -> void:
+	var door := _arg(args, "--door", "shoot")
+	if door != "shoot" and door != "melee":
+		printerr("ROSTER-SWEEP-FAIL: unknown --door %s (expected shoot or melee)" % door)
+		quit(2)
+		return
 	ProjectSettings.set_setting("niemandsland/harness_mode", true)
 	OS.set_environment("NML_ONE_CORE_ACTIVATION", "0")
+	OS.set_environment("NML_ONE_CORE_CHARGE", "0")
 	change_scene_to_file("res://scenes/main.tscn")
 	var main := await _boot()
 	if main == null:
@@ -81,8 +87,12 @@ func _run(args: Array) -> void:
 	h.arm(main, dice)
 	var rows: Array = []
 	for p in pairs:
-		rows.append_array(await h.sweep_pair(main, p[0], p[1], seeds, dice, rows.size()))
-		printerr("ROSTER-SWEEP: %d volleys (%s)" % [rows.size(), p[0]["name"]])
+		if door == "melee":
+			rows.append_array(await h.sweep_melee_pair(main, p[0], p[1], seeds, dice, rows.size()))
+			printerr("ROSTER-SWEEP: %d charges (%s)" % [rows.size(), p[0]["name"]])
+		else:
+			rows.append_array(await h.sweep_pair(main, p[0], p[1], seeds, dice, rows.size()))
+			printerr("ROSTER-SWEEP: %d volleys (%s)" % [rows.size(), p[0]["name"]])
 	h.disarm(main)
 	h.release(dice)
 	var cmp: Dictionary = h.compare(rows, out)
