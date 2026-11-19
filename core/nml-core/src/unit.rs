@@ -41,8 +41,8 @@ use crate::combat::{
     SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN, SHROUD_RANGE_PENALTY_IN,
 };
 use crate::rules::{
-    base_rule_name, has_special_rule, rule_rating, spawn_target_rule, unit_rating, Registries,
-    Spell,
+    base_rule_name, has_special_rule, rule_name_matches, rule_rating, spawn_target_rule,
+    unit_rating, Registries, Spell,
 };
 use crate::state::{Bands, Profile, Profiles, Weapon};
 
@@ -1575,8 +1575,12 @@ pub struct UnitStatic {
     pub unimplemented: Vec<Unimplemented>,
 }
 
+/// `AiShooting._has_rule` ai_shooting.gd:222-226 — exact rule name or its
+/// parametrised form (`GameUnit.rule_name_matches`), never a bare prefix
+/// ("Shred in Melee", "Surge Mark", "Rending in Melee Aura" are not plain
+/// Shred / Surge / Rending).
 fn weapon_has(w: &Weapon, rule: &str) -> bool {
-    w.rules.iter().any(|r| r.trim().starts_with(rule))
+    w.rules.iter().any(|r| rule_name_matches(r, rule))
 }
 
 /// NML-002 Strafing: the weapon attacks only through the move-through trigger.
@@ -1586,9 +1590,9 @@ fn weapon_strafes(w: &Weapon) -> bool {
 }
 
 /// The name a move-through attack logs under: the 3.6 name when one of the firing
-/// weapons carries it, else the 3.5 name.
+/// weapons carries it, else the 3.5 name (`AiShooting.strafing_rule_name`).
 pub(crate) fn strafing_rule_name<'a>(profiles: impl IntoIterator<Item = &'a ShootProfile>) -> &'static str {
-    let crossing = profiles.into_iter().any(|p| p.rules.iter().any(|r| r.trim().starts_with("Crossing Strike")));
+    let crossing = profiles.into_iter().any(|p| p.rules.iter().any(|r| rule_name_matches(r, "Crossing Strike")));
     if crossing { "Crossing Strike" } else { "Strafing" }
 }
 
