@@ -14,9 +14,11 @@ const BLADE := {"name": "Blade", "range_in": 0, "attacks": 2, "count": 10, "rule
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
+var _shadow_env_before: String
 
 
 func before_test() -> void:
+	_shadow_env_before = OS.get_environment("NML_CORE_SHADOW_MELEE")
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -44,6 +46,7 @@ func after_test() -> void:
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
 	CoreActivation._charge_env = -1
+	OS.set_environment("NML_CORE_SHADOW_MELEE", _shadow_env_before)
 	CoreShadow._melee_env = -1
 	CoreShadow.melee_records = []
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
@@ -62,10 +65,12 @@ func _free(units: Array) -> void:
 
 ## One shadowed AI charge (door off): the shadow board before the planner's charge move, the table's melee between
 ## `melee_begin` and `melee_compare`. `fault` runs on the table's board after the fight, before the compare (a planted fault).
-func _shadow(s: int, models: int, foe_models: int, gap_in: float, foe_rules := [], fault := Callable()) -> Dictionary:
-	var att := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Att", "models": models, "x_in": 0.0}, true), BLADE.merged({"count": models}))
+func _shadow(s: int, models: int, foe_models: int, gap_in: float, foe_rules := [], fault := Callable(),
+		att_rules := [], att_weapon_rules := [], foe_weapon_rules := []) -> Dictionary:
+	var att := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Att", "models": models, "x_in": 0.0, "rules": att_rules}, true),
+		BLADE.merged({"count": models, "rules": att_weapon_rules}, true))
 	var foe := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Def", "models": foe_models, "x_in": gap_in, "z_step_in": 1.4, "rules": foe_rules}, true),
-		BLADE.merged({"count": foe_models, "attacks": 1}))
+		BLADE.merged({"count": foe_models, "attacks": 1, "rules": foe_weapon_rules}, true))
 	for i in foe.models.size():
 		(foe.models[i] as ModelInstance).node.global_position.z += float((i * 7) % 5) * 0.0001
 	_main.seed_tray_rng(s)
@@ -83,7 +88,7 @@ func _shadow(s: int, models: int, foe_models: int, gap_in: float, foe_rules := [
 	CoreShadow.release(_main)
 	_free([att, foe])
 	await _main.get_tree().process_frame
-	return CoreShadow.melee_records.back()
+	return CoreShadow.melee_records.back() if not CoreShadow.melee_records.is_empty() else {}
 
 
 func _sweep_shadow(models: int, foe_models: int, gap_in: float) -> void:
@@ -121,3 +126,89 @@ func test_the_compare_sees_a_planted_difference() -> void:
 	var shaken := func(_att: GameUnit, foe: GameUnit) -> void: foe.is_shaken = not foe.is_shaken
 	var flipped := await _shadow(0, 5, 8, 7.0, [], shaken)
 	assert_str(str(flipped["first_diff"])).is_equal("shaken")
+
+
+## Plan E step 3: NML_CORE_SHADOW_MELEE=deny reads the melee deny file so a planted AP(1) charger is compared (not refused),
+## the record carries `deny`, both unit names, their rule labels and the full core roll stream, and the live charge door is untouched.
+func test_deny_view_compares_an_ap_charger_and_leaves_the_door_untouched() -> void:
+	# Allow view (=1): AP(1) is refused by the live allow file, while `deny` already records [] (the deny file would take it).
+	OS.set_environment("NML_CORE_SHADOW_MELEE", "1")
+	CoreShadow._melee_env = -1
+	var allow_rec := await _shadow(0, 5, 8, 7.0, [], Callable(), [], ["AP(1)"])
+	assert_bool(allow_rec.get("taken", true)).is_false()
+	assert_array(allow_rec.get("why", [])).contains(["weapon_rule:AP"])
+	assert_bool(allow_rec.has("deny")).override_failure_message("record must carry `deny`").is_true()
+	assert_array(allow_rec.get("deny", ["missing"])).is_empty()
+	assert_str(str(allow_rec.get("charger", ""))).is_equal("Att")
+	assert_str(str(allow_rec.get("target", ""))).is_equal("Def")
+	assert_dict(allow_rec.get("rules", {})).contains_key_value("charger", ["AP"]).contains_key_value("target", [])
+	assert_bool(allow_rec.has("core_rolls")).override_failure_message("record must carry `core_rolls`").is_true()
+	assert_array(allow_rec.get("core_rolls", ["missing"])).is_empty()
+
+	# Deny view (=deny): the same AP(1) charger is taken, replayed equal, and records the full core roll stream.
+	OS.set_environment("NML_CORE_SHADOW_MELEE", "deny")
+	CoreShadow._melee_env = -1
+	assert_bool(CoreShadow.melee_enabled()).override_failure_message("NML_CORE_SHADOW_MELEE=deny must enable melee shadow").is_true()
+	for s in 4:
+		var rec := await _shadow(s, 5, 8, 7.0, [], Callable(), [], ["AP(1)"])
+		assert_bool(rec.get("taken", false)).override_failure_message("seed %d: AP charger refused in deny view: %s" % [s, rec]).is_true()
+		assert_array(rec.get("why", ["missing"])).is_empty()
+		assert_array(rec.get("deny", ["missing"])).is_empty()
+		assert_bool(rec.get("equal", false)).override_failure_message("seed %d: %s" % [s, rec]).is_true()
+		assert_str(str(rec.get("charger", ""))).is_equal("Att")
+		assert_str(str(rec.get("target", ""))).is_equal("Def")
+		assert_dict(rec.get("rules", {})).contains_key_value("charger", ["AP"]).contains_key_value("target", [])
+		var rolls: Array = rec.get("core_rolls", [])
+		assert_int(rolls.size()).override_failure_message("seed %d: core_rolls empty" % s).is_greater_equal(2)
+		if not rolls.is_empty():
+			assert_dict(rolls[0]).contains_key_value("kind", "attack").contains_key_value("owner", "Att")
+			for entry in rolls:
+				assert_dict(entry).contains_keys(["kind", "count", "target", "owner", "faces"])
+
+	# Planted fault on the AP charger in deny view is caught and keeps the full core roll stream.
+	var nudge := func(att: GameUnit, _foe: GameUnit) -> void: (att.get_alive_models()[0] as ModelInstance).node.global_position.x += 0.0254
+	var bad := await _shadow(0, 5, 8, 7.0, [], nudge, [], ["AP(1)"])
+	assert_bool(bad.get("taken", false)).is_true()
+	assert_bool(bad.get("equal", true)).is_false()
+	assert_str(str(bad.get("first_diff", ""))).is_equal("positions")
+	assert_int((bad.get("core_rolls", []) as Array).size()).is_greater_equal(2)
+
+	# Door untouched: even with the charge door on and shadow in deny view, takes_ai_charge still reads the allow file.
+	CoreActivation._charge_env = 1
+	var att := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Att", "models": 5, "x_in": 0.0}, true),
+		BLADE.merged({"count": 5, "rules": ["AP(1)"]}, true))
+	var foe := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Def", "models": 8, "x_in": 7.0}, true),
+		BLADE.merged({"count": 8, "attacks": 1}, true))
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	var report := {"unit": att, "target": foe, "action": AiDecision.Action.CHARGE, "moved": true}
+	assert_array(CoreActivation.charge_refusals(_main, att, report)).contains(["weapon_rule:AP"])
+	assert_bool(CoreActivation.takes_ai_charge(_main, att, report)).is_false()
+	_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+	_main._solo_core_ai_h = 0
+	_free([att, foe])
+
+
+## Plan E step 3: deny view still refuses structural guards (`size`), records both units' rule labels, and on a roll
+## mismatch keeps every core roll emitted up to and including the diverging roll.
+func test_deny_view_refuses_size_and_keeps_core_rolls_through_mismatch() -> void:
+	OS.set_environment("NML_CORE_SHADOW_MELEE", "deny")
+	CoreShadow._melee_env = -1
+	var big := await _shadow(0, 10, 2, 6.0, ["Fear(1)"], Callable(), [], ["AP(1)"])
+	assert_bool(big.get("taken", true)).is_false()
+	assert_array(big.get("deny", [])).is_equal(["size"])
+	assert_array(big.get("why", [])).is_equal(["size"])
+	assert_dict(big.get("rules", {})).contains_key_value("charger", ["AP"]).contains_key_value("target", ["Fear"])
+	assert_array(big.get("core_rolls", ["nonempty"])).is_empty()
+
+	# Tamper the second table roll (defense count) before compare: roll #0 matches, roll #1 diverges, both sit in core_rolls.
+	var tamper := func(_att: GameUnit, _foe: GameUnit) -> void:
+		if CoreShadow.tap.size() >= 2:
+			CoreShadow.tap[1]["count"] = 99
+	var mis := await _shadow(0, 5, 8, 7.0, [], tamper, [], ["AP(1)"])
+	assert_bool(mis.get("taken", false)).is_true()
+	assert_str(str(mis.get("first_diff", ""))).is_equal("rolls")
+	var rolls: Array = mis.get("core_rolls", [])
+	assert_int(rolls.size()).is_equal(2)
+	if rolls.size() >= 2:
+		assert_dict(rolls[0]).contains_key_value("kind", "attack")
+		assert_dict(rolls[1]).contains_key_value("kind", "defense")
