@@ -10,7 +10,8 @@ diffs [{seed, gate, path, ref, got, accepted}]). Exit 2 = refused (`core mismatc
 or `acts_<seed>/acts.jsonl`, or nothing compared), 1 = an unexplained difference or a stale accept, 0 = all equal,
 3 = blind. `--accept FILE` ([{gate, path_regex, reason, epoch, pr}]) names expected differences; an entry matching
 nothing is `stale accept`. `--plant` must turn a corrupted copy of the first seed red (exit 1), else exit 3:
-instrument blind.
+instrument blind. `--config trainer` plays `play_game` defaults (no kwargs/legacy switches) against a `core_selfplay_py`
+recording (picks from `planner_positions`, no `acts.jsonl`), refusing unless `tool` and `rules_epoch` match current.
 """
 
 from __future__ import annotations
@@ -35,16 +36,34 @@ import sidecar_gate  # noqa: E402
 TOL = 1e-9  # the sidecar gate's float tolerance
 PLANT_DIR = Path.home() / ".cache/nml-g/tmp/plant"
 CONFIG = "legacy"
+PY_TOOL = "core_selfplay_py"
 
 
-def scan_ref(ref_dir: Path, seeds: list[int]) -> tuple[dict[int, dict], list[int]]:
+def _stamped_epoch(rec: dict) -> int | None:
+    ps = rec.get("prescreen") if isinstance(rec.get("prescreen"), dict) else {}
+    for src in (rec.get("knobs"), ps, ps.get("core_build")):
+        val = src.get("rules_epoch") if isinstance(src, dict) else None
+        if isinstance(val, int) and not isinstance(val, bool):
+            return val
+    return None
+
+
+def _row_picks(ref: dict) -> list[tuple] | None:
+    try:
+        return [(r["round"], r["side"], r["unit"], r["kind"]) for r in ref["planner_positions"]]
+    except (KeyError, TypeError):
+        return None
+
+
+def scan_ref(ref_dir: Path, seeds: list[int], config: str = CONFIG) -> tuple[dict[int, dict], list[int]]:
     """({seed: ref}, missing seeds). A seed needs a readable core_s<seed>.json with `planner_positions` AND its
     acts.jsonl (the picks; without them the M3-5 gate would silently drop its sharpest quantity)."""
     refs, missing = {}, []
     for seed in seeds:
         try:
             ref = json.loads((ref_dir / ("core_s%d.json" % seed)).read_text(encoding="utf-8"))
-            ok = isinstance(ref["planner_positions"], list) and (ref_dir / ("acts_%d" % seed) / "acts.jsonl").is_file()
+            ok = isinstance(ref, dict) and isinstance(ref["planner_positions"], list) and (
+                config == "trainer" or (ref_dir / ("acts_%d" % seed) / "acts.jsonl").is_file())
         except (OSError, ValueError, KeyError, TypeError):
             ok = False
         if ok:
@@ -60,18 +79,32 @@ def compare_seed(seed: int, ref: dict, got: dict, picks) -> list[dict]:
     return [{"seed": seed, "gate": g, "path": p, "ref": r, "got": m} for g, ds in found.items() for p, r, m in ds]
 
 
-def run_parity(ref_dir: Path, seeds: list[int], make_play, log=print) -> dict:
+def run_parity(ref_dir: Path, seeds: list[int], make_play, log=print, config: str = CONFIG) -> dict:
     """Judge `seeds` of the oracle at `ref_dir`. `make_play()` -> `play(seed) -> result dict` is called only once
     every seed has its reference: a refused run never loads a core and never plays a game."""
-    refs, missing = scan_ref(ref_dir, seeds)
+    refs, missing = scan_ref(ref_dir, seeds, config)
     out = {"ref": str(ref_dir), "seeds_requested": len(seeds), "seeds_compared": 0, "rows_compared": 0,
            "missing": missing, "refused": None, "diffs": []}
     if missing or not refs:
         out["refused"] = "seeds %s have no reference (absent or unreadable core_s<seed>.json / acts.jsonl)" % missing if refs else "compared 0 seeds"
         return out
+    want_epoch, row_picks = nml_core.CURRENT_RULES_EPOCH, {}
+    if config == "trainer":
+        for seed in seeds:
+            if refs[seed].get("tool") != PY_TOOL:
+                return {**out, "refused": "tool mismatch: seed %d has tool=%r (expected %r)" % (seed, refs[seed].get("tool"), PY_TOOL)}
+            if (ep := _stamped_epoch(refs[seed])) != want_epoch:
+                return {**out, "refused": "epoch mismatch: seed %d ref has rules_epoch=%r, expected %d" % (seed, ep, want_epoch)}
+            if (picks := _row_picks(refs[seed])) is None:
+                return {**out, "refused": "seed %d planner_positions lacks pick fields (round, side, unit, kind)" % seed}
+            row_picks[seed] = picks
     play = make_play()
     for seed in seeds:
-        diffs = compare_seed(seed, refs[seed], play(seed), selfplay_gate.ref_picks(ref_dir, seed))
+        got = play(seed)
+        if config == "trainer" and (got_ep := _stamped_epoch(got)) != want_epoch:
+            return {**out, "refused": "epoch mismatch: seed %d played game has rules_epoch=%r, expected %d" % (seed, got_ep, want_epoch)}
+        picks = row_picks[seed] if config == "trainer" else selfplay_gate.ref_picks(ref_dir, seed)
+        diffs = compare_seed(seed, refs[seed], got, picks)
         rows = len(refs[seed]["planner_positions"])
         out["seeds_compared"], out["rows_compared"], out["diffs"] = out["seeds_compared"] + 1, out["rows_compared"] + rows, out["diffs"] + diffs
         log("seed %d rows %d diffs %d" % (seed, rows, len(diffs)))
@@ -87,10 +120,20 @@ def apply_accept(summary: dict, accept: list[dict]) -> None:
     summary["stale_accepts"] = [e for i, e in enumerate(accept) if i not in used]
 
 
-def plant(ref_dir: Path, seed: int, dest: Path) -> Path:
+def plant(ref_dir: Path, seed: int, dest: Path, config: str = CONFIG) -> Path:
     """A copy of one oracle seed with board row 0 column 3 +1 and its first two picks swapped: a run on it must be red."""
     ref = json.loads((ref_dir / ("core_s%d.json" % seed)).read_text(encoding="utf-8"))
     ref["planner_positions"][0]["board"][0][3] += 1
+    if config == "trainer":
+        rows = ref["planner_positions"]
+        if len(rows) >= 2 and (rows[0]["unit"], rows[0]["kind"]) != (rows[1]["unit"], rows[1]["kind"]):
+            for k in ("unit", "kind"):
+                rows[0][k], rows[1][k] = rows[1][k], rows[0][k]
+        else:
+            rows[0]["unit"] = "%s_planted" % rows[0]["unit"]
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / ("core_s%d.json" % seed)).write_text(json.dumps(ref), encoding="utf-8")
+        return dest
     acts = (ref_dir / ("acts_%d" % seed) / "acts.jsonl").read_text(encoding="utf-8").splitlines()
     i, j = [k for k, ln in enumerate(acts) if json.loads(ln).get("kind") == "act"][:2]
     acts[i], acts[j] = acts[j], acts[i]
@@ -128,11 +171,17 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--plant", action="store_true", help="also prove the instrument red on a corrupted copy of the first seed")
     ap.add_argument("--allow-core-mismatch", action="store_true",
                     help="run even when nml_core is dirty or its BUILD_COMMIT != HEAD of --repo")
+    ap.add_argument("--config", choices=("legacy", "trainer"), default=CONFIG,
+                    help="legacy: epoch-0 LEGACY_FIDELITY_KNOBS vs GD oracle; trainer: play_game defaults vs Python ref")
     a = ap.parse_args(argv)
-    ref_dir, seeds, knobs = Path(a.ref), selfplay_gate.parse_seeds(a.seeds), dict(sp.LEGACY_FIDELITY_KNOBS)
+    ref_dir, seeds = Path(a.ref), selfplay_gate.parse_seeds(a.seeds)
+    knobs = {} if a.config == "trainer" else dict(sp.LEGACY_FIDELITY_KNOBS)
+    rules_epoch = nml_core.CURRENT_RULES_EPOCH if a.config == "trainer" else knobs["rules_epoch"]
 
     def make_play():
         core = nml_core.load(a.repo)
+        if a.config == "trainer":
+            return lambda seed: sp.play_game(seed, a.army1, a.army2, a.repo, a.bank, core)
         list_to_profile.LEGACY_CORE_SELFPLAY = False   # a fresh oracle: the shipped loader and conditional-AP EV
         nml_core.set_legacy_no_cond_ap(False)
         acts = [ref_dir / ("acts_%d" % s) / "acts.jsonl" for s in seeds]
@@ -144,15 +193,16 @@ def main(argv: list[str]) -> int:
     mismatch = _core_mismatch(sha)
     body = ({"ref": str(ref_dir), "seeds_requested": len(seeds), "seeds_compared": 0, "rows_compared": 0,
              "missing": [], "refused": "core mismatch: %s" % mismatch, "diffs": []}
-            if mismatch and not a.allow_core_mismatch else run_parity(ref_dir, seeds, make_play))
+            if mismatch and not a.allow_core_mismatch else run_parity(ref_dir, seeds, make_play, config=a.config))
     summary = {"sha": sha or "unknown", "core_commit": nml_core.BUILD_COMMIT, "core_dirty": nml_core.BUILD_DIRTY,
-               "allow_core_mismatch": a.allow_core_mismatch, "config": CONFIG,
-               "rules_epoch": knobs["rules_epoch"], "knobs_played": dict(knobs), **body}
+               "allow_core_mismatch": a.allow_core_mismatch, "config": a.config,
+               "rules_epoch": rules_epoch, "knobs_played": dict(knobs), **body}
     if a.accept:
         apply_accept(summary, json.loads(Path(a.accept).read_text(encoding="utf-8")))
     code = exit_code(summary)
     if a.plant and not summary["refused"]:
-        summary["plant_exit"] = exit_code(run_parity(plant(ref_dir, seeds[0], PLANT_DIR), seeds[:1], make_play, log=lambda *_: None))
+        planted = plant(ref_dir, seeds[0], PLANT_DIR, a.config)
+        summary["plant_exit"] = exit_code(run_parity(planted, seeds[:1], make_play, log=lambda *_: None, config=a.config))
         code = code if summary["plant_exit"] == 1 else 3
         print("plant: exit %d -> %s" % (summary["plant_exit"], "red, as it must be" if code != 3 else "instrument blind"))
     Path(a.out).write_text(json.dumps(summary, indent=1, sort_keys=True, default=repr) + "\n", encoding="utf-8")
