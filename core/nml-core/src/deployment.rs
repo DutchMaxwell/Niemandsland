@@ -594,6 +594,83 @@ pub fn zones_contain(zones: &[Zone], p: (f64, f64)) -> bool {
     })
 }
 
+/// Catalogue board-size key in whole inches (e.g. `"48x48"`, `"72x48"`).
+pub fn board_size_key(board_in: [f64; 2]) -> String {
+    format!("{}x{}", board_in[0].round() as i64, board_in[1].round() as i64)
+}
+
+/// Firefight step 8: every zone element must lie inside the centred `board_in` rectangle
+/// (`[-w/2, w/2] x [-d/2, d/2]`); a 72x48 zone on a 48x48 board is refused.
+pub fn zones_fit_board(zones: &[Zone], board_in: [f64; 2]) -> Result<(), String> {
+    if board_in[0] <= 0.0 || board_in[1] <= 0.0 {
+        return Err(format!("invalid board size {}x{}", board_in[0], board_in[1]));
+    }
+    let (hx, hz, eps) = (board_in[0] * 0.5, board_in[1] * 0.5, 1e-6);
+    let key = board_size_key(board_in);
+    for zn in zones {
+        match zn {
+            Zone::Poly(pts) => {
+                if pts.is_empty() {
+                    return Err(format!("empty deployment zone polygon for board {key}"));
+                }
+                for &[x, z] in pts {
+                    if (x as f64).abs() > hx + eps || (z as f64).abs() > hz + eps {
+                        return Err(format!(
+                            "deployment zone vertex ({x}, {z}) exceeds {key} board half-extents ({hx}, {hz})"
+                        ));
+                    }
+                }
+            }
+            Zone::Disc { c, r } => {
+                if (c[0] as f64).abs() + (*r as f64) > hx + eps || (c[1] as f64).abs() + (*r as f64) > hz + eps {
+                    return Err(format!(
+                        "deployment zone disc ({}, {}) r={r} exceeds {key} board half-extents ({hx}, {hz})",
+                        c[0], c[1]
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Firefight step 8: look up `[player1_zones, player2_zones]` for `style_id` on a board of size
+/// `board_in` from `assets/solo/deployments.json`. Per-board entries live under `"boards"[key]`;
+/// `"72x48"` falls back to the legacy top-level `"styles"` map. Every returned zone is validated
+/// to fit `board_in`.
+pub fn catalog_zones_for_board(
+    catalog: &serde_json::Value,
+    style_id: &str,
+    board_in: [f64; 2],
+) -> Result<[Vec<Zone>; 2], String> {
+    let key = board_size_key(board_in);
+    let style = catalog
+        .get("boards")
+        .and_then(|b| b.get(&key))
+        .and_then(|m| m.get(style_id))
+        .or_else(|| {
+            if key == "72x48" {
+                catalog.get("styles").and_then(|s| s.get(style_id))
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| format!("deployment style {style_id:?} is not defined for board {key}"))?;
+    let side = |pk: &str| -> Result<Vec<Zone>, String> {
+        let polys = style
+            .get("zones")
+            .and_then(|z| z.get(pk))
+            .ok_or_else(|| format!("deployment style {style_id:?} for board {key} lacks player {pk} zones"))?;
+        let zones = crate::objectives::zones_of_list(polys);
+        if zones.is_empty() {
+            return Err(format!("deployment style {style_id:?} for board {key} has empty player {pk} zones"));
+        }
+        zones_fit_board(&zones, board_in)?;
+        Ok(zones)
+    };
+    Ok([side("1")?, side("2")?])
+}
+
 /// `best_spot`'s scan step at the call site (solo_controller.gd:9121).
 pub const DEPLOY_SPOT_STEP_M: f64 = 0.025;
 /// `least_blocked_spot`'s coarser step (solo_controller.gd:9144).

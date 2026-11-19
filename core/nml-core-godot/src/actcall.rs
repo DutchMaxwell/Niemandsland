@@ -275,15 +275,20 @@ pub fn check_of(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Ter
     }
 }
 
-/// `NmlCore.check_begin`: `{"ok": true}`, or `{"ok": false, "reason"}` while another unit's activation is open (`open_name` != "").
-pub fn begin_of(open_name: &str) -> VarDictionary {
-    match begin_check((!open_name.is_empty()).then_some(open_name)) {
+/// `NmlCore.check_begin`: `{"ok": true}`, or `{"ok": false, "reason", "lines"}` when another
+/// unit's activation is open (`open_name` != "") or the loaded game header mixes game systems.
+pub fn begin_of(open_name: &str, systems: &[&str]) -> VarDictionary {
+    match begin_check((!open_name.is_empty()).then_some(open_name), systems) {
         Ok(()) => {
             let mut d = VarDictionary::new();
             d.set("ok", true);
             d
         }
-        Err(reason) => not_ok(&reason),
+        Err(refused) => {
+            let mut d = not_ok(&refused.reason);
+            d.set("lines", &lines_of(&[refused.line]));
+            d
+        }
     }
 }
 

@@ -345,6 +345,26 @@ func test_a_unit_may_not_begin_while_another_is_open() -> void:
 	assert_str(str(r.get("reason", ""))).is_equal("Finish Blades's activation first.")
 
 
+## Firefight step 7: the stateless check_begin also reads the loaded header - a table whose lists carry two game
+## systems is refused with its reason and a battle-log line; a one-system table opens.
+func test_check_begin_refuses_a_header_that_mixes_game_systems() -> void:
+	for sys in [["gf", "gff", false], ["gff", "gff", true], ["gf", "gf", true]]:
+		var core: Object = ClassDB.instantiate("NmlCore")
+		var a := _unit(1, [Vector3.ZERO], "a")
+		var b := _unit(2, [Vector3(30.0 * IN2M, 0, 0)], "b")
+		a.unit_properties["game_system"] = sys[0]
+		b.unit_properties["game_system"] = sys[1]
+		var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+		army.game_units = {"a": a, "b": b}
+		var state := BattleSim.capture(army, func() -> Array: return [], func(_i: int) -> int: return 0, 1, 4)
+		assert_bool(core.set_game_header(AiActRecorder._header_line(state, Callable()))).override_failure_message(str(core.last_error())).is_true()
+		var r: Dictionary = core.check_begin("")
+		assert_bool(r["ok"]).override_failure_message("%s + %s" % [sys[0], sys[1]]).is_equal(sys[2])
+		if not sys[2]:
+			assert_str(str(r.get("reason", ""))).contains("two game systems")
+			assert_str(str(((r.get("lines", [{}]) as Array)[0] as Dictionary).get("rule", ""))).is_equal("mixed_systems")
+
+
 ## ---- the step path runs with the table's casualty order and the moving shot (step 17b) ----
 ## "a" (3 models, a 24" Rifle) and "b" (5 models in a 1" line whose slot 0 stands in the MIDDLE) under a game header
 ## of `epoch`. Slot order kills slot 0 first; the table's order (`tray_exact` from epoch 70) kills an outer model.

@@ -95,7 +95,7 @@ pub fn chain_casualty_order(state: &State, u: usize, max_picks: Option<usize>) -
         group.extend((0..state.positions[h].len()).map(|m| (h, m)));
     }
     let n = group.len();
-    let max_chain = if matches!(state.profile(host).game_system.as_str(), "gff" | "aofs") { 6.0 } else { 9.0 };
+    let max_chain = state.book(host).chain_in;
     let (slack, mut gap, mut linked) = (0.01, vec![0.0; n * n], vec![false; n * n]);
     for i in 0..n {
         for j in i + 1..n {
@@ -185,5 +185,49 @@ mod tests {
                 u["expected"].as_array().unwrap().iter().map(|x| x.as_u64().unwrap() as usize).collect();
             assert_eq!(casualty_order_of(&kits, &pos, &wounds), want, "{}", u["name"]);
         }
+    }
+
+    /// Firefight step 5: `chain_casualty_order` reads `rules::book(..).chain_in`.
+    /// Removing the cheap side-branch leaves a 6.6 in line: coherent at gf 9 in, incoherent at gff 6 in.
+    #[test]
+    fn chain_casualty_order_reads_book_chain() {
+        use crate::state::{ProfileCache, Profiles};
+        use std::rc::Rc;
+        let run = |sys: &str| {
+            let p: crate::state::Profile = serde_json::from_value(serde_json::json!({
+                "unit_id": "u0", "name": "u0", "quality": 4, "defense": 4,
+                "model_count": 6, "game_system": sys,
+            })).unwrap();
+            let mut idx = HashMap::new();
+            idx.insert("u0".to_string(), 0);
+            let mut cache = ProfileCache::new(Rc::new(Profiles { list: vec![p], index: idx }));
+            let mut st = crate::io::state_from_json(&serde_json::json!({
+                "round": 1, "rounds_total": 4,
+                "units": { "u0": {
+                    "player": 1, "alive": 6,
+                    "positions": [
+                        [0.0, 0.0, 0.0],
+                        [1.9 * IN2M, 0.0, 0.0],
+                        [3.8 * IN2M, 0.0, 0.0],
+                        [5.7 * IN2M, 0.0, 0.0],
+                        [7.6 * IN2M, 0.0, 0.0],
+                        [3.8 * IN2M, 0.0, 1.5 * IN2M],
+                    ],
+                    "radii": vec![0.5 * IN2M; 6],
+                    "wounds": vec![1; 6],
+                }}
+            }).to_string(), &mut cache, &mut None).unwrap();
+            st.kits = vec![Rc::new(vec![
+                Kit { weapons: vec![0], equipment: 0, wounds_max: 1 },
+                Kit { weapons: vec![0], equipment: 0, wounds_max: 1 },
+                Kit { weapons: vec![0], equipment: 0, wounds_max: 1 },
+                Kit { weapons: vec![0], equipment: 0, wounds_max: 1 },
+                Kit { weapons: vec![0], equipment: 0, wounds_max: 1 },
+                Kit { weapons: vec![], equipment: 0, wounds_max: 1 },
+            ])];
+            chain_casualty_order(&st, 0, Some(1)).unwrap()
+        };
+        assert_eq!(run("gf")[0], 5, "gf 9 in chain keeps the 6.6 in line coherent, picking cheap slot 5");
+        assert_ne!(run("gff")[0], 5, "gff 6 in chain rejects slot 5 because the 6.6 in line exceeds 6 in");
     }
 }
