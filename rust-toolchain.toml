@@ -12,3 +12,4 @@
 [toolchain]
 channel = "1.98.0"
 components = ["clippy", "rustfmt"]
+# proof only: touching this file must change the cache key
