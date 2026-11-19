@@ -16,7 +16,23 @@
     "Stealth Aura": "Measured (5-seed sweep): 8 taken volleys, the same target-side hit penalty as Changebound.",
     "Hazardous": "Measured (5-seed sweep): 6 taken volleys, the attacker's wounds differ on a natural 1; direction not in the dump.",
     "Gleaming Armour": "Measured (5-seed sweep): 5 taken volleys, the target's Defense differs by one.",
-    "Relentless Aura": "Measured (5-seed sweep): 1 taken volley, the core pays one defense die more on a natural 6."
+    "Relentless Aura": "Measured (5-seed sweep): 1 taken volley, the core pays one defense die more on a natural 6.",
+    "Bane": "door omits the Bane re-roll line (`Bane: <U> re-rolls N unmodified Defense 6s`), dlines_gap row 13: the core words only a weapon alias.",
+    "Bane Mark": "door omits the Bane re-roll line, dlines_gap row 13.",
+    "Bane when Shooting": "door omits the Bane re-roll line, dlines_gap row 13.",
+    "Bane when Shooting Aura": "door omits the Bane re-roll line, dlines_gap row 13.",
+    "Mischievous": "door omits the unit-level Bane alias line (`Mischievous: <U> re-rolls ...`), dlines_gap row 13 (measured: 13 taken volleys).",
+    "Enhanced Mischievous": "door omits the unit-level Bane alias line, dlines_gap row 13.",
+    "Mischievous Boost": "door omits the unit-level Bane alias line, dlines_gap row 13.",
+    "Bestial": "door omits the unit-level Bane alias line, dlines_gap row 13.",
+    "Enhanced Bestial": "door omits the unit-level Bane alias line, dlines_gap row 13.",
+    "Bestial Boost": "door omits the unit-level Bane alias line, dlines_gap row 13.",
+    "Vicious": "door omits the unit-level Bane alias line, dlines_gap row 13.",
+    "Scrapper": "door omits the unit-level Bane alias line, dlines_gap row 13.",
+    "Enhanced Scrapper": "door omits the unit-level Bane alias line, dlines_gap row 13.",
+    "Scrapper Boost": "door omits the unit-level Bane alias line, dlines_gap row 13.",
+    "Raider": "door omits the unit-level Bane alias line, dlines_gap row 13.",
+    "Raider Boost": "door omits the unit-level Bane alias line, dlines_gap row 13."
   },
   "groups": {
     "ledger_not_round_tripped": {
@@ -30,6 +46,60 @@
       "kind": "pre_attack_beat",
       "why": "The table resolves a bearer's pre-attack beat in main.gd before the volley, and the core, which takes the whole activation, resolves it again from the board it captured before that beat. Measured 19.11. (one real AI activation per seed, deny slice, door on against door off, 8 seeds each): Mend 8/8 and Breath Attack 8/8 roll the beat's die twice (a second Blast volley on 7/8), Mind Control (also Fatigue Debuff) 8/8 rolls its morale test twice, Storm Attack 8/8 rolls its trigger dice twice, Reckless Piercing 8/8 rolls its die twice, and the Utility Buff family leaves a stale once-record or marker behind on the table 8/8 (Precision Shooter Buff: a record the core already spent; Precision Tag: a tag marker). The family is one primitive, so its Casting Buff, Precision Target and Precision Spotter (each measured equal, 8/8) and Re-Position Artillery (not measured) go with it. Piercing Tag, Piercing Target and Piercing Spotter (primitive Piercing Tag) run in the same slot but measured equal 8/8 and stay taken (LD-6).",
       "leaves_with": "the beats guard in PLAN_C_CAST_LEGS"
+    },
+    "door_omits_to_hit_note": {
+      "primitives": ["Artillery", "Stealth", "Evasive", "Aircraft", "Shot Modifier", "Instinctive"],
+      "kind": "rule_line",
+      "why": "The table names every to-hit modifier a rule applies in one line (`To-hit vs <U>: Artillery +1 (Held, target over 12\"), Stealth -1 -> hits on 3+`); the door says none of it. Measured 19.11. (dlines probe over the roster sweep, 1394 taken-and-equal volleys): 224 volleys, the largest gap, dlines_gap row 2. A rule applied without a log line.",
+      "leaves_with": "the dlines2 train that composes the note on the core's step path"
+    },
+    "door_omits_wound_ignore_line": {
+      "primitives": ["Regeneration", "Self-Repair", "Resistance"],
+      "kind": "rule_line",
+      "why": "The table writes the ignore roll of the Regeneration family with the rule's name (`<U> rolls N Plaguebound dice (5+) - K wounds ignored`, the bypass and Warding lines); the door writes none and the core's context carries targets, not names. Measured 19.11.: 198 volleys, dlines_gap row 3.",
+      "leaves_with": "the dlines2 train that carries the group names to the dice leg"
+    },
+    "door_omits_shred_line": {
+      "primitives": ["Shred"],
+      "kind": "rule_line",
+      "why": "The table names Shred's extra wounds (`Warbound: 2 Defense rolls of 1 -> +2 wounds`, the widened and Boost forms); the door writes none. Measured 19.11.: 80 volleys, dlines_gap row 7.",
+      "leaves_with": "the dlines2 train that says the Shred lines"
+    },
+    "door_omits_lacerate_line": {
+      "primitives": ["Lacerate"],
+      "kind": "rule_line",
+      "why": "The table names Lacerate's re-roll (`Lacerate: <U> re-rolls N unmodified Defense 6s`); the door writes none (the core carries no name for it). Measured 19.11.: 12 volleys, dlines_gap row 13.",
+      "leaves_with": "the dlines2 train that names the Bane family's re-roll"
+    },
+    "door_omits_simultaneous_fire_line": {
+      "primitives": [],
+      "kind": "rule_line",
+      "why": "A shooter with a Deadly weapon beside another ranged weapon (its joined heroes' included): the table lands Deadly inline, so a later weapon sees fewer models and says `Simultaneous fire: ...` or Blast's cap read when the volley started; the core lands after the dice and writes neither. Not a rule name: `CoreSlice` refuses it by predicate (`deadly_beside_other_weapons`), switched on by this group. Measured 19.11.: 29 volleys, dlines_gap row 18.",
+      "leaves_with": "the dlines2 train that lands Deadly inline on the step path"
+    },
+    "door_omits_takedown_lines": {
+      "primitives": ["Takedown"],
+      "kind": "rule_line",
+      "why": "The table writes three Takedown lines (the pick, the unit-of-[1] save context, the picked model wounded or killed) and no `takes N wounds` line; the door writes `takes N wounds` instead. Measured 19.11.: 38 volleys, dlines_gap row 15.",
+      "leaves_with": "the dlines2 train that says the Takedown lines"
+    },
+    "door_omits_shielded_line": {
+      "primitives": ["Shielded"],
+      "kind": "rule_line",
+      "why": "The table says each Defense part a rule adds before the volley (`<U> is Shielded: +1 Defense (saves on 3+)`); the door writes none. Measured 19.11.: 31 volleys, dlines_gap row 17.",
+      "leaves_with": "the dlines2 train that composes the Defense parts"
+    },
+    "door_omits_shroud_line": {
+      "primitives": ["Ranged Shrouding"],
+      "kind": "rule_line",
+      "why": "The table names the range cut of the Ranged Shrouding family (`Wild Veil: <U> - weapon ranges against it 6\" shorter (min 6\")`); the door writes none (the rule name is not on the core's context). Measured 19.11.: 35 volleys, dlines_gap row 16.",
+      "leaves_with": "the dlines2 train that carries the shroud's name"
+    },
+    "door_omits_fortified_line": {
+      "primitives": ["Fortified"],
+      "kind": "rule_line",
+      "why": "The table names the AP the Fortified family takes off (`Warden: <U> takes the hits at AP(1) instead of AP(2) - saves on 5+`); the door words it differently and only in its ledger. Measured 19.11.: 17 volleys, dlines_gap row 21.",
+      "leaves_with": "the dlines2 train that says the Fortified line"
     }
   }
 }
