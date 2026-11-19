@@ -26,11 +26,6 @@ const TAKEDOWN_LABEL_GROUP := "door_takedown_names_an_equipment_carrier"
 ## The primitives whose rules move a SHOOTING to-hit number: on the target (Artillery's -1, the Stealth and Evasive families, Aircraft) and on the shooter.
 const TO_HIT_ON_TARGET := ["Artillery", "Stealth", "Evasive", "Aircraft"]
 const TO_HIT_ON_SHOOTER := ["Artillery", "Shot Modifier", "Instinctive"]
-const WARDING_BESIDE_IGNORE_GROUP := "door_warding_gate_beside_other_ignore"
-## The rule names that share Warding's distance gate (6+ ignore only from a shot over 9in, core `unit.rs` MOR-17a), and the primitives of
-## the wound-ignore families (Regeneration and its aliases, Resistance, Self-Repair).
-const WARDING_GATED := ["Warding", "Knightborn", "Angelic Blessing"]
-const IGNORE_PRIMITIVES := ["Regeneration", "Resistance", "Self-Repair"]
 
 
 static func _has_group(group: String) -> bool:
@@ -194,18 +189,12 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 
 ## Deny mode, a PAIR (two groups). Versatile: the core latches a Versatile Attack pick on the plain Quality, the table on the MODIFIED to-hit
 ## number, so a Versatile shooter and any to-hit modifier in play (on the target, or on the shooter itself) can pick differently: a state
-## difference, kept by the dice-only pin. Takedown: a line difference (the picked model's label), dropped by it. Warding gate: a TARGET with a Warding-family rule
-## beside another wound-ignore group (a state difference too, whatever the shooter carries).
+## difference, kept by the dice-only pin. Takedown: a line difference (the picked model's label), dropped by it.
 ## `pair_refusals_in` reads a named slice file like `refusals_in` (the shadow's census reads the deny file whatever the live slice is).
 static func pair_refusals(shooter: GameUnit, target: GameUnit) -> Array:
 	var out: Array = []
 	if shooter == null or target == null or config()["mode"] != "deny":
 		return out
-	# A TARGET with a Warding-family rule beside ANOTHER wound-ignore group (Regeneration and its forms, Medical Training, Spell Resistance, a second gated
-	# name), whatever the shooter carries: the core stamps the distance gate only when the gated rule is the best ignore (`unit.rs`, `normal < other_min`), so
-	# beside another group the door never says the gate line and, from within 9in, still rolls the gated group the table refuses (a state difference).
-	if _has_group(WARDING_BESIDE_IGNORE_GROUP) and _warding_beside_other_ignore(target):
-		out.append("warding_gate_beside_other_ignore")
 	if _has_group(VERSATILE_PAIR_GROUP) and _chain_carries(shooter, ["Versatile Attack"]) \
 			and (_chain_carries(target, TO_HIT_ON_TARGET) or _chain_carries(shooter, TO_HIT_ON_SHOOTER)):
 		out.append("versatile_pick_modified_to_hit")
@@ -299,38 +288,6 @@ static func _own_shred_beside_alias(gu: GameUnit) -> bool:
 			if RulesRegistry.lookup(system, faction, label).get("primitive") == "Shred" and _shred_group_key(label) != "Shred":
 				return true
 	return false
-
-
-## `gu` (with its joined heroes) carries a rule of the Warding family AND a wound-ignore rule of ANOTHER group (the table's `_solo_ignore_group_key`:
-## Regeneration, its Aura / Buff forms and Medical Training are one group; Enhanced / Aura / Buff / Boost forms belong to their base name).
-## Rules are read the way the core reads them: the registry's ignore primitives (item grants included) plus Medical Training, which has no entry.
-static func _warding_beside_other_ignore(gu: GameUnit) -> bool:
-	var groups := {}
-	for u in [gu] + gu.get_attached_heroes():
-		if not u is GameUnit:
-			continue
-		for p in IGNORE_PRIMITIVES:
-			for e in RulesRegistry.unit_rules_of_primitive(u as GameUnit, p):
-				groups[_ignore_group_key(str((e as Dictionary).get("name", "")))] = true
-		if (u as GameUnit).get_special_rules().any(func(r) -> bool: return rule_label(r) == "Medical Training"):
-			groups["Regeneration"] = true
-	return groups.size() >= 2 and WARDING_GATED.any(func(n: String) -> bool: return groups.has(n))
-
-
-static func _ignore_group_key(rule_name: String) -> String:
-	var n := rule_name.strip_edges()
-	if n.to_lower().begins_with("regeneration") or n.to_lower() == "medical training":
-		return "Regeneration"
-	if n.begins_with("Enhanced "):
-		n = n.substr(9)
-	var trimmed := true
-	while trimmed:
-		trimmed = false
-		for suffix in [" Aura", " Buff", " Boost"]:
-			if n.ends_with(suffix):
-				n = n.left(n.length() - suffix.length())
-				trimmed = true
-	return n
 
 
 static func _shred_group_key(rule_name: String) -> String:
