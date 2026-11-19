@@ -18,8 +18,7 @@ var _epoch_before: int
 
 func before_test() -> void:
 	_epoch_before = AiActRecorder.rules_epoch
-	# The table's gate reads from EPOCH_73_V36 on; the volley itself goes through the core door (deny default), which takes the
-	# stamp as its own: its lone-hero target reads from EPOCH_83, so this runs at the current epoch (the 72 controls pin theirs).
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)

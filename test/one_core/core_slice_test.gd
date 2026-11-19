@@ -427,11 +427,13 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 	CoreSlice.reset_cache()
 
 
-## A joined unit whose own models are all dead is shot as its living hero ("Hero: X is the unit now"). The core's step path says
-## that itself (sim.rs, a tray line), so deny mode takes such a TARGET like any other. RED: bring back a `lone_hero_target` refusal
-## -> the first assertion reads ["lone_hero_target"], and v36/g4r5_r8_lonehero_retarget_test + g4r5_r8b_lonehero_nearest_test
-## lose the core's Hero line on the deny default.
-func test_deny_mode_takes_a_lone_hero_target() -> void:
+## A joined unit whose own models are all dead is shot as its living hero ("Hero: X is the unit now"). The core's lone-hero target
+## (and the step path's Hero line) exists from EPOCH_83_LONE_HERO_TARGET, so deny mode keeps such a TARGET on the table under an
+## older stamp (a replay, v36/g4r5_r8_lonehero_retarget_test and g4r5_r8b_lonehero_nearest_test pin 73) and takes it from 83 on.
+## A host with a living model, a dead hero or a shooter is untouched on both sides. RED: drop the epoch gate -> the 82 leg reads [],
+## drop the predicate -> both v36 tests lose their Hero line; keep it unconditional -> the 83 leg reads ["lone_hero_target"].
+func test_deny_mode_takes_a_lone_hero_target_from_epoch_83() -> void:
+	var epoch_before := AiActRecorder.rules_epoch
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
 	var host := _unit(["Tough(3)"], [["AP(1)"]])
@@ -440,8 +442,22 @@ func test_deny_mode_takes_a_lone_hero_target() -> void:
 	var hm := ModelInstance.new()
 	hm.is_alive = true
 	hero.models.append(hm)
-	assert_array(CoreSlice.refusals(host, true)).override_failure_message("host with no model, hero alive: the core shoots it as the hero").is_empty()
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_83_LONE_HERO_TARGET - 1
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("below 83: host with no model, hero alive stays on the table").is_equal(["lone_hero_target"])
+	assert_bool(CoreSlice.takes(host, true)).is_false()
+	assert_array(CoreSlice.refusals(host)).override_failure_message("as a shooter it is not a target case").is_empty()
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_83_LONE_HERO_TARGET
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("from 83 the core shoots it as the hero").is_empty()
 	assert_bool(CoreSlice.takes(host, true)).is_true()
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_83_LONE_HERO_TARGET - 1
+	var xm := ModelInstance.new()
+	xm.is_alive = true
+	host.models.append(xm)
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("a host with a living model is no lone hero").is_empty()
+	host.models.clear()
+	hm.is_alive = false
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("a dead hero is no lone hero").is_empty()
+	AiActRecorder.rules_epoch = epoch_before
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 

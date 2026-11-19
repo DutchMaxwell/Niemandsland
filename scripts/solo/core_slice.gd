@@ -134,6 +134,12 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 	# Deny mode takes a joined hero with its unit, so the hero's own unit and weapon rules must pass the list too (allow
 	# mode refuses every attachment above; its labels stay as they were).
 	if c["mode"] == "deny":
+		# A joined unit whose own models are all dead is shot as its living hero. The core's lone-hero target exists from
+		# EPOCH_83_LONE_HERO_TARGET (below it the core shoots the dead host at the host's Defense and says nothing), so a volley
+		# at such a target under an older stamp (a replay, a pinned test) stays on the table; current games go to the core.
+		if as_target and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_83_LONE_HERO_TARGET and gu.get_alive_count() <= 0 \
+				and gu.get_attached_heroes().any(func(h) -> bool: return h is GameUnit and (h as GameUnit).get_alive_count() > 0):
+			out.append("lone_hero_target")
 		for hero in gu.get_attached_heroes():
 			for r in refusals(hero as GameUnit, true):
 				if r != "attached" and not out.has(r):
