@@ -1720,12 +1720,12 @@ mod tests {
         (step_activation(statics, st, "a", &Terrain::default(), seams(), &t, true), asked)
     }
 
-    /// CC-6a: the plain damage cases of CC-2's golden (`golden_cast_damage.json`, recorded from the table with the core off), replayed
-    /// through the step path on the recorded faces: the same rolls in the same order (the die is `cast`, the saves `spell_defense`;
-    /// the table's save target is unclamped, the core's 2..6), the same lines but for the tray's own "AI (...)" dice lines, the same
-    /// models dead in the same slots (the volley's casualty order). The morale test after the damage is CC-8a's: the golden's morale
-    /// roll and lines are not asked or said yet. RED: Cover folded into the save (the in-cover test below), the AP dropped (the
-    /// `morale` scenario saves at 4+), the landing report left out (no wound lines), the saves' kind left as `defense`.
+    /// CC-6a/8a: the plain damage cases of CC-2's golden (`golden_cast_damage.json`, recorded from the table with the core off), replayed
+    /// through the step path on the recorded faces: the same rolls in the same order (the die is `cast`, the saves `spell_defense`,
+    /// the post-damage morale `spell_morale`; the table's save target is unclamped, the core's 2..6), the same lines but for the tray's
+    /// own "AI (...)" dice lines, the same models dead in the same slots (the volley's casualty order) and the same shaken state.
+    /// RED: Cover folded into the save (the in-cover test below), the AP dropped (the `morale` scenario saves at 4+), the landing
+    /// report left out (no wound lines), the saves' kind left as `defense`, or morale skipped / moved out of table order (CC-8a).
     #[test]
     fn the_plain_damage_cases_of_the_cc2_golden_replay_roll_for_roll_and_line_for_line() {
         let golden: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(format!("{}/../../test/fixtures/one_core/golden_cast_damage.json", env!("CARGO_MANIFEST_DIR"))).expect("the CC-2 golden")).unwrap();
@@ -1739,49 +1739,57 @@ mod tests {
                 "bolt_kill" => bolt_board(12, &["AP(4)"], 3),
                 other => panic!("a scenario this test does not know: {other}"),
             };
-            // the recorded rolls "leg|kind|CxT+|owner|faces", minus the morale die (CC-8a)
-            let rolls: Vec<Vec<String>> = case["extra"]["rolls"].as_array().unwrap().iter().map(|r| text(r).split('|').map(String::from).collect::<Vec<_>>()).filter(|r| r[1] != "morale" && r[0] != "spell" || r[1] == "defense").collect();
+            // the recorded rolls "leg|kind|CxT+|owner|faces": cast die, spell saves, and spell morale (CC-8a)
+            let rolls: Vec<Vec<String>> = case["extra"]["rolls"].as_array().unwrap().iter().map(|r| text(r).split('|').map(String::from).collect::<Vec<_>>()).collect();
             let groups: Vec<Vec<u8>> = rolls.iter().map(|r| r[4].split(',').map(|f| f.parse().unwrap()).collect()).collect();
             let want_rolls: Vec<String> = rolls.iter().map(|r| {
                 let (count, target) = r[2].trim_end_matches('+').split_once('x').map(|(c, t)| (c.to_string(), t.parse::<i64>().unwrap())).unwrap();
-                let (kind, target) = if r[0] == "cast" { ("cast", target) } else { ("spell_defense", target.clamp(2, 6)) };
+                let (kind, target) = match (r[0].as_str(), r[1].as_str()) {
+                    ("cast", _) => ("cast", target),
+                    ("spell", "morale") => ("spell_morale", target),
+                    _ => ("spell_defense", target.clamp(2, 6)),
+                };
                 format!("{kind}|{count}x{target}+|{}", r[3].trim_start_matches("AI (").trim_end_matches(')'))
             }).collect();
             let (done, asked) = replay(&statics, &st, test_bolt(), &groups);
             let ActStep::Done { state, lines, landings, .. } = done else { panic!("{name} {seed}: taken, got {done:?}") };
             assert_eq!(asked, want_rolls, "{name} {seed}: the rolls");
             let ours: Vec<String> = lines.iter().map(|l| format!("COMBAT|{}", l.text)).collect();
-            let want: Vec<String> = case["lines"].as_array().unwrap().iter().map(text).filter(|l| !l.starts_with("COMBAT|AI (") && !l.contains("morale")).collect();
+            let want: Vec<String> = case["lines"].as_array().unwrap().iter().map(text).filter(|l| !l.starts_with("COMBAT|AI (")).collect();
             assert_eq!(ours, want, "{name} {seed}: the lines");
             let foe = &case["final"][1];
             let mut dead: Vec<i64> = landings.iter().filter(|l| l.unit == 2).flat_map(|l| l.models.iter().filter(|m| m.dead).map(|m| m.slot as i64)).collect();
             dead.sort();
             let gone: Vec<i64> = foe["slots"].as_array().unwrap().iter().filter(|s| !s[1].as_bool().unwrap()).map(|s| s[0].as_i64().unwrap()).collect();
-            assert_eq!((state.alive[2], dead, state.casts[0]), (foe["alive"].as_i64().unwrap(), gone, 0), "{name} {seed}: alive, the slots that fell, the token paid");
+            assert_eq!(
+                (state.alive[2], state.shaken[2], dead, state.casts[0]),
+                (foe["alive"].as_i64().unwrap(), foe["shaken"].as_bool().unwrap(), gone, 0),
+                "{name} {seed}: alive, shaken, the slots that fell, the token paid"
+            );
             *seen.entry(name).or_insert(0) += 1;
         }
         assert_eq!(seen.values().copied().collect::<Vec<_>>(), [8, 8, 8], "all 24 cases: {seen:?}");
     }
 
     /// CC-6a: Cover is for shots: a target in cover saves a spell at its own Defense, and says so before the save line (NML-104, the
-    /// table's `_solo_log_defense_vs_spell`). The same faces as the golden's `bolt_saves` seed 0 (4+: 3 blocks of 6). RED: the cover
-    /// folded in (`defense - 1`) -> the save asks 3+ and blocks 4.
+    /// table's `_solo_log_defense_vs_spell`). The same faces as the golden's `bolt_saves` seed 0 (4+: 3 blocks of 6, then morale 6).
+    /// RED: the cover folded in (`defense - 1`) -> the save asks 3+ and blocks 4.
     #[test]
     fn a_target_in_cover_saves_a_spell_at_its_own_defense_and_says_so() {
         let (mut st, statics) = bolt_board(6, &[], 6);
         st.in_cover[2] = true;
-        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![4, 3, 1, 4, 1, 6]]);
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![4, 3, 1, 4, 1, 6], vec![6]]);
         let ActStep::Done { state, lines, .. } = done else { panic!("taken, got {done:?}") };
-        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|6x4+|Foe"]);
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|6x4+|Foe", "spell_morale|1x4+|Foe"]);
         let said: Vec<&str> = lines.iter().map(|l| l.text.as_str()).skip(3).collect();
-        assert_eq!(said, ["Cover does not apply to spell damage (its +1 is against shooting) \u{2014} Foe saves on 4+", "Foe saves on 4+", "Foe takes 3 wounds (3/6)", "Foe loses 3 models (3/6)"]);
-        assert_eq!(state.alive[2], 3);
+        assert_eq!(said, ["Cover does not apply to spell damage (its +1 is against shooting) \u{2014} Foe saves on 4+", "Foe saves on 4+", "Foe takes 3 wounds (3/6)", "Foe loses 3 models (3/6)", "Foe passes morale"]);
+        assert_eq!((state.alive[2], state.shaken[2]), (3, false));
     }
 
-    /// CC-6a: a spell and a target the core cannot resolve EXACTLY are refused at the cast's own input before any die, each with its
-    /// own sentence: a weapon rule that is not an AP rating, and a target that saves with a rule or record the core does not fold or
-    /// say for spell damage yet (a live record on its chain, growth markers, Regeneration, Shielded, Guarded, Fortified, Armor). The
-    /// plain board asks the die. RED: a check removed -> the case asks the cast die instead.
+    /// CC-6a/6b: a spell and a target the core cannot resolve EXACTLY are refused at the cast's own input before any die, each with its
+    /// own sentence: a weapon rule outside AP/Deadly, and a target that saves with a rule or record the core does not fold or say for
+    /// spell damage yet (a live record on its chain, growth markers, Shielded, Guarded, Fortified, Armor). Plain boards, AP, Deadly and
+    /// Regeneration targets ask the die. RED: a check removed -> the case asks the cast die instead.
     #[test]
     fn a_damage_spell_or_target_the_core_cannot_resolve_exactly_is_refused_before_the_die() {
         let ask = |st: &State, statics: &[UnitStatic]| step_activation(statics, st, "a", &Terrain::default(), seams(), &[Begin, intent(HOLD, None), Input::Cast(test_bolt())], true);
@@ -1829,21 +1837,101 @@ mod tests {
         assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &hero, true), ActStep::Refused { index: 2, reason } if reason == "cast 0: bh meets Test Bolt with a rule the core does not say for spell damage yet"));
     }
 
-    /// CC-6a: every standing target of the spell takes its hits, in list order, each saved on its own dice; the golden's one-model
-    /// board gains a second target "bh" (two models, Defense 4+). RED: only the first target hit -> the second save is never asked.
+    /// CC-6a/8a: every standing target of the spell takes its hits, in list order, each saved on its own dice (and testing morale
+    /// right after its own damage when at or below half); the golden's one-model board gains a second target "bh" (two models,
+    /// Defense 4+, Quality 4+). RED: only the first target hit -> the second save is never asked.
     #[test]
     fn every_standing_target_takes_the_spells_hits_in_list_order() {
         let (mut st, mut statics) = bolt_board(2, &[], 6);
-        statics[3] = UnitStatic { name: "Guard".into(), model_count: 2, wounds_max: vec![1, 1], ctx: crate::unit::Ctx { defense: 4, tough: 1, modifier_sum: true, ..Default::default() }, ..Default::default() };
+        statics[3] = UnitStatic { name: "Guard".into(), model_count: 2, wounds_max: vec![1, 1], ctx: crate::unit::Ctx { defense: 4, quality: 4, tough: 1, modifier_sum: true, ..Default::default() }, ..Default::default() };
         st.positions[3] = vec![[20.0 * INCHES_TO_METERS, 0.0, 0.0], [20.0 * INCHES_TO_METERS, 0.0, 1.3 * INCHES_TO_METERS]];
         (st.wounds[3], st.alive[3]) = (vec![1, 1], 2);
         Rc::make_mut(&mut st.radii)[3] = vec![0.63 * INCHES_TO_METERS; 2];
         let cast = CastInput { targets: vec!["b".into(), "bh".into()], ..test_bolt() };
-        let (done, asked) = replay(&statics, &st, cast, &[vec![6], vec![1, 1], vec![6, 1]]);
+        let (done, asked) = replay(&statics, &st, cast, &[vec![6], vec![1, 1], vec![6, 1], vec![5]]);
         let ActStep::Done { state, lines, .. } = done else { panic!("taken, got {done:?}") };
-        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|2x4+|Foe", "spell_defense|2x4+|Guard"]);
-        assert_eq!(lines.iter().map(|l| l.text.as_str()).skip(3).collect::<Vec<_>>(), ["Foe saves on 4+", "Foe takes 2 wounds (4/6)", "Foe loses 2 models (4/6)", "Guard saves on 4+", "Guard takes 1 wound (1/2)", "Guard loses a model (1/2)"]);
-        assert_eq!((state.alive[2], state.alive[3]), (4, 1));
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|2x4+|Foe", "spell_defense|2x4+|Guard", "spell_morale|1x4+|Guard"]);
+        assert_eq!(lines.iter().map(|l| l.text.as_str()).skip(3).collect::<Vec<_>>(), ["Foe saves on 4+", "Foe takes 2 wounds (4/6)", "Foe loses 2 models (4/6)", "Guard saves on 4+", "Guard takes 1 wound (1/2)", "Guard loses a model (1/2)", "Guard passes morale"]);
+        assert_eq!((state.alive[2], state.alive[3], state.shaken[3]), (4, 1, false));
+    }
+
+    // ---- CC-8a: morale after spell damage (table timing O2, kind spell_morale) ----
+
+    /// CC-8a (O2): morale runs RIGHT AFTER that target's spell damage, never deferred to the activation's end. Two proofs:
+    /// (1) Cast + Hold volley in one activation: Test Bolt drops Foe to 3/6 -> `spell_morale` is asked BEFORE the volley's
+    ///     `attack` die, and Foe is already Shaken before the volley lands.
+    /// (2) Two-target cast: Test Bolt drops Foe (target 1) to 2/4 -> Foe's `spell_morale` is asked BEFORE Guard's `spell_defense`.
+    /// Planted fault: moving spell morale to the activation's end pushes `spell_morale` behind `attack` / Guard's `spell_defense` -> RED.
+    #[test]
+    fn spell_damage_morale_runs_right_after_that_targets_damage_before_later_rolls() {
+        // (1) Cast + volley: Mystic casts Test Bolt (6 hits) at Foe AND shoots a 1-shot Rifle at Foe.
+        let (st, mut statics) = bolt_board(6, &[], 6);
+        statics[0].shoot = vec![ShootProfile { name: "Rifle".into(), attacks: 1, count: 1, range: 24, ..Default::default() }];
+        statics[0].ctx.quality = 4;
+        let mut t = vec![Begin, intent(HOLD, Some("b")), Input::Cast(test_bolt())];
+        let mut asked = Vec::new();
+        for g in [vec![6u8], vec![4, 3, 1, 4, 1, 6], vec![1], vec![1]] {
+            match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) {
+                ActStep::NeedRoll { kind, count, target, owner, faces, .. } => {
+                    assert_eq!(faces, g.len(), "{kind}");
+                    asked.push(format!("{kind}|{count}x{target}+|{owner}"));
+                    t.push(Faces(g));
+                }
+                other => panic!("expected NeedRoll, got {other:?}"),
+            }
+        }
+        let ActStep::Done { state, lines, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) else { panic!("expected Done") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|6x4+|Foe", "spell_morale|1x4+|Foe", "attack|1x4+|Mystic"], "O2: spell_morale precedes the volley's attack die");
+        assert_eq!((state.alive[2], state.shaken[2]), (3, true));
+        let morale_at = lines.iter().position(|l| l.text == "Foe fails morale — Shaken").expect("spell morale line");
+        let volley_at = lines.iter().position(|l| l.text == "Mystic fires at Foe").expect("volley announce line");
+        assert!(morale_at < volley_at, "O2: spell morale line before volley announce");
+
+        // (2) Two-target cast: target 1 ("b", 4 models) drops to 2/4 -> its spell_morale runs BEFORE target 2 ("bh") saves.
+        let (mut st, mut statics) = bolt_board(2, &[], 4);
+        statics[3] = UnitStatic { name: "Guard".into(), model_count: 4, wounds_max: vec![1; 4], ctx: crate::unit::Ctx { defense: 4, quality: 4, tough: 1, modifier_sum: true, ..Default::default() }, ..Default::default() };
+        st.positions[3] = (0..4).map(|i| [20.0 * INCHES_TO_METERS, 0.0, 1.3 * i as f64 * INCHES_TO_METERS]).collect();
+        (st.wounds[3], st.alive[3]) = (vec![1; 4], 4);
+        Rc::make_mut(&mut st.radii)[3] = vec![0.63 * INCHES_TO_METERS; 4];
+        let cast = CastInput { targets: vec!["b".into(), "bh".into()], ..test_bolt() };
+        let (done, asked) = replay(&statics, &st, cast, &[vec![6], vec![1, 1], vec![2], vec![6, 6]]);
+        let ActStep::Done { state, .. } = done else { panic!("taken, got {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|2x4+|Foe", "spell_morale|1x4+|Foe", "spell_defense|2x4+|Guard"]);
+        assert_eq!((state.alive[2], state.shaken[2], state.alive[3], state.shaken[3]), (2, true, 4, false));
+    }
+
+    /// CC-8a: spell morale carries the spell name as its cause (so Banner does not add +1 and says so), skips the die when the
+    /// target is already Shaken, and triggers on a single Tough model wounded to half with the table's tough-value line.
+    #[test]
+    fn spell_morale_drops_banner_skips_shaken_die_and_triggers_on_half_tough() {
+        // Banner (+1) dropped because cause = "Test Bolt" (only shooting or melee).
+        let (mut st, statics) = bolt_board(6, &[], 6);
+        st.morale_bonus[2] = 1;
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![4, 3, 1, 4, 1, 6], vec![3]]);
+        let ActStep::Done { state, lines, .. } = done else { panic!("taken, got {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|6x4+|Foe", "spell_morale|1x4+|Foe"]);
+        assert!(lines.iter().any(|l| l.text == "Banner: Foe gets no +1 against Test Bolt (only shooting or melee)"), "{lines:?}");
+        assert!(state.shaken[2], "3 fails 4+ because Banner did not apply");
+
+        // Already Shaken: no morale die drawn, still prints the failure line.
+        let (mut st, statics) = bolt_board(6, &[], 6);
+        st.shaken[2] = true;
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![4, 3, 1, 4, 1, 6]]);
+        let ActStep::Done { state, lines, .. } = done else { panic!("taken, got {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|6x4+|Foe"]);
+        assert!(lines.iter().any(|l| l.text == "Foe fails morale — Shaken"), "{lines:?}");
+        assert!(state.shaken[2]);
+
+        // Single Tough(4) model taking 2 wounds -> 2/4 triggers morale with the tough-value line.
+        let (mut st, mut statics) = bolt_board(2, &[], 1);
+        (statics[2].wounds_max, statics[2].ctx.tough) = (vec![4], 4);
+        st.wounds[2] = vec![4];
+        st.kits[2] = Rc::new(vec![Kit { weapons: vec![], equipment: 0, wounds_max: 4 }]);
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![1, 1], vec![6]]);
+        let ActStep::Done { state, lines, .. } = done else { panic!("taken, got {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|2x4+|Foe", "spell_morale|1x4+|Foe"]);
+        assert!(lines.iter().any(|l| l.text.starts_with("Foe is at half its tough value (2/4) — morale test")), "{lines:?}");
+        assert_eq!((state.wounds[2][0], state.shaken[2]), (2, false));
     }
 
     // ---- step 12: cancel ----

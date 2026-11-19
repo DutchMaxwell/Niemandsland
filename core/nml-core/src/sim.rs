@@ -8230,15 +8230,18 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
     CastEnd::Landed
 }
 
-/// CC-6a: a damage spell's hits on one target, plain (`_solo_resolve_spell_damage` main.gd:5747). The printed hits are fixed (no to-hit
+/// CC-6a/8a: a damage spell's hits on one target, plain (`_solo_resolve_spell_damage` main.gd:5747). The printed hits are fixed (no to-hit
 /// die), saved at the target's own Defense and the spell's AP: Shielded, Cover and the over-9" family do not count against a spell
 /// (NML-104), so a target in cover says so; the dice are the spell's own (`spell_defense`). The unsaved wounds land through the
-/// volley's casualty order and report. Facets, Regeneration and the morale test are CC-6b..8a's: `cast_break` keeps out what they change.
+/// volley's casualty order and report, followed at table timing (O2, CC-8a) by the target's morale test (`spell_morale`).
+/// Facets and Regeneration are CC-6b..7b's: `cast_break` keeps out what they change.
 fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ti: usize, spell: &Spell, seams: Seams, tray: &mut Tray, shot: &mut ShootResult) {
     if spell.effect_hits <= 0 {
         return;
     }
     let ut = &statics[state.roster.profile[ti]];
+    let alive_before = morale_alive(state, ti, seams);
+    let wounds_before = morale_wounds_left(state, ti, seams);
     let def = ctx_of(ut, state, ti);
     if state.in_cover[ti] {
         let (side, text) = (state.player[ti], format!("Cover does not apply to spell damage (its +1 is against shooting) — {} saves on {}+", ut.name, def.defense.clamp(2, 6)));
@@ -8250,6 +8253,20 @@ fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ti: usize, spell
     let before = chain_snapshot(state, ti, tray);
     land_pool_wounds(state, ti, landed, seams.tray_exact, seams, &mut shot.log);
     land_chain_report(statics, state, tray, ti, before);
+    // CC-8a (O2): morale runs right after that target's spell damage (main.gd `_solo_resolve_spell_damage` -> `_solo_shooting_morale`),
+    // carrying the spell's name as its cause (Banner does not apply) and tagging the morale dice onto the spell leg (`spell_morale`).
+    if landed > 0 && shooting_morale_trigger(state, statics, seams, ut, ti, alive_before, wounds_before) {
+        if tray.feed().is_some() {
+            if let Some(line) = shooting_morale_line(state, statics, seams, ut, ti, alive_before, wounds_before) {
+                say_rule(tray, "morale", state.player[ti], || line);
+            }
+        }
+        let draw0 = tray.feed().map_or(0, |f| f.draws());
+        let before_m = chain_snapshot(state, ti, tray);
+        tray_morale_for(state, statics, ti, false, true, Some(&spell.name), seams, tray, shot, None, None);
+        tray.tag_spell_morale(draw0);
+        land_chain_report(statics, state, tray, ti, before_m);
+    }
 }
 
 /// NML-1157 — WHICH member of the activating chain actually casts.

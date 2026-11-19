@@ -156,6 +156,22 @@ impl Tray {
         }
     }
 
+    /// CC-8a: re-tag morale draws taken since `from` as spell-leg morale rolls (`morale` -> `spell_morale`,
+    /// `fearless` -> `spell_fearless`, `no_retreat` -> `spell_no_retreat`). Seeded trays ignore the call.
+    pub fn tag_spell_morale(&mut self, from: usize) {
+        let Some(feed) = self.feed.as_mut() else { return };
+        for (at, k) in &mut feed.kinds {
+            if *at >= from {
+                *k = match *k {
+                    "morale" => "spell_morale",
+                    "fearless" => "spell_fearless",
+                    "no_retreat" => "spell_no_retreat",
+                    other => other,
+                };
+            }
+        }
+    }
+
     /// One-core P4 step 4.0-9: the unit a resolver is about to draw for, stamped for the next draw. A supplied tray keeps
     /// it for `NeedRoll`'s `owner_key` (no second resolve); a seeded tray ignores the call.
     pub fn owner_next(&mut self, unit: Option<usize>) {
