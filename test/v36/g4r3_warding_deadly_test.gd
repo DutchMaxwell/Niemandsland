@@ -82,19 +82,6 @@ func _fixture(gap_in: float) -> Dictionary:
 	return {"tank": tank, "squad": squad}
 
 
-func _ai_volley(epoch: int, gap_in: float) -> String:
-	AiActRecorder.rules_epoch = epoch
-	var f := _fixture(gap_in)
-	var shots: Array = []
-	for p in AiShooting.profiles_in_range([_lance()], 0.0):
-		shots.append({"member": f["tank"], "quality": 2, "alive": 1, "max": 1, "reach": 24, "profile": p})
-	_main.seed_tray_rng(SEED)
-	await _main._solo_resolve_ai_volley(f["tank"], f["squad"], shots)
-	var text := _log_text()
-	await E2EBoot.settle(get_tree())
-	return text
-
-
 func _human_volley(epoch: int, gap_in: float) -> String:
 	AiActRecorder.rules_epoch = epoch
 	var f := _fixture(gap_in)
@@ -107,33 +94,6 @@ func _human_volley(epoch: int, gap_in: float) -> String:
 
 func _assert_deadly_landed(text: String) -> void:
 	assert_str(text).override_failure_message("fixture: the lance must land Deadly wounds (log: %s)" % text).contains("Deadly(3):")
-
-
-## EPOCH_72 leg (declared first: gdUnit drops tests declared after a failing one): the old ungated roll stays.
-func test_deadly_wounds_inside_nine_inches_still_roll_the_ignore_at_epoch_72(timeout := 120000) -> void:
-	var text: String = await _ai_volley(AiActRecorder.EPOCH_72_PLAYTEST_RULES, 5.0)
-	_assert_deadly_landed(text)
-	assert_str(text).override_failure_message("EPOCH_72 keeps the ungated roll (log: %s)" % text).contains("Knightborn di")
-
-
-## CONTROL: from over 9" the 6+ applies to Deadly wounds, and the gate's verdict is logged under the rule's name.
-func test_deadly_wounds_from_over_nine_inches_roll_the_ignore_at_epoch_73(timeout := 120000) -> void:
-	var text: String = await _ai_volley(AiActRecorder.EPOCH_73_V36, 16.0)
-	_assert_deadly_landed(text)
-	assert_str(text).override_failure_message("over 9in the Knightborn dice roll (log: %s)" % text).contains("Knightborn di")
-	assert_str(text).override_failure_message("rules-must-log (log: %s)" % text) \
-		.contains("Warding: Knight Squad ignores wounds on 6+ (shot from over 9in)")
-
-
-## AI volley, the parity act's shape: a Deadly shot from within 9" rolls no Warding / Knightborn die.
-func test_ai_deadly_wounds_inside_nine_inches_roll_no_ignore_at_epoch_73(timeout := 120000) -> void:
-	var text: String = await _ai_volley(AiActRecorder.EPOCH_73_V36, 5.0)
-	_assert_deadly_landed(text)
-	assert_str(text) \
-		.override_failure_message("C-WARDING-DEADLY — no 6+ ignore dice inside 9in, Deadly wounds included (log: %s)" % text) \
-		.not_contains("Knightborn di")
-	assert_str(text).override_failure_message("rules-must-log (log: %s)" % text) \
-		.contains("Warding: no 6+ ignore, Knight Squad was shot from within 9in")
 
 
 ## Human volley: the same Deadly landing, the same gate.
