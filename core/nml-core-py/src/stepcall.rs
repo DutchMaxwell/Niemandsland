@@ -161,8 +161,11 @@ pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain,
             "lines": lines_of(&lines), "landings": landings_of(state, &landings),
         }),
         ActStep::Open => json!({"step": "open"}),
-        // P4.0-5: the same answer shape as the Godot seam's `need_choice`.
-        ActStep::NeedChoice { id, options, owner } => json!({"step": "need_choice", "id": id, "options": options, "owner": owner}),
+        // P4.0-5 / CC-9a: the same answer shape as the Godot seam's `need_choice`, with lines and landings before the choice.
+        ActStep::NeedChoice { id, options, owner, lines, landings } => json!({
+            "step": "need_choice", "id": id, "options": options, "owner": owner,
+            "lines": lines_of(&lines), "landings": landings_of(state, &landings),
+        }),
         ActStep::Refused { index, reason } => refused(index, &reason),
         ActStep::Cancelled { lines } => json!({"step": "cancelled", "lines": lines_of(&lines)}),
         ActStep::Done { state: s, lines, landings, .. } => {
@@ -262,5 +265,42 @@ mod tests {
         for odd in [json!(3), json!(1.5), json!({"slot": 1}), json!([1.5]), json!(true)] {
             assert!(choice(odd.clone()).is_none(), "{odd}");
         }
+    }
+
+    /// CC-9a/9c: `stepcall::run` serializes `lines` and `landings` onto `need_choice` answers (matching `actcall::run`),
+    /// both empty (Takedown) and populated (cast interference lines before the choice).
+    #[test]
+    fn need_choice_carries_lines_and_landings_arrays() {
+        let header = nmlcore::read_act_header(
+            r#"{"kind":"header","knobs":{},"profiles":{"a":{"unit_id":"a","name":"Mystic","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":2,"base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[]},"b":{"unit_id":"b","name":"Foe","quality":4,"defense":4,"tough":1,"wounds_max":[3,3],"model_count":2,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}}}"#,
+        )
+        .expect("header");
+        let mut cache = nmlcore::state::ProfileCache::new(header.profiles);
+        let mut roster = None;
+        let st = nmlcore::io::state_from_json(
+            r#"{"round":1,"rounds_total":4,"scoring":"end","units":{"a":{"player":1,"alive":1,"wounds":[1],"radii":[0.016],"positions":[[0.0,0.0,0.0]],"in_cover":false,"shaken":false,"fatigued":false,"activated":false,"casts":4,"morale_bonus":0,"aircraft":false,"dormant":false,"ambush_arrived_round":-1,"earliest_arrival_round":-1,"wound_frac":1.0,"mods":{},"mods_base":{},"bands":{"advance":6.0,"rush":12.0}},"b":{"player":2,"alive":2,"wounds":[3,3],"radii":[0.016,0.016],"positions":[[0.2,0.0,0.0],[0.25,0.0,0.0]],"in_cover":false,"shaken":false,"fatigued":false,"activated":false,"casts":2,"morale_bonus":0,"aircraft":false,"dormant":false,"ambush_arrived_round":-1,"earliest_arrival_round":-1,"wound_frac":1.0,"mods":{},"mods_base":{},"bands":{"advance":6.0,"rush":12.0}}}}"#,
+            &mut cache,
+            &mut roster,
+        )
+        .expect("state");
+        let mut caster = UnitStatic { name: "Mystic".into(), is_caster: true, ..Default::default() };
+        caster.spells.push(nmlcore::rules::Spell { name: "Bolt".into(), effect_kind: "damage".into(), threshold: 1, target_count: 1, ..Default::default() });
+        let statics = vec![caster, UnitStatic { name: "Foe".into(), ..Default::default() }];
+        let cast = CastInput { seq: 0, caster: "a".into(), spell: "Bolt".into(), targets: vec!["b".into()], base: 4, threshold: 1, open: true, pools: vec![(2, vec![("b".into(), 2)])], ..Default::default() };
+        let t = [
+            Input::Begin,
+            Input::Intent { kind: 0, shoot: None, split: None, charge: None },
+            Input::Cast(cast),
+            Input::Choice { id: "interference:0:a:2".into(), option: String::new() },
+        ];
+        let (ans, next) = run(&statics, &st, "a", &Terrain::default(), Seams::default(), &t, false);
+        assert!(next.is_none());
+        assert_eq!(ans["step"], "need_choice");
+        assert_eq!(ans["id"], "interference:0:a:2");
+        assert_eq!(ans["options"], json!(["0", "1", "2"]));
+        assert_eq!(ans["owner"], "b");
+        assert_eq!(ans["landings"], json!([]));
+        let texts: Vec<&str> = ans["lines"].as_array().unwrap().iter().map(|l| l["text"].as_str().unwrap()).collect();
+        assert_eq!(texts, ["Mystic casts Bolt at Foe", "Mystic casts Bolt at Foe \u{2014} needs 4+ (1 token)"]);
     }
 }

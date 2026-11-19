@@ -8409,6 +8409,28 @@ fn spend_cast_tokens(state: &mut State, c: &CastInput) {
     }
 }
 
+/// CC-5d/9c: log Shaken Spell Accumulator batteries of `side` (`solo_controller.shaken_lenders`, table unit order).
+fn say_shaken_batteries(statics: &[UnitStatic], state: &State, side: i64, tray: &mut Tray) {
+    for cu in (0..state.units()).filter(|&u| state.player[u] == side && state.alive[u] > 0 && !state.dormant[u]) {
+        for &m in std::iter::once(&cu).chain(&state.attached[cu]) {
+            let s = &statics[state.roster.profile[m]];
+            if state.alive[m] > 0 && !state.dormant[m] && state.casts[m] > 0 && !s.is_caster && state.shaken[m] && s.spell_accumulator {
+                cast_say(tray, side, format!("Spell Accumulator: {} is Shaken \u{2014} its tokens do not feed friendly casters", s.name));
+            }
+        }
+    }
+}
+
+/// CC-9c: whether `side` fields any living non-dormant caster with tokens left (`_solo_side_has_caster_tokens` main.gd:6471).
+fn side_has_caster_tokens(statics: &[UnitStatic], state: &State, side: i64) -> bool {
+    (0..state.units()).any(|u| {
+        state.player[u] == side
+            && state.alive[u] > 0
+            && statics[state.roster.profile[u]].is_caster
+            && state.casts[u] > 0
+    })
+}
+
 /// CC-5c/5d: the notes of the casting net in the table's order (`caster_casting_net` solo_controller.gd:5225): the conduit mod,
 /// then each casting record of the caster and its host, then the Spell Amplifier.
 fn casting_notes(statics: &[UnitStatic], state: &State, ci: usize, conduit_mod: i64) -> Vec<String> {
@@ -8450,14 +8472,7 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
             return CastEnd::Hit;
         }
     }
-    for cu in (0..state.units()).filter(|&u| state.player[u] == side && state.alive[u] > 0 && !state.dormant[u]) {
-        for &m in std::iter::once(&cu).chain(&state.attached[cu]) {
-            let s = &statics[state.roster.profile[m]];
-            if state.alive[m] > 0 && !state.dormant[m] && state.casts[m] > 0 && !s.is_caster && state.shaken[m] && s.spell_accumulator {
-                cast_say(tray, side, format!("Spell Accumulator: {} is Shaken — its tokens do not feed friendly casters", name(m)));
-            }
-        }
-    }
+    say_shaken_batteries(statics, state, side, tray);
     for k in &c.conduit_shaken {
         if let Some(&sh) = state.roster.index.get(k.as_str()) {
             cast_say(tray, side, format!("Spell Conduit: {} is Shaken — its conduit does not help {caster} cast", name(sh)));
@@ -8474,13 +8489,64 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
     if net != 0 {
         cast_say(tray, side, format!("{net:+} to casting rolls ({}) — {caster} casts on {base}+ (base {}+)", casting_notes(statics, state, ci, conduit_mod).join(", "), c.base));
     }
-    let target = (base - c.boost.max(0) + c.interference.max(0)).clamp(2, 6);
+    let mut interference = c.interference.max(0);
+    let mut target = (base - c.boost.max(0) + interference).clamp(2, 6);
     let standing: Vec<&str> = c.targets.iter().filter_map(|k| state.roster.index.get(k.as_str())).filter(|&&t| state.alive[t] > 0).map(|&t| name(t)).collect();
     let mut tokens = format!("{} token{}", c.threshold, if c.threshold == 1 { "" } else { "s" });
     tokens += &(if c.boost > 0 { format!(", +{} boost", c.boost) } else { String::new() });
     tokens += &(if c.interference > 0 { format!(", -{} interference", c.interference) } else { String::new() });
     cast_say(tray, side, format!("{} casts {} at {}", name(si), c.spell, standing[0]));
     cast_say(tray, side, format!("{caster} casts {} at {} — needs {target}+ ({tokens})", c.spell, standing.join(", ")));
+    // CC-9c: open human interference per foe slot in `c.pools`, spending in list order and logging the table's lines (`main.gd:6490-6542`).
+    if c.open {
+        let v36 = rule_on(seams.rules_epoch, EPOCH_73_V36);
+        let reach = if v36 { "within 18\", no line of sight needed" } else { "within 18\" and line of sight" };
+        let pool_note = if v36 { format!(" (casters {reach})") } else { String::new() };
+        for (slot, payers) in &c.pools {
+            say_shaken_batteries(statics, state, *slot, tray);
+            let eligible: Vec<(usize, i64)> = payers
+                .iter()
+                .filter_map(|(k, n)| {
+                    let &u = state.roster.index.get(k.as_str())?;
+                    let avail = if state.alive[u] > 0 && !state.dormant[u] { state.casts[u].min(*n).max(0) } else { 0 };
+                    (avail > 0).then_some((u, avail))
+                })
+                .collect();
+            let pool: i64 = eligible.iter().map(|&(_, a)| a).sum();
+            if pool == 0 {
+                if side_has_caster_tokens(statics, state, *slot) {
+                    cast_say(tray, *slot, format!("{}: no caster of P{slot} {reach} \u{2014} no interference", c.spell));
+                }
+                continue;
+            }
+            let id = format!("interference:{}:{}:{slot}", c.seq, c.caster);
+            let owner = state.key(eligible[0].0).to_string();
+            let Some(spent) = tray.interference(&id, pool, &owner) else { continue };
+            if spent <= 0 {
+                continue;
+            }
+            let (mut rem, mut parts) = (spent, Vec::new());
+            for &(u, avail) in &eligible {
+                if rem <= 0 {
+                    break;
+                }
+                let take = rem.min(avail).min(state.casts[u]);
+                if take > 0 {
+                    state.casts[u] -= take;
+                    rem -= take;
+                    parts.push(format!("{} \u{00d7}{take}", name(u)));
+                }
+            }
+            interference += spent;
+            target = (base - c.boost.max(0) + interference).clamp(2, 6);
+            let (verb, plural) = (if parts.len() == 1 { "s" } else { "" }, if spent == 1 { "" } else { "s" });
+            cast_say(
+                tray,
+                *slot,
+                format!("Interference: {} spend{verb} {spent} token{plural} \u{2014} the cast roll worsens to {target}+{pool_note}", parts.join(", ")),
+            );
+        }
+    }
     tray.owner_next(Some(ci));
     let faces = tray.roll(1);
     let hit = crate::dice::faces_to_hits(&faces, target as u8) > 0;

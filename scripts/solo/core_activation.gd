@@ -338,6 +338,14 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		var us := Time.get_ticks_usec() - t0
 		core_us += us
 		max_us = maxi(max_us, us)
+		var lines: Array = r.get("lines", [])
+		for i in range(printed, lines.size()):
+			var line: Dictionary = lines[i]
+			# P4.D-48: a melee line carries "{cite}" where the table cites its rules book (the core holds no book version).
+			main._log_rule_event(int(line["category"]), str(line["text"]).replace("{cite}",
+				OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))), ai, str(line["detail"]))
+		printed = maxi(printed, lines.size())
+		await land_step(main, unit, r.get("landings", []), start_models, landed)
 		if str(r["step"]) == "need_choice":
 			var options: Array = r.get("options", [])
 			# The choice's owner is a roster KEY (the Takedown shooter, the wounded target): never the shooter by default.
@@ -348,14 +356,6 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 			if answer_fits(str(r["id"]), options, option):
 				transcript.append({"t": "choice", "id": str(r["id"]), "option": option})
 			continue
-		var lines: Array = r.get("lines", [])
-		for i in range(printed, lines.size()):
-			var line: Dictionary = lines[i]
-			# P4.D-48: a melee line carries "{cite}" where the table cites its rules book (the core holds no book version).
-			main._log_rule_event(int(line["category"]), str(line["text"]).replace("{cite}",
-				OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))), ai, str(line["detail"]))
-		printed = maxi(printed, lines.size())
-		await land_step(main, unit, r.get("landings", []), start_models, landed)
 		if str(r["step"]) == "done":
 			await land_delta(main, r.get("delta", []), start_models, landed)
 			if not keep_handle:

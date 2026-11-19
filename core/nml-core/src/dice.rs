@@ -124,7 +124,7 @@ impl Tray {
     /// instead of drawing. Past the last group it serves 1s and records where it
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
-        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), casts: Vec::new(), cast_refused: None };
+        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), interference_choices: Vec::new(), choice_seq: 0, casts: Vec::new(), cast_refused: None };
         Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None }
     }
 
@@ -184,7 +184,7 @@ impl Tray {
     /// target group. A supplied tray keeps it; a seeded tray ignores the call, so every seeded path lands automatically as before.
     pub fn offer_wound_alloc(&mut self, id: String, answer: Option<Vec<usize>>) {
         if let Some(feed) = self.feed.as_mut() {
-            feed.wound_choices.push(WoundChoice { id, answer, reached: None, bad: None });
+            feed.wound_choices.push(WoundChoice { id, answer, reached: None, bad: None, lines: Vec::new(), landings: Vec::new(), order: 0 });
         }
     }
 
@@ -195,8 +195,39 @@ impl Tray {
         let feed = self.feed.as_mut()?;
         let c = feed.wound_choices.iter_mut().find(|c| c.id == id)?;
         c.reached = Some((feed.next, options.clone(), owner.to_string()));
+        c.order = feed.choice_seq;
+        feed.choice_seq += 1;
         c.bad = c.answer.as_ref().and_then(|a| a.iter().find(|s| !options.contains(s)).copied());
+        if c.answer.is_none() {
+            c.lines = self.lines.iter().map(|(_, l)| l.clone()).collect();
+            c.landings = self.landings.iter().map(|(_, l)| l.clone()).collect();
+        }
         c.answer.clone().filter(|_| c.bad.is_none())
+    }
+
+    /// CC-9c: the transcript names an interference choice `id` (`interference:<seq>:<caster>:<slot>`, answered when
+    /// `answer` is `Some`). A supplied tray keeps it; a seeded tray ignores the call.
+    pub fn offer_interference(&mut self, id: String, answer: Option<i64>) {
+        if let Some(feed) = self.feed.as_mut() {
+            feed.interference_choices.push(InterferenceChoice { id, answer, reached: None, bad: None, lines: Vec::new(), landings: Vec::new(), order: 0 });
+        }
+    }
+
+    /// CC-9c: `tray_cast` reaches interference choice `id` for a foe slot with `pool` available tokens and `owner`
+    /// (first pool unit's roster key). `Some(n)` = valid token spend `0..=pool`; `None` = unanswered ask or out-of-range
+    /// answer (kept in `bad`). Captures pre-choice lines and landings when unanswered.
+    pub fn interference(&mut self, id: &str, pool: i64, owner: &str) -> Option<i64> {
+        let feed = self.feed.as_mut()?;
+        let c = feed.interference_choices.iter_mut().find(|c| c.id == id)?;
+        c.reached = Some((feed.next, pool, owner.to_string()));
+        c.order = feed.choice_seq;
+        feed.choice_seq += 1;
+        c.bad = c.answer.filter(|&n| n < 0 || n > pool);
+        if c.answer.is_none() {
+            c.lines = self.lines.iter().map(|(_, l)| l.clone()).collect();
+            c.landings = self.landings.iter().map(|(_, l)| l.clone()).collect();
+        }
+        c.answer.filter(|_| c.bad.is_none())
     }
 
     /// CC-5a: the transcript's planned casts, in plan order. A supplied tray keeps them (the cast slot of `resolve_with` reads them
@@ -321,6 +352,10 @@ pub struct Feed {
     owners: Vec<(usize, Option<usize>)>,
     /// One-core P4.D-20/21: the transcript's wound-allocation choices, one per id (`Tray::offer_wound_alloc`).
     pub wound_choices: Vec<WoundChoice>,
+    /// CC-9c: the transcript's cast-interference choices, one per id (`Tray::offer_interference`).
+    pub interference_choices: Vec<InterferenceChoice>,
+    /// Monotonic reach ordinal across both choice families (breaks ties when two choices occur at the same draw).
+    choice_seq: usize,
     /// CC-5a: the transcript's planned casts (`Tray::offer_casts`).
     casts: Vec<CastInput>,
     /// CC-5c/8b: the first offered cast refused during resolution `(draw, seq, reason)` (`Tray::note_cast_refused`).
@@ -329,13 +364,30 @@ pub struct Feed {
 
 /// One-core P4.D-20: the step API's wound-allocation choice as the volley's landing sees it. `answer` = the
 /// owner's ordered capture slots (`None` = only asked). `reached` = (draws so far, options, owner) once a group's
-/// landing came to it; `bad` = the first answered slot that is no option.
+/// landing came to it; `bad` = the first answered slot that is no option. CC-9a: `lines` and `landings` hold
+/// everything said/landed on this tray BEFORE this choice was reached (when `answer` is `None`).
 #[derive(Debug, Clone)]
 pub struct WoundChoice {
     pub id: String,
     pub answer: Option<Vec<usize>>,
     pub reached: Option<(usize, Vec<usize>, String)>,
     pub bad: Option<usize>,
+    pub lines: Vec<LogLine>,
+    pub landings: Vec<Landing>,
+    pub order: usize,
+}
+
+/// CC-9c: the step API's cast-interference choice as `tray_cast` sees it. `answer` = token count to spend
+/// (`None` = only asked). `reached` = (draws so far, pool total, owner key); `bad` = out-of-range answer.
+#[derive(Debug, Clone)]
+pub struct InterferenceChoice {
+    pub id: String,
+    pub answer: Option<i64>,
+    pub reached: Option<(usize, i64, String)>,
+    pub bad: Option<i64>,
+    pub lines: Vec<LogLine>,
+    pub landings: Vec<Landing>,
+    pub order: usize,
 }
 
 impl Feed {
