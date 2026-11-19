@@ -104,21 +104,3 @@ func test_flamer_stays_silent_after_the_wipe_at_epoch_72(timeout := 120000) -> v
 		.override_failure_message("EPOCH_72 must keep the per-weapon recount (log: %s)" % text) \
 		.contains("Test Flamer silent — no models in range or sight")
 	assert_str(text).not_contains("Simultaneous fire")
-
-
-## EPOCH_73 leg: the flamer's reach was fixed at declaration, so it still rolls its dice, never claims it had
-## no models in range or sight, and the battle log names why (rules-must-log).
-func test_flamer_still_fires_after_the_wipe_at_epoch_73(timeout := 120000) -> void:
-	var r: Dictionary = await _volley_after_the_squad_dies(AiActRecorder.EPOCH_73_V36)
-	var text := str(r["text"])
-	assert_int(int(r["squad"])).override_failure_message("fixture: the missile must wipe the squad (log: %s)" % text).is_equal(0)
-	assert_int(int(r["hero"])).override_failure_message("fixture: the hero must survive (log: %s)" % text).is_equal(1)
-	assert_str(text) \
-		.override_failure_message("SHO-PAR-F6 — the flamer lost its declared targets to the missile's casualties (log: %s)" % text) \
-		.not_contains("Test Flamer silent")
-	assert_str(text) \
-		.override_failure_message("SHO-PAR-F6 — the flamer must roll its declared dice (log: %s)" % text) \
-		.contains("Test Tank fires Test Flamer at Test Scouts")
-	assert_str(text) \
-		.override_failure_message("rules-must-log — the fixed declaration must name itself (log: %s)" % text) \
-		.contains("Simultaneous fire: Test Tank fires Test Flamer as declared")

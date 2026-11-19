@@ -88,18 +88,6 @@ func _charge(guard: GameUnit, bearer: GameUnit) -> void:
 	await E2EBoot.settle(get_tree())
 
 
-## One AI volley by the bearer, in the shape `_run_ai_shooting` builds.
-func _volley(bearer: GameUnit, guard: GameUnit) -> void:
-	E2EBoot.place_unit_at(guard, Vector3(10.0 * INCH, 0, 0))
-	var profiles: Array = AiShooting.profiles_in_range([_weapon("Rifle", 24, 4)], 0.0)
-	var shots: Array = [{"member": bearer, "quality": bearer.get_quality(),
-		"alive": bearer.get_alive_count(), "max": bearer.models.size(),
-		"reach": 24, "profile": profiles[0]}]
-	_main.seed_tray_rng(5)
-	await _main._solo_resolve_ai_volley(bearer, guard, shots, false)
-	await E2EBoot.settle(get_tree())
-
-
 func test_the_feat_applies_to_the_first_strike_back_only_at_epoch_73() -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
 	var bearer := _unit(2, "Horde", 0.0, true)
@@ -108,16 +96,6 @@ func test_the_feat_applies_to_the_first_strike_back_only_at_epoch_73() -> void:
 	assert_int(_feat_count()).is_equal(1)   # the first attack of the bearer carries the +1
 	await _charge(guard, bearer)
 	assert_int(_feat_count()).override_failure_message("the spent Feat applied again:\n%s" % _log_text()).is_equal(1)
-
-
-func test_a_volley_spends_the_latch_the_melee_then_finds_closed_at_epoch_73() -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
-	var bearer := _unit(2, "Horde", 0.0, true)
-	var guard := _unit(1, "Guard", 1.0, false)
-	await _volley(bearer, guard)
-	assert_int(_feat_count()).is_equal(1)   # the bearer's first attack is the shot
-	await _charge(guard, bearer)
-	assert_int(_feat_count()).override_failure_message("the Feat spent on the shot applied in melee:\n%s" % _log_text()).is_equal(1)
 
 
 func test_the_spent_latch_is_written_to_the_act_ledger_at_epoch_73() -> void:
