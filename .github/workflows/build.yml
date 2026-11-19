@@ -145,7 +145,7 @@ jobs:
           cache-shared-key: export-linux
 
       - name: Save the core library (main only)
-        if: steps.so_cache.outputs.cache-hit != 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: steps.so_cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: core/target/release/libnml_core_godot.so
@@ -202,7 +202,7 @@ jobs:
           pip install maturin
           NML_BUILD_COMMIT=$GITHUB_SHA maturin build --release -i python -m core/nml-core-py/Cargo.toml -o dist
       - name: Save the nml_core wheel (main only)
-        if: steps.whl_cache.outputs.cache-hit != 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: steps.whl_cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: dist
