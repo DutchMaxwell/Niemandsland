@@ -85,6 +85,45 @@ func test_an_input_the_core_does_not_know_is_refused_with_its_index() -> void:
 	assert_str(r["reason"]).is_equal("input 1 is not understood")
 
 
+## CC-4: one planned cast, with typed and plain arrays the way the planner builds them. The core resolves no cast yet (CC-3), so
+## the answer is ITS refusal at the cast's index: "input 2 is not understood" would mean the binding dropped the input.
+func _cast(extra: Dictionary = {}) -> Dictionary:
+	var targets: Array[String] = ["b"]
+	var cast := {"t": "cast", "seq": 0, "caster": "a", "spell": "Bolt", "targets": targets, "base": 4, "threshold": 1,
+		"boost": 1, "boost_sources": [["a", 1]], "interference": 1, "interference_sources": [["b", 1]], "conduit": "",
+		"conduit_shaken": PackedStringArray(), "pools": [[1, [["b", 2]]]], "once": false, "open": false}
+	cast.merge(extra, true)
+	return cast
+
+
+func test_a_cast_input_is_understood_and_refused_by_the_core_until_it_resolves_casts() -> void:
+	var start: Array = [{"t": "begin"}, {"t": "intent", "kind": 0, "shoot": "b"}]
+	var r: Dictionary = _core.step_activation(_h, "a", start + [_cast()], false)
+	assert_str(r["step"]).is_equal("refused")
+	assert_int(int(r["index"])).is_equal(2)
+	assert_str(r["reason"]).is_equal("casts are not resolved by the core yet")
+	# A minimal cast (only the required fields) is understood too.
+	var minimal := {"t": "cast", "seq": 0, "caster": "a", "spell": "Bolt", "targets": ["b"], "base": 4, "threshold": 1}
+	r = _core.step_activation(_h, "a", start + [minimal], false)
+	assert_str(r["reason"]).is_equal("casts are not resolved by the core yet")
+	# The core's own order rule still reads first.
+	r = _core.step_activation(_h, "a", [{"t": "begin"}, _cast()], false)
+	assert_str(r["reason"]).is_equal("a cast before the action was declared")
+
+
+func test_a_malformed_cast_is_refused_not_dropped() -> void:
+	var start: Array = [{"t": "begin"}, {"t": "intent", "kind": 0, "shoot": "b"}]
+	for bad in [{"targets": "b"}, {"targets": [1]}, {"boost_sources": [["a"]]}, {"boost_sources": "a"}, {"pools": [[1]]},
+			{"pools": [[1, [["b"]]]]}, {"conduit": 3}, {"caster": 7}]:
+		var r: Dictionary = _core.step_activation(_h, "a", start + [_cast(bad)], false)
+		assert_str(str(r.get("reason", ""))).override_failure_message("cast %s" % [bad]).is_equal("input 2 is not understood")
+	for gone in ["seq", "caster", "spell", "targets", "base", "threshold"]:
+		var c := _cast()
+		c.erase(gone)
+		var r: Dictionary = _core.step_activation(_h, "a", start + [c], false)
+		assert_str(str(r.get("reason", ""))).override_failure_message("cast without %s" % gone).is_equal("input 2 is not understood")
+
+
 func test_an_unknown_handle_is_refused() -> void:
 	var r: Dictionary = _core.step_activation(9999, "a", [{"t": "begin"}], false)
 	assert_str(r["step"]).is_equal("refused")

@@ -84,3 +84,36 @@ def test_a_takedown_choice_is_asked_answered_and_refused_through_the_python_bind
     # A choice entry without an `id` is still the binding's own "not understood" refusal.
     bad = core.step_activation(state, unit, start + [{"t": "choice"}], False)
     assert bad == {"step": "refused", "index": 2, "reason": "input 2 is not understood"}
+
+
+def test_a_cast_input_is_understood_and_refused_by_the_core_until_it_resolves_casts():
+    """CC-4: `{"t": "cast", ..}` goes through the Python seam as an `Input::Cast`. The core resolves no cast yet (CC-3), so the
+    answer is ITS refusal at the cast's index; "input 2 is not understood" would mean the binding dropped the input. A
+    malformed field is the binding's refusal, never a default in disguise (the field-by-field read is pinned by
+    `stepcall::tests::a_cast_input_keeps_every_field`)."""
+    import nml_core
+
+    source = json.loads(SOURCE.read_text())
+    record = json.loads(RECORD.read_text())
+    unit, target = record["unit"], record["target"]
+    core = nml_core.load(str(REPO))
+    core.set_header(source["header"])
+    state = core.state_of(source["state"])
+    start = [{"t": "begin"}, {"t": "intent", "kind": 0, "shoot": target}]
+    cast = {"t": "cast", "seq": 0, "caster": unit, "spell": "Bolt", "targets": [target], "base": 4, "threshold": 1,
+            "boost": 1, "boost_sources": [[unit, 1]], "interference": 1, "interference_sources": [[target, 1]],
+            "conduit": "", "conduit_shaken": [], "pools": [[1, [[target, 2]]]], "once": False, "open": False}
+
+    refused = core.step_activation(state, unit, start + [cast], False)
+    assert refused == {"step": "refused", "index": 2, "reason": "casts are not resolved by the core yet"}
+
+    # Only the required fields: understood too. A cast before the declared action: the core's order rule reads first.
+    minimal = {k: cast[k] for k in ("t", "seq", "caster", "spell", "targets", "base", "threshold")}
+    assert core.step_activation(state, unit, start + [minimal], False)["reason"] == "casts are not resolved by the core yet"
+    early = core.step_activation(state, unit, [{"t": "begin"}, cast], False)
+    assert early == {"step": "refused", "index": 1, "reason": "a cast before the action was declared"}
+
+    for bad in ({"targets": target}, {"boost_sources": [[unit]]}, {"pools": [[1]]}, {"conduit": 3}, {"seq": "0"}):
+        answer = core.step_activation(state, unit, start + [{**cast, **bad}], False)
+        assert answer == {"step": "refused", "index": 2, "reason": "input 2 is not understood"}, bad
+    assert core.step_activation(state, unit, start + [{k: v for k, v in cast.items() if k != "spell"}], False)["reason"] == "input 2 is not understood"
