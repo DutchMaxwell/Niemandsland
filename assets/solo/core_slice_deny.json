@@ -17,22 +17,25 @@
     "Hazardous": "Measured (5-seed sweep): 6 taken volleys, the attacker's wounds differ on a natural 1; direction not in the dump.",
     "Gleaming Armour": "Measured (5-seed sweep): 5 taken volleys, the target's Defense differs by one.",
     "Relentless Aura": "Measured (5-seed sweep): 1 taken volley, the core pays one defense die more on a natural 6.",
-    "Bane": "door omits the Bane re-roll line (`Bane: <U> re-rolls N unmodified Defense 6s`), dlines_gap row 13: the core words only a weapon alias.",
-    "Bane Mark": "door omits the Bane re-roll line, dlines_gap row 13.",
-    "Bane when Shooting": "door omits the Bane re-roll line, dlines_gap row 13.",
-    "Bane when Shooting Aura": "door omits the Bane re-roll line, dlines_gap row 13.",
-    "Mischievous": "door omits the unit-level Bane alias line (`Mischievous: <U> re-rolls ...`), dlines_gap row 13 (measured: 13 taken volleys).",
-    "Enhanced Mischievous": "door omits the unit-level Bane alias line, dlines_gap row 13.",
-    "Mischievous Boost": "door omits the unit-level Bane alias line, dlines_gap row 13.",
-    "Bestial": "door omits the unit-level Bane alias line, dlines_gap row 13.",
-    "Enhanced Bestial": "door omits the unit-level Bane alias line, dlines_gap row 13.",
-    "Bestial Boost": "door omits the unit-level Bane alias line, dlines_gap row 13.",
-    "Vicious": "door omits the unit-level Bane alias line, dlines_gap row 13.",
-    "Scrapper": "door omits the unit-level Bane alias line, dlines_gap row 13.",
-    "Enhanced Scrapper": "door omits the unit-level Bane alias line, dlines_gap row 13.",
-    "Scrapper Boost": "door omits the unit-level Bane alias line, dlines_gap row 13.",
-    "Raider": "door omits the unit-level Bane alias line, dlines_gap row 13.",
-    "Raider Boost": "door omits the unit-level Bane alias line, dlines_gap row 13."
+    "Fortified Aura": "door omits the table's aura-loss line (`_solo_fortified_aura_loss_log`) when the bearer dies, dlines_gap row 21: the Fortified line itself is said since dlines2 train 2.",
+    "Guardian Boost Aura": "door omits the table's aura-loss line (`_solo_fortified_aura_loss_log`) when the bearer dies, dlines_gap row 21: the Fortified line itself is said since dlines2 train 2.",
+    "Angelic Blessing": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
+    "Angelic Blessing Boost": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
+    "Cursed Undead": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
+    "Cursed Undead Boost": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
+    "Enhanced Angelic Blessing": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
+    "Enhanced Cursed Undead": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
+    "Enhanced Knightborn": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
+    "Enhanced Plaguebound": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
+    "Enhanced Self-Repair": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
+    "Grounded Protection": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
+    "Knightborn": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
+    "Plaguebound": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
+    "Plaguebound Boost": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
+    "Protected": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
+    "Protection Feat": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
+    "Self-Repair Boost": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
+    "Warding": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3."
   },
   "groups": {
     "ledger_not_round_tripped": {
@@ -54,9 +57,9 @@
       "leaves_with": "the dlines2 train that composes the note on the core's step path"
     },
     "door_omits_wound_ignore_line": {
-      "primitives": ["Regeneration", "Self-Repair", "Resistance"],
+      "primitives": ["Self-Repair", "Resistance"],
       "kind": "rule_line",
-      "why": "The table writes the ignore roll of the Regeneration family with the rule's name (`<U> rolls N Plaguebound dice (5+) - K wounds ignored`, the bypass and Warding lines); the door writes none and the core's context carries targets, not names. Measured 19.11.: 198 volleys, dlines_gap row 3.",
+      "why": "The table writes the ignore roll of every group with the rule's name; the door says the plain Regeneration group's roll and bypass lines since dlines2 train 2. The other groups (Self-Repair, Resistance) also owe the table's `ignore only Regeneration - X still rolls` line when a bypass weapon hits, which the core's callers cannot count yet (dlines_gap row 3).",
       "leaves_with": "the dlines2 train that carries the group names to the dice leg"
     },
     "door_omits_shred_line": {
@@ -64,12 +67,6 @@
       "kind": "rule_line",
       "why": "The table names Shred's extra wounds (`Warbound: 2 Defense rolls of 1 -> +2 wounds`, the widened and Boost forms); the door writes none. Measured 19.11.: 80 volleys, dlines_gap row 7.",
       "leaves_with": "the dlines2 train that says the Shred lines"
-    },
-    "door_omits_lacerate_line": {
-      "primitives": ["Lacerate"],
-      "kind": "rule_line",
-      "why": "The table names Lacerate's re-roll (`Lacerate: <U> re-rolls N unmodified Defense 6s`); the door writes none (the core carries no name for it). Measured 19.11.: 12 volleys, dlines_gap row 13.",
-      "leaves_with": "the dlines2 train that names the Bane family's re-roll"
     },
     "door_omits_simultaneous_fire_line": {
       "primitives": [],
@@ -82,24 +79,6 @@
       "kind": "rule_line",
       "why": "The table writes three Takedown lines (the pick, the unit-of-[1] save context, the picked model wounded or killed) and no `takes N wounds` line; the door writes `takes N wounds` instead. Measured 19.11.: 38 volleys, dlines_gap row 15.",
       "leaves_with": "the dlines2 train that says the Takedown lines"
-    },
-    "door_omits_shielded_line": {
-      "primitives": ["Shielded"],
-      "kind": "rule_line",
-      "why": "The table says each Defense part a rule adds before the volley (`<U> is Shielded: +1 Defense (saves on 3+)`); the door writes none. Measured 19.11.: 31 volleys, dlines_gap row 17.",
-      "leaves_with": "the dlines2 train that composes the Defense parts"
-    },
-    "door_omits_shroud_line": {
-      "primitives": ["Ranged Shrouding"],
-      "kind": "rule_line",
-      "why": "The table names the range cut of the Ranged Shrouding family (`Wild Veil: <U> - weapon ranges against it 6\" shorter (min 6\")`); the door writes none (the rule name is not on the core's context). Measured 19.11.: 35 volleys, dlines_gap row 16.",
-      "leaves_with": "the dlines2 train that carries the shroud's name"
-    },
-    "door_omits_fortified_line": {
-      "primitives": ["Fortified"],
-      "kind": "rule_line",
-      "why": "The table names the AP the Fortified family takes off (`Warden: <U> takes the hits at AP(1) instead of AP(2) - saves on 5+`); the door words it differently and only in its ledger. Measured 19.11.: 17 volleys, dlines_gap row 21.",
-      "leaves_with": "the dlines2 train that says the Fortified line"
     }
   }
 }

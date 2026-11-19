@@ -286,6 +286,10 @@ pub struct Ctx {
     pub fortified_boost_ap: i64,
     pub fortified_alias_ap: i64,
     pub fortified_alias_over_in: f64,
+    /// The names of the Boost / gated alias that stamped the two reads above, for the table's `<rule>: <U> takes the hits at AP(a) instead of
+    /// AP(b)` line ("" = none).
+    pub fortified_boost_name: &'static str,
+    pub fortified_alias_name: &'static str,
     /// The volley's over-9" GATE (main.gd:3090/6415): only
     /// `resolve_volley_with_tray` sets it, on its local Ctx copy; every other
     /// save path leaves it false.
@@ -307,7 +311,13 @@ pub struct Ctx {
     /// `ctx_for` always sets them beside the flag.
     pub ranged_shroud_penalty_in: f64,
     pub ranged_shroud_floor_in: f64,
+    /// The rule that supplies the clamp ("Wild Veil", "Ranged Shrouding"), for the table's per-volley line; "" without the rule.
+    pub ranged_shroud_name: &'static str,
     pub shielded: bool,
+    /// The literal Shielded is carried by most, not all, models: the table's line adds " (most of its models carry it)".
+    pub shielded_note: bool,
+    /// The same note for the Fortified line, per source: [the literal Fortified, the Boost, the gated alias].
+    pub fortified_notes: [bool; 3],
     /// Wave 3 — the Shielded-family DATA-alias fold (`acts::EPOCH_6_TABLE_
     /// RULES`): WHICH member of the family is driving the working `shielded`
     /// +1, `None` for the literal "Shielded" (its pre-port silent read) or no
@@ -404,6 +414,12 @@ pub struct Ctx {
     /// name; any further name folds into the last slot). Only the flat static rules are here: `Ctx::groups_valid` says when the live
     /// legs (grants, terrain, once-per-game, distance gates) left them alone. All 0 below epoch 84.
     pub regen_groups: [i64; 4],
+    /// The rule that supplies each group above, as the table's roll line spells it ("regeneration", "self-repair", "resistance" in lower
+    /// case, any other group by its rule's own name: "Plaguebound", ...); "" where the slot is empty. The winning name of a group is the one of its lowest target, the first one on a tie.
+    pub regen_names: [&'static str; 4],
+    /// Regeneration is carried by most, not all, models (a joined hero without it): the table says so before the roll
+    /// ("<U> — Regeneration: most models carry it, so a joined hero without it does not switch it off").
+    pub regen_most_note: bool,
     /// The DYNAMIC melee flag `BattleSim._ctx_of(su, true)` writes over the
     /// template (battle_sim.gd:705-707): a fatigued striker hits only on 6s.
     pub fatigued: bool,
@@ -946,6 +962,9 @@ pub struct ShootProfile {
     /// AI-G2 (`EPOCH_73_V36`): the book name of the WEAPON rule the map resolves to the Bane primitive
     /// (Smash, Reap, Decimate); the save batch's rules-must-log line names it. "" = none.
     pub bane_alias: String,
+    /// The UNIT-level rule whose name the table's re-roll line carries (Mischievous, Vicious, Unstoppable when Shooting): the first carried
+    /// Bane-primitive alias or Lacerate-primitive entry whose facet fits this profile. "" = none (the weapon alias, Lacerate or Bane name it).
+    pub bane_name: String,
     /// Wave 3 (`rules-wave3-shred3`): the family's per-face wound amount,
     /// read off the carried Shred-primitive entry's own
     /// `extra_wound_per_save_one` (`build_for`'s epoch-6 arm, gated
@@ -2862,21 +2881,21 @@ fn melee_shroud_params(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> O
 /// rides `melee_shroud_params` above. EPOCH-GATED (`acts::rule_on`): the
 /// alias walk is wave-3 behaviour, so a record below `EPOCH_6_TABLE_RULES`
 /// keeps the pre-port reading — the bare literal with the fixed constants.
-fn ranged_shroud_params(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<[f64; 2]> {
+fn ranged_shroud_params(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<(&'static str, [f64; 2])> {
     if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
         return rule_on_all_models(p, "Ranged Shrouding")
-            .then_some([SHROUD_RANGE_PENALTY_IN, SHROUD_FLOOR_IN]);
+            .then_some(("Ranged Shrouding", [SHROUD_RANGE_PENALTY_IN, SHROUD_FLOOR_IN]));
     }
     if most_models_family_on(p, "Ranged Shrouding", rules_epoch) {
         let map = reg.rules_for(&p.game_system);
         let e = map.lookup(&p.faction_folder, "Ranged Shrouding");
-        return Some(match e {
+        return Some(("Ranged Shrouding", match e {
             Some(e) => [
                 e.param_f("range_penalty_in", SHROUD_RANGE_PENALTY_IN),
                 e.param_f("floor_in", SHROUD_FLOOR_IN),
             ],
             None => [SHROUD_RANGE_PENALTY_IN, SHROUD_FLOOR_IN],
-        });
+        }));
     }
     for hit in rules_of_primitive(reg, p, "Ranged Shrouding") {
         if hit.name == "Ranged Shrouding" || !rule_on_all_models(p, &hit.name) {
@@ -2884,10 +2903,10 @@ fn ranged_shroud_params(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
         }
         let map = reg.rules_for(&p.game_system);
         let Some(e) = map.lookup(&p.faction_folder, &hit.name) else { continue };
-        return Some([
+        return Some((crate::rules::intern(&hit.name), [
             e.param_f("range_penalty_in", SHROUD_RANGE_PENALTY_IN),
             e.param_f("floor_in", SHROUD_FLOOR_IN),
-        ]);
+        ]));
     }
     None
 }
@@ -3053,7 +3072,7 @@ pub fn capture_reads_for_epoch(
 /// recorded flat fold replays and the tail stays zeros.
 fn regen_targets(
     reg: &mut Registries, p: &Profile, rules_epoch: u32, trace73: bool,
-) -> (i64, i64, i64, i64, f64, f64, i64, bool, [i64; 4]) {
+) -> (i64, i64, i64, i64, f64, f64, i64, bool, RegenGroups) {
     let regen = if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
         regen_family_on(p, "Regeneration", rules_epoch)
     } else {
@@ -3077,21 +3096,22 @@ fn regen_targets(
     let mut picked = (base, base, 0i64, 0i64);
     let mut feat = 0i64;
     // EPOCH_82_IGNORE_BY_NAME: the flat rules by NAME (the table's groups); the Self-Repair group is kept even beside Regeneration.
-    let mut groups: Vec<(String, i64)> = Vec::new();
-    let put = |groups: &mut Vec<(String, i64)>, key: String, target: i64| {
+    let mut groups: Vec<(String, String, i64)> = Vec::new(); // (group key, the rule that names the group, target)
+    let put = |groups: &mut Vec<(String, String, i64)>, key: String, name: &str, target: i64| {
         if target > 0 {
             match groups.iter_mut().find(|g| g.0 == key) {
-                Some(g) => g.1 = g.1.min(target),
-                None => groups.push((key, target)),
+                Some(g) if target < g.2 => (g.1, g.2) = (name.to_string(), target),
+                Some(_) => {}
+                None => groups.push((key, name.to_string(), target)),
             }
         }
     };
     if regen || has_special_rule(&p.special_rules, "Medical Training") {
-        put(&mut groups, "Regeneration".into(), base);
+        put(&mut groups, "Regeneration".into(), "regeneration", base);
     }
     if regen_family_on(p, "Self-Repair", rules_epoch) {
         let t = reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Self-Repair").map_or(SELF_REPAIR_TARGET, |e| e.param_i("ignore_target", SELF_REPAIR_TARGET));
-        put(&mut groups, "Self-Repair".into(), t);
+        put(&mut groups, "Self-Repair".into(), "self-repair", t);
     }
     // EPOCH_82_IGNORE_BY_NAME: does a rule of the group named Regeneration contribute to the fold (the table's `regen` group)?
     let mut named = base > 0 && (regen || has_special_rule(&p.special_rules, "Medical Training"));
@@ -3130,7 +3150,7 @@ fn regen_targets(
             Some(e) => e.param_i("ignore_target_spell", RESISTANCE_TARGET_SPELL),
             None => RESISTANCE_TARGET_SPELL,
         };
-        put(&mut groups, ignore_group_key(name, ""), rs);
+        put(&mut groups, ignore_group_key(name, ""), if name == "Resistance" { "resistance" } else { name }, rs);
         if rs > 0 && (picked.0 == 0 || rs < picked.0) {
             picked.0 = rs;
         }
@@ -3238,7 +3258,9 @@ fn regen_targets(
                 picked.1 = spell;
             }
             named = named || (normal > 0 && regeneration_group(&n, e.param_s("upgrades")));
-            put(&mut groups, ignore_group_key(&n, e.param_s("upgrades")), normal);
+            // the table names the Regeneration group "regeneration" for every form of it (the rule, its Aura / Buff forms)
+            let key = ignore_group_key(&n, e.param_s("upgrades"));
+            put(&mut groups, key.clone(), if key == "Regeneration" { "regeneration" } else { &n }, normal);
             if gated {
                 if normal > 0 {
                     warding = Some((
@@ -3264,7 +3286,7 @@ fn regen_targets(
             }
         }
     }
-    let grouped = if rule_on(rules_epoch, crate::acts::EPOCH_84_IGNORE_GROUPS) { lay_out_groups(groups) } else { [0; 4] };
+    let grouped = if rule_on(rules_epoch, crate::acts::EPOCH_84_IGNORE_GROUPS) { lay_out_groups(groups) } else { ([0; 4], [""; 4]) };
     (picked.0, picked.1, picked.2, picked.3, gates.0, gates.1, feat, named, grouped)
 }
 
@@ -3291,6 +3313,9 @@ pub(crate) fn ignore_group_key(name: &str, upgrades: &str) -> String {
     key.to_string()
 }
 
+/// The ignore groups' targets and the rule names that supply them, as `Ctx::regen_groups` / `Ctx::regen_names` carry them.
+type RegenGroups = ([i64; 4], [&'static str; 4]);
+
 /// Does this rule belong to the group named Regeneration?
 pub(crate) fn regeneration_group(name: &str, upgrades: &str) -> bool {
     ignore_group_key(name, upgrades) == "Regeneration"
@@ -3298,17 +3323,21 @@ pub(crate) fn regeneration_group(name: &str, upgrades: &str) -> bool {
 
 /// The table's roll order of the ignore groups (`_solo_regen_pick`): Regeneration first, then the most generous target, then the name;
 /// laid out as `Ctx::regen_groups` (slot 0 Regeneration, slots 1..3 the others, extras folded into the last).
-fn lay_out_groups(mut groups: Vec<(String, i64)>) -> [i64; 4] {
+fn lay_out_groups(mut groups: Vec<(String, String, i64)>) -> RegenGroups {
     let mut out = [0i64; 4];
+    let mut names = [""; 4];
     if let Some(i) = groups.iter().position(|g| g.0 == "Regeneration") {
-        out[0] = groups.remove(i).1;
+        let g = groups.remove(i);
+        (out[0], names[0]) = (g.2, crate::rules::intern(&g.1));
     }
-    groups.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+    groups.sort_by(|a, b| a.2.cmp(&b.2).then_with(|| a.0.cmp(&b.0)));
     for (n, g) in groups.iter().enumerate() {
         let slot = 1 + n.min(2);
-        out[slot] = if out[slot] == 0 { g.1 } else { out[slot].min(g.1) };
+        if out[slot] == 0 || g.2 < out[slot] {
+            (out[slot], names[slot]) = (g.2, crate::rules::intern(&g.1));
+        }
     }
-    out
+    (out, names)
 }
 
 /// The SHOOTING leg's three die params (`ap_bonus`/`hit_bonus`/`low_roll_max`)
@@ -3502,12 +3531,12 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     // WAVE 3 — the family's DATA-ALIAS amounts, gated on the FROZEN
     // `EPOCH_6_TABLE_RULES`: an `rules_epoch: 5` record (the Gen-3 fleet's
     // window) reads zeros and replays byte-exact; the stamp IS the gate.
-    let (fortified_boost_ap, fortified_alias_ap, fortified_alias_over_in) =
+    let (fortified_boost_ap, fortified_alias_ap, fortified_alias_over_in, fortified_boost_name, fortified_alias_name) =
         if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
             let fa = fortified_alias_of(reg, p, rules_epoch);
-            (fa.boost_ap, fa.alias_ap, fa.alias_over_in)
+            (fa.boost_ap, fa.alias_ap, fa.alias_over_in, crate::rules::intern(&fa.boost_name), crate::rules::intern(&fa.alias_name))
         } else {
-            (0, 0, 0.0)
+            (0, 0, 0.0, "", "")
         };
     trace_stamp(trace73 && fortified_alias_ap != 0, "fortified-alias", "Fortified",
         &format!("{}: Fortified alias stamped -{} AP over {}", p.name, fortified_alias_ap, fortified_alias_over_in));
@@ -3572,7 +3601,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     };
     let ranged_shroud = ranged_shroud_params(reg, p, rules_epoch);
     if trace73 {
-        if let Some([pen, floor]) = ranged_shroud {
+        if let Some((_, [pen, floor])) = ranged_shroud {
             trace_stamp(true, "ranged-shrouding", "Ranged Shrouding",
                 &format!("{}: Ranged Shrouding stamped -{}\" range, floor {}in", p.name, pen, floor));
         }
@@ -3770,6 +3799,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         fortified_boost_ap,
         fortified_alias_ap,
         fortified_alias_over_in,
+        fortified_boost_name,
+        fortified_alias_name,
         fortified_alias_over9: false,
         // Guarded OR Versatile Defense — ai_ev.gd:157-158.
         // "Sturdy" (hygiene-wave follow-up): the Guarded family's DATA alias
@@ -3785,8 +3816,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         guarded_name,
         guarded_charge_over_in: 0.0,
         ranged_shrouding: ranged_shroud.is_some(),
-        ranged_shroud_penalty_in: ranged_shroud.map_or(SHROUD_RANGE_PENALTY_IN, |s| s[0]),
-        ranged_shroud_floor_in: ranged_shroud.map_or(SHROUD_FLOOR_IN, |s| s[1]),
+        ranged_shroud_penalty_in: ranged_shroud.map_or(SHROUD_RANGE_PENALTY_IN, |s| s.1[0]),
+        ranged_shroud_floor_in: ranged_shroud.map_or(SHROUD_FLOOR_IN, |s| s.1[1]),
+        ranged_shroud_name: ranged_shroud.map_or("", |s| s.0),
         mobile_artillery_hit,
         mobile_artillery_over_in,
         grounded_precision_hit,
@@ -3809,6 +3841,12 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
                 .is_some_and(|e| e.param_b_or("no_moved_penalty", false)),
         shielded: rule_on_defence_family(p, "Shielded", rules_epoch)
             || shielded_alias.as_ref().is_some_and(|(_, pending)| !*pending),
+        shielded_note: rule_on_defence_family(p, "Shielded", rules_epoch) && !rule_on_all_models(p, "Shielded"),
+        fortified_notes: [
+            rule_on_defence_family(p, "Fortified", rules_epoch) && !rule_on_all_models(p, "Fortified"),
+            !fortified_boost_name.is_empty() && !rule_on_all_models(p, fortified_boost_name),
+            !fortified_alias_name.is_empty() && !rule_on_all_models(p, fortified_alias_name),
+        ],
         shielded_alias: shielded_alias.map_or(ShieldedAlias::None, |(a, _)| a),
         shielded_rating,
         // §2.4 — see the Ctx field's doc: the suppression rides a STAMPED
@@ -3857,7 +3895,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         regen_gate_over_in: regen_targets.4,
         regen_gate_charge_in: regen_targets.5,
         regen_named: regen_targets.7,
-        regen_groups: regen_targets.8,
+        regen_groups: regen_targets.8 .0,
+        regen_names: regen_targets.8 .1,
+        regen_most_note: regen_family_on(p, "Regeneration", rules_epoch) && !rule_on_all_models(p, "Regeneration"),
         fatigued: false,
         retaliate_hits_per_wound: retaliate_hits_per_wound(reg, p),
         death_hits_per_kill: death_hits_per_kill(reg, p),
@@ -4202,7 +4242,7 @@ fn stamp(
 /// non-"Bane", non-"Aura", `reroll_save_sixes`) joins it, exactly main.gd:
 /// 6553-6560. Every record below that epoch keeps the flat prefix reading.
 /// A1: the weapon prints Lacerate and no Bane — main.gd `_solo_profile_lacerate_only`.
-fn lacerate_only(rules: &[String]) -> bool {
+pub(crate) fn lacerate_only(rules: &[String]) -> bool {
     let mut lacerate = false;
     for r in rules {
         let s = r.trim();
@@ -4235,6 +4275,7 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
     let mut u_rending = false;
     let mut u_unstop = false;
     let mut u_unstop_melee = false;
+    let mut facets: Vec<(String, bool, bool)> = Vec::new(); // the unit-level names the re-roll line carries, with their facet
     for r in &p.special_rules {
         let rs = r.trim();
         if rs.starts_with("Bane") || rs.starts_with("Lacerate") {
@@ -4314,6 +4355,9 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
                 );
             }
             u_bane |= hit.reroll_save_sixes;
+            if hit.reroll_save_sixes {
+                facets.push((hit.name.clone(), hit.melee_only, hit.shooting_only));
+            }
             // §2.3 — below the CURRENT epoch only: the old flat read made the
             // alias's `bane` the regen-bypass test too, so the pre-port
             // corpora fold it into the bypass half identically. At the
@@ -4338,6 +4382,7 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
             if !hit.bypass_regen || hit.name.starts_with("Lacerate") {
                 continue;
             }
+            facets.push((hit.name.clone(), hit.melee_only, hit.shooting_only));
             melee_bane |= hit.melee_only;
             shooting_bane |= hit.shooting_only;
             u_bane |= !hit.melee_only && !hit.shooting_only;
@@ -4393,6 +4438,11 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         sp.bane |= u_bane
             || (melee_bane && sp.range <= 0)
             || (shooting_bane && sp.range > 0);
+        if sp.bane {
+            if let Some((name, ..)) = facets.iter().find(|(_, m, s)| (!m && !s) || (*m && sp.range <= 0) || (*s && sp.range > 0)) {
+                sp.bane_name = name.clone();
+            }
+        }
         // A1: `base_profile` stamps the legacy bypass for a printed Lacerate too.
         if playtest && lacerate_only(&sp.rules) {
             sp.bypass_regen = false;

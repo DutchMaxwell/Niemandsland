@@ -272,16 +272,19 @@ func test_a_missing_or_malformed_file_is_the_empty_slice() -> void:
 ## The deny file refuses its listed primitives (a Teleport unit) and takes a unit whose
 ## rules are automated and not listed (AP, Tough); a name no map knows is taken (unmapped_inert). The list only shrinks: CEILING.
 ## RED: read PATH regardless of the switch -> the first assertion reads mode "allow".
-const DENY_CEILING := 24   # DLINES2 19.11.: +15 primitives in eight `rule_line` groups (a rule whose table line the door omits stays on the table until the line exists, dlines_gap rows 2, 3, 7, 13, 15, 16, 17, 21), they leave group by group with their lines. BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
+const DENY_CEILING := 19   # DLINES2 train 2: Ranged Shrouding, Lacerate, Shielded, Fortified and Regeneration left with their lines (24 -> 19). 19.11.: +15 primitives in eight `rule_line` groups (a rule whose table line the door omits stays on the table until the line exists, dlines_gap rows 2, 3, 7, 13, 15, 16, 17, 21), they leave group by group with their lines. BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
 
 
 func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
 	assert_str(str(CoreSlice.config()["mode"])).is_equal("deny")
-	# C-R1 (epochs 82 + 84) ported the wound-ignore rules by name and left the deny list; DLINES2 refuses the family again because the door
-	# writes none of its roll lines (a `rule_line` group, dlines_gap row 3). Tough stays taken.
-	assert_array(CoreSlice.refusals(_unit(["Regeneration"], [["AP(1)"]]))).is_equal(["unit_rule:Regeneration"])
+	# C-R1 (epochs 82 + 84) ported the wound-ignore rules by name and left the deny list; DLINES2 refuses the families whose roll line the door
+	# does not write (a `rule_line` group, dlines_gap row 3): Self-Repair still, the plain Regeneration group has its line (train 2). Tough stays taken.
+	var repairer := _unit(["Self-Repair"], [["AP(1)"]])
+	repairer.unit_properties["faction_folder"] = "robot_legions"
+	assert_array(CoreSlice.refusals(repairer)).is_equal(["unit_rule:Self-Repair"])
+	assert_bool(CoreSlice.takes(_unit(["Regeneration"], [["AP(1)"]]))).is_true()
 	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
 	# A rule refused by NAME where its primitive is shared (Changebound = Stealth; plain Stealth stays taken).
 	var changed := _unit(["Changebound"], [])
@@ -318,10 +321,8 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 	var rep: Array = [
 		["Artillery", ""], ["Stealth", ""], ["Evasive", "battle_brothers"], ["Aircraft", ""], ["Precision Fighter", ""],
 		["Instinctive", "goblin_reclaimers"],
-		["Regeneration", ""], ["Self-Repair", "robot_legions"], ["Resistance", "alien_hives"],
-		["Shred", ""], ["Lacerate", "battle_brothers"], ["Anti-Regen", ""], ["Takedown", ""],
-		["Shielded", "battle_brothers"], ["Ranged Shrouding", "custodian_brothers"], ["Fortified", "alien_hives"],
-		["Bane", ""], ["Mischievous", "goblin_reclaimers"], ["Vicious", "goblin_reclaimers"],
+		["Self-Repair", "robot_legions"], ["Resistance", "alien_hives"], ["Shred", ""], ["Takedown", ""],
+		["Plaguebound", "plague_disciples"], ["Warding", "eternal_wardens"], ["Protection Feat", "alien_hives"],
 	]
 	for row in rep:
 		var as_unit := _unit([row[0]], [[]])
@@ -335,6 +336,16 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 		assert_array(CoreSlice.refusals(as_weapon)).override_failure_message("%s as a weapon rule is taken" % row[0]).is_equal(["weapon_rule:" + row[0]])
 	for kept in [["Blast(3)"], ["Reliable"], ["Surge when Shooting"], ["Rending"], ["Sturdy"], ["Slayer"], ["Tough(3)"]]:
 		assert_bool(CoreSlice.takes(_unit(kept, [["AP(1)"]]))).override_failure_message("%s stays on the core" % kept[0]).is_true()
+	# Train 2 (lines said, groups lifted): the Ranged Shrouding range cut, the Bane re-roll named by plain Bane / Lacerate / the unit-level aliases, the
+	# Shielded and Fortified lines, the plain Regeneration group's roll.
+	for lifted in [["Ranged Shrouding", "custodian_brothers"], ["Bane", ""], ["Lacerate", "battle_brothers"], ["Anti-Regen", ""],
+			["Mischievous", "goblin_reclaimers"], ["Vicious", "goblin_reclaimers"], ["Unstoppable when Shooting", ""],
+			["Shielded", "battle_brothers"], ["Fortified", "alien_hives"], ["Regeneration", ""], ["Regeneration Aura", "alien_hives"]]:
+		var lifted_unit := _unit([lifted[0]], [[lifted[0]]])
+		if lifted[1] != "":
+			lifted_unit.unit_properties["faction_folder"] = lifted[1]
+		assert_bool(CoreSlice.takes(lifted_unit, true)).override_failure_message("%s says its line on the door now (train 2)" % lifted[0]).is_true()
+		assert_bool(CoreSlice.takes(lifted_unit)).override_failure_message("%s as a unit and weapon rule stays on the core" % lifted[0]).is_true()
 	var smash := _unit([], [["Smash"]])
 	smash.unit_properties["faction_folder"] = "battle_brothers"   # a Bane WEAPON alias: the core says its line (dlines 3)
 	assert_bool(CoreSlice.takes(smash)).override_failure_message("a Bane weapon alias stays on the core").is_true()
@@ -441,9 +452,7 @@ func test_the_way_back_reads_the_shipped_allow_file() -> void:
 func test_deny_mode_takes_the_lifted_equal_probes() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
-	# DLINES2: "Unstoppable when Shooting" (primitive Lacerate) left this list: its dice are equal but the table names the re-roll and the door
-	# does not (dlines_gap row 13), so the Lacerate group refuses it (test above).
-	var unit_rules := {
+	var unit_rules := {"Unstoppable when Shooting": "",
 		"Guarded": "blessed_sisters", "Piercing Tag": "alien_hives", "Vengeance": "eternal_dynasty"}
 	for name in unit_rules:
 		var gu := _unit([name], [])

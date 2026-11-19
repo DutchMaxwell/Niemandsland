@@ -593,6 +593,27 @@ fn piercing_assault_grant_cond() -> CondAp {
 }
 
 /// A rule's battle-log line on a supplied tray, in the table's words (a seeded tray never builds the text).
+/// The table's `_solo_log_defense_parts` line for the Shielded family (`<U> is <rule>: +N Defense (saves on M+)`), said once before the
+/// volley's announce; the rule is the literal or the alias that drives `shielded`. None when the target has no bonus to name.
+pub(crate) fn say_shielded(tray: &mut Tray, def: &Ctx, name: &str) {
+    let bonus = def.shielded_bonus();
+    if !def.shielded || bonus <= 0 {
+        return;
+    }
+    let rule = match def.shielded_alias {
+        ShieldedAlias::None => "Shielded",
+        ShieldedAlias::PlusOneToDefense => "+1 to Defense",
+        ShieldedAlias::SturdyBoost => "Enhanced Sturdy",
+        ShieldedAlias::SafetyGearBoost => "Safety Gear Boost",
+        ShieldedAlias::TenaciousBoost => "Tenacious Boost",
+        ShieldedAlias::GroundedReinforcement => "Grounded Defense",
+        ShieldedAlias::DefenseRating => "Defense",
+    };
+    let note = if def.shielded_alias == ShieldedAlias::None && def.shielded_note { " (most of its models carry it)" } else { "" };
+    say_rule(tray, "shielded", def.side, || format!("{name} is {rule}{note}: +{bonus} Defense (saves on {}+)",
+        shielded_defense(def.defense, bonus, def.def_floor()).clamp(BEST_HIT_TARGET, 6)));
+}
+
 pub(crate) fn say_rule(tray: &mut Tray, rule: &'static str, side: i64, text: impl FnOnce() -> String) {
     tray.say(|| LogLine { rule, category: Category::Combat, side, text: text(), detail: None });
 }
@@ -776,13 +797,17 @@ fn save_batch(
     // its ELSE — Boost ungated, gated aliases past the volley's over-9" flag,
     // both clamped at AP(0) like `fortified_ap`.
     let mut eff_ap = fortified_ap(ap, def.fortified);
+    let mut fortified_rule = if def.fortified { "Fortified" } else { "" };
+    let mut fortified_note = def.fortified && def.fortified_notes[0];
     if !def.fortified {
-        let red = def
-            .fortified_boost_ap
-            .max(if def.fortified_alias_over9 { def.fortified_alias_ap } else { 0 });
+        let gated = if def.fortified_alias_over9 { def.fortified_alias_ap } else { 0 };
+        let red = def.fortified_boost_ap.max(gated);
         if red > 0 && ap > 0 {
             eff_ap = (ap - red).max(0);
             out.fortified_fired = true;
+            let boost = def.fortified_boost_ap >= gated;
+            fortified_rule = if boost { def.fortified_boost_name } else { def.fortified_alias_name };
+            fortified_note = def.fortified_notes[if boost { 1 } else { 2 }];
         }
     }
     // rules-wave3-growthmark (epoch 6) — the DEFENDER-side facets ride the
@@ -821,11 +846,17 @@ fn save_batch(
             (eff_ap + def.growth_fortify_ap).max(0),
         )
     };
+    let stat = if def.modifier_sum { defense - growth_def + defense_mod } else { target - (eff_ap + def.growth_fortify_ap).max(0) };
+    if eff_ap < ap && !fortified_rule.is_empty() {
+        // The table's line (`_solo_save_batch`), once per save batch whose AP the rule cut, before the threshold line.
+        say_rule(tray, "fortified", def.side, || format!("{fortified_rule}: {def_owner} takes the hits at AP({eff_ap}) instead of AP({ap}) — saves on {}+{}", stat + eff_ap,
+            if fortified_note { " (most of its models carry it)" } else { "" }));
+    }
     // One-core P3 step 25: the table's threshold line before the save dice (`_solo_log_save_threshold`,
     // main.gd:9823), from the stat and the AP `target` was built from (only modifier_sum clamps the sum).
     tray.say(|| {
         let a = (eff_ap + def.growth_fortify_ap).max(0);
-        let d = if def.modifier_sum { defense - growth_def + defense_mod } else { target - a };
+        let d = stat;
         LogLine { rule: "save", category: Category::Combat, side: def.side,
             text: format!("{def_owner} saves on {}", save_threshold_text(d, a)), detail: None }
     });
@@ -847,12 +878,19 @@ fn save_batch(
     if bane {
         let n = faces.iter().filter(|&&f| f == 6 || (f as i64 >= bane_from && f as i64 >= target)).count() as i64;
         if n > 0 {
-            if !p.bane_alias.is_empty() {
-                // The table's line (rules-must-log), said before the re-roll dice like the table's.
-                let what = if bane_from < 6 { format!("roll{} of {bane_from}+", if n == 1 { "" } else { "s" }) } else { format!("6{}", if n == 1 { "" } else { "s" }) };
-                // the base window says no condition (the table adds it only to the widened form)
-                let why = if bane_from < 6 { cond_ap_why(&p.bane_condition) } else { "" };
-                say_rule(tray, "bane", def.side, || format!("{}: {def_owner} re-rolls {n} unmodified Defense {what}{why}", p.bane_alias));
+            {
+                // The table's line (rules-must-log), said before the re-roll dice like the table's: the rule is the unit-level facet, else the
+                // weapon alias, else Lacerate alone, else plain Bane; a widened window names the Boost that opened it.
+                let name: &str = if !p.bane_name.is_empty() { &p.bane_name } else if !p.bane_alias.is_empty() { &p.bane_alias }
+                    else if crate::unit::lacerate_only(&p.rules) { "Lacerate" } else { "Bane" };
+                let s = if n == 1 { "" } else { "s" };
+                let line = if bane_from < 6 {
+                    // the condition's words only on the widened form
+                    format!("{}: {def_owner} re-rolls {n} unmodified Defense roll{s} of {bane_from}+{}", if p.bane_rule.is_empty() { name } else { p.bane_rule }, cond_ap_why(&p.bane_condition))
+                } else {
+                    format!("{name}: {def_owner} re-rolls {n} unmodified Defense 6{s}")
+                };
+                say_rule(tray, "bane", def.side, || line);
             }
             tray.owner_next(def.unit);
             reroll = tray.roll(n as usize);
@@ -1319,6 +1357,11 @@ pub fn resolve_volley_leg(
         let saves = guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), true, def.def_floor());
         say_rule(tray, "guarded", def.side, || format!("{def_owner} ({}): shot from over {}\" — +1 Defense (saves on {}+)",
             def.guarded_name, LONG_RANGE_IN as i64, saves.clamp(BEST_HIT_TARGET, 6)));
+    }
+    if def.ranged_shrouding && !shots.is_empty() {
+        // The table's line (`_solo_resolve_ai_volley`), once per volley whether or not a weapon was shortened.
+        say_rule(tray, "shroud", def.side, || format!("{}: {def_owner} — weapon ranges against it {}\" shorter (min {}\")",
+            def.ranged_shroud_name, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in));
     }
     for (sh, k, pi) in shots {
         let att = sh.att;
@@ -2174,13 +2217,18 @@ pub(crate) fn regen_batch(
 }
 
 /// One ignore roll: a die per wound of `w`, each `target`+ ignoring it; the wounds that survive come back.
-fn roll_ignore_group(w: i64, target: i64, def: &Ctx, def_owner: &str, tray: &mut Tray, rolls: &mut Vec<Roll>) -> i64 {
+fn roll_ignore_group(w: i64, target: i64, name: &str, def: &Ctx, def_owner: &str, tray: &mut Tray, rolls: &mut Vec<Roll>) -> i64 {
     if w <= 0 || !def.regeneration || target <= 0 {
         return w.max(0);
     }
     tray.owner_next(def.unit);
     let faces = tray.roll(w as usize);
     let ignored = faces.iter().filter(|&&f| f as i64 >= target).count() as i64;
+    if !name.is_empty() {
+        // The table's line (`_solo_roll_ignore_group`): the group's own name, "die" for one wound, "dice" for more.
+        say_rule(tray, "ignore", def.side, || format!("{def_owner} rolls {w} {name} di{} ({target}+) — {ignored} wound{} ignored",
+            if w == 1 { "e" } else { "ce" }, if ignored == 1 { "" } else { "s" }));
+    }
     rolls.push(Roll {
         kind: "attack",
         count: w,
@@ -2204,20 +2252,42 @@ pub(crate) fn ignore_batch(
     rolls: &mut Vec<Roll>,
 ) -> i64 {
     let bypass = bypass.max(0);
-    if !def.groups_valid() {
-        return bypass + roll_ignore_group(pool, def.regen_target, def, def_owner, tray, rolls);
+    if pool.max(0) + bypass > 0 && def.regeneration && def.regen_most_note && def.regen_names[0] == "regeneration" {
+        say_rule(tray, "ignore", def.side, || format!("{def_owner} — Regeneration: most models carry it, so a joined hero without it does not switch it off"));
     }
+    if !def.groups_valid() {
+        // One group: its own name when the static stamp holds exactly one, else a granted Regeneration (the Aura / Medical Training forms).
+        let mut live = def.regen_groups.iter().zip(def.regen_names).filter(|(t, _)| **t > 0 && **t == def.regen_target);
+        let name = match (live.next(), live.next()) {
+            (Some((_, n)), None) => n,
+            _ if def.regen_named => "regeneration",
+            _ => "",
+        };
+        if name == "regeneration" && bypass > 0 {
+            say_rule(tray, "ignore", def.side, || format!("{def_owner}: {bypass} wound{} ignore Regeneration — no regeneration roll", if bypass == 1 { "" } else { "s" }));
+        }
+        return bypass + roll_ignore_group(pool, def.regen_target, name, def, def_owner, tray, rolls);
+    }
+    let display = |n: &str| match n { "regeneration" => "Regeneration".to_string(), "self-repair" => "Self-Repair".to_string(), "resistance" => "Resistance".to_string(), o => o.to_string() };
+    let others: Vec<String> = def.regen_groups.iter().zip(def.regen_names).enumerate().filter(|(i, (t, _))| *i > 0 && **t > 0).map(|(_, (_, n))| display(n)).collect();
     let mut pool = pool.max(0);
     let mut joined = false;
-    for (slot, &target) in def.regen_groups.iter().enumerate() {
+    for (slot, (&target, name)) in def.regen_groups.iter().zip(def.regen_names).enumerate() {
         if target <= 0 {
             continue;
         }
-        if slot > 0 && !joined {
+        if slot == 0 {
+            if bypass > 0 {
+                say_rule(tray, "ignore", def.side, || format!("{def_owner}: {bypass} wound{} ignore Regeneration — no {name} roll", if bypass == 1 { "" } else { "s" }));
+            }
+        } else if !joined {
             joined = true;
+            if bypass > 0 {
+                say_rule(tray, "ignore", def.side, || format!("{def_owner}: {bypass} wound{} ignore only Regeneration — {} still rolls", if bypass == 1 { "" } else { "s" }, others.join(" and ")));
+            }
             pool += bypass;
         }
-        pool = roll_ignore_group(pool, target, def, def_owner, tray, rolls);
+        pool = roll_ignore_group(pool, target, name, def, def_owner, tray, rolls);
     }
     if joined { pool } else { pool + bypass }
 }

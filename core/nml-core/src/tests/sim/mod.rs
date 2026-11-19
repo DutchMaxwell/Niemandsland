@@ -1797,6 +1797,7 @@ mod plain_moves;
 mod port_container_ledges;
 mod quick_shot;
 mod rule_lines_hit_roll;
+mod rule_lines_defense;
 mod rapid_charge_mark;
 mod reckless_piercing;
 mod reposition_artillery;

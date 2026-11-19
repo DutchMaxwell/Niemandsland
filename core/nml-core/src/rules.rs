@@ -527,6 +527,20 @@ fn modifier_of(m: Option<&Value>) -> SpellModifier {
     }
 }
 
+/// A rule name that outlives the registry read, for the `Copy` dice contexts (`Ctx`) that name a rule in a log line: each distinct name is
+/// leaked once (the registry holds a few hundred), so the same name always comes back as the same `&'static str`.
+pub(crate) fn intern(name: &str) -> &'static str {
+    use std::sync::{Mutex, OnceLock};
+    static NAMES: OnceLock<Mutex<std::collections::HashSet<&'static str>>> = OnceLock::new();
+    let mut seen = NAMES.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(&known) = seen.get(name) {
+        return known;
+    }
+    let leaked: &'static str = Box::leak(name.to_string().into_boxed_str());
+    seen.insert(leaked);
+    leaked
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -605,3 +619,4 @@ mod tests {
         assert_eq!(normalize_system("gf"), "gf");
     }
 }
+
