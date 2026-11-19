@@ -950,6 +950,11 @@ pub const EPOCH_90_JOINED_ONE_RECOVERY: u32 = 90;
 /// byte-exact. The recorder mirror (`act_recorder.gd`) stamps 91 in the same change.
 pub const EPOCH_91_JOINED_HERO_FATIGUE: u32 = 91;
 pub const CURRENT_RULES_EPOCH: u32 = 91;
+/// Placeholder epoch gate for DS-GMC3 melee fixes (Counter as a unit rule, Destructive 3.6.0 / target-state
+/// conditional AP in melee, Piercing Hunter weapon seat `ranged_over_or_charge`).
+/// `CURRENT_RULES_EPOCH` is not touched, so every recorded game replays byte-exact; the lead batches
+/// this placeholder into the next daily epoch bump.
+pub const PENDING_EPOCH_MELEE_GMC3: u32 = CURRENT_RULES_EPOCH + 1;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff

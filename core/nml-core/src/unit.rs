@@ -6374,6 +6374,58 @@ fn stamp_conditional_ap_named(
     }
 }
 
+/// DS-GMC3 (`PENDING_EPOCH_MELEE_GMC3`) — expand weapon-seat `condition: "ranged_over_or_charge"`
+/// conditional-AP rules (`Havocbound`, `Piercing Warrior`) into the same `on_charge` + `ranged_over`
+/// legs that the unit-seat arms stamp, deduplicated against unit-seat stamps by name.
+fn stamp_weapon_ranged_over_or_charge(
+    reg: &mut Registries,
+    p: &Profile,
+    rules_epoch: u32,
+    shoot: &mut [ShootProfile],
+    melee: &mut [ShootProfile],
+) {
+    let map = reg.rules_for(&p.game_system);
+    let havoc_boosted = p.special_rules.iter().any(|r| base_rule_name(r) == "Enhanced Havocbound");
+    for sp in shoot.iter_mut().chain(melee.iter_mut()) {
+        let mut seen: Vec<String> = Vec::new();
+        for raw in &sp.rules {
+            let n = base_rule_name(raw);
+            if n.is_empty()
+                || seen.contains(&n)
+                || (n == "Havocbound" && havoc_boosted)
+                || sp.cond_ap.iter().any(|c| c.name == n)
+            {
+                continue;
+            }
+            seen.push(n.clone());
+            let Some(e) = map.lookup(&p.faction_folder, &n) else {
+                continue;
+            };
+            if e.param_s("condition") != "ranged_over_or_charge" {
+                continue;
+            }
+            let ap = e.param_i("ap_bonus", 0);
+            if ap <= 0 {
+                continue;
+            }
+            sp.cond_ap.push(CondAp {
+                ap_bonus: ap,
+                condition: "on_charge".into(),
+                charge_over_in: crate::combat::charge_over_in(rules_epoch),
+                name: n.clone(),
+                ..Default::default()
+            });
+            sp.cond_ap.push(CondAp {
+                ap_bonus: ap,
+                condition: "ranged_over".into(),
+                over_in: e.param_f("over_in", LONG_RANGE_IN),
+                name: n,
+                ..Default::default()
+            });
+        }
+    }
+}
+
 /// Wave 4 (rules-wave4-renames) — the UNIT-level "Takedown when Shooting"
 /// (aof/saurians: "This model gets Takedown when shooting"), the table's
 /// `AiEv.takedown_rule_for_profile` ai_ev.gd:210-235: a carried Takedown-
@@ -7382,9 +7434,12 @@ impl UnitStatic {
         // (ai_shooting.gd:135). Melee-only by nature: the shooting array never
         // sees the flag. `rules_epoch` defaults to 0, so every pre-wave
         // record replays the Gen-0 rule set untouched.
-        if rule_on(rules_epoch, EPOCH_3_TABLE_RULES)
+        if (rule_on(rules_epoch, EPOCH_3_TABLE_RULES)
             && (rule_on_all_models(p, "Counter-Attack")
-                || rule_on_all_models(p, "Counter in Melee"))
+                || rule_on_all_models(p, "Counter in Melee")))
+            || (rule_on(rules_epoch, crate::acts::PENDING_EPOCH_MELEE_GMC3)
+                && (has_special_rule(&p.special_rules, "Counter")
+                    || has_special_rule(&p.item_grants, "Counter")))
         {
             for sp in melee.iter_mut() {
                 sp.counter = true;
@@ -7563,6 +7618,9 @@ impl UnitStatic {
         // it and replays byte-exact.
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
             stamp_conditional_ap_named(reg, p, rules_epoch, &mut shoot, &mut melee);
+        }
+        if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_MELEE_GMC3) {
+            stamp_weapon_ranged_over_or_charge(reg, p, rules_epoch, &mut shoot, &mut melee);
         }
         // Wave 4 (rules-wave4-renames), gated on the FROZEN
         // `EPOCH_7_TABLE_RULES`: "Takedown when Shooting" is Takedown's

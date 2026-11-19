@@ -7356,7 +7356,9 @@ fn tray_charge_with_self_wounds(
     if v36 && epoch13 && wants_first {
         let name = &statics[next.roster.profile[ti]].name;
         if counter_blocked {
-            shot.log.push(format!("Counter: {name} is Fatigued - no strike-first"));
+            let line = format!("Counter: {name} is Fatigued - no strike-first");
+            say_melee(tray, next.player[ti], line.clone());
+            shot.log.push(line);
         } else {
             shot.log.push(format!("Counter: {name} strikes first"));
         }
@@ -7375,6 +7377,9 @@ fn tray_charge_with_self_wounds(
         by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch, charge_from_in, seams.tray_exact);
     }
     if counter_first && side_up(next, si, seams) && side_up(next, ti, seams) {
+        if impact_first {
+            say_melee(tray, next.player[ti], format!("Counter: {tname} strikes first, after the Impact dice ({CITE})"));
+        }
         let (c, rc, h, s) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, StrikeSet::CounterOnly, cover);
         by_tu += c;
         by_su += rc;
