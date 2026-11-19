@@ -7979,15 +7979,18 @@ pub(crate) fn cast_phase(
     }
 }
 
-/// CC-5b: how an offered cast ends before any die. Its caster is down when the cast resolves (a Dangerous test, an earlier cast's
-/// Hazardous): skipped silently, as `_solo_resolve_ai_casts` does. No target stands: the cast fizzles.
+/// CC-5b/5c: how an offered cast ends. Before any die: its caster is down when the cast resolves (a Dangerous test, an earlier cast's
+/// Hazardous), skipped silently as `_solo_resolve_ai_casts` does; no target stands, the cast fizzles. At the cast die: it fails, or it
+/// succeeds (`Hit`: the effect is CC-6/CC-8's, so the step API refuses a `Hit` for now).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CastEnd {
     Skipped,
     Fizzled,
+    Failed,
+    Hit,
 }
 
-/// CC-5b: `Some(end)` when `c` ends before any die in `state`; `None` = it goes on to the cast die (CC-5c).
+/// CC-5b: `Some(end)` when `c` ends before any die in `state`; `None` = it goes on to the cast die.
 pub(crate) fn cast_ends(state: &State, c: &CastInput) -> Option<CastEnd> {
     let at = |k: &String| state.roster.index.get(k.as_str()).copied();
     if at(&c.caster).is_none_or(|i| state.alive[i] <= 0) {
@@ -7996,26 +7999,71 @@ pub(crate) fn cast_ends(state: &State, c: &CastInput) -> Option<CastEnd> {
     c.targets.iter().filter_map(at).all(|t| state.alive[t] <= 0).then_some(CastEnd::Fizzled)
 }
 
-/// CC-5b: one offered cast, part 1 (`_solo_resolve_one_cast` main.gd:5598-5613 after the plan's own spend). The tokens go first and
-/// stay spent whatever follows: the table paid them at plan time, so its capture holds the counts BEFORE the plan and the core pays
-/// them here, the threshold from the caster, boost and interference from the listed payers in list order. Then `cast_ends`: a
-/// skipped cast says nothing, a fizzled one says so. `None` = the cast goes on to the cast die (CC-5c).
-pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, c: &CastInput, tray: &mut Tray) -> Option<CastEnd> {
-    let pay = |state: &mut State, key: &str, n: i64| {
-        if let Some(&i) = state.roster.index.get(key) {
+fn cast_say(tray: &mut Tray, side: i64, text: String) {
+    tray.say(|| LogLine { rule: "cast", category: Category::Combat, side, text, detail: None });
+}
+
+/// CC-5c: the notes of the casting net in the table's order (`caster_casting_net` solo_controller.gd:5225): each casting record of the
+/// caster then its host, then the Spell Amplifier.
+fn casting_notes(statics: &[UnitStatic], state: &State, ci: usize) -> Vec<String> {
+    let mut notes: Vec<String> = Vec::new();
+    for u in [Some(ci), state.attached_to[ci]].into_iter().flatten() {
+        notes.extend(state.buffs[u].iter().filter(|r| mods::matches(r, mods::Role::Casting, false)).map(|r| format!("{} {:+}", r.name, r.casting_mod)));
+    }
+    let amp = statics[state.roster.profile[ci]].spell_amplifier_casting_mod;
+    notes.extend((amp != 0).then(|| format!("Spell Amplifier {amp:+}")));
+    notes
+}
+
+/// CC-5b/5c: one offered cast (`_solo_resolve_one_cast` main.gd:5598, after the plan's own spend). The tokens go first and stay spent
+/// whatever follows: the table paid them at plan time, so its capture holds the counts BEFORE the plan and the core pays them here,
+/// the threshold from the caster, boost and interference from the listed payers in list order. A skipped cast then says nothing, a
+/// fizzled one says so. Otherwise the lines up to the die, the cast die (kind "cast", the caster's), its result line, and the
+/// casting once-mod is spent by the roll. The target is the table's double clamp: the casting net moves the base first
+/// (`caster_casting_net`), boost and interference the clamped result (`AiSpell.cast_target`). `si` is the activating unit (the
+/// announce line names it), the conduit is not resolved yet.
+pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c: &CastInput, seams: Seams, tray: &mut Tray, shot: &mut ShootResult) -> CastEnd {
+    for (key, n) in std::iter::once((&c.caster, &c.threshold)).chain(c.boost_sources.iter().chain(&c.interference_sources).map(|(k, n)| (k, n))) {
+        if let Some(&i) = state.roster.index.get(key.as_str()) {
             state.casts[i] = (state.casts[i] - n).max(0);
         }
-    };
-    pay(state, &c.caster, c.threshold);
-    for (key, n) in c.boost_sources.iter().chain(&c.interference_sources) {
-        pay(state, key, *n);
     }
+    let ci = state.roster.index.get(c.caster.as_str()).copied().unwrap_or(si);
+    let (side, caster) = (state.player[ci], statics[state.roster.profile[ci]].name.clone());
     let end = cast_ends(state, c);
-    if let (Some(CastEnd::Fizzled), Some(&ci)) = (end, state.roster.index.get(c.caster.as_str())) {
-        let (side, name) = (state.player[ci], statics[state.roster.profile[ci]].name.clone());
-        tray.say(|| LogLine { rule: "cast", category: Category::Combat, side, text: format!("{name}'s {} fizzles — no target remains", c.spell), detail: None });
+    if end == Some(CastEnd::Fizzled) {
+        cast_say(tray, side, format!("{caster}'s {} fizzles — no target remains", c.spell));
     }
-    end
+    if let Some(end) = end {
+        return end;
+    }
+    let name = |u: usize| statics[state.roster.profile[u]].name.as_str();
+    for u in (0..state.units()).filter(|&u| state.player[u] == side && state.alive[u] > 0 && state.shaken[u] && state.casts[u] > 0) {
+        let s = &statics[state.roster.profile[u]];
+        if s.spell_accumulator && !s.is_caster {
+            cast_say(tray, side, format!("Spell Accumulator: {} is Shaken — its tokens do not feed friendly casters", name(u)));
+        }
+    }
+    let net = casting_net_of(statics, state, ci, seams);
+    let base = if net != 0 { (c.base - net).clamp(2, 6) } else { c.base };
+    if net != 0 {
+        cast_say(tray, side, format!("{net:+} to casting rolls ({}) — {caster} casts on {base}+ (base {}+)", casting_notes(statics, state, ci).join(", "), c.base));
+    }
+    let target = (base - c.boost.max(0) + c.interference.max(0)).clamp(2, 6);
+    let standing: Vec<&str> = c.targets.iter().filter_map(|k| state.roster.index.get(k.as_str())).filter(|&&t| state.alive[t] > 0).map(|&t| name(t)).collect();
+    let mut tokens = format!("{} token{}", c.threshold, if c.threshold == 1 { "" } else { "s" });
+    tokens += &(if c.boost > 0 { format!(", +{} boost", c.boost) } else { String::new() });
+    tokens += &(if c.interference > 0 { format!(", -{} interference", c.interference) } else { String::new() });
+    cast_say(tray, side, format!("{} casts {} at {}", name(si), c.spell, standing[0]));
+    cast_say(tray, side, format!("{caster} casts {} at {} — needs {target}+ ({tokens})", c.spell, standing.join(", ")));
+    tray.owner_next(Some(ci));
+    let faces = tray.roll(1);
+    let hit = crate::dice::faces_to_hits(&faces, target as u8) > 0;
+    let face = faces.first().copied().unwrap_or(0);
+    shot.rolls.push(crate::dice::Roll { kind: "cast", count: 1, target, faces, owner: caster });
+    cast_say(tray, side, format!("{}: cast roll {face} vs {target}+ — {}", c.spell, if hit { "SUCCESS" } else { "FAILED" }));
+    mods::spend_once(state, ci, &[mods::Role::Casting], false);
+    if hit { CastEnd::Hit } else { CastEnd::Failed }
 }
 
 /// NML-1157 — WHICH member of the activating chain actually casts.
@@ -10254,9 +10302,11 @@ fn resolve_with(
         cast_phase(statics, &mut next, si, &row, seams, rng.as_deref_mut());
     }
     // CC-5b: the casts offered on the tray, in plan order; their wounds (CC-6) join the melee tally like the expectation cast's.
-    if let Some((tray, _)) = dice.as_mut() {
+    if let Some((tray, shot)) = dice.as_mut() {
         for c in tray.casts().to_vec() {
-            tray_cast(statics, &mut next, &c, tray);
+            if tray_cast(statics, &mut next, si, &c, seams, tray, shot) == CastEnd::Hit {
+                tray.note_cast_hit(c.seq);
+            }
         }
     }
     let pre_melee_su = (cast_wounds_before_su - wounds_left(&next, si)).max(0);
