@@ -36,6 +36,31 @@ pub enum Input {
     /// `option` asks the core what it is waiting for: the next answer is `ActStep::NeedChoice`.
     /// A transcript without a `Choice` keeps the core's automatic pick (the default policy).
     Choice { id: String, option: String },
+    /// CC-3: one planned cast, in plan order, after the `Intent` and before the first `Faces`. The core does not resolve it yet.
+    Cast(CastInput),
+}
+
+/// One planned cast: the planner's picks (spell, targets, boost and interference with their payers, the conduit, the
+/// eligible interferers) and the table's readings (`base` = the caster's cast target, `once` = the book text's reading).
+/// `seq` is the cast's 0-based ordinal in the activation (every choice id will carry it); the `*_sources` / `pools` lists
+/// are `(unit key, tokens)` in spend order, `pools` per foe slot. `open`: the foe's owner may still interfere.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CastInput {
+    pub seq: i64,
+    pub caster: String,
+    pub spell: String,
+    pub targets: Vec<String>,
+    pub base: i64,
+    pub threshold: i64,
+    pub boost: i64,
+    pub boost_sources: Vec<(String, i64)>,
+    pub interference: i64,
+    pub interference_sources: Vec<(String, i64)>,
+    pub conduit: String,
+    pub conduit_shaken: Vec<String>,
+    pub pools: Vec<(i64, Vec<(String, i64)>)>,
+    pub once: bool,
+    pub open: bool,
 }
 
 /// The core's answer to the inputs so far. `Done` and `Cancelled` are the
@@ -68,6 +93,7 @@ pub enum ActStep {
 /// is the first offending input's index and its sentence. `name` is the unit's.
 pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
     let (mut declared, mut shot, mut rolled, mut over) = (false, false, false, false);
+    let mut last_seq: Option<i64> = None;
     for (i, x) in t.iter().enumerate() {
         let why = match x {
             _ if i == 0 && *x != Input::Begin => Some("the activation was not started".to_string()),
@@ -76,6 +102,9 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
             Input::Cancel if rolled => Some("cancel is not possible after the first die".to_string()),
             Input::Faces(_) if !declared => Some("faces before the action was declared".to_string()),
             Input::Choice { .. } if !declared => Some("the choice was answered before the action was declared".to_string()),
+            Input::Cast(_) if !declared => Some("a cast before the action was declared".to_string()),
+            Input::Cast(_) if rolled => Some("a cast after the first die".to_string()),
+            Input::Cast(c) if c.seq < last_seq.map_or(0, |p| p + 1) => Some(format!("cast seq {} is too low: seq is 0 or more and higher than the cast before", c.seq)),
             Input::Intent { .. } if declared => Some("one action per activation".to_string()),
             Input::Placed { .. } if shot => Some(format!("{name} has already shot this round — it cannot move now")),
             Input::Intent { kind, .. } if *kind == REPOSITION => Some("not on the step path yet".to_string()),
@@ -89,6 +118,7 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
             Input::Intent { shoot, .. } => (declared, shot) = (true, shoot.is_some()),
             Input::Faces(_) => rolled = true,
             Input::Cancel => over = true,
+            Input::Cast(c) => last_seq = Some(c.seq),
             _ => {}
         }
     }
@@ -245,6 +275,11 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let name = at.map_or(unit, |i| statics[state.roster.profile[i]].name.as_str());
     if let Err((index, reason)) = order_check(name, t) {
         return ActStep::Refused { index, reason };
+    }
+    // CC-3: the core resolves no cast yet. The first one is refused at its own index, before any resolver runs
+    // (so before the Dangerous die and before any token is spent).
+    if let Some(i) = t.iter().position(|x| matches!(x, Input::Cast(_))) {
+        return ActStep::Refused { index: i, reason: "casts are not resolved by the core yet".to_string() };
     }
     // Before any resolver runs: no die is drawn and no state is resolved. A `Placed` in the
     // transcript is simply dropped (the table puts the models back).
@@ -586,6 +621,11 @@ mod tests {
         Input::Intent { kind, shoot: shoot.map(String::from), split: None, charge: None }
     }
 
+    /// A planned cast with the given `seq` and every other field at its default.
+    fn cast(seq: i64) -> Input {
+        Input::Cast(CastInput { seq, caster: "a".into(), spell: "Bolt".into(), targets: vec!["b".into()], ..Default::default() })
+    }
+
     fn refused(t: &[Input], index: usize, reason: &str) {
         assert_eq!(order_check("Squad", t), Err((index, reason.to_string())), "{t:?}");
     }
@@ -633,6 +673,21 @@ mod tests {
         refused(&[Begin, intent(CHARGE, None)], 1, "a charge names its target");
         let charge = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("b".into()) };
         assert_eq!(order_check("Squad", &[Begin, charge, Faces(vec![4])]), Ok(()));
+    }
+
+    /// CC-3: a cast sits after the declared action and before the first die; `seq` starts at 0 or more and rises.
+    /// RED: the `Cast` arms removed from `order_check` -> every refusal below is `Ok`.
+    #[test]
+    fn rule9_a_cast_sits_after_the_intent_and_before_the_first_die_with_a_rising_seq() {
+        let low = "is too low: seq is 0 or more and higher than the cast before";
+        refused(&[Begin, cast(0)], 1, "a cast before the action was declared");
+        refused(&[Begin, intent(HOLD, Some("b")), Faces(vec![3]), cast(0)], 3, "a cast after the first die");
+        refused(&[Begin, intent(HOLD, Some("b")), cast(0), cast(0)], 3, &format!("cast seq 0 {low}"));
+        refused(&[Begin, intent(HOLD, Some("b")), cast(1), cast(0)], 3, &format!("cast seq 0 {low}"));
+        refused(&[Begin, intent(HOLD, Some("b")), cast(-1)], 2, &format!("cast seq -1 {low}"));
+        refused(&[Begin, intent(HOLD, Some("b")), cast(0), Cancel, cast(1)], 4, "the activation is over");
+        let ok = [Begin, placed(vec![]), intent(ADVANCE, None), cast(0), placed(vec![]), cast(1), cast(5), Faces(vec![4])];
+        assert_eq!(order_check("Squad", &ok[..]), Ok(()));
     }
 
     #[test]
@@ -1101,6 +1156,27 @@ mod tests {
         let ask = |t: &[Input]| step_activation(&statics, &st, "a", &Terrain::default(), seams(), t, true);
         assert!(matches!(ask(&[Begin]), ActStep::Open));
         assert!(matches!(ask(&[intent(HOLD, None)]), ActStep::Refused { index: 0, .. }));
+    }
+
+    /// CC-3: the core resolves no cast yet - the first cast is refused at its own index with one sentence, before any
+    /// resolver (no `NeedRoll`, no `Cancelled`, no `Done`). RED: the refusal removed -> the volley runs (`NeedRoll`).
+    #[test]
+    fn any_cast_is_refused_at_its_index_until_the_core_resolves_casts() {
+        let (st, statics) = volley_line();
+        let ask = |t: &[Input]| step_activation(&statics, &st, "a", &Terrain::default(), seams(), t, true);
+        let why = "casts are not resolved by the core yet";
+        for (t, at) in [
+            (vec![Begin, intent(HOLD, Some("b")), cast(0)], 2),
+            (vec![Begin, intent(HOLD, Some("b")), cast(0), cast(1), Faces(vec![4, 4])], 2),
+            (vec![Begin, intent(HOLD, None), cast(0), Cancel], 2),
+        ] {
+            let ActStep::Refused { index, reason } = ask(&t) else { panic!("{t:?}") };
+            assert_eq!((index, reason.as_str()), (at, why), "{t:?}");
+        }
+        // an order break still reads first, with its own sentence
+        assert!(matches!(ask(&[Begin, cast(0)]), ActStep::Refused { index: 1, reason } if reason == "a cast before the action was declared"));
+        // the same transcript without the cast is untouched
+        assert!(matches!(ask(&[Begin, intent(HOLD, Some("b"))]), ActStep::NeedRoll { .. }));
     }
 
     // ---- step 12: cancel ----
