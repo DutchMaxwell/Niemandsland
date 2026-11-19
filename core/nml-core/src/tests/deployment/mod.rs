@@ -69,3 +69,46 @@
         let (w, d) = (w_in * crate::IN2M, d_in * crate::IN2M);
         crate::deployment::Rect::new(-w / 2.0, -d / 2.0, w, d)
     }
+
+    /// Firefight step 8: 48x48 board zones (catalogue key per board size, standard style only).
+    /// R: a 72x48 zone on a 48-in board is refused; G: both zones 12 in deep, 24 in apart.
+    #[test]
+    fn board_48x48_deployment_zones_and_72x48_refusal() {
+        let cat: serde_json::Value =
+            serde_json::from_str(include_str!("../../../../../assets/solo/deployments.json")).unwrap();
+        // RED guard: a 72x48 zone does not fit on a 48x48 board and must be refused.
+        let z72 = crate::objectives::zones_of_style(&cat["styles"]["front_line"]);
+        assert!(zones_fit_board(&z72, [48.0, 48.0]).is_err(), "72x48 zone on 48x48 board must be refused");
+        assert!(zones_fit_board(&z72, [72.0, 48.0]).is_ok(), "72x48 zone fits 72x48 board");
+
+        // 48x48 catalogue: standard style (`front_line`) only; other styles refused.
+        assert!(catalog_zones_for_board(&cat, "spearhead", [48.0, 48.0]).is_err(),
+            "non-standard styles are not enabled on 48x48");
+        assert!(catalog_zones_for_board(&cat, "centre_disc_12", [48.0, 48.0]).is_err(),
+            "attack_defend styles are not enabled on 48x48");
+
+        // 48x48 front_line: both zones 12 in deep, 24 in apart, spanning x in [-24, 24].
+        let [p1, p2] = catalog_zones_for_board(&cat, "front_line", [48.0, 48.0]).unwrap();
+        let bounds = |zones: &[Zone]| -> (i64, i64, i64, i64) {
+            let (mut x0, mut x1, mut z0, mut z1) = (i64::MAX, i64::MIN, i64::MAX, i64::MIN);
+            for z in zones {
+                let Zone::Poly(pts) = z else { panic!("expected polygon zone") };
+                for &[x, y] in pts {
+                    x0 = x0.min(x); x1 = x1.max(x); z0 = z0.min(y); z1 = z1.max(y);
+                }
+            }
+            (x0, x1, z0, z1)
+        };
+        let (p1x0, p1x1, p1z0, p1z1) = bounds(&p1);
+        let (p2x0, p2x1, p2z0, p2z1) = bounds(&p2);
+        assert_eq!((p1x0, p1x1, p1z0, p1z1), (-24, 24, -24, -12), "P1 zone is 48x12 along z=-24..-12");
+        assert_eq!((p2x0, p2x1, p2z0, p2z1), (-24, 24, 12, 24), "P2 zone is 48x12 along z=12..24");
+        assert_eq!(p1z1 - p1z0, 12, "P1 zone 12 in deep");
+        assert_eq!(p2z1 - p2z0, 12, "P2 zone 12 in deep");
+        assert_eq!(p2z0 - p1z1, 24, "zones 24 in apart");
+
+        // 72x48 lookup continues to return the existing 72x48 front_line zones unchanged.
+        let [g1, g2] = catalog_zones_for_board(&cat, "front_line", [72.0, 48.0]).unwrap();
+        assert_eq!(bounds(&g1), (-36, 36, -24, -12));
+        assert_eq!(bounds(&g2), (-36, 36, 12, 24));
+    }

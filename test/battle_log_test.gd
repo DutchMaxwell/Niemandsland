@@ -62,6 +62,18 @@ func test_morale_roll_line_says_passed_or_failed() -> void:
 	assert_str(str(log_node.entries()[4]["text"])).is_equal("AI (Def) defends: 3 → 0 blocks (4+)")
 
 
+func test_dangerous_roll_line_counts_the_ones() -> void:
+	# Dangerous terrain (GF p.12): only a 1 wounds, so the line counts the 1s, not hits on a 6+ (issue #3090).
+	var log_node: BattleLog = auto_free(BattleLog.new())
+	log_node.on_dice_rolled(13, 2, 6, "AI (Veterans)", [6, 6, 5, 5, 4, 4, 4, 3, 2, 1, 1, 1, 1], "dangerous")
+	assert_str(str(log_node.entries()[0]["text"])).is_equal(
+		"AI (Veterans): 6 6 5 5 4 4 4 3 2 1 1 1 1 → 4 wounds (each 1)")
+	log_node.on_dice_rolled(2, 0, 6, "AI (Veterans)", [6, 3], "dangerous")
+	assert_str(str(log_node.entries()[1]["text"])).is_equal("AI (Veterans): 6 3 → 0 wounds (each 1)")
+	log_node.on_dice_rolled(1, 0, 6, "You", [1], "dangerous")
+	assert_str(str(log_node.entries()[2]["text"])).is_equal("You: 1 → 1 wound (each 1)")
+
+
 func test_ring_buffer_caps_and_drops_oldest() -> void:
 	var log_node: BattleLog = auto_free(BattleLog.new())
 	for i in range(BattleLog.CAP + 50):

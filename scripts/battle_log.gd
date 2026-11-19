@@ -200,6 +200,15 @@ func on_dice_rolled(count: int, hits: int, target: int, player: String = "", fac
 		var faces_str := " ".join(parts)
 		if target > 0 and kind == "morale":
 			log_event(Category.COMBAT, "%s%s → %s (%d+)" % [prefix, faces_str, "passed" if hits > 0 else "failed", target])
+		elif kind == "dangerous":
+			# Dangerous terrain (GF p.12): a 1 wounds, never a 6+, so the line counts the 1s and agrees with the
+			# wound sentence below it (issue #3090). The faces still read high→low.
+			var wounds := 0
+			for f in faces:
+				if int(f) == 1:
+					wounds += 1
+			log_event(Category.COMBAT, "%s%s → %d wound%s (each 1)" % [prefix, faces_str, wounds,
+				"" if wounds == 1 else "s"])
 		elif target > 0:
 			var plural := "" if hits == 1 else "s"
 			log_event(Category.COMBAT, "%s%s → %d %s%s (%d+)" % [prefix, faces_str, hits, noun, plural, target])

@@ -1256,6 +1256,8 @@ pub struct UnitStatic {
     /// `Profile.name` — `GameUnit.get_name()`, which is what `_solo_tray_roll`
     /// signs every die with (main.gd:3199-3200, :6448).
     pub name: String,
+    /// Parsed canonical game-system tag from `rules::book(&p.game_system).system` (`""` on default literals).
+    pub system: &'static str,
     /// Rules 3.6 (`EPOCH_73_V36`) — the book name of the Brace this unit carries ("Brace", "Brace in Melee");
     /// the charge's rules-must-log line names it. "" = no Brace.
     pub brace_rule: String,
@@ -7951,6 +7953,7 @@ impl UnitStatic {
         UnitStatic {
             ctx: ctx_for(reg, p, rules_epoch),
             name: p.name.clone(),
+            system: crate::rules::book(&p.game_system).system,
             brace_rule: brace_of(reg, p, rules_epoch).map(|b| b.0).unwrap_or_default(),
             parry_weapons: parry_weapons_of(reg, p, rules_epoch),
             fortified_alias_name: fa.alias_name,

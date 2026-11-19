@@ -410,11 +410,15 @@ impl NmlCore {
         actcall::check_of(&slot.statics, &slot.cap.state, &unit.to_string(), terrain, seams, &drop, enforce)
     }
 
-    /// One-core P3 (O5): may a unit begin its activation? `open_name` = the unit whose activation is open ("" = nobody).
-    /// `{"ok": true}` or `{"ok": false, "reason"}`. Stateless: no handle, so a drag of a not-activated unit can ask it.
+    /// One-core P3 (O5) + Firefight step 7: may a unit begin its activation? `open_name` = the unit whose
+    /// activation is open ("" = nobody); also refuses a loaded header that mixes game systems.
+    /// `{"ok": true}` or `{"ok": false, "reason", "lines"}`.
     #[func]
     fn check_begin(&self, open_name: GString) -> VarDictionary {
-        actcall::begin_of(&open_name.to_string())
+        let systems: Vec<&str> = self.header.as_ref()
+            .map(|hd| hd.profiles.list.iter().map(|p| p.game_system.as_str()).collect())
+            .unwrap_or_default();
+        actcall::begin_of(&open_name.to_string(), &systems)
     }
 
     /// One-core P3 (N3 b): the round end of a plain mission on handle `h` (`nml_core::round::end_round`). `words` =

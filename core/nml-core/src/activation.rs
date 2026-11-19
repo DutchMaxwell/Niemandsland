@@ -126,13 +126,35 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
     Ok(())
 }
 
-/// O5: no unit begins while another unit's activation is open; `Some(a)`
-/// names the unit whose activation is open.
-pub fn begin_check(open_elsewhere: Option<&str>) -> Result<(), String> {
-    match open_elsewhere {
-        Some(a) => Err(format!("Finish {a}'s activation first.")),
-        None => Ok(()),
+/// `begin_check`'s refusal: the player-facing `reason` and the battle-log `line` the door records.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BeginRefused {
+    pub reason: String,
+    pub line: LogLine,
+}
+
+/// O5 + Firefight step 7: a unit may begin only when no other unit's activation is open (`Some(a)`)
+/// and the table does not mix game systems (`systems`, normalised through `rules::book`).
+/// Refusals carry both a player-facing reason and a `LogLine`.
+pub fn begin_check(open_elsewhere: Option<&str>, systems: &[&str]) -> Result<(), BeginRefused> {
+    if let Some(a) = open_elsewhere {
+        let reason = format!("Finish {a}'s activation first.");
+        let line = LogLine { rule: "begin_check", category: Category::General, side: 0, text: reason.clone(), detail: None };
+        return Err(BeginRefused { reason, line });
     }
+    let mut books: Vec<&'static str> = systems.iter().map(|s| crate::rules::book(s).system).collect();
+    books.sort_unstable();
+    books.dedup();
+    if books.len() > 1 {
+        let reason = if books.len() == 2 {
+            format!("cannot start a game with lists of two game systems ({}, {})", books[0], books[1])
+        } else {
+            format!("cannot start a game with lists of {} game systems ({})", books.len(), books.join(", "))
+        };
+        let line = LogLine { rule: "mixed_systems", category: Category::General, side: 0, text: reason.clone(), detail: None };
+        return Err(BeginRefused { reason, line });
+    }
+    Ok(())
 }
 
 /// The table's own drop floor in inches (`main.gd` `_on_units_dropped`, the
@@ -888,8 +910,27 @@ mod tests {
 
     #[test]
     fn begin_names_the_open_activation() {
-        assert_eq!(begin_check(Some("A")), Err("Finish A's activation first.".to_string()));
-        assert_eq!(begin_check(None), Ok(()));
+        let err = begin_check(Some("A"), &[]).unwrap_err();
+        assert_eq!(err.reason, "Finish A's activation first.");
+        assert_eq!(err.line.rule, "begin_check");
+        assert_eq!(err.line.text, err.reason);
+        assert_eq!(begin_check(None, &[]), Ok(()));
+    }
+
+    /// Firefight step 7: `begin_check` refuses mixed game systems with reason + log line;
+    /// same-system tables (including `gff` + `gff`) open.
+    #[test]
+    fn begin_refuses_mixed_systems_and_opens_same_system() {
+        assert_eq!(begin_check(None, &["gff", "gff"]), Ok(()));
+        assert_eq!(begin_check(None, &["gf", ""]), Ok(()));
+        assert_eq!(begin_check(None, &["GF", "gf"]), Ok(()));
+        let err = begin_check(None, &["gf", "gff"]).unwrap_err();
+        assert!(err.reason.contains("lists of two game systems"), "reason: {}", err.reason);
+        assert!(err.reason.contains("gf") && err.reason.contains("gff"), "reason: {}", err.reason);
+        assert_eq!(err.line.rule, "mixed_systems");
+        assert_eq!(err.line.category, Category::General);
+        assert_eq!(err.line.text, err.reason);
+        assert!(begin_check(None, &["aof", "gff"]).is_err());
     }
 
     /// Two models at the origin and 1 m east, the second one moved `dx` inches east and `dy` up.
@@ -1587,7 +1628,7 @@ mod tests {
         let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params });
         let t = vec![Begin, intent(HOLD, None), Input::Cast(CastInput { base: 4, threshold: 1, ..bolt(0) })];
         let first = step_activation(&statics, &st, "a", &board, Seams { dangerous_end_morale: true, ..seams() }, &t, true);
-        assert!(matches!(&first, ActStep::NeedRoll { kind: "attack", owner_key, count: 2, .. } if owner_key == "a"), "the Dangerous test first: {first:?}");
+        assert!(matches!(&first, ActStep::NeedRoll { kind: "dangerous", owner_key, count: 2, .. } if owner_key == "a"), "the Dangerous test first, named for its count-the-1s line: {first:?}");
         let t = [t, vec![Faces(vec![6, 6])]].concat();
         let ActStep::NeedRoll { kind: "cast", lines, .. } = step_activation(&statics, &st, "a", &board, Seams { dangerous_end_morale: true, ..seams() }, &t, true) else { panic!("then the cast die") };
         assert_eq!(lines.iter().map(|l| l.text.as_str()).next(), Some("Spell Accumulator: Hero is Shaken \u{2014} its tokens do not feed friendly casters"));
@@ -2372,7 +2413,7 @@ mod tests {
             }
         }
         let ActStep::Done { state: s2, lines: l2, .. } = step_activation(&statics2, &st2, "a", &board, dang_seams, &t2, true) else { panic!("expected Done") };
-        assert_eq!(asked2, ["attack|4x6+|Host", "cast|1x2+|Hero", "spell_defense|2x4+|Foe", "attack|1x4+|Hero"]);
+        assert_eq!(asked2, ["dangerous|4x6+|Host", "cast|1x2+|Hero", "spell_defense|2x4+|Foe", "attack|1x4+|Hero"]);
         assert_eq!((s2.alive[0], s2.alive[1], s2.casts[0], s2.casts[1]), (0, 1, 0, 0), "host dead (cast 0 token still spent), hero alive");
         assert!(l2.iter().any(|l| l.text == "Host is destroyed but its joined hero lives - the unit is not destroyed and goes on"), "{l2:?}");
     }
@@ -3690,7 +3731,7 @@ mod tests {
             t.push(Faces(match asked.len() { 1 => vec![1, 6], 3 => vec![1; faces], _ => vec![6; faces] }));
             assert!(asked.len() < 8, "{asked:?}");
         }
-        let want = [("attack", "a"), ("attack", "a"), ("defense", "b"), ("morale", "b"), ("morale", "a")];
+        let want = [("dangerous", "a"), ("attack", "a"), ("defense", "b"), ("morale", "b"), ("morale", "a")];
         assert_eq!(asked, want.map(|(k, o)| (k, o.to_string())));
     }
 

@@ -85,7 +85,7 @@ func _count(lines: Array, needle: String) -> int:
 	return lines.filter(func(l: String) -> bool: return l.contains(needle)).size()
 
 
-## RED: the table's own call kept next to the core's -> two tests ("Dangerous terrain test" twice, two "(6+)" dice lines).
+## RED: the table's own call kept next to the core's -> two tests ("Dangerous terrain test" twice, two "(each 1)" dice lines).
 @warning_ignore('unused_parameter')
 func test_an_idle_shaken_unit_in_dangerous_terrain_takes_exactly_one_test_through_the_core(timeout := 300000,
 		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "NmlCore extension not loaded") -> void:
@@ -93,7 +93,7 @@ func test_an_idle_shaken_unit_in_dangerous_terrain_takes_exactly_one_test_throug
 	var lines: Array = r["lines"]
 	assert_int(int(r["core_runs"])).override_failure_message("the core did not take the idle activation: %s" % str(lines)).is_equal(1)
 	assert_int(_count(lines, "Dangerous terrain test")).override_failure_message("not exactly one test: %s" % str(lines)).is_equal(1)
-	assert_int(lines.filter(func(l: String) -> bool: return l.begins_with("AI (Att)") and l.ends_with("(6+)")).size()) \
+	assert_int(lines.filter(func(l: String) -> bool: return l.begins_with("AI (Att)") and l.ends_with("(each 1)")).size()) \
 		.override_failure_message("not one die set: %s" % str(lines)).is_equal(1)
 	assert_int(_count(lines, "recovers from Shaken")).is_equal(1)
 	assert_bool(r["final"][0]["shaken"]).override_failure_message("still Shaken").is_false()
