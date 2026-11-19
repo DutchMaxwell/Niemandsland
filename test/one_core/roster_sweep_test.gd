@@ -7,6 +7,7 @@ extends GdUnitTestSuite
 ## and the step driver, tools/parity/parity_compare.py. Constructed: only the unit placement (two blocks, 14" apart).
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
+const ParityTable := preload("res://test/parity/parity_table.gd")
 const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
 const LISTS := ["res://assets/arena_lists/p1_2000.json", "res://assets/arena_lists/p2_2000.json"]
 const WOLF := "res://test/fixtures/wolf_brothers_3000.json"
@@ -173,3 +174,35 @@ func test_a_twelve_inch_weapon_fires_across_the_base_edge_on_both_paths() -> voi
 
 func _attacks(rolls: Array) -> int:
 	return rolls.filter(func(r: Dictionary) -> bool: return str(r["kind"]) == "attack").size()
+
+
+## Plan E (step 4a): `RosterSweep.charge` runs the door-vs-table pair (control EQUAL, planted fault UNEQUAL) and accepts real
+## `load_list` entries with `bypass_slice` for step 4b's melee sweep. RED: stub `compare_charge` -> planted faults read equal.
+func test_charge_helper_compares_door_against_table_and_catches_planted_faults() -> void:
+	RosterSweep.arm(_main, ProjectSettings.globalize_path(DICE))
+	CoreActivation._charge_env = 1
+	var side := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.3, "game_system": "gf", "faction_folder": "robot_legions", "rules": []}
+	var blade := {"name": "Blade", "range_in": 0, "attacks": 2, "count": 5, "rules": []}
+	var att_fn := func() -> GameUnit: return ParityTable._make_unit(_main, side.merged({"player": 2, "name": "Att", "models": 5, "x_in": 0.0}, true), blade)
+	var foe_fn := func() -> GameUnit:
+		var u := ParityTable._make_unit(_main, side.merged({"player": 1, "name": "Def", "models": 8, "x_in": 7.0, "z_step_in": 1.4}, true), blade.merged({"count": 8, "attacks": 1}))
+		for i in u.models.size():
+			(u.models[i] as ModelInstance).node.global_position.z += float((i * 7) % 5) * 0.0001
+		return u
+	var ctrl := await RosterSweep.charge(_main, att_fn, foe_fn, 0)
+	assert_bool(bool(ctrl["taken"])).override_failure_message("control charge was not taken by the door").is_true()
+	assert_bool(bool(ctrl["equal"])).override_failure_message("control charge differed: %s" % [ctrl["diffs"]]).is_true()
+	assert_str(str(ctrl["first_diff"])).is_empty()
+	var nudge := func(_a: GameUnit, f: GameUnit) -> void: (f.get_alive_models()[0] as ModelInstance).node.global_position.x += RosterSweep.INCH
+	var moved := await RosterSweep.charge(_main, att_fn, foe_fn, 0, {"core_fault": nudge})
+	assert_bool(bool(moved["equal"])).override_failure_message("a 1 in position fault went unseen").is_false()
+	assert_str(str(moved["first_diff"])).is_equal("foe")
+	var flip := func(_a: GameUnit, f: GameUnit) -> void: f.is_shaken = not f.is_shaken
+	var shaken := await RosterSweep.charge(_main, att_fn, foe_fn, 0, {"core_fault": flip})
+	assert_bool(bool(shaken["equal"])).override_failure_message("a Shaken fault went unseen").is_false()
+	assert_str(str(shaken["first_diff"])).is_equal("shaken")
+	var lists := _lists()
+	var real_res := await RosterSweep.charge(_main, lists[0]["units"][0], lists[1]["units"][1], 0, {"bypass_slice": true})
+	assert_bool(bool(real_res["taken"])).override_failure_message("real list charge was not driven through the core").is_true()
+	assert_array(real_res["refusals"]).is_not_empty()
+	assert_array(real_res["core"]["lines"]).is_not_empty()
