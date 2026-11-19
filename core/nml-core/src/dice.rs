@@ -67,22 +67,30 @@ pub struct Tray {
     /// The index of a morale outcome line the wounds of the SAME test are still to be reported ahead of: No Retreat's
     /// self-wounds land (and say so) before the table writes "passes morale". Set by `hold_outcome`, spent by `say_wounds`.
     outcome_at: Option<usize>,
+    /// The name the table calls the volley's target by when it is not the unit the dice resolve against: a lone hero's host
+    /// ("X fires W at <host>"). Set by the volley around its resolve, `None` otherwise.
+    aimed: Option<String>,
 }
 
 impl Tray {
+    /// Names the target the next lines call it by (`None` = the unit itself).
+    pub fn aim(&mut self, name: Option<String>) {
+        self.aimed = name;
+    }
+
     /// `main.seed_tray_rng(dice_seed)` — `RandomNumberGenerator.seed = seed`.
     ///
     /// The seed is `i64`, not `u64`, because that is what GDScript hands the
     /// engine and what `GodotRng::new` mirrors; a negative seed must land on
     /// the same stream on both sides.
     pub fn seeded(seed: i64) -> Tray {
-        Tray { rng: GodotRng::new(seed), feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None }
+        Tray { rng: GodotRng::new(seed), feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None }
     }
 
     /// A tray that continues a generator already in flight — how a replay
     /// reaches a recorded position in the stream.
     pub fn from_rng(rng: GodotRng) -> Tray {
-        Tray { rng, feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None }
+        Tray { rng, feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None }
     }
 
     /// Re-seeds in place, as a second `seed_tray_rng` call would.
@@ -117,7 +125,7 @@ impl Tray {
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
         let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), casts: Vec::new(), cast_hit: None };
-        Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None }
+        Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None }
     }
 
     /// The supplied feed, if this tray has one.
@@ -436,6 +444,9 @@ pub struct ShootResult {
     /// (`SoloController.apply_deadly_wounds`, solo_controller.gd:8333). Empty
     /// on every non-Deadly activation; the landing sites drain it.
     pub deadly_groups: Vec<(i64, i64)>,
+    /// The volley's Deadly weapons, one entry per weapon for the table's line (`_solo_land_deadly_wounds`): `(weapon, raw
+    /// unsaved, X, how many of `deadly_groups` it pushed)`, in the same order. The volley landing drains both together.
+    pub deadly_lines: Vec<(String, i64, i64, usize)>,
     /// The same groups' PRE-regeneration raw unsaved count — the shooting
     /// tally keeps it (`total_caused += w`, main.gd:3318) while the landing
     /// uses the group's post-regeneration count.
@@ -474,6 +485,7 @@ impl ShootResult {
         self.fortified_fired = self.fortified_fired || other.fortified_fired;
         self.bane_rerolled += other.bane_rerolled;
         self.deadly_groups.extend(other.deadly_groups);
+        self.deadly_lines.extend(other.deadly_lines);
         self.deadly_tally += other.deadly_tally;
         self.takedown_groups.extend(other.takedown_groups);
         self.hazardous_self.extend(other.hazardous_self);
@@ -564,6 +576,11 @@ fn piercing_assault_grant_cond() -> CondAp {
     CondAp { ap_bonus: 1, condition: "on_charge".into(), ..Default::default() }
 }
 
+/// A rule's battle-log line on a supplied tray, in the table's words (a seeded tray never builds the text).
+pub(crate) fn say_rule(tray: &mut Tray, rule: &'static str, side: i64, text: impl FnOnce() -> String) {
+    tray.say(|| LogLine { rule, category: Category::Combat, side, text: text(), detail: None });
+}
+
 /// The table's `blast_log_text`: names Blast(X) and, when the model count clamps the multiplier, the cap.
 fn blast_log(x: i64, hits: i64, boosted: i64, models: i64) -> String {
     let mult = boosted / hits.max(1);
@@ -571,13 +588,20 @@ fn blast_log(x: i64, hits: i64, boosted: i64, models: i64) -> String {
     format!("Blast({x}): {hits} hit{} ×{mult}{capped} → {boosted} hits", if hits == 1 { "" } else { "s" })
 }
 
-fn surge_attack_hits(
+fn surge_attack_hits(p: &ShootProfile, faces: &[u8], count_target: i64, owner: &str, tray: &mut Tray, rolls: &mut Vec<Roll>) -> i64 {
+    surge_attack_say(p, faces, count_target, owner, tray, rolls, None)
+}
+
+/// `surge_attack_hits`, plus the table's `_solo_hits` line when `say_side` is the shooter's seat (the volley and strike
+/// legs; the melee Bloodthirsty leg stays silent).
+fn surge_attack_say(
     p: &ShootProfile,
     faces: &[u8],
     count_target: i64,
     owner: &str,
     tray: &mut Tray,
     rolls: &mut Vec<Roll>,
+    say_side: Option<i64>,
 ) -> i64 {
     if !p.surge_attack {
         return 0;
@@ -597,7 +621,13 @@ fn surge_attack_hits(
         faces: extra_faces.clone(),
         owner: owner.into(),
     });
-    faces_to_hits(&extra_faces, count_target as u8) as i64
+    let hits = faces_to_hits(&extra_faces, count_target as u8) as i64;
+    if let Some(side) = say_side {
+        let rule = if p.surge_attack_rule.is_empty() { "Extra attacks" } else { p.surge_attack_rule.as_str() };
+        say_rule(tray, "extra_attack", side, || format!("{rule}: {xn} extra attack{} from unmodified 6s — {hits} hit{}",
+            if xn == 1 { "" } else { "s" }, if hits == 1 { "" } else { "s" }));
+    }
+    hits
 }
 
 /// G4R5 F-PRIMAL-GRANT-ONCE (`EPOCH_73_V36`): ONE live "Enhanced Primal" grant is carried in two channels (the overlay rule on
@@ -605,15 +635,15 @@ fn surge_attack_hits(
 /// On a member that PRINTS the extra-die form the grant only LOWERS that form's threshold to 5s; only a member without the
 /// printed form rolls the grant's own group. Below 73 both groups roll (replay). Returns the extras' hits.
 #[allow(clippy::too_many_arguments)]
-fn primal_extras(p: &ShootProfile, grant: bool, v36: bool, faces: &[u8], count_target: i64, owner: &str, tray: &mut Tray, out: &mut ShootResult) -> i64 {
+fn primal_extras(p: &ShootProfile, grant: bool, v36: bool, faces: &[u8], count_target: i64, owner: &str, side: i64, tray: &mut Tray, out: &mut ShootResult) -> i64 {
     if !(grant && v36 && p.surge_attack) {
-        let hits = surge_attack_hits(p, faces, count_target, owner, tray, &mut out.rolls);
-        return hits + if grant { surge_attack_hits(&primal_boost_grant_profile(), faces, count_target, owner, tray, &mut out.rolls) } else { 0 };
+        let hits = surge_attack_say(p, faces, count_target, owner, tray, &mut out.rolls, Some(side));
+        return hits + if grant { surge_attack_say(&primal_boost_grant_profile(), faces, count_target, owner, tray, &mut out.rolls, Some(side)) } else { 0 };
     }
     if faces.iter().any(|&f| f == 6 || (f == 5 && count_target <= 5)) {
         out.log.push(format!("Enhanced Primal: {owner} — one extra-attack roll on unmodified 5s and 6s (the grant widens the Primal, it adds no second roll)"));
     }
-    surge_attack_hits(&ShootProfile { surge_attack_low: p.surge_attack_low.min(5), ..p.clone() }, faces, count_target, owner, tray, &mut out.rolls)
+    surge_attack_say(&ShootProfile { surge_attack_low: p.surge_attack_low.min(5), ..p.clone() }, faces, count_target, owner, tray, &mut out.rolls, Some(side))
 }
 
 /// `AiCombatMath.blocks_with_bane` :354-363 — each unmodified Defense 6 is
@@ -801,6 +831,13 @@ fn save_batch(
     if bane {
         let n = faces.iter().filter(|&&f| f == 6 || (f as i64 >= bane_from && f as i64 >= target)).count() as i64;
         if n > 0 {
+            if !p.bane_alias.is_empty() {
+                // The table's line (rules-must-log), said before the re-roll dice like the table's.
+                let what = if bane_from < 6 { format!("roll{} of {bane_from}+", if n == 1 { "" } else { "s" }) } else { format!("6{}", if n == 1 { "" } else { "s" }) };
+                // the base window says no condition (the table adds it only to the widened form)
+                let why = if bane_from < 6 { cond_ap_why(&p.bane_condition) } else { "" };
+                say_rule(tray, "bane", def.side, || format!("{}: {def_owner} re-rolls {n} unmodified Defense {what}{why}", p.bane_alias));
+            }
             tray.owner_next(def.unit);
             reroll = tray.roll(n as usize);
             out.rolls.push(Roll {
@@ -815,6 +852,7 @@ fn save_batch(
                 let s = if n == 1 { "" } else { "s" };
                 let what = if bane_from < 6 { format!("roll{s} of {bane_from}+") } else { format!("6{s}") };
                 out.log.push(format!("{}: {def_owner} re-rolls {n} unmodified Defense {what}{}", p.bane_alias, cond_ap_why(&p.bane_condition)));
+
             } else {
                 // The widened window's own share — the successful 5s the base leg
                 // would never have touched (rules-must-log count).
@@ -1208,6 +1246,8 @@ pub fn resolve_volley_leg(
     let mut evasive_boost_fired = false;
     // EPOCH_73_V36 — the Aircraft to-hit penalty's once-per-volley log flag.
     let mut aircraft_fired = false;
+    // The table's "Reliable: ... shoots at Quality N+" line, once per volley (`reliable_logged`).
+    let mut reliable_said = false;
     // Rules 3.6 (D-MOST) — Stealth's -1 rode the most-models read: one line per volley.
     let mut stealth_most_fired = false;
     // FAB-C15 — the once-granted Stealth's own rules-must-log flag.
@@ -1257,6 +1297,13 @@ pub fn resolve_volley_leg(
         .flat_map(|sh| sh.keep.iter().enumerate().map(move |(k, &pi)| (sh, k, pi)))
         .collect();
     shots.sort_by_key(|&(sh, _, pi)| shot_rank(&sh.profiles[pi]));
+    if def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded && !shots.is_empty() {
+        // The table's line (`_solo_resolve_ai_volley`), once per volley, before the first die, hit or miss; its "(most of its models carry
+        // it)" note needs per-model carriers.
+        let saves = guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), true, def.def_floor());
+        say_rule(tray, "guarded", def.side, || format!("{def_owner} ({}): shot from over {}\" — +1 Defense (saves on {}+)",
+            def.guarded_name, LONG_RANGE_IN as i64, saves.clamp(BEST_HIT_TARGET, 6)));
+    }
     for (sh, k, pi) in shots {
         let att = sh.att;
         let p = &sh.profiles[pi];
@@ -1506,6 +1553,9 @@ pub fn resolve_volley_leg(
             m = own;
         }
         let (mut raw, mut target) = fold_hit(def.modifier_sum, target, m);
+        if p.reliable && !std::mem::replace(&mut reliable_said, true) {
+            say_rule(tray, "reliable", att.side, || format!("Reliable: {} shoots at Quality {target}+", sh.owner));
+        }
         let mut versatile_ap = 0;
         if (p.versatile_attack || att.versatile_grant)
             && (att.versatile_no_gate || mod_dist_in > LONG_RANGE_IN)
@@ -1569,9 +1619,11 @@ pub fn resolve_volley_leg(
         let count_target = if weapon_mod != 0 { fold_hit(def.modifier_sum, raw, weapon_mod).1 } else { target };
         if p.precise {
             out.log.push(format!("Precise: +1 to hit on {}'s volley", sh.owner));
+            say_rule(tray, "precise", att.side, || "Precise: +1 to hit".into());
         }
         if imprecise {
             out.log.push(format!("Imprecise: -1 to hit on {}'s volley", sh.owner));
+            say_rule(tray, "imprecise", att.side, || "Imprecise: -1 to hit".into());
         }
         if p.hazardous {
             let ones = faces.iter().filter(|&&f| f == 1).count() as i64;
@@ -1609,7 +1661,14 @@ pub fn resolve_volley_leg(
         let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
         if (p.relentless || att.relentless_grant) && mod_dist_in > LONG_RANGE_IN {
             hits += sixes(&faces);
+            // The table's line for the printed rule (a spell's grant adds its source, which the core does not carry).
+            if p.relentless && sixes(&faces) > 0 {
+                say_rule(tray, "relentless", att.side, || format!("Relentless: +{} hit{} (unmodified 6s)",
+                    sixes(&faces), if sixes(&faces) == 1 { "" } else { "s" }));
+            }
         }
+        let surge_before = hits;
+        let mut surge_fives = 0;
         if p.surge {
             // SHO-18 (rules 3.6): a Surge ALIAS fires only from a shot over 9".
             let alias_fires = !p.alias_gate
@@ -1624,7 +1683,8 @@ pub fn resolve_volley_leg(
                 if alias_fires && (p.surge_within_in <= 0.0 || mod_dist_in <= p.surge_within_in) {
                     hits += sixes(&faces) * p.bonus_hits_per_six.max(1);
                     if p.surge_low < 6 && mod_dist_in > p.surge_over_in {
-                        hits += faces.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
+                        surge_fives = faces.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
+                        hits += surge_fives;
                     }
                     if !p.surge_alias_rule.is_empty() && sixes(&faces) > 0 {
                         if p.alias_gate && p.surge_over_in < 0.0 {
@@ -1644,11 +1704,22 @@ pub fn resolve_volley_leg(
                 out.mark("surge_gates");
             }
         }
+        if p.surge && hits > surge_before && surge_gates {
+            // The table's lines (`_solo_hits`): the alias names its gate, then the plain total.
+            let bonus = hits - surge_before;
+            if !p.surge_alias_rule.is_empty() {
+                let plain = p.alias_gate && p.surge_over_in < 0.0;
+                say_rule(tray, "surge", att.side, || if plain { format!("{}: bonus hits on unmodified 6s", p.surge_alias_rule) }
+                    else { format!("{}: shot from over {}\" — bonus hits on unmodified 6s", p.surge_alias_rule, LONG_RANGE_IN as i64) });
+            }
+            say_rule(tray, "surge", att.side, || format!("Surge: +{bonus} hit{} (unmodified {})",
+                if bonus == 1 { "" } else { "s" }, if surge_fives == 0 { "6s" } else { "5-6s" }));
+        }
         // Block B6 — the extra-ATTACK-DIE Surge siblings, ported (see the
         // helper's own doc). Draws its own tray slot right after Surge's,
         // matching `_solo_hits`'s order.
         // Wave 2 — a granted "Primal Boost", the same low-surge form (one group per member: `primal_extras`).
-        hits += primal_extras(p, att.surge_grant, rule_on(att.rules_epoch, EPOCH_73_V36), &faces, count_target, sh.owner, tray, &mut out);
+        hits += primal_extras(p, att.surge_grant, rule_on(att.rules_epoch, EPOCH_73_V36), &faces, count_target, sh.owner, att.side, tray, &mut out);
         // EPOCH 44 SURGE MARK — the mark's once-grant ("Surge", placed by
         // `tray_vs_marks` at the attack seam, spent with the exchange) reads
         // against the marked target ONLY: +1 hit per unmodified 6, the plain
@@ -1680,15 +1751,17 @@ pub fn resolve_volley_leg(
             if def.blast_models.is_some() {
                 out.log.push(blast_log(p.blast, hits, boosted, cap));
             }
+            say_rule(tray, "blast", att.side, || blast_log(p.blast, hits, boosted, cap)); // the table says it always (#169)
             hits = boosted;
         }
         // One-core P3 step 24: the table's line after `_solo_hits` (main.gd:5056-5057), a miss included; step 27: with
         // the table's sight part when not every model of the member sees the target (main.gd:5129).
+        let aimed = tray.aimed.clone();
         tray.say(|| {
             let note = shooters.iter().position(|s| std::ptr::eq(s, sh)).and_then(|i| sighted(i, pi))
                 .filter(|&(n, m, _)| n < m).map_or(String::new(), |(n, m, _)| format!(" ({n}/{m} models sighted)"));
             LogLine { rule: "shoot", category: Category::Combat, side: att.side,
-                text: format!("{} fires {} at {def_owner}{note} — {hits} hit{}", sh.owner, p.name, if hits == 1 { "" } else { "s" }),
+                text: format!("{} fires {} at {}{note} — {hits} hit{}", sh.owner, p.name, aimed.as_deref().unwrap_or(def_owner), if hits == 1 { "" } else { "s" }),
                 detail: None }
         });
         if hits <= 0 {
@@ -1853,13 +1926,16 @@ pub fn resolve_volley_leg(
                 if c.gate == "hold_or_charge" {
                     if d > 0 {
                         out.log.push(format!("Slayer: AP(+{}) because {} held", d, sh.owner));
+                        say_rule(tray, "slayer", att.side, || format!("Slayer: AP(+{}) because {} held", d, sh.owner));
                     } else if !att.held && (att.v36_rules || mod_dist_in > c.over_in)
                         && c.condition == "vs_tough_ge" && def.tough.max(1) >= c.threshold
                     {
                         out.log.push(format!("Slayer: no AP, {} moved", sh.owner));
+                        say_rule(tray, "slayer", att.side, || format!("Slayer: no AP, {} moved", sh.owner));
                     }
                 } else if d > 0 && !c.name.is_empty() {
                     out.log.push(format!("{}: AP(+{}) on {}'s volley{}", c.name, d, sh.owner, cond_ap_why(&c.condition)));
+                    say_rule(tray, "cond_ap", att.side, || format!("{}: AP(+{}) against {def_owner}{}", c.name, d, cond_ap_why(&c.condition)));
                 }
             }
             // Wave 2 — the Slayer mark's granted conditional (epoch-gated).
@@ -1873,8 +1949,10 @@ pub fn resolve_volley_leg(
                 if att.v36_rules {
                     if d > 0 {
                         out.log.push(format!("Slayer: AP(+{}) because {} held", d, sh.owner));
+                        say_rule(tray, "slayer", att.side, || format!("Slayer: AP(+{}) because {} held", d, sh.owner));
                     } else if !att.held && (att.v36_rules || mod_dist_in > spec.over_in) && def.tough.max(1) >= 3 {
                         out.log.push(format!("Slayer: no AP, {} moved", sh.owner));
+                        say_rule(tray, "slayer", att.side, || format!("Slayer: no AP, {} moved", sh.owner));
                     }
                 }
             }
@@ -1898,6 +1976,12 @@ pub fn resolve_volley_leg(
         // scaling, so the share is a fraction of the weapon's whole attack pool (`p.attacks`), not of the
         // sighted dice `n` (the stamp exists only from `EPOCH_73_V36`, so below it nothing changes).
         let sgt_hits = sergeant_hits(p, p.attacks.max(n), normal, att);
+        if ap4 > 0 {
+            // The table's line before the AP-on-6 batch (`_solo_resolve_saves`): Rending, Destructive or the book entry's name.
+            let label = if p.rending || att.rending_grant { "Rending" } else if p.destructive { "Destructive" }
+                else if p.on6_rule.is_empty() { "Crack" } else { p.on6_rule.as_str() };
+            say_rule(tray, "on6_ap", att.side, || format!("{label}: {ap4} hit{} on a 6 → AP(+{on6})", if ap4 == 1 { "" } else { "s" }));
+        }
         let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, shred_alias_fires, shred_low, deadly_per_model, tray, &mut out);
         if sgt_hits > 0 {
             let line = sergeant_line(p, sh.owner, sgt_hits);
@@ -1974,7 +2058,9 @@ pub fn resolve_volley_leg(
             out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, def, def_owner, tray, &mut out.rolls));
             out.deadly_tally += w;
         } else if deadly_per_model && p.deadly > 0 {
+            let first = out.deadly_groups.len();
             push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, def, def_owner, tray);
+            out.deadly_lines.push((p.name.clone(), w, p.deadly.max(1), out.deadly_groups.len() - first));
             out.deadly_tally += w;
         } else if ignores_regen {
             regen_proof += w;
@@ -2685,7 +2771,7 @@ pub fn resolve_melee_leg_wipe(
             // Block B6 — the extra-ATTACK-DIE Surge siblings (Predator Fighter
             // is melee-only, so this is the branch it actually fires on).
             // Wave 2 — a granted "Primal Boost", the same low-surge form (one group per member: `primal_extras`).
-            hits += primal_extras(p, sh.att.surge_grant, rule_on(sh.att.rules_epoch, EPOCH_73_V36), trig, count_target, sh.owner, tray, &mut out);
+            hits += primal_extras(p, sh.att.surge_grant, rule_on(sh.att.rules_epoch, EPOCH_73_V36), trig, count_target, sh.owner, sh.att.side, tray, &mut out);
             // EPOCH 44 SURGE MARK — the strike fold's twin of the volley leg
             // above: the mark's once-grant adds +1 hit per unmodified 6
             // against the marked target only, named once when it fires.

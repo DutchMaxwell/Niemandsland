@@ -41,7 +41,7 @@ use crate::acts::{
 use crate::io::{Action, Seams, SplitShot};
 use crate::landing::{LandedModel, Landing};
 use crate::logline::{Category, LogLine};
-use crate::dice::{Morale, ShootResult, Tray};
+use crate::dice::{say_rule, Morale, ShootResult, Tray};
 use crate::mods;
 use crate::mission::{drop_carried, sync_carried_positions};
 use crate::rng::GodotRng;
@@ -298,6 +298,23 @@ fn morale_quality(statics: &[UnitStatic], state: &State, i: usize, seams: Seams)
     best.unwrap_or(own)
 }
 
+/// The joined Hero whose Quality a morale test uses (the table's `_solo_morale_quality`): the first living attached Hero that beats the
+/// unit's own Quality, or the first living one while the host is dead. `None` when the unit tests with its own.
+fn morale_hero(statics: &[UnitStatic], state: &State, i: usize, seams: Seams) -> Option<(usize, i64)> {
+    if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) || !seams.hero_attach {
+        return None;
+    }
+    let mut best: Option<(usize, i64)> = None;
+    let mut quality = statics[state.roster.profile[i]].quality;
+    for &h in state.attached[i].iter().filter(|&&h| state.alive[h] > 0) {
+        let q = statics[state.roster.profile[h]].quality;
+        if (state.alive[i] <= 0 && best.is_none()) || q < quality {
+            (quality, best) = (q, Some((h, q)));
+        }
+    }
+    best
+}
+
 fn morale_side_alive(state: &State, i: usize, seams: Seams) -> bool {
     if rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) && seams.hero_attach {
         combined_alive(state, i, seams) > 0
@@ -541,7 +558,7 @@ fn open_alloc(state: &State, si: usize, ti: usize, gi: usize, (w, deadly): (i64,
 /// P4.D-21 — `land_deadly_wounds` for the wounds the owner places (`SoloController.deadly_pick`, main.gd:10661, D17): a
 /// wound goes to the next pick and deals X capped at that model; a wound the auto pick FORCES onto an already-wounded Tough
 /// model, or one with no pick left, lands by `land_deadly_wounds`. Returns the wounds dealt.
-fn land_deadly_picked(state: &mut State, ti: usize, unsaved: i64, x: i64, seams: Seams, alloc: &mut AllocPicks) -> i64 {
+fn land_deadly_picked(state: &mut State, ti: usize, unsaved: i64, x: i64, seams: Seams, alloc: &mut AllocPicks, forced_n: &mut i64) -> i64 {
     let mut dealt = 0;
     for _ in 0..unsaved.max(0) {
         let lead = crate::casualty::chain_casualty_order(state, ti, Some(1)).and_then(|o| o.first().copied());
@@ -552,10 +569,18 @@ fn land_deadly_picked(state: &mut State, ti: usize, unsaved: i64, x: i64, seams:
                 land_wounds_in_order(state, ti, take, vec![i]);
                 take
             }
-            None => land_deadly_wounds(state, ti, 1, x, seams),
+            None => land_deadly_counted(state, ti, 1, x, seams, forced_n),
         };
     }
     dealt
+}
+
+/// One Deadly group on `ti`: the owner's picks when the group has an allocation open, else the automatic landing.
+fn land_deadly_group(state: &mut State, ti: usize, unsaved: i64, x: i64, seams: Seams, alloc: &mut Option<AllocPicks>, forced_n: &mut i64) -> i64 {
+    match alloc.as_mut() {
+        Some(a) => land_deadly_picked(state, ti, unsaved, x, seams, a, forced_n),
+        None => land_deadly_counted(state, ti, unsaved, x, seams, forced_n),
+    }
 }
 
 /// P4.D-20 — the pool's `w` wounds, one per remaining pick (landed first); the caller lands the rest by `casualty_order`
@@ -703,6 +728,12 @@ fn land_takedown_groups(state: &mut State, ti: usize, shot: &mut ShootResult, pi
 /// uses. `x` capped at that model's remaining wounds each hit, no carry-over
 /// either way. Returns the wounds actually dealt (the table's `dealt`).
 pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: i64, seams: Seams) -> i64 {
+    land_deadly_counted(state, ti, unsaved, deadly_x, seams, &mut 0)
+}
+
+/// `land_deadly_wounds`, plus the picks that FINISHED an already-wounded Tough model (the table's `deadly_pick` "forced"
+/// flag, counted into `forced_n`): the volley line names them.
+fn land_deadly_counted(state: &mut State, ti: usize, unsaved: i64, deadly_x: i64, seams: Seams, forced_n: &mut i64) -> i64 {
     let x = deadly_x.max(1);
     let mut dealt = 0i64;
     let epoch67 = rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS);
@@ -754,6 +785,9 @@ pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: 
             b
         };
         let take = x.min(state.wounds[m][best]);
+        if epoch67 && max_of[ci].get(best).is_some_and(|&mx| mx > 1 && state.wounds[m][best] < mx) {
+            *forced_n += 1;
+        }
         dealt += take;
         state.wounds[m][best] -= take;
         if state.wounds[m][best] <= 0 {
@@ -1352,11 +1386,16 @@ fn chain_snapshot(next: &State, ti: usize, tray: &Tray) -> Option<ChainBefore> {
 /// lines (main.gd:16582-16600): the wounds that landed on the chain, then per member the models it lost (main.gd:18376-18395,
 /// :25123); then one landing per changed member, its loss line said here. A seeded tray (`None`) says and records nothing.
 fn land_chain_report(statics: &[UnitStatic], next: &State, tray: &mut Tray, ti: usize, before: Option<ChainBefore>) {
+    land_chain_report_inline(statics, next, tray, ti, before, 0);
+}
+
+/// `land_chain_report`, less the wounds the table lands model by model with their own line (the volley's Deadly): `inline`.
+fn land_chain_report_inline(statics: &[UnitStatic], next: &State, tray: &mut Tray, ti: usize, before: Option<ChainBefore>, inline: i64) {
     let Some(ch) = before else { return };
     let ut = &statics[next.roster.profile[ti]];
     let size = |u: usize| statics[next.roster.profile[u]].model_count;
     let (alive, total) = ch.iter().fold((0, 0), |(a, t), (u, ..)| (a + next.alive[*u], t + size(*u)));
-    let took: i64 = ch.iter().map(|(u, _, w)| w.iter().sum::<i64>() - next.wounds[*u].iter().sum::<i64>()).sum();
+    let took: i64 = ch.iter().map(|(u, _, w)| w.iter().sum::<i64>() - next.wounds[*u].iter().sum::<i64>()).sum::<i64>() - inline;
     // NML-1091: a unit that IS one multi-wound model counts that model's wounds instead.
     let (n, of, unit) = match ut.wounds_max.first() {
         Some(&m) if total == 1 && m > 1 => (next.wounds[ti].first().copied().unwrap_or(0).max(0), m, " wounds"),
@@ -1574,6 +1613,7 @@ pub(crate) fn tray_strafing(
         land_pool_wounds(next, target, w, false, seams, &mut shot.log);
     }
     land_takedown_groups(next, target, shot, seams.takedown_pick);
+    shot.deadly_lines.clear(); // the volley's per-weapon lines are said at the AI volley's own landing only
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
         let dl = land_deadly_wounds(next, target, post, dx, seams);
         shot.log.push(format!("Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {dl} wounds dealt"));
@@ -2214,9 +2254,10 @@ fn control_morale_passed(
         return faces.first().map(|f| *f as i64 >= quality).unwrap_or(true);
     }
     let us = &statics[next.roster.profile[ti]];
-    let mut ctx = live_morale_ctx(statics, next, ti, false, seams, shot);
+    let mut ctx = live_morale_ctx(statics, next, ti, false, seams, shot, tray);
     ctx.side = next.player[ti]; // the seat the morale dice lines (Fearless, No Retreat) are said for
-    drop_banner_for_cause(statics, next, ti, false, true, Some(source.rule), None, None, seams, &mut ctx, shot);
+    let banner_dropped = drop_banner_for_cause(statics, next, ti, false, true, Some(source.rule), None, None, seams, &mut ctx, shot, tray);
+    say_morale_bonus(statics, next, ti, false, Some(source.rule), seams, &ctx, banner_dropped, tray);
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
         &ctx, source.owner, None, false, false, next.shaken[ti], wounds_left(next, ti), tray,
     );
@@ -3800,6 +3841,33 @@ fn shooting_morale_trigger(
     }
     should_test_shooting_morale(alive_before, state.alive[ti], us.model_count)
         || wounded(state.alive[ti], us.model_count)
+}
+
+/// The table's line when WOUNDS, not a lost model, call the shooting morale test (`_solo_shooting_morale`): a single model at half
+/// its Tough value, or a multi-model unit at half strength or less. `None` when a lost model called it (the table says nothing).
+#[allow(clippy::too_many_arguments)]
+fn shooting_morale_line(
+    state: &State, statics: &[UnitStatic], seams: Seams, us: &UnitStatic, ti: usize, alive_before: i64, wounds_before: i64,
+) -> Option<String> {
+    let root = morale_root(state, ti, seams);
+    let (ti, us) = if root == ti { (ti, us) } else { (root, &statics[state.roster.profile[root]]) };
+    let now = morale_wounds_left(state, ti, seams);
+    if wounds_before < 0 || now >= wounds_before {
+        return None;
+    }
+    let (alive, total) = if hero_size_on(state, ti, seams) {
+        (combined_alive(state, ti, seams), combined_total(statics, state, ti, us))
+    } else {
+        (state.alive[ti], us.model_count)
+    };
+    if total == 1 {
+        let start = us.wounds_max.first().copied().unwrap_or(0);
+        return (alive > 0 && at_or_below_half(now, start))
+            .then(|| format!("{} is at half its tough value ({now}/{start}) — morale test ({CITE})", us.name));
+    }
+    (rule_on(seams.rules_epoch, EPOCH_72_PLAYTEST_RULES) && alive > 0 && at_or_below_half(alive, total)
+        && !should_test_shooting_morale(alive_before, alive, total))
+        .then(|| format!("{} takes wounds at half strength or less ({alive}/{total} models) — morale test ({CITE})", us.name))
 }
 
 /// SHO-15a Scourge (`EPOCH_73_V36`): the phantom wounds count toward this trigger only, read as landed on a
@@ -6289,7 +6357,7 @@ fn strike_phase(
                     crate::combat::BEST_HIT_TARGET,
                 ),
                 &def, guarded_folds(&def, charge_from_in, if def.guarded_charge_over_in > 0.0 { def.guarded_charge_over_in } else { crate::combat::LONG_RANGE_IN }, seams.rules_epoch),
-                prof36, &mut shot.log, seams.rules_epoch);
+                prof36, &mut shot.log, None, seams.rules_epoch);
             att.versatile_pick_hit = vh;
             att.versatile_pick_ap = va;
             att.versatile_latched = vl;
@@ -6714,18 +6782,28 @@ fn banner_gone(statics: &[UnitStatic], state: &State, i: usize, seams: Seams) ->
 }
 
 /// One live context for ordinary morale and the Mind Control family.
-fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool, seams: Seams, shot: &mut ShootResult) -> Ctx {
+fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool, seams: Seams, shot: &mut ShootResult, tray: &mut Tray) -> Ctx {
     let us = &statics[state.roster.profile[i]];
     let mut ctx = ctx_of(us, state, i);
+    // The table's `_solo_morale_quality` names who lends the Quality, once per test that rolls a die: the aura Hero, else the
+    // joined Hero whose Quality the unit uses.
+    let rolls = !unit_shaken(state, i, seams);
+    // A lone hero's test is its host's in the table's log: the lines name the host, whose joined heroes lend the Quality.
+    let root = morale_root(state, i, seams);
+    let shown = &statics[state.roster.profile[root]].name;
     if rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) && seams.hero_attach {
         ctx.quality = morale_quality(statics, state, i, seams);
     }
+    let mut lender = morale_hero(statics, state, root, seams);
     if let Some((h, quality)) = hero_aura_quality(statics, state, i, ctx.quality, seams) {
         ctx.quality = quality;
-        shot.log.push(format!(
-            "{} (Tough 9+) lends its Quality to {}'s morale test (Q{}+)",
-            statics[state.roster.profile[h]].name, us.name, quality
-        ));
+        let line = format!("{} (Tough 9+) lends its Quality to {shown}'s morale test (Q{}+)", statics[state.roster.profile[h]].name, quality);
+        shot.log.push(line.clone());
+        say_rule(tray, "morale", state.player[i], || line);
+        lender = None;
+    }
+    if let (true, Some((h, quality))) = (rolls, lender) {
+        say_rule(tray, "morale", state.player[i], || format!("Hero {} tests on behalf of {shown} (Q{quality}+)", statics[state.roster.profile[h]].name));
     }
     if rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) {
         ctx.fearless = morale_fearless(statics, state, i, seams);
@@ -6772,10 +6850,11 @@ fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool,
 fn drop_banner_for_cause(
     statics: &[UnitStatic], state: &State, i: usize, melee: bool, charged_by_enemy: bool,
     cause: Option<&str>, over_in: Option<f64>, charge_from_in: Option<f64>, seams: Seams,
-    ctx: &mut Ctx, shot: &mut ShootResult,
+    ctx: &mut Ctx, shot: &mut ShootResult, tray: &mut Tray,
 ) -> i64 {
     if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) || unit_shaken(state, i, seams) { return 0; }
     let us = &statics[state.roster.profile[i]];
+    let shown = &statics[state.roster.profile[morale_root(state, i, seams)]].name; // a lone hero's test is its host's
     let banner = ((state.morale_bonus[i] - us.ctx.morale_rating).max(0) - banner_gone(statics, state, i, seams)).max(0);
     if let Some(cause) = cause {
         // `EPOCH_75_TABLE_FIXES` (main.gd's cause branch): Bravery Aura has no shooting/melee
@@ -6788,6 +6867,7 @@ fn drop_banner_for_cause(
         if banner > 0 {
             ctx.morale_bonus -= banner;
             shot.log.push(format!("[Banner] {}: no +{} against {} (only shooting or melee)", us.name, banner, cause));
+            say_rule(tray, "banner", state.player[i], || format!("Banner: {shown} gets no +{banner} against {cause} (only shooting or melee)"));
         }
         let great_banner = mods::sum(state, i, mods::Role::Morale, melee, |r| {
             if &*r.name == "Great Banner" { r.morale_mod } else { 0 }
@@ -6795,6 +6875,7 @@ fn drop_banner_for_cause(
         if great_banner != 0 {
             ctx.morale_bonus -= great_banner;
             shot.log.push(format!("[Great Banner] {}: no +{} against {} (only shooting or melee)", us.name, great_banner, cause));
+            say_rule(tray, "banner", state.player[i], || format!("Great Banner: {shown} gets no +{great_banner} against {cause} (only shooting or melee)"));
         }
         return banner.max(0);
     }
@@ -6810,6 +6891,7 @@ fn drop_banner_for_cause(
             );
             trace_rule("morale", "Banner", &line);
             shot.log.push(line);
+            say_rule(tray, "banner", state.player[i], || format!("Banner: {shown} gets no +{vt} — it charged, it was not charged (Valiant needs a shot or a charge)"));
         }
         return vt;
     }
@@ -6828,8 +6910,41 @@ fn drop_banner_for_cause(
         );
         trace_rule("morale", "Banner", &line);
         shot.log.push(line);
+        say_rule(tray, "banner", state.player[i], || format!(
+            "Banner: {shown} gets no +{vt} from a {kind} {band}\" or under (Valiant counts only beyond the gate)"));
     }
     vt
+}
+
+/// The table's lines before the test die (`_solo_morale_test`), for a unit that rolls one: the rating and the Banner family name the
+/// bonus they add (the bonus is the stamped share minus what a cause or the Valiant band took back out, so spell tokens stay out of
+/// it), then the live spell tokens ("<spell> +1: ... passes on N+"), a Great Banner token left out when a rule forced the test.
+/// The target is the one the die is rolled against. Shared by the ordinary test and the Mind Control family's.
+#[allow(clippy::too_many_arguments)]
+fn say_morale_bonus(
+    statics: &[UnitStatic], state: &State, i: usize, melee: bool, cause: Option<&str>, seams: Seams, ctx: &Ctx, banner_dropped: i64, tray: &mut Tray,
+) {
+    if tray.feed().is_none() {
+        return;
+    }
+    let us = &statics[state.roster.profile[i]];
+    let shown = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
+    if unit_shaken(state, i, seams) {
+        return; // a Shaken unit rolls no die and the table writes no bonus line (its "already Shaken" line: see the gap list, not said here)
+    }
+    let target = morale_target(ctx.quality, ctx.morale_bonus);
+    let bonus = state.morale_bonus[i] - banner_gone(statics, state, i, seams) - banner_dropped;
+    if bonus > 0 {
+        say_rule(tray, "morale", state.player[i], || format!("{}: {shown} gets +{bonus} to morale test rolls (passes on {target}+)",
+            morale_bonus_source(us, bonus)));
+    }
+    let skip_great = cause.is_some() && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36);
+    let tokens = mods::morale_tokens(state, i, melee).into_iter().filter(|(n, _)| !(skip_great && &**n == "Great Banner")).collect::<Vec<_>>();
+    let spell: i64 = tokens.iter().map(|t| t.1).sum();
+    if spell != 0 {
+        let notes = tokens.iter().map(|(n, m)| format!("{n} {m:+}")).collect::<Vec<_>>().join(", ");
+        say_rule(tray, "morale", state.player[i], || format!("{notes}: {spell:+} to morale test rolls — {shown} passes on {target}+"));
+    }
 }
 
 /// The name the table's "gets +N to morale test rolls" line puts in front of the colon: the Morale(X) rating when the
@@ -6874,9 +6989,11 @@ pub(crate) fn tray_morale_for(
         return;
     }
     let us = &statics[state.roster.profile[i]];
-    let mut ctx = live_morale_ctx(statics, state, i, melee, seams, shot);
+    // The table's test is about the unit that was aimed at: a lone hero's lines and die labels name its host.
+    let shown = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
+    let mut ctx = live_morale_ctx(statics, state, i, melee, seams, shot, tray);
     ctx.side = state.player[i]; // the seat the morale dice lines (Fearless, No Retreat) are said for
-    let banner_dropped = drop_banner_for_cause(statics, state, i, melee, charged_by_enemy, cause, over_in, charge_from_in, seams, &mut ctx, shot);
+    let banner_dropped = drop_banner_for_cause(statics, state, i, melee, charged_by_enemy, cause, over_in, charge_from_in, seams, &mut ctx, shot, tray);
     // G4R4 C-LONEHERO-SHAKEN: the unit's flag, the dead host's included (rules-must-log names the Shaken rule).
     let shaken = unit_shaken(state, i, seams);
     if shaken && !state.shaken[i] {
@@ -6895,23 +7012,12 @@ pub(crate) fn tray_morale_for(
             morale_target(ctx.quality, ctx.morale_bonus)
         ));
     }
-    // The table's line before the test die (`_solo_morale_test`): the rating and the Banner family name the
-    // bonus they add. The bonus is the stamped share minus what a cause or the Valiant band took back out, so
-    // spell tokens stay out of it; the target is the one the die is rolled against.
-    if !shaken {
-        let bonus = state.morale_bonus[i] - banner_gone(statics, state, i, seams) - banner_dropped;
-        if bonus > 0 {
-            let target = morale_target(ctx.quality, ctx.morale_bonus);
-            tray.say(|| LogLine { rule: "morale", category: Category::Combat, side: state.player[i], detail: None,
-                text: format!("{}: {} gets +{bonus} to morale test rolls (passes on {target}+)",
-                    morale_bonus_source(us, bonus), us.name) });
-        }
-    }
+    say_morale_bonus(statics, state, i, melee, cause, seams, &ctx, banner_dropped, tray);
     // main.gd:8303 — the test die spends the morale once-mods it just used.
     // Placed after the call because `ctx` already carries the target it built.
     let (outcome, r) = crate::dice::resolve_morale_with_tray(
         &ctx,
-        &us.name,
+        &us.name,   // the dice row keeps the roller's own name; the door's label shows the host (core_activation.gd `_shown_owner`)
         Some(i),
         melee,
         below_half(state, statics, us, i, seams),
@@ -6942,9 +7048,9 @@ pub(crate) fn tray_morale_for(
     // One-core P3 step 26: the table's outcome line after the last morale die (`_solo_morale_test`'s match,
     // main.gd:13170-13184); its dice line stays the tray's. Every cause reaches that one match on the table.
     tray.say(|| LogLine { rule: "morale", category: Category::Combat, side: state.player[i], text: match outcome {
-        Morale::Passed => format!("{} passes morale", us.name),
-        Morale::Shaken => format!("{} fails morale — Shaken", us.name),
-        Morale::Routed => format!("{} fails morale at half strength — ROUTS", us.name),
+        Morale::Passed => format!("{shown} passes morale"),
+        Morale::Shaken => format!("{shown} fails morale — Shaken"),
+        Morale::Routed => format!("{shown} fails morale at half strength — ROUTS"),
     }, detail: None });
     // No Retreat's self-wounds land before the table writes its outcome: the landing report that follows this test says
     // their wound and loss lines ahead of this line (a rout's removal, which follows the outcome, holds nothing).
@@ -8677,6 +8783,7 @@ fn versatile_latch(
     guarded: bool,
     prof: Option<&ShootProfile>,
     log: &mut Vec<String>,
+    tray: Option<&mut Tray>,
     rules_epoch: u32,
 ) -> (i64, i64, bool) {
     if next.versatile_pick_round[mi] == next.round {
@@ -8700,6 +8807,10 @@ fn versatile_latch(
         statics[next.roster.profile[mi]].name,
         if ap_mod > 0 { "AP(+1)" } else { "+1 to hit" }
     ));
+    if let Some(t) = tray {
+        // The table's line (`_solo_log_versatile_pick`): once per activation, where the volley decides.
+        say_rule(t, "versatile", next.player[mi], || log.last().cloned().unwrap_or_default());
+    }
     // Rules 3.6 (row W1.TRACE) — the once-per-activation pick names itself
     // (arm `versatile-attack`).
     if rule_on(rules_epoch, EPOCH_73_V36) {
@@ -10982,11 +11093,20 @@ fn resolve_with(
                                             crate::combat::reliable_quality(att.quality,
                                                 prof36.map(|p| p.reliable).unwrap_or(false)),
                                             &def, guarded_folds(&def, g.mod_d, crate::combat::LONG_RANGE_IN, seams.rules_epoch),
-                                            prof36, &mut shot.log, seams.rules_epoch);
+                                            prof36, &mut shot.log, Some(&mut *tray), seams.rules_epoch);
                                         att.versatile_pick_hit = vh;
                                         att.versatile_pick_ap = va;
                                         att.versatile_latched = vl;
                                     }
+                                }
+                            }
+                            // G4R5 F-AMBUSH-ARRIVAL-AP (the table's `_solo_ambush_arrival_ap`): each member with the arrival AP
+                            // names the rule once, before the announce (`EPOCH_73_V36`, the table's gate for the line and the AP).
+                            if tray.feed().is_some() && rule_on(seams.rules_epoch, EPOCH_73_V36) {
+                                for (mi, _, att) in parts.iter().filter(|(_, m, a)| !m.keep.is_empty() && a.ambush_arrival_ap > 0) {
+                                    tray.say(|| LogLine { rule: "ambush_arrival", category: Category::Combat, side: next.player[si],
+                                        text: format!("Ambushing Piercing Shot: {} shoots with AP(+{}) in its arrival round",
+                                            statics[next.roster.profile[*mi]].name, att.ambush_arrival_ap), detail: None });
                                 }
                             }
                             // One-core P3 step 24: the table's announce (`_solo_show_attack_announce`, main.gd:11752), said
@@ -11000,6 +11120,8 @@ fn resolve_with(
                             // CLASS FIX (external review 03.09. item 3 / F9,
                             // `acts::rule_on`) — same gate as `strike_phase`'s
                             // melee half above.
+                            // A lone hero's hit lines call the target by its host's name, as the table does.
+                            tray.aim(lone_host.map(|h| statics[next.roster.profile[h]].name.clone()));
                             let r = crate::dice::resolve_volley_leg(
                                 &shooters_of(&parts, statics, &next),
                                 &def, &ut_g.name, g.d, g.mod_d,
@@ -11033,6 +11155,7 @@ fn resolve_with(
                                     shot.log.push(format!("{n}: {} takes the hits at AP(-{cut}), min. AP(0) — saves one better", ut_g.name));
                                 }
                             }
+                            tray.aim(None);
                             for (mi, msc, _) in &parts {
                                 let shoot = &statics[next.roster.profile[*mi]].shoot;
                                 mark_spent_limited(shoot, &msc.keep, &mut next.limited_used, *mi);
@@ -11056,7 +11179,9 @@ fn resolve_with(
                             let att_incoming = land_hazardous_self(statics, &mut next, &members, seams, shot);
                             // One-core P3 step 7: the target chain (host, then its joined heroes) before
                             // the landing. Only a supplied tray takes it: a seeded one clones nothing.
-                            let chain_before = chain_snapshot(&next, g.ti, tray);
+                            // A lone hero's wounds are reported on its host's chain as one unit ("Cultists takes 18 wounds (1/2)").
+                            let rep = lone_host.unwrap_or(g.ti);
+                            let chain_before = chain_snapshot(&next, rep, tray);
                             if !seams.tray_exact {
                                 land_pool_wounds(&mut next, g.ti, w, false, seams, &mut shot.log);
                             }
@@ -11071,20 +11196,40 @@ fn resolve_with(
                             // `apply_deadly_wounds`, solo_controller.gd:8333):
                             // each unsaved wound ×X on the model with the most
                             // remaining wounds, capped there, surplus wasted.
-                            for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
-                                let d = match alloc.as_mut() {
-                                    Some(a) => land_deadly_picked(&mut next, g.ti, post, dx, seams, a),
-                                    None => land_deadly_wounds(&mut next, g.ti, post, dx, seams),
-                                };
-                                shot.log.push(format!(
-                                    "Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {d} wounds dealt"));
+                            let mut groups = std::mem::take(&mut shot.deadly_groups).into_iter();
+                            let mut deadly_dealt = 0;
+                            let side = next.player[si];
+                            for (weapon, unsaved, dx, n) in std::mem::take(&mut shot.deadly_lines) {
+                                let (mut dealt, mut forced) = (0, 0);
+                                for (post, gx) in groups.by_ref().take(n) {
+                                    let d = land_deadly_group(&mut next, g.ti, post, gx, seams, &mut alloc, &mut forced);
+                                    shot.log.push(format!(
+                                        "Deadly({gx}): {post} unsaved ×{gx}, no carry-over → {d} wounds dealt"));
+                                    dealt += d;
+                                }
+                                deadly_dealt += dealt;
+                                // The table's lines (`_solo_land_deadly_wounds`), once per weapon and only when a wound landed.
+                                let s = |n: i64| if n == 1 { "" } else { "s" };
+                                if dealt > 0 {
+                                    say_rule(tray, "deadly", side, || format!(
+                                        "Deadly({dx}): {unsaved} unsaved ×{dx}, no carry-over → {dealt} wound{} dealt ({weapon})", s(dealt)));
+                                    if forced > 0 {
+                                        say_rule(tray, "deadly", side, || format!(
+                                            "Deadly({dx}): {forced} wound{} finish the already-wounded Tough model first ({CITE})", s(forced)));
+                                    }
+                                }
+                            }
+                            for (post, gx) in groups {   // a group no weapon line owns still lands (the volley leg records one per weapon)
+                                let d = land_deadly_group(&mut next, g.ti, post, gx, seams, &mut alloc, &mut 0);
+                                shot.log.push(format!("Deadly({gx}): {post} unsaved ×{gx}, no carry-over → {d} wounds dealt"));
+                                deadly_dealt += d;
                             }
                             if seams.tray_exact {
                                 let left = alloc.as_mut().map_or(w, |a| land_pool_picked(&mut next, g.ti, w, a, tray));
                                 land_pool_wounds(&mut next, g.ti, left, true, seams, &mut shot.log);
                             }
                             // One-core P3 steps 7/25/27: the landing's lines and its landings, stamped BEFORE the group's morale test below draws.
-                            land_chain_report(statics, &next, tray, g.ti, chain_before);
+                            land_chain_report_inline(statics, &next, tray, rep, chain_before, deadly_dealt);
                             // rules-wave3-growthmark (epoch 6) — the
                             // ignore-wound marker AFTER the landing.
                             if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
@@ -11122,6 +11267,11 @@ fn resolve_with(
                             if scourge_morale_trigger(
                                 &next, statics, seams, ut_g, g.ti, morale_alive_g, wounds_before_g, phantom, &mut shot.log,
                             ) {
+                                if tray.feed().is_some() {
+                                    if let Some(line) = shooting_morale_line(&next, statics, seams, ut_g, g.ti, morale_alive_g, wounds_before_g) {
+                                        say_rule(tray, "morale", next.player[g.ti], || line);
+                                    }
+                                }
                                 tray_morale(&mut next, statics, g.ti, false, seams, tray, shot, Some(g.mod_d), None);
                             }
                         }

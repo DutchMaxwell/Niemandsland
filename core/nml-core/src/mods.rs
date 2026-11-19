@@ -151,6 +151,16 @@ pub fn sum(state: &State, i: usize, role: Role, melee: bool, f: impl Fn(&LiveMod
     total
 }
 
+/// The live morale tokens of one unit's chain, `(spell, morale_mod)` per record in `sum`'s order — the table's `AiSpell.mods_for(.., "morale", ..)`
+/// rows its morale line lists.
+pub fn morale_tokens(state: &State, i: usize, melee: bool) -> Vec<(Rc<str>, i64)> {
+    [Some(i), state.attached_to[i]].into_iter().flatten()
+        .flat_map(|u| state.buffs[u].iter())
+        .filter(|r| matches(r, Role::Morale, melee))
+        .map(|r| (r.name.clone(), r.morale_mod))
+        .collect()
+}
+
 /// SEAM 4 step 2 — `sum` with the rules-must-log line on every FIRING record:
 /// `[utility-buff] <name> — <kind> <+/-n> on <unit>` (the trace_rule shape,
 /// NML_TRACE_RULES=1). `sum`'s own callers stay silent — the hit/casting/

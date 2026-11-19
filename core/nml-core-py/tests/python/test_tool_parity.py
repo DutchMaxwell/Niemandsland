@@ -10,7 +10,8 @@ own result shape. What is pinned:
   * an empty directory, a seed without its acts corpus and a half-recorded range are REFUSED (exit 2),
     never skipped and never green, and no game is played for them;
   * the CLI refuses an empty directory (exit 2) before it loads the core, and still writes the summary;
-  * the knob set the driver plays at agrees with `selfplay.TRAINER_KNOBS`.
+  * the knob set the driver plays at (`LEGACY_FIDELITY_KNOBS`, epoch 0 pre-fidelity) agrees with the old tool's
+    header (`selfplay.TRAINER_KNOBS`) on the shared keys.
 
 Step 3 (`--accept`, `--plant`), through `main` with the game and the core stubbed:
 
@@ -18,6 +19,13 @@ Step 3 (`--accept`, `--plant`), through `main` with the game and the core stubbe
     one it does not name is unexplained and red; an entry that matched nothing is `stale accept` and red;
   * `--plant` corrupts a COPY of the first seed (never the oracle), the planted run must turn red through BOTH gates,
     and an instrument that cannot see it exits 3 ("blind"); a refused run plants nothing.
+
+Step 2b (core identity guard and summary provenance):
+
+  * a dirty `nml_core` (`BUILD_DIRTY=True`) or commit mismatch (`BUILD_COMMIT != HEAD`) is refused with exit 2
+    before loading the core or playing; `--allow-core-mismatch` overrides it, records the override in the summary,
+    and prints it on the `PARITY:` line;
+  * the summary carries `config`, `rules_epoch` (0 for the legacy config), and `knobs_played`.
 """
 
 from __future__ import annotations
@@ -164,7 +172,15 @@ def test_a_half_recorded_range_is_refused_and_a_core_file_without_rows_counts_as
     assert _judge(oracle, seeds=[1])[1]["missing"] == [1]
 
 
+def _match_core(monkeypatch, sha: str = "deadbeef") -> str:
+    monkeypatch.setattr(tp, "_repo_head", lambda *_: sha)
+    monkeypatch.setattr(tp.nml_core, "BUILD_COMMIT", sha)
+    monkeypatch.setattr(tp.nml_core, "BUILD_DIRTY", False)
+    return sha
+
+
 def test_the_cli_refuses_an_empty_directory_before_loading_the_core_and_writes_the_summary(tmp_path, monkeypatch):
+    _match_core(monkeypatch)
     monkeypatch.setattr(tp.nml_core, "load", lambda *_: pytest.fail("a refused run must not load the core"))
     out = tmp_path / "parity_summary.json"
     empty = tmp_path / "empty"
@@ -177,10 +193,10 @@ def test_the_cli_refuses_an_empty_directory_before_loading_the_core_and_writes_t
     assert summary["missing"] == [27, 28, 29] and summary["core_commit"] == tp.nml_core.BUILD_COMMIT
 
 
-def test_the_knob_set_the_driver_plays_at_agrees_with_the_trainer_knobs():
-    """The plan says "at TRAINER_KNOBS"; the driver splats LEGACY_FIDELITY_KNOBS (the play_game
-    kwargs both older gates use). Every knob the two share must say the same thing."""
-    as_trainer = {"charge_gate": False}                        # the play_game string "off" is the trainer's False
+def test_the_knob_set_the_driver_plays_at_agrees_with_the_old_tools_header_on_the_shared_keys():
+    """`LEGACY_FIDELITY_KNOBS` is epoch 0, pre-fidelity (the old tool's game, not the trainer's).
+    Every knob it shares with `TRAINER_KNOBS` (the old tool's header defaults) must say the same thing."""
+    as_trainer = {"charge_gate": False}                        # the play_game string "off" is the old tool's False
     shared = set(sp.LEGACY_FIDELITY_KNOBS) & set(sp.TRAINER_KNOBS)
     assert {"hero_last", "cast_fold", "cond_ap_dice", "versatile_reach", "rules_epoch", "melee_reach",
             "charge_gate"} <= shared
@@ -192,6 +208,7 @@ def test_the_knob_set_the_driver_plays_at_agrees_with_the_trainer_knobs():
 @pytest.fixture
 def cli(monkeypatch, oracle, tmp_path):
     """`main` end to end without a game: the core load and `play_game` are stubbed, the planted copy goes to tmp."""
+    _match_core(monkeypatch)
     monkeypatch.setattr(tp.nml_core, "load", lambda *_: object())
     monkeypatch.setattr(tp.list_to_profile, "LEGACY_CORE_SELFPLAY", False)
     monkeypatch.setattr(tp, "PLANT_DIR", tmp_path / "plant")
@@ -275,3 +292,44 @@ def test_a_refused_run_plants_nothing(cli, tmp_path):
     empty.mkdir()
     code, summary = cli("--plant", ref=empty)
     assert code == 2 and "plant_exit" not in summary and not (tmp_path / "plant").exists()
+
+
+def test_a_dirty_core_is_refused_with_exit_2_before_loading_or_playing(cli, monkeypatch, capsys):
+    monkeypatch.setattr(tp.nml_core, "BUILD_DIRTY", True)
+    monkeypatch.setattr(tp.nml_core, "load", lambda *_: pytest.fail("a refused run must not load the core"))
+    code, summary = cli(play=lambda *_: pytest.fail("a refused run must not play"))
+    assert code == 2 and summary["seeds_compared"] == 0
+    assert summary["core_dirty"] is True and summary["allow_core_mismatch"] is False
+    assert "core mismatch" in summary["refused"] and "BUILD_DIRTY" in summary["refused"]
+    assert "REFUSED: core mismatch" in capsys.readouterr().out
+
+
+def test_a_commit_mismatch_is_refused_with_exit_2_before_loading_or_playing(cli, monkeypatch, capsys):
+    monkeypatch.setattr(tp.nml_core, "BUILD_COMMIT", "00000000")
+    monkeypatch.setattr(tp.nml_core, "load", lambda *_: pytest.fail("a refused run must not load the core"))
+    code, summary = cli(play=lambda *_: pytest.fail("a refused run must not play"))
+    assert code == 2 and summary["seeds_compared"] == 0
+    assert summary["core_commit"] == "00000000" and summary["sha"] == "deadbeef"
+    assert summary["allow_core_mismatch"] is False
+    assert "core mismatch" in summary["refused"] and "00000000" in summary["refused"]
+    assert "REFUSED: core mismatch" in capsys.readouterr().out
+
+
+def test_allow_core_mismatch_overrides_refusal_and_records_it(cli, monkeypatch, capsys):
+    monkeypatch.setattr(tp.nml_core, "BUILD_DIRTY", True)
+    monkeypatch.setattr(tp.nml_core, "BUILD_COMMIT", "00000000")
+    code, summary = cli("--allow-core-mismatch")
+    assert code == 0 and summary["refused"] is None and summary["seeds_compared"] == 2
+    assert summary["allow_core_mismatch"] is True and summary["core_dirty"] is True
+    assert summary["core_commit"] == "00000000" and summary["sha"] == "deadbeef"
+    out = capsys.readouterr().out
+    assert "PARITY:" in out and "--allow-core-mismatch" in out
+
+
+def test_summary_carries_config_rules_epoch_0_and_knobs_played_for_the_legacy_config(cli):
+    code, summary = cli()
+    assert code == 0
+    assert summary["config"] == "legacy" and summary["rules_epoch"] == 0
+    assert summary["knobs_played"]["rules_epoch"] == 0
+    assert sp.LEGACY_FIDELITY_KNOBS.items() <= summary["knobs_played"].items()
+    assert summary["allow_core_mismatch"] is False
