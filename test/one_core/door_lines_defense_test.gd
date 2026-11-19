@@ -132,3 +132,28 @@ func test_the_gated_ignore_rule_says_its_verdict() -> void:
 	await _same("warding at 14 in", _striker([], []), _ignorer(["Warding"], "knight_brothers"), "Warding:", 6, {"distance_in": 14.0})
 	await _same("angelic blessing at 14 in", _striker([], []), _ignorer(["Angelic Blessing"], "kingdom_of_angels", "aof"), "Warding:", 6, {"distance_in": 14.0})
 	await _same("knightborn vs bane at 14 in", _striker(["Bane"], []), _ignorer(["Knightborn"], "knight_brothers"), "Ranks:", 6, {"distance_in": 14.0})
+
+
+## WDENY (19.11., found reviewing dlines train 4): the gated ignore rule BESIDE another ignore group. The core stamped the gate only when the gated rule was the best
+## ignore, so beside Regeneration the `Warding:` line was missing from over 9 in (12/12 seeds) and, from within 9 in, the door still rolled the gated group the table
+## refuses (lines 12/12, end state 7/12). Each pair is compared on the gate line AND on every roll line, both distances; `_same` asserts the end states equal (0 diffs).
+func test_the_gated_ignore_rule_beside_another_group_says_its_verdict_and_rolls_alike() -> void:
+	var pairs := [
+		["regeneration + warding", ["Regeneration", "Warding"], "knight_brothers", "gf"],
+		["regeneration + knightborn", ["Regeneration", "Knightborn"], "knight_brothers", "gf"],
+		["regeneration + angelic blessing", ["Regeneration", "Angelic Blessing"], "kingdom_of_angels", "aof"],
+		["regeneration aura + knightborn", ["Regeneration Aura", "Knightborn"], "knight_brothers", "gf"],
+		["medical training + knightborn", ["Medical Training", "Knightborn"], "knight_brothers", "gf"],
+		["spell resistance + knightborn", ["Spell Resistance", "Knightborn"], "knight_brothers", "gf"],
+		["warding + knightborn", ["Warding", "Knightborn"], "knight_brothers", "gf"],
+		["regeneration + warding + knightborn", ["Regeneration", "Warding", "Knightborn"], "knight_brothers", "gf"],
+	]
+	for pair in pairs:
+		for dist in [14.0, 5.0]:
+			var label := "%s at %d in" % [pair[0], int(dist)]
+			await _same(label + " (gate line)", _striker([], ["AP(1)"], "battle_brothers"), _ignorer(pair[1], pair[2], pair[3]), "Warding:", 6, {"distance_in": dist})
+			# two gated names from within the gate: both are shut and nothing rolls on either path (the empty comparison is the point)
+			var rolls := 0 if dist < 9.0 and pair[0] == "warding + knightborn" else 6
+			await _same(label + " (rolls)", _striker([], ["AP(1)"], "battle_brothers"), _ignorer(pair[1], pair[2], pair[3]), "Ranks rolls", rolls, {"distance_in": dist})
+	for dist in [14.0, 5.0]:
+		await _same("regeneration + knightborn vs bane at %d in" % int(dist), _striker(["Bane"], []), _ignorer(["Regeneration", "Knightborn"], "knight_brothers"), "Ranks:", 6, {"distance_in": dist})

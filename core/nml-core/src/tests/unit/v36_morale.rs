@@ -178,6 +178,32 @@ mod mor_17a {
         assert_eq!((ctx.regen_gate_over_in, ctx.regen_gate_charge_in), (0.0, 0.0), "the grant has no gate");
     }
 
+    /// WDENY: the gate used to be stamped only when the gated rule was the best ignore (`normal < other_min`), so beside Regeneration (5+) it never was.
+    /// From `EPOCH_84_IGNORE_GROUPS` it is stamped beside every other group and the gated group is FLAGGED, so a shut gate drops that group alone.
+    /// Below 84 the old stamp stays (control), and the gated rule alone carries no flag (it takes the whole fold, as before).
+    #[test]
+    fn a_gated_rule_beside_another_group_stamps_the_gate_and_flags_its_group() {
+        use crate::acts::{EPOCH_83_LONE_HERO_TARGET, EPOCH_84_IGNORE_GROUPS};
+        let beside = knight_ctx(r#"["Knightborn","Regeneration"]"#, "[]", EPOCH_84_IGNORE_GROUPS);
+        assert_eq!((beside.regen_gate_over_in, beside.regen_gate_charge_in), (9.0, 6.0), "the gate is stamped beside Regeneration");
+        assert_eq!((beside.regen_groups, beside.regen_names), ([5, 6, 0, 0], ["regeneration", "Knightborn", "", ""]));
+        assert_eq!(beside.regen_gated, [false, true, false, false], "only the Knightborn group is gated");
+        assert!(beside.groups_valid() && beside.gate_in_force(), "the groups answer, so the gate is in force");
+        let shut = beside.gate_shut();
+        assert_eq!((shut.regen_target, shut.regen_groups, shut.regen_gate_shut), (5, [5, 0, 0, 0], true), "from within 9in Regeneration still rolls, Knightborn does not");
+        assert!(!shut.groups_valid(), "one group left: the single roll");
+        let alone = knight_ctx(r#"["Knightborn"]"#, "[]", EPOCH_84_IGNORE_GROUPS);
+        assert_eq!((alone.regen_gate_over_in, alone.regen_gated), (9.0, [false; 4]), "alone: stamped as ever, no group flag");
+        assert_eq!(alone.gate_shut().regen_target, 0, "alone, a shut gate takes the whole fold");
+        let two = knight_ctx(r#"["Warding","Knightborn"]"#, "[]", EPOCH_84_IGNORE_GROUPS);
+        assert_eq!((two.regen_groups, two.regen_gated), ([0, 6, 6, 0], [false, true, true, false]), "two gated names are two groups, both shut together");
+        assert_eq!(two.gate_shut().regen_target, 0);
+        let resistance = knight_ctx(r#"["Knightborn","Spell Resistance"]"#, "[]", EPOCH_84_IGNORE_GROUPS);
+        assert_eq!((resistance.regen_gate_over_in, resistance.regen_gated.iter().filter(|&&g| g).count()), (9.0, 1), "Spell Resistance is another group: it was never rolled beside the gate");
+        let old = knight_ctx(r#"["Knightborn","Regeneration"]"#, "[]", EPOCH_83_LONE_HERO_TARGET);
+        assert_eq!((old.regen_gate_over_in, old.regen_gated), (0.0, [false; 4]), "below 84 the old stamp: no gate beside Regeneration");
+    }
+
     #[test]
     fn enhanced_knightborn_does_nothing_new_at_epoch_72() {
         let ctx = knight_ctx(r#"["Enhanced Knightborn"]"#, "[]", EPOCH_72_PLAYTEST_RULES);

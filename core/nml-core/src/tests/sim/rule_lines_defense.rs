@@ -110,3 +110,36 @@ use super::volley_landings::volley_line;
         assert!(plain.iter().all(|l| !l.contains("ignore only Regeneration")), "no bypass weapon, no line: {plain:?}");
         assert!(rule_lines(|_, _| {}, vec![vec![6, 6, 6, 6], vec![1, 1, 1, 1]]).iter().all(|l| !l.contains("ignore")), "no ignore rule, no line");
     }
+
+    /// WDENY (19.11., found by the door probe): the Warding family's distance gate beside ANOTHER ignore group. The gate used to be stamped only when the
+    /// gated rule was the best ignore, so beside Regeneration the line `Warding: <U> ignores wounds on 6+ (shot from over 9in)` was never said and, from
+    /// within 9in, the gated group still rolled where the table refuses it. Now: over the gate the line, then Regeneration, then the gated group; within
+    /// it the refusal line and Regeneration alone. The gated rule ALONE keeps its old reading (the control rows). RED on the old stamp: no flag, no line.
+    #[test]
+    fn a_gated_ignore_group_beside_regeneration_rolls_only_from_over_its_gate() {
+        let setup = |far: bool, groups: [i64; 4], names: [&'static str; 4], gated: [bool; 4]| move |st: &mut State, s: &mut [UnitStatic]| {
+            let x = if far { 20.0 } else { 3.0 };
+            st.positions[2] = vec![[x * IN2M, 0.0, 0.0], [x * IN2M, 0.0, 2.5 * IN2M]];
+            let c = &mut s[2].ctx;
+            c.rules_epoch = crate::acts::CURRENT_RULES_EPOCH;
+            (c.regeneration, c.regen_named, c.regen_target) = (true, groups[0] > 0, groups.iter().copied().filter(|&t| t > 0).min().unwrap());
+            (c.regen_groups, c.regen_names, c.regen_gated, c.regen_gate_over_in, c.regen_gate_charge_in) = (groups, names, gated, 9.0, 6.0);
+        };
+        let beside = |far| setup(far, [5, 6, 0, 0], ["regeneration", "Warding", "", ""], [false, true, false, false]);
+        let faces = || vec![vec![6, 6, 6, 6], vec![1, 1, 1, 1], vec![1, 1, 1, 1], vec![1, 1, 1, 1]];
+        let open = rule_lines(beside(true), faces());
+        let at = |t: &str| open.iter().position(|l| l.starts_with(t)).unwrap_or_else(|| panic!("{t}: {open:?}"));
+        assert!(at("Warding: Def ignores wounds on 6+ (shot from over 9in)") < at("Def rolls 4 regeneration dice (5+)"), "{open:?}");
+        assert!(at("Def rolls 4 regeneration dice (5+)") < at("Def rolls 4 Warding dice (6+)"), "{open:?}");
+        let shut = rule_lines(beside(false), faces());
+        assert!(shut.iter().any(|l| l == "Warding: no 6+ ignore, Def was shot from within 9in"), "{shut:?}");
+        assert!(shut.iter().any(|l| l.starts_with("Def rolls 4 regeneration dice (5+)")), "Regeneration still rolls from within the gate: {shut:?}");
+        assert!(shut.iter().all(|l| !l.contains("Warding dice") && !l.contains("ignores wounds on 6+")), "the gated group is shut: {shut:?}");
+        // controls: the gated rule alone is the old reading (one folded roll, nothing at all from within the gate)
+        let alone = |far| setup(far, [0, 6, 0, 0], ["", "Warding", "", ""], [false; 4]);
+        let alone_open = rule_lines(alone(true), faces());
+        assert!(alone_open.iter().any(|l| l == "Warding: Def ignores wounds on 6+ (shot from over 9in)") && alone_open.iter().any(|l| l.starts_with("Def rolls 4 Warding dice (6+)")), "{alone_open:?}");
+        let alone_shut = rule_lines(alone(false), faces());
+        assert!(alone_shut.iter().any(|l| l == "Warding: no 6+ ignore, Def was shot from within 9in"), "{alone_shut:?}");
+        assert!(alone_shut.iter().all(|l| !l.contains(" dice (")), "no ignore roll at all: {alone_shut:?}");
+    }

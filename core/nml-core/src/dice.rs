@@ -1355,18 +1355,18 @@ pub(crate) fn resolve_volley_with_pick_label(
     // WAVE 3 — the aliases' over-9" SAVE gate (main.gd:3090/6415), ONCE per
     // volley on this local copy; non-volley paths leave it false — the
     // table's own reading (melee `dist_in: -1.0`, :6119). Stamp-gated.
-    let def = &Ctx {
-        fortified_alias_over9: def.fortified_alias_ap > 0
-            && def.fortified_alias_over_in > 0.0
-            && mod_dist_in > def.fortified_alias_over_in,
-        // MOR-17a (rules 3.6): Warding's 6+ needs a shot from OVER its gate —
-        // inside it the 6+ die of this kind never rolls (0 = old reading).
-        regen_target: if def.regen_gate_over_in > 0.0 && mod_dist_in <= def.regen_gate_over_in {
-            0
-        } else {
-            def.regen_target
-        },
-        ..*def
+    // MOR-17a (rules 3.6): Warding's 6+ needs a shot from OVER its gate — inside it the 6+ die of this kind never rolls. Alone it takes the whole
+    // fold with it (the old reading); beside other groups (`Ctx::regen_gated`) only its own group drops out.
+    let gate_on = def.gate_in_force();
+    let gate_shut = gate_on && def.regen_gate_over_in > 0.0 && mod_dist_in <= def.regen_gate_over_in;
+    let def = &{
+        let c = Ctx {
+            fortified_alias_over9: def.fortified_alias_ap > 0
+                && def.fortified_alias_over_in > 0.0
+                && mod_dist_in > def.fortified_alias_over_in,
+            ..*def
+        };
+        if gate_shut { c.gate_shut() } else { c }
     };
     // FLATTENED on purpose: one pass over the (member, profile) pairs, so the
     // body below stays the single-shooter one.
@@ -2256,9 +2256,9 @@ pub(crate) fn resolve_volley_with_pick_label(
     }
     // MOR-17a — rules-must-log, once per volley: the gate's verdict, under the
     // rule's name (Warding, Knightborn and Angelic Blessing are one rule).
-    if def.regen_gate_over_in > 0.0 && (regenable > 0 || regen_proof > 0 || out.deadly_tally > 0) {
+    if gate_on && def.regen_gate_over_in > 0.0 && (regenable > 0 || regen_proof > 0 || out.deadly_tally > 0) {
         let gate = def.regen_gate_over_in;
-        let line = if def.regen_target > 0 {
+        let line = if !def.regen_gate_shut && def.regen_target > 0 {
             format!("Warding: {def_owner} ignores wounds on 6+ (shot from over {gate:.0}in)")
         } else {
             format!("Warding: no 6+ ignore, {def_owner} was shot from within {gate:.0}in")
@@ -2738,16 +2738,8 @@ pub fn resolve_melee_leg_wipe(
     let charge_from_in = if charging { charge_from_in } else { 0.0 };
     // MOR-17a (rules 3.6): Warding's 6+ needs a charge from OVER its gate. A
     // strike-back rides 0.0 — it did the charging, so the 6+ never rolls.
-    let def = &Ctx {
-        regen_target: if def.regen_gate_charge_in > 0.0
-            && charge_from_in <= def.regen_gate_charge_in
-        {
-            0
-        } else {
-            def.regen_target
-        },
-        ..*def
-    };
+    let gate_on = def.gate_in_force();
+    let def = &if gate_on && def.regen_gate_charge_in > 0.0 && charge_from_in <= def.regen_gate_charge_in { def.gate_shut() } else { *def };
     let mut out = ShootResult::default();
     // Wave 3 — the Shielded-family alias's rules-must-log flag, the volley
     // fold's melee twin (Shielded is the whole melee Defense ladder here).
@@ -3276,9 +3268,9 @@ pub fn resolve_melee_leg_wipe(
     }
     // MOR-17a — rules-must-log, once per fight: the gate's verdict, the volley
     // fold's melee twin (same rule name).
-    if def.regen_gate_charge_in > 0.0 && (regenable > 0 || out.deadly_tally > 0) {
+    if gate_on && def.regen_gate_charge_in > 0.0 && (regenable > 0 || out.deadly_tally > 0) {
         let gate = def.regen_gate_charge_in;
-        out.log.push(if def.regen_target > 0 {
+        out.log.push(if !def.regen_gate_shut && def.regen_target > 0 {
             format!("Warding: {def_owner} ignores wounds on 6+ (charged from over {gate:.0}in)")
         } else {
             format!("Warding: no 6+ ignore, {def_owner} was charged from within {gate:.0}in")
@@ -3506,16 +3498,9 @@ pub fn impact_saves_with_tray(
     // MOR-17a (rules 3.6): Warding's 6+ needs a charge from OVER its gate. A
     // charge from the gate or closer folds nothing — the GD side's
     // `_solo_land_wounds` gate, mirrored here. `None` keeps the old blanket read.
-    let regen_def = &Ctx {
-        regen_target: match charge {
-            Some((gap_in, _))
-                if def.regen_gate_charge_in > 0.0 && gap_in <= def.regen_gate_charge_in =>
-            {
-                0
-            }
-            _ => def.regen_target,
-        },
-        ..*def
+    let regen_def = &match charge {
+        Some((gap_in, _)) if def.gate_in_force() && def.regen_gate_charge_in > 0.0 && gap_in <= def.regen_gate_charge_in => def.gate_shut(),
+        _ => *def,
     };
     out.wounds = regen_batch(w, 0, regen_def, def_owner, tray, &mut out.rolls);
     out

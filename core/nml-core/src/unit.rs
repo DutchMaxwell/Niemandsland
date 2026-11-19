@@ -432,6 +432,13 @@ pub struct Ctx {
     /// The rule that supplies each group above, as the table's roll line spells it ("regeneration", "self-repair", "resistance" in lower
     /// case, any other group by its rule's own name: "Plaguebound", ...); "" where the slot is empty. The winning name of a group is the one of its lowest target, the first one on a tie.
     pub regen_names: [&'static str; 4],
+    /// `EPOCH_84_IGNORE_GROUPS` + MOR-17a: slot i of `regen_groups` is a distance-GATED group (Warding, Knightborn, Angelic Blessing). Set only when the gate
+    /// is stamped beside at least one other group: the gate then shuts that group's own roll and leaves the others rolling (the table's
+    /// `_solo_regen_pick`: a refused rule is simply not in the group list). All false = the gated rule alone (or none): the old reading, where
+    /// a shut gate zeroes the one folded target.
+    pub regen_gated: [bool; 4],
+    /// Set on the local copy `gate_shut` returns, never on a stamp: this resolution came from within the gate, so the line says the refusal.
+    pub regen_gate_shut: bool,
     /// The best ignore rule (the lowest target, the first on a tie) is carried by most, not all, models (a joined hero without it): the table says
     /// so before the roll ("<U> — Regeneration: most models carry it, so a joined hero without it does not switch it off"). "" = not the case.
     pub regen_most_name: &'static str,
@@ -788,8 +795,31 @@ impl Ctx {
             && live.iter().copied().min() == Some(self.regen_target)
             && self.regen_pending == 0
             && self.regen_feat == 0
-            && self.regen_gate_over_in == 0.0
-            && self.regen_gate_charge_in == 0.0
+            && ((self.regen_gate_over_in == 0.0 && self.regen_gate_charge_in == 0.0) || self.regen_gated.iter().any(|&g| g))
+    }
+
+    /// MOR-17a: is the stamped distance gate in force at this save moment? The gated rule alone (no `regen_gated` flag) always is, as it always was;
+    /// beside other groups it is in force while the groups answer (`groups_valid`): a live leg that moved the folded target keeps the ungated fold.
+    pub fn gate_in_force(&self) -> bool {
+        !self.regen_gated.iter().any(|&g| g) || self.groups_valid()
+    }
+
+    /// MOR-17a: this Ctx for a resolution from WITHIN the gate. The gated rule alone: nothing rolls (`regen_target` 0). Beside other groups only the
+    /// gated groups drop out (target and name cleared, the flag stays so `groups_valid` still answers) and the folded target is the best of the rest.
+    pub fn gate_shut(&self) -> Ctx {
+        let mut c = *self;
+        c.regen_gate_shut = true;
+        if c.regen_gated.iter().any(|&g| g) {
+            for i in 0..4 {
+                if c.regen_gated[i] {
+                    (c.regen_groups[i], c.regen_names[i]) = (0, "");
+                }
+            }
+            c.regen_target = c.regen_groups.iter().copied().filter(|&t| t > 0).min().unwrap_or(0);
+        } else {
+            c.regen_target = 0;
+        }
+        c
     }
 
     pub fn bypass_skips_ignore(&self) -> bool {
@@ -3133,22 +3163,22 @@ fn regen_targets(
     let mut picked = (base, base, 0i64, 0i64);
     let mut feat = 0i64;
     // EPOCH_82_IGNORE_BY_NAME: the flat rules by NAME (the table's groups); the Self-Repair group is kept even beside Regeneration.
-    let mut groups: Vec<(String, String, i64)> = Vec::new(); // (group key, the rule that names the group, target)
-    let put = |groups: &mut Vec<(String, String, i64)>, key: String, name: &str, target: i64| {
+    let mut groups: Vec<(String, String, i64, bool)> = Vec::new(); // (group key, the rule that names the group, target, a distance-gated rule holds it)
+    let put = |groups: &mut Vec<(String, String, i64, bool)>, key: String, name: &str, target: i64, gated: bool| {
         if target > 0 {
             match groups.iter_mut().find(|g| g.0 == key) {
-                Some(g) if target < g.2 => (g.1, g.2) = (name.to_string(), target),
+                Some(g) if target < g.2 => (g.1, g.2, g.3) = (name.to_string(), target, gated),
                 Some(_) => {}
-                None => groups.push((key, name.to_string(), target)),
+                None => groups.push((key, name.to_string(), target, gated)),
             }
         }
     };
     if regen || has_special_rule(&p.special_rules, "Medical Training") {
-        put(&mut groups, "Regeneration".into(), "regeneration", base);
+        put(&mut groups, "Regeneration".into(), "regeneration", base, false);
     }
     if regen_family_on(p, "Self-Repair", rules_epoch) {
         let t = reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Self-Repair").map_or(SELF_REPAIR_TARGET, |e| e.param_i("ignore_target", SELF_REPAIR_TARGET));
-        put(&mut groups, "Self-Repair".into(), "self-repair", t);
+        put(&mut groups, "Self-Repair".into(), "self-repair", t, false);
     }
     // EPOCH_82_IGNORE_BY_NAME: does a rule of the group named Regeneration contribute to the fold (the table's `regen` group)?
     let mut named = base > 0 && (regen || has_special_rule(&p.special_rules, "Medical Training"));
@@ -3187,7 +3217,7 @@ fn regen_targets(
             Some(e) => e.param_i("ignore_target_spell", RESISTANCE_TARGET_SPELL),
             None => RESISTANCE_TARGET_SPELL,
         };
-        put(&mut groups, ignore_group_key(name, ""), if name == "Resistance" { "resistance" } else { name }, rs);
+        put(&mut groups, ignore_group_key(name, ""), if name == "Resistance" { "resistance" } else { name }, rs, false);
         if rs > 0 && (picked.0 == 0 || rs < picked.0) {
             picked.0 = rs;
         }
@@ -3297,7 +3327,7 @@ fn regen_targets(
             named = named || (normal > 0 && regeneration_group(&n, e.param_s("upgrades")));
             // the table names the Regeneration group "regeneration" for every form of it (the rule, its Aura / Buff forms)
             let key = ignore_group_key(&n, e.param_s("upgrades"));
-            put(&mut groups, key.clone(), if key == "Regeneration" { "regeneration" } else { &n }, normal);
+            put(&mut groups, key.clone(), if key == "Regeneration" { "regeneration" } else { &n }, normal, gated);
             if gated {
                 if normal > 0 {
                     warding = Some((
@@ -3315,15 +3345,22 @@ fn regen_targets(
         }
     }
     // MOR-17a: the distance gates are a 3.6 reading — below 73 the stamp stays 0.0.
+    // From `EPOCH_84_IGNORE_GROUPS` the gate also rides a gated rule that is NOT the best ignore: it shuts that rule's own group (`Ctx::regen_gated`)
+    // and leaves the others rolling, the table's `_solo_regen_pick`. Below 84 (and for the gated rule alone) the old stamp stays.
+    let groups_on = rule_on(rules_epoch, crate::acts::EPOCH_84_IGNORE_GROUPS);
     let mut gates = (0.0, 0.0);
     if rule_on(rules_epoch, EPOCH_73_V36) && !no_gate {
         if let Some((normal, over, charge)) = warding {
-            if other_min == 0 || normal < other_min {
+            if other_min == 0 || normal < other_min || groups_on {
                 gates = (over, charge);
             }
         }
     }
-    let grouped = if rule_on(rules_epoch, crate::acts::EPOCH_84_IGNORE_GROUPS) { lay_out_groups(groups) } else { ([0; 4], [""; 4]) };
+    let mut grouped = if groups_on { lay_out_groups(groups) } else { ([0; 4], [""; 4], [false; 4]) };
+    // the flags only where they mean something: a gate is stamped and another group rolls beside the gated one
+    if gates == (0.0, 0.0) || grouped.0.iter().filter(|&&t| t > 0).count() < 2 {
+        grouped.2 = [false; 4];
+    }
     (picked.0, picked.1, picked.2, picked.3, gates.0, gates.1, feat, named, grouped)
 }
 
@@ -3365,7 +3402,7 @@ fn regen_most_name(p: &Profile, groups: &RegenGroups, rules_epoch: u32) -> &'sta
 }
 
 /// The ignore groups' targets and the rule names that supply them, as `Ctx::regen_groups` / `Ctx::regen_names` carry them.
-type RegenGroups = ([i64; 4], [&'static str; 4]);
+type RegenGroups = ([i64; 4], [&'static str; 4], [bool; 4]);
 
 /// Does this rule belong to the group named Regeneration?
 pub(crate) fn regeneration_group(name: &str, upgrades: &str) -> bool {
@@ -3374,21 +3411,22 @@ pub(crate) fn regeneration_group(name: &str, upgrades: &str) -> bool {
 
 /// The table's roll order of the ignore groups (`_solo_regen_pick`): Regeneration first, then the most generous target, then the name;
 /// laid out as `Ctx::regen_groups` (slot 0 Regeneration, slots 1..3 the others, extras folded into the last).
-fn lay_out_groups(mut groups: Vec<(String, String, i64)>) -> RegenGroups {
+fn lay_out_groups(mut groups: Vec<(String, String, i64, bool)>) -> RegenGroups {
     let mut out = [0i64; 4];
     let mut names = [""; 4];
+    let mut gated = [false; 4];
     if let Some(i) = groups.iter().position(|g| g.0 == "Regeneration") {
         let g = groups.remove(i);
-        (out[0], names[0]) = (g.2, crate::rules::intern(&g.1));
+        (out[0], names[0], gated[0]) = (g.2, crate::rules::intern(&g.1), g.3);
     }
     groups.sort_by(|a, b| a.2.cmp(&b.2).then_with(|| a.0.cmp(&b.0)));
     for (n, g) in groups.iter().enumerate() {
         let slot = 1 + n.min(2);
         if out[slot] == 0 || g.2 < out[slot] {
-            (out[slot], names[slot]) = (g.2, crate::rules::intern(&g.1));
+            (out[slot], names[slot], gated[slot]) = (g.2, crate::rules::intern(&g.1), g.3);
         }
     }
-    (out, names)
+    (out, names, gated)
 }
 
 /// The SHOOTING leg's three die params (`ap_bonus`/`hit_bonus`/`low_roll_max`)
@@ -3952,6 +3990,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         regen_named: regen_targets.7,
         regen_groups: regen_targets.8 .0,
         regen_names: regen_targets.8 .1,
+        regen_gated: regen_targets.8 .2,
+        regen_gate_shut: false,
         regen_most_name: regen_most_name(p, &regen_targets.8, rules_epoch),
         fatigued: false,
         retaliate_hits_per_wound: retaliate_hits_per_wound(reg, p),
