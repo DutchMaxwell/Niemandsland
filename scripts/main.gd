@@ -1339,7 +1339,9 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	elif int(report.get("action", 0)) == AiDecision.Action.CHARGE:
 		# One core P4.D-48: a charge the melee slice takes resolves in the core (charge, strikes, result, morale, consolidation).
 		if not (CoreActivation.takes_ai_charge(self, unit, report) and await CoreActivation.run_ai_charge(self, unit, report)):
+			CoreShadow.melee_begin(self, unit, report)   # plan E: NML_CORE_SHADOW_MELEE=1 only (counting)
 			await _run_ai_melee(report)
+			CoreShadow.melee_compare(self, unit, report)
 	BattleSim.prof_mark("attack", _prof_atk_t0)
 	if core_dangerous:
 		report["dangerous_wounds_taken"] = wounds_before_dangerous - _solo_unit_wounds_now(unit)
