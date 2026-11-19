@@ -1666,7 +1666,7 @@ pub(crate) fn tray_strafing(
     let phantom = r.scourge_wounds;
     let w = shot.absorb(r);
     let members: Vec<usize> = parts.iter().map(|(b, _, _, _)| *b).collect();
-    land_hazardous_self(statics, next, &members, seams, shot);
+    land_hazardous_self(statics, next, &members, seams, tray, shot);
     let before = chain_snapshot(next, target, tray);   // P4.D-37: the landing the step API hands the table
     if !seams.tray_exact {
         land_pool_wounds(next, target, w, false, seams, &mut shot.log);
@@ -5419,32 +5419,70 @@ fn hazardous_bearer(state: &State, unit: usize, weapon: &str) -> Option<usize> {
 #[allow(clippy::too_many_arguments)]
 fn hazardous_self_wounds(
     statics: &[UnitStatic], state: &mut State, unit: usize,
-    weapon: &str, ones: i64, x: i64, seams: Seams, shot: &mut ShootResult,
+    weapon: &str, ones: i64, x: i64, seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
 ) -> i64 {
     if ones <= 0 { return 0; }
     let name = statics[state.roster.profile[unit]].name.clone();
     for _ in 0..ones {
         match hazardous_bearer(state, unit, weapon) {
             Some(i) => {
+                let slot = if tray.feed().is_some() {
+                    let dead = tray.dead_slots(unit);
+                    (0..).filter(|s| !dead.contains(s)).nth(i).unwrap_or(i)
+                } else {
+                    i
+                };
+                let at = state.positions[unit][i];
                 let take = x.min(state.wounds[unit][i]);
                 state.wounds[unit][i] -= take;
+                let killed = state.wounds[unit][i] <= 0;
+                let wounds_left = state.wounds[unit][i].max(0);
                 shot.log.push(format!(
                     "Hazardous: {} model {} takes {} wound{} ({})",
                     name, i + 1, take, if take == 1 { "" } else { "s" }, weapon));
-                if state.wounds[unit][i] <= 0 {
+                tray.say(|| {
+                    let bd = if x > 1 { format!("Blast/Deadly {x}, ") } else { String::new() };
+                    LogLine {
+                        rule: "hazardous", category: Category::Combat, side: state.player[unit], detail: None,
+                        text: format!("Hazardous: {name} model {} takes {take} wound{} ({bd}{weapon})",
+                            slot + 1, if take == 1 { "" } else { "s" }),
+                    }
+                });
+                if killed {
                     if state.positions[unit].len() == 1 { drop_carried(state, unit); }
                     state.wounds[unit].remove(i);
                     remove_position_or_log(state, unit, i, "hazardous_self");
                     state.kit_remove(unit, i);
                     if i < state.radii[unit].len() { Rc::make_mut(&mut state.radii)[unit].remove(i); }
                     state.alive[unit] = state.positions[unit].len() as i64;
+                    let (alive, total) = std::iter::once(unit).chain(state.attached[unit].iter().copied())
+                        .fold((0, 0), |(a, t), u| (a + state.alive[u], t + statics[state.roster.profile[u]].model_count));
+                    let loss = if alive == 0 {
+                        format!("{name} destroyed")
+                    } else {
+                        format!("{name} loses a model ({alive}/{total})")
+                    };
+                    tray.say_wounds(|| LogLine {
+                        rule: "hazardous", category: Category::Combat, side: state.player[unit], text: loss, detail: None,
+                    });
                 }
+                tray.land(|| Landing {
+                    unit,
+                    models: vec![LandedModel { at, slot, wounds_left, dead: killed }],
+                    loss_line: true,
+                });
             }
             None => {
-                land_wounds_with(state, unit, x, seams.tray_exact);
-                shot.log.push(format!(
+                let line = format!(
                     "Hazardous: {} has no bearer on record — the unit takes {} wound{} ({})",
-                    name, x, if x == 1 { "" } else { "s" }, weapon));
+                    name, x, if x == 1 { "" } else { "s" }, weapon);
+                shot.log.push(line.clone());
+                tray.say(|| LogLine {
+                    rule: "hazardous", category: Category::Combat, side: state.player[unit], text: line, detail: None,
+                });
+                let before = chain_snapshot(state, unit, tray);
+                land_wounds_with(state, unit, x, seams.tray_exact);
+                land_chain_report(statics, state, tray, unit, before);
             }
         }
     }
@@ -5456,13 +5494,13 @@ fn hazardous_self_wounds(
 /// IS ported, so the tray tree must no longer decline the activation for it.
 fn land_hazardous_self(
     statics: &[UnitStatic], state: &mut State, members: &[usize],
-    seams: Seams, shot: &mut ShootResult,
+    seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
 ) -> i64 {
     if !rule_on(seams.rules_epoch, EPOCH_73_V36) { return 0; }
     let mut tally = 0;
     for (owner, weapon, ones, x) in std::mem::take(&mut shot.hazardous_self) {
         if let Some(&unit) = members.iter().find(|&&m| statics[state.roster.profile[m]].name == owner) {
-            tally += hazardous_self_wounds(statics, state, unit, &weapon, ones, x, seams, shot);
+            tally += hazardous_self_wounds(statics, state, unit, &weapon, ones, x, seams, tray, shot);
         }
     }
     shot.unported.retain(|u| *u != "hazardous");
@@ -6277,12 +6315,16 @@ fn strike_phase(
     }
     // G4-C8a rules-must-log: "Who Can Strike" names itself when fewer models strike than live (the table's
     // MEL-02 line, main.gd `_solo_attack_groups`, which prints the same text without the rule name).
-    if rule_on(seams.rules_epoch, EPOCH_73_V36) {
-        for (mi, sc, _) in parts.iter().filter(|(mi, sc, _)| sc.strikers < next.alive[*mi]) {
-            shot.log.push(format!("Who Can Strike: {}: {} of {} models are within {}\" and strike", statics[next.roster.profile[*mi]].name,
-                sc.strikers, next.alive[*mi], crate::combat::melee_reach_in(seams.rules_epoch).0 as i64));
-        }
-    }
+    let who_can_strike: Vec<(i64, String)> = if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        parts.iter().filter(|(mi, sc, _)| sc.strikers < next.alive[*mi]).map(|(mi, sc, _)| {
+            let line = format!("{}: {} of {} models are within {}\" and strike", statics[next.roster.profile[*mi]].name,
+                sc.strikers, next.alive[*mi], crate::combat::melee_reach_in(seams.rules_epoch).0 as i64);
+            shot.log.push(format!("Who Can Strike: {line}"));
+            (next.player[*mi], line)
+        }).collect()
+    } else {
+        Vec::new()
+    };
     // MEL-11 (`EPOCH_73_V36`) — Ravage once per round, never while Fatigued.
     // The table fatigues a host's joined heroes with it, so a tired host stops
     // theirs too; the Counter-only pre-phase leaves the one roll to the
@@ -6301,13 +6343,15 @@ fn strike_phase(
                 if host_tired || set == StrikeSet::CounterOnly {
                     att.growth_wound_dice = 0;
                     if set != StrikeSet::CounterOnly {
-                        shot.log.push(format!(
-                            "Regenerative Strength: {} is Fatigued - no token dice", um.name));
+                        let line = format!("Regenerative Strength: {} is Fatigued - no token dice", um.name);
+                        shot.log.push(line.clone());
+                        say_melee(tray, next.player[*mi], line);
                     }
                 } else if next.growth_strike_round[*mi] == next.round {
                     att.growth_wound_dice = 0;
-                    shot.log.push(format!(
-                        "Regenerative Strength: {} already rolled its dice this round", um.name));
+                    let line = format!("Regenerative Strength: {} already rolled its dice this round", um.name);
+                    shot.log.push(line.clone());
+                    say_melee(tray, next.player[*mi], line);
                 } else {
                     next.growth_strike_round[*mi] = next.round;
                 }
@@ -6351,6 +6395,7 @@ fn strike_phase(
     }
     let ut = &statics[next.roster.profile[ti]];
     let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch), statics, next, ti, seams), seams.rules_epoch);
+    def.side = next.player[ti];
     // MEL-07c-fix (`EPOCH_73_V36`) — the strike Parry counts the host AND its
     // joined heroes, the same sum the Impact event reads (`parry_dice_total`).
     if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
@@ -6421,6 +6466,57 @@ fn strike_phase(
             att.versatile_latched = vl;
         }
     }
+    // Snapshot defender alive before pre-strike direct wounds (Regenerative Strength) so
+    // Deathstrike/Self-Destruct counts every model killed during this phase (main.gd:9395).
+    let alive_before = next.alive[ti];
+    // MEL-12 (`EPOCH_73_V36`): Regenerative Strength token wounds land immediately BEFORE weapon
+    // strikes (main.gd:9461-9472), keeping their own casualty-order step and tray landing.
+    let (mut gs_caused, mut gs_taken, mut gs_ignored) = (0i64, 0i64, 0i64);
+    // PENDING_EPOCH_MELEE_GMC1: the separate landing moves the Retaliate pool snapshot (the token wounds no longer
+    // count as "taken") and the casualty order, so a seeded outcome would change. Step path only until the lead
+    // assigns the rules epoch; a seeded tray keeps the pooled landing inside `resolve_melee_leg_wipe`.
+    if tray.feed().is_some()
+        && !parts.iter().any(|(_, _, a)| a.unpredictable || a.ravage > 0)
+        && parts.iter().any(|(_, _, a)| a.growth_wound_dice > 0)
+    {
+        let regen_def = Ctx {
+            regen_target: if def.regen_gate_charge_in > 0.0 && charge_from_in <= def.regen_gate_charge_in {
+                0
+            } else {
+                def.regen_target
+            },
+            ..def
+        };
+        for (mi, _, att) in parts.iter_mut() {
+            let n = att.growth_wound_dice;
+            if n <= 0 {
+                continue;
+            }
+            att.growth_wound_dice = 0;
+            let owner = statics[next.roster.profile[*mi]].name.clone();
+            tray.owner_next(att.unit);
+            let faces = tray.roll(n as usize);
+            let w = faces.iter().filter(|&&f| f as i64 >= 4).count() as i64;
+            shot.rolls.push(crate::dice::Roll { kind: "attack", count: n, target: 4, faces, owner: owner.clone() });
+            shot.log.push(format!("Regenerative Strength: {owner} rolls {n} dice, {w} wounds"));
+            say_melee(tray, next.player[*mi], format!(
+                "Regenerative Strength: {owner} rolls {n} dice, {w} wound{}",
+                if w == 1 { "" } else { "s" },
+            ));
+            if w > 0 {
+                let landed = crate::dice::regen_batch(w, 0, &regen_def, &ut.name, tray, &mut shot.rolls);
+                gs_caused += w;
+                gs_taken += landed;
+                gs_ignored += w - landed;
+                let before = chain_snapshot(next, ti, tray);
+                land_pool_wounds(next, ti, landed, seams.tray_exact, seams, &mut shot.log);
+                land_chain_report(statics, next, tray, ti, before);
+            }
+        }
+    }
+    for (side, line) in who_can_strike {
+        say_melee(tray, side, line);
+    }
     let members: Vec<crate::dice::Shooter<'_>> = parts
         .iter()
         .map(|(mi, sc, att)| {
@@ -6470,11 +6566,11 @@ fn strike_phase(
         }
         mark_spent_limited(melee, &sc.keep, &mut next.limited_used, *mi);
     }
-    let mut caused = r.caused;
+    let mut caused = r.caused + gs_caused;
     // MEL-10r (`EPOCH_73_V36`) — the melee-winner tally is wounds TAKEN: Regeneration-cancelled
     // wounds do not count. `r.caused` stays pre-Regeneration for the Regenerative Strength trigger.
     if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
-        caused = r.taken;
+        caused = r.taken + gs_taken;
     }
     // SHO-15b Scourge: the phantom wounds this strike's blocks earned, read
     // before `absorb` folds the sub-phase (which never carries them forward).
@@ -6483,26 +6579,20 @@ fn strike_phase(
     // strike IGNORED (Regeneration's own count) bank the bearer a marker. The
     // Deadly groups' raw tally rides `caused` but lands separately below, so
     // it is not an ignored wound.
-    let ignored = r.caused - r.wounds - r.deadly_tally;
+    let ignored = (r.caused - r.wounds - r.deadly_tally) + gs_ignored;
     // DAT-17a: the grant is spent by wounds coming IN, not by wounds landing
     // after Regeneration. `caused` is the pre-Regeneration tally, so an
     // all-ignored roll still reads as wounding and a zero-wound exchange not.
-    let def_incoming = r.caused > 0;
+    let def_incoming = r.caused > 0 || gs_caused > 0;
     let raw_deadly = r.deadly_tally;
     let w = shot.absorb(r);
     let members: Vec<usize> = parts.iter().map(|(mi, _, _)| *mi).collect();
-    let hazard_self = land_hazardous_self(statics, next, &members, seams, shot);
+    let hazard_self = land_hazardous_self(statics, next, &members, seams, tray, shot);
     // B13: the table measures the lash-back on wounds actually TAKEN — the
     // wound-POOL difference (`_solo_retaliate_hits` :4570, NML-937), snapshotted
     // BEFORE the landing like the table's `pools_before` (:6146) — overkill
     // wounds past the last model are lost and lash nothing back.
     let pool_before = wounds_left(next, ti);
-    // Block C4 — the death-half snapshots its own count next to the pool: the
-    // table snapshots every chain member's alive count BEFORE the phase's
-    // casualties (main.gd:5968-5970), and the twin's equivalent is the
-    // defender unit's own alive count — nothing else moves `alive[ti]` inside
-    // this phase.
-    let alive_before = next.alive[ti];
     // P4.D-48: a supplied tray (the step path) keeps the phase's landing and says the table's wound and loss lines
     // (`land_chain_report`, shared with the volley); a seeded tray snapshots nothing, so no draw or outcome moves.
     let landed = chain_snapshot(next, ti, tray);
@@ -6543,19 +6633,27 @@ fn strike_phase(
     if taken > 0 && def.retaliate_hits_per_wound > 0 && next.alive[si] > 0 {
         let hits = def.retaliate_hits_per_wound * taken;
         shot.log.push(format!("Retaliate: {} lashes back — {} hits", ut.name, hits));
+        say_melee(tray, next.player[ti], format!(
+            "Retaliate: {} lashes back — {} hit{} ({}: {} wound{} × {})",
+            ut.name, hits, if hits == 1 { "" } else { "s" },
+            ut.name, taken, if taken == 1 { "" } else { "s" }, def.retaliate_hits_per_wound,
+        ));
         let su = &statics[next.roster.profile[si]];
         // The lash-back wounds the holder: read its LIVE ctx so a granted
         // Regeneration is asked about them (the defender side already does).
-        let sctx = if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        let mut sctx = if rule_on(seams.rules_epoch, EPOCH_73_V36) {
             ctx_live(ctx_of(su, next, si), statics, next, si, true, seams.rules_epoch)
         } else {
             ctx_of(su, next, si)
         };
+        sctx.side = next.player[si];
         let (unsaved, landed) = crate::dice::retaliate_saves_with_tray(
             hits, &sctx, &su.name, tray, &mut shot.rolls,
         );
         if unsaved > 0 {
+            let before = chain_snapshot(next, si, tray);
             land_wounds_with(next, si, landed, seams.tray_exact);
+            land_chain_report(statics, next, tray, si, before);
             retaliated = unsaved; // _solo_retaliate_credit += rw (main.gd:6171)
         }
     }
@@ -6576,20 +6674,28 @@ fn strike_phase(
     if killed > 0 && def.death_hits_per_kill > 0 && next.alive[si] > 0 {
         let su = &statics[next.roster.profile[si]];
         let hits = def.death_hits_per_kill * killed;
+        let rule = if ut.ctx.self_destruct_rating > 0 { "Self-Destruct" } else { "Deathstrike" };
         shot.log.push(format!(
             "Deathstrike/Self-Destruct: {}'s dying models lash out — {} takes {} hits",
             ut.name, su.name, hits
         ));
-        let sctx = if rule_on(seams.rules_epoch, EPOCH_73_V36) {
+        say_melee(tray, next.player[ti], format!(
+            "{rule}: {}'s dying models lash out — {} takes {hits} hit{}",
+            ut.name, su.name, if hits == 1 { "" } else { "s" },
+        ));
+        let mut sctx = if rule_on(seams.rules_epoch, EPOCH_73_V36) {
             ctx_live(ctx_of(su, next, si), statics, next, si, true, seams.rules_epoch)
         } else {
             ctx_of(su, next, si)
         };
+        sctx.side = next.player[si];
         let (_, landed) = crate::dice::retaliate_saves_with_tray(
             hits, &sctx, &su.name, tray, &mut shot.rolls,
         );
         att_incoming += landed;
+        let before = chain_snapshot(next, si, tray);
         land_wounds_with(next, si, landed, seams.tray_exact);
+        land_chain_report(statics, next, tray, si, before);
     }
     let att_wounded = att_incoming > 0;
     spend_exchange_wounded(next, si, ti, true, att_wounded, def_incoming, seams.rules_epoch); // main.gd:6152, per strike phase
@@ -6606,37 +6712,48 @@ fn strike_phase(
 /// then the saves with the heavy pool's hits cancelled first.
 #[allow(clippy::too_many_arguments)]
 fn impact_with_parry(
-    next: &mut State, ti: usize, us: &UnitStatic, ut: &UnitStatic,
+    statics: &[UnitStatic], next: &mut State, si: usize, ti: usize, us: &UnitStatic, ut: &UnitStatic,
     pools: [(i64, i64); 2], parry_dice: i64, charge: Option<(f64, bool)>, tray: &mut Tray,
     shot: &mut ShootResult, tally_post_regen: bool, rules_epoch: u32,
 ) -> i64 {
     let exact = matches!(charge, Some((_, true)));
+    let meta = [("Impact", us.ctx.impact), ("Heavy Impact", us.ctx.heavy_impact)];
     let mut hits: [(i64, i64); 2] = [(0, 0), (0, 0)];
     for (i, &(dice, ap)) in pools.iter().enumerate() {
         if dice <= 0 || next.alive[ti] <= 0 { continue; }
+        tray.owner_next(Some(si));
         let (roll, h) = crate::dice::impact_hit_roll(dice, &us.name, tray);
         shot.rolls.push(roll);
+        let (label, rating) = meta[i];
+        say_melee(tray, next.player[si], format!("{}: {label}({rating}) rolls {dice} di{} → {h} hit{}",
+            us.name, if dice == 1 { "e" } else { "ce" }, if h == 1 { "" } else { "s" }));
         hits[i] = (h, ap);
     }
     let n = parry_dice.min(hits[0].0 + hits[1].0);
     if n > 0 {
+        tray.owner_next(Some(ti));
         let faces = tray.roll(n as usize);
         let k = faces.iter().filter(|&&f| f >= 6).count() as i64;
         shot.rolls.push(crate::dice::Roll {
             kind: "parry", count: n, target: 6, faces: faces.clone(), owner: ut.name.clone(),
         });
-        shot.log.push(format!("Parry: {} rolls {} dice and ignores {} Impact hits", ut.name, n, k));
+        let line = format!("Parry: {} rolls {} dice and ignores {} Impact hits", ut.name, n, k);
+        shot.log.push(line.clone());
+        say_melee(tray, next.player[ti], line);
         hits = crate::dice::parry_cancel(&faces, hits);
     }
     let mut caused = 0;
     for &(h, ap) in &hits {
         if h <= 0 || next.alive[ti] <= 0 { continue; }
-        let def = ctx_of_melee(ut, next, ti, rules_epoch);
+        let mut def = ctx_of_melee(ut, next, ti, rules_epoch);
+        def.side = next.player[ti];
         let r = crate::dice::impact_saves_with_tray(h, ap, &def, &ut.name, charge, tray);
         // MEL-10r (`EPOCH_73_V36`) — Impact wounds Regeneration cancels are not TAKEN.
         caused += if tally_post_regen { r.wounds } else { r.caused };
         let w = shot.absorb(r);
+        let before = chain_snapshot(next, ti, tray);
         land_wounds_with(next, ti, w, exact);
+        land_chain_report(statics, next, tray, ti, before);
     }
     caused
 }
@@ -6705,11 +6822,13 @@ fn impact_phase(
             .unwrap_or((0, ""));
         let braced = next.fatigued[ti];
         if brace > 0 {
-            if braced {
-                shot.log.push(format!("{brace_rule}: no effect, {} is Fatigued", ut.name));
+            let line = if braced {
+                format!("{brace_rule}: no effect, {} is Fatigued", ut.name)
             } else {
-                shot.log.push(format!("{brace_rule}: {} takes {} Impact dice off {}", ut.name, brace, us.name));
-            }
+                format!("{brace_rule}: {} takes {} Impact dice off {}", ut.name, brace, us.name)
+            };
+            shot.log.push(line.clone());
+            say_melee(tray, next.player[ti], line);
         }
         cut_by.brace_models = if braced || brace == 0 { 0 } else { 1 };
         cut_by.brace_impact_per_model = Some(brace.max(1));
@@ -6726,21 +6845,34 @@ fn impact_phase(
     };
     let tally_post_regen = rule_on(rules_epoch, EPOCH_73_V36);
     if parry_dice > 0 {
-        return impact_with_parry(next, ti, us, ut, pools, parry_dice, Some((charge_from_in, exact)), tray, shot, tally_post_regen, rules_epoch);
+        return impact_with_parry(statics, next, si, ti, us, ut, pools, parry_dice, Some((charge_from_in, exact)), tray, shot, tally_post_regen, rules_epoch);
     }
+    let meta = [("Impact", us.ctx.impact), ("Heavy Impact", us.ctx.heavy_impact)];
     let mut caused = 0;
-    for (dice, ap) in pools {
+    for (i, (dice, ap)) in pools.into_iter().enumerate() {
         if dice <= 0 || next.alive[ti] <= 0 {
             continue; // :6304 — nothing left to hit, no dice
         }
-        let def = ctx_of_melee(ut, next, ti, rules_epoch);
-        let r = crate::dice::resolve_impact_pool_at(
-            dice, ap, &us.name, &def, &ut.name, Some((charge_from_in, exact)), tray,
+        tray.owner_next(Some(si));
+        let (roll, hits) = crate::dice::impact_hit_roll(dice, &us.name, tray);
+        shot.rolls.push(roll);
+        let (label, rating) = meta[i];
+        say_melee(tray, next.player[si], format!("{}: {label}({rating}) rolls {dice} di{} → {hits} hit{}",
+            us.name, if dice == 1 { "e" } else { "ce" }, if hits == 1 { "" } else { "s" }));
+        if hits <= 0 {
+            continue;
+        }
+        let mut def = ctx_of_melee(ut, next, ti, rules_epoch);
+        def.side = next.player[ti];
+        let r = crate::dice::impact_saves_with_tray(
+            hits, ap, &def, &ut.name, Some((charge_from_in, exact)), tray,
         );
         // MEL-10r (`EPOCH_73_V36`) — Impact wounds Regeneration cancels are not TAKEN.
         caused += if tally_post_regen { r.wounds } else { r.caused };
         let w = shot.absorb(r);
+        let before = chain_snapshot(next, ti, tray);
         land_wounds_with(next, ti, w, exact);
+        land_chain_report(statics, next, tray, ti, before);
     }
     caused
 }
@@ -6782,18 +6914,29 @@ fn self_destruct_post_melee(
         return;
     }
     let hits = ut.ctx.self_destruct_rating * alive;
+    let enemy_name = statics[next.roster.profile[enemy]].name.clone();
     shot.log.push(format!(
-        "Self-Destruct: {alive} surviving models detonate, {hits} hits to {}",
-        statics[next.roster.profile[enemy]].name
+        "Self-Destruct: {alive} surviving models detonate, {hits} hits to {enemy_name}"
     ));
+    say_melee(tray, next.player[ui], format!(
+        "Self-Destruct: {} detonates after the melee — destroyed; {enemy_name} takes {hits} hit{}",
+        ut.name, if hits == 1 { "" } else { "s" },
+    ));
+    let before_self = chain_snapshot(next, ui, tray);
     land_wounds(next, ui, 9999); // main.gd:17363 — "it is immediately killed", no saves
+    land_chain_report(statics, next, tray, ui, before_self);
     if next.alive[enemy] > 0 {
         let eu = &statics[next.roster.profile[enemy]];
-        let ectx = ctx_of(eu, next, enemy);
+        let mut ectx = ctx_of(eu, next, enemy);
+        ectx.side = next.player[enemy];
         let (_, landed) = crate::dice::retaliate_saves_with_tray(
             hits, &ectx, &eu.name, tray, &mut shot.rolls,
         );
-        land_wounds(next, enemy, landed);
+        let before_enemy = chain_snapshot(next, enemy, tray);
+        // PENDING_EPOCH_MELEE_GMC1: the table's casualty order (a wounded Tough first, kits) moves seeded outcomes;
+        // step path only until the lead assigns the rules epoch.
+        land_wounds_with(next, enemy, landed, seams.tray_exact && tray.feed().is_some());
+        land_chain_report(statics, next, tray, enemy, before_enemy);
     }
 }
 
@@ -11291,7 +11434,7 @@ fn resolve_with(
                             let phantom = r.scourge_wounds;
                             let w = shot.absorb(r);
                             let members: Vec<usize> = parts.iter().map(|(mi, _, _)| *mi).collect();
-                            let att_incoming = land_hazardous_self(statics, &mut next, &members, seams, shot);
+                            let att_incoming = land_hazardous_self(statics, &mut next, &members, seams, tray, shot);
                             // One-core P3 step 7: the target chain (host, then its joined heroes) before
                             // the landing. Only a supplied tray takes it: a seeded one clones nothing.
                             // A lone hero's wounds are reported on its host's chain as one unit ("Cultists takes 18 wounds (1/2)").

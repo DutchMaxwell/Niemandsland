@@ -1180,8 +1180,11 @@ static func _land_stamps(main, gu: GameUnit, d: Dictionary) -> void:
 		var was := int(gu.unit_properties.get(prop, -1))
 		if value == was:
 			continue
-		stamp_splits += 1
-		push_error("CoreActivation.land_delta: %s.%s differs (table %d, core %d)" % [gu.get_name(), prop, was, value])
+		# On a core-resolved charge, the table never ran `_solo_melee_strike_phase`, so the core is the first writer
+		# of melee-only once-per-round stamps (`growth_strike_round` -> `regenerative_strength_round`).
+		if not (_charge_landing and key == "growth_strike_round"):
+			stamp_splits += 1
+			push_error("CoreActivation.land_delta: %s.%s differs (table %d, core %d)" % [gu.get_name(), prop, was, value])
 		main._sync_unit_property(gu, prop, value)
 
 

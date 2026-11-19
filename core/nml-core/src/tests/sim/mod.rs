@@ -1806,6 +1806,7 @@ mod reposition_artillery;
 mod retaliate;
 mod rule_lines_lone_hero;
 mod rule_lines_save_step;
+mod melee_landing_gaps;
 mod retreating_strike;
     mod reply_speed;
     mod screened_melee;
