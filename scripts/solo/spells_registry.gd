@@ -31,6 +31,52 @@ static var _cache: Dictionary = {}
 static var missing_faction_warnings: int = 0
 static var _warned_missing: Dictionary = {}
 
+## 3.6 army-list folder -> committed spell-map key for the nine renamed books
+## (test/v36/dat_02_test.gd RENAMED, scripts/model_library.gd FOLDER_ALIASES):
+## the daemon books lost their Wormhole/Rift prefix, the GF Saurian Starhost book
+## gained a plural "s". A list keeps the folder it was built against, so an alias
+## still names the SAME book in the SAME system — never a cross-system guess.
+const FACTION_ALIASES: Dictionary = {
+	"gf": {
+		"wormhole_daemons_of_change": "daemons_of_change",
+		"wormhole_daemons_of_lust": "daemons_of_lust",
+		"wormhole_daemons_of_plague": "daemons_of_plague",
+		"wormhole_daemons_of_war": "daemons_of_war",
+		"saurian_starhost": "saurian_starhosts",
+	},
+	"aof": {
+		"rift_daemons_of_change": "daemons_of_change",
+		"rift_daemons_of_lust": "daemons_of_lust",
+		"rift_daemons_of_plague": "daemons_of_plague",
+		"rift_daemons_of_war": "daemons_of_war",
+	},
+	"gff": {
+		"daemons_of_change": "wormhole_daemons_of_change",
+		"daemons_of_lust": "wormhole_daemons_of_lust",
+		"daemons_of_plague": "wormhole_daemons_of_plague",
+		"daemons_of_war": "wormhole_daemons_of_war",
+		"saurian_starhosts": "saurian_starhost",
+	},
+	"aofs": {
+		"daemons_of_change": "rift_daemons_of_change",
+		"daemons_of_lust": "rift_daemons_of_lust",
+		"daemons_of_plague": "rift_daemons_of_plague",
+		"daemons_of_war": "rift_daemons_of_war",
+	},
+	"aofr": {
+		"daemons_of_change": "rift_daemons_of_change",
+		"daemons_of_lust": "rift_daemons_of_lust",
+		"daemons_of_plague": "rift_daemons_of_plague",
+		"daemons_of_war": "rift_daemons_of_war",
+	},
+}
+
+
+## The map key a list's faction folder names: its own key when present, else its
+## 3.6 rename alias (same system, same book).
+static func book_key(system: String, faction: String) -> String:
+	return str((FACTION_ALIASES.get(system, {}) as Dictionary).get(faction, faction))
+
 
 ## The full spell map of a system ({} when the asset is missing — every reader falls back).
 static func map_for(system: String) -> Dictionary:
@@ -66,10 +112,11 @@ static func spells_for(system: String, faction: String) -> Array:
 		return []
 	var s := RulesRegistry.normalize_system(system)
 	var factions: Dictionary = m.get("factions", {})
-	if not factions.has(faction):
-		var key := "%s/%s" % [s, faction]
-		if not _warned_missing.has(key):
-			_warned_missing[key] = true
+	var key := book_key(s, faction)
+	if not factions.has(key):
+		var warn_key := "%s/%s" % [s, faction]
+		if not _warned_missing.has(warn_key):
+			_warned_missing[warn_key] = true
 			missing_faction_warnings += 1
 			push_warning(
 					"SpellsRegistry: no spell book for faction '%s' in system '%s' — "
@@ -77,7 +124,7 @@ static func spells_for(system: String, faction: String) -> Array:
 					+ "a caster of this faction resolves ZERO spells. Check the "
 					+ "list filename slug (system prefix?) and the spell map.")
 		return []
-	var fmap: Dictionary = factions[faction]
+	var fmap: Dictionary = factions[key]
 	return fmap.get("spells", [])
 
 
@@ -91,7 +138,8 @@ static func spells_for_unit(unit: GameUnit) -> Array:
 ## unknown or the spell has no range. Reads the map directly (not spells_for) so an ordinary miss does not
 ## count as a missing spell book.
 static func range_in_for(system: String, faction: String, spell_name: String) -> int:
-	var fmap: Variant = map_for(system).get("factions", {}).get(faction, {})
+	var s := RulesRegistry.normalize_system(system)
+	var fmap: Variant = map_for(s).get("factions", {}).get(book_key(s, faction), {})
 	if not (fmap is Dictionary):
 		return 0
 	for sp in fmap.get("spells", []):

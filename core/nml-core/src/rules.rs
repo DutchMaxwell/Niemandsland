@@ -56,6 +56,35 @@ pub fn normalize_system(system: &str) -> String {
     }
 }
 
+/// 3.6 army-list folder -> committed spell-map key for the nine renamed books
+/// (`test/v36/dat_02_test.gd` RENAMED): the daemon books lost their
+/// Wormhole/Rift prefix, the GF Saurian Starhost book gained a plural "s". A
+/// list keeps the folder it was built against, so an alias still names the SAME
+/// book in the SAME system — never a cross-system guess. `None` for non-aliases.
+fn spell_faction_alias(system: &str, faction: &str) -> Option<String> {
+    for sub in ["change", "lust", "plague", "war"] {
+        let of = format!("daemons_of_{sub}");
+        let wormhole = format!("wormhole_daemons_of_{sub}");
+        let rift = format!("rift_daemons_of_{sub}");
+        if faction != of && faction != wormhole && faction != rift {
+            continue;
+        }
+        let canonical = match system {
+            "gf" | "aof" => of,
+            "gff" => wormhole,
+            "aofs" | "aofr" => rift,
+            _ => return None,
+        };
+        return (faction != canonical.as_str()).then_some(canonical);
+    }
+    let canonical = match (system, faction) {
+        ("gf", "saurian_starhost") => "saurian_starhosts",
+        ("gff", "saurian_starhosts") => "saurian_starhost",
+        _ => return None,
+    };
+    Some(canonical.to_string())
+}
+
 /// `RulesRegistry.base_rule_name` rules_registry.gd:123-124 — "Armor(4)" -> "Armor".
 pub fn base_rule_name(rule: &str) -> String {
     rule.trim()
@@ -408,8 +437,9 @@ impl Registries {
         &self.rules[&s]
     }
 
-    /// `SpellsRegistry.spells_for` spells_registry.gd:49-55 — [] when the map or
+    /// `SpellsRegistry.spells_for` spells_registry.gd:63-81 — [] when the map or
     /// the faction is unknown (conservative: that faction simply never casts).
+    /// A 3.6 renamed folder falls back to its same-system alias (`spell_faction_alias`).
     pub fn spells_for(&mut self, system: &str, faction: &str) -> &[Spell] {
         let s = normalize_system(system);
         if !self.spells.contains_key(&s) {
@@ -439,10 +469,16 @@ impl Registries {
         if faction.is_empty() {
             return &[];
         }
-        match self.spells[&s].get(faction) {
-            Some(v) => v.as_slice(),
-            None => &[],
+        let by_faction = &self.spells[&s];
+        if let Some(v) = by_faction.get(faction) {
+            return v.as_slice();
         }
+        if let Some(alias) = spell_faction_alias(&s, faction) {
+            if let Some(v) = by_faction.get(&alias) {
+                return v.as_slice();
+            }
+        }
+        &[]
     }
 
     /// The mechanics files this registry could not READ, in first-failure
@@ -565,6 +601,89 @@ mod tests {
         assert!(has_special_rule(&["Relentless (spell)".into()], "Relentless"));
         assert!(rule_name_matches("Tough(3)", "Tough"));
         assert!(!rule_name_matches("Toughness", "Tough"));
+    }
+
+    /// Every caster faction slug present in the committed fixtures
+    /// (`core/nml-core-py/tests/python/fixtures`, `core/nml-core/tests/fixtures`,
+    /// `test/fixtures`; JSON/JSONL objects with `caster_value > 0`, scanned
+    /// 2026-11-19) must resolve a non-empty spell book. (system, faction_folder).
+    const FIXTURE_CASTER_SLUGS: [(&str, &str); 41] = [
+        ("gf", "alien_hives"), ("gf", "battle_brothers"), ("gf", "blessed_sisters"),
+        ("gf", "blood_brothers"), ("gf", "change_disciples"), ("gf", "daemons_of_change"),
+        ("gf", "elven_jesters"), ("gf", "havoc_brothers"), ("gf", "high_elf_fleets"),
+        ("gf", "human_defense_force"), ("gf", "human_inquisition"),
+        ("gf", "knight_prime_brothers"), ("gf", "lust_disciples"), ("gf", "machine_cults"),
+        ("gf", "robot_legions"), ("gf", "saurian_starhosts"), ("gf", "soul_snatcher_cults"),
+        ("gf", "titan_lords"), ("gf", "titan_lords_change_disciples"),
+        ("gf", "titan_lords_lust_disciples"), ("gf", "titan_lords_plague_disciples"),
+        ("gf", "wolf_prime_brothers"),
+        ("aof", "beastmen"), ("aof", "change_disciples"), ("aof", "chivalrous_kingdoms"),
+        ("aof", "daemons_of_change"), ("aof", "daemons_of_lust"), ("aof", "daemons_of_plague"),
+        ("aof", "daemons_of_war"), ("aof", "deep_sea_elves"), ("aof", "dwarves"),
+        ("aof", "giant_tribes_lust_disciples"), ("aof", "giant_tribes_plague_disciples"),
+        ("aof", "havoc_warriors"), ("aof", "human_empire"), ("aof", "mummified_undead"),
+        ("aof", "ratmen"), ("aof", "saurians"), ("aof", "shadow_stalkers"),
+        ("aof", "sky_city_dwarves"), ("aof", "wood_elves"),
+    ];
+
+    #[test]
+    fn every_fixture_caster_faction_slug_resolves_a_spell_book() {
+        let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+        let mut reg = Registries::new(&root);
+        let zero: Vec<String> = FIXTURE_CASTER_SLUGS
+            .iter()
+            .filter(|(system, faction)| reg.spells_for(system, faction).is_empty())
+            .map(|(system, faction)| format!("{system}/{faction}"))
+            .collect();
+        assert!(zero.is_empty(), "caster factions resolve ZERO spell books: {}", zero.join(", "));
+    }
+
+    /// The 3.6 renamed books (`test/v36/dat_02_test.gd` RENAMED,
+    /// `scripts/model_library.gd` FOLDER_ALIASES): a list stamps the folder it was
+    /// built against; the map keys its 3.6 book. Each slug resolves the SAME book.
+    const V36_SPELL_BOOK_ALIASES: [(&str, &str, &str); 22] = [
+        ("gf", "wormhole_daemons_of_change", "daemons_of_change"),
+        ("gf", "wormhole_daemons_of_lust", "daemons_of_lust"),
+        ("gf", "wormhole_daemons_of_plague", "daemons_of_plague"),
+        ("gf", "wormhole_daemons_of_war", "daemons_of_war"),
+        ("gf", "saurian_starhost", "saurian_starhosts"),
+        ("aof", "rift_daemons_of_change", "daemons_of_change"),
+        ("aof", "rift_daemons_of_lust", "daemons_of_lust"),
+        ("aof", "rift_daemons_of_plague", "daemons_of_plague"),
+        ("aof", "rift_daemons_of_war", "daemons_of_war"),
+        ("gff", "daemons_of_change", "wormhole_daemons_of_change"),
+        ("gff", "daemons_of_lust", "wormhole_daemons_of_lust"),
+        ("gff", "daemons_of_plague", "wormhole_daemons_of_plague"),
+        ("gff", "daemons_of_war", "wormhole_daemons_of_war"),
+        ("gff", "saurian_starhosts", "saurian_starhost"),
+        ("aofs", "daemons_of_change", "rift_daemons_of_change"),
+        ("aofs", "daemons_of_lust", "rift_daemons_of_lust"),
+        ("aofs", "daemons_of_plague", "rift_daemons_of_plague"),
+        ("aofs", "daemons_of_war", "rift_daemons_of_war"),
+        ("aofr", "daemons_of_change", "rift_daemons_of_change"),
+        ("aofr", "daemons_of_lust", "rift_daemons_of_lust"),
+        ("aofr", "daemons_of_plague", "rift_daemons_of_plague"),
+        ("aofr", "daemons_of_war", "rift_daemons_of_war"),
+    ];
+
+    #[test]
+    fn every_v36_renamed_spell_book_alias_resolves_its_committed_book() {
+        let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+        let mut reg = Registries::new(&root);
+        let mut zero = Vec::new();
+        for (system, alias, canonical) in V36_SPELL_BOOK_ALIASES {
+            let alias_book: Vec<String> =
+                reg.spells_for(system, alias).iter().map(|s| s.name.clone()).collect();
+            let canonical_book: Vec<String> =
+                reg.spells_for(system, canonical).iter().map(|s| s.name.clone()).collect();
+            assert!(!canonical_book.is_empty(), "{system}/{canonical} is not a committed book");
+            if alias_book.is_empty() {
+                zero.push(format!("{system}/{alias}"));
+            } else {
+                assert_eq!(alias_book, canonical_book, "{system}/{alias} must resolve {canonical}");
+            }
+        }
+        assert!(zero.is_empty(), "3.6 folder aliases resolve ZERO spell books: {}", zero.join(", "));
     }
 
     /// CC-4b: the spell entry's `effect.scope` and `target.kind` parse; an entry without them reads "" for both. RED: the two
