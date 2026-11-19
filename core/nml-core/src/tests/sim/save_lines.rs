@@ -35,7 +35,8 @@ use crate::logline::Category;
             (10, 1, 1, 1, &["Def takes 1 wound (9/10)", "Def loses a model (9/10)"]),
             (10, 1, 3, 6, &[]), // every save holds: no wound, no line (main.gd:16533)
             (10, 1, 10, 1, &["Def takes 10 wounds (0/10)", "Def destroyed"]),
-            (1, 3, 2, 1, &["Def takes 2 wounds (1/3 wounds)"]), // NML-1091: one Tough model counts wounds
+            // NML-1091: one Tough model counts wounds; left at 1 of 3 it is at half, and the table names the test it then rolls
+            (1, 3, 2, 1, &["Def takes 2 wounds (1/3 wounds)", "Def is at half its tough value (1/3) — morale test ({cite})"]),
         ];
         for (models, wounds, hits, save_face, said) in cases {
             let (st, statics) = att_def(models, wounds);
