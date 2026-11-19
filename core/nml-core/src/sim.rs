@@ -8003,10 +8003,10 @@ fn cast_say(tray: &mut Tray, side: i64, text: String) {
     tray.say(|| LogLine { rule: "cast", category: Category::Combat, side, text, detail: None });
 }
 
-/// CC-5c: the notes of the casting net in the table's order (`caster_casting_net` solo_controller.gd:5225): each casting record of the
-/// caster then its host, then the Spell Amplifier.
-fn casting_notes(statics: &[UnitStatic], state: &State, ci: usize) -> Vec<String> {
-    let mut notes: Vec<String> = Vec::new();
+/// CC-5c/5d: the notes of the casting net in the table's order (`caster_casting_net` solo_controller.gd:5225): the conduit mod,
+/// then each casting record of the caster and its host, then the Spell Amplifier.
+fn casting_notes(statics: &[UnitStatic], state: &State, ci: usize, conduit_mod: i64) -> Vec<String> {
+    let mut notes: Vec<String> = (conduit_mod != 0).then(|| format!("Spell Conduit {conduit_mod:+}")).into_iter().collect();
     for u in [Some(ci), state.attached_to[ci]].into_iter().flatten() {
         notes.extend(state.buffs[u].iter().filter(|r| mods::matches(r, mods::Role::Casting, false)).map(|r| format!("{} {:+}", r.name, r.casting_mod)));
     }
@@ -8015,17 +8015,17 @@ fn casting_notes(statics: &[UnitStatic], state: &State, ci: usize) -> Vec<String
     notes
 }
 
-/// CC-5b/5c: one offered cast (`_solo_resolve_one_cast` main.gd:5598, after the plan's own spend). The tokens go first and stay spent
-/// whatever follows: the table paid them at plan time, so its capture holds the counts BEFORE the plan and the core pays them here,
-/// the threshold from the caster, boost and interference from the listed payers in list order. A skipped cast then says nothing, a
-/// fizzled one says so. Otherwise the lines up to the die, the cast die (kind "cast", the caster's), its result line, and the
-/// casting once-mod is spent by the roll. The target is the table's double clamp: the casting net moves the base first
-/// (`caster_casting_net`), boost and interference the clamped result (`AiSpell.cast_target`). `si` is the activating unit (the
-/// announce line names it), the conduit is not resolved yet.
+/// CC-5b/5c/5d: one offered cast (`_solo_resolve_one_cast` main.gd:5598, after the plan's own spend). The tokens go first and stay
+/// spent whatever follows: the table paid them at plan time, so its capture holds the counts BEFORE the plan and the core pays them
+/// here, the threshold from the caster, boost and interference from the listed payers in list order. A skipped cast then says
+/// nothing, a fizzled one says so. Otherwise the shaken-battery, conduit, casting-net and announce/needs lines, the cast die (kind
+/// "cast", the caster's), its result line, and the casting once-mod is spent by the roll. The target is the table's double clamp:
+/// the casting net (including the conduit mod) moves the base first (`caster_casting_net`), boost and interference the clamped
+/// result (`AiSpell.cast_target`). `si` is the activating unit (the announce line names it).
 pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c: &CastInput, seams: Seams, tray: &mut Tray, shot: &mut ShootResult) -> CastEnd {
     for (key, n) in std::iter::once((&c.caster, &c.threshold)).chain(c.boost_sources.iter().chain(&c.interference_sources).map(|(k, n)| (k, n))) {
         if let Some(&i) = state.roster.index.get(key.as_str()) {
-            state.casts[i] = (state.casts[i] - n).max(0);
+            state.casts[i] = (state.casts[i] - (*n).max(0)).max(0);
         }
     }
     let ci = state.roster.index.get(c.caster.as_str()).copied().unwrap_or(si);
@@ -8038,16 +8038,29 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
         return end;
     }
     let name = |u: usize| statics[state.roster.profile[u]].name.as_str();
-    for u in (0..state.units()).filter(|&u| state.player[u] == side && state.alive[u] > 0 && state.shaken[u] && state.casts[u] > 0) {
-        let s = &statics[state.roster.profile[u]];
-        if s.spell_accumulator && !s.is_caster {
-            cast_say(tray, side, format!("Spell Accumulator: {} is Shaken — its tokens do not feed friendly casters", name(u)));
+    for cu in (0..state.units()).filter(|&u| state.player[u] == side && state.alive[u] > 0 && !state.dormant[u]) {
+        for &m in std::iter::once(&cu).chain(&state.attached[cu]) {
+            let s = &statics[state.roster.profile[m]];
+            if state.alive[m] > 0 && !state.dormant[m] && state.casts[m] > 0 && !s.is_caster && state.shaken[m] && s.spell_accumulator {
+                cast_say(tray, side, format!("Spell Accumulator: {} is Shaken — its tokens do not feed friendly casters", name(m)));
+            }
         }
     }
-    let net = casting_net_of(statics, state, ci, seams);
+    for k in &c.conduit_shaken {
+        if let Some(&sh) = state.roster.index.get(k.as_str()) {
+            cast_say(tray, side, format!("Spell Conduit: {} is Shaken — its conduit does not help {caster} cast", name(sh)));
+        }
+    }
+    let mut conduit_mod = 0;
+    if let Some(&cu) = (!c.conduit.is_empty()).then(|| state.roster.index.get(c.conduit.as_str())).flatten() {
+        let s = &statics[state.roster.profile[cu]];
+        conduit_mod = if s.spell_conduit { s.spell_conduit_casting_mod } else { 0 };
+        cast_say(tray, side, format!("Spell Conduit: {caster} casts as if standing at {} ({})", name(cu), geom::godot_vec3(geom::centre(&state.positions[cu]))));
+    }
+    let net = casting_net_of(statics, state, ci, seams) + conduit_mod;
     let base = if net != 0 { (c.base - net).clamp(2, 6) } else { c.base };
     if net != 0 {
-        cast_say(tray, side, format!("{net:+} to casting rolls ({}) — {caster} casts on {base}+ (base {}+)", casting_notes(statics, state, ci).join(", "), c.base));
+        cast_say(tray, side, format!("{net:+} to casting rolls ({}) — {caster} casts on {base}+ (base {}+)", casting_notes(statics, state, ci, conduit_mod).join(", "), c.base));
     }
     let target = (base - c.boost.max(0) + c.interference.max(0)).clamp(2, 6);
     let standing: Vec<&str> = c.targets.iter().filter_map(|k| state.roster.index.get(k.as_str())).filter(|&&t| state.alive[t] > 0).map(|&t| name(t)).collect();
