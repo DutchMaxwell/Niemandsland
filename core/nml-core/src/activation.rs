@@ -311,6 +311,16 @@ fn cast_break(statics: &[UnitStatic], state: &State, left: &mut [i64], c: &CastI
     None
 }
 
+/// CC-6a/8b: whether target `t` carries no rule or live record that moves its save or says a line the core lacks for
+/// spell damage. Checked at activation start (`damage_break`) AND re-checked at cast resolution (`sim::tray_cast`, CC-6a
+/// hazard 2) because an earlier cast in the same activation may place a record on `t` or its joined chain.
+pub(crate) fn damage_target_plain(statics: &[UnitStatic], state: &State, t: usize) -> bool {
+    let d = &statics[state.roster.profile[t]].ctx;
+    let armor = state.profiles.list.get(state.roster.profile[t]).is_some_and(|p| crate::rules::has_special_rule(&p.special_rules, "Armor"));
+    let chain_clear = std::iter::once(t).chain(state.attached_to[t]).chain(state.attached[t].iter().copied()).all(|u| state.buffs[u].is_empty());
+    chain_clear && state.growth_markers[t] <= 0 && !(armor || d.shielded || d.guarded || d.fortified)
+}
+
 /// CC-6a/6b/7a/7b: why the core cannot resolve a damage spell's hits exactly yet, `None` when it can. Weapon rules: all ported
 /// damage-spell facets (`AP`, `Deadly`, `Surge`, `Hazardous`, `Crack`, `Blast`, `Bane`, `Lacerate`, `Shred`, `Destructive`, `Fracture`,
 /// `Puncture`, `Disintegrate`, `Shatter`, `Tear`, `Purge`, `Decimate`, `Obliterate`, `Reap`, `Fragment`; `Scourge` and unknown rules
@@ -325,13 +335,7 @@ fn damage_break(statics: &[UnitStatic], state: &State, c: &CastInput, spell: &cr
     ))) {
         return Some(format!("the core does not resolve the {rule} rule of {} yet", c.spell));
     }
-    let plain = |t: usize| {
-        let d = &statics[state.roster.profile[t]].ctx;
-        let armor = state.profiles.list.get(state.roster.profile[t]).is_some_and(|p| crate::rules::has_special_rule(&p.special_rules, "Armor"));
-        let chain_clear = [Some(t), state.attached_to[t]].into_iter().flatten().all(|u| state.buffs[u].is_empty());
-        chain_clear && state.growth_markers[t] <= 0 && !(armor || d.shielded || d.guarded || d.fortified)
-    };
-    let t = c.targets.iter().filter_map(|k| state.roster.index.get(k.as_str()).copied()).find(|&t| !plain(t))?;
+    let t = c.targets.iter().filter_map(|k| state.roster.index.get(k.as_str()).copied()).find(|&t| !damage_target_plain(statics, state, t))?;
     Some(format!("{} meets {} with a rule the core does not say for spell damage yet", statics[state.roster.profile[t]].name, c.spell))
 }
 
@@ -439,7 +443,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let faces: Vec<Vec<u8>> = t.iter().filter_map(|x| if let Input::Faces(f) = x { Some(f.clone()) } else { None }).collect();
     // The spike's non-tray seed: a plain activation never draws from it.
     let reached = std::cell::RefCell::new(Vec::new());
-    let cast_hit = std::cell::Cell::new(None);
+    let cast_refused = std::cell::RefCell::new(None);
     let run = |statics: &[UnitStatic]| {
         let resolve = |tray: &mut Tray| {
             if let Some((p, trails)) = placed.clone() {
@@ -451,17 +455,19 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             tray.offer_casts(casts.clone());
             let out = resolve_stochastic_tray_on_board(statics, state, &action, terrain, seams, &mut GodotRng::new(0), tray);
             *reached.borrow_mut() = tray.feed().map(|f| f.wound_choices.clone()).unwrap_or_default();
-            cast_hit.set(tray.feed().and_then(|f| f.cast_hit));
+            *cast_refused.borrow_mut() = tray.feed().and_then(|f| f.cast_refused.clone());
             out
         };
         step_with(&faces, resolve, |r| r.as_ref().map_or(&[][..], |(_, s)| s.rolls.as_slice()))
     };
     let first = run(statics);
-    // CC-5c: a cast that SUCCEEDED has an effect the core does not resolve yet (a buff or debuff, CC-8b): refused at its own input,
-    // before anything is asked or landed on it (the transcript, its die and its tokens go back to the table).
-    if let Some(seq) = cast_hit.get() {
-        let index = t.iter().position(|x| matches!(x, Input::Cast(c) if c.seq == seq)).unwrap_or(0);
-        return ActStep::Refused { index, reason: "casts are not resolved by the core yet".to_string() };
+    // CC-5c/8b: a cast refused during resolution (unhandled spell kind, or CC-6a hazard 2: an earlier cast in the same
+    // activation placed a record on a damage spell's target) is refused at its own input unless an earlier roll starved.
+    if let Some((at, seq, reason)) = cast_refused.take() {
+        if !matches!(first, Step::NeedRoll { index, .. } if index < at) {
+            let index = t.iter().position(|x| matches!(x, Input::Cast(c) if c.seq == seq)).unwrap_or(0);
+            return ActStep::Refused { index, reason };
+        }
     }
     // P4.D-20/21: the choices the landings came to, in the order they came, each before the first starved roll (after it, a
     // landing read made-up dice): a bad slot is refused, an unanswered ask is the answer. An answer no landing asked for is
@@ -1253,17 +1259,17 @@ mod tests {
     }
 
     /// CC-3/CC-5c: a cast that SUCCEEDED has an effect the core does not resolve yet (a buff or debuff; a damage spell's hits are
-    /// CC-6a's), so it is refused at its own input with one sentence once its die is in (RED: the refusal removed -> `NeedRoll` for
-    /// the volley after it). Before the die the cast asks that die; a cancel before it is the usual one; an order break still reads first.
+    /// CC-5c/8b: a buff cast that succeeded now lands (CC-8b), so after its die the activation moves on to the volley
+    /// (`NeedRoll` for the shot); a cancel before any die is the usual one; an order break still reads first.
     #[test]
     fn a_cast_that_succeeded_is_refused_at_its_index_until_the_core_resolves_effects() {
         let (st, statics) = caster_line(); // CC-5a: the cast must pass the static checks to get here
         let ask = |t: &[Input]| step_activation(&statics, &st, "a", &Terrain::default(), seams(), t, true);
         let start = [Begin, intent(HOLD, Some("b"))];
         let hit = [&start[..], &[Input::Cast(ward(0)), Faces(vec![6])]].concat();
-        assert!(matches!(ask(&hit), ActStep::Refused { index: 2, reason } if reason == "casts are not resolved by the core yet"));
+        assert!(matches!(ask(&hit), ActStep::NeedRoll { kind: "attack", .. }), "CC-8b: buff resolves and moves on to the volley");
         let two = [&start[..], &[Input::Cast(bolt(0)), Input::Cast(ward(1)), Faces(vec![1]), Faces(vec![6])]].concat();
-        assert!(matches!(ask(&two), ActStep::Refused { index: 3, reason } if reason == "casts are not resolved by the core yet"), "the second cast hit");
+        assert!(matches!(ask(&two), ActStep::NeedRoll { kind: "attack", .. }), "CC-8b: second cast (buff) resolves too");
         assert!(matches!(ask(&[Begin, intent(HOLD, None), cast(0), Cancel]), ActStep::Cancelled { .. }), "no die yet: the usual cancel");
         assert!(matches!(ask(&[Begin, cast(0)]), ActStep::Refused { index: 1, reason } if reason == "a cast before the action was declared"));
         // the same transcript without the cast is untouched
@@ -1415,8 +1421,8 @@ mod tests {
         let ActStep::Done { state, lines, .. } = done else { panic!("a failed cast is taken: {done:?}") };
         assert_eq!(lines.last().map(|l| l.text.as_str()), Some("Bolt: cast roll 1 vs 4+ \u{2014} FAILED"));
         assert_eq!((state.casts.clone(), asked), (vec![3, 2, 0, 0], 1));
-        // a buff's hit is refused (its effect is CC-8b's); a damage spell without hits is taken
-        assert!(matches!(answer_dice(&statics, &st, spell(ward(0)).to_vec(), &[6]).0, ActStep::Refused { index: 2, .. }));
+        // CC-8b: an effect-less buff resolves to Done; a damage spell without hits is taken too
+        assert!(matches!(answer_dice(&statics, &st, spell(ward(0)).to_vec(), &[6]).0, ActStep::Done { .. }));
         assert!(matches!(answer_dice(&statics, &st, spell(bolt(0)).to_vec(), &[6]).0, ActStep::Done { .. }), "hits 0: nothing to save");
         // a joined hero casts: the activating unit's name announces, the hero's names the cast; boost and interference move the target 4 -> 3
         let hero = CastInput { caster: "ah".into(), boost: 2, boost_sources: vec![("ah".into(), 2)], interference: 1, interference_sources: vec![("bh".into(), 1)], threshold: 2, ..bolt(0) };
@@ -1433,7 +1439,7 @@ mod tests {
     fn the_lines_before_the_die_equal_the_cc2_goldens() {
         use crate::mods::LiveMod;
         let golden: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(format!("{}/../../test/fixtures/one_core/golden_cast_effects.json", env!("CARGO_MANIFEST_DIR"))).expect("the CC-2 golden")).unwrap();
-        let focus = LiveMod { move_mod: 0, hit_mod: 0, casting_mod: 1, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: true, name: Rc::from("Focus") };
+        let focus = LiveMod { move_mod: 0, range_in: 0, hit_mod: 0, casting_mod: 1, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: true, name: Rc::from("Focus") };
         let me = |c: CastInput| CastInput { caster: "a".into(), spell: "Warding Chant".into(), targets: vec!["a".into()], base: 4, threshold: c.threshold.max(1), ..c };
         let mut seen = 0;
         for (scenario, cast, buffs, roll) in [
@@ -1465,7 +1471,7 @@ mod tests {
         use crate::mods::LiveMod;
         let (mut st, mut statics) = die_line();
         statics[0].spell_amplifier_casting_mod = 2;
-        let focus = LiveMod { move_mod: 0, hit_mod: 0, casting_mod: 1, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: true, name: Rc::from("Focus") };
+        let focus = LiveMod { move_mod: 0, range_in: 0, hit_mod: 0, casting_mod: 1, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: true, name: Rc::from("Focus") };
         st.buffs[0] = vec![focus];
         let cast = |c: CastInput| [Begin, intent(HOLD, None), Input::Cast(CastInput { base: 4, threshold: 1, ..c })];
         let ActStep::NeedRoll { target, lines, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &cast(bolt(0)), true) else { panic!("asks the die") };
@@ -1529,7 +1535,7 @@ mod tests {
         assert!(matches!(answer_dice(&statics, &st, t.clone(), &[1]).0, ActStep::Done { .. }), "a failed conduit cast is taken");
         // conduit note precedes casting records and Spell Amplifier (`caster_casting_net` solo_controller.gd:5228-5240)
         statics[0].spell_amplifier_casting_mod = 1;
-        let focus = LiveMod { move_mod: 0, hit_mod: 0, casting_mod: 1, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: true, name: Rc::from("Focus") };
+        let focus = LiveMod { move_mod: 0, range_in: 0, hit_mod: 0, casting_mod: 1, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: true, name: Rc::from("Focus") };
         st.buffs[0] = vec![focus];
         let ActStep::NeedRoll { target, lines, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) else { panic!("conduit + amp") };
         assert_eq!(target, 2, "4 - 3 clamps to 2+");
@@ -1809,7 +1815,7 @@ mod tests {
             let ok = rule != "Scourge";
             cases.push((rule, st, statics, if ok { String::new() } else { format!("the core does not resolve the {rule} rule of Test Bolt yet") }));
         }
-        let ward = LiveMod { move_mod: 0, hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 1, defense_mod: 0, grants_rule: Rc::from(""), scope: Rc::from("melee"), attackers: false, once: false, name: Rc::from("Shield Wall") };
+        let ward = LiveMod { move_mod: 0, range_in: 0, hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 1, defense_mod: 0, grants_rule: Rc::from(""), scope: Rc::from("melee"), attackers: false, once: false, name: Rc::from("Shield Wall") };
         let host = |mut st: State, mut statics: Vec<UnitStatic>, how: &str| {
             match how {
                 "record" => st.buffs[2] = vec![ward.clone()],
@@ -2489,6 +2495,288 @@ mod tests {
         assert_eq!(crate::spell::bane_window(&f_ob, &d_ctx), (true, 5));
     }
 
+    // ---- CC-8b: modifier / grant effects through PlainBuff, granted reach, effect-less spells, CC-6a hazard 2 ----
+
+    /// CC-8b: all 26 cases of CC-2's golden (`golden_cast_effects.json`: `buff_self`, `debuff_foe`, `fizzle`,
+    /// `boost_interference`, `casting_once`) replay end-to-end through `step_activation`: exact rolls, exact core lines,
+    /// and exact resulting `LiveMod` records on Mystic and Foe (table landing lines stay on the table, CC-12a).
+    #[test]
+    fn cc8b_the_effects_cases_of_the_cc2_golden_replay_roll_for_roll_and_mod_for_mod() {
+        use crate::rules::{Spell, SpellModifier};
+        let golden: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(format!("{}/../../test/fixtures/one_core/golden_cast_effects.json", env!("CARGO_MANIFEST_DIR"))).expect("the CC-2 golden")).unwrap();
+        let text = |v: &serde_json::Value| v.as_str().unwrap().to_string();
+        let fmt_mod = |r: &LiveMod| format!("{}|hit {}|def {}|cast {}|morale {}|grants {}|{}", r.name, r.hit_mod, r.def_mod, r.casting_mod, r.morale_mod, r.grants_rule, if r.once { "once" } else { "round" });
+        let is_table_line = |l: &str| {
+            l.starts_with("COMBAT|AI (")
+                || l.contains(" takes effect on ")
+                || l.contains(" token placed on ")
+                || l.contains(" is ACTIVE: ")
+                || l.contains(" is consumed (")
+        };
+        let mut seen = std::collections::BTreeMap::new();
+        for case in golden["cases"].as_array().unwrap() {
+            let (name, seed) = (text(&case["scenario"]), case["seed"].as_i64().unwrap());
+            let (mut st, mut statics) = die_line();
+            let warding = Spell { name: "Warding Chant".into(), effect_kind: "buff".into(), threshold: 1, target_count: 1, grants_rule: "Fearless".into(), ..Default::default() };
+            let withering = Spell { name: "Withering Gaze".into(), effect_kind: "debuff".into(), threshold: 1, target_count: 1, modifier: SpellModifier { present: true, def_mod: -1.0, ..Default::default() }, ..Default::default() };
+            statics[0].spells = vec![warding, withering];
+            st.casts = vec![6, 0, 0, 1];
+            let cast = match name.as_str() {
+                "buff_self" => CastInput { spell: "Warding Chant".into(), targets: vec!["a".into()], base: 4, threshold: 1, once: true, ..bolt(0) },
+                "debuff_foe" => CastInput { spell: "Withering Gaze".into(), targets: vec!["b".into()], base: 4, threshold: 1, once: false, ..bolt(0) },
+                "fizzle" => {
+                    (st.alive[2], st.wounds[2], st.positions[2]) = (0, Vec::new(), Vec::new());
+                    CastInput { spell: "Warding Chant".into(), targets: vec!["b".into()], base: 4, threshold: 1, once: true, ..bolt(0) }
+                }
+                "boost_interference" => CastInput { spell: "Warding Chant".into(), targets: vec!["a".into()], base: 4, threshold: 2, boost: 2, boost_sources: vec![("a".into(), 2)], interference: 1, interference_sources: vec![("bh".into(), 1)], once: true, ..bolt(0) },
+                "casting_once" => {
+                    st.buffs[0] = vec![serde_json::from_value::<crate::io::PlainLedger>(serde_json::json!({"buffs":[{"spell":"Focus","casting_mod":1,"duration":"once"}]})).unwrap()].into_iter().next().map(|l| {
+                        let mut tmp = st.clone();
+                        crate::io::fold_ledger(&mut tmp, 0, &l, crate::acts::CURRENT_RULES_EPOCH, 1, false, -1);
+                        tmp.buffs[0].pop().unwrap()
+                    }).into_iter().collect();
+                    CastInput { spell: "Warding Chant".into(), targets: vec!["a".into()], base: 4, threshold: 1, once: true, ..bolt(0) }
+                }
+                other => panic!("unknown scenario {other}"),
+            };
+            let rolls: Vec<Vec<String>> = case["extra"]["rolls"].as_array().unwrap().iter().map(|r| text(r).split('|').map(String::from).collect()).collect();
+            let groups: Vec<Vec<u8>> = rolls.iter().map(|r| r[4].split(',').map(|f| f.parse().unwrap()).collect()).collect();
+            let want_rolls: Vec<String> = rolls.iter().map(|r| format!("cast|{}|{}", r[2], r[3].trim_start_matches("AI (").trim_end_matches(')'))).collect();
+            let (done, asked) = replay(&statics, &st, cast, &groups);
+            let ActStep::Done { state, lines, .. } = done else { panic!("{name} {seed}: expected Done, got {done:?}") };
+            assert_eq!(asked, want_rolls, "{name} {seed}: rolls");
+            let ours: Vec<String> = lines.iter().map(|l| format!("COMBAT|{}", l.text)).collect();
+            let want: Vec<String> = case["lines"].as_array().unwrap().iter().map(text).filter(|l| !is_table_line(l)).collect();
+            assert_eq!(ours, want, "{name} {seed}: lines");
+            let mods_arr = case["extra"]["mods"].as_array().unwrap();
+            let want_a: Vec<String> = mods_arr[0][1].as_array().unwrap().iter().map(text).collect();
+            let want_b: Vec<String> = mods_arr[1][1].as_array().unwrap().iter().map(text).collect();
+            let got_a: Vec<String> = state.buffs[0].iter().map(fmt_mod).collect();
+            let got_b: Vec<String> = state.buffs[2].iter().map(fmt_mod).collect();
+            assert_eq!((got_a, got_b), (want_a, want_b), "{name} {seed}: LiveMods");
+            *seen.entry(name).or_insert(0) += 1;
+        }
+        assert_eq!(seen.values().copied().collect::<Vec<_>>(), [6, 6, 6, 6, 2], "all 26 golden_cast_effects cases: {seen:?}");
+    }
+
+    /// CC-8b: a debuff placed by a cast is read by the SAME activation's volley, and obeys `scope` (a melee-scoped debuff
+    /// stays out of the shooting volley and stays unspent; an attackers-beneficiary hit buff improves the volley's to-hit).
+    /// Planted fault: dropping `scope` makes the melee-scoped debuff fire on shooting (5+ instead of 4+) and spend -> RED.
+    #[test]
+    fn cc8b_a_debuff_is_read_by_the_same_activations_volley_and_obeys_scope() {
+        use crate::rules::{Spell, SpellModifier};
+        let (st, mut statics) = bolt_board(0, &[], 6);
+        statics[0].shoot = vec![ShootProfile { name: "Rifle".into(), attacks: 1, count: 1, range: 24, ..Default::default() }];
+        statics[0].ctx.quality = 4;
+        statics[0].spells = vec![
+            Spell { name: "Withering".into(), effect_kind: "debuff".into(), threshold: 1, target_count: 1, scope: "shooting".into(), modifier: SpellModifier { present: true, def_mod: -1.0, ..Default::default() }, ..Default::default() },
+            Spell { name: "Crippling".into(), effect_kind: "debuff".into(), threshold: 1, target_count: 1, scope: "melee".into(), modifier: SpellModifier { present: true, def_mod: -1.0, ..Default::default() }, ..Default::default() },
+            Spell { name: "Marked".into(), effect_kind: "debuff".into(), threshold: 1, target_count: 1, scope: "shooting".into(), beneficiary: "attackers".into(), modifier: SpellModifier { present: true, hit_mod: 1.0, ..Default::default() }, ..Default::default() },
+        ];
+        let run_cast_shoot = |spell_name: &str, once: bool, groups: &[Vec<u8>]| {
+            let cast = CastInput { spell: spell_name.into(), base: 2, threshold: 1, once, ..bolt(0) };
+            let mut t = vec![Begin, intent(HOLD, Some("b")), Input::Cast(cast)];
+            let mut asked = Vec::new();
+            for g in groups {
+                match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) {
+                    ActStep::NeedRoll { kind, count, target, owner, faces, .. } => {
+                        assert_eq!(faces, g.len(), "{spell_name} {kind}");
+                        asked.push(format!("{kind}|{count}x{target}+|{owner}"));
+                        t.push(Faces(g.clone()));
+                    }
+                    other => panic!("{spell_name}: expected NeedRoll, got {other:?}"),
+                }
+            }
+            (step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true), asked)
+        };
+        // (1) Shooting-scoped def_mod -1 (once): Foe saves on 5+ (4 fails -> 1 dead) and the once-debuff is spent.
+        let (done, asked) = run_cast_shoot("Withering", true, &[vec![6], vec![4], vec![4]]);
+        let ActStep::Done { state, .. } = done else { panic!("Withering: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "attack|1x4+|Mystic", "defense|1x5+|Foe"]);
+        assert_eq!((state.alive[2], state.buffs[2].len()), (5, 0), "5+ fails on 4 and once-debuff is spent");
+        // (2) Melee-scoped def_mod -1 (once): stays out of shooting -> Foe saves on 4+ (4 passes -> 0 dead) and debuff persists.
+        let (done, asked) = run_cast_shoot("Crippling", true, &[vec![6], vec![4], vec![4]]);
+        let ActStep::Done { state, .. } = done else { panic!("Crippling: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "attack|1x4+|Mystic", "defense|1x4+|Foe"]);
+        assert_eq!(state.alive[2], 6, "melee-scoped debuff must not degrade shooting save");
+        assert_eq!(state.buffs[2].len(), 1, "melee-scoped debuff must stay unspent after shooting");
+        assert_eq!(&*state.buffs[2][0].scope, "melee");
+        // (3) Attackers-beneficiary hit_mod +1 (shooting, once): Mystic hits on 3+ and spends the mark.
+        let (done, asked) = run_cast_shoot("Marked", true, &[vec![6], vec![3], vec![6]]);
+        let ActStep::Done { state, .. } = done else { panic!("Marked: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "attack|1x3+|Mystic", "defense|1x4+|Foe"]);
+        assert!(state.buffs[2].is_empty(), "attackers once-mark spent by the volley");
+    }
+
+    /// CC-8b: a reach spell cast in the same activation widens the activation's volley — both a `modifier.range_in` buff
+    /// (`Battle Rune` +6", scope "shooting") and a Royal Legion-family `grants_rule` buff (`Lust Boon` -> `Enhanced Lustbound` +8").
+    /// Planted fault: dropping `scope` makes a melee-scoped `range_in` buff wrongly widen shooting -> RED.
+    #[test]
+    fn cc8b_granted_reach_widens_the_same_activations_volley() {
+        use crate::rules::{Spell, SpellModifier};
+        let sight_seams = Seams { sighting: true, ..seams() };
+        let drive_sight = |statics: &[UnitStatic], st: &State, mut t: Vec<Input>, groups: &[Vec<u8>]| {
+            let mut asked = Vec::new();
+            for g in groups {
+                match step_activation(statics, st, "a", &Terrain::default(), sight_seams, &t, true) {
+                    ActStep::NeedRoll { kind, count, target, owner, faces, .. } => {
+                        assert_eq!(faces, g.len(), "{kind}");
+                        asked.push(format!("{kind}|{count}x{target}+|{owner}"));
+                        t.push(Faces(g.clone()));
+                    }
+                    other => return (other, asked),
+                }
+            }
+            (step_activation(statics, st, "a", &Terrain::default(), sight_seams, &t, true), asked)
+        };
+        // (1) modifier.range_in +6" (`Battle Rune`, scope "shooting", once): 24" rifle reaches Foe parked 28" away.
+        let (mut st, mut statics) = bolt_board(0, &[], 3);
+        statics[0].shoot = vec![ShootProfile { name: "Rifle".into(), attacks: 1, count: 1, range: 24, ..Default::default() }];
+        statics[0].ctx.quality = 4;
+        statics[0].spells = vec![
+            Spell { name: "Battle Rune".into(), effect_kind: "buff".into(), threshold: 1, target_count: 1, scope: "shooting".into(), modifier: SpellModifier { present: true, range_in: 6.0, ..Default::default() }, ..Default::default() },
+            Spell { name: "Melee Reach".into(), effect_kind: "buff".into(), threshold: 1, target_count: 1, scope: "melee".into(), modifier: SpellModifier { present: true, range_in: 6.0, ..Default::default() }, ..Default::default() },
+        ];
+        st.positions[0] = vec![[0.0, 0.0, 0.0]];
+        st.positions[1] = vec![[-2.0 * INCHES_TO_METERS, 0.0, 5.0 * INCHES_TO_METERS]];
+        st.positions[2] = vec![[28.0 * INCHES_TO_METERS, 0.0, 0.0]; 3];
+        st.positions[3] = vec![[-2.0 * INCHES_TO_METERS, 0.0, -5.0 * INCHES_TO_METERS]];
+        // Control: without casting, the 24" rifle cannot reach 28".
+        let (ctrl, asked) = drive_sight(&statics, &st, vec![Begin, intent(HOLD, Some("b"))], &[]);
+        assert!(matches!(ctrl, ActStep::Done { .. }) && asked.is_empty(), "control: out of 24\" reach ({asked:?})");
+        // With Battle Rune (shooting, once): reaches 28", rolls attack, then spends the once-buff.
+        let cast_rune = CastInput { spell: "Battle Rune".into(), targets: vec!["a".into()], base: 2, threshold: 1, once: true, ..bolt(0) };
+        let (done, asked) = drive_sight(&statics, &st, vec![Begin, intent(HOLD, Some("b")), Input::Cast(cast_rune)], &[vec![6], vec![1]]);
+        let ActStep::Done { state, .. } = done else { panic!("Battle Rune: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "attack|1x4+|Mystic"], "24 + 6 reaches 28\"");
+        assert!(state.buffs[0].is_empty(), "once range buff spent by the shooting volley");
+        // Scope control: melee-scoped range_in does NOT widen shooting.
+        let cast_melee = CastInput { spell: "Melee Reach".into(), targets: vec!["a".into()], base: 2, threshold: 1, once: true, ..bolt(0) };
+        let (done, asked) = drive_sight(&statics, &st, vec![Begin, intent(HOLD, Some("b")), Input::Cast(cast_melee)], &[vec![6]]);
+        assert!(matches!(done, ActStep::Done { .. }), "melee reach: {done:?}");
+        assert_eq!(asked, ["cast|1x2+|Mystic"], "melee-scoped range_in must not widen shooting");
+
+        // (2) Royal Legion grant (`Lust Boon` -> `Enhanced Lustbound`, +8"): 24" rifle reaches Foe parked 30" away.
+        let header = crate::read_act_header(r#"{"kind":"header","knobs":{},"profiles":{"shooter":{"unit_id":"shooter","name":"Mystic","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":1,"base_radius":0.016,"game_system":"gf","faction_folder":"lust_disciples","special_rules":["Caster(1)"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#).unwrap();
+        let mut reg = crate::rules::Registries::new(&format!("{}/../..", env!("CARGO_MANIFEST_DIR")));
+        statics[0] = UnitStatic::build_for(&mut reg, header.profiles.get("shooter").unwrap(), crate::acts::CURRENT_RULES_EPOCH);
+        st.positions[2] = vec![[30.0 * INCHES_TO_METERS, 0.0, 0.0]; 3];
+        let cast_boon = CastInput { spell: "Lust Boon".into(), targets: vec!["a".into()], base: 2, threshold: 1, once: true, ..bolt(0) };
+        let (done, asked) = drive_sight(&statics, &st, vec![Begin, intent(HOLD, Some("b")), Input::Cast(cast_boon)], &[vec![6], vec![1]]);
+        let ActStep::Done { state, .. } = done else { panic!("Lust Boon: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "attack|1x4+|Mystic"], "24 + 8 reaches 30\"");
+        assert!(state.buffs[0].is_empty(), "Lust Boon once-grant spent by the shooting volley");
+    }
+
+    /// CC-8b: a capture of the landed table record (`unit_properties["spell_records"]` folded through `PlainLedger` /
+    /// `fold_ledger`) equals the core's `LiveMod` from `tray_cast`, field for field — including `scope`, `beneficiary`,
+    /// `once`, `range_in` and a speed-only spell whose advance/rush stay unparsed (`move_mod == 0`).
+    /// Planted fault: dropping `scope` breaks equality on every scoped case -> RED.
+    #[test]
+    fn cc8b_a_capture_of_the_landed_table_record_equals_the_cores_live_mod() {
+        use crate::rules::{Spell, SpellModifier};
+        let cases: Vec<(Spell, bool, serde_json::Value)> = vec![
+            (
+                Spell { name: "Withering Gaze".into(), effect_kind: "debuff".into(), threshold: 1, target_count: 1, scope: "shooting".into(), modifier: SpellModifier { present: true, def_mod: -1.0, ..Default::default() }, ..Default::default() },
+                false,
+                serde_json::json!({"spell":"Withering Gaze","hit_mod":0,"def_mod":-1,"casting_mod":0,"morale_mod":0,"range_in":0,"advance_in":0,"rush_in":0,"grants_rule":"","scope":"shooting","beneficiary":"","duration":"round"}),
+            ),
+            (
+                Spell { name: "Advanced Sight".into(), effect_kind: "debuff".into(), threshold: 1, target_count: 1, scope: "shooting".into(), beneficiary: "attackers".into(), grants_rule: "Unstoppable".into(), ..Default::default() },
+                true,
+                serde_json::json!({"spell":"Advanced Sight","hit_mod":0,"def_mod":0,"casting_mod":0,"morale_mod":0,"range_in":0,"advance_in":0,"rush_in":0,"grants_rule":"Unstoppable","scope":"shooting","beneficiary":"attackers","duration":"once"}),
+            ),
+            (
+                Spell { name: "Battle Rune".into(), effect_kind: "buff".into(), threshold: 1, target_count: 1, scope: "shooting".into(), modifier: SpellModifier { present: true, range_in: 6.0, ..Default::default() }, ..Default::default() },
+                true,
+                serde_json::json!({"spell":"Battle Rune","hit_mod":0,"def_mod":0,"casting_mod":0,"morale_mod":0,"range_in":6,"advance_in":0,"rush_in":0,"grants_rule":"","scope":"shooting","beneficiary":"","duration":"once"}),
+            ),
+            (
+                Spell { name: "Fleet".into(), effect_kind: "buff".into(), threshold: 1, target_count: 1, modifier: SpellModifier { present: true, advance_in: 2.0, rush_in: 4.0, ..Default::default() }, ..Default::default() },
+                false,
+                serde_json::json!({"spell":"Fleet","hit_mod":0,"def_mod":0,"casting_mod":0,"morale_mod":0,"range_in":0,"advance_in":2,"rush_in":4,"grants_rule":"","scope":"","beneficiary":"","duration":"round"}),
+            ),
+        ];
+        for (spell, once, table_rec) in cases {
+            let name = spell.name.clone();
+            let (st, mut statics) = bolt_board(0, &[], 3);
+            statics[0].spells = vec![spell];
+            let cast = CastInput { spell: name.clone(), targets: vec!["b".into()], base: 2, threshold: 1, once, ..bolt(0) };
+            let (ActStep::Done { state, .. }, _) = replay(&statics, &st, cast, &[vec![6]]) else { panic!("{name}: expected Done") };
+            assert_eq!(state.buffs[2].len(), 1, "{name}: one LiveMod landed");
+            let ledger: crate::io::PlainLedger = serde_json::from_value(serde_json::json!({"buffs": [table_rec]})).unwrap();
+            let mut captured = st.clone();
+            crate::io::fold_ledger(&mut captured, 2, &ledger, crate::acts::CURRENT_RULES_EPOCH, 3, false, -1);
+            assert_eq!(state.buffs[2], captured.buffs[2], "{name}: core LiveMod must equal captured table record");
+        }
+    }
+
+    /// CC-8b: an effect-less buff/debuff spell (no modifier and no grant, or an all-zero modifier dict) is RESOLVED (not
+    /// refused) with nothing pushed to `state.buffs`; a multi-target buff lands on every standing target and skips dead ones.
+    #[test]
+    fn cc8b_effectless_spells_resolve_cleanly_and_multi_target_lands_on_every_standing_target() {
+        use crate::rules::{Spell, SpellModifier};
+        let (mut st, mut statics) = bolt_board(0, &[], 3);
+        statics[0].spells = vec![
+            Spell { name: "Empty Buff".into(), effect_kind: "buff".into(), threshold: 1, target_count: 1, ..Default::default() },
+            Spell { name: "Zero Mod".into(), effect_kind: "debuff".into(), threshold: 1, target_count: 1, modifier: SpellModifier { present: true, ..Default::default() }, ..Default::default() },
+            Spell { name: "Mass Ward".into(), effect_kind: "buff".into(), threshold: 1, target_count: 2, grants_rule: "Fearless".into(), ..Default::default() },
+        ];
+        for name in ["Empty Buff", "Zero Mod"] {
+            let cast = CastInput { spell: name.into(), targets: vec!["a".into()], base: 2, threshold: 1, once: false, ..bolt(0) };
+            let (ActStep::Done { state, .. }, asked) = replay(&statics, &st, cast, &[vec![6]]) else { panic!("{name}: expected Done") };
+            assert_eq!(asked, ["cast|1x2+|Mystic"], "{name}");
+            assert!(state.buffs[0].is_empty(), "{name}: no LiveMod pushed");
+            assert_eq!(state.casts[0], 0, "{name}: token paid");
+        }
+        // Multi-target: "a" and "ah" stand, "b" is dead -> lands on "a" and "ah" only.
+        (st.alive[1], st.wounds[1], st.positions[1]) = (1, vec![1], vec![[1.0, 0.0, 0.0]]);
+        (st.alive[2], st.wounds[2], st.positions[2]) = (0, Vec::new(), Vec::new());
+        let multi = CastInput { spell: "Mass Ward".into(), targets: vec!["a".into(), "b".into(), "ah".into()], base: 2, threshold: 1, once: true, ..bolt(0) };
+        let (ActStep::Done { state, .. }, _) = replay(&statics, &st, multi, &[vec![6]]) else { panic!("Mass Ward: expected Done") };
+        assert_eq!((state.buffs[0].len(), state.buffs[1].len(), state.buffs[2].len()), (1, 1, 0), "lands on standing targets only");
+        assert_eq!((&*state.buffs[0][0].grants_rule, &*state.buffs[1][0].grants_rule), ("Fearless", "Fearless"));
+    }
+
+    /// CC-6a hazard 2: a record placed by an earlier cast in the SAME activation is not present at activation start, so a
+    /// following damage cast re-checks its standing targets at resolution and is refused (without asking its die) when an
+    /// earlier cast landed a record on the target or its joined chain.
+    #[test]
+    fn cc8b_damage_cast_rechecks_target_after_earlier_cast_in_same_activation() {
+        use crate::rules::{Spell, SpellModifier};
+        let (mut st, mut statics) = bolt_board(2, &[], 6);
+        st.casts = vec![4, 0, 0, 0];
+        let debuff = Spell { name: "Withering".into(), effect_kind: "debuff".into(), threshold: 1, target_count: 1, modifier: SpellModifier { present: true, def_mod: -1.0, ..Default::default() }, ..Default::default() };
+        statics[0].spells.push(debuff);
+        let c0 = CastInput { seq: 0, spell: "Withering".into(), targets: vec!["b".into()], base: 4, threshold: 1, once: false, ..bolt(0) };
+        let c1 = CastInput { seq: 1, ..test_bolt() };
+        let base_t = vec![Begin, intent(HOLD, None), Input::Cast(c0.clone()), Input::Cast(c1.clone())];
+        // Before Cast 0 rolls: Foe is still plain -> asks Cast 0's die (not statically refused).
+        assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &base_t, true), ActStep::NeedRoll { kind: "cast", target: 4, .. }));
+        // If Cast 0 FAILS ([1]): Foe stays plain -> Cast 1 asks its die and resolves normally.
+        let mut fail_t = base_t.clone();
+        fail_t.push(Faces(vec![1]));
+        assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &fail_t, true), ActStep::NeedRoll { kind: "cast", target: 2, .. }), "Cast 0 failed: Cast 1 proceeds");
+        // If Cast 0 SUCCEEDS ([6]): Withering lands on Foe -> Cast 1 is REFUSED at index 3 before asking its die.
+        let mut hit_t = base_t.clone();
+        hit_t.push(Faces(vec![6]));
+        match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &hit_t, true) {
+            ActStep::Refused { index: 3, reason } => assert_eq!(reason, "cast 1: Foe meets Test Bolt with a rule the core does not say for spell damage yet"),
+            other => panic!("expected Cast 1 refused after Cast 0 placed a record on Foe, got {other:?}"),
+        }
+        // Control: Cast 0 lands on "a" (self, not Foe's chain) -> Cast 1 on "b" is NOT refused and asks its die.
+        let c0_self = CastInput { targets: vec!["a".into()], ..c0 };
+        let self_t = vec![Begin, intent(HOLD, None), Input::Cast(c0_self), Input::Cast(c1), Faces(vec![6])];
+        assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &self_t, true), ActStep::NeedRoll { kind: "cast", target: 2, .. }), "buff on self does not block damage on Foe");
+        // Joined hero: Cast 0 lands on host "b", Cast 1 targets attached hero "bh" -> Cast 1 is refused at index 3.
+        st.attached_to = Rc::new(vec![None, None, None, Some(2)]);
+        st.attached = Rc::new(vec![vec![], vec![], vec![3], vec![]]);
+        (st.alive[3], st.wounds[3], st.positions[3]) = (1, vec![1], vec![[8.0 * INCHES_TO_METERS, 0.0, 0.0]]);
+        let c1_hero = CastInput { seq: 1, targets: vec!["bh".into()], ..test_bolt() };
+        let hero_t = vec![Begin, intent(HOLD, None), Input::Cast(CastInput { seq: 0, spell: "Withering".into(), targets: vec!["b".into()], base: 4, threshold: 1, once: false, ..bolt(0) }), Input::Cast(c1_hero), Faces(vec![6])];
+        assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &hero_t, true), ActStep::Refused { index: 3, reason } if reason == "cast 1: bh meets Test Bolt with a rule the core does not say for spell damage yet"));
+    }
+
     // ---- step 12: cancel ----
 
     /// The one cancel sentence (O15 (3)); `side` is the unit's player slot.
@@ -2784,7 +3072,7 @@ mod tests {
 
     fn once_buff(name: &str, scope: &str, once: bool) -> LiveMod {
         LiveMod {
-            hit_mod: 1, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, move_mod: 0,
+            hit_mod: 1, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, move_mod: 0, range_in: 0,
             grants_rule: "".into(), scope: scope.into(), attackers: false, once, name: name.into(),
         }
     }
@@ -2889,7 +3177,7 @@ mod tests {
     fn a_great_musician_row_widens_the_allowance() {
         let (mut st, statics) = squad_line();
         st.buffs[0].push(crate::mods::LiveMod { hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0,
-            move_mod: 1, grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: false, name: Rc::from("Great Musician") });
+            move_mod: 1, range_in: 0, grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: false, name: Rc::from("Great Musician") });
         let a = allowance(&statics, &st, 0, seams(), &Terrain::default());
         assert_eq!((a.advance, a.rush, &a.widened_by[..]), (7.0, 13.0, &["Great Musician".to_string()][..]));
         assert_eq!(check(&st, &statics, ADVANCE, east(6.9), true), OK);
@@ -2988,7 +3276,7 @@ mod tests {
         assert_eq!((lines.len(), lines[0].text.as_str(), lines[0].detail.as_deref()), (1, over, Some("Difficult terrain")));
         let mut debuffed = st.clone();
         debuffed.buffs[0].push(crate::mods::LiveMod { hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0,
-            move_mod: 0, grants_rule: Rc::from("Difficult Terrain"), scope: Rc::from(""), attackers: false, once: false, name: Rc::from("Debuff") });
+            move_mod: 0, range_in: 0, grants_rule: Rc::from("Difficult Terrain"), scope: Rc::from(""), attackers: false, once: false, name: Rc::from("Debuff") });
         assert_eq!(go(&debuffed, 1.5, 8.0, true), refusal(over), "the carried debuff caps without forest");
         let mut p = st.profiles.list[0].clone();
         p.special_rules.push("Strider".into());

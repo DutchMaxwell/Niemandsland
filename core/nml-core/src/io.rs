@@ -237,27 +237,54 @@ pub(crate) struct PlainUnit {
 #[derive(Deserialize)]
 pub(crate) struct PlainBuff {
     #[serde(default)]
-    spell: String,
+    pub(crate) spell: String,
     #[serde(default)]
-    hit_mod: i64,
+    pub(crate) hit_mod: i64,
     #[serde(default)]
-    casting_mod: i64,
+    pub(crate) casting_mod: i64,
     #[serde(default)]
-    morale_mod: i64,
+    pub(crate) morale_mod: i64,
     #[serde(default)]
-    ap_mod: i64,
+    pub(crate) ap_mod: i64,
     #[serde(default)]
-    def_mod: i64,
+    pub(crate) def_mod: i64,
     #[serde(default)]
-    defense_mod: i64,
+    pub(crate) defense_mod: i64,
     #[serde(default)]
-    grants_rule: String,
+    pub(crate) range_in: i64,
     #[serde(default)]
-    scope: String,
+    pub(crate) grants_rule: String,
     #[serde(default)]
-    beneficiary: String,
+    pub(crate) scope: String,
     #[serde(default)]
-    duration: String,
+    pub(crate) beneficiary: String,
+    #[serde(default)]
+    pub(crate) duration: String,
+}
+
+impl PlainBuff {
+    /// CC-8b: convert a table-shaped `PlainBuff` into a `LiveMod` — shared by `fold_ledger` (capture) and `sim::tray_cast`
+    /// (core-resolved buff/debuff spells) so both paths build the exact same record.
+    pub(crate) fn to_live_mod(&self, rules_epoch: u32) -> LiveMod {
+        let epoch7 = rule_on(rules_epoch, EPOCH_7_TABLE_RULES);
+        LiveMod {
+            hit_mod: self.hit_mod,
+            casting_mod: self.casting_mod,
+            morale_mod: self.morale_mod,
+            ap_mod: if epoch7 { self.ap_mod } else { 0 },
+            def_mod: if epoch7 { self.def_mod } else { 0 },
+            defense_mod: if epoch7 { self.defense_mod } else { 0 },
+            // The Great Musician port's anti-double-count rule: a table-loaded row NEVER carries the move knob —
+            // the table's `advance_in`/`rush_in` are unparsed and their inches already ride the recorded `bands`.
+            move_mod: 0,
+            range_in: if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) { self.range_in } else { 0 },
+            grants_rule: Rc::from(self.grants_rule.as_str()),
+            scope: Rc::from(self.scope.as_str()),
+            attackers: self.beneficiary == "attackers",
+            once: self.duration == "once",
+            name: Rc::from(self.spell.as_str()),
+        }
+    }
 }
 
 /// `AiActRecorder._ledger_of` (act_recorder.gd) — `{}` for a unit with nothing
@@ -1234,30 +1261,7 @@ pub fn fold_ledger(
     ambush_arrived_round: i64,
 ) {
     for b in &ledger.buffs {
-        // SEAM 4 step 1 — the reader gate, the SAME one `record_buff`
-        // writes (design §4(c), the FROZEN `EPOCH_7_TABLE_RULES`): a
-        // record stamped below 7 keeps ignoring the three ap/def knobs
-        // (the row still lands — the fold has no all-zero guard — so
-        // today's reading is preserved byte-identically).
-        let epoch7 = rule_on(rules_epoch, EPOCH_7_TABLE_RULES);
-        st.buffs[ui].push(LiveMod {
-            hit_mod: b.hit_mod,
-            casting_mod: b.casting_mod,
-            morale_mod: b.morale_mod,
-            ap_mod: if epoch7 { b.ap_mod } else { 0 },
-            def_mod: if epoch7 { b.def_mod } else { 0 },
-            defense_mod: if epoch7 { b.defense_mod } else { 0 },
-            // The Great Musician port's anti-double-count rule: a
-            // table-loaded row NEVER carries the move knob — the
-            // table's `advance_in`/`rush_in` are unparsed above and
-            // their inches already ride the recorded `bands`.
-            move_mod: 0,
-            grants_rule: Rc::from(b.grants_rule.as_str()),
-            scope: Rc::from(b.scope.as_str()),
-            attackers: b.beneficiary == "attackers",
-            once: b.duration == "once",
-            name: Rc::from(b.spell.as_str()),
-        });
+        st.buffs[ui].push(b.to_live_mod(rules_epoch));
     }
     st.hit_and_run_round[ui] = ledger.hit_and_run_round;
     st.delayed_action_round[ui] = ledger.delayed_action_round;

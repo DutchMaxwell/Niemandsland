@@ -11,7 +11,7 @@ use super::*;
         st.roster = Rc::new(Roster { keys, index, profile: vec![0; 4] });
         st.bands[0] = Bands { advance: 8.0, rush: 16.0, charge: None };
         st.buffs[0].push(mods::LiveMod { hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0,
-            move_mod: 1, grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: false, name: Rc::from("GM") });
+            move_mod: 1, range_in: 0, grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: false, name: Rc::from("GM") });
         let statics = vec![UnitStatic::default(); 4];
         let t = crate::terrain::Terrain::default();
         let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, ..Seams::default() };

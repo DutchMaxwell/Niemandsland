@@ -24,7 +24,7 @@ fn great_banner_line() -> (crate::state::State, Vec<UnitStatic>) {
         ap_mod: 0,
         def_mod: 0,
         defense_mod: 0,
-        move_mod: 0,
+        move_mod: 0, range_in: 0,
         grants_rule: Rc::from(""),
         scope: Rc::from(""),
         attackers: false,

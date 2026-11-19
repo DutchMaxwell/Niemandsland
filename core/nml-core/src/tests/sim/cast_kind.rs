@@ -137,7 +137,7 @@ use super::*;
         };
         let run = |down: Option<usize>, face: u8| run_with(&c, down, face, false);
         assert_eq!(run(None, 6), (CastEnd::Landed, 1, 5, 2), "announce, needs, result, saves-on, wound lines; the die and the saves");
-        assert_eq!(run_with(&c, None, 6, true), (CastEnd::Hit, 1, 3, 1), "a buff: announce, needs, result line; one die");
+        assert_eq!(run_with(&c, None, 6, true), (CastEnd::Landed, 1, 3, 1), "CC-8b: an effect-less buff resolves (announce, needs, result line; one die)");
         assert_eq!(run(None, 1), (CastEnd::Failed, 1, 3, 1));
         assert_eq!(run(Some(2), 6), (CastEnd::Fizzled, 1, 1, 0), "the fizzle line, no die");
         assert_eq!(run(Some(0), 6), (CastEnd::Skipped, 1, 0, 0), "silent, no die");

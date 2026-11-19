@@ -29,7 +29,7 @@ fn piercing_charge_grant() -> mods::LiveMod {
         ap_mod: 0,
         def_mod: 0,
         defense_mod: 0,
-        move_mod: 0,
+        move_mod: 0, range_in: 0,
         grants_rule: Rc::from(grants_rule.as_str()),
         scope: Rc::from(""),
         attackers: false,

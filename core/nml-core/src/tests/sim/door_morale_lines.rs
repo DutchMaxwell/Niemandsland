@@ -6,7 +6,7 @@ use crate::mods::LiveMod;
 
     fn token(name: &str, morale_mod: i64) -> LiveMod {
         LiveMod {
-            hit_mod: 0, casting_mod: 0, morale_mod, ap_mod: 0, def_mod: 0, defense_mod: 0, move_mod: 0, grants_rule: Rc::from(""),
+            hit_mod: 0, casting_mod: 0, morale_mod, ap_mod: 0, def_mod: 0, defense_mod: 0, move_mod: 0, range_in: 0, grants_rule: Rc::from(""),
             scope: Rc::from(""), attackers: false, once: true, name: Rc::from(name),
         }
     }
