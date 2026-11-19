@@ -125,13 +125,52 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
     Ok(())
 }
 
-/// O5: no unit begins while another unit's activation is open; `Some(a)`
-/// names the unit whose activation is open.
-pub fn begin_check(open_elsewhere: Option<&str>) -> Result<(), String> {
+/// A refused `begin_check`: the sentence the table shows and the battle-log line it writes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BeginRefused {
+    pub reason: String,
+    pub line: LogLine,
+}
+
+fn refused(reason: String, rule: &'static str) -> BeginRefused {
+    BeginRefused {
+        line: LogLine { rule, category: Category::General, side: 0, text: reason.clone(), detail: None },
+        reason,
+    }
+}
+
+fn refuse_open(open_elsewhere: Option<&str>) -> Result<(), BeginRefused> {
     match open_elsewhere {
-        Some(a) => Err(format!("Finish {a}'s activation first.")),
+        Some(a) => Err(refused(format!("Finish {a}'s activation first."), "activation_open")),
         None => Ok(()),
     }
+}
+
+/// O5: no unit begins while another unit's activation is open; `Some(a)`
+/// names the unit whose activation is open. One system per game: a `systems`
+/// list that names two game systems refuses the table, after
+/// `rules::normalize_system` folds case and empty/unknown labels; an empty
+/// list (a stateless caller) opens.
+pub fn begin_check(open_elsewhere: Option<&str>, systems: &[&str]) -> Result<(), BeginRefused> {
+    refuse_open(open_elsewhere)?;
+    refuse_mixed(systems)
+}
+
+fn refuse_mixed(systems: &[&str]) -> Result<(), BeginRefused> {
+    let mut named: Vec<String> = Vec::new();
+    for system in systems.iter().filter(|s| !s.trim().is_empty()) {
+        let system = crate::rules::normalize_system(system);
+        if !named.contains(&system) {
+            named.push(system);
+        }
+    }
+    if named.len() > 1 {
+        return Err(refused(
+            format!("cannot start a game with lists of two game systems ({})", named.join(", ")),
+            "mixed_systems",
+        ));
+    }
+    Ok(())
 }
 
 /// The table's own drop floor in inches (`main.gd` `_on_units_dropped`, the
@@ -803,8 +842,21 @@ mod tests {
 
     #[test]
     fn begin_names_the_open_activation() {
-        assert_eq!(begin_check(Some("A")), Err("Finish A's activation first.".to_string()));
-        assert_eq!(begin_check(None), Ok(()));
+        let open = begin_check(Some("A"), &[]).unwrap_err();
+        assert_eq!(open.reason, "Finish A's activation first.");
+        assert_eq!(open.line.rule, "activation_open");
+        assert!(begin_check(None, &[]).is_ok());
+    }
+
+    #[test]
+    fn begin_refuses_mixed_systems_and_opens_same_system() {
+        let err = begin_check(None, &["gf", "gff"]).unwrap_err();
+        assert_eq!(err.reason, "cannot start a game with lists of two game systems (gf, gff)");
+        assert_eq!(err.line.rule, "mixed_systems");
+        assert_eq!(err.line.text, err.reason);
+        assert!(begin_check(None, &["gff", "gff"]).is_ok());
+        assert!(begin_check(None, &["gf", ""]).is_ok());
+        assert!(begin_check(None, &["GF", "gf"]).is_ok());
     }
 
     /// Two models at the origin and 1 m east, the second one moved `dx` inches east and `dy` up.
