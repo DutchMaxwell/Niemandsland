@@ -1,0 +1,1233 @@
+{
+  "schema": "nml-melee-matrix-cells-v1",
+  "cells": [
+    {
+      "primitive": "AP",
+      "seat": "CW",
+      "rule": "AP(1)",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "AP",
+      "seat": "TW",
+      "rule": "AP(1)",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Tough",
+      "seat": "CU",
+      "rule": "Tough(2)",
+      "system": "gf",
+      "faction": "robot_legions",
+      "att": {
+        "tough": 2
+      }
+    },
+    {
+      "primitive": "Tough",
+      "seat": "TU",
+      "rule": "Tough(2)",
+      "system": "gf",
+      "faction": "robot_legions",
+      "def": {
+        "tough": 2
+      }
+    },
+    {
+      "primitive": "Fear",
+      "seat": "CU",
+      "rule": "Fear(2)",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Fear",
+      "seat": "TU",
+      "rule": "Fear(2)",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Fearless",
+      "seat": "CU",
+      "rule": "Fearless",
+      "system": "gf",
+      "faction": "robot_legions",
+      "att": {
+        "quality": 5,
+        "tough": 2
+      }
+    },
+    {
+      "primitive": "Fearless",
+      "seat": "TU",
+      "rule": "Fearless",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Hero (plain)",
+      "seat": "CU",
+      "rule": "Hero",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Hero (plain)",
+      "seat": "TU",
+      "rule": "Hero",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Hero (joined)",
+      "seat": "CU",
+      "rule": "Hero",
+      "system": "gf",
+      "faction": "robot_legions",
+      "att": {
+        "attached_hero": true
+      }
+    },
+    {
+      "primitive": "Hero (joined)",
+      "seat": "TU",
+      "rule": "Hero",
+      "system": "gf",
+      "faction": "robot_legions",
+      "def": {
+        "attached_hero": true
+      }
+    },
+    {
+      "primitive": "Morale",
+      "seat": "CU",
+      "rule": "Morale(6)",
+      "system": "gf",
+      "faction": "robot_legions",
+      "att": {
+        "quality": 5
+      }
+    },
+    {
+      "primitive": "Morale",
+      "seat": "TU",
+      "rule": "Morale(6)",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "No Retreat",
+      "seat": "CU",
+      "rule": "No Retreat",
+      "system": "gf",
+      "faction": "robot_legions",
+      "att": {
+        "quality": 5
+      }
+    },
+    {
+      "primitive": "No Retreat",
+      "seat": "TU",
+      "rule": "No Retreat",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Banner",
+      "seat": "CU",
+      "rule": "Banner",
+      "system": "gf",
+      "faction": "robot_legions",
+      "att": {
+        "quality": 5
+      }
+    },
+    {
+      "primitive": "Banner",
+      "seat": "TU",
+      "rule": "Banner",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Sergeant",
+      "seat": "CU",
+      "rule": "Sergeant",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Sergeant",
+      "seat": "TU",
+      "rule": "Sergeant",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Impact",
+      "seat": "CU",
+      "rule": "Impact(2)",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Heavy Impact",
+      "seat": "CU",
+      "rule": "Heavy Impact(2)",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Furious",
+      "seat": "CU",
+      "rule": "Furious",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Counter",
+      "seat": "TU",
+      "rule": "Counter",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Counter",
+      "seat": "TW",
+      "rule": "Counter",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Thrust",
+      "seat": "CU",
+      "rule": "Thrust",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Thrust",
+      "seat": "CW",
+      "rule": "Thrust",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Parry",
+      "seat": "TW",
+      "rule": "Parry(2)",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Brace",
+      "seat": "TU",
+      "rule": "Brace(2)",
+      "system": "gf",
+      "faction": "robot_legions",
+      "att": {
+        "models": 3,
+        "rules": [
+          "Impact(1)"
+        ]
+      },
+      "def": {
+        "tough": 2
+      }
+    },
+    {
+      "primitive": "Brace",
+      "seat": "TW",
+      "rule": "Brace(2)",
+      "system": "gf",
+      "faction": "robot_legions",
+      "att": {
+        "models": 3,
+        "rules": [
+          "Impact(1)"
+        ]
+      },
+      "def": {
+        "tough": 2
+      }
+    },
+    {
+      "primitive": "Bloodthirsty Fighter",
+      "seat": "CU",
+      "rule": "Bloodthirsty Fighter",
+      "system": "aof",
+      "faction": "war_disciples"
+    },
+    {
+      "primitive": "Bloodthirsty Fighter",
+      "seat": "CW",
+      "rule": "Bloodthirsty Fighter",
+      "system": "aof",
+      "faction": "war_disciples"
+    },
+    {
+      "primitive": "Bloodthirsty Fighter",
+      "seat": "TU",
+      "rule": "Bloodthirsty Fighter",
+      "system": "aof",
+      "faction": "war_disciples"
+    },
+    {
+      "primitive": "Bloodthirsty Fighter",
+      "seat": "TW",
+      "rule": "Bloodthirsty Fighter",
+      "system": "aof",
+      "faction": "war_disciples"
+    },
+    {
+      "primitive": "Unwieldy",
+      "seat": "CU",
+      "rule": "Unwieldy",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Unwieldy",
+      "seat": "CW",
+      "rule": "Unwieldy",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Retaliate",
+      "seat": "TU",
+      "rule": "Retaliate(1)",
+      "system": "gf",
+      "faction": "alien_hives"
+    },
+    {
+      "primitive": "Ravage",
+      "seat": "CU",
+      "rule": "Ravage(1)",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Ravage",
+      "seat": "TU",
+      "rule": "Ravage(1)",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Limited",
+      "seat": "CW",
+      "rule": "Limited",
+      "system": "gf",
+      "faction": "robot_legions",
+      "att": {
+        "limited_used": true
+      }
+    },
+    {
+      "primitive": "Limited",
+      "seat": "TW",
+      "rule": "Limited",
+      "system": "gf",
+      "faction": "robot_legions",
+      "def": {
+        "limited_used": true
+      }
+    },
+    {
+      "primitive": "Hit & Run Fighter",
+      "seat": "CU",
+      "rule": "Hit & Run Fighter",
+      "system": "gf",
+      "faction": "orc_marauders"
+    },
+    {
+      "primitive": "Unpredictable Fighter",
+      "seat": "CU",
+      "rule": "Unpredictable Fighter",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Piercing Assault",
+      "seat": "CU",
+      "rule": "Piercing Assault",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Piercing Assault",
+      "seat": "CW",
+      "rule": "Piercing Assault",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Unpredictable",
+      "seat": "CU",
+      "rule": "Unpredictable",
+      "system": "gf",
+      "faction": "orc_marauders"
+    },
+    {
+      "primitive": "Bane",
+      "seat": "CW",
+      "rule": "Bane",
+      "system": "gf",
+      "faction": "battle_brothers"
+    },
+    {
+      "primitive": "Bane",
+      "seat": "TW",
+      "rule": "Bane",
+      "system": "gf",
+      "faction": "battle_brothers"
+    },
+    {
+      "primitive": "Blast",
+      "seat": "CW",
+      "rule": "Blast(3)",
+      "system": "gf",
+      "faction": "battle_brothers"
+    },
+    {
+      "primitive": "Deadly",
+      "seat": "CW",
+      "rule": "Deadly(3)",
+      "system": "gf",
+      "faction": "battle_brothers",
+      "att": {
+        "models": 4,
+        "tough": 3,
+        "z_step_in": 2.2
+      },
+      "def": {
+        "models": 4,
+        "tough": 3,
+        "z_step_in": 2.3,
+        "weapon_attacks": 2
+      }
+    },
+    {
+      "primitive": "Deadly",
+      "seat": "TW",
+      "rule": "Deadly(3)",
+      "system": "gf",
+      "faction": "battle_brothers",
+      "att": {
+        "models": 4,
+        "tough": 3,
+        "z_step_in": 2.2
+      },
+      "def": {
+        "models": 4,
+        "tough": 3,
+        "z_step_in": 2.3,
+        "weapon_attacks": 2
+      }
+    },
+    {
+      "primitive": "Rending",
+      "seat": "CW",
+      "rule": "Rending",
+      "system": "gf",
+      "faction": "battle_brothers"
+    },
+    {
+      "primitive": "Rending",
+      "seat": "TW",
+      "rule": "Rending",
+      "system": "gf",
+      "faction": "battle_brothers"
+    },
+    {
+      "primitive": "Lacerate",
+      "seat": "CW",
+      "rule": "Lacerate",
+      "system": "gf",
+      "faction": "battle_brothers"
+    },
+    {
+      "primitive": "Lacerate",
+      "seat": "TW",
+      "rule": "Lacerate",
+      "system": "gf",
+      "faction": "battle_brothers"
+    },
+    {
+      "primitive": "Pierce",
+      "seat": "CW",
+      "rule": "Pierce",
+      "system": "gf",
+      "faction": "battle_brothers",
+      "def": {
+        "rules": [
+          "Shielded"
+        ]
+      }
+    },
+    {
+      "primitive": "Shred",
+      "seat": "CW",
+      "rule": "Shred",
+      "system": "gf",
+      "faction": "battle_brothers"
+    },
+    {
+      "primitive": "Shred",
+      "seat": "TW",
+      "rule": "Shred",
+      "system": "gf",
+      "faction": "battle_brothers"
+    },
+    {
+      "primitive": "Surge",
+      "seat": "CW",
+      "rule": "Surge",
+      "system": "gf",
+      "faction": "battle_brothers"
+    },
+    {
+      "primitive": "Surge",
+      "seat": "TW",
+      "rule": "Surge",
+      "system": "gf",
+      "faction": "battle_brothers"
+    },
+    {
+      "primitive": "Reliable",
+      "seat": "CW",
+      "rule": "Reliable",
+      "system": "gf",
+      "faction": "battle_brothers"
+    },
+    {
+      "primitive": "Slayer",
+      "seat": "CW",
+      "rule": "Slayer",
+      "system": "gf",
+      "faction": "dao_union",
+      "att": {
+        "models": 4,
+        "tough": 3,
+        "z_step_in": 2.2
+      },
+      "def": {
+        "models": 4,
+        "tough": 3,
+        "z_step_in": 2.3,
+        "weapon_attacks": 2
+      }
+    },
+    {
+      "primitive": "Melee Slayer",
+      "seat": "CW",
+      "rule": "Melee Slayer",
+      "system": "gf",
+      "faction": "blood_prime_brothers",
+      "att": {
+        "models": 4,
+        "tough": 3,
+        "z_step_in": 2.2
+      },
+      "def": {
+        "models": 4,
+        "tough": 3,
+        "z_step_in": 2.3,
+        "weapon_attacks": 2
+      }
+    },
+    {
+      "primitive": "Takedown",
+      "seat": "CW",
+      "rule": "Takedown",
+      "system": "gf",
+      "faction": "battle_brothers"
+    },
+    {
+      "primitive": "Tear",
+      "seat": "CW",
+      "rule": "Tear",
+      "system": "gf",
+      "faction": "custodian_brothers",
+      "def": {
+        "models": 1,
+        "tough": 9
+      }
+    },
+    {
+      "primitive": "Crack",
+      "seat": "CW",
+      "rule": "Crack",
+      "system": "gf",
+      "faction": "high_elf_fleets"
+    },
+    {
+      "primitive": "Shatter",
+      "seat": "CW",
+      "rule": "Shatter",
+      "system": "gf",
+      "faction": "blood_prime_brothers",
+      "att": {
+        "models": 4,
+        "tough": 3,
+        "z_step_in": 2.2
+      },
+      "def": {
+        "models": 4,
+        "tough": 3,
+        "z_step_in": 2.3,
+        "weapon_attacks": 2
+      }
+    },
+    {
+      "primitive": "Destructive",
+      "seat": "CW",
+      "rule": "Destructive",
+      "system": "gf",
+      "faction": "elven_jesters"
+    },
+    {
+      "primitive": "Destructive",
+      "seat": "TW",
+      "rule": "Destructive",
+      "system": "gf",
+      "faction": "elven_jesters"
+    },
+    {
+      "primitive": "Disintegrate",
+      "seat": "CW",
+      "rule": "Disintegrate",
+      "system": "gf",
+      "faction": "blessed_sisters",
+      "def": {
+        "defense": 3
+      }
+    },
+    {
+      "primitive": "Scourge",
+      "seat": "CW",
+      "rule": "Scourge",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Precise",
+      "seat": "CW",
+      "rule": "Precise",
+      "system": "gf",
+      "faction": "alien_hives"
+    },
+    {
+      "primitive": "Hazardous",
+      "seat": "CW",
+      "rule": "Hazardous",
+      "system": "gf",
+      "faction": "ratmen_clans",
+      "att": {
+        "pin_kits": true
+      },
+      "def": {
+        "weapon_attacks": 2,
+        "pin_kits": true
+      }
+    },
+    {
+      "primitive": "Hazardous",
+      "seat": "TW",
+      "rule": "Hazardous",
+      "system": "gf",
+      "faction": "ratmen_clans",
+      "att": {
+        "pin_kits": true
+      },
+      "def": {
+        "weapon_attacks": 2,
+        "pin_kits": true
+      }
+    },
+    {
+      "primitive": "Armor",
+      "seat": "CU",
+      "rule": "Armor(2)",
+      "system": "gf",
+      "faction": "alien_hives"
+    },
+    {
+      "primitive": "Armor",
+      "seat": "TU",
+      "rule": "Armor(2)",
+      "system": "gf",
+      "faction": "alien_hives"
+    },
+    {
+      "primitive": "Fortified",
+      "seat": "TU",
+      "rule": "Fortified",
+      "system": "gf",
+      "faction": "alien_hives",
+      "att": {
+        "weapon_rules": [
+          "AP(1)"
+        ]
+      }
+    },
+    {
+      "primitive": "Shielded",
+      "seat": "TU",
+      "rule": "Shielded",
+      "system": "gf",
+      "faction": "battle_brothers"
+    },
+    {
+      "primitive": "Resistance",
+      "seat": "TU",
+      "rule": "Resistance",
+      "system": "gf",
+      "faction": "alien_hives"
+    },
+    {
+      "primitive": "Regeneration",
+      "seat": "CU",
+      "rule": "Regeneration",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Regeneration",
+      "seat": "TU",
+      "rule": "Regeneration",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Self-Repair",
+      "seat": "CU",
+      "rule": "Self-Repair",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Self-Repair",
+      "seat": "TU",
+      "rule": "Self-Repair",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Evasive",
+      "seat": "TU",
+      "rule": "Evasive",
+      "system": "gf",
+      "faction": "ratmen_clans"
+    },
+    {
+      "primitive": "Melee Evasion",
+      "seat": "TU",
+      "rule": "Melee Evasion",
+      "system": "gf",
+      "faction": "ratmen_clans"
+    },
+    {
+      "primitive": "Melee Shrouding",
+      "seat": "TU",
+      "rule": "Melee Shrouding",
+      "system": "gf",
+      "faction": "battle_brothers",
+      "gap_in": 10.8
+    },
+    {
+      "primitive": "Versatile Defense",
+      "seat": "TU",
+      "rule": "Versatile Defense",
+      "system": "gf",
+      "faction": "change_disciples",
+      "gap_in": 8.5
+    },
+    {
+      "primitive": "Guarded",
+      "seat": "TU",
+      "rule": "Guarded",
+      "system": "gf",
+      "faction": "blessed_sisters",
+      "gap_in": 8.5
+    },
+    {
+      "primitive": "Stealth",
+      "seat": "TU",
+      "rule": "Stealth",
+      "system": "gf",
+      "faction": "robot_legions",
+      "gap_in": 8.5
+    },
+    {
+      "primitive": "Versatile Reach",
+      "seat": "CU",
+      "rule": "Versatile Reach",
+      "system": "gf",
+      "faction": "battle_brothers",
+      "gap_in": 14.0
+    },
+    {
+      "primitive": "Fast",
+      "seat": "CU",
+      "rule": "Fast",
+      "system": "gf",
+      "faction": "robot_legions",
+      "gap_in": 15.0
+    },
+    {
+      "primitive": "Slow",
+      "seat": "CU",
+      "rule": "Slow",
+      "system": "gf",
+      "faction": "robot_legions",
+      "gap_in": 8.3
+    },
+    {
+      "primitive": "Quick",
+      "seat": "CU",
+      "rule": "Quick",
+      "system": "gf",
+      "faction": "goblin_reclaimers",
+      "gap_in": 13.5
+    },
+    {
+      "primitive": "Strider",
+      "seat": "CU",
+      "rule": "Strider",
+      "system": "gf",
+      "faction": "robot_legions",
+      "terrain": "forest"
+    },
+    {
+      "primitive": "Flying",
+      "seat": "CU",
+      "rule": "Flying",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Flying",
+      "seat": "TU",
+      "rule": "Flying",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Bounding",
+      "seat": "CU",
+      "rule": "Bounding",
+      "system": "gf",
+      "faction": "orc_marauders"
+    },
+    {
+      "primitive": "Swift",
+      "seat": "CU",
+      "rule": "Swift",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Rapid Advance",
+      "seat": "CU",
+      "rule": "Rapid Advance",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Rapid Rush",
+      "seat": "CU",
+      "rule": "Rapid Rush",
+      "system": "gf",
+      "faction": "battle_brothers"
+    },
+    {
+      "primitive": "Versatile Attack",
+      "seat": "CU",
+      "rule": "Versatile Attack",
+      "system": "gf",
+      "faction": "battle_brothers",
+      "gap_in": 9.0,
+      "att": {
+        "quality": 5,
+        "defense": 5
+      },
+      "def": {
+        "models": 6,
+        "quality": 5,
+        "defense": 5
+      }
+    },
+    {
+      "primitive": "Piercing Hunter",
+      "seat": "CU",
+      "rule": "Havocbound",
+      "system": "gf",
+      "faction": "havoc_brothers",
+      "gap_in": 9.0,
+      "def": {
+        "models": 6
+      }
+    },
+    {
+      "primitive": "Piercing Hunter",
+      "seat": "CW",
+      "rule": "Havocbound",
+      "system": "gf",
+      "faction": "havoc_brothers",
+      "gap_in": 9.0,
+      "def": {
+        "models": 6
+      }
+    },
+    {
+      "primitive": "Unstoppable",
+      "seat": "CU",
+      "rule": "Unstoppable",
+      "system": "gf",
+      "faction": "robot_legions",
+      "def": {
+        "rules": [
+          "Regeneration"
+        ]
+      }
+    },
+    {
+      "primitive": "Unstoppable",
+      "seat": "CW",
+      "rule": "Unstoppable",
+      "system": "gf",
+      "faction": "battle_brothers",
+      "def": {
+        "rules": [
+          "Evasive"
+        ]
+      }
+    },
+    {
+      "primitive": "Vengeance",
+      "seat": "CU",
+      "rule": "Vengeance",
+      "system": "gf",
+      "faction": "eternal_dynasty",
+      "att": {
+        "models": 2,
+        "quality": 5,
+        "defense": 6
+      },
+      "def": {
+        "models": 5,
+        "quality": 3,
+        "defense": 3,
+        "weapon_attacks": 2
+      }
+    },
+    {
+      "primitive": "Vengeance",
+      "seat": "TU",
+      "rule": "Vengeance",
+      "system": "gf",
+      "faction": "eternal_dynasty",
+      "att": {
+        "models": 8,
+        "quality": 3,
+        "defense": 4
+      },
+      "def": {
+        "models": 2,
+        "quality": 5,
+        "defense": 6
+      }
+    },
+    {
+      "primitive": "Assault",
+      "seat": "CW",
+      "rule": "Assault",
+      "system": "gf",
+      "faction": "battle_brothers",
+      "att": {
+        "extra_weapons": [
+          {
+            "name": "Rifle",
+            "range_in": 12,
+            "attacks": 2,
+            "count": 5,
+            "rules": [
+              "Assault"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "primitive": "Crossing Attack",
+      "seat": "CU",
+      "rule": "Crossing Attack(2)",
+      "system": "gf",
+      "faction": "high_elf_fleets",
+      "att": {
+        "rules": [
+          "Flying"
+        ]
+      },
+      "mid_blocker": true
+    },
+    {
+      "primitive": "Crossing Attack",
+      "seat": "CW",
+      "rule": "Crossing Attack(2)",
+      "system": "gf",
+      "faction": "robot_legions"
+    },
+    {
+      "primitive": "Strafing",
+      "seat": "CW",
+      "rule": "Strafing",
+      "system": "gf",
+      "faction": "alien_hives",
+      "att": {
+        "extra_weapons": [
+          {
+            "name": "Drop Bombs",
+            "range_in": 0,
+            "attacks": 2,
+            "count": 5,
+            "rules": [
+              "Strafing"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "primitive": "Strafing",
+      "seat": "TW",
+      "rule": "Strafing",
+      "system": "gf",
+      "faction": "alien_hives",
+      "def": {
+        "extra_weapons": [
+          {
+            "name": "Drop Bombs",
+            "range_in": 0,
+            "attacks": 2,
+            "count": 8,
+            "rules": [
+              "Strafing"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "primitive": "Aura Channel",
+      "seat": "CU",
+      "rule": "Furious Aura",
+      "system": "aof",
+      "faction": "beastmen",
+      "att": {
+        "expand_aura": true
+      }
+    },
+    {
+      "primitive": "Aura Channel",
+      "seat": "CW",
+      "rule": "Rending in Melee Aura",
+      "system": "aof",
+      "faction": "dwarves"
+    },
+    {
+      "primitive": "Aura Channel",
+      "seat": "TU",
+      "rule": "Melee Evasion Aura",
+      "system": "aof",
+      "faction": "beastmen",
+      "def": {
+        "expand_aura": true
+      }
+    },
+    {
+      "primitive": "Aura Channel",
+      "seat": "TW",
+      "rule": "Melee Evasion Aura",
+      "system": "aof",
+      "faction": "beastmen"
+    },
+    {
+      "primitive": "Utility Buff",
+      "seat": "CU",
+      "rule": "Defense Debuff",
+      "system": "aof",
+      "faction": "ratmen"
+    },
+    {
+      "primitive": "Utility Buff",
+      "seat": "CW",
+      "rule": "Surge Mark",
+      "system": "aof",
+      "faction": "chivalrous_kingdoms"
+    },
+    {
+      "primitive": "Utility Buff",
+      "seat": "TU",
+      "rule": "Defense Debuff",
+      "system": "aof",
+      "faction": "ratmen"
+    },
+    {
+      "primitive": "Utility Buff",
+      "seat": "TW",
+      "rule": "Surge Mark",
+      "system": "aof",
+      "faction": "chivalrous_kingdoms"
+    },
+    {
+      "primitive": "Shot Modifier",
+      "seat": "CU",
+      "rule": "Good Fighter",
+      "system": "aof",
+      "faction": "goblins"
+    },
+    {
+      "primitive": "Shot Modifier",
+      "seat": "CW",
+      "rule": "Good Fighter",
+      "system": "aof",
+      "faction": "goblins"
+    },
+    {
+      "primitive": "Growth Markers",
+      "seat": "CU",
+      "rule": "Regenerative Strength",
+      "system": "aof",
+      "faction": "dark_elves",
+      "att": {
+        "ledger": {
+          "growth_regenerative_strength": 2
+        }
+      }
+    },
+    {
+      "primitive": "Growth Markers",
+      "seat": "TU",
+      "rule": "Defensive Growth",
+      "system": "gf",
+      "faction": "human_inquisition",
+      "def": {
+        "ledger": {
+          "growth_defensive_growth": 2
+        }
+      }
+    },
+    {
+      "primitive": "Instinctive",
+      "seat": "CU",
+      "rule": "Instinctive",
+      "system": "aof",
+      "faction": "goblins"
+    },
+    {
+      "primitive": "Breath Attack",
+      "seat": "CU",
+      "rule": "Breath Attack",
+      "system": "gf",
+      "faction": "alien_hives"
+    },
+    {
+      "primitive": "Breath Attack",
+      "seat": "TU",
+      "rule": "Breath Attack",
+      "system": "gf",
+      "faction": "alien_hives"
+    },
+    {
+      "primitive": "Mend",
+      "seat": "CU",
+      "rule": "Mend",
+      "system": "gf",
+      "faction": "battle_brothers",
+      "att": {
+        "tough": 3,
+        "wounds_cur": 1
+      }
+    },
+    {
+      "primitive": "Mend",
+      "seat": "TU",
+      "rule": "Mend",
+      "system": "gf",
+      "faction": "battle_brothers",
+      "def": {
+        "tough": 3,
+        "wounds_cur": 1
+      }
+    },
+    {
+      "primitive": "Mind Control",
+      "seat": "CU",
+      "rule": "Mind Control",
+      "system": "gf",
+      "faction": "jackals"
+    },
+    {
+      "primitive": "Mind Control",
+      "seat": "TU",
+      "rule": "Mind Control",
+      "system": "gf",
+      "faction": "jackals"
+    },
+    {
+      "primitive": "Storm Attack",
+      "seat": "CU",
+      "rule": "Storm of War",
+      "system": "gf",
+      "faction": "daemons_of_war"
+    },
+    {
+      "primitive": "Storm Attack",
+      "seat": "TU",
+      "rule": "Storm of War",
+      "system": "gf",
+      "faction": "daemons_of_war"
+    },
+    {
+      "primitive": "Reckless Piercing",
+      "seat": "CU",
+      "rule": "Reckless Piercing",
+      "system": "aof",
+      "faction": "daemons_of_war"
+    },
+    {
+      "primitive": "Deathstrike",
+      "seat": "CU",
+      "rule": "Deathstrike(2)",
+      "system": "gf",
+      "faction": "infected_colonies"
+    },
+    {
+      "primitive": "Deathstrike",
+      "seat": "TU",
+      "rule": "Deathstrike(2)",
+      "system": "gf",
+      "faction": "infected_colonies"
+    },
+    {
+      "primitive": "Self-Destruct",
+      "seat": "CU",
+      "rule": "Self-Destruct(2)",
+      "system": "gf",
+      "faction": "alien_hives"
+    },
+    {
+      "primitive": "Self-Destruct",
+      "seat": "TU",
+      "rule": "Self-Destruct(2)",
+      "system": "gf",
+      "faction": "alien_hives"
+    }
+  ]
+}
