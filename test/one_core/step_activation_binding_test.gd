@@ -101,11 +101,12 @@ func test_a_cast_input_is_understood_and_refused_by_the_core_until_it_resolves_c
 	var r: Dictionary = _core.step_activation(_h, "a", start + [_cast()], false)
 	assert_str(r["step"]).is_equal("refused")
 	assert_int(int(r["index"])).is_equal(2)
-	assert_str(r["reason"]).is_equal("casts are not resolved by the core yet")
+	# The fixture caster holds no spell "Bolt", so the core's own cast check (CC-5a) answers first: its "cast 0: ..." sentence.
+	assert_str(r["reason"]).starts_with("cast 0: ")
 	# A minimal cast (only the required fields) is understood too.
 	var minimal := {"t": "cast", "seq": 0, "caster": "a", "spell": "Bolt", "targets": ["b"], "base": 4, "threshold": 1}
 	r = _core.step_activation(_h, "a", start + [minimal], false)
-	assert_str(r["reason"]).is_equal("casts are not resolved by the core yet")
+	assert_str(r["reason"]).starts_with("cast 0: ")
 	# The core's own order rule still reads first.
 	r = _core.step_activation(_h, "a", [{"t": "begin"}, _cast()], false)
 	assert_str(r["reason"]).is_equal("a cast before the action was declared")

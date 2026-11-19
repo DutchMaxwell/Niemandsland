@@ -104,12 +104,14 @@ def test_a_cast_input_is_understood_and_refused_by_the_core_until_it_resolves_ca
             "boost": 1, "boost_sources": [[unit, 1]], "interference": 1, "interference_sources": [[target, 1]],
             "conduit": "", "conduit_shaken": [], "pools": [[1, [[target, 2]]]], "once": False, "open": False}
 
+    # The fixture caster holds no spell "Bolt", so the core's own cast check (CC-5a) answers first; either way it is the core's cast
+    # sentence ("cast 0: ..."), never "input 2 is not understood".
     refused = core.step_activation(state, unit, start + [cast], False)
-    assert refused == {"step": "refused", "index": 2, "reason": "casts are not resolved by the core yet"}
+    assert refused["step"] == "refused" and refused["index"] == 2 and refused["reason"].startswith("cast 0: "), refused
 
     # Only the required fields: understood too. A cast before the declared action: the core's order rule reads first.
     minimal = {k: cast[k] for k in ("t", "seq", "caster", "spell", "targets", "base", "threshold")}
-    assert core.step_activation(state, unit, start + [minimal], False)["reason"] == "casts are not resolved by the core yet"
+    assert core.step_activation(state, unit, start + [minimal], False)["reason"].startswith("cast 0: ")
     early = core.step_activation(state, unit, [{"t": "begin"}, cast], False)
     assert early == {"step": "refused", "index": 1, "reason": "a cast before the action was declared"}
 
