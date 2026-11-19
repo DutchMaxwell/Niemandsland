@@ -7,9 +7,9 @@
 Weights come from test/shard_weights.json (suite -> seconds, regenerated from a main run).
 A new suite needs NO line there: a suite missing from the file gets the median weight and is
 still assigned exactly once (--check prints how many suites sit at the median; the next
-regeneration gives them a measured weight). A line for a suite that no longer exists fails
---check - delete the line together with the suite. Longest-processing-time-first: heaviest
-suite into the lightest shard.
+regeneration gives them a measured weight). A line for a suite that no longer exists prints a
+warning under --check and does not fail (the next regeneration drops it). Longest-processing-time-first:
+heaviest suite into the lightest shard.
 """
 import argparse
 import json
@@ -65,11 +65,9 @@ def main():
         print(f"{len(unweighted)} unweighted suites at the median ({default_weight(suites, weights):g} s)")
     stale = sorted(set(weights) - set(suites), key=lambda s: s.encode())
     if stale:
-        print(f"::error::{WEIGHTS} has lines for suites that no longer exist - delete them: {stale}")
+        print(f"::warning::{WEIGHTS} has stale lines for suites that no longer exist (dropped on next regeneration): {stale}")
     if missing or dupes or len(seen) != len(suites):
         print(f"::error::shard coverage broken - missing from every shard: {missing}, in several shards: {dupes}")
-        return 1
-    if stale:
         return 1
     print(f"OK: the {a.shards} shards cover every *_test.gd suite exactly once")
     return 0

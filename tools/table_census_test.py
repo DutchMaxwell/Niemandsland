@@ -62,7 +62,7 @@ def test_check_is_green_on_the_committed_state(tmp_path):
 def test_check_is_red_on_a_stale_counter(tmp_path):
     root = repo(tmp_path)
     txt = committed(root)
-    txt.write_text(txt.read_text().replace("old_b 3 0", "old_b 3 1"))   # a prod-caller count
+    txt.write_text(txt.read_text().replace("old_a 4 2", "old_a 4 1"))   # prod callers grew above committed
     res = run(root, "--check")
     assert res.returncode == 1 and "counter is stale" in res.stdout
     assert run(root, "--write").returncode == 0 and run(root, "--check").returncode == 0
@@ -88,8 +88,65 @@ def test_a_moved_test_caller_count_is_reported_but_not_red(tmp_path):
     assert run(root, "--check").returncode == 0
     assert txt.read_text() == before                       # the committed text does not move
     assert "old_b 3 0 2" in run(root).stdout               # the printed report shows the new test count
-    txt.write_text(before.replace("old_b 3 0", "old_b 4 0"))   # the same edit on the LINES column is red
+    txt.write_text(before.replace("old_b 3 0", "old_b 2 0"))   # the same edit on the LINES column is red (grew)
     assert run(root, "--check").returncode == 1
+
+
+def test_check_ratchet_is_red_when_a_function_grows_by_one_line(tmp_path):
+    root = repo(tmp_path)
+    committed(root)
+    src = root / "scripts/a.gd"
+    src.write_text(src.read_text().replace("\treturn x + 1\n", "\tvar y := x\n\treturn y + 1\n"))
+    res = run(root, "--check")
+    assert res.returncode == 1 and "counter is stale" in res.stdout
+
+
+def test_check_ratchet_is_green_with_notice_when_a_function_shrinks_by_one_line(tmp_path):
+    root = repo(tmp_path)
+    committed(root)
+    src = root / "scripts/a.gd"
+    src.write_text(src.read_text().replace("\treturn x + 1\n# a comment that mentions old_a(1) is not a caller\n",
+                                           "\treturn x + 1\n"))
+    res = run(root, "--check")
+    assert res.returncode == 0
+    assert "census can shrink: run --write" in res.stdout
+
+
+def test_check_ratchet_is_green_with_notice_when_a_deleted_function_leaves_manifest(tmp_path):
+    root = repo(tmp_path)
+    committed(root)
+    src = root / "scripts/a.gd"
+    src.write_text(src.read_text().replace("func old_b() -> void:\n\told_a(2)   # a trailing comment with old_b() is not a caller\n\n", ""))
+    shrunk_manifest = {
+        "groups": {"grp": ["scripts/a.gd:old_a"], "whole": ["scripts/a.gd"]},
+        "allowed_callers": {"scripts/a.gd:old_a": ["scripts/a.gd:door", "@grp"]},
+    }
+    (root / "tools/table_census.json").write_text(json.dumps(shrunk_manifest))
+    res = run(root, "--check")
+    assert res.returncode == 0
+    assert "census can shrink: run --write" in res.stdout
+
+
+def test_check_ratchet_is_red_when_a_manifest_function_is_missing_from_code_or_manifest(tmp_path):
+    # Case 1: function listed in tools/table_census.json is missing from code
+    root = repo(tmp_path)
+    committed(root)
+    src = root / "scripts/a.gd"
+    src.write_text(src.read_text().replace("func old_b() -> void:\n\told_a(2)   # a trailing comment with old_b() is not a caller\n\n", ""))
+    res = run(root, "--check")
+    assert res.returncode == 1 and "scripts/a.gd:old_b not found" in res.stderr
+
+    # Case 2: function still exists in code and committed report, but was dropped from tools/table_census.json
+    root2 = repo(tmp_path / "case2")
+    committed(root2)
+    dropped_manifest = {
+        "groups": {"grp": ["scripts/a.gd:old_a"], "whole": ["scripts/a.gd"]},
+        "allowed_callers": {"scripts/a.gd:old_a": ["scripts/a.gd:door", "scripts/a.gd:old_b", "@grp"]},
+    }
+    (root2 / "tools/table_census.json").write_text(json.dumps(dropped_manifest))
+    res2 = run(root2, "--check")
+    assert res2.returncode == 1 and "missing from tools/table_census.json" in res2.stdout
+    assert "new caller" not in res2.stdout
 
 
 def test_check_is_red_on_a_new_prod_caller_and_green_once_listed(tmp_path):

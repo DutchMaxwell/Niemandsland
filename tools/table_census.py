@@ -19,9 +19,11 @@ printed, never committed.
   python3 tools/table_census.py --write    rewrite the committed report (lines and prod callers only)
   python3 tools/table_census.py --runtime census.json   print the report + the soak's table share of AI volleys
                                            (+ the SHADOW and DENY MODE sections when the soak carries them)
-  python3 tools/table_census.py --check    exit 1 if the report is stale (lines and prod callers; test-caller counts
-                                           are printed but never compared or committed), if a planner function has no tag, or if a prod caller appears that
-                                           allowed_callers does not list ("file:function" or "@group"). A listed
+  python3 tools/table_census.py --check    ratchet check: exit 1 if any census lines or prod callers grew above the
+                                           committed report (test-caller counts are printed, never compared or committed),
+                                           if a census/manifest entry is missing from code or manifest, if a planner
+                                           function has no tag, or if an unlisted prod caller appears ("file:function"
+                                           or "@group"). Lower numbers pass with a notice to run --write. A listed
                                            caller that is gone is fine on purpose.
   python3 tools/table_census.py --gate-tag gd_search   exit 1 while a test still calls a function of that tag and
                                            list each one as file:function (the gate for clearing the GDScript search)
@@ -223,6 +225,38 @@ def prod_only(text):
     return "".join(" ".join(p[:-1] if len(p) == 5 else p) + "\n" for p in (ln.split() for ln in head.splitlines()))
 
 
+def _parse_report(text):
+    """Parse a prod_only report into {key: (int, ...)} for ratchet comparison."""
+    out = {}
+    for ln in prod_only(text).splitlines():
+        if ln.startswith("TABLE LINES LEFT:"):
+            out[("TABLE LINES LEFT:",)] = (int(ln.split(":", 1)[1].strip()),)
+        else:
+            p = ln.split()
+            if len(p) == 4:
+                out[(p[0], p[1])] = (int(p[2]), int(p[3]))
+    return out
+
+
+def _ident_exists(root, ident):
+    file, _, name = ident.partition(":")
+    path = root / file
+    return path.is_file() and (not name or Source(path, file).span(name) is not None)
+
+
+def ratchet_check(root, old_text, want_text):
+    """Compare current `want_text` against committed `old_text` as a one-way ratchet.
+    Returns (grown, missing_from_manifest, can_shrink)."""
+    old_rows, want_rows = _parse_report(old_text), _parse_report(want_text)
+    grown = [k for k, wv in want_rows.items()
+             if (ov := old_rows.get(k)) is None or any(w > o for w, o in zip(wv, ov))]
+    missing = [k[1] for k in old_rows
+               if len(k) == 2 and k[0] != "planner_tag" and k[1] != "TOTAL"
+               and k not in want_rows and _ident_exists(root, k[1])]
+    can_shrink = not grown and not missing and prod_only(old_text) != want_text
+    return grown, missing, can_shrink
+
+
 def group_of(reason):
     """The rule group a reason belongs to, shooter or target side: "weapon_rule:AP" / "target_weapon_rule:AP" -> "AP"."""
     reason = reason.removeprefix("target_")
@@ -402,14 +436,18 @@ def main(argv=None):
         txt_path.write_text(want)
     elif args.check:
         old = txt_path.read_text() if txt_path.exists() else ""
-        stale = prod_only(old) != want   # lines and prod callers only; test counts are printed, never committed
-        if stale:
+        grown, missing, can_shrink = ratchet_check(args.root, old, want)
+        if grown:
             print("::error::table census counter is stale - run: python3 tools/table_census.py --write")
             sys.stdout.writelines(difflib.unified_diff(prod_only(old).splitlines(1), want.splitlines(1),
                                                        "committed", "current"))
+        for ident in missing:
+            print(f"::error::census function {ident} is missing from tools/table_census.json (still exists in code)")
+        if can_shrink:
+            print("::notice::census can shrink: run --write")
         for callee, caller in bad:
             print(f"::error::new caller of {callee}: {caller} (not in allowed_callers of tools/table_census.json)")
-        return int(stale or bool(bad) or bool(gate))
+        return int(bool(grown) or bool(missing) or bool(bad) or bool(gate))
     else:
         sys.stdout.write(text + (runtime_report(args.runtime) if args.runtime else ""))
     return int(bool(gate))
