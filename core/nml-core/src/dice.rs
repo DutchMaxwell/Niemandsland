@@ -3439,11 +3439,11 @@ pub fn resolve_spell_hits_with_tray(
     out.caused = w;
     if deadly > 0 {
         let first = out.deadly_groups.len();
-        push_deadly_groups(&mut out, w, deadly.max(1), bypass, &spell_def, def_owner, tray);
+        push_deadly_groups(&mut out, w, deadly.max(1), bypass, ignores_regen, &spell_def, def_owner, tray);
         out.deadly_lines.push((spell_name.into(), w, deadly.max(1), out.deadly_groups.len() - first));
         out.deadly_tally = w;
     } else {
-        out.wounds = ignore_batch(if bypass { 0 } else { w }, if bypass { w } else { 0 }, &spell_def, def_owner, tray, &mut out.rolls);
+        out.wounds = ignore_batch(if bypass { 0 } else { w }, if bypass { w } else { 0 }, if ignores_regen && !bypass { w } else { 0 }, &spell_def, def_owner, tray, &mut out.rolls);
     }
     out
 }
