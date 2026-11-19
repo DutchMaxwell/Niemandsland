@@ -1,43 +1,111 @@
 class_name FxBurst
 extends MultiMeshInstance3D
-## VFX v2: one burst of billboard particles, drawn and animated by ONE shader from per-instance data written once
-## from a RandomNumberGenerator seeded by the cue. Not CPUParticles3D / GPUParticles3D: an emitting CPUParticles3D
-## draws from the game's global RNG even with a fixed seed (measured), and engine particles differ per peer. Same
-## seed, same burst on every screen; no per-frame CPU work. Performance draws none, Low half the particles.
+## VFX v3: one burst of billboard particles driven by ONE shader + a startup 256×256 RGBA channel atlas
+## (R = soft puff, G = FBM eroded smoke, B = velocity-stretched spark/slash taper, A = angular clod silhouette)
+## from per-instance data written once from a RandomNumberGenerator seeded by the cue. Never touches global RNG;
+## same seed, same burst on every peer; zero per-frame CPU work. Supports vertex-shader y = 0 turf bounce
+## (CHIP / BONE / SPARK / DROP), 2.2 s wind-drifting cordite smoke (PUFF, alpha <= 0.35), sand-contrast rim, and
+## a WCAG 2.3.3 reduced-motion static keyframe path (no strobe, no flight motion).
 
 enum Look { PUFF, SPARK, EMBER, MIST, DUST, FLASH, SHARD, FROST, WISP, MOTE, BONE, DROP, CHIP }
+enum Channel { PUFF_R = 0, SMOKE_G = 1, SPARK_B = 2, CLOD_A = 3 }
+
+const ATLAS_SIZE := 256
+const REDUCED_LIFE_S := 0.35
+const SHADER_MIX: Shader = preload("res://shaders/fx_burst_v3.gdshader")
+const SHADER_ADD: Shader = preload("res://shaders/fx_burst_v3_add.gdshader")
+
 ## look -> [start colour, end colour, additive, start size m, end size m, speed m/s, gravity m/s², life s, spread]
+## Smoke/dust/mist/wisp start alpha clamped <= 0.45 (cordite gunsmoke <= 0.35) so bursts never hide hit models.
 const LOOKS := {
-	Look.PUFF: [Color(0.62, 0.6, 0.56, 0.75), Color(0.45, 0.45, 0.44, 0.0), false, 0.006, 0.03, 0.05, -0.03, 0.9, 0.8],
-	Look.SPARK: [Color(3.0, 2.2, 0.9, 1.0), Color(1.2, 0.4, 0.1, 0.0), true, 0.003, 0.0015, 0.5, 1.2, 0.3, 1.0],
-	Look.EMBER: [Color(3.0, 1.3, 0.3, 1.0), Color(0.8, 0.15, 0.05, 0.0), true, 0.006, 0.002, 0.18, -0.12, 0.8, 0.6],
-	Look.MIST: [Color(0.55, 0.04, 0.04, 0.85), Color(0.3, 0.02, 0.02, 0.0), false, 0.004, 0.016, 0.12, 0.1, 0.6, 1.0],
-	Look.DUST: [Color(0.6, 0.53, 0.42, 0.8), Color(0.5, 0.45, 0.38, 0.0), false, 0.006, 0.026, 0.09, 0.05, 0.9, 0.5],
-	Look.FLASH: [Color(2.4, 2.0, 1.3, 1.0), Color(1.2, 0.7, 0.25, 0.0), true, 0.016, 0.006, 0.0, 0.0, 0.1, 0.0],
+	Look.PUFF: [Color(0.76, 0.73, 0.68, 0.35), Color(0.47, 0.48, 0.49, 0.0), false, 0.006, 0.032, 0.04, -0.015, 2.2, 0.85],
+	Look.SPARK: [Color(3.0, 2.2, 0.9, 1.0), Color(1.2, 0.4, 0.1, 0.0), true, 0.003, 0.0014, 0.52, 1.4, 0.38, 1.0],
+	Look.EMBER: [Color(3.0, 1.3, 0.3, 1.0), Color(0.8, 0.15, 0.05, 0.0), true, 0.0055, 0.0018, 0.18, -0.10, 0.8, 0.6],
+	Look.MIST: [Color(0.62, 0.08, 0.08, 0.42), Color(0.32, 0.04, 0.04, 0.0), false, 0.004, 0.016, 0.12, 0.1, 0.6, 1.0],
+	Look.DUST: [Color(0.62, 0.55, 0.44, 0.42), Color(0.48, 0.43, 0.36, 0.0), false, 0.006, 0.026, 0.09, 0.05, 0.9, 0.5],
+	Look.FLASH: [Color(2.8, 2.3, 1.5, 1.0), Color(1.4, 0.75, 0.25, 0.0), true, 0.018, 0.008, 0.0, 0.0, 0.08, 0.0],
 	Look.SHARD: [Color(2.2, 1.0, 2.6, 1.0), Color(0.8, 0.3, 1.0, 0.0), true, 0.005, 0.003, 0.35, 0.9, 0.7, 1.0],
 	Look.FROST: [Color(1.6, 2.2, 3.0, 1.0), Color(0.7, 0.9, 1.2, 0.0), true, 0.004, 0.006, 0.08, 0.04, 1.0, 1.0],
-	Look.WISP: [Color(0.25, 0.08, 0.35, 0.8), Color(0.05, 0.02, 0.08, 0.0), false, 0.008, 0.03, 0.06, -0.08, 1.1, 0.7],
+	Look.WISP: [Color(0.28, 0.10, 0.38, 0.42), Color(0.05, 0.02, 0.08, 0.0), false, 0.008, 0.03, 0.06, -0.08, 1.1, 0.7],
 	Look.MOTE: [Color(2.2, 1.2, 3.0, 1.0), Color(0.9, 0.4, 1.4, 0.0), true, 0.004, 0.002, 0.07, -0.1, 1.0, 1.0],
-	Look.BONE: [Color(0.85, 0.82, 0.72, 0.85), Color(0.6, 0.58, 0.5, 0.0), false, 0.004, 0.014, 0.1, 0.4, 0.7, 1.0],
-	Look.DROP: [Color(0.5, 0.02, 0.02, 0.95), Color(0.32, 0.01, 0.01, 0.0), false, 0.0026, 0.002, 0.24, 1.4, 0.55, 0.9],
-	Look.CHIP: [Color(0.9, 0.87, 0.78, 1.0), Color(0.72, 0.7, 0.62, 0.0), false, 0.003, 0.003, 0.26, 1.5, 0.6, 0.9],
+	Look.BONE: [Color(0.86, 0.82, 0.72, 0.90), Color(0.62, 0.58, 0.50, 0.0), false, 0.004, 0.009, 0.14, 1.2, 0.75, 1.0],
+	Look.DROP: [Color(0.54, 0.03, 0.03, 0.92), Color(0.32, 0.02, 0.02, 0.0), false, 0.0026, 0.002, 0.24, 1.4, 0.55, 0.9],
+	Look.CHIP: [Color(0.88, 0.84, 0.74, 0.95), Color(0.68, 0.64, 0.56, 0.0), false, 0.0034, 0.003, 0.28, 1.5, 0.75, 0.9],
 }
-const SHADER := "shader_type spatial;
-render_mode unshaded, skip_vertex_transform, cull_disabled, depth_draw_never, %s;
-uniform float progress = 0.0; uniform vec4 c0 : source_color; uniform vec4 c1 : source_color;
-uniform float s0; uniform float s1; uniform float life; uniform float gravity;
-varying float t;
-void vertex() {
-	t = clamp(progress / mix(0.55, 1.0, INSTANCE_CUSTOM.w), 0.0, 1.0);
-	float tt = t * life;
-	vec3 p = MODEL_MATRIX[3].xyz + INSTANCE_CUSTOM.xyz * tt * (1.0 - 0.4 * t) - vec3(0.0, 0.5 * gravity * tt * tt, 0.0);
-	VERTEX = (VIEW_MATRIX * vec4(p, 1.0)).xyz + vec3(VERTEX.xy * mix(s0, s1, t), 0.0);
+
+## look -> [channel_mode, stretch (neg = star-flash), bounce (y=0 damping), wind Vector3, contrast_rim, alpha_cap]
+const LOOK_V3 := {
+	Look.PUFF: [Channel.SMOKE_G, 0.0, 0.0, FireProp.SMOKE_WIND_DRIFT, 0.45, 0.35],
+	Look.SPARK: [Channel.SPARK_B, 4.2, 0.45, Vector3.ZERO, 0.0, 1.0],
+	Look.EMBER: [Channel.SPARK_B, 2.4, 0.25, FireProp.SMOKE_WIND_DRIFT * 0.6, 0.0, 1.0],
+	Look.MIST: [Channel.SMOKE_G, 0.0, 0.0, Vector3.ZERO, 0.35, 0.45],
+	Look.DUST: [Channel.SMOKE_G, 0.0, 0.0, FireProp.SMOKE_WIND_DRIFT * 0.5, 0.55, 0.45],
+	Look.FLASH: [Channel.PUFF_R, -1.0, 0.0, Vector3.ZERO, 0.0, 1.0],
+	Look.SHARD: [Channel.CLOD_A, 0.0, 0.38, Vector3.ZERO, 0.0, 1.0],
+	Look.FROST: [Channel.PUFF_R, 0.0, 0.0, Vector3.ZERO, 0.0, 1.0],
+	Look.WISP: [Channel.SMOKE_G, 0.0, 0.0, FireProp.SMOKE_WIND_DRIFT * 0.5, 0.25, 0.45],
+	Look.MOTE: [Channel.PUFF_R, 0.0, 0.0, Vector3.ZERO, 0.0, 1.0],
+	Look.BONE: [Channel.CLOD_A, 0.0, 0.40, Vector3.ZERO, 0.60, 0.95],
+	Look.DROP: [Channel.CLOD_A, 0.0, 0.28, Vector3.ZERO, 0.40, 0.95],
+	Look.CHIP: [Channel.CLOD_A, 0.0, 0.45, Vector3.ZERO, 0.65, 0.96],
 }
-void fragment() {
-	vec4 c = mix(c0, c1, t);
-	ALBEDO = c.rgb; ALPHA = clamp(c.a, 0.0, 1.0) * (1.0 - smoothstep(0.3, 1.0, length(UV * 2.0 - 1.0))) * step(t, 0.999);
-}"
-static var _shaders := {}
+
+static var _atlas: ImageTexture
+static var _unit_quad: QuadMesh
+
+
+## Startup procedural 256×256 RGBA channel atlas (built once deterministically; never touches global RNG).
+## R = soft puff, G = FBM eroded smoke, B = spark/slash taper, A = angular clod silhouette.
+static func channel_atlas() -> ImageTexture:
+	if _atlas != null:
+		return _atlas
+	var sz := ATLAS_SIZE
+	var noise := FastNoiseLite.new()
+	noise.seed = 1337
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.frequency = 0.028
+	noise.fractal_type = FastNoiseLite.FRACTAL_FBM
+	noise.fractal_octaves = 4
+	noise.fractal_lacunarity = 2.0
+	noise.fractal_gain = 0.52
+	var noise_img := noise.get_seamless_image(sz, sz)
+	var noise_data := noise_img.get_data()
+	var bytes := PackedByteArray()
+	bytes.resize(sz * sz * 4)
+	var inv_half := 2.0 / float(sz)
+	var idx := 0
+	var n_idx := 0
+	for y in sz:
+		var ny := (float(y) + 0.5) * inv_half - 1.0
+		var ny2 := ny * ny
+		var spark_y := clampf(1.0 - absf(ny), 0.0, 1.0) * (0.35 + 0.65 * clampf((ny + 1.0) * 0.5, 0.0, 1.0))
+		for x in sz:
+			var nx := (float(x) + 0.5) * inv_half - 1.0
+			var r := sqrt(nx * nx + ny2)
+			var fbm := float(noise_data[n_idx]) * (1.0 / 255.0)
+			n_idx += 1
+			# R: soft radial puff
+			var r_ch := clampf(1.0 - r, 0.0, 1.0)
+			r_ch = r_ch * r_ch * (3.0 - 2.0 * r_ch)
+			# G: FBM eroded smoke cloud
+			var g_rad := clampf(1.0 - r * 1.05, 0.0, 1.0)
+			var g_ch := clampf(g_rad * (0.38 + 0.85 * fbm), 0.0, 1.0)
+			# B: spark / slash streak taper (aligned to +Y velocity axis)
+			var b_core := exp(-nx * nx * 18.0) * spark_y
+			var b_ch := clampf(b_core, 0.0, 1.0)
+			# A: angular rocky clod / bone silhouette
+			var ang := atan2(ny, nx)
+			var clod_r := 0.56 + 0.14 * sin(3.0 * ang + 0.7) + 0.09 * cos(5.0 * ang - 0.4) + 0.10 * (fbm - 0.5)
+			var a_ch := clampf((clod_r - r) * 8.0 + 0.5, 0.0, 1.0)
+			bytes[idx] = int(r_ch * 255.0)
+			bytes[idx + 1] = int(g_ch * 255.0)
+			bytes[idx + 2] = int(b_ch * 255.0)
+			bytes[idx + 3] = int(a_ch * 255.0)
+			idx += 4
+	var img := Image.create_from_data(sz, sz, false, Image.FORMAT_RGBA8, bytes)
+	img.generate_mipmaps()
+	_atlas = ImageTexture.create_from_image(img)
+	return _atlas
 
 
 ## Particles a burst of `count` gets at the current quality (Performance 0, Low half).
@@ -61,32 +129,44 @@ static func instances(look: Look, dir: Vector3, n: int, rng_seed: int, scale := 
 
 
 ## Spawn a burst under `parent` at `at`, thrown along `dir` (zero = all around), its colours multiplied by `tint`;
-## null when the budget is 0.
+## null when the budget is 0 (or FLASH under Reduce Motion).
 static func spawn(parent: Node, look: Look, at: Vector3, dir: Vector3, count: int, rng_seed: int, preset: int,
-		scale := 1.0, tint := Color.WHITE, flat := false) -> FxBurst:
+		scale := 1.0, tint := Color.WHITE, flat := false, ground_y := 0.0) -> FxBurst:
 	var n := budget(count, preset)
 	if n <= 0 or parent == null:
 		return null
+	var reduced := UiMotion.reduced()
+	if reduced and look == Look.FLASH:
+		return null
 	var cfg: Array = LOOKS[look]
+	var v3: Array = LOOK_V3[look]
 	var add: bool = cfg[2]
-	if not _shaders.has(add):
-		_shaders[add] = Shader.new()
-		(_shaders[add] as Shader).code = SHADER % ("blend_add" if add else "blend_mix")
 	var mat := ShaderMaterial.new()
-	mat.shader = _shaders[add]
+	mat.shader = SHADER_ADD if add else SHADER_MIX
+	mat.set_shader_parameter("atlas_tex", channel_atlas())
 	mat.set_shader_parameter("c0", (cfg[0] as Color) * tint)
 	mat.set_shader_parameter("c1", (cfg[1] as Color) * tint)
 	mat.set_shader_parameter("s0", float(cfg[3]) * scale)
 	mat.set_shader_parameter("s1", float(cfg[4]) * scale)
 	mat.set_shader_parameter("gravity", float(cfg[6]))
-	mat.set_shader_parameter("life", float(cfg[7]))
+	var life_s: float = REDUCED_LIFE_S if reduced else float(cfg[7])
+	mat.set_shader_parameter("life", life_s)
 	mat.set_shader_parameter("progress", 0.0)
+	mat.set_shader_parameter("channel_mode", int(v3[0]))
+	mat.set_shader_parameter("stretch", float(v3[1]))
+	mat.set_shader_parameter("bounce", float(v3[2]))
+	mat.set_shader_parameter("ground_y", ground_y)
+	mat.set_shader_parameter("wind", v3[3] as Vector3)
+	mat.set_shader_parameter("contrast_rim", float(v3[4]))
+	mat.set_shader_parameter("alpha_cap", float(v3[5]))
+	mat.set_shader_parameter("static_mode", 1.0 if reduced else 0.0)
+	if _unit_quad == null:
+		_unit_quad = QuadMesh.new()
+		_unit_quad.size = Vector2(2, 2)   # the shader sizes it
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_custom_data = true
-	var quad := QuadMesh.new()
-	quad.size = Vector2(2, 2)   # the shader sizes it
-	mm.mesh = quad
+	mm.mesh = _unit_quad
 	mm.instance_count = n
 	var data := instances(look, dir, n, rng_seed, scale, flat)   # flat: a ring along the ground
 	for i in n:
@@ -100,6 +180,6 @@ static func spawn(parent: Node, look: Look, at: Vector3, dir: Vector3, count: in
 	parent.add_child(b)
 	b.global_position = at
 	var tw := b.create_tween()
-	tw.tween_property(mat, "shader_parameter/progress", 1.0, float(cfg[7]))
+	tw.tween_property(mat, "shader_parameter/progress", 1.0, life_s)
 	tw.tween_callback(b.queue_free)
 	return b
