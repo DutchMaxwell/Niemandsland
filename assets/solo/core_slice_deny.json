@@ -54,6 +54,18 @@
       "why": "A weapon's own Shred beside a unit-level Shred rule of another name (Warbound, Destroyer, Infected, ...) is two rules in the table (R-1 A2: each pays its extra wounds, the alias gated by distance); the core pays the unmodified 1s once, so the target's wounds differ (5 of 12 seeds, dlines3 door test). Not a rule name: `CoreSlice` refuses it by predicate (`own_shred_beside_alias`), switched on by this group; a state difference, so the dice-only pin keeps it.",
       "leaves_with": "the core paying the own part and the alias part apart (R-1 A2 on the step path)"
     },
+    "door_omits_armor_line": {
+      "primitives": ["Armor"],
+      "kind": "rule_line",
+      "why": "The table names a target's Armor(X) before the announce (`<U> has Armor(X): counts as Defense N+`); the core applies it and writes no line. Measured 19.11.: 3 volleys at 1500 and at 2000 pts, dlines_gap row 23.",
+      "leaves_with": "the dlines3 train that says the Armor line"
+    },
+    "door_omits_conditional_ap_line": {
+      "primitives": ["Disintegrate", "Tear"],
+      "kind": "rule_line",
+      "why": "The table names the conditional AP of Disintegrate and Tear (`<rule>: AP(+N) against <U>`) on every volley that gets it; the core applies it and its step path writes no line for these two (its named forms Havocbound, Slayer, ... do). Measured 19.11.: 3 + 12 + 6 volleys at 1500 / 2000 / 3000 pts, dlines_gap row 11.",
+      "leaves_with": "the dlines3 train that says the Disintegrate / Tear line"
+    },
     "door_omits_takedown_lines": {
       "primitives": ["Takedown"],
       "kind": "rule_line",

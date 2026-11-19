@@ -2227,9 +2227,9 @@ fn push_deadly_groups(out: &mut ShootResult, w: i64, x: i64, ignores_regen: bool
     if def.playtest_rules && !ignores_regen && def.regeneration && def.regen_target > 0 {
         for _ in 0..w {
             let post = regen_batch(x, if bypass_flag { x } else { 0 }, def, def_owner, tray, &mut out.rolls);
-            if post > 0 {
-                out.deadly_groups.push((1, post));
-            }
+            // A wound whose X are all ignored still takes its pick (the table's `deadly_pick` runs before the ignore roll, so the "finish the
+            // already-wounded Tough model first" count includes it): an x = 0 group lands nothing and only counts the forced pick.
+            out.deadly_groups.push((1, post));
         }
         return;
     }

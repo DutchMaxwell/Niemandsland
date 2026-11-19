@@ -67,3 +67,12 @@ func test_the_shred_family_names_its_pay_line() -> void:
 func test_the_shred_boost_names_its_window() -> void:
 	await _same("warbound boost", _striker(["Warbound", "Warbound Boost"], [], "war_disciples", "aofr"), _ranks(), "Warbound Boost:", 6, {"distance_in": 14.0})
 	await _same("destroyer boost", _striker(["Destroyer", "Destroyer Boost"], [], "ogres", "aofr"), _ranks(), "Destroyer Boost:", 6, {"distance_in": 14.0})
+
+
+## Deadly at a Tough target that has an ignore group: every unsaved Deadly wound takes its pick BEFORE the ignore roll (the table's `deadly_pick`), so
+## the "finish the already-wounded Tough model first" count includes a wound whose X were all ignored; the core dropped such a wound and counted one
+## forced pick too few. Many shooters and a Defense 6+ target make all-ignored wounds (three 5+ dice) turn up within the seeds.
+func test_deadly_counts_the_picks_of_ignored_wounds() -> void:
+	var target := DoorLines.entry("Ranks", 10, ["Regeneration", "Tough(6)"], [], "battle_brothers", 0)
+	(target["unit"] as OPRApiClient.OPRUnit).defense = 6
+	await _same("deadly vs regeneration", _striker([], ["Deadly(3)"], "battle_brothers", "gf", 30), target, "Deadly(3):", 6)
