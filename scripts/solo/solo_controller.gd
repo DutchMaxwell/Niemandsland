@@ -212,6 +212,8 @@ const NO_OBJECTIVE := Vector3(INF, INF, INF)   # _nearest_uncontrolled_objective
 ## through difficult terrain at any point of its move, then all models in the unit may not move more
 ## than 6” for that movement." — a 6" CAP on the whole move, NOT a halving.
 const DIFFICULT_MOVE_CAP_IN := 6.0
+## #3090 (PENDING_EPOCH_DANGER_AVOID): the sideways goal shifts `_execute_move` tries, in order (core twin `DANGER_SIDESTEP_IN`).
+const DANGER_SIDESTEP_IN: Array[int] = [1, -1, 2, -2, 3, -3, 4, -4]
 ## Unit spacing (GF/AoF Advanced Rules v3.5.1 p.7 "General Movement": "Models may never be within 1” of
 ## models from OTHER UNITS, unless they are taking a Charge action, and may never move through other
 ## models or units (friendly or enemy), even if they are taking a Charge action.") — applies to ALL
@@ -6191,7 +6193,11 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# DANGEROUS terrain is also routed AROUND when a clear path exists (field-test finding 4). Only Flying
 	# ignores it (Strider ignores Difficult but NOT Dangerous — GF/AoF v3.5.1 p.13/p.14); if the destination
 	# itself is dangerous, going around is impossible, so the model routes in and takes its dangerous test.
-	var goal_in_danger: bool = not flying and _targets_in_dangerous(positions, goal, reach, own_r_m)
+	# #3090 (PENDING_EPOCH_DANGER_AVOID, core twin `plain_move_fresh`): a plain move reads the unit's GOAL, not one model's
+	# rigid corner; a charge keeps the per-model test (its front models must reach a target standing in it).
+	var danger_avoid: bool = not allow_contact and AiActRecorder.rules_epoch >= AiActRecorder.PENDING_EPOCH_DANGER_AVOID
+	var goal_in_danger: bool = not flying and (_goal_in_dangerous(positions, goal, reach, own_r_m) if danger_avoid
+		else _targets_in_dangerous(positions, goal, reach, own_r_m))
 	var avoid_dangerous: bool = not flying and not goal_in_danger
 	# Rules 3.6 ruins: the delta _plan_positions judges, to NAME the regime in the move record.
 	var delta0 := _clamp_delta_to_bounds(positions, MoveIntent.plan_unit_move(positions, goal, reach))
@@ -6203,12 +6209,35 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	for m in models:
 		trail_radii_m.append(model_base_radius_m(m as ModelInstance))
 	var new_positions := _plan_move(unit, models, positions, goal, reach, allow_contact, avoid, avoid_dangerous, trails, charge_target)
+	var capped := false
 	if not ignores_difficult and (_trails_cross_difficult(trails, trail_radii_m) or difficult_debuff):
 		# The actual route enters difficult terrain → the 6" cap applies (p.11); re-plan through it so the
 		# budget math and the drawn corridor agree. Dangerous is STILL routed around on this pass.
 		reach = minf(inches, DIFFICULT_MOVE_CAP_IN)
+		capped = true
 		trails = []
 		new_positions = _plan_move(unit, models, positions, goal, reach, allow_contact, false, avoid_dangerous, trails, charge_target)
+	# #3090 (PENDING_EPOCH_DANGER_AVOID, core twin `Move::execute`): the solver routes model by model, so an edge model
+	# hemmed in by its neighbour can keep a route through Dangerous ground the whole unit could skirt. Shift the goal
+	# sideways (perpendicular to the move, + = right of travel) and keep the FIRST plan that crosses no Dangerous ground
+	# and keeps the p.11 regime; the rest of the move runs on that goal. None clears: today's plan. A player's order is
+	# never re-aimed.
+	if danger_avoid and avoid_dangerous and not flying and not _player_move \
+			and _dangerous_trail_flags(trails, trail_radii_m).has(true):
+		var side := Vector2(-delta0.z, delta0.x).normalized()
+		if side != Vector2.ZERO:
+			for k: int in DANGER_SIDESTEP_IN:
+				var g5 := goal + Vector3(side.x, 0.0, side.y) * (float(k) * INCHES_TO_METERS)
+				var t5: Array = []
+				var p5 := _plan_move(unit, models, positions, g5, reach, allow_contact, avoid and not capped, avoid_dangerous, t5, charge_target)
+				if _dangerous_trail_flags(t5, trail_radii_m).has(true) \
+						or (not ignores_difficult and not capped and _trails_cross_difficult(t5, trail_radii_m)):
+					continue
+				goal = g5
+				new_positions = p5
+				trails = t5
+				board_clamp_notes.append("%s sidesteps Dangerous ground (%d\" %s)" % [unit.get_name(), absi(k), "right" if k > 0 else "left"])
+				break
 	# STALL ESCALATION as its OWN gate, not an elif (Windows playtest bug 4b): chained behind the
 	# difficult-cap branch it was UNREACHABLE whenever that branch fired — and the capped re-plan still
 	# avoids DANGEROUS cells, so a route hard-blocked by a dangerous field kept its bounded-search stub and
@@ -6671,6 +6700,15 @@ func _targets_in_dangerous(positions: Array, goal: Vector3, reach_in: float, rad
 		if TerrainRules.base_in_terrain((p as Vector3) + delta, radius_m, terrain_type_at, TerrainRules.is_dangerous):
 			return true
 	return false
+
+
+## #3090 (PENDING_EPOCH_DANGER_AVOID, core twin `goal_in`): does the unit's own GOAL, its centre at the end of the rigid
+## move, land (base edge included) in DANGEROUS terrain? One model's rigid corner no longer turns avoidance off.
+func _goal_in_dangerous(positions: Array, goal: Vector3, reach_in: float, radius_m: float = 0.0) -> bool:
+	if not terrain_type_at.is_valid() or positions.is_empty():
+		return false
+	var delta := _clamp_delta_to_bounds(positions, MoveIntent.plan_unit_move(positions, goal, reach_in))
+	return TerrainRules.base_in_terrain(MoveIntent.anchor_of(positions) + delta, radius_m, terrain_type_at, TerrainRules.is_dangerous)
 
 
 ## Rules 3.6: is the rigid move over 6" for a non-Flying unit? Same slack as `_dangerous_trail_flags` (`UNSTABLE_SLACK_IN`).

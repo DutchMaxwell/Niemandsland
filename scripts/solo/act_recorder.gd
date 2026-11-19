@@ -284,6 +284,9 @@ const EPOCH_90_JOINED_ONE_RECOVERY := 90
 ## The core's frozen `EPOCH_91_JOINED_HERO_FATIGUE` (acts.rs): the melee marks the host's joined heroes Fatigued with it, as the
 ## table's `_solo_set_fatigued` already does. Nothing in the table gates on it.
 const EPOCH_91_JOINED_HERO_FATIGUE := 91
+## The core's `PENDING_EPOCH_DANGER_AVOID` (acts.rs, #3090 part 2): a plain move's Dangerous exception reads the unit's
+## goal, and a plan that still crosses Dangerous retries with the goal shifted sideways (`SoloController._execute_move`).
+const PENDING_EPOCH_DANGER_AVOID := 93
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
