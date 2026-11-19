@@ -1031,6 +1031,8 @@ pub struct ShootProfile {
     /// carries Vinci Tech — the rule's own printed condition.
     pub versatile_both: bool,
     pub on6_ap: i64,
+    /// The rule that stamped `on6_ap` (Crack, Fracture, ...), for the table's "<rule>: N hits on a 6" line.
+    pub on6_rule: String,
     /// `AiEv.stamp_sergeant` :267-274 writes the bearer's own attack share here.
     /// ALWAYS 0 in this port — see `UnitStatic::unimplemented`.
     pub sergeant_attacks: i64,
@@ -6061,12 +6063,13 @@ fn stamp_conditional_ap(
                     sp.regen_bypass_rule = base.clone();
                 }
                 sp.cond_ap.push(hold_gate(c));
-                seen.push(base);
+                seen.push(base.clone());
             }
             // Crack's on-6-to-hit AP upgrade (:305-307) — a plain assignment in
             // GDScript, so the LAST rule of the weapon wins, not the largest.
             if on6 > 0 {
                 sp.on6_ap = on6;
+                sp.on6_rule = base;
             }
         }
         for (n, c) in &unit_specs {
