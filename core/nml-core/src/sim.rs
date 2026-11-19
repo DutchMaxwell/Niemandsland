@@ -1363,7 +1363,7 @@ fn land_chain_report(statics: &[UnitStatic], next: &State, tray: &mut Tray, ti: 
         _ => (alive, total, ""),
     };
     if took > 0 {
-        tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[ti],
+        tray.say_wounds(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[ti],
             text: format!("{} takes {took} wound{} ({n}/{of}{unit})", ut.name, if took == 1 { "" } else { "s" }), detail: None });
     }
     for (u, at, _) in &ch {
@@ -1376,8 +1376,9 @@ fn land_chain_report(statics: &[UnitStatic], next: &State, tray: &mut Tray, ti: 
             (1, _) => format!("{name} loses a model ({a}/{t})"),
             _ => format!("{name} loses {lost} models ({a}/{t})"),
         };
-        tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[*u], text, detail: None });
+        tray.say_wounds(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[*u], text, detail: None });
     }
+    tray.release_outcome();
     for (u, at, wounds) in ch {
         if let Some(l) = landing_of(next, u, &at, &wounds, &tray.dead_slots(u)) {
             tray.land(|| Landing { loss_line: true, ..l });
@@ -2214,6 +2215,7 @@ fn control_morale_passed(
     }
     let us = &statics[next.roster.profile[ti]];
     let mut ctx = live_morale_ctx(statics, next, ti, false, seams, shot);
+    ctx.side = next.player[ti]; // the seat the morale dice lines (Fearless, No Retreat) are said for
     drop_banner_for_cause(statics, next, ti, false, true, Some(source.rule), None, None, seams, &mut ctx, shot);
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
         &ctx, source.owner, None, false, false, next.shaken[ti], wounds_left(next, ti), tray,
@@ -6763,13 +6765,16 @@ fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool,
 /// MOR-09b: `charged_by_enemy = false` is the melee the unit itself charged and
 /// lost. Melee caused the test, so Banner stays; but the unit was not charged,
 /// so the Valiant share comes out (an explicit state, never the `None` reading).
+///
+/// Returns the Banner-family share it took out of the target (a Great Banner spell token excluded: the table keeps
+/// that one with the spell tokens), which is what the table's own "gets +N to morale test rolls" line counts.
 #[allow(clippy::too_many_arguments)] // the cause/distance flags join the existing parity args
 fn drop_banner_for_cause(
     statics: &[UnitStatic], state: &State, i: usize, melee: bool, charged_by_enemy: bool,
     cause: Option<&str>, over_in: Option<f64>, charge_from_in: Option<f64>, seams: Seams,
     ctx: &mut Ctx, shot: &mut ShootResult,
-) {
-    if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) || unit_shaken(state, i, seams) { return; }
+) -> i64 {
+    if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) || unit_shaken(state, i, seams) { return 0; }
     let us = &statics[state.roster.profile[i]];
     let banner = ((state.morale_bonus[i] - us.ctx.morale_rating).max(0) - banner_gone(statics, state, i, seams)).max(0);
     if let Some(cause) = cause {
@@ -6791,7 +6796,7 @@ fn drop_banner_for_cause(
             ctx.morale_bonus -= great_banner;
             shot.log.push(format!("[Great Banner] {}: no +{} against {} (only shooting or melee)", us.name, great_banner, cause));
         }
-        return;
+        return banner.max(0);
     }
     if !charged_by_enemy {
         // MOR-09b: the unit itself charged and lost. Melee caused the test, so
@@ -6806,9 +6811,9 @@ fn drop_banner_for_cause(
             trace_rule("morale", "Banner", &line);
             shot.log.push(line);
         }
-        return;
+        return vt;
     }
-    if !crate::unit::valiant_inside_band(melee, over_in, charge_from_in) { return; }
+    if !crate::unit::valiant_inside_band(melee, over_in, charge_from_in) { return 0; }
     let vt = us.ctx.valiant_bonus.min(banner).max(0);
     if vt > 0 {
         ctx.morale_bonus -= vt;
@@ -6824,6 +6829,18 @@ fn drop_banner_for_cause(
         trace_rule("morale", "Banner", &line);
         shot.log.push(line);
     }
+    vt
+}
+
+/// The name the table's "gets +N to morale test rolls" line puts in front of the colon: the Morale(X) rating when the
+/// unit has one, the Banner-family source otherwise, both joined by " + " when the bonus exceeds the rating alone.
+fn morale_bonus_source(us: &UnitStatic, bonus: i64) -> String {
+    let family = if us.morale_family.is_empty() { "Banner" } else { us.morale_family.as_str() };
+    let rating = us.ctx.morale_rating;
+    if rating <= 0 {
+        return family.to_string();
+    }
+    if bonus > rating { format!("Morale({rating}) + {family}") } else { format!("Morale({rating})") }
 }
 
 /// `main._solo_morale_test` :8305 on the played path — the tray twin of
@@ -6858,7 +6875,8 @@ pub(crate) fn tray_morale_for(
     }
     let us = &statics[state.roster.profile[i]];
     let mut ctx = live_morale_ctx(statics, state, i, melee, seams, shot);
-    drop_banner_for_cause(statics, state, i, melee, charged_by_enemy, cause, over_in, charge_from_in, seams, &mut ctx, shot);
+    ctx.side = state.player[i]; // the seat the morale dice lines (Fearless, No Retreat) are said for
+    let banner_dropped = drop_banner_for_cause(statics, state, i, melee, charged_by_enemy, cause, over_in, charge_from_in, seams, &mut ctx, shot);
     // G4R4 C-LONEHERO-SHAKEN: the unit's flag, the dead host's included (rules-must-log names the Shaken rule).
     let shaken = unit_shaken(state, i, seams);
     if shaken && !state.shaken[i] {
@@ -6876,6 +6894,18 @@ pub(crate) fn tray_morale_for(
             us.ctx.morale_rating,
             morale_target(ctx.quality, ctx.morale_bonus)
         ));
+    }
+    // The table's line before the test die (`_solo_morale_test`): the rating and the Banner family name the
+    // bonus they add. The bonus is the stamped share minus what a cause or the Valiant band took back out, so
+    // spell tokens stay out of it; the target is the one the die is rolled against.
+    if !shaken {
+        let bonus = state.morale_bonus[i] - banner_gone(statics, state, i, seams) - banner_dropped;
+        if bonus > 0 {
+            let target = morale_target(ctx.quality, ctx.morale_bonus);
+            tray.say(|| LogLine { rule: "morale", category: Category::Combat, side: state.player[i], detail: None,
+                text: format!("{}: {} gets +{bonus} to morale test rolls (passes on {target}+)",
+                    morale_bonus_source(us, bonus), us.name) });
+        }
     }
     // main.gd:8303 — the test die spends the morale once-mods it just used.
     // Placed after the call because `ctx` already carries the target it built.
@@ -6916,6 +6946,11 @@ pub(crate) fn tray_morale_for(
         Morale::Shaken => format!("{} fails morale — Shaken", us.name),
         Morale::Routed => format!("{} fails morale at half strength — ROUTS", us.name),
     }, detail: None });
+    // No Retreat's self-wounds land before the table writes its outcome: the landing report that follows this test says
+    // their wound and loss lines ahead of this line (a rout's removal, which follows the outcome, holds nothing).
+    if self_wounds > 0 {
+        tray.hold_outcome();
+    }
     match outcome {
         Morale::Passed => {}
         Morale::Shaken => {
@@ -7995,13 +8030,15 @@ pub(crate) fn cast_phase(
 
 /// CC-5b/5c: how an offered cast ends. Before any die: its caster is down when the cast resolves (a Dangerous test, an earlier cast's
 /// Hazardous), skipped silently as `_solo_resolve_ai_casts` does; no target stands, the cast fizzles. At the cast die: it fails, or it
-/// succeeds (`Hit`: the effect is CC-6/CC-8's, so the step API refuses a `Hit` for now).
+/// succeeds: `Landed` = a damage spell's hits are saved and landed (CC-6a), `Hit` = the effect is CC-8b's (a buff or debuff), so the
+/// step API refuses a `Hit` for now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CastEnd {
     Skipped,
     Fizzled,
     Failed,
     Hit,
+    Landed,
 }
 
 /// CC-5b: `Some(end)` when `c` ends before any die in `state`; `None` = it goes on to the cast die.
@@ -8035,7 +8072,8 @@ fn casting_notes(statics: &[UnitStatic], state: &State, ci: usize, conduit_mod: 
 /// nothing, a fizzled one says so. Otherwise the shaken-battery, conduit, casting-net and announce/needs lines, the cast die (kind
 /// "cast", the caster's), its result line, and the casting once-mod is spent by the roll. The target is the table's double clamp:
 /// the casting net (including the conduit mod) moves the base first (`caster_casting_net`), boost and interference the clamped
-/// result (`AiSpell.cast_target`). `si` is the activating unit (the announce line names it).
+/// result (`AiSpell.cast_target`). `si` is the activating unit (the announce line names it). A hit of a damage spell lands its hits
+/// on each standing target in list order (`tray_spell_damage`, CC-6a); any other effect ends `Hit`, which the step API still refuses.
 pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c: &CastInput, seams: Seams, tray: &mut Tray, shot: &mut ShootResult) -> CastEnd {
     for (key, n) in std::iter::once((&c.caster, &c.threshold)).chain(c.boost_sources.iter().chain(&c.interference_sources).map(|(k, n)| (k, n))) {
         if let Some(&i) = state.roster.index.get(key.as_str()) {
@@ -8090,7 +8128,36 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
     shot.rolls.push(crate::dice::Roll { kind: "cast", count: 1, target, faces, owner: caster });
     cast_say(tray, side, format!("{}: cast roll {face} vs {target}+ — {}", c.spell, if hit { "SUCCESS" } else { "FAILED" }));
     mods::spend_once(state, ci, &[mods::Role::Casting], false);
-    if hit { CastEnd::Hit } else { CastEnd::Failed }
+    if !hit {
+        return CastEnd::Failed;
+    }
+    let Some(spell) = statics[state.roster.profile[ci]].spells.iter().find(|s| s.name == c.spell && s.effect_kind == "damage") else { return CastEnd::Hit };
+    for t in c.targets.iter().filter_map(|k| state.roster.index.get(k.as_str()).copied()).filter(|&t| state.alive[t] > 0).collect::<Vec<_>>() {
+        tray_spell_damage(statics, state, t, spell, seams, tray, shot);
+    }
+    CastEnd::Landed
+}
+
+/// CC-6a: a damage spell's hits on one target, plain (`_solo_resolve_spell_damage` main.gd:5747). The printed hits are fixed (no to-hit
+/// die), saved at the target's own Defense and the spell's AP: Shielded, Cover and the over-9" family do not count against a spell
+/// (NML-104), so a target in cover says so; the dice are the spell's own (`spell_defense`). The unsaved wounds land through the
+/// volley's casualty order and report. Facets, Regeneration and the morale test are CC-6b..8a's: `cast_break` keeps out what they change.
+fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ti: usize, spell: &Spell, seams: Seams, tray: &mut Tray, shot: &mut ShootResult) {
+    if spell.effect_hits <= 0 {
+        return;
+    }
+    let ut = &statics[state.roster.profile[ti]];
+    let def = ctx_of(ut, state, ti);
+    if state.in_cover[ti] {
+        let (side, text) = (state.player[ti], format!("Cover does not apply to spell damage (its +1 is against shooting) — {} saves on {}+", ut.name, def.defense.clamp(2, 6)));
+        tray.say(|| LogLine { rule: "spell", category: Category::Combat, side, text, detail: None });
+    }
+    let mut out = crate::dice::resolve_spell_hits_with_tray(spell.effect_hits, crate::spell::spell_facets(&spell.weapon_rules, seams.rules_epoch).ap, &def, &ut.name, tray);
+    out.rolls.iter_mut().for_each(|r| r.kind = "spell_defense");
+    let landed = shot.absorb(out);
+    let before = chain_snapshot(state, ti, tray);
+    land_pool_wounds(state, ti, landed, seams.tray_exact, seams, &mut shot.log);
+    land_chain_report(statics, state, tray, ti, before);
 }
 
 /// NML-1157 — WHICH member of the activating chain actually casts.

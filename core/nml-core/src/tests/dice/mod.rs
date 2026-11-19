@@ -422,6 +422,7 @@ mod melee_impact_order;
 mod relentless_thrust;
 mod takedown_unit_of_one;
 mod morale_dice;
+mod morale_lines;
 mod morale_rating;
 mod rung_i_dice;
 mod counter_param;

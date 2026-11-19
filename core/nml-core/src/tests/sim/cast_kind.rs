@@ -111,27 +111,33 @@ use super::*;
         (st, statics)
     }
 
-    /// CC-5b/5c: `tray_cast` on its four ends. A cast whose caster and target stand pays, asks the cast die and ends on it (a face
+    /// CC-5b/5c: `tray_cast` on its ends. A cast whose caster and target stand pays, asks the cast die and ends on it (a face
     /// of 6 hits, a 1 fails); the same cast at a wiped-out target fizzles with its one line; with the caster down it is skipped
-    /// without one. All of them paid the threshold.
+    /// without one. All of them paid the threshold. A hit lands a damage spell's hits (CC-6a: the target's saves are asked, so one
+    /// more roll and the saves and wound lines); a buff's effect is not the core's yet (`Hit`).
     #[test]
     fn tray_cast_pays_first_then_skips_fizzles_or_rolls_its_die() {
         use crate::activation::CastInput;
         use crate::dice::ShootResult;
         use crate::sim::{tray_cast, CastEnd};
         let c = CastInput { seq: 0, caster: "a".into(), spell: "bolt".into(), targets: vec!["b".into()], base: 4, threshold: 1, ..Default::default() };
-        let run = |down: Option<usize>, face: u8| {
+        let run_with = |c: &CastInput, down: Option<usize>, face: u8, buff: bool| {
             let (mut st, mut statics) = indexed_caster();
             statics[0].name = "Mystic".into();
+            if buff {
+                statics[0].spells = vec![Spell { name: "bolt".into(), ..blessing() }];
+            }
             if let Some(u) = down {
                 (st.alive[u], st.wounds[u]) = (0, Vec::new());
             }
             let mut tray = Tray::supplied(vec![vec![face]]);
             let mut shot = ShootResult::default();
-            let end = tray_cast(&statics, &mut st, 0, &c, Seams::default(), &mut tray, &mut shot);
+            let end = tray_cast(&statics, &mut st, 0, c, Seams::default(), &mut tray, &mut shot);
             (end, st.casts[0], tray.all_lines().len(), shot.rolls.len())
         };
-        assert_eq!(run(None, 6), (CastEnd::Hit, 1, 3, 1), "announce, needs, result line; one die");
+        let run = |down: Option<usize>, face: u8| run_with(&c, down, face, false);
+        assert_eq!(run(None, 6), (CastEnd::Landed, 1, 5, 2), "announce, needs, result, saves-on, wound lines; the die and the saves");
+        assert_eq!(run_with(&c, None, 6, true), (CastEnd::Hit, 1, 3, 1), "a buff: announce, needs, result line; one die");
         assert_eq!(run(None, 1), (CastEnd::Failed, 1, 3, 1));
         assert_eq!(run(Some(2), 6), (CastEnd::Fizzled, 1, 1, 0), "the fizzle line, no die");
         assert_eq!(run(Some(0), 6), (CastEnd::Skipped, 1, 0, 0), "silent, no die");

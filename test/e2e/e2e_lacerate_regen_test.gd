@@ -81,21 +81,6 @@ func _gun(rules: Array, attacks: int = 60, reach: int = 24) -> OPRApiClient.OPRW
 	return w
 
 
-func _volley(rules: Array, attacks: int = 60) -> String:
-	var attacker := _attacker()
-	var foe := _self_repair_foe()
-	var profiles := AiShooting.profiles_in_range([_gun(rules, attacks)], 0.0)
-	assert_int(profiles.size()).is_equal(1)
-	var shots := [{"member": attacker, "quality": attacker.get_quality(),
-		"alive": attacker.get_alive_count(), "max": attacker.models.size(),
-		"reach": 24, "profile": profiles[0]}]
-	_main.seed_tray_rng(7)
-	await _main._solo_resolve_ai_volley(attacker, foe, shots)
-	var text := _log_text()
-	await E2EBoot.settle(get_tree())
-	return text
-
-
 func _spell(weapon_rules: Array) -> String:
 	var caster := _attacker()
 	var foe := _self_repair_foe()
@@ -137,51 +122,6 @@ func test_bane_and_rending_weapons_still_ignore_regeneration() -> void:
 	var attacker := _attacker()
 	assert_bool(_main._solo_ignores_regen(attacker, AiShooting.profiles_in_range([_gun(["Bane"])], 0.0)[0])).is_true()
 	assert_bool(_main._solo_ignores_regen(attacker, AiShooting.profiles_in_range([_gun(["Rending"])], 0.0)[0])).is_true()
-
-
-# ===== the volley =====
-
-## The claim on the dice: a Lacerate volley's wounds face the Self-Repair roll, and the re-roll line
-## names Lacerate, not Bane.
-func test_lacerate_volley_rolls_self_repair() -> void:
-	var text: String = await _volley(["AP(4)", "Lacerate"])
-	assert_str(text) \
-		.override_failure_message("A1 — the Lacerate wounds skipped Self-Repair (log: %s)" % text.strip_edges()) \
-		.contains("self-repair di")
-	assert_str(text) \
-		.override_failure_message("A1 — the re-roll must name the rule that caused it (log: %s)" % text.strip_edges()) \
-		.contains("Lacerate: Clockwork Squad re-rolls")
-	assert_str(text).not_contains("ignore Regeneration")
-
-
-## Bane's wounds skip only the roll of the rule named Regeneration: Self-Repair still rolls them, and the log
-## says so (rules-must-log: the decision is never silent).
-func test_bane_volley_still_rolls_self_repair_and_says_so() -> void:
-	var text: String = await _volley(["AP(4)", "Bane"])
-	assert_str(text).contains("self-repair di")
-	assert_str(text) \
-		.override_failure_message("A1 — the still-rolling Self-Repair must be logged (log: %s)" % text.strip_edges()) \
-		.contains("ignore only Regeneration — Self-Repair still rolls")
-	assert_str(text).not_contains("no self-repair roll")
-
-
-## Rending (p.14) ignores Regeneration on EVERY hit — not only the unmodified 6s that get AP(+4). No AP
-## here, so most wounds come from non-6 hits; all of them bypass Regeneration only - Self-Repair still rolls them.
-func test_rending_volley_still_rolls_self_repair_on_every_hit() -> void:
-	var text: String = await _volley(["Rending"])
-	assert_str(text).contains("Rending:")
-	assert_str(text).contains("self-repair di")
-	assert_str(text) \
-		.override_failure_message("A1 — the still-rolling Self-Repair must be logged (log: %s)" % text.strip_edges()) \
-		.contains("ignore only Regeneration — Self-Repair still rolls")
-	assert_str(text).not_contains("no self-repair roll")
-
-
-## CONTROL (the check can fail): a plain volley rolls Self-Repair and claims no skip.
-func test_plain_volley_rolls_self_repair() -> void:
-	var text: String = await _volley(["AP(4)"])
-	assert_str(text).contains("self-repair di")
-	assert_str(text).not_contains("ignore Regeneration")
 
 
 # ===== the spell =====

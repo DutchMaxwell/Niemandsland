@@ -37,6 +37,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
 	AiDiceRecorder.close()
 	OS.set_environment("NML_DICE_DUMP", "")
 	var d := DirAccess.open(_DUMP_DIR)
@@ -71,13 +73,13 @@ func _owners() -> Array:
 	return out
 
 
-## A host squad with a Bloodborn hero joined to it. The hero's pistol (Quality 2+, 12 dice) is the shot; the volley's
-## attacker is the host, the firing member is the hero — the parity acts' shape.
-func _volley(epoch: int) -> void:
-	AiActRecorder.rules_epoch = epoch
-	var host := E2EBoot.make_unit(_main, 1, "Test Squad", [Vector3.ZERO])
+## A host squad (seat `seat`) with a Bloodborn hero joined to it, and a squad of the other seat to shoot at. The hero's
+## pistol (Quality 2+, 12 dice) is the shot; the volley's attacker is the host, the firing member is the hero - the
+## parity acts' shape.
+func _fixture(seat: int) -> Dictionary:
+	var host := E2EBoot.make_unit(_main, seat, "Test Squad", [Vector3.ZERO])
 	(host.models[0] as ModelInstance).model_index = 0
-	var hero := E2EBoot.make_unit(_main, 1, "Test Hero", [Vector3(0, 0, 0.02)])
+	var hero := E2EBoot.make_unit(_main, seat, "Test Hero", [Vector3(0, 0, 0.02)])
 	(hero.models[0] as ModelInstance).model_index = 0
 	hero.unit_properties["game_system"] = "gf"
 	hero.unit_properties["faction_folder"] = "blood_brothers"
@@ -96,14 +98,44 @@ func _volley(epoch: int) -> void:
 	src.weapons.assign([pistol])
 	hero.source_type = "opr"
 	hero.source_data = src
-	var squad := E2EBoot.make_unit(_main, 2, "Test Scouts", [Vector3(5.0 * INCH, 0, 0), Vector3(5.0 * INCH, 0, 0.02)])
+	var squad := E2EBoot.make_unit(_main, 3 - seat, "Test Scouts", [Vector3(5.0 * INCH, 0, 0), Vector3(5.0 * INCH, 0, 0.02)])
 	squad.unit_properties["defense"] = 6
 	_main.opr_army_manager.game_units[squad.unit_id] = squad
+	return {"host": host, "hero": hero, "squad": squad, "pistol": pistol}
+
+
+func _volley(epoch: int) -> void:
+	AiActRecorder.rules_epoch = epoch
+	var f := _fixture(1)
 	var shots: Array = []
-	for p in AiEv.stamp_sergeant(AiShooting.profiles_in_range([pistol], 0.0), hero):
-		shots.append({"member": hero, "quality": 2, "alive": 1, "max": 1, "reach": 12, "profile": p})
+	for p in AiEv.stamp_sergeant(AiShooting.profiles_in_range([f["pistol"]], 0.0), f["hero"]):
+		shots.append({"member": f["hero"], "quality": 2, "alive": 1, "max": 1, "reach": 12, "profile": p})
 	_main.seed_tray_rng(SEED)
-	await _main._solo_resolve_ai_volley(host, squad, shots)
+	await _main._solo_resolve_ai_volley(f["host"], f["squad"], shots)
+	await E2EBoot.settle(get_tree())
+
+
+## The game's own call: the core door takes the host's volley (both seats AI), the joined hero fires its pistol in it.
+func _door_volley(epoch: int) -> void:
+	AiActRecorder.rules_epoch = epoch
+	_main.solo_ai_slots = {1: true, 2: true}
+	_main.solo_controller.ai_slot = 2
+	_main.solo_controller.human_slot = 1
+	CoreActivation._env = 1
+	var f := _fixture(2)
+	var host: GameUnit = f["host"]
+	var host_src := OPRApiClient.OPRUnit.new()   # the host fires nothing itself: only the hero's pistol rolls dice
+	host.source_type = "opr"
+	host.source_data = host_src
+	_main.seed_tray_rng(SEED)
+	var runs := CoreActivation.ai_runs
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	await _main._run_ai_shooting({"unit": host, "moved": false, "action": AiDecision.Action.HOLD})
+	assert_int(CoreActivation.ai_runs).override_failure_message("the core did not take the volley (the table shot it)") \
+		.is_equal(runs + 1)
+	if _main._solo_core_ai_h != 0:
+		_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+	_main._solo_core_ai_h = 0
 	await E2EBoot.settle(get_tree())
 
 
@@ -123,9 +155,13 @@ func test_the_extra_die_is_signed_by_the_host_at_epoch_72(timeout := 120000) -> 
 
 ## EPOCH_73: the extra die carries the firing hero's label, like the hero's own attack dice.
 func test_the_extra_die_is_signed_by_the_firing_member_at_epoch_73(timeout := 120000) -> void:
-	await _volley(AiActRecorder.EPOCH_73_V36)
-	_assert_extra_die_rolled()
+	await _door_volley(AiActRecorder.EPOCH_73_V36)
 	var owners := _owners()
+	# The door's log names no "Bloodborn:" line (the table writes one), so the extra die is counted in the dice record
+	# instead: the hero's pistol batch plus the extra die = two rolls signed by the hero.
+	assert_int(owners.count("AI (Test Hero)")) \
+		.override_failure_message("fixture: the hero's sixes must spawn an extra attack die (owners: %s, log: %s)" % [owners, _log_text()]) \
+		.is_greater_equal(2)
 	assert_array(owners).override_failure_message("fixture: the hero must sign its attack dice (owners: %s)" % [owners]) \
 		.contains(["AI (Test Hero)"])
 	assert_array(owners) \

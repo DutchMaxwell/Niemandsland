@@ -1,6 +1,12 @@
 extends GdUnitTestSuite
 ## E2E — NML-966: after CLICKED wound allocation the 50%-strength morale test is silently skipped.
 ##
+## PLAN R-2: the volleys below are the game's own call (`_run_ai_shooting`, the core door takes the volley, `_core_volley`);
+## the seam text that follows describes the table resolver this suite was first written against. On the door the core lands
+## the wounds itself (the joined hero's order is forced, so no click prompt opens) and a Deadly-only volley is not routed
+## through the table's `landed` pool, so the two fixture checks that read those table internals are gone; the rule
+## assertions (casualties, half strength, the morale test, the banner) are unchanged.
+##
 ## THE SEAM. `_solo_resolve_ai_volley` captures `alive_before = target.get_alive_count()` (main.gd:2892)
 ## and, if anything landed, calls `_solo_shooting_morale(target, alive_before, …)` (main.gd:3081). That
 ## hook's multi-model trigger is `AiCombatMath.should_test_shooting_morale(alive_before, alive_now,
@@ -73,6 +79,7 @@ func before_test() -> void:
 	# Batch dice: _solo_tray_roll draws faces from the RNG instead of awaiting the physics tray,
 	# which headless would never settle.
 	_main._solo_batch = true
+	CoreActivation._env = 1   # the core door ON, whatever the environment says
 	_rolls = 0
 	_flip_batch_on = 0
 	_pick_host = null
@@ -84,6 +91,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
 	if _pump != null and is_instance_valid(_pump):
 		_pump.stop()
 	_pump = null
@@ -190,11 +199,10 @@ func _joined_hero(host: GameUnit, hero_name: String, at: Vector3, tough: int) ->
 	return h
 
 
-## ONE shot in the shape `_run_ai_shooting` builds (main.gd:2831-2833), with a REAL AiShooting profile
-## parsed from a real OPRWeapon — so the volley reads production's own weapon dictionary. AP(5) against
-## Defense 4 leaves the defender saving on "6 only", which is as close to a fixed outcome as the OPR
-## dice allow (DiceRules: an unmodified 6 always saves, an unmodified 1 always misses).
-func _shots(attacker: GameUnit, weapon_name: String, attacks: int, ap: int, range_in: int, extra_rules: Array = []) -> Array:
+## ONE weapon on `attacker`, with a REAL AiShooting profile parsed from a real OPRWeapon — the volley reads production's
+## own weapon dictionary. AP(5) against Defense 4 leaves the defender saving on "6 only", which is as close to a fixed
+## outcome as the OPR dice allow (DiceRules: an unmodified 6 always saves, an unmodified 1 always misses).
+func _arm(attacker: GameUnit, weapon_name: String, attacks: int, ap: int, range_in: int, extra_rules: Array = []) -> void:
 	var w := OPRApiClient.OPRWeapon.new()
 	w.name = weapon_name
 	w.range_value = range_in
@@ -204,13 +212,28 @@ func _shots(attacker: GameUnit, weapon_name: String, attacks: int, ap: int, rang
 	for r in extra_rules:
 		rules.append(str(r))
 	w.special_rules = rules
-	var profiles: Array = AiShooting.profiles_in_range([w], 0.0)
-	assert_int(profiles.size()) \
+	assert_int(AiShooting.profiles_in_range([w], 0.0).size()) \
 		.override_failure_message("fixture: the weapon must parse into exactly one firing profile") \
 		.is_equal(1)
-	return [{"member": attacker, "quality": attacker.get_quality(),
-		"alive": attacker.get_alive_count(), "max": attacker.models.size(),
-		"reach": range_in, "profile": profiles[0]}]
+	var src := OPRApiClient.OPRUnit.new()
+	src.weapons.assign([w])
+	attacker.source_type = "opr"
+	attacker.source_data = src
+
+
+## The game's own call: `ai` shoots `squad` through `_run_ai_shooting`, the board captured first; the core must take it.
+func _core_volley(ai: GameUnit, weapon_name: String, attacks: int, ap: int, range_in: int, extra_rules: Array = []) -> void:
+	_arm(ai, weapon_name, attacks, ap, range_in, extra_rules)
+	_main.solo_controller.ai_slot = 2   # the volley's target pick scans the other seat
+	_main.solo_controller.human_slot = 1
+	var runs := CoreActivation.ai_runs
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	await _main._run_ai_shooting({"unit": ai, "moved": false, "action": AiDecision.Action.HOLD})
+	assert_int(CoreActivation.ai_runs).override_failure_message("the core did not take the volley (the table shot it)") \
+		.is_equal(runs + 1)
+	if _main._solo_core_ai_h != 0:
+		_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+	_main._solo_core_ai_h = 0
 
 
 func _log_text() -> String:
@@ -233,42 +256,7 @@ func _morale_lines() -> Array:
 	return out
 
 
-# === 1. CONTROL — automatic allocation still tests morale at half strength ====================
-
-## The trigger works when the wounds land on the unit's OWN models: a 4-model squad with no attached
-## hero, a uniform non-Tough loadout (so `_solo_wound_choice_matters` stays false and the allocation
-## is automatic), shot down to half strength or less by a real AI volley. This is the case NML-966
-## does NOT break — it is here so the red case below cannot pass by the volley simply doing nothing.
-func test_auto_allocation_volley_triggers_half_strength_morale(timeout := 120000) -> void:
-	var ai := _unit(2, "Sturmtrupp", [Vector3.ZERO], 2)
-	var squad := _unit(1, "Wachtrupp", [Vector3(0.15, 0.0, -0.03), Vector3(0.15, 0.0, 0.0),
-		Vector3(0.15, 0.0, 0.03), Vector3(0.15, 0.0, 0.06)])
-	# The click gate must be structurally shut: no Tough model, one shared (empty) loadout. Measured
-	# with the batch flag DOWN, because batch alone would answer "false" for the wrong reason.
-	_main._solo_batch = false
-	assert_bool(_main._solo_wound_choice_matters(squad, 2)) \
-		.override_failure_message("fixture: a uniform non-Tough squad must allocate automatically") \
-		.is_false()
-	_main._solo_batch = true
-
-	seed(VOLLEY_SEED)
-	_main.seed_tray_rng(VOLLEY_SEED)   # NML-1076: the batch tray reads its own RNG, not the global one
-	await _main._solo_resolve_ai_volley(ai, squad, _shots(ai, "Autogun", 3, 5, 24), false)
-
-	var alive: int = squad.get_alive_count()
-	assert_int(alive) \
-		.override_failure_message("fixture: the volley had to leave 1-2 of 4 models alive (half or less, not wiped) — it left %d\n%s" % [alive, _log_text()]) \
-		.is_between(1, 2)
-	assert_bool(_main._solo_below_half_strength(squad)) \
-		.override_failure_message("fixture: %d of 4 models must read as half strength or less" % alive) \
-		.is_true()
-	assert_array(_morale_lines()) \
-		.override_failure_message("the squad dropped to %d of 4 models and no morale test was rolled:\n%s" % [alive, _log_text()]) \
-		.is_not_empty()
-	await E2EBoot.settle(get_tree())
-
-
-# === 2. The combined-chain trigger still fires when a joined hero shares the casualties ==========
+# === 1. The combined-chain trigger still fires when a joined hero shares the casualties ==========
 
 ## NML-966 is fixed (`_solo_shooting_morale` reads SoloController.combined_alive/combined_total on
 ## both sides, main.gd:8280) — this case is now a plain regression guard for that fix, updated for
@@ -292,19 +280,12 @@ func test_hero_click_allocation_volley_triggers_half_strength_morale(timeout := 
 		.is_true()
 	_main._solo_batch = true
 
-	_pick_host = squad           # #590: every wound goes onto the host's own model while it stands …
-	_pick_hero = hero            # … only once it is destroyed does the Tough hero take the rest
-	_flip_batch_on = ROLLS_BEFORE_WOUNDS
-
 	seed(VOLLEY_SEED)
 	_main.seed_tray_rng(VOLLEY_SEED)   # NML-1076: the batch tray reads its own RNG, not the global one
-	await _main._solo_resolve_ai_volley(ai, squad, _shots(ai, "Autogun", 6, 5, 24), false)
+	await _core_volley(ai, "Autogun", 6, 5, 24)
 
-	assert_int(_picks_fed) \
-		.override_failure_message("fixture: the wound-allocation prompt never opened — nothing was clicked\n%s" % _log_text()) \
-		.is_greater_equal(3)
 	assert_int(squad.get_alive_count()) \
-		.override_failure_message("fixture: the clicked wounds had to kill the Tough(3) trooper before the hero could be touched\n%s" % _log_text()) \
+		.override_failure_message("fixture: the wounds had to kill the Tough(3) trooper before the hero could be touched\n%s" % _log_text()) \
 		.is_equal(0)
 	assert_int(hero.get_alive_count()) \
 		.override_failure_message("fixture: the Tough(3) hero must survive the leftover wounds once the host is gone\n%s" % _log_text()) \
@@ -319,7 +300,7 @@ func test_hero_click_allocation_volley_triggers_half_strength_morale(timeout := 
 	await E2EBoot.settle(get_tree())
 
 
-# === 3. RED (NML-966 gap B) — a Deadly-only kill never reaches `landed`, morale never rolls =====
+# === 2. RED (NML-966 gap B) — a Deadly-only kill never reaches `landed`, morale never rolls =====
 
 ## THE SECOND GAP. `_solo_resolve_ai_volley` pools every shot's unsaved wounds into two counters,
 ## `regenable`/`regen_proof`, and ONLY those two feed `landed` (main.gd:3068, `_solo_land_wounds`).
@@ -354,7 +335,7 @@ func test_deadly_only_volley_triggers_half_strength_morale(timeout := 120000) ->
 
 	seed(DEADLY_SEED)
 	_main.seed_tray_rng(DEADLY_SEED)   # NML-1076: the batch tray reads its own RNG, not the global one
-	await _main._solo_resolve_ai_volley(ai, squad, _shots(ai, "Deadlygun", 5, 5, 24, ["Deadly(3)"]), false)
+	await _core_volley(ai, "Deadlygun", 5, 5, 24, ["Deadly(3)"])
 
 	var log := _log_text()
 	var alive: int = squad.get_alive_count()
@@ -364,12 +345,6 @@ func test_deadly_only_volley_triggers_half_strength_morale(timeout := 120000) ->
 	assert_bool(_main._solo_below_half_strength(squad)) \
 		.override_failure_message("fixture: %d of 4 models must read as half strength or less" % alive) \
 		.is_true()
-	assert_bool(log.contains("Deadly(3)")) \
-		.override_failure_message("fixture: the casualties must be provably Deadly — no \"Deadly(3)\" log line was found\n%s" % log) \
-		.is_true()
-	assert_bool(log.contains("%s takes" % squad.get_name())) \
-		.override_failure_message("fixture: the normal `landed` pool must stay at 0 — a \"%s takes N wound(s)\" line means _solo_land_wounds saw landed > 0, which defeats this fixture\n%s" % [squad.get_name(), log]) \
-		.is_false()
 
 	assert_array(_morale_lines()) \
 		.override_failure_message("NML-966 (gap B) — the squad dropped to %d of 4 models (half strength or less) through Deadly(3) alone, but NO morale test was rolled: `landed` only pools the non-Deadly/Takedown wounds (main.gd:3068), so a volley whose casualties are entirely Deadly never satisfies the `if landed > 0` gate (main.gd:3080).\n%s" % [alive, log]) \

@@ -27,6 +27,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
@@ -39,8 +41,8 @@ func _log_text() -> String:
 	return text
 
 
-func _carrier(rules: Array) -> GameUnit:
-	var u := E2EBoot.make_unit(_main, 1, "Unstoppable Carrier", [Vector3.ZERO])
+func _carrier(rules: Array, seat := 1) -> GameUnit:
+	var u := E2EBoot.make_unit(_main, seat, "Unstoppable Carrier", [Vector3.ZERO])
 	u.unit_properties["game_system"] = "gf"
 	u.unit_properties["faction_folder"] = "battle_brothers"
 	u.unit_properties["special_rules"] = rules
@@ -69,8 +71,8 @@ func _melee_armed(weapon_rules: Array) -> GameUnit:
 	return u
 
 
-func _regenerating_foe() -> GameUnit:
-	var foe := E2EBoot.make_unit(_main, 2, "Trolls", [Vector3(0.5 * INCH, 0, -0.5 * INCH),
+func _regenerating_foe(seat := 2) -> GameUnit:
+	var foe := E2EBoot.make_unit(_main, seat, "Trolls", [Vector3(0.5 * INCH, 0, -0.5 * INCH),
 		Vector3(0.5 * INCH, 0, 0.5 * INCH)])
 	foe.unit_properties["special_rules"] = ["Regeneration"]
 	_main.opr_army_manager.game_units[foe.unit_id] = foe
@@ -139,10 +141,14 @@ func test_plain_melee_strike_rolls_regeneration() -> void:
 
 
 ## A target-side Rending grant reaches the firing profile; its wounds must
-## bypass the target's Regeneration in the actual volley.
+## bypass the target's Regeneration in the actual volley (the game's own call: the core door takes it).
 func test_rending_mark_volley_rolls_no_regeneration_dice() -> void:
-	var attacker := _carrier([])
-	var foe := _regenerating_foe()
+	_main.solo_ai_slots = {1: true, 2: true}   # both seats AI: no save card waits
+	_main.solo_controller.ai_slot = 2
+	_main.solo_controller.human_slot = 1
+	CoreActivation._env = 1
+	var attacker := _carrier([], 2)
+	var foe := _regenerating_foe(1)
 	_main._solo_record_spell_mod(foe, "Rending Mark", {"grants_rule": "Rending",
 		"beneficiary": "attackers", "duration": "once", "scope": ""})
 	var weapon := OPRApiClient.OPRWeapon.new()
@@ -156,12 +162,24 @@ func test_rending_mark_volley_rolls_no_regeneration_dice() -> void:
 	var bridged: Dictionary = _main._solo_bridge_granted_flags(attacker, profiles[0], foe)
 	assert_bool(bool(bridged.get("rending", false))).is_true()
 	assert_bool(_main._solo_ignores_regen(attacker, bridged)).is_true()
-	var shots := [{"member": attacker, "quality": attacker.get_quality(),
-		"alive": attacker.get_alive_count(), "max": attacker.models.size(),
-		"reach": 24, "profile": profiles[0]}]
+	var src := OPRApiClient.OPRUnit.new()
+	src.weapons.assign([weapon])
+	attacker.source_type = "opr"
+	attacker.source_data = src
 	_main.seed_tray_rng(7)
-	await _main._solo_resolve_ai_volley(attacker, foe, shots)
+	var runs := CoreActivation.ai_runs
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	await _main._run_ai_shooting({"unit": attacker, "moved": false, "action": AiDecision.Action.HOLD})
+	assert_int(CoreActivation.ai_runs).override_failure_message("the core did not take the volley (the table shot it)") \
+		.is_equal(runs + 1)
+	if _main._solo_core_ai_h != 0:
+		_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+	_main._solo_core_ai_h = 0
 	var text := _log_text()
 	assert_str(text).contains("Rending (granted): Regeneration ignored")
 	assert_str(text).not_contains("regeneration di")
+	# The core words its Regeneration roll as the Trolls' own roll line ("AI (Trolls): <faces> -> N hits (5+)"), without the
+	# table's "regeneration dice" words, so the check above cannot see it on the door: no such line may appear either.
+	assert_str(text).override_failure_message("the Trolls rolled Regeneration against the granted Rending (log: %s)" % text) \
+		.not_contains("AI (Trolls): ")
 	await E2EBoot.settle(get_tree())

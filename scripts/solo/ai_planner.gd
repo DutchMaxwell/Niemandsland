@@ -435,22 +435,6 @@ static func horizon() -> int:
 	return _hz
 
 
-## R1+R6 (round-rollout search): play the rest of the ROUND out after
-## `first_action` by `me` — sides alternate as in the real rule, a dry side
-## lets the other play its tail, every step is the cheap-policy greedy pick —
-## and then keep playing INTO the following round(s) up to `horizon_rounds`
-## (R6: the step-4 calibration proved the round-1 leaf is blind — imagined
-## round 1 holds almost no combat, so every opener scored alike; the
-## consequences land in round 2, which the mind must now watch). Returns the
-## horizon-end state; the CALLER prices it with the rich leaf (eval +
-## reply_threat). Pure and deterministic. horizon_rounds = 1 is the pre-R6
-## single-round rollout, byte-identical (the safety valve and test seam).
-static func rollout(state: Dictionary, first_action: Dictionary, me: int,
-		horizon_rounds: int = -1) -> Dictionary:
-	var ends := rollout_boundaries(state, first_action, me, horizon_rounds)
-	return ends[ends.size() - 1]
-
-
 ## R7: the same playout, but returning the state AT EVERY round boundary of
 ## Leaf-row seam (glasses v4): the WINNING candidate's horizon-end state —
 ## the exact distribution the leaf eval judges. The controller logs it as a
@@ -1252,13 +1236,6 @@ static func _menu_holders_on() -> bool:
 	return menu_holders
 
 
-## MENUHOLDERS qualifier: the enemy unit `ek` holds/contests a marker not ours (any model's
-## centre within 3" of an objective whose owner is not `player`; 0 = nobody counts as not ours)
-## or has not activated this round.
-static func _holder_or_unactivated(state: Dictionary, player: int, ek: String) -> bool:
-	return _unactivated(state, player, ek) or _marker_holder(state, player, ek)
-
-
 static func _unactivated(state: Dictionary, _player: int, ek: String) -> bool:
 	return not bool((state["units"][ek] as Dictionary).get("activated", false))
 
@@ -1782,17 +1759,6 @@ static func full_playout(state0: Dictionary, action: Dictionary, player: int,
 		"survivors": {"p1": alive1, "p2": alive2},
 		"rounds_played": maxi(rounds_total, round0),
 		"winner": winner}
-
-
-## Seed-taking twin: the same playout with its LOCAL generator built here, so
-## a caller only ever has to name a number. Same state + same seed = the same
-## game, every time — the reproducibility the fidelity replay and every A/B
-## rest on.
-static func full_playout_seeded(state0: Dictionary, action: Dictionary,
-		player: int, playout_seed: int) -> Dictionary:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = playout_seed
-	return full_playout(state0, action, player, rng)
 
 
 ## Cheap-policy alternation until the round runs dry (official one-for-one;

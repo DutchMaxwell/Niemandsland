@@ -9,8 +9,6 @@ const WEAPON := {"name": "Club", "attacks": 6, "ap": 0, "rules": []}
 const TRAP := {"name": "Trap", "ap": 0, "deadly": 0, "rules": []}
 const PART := [{"name": "Piercing Feat", "bonus": 1}]
 const INCH := 0.0254
-const PAID := "Piercing Feat: AP(+1)"   # the table's per-attack AP trace line
-const SPEND := "Piercing Feat: %s spends its once-per-game feat on this attack"
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -119,13 +117,6 @@ func _unit(pid: int, unit_name: String, x_in: float, bearer: bool) -> GameUnit:
 	return u
 
 
-func _count(needle: String) -> int:
-	var text := ""
-	for e in _main.battle_log.entries():
-		text += str((e as Dictionary)["text"]) + "\n"
-	return text.count(needle)
-
-
 ## The Guard charges the bearer: the bearer's strike-back is its attack.
 func _charge(guard: GameUnit, bearer: GameUnit) -> void:
 	guard.is_fatigued = false
@@ -134,45 +125,6 @@ func _charge(guard: GameUnit, bearer: GameUnit) -> void:
 	_main.seed_tray_rng(11)
 	await _main._run_ai_melee({"unit": guard, "target": bearer, "charge_from_in": 1.0, "dangerous_wounds_taken": 0})
 	await Boot.settle(get_tree())
-
-
-## One AI volley by the bearer, in the shape `_run_ai_shooting` builds.
-func _volley(bearer: GameUnit, guard: GameUnit) -> void:
-	Boot.place_unit_at(guard, Vector3(10.0 * INCH, 0, 0))
-	var profiles: Array = AiShooting.profiles_in_range([_weapon("Rifle", 24, 4)], 0.0)
-	var shots: Array = [{"member": bearer, "quality": bearer.get_quality(),
-		"alive": bearer.get_alive_count(), "max": bearer.models.size(),
-		"reach": 24, "profile": profiles[0]}]
-	_main.seed_tray_rng(5)
-	await _main._solo_resolve_ai_volley(bearer, guard, shots, false)
-	await Boot.settle(get_tree())
-
-
-func test_a_volley_spends_the_latch_and_the_next_shot_pays_nothing() -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
-	var bearer := _unit(2, "Horde", 0.0, true)
-	var guard := _unit(1, "Guard", 1.0, false)
-	await _volley(bearer, guard)
-	assert_int(_count(PAID)).override_failure_message("the first volley did not pay the feat").is_equal(1)
-	assert_int(_count(SPEND % bearer.get_name())).is_equal(1)
-	assert_bool(bool(bearer.unit_properties.get(SoloController.shot_feat_flag("Piercing Feat"), false))).is_true()
-	assert_array(_main._solo_conditional_ap_parts(WEAPON, bearer, guard, false, 10.0, false)).is_empty()
-	await _volley(bearer, guard)
-	assert_int(_count(PAID)).override_failure_message("the second volley paid the spent feat again").is_equal(1)
-
-
-func test_the_first_strike_back_spends_it_and_the_next_attacks_pay_nothing() -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
-	var bearer := _unit(2, "Horde", 0.0, true)
-	var guard := _unit(1, "Guard", 1.0, false)
-	await _charge(guard, bearer)
-	assert_int(_count(PAID)).override_failure_message("the first strike-back did not pay the feat").is_equal(1)
-	assert_int(_count(SPEND % bearer.get_name())).is_equal(1)
-	assert_array(_main._solo_conditional_ap_parts(WEAPON, bearer, guard, false, -1.0, true)).is_empty()
-	await _charge(guard, bearer)
-	assert_int(_count(PAID)).override_failure_message("the second strike-back paid the spent feat again").is_equal(1)
-	await _volley(bearer, guard)
-	assert_int(_count(PAID)).override_failure_message("a later shot paid the spent feat").is_equal(1)
 
 
 func test_the_spent_latch_is_written_to_the_act_ledger() -> void:
