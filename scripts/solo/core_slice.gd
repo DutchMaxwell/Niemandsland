@@ -134,12 +134,6 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 	# Deny mode takes a joined hero with its unit, so the hero's own unit and weapon rules must pass the list too (allow
 	# mode refuses every attachment above; its labels stay as they were).
 	if c["mode"] == "deny":
-		# C-19: a joined unit whose own models are all dead is shot as its living hero, and the table says so in the log ("X is
-		# the unit now"). The core's step path writes no such line (the v36 lone-hero tests went red on the flipped default), so a
-		# volley at such a target stays on the table. Leaves with the step path's Hero line.
-		if as_target and gu.get_alive_count() <= 0 and gu.get_attached_heroes().any(
-				func(h) -> bool: return h is GameUnit and (h as GameUnit).get_alive_count() > 0):
-			out.append("lone_hero_target")
 		for hero in gu.get_attached_heroes():
 			for r in refusals(hero as GameUnit, true):
 				if r != "attached" and not out.has(r):

@@ -427,11 +427,11 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 	CoreSlice.reset_cache()
 
 
-## C-19: a joined unit whose own models are all dead is shot as its living hero ("Hero: X is the unit now", a table line the
-## core's step path does not write), so deny mode keeps such a TARGET on the table; a host with a living model, a dead hero or
-## a shooter is untouched. RED: drop the predicate -> v36/g4r5_r8_lonehero_retarget_test and g4r5_r8b_lonehero_nearest_test
-## fail on the deny default (no Hero line in the log), and the first assertion here reads [].
-func test_deny_mode_keeps_a_lone_hero_target_on_the_table() -> void:
+## A joined unit whose own models are all dead is shot as its living hero ("Hero: X is the unit now"). The core's step path says
+## that itself (sim.rs, a tray line), so deny mode takes such a TARGET like any other. RED: bring back a `lone_hero_target` refusal
+## -> the first assertion reads ["lone_hero_target"], and v36/g4r5_r8_lonehero_retarget_test + g4r5_r8b_lonehero_nearest_test
+## lose the core's Hero line on the deny default.
+func test_deny_mode_takes_a_lone_hero_target() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
 	var host := _unit(["Tough(3)"], [["AP(1)"]])
@@ -440,16 +440,8 @@ func test_deny_mode_keeps_a_lone_hero_target_on_the_table() -> void:
 	var hm := ModelInstance.new()
 	hm.is_alive = true
 	hero.models.append(hm)
-	assert_array(CoreSlice.refusals(host, true)).override_failure_message("host with no model, hero alive: a lone hero").is_equal(["lone_hero_target"])
-	assert_bool(CoreSlice.takes(host, true)).is_false()
-	assert_array(CoreSlice.refusals(host)).override_failure_message("as a shooter it is not a target case").is_empty()
-	var xm := ModelInstance.new()
-	xm.is_alive = true
-	host.models.append(xm)
-	assert_array(CoreSlice.refusals(host, true)).override_failure_message("a host with a living model is no lone hero").is_empty()
-	host.models.clear()
-	hm.is_alive = false
-	assert_array(CoreSlice.refusals(host, true)).override_failure_message("a dead hero is no lone hero").is_empty()
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("host with no model, hero alive: the core shoots it as the hero").is_empty()
+	assert_bool(CoreSlice.takes(host, true)).is_true()
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 
