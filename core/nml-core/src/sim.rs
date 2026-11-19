@@ -11100,6 +11100,7 @@ fn resolve_with(
                             if tray.feed().is_some() && parts.iter().any(|(_, m, _)| !m.keep.is_empty()) {
                                 // The table names the target it was aimed at: a lone hero's host, not the hero (see above).
                                 let aimed = lone_host.map_or(ut_g.name.as_str(), |h| statics[next.roster.profile[h]].name.as_str());
+                                crate::dice::say_shielded(tray, &def, aimed);
                                 tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[si],
                                     text: format!("{} fires at {}", statics[pi_s].name, aimed), detail: None });
                             }
