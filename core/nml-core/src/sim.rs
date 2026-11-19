@@ -540,7 +540,12 @@ impl AllocPicks {
 /// living models and a mixed loadout or a Tough model, and either a Deadly wound or a pool smaller than its wounds is
 /// there to place. `None` = automatic: no choice named by the transcript (every seeded tray), or nothing to choose.
 /// Slots are capture slots: `tray.dead_slots` skips the models earlier landings removed.
-fn open_alloc(state: &State, si: usize, ti: usize, gi: usize, (w, deadly): (i64, i64), tray: &mut Tray) -> Option<AllocPicks> {
+fn open_alloc(state: &State, si: usize, ti: usize, gi: usize, counts: (i64, i64), tray: &mut Tray) -> Option<AllocPicks> {
+    open_alloc_id(state, ti, &format!("wound_alloc:{}:{}:{gi}", state.key(si), state.key(ti)), counts, tray)
+}
+
+/// P4.D-20/21 + CC-6b: wound-allocation choice for an explicit `id` (volley group or cast `seq`).
+fn open_alloc_id(state: &State, ti: usize, id: &str, (w, deadly): (i64, i64), tray: &mut Tray) -> Option<AllocPicks> {
     tray.feed()?;
     let kits = state.kits.get(ti).filter(|k| k.len() == state.wounds[ti].len())?;
     let matters = kits.iter().any(|x| x.wounds_max > 1 || (&x.weapons, x.equipment) != (&kits[0].weapons, kits[0].equipment));
@@ -550,8 +555,7 @@ fn open_alloc(state: &State, si: usize, ti: usize, gi: usize, (w, deadly): (i64,
     }
     let dead = tray.dead_slots(ti);
     let slots: Vec<usize> = (0..).filter(|s| !dead.contains(s)).take(alive).collect();
-    let id = format!("wound_alloc:{}:{}:{gi}", state.key(si), state.key(ti));
-    let picks = tray.wound_alloc(&id, slots.clone(), state.key(ti))?;
+    let picks = tray.wound_alloc(id, slots.clone(), state.key(ti))?;
     Some(AllocPicks { picks: picks.into_iter(), slots, at: state.positions[ti].clone(), used: 0 })
 }
 
@@ -8225,31 +8229,83 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
     }
     let Some(spell) = statics[state.roster.profile[ci]].spells.iter().find(|s| s.name == c.spell && s.effect_kind == "damage") else { return CastEnd::Hit };
     for t in c.targets.iter().filter_map(|k| state.roster.index.get(k.as_str()).copied()).filter(|&t| state.alive[t] > 0).collect::<Vec<_>>() {
-        tray_spell_damage(statics, state, t, spell, seams, tray, shot);
+        tray_spell_damage(statics, state, ci, t, c.seq, spell, seams, tray, shot);
     }
     CastEnd::Landed
 }
 
-/// CC-6a: a damage spell's hits on one target, plain (`_solo_resolve_spell_damage` main.gd:5747). The printed hits are fixed (no to-hit
+/// CC-6a/6b/8a: a damage spell's hits on one target (`_solo_resolve_spell_damage` main.gd:5747). The printed hits are fixed (no to-hit
 /// die), saved at the target's own Defense and the spell's AP: Shielded, Cover and the over-9" family do not count against a spell
-/// (NML-104), so a target in cover says so; the dice are the spell's own (`spell_defense`). The unsaved wounds land through the
-/// volley's casualty order and report. Facets, Regeneration and the morale test are CC-6b..8a's: `cast_break` keeps out what they change.
-fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ti: usize, spell: &Spell, seams: Seams, tray: &mut Tray, shot: &mut ShootResult) {
+/// (NML-104), so a target in cover says so; saves are `spell_defense` and Regeneration / Resistance (at the spell threshold, obeying
+/// `ignores_regen`) are `spell_attack`. CC-6b lands Deadly(X) per model with the table's lines and honours `wound_alloc` when open.
+/// Followed at table timing (O2, CC-8a) by the target's morale test (`spell_morale`).
+#[allow(clippy::too_many_arguments)]
+fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, ti: usize, seq: i64, spell: &Spell, seams: Seams, tray: &mut Tray, shot: &mut ShootResult) {
     if spell.effect_hits <= 0 {
         return;
     }
     let ut = &statics[state.roster.profile[ti]];
-    let def = ctx_of(ut, state, ti);
+    let alive_before = morale_alive(state, ti, seams);
+    let wounds_before = morale_wounds_left(state, ti, seams);
+    let mut def = with_modifier_sum(ctx_live(ctx_of(ut, state, ti), statics, state, ti, false, seams.rules_epoch), seams.rules_epoch);
+    def.side = state.player[ti];
+    def.playtest_rules = rule_on(seams.rules_epoch, EPOCH_72_PLAYTEST_RULES);
+    def.rules_epoch = seams.rules_epoch;
     if state.in_cover[ti] {
         let (side, text) = (state.player[ti], format!("Cover does not apply to spell damage (its +1 is against shooting) — {} saves on {}+", ut.name, def.defense.clamp(2, 6)));
         tray.say(|| LogLine { rule: "spell", category: Category::Combat, side, text, detail: None });
     }
-    let mut out = crate::dice::resolve_spell_hits_with_tray(spell.effect_hits, crate::spell::spell_facets(&spell.weapon_rules, seams.rules_epoch).ap, &def, &ut.name, tray);
-    out.rolls.iter_mut().for_each(|r| r.kind = "spell_defense");
-    let landed = shot.absorb(out);
+    let facets = crate::spell::spell_facets(&spell.weapon_rules, seams.rules_epoch);
+    let mut out = crate::dice::resolve_spell_hits_with_tray(
+        spell.effect_hits, facets.ap, facets.deadly, facets.ignores_regen, &spell.name, &def, &ut.name, tray,
+    );
+    for r in &mut out.rolls {
+        r.kind = if r.kind == "defense" { "spell_defense" } else { "spell_attack" };
+    }
+    let def_incoming = out.caused > 0;
+    let w = shot.absorb(out);
     let before = chain_snapshot(state, ti, tray);
-    land_pool_wounds(state, ti, landed, seams.tray_exact, seams, &mut shot.log);
-    land_chain_report(statics, state, tray, ti, before);
+    let deadly: i64 = shot.deadly_groups.iter().map(|d| d.0).sum();
+    let alloc_id = format!("wound_alloc:{}:{}:cast:{seq}", state.key(ci), state.key(ti));
+    let mut alloc = if seams.tray_exact { open_alloc_id(state, ti, &alloc_id, (w, deadly), tray) } else { None };
+    let mut deadly_dealt = 0;
+    let caster_side = state.player[ci];
+    let mut groups = std::mem::take(&mut shot.deadly_groups).into_iter();
+    for (weapon, unsaved, dx, n) in std::mem::take(&mut shot.deadly_lines) {
+        let (mut dealt, mut forced) = (0, 0);
+        for (post, gx) in groups.by_ref().take(n) {
+            let d = land_deadly_group(state, ti, post, gx, seams, &mut alloc, &mut forced);
+            shot.log.push(format!("Deadly({gx}): {post} unsaved ×{gx}, no carry-over → {d} wounds dealt"));
+            dealt += d;
+        }
+        deadly_dealt += dealt;
+        let s = |n: i64| if n == 1 { "" } else { "s" };
+        if dealt > 0 {
+            say_rule(tray, "deadly", caster_side, || format!("Deadly({dx}): {unsaved} unsaved ×{dx}, no carry-over → {dealt} wound{} dealt ({weapon})", s(dealt)));
+            if forced > 0 {
+                say_rule(tray, "deadly", caster_side, || format!("Deadly({dx}): {forced} wound{} finish the already-wounded Tough model first ({CITE})", s(forced)));
+            }
+        }
+    }
+    let left = if seams.tray_exact { alloc.as_mut().map_or(w, |a| land_pool_picked(state, ti, w, a, tray)) } else { w };
+    land_pool_wounds(state, ti, left, seams.tray_exact, seams, &mut shot.log);
+    land_chain_report_inline(statics, state, tray, ti, before, deadly_dealt);
+    spend_protection_feat(statics, state, ti, def_incoming, seams.rules_epoch);
+    let landed = w + deadly_dealt;
+    // CC-8a (O2): morale runs right after that target's spell damage (main.gd `_solo_resolve_spell_damage` -> `_solo_shooting_morale`),
+    // carrying the spell's name as its cause (Banner does not apply) and tagging the morale dice onto the spell leg (`spell_morale`).
+    if landed > 0 && shooting_morale_trigger(state, statics, seams, ut, ti, alive_before, wounds_before) {
+        if tray.feed().is_some() {
+            if let Some(line) = shooting_morale_line(state, statics, seams, ut, ti, alive_before, wounds_before) {
+                say_rule(tray, "morale", state.player[ti], || line);
+            }
+        }
+        let draw0 = tray.feed().map_or(0, |f| f.draws());
+        let before_m = chain_snapshot(state, ti, tray);
+        tray_morale_for(state, statics, ti, false, true, Some(&spell.name), seams, tray, shot, None, None);
+        tray.tag_spell_morale(draw0);
+        land_chain_report(statics, state, tray, ti, before_m);
+    }
 }
 
 /// NML-1157 — WHICH member of the activating chain actually casts.
