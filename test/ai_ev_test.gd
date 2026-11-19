@@ -27,11 +27,9 @@ const ATT := {"quality": 4, "models": 5}
 const DEF_PLAIN := {"defense": 4, "tough": 1, "models": 5}
 
 
-func test_profile_ev_baseline_matches_expected_wounds() -> void:
-	# No special rules: 10 attacks, hit 4+ (1/2), save 4+ fails 1/2 → 2.5 — identical to the wave-0
-	# AiCombatMath.expected_wounds metric (one math, no second truth).
-	assert_float(AiEv.profile_ev(_rprof(), ATT, DEF_PLAIN, 12.0, false)).is_equal_approx(
-		AiCombatMath.expected_wounds(10, 4, 4, 0), 0.0001)
+func test_profile_ev_baseline_is_attacks_times_hit_times_fail() -> void:
+	# No special rules: 10 attacks, hit 4+ (1/2), save 4+ fails 1/2 → 10 × 1/2 × 1/2 = 2.5.
+	assert_float(AiEv.profile_ev(_rprof(), ATT, DEF_PLAIN, 12.0, false)).is_equal_approx(2.5, 0.0001)
 
 
 func test_stealth_devalues_targets_beyond_nine_inches_only() -> void:

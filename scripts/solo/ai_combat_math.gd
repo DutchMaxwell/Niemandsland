@@ -156,18 +156,6 @@ static func success_chance(target: int) -> float:
 	return float(7 - clampi(target, 2, 6)) / 6.0
 
 
-## Expected wounds one weapon profile deals to a target (goal 003 P2 metric): attacks × P(hit at Quality)
-## × P(the save at Defense+AP fails). Deterministic, no dice — the AI sums this across its profiles per
-## candidate target and picks the target that maximises it (the officially-undefined "better than" step,
-## locked to expected damage).
-static func expected_wounds(attacks: int, quality: int, defense: int, armor_piercing: int) -> float:
-	if attacks <= 0:
-		return 0.0
-	var p_hit := success_chance(quality)
-	var p_through := 1.0 - success_chance(save_target(defense, armor_piercing))
-	return float(attacks) * p_hit * p_through
-
-
 ## Rules 3.6 (EPOCH_73_V36) — expected wounds ONE already-rolled hit deals: the save fails
 ## at that hit's AP, then Deadly's Tough-capped multiply and the Regeneration keep. Used only
 ## to rank Parry's cancellations. block_chance lives in AiEv (one truth, never copied).
@@ -355,12 +343,6 @@ static func impact_total_dice(impact_x: int, charging_models: int, counter_model
 	return maxi(0, maxi(impact_x, 0) * maxi(charging_models, 0) - maxi(counter_models, 0))
 
 
-## Whether a Fearless recovery die rescues a FAILED morale test (GF/AoF Advanced Rules v3.5.1, p.13: on a
-## failed test, "roll one die. On a 4+ it counts as passed instead."). True when the recovery die is a 4+.
-static func fearless_recovers(recovery_face: int) -> bool:
-	return DiceRules.is_success(recovery_face, FEARLESS_RECOVER_TARGET, 0)
-
-
 ## Whether a round-start Shaken-recovery die (wave-4 Battleborn; quick-win Steadfast carries the
 ## byte-identical official text) clears Shaken: true at `target`+ ("On a 4+, it stops being Shaken.").
 static func battleborn_recovers(die_face: int, target: int = BATTLEBORN_RECOVER_TARGET) -> bool:
@@ -386,35 +368,10 @@ static func fear_adjusted_wounds(wounds: int, fear_x: int) -> int:
 	return maxi(wounds, 0) + maxi(fear_x, 0)
 
 
-## Number of unmodified Defense 6s in a save roll — the dice Bane forces the defender to re-roll (GF/AoF
-## Advanced Rules v3.5.1, p.13: "the target must re-roll unmodified Defense results of 6.").
-static func bane_reroll_count(save_faces: Array) -> int:
-	return unmodified_sixes(save_faces)
-
-
-## Blocked hits after the attacker's Bane forces the defender to re-roll unmodified Defense 6s (GF/AoF
-## Advanced Rules v3.5.1, p.13). A natural 6 always blocks, so Bane strips those guaranteed saves: each save
-## face of 6 is replaced by the next `reroll_faces` value (one per 6, in order). "A die roll may only be
-## re-rolled once, so if another 6 is rolled after re-rolling Defense, then the hit is blocked." — a
-## re-rolled 6 therefore stays a block. Returns the block count of the post-re-roll faces at Defense + AP.
-## With no 6s (or no re-roll faces) this equals count_blocks(save_faces, defense, armor_piercing).
-static func blocks_with_bane(save_faces: Array, reroll_faces: Array, defense: int, armor_piercing: int) -> int:
-	var combined: Array = []
-	var ri := 0
-	for f in save_faces:
-		if int(f) == UNMODIFIED_SIX:
-			combined.append(int(reroll_faces[ri]) if ri < reroll_faces.size() else UNMODIFIED_SIX)
-			ri += 1
-		else:
-			combined.append(int(f))
-	return count_blocks(combined, defense, armor_piercing)
-
-
 ## The WIDENED window's re-roll count (wave 4: "Bestial Boost" — `reroll_save_low: 5` past
 ## `over_in: 9`): every unmodified 6 re-rolls (the base leg), and every face at or above `low` that
 ## is ALSO a successful save re-rolls too — a face that already failed its save never re-rolls
-## (core twin: dice.rs blocks_with_bane_from). `low` 6 = the base leg, byte-identical to
-## bane_reroll_count / blocks_with_bane.
+## (core twin: dice.rs blocks_with_bane_from). `low` 6 = the base leg: only the unmodified 6s.
 static func bane_reroll_count_from(save_faces: Array, save_target: int, low: int) -> int:
 	var n := 0
 	for f in save_faces:
@@ -593,35 +550,6 @@ static func conditional_ap_why(params: Dictionary) -> String:
 		"near_terrain":
 			return "target stands within 1\" of terrain"
 	return ""
-
-
-## Deadly(X) per-model resolution (GF v3.5.1 p.14, wording verified — the rule-true replacement for the
-## pooled multiplier above): "Assign each wound to one model and multiply it by X … these wounds don't
-## carry over to other models if the original target is killed." So each unsaved wound deals X damage to
-## ONE model, capped at that model's REMAINING wounds — the excess is LOST, never spilling to the next.
-## `toughs` = the defender's per-model remaining wounds in casualty-removal order (front of the array dies
-## first). Returns the actual wounds DEALT (for the melee wound-comparison + the summary), never more than
-## the pool could absorb. Pure + unit-tested; the pooled `deadly_multiplier` path was wrong for a unit of
-## multi-Tough models when X < Tough (two ×2 hits on Tough(3) bodies should leave BOTH alive, not combine
-## to kill one).
-## `toughs` = the defender's per-model REMAINING wounds (mutated in place: 0 = removed). Each unsaved
-## wound is assigned to the alive model with the MOST remaining wounds — the defender's casualty-minimising
-## spread (GF v3.5.1 "the defending player removes casualties") — dealing X capped at that model's
-## remaining wounds; the excess of a killing hit is LOST (no carry-over). Returns the wounds DEALT.
-static func deadly_wounds_dealt(unsaved: int, deadly_x: int, toughs: Array) -> int:
-	var x: int = maxi(1, deadly_x)
-	var dealt := 0
-	for _w in range(maxi(0, unsaved)):
-		var best := -1
-		for i in range(toughs.size()):
-			if int(toughs[i]) > 0 and (best < 0 or int(toughs[i]) > int(toughs[best])):
-				best = i
-		if best < 0:
-			break   # every model already removed — the rest of the wounds are wasted
-		var absorb: int = mini(x, int(toughs[best]))   # no carry-over: capped at THIS model's wounds
-		dealt += absorb
-		toughs[best] = int(toughs[best]) - absorb   # the model dies when this reaches 0
-	return dealt
 
 
 ## Shred extra wounds (wave 5, OPR army-book weapon rule — same text in all five systems: on unmodified

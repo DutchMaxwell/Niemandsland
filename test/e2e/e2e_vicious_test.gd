@@ -92,7 +92,16 @@ func test_vicious_real_rerolls_named_log_and_regeneration_remains_available() ->
 	var log_start: int = _main.battle_log.entries().size()
 	var wounds: int = await _main._solo_resolve_saves(vicious, foe, "Rifle", [], 60, 4,
 		profile, false, false)
-	assert_int(wounds).is_equal(60 - AiCombatMath.blocks_with_bane(faces, rerolls, 4, 0))
+	var blocked := 0   # the oracle, written out (not AiCombatMath: the game reads it too): a 6 re-rolls once, then 4+ blocks
+	var next_reroll := 0
+	for f in faces:
+		var face: int = f
+		if face == 6:
+			face = rerolls[next_reroll]
+			next_reroll += 1
+		if face >= 4:
+			blocked += 1
+	assert_int(wounds).is_equal(60 - blocked)
 	var text := ""
 	for entry in _main.battle_log.entries().slice(log_start):
 		text += str(entry["text"]) + "\n"
