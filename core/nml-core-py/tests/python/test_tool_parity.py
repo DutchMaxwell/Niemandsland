@@ -26,6 +26,14 @@ Step 2b (core identity guard and summary provenance):
     before loading the core or playing; `--allow-core-mismatch` overrides it, records the override in the summary,
     and prints it on the `PARITY:` line;
   * the summary carries `config`, `rules_epoch` (0 for the legacy config), and `knobs_played`.
+
+Step 2c (`--config trainer`):
+
+  * plays `selfplay.play_game` with NO knob kwargs and no legacy loader switches against a Python-made recording
+    (no `acts.jsonl` required; picks come from `planner_positions` rows `(round, side, unit, kind)`);
+  * equal pair -> exit 0; one changed int -> exit 1; GD-made reference -> exit 2; reference or played game at
+    a non-current epoch (e.g. 89 vs 90) -> exit 2 (`epoch mismatch`); `--plant` on an equal pair -> red through
+    both gates.
 """
 
 from __future__ import annotations
@@ -333,3 +341,103 @@ def test_summary_carries_config_rules_epoch_0_and_knobs_played_for_the_legacy_co
     assert summary["knobs_played"]["rules_epoch"] == 0
     assert sp.LEGACY_FIDELITY_KNOBS.items() <= summary["knobs_played"].items()
     assert summary["allow_core_mismatch"] is False
+
+
+def _py_record(seed: int, epoch: int | None = None) -> dict:
+    """What `selfplay.py` writes at its defaults: `core_selfplay_py`, row picks, and `prescreen.core_build`."""
+    rec = _got(_ref(seed))
+    ep = tp.nml_core.CURRENT_RULES_EPOCH if epoch is None else epoch
+    rec["prescreen"] = {"core_commit": "deadbeef", "core_build": {"rules_epoch": ep}}
+    rec["knobs"] = {"top_k": 6, "horizon": 2}
+    return rec
+
+
+@pytest.fixture
+def py_oracle(tmp_path):
+    """Python-made reference directory: `core_s<seed>.json` ONLY, no `acts_<seed>/acts.jsonl`."""
+    root = tmp_path / "py_oracle"
+    root.mkdir()
+    for seed in SEEDS:
+        (root / ("core_s%d.json" % seed)).write_text(json.dumps(_py_record(seed)))
+    return root
+
+
+def test_trainer_equal_pair_without_acts_is_green_and_uses_no_knobs_or_legacy_switches(cli, py_oracle, monkeypatch):
+    seen_kwargs: list[dict] = []
+    monkeypatch.setattr(tp.list_to_profile, "LEGACY_CORE_SELFPLAY", True)
+    monkeypatch.setattr(tp.nml_core, "set_legacy_no_cond_ap",
+                        lambda *_: pytest.fail("trainer mode must not touch legacy loader switches"))
+    monkeypatch.setattr(tp.sp, "play_game", lambda seed, *a, **k: (seen_kwargs.append(k), _py_record(seed))[1])
+    code, summary = cli("--config", "trainer", ref=py_oracle)
+    assert code == 0 and summary["refused"] is None and summary["diffs"] == []
+    assert (summary["seeds_requested"], summary["seeds_compared"], summary["rows_compared"]) == (2, 2, 6)
+    assert summary["config"] == "trainer" and summary["rules_epoch"] == tp.nml_core.CURRENT_RULES_EPOCH
+    assert summary["knobs_played"] == {} and seen_kwargs == [{}, {}]
+    assert tp.list_to_profile.LEGACY_CORE_SELFPLAY is True
+
+
+def test_trainer_one_changed_int_and_pick_diff_are_red_and_named(cli, py_oracle):
+    def play_vp(seed):
+        got = _py_record(seed)
+        if seed == 2:
+            got["vp"]["p1"] += 1
+        return got
+
+    code, summary = cli("--config", "trainer", ref=py_oracle, play=play_vp)
+    assert code == 1 and summary["seeds_compared"] == 2
+    assert [d for d in summary["diffs"] if d["gate"] == "selfplay"] == [
+        {"seed": 2, "gate": "selfplay", "path": "vp", "ref": {"p1": 5, "p2": 3}, "got": {"p1": 6, "p2": 3}}
+    ]
+    assert all(d["seed"] == 2 for d in summary["diffs"])
+
+    def play_pick(seed):
+        got = _py_record(seed)
+        if seed == 1:
+            got["planner_positions"][0]["unit"] = "u9"
+        return got
+
+    code, summary = cli("--config", "trainer", ref=py_oracle, play=play_pick)
+    assert code == 1 and [(d["seed"], d["gate"], d["path"]) for d in summary["diffs"]] == [(1, "selfplay", "pick#0")]
+
+
+def test_trainer_refuses_a_gd_made_reference_with_exit_2_before_loading_or_playing(cli, oracle, monkeypatch):
+    monkeypatch.setattr(tp.nml_core, "load", lambda *_: pytest.fail("a refused run must not load the core"))
+    code, summary = cli("--config", "trainer", ref=oracle, play=lambda *_: pytest.fail("must not play"))
+    assert code == 2 and summary["seeds_compared"] == 0
+    assert summary["refused"] and "tool" in summary["refused"] and "core_selfplay" in summary["refused"]
+
+
+def test_trainer_refuses_reference_at_epoch_89_with_exit_2_and_epoch_mismatch(cli, tmp_path, monkeypatch):
+    monkeypatch.setattr(tp.nml_core, "CURRENT_RULES_EPOCH", 90)
+    monkeypatch.setattr(tp.nml_core, "load", lambda *_: pytest.fail("a refused run must not load the core"))
+    old = tmp_path / "epoch89"
+    old.mkdir()
+    for seed in SEEDS:
+        (old / ("core_s%d.json" % seed)).write_text(json.dumps(_py_record(seed, epoch=89)))
+    code, summary = cli("--config", "trainer", ref=old, play=lambda *_: pytest.fail("must not play"))
+    assert code == 2 and summary["seeds_compared"] == 0
+    assert summary["refused"] and "epoch mismatch" in summary["refused"] and "89" in summary["refused"]
+
+
+def test_trainer_refuses_when_played_game_stamps_wrong_epoch_with_exit_2(cli, tmp_path, monkeypatch):
+    monkeypatch.setattr(tp.nml_core, "CURRENT_RULES_EPOCH", 90)
+    ref_dir = tmp_path / "epoch90"
+    ref_dir.mkdir()
+    for seed in SEEDS:
+        (ref_dir / ("core_s%d.json" % seed)).write_text(json.dumps(_py_record(seed, epoch=90)))
+    code, summary = cli("--config", "trainer", ref=ref_dir, play=lambda seed: _py_record(seed, epoch=89))
+    assert code == 2 and summary["seeds_compared"] == 0
+    assert summary["refused"] and "epoch mismatch" in summary["refused"] and "89" in summary["refused"]
+
+
+def test_trainer_plant_on_an_equal_pair_is_red_through_both_gates(cli, py_oracle, tmp_path, capsys):
+    before = {str(p): p.read_bytes() for p in py_oracle.rglob("*") if p.is_file()}
+    dest = tp.plant(py_oracle, 1, tmp_path / "planted", config="trainer")
+    assert {str(p): p.read_bytes() for p in py_oracle.rglob("*") if p.is_file()} == before
+    assert not (dest / "acts_1").exists()
+    planted_summary = tp.run_parity(dest, [1], lambda: _py_record, log=lambda *_: None, config="trainer")
+    assert tp.exit_code(planted_summary) == 1
+    assert {d["gate"] for d in planted_summary["diffs"]} == {"selfplay", "sidecar"}
+    code, summary = cli("--config", "trainer", "--plant", ref=py_oracle, play=_py_record)
+    assert code == 0 and summary["plant_exit"] == 1 and summary["diffs"] == []
+    assert "red, as it must be" in capsys.readouterr().out
