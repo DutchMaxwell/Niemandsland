@@ -12,6 +12,7 @@ const LISTS := [
 	"res://assets/arena_lists/p1_2000.json", "res://assets/arena_lists/p2_2000.json",
 	"res://assets/arena_lists/p1_3000.json", "res://assets/arena_lists/p2_3000.json"]
 const TMP := "user://core_slice_test.json"
+const SlicePin := preload("res://test/one_core/slice_pin.gd")
 
 
 func after_test() -> void:
@@ -615,3 +616,16 @@ class _StubMain extends RefCounted:
 	var solo_ai_slots := {1: true}
 	func _online_turn_room() -> bool:
 		return false
+
+
+## DLINES2: `SlicePin.dice_only()` is the production deny list minus its line refusals - the helper the dice parity tests read. RED: if it kept the
+## `rule_line` groups the Self-Repair row below is refused; if it dropped every refusal Changebound (a DICE difference) would be taken.
+func test_the_dice_only_slice_drops_the_line_refusals_and_keeps_the_dice_ones() -> void:
+	var self_repair := _unit(["Self-Repair"], [])
+	self_repair.unit_properties["faction_folder"] = "robot_legions"
+	SlicePin.dice_only()
+	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("Self-Repair's missing line is not a dice difference").is_true()
+	assert_bool(CoreSlice.takes(_unit(["Shred"], []), true)).override_failure_message("Shred's missing line is not a dice difference").is_true()
+	assert_bool(CoreSlice.takes(_unit(["Changebound"], []), true)).override_failure_message("Changebound changes the dice: still refused").is_false()
+	SlicePin.release_dice_only()
+	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("the production list refuses Self-Repair again").is_false()

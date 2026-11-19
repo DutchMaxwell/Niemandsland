@@ -10,6 +10,7 @@ extends GdUnitTestSuite
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
+const SlicePin := preload("res://test/one_core/slice_pin.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const SEEDS := 16
 const DICE := "user://split_door_dice"
@@ -21,8 +22,7 @@ var _root_before: Array
 
 
 func before_test() -> void:
-	CoreSlice.path_override = CoreSlice.DENY_PATH
-	CoreSlice.reset_cache()
+	SlicePin.dice_only()   # the dice are the subject: the production deny list minus its line refusals (DLINES2)
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -34,8 +34,7 @@ func before_test() -> void:
 
 func after_test() -> void:
 	GraphicsSettings.combat_stage_hold_s = 2.5
-	CoreSlice.path_override = ""
-	CoreSlice.reset_cache()
+	SlicePin.release_dice_only()
 	RosterSweep.disarm(_main)
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null

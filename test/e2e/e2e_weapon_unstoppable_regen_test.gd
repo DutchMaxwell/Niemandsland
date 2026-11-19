@@ -7,6 +7,7 @@ extends GdUnitTestSuite
 ## core (dice.rs:1212-1217) both bypass; the table was the odd one out.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
+const SlicePin := preload("res://test/one_core/slice_pin.gd")
 const INCH := 0.0254
 
 var _runner: GdUnitSceneRunner
@@ -27,6 +28,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	SlicePin.release_dice_only()
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
@@ -167,6 +169,7 @@ func test_rending_mark_volley_rolls_no_regeneration_dice() -> void:
 	attacker.source_type = "opr"
 	attacker.source_data = src
 	_main.seed_tray_rng(7)
+	SlicePin.dice_only()   # the dice are the subject (no regeneration die on a bypass): the production list also refuses Regeneration for its missing line (DLINES2)
 	var runs := CoreActivation.ai_runs
 	_main._solo_core_ai_h = CoreActivation.capture(_main)
 	await _main._run_ai_shooting({"unit": attacker, "moved": false, "action": AiDecision.Action.HOLD})
