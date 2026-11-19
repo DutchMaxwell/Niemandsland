@@ -7981,13 +7981,15 @@ pub(crate) fn cast_phase(
 
 /// CC-5b/5c: how an offered cast ends. Before any die: its caster is down when the cast resolves (a Dangerous test, an earlier cast's
 /// Hazardous), skipped silently as `_solo_resolve_ai_casts` does; no target stands, the cast fizzles. At the cast die: it fails, or it
-/// succeeds (`Hit`: the effect is CC-6/CC-8's, so the step API refuses a `Hit` for now).
+/// succeeds: `Landed` = a damage spell's hits are saved and landed (CC-6a), `Hit` = the effect is CC-8b's (a buff or debuff), so the
+/// step API refuses a `Hit` for now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CastEnd {
     Skipped,
     Fizzled,
     Failed,
     Hit,
+    Landed,
 }
 
 /// CC-5b: `Some(end)` when `c` ends before any die in `state`; `None` = it goes on to the cast die.
@@ -8021,7 +8023,8 @@ fn casting_notes(statics: &[UnitStatic], state: &State, ci: usize, conduit_mod: 
 /// nothing, a fizzled one says so. Otherwise the shaken-battery, conduit, casting-net and announce/needs lines, the cast die (kind
 /// "cast", the caster's), its result line, and the casting once-mod is spent by the roll. The target is the table's double clamp:
 /// the casting net (including the conduit mod) moves the base first (`caster_casting_net`), boost and interference the clamped
-/// result (`AiSpell.cast_target`). `si` is the activating unit (the announce line names it).
+/// result (`AiSpell.cast_target`). `si` is the activating unit (the announce line names it). A hit of a damage spell lands its hits
+/// on each standing target in list order (`tray_spell_damage`, CC-6a); any other effect ends `Hit`, which the step API still refuses.
 pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c: &CastInput, seams: Seams, tray: &mut Tray, shot: &mut ShootResult) -> CastEnd {
     for (key, n) in std::iter::once((&c.caster, &c.threshold)).chain(c.boost_sources.iter().chain(&c.interference_sources).map(|(k, n)| (k, n))) {
         if let Some(&i) = state.roster.index.get(key.as_str()) {
@@ -8076,7 +8079,36 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
     shot.rolls.push(crate::dice::Roll { kind: "cast", count: 1, target, faces, owner: caster });
     cast_say(tray, side, format!("{}: cast roll {face} vs {target}+ — {}", c.spell, if hit { "SUCCESS" } else { "FAILED" }));
     mods::spend_once(state, ci, &[mods::Role::Casting], false);
-    if hit { CastEnd::Hit } else { CastEnd::Failed }
+    if !hit {
+        return CastEnd::Failed;
+    }
+    let Some(spell) = statics[state.roster.profile[ci]].spells.iter().find(|s| s.name == c.spell && s.effect_kind == "damage") else { return CastEnd::Hit };
+    for t in c.targets.iter().filter_map(|k| state.roster.index.get(k.as_str()).copied()).filter(|&t| state.alive[t] > 0).collect::<Vec<_>>() {
+        tray_spell_damage(statics, state, t, spell, seams, tray, shot);
+    }
+    CastEnd::Landed
+}
+
+/// CC-6a: a damage spell's hits on one target, plain (`_solo_resolve_spell_damage` main.gd:5747). The printed hits are fixed (no to-hit
+/// die), saved at the target's own Defense and the spell's AP: Shielded, Cover and the over-9" family do not count against a spell
+/// (NML-104), so a target in cover says so; the dice are the spell's own (`spell_defense`). The unsaved wounds land through the
+/// volley's casualty order and report. Facets, Regeneration and the morale test are CC-6b..8a's: `cast_break` keeps out what they change.
+fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ti: usize, spell: &Spell, seams: Seams, tray: &mut Tray, shot: &mut ShootResult) {
+    if spell.effect_hits <= 0 {
+        return;
+    }
+    let ut = &statics[state.roster.profile[ti]];
+    let def = ctx_of(ut, state, ti);
+    if state.in_cover[ti] {
+        let (side, text) = (state.player[ti], format!("Cover does not apply to spell damage (its +1 is against shooting) — {} saves on {}+", ut.name, def.defense.clamp(2, 6)));
+        tray.say(|| LogLine { rule: "spell", category: Category::Combat, side, text, detail: None });
+    }
+    let mut out = crate::dice::resolve_spell_hits_with_tray(spell.effect_hits, crate::spell::spell_facets(&spell.weapon_rules, seams.rules_epoch).ap, &def, &ut.name, tray);
+    out.rolls.iter_mut().for_each(|r| r.kind = "spell_defense");
+    let landed = shot.absorb(out);
+    let before = chain_snapshot(state, ti, tray);
+    land_pool_wounds(state, ti, landed, seams.tray_exact, seams, &mut shot.log);
+    land_chain_report(statics, state, tray, ti, before);
 }
 
 /// NML-1157 — WHICH member of the activating chain actually casts.

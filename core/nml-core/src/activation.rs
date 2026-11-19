@@ -305,7 +305,27 @@ fn cast_break(statics: &[UnitStatic], state: &State, left: &mut [i64], c: &CastI
         }
         left[i] -= n;
     }
+    if spell.effect_kind == "damage" {
+        return damage_break(statics, state, c, spell).map(|why| format!("cast {}: {why}", c.seq));
+    }
     None
+}
+
+/// CC-6a: why the core cannot resolve a damage spell's hits exactly yet, `None` when it can. Plain only: every weapon rule of the spell
+/// is an AP rating (the facets are CC-6b..7b's), and every target is a plain one: no rule or record that moves its save or says a line
+/// the core lacks (a live modifier or grant on its chain, growth markers, Regeneration, Shielded, Guarded, Fortified, Armor).
+fn damage_break(statics: &[UnitStatic], state: &State, c: &CastInput, spell: &crate::rules::Spell) -> Option<String> {
+    if let Some(rule) = spell.weapon_rules.iter().find(|r| r.split('(').next().is_none_or(|n| n.trim() != "AP")) {
+        return Some(format!("the core does not resolve the {rule} rule of {} yet", c.spell));
+    }
+    let plain = |t: usize| {
+        let d = &statics[state.roster.profile[t]].ctx;
+        let armor = state.profiles.list.get(state.roster.profile[t]).is_some_and(|p| crate::rules::has_special_rule(&p.special_rules, "Armor"));
+        let chain_clear = [Some(t), state.attached_to[t]].into_iter().flatten().all(|u| state.buffs[u].is_empty());
+        chain_clear && state.growth_markers[t] <= 0 && !(armor || d.regeneration || d.shielded || d.guarded || d.fortified)
+    };
+    let t = c.targets.iter().filter_map(|k| state.roster.index.get(k.as_str()).copied()).find(|&t| !plain(t))?;
+    Some(format!("{} meets {} with a rule the core does not say for spell damage yet", statics[state.roster.profile[t]].name, c.spell))
 }
 
 /// CC-5a: the first planned cast in the transcript that `cast_break` refuses, as (its input index, the sentence).
@@ -430,8 +450,8 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         step_with(&faces, resolve, |r| r.as_ref().map_or(&[][..], |(_, s)| s.rolls.as_slice()))
     };
     let first = run(statics);
-    // CC-5c: a cast that SUCCEEDED has an effect the core does not resolve yet (CC-6/8): refused at its own input, before anything is
-    // asked or landed on it (the transcript, its die and its tokens go back to the table).
+    // CC-5c: a cast that SUCCEEDED has an effect the core does not resolve yet (a buff or debuff, CC-8b): refused at its own input,
+    // before anything is asked or landed on it (the transcript, its die and its tokens go back to the table).
     if let Some(seq) = cast_hit.get() {
         let index = t.iter().position(|x| matches!(x, Input::Cast(c) if c.seq == seq)).unwrap_or(0);
         return ActStep::Refused { index, reason: "casts are not resolved by the core yet".to_string() };
@@ -1225,17 +1245,17 @@ mod tests {
         assert!(matches!(ask(&[intent(HOLD, None)]), ActStep::Refused { index: 0, .. }));
     }
 
-    /// CC-3/CC-5c: a cast that SUCCEEDED has an effect the core does not resolve yet, so it is refused at its own input with one
-    /// sentence once its die is in (RED: the refusal removed -> `NeedRoll` for the volley after it). Before the die the cast asks
-    /// that die; a cancel before it is the usual one; an order break still reads first.
+    /// CC-3/CC-5c: a cast that SUCCEEDED has an effect the core does not resolve yet (a buff or debuff; a damage spell's hits are
+    /// CC-6a's), so it is refused at its own input with one sentence once its die is in (RED: the refusal removed -> `NeedRoll` for
+    /// the volley after it). Before the die the cast asks that die; a cancel before it is the usual one; an order break still reads first.
     #[test]
     fn a_cast_that_succeeded_is_refused_at_its_index_until_the_core_resolves_effects() {
         let (st, statics) = caster_line(); // CC-5a: the cast must pass the static checks to get here
         let ask = |t: &[Input]| step_activation(&statics, &st, "a", &Terrain::default(), seams(), t, true);
         let start = [Begin, intent(HOLD, Some("b"))];
-        let hit = [&start[..], &[Input::Cast(bolt(0)), Faces(vec![6])]].concat();
+        let hit = [&start[..], &[Input::Cast(ward(0)), Faces(vec![6])]].concat();
         assert!(matches!(ask(&hit), ActStep::Refused { index: 2, reason } if reason == "casts are not resolved by the core yet"));
-        let two = [&start[..], &[Input::Cast(bolt(0)), Input::Cast(bolt(1)), Faces(vec![1]), Faces(vec![6])]].concat();
+        let two = [&start[..], &[Input::Cast(bolt(0)), Input::Cast(ward(1)), Faces(vec![1]), Faces(vec![6])]].concat();
         assert!(matches!(ask(&two), ActStep::Refused { index: 3, reason } if reason == "casts are not resolved by the core yet"), "the second cast hit");
         assert!(matches!(ask(&[Begin, intent(HOLD, None), cast(0), Cancel]), ActStep::Cancelled { .. }), "no die yet: the usual cancel");
         assert!(matches!(ask(&[Begin, cast(0)]), ActStep::Refused { index: 1, reason } if reason == "a cast before the action was declared"));
@@ -1245,18 +1265,23 @@ mod tests {
 
     // ---- CC-5a: the static checks on a planned cast ----
 
-    /// "a" holds a damage spell ("Bolt") and a utility spell ("Mend All"); everything else is `volley_line`'s.
+    /// "a" holds a damage spell ("Bolt"), a utility spell ("Mend All") and a buff ("Ward"); everything else is `volley_line`'s.
     fn caster_line() -> (State, Vec<UnitStatic>) {
         let (st, mut statics) = volley_line();
         let spell = |name: &str, kind: &str| crate::rules::Spell { name: name.into(), effect_kind: kind.into(), threshold: 1, target_count: 1, ..Default::default() };
         for u in [0, 1] {
-            (statics[u].is_caster, statics[u].spells) = (true, vec![spell("Bolt", "damage"), spell("Mend All", "utility")]);
+            (statics[u].is_caster, statics[u].spells) = (true, vec![spell("Bolt", "damage"), spell("Mend All", "utility"), spell("Ward", "buff")]);
         }
         (st, statics)
     }
 
     fn bolt(seq: i64) -> CastInput {
         CastInput { seq, caster: "a".into(), spell: "Bolt".into(), targets: vec!["b".into()], ..Default::default() }
+    }
+
+    /// The buff: its effect is CC-8b's, so a hit on its die is still refused.
+    fn ward(seq: i64) -> CastInput {
+        CastInput { spell: "Ward".into(), ..bolt(seq) }
     }
 
     /// CC-5a: a cast the core cannot take is refused with its OWN sentence at its input's index, and a bad cast behind a good
@@ -1383,8 +1408,9 @@ mod tests {
         let ActStep::Done { state, lines, .. } = done else { panic!("a failed cast is taken: {done:?}") };
         assert_eq!(lines.last().map(|l| l.text.as_str()), Some("Bolt: cast roll 1 vs 4+ \u{2014} FAILED"));
         assert_eq!((state.casts.clone(), asked), (vec![3, 2, 0, 0], 1));
-        // a hit is refused (its effect is CC-6/8)
-        assert!(matches!(answer_dice(&statics, &st, spell(bolt(0)).to_vec(), &[6]).0, ActStep::Refused { index: 2, .. }));
+        // a buff's hit is refused (its effect is CC-8b's); a damage spell without hits is taken
+        assert!(matches!(answer_dice(&statics, &st, spell(ward(0)).to_vec(), &[6]).0, ActStep::Refused { index: 2, .. }));
+        assert!(matches!(answer_dice(&statics, &st, spell(bolt(0)).to_vec(), &[6]).0, ActStep::Done { .. }), "hits 0: nothing to save");
         // a joined hero casts: the activating unit's name announces, the hero's names the cast; boost and interference move the target 4 -> 3
         let hero = CastInput { caster: "ah".into(), boost: 2, boost_sources: vec![("ah".into(), 2)], interference: 1, interference_sources: vec![("bh".into(), 1)], threshold: 2, ..bolt(0) };
         st.casts = vec![4, 4, 0, 1];
@@ -1410,7 +1436,7 @@ mod tests {
         ] {
             let case = golden["cases"].as_array().unwrap().iter().find(|c| c["scenario"] == scenario).unwrap();
             let (mut st, mut statics) = die_line();
-            statics[0].spells[0].name = "Warding Chant".into();
+            (statics[0].spells[0].name, statics[0].spells[0].effect_kind) = ("Warding Chant".into(), "buff".into()); // the golden's spell is a buff
             (statics[2].name, st.casts, st.buffs[0]) = ("Foe".into(), vec![6, 0, 0, 1], buffs);
             let t = [Begin, intent(HOLD, None), Input::Cast(cast)];
             let ActStep::NeedRoll { count, target, owner, lines, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) else { panic!("{scenario}: asks the die") };
@@ -1649,6 +1675,175 @@ mod tests {
         assert!(matches!(ask(&start), ActStep::NeedRoll { owner_key, .. } if owner_key == "a"), "fixture: the Dangerous test is owed first");
         let t = [&start[..], &[Input::Cast(CastInput { spell: "Nope".into(), ..bolt(0) })]].concat();
         assert!(matches!(ask(&t), ActStep::Refused { index: 2, reason } if reason == "cast 0: a has no spell named Nope"));
+    }
+
+    // ---- CC-6a: a damage spell's hits ----
+
+    /// CC-2's damage board (`golden_witness_harness.gd` `cast_damage_scenarios`): "a" = Mystic with one token and "Test Bolt" (`hits`
+    /// fixed hits, weapon `rules`), "b" = Foe, `foes` one-wound models in a line 1.3" apart, Defense 4+, Quality 4+, no kit loadout.
+    fn bolt_board(hits: i64, rules: &[&str], foes: usize) -> (State, Vec<UnitStatic>) {
+        let (mut st, mut statics) = die_line();
+        st.profiles = Rc::new(crate::state::Profiles { list: vec![st.profiles.list[0].clone(); 4], index: Default::default() }); // one per unit: the casualty order reads the host's profile
+        statics[0].spells = vec![crate::rules::Spell { name: "Test Bolt".into(), effect_kind: "damage".into(), effect_hits: hits, weapon_rules: rules.iter().map(|r| r.to_string()).collect(), threshold: 1, range_in: 12.0, ..Default::default() }];
+        (st.casts, st.attached, st.attached_to) = (vec![1, 0, 0, 0], Rc::new(vec![Vec::new(); 4]), Rc::new(vec![None; 4])); // no joined heroes
+        (statics[2].model_count, statics[2].wounds_max) = (foes as i64, vec![1; foes]);
+        statics[2].ctx = crate::unit::Ctx { defense: 4, quality: 4, tough: 1, modifier_sum: true, ..Default::default() };
+        // The line is symmetric, so every outermost pair ties on the casualty order's distance to the centroid and the table broke each
+        // tie by Godot's unstable sort (the shared casualty fixture "carries no exact ties"). Slots 4 and 2 are nudged 0.001" out so the
+        // core's order is the one the golden recorded (slots 0 and 5, then 4, 1, 2, 3); what is pinned is the landing, not tie-breaking.
+        let nudge = |i: usize| [0.0, 0.0, -0.001, 0.0, 0.001, 0.0].get(i).copied().unwrap_or(0.0);
+        st.positions[2] = (0..foes).map(|i| [8.0 * INCHES_TO_METERS, 0.0, (1.3 * i as f64 + nudge(i)) * INCHES_TO_METERS]).collect();
+        (st.wounds[2], st.alive[2]) = (vec![1; foes], foes as i64);
+        Rc::make_mut(&mut st.radii)[2] = vec![0.63 * INCHES_TO_METERS; foes];
+        st.kits = vec![Rc::new(Vec::new()), Rc::new(Vec::new()), Rc::new(vec![Kit { weapons: vec![], equipment: 0, wounds_max: 1 }; foes]), Rc::new(Vec::new())];
+        (st, statics)
+    }
+
+    fn test_bolt() -> CastInput {
+        CastInput { spell: "Test Bolt".into(), base: 2, threshold: 1, ..bolt(0) }
+    }
+
+    /// Answers each roll `NeedRoll` asks with the next of `groups`; the final answer and the rolls asked as "kind|CxT+|owner".
+    fn replay(statics: &[UnitStatic], st: &State, cast: CastInput, groups: &[Vec<u8>]) -> (ActStep, Vec<String>) {
+        let mut t = vec![Begin, intent(HOLD, None), Input::Cast(cast)];
+        let mut asked = Vec::new();
+        for g in groups {
+            match step_activation(statics, st, "a", &Terrain::default(), seams(), &t, true) {
+                ActStep::NeedRoll { kind, count, target, owner, faces, .. } => {
+                    assert_eq!(faces, g.len(), "{kind}: the golden's group has the faces the core asks");
+                    asked.push(format!("{kind}|{count}x{target}+|{owner}"));
+                    t.push(Faces(g.clone()));
+                }
+                other => return (other, asked),
+            }
+        }
+        (step_activation(statics, st, "a", &Terrain::default(), seams(), &t, true), asked)
+    }
+
+    /// CC-6a: the plain damage cases of CC-2's golden (`golden_cast_damage.json`, recorded from the table with the core off), replayed
+    /// through the step path on the recorded faces: the same rolls in the same order (the die is `cast`, the saves `spell_defense`;
+    /// the table's save target is unclamped, the core's 2..6), the same lines but for the tray's own "AI (...)" dice lines, the same
+    /// models dead in the same slots (the volley's casualty order). The morale test after the damage is CC-8a's: the golden's morale
+    /// roll and lines are not asked or said yet. RED: Cover folded into the save (the in-cover test below), the AP dropped (the
+    /// `morale` scenario saves at 4+), the landing report left out (no wound lines), the saves' kind left as `defense`.
+    #[test]
+    fn the_plain_damage_cases_of_the_cc2_golden_replay_roll_for_roll_and_line_for_line() {
+        let golden: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(format!("{}/../../test/fixtures/one_core/golden_cast_damage.json", env!("CARGO_MANIFEST_DIR"))).expect("the CC-2 golden")).unwrap();
+        let text = |v: &serde_json::Value| v.as_str().unwrap().to_string();
+        let mut seen = std::collections::BTreeMap::new();
+        for case in golden["cases"].as_array().unwrap() {
+            let (name, seed) = (text(&case["scenario"]), case["seed"].as_i64().unwrap());
+            let (st, statics) = match name.as_str() {
+                "bolt_saves" => bolt_board(6, &[], 6),
+                "bolt_morale" => bolt_board(6, &["AP(1)"], 6),
+                "bolt_kill" => bolt_board(12, &["AP(4)"], 3),
+                other => panic!("a scenario this test does not know: {other}"),
+            };
+            // the recorded rolls "leg|kind|CxT+|owner|faces", minus the morale die (CC-8a)
+            let rolls: Vec<Vec<String>> = case["extra"]["rolls"].as_array().unwrap().iter().map(|r| text(r).split('|').map(String::from).collect::<Vec<_>>()).filter(|r| r[1] != "morale" && r[0] != "spell" || r[1] == "defense").collect();
+            let groups: Vec<Vec<u8>> = rolls.iter().map(|r| r[4].split(',').map(|f| f.parse().unwrap()).collect()).collect();
+            let want_rolls: Vec<String> = rolls.iter().map(|r| {
+                let (count, target) = r[2].trim_end_matches('+').split_once('x').map(|(c, t)| (c.to_string(), t.parse::<i64>().unwrap())).unwrap();
+                let (kind, target) = if r[0] == "cast" { ("cast", target) } else { ("spell_defense", target.clamp(2, 6)) };
+                format!("{kind}|{count}x{target}+|{}", r[3].trim_start_matches("AI (").trim_end_matches(')'))
+            }).collect();
+            let (done, asked) = replay(&statics, &st, test_bolt(), &groups);
+            let ActStep::Done { state, lines, landings, .. } = done else { panic!("{name} {seed}: taken, got {done:?}") };
+            assert_eq!(asked, want_rolls, "{name} {seed}: the rolls");
+            let ours: Vec<String> = lines.iter().map(|l| format!("COMBAT|{}", l.text)).collect();
+            let want: Vec<String> = case["lines"].as_array().unwrap().iter().map(text).filter(|l| !l.starts_with("COMBAT|AI (") && !l.contains("morale")).collect();
+            assert_eq!(ours, want, "{name} {seed}: the lines");
+            let foe = &case["final"][1];
+            let mut dead: Vec<i64> = landings.iter().filter(|l| l.unit == 2).flat_map(|l| l.models.iter().filter(|m| m.dead).map(|m| m.slot as i64)).collect();
+            dead.sort();
+            let gone: Vec<i64> = foe["slots"].as_array().unwrap().iter().filter(|s| !s[1].as_bool().unwrap()).map(|s| s[0].as_i64().unwrap()).collect();
+            assert_eq!((state.alive[2], dead, state.casts[0]), (foe["alive"].as_i64().unwrap(), gone, 0), "{name} {seed}: alive, the slots that fell, the token paid");
+            *seen.entry(name).or_insert(0) += 1;
+        }
+        assert_eq!(seen.values().copied().collect::<Vec<_>>(), [8, 8, 8], "all 24 cases: {seen:?}");
+    }
+
+    /// CC-6a: Cover is for shots: a target in cover saves a spell at its own Defense, and says so before the save line (NML-104, the
+    /// table's `_solo_log_defense_vs_spell`). The same faces as the golden's `bolt_saves` seed 0 (4+: 3 blocks of 6). RED: the cover
+    /// folded in (`defense - 1`) -> the save asks 3+ and blocks 4.
+    #[test]
+    fn a_target_in_cover_saves_a_spell_at_its_own_defense_and_says_so() {
+        let (mut st, statics) = bolt_board(6, &[], 6);
+        st.in_cover[2] = true;
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![4, 3, 1, 4, 1, 6]]);
+        let ActStep::Done { state, lines, .. } = done else { panic!("taken, got {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|6x4+|Foe"]);
+        let said: Vec<&str> = lines.iter().map(|l| l.text.as_str()).skip(3).collect();
+        assert_eq!(said, ["Cover does not apply to spell damage (its +1 is against shooting) \u{2014} Foe saves on 4+", "Foe saves on 4+", "Foe takes 3 wounds (3/6)", "Foe loses 3 models (3/6)"]);
+        assert_eq!(state.alive[2], 3);
+    }
+
+    /// CC-6a: a spell and a target the core cannot resolve EXACTLY are refused at the cast's own input before any die, each with its
+    /// own sentence: a weapon rule that is not an AP rating, and a target that saves with a rule or record the core does not fold or
+    /// say for spell damage yet (a live record on its chain, growth markers, Regeneration, Shielded, Guarded, Fortified, Armor). The
+    /// plain board asks the die. RED: a check removed -> the case asks the cast die instead.
+    #[test]
+    fn a_damage_spell_or_target_the_core_cannot_resolve_exactly_is_refused_before_the_die() {
+        let ask = |st: &State, statics: &[UnitStatic]| step_activation(statics, st, "a", &Terrain::default(), seams(), &[Begin, intent(HOLD, None), Input::Cast(test_bolt())], true);
+        let (st, statics) = bolt_board(6, &["AP(1)"], 6);
+        assert!(matches!(ask(&st, &statics), ActStep::NeedRoll { kind: "cast", .. }), "control: the plain board asks the die");
+        let target = "Foe meets Test Bolt with a rule the core does not say for spell damage yet";
+        let mut cases: Vec<(&str, State, Vec<UnitStatic>, String)> = Vec::new();
+        for rule in ["Blast(3)", "Deadly(3)", "Hazardous", "Surge", "Bane", "AP"] {
+            let (st, statics) = bolt_board(6, &["AP(1)", rule], 6);
+            cases.push((rule, st, statics, if rule == "AP" { String::new() } else { format!("the core does not resolve the {rule} rule of Test Bolt yet") }));
+        }
+        let ward = LiveMod { move_mod: 0, hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 1, defense_mod: 0, grants_rule: Rc::from(""), scope: Rc::from("melee"), attackers: false, once: false, name: Rc::from("Shield Wall") };
+        let host = |mut st: State, mut statics: Vec<UnitStatic>, how: &str| {
+            match how {
+                "record" => st.buffs[2] = vec![ward.clone()],
+                "markers" => st.growth_markers[2] = 1,
+                "Regeneration" => statics[2].ctx.regeneration = true,
+                "Shielded" => statics[2].ctx.shielded = true,
+                "Guarded" => statics[2].ctx.guarded = true,
+                "Fortified" => statics[2].ctx.fortified = true,
+                _ => {}
+            }
+            (st, statics)
+        };
+        for how in ["record", "markers", "Regeneration", "Shielded", "Guarded", "Fortified"] {
+            let (st, statics) = host(bolt_board(6, &[], 6).0, bolt_board(6, &[], 6).1, how);
+            cases.push((how, st, statics, target.to_string()));
+        }
+        let (mut st, statics) = bolt_board(6, &[], 6);
+        let mut list = st.profiles.list.clone();
+        list[2].special_rules = vec!["Armor(3)".into()];
+        st.profiles = Rc::new(crate::state::Profiles { list, index: Default::default() });
+        cases.push(("Armor", st, statics, target.to_string()));
+        for (what, st, statics, why) in cases {
+            match ask(&st, &statics) {
+                ActStep::Refused { index: 2, reason } => assert_eq!(reason, format!("cast 0: {why}"), "{what}"),
+                ActStep::NeedRoll { kind: "cast", .. } if why.is_empty() => {}
+                other => panic!("{what}: {other:?}"),
+            }
+        }
+        // a joined hero as the target meets its HOST's records too (the table's `_solo_mods_of_chain`: the unit and its host)
+        let (mut st, statics) = bolt_board(6, &[], 6);
+        (st.attached_to, st.buffs[2]) = (Rc::new(vec![None, None, None, Some(2)]), vec![ward.clone()]);
+        let hero = [Begin, intent(HOLD, None), Input::Cast(CastInput { targets: vec!["bh".into()], ..test_bolt() })];
+        assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &hero, true), ActStep::Refused { index: 2, reason } if reason == "cast 0: bh meets Test Bolt with a rule the core does not say for spell damage yet"));
+    }
+
+    /// CC-6a: every standing target of the spell takes its hits, in list order, each saved on its own dice; the golden's one-model
+    /// board gains a second target "bh" (two models, Defense 4+). RED: only the first target hit -> the second save is never asked.
+    #[test]
+    fn every_standing_target_takes_the_spells_hits_in_list_order() {
+        let (mut st, mut statics) = bolt_board(2, &[], 6);
+        statics[3] = UnitStatic { name: "Guard".into(), model_count: 2, wounds_max: vec![1, 1], ctx: crate::unit::Ctx { defense: 4, tough: 1, modifier_sum: true, ..Default::default() }, ..Default::default() };
+        st.positions[3] = vec![[20.0 * INCHES_TO_METERS, 0.0, 0.0], [20.0 * INCHES_TO_METERS, 0.0, 1.3 * INCHES_TO_METERS]];
+        (st.wounds[3], st.alive[3]) = (vec![1, 1], 2);
+        Rc::make_mut(&mut st.radii)[3] = vec![0.63 * INCHES_TO_METERS; 2];
+        let cast = CastInput { targets: vec!["b".into(), "bh".into()], ..test_bolt() };
+        let (done, asked) = replay(&statics, &st, cast, &[vec![6], vec![1, 1], vec![6, 1]]);
+        let ActStep::Done { state, lines, .. } = done else { panic!("taken, got {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|2x4+|Foe", "spell_defense|2x4+|Guard"]);
+        assert_eq!(lines.iter().map(|l| l.text.as_str()).skip(3).collect::<Vec<_>>(), ["Foe saves on 4+", "Foe takes 2 wounds (4/6)", "Foe loses 2 models (4/6)", "Guard saves on 4+", "Guard takes 1 wound (1/2)", "Guard loses a model (1/2)"]);
+        assert_eq!((state.alive[2], state.alive[3]), (4, 1));
     }
 
     // ---- step 12: cancel ----
