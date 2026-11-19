@@ -368,3 +368,85 @@ func test_casting_caster_writes_no_hold_note() -> void:
 	assert_array(solo._plan_casts(caster, report)).is_not_empty()
 	for n in report["rule_notes"]:
 		assert_str(str((n as Dictionary).get("text", ""))).not_contains("holds its spell tokens")
+
+
+# === CC-10a: the plan carries what the core's cast input needs (the payer lists, the conduit,
+#     the foe pools) so the table side can build it without re-planning. Nothing sends them yet. ===
+
+func test_the_plan_carries_the_boost_payers_and_the_foe_pools() -> void:
+	# The plan already drew the boost from the helper; it must also RETURN who paid what (in draw
+	# order) and the foe slot's eligible interferers — the cast input's `boost_sources` / `pools`.
+	var caster := _unit(2, [Vector3(0, 0, 0)], "Mage", ["Caster(2)"])
+	caster.initialize_caster_points()
+	var helper := _unit(2, [Vector3(2.0 * IN2M, 0, 0)], "Acolyte", ["Caster(3)"])
+	helper.initialize_caster_points()
+	var enemy := _unit(1, [Vector3(8.0 * IN2M, 0, 0)], "Spears")
+	var solo := _controller([caster, helper, enemy])
+	_seed_for_d3(solo, 2)
+	var plan := solo._plan_member_cast(caster, caster)
+	assert_bool(plan.is_empty()).is_false()
+	var srcs: Array = plan.get("boost_sources", [])
+	assert_int(srcs.size()).is_equal(1)
+	if srcs.size() == 1:
+		assert_bool(srcs[0]["unit"] == helper).is_true()
+		assert_int(int(srcs[0]["tokens"])).is_equal(int(plan.get("boost", 0)))
+	assert_int(int(plan.get("boost", 0))).is_equal(2)
+	assert_array(plan.get("interference_sources", [])).is_empty()
+	assert_bool(plan.get("conduit") == null).is_true()
+	assert_array(plan.get("conduit_shaken", [])).is_empty()
+	var pools: Array = plan.get("pools", [])
+	assert_int(pools.size()).is_equal(1)
+	if pools.size() == 1:
+		assert_int(int((pools[0] as Array)[0])).is_equal(1)
+		assert_array((pools[0] as Array)[1]).is_empty()
+
+
+func test_the_plan_lists_the_foe_pool_that_may_interfere() -> void:
+	# Human-vs-AI: the resist choice stays OPEN for the human, so the plan hands the core its pool
+	# (the foe slot's casters with tokens, nearest first) instead of spending it.
+	var caster := _unit(2, [Vector3(0, 0, 0)], "Mage", ["Caster(2)"])
+	caster.initialize_caster_points()
+	var enemy_caster := _unit(1, [Vector3(6.0 * IN2M, 0, 0)], "Witch", ["Caster(2)"])
+	enemy_caster.initialize_caster_points()
+	var enemy := _unit(1, [Vector3(8.0 * IN2M, 0, 0)], "Spears")
+	var solo := _controller([caster, enemy_caster, enemy])
+	_seed_for_d3(solo, 2)
+	var plan := solo._plan_member_cast(caster, caster)
+	assert_bool(plan.is_empty()).is_false()
+	assert_bool(bool(plan.get("interference_open", false))).is_true()
+	assert_array(plan.get("interference_sources", [])).is_empty()
+	var pools: Array = plan.get("pools", [])
+	assert_int(pools.size()).is_equal(1)
+	if pools.size() == 1:
+		assert_int(int((pools[0] as Array)[0])).is_equal(1)
+		var rows: Array = (pools[0] as Array)[1]
+		assert_int(rows.size()).is_equal(1)
+		if rows.size() == 1:
+			assert_bool(rows[0]["unit"] == enemy_caster).is_true()
+			assert_int(int(rows[0]["tokens"])).is_equal(2)
+
+
+func test_the_plan_names_the_conduit_it_cast_through() -> void:
+	# The table casts through the first friendly Spell Conduit in army order; the plan must name THAT
+	# unit so the core takes the mod from its statics instead of searching itself.
+	var caster := _unit(2, [Vector3(0, 0, 0)], "Mage", ["Caster(2)"])
+	caster.initialize_caster_points()
+	var relay := _unit(2, [Vector3(2.0 * IN2M, 0, 0)], "Relay", ["Spell Conduit"])
+	var enemy := _unit(1, [Vector3(8.0 * IN2M, 0, 0)], "Spears")
+	var solo := _controller([caster, relay, enemy])
+	_seed_for_d3(solo, 2)
+	var plan := solo._plan_member_cast(caster, caster)
+	assert_bool(plan.is_empty()).is_false()
+	assert_bool(plan.get("conduit") == relay).is_true()
+	assert_array(plan.get("conduit_shaken", [])).is_empty()
+	# A Shaken conduit cannot relay: it is named in `conduit_shaken` (the log's line) and no unit.
+	relay.is_shaken = true
+	caster.casts_current = 2
+	_seed_for_d3(solo, 2)
+	var plan2 := solo._plan_member_cast(caster, caster)
+	assert_bool(plan2.is_empty()).is_false()
+	assert_bool(plan2.get("conduit") == null).is_true()
+	var shaken: Array = plan2.get("conduit_shaken", [])
+	assert_int(shaken.size()).is_equal(1)
+	if shaken.size() == 1:
+		assert_bool(shaken[0]["unit"] == relay).is_true()

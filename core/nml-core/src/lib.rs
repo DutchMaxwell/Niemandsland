@@ -8,6 +8,7 @@
 pub mod acts;
 pub mod activation;
 pub mod arbitration;
+pub mod boardgen;
 pub mod cast_move_ev;
 pub mod casualty;
 pub mod combat;

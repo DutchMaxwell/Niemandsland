@@ -46,6 +46,43 @@ func test_an_unresolvable_faction_is_counted_and_warned_once() -> void:
 	SpellsRegistry.reset_cache()
 
 
+func test_3_6_army_list_folder_aliases_resolve_the_same_book() -> void:
+	# The nine books renamed in 3.6 (test/v36/dat_02_test.gd RENAMED) must resolve
+	# the SAME committed book under either folder — an aliased slug is not a miss.
+	var rows := [
+		["gf", "wormhole_daemons_of_change", "daemons_of_change"],
+		["gf", "wormhole_daemons_of_lust", "daemons_of_lust"],
+		["gf", "wormhole_daemons_of_plague", "daemons_of_plague"],
+		["gf", "wormhole_daemons_of_war", "daemons_of_war"],
+		["gf", "saurian_starhost", "saurian_starhosts"],
+		["aof", "rift_daemons_of_change", "daemons_of_change"],
+		["aof", "rift_daemons_of_lust", "daemons_of_lust"],
+		["aof", "rift_daemons_of_plague", "daemons_of_plague"],
+		["aof", "rift_daemons_of_war", "daemons_of_war"],
+		["gff", "daemons_of_change", "wormhole_daemons_of_change"],
+		["gff", "daemons_of_lust", "wormhole_daemons_of_lust"],
+		["gff", "daemons_of_plague", "wormhole_daemons_of_plague"],
+		["gff", "daemons_of_war", "wormhole_daemons_of_war"],
+		["gff", "saurian_starhosts", "saurian_starhost"],
+		["aofs", "daemons_of_change", "rift_daemons_of_change"],
+		["aofs", "daemons_of_lust", "rift_daemons_of_lust"],
+		["aofs", "daemons_of_plague", "rift_daemons_of_plague"],
+		["aofs", "daemons_of_war", "rift_daemons_of_war"],
+		["aofr", "daemons_of_change", "rift_daemons_of_change"],
+		["aofr", "daemons_of_lust", "rift_daemons_of_lust"],
+		["aofr", "daemons_of_plague", "rift_daemons_of_plague"],
+		["aofr", "daemons_of_war", "rift_daemons_of_war"],
+	]
+	for row in rows:
+		var alias: Array = SpellsRegistry.spells_for(row[0], row[1])
+		var canonical: Array = SpellsRegistry.spells_for(row[0], row[2])
+		assert_bool(canonical.is_empty()) \
+			.override_failure_message("%s/%s has no committed book" % [row[0], row[2]]).is_false()
+		assert_int(alias.size()) \
+			.override_failure_message("%s/%s resolves ZERO spells" % [row[0], row[1]]) \
+			.is_equal(canonical.size())
+
+
 func test_spell_lists_diverge_across_systems_for_the_same_faction() -> void:
 	# THE cross-system divergence proof (the wave-6 §0 invariant, measured on the source data: 77 of
 	# 82 books published for 2+ systems carry parameter-divergent spell lists). The first

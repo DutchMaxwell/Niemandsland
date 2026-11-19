@@ -122,6 +122,46 @@ REGISTRY_DEFAULT_SYSTEM = "gf"
 REGISTRY_DIR = Path(__file__).resolve().parents[3] / "assets" / "solo"
 _REGISTRY_CACHE: dict[str, dict] = {}
 
+#: 3.6 army-list folder -> committed spell-map key for the nine renamed books
+#: (test/v36/dat_02_test.gd RENAMED, scripts/model_library.gd FOLDER_ALIASES):
+#: the daemon books lost their Wormhole/Rift prefix, the GF Saurian Starhost book
+#: gained a plural "s". A list keeps the folder it was built against, so an alias
+#: names the SAME book in the SAME system — never a cross-system guess.
+_SPELL_FACTION_ALIASES: dict[str, dict[str, str]] = {
+    "gf": {
+        "wormhole_daemons_of_change": "daemons_of_change",
+        "wormhole_daemons_of_lust": "daemons_of_lust",
+        "wormhole_daemons_of_plague": "daemons_of_plague",
+        "wormhole_daemons_of_war": "daemons_of_war",
+        "saurian_starhost": "saurian_starhosts",
+    },
+    "aof": {
+        "rift_daemons_of_change": "daemons_of_change",
+        "rift_daemons_of_lust": "daemons_of_lust",
+        "rift_daemons_of_plague": "daemons_of_plague",
+        "rift_daemons_of_war": "daemons_of_war",
+    },
+    "gff": {
+        "daemons_of_change": "wormhole_daemons_of_change",
+        "daemons_of_lust": "wormhole_daemons_of_lust",
+        "daemons_of_plague": "wormhole_daemons_of_plague",
+        "daemons_of_war": "wormhole_daemons_of_war",
+        "saurian_starhosts": "saurian_starhost",
+    },
+    "aofs": {
+        "daemons_of_change": "rift_daemons_of_change",
+        "daemons_of_lust": "rift_daemons_of_lust",
+        "daemons_of_plague": "rift_daemons_of_plague",
+        "daemons_of_war": "rift_daemons_of_war",
+    },
+    "aofr": {
+        "daemons_of_change": "rift_daemons_of_change",
+        "daemons_of_lust": "rift_daemons_of_lust",
+        "daemons_of_plague": "rift_daemons_of_plague",
+        "daemons_of_war": "rift_daemons_of_war",
+    },
+}
+
 #: movement_range_controller.gd:179 — the ONLY primitives the move-band registry
 #: pass honours. A rule aliased to anything else (Wild Veil -> Ranged Shrouding)
 #: leaves the bands alone, on the table and here. NML-1121: "Teleport" joined this
@@ -1037,8 +1077,10 @@ def spells_for(system: str, faction: str) -> list[dict[str, Any]]:
             )
         except (OSError, ValueError):
             _SPELL_MAPS[s] = {}
-    return list((_SPELL_MAPS[s].get("factions", {}).get(faction, {}) or {}).get(
-        "spells", []))
+    factions = _SPELL_MAPS[s].get("factions", {})
+    if faction not in factions:
+        faction = _SPELL_FACTION_ALIASES.get(s, {}).get(faction, faction)
+    return list((factions.get(faction, {}) or {}).get("spells", []))
 
 
 def _warn_unresolved_spell_books(profiles: dict[str, dict[str, Any]],

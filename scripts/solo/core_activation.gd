@@ -338,6 +338,14 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		var us := Time.get_ticks_usec() - t0
 		core_us += us
 		max_us = maxi(max_us, us)
+		var lines: Array = r.get("lines", [])
+		for i in range(printed, lines.size()):
+			var line: Dictionary = lines[i]
+			# P4.D-48: a melee line carries "{cite}" where the table cites its rules book (the core holds no book version).
+			main._log_rule_event(int(line["category"]), str(line["text"]).replace("{cite}",
+				OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))), ai, str(line["detail"]))
+		printed = maxi(printed, lines.size())
+		await land_step(main, unit, r.get("landings", []), start_models, landed)
 		if str(r["step"]) == "need_choice":
 			var options: Array = r.get("options", [])
 			# The choice's owner is a roster KEY (the Takedown shooter, the wounded target): never the shooter by default.
@@ -348,14 +356,6 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 			if answer_fits(str(r["id"]), options, option):
 				transcript.append({"t": "choice", "id": str(r["id"]), "option": option})
 			continue
-		var lines: Array = r.get("lines", [])
-		for i in range(printed, lines.size()):
-			var line: Dictionary = lines[i]
-			# P4.D-48: a melee line carries "{cite}" where the table cites its rules book (the core holds no book version).
-			main._log_rule_event(int(line["category"]), str(line["text"]).replace("{cite}",
-				OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))), ai, str(line["detail"]))
-		printed = maxi(printed, lines.size())
-		await land_step(main, unit, r.get("landings", []), start_models, landed)
 		if str(r["step"]) == "done":
 			await land_delta(main, r.get("delta", []), start_models, landed)
 			if not keep_handle:
@@ -733,6 +733,55 @@ static func ai_transcript(main, unit: GameUnit, report: Dictionary, target: Game
 	if not split.is_empty():
 		intent["split"] = split
 	return [{"t": "begin"}, {"t": "placed", "positions": at, "trails": trails}, intent]
+
+
+## CC-10b: the planner's cast dicts (`report["casts"]`, plan order) as the core's `Input::Cast` entries: one per planned
+## cast, `seq` 0-based, every unit named by its roster key (`unit_id`), payers as `[[key, tokens]..]` in spend order and
+## the pools per foe slot. Pure. Nothing sends this array to the core yet (CC-13).
+static func cast_inputs(report: Dictionary) -> Array:
+	var out: Array = []
+	for c in report.get("casts", []):
+		var cast := c as Dictionary
+		var caster: GameUnit = cast.get("caster")
+		if caster == null:
+			continue
+		var targets: Array = []
+		for t in cast.get("targets", []):
+			if t is GameUnit:
+				targets.append((t as GameUnit).unit_id)
+		var conduit: GameUnit = cast.get("conduit")
+		var shaken: Array = []
+		for sh in cast.get("conduit_shaken", []):
+			var su: GameUnit = (sh as Dictionary).get("unit")
+			if su != null:
+				shaken.append(su.unit_id)
+		var pools: Array = []
+		for p in cast.get("pools", []):
+			var row: Array = p as Array
+			pools.append([int(row[0]), _cast_payers(row[1])])
+		var effect: Dictionary = (cast.get("spell", {}) as Dictionary).get("effect", {})
+		out.append({"t": "cast", "seq": out.size(), "caster": caster.unit_id,
+			"spell": str(cast.get("name", "")), "targets": targets,
+			"base": int(cast.get("base_target", 0)),
+			"threshold": int(cast.get("threshold", 0)),
+			"boost": int(cast.get("boost", 0)), "boost_sources": _cast_payers(cast.get("boost_sources", [])),
+			"interference": int(cast.get("interference", 0)),
+			"interference_sources": _cast_payers(cast.get("interference_sources", [])),
+			"conduit": (conduit.unit_id if conduit != null else ""), "conduit_shaken": shaken,
+			"pools": pools, "once": bool(effect.get("once", str(effect.get("duration", "")) == "once")),
+			"open": bool(cast.get("interference_open", false))})
+	return out
+
+
+## One payer list of a cast as the core reads it: `[[unit key, tokens]..]` in spend order.
+static func _cast_payers(srcs: Array) -> Array:
+	var rows: Array = []
+	for s in srcs:
+		var sd := s as Dictionary
+		var su: GameUnit = sd.get("unit")
+		if su != null:
+			rows.append([su.unit_id, int(sd.get("tokens", 0))])
+	return rows
 
 
 ## P4.D-14: split fire's aim of `parts` (the volley's groups, {target, shots}): one {member, weapon, target} per shot in the table's

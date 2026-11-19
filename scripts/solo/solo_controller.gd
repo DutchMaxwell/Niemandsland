@@ -5454,11 +5454,18 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit, hold_out: Array = []) -
 	var target_units: Array = []
 	for t in chosen_targets:
 		target_units.append((t as Dictionary)["unit"])
+	# CC-10a: what the core's cast input needs and the table already computed here — who paid the boost and the
+	# interference (in draw order), the conduit the cast rides (its unit, or none) with the Shaken ones that sat
+	# it out, and the foe slot's eligible interferers. Nothing reads them through a door yet (CC-13).
+	var conduit := caster_conduit(member)
 	return {"caster": member, "caster_unit": unit, "spell": chosen,
 		"name": str(chosen.get("name", "?")), "threshold": threshold,
 		"targets": target_units, "ev": chosen_ev, "boost": boost, "interference": interference,
 		"target_num": AiSpell.cast_target(boost, interference, priced_target), "base_target": base_target,
 		"interference_open": not auto_interference and not enemy_helpers.is_empty(),
+		"boost_sources": boost_sources, "interference_sources": interference_sources,
+		"conduit": conduit.get("unit"), "conduit_shaken": conduit.get("shaken", []),
+		"pools": [[human_slot, enemy_helpers]],
 		"tokens_before": tokens_before, "tokens_after": member.casts_current}
 
 
