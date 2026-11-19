@@ -346,8 +346,12 @@ fn cast_check(statics: &[UnitStatic], state: &State, t: &[Input]) -> Option<(usi
     t.iter().enumerate().find_map(|(i, x)| if let Input::Cast(c) = x { cast_break(statics, state, &mut left, c).map(|why| (i, why)) } else { None })
 }
 
+/// P4.0-5: the ids of the Takedown model-pick choice (`takedown_model:<shooter>:<target>`) start with this.
+const TAKEDOWN_MODEL: &str = "takedown_model:";
 /// P4.D-20: the ids of the wound-allocation choice (`wound_alloc:<shooter>:<target>:<group>`) start with this.
 const WOUND_ALLOC: &str = "wound_alloc:";
+/// CC-9b/9c: the ids of the cast-interference choice (`interference:<seq>:<caster>:<slot>`) start with this.
+const INTERFERENCE: &str = "interference:";
 
 /// One activation through the step API: the order rules, then the declared
 /// action (not moving = Hold) on the supplied faces and the LAST placement (`check_move` first).
@@ -388,17 +392,47 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     if kind == RUSH && shoot.is_some() {
         return ActStep::Refused { index: at_intent, reason: format!("{name} rushed this activation - it cannot shoot.") };
     }
-    // P4.0-5: the last `Choice` in the transcript answers (or asks) the open choice; without one the
-    // core's automatic pick stands and nothing below changes.
+    // CC-9b: route every `Choice` by id prefix (`takedown_model:`, `wound_alloc:`, `interference:`); any other prefix is
+    // refused with a sentence. Within each kind the last entry per id wins; without one the core's automatic pick stands.
+    let mut takedown: Option<(usize, &str, &str)> = None;
+    let mut wound: Vec<(usize, String, Option<Vec<usize>>)> = Vec::new();
+    let mut interference: Vec<(usize, String, Option<i64>)> = Vec::new();
+    for (i, x) in t.iter().enumerate() {
+        let Input::Choice { id, option } = x else { continue };
+        if id.starts_with(TAKEDOWN_MODEL) {
+            takedown = Some((i, id.as_str(), option.as_str()));
+        } else if id.starts_with(WOUND_ALLOC) {
+            let slots = option.split(',').map(|s| s.strip_prefix("slot:")?.parse::<usize>().ok()).collect::<Option<Vec<_>>>();
+            if !option.is_empty() && slots.is_none() {
+                return ActStep::Refused { index: i, reason: format!("{option} is not a slot list (slot:<n>,..) for {id}") };
+            }
+            wound.retain(|w| w.1 != *id);
+            wound.push((i, id.clone(), slots.filter(|_| !option.is_empty())));
+        } else if id.starts_with(INTERFERENCE) {
+            let count = if option.is_empty() {
+                None
+            } else {
+                let plain = option.bytes().all(|b| b.is_ascii_digit()) && (option.len() == 1 || !option.starts_with('0'));
+                let Some(n) = plain.then(|| option.parse::<i64>().ok()).flatten() else {
+                    return ActStep::Refused { index: i, reason: format!("{option} is not a token count (0..N) for {id}") };
+                };
+                Some(n)
+            };
+            interference.retain(|w| w.1 != *id);
+            interference.push((i, id.clone(), count));
+        } else {
+            return ActStep::Refused {
+                index: i,
+                reason: format!("unknown choice kind {id} (expected {TAKEDOWN_MODEL}, {WOUND_ALLOC} or {INTERFERENCE})"),
+            };
+        }
+    }
     let mut seams = seams;
-    if let Some((i, id, option)) = t.iter().enumerate().rev().find_map(|(i, x)| match x {
-        Input::Choice { id, option } if !id.starts_with(WOUND_ALLOC) => Some((i, id, option)),
-        _ => None,
-    }) {
+    if let Some((i, id, option)) = takedown {
         let Some((want, options, owner)) = at.and_then(|si| takedown_choice(statics, state, si, shoot.as_deref())) else {
             return ActStep::Refused { index: i, reason: format!("no choice is open in this activation (got {id})") };
         };
-        if *id != want {
+        if id != want {
             return ActStep::Refused { index: i, reason: format!("the open choice is {want}, not {id}") };
         }
         if option.is_empty() {
@@ -409,20 +443,8 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         };
         seams = Seams { takedown_pick: Some(slot), ..seams };
     }
-    // P4.D-20/21: every wound-allocation `Choice` (the last one per id, one per target group): an empty option asks (the
-    // core opens it at that group's landing, once the saves are in), `slot:<n>,..` answers; none = automatic.
-    let mut wound: Vec<(usize, String, Option<Vec<usize>>)> = Vec::new();
-    for (i, x) in t.iter().enumerate() {
-        let Input::Choice { id, option } = x else { continue };
-        if !id.starts_with(WOUND_ALLOC) {
-            continue;
-        }
-        let slots = option.split(',').map(|s| s.strip_prefix("slot:")?.parse::<usize>().ok()).collect::<Option<Vec<_>>>();
-        if !option.is_empty() && slots.is_none() {
-            return ActStep::Refused { index: i, reason: format!("{option} is not a slot list (slot:<n>,..) for {id}") };
-        }
-        wound.retain(|w| w.1 != *id);
-        wound.push((i, id.clone(), slots.filter(|_| !option.is_empty())));
+    if let Some((i, id, _)) = interference.iter().find(|c| c.2.is_some()) {
+        return ActStep::Refused { index: *i, reason: format!("no interference choice is open in this activation (got {id})") };
     }
     // P4.D-48: a charge on the step path is the TABLE's charge (the move, the snap, the pile-in), whatever the header's
     // search knobs say: the ported movement is ON and the plain-only imagination OFF. Without it the resolver skips the move,
@@ -2814,6 +2836,45 @@ mod tests {
         assert!(lines.iter().all(|l| !l.text.contains("b takes ") && !l.text.contains("b loses ")), "speculative automatic landing lines must not leak: {lines:?}");
         assert!(landings.iter().any(|l| l.unit == 0), "prior Dangerous landing on unit 0 must be present: {landings:?}");
         assert!(landings.iter().all(|l| l.unit != 2), "speculative automatic landing on target 2 must not leak: {landings:?}");
+    }
+
+    // ---- CC-9b: choices routed by id prefix ----
+
+    /// CC-9b: `step_activation` routes `Input::Choice` by id prefix (`takedown_model:`, `wound_alloc:`, `interference:`);
+    /// an unknown prefix is refused with its own sentence (never misrouted to Takedown), and an `interference:` id is
+    /// never treated as a Takedown answer. RED before CC-9b: `!id.starts_with(WOUND_ALLOC)` routes both to Takedown.
+    #[test]
+    fn choices_are_routed_by_prefix_and_unknown_prefixes_are_refused() {
+        let (st, statics) = takedown_line();
+        let ask = |id: &str, option: &str| {
+            let t = [Begin, intent(HOLD, Some("b")), Input::Choice { id: id.into(), option: option.into() }];
+            step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true)
+        };
+        for bad in ["bogus:a:b", "plain_id", "takedown_model"] {
+            match ask(bad, "slot:0") {
+                ActStep::Refused { index: 2, reason } => {
+                    assert!(reason.contains("unknown choice"), "{bad}: {reason}");
+                    assert!(reason.contains(bad), "{bad}: {reason}");
+                }
+                other => panic!("{bad}: expected unknown-prefix Refused, got {other:?}"),
+            }
+        }
+        // An `interference:` probe on a Takedown shooter board is NOT routed to Takedown (never says "the open choice is takedown_model:...").
+        let probe = ask("interference:0:a:1", "");
+        assert!(!matches!(&probe, ActStep::Refused { reason, .. } if reason.contains("takedown_model")), "must not route interference: to takedown: {probe:?}");
+        // A non-integer `interference:` answer is refused as a bad interference option, never routed to Takedown.
+        match ask("interference:0:a:1", "slot:0") {
+            ActStep::Refused { index: 2, reason } => assert!(reason.contains("token count"), "{reason}"),
+            other => panic!("expected interference refusal, got {other:?}"),
+        }
+        // Takedown + wound_alloc together: Takedown answers cleanly while wound_alloc is also probed.
+        let t = [
+            Begin,
+            intent(HOLD, Some("b")),
+            Input::Choice { id: TAKEDOWN_ID.into(), option: "slot:0".into() },
+            Input::Choice { id: ALLOC_ID.into(), option: String::new() },
+        ];
+        assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true), ActStep::NeedRoll { index: 0, .. }));
     }
 
     // ---- step 12: cancel ----
