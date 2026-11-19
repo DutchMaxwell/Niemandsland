@@ -88,6 +88,7 @@ use super::*;
                 ..Default::default()
             },
             grants_rule: String::new(),
+            ..Default::default()
         }
     }
 
