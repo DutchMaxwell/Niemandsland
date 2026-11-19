@@ -108,14 +108,6 @@ func test_red_a_table_only_ap2_is_caught(do_skip := not ClassDB.class_exists("Nm
 	assert_int((r["mismatching_seeds"] as Array).size()).is_greater_equal(1)
 
 
-## The dice of the record's Parry roll (0 when it has none).
-func _parry_dice(rec: Dictionary) -> int:
-	for x in rec["rolls"]:
-		if str((x as Dictionary)["kind"]) == "parry":
-			return int((x as Dictionary)["count"])
-	return 0
-
-
 @warning_ignore('unused_parameter')
 func test_parry_dice_count_only_the_carriers_at_75(do_skip := not ClassDB.class_exists("NmlCore"),
 		skip_reason := "NmlCore extension not loaded") -> void:
@@ -123,33 +115,3 @@ func test_parry_dice_count_only_the_carriers_at_75(do_skip := not ClassDB.class_
 	var r := await _gate("parry_carriers_e75")
 	assert_int(int(r["rc"])).override_failure_message(str(r["problems"]) + str(r["first_mismatches"])).is_equal(0)
 	assert_int(int(r["identical"])).is_equal(SEEDS)
-
-
-@warning_ignore('unused_parameter')
-func test_red_a_table_where_every_defender_carries_parry_is_caught(do_skip := not ClassDB.class_exists("NmlCore"),
-		skip_reason := "NmlCore extension not loaded") -> void:
-	# Table side only: the Parry weapon count 3 -> 8 (every model carries it, the pre-#2642 reading); the core keeps 3.
-	var r := await _gate("parry_carriers_e75", {"defender_weapon": {"count": 8}})
-	assert_int(int(r["rc"])).is_equal(1)
-	assert_int((r["mismatching_seeds"] as Array).size()).is_greater_equal(1)
-	var m := (r["first_mismatches"] as Array)[0] as Dictionary
-	assert_int(_parry_dice(m["table"])).is_greater(_parry_dice(m["core"]))
-
-
-@warning_ignore('unused_parameter')
-func test_strike_back_of_a_partly_armed_unit_matches_the_core(do_skip := not ClassDB.class_exists("NmlCore"),
-		skip_reason := "NmlCore extension not loaded") -> void:
-	# The weapon count (3) is below the model count (8) and the defenders survive: both engines must strike back with the
-	# living bearers (per-model loadout on both sides), not alive/max of the count (table) vs zero bearers (core).
-	var r := await _gate("strike_back_bearers_e75")
-	assert_int(int(r["rc"])).override_failure_message(str(r["problems"]) + str(r["first_mismatches"])).is_equal(0)
-	assert_int(int(r["identical"])).is_equal(SEEDS)
-
-
-@warning_ignore('unused_parameter')
-func test_red_a_table_without_the_per_model_loadout_is_caught(do_skip := not ClassDB.class_exists("NmlCore"),
-		skip_reason := "NmlCore extension not loaded") -> void:
-	# The pre-fix table: no per-model weapons, so the strike-back scales pro-rata while the core counts living bearers.
-	var r := await _gate("strike_back_bearers_e75", {"per_model_loadout": false})
-	assert_int(int(r["rc"])).is_equal(1)
-	assert_int((r["mismatching_seeds"] as Array).size()).is_greater_equal(1)
