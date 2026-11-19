@@ -432,7 +432,7 @@
     "COMBAT|Melee result: Att took 1, Def took 2 (Fear: 2) — Def loses the melee",
     "COMBAT|AI (Def): 1 → failed (4+)",
     "COMBAT|Def fails morale — Shaken",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "-3517970943730970763",
    "scenario": "fear_charger",
@@ -652,7 +652,7 @@
     "COMBAT|Melee result: Att took 2, Def took 4 (Fear: 2) — Def loses the melee",
     "COMBAT|AI (Def): 4 → passed (4+)",
     "COMBAT|Def passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "-891775342720430656",
    "scenario": "fear_charger",
@@ -870,7 +870,7 @@
     "COMBAT|Att takes 3 wounds (7/10)",
     "COMBAT|Att loses 3 models (7/10)",
     "COMBAT|Melee result: Att took 3, Def took 3 (Fear: 2) — a draw — no morale test",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "331117989603590377",
    "scenario": "fear_charger",
@@ -1088,7 +1088,7 @@
     "COMBAT|Att takes 1 wound (9/10)",
     "COMBAT|Att loses a model (9/10)",
     "COMBAT|Melee result: Att took 3 (Fear: 2), Def took 3 — a draw — no morale test",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "9037474382452337367",
    "scenario": "fear_defender",
@@ -1308,7 +1308,7 @@
     "COMBAT|Melee result: Att took 4 (Fear: 2), Def took 2 — Att loses the melee",
     "COMBAT|AI (Att): 4 → passed (4+)",
     "COMBAT|Att passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "-891775342720430656",
    "scenario": "fear_defender",
@@ -1528,7 +1528,7 @@
     "COMBAT|Melee result: Att took 3 (Fear: 2), Def took 2 — Att loses the melee",
     "COMBAT|AI (Att): 2 → failed (4+)",
     "COMBAT|Att fails morale — Shaken",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "43256927267470872",
    "scenario": "fear_defender",
@@ -1748,7 +1748,7 @@
     "COMBAT|Melee result: Att took 3 (Fear: 2), Def took 1 — Att loses the melee",
     "COMBAT|AI (Att): 3 → failed (4+)",
     "COMBAT|Att fails morale — Shaken",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "3003427134685170467",
    "scenario": "fear_defender",
@@ -2184,7 +2184,7 @@
     "COMBAT|Melee result: Att took 1, Def took 2 (Fear: 2) — Def loses the melee",
     "COMBAT|AI (Def): 1 → failed (4+)",
     "COMBAT|Def fails morale — Shaken",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "-3517970943730970763",
    "scenario": "fear_human",
@@ -2403,7 +2403,7 @@
     "COMBAT|Melee result: Att took 2, Def took 4 (Fear: 2) — Def loses the melee",
     "COMBAT|AI (Def): 4 → passed (4+)",
     "COMBAT|Def passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "-891775342720430656",
    "scenario": "fear_human",
@@ -2620,7 +2620,7 @@
     "COMBAT|Att takes 3 wounds (7/10)",
     "COMBAT|Att loses 3 models (7/10)",
     "COMBAT|Melee result: Att took 3, Def took 3 (Fear: 2) — a draw — no morale test",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "331117989603590377",
    "scenario": "fear_human",
@@ -3050,7 +3050,7 @@
     "COMBAT|Att takes 1 wound (9/10)",
     "COMBAT|Att loses a model (9/10)",
     "COMBAT|Melee result: Att took 1, Def took 1 — a draw — no morale test",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "1779269876428923432",
    "scenario": "furious_human",
@@ -3269,7 +3269,7 @@
     "COMBAT|Melee result: Att took 3, Def took 1 — Att loses the melee",
     "COMBAT|You: 1 → failed (4+)",
     "COMBAT|Att fails morale — Shaken",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "443684534026087405",
    "scenario": "furious_human",
@@ -3480,7 +3480,7 @@
     "COMBAT|Att saves on 4+",
     "COMBAT|You defend: 6 6 5 5 4 → 5 blocks (4+)",
     "COMBAT|Melee result: Att took 0, Def took 0 — a draw — no morale test",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "152681930371637496",
    "scenario": "furious_human",
@@ -3728,7 +3728,7 @@
     "COMBAT|Def fails morale at half strength — ROUTS",
     "COMBAT|Def takes 3 wounds (0/8)",
     "COMBAT|Def destroyed",
-    "COMBAT|Att consolidates up to 3\" (enemy destroyed — GF 3.6)"
+    "COMBAT|Consolidation: Att holds its ground (enemy destroyed, no room to move — GF 3.6)"
    ],
    "rng": "3706366254806994843",
    "scenario": "hero_charger",
@@ -3972,7 +3972,7 @@
     "COMBAT|Melee result: Att took 0, Def took 2 — Def loses the melee",
     "COMBAT|AI (Def): 6 → passed (4+)",
     "COMBAT|Def passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "-4704908403092963812",
    "scenario": "hero_charger",
@@ -4215,7 +4215,7 @@
     "COMBAT|Hero AttHero tests on behalf of Att (Q3+)",
     "COMBAT|AI (Att): 5 → passed (3+)",
     "COMBAT|Att passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "-3951442055317307110",
    "scenario": "hero_charger",
@@ -4457,7 +4457,7 @@
     "COMBAT|Att takes 2 wounds (9/11)",
     "COMBAT|Att loses 2 models (9/11)",
     "COMBAT|Melee result: Att took 2, Def took 2 — a draw — no morale test",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "-4534581452550845972",
    "scenario": "hero_charger",
@@ -4952,7 +4952,7 @@
     "COMBAT|Hero DefHero tests on behalf of Def (Q3+)",
     "COMBAT|AI (Def): 3 → passed (3+)",
     "COMBAT|Def passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "-6055078531743331058",
    "scenario": "hero_defender",
@@ -5196,7 +5196,7 @@
     "COMBAT|Melee result: Att took 2, Def took 1 — Att loses the melee",
     "COMBAT|AI (Att): 5 → passed (4+)",
     "COMBAT|Att passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "-3951442055317307110",
    "scenario": "hero_defender",
@@ -5438,7 +5438,7 @@
     "COMBAT|Melee result: Att took 3, Def took 0 — Att loses the melee",
     "COMBAT|AI (Att): 4 → passed (4+)",
     "COMBAT|Att passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "7426995166965747237",
    "scenario": "hero_defender",
@@ -5684,7 +5684,7 @@
     "COMBAT|Melee result: Att took 2, Def took 4 (Fear: 2) — Def loses the melee",
     "COMBAT|AI (Def): 3 → failed (4+)",
     "COMBAT|Def fails morale — Shaken",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "5635694677514372330",
    "scenario": "hero_fear_chain",
@@ -5928,7 +5928,7 @@
     "COMBAT|Att takes 3 wounds (8/11)",
     "COMBAT|Att loses 3 models (8/11)",
     "COMBAT|Melee result: Att took 3, Def took 3 (Fear: 2) — a draw — no morale test",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "8692969087855087299",
    "scenario": "hero_fear_chain",
@@ -6174,7 +6174,7 @@
     "COMBAT|Melee result: Att took 1, Def took 3 (Fear: 2) — Def loses the melee",
     "COMBAT|AI (Def): 5 → passed (4+)",
     "COMBAT|Def passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "4533832284663367405",
    "scenario": "hero_fear_chain",
@@ -6420,7 +6420,7 @@
     "COMBAT|Melee result: Att took 3, Def took 5 (Fear: 2) — Def loses the melee",
     "COMBAT|AI (Def): 1 → failed (4+)",
     "COMBAT|Def fails morale — Shaken",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "4450739290170928849",
    "scenario": "hero_fear_chain",
@@ -6667,7 +6667,7 @@
     "COMBAT|Def fails morale at half strength — ROUTS",
     "COMBAT|Def takes 3 wounds (0/8)",
     "COMBAT|Def destroyed",
-    "COMBAT|Att consolidates up to 3\" (enemy destroyed — GF 3.6)"
+    "COMBAT|Consolidation: Att holds its ground (enemy destroyed, no room to move — GF 3.6)"
    ],
    "rng": "3706366254806994843",
    "scenario": "hero_human",
@@ -6910,7 +6910,7 @@
     "COMBAT|Melee result: Att took 0, Def took 2 — Def loses the melee",
     "COMBAT|AI (Def): 6 → passed (4+)",
     "COMBAT|Def passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "-4704908403092963812",
    "scenario": "hero_human",
@@ -7152,7 +7152,7 @@
     "COMBAT|Hero AttHero tests on behalf of Att (Q3+)",
     "COMBAT|You: 5 → passed (3+)",
     "COMBAT|Att passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "-3951442055317307110",
    "scenario": "hero_human",
@@ -7393,7 +7393,7 @@
     "COMBAT|Att takes 2 wounds (9/11)",
     "COMBAT|Att loses 2 models (9/11)",
     "COMBAT|Melee result: Att took 2, Def took 2 — a draw — no morale test",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "-4534581452550845972",
    "scenario": "hero_human",

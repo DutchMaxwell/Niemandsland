@@ -260,7 +260,7 @@
     "COMBAT|Melee result: Att took 2, Def took 1 — Att loses the melee",
     "COMBAT|You: 4 → passed (4+)",
     "COMBAT|Att passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "-1297277400429683801",
    "scenario": "human_charge",
@@ -393,7 +393,7 @@
     "COMBAT|Melee result: Att took 3, Def took 1 — Att loses the melee",
     "COMBAT|You: 1 → failed (4+)",
     "COMBAT|Att fails morale — Shaken",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "443684534026087405",
    "scenario": "human_charge",
@@ -518,7 +518,7 @@
     "COMBAT|Att saves on 4+",
     "COMBAT|You defend: 6 6 5 5 4 → 5 blocks (4+)",
     "COMBAT|Melee result: Att took 0, Def took 0 — a draw — no morale test",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "152681930371637496",
    "scenario": "human_charge",
@@ -2091,7 +2091,7 @@
     }
    ],
    "lines": [
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "-8330585842245805678",
    "scenario": "consolidation_back",
@@ -2208,7 +2208,7 @@
     }
    ],
    "lines": [
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "7626009594601917327",
    "scenario": "consolidation_back",
@@ -2325,7 +2325,7 @@
     }
    ],
    "lines": [
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "8364183946894225711",
    "scenario": "consolidation_back",
@@ -2442,7 +2442,7 @@
     }
    ],
    "lines": [
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "rng": "3200770847647146015",
    "scenario": "consolidation_back",
