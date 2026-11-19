@@ -68,12 +68,31 @@ def test_check_says_nothing_about_the_median_when_every_suite_has_a_line(tmp_pat
     assert "unweighted" not in capsys.readouterr().out
 
 
-def test_check_fails_when_a_weight_line_names_a_suite_that_was_deleted(tmp_path, monkeypatch, capsys):
+def test_check_warns_and_passes_when_a_weight_line_names_a_suite_that_was_deleted(tmp_path, monkeypatch, capsys):
     weights = {"test/a_test.gd": 3.0, "test/deleted_test.gd": 5.0}
     _fixture_tree(tmp_path, monkeypatch, ["a_test.gd"], weights)
+    assert shard_assign.main() == 0
+    out = capsys.readouterr().out
+    assert "::warning::" in out and "test/deleted_test.gd" in out, out
+    assert "::error::" not in out, out
+    assert "exactly once" in out, out
+
+
+def test_check_still_fails_when_a_suite_is_missing_from_all_shards_even_with_stale_weight(tmp_path, monkeypatch, capsys):
+    weights = {"test/a_test.gd": 3.0, "test/b_test.gd": 2.0, "test/deleted_test.gd": 5.0}
+    _fixture_tree(tmp_path, monkeypatch, ["a_test.gd", "b_test.gd"], weights)
+    real = shard_assign.assign
+
+    def lossy(suites, w, shards):
+        out, load = real(suites, w, shards)
+        out[0] = out[0][1:]
+        return out, load
+
+    monkeypatch.setattr(shard_assign, "assign", lossy)
     assert shard_assign.main() == 1
     out = capsys.readouterr().out
-    assert "::error::" in out and "test/deleted_test.gd" in out, out
+    assert "::warning::" in out and "test/deleted_test.gd" in out, out
+    assert "::error::shard coverage broken" in out, out
 
 
 def test_index_mode_stdout_stays_a_bare_suite_list_when_a_suite_has_no_weight_line(tmp_path, monkeypatch, capsys):

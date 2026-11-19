@@ -206,3 +206,51 @@ func test_charge_helper_compares_door_against_table_and_catches_planted_faults()
 	assert_bool(bool(real_res["taken"])).override_failure_message("real list charge was not driven through the core").is_true()
 	assert_array(real_res["refusals"]).is_not_empty()
 	assert_array(real_res["core"]["lines"]).is_not_empty()
+
+
+func _melee_entry(nm: String, size: int, rng: int, w_rules: Array[String] = []) -> Dictionary:
+	var ou := OPRApiClient.OPRUnit.new()
+	ou.name = nm; ou.size = size; ou.quality = 4; ou.defense = 4; ou.game_system = "gf"
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "Blade" if rng == 0 else "Rifle"; w.range_value = rng; w.attacks = 2; w.count = size; w.special_rules.assign(w_rules)
+	ou.weapons = [w]
+	return {"unit": ou, "faction": "robot_legions", "system": "gf"}
+
+
+## Plan E (step 4b): melee sweep (`--door melee`) sweeps ring pairs x melee units x enemy units x seeds, emits JSON verdict rows
+## with `taken`, `deny`, `equal`, `first_diff` like the shoot sweep, and marks planted fault rows UNEQUAL.
+## RED: stub `verdicts()` melee `first_diff` to "" -> planted fault rows read equal.
+func test_melee_sweep_pair_emits_verdict_rows_and_catches_planted_fault() -> void:
+	var dice := ProjectSettings.globalize_path(DICE)
+	RosterSweep.arm(_main, dice)
+	var blades := _melee_entry("Blades", 1, 0, ["AP(1)"])
+	var rifles := _melee_entry("Rifles", 1, 24)
+	var guards := _melee_entry("Guards", 1, 0)
+	var horde := _melee_entry("Horde", 10, 0)
+	assert_bool(RosterSweep.has_melee(blades) and not RosterSweep.has_melee(rifles)).is_true()
+	var rows: Array = await RosterSweep.sweep_melee_pair(_main, {"name": "A", "system": "gf", "units": [blades, rifles]},
+		{"name": "B", "system": "gf", "units": [guards, horde]}, 1, dice)
+	assert_int(rows.size()).override_failure_message("1x2 + 2x2 = 6 melee-charger x enemy charges").is_equal(6)
+	var cmp := RosterSweep.compare(rows, OUT)
+	assert_array(cmp["problems"]).is_empty()
+	var vs: Array = cmp["verdicts"]
+	assert_bool(vs.all(func(v: Dictionary) -> bool: return str(v["att"]) != "Rifles") and vs.any(func(v: Dictionary) -> bool: return str(v["tgt"]) == "Rifles")).is_true()
+	for v in vs:
+		for k in ["id", "pair", "att", "tgt", "seed", "fired", "taken", "deny", "equal", "first_diff", "labels"]:
+			assert_bool((v as Dictionary).has(k)).override_failure_message("missing key %s" % k).is_true()
+		if str(v["att"]) == "Horde" or str(v["tgt"]) == "Horde":
+			assert_bool(bool(v["taken"])).is_false()
+			assert_array(v["deny"]).contains(["size"])
+		else:
+			assert_bool(bool(v["fired"]) and bool(v["taken"]) and bool(v["equal"])).override_failure_message("control row failed: %s" % [v]).is_true()
+			assert_array(v["deny"]).is_empty()
+			assert_str(str(v["first_diff"])).is_empty()
+	assert_dict(RosterSweep.deny_share(vs)).contains_key_value("taken", 3).contains_key_value("equal", 3)
+	var small := [{"name": "A", "system": "gf", "units": [blades]}, {"name": "B", "system": "gf", "units": [guards]}]
+	for case in [[{"core_fault": func(_a: GameUnit, f: GameUnit) -> void: f.is_shaken = not f.is_shaken}, "shaken", 0], [{"core_swap_face": 0}, "rolls", 2]]:
+		var fault := RosterSweep.compare(await RosterSweep.sweep_melee_pair(_main, small[0], small[1], 1, dice, 0, case[0]), OUT)
+		for v in fault["verdicts"]:
+			assert_bool(bool(v["equal"])).override_failure_message("planted %s fault unseen: %s" % [case[1], v]).is_false()
+			assert_str(str(v["first_diff"])).is_equal(str(case[1]))
+		assert_int((RosterSweep.deny_share(fault["verdicts"])["unequal"] as Array).size()).is_equal(2)
+		assert_int(int(fault["roll_mismatches"])).is_equal(int(case[2]))
