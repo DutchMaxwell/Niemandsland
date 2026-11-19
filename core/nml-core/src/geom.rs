@@ -81,6 +81,30 @@ pub fn centre(ps: &[[f64; 3]]) -> V3 {
     div(c, ps.len() as f64)
 }
 
+/// Godot 4 `String::num_real(float)` for `Vector3::operator String()`:
+/// 6 decimals, minus `floor(log10|x|)` when `|x| > 10`, trailing zeros trimmed, `".0"` kept.
+fn godot_f32(x: f32) -> String {
+    let a = x.abs();
+    let dec = if a > 10.0 { 6usize.saturating_sub(a.log10().floor() as usize) } else { 6 };
+    let mut s = format!("{x:.dec$}");
+    if s.contains('.') {
+        while s.ends_with('0') {
+            s.pop();
+        }
+        if s.ends_with('.') {
+            s.push('0');
+        }
+    } else {
+        s.push_str(".0");
+    }
+    if s == "-0.0" { "0.0".into() } else { s }
+}
+
+/// Godot 4 `str(Vector3)` format, e.g. `(0.508, 0.0, 0.3048)`.
+pub(crate) fn godot_vec3(v: V3) -> String {
+    format!("({}, {}, {})", godot_f32(v[0]), godot_f32(v[1]), godot_f32(v[2]))
+}
+
 /// `BattleSim.dist_in` battle_sim.gd:758-764 — nearest MODEL-to-model gap of two
 /// snapshot position arrays in inches. `minf` is an f64 min over f32 lengths,
 /// and the division by `IN2M` is the one f64 step.
