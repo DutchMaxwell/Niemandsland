@@ -71,6 +71,12 @@
       "why": "The table names Lacerate's re-roll (`Lacerate: <U> re-rolls N unmodified Defense 6s`); the door writes none (the core carries no name for it). Measured 19.11.: 12 volleys, dlines_gap row 13.",
       "leaves_with": "the dlines2 train that names the Bane family's re-roll"
     },
+    "door_omits_simultaneous_fire_line": {
+      "primitives": [],
+      "kind": "rule_line",
+      "why": "A shooter with a Deadly weapon beside another ranged weapon (its joined heroes' included): the table lands Deadly inline, so a later weapon sees fewer models and says `Simultaneous fire: ...` or Blast's cap read when the volley started; the core lands after the dice and writes neither. Not a rule name: `CoreSlice` refuses it by predicate (`deadly_beside_other_weapons`), switched on by this group. Measured 19.11.: 29 volleys, dlines_gap row 18.",
+      "leaves_with": "the dlines2 train that lands Deadly inline on the step path"
+    },
     "door_omits_takedown_lines": {
       "primitives": ["Takedown"],
       "kind": "rule_line",
