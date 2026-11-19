@@ -97,24 +97,6 @@ func test_deadly_multiplier_is_tough_capped() -> void:
 	assert_int(AiCombatMath.deadly_multiplier(3, 1)).is_equal(1)
 
 
-func test_deadly_wounds_dealt_has_no_carry_over() -> void:
-	# THE bug the pooled multiplier hid (GF v3.5.1 p.14 "no carry-over"): Deadly(2), 2 unsaved, on
-	# Tough(3) models — each wound ×2 on its OWN model, both survive (2 < 3). The pool combined 4 and
-	# spilled to kill one; per-model spread kills NONE.
-	assert_int(AiCombatMath.deadly_wounds_dealt(2, 2, [3, 3, 3])).is_equal(4)   # 2+2, both alive
-	var toughs := [3, 3, 3]
-	AiCombatMath.deadly_wounds_dealt(2, 2, toughs)
-	assert_array(toughs).contains_exactly([1, 1, 3])   # two models at 1 wound, none removed
-	# Deadly(6), 1 unsaved, Tough(2): kills one model, 4 excess LOST (no carry-over).
-	var t2 := [2, 2, 2]
-	assert_int(AiCombatMath.deadly_wounds_dealt(1, 6, t2)).is_equal(2)
-	assert_array(t2).contains_exactly([0, 2, 2])   # only ONE model removed
-	# 4 unsaved of Deadly(2) on Tough(3)×3: spread fills each to 1 wound left, the 4th finishes one → 1 kill.
-	var t3 := [3, 3, 3]
-	AiCombatMath.deadly_wounds_dealt(4, 2, t3)
-	assert_int(t3.count(0)).is_equal(1)   # exactly one model removed (defender-optimal spread)
-
-
 func test_unmodified_sixes_counts_natural_sixes() -> void:
 	assert_int(AiCombatMath.unmodified_sixes([6, 6, 5, 1, 6])).is_equal(3)
 	assert_int(AiCombatMath.unmodified_sixes([5, 4, 3])).is_equal(0)
@@ -160,14 +142,6 @@ func test_thrust_to_hit_improves_by_one_when_charging() -> void:
 	assert_int(AiCombatMath.modified_hit_target(AiCombatMath.thrust_to_hit(2, true), AiCombatMath.melee_hit_modifier(true))).is_equal(2)
 
 
-func test_fearless_recovers_on_four_plus() -> void:
-	# Fearless (GF/AoF v3.5.1 p.13): a re-roll of 4+ turns a failed morale test into a pass.
-	assert_bool(AiCombatMath.fearless_recovers(4)).is_true()
-	assert_bool(AiCombatMath.fearless_recovers(6)).is_true()
-	assert_bool(AiCombatMath.fearless_recovers(3)).is_false()
-	assert_bool(AiCombatMath.fearless_recovers(1)).is_false()
-
-
 func test_fear_adjusted_wounds_adds_x_for_the_winner_check() -> void:
 	# Fear (GF/AoF v3.5.1 p.13): +X to the who-won-melee tally only.
 	assert_int(AiCombatMath.fear_adjusted_wounds(2, 3)).is_equal(5)
@@ -175,31 +149,26 @@ func test_fear_adjusted_wounds_adds_x_for_the_winner_check() -> void:
 	assert_int(AiCombatMath.fear_adjusted_wounds(4, 0)).is_equal(4)
 
 
-func test_bane_reroll_count_is_the_defense_sixes() -> void:
-	assert_int(AiCombatMath.bane_reroll_count([6, 6, 5, 6])).is_equal(3)
-	assert_int(AiCombatMath.bane_reroll_count([5, 4, 3])).is_equal(0)
-
-
 func test_blocks_with_bane_rerolls_defense_sixes_once() -> void:
 	# Bane (GF/AoF v3.5.1 p.13): the defender re-rolls unmodified Defense 6s once. Def 4+, no AP.
 	# Saves [6, 6, 3]: without Bane all three would-be blocks are [6,6](block) + 3(fail vs 4) = 2 blocks.
 	assert_int(AiCombatMath.count_blocks([6, 6, 3], 4, 0)).is_equal(2)
 	# Bane re-rolls the two 6s → [2, 5]: the 2 fails, the 5 blocks; plus the original 3 fails → 1 block.
-	assert_int(AiCombatMath.blocks_with_bane([6, 6, 3], [2, 5], 4, 0)).is_equal(1)
+	assert_int(AiCombatMath.blocks_with_bane_from([6, 6, 3], [2, 5], 4, 0, 6)).is_equal(1)
 	# A re-rolled 6 stays a block ("a die is only re-rolled once"): [6] → reroll [6] → still 1 block.
-	assert_int(AiCombatMath.blocks_with_bane([6], [6], 4, 0)).is_equal(1)
+	assert_int(AiCombatMath.blocks_with_bane_from([6], [6], 4, 0, 6)).is_equal(1)
 	# No 6s → identical to a plain block count (Bane does nothing).
-	assert_int(AiCombatMath.blocks_with_bane([5, 3, 2], [], 4, 0)).is_equal(1)
+	assert_int(AiCombatMath.blocks_with_bane_from([5, 3, 2], [], 4, 0, 6)).is_equal(1)
 
 
 func test_blocks_with_bane_respects_ap_on_the_reroll() -> void:
 	# Def 4+, AP 1 → save target 5. Original [6, 6] both block; Bane re-rolls to [4, 5]: 4 fails vs 5+, 5
 	# blocks → 1 block. (A natural 6 in a re-roll would still block regardless of AP.)
-	assert_int(AiCombatMath.blocks_with_bane([6, 6], [4, 5], 4, 1)).is_equal(1)
+	assert_int(AiCombatMath.blocks_with_bane_from([6, 6], [4, 5], 4, 1, 6)).is_equal(1)
 
 
 func test_bane_reroll_count_from_widens_to_successful_fives() -> void:
-	# Base leg (low 6): byte-identical to bane_reroll_count — only the unmodified 6s.
+	# Base leg (low 6): only the unmodified 6s.
 	assert_int(AiCombatMath.bane_reroll_count_from([6, 5, 3, 1], 5, 6)).is_equal(1)
 	# Widened (low 5, save on 5+): the 6 AND the successful 5 re-roll; a 5 that already failed its
 	# save (target 7, heavy AP) is not a success and never re-rolls.
@@ -207,19 +176,8 @@ func test_bane_reroll_count_from_widens_to_successful_fives() -> void:
 	assert_int(AiCombatMath.bane_reroll_count_from([6, 5], 7, 5)).is_equal(1)
 	# blocks_with_bane_from: the 6 and the 5 re-roll once ([1, 2] both fail), the 3 stays → 0 blocks.
 	assert_int(AiCombatMath.blocks_with_bane_from([6, 5, 3], [1, 2, 4], 4, 0, 5)).is_equal(0)
-	# low 6 = the base leg — byte-identical to blocks_with_bane.
+	# low 6 = the base leg: only the unmodified 6s re-roll.
 	assert_int(AiCombatMath.blocks_with_bane_from([6, 6, 3], [2, 5], 4, 0, 6)).is_equal(1)
-
-
-func test_expected_wounds() -> void:
-	# 6 attacks, hit on 4+ (1/2), target Def 4+ save fails on 1/2 → 6 × 0.5 × 0.5 = 1.5.
-	assert_float(AiCombatMath.expected_wounds(6, 4, 4, 0)).is_equal_approx(1.5, 0.0001)
-	# AP2 pushes the save to 6+ (through-chance 5/6): 6 × 0.5 × 5/6 = 2.5.
-	assert_float(AiCombatMath.expected_wounds(6, 4, 4, 2)).is_equal_approx(2.5, 0.0001)
-	# No attacks → no damage.
-	assert_float(AiCombatMath.expected_wounds(0, 3, 5, 0)).is_equal_approx(0.0, 0.0001)
-	# Higher AP never lowers expected damage (more wounds get through).
-	assert_bool(AiCombatMath.expected_wounds(4, 3, 4, 3) >= AiCombatMath.expected_wounds(4, 3, 4, 0)).is_true()
 
 
 func test_modified_hit_target_applies_roll_modifiers_bounded() -> void:
