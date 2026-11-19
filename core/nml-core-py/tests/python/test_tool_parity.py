@@ -11,6 +11,13 @@ own result shape. What is pinned:
     never skipped and never green, and no game is played for them;
   * the CLI refuses an empty directory (exit 2) before it loads the core, and still writes the summary;
   * the knob set the driver plays at agrees with `selfplay.TRAINER_KNOBS`.
+
+Step 3 (`--accept`, `--plant`), through `main` with the game and the core stubbed:
+
+  * a difference an accept entry names (same gate, `path_regex` FULL match) is `accepted` and the run is green;
+    one it does not name is unexplained and red; an entry that matched nothing is `stale accept` and red;
+  * `--plant` corrupts a COPY of the first seed (never the oracle), the planted run must turn red through BOTH gates,
+    and an instrument that cannot see it exits 3 ("blind"); a refused run plants nothing.
 """
 
 from __future__ import annotations
@@ -63,12 +70,13 @@ def _got(ref: dict) -> dict:
 
 @pytest.fixture
 def oracle(tmp_path):
+    root = tmp_path / "oracle"
     for seed in SEEDS:
         ref = _ref(seed)
-        (tmp_path / ("core_s%d.json" % seed)).write_text(json.dumps(ref))
-        (tmp_path / ("acts_%d" % seed)).mkdir()
-        (tmp_path / ("acts_%d" % seed) / "acts.jsonl").write_text(_acts(ref))
-    return tmp_path
+        (root / ("acts_%d" % seed)).mkdir(parents=True)
+        (root / ("core_s%d.json" % seed)).write_text(json.dumps(ref))
+        (root / ("acts_%d" % seed) / "acts.jsonl").write_text(_acts(ref))
+    return root
 
 
 def _play_equal(seed: int) -> dict:
@@ -141,7 +149,7 @@ def test_an_empty_seed_list_compares_nothing_and_is_refused(oracle):
 def test_a_seed_without_its_acts_corpus_is_refused_not_skipped(oracle):
     (oracle / "acts_2" / "acts.jsonl").unlink()
     code, summary, played = _judge(oracle)
-    assert code == 2 and "1 of 2 requested seeds have no reference" in summary["refused"]
+    assert code == 2 and "seeds [2] have no reference" in summary["refused"]
     assert summary["missing"] == [2]
     assert played == []                                        # the comparison is invalid; no game is wasted on it
 
@@ -179,3 +187,91 @@ def test_the_knob_set_the_driver_plays_at_agrees_with_the_trainer_knobs():
     for key in shared:
         want = as_trainer.get(key, sp.LEGACY_FIDELITY_KNOBS[key])
         assert sp.TRAINER_KNOBS[key] == want, key
+
+
+@pytest.fixture
+def cli(monkeypatch, oracle, tmp_path):
+    """`main` end to end without a game: the core load and `play_game` are stubbed, the planted copy goes to tmp."""
+    monkeypatch.setattr(tp.nml_core, "load", lambda *_: object())
+    monkeypatch.setattr(tp.list_to_profile, "LEGACY_CORE_SELFPLAY", False)
+    monkeypatch.setattr(tp, "PLANT_DIR", tmp_path / "plant")
+    holder = {"play": _play_equal}
+    monkeypatch.setattr(tp.sp, "play_game", lambda seed, *a, **k: holder["play"](seed))
+
+    def run(*extra, play=_play_equal, ref=oracle):
+        holder["play"] = play
+        out = tmp_path / "summary.json"
+        code = tp.main(["--ref", str(ref), "--bank", "b", "--army1", "a", "--army2", "b", "--seeds", "1-2",
+                        "--repo", str(tmp_path), "--out", str(out), *extra])
+        return code, json.loads(out.read_text())
+
+    return run
+
+
+def _vp_off_by_one(seed):
+    got = _got(_ref(seed))
+    got["vp"]["p1"] += 1          # the selfplay gate calls this `vp`, the sidecar gate `vp.p1`
+    return got
+
+
+def _accept_file(tmp_path, *entries):
+    (tmp_path / "accept.json").write_text(json.dumps([
+        {"gate": g, "path_regex": rx, "reason": "test", "epoch": 71, "pr": 0} for g, rx in entries]))
+    return str(tmp_path / "accept.json")
+
+
+def test_a_difference_an_accept_entry_names_is_accepted_and_the_run_is_green(cli, tmp_path):
+    accept = _accept_file(tmp_path, ("selfplay", "vp"), ("sidecar", r"vp\.p1"))
+    code, summary = cli("--accept", accept, play=_vp_off_by_one)
+    assert code == 0 and len(summary["diffs"]) == 4 and all(d["accepted"] for d in summary["diffs"])
+    assert summary["stale_accepts"] == []
+
+
+def test_a_difference_no_entry_names_is_unexplained_and_red(cli, tmp_path, capsys):
+    code, summary = cli("--accept", _accept_file(tmp_path, ("selfplay", "vp")), play=_vp_off_by_one)
+    assert code == 1 and [d["gate"] for d in summary["diffs"] if not d["accepted"]] == ["sidecar", "sidecar"]
+    assert "4 differences (2 unexplained)" in capsys.readouterr().out
+    # the gate must match and the path must match IN FULL: neither a prefix nor the other gate's name counts
+    code, summary = cli("--accept", _accept_file(tmp_path, ("sidecar", "vp"), ("selfplay", "v")), play=_vp_off_by_one)
+    assert code == 1 and not any(d["accepted"] for d in summary["diffs"])
+
+
+def test_a_stale_accept_entry_fails_an_otherwise_equal_run(cli, tmp_path, capsys):
+    code, summary = cli("--accept", _accept_file(tmp_path, ("selfplay", "vp")))
+    assert code == 1 and summary["diffs"] == [] and [e["path_regex"] for e in summary["stale_accepts"]] == ["vp"]
+    assert "stale accept" in capsys.readouterr().out
+    assert cli()[0] == 0                                         # without the allowance the same run is green
+
+
+def test_the_plant_corrupts_a_copy_and_the_planted_run_is_red_through_both_gates(oracle, tmp_path):
+    before = {str(p): p.read_bytes() for p in oracle.rglob("*") if p.is_file()}
+    dest = tp.plant(oracle, 1, tmp_path / "plant")
+    assert {str(p): p.read_bytes() for p in oracle.rglob("*") if p.is_file()} == before     # the oracle is untouched
+    ref, planted = _ref(1), json.loads((dest / "core_s1.json").read_text())
+    assert planted["planner_positions"][0]["board"][0][3] == ref["planner_positions"][0]["board"][0][3] + 1
+    assert planted["planner_positions"][1:] == ref["planner_positions"][1:]
+    orig, swapped = _acts(ref).splitlines(), (dest / "acts_1" / "acts.jsonl").read_text().splitlines()
+    assert swapped[1:3] == [orig[2], orig[1]] and swapped[0] == orig[0] and swapped[3:] == orig[3:]
+    summary = tp.run_parity(dest, [1], lambda: _play_equal, log=lambda *_: None)
+    assert tp.exit_code(summary) == 1 and {d["gate"] for d in summary["diffs"]} == {"selfplay", "sidecar"}
+
+
+def test_plant_on_an_equal_pair_reports_the_planted_run_red_and_the_run_stays_green(cli, capsys):
+    code, summary = cli("--plant")
+    assert code == 0 and summary["plant_exit"] == 1 and summary["diffs"] == []
+    assert "red, as it must be" in capsys.readouterr().out
+
+
+def test_an_instrument_blind_to_the_plant_exits_3(cli, monkeypatch, capsys):
+    monkeypatch.setattr(tp, "compare_seed", lambda *_: [])       # a gate that sees nothing
+    code, summary = cli("--plant")
+    assert code == 3 and summary["plant_exit"] == 0
+    assert "instrument blind" in capsys.readouterr().out
+    assert cli()[0] == 0                                          # blind AND green: only --plant tells them apart
+
+
+def test_a_refused_run_plants_nothing(cli, tmp_path):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    code, summary = cli("--plant", ref=empty)
+    assert code == 2 and "plant_exit" not in summary and not (tmp_path / "plant").exists()
