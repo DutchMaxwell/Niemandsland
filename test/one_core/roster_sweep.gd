@@ -147,10 +147,10 @@ static func first_state_diff(t: Dictionary, c: Dictionary) -> String:
 ## `opts` plants a state or a fault: "ledger" {"att"|"tgt": {property: value}} is written on both halves (a fact the table keeps);
 ## the core half alone can drop properties before the capture ("core_drop": {"att"|"tgt": [property]}), edit one weapon rule of the
 ## shooter for the volley ("core_edit_rule": {"from", "to"}) or swap one face of the roll stream it recorded ("core_swap_face": roll
-## index). Nothing is planted unless asked: the sweep itself never touches either half.
+## index); "distance_in" puts the target that far (centre to centre, inches) from the shooter instead of `DISTANCE_IN` on both halves. Nothing is planted unless asked: the sweep itself never touches either half.
 static func volley(main: Node, entry_a: Dictionary, entry_b: Dictionary, seed_n: int, core: bool, dump_dir: String, opts := {}) -> Dictionary:
 	var att := spawn(main, entry_a, SEAT_SHOOTER, 0.0)
-	var tgt := spawn(main, entry_b, SEAT_TARGET, DISTANCE_IN)
+	var tgt := spawn(main, entry_b, SEAT_TARGET, float(opts.get("distance_in", DISTANCE_IN)))
 	var by := {"att": att, "tgt": tgt}
 	for who in opts.get("ledger", {}):
 		for prop in opts["ledger"][who]:
@@ -167,6 +167,10 @@ static func volley(main: Node, entry_a: Dictionary, entry_b: Dictionary, seed_n:
 					w.special_rules[i] = opts["core_edit_rule"]["to"]
 					edited.append([w, i])
 	main.seed_tray_rng(seed_n)
+	var lines: Array = []   # the battle-log lines the volley wrote, "<CATEGORY>|<text>", in log order
+	var on_entry := func(e: Dictionary) -> void:
+		lines.append("%s|%s" % [BattleLog.Category.keys()[int(e["category"])], str(e["text"])])
+	main.battle_log.entry_added.connect(on_entry)
 	if core:
 		CoreActivation.reset_all(main)   # a new game per volley: the header carries the profiles of THESE two units
 		var h := CoreActivation.capture(main)
@@ -185,13 +189,14 @@ static func volley(main: Node, entry_a: Dictionary, entry_b: Dictionary, seed_n:
 		main._solo_core_ai_h = 0
 		await main._run_ai_shooting({"unit": att, "moved": false, "action": AiDecision.Action.HOLD})
 		main.solo_controller.hit_and_run_move(att, true)   # DS-HR1: the body's post-shot tail (main.gd:1347-1349)
+	main.battle_log.entry_added.disconnect(on_entry)
 	AiDiceRecorder.close()
 	var rolls: Array = ParityTable._read_dice(dump_dir)
 	if core and opts.has("core_swap_face") and int(opts["core_swap_face"]) < rolls.size():
 		var faces: Array = rolls[int(opts["core_swap_face"])]["faces"]
 		if not faces.is_empty():
 			faces[0] = int(faces[0]) % 6 + 1
-	var out := {"rolls": rolls, "state": state_of(att, tgt),
+	var out := {"rolls": rolls, "state": state_of(att, tgt), "lines": lines,
 		"labels": {"att": labels_of(att), "tgt": labels_of(tgt)}, "names": [att.get_name(), tgt.get_name()],
 		# What the deny-mode slice (NML_CORE_SLICE=deny) would refuse here, as the shadow record says it: [] = taken.
 		"deny": CoreSlice.refusals_in(CoreSlice.DENY_PATH, att) \

@@ -564,6 +564,11 @@ fn piercing_assault_grant_cond() -> CondAp {
     CondAp { ap_bonus: 1, condition: "on_charge".into(), ..Default::default() }
 }
 
+/// A rule's battle-log line on a supplied tray, in the table's words (a seeded tray never builds the text).
+pub(crate) fn say_rule(tray: &mut Tray, rule: &'static str, side: i64, text: impl FnOnce() -> String) {
+    tray.say(|| LogLine { rule, category: Category::Combat, side, text: text(), detail: None });
+}
+
 /// The table's `blast_log_text`: names Blast(X) and, when the model count clamps the multiplier, the cap.
 fn blast_log(x: i64, hits: i64, boosted: i64, models: i64) -> String {
     let mult = boosted / hits.max(1);

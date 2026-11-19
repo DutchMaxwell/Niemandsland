@@ -41,7 +41,7 @@ use crate::acts::{
 use crate::io::{Action, Seams, SplitShot};
 use crate::landing::{LandedModel, Landing};
 use crate::logline::{Category, LogLine};
-use crate::dice::{Morale, ShootResult, Tray};
+use crate::dice::{say_rule, Morale, ShootResult, Tray};
 use crate::mods;
 use crate::mission::{drop_carried, sync_carried_positions};
 use crate::rng::GodotRng;
@@ -296,6 +296,23 @@ fn morale_quality(statics: &[UnitStatic], state: &State, i: usize, seams: Seams)
         }
     }
     best.unwrap_or(own)
+}
+
+/// The joined Hero whose Quality a morale test uses (the table's `_solo_morale_quality`): the first living attached Hero that beats the
+/// unit's own Quality, or the first living one while the host is dead. `None` when the unit tests with its own.
+fn morale_hero(statics: &[UnitStatic], state: &State, i: usize, seams: Seams) -> Option<(usize, i64)> {
+    if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) || !seams.hero_attach {
+        return None;
+    }
+    let mut best: Option<(usize, i64)> = None;
+    let mut quality = statics[state.roster.profile[i]].quality;
+    for &h in state.attached[i].iter().filter(|&&h| state.alive[h] > 0) {
+        let q = statics[state.roster.profile[h]].quality;
+        if (state.alive[i] <= 0 && best.is_none()) || q < quality {
+            (quality, best) = (q, Some((h, q)));
+        }
+    }
+    best
 }
 
 fn morale_side_alive(state: &State, i: usize, seams: Seams) -> bool {
@@ -2200,9 +2217,10 @@ fn control_morale_passed(
         return faces.first().map(|f| *f as i64 >= quality).unwrap_or(true);
     }
     let us = &statics[next.roster.profile[ti]];
-    let mut ctx = live_morale_ctx(statics, next, ti, false, seams, shot);
+    let mut ctx = live_morale_ctx(statics, next, ti, false, seams, shot, tray);
     ctx.side = next.player[ti]; // the seat the morale dice lines (Fearless, No Retreat) are said for
-    drop_banner_for_cause(statics, next, ti, false, true, Some(source.rule), None, None, seams, &mut ctx, shot);
+    let banner_dropped = drop_banner_for_cause(statics, next, ti, false, true, Some(source.rule), None, None, seams, &mut ctx, shot, tray);
+    say_morale_bonus(statics, next, ti, false, Some(source.rule), seams, &ctx, banner_dropped, tray);
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
         &ctx, source.owner, None, false, false, next.shaken[ti], wounds_left(next, ti), tray,
     );
@@ -6700,18 +6718,28 @@ fn banner_gone(statics: &[UnitStatic], state: &State, i: usize, seams: Seams) ->
 }
 
 /// One live context for ordinary morale and the Mind Control family.
-fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool, seams: Seams, shot: &mut ShootResult) -> Ctx {
+fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool, seams: Seams, shot: &mut ShootResult, tray: &mut Tray) -> Ctx {
     let us = &statics[state.roster.profile[i]];
     let mut ctx = ctx_of(us, state, i);
+    // The table's `_solo_morale_quality` names who lends the Quality, once per test that rolls a die: the aura Hero, else the
+    // joined Hero whose Quality the unit uses.
+    let rolls = !unit_shaken(state, i, seams);
+    // A lone hero's test is its host's in the table's log: the lines name the host, whose joined heroes lend the Quality.
+    let root = morale_root(state, i, seams);
+    let shown = &statics[state.roster.profile[root]].name;
     if rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) && seams.hero_attach {
         ctx.quality = morale_quality(statics, state, i, seams);
     }
+    let mut lender = morale_hero(statics, state, root, seams);
     if let Some((h, quality)) = hero_aura_quality(statics, state, i, ctx.quality, seams) {
         ctx.quality = quality;
-        shot.log.push(format!(
-            "{} (Tough 9+) lends its Quality to {}'s morale test (Q{}+)",
-            statics[state.roster.profile[h]].name, us.name, quality
-        ));
+        let line = format!("{} (Tough 9+) lends its Quality to {shown}'s morale test (Q{}+)", statics[state.roster.profile[h]].name, quality);
+        shot.log.push(line.clone());
+        say_rule(tray, "morale", state.player[i], || line);
+        lender = None;
+    }
+    if let (true, Some((h, quality))) = (rolls, lender) {
+        say_rule(tray, "morale", state.player[i], || format!("Hero {} tests on behalf of {shown} (Q{quality}+)", statics[state.roster.profile[h]].name));
     }
     if rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) {
         ctx.fearless = morale_fearless(statics, state, i, seams);
@@ -6758,10 +6786,11 @@ fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool,
 fn drop_banner_for_cause(
     statics: &[UnitStatic], state: &State, i: usize, melee: bool, charged_by_enemy: bool,
     cause: Option<&str>, over_in: Option<f64>, charge_from_in: Option<f64>, seams: Seams,
-    ctx: &mut Ctx, shot: &mut ShootResult,
+    ctx: &mut Ctx, shot: &mut ShootResult, tray: &mut Tray,
 ) -> i64 {
     if !rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) || unit_shaken(state, i, seams) { return 0; }
     let us = &statics[state.roster.profile[i]];
+    let shown = &statics[state.roster.profile[morale_root(state, i, seams)]].name; // a lone hero's test is its host's
     let banner = ((state.morale_bonus[i] - us.ctx.morale_rating).max(0) - banner_gone(statics, state, i, seams)).max(0);
     if let Some(cause) = cause {
         // `EPOCH_75_TABLE_FIXES` (main.gd's cause branch): Bravery Aura has no shooting/melee
@@ -6774,6 +6803,7 @@ fn drop_banner_for_cause(
         if banner > 0 {
             ctx.morale_bonus -= banner;
             shot.log.push(format!("[Banner] {}: no +{} against {} (only shooting or melee)", us.name, banner, cause));
+            say_rule(tray, "banner", state.player[i], || format!("Banner: {shown} gets no +{banner} against {cause} (only shooting or melee)"));
         }
         let great_banner = mods::sum(state, i, mods::Role::Morale, melee, |r| {
             if &*r.name == "Great Banner" { r.morale_mod } else { 0 }
@@ -6781,6 +6811,7 @@ fn drop_banner_for_cause(
         if great_banner != 0 {
             ctx.morale_bonus -= great_banner;
             shot.log.push(format!("[Great Banner] {}: no +{} against {} (only shooting or melee)", us.name, great_banner, cause));
+            say_rule(tray, "banner", state.player[i], || format!("Great Banner: {shown} gets no +{great_banner} against {cause} (only shooting or melee)"));
         }
         return banner.max(0);
     }
@@ -6796,6 +6827,7 @@ fn drop_banner_for_cause(
             );
             trace_rule("morale", "Banner", &line);
             shot.log.push(line);
+            say_rule(tray, "banner", state.player[i], || format!("Banner: {shown} gets no +{vt} — it charged, it was not charged (Valiant needs a shot or a charge)"));
         }
         return vt;
     }
@@ -6814,8 +6846,43 @@ fn drop_banner_for_cause(
         );
         trace_rule("morale", "Banner", &line);
         shot.log.push(line);
+        say_rule(tray, "banner", state.player[i], || format!(
+            "Banner: {shown} gets no +{vt} from a {kind} {band}\" or under (Valiant counts only beyond the gate)"));
     }
     vt
+}
+
+/// The table's lines before the test die (`_solo_morale_test`): a Shaken unit says why it rolls none, any other the rating and the Banner family name the
+/// bonus they add (the bonus is the stamped share minus what a cause or the Valiant band took back out, so spell tokens stay out of
+/// it), then the live spell tokens ("<spell> +1: ... passes on N+"), a Great Banner token left out when a rule forced the test.
+/// The target is the one the die is rolled against. Shared by the ordinary test and the Mind Control family's.
+#[allow(clippy::too_many_arguments)]
+fn say_morale_bonus(
+    statics: &[UnitStatic], state: &State, i: usize, melee: bool, cause: Option<&str>, seams: Seams, ctx: &Ctx, banner_dropped: i64, tray: &mut Tray,
+) {
+    if tray.feed().is_none() {
+        return;
+    }
+    let us = &statics[state.roster.profile[i]];
+    let shown = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
+    if unit_shaken(state, i, seams) {
+        // A Shaken unit rolls no die: the table says why instead of the bonus lines.
+        say_rule(tray, "morale", state.player[i], || format!("{shown} is already Shaken — automatically fails morale ({CITE})"));
+        return;
+    }
+    let target = morale_target(ctx.quality, ctx.morale_bonus);
+    let bonus = state.morale_bonus[i] - banner_gone(statics, state, i, seams) - banner_dropped;
+    if bonus > 0 {
+        say_rule(tray, "morale", state.player[i], || format!("{}: {shown} gets +{bonus} to morale test rolls (passes on {target}+)",
+            morale_bonus_source(us, bonus)));
+    }
+    let skip_great = cause.is_some() && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36);
+    let tokens = mods::morale_tokens(state, i, melee).into_iter().filter(|(n, _)| !(skip_great && &**n == "Great Banner")).collect::<Vec<_>>();
+    let spell: i64 = tokens.iter().map(|t| t.1).sum();
+    if spell != 0 {
+        let notes = tokens.iter().map(|(n, m)| format!("{n} {m:+}")).collect::<Vec<_>>().join(", ");
+        say_rule(tray, "morale", state.player[i], || format!("{notes}: {spell:+} to morale test rolls — {shown} passes on {target}+"));
+    }
 }
 
 /// The name the table's "gets +N to morale test rolls" line puts in front of the colon: the Morale(X) rating when the
@@ -6860,9 +6927,11 @@ pub(crate) fn tray_morale_for(
         return;
     }
     let us = &statics[state.roster.profile[i]];
-    let mut ctx = live_morale_ctx(statics, state, i, melee, seams, shot);
+    // The table's test is about the unit that was aimed at: a lone hero's lines and die labels name its host.
+    let shown = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
+    let mut ctx = live_morale_ctx(statics, state, i, melee, seams, shot, tray);
     ctx.side = state.player[i]; // the seat the morale dice lines (Fearless, No Retreat) are said for
-    let banner_dropped = drop_banner_for_cause(statics, state, i, melee, charged_by_enemy, cause, over_in, charge_from_in, seams, &mut ctx, shot);
+    let banner_dropped = drop_banner_for_cause(statics, state, i, melee, charged_by_enemy, cause, over_in, charge_from_in, seams, &mut ctx, shot, tray);
     // G4R4 C-LONEHERO-SHAKEN: the unit's flag, the dead host's included (rules-must-log names the Shaken rule).
     let shaken = unit_shaken(state, i, seams);
     if shaken && !state.shaken[i] {
@@ -6881,23 +6950,12 @@ pub(crate) fn tray_morale_for(
             morale_target(ctx.quality, ctx.morale_bonus)
         ));
     }
-    // The table's line before the test die (`_solo_morale_test`): the rating and the Banner family name the
-    // bonus they add. The bonus is the stamped share minus what a cause or the Valiant band took back out, so
-    // spell tokens stay out of it; the target is the one the die is rolled against.
-    if !shaken {
-        let bonus = state.morale_bonus[i] - banner_gone(statics, state, i, seams) - banner_dropped;
-        if bonus > 0 {
-            let target = morale_target(ctx.quality, ctx.morale_bonus);
-            tray.say(|| LogLine { rule: "morale", category: Category::Combat, side: state.player[i], detail: None,
-                text: format!("{}: {} gets +{bonus} to morale test rolls (passes on {target}+)",
-                    morale_bonus_source(us, bonus), us.name) });
-        }
-    }
+    say_morale_bonus(statics, state, i, melee, cause, seams, &ctx, banner_dropped, tray);
     // main.gd:8303 — the test die spends the morale once-mods it just used.
     // Placed after the call because `ctx` already carries the target it built.
     let (outcome, r) = crate::dice::resolve_morale_with_tray(
         &ctx,
-        &us.name,
+        &us.name,   // the dice row keeps the roller's own name; the door's label shows the host (core_activation.gd `_shown_owner`)
         Some(i),
         melee,
         below_half(state, statics, us, i, seams),
@@ -6928,9 +6986,9 @@ pub(crate) fn tray_morale_for(
     // One-core P3 step 26: the table's outcome line after the last morale die (`_solo_morale_test`'s match,
     // main.gd:13170-13184); its dice line stays the tray's. Every cause reaches that one match on the table.
     tray.say(|| LogLine { rule: "morale", category: Category::Combat, side: state.player[i], text: match outcome {
-        Morale::Passed => format!("{} passes morale", us.name),
-        Morale::Shaken => format!("{} fails morale — Shaken", us.name),
-        Morale::Routed => format!("{} fails morale at half strength — ROUTS", us.name),
+        Morale::Passed => format!("{shown} passes morale"),
+        Morale::Shaken => format!("{shown} fails morale — Shaken"),
+        Morale::Routed => format!("{shown} fails morale at half strength — ROUTS"),
     }, detail: None });
     // No Retreat's self-wounds land before the table writes its outcome: the landing report that follows this test says
     // their wound and loss lines ahead of this line (a rout's removal, which follows the outcome, holds nothing).
