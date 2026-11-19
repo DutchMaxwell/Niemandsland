@@ -427,11 +427,15 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 	CoreSlice.reset_cache()
 
 
-## C-19: a joined unit whose own models are all dead is shot as its living hero ("Hero: X is the unit now", a table line the
-## core's step path does not write), so deny mode keeps such a TARGET on the table; a host with a living model, a dead hero or
-## a shooter is untouched. RED: drop the predicate -> v36/g4r5_r8_lonehero_retarget_test and g4r5_r8b_lonehero_nearest_test
-## fail on the deny default (no Hero line in the log), and the first assertion here reads [].
-func test_deny_mode_keeps_a_lone_hero_target_on_the_table() -> void:
+## A joined unit whose own models are all dead is shot as its living hero ("Hero: X is the unit now"). The core's lone-hero target
+## exists from EPOCH_83_LONE_HERO_TARGET and its step path says the Hero line, but it still lacks the table's half-strength trigger
+## line and "Hero X tests on behalf of ..." for such a chain, so deny mode keeps such a TARGET on the table at every epoch until
+## `CoreSlice.lone_hero_lines_done` is true; then the refusal reads "below 83 only" (a replay stamp, v36/g4r5_r8_lonehero_retarget_test
+## and g4r5_r8b_lonehero_nearest_test pin 73). A host with a living model, a dead hero or a shooter is untouched in every state.
+## RED: drop the flag from the predicate -> the 83 and current-epoch assertions read [] (the door takes it); drop the epoch gate -> the
+## flag-on 82 leg reads [].
+func test_deny_mode_keeps_a_lone_hero_target_on_the_table_until_its_lines_are_done() -> void:
+	var epoch_before := AiActRecorder.rules_epoch
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
 	var host := _unit(["Tough(3)"], [["AP(1)"]])
@@ -440,16 +444,31 @@ func test_deny_mode_keeps_a_lone_hero_target_on_the_table() -> void:
 	var hm := ModelInstance.new()
 	hm.is_alive = true
 	hero.models.append(hm)
-	assert_array(CoreSlice.refusals(host, true)).override_failure_message("host with no model, hero alive: a lone hero").is_equal(["lone_hero_target"])
-	assert_bool(CoreSlice.takes(host, true)).is_false()
+	var lone := ["lone_hero_target"]
+	for epoch in [AiActRecorder.EPOCH_83_LONE_HERO_TARGET - 1, AiActRecorder.EPOCH_83_LONE_HERO_TARGET, epoch_before]:
+		AiActRecorder.rules_epoch = epoch
+		assert_array(CoreSlice.refusals(host, true)).override_failure_message("lines not done, epoch %d: a lone hero stays on the table" % epoch).is_equal(lone)
+		assert_bool(CoreSlice.takes(host, true)).is_false()
 	assert_array(CoreSlice.refusals(host)).override_failure_message("as a shooter it is not a target case").is_empty()
-	var xm := ModelInstance.new()
-	xm.is_alive = true
-	host.models.append(xm)
-	assert_array(CoreSlice.refusals(host, true)).override_failure_message("a host with a living model is no lone hero").is_empty()
-	host.models.clear()
-	hm.is_alive = false
-	assert_array(CoreSlice.refusals(host, true)).override_failure_message("a dead hero is no lone hero").is_empty()
+	CoreSlice.lone_hero_lines_done = true
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_83_LONE_HERO_TARGET - 1
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("lines done, below 83: still the table").is_equal(lone)
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_83_LONE_HERO_TARGET
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("lines done, from 83: the core shoots it as the hero").is_empty()
+	assert_bool(CoreSlice.takes(host, true)).is_true()
+	for flag in [false, true]:
+		CoreSlice.lone_hero_lines_done = flag
+		AiActRecorder.rules_epoch = AiActRecorder.EPOCH_83_LONE_HERO_TARGET - 1
+		var xm := ModelInstance.new()
+		xm.is_alive = true
+		host.models.append(xm)
+		assert_array(CoreSlice.refusals(host, true)).override_failure_message("a host with a living model is no lone hero").is_empty()
+		host.models.clear()
+		hm.is_alive = false
+		assert_array(CoreSlice.refusals(host, true)).override_failure_message("a dead hero is no lone hero").is_empty()
+		hm.is_alive = true
+	CoreSlice.lone_hero_lines_done = false
+	AiActRecorder.rules_epoch = epoch_before
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 
@@ -489,6 +508,43 @@ func test_deny_mode_takes_an_unmapped_upgrade_label() -> void:
 	OS.set_environment("NML_CORE_SLICE", "allow")   # C-19: the allow file is the way back, no longer the default
 	CoreSlice.reset_cache()
 	assert_array(CoreSlice.refusals(_unit(["Some Upgrade Label"], []))).is_equal(["unit_rule:Some Upgrade Label"])
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+
+
+## Plan E step 2: the melee deny slice (`MELEE_DENY_PATH`, mode "deny", door "melee") sits beside the allow file.
+## A unit with AP(1) is refused by the allow file (`deny = false`, default) and taken by the deny file (`deny = true`),
+## as charger and as target; inert names and unmapped upgrade labels pass in deny mode; joined heroes stay refused
+## (`attached_heroes`), while a standalone Hero passes. Reading the melee deny file does not disturb the live shoot slice.
+## RED: `melee_refusals` ignores `deny` (reads MELEE_PATH) or `config()` rejects MELEE_DENY_PATH's door -> AP is refused.
+func test_the_melee_deny_slice_takes_ap_and_refuses_attachments() -> void:
+	var raw := FileAccess.get_file_as_string(CoreSlice.MELEE_DENY_PATH) if FileAccess.file_exists(CoreSlice.MELEE_DENY_PATH) else ""
+	var parsed: Variant = JSON.parse_string(raw) if not raw.is_empty() else null
+	var data: Dictionary = parsed if parsed is Dictionary else {}
+	assert_bool(parsed is Dictionary).override_failure_message("%s unreadable" % CoreSlice.MELEE_DENY_PATH).is_true()
+	assert_str(str(data.get("schema"))).is_equal(CoreSlice.SCHEMA)
+	assert_str(str(data.get("door"))).is_equal("melee")
+	assert_str(str(data.get("mode"))).is_equal("deny")
+	assert_bool(bool(data.get("unmapped_inert", false))).is_true()
+	assert_array((data.get("inert", {}) as Dictionary).keys()).contains(["Unique", "Army Standard Bearer", "Courage"])
+	assert_dict(data.get("deny_names", {}) as Dictionary).is_empty()
+	assert_array((data.get("groups", {}) as Dictionary).keys()).is_equal(["attached_heroes"])
+	var ap := _unit([], [["AP(1)"]])
+	assert_array(CoreSlice.melee_refusals(ap)).is_equal(["weapon_rule:AP"])
+	assert_array(CoreSlice.melee_refusals(ap, true, false)).is_equal(["weapon_rule:AP"])
+	assert_array(CoreSlice.melee_refusals(ap, false, true)).override_failure_message("melee deny must take AP charger").is_empty()
+	assert_array(CoreSlice.melee_refusals(ap, true, true)).override_failure_message("melee deny must take AP target").is_empty()
+	assert_array(CoreSlice.melee_refusals(_unit(["Unique", "Army Standard Bearer", "Courage", "Some Upgrade Label"], [["AP(1)"]]), false, true)).is_empty()
+	assert_array(CoreSlice.melee_refusals(_unit(["Hero"], [["AP(1)"]]), false, true)).override_failure_message("standalone Hero is taken").is_empty()
+	var host := _unit(["Tough(3)"], [["AP(1)"]])
+	var hero := _unit(["Hero"], [])
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	assert_array(CoreSlice.melee_refusals(host, false, true)).is_equal(["attached"])
+	assert_array(CoreSlice.melee_refusals(hero, true, true)).is_equal(["attached"])
+	OS.set_environment("NML_CORE_SLICE", "allow")
+	CoreSlice.reset_cache()
+	assert_array(CoreSlice.melee_refusals(ap, false, true)).is_empty()
+	assert_str(str(CoreSlice.config()["mode"])).is_equal("allow")
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 

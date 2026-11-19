@@ -21,6 +21,8 @@ const SCHEMA := "nml-core-slice-v1"
 const MODES := ["allow", "deny"]
 ## P4.D-48: the AI charge door's own slice (door "melee"), read through `refusals_in`. Allow mode, no group = no rule at all.
 const MELEE_PATH := "res://assets/solo/core_slice_melee.json"
+## Plan E: the melee deny slice (door "melee", mode "deny"), read beside MELEE_PATH by the shadow until step 20 flips the default.
+const MELEE_DENY_PATH := "res://assets/solo/core_slice_melee_deny.json"
 
 ## TEST SEAM (the RulesRegistry.map_path_override pattern): a path that replaces PATH. Empty in production, always.
 static var path_override := ""
@@ -40,8 +42,8 @@ static func config() -> Dictionary:
 	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}, "unmapped_inert": false}
 	var live := path_override.is_empty()
 	var path := live_path()
-	# Each file belongs to one door: the melee file only through MELEE_PATH, every other path (shipped, deny, a test file) is the shoot door's.
-	var door := "melee" if path == MELEE_PATH else "shoot"
+	# Each file belongs to one door: the melee files only through MELEE_PATH / MELEE_DENY_PATH, every other path (shipped, deny, a test file) is the shoot door's.
+	var door := "melee" if path == MELEE_PATH or path == MELEE_DENY_PATH else "shoot"
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
 	if not (data is Dictionary) or str(data.get("schema", "")) != SCHEMA or str(data.get("door", "")) != door \
 			or not MODES.has(str(data.get("mode", "allow"))):
@@ -121,6 +123,11 @@ static func _rule_taken(gu: GameUnit, label: String) -> bool:
 	return p is String and prims.has(p) == allow
 
 
+## The core's lone-hero volley still lacks two table lines (see `refusals`): false keeps such a target on the table at every epoch.
+## A test that exercises the core door for it sets this and puts it back.
+static var lone_hero_lines_done := false
+
+
 ## Why the slice refuses `gu` - the labels the P4.D-3 census counts ("unit_rule:<name>", "attached", "non_opr",
 ## "weapon_rule:<name>"); [] = the core door takes it. `as_target`: a target needs no OPR profile (P4.D-13b).
 static func refusals(gu: GameUnit, as_target := false) -> Array:
@@ -134,11 +141,14 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 	# Deny mode takes a joined hero with its unit, so the hero's own unit and weapon rules must pass the list too (allow
 	# mode refuses every attachment above; its labels stay as they were).
 	if c["mode"] == "deny":
-		# C-19: a joined unit whose own models are all dead is shot as its living hero, and the table says so in the log ("X is
-		# the unit now"). The core's step path writes no such line (the v36 lone-hero tests went red on the flipped default), so a
-		# volley at such a target stays on the table. Leaves with the step path's Hero line.
-		if as_target and gu.get_alive_count() <= 0 and gu.get_attached_heroes().any(
-				func(h) -> bool: return h is GameUnit and (h as GameUnit).get_alive_count() > 0):
+		# A joined unit whose own models are all dead is shot as its living hero. The core's lone-hero target exists from
+		# EPOCH_83_LONE_HERO_TARGET (below it the core shoots the dead host at the host's Defense and says nothing), and its step
+		# path says the Hero line since #3062, but the core still lacks the table's half-strength trigger line and "Hero X tests on
+		# behalf of ..." for such a chain (follow-up, lane dlines): a missing line keeps the volley on the table for every epoch
+		# until `lone_hero_lines_done` is true (the future lift is then "from 83 on").
+		if as_target and (AiActRecorder.rules_epoch < AiActRecorder.EPOCH_83_LONE_HERO_TARGET or not lone_hero_lines_done) \
+				and gu.get_alive_count() <= 0 \
+				and gu.get_attached_heroes().any(func(h) -> bool: return h is GameUnit and (h as GameUnit).get_alive_count() > 0):
 			out.append("lone_hero_target")
 		for hero in gu.get_attached_heroes():
 			for r in refusals(hero as GameUnit, true):
@@ -183,9 +193,10 @@ static func takes_human(gu: GameUnit, as_target := false) -> bool:
 	return refusals_human(gu, as_target).is_empty()
 
 
-## P4.D-48: why the charge door refuses `gu` (charger, or the charged `as_target`), the same labels as `refusals`.
-static func melee_refusals(gu: GameUnit, as_target := false) -> Array:
-	return refusals_in(MELEE_PATH, gu, as_target)
+## P4.D-48 / Plan E: why the charge door refuses `gu` (charger, or the charged `as_target`), the same labels as `refusals`.
+## `deny` reads `MELEE_DENY_PATH` beside the live allow file (shadow / probes until step 20 flips the melee default).
+static func melee_refusals(gu: GameUnit, as_target := false, deny := false) -> Array:
+	return refusals_in(MELEE_DENY_PATH if deny else MELEE_PATH, gu, as_target)
 
 
 ## P4.D-37: `gu` carries a unit or weapon rule whose registry primitive is one of `primitives` (the slice's own lookup).

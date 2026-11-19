@@ -137,3 +137,36 @@ use super::*;
         assert_eq!(saves(crate::acts::EPOCH_88_SPLIT_LONE_HERO), vec![3], "the hero's Defense 3+");
         assert!(!saves(crate::acts::EPOCH_87_WALKED_DANGEROUS).contains(&3), "87 replays the host group");
     }
+
+    /// The Hero rule on the STEP path (C-19: `lone_hero_target`): "b" has no models left, its joined hero "bh" lives. The table
+    /// says "Hero: <hero> is the unit now - shots from <shooter> at <host> are ..." before the volley and then "<shooter> fires at
+    /// <host>"; the step path only shows what the tray says, and `shot.log` (where the line used to go) is not read there. A
+    /// log line, no die: the dice are the ones the tests above pin. RED: drop the `tray.say` -> no Hero line, and "a fires at bh".
+    #[test]
+    fn the_step_path_says_the_hero_line_and_aims_at_the_host() {
+        let (mut st, mut statics) = volley_line();
+        (st.positions[2], st.wounds[2], st.alive[2]) = (vec![], vec![], 0);
+        Rc::make_mut(&mut st.radii)[2] = vec![];
+        (st.positions[3], st.wounds[3], st.alive[3]) = (vec![[12.0 * IN2M, 0.0, 0.0]], vec![1], 1);
+        Rc::make_mut(&mut st.radii)[3] = vec![IN2M];
+        (statics[2].ctx.defense, statics[3].ctx.defense, statics[3].model_count, statics[3].wounds_max) = (6, 3, 1, vec![1]);
+        let hero = "Hero: bh is the unit now — shots from a at b are measured and saved as the hero";
+        let aim = vec![crate::io::SplitShot { member: "a".into(), weapon: "rifle".into(), target: "b".into() }];
+        let said = |epoch: u32, key: &str, split: Option<Vec<crate::io::SplitShot>>| {
+            let action = Action {
+                kind: HOLD, unit: "a".into(), dest: None, shoot: Some(key.into()), charge: None,
+                patient: false, split, traced: None, teleport: None,
+            };
+            let seams = Seams { rules_epoch: epoch, tray_exact: true, hero_attach: true, ..Seams::default() };
+            let mut tray = Tray::supplied(vec![vec![6; 4], vec![1; 4]]); // 4 hits, 4 failed saves; morale starves
+            resolve_stochastic_tray_on_board(&statics, &st, &action, &Terrain::default(), seams, &mut GodotRng::new(0), &mut tray).unwrap();
+            tray.all_lines().into_iter().map(|l| l.text).collect::<Vec<_>>()
+        };
+        let one = said(crate::acts::EPOCH_83_LONE_HERO_TARGET, "b", None);
+        assert_eq!(one[..2], [hero, "a fires at b"], "one target, from 83: {one:?}");
+        assert_eq!(one.iter().filter(|l| l.starts_with("Hero: ")).count(), 1, "said once: {one:?}");
+        let old = said(crate::acts::EPOCH_82_IGNORE_BY_NAME, "b", None);
+        assert!(!old.iter().any(|l| l.starts_with("Hero: ")), "82 replays the old reading, no Hero rule: {old:?}");
+        let split = said(crate::acts::EPOCH_88_SPLIT_LONE_HERO, "bh", Some(aim));
+        assert_eq!(split[..2], [hero, "a fires at b"], "a split group, from 88: {split:?}");
+    }
