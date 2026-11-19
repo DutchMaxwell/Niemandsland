@@ -311,12 +311,18 @@ fn cast_break(statics: &[UnitStatic], state: &State, left: &mut [i64], c: &CastI
     None
 }
 
-/// CC-6a/6b: why the core cannot resolve a damage spell's hits exactly yet, `None` when it can. Weapon rules: AP and Deadly
-/// (Surge, Blast, Hazardous, Bane and the rest are CC-7a..7b's). Target: no rule or record that moves its save or says a line the
-/// core lacks (a live modifier or grant on its chain, growth markers, Shielded, Guarded, Fortified, Armor); Regeneration and its
-/// family (Resistance, Self-Repair, ...) are resolved at the spell threshold (CC-6b).
+/// CC-6a/6b/7a/7b: why the core cannot resolve a damage spell's hits exactly yet, `None` when it can. Weapon rules: all ported
+/// damage-spell facets (`AP`, `Deadly`, `Surge`, `Hazardous`, `Crack`, `Blast`, `Bane`, `Lacerate`, `Shred`, `Destructive`, `Fracture`,
+/// `Puncture`, `Disintegrate`, `Shatter`, `Tear`, `Purge`, `Decimate`, `Obliterate`, `Reap`, `Fragment`; `Scourge` and unknown rules
+/// stay refused). Target: no rule or record that moves its save or says a line the core lacks (a live modifier or grant on its chain,
+/// growth markers, Shielded, Guarded, Fortified, Armor); Regeneration and its family are resolved at the spell threshold (CC-6b).
 fn damage_break(statics: &[UnitStatic], state: &State, c: &CastInput, spell: &crate::rules::Spell) -> Option<String> {
-    if let Some(rule) = spell.weapon_rules.iter().find(|r| r.split('(').next().is_none_or(|n| !matches!(n.trim(), "AP" | "Deadly"))) {
+    if let Some(rule) = spell.weapon_rules.iter().find(|r| r.split('(').next().is_none_or(|n| !matches!(
+        n.trim(),
+        "AP" | "Deadly" | "Surge" | "Hazardous" | "Crack" | "Blast" | "Bane" | "Lacerate" | "Shred"
+            | "Destructive" | "Fracture" | "Puncture" | "Disintegrate" | "Shatter" | "Tear"
+            | "Purge" | "Decimate" | "Obliterate" | "Reap" | "Fragment"
+    ))) {
         return Some(format!("the core does not resolve the {rule} rule of {} yet", c.spell));
     }
     let plain = |t: usize| {
@@ -1798,9 +1804,9 @@ mod tests {
         assert!(matches!(ask(&st, &statics), ActStep::NeedRoll { kind: "cast", .. }), "control: the plain board asks the die");
         let target = "Foe meets Test Bolt with a rule the core does not say for spell damage yet";
         let mut cases: Vec<(&str, State, Vec<UnitStatic>, String)> = Vec::new();
-        for rule in ["Blast(3)", "Deadly(3)", "Hazardous", "Surge", "Bane", "AP"] {
+        for rule in ["Blast(3)", "Deadly(3)", "Hazardous", "Surge", "Crack", "Bane", "Scourge", "AP"] {
             let (st, statics) = bolt_board(6, &["AP(1)", rule], 6);
-            let ok = matches!(rule, "AP" | "Deadly(3)");
+            let ok = rule != "Scourge";
             cases.push((rule, st, statics, if ok { String::new() } else { format!("the core does not resolve the {rule} rule of Test Bolt yet") }));
         }
         let ward = LiveMod { move_mod: 0, hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 1, defense_mod: 0, grants_rule: Rc::from(""), scope: Rc::from("melee"), attackers: false, once: false, name: Rc::from("Shield Wall") };
@@ -2112,6 +2118,375 @@ mod tests {
         let (ActStep::Done { state: plain_picked, lines: plain_lines, .. }, _) = run(&[], Some("slot:1,slot:1")) else { panic!("plain picked") };
         assert_eq!(plain_picked.wounds[2], vec![3, 1], "plain spell honours owner wound_alloc picks");
         assert!(plain_lines.iter().any(|l| l.text == "b: the owner allocates 2 wounds"), "{plain_lines:?}");
+    }
+
+    // ---- CC-7a: trigger roll (Surge, on-6 AP batch first, Hazardous to host), caster / unit death ----
+
+    /// CC-7a: the trigger roll (`spell_attack`, `hits x 6+`, caster owner) drives Surge (+1 hit per 6) and on-6 AP (the upgraded
+    /// batch saves FIRST with its line before the normal batch, then one shared Regeneration / Resistance landing).
+    /// Planted fault: on-6 AP dropped -> Batch 1 saves at 4+ instead of 6+ and blocks the 5s -> RED.
+    #[test]
+    fn spell_trigger_roll_handles_surge_and_on6_ap_batch_first() {
+        // (1) Surge: 4 printed hits, trigger [6, 6, 3, 1] -> 6 hits saved at 4+.
+        let (st, statics) = bolt_board(4, &["Surge"], 6);
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![6, 6, 3, 1], vec![4, 4, 4, 4, 1, 1]]);
+        let ActStep::Done { state, .. } = done else { panic!("surge: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_attack|4x6+|Mystic", "spell_defense|6x4+|Foe"]);
+        assert_eq!(state.alive[2], 4, "4 + 2 surge hits, 4 blocked -> 2 models lost");
+
+        // (2) On-6 AP batch first (Crack = AP(+2) on 6s) on AP(1) vs Defense 3+:
+        // 4 hits, trigger [6, 2, 6, 4] -> 2 upgraded hits save FIRST at 6+ (Def 3+, AP 3), then 2 plain at 4+ (Def 3+, AP 1).
+        // Faces [5, 5] fail 6+ (2 wounds), [4, 4] block 4+ (0 wounds). Dropping on-6 AP makes [5, 5] save at 4+ -> 0 wounds.
+        let (st, mut statics) = bolt_board(4, &["AP(1)", "Crack"], 6);
+        statics[2].ctx.defense = 3;
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![6, 2, 6, 4], vec![5, 5], vec![4, 4]]);
+        let ActStep::Done { state, lines, .. } = done else { panic!("crack: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_attack|4x6+|Mystic", "spell_defense|2x6+|Foe", "spell_defense|2x4+|Foe"]);
+        assert_eq!(state.alive[2], 4, "both on-6 hits penetrate 5s at 6+, normal batch blocked on 4+");
+        let on6_at = lines.iter().position(|l| l.text == "Test Bolt: 2 hits on a 6 \u{2192} AP(+2)").expect("on-6 AP line");
+        let hi_save_at = lines.iter().position(|l| l.text == "Foe saves on 6+ (Def 3+, AP 3)").expect("on-6 save line");
+        let lo_save_at = lines.iter().position(|l| l.text == "Foe saves on 4+ (Def 3+, AP 1)").expect("plain save line");
+        assert!(on6_at < hi_save_at && hi_save_at < lo_save_at, "on-6 AP line -> on-6 batch -> plain batch: {lines:?}");
+
+        // (3) Surge + Crack vs Resistance (2+ vs spells): 3 hits, trigger [6, 3, 2] -> 4 total hits, 1 upgraded (6+) + 3 plain (4+),
+        // 1 unsaved from Batch 1 + 1 unsaved from Batch 2 -> ONE shared 2-die Resistance roll at 2+.
+        let (st, mut statics) = bolt_board(3, &["AP(1)", "Surge", "Crack"], 6);
+        statics[2].ctx.defense = 3;
+        statics[2].ctx.regeneration = true;
+        statics[2].ctx.regen_target = 6;
+        statics[2].ctx.regen_target_spell = 2;
+        statics[2].ctx.regen_named = false;
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![6, 3, 2], vec![5], vec![4, 4, 1], vec![2, 1]]);
+        let ActStep::Done { state, .. } = done else { panic!("surge+crack+res: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_attack|3x6+|Mystic", "spell_defense|1x6+|Foe", "spell_defense|3x4+|Foe", "spell_attack|2x2+|Foe"]);
+        assert_eq!(state.alive[2], 5, "2 unsaved combined -> 1 ignored by Resistance -> 1 model lost");
+    }
+
+    /// CC-7a (wipe case + multi-cast skip): a Hazardous spell's trigger 1s wound the caster's host (no save, no regen),
+    /// emit the host's wound/destroyed lines + landings and the Hazardous trigger line BEFORE target morale; when the host
+    /// (with no living joined hero) is wiped, any later planned cast still spends its tokens and skips silently, and the
+    /// activation ends there with NO volley.
+    #[test]
+    fn hazardous_spell_wounds_host_and_wipe_ends_the_activation() {
+        let (mut st, mut statics) = bolt_board(4, &["Hazardous"], 6);
+        (statics[0].model_count, statics[0].wounds_max) = (2, vec![1, 1]);
+        statics[0].shoot = vec![ShootProfile { name: "Rifle".into(), attacks: 1, count: 2, range: 24, ..Default::default() }];
+        statics[0].ctx.quality = 4;
+        st.positions[0] = vec![[0.0, 0.0, 0.0], [0.0, 0.0, 1.3 * INCHES_TO_METERS]];
+        (st.wounds[0], st.alive[0], st.casts[0]) = (vec![1, 1], 2, 2);
+        Rc::make_mut(&mut st.radii)[0] = vec![0.63 * INCHES_TO_METERS; 2];
+        st.kits[0] = Rc::new(vec![Kit { weapons: vec![], equipment: 0, wounds_max: 1 }; 2]);
+        // Two planned casts by Mystic + Hold volley at Foe: cast 0's Hazardous trigger [1, 4, 1, 5] wipes Mystic (2 wounds).
+        // Cast 1 must still spend its token and skip silently; the Rifle volley must NEVER fire.
+        let mut t = vec![
+            Begin, intent(HOLD, Some("b")),
+            Input::Cast(test_bolt()),
+            Input::Cast(CastInput { seq: 1, ..test_bolt() }),
+        ];
+        let mut asked = Vec::new();
+        for g in [vec![6u8], vec![1, 4, 1, 5], vec![6, 3, 2, 1], vec![5]] {
+            match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) {
+                ActStep::NeedRoll { kind, count, target, owner, faces, .. } => {
+                    assert_eq!(faces, g.len(), "{kind}");
+                    asked.push(format!("{kind}|{count}x{target}+|{owner}"));
+                    t.push(Faces(g));
+                }
+                other => panic!("expected NeedRoll, got {other:?}"),
+            }
+        }
+        let ActStep::Done { state, lines, landings, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) else { panic!("expected Done") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_attack|4x6+|Mystic", "spell_defense|4x6+|Foe", "spell_morale|1x4+|Foe"], "Hazardous AP(4) saves on 6 only; wiped host skips cast 1 and volley");
+        assert_eq!((state.alive[0], state.casts[0], state.alive[2], state.shaken[2]), (0, 0, 3, false), "both tokens spent, host wiped, foe took 3 and passed morale");
+        let host_dead = landings.iter().filter(|l| l.unit == 0).flat_map(|l| l.models.iter().filter(|m| m.dead).map(|m| m.slot)).collect::<Vec<_>>();
+        assert_eq!(host_dead.len(), 2, "both host models landed dead");
+        let haz_at = lines.iter().position(|l| l.text == "Test Bolt: 2 trigger rolls of 1 \u{2014} Mystic takes 2 wounds").expect("Hazardous line");
+        let host_wipe_at = lines.iter().position(|l| l.text == "Mystic destroyed").expect("host destroyed line");
+        let morale_at = lines.iter().position(|l| l.text == "Foe passes morale").expect("foe morale line");
+        assert!(host_wipe_at < haz_at && haz_at < morale_at, "host wounds/destroyed -> Hazardous line -> foe morale: {lines:?}");
+    }
+
+    /// CC-7a (hero-alive cases):
+    /// (1) Joined hero casts a Hazardous spell: wounds go to the HOST first (heroes last), killing the 1-wound host while the
+    ///     Tough(3) hero survives (with spill onto the hero on a second 1); the activation GOES ON and the hero fires its volley.
+    /// (2) Dangerous terrain kills the host before casts while the joined hero lives: logs the hero-lives line, skips the dead
+    ///     host's cast (tokens still spent), runs the living hero's cast, and goes on to the volley.
+    #[test]
+    fn hazardous_wounds_go_to_host_and_living_joined_hero_goes_on() {
+        // (1) Joined hero "ah" (Tough 3, Rifle 24" A1) casts Hazardous spell -> 2 trigger 1s kill host "a" (1W) and spill 1W onto "ah" (2/3W).
+        let (mut st, mut statics) = bolt_board(2, &["Hazardous"], 6);
+        statics[0].name = "Host".into();
+        statics[0].spells.clear();
+        statics[1] = UnitStatic {
+            name: "Hero".into(), model_count: 1, wounds_max: vec![3], is_caster: true,
+            ctx: crate::unit::Ctx { defense: 4, quality: 4, tough: 3, modifier_sum: true, ..Default::default() },
+            shoot: vec![ShootProfile { name: "Rifle".into(), attacks: 1, count: 1, range: 24, ..Default::default() }],
+            spells: vec![crate::rules::Spell { name: "Test Bolt".into(), effect_kind: "damage".into(), effect_hits: 2, weapon_rules: vec!["Hazardous".into()], threshold: 1, range_in: 12.0, ..Default::default() }],
+            ..Default::default()
+        };
+        let mut list = st.profiles.list.clone();
+        list[1].wounds_max = vec![3];
+        st.profiles = Rc::new(crate::state::Profiles { list, index: Default::default() });
+        (st.attached, st.attached_to) = (Rc::new(vec![vec![1], vec![], vec![], vec![]]), Rc::new(vec![None, Some(0), None, None]));
+        st.positions[1] = vec![[0.0, 0.0, 1.3 * INCHES_TO_METERS]];
+        (st.wounds[1], st.alive[1], st.casts) = (vec![3], 1, vec![0, 1, 0, 0]);
+        Rc::make_mut(&mut st.radii)[1] = vec![0.63 * INCHES_TO_METERS];
+        st.kits[1] = Rc::new(vec![Kit { weapons: vec![], equipment: 0, wounds_max: 3 }]);
+        let hero_seams = Seams { hero_attach: true, ..seams() };
+        let hero_cast = CastInput { caster: "ah".into(), ..test_bolt() };
+        let mut t = vec![Begin, intent(HOLD, Some("b")), Input::Cast(hero_cast.clone())];
+        let mut asked = Vec::new();
+        for g in [vec![6u8], vec![1, 1], vec![6, 6], vec![1]] {
+            match step_activation(&statics, &st, "a", &Terrain::default(), hero_seams, &t, true) {
+                ActStep::NeedRoll { kind, count, target, owner, faces, .. } => {
+                    assert_eq!(faces, g.len(), "{kind}");
+                    asked.push(format!("{kind}|{count}x{target}+|{owner}"));
+                    t.push(Faces(g));
+                }
+                other => panic!("expected NeedRoll, got {other:?}"),
+            }
+        }
+        let ActStep::Done { state, lines, .. } = step_activation(&statics, &st, "a", &Terrain::default(), hero_seams, &t, true) else { panic!("expected Done") };
+        assert_eq!(asked, ["cast|1x2+|Hero", "spell_attack|2x6+|Hero", "spell_defense|2x6+|Foe", "attack|1x4+|Hero"], "host dies to Hazardous, hero lives and fires its volley");
+        assert_eq!((state.alive[0], state.alive[1], state.wounds[1][0]), (0, 1, 2), "wound 1 kills host, wound 2 spills onto hero");
+        assert!(lines.iter().any(|l| l.text == "Test Bolt: 2 trigger rolls of 1 \u{2014} Host takes 2 wounds"), "{lines:?}");
+
+        // (2) Dangerous terrain kills the host before casts while joined hero lives: logs hero-lives line, skips host's cast (token spent), hero casts & shoots.
+        use crate::terrain::{CellParams, PlainTerrain, DANGEROUS};
+        let mut st2 = st.clone();
+        let mut statics2 = statics.clone();
+        statics2[0].spells = vec![crate::rules::Spell { name: "Test Bolt".into(), effect_kind: "damage".into(), effect_hits: 2, weapon_rules: vec![], threshold: 1, range_in: 12.0, ..Default::default() }];
+        statics2[1].spells[0].weapon_rules.clear();
+        st2.positions[0] = vec![[4.0 * INCHES_TO_METERS, 0.0, 0.0]];
+        st2.positions[1] = vec![[1.0 * INCHES_TO_METERS, 0.0, 0.0]]; // outside dangerous tile
+        st2.casts = vec![1, 1, 0, 0];
+        let cells = vec![[16.0, 14.0, DANGEROUS as f64], [16.0, 15.0, DANGEROUS as f64]];
+        let cell_params = CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: INCHES_TO_METERS };
+        let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params });
+        let mut t2 = vec![
+            Begin, intent(HOLD, Some("b")),
+            Input::Cast(CastInput { seq: 0, caster: "a".into(), ..test_bolt() }),
+            Input::Cast(CastInput { seq: 1, caster: "ah".into(), ..test_bolt() }),
+        ];
+        let mut asked2 = Vec::new();
+        let dang_seams = Seams { dangerous_end_morale: true, ..hero_seams };
+        // Dangerous roll [1, 6, 6, 6] (1 Host + 3 Hero Tough) -> 1 wound kills Host -> hero lives line -> Host cast 0 skipped (token spent) -> Hero cast 1 rolls -> saves -> Hero volley.
+        for g in [vec![1u8, 6, 6, 6], vec![6], vec![6, 6], vec![1]] {
+            match step_activation(&statics2, &st2, "a", &board, dang_seams, &t2, true) {
+                ActStep::NeedRoll { kind, count, target, owner, faces, .. } => {
+                    assert_eq!(faces, g.len(), "{kind}");
+                    asked2.push(format!("{kind}|{count}x{target}+|{owner}"));
+                    t2.push(Faces(g));
+                }
+                other => panic!("dangerous hero-alive: expected NeedRoll, got {other:?}"),
+            }
+        }
+        let ActStep::Done { state: s2, lines: l2, .. } = step_activation(&statics2, &st2, "a", &board, dang_seams, &t2, true) else { panic!("expected Done") };
+        assert_eq!(asked2, ["attack|4x6+|Host", "cast|1x2+|Hero", "spell_defense|2x4+|Foe", "attack|1x4+|Hero"]);
+        assert_eq!((s2.alive[0], s2.alive[1], s2.casts[0], s2.casts[1]), (0, 1, 0, 0), "host dead (cast 0 token still spent), hero alive");
+        assert!(l2.iter().any(|l| l.text == "Host is destroyed but its joined hero lives - the unit is not destroyed and goes on"), "{l2:?}");
+    }
+
+    // ---- CC-7b: Blast fan-out with target_kind, bane window, applied facets line ----
+
+    /// CC-7b: Blast(X) fan-out replays the hitting Blast cases of `golden_shoot_volley.json` (seeds 0, 17, 49) as a Blast(3)
+    /// spell, caps by `combined_alive` (including a joined hero) for `"unit"` targets, and suppresses fan-out (`1`) for
+    /// `"model"` targets. Planted fault: fanning out on a `"model"` target asks 6 saves instead of 2 -> RED.
+    #[test]
+    fn blast_spell_replays_golden_shoot_blast_and_respects_model_target_kind() {
+        let golden: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(format!("{}/../../test/fixtures/one_core/golden_shoot_volley.json", env!("CARGO_MANIFEST_DIR"))).expect("shoot volley golden")).unwrap();
+        let mut replayed = 0;
+        for case in golden["cases"].as_array().unwrap().iter().filter(|c| c["scenario"] == "blast") {
+            let lines: Vec<&str> = case["lines"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+            let Some(def_line) = lines.iter().find(|l| l.starts_with("COMBAT|AI (Def) defends: ")) else { continue };
+            let save_faces: Vec<u8> = def_line.split(':').nth(1).unwrap().split('\u{2192}').next().unwrap().split_whitespace().map(|x| x.parse().unwrap()).collect();
+            let base_hits = (save_faces.len() / 3) as i64;
+            let (st, mut statics) = bolt_board(base_hits, &["Blast(3)"], 10);
+            statics[0].spells[0].target_kind = "unit".into();
+            statics[2].name = "Def".into();
+            let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], save_faces.clone()]);
+            let ActStep::Done { state, lines: got_lines, .. } = done else { panic!("seed {}: {done:?}", case["seed"]) };
+            assert_eq!(asked, ["cast|1x2+|Mystic".into(), format!("spell_defense|{}x4+|Def", save_faces.len())]);
+            let ours: Vec<String> = got_lines.iter().skip(3).map(|l| format!("COMBAT|{}", l.text)).collect();
+            let save_at = lines.iter().position(|l| *l == "COMBAT|Def saves on 4+").unwrap();
+            let want: Vec<String> = lines[save_at..].iter().filter(|l| !l.starts_with("COMBAT|AI (")).map(|l| (*l).to_string()).collect();
+            assert_eq!(ours, want, "seed {}: lines", case["seed"]);
+            let def_end = &case["final"][1];
+            assert_eq!((state.alive[2], state.wounds[2].iter().sum::<i64>(), state.shaken[2]), (def_end["alive"].as_i64().unwrap(), def_end["wounds"].as_i64().unwrap(), def_end["shaken"].as_bool().unwrap()));
+            replayed += 1;
+        }
+        assert_eq!(replayed, 3, "all 3 hitting blast golden cases (seeds 0, 17, 49)");
+
+        // target_kind == "model" on a 6-model target: Blast(3) does NOT fan out (2 hits -> 2 saves, not 6).
+        let (st, mut statics) = bolt_board(2, &["Blast(3)"], 6);
+        statics[0].spells[0].target_kind = "model".into();
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![4, 1]]);
+        let ActStep::Done { state, .. } = done else { panic!("model target: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|2x4+|Foe"], "model target must not fan out Blast(3)");
+        assert_eq!(state.alive[2], 5);
+
+        // target_kind == "unit" caps Blast(3) by combined_alive: 2 host models -> 4 hits; 2 host + 1 joined hero -> 6 hits.
+        let (st_two, mut statics_two) = bolt_board(2, &["Blast(3)"], 2);
+        statics_two[0].spells[0].target_kind = "unit".into();
+        let (_, asked_two) = replay(&statics_two, &st_two, test_bolt(), &[vec![6], vec![4, 4, 4, 4]]);
+        assert_eq!(asked_two, ["cast|1x2+|Mystic", "spell_defense|4x4+|Foe"], "2-model unit caps Blast(3) at x2");
+
+        let (mut st_chain, statics_chain) = (st_two, statics_two);
+        (st_chain.attached, st_chain.attached_to) = (Rc::new(vec![vec![], vec![], vec![3], vec![]]), Rc::new(vec![None, None, None, Some(2)]));
+        (st_chain.alive[3], st_chain.wounds[3]) = (1, vec![1]);
+        let mut t = vec![Begin, intent(HOLD, None), Input::Cast(test_bolt())];
+        let mut asked_chain = Vec::new();
+        for g in [vec![6u8], vec![4, 4, 4, 4, 4, 4]] {
+            match step_activation(&statics_chain, &st_chain, "a", &Terrain::default(), Seams { hero_attach: true, ..seams() }, &t, true) {
+                ActStep::NeedRoll { kind, count, target, owner, faces, .. } => {
+                    assert_eq!(faces, g.len());
+                    asked_chain.push(format!("{kind}|{count}x{target}+|{owner}"));
+                    t.push(Faces(g));
+                }
+                other => panic!("chain blast: {other:?}"),
+            }
+        }
+        assert_eq!(asked_chain, ["cast|1x2+|Mystic", "spell_defense|6x4+|Foe"], "combined_alive 2+1 caps Blast(3) at x3");
+    }
+
+    /// CC-7b: Bane, Lacerate, widened bane windows (Obliterate, Reap, Fragment, Decimate) and Shred resolve through
+    /// `resolve_spell_hits_with_tray` with the table's re-roll dice (`spell_defense`), log lines, and Regeneration bypass rules.
+    #[test]
+    fn spell_bane_window_and_shred_resolve_on_tray() {
+        // (1) Bane: unmodified 6 re-rolls as `spell_defense`, says Bane line, bypasses named Regeneration.
+        let (st, mut statics) = bolt_board(3, &["Bane"], 6);
+        (statics[2].ctx.regeneration, statics[2].ctx.regen_target, statics[2].ctx.regen_target_spell, statics[2].ctx.regen_named) = (true, 5, 5, true);
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![6, 4, 2], vec![2]]);
+        let ActStep::Done { state, lines, .. } = done else { panic!("bane: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|3x4+|Foe", "spell_defense|1x4+|Foe"], "Bane re-rolls 6 and skips named Regeneration");
+        assert_eq!(state.alive[2], 4);
+        assert!(lines.iter().any(|l| l.text == "Bane: Foe re-rolls 1 unmodified Defense 6"), "{lines:?}");
+
+        // (2) Lacerate: unmodified 6 re-rolls with Lacerate line, does NOT bypass named Regeneration (A1).
+        let (st, mut statics) = bolt_board(2, &["Lacerate"], 6);
+        (statics[2].ctx.regeneration, statics[2].ctx.regen_target, statics[2].ctx.regen_target_spell, statics[2].ctx.regen_named) = (true, 5, 5, true);
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![6, 4], vec![2], vec![5]]);
+        let ActStep::Done { state, lines, .. } = done else { panic!("lacerate: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|2x4+|Foe", "spell_defense|1x4+|Foe", "spell_attack|1x5+|Foe"]);
+        assert_eq!(state.alive[2], 6, "Regeneration ignores the 1 wound on a 5");
+        assert!(lines.iter().any(|l| l.text == "Lacerate: Foe re-rolls 1 unmodified Defense 6"), "{lines:?}");
+
+        // (3) Obliterate vs Tough(3)+ (named Regeneration): 5+ window re-rolls both 6 and 5, bypasses Regeneration, says applied-facets line.
+        let (mut st, mut statics) = bolt_board(4, &["Obliterate"], 3);
+        (statics[2].wounds_max, statics[2].ctx.tough) = (vec![3; 3], 3);
+        (statics[2].ctx.regeneration, statics[2].ctx.regen_target, statics[2].ctx.regen_target_spell, statics[2].ctx.regen_named) = (true, 5, 5, true);
+        let mut list = st.profiles.list.clone();
+        list[2].wounds_max = vec![3; 3];
+        st.profiles = Rc::new(crate::state::Profiles { list, index: Default::default() });
+        st.wounds[2] = vec![3; 3];
+        st.kits[2] = Rc::new(vec![Kit { weapons: vec![], equipment: 0, wounds_max: 3 }; 3]);
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![6, 5, 4, 2], vec![1, 1]]);
+        let ActStep::Done { state, lines, .. } = done else { panic!("obliterate tough3: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|4x4+|Foe", "spell_defense|2x4+|Foe"]);
+        assert_eq!(state.alive[2], 2, "3 unsaved wounds kill 1 Tough(3) model; Regeneration bypassed");
+        assert!(lines.iter().any(|l| l.text == "Test Bolt: Obliterate \u{2014} save window 5+ vs Tough(3)+, Regeneration bypassed"), "{lines:?}");
+        assert!(lines.iter().any(|l| l.text == "Bane: Foe re-rolls 2 unmodified Defense rolls of 5+"), "{lines:?}");
+
+        // Obliterate vs Tough(1): condition fails -> no Obliterate line and no Bane re-roll.
+        let (st1, statics1) = bolt_board(2, &["Obliterate"], 6);
+        let (done1, asked1) = replay(&statics1, &st1, test_bolt(), &[vec![6], vec![6, 5]]);
+        let ActStep::Done { lines: l1, .. } = done1 else { panic!("obliterate tough1") };
+        assert_eq!(asked1, ["cast|1x2+|Mystic", "spell_defense|2x4+|Foe"]);
+        assert!(!l1.iter().any(|l| l.text.contains("Obliterate")), "{l1:?}");
+
+        // (4) Purge + Reap vs Shaken + Fatigued (Def 3+ -> AP +2 -> 5+, window 5+ re-rolls 6 and 5).
+        let (mut st, mut statics) = bolt_board(3, &["Purge", "Reap"], 6);
+        statics[2].ctx.defense = 3;
+        (st.shaken[2], st.fatigued[2]) = (true, true);
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![6, 5, 4], vec![1, 1]]);
+        let ActStep::Done { state, lines, .. } = done else { panic!("purge+reap: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|3x5+|Foe", "spell_defense|2x5+|Foe"]);
+        assert_eq!(state.alive[2], 3, "all 3 unsaved (4 failed 5+, 6 and 5 re-rolled to 1s); already shaken draws no morale die");
+        assert!(lines.iter().any(|l| l.text == "Test Bolt: Purge +2 AP vs Shaken + Fatigued, Reap \u{2014} save window 5+ vs Shaken + Fatigued"), "{lines:?}");
+
+        // (5) Fragment vs Defense 5+ (re-rolls 6 and 5); vs Defense 4+ (no Fragment).
+        let (st, mut statics) = bolt_board(3, &["Fragment"], 6);
+        statics[2].ctx.defense = 5;
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![6, 5, 4], vec![1, 6]]);
+        let ActStep::Done { lines, .. } = done else { panic!("fragment def5: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|3x5+|Foe", "spell_defense|2x5+|Foe"]);
+        assert!(lines.iter().any(|l| l.text == "Test Bolt: Fragment \u{2014} save window 5+ vs Defense 5+"), "{lines:?}");
+
+        // (6) Decimate: above half -> re-rolls 6s + line; at half (3/6) -> silent, no re-roll.
+        let (st, statics) = bolt_board(2, &["Decimate"], 6);
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![6, 4], vec![1]]);
+        let ActStep::Done { lines, .. } = done else { panic!("decimate above: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|2x4+|Foe", "spell_defense|1x4+|Foe"]);
+        assert!(lines.iter().any(|l| l.text == "Test Bolt: Decimate \u{2014} Bane vs a target above half"), "{lines:?}");
+
+        let (mut st_half, statics_half) = bolt_board(2, &["Decimate"], 6);
+        (st_half.alive[2], st_half.wounds[2]) = (3, vec![1; 3]);
+        st_half.positions[2].truncate(3);
+        let (done_h, asked_h) = replay(&statics_half, &st_half, test_bolt(), &[vec![6], vec![6, 4]]);
+        let ActStep::Done { lines: lh, .. } = done_h else { panic!("decimate half") };
+        assert_eq!(asked_h, ["cast|1x2+|Mystic", "spell_defense|2x4+|Foe"]);
+        assert!(!lh.iter().any(|l| l.text.contains("Decimate")), "{lh:?}");
+
+        // (7) Shred: unmodified Defense 1 adds +1 wound and says the Shred line.
+        let (st, statics) = bolt_board(2, &["Shred"], 6);
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![4, 1]]);
+        let ActStep::Done { state, lines, .. } = done else { panic!("shred: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|2x4+|Foe"]);
+        assert_eq!(state.alive[2], 4, "1 unsaved + 1 Shred extra wound = 2 wounds");
+        assert!(lines.iter().any(|l| l.text == "Shred: 1 Defense roll of 1 \u{2192} +1 wound"), "{lines:?}");
+    }
+
+    /// CC-7b: applied-facets lines and conditional AP (`effective_ap`) match `_solo_resolve_spell_damage` (Destructive above/at
+    /// half, Fracture, Shatter, Puncture, Disintegrate, Tear).
+    #[test]
+    fn spell_applied_facets_line_and_conditional_ap_match_table() {
+        // Destructive above half -> +1 AP (4+ -> 5+); at half -> not applied (4+).
+        let (st, statics) = bolt_board(2, &["Destructive"], 6);
+        let (ActStep::Done { lines, .. }, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![4, 4]]) else { panic!("destructive above") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|2x5+|Foe"]);
+        assert!(lines.iter().any(|l| l.text == "Test Bolt: Destructive +1 AP (above half)"), "{lines:?}");
+
+        let (mut st_h, statics_h) = bolt_board(2, &["Destructive"], 6);
+        (st_h.alive[2], st_h.wounds[2]) = (3, vec![1; 3]);
+        st_h.positions[2].truncate(3);
+        let (ActStep::Done { lines: lh, .. }, asked_h) = replay(&statics_h, &st_h, test_bolt(), &[vec![6], vec![4, 4]]) else { panic!("destructive half") };
+        assert_eq!(asked_h, ["cast|1x2+|Mystic", "spell_defense|2x4+|Foe"]);
+        assert!(lh.iter().any(|l| l.text == "Test Bolt: Destructive not applied (target at or below half)"), "{lh:?}");
+
+        // Fracture (v36: sixes get AP(+2)) & Shatter (v36: sixes get AP(+3)) say their applied-facets line BEFORE trigger roll.
+        let (st_f, statics_f) = bolt_board(2, &["Fracture"], 6);
+        let (ActStep::Done { lines: lf, .. }, asked_f) = replay(&statics_f, &st_f, test_bolt(), &[vec![6], vec![6, 2], vec![5], vec![4]]) else { panic!("fracture") };
+        assert_eq!(asked_f, ["cast|1x2+|Mystic", "spell_attack|2x6+|Mystic", "spell_defense|1x6+|Foe", "spell_defense|1x4+|Foe"]);
+        assert!(lf.iter().any(|l| l.text == "Test Bolt: Fracture \u{2014} sixes get AP(+2)"), "{lf:?}");
+
+        let (st_s, statics_s) = bolt_board(2, &["Shatter"], 6);
+        let (ActStep::Done { lines: ls, .. }, asked_s) = replay(&statics_s, &st_s, test_bolt(), &[vec![6], vec![6, 2], vec![6], vec![4]]) else { panic!("shatter") };
+        assert_eq!(asked_s, ["cast|1x2+|Mystic", "spell_attack|2x6+|Mystic", "spell_defense|1x6+|Foe", "spell_defense|1x4+|Foe"]);
+        assert!(ls.iter().any(|l| l.text == "Test Bolt: Shatter \u{2014} sixes get AP(+3)"), "{ls:?}");
+
+        // Puncture vs Def 3+ (+2 AP -> 5+); Disintegrate vs Tough(3)+ (+2 AP -> 6+); Tear vs Tough(9)+ (+4 AP -> 6 only, silent).
+        let (st_p, mut statics_p) = bolt_board(2, &["Puncture"], 6);
+        statics_p[2].ctx.defense = 3;
+        let (ActStep::Done { lines: lp, .. }, asked_p) = replay(&statics_p, &st_p, test_bolt(), &[vec![6], vec![5, 5]]) else { panic!("puncture") };
+        assert_eq!(asked_p, ["cast|1x2+|Mystic", "spell_defense|2x5+|Foe"]);
+        assert!(lp.iter().any(|l| l.text == "Test Bolt: Puncture \u{2014} ignores Regeneration, AP(+2) vs Defense 3 or less"), "{lp:?}");
+
+        let (st_d, mut statics_d) = bolt_board(2, &["Disintegrate"], 6);
+        statics_d[2].ctx.tough = 3;
+        let (ActStep::Done { lines: ld, .. }, asked_d) = replay(&statics_d, &st_d, test_bolt(), &[vec![6], vec![6, 6]]) else { panic!("disintegrate") };
+        assert_eq!(asked_d, ["cast|1x2+|Mystic", "spell_defense|2x6+|Foe"]);
+        assert!(ld.iter().any(|l| l.text == "Test Bolt: Disintegrate \u{2014} ignores Regeneration, AP(+2) vs Tough(3)+"), "{ld:?}");
+
+        let (st_t, mut statics_t) = bolt_board(2, &["Tear"], 1);
+        statics_t[2].ctx.tough = 9;
+        let (ActStep::Done { lines: lt, .. }, asked_t) = replay(&statics_t, &st_t, test_bolt(), &[vec![6], vec![6, 6]]) else { panic!("tear") };
+        assert_eq!(asked_t, ["cast|1x2+|Mystic", "spell_defense|2x6+|Foe"]);
+        assert!(lt.iter().any(|l| l.text == "Foe saves on 6 only (Def 4+, AP 4 \u{2014} a natural 6 always saves)"), "{lt:?}");
+
+        // Direct pub(crate) smoke on spell::effective_ap and spell::bane_window.
+        let f_ob = crate::spell::spell_facets(&["Obliterate".into(), "Purge".into()], crate::acts::CURRENT_RULES_EPOCH);
+        let d_ctx = crate::unit::Ctx { defense: 4, tough: 3, shaken_or_fatigued: true, ..Default::default() };
+        assert_eq!(crate::spell::effective_ap(&f_ob, &d_ctx), 2);
+        assert_eq!(crate::spell::bane_window(&f_ob, &d_ctx), (true, 5));
     }
 
     // ---- step 12: cancel ----

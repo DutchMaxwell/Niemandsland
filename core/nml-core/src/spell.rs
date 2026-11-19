@@ -302,7 +302,7 @@ pub fn spell_facets(weapon_rules: &[String], rules_epoch: u32) -> Facets {
 }
 
 /// `AiSpell.effective_ap` ai_spell.gd:181-190.
-fn effective_ap(f: &Facets, def: &Ctx) -> i64 {
+pub(crate) fn effective_ap(f: &Facets, def: &Ctx) -> i64 {
     let mut ap = f.ap;
     let tough = def.tough.max(1);
     if f.ap_vs_tough3 > 0 && tough >= 3 {
@@ -325,7 +325,7 @@ fn effective_ap(f: &Facets, def: &Ctx) -> i64 {
 
 /// Rules 3.6 (`EPOCH_73_V36`) — the Bane window the spell's token list opens
 /// against THIS defender. `(bane, from)`: `from` 6 is the base sixes-only leg.
-fn bane_window(f: &Facets, def: &Ctx) -> (bool, i64) {
+pub(crate) fn bane_window(f: &Facets, def: &Ctx) -> (bool, i64) {
     let mut bane = f.bane;
     let mut from = 6i64;
     if f.bane_above_half && def.above_half_strength {
