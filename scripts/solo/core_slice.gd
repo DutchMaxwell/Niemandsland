@@ -16,6 +16,8 @@ const PATH := "res://assets/solo/core_slice_allow.json"
 const DENY_PATH := "res://assets/solo/core_slice_deny.json"
 const SCHEMA := "nml-core-slice-v1"
 const MODES := ["allow", "deny"]
+## P4.D-48: the AI charge door's own slice (door "melee"), read through `refusals_in`. Allow mode, no group = no rule at all.
+const MELEE_PATH := "res://assets/solo/core_slice_melee.json"
 
 ## TEST SEAM (the RulesRegistry.map_path_override pattern): a path that replaces PATH. Empty in production, always.
 static var path_override := ""
@@ -34,10 +36,12 @@ static func config() -> Dictionary:
 		return _loaded
 	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}, "unmapped_inert": false}
 	var path := path_override if not path_override.is_empty() else (DENY_PATH if deny_switched() else PATH)
+	# Each file belongs to one door: the melee file only through MELEE_PATH, every other path (shipped, deny, a test file) is the shoot door's.
+	var door := "melee" if path == MELEE_PATH else "shoot"
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
-	if not (data is Dictionary) or str(data.get("schema", "")) != SCHEMA or str(data.get("door", "")) != "shoot" \
+	if not (data is Dictionary) or str(data.get("schema", "")) != SCHEMA or str(data.get("door", "")) != door \
 			or not MODES.has(str(data.get("mode", "allow"))):
-		push_error("CoreSlice: %s is missing or not a %s file for the shoot door - the slice is empty" % [path, SCHEMA])
+		push_error("CoreSlice: %s is missing or not a %s file for the %s door - the slice is empty" % [path, SCHEMA, door])
 		return _loaded
 	_loaded["mode"] = str(data.get("mode", "allow"))
 	for g in data.get("groups", {}):
@@ -124,6 +128,11 @@ static func refusals_in(path: String, gu: GameUnit, as_target := false) -> Array
 
 static func takes(gu: GameUnit, as_target := false) -> bool:
 	return refusals(gu, as_target).is_empty()
+
+
+## P4.D-48: why the charge door refuses `gu` (charger, or the charged `as_target`), the same labels as `refusals`.
+static func melee_refusals(gu: GameUnit, as_target := false) -> Array:
+	return refusals_in(MELEE_PATH, gu, as_target)
 
 
 ## P4.D-37: `gu` carries a unit or weapon rule whose registry primitive is one of `primitives` (the slice's own lookup).
