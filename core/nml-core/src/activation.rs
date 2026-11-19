@@ -10,7 +10,7 @@ use crate::logline::{Category, LogLine};
 use crate::mods::LiveMod;
 use crate::mv::step::{leg_crosses, DIFFICULT_MOVE_CAP_IN};
 use crate::rng::GodotRng;
-use crate::sim::{band_parts, resolve_stochastic_tray_on_board, terrain_debuff_folds, Cover, ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
+use crate::sim::{band_parts, cast_ends, resolve_stochastic_tray_on_board, terrain_debuff_folds, Cover, ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
 use crate::state::State;
 use crate::step::{step_with, Step};
 use crate::terrain::{is_difficult, Terrain};
@@ -269,7 +269,7 @@ const CAST_KINDS: [&str; 3] = ["damage", "buff", "debuff"];
 /// CC-5a: why one planned cast cannot be taken, `None` when it can. The caster and every target are units of the roster, the caster
 /// holds a spell of that EXACT name, the spell's kind is one the core resolves, and `open` (a foe's owner may still answer) is not
 /// offered while the core has no interference choice.
-fn cast_break(statics: &[UnitStatic], state: &State, c: &CastInput) -> Option<String> {
+fn cast_break(statics: &[UnitStatic], state: &State, left: &mut [i64], c: &CastInput) -> Option<String> {
     let Some(&ci) = state.roster.index.get(c.caster.as_str()) else { return Some(format!("cast {}: {} is no unit of this game", c.seq, c.caster)) };
     let caster = &statics[state.roster.profile[ci]];
     let Some(spell) = caster.spells.iter().find(|s| s.name == c.spell) else { return Some(format!("cast {}: {} has no spell named {}", c.seq, caster.name, c.spell)) };
@@ -279,12 +279,32 @@ fn cast_break(statics: &[UnitStatic], state: &State, c: &CastInput) -> Option<St
     if let Some(k) = c.targets.iter().find(|k| !state.roster.index.contains_key(k.as_str())) {
         return Some(format!("cast {}: {k} is no unit of this game (a target of {})", c.seq, c.spell));
     }
-    c.open.then(|| format!("cast {}: a foe's answer to {} cannot be asked yet", c.seq, c.spell))
+    if c.open {
+        return Some(format!("cast {}: a foe's answer to {} cannot be asked yet", c.seq, c.spell));
+    }
+    // CC-5b: the tokens as the table paid them at plan time: the threshold from the caster, boost and interference from the listed
+    // payers, each from what is left after the casts before it. The payers must give exactly the boost / interference named.
+    for (what, want, payers) in [("boost", c.boost, &c.boost_sources), ("interference", c.interference, &c.interference_sources)] {
+        let given: i64 = payers.iter().map(|p| p.1).sum();
+        if given != want {
+            return Some(format!("cast {}: {} has {what} {want} but its payers give {given}", c.seq, c.spell));
+        }
+    }
+    let pays = std::iter::once((c.caster.as_str(), c.threshold)).chain(c.boost_sources.iter().chain(&c.interference_sources).map(|(k, n)| (k.as_str(), *n)));
+    for (key, n) in pays {
+        let Some(&i) = state.roster.index.get(key) else { return Some(format!("cast {}: {key} is no unit of this game (a payer for {})", c.seq, c.spell)) };
+        if n < 0 || left[i] < n {
+            return Some(format!("cast {}: {} holds {} token(s) but {} asks {n} of it", c.seq, statics[state.roster.profile[i]].name, left[i], c.spell));
+        }
+        left[i] -= n;
+    }
+    None
 }
 
 /// CC-5a: the first planned cast in the transcript that `cast_break` refuses, as (its input index, the sentence).
 fn cast_check(statics: &[UnitStatic], state: &State, t: &[Input]) -> Option<(usize, String)> {
-    t.iter().enumerate().find_map(|(i, x)| if let Input::Cast(c) = x { cast_break(statics, state, c).map(|why| (i, why)) } else { None })
+    let mut left = state.casts.clone();
+    t.iter().enumerate().find_map(|(i, x)| if let Input::Cast(c) = x { cast_break(statics, state, &mut left, c).map(|why| (i, why)) } else { None })
 }
 
 /// P4.D-20: the ids of the wound-allocation choice (`wound_alloc:<shooter>:<target>:<group>`) start with this.
@@ -300,14 +320,15 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     if let Err((index, reason)) = order_check(name, t) {
         return ActStep::Refused { index, reason };
     }
-    // CC-5a: the static checks come first, each break with its own sentence at its cast's index. CC-3: the core resolves no
-    // valid cast yet either (CC-5b/5c lift this step by step): the first one is refused at its own index. Both run before any
-    // resolver, so before the Dangerous die and before any token is spent.
+    // CC-5a: the static checks come first, each break with its own sentence at its cast's index. CC-3/CC-5b: the core takes only the
+    // casts that end before any die (their caster is down or no target stands, `cast_ends`); the first other cast is refused at its
+    // own index (CC-5c lifts this step by step). Both run before any resolver, so before the Dangerous die and before any token
+    // is spent.
     if let Some((index, reason)) = cast_check(statics, state, t) {
         return ActStep::Refused { index, reason };
     }
     let casts: Vec<CastInput> = t.iter().filter_map(|x| if let Input::Cast(c) = x { Some(c.clone()) } else { None }).collect();
-    if let Some(i) = t.iter().position(|x| matches!(x, Input::Cast(_))) {
+    if let Some(i) = t.iter().position(|x| matches!(x, Input::Cast(c) if cast_ends(state, c).is_none())) {
         return ActStep::Refused { index: i, reason: "casts are not resolved by the core yet".to_string() };
     }
     // Before any resolver runs: no die is drawn and no state is resolved. A `Placed` in the
@@ -1221,7 +1242,9 @@ mod tests {
     fn caster_line() -> (State, Vec<UnitStatic>) {
         let (st, mut statics) = volley_line();
         let spell = |name: &str, kind: &str| crate::rules::Spell { name: name.into(), effect_kind: kind.into(), threshold: 1, ..Default::default() };
-        (statics[0].is_caster, statics[0].spells) = (true, vec![spell("Bolt", "damage"), spell("Mend All", "utility")]);
+        for u in [0, 1] {
+            (statics[u].is_caster, statics[u].spells) = (true, vec![spell("Bolt", "damage"), spell("Mend All", "utility")]);
+        }
         (st, statics)
     }
 
@@ -1252,6 +1275,62 @@ mod tests {
         assert_eq!((index, reason.as_str()), (2, "casts are not resolved by the core yet"));
         let t = [&start[..], &[Input::Cast(bolt(0)), Input::Cast(CastInput { spell: "Nope".into(), ..bolt(1) })]].concat();
         assert!(matches!(ask(&t), ActStep::Refused { index: 3, reason } if reason == "cast 1: a has no spell named Nope"));
+    }
+
+    /// The board of the casts that end before any die: "b" is wiped out (a fizzle for anyone casting at it), "ah" is down (a skip for
+    /// its casts); "a" holds 3 tokens, "ah" 3, "bh" 1.
+    fn wiped_line() -> (State, Vec<UnitStatic>) {
+        let (mut st, statics) = caster_line();
+        st.casts = vec![3, 3, 0, 1];
+        for u in [1, 2] {
+            (st.alive[u], st.positions[u], st.wounds[u]) = (0, Vec::new(), Vec::new());
+        }
+        (st, statics)
+    }
+
+    /// CC-5b: casts that end before any die are TAKEN, and their tokens are spent exactly as the lists say, in plan order: "a"
+    /// pays threshold 1 for a cast at the wiped-out "b" (a fizzle, one line) with "ah" paying a boost of 1 and "bh" the interference
+    /// of 1; then the downed "ah" "casts" (a silent skip) and still pays its threshold. RED: the boost payers ignored in the spend
+    /// -> "ah" keeps a token it paid.
+    #[test]
+    fn a_cast_that_ends_before_any_die_is_taken_and_spends_its_tokens_exactly() {
+        let (st, statics) = wiped_line();
+        let fizzle = CastInput { threshold: 1, boost: 1, boost_sources: vec![("ah".into(), 1)], interference: 1, interference_sources: vec![("bh".into(), 1)], ..bolt(0) };
+        let skip = CastInput { caster: "ah".into(), threshold: 1, ..bolt(1) };
+        let t = [Begin, intent(HOLD, None), Input::Cast(fizzle), Input::Cast(skip)];
+        let ActStep::Done { state, lines, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) else { panic!("taken") };
+        assert_eq!(state.casts, vec![2, 1, 0, 0], "a paid 1, ah 1 (boost) + 1 (its own threshold), bh 1");
+        let said: Vec<_> = lines.iter().map(|l| (l.rule, l.side, l.text.as_str())).collect();
+        assert_eq!(said, [("cast", 0, "a's Bolt fizzles — no target remains")], "the skip says nothing");
+    }
+
+    /// CC-5b: a cast the core cannot pay is refused at its input's index before any die, with the payer named: the caster short of its
+    /// threshold, a payer short of its share, the SECOND cast short because the first took the tokens, an unknown payer, a payer
+    /// list that does not add up to the boost / interference named, a negative spend.
+    #[test]
+    fn a_cast_the_core_cannot_pay_for_is_refused_at_its_index() {
+        let (mut st, statics) = wiped_line();
+        st.casts = vec![3, 1, 0, 1]; // "ah" holds ONE token
+        let ask = |casts: Vec<CastInput>| {
+            let t = [vec![Begin, intent(HOLD, None)], casts.into_iter().map(Input::Cast).collect()].concat();
+            step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true)
+        };
+        let pay = |key: &str, n: i64| vec![(key.to_string(), n)];
+        for (c, why) in [
+            (CastInput { caster: "ah".into(), threshold: 2, ..bolt(0) }, "cast 0: ah holds 1 token(s) but Bolt asks 2 of it"),
+            (CastInput { boost: 1, boost_sources: pay("b", 1), ..bolt(0) }, "cast 0: b holds 0 token(s) but Bolt asks 1 of it"),
+            (CastInput { interference: 1, interference_sources: pay("zz", 1), ..bolt(0) }, "cast 0: zz is no unit of this game (a payer for Bolt)"),
+            (CastInput { boost: 2, boost_sources: pay("ah", 1), ..bolt(0) }, "cast 0: Bolt has boost 2 but its payers give 1"),
+            (CastInput { interference: 1, ..bolt(0) }, "cast 0: Bolt has interference 1 but its payers give 0"),
+            (CastInput { threshold: -1, ..bolt(0) }, "cast 0: a holds 3 token(s) but Bolt asks -1 of it"),
+        ] {
+            let got = ask(vec![c.clone()]);
+            let ActStep::Refused { index, reason } = got else { panic!("{c:?}: {got:?}") };
+            assert_eq!((index, reason.as_str()), (2, why), "{c:?}");
+        }
+        // "ah" holds ONE token: the first cast takes it, the second finds it gone (refused at ITS index, 3)
+        let (first, second) = (CastInput { caster: "ah".into(), threshold: 1, ..bolt(0) }, CastInput { caster: "ah".into(), threshold: 1, ..bolt(1) });
+        assert!(matches!(ask(vec![first, second]), ActStep::Refused { index: 3, reason } if reason == "cast 1: ah holds 0 token(s) but Bolt asks 1 of it"));
     }
 
     /// CC-5a: the refusal comes before ANY roll. "a" stands in Dangerous terrain, so its activation owes the Dangerous test
