@@ -429,9 +429,13 @@ static func takes_action(unit: GameUnit, kind: int) -> bool:
 ## P4.D-19: does the AI body hand this activation to the core? A board was captured for it before its move, the tray
 ## exists, the action is one the door takes (`takes_action`), and the unit is plain. True = the activation's Dangerous test
 ## and the end morale from its wounds are the core's: the body rolls neither (see `run_ai`'s `owns_dangerous`).
+## C-19 (deny mode): an activation that casts (`report["casts"]`) is NOT taken. `run_ai` refuses it anyway (the "cast" clause), but
+## by then the body had deferred the Dangerous test and resolved the casts first: cast -> Dangerous, where the table pays Dangerous
+## -> cast (a caster the test kills must not cast). The whole activation stays on the table, in the table's own order; a caster
+## with nothing to cast this activation is still taken.
 static func takes_ai_activation(main, unit: GameUnit, report: Dictionary) -> bool:
 	var takes: bool = main._solo_core_ai_h != 0 and main.dice_roller_control != null and is_plain(unit) \
-		and takes_action(unit, int(report.get("action", -1)))
+		and takes_action(unit, int(report.get("action", -1))) and (report.get("casts", []) as Array).is_empty()
 	if takes and moves_through(unit) and not main.solo_controller.last_move_paths.is_empty() \
 			and not crossed_plain(main, unit, chords_of(main.solo_controller.last_move_paths)):
 		report["through_refused"] = true   # P4.D-37c: the decision is made once, here; `run_ai` honours it after the table struck

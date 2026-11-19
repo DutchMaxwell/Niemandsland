@@ -1,0 +1,2244 @@
+{
+ "cases": [
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [
+       "Warding Chant|hit 0|def 0|cast 0|morale 0|grants Fearless|once"
+      ],
+      [
+       "Warding Chant|once true"
+      ]
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x4+|AI (Mystic)|6"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 4+ (1 token)",
+    "COMBAT|AI (Mystic): 6 → 1 hit (4+)",
+    "COMBAT|Warding Chant: cast roll 6 vs 4+ — SUCCESS",
+    "COMBAT|Warding Chant takes effect on Mystic: grants Fearless (once)",
+    "GENERAL|\"Warding Chant\" token placed on Mystic (persists until it applies)",
+    "COMBAT|Warding Chant on Mystic is ACTIVE: grants Fearless — applies ONCE"
+   ],
+   "rng": "-675965370631573687",
+   "scenario": "buff_self",
+   "seed": 0
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [
+       "Warding Chant|hit 0|def 0|cast 0|morale 0|grants Fearless|once"
+      ],
+      [
+       "Warding Chant|once true"
+      ]
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x4+|AI (Mystic)|4"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 4+ (1 token)",
+    "COMBAT|AI (Mystic): 4 → 1 hit (4+)",
+    "COMBAT|Warding Chant: cast roll 4 vs 4+ — SUCCESS",
+    "COMBAT|Warding Chant takes effect on Mystic: grants Fearless (once)",
+    "GENERAL|\"Warding Chant\" token placed on Mystic (persists until it applies)",
+    "COMBAT|Warding Chant on Mystic is ACTIVE: grants Fearless — applies ONCE"
+   ],
+   "rng": "6844932353678761266",
+   "scenario": "buff_self",
+   "seed": 1
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [
+       "Warding Chant|hit 0|def 0|cast 0|morale 0|grants Fearless|once"
+      ],
+      [
+       "Warding Chant|once true"
+      ]
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x4+|AI (Mystic)|5"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 4+ (1 token)",
+    "COMBAT|AI (Mystic): 5 → 1 hit (4+)",
+    "COMBAT|Warding Chant: cast roll 5 vs 4+ — SUCCESS",
+    "COMBAT|Warding Chant takes effect on Mystic: grants Fearless (once)",
+    "GENERAL|\"Warding Chant\" token placed on Mystic (persists until it applies)",
+    "COMBAT|Warding Chant on Mystic is ACTIVE: grants Fearless — applies ONCE"
+   ],
+   "rng": "-4080913995720455397",
+   "scenario": "buff_self",
+   "seed": 2
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x4+|AI (Mystic)|1"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 4+ (1 token)",
+    "COMBAT|AI (Mystic): 1 → 0 hits (4+)",
+    "COMBAT|Warding Chant: cast roll 1 vs 4+ — FAILED"
+   ],
+   "rng": "3439983728589879556",
+   "scenario": "buff_self",
+   "seed": 3
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x4+|AI (Mystic)|3"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 4+ (1 token)",
+    "COMBAT|AI (Mystic): 3 → 0 hits (4+)",
+    "COMBAT|Warding Chant: cast roll 3 vs 4+ — FAILED"
+   ],
+   "rng": "4150984202722451089",
+   "scenario": "buff_self",
+   "seed": 8
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x4+|AI (Mystic)|2"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 4+ (1 token)",
+    "COMBAT|AI (Mystic): 2 → 0 hits (4+)",
+    "COMBAT|Warding Chant: cast roll 2 vs 4+ — FAILED"
+   ],
+   "rng": "8266933301943904332",
+   "scenario": "buff_self",
+   "seed": 11
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [
+       "Withering Gaze|hit 0|def -1|cast 0|morale 0|grants |round"
+      ],
+      [
+       "Withering Gaze|once false"
+      ]
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x4+|AI (Mystic)|6"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Withering Gaze at Foe",
+    "COMBAT|Mystic casts Withering Gaze at Foe — needs 4+ (1 token)",
+    "COMBAT|AI (Mystic): 6 → 1 hit (4+)",
+    "COMBAT|Withering Gaze: cast roll 6 vs 4+ — SUCCESS",
+    "COMBAT|Withering Gaze takes effect on Foe: see the faction's spell list",
+    "GENERAL|\"Withering Gaze\" token placed on Foe (expires at the end of the round)",
+    "COMBAT|Withering Gaze on Foe is ACTIVE: -1 to defense — until end of round"
+   ],
+   "rng": "-675965370631573687",
+   "scenario": "debuff_foe",
+   "seed": 0
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [
+       "Withering Gaze|hit 0|def -1|cast 0|morale 0|grants |round"
+      ],
+      [
+       "Withering Gaze|once false"
+      ]
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x4+|AI (Mystic)|4"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Withering Gaze at Foe",
+    "COMBAT|Mystic casts Withering Gaze at Foe — needs 4+ (1 token)",
+    "COMBAT|AI (Mystic): 4 → 1 hit (4+)",
+    "COMBAT|Withering Gaze: cast roll 4 vs 4+ — SUCCESS",
+    "COMBAT|Withering Gaze takes effect on Foe: see the faction's spell list",
+    "GENERAL|\"Withering Gaze\" token placed on Foe (expires at the end of the round)",
+    "COMBAT|Withering Gaze on Foe is ACTIVE: -1 to defense — until end of round"
+   ],
+   "rng": "6844932353678761266",
+   "scenario": "debuff_foe",
+   "seed": 1
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [
+       "Withering Gaze|hit 0|def -1|cast 0|morale 0|grants |round"
+      ],
+      [
+       "Withering Gaze|once false"
+      ]
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x4+|AI (Mystic)|5"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Withering Gaze at Foe",
+    "COMBAT|Mystic casts Withering Gaze at Foe — needs 4+ (1 token)",
+    "COMBAT|AI (Mystic): 5 → 1 hit (4+)",
+    "COMBAT|Withering Gaze: cast roll 5 vs 4+ — SUCCESS",
+    "COMBAT|Withering Gaze takes effect on Foe: see the faction's spell list",
+    "GENERAL|\"Withering Gaze\" token placed on Foe (expires at the end of the round)",
+    "COMBAT|Withering Gaze on Foe is ACTIVE: -1 to defense — until end of round"
+   ],
+   "rng": "-4080913995720455397",
+   "scenario": "debuff_foe",
+   "seed": 2
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x4+|AI (Mystic)|1"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Withering Gaze at Foe",
+    "COMBAT|Mystic casts Withering Gaze at Foe — needs 4+ (1 token)",
+    "COMBAT|AI (Mystic): 1 → 0 hits (4+)",
+    "COMBAT|Withering Gaze: cast roll 1 vs 4+ — FAILED"
+   ],
+   "rng": "3439983728589879556",
+   "scenario": "debuff_foe",
+   "seed": 3
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x4+|AI (Mystic)|3"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Withering Gaze at Foe",
+    "COMBAT|Mystic casts Withering Gaze at Foe — needs 4+ (1 token)",
+    "COMBAT|AI (Mystic): 3 → 0 hits (4+)",
+    "COMBAT|Withering Gaze: cast roll 3 vs 4+ — FAILED"
+   ],
+   "rng": "4150984202722451089",
+   "scenario": "debuff_foe",
+   "seed": 8
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x4+|AI (Mystic)|2"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Withering Gaze at Foe",
+    "COMBAT|Mystic casts Withering Gaze at Foe — needs 4+ (1 token)",
+    "COMBAT|AI (Mystic): 2 → 0 hits (4+)",
+    "COMBAT|Withering Gaze: cast roll 2 vs 4+ — FAILED"
+   ],
+   "rng": "8266933301943904332",
+   "scenario": "debuff_foe",
+   "seed": 11
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": []
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       1
+      ],
+      [
+       1,
+       false,
+       1
+      ],
+      [
+       2,
+       false,
+       1
+      ],
+      [
+       3,
+       false,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic's Warding Chant fizzles — no target remains"
+   ],
+   "rng": "-8330585842245805678",
+   "scenario": "fizzle",
+   "seed": 0
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": []
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 0,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       false,
+       1
+      ],
+      [
+       1,
+       false,
+       1
+      ],
+      [
+       2,
+       false,
+       1
+      ],
+      [
+       3,
+       false,
+       1
+      ],
+      [
+       4,
+       false,
+       1
+      ],
+      [
+       5,
+       false,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic's Warding Chant fizzles — no target remains"
+   ],
+   "rng": "-1966449618399012673",
+   "scenario": "fizzle",
+   "seed": 1
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [
+       "Warding Chant|hit 0|def 0|cast 0|morale 0|grants Fearless|once"
+      ],
+      [
+       "Warding Chant|once true"
+      ]
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x3+|AI (Mystic)|6"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 3+ (2 tokens, +2 boost, -1 interference)",
+    "COMBAT|AI (Mystic): 6 → 1 hit (3+)",
+    "COMBAT|Warding Chant: cast roll 6 vs 3+ — SUCCESS",
+    "COMBAT|Warding Chant takes effect on Mystic: grants Fearless (once)",
+    "GENERAL|\"Warding Chant\" token placed on Mystic (persists until it applies)",
+    "COMBAT|Warding Chant on Mystic is ACTIVE: grants Fearless — applies ONCE"
+   ],
+   "rng": "-675965370631573687",
+   "scenario": "boost_interference",
+   "seed": 0
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [
+       "Warding Chant|hit 0|def 0|cast 0|morale 0|grants Fearless|once"
+      ],
+      [
+       "Warding Chant|once true"
+      ]
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x3+|AI (Mystic)|4"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 3+ (2 tokens, +2 boost, -1 interference)",
+    "COMBAT|AI (Mystic): 4 → 1 hit (3+)",
+    "COMBAT|Warding Chant: cast roll 4 vs 3+ — SUCCESS",
+    "COMBAT|Warding Chant takes effect on Mystic: grants Fearless (once)",
+    "GENERAL|\"Warding Chant\" token placed on Mystic (persists until it applies)",
+    "COMBAT|Warding Chant on Mystic is ACTIVE: grants Fearless — applies ONCE"
+   ],
+   "rng": "6844932353678761266",
+   "scenario": "boost_interference",
+   "seed": 1
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [
+       "Warding Chant|hit 0|def 0|cast 0|morale 0|grants Fearless|once"
+      ],
+      [
+       "Warding Chant|once true"
+      ]
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x3+|AI (Mystic)|5"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 3+ (2 tokens, +2 boost, -1 interference)",
+    "COMBAT|AI (Mystic): 5 → 1 hit (3+)",
+    "COMBAT|Warding Chant: cast roll 5 vs 3+ — SUCCESS",
+    "COMBAT|Warding Chant takes effect on Mystic: grants Fearless (once)",
+    "GENERAL|\"Warding Chant\" token placed on Mystic (persists until it applies)",
+    "COMBAT|Warding Chant on Mystic is ACTIVE: grants Fearless — applies ONCE"
+   ],
+   "rng": "-4080913995720455397",
+   "scenario": "boost_interference",
+   "seed": 2
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x3+|AI (Mystic)|1"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 3+ (2 tokens, +2 boost, -1 interference)",
+    "COMBAT|AI (Mystic): 1 → 0 hits (3+)",
+    "COMBAT|Warding Chant: cast roll 1 vs 3+ — FAILED"
+   ],
+   "rng": "3439983728589879556",
+   "scenario": "boost_interference",
+   "seed": 3
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [
+       "Warding Chant|hit 0|def 0|cast 0|morale 0|grants Fearless|once"
+      ],
+      [
+       "Warding Chant|once true"
+      ]
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x3+|AI (Mystic)|3"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 3+ (2 tokens, +2 boost, -1 interference)",
+    "COMBAT|AI (Mystic): 3 → 1 hit (3+)",
+    "COMBAT|Warding Chant: cast roll 3 vs 3+ — SUCCESS",
+    "COMBAT|Warding Chant takes effect on Mystic: grants Fearless (once)",
+    "GENERAL|\"Warding Chant\" token placed on Mystic (persists until it applies)",
+    "COMBAT|Warding Chant on Mystic is ACTIVE: grants Fearless — applies ONCE"
+   ],
+   "rng": "4150984202722451089",
+   "scenario": "boost_interference",
+   "seed": 8
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x3+|AI (Mystic)|2"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 3+ (2 tokens, +2 boost, -1 interference)",
+    "COMBAT|AI (Mystic): 2 → 0 hits (3+)",
+    "COMBAT|Warding Chant: cast roll 2 vs 3+ — FAILED"
+   ],
+   "rng": "8266933301943904332",
+   "scenario": "boost_interference",
+   "seed": 11
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [
+       "Warding Chant|hit 0|def 0|cast 0|morale 0|grants Fearless|once"
+      ],
+      [
+       "Warding Chant|once true"
+      ]
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x3+|AI (Mystic)|6"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|+1 to casting rolls (Focus +1) — Mystic casts on 3+ (base 4+)",
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 3+ (1 token)",
+    "COMBAT|AI (Mystic): 6 → 1 hit (3+)",
+    "COMBAT|Warding Chant: cast roll 6 vs 3+ — SUCCESS",
+    "COMBAT|\"Focus\" on Mystic is consumed (applies once)",
+    "COMBAT|Warding Chant takes effect on Mystic: grants Fearless (once)",
+    "GENERAL|\"Warding Chant\" token placed on Mystic (persists until it applies)",
+    "COMBAT|Warding Chant on Mystic is ACTIVE: grants Fearless — applies ONCE"
+   ],
+   "rng": "-675965370631573687",
+   "scenario": "casting_once",
+   "seed": 0
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [
+       "Warding Chant|hit 0|def 0|cast 0|morale 0|grants Fearless|once"
+      ],
+      [
+       "Warding Chant|once true"
+      ]
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x3+|AI (Mystic)|4"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|+1 to casting rolls (Focus +1) — Mystic casts on 3+ (base 4+)",
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 3+ (1 token)",
+    "COMBAT|AI (Mystic): 4 → 1 hit (3+)",
+    "COMBAT|Warding Chant: cast roll 4 vs 3+ — SUCCESS",
+    "COMBAT|\"Focus\" on Mystic is consumed (applies once)",
+    "COMBAT|Warding Chant takes effect on Mystic: grants Fearless (once)",
+    "GENERAL|\"Warding Chant\" token placed on Mystic (persists until it applies)",
+    "COMBAT|Warding Chant on Mystic is ACTIVE: grants Fearless — applies ONCE"
+   ],
+   "rng": "6844932353678761266",
+   "scenario": "casting_once",
+   "seed": 1
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [
+       "Warding Chant|hit 0|def 0|cast 0|morale 0|grants Fearless|once"
+      ],
+      [
+       "Warding Chant|once true"
+      ]
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x3+|AI (Mystic)|5"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|+1 to casting rolls (Focus +1) — Mystic casts on 3+ (base 4+)",
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 3+ (1 token)",
+    "COMBAT|AI (Mystic): 5 → 1 hit (3+)",
+    "COMBAT|Warding Chant: cast roll 5 vs 3+ — SUCCESS",
+    "COMBAT|\"Focus\" on Mystic is consumed (applies once)",
+    "COMBAT|Warding Chant takes effect on Mystic: grants Fearless (once)",
+    "GENERAL|\"Warding Chant\" token placed on Mystic (persists until it applies)",
+    "COMBAT|Warding Chant on Mystic is ACTIVE: grants Fearless — applies ONCE"
+   ],
+   "rng": "-4080913995720455397",
+   "scenario": "casting_once",
+   "seed": 2
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x3+|AI (Mystic)|1"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|+1 to casting rolls (Focus +1) — Mystic casts on 3+ (base 4+)",
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 3+ (1 token)",
+    "COMBAT|AI (Mystic): 1 → 0 hits (3+)",
+    "COMBAT|Warding Chant: cast roll 1 vs 3+ — FAILED",
+    "COMBAT|\"Focus\" on Mystic is consumed (applies once)"
+   ],
+   "rng": "3439983728589879556",
+   "scenario": "casting_once",
+   "seed": 3
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [
+       "Warding Chant|hit 0|def 0|cast 0|morale 0|grants Fearless|once"
+      ],
+      [
+       "Warding Chant|once true"
+      ]
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x3+|AI (Mystic)|3"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|+1 to casting rolls (Focus +1) — Mystic casts on 3+ (base 4+)",
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 3+ (1 token)",
+    "COMBAT|AI (Mystic): 3 → 1 hit (3+)",
+    "COMBAT|Warding Chant: cast roll 3 vs 3+ — SUCCESS",
+    "COMBAT|\"Focus\" on Mystic is consumed (applies once)",
+    "COMBAT|Warding Chant takes effect on Mystic: grants Fearless (once)",
+    "GENERAL|\"Warding Chant\" token placed on Mystic (persists until it applies)",
+    "COMBAT|Warding Chant on Mystic is ACTIVE: grants Fearless — applies ONCE"
+   ],
+   "rng": "4150984202722451089",
+   "scenario": "casting_once",
+   "seed": 8
+  },
+  {
+   "epoch": 90,
+   "extra": {
+    "mods": [
+     [
+      "Mystic",
+      [],
+      []
+     ],
+     [
+      "Foe",
+      [],
+      []
+     ]
+    ],
+    "rolls": [
+     "cast|attack|1x3+|AI (Mystic)|2"
+    ]
+   },
+   "final": [
+    {
+     "alive": 1,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ]
+     ],
+     "unit": "Mystic",
+     "wounds": 1
+    },
+    {
+     "alive": 6,
+     "shaken": false,
+     "slots": [
+      [
+       0,
+       true,
+       1
+      ],
+      [
+       1,
+       true,
+       1
+      ],
+      [
+       2,
+       true,
+       1
+      ],
+      [
+       3,
+       true,
+       1
+      ],
+      [
+       4,
+       true,
+       1
+      ],
+      [
+       5,
+       true,
+       1
+      ]
+     ],
+     "unit": "Foe",
+     "wounds": 6
+    }
+   ],
+   "lines": [
+    "COMBAT|+1 to casting rolls (Focus +1) — Mystic casts on 3+ (base 4+)",
+    "COMBAT|Mystic casts Warding Chant at Mystic",
+    "COMBAT|Mystic casts Warding Chant at Mystic — needs 3+ (1 token)",
+    "COMBAT|AI (Mystic): 2 → 0 hits (3+)",
+    "COMBAT|Warding Chant: cast roll 2 vs 3+ — FAILED",
+    "COMBAT|\"Focus\" on Mystic is consumed (applies once)"
+   ],
+   "rng": "8266933301943904332",
+   "scenario": "casting_once",
+   "seed": 11
+  }
+ ],
+ "family": "cast_effects",
+ "provenance": {
+  "epoch": 90,
+  "git_sha": "702fff0f3c6255d83ef339520859793a608b8377",
+  "registry_sha256": "425decb0652c95d5718359a87107f2f3738e3287e9d67a13369b0a00a3f0df0e",
+  "registry_system": "gf"
+ },
+ "schema": "nml-golden-witness-v2"
+}

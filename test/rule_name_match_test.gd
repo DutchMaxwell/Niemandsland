@@ -32,7 +32,7 @@ func test_parametrised_form_still_matches_its_base_name() -> void:
 		.is_true()
 	assert_bool(_unit(["Fear(2)"]).has_special_rule("Fear")).is_true()
 	assert_bool(_unit(["Caster(1)"]).has_special_rule("Caster")).is_true()
-	# The full parametrised string is a legal query too (core_selfplay_caster_test relies on it).
+	# The full parametrised string is a legal query too (import_path_caster_test relies on it).
 	assert_bool(_unit(["Caster(1)"]).has_special_rule("Caster(1)")).is_true()
 
 

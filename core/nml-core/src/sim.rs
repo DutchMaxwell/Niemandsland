@@ -11500,6 +11500,7 @@ mod cast_fold_tests {
             beneficiary: String::new(),
             modifier: SpellModifier::default(),
             grants_rule: String::new(),
+            ..Default::default()
         }
     }
 

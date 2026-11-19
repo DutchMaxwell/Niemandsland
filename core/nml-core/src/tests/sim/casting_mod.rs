@@ -30,6 +30,7 @@ use crate::spell::cast_success_chance;
             beneficiary: "target".into(),
             modifier: SpellModifier { present: true, casting_mod: mod_s, ..Default::default() },
             grants_rule: String::new(),
+            ..Default::default()
         }
     }
 

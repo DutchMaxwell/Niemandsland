@@ -541,6 +541,94 @@ def test_the_round_refill_follows_the_caster_rule():
     assert sp._refill_round_caster_points(unit, plain) == 0
 
 
+# ------------------------------------------------------- the magic telemetry ---
+#
+# Plan G step 12a: Python twins of test/core_selfplay_magic_stamp_test.gd, which guarded the same
+# counters on `tools/core_selfplay.gd` (12b ports the rest and deletes that file). GD test -> twin:
+#   ..._counts_granted_casters_and_books_for_resolving_faction -> ..._for_a_resolving_faction
+#   ..._books_resolved_zero_without_a_committed_spell_map      -> ..._stays_zero_without_a_committed_spell_book
+#   test_a_flat_system_prefixed_filename_resolves_its_spell_book -> test_a_flat_system_prefixed_filename_reaches_books_resolved
+#   test_magic_tally_{counts_a_positive_delta_as_one_cast,ignores_an_unchanged_token_count,ignores_a_negative_delta}: same names
+#   test_refill_round_caster_points_* (3): the test above already pins all three (1 -> 3, cap 6, non-caster 0)
+
+
+def _caster_selection(rating: int) -> dict:
+    return {"id": "wiz", "selectionId": "wiz", "name": "Wizard", "quality": 4, "defense": 4, "size": 1,
+            "cost": 10, "weapons": [], "selectedUpgrades": [],
+            "rules": [{"name": "Caster", "rating": rating, "label": "Caster(%d)" % rating}]}
+
+
+def _grunt_selection() -> dict:
+    return {"id": "gr", "selectionId": "gr", "name": "Grunts", "quality": 4, "defense": 4, "size": 5,
+            "cost": 10, "weapons": [], "selectedUpgrades": [],
+            "rules": [{"name": "Tough", "rating": 3, "label": "Tough(3)"}]}
+
+
+def _magic_of(p1: dict, p2: dict | None = None) -> dict:
+    """`_magic_init` over the rosters as `play_game` builds it: profiles from the loader, the spell
+    books from a core carrying their header (`core.spell_ranges()`)."""
+    profiles = {**p1, **(p2 or {})}
+    core = nml_core.load(str(REPO))
+    core.set_header({"profiles": profiles, "terrain": None, "knobs": dict(sp.TRAINER_KNOBS)})
+    return sp._magic_init(list(profiles.values()), core.spell_ranges())
+
+
+def _zero_magic() -> dict:
+    return sp._magic_init([], {})
+
+
+def test_magic_init_counts_granted_casters_and_books_for_a_resolving_faction():
+    """A caster of a faction whose spell book is committed lands granted / casters / books_resolved on
+    p1; the non-caster on p2 stays all-zero. battle_brothers fields a gf book."""
+    wizard = {"gameSystem": "gf", "units": [_caster_selection(2)]}
+    grunts = {"gameSystem": "gf", "units": [_grunt_selection()]}
+    magic = _magic_of(
+        profiles_from_army_forge_json(wizard, "battle_brothers", player=1),
+        profiles_from_army_forge_json(grunts, "no_such_faction", player=2),
+    )
+    assert (magic["granted"]["p1"], magic["casters"]["p1"], magic["books_resolved"]["p1"]) == (2, 1, 1)
+    assert (magic["granted"]["p2"], magic["casters"]["p2"], magic["books_resolved"]["p2"]) == (0, 0, 0)
+
+
+def test_magic_init_books_resolved_stays_zero_without_a_committed_spell_book():
+    """DISCRIMINATOR: a caster of a faction with no committed book is still a caster (tokens granted,
+    counted) but books_resolved needs BOTH tokens > 0 AND a non-empty book."""
+    wizard = {"gameSystem": "gf", "units": [_caster_selection(3)]}
+    with pytest.warns(UserWarning, match="zero spell books"):
+        magic = _magic_of(profiles_from_army_forge_json(wizard, "no_such_faction", player=1))
+    assert (magic["granted"]["p1"], magic["casters"]["p1"], magic["books_resolved"]["p1"]) == (3, 1, 0)
+
+
+def test_a_flat_system_prefixed_filename_reaches_books_resolved(tmp_path):
+    """The boxes store lists FLAT (`gf_<faction>_<pts>.json`). The old reading keyed the faction
+    `gf_battle_brothers`, no book, and every recorded game had books_resolved = 0."""
+    path = tmp_path / "gf_battle_brothers_1000.json"
+    path.write_text(json.dumps({"gameSystem": "gf", "units": [_caster_selection(2)]}), encoding="utf-8")
+    profiles = list_to_profile.profiles_from_list(path, player=1)
+    assert next(iter(profiles.values()))["faction_folder"] == "battle_brothers"
+    assert _magic_of(profiles)["books_resolved"]["p1"] == 1
+
+
+def test_magic_tally_counts_a_positive_delta_as_one_cast():
+    magic = _zero_magic()
+    sp._magic_tally(magic, "p1", 4, 2)
+    assert magic["casts"] == {"p1": 1, "p2": 0}
+    assert magic["tokens_spent"] == {"p1": 2, "p2": 0}
+
+
+def test_magic_tally_ignores_an_unchanged_token_count():
+    magic = _zero_magic()
+    sp._magic_tally(magic, "p1", 2, 2)
+    assert magic["casts"] == {"p1": 0, "p2": 0} and magic["tokens_spent"] == {"p1": 0, "p2": 0}
+
+
+def test_magic_tally_ignores_a_negative_delta():
+    """Tokens going UP (a round refill landing between the two reads) is never a cast."""
+    magic = _zero_magic()
+    sp._magic_tally(magic, "p1", 2, 3)
+    assert magic["casts"] == {"p1": 0, "p2": 0} and magic["tokens_spent"] == {"p1": 0, "p2": 0}
+
+
 # --------------------------------------------------- the two Rust seam knobs ---
 
 
@@ -1245,3 +1333,81 @@ def test_the_arrival_round_gate_holds_a_unit_back():
     assert sp._arrive_reserves(late, reads, board, [], 1, 2) == 1
     assert late["units"]["p1_a"]["wounds"] == [3, 2], "the DAMAGED model stays damaged"
     assert len(late["units"]["p1_a"]["positions"]) == 2
+
+
+# ------------------------------------------------------- the magic telemetry, 12b ---
+#
+# Plan G step 12b: the rest of test/core_selfplay_magic_stamp_test.gd's twins (12a is the first half; the
+# three refill tests are covered by test_the_round_refill_follows_the_caster_rule). GD test -> twin:
+#   test_spells_by_kind_counts_only_this_activations_events: same name
+#   test_magic_eligibility_tally_counts_caster_and_in_range_activations: same name
+#   test_write_result_stamps_the_magic_block -> test_a_played_game_carries_the_live_magic_block
+
+
+def test_spells_by_kind_counts_only_this_activations_events():
+    """`frm` is the round log's size read PRE-apply, so earlier casts of the round (and any kind the
+    counter does not carry) never count."""
+    magic = sp._magic_init([], {})
+    sp._spells_by_kind_tally(magic, "p1", ["damage", "buff", "debuff", "???"], 1)
+    assert magic["spells_by_kind"]["p1"] == {"damage": 0, "buff": 1, "debuff": 1}  # index 0 predates the apply
+    assert magic["spells_by_kind"]["p2"] == {"damage": 0, "buff": 0, "debuff": 0}
+
+
+def _two_unit_state(enemy_x_in: float, actor_casts: int):
+    """acts_25's first board reduced to one p1 caster at the origin and one p2 unit `enemy_x_in` inches
+    away; returns (state, actor index)."""
+    header, acts = read_acts("acts_25.jsonl")
+    core = nml_core.load(str(REPO))
+    core.set_header(header)
+    plain = acts[0]["state"]
+    for u in plain["units"].values():
+        u.update(alive=0, positions=[], radii=[], wounds=[])
+    keys = list(plain["units"])
+    actor_key = next(k for k in keys if plain["units"][k]["player"] == 1)
+    enemy_key = next(k for k in keys if plain["units"][k]["player"] == 2)
+    for key, x in ((actor_key, 0.0), (enemy_key, enemy_x_in * 0.0254)):
+        plain["units"][key].update(alive=1, positions=[[x, 0, 0]], radii=[0.016], wounds=[1],
+                                   shaken=False, aircraft=False, ambush_arrived_round=-1)
+    plain["units"][actor_key]["casts"] = actor_casts
+    return core.state_of(plain), keys.index(actor_key)
+
+
+def test_magic_eligibility_tally_counts_caster_and_in_range_activations():
+    """The denominator behind `casts`: a token-bearing unit counts as a caster activation, and as an
+    in-range one only with a living enemy inside its longest spell range (12" here)."""
+    magic = sp._magic_init([], {})
+    near, actor = _two_unit_state(6.0, 1)
+    sp._magic_eligibility_tally(magic, "p1", near, actor, 12.0)
+    assert (magic["caster_activations"]["p1"], magic["in_range_activations"]["p1"]) == (1, 1)
+    far, actor = _two_unit_state(30.0, 1)
+    sp._magic_eligibility_tally(magic, "p1", far, actor, 12.0)
+    assert (magic["caster_activations"]["p1"], magic["in_range_activations"]["p1"]) == (2, 1)
+    dry, actor = _two_unit_state(6.0, 0)  # no tokens: not a caster activation at all
+    sp._magic_eligibility_tally(magic, "p1", dry, actor, 12.0)
+    assert (magic["caster_activations"]["p1"], magic["in_range_activations"]["p1"]) == (2, 1)
+    touching, actor = _two_unit_state(0.0, 1)  # even an enemy on top of the caster is no target for a book with no reach
+    sp._magic_eligibility_tally(magic, "p1", touching, actor, 0.0)
+    assert (magic["caster_activations"]["p1"], magic["in_range_activations"]["p1"]) == (3, 1)
+
+
+@pytest.mark.skipif(not (BANK_DIR.is_dir() and ARMY1.exists() and ARMY2.exists()),
+                    reason="needs the terrain bank + 1000pt lists")
+def test_a_played_game_carries_the_live_magic_block(monkeypatch):
+    """The result stamp: `play_game` hands back the dict `_magic_init` made and the tallies kept
+    updating, not a fresh one. A fresh `_magic_init` at the end would be all-zero here (the same
+    caster fixture test_spells_by_kind_stamp.py plays)."""
+    made = []
+    real = sp._magic_init
+    monkeypatch.setattr(sp, "_magic_init", lambda *a, **k: made.append(real(*a, **k)) or made[-1])
+    monkeypatch.setitem(sp.TRAINER_KNOBS, "seam_cast", True)
+    army2 = LISTS / "battle_brothers_1000.json"
+    if not army2.exists():
+        pytest.skip("needs battle_brothers_1000.json")
+    res = sp.play_game(2, str(ARMY1), str(army2), str(REPO), str(BANK_DIR), None, cast_fold=True,
+                       charge_gate="off", hero_attach="table", dice="table", charge_landing="table",
+                       movement="rigid", sighting="model", cond_ap=True, objectives="rulebook",
+                       deployment="arena", dice_seed=2, sidecars=False, menu_wide="off",
+                       menu_los="planner", los="unit", hero_last=False, ambush="off")
+    assert len(made) == 1 and res["magic"] is made[0]
+    assert sum(res["magic"]["casts"].values()) > 0, "the fixture must cast, or this proves nothing"
+    assert set(res["magic"]) == set(real([], {}))

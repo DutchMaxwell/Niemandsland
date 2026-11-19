@@ -37,6 +37,7 @@ use super::*;
             beneficiary: String::new(),
             modifier: SpellModifier::default(),
             grants_rule: String::new(),
+            ..Default::default()
         }
     }
 
@@ -54,6 +55,7 @@ use super::*;
             beneficiary: String::new(),
             modifier: SpellModifier::default(),
             grants_rule: String::new(),
+            ..Default::default()
         }
     }
 
