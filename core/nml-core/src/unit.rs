@@ -417,9 +417,9 @@ pub struct Ctx {
     /// The rule that supplies each group above, as the table's roll line spells it ("regeneration", "self-repair", "resistance" in lower
     /// case, any other group by its rule's own name: "Plaguebound", ...); "" where the slot is empty. The winning name of a group is the one of its lowest target, the first one on a tie.
     pub regen_names: [&'static str; 4],
-    /// Regeneration is carried by most, not all, models (a joined hero without it): the table says so before the roll
-    /// ("<U> — Regeneration: most models carry it, so a joined hero without it does not switch it off").
-    pub regen_most_note: bool,
+    /// The best ignore rule (the lowest target, the first on a tie) is carried by most, not all, models (a joined hero without it): the table says
+    /// so before the roll ("<U> — Regeneration: most models carry it, so a joined hero without it does not switch it off"). "" = not the case.
+    pub regen_most_name: &'static str,
     /// The DYNAMIC melee flag `BattleSim._ctx_of(su, true)` writes over the
     /// template (battle_sim.gd:705-707): a fatigued striker hits only on 6s.
     pub fatigued: bool,
@@ -936,6 +936,14 @@ pub struct ShootProfile {
     /// pays the alias on unmodified 1s at any distance on a shot and on a charge (never a
     /// strike-back) and never widens the window. Set by arm 6b; read by dice.rs.
     pub shred_any_distance: bool,
+    /// The rule the table's Shred line names (`<rule>: N Defense rolls of 1 -> +N wounds`): the Enhanced form carried with its base, else
+    /// the first unit-level Shred entry whose facet fits this profile (Warbound, Destroyer, ...); "" = the plain name "Shred".
+    pub shred_name: String,
+    /// The Boost whose widened window `shred_low` holds ("Warbound Boost"), for the table's `<rule>: Shred on failed saves of 1-L` line.
+    pub shred_boost_name: String,
+    /// The table's once-per-volley announcement of the widening, from the FIRST carried Boost / Enhanced entry: (rule, window top face,
+    /// whether it widens (the 3.5 Boost) or only lifts the distance condition (the Enhanced form)). None = nothing to announce.
+    pub shred_announce: Option<(String, i64, bool)>,
     /// Wave 4 (`rules-wave4-boostbases`) — the Bane Boost's widened save
     /// re-roll window ("Mischievous Boost"'s own `reroll_save_low`, stamped
     /// by `build_for`'s epoch-6 arm only when the model also carries the
@@ -3313,6 +3321,20 @@ pub(crate) fn ignore_group_key(name: &str, upgrades: &str) -> String {
     key.to_string()
 }
 
+/// The name the table's most-models trace carries (`_solo_ignore_wounds`): the best group's rule when it is one of the "most models" names and
+/// not every model carries it.
+fn regen_most_name(p: &Profile, groups: &RegenGroups, rules_epoch: u32) -> &'static str {
+    let best = (0..4).filter(|&i| groups.0[i] > 0).min_by_key(|&i| (groups.0[i], i));
+    let Some(i) = best else { return "" };
+    let raw = groups.1[i];
+    let shown = match raw { "regeneration" => "Regeneration", "self-repair" => "Self-Repair", "resistance" => "Resistance", o => o };
+    if REGEN_MOST_MODELS.contains(&shown) && regen_family_on(p, shown, rules_epoch) && !rule_on_all_models(p, shown) {
+        crate::rules::intern(shown)
+    } else {
+        ""
+    }
+}
+
 /// The ignore groups' targets and the rule names that supply them, as `Ctx::regen_groups` / `Ctx::regen_names` carry them.
 type RegenGroups = ([i64; 4], [&'static str; 4]);
 
@@ -3897,7 +3919,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         regen_named: regen_targets.7,
         regen_groups: regen_targets.8 .0,
         regen_names: regen_targets.8 .1,
-        regen_most_note: regen_family_on(p, "Regeneration", rules_epoch) && !rule_on_all_models(p, "Regeneration"),
+        regen_most_name: regen_most_name(p, &regen_targets.8, rules_epoch),
         fatigued: false,
         retaliate_hits_per_wound: retaliate_hits_per_wound(reg, p),
         death_hits_per_kill: death_hits_per_kill(reg, p),
@@ -4154,6 +4176,15 @@ fn stamp(
             &format!("shred alias on {} — blocking rolls of unmodified 1 take +1 wound", p.name),
         );
     }
+    // The names the table's Shred lines carry (`_solo_shred_enhanced_name`, `_solo_shred_facet_name`, the `warbound_logged` announcement).
+    let shred_enhanced = if rule_on(rules_epoch, EPOCH_73_V36) {
+        shred_hits.iter().find(|h| h.name.starts_with("Enhanced ") && !h.upgrades.is_empty() && has_exact_rule(&p.special_rules, &h.upgrades)).map(|h| h.name.clone())
+    } else {
+        None
+    };
+    let shred_announce = shred_hits.iter()
+        .find(|h| h.save_fail_max > 1 && !h.upgrades.is_empty() && has_exact_rule(&p.special_rules, &h.upgrades))
+        .map(|h| (h.name.clone(), h.save_fail_max, !rule_on(rules_epoch, EPOCH_73_V36) || !h.name.starts_with("Enhanced ")));
     for sp in shoot.iter_mut() {
         if plain_shred
             || shred_hits
@@ -4161,6 +4192,10 @@ fn stamp(
                 .any(|h| facet_applies(h.melee_only, h.shooting_only, sp.range))
         {
             sp.shred_alias = true;
+            sp.shred_name = shred_enhanced.clone()
+                .or_else(|| shred_hits.iter().find(|h| facet_applies(h.melee_only, h.shooting_only, sp.range)).map(|h| h.name.clone()))
+                .unwrap_or_default();
+            sp.shred_announce = shred_announce.clone();
             trace_stamp(trace73, "shred", "Shred",
                 &format!("{}: Shred stamped +1 wound per unmodified 1", p.name));
         }
@@ -4188,6 +4223,7 @@ fn stamp(
         for sp in shoot.iter_mut() {
             if sp.shred_alias {
                 sp.shred_low = hit.save_fail_max;
+                sp.shred_boost_name = hit.name.clone();
                 sp.shred_over_in = v36_over_in(hit.over_in, rules_epoch);
             }
         }

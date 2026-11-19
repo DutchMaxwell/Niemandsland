@@ -272,7 +272,7 @@ func test_a_missing_or_malformed_file_is_the_empty_slice() -> void:
 ## The deny file refuses its listed primitives (a Teleport unit) and takes a unit whose
 ## rules are automated and not listed (AP, Tough); a name no map knows is taken (unmapped_inert). The list only shrinks: CEILING.
 ## RED: read PATH regardless of the switch -> the first assertion reads mode "allow".
-const DENY_CEILING := 19   # DLINES2 train 2: Ranged Shrouding, Lacerate, Shielded, Fortified and Regeneration left with their lines (24 -> 19). 19.11.: +15 primitives in eight `rule_line` groups (a rule whose table line the door omits stays on the table until the line exists, dlines_gap rows 2, 3, 7, 13, 15, 16, 17, 21), they leave group by group with their lines. BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
+const DENY_CEILING := 19   # DLINES3 train 3: Shred, Self-Repair and Resistance left with their lines (19 -> 16), then the probes at 1500 / 2000 / 3000 pts showed three more families whose line the door omits: Armor, Disintegrate, Tear (+3 -> 19). DLINES2 train 2: Ranged Shrouding, Lacerate, Shielded, Fortified and Regeneration left with their lines (24 -> 19). 19.11.: +15 primitives in eight `rule_line` groups (a rule whose table line the door omits stays on the table until the line exists, dlines_gap rows 2, 3, 7, 13, 15, 16, 17, 21), they leave group by group with their lines. BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
 
 
 func test_the_deny_switch_reads_the_measured_deny_list() -> void:
@@ -280,10 +280,10 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	CoreSlice.reset_cache()
 	assert_str(str(CoreSlice.config()["mode"])).is_equal("deny")
 	# C-R1 (epochs 82 + 84) ported the wound-ignore rules by name and left the deny list; DLINES2 refuses the families whose roll line the door
-	# does not write (a `rule_line` group, dlines_gap row 3): Self-Repair still, the plain Regeneration group has its line (train 2). Tough stays taken.
-	var repairer := _unit(["Self-Repair"], [["AP(1)"]])
-	repairer.unit_properties["faction_folder"] = "robot_legions"
-	assert_array(CoreSlice.refusals(repairer)).is_equal(["unit_rule:Self-Repair"])
+	# does not write (dlines_gap row 3): the terrain and once-per-game aliases (Grounded Protection, Protection Feat) by name; the groups' rolls are said since trains 2 and 3. Tough stays taken.
+	var grounded := _unit(["Grounded Protection"], [["AP(1)"]])
+	grounded.unit_properties["faction_folder"] = "soul_snatcher_cults"
+	assert_array(CoreSlice.refusals(grounded)).is_equal(["unit_rule:Grounded Protection"])
 	assert_bool(CoreSlice.takes(_unit(["Regeneration"], [["AP(1)"]]))).is_true()
 	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
 	# A rule refused by NAME where its primitive is shared (Changebound = Stealth; plain Stealth stays taken).
@@ -321,8 +321,8 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 	var rep: Array = [
 		["Artillery", ""], ["Stealth", ""], ["Evasive", "battle_brothers"], ["Aircraft", ""], ["Precision Fighter", ""],
 		["Instinctive", "goblin_reclaimers"],
-		["Self-Repair", "robot_legions"], ["Resistance", "alien_hives"], ["Shred", ""], ["Takedown", ""],
-		["Plaguebound", "plague_disciples"], ["Warding", "eternal_wardens"], ["Protection Feat", "alien_hives"],
+		["Takedown", ""], ["Grounded Protection", "soul_snatcher_cults"], ["Protection Feat", "alien_hives"],
+		["Armor", ""], ["Disintegrate", "custodian_brothers"], ["Tear", "custodian_brothers"],
 	]
 	for row in rep:
 		var as_unit := _unit([row[0]], [[]])
@@ -340,7 +340,8 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 	# Shielded and Fortified lines, the plain Regeneration group's roll.
 	for lifted in [["Ranged Shrouding", "custodian_brothers"], ["Bane", ""], ["Lacerate", "battle_brothers"], ["Anti-Regen", ""],
 			["Mischievous", "goblin_reclaimers"], ["Vicious", "goblin_reclaimers"], ["Unstoppable when Shooting", ""],
-			["Shielded", "battle_brothers"], ["Fortified", "alien_hives"], ["Regeneration", ""], ["Regeneration Aura", "alien_hives"]]:
+			["Shielded", "battle_brothers"], ["Fortified", "alien_hives"], ["Regeneration", ""], ["Regeneration Aura", "alien_hives"],
+			["Shred", ""], ["Warbound", "war_disciples"], ["Self-Repair", "robot_legions"], ["Resistance", "alien_hives"], ["Plaguebound", "plague_disciples"]]:
 		var lifted_unit := _unit([lifted[0]], [[lifted[0]]])
 		if lifted[1] != "":
 			lifted_unit.unit_properties["faction_folder"] = lifted[1]
@@ -459,10 +460,8 @@ func test_deny_mode_takes_the_lifted_equal_probes() -> void:
 		gu.unit_properties["faction_folder"] = unit_rules[name]
 		assert_bool(CoreSlice.takes(gu)).override_failure_message(
 			"deny mode takes a unit that carries %s" % name).is_true()
-	var tearer := _unit(["Tough(3)"], [["Tear"]])
-	tearer.unit_properties["faction_folder"] = "custodian_brothers"
-	assert_bool(CoreSlice.takes(tearer)).override_failure_message(
-		"deny mode takes a unit that carries Tear").is_true()
+	# DLINES3: Tear left this list: its dice are equal but the table names its conditional AP (`Tear: AP(+N) against <U>`) and the door says
+	# nothing for it (dlines_gap row 11), so the conditional-AP group refuses it (test above).
 	# Lifted again (C-19): the soak's unequal volley was a shot at base contact the table read as melee, not Point-Blank
 	# Surge (surge_contact_door_test.gd, 16/16 equal through the door in deny mode after the table fix).
 	var sisters := _unit(["Point-Blank Surge"], [])
@@ -628,13 +627,36 @@ class _StubMain extends RefCounted:
 
 
 ## DLINES2: `SlicePin.dice_only()` is the production deny list minus its line refusals - the helper the dice parity tests read. RED: if it kept the
-## `rule_line` groups the Self-Repair row below is refused; if it dropped every refusal Changebound (a DICE difference) would be taken.
+## `rule_line` groups the Grounded Protection row below is refused; if it dropped every refusal Changebound (a DICE difference) would be taken.
 func test_the_dice_only_slice_drops_the_line_refusals_and_keeps_the_dice_ones() -> void:
-	var self_repair := _unit(["Self-Repair"], [])
-	self_repair.unit_properties["faction_folder"] = "robot_legions"
+	var self_repair := _unit(["Grounded Protection"], [])
+	self_repair.unit_properties["faction_folder"] = "soul_snatcher_cults"
 	SlicePin.dice_only()
-	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("Self-Repair's missing line is not a dice difference").is_true()
+	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("Grounded Protection's missing line is not a dice difference").is_true()
 	assert_bool(CoreSlice.takes(_unit(["Shred"], []), true)).override_failure_message("Shred's missing line is not a dice difference").is_true()
 	assert_bool(CoreSlice.takes(_unit(["Changebound"], []), true)).override_failure_message("Changebound changes the dice: still refused").is_false()
 	SlicePin.release_dice_only()
-	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("the production list refuses Self-Repair again").is_false()
+	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("the production list refuses Grounded Protection again").is_false()
+
+
+## DLINES3: a weapon's own Shred beside a unit-level Shred rule of another name is two rules in the table (R-1 A2) and one in the core: the target's
+## wounds differ (found by the Shred door test, 5 of 12 seeds), so the deny file refuses it by predicate. Controls: either alone, or the plain
+## unit-level Shred beside the weapon's (one group), stay taken; the dice-only pin keeps the refusal (a state difference, not a missing line).
+func test_an_own_shred_beside_an_alias_is_refused() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	var both := _unit(["Warbound"], [["Shred"]])
+	both.unit_properties["faction_folder"] = "war_disciples"
+	assert_array(CoreSlice.refusals(both)).is_equal(["own_shred_beside_alias"])
+	assert_bool(CoreSlice.takes(both, true)).override_failure_message("a target is not refused for what it would fire").is_true()
+	var alias_only := _unit(["Warbound"], [["AP(1)"]])
+	alias_only.unit_properties["faction_folder"] = "war_disciples"
+	assert_bool(CoreSlice.takes(alias_only)).is_true()
+	assert_bool(CoreSlice.takes(_unit([], [["Shred"]]))).is_true()
+	var same_group := _unit(["Shred"], [["Shred"]])
+	assert_bool(CoreSlice.takes(same_group)).override_failure_message("the plain unit-level Shred is the weapon's own group").is_true()
+	SlicePin.dice_only()
+	assert_array(CoreSlice.refusals(both)).override_failure_message("a state difference stays refused in the dice-only slice").is_equal(["own_shred_beside_alias"])
+	SlicePin.release_dice_only()
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()

@@ -567,6 +567,15 @@ fn land_deadly_picked(state: &mut State, ti: usize, unsaved: i64, x: i64, seams:
     for _ in 0..unsaved.max(0) {
         let lead = crate::casualty::chain_casualty_order(state, ti, Some(1)).and_then(|o| o.first().copied());
         let forced = lead.is_some_and(|j| state.kits[ti].get(j).is_some_and(|k| k.wounds_max > 1 && state.wounds[ti][j] < k.wounds_max));
+        if x <= 0 {
+            // an all-ignored wound: the pick is made (a forced one is counted), nothing lands
+            if forced {
+                *forced_n += 1;
+            } else {
+                let _ = alloc.next(state, ti);
+            }
+            continue;
+        }
         dealt += match if forced { None } else { alloc.next(state, ti) } {
             Some(i) => {
                 let take = x.max(1).min(state.wounds[ti][i]);
@@ -738,6 +747,7 @@ pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: 
 /// `land_deadly_wounds`, plus the picks that FINISHED an already-wounded Tough model (the table's `deadly_pick` "forced"
 /// flag, counted into `forced_n`): the volley line names them.
 fn land_deadly_counted(state: &mut State, ti: usize, unsaved: i64, deadly_x: i64, seams: Seams, forced_n: &mut i64) -> i64 {
+    let ignored = deadly_x <= 0; // an all-ignored wound (dice.rs `push_deadly_groups`): the pick happens, nothing lands
     let x = deadly_x.max(1);
     let mut dealt = 0i64;
     let epoch67 = rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS);
@@ -788,7 +798,7 @@ fn land_deadly_counted(state: &mut State, ti: usize, unsaved: i64, deadly_x: i64
             }
             b
         };
-        let take = x.min(state.wounds[m][best]);
+        let take = if ignored { 0 } else { x.min(state.wounds[m][best]) };
         if epoch67 && max_of[ci].get(best).is_some_and(|&mx| mx > 1 && state.wounds[m][best] < mx) {
             *forced_n += 1;
         }
@@ -3316,7 +3326,7 @@ pub(crate) fn tray_retreating_strike(
             kind: "ravage", count: dice, target: RAVAGE_WOUND_TARGET,
             faces: faces.clone(), owner: statics[next.roster.profile[bearer]].name.clone(),
         });
-        let landed = crate::dice::regen_batch(w, &def, &def_owner, tray, &mut shot.rolls);
+        let landed = crate::dice::regen_batch(w, 0, &def, &def_owner, tray, &mut shot.rolls);
         land_wounds_with(next, ti, landed, seams.tray_exact);
         shot.log.push(format!(
             "{}: {} strikes while retreating -- {} dice -> {} wound(s) on {} (no save)",

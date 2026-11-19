@@ -19,23 +19,9 @@
     "Relentless Aura": "Measured (5-seed sweep): 1 taken volley, the core pays one defense die more on a natural 6.",
     "Fortified Aura": "door omits the table's aura-loss line (`_solo_fortified_aura_loss_log`) when the bearer dies, dlines_gap row 21: the Fortified line itself is said since dlines2 train 2.",
     "Guardian Boost Aura": "door omits the table's aura-loss line (`_solo_fortified_aura_loss_log`) when the bearer dies, dlines_gap row 21: the Fortified line itself is said since dlines2 train 2.",
-    "Angelic Blessing": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
-    "Angelic Blessing Boost": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
-    "Cursed Undead": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
-    "Cursed Undead Boost": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
-    "Enhanced Angelic Blessing": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
-    "Enhanced Cursed Undead": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
-    "Enhanced Knightborn": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
-    "Enhanced Plaguebound": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
-    "Enhanced Self-Repair": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
-    "Grounded Protection": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
-    "Knightborn": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
-    "Plaguebound": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
-    "Plaguebound Boost": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
-    "Protected": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
-    "Protection Feat": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
-    "Self-Repair Boost": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3.",
-    "Warding": "door omits the gate, terrain, once-per-game or bypass line of this ignore rule (the plain Regeneration group says its roll since dlines2 train 2), dlines_gap row 3."
+    "Grounded Protection": "door omits the table's terrain trace (Grounded Protection) or once-per-game lines (Protection Feat), dlines_gap row 3; the roll, bypass and Warding gate lines are said since dlines2/3.",
+    "Enhanced Knightborn": "the table names the roll group by whichever of Knightborn / Enhanced Knightborn is live at the shot's distance (the gated Knightborn folds nothing within 9in); the core's group name is static, dlines_gap row 3.",
+    "Protection Feat": "door omits the table's terrain trace (Grounded Protection) or once-per-game lines (Protection Feat), dlines_gap row 3; the roll, bypass and Warding gate lines are said since dlines2/3."
   },
   "groups": {
     "ledger_not_round_tripped": {
@@ -56,23 +42,29 @@
       "why": "The table names every to-hit modifier a rule applies in one line (`To-hit vs <U>: Artillery +1 (Held, target over 12\"), Stealth -1 -> hits on 3+`); the door says none of it. Measured 19.11. (dlines probe over the roster sweep, 1394 taken-and-equal volleys): 224 volleys, the largest gap, dlines_gap row 2. A rule applied without a log line.",
       "leaves_with": "the dlines2 train that composes the note on the core's step path"
     },
-    "door_omits_wound_ignore_line": {
-      "primitives": ["Self-Repair", "Resistance"],
-      "kind": "rule_line",
-      "why": "The table writes the ignore roll of every group with the rule's name; the door says the plain Regeneration group's roll and bypass lines since dlines2 train 2. The other groups (Self-Repair, Resistance) also owe the table's `ignore only Regeneration - X still rolls` line when a bypass weapon hits, which the core's callers cannot count yet (dlines_gap row 3).",
-      "leaves_with": "the dlines2 train that carries the group names to the dice leg"
-    },
-    "door_omits_shred_line": {
-      "primitives": ["Shred"],
-      "kind": "rule_line",
-      "why": "The table names Shred's extra wounds (`Warbound: 2 Defense rolls of 1 -> +2 wounds`, the widened and Boost forms); the door writes none. Measured 19.11.: 80 volleys, dlines_gap row 7.",
-      "leaves_with": "the dlines2 train that says the Shred lines"
-    },
     "door_omits_simultaneous_fire_line": {
       "primitives": [],
       "kind": "rule_line",
       "why": "A shooter with a Deadly weapon beside another ranged weapon (its joined heroes' included): the table lands Deadly inline, so a later weapon sees fewer models and says `Simultaneous fire: ...` or Blast's cap read when the volley started; the core lands after the dice and writes neither. Not a rule name: `CoreSlice` refuses it by predicate (`deadly_beside_other_weapons`), switched on by this group. Measured 19.11.: 29 volleys, dlines_gap row 18.",
       "leaves_with": "the dlines2 train that lands Deadly inline on the step path"
+    },
+    "door_own_shred_beside_alias": {
+      "primitives": [],
+      "kind": "state_difference",
+      "why": "A weapon's own Shred beside a unit-level Shred rule of another name (Warbound, Destroyer, Infected, ...) is two rules in the table (R-1 A2: each pays its extra wounds, the alias gated by distance); the core pays the unmodified 1s once, so the target's wounds differ (5 of 12 seeds, dlines3 door test). Not a rule name: `CoreSlice` refuses it by predicate (`own_shred_beside_alias`), switched on by this group; a state difference, so the dice-only pin keeps it.",
+      "leaves_with": "the core paying the own part and the alias part apart (R-1 A2 on the step path)"
+    },
+    "door_omits_armor_line": {
+      "primitives": ["Armor"],
+      "kind": "rule_line",
+      "why": "The table names a target's Armor(X) before the announce (`<U> has Armor(X): counts as Defense N+`); the core applies it and writes no line. Measured 19.11.: 3 volleys at 1500 and at 2000 pts, dlines_gap row 23.",
+      "leaves_with": "the dlines3 train that says the Armor line"
+    },
+    "door_omits_conditional_ap_line": {
+      "primitives": ["Disintegrate", "Tear"],
+      "kind": "rule_line",
+      "why": "The table names the conditional AP of Disintegrate and Tear (`<rule>: AP(+N) against <U>`) on every volley that gets it; the core applies it and its step path writes no line for these two (its named forms Havocbound, Slayer, ... do). Measured 19.11.: 3 + 12 + 6 volleys at 1500 / 2000 / 3000 pts, dlines_gap row 11.",
+      "leaves_with": "the dlines3 train that says the Disintegrate / Tear line"
     },
     "door_omits_takedown_lines": {
       "primitives": ["Takedown"],

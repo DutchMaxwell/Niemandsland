@@ -929,6 +929,17 @@ fn save_batch(
         let bonus = p.shred_ones_wound_bonus.max(1);
         let shreds = shred_faces(&faces, &reroll, shred_low.max(1), target as i64);
         let wound = shreds * bonus;
+        if shreds > 0 {
+            // The table's line (`_solo_save_batch`): the widened window names its Boost, the plain one the rule that pays the 1s.
+            let s = if shreds == 1 { "" } else { "s" };
+            if shred_low > 1 {
+                let gate = if p.shred_over_in < 0.0 { String::new() } else { format!(" (over {}\")", p.shred_over_in) };
+                say_rule(tray, "shred", def.side, || format!("{}: Shred on failed saves of 1-{shred_low}{gate} — {shreds} extra wound{s}", p.shred_boost_name));
+            } else {
+                let name = if p.shred_name.is_empty() { "Shred" } else { p.shred_name.as_str() };
+                say_rule(tray, "shred", def.side, || format!("{name}: {shreds} Defense roll{s} of 1 → +{shreds} wound{s}"));
+            }
+        }
         if wound > 0 && p.shred_ones_wound_bonus > 0 {
             out.log.push(format!(
                 "Shred ({}): {} — {} failed save rolls cost {} extra wounds against {}",
@@ -1225,6 +1236,8 @@ pub fn resolve_volley_leg(
 ) -> ShootResult {
     let mut out = ShootResult::default();
     let (mut regenable, mut regen_proof) = (0i64, 0i64);
+    // the wounds of bypass weapons that JOINED the pool (the target has no group named Regeneration): the table's `ignore only Regeneration` line counts them
+    let mut regen_joined = 0i64;
     // PORTED — Unpredictable's SHOOTING leg :3096-3110: ONE die for the whole
     // volley, before any weapon fires, off the FIRST shooter's context. A face
     // at or under `low_roll_max` is +ap_bonus on every profile of this volley
@@ -1302,6 +1315,8 @@ pub fn resolve_volley_leg(
     let mut aircraft_fired = false;
     // The table's "Reliable: ... shoots at Quality N+" line, once per volley (`reliable_logged`).
     let mut reliable_said = false;
+    // The table's `warbound_logged`: the widened Shred window names itself once per volley.
+    let mut shred_announced = false;
     // Rules 3.6 (D-MOST) — Stealth's -1 rode the most-models read: one line per volley.
     let mut stealth_most_fired = false;
     // FAB-C15 — the once-granted Stealth's own rules-must-log flag.
@@ -1614,6 +1629,16 @@ pub fn resolve_volley_leg(
         let (mut raw, mut target) = fold_hit(def.modifier_sum, target, m);
         if p.reliable && !std::mem::replace(&mut reliable_said, true) {
             say_rule(tray, "reliable", att.side, || format!("Reliable: {} shoots at Quality {target}+", sh.owner));
+        }
+        if (p.shred || p.shred_alias) && !shred_announced {
+            if let Some((rule, low, widens)) = &p.shred_announce {
+                shred_announced = true;
+                say_rule(tray, "shred", att.side, || if *widens {
+                    format!("{rule}: failed saves of 1-{low} count as wounds on {def_owner}")
+                } else {
+                    format!("{rule}: unmodified 1s to block deal an extra wound at any distance on {def_owner}")
+                });
+            }
         }
         let mut versatile_ap = 0;
         if (p.versatile_attack || att.versatile_grant)
@@ -2069,13 +2094,13 @@ pub fn resolve_volley_leg(
         // registry arm, main.gd:7133-7137): the stamp carries the rule NAME,
         // so an empty field is the pre-46 silence, replay-exact.
         let disintegrate_regen = !p.regen_bypass_rule.is_empty();
-        let ignores_regen = (p.bypass_regen
+        let bypass_flag = p.bypass_regen
             || p.rending
             || p.unstoppable
             || att.rending_grant
             || att.unstoppable_grant
-            || disintegrate_regen)
-            && def.bypass_skips_ignore();
+            || disintegrate_regen;
+        let ignores_regen = bypass_flag && def.bypass_skips_ignore();
         // Rules-must-log: the refusal names the rule — the table's
         // Bane-in-Melee arm's own line (main.gd:7175-7176). DAT-16b: from rules 3.6
         // the line is written only when the target really has a Regeneration-family
@@ -2114,17 +2139,20 @@ pub fn resolve_volley_leg(
             // Tray-exact S7 — the table's Takedown landing: w x max(Deadly, 1) BEFORE the
             // picked model's own Regeneration roll, all of it for that one model (the drain).
             let td = w * p.deadly.max(1);
-            out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, def, def_owner, tray, &mut out.rolls));
+            out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, if bypass_flag && !ignores_regen { td } else { 0 }, def, def_owner, tray, &mut out.rolls));
             out.deadly_tally += w;
         } else if deadly_per_model && p.deadly > 0 {
             let first = out.deadly_groups.len();
-            push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, def, def_owner, tray);
+            push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, def_owner, tray);
             out.deadly_lines.push((p.name.clone(), w, p.deadly.max(1), out.deadly_groups.len() - first));
             out.deadly_tally += w;
         } else if ignores_regen {
             regen_proof += w;
         } else {
             regenable += w;
+            if bypass_flag {
+                regen_joined += w;
+            }
         }
     }
     // --- `_solo_land_wounds` :6623 -> `_solo_apply_regeneration` :6543 ---
@@ -2170,16 +2198,18 @@ pub fn resolve_volley_leg(
     }
     // MOR-17a — rules-must-log, once per volley: the gate's verdict, under the
     // rule's name (Warding, Knightborn and Angelic Blessing are one rule).
-    if def.regen_gate_over_in > 0.0 && (regenable > 0 || out.deadly_tally > 0) {
+    if def.regen_gate_over_in > 0.0 && (regenable > 0 || regen_proof > 0 || out.deadly_tally > 0) {
         let gate = def.regen_gate_over_in;
-        out.log.push(if def.regen_target > 0 {
+        let line = if def.regen_target > 0 {
             format!("Warding: {def_owner} ignores wounds on 6+ (shot from over {gate:.0}in)")
         } else {
             format!("Warding: no 6+ ignore, {def_owner} was shot from within {gate:.0}in")
-        });
+        };
+        out.log.push(line.clone());
+        say_rule(tray, "ignore", def.side, || line);
     }
     out.caused = regen_proof + regenable + out.deadly_tally;
-    out.wounds = ignore_batch(regenable, regen_proof, def, def_owner, tray, &mut out.rolls);
+    out.wounds = ignore_batch(regenable, regen_proof, regen_joined, def, def_owner, tray, &mut out.rolls);
     out
 }
 
@@ -2192,28 +2222,30 @@ pub fn resolve_volley_leg(
 /// Deadly(X) wound is X wounds, and the Regeneration family rolls all X before the model's cap — one
 /// landing group per wound, a wound whose X are all ignored lands nothing. Below 72 (or with nothing
 /// to roll) the legacy leg: one roll on the RAW unsaved count, then ×X per model.
-fn push_deadly_groups(out: &mut ShootResult, w: i64, x: i64, ignores_regen: bool, def: &Ctx, def_owner: &str, tray: &mut Tray) {
+#[allow(clippy::too_many_arguments)] // the two bypass flags and the landing context
+fn push_deadly_groups(out: &mut ShootResult, w: i64, x: i64, ignores_regen: bool, bypass_flag: bool, def: &Ctx, def_owner: &str, tray: &mut Tray) {
     if def.playtest_rules && !ignores_regen && def.regeneration && def.regen_target > 0 {
         for _ in 0..w {
-            let post = regen_batch(x, def, def_owner, tray, &mut out.rolls);
-            if post > 0 {
-                out.deadly_groups.push((1, post));
-            }
+            let post = regen_batch(x, if bypass_flag { x } else { 0 }, def, def_owner, tray, &mut out.rolls);
+            // A wound whose X are all ignored still takes its pick (the table's `deadly_pick` runs before the ignore roll, so the "finish the
+            // already-wounded Tough model first" count includes it): an x = 0 group lands nothing and only counts the forced pick.
+            out.deadly_groups.push((1, post));
         }
         return;
     }
-    let post = ignore_batch(if ignores_regen { 0 } else { w }, if ignores_regen { w } else { 0 }, def, def_owner, tray, &mut out.rolls);
+    let post = ignore_batch(if ignores_regen { 0 } else { w }, if ignores_regen { w } else { 0 }, if bypass_flag && !ignores_regen { w } else { 0 }, def, def_owner, tray, &mut out.rolls);
     out.deadly_groups.push((post, x));
 }
 
 pub(crate) fn regen_batch(
     w: i64,
+    joined: i64,
     def: &Ctx,
     def_owner: &str,
     tray: &mut Tray,
     rolls: &mut Vec<Roll>,
 ) -> i64 {
-    ignore_batch(w, 0, def, def_owner, tray, rolls)
+    ignore_batch(w, 0, joined, def, def_owner, tray, rolls)
 }
 
 /// One ignore roll: a die per wound of `w`, each `target`+ ignoring it; the wounds that survive come back.
@@ -2239,21 +2271,33 @@ fn roll_ignore_group(w: i64, target: i64, name: &str, def: &Ctx, def_owner: &str
     (w - ignored).max(0)
 }
 
+/// The display of an ignore group in the table's "still rolls" list (`display_of` in `_solo_ignore_wounds`): the three named forms capitalised.
+fn display_ignore_name(n: &str) -> String {
+    match n {
+        "regeneration" => "Regeneration".to_string(),
+        "self-repair" => "Self-Repair".to_string(),
+        "resistance" => "Resistance".to_string(),
+        o => o.to_string(),
+    }
+}
+
 /// `main._solo_ignore_wounds`: the wounds of `pool` (regenable) and `bypass` (a Bane / Rending / Unstoppable weapon's) meet the ignore
 /// groups in the table's order. The bypassed wounds skip only the group named Regeneration and join the pool at the first other group;
 /// each group rolls on the wounds still standing. Returns ALL wounds that land. Without valid groups (below epoch 82, or one name, or a
 /// live leg beside them) it is today's single roll on `pool` plus the bypassed wounds untouched.
+#[allow(clippy::too_many_arguments)] // the pool, the Regeneration-bypass wounds and the joined-bypass count are three counts of one landing
 pub(crate) fn ignore_batch(
     pool: i64,
     bypass: i64,
+    joined: i64,
     def: &Ctx,
     def_owner: &str,
     tray: &mut Tray,
     rolls: &mut Vec<Roll>,
 ) -> i64 {
     let bypass = bypass.max(0);
-    if pool.max(0) + bypass > 0 && def.regeneration && def.regen_most_note && def.regen_names[0] == "regeneration" {
-        say_rule(tray, "ignore", def.side, || format!("{def_owner} — Regeneration: most models carry it, so a joined hero without it does not switch it off"));
+    if pool.max(0) + bypass > 0 && def.regeneration && !def.regen_most_name.is_empty() {
+        say_rule(tray, "ignore", def.side, || format!("{def_owner} — {}: most models carry it, so a joined hero without it does not switch it off", def.regen_most_name));
     }
     if !def.groups_valid() {
         // One group: its own name when the static stamp holds exactly one, else a granted Regeneration (the Aura / Medical Training forms).
@@ -2265,11 +2309,15 @@ pub(crate) fn ignore_batch(
         };
         if name == "regeneration" && bypass > 0 {
             say_rule(tray, "ignore", def.side, || format!("{def_owner}: {bypass} wound{} ignore Regeneration — no regeneration roll", if bypass == 1 { "" } else { "s" }));
+        } else if !name.is_empty() && name != "regeneration" && joined > 0 {
+            // a bypass weapon at a group not named Regeneration: its wounds join the pool and the group still rolls them
+            say_rule(tray, "ignore", def.side, || format!("{def_owner}: {joined} wound{} ignore only Regeneration — {} still rolls", if joined == 1 { "" } else { "s" }, display_ignore_name(name)));
         }
         return bypass + roll_ignore_group(pool, def.regen_target, name, def, def_owner, tray, rolls);
     }
-    let display = |n: &str| match n { "regeneration" => "Regeneration".to_string(), "self-repair" => "Self-Repair".to_string(), "resistance" => "Resistance".to_string(), o => o.to_string() };
-    let others: Vec<String> = def.regen_groups.iter().zip(def.regen_names).enumerate().filter(|(i, (t, _))| *i > 0 && **t > 0).map(|(_, (_, n))| display(n)).collect();
+    let others: Vec<String> = def.regen_groups.iter().zip(def.regen_names).enumerate().filter(|(i, (t, _))| *i > 0 && **t > 0).map(|(_, (_, n))| display_ignore_name(n)).collect();
+    // no group named Regeneration: the bypass wounds that already joined the pool are the ones the first group announces
+    let announce = if def.regen_groups[0] > 0 { bypass } else { joined };
     let mut pool = pool.max(0);
     let mut joined = false;
     for (slot, (&target, name)) in def.regen_groups.iter().zip(def.regen_names).enumerate() {
@@ -2282,8 +2330,8 @@ pub(crate) fn ignore_batch(
             }
         } else if !joined {
             joined = true;
-            if bypass > 0 {
-                say_rule(tray, "ignore", def.side, || format!("{def_owner}: {bypass} wound{} ignore only Regeneration — {} still rolls", if bypass == 1 { "" } else { "s" }, others.join(" and ")));
+            if announce > 0 {
+                say_rule(tray, "ignore", def.side, || format!("{def_owner}: {announce} wound{} ignore only Regeneration — {} still rolls", if announce == 1 { "" } else { "s" }, others.join(" and ")));
             }
             pool += bypass;
         }
@@ -2319,7 +2367,7 @@ pub fn retaliate_saves_with_tray(
     let unsaved =
         save_batch(&ShootProfile::default(), def, def_owner, hits, save_def, 0, false, false, 1, false, tray, &mut sub);
     rolls.extend(sub.rolls);
-    let landed = regen_batch(unsaved, def, def_owner, tray, rolls);
+    let landed = regen_batch(unsaved, 0, def, def_owner, tray, rolls);
     (unsaved, landed)
 }
 
@@ -2687,7 +2735,7 @@ pub fn resolve_melee_leg_wipe(
             owner: sh.owner.into(),
         });
         out.caused += w;
-        out.wounds += regen_batch(w, def, def_owner, tray, &mut out.rolls);
+        out.wounds += regen_batch(w, 0, def, def_owner, tray, &mut out.rolls);
     }
     // MEL-12 (`EPOCH_73_V36`) — Regenerative Strength's banked tokens: one die
     // per token, each 4+ a DIRECT wound (no hit roll, no save; Regeneration
@@ -2705,12 +2753,14 @@ pub fn resolve_melee_leg_wipe(
         out.log.push(format!(
             "Regenerative Strength: {} rolls {} dice, {} wounds", sh.owner, n, w));
         out.caused += w;
-        out.wounds += regen_batch(w, def, def_owner, tray, &mut out.rolls);
+        out.wounds += regen_batch(w, 0, def, def_owner, tray, &mut out.rolls);
     }
     // (3) the strikes :6060-6148. `regenable`/`regen_proof` are the PHASE's, not
     //     the member's — the table declares them before the group loop and lands
     //     them once after it (:6161).
     let (mut regenable, mut regen_proof) = (0i64, 0i64);
+    // the wounds of bypass weapons that JOINED the pool (the target has no group named Regeneration): the table's `ignore only Regeneration` line counts them
+    let mut regen_joined = 0i64;
     // Wave 3 — Grounded Precision's melee half names itself once per member
     // (rules-must-log, the volley's own flag shape).
     let mut gp_fired: Vec<(&str, i64)> = Vec::new();
@@ -3081,13 +3131,13 @@ pub fn resolve_melee_leg_wipe(
             // volley seam: the registry-driven weapon-rule bypass joins the
             // SAME union (the table's arm is reach-blind, main.gd:7133-7137).
             let disintegrate_regen = !p.regen_bypass_rule.is_empty();
-            let ignores_regen = (p.bypass_regen
+            let bypass_flag = p.bypass_regen
                 || p.rending
                 || p.unstoppable
                 || sh.att.rending_grant
                 || sh.att.unstoppable_regen_melee
-                || disintegrate_regen)
-                && def.bypass_skips_ignore();
+                || disintegrate_regen;
+            let ignores_regen = bypass_flag && def.bypass_skips_ignore();
             // Rules-must-log: the refusal names the rule, the volley fold's
             // twin (main.gd:7175-7176). DAT-16b: same target gate as the ranged
             // leg — from 73 only a real Regeneration roll is named.
@@ -3111,15 +3161,21 @@ pub fn resolve_melee_leg_wipe(
                 // Tray-exact S9 — the melee twin of S7 (Takedown Strike included, main.gd:7275-7283):
                 // w x max(Deadly, 1) through the pick's Regeneration, one model, overkill lost.
                 let td = w * p.deadly.max(1);
-                out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, def, def_owner, tray, &mut out.rolls));
+                out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, if bypass_flag && !ignores_regen { td } else { 0 }, def, def_owner, tray, &mut out.rolls));
                 out.deadly_tally += w;
             } else if deadly_per_model && p.deadly > 0 {
-                push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, def, def_owner, tray);
+                push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, def_owner, tray);
                 out.deadly_tally += w;
             } else if ignores_regen {
                 regen_proof += w;
             } else {
                 regenable += w;
+                if bypass_flag {
+                    regen_joined += w;
+                }
+            if bypass_flag {
+                regen_joined += w;
+            }
             }
         }
     }
@@ -3161,7 +3217,7 @@ pub fn resolve_melee_leg_wipe(
     if pool_lands_on_dead {
         out.log.push(format!("Regeneration: {def_owner} is already destroyed by the Deadly wounds - no ignore roll for the other wounds"));
     }
-    out.wounds += if pool_lands_on_dead { regen_proof + regenable } else { ignore_batch(regenable, regen_proof, def, def_owner, tray, &mut out.rolls) };
+    out.wounds += if pool_lands_on_dead { regen_proof + regenable } else { ignore_batch(regenable, regen_proof, regen_joined, def, def_owner, tray, &mut out.rolls) };
     // MEL-10r — a wound Regeneration cancels is not TAKEN: the 73 tally counts what landed.
     out.taken = if tally_post_regen { out.wounds + out.deadly_tally } else { out.caused };
     out
@@ -3306,7 +3362,7 @@ pub fn impact_saves_with_tray(
         },
         ..*def
     };
-    out.wounds = regen_batch(w, regen_def, def_owner, tray, &mut out.rolls);
+    out.wounds = regen_batch(w, 0, regen_def, def_owner, tray, &mut out.rolls);
     out
 }
 
@@ -3358,7 +3414,7 @@ pub fn resolve_breath_attack_with_tray(
     let bare = ShootProfile { ap, ..Default::default() };
     let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), ap, false, false, 1, false, tray, &mut out);
     out.caused = w;
-    out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
+    out.wounds = regen_batch(w, 0, def, def_owner, tray, &mut out.rolls);
     out
 }
 
@@ -3383,11 +3439,11 @@ pub fn resolve_spell_hits_with_tray(
     out.caused = w;
     if deadly > 0 {
         let first = out.deadly_groups.len();
-        push_deadly_groups(&mut out, w, deadly.max(1), bypass, &spell_def, def_owner, tray);
+        push_deadly_groups(&mut out, w, deadly.max(1), bypass, ignores_regen, &spell_def, def_owner, tray);
         out.deadly_lines.push((spell_name.into(), w, deadly.max(1), out.deadly_groups.len() - first));
         out.deadly_tally = w;
     } else {
-        out.wounds = ignore_batch(if bypass { 0 } else { w }, if bypass { w } else { 0 }, &spell_def, def_owner, tray, &mut out.rolls);
+        out.wounds = ignore_batch(if bypass { 0 } else { w }, if bypass { w } else { 0 }, if ignores_regen && !bypass { w } else { 0 }, &spell_def, def_owner, tray, &mut out.rolls);
     }
     out
 }
@@ -3407,7 +3463,7 @@ pub fn resolve_storm_hits_with_tray(
     let bare = ShootProfile { ap, bane, ..Default::default() };
     let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), ap, shred_grant, false, 1, false, tray, &mut out);
     out.caused = w;
-    out.wounds = if bane { w } else { regen_batch(w, def, def_owner, tray, &mut out.rolls) };
+    out.wounds = if bane { w } else { regen_batch(w, 0, def, def_owner, tray, &mut out.rolls) };
     out
 }
 

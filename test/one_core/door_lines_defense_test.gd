@@ -32,9 +32,10 @@ func after_test() -> void:
 	_runner = null
 
 
-func _same(label: String, shooter: Dictionary, target: Dictionary, prefix: String, min_fired := 1) -> void:
-	var r := await DoorLines.compare(_main, shooter, target, prefix, SEEDS, ProjectSettings.globalize_path(DICE))
-	print("DOOR_LINES %s fired=%d/%d mismatches=%d" % [label, r["fired"], SEEDS, (r["bad"] as Array).size()])
+func _same(label: String, shooter: Dictionary, target: Dictionary, prefix: String, min_fired := 1, opts := {}) -> void:
+	var r := await DoorLines.compare(_main, shooter, target, prefix, SEEDS, ProjectSettings.globalize_path(DICE), opts)
+	print("DOOR_LINES %s fired=%d/%d mismatches=%d state_bad=%d" % [label, r["fired"], SEEDS, (r["bad"] as Array).size(), r["state_bad"]])
+	assert_int(int(r["state_bad"])).override_failure_message("%s: the end states differ, the lines are compared over a pair the door must not take" % label).is_equal(0)
 	assert_int(int(r["fired"])).override_failure_message("%s: the rule never fired on the table, nothing is compared" % label).is_greater_equal(min_fired)
 	assert_array(r["bad"]).override_failure_message("%s: the door's lines differ from the table's:\n%s" % [label, "\n".join((r["bad"] as Array).slice(0, 4))]).is_empty()
 
@@ -95,3 +96,39 @@ func test_the_regeneration_group_names_its_roll_and_the_bypass() -> void:
 	await _same("regeneration", _striker([], []), DoorLines.entry("Ranks", 10, ["Regeneration"], [], "battle_brothers", 0), "Ranks rolls", 6)
 	await _same("regeneration aura", _striker([], []), DoorLines.entry("Ranks", 10, ["Regeneration Aura"], [], "alien_hives", 0), "Ranks rolls", 6)
 	await _same("bypass", _striker(["Bane"], []), DoorLines.entry("Ranks", 10, ["Regeneration"], [], "battle_brothers", 0), "Ranks:", 6)
+
+
+func _ignorer(rules: Array, faction: String, system := "gf") -> Dictionary:
+	var e := DoorLines.entry("Ranks", 10, rules, [], faction, 0)
+	(e["unit"] as OPRApiClient.OPRUnit).game_system = system
+	e["system"] = system
+	return e
+
+
+## The other wound-ignore groups name their roll the way the table spells it (the rule's own name, "self-repair" / "resistance" in lower case), and a
+## bypass weapon (Bane / Rending) at a group not named Regeneration names the "ignore only Regeneration - X still rolls" line, the count of the
+## bypass wounds that joined the pool. The aliases with a distance gate, a terrain condition or a once-per-game latch stay refused by name.
+func test_the_other_ignore_groups_name_their_roll() -> void:
+	await _same("self-repair", _striker([], []), _ignorer(["Self-Repair"], "robot_legions"), "Ranks rolls", 6)
+	await _same("enhanced self-repair", _striker([], []), _ignorer(["Self-Repair", "Enhanced Self-Repair"], "robot_legions"), "Ranks rolls", 6)
+	await _same("resistance", _striker([], []), _ignorer(["Resistance"], "alien_hives"), "Ranks rolls", 6)
+	await _same("plaguebound", _striker([], []), _ignorer(["Plaguebound"], "plague_disciples"), "Ranks rolls", 6)
+	await _same("enhanced plaguebound", _striker([], []), _ignorer(["Plaguebound", "Enhanced Plaguebound"], "plague_disciples"), "Ranks rolls", 6)
+	await _same("protected", _striker([], []), _ignorer(["Protected"], "plague_disciples"), "Ranks rolls", 6)
+	await _same("cursed undead", _striker([], []), _ignorer(["Cursed Undead"], "vampiric_undead", "aof"), "Ranks rolls", 6)
+	await _same("self-repair vs bane", _striker(["Bane"], []), _ignorer(["Self-Repair"], "robot_legions"), "Ranks:", 6)
+	await _same("plaguebound vs bane", _striker(["Bane"], []), _ignorer(["Plaguebound"], "plague_disciples"), "Ranks:", 6)
+	await _same("regeneration + self-repair vs bane", _striker(["Bane"], []), _ignorer(["Regeneration", "Self-Repair"], "robot_legions"), "Ranks:", 6)
+
+
+## The distance-gated ignore rule (Warding / Knightborn / Angelic Blessing: 6+ only when shot from over 9 in) says its verdict once per volley, under the
+## name "Warding": the ignore when the gate is open, the refusal when the shooter is within it; the roll lines follow when it rolled.
+func test_the_gated_ignore_rule_says_its_verdict() -> void:
+	for far in [14.0, 5.0]:
+		var label := "knightborn at %d in" % int(far)
+		await _same(label, _striker([], []), _ignorer(["Knightborn"], "knight_brothers"), "Warding:", 6, {"distance_in": far})
+		if far > 9.0:
+			await _same(label + " (roll)", _striker([], []), _ignorer(["Knightborn"], "knight_brothers"), "Ranks rolls", 6, {"distance_in": far})
+	await _same("warding at 14 in", _striker([], []), _ignorer(["Warding"], "knight_brothers"), "Warding:", 6, {"distance_in": 14.0})
+	await _same("angelic blessing at 14 in", _striker([], []), _ignorer(["Angelic Blessing"], "kingdom_of_angels", "aof"), "Warding:", 6, {"distance_in": 14.0})
+	await _same("knightborn vs bane at 14 in", _striker(["Bane"], []), _ignorer(["Knightborn"], "knight_brothers"), "Ranks:", 6, {"distance_in": 14.0})
