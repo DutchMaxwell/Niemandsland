@@ -53,7 +53,8 @@ fn input_of(v: &Variant) -> Option<Input> {
             kind: plain::int(&field("kind")?),
             shoot: field("shoot").map(|s| plain::text(&s)).filter(|s| !s.is_empty()),
             split: Some(split_of(field("split"))?).filter(|l| !l.is_empty()),
-            charge: None, // P4.D-46: the table sends no charge yet (P4.D-48)
+            // P4.D-48: a CHARGE names its target by roster key (`charge`); absent or "" = none (the core refuses a charge without one).
+            charge: field("charge").map(|s| plain::text(&s)).filter(|s| !s.is_empty()),
         },
         "faces" => Input::Faces(plain::any_array(&field("faces")?).iter_shared().map(|f| plain::int(&f).clamp(0, 6) as u8).collect()),
         // P4.0-5: `{"t": "choice", "id": ..., "option": ...}`; an empty/absent `option` asks the core.

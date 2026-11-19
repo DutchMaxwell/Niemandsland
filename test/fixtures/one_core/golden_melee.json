@@ -73,7 +73,7 @@
     "COMBAT|Melee result: Att took 2, Def took 1 — Att loses the melee",
     "COMBAT|AI (Att): 4 → passed (4+)",
     "COMBAT|Att passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "scenario": "plain",
    "seed": 17
@@ -112,7 +112,7 @@
     "COMBAT|Melee result: Att took 3, Def took 1 — Att loses the melee",
     "COMBAT|AI (Att): 1 → failed (4+)",
     "COMBAT|Att fails morale — Shaken",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "scenario": "plain",
    "seed": 49
@@ -143,7 +143,7 @@
     "COMBAT|Att saves on 4+",
     "COMBAT|AI (Att) defends: 6 6 5 5 4 → 5 blocks (4+)",
     "COMBAT|Melee result: Att took 0, Def took 0 — a draw — no morale test",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "scenario": "plain",
    "seed": 225
@@ -178,7 +178,7 @@
     "COMBAT|Melee result: Att took 0, Def took 6 — Def loses the melee",
     "COMBAT|AI (Def): 6 → passed (4+)",
     "COMBAT|Def passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "scenario": "ap",
    "seed": 0
@@ -217,7 +217,7 @@
     "COMBAT|Melee result: Att took 3, Def took 2 — Att loses the melee",
     "COMBAT|AI (Att): 5 → passed (4+)",
     "COMBAT|Att passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "scenario": "ap",
    "seed": 17
@@ -256,7 +256,7 @@
     "COMBAT|Melee result: Att took 3, Def took 1 — Att loses the melee",
     "COMBAT|AI (Att): 1 → failed (4+)",
     "COMBAT|Att fails morale — Shaken",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "scenario": "ap",
    "seed": 49
@@ -287,7 +287,7 @@
     "COMBAT|Att saves on 4+",
     "COMBAT|AI (Att) defends: 6 6 5 5 4 → 5 blocks (4+)",
     "COMBAT|Melee result: Att took 0, Def took 0 — a draw — no morale test",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "scenario": "ap",
    "seed": 225
@@ -416,7 +416,7 @@
     "COMBAT|Melee result: Att took 1, Def took 6 — Def loses the melee",
     "COMBAT|AI (Def): 6 → passed (4+)",
     "COMBAT|Def passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "scenario": "impact",
    "seed": 49
@@ -523,7 +523,7 @@
     "COMBAT|Att takes 1 wound (9/10)",
     "COMBAT|Att loses a model (9/10)",
     "COMBAT|Melee result: Att took 1, Def took 1 — a draw — no morale test",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "scenario": "furious",
    "seed": 17
@@ -562,7 +562,7 @@
     "COMBAT|Melee result: Att took 3, Def took 1 — Att loses the melee",
     "COMBAT|AI (Att): 1 → failed (4+)",
     "COMBAT|Att fails morale — Shaken",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "scenario": "furious",
    "seed": 49
@@ -593,7 +593,7 @@
     "COMBAT|Att saves on 4+",
     "COMBAT|AI (Att) defends: 6 6 5 5 4 → 5 blocks (4+)",
     "COMBAT|Melee result: Att took 0, Def took 0 — a draw — no morale test",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "scenario": "furious",
    "seed": 225
@@ -633,7 +633,7 @@
     "COMBAT|Melee result: Att took 2, Def took 1 — Att loses the melee",
     "COMBAT|AI (Att): 2 → failed (4+)",
     "COMBAT|Att fails morale — Shaken",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "scenario": "counter",
    "seed": 0
@@ -673,7 +673,7 @@
     "COMBAT|Melee result: Att took 1, Def took 3 — Def loses the melee",
     "COMBAT|AI (Def): 4 → passed (4+)",
     "COMBAT|Def passes morale",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "scenario": "counter",
    "seed": 17
@@ -713,7 +713,7 @@
     "COMBAT|Melee result: Att took 1, Def took 3 — Def loses the melee",
     "COMBAT|AI (Def): 1 → failed (4+)",
     "COMBAT|Def fails morale — Shaken",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "scenario": "counter",
    "seed": 49
@@ -745,7 +745,7 @@
     "COMBAT|Def saves on 4+",
     "COMBAT|AI (Def) defends: 6 6 5 5 4 → 5 blocks (4+)",
     "COMBAT|Melee result: Att took 0, Def took 0 — a draw — no morale test",
-    "COMBAT|Consolidation: Att moves back 1\" (the charger separates — GF 3.6)"
+    "COMBAT|Consolidation: Att stays put (no legal spot to move back 1\" — GF 3.6)"
    ],
    "scenario": "counter",
    "seed": 225

@@ -100,6 +100,35 @@ mod charge_step {
         (hit, struck_back, impact)
     }
 
+    /// P4.D-48: the header's search seams may carry `movement` OFF (the table's step seams come from them); a stepped charge
+    /// still moves, snaps and fights exactly as with it ON. RED: drop the CHARGE override in `step_activation` -> a fightless
+    /// `Done` with the charger where it stood.
+    #[test]
+    fn a_stepped_charge_moves_with_the_header_movement_seam_off() {
+        let (st, statics) = scene(2, &[], 2);
+        let board = clear_board();
+        let charge = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("p2_0_b".into()) };
+        let off = Seams { movement: false, plain_only: true, ..seams() };
+        for seed in 0..16i64 {
+            let run = |s: Seams| {
+                let (mut t, mut dice) = (vec![Input::Begin, charge.clone()], Tray::seeded(seed));
+                dice.set_zero_draws(true);
+                loop {
+                    match step_activation(&statics, &st, "p1_0_a", &board, s, &t, true) {
+                        ActStep::NeedRoll { faces: n, .. } => t.push(Input::Faces(dice.roll(n))),
+                        ActStep::Done { state, lines, .. } => break (state, lines),
+                        other => panic!("seed {seed}: {other:?}"),
+                    }
+                }
+            };
+            let (want, want_lines) = run(seams());
+            let (got, got_lines) = run(off);
+            assert!(want.positions[0] != st.positions[0], "seed {seed}: the charge did not move");
+            assert_eq!(got, want, "seed {seed}: end state with the movement seam off");
+            assert_eq!(got_lines, want_lines, "seed {seed}: lines");
+        }
+    }
+
     /// RED (proved by hand): drop `charge` from the step path's `Action` (no move, no strike), or replace the last face group
     /// of a charge with sixes (the strike leg reads other faces): every case below fails.
     #[test]

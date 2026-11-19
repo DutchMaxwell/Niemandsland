@@ -13302,13 +13302,21 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 				"Pull back 1\": drag %s back from the melee (%s) — the game waits." % [charger.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger))],
 				"✓ Pulled back")
 			return
+		var before_pos: Array = solo_controller.chain_positions(charger)
 		var dang: int = solo_controller.separate_from_melee(charger, solo_controller.unit_centre(defender))
+		# The placement gate may hand every model back to its start (a dense rank has no legal end spot): the
+		# line and the glide follow what the models really did, not the route the executor published.
+		var stepped: bool = solo_controller.chain_moved_since(charger, before_pos)
 		solo_controller.record_decision({"kind": "separate", "unit": charger.get_name(),
 			"rule": "%s consolidation: the charger moves back 1\" when neither unit was destroyed" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger)),
-			"candidates": [], "chosen": "", "why": "mandatory separation", "data": {"back_in": 1.0}})
+			"candidates": [], "chosen": "", "why": "mandatory separation", "data": {"back_in": 1.0, "moved": stepped}})
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "Consolidation: %s moves back 1\" (the charger separates — %s)" % [charger.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger))], true)
-		await _solo_animate_move(solo_controller.last_move_paths, false)   # NML-208: always glides
+			if stepped:
+				battle_log.log_event(BattleLog.Category.COMBAT, "Consolidation: %s moves back 1\" (the charger separates — %s)" % [charger.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger))], true)
+			else:
+				battle_log.log_event(BattleLog.Category.COMBAT, "Consolidation: %s stays put (no legal spot to move back 1\" — %s)" % [charger.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger))], true)
+		if stepped:
+			await _solo_animate_move(solo_controller.last_move_paths, false)   # NML-208: always glides
 		if dang > 0:
 			await _run_ai_dangerous(charger, dang)
 		_solo_flush_dev()
@@ -13317,18 +13325,22 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 		return   # both sides wiped — nobody left to consolidate
 	var survivor: GameUnit = charger if charger_alive else defender
 	if _solo_is_ai_unit(survivor) or auto:
+		var win_before: Array = solo_controller.chain_positions(survivor)
 		var dang2: int = solo_controller.consolidate_after_melee_win(survivor)
+		# "Moved" is what the models did: the executor publishes a route even when the placement gate hands
+		# every model back to its start (a dense rank has no legal end spot).
+		var consolidated: bool = not solo_controller.last_move_paths.is_empty() and solo_controller.chain_moved_since(survivor, win_before)
 		if battle_log != null:
 			# The rule is applied even when the survivor has nowhere to go: then it just holds its
 			# ground, but it still consolidates — so the event must log either way (house rule: every
 			# applied rule logs). A missing line here stalled the Game School S-06 consolidation step.
-			if solo_controller.last_move_paths.is_empty():
+			if not consolidated:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"Consolidation: %s holds its ground (enemy destroyed, no room to move — %s)" % [survivor.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(survivor))], true)
 			else:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"%s consolidates up to 3\" (enemy destroyed — %s)" % [survivor.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(survivor))], true)
-		if not solo_controller.last_move_paths.is_empty():
+		if consolidated:
 			await _solo_animate_move(solo_controller.last_move_paths, false)   # NML-208: always glides
 		if dang2 > 0:
 			await _run_ai_dangerous(survivor, dang2)

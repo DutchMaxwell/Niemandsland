@@ -24,12 +24,12 @@ human_shoot TOTAL 326 4
 melee_charge scripts/main.gd:_run_ai_melee 190 1
 melee_charge scripts/main.gd:_run_human_melee 106 1
 melee_charge scripts/main.gd:_solo_charge_impact 82 4
-melee_charge scripts/main.gd:_solo_consolidate_melee 81 2
+melee_charge scripts/main.gd:_solo_consolidate_melee 93 2
 melee_charge scripts/main.gd:_solo_log_melee_result 40 2
 melee_charge scripts/main.gd:_solo_melee_strike_phase 434 6
 melee_charge scripts/main.gd:_solo_parry_strike 28 1
 melee_charge scripts/main.gd:_solo_retreating_strike 35 2
-melee_charge TOTAL 996 19
+melee_charge TOTAL 1008 19
 planner scripts/solo/ai_planner.gd 1824 7
 planner scripts/solo/ai_position.gd 400 1
 planner scripts/solo/ai_spell.gd 633 4
@@ -49,4 +49,4 @@ planner_tag test_only 9 54
 planner_tag tools_only 71 1027
 planner_tag tree 27 536
 planner_tag TOTAL 354 6033
-TABLE LINES LEFT: 11523
+TABLE LINES LEFT: 11535

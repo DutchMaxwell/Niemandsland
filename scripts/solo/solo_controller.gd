@@ -5870,6 +5870,26 @@ func separate_from_melee(charger: GameUnit, defender_centre: Vector3) -> int:
 	return _move_away(charger, defender_centre, MELEE_SEPARATION_IN)
 
 
+## Where the unit's models (host + joined heroes) stand now — the "before" of `chain_moved_since`.
+func chain_positions(unit: GameUnit) -> Array:
+	return _positions_of(_moving_models(unit))
+
+
+## True when any model of the unit's chain stands somewhere else than in `before` (taken with `chain_positions`;
+## the move executor's own 0.0005 m "nothing moved" threshold). `_execute_move` publishes its route in
+## `last_move_paths` even when the placement gate then hands every model back to its start (a dense rank has no
+## legal end spot for the per-model flow), so "a route was published" does not mean "the unit moved": the
+## consolidation log reads this instead and says what really happened.
+func chain_moved_since(unit: GameUnit, before: Array) -> bool:
+	var now := _positions_of(_moving_models(unit))
+	if now.size() != before.size():
+		return true
+	for i in range(now.size()):
+		if ((now[i] as Vector3) - (before[i] as Vector3)).length() > 0.0005:
+			return true
+	return false
+
+
 ## Winner consolidation (GF Advanced Rules v3.5.1 p.9: the enemy unit was destroyed in melee → the survivor
 ## "may move by up to 3”") — round 7, finding 4. A MAY, so the AI takes it when it helps: EV-aware goal =
 ## the nearest objective this side doesn't control (seize-range progress wins games), else the nearest
@@ -5901,6 +5921,7 @@ func consolidate_after_melee_win(unit: GameUnit) -> int:
 			return 0
 		goal = unit_centre(enemy)
 		why = "toward next target"
+	var before := chain_positions(unit)
 	var dang := _move_toward(unit, goal, CONSOLIDATION_WIN_IN, false)
 	ai_slot = prev_ai
 	human_slot = prev_human
@@ -5908,7 +5929,7 @@ func consolidate_after_melee_win(unit: GameUnit) -> int:
 	record_decision({"kind": "consolidate", "unit": unit.get_name(),
 		"rule": "%s consolidation: enemy destroyed in melee — the survivor may move up to 3\"" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit)),
 		"candidates": [], "chosen": why, "why": "melee winner consolidation",
-		"data": {"band_in": CONSOLIDATION_WIN_IN}})
+		"data": {"band_in": CONSOLIDATION_WIN_IN, "moved": chain_moved_since(unit, before)}})
 	return dang
 
 

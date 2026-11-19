@@ -1329,8 +1329,9 @@ pub struct MoveRules {
 impl MoveRules {
 /// Apply the same snap to the simulator's surviving models, after movement hazards.
 /// #183 (`EPOCH_77_CHARGE_CAP`): `snap_charge_state` with each mover's own trail length (`Landing::arcs`, movers order).
+/// Answers the snap and how many models stayed at their band (the table's `last_snap_stayed`).
 pub(crate) fn snap_charge_state_per_model(self, state: &mut State, si: usize, ci: usize, arcs: &[f64], band_in: f64,
-    hero_attach: bool) -> Option<f64> {
+    hero_attach: bool) -> Option<(f64, usize)> {
     let (mut from, mut to) = (movers_of(state, si), movers_of(state, ci));
     if !hero_attach { from.retain(|m| m.unit == si); to.retain(|m| m.unit == ci); }
     let (snap, delta, moving) = ChargePose { state, positions: &[] }.snap_per_model(&from, &to, arcs, band_in)?;
@@ -1338,7 +1339,7 @@ pub(crate) fn snap_charge_state_per_model(self, state: &mut State, si: usize, ci
         state.positions[m.unit][m.model] = geom::to_f64(geom::add(pos_of(state, *m), delta));
     }
     state.moved_round[si] = state.round;
-    Some(snap)
+    Some((snap, moving.iter().filter(|m| !**m).count()))
 }
 
 pub(crate) fn snap_charge_state(self, state: &mut State, si: usize, ci: usize,
