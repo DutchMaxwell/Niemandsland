@@ -3,7 +3,7 @@
 //! `activation::step_activation` rules; the answer comes out as a plain dict (lines and landings included).
 //! The seams are the Godot binding's `seams_for_step`; positions cross the seam through f32, as a Godot
 //! `Vector3` does, so the same transcript gives the same answer on both seams.
-use nmlcore::activation::{delta_of, step_activation, ActStep, Input};
+use nmlcore::activation::{delta_of, step_activation, ActStep, CastInput, Input};
 use nmlcore::acts::Knobs;
 use nmlcore::io::Seams;
 use nmlcore::landing::Landing;
@@ -50,6 +50,60 @@ fn option_of(v: Option<&Value>) -> Option<String> {
     }
 }
 
+/// A cast's text list (`targets`, `conduit_shaken`): absent or null = none; any other shape is not understood.
+fn texts_of(v: Option<&Value>) -> Option<Vec<String>> {
+    match v {
+        None | Some(Value::Null) => Some(Vec::new()),
+        Some(Value::Array(a)) => a.iter().map(|s| s.as_str().map(str::to_string)).collect(),
+        Some(_) => None,
+    }
+}
+
+/// A cast's payers, `[[unit key, tokens]..]` in spend order: absent or null = none; any other shape is not understood.
+fn payers_of(v: Option<&Value>) -> Option<Vec<(String, i64)>> {
+    match v {
+        None | Some(Value::Null) => Some(Vec::new()),
+        Some(Value::Array(a)) => a.iter().map(|p| match p.as_array()?.as_slice() { [k, n] => Some((k.as_str()?.to_string(), int(n)?)), _ => None }).collect(),
+        Some(_) => None,
+    }
+}
+
+/// A cast's interference pools as `CastInput` holds them: per foe slot its payers.
+type Pools = Vec<(i64, Vec<(String, i64)>)>;
+
+/// A cast's interference pools, `[[foe slot, payers]..]`: absent or null = none; any other shape is not understood.
+fn pools_of(v: Option<&Value>) -> Option<Pools> {
+    match v {
+        None | Some(Value::Null) => Some(Vec::new()),
+        Some(Value::Array(a)) => a.iter().map(|p| match p.as_array()?.as_slice() { [slot, list] => Some((int(slot)?, payers_of(Some(list))?)), _ => None }).collect(),
+        Some(_) => None,
+    }
+}
+
+/// CC-4: `{"t": "cast", ..}`, one planned cast. `seq`, `caster`, `spell`, `targets`, `base` and `threshold` are required; the
+/// token and conduit lists, `once` and `open` default to none / false when absent. A present field of the wrong shape is not
+/// understood (a refusal, never a default in disguise). The Godot seam's `cast_of` reads the same fields.
+fn cast_of(o: &serde_json::Map<String, Value>) -> Option<CastInput> {
+    let (num, text, flag) = (|k: &str| o.get(k).map_or(Some(0), int), |k: &str| o.get(k).map_or(Some(String::new()), |v| v.as_str().map(str::to_string)), |k: &str| o.get(k).map_or(Some(false), Value::as_bool));
+    Some(CastInput {
+        seq: int(o.get("seq")?)?,
+        caster: o.get("caster")?.as_str()?.to_string(),
+        spell: o.get("spell")?.as_str()?.to_string(),
+        targets: texts_of(Some(o.get("targets")?))?,
+        base: int(o.get("base")?)?,
+        threshold: int(o.get("threshold")?)?,
+        boost: num("boost")?,
+        boost_sources: payers_of(o.get("boost_sources"))?,
+        interference: num("interference")?,
+        interference_sources: payers_of(o.get("interference_sources"))?,
+        conduit: text("conduit")?,
+        conduit_shaken: texts_of(o.get("conduit_shaken"))?,
+        pools: pools_of(o.get("pools"))?,
+        once: flag("once")?,
+        open: flag("open")?,
+    })
+}
+
 fn input_of(v: &Value) -> Option<Input> {
     let o = v.as_object()?;
     Some(match o.get("t")?.as_str()? {
@@ -67,6 +121,7 @@ fn input_of(v: &Value) -> Option<Input> {
             };
             Input::Placed { at, trails }
         }
+        "cast" => Input::Cast(cast_of(o)?),
         _ => return None,
     })
 }
@@ -143,6 +198,52 @@ mod tests {
 
     fn choice(option: Value) -> Option<Input> {
         input_of(&json!({"t": "choice", "id": "wound_alloc:a:b:0", "option": option}))
+    }
+
+    /// A cast input with every field set to a non-default value.
+    fn full_cast() -> Value {
+        json!({
+            "t": "cast", "seq": 2, "caster": "u1", "spell": "Fireball", "targets": ["e1", "e2"], "base": 4, "threshold": 3,
+            "boost": 1, "boost_sources": [["u1", 1]], "interference": 2, "interference_sources": [["f1", 1], ["f2", 1]],
+            "conduit": "u3", "conduit_shaken": ["u4"], "pools": [[1, [["f1", 2], ["f2", 1]]], [0, []]], "once": true, "open": true,
+        })
+    }
+
+    /// CC-4: every field of the cast input reaches the core, in its order. RED: one field not read in `cast_of` -> it
+    /// parses as its default and this equality fails.
+    #[test]
+    fn a_cast_input_keeps_every_field() {
+        let pay = |k: &str, n: i64| (k.to_string(), n);
+        let want = CastInput {
+            seq: 2, caster: "u1".into(), spell: "Fireball".into(), targets: vec!["e1".into(), "e2".into()], base: 4, threshold: 3,
+            boost: 1, boost_sources: vec![pay("u1", 1)], interference: 2, interference_sources: vec![pay("f1", 1), pay("f2", 1)],
+            conduit: "u3".into(), conduit_shaken: vec!["u4".into()], pools: vec![(1, vec![pay("f1", 2), pay("f2", 1)]), (0, vec![])], once: true, open: true,
+        };
+        assert_eq!(input_of(&full_cast()), Some(Input::Cast(want)));
+    }
+
+    /// The optional fields default when absent or null; the required ones do not, and a present field of the wrong shape is
+    /// not understood.
+    #[test]
+    fn a_cast_input_defaults_what_is_optional_and_refuses_what_is_malformed() {
+        let min = json!({"t": "cast", "seq": 0, "caster": "u1", "spell": "Bolt", "targets": ["e1"], "base": 4, "threshold": 1});
+        let want = CastInput { seq: 0, caster: "u1".into(), spell: "Bolt".into(), targets: vec!["e1".into()], base: 4, threshold: 1, ..Default::default() };
+        assert_eq!(input_of(&min), Some(Input::Cast(want.clone())));
+        let mut nulled = min.clone();
+        for k in ["boost_sources", "interference_sources", "pools", "conduit_shaken"] {
+            nulled[k] = Value::Null;
+        }
+        assert_eq!(input_of(&nulled), Some(Input::Cast(want)), "null = absent for the lists");
+        for k in ["seq", "caster", "spell", "targets", "base", "threshold"] {
+            let mut gone = full_cast();
+            gone.as_object_mut().unwrap().remove(k);
+            assert!(input_of(&gone).is_none(), "{k} is required");
+        }
+        for (k, odd) in [("targets", json!("e1")), ("targets", json!([1])), ("boost_sources", json!([["u1"]])), ("boost_sources", json!([["u1", "x"]])), ("interference_sources", json!({"u1": 1})), ("pools", json!([[1]])), ("pools", json!([[1, [["f1"]]]])), ("conduit", json!(3)), ("once", json!("yes")), ("open", json!(1)), ("seq", json!("0")), ("boost", json!([1]))] {
+            let mut bad = full_cast();
+            bad[k] = odd.clone();
+            assert!(input_of(&bad).is_none(), "{k} = {odd}");
+        }
     }
 
     /// The owner's wound-allocation answer reaches the core as the slot list it reads, however the caller spells it; any shape

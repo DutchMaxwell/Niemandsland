@@ -3,7 +3,7 @@
 //! rules; the answer comes out as a plain dictionary (lines and landings included).
 use crate::plain;
 use godot::prelude::*;
-use nml_core::activation::{allowance, begin_check, check_move, delta_of, step_activation, ActStep, Check, Drop, Input};
+use nml_core::activation::{allowance, begin_check, check_move, delta_of, step_activation, ActStep, CastInput, Check, Drop, Input};
 use nml_core::io::{Seams, SplitShot};
 use nml_core::landing::Landing;
 use nml_core::logline::LogLine;
@@ -43,6 +43,54 @@ fn option_of(v: Option<Variant>) -> Option<String> {
     plain::any_array(&v).iter_shared().map(slot).collect::<Option<Vec<_>>>().map(|s| s.join(","))
 }
 
+/// An array's entries; `None` when the value is no array (a refusal, never a silent empty list).
+fn list_of(v: &Variant) -> Option<Vec<Variant>> {
+    matches!(v.get_type(), VariantType::ARRAY | VariantType::PACKED_STRING_ARRAY).then(|| plain::any_array(v).iter_shared().collect())
+}
+
+/// A cast's text list (`targets`, `conduit_shaken`): absent = none, any other shape is not understood.
+fn texts_of(v: Option<Variant>) -> Option<Vec<String>> {
+    v.map_or(Some(Vec::new()), |v| list_of(&v)?.iter().map(|s| s.try_to::<GString>().ok().map(|s| s.to_string())).collect())
+}
+
+/// A cast's payers, `[[unit key, tokens]..]` in spend order: absent = none, any other shape is not understood.
+fn payers_of(v: Option<Variant>) -> Option<Vec<(String, i64)>> {
+    v.map_or(Some(Vec::new()), |v| list_of(&v)?.iter().map(|p| match list_of(p)?.as_slice() { [k, n] => Some((k.try_to::<GString>().ok()?.to_string(), plain::int(n))), _ => None }).collect())
+}
+
+/// A cast's interference pools as `CastInput` holds them: per foe slot its payers.
+type Pools = Vec<(i64, Vec<(String, i64)>)>;
+
+/// A cast's interference pools, `[[foe slot, payers]..]`: absent = none, any other shape is not understood.
+fn pools_of(v: Option<Variant>) -> Option<Pools> {
+    v.map_or(Some(Vec::new()), |v| list_of(&v)?.iter().map(|p| match list_of(p)?.as_slice() { [slot, list] => Some((plain::int(slot), payers_of(Some(list.clone()))?)), _ => None }).collect())
+}
+
+/// CC-4: `{"t": "cast", ..}`, one planned cast, read field for field as the Python seam's `cast_of` does: `seq`, `caster`,
+/// `spell`, `targets`, `base` and `threshold` are required; the token and conduit lists, `once` and `open` default to none /
+/// false when absent. A present field of the wrong shape is not understood (a refusal, never a default in disguise).
+fn cast_of(d: &VarDictionary) -> Option<CastInput> {
+    let text = |k: &str| d.get(k).map_or(Some(String::new()), |v| v.try_to::<GString>().ok().map(|s| s.to_string()));
+    let (num, flag) = (|k: &str| d.get(k).map_or(0, |v| plain::int(&v)), |k: &str| d.get(k).is_some_and(|v| plain::flag(&v)));
+    Some(CastInput {
+        seq: plain::int(&d.get("seq")?),
+        caster: d.get("caster")?.try_to::<GString>().ok()?.to_string(),
+        spell: d.get("spell")?.try_to::<GString>().ok()?.to_string(),
+        targets: texts_of(Some(d.get("targets")?))?,
+        base: plain::int(&d.get("base")?),
+        threshold: plain::int(&d.get("threshold")?),
+        boost: num("boost"),
+        boost_sources: payers_of(d.get("boost_sources"))?,
+        interference: num("interference"),
+        interference_sources: payers_of(d.get("interference_sources"))?,
+        conduit: text("conduit")?,
+        conduit_shaken: texts_of(d.get("conduit_shaken"))?,
+        pools: pools_of(d.get("pools"))?,
+        once: flag("once"),
+        open: flag("open"),
+    })
+}
+
 fn input_of(v: &Variant) -> Option<Input> {
     let d = v.try_to::<VarDictionary>().ok()?;
     let field = |k: &str| d.get(k);
@@ -67,6 +115,7 @@ fn input_of(v: &Variant) -> Option<Input> {
                 Some(t) => plain::any_array(&t).iter_shared().map(|m| plain::any_array(&m).iter_shared().map(|p| p.try_to::<Vector2>().ok().map(|p| [p.x as f64, p.y as f64])).collect::<Option<Vec<_>>>()).collect::<Option<Vec<_>>>()?,
             },
         },
+        "cast" => Input::Cast(cast_of(&d)?),
         _ => return None,
     })
 }
