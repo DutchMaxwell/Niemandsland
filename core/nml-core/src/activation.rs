@@ -263,6 +263,30 @@ fn takedown_choice(statics: &[UnitStatic], state: &State, si: usize, shoot: Opti
     Some((id, living.iter().map(|i| format!("slot:{i}")).collect(), owner))
 }
 
+/// CC-5a: the spell kinds the core will resolve (damage; buff and debuff as a modifier or a grant). `utility` stays with the table.
+const CAST_KINDS: [&str; 3] = ["damage", "buff", "debuff"];
+
+/// CC-5a: why one planned cast cannot be taken, `None` when it can. The caster and every target are units of the roster, the caster
+/// holds a spell of that EXACT name, the spell's kind is one the core resolves, and `open` (a foe's owner may still answer) is not
+/// offered while the core has no interference choice.
+fn cast_break(statics: &[UnitStatic], state: &State, c: &CastInput) -> Option<String> {
+    let Some(&ci) = state.roster.index.get(c.caster.as_str()) else { return Some(format!("cast {}: {} is no unit of this game", c.seq, c.caster)) };
+    let caster = &statics[state.roster.profile[ci]];
+    let Some(spell) = caster.spells.iter().find(|s| s.name == c.spell) else { return Some(format!("cast {}: {} has no spell named {}", c.seq, caster.name, c.spell)) };
+    if !CAST_KINDS.contains(&spell.effect_kind.as_str()) {
+        return Some(format!("cast {}: the core does not resolve {} spells yet ({})", c.seq, spell.effect_kind, c.spell));
+    }
+    if let Some(k) = c.targets.iter().find(|k| !state.roster.index.contains_key(k.as_str())) {
+        return Some(format!("cast {}: {k} is no unit of this game (a target of {})", c.seq, c.spell));
+    }
+    c.open.then(|| format!("cast {}: a foe's answer to {} cannot be asked yet", c.seq, c.spell))
+}
+
+/// CC-5a: the first planned cast in the transcript that `cast_break` refuses, as (its input index, the sentence).
+fn cast_check(statics: &[UnitStatic], state: &State, t: &[Input]) -> Option<(usize, String)> {
+    t.iter().enumerate().find_map(|(i, x)| if let Input::Cast(c) = x { cast_break(statics, state, c).map(|why| (i, why)) } else { None })
+}
+
 /// P4.D-20: the ids of the wound-allocation choice (`wound_alloc:<shooter>:<target>:<group>`) start with this.
 const WOUND_ALLOC: &str = "wound_alloc:";
 
@@ -276,8 +300,13 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     if let Err((index, reason)) = order_check(name, t) {
         return ActStep::Refused { index, reason };
     }
-    // CC-3: the core resolves no cast yet. The first one is refused at its own index, before any resolver runs
-    // (so before the Dangerous die and before any token is spent).
+    // CC-5a: the static checks come first, each break with its own sentence at its cast's index. CC-3: the core resolves no
+    // valid cast yet either (CC-5b/5c lift this step by step): the first one is refused at its own index. Both run before any
+    // resolver, so before the Dangerous die and before any token is spent.
+    if let Some((index, reason)) = cast_check(statics, state, t) {
+        return ActStep::Refused { index, reason };
+    }
+    let casts: Vec<CastInput> = t.iter().filter_map(|x| if let Input::Cast(c) = x { Some(c.clone()) } else { None }).collect();
     if let Some(i) = t.iter().position(|x| matches!(x, Input::Cast(_))) {
         return ActStep::Refused { index: i, reason: "casts are not resolved by the core yet".to_string() };
     }
@@ -368,6 +397,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             for (_, id, answer) in &wound {
                 tray.offer_wound_alloc(id.clone(), answer.clone());
             }
+            tray.offer_casts(casts.clone());
             let out = resolve_stochastic_tray_on_board(statics, state, &action, terrain, seams, &mut GodotRng::new(0), tray);
             *reached.borrow_mut() = tray.feed().map(|f| f.wound_choices.clone()).unwrap_or_default();
             out
@@ -1168,7 +1198,7 @@ mod tests {
     /// resolver (no `NeedRoll`, no `Cancelled`, no `Done`). RED: the refusal removed -> the volley runs (`NeedRoll`).
     #[test]
     fn any_cast_is_refused_at_its_index_until_the_core_resolves_casts() {
-        let (st, statics) = volley_line();
+        let (st, statics) = caster_line(); // CC-5a: the cast must pass the static checks to reach this refusal
         let ask = |t: &[Input]| step_activation(&statics, &st, "a", &Terrain::default(), seams(), t, true);
         let why = "casts are not resolved by the core yet";
         for (t, at) in [
@@ -1183,6 +1213,65 @@ mod tests {
         assert!(matches!(ask(&[Begin, cast(0)]), ActStep::Refused { index: 1, reason } if reason == "a cast before the action was declared"));
         // the same transcript without the cast is untouched
         assert!(matches!(ask(&[Begin, intent(HOLD, Some("b"))]), ActStep::NeedRoll { .. }));
+    }
+
+    // ---- CC-5a: the static checks on a planned cast ----
+
+    /// "a" holds a damage spell ("Bolt") and a utility spell ("Mend All"); everything else is `volley_line`'s.
+    fn caster_line() -> (State, Vec<UnitStatic>) {
+        let (st, mut statics) = volley_line();
+        let spell = |name: &str, kind: &str| crate::rules::Spell { name: name.into(), effect_kind: kind.into(), threshold: 1, ..Default::default() };
+        (statics[0].is_caster, statics[0].spells) = (true, vec![spell("Bolt", "damage"), spell("Mend All", "utility")]);
+        (st, statics)
+    }
+
+    fn bolt(seq: i64) -> CastInput {
+        CastInput { seq, caster: "a".into(), spell: "Bolt".into(), targets: vec!["b".into()], ..Default::default() }
+    }
+
+    /// CC-5a: a cast the core cannot take is refused with its OWN sentence at its input's index, and a bad cast behind a good
+    /// one is still found (the checks run before the "not resolved yet" refusal). RED: a check removed -> the case reads the
+    /// "casts are not resolved by the core yet" sentence instead; compared by exact name (`bolt` is not `Bolt`).
+    #[test]
+    fn a_cast_the_core_cannot_take_is_refused_with_its_own_sentence_at_its_index() {
+        let (st, statics) = caster_line();
+        let ask = |t: &[Input]| step_activation(&statics, &st, "a", &Terrain::default(), seams(), t, true);
+        let start = [Begin, intent(HOLD, Some("b"))];
+        for (c, why) in [
+            (CastInput { caster: "zz".into(), ..bolt(0) }, "cast 0: zz is no unit of this game"),
+            (CastInput { spell: "bolt".into(), ..bolt(0) }, "cast 0: a has no spell named bolt"),
+            (CastInput { spell: "Mend All".into(), ..bolt(0) }, "cast 0: the core does not resolve utility spells yet (Mend All)"),
+            (CastInput { targets: vec!["b".into(), "zz".into()], ..bolt(0) }, "cast 0: zz is no unit of this game (a target of Bolt)"),
+            (CastInput { open: true, ..bolt(0) }, "cast 0: a foe's answer to Bolt cannot be asked yet"),
+        ] {
+            let ActStep::Refused { index, reason } = ask(&[&start[..], &[Input::Cast(c.clone())]].concat()) else { panic!("{c:?}") };
+            assert_eq!((index, reason.as_str()), (2, why), "{c:?}");
+        }
+        // a valid cast is still the CC-3 refusal; a bad one BEHIND it is found first, at its own index
+        let ActStep::Refused { index, reason } = ask(&[&start[..], &[Input::Cast(bolt(0))]].concat()) else { panic!("valid") };
+        assert_eq!((index, reason.as_str()), (2, "casts are not resolved by the core yet"));
+        let t = [&start[..], &[Input::Cast(bolt(0)), Input::Cast(CastInput { spell: "Nope".into(), ..bolt(1) })]].concat();
+        assert!(matches!(ask(&t), ActStep::Refused { index: 3, reason } if reason == "cast 1: a has no spell named Nope"));
+    }
+
+    /// CC-5a: the refusal comes before ANY roll. "a" stands in Dangerous terrain, so its activation owes the Dangerous test
+    /// first (the plain transcript asks it); the same transcript with an unknown spell is refused and asks nothing. RED: the
+    /// check moved behind the first draw (only when faces are supplied) -> this transcript asks the Dangerous roll.
+    #[test]
+    fn an_unknown_spell_is_refused_while_a_dangerous_test_is_owed_and_no_roll_is_asked() {
+        use crate::terrain::{CellParams, PlainTerrain, DANGEROUS};
+        let (mut st, statics) = caster_line();
+        st.positions[0] = vec![[4.0 * INCHES_TO_METERS, 0.0, 0.0], [5.0 * INCHES_TO_METERS, 0.0, 0.0]];
+        (st.wounds[0], st.alive[0]) = (vec![1, 1], 2);
+        Rc::make_mut(&mut st.radii)[0] = vec![INCHES_TO_METERS / 2.0; 2];
+        let cells = vec![[16.0, 14.0, DANGEROUS as f64], [16.0, 15.0, DANGEROUS as f64]];
+        let cell_params = CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: INCHES_TO_METERS };
+        let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params });
+        let ask = |t: &[Input]| step_activation(&statics, &st, "a", &board, Seams { dangerous_end_morale: true, ..seams() }, t, true);
+        let start = vec![Begin, intent(HOLD, Some("b"))];
+        assert!(matches!(ask(&start), ActStep::NeedRoll { owner_key, .. } if owner_key == "a"), "fixture: the Dangerous test is owed first");
+        let t = [&start[..], &[Input::Cast(CastInput { spell: "Nope".into(), ..bolt(0) })]].concat();
+        assert!(matches!(ask(&t), ActStep::Refused { index: 2, reason } if reason == "cast 0: a has no spell named Nope"));
     }
 
     // ---- step 12: cancel ----
