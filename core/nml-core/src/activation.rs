@@ -276,21 +276,25 @@ fn cast_break(statics: &[UnitStatic], state: &State, left: &mut [i64], c: &CastI
     if !CAST_KINDS.contains(&spell.effect_kind.as_str()) {
         return Some(format!("cast {}: the core does not resolve {} spells yet ({})", c.seq, spell.effect_kind, c.spell));
     }
+    if c.targets.is_empty() && spell.target_count > 0 {
+        return Some(format!("cast {}: {} has no targets", c.seq, c.spell));
+    }
     if let Some(k) = c.targets.iter().find(|k| !state.roster.index.contains_key(k.as_str())) {
         return Some(format!("cast {}: {k} is no unit of this game (a target of {})", c.seq, c.spell));
     }
     if c.open {
         return Some(format!("cast {}: a foe's answer to {} cannot be asked yet", c.seq, c.spell));
     }
-    if !c.conduit.is_empty() {
-        return Some(format!("cast {}: a cast through a conduit is not resolved by the core yet", c.seq));
+    if let Some(k) = (!c.conduit.is_empty()).then_some(&c.conduit).into_iter().chain(&c.conduit_shaken).find(|k| !state.roster.index.contains_key(k.as_str())) {
+        return Some(format!("cast {}: {k} is no unit of this game (a conduit for {})", c.seq, c.spell));
     }
     // CC-5b: the tokens as the table paid them at plan time: the threshold from the caster, boost and interference from the listed
     // payers, each from what is left after the casts before it. The payers must give exactly the boost / interference named.
     for (what, want, payers) in [("boost", c.boost, &c.boost_sources), ("interference", c.interference, &c.interference_sources)] {
-        let given: i64 = payers.iter().map(|p| p.1).sum();
-        if given != want {
-            return Some(format!("cast {}: {} has {what} {want} but its payers give {given}", c.seq, c.spell));
+        let given = payers.iter().try_fold(0i64, |acc, p| acc.checked_add(p.1));
+        if given != Some(want) {
+            let got = given.map_or_else(|| "overflow".into(), |g| g.to_string());
+            return Some(format!("cast {}: {} has {what} {want} but its payers give {got}", c.seq, c.spell));
         }
     }
     let pays = std::iter::once((c.caster.as_str(), c.threshold)).chain(c.boost_sources.iter().chain(&c.interference_sources).map(|(k, n)| (k.as_str(), *n)));
@@ -1244,7 +1248,7 @@ mod tests {
     /// "a" holds a damage spell ("Bolt") and a utility spell ("Mend All"); everything else is `volley_line`'s.
     fn caster_line() -> (State, Vec<UnitStatic>) {
         let (st, mut statics) = volley_line();
-        let spell = |name: &str, kind: &str| crate::rules::Spell { name: name.into(), effect_kind: kind.into(), threshold: 1, ..Default::default() };
+        let spell = |name: &str, kind: &str| crate::rules::Spell { name: name.into(), effect_kind: kind.into(), threshold: 1, target_count: 1, ..Default::default() };
         for u in [0, 1] {
             (statics[u].is_caster, statics[u].spells) = (true, vec![spell("Bolt", "damage"), spell("Mend All", "utility")]);
         }
@@ -1269,7 +1273,8 @@ mod tests {
             (CastInput { spell: "Mend All".into(), ..bolt(0) }, "cast 0: the core does not resolve utility spells yet (Mend All)"),
             (CastInput { targets: vec!["b".into(), "zz".into()], ..bolt(0) }, "cast 0: zz is no unit of this game (a target of Bolt)"),
             (CastInput { open: true, ..bolt(0) }, "cast 0: a foe's answer to Bolt cannot be asked yet"),
-            (CastInput { conduit: "bh".into(), ..bolt(0) }, "cast 0: a cast through a conduit is not resolved by the core yet"),
+            (CastInput { targets: vec![], ..bolt(0) }, "cast 0: Bolt has no targets"),
+            (CastInput { conduit: "zz".into(), ..bolt(0) }, "cast 0: zz is no unit of this game (a conduit for Bolt)"),
         ] {
             let ActStep::Refused { index, reason } = ask(&[&start[..], &[Input::Cast(c.clone())]].concat()) else { panic!("{c:?}") };
             assert_eq!((index, reason.as_str()), (2, why), "{c:?}");
@@ -1462,6 +1467,168 @@ mod tests {
         let t = [t, vec![Faces(vec![6, 6])]].concat();
         let ActStep::NeedRoll { kind: "cast", lines, .. } = step_activation(&statics, &st, "a", &board, Seams { dangerous_end_morale: true, ..seams() }, &t, true) else { panic!("then the cast die") };
         assert_eq!(lines.iter().map(|l| l.text.as_str()).next(), Some("Spell Accumulator: Hero is Shaken \u{2014} its tokens do not feed friendly casters"));
+    }
+
+    /// CC-5d (item 1): a cast with `conduit != ""` is resolved instead of refused — shaken conduits and the active conduit log in
+    /// the table's exact format (`main.gd:5633-5641`, centre via `geom::centre` in Godot's `str(Vector3)` format), the conduit mod
+    /// joins the casting net first (`Spell Conduit +1`), and unknown conduit keys are refused at the cast's index.
+    #[test]
+    fn a_conduit_cast_applies_its_mod_and_logs_the_tables_lines() {
+        use crate::mods::LiveMod;
+        let (mut st, mut statics) = die_line();
+        (statics[1].name, statics[1].spell_conduit, statics[1].spell_conduit_casting_mod) = ("Relay".into(), true, 1);
+        st.positions[1] = vec![[0.0, 0.0, 0.0], [1.016, 0.0, 0.6096]]; // f32 centre = (0.508, 0.0, 0.3048)
+        (st.wounds[1], st.alive[1]) = (vec![1, 1], 2);
+        statics[3].name = "ShakenRelay".into();
+        let c = CastInput { base: 4, threshold: 1, conduit: "ah".into(), conduit_shaken: vec!["bh".into()], ..bolt(0) };
+        let t = vec![Begin, intent(HOLD, None), Input::Cast(c.clone())];
+        let ActStep::NeedRoll { kind: "cast", target, lines, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) else { panic!("conduit cast asks its die") };
+        assert_eq!(target, 3, "base 4 - conduit +1 = 3+");
+        let got: Vec<&str> = lines.iter().map(|l| l.text.as_str()).collect();
+        assert_eq!(got, [
+            "Spell Conduit: ShakenRelay is Shaken \u{2014} its conduit does not help Mystic cast",
+            // main.gd:5639 prints "(%s)" around str(Vector3), which carries its own parens
+            "Spell Conduit: Mystic casts as if standing at Relay ((0.508, 0.0, 0.3048))",
+            "+1 to casting rolls (Spell Conduit +1) \u{2014} Mystic casts on 3+ (base 4+)",
+            "Mystic casts Bolt at Foe",
+            "Mystic casts Bolt at Foe \u{2014} needs 3+ (1 token)",
+        ]);
+        assert!(matches!(answer_dice(&statics, &st, t.clone(), &[1]).0, ActStep::Done { .. }), "a failed conduit cast is taken");
+        // conduit note precedes casting records and Spell Amplifier (`caster_casting_net` solo_controller.gd:5228-5240)
+        statics[0].spell_amplifier_casting_mod = 1;
+        let focus = LiveMod { move_mod: 0, hit_mod: 0, casting_mod: 1, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: true, name: Rc::from("Focus") };
+        st.buffs[0] = vec![focus];
+        let ActStep::NeedRoll { target, lines, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) else { panic!("conduit + amp") };
+        assert_eq!(target, 2, "4 - 3 clamps to 2+");
+        assert_eq!(lines[2].text, "+3 to casting rolls (Spell Conduit +1, Focus +1, Spell Amplifier +1) \u{2014} Mystic casts on 2+ (base 4+)");
+        // unknown conduit / shaken conduit is refused at its input index
+        for bad in [CastInput { conduit: "zz".into(), ..c.clone() }, CastInput { conduit_shaken: vec!["zz".into()], ..c }] {
+            let bt = vec![Begin, intent(HOLD, None), Input::Cast(bad)];
+            assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &bt, true), ActStep::Refused { index: 2, .. }));
+        }
+    }
+
+    /// CC-5d (item 2): a CastInput with empty `targets` is refused at its input index when the spell takes targets (`target_count > 0`),
+    /// instead of fizzling via vacuous `all()`; an untargeted spell (`target_count == 0`) with empty `targets` is not refused.
+    #[test]
+    fn an_empty_target_list_is_refused_unless_the_spell_is_untargeted() {
+        let (mut st, mut statics) = die_line();
+        statics[0].spells.push(crate::rules::Spell { name: "Aura".into(), effect_kind: "buff".into(), threshold: 1, target_count: 0, ..Default::default() });
+        let ask = |t: &[Input]| step_activation(&statics, &st, "a", &Terrain::default(), seams(), t, true);
+        let empty = CastInput { targets: vec![], threshold: 1, ..bolt(0) };
+        let ActStep::Refused { index, reason } = ask(&[Begin, intent(HOLD, None), Input::Cast(empty)]) else { panic!("targeted spell with no targets must be refused") };
+        assert_eq!((index, reason.as_str()), (2, "cast 0: Bolt has no targets"));
+        let untargeted = CastInput { spell: "Aura".into(), targets: vec![], threshold: 1, ..bolt(0) };
+        assert!(!matches!(ask(&[Begin, intent(HOLD, None), Input::Cast(untargeted)]), ActStep::Refused { .. }), "untargeted spell is not refused");
+        let _ = &mut st;
+    }
+
+    /// CC-5d (item 3): the Shaken-battery line ports `solo_controller.shaken_lenders` (`solo_controller.gd:5802-5822`): reserve units
+    /// are skipped, destroyed hosts are skipped (their living attached hero only appears at its own entry), and each surviving host
+    /// walks `[host] + attached` in table unit order rather than plain roster order.
+    #[test]
+    fn the_shaken_battery_line_follows_the_tables_order_reserve_and_destroyed_rules() {
+        let (mut st, statics) = die_line();
+        let mut s_host = UnitStatic { name: "Host".into(), ..Default::default() };
+        let s_bat = |n: &str| UnitStatic { name: n.into(), spell_accumulator: true, ..Default::default() };
+        let s_caster = statics[0].clone();
+        let s_foe = statics[2].clone();
+        s_host.model_count = 1;
+        let statics = vec![s_host, s_bat("ReserveBat"), s_bat("MidBat"), s_bat("HeroBat"), s_caster, s_foe];
+        let keys: Vec<String> = ["h", "r", "m", "hb", "c", "f"].into_iter().map(String::from).collect();
+        let index = keys.iter().enumerate().map(|(i, k)| (k.clone(), i)).collect();
+        let n = keys.len();
+        st.roster = Rc::new(crate::state::Roster { keys, index, profile: (0..n).collect() });
+        st.profiles = Rc::new(crate::state::Profiles { list: vec![st.profiles.list[0].clone(); n], index: std::collections::HashMap::new() });
+        st.player = vec![0, 0, 0, 0, 0, 1];
+        st.alive = vec![1; n];
+        st.activated = vec![false; n];
+        st.shaken = vec![false, true, true, true, false, false];
+        st.fatigued = vec![false; n];
+        st.in_cover = vec![false; n];
+        st.aircraft = vec![false; n];
+        st.dormant = vec![false, true, false, false, false, false]; // ReserveBat is in reserve
+        st.dormant_models = vec![0; n];
+        st.dormant_wounds = vec![Vec::new(); n];
+        st.casts = vec![0, 2, 2, 2, 4, 0];
+        st.morale_bonus = vec![0; n];
+        st.ambush_arrived_round = vec![-1; n];
+        st.earliest_arrival_round = vec![-1; n];
+        st.wound_frac = vec![1.0; n];
+        st.positions = (0..n).map(|i| vec![[i as f64 * INCHES_TO_METERS, 0.0, 0.0]]).collect();
+        st.wounds = vec![vec![1]; n];
+        st.radii = Rc::new(vec![vec![INCHES_TO_METERS]; n]);
+        st.mods = vec![crate::state::Mods::default(); n];
+        st.mods_base = (0..n).map(|_| Rc::new(crate::state::Mods::default())).collect();
+        st.attached = Rc::new(vec![vec![3], vec![], vec![], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, None, None, Some(0), None, None]);
+        st.los = vec![None; n];
+        st.bands = vec![crate::state::Bands::default(); n];
+        st.shroud = vec![None; n];
+        st.charge_no_difficult = vec![false; n];
+        st.charge_probe_r = vec![0.0; n];
+        st.buffs = vec![Vec::new(); n];
+        st.vs_mark_round = vec![-1; n];
+        st.hit_and_run_round = vec![-1; n];
+        st.moved_round = vec![-1; n];
+        st.delayed_action_round = vec![-1; n];
+        st.coordinate_via_round = vec![-1; n];
+        st.reckless_rolled_round = vec![-1; n];
+        st.reckless_ap_round = vec![-1; n];
+        st.reckless_backfire_round = vec![-1; n];
+        st.versatile_pick_round = vec![-1; n];
+        st.versatile_pick_mode = vec![0; n];
+        st.retreating_strike_round = vec![-1; n];
+        st.mind_control_moved_round = vec![-1; n];
+        st.growth_markers = vec![0; n];
+        st.vengeance_markers = vec![0; n];
+        st.growth_round = vec![-1; n];
+        st.growth_strike_round = vec![-1; n];
+        st.second_wind_used = vec![false; n];
+        st.surprise_attack_used = vec![false; n];
+        st.teleport_used = vec![false; n];
+        st.reinforcement_used = vec![false; n];
+        st.limited_used = Rc::new(vec![Vec::new(); n]);
+        st.piercing_tag_used = vec![false; n];
+        st.piercing_tag_markers = vec![0; n];
+        st.piercing_tag_persistent = vec![false; n];
+        st.piercing_spot_round = vec![-1; n];
+        st.spot_markers = vec![0; n];
+        st.tag_markers = vec![0; n];
+        st.spot_round = vec![-1; n];
+        st.precision_used = Rc::new(vec![Vec::new(); n]);
+        st.storm_used = Rc::new(vec![Vec::new(); n]);
+        st.feats_used = Rc::new(vec![Vec::new(); n]);
+        let cast = CastInput { seq: 0, caster: "c".into(), spell: "Bolt".into(), targets: vec!["f".into()], base: 4, threshold: 1, ..Default::default() };
+        let t = vec![Begin, intent(HOLD, None), Input::Cast(cast)];
+        let shaken_names = |state: &State| -> Vec<String> {
+            let ActStep::NeedRoll { kind: "cast", lines, .. } = step_activation(&statics, state, "c", &Terrain::default(), seams(), &t, true) else { panic!("asks die") };
+            lines.iter().filter_map(|l| l.text.strip_prefix("Spell Accumulator: ")?.split(" is Shaken").next().map(String::from)).collect()
+        };
+        // Host alive: Host's members emit HeroBat BEFORE MidBat, ReserveBat is skipped, HeroBat's own entry emits it again.
+        assert_eq!(shaken_names(&st), ["HeroBat", "MidBat", "HeroBat"]);
+        // Host destroyed: Host is skipped, so HeroBat only appears at its own entry AFTER MidBat.
+        let mut dead_host = st.clone();
+        dead_host.alive[0] = 0;
+        assert_eq!(shaken_names(&dead_host), ["MidBat", "HeroBat"]);
+        // Host in reserve (captured with its attached hero dormant too): neither Host nor HeroBat appears.
+        let mut res_host = st.clone();
+        (res_host.dormant[0], res_host.dormant[3]) = (true, true);
+        assert_eq!(shaken_names(&res_host), ["MidBat"]);
+    }
+
+    /// CC-5d: Godot's `str(Vector3)` format (6 decimals, minus `floor(log10|x|)` when `|x| > 10`, trailing zeros trimmed, `".0"` kept).
+    #[test]
+    fn godot_vec3_matches_godots_str_vector3_format() {
+        for (v, want) in [
+            ([0.508, 0.0, 0.3048], "(0.508, 0.0, 0.3048)"),
+            (crate::geom::to_f32([-0.12345678, 12.345678, 100.123456]), "(-0.123457, 12.34568, 100.1235)"),
+            ([0.0, 0.0, 0.0], "(0.0, 0.0, 0.0)"),
+            ([1.0e-7, -1.0e-7, 0.0], "(0.0, 0.0, 0.0)"),
+            ([10.0, -10.5, 1_000_000.0], "(10.0, -10.5, 1000000.0)"),
+        ] {
+            assert_eq!(crate::geom::godot_vec3(v), want, "{v:?}");
+        }
     }
 
     /// CC-5a: the refusal comes before ANY roll. "a" stands in Dangerous terrain, so its activation owes the Dangerous test
