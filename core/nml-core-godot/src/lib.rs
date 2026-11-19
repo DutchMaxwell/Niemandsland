@@ -35,6 +35,7 @@ use nml_core::{
 };
 
 mod actcall;
+mod boardcall;
 mod mvcall;
 mod positioncall;
 mod roundcall;
@@ -929,6 +930,14 @@ impl NmlCore {
     #[func]
     fn dropped_keys(&self) -> PackedStringArray {
         self.dropped.iter().map(GString::from).collect()
+    }
+
+    /// The seeded 48 x 48 in heightfield board for `seed` (`nml_core::boardgen`, point-symmetric): `cells` (`level` 0/1/2,
+    /// inches in `level_in`), `lots`, `arteries`, `connectors` (Stair/Ladder with `edge_in`), `problems` (empty = accepted).
+    /// Pure data; nothing in the rules reads it.
+    #[func]
+    fn boardgen_layout(&self, seed: i64) -> VarDictionary {
+        plain::variant_of(&boardcall::layout_value(seed)).try_to::<VarDictionary>().unwrap_or_default()
     }
 
     #[func]
