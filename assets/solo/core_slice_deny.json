@@ -24,6 +24,12 @@
       "kind": "ledger",
       "why": "Their marker pools / once-per-game stamps do not come back from the core's delta yet (slice design 1d). Growth Markers measured: a joined hero's Piercing Growth AP differs between the core and the table (C-18 soak, Hive Swarms + Grunt Veteran). Hit & Run and Hit & Run Shooter lifted again (HR-POS): the delta carries the stepped positions and the table lands them (door probe 8/8).",
       "leaves_with": "C-12 / C-13 and the activation-level steps"
+    },
+    "pre_attack_beat_twice": {
+      "primitives": ["Mend", "Breath Attack", "Mind Control", "Storm Attack", "Reckless Piercing", "Utility Buff"],
+      "kind": "pre_attack_beat",
+      "why": "The table resolves a bearer's pre-attack beat in main.gd before the volley, and the core, which takes the whole activation, resolves it again from the board it captured before that beat. Measured 19.11. (one real AI activation per seed, deny slice, door on against door off, 8 seeds each): Mend 8/8 and Breath Attack 8/8 roll the beat's die twice (a second Blast volley on 7/8), Mind Control (also Fatigue Debuff) 8/8 rolls its morale test twice, Storm Attack 8/8 rolls its trigger dice twice, Reckless Piercing 8/8 rolls its die twice, and the Utility Buff family leaves a stale once-record or marker behind on the table 8/8 (Precision Shooter Buff: a record the core already spent; Precision Tag: a tag marker). The family is one primitive, so its Casting Buff, Precision Target and Precision Spotter (each measured equal, 8/8) and Re-Position Artillery (not measured) go with it. Piercing Tag, Piercing Target and Piercing Spotter (primitive Piercing Tag) run in the same slot but measured equal 8/8 and stay taken (LD-6).",
+      "leaves_with": "the beats guard in PLAN_C_CAST_LEGS"
     }
   }
 }
