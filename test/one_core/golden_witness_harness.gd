@@ -73,6 +73,15 @@ const RUNNER_CONSOLIDATION := "melee_consolidation"
 const MELEE_FEAR_HERO_FAMILY := "melee_fear_hero"
 const MELEE_FEAR_HERO_FIXTURE_PATH := "res://test/fixtures/one_core/golden_melee_fear_hero.json"
 const RUNNER_AI_CHARGE := "ai_charge"
+## CC-2: the table's casts of an AI activation. The planner's cast dict goes through `_solo_resolve_ai_casts` (the cast die
+## on the tray, the effect, the spell's own saves and morale), both seats AI. `cast_damage` = a damage spell (saves, a
+## kill, the morale test); `cast_effects` = the other legs (a buff on the caster, a debuff on the enemy, a failed cast, a
+## fizzle, boost + interference, a spent once-mod). Runner "ai_cast".
+const CAST_DAMAGE_FAMILY := "cast_damage"
+const CAST_DAMAGE_FIXTURE_PATH := "res://test/fixtures/one_core/golden_cast_damage.json"
+const CAST_EFFECTS_FAMILY := "cast_effects"
+const CAST_EFFECTS_FIXTURE_PATH := "res://test/fixtures/one_core/golden_cast_effects.json"
+const RUNNER_AI_CAST := "ai_cast"
 ## Rolls of the volley before the wounds land: the to-hit batch and the defender's save batch. The click prompt needs
 ## _solo_batch false, the batch tray needs it true, so the flag drops after this many rolls and returns with the
 ## first pick (the pattern of test/e2e/e2e_volley_morale_test.gd).
@@ -125,6 +134,19 @@ const DEF_HERO := {"key": "def_hero", "player": 2, "name": "DefHero", "models": 
 const BYSTANDER := {"key": "by", "player": 2, "name": "By", "models": 1, "quality": 4, "defense": 4, "tough": 1,
 	"x_in": 20.0, "z_step_in": 1.3, "base_radius_in": 0.63, "game_system": "gf", "faction_folder": "robot_legions",
 	"rules": []}
+
+## The cast grids' board: a one-model caster at the origin (player 1) and a six-model foe 8" away (player 2); both AI seats.
+const CASTER := {"key": "cst", "player": 1, "name": "Mystic", "models": 1, "quality": 4, "defense": 4, "tough": 1,
+	"x_in": 0.0, "z_step_in": 1.2, "base_radius_in": 0.63, "game_system": "gf", "faction_folder": "robot_legions",
+	"rules": []}
+const CAST_FOE := {"key": "foe", "player": 2, "name": "Foe", "models": 6, "quality": 4, "defense": 4, "tough": 1,
+	"x_in": 8.0, "z_step_in": 1.3, "base_radius_in": 0.63, "game_system": "gf", "faction_folder": "robot_legions",
+	"rules": []}
+const CAST_STAFF := {"name": "Staff", "range_in": 0, "attacks": 1, "count": 1, "rules": []}
+const CAST_SEEDS: Array[int] = [0, 1, 2, 3, 4, 5, 6, 7]
+## The effects grid's seeds, picked from a 32-seed scan by the FIRST die (the cast die): 6, 4, 5 pass a 4+; 1, 3, 2 fail it;
+## the 3 passes the 3+ of the boosted cast and the 2 does not.
+const CAST_FX_SEEDS: Array[int] = [0, 1, 2, 3, 8, 11]
 
 ## The morale grid: one AI-owned unit (player 2, so no save prompt), 10 models, no weapon needed.
 const MORALE_UNIT := {"player": 2, "name": "Mor", "models": 10, "quality": 2, "defense": 4, "tough": 1,
@@ -330,6 +352,48 @@ static func melee_fear_hero_scenarios() -> Array:
 	]
 
 
+## The damage-spell grid (CC-2): fixed hits, then the spell's own saves (no Shielded, no Cover) and the morale test of
+## what is left. `bolt_saves` = AP(0) hits that the foe's armour mostly stops; `bolt_morale` = AP(1) hits that leave
+## the six-model foe at or below half; `bolt_kill` = a three-model foe that twelve AP(4) hits wipe out (no morale test).
+static func cast_damage_scenarios() -> Array:
+	var bolt := func(hits: int, rules: Array) -> Dictionary:
+		return {"range_in": 12, "effect": {"kind": "damage", "hits": hits, "weapon_rules": rules},
+			"target": {"kind": "unit", "side": "enemy"}}
+	var base := {"runner": RUNNER_AI_CAST, "seeds": CAST_SEEDS, "spell_name": "Test Bolt", "base_target": 2}
+	return [
+		_with(base, {"name": "bolt_saves", "spell": bolt.call(6, []),
+			"note": "six AP(0) hits at Defense 4+: the saves stop about half"}),
+		_with(base, {"name": "bolt_morale", "spell": bolt.call(6, ["AP(1)"]),
+			"note": "six AP(1) hits (saves on 5+): the foe falls to half or less and tests morale"}),
+		_with(base, {"name": "bolt_kill", "spell": bolt.call(12, ["AP(4)"]), "foe": _with(CAST_FOE, {"models": 3}),
+			"note": "twelve AP(4) hits at three models: the unit is destroyed, no morale test"}),
+	]
+
+
+## The other cast legs (CC-2). The cast die is a 2+ in the damage grid (only a natural 1 fails); here the base is 4+, so a
+## failed cast is a plain seed pick (die 1, 2 or 3). `buff_self`: a once-rule granted to the caster; `debuff_foe`: a defense malus
+## on the enemy; `fizzle`: every target is gone, no die; `boost_interference`: +2 boost, -1 interference (3+);
+## `casting_once`: a once-mod of +1 to casting rolls placed beforehand, spent by this roll.
+static func cast_effects_scenarios() -> Array:
+	var buff := {"range_in": 12, "effect": {"kind": "buff", "grants_rule": "Fearless", "duration": "once"},
+		"target": {"side": "friendly", "count": 1, "kind": "unit"}}
+	var debuff := {"range_in": 12, "effect": {"kind": "debuff", "modifier": {"def_mod": -1}, "duration": "round"},
+		"target": {"kind": "unit", "side": "enemy"}}
+	var base := {"runner": RUNNER_AI_CAST, "seeds": CAST_FX_SEEDS, "spell_name": "Warding Chant", "base_target": 4,
+		"spell": buff, "on_self": true}
+	return [
+		_with(base, {"name": "buff_self", "note": "a buff cast on the caster itself: the token and the granted rule"}),
+		_with(base, {"name": "debuff_foe", "spell_name": "Withering Gaze", "spell": debuff, "on_self": false,
+			"note": "a debuff on the enemy: the token and the defense malus"}),
+		_with(base, {"name": "fizzle", "kill_foe": true, "on_self": false, "spell": debuff,
+			"seeds": [0, 1] as Array[int], "note": "the only target is gone: no die, one line"}),
+		_with(base, {"name": "boost_interference", "boost": 2, "interference": 1, "threshold": 2,
+			"note": "both sides spent tokens (both-AI): the die needs 3+ and the line states the spend"}),
+		_with(base, {"name": "casting_once", "pre_mod": {"kind": "buff", "modifier": {"casting_mod": 1}, "duration": "once"},
+			"note": "a once-mod of +1 to casting rolls: the net is stated and the roll spends the mod"}),
+	]
+
+
 ## The prompt grid: 20 Rifle shots (2 attacks per model) at a human 10-model defender, so a volley lands several wounds.
 ## `mixed`: five Rifle bearers and five "Plasma Stub" bearers (two loadouts, every model Tough 1); `tough`: one loadout,
 ## every model Tough(3). Each shape is answered two ways: `auto` (right-click at once) and `click` (the owner clicks
@@ -394,6 +458,10 @@ static func capture(main: Node, family: String = FAMILY) -> Dictionary:
 		return await capture_grid(main, MELEE_SHAPES_FAMILY, melee_shape_scenarios())
 	if family == MELEE_FEAR_HERO_FAMILY:
 		return await capture_grid(main, MELEE_FEAR_HERO_FAMILY, melee_fear_hero_scenarios())
+	if family == CAST_DAMAGE_FAMILY:
+		return await capture_grid(main, CAST_DAMAGE_FAMILY, cast_damage_scenarios())
+	if family == CAST_EFFECTS_FAMILY:
+		return await capture_grid(main, CAST_EFFECTS_FAMILY, cast_effects_scenarios())
 	var out := {"schema": SCHEMA, "family": FAMILY, "provenance": provenance(), "cases": []}
 	for sc in scenarios():
 		for seed in SEEDS:
@@ -463,6 +531,8 @@ static func _run_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
 			return await _run_into_human_case(main, sc, seed)
 		RUNNER_AI_MOVE_THROUGH:
 			return await _run_move_through_case(main, sc, seed)
+		RUNNER_AI_CAST:
+			return await _run_ai_cast_case(main, sc, seed)
 		RUNNER_HUMAN_CHARGE, RUNNER_STRIKE_BACK, RUNNER_MELEE_IMPACT, RUNNER_MELEE_COUNTER, RUNNER_CONSOLIDATION, \
 		RUNNER_AI_CHARGE:
 			return await _run_melee_shape_case(main, sc, seed)
@@ -692,6 +762,67 @@ static func _run_melee_shape_case(main: Node, sc: Dictionary, seed: int) -> Dict
 	_free_units(main, chain + idle)
 	await main.get_tree().process_frame
 	return rec
+
+
+## One cast scenario x seed: the planner's cast dict for a one-model caster, through the table's own
+## `_solo_resolve_ai_casts` (the resolver the AI body calls after the move). Besides the lines and the final state it
+## records, as text, the activation's tray rolls in order with their legs (`cast` = the die, `spell` = everything the
+## effect rolls) and the spell records + tokens each unit holds afterwards (`extra.mods`).
+static func _run_ai_cast_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
+	var caster := ParityTable._make_unit(main, CASTER, CAST_STAFF)
+	var foe := ParityTable._make_unit(main, sc.get("foe", CAST_FOE), {})
+	if bool(sc.get("kill_foe", false)):
+		_kill_models(foe, foe.models.size())
+	if sc.has("pre_mod"):
+		main._solo_record_spell_mod(caster, "Focus", sc["pre_mod"])   # the real placement path; its line is written before the tap
+	var cast := {"caster": caster, "caster_unit": caster, "name": str(sc["spell_name"]), "spell": sc["spell"],
+		"targets": [caster] if bool(sc.get("on_self", false)) else [foe], "boost": int(sc.get("boost", 0)),
+		"interference": int(sc.get("interference", 0)), "base_target": int(sc["base_target"]),
+		"threshold": int(sc.get("threshold", 1)), "owner_label": "AI (Mystic)", "interference_open": false}
+	var seats: Dictionary = (main.solo_ai_slots as Dictionary).duplicate()
+	main.solo_ai_slots = {1: true, 2: true}   # both seats AI: a human foe would wait for a save card
+	main._solo_both_ai = true
+	main.seed_tray_rng(seed)
+	var lines: Array = []
+	var tap := _line_tap(lines)
+	main.battle_log.entry_added.connect(tap)
+	CoreShadow.tap.clear()
+	CoreShadow.tapping = true   # the shadow's own roll tap: kind, count, target, faces, owner and the leg of every tray roll
+	await main._solo_resolve_ai_casts({"casts": [cast]})
+	CoreShadow.tapping = false
+	main.battle_log.entry_added.disconnect(tap)
+	main.solo_ai_slots = seats
+	main._solo_both_ai = false
+	var rolls: Array = CoreShadow.tap.map(func(r: Dictionary) -> String: return "%s|%s|%dx%d+|%s|%s" % [
+		str(r["leg"]), str(r["kind"]), int(r["count"]), int(r["target"]), str(r["owner"]),
+		",".join((r["faces"] as Array).map(func(f: Variant) -> String: return str(int(f))))])
+	CoreShadow.tap.clear()
+	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch, "lines": lines,
+		"final": _final([caster, foe]), "rng": _rng_state(main), "extra": {"rolls": rolls, "mods": _spell_state(main, [caster, foe])}}
+	for gu in [caster, foe]:
+		main._solo_spell_mods.erase((gu as GameUnit).get_instance_id())
+	main._solo_spell_tokens_active.clear()
+	_free_units(main, [caster, foe])
+	await main.get_tree().process_frame
+	return rec
+
+
+## The spell records (`_solo_spell_mods`) and the live spell tokens each unit holds, as text: [unit, [record], [token]].
+static func _spell_state(main: Node, units: Array) -> Array:
+	var out: Array = []
+	for u in units:
+		var gu := u as GameUnit
+		var recs: Array = []
+		for rd in main._solo_spell_mods.get(gu.get_instance_id(), []):
+			var r := rd as Dictionary
+			recs.append("%s|hit %d|def %d|cast %d|morale %d|grants %s|%s" % [str(r["spell"]), int(r["hit_mod"]),
+				int(r["def_mod"]), int(r["casting_mod"]), int(r["morale_mod"]), str(r["grants_rule"]), str(r["duration"])])
+		var toks: Array = []
+		for e in main._solo_spell_tokens_active:
+			if (e as Dictionary).get("unit") == gu:
+				toks.append("%s|once %s" % [str(e["token"]), str(bool(e["once"]))])
+		out.append([gu.get_name(), recs, toks])
+	return out
 
 
 ## Builds the hero of `spec`, stands its model at the spec's own spot and joins it to `host` the way the army import
@@ -1003,6 +1134,10 @@ static func fixture_path(family: String = FAMILY) -> String:
 		return MELEE_SHAPES_FIXTURE_PATH
 	if family == MELEE_FEAR_HERO_FAMILY:
 		return MELEE_FEAR_HERO_FIXTURE_PATH
+	if family == CAST_DAMAGE_FAMILY:
+		return CAST_DAMAGE_FIXTURE_PATH
+	if family == CAST_EFFECTS_FAMILY:
+		return CAST_EFFECTS_FIXTURE_PATH
 	return FIXTURE_PATH
 
 
