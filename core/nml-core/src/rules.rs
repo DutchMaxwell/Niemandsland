@@ -326,6 +326,12 @@ pub struct Spell {
     /// sight only when its own entry says so. Absent means false: the spell
     /// reaches any target in range, seen or not.
     pub needs_los: bool,
+    /// `effect.scope` ("shooting", "melee", "attacking") — which attacks a stamped modifier or grant reads on, "" when the
+    /// spell has none. The table lands a buff by name AND scope (CC-4b: parsed only, nothing reads it yet).
+    pub scope: String,
+    /// `target.kind` — "model" resolves as a unit of one (no Blast fan-out, main.gd:5799-5800), "unit" is the normal case;
+    /// "" when the entry has none, which the table reads as a unit (CC-4b: parsed only, nothing reads it yet).
+    pub target_kind: String,
 }
 
 /// The `effect.modifier` fields `BattleSim._apply_cast_effect` reads
@@ -496,6 +502,8 @@ fn spell_of(e: &Value) -> Spell {
             .unwrap_or("")
             .to_string(),
         needs_los: e.get("needs_los").and_then(|v| v.as_bool()).unwrap_or(false),
+        scope: eff.and_then(|v| v.get("scope")).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        target_kind: e.get("target").and_then(|t| t.get("kind")).and_then(|v| v.as_str()).unwrap_or("").to_string(),
     }
 }
 
@@ -543,6 +551,26 @@ mod tests {
         assert!(has_special_rule(&["Relentless (spell)".into()], "Relentless"));
         assert!(rule_name_matches("Tough(3)", "Tough"));
         assert!(!rule_name_matches("Toughness", "Tough"));
+    }
+
+    /// CC-4b: the spell entry's `effect.scope` and `target.kind` parse; an entry without them reads "" for both. RED: the two
+    /// fields not read in `spell_of` -> every non-empty assertion below sees "".
+    #[test]
+    fn a_spell_entry_carries_its_scope_and_its_target_kind() {
+        let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+        let mut reg = Registries::new(&root);
+        let by_name = |reg: &mut Registries, faction: &str, name: &str| {
+            let spells = reg.spells_for("gf", faction);
+            spells.iter().find(|s| s.name == name).unwrap_or_else(|| panic!("{name} is not in the gf {faction} book")).clone()
+        };
+        let sight = by_name(&mut reg, "battle_brothers", "Advanced Sight");
+        assert_eq!((sight.scope.as_str(), sight.target_kind.as_str()), ("shooting", "unit"));
+        let assault = by_name(&mut reg, "havoc_brothers", "Dark Assault");
+        assert_eq!((assault.scope.as_str(), assault.target_kind.as_str()), ("melee", "unit"));
+        let shriek = by_name(&mut reg, "alien_hives", "Hive Shriek");
+        assert_eq!((shriek.scope.as_str(), shriek.target_kind.as_str()), ("", "model"), "a damage spell has no scope");
+        let bare = spell_of(&serde_json::json!({"name": "Bare", "effect": {"kind": "damage"}}));
+        assert_eq!((bare.scope.as_str(), bare.target_kind.as_str()), ("", ""), "absent = \"\"");
     }
 
     /// SPLIT step 1: a parametrised `Split(<name> [<n>])` string names a

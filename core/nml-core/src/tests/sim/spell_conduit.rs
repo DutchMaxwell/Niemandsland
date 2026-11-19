@@ -36,6 +36,7 @@ use crate::spell::cast_success_chance;
             beneficiary: String::new(),
             modifier: SpellModifier::default(),
             grants_rule: String::new(),
+            ..Default::default()
         }
     }
 
