@@ -91,6 +91,17 @@ func test_a_move_past_the_slack_through_a_ruin_is_dangerous() -> void:
 	assert_bool(_flag(_through(6.0 + 2.0 * MovementPlanner.UNSTABLE_SLACK_IN), AiActRecorder.EPOCH_73_V36)).is_true()
 
 
+func test_long_unstable_move_uses_the_same_slack_as_the_dice_check() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var unit := GameUnit.new()
+	assert_bool(_solo._long_unstable_move(unit, Vector3((6.0 + 0.00005) * IN2M, 0.0, 0.0))) \
+		.override_failure_message("a 6.00005 inch planned move must not count as a long unstable move") \
+		.is_false()
+	assert_bool(_solo._long_unstable_move(unit, Vector3(6.01 * IN2M, 0.0, 0.0))) \
+		.override_failure_message("a 6.01 inch planned move must count as a long unstable move") \
+		.is_true()
+
+
 func test_a_dangerous_cell_flags_a_six_inch_advance_at_epoch_72() -> void:
 	_set_dangerous_band()
 	assert_bool(_flag(_through(6.0), AiActRecorder.EPOCH_72_PLAYTEST_RULES)).is_true()
