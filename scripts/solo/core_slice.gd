@@ -123,6 +123,11 @@ static func _rule_taken(gu: GameUnit, label: String) -> bool:
 	return p is String and prims.has(p) == allow
 
 
+## The core's lone-hero volley still lacks two table lines (see `refusals`): false keeps such a target on the table at every epoch.
+## A test that exercises the core door for it sets this and puts it back.
+static var lone_hero_lines_done := false
+
+
 ## Why the slice refuses `gu` - the labels the P4.D-3 census counts ("unit_rule:<name>", "attached", "non_opr",
 ## "weapon_rule:<name>"); [] = the core door takes it. `as_target`: a target needs no OPR profile (P4.D-13b).
 static func refusals(gu: GameUnit, as_target := false) -> Array:
@@ -136,11 +141,14 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 	# Deny mode takes a joined hero with its unit, so the hero's own unit and weapon rules must pass the list too (allow
 	# mode refuses every attachment above; its labels stay as they were).
 	if c["mode"] == "deny":
-		# C-19: a joined unit whose own models are all dead is shot as its living hero, and the table says so in the log ("X is
-		# the unit now"). The core's step path writes no such line (the v36 lone-hero tests went red on the flipped default), so a
-		# volley at such a target stays on the table. Leaves with the step path's Hero line.
-		if as_target and gu.get_alive_count() <= 0 and gu.get_attached_heroes().any(
-				func(h) -> bool: return h is GameUnit and (h as GameUnit).get_alive_count() > 0):
+		# A joined unit whose own models are all dead is shot as its living hero. The core's lone-hero target exists from
+		# EPOCH_83_LONE_HERO_TARGET (below it the core shoots the dead host at the host's Defense and says nothing), and its step
+		# path says the Hero line since #3062, but the core still lacks the table's half-strength trigger line and "Hero X tests on
+		# behalf of ..." for such a chain (follow-up, lane dlines): a missing line keeps the volley on the table for every epoch
+		# until `lone_hero_lines_done` is true (the future lift is then "from 83 on").
+		if as_target and (AiActRecorder.rules_epoch < AiActRecorder.EPOCH_83_LONE_HERO_TARGET or not lone_hero_lines_done) \
+				and gu.get_alive_count() <= 0 \
+				and gu.get_attached_heroes().any(func(h) -> bool: return h is GameUnit and (h as GameUnit).get_alive_count() > 0):
 			out.append("lone_hero_target")
 		for hero in gu.get_attached_heroes():
 			for r in refusals(hero as GameUnit, true):

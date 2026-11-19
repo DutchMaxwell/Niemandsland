@@ -427,11 +427,15 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 	CoreSlice.reset_cache()
 
 
-## C-19: a joined unit whose own models are all dead is shot as its living hero ("Hero: X is the unit now", a table line the
-## core's step path does not write), so deny mode keeps such a TARGET on the table; a host with a living model, a dead hero or
-## a shooter is untouched. RED: drop the predicate -> v36/g4r5_r8_lonehero_retarget_test and g4r5_r8b_lonehero_nearest_test
-## fail on the deny default (no Hero line in the log), and the first assertion here reads [].
-func test_deny_mode_keeps_a_lone_hero_target_on_the_table() -> void:
+## A joined unit whose own models are all dead is shot as its living hero ("Hero: X is the unit now"). The core's lone-hero target
+## exists from EPOCH_83_LONE_HERO_TARGET and its step path says the Hero line, but it still lacks the table's half-strength trigger
+## line and "Hero X tests on behalf of ..." for such a chain, so deny mode keeps such a TARGET on the table at every epoch until
+## `CoreSlice.lone_hero_lines_done` is true; then the refusal reads "below 83 only" (a replay stamp, v36/g4r5_r8_lonehero_retarget_test
+## and g4r5_r8b_lonehero_nearest_test pin 73). A host with a living model, a dead hero or a shooter is untouched in every state.
+## RED: drop the flag from the predicate -> the 83 and current-epoch assertions read [] (the door takes it); drop the epoch gate -> the
+## flag-on 82 leg reads [].
+func test_deny_mode_keeps_a_lone_hero_target_on_the_table_until_its_lines_are_done() -> void:
+	var epoch_before := AiActRecorder.rules_epoch
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
 	var host := _unit(["Tough(3)"], [["AP(1)"]])
@@ -440,16 +444,31 @@ func test_deny_mode_keeps_a_lone_hero_target_on_the_table() -> void:
 	var hm := ModelInstance.new()
 	hm.is_alive = true
 	hero.models.append(hm)
-	assert_array(CoreSlice.refusals(host, true)).override_failure_message("host with no model, hero alive: a lone hero").is_equal(["lone_hero_target"])
-	assert_bool(CoreSlice.takes(host, true)).is_false()
+	var lone := ["lone_hero_target"]
+	for epoch in [AiActRecorder.EPOCH_83_LONE_HERO_TARGET - 1, AiActRecorder.EPOCH_83_LONE_HERO_TARGET, epoch_before]:
+		AiActRecorder.rules_epoch = epoch
+		assert_array(CoreSlice.refusals(host, true)).override_failure_message("lines not done, epoch %d: a lone hero stays on the table" % epoch).is_equal(lone)
+		assert_bool(CoreSlice.takes(host, true)).is_false()
 	assert_array(CoreSlice.refusals(host)).override_failure_message("as a shooter it is not a target case").is_empty()
-	var xm := ModelInstance.new()
-	xm.is_alive = true
-	host.models.append(xm)
-	assert_array(CoreSlice.refusals(host, true)).override_failure_message("a host with a living model is no lone hero").is_empty()
-	host.models.clear()
-	hm.is_alive = false
-	assert_array(CoreSlice.refusals(host, true)).override_failure_message("a dead hero is no lone hero").is_empty()
+	CoreSlice.lone_hero_lines_done = true
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_83_LONE_HERO_TARGET - 1
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("lines done, below 83: still the table").is_equal(lone)
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_83_LONE_HERO_TARGET
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("lines done, from 83: the core shoots it as the hero").is_empty()
+	assert_bool(CoreSlice.takes(host, true)).is_true()
+	for flag in [false, true]:
+		CoreSlice.lone_hero_lines_done = flag
+		AiActRecorder.rules_epoch = AiActRecorder.EPOCH_83_LONE_HERO_TARGET - 1
+		var xm := ModelInstance.new()
+		xm.is_alive = true
+		host.models.append(xm)
+		assert_array(CoreSlice.refusals(host, true)).override_failure_message("a host with a living model is no lone hero").is_empty()
+		host.models.clear()
+		hm.is_alive = false
+		assert_array(CoreSlice.refusals(host, true)).override_failure_message("a dead hero is no lone hero").is_empty()
+		hm.is_alive = true
+	CoreSlice.lone_hero_lines_done = false
+	AiActRecorder.rules_epoch = epoch_before
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 

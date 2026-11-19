@@ -10726,6 +10726,17 @@ fn resolve_with(
                                 shot.log.push(format!("Hero: {} is the unit now — shots from {} at {} are measured and saved as the hero",
                                     statics[next.roster.profile[g.ti]].name, statics[pi_s].name, g.key));
                             }
+                            // The Hero rule on the step path (`_solo_resolve_ai_volley`, main.gd): the group was NAMED at a host whose
+                            // own models are all gone and is shot as its living joined hero. The table says so before the volley and
+                            // calls the target by the host's name; `shot.log` above is the plain path's copy, the tray's line is the
+                            // step path's (a log line, no die: no epoch).
+                            let lone_host = next.roster.index.get(g.key.as_str()).copied()
+                                .filter(|&k| k != g.ti && lone_hero_of(&next, k, seams) == Some(g.ti));
+                            if let Some(host) = lone_host {
+                                tray.say(|| LogLine { rule: "hero", category: Category::Combat, side: next.player[si], detail: None,
+                                    text: format!("Hero: {} is the unit now — shots from {} at {} are measured and saved as the hero",
+                                        statics[next.roster.profile[g.ti]].name, statics[pi_s].name, statics[next.roster.profile[host]].name) });
+                            }
                             // main.gd:3042 — the Mark is picked and recorded
                             // BEFORE this group's profiles and contexts are
                             // read (:3082), so the grant reaches this volley.
@@ -10967,8 +10978,10 @@ fn resolve_with(
                             // One-core P3 step 24: the table's announce (`_solo_show_attack_announce`, main.gd:11752), said
                             // before the volley's first die; a group with no weapon in range never reaches it (main.gd:4693).
                             if tray.feed().is_some() && parts.iter().any(|(_, m, _)| !m.keep.is_empty()) {
+                                // The table names the target it was aimed at: a lone hero's host, not the hero (see above).
+                                let aimed = lone_host.map_or(ut_g.name.as_str(), |h| statics[next.roster.profile[h]].name.as_str());
                                 tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[si],
-                                    text: format!("{} fires at {}", statics[pi_s].name, ut_g.name), detail: None });
+                                    text: format!("{} fires at {}", statics[pi_s].name, aimed), detail: None });
                             }
                             // CLASS FIX (external review 03.09. item 3 / F9,
                             // `acts::rule_on`) — same gate as `strike_phase`'s
