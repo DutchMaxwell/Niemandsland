@@ -11106,6 +11106,8 @@ fn resolve_with(
                             // CLASS FIX (external review 03.09. item 3 / F9,
                             // `acts::rule_on`) — same gate as `strike_phase`'s
                             // melee half above.
+                            // A lone hero's hit lines call the target by its host's name, as the table does.
+                            tray.aim(lone_host.map(|h| statics[next.roster.profile[h]].name.clone()));
                             let r = crate::dice::resolve_volley_leg(
                                 &shooters_of(&parts, statics, &next),
                                 &def, &ut_g.name, g.d, g.mod_d,
@@ -11139,6 +11141,7 @@ fn resolve_with(
                                     shot.log.push(format!("{n}: {} takes the hits at AP(-{cut}), min. AP(0) — saves one better", ut_g.name));
                                 }
                             }
+                            tray.aim(None);
                             for (mi, msc, _) in &parts {
                                 let shoot = &statics[next.roster.profile[*mi]].shoot;
                                 mark_spent_limited(shoot, &msc.keep, &mut next.limited_used, *mi);
@@ -11162,7 +11165,9 @@ fn resolve_with(
                             let att_incoming = land_hazardous_self(statics, &mut next, &members, seams, shot);
                             // One-core P3 step 7: the target chain (host, then its joined heroes) before
                             // the landing. Only a supplied tray takes it: a seeded one clones nothing.
-                            let chain_before = chain_snapshot(&next, g.ti, tray);
+                            // A lone hero's wounds are reported on its host's chain as one unit ("Cultists takes 18 wounds (1/2)").
+                            let rep = lone_host.unwrap_or(g.ti);
+                            let chain_before = chain_snapshot(&next, rep, tray);
                             if !seams.tray_exact {
                                 land_pool_wounds(&mut next, g.ti, w, false, seams, &mut shot.log);
                             }
@@ -11210,7 +11215,7 @@ fn resolve_with(
                                 land_pool_wounds(&mut next, g.ti, left, true, seams, &mut shot.log);
                             }
                             // One-core P3 steps 7/25/27: the landing's lines and its landings, stamped BEFORE the group's morale test below draws.
-                            land_chain_report_inline(statics, &next, tray, g.ti, chain_before, deadly_dealt);
+                            land_chain_report_inline(statics, &next, tray, rep, chain_before, deadly_dealt);
                             // rules-wave3-growthmark (epoch 6) — the
                             // ignore-wound marker AFTER the landing.
                             if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {

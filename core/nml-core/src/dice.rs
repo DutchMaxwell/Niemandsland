@@ -67,22 +67,30 @@ pub struct Tray {
     /// The index of a morale outcome line the wounds of the SAME test are still to be reported ahead of: No Retreat's
     /// self-wounds land (and say so) before the table writes "passes morale". Set by `hold_outcome`, spent by `say_wounds`.
     outcome_at: Option<usize>,
+    /// The name the table calls the volley's target by when it is not the unit the dice resolve against: a lone hero's host
+    /// ("X fires W at <host>"). Set by the volley around its resolve, `None` otherwise.
+    aimed: Option<String>,
 }
 
 impl Tray {
+    /// Names the target the next lines call it by (`None` = the unit itself).
+    pub fn aim(&mut self, name: Option<String>) {
+        self.aimed = name;
+    }
+
     /// `main.seed_tray_rng(dice_seed)` — `RandomNumberGenerator.seed = seed`.
     ///
     /// The seed is `i64`, not `u64`, because that is what GDScript hands the
     /// engine and what `GodotRng::new` mirrors; a negative seed must land on
     /// the same stream on both sides.
     pub fn seeded(seed: i64) -> Tray {
-        Tray { rng: GodotRng::new(seed), feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None }
+        Tray { rng: GodotRng::new(seed), feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None }
     }
 
     /// A tray that continues a generator already in flight — how a replay
     /// reaches a recorded position in the stream.
     pub fn from_rng(rng: GodotRng) -> Tray {
-        Tray { rng, feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None }
+        Tray { rng, feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None }
     }
 
     /// Re-seeds in place, as a second `seed_tray_rng` call would.
@@ -117,7 +125,7 @@ impl Tray {
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
         let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), casts: Vec::new(), cast_hit: None };
-        Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None }
+        Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None }
     }
 
     /// The supplied feed, if this tray has one.
@@ -1748,11 +1756,12 @@ pub fn resolve_volley_leg(
         }
         // One-core P3 step 24: the table's line after `_solo_hits` (main.gd:5056-5057), a miss included; step 27: with
         // the table's sight part when not every model of the member sees the target (main.gd:5129).
+        let aimed = tray.aimed.clone();
         tray.say(|| {
             let note = shooters.iter().position(|s| std::ptr::eq(s, sh)).and_then(|i| sighted(i, pi))
                 .filter(|&(n, m, _)| n < m).map_or(String::new(), |(n, m, _)| format!(" ({n}/{m} models sighted)"));
             LogLine { rule: "shoot", category: Category::Combat, side: att.side,
-                text: format!("{} fires {} at {def_owner}{note} — {hits} hit{}", sh.owner, p.name, if hits == 1 { "" } else { "s" }),
+                text: format!("{} fires {} at {}{note} — {hits} hit{}", sh.owner, p.name, aimed.as_deref().unwrap_or(def_owner), if hits == 1 { "" } else { "s" }),
                 detail: None }
         });
         if hits <= 0 {

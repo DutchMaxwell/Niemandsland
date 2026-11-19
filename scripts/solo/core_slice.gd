@@ -123,9 +123,6 @@ static func _rule_taken(gu: GameUnit, label: String) -> bool:
 	return p is String and prims.has(p) == allow
 
 
-## The core's lone-hero volley still lacks two table lines (see `refusals`): false keeps such a target on the table at every epoch.
-## A test that exercises the core door for it sets this and puts it back.
-static var lone_hero_lines_done := false
 
 
 ## Why the slice refuses `gu` - the labels the P4.D-3 census counts ("unit_rule:<name>", "attached", "non_opr",
@@ -143,11 +140,10 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 	if c["mode"] == "deny":
 		# A joined unit whose own models are all dead is shot as its living hero. The core's lone-hero target exists from
 		# EPOCH_83_LONE_HERO_TARGET (below it the core shoots the dead host at the host's Defense and says nothing), and its step
-		# path says the Hero line since #3062, but the core still lacks the table's half-strength trigger line and "Hero X tests on
-		# behalf of ..." for such a chain (follow-up, lane dlines): a missing line keeps the volley on the table for every epoch
-		# until `lone_hero_lines_done` is true (the future lift is then "from 83 on").
-		if as_target and (AiActRecorder.rules_epoch < AiActRecorder.EPOCH_83_LONE_HERO_TARGET or not lone_hero_lines_done) \
-				and gu.get_alive_count() <= 0 \
+		# path says the table's lines for such a chain: the Hero line, the host's name in the hit and wound lines (the chain counted
+		# as one unit), the half-strength trigger and "Hero X tests on behalf of ...". A volley under an older stamp (a replay, a
+		# pinned test) stays on the table; current games go to the core.
+		if as_target and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_83_LONE_HERO_TARGET and gu.get_alive_count() <= 0 \
 				and gu.get_attached_heroes().any(func(h) -> bool: return h is GameUnit and (h as GameUnit).get_alive_count() > 0):
 			out.append("lone_hero_target")
 		for hero in gu.get_attached_heroes():

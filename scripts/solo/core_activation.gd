@@ -368,7 +368,7 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 			return r
 		var owner := str(r["owner"])
 		var roller := _roller_of(main, unit, transcript, owner, str(r.get("owner_key", "")))
-		var label: String = "AI (%s)" % owner if main._solo_is_ai_unit(roller) else main._roller_label(roller)
+		var label: String = "AI (%s)" % _shown_owner(roller, owner) if main._solo_is_ai_unit(roller) else main._roller_label(roller)
 		if on_throw.is_valid():
 			on_throw.call(str(r["kind"]), int(r["index"]))
 		if beat.is_valid():
@@ -909,6 +909,13 @@ static func _roller_of(main, unit: GameUnit, transcript: Array, owner: String, o
 			if foe is GameUnit and (foe as GameUnit).get_name() == owner:
 				return foe
 	return unit
+
+
+## The unit name a roll's label shows: a lone hero (its host has no model left) rolls for its host in the table's log, which was
+## aimed at the host ("AI (Cultists) defends"); every other roller shows the owner the core named.
+static func _shown_owner(roller: GameUnit, owner: String) -> String:
+	var host = roller.get_attached_to()
+	return (host as GameUnit).get_name() if host is GameUnit and (host as GameUnit).get_alive_count() <= 0 else owner
 
 
 ## Every living model on the table and its position at the activation start, in get_alive_models() order.

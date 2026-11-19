@@ -1,11 +1,10 @@
 extends GdUnitTestSuite
 ## A volley at a lone hero (the target's own models are all dead, a joined hero lives and is shot as the unit) through the AI door.
-## From EPOCH_83_LONE_HERO_TARGET the core shoots it as the hero and the step path says the table's Hero line and "fires at <host>"
-## (sim.rs); below 83 the core would shoot the dead host, so `CoreSlice` keeps such a target on the table. The same seed through the
-## table and through the core must roll the same dice and read the same up to the hero's saves. Known differences after that, NOT
-## asserted (follow-up, lane dlines): the core names the hero where the table names the host in "fires <weapon> at", the defense and
-## morale labels and the wound line, and lacks the table's half-strength trigger line and "Hero X tests on behalf of". Those two
-## missing lines keep the target on the table in the shipped slice (`CoreSlice.lone_hero_lines_done`, false); this suite bypasses it.
+## From EPOCH_83_LONE_HERO_TARGET the core shoots it as the hero and its step path says the table's lines for it: the Hero line, the host's
+## name in "fires at" / "fires <weapon> at" / "AI (<host>) defends" / the wound line (the chain counted as one unit, "Cultists takes N
+## wounds (a/b)"), the half-strength trigger, "Hero X tests on behalf of <host>" and "<host> fails morale". The same seed through the table and
+## through the core must write the SAME lines, in the same order, and roll the same dice; below 83 the core would shoot the dead host, so
+## `CoreSlice` keeps such a target on the table.
 ## Real: the main scene, NmlCore, the AI body's volley call (`_run_ai_shooting`) on a captured board.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -32,12 +31,10 @@ func before_test() -> void:
 	_main.opr_army_manager.current_round = 1
 	_main._solo_batch = true
 	CoreActivation._env = 1
-	CoreSlice.lone_hero_lines_done = true   # the slice keeps such a target on the table until the table's other lines are done: bypassed here only
 	RulesRegistry.reset_cache()
 
 
 func after_test() -> void:
-	CoreSlice.lone_hero_lines_done = false
 	AiActRecorder.rules_epoch = _epoch_before
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
@@ -103,17 +100,16 @@ func _dice(lines: Array) -> Array:
 	return lines.filter(func(l: String) -> bool: return l.begins_with("AI (")).map(func(l: String) -> String: return rx.sub(l, ""))
 
 
-## RED: without the core's Hero line (the tray's `say`) the first line is the core's "Gunners fires at Champion" and the Hero line
-## is missing; without the epoch gate in CoreSlice (second test) the 82 case would be taken by the core.
-func test_the_core_reads_like_the_table_up_to_the_heros_saves(timeout := 120000) -> void:
+## RED (on #3062 alone): the core names the hero in "fires <weapon> at" and the labels, counts the hero's wounds in the wound line and lacks
+## the half-strength trigger and the Hero who tests on behalf; without the epoch gate in CoreSlice (second test) the 82 case would be taken by the core.
+func test_the_core_writes_the_tables_lines_for_a_lone_hero(timeout := 120000) -> void:
 	var table := await _volley(false)
 	var table_dice := _dice(table)
 	var core := await _volley(true)
 	assert_int(CoreActivation.ai_runs).override_failure_message("the core did not take the volley (the table shot): %s" % [core]).is_equal(1)
-	assert_array(core.slice(0, 2)).override_failure_message("table %s\ncore %s" % [table.slice(0, 2), core.slice(0, 2)]).is_equal(table.slice(0, 2))
 	assert_str(core[0]).starts_with("Hero: Champion is the unit now")
 	assert_array(_dice(core)).override_failure_message("the same seed rolls the same dice: table %s core %s" % [table_dice, _dice(core)]).is_equal(table_dice)
-	assert_bool(core.has("Champion saves on 6+") and table.has("Champion saves on 6+")).override_failure_message("the save line names the hero on both sides").is_true()
+	assert_array(core).override_failure_message("the core's lines differ from the table's:\ntable %s\ncore  %s" % [table, core]).is_equal(table)
 
 
 ## Below 83 the core would shoot the dead host: the same volley under a replay stamp stays on the table, which still says the line.
