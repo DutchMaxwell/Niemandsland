@@ -271,7 +271,7 @@ func test_a_missing_or_malformed_file_is_the_empty_slice() -> void:
 ## The deny file refuses its listed primitives (a Teleport unit) and takes a unit whose
 ## rules are automated and not listed (AP, Tough); a name no map knows is taken (unmapped_inert). The list only shrinks: CEILING.
 ## RED: read PATH regardless of the switch -> the first assertion reads mode "allow".
-const DENY_CEILING := 23   # DLINES2 19.11.: +14 primitives in eight `rule_line` groups (a rule whose table line the door omits stays on the table until the line exists, dlines_gap rows 2, 3, 7, 13, 15, 16, 17, 21), they leave group by group with their lines. BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
+const DENY_CEILING := 24   # DLINES2 19.11.: +15 primitives in eight `rule_line` groups (a rule whose table line the door omits stays on the table until the line exists, dlines_gap rows 2, 3, 7, 13, 15, 16, 17, 21), they leave group by group with their lines. BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
 
 
 func test_the_deny_switch_reads_the_measured_deny_list() -> void:
@@ -317,7 +317,7 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 	var rep: Array = [
 		["Artillery", ""], ["Stealth", ""], ["Evasive", "battle_brothers"], ["Aircraft", ""], ["Precision Fighter", ""],
 		["Instinctive", "goblin_reclaimers"],
-		["Regeneration", ""], ["Self-Repair", "robot_legions"],
+		["Regeneration", ""], ["Self-Repair", "robot_legions"], ["Resistance", "alien_hives"],
 		["Shred", ""], ["Lacerate", "battle_brothers"], ["Anti-Regen", ""], ["Takedown", ""],
 		["Shielded", "battle_brothers"], ["Ranged Shrouding", "custodian_brothers"], ["Fortified", "alien_hives"],
 		["Bane", ""], ["Mischievous", "goblin_reclaimers"], ["Vicious", "goblin_reclaimers"],

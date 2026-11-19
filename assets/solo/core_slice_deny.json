@@ -54,7 +54,7 @@
       "leaves_with": "the dlines2 train that composes the note on the core's step path"
     },
     "door_omits_wound_ignore_line": {
-      "primitives": ["Regeneration", "Self-Repair"],
+      "primitives": ["Regeneration", "Self-Repair", "Resistance"],
       "kind": "rule_line",
       "why": "The table writes the ignore roll of the Regeneration family with the rule's name (`<U> rolls N Plaguebound dice (5+) - K wounds ignored`, the bypass and Warding lines); the door writes none and the core's context carries targets, not names. Measured 19.11.: 198 volleys, dlines_gap row 3.",
       "leaves_with": "the dlines2 train that carries the group names to the dice leg"
