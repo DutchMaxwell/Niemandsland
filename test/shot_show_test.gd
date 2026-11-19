@@ -178,27 +178,42 @@ func test_batched_hdr_ribbons_and_light_pool_cap_create_and_free(timeout := 5000
 	assert_int(batches.size()).override_failure_message("all 10 tracers batched in 1 MultiMesh draw call").is_equal(1)
 	assert_int((batches[0] as VfxRibbonBatch).active_count()).is_equal(10)
 	assert_int(lights.size()).override_failure_message("pooled ring buffer capped at MAX_LIGHTS").is_equal(ShotScript.MAX_LIGHTS)
-	assert_float((lights[0] as OmniLight3D).omni_range).is_equal_approx(ShotScript.LIGHT_RANGE_M, 1e-4)
-	assert_float(ShotScript.LIGHT_RANGE_M).override_failure_message("muzzle light stays base-local").is_less_equal(0.08)
-	assert_float(ShotScript.LIGHT_ENERGY).override_failure_message("no whiteout blowout energy").is_less_equal(0.8)
+	assert_float((lights[0] as OmniLight3D).omni_range).is_between(ShotScript.LIGHT_RANGE_M * ShotScript.LIGHT_RANGE_END_K, ShotScript.LIGHT_RANGE_M)
+	assert_float(ShotScript.LIGHT_RANGE_M).override_failure_message("muzzle light stays base-local").is_less_equal(0.09)
+	assert_float(ShotScript.LIGHT_ATTENUATION).override_failure_message("metres: a decay above ~0.3 burns the core to white (d^-decay)").is_less_equal(0.3)
+	assert_float(ShotScript.LIGHT_ENERGY).is_between(1.0, 3.0)
 	assert_bool((lights[0] as OmniLight3D).shadow_enabled).is_false()
 	await get_tree().create_timer(2.6).timeout
 	assert_int(show.get_child_count()).override_failure_message("ribbon batch, light pool and bursts all freed").is_equal(0)
 
 
-func test_volley_caps_pooled_lights_per_volley(timeout := 5000) -> void:
+func test_volley_caps_pooled_lights_per_volley_even_across_a_pool_release(timeout := 6000) -> void:
 	var show := _show()
 	var wide_pairs: Array = []
-	for i in 9:
+	for i in 10:
 		wide_pairs.append([Vector3(0.0, 0.03, i * 0.12), Vector3(0.3, 0.03, i * 0.12)])
 	show.volley(wide_pairs, VolleyCue.Family.BALLISTIC, 77)
-	await get_tree().create_timer(ShotScript.CHAOS_S + 0.1).timeout
-	var vid: int = show._next_volley_id - 1
-	assert_int(int(show._volley_lights.get(vid, 0))) \
-		.override_failure_message("pooled lights per volley stay within MAX_LIGHTS_PER_VOLLEY") \
-		.is_less_equal(ShotScript.MAX_LIGHTS_PER_VOLLEY)
+	await get_tree().create_timer(ShotScript.CHAOS_S * 0.4).timeout
+	show.release_light_pool()   # what the idle timer does after 0.35 s without a light: the cap must outlive it
+	await get_tree().create_timer(ShotScript.CHAOS_S + 0.5).timeout
+	assert_int(show.light_starts).override_failure_message("a 10-pair volley lights at most 2 muzzle + 2 impact lights") \
+		.is_less_equal(ShotScript.MAX_MUZZLE_LIGHTS_PER_VOLLEY + ShotScript.MAX_IMPACT_LIGHTS_PER_VOLLEY)
+	assert_int(show.light_starts).is_greater(0)
+	assert_bool(show._volley_lights.is_empty() and show._volley_open.is_empty()) \
+		.override_failure_message("the volley's light budget is dropped with its last round").is_true()
 	await get_tree().create_timer(2.5).timeout
 	assert_int(show.get_child_count()).is_equal(0)
+
+
+func test_the_flash_eases_out_without_a_cut() -> void:
+	assert_float(ShotScript.light_curve(0.0)).is_equal(1.0)
+	assert_float(ShotScript.light_curve(1.0)).is_equal(0.0)
+	var prev := 1.0
+	for i in range(1, 21):
+		var e: float = ShotScript.light_curve(i / 20.0)
+		assert_float(e).override_failure_message("never rises again").is_less_equal(prev)
+		prev = e
+	assert_float(ShotScript.light_curve(0.95)).override_failure_message("a soft tail, no step at the end").is_less(0.02)
 
 
 func test_ensure_ribbon_batch_replaces_batch_queued_for_deletion() -> void:

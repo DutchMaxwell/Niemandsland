@@ -36,11 +36,18 @@ const ECHO_CHANCE := 0.35       # share of shots that throw a second, offset imp
 const AUTO_ROUNDS := 4          # a machine gun's burst per model
 const ROUND_GAP_S := 0.06
 const MAX_LIGHTS := 4           # small pooled ring buffer (Forward+ clustered)
-const MAX_LIGHTS_PER_VOLLEY := 3   # cap pooled flashes per volley so squads never stack light blowout
-const LIGHT_RANGE_M := 0.055    # confined to the shooter's own base area (~25-40 mm base)
-const LIGHT_ATTENUATION := 2.4
-const LIGHT_LIFE_S := 0.055     # crisp 55 ms warm muzzle glint
-const LIGHT_ENERGY := 0.42
+const MAX_MUZZLE_LIGHTS_PER_VOLLEY := 2   # muzzle and impact lights are counted apart, so a squad never stacks them
+const MAX_IMPACT_LIGHTS_PER_VOLLEY := 2
+const IMPACT_LIGHT_K := 0.6     # an impact glints at 0.6x the muzzle's energy
+## Godot's omni falloff is window(d / range) * d^-attenuation in WORLD units: the table is in metres, so at 2 cm a decay of
+## 2.4 multiplies the energy by ~12,000 (the white puddle of iteration 2). With a decay near 0 the soft range window alone
+## shapes the pool, and the energy can be a normal number.
+const LIGHT_RANGE_M := 0.08     # one base and a half around the flash (~25-40 mm bases)
+const LIGHT_RANGE_END_K := 0.6  # the pool pulls in to this share of its range as the flash dies (no edge popping off)
+const LIGHT_ATTENUATION := 0.2
+const LIGHT_LIFE_S := 0.07
+const LIGHT_ENERGY := 2.2
+const LIGHT_LIFT_M := 0.018     # the light hangs this high over the muzzle / impact point and grazes the ground
 const LIGHT_POOL_IDLE_S := 0.35
 const STATIC_THREAD_LIFE_S := 0.5
 const BLAST_RING := "shader_type spatial;
@@ -62,7 +69,9 @@ var _light_cursor := 0
 var _light_idle_s := 0.0
 var _next_volley_id := 1
 var _current_volley_id := 0
-var _volley_lights := {}
+var _volley_lights := {}        # volley id -> Vector2i(muzzle lights, impact lights) lit so far
+var _volley_open := {}          # volley id -> rounds that have not landed yet (the entry above goes with the last one)
+var light_starts := 0           # lights lit since this show exists (tests and the capture read it)
 static var _meshes := {}
 static var _ring_shader: Shader
 
@@ -79,6 +88,7 @@ func _exit_tree() -> void:
 	_light_life.clear()
 	_light_peak.clear()
 	_volley_lights.clear()
+	_volley_open.clear()
 	_current_volley_id = 0
 	_ribbon_batch = null
 
@@ -130,8 +140,7 @@ func release_light_pool() -> void:
 	_light_age.clear()
 	_light_life.clear()
 	_light_peak.clear()
-	_volley_lights.clear()
-	_light_idle_s = 0.0
+	_light_idle_s = 0.0   # the per-volley counts stay: a volley's cap must survive an idle pool release
 	set_process(false)
 
 
@@ -160,8 +169,9 @@ func _process(delta: float) -> void:
 			l.visible = false
 		else:
 			_light_age[i] = next_age
-			var k := 1.0 - next_age / life
-			l.light_energy = _light_peak[i] * k * k
+			var a := next_age / life
+			l.light_energy = _light_peak[i] * light_curve(a)
+			l.omni_range = LIGHT_RANGE_M * lerpf(1.0, LIGHT_RANGE_END_K, a)
 			any_active = true
 	if any_active:
 		_light_idle_s = 0.0
@@ -169,6 +179,13 @@ func _process(delta: float) -> void:
 		_light_idle_s += delta
 		if _light_idle_s >= LIGHT_POOL_IDLE_S:
 			release_light_pool()
+
+
+## The flash's energy over its life (a = 0 at the flash, 1 at its end): smoothstep-eased so it starts at full strength,
+## has no kink where it ends and never cuts off.
+static func light_curve(a: float) -> float:
+	var k := 1.0 - clampf(a, 0.0, 1.0)
+	return k * k * (3.0 - 2.0 * k)
 
 
 ## The chaos of a real volley, from the cue's seed alone, so every peer sees the same: per shot a start delay inside
@@ -194,9 +211,10 @@ func volley(pairs: Array, family: int, rng_seed: int, blast := 0, ground_drop :=
 		_draw_reduced_motion_volley(pairs, family, blast, ground_drop)
 	var vid := _next_volley_id
 	_next_volley_id += 1
-	_volley_lights[vid] = 0
+	_volley_lights[vid] = Vector2i.ZERO
 	var shots := plan(pairs.size(), rng_seed)
 	var rounds := AUTO_ROUNDS if family == F.AUTO else 1
+	_volley_open[vid] = pairs.size() * rounds
 	for i in pairs.size():
 		var side: Vector3 = Vector3(-(pairs[i][1] - pairs[i][0]).z, 0.0, (pairs[i][1] - pairs[i][0]).x).normalized()
 		for k in rounds:   # a burst walks across the target base
@@ -247,7 +265,7 @@ func _fire(a: Vector3, b: Vector3, family: int, s: int, p: int, muzzle_k := 1.0,
 			FxBurst.spawn(self, FxBurst.Look.MOTE, muzzle, dir, 10, s + 3, p, a.distance_to(b) / 0.18, Color(1.75, 0.58, 0.12))
 			FxBurst.spawn(self, FxBurst.Look.EMBER, muzzle, dir, 28, s, p, a.distance_to(b) / 0.15)
 			FxBurst.spawn(self, FxBurst.Look.PUFF, muzzle, dir + Vector3.UP, 6, s + 1, p, 1.2)
-			_light(muzzle, Color(1.0, 0.52, 0.16), p, 0.06, vid)
+			_light(muzzle, Color(1.0, 0.52, 0.16), p, LIGHT_LIFE_S, vid)
 		F.ENERGY:
 			FxBurst.spawn(self, FxBurst.Look.MOTE, muzzle, Vector3.ZERO, 10, s, p, 0.6)
 		F.BEAM:
@@ -255,7 +273,7 @@ func _fire(a: Vector3, b: Vector3, family: int, s: int, p: int, muzzle_k := 1.0,
 		F.ARTILLERY:
 			FxBurst.spawn(self, FxBurst.Look.FLASH, star_at, dir, 1, s, p, 0.78 * muzzle_k)
 			FxBurst.spawn(self, FxBurst.Look.PUFF, muzzle, dir + Vector3.UP, 12, s + 1, p, 1.4 * muzzle_k)
-			_light(muzzle, Color(1.0, 0.68, 0.32), p, 0.065, vid)
+			_light(muzzle, Color(1.0, 0.68, 0.32), p, LIGHT_LIFE_S, vid)
 		F.THROWN:
 			pass   # the throw itself is the look
 		_:
@@ -358,12 +376,12 @@ func _impact(at: Vector3, back: Vector3, family: int, s: int, p: int, blast := 0
 		F.ENERGY:
 			FxBurst.spawn(self, FxBurst.Look.FLASH, at, Vector3.ZERO, 1, s, p, 0.7)
 			FxBurst.spawn(self, FxBurst.Look.SPARK, at, back, 6, s + 1, p)
-			_light(at, Color(0.4, 0.8, 1.0), p, LIGHT_LIFE_S, volley_id)
+			_impact_light(at, Color(0.4, 0.8, 1.0), p, LIGHT_LIFE_S, volley_id, primary)
 		F.BEAM:
 			FxBurst.spawn(self, FxBurst.Look.FLASH, at, Vector3.ZERO, 1, s, p, 0.6, Color(1.0, 0.45, 0.45))
 			FxBurst.spawn(self, FxBurst.Look.SPARK, at, back, 8, s + 1, p, 1.0, Color(1.4, 0.6, 0.5))
 			FxBurst.spawn(self, FxBurst.Look.EMBER, at, Vector3.UP, 4, s + 2, p, 0.5)
-			_light(at, Color(1.0, 0.4, 0.4), p, LIGHT_LIFE_S, volley_id)
+			_impact_light(at, Color(1.0, 0.4, 0.4), p, LIGHT_LIFE_S, volley_id, primary)
 		F.BOW, F.THROWN:
 			FxBurst.spawn(self, FxBurst.Look.DUST, at, back + Vector3.UP, 4 if family == F.BOW else 6, s, p, 0.6)
 			FxBurst.spawn(self, FxBurst.Look.CHIP, at, back + Vector3.UP, 3, s + 1, p, 0.6)
@@ -372,17 +390,24 @@ func _impact(at: Vector3, back: Vector3, family: int, s: int, p: int, blast := 0
 			FxBurst.spawn(self, FxBurst.Look.DUST, at, Vector3.UP, 14, s + 1, p, 1.4)
 			FxBurst.spawn(self, FxBurst.Look.CHIP, at, Vector3.UP, 8, s + 2, p, 1.0)
 			FxBurst.spawn(self, FxBurst.Look.DUST, at - Vector3.UP * ground_drop, Vector3.ZERO, 16, s + 3, p, 1.6, Color.WHITE, true)
-			_light(at, Color(1.0, 0.65, 0.35), p, 0.065, volley_id)
+			_impact_light(at, Color(1.0, 0.65, 0.35), p, LIGHT_LIFE_S, volley_id, primary)
 		F.AUTO:
 			FxBurst.spawn(self, FxBurst.Look.DUST, at, back + Vector3.UP, 3, s, p, 0.6)
 			FxBurst.spawn(self, FxBurst.Look.SPARK, at, back, 3, s + 1, p, 0.8)
 		_:
 			FxBurst.spawn(self, FxBurst.Look.DUST, at, back + Vector3.UP, 6, s, p, 0.8)
 			FxBurst.spawn(self, FxBurst.Look.SPARK, at, back, 5, s + 1, p)
-			_light(at, Color(1.0, 0.7, 0.4), p, LIGHT_LIFE_S, volley_id)
+			_impact_light(at, Color(1.0, 0.7, 0.4), p, LIGHT_LIFE_S, volley_id, primary)
 	if primary and blast > 0:
 		_sound(family, "blast", at)
 		_blast_ring(at - Vector3.UP * ground_drop, blast, p)
+	if primary and volley_id > 0:   # the volley's light budget goes with its last round
+		var left := int(_volley_open.get(volley_id, 0)) - 1
+		if left <= 0:
+			_volley_open.erase(volley_id)
+			_volley_lights.erase(volley_id)
+		else:
+			_volley_open[volley_id] = left
 
 
 ## Blast(X): a ring of light runs out over the ground where the round lands, wider for a bigger X (cosmetic: it does
@@ -442,16 +467,25 @@ func _sound(family: int, moment: String, at: Vector3) -> void:
 		audio.call("play_sfx_at_path", path)
 
 
-## Ring-buffered OmniLight3D muzzle/impact flash: base-local (0.055 m, energy 0.55, 55 ms quadratic decay),
-## capped per volley and deduplicated against overlapping active lights. 0 lights on Low/Perf/ReduceMotion.
-func _light(at: Vector3, color: Color, p: int, life_s: float = LIGHT_LIFE_S, volley_id: int = 0) -> void:
+## An impact's light: only the round that lands for real lights it (the echo is a copy 70 ms later, 8 mm away).
+func _impact_light(at: Vector3, color: Color, p: int, life_s: float, volley_id: int, primary: bool) -> void:
+	if primary:
+		_light(at, color, p, life_s, volley_id, true)
+
+
+## Ring-buffered OmniLight3D muzzle/impact flash: hangs LIGHT_LIFT_M over the point, soft falloff (attenuation ~0.2,
+## range 0.08 m), energy eased to zero over LIGHT_LIFE_S while the pool pulls in. Per volley at most 2 muzzle + 2 impact
+## lights, impact at 0.6x the muzzle's energy, deduplicated against overlapping active lights. 0 lights on Low/Perf/Reduce Motion.
+func _light(at: Vector3, color: Color, p: int, life_s: float = LIGHT_LIFE_S, volley_id: int = 0, impact := false) -> void:
 	if p < 2:
 		return
 	if volley_id > 0:
-		var used := int(_volley_lights.get(volley_id, 0))
-		if used >= MAX_LIGHTS_PER_VOLLEY:
+		var used: Vector2i = _volley_lights.get(volley_id, Vector2i.ZERO)
+		var n: int = used.y if impact else used.x
+		if n >= (MAX_IMPACT_LIGHTS_PER_VOLLEY if impact else MAX_MUZZLE_LIGHTS_PER_VOLLEY):
 			return
-		_volley_lights[volley_id] = used + 1
+		_volley_lights[volley_id] = Vector2i(used.x, used.y + 1) if impact else Vector2i(used.x + 1, used.y)
+	at += Vector3.UP * LIGHT_LIFT_M
 	_ensure_light_pool()
 	var slot := -1
 	var min_sep := LIGHT_RANGE_M * 0.85
@@ -463,15 +497,17 @@ func _light(at: Vector3, color: Color, p: int, life_s: float = LIGHT_LIFE_S, vol
 	if slot < 0:
 		slot = _light_cursor
 		_light_cursor = (_light_cursor + 1) % MAX_LIGHTS
+	var energy := LIGHT_ENERGY * (IMPACT_LIGHT_K if impact else 1.0)
 	var l := _light_pool[slot]
 	l.global_position = at
 	l.light_color = color
-	l.light_energy = LIGHT_ENERGY
+	l.light_energy = energy
 	l.omni_range = LIGHT_RANGE_M
 	l.omni_attenuation = LIGHT_ATTENUATION
 	l.visible = true
 	_light_age[slot] = 0.0
 	_light_life[slot] = maxf(life_s, 0.02)
-	_light_peak[slot] = LIGHT_ENERGY
+	_light_peak[slot] = energy
 	_light_idle_s = 0.0
+	light_starts += 1
 	set_process(true)
