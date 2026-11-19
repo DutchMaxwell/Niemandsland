@@ -471,6 +471,8 @@ pub struct ShootResult {
     /// its unsaved wounds x max(Deadly, 1) AFTER the picked model's Regeneration (main.gd:4059-4067);
     /// the drain lands each on ONE model, overkill lost. Their raw count rides `deadly_tally`.
     pub takedown_groups: Vec<i64>,
+    /// Per Takedown group pushed into `takedown_groups`: `(weapon_name, picked_model_label)` for the landing line.
+    pub takedown_lines: Vec<(String, String)>,
     /// Rules 3.6 (`EPOCH_73_V36`) — Hazardous self-wounds the dice legs read off the hit roll:
     /// `(owner, weapon, unmodified 1s, X)` with X = max(Blast, Deadly, 1). The sim lands them on the
     /// bearer (main.gd `_solo_hazardous_self_wounds`); below the gate they are ignored.
@@ -504,6 +506,7 @@ impl ShootResult {
         self.deadly_lines.extend(other.deadly_lines);
         self.deadly_tally += other.deadly_tally;
         self.takedown_groups.extend(other.takedown_groups);
+        self.takedown_lines.extend(other.takedown_lines);
         self.hazardous_self.extend(other.hazardous_self);
         for u in other.unported {
             self.mark(u);
@@ -1234,6 +1237,20 @@ pub fn resolve_volley_leg(
     sighted: &dyn Fn(usize, usize) -> Option<(i64, i64, &'static str)>,
     tray: &mut Tray,
 ) -> ShootResult {
+    resolve_volley_with_pick_label(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates,
+        shred_alias_dice, shred_boost_dice, deadly_per_model, takedown_exact,
+        &|gr| (takedown_cover(gr), "trooper".into()), sighted, tray)
+}
+
+/// `resolve_volley_leg` whose Takedown pick callback also answers the picked model's label (the table's `_solo_model_label`),
+/// for the door's Takedown lines.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn resolve_volley_with_pick_label(
+    shooters: &[Shooter<'_>], def: &Ctx, def_owner: &str, dist_in: f64, mod_dist_in: f64,
+    cond_ap_dice: bool, surge_gates: bool, shred_alias_dice: bool, shred_boost_dice: bool,
+    deadly_per_model: bool, takedown_exact: bool, takedown_pick_info: &dyn Fn(&[i64]) -> (bool, String),
+    sighted: &dyn Fn(usize, usize) -> Option<(i64, i64, &'static str)>, tray: &mut Tray,
+) -> ShootResult {
     let mut out = ShootResult::default();
     let (mut regenable, mut regen_proof) = (0i64, 0i64);
     // the wounds of bypass weapons that JOINED the pool (the target has no group named Regeneration): the table's `ignore only Regeneration` line counts them
@@ -1455,9 +1472,11 @@ pub fn resolve_volley_leg(
         // larger penalty wins; zero below the FROZEN gate.
         let mut alias_pen = def.stealth_alias_penalty;
         let mut alias_over = def.stealth_alias_over_in;
+        let mut alias_name = def.stealth_alias_name;
         if def.stationary_alias_penalty > alias_pen && def.moved_round != def.round {
             alias_pen = def.stationary_alias_penalty;
             alias_over = def.stationary_alias_over_in;
+            alias_name = def.stationary_alias_name;
             if !ent_fired {
                 ent_fired = true;
                 out.log.push(format!(
@@ -1472,11 +1491,8 @@ pub fn resolve_volley_leg(
         let v36_artillery = att.artillery_shooter_needs_hold || att.artillery_shooter_over_in > 0.0;
         let art_gate_ok = (!att.artillery_shooter_needs_hold || att.held)
             && (att.artillery_shooter_over_in <= 0.0 || mod_dist_in > att.artillery_shooter_over_in);
-        let art_shooter_bonus = if art_gate_ok {
-            att.artillery_shooter_hit_bonus.unwrap_or(crate::combat::ARTILLERY_SHOOTER_HIT_BONUS)
-        } else {
-            0
-        };
+        let art_bonus_val = att.artillery_shooter_hit_bonus.unwrap_or(crate::combat::ARTILLERY_SHOOTER_HIT_BONUS);
+        let art_shooter_bonus = if art_gate_ok { art_bonus_val } else { 0 };
         // SHO-06 (rules 3.6): the target-side penalty is -1 past 12" and only while most models
         // carry the rule and the unit has not moved this round. Below the gate the old over-9"
         // -2 leg stays byte-exact.
@@ -1591,6 +1607,7 @@ pub fn resolve_volley_leg(
             out.log.push(format!(
                 "Quick Readjustment: {} ignores the Indirect moved penalty", sh.owner));
         }
+        let info_mod = m - upr_hit;
         // Wave 4 — the evasive Boost names itself once per volley: the
         // unconditional -1 rode this weapon's to-hit sum (the defender-side
         // alias marker, Ctx::evasive_alias).
@@ -1625,6 +1642,17 @@ pub fn resolve_volley_leg(
                     "Unstoppable: {} — negative to-hit modifiers ignored (aura)", sh.owner));
             }
             m = own;
+        }
+        let unit_of_one = takedown_exact && p.takedown;
+        let (td_own, td_label) = if unit_of_one {
+            takedown_pick_info(&out.takedown_groups)
+        } else {
+            (false, String::new())
+        };
+        if unit_of_one {
+            let rule = if p.takedown_rule.is_empty() { "Takedown" } else { p.takedown_rule.as_str() };
+            say_rule(tray, "takedown", att.side, || format!(
+                "{rule} ({}): targets the {td_label} in {def_owner} — resolved as a unit of [1]", p.name));
         }
         let (mut raw, mut target) = fold_hit(def.modifier_sum, target, m);
         if p.reliable && !std::mem::replace(&mut reliable_said, true) {
@@ -1684,6 +1712,27 @@ pub fn resolve_volley_leg(
                 ));
             }
         }
+        // Table's `_solo_log_hit_mod` (main.gd:5392, 9053-9058): once per shot after Reliable/Versatile,
+        // right before the attack roll, whenever `hit_mod_worth_logging` holds (`info_mod != 0 || !note.is_empty()`).
+        let base_hit_note = if tray.feed().is_some() {
+            let target_art_applies = def.artillery && if v36_target_art {
+                target_art && mod_dist_in > def.artillery_target_over_in
+            } else {
+                mod_dist_in > LONG_RANGE_IN
+            };
+            let (base_note, full_note) = compose_to_hit_note(
+                att, def, p, mod_dist_in, alias_pen, alias_over, alias_name,
+                art_gate_ok, art_bonus_val, target_art_applies, target_pen, ma, gp, im,
+            );
+            if info_mod != 0 || !full_note.trim().is_empty() {
+                let aimed = tray.aimed.clone();
+                say_rule(tray, "to_hit", att.side, || format!(
+                    "To-hit vs {}: {full_note} → hits on {target}+", aimed.as_deref().unwrap_or(def_owner)));
+            }
+            base_note
+        } else {
+            String::new()
+        };
         // Precise is NOT in the rolled target. `_solo_tray_roll` is handed the
         // plain `to_hit` (main.gd:3200) and `_solo_hits` applies the +1 when it
         // COUNTS (:4405-4406) — so the die count is scored one better while the
@@ -1828,7 +1877,6 @@ pub fn resolve_volley_leg(
         }
         // Tray-exact S8: a Takedown resolves as a unit of [1] — Blast has one model to spill onto
         // (main.gd `_solo_hits`, TC-023) and the save reads the pick's own square.
-        let unit_of_one = takedown_exact && p.takedown;
         if hits > 0 && p.blast > 1 {
             let cap = if unit_of_one { 1 } else { def.blast_models.unwrap_or(def.models).max(1) };
             let boosted = hits * p.blast.clamp(1, cap);
@@ -1885,7 +1933,8 @@ pub fn resolve_volley_leg(
         // Defense, in main.gd's own order: Shielded, then Guarded (over 9"),
         // then Cover — which Blast / Indirect / Ignores Cover skip (:3221).
         let pierce = pierce_ignores(p, att);
-        let mut base = shielded_defense(def.defense, if pierce { 0 } else { def.shielded_bonus() }, def.def_floor());
+        let shielded_def = shielded_defense(def.defense, if pierce { 0 } else { def.shielded_bonus() }, def.def_floor());
+        let mut base = shielded_def;
         // Audit 2026-09-13 §2.4 — the Sturdy-kind Boost REPLACES the base
         // rule's over-9" condition ("always ... instead of only when shot or
         // charged from over 9\" away"): while one of its aliases supplied the
@@ -1895,21 +1944,14 @@ pub fn resolve_volley_leg(
         let guarded_applies = def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded;
         base = guarded_defense(base, guarded_applies && !pierce, def.def_floor());
         shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
-        // Tray-exact S8: a Takedown save reads its pick's OWN square, and the pick is the one the
-        // table makes for THIS profile, after the volley's earlier Takedown groups landed (it re-picks
-        // per profile, main.gd:4171) — the caller answers from the groups so far.
-        let td_own = unit_of_one && takedown_cover(&out.takedown_groups);
         // Rules 3.6 (FAB-A3): an Indirect shot lifts cover granted by sight blockers only, and the
         // engine grants Cover terrain only — so a HELD shot keeps it too. Blast and Ignores Cover
         // keep dropping it at every epoch (`indirect_cover_needs_hold` is stamped only from
         // EPOCH_73_V36, so older records keep their unconditional skip).
         let indirect_keeps_cover = p.indirect && p.indirect_cover_needs_hold;
         let skips_cover = p.blast > 1 || p.ignores_cover || (p.indirect && !indirect_keeps_cover);
-        let save_def = if skips_cover {
-            base
-        } else {
-            covered_defense(base, if pierce { false } else if unit_of_one { td_own } else { def.in_cover }, def.def_floor())
-        };
+        let cov_def = covered_defense(base, if pierce { false } else if unit_of_one { td_own } else { def.in_cover }, def.def_floor());
+        let save_def = if skips_cover { base } else { cov_def };
         if pierce && !pierce_logged {
             pierce_logged = true;
             let mut ign: Vec<String> = Vec::new();
@@ -1925,6 +1967,20 @@ pub fn resolve_volley_leg(
             let why = if skips_cover { "cover ignored" }
                 else if td_own { "in cover of its own" } else { "no cover of its own" };
             out.log.push(format!("Takedown ({}): the pick saves on {save_def}+ ({why})", p.name));
+            say_rule(tray, "takedown", att.side, || {
+                let mut parts = vec![format!("hits on {target}+")];
+                if !base_hit_note.is_empty() { parts.push(base_hit_note.clone()); }
+                parts.push(if !td_own { "no cover of its own".into() }
+                    else if cov_def == base { format!("in cover, but Defense is already {}+", base.clamp(BEST_HIT_TARGET, 6)) }
+                    else if save_def == cov_def { "in cover: +1 Defense".into() }
+                    else { "in cover, but this weapon ignores cover".into() });
+                if guarded_applies && !pierce && base != shielded_def {
+                    let gn = if def.guarded_name.is_empty() { "Guarded" } else { def.guarded_name };
+                    parts.push(format!("{gn}: +1 Defense"));
+                }
+                parts.push(format!("saves on {}+", save_def.clamp(BEST_HIT_TARGET, 6)));
+                format!("Takedown ({}) vs the {td_label} of {def_owner} — unit of [1]: {}", p.name, parts.join(", "))
+            });
         }
         // Wave 3 — rules-must-log: the unit-level Indirect names ("Indirect
         // when Shooting" / "Ignores Cover when Shooting", unit.rs build_for's
@@ -2140,6 +2196,7 @@ pub fn resolve_volley_leg(
             // picked model's own Regeneration roll, all of it for that one model (the drain).
             let td = w * p.deadly.max(1);
             out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, if bypass_flag && !ignores_regen { td } else { 0 }, def, def_owner, tray, &mut out.rolls));
+            out.takedown_lines.push((p.name.clone(), td_label));
             out.deadly_tally += w;
         } else if deadly_per_model && p.deadly > 0 {
             let first = out.deadly_groups.len();
@@ -3296,6 +3353,88 @@ pub fn parry_cancel(faces: &[u8], pools: [(i64, i64); 2]) -> [(i64, i64); 2] {
 fn takedown_pick_line(p: &ShootProfile, def_owner: &str) -> String {
     let rule = if p.takedown_rule.is_empty() { "Takedown" } else { p.takedown_rule.as_str() };
     format!("{rule} ({}): targets the most valuable model in {def_owner} — resolved as a unit of [1]", p.name)
+}
+
+/// Table's `_solo_hit_mod_info` shooting note (main.gd:8826-8920) in exact fragment order, plus the
+/// volley's Indirect / Spotted / Tagged tail (main.gd:5325-5344). Returns `(base_note, full_note)`.
+#[allow(clippy::too_many_arguments)]
+fn compose_to_hit_note(
+    att: &Ctx, def: &Ctx, p: &ShootProfile, mod_dist_in: f64,
+    alias_pen: i64, alias_over: f64, alias_name: &str,
+    art_gate_ok: bool, art_bonus_val: i64, target_art_applies: bool, target_pen: i64,
+    ma: i64, gp: i64, im: i64,
+) -> (String, String) {
+    let mut notes: Vec<String> = Vec::new();
+    let over_nine = mod_dist_in > LONG_RANGE_IN;
+    let v36_art = att.artillery_shooter_needs_hold || att.artillery_shooter_over_in > 0.0;
+    if att.artillery && over_nine && v36_art {
+        notes.push(if art_gate_ok {
+            format!("Artillery +{art_bonus_val} (Held, target over {}\")", att.artillery_shooter_over_in as i64)
+        } else if att.artillery_shooter_needs_hold && !att.held {
+            format!("Artillery: no +{art_bonus_val} (shooter did not Hold)")
+        } else {
+            format!("Artillery: no +{art_bonus_val} (target within {}\")", att.artillery_shooter_over_in as i64)
+        });
+    } else if att.artillery {
+        notes.push(if over_nine { format!("Artillery +{art_bonus_val}") }
+            else { format!("Artillery: no +{art_bonus_val} (target within 9\")") });
+    }
+    if def.stealth {
+        notes.push(if !over_nine { "Stealth: no -1 (within 9\")".into() }
+            else if def.stealth_most_models { "Stealth -1 (most models carry it)".into() }
+            else { "Stealth -1".into() });
+    }
+    if alias_pen > 0 && !(def.stealth && over_nine) && (alias_over <= 0.0 || mod_dist_in > alias_over) && !alias_name.is_empty() {
+        notes.push(if alias_over > 0.0 && rule_on(def.rules_epoch, EPOCH_73_V36) {
+            format!("{alias_name} -{alias_pen} over {}\"", alias_over as i64)
+        } else { format!("{alias_name} -{alias_pen}") });
+    }
+    if def.artillery {
+        notes.push(if def.artillery_target_over_in > 0.0 {
+            if target_art_applies { format!("Artillery target -{target_pen} over {}\" (unmoved)", def.artillery_target_over_in as i64) }
+            else if def.moved_round == def.round { format!("Artillery target: no -{target_pen} (moved this round)") }
+            else if !def.artillery_target_most_models { format!("Artillery target: no -{target_pen} (most models lack it)") }
+            else { format!("Artillery target: no -{target_pen} (within {}\")", def.artillery_target_over_in as i64) }
+        } else if over_nine { format!("Artillery target -{target_pen}") }
+        else { format!("Artillery target: no -{target_pen} (within 9\")") });
+    }
+    if def.aircraft_hit_penalty > 0 {
+        let an = if def.aircraft_hit_name.is_empty() { "Aircraft" } else { def.aircraft_hit_name };
+        notes.push(format!("{an} -{}", def.aircraft_hit_penalty));
+    }
+    if def.evasive {
+        notes.push(if !def.evasive_stand_down_name.is_empty() {
+            format!("{}: -1 to hit (base Evasive stood down)", def.evasive_stand_down_name)
+        } else { "Evasive -1".into() });
+    }
+    if att.growth_hit_mod != 0 { notes.push(format!("Growth {:+}", att.growth_hit_mod)); }
+    let (mut ma_done, mut gp_done, mut feat_done) = (false, false, false);
+    for e in att.shot_mod_notes {
+        if e.name.is_empty() { break; }
+        let hit = match e.kind {
+            0 => if e.over_in <= 0.0 || mod_dist_in > e.over_in { e.bonus } else { 0 },
+            1 => { ma_done = true; ma }
+            2 => { gp_done = true; gp }
+            3 => { feat_done = true; att.feat_hit_bonus }
+            _ => 0,
+        };
+        if hit != 0 { notes.push(format!("{} {hit:+}", e.name)); }
+    }
+    if !ma_done && ma != 0 { notes.push(format!("Mobile Artillery {ma:+}")); }
+    if !gp_done && gp != 0 { notes.push(format!("Grounded Precision {gp:+}")); }
+    if !feat_done && att.feat_hit_bonus != 0 { notes.push(format!("Precision Feat {:+}", att.feat_hit_bonus)); }
+    if att.instinctive_applied != 0 {
+        let n = if att.instinctive_name.is_empty() { "Instinctive" } else { att.instinctive_name };
+        notes.push(format!("{n} {:+} (closest target)", att.instinctive_applied));
+    }
+    let base_note = notes.join(", ");
+    if att.moved_this_round && p.indirect {
+        if rule_on(att.rules_epoch, EPOCH_73_V36) { notes.push("Indirect: no moved penalty".into()); }
+        else if im != 0 { notes.push(format!("Indirect moved {im}")); }
+    }
+    if att.spot_hit_note != 0 { notes.push(format!("Spotted {:+}", att.spot_hit_note)); }
+    if att.tag_hit_note != 0 { notes.push(format!("Tagged {:+}", att.tag_hit_note)); }
+    (base_note, notes.join(", "))
 }
 
 /// ONE Impact pool's hit roll — the `attack` slot `resolve_impact_pool_at`

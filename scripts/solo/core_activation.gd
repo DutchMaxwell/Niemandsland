@@ -502,7 +502,7 @@ static func note_legacy(main, door: String, unit: GameUnit, targets: Array, extr
 	var human := door.begins_with("human")   # C-19: the human doors count under the slice the human door reads
 	var why: Array = why_not(main, unit, null, human)
 	for t in targets:
-		for r in why_not(main, null, t as GameUnit, human):
+		for r in why_not(main, null, t as GameUnit, human) + CoreSlice.pair_refusals(unit, t as GameUnit):
 			if not why.has(r):
 				why.append(r)
 	why.append_array(Array(extra.split(",", false)))
@@ -560,7 +560,8 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	var cast := not (report.get("casts", []) as Array).is_empty()
 	if h == 0 or not takes_action(unit, kind) or not is_plain(unit) or table_rolled or cast or _aim_ambiguous(aim) \
 			or (target == null and not owns_dangerous) or (target != null and not is_plain_target(target)) \
-			or rest.any(func(p: Dictionary) -> bool: return not is_plain_target(p["target"])):
+			or rest.any(func(p: Dictionary) -> bool: return not is_plain_target(p["target"])) \
+			or parts.any(func(p: Dictionary) -> bool: return not CoreSlice.pair_refusals(unit, p["target"]).is_empty()):
 		return false
 	# #172 interim: the core lands its own casualty order, so a human owner who has a wound-allocation choice (a Tough
 	# model, or mixed loadouts among the alive models) would never be asked. That volley stays on the table, which
