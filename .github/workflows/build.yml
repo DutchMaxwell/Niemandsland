@@ -59,7 +59,10 @@ jobs:
       - name: Shard count (single source)
         id: shards
         run: |
-          COUNT=12
+          # 14, not 16: one PR run peaks at 12 shards + 2-5 other jobs (measured, 8 PRs, all workflows) = 14-17
+          # concurrent jobs; the free plan allows 20, and 16 shards would push a core/nml-core-godot PR (the
+          # ONNX spike runs too) to 21. Keep (shards + peak of the rest) <= 20 when raising this.
+          COUNT=14
           echo "shard_count=$COUNT" >> "$GITHUB_OUTPUT"
           echo "shards=$(python3 -c "import json,sys; print(json.dumps(list(range(int(sys.argv[1])))))" "$COUNT")" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
