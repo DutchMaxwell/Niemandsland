@@ -11,15 +11,19 @@ const ShotScript = preload("res://scripts/vfx/shot_show.gd")
 const PAIRS := [[Vector3(0, 0.03, 0), Vector3(0.3, 0.03, 0)], [Vector3(0, 0.03, 0.03), Vector3(0.3, 0.03, 0.03)],
 	[Vector3(0, 0.03, 0.06), Vector3(0.3, 0.03, 0.06)]]
 var _preset_before: int
+var _motion_before: bool
 
 
 func before_test() -> void:
 	_preset_before = GraphicsSettings.current_preset
+	_motion_before = GraphicsSettings.reduce_motion
 	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.MEDIUM
+	GraphicsSettings.reduce_motion = false
 
 
 func after_test() -> void:
 	GraphicsSettings.current_preset = _preset_before
+	GraphicsSettings.reduce_motion = _motion_before
 
 
 func _show() -> Node3D:
@@ -160,3 +164,41 @@ func test_a_blast_draws_a_ring_on_the_ground() -> void:
 	var rings := show.get_children().filter(func(c: Node) -> bool: return c is MeshInstance3D and (c as MeshInstance3D).mesh is PlaneMesh)
 	assert_int(rings.size()).override_failure_message("one ring, for the Blast impact only").is_equal(1)
 	assert_float((rings[0] as Node3D).global_position.y).override_failure_message("on the ground").is_less(0.02)
+
+
+func test_batched_hdr_ribbons_and_eight_light_pool_create_and_free(timeout := 5000) -> void:
+	var show := _show()
+	for i in 10:
+		var a := Vector3(0.0, 0.03, i * 0.02)
+		var b := Vector3(0.3, 0.03, i * 0.02)
+		show._fire(a, b, VolleyCue.Family.BALLISTIC, 200 + i, 2)
+	await get_tree().process_frame
+	var batches := show.get_children().filter(func(c: Node) -> bool: return c is VfxRibbonBatch)
+	var lights := show.get_children().filter(func(c: Node) -> bool: return c is OmniLight3D)
+	assert_int(batches.size()).override_failure_message("all 10 tracers batched in 1 MultiMesh draw call").is_equal(1)
+	assert_int((batches[0] as VfxRibbonBatch).active_count()).is_equal(10)
+	assert_int(lights.size()).override_failure_message("8-light ring buffer pool").is_equal(ShotScript.MAX_LIGHTS)
+	assert_float((lights[0] as OmniLight3D).omni_range).is_equal_approx(ShotScript.LIGHT_RANGE_M, 1e-4)
+	assert_bool((lights[0] as OmniLight3D).shadow_enabled).is_false()
+	await get_tree().create_timer(2.6).timeout
+	assert_int(show.get_child_count()).override_failure_message("ribbon batch, light pool and bursts all freed").is_equal(0)
+
+
+func test_low_preset_uses_zero_lights_and_reduce_motion_draws_static_threads(timeout := 5000) -> void:
+	var low_show := _show()
+	low_show._fire(Vector3(0, 0.03, 0), Vector3(0.3, 0.03, 0), VolleyCue.Family.BALLISTIC, 11, 1)
+	assert_int(low_show.get_children().filter(func(c: Node) -> bool: return c is OmniLight3D).size()).is_equal(0)
+	var motion_before: bool = GraphicsSettings.reduce_motion
+	GraphicsSettings.reduce_motion = true
+	var rm_show := _show()
+	rm_show.volley(PAIRS, VolleyCue.Family.BALLISTIC, 12)
+	var batches := rm_show.get_children().filter(func(c: Node) -> bool: return c is VfxRibbonBatch)
+	assert_int(batches.size()).override_failure_message("static sight-line thread batch created immediately").is_equal(1)
+	var batch := batches[0] as VfxRibbonBatch
+	assert_int(batch.active_count()).is_equal(PAIRS.size())
+	assert_bool(batch.is_slot_static(0)).override_failure_message("reduced motion takes static thread path").is_true()
+	assert_int(rm_show.get_children().filter(func(c: Node) -> bool: return c is OmniLight3D).size()).is_equal(0)
+	await get_tree().create_timer(ShotScript.STATIC_THREAD_LIFE_S + 0.25).timeout
+	GraphicsSettings.reduce_motion = motion_before
+	assert_int(rm_show.get_children().filter(func(c: Node) -> bool: return c is VfxRibbonBatch).size()) \
+		.override_failure_message("static thread batch freed after 0.5 s fade").is_equal(0)

@@ -1,13 +1,12 @@
 class_name ShotShow
 extends Node3D
-## Combat effects, the shooting show on top of the rule-true chalk lines: per weapon family a muzzle moment (rifle flash and
-## smoke, bow snap, flamer gout, energy charge-up, a machine gun's stutter, a gun's heavy thump), a visible projectile
-## along the SAME eye-to-eye sight line (tracer bullet, arrow or javelin on an arc above it, glowing bolt, a beam that
-## stands at once, a lobbed shell trailing smoke) and a NEUTRAL impact where it arrives (dust, sparks, a little light;
-## Blast weapons add a ring of light on the ground). The impact claims nothing about the dice; blood and ricochets come
-## from the resolver's results. Performance and Reduce Motion: no picture. Low: half the particles, no lights. All
-## randomness from the cue's seed; a volley is chaotic, not a row (every model fires at its own moment), the same on
-## every peer. Every round tells `sound_cue` when it leaves and lands, picture or not.
+## Combat effects, the shooting show on top of the rule-true chalk lines: per weapon family a muzzle moment (2-frame
+## star/cone flash, warm 0.24 m pooled OmniLight3D, drifting cordite smoke, bow snap, flamer gout, energy charge-up,
+## machine-gun stutter, artillery thump), batched 1-draw-call HDR tracer ribbons (VfxRibbonBatch with dark sand-contrast
+## edge) or arced projectiles along the SAME eye-to-eye sight line, and a neutral impact where it arrives.
+## Reduce Motion: instant static sight-line threads (0.5 s fade) and static blast rings (no flying bolts or flicker);
+## Performance: no picture; Low: half the particles, 0 lights. All randomness from the cue's seed; every round emits
+## `sound_cue` when it leaves and lands, picture or not.
 
 signal sound_cue(family: int, moment: String, at: Vector3)   # sound-ready hook: launch / impact / blast, per round
 
@@ -25,12 +24,24 @@ const SHOTS := {
 	F.THROWN: [0.5, Color(1.0, 0.92, 0.75), 0.035, 0.0015, 0.32],
 	F.BEAM: [0.12, Color(4.0, 1.1, 1.3), 0.0, 0.0011, 0.0],
 }
-const CHAOS_S := 0.6       # every model fires at its own moment inside this window
-const JITTER_M := 0.008    # where the visible round lands inside the target's base (the rule line stays exact)
-const ECHO_CHANCE := 0.35  # share of shots that throw a second, offset impact
-const AUTO_ROUNDS := 4     # a machine gun's burst per model
+const RIBBON_WIDTHS := {
+	F.NEUTRAL: 0.0034,
+	F.BALLISTIC: 0.0042,
+	F.AUTO: 0.0036,
+	F.ENERGY: 0.0058,
+}
+const CHAOS_S := 0.6            # every model fires at its own moment inside this window
+const JITTER_M := 0.008         # where the visible round lands inside the target's base (the rule line stays exact)
+const ECHO_CHANCE := 0.35       # share of shots that throw a second, offset impact
+const AUTO_ROUNDS := 4          # a machine gun's burst per model
 const ROUND_GAP_S := 0.06
-const MAX_LIGHTS := 3
+const MAX_LIGHTS := 8           # 8-light pooled ring buffer (Forward+ clustered, <0.08 ms GPU)
+const LIGHT_RANGE_M := 0.24     # washes shooter base & front grass
+const LIGHT_ATTENUATION := 1.6
+const LIGHT_LIFE_S := 0.07      # crisp 70 ms muzzle wash
+const LIGHT_ENERGY := 1.8
+const LIGHT_POOL_IDLE_S := 0.35
+const STATIC_THREAD_LIFE_S := 0.5
 const BLAST_RING := "shader_type spatial;
 render_mode unshaded, blend_add, cull_disabled, depth_draw_never;
 uniform float progress = 0.0;
@@ -41,7 +52,13 @@ void fragment() {
 
 var enabled := true
 var force_for_tests := false
-var _lights := 0
+var _ribbon_batch: VfxRibbonBatch = null
+var _light_pool: Array[OmniLight3D] = []
+var _light_age := PackedFloat32Array()
+var _light_life := PackedFloat32Array()
+var _light_peak := PackedFloat32Array()
+var _light_cursor := 0
+var _light_idle_s := 0.0
 static var _meshes := {}
 static var _ring_shader: Shader
 
@@ -49,12 +66,101 @@ static var _ring_shader: Shader
 func _ready() -> void:
 	var gs := get_node_or_null("/root/GraphicsSettings")
 	enabled = gs != null and gs.get("show_combat_effects") == true
+	set_process(false)
+
+
+func _exit_tree() -> void:
+	_light_pool.clear()
+	_light_age.clear()
+	_light_life.clear()
+	_light_peak.clear()
+	_ribbon_batch = null
 
 
 func _preset() -> int:
 	var gs := get_node_or_null("/root/GraphicsSettings")
 	return -1 if not enabled or UiMotion.reduced() or (DisplayServer.get_name() == "headless" and not force_for_tests) \
 		else (int(gs.current_preset) if gs != null else 2)
+
+
+func _ensure_ribbon_batch() -> VfxRibbonBatch:
+	if _ribbon_batch == null or not is_instance_valid(_ribbon_batch):
+		_ribbon_batch = VfxRibbonBatch.new()
+		_ribbon_batch.name = "TracerRibbonBatch"
+		_ribbon_batch.auto_free_when_empty = true
+		add_child(_ribbon_batch)
+	return _ribbon_batch
+
+
+func _ensure_light_pool() -> void:
+	if not _light_pool.is_empty():
+		return
+	_light_age.resize(MAX_LIGHTS)
+	_light_life.resize(MAX_LIGHTS)
+	_light_peak.resize(MAX_LIGHTS)
+	_light_age.fill(0.0)
+	_light_life.fill(0.0)
+	_light_peak.fill(0.0)
+	for i in MAX_LIGHTS:
+		var l := OmniLight3D.new()
+		l.name = "MuzzleLight_%d" % i
+		l.shadow_enabled = false
+		l.omni_range = LIGHT_RANGE_M
+		l.omni_attenuation = LIGHT_ATTENUATION
+		l.light_energy = 0.0
+		l.visible = false
+		add_child(l)
+		_light_pool.append(l)
+	_light_cursor = 0
+	_light_idle_s = 0.0
+	set_process(true)
+
+
+func release_light_pool() -> void:
+	for l in _light_pool:
+		if is_instance_valid(l):
+			l.queue_free()
+	_light_pool.clear()
+	_light_age.clear()
+	_light_life.clear()
+	_light_peak.clear()
+	_light_idle_s = 0.0
+	set_process(false)
+
+
+func light_pool_size() -> int:
+	return _light_pool.size()
+
+
+func _process(delta: float) -> void:
+	if _light_pool.is_empty():
+		set_process(false)
+		return
+	var any_active := false
+	for i in _light_pool.size():
+		var life := _light_life[i]
+		if life <= 0.0:
+			continue
+		var l := _light_pool[i]
+		if not is_instance_valid(l):
+			_light_life[i] = 0.0
+			continue
+		var next_age := _light_age[i] + delta
+		if next_age >= life:
+			_light_life[i] = 0.0
+			_light_age[i] = 0.0
+			l.light_energy = 0.0
+			l.visible = false
+		else:
+			_light_age[i] = next_age
+			l.light_energy = _light_peak[i] * (1.0 - next_age / life)
+			any_active = true
+	if any_active:
+		_light_idle_s = 0.0
+	else:
+		_light_idle_s += delta
+		if _light_idle_s >= LIGHT_POOL_IDLE_S:
+			release_light_pool()
 
 
 ## The chaos of a real volley, from the cue's seed alone, so every peer sees the same: per shot a start delay inside
@@ -75,7 +181,9 @@ static func plan(n: int, rng_seed: int) -> Array:
 func volley(pairs: Array, family: int, rng_seed: int, blast := 0, ground_drop := 0.0) -> void:
 	if not enabled or (DisplayServer.get_name() == "headless" and not force_for_tests):
 		return
-	var p := _preset()   # -1 with Reduce Motion: no picture, but every round still reaches the sound hook
+	var p := _preset()
+	if UiMotion.reduced():
+		_draw_reduced_motion_volley(pairs, family, blast, ground_drop)
 	var shots := plan(pairs.size(), rng_seed)
 	var rounds := AUTO_ROUNDS if family == F.AUTO else 1
 	for i in pairs.size():
@@ -88,6 +196,19 @@ func volley(pairs: Array, family: int, rng_seed: int, blast := 0, ground_drop :=
 				bool(shots[i]["echo"]) and rounds == 1, blast, ground_drop))
 
 
+## WCAG 2.3.3 static keyframe volley under Reduce Motion: instant sight-line threads (0.5 s fade) + static blast ring,
+## zero flying bolts, zero strobe lights.
+func _draw_reduced_motion_volley(pairs: Array, family: int, blast: int, ground_drop: float) -> void:
+	if pairs.is_empty():
+		return
+	var batch := _ensure_ribbon_batch()
+	var tint := VolleyCue.hdr_tint(family)
+	for pair in pairs:
+		batch.push_ribbon(pair[0], pair[1], tint, 0.0022, STATIC_THREAD_LIFE_S, 0.0, true, 1.15)
+		if blast > 0:
+			_static_blast_ring(pair[1] - Vector3.UP * ground_drop, blast)
+
+
 func _fire(a: Vector3, b: Vector3, family: int, s: int, p: int, muzzle_k := 1.0, echo := false, blast := 0,
 		ground_drop := 0.0) -> void:
 	var dir := (b - a).normalized()
@@ -95,13 +216,13 @@ func _fire(a: Vector3, b: Vector3, family: int, s: int, p: int, muzzle_k := 1.0,
 	_sound(family, "launch", muzzle)
 	match family:
 		F.BALLISTIC, F.AUTO:
-			FxBurst.spawn(self, FxBurst.Look.FLASH, muzzle, Vector3.ZERO, 1, s, p, 0.45 * muzzle_k)
+			FxBurst.spawn(self, FxBurst.Look.FLASH, muzzle, dir, 1, s, p, 0.55 * muzzle_k)
 			FxBurst.spawn(self, FxBurst.Look.PUFF, muzzle, dir + Vector3.UP, 6 if family == F.BALLISTIC else 2, s + 1, p, 0.7 * muzzle_k)
-			_light(muzzle, Color(1.0, 0.75, 0.4), p)
+			_light(muzzle, Color(1.0, 0.78, 0.42), p)
 		F.BOW:
 			FxBurst.spawn(self, FxBurst.Look.DUST, muzzle, Vector3.UP, 2, s, p, 0.3)   # the string's snap: no flash
 		F.FLAME:
-			FxBurst.spawn(self, FxBurst.Look.FLASH, muzzle, Vector3.ZERO, 1, s + 2, p, 0.5, Color(1.0, 0.6, 0.3))
+			FxBurst.spawn(self, FxBurst.Look.FLASH, muzzle, dir, 1, s + 2, p, 0.55, Color(1.0, 0.6, 0.3))
 			FxBurst.spawn(self, FxBurst.Look.EMBER, muzzle, dir, 28, s, p, a.distance_to(b) / 0.15)
 			FxBurst.spawn(self, FxBurst.Look.PUFF, muzzle, dir + Vector3.UP, 6, s + 1, p, 1.2)
 		F.ENERGY:
@@ -109,9 +230,9 @@ func _fire(a: Vector3, b: Vector3, family: int, s: int, p: int, muzzle_k := 1.0,
 		F.BEAM:
 			FxBurst.spawn(self, FxBurst.Look.MOTE, muzzle, Vector3.ZERO, 6, s, p, 0.4, Color(1.6, 0.5, 0.5))
 		F.ARTILLERY:
-			FxBurst.spawn(self, FxBurst.Look.FLASH, muzzle, Vector3.ZERO, 1, s, p, 0.9 * muzzle_k)
+			FxBurst.spawn(self, FxBurst.Look.FLASH, muzzle, dir, 1, s, p, 0.95 * muzzle_k)
 			FxBurst.spawn(self, FxBurst.Look.PUFF, muzzle, dir + Vector3.UP, 12, s + 1, p, 1.4 * muzzle_k)
-			_light(muzzle, Color(1.0, 0.7, 0.35), p)
+			_light(muzzle, Color(1.0, 0.7, 0.35), p, 0.11)
 		F.THROWN:
 			pass   # the throw itself is the look
 		_:
@@ -120,10 +241,18 @@ func _fire(a: Vector3, b: Vector3, family: int, s: int, p: int, muzzle_k := 1.0,
 	var tw := create_tween()
 	if family == F.ENERGY or family == F.BEAM:
 		tw.tween_interval(0.12 if family == F.ENERGY else 0.05)   # the charge-up before it leaves
-	var bolt: Node3D = _projectile(family, shot) if p > 0 else null
+	var uses_ribbon: bool = p > 0 and RIBBON_WIDTHS.has(family)
+	var bolt: Node3D = _projectile(family, shot) if (p > 0 and not uses_ribbon) else null
 	if family == F.BEAM:
 		tw.tween_callback(_beam.bind(muzzle, b, shot, p))
 		tw.tween_interval(0.03)
+	elif uses_ribbon:
+		var flight_s := float(shot[0])
+		var width_m := float(RIBBON_WIDTHS[family]) * (0.85 if p == 1 else 1.0)
+		var tint := VolleyCue.hdr_tint(family)
+		tw.tween_callback(func() -> void:
+			_ensure_ribbon_batch().push_ribbon(muzzle, b, tint, width_m, flight_s, 0.0, false, 2.2))
+		tw.tween_interval(flight_s)
 	elif bolt != null:
 		bolt.global_position = muzzle
 		var arc: float = float(shot[4]) * a.distance_to(b)
@@ -146,9 +275,7 @@ func _fire(a: Vector3, b: Vector3, family: int, s: int, p: int, muzzle_k := 1.0,
 		tw.tween_callback(_impact.bind(b + Vector3(-dir.z, 0.0, dir.x) * JITTER_M, -dir, family, s + 5, p, 0, 0.0, false))
 
 
-## The projectile: a holder that look_at() points along the flight, the mesh's long axis turned onto it. Meshes and
-## materials are shared per family (one per tracer cost +0.35 ms GPU in the v1 measurement). A beam's mesh is a unit
-## cylinder its transform stretches.
+## Arced projectiles (BOW, THROWN, ARTILLERY) and standing BEAM share one mesh/material per family.
 func _projectile(family: int, shot: Array) -> Node3D:
 	if float(shot[2]) <= 0.0 and family != F.BEAM:
 		return null
@@ -221,7 +348,7 @@ func _impact(at: Vector3, back: Vector3, family: int, s: int, p: int, blast := 0
 			FxBurst.spawn(self, FxBurst.Look.DUST, at, Vector3.UP, 14, s + 1, p, 1.4)
 			FxBurst.spawn(self, FxBurst.Look.CHIP, at, Vector3.UP, 8, s + 2, p, 1.0)
 			FxBurst.spawn(self, FxBurst.Look.DUST, at - Vector3.UP * ground_drop, Vector3.ZERO, 16, s + 3, p, 1.6, Color.WHITE, true)
-			_light(at, Color(1.0, 0.65, 0.35), p)
+			_light(at, Color(1.0, 0.65, 0.35), p, 0.14)
 		F.AUTO:
 			FxBurst.spawn(self, FxBurst.Look.DUST, at, back + Vector3.UP, 3, s, p, 0.6)
 			FxBurst.spawn(self, FxBurst.Look.SPARK, at, back, 3, s + 1, p, 0.8)
@@ -258,6 +385,26 @@ func _blast_ring(ground: Vector3, blast: int, p: int) -> void:
 	tw.tween_callback(ring.queue_free)
 
 
+func _static_blast_ring(ground: Vector3, blast: int) -> void:
+	if _ring_shader == null:
+		_ring_shader = Shader.new()
+		_ring_shader.code = BLAST_RING
+	var plane := PlaneMesh.new()
+	plane.size = Vector2.ONE * (0.02 + 0.008 * clampi(blast, 1, 12)) * 2.0
+	var mat := ShaderMaterial.new()
+	mat.shader = _ring_shader
+	mat.set_shader_parameter("progress", 0.65)
+	var ring := MeshInstance3D.new()
+	ring.mesh = plane
+	ring.material_override = mat
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(ring)
+	ring.global_position = ground + Vector3.UP * 0.003
+	var tw := ring.create_tween()
+	tw.tween_property(ring, "transparency", 1.0, STATIC_THREAD_LIFE_S)
+	tw.tween_callback(ring.queue_free)
+
+
 ## The sound-ready hook: every round's launch, impact and blast moment as a signal; a family whose sound is set in
 ## the weapon-family table (sounds.<family>.<moment> = res:// path) also plays it. Nothing ships a sound today.
 func _sound(family: int, moment: String, at: Vector3) -> void:
@@ -271,19 +418,22 @@ func _sound(family: int, moment: String, at: Vector3) -> void:
 		audio.call("play_sfx_at_path", path)
 
 
-func _light(at: Vector3, color: Color, p: int) -> void:
-	if p < 2 or _lights >= MAX_LIGHTS:
+## Ring-buffered 8-light OmniLight3D muzzle/impact wash (0.24 m range, 0.07 s decay, 0 lights on Low/Perf/ReduceMotion).
+func _light(at: Vector3, color: Color, p: int, life_s: float = LIGHT_LIFE_S) -> void:
+	if p < 2:
 		return
-	var l := OmniLight3D.new()
-	l.light_color = color
-	l.light_energy = 1.2
-	l.omni_range = 0.08
-	l.shadow_enabled = false
-	add_child(l)
+	_ensure_light_pool()
+	var slot := _light_cursor
+	_light_cursor = (_light_cursor + 1) % MAX_LIGHTS
+	var l := _light_pool[slot]
 	l.global_position = at
-	_lights += 1
-	var tw := l.create_tween()
-	tw.tween_property(l, "light_energy", 0.0, 0.12)
-	tw.tween_callback(func() -> void:
-		_lights -= 1
-		l.queue_free())
+	l.light_color = color
+	l.light_energy = LIGHT_ENERGY
+	l.omni_range = LIGHT_RANGE_M
+	l.omni_attenuation = LIGHT_ATTENUATION
+	l.visible = true
+	_light_age[slot] = 0.0
+	_light_life[slot] = maxf(life_s, 0.02)
+	_light_peak[slot] = LIGHT_ENERGY
+	_light_idle_s = 0.0
+	set_process(true)
