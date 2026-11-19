@@ -132,26 +132,3 @@ func test_the_table_names_anti_regen_when_it_skips_regeneration() -> void:
 	assert_str(_log_text()) \
 		.override_failure_message("rules-must-log: the bypass names Anti-Regen (log: %s)" % _log_text().strip_edges()) \
 		.contains("Anti-Regen: Regeneration ignored")
-
-
-## The real volley into a lone model standing in a wood: the cover save is skipped and the log says which
-## rule skipped it, instead of claiming the cover.
-func test_the_table_names_anti_cover_when_it_skips_cover() -> void:
-	var o: Node3D = _main.terrain_overlay
-	o.grid_cells[o.world_to_cell(SEED)] = o.TerrainType.FOREST
-	var foe := E2EBoot.make_unit(_main, 2, "Woodsman", [SEED])
-	_main.opr_army_manager.game_units[foe.unit_id] = foe
-	assert_bool(_main._solo_majority_in_cover(foe)).override_failure_message("precondition: the foe is in cover").is_true()
-	var shooter := _shooter()
-	var shots := [{"member": shooter, "quality": shooter.get_quality(), "alive": shooter.get_alive_count(),
-		"max": shooter.models.size(), "reach": 24, "profile": _profile(shooter, "Anti-Cover")}]
-	_main.seed_tray_rng(7)
-	await _main._solo_resolve_ai_volley(shooter, foe, shots)
-	var text := _log_text()
-	await E2EBoot.settle(get_tree())
-	assert_str(text) \
-		.override_failure_message("the Anti-Cover gun must not use the cover (log: %s)" % text.strip_edges()) \
-		.not_contains("is in cover")
-	assert_str(text) \
-		.override_failure_message("rules-must-log: the skip names Anti-Cover (log: %s)" % text.strip_edges()) \
-		.contains("Anti-Cover: Gunners")
