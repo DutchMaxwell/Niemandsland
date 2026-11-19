@@ -4,6 +4,7 @@ extends GdUnitTestSuite
 ## Real: the main scene, its network manager class (transport swapped out, the e2e_mp_auto_verbs_test pattern),
 ## the NmlCore extension. Constructed: bare units from E2EBoot.make_unit with an OPRUnit profile of one weapon.
 
+const SlicePin := preload("res://test/one_core/slice_pin.gd")
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 
@@ -28,6 +29,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	SlicePin.release()
 	CoreActivation.reset_all(_main)   # the session store is static: no case leaks an open activation into the next
 	CoreActivation._env = -1
 	_end_session()
@@ -111,14 +113,17 @@ func test_a_bare_unit_with_one_plain_weapon_is_plain() -> void:
 
 
 func test_a_special_rule_makes_a_unit_not_plain() -> void:
+	SlicePin.narrow()   # C-19: the case is about a unit the narrow slice refuses
 	assert_bool(CoreActivation.is_plain(_unit(1, "Rifles", ["Furious"]))).is_false()
 
 
 func test_a_weapon_rule_makes_a_unit_not_plain() -> void:
+	SlicePin.narrow()   # C-19: the case is about a unit the narrow slice refuses
 	assert_bool(CoreActivation.is_plain(_unit(1, "Rifles", [], ["Blast(3)"]))).is_false()
 
 
 func test_an_attached_hero_makes_a_unit_not_plain() -> void:
+	SlicePin.narrow()   # C-19: the case is about a unit the narrow slice refuses
 	var host := _unit(1, "Rifles")
 	var hero := _unit(1, "Captain")
 	hero.unit_properties["attached_to"] = host

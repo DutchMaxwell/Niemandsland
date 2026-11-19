@@ -9,6 +9,7 @@ extends GdUnitTestSuite
 ## What one test is: the sentence "takes one Dangerous terrain test for the whole unit", and one tray roll of its dice
 ## (a "(6+)" dice line of the attacker, quality 4 so no hit roll reads 6+).
 
+const SlicePin := preload("res://test/one_core/slice_pin.gd")
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const Harness := preload("res://test/one_core/golden_witness_harness.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -40,6 +41,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	SlicePin.release()
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
@@ -185,6 +187,7 @@ func _shooting(act: Callable, seed: int) -> Dictionary:
 ## front of its own volley).
 ## RED: an exit with no call or payment -> zero sentences; a refusal path that pays twice -> two.
 func test_every_exit_of_the_volley_code_pays_an_owed_test_once() -> void:
+	SlicePin.narrow()   # C-19: the "refused" case needs a target the narrow slice refuses (a unit rule)
 	var cases := {
 		"volley": func() -> Array: return [_att(5), [_def(8.0)]],
 		"no target": func() -> Array: return [_att(5), [_def(40.0)]],

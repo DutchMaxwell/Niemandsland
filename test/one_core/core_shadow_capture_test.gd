@@ -6,6 +6,7 @@ extends GdUnitTestSuite
 ## Real: the main scene, NmlCore, the table's `_solo_resolve_ai_volley` and its tray. Constructed: the golden grid's
 ## "ap" shape (an AP(1) rifle, not in the shipped slice) and its defender.
 
+const SlicePin := preload("res://test/one_core/slice_pin.gd")
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const Harness := preload("res://test/one_core/golden_witness_harness.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -16,6 +17,7 @@ var _root_before: Array
 
 
 func before_test() -> void:
+	SlicePin.narrow()   # C-19: this suite is about what the narrow slice refuses
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -32,6 +34,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	SlicePin.release()
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
 	CoreShadow._env = -1
