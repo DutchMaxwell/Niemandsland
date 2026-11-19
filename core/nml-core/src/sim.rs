@@ -6360,6 +6360,9 @@ fn strike_phase(
     // defender unit's own alive count — nothing else moves `alive[ti]` inside
     // this phase.
     let alive_before = next.alive[ti];
+    // P4.D-48: a supplied tray (the step path) keeps the phase's landing and says the table's wound and loss lines
+    // (`land_chain_report`, shared with the volley); a seeded tray snapshots nothing, so no draw or outcome moves.
+    let landed = chain_snapshot(next, ti, tray);
     if !seams.tray_exact {
         land_pool_wounds(next, ti, w, false, seams, &mut shot.log);
     }
@@ -6380,6 +6383,7 @@ fn strike_phase(
     if seams.tray_exact {
         land_pool_wounds(next, ti, w, true, seams, &mut shot.log);
     }
+    land_chain_report(statics, next, tray, ti, landed);
     caused = caused - raw_deadly + dealt;
     // rules-wave3-growthmark (epoch 6) — the ignore-wound marker AFTER the
     // landing: a bearer that ignored some of these wounds banks for them.
@@ -6968,6 +6972,9 @@ fn tray_charge_with_self_wounds(
 ) -> Option<usize> {
     let mut charger_self_wounds = charger_self_wounds;
     let mut defender_self_wounds = 0;
+    // P4.D-48: the table's announce line (`_solo_show_attack_announce`), after the pile-in and before any strike.
+    let (sname, tname) = (statics[next.roster.profile[si]].name.clone(), statics[next.roster.profile[ti]].name.clone());
+    say_melee(tray, next.player[si], format!("{sname} charges {tname}"));
     let strikes_first =
         |u: usize| statics[next.roster.profile[u]].melee.iter().any(|p| p.counter && p.counter_strikes_first.unwrap_or(true));
     // The table asks the host AND its living attached heroes (`_solo_has_counter`, main.gd:7050);
@@ -7095,6 +7102,22 @@ fn tray_charge_with_self_wounds(
         b += scourge_on_charger;
         let loser_without = melee_loser(next, si, ti, a_base, b_base, seams);
         let loser_with = melee_loser(next, si, ti, a, b, seams);
+        // P4.D-48: the table's result line (`_solo_log_melee_result`): what each side TOOK = the enemy's score, with the Fear
+        // and self-inflicted parts named. The Regeneration and Scourge notes are not said (those rules stay off the door).
+        let tally = |struck: i64, taken: i64, fear: i64| {
+            let mut extra = Vec::new();
+            if fear > 0 { extra.push(format!("Fear: {fear}")); }
+            if taken - struck - fear > 0 { extra.push(format!("self-inflicted: {}", taken - struck - fear)); }
+            if extra.is_empty() { taken.to_string() } else { format!("{taken} ({})", extra.join(", ")) }
+        };
+        let verdict = match loser_with {
+            Some(l) => format!("{} loses the melee", statics[next.roster.profile[l]].name),
+            None if combined_alive(next, si, seams) <= 0 && combined_alive(next, ti, seams) <= 0 => "both destroyed — no morale test".into(),
+            None => "a draw — no morale test".into(),
+        };
+        let text = format!("Melee result: {sname} took {}, {tname} took {} — {verdict}",
+            tally(by_tu, b, chain_fear(statics, next, ti, seams)), tally(by_su, a, chain_fear(statics, next, si, seams)));
+        say_melee(tray, next.player[si], text);
         shot.log.push(format!(
             "[Melee result] {} took {b} wounds, {} took {a} (Fear and self-inflicted wounds count)",
             statics[next.roster.profile[si]].name, statics[next.roster.profile[ti]].name
@@ -9320,6 +9343,15 @@ fn consolidation_goal(next: &State, winner: usize) -> Option<V3> {
     })
 }
 
+/// P4.D-48: the placeholder a melee line carries where the table cites its rules book; the charge door fills it in
+/// (`CoreActivation.drive`), since the core holds no book version.
+pub const CITE: &str = "{cite}";
+
+/// P4.D-48: one table melee line on a supplied tray (a seeded tray says nothing).
+fn say_melee(tray: &mut Tray, side: i64, text: String) {
+    tray.say(|| LogLine { rule: "melee", category: Category::Combat, side, text, detail: None });
+}
+
 /// Consolidation Moves (GF v3.5.1 p.9; the table's `_solo_consolidate_melee`), seam-gated by `consolidate`
 /// and, from `EPOCH_73_V36`, by the epoch alone. One side destroyed: the survivor may move up to 3" via the
 /// SAME routed chain `plain_move` gives ADVANCE/RUSH. From 73 also neither destroyed: the charger moves back 1",
@@ -9341,23 +9373,28 @@ fn consolidate_after_melee(next: &mut State, statics: &[UnitStatic], cover: Cove
     if next.alive[winner] <= 0 || (sep && next.alive[ti] <= 0) {
         return;
     }
+    // P4.D-48: the table's consolidation lines (`_solo_consolidate_melee`): the separation always, a win's move or its hold.
+    let wname = statics[next.roster.profile[winner]].name.clone();
+    let side = next.player[winner];
+    let say = |dice: &mut Option<(&mut Tray, &mut ShootResult)>, text: String| if let (true, Some((tray, _))) = (v36, dice.as_mut()) { say_melee(tray, side, text) };
+    if sep {
+        say(&mut dice, format!("Consolidation: {wname} moves back 1\" (the charger separates — {CITE})"));
+    }
+    let holds = format!("Consolidation: {wname} holds its ground (enemy destroyed, no room to move — {CITE})");
     let (goal, band_in, what) = if sep {
         let (c, d) = (geom::centre(&next.positions[si]), geom::centre(&next.positions[ti]));
         (geom::sub(geom::mul(c, 2.0), d), 1.0, "moves back 1\" (the charger separates)")
     } else {
-        let Some(goal) = consolidation_goal(next, winner) else { return };
+        let Some(goal) = consolidation_goal(next, winner) else { return say(&mut dice, holds) };
         (goal, CONSOLIDATE_WIN_IN, "consolidates up to 3\" (enemy destroyed)")
     };
-    if let Some(land) = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).plain_move(
-        next,
-        t,
-        winner,
-        goal,
-        band_in,
-        seams.hero_attach,
-        true,
-        crate::mv::FAST_PLANNER_GUARD,
-    ) {
+    let land = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).plain_move(
+        next, t, winner, goal, band_in, seams.hero_attach, true, crate::mv::FAST_PLANNER_GUARD);
+    if !sep {
+        let moved = land.as_ref().is_some_and(|l| l.movers.iter().zip(&l.end).any(|(m, e)| geom::length(geom::sub(*e, geom::to_f32(next.positions[m.unit][m.model]))) > 0.0005));
+        say(&mut dice, if moved { format!("{wname} consolidates up to 3\" (enemy destroyed — {CITE})") } else { holds });
+    }
+    if let Some(land) = land {
         // `_execute_move` tests only a move that moved (its 0.0005 m early-out); the count reads the pre-move state.
         let moved = land.movers.iter().zip(&land.end).any(|(m, e)| geom::length(geom::sub(*e, geom::to_f32(next.positions[m.unit][m.model]))) > 0.0005);
         let name = statics[next.roster.profile[winner]].name.clone();
@@ -10933,24 +10970,42 @@ fn resolve_with(
                 let mut trial = next.clone();
                 let snap = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch })
                     .snap_charge_state_per_model(&mut trial, si, ti, arcs, *band, seams.hero_attach);
-                snap.filter(|s| *s >= 0.0).map(|_| trial)
+                (snap.filter(|s| s.0 >= 0.0).map(|s| (trial, s)), snap.map_or(0.0, |s| s.0))
             });
             if engage_gap_in <= MELEE_ENGAGE_IN && per_model.as_ref().map_or(engage_gap_in <= BASE_CONTACT_EPSILON_IN
-                    || engage_gap_in <= charge_remaining_in + BASE_CONTACT_EPSILON_IN, |t| t.is_some())
+                    || engage_gap_in <= charge_remaining_in + BASE_CONTACT_EPSILON_IN, |t| t.0.is_some())
             {
-                if let Some(Some(snapped)) = per_model {
+                // P4.D-48: the snap the table narrates (`_run_ai_melee`): its size and the models left at their band.
+                let mut said_snap = (0.0, 0);
+                if let Some((Some((snapped, s)), _)) = per_model {
                     next = snapped;
+                    said_snap = s;
                 }
+                let (sname, tname) = (statics[pi_s].name.clone(), statics[next.roster.profile[ti]].name.clone());
                 if seams.movement && !seams.plain_only {
                     if !rule_on(seams.rules_epoch, EPOCH_77_CHARGE_CAP) || charge_arcs.is_none() {
-                        (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch })
-                            .snap_charge_state(&mut next, si, ti, charge_remaining_in, seams.hero_attach);
+                        said_snap.0 = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch })
+                            .snap_charge_state(&mut next, si, ti, charge_remaining_in, seams.hero_attach).unwrap_or(0.0);
+                    }
+                    if let (true, Some((tray, _))) = (said_snap.0 > 0.05, dice.as_mut()) {
+                        say_melee(tray, next.player[si], format!("{sname} charges into base contact (+{:.1}\") — {CITE}", said_snap.0));
+                        if said_snap.1 > 0 {
+                            say_melee(tray, next.player[si], format!("{sname}: {} model{} stay at their band (Charge: up to 12\"; Unit Coherency as close as possible)",
+                                said_snap.1, if said_snap.1 == 1 { "" } else { "s" }));
+                        }
                     }
                     // G4-C8b: the defender's mandatory pile-in, before Counter, Impact and every strike.
                     if let (true, Cover::Board(t)) = (rule_on(seams.rules_epoch, EPOCH_73_V36), cover) {
                         let n = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).pile_in_state(&mut next, t, si, ti, seams.hero_attach);
                         if let (true, Some((_, shot))) = (n > 0, dice.as_mut()) {
                             shot.log.push(format!("Pile In: {}: {n} model{} pile in up to 3\"", statics[next.roster.profile[ti]].name, if n == 1 { "" } else { "s" }));
+                        }
+                        if let Some((tray, _)) = dice.as_mut() {
+                            let text = if n > 0 { format!("{tname}: {n} model{} pile in up to 3\" ({CITE})", if n == 1 { "" } else { "s" }) }
+                                else { format!("{tname}: all models already in base contact — no pile-in needed ({CITE})") };
+                            if n > 0 || combined_alive(&next, ti, seams) > 1 {
+                                say_melee(tray, next.player[ti], text);
+                            }
                         }
                     }
                 }
@@ -10982,6 +11037,8 @@ fn resolve_with(
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.
                         if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) || morale_side_alive(&next, li, seams) {
+                            // P4.D-48: a rout removes the loser; the step path lands it with the table's lines.
+                            let routed = chain_snapshot(&next, li, tray);
                             // MOR-09b: the loser's own charge keeps Banner but drops the
                             // Valiant share; only a unit that WAS charged keeps the band.
                             if li == si {
@@ -10991,6 +11048,7 @@ fn resolve_with(
                                 tray_morale(&mut next, statics, li, true, seams, tray, shot, None,
                                     Some(charge_from_in));
                             }
+                            land_chain_report(statics, &next, tray, li, routed);
                         }
                     }
                     // Coverage wave — growth markers (Defensive Frenzy):
@@ -11077,6 +11135,15 @@ fn resolve_with(
                 if seams.consolidate || rule_on(seams.rules_epoch, EPOCH_73_V36) {
                     consolidate_after_melee(&mut next, statics, cover, seams, si, ti, dice.as_mut().map(|d| (&mut *d.0, &mut *d.1)));
                 }
+            } else if let Some((tray, _)) = dice.as_mut() {
+                // P4.D-48: the table's falls-short lines (`_run_ai_melee`): out of the engage reach, or the snap's budget spent.
+                let sname = &statics[pi_s].name;
+                say_melee(tray, next.player[si], if engage_gap_in > MELEE_ENGAGE_IN {
+                    format!("{sname}'s charge falls short ({engage_gap_in:.1}\")")
+                } else {
+                    let gap = per_model.as_ref().map_or(engage_gap_in, |t| -t.1);
+                    format!("{sname}'s charge falls short ({gap:.1}\" gap, move budget spent) — {CITE} 'as close as possible'")
+                });
             }
         }
     }
