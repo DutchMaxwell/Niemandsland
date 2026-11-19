@@ -735,6 +735,55 @@ static func ai_transcript(main, unit: GameUnit, report: Dictionary, target: Game
 	return [{"t": "begin"}, {"t": "placed", "positions": at, "trails": trails}, intent]
 
 
+## CC-10b: the planner's cast dicts (`report["casts"]`, plan order) as the core's `Input::Cast` entries: one per planned
+## cast, `seq` 0-based, every unit named by its roster key (`unit_id`), payers as `[[key, tokens]..]` in spend order and
+## the pools per foe slot. Pure. Nothing sends this array to the core yet (CC-13).
+static func cast_inputs(report: Dictionary) -> Array:
+	var out: Array = []
+	for c in report.get("casts", []):
+		var cast := c as Dictionary
+		var caster: GameUnit = cast.get("caster")
+		if caster == null:
+			continue
+		var targets: Array = []
+		for t in cast.get("targets", []):
+			if t is GameUnit:
+				targets.append((t as GameUnit).unit_id)
+		var conduit: GameUnit = cast.get("conduit")
+		var shaken: Array = []
+		for sh in cast.get("conduit_shaken", []):
+			var su: GameUnit = (sh as Dictionary).get("unit")
+			if su != null:
+				shaken.append(su.unit_id)
+		var pools: Array = []
+		for p in cast.get("pools", []):
+			var row: Array = p as Array
+			pools.append([int(row[0]), _cast_payers(row[1])])
+		var effect: Dictionary = (cast.get("spell", {}) as Dictionary).get("effect", {})
+		out.append({"t": "cast", "seq": out.size(), "caster": caster.unit_id,
+			"spell": str(cast.get("name", "")), "targets": targets,
+			"base": int(cast.get("base_target", 0)),
+			"threshold": int(cast.get("threshold", 0)),
+			"boost": int(cast.get("boost", 0)), "boost_sources": _cast_payers(cast.get("boost_sources", [])),
+			"interference": int(cast.get("interference", 0)),
+			"interference_sources": _cast_payers(cast.get("interference_sources", [])),
+			"conduit": (conduit.unit_id if conduit != null else ""), "conduit_shaken": shaken,
+			"pools": pools, "once": bool(effect.get("once", str(effect.get("duration", "")) == "once")),
+			"open": bool(cast.get("interference_open", false))})
+	return out
+
+
+## One payer list of a cast as the core reads it: `[[unit key, tokens]..]` in spend order.
+static func _cast_payers(srcs: Array) -> Array:
+	var rows: Array = []
+	for s in srcs:
+		var sd := s as Dictionary
+		var su: GameUnit = sd.get("unit")
+		if su != null:
+			rows.append([su.unit_id, int(sd.get("tokens", 0))])
+	return rows
+
+
 ## P4.D-14: split fire's aim of `parts` (the volley's groups, {target, shots}): one {member, weapon, target} per shot in the table's
 ## group order; [] for one group. The member is the unit NAME (`sim.rs split_plan` finds it by name), the target its roster key.
 static func split_aim(parts: Array) -> Array:
