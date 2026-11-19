@@ -1,17 +1,20 @@
-"""PLAN G step 2 — parity driver: `selfplay.py` (Rust core) against a recorded `tools/core_selfplay.gd` oracle.
+"""PLAN G step 2/3 — parity driver: `selfplay.py` (Rust core) against a recorded `tools/core_selfplay.gd` oracle.
 
 Plays each seed ONCE with `selfplay.play_game` at the oracle's knobs (`selfplay.LEGACY_FIDELITY_KNOBS`, agrees with
-`TRAINER_KNOBS`; shipped loader, so use a FRESH oracle) and runs BOTH gates' own `compare()` on it (`selfplay_gate`:
-winner/objectives/VP/rounds/picks; `sidecar_gate`: the file field by field; each stops at a seed's first difference).
-Writes `parity_summary.json`: sha, core_commit, core_dirty, ref, seeds_requested/compared, rows_compared, missing,
-refused, diffs [{seed, gate, path, ref, got}]. Refuse, never skip: exit 2 when a requested seed lacks `core_s<seed>.json`
-or `acts_<seed>/acts.jsonl`, or nothing was compared. Exit 1 = a difference, 0 = all equal.
+`TRAINER_KNOBS`; use a FRESH oracle) and runs BOTH gates' own `compare()` on it (`selfplay_gate`: winner/objectives/VP/
+rounds/picks; `sidecar_gate`: the file field by field; each stops at a seed's first difference). Writes
+`parity_summary.json` (sha, core_commit, core_dirty, ref, seeds_requested/compared, rows_compared, missing, refused,
+diffs [{seed, gate, path, ref, got, accepted}]). Exit 2 = refused (a requested seed lacks `core_s<seed>.json` or
+`acts_<seed>/acts.jsonl`, or nothing compared), 1 = an unexplained difference or a stale accept, 0 = all equal, 3 = blind.
+`--accept FILE` ([{gate, path_regex, reason, epoch, pr}]) names expected differences; an entry matching nothing is
+`stale accept`. `--plant` must turn a corrupted copy of the first seed red (exit 1), else exit 3: instrument blind.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -27,6 +30,7 @@ import selfplay_gate  # noqa: E402
 import sidecar_gate  # noqa: E402
 
 TOL = 1e-9  # the sidecar gate's float tolerance
+PLANT_DIR = Path.home() / ".cache/nml-g/tmp/plant"
 
 
 def scan_ref(ref_dir: Path, seeds: list[int]) -> tuple[dict[int, dict], list[int]]:
@@ -58,10 +62,8 @@ def run_parity(ref_dir: Path, seeds: list[int], make_play, log=print) -> dict:
     refs, missing = scan_ref(ref_dir, seeds)
     out = {"ref": str(ref_dir), "seeds_requested": len(seeds), "seeds_compared": 0, "rows_compared": 0,
            "missing": missing, "refused": None, "diffs": []}
-    for s in missing:
-        log("seed %d MISSING core_s%d.json / acts_%d/acts.jsonl (absent or unreadable)" % (s, s, s))
     if missing or not refs:
-        out["refused"] = "%d of %d requested seeds have no reference" % (len(missing), len(seeds)) if refs else "compared 0 seeds"
+        out["refused"] = "seeds %s have no reference (absent or unreadable core_s<seed>.json / acts.jsonl)" % missing if refs else "compared 0 seeds"
         return out
     play = make_play()
     for seed in seeds:
@@ -72,9 +74,30 @@ def run_parity(ref_dir: Path, seeds: list[int], make_play, log=print) -> dict:
     return out
 
 
+def apply_accept(summary: dict, accept: list[dict]) -> None:
+    """Mark each diff `accepted` when an entry names its gate and fully matches its path; list the entries that matched nothing."""
+    used = set()
+    for d in summary["diffs"]:
+        hit = next((i for i, e in enumerate(accept) if e["gate"] == d["gate"] and re.fullmatch(e["path_regex"], d["path"])), None)
+        d["accepted"], _ = hit is not None, used.add(hit)
+    summary["stale_accepts"] = [e for i, e in enumerate(accept) if i not in used]
+
+
+def plant(ref_dir: Path, seed: int, dest: Path) -> Path:
+    """A copy of one oracle seed with board row 0 column 3 +1 and its first two picks swapped: a run on it must be red."""
+    ref = json.loads((ref_dir / ("core_s%d.json" % seed)).read_text(encoding="utf-8"))
+    ref["planner_positions"][0]["board"][0][3] += 1
+    acts = (ref_dir / ("acts_%d" % seed) / "acts.jsonl").read_text(encoding="utf-8").splitlines()
+    i, j = [k for k, ln in enumerate(acts) if json.loads(ln).get("kind") == "act"][:2]
+    acts[i], acts[j] = acts[j], acts[i]
+    (dest / ("acts_%d" % seed)).mkdir(parents=True, exist_ok=True)
+    (dest / ("core_s%d.json" % seed)).write_text(json.dumps(ref), encoding="utf-8")
+    (dest / ("acts_%d" % seed) / "acts.jsonl").write_text("\n".join(acts) + "\n", encoding="utf-8")
+    return dest
+
+
 def exit_code(summary: dict) -> int:
-    """2 = refused (nothing compared, or only part of the range), 1 = differences, 0 = equal."""
-    return 2 if summary["refused"] else int(bool(summary["diffs"]))
+    return 2 if summary["refused"] else int(any(not d.get("accepted") for d in summary["diffs"]) or bool(summary.get("stale_accepts")))
 
 
 def main(argv: list[str]) -> int:
@@ -83,6 +106,8 @@ def main(argv: list[str]) -> int:
         ap.add_argument(flag, required=True)
     ap.add_argument("--repo", default=str(Path(__file__).resolve().parents[3]))
     ap.add_argument("--out", default="parity_summary.json", help="where the summary JSON goes")
+    ap.add_argument("--accept", help="JSON list of accepted difference classes")
+    ap.add_argument("--plant", action="store_true", help="also prove the instrument red on a corrupted copy of the first seed")
     a = ap.parse_args(argv)
     ref_dir, seeds = Path(a.ref), selfplay_gate.parse_seeds(a.seeds)
 
@@ -92,18 +117,27 @@ def main(argv: list[str]) -> int:
         nml_core.set_legacy_no_cond_ap(False)
         acts = [ref_dir / ("acts_%d" % s) / "acts.jsonl" for s in seeds]
         hero, vocab = sp.resolve_hero_attach_mode("auto", acts)[0], sp.resolve_vocab_version("auto", acts)[0]
-        print("hero_attach %s, vocab_version %d (read off the corpus)" % (hero, vocab))
         return lambda seed: sp.play_game(seed, a.army1, a.army2, a.repo, a.bank, core, hero_attach=hero,
                                          vocab_version=vocab, **sp.LEGACY_FIDELITY_KNOBS)
 
     sha = subprocess.run(["git", "-C", a.repo, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     summary = {"sha": sha or "unknown", "core_commit": nml_core.BUILD_COMMIT, "core_dirty": nml_core.BUILD_DIRTY,
                **run_parity(ref_dir, seeds, make_play)}
+    if a.accept:
+        apply_accept(summary, json.loads(Path(a.accept).read_text(encoding="utf-8")))
+    code = exit_code(summary)
+    if a.plant and not summary["refused"]:
+        summary["plant_exit"] = exit_code(run_parity(plant(ref_dir, seeds[0], PLANT_DIR), seeds[:1], make_play, log=lambda *_: None))
+        code = code if summary["plant_exit"] == 1 else 3
+        print("plant: exit %d -> %s" % (summary["plant_exit"], "red, as it must be" if code != 3 else "instrument blind"))
     Path(a.out).write_text(json.dumps(summary, indent=1, sort_keys=True, default=repr) + "\n", encoding="utf-8")
-    print("PARITY: %d/%d seeds compared, %d rows, %d differences%s -> %s" % (
+    for e in summary.get("stale_accepts", []):
+        print("stale accept: %s" % json.dumps(e))
+    print("PARITY: %d/%d seeds compared, %d rows, %d differences (%d unexplained)%s -> %s" % (
         summary["seeds_compared"], summary["seeds_requested"], summary["rows_compared"], len(summary["diffs"]),
+        sum(not d.get("accepted") for d in summary["diffs"]),
         " (REFUSED: %s)" % summary["refused"] if summary["refused"] else "", a.out))
-    return exit_code(summary)
+    return code
 
 
 if __name__ == "__main__":
