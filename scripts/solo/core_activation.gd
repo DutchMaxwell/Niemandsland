@@ -519,6 +519,8 @@ static func dump_legacy() -> void:
 		var out := {"legacy": legacy, "legacy_sets": legacy_sets, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals}
 		if not CoreShadow.records.is_empty():
 			out["shadow"] = CoreShadow.records   # C-4: the shadow run's volleys (NML_CORE_SHADOW=1)
+		if not CoreShadow.melee_records.is_empty():
+			out["shadow_melee"] = CoreShadow.melee_records   # plan E: the AI charges (NML_CORE_SHADOW_MELEE=1)
 		f.store_string(JSON.stringify(out))
 
 
@@ -644,13 +646,28 @@ const MELEE_MAX_MODELS := 10
 
 
 static func takes_ai_charge(main, unit: GameUnit, report: Dictionary) -> bool:
+	return charge_door_enabled() and main._solo_core_ai_h != 0 and main.dice_roller_control != null \
+		and charge_refusals(main, unit, report).is_empty()
+
+
+## Plan E (melee shadow): why the charge door's slice refuses this AI charge, by reason ([] = it takes it); the door's own
+## predicate apart from the switch, the board and the tray. Read before the table fights (the sizes are the start's).
+static func charge_refusals(main, unit: GameUnit, report: Dictionary) -> Array:
 	var target = report.get("target")
-	return charge_door_enabled() and main._solo_core_ai_h != 0 and unit != null and target is GameUnit \
-		and main._solo_combined_alive(unit) < MELEE_MAX_MODELS and main._solo_combined_alive(target) < MELEE_MAX_MODELS \
-		and main.dice_roller_control != null and int(report.get("action", -1)) == AiDecision.Action.CHARGE and main._solo_is_ai_unit(target) \
-		and CoreSlice.melee_refusals(unit).is_empty() and CoreSlice.melee_refusals(target, true).is_empty() \
-		and has_statline(target) and int(report.get("dangerous_dice", report.get("dangerous_models", 0))) == 0 \
-		and (report.get("casts", []) as Array).is_empty()
+	if unit == null or not target is GameUnit or int(report.get("action", -1)) != AiDecision.Action.CHARGE:
+		return ["no_charge"]
+	var out: Array = CoreSlice.melee_refusals(unit) + CoreSlice.melee_refusals(target, true).map(func(r): return "target_" + r)
+	if not main._solo_is_ai_unit(target):
+		out.append("human_defender")
+	if main._solo_combined_alive(unit) >= MELEE_MAX_MODELS or main._solo_combined_alive(target) >= MELEE_MAX_MODELS:
+		out.append("size")
+	if not has_statline(target):
+		out.append("no_statline")
+	if int(report.get("dangerous_dice", report.get("dangerous_models", 0))) != 0:
+		out.append("dangerous")
+	if not (report.get("casts", []) as Array).is_empty():
+		out.append("cast")
+	return out
 
 
 ## P4.D-48: the AI charge through the core's step path (`_run_ai_melee` hands over). The core lands the charge with its own

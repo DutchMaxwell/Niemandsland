@@ -38,7 +38,7 @@ static func enabled() -> bool:
 static func capture(main, peek: GameUnit) -> int:
 	tap.clear()
 	tapping = false
-	if not enabled() or peek == null or not CoreActivation.applies(main) or not peek.source_data is OPRApiClient.OPRUnit:
+	if not (enabled() or melee_enabled()) or peek == null or not CoreActivation.applies(main) or not peek.source_data is OPRApiClient.OPRUnit:
 		return 0
 	var h := CoreActivation.capture(main)
 	tapping = h != 0
@@ -59,7 +59,7 @@ static func note_placed(main, unit: GameUnit, report: Dictionary) -> void:
 
 ## C-19 s2: the volley code's hand-off: the compare waits for `flush` (the AI body, after its end-of-activation morale).
 static func hold(main, unit: GameUnit, report: Dictionary, groups: Dictionary, order: Array) -> void:
-	if int(main._solo_core_shadow_h) != 0 and not order.is_empty():
+	if enabled() and int(main._solo_core_shadow_h) != 0 and not order.is_empty():
 		_held = [unit, report, groups, order]
 
 
@@ -193,7 +193,113 @@ static func release(main) -> void:
 		if core != null:
 			core.release(int(main._solo_core_shadow_h))
 	main._solo_core_shadow_h = 0
+	melee_end(main)
 	_held = []
 	placed = []
 	tap.clear()
 	tapping = false
+
+
+## Plan E (melee shadow, P4.D-48): env NML_CORE_SHADOW_MELEE=1 (soaks only, default OFF). With the charge door off the table
+## fights every AI charge; for each one the door's slice WOULD take (`CoreActivation.charge_refusals` = []) the shadow board
+## replays it through the core's step path with the table's own faces and compares the rolls, each unit's end state,
+## the living models' positions (XZ, within 0.01") and the table's melee lines against the core's. Counting only.
+static var _melee_env := -1
+## One record per AI charge seen: {charger, target, taken, why, equal, first_diff, detail}; the census writes them.
+static var melee_records: Array = []
+## The charge in flight: {why, lines}; {} = none. `_line_fn` taps the battle log while the table fights it.
+static var _melee: Dictionary = {}
+static var _line_fn: Callable
+
+
+static func melee_enabled() -> bool:
+	if _melee_env < 0:
+		_melee_env = 1 if OS.get_environment("NML_CORE_SHADOW_MELEE").to_lower() in ["1", "on"] else 0
+	return _melee_env == 1
+
+
+## Before the table fights the charge: the slice's reading (start sizes) and the battle-log tap.
+static func melee_begin(main, unit: GameUnit, report: Dictionary) -> void:
+	melee_end(main)
+	if not melee_enabled() or int(main._solo_core_shadow_h) == 0:
+		return
+	_melee = {"why": CoreActivation.charge_refusals(main, unit, report), "lines": []}
+	var lines: Array = _melee["lines"]
+	_line_fn = func(e: Dictionary) -> void: lines.append("%s|%s" % [BattleLog.Category.keys()[int(e["category"])], str(e["text"])])
+	main.battle_log.entry_added.connect(_line_fn)
+
+
+## The tap closes (every exit, `release`).
+static func melee_end(main) -> void:
+	if _line_fn.is_valid() and main.battle_log != null and main.battle_log.entry_added.is_connected(_line_fn):
+		main.battle_log.entry_added.disconnect(_line_fn)
+	_line_fn = Callable()
+
+
+## After the table fought the charge: one record; a charge the slice takes is replayed and compared.
+static func melee_compare(main, unit: GameUnit, report: Dictionary) -> void:
+	if _melee.is_empty():
+		return
+	melee_end(main)
+	var m := _melee
+	_melee = {}
+	var rec := {"charger": unit.get_name(), "target": (report["target"] as GameUnit).get_name(), "taken": (m["why"] as Array).is_empty(),
+		"why": m["why"], "equal": false, "first_diff": "", "detail": {}}
+	if rec["taken"]:
+		rec["first_diff"] = _melee_diff(main, unit, report, m["lines"])
+		rec["equal"] = rec["first_diff"] == ""
+		rec["detail"] = _detail
+	melee_records.append(rec)
+
+
+static func _melee_diff(main, unit: GameUnit, report: Dictionary, table_lines: Array) -> String:
+	var core: Object = main.solo_controller._core_node_ready()
+	var h := int(main._solo_core_shadow_h)
+	var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.CHARGE, "charge": (report["target"] as GameUnit).unit_id}]
+	var rolls: Array = tap.filter(func(r: Dictionary) -> bool: return not ["cast", "spell"].has(str(r["leg"])))
+	var r: Dictionary = core.step_activation(h, unit.unit_id, t, false)
+	_detail = {}
+	var i := 0
+	while str(r["step"]) == "need_roll":
+		if i >= rolls.size() or not same_roll(gate_key(r, false), gate_key(rolls[i], true), {}) or (rolls[i]["faces"] as Array).size() != int(r["faces"]):
+			_detail = {"core": gate_key(r, false), "table": _raw(rolls[i]) if i < rolls.size() else []}
+			return "rolls"
+		t.append({"t": "faces", "faces": rolls[i]["faces"]})
+		i += 1
+		r = core.step_activation(h, unit.unit_id, t, false)
+	if str(r["step"]) != "done":
+		_detail = {"reason": str(r.get("reason", r.get("id", "")))}
+		return str(r["step"])
+	if i < rolls.size():
+		_detail = {"table": rolls.slice(i, i + 4).map(_raw)}
+		return "table_rolled_more"
+	var plain: Dictionary = core.plain_of(int(r["handle"]))
+	core.release(int(r["handle"]))
+	var diff := _state_diff(main, plain)
+	if diff == "":
+		diff = _positions_diff(main, plain)
+	if diff == "":
+		var cite := OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))
+		var core_lines: Array = (r.get("lines", []) as Array).map(func(l: Dictionary) -> String:
+			return "%s|%s" % [BattleLog.Category.keys()[int(l["category"])], str(l["text"]).replace("{cite}", cite)])
+		var said: Array = table_lines.filter(func(l: String) -> bool: return not l.contains(" → "))   # the tray's roll lines are the table's
+		if said != core_lines:
+			_detail = {"table": said, "core": core_lines}
+			diff = "lines"
+	return diff
+
+
+## The first unit whose living models stand elsewhere in the core (XZ, sorted, 0.01"): "" = none, else "positions".
+static func _positions_diff(main, core_plain: Dictionary) -> String:
+	var table: Dictionary = BattleSim.capture(main.opr_army_manager)
+	for uid in table["units"]:
+		var xz := func(ps: Array) -> Array:
+			var out: Array = ps.map(func(p: Variant) -> Vector2: return Vector2(p[0], p[2]) / 0.0254)   # Vector3 (table) or [x, y, z] (core)
+			out.sort()
+			return out
+		var a: Array = xz.call(table["units"][uid].get("positions", []))
+		var b: Array = xz.call((core_plain.get("units", {}) as Dictionary).get(uid, {}).get("positions", []))
+		if a.size() != b.size() or range(a.size()).any(func(i: int) -> bool: return (a[i] as Vector2).distance_to(b[i]) > 0.01):
+			_detail = {"unit": str(uid), "table": a, "core": b}
+			return "positions"
+	return ""
