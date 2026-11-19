@@ -1587,7 +1587,7 @@ mod tests {
         let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params });
         let t = vec![Begin, intent(HOLD, None), Input::Cast(CastInput { base: 4, threshold: 1, ..bolt(0) })];
         let first = step_activation(&statics, &st, "a", &board, Seams { dangerous_end_morale: true, ..seams() }, &t, true);
-        assert!(matches!(&first, ActStep::NeedRoll { kind: "attack", owner_key, count: 2, .. } if owner_key == "a"), "the Dangerous test first: {first:?}");
+        assert!(matches!(&first, ActStep::NeedRoll { kind: "dangerous", owner_key, count: 2, .. } if owner_key == "a"), "the Dangerous test first, named for its count-the-1s line: {first:?}");
         let t = [t, vec![Faces(vec![6, 6])]].concat();
         let ActStep::NeedRoll { kind: "cast", lines, .. } = step_activation(&statics, &st, "a", &board, Seams { dangerous_end_morale: true, ..seams() }, &t, true) else { panic!("then the cast die") };
         assert_eq!(lines.iter().map(|l| l.text.as_str()).next(), Some("Spell Accumulator: Hero is Shaken \u{2014} its tokens do not feed friendly casters"));
@@ -2372,7 +2372,7 @@ mod tests {
             }
         }
         let ActStep::Done { state: s2, lines: l2, .. } = step_activation(&statics2, &st2, "a", &board, dang_seams, &t2, true) else { panic!("expected Done") };
-        assert_eq!(asked2, ["attack|4x6+|Host", "cast|1x2+|Hero", "spell_defense|2x4+|Foe", "attack|1x4+|Hero"]);
+        assert_eq!(asked2, ["dangerous|4x6+|Host", "cast|1x2+|Hero", "spell_defense|2x4+|Foe", "attack|1x4+|Hero"]);
         assert_eq!((s2.alive[0], s2.alive[1], s2.casts[0], s2.casts[1]), (0, 1, 0, 0), "host dead (cast 0 token still spent), hero alive");
         assert!(l2.iter().any(|l| l.text == "Host is destroyed but its joined hero lives - the unit is not destroyed and goes on"), "{l2:?}");
     }
@@ -3690,7 +3690,7 @@ mod tests {
             t.push(Faces(match asked.len() { 1 => vec![1, 6], 3 => vec![1; faces], _ => vec![6; faces] }));
             assert!(asked.len() < 8, "{asked:?}");
         }
-        let want = [("attack", "a"), ("attack", "a"), ("defense", "b"), ("morale", "b"), ("morale", "a")];
+        let want = [("dangerous", "a"), ("attack", "a"), ("defense", "b"), ("morale", "b"), ("morale", "a")];
         assert_eq!(asked, want.map(|(k, o)| (k, o.to_string())));
     }
 

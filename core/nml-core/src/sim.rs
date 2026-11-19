@@ -10186,6 +10186,7 @@ fn consolidate_after_melee(next: &mut State, statics: &[UnitStatic], cover: Cove
         if let (true, Some((tray, shot))) = (n > 0, dice) {
             shot.log.push(format!("Dangerous terrain: {name} takes one test for the whole unit ({n} dice)"));
             tray.owner_next(Some(winner));
+            tray.name_next("dangerous"); // the table's kind (main.gd `_run_ai_dangerous`): its dice line counts the 1s
             let faces = tray.roll(n as usize);
             let w = dangerous_wounds(&faces);
             shot.rolls.push(crate::dice::Roll { kind: "attack", count: n, target: DANGEROUS_TARGET, faces, owner: name });
@@ -10908,6 +10909,7 @@ fn resolve_with(
         if let Some((tray, shot)) = dice.as_mut() {
             let n = dangerous_dice(statics, state, &next, si, seams, landing.as_ref(), cover, shot, false);
             if n > 0 {
+                tray.name_next("dangerous"); // the table's kind (main.gd `_run_ai_dangerous`): its dice line counts the 1s
                 let faces = tray.roll(n as usize);
                 let w = dangerous_wounds(&faces);
                 shot.rolls.push(crate::dice::Roll {

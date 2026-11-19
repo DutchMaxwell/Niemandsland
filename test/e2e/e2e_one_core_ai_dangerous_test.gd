@@ -7,7 +7,7 @@ extends GdUnitTestSuite
 ## tray. Constructed: plain units (ParityTable), a painted Dangerous block under the attacker (the golden harness's own),
 ## both seats AI (no save card waits for a click).
 ## What one test is: the sentence "takes one Dangerous terrain test for the whole unit", and one tray roll of its dice
-## (a "(6+)" dice line of the attacker, quality 4 so no hit roll reads 6+).
+## (a "(each 1)" dice line of the attacker: only the Dangerous test counts the 1s).
 
 const SlicePin := preload("res://test/one_core/slice_pin.gd")
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -68,7 +68,7 @@ func _tally(lines: Array) -> Dictionary:
 	for l in lines:
 		var t := str(l)
 		out["tests"] += 1 if t.contains("Dangerous terrain test") else 0
-		out["dice"] += 1 if t.begins_with("COMBAT|AI (Att)") and t.ends_with("(6+)") else 0
+		out["dice"] += 1 if t.begins_with("COMBAT|AI (Att)") and t.ends_with("(each 1)") else 0
 		out["wounds"] += 1 if t.contains("from dangerous terrain") else 0
 		out["morale"] += 1 if t.begins_with("COMBAT|Att ") and t.contains(" morale") else 0
 		out["fires"] += 1 if t.contains(" fires at ") or t.contains(" fires Rifle at ") or t.contains(" fires Pistol at ") else 0
@@ -131,7 +131,7 @@ func test_a_shooter_takes_its_dangerous_test_once_through_the_core() -> void:
 			# The staged volley opens at its own first hit roll, not at the Dangerous test's throw: its announce comes after.
 			var announce := _first(r["lines"], "Att fires at Def")
 			assert_bool(announce > _first(r["lines"], "from dangerous terrain") if int(r["lost"]) > 0 \
-				else announce > _first(r["lines"], "(6+)")).override_failure_message("the volley's announce came early: " + why).is_true()
+				else announce > _first(r["lines"], "(each 1)")).override_failure_message("the volley's announce came early: " + why).is_true()
 			if int(shape["dead"]) > 0:
 				assert_int(int(tally["morale"])).override_failure_message("morale tests: " + why).is_equal(1 if int(r["lost"]) > 0 else 0)
 	assert_int(CoreActivation.dangerous_mismatches).override_failure_message("core and table disagree on the test").is_equal(0)

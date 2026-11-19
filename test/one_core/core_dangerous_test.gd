@@ -80,7 +80,7 @@ func _shots(att: GameUnit, weapon: Dictionary, gap_in: float) -> Array:
 	return out
 
 
-## What a case's full log wrote of the Dangerous test: the sentences, the test's tray rolls (the attacker's "(6+)" lines),
+## What a case's full log wrote of the Dangerous test: the sentences, the test's tray rolls (the attacker's "(each 1)" lines),
 ## the wound sentence, and where the volley's own "fires at" announce stands relative to them (-1 = none written).
 static func _tally(lines: Array) -> Dictionary:
 	var out := {"tests": 0, "dice": 0, "wounds": 0, "announce_after": -1}
@@ -88,9 +88,9 @@ static func _tally(lines: Array) -> Dictionary:
 	for i in lines.size():
 		var t := str(lines[i])
 		out["tests"] += 1 if t.contains("Dangerous terrain test") else 0
-		out["dice"] += 1 if t.begins_with("COMBAT|AI (Att)") and t.ends_with("(6+)") else 0
+		out["dice"] += 1 if t.begins_with("COMBAT|AI (Att)") and t.ends_with("(each 1)") else 0
 		out["wounds"] += 1 if t.contains("from dangerous terrain") else 0
-		if t.contains("Dangerous terrain test") or (t.begins_with("COMBAT|AI (Att)") and t.ends_with("(6+)")) \
+		if t.contains("Dangerous terrain test") or (t.begins_with("COMBAT|AI (Att)") and t.ends_with("(each 1)")) \
 				or t.contains("from dangerous terrain"):
 			last = i
 		if t == "COMBAT|Att fires at Def":
