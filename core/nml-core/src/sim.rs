@@ -41,7 +41,7 @@ use crate::acts::{
 use crate::io::{Action, Seams, SplitShot};
 use crate::landing::{LandedModel, Landing};
 use crate::logline::{Category, LogLine};
-use crate::dice::{Morale, ShootResult, Tray};
+use crate::dice::{say_rule, Morale, ShootResult, Tray};
 use crate::mods;
 use crate::mission::{drop_carried, sync_carried_positions};
 use crate::rng::GodotRng;
@@ -3786,6 +3786,33 @@ fn shooting_morale_trigger(
         || wounded(state.alive[ti], us.model_count)
 }
 
+/// The table's line when WOUNDS, not a lost model, call the shooting morale test (`_solo_shooting_morale`): a single model at half
+/// its Tough value, or a multi-model unit at half strength or less. `None` when a lost model called it (the table says nothing).
+#[allow(clippy::too_many_arguments)]
+fn shooting_morale_line(
+    state: &State, statics: &[UnitStatic], seams: Seams, us: &UnitStatic, ti: usize, alive_before: i64, wounds_before: i64,
+) -> Option<String> {
+    let root = morale_root(state, ti, seams);
+    let (ti, us) = if root == ti { (ti, us) } else { (root, &statics[state.roster.profile[root]]) };
+    let now = morale_wounds_left(state, ti, seams);
+    if wounds_before < 0 || now >= wounds_before {
+        return None;
+    }
+    let (alive, total) = if hero_size_on(state, ti, seams) {
+        (combined_alive(state, ti, seams), combined_total(statics, state, ti, us))
+    } else {
+        (state.alive[ti], us.model_count)
+    };
+    if total == 1 {
+        let start = us.wounds_max.first().copied().unwrap_or(0);
+        return (alive > 0 && at_or_below_half(now, start))
+            .then(|| format!("{} is at half its tough value ({now}/{start}) — morale test ({CITE})", us.name));
+    }
+    (rule_on(seams.rules_epoch, EPOCH_72_PLAYTEST_RULES) && alive > 0 && at_or_below_half(alive, total)
+        && !should_test_shooting_morale(alive_before, alive, total))
+        .then(|| format!("{} takes wounds at half strength or less ({alive}/{total} models) — morale test ({CITE})", us.name))
+}
+
 /// SHO-15a Scourge (`EPOCH_73_V36`): the phantom wounds count toward this trigger only, read as landed on a
 /// scratch copy (nothing is removed). Table twin: main.gd `_solo_scourge_decides`.
 #[allow(clippy::too_many_arguments)]
@@ -6273,7 +6300,7 @@ fn strike_phase(
                     crate::combat::BEST_HIT_TARGET,
                 ),
                 &def, guarded_folds(&def, charge_from_in, if def.guarded_charge_over_in > 0.0 { def.guarded_charge_over_in } else { crate::combat::LONG_RANGE_IN }, seams.rules_epoch),
-                prof36, &mut shot.log, seams.rules_epoch);
+                prof36, &mut shot.log, None, seams.rules_epoch);
             att.versatile_pick_hit = vh;
             att.versatile_pick_ap = va;
             att.versatile_latched = vl;
@@ -8628,6 +8655,7 @@ fn versatile_latch(
     guarded: bool,
     prof: Option<&ShootProfile>,
     log: &mut Vec<String>,
+    tray: Option<&mut Tray>,
     rules_epoch: u32,
 ) -> (i64, i64, bool) {
     if next.versatile_pick_round[mi] == next.round {
@@ -8651,6 +8679,10 @@ fn versatile_latch(
         statics[next.roster.profile[mi]].name,
         if ap_mod > 0 { "AP(+1)" } else { "+1 to hit" }
     ));
+    if let Some(t) = tray {
+        // The table's line (`_solo_log_versatile_pick`): once per activation, where the volley decides.
+        say_rule(t, "versatile", next.player[mi], || log.last().cloned().unwrap_or_default());
+    }
     // Rules 3.6 (row W1.TRACE) — the once-per-activation pick names itself
     // (arm `versatile-attack`).
     if rule_on(rules_epoch, EPOCH_73_V36) {
@@ -10922,7 +10954,7 @@ fn resolve_with(
                                             crate::combat::reliable_quality(att.quality,
                                                 prof36.map(|p| p.reliable).unwrap_or(false)),
                                             &def, guarded_folds(&def, g.mod_d, crate::combat::LONG_RANGE_IN, seams.rules_epoch),
-                                            prof36, &mut shot.log, seams.rules_epoch);
+                                            prof36, &mut shot.log, Some(&mut *tray), seams.rules_epoch);
                                         att.versatile_pick_hit = vh;
                                         att.versatile_pick_ap = va;
                                         att.versatile_latched = vl;
@@ -11060,6 +11092,11 @@ fn resolve_with(
                             if scourge_morale_trigger(
                                 &next, statics, seams, ut_g, g.ti, morale_alive_g, wounds_before_g, phantom, &mut shot.log,
                             ) {
+                                if tray.feed().is_some() {
+                                    if let Some(line) = shooting_morale_line(&next, statics, seams, ut_g, g.ti, morale_alive_g, wounds_before_g) {
+                                        say_rule(tray, "morale", next.player[g.ti], || line);
+                                    }
+                                }
                                 tray_morale(&mut next, statics, g.ti, false, seams, tray, shot, Some(g.mod_d), None);
                             }
                         }

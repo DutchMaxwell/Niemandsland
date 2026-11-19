@@ -528,6 +528,11 @@ fn piercing_assault_grant_cond() -> CondAp {
     CondAp { ap_bonus: 1, condition: "on_charge".into(), ..Default::default() }
 }
 
+/// A rule's battle-log line on a supplied tray, in the table's words (a seeded tray never builds the text).
+pub(crate) fn say_rule(tray: &mut Tray, rule: &'static str, side: i64, text: impl FnOnce() -> String) {
+    tray.say(|| LogLine { rule, category: Category::Combat, side, text: text(), detail: None });
+}
+
 /// The table's `blast_log_text`: names Blast(X) and, when the model count clamps the multiplier, the cap.
 fn blast_log(x: i64, hits: i64, boosted: i64, models: i64) -> String {
     let mult = boosted / hits.max(1);
@@ -765,6 +770,13 @@ fn save_batch(
     if bane {
         let n = faces.iter().filter(|&&f| f == 6 || (f as i64 >= bane_from && f as i64 >= target)).count() as i64;
         if n > 0 {
+            if !p.bane_alias.is_empty() {
+                // The table's line (rules-must-log), said before the re-roll dice like the table's.
+                let what = if bane_from < 6 { format!("roll{} of {bane_from}+", if n == 1 { "" } else { "s" }) } else { format!("6{}", if n == 1 { "" } else { "s" }) };
+                // the base window says no condition (the table adds it only to the widened form)
+                let why = if bane_from < 6 { cond_ap_why(&p.bane_condition) } else { "" };
+                say_rule(tray, "bane", def.side, || format!("{}: {def_owner} re-rolls {n} unmodified Defense {what}{why}", p.bane_alias));
+            }
             tray.owner_next(def.unit);
             reroll = tray.roll(n as usize);
             out.rolls.push(Roll {
@@ -779,6 +791,7 @@ fn save_batch(
                 let s = if n == 1 { "" } else { "s" };
                 let what = if bane_from < 6 { format!("roll{s} of {bane_from}+") } else { format!("6{s}") };
                 out.log.push(format!("{}: {def_owner} re-rolls {n} unmodified Defense {what}{}", p.bane_alias, cond_ap_why(&p.bane_condition)));
+
             } else {
                 // The widened window's own share — the successful 5s the base leg
                 // would never have touched (rules-must-log count).
@@ -1221,6 +1234,13 @@ pub fn resolve_volley_leg(
         .flat_map(|sh| sh.keep.iter().enumerate().map(move |(k, &pi)| (sh, k, pi)))
         .collect();
     shots.sort_by_key(|&(sh, _, pi)| shot_rank(&sh.profiles[pi]));
+    if def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded && !shots.is_empty() {
+        // The table's line (`_solo_resolve_ai_volley`), once per volley, before the first die, hit or miss; its "(most of its models carry
+        // it)" note needs per-model carriers.
+        let saves = guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), true, def.def_floor());
+        say_rule(tray, "guarded", def.side, || format!("{def_owner} ({}): shot from over {}\" — +1 Defense (saves on {}+)",
+            def.guarded_name, LONG_RANGE_IN as i64, saves.clamp(BEST_HIT_TARGET, 6)));
+    }
     for (sh, k, pi) in shots {
         let att = sh.att;
         let p = &sh.profiles[pi];
