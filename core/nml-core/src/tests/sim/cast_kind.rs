@@ -102,16 +102,45 @@ use super::*;
             .collect()
     }
 
+    /// `lone_caster` with the roster's key index built, so a cast input can name its units.
+    fn indexed_caster() -> (State, Vec<UnitStatic>) {
+        let (mut st, statics) = lone_caster(vec![bolt()]);
+        let r = &*st.roster;
+        let index = r.keys.iter().enumerate().map(|(i, k)| (k.clone(), i)).collect();
+        st.roster = Rc::new(crate::state::Roster { keys: r.keys.clone(), index, profile: r.profile.clone() });
+        (st, statics)
+    }
+
+    /// CC-5b: `tray_cast` part 1 on the three ends. A cast whose caster and target stand pays and goes on (`None`, nothing said: the
+    /// cast die is CC-5c); the same cast at a wiped-out target fizzles with its one line; with the caster down it is skipped without
+    /// one. All three have paid the threshold.
+    #[test]
+    fn tray_cast_pays_first_then_skips_fizzles_or_goes_on() {
+        use crate::activation::CastInput;
+        use crate::sim::{tray_cast, CastEnd};
+        let c = CastInput { seq: 0, caster: "a".into(), spell: "bolt".into(), targets: vec!["b".into()], threshold: 1, ..Default::default() };
+        let run = |down: Option<usize>| {
+            let (mut st, mut statics) = indexed_caster();
+            statics[0].name = "Mystic".into();
+            if let Some(u) = down {
+                (st.alive[u], st.wounds[u]) = (0, Vec::new());
+            }
+            let mut tray = Tray::supplied(Vec::new());
+            let end = tray_cast(&statics, &mut st, &c, &mut tray);
+            (end, st.casts[0], tray.all_lines().into_iter().map(|l| l.text).collect::<Vec<_>>())
+        };
+        assert_eq!(run(None), (None, 1, vec![]));
+        assert_eq!(run(Some(2)), (Some(CastEnd::Fizzled), 1, vec!["Mystic's bolt fizzles \u{2014} no target remains".to_string()]));
+        assert_eq!(run(Some(0)), (Some(CastEnd::Skipped), 1, vec![]));
+    }
+
     /// CC-5a: casts offered on a supplied tray keep the expectation `cast_phase` off the tray path, whatever `seams.cast` says. The
     /// control (nothing offered, the same seams) casts: one attempt event. RED: the gate in `resolve_with` removed -> the offered
     /// run pushes the attempt too.
     #[test]
     fn an_offered_cast_keeps_the_expectation_cast_phase_off_the_tray_path() {
         use crate::activation::CastInput;
-        let (mut st, statics) = lone_caster(vec![bolt()]);
-        let r = &*st.roster;
-        let index = r.keys.iter().enumerate().map(|(i, k)| (k.clone(), i)).collect();
-        st.roster = Rc::new(crate::state::Roster { keys: r.keys.clone(), index, profile: r.profile.clone() });
+        let (st, statics) = indexed_caster();
         let seams = Seams { cast: true, ..epoch(crate::acts::CURRENT_RULES_EPOCH) };
         let action = Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None };
         let run = |offer: bool| {

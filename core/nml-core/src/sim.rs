@@ -45,6 +45,7 @@ use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
 use crate::mission::{drop_carried, sync_carried_positions};
 use crate::rng::GodotRng;
+use crate::activation::CastInput;
 use crate::rules::Spell;
 use crate::spell::{
     boost_value_of, cast_success_chance_vs, official_pick_order, plan_boost, plan_interference,
@@ -7978,6 +7979,45 @@ pub(crate) fn cast_phase(
     }
 }
 
+/// CC-5b: how an offered cast ends before any die. Its caster is down when the cast resolves (a Dangerous test, an earlier cast's
+/// Hazardous): skipped silently, as `_solo_resolve_ai_casts` does. No target stands: the cast fizzles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CastEnd {
+    Skipped,
+    Fizzled,
+}
+
+/// CC-5b: `Some(end)` when `c` ends before any die in `state`; `None` = it goes on to the cast die (CC-5c).
+pub(crate) fn cast_ends(state: &State, c: &CastInput) -> Option<CastEnd> {
+    let at = |k: &String| state.roster.index.get(k.as_str()).copied();
+    if at(&c.caster).is_none_or(|i| state.alive[i] <= 0) {
+        return Some(CastEnd::Skipped);
+    }
+    c.targets.iter().filter_map(at).all(|t| state.alive[t] <= 0).then_some(CastEnd::Fizzled)
+}
+
+/// CC-5b: one offered cast, part 1 (`_solo_resolve_one_cast` main.gd:5598-5613 after the plan's own spend). The tokens go first and
+/// stay spent whatever follows: the table paid them at plan time, so its capture holds the counts BEFORE the plan and the core pays
+/// them here, the threshold from the caster, boost and interference from the listed payers in list order. Then `cast_ends`: a
+/// skipped cast says nothing, a fizzled one says so. `None` = the cast goes on to the cast die (CC-5c).
+pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, c: &CastInput, tray: &mut Tray) -> Option<CastEnd> {
+    let pay = |state: &mut State, key: &str, n: i64| {
+        if let Some(&i) = state.roster.index.get(key) {
+            state.casts[i] = (state.casts[i] - n).max(0);
+        }
+    };
+    pay(state, &c.caster, c.threshold);
+    for (key, n) in c.boost_sources.iter().chain(&c.interference_sources) {
+        pay(state, key, *n);
+    }
+    let end = cast_ends(state, c);
+    if let (Some(CastEnd::Fizzled), Some(&ci)) = (end, state.roster.index.get(c.caster.as_str())) {
+        let (side, name) = (state.player[ci], statics[state.roster.profile[ci]].name.clone());
+        tray.say(|| LogLine { rule: "cast", category: Category::Combat, side, text: format!("{name}'s {} fizzles — no target remains", c.spell), detail: None });
+    }
+    end
+}
+
 /// NML-1157 — WHICH member of the activating chain actually casts.
 ///
 /// `Caster(X)` is a HERO rule in every faction book this corpus plays, and a
@@ -10212,6 +10252,12 @@ fn resolve_with(
             None => (0..next.units()).map(|j| los_clear(&next, si, j)).collect(),
         };
         cast_phase(statics, &mut next, si, &row, seams, rng.as_deref_mut());
+    }
+    // CC-5b: the casts offered on the tray, in plan order; their wounds (CC-6) join the melee tally like the expectation cast's.
+    if let Some((tray, _)) = dice.as_mut() {
+        for c in tray.casts().to_vec() {
+            tray_cast(statics, &mut next, &c, tray);
+        }
     }
     let pre_melee_su = (cast_wounds_before_su - wounds_left(&next, si)).max(0);
     let pre_melee_tu = ci.map_or(0, |t| (cast_wounds_before_tu - wounds_left(&next, t)).max(0));
