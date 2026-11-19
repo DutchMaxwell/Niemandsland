@@ -779,4 +779,51 @@ func test_a_takedown_shooter_against_an_item_carrier_is_refused_as_a_pair() -> v
 	SlicePin.dice_only()
 	assert_array(CoreSlice.pair_refusals(sniper, carrier)).override_failure_message("a missing line is not a dice difference").is_empty()
 	SlicePin.release_dice_only()
+
+
+## A target unit of `faction` / `system` with `rules` (the Warding family lives in faction maps: Knightborn / Warding in knight_brothers, Angelic Blessing in kingdom_of_angels).
+func _ignorer(rules: Array, faction: String, system := "gf") -> GameUnit:
+	var gu := _unit(rules, [[]])
+	gu.unit_properties["faction_folder"] = faction
+	gu.unit_properties["game_system"] = system
+	return gu
+
+
+## WDENY (19.11., door probe): a PAIR whose TARGET carries a Warding-family rule beside ANOTHER wound-ignore group is refused (the core never stamps the distance gate there:
+## the Warding line is missing from 14in and the gated group is still rolled from 5in, 12 seeds per pair), whatever the shooter carries. Both ways: each rule alone, one group
+## written twice (Angelic Blessing + Enhanced Angelic Blessing) and a plain Regeneration target stay taken; a joined hero's rule counts; the dice-only pin keeps it (a state
+## difference); a slice file without the group (the allow slice, a test's own deny file) refuses nothing.
+## RED: delete the group from the deny file (or the `_warding_beside_other_ignore` call in `pair_refusals`) and every `is_equal` below reads `[]`.
+func test_a_warding_family_target_beside_another_ignore_group_is_refused_as_a_pair() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	var why := ["warding_gate_beside_other_ignore"]
+	var shooter := _unit([], [["AP(1)"]])
+	for row in [["Warding", "knight_brothers", "gf"], ["Knightborn", "knight_brothers", "gf"], ["Angelic Blessing", "kingdom_of_angels", "aof"]]:
+		var gated := _ignorer([row[0]], row[1], row[2])
+		assert_array(CoreSlice.pair_refusals(shooter, gated)).override_failure_message("%s alone keeps its verdict (the gate is stamped)" % row[0]).is_empty()
+		var beside := _ignorer([row[0], "Regeneration"], row[1], row[2])
+		assert_array(CoreSlice.pair_refusals(shooter, beside)).override_failure_message("Regeneration + %s: the gate is never stamped" % row[0]).is_equal(why)
+		assert_array(CoreSlice.pair_refusals(beside, shooter)).override_failure_message("the pair carries the refusal on the TARGET side only").is_empty()
+		assert_array(CoreSlice.refusals(beside, true)).override_failure_message("a pair refusal, not a target-rule refusal: the target alone is taken").is_empty()
+	assert_array(CoreSlice.pair_refusals(shooter, _ignorer(["Regeneration"], "knight_brothers"))).override_failure_message("Regeneration alone keeps its verdict").is_empty()
+	assert_array(CoreSlice.pair_refusals(shooter, _ignorer(["Regeneration", "Fast"], "battle_brothers"))).is_empty()
+	for other in ["Regeneration Aura", "Medical Training", "Spell Resistance", "Warding"]:
+		assert_array(CoreSlice.pair_refusals(shooter, _ignorer(["Knightborn", other], "knight_brothers"))).override_failure_message("Knightborn + %s: another group beside the gated one" % other).is_equal(why)
+	assert_array(CoreSlice.pair_refusals(shooter, _ignorer(["Angelic Blessing", "Enhanced Angelic Blessing"], "kingdom_of_angels", "aof"))).override_failure_message("one group written twice (the Enhanced form belongs to its base)").is_empty()
+	assert_array(CoreSlice.pair_refusals(shooter, _ignorer(["Regeneration", "Regeneration Aura", "Medical Training"], "knight_brothers"))).override_failure_message("three names of ONE group, no gated rule").is_empty()
+	var host := _ignorer(["Knightborn"], "knight_brothers")
+	var hero := _ignorer(["Regeneration"], "knight_brothers")
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	assert_array(CoreSlice.pair_refusals(shooter, host)).override_failure_message("a joined hero's Regeneration sits beside the host's Knightborn").is_equal(why)
+	assert_array(CoreSlice.pair_refusals(shooter, null)).is_empty()
+	assert_array(CoreSlice.pair_refusals_in(CoreSlice.DENY_PATH, shooter, _ignorer(["Warding", "Regeneration"], "knight_brothers"))).override_failure_message("the shadow's census reads it through the deny file").is_equal(why)
+	SlicePin.dice_only()
+	assert_array(CoreSlice.pair_refusals(shooter, _ignorer(["Warding", "Regeneration"], "knight_brothers"))).override_failure_message("a state difference stays refused in the dice-only slice").is_equal(why)
+	SlicePin.release_dice_only()
+	_allow({}, "deny")
+	assert_array(CoreSlice.pair_refusals(shooter, _ignorer(["Warding", "Regeneration"], "knight_brothers"))).override_failure_message("a deny file without the group refuses nothing of the kind").is_empty()
+	CoreSlice.path_override = ""
+	SlicePin.narrow()
+	assert_array(CoreSlice.pair_refusals(shooter, _ignorer(["Warding", "Regeneration"], "knight_brothers"))).override_failure_message("the allow slice has no such group").is_empty()
 	SlicePin.release()
