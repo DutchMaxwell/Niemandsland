@@ -857,6 +857,21 @@ def test_an_unresolvable_spell_book_is_loud_not_silent():
         profiles_from_army_forge_json(_a_caster(), "no_such_faction", player=1)
 
 
+def test_every_3_6_renamed_folder_resolves_the_same_spell_book_as_its_map_key():
+    """The nine 3.6 renamed army-book folders (Wormhole/Rift Daemons lost their
+    prefix, the GF Saurian Starhost book gained an "s") key no book in the
+    committed maps; the alias table hands each the SAME book its map key holds.
+    Mirrors the Rust `V36_SPELL_BOOK_ALIASES` and the GDScript `FACTION_ALIASES`."""
+    zero = []
+    for system, table in list_to_profile._SPELL_FACTION_ALIASES.items():
+        for alias, canonical in table.items():
+            book = list_to_profile.spells_for(system, canonical)
+            assert book, f"{system}/{canonical} is not a committed book"
+            if list_to_profile.spells_for(system, alias) != book:
+                zero.append(f"{system}/{alias}")
+    assert not zero, f"renamed folders do not resolve their book: {zero}"
+
+
 # === loud rules resolution (rules-slug fix, second half) ========================
 #
 # The SAME faction-slug bug also keyed rule lookups into
