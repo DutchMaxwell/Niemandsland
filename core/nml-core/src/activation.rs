@@ -1502,7 +1502,7 @@ mod tests {
         let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params });
         let t = vec![Begin, intent(HOLD, None), Input::Cast(CastInput { base: 4, threshold: 1, ..bolt(0) })];
         let first = step_activation(&statics, &st, "a", &board, Seams { dangerous_end_morale: true, ..seams() }, &t, true);
-        assert!(matches!(&first, ActStep::NeedRoll { kind: "attack", owner_key, count: 2, .. } if owner_key == "a"), "the Dangerous test first: {first:?}");
+        assert!(matches!(&first, ActStep::NeedRoll { kind: "dangerous", owner_key, count: 2, .. } if owner_key == "a"), "the Dangerous test first, named for its count-the-1s line: {first:?}");
         let t = [t, vec![Faces(vec![6, 6])]].concat();
         let ActStep::NeedRoll { kind: "cast", lines, .. } = step_activation(&statics, &st, "a", &board, Seams { dangerous_end_morale: true, ..seams() }, &t, true) else { panic!("then the cast die") };
         assert_eq!(lines.iter().map(|l| l.text.as_str()).next(), Some("Spell Accumulator: Hero is Shaken \u{2014} its tokens do not feed friendly casters"));
