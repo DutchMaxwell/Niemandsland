@@ -4,7 +4,8 @@ extends GdUnitTestSuite
 ## The core already folds it per shooting member (`ambush_arrival_ap`, stamp == round, shooting only); the table never
 ## did, neither in the AI's volley nor in the human's (gf_023/13: core save 6+, table save 5+). From 73 both table
 ## volleys add the +1 per shot member and the battle log names the book rule.
-## The recorded act closes only with the next re-recording; these tests drive the live volley seams.
+## The recorded act closes only with the next re-recording; the two AI controls drive the game's own call
+## (`_run_ai_shooting`, the core door takes it); the AI legs the core cannot answer yet and the human tests drive the table's.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
@@ -34,6 +35,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
 	AiActRecorder.rules_epoch = _epoch_before
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
@@ -68,8 +71,8 @@ func _unit(pid: int, unit_name: String, positions: Array) -> GameUnit:
 
 ## A shooter the way the game delivers it: the book rule on its rule line and the arrival stamp the Ambush arrival
 ## writes (`ambush_arrived_round`); a Defense 4+ squad stands 12" away in the open.
-func _fixture(rule: bool, arrived_round: int) -> Dictionary:
-	var shooter := _unit(1, "Trackers", [Vector3.ZERO])
+func _fixture(rule: bool, arrived_round: int, seat := 1) -> Dictionary:
+	var shooter := _unit(seat, "Trackers", [Vector3.ZERO])
 	shooter.unit_properties["quality"] = 2
 	shooter.unit_properties["game_system"] = "gf"
 	if rule:
@@ -82,11 +85,35 @@ func _fixture(rule: bool, arrived_round: int) -> Dictionary:
 	var positions: Array = []
 	for i in 4:
 		positions.append(Vector3(12.0 * INCH, 0, 0.02 * i))
-	var squad := _unit(2, "Infected Soldiers", positions)
+	var squad := _unit(3 - seat, "Infected Soldiers", positions)
 	return {"shooter": shooter, "squad": squad}
 
 
+## The game's own call: the core door takes the AI's volley (both seats AI, so no save card waits).
 func _ai_volley(epoch: int, rule: bool, arrived_round: int) -> String:
+	AiActRecorder.rules_epoch = epoch
+	_main.solo_ai_slots = {1: true, 2: true}
+	_main.solo_controller.ai_slot = 2
+	_main.solo_controller.human_slot = 1
+	CoreActivation._env = 1
+	var f := _fixture(rule, arrived_round, 2)
+	_main.seed_tray_rng(SEED)
+	var runs := CoreActivation.ai_runs
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	await _main._run_ai_shooting({"unit": f["shooter"], "moved": false, "action": AiDecision.Action.HOLD})
+	assert_int(CoreActivation.ai_runs).override_failure_message("the core did not take the volley (the table shot it)") \
+		.is_equal(runs + 1)
+	if _main._solo_core_ai_h != 0:
+		_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+	_main._solo_core_ai_h = 0
+	var text := _log_text()
+	await E2EBoot.settle(get_tree())
+	return text
+
+
+## The table's own volley, for the two legs the core door cannot answer yet: the epoch-72 leg (the core folds the arrival AP
+## at no epoch) and the epoch-73 leg that reads the rule-name line (the core's volley writes none). Findings, see the PR.
+func _table_ai_volley(epoch: int, rule: bool, arrived_round: int) -> String:
 	AiActRecorder.rules_epoch = epoch
 	var f := _fixture(rule, arrived_round)
 	var shots: Array = []
@@ -112,7 +139,7 @@ func _human_volley(epoch: int, rule: bool, arrived_round: int) -> String:
 ## EPOCH_72 leg (declared first: gdUnit drops tests declared after a failing one): below 73 the arrival round adds
 ## nothing, byte for byte.
 func test_arrival_round_adds_no_ap_at_epoch_72(timeout := 120000) -> void:
-	var text: String = await _ai_volley(AiActRecorder.EPOCH_72_PLAYTEST_RULES, true, ROUND)
+	var text: String = await _table_ai_volley(AiActRecorder.EPOCH_72_PLAYTEST_RULES, true, ROUND)
 	assert_str(text).override_failure_message("fixture: the weapon's own AP(1) must reach the save line (log: %s)" % text) \
 		.contains("saves on 5+ (Def 4+, AP 1)")
 	assert_str(text).override_failure_message("EPOCH_72 keeps the old merge (log: %s)" % text).not_contains(ARRIVAL_LINE)
@@ -121,7 +148,7 @@ func test_arrival_round_adds_no_ap_at_epoch_72(timeout := 120000) -> void:
 ## The parity act's shape, AI side: the rule plus an arrival stamp equal to the current round -> the save line reads
 ## AP 2 (Def 4+ -> 6+) and the log names the book rule.
 func test_ai_volley_adds_ap_one_in_the_arrival_round_at_epoch_73(timeout := 120000) -> void:
-	var text: String = await _ai_volley(AiActRecorder.EPOCH_73_V36, true, ROUND)
+	var text: String = await _table_ai_volley(AiActRecorder.EPOCH_73_V36, true, ROUND)
 	assert_str(text) \
 		.override_failure_message("F-AMBUSH-ARRIVAL-AP — the AI volley must shoot AP 2 in the arrival round (log: %s)" % text) \
 		.contains("saves on 6+ (Def 4+, AP 2)")
