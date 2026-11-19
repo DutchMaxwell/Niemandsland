@@ -156,7 +156,28 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 		for r in w.special_rules:
 			if not _rule_taken(gu, rule_label(r)):
 				out.append("weapon_rule:" + rule_label(r))
+	# Deny mode, a SHOOTER: a Deadly weapon beside another ranged weapon (dlines_gap rows 18 and 1). The table lands Deadly wounds
+	# inline, so a later weapon of the same volley can see fewer models and says so ("Simultaneous fire: ...", Blast's "cap read when the
+	# volley started"); the core lands after all the dice and has no such line. Refused as a shooter only, by the weapons of the unit and
+	# its joined heroes (they fire in one volley); a single ranged weapon, or Deadly alone, stays on the core.
+	if not as_target and out.is_empty() and config()["mode"] == "deny" and _deadly_beside_other_weapons(gu):
+		out.append("deadly_beside_other_weapons")
 	return out
+
+
+## `gu` (with its joined heroes) carries a Deadly ranged weapon and at least one OTHER ranged weapon entry.
+static func _deadly_beside_other_weapons(gu: GameUnit) -> bool:
+	var ranged := 0
+	var deadly := false
+	for u in [gu] + gu.get_attached_heroes():
+		if not (u is GameUnit and (u as GameUnit).source_data is OPRApiClient.OPRUnit):
+			continue
+		for w in ((u as GameUnit).source_data as OPRApiClient.OPRUnit).weapons:
+			if w.range_value <= 0:
+				continue
+			ranged += 1
+			deadly = deadly or (w.special_rules as Array).any(func(r) -> bool: return rule_label(r) == "Deadly")
+	return deadly and ranged >= 2
 
 
 ## C-18 (shadow only): `refusals` under the slice file at `path` (e.g. DENY_PATH) without switching the live slice.

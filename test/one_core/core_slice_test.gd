@@ -271,15 +271,17 @@ func test_a_missing_or_malformed_file_is_the_empty_slice() -> void:
 ## The deny file refuses its listed primitives (a Teleport unit) and takes a unit whose
 ## rules are automated and not listed (AP, Tough); a name no map knows is taken (unmapped_inert). The list only shrinks: CEILING.
 ## RED: read PATH regardless of the switch -> the first assertion reads mode "allow".
-const DENY_CEILING := 9   # BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
+const DENY_CEILING := 23   # DLINES2 19.11.: +14 primitives in eight `rule_line` groups (a rule whose table line the door omits stays on the table until the line exists, dlines_gap rows 2, 3, 7, 13, 15, 16, 17, 21), they leave group by group with their lines. BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
 
 
 func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
 	assert_str(str(CoreSlice.config()["mode"])).is_equal("deny")
-	# C-R1 (epochs 82 + 84) ported the wound-ignore rules by name: Regeneration is no longer listed.
-	assert_bool(CoreSlice.takes(_unit(["Regeneration"], [["AP(1)"]]))).is_true()
+	# C-R1 (epochs 82 + 84) ported the wound-ignore rules by name and left the deny list; DLINES2 refuses the family again because the door
+	# writes none of its roll lines (a `rule_line` group, dlines_gap row 3). Tough stays taken.
+	assert_array(CoreSlice.refusals(_unit(["Regeneration"], [["AP(1)"]]))).is_equal(["unit_rule:Regeneration"])
+	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
 	# A rule refused by NAME where its primitive is shared (Changebound = Stealth; plain Stealth stays taken).
 	var changed := _unit(["Changebound"], [])
 	changed.unit_properties["faction_folder"] = "change_disciples"   # the faction whose map entry gives it primitive Stealth
@@ -302,6 +304,73 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 		"the deny list only shrinks (ceiling %d)" % DENY_CEILING).is_less_equal(DENY_CEILING)
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
+
+
+## DLINES2 19.11. (lead rule: a missing line blocks the door): every rule whose table line the door omits is refused by its primitive (a
+## `rule_line` group of the deny file) or by name, so the table resolves a volley that carries one. `rep` = [rule name, faction folder, label
+## the slice reports]; the name is a real registry entry of that faction, so the refusal comes from the file, not from the name alone. Controls:
+## the fixed families (Blast, Deadly alone, Reliable, Surge, Sturdy, a Bane WEAPON alias) and a plain unit stay taken.
+## RED: drop a group from the file -> its row reads [] (the door takes it).
+func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	var rep: Array = [
+		["Artillery", ""], ["Stealth", ""], ["Evasive", "battle_brothers"], ["Aircraft", ""], ["Precision Fighter", ""],
+		["Instinctive", "goblin_reclaimers"],
+		["Regeneration", ""], ["Self-Repair", "robot_legions"],
+		["Shred", ""], ["Lacerate", "battle_brothers"], ["Anti-Regen", ""], ["Takedown", ""],
+		["Shielded", "battle_brothers"], ["Ranged Shrouding", "custodian_brothers"], ["Fortified", "alien_hives"],
+		["Bane", ""], ["Mischievous", "goblin_reclaimers"], ["Vicious", "goblin_reclaimers"],
+	]
+	for row in rep:
+		var as_unit := _unit([row[0]], [[]])
+		if row[1] != "":
+			as_unit.unit_properties["faction_folder"] = row[1]
+		assert_array(CoreSlice.refusals(as_unit)).override_failure_message("%s as a unit rule is taken, its line is missing on the door" % row[0]).is_equal(["unit_rule:" + row[0]])
+		assert_array(CoreSlice.refusals(as_unit, true)).override_failure_message("%s on a target is taken" % row[0]).is_equal(["unit_rule:" + row[0]])
+		var as_weapon := _unit([], [[row[0]]])
+		if row[1] != "":
+			as_weapon.unit_properties["faction_folder"] = row[1]
+		assert_array(CoreSlice.refusals(as_weapon)).override_failure_message("%s as a weapon rule is taken" % row[0]).is_equal(["weapon_rule:" + row[0]])
+	for kept in [["Blast(3)"], ["Reliable"], ["Surge when Shooting"], ["Rending"], ["Sturdy"], ["Slayer"], ["Tough(3)"]]:
+		assert_bool(CoreSlice.takes(_unit(kept, [["AP(1)"]]))).override_failure_message("%s stays on the core" % kept[0]).is_true()
+	var smash := _unit([], [["Smash"]])
+	smash.unit_properties["faction_folder"] = "battle_brothers"   # a Bane WEAPON alias: the core says its line (dlines 3)
+	assert_bool(CoreSlice.takes(smash)).override_failure_message("a Bane weapon alias stays on the core").is_true()
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+
+
+## DLINES2: a Deadly weapon beside another ranged weapon, as a shooter (the table lands Deadly inline, the core after the dice: "Simultaneous
+## fire" and Blast's cap note are missing); Deadly alone, two plain weapons, a melee weapon beside Deadly and a TARGET are taken. A joined hero's
+## weapons fire in the same volley. RED: drop the predicate -> the first assertion reads [].
+func test_deny_mode_refuses_a_deadly_weapon_beside_another_ranged_weapon() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	var both := _ranged_unit([["Deadly(3)"], ["AP(1)"]])
+	assert_array(CoreSlice.refusals(both)).is_equal(["deadly_beside_other_weapons"])
+	assert_array(CoreSlice.refusals(both, true)).override_failure_message("as a target the weapons do not matter").is_empty()
+	assert_bool(CoreSlice.takes(_ranged_unit([["Deadly(3)"]]))).override_failure_message("Deadly alone stays on the core").is_true()
+	assert_bool(CoreSlice.takes(_ranged_unit([["AP(1)"], ["Blast(3)"]]))).override_failure_message("no Deadly: no inline casualties").is_true()
+	assert_bool(CoreSlice.takes(_ranged_unit([["Deadly(3)"]], [["Reliable"]]))).override_failure_message("a melee weapon (range 0) is no second ranged weapon").is_true()
+	var host := _ranged_unit([["AP(1)"]])
+	var hero := _ranged_unit([["Deadly(3)"]])
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	assert_array(CoreSlice.refusals(host)).override_failure_message("the hero's Deadly gun fires in the host's volley").is_equal(["deadly_beside_other_weapons"])
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+
+
+## A unit whose `ranged` weapons have range 24 and whose `melee` ones range 0.
+func _ranged_unit(ranged: Array, melee: Array = []) -> GameUnit:
+	var gu := _unit([], ranged)
+	for w in (gu.source_data as OPRApiClient.OPRUnit).weapons:
+		w.range_value = 24
+	for rules in melee:
+		var w := OPRApiClient.OPRWeapon.new()
+		w.special_rules.assign(rules)
+		(gu.source_data as OPRApiClient.OPRUnit).weapons.append(w)
+	return gu
 
 
 ## C-19: with NO env the AI door's slice is the deny-list; `NML_CORE_SLICE=allow` (or `plain`) is the way back to the shipped
@@ -371,7 +440,9 @@ func test_the_way_back_reads_the_shipped_allow_file() -> void:
 func test_deny_mode_takes_the_lifted_equal_probes() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
-	var unit_rules := {"Unstoppable when Shooting": "",
+	# DLINES2: "Unstoppable when Shooting" (primitive Lacerate) left this list: its dice are equal but the table names the re-roll and the door
+	# does not (dlines_gap row 13), so the Lacerate group refuses it (test above).
+	var unit_rules := {
 		"Guarded": "blessed_sisters", "Piercing Tag": "alien_hives", "Vengeance": "eternal_dynasty"}
 	for name in unit_rules:
 		var gu := _unit([name], [])
