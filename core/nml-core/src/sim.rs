@@ -8174,6 +8174,18 @@ fn cast_say(tray: &mut Tray, side: i64, text: String) {
     tray.say(|| LogLine { rule: "cast", category: Category::Combat, side, text, detail: None });
 }
 
+fn spell_say(tray: &mut Tray, side: i64, text: String) {
+    tray.say(|| LogLine { rule: "spell", category: Category::Combat, side, text, detail: None });
+}
+
+fn spend_cast_tokens(state: &mut State, c: &CastInput) {
+    for (key, n) in std::iter::once((&c.caster, &c.threshold)).chain(c.boost_sources.iter().chain(&c.interference_sources).map(|(k, n)| (k, n))) {
+        if let Some(&i) = state.roster.index.get(key.as_str()) {
+            state.casts[i] = (state.casts[i] - (*n).max(0)).max(0);
+        }
+    }
+}
+
 /// CC-5c/5d: the notes of the casting net in the table's order (`caster_casting_net` solo_controller.gd:5225): the conduit mod,
 /// then each casting record of the caster and its host, then the Spell Amplifier.
 fn casting_notes(statics: &[UnitStatic], state: &State, ci: usize, conduit_mod: i64) -> Vec<String> {
@@ -8195,11 +8207,7 @@ fn casting_notes(statics: &[UnitStatic], state: &State, ci: usize, conduit_mod: 
 /// result (`AiSpell.cast_target`). `si` is the activating unit (the announce line names it). A hit of a damage spell lands its hits
 /// on each standing target in list order (`tray_spell_damage`, CC-6a); any other effect ends `Hit`, which the step API still refuses.
 pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c: &CastInput, seams: Seams, tray: &mut Tray, shot: &mut ShootResult) -> CastEnd {
-    for (key, n) in std::iter::once((&c.caster, &c.threshold)).chain(c.boost_sources.iter().chain(&c.interference_sources).map(|(k, n)| (k, n))) {
-        if let Some(&i) = state.roster.index.get(key.as_str()) {
-            state.casts[i] = (state.casts[i] - (*n).max(0)).max(0);
-        }
-    }
+    spend_cast_tokens(state, c);
     let ci = state.roster.index.get(c.caster.as_str()).copied().unwrap_or(si);
     let (side, caster) = (state.player[ci], statics[state.roster.profile[ci]].name.clone());
     let end = cast_ends(state, c);
@@ -8253,18 +8261,19 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
     }
     let Some(spell) = statics[state.roster.profile[ci]].spells.iter().find(|s| s.name == c.spell && s.effect_kind == "damage") else { return CastEnd::Hit };
     for t in c.targets.iter().filter_map(|k| state.roster.index.get(k.as_str()).copied()).filter(|&t| state.alive[t] > 0).collect::<Vec<_>>() {
-        tray_spell_damage(statics, state, ci, t, c.seq, spell, seams, tray, shot);
+        tray_spell_damage(statics, state, ci, si, t, c.seq, spell, seams, tray, shot);
     }
     CastEnd::Landed
 }
 
-/// CC-6a/6b/8a: a damage spell's hits on one target (`_solo_resolve_spell_damage` main.gd:5747). The printed hits are fixed (no to-hit
-/// die), saved at the target's own Defense and the spell's AP: Shielded, Cover and the over-9" family do not count against a spell
-/// (NML-104), so a target in cover says so; saves are `spell_defense` and Regeneration / Resistance (at the spell threshold, obeying
-/// `ignores_regen`) are `spell_attack`. CC-6b lands Deadly(X) per model with the table's lines and honours `wound_alloc` when open.
-/// Followed at table timing (O2, CC-8a) by the target's morale test (`spell_morale`).
+/// CC-6a/6b/7a/8a: a damage spell's hits on one target (`_solo_resolve_spell_damage` main.gd:5747). The printed hits are fixed
+/// (no to-hit die); the trigger roll (`spell_attack`, 6+, caster owner) runs for Surge / on-6 AP / Hazardous (CC-7a), the on-6 AP
+/// batch saving first. Shielded, Cover and the over-9" family do not count against a spell (NML-104); saves are `spell_defense` and
+/// Regeneration / Resistance (at the spell threshold, obeying `ignores_regen`) are `spell_attack`. CC-6b lands Deadly(X) per model and
+/// honours `wound_alloc` when open; CC-7a lands Hazardous trigger-1 wounds on `host` (no save/regen) before the target's morale test
+/// (`spell_morale`, O2).
 #[allow(clippy::too_many_arguments)]
-fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, ti: usize, seq: i64, spell: &Spell, seams: Seams, tray: &mut Tray, shot: &mut ShootResult) {
+fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, host: usize, ti: usize, seq: i64, spell: &Spell, seams: Seams, tray: &mut Tray, shot: &mut ShootResult) {
     if spell.effect_hits <= 0 {
         return;
     }
@@ -8275,13 +8284,30 @@ fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, ti: u
     def.side = state.player[ti];
     def.playtest_rules = rule_on(seams.rules_epoch, EPOCH_72_PLAYTEST_RULES);
     def.rules_epoch = seams.rules_epoch;
-    if state.in_cover[ti] {
-        let (side, text) = (state.player[ti], format!("Cover does not apply to spell damage (its +1 is against shooting) — {} saves on {}+", ut.name, def.defense.clamp(2, 6)));
-        tray.say(|| LogLine { rule: "spell", category: Category::Combat, side, text, detail: None });
-    }
     let facets = crate::spell::spell_facets(&spell.weapon_rules, seams.rules_epoch);
+    let caster_side = state.player[ci];
+    let hazardous = crate::rules::has_special_rule(&spell.weapon_rules, "Hazardous");
+    let (mut trigger_sixes, mut trigger_ones) = (0i64, 0i64);
+    if facets.surge || facets.on6_ap > 0 || hazardous {
+        tray.owner_next(Some(ci));
+        let faces = tray.roll(spell.effect_hits as usize);
+        trigger_sixes = faces.iter().filter(|&&f| f == 6).count() as i64;
+        trigger_ones = faces.iter().filter(|&&f| f == 1).count() as i64;
+        shot.rolls.push(crate::dice::Roll {
+            kind: "spell_attack", count: spell.effect_hits, target: crate::combat::UNMODIFIED_SIX,
+            faces, owner: statics[state.roster.profile[ci]].name.clone(),
+        });
+    }
+    let total_hits = spell.effect_hits + if facets.surge { trigger_sixes } else { 0 };
+    if state.in_cover[ti] {
+        spell_say(tray, state.player[ti], format!("Cover does not apply to spell damage (its +1 is against shooting) — {} saves on {}+", ut.name, def.defense.clamp(2, 6)));
+    }
+    let upgraded = if facets.on6_ap > 0 { trigger_sixes.min(total_hits) } else { 0 };
+    if upgraded > 0 {
+        spell_say(tray, caster_side, format!("{}: {upgraded} hit{} on a 6 → AP(+{})", spell.name, if upgraded == 1 { "" } else { "s" }, facets.on6_ap));
+    }
     let mut out = crate::dice::resolve_spell_hits_with_tray(
-        spell.effect_hits, facets.ap, facets.deadly, facets.ignores_regen, &spell.name, &def, &ut.name, tray,
+        total_hits, upgraded, facets.ap, facets.on6_ap, facets.deadly, facets.ignores_regen, &spell.name, &def, &ut.name, tray,
     );
     for r in &mut out.rolls {
         r.kind = if r.kind == "defense" { "spell_defense" } else { "spell_attack" };
@@ -8293,7 +8319,6 @@ fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, ti: u
     let alloc_id = format!("wound_alloc:{}:{}:cast:{seq}", state.key(ci), state.key(ti));
     let mut alloc = if seams.tray_exact { open_alloc_id(state, ti, &alloc_id, (w, deadly), tray) } else { None };
     let mut deadly_dealt = 0;
-    let caster_side = state.player[ci];
     let mut groups = std::mem::take(&mut shot.deadly_groups).into_iter();
     for (weapon, unsaved, dx, n) in std::mem::take(&mut shot.deadly_lines) {
         let (mut dealt, mut forced) = (0, 0);
@@ -8315,6 +8340,15 @@ fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, ti: u
     land_pool_wounds(state, ti, left, seams.tray_exact, seams, &mut shot.log);
     land_chain_report_inline(statics, state, tray, ti, before, deadly_dealt);
     spend_protection_feat(statics, state, ti, def_incoming, seams.rules_epoch);
+    // CC-7a: Hazardous ("this model's unit takes one wound on unmodified rolls of 1") lands on the caster's HOST (no save/regen) before morale.
+    if trigger_ones > 0 && hazardous {
+        let before_h = chain_snapshot(state, host, tray);
+        land_pool_wounds(state, host, trigger_ones, seams.tray_exact, seams, &mut shot.log);
+        land_chain_report_inline(statics, state, tray, host, before_h, 0);
+        let s = if trigger_ones == 1 { "" } else { "s" };
+        spell_say(tray, caster_side, format!("{}: {trigger_ones} trigger roll{s} of 1 — {} takes {trigger_ones} wound{s}",
+            spell.name, statics[state.roster.profile[host]].name));
+    }
     let landed = w + deadly_dealt;
     // CC-8a (O2): morale runs right after that target's spell damage (main.gd `_solo_resolve_spell_damage` -> `_solo_shooting_morale`),
     // carrying the spell's name as its cause (Banner does not apply) and tagging the morale dice onto the spell leg (`spell_morale`).
@@ -10572,11 +10606,28 @@ fn resolve_with(
         };
         cast_phase(statics, &mut next, si, &row, seams, rng.as_deref_mut());
     }
-    // CC-5b: the casts offered on the tray, in plan order; their wounds (CC-6) join the melee tally like the expectation cast's.
+    // CC-5b/7a: the casts offered on the tray, in plan order; their wounds (CC-6) join the melee tally like the expectation cast's.
+    // Activating unit wiped by Dangerous or by its own cast ends the activation here (main.gd:1290-1301); host dead + hero alive goes on.
     if let Some((tray, shot)) = dice.as_mut() {
-        for c in tray.casts().to_vec() {
-            if tray_cast(statics, &mut next, si, &c, seams, tray, shot) == CastEnd::Hit {
-                tray.note_cast_hit(c.seq);
+        let casts = tray.casts().to_vec();
+        if !casts.is_empty() {
+            if !side_up(&next, si, seams) {
+                for c in casts {
+                    spend_cast_tokens(&mut next, &c);
+                }
+                return Ok(finish_activation(statics, state, next, si, seams, cover));
+            }
+            if next.alive[si] <= 0 && rule_on(seams.rules_epoch, EPOCH_73_V36) {
+                tray.say(|| LogLine { rule: "hero", category: Category::Combat, side: next.player[si], detail: None,
+                    text: format!("{} is destroyed but its joined hero lives - the unit is not destroyed and goes on", statics[pi_s].name) });
+            }
+            for c in casts {
+                if tray_cast(statics, &mut next, si, &c, seams, tray, shot) == CastEnd::Hit {
+                    tray.note_cast_hit(c.seq);
+                }
+            }
+            if !side_up(&next, si, seams) {
+                return Ok(finish_activation(statics, state, next, si, seams, cover));
             }
         }
     }
@@ -11654,6 +11705,12 @@ fn resolve_with(
     if was_shaken && kind == HOLD && shoot_key.is_empty() {
         next.shaken[si] = false;
     }
+    Ok(finish_activation(statics, state, next, si, seams, cover))
+}
+
+/// Shared end-of-activation bookkeeping (normal finish and CC-7a early exit when a cast wipes the activating unit):
+/// mark the unit + joined heroes activated, check Second Wind, refresh LOS pairs on a live board, and sync positions.
+fn finish_activation(statics: &[UnitStatic], state: &State, mut next: State, si: usize, seams: Seams, cover: Cover<'_>) -> State {
     next.activated[si] = true;
     // D1-B4b: a joined hero spends the HOST's activation, never one of its own
     // (`SoloController.can_activate` solo_controller.gd:411). Marking it here is
@@ -11688,7 +11745,7 @@ fn resolve_with(
         refresh_los_pairs(&mut next, state, terrain, seams);
     }
     sync_carried_positions(&mut next);
-    Ok(next)
+    next
 }
 
 /// Rewrites the `los_pairs` row AND column of every unit whose model positions
