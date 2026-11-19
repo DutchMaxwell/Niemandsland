@@ -126,13 +126,35 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
     Ok(())
 }
 
-/// O5: no unit begins while another unit's activation is open; `Some(a)`
-/// names the unit whose activation is open.
-pub fn begin_check(open_elsewhere: Option<&str>) -> Result<(), String> {
-    match open_elsewhere {
-        Some(a) => Err(format!("Finish {a}'s activation first.")),
-        None => Ok(()),
+/// `begin_check`'s refusal: the player-facing `reason` and the battle-log `line` the door records.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BeginRefused {
+    pub reason: String,
+    pub line: LogLine,
+}
+
+/// O5 + Firefight step 7: a unit may begin only when no other unit's activation is open (`Some(a)`)
+/// and the table does not mix game systems (`systems`, normalised through `rules::book`).
+/// Refusals carry both a player-facing reason and a `LogLine`.
+pub fn begin_check(open_elsewhere: Option<&str>, systems: &[&str]) -> Result<(), BeginRefused> {
+    if let Some(a) = open_elsewhere {
+        let reason = format!("Finish {a}'s activation first.");
+        let line = LogLine { rule: "begin_check", category: Category::General, side: 0, text: reason.clone(), detail: None };
+        return Err(BeginRefused { reason, line });
     }
+    let mut books: Vec<&'static str> = systems.iter().map(|s| crate::rules::book(s).system).collect();
+    books.sort_unstable();
+    books.dedup();
+    if books.len() > 1 {
+        let reason = if books.len() == 2 {
+            format!("cannot start a game with lists of two game systems ({}, {})", books[0], books[1])
+        } else {
+            format!("cannot start a game with lists of {} game systems ({})", books.len(), books.join(", "))
+        };
+        let line = LogLine { rule: "mixed_systems", category: Category::General, side: 0, text: reason.clone(), detail: None };
+        return Err(BeginRefused { reason, line });
+    }
+    Ok(())
 }
 
 /// The table's own drop floor in inches (`main.gd` `_on_units_dropped`, the
@@ -888,8 +910,27 @@ mod tests {
 
     #[test]
     fn begin_names_the_open_activation() {
-        assert_eq!(begin_check(Some("A")), Err("Finish A's activation first.".to_string()));
-        assert_eq!(begin_check(None), Ok(()));
+        let err = begin_check(Some("A"), &[]).unwrap_err();
+        assert_eq!(err.reason, "Finish A's activation first.");
+        assert_eq!(err.line.rule, "begin_check");
+        assert_eq!(err.line.text, err.reason);
+        assert_eq!(begin_check(None, &[]), Ok(()));
+    }
+
+    /// Firefight step 7: `begin_check` refuses mixed game systems with reason + log line;
+    /// same-system tables (including `gff` + `gff`) open.
+    #[test]
+    fn begin_refuses_mixed_systems_and_opens_same_system() {
+        assert_eq!(begin_check(None, &["gff", "gff"]), Ok(()));
+        assert_eq!(begin_check(None, &["gf", ""]), Ok(()));
+        assert_eq!(begin_check(None, &["GF", "gf"]), Ok(()));
+        let err = begin_check(None, &["gf", "gff"]).unwrap_err();
+        assert!(err.reason.contains("lists of two game systems"), "reason: {}", err.reason);
+        assert!(err.reason.contains("gf") && err.reason.contains("gff"), "reason: {}", err.reason);
+        assert_eq!(err.line.rule, "mixed_systems");
+        assert_eq!(err.line.category, Category::General);
+        assert_eq!(err.line.text, err.reason);
+        assert!(begin_check(None, &["aof", "gff"]).is_err());
     }
 
     /// Two models at the origin and 1 m east, the second one moved `dx` inches east and `dy` up.

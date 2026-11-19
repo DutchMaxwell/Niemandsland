@@ -732,9 +732,11 @@ fn gate_flags(&self) -> super::gate::GateFlags<'_> {
 fn starts_torn(&self, starts: &[V2], radii_m: &[f64]) -> bool {
     let radii_in: Vec<f64> = radii_m.iter().map(|r| r / IN2M).collect();
     let shapes: Vec<_> = self.movers.iter().map(|m| self.state.base_shape(m.unit)).collect();
-    let chain = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)
-        && matches!(self.state.profile(self.si).game_system.as_str(), "gff" | "aofs")
-    { super::SKIRMISH_CHAIN_IN } else { super::MAX_CHAIN_IN };
+    let chain = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) {
+        self.state.book(self.si).chain_in
+    } else {
+        super::MAX_CHAIN_IN
+    };
     !super::gate::coherent_placement(starts, &radii_in,
         super::gate::GateFlags { shapes: &shapes, coherent_chain_in: chain, ..Default::default() })
 }
@@ -987,9 +989,11 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         // `CoherencyChecker.is_skirmish_system` :64 — ONE answer per acting
         // unit, read by both gate arms (:6491, :6503) and by the ladder's own
         // coherency predicates (:4846, :4941, :4966).
-        let chain = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)
-            && matches!(state.profile(self.si).game_system.as_str(), "gff" | "aofs")
-        { super::SKIRMISH_CHAIN_IN } else { super::MAX_CHAIN_IN };
+        let chain = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) {
+            state.book(self.si).chain_in
+        } else {
+            super::MAX_CHAIN_IN
+        };
         let flags = super::gate::GateFlags { shapes: &shapes, radii_m,
             planned_world: &planned_world,
             charge_targets: self.allow_contact.then_some(targets.as_slice()),
@@ -1386,7 +1390,7 @@ pub(crate) fn pile_in_state(self, state: &mut State, t: &Terrain, si: usize, ti:
     let mut order: Vec<usize> = (0..dm.len()).collect();
     order.sort_by(|&a, &b| if (to_slot(a) - to_slot(b)).abs() > 0.0001 { to_slot(a).total_cmp(&to_slot(b)) } else { a.cmp(&b) });
     let walls: &[[[f32; 2]; 2]] = if state.profile(ti).special_rules.iter().any(|r| r == "Flying") { &[] } else { t.walls_world_m() };
-    let chain = if matches!(state.profile(ti).game_system.as_str(), "gff" | "aofs") { super::SKIRMISH_CHAIN_IN } else { super::MAX_CHAIN_IN };
+    let chain = state.book(ti).chain_in;
     let mut moved = 0;
     for i in order {
         let (m, p, r) = (dm[i], pos_of(state, dm[i]), radius_of(state, dm[i]));
@@ -1459,9 +1463,11 @@ pub fn unit_coherent_now(self, state: &State, t: &Terrain, si: usize, hero_attac
     let starts: Vec<V2> = movers.iter().map(|m| t.to_inch(pos_of(state, *m))).collect();
     let radii_in: Vec<f64> = movers.iter().map(|m| radius_of(state, *m) / IN2M).collect();
     let shapes: Vec<_> = movers.iter().map(|m| state.base_shape(m.unit)).collect();
-    let chain = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)
-        && matches!(state.profile(si).game_system.as_str(), "gff" | "aofs")
-    { super::SKIRMISH_CHAIN_IN } else { super::MAX_CHAIN_IN };
+    let chain = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) {
+        state.book(si).chain_in
+    } else {
+        super::MAX_CHAIN_IN
+    };
     super::gate::coherent_placement(&starts, &radii_in,
         super::gate::GateFlags { shapes: &shapes, coherent_chain_in: chain, ..Default::default() })
 }
@@ -2718,5 +2724,95 @@ pub(crate) mod tests {
         for i in 0..3 {
             assert_eq!(stay.end[i], pos_of(&stay_st, Mover { unit: 0, model: i }), "unmoved model {i} drifted");
         }
+    }
+
+    /// Firefight step 5: `generated-skirmish-chain` through `MoveRules` reads `rules::book(..).chain_in`.
+    /// Forcing `gff` chain to 9 turns this test red.
+    #[test]
+    fn skirmish_chain_reads_book_on_generated_fixture() {
+        let fixtures: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../test/fixtures/position_parity/cases.json"
+        )).unwrap();
+        let case = fixtures["cases"].as_array().unwrap().iter()
+            .find(|c| c["id"] == "generated-skirmish-chain").unwrap();
+        let unit = &case["units"][0];
+        assert_eq!(unit["game_system"], "gff");
+        let pos: Vec<V3> = unit["positions"].as_array().unwrap().iter()
+            .map(|p| [p[0].as_f64().unwrap() as f32, p[1].as_f64().unwrap() as f32, p[2].as_f64().unwrap() as f32])
+            .collect();
+        let radii: Vec<f64> = unit["radii"].as_array().unwrap().iter()
+            .map(|r| r.as_f64().unwrap()).collect();
+        let make = |sys: &str| {
+            let mut st = units_state(vec![pos.clone()], vec![radii.clone()], vec![vec![]]);
+            let mut p = st.profiles.list[0].clone();
+            p.game_system = sys.to_string();
+            st.profiles = Rc::new(Profiles { list: vec![p], index: HashMap::new() });
+            st
+        };
+        let t = board(vec![]);
+        let gff = make("gff");
+        let gf = make("gf");
+        assert!(!MoveRules { rules_epoch: EPOCH_6_TABLE_RULES }.unit_coherent_now(&gff, &t, 0, true),
+            "7.24 in spread is incoherent under gff 6 in chain");
+        assert!(MoveRules { rules_epoch: EPOCH_6_TABLE_RULES }.unit_coherent_now(&gf, &t, 0, true),
+            "7.24 in spread is coherent under gf 9 in chain");
+        assert!(MoveRules { rules_epoch: EPOCH_6_TABLE_RULES - 1 }.unit_coherent_now(&gff, &t, 0, true),
+            "below epoch 6 keeps 9 in chain");
+        let ad = case["action"]["dest"].as_array().unwrap();
+        let dest = [ad[0].as_f64().unwrap() as f32, ad[1].as_f64().unwrap() as f32, ad[2].as_f64().unwrap() as f32];
+        let band = case["action"]["band_in"].as_f64().unwrap();
+        let gff_land = MoveRules { rules_epoch: EPOCH_6_TABLE_RULES }
+            .plain_move(&gff, &t, 0, dest, band, true, true, crate::mv::FAST_PLANNER_GUARD).unwrap();
+        let gf_land = MoveRules { rules_epoch: EPOCH_6_TABLE_RULES }
+            .plain_move(&gf, &t, 0, dest, band, true, true, crate::mv::FAST_PLANNER_GUARD).unwrap();
+        let moved_in = |l: &Landing| geom::length(geom::sub(l.end[0], pos[0])) as f64 / IN2M;
+        assert!(moved_in(&gff_land) < 0.05, "gff collapses to start: moved {:.3} in", moved_in(&gff_land));
+        assert!(moved_in(&gf_land) > 5.0, "gf keeps its advance: moved {:.3} in", moved_in(&gf_land));
+    }
+
+    /// Firefight step 5 (reviewer): the two chain sites the fixture above does not reach. Five models in a row at
+    /// 2.5" steps link at 0.5" and spread 8" edge to edge: torn under gff's 6" chain, whole under gf's 9".
+    fn five_in_a_row(sys: &str, extra: Vec<V3>) -> State {
+        let (r, s) = (IN2M, IN2M as f32);
+        let row: Vec<V3> = (0..5).map(|i| [2.5 * i as f32 * s, 0.0, 0.0]).collect();
+        let (pos, radii) = if extra.is_empty() { (vec![row], vec![vec![r; 5]]) } else { (vec![extra.clone(), row], vec![vec![r; extra.len()], vec![r; 5]]) };
+        let mut st = units_state(pos, radii, vec![vec![]; if extra.is_empty() { 1 } else { 2 }]);
+        let mut p = st.profiles.list[0].clone();
+        p.game_system = sys.to_string();
+        st.profiles = Rc::new(Profiles { list: vec![p], index: HashMap::new() });
+        st
+    }
+
+    /// The Regroup start check (`starts_torn`) reads the book. Asked directly: the gate cannot repair a spread tear, so
+    /// the landing alone would look the same for both chains.
+    #[test]
+    fn regroup_start_check_reads_book_chain() {
+        let torn = |sys: &str| {
+            let (st, t) = (five_in_a_row(sys, vec![]), board(vec![]));
+            let movers = movers_of(&st, 0);
+            let pos: Vec<V3> = movers.iter().map(|m| pos_of(&st, *m)).collect();
+            let starts: Vec<V2> = pos.iter().map(|p| t.to_inch(*p)).collect();
+            let mv = Move { rules_epoch: EPOCH_73_V36, state: &st, t: &t, si: 0, ci: None, movers, pos, goal: [0.0; 3], own_r_m: IN2M,
+                avoid_dang: false, flying: false, traversal: false, ignores_difficult: false, half: [1.0, 1.0], fast_planner: true,
+                guard: 0, allow_contact: false };
+            mv.starts_torn(&starts, &[IN2M; 5])
+        };
+        assert!(torn("gff"), "8 in of spread is torn under gff's 6 in chain");
+        assert!(!torn("gf"), "8 in of spread is whole under gf's 9 in chain");
+    }
+
+    /// The defender's pile-in prefers the longest step that keeps it coherent for ITS chain. A charger 4" past the
+    /// row's end pulls the nearest model out: a 3" step would spread the row to 11" (over gf's 9"), so gf takes a
+    /// short step; gff is already over 6" at every step, no step is coherent, and it takes the full 3".
+    #[test]
+    fn pile_in_coherence_reads_book_chain() {
+        let stepped = |sys: &str| {
+            let mut st = five_in_a_row(sys, vec![[16.0 * IN2M as f32, 0.0, 0.0]]);
+            MoveRules { rules_epoch: EPOCH_73_V36 }.pile_in_state(&mut st, &board(vec![]), 0, 1, true);
+            (st.positions[1][4][0] as f64 - 10.0 * IN2M) / IN2M
+        };
+        let (gf, gff) = (stepped("gf"), stepped("gff"));
+        assert!(gf > 0.0 && gf < 1.5, "gf takes a short coherent step: {gf:.2} in");
+        assert!((gff - 3.0).abs() < 0.05, "gff takes the full 3 in step: {gff:.2} in");
     }
 }

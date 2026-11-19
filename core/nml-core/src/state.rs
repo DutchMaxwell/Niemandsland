@@ -775,6 +775,13 @@ impl State {
     pub fn profile(&self, i: usize) -> &Profile {
         &self.profiles.list[self.roster.profile[i]]
     }
+    /// Game-system book for unit `i` (falls back to `"gf"` when a synthetic test omits `profiles.list` entries).
+    pub fn book(&self, i: usize) -> &'static crate::rules::Book {
+        let sys = self.roster.profile.get(i)
+            .and_then(|&pi| self.profiles.list.get(pi))
+            .map_or("", |p| p.game_system.as_str());
+        crate::rules::book(sys)
+    }
     /// The unit's recorded base footprint — `Profile::shape`, per unit, so an
     /// attached hero (its own roster slot) answers with its own base.
     pub fn base_shape(&self, i: usize) -> geom::BaseShape {

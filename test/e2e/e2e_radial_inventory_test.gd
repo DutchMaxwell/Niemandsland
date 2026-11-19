@@ -77,9 +77,12 @@ func _unit(pid: int, unit_name: String, positions: Array, rules: Array = []) -> 
 	return u
 
 
-## Solo game in play, with one AI unit far off so Shoot / Fight are offered.
-func _solo_playing_on() -> void:
-	_unit(2, "Raiders", [Vector3(1.2, 0, 0.8)])
+## Solo game in play, with one AI unit far off so Shoot / Fight are offered. `system` tags the AI unit too: the
+## core refuses a table whose lists carry two game systems, so the opponent must be of the hero's system.
+func _solo_playing_on(system := "") -> void:
+	var raiders := _unit(2, "Raiders", [Vector3(1.2, 0, 0.8)])
+	if system != "":
+		raiders.unit_properties["game_system"] = system
 	_main.solo_ai_slots = {2: true}
 	_main._ensure_solo_controller()
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
@@ -301,7 +304,7 @@ func test_a_plain_squad_reaches_every_entry(timeout := 180000) -> void:
 
 func test_a_hero_with_many_entries_reaches_every_entry(timeout := 240000) -> void:
 	var hero := _hero()
-	_solo_playing_on()
+	_solo_playing_on("aof")
 	assert_array(await _walk(hero, HERO)).is_empty()
 
 

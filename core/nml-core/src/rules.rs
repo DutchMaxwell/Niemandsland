@@ -18,9 +18,103 @@ use std::sync::{Mutex, OnceLock};
 use serde_json::Value;
 
 /// `RulesRegistry.SYSTEMS` / `DEFAULT_SYSTEM` — rules_registry.gd:18-19.
-const SYSTEMS: [&str; 5] = ["gf", "gff", "aof", "aofs", "aofr"];
+pub const SYSTEMS: [&str; 5] = ["gf", "gff", "aof", "aofs", "aofr"];
 const DEFAULT_SYSTEM: &str = "gf";
 const COMMON: &str = "common";
+
+/// Hero aura rules for a game system.
+/// Today every system uses GF 3.6 values (`reach_in: 6.0`, `min_tough: 9`, `joins: true`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HeroAura {
+    pub reach_in: f64,
+    pub min_tough: i64,
+    pub joins: bool,
+}
+
+/// System-wide rules header: one struct per game book so core branches read book fields instead of
+/// scattered system-string comparisons. Every field holds today's behaviour (zero outcome change for any system).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Book {
+    pub system: &'static str,
+    pub chain_in: f64,
+    pub hero_aura: HeroAura,
+    pub blast_spread_in: Option<f64>,
+    pub vertical_moves: bool,
+    pub default_board_in: [f64; 2],
+}
+
+const DEFAULT_HERO_AURA: HeroAura = HeroAura {
+    reach_in: crate::sim::HERO_AURA_REACH_IN,
+    min_tough: crate::sim::HERO_AURA_TOUGH,
+    joins: true,
+};
+
+const BOOK_GF: Book = Book {
+    system: "gf",
+    chain_in: crate::mv::MAX_CHAIN_IN,
+    hero_aura: DEFAULT_HERO_AURA,
+    blast_spread_in: None,
+    vertical_moves: false,
+    default_board_in: [72.0, 48.0],
+};
+
+// The 3.6 Firefight book prints a 9 in chain (beginner's guide p.7); today's 6 in stays until the epoch-gated
+// Firefight rules flip it, because a different chain changes how a `gff` game plays.
+const BOOK_GFF: Book = Book {
+    system: "gff",
+    chain_in: crate::mv::SKIRMISH_CHAIN_IN,
+    hero_aura: DEFAULT_HERO_AURA,
+    blast_spread_in: None,
+    vertical_moves: false,
+    default_board_in: [48.0, 48.0],
+};
+
+const BOOK_AOF: Book = Book {
+    system: "aof",
+    chain_in: crate::mv::MAX_CHAIN_IN,
+    hero_aura: DEFAULT_HERO_AURA,
+    blast_spread_in: None,
+    vertical_moves: false,
+    default_board_in: [72.0, 48.0],
+};
+
+// The 3.6 Skirmish book prints 6 in (beginner's guide p.7), the same as today.
+const BOOK_AOFS: Book = Book {
+    system: "aofs",
+    chain_in: crate::mv::SKIRMISH_CHAIN_IN,
+    hero_aura: DEFAULT_HERO_AURA,
+    blast_spread_in: None,
+    vertical_moves: false,
+    default_board_in: [48.0, 48.0],
+};
+
+const BOOK_AOFR: Book = Book {
+    system: "aofr",
+    chain_in: crate::mv::MAX_CHAIN_IN,
+    hero_aura: DEFAULT_HERO_AURA,
+    blast_spread_in: None,
+    vertical_moves: false,
+    default_board_in: [72.0, 48.0],
+};
+
+/// Return the static `Book` header for `system` (case/whitespace tolerant; empty or unknown folds to `"gf"`).
+pub fn book(system: &str) -> &'static Book {
+    match system.trim() {
+        "gf" | "" => &BOOK_GF,
+        "gff" => &BOOK_GFF,
+        "aof" => &BOOK_AOF,
+        "aofs" => &BOOK_AOFS,
+        "aofr" => &BOOK_AOFR,
+        other => match other.to_ascii_lowercase().as_str() {
+            "gf" => &BOOK_GF,
+            "gff" => &BOOK_GFF,
+            "aof" => &BOOK_AOF,
+            "aofs" => &BOOK_AOFS,
+            "aofr" => &BOOK_AOFR,
+            _ => &BOOK_GF,
+        },
+    }
+}
 
 /// F12 (analysis/SILENT_FAILURES_2026-09-13.md): an unrecognised system used to
 /// fold onto `"gf"` in silence — a typo'd `game_system` played the wrong book
@@ -736,6 +830,36 @@ mod tests {
         assert_eq!(normalize_system("ZZ-F12-UNKNOWN "), "gf", "fold unchanged");
         assert_eq!(note_folded_system("zz-f12-unknown"), 4, "as \"zz-f12-unknown\"");
         assert_eq!(normalize_system("gf"), "gf");
+    }
+
+    /// Firefight step 4: `Book` + `book()` table for all five systems matches today's behaviour.
+    /// `gf` equals `MAX_CHAIN_IN`, `HERO_AURA_TOUGH`, `HERO_AURA_REACH_IN`; `gff`/`aofs` keep
+    /// `SKIRMISH_CHAIN_IN` (6 in) and 48x48 default board; unknown folds to `gf`.
+    #[test]
+    fn book_header_matches_todays_behaviour_for_all_five_systems() {
+        let cases: [(&str, f64, [f64; 2]); 5] = [
+            ("gf", crate::mv::MAX_CHAIN_IN, [72.0, 48.0]),
+            ("gff", crate::mv::SKIRMISH_CHAIN_IN, [48.0, 48.0]),
+            ("aof", crate::mv::MAX_CHAIN_IN, [72.0, 48.0]),
+            ("aofs", crate::mv::SKIRMISH_CHAIN_IN, [48.0, 48.0]),
+            ("aofr", crate::mv::MAX_CHAIN_IN, [72.0, 48.0]),
+        ];
+        assert_eq!(cases.len(), SYSTEMS.len());
+        for (sys, chain_in, board_in) in cases {
+            let b = book(sys);
+            assert_eq!(b.system, sys, "system tag for {sys}");
+            assert_eq!(b.chain_in, chain_in, "chain_in for {sys}");
+            assert_eq!(b.hero_aura.reach_in, crate::sim::HERO_AURA_REACH_IN, "reach_in for {sys}");
+            assert_eq!(b.hero_aura.min_tough, crate::sim::HERO_AURA_TOUGH, "min_tough for {sys}");
+            assert!(b.hero_aura.joins, "joins stays true today for {sys}");
+            assert_eq!(b.blast_spread_in, None, "blast spread stays off today for {sys}");
+            assert!(!b.vertical_moves, "vertical moves stay off today for {sys}");
+            assert_eq!(b.default_board_in, board_in, "default_board_in for {sys}");
+        }
+        assert_eq!(book(" GF ").system, "gf");
+        assert_eq!(book("GFF").chain_in, crate::mv::SKIRMISH_CHAIN_IN);
+        assert_eq!(book("").system, "gf");
+        assert_eq!(book("unknown-system").system, "gf");
     }
 }
 

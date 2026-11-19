@@ -1056,11 +1056,23 @@ fn side_up(state: &State, i: usize, seams: Seams) -> bool {
     if rule_on(seams.rules_epoch, EPOCH_73_V36) { combined_alive(state, i, seams) > 0 } else { state.alive[i] > 0 }
 }
 
+/// Rules 3.6 (`EPOCH_73_V36`) — Blast(X) caps by the target's living model count: host plus any
+/// living joined heroes when the book allows joining (`book.hero_aura.joins`). Books with
+/// `blast_spread_in` split across neighbouring units separately (Phase 2); while `None`, the cap is
+/// the target unit alone, byte-identical to `_solo_combined_alive(target)`.
+fn blast_cap_models(state: &State, ti: usize, seams: Seams, book: &crate::rules::Book) -> i64 {
+    if book.hero_aura.joins {
+        combined_alive(state, ti, seams)
+    } else {
+        state.alive[ti]
+    }
+}
+
 /// Rules 3.6 (`EPOCH_73_V36`) — Blast(X) caps by the table's `_solo_combined_alive(target)`: the host's living
 /// models PLUS every living joined hero. Stamped beside `models`, which stays the host's own count.
 fn stamp_blast_models(def: &mut Ctx, state: &State, ti: usize, seams: Seams) {
     if rule_on(seams.rules_epoch, EPOCH_73_V36) {
-        def.blast_models = Some(combined_alive(state, ti, seams));
+        def.blast_models = Some(blast_cap_models(state, ti, seams, state.book(ti)));
     }
 }
 
@@ -1150,7 +1162,7 @@ pub(crate) fn tray_breath_attack(
     if crate::dice::faces_to_hits(&[f0], BREATH_TRIGGER as u8) == 0 {
         return;
     }
-    let hits = BREATH_BLAST.min(combined_alive(next, ti, seams)).max(1);
+    let hits = BREATH_BLAST.min(blast_cap_models(next, ti, seams, next.book(ti))).max(1);
     let ut = &statics[next.roster.profile[ti]];
     let def = ctx_of(ut, next, ti);
     let alive_before = morale_alive(next, ti, seams);
@@ -6970,14 +6982,21 @@ fn self_destruct_post_melee(
     }
 }
 
-const HERO_AURA_TOUGH: i64 = 9;
-const HERO_AURA_REACH_IN: f64 = 6.0;
+pub(crate) const HERO_AURA_TOUGH: i64 = 9;
+pub(crate) const HERO_AURA_REACH_IN: f64 = 6.0;
 
 /// Rules 3.6 hero morale aura (`EPOCH_73_V36`; `main._solo_aura_hero_for_morale` twin): the friendly Hero with
 /// the best Quality, when it beats `own`, that lends unit `i` its morale test — alive, not Shaken, in play,
-/// Tough(9)+, within 6" base edge to base edge (`modifier_distance_in`, the table's `nearest_melee_gap_in`).
-/// Such a Hero cannot be joined, so it is its own unit. A Shaken `i` rolls no die, so no aura is spent.
-fn hero_aura_quality(statics: &[UnitStatic], state: &State, i: usize, own: i64, seams: Seams) -> Option<(usize, i64)> {
+/// Tough >= `aura.min_tough`, within `aura.reach_in` base edge to base edge (`modifier_distance_in`, the table's
+/// `nearest_melee_gap_in`). A Shaken `i` rolls no die, so no aura is spent.
+fn hero_aura_quality_for_book(
+    statics: &[UnitStatic],
+    state: &State,
+    i: usize,
+    own: i64,
+    seams: Seams,
+    aura: crate::rules::HeroAura,
+) -> Option<(usize, i64)> {
     if !rule_on(seams.rules_epoch, EPOCH_73_V36) || unit_shaken(state, i, seams) {
         return None;
     }
@@ -6985,18 +7004,22 @@ fn hero_aura_quality(statics: &[UnitStatic], state: &State, i: usize, own: i64, 
     for h in 0..state.units() {
         let hs = &statics[state.roster.profile[h]];
         if h == i || state.player[h] != state.player[i] || state.alive[h] <= 0 || state.shaken[h] || state.dormant[h]
-            || !hs.is_hero || hs.ctx.tough < HERO_AURA_TOUGH || state.attached[i].contains(&h)
+            || !hs.is_hero || hs.ctx.tough < aura.min_tough || (aura.joins && state.attached[i].contains(&h))
         {
             continue;
         }
         if hs.quality >= best.map_or(own, |b| b.1) {
             continue;
         }
-        if modifier_distance_in(state, i, h, seams) <= HERO_AURA_REACH_IN + CONTROL_EPS {
+        if modifier_distance_in(state, i, h, seams) <= aura.reach_in + CONTROL_EPS {
             best = Some((h, hs.quality));
         }
     }
     best
+}
+
+fn hero_aura_quality(statics: &[UnitStatic], state: &State, i: usize, own: i64, seams: Seams) -> Option<(usize, i64)> {
+    hero_aura_quality_for_book(statics, state, i, own, seams, state.book(i).hero_aura)
 }
 
 /// G4R4 C-BANNER-DEAD-HOST (`EPOCH_73_V36`): the part of unit `i`'s recorded Banner bonus that left with its carrier. The
@@ -8674,7 +8697,11 @@ fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, host:
     }
     let mut total_hits = spell.effect_hits + if facets.surge { trigger_sixes } else { 0 };
     // CC-7b: Blast ×min(X, models) — a "model"-targeted spell resolves as a unit of 1 (no fan-out, main.gd:5804-5805).
-    let fanout = if spell.target_kind == "model" { 1 } else { combined_alive(state, ti, seams) };
+    let fanout = if spell.target_kind == "model" {
+        1
+    } else {
+        blast_cap_models(state, ti, seams, state.book(ti))
+    };
     if facets.blast > 1 {
         total_hits *= facets.blast.clamp(1, fanout.max(1));
     }
@@ -12544,5 +12571,45 @@ mod cast_fold_tests {
         assert!(!crate::mods::granted(&st, 0, "Furious"), "the exchange consumed the grant");
         let next_round = ctx_live(base, &statics, &st, 0, true, 4);
         assert!(!next_round.furious, "gone for the round after — no double-dip");
+    }
+
+    /// Firefight step 6: `hero_aura_quality` and `stamp_blast_models` read `rules::Book` fields
+    /// (same values for all five systems today -> zero outcome change).
+    #[test]
+    fn hero_aura_and_blast_cap_read_book_fields() {
+        use crate::rules::{book, Book, HeroAura};
+        let (mut st, mut statics) = host_and_caster_hero();
+        // Separate hero (unit 1) at 4" from unit 0, Tough(3), Quality 3+ vs unit 0 Quality 5+.
+        Rc::make_mut(&mut st.attached)[0].clear();
+        Rc::make_mut(&mut st.attached_to)[1] = None;
+        st.positions[0] = vec![[0.0, 0.0, 0.0]];
+        st.positions[1] = vec![[4.0 * IN2M, 0.0, 0.0]];
+        Rc::make_mut(&mut st.radii)[0] = vec![0.0];
+        Rc::make_mut(&mut st.radii)[1] = vec![0.0];
+        statics[0].quality = 5;
+        statics[1].is_hero = true;
+        statics[1].quality = 3;
+        statics[1].ctx.tough = 3;
+        let seams = Seams { rules_epoch: EPOCH_73_V36, hero_attach: true, ..Seams::default() };
+
+        // Today's GF and GFF books keep min_tough = 9, reach_in = 6.0 -> Tough(3) hero does not lend.
+        assert_eq!(hero_aura_quality(&statics, &st, 0, 5, seams), None);
+        assert_eq!(hero_aura_quality_for_book(&statics, &st, 0, 5, seams, book("gf").hero_aura), None);
+        // Custom aura header lowers min_tough -> same hero lends within reach, not outside reach.
+        let low_tough = HeroAura { reach_in: 6.0, min_tough: 1, joins: false };
+        assert_eq!(hero_aura_quality_for_book(&statics, &st, 0, 5, seams, low_tough), Some((1, 3)));
+        let short_reach = HeroAura { reach_in: 3.0, min_tough: 1, joins: false };
+        assert_eq!(hero_aura_quality_for_book(&statics, &st, 0, 5, seams, short_reach), None);
+
+        // Blast cap reads `book.hero_aura.joins`: host (3) + joined hero (1) = 4 when joins=true, 3 when joins=false.
+        st.alive[0] = 3;
+        st.alive[1] = 1;
+        Rc::make_mut(&mut st.attached)[0] = vec![1];
+        Rc::make_mut(&mut st.attached_to)[1] = Some(0);
+        let mut def = Ctx::default();
+        stamp_blast_models(&mut def, &st, 0, seams);
+        assert_eq!(def.blast_models, Some(4), "today's book joins=true counts host + hero");
+        let no_join = Book { hero_aura: low_tough, ..*book("gf") };
+        assert_eq!(blast_cap_models(&st, 0, seams, &no_join), 3, "joins=false counts host models only");
     }
 }
