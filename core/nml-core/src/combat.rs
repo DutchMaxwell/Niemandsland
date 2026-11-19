@@ -103,7 +103,7 @@ pub fn success_chance(target: i64) -> f64 {
 /// `AiCombatMath.save_target` :127-128.
 #[inline]
 pub fn save_target(defense: i64, ap: i64) -> i64 {
-    defense + ap.max(0)
+    defense + ap.max(0) + 1
 }
 
 /// `AiCombatMath.modified_hit_target` :222-223 — "+1 to hit" lowers the target.
