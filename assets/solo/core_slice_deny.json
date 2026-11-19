@@ -2,7 +2,7 @@
   "schema": "nml-core-slice-v1",
   "door": "shoot",
   "mode": "deny",
-  "note": "C-15 (deny by evidence): read only with NML_CORE_SLICE=deny. A unit carrying a listed primitive (unit or weapon rule) stays on the table; every other rule the registry automates goes to the core. Unknown or unautomated rules stay refused in both modes. Measured in the 24-game shadow soak of 17.11. (wave1116/shadow_soak_C6.md); the list only shrinks.",
+  "note": "C-15 / C-19 (deny by evidence): the AI door's slice, the default since C-19 (NML_CORE_SLICE=allow is the way back; the human door keeps the allow file until DS-109). A unit carrying a listed primitive (unit or weapon rule) stays on the table; every other rule the registry automates goes to the core. Unknown or unautomated rules stay refused in both modes. Measured in the 24-game shadow soak of 17.11. (wave1116/shadow_soak_C6.md); the list only shrinks.",
   "unmapped_inert": true,
   "unmapped_inert_why": "A rule name no rules map knows for the unit's system and faction (an upgrade's own label such as Wandering Mystic, War Paint, Combat Shield): the registry gives neither side anything to read, and the rules the upgrade grants are carried and checked on their own.",
   "inert": {

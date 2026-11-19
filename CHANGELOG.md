@@ -69,6 +69,15 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 - **NACHTMAHR's look-ahead takes casualties in the table's order.** In-game the core got no
   per-model kit data, so the look-ahead removed casualties in list order. It now gets each model's
   kit, so its choice matches the table. (#2648)
+- **The rules engine resolves NACHTMAHR's shots for units with special rules.** A volley of an AI
+  unit that carries rules such as Tough, AP, Blast or Regeneration is now resolved by the rules
+  engine, not only the volleys of units with no special rule at all. A short list of rules still goes
+  through the table (the pre-attack beats such as Mend, some item auras, rules whose state the engine
+  does not yet hand back), and so does a shot at a joined hero whose unit has no models left. In a
+  soak of 24 AI games and a 5-seed roster sweep every volley the engine took came out identical to
+  the table's. Your own units' moves and shots are unchanged by this. Setting `NML_CORE_SLICE=allow`
+  before starting the game brings the old, narrower slice back for this release;
+  `NML_ONE_CORE_ACTIVATION=0` still turns the engine off entirely. (#3043)
 
 ### Changed — activations
 - **Activations are explicit, and a move is checked by the rules engine.** Against the AI, and in an

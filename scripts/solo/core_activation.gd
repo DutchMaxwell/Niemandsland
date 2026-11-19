@@ -89,6 +89,16 @@ static func is_plain_target(gu: GameUnit) -> bool:
 	return has_statline(gu) and CoreSlice.takes(gu, true)
 
 
+## C-19: `is_plain` / `is_plain_target` for the HUMAN door (a human unit's lifecycle, move path and shot): the slice the human
+## door reads (`CoreSlice.human_path`), which C-19 did not switch to the deny-list. The AI door asks the two above.
+static func is_plain_human(gu: GameUnit) -> bool:
+	return CoreSlice.takes_human(gu)
+
+
+static func is_plain_target_human(gu: GameUnit) -> bool:
+	return has_statline(gu) and CoreSlice.takes_human(gu, true)
+
+
 ## Quality and defense both in 2..6 (the rules' range). A hand-written foreign save may carry none: get_quality() and
 ## get_defense() then answer 0, and there is nothing to hand the core.
 static func has_statline(gu: GameUnit) -> bool:
@@ -113,7 +123,7 @@ static func is_lifecycle_unit(main, gu: GameUnit) -> bool:
 
 ## (2) A lifecycle unit whose shot, End and digest resolve in the core.
 static func is_core_unit(main, gu: GameUnit) -> bool:
-	return is_lifecycle_unit(main, gu) and is_plain(gu) and not CoreSlice.carries(gu, ["Crossing Attack"])
+	return is_lifecycle_unit(main, gu) and is_plain_human(gu) and not CoreSlice.carries(gu, ["Crossing Attack"])
 
 
 ## (3) Equal to (2) for now; step 82 widens it by movement rule.
@@ -454,12 +464,12 @@ static func chords_of(paths: Array) -> Array:
 ## P4.D-37c: every enemy the core's strike legs (`chords`: one start-to-end leg per model) cross is a plain target. The core strikes
 ## what those legs cross with the rules it ports; the slice vouches only for units it lists, so any other crossed enemy
 ## (even one the strike would not pick) leaves the strike to the table, as before.
-static func crossed_plain(main, gu: GameUnit, chords: Array) -> bool:
+static func crossed_plain(main, gu: GameUnit, chords: Array, human := false) -> bool:
 	for e in main.opr_army_manager.get_game_units_for_player(main.solo_controller.enemy_slot_of(gu)):
 		var eu := e as GameUnit
 		if eu == null or eu.get_alive_count() <= 0 or SoloController.unit_in_reserve(eu) or eu.is_attached():
 			continue
-		if SoloController.trails_cross_unit_bases(chords, eu.models) and not is_plain_target(eu):
+		if SoloController.trails_cross_unit_bases(chords, eu.models) and not (is_plain_target_human(eu) if human else is_plain_target(eu)):
 			return false
 	return true
 
@@ -479,19 +489,20 @@ static var legacy_sets := {}
 
 ## Why the core door refuses this shooter (and target): "no_core", "attached", "non_opr", "unit_rule:<name>",
 ## "weapon_rule:<name>" for the shooter; the target's carry a "target_" prefix ("target_rule:<name>" = its unit rules).
-static func why_not(main, unit: GameUnit, target: GameUnit) -> Array:
+static func why_not(main, unit: GameUnit, target: GameUnit, human := false) -> Array:
 	var out: Array = [] if applies(main) else ["no_core"]
-	out.append_array(CoreSlice.refusals(unit) if unit != null else [])
-	for r in (CoreSlice.refusals(target, true) if target != null else []):
+	out.append_array((CoreSlice.refusals_human(unit) if human else CoreSlice.refusals(unit)) if unit != null else [])
+	for r in ((CoreSlice.refusals_human(target, true) if human else CoreSlice.refusals(target, true)) if target != null else []):
 		out.append("target_rule:" + r.trim_prefix("unit_rule:") if r.begins_with("unit_rule:") else "target_" + r)
 	return out
 
 
 ## One table volley, counted once per reason. `extra` = comma-joined door facts ("split", "no_handle").
 static func note_legacy(main, door: String, unit: GameUnit, targets: Array, extra: String = "") -> void:
-	var why: Array = why_not(main, unit, null)
+	var human := door.begins_with("human")   # C-19: the human doors count under the slice the human door reads
+	var why: Array = why_not(main, unit, null, human)
 	for t in targets:
-		for r in why_not(main, null, t as GameUnit):
+		for r in why_not(main, null, t as GameUnit, human):
 			if not why.has(r):
 				why.append(r)
 	why.append_array(Array(extra.split(",", false)))
@@ -1420,7 +1431,7 @@ static func drop_refused(main, gu: GameUnit) -> bool:
 		for e in s["start_models"]:
 			from[e["model"]] = e["at"]
 		var alive: Array = gu.get_alive_models()
-		s["table_strike"] = not crossed_plain(main, gu, range(at.size()).map(func(i: int) -> Array: return [from.get(alive[i], at[i]), at[i]]))
+		s["table_strike"] = not crossed_plain(main, gu, range(at.size()).map(func(i: int) -> Array: return [from.get(alive[i], at[i]), at[i]]), true)
 	for line in r.get("lines", []):
 		main._log_rule_event(BattleLog.Category.MOVEMENT, str(line["text"]), false, str(line["detail"]))
 	return false
@@ -1494,7 +1505,7 @@ static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Ca
 		return true   # nothing was shot: `last_target` is not the target, the caller returns and the activation stays open
 	if auto:
 		return false   # an Auto verb moved the unit through the engine, not through the session's drop: the core would shoot from the start
-	if not is_core_unit(main, attacker) or not is_plain_target(target) \
+	if not is_core_unit(main, attacker) or not is_plain_target_human(target) \
 			or int(main.object_manager._movement_cap) == CAP_CHARGE or table_struck(attacker):
 		return false
 	if main.core_door_refused(attacker):
@@ -1533,7 +1544,7 @@ static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Ca
 ## the caller returns). The caller does the table's side effects (the declared line, `shot_round`,
 ## `human_attack_resolved`, `_solo_complete_human_attack`) and closes the session.
 static func human_shoot_split(main, attacker: GameUnit, target_a: GameUnit, target_b: GameUnit, b_names: Array) -> bool:
-	if not is_core_unit(main, attacker) or not is_plain_target(target_a) or not is_plain_target(target_b) \
+	if not is_core_unit(main, attacker) or not is_plain_target_human(target_a) or not is_plain_target_human(target_b) \
 			or int(main.object_manager._movement_cap) == CAP_CHARGE or table_struck(attacker):
 		return false
 	if main.core_door_refused(attacker):

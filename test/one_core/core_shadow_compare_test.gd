@@ -6,6 +6,7 @@ extends GdUnitTestSuite
 ## comparator that always says equal) turns the second and third case red; a comparator that never says equal, the first.
 ## Real: the main scene, NmlCore, the table's `_solo_resolve_ai_volley`, its tray and the tap. Constructed: golden-grid units.
 
+const SlicePin := preload("res://test/one_core/slice_pin.gd")
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const Harness := preload("res://test/one_core/golden_witness_harness.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -17,6 +18,7 @@ var _epoch_before: int
 
 
 func before_test() -> void:
+	SlicePin.narrow()   # C-19: this suite is about what the narrow slice refuses
 	_epoch_before = AiActRecorder.rules_epoch
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
@@ -37,6 +39,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	SlicePin.release()
 	AiActRecorder.rules_epoch = _epoch_before
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1

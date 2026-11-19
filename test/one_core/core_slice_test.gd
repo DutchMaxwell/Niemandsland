@@ -267,8 +267,8 @@ func test_a_missing_or_malformed_file_is_the_empty_slice() -> void:
 	assert_bool(CoreSlice.takes(_unit([], [[]]))).override_failure_message("a plain unit must stay taken").is_true()
 
 
-## C-15: env NML_CORE_SLICE=deny reads the measured deny-list file instead of the shipped allowlist; unset, the shipped
-## file as before. The deny file refuses its listed primitives (a Teleport unit) and takes a unit whose
+## C-15 / C-19: the measured deny-list is what the live slice reads (env `deny`, as before; since C-19 also with the env unset).
+## The deny file refuses its listed primitives (a Teleport unit) and takes a unit whose
 ## rules are automated and not listed (AP, Tough); a name no map knows is taken (unmapped_inert). The list only shrinks: CEILING.
 ## RED: read PATH regardless of the switch -> the first assertion reads mode "allow".
 const DENY_CEILING := 9   # BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
@@ -302,7 +302,67 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 		"the deny list only shrinks (ceiling %d)" % DENY_CEILING).is_less_equal(DENY_CEILING)
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
-	assert_str(str(CoreSlice.config()["mode"])).is_equal("allow")
+
+
+## C-19: with NO env the AI door's slice is the deny-list; `NML_CORE_SLICE=allow` (or `plain`) is the way back to the shipped
+## allow file, any other value (`deny`, a typo) is the default. RED on main (before C-19): unset read the allow file -> mode
+## "allow", and a unit with automated rules (Tough, AP) is refused. The startup line names the mode in use.
+func test_the_ai_door_reads_the_deny_list_unless_the_way_back_is_asked_for() -> void:
+	var ruled := _unit(["Tough(3)"], [["AP(1)"]])
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+	assert_str(str(CoreSlice.config()["mode"])).override_failure_message("no env: the default slice is not the deny-list").is_equal("deny")
+	assert_bool(CoreSlice.takes(ruled)).override_failure_message("no env: a unit with automated rules stays on the table").is_true()
+	assert_str(CoreSlice.mode_line()).contains("AI door deny (core_slice_deny.json)").contains("NML_CORE_SLICE=allow")
+	for raw in ["allow", "ALLOW", "plain"]:
+		OS.set_environment("NML_CORE_SLICE", raw)
+		CoreSlice.reset_cache()
+		assert_str(str(CoreSlice.config()["mode"])).override_failure_message("NML_CORE_SLICE=%s is the way back to allow" % raw).is_equal("allow")
+		assert_bool(CoreSlice.takes(ruled)).override_failure_message("the way back refuses a unit with rules").is_false()
+		assert_str(CoreSlice.mode_line()).contains("AI door allow (core_slice_allow.json)")
+	for raw in ["deny", "typo", ""]:
+		OS.set_environment("NML_CORE_SLICE", raw)
+		CoreSlice.reset_cache()
+		assert_str(str(CoreSlice.config()["mode"])).override_failure_message("NML_CORE_SLICE='%s' must read the deny-list" % raw).is_equal("deny")
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+
+
+## C-19: the HUMAN door is not switched by the default (the gate measured the AI door; DS-109 switches the human door): with
+## no env it still reads the allow file, so a unit with rules is a table unit for it and a deny-list unit for the AI door.
+## An explicit `deny` reads the deny-list for both doors (as before C-19); `allow` reads the allow file for both; a test
+## seam (`path_override`) is read by both. RED (the human door follows the AI door): the unset case takes the unit.
+func test_the_human_door_keeps_the_allow_file_until_it_is_switched() -> void:
+	var ruled := _unit(["Tough(3)"], [["AP(1)"]])
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+	assert_bool(CoreSlice.takes(ruled)).override_failure_message("AI door, no env").is_true()
+	assert_bool(CoreSlice.takes_human(ruled)).override_failure_message("human door, no env: switched by C-19").is_false()
+	assert_array(CoreSlice.refusals_human(ruled)).is_equal(["unit_rule:Tough", "weapon_rule:AP"])
+	assert_bool(CoreSlice.takes_human(_unit([], [[]]))).override_failure_message("a plain unit stays taken").is_true()
+	assert_bool(CoreSlice.takes_human(ruled, true)).override_failure_message("human door, target").is_false()
+	assert_str(CoreSlice.mode_line()).contains("human door allow (core_slice_allow.json)")
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	assert_bool(CoreSlice.takes_human(ruled)).override_failure_message("explicit deny reads the deny-list for both doors").is_true()
+	assert_str(CoreSlice.mode_line()).contains("human door deny (core_slice_deny.json)")
+	OS.set_environment("NML_CORE_SLICE", "allow")
+	CoreSlice.reset_cache()
+	assert_bool(CoreSlice.takes_human(ruled)).is_false()
+	OS.unset_environment("NML_CORE_SLICE")
+	_allow({}, "deny")   # a test seam is read by both doors
+	assert_bool(CoreSlice.takes_human(ruled)).override_failure_message("the seam's slice is the human door's too").is_true()
+
+
+## C-19: the way back is the shipped file exactly (what `allow` reads is the old slice: the move-through group, nothing else).
+func test_the_way_back_reads_the_shipped_allow_file() -> void:
+	OS.set_environment("NML_CORE_SLICE", "allow")
+	CoreSlice.reset_cache()
+	var prims := (CoreSlice.config()["primitives"] as Dictionary).keys()
+	prims.sort()
+	assert_array(prims).is_equal(["Crossing Attack", "Strafing"])
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
 
 
 ## LD-6 (18.11.): the deny list's EQUAL-probe names leave in one batch. Each name's volley replays equal 16/16
@@ -367,6 +427,33 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 	CoreSlice.reset_cache()
 
 
+## C-19: a joined unit whose own models are all dead is shot as its living hero ("Hero: X is the unit now", a table line the
+## core's step path does not write), so deny mode keeps such a TARGET on the table; a host with a living model, a dead hero or
+## a shooter is untouched. RED: drop the predicate -> v36/g4r5_r8_lonehero_retarget_test and g4r5_r8b_lonehero_nearest_test
+## fail on the deny default (no Hero line in the log), and the first assertion here reads [].
+func test_deny_mode_keeps_a_lone_hero_target_on_the_table() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	var host := _unit(["Tough(3)"], [["AP(1)"]])
+	var hero := _unit(["Hero"], [])
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	var hm := ModelInstance.new()
+	hm.is_alive = true
+	hero.models.append(hm)
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("host with no model, hero alive: a lone hero").is_equal(["lone_hero_target"])
+	assert_bool(CoreSlice.takes(host, true)).is_false()
+	assert_array(CoreSlice.refusals(host)).override_failure_message("as a shooter it is not a target case").is_empty()
+	var xm := ModelInstance.new()
+	xm.is_alive = true
+	host.models.append(xm)
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("a host with a living model is no lone hero").is_empty()
+	host.models.clear()
+	hm.is_alive = false
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("a dead hero is no lone hero").is_empty()
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+
+
 ## Deny mode takes a joined hero with its unit, so a rule the hero carries is read too: a host whose only listed rule
 ## sits on its joined hero is refused by that rule (C-18 soak: Piercing Growth on a joined Grunt Veteran). RED: read only
 ## the host's own rules -> the host is taken.
@@ -386,9 +473,11 @@ func test_deny_mode_takes_the_inert_names() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
 	assert_bool(CoreSlice.takes(_unit(["Unique", "Army Standard Bearer", "Courage"], [["AP(1)"]]))).is_true()
-	OS.unset_environment("NML_CORE_SLICE")
+	OS.set_environment("NML_CORE_SLICE", "allow")   # C-19: the allow file is the way back, no longer the default
 	CoreSlice.reset_cache()
 	assert_array(CoreSlice.refusals(_unit(["Unique"], []))).is_equal(["unit_rule:Unique"])
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
 
 
 ## Deny mode takes a name no rules map knows (an upgrade's own label); allow mode still refuses it. RED: drop the unmapped
@@ -397,9 +486,11 @@ func test_deny_mode_takes_an_unmapped_upgrade_label() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
 	assert_bool(CoreSlice.takes(_unit(["Some Upgrade Label"], [["AP(1)"]]))).is_true()
-	OS.unset_environment("NML_CORE_SLICE")
+	OS.set_environment("NML_CORE_SLICE", "allow")   # C-19: the allow file is the way back, no longer the default
 	CoreSlice.reset_cache()
 	assert_array(CoreSlice.refusals(_unit(["Some Upgrade Label"], []))).is_equal(["unit_rule:Some Upgrade Label"])
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
 
 
 ## `applies` reads only these two members (the census test's stub).
