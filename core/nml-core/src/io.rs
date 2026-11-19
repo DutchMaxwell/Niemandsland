@@ -835,6 +835,11 @@ pub struct Seams {
     /// replayed transcript resolves exactly as before.
     #[serde(default)]
     pub takedown_pick: Option<usize>,
+    /// DS-GMC2: executed step-path CHARGE (`activation::step_activation`) runs `_charge_move` directly without
+    /// `#857`'s replay-only `plain_move` fallback when `charge_cut && !overlap_free`. Default OFF: every recorded
+    /// replay and search rollout stays byte-identical.
+    #[serde(default)]
+    pub charge_direct: bool,
 }
 
 impl Seams {

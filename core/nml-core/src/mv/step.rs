@@ -27,7 +27,7 @@ use crate::state::State;
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
 use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_74_CLIMB_COST, EPOCH_8_PLANNER_MENU, EPOCH_73_V36, EPOCH_77_CHARGE_CAP,
-    EPOCH_78_FLIER_CUT};
+    EPOCH_78_FLIER_CUT, PENDING_EPOCH_MELEE_GMC2};
 
 use super::cost::{ledge_cost, trim_polyline_priced, CellSet, Grid, Ledge, Wall, Zone};
 use super::entry::plan_unit_step_call;
@@ -1185,7 +1185,19 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         .enumerate()
         .map(|(i, m)| {
             let p = planned.get(i).copied().unwrap_or_else(|| t.to_inch(pos_of(state, *m)));
-            let w = t.from_inch(p, 0.0);
+            // DS-GMC2 (`PENDING_EPOCH_MELEE_GMC2`, table twin `_plan_positions`): moved endpoints use the same
+            // `to_world_f32` multiply-then-subtract as every intermediate step and the table (avoiding 1-ULP `from_inch`
+            // drift that flips exact contact/separation tie-breaks); unmoved (`!stirred`) models keep `self.pos[i]`.
+            let w = if rule_on(self.rules_epoch, PENDING_EPOCH_MELEE_GMC2) {
+                if !stirred {
+                    self.pos[i]
+                } else {
+                    let [x, z] = super::gate::to_world_f32(p, t.board_in());
+                    [x, 0.0, z]
+                }
+            } else {
+                t.from_inch(p, 0.0)
+            };
             // G4R5 R3 + R3b (`EPOCH_73_V36`, table twin `_apply_model_positions`): a model stands where its route ends:
             // on the roof of the container footprint it ends on, else on the table, so one that walks off a roof is back
             // at y 0. Below epoch 73 it keeps the start height.
@@ -1418,6 +1430,14 @@ pub fn charge_move(self, state: &State, t: &Terrain, si: usize, ci: usize,
             band_in, hero_attach, fast_planner, guard);
     }
     Some(land)
+}
+
+/// DS-GMC2: table-direct charge move (`SoloController._charge_move`) — executes the charge landing directly
+/// without `#857`'s replay-only `plain_move` fallback. Used on the step path (`Seams::charge_direct`).
+#[allow(clippy::too_many_arguments)]
+pub fn charge_move_direct(self, state: &State, t: &Terrain, si: usize, ci: usize,
+    band_in: f64, hero_attach: bool, fast_planner: bool, guard: i64) -> Option<Landing> {
+    self.charge_landing(state, t, si, ci, band_in, hero_attach, fast_planner, guard).map(|(land, _)| land)
 }
 
 /// G4-C2 (c): would the table's declaration probe (`charge_path_probe`) accept this charge? False when the whole
@@ -2659,5 +2679,44 @@ pub(crate) mod tests {
         let (budget, arc, climb) = multi_model_rush(EPOCH_74_CLIMB_COST, 4, [-1.0, -21.5], [20.0, -21.5], 8.0);
         assert_eq!(climb, 0.0);
         assert!(arc > 7.9 && arc <= budget + 0.03, "arc {arc:.2} of {budget:.1}");
+    }
+
+    /// DS-GMC2 Cause 1 (`PENDING_EPOCH_MELEE_GMC2`): `Move::execute` converts moved endpoints via `to_world_f32`
+    /// (matching `SoloController._plan_positions`), eliminating the 1-ULP `from_inch` drift that flips exact
+    /// base-contact/separation tie-breaks on Versatile Reach and Fast, while keeping `!stirred` models verbatim
+    /// and preserving legacy `from_inch` below the epoch gate.
+    #[test]
+    fn pending_epoch_gmc2_endpoints_match_to_world_f32_and_legacy_stays_frozen() {
+        let t = board(vec![]);
+        let r = 0.63 * IN2M;
+        let att: Vec<V3> = (0..5).map(|i| [0.0, 0.0, (i as f64 * 1.3 * IN2M) as f32]).collect();
+        let def: Vec<V3> = (0..8).map(|i| [(14.0 * IN2M) as f32, 0.0, (i as f64 * 1.3 * IN2M) as f32]).collect();
+        let state = units_state(vec![att, def], vec![vec![r; 5], vec![r; 8]], vec![vec![], vec![]]);
+        let run = |ep: u32| {
+            (MoveRules { rules_epoch: ep })
+                .charge_move(&state, &t, 0, 1, 14.0, false, true, crate::mv::FAST_PLANNER_GUARD)
+                .expect("charge lands")
+        };
+        let old = run(crate::acts::CURRENT_RULES_EPOCH);
+        let new = run(PENDING_EPOCH_MELEE_GMC2);
+        let mut ulp_fixed = 0usize;
+        for (i, tr) in new.trails.iter().enumerate() {
+            let p = *tr.last().expect("trail end");
+            let [wx, wz] = crate::mv::gate::to_world_f32(p, t.board_in());
+            assert_eq!([new.end[i][0], new.end[i][2]], [wx, wz], "model {i} must match to_world_f32 bit-exact");
+            let leg = t.from_inch(p, 0.0);
+            assert_eq!([old.end[i][0], old.end[i][2]], [leg[0], leg[2]], "legacy epoch must keep from_inch");
+            if [old.end[i][0], old.end[i][2]] != [wx, wz] {
+                ulp_fixed += 1;
+            }
+        }
+        assert!(ulp_fixed > 0, "fixture must exercise at least one 1-ULP from_inch vs to_world_f32 difference");
+        // Unmoved (!stirred) coherent unit keeps exact original world positions at PENDING_EPOCH_MELEE_GMC2.
+        let stay_pos = vec![vec![[0.0, 0.0, 0.0], [(1.5 * IN2M) as f32, 0.0, 0.0], [(3.0 * IN2M) as f32, 0.0, 0.0]]];
+        let stay_st = units_state(stay_pos, vec![vec![0.5 * IN2M; 3]], vec![vec![]]);
+        let stay = stay_put(PENDING_EPOCH_MELEE_GMC2, &stay_st, &t);
+        for i in 0..3 {
+            assert_eq!(stay.end[i], pos_of(&stay_st, Mover { unit: 0, model: i }), "unmoved model {i} drifted");
+        }
     }
 }

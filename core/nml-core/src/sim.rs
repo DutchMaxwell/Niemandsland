@@ -36,7 +36,7 @@ use crate::acts::{
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
     EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_75_TABLE_FIXES,
     EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_79_EV_MOVED_ROUND, EPOCH_83_LONE_HERO_TARGET, EPOCH_88_SPLIT_LONE_HERO,
-    EPOCH_89_SHARED_BEARERS, EPOCH_91_JOINED_HERO_FATIGUE,
+    EPOCH_89_SHARED_BEARERS, EPOCH_91_JOINED_HERO_FATIGUE, PENDING_EPOCH_MELEE_GMC2,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::landing::{LandedModel, Landing};
@@ -10494,6 +10494,13 @@ fn resolve_with(
         );
     }
     let band_in = parts.total();
+    // DS-GMC2 (`PENDING_EPOCH_MELEE_GMC2`, table twin `SoloController.melee_shroud_charge_in`):
+    // Melee Shrouding shortens the working CHARGE band (-2"/-3", floor 6") against a shrouded target.
+    let band_in = if kind == CHARGE && rule_on(seams.rules_epoch, PENDING_EPOCH_MELEE_GMC2) {
+        ci.map_or(band_in, |ti| crate::gate::melee_shroud_charge_in(band_in, &next, ti))
+    } else {
+        band_in
+    };
     // Rules 3.6 (G4-H7): a charge on a unit with no living model, host and joined heroes, is void - the table logs
     // "the charge falls short" and moves nothing, so there is no move, no Dangerous test and no fight.
     let charge_void = kind == CHARGE
@@ -10598,16 +10605,12 @@ fn resolve_with(
     }
     if placed.is_none() && seams.movement && !seams.plain_only && kind == CHARGE && band_in > 0.0 {
         if let (Cover::Board(t), Some(ti)) = (cover, ci) {
-            landing = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).charge_move(
-                &next,
-                t,
-                si,
-                ti,
-                band_in,
-                seams.hero_attach,
-                true,
-                crate::mv::FAST_PLANNER_GUARD,
-            );
+            let mr = crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch };
+            landing = if seams.charge_direct {
+                mr.charge_move_direct(&next, t, si, ti, band_in, seams.hero_attach, true, crate::mv::FAST_PLANNER_GUARD)
+            } else {
+                mr.charge_move(&next, t, si, ti, band_in, seams.hero_attach, true, crate::mv::FAST_PLANNER_GUARD)
+            };
         }
     }
     // D5-3, seam-gated: every NON-charge move with a destination goes through

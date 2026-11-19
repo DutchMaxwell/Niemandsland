@@ -814,6 +814,8 @@ impl Core {
             bands_prefolded: self.knobs.bands_prefolded,
             // P4.0-5 — an answer, never a rule switch: the trainer supplies no choice.
             takedown_pick: None,
+            // DS-GMC2: step-path CHARGE only; replay and trainer rollouts stay off.
+            charge_direct: false,
         }
     }
 

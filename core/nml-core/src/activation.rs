@@ -427,7 +427,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     // search knobs say: the ported movement is ON and the plain-only imagination OFF. Without it the resolver skips the move,
     // finds no contact and answers a fightless `Done` (measured at the Godot door: empty lines, empty delta).
     if kind == CHARGE {
-        seams = Seams { movement: true, plain_only: false, ..seams };
+        seams = Seams { movement: true, plain_only: false, charge_direct: true, ..seams };
     }
     // Not HOLD: a mode was declared and the last placement moved (or does not match the models).
     let mut moved = Vec::new();
