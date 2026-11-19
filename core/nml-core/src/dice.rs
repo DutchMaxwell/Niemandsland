@@ -406,6 +406,9 @@ pub struct ShootResult {
     /// (`SoloController.apply_deadly_wounds`, solo_controller.gd:8333). Empty
     /// on every non-Deadly activation; the landing sites drain it.
     pub deadly_groups: Vec<(i64, i64)>,
+    /// The volley's Deadly weapons, one entry per weapon for the table's line (`_solo_land_deadly_wounds`): `(weapon, raw
+    /// unsaved, X, how many of `deadly_groups` it pushed)`, in the same order. The volley landing drains both together.
+    pub deadly_lines: Vec<(String, i64, i64, usize)>,
     /// The same groups' PRE-regeneration raw unsaved count — the shooting
     /// tally keeps it (`total_caused += w`, main.gd:3318) while the landing
     /// uses the group's post-regeneration count.
@@ -444,6 +447,7 @@ impl ShootResult {
         self.fortified_fired = self.fortified_fired || other.fortified_fired;
         self.bane_rerolled += other.bane_rerolled;
         self.deadly_groups.extend(other.deadly_groups);
+        self.deadly_lines.extend(other.deadly_lines);
         self.deadly_tally += other.deadly_tally;
         self.takedown_groups.extend(other.takedown_groups);
         self.hazardous_self.extend(other.hazardous_self);
@@ -528,6 +532,11 @@ fn piercing_assault_grant_cond() -> CondAp {
     CondAp { ap_bonus: 1, condition: "on_charge".into(), ..Default::default() }
 }
 
+/// A rule's battle-log line on a supplied tray, in the table's words (a seeded tray never builds the text).
+pub(crate) fn say_rule(tray: &mut Tray, rule: &'static str, side: i64, text: impl FnOnce() -> String) {
+    tray.say(|| LogLine { rule, category: Category::Combat, side, text: text(), detail: None });
+}
+
 /// The table's `blast_log_text`: names Blast(X) and, when the model count clamps the multiplier, the cap.
 fn blast_log(x: i64, hits: i64, boosted: i64, models: i64) -> String {
     let mult = boosted / hits.max(1);
@@ -535,13 +544,20 @@ fn blast_log(x: i64, hits: i64, boosted: i64, models: i64) -> String {
     format!("Blast({x}): {hits} hit{} ×{mult}{capped} → {boosted} hits", if hits == 1 { "" } else { "s" })
 }
 
-fn surge_attack_hits(
+fn surge_attack_hits(p: &ShootProfile, faces: &[u8], count_target: i64, owner: &str, tray: &mut Tray, rolls: &mut Vec<Roll>) -> i64 {
+    surge_attack_say(p, faces, count_target, owner, tray, rolls, None)
+}
+
+/// `surge_attack_hits`, plus the table's `_solo_hits` line when `say_side` is the shooter's seat (the volley and strike
+/// legs; the melee Bloodthirsty leg stays silent).
+fn surge_attack_say(
     p: &ShootProfile,
     faces: &[u8],
     count_target: i64,
     owner: &str,
     tray: &mut Tray,
     rolls: &mut Vec<Roll>,
+    say_side: Option<i64>,
 ) -> i64 {
     if !p.surge_attack {
         return 0;
@@ -561,7 +577,13 @@ fn surge_attack_hits(
         faces: extra_faces.clone(),
         owner: owner.into(),
     });
-    faces_to_hits(&extra_faces, count_target as u8) as i64
+    let hits = faces_to_hits(&extra_faces, count_target as u8) as i64;
+    if let Some(side) = say_side {
+        let rule = if p.surge_attack_rule.is_empty() { "Extra attacks" } else { p.surge_attack_rule.as_str() };
+        say_rule(tray, "extra_attack", side, || format!("{rule}: {xn} extra attack{} from unmodified 6s — {hits} hit{}",
+            if xn == 1 { "" } else { "s" }, if hits == 1 { "" } else { "s" }));
+    }
+    hits
 }
 
 /// G4R5 F-PRIMAL-GRANT-ONCE (`EPOCH_73_V36`): ONE live "Enhanced Primal" grant is carried in two channels (the overlay rule on
@@ -569,15 +591,15 @@ fn surge_attack_hits(
 /// On a member that PRINTS the extra-die form the grant only LOWERS that form's threshold to 5s; only a member without the
 /// printed form rolls the grant's own group. Below 73 both groups roll (replay). Returns the extras' hits.
 #[allow(clippy::too_many_arguments)]
-fn primal_extras(p: &ShootProfile, grant: bool, v36: bool, faces: &[u8], count_target: i64, owner: &str, tray: &mut Tray, out: &mut ShootResult) -> i64 {
+fn primal_extras(p: &ShootProfile, grant: bool, v36: bool, faces: &[u8], count_target: i64, owner: &str, side: i64, tray: &mut Tray, out: &mut ShootResult) -> i64 {
     if !(grant && v36 && p.surge_attack) {
-        let hits = surge_attack_hits(p, faces, count_target, owner, tray, &mut out.rolls);
-        return hits + if grant { surge_attack_hits(&primal_boost_grant_profile(), faces, count_target, owner, tray, &mut out.rolls) } else { 0 };
+        let hits = surge_attack_say(p, faces, count_target, owner, tray, &mut out.rolls, Some(side));
+        return hits + if grant { surge_attack_say(&primal_boost_grant_profile(), faces, count_target, owner, tray, &mut out.rolls, Some(side)) } else { 0 };
     }
     if faces.iter().any(|&f| f == 6 || (f == 5 && count_target <= 5)) {
         out.log.push(format!("Enhanced Primal: {owner} — one extra-attack roll on unmodified 5s and 6s (the grant widens the Primal, it adds no second roll)"));
     }
-    surge_attack_hits(&ShootProfile { surge_attack_low: p.surge_attack_low.min(5), ..p.clone() }, faces, count_target, owner, tray, &mut out.rolls)
+    surge_attack_say(&ShootProfile { surge_attack_low: p.surge_attack_low.min(5), ..p.clone() }, faces, count_target, owner, tray, &mut out.rolls, Some(side))
 }
 
 /// `AiCombatMath.blocks_with_bane` :354-363 — each unmodified Defense 6 is
@@ -1612,7 +1634,7 @@ pub fn resolve_volley_leg(
         // helper's own doc). Draws its own tray slot right after Surge's,
         // matching `_solo_hits`'s order.
         // Wave 2 — a granted "Primal Boost", the same low-surge form (one group per member: `primal_extras`).
-        hits += primal_extras(p, att.surge_grant, rule_on(att.rules_epoch, EPOCH_73_V36), &faces, count_target, sh.owner, tray, &mut out);
+        hits += primal_extras(p, att.surge_grant, rule_on(att.rules_epoch, EPOCH_73_V36), &faces, count_target, sh.owner, att.side, tray, &mut out);
         // EPOCH 44 SURGE MARK — the mark's once-grant ("Surge", placed by
         // `tray_vs_marks` at the attack seam, spent with the exchange) reads
         // against the marked target ONLY: +1 hit per unmodified 6, the plain
@@ -1644,6 +1666,7 @@ pub fn resolve_volley_leg(
             if def.blast_models.is_some() {
                 out.log.push(blast_log(p.blast, hits, boosted, cap));
             }
+            say_rule(tray, "blast", att.side, || blast_log(p.blast, hits, boosted, cap)); // the table says it always (#169)
             hits = boosted;
         }
         // One-core P3 step 24: the table's line after `_solo_hits` (main.gd:5056-5057), a miss included; step 27: with
@@ -1938,7 +1961,9 @@ pub fn resolve_volley_leg(
             out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, def, def_owner, tray, &mut out.rolls));
             out.deadly_tally += w;
         } else if deadly_per_model && p.deadly > 0 {
+            let first = out.deadly_groups.len();
             push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, def, def_owner, tray);
+            out.deadly_lines.push((p.name.clone(), w, p.deadly.max(1), out.deadly_groups.len() - first));
             out.deadly_tally += w;
         } else if ignores_regen {
             regen_proof += w;
@@ -2649,7 +2674,7 @@ pub fn resolve_melee_leg_wipe(
             // Block B6 — the extra-ATTACK-DIE Surge siblings (Predator Fighter
             // is melee-only, so this is the branch it actually fires on).
             // Wave 2 — a granted "Primal Boost", the same low-surge form (one group per member: `primal_extras`).
-            hits += primal_extras(p, sh.att.surge_grant, rule_on(sh.att.rules_epoch, EPOCH_73_V36), trig, count_target, sh.owner, tray, &mut out);
+            hits += primal_extras(p, sh.att.surge_grant, rule_on(sh.att.rules_epoch, EPOCH_73_V36), trig, count_target, sh.owner, sh.att.side, tray, &mut out);
             // EPOCH 44 SURGE MARK — the strike fold's twin of the volley leg
             // above: the mark's once-grant adds +1 hit per unmodified 6
             // against the marked target only, named once when it fires.

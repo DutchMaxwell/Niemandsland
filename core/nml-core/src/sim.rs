@@ -41,7 +41,7 @@ use crate::acts::{
 use crate::io::{Action, Seams, SplitShot};
 use crate::landing::{LandedModel, Landing};
 use crate::logline::{Category, LogLine};
-use crate::dice::{Morale, ShootResult, Tray};
+use crate::dice::{say_rule, Morale, ShootResult, Tray};
 use crate::mods;
 use crate::mission::{drop_carried, sync_carried_positions};
 use crate::rng::GodotRng;
@@ -541,7 +541,7 @@ fn open_alloc(state: &State, si: usize, ti: usize, gi: usize, (w, deadly): (i64,
 /// P4.D-21 — `land_deadly_wounds` for the wounds the owner places (`SoloController.deadly_pick`, main.gd:10661, D17): a
 /// wound goes to the next pick and deals X capped at that model; a wound the auto pick FORCES onto an already-wounded Tough
 /// model, or one with no pick left, lands by `land_deadly_wounds`. Returns the wounds dealt.
-fn land_deadly_picked(state: &mut State, ti: usize, unsaved: i64, x: i64, seams: Seams, alloc: &mut AllocPicks) -> i64 {
+fn land_deadly_picked(state: &mut State, ti: usize, unsaved: i64, x: i64, seams: Seams, alloc: &mut AllocPicks, forced_n: &mut i64) -> i64 {
     let mut dealt = 0;
     for _ in 0..unsaved.max(0) {
         let lead = crate::casualty::chain_casualty_order(state, ti, Some(1)).and_then(|o| o.first().copied());
@@ -552,10 +552,18 @@ fn land_deadly_picked(state: &mut State, ti: usize, unsaved: i64, x: i64, seams:
                 land_wounds_in_order(state, ti, take, vec![i]);
                 take
             }
-            None => land_deadly_wounds(state, ti, 1, x, seams),
+            None => land_deadly_counted(state, ti, 1, x, seams, forced_n),
         };
     }
     dealt
+}
+
+/// One Deadly group on `ti`: the owner's picks when the group has an allocation open, else the automatic landing.
+fn land_deadly_group(state: &mut State, ti: usize, unsaved: i64, x: i64, seams: Seams, alloc: &mut Option<AllocPicks>, forced_n: &mut i64) -> i64 {
+    match alloc.as_mut() {
+        Some(a) => land_deadly_picked(state, ti, unsaved, x, seams, a, forced_n),
+        None => land_deadly_counted(state, ti, unsaved, x, seams, forced_n),
+    }
 }
 
 /// P4.D-20 — the pool's `w` wounds, one per remaining pick (landed first); the caller lands the rest by `casualty_order`
@@ -703,6 +711,12 @@ fn land_takedown_groups(state: &mut State, ti: usize, shot: &mut ShootResult, pi
 /// uses. `x` capped at that model's remaining wounds each hit, no carry-over
 /// either way. Returns the wounds actually dealt (the table's `dealt`).
 pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: i64, seams: Seams) -> i64 {
+    land_deadly_counted(state, ti, unsaved, deadly_x, seams, &mut 0)
+}
+
+/// `land_deadly_wounds`, plus the picks that FINISHED an already-wounded Tough model (the table's `deadly_pick` "forced"
+/// flag, counted into `forced_n`): the volley line names them.
+fn land_deadly_counted(state: &mut State, ti: usize, unsaved: i64, deadly_x: i64, seams: Seams, forced_n: &mut i64) -> i64 {
     let x = deadly_x.max(1);
     let mut dealt = 0i64;
     let epoch67 = rule_on(seams.rules_epoch, EPOCH_67_MARKERS_BURSTS);
@@ -754,6 +768,9 @@ pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: 
             b
         };
         let take = x.min(state.wounds[m][best]);
+        if epoch67 && max_of[ci].get(best).is_some_and(|&mx| mx > 1 && state.wounds[m][best] < mx) {
+            *forced_n += 1;
+        }
         dealt += take;
         state.wounds[m][best] -= take;
         if state.wounds[m][best] <= 0 {
@@ -1338,11 +1355,16 @@ fn chain_snapshot(next: &State, ti: usize, tray: &Tray) -> Option<ChainBefore> {
 /// lines (main.gd:16582-16600): the wounds that landed on the chain, then per member the models it lost (main.gd:18376-18395,
 /// :25123); then one landing per changed member, its loss line said here. A seeded tray (`None`) says and records nothing.
 fn land_chain_report(statics: &[UnitStatic], next: &State, tray: &mut Tray, ti: usize, before: Option<ChainBefore>) {
+    land_chain_report_inline(statics, next, tray, ti, before, 0);
+}
+
+/// `land_chain_report`, less the wounds the table lands model by model with their own line (the volley's Deadly): `inline`.
+fn land_chain_report_inline(statics: &[UnitStatic], next: &State, tray: &mut Tray, ti: usize, before: Option<ChainBefore>, inline: i64) {
     let Some(ch) = before else { return };
     let ut = &statics[next.roster.profile[ti]];
     let size = |u: usize| statics[next.roster.profile[u]].model_count;
     let (alive, total) = ch.iter().fold((0, 0), |(a, t), (u, ..)| (a + next.alive[*u], t + size(*u)));
-    let took: i64 = ch.iter().map(|(u, _, w)| w.iter().sum::<i64>() - next.wounds[*u].iter().sum::<i64>()).sum();
+    let took: i64 = ch.iter().map(|(u, _, w)| w.iter().sum::<i64>() - next.wounds[*u].iter().sum::<i64>()).sum::<i64>() - inline;
     // NML-1091: a unit that IS one multi-wound model counts that model's wounds instead.
     let (n, of, unit) = match ut.wounds_max.first() {
         Some(&m) if total == 1 && m > 1 => (next.wounds[ti].first().copied().unwrap_or(0).max(0), m, " wounds"),
@@ -1559,6 +1581,7 @@ pub(crate) fn tray_strafing(
         land_pool_wounds(next, target, w, false, seams, &mut shot.log);
     }
     land_takedown_groups(next, target, shot, seams.takedown_pick);
+    shot.deadly_lines.clear(); // the volley's per-weapon lines are said at the AI volley's own landing only
     for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
         let dl = land_deadly_wounds(next, target, post, dx, seams);
         shot.log.push(format!("Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {dl} wounds dealt"));
@@ -10929,6 +10952,15 @@ fn resolve_with(
                                     }
                                 }
                             }
+                            // G4R5 F-AMBUSH-ARRIVAL-AP (the table's `_solo_ambush_arrival_ap`): each member with the arrival AP
+                            // names the rule once, before the announce (`EPOCH_73_V36`, the table's gate for the line and the AP).
+                            if tray.feed().is_some() && rule_on(seams.rules_epoch, EPOCH_73_V36) {
+                                for (mi, _, att) in parts.iter().filter(|(_, m, a)| !m.keep.is_empty() && a.ambush_arrival_ap > 0) {
+                                    tray.say(|| LogLine { rule: "ambush_arrival", category: Category::Combat, side: next.player[si],
+                                        text: format!("Ambushing Piercing Shot: {} shoots with AP(+{}) in its arrival round",
+                                            statics[next.roster.profile[*mi]].name, att.ambush_arrival_ap), detail: None });
+                                }
+                            }
                             // One-core P3 step 24: the table's announce (`_solo_show_attack_announce`, main.gd:11752), said
                             // before the volley's first die; a group with no weapon in range never reaches it (main.gd:4693).
                             if tray.feed().is_some() && parts.iter().any(|(_, m, _)| !m.keep.is_empty()) {
@@ -11009,20 +11041,40 @@ fn resolve_with(
                             // `apply_deadly_wounds`, solo_controller.gd:8333):
                             // each unsaved wound ×X on the model with the most
                             // remaining wounds, capped there, surplus wasted.
-                            for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
-                                let d = match alloc.as_mut() {
-                                    Some(a) => land_deadly_picked(&mut next, g.ti, post, dx, seams, a),
-                                    None => land_deadly_wounds(&mut next, g.ti, post, dx, seams),
-                                };
-                                shot.log.push(format!(
-                                    "Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {d} wounds dealt"));
+                            let mut groups = std::mem::take(&mut shot.deadly_groups).into_iter();
+                            let mut deadly_dealt = 0;
+                            let side = next.player[si];
+                            for (weapon, unsaved, dx, n) in std::mem::take(&mut shot.deadly_lines) {
+                                let (mut dealt, mut forced) = (0, 0);
+                                for (post, gx) in groups.by_ref().take(n) {
+                                    let d = land_deadly_group(&mut next, g.ti, post, gx, seams, &mut alloc, &mut forced);
+                                    shot.log.push(format!(
+                                        "Deadly({gx}): {post} unsaved ×{gx}, no carry-over → {d} wounds dealt"));
+                                    dealt += d;
+                                }
+                                deadly_dealt += dealt;
+                                // The table's lines (`_solo_land_deadly_wounds`), once per weapon and only when a wound landed.
+                                let s = |n: i64| if n == 1 { "" } else { "s" };
+                                if dealt > 0 {
+                                    say_rule(tray, "deadly", side, || format!(
+                                        "Deadly({dx}): {unsaved} unsaved ×{dx}, no carry-over → {dealt} wound{} dealt ({weapon})", s(dealt)));
+                                    if forced > 0 {
+                                        say_rule(tray, "deadly", side, || format!(
+                                            "Deadly({dx}): {forced} wound{} finish the already-wounded Tough model first ({CITE})", s(forced)));
+                                    }
+                                }
+                            }
+                            for (post, gx) in groups {   // a group no weapon line owns still lands (the volley leg records one per weapon)
+                                let d = land_deadly_group(&mut next, g.ti, post, gx, seams, &mut alloc, &mut 0);
+                                shot.log.push(format!("Deadly({gx}): {post} unsaved ×{gx}, no carry-over → {d} wounds dealt"));
+                                deadly_dealt += d;
                             }
                             if seams.tray_exact {
                                 let left = alloc.as_mut().map_or(w, |a| land_pool_picked(&mut next, g.ti, w, a, tray));
                                 land_pool_wounds(&mut next, g.ti, left, true, seams, &mut shot.log);
                             }
                             // One-core P3 steps 7/25/27: the landing's lines and its landings, stamped BEFORE the group's morale test below draws.
-                            land_chain_report(statics, &next, tray, g.ti, chain_before);
+                            land_chain_report_inline(statics, &next, tray, g.ti, chain_before, deadly_dealt);
                             // rules-wave3-growthmark (epoch 6) — the
                             // ignore-wound marker AFTER the landing.
                             if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
