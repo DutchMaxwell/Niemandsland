@@ -40,6 +40,7 @@ use crate::rules::{Spell, SpellModifier};
             beneficiary: String::new(),
             modifier: SpellModifier::default(),
             grants_rule: String::new(),
+            ..Default::default()
         }
     }
 

@@ -353,6 +353,7 @@ mod mor_15 {
             modifier: SpellModifier::default(),
             grants_rule: String::new(),
             needs_los: false,
+            ..Default::default()
         }
     }
 
