@@ -102,6 +102,29 @@ use super::*;
             .collect()
     }
 
+    /// CC-5a: casts offered on a supplied tray keep the expectation `cast_phase` off the tray path, whatever `seams.cast` says. The
+    /// control (nothing offered, the same seams) casts: one attempt event. RED: the gate in `resolve_with` removed -> the offered
+    /// run pushes the attempt too.
+    #[test]
+    fn an_offered_cast_keeps_the_expectation_cast_phase_off_the_tray_path() {
+        use crate::activation::CastInput;
+        let (mut st, statics) = lone_caster(vec![bolt()]);
+        let r = &*st.roster;
+        let index = r.keys.iter().enumerate().map(|(i, k)| (k.clone(), i)).collect();
+        st.roster = Rc::new(crate::state::Roster { keys: r.keys.clone(), index, profile: r.profile.clone() });
+        let seams = Seams { cast: true, ..epoch(crate::acts::CURRENT_RULES_EPOCH) };
+        let action = Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None };
+        let run = |offer: bool| {
+            let mut tray = Tray::supplied(Vec::new());
+            if offer {
+                tray.offer_casts(vec![CastInput { seq: 0, caster: "a".into(), spell: "bolt".into(), targets: vec!["b".into()], ..Default::default() }]);
+            }
+            resolve_stochastic_tray_on_board(&statics, &st, &action, &Terrain::default(), seams, &mut GodotRng::new(0), &mut tray).unwrap().0
+        };
+        assert_eq!(kinds(&run(false)), ["damage"], "control: the expectation cast runs when nothing is offered");
+        assert!(run(true).cast_events.is_empty(), "offered casts: no expectation cast");
+    }
+
     /// The table's event shape, key for key (battle_sim.gd `_cast_phase`): a
     /// plain cast (no conduit, no boost, no interference) pushes exactly ONE
     /// entry, the attempt, and log lines carry no `kind` for the tally to count.

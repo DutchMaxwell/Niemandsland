@@ -25,6 +25,7 @@
 //! `RandomPCG` twin (GATE R, 6003/6003), and a tray face is one
 //! `randi_range(1, 6)` on it.
 
+use crate::activation::CastInput;
 #[cfg(test)]
 use crate::combat::modified_hit_target;
 use crate::acts::{rule_on, EPOCH_73_V36};
@@ -112,7 +113,7 @@ impl Tray {
     /// instead of drawing. Past the last group it serves 1s and records where it
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
-        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new() };
+        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), casts: Vec::new() };
         Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new() }
     }
 
@@ -169,6 +170,19 @@ impl Tray {
         c.reached = Some((feed.next, options.clone(), owner.to_string()));
         c.bad = c.answer.as_ref().and_then(|a| a.iter().find(|s| !options.contains(s)).copied());
         c.answer.clone().filter(|_| c.bad.is_none())
+    }
+
+    /// CC-5a: the transcript's planned casts, in plan order. A supplied tray keeps them (the cast slot of `resolve_with` reads them
+    /// and the expectation `cast_phase` stays off); a seeded tray ignores the call, so every seeded path is unchanged.
+    pub fn offer_casts(&mut self, casts: Vec<CastInput>) {
+        if let Some(feed) = self.feed.as_mut() {
+            feed.casts = casts;
+        }
+    }
+
+    /// The casts `offer_casts` kept; empty on every seeded tray and on a supplied one nobody offered to.
+    pub fn casts(&self) -> &[CastInput] {
+        self.feed.as_ref().map_or(&[][..], |f| f.casts.as_slice())
     }
 
     /// The supplied placement, if any (`None` on every seeded tray).
@@ -245,6 +259,8 @@ pub struct Feed {
     owners: Vec<(usize, Option<usize>)>,
     /// One-core P4.D-20/21: the transcript's wound-allocation choices, one per id (`Tray::offer_wound_alloc`).
     pub wound_choices: Vec<WoundChoice>,
+    /// CC-5a: the transcript's planned casts (`Tray::offer_casts`).
+    casts: Vec<CastInput>,
 }
 
 /// One-core P4.D-20: the step API's wound-allocation choice as the volley's landing sees it. `answer` = the

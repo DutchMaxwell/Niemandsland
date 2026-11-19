@@ -10205,7 +10205,8 @@ fn resolve_with(
     // charge move's own self-wounds ride `charger_self_wounds` separately.
     let cast_wounds_before_su = wounds_left(&next, si);
     let cast_wounds_before_tu = ci.map_or(0, |t| wounds_left(&next, t));
-    if seams.cast {
+    // CC-5a: casts offered on a supplied tray are the tray path's own (`tray_cast`); the expectation model never runs beside them.
+    if seams.cast && dice.as_ref().is_none_or(|(tray, _)| tray.casts().is_empty()) {
         let row: Vec<bool> = match cast_los {
             Some(r) => r.to_vec(),
             None => (0..next.units()).map(|j| los_clear(&next, si, j)).collect(),
