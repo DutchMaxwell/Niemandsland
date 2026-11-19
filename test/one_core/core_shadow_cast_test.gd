@@ -73,6 +73,7 @@ func _shadow_cast(caster: GameUnit, entry: Dictionary, targets: Array, seed: int
 		"owner_label": "AI (%s)" % caster.get_name(), "interference_open": false,
 		"boost_sources": [], "interference_sources": [], "conduit": null, "conduit_shaken": [], "pools": []}
 	var report := {"action": AiDecision.Action.HOLD, "moved": false, "casts": [cast]}
+	_main._solo_spell_tokens_active.clear()   # one activation from a clean token board (the same unit key each iteration)
 	caster.casts_current = 3
 	_main._solo_core_shadow_h = CoreShadow.capture(_main, caster)
 	assert_int(_main._solo_core_shadow_h).override_failure_message("no shadow board").is_not_equal(0)

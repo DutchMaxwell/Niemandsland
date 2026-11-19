@@ -14,6 +14,9 @@ import json
 
 BASELINE = "2026-11-11"
 FOLD = {k: "attack" for k in ("morale", "fearless", "no_retreat", "regeneration", "ravage", "battleborn", "dangerous")}
+# CC-10c/10d: the core's cast legs read as the tray's kind (the door's map: cast -> attack, spell_* -> the plain kind).
+CAST_KINDS = {"cast": "attack", "spell_attack": "attack", "spell_defense": "defense", "spell_morale": "morale",
+              "spell_fearless": "fearless", "spell_no_retreat": "no_retreat"}
 
 
 def load(path):
@@ -28,7 +31,8 @@ def load(path):
 
 
 def key(r, table):
-    kind, target, owner = FOLD.get(r["kind"], r["kind"]), r["target"], r["owner"]
+    kind = CAST_KINDS.get(r["kind"], r["kind"])
+    kind, target, owner = FOLD.get(kind, kind), r["target"], r["owner"]
     if kind == "defense":
         target = min(max(target, 2), 6)
     if table and owner.startswith("AI (") and owner.endswith(")"):

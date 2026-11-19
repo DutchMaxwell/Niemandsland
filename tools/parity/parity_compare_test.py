@@ -7,8 +7,8 @@ from pathlib import Path
 SCRIPT = Path(__file__).with_name("parity_compare.py")
 
 
-def rec(seed, faces=(5, 2), owner="Att", alive=4):
-    roll = {"kind": "attack", "count": 2, "target": 4, "faces": list(faces), "owner": owner}
+def rec(seed, faces=(5, 2), owner="Att", alive=4, kind="attack"):
+    roll = {"kind": kind, "count": 2, "target": 4, "faces": list(faces), "owner": owner}
     return {"seed": seed, "epoch": 73, "def_alive": alive, "rolls": [roll]}
 
 
@@ -47,3 +47,20 @@ def test_stale_exception_fails(tmp_path):
 def test_future_dated_exception_fails(tmp_path):
     rc, res = run(tmp_path, [rec(0)], [rec(0, faces=(1, 1))], [entry(since="2026-11-12")])
     assert rc == 1 and any("after the baseline" in p for p in res["problems"])
+
+
+def test_the_core_cast_legs_read_as_the_tray_kind(tmp_path):
+    """CC-10c: the door maps the core's cast legs onto the tray's kinds (cast -> attack, spell_defense -> defense)."""
+    rc, res = run(tmp_path, [rec(0)], [rec(0, kind="cast")])
+    assert rc == 0 and res["identical"] == 1
+    rc, res = run(tmp_path, [rec(0)], [rec(0, kind="spell_attack")])
+    assert rc == 0 and res["identical"] == 1
+    rc, res = run(tmp_path, [rec(0)], [rec(0, kind="cast", faces=(5, 3))])
+    assert rc == 1 and res["mismatching_seeds"] == [0]
+
+
+def test_a_spells_fearless_and_no_retreat_dice_read_as_the_tray_kind(tmp_path):
+    """CC-10c: the core names a spell's morale re-rolls spell_fearless / spell_no_retreat; the tray's kind is attack."""
+    for kind in ("spell_fearless", "spell_no_retreat"):
+        rc, res = run(tmp_path, [rec(0)], [rec(0, kind=kind)])
+        assert rc == 0 and res["identical"] == 1, kind
