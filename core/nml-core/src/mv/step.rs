@@ -2415,7 +2415,7 @@ pub(crate) mod tests {
             ("limited_used", Box::new(|s| Rc::make_mut(&mut s.limited_used)[0].push("x".into()))),
             ("teleport_used", Box::new(|s| s.teleport_used[0] = true)),
             ("buffs", Box::new(|s| s.buffs[0].push(LiveMod {
-                hit_mod: 1, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, move_mod: 0,
+                hit_mod: 1, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, move_mod: 0, range_in: 0,
                 grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: false, name: Rc::from("")
             }))),
             ("attached", Box::new(|s| Rc::make_mut(&mut s.attached)[2].push(0))),

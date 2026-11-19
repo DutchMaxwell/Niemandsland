@@ -17,7 +17,7 @@ fn marked_target_opens_a_fourteen_inch_charge_only_at_epoch_66() {
     statics[1].wounds_max = vec![20];
     st.buffs[1].push(mods::LiveMod {
         hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0,
-        def_mod: 0, defense_mod: 0, move_mod: 0,
+        def_mod: 0, defense_mod: 0, move_mod: 0, range_in: 0,
         grants_rule: Rc::from("Rapid Charge"), scope: Rc::from("melee"),
         attackers: true, once: true, name: Rc::from("Rapid Charge Mark"),
     });

@@ -124,7 +124,7 @@ impl Tray {
     /// instead of drawing. Past the last group it serves 1s and records where it
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
-        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), casts: Vec::new(), cast_hit: None };
+        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), casts: Vec::new(), cast_refused: None };
         Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None }
     }
 
@@ -207,10 +207,11 @@ impl Tray {
         }
     }
 
-    /// CC-5c: the cast `seq` succeeded at its die, and its effect is not the core's yet. The first one is kept; the step API reads it.
-    pub fn note_cast_hit(&mut self, seq: i64) {
+    /// CC-5c/8b: the cast `seq` could not be resolved at this point (unhandled spell kind, or CC-6a hazard 2: an earlier
+    /// cast in the same activation placed a record on a damage spell's target). Keeps the first one with its draw index.
+    pub fn note_cast_refused(&mut self, seq: i64, reason: String) {
         if let Some(feed) = self.feed.as_mut() {
-            feed.cast_hit.get_or_insert(seq);
+            feed.cast_refused.get_or_insert((feed.next, seq, reason));
         }
     }
 
@@ -322,8 +323,8 @@ pub struct Feed {
     pub wound_choices: Vec<WoundChoice>,
     /// CC-5a: the transcript's planned casts (`Tray::offer_casts`).
     casts: Vec<CastInput>,
-    /// CC-5c: the first offered cast that succeeded (`Tray::note_cast_hit`).
-    pub cast_hit: Option<i64>,
+    /// CC-5c/8b: the first offered cast refused during resolution `(draw, seq, reason)` (`Tray::note_cast_refused`).
+    pub cast_refused: Option<(usize, i64, String)>,
 }
 
 /// One-core P4.D-20: the step API's wound-allocation choice as the volley's landing sees it. `answer` = the

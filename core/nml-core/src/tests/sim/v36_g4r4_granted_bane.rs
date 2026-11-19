@@ -28,7 +28,7 @@ fn grant(rule: &str) -> crate::mods::LiveMod {
         ap_mod: 0,
         def_mod: 0,
         defense_mod: 0,
-        move_mod: 0,
+        move_mod: 0, range_in: 0,
         grants_rule: Rc::from(rule),
         scope: Rc::from(""),
         attackers: false,

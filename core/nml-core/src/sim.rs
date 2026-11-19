@@ -255,11 +255,28 @@ fn morale_root(state: &State, i: usize, seams: Seams) -> usize {
     }
 }
 
-/// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`, empty `reach_grants` below it): the best reach a LIVE grant on member `mi` adds
-/// ("Lust Boon" hands out Enhanced Lustbound, +8"), with the granted rule's name. The table reads it per member.
-fn granted_reach<'a>(us: &'a UnitStatic, state: &State, mi: usize) -> (f64, &'a str) {
+/// G4R4 C-GRANTED-RANGE (`EPOCH_73_V36`, empty `reach_grants` below it) + CC-8b (`LiveMod.range_in`): the shooting reach
+/// bonus a LIVE grant ("Lust Boon" hands out Enhanced Lustbound, +8") or range spell ("Battle Rune" +6") adds on member
+/// `mi`, with the rule/spell name. A `range_in` spell stacks on top of the Royal Legion bonus (table: `spell_in + alias_in`).
+fn granted_reach<'a>(us: &'a UnitStatic, state: &'a State, mi: usize) -> (f64, &'a str) {
     let live = us.reach_grants.iter().filter(|(n, _)| mods::granted(state, mi, n));
-    live.fold((0.0, ""), |best, (n, b)| if *b > best.0 { (*b, n.as_str()) } else { best })
+    let (grant, grant_name) = live.fold((0.0, ""), |best, (n, b)| if *b > best.0 { (*b, n.as_str()) } else { best });
+    let (mut spell_in, mut spell_name) = (0.0, "");
+    for u in std::iter::once(mi).chain(state.attached_to[mi]).chain(state.attached[mi].iter().copied()) {
+        for r in &state.buffs[u] {
+            if mods::matches(r, mods::Role::Range, false) {
+                spell_in += r.range_in as f64;
+                if spell_name.is_empty() {
+                    spell_name = &r.name;
+                }
+            }
+        }
+    }
+    if spell_in > 0.0 {
+        (us.royal_legion_range_in.max(grant) + spell_in, if grant > us.royal_legion_range_in { grant_name } else { spell_name })
+    } else {
+        (grant, grant_name)
+    }
 }
 
 /// G4R4 C-LONEHERO-SHAKEN (`EPOCH_73_V36`): the Shaken a morale test reads. A lone joined hero (its host has no models
@@ -1882,6 +1899,7 @@ fn record_buff(state: &mut State, ti: usize, b: &UtilityBuff, rules_epoch: u32) 
         def_mod: b.def_mod,
         defense_mod: b.defense_mod,
         move_mod: b.move_mod,
+        range_in: 0,
         grants_rule: Rc::from(b.grants_rule.as_str()),
         scope: Rc::from(b.scope.as_str()),
         attackers: b.beneficiary == "attackers",
@@ -2084,7 +2102,12 @@ fn ebr_relay_has_hero(
 /// Test-only wrapper: the precision-debuff unit test spends a plain exchange.
 #[cfg(test)]
 fn spend_exchange(state: &mut State, att: usize, def: usize, melee: bool) {
-    mods::spend_once(state, att, &[mods::Role::AttackerOwn, mods::Role::Ap, mods::Role::Grant], melee);
+    let att_roles: &[mods::Role] = if melee {
+        &[mods::Role::AttackerOwn, mods::Role::Ap, mods::Role::Grant]
+    } else {
+        &[mods::Role::AttackerOwn, mods::Role::Ap, mods::Role::Grant, mods::Role::Range]
+    };
+    mods::spend_once(state, att, att_roles, melee);
     mods::spend_once(state, def, &[mods::Role::VsTarget, mods::Role::Defense, mods::Role::Grant, mods::Role::GrantVs], melee);
 }
 
@@ -2109,7 +2132,11 @@ fn spend_exchange_wounded(
     state: &mut State, att: usize, def: usize, melee: bool, att_wounded: bool, def_incoming: bool,
     rules_epoch: u32,
 ) {
-    let att_roles = [mods::Role::AttackerOwn, mods::Role::Ap, mods::Role::Grant];
+    let att_roles: &[mods::Role] = if melee {
+        &[mods::Role::AttackerOwn, mods::Role::Ap, mods::Role::Grant]
+    } else {
+        &[mods::Role::AttackerOwn, mods::Role::Ap, mods::Role::Grant, mods::Role::Range]
+    };
     let def_roles = [mods::Role::VsTarget, mods::Role::Defense, mods::Role::Grant, mods::Role::GrantVs];
     // EPOCH 73: the grant is spent by the FIRST exchange that brings a wound in
     // to its holder — an all-ignored roll still spends it, a zero-wound exchange
@@ -2120,7 +2147,7 @@ fn spend_exchange_wounded(
         .any(|u| state.buffs[u].iter().any(mods::is_regen_grant));
     let def_had = [Some(def), state.attached_to[def]].into_iter().flatten()
         .any(|u| state.buffs[u].iter().any(mods::is_regen_grant));
-    mods::spend_once_except(state, att, &att_roles, melee, |r| v36 && (mods::keep_regen(r, att_wounded) || mods::attacked_only_grant(r)));
+    mods::spend_once_except(state, att, att_roles, melee, |r| v36 && (mods::keep_regen(r, att_wounded) || mods::attacked_only_grant(r)));
     mods::spend_once_except(state, def, &def_roles, melee, |r| v36 && mods::keep_regen(r, def_incoming));
     if v36 && att_wounded && att_had {
         trace_rule("regen-grant", "Regeneration Buff", &format!("spent by a wounding exchange (unit {att})"));
@@ -2268,6 +2295,7 @@ fn tray_vs_marks(
                     def_mod: 0,
                     defense_mod: 0,
                     move_mod: 0,
+                    range_in: 0,
                     grants_rule: Rc::from(grant.as_str()),
                     scope: Rc::from(b.scope.as_str()),
                     attackers: b.beneficiary == "attackers",
@@ -2283,6 +2311,7 @@ fn tray_vs_marks(
                     def_mod: 0,
                     defense_mod: 0,
                     move_mod: 0,
+                    range_in: 0,
                     grants_rule: Rc::from(grant),
                     scope: Rc::from(""),
                     attackers: false,
@@ -2815,6 +2844,7 @@ fn push_precision_target(next: &mut State, u: usize, hit_mod: i64, name: &str) {
         def_mod: 0,
         defense_mod: 0,
         move_mod: 0,
+        range_in: 0,
         grants_rule: Rc::from(""),
         scope: Rc::from(""),
         attackers: true,
@@ -7923,6 +7953,7 @@ fn apply_cast_effect(
             def_mod: 0,
             defense_mod: 0,
             move_mod: 0,
+            range_in: 0,
             grants_rule: Rc::from(entry.grants_rule.as_str()),
             scope: Rc::from(""),
             attackers: entry.beneficiary == "attackers",
@@ -7988,7 +8019,7 @@ fn apply_utility_effect(
                 if dangerous { "Dangerous Terrain" } else { "Difficult Terrain" };
             state.buffs[ti].push(mods::LiveMod {
                 hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0,
-                def_mod: 0, defense_mod: 0, move_mod: 0,
+                def_mod: 0, defense_mod: 0, move_mod: 0, range_in: 0,
                 grants_rule: Rc::from(rule),
                 scope: Rc::from(""),
                 attackers: false,
@@ -8002,7 +8033,7 @@ fn apply_utility_effect(
         crate::spell::UtilityArchetype::ApOwn { ap, scope } => {
             state.buffs[ti].push(mods::LiveMod {
                 hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: ap,
-                def_mod: 0, defense_mod: 0, move_mod: 0,
+                def_mod: 0, defense_mod: 0, move_mod: 0, range_in: 0,
                 grants_rule: Rc::from(""),
                 scope: Rc::from(scope),
                 attackers: false,
@@ -8405,6 +8436,15 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
         return end;
     }
     let name = |u: usize| statics[state.roster.profile[u]].name.as_str();
+    let standing_idx: Vec<usize> = c.targets.iter().filter_map(|k| state.roster.index.get(k.as_str()).copied()).filter(|&t| state.alive[t] > 0).collect();
+    // CC-6a hazard 2: a record placed by an earlier cast in the same activation was not present at activation start;
+    // re-check standing targets of a damage spell before rolling its die.
+    if statics[state.roster.profile[ci]].spells.iter().any(|s| s.name == c.spell && s.effect_kind == "damage") {
+        if let Some(&t) = standing_idx.iter().find(|&&t| !crate::activation::damage_target_plain(statics, state, t)) {
+            tray.note_cast_refused(c.seq, format!("cast {}: {} meets {} with a rule the core does not say for spell damage yet", c.seq, name(t), c.spell));
+            return CastEnd::Hit;
+        }
+    }
     for cu in (0..state.units()).filter(|&u| state.player[u] == side && state.alive[u] > 0 && !state.dormant[u]) {
         for &m in std::iter::once(&cu).chain(&state.attached[cu]) {
             let s = &statics[state.roster.profile[m]];
@@ -8446,11 +8486,56 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
     if !hit {
         return CastEnd::Failed;
     }
-    let Some(spell) = statics[state.roster.profile[ci]].spells.iter().find(|s| s.name == c.spell && s.effect_kind == "damage") else { return CastEnd::Hit };
-    for t in c.targets.iter().filter_map(|k| state.roster.index.get(k.as_str()).copied()).filter(|&t| state.alive[t] > 0).collect::<Vec<_>>() {
-        tray_spell_damage(statics, state, ci, si, t, c.seq, spell, seams, tray, shot);
+    let Some(spell) = statics[state.roster.profile[ci]].spells.iter().find(|s| s.name == c.spell) else { return CastEnd::Hit };
+    match spell.effect_kind.as_str() {
+        "damage" => {
+            for &t in &standing_idx {
+                tray_spell_damage(statics, state, ci, si, t, c.seq, spell, seams, tray, shot);
+            }
+            CastEnd::Landed
+        }
+        "buff" | "debuff" => {
+            tray_spell_effect(state, &standing_idx, c, spell, seams.rules_epoch);
+            CastEnd::Landed
+        }
+        _ => CastEnd::Hit,
     }
-    CastEnd::Landed
+}
+
+/// CC-8b: a buff or debuff spell's effect on every standing target (`_solo_record_spell_mod` main.gd:6078). Builds the
+/// table's `PlainBuff` shape and converts it through `PlainBuff::to_live_mod` (the capture's own conversion), so the
+/// core's `LiveMod` equals what capturing the landed table record produces. A spell with neither a non-zero modifier nor a
+/// grant is resolved with nothing pushed (table: announce + token only).
+fn tray_spell_effect(state: &mut State, targets: &[usize], c: &CastInput, spell: &Spell, rules_epoch: u32) {
+    let m = spell.modifier;
+    if !m.present && spell.grants_rule.is_empty() {
+        return;
+    }
+    let (hit, def, cast, morale, range, adv, rush) = (
+        m.hit_mod as i64, m.def_mod as i64, m.casting_mod as i64, m.morale_mod as i64,
+        m.range_in as i64, m.advance_in as i64, m.rush_in as i64,
+    );
+    if (hit, def, cast, morale, range, adv, rush) == (0, 0, 0, 0, 0, 0, 0) && spell.grants_rule.is_empty() {
+        return;
+    }
+    let rec = crate::io::PlainBuff {
+        spell: spell.name.clone(),
+        hit_mod: hit,
+        casting_mod: cast,
+        morale_mod: morale,
+        ap_mod: 0,
+        def_mod: def,
+        defense_mod: 0,
+        range_in: range,
+        grants_rule: spell.grants_rule.clone(),
+        scope: spell.scope.clone(),
+        beneficiary: spell.beneficiary.clone(),
+        duration: if c.once { "once" } else { "round" }.into(),
+    };
+    let live = rec.to_live_mod(rules_epoch);
+    for &t in targets {
+        state.buffs[t].push(live.clone());
+    }
 }
 
 /// CC-7b: the rules-3.6 "applied facets" clauses for `_solo_resolve_spell_damage` (main.gd:5756-5784), in table order.
@@ -10831,7 +10916,7 @@ fn resolve_with(
         };
         cast_phase(statics, &mut next, si, &row, seams, rng.as_deref_mut());
     }
-    // CC-5b/7a: the casts offered on the tray, in plan order; their wounds (CC-6) join the melee tally like the expectation cast's.
+    // CC-5b/7a/8b: the casts offered on the tray, in plan order; their wounds (CC-6) join the melee tally like the expectation cast's.
     // Activating unit wiped by Dangerous or by its own cast ends the activation here (main.gd:1290-1301); host dead + hero alive goes on.
     if let Some((tray, shot)) = dice.as_mut() {
         let casts = tray.casts().to_vec();
@@ -10848,7 +10933,8 @@ fn resolve_with(
             }
             for c in casts {
                 if tray_cast(statics, &mut next, si, &c, seams, tray, shot) == CastEnd::Hit {
-                    tray.note_cast_hit(c.seq);
+                    tray.note_cast_refused(c.seq, "casts are not resolved by the core yet".into());
+                    break;
                 }
             }
             if !side_up(&next, si, seams) {
@@ -12318,7 +12404,7 @@ mod cast_fold_tests {
         let epoch5 = Seams { hero_attach: true, cast_fold: true, rules_epoch: EPOCH_6_TABLE_RULES - 1, ..Seams::default() };
         let live_mod = |casting_mod: i64| mods::LiveMod {
             hit_mod: 0, casting_mod, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0,
-            move_mod: 0,
+            move_mod: 0, range_in: 0,
             grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: false,
             name: Rc::from(""),
         };

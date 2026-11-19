@@ -38,7 +38,7 @@ fn line() -> (State, Vec<UnitStatic>) {
 /// The ledger record the table keeps on the TARGET after the spell: a once-grant of "Surge" to its attackers.
 fn curse() -> crate::mods::LiveMod {
     crate::mods::LiveMod {
-        hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, move_mod: 0,
+        hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, move_mod: 0, range_in: 0,
         grants_rule: Rc::from("Surge"), scope: Rc::from("shooting"), attackers: true, once: true,
         name: Rc::from("Curse of the Huntress"),
     }

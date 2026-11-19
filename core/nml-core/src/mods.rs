@@ -48,6 +48,10 @@ pub struct LiveMod {
     /// move_bands_for_props). Parsing them here would double-count every
     /// replay.
     pub move_mod: i64,
+    /// `range_in` — CC-8b: shooting range modifier (`Battle Rune` +6",
+    /// `AiSpell.mods_for(..., "range", false)`), read by `sim::granted_reach`
+    /// and spent by shooting exchanges (`Role::Range`).
+    pub range_in: i64,
     /// `grants_rule` — the rule name the record hands the WHOLE joined chain
     /// (`_solo_apply_grant` main.gd:3730), "" for a plain modifier.
     pub grants_rule: Rc<str>,
@@ -87,6 +91,7 @@ pub enum Role {
     Ap,
     Defense,
     Speed,
+    Range,
 }
 
 /// `AiSpell.mods_for` ai_spell.gd:364-400, one record.
@@ -111,6 +116,8 @@ pub fn matches(r: &LiveMod, role: Role, melee: bool) -> bool {
         // `beneficiary: ""` (main.gd:16541) so the two readings cannot
         // diverge in practice; match the GDScript anyway.
         Role::Speed => r.move_mod != 0,
+        // Mirrors `AiSpell.mods_for`'s "range" arm (ai_spell.gd:496-498): no `attackers` filter, scope-filtered above.
+        Role::Range => r.range_in != 0,
     }
 }
 
