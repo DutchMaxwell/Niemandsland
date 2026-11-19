@@ -19,14 +19,9 @@
     "Relentless Aura": "Measured (5-seed sweep): 1 taken volley, the core pays one defense die more on a natural 6.",
     "Fortified Aura": "door omits the table's aura-loss line (`_solo_fortified_aura_loss_log`) when the bearer dies, dlines_gap row 21: the Fortified line itself is said since dlines2 train 2.",
     "Guardian Boost Aura": "door omits the table's aura-loss line (`_solo_fortified_aura_loss_log`) when the bearer dies, dlines_gap row 21: the Fortified line itself is said since dlines2 train 2.",
-    "Angelic Blessing": "door omits the distance-gate, terrain or once-per-game line of this ignore rule (the groups' rolls and bypass lines are said since dlines2/3), dlines_gap row 3.",
-    "Angelic Blessing Boost": "door omits the distance-gate, terrain or once-per-game line of this ignore rule (the groups' rolls and bypass lines are said since dlines2/3), dlines_gap row 3.",
-    "Enhanced Angelic Blessing": "door omits the distance-gate, terrain or once-per-game line of this ignore rule (the groups' rolls and bypass lines are said since dlines2/3), dlines_gap row 3.",
-    "Enhanced Knightborn": "door omits the distance-gate, terrain or once-per-game line of this ignore rule (the groups' rolls and bypass lines are said since dlines2/3), dlines_gap row 3.",
-    "Grounded Protection": "door omits the distance-gate, terrain or once-per-game line of this ignore rule (the groups' rolls and bypass lines are said since dlines2/3), dlines_gap row 3.",
-    "Knightborn": "door omits the distance-gate, terrain or once-per-game line of this ignore rule (the groups' rolls and bypass lines are said since dlines2/3), dlines_gap row 3.",
-    "Protection Feat": "door omits the distance-gate, terrain or once-per-game line of this ignore rule (the groups' rolls and bypass lines are said since dlines2/3), dlines_gap row 3.",
-    "Warding": "door omits the distance-gate, terrain or once-per-game line of this ignore rule (the groups' rolls and bypass lines are said since dlines2/3), dlines_gap row 3."
+    "Grounded Protection": "door omits the table's terrain trace (Grounded Protection) or once-per-game lines (Protection Feat), dlines_gap row 3; the roll, bypass and Warding gate lines are said since dlines2/3.",
+    "Enhanced Knightborn": "the table names the roll group by whichever of Knightborn / Enhanced Knightborn is live at the shot's distance (the gated Knightborn folds nothing within 9in); the core's group name is static, dlines_gap row 3.",
+    "Protection Feat": "door omits the table's terrain trace (Grounded Protection) or once-per-game lines (Protection Feat), dlines_gap row 3; the roll, bypass and Warding gate lines are said since dlines2/3."
   },
   "groups": {
     "ledger_not_round_tripped": {

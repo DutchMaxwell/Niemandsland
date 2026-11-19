@@ -2198,13 +2198,15 @@ pub fn resolve_volley_leg(
     }
     // MOR-17a — rules-must-log, once per volley: the gate's verdict, under the
     // rule's name (Warding, Knightborn and Angelic Blessing are one rule).
-    if def.regen_gate_over_in > 0.0 && (regenable > 0 || out.deadly_tally > 0) {
+    if def.regen_gate_over_in > 0.0 && (regenable > 0 || regen_proof > 0 || out.deadly_tally > 0) {
         let gate = def.regen_gate_over_in;
-        out.log.push(if def.regen_target > 0 {
+        let line = if def.regen_target > 0 {
             format!("Warding: {def_owner} ignores wounds on 6+ (shot from over {gate:.0}in)")
         } else {
             format!("Warding: no 6+ ignore, {def_owner} was shot from within {gate:.0}in")
-        });
+        };
+        out.log.push(line.clone());
+        say_rule(tray, "ignore", def.side, || line);
     }
     out.caused = regen_proof + regenable + out.deadly_tally;
     out.wounds = ignore_batch(regenable, regen_proof, regen_joined, def, def_owner, tray, &mut out.rolls);

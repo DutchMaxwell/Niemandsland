@@ -280,10 +280,10 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	CoreSlice.reset_cache()
 	assert_str(str(CoreSlice.config()["mode"])).is_equal("deny")
 	# C-R1 (epochs 82 + 84) ported the wound-ignore rules by name and left the deny list; DLINES2 refuses the families whose roll line the door
-	# does not write (dlines_gap row 3): the gated, terrain and once-per-game aliases (Warding, Angelic Blessing, Protection Feat, ...) by name; the groups' rolls are said since trains 2 and 3. Tough stays taken.
-	var warded := _unit(["Warding"], [["AP(1)"]])
-	warded.unit_properties["faction_folder"] = "eternal_wardens"
-	assert_array(CoreSlice.refusals(warded)).is_equal(["unit_rule:Warding"])
+	# does not write (dlines_gap row 3): the terrain and once-per-game aliases (Grounded Protection, Protection Feat) by name; the groups' rolls are said since trains 2 and 3. Tough stays taken.
+	var grounded := _unit(["Grounded Protection"], [["AP(1)"]])
+	grounded.unit_properties["faction_folder"] = "soul_snatcher_cults"
+	assert_array(CoreSlice.refusals(grounded)).is_equal(["unit_rule:Grounded Protection"])
 	assert_bool(CoreSlice.takes(_unit(["Regeneration"], [["AP(1)"]]))).is_true()
 	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
 	# A rule refused by NAME where its primitive is shared (Changebound = Stealth; plain Stealth stays taken).
@@ -321,7 +321,7 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 	var rep: Array = [
 		["Artillery", ""], ["Stealth", ""], ["Evasive", "battle_brothers"], ["Aircraft", ""], ["Precision Fighter", ""],
 		["Instinctive", "goblin_reclaimers"],
-		["Takedown", ""], ["Warding", "eternal_wardens"], ["Protection Feat", "alien_hives"], ["Angelic Blessing", "kingdom_of_angels"],
+		["Takedown", ""], ["Grounded Protection", "soul_snatcher_cults"], ["Protection Feat", "alien_hives"],
 	]
 	for row in rep:
 		var as_unit := _unit([row[0]], [[]])
@@ -628,16 +628,16 @@ class _StubMain extends RefCounted:
 
 
 ## DLINES2: `SlicePin.dice_only()` is the production deny list minus its line refusals - the helper the dice parity tests read. RED: if it kept the
-## `rule_line` groups the Warding row below is refused; if it dropped every refusal Changebound (a DICE difference) would be taken.
+## `rule_line` groups the Grounded Protection row below is refused; if it dropped every refusal Changebound (a DICE difference) would be taken.
 func test_the_dice_only_slice_drops_the_line_refusals_and_keeps_the_dice_ones() -> void:
-	var self_repair := _unit(["Warding"], [])
-	self_repair.unit_properties["faction_folder"] = "eternal_wardens"
+	var self_repair := _unit(["Grounded Protection"], [])
+	self_repair.unit_properties["faction_folder"] = "soul_snatcher_cults"
 	SlicePin.dice_only()
-	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("Warding's missing line is not a dice difference").is_true()
+	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("Grounded Protection's missing line is not a dice difference").is_true()
 	assert_bool(CoreSlice.takes(_unit(["Shred"], []), true)).override_failure_message("Shred's missing line is not a dice difference").is_true()
 	assert_bool(CoreSlice.takes(_unit(["Changebound"], []), true)).override_failure_message("Changebound changes the dice: still refused").is_false()
 	SlicePin.release_dice_only()
-	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("the production list refuses Warding again").is_false()
+	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("the production list refuses Grounded Protection again").is_false()
 
 
 ## DLINES3: a weapon's own Shred beside a unit-level Shred rule of another name is two rules in the table (R-1 A2) and one in the core: the target's
