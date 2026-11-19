@@ -76,9 +76,9 @@ pub enum ActStep {
     /// The activation is open and waits for the next input.
     Open,
     /// P4.0-5 / CC-9a: the core needs one answer before it can resolve (`option: ""` asked). `id` and every
-    /// option are stable ids (a target unit key and `slot:<n>` model slots), `owner` is the roster key of the unit
-    /// whose side answers. `lines` and `landings` are only those before the choice point (cumulative, like
-    /// `NeedRoll`). Answer with `Input::Choice { id, option }`.
+    /// option are stable ids (a target unit key and `slot:<n>` model slots, or `"0".."pool"` for interference),
+    /// `owner` is the roster key of the unit whose side answers. `lines` and `landings` are only those before
+    /// the choice point (cumulative, like `NeedRoll`). Answer with `Input::Choice { id, option }`.
     NeedChoice { id: String, options: Vec<String>, owner: String, lines: Vec<LogLine>, landings: Vec<Landing> },
     /// Input `index` breaks an order rule; `reason` is the sentence the player sees.
     Refused { index: usize, reason: String },
@@ -267,10 +267,10 @@ fn takedown_choice(statics: &[UnitStatic], state: &State, si: usize, shoot: Opti
 /// CC-5a: the spell kinds the core will resolve (damage; buff and debuff as a modifier or a grant). `utility` stays with the table.
 const CAST_KINDS: [&str; 3] = ["damage", "buff", "debuff"];
 
-/// CC-5a: why one planned cast cannot be taken, `None` when it can. The caster and every target are units of the roster, the caster
-/// holds a spell of that EXACT name, the spell's kind is one the core resolves, and `open` (a foe's owner may still answer) is not
-/// offered while the core has no interference choice.
-fn cast_break(statics: &[UnitStatic], state: &State, left: &mut [i64], c: &CastInput) -> Option<String> {
+/// CC-5a/9c: why one planned cast cannot be taken, `None` when it can. The caster and every target are units of the roster, the caster
+/// holds a spell of that EXACT name, the spell's kind is one the core resolves, and `open` (a foe's owner may still answer) requires
+/// an interference probe or answer (`interference:<seq>:<caster>:<slot>`) in the transcript plus valid pool payers.
+fn cast_break(statics: &[UnitStatic], state: &State, left: &mut [i64], c: &CastInput, t: &[Input]) -> Option<String> {
     let Some(&ci) = state.roster.index.get(c.caster.as_str()) else { return Some(format!("cast {}: {} is no unit of this game", c.seq, c.caster)) };
     let caster = &statics[state.roster.profile[ci]];
     let Some(spell) = caster.spells.iter().find(|s| s.name == c.spell) else { return Some(format!("cast {}: {} has no spell named {}", c.seq, caster.name, c.spell)) };
@@ -284,7 +284,26 @@ fn cast_break(statics: &[UnitStatic], state: &State, left: &mut [i64], c: &CastI
         return Some(format!("cast {}: {k} is no unit of this game (a target of {})", c.seq, c.spell));
     }
     if c.open {
-        return Some(format!("cast {}: a foe's answer to {} cannot be asked yet", c.seq, c.spell));
+        for (_, payers) in &c.pools {
+            for (key, n) in payers {
+                let Some(&i) = state.roster.index.get(key.as_str()) else {
+                    return Some(format!("cast {}: {key} is no unit of this game (an interference pool for {})", c.seq, c.spell));
+                };
+                if *n < 0 {
+                    return Some(format!("cast {}: {} has a negative interference pool ({n}) for {}", c.seq, statics[state.roster.profile[i]].name, c.spell));
+                }
+            }
+        }
+        let prefix = format!("{INTERFERENCE}{}:{}:", c.seq, c.caster);
+        let needed: Vec<i64> = c.pools.iter().filter(|(_, p)| p.iter().any(|(_, n)| *n > 0)).map(|(s, _)| *s).collect();
+        let covered = if needed.is_empty() {
+            t.iter().any(|x| matches!(x, Input::Choice { id, .. } if id.starts_with(&prefix)))
+        } else {
+            needed.iter().all(|&slot| t.iter().any(|x| matches!(x, Input::Choice { id, .. } if *id == format!("{prefix}{slot}"))))
+        };
+        if !covered {
+            return Some(format!("cast {}: a foe's answer to {} cannot be asked yet", c.seq, c.spell));
+        }
     }
     if let Some(k) = (!c.conduit.is_empty()).then_some(&c.conduit).into_iter().chain(&c.conduit_shaken).find(|k| !state.roster.index.contains_key(k.as_str())) {
         return Some(format!("cast {}: {k} is no unit of this game (a conduit for {})", c.seq, c.spell));
@@ -343,7 +362,7 @@ fn damage_break(statics: &[UnitStatic], state: &State, c: &CastInput, spell: &cr
 /// CC-5a: the first planned cast in the transcript that `cast_break` refuses, as (its input index, the sentence).
 fn cast_check(statics: &[UnitStatic], state: &State, t: &[Input]) -> Option<(usize, String)> {
     let mut left = state.casts.clone();
-    t.iter().enumerate().find_map(|(i, x)| if let Input::Cast(c) = x { cast_break(statics, state, &mut left, c).map(|why| (i, why)) } else { None })
+    t.iter().enumerate().find_map(|(i, x)| if let Input::Cast(c) = x { cast_break(statics, state, &mut left, c, t).map(|why| (i, why)) } else { None })
 }
 
 /// P4.0-5: the ids of the Takedown model-pick choice (`takedown_model:<shooter>:<target>`) start with this.
@@ -443,7 +462,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         };
         seams = Seams { takedown_pick: Some(slot), ..seams };
     }
-    if let Some((i, id, _)) = interference.iter().find(|c| c.2.is_some()) {
+    if let Some((i, id, _)) = interference.iter().find(|c| c.2.is_some() && casts.is_empty()) {
         return ActStep::Refused { index: *i, reason: format!("no interference choice is open in this activation (got {id})") };
     }
     // P4.D-48: a charge on the step path is the TABLE's charge (the move, the snap, the pile-in), whatever the header's
@@ -465,7 +484,8 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let action = Action { kind, unit: unit.to_string(), dest: None, shoot, charge, patient: false, split, traced: None, teleport: None };
     let faces: Vec<Vec<u8>> = t.iter().filter_map(|x| if let Input::Faces(f) = x { Some(f.clone()) } else { None }).collect();
     // The spike's non-tray seed: a plain activation never draws from it.
-    let reached = std::cell::RefCell::new(Vec::new());
+    let reached_wound = std::cell::RefCell::new(Vec::new());
+    let reached_int = std::cell::RefCell::new(Vec::new());
     let cast_refused = std::cell::RefCell::new(None);
     let run = |statics: &[UnitStatic]| {
         let resolve = |tray: &mut Tray| {
@@ -475,15 +495,72 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             for (_, id, answer) in &wound {
                 tray.offer_wound_alloc(id.clone(), answer.clone());
             }
+            for (_, id, answer) in &interference {
+                tray.offer_interference(id.clone(), *answer);
+            }
             tray.offer_casts(casts.clone());
             let out = resolve_stochastic_tray_on_board(statics, state, &action, terrain, seams, &mut GodotRng::new(0), tray);
-            *reached.borrow_mut() = tray.feed().map(|f| f.wound_choices.clone()).unwrap_or_default();
+            *reached_wound.borrow_mut() = tray.feed().map(|f| f.wound_choices.clone()).unwrap_or_default();
+            *reached_int.borrow_mut() = tray.feed().map(|f| f.interference_choices.clone()).unwrap_or_default();
             *cast_refused.borrow_mut() = tray.feed().and_then(|f| f.cast_refused.clone());
             out
         };
         step_with(&faces, resolve, |r| r.as_ref().map_or(&[][..], |(_, s)| s.rolls.as_slice()))
     };
     let first = run(statics);
+    // P4.D-20/21 + CC-9a/9c: every reached choice (interference and wound_alloc) in (draw, reach) order, before the first
+    // starved roll and before any cast refusal that came after it: a bad option is refused, an unanswered ask is NeedChoice
+    // with the lines and landings before that choice point. Unreached answered choices are refused on Done.
+    let at_wound = |id: &str| wound.iter().find(|w| w.1 == id).map_or(0, |w| w.0);
+    let at_int = |id: &str| interference.iter().find(|w| w.1 == id).map_or(0, |w| w.0);
+    let wound_choices = reached_wound.take();
+    let int_choices = reached_int.take();
+    enum Pending {
+        Refuse(usize, String),
+        Ask { id: String, options: Vec<String>, owner: String, lines: Vec<LogLine>, landings: Vec<Landing> },
+    }
+    let mut events: Vec<(usize, usize, Pending)> = Vec::new();
+    for c in &int_choices {
+        let Some((at, pool, owner)) = &c.reached else { continue };
+        if let Some(n) = c.bad {
+            events.push((*at, c.order, Pending::Refuse(at_int(&c.id), format!("{n} is not an option of {} (options: 0..={pool})", c.id))));
+        } else if c.answer.is_none() {
+            events.push((*at, c.order, Pending::Ask {
+                id: c.id.clone(),
+                options: (0..=*pool).map(|n| n.to_string()).collect(),
+                owner: owner.clone(),
+                lines: c.lines.clone(),
+                landings: c.landings.clone(),
+            }));
+        }
+    }
+    for c in &wound_choices {
+        let Some((at, options, owner)) = &c.reached else { continue };
+        if let Some(s) = c.bad {
+            events.push((*at, c.order, Pending::Refuse(at_wound(&c.id), format!("slot:{s} is not an option of {}", c.id))));
+        } else if c.answer.is_none() {
+            events.push((*at, c.order, Pending::Ask {
+                id: c.id.clone(),
+                options: options.iter().map(|s| format!("slot:{s}")).collect(),
+                owner: owner.clone(),
+                lines: c.lines.clone(),
+                landings: c.landings.clone(),
+            }));
+        }
+    }
+    events.sort_by_key(|(at, order, _)| (*at, *order));
+    for (at, _, ev) in events {
+        if matches!(first, Step::NeedRoll { index, .. } if index < at) {
+            continue;
+        }
+        if matches!(&*cast_refused.borrow(), Some((refused_at, _, _)) if *refused_at <= at) {
+            break;
+        }
+        return match ev {
+            Pending::Refuse(index, reason) => ActStep::Refused { index, reason },
+            Pending::Ask { id, options, owner, lines, landings } => ActStep::NeedChoice { id, options, owner, lines: [moved, lines].concat(), landings },
+        };
+    }
     // CC-5c/8b: a cast refused during resolution (unhandled spell kind, or CC-6a hazard 2: an earlier cast in the same
     // activation placed a record on a damage spell's target) is refused at its own input unless an earlier roll starved.
     if let Some((at, seq, reason)) = cast_refused.take() {
@@ -492,27 +569,12 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             return ActStep::Refused { index, reason };
         }
     }
-    // P4.D-20/21: the choices the landings came to, in the order they came, each before the first starved roll (after it, a
-    // landing read made-up dice): a bad slot is refused, an unanswered ask is the answer. An answer no landing asked for is
-    // refused too.
-    let at_input = |id: &str| wound.iter().find(|w| w.1 == id).map_or(0, |w| w.0);
-    let mut choices = reached.take();
-    choices.sort_by_key(|c| c.reached.as_ref().map(|r| r.0));
-    for c in &choices {
-        let Some((at, options, owner)) = &c.reached else {
-            if c.answer.is_some() && matches!(first, Step::Done(..)) {
-                return ActStep::Refused { index: at_input(&c.id), reason: format!("no wound allocation is open in this activation (got {})", c.id) };
-            }
-            continue;
-        };
-        if matches!(first, Step::NeedRoll { index, .. } if index < *at) {
-            continue;
+    if matches!(first, Step::Done(..)) {
+        if let Some(c) = int_choices.iter().find(|c| c.reached.is_none() && c.answer.is_some()) {
+            return ActStep::Refused { index: at_int(&c.id), reason: format!("no interference choice is open in this activation (got {})", c.id) };
         }
-        if let Some(s) = c.bad {
-            return ActStep::Refused { index: at_input(&c.id), reason: format!("slot:{s} is not an option of {}", c.id) };
-        }
-        if c.answer.is_none() {
-            return ActStep::NeedChoice { id: c.id.clone(), options: options.iter().map(|s| format!("slot:{s}")).collect(), owner: owner.clone(), lines: [moved, c.lines.clone()].concat(), landings: c.landings.clone() };
+        if let Some(c) = wound_choices.iter().find(|c| c.reached.is_none() && c.answer.is_some()) {
+            return ActStep::Refused { index: at_wound(&c.id), reason: format!("no wound allocation is open in this activation (got {})", c.id) };
         }
     }
     match first {
@@ -2875,6 +2937,193 @@ mod tests {
             Input::Choice { id: ALLOC_ID.into(), option: String::new() },
         ];
         assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true), ActStep::NeedRoll { index: 0, .. }));
+    }
+
+    // ---- CC-9c: cast interference NeedChoice from pools ----
+
+    /// CC-9c: an `open` cast is refused while no interference probe/answer is present; with a probe it opens
+    /// `NeedChoice { id: "interference:<seq>:<caster>:<slot>", options: "0".."pool", owner: first_pool_unit, lines, landings }`
+    /// carrying the cast's announce and needs lines; answering 1 spends in list order, logs the table's interference line
+    /// and raises the target by +1; answering 2 spills to the second payer in list order; answering 0 leaves target and
+    /// tokens unchanged (O3); bad / out-of-range options are refused at the Choice's index.
+    #[test]
+    fn an_open_cast_opens_interference_choice_and_spends_in_list_order_raising_the_target() {
+        let (mut st, mut statics) = die_line();
+        statics[3].name = "FoeHero".into();
+        st.casts = vec![4, 2, 1, 2]; // Mystic=4, Hero=2, Foe=1, FoeHero=2
+        let open_cast = CastInput {
+            base: 4,
+            threshold: 1,
+            open: true,
+            pools: vec![(1, vec![("b".into(), 1), ("bh".into(), 2)])],
+            ..bolt(0)
+        };
+        let id = "interference:0:a:1";
+        let start = vec![Begin, intent(HOLD, None), Input::Cast(open_cast.clone())];
+
+        // 1. Open with no probe/answer -> refused at the cast's index before any roll.
+        match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &start, true) {
+            ActStep::Refused { index: 2, reason } => assert_eq!(reason, "cast 0: a foe's answer to Bolt cannot be asked yet"),
+            other => panic!("open cast without probe must be refused, got {other:?}"),
+        }
+
+        // 2. Probed -> NeedChoice with id carrying seq, options "0".."3", owner "b", pre-choice cast lines.
+        let mut probed = start.clone();
+        probed.push(Input::Choice { id: id.into(), option: String::new() });
+        match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &probed, true) {
+            ActStep::NeedChoice { id: got_id, options, owner, lines, landings } => {
+                assert_eq!((got_id.as_str(), owner.as_str()), (id, "b"));
+                assert_eq!(options, vec!["0", "1", "2", "3"]);
+                assert!(landings.is_empty());
+                assert_eq!(
+                    lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(),
+                    ["Mystic casts Bolt at Foe", "Mystic casts Bolt at Foe \u{2014} needs 4+ (1 token)"]
+                );
+            }
+            other => panic!("expected interference NeedChoice, got {other:?}"),
+        }
+
+        // 3. Answer "1" -> target 4+ -> 5+, spends 1 from "b" only, logs the interference line, face 4 fails.
+        let with_opt = |opt: &str| {
+            let mut t = start.clone();
+            t.push(Input::Choice { id: id.into(), option: opt.into() });
+            t
+        };
+        let t1 = with_opt("1");
+        let ActStep::NeedRoll { kind: "cast", target, lines, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t1, true) else {
+            panic!("expected cast die after interference answer 1");
+        };
+        assert_eq!(target, 5, "1 interference raises 4+ to 5+");
+        assert_eq!(
+            lines.last().map(|l| l.text.as_str()),
+            Some("Interference: Foe \u{00d7}1 spends 1 token \u{2014} the cast roll worsens to 5+ (casters within 18\", no line of sight needed)")
+        );
+        let (done1, _) = answer_dice(&statics, &st, t1, &[4]);
+        let ActStep::Done { state: s1, lines: l1, .. } = done1 else { panic!("face 4 fails 5+, got {done1:?}") };
+        assert_eq!(s1.casts, vec![3, 2, 0, 2], "only Foe spent 1 token; FoeHero untouched");
+        assert_eq!(l1.last().map(|l| l.text.as_str()), Some("Bolt: cast roll 4 vs 5+ \u{2014} FAILED"));
+
+        // 4. Answer "2" -> spends in list order (1 from Foe, 1 from FoeHero), plural verb "spend", target 6+.
+        let t2 = with_opt("2");
+        let ActStep::NeedRoll { kind: "cast", target, lines, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t2, true) else {
+            panic!("expected cast die after interference answer 2");
+        };
+        assert_eq!(target, 6, "2 interference raises 4+ to 6+");
+        assert_eq!(
+            lines.last().map(|l| l.text.as_str()),
+            Some("Interference: Foe \u{00d7}1, FoeHero \u{00d7}1 spend 2 tokens \u{2014} the cast roll worsens to 6+ (casters within 18\", no line of sight needed)")
+        );
+        let (done2, _) = answer_dice(&statics, &st, t2, &[5]);
+        let ActStep::Done { state: s2, .. } = done2 else { panic!("face 5 fails 6+, got {done2:?}") };
+        assert_eq!(s2.casts, vec![3, 2, 0, 1], "Foe spent 1, FoeHero spent 1");
+
+        // 5. Answer "0" (including O3 no-answer path) -> target stays 4+, no foe tokens spent, no spend line.
+        let t0 = with_opt("0");
+        let ActStep::NeedRoll { kind: "cast", target, lines, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t0, true) else {
+            panic!("expected cast die after interference answer 0");
+        };
+        assert_eq!(target, 4);
+        assert!(lines.iter().all(|l| !l.text.starts_with("Interference:")), "{lines:?}");
+        let (done0, _) = answer_dice(&statics, &st, t0, &[1]);
+        let ActStep::Done { state: s0, .. } = done0 else { panic!("face 1 fails 4+, got {done0:?}") };
+        assert_eq!(s0.casts, vec![3, 2, 1, 2]);
+
+        // 6. Bad / out-of-range options refused at the Choice's index (3).
+        for (bad, want) in [("4", "is not an option"), ("-1", "token count"), ("abc", "token count"), ("+1", "token count"), ("01", "token count")] {
+            match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &with_opt(bad), true) {
+                ActStep::Refused { index: 3, reason } => assert!(reason.contains(want) && reason.contains(bad), "{bad}: {reason}"),
+                other => panic!("{bad}: expected Refused at 3, got {other:?}"),
+            }
+        }
+    }
+
+    /// CC-9c: live pool shrinks across casts (`seq` 0 -> `seq` 1), multi-slot pools ask in order (carrying slot 1's
+    /// interference line in slot 2's `NeedChoice`), an empty pool logs the table's "no caster of P<slot>" line when
+    /// that side holds caster tokens elsewhere, and bad pool keys / unreached answers are refused.
+    #[test]
+    fn interference_respects_seq_live_tokens_multi_slot_and_empty_pool() {
+        let (mut st, mut statics) = die_line();
+        statics[2].is_caster = true;
+        statics[3].name = "FoeTwo".into();
+        st.casts = vec![4, 0, 2, 1];
+
+        // (1) Two open casts in one activation: cast 0 spends 1 of Foe's 2 -> cast 1's pool is live-capped to 1.
+        let c0 = CastInput { base: 4, threshold: 1, open: true, pools: vec![(1, vec![("b".into(), 2)])], ..bolt(0) };
+        let c1 = CastInput { base: 4, threshold: 1, open: true, pools: vec![(1, vec![("b".into(), 2)])], ..bolt(1) };
+        let t = vec![
+            Begin,
+            intent(HOLD, None),
+            Input::Cast(c0),
+            Input::Cast(c1),
+            Input::Choice { id: "interference:0:a:1".into(), option: "1".into() },
+            Input::Choice { id: "interference:1:a:1".into(), option: String::new() },
+            Faces(vec![1]), // cast 0 fails 5+
+        ];
+        match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) {
+            ActStep::NeedChoice { id, options, owner, lines, .. } => {
+                assert_eq!((id.as_str(), owner.as_str()), ("interference:1:a:1", "b"));
+                assert_eq!(options, vec!["0", "1"], "only 1 token remains after cast 0 spent 1");
+                assert!(lines.iter().any(|l| l.text.contains("FAILED")), "cast 0's result line precedes cast 1's choice: {lines:?}");
+            }
+            other => panic!("expected cast 1 NeedChoice, got {other:?}"),
+        }
+
+        // (2) Multi-slot co-op pools: slot 1 then slot 2; slot 2's NeedChoice carries slot 1's interference line.
+        st.player[3] = 2;
+        let multi = CastInput { base: 4, threshold: 1, open: true, pools: vec![(1, vec![("b".into(), 1)]), (2, vec![("bh".into(), 1)])], ..bolt(0) };
+        let t_multi = vec![
+            Begin,
+            intent(HOLD, None),
+            Input::Cast(multi.clone()),
+            Input::Choice { id: "interference:0:a:1".into(), option: String::new() },
+            Input::Choice { id: "interference:0:a:2".into(), option: String::new() },
+        ];
+        assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t_multi, true), ActStep::NeedChoice { ref id, .. } if id == "interference:0:a:1"));
+        let t_slot2 = vec![
+            Begin,
+            intent(HOLD, None),
+            Input::Cast(multi.clone()),
+            Input::Choice { id: "interference:0:a:1".into(), option: "1".into() },
+            Input::Choice { id: "interference:0:a:2".into(), option: String::new() },
+        ];
+        match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t_slot2, true) {
+            ActStep::NeedChoice { id, options, owner, lines, .. } => {
+                assert_eq!((id.as_str(), owner.as_str()), ("interference:0:a:2", "bh"));
+                assert_eq!(options, vec!["0", "1"]);
+                assert!(lines.iter().any(|l| l.text.starts_with("Interference: Foe")), "{lines:?}");
+            }
+            other => panic!("expected slot 2 NeedChoice, got {other:?}"),
+        }
+        let t_both = vec![
+            Begin,
+            intent(HOLD, None),
+            Input::Cast(multi),
+            Input::Choice { id: "interference:0:a:1".into(), option: "1".into() },
+            Input::Choice { id: "interference:0:a:2".into(), option: "1".into() },
+        ];
+        assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t_both, true), ActStep::NeedRoll { kind: "cast", target: 6, .. }));
+
+        // (3) Empty pool when foe slot 1 has a caster with tokens elsewhere -> logs "no caster of P1", asks cast die directly.
+        let empty_pool = CastInput { base: 4, threshold: 1, open: true, pools: vec![(1, vec![])], ..bolt(0) };
+        let t_empty = vec![Begin, intent(HOLD, None), Input::Cast(empty_pool), Input::Choice { id: "interference:0:a:1".into(), option: String::new() }];
+        let ActStep::NeedRoll { kind: "cast", target: 4, lines, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t_empty, true) else {
+            panic!("empty pool goes straight to cast die");
+        };
+        assert!(lines.iter().any(|l| l.text == "Bolt: no caster of P1 within 18\", no line of sight needed \u{2014} no interference"), "{lines:?}");
+
+        // (4) Unknown pool unit key -> refused at the cast's index.
+        let bad_pool = CastInput { base: 4, threshold: 1, open: true, pools: vec![(1, vec![("zz".into(), 1)])], ..bolt(0) };
+        let t_bad = vec![Begin, intent(HOLD, None), Input::Cast(bad_pool), Input::Choice { id: "interference:0:a:1".into(), option: String::new() }];
+        assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t_bad, true), ActStep::Refused { index: 2, ref reason } if reason.contains("zz")));
+
+        // (5) Fizzled open cast with an unreached interference answer -> refused on Done; an unreached probe resolves cleanly.
+        let mut dead_target = st.clone();
+        (dead_target.alive[2], dead_target.positions[2], dead_target.wounds[2]) = (0, Vec::new(), Vec::new());
+        let fizz = CastInput { base: 4, threshold: 1, open: true, pools: vec![(1, vec![("bh".into(), 1)])], ..bolt(0) };
+        let t_fizz_ans = vec![Begin, intent(HOLD, None), Input::Cast(fizz.clone()), Input::Choice { id: "interference:0:a:1".into(), option: "1".into() }];
+        assert!(matches!(step_activation(&statics, &dead_target, "a", &Terrain::default(), seams(), &t_fizz_ans, true), ActStep::Refused { index: 3, ref reason } if reason.contains("no interference choice is open")));
+        let t_fizz_probe = vec![Begin, intent(HOLD, None), Input::Cast(fizz), Input::Choice { id: "interference:0:a:1".into(), option: String::new() }];
+        assert!(matches!(step_activation(&statics, &dead_target, "a", &Terrain::default(), seams(), &t_fizz_probe, true), ActStep::Done { .. }));
     }
 
     // ---- step 12: cancel ----
