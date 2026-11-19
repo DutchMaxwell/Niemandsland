@@ -1068,6 +1068,8 @@ pub struct ShootProfile {
     /// re-trigger. Stamped per `unit.rs::stamp`, gated by `facet_applies`
     /// exactly like `surge` above (Predator Fighter is melee-only).
     pub surge_attack: bool,
+    /// The book rule that stamped `surge_attack` (Bloodborn, Clan Warrior, ...), for the volley's extra-attack line.
+    pub surge_attack_rule: String,
     /// The Boost upgrade's `surge_low` (Primal Boost, Clan Warrior Boost, ...):
     /// a successful unmodified 5 ALSO draws an extra die when this is < 6.
     /// 6 = no boost — `main.gd`'s own `int(profile.get("surge_attack_low",
@@ -3987,6 +3989,7 @@ fn stamp(
             if facet_applies(hit.melee_only, scope_live, sp.range) {
                 if hit.extra_attack {
                     sp.surge_attack = true;
+                    sp.surge_attack_rule = hit.name.clone();
                 } else {
                     sp.surge = true;
                     sp.surge_alias_rule = hit.name.clone();
