@@ -2752,6 +2752,10 @@ pub fn resolve_melee_leg_wipe(
         out.rolls.push(Roll { kind: "attack", count: n, target: 4, faces, owner: sh.owner.into() });
         out.log.push(format!(
             "Regenerative Strength: {} rolls {} dice, {} wounds", sh.owner, n, w));
+        tray.say(|| LogLine {
+            rule: "melee", category: Category::Combat, side: sh.att.side, detail: None,
+            text: format!("Regenerative Strength: {} rolls {} dice, {} wound{}", sh.owner, n, w, if w == 1 { "" } else { "s" }),
+        });
         out.caused += w;
         out.wounds += regen_batch(w, 0, def, def_owner, tray, &mut out.rolls);
     }
