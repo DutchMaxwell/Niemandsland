@@ -14,12 +14,19 @@ uniform int channel_mode = 0;
 uniform float contrast_rim = 0.0;
 uniform float alpha_cap = 1.0;
 uniform float static_mode = 0.0;
+uniform float emit_gap = 0.0;   // streamed burst: seconds between two particles being born (0 = all born at once)
+uniform float span = 1.0;       // streamed burst: its duration / a particle's life (progress runs over `life * span` seconds)
 
 varying float t;
 varying float v_seed;
+varying float v_on;
 
 void vertex() {
-	t = clamp(progress / mix(0.55, 1.0, INSTANCE_CUSTOM.w), 0.0, 1.0);
+	float jit = fract(INSTANCE_CUSTOM.w);   // the integer part is the particle's birth step in a streamed burst
+	float clock = progress * span - floor(INSTANCE_CUSTOM.w) * emit_gap / max(life, 0.001);
+	float on = clock >= 0.0 ? 1.0 : 0.0;   // not born yet: the quad collapses to a point
+	v_on = on;
+	t = clamp(clock / mix(0.55, 1.0, jit), 0.0, 1.0);
 	float tt = static_mode > 0.5 ? 0.0 : (t * life);
 	vec3 p0 = MODEL_MATRIX[3].xyz;
 	vec3 v0 = INSTANCE_CUSTOM.xyz;
@@ -65,17 +72,20 @@ void vertex() {
 			offset_v = quad * sz;
 		}
 	} else {
-		float spin = INSTANCE_CUSTOM.w * TAU + (channel_mode == 3 && static_mode < 0.5 ? t * 4.5 : 0.0);
+		float spin = jit * TAU + (channel_mode == 3 && static_mode < 0.5 ? t * 4.5 : 0.0);
 		float cs = cos(spin);
 		float sn = sin(spin);
 		vec2 rq = vec2(quad.x * cs - quad.y * sn, quad.x * sn + quad.y * cs);
 		offset_v = rq * sz;
 	}
-	VERTEX = (VIEW_MATRIX * vec4(p, 1.0)).xyz + vec3(offset_v, 0.0);
-	v_seed = INSTANCE_CUSTOM.w;
+	VERTEX = (VIEW_MATRIX * vec4(p, 1.0)).xyz + vec3(offset_v * on, 0.0);
+	v_seed = jit;
 }
 
 void fragment() {
+	if (v_on < 0.5) {
+		discard;
+	}
 	vec4 atlas = texture(atlas_tex, UV);
 	vec4 c = mix(c0, c1, static_mode > 0.5 ? t * 0.6 : t);
 	float mask = 0.0;

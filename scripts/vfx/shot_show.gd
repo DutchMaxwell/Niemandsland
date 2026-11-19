@@ -17,7 +17,7 @@ const SHOTS := {
 	F.NEUTRAL: [0.2, Color(1.6, 1.6, 1.5), 0.0, 0.0, 0.0],
 	F.BALLISTIC: [0.24, Color(5.0, 3.6, 1.6), 0.022, 0.0012, 0.0],
 	F.BOW: [0.45, Color(1.1, 1.0, 0.85), 0.03, 0.0011, 0.18],
-	F.FLAME: [0.3, Color(4.0, 1.6, 0.4), 0.0, 0.0, 0.0],
+	F.FLAME: [0.2, Color(4.0, 1.6, 0.4), 0.0, 0.0, 0.0],   # the stream's first tongues reach the target after ~0.2 s
 	F.ENERGY: [0.26, Color(1.2, 3.6, 5.0), 0.012, 0.004, 0.0],
 	F.AUTO: [0.16, Color(5.0, 3.0, 1.1), 0.014, 0.0008, 0.0],
 	F.ARTILLERY: [0.6, Color(3.0, 1.8, 0.75), 0.011, 0.005, 0.3],   # the shell: bigger and hotter, it is the warning
@@ -30,6 +30,11 @@ const RIBBON_WIDTHS := {
 	F.AUTO: 0.0048,
 	F.ENERGY: 0.0074,
 }
+const FLAME_LEAD_S := 0.11      # a flamer fires this long after its sight line appears (not after the random chaos delay)
+const FLAME_LEAD_JITTER_S := 0.1
+const FLAME_STREAM_S := 0.35    # the gout runs this long: tongues are born one after another, muzzle to target
+const FLAME_QUADS := 40
+const FLAME_REACH_S := 0.26     # the fastest tongues cover the whole line in about this time
 const CHAOS_S := 0.6            # every model fires at its own moment inside this window
 const JITTER_M := 0.008         # where the visible round lands inside the target's base (the rule line stays exact)
 const ECHO_CHANCE := 0.35       # share of shots that throw a second, offset impact
@@ -227,6 +232,11 @@ static func plan(n: int, rng_seed: int) -> Array:
 	return out
 
 
+## When a shot starts: the plan's chaos delay, except a flamer, which fires right after its line appears (a gout, not a crack).
+static func _start_delay(family: int, chaos_delay: float) -> float:
+	return FLAME_LEAD_S + chaos_delay / CHAOS_S * FLAME_LEAD_JITTER_S if family == F.FLAME else chaos_delay
+
+
 ## One volley: `pairs` are the rule's [from_eye, to_eye] segments, `rng_seed` the cue's cosmetic seed, `blast` the
 ## weapon's Blast(X) (0 = none) and `ground_drop` how far below the target eye the ground lies (for the blast ring).
 func volley(pairs: Array, family: int, rng_seed: int, blast := 0, ground_drop := 0.0) -> void:
@@ -245,7 +255,7 @@ func volley(pairs: Array, family: int, rng_seed: int, blast := 0, ground_drop :=
 		var side: Vector3 = Vector3(-(pairs[i][1] - pairs[i][0]).z, 0.0, (pairs[i][1] - pairs[i][0]).x).normalized()
 		for k in rounds:   # a burst walks across the target base
 			var tw := create_tween()
-			tw.tween_interval(float(shots[i]["delay"]) + k * ROUND_GAP_S)
+			tw.tween_interval(_start_delay(family, float(shots[i]["delay"])) + k * ROUND_GAP_S)
 			tw.tween_callback(_fire_in_volley.bind(vid, pairs[i][0], pairs[i][1] + shots[i]["jitter"] + side * JITTER_M * (k - (rounds - 1) * 0.5) * 0.5,
 				family, rng_seed + 7919 * i + 131 * k, p, float(shots[i]["muzzle"]) * (0.6 if rounds > 1 else 1.0),
 				bool(shots[i]["echo"]) and rounds == 1, blast, ground_drop))
@@ -286,12 +296,15 @@ func _fire(a: Vector3, b: Vector3, family: int, s: int, p: int, muzzle_k := 1.0,
 			_light(muzzle, Color(1.0, 0.72, 0.34), p, LIGHT_LIFE_S, vid)
 		F.BOW:
 			FxBurst.spawn(self, FxBurst.Look.DUST, muzzle, Vector3.UP, 2, s, p, 0.3)   # the string's snap: no flash
-		F.FLAME:
-			FxBurst.spawn(self, FxBurst.Look.FLASH, star_at, dir, 1, s + 2, p, 0.62, Color(1.0, 0.55, 0.22))
-			FxBurst.spawn(self, FxBurst.Look.MOTE, muzzle, dir, 10, s + 3, p, a.distance_to(b) / 0.18, Color(1.75, 0.58, 0.12))
-			FxBurst.spawn(self, FxBurst.Look.EMBER, muzzle, dir, 28, s, p, a.distance_to(b) / 0.15)
-			FxBurst.spawn(self, FxBurst.Look.PUFF, muzzle, dir + Vector3.UP, 6, s + 1, p, 1.2)
+		F.FLAME:   # a gout: ONE burst of tongues born one after another for FLAME_STREAM_S, thrown down the shot line
+			var dist := a.distance_to(b)
+			FxBurst.spawn(self, FxBurst.Look.FLASH, star_at, dir, 1, s + 2, p, 0.5, Color(1.0, 0.55, 0.22))
+			FxBurst.spawn(self, FxBurst.Look.FLAME, muzzle, dir, FLAME_QUADS, s + 3, p, 1.0, Color.WHITE, false, 0.0, 1.0,
+				dist / FLAME_REACH_S, FLAME_STREAM_S)
+			FxBurst.spawn(self, FxBurst.Look.EMBER, muzzle, dir, 10, s, p, dist / 0.15)
+			FxBurst.spawn(self, FxBurst.Look.PUFF, muzzle.lerp(b, 0.66), dir + Vector3.UP, 5, s + 1, p, 1.0, Color(0.18, 0.15, 0.13))
 			_light(muzzle, Color(1.0, 0.52, 0.16), p, LIGHT_LIFE_S, vid)
+			_light(muzzle.lerp(b, 0.5), Color(1.0, 0.45, 0.12), p, FLAME_STREAM_S + 0.1, vid)   # the stream's glow, fading with it
 		F.ENERGY:
 			FxBurst.spawn(self, FxBurst.Look.MOTE, muzzle, Vector3.ZERO, 10, s, p, 0.6)
 		F.BEAM:
@@ -399,10 +412,12 @@ func _impact(at: Vector3, back: Vector3, family: int, s: int, p: int, blast := 0
 	if primary:
 		_sound(family, "impact", at)
 	match family:
-		F.FLAME:
-			FxBurst.spawn(self, FxBurst.Look.EMBER, at, Vector3.UP, 14, s, p, 1.0, Color(1.15, 0.85, 0.55))
-			FxBurst.spawn(self, FxBurst.Look.MOTE, at, Vector3.UP, 6, s + 2, p, 0.85, Color(1.7, 0.52, 0.10))
+		F.FLAME:   # fire licking the base of the struck model (low, slow, 0.6 s), a few embers, a little dark smoke
+			var base := at - Vector3.UP * maxf(ground_drop - 0.002, 0.0)
+			FxBurst.spawn(self, FxBurst.Look.FLAME, base, Vector3.UP, 6, s, p, 0.8, Color.WHITE, false, 0.0, 1.5, 0.03)
+			FxBurst.spawn(self, FxBurst.Look.EMBER, at, Vector3.UP, 6, s + 2, p, 1.0, Color(1.15, 0.85, 0.55))
 			FxBurst.spawn(self, FxBurst.Look.PUFF, at, Vector3.UP, 6, s + 1, p, 1.1, Color(0.32, 0.28, 0.26))
+			_impact_light(base, Color(1.0, 0.5, 0.15), p, 0.5, volley_id, primary)
 		F.ENERGY:
 			FxBurst.spawn(self, FxBurst.Look.FLASH, at, Vector3.ZERO, 1, s, p, 0.7)
 			FxBurst.spawn(self, FxBurst.Look.SPARK, at, back, 6, s + 1, p)

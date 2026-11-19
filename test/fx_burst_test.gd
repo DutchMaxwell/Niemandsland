@@ -121,3 +121,27 @@ func test_blast_looks_a_short_hot_fireball_and_a_light_smoke_column_that_rises_a
 	var b: FxBurst = BurstScript.spawn(h, BurstScript.Look.SPARK, Vector3.ZERO, Vector3.UP, 4, 5, 2, 1.0, Color.WHITE, false, 0.0, 2.0)
 	assert_float(float((b.material_override as ShaderMaterial).get_shader_parameter("life"))) \
 		.override_failure_message("life_k stretches the look's life").is_equal_approx(float(BurstScript.LOOKS[BurstScript.Look.SPARK][7]) * 2.0, 1e-5)
+
+
+func test_a_streamed_burst_releases_its_particles_one_after_another_in_one_draw_call(timeout := 5000) -> void:
+	var plain: Array = BurstScript.instances(BurstScript.Look.FLAME, Vector3.RIGHT, 12, 9)
+	var streamed: Array = BurstScript.instances(BurstScript.Look.FLAME, Vector3.RIGHT, 12, 9, 1.0, false, 1.0, true)
+	for i in 12:
+		var w: float = ((streamed[i] as Array)[1] as Color).a
+		assert_int(int(floorf(w))).override_failure_message("particle %d is born at step %d" % [i, i]).is_equal(i)
+		assert_float(w - floorf(w)).override_failure_message("same jitter as the plain burst") \
+			.is_equal_approx(((plain[i] as Array)[1] as Color).a, 1e-4)
+		assert_float(((plain[i] as Array)[1] as Color).a).is_less(1.0)
+	var fast: Array = BurstScript.instances(BurstScript.Look.FLAME, Vector3.RIGHT, 12, 9, 1.0, false, 2.0)
+	assert_float(((fast[0] as Array)[1] as Color).r).override_failure_message("speed_k scales speed") \
+		.is_equal_approx(((plain[0] as Array)[1] as Color).r * 2.0, 1e-4)
+	var h := _host()
+	var look: Array = BurstScript.LOOKS[BurstScript.Look.FLAME]
+	var b: FxBurst = BurstScript.spawn(h, BurstScript.Look.FLAME, Vector3.ZERO, Vector3.RIGHT, 40, 3, 2, 1.0, Color.WHITE, false, 0.0, 1.0, 1.0, 0.35)
+	var mat := b.material_override as ShaderMaterial
+	assert_int(h.get_child_count()).override_failure_message("one burst = one draw call").is_equal(1)
+	assert_float(float(mat.get_shader_parameter("emit_gap")) * 40.0).is_equal_approx(0.35, 1e-4)
+	assert_float(float(mat.get_shader_parameter("span"))).is_equal_approx((float(look[7]) + 0.35) / float(look[7]), 1e-4)
+	await get_tree().create_timer(float(look[7]) + 0.35 + 0.3).timeout
+	assert_int(h.get_child_count()).override_failure_message("frees itself after the stream and the last particle's life").is_equal(0)
+

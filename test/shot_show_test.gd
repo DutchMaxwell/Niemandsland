@@ -198,6 +198,38 @@ func test_a_shell_marks_its_landing_before_it_lands_and_not_on_low(timeout := 60
 	assert_int(_planes(show, ShotScript.BLAST_WAVE).size()).is_greater_equal(1)
 
 
+func test_a_flamer_fires_a_continuous_stream_along_the_line_not_a_puff(timeout := 5000) -> void:
+	var show := _show()
+	show._fire(Vector3(0, 0.03, 0), Vector3(0.127, 0.03, 0), VolleyCue.Family.FLAME, 8, 2)
+	var bursts: Array = show.get_children().filter(func(c: Node) -> bool: return c is FxBurst)
+	var quads := 0
+	var stream: ShaderMaterial = null
+	for c in bursts:
+		var mm := (c as FxBurst).multimesh
+		quads += mm.instance_count
+		var m := (c as FxBurst).material_override as ShaderMaterial
+		if float(m.get_shader_parameter("emit_gap")) > 0.0:
+			stream = m
+	assert_object(stream).override_failure_message("the gout is one streamed burst").is_not_null()
+	assert_float(float(stream.get_shader_parameter("emit_gap")) * ShotScript.FLAME_QUADS) \
+		.override_failure_message("tongues are born over the whole stream, not in one frame").is_equal_approx(ShotScript.FLAME_STREAM_S, 1e-4)
+	assert_int(quads).override_failure_message("modest: at most 56 quads for the whole gout").is_less_equal(56)
+	await get_tree().create_timer(0.5).timeout
+	assert_bool(show.get_children().any(func(c: Node) -> bool: return c is FxBurst \
+		and float(((c as FxBurst).material_override as ShaderMaterial).get_shader_parameter("emit_gap")) > 0.0)) \
+		.override_failure_message("still burning 0.5 s in").is_true()
+	assert_float(ShotScript._start_delay(VolleyCue.Family.FLAME, ShotScript.CHAOS_S)).is_between(0.1, 0.25)
+	assert_float(ShotScript._start_delay(VolleyCue.Family.BALLISTIC, 0.4)).is_equal(0.4)
+
+
+func test_a_flame_lands_as_fire_licking_the_base() -> void:
+	var show := _show()
+	show._impact(Vector3(0.1, 0.03, 0), Vector3.LEFT, VolleyCue.Family.FLAME, 5, 2, 0, 0.03)
+	var lives: Array = show.get_children().filter(func(c: Node) -> bool: return c is FxBurst) \
+		.map(func(c: Node) -> float: return float(((c as FxBurst).material_override as ShaderMaterial).get_shader_parameter("life")))
+	assert_bool(lives.any(func(l: float) -> bool: return is_equal_approx(l, 0.6))).override_failure_message("a 0.6 s base fire").is_true()
+
+
 func test_batched_hdr_ribbons_and_light_pool_cap_create_and_free(timeout := 5000) -> void:
 	var show := _show()
 	for i in 10:
