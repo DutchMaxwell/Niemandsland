@@ -955,6 +955,16 @@ pub const CURRENT_RULES_EPOCH: u32 = 91;
 /// `CURRENT_RULES_EPOCH` is not touched, so every recorded game replays byte-exact; the lead batches
 /// this placeholder into the next daily epoch bump.
 pub const PENDING_EPOCH_MELEE_GMC3: u32 = CURRENT_RULES_EPOCH + 1;
+/// Placeholder gate for DS-GMC2 ("charge reach" melee cause group):
+/// 1) `mv::step::Move::execute` converts moved endpoints via `to_world_f32` (matching `SoloController._plan_positions`,
+///    preventing 1-ULP `from_inch` drift that flips tie-breaks in Versatile Reach pile-in and Fast 1" separation),
+///    and keeps `!stirred` models verbatim.
+/// 2) `sim::resolve_with` applies `gate::melee_shroud_charge_in` to `band_in` on `CHARGE` (matching
+///    `SoloController.melee_shroud_charge_in`, GF v3.5.3 army books).
+///
+/// `CURRENT_RULES_EPOCH` is not touched, so every recorded game replays byte-exact; the lead batches
+/// this placeholder into the next daily epoch bump (it may share the number of `PENDING_EPOCH_MELEE_GMC3`).
+pub const PENDING_EPOCH_MELEE_GMC2: u32 = CURRENT_RULES_EPOCH + 1;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
