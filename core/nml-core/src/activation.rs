@@ -10,7 +10,7 @@ use crate::logline::{Category, LogLine};
 use crate::mods::LiveMod;
 use crate::mv::step::{leg_crosses, DIFFICULT_MOVE_CAP_IN};
 use crate::rng::GodotRng;
-use crate::sim::{band_parts, cast_ends, resolve_stochastic_tray_on_board, terrain_debuff_folds, Cover, ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
+use crate::sim::{band_parts, resolve_stochastic_tray_on_board, terrain_debuff_folds, Cover, ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
 use crate::state::State;
 use crate::step::{step_with, Step};
 use crate::terrain::{is_difficult, Terrain};
@@ -282,6 +282,9 @@ fn cast_break(statics: &[UnitStatic], state: &State, left: &mut [i64], c: &CastI
     if c.open {
         return Some(format!("cast {}: a foe's answer to {} cannot be asked yet", c.seq, c.spell));
     }
+    if !c.conduit.is_empty() {
+        return Some(format!("cast {}: a cast through a conduit is not resolved by the core yet", c.seq));
+    }
     // CC-5b: the tokens as the table paid them at plan time: the threshold from the caster, boost and interference from the listed
     // payers, each from what is left after the casts before it. The payers must give exactly the boost / interference named.
     for (what, want, payers) in [("boost", c.boost, &c.boost_sources), ("interference", c.interference, &c.interference_sources)] {
@@ -320,17 +323,12 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     if let Err((index, reason)) = order_check(name, t) {
         return ActStep::Refused { index, reason };
     }
-    // CC-5a: the static checks come first, each break with its own sentence at its cast's index. CC-3/CC-5b: the core takes only the
-    // casts that end before any die (their caster is down or no target stands, `cast_ends`); the first other cast is refused at its
-    // own index (CC-5c lifts this step by step). Both run before any resolver, so before the Dangerous die and before any token
-    // is spent.
+    // CC-5a: the static checks come first, each break with its own sentence at its cast's index, before any resolver: so before the
+    // Dangerous die and before any token is spent.
     if let Some((index, reason)) = cast_check(statics, state, t) {
         return ActStep::Refused { index, reason };
     }
     let casts: Vec<CastInput> = t.iter().filter_map(|x| if let Input::Cast(c) = x { Some(c.clone()) } else { None }).collect();
-    if let Some(i) = t.iter().position(|x| matches!(x, Input::Cast(c) if cast_ends(state, c).is_none())) {
-        return ActStep::Refused { index: i, reason: "casts are not resolved by the core yet".to_string() };
-    }
     // Before any resolver runs: no die is drawn and no state is resolved. A `Placed` in the
     // transcript is simply dropped (the table puts the models back).
     if t.last() == Some(&Input::Cancel) {
@@ -410,6 +408,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let faces: Vec<Vec<u8>> = t.iter().filter_map(|x| if let Input::Faces(f) = x { Some(f.clone()) } else { None }).collect();
     // The spike's non-tray seed: a plain activation never draws from it.
     let reached = std::cell::RefCell::new(Vec::new());
+    let cast_hit = std::cell::Cell::new(None);
     let run = |statics: &[UnitStatic]| {
         let resolve = |tray: &mut Tray| {
             if let Some((p, trails)) = placed.clone() {
@@ -421,11 +420,18 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             tray.offer_casts(casts.clone());
             let out = resolve_stochastic_tray_on_board(statics, state, &action, terrain, seams, &mut GodotRng::new(0), tray);
             *reached.borrow_mut() = tray.feed().map(|f| f.wound_choices.clone()).unwrap_or_default();
+            cast_hit.set(tray.feed().and_then(|f| f.cast_hit));
             out
         };
         step_with(&faces, resolve, |r| r.as_ref().map_or(&[][..], |(_, s)| s.rolls.as_slice()))
     };
     let first = run(statics);
+    // CC-5c: a cast that SUCCEEDED has an effect the core does not resolve yet (CC-6/8): refused at its own input, before anything is
+    // asked or landed on it (the transcript, its die and its tokens go back to the table).
+    if let Some(seq) = cast_hit.get() {
+        let index = t.iter().position(|x| matches!(x, Input::Cast(c) if c.seq == seq)).unwrap_or(0);
+        return ActStep::Refused { index, reason: "casts are not resolved by the core yet".to_string() };
+    }
     // P4.D-20/21: the choices the landings came to, in the order they came, each before the first starved roll (after it, a
     // landing read made-up dice): a bad slot is refused, an unanswered ask is the answer. An answer no landing asked for is
     // refused too.
@@ -1215,22 +1221,19 @@ mod tests {
         assert!(matches!(ask(&[intent(HOLD, None)]), ActStep::Refused { index: 0, .. }));
     }
 
-    /// CC-3: the core resolves no cast yet - the first cast is refused at its own index with one sentence, before any
-    /// resolver (no `NeedRoll`, no `Cancelled`, no `Done`). RED: the refusal removed -> the volley runs (`NeedRoll`).
+    /// CC-3/CC-5c: a cast that SUCCEEDED has an effect the core does not resolve yet, so it is refused at its own input with one
+    /// sentence once its die is in (RED: the refusal removed -> `NeedRoll` for the volley after it). Before the die the cast asks
+    /// that die; a cancel before it is the usual one; an order break still reads first.
     #[test]
-    fn any_cast_is_refused_at_its_index_until_the_core_resolves_casts() {
-        let (st, statics) = caster_line(); // CC-5a: the cast must pass the static checks to reach this refusal
+    fn a_cast_that_succeeded_is_refused_at_its_index_until_the_core_resolves_effects() {
+        let (st, statics) = caster_line(); // CC-5a: the cast must pass the static checks to get here
         let ask = |t: &[Input]| step_activation(&statics, &st, "a", &Terrain::default(), seams(), t, true);
-        let why = "casts are not resolved by the core yet";
-        for (t, at) in [
-            (vec![Begin, intent(HOLD, Some("b")), cast(0)], 2),
-            (vec![Begin, intent(HOLD, Some("b")), cast(0), cast(1), Faces(vec![4, 4])], 2),
-            (vec![Begin, intent(HOLD, None), cast(0), Cancel], 2),
-        ] {
-            let ActStep::Refused { index, reason } = ask(&t) else { panic!("{t:?}") };
-            assert_eq!((index, reason.as_str()), (at, why), "{t:?}");
-        }
-        // an order break still reads first, with its own sentence
+        let start = [Begin, intent(HOLD, Some("b"))];
+        let hit = [&start[..], &[Input::Cast(bolt(0)), Faces(vec![6])]].concat();
+        assert!(matches!(ask(&hit), ActStep::Refused { index: 2, reason } if reason == "casts are not resolved by the core yet"));
+        let two = [&start[..], &[Input::Cast(bolt(0)), Input::Cast(bolt(1)), Faces(vec![1]), Faces(vec![6])]].concat();
+        assert!(matches!(ask(&two), ActStep::Refused { index: 3, reason } if reason == "casts are not resolved by the core yet"), "the second cast hit");
+        assert!(matches!(ask(&[Begin, intent(HOLD, None), cast(0), Cancel]), ActStep::Cancelled { .. }), "no die yet: the usual cancel");
         assert!(matches!(ask(&[Begin, cast(0)]), ActStep::Refused { index: 1, reason } if reason == "a cast before the action was declared"));
         // the same transcript without the cast is untouched
         assert!(matches!(ask(&[Begin, intent(HOLD, Some("b"))]), ActStep::NeedRoll { .. }));
@@ -1266,13 +1269,13 @@ mod tests {
             (CastInput { spell: "Mend All".into(), ..bolt(0) }, "cast 0: the core does not resolve utility spells yet (Mend All)"),
             (CastInput { targets: vec!["b".into(), "zz".into()], ..bolt(0) }, "cast 0: zz is no unit of this game (a target of Bolt)"),
             (CastInput { open: true, ..bolt(0) }, "cast 0: a foe's answer to Bolt cannot be asked yet"),
+            (CastInput { conduit: "bh".into(), ..bolt(0) }, "cast 0: a cast through a conduit is not resolved by the core yet"),
         ] {
             let ActStep::Refused { index, reason } = ask(&[&start[..], &[Input::Cast(c.clone())]].concat()) else { panic!("{c:?}") };
             assert_eq!((index, reason.as_str()), (2, why), "{c:?}");
         }
-        // a valid cast is still the CC-3 refusal; a bad one BEHIND it is found first, at its own index
-        let ActStep::Refused { index, reason } = ask(&[&start[..], &[Input::Cast(bolt(0))]].concat()) else { panic!("valid") };
-        assert_eq!((index, reason.as_str()), (2, "casts are not resolved by the core yet"));
+        // a valid cast asks its die (CC-5c); a bad one BEHIND it is found first, at its own index
+        assert!(matches!(ask(&[&start[..], &[Input::Cast(bolt(0))]].concat()), ActStep::NeedRoll { kind: "cast", .. }));
         let t = [&start[..], &[Input::Cast(bolt(0)), Input::Cast(CastInput { spell: "Nope".into(), ..bolt(1) })]].concat();
         assert!(matches!(ask(&t), ActStep::Refused { index: 3, reason } if reason == "cast 1: a has no spell named Nope"));
     }
@@ -1331,6 +1334,134 @@ mod tests {
         // "ah" holds ONE token: the first cast takes it, the second finds it gone (refused at ITS index, 3)
         let (first, second) = (CastInput { caster: "ah".into(), threshold: 1, ..bolt(0) }, CastInput { caster: "ah".into(), threshold: 1, ..bolt(1) });
         assert!(matches!(ask(vec![first, second]), ActStep::Refused { index: 3, reason } if reason == "cast 1: ah holds 0 token(s) but Bolt asks 1 of it"));
+    }
+
+    /// The board of the cast die: "a" is the caster "Mystic" (4 tokens), "b" the target "Foe", "ah" a friendly unit "Hero" joined to "a".
+    fn die_line() -> (State, Vec<UnitStatic>) {
+        let (mut st, mut statics) = caster_line();
+        (statics[0].name, statics[2].name, statics[1].name) = ("Mystic".into(), "Foe".into(), "Hero".into());
+        st.casts = vec![4, 2, 0, 0];
+        (st, statics)
+    }
+
+    /// Asks `t` through the core and answers each `NeedRoll` with the next of `faces`; the last answer and how many rolls were asked.
+    fn answer_dice(statics: &[UnitStatic], st: &State, mut t: Vec<Input>, faces: &[u8]) -> (ActStep, usize) {
+        let mut next = faces.iter();
+        let mut asked = 0;
+        loop {
+            match step_activation(statics, st, "a", &Terrain::default(), seams(), &t, true) {
+                ActStep::NeedRoll { .. } if next.len() > 0 => {
+                    asked += 1;
+                    t.push(Faces(vec![*next.next().unwrap()]));
+                }
+                other => return (other, asked),
+            }
+        }
+    }
+
+    /// CC-5c: the cast die and the lines up to it, byte for byte the table's (golden_cast_effects `buff_self` / `casting_once`).
+    /// The die is kind "cast", count 1, the caster's; the activating unit's name is on the announce line, the caster's on the
+    /// needs line (a joined hero casts: the activating "Mystic" announces, "Hero" needs). A failed die is taken: its result line, the tokens paid, the
+    /// casting once-record spent; a success is refused. RED: boost / interference left out of the target, the base not moved by
+    /// the net first, the once-record kept, the die's kind or owner changed.
+    #[test]
+    fn a_cast_asks_its_die_and_says_the_tables_lines_up_to_it() {
+        let (mut st, statics) = die_line();
+        let spell = |c: CastInput| [Begin, intent(HOLD, None), Input::Cast(CastInput { base: 4, threshold: c.threshold.max(1), ..c })];
+        // a plain cast: asked first, the lines said before the starved draw are the announce and the needs line
+        let ActStep::NeedRoll { index, faces, kind, count, target, owner, owner_key, lines, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &spell(bolt(0)), true) else { panic!("asks the die") };
+        let said = lines.iter().map(|l| (l.rule, l.side, l.text.as_str())).collect::<Vec<_>>();
+        assert_eq!((index, faces, kind, count, target, owner.as_str(), owner_key.as_str()), (0, 1, "cast", 1, 4, "Mystic", "a"));
+        assert_eq!(said, [("cast", 0, "Mystic casts Bolt at Foe"), ("cast", 0, "Mystic casts Bolt at Foe \u{2014} needs 4+ (1 token)")]);
+        // a failed die is taken: the result line, the tokens paid, nothing else changes
+        let (done, asked) = answer_dice(&statics, &st, spell(bolt(0)).to_vec(), &[1]);
+        let ActStep::Done { state, lines, .. } = done else { panic!("a failed cast is taken: {done:?}") };
+        assert_eq!(lines.last().map(|l| l.text.as_str()), Some("Bolt: cast roll 1 vs 4+ \u{2014} FAILED"));
+        assert_eq!((state.casts.clone(), asked), (vec![3, 2, 0, 0], 1));
+        // a hit is refused (its effect is CC-6/8)
+        assert!(matches!(answer_dice(&statics, &st, spell(bolt(0)).to_vec(), &[6]).0, ActStep::Refused { index: 2, .. }));
+        // a joined hero casts: the activating unit's name announces, the hero's names the cast; boost and interference move the target 4 -> 3
+        let hero = CastInput { caster: "ah".into(), boost: 2, boost_sources: vec![("ah".into(), 2)], interference: 1, interference_sources: vec![("bh".into(), 1)], threshold: 2, ..bolt(0) };
+        st.casts = vec![4, 4, 0, 1];
+        let ActStep::NeedRoll { target, owner, lines, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &spell(hero), true) else { panic!("asks the die") };
+        assert_eq!((target, owner.as_str()), (3, "Hero"));
+        assert_eq!(lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), ["Mystic casts Bolt at Foe", "Hero casts Bolt at Foe \u{2014} needs 3+ (2 tokens, +2 boost, -1 interference)"]);
+    }
+
+    /// CC-5c: the lines before the cast die and the die's own shape equal CC-2's goldens (`golden_cast_effects.json`: `buff_self`,
+    /// `boost_interference`, `casting_once`, recorded from the table with the core off), line for line: the core's lines are the
+    /// golden's but for the tray's own "AI (...)" line and the result line (said after the die).
+    #[test]
+    fn the_lines_before_the_die_equal_the_cc2_goldens() {
+        use crate::mods::LiveMod;
+        let golden: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(format!("{}/../../test/fixtures/one_core/golden_cast_effects.json", env!("CARGO_MANIFEST_DIR"))).expect("the CC-2 golden")).unwrap();
+        let focus = LiveMod { move_mod: 0, hit_mod: 0, casting_mod: 1, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: true, name: Rc::from("Focus") };
+        let me = |c: CastInput| CastInput { caster: "a".into(), spell: "Warding Chant".into(), targets: vec!["a".into()], base: 4, threshold: c.threshold.max(1), ..c };
+        let mut seen = 0;
+        for (scenario, cast, buffs, roll) in [
+            ("buff_self", me(bolt(0)), vec![], "cast|attack|1x4+|AI (Mystic)|"),
+            ("boost_interference", me(CastInput { threshold: 2, boost: 2, boost_sources: vec![("a".into(), 2)], interference: 1, interference_sources: vec![("bh".into(), 1)], ..bolt(0) }), vec![], "cast|attack|1x3+|AI (Mystic)|"),
+            ("casting_once", me(bolt(0)), vec![focus], "cast|attack|1x3+|AI (Mystic)|"),
+        ] {
+            let case = golden["cases"].as_array().unwrap().iter().find(|c| c["scenario"] == scenario).unwrap();
+            let (mut st, mut statics) = die_line();
+            statics[0].spells[0].name = "Warding Chant".into();
+            (statics[2].name, st.casts, st.buffs[0]) = ("Foe".into(), vec![6, 0, 0, 1], buffs);
+            let t = [Begin, intent(HOLD, None), Input::Cast(cast)];
+            let ActStep::NeedRoll { count, target, owner, lines, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) else { panic!("{scenario}: asks the die") };
+            let ours: Vec<String> = lines.iter().map(|l| format!("COMBAT|{}", l.text)).collect();
+            let want: Vec<String> = case["lines"].as_array().unwrap().iter().map(|l| l.as_str().unwrap().to_string()).take_while(|l| !l.starts_with("COMBAT|AI (")).collect();
+            assert_eq!(ours, want, "{scenario}");
+            assert!(case["extra"]["rolls"][0].as_str().unwrap().starts_with(roll), "{scenario}: {:?}", case["extra"]["rolls"]);
+            assert_eq!(format!("cast|attack|{count}x{target}+|AI ({owner})|"), roll, "{scenario}");
+            seen += 1;
+        }
+        assert_eq!(seen, 3);
+    }
+
+    /// CC-5c: the casting net moves the BASE first and is clamped to 2..6, boost and interference move the clamped result (the
+    /// table's double clamp: base 4, net +3, interference 2 is 4+, not the single clamp's 3+). The line names the notes in the
+    /// table's order: the caster's records, then the Spell Amplifier; the once-record is spent by the roll even when it fails.
+    #[test]
+    fn the_casting_net_moves_the_base_and_the_once_record_is_spent_by_the_roll() {
+        use crate::mods::LiveMod;
+        let (mut st, mut statics) = die_line();
+        statics[0].spell_amplifier_casting_mod = 2;
+        let focus = LiveMod { move_mod: 0, hit_mod: 0, casting_mod: 1, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, grants_rule: Rc::from(""), scope: Rc::from(""), attackers: false, once: true, name: Rc::from("Focus") };
+        st.buffs[0] = vec![focus];
+        let cast = |c: CastInput| [Begin, intent(HOLD, None), Input::Cast(CastInput { base: 4, threshold: 1, ..c })];
+        let ActStep::NeedRoll { target, lines, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &cast(bolt(0)), true) else { panic!("asks the die") };
+        assert_eq!(target, 2, "4 - 3 clamps to 2");
+        assert_eq!(lines[0].text, "+3 to casting rolls (Focus +1, Spell Amplifier +2) \u{2014} Mystic casts on 2+ (base 4+)");
+        let counter = CastInput { interference: 2, interference_sources: vec![("bh".into(), 2)], ..bolt(0) };
+        st.casts = vec![4, 0, 0, 2];
+        let ActStep::NeedRoll { target, .. } = step_activation(&statics, &st, "a", &Terrain::default(), seams(), &cast(counter.clone()), true) else { panic!("asks the die") };
+        assert_eq!(target, 4, "clamp(4 - 3) = 2, then + 2 interference");
+        let (done, _) = answer_dice(&statics, &st, cast(counter).to_vec(), &[1]);
+        let ActStep::Done { state, .. } = done else { panic!("a failed cast is taken") };
+        assert!(state.buffs[0].is_empty(), "the Focus once-record is spent by the roll: {:?}", state.buffs[0]);
+    }
+
+    /// CC-5c: the cast comes AFTER the activation's own Dangerous test (the core's order), and a Shaken friendly battery that
+    /// cannot lend says so before the announce. RED: the cast slot before the Dangerous test -> the first roll is the cast.
+    #[test]
+    fn the_cast_die_follows_the_dangerous_test_and_a_shaken_battery_says_so() {
+        use crate::terrain::{CellParams, PlainTerrain, DANGEROUS};
+        let (mut st, mut statics) = die_line();
+        st.positions[0] = vec![[4.0 * INCHES_TO_METERS, 0.0, 0.0], [5.0 * INCHES_TO_METERS, 0.0, 0.0]];
+        (st.wounds[0], st.alive[0]) = (vec![1, 1], 2);
+        Rc::make_mut(&mut st.radii)[0] = vec![INCHES_TO_METERS / 2.0; 2];
+        (statics[1].is_caster, statics[1].spell_accumulator) = (false, true);
+        st.shaken[1] = true;
+        let cells = vec![[16.0, 14.0, DANGEROUS as f64], [16.0, 15.0, DANGEROUS as f64]];
+        let cell_params = CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: INCHES_TO_METERS };
+        let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params });
+        let t = vec![Begin, intent(HOLD, None), Input::Cast(CastInput { base: 4, threshold: 1, ..bolt(0) })];
+        let first = step_activation(&statics, &st, "a", &board, Seams { dangerous_end_morale: true, ..seams() }, &t, true);
+        assert!(matches!(&first, ActStep::NeedRoll { kind: "attack", owner_key, count: 2, .. } if owner_key == "a"), "the Dangerous test first: {first:?}");
+        let t = [t, vec![Faces(vec![6, 6])]].concat();
+        let ActStep::NeedRoll { kind: "cast", lines, .. } = step_activation(&statics, &st, "a", &board, Seams { dangerous_end_morale: true, ..seams() }, &t, true) else { panic!("then the cast die") };
+        assert_eq!(lines.iter().map(|l| l.text.as_str()).next(), Some("Spell Accumulator: Hero is Shaken \u{2014} its tokens do not feed friendly casters"));
     }
 
     /// CC-5a: the refusal comes before ANY roll. "a" stands in Dangerous terrain, so its activation owes the Dangerous test

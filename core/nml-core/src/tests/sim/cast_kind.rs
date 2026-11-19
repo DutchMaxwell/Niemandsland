@@ -111,27 +111,30 @@ use super::*;
         (st, statics)
     }
 
-    /// CC-5b: `tray_cast` part 1 on the three ends. A cast whose caster and target stand pays and goes on (`None`, nothing said: the
-    /// cast die is CC-5c); the same cast at a wiped-out target fizzles with its one line; with the caster down it is skipped without
-    /// one. All three have paid the threshold.
+    /// CC-5b/5c: `tray_cast` on its four ends. A cast whose caster and target stand pays, asks the cast die and ends on it (a face
+    /// of 6 hits, a 1 fails); the same cast at a wiped-out target fizzles with its one line; with the caster down it is skipped
+    /// without one. All of them paid the threshold.
     #[test]
-    fn tray_cast_pays_first_then_skips_fizzles_or_goes_on() {
+    fn tray_cast_pays_first_then_skips_fizzles_or_rolls_its_die() {
         use crate::activation::CastInput;
+        use crate::dice::ShootResult;
         use crate::sim::{tray_cast, CastEnd};
-        let c = CastInput { seq: 0, caster: "a".into(), spell: "bolt".into(), targets: vec!["b".into()], threshold: 1, ..Default::default() };
-        let run = |down: Option<usize>| {
+        let c = CastInput { seq: 0, caster: "a".into(), spell: "bolt".into(), targets: vec!["b".into()], base: 4, threshold: 1, ..Default::default() };
+        let run = |down: Option<usize>, face: u8| {
             let (mut st, mut statics) = indexed_caster();
             statics[0].name = "Mystic".into();
             if let Some(u) = down {
                 (st.alive[u], st.wounds[u]) = (0, Vec::new());
             }
-            let mut tray = Tray::supplied(Vec::new());
-            let end = tray_cast(&statics, &mut st, &c, &mut tray);
-            (end, st.casts[0], tray.all_lines().into_iter().map(|l| l.text).collect::<Vec<_>>())
+            let mut tray = Tray::supplied(vec![vec![face]]);
+            let mut shot = ShootResult::default();
+            let end = tray_cast(&statics, &mut st, 0, &c, Seams::default(), &mut tray, &mut shot);
+            (end, st.casts[0], tray.all_lines().len(), shot.rolls.len())
         };
-        assert_eq!(run(None), (None, 1, vec![]));
-        assert_eq!(run(Some(2)), (Some(CastEnd::Fizzled), 1, vec!["Mystic's bolt fizzles \u{2014} no target remains".to_string()]));
-        assert_eq!(run(Some(0)), (Some(CastEnd::Skipped), 1, vec![]));
+        assert_eq!(run(None, 6), (CastEnd::Hit, 1, 3, 1), "announce, needs, result line; one die");
+        assert_eq!(run(None, 1), (CastEnd::Failed, 1, 3, 1));
+        assert_eq!(run(Some(2), 6), (CastEnd::Fizzled, 1, 1, 0), "the fizzle line, no die");
+        assert_eq!(run(Some(0), 6), (CastEnd::Skipped, 1, 0, 0), "silent, no die");
     }
 
     /// CC-5a: casts offered on a supplied tray keep the expectation `cast_phase` off the tray path, whatever `seams.cast` says. The
