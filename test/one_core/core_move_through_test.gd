@@ -8,6 +8,7 @@ extends GdUnitTestSuite
 ## group is the one exercised. NML_ONE_CORE_SEEDS overrides 20. Not compared: the declaration line (the core's announce
 ## against the table's sight line, one per volley) and the shot rows the recorder gets.
 
+const SlicePin := preload("res://test/one_core/slice_pin.gd")
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const INCH := 0.0254
@@ -44,6 +45,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	SlicePin.release()
 	CoreSlice.path_override = ""
 	CoreSlice.reset_cache()
 	if FileAccess.file_exists(TMP):
@@ -329,6 +331,7 @@ func _decided(s: int, foe_rules: Array, far_rules: Variant) -> Dictionary:
 ## (Regeneration) leaves the whole activation to the table: the core is not called, the table strikes once, and the result is
 ## the table's own run. RED (the guard dropped from `takes_ai_activation`): the core takes it and strikes the Regeneration unit.
 func test_a_crossed_enemy_with_an_unsupported_rule_leaves_the_strike_to_the_table() -> void:
+	SlicePin.narrow()   # C-19: the case is about a unit the narrow slice refuses
 	var bad: Array = []
 	for s in 6:
 		var table := await _run(STRAFE_GUN, [], AiDecision.Action.RUSH, s, false, 20, ["Regeneration"])
@@ -342,6 +345,7 @@ func test_a_crossed_enemy_with_an_unsupported_rule_leaves_the_strike_to_the_tabl
 
 ## The conservative reading: a second crossed unit the strike would not even pick (it stands behind the nearest) still decides.
 func test_any_crossed_enemy_decides_not_only_the_one_struck() -> void:
+	SlicePin.narrow()   # C-19: the case is about a unit the narrow slice refuses
 	var door := await _decided(1, [], ["Regeneration"])
 	assert_bool(door["takes"]).override_failure_message("a crossed Regeneration unit behind the line was ignored").is_false()
 	assert_int(int(door["core"])).is_equal(0)
@@ -362,6 +366,7 @@ func test_crossed_plain_enemies_still_go_through_the_core() -> void:
 ## before the move, still holds the wiped-out unit and would strike it again. RED (`through_refused` ignored by `run_ai`): the
 ## core takes the volley's call and a second strike sentence stands.
 func test_a_refused_activation_is_not_resumed_by_the_core_after_the_table_struck() -> void:
+	SlicePin.narrow()   # C-19: the case is about a unit the narrow slice refuses
 	var units := _units(STRAFE_GUN, [], true, 3.0, 2, ["Regeneration"])   # the crossed unit: 2 models, wiped out by ten strafe shots
 	var att: GameUnit = units[0]
 	var tgt := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Tgt", "models": 5, "x_in": 15.0}), RIFLE.merged({"count": 5}))

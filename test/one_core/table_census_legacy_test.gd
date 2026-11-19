@@ -3,6 +3,7 @@ extends GdUnitTestSuite
 ## count) and changes nothing else; `why_not` names why the core door refuses a shooter and its target.
 ## Real: the main scene (inert + door cases), the table's own AI volley. Constructed: bare units, a stub table for `applies`.
 
+const SlicePin := preload("res://test/one_core/slice_pin.gd")
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
@@ -21,11 +22,13 @@ class StubMain extends RefCounted:
 
 
 func before_test() -> void:
+	SlicePin.narrow()   # C-19: this suite is about what the narrow slice refuses
 	CoreActivation.legacy.clear()
 	CoreActivation.legacy_sets.clear()
 
 
 func after_test() -> void:
+	SlicePin.release()
 	CoreActivation.legacy.clear()
 	CoreActivation.legacy_sets.clear()
 	if _main != null:
