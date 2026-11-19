@@ -77,7 +77,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   soak of 24 AI games and a 5-seed roster sweep every volley the engine took came out identical to
   the table's. Your own units' moves and shots are unchanged by this. Setting `NML_CORE_SLICE=allow`
   before starting the game brings the old, narrower slice back for this release;
-  `NML_ONE_CORE_ACTIVATION=0` still turns the engine off entirely.
+  `NML_ONE_CORE_ACTIVATION=0` still turns the engine off entirely. (#3043)
 
 ### Changed — activations
 - **Activations are explicit, and a move is checked by the rules engine.** Against the AI, and in an
