@@ -66,6 +66,31 @@ func test_a_six_inch_advance_through_a_ruin_is_not_dangerous_at_epoch_73() -> vo
 	assert_bool(_flag(_through(6.0), AiActRecorder.EPOCH_73_V36)).is_false()
 
 
+## C-19 lane s3 (gate-4 soak game 20, seed 21): a bent 6 inch Advance whose float32 route sums to 6.00005 inches. The
+## core reads it as 6 inches (`mv::step` UNSTABLE_SLACK_IN, 0.001 inch); the table's old 1e-6 m slack read it as over 6.
+const GAME_20_TRAIL := [Vector3(0.224251, 0.0, 0.476129), Vector3(0.0889, 0.0, 0.4445), Vector3(0.075802, 0.0, 0.441653)]
+
+
+## A ruin band under the long leg of the game-20 trail (x 0.14 .. 0.16 m).
+func _set_ruin_under_game_20() -> void:
+	_solo.terrain_type_at = func(p: Vector3) -> int:
+		return TerrainRules.TerrainType.RUINS if absf(p.x - 0.15) <= 0.01 else TerrainRules.TerrainType.NONE
+
+
+func test_a_float_noise_six_inch_advance_through_a_ruin_is_not_dangerous() -> void:
+	_set_ruin_under_game_20()
+	var walked_in := MovementPlanner.polyline_length(GAME_20_TRAIL) / IN2M
+	assert_float(walked_in).is_greater(6.0).is_less(6.001)   # over 6 inches by float noise only
+	assert_bool(_flag(GAME_20_TRAIL, AiActRecorder.EPOCH_73_V36)) \
+		.override_failure_message("a 6 inch Advance that float noise lengthens by %.6f inch is not over 6 inches" % (walked_in - 6.0)) \
+		.is_false()
+
+
+func test_a_move_past_the_slack_through_a_ruin_is_dangerous() -> void:
+	_set_ruin_band()
+	assert_bool(_flag(_through(6.0 + 2.0 * MovementPlanner.UNSTABLE_SLACK_IN), AiActRecorder.EPOCH_73_V36)).is_true()
+
+
 func test_a_dangerous_cell_flags_a_six_inch_advance_at_epoch_72() -> void:
 	_set_dangerous_band()
 	assert_bool(_flag(_through(6.0), AiActRecorder.EPOCH_72_PLAYTEST_RULES)).is_true()
