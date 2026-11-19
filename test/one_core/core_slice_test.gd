@@ -493,6 +493,43 @@ func test_deny_mode_takes_an_unmapped_upgrade_label() -> void:
 	CoreSlice.reset_cache()
 
 
+## Plan E step 2: the melee deny slice (`MELEE_DENY_PATH`, mode "deny", door "melee") sits beside the allow file.
+## A unit with AP(1) is refused by the allow file (`deny = false`, default) and taken by the deny file (`deny = true`),
+## as charger and as target; inert names and unmapped upgrade labels pass in deny mode; joined heroes stay refused
+## (`attached_heroes`), while a standalone Hero passes. Reading the melee deny file does not disturb the live shoot slice.
+## RED: `melee_refusals` ignores `deny` (reads MELEE_PATH) or `config()` rejects MELEE_DENY_PATH's door -> AP is refused.
+func test_the_melee_deny_slice_takes_ap_and_refuses_attachments() -> void:
+	var raw := FileAccess.get_file_as_string(CoreSlice.MELEE_DENY_PATH) if FileAccess.file_exists(CoreSlice.MELEE_DENY_PATH) else ""
+	var parsed: Variant = JSON.parse_string(raw) if not raw.is_empty() else null
+	var data: Dictionary = parsed if parsed is Dictionary else {}
+	assert_bool(parsed is Dictionary).override_failure_message("%s unreadable" % CoreSlice.MELEE_DENY_PATH).is_true()
+	assert_str(str(data.get("schema"))).is_equal(CoreSlice.SCHEMA)
+	assert_str(str(data.get("door"))).is_equal("melee")
+	assert_str(str(data.get("mode"))).is_equal("deny")
+	assert_bool(bool(data.get("unmapped_inert", false))).is_true()
+	assert_array((data.get("inert", {}) as Dictionary).keys()).contains(["Unique", "Army Standard Bearer", "Courage"])
+	assert_dict(data.get("deny_names", {}) as Dictionary).is_empty()
+	assert_array((data.get("groups", {}) as Dictionary).keys()).is_equal(["attached_heroes"])
+	var ap := _unit([], [["AP(1)"]])
+	assert_array(CoreSlice.melee_refusals(ap)).is_equal(["weapon_rule:AP"])
+	assert_array(CoreSlice.melee_refusals(ap, true, false)).is_equal(["weapon_rule:AP"])
+	assert_array(CoreSlice.melee_refusals(ap, false, true)).override_failure_message("melee deny must take AP charger").is_empty()
+	assert_array(CoreSlice.melee_refusals(ap, true, true)).override_failure_message("melee deny must take AP target").is_empty()
+	assert_array(CoreSlice.melee_refusals(_unit(["Unique", "Army Standard Bearer", "Courage", "Some Upgrade Label"], [["AP(1)"]]), false, true)).is_empty()
+	assert_array(CoreSlice.melee_refusals(_unit(["Hero"], [["AP(1)"]]), false, true)).override_failure_message("standalone Hero is taken").is_empty()
+	var host := _unit(["Tough(3)"], [["AP(1)"]])
+	var hero := _unit(["Hero"], [])
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	assert_array(CoreSlice.melee_refusals(host, false, true)).is_equal(["attached"])
+	assert_array(CoreSlice.melee_refusals(hero, true, true)).is_equal(["attached"])
+	OS.set_environment("NML_CORE_SLICE", "allow")
+	CoreSlice.reset_cache()
+	assert_array(CoreSlice.melee_refusals(ap, false, true)).is_empty()
+	assert_str(str(CoreSlice.config()["mode"])).is_equal("allow")
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+
+
 ## `applies` reads only these two members (the census test's stub).
 class _StubMain extends RefCounted:
 	var solo_ai_slots := {1: true}

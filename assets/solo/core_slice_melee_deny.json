@@ -1,0 +1,22 @@
+{
+  "schema": "nml-core-slice-v1",
+  "door": "melee",
+  "mode": "deny",
+  "note": "Plan E (melee deny by evidence): the melee door's deny slice, read beside core_slice_melee.json by the shadow and probes while the allow file stays the live default (until step 20 flips it). A unit carrying a listed primitive or attachment stays on the table; every other rule the registry automates goes to the core. Unknown or unautomated rules stay refused unless inert or unmapped_inert; the list only shrinks after the gate.",
+  "unmapped_inert": true,
+  "unmapped_inert_why": "A rule name no rules map knows for the unit's system and faction (an upgrade's own label such as Wandering Mystic, War Paint, Combat Shield): the registry gives neither side anything to read, and the rules the upgrade grants are carried and checked on their own.",
+  "inert": {
+    "Unique": "A list-building restriction only (army book); no effect on a melee.",
+    "Army Standard Bearer": "An upgrade's own label; the rules it grants (Fear(2)) are carried and checked on their own in melee.",
+    "Courage": "The bare base the Courage Aura expansion stamps; no map entry on either side - the +1 morale in melee rides the aura's own Banner entry."
+  },
+  "deny_names": {},
+  "groups": {
+    "attached_heroes": {
+      "primitives": [],
+      "kind": "measured",
+      "why": "ME-HERO probe (19.11., after #3048): remaining joined-hero melee differences on both seats (1 in separation guard / moves back vs stays put, Hero tests on behalf of host line, Hero fights on alone line, pile-in line). Listing this group refuses attachments in deny mode.",
+      "leaves_with": "the joined-hero melee fixes (lane hlines) and a 16/16 equal ME-HERO re-probe"
+    }
+  }
+}
