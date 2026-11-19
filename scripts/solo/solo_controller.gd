@@ -8908,9 +8908,10 @@ func _dangerous_trail_flags(trails: Array, radii_m: Array = []) -> Array:
 				break
 		# Rules 3.6 (EPOCH_73_V36): Unstable ruins — a model whose OWN move is over 6 inches and whose
 		# route goes into or through a ruin takes the same unit-level test. Flying is filtered upstream.
-		# The epsilon keeps a base-exact 6" Advance (float32 Vector3 geometry) on the safe side.
-		if not hit and unstable_epoch \
-				and MovementPlanner.polyline_length(leg) > 6.0 * INCHES_TO_METERS + 1e-6:
+		# The slack keeps a 6" Advance (float32 Vector3 geometry, summed over a bent route) on the safe side; it is the
+		# core's own (`mv::step` UNSTABLE_SLACK_IN). C-19 s3: 1e-6 m read a 6.00005" Advance as over 6".
+		if not hit and unstable_epoch and MovementPlanner.polyline_length(leg) \
+				> (MovementPlanner.UNSTABLE_MOVE_IN + MovementPlanner.UNSTABLE_SLACK_IN) * INCHES_TO_METERS:
 			for i in range(1, leg.size()):
 				if _path_crosses_terrain(leg[i - 1], leg[i], TerrainRules.PathCheck.UNSTABLE, r):
 					hit = true
