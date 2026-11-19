@@ -63,10 +63,8 @@
       "tree": "block_chance_from charge_score classify impact_ev melee_ev ravage_ev shoot_ev"
     },
     "scripts/solo/ai_planner.gd": {
-      "dead": "_holder_or_unactivated",
       "erlkoenig": "_advance_label _centre _describe _enemy_keys _intent _menu_holders_on _name_of _nearest_enemy _tail_cap_for brain_breadth_stamp brain_knob_stamp close_margin depth_discount horizon imagined_round_end_enabled intent_line leaf_opener_stamp menu_advance_k_on menu_wide_on playout_rich playout_rush_k_on points_knob_stamp seat_mode set_search_budget table_fidelity_stamp top_k_default tree_knobs",
       "gd_search": "_advance_shoots _below_half _best_charge _best_shoot _blend_score _can_activate _can_shoot_at _clamp_to_band _cross_round _end_threat _gap_m _imagined_round_end _marker_holder _node_dump_stream _order_mode _other_player _plain_candidates _playout_pick _playout_round_tail _playout_sig _policy_candidates _policy_step _policy_step_net _record_node _reorder_within_unit _round_start_refresh _safe_advance _second_wave _unactivated candidates candidates_wide full_playout menu_covers menu_covers_in plan plan_with_rollout rollout_boundaries take_last_leaf",
-      "test_only": "full_playout_seeded rollout",
       "tools_only": "close close_node_dump"
     },
     "scripts/solo/ai_position.gd": {
@@ -81,7 +79,6 @@
       "erlkoenig": "_attached_hero_rules _centre_of _granted_rules _model_kit _plain_vec3 _plain_vec3s _stamp_hero_aura _unit_profile _vec3_of _vec3s_of capture cast_phase_enabled core_enabled core_wanted dist_in edge_gap_in hero_fold_enabled mask_secret_for spacing_enabled state_from_plain state_to_plain unit_profile_dyn",
       "gd_search": "_append_attached_models _append_attached_positions _apply_cast_effect _apply_expected_wounds _below_half _best_spell_target _cast_origins _cast_phase _cast_token_pool _ctx_of _draw_cast_tokens _engage_gap_in _expected_melee_morale _expected_remaining _expected_shooting_morale _fill_vocab _fold_dist_in _fold_hero_profiles _held_for _load_vocab _los_clear _morale_dither _morale_fails_expected _parse_rule _pick_cast _plan_cast_tokens _profiles_of _rule_pairs _scourge_phantom_ev _spacing_fraction _spell_damage_ev_of _spell_ev_from _unit_group _wounds_left apply_carry_step board_rows can_hold_marker clone_state control_gap_in melee_threat playout_seize prof_mark prof_t0 profile_enabled reply_threat resolve resolve_stochastic sees spell_ev_of",
       "live_helper": "apply_destroy_step escort_winner extract_winner marker_point_in mission_winner role_winner sabotage_winner vp_end_bonus vp_round_add vp_score_end vp_score_round",
-      "test_only": "drop_carried",
       "tools_only": "_corridor_forced_through_plain _crosses_difficult_plain _melee_shroud_charge_in_plain _plain_centre board_row_indices charge_illegal_plain profile_reset reset_round_mods"
     },
     "scripts/solo/solo_sim.gd": {

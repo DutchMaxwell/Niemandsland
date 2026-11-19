@@ -441,18 +441,6 @@ static func apply_carry_step(state: Dictionary, markers: Array, owners: Array) -
 				(objs[i] as Dictionary)["pos"] = ps[0]
 
 
-## The carrier's own marker(s) return to the table at `drop_pos` (R3/R4: a
-## unit may carry more than one, the book states no limit — both drop at the
-## SAME point, one call per drop event).
-static func drop_carried(markers: Array, objectives: Array, unit_key: String, drop_pos: Vector3) -> void:
-	for i in range(markers.size()):
-		var mk: Dictionary = markers[i]
-		if bool(mk.get("carry", false)) and String(mk.get("carried_by", "")) == unit_key:
-			mk["carried_by"] = ""
-			if i < objectives.size():
-				(objectives[i] as Dictionary)["pos"] = drop_pos
-
-
 ## HEAD_QUEUE #12/#13 (rebuilt 23.08.): ONE marker measure for referee AND
 ## planner. The nearest BASE EDGE gap in inches, measured HORIZONTALLY — the
 ## same way MoveIntent.distance_inches measures for the real check. A 3D
