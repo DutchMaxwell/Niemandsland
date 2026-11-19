@@ -943,7 +943,13 @@ pub const EPOCH_89_SHARED_BEARERS: u32 = 89;
 /// `_solo_battleborn_recovery`, `_solo_mirror_shaken`). Before 90 the hero drew its own die and the pair could split.
 /// Records stamped 89 or below replay byte-exact. The recorder mirror (`act_recorder.gd`) stamps 90 in the same change.
 pub const EPOCH_90_JOINED_ONE_RECOVERY: u32 = 90;
-pub const CURRENT_RULES_EPOCH: u32 = 90;
+/// A melee fatigues the unit's joined heroes with it (T-JOINED-HERO-FATIGUE, maintainer ruling 19.11.: a joined hero is
+/// part of the unit): the core marks the host Fatigued at the charge and at the strike-back, and from 91 it marks every
+/// attached hero too, as the table's `_solo_set_fatigued` does. Before 91 only the host index was set, so a joined hero
+/// kept striking at full Quality while the table's hero struck on unmodified 6s. Records stamped 90 or below replay
+/// byte-exact. The recorder mirror (`act_recorder.gd`) stamps 91 in the same change.
+pub const EPOCH_91_JOINED_HERO_FATIGUE: u32 = 91;
+pub const CURRENT_RULES_EPOCH: u32 = 91;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2263,7 +2269,7 @@ mod tests {
         EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT, EPOCH_79_EV_MOVED_ROUND, EPOCH_80_ROLLOUT_CUMBERSOME,
         EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME, EPOCH_83_LONE_HERO_TARGET, EPOCH_84_IGNORE_GROUPS, EPOCH_85_INDIRECT_GATE,
         EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_87_WALKED_DANGEROUS, EPOCH_88_SPLIT_LONE_HERO, EPOCH_89_SHARED_BEARERS,
-        EPOCH_90_JOINED_ONE_RECOVERY,
+        EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_91_JOINED_HERO_FATIGUE,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2284,7 +2290,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 90, "the live epoch is EPOCH_90_JOINED_ONE_RECOVERY");
+        assert_eq!(CURRENT_RULES_EPOCH, 91, "the live epoch is EPOCH_91_JOINED_HERO_FATIGUE");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2294,11 +2300,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":90}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":91}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 90"
+            "a fresh play_game() now stamps the bumped epoch, 91"
         );
     }
 
@@ -2440,6 +2446,14 @@ mod tests {
         assert!(rule_on(EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_90_JOINED_ONE_RECOVERY), "a record at 90 rolls once per pair");
         assert!(rule_on(EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_89_SHARED_BEARERS), "90 keeps the shared bearers on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_90_JOINED_ONE_RECOVERY), "a fresh play_game() stamps it on");
+    }
+
+    #[test]
+    fn epoch_91_gate_is_closed_at_epoch_90_and_open_from_91() {
+        assert!(!rule_on(EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_91_JOINED_HERO_FATIGUE), "a record at 90 tires the host only");
+        assert!(rule_on(EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_91_JOINED_HERO_FATIGUE), "a record at 91 tires the joined heroes too");
+        assert!(rule_on(EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_90_JOINED_ONE_RECOVERY), "91 keeps the one-recovery joined pair on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_91_JOINED_HERO_FATIGUE), "a fresh play_game() stamps it on");
     }
 
     #[test]
