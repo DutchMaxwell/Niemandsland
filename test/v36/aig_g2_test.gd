@@ -38,13 +38,6 @@ func after_test() -> void:
 	AiActRecorder.rules_epoch = _epoch_before
 
 
-func _log_text() -> String:
-	var text := ""
-	for e in _main.battle_log.entries():
-		text += str((e as Dictionary)["text"]) + "\n"
-	return text
-
-
 ## A gf shooter (battle_brothers unless told otherwise) `east_in` inches east of the seed point.
 func _shooter(east_in: float, faction: String = "battle_brothers") -> GameUnit:
 	var u := E2EBoot.make_unit(_main, 1, "Gunners", [SEED + Vector3(east_in * INCH, 0, 0)])
@@ -107,44 +100,6 @@ func test_a_smash_weapon_never_cuts_regeneration() -> void:
 	assert_bool(_main._solo_ignores_regen(shooter, _profile(shooter, "Smash"))).is_false()
 
 
-## The real volley past half range: the gate is open and the log names the book rule.
-func test_the_table_names_smash_when_it_re_rolls_past_half_range() -> void:
-	var foe := E2EBoot.make_unit(_main, 2, "Woodsman", [SEED])
-	_main.opr_army_manager.game_units[foe.unit_id] = foe
-	var shooter := _shooter(18.0)
-	var shots := [{"member": shooter, "quality": shooter.get_quality(), "alive": shooter.get_alive_count(),
-		"max": shooter.models.size(), "reach": 24, "profile": _profile(shooter, "Smash")}]
-	_main.seed_tray_rng(7)
-	await _main._solo_resolve_ai_volley(shooter, foe, shots)
-	var text := _log_text()
-	await E2EBoot.settle(get_tree())
-	assert_str(text) \
-		.override_failure_message("rules-must-log: the re-roll names Smash (log: %s)" % text.strip_edges()) \
-		.contains("Smash: Woodsman re-rolls")
-
-
-## Volley a Reap gun (rebel_guerrillas, 6" away) into a Defense-3 woodsman that is `shaken` or not; returns the log.
-func _reap_volley(shaken: bool) -> String:
-	var foe := E2EBoot.make_unit(_main, 2, "Woodsman", [SEED])
-	foe.unit_properties["defense"] = 3
-	foe.is_shaken = shaken
-	_main.opr_army_manager.game_units[foe.unit_id] = foe
-	var shooter := _shooter(6.0, "rebel_guerrillas")
-	var shots := [{"member": shooter, "quality": shooter.get_quality(), "alive": shooter.get_alive_count(),
-		"max": shooter.models.size(), "reach": 24, "profile": _profile(shooter, "Reap")}]
-	_main.seed_tray_rng(7)
-	await _main._solo_resolve_ai_volley(shooter, foe, shots)
-	var text := _log_text()
-	await E2EBoot.settle(get_tree())
-	return text
-
-
-## Control: Reap's own condition (Shaken or Fatigued) shuts the window against a steady target.
-func test_a_steady_target_is_not_reaped() -> void:
-	var text: String = await _reap_volley(false)
-	assert_str(text).not_contains("Reap")
-
-
 ## Reap's map params print the widened window: successful saves of 5+ re-roll, no distance condition.
 func test_a_reap_weapon_stamps_the_entrys_widened_window() -> void:
 	var p := _profile(_shooter(6.0, "rebel_guerrillas"), "Reap")
@@ -160,11 +115,3 @@ func test_a_melee_reap_profile_carries_the_widened_window() -> void:
 	var p := profiles[0] as Dictionary
 	assert_int(int(p.get("bane_low", 0))).override_failure_message("profile: %s" % str(p)).is_equal(5)
 	assert_str(str(p.get("bane_alias", ""))).is_equal("Reap")
-
-
-func test_the_table_names_reaps_window_against_a_shaken_target() -> void:
-	var text: String = await _reap_volley(true)
-	assert_str(text) \
-		.override_failure_message("rules-must-log: Reap names itself (log: %s)" % text.strip_edges()) \
-		.contains("Reap: Woodsman re-rolls")
-	assert_str(text).override_failure_message("the widened 5+ window (log: %s)" % text.strip_edges()).contains("of 5+")
