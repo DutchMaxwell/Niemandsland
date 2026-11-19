@@ -3,7 +3,7 @@
 //! Hazardous self-wounds, and Regenerative Strength pre-strike landing.
 
 use super::*;
-use crate::acts::CURRENT_RULES_EPOCH;
+use crate::acts::{CURRENT_RULES_EPOCH, EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_92_MELEE_CAUSES};
 use crate::state::Kit;
 
 fn two_unit_melee(att_models: usize, def_models: usize, tough: i64) -> (Vec<UnitStatic>, State) {
@@ -56,7 +56,11 @@ fn two_unit_melee(att_models: usize, def_models: usize, tough: i64) -> (Vec<Unit
 }
 
 fn exact_seams() -> Seams {
-    Seams { rules_epoch: CURRENT_RULES_EPOCH, tray_exact: true, ..Seams::default() }
+    seams_at(CURRENT_RULES_EPOCH)
+}
+
+fn seams_at(rules_epoch: u32) -> Seams {
+    Seams { rules_epoch, tray_exact: true, ..Seams::default() }
 }
 
 #[test]
@@ -280,51 +284,138 @@ fn regenerative_strength_lands_before_strikes_and_emits_lines() {
     assert!(lines_f.iter().any(|l| l == "Regenerative Strength: Att is Fatigued - no token dice"), "lines_f: {lines_f:?}");
 }
 
-// PENDING_EPOCH_MELEE_GMC1: two table-parity details move SEEDED outcomes, so they are step-path only until the lead
-// assigns the rules epoch. These two tests pin that a seeded tray still lands the old way.
+// DS-GMC1 (`EPOCH_92_MELEE_CAUSES`): two table-parity details move SEEDED outcomes, so they are gated by the rules epoch
+// on EVERY path (seeded and step), not by the tray kind. Below 92 both trays land the old way; from 92 both land the
+// table's way.
+
+/// One Regenerative Strength strike phase on a seeded tray: (wounds the Def lost in all, wounds the token dice landed,
+/// the Retaliate lash-back hit count, the Def's and the Att's wounds after - the lash-back lands on the Att).
+fn regen_retaliate_seeded(seed: i64, epoch: u32) -> (i64, i64, i64, Vec<i64>, Vec<i64>) {
+    let (mut statics, mut st) = two_unit_melee(3, 6, 3);
+    statics[0].growth = vec![GrowthRule { name: "Regenerative Strength".into(), ..Default::default() }];
+    statics[0].ctx.growth_wounds_not_attacks = true;
+    statics[1].ctx.retaliate_hits_per_wound = 1;
+    st.growth_markers[0] = 6;
+    let mut tray = Tray::seeded(seed);
+    let mut shot = ShootResult::default();
+    strike_phase(&statics, &mut st, 0, 1, true, 7.0, seams_at(epoch), &mut tray, &mut shot, StrikeSet::All, Cover::Recorded(None));
+    let lost = 18 - st.wounds[1].iter().sum::<i64>();
+    let token: i64 = shot.log.iter().find_map(|l| {
+        let rest = l.strip_prefix("Regenerative Strength: Att rolls 6 dice, ")?;
+        rest.split(' ').next()?.parse().ok()
+    }).unwrap_or(0);
+    let hits: i64 = shot.log.iter().find_map(|l| {
+        let rest = l.strip_prefix("Retaliate: Def lashes back — ")?;
+        rest.split(' ').next()?.parse().ok()
+    }).unwrap_or(0);
+    (lost, token, hits, st.wounds[1].clone(), st.wounds[0].clone())
+}
 
 #[test]
-fn a_seeded_tray_keeps_the_token_wounds_in_the_retaliate_pool() {
+fn a_seeded_tray_keeps_the_token_wounds_in_the_retaliate_pool_below_92() {
     let mut checked = 0;
     for seed in 1..=24 {
-        let (mut statics, mut st) = two_unit_melee(3, 6, 3);
-        statics[0].growth = vec![GrowthRule { name: "Regenerative Strength".into(), ..Default::default() }];
-        statics[0].ctx.growth_wounds_not_attacks = true;
-        statics[1].ctx.retaliate_hits_per_wound = 1;
-        st.growth_markers[0] = 6;
-        let mut tray = Tray::seeded(seed);
-        let mut shot = ShootResult::default();
-        strike_phase(&statics, &mut st, 0, 1, true, 7.0, exact_seams(), &mut tray, &mut shot, StrikeSet::All, Cover::Recorded(None));
-        let lost = 18 - st.wounds[1].iter().sum::<i64>();
-        let hits: i64 = shot.log.iter().find_map(|l| {
-            let rest = l.strip_prefix("Retaliate: Def lashes back — ")?;
-            rest.split(' ').next()?.parse().ok()
-        }).unwrap_or(0);
-        assert_eq!(hits, lost, "seed {seed}: the lash-back counts every wound taken, token wounds included: {:?}", shot.log);
+        let (lost, _, hits, _, _) = regen_retaliate_seeded(seed, EPOCH_91_JOINED_HERO_FATIGUE);
+        assert_eq!(hits, lost, "seed {seed}: at 91 the lash-back counts every wound taken, token wounds included");
         checked += i64::from(lost > 0);
     }
     assert!(checked >= 20, "the fixture must wound in most seeds, got {checked}");
 }
 
 #[test]
-fn a_seeded_tray_lands_the_self_destruct_hits_slot_zero_first() {
+fn a_seeded_tray_lands_the_token_wounds_before_the_strikes_from_92() {
+    let (mut checked, mut moved) = (0, 0);
+    for seed in 1..=24 {
+        let (lost, token, hits, def_wounds, att_wounds) = regen_retaliate_seeded(seed, EPOCH_92_MELEE_CAUSES);
+        assert_eq!(hits, lost - token, "seed {seed}: from 92 the lash-back pool leaves the token wounds out");
+        checked += i64::from(token > 0);
+        let (_, _, _, old_def, old_att) = regen_retaliate_seeded(seed, EPOCH_91_JOINED_HERO_FATIGUE);
+        moved += i64::from((old_def, old_att) != (def_wounds, att_wounds));
+    }
+    assert!(checked >= 20, "the fixture must roll token wounds in most seeds, got {checked}");
+    assert!(moved >= 1, "the epoch must move a seeded outcome (the smaller lash-back wounds the Att less), moved {moved}");
+}
+
+#[test]
+fn a_supplied_tray_below_92_keeps_the_token_wounds_in_the_pool_too() {
+    // The old gate was the tray kind: a supplied (step) tray took the new landing at ANY epoch. The epoch is the gate now.
+    let run = |epoch: u32| {
+        let (mut statics, mut st) = two_unit_melee(3, 5, 1);
+        statics[0].growth = vec![GrowthRule { name: "Regenerative Strength".into(), ..Default::default() }];
+        statics[0].ctx.growth_wounds_not_attacks = true;
+        st.growth_markers[0] = 2;
+        let mut tray = Tray::supplied(vec![vec![6, 5], vec![5, 5, 1, 1, 1, 1], vec![1, 1], vec![1, 1, 1, 1, 1, 1]]);
+        let mut shot = ShootResult::default();
+        strike_phase(&statics, &mut st, 0, 1, true, 7.0, seams_at(epoch), &mut tray, &mut shot, StrikeSet::All, Cover::Recorded(None));
+        tray.all_lines().into_iter().map(|l| l.text).collect::<Vec<String>>()
+    };
+    let at_92 = run(EPOCH_92_MELEE_CAUSES);
+    assert!(at_92.iter().any(|l| l == "Def takes 2 wounds (3/5)"), "at 92 the token wounds land before the strikes: {at_92:?}");
+    let at_91 = run(EPOCH_91_JOINED_HERO_FATIGUE);
+    assert!(!at_91.iter().any(|l| l == "Def takes 2 wounds (3/5)"), "at 91 a supplied tray keeps the pooled landing: {at_91:?}");
+}
+
+/// The Self-Destruct survival half on a seeded tray: (wounds lost, the Def's wounds after - a dead model leaves the list),
+/// for the fixture where its LAST model is the wounded Tough one (1 of 3 left) and the two Att models detonate for 6 hits.
+fn self_destruct_seeded(seed: i64, epoch: u32) -> (i64, Vec<i64>) {
+    let (mut statics, mut st) = two_unit_melee(2, 4, 3);
+    statics[0].ctx.self_destruct_rating = 3;
+    st.kits = vec![
+        Rc::new(vec![Kit { weapons: vec![0], equipment: 0, wounds_max: 3 }; 2]),
+        Rc::new(vec![Kit { weapons: vec![0], equipment: 0, wounds_max: 3 }; 4]),
+    ];
+    st.wounds[1] = vec![3, 3, 3, 1]; // the wounded Tough model sits last: the table's order takes it first
+    let mut tray = Tray::seeded(seed);
+    let mut shot = ShootResult::default();
+    self_destruct_post_melee(&statics, &mut st, 0, 1, seams_at(epoch), &mut tray, &mut shot);
+    (10 - st.wounds[1].iter().sum::<i64>(), st.wounds[1].clone())
+}
+
+#[test]
+fn a_seeded_tray_lands_the_self_destruct_hits_slot_zero_first_below_92() {
     let mut checked = 0;
     for seed in 1..=40 {
+        let (lost, wounds) = self_destruct_seeded(seed, EPOCH_91_JOINED_HERO_FATIGUE);
+        if (1..=2).contains(&lost) {
+            assert_eq!(wounds, vec![3 - lost, 3, 3, 1], "seed {seed}: at 91 slot 0 takes the hits first on a seeded tray");
+            checked += 1;
+        }
+    }
+    assert!(checked >= 5, "the fixture must land 1-2 wounds in several seeds, got {checked}");
+}
+
+#[test]
+fn a_seeded_tray_lands_the_self_destruct_hits_on_the_wounded_model_first_from_92() {
+    let mut checked = 0;
+    for seed in 1..=40 {
+        let (lost, wounds) = self_destruct_seeded(seed, EPOCH_92_MELEE_CAUSES);
+        // The wounded model (1 wound left) dies first and leaves the list; a second wound goes to slot 0.
+        match lost {
+            1 => assert_eq!(wounds, vec![3, 3, 3], "seed {seed}: from 92 the wounded Tough model takes the first wound"),
+            2 => assert_eq!(wounds, vec![2, 3, 3], "seed {seed}: from 92 the wounded model dies, then slot 0"),
+            _ => continue,
+        }
+        checked += 1;
+    }
+    assert!(checked >= 5, "the fixture must land 1-2 wounds in several seeds, got {checked}");
+}
+
+#[test]
+fn a_supplied_tray_below_92_lands_the_self_destruct_hits_slot_zero_first_too() {
+    // Same epoch gate on the step path: 91 keeps the old order on a supplied tray, 92 takes the wounded model first.
+    let run = |epoch: u32| {
         let (mut statics, mut st) = two_unit_melee(2, 4, 3);
         statics[0].ctx.self_destruct_rating = 3;
         st.kits = vec![
             Rc::new(vec![Kit { weapons: vec![0], equipment: 0, wounds_max: 3 }; 2]),
             Rc::new(vec![Kit { weapons: vec![0], equipment: 0, wounds_max: 3 }; 4]),
         ];
-        st.wounds[1] = vec![3, 3, 3, 1]; // the wounded Tough model sits last: the table's order takes it first
-        let mut tray = Tray::seeded(seed);
+        st.wounds[1] = vec![3, 3, 3, 1];
+        let mut tray = Tray::supplied(vec![vec![6, 5, 5, 5, 5, 1]]); // 6 hits: one fails its save
         let mut shot = ShootResult::default();
-        self_destruct_post_melee(&statics, &mut st, 0, 1, exact_seams(), &mut tray, &mut shot);
-        let lost = 10 - st.wounds[1].iter().sum::<i64>();
-        if (1..=2).contains(&lost) {
-            assert_eq!(st.wounds[1], vec![3 - lost, 3, 3, 1], "seed {seed}: slot 0 takes the hits first on a seeded tray");
-            checked += 1;
-        }
-    }
-    assert!(checked >= 5, "the fixture must land 1-2 wounds in several seeds, got {checked}");
+        self_destruct_post_melee(&statics, &mut st, 0, 1, seams_at(epoch), &mut tray, &mut shot);
+        st.wounds[1].clone()
+    };
+    assert_eq!(run(EPOCH_92_MELEE_CAUSES), vec![3, 3, 3], "from 92 the wounded model takes the wound and dies");
+    assert_eq!(run(EPOCH_91_JOINED_HERO_FATIGUE), vec![2, 3, 3, 1], "at 91 a supplied tray keeps slot 0 first");
 }

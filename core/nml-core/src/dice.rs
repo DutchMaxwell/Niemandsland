@@ -3101,7 +3101,7 @@ pub fn resolve_melee_leg_wipe(
             // `on_charge`/`vs_tough_ge` gates fire correctly here.
             if cond_ap_dice {
                 let cap = CondApTarget::of(def, p.range as f64);
-                let use_target_state = rule_on(sh.att.rules_epoch, crate::acts::PENDING_EPOCH_MELEE_GMC3);
+                let use_target_state = rule_on(sh.att.rules_epoch, crate::acts::EPOCH_92_MELEE_CAUSES);
                 for c in &p.cond_ap {
                     let d = if use_target_state {
                         conditional_ap_bonus_vs(c, &cap, charging, charge_from_in, true)
