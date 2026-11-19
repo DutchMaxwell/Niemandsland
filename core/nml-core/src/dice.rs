@@ -3055,18 +3055,27 @@ pub fn resolve_melee_leg_wipe(
             // EV call, which is structurally stuck at `false`), so
             // `on_charge`/`vs_tough_ge` gates fire correctly here.
             if cond_ap_dice {
+                let cap = CondApTarget::of(def, p.range as f64);
+                let use_target_state = rule_on(sh.att.rules_epoch, crate::acts::PENDING_EPOCH_MELEE_GMC3);
                 for c in &p.cond_ap {
-                    let d = conditional_ap_bonus(c, def.tough.max(1), def.defense, charging, charge_from_in, true);
+                    let d = if use_target_state {
+                        conditional_ap_bonus_vs(c, &cap, charging, charge_from_in, true)
+                    } else {
+                        conditional_ap_bonus(c, def.tough.max(1), def.defense, charging, charge_from_in, true)
+                    };
                     ap += d;
                     // Rules-must-log, the melee half: only the wave-3 NAMED
                     // forms log; unnamed specs stay silent (old replays).
                     // SHO-20: the 3.6 charge leg names the charge.
                     if c.gate == "hold_or_charge" {
                         if d > 0 {
-                            out.log.push(format!("Slayer: AP(+{}) because it charged", d));
+                            let line = format!("Slayer: AP(+{}) because it charged", d);
+                            out.log.push(line.clone());
+                            say_rule(tray, "slayer", sh.att.side, || line);
                         }
                     } else if d > 0 && !c.name.is_empty() {
-                        out.log.push(format!("{}: AP(+{}) on {}'s strike", c.name, d, sh.owner));
+                        out.log.push(format!("{}: AP(+{}) on {}'s strike{}", c.name, d, sh.owner, cond_ap_why(&c.condition)));
+                        say_rule(tray, "cond_ap", sh.att.side, || format!("{}: AP(+{}) against {def_owner}{}", c.name, d, cond_ap_why(&c.condition)));
                     }
                 }
                 // Wave 2 — the Slayer mark and Piercing Assault on their
@@ -3075,7 +3084,9 @@ pub fn resolve_melee_leg_wipe(
                     let d = conditional_ap_bonus(&slayer_grant_cond(), def.tough.max(1), def.defense, charging, 0.0, true);
                     ap += d;
                     if d > 0 && sh.att.v36_rules {
-                        out.log.push(format!("Slayer: AP(+{}) because it charged", d));
+                        let line = format!("Slayer: AP(+{}) because it charged", d);
+                        out.log.push(line.clone());
+                        say_rule(tray, "slayer", sh.att.side, || line);
                     }
                 }
                 if sh.att.pierce_assault_grant {
