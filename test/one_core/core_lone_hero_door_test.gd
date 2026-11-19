@@ -3,8 +3,9 @@ extends GdUnitTestSuite
 ## From EPOCH_83_LONE_HERO_TARGET the core shoots it as the hero and the step path says the table's Hero line and "fires at <host>"
 ## (sim.rs); below 83 the core would shoot the dead host, so `CoreSlice` keeps such a target on the table. The same seed through the
 ## table and through the core must roll the same dice and read the same up to the hero's saves. Known differences after that, NOT
-## asserted (not narration only, follow-up in the PR): the core names the hero where the table names the host in "fires <weapon> at",
-## the defense and morale labels and the wound line, and lacks the table's half-strength trigger line and "Hero X tests on behalf of".
+## asserted (follow-up, lane dlines): the core names the hero where the table names the host in "fires <weapon> at", the defense and
+## morale labels and the wound line, and lacks the table's half-strength trigger line and "Hero X tests on behalf of". Those two
+## missing lines keep the target on the table in the shipped slice (`CoreSlice.lone_hero_lines_done`, false); this suite bypasses it.
 ## Real: the main scene, NmlCore, the AI body's volley call (`_run_ai_shooting`) on a captured board.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -31,10 +32,12 @@ func before_test() -> void:
 	_main.opr_army_manager.current_round = 1
 	_main._solo_batch = true
 	CoreActivation._env = 1
+	CoreSlice.lone_hero_lines_done = true   # the slice keeps such a target on the table until the table's other lines are done: bypassed here only
 	RulesRegistry.reset_cache()
 
 
 func after_test() -> void:
+	CoreSlice.lone_hero_lines_done = false
 	AiActRecorder.rules_epoch = _epoch_before
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
