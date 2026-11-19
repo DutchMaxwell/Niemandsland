@@ -311,18 +311,19 @@ fn cast_break(statics: &[UnitStatic], state: &State, left: &mut [i64], c: &CastI
     None
 }
 
-/// CC-6a: why the core cannot resolve a damage spell's hits exactly yet, `None` when it can. Plain only: every weapon rule of the spell
-/// is an AP rating (the facets are CC-6b..7b's), and every target is a plain one: no rule or record that moves its save or says a line
-/// the core lacks (a live modifier or grant on its chain, growth markers, Regeneration, Shielded, Guarded, Fortified, Armor).
+/// CC-6a/6b: why the core cannot resolve a damage spell's hits exactly yet, `None` when it can. Weapon rules: AP and Deadly
+/// (Surge, Blast, Hazardous, Bane and the rest are CC-7a..7b's). Target: no rule or record that moves its save or says a line the
+/// core lacks (a live modifier or grant on its chain, growth markers, Shielded, Guarded, Fortified, Armor); Regeneration and its
+/// family (Resistance, Self-Repair, ...) are resolved at the spell threshold (CC-6b).
 fn damage_break(statics: &[UnitStatic], state: &State, c: &CastInput, spell: &crate::rules::Spell) -> Option<String> {
-    if let Some(rule) = spell.weapon_rules.iter().find(|r| r.split('(').next().is_none_or(|n| n.trim() != "AP")) {
+    if let Some(rule) = spell.weapon_rules.iter().find(|r| r.split('(').next().is_none_or(|n| !matches!(n.trim(), "AP" | "Deadly"))) {
         return Some(format!("the core does not resolve the {rule} rule of {} yet", c.spell));
     }
     let plain = |t: usize| {
         let d = &statics[state.roster.profile[t]].ctx;
         let armor = state.profiles.list.get(state.roster.profile[t]).is_some_and(|p| crate::rules::has_special_rule(&p.special_rules, "Armor"));
         let chain_clear = [Some(t), state.attached_to[t]].into_iter().flatten().all(|u| state.buffs[u].is_empty());
-        chain_clear && state.growth_markers[t] <= 0 && !(armor || d.regeneration || d.shielded || d.guarded || d.fortified)
+        chain_clear && state.growth_markers[t] <= 0 && !(armor || d.shielded || d.guarded || d.fortified)
     };
     let t = c.targets.iter().filter_map(|k| state.roster.index.get(k.as_str()).copied()).find(|&t| !plain(t))?;
     Some(format!("{} meets {} with a rule the core does not say for spell damage yet", statics[state.roster.profile[t]].name, c.spell))
@@ -1799,7 +1800,8 @@ mod tests {
         let mut cases: Vec<(&str, State, Vec<UnitStatic>, String)> = Vec::new();
         for rule in ["Blast(3)", "Deadly(3)", "Hazardous", "Surge", "Bane", "AP"] {
             let (st, statics) = bolt_board(6, &["AP(1)", rule], 6);
-            cases.push((rule, st, statics, if rule == "AP" { String::new() } else { format!("the core does not resolve the {rule} rule of Test Bolt yet") }));
+            let ok = matches!(rule, "AP" | "Deadly(3)");
+            cases.push((rule, st, statics, if ok { String::new() } else { format!("the core does not resolve the {rule} rule of Test Bolt yet") }));
         }
         let ward = LiveMod { move_mod: 0, hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 1, defense_mod: 0, grants_rule: Rc::from(""), scope: Rc::from("melee"), attackers: false, once: false, name: Rc::from("Shield Wall") };
         let host = |mut st: State, mut statics: Vec<UnitStatic>, how: &str| {
@@ -1816,7 +1818,7 @@ mod tests {
         };
         for how in ["record", "markers", "Regeneration", "Shielded", "Guarded", "Fortified"] {
             let (st, statics) = host(bolt_board(6, &[], 6).0, bolt_board(6, &[], 6).1, how);
-            cases.push((how, st, statics, target.to_string()));
+            cases.push((how, st, statics, if how == "Regeneration" { String::new() } else { target.to_string() }));
         }
         let (mut st, statics) = bolt_board(6, &[], 6);
         let mut list = st.profiles.list.clone();
@@ -1932,6 +1934,184 @@ mod tests {
         assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|2x4+|Foe", "spell_morale|1x4+|Foe"]);
         assert!(lines.iter().any(|l| l.text.starts_with("Foe is at half its tough value (2/4) — morale test")), "{lines:?}");
         assert_eq!((state.wounds[2][0], state.shaken[2]), (2, false));
+    }
+
+    // ---- CC-6b: Deadly per model, Regeneration / Resistance at spell threshold, bypass, wound_alloc ----
+
+    /// CC-6b: the Deadly cases of the table's volley golden (`golden_shoot_volley.json` scenario `deadly`: 10 Tough(3) models,
+    /// Defense 4+, Quality 4+, Deadly(3)), replayed as a Deadly(3) spell named "Rifle" on the recorded save and morale faces:
+    /// exact roll order, exact save/Deadly/loss/morale lines, exact alive/wounds/shaken state.
+    #[test]
+    fn the_deadly_golden_cases_replay_through_a_deadly_spell() {
+        let golden: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(format!("{}/../../test/fixtures/one_core/golden_shoot_volley.json", env!("CARGO_MANIFEST_DIR"))).expect("the shoot volley golden")).unwrap();
+        let mut replayed = 0;
+        for case in golden["cases"].as_array().unwrap().iter().filter(|c| c["scenario"] == "deadly") {
+            let lines: Vec<&str> = case["lines"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+            let Some(def_line) = lines.iter().find(|l| l.starts_with("COMBAT|AI (Def) defends: ")) else { continue };
+            let parse_faces = |s: &str| -> Vec<u8> {
+                s.split(':').nth(1).unwrap().split('→').next().unwrap().split_whitespace().map(|x| x.parse().unwrap()).collect()
+            };
+            let save_faces = parse_faces(def_line);
+            let morale_faces = lines.iter().find(|l| l.starts_with("COMBAT|AI (Def): ")).map(|l| parse_faces(l));
+            let (mut st, mut statics) = bolt_board(save_faces.len() as i64, &["Deadly(3)"], 10);
+            statics[0].spells[0].name = "Rifle".into();
+            statics[2].name = "Def".into();
+            (statics[2].wounds_max, statics[2].ctx.tough) = (vec![3; 10], 3);
+            let mut list = st.profiles.list.clone();
+            list[2].wounds_max = vec![3; 10];
+            st.profiles = Rc::new(crate::state::Profiles { list, index: Default::default() });
+            st.wounds[2] = vec![3; 10];
+            st.kits[2] = Rc::new(vec![Kit { weapons: vec![], equipment: 0, wounds_max: 3 }; 10]);
+            let mut groups = vec![vec![6u8], save_faces.clone()];
+            let mut want_rolls = vec!["cast|1x2+|Mystic".into(), format!("spell_defense|{}x4+|Def", save_faces.len())];
+            if let Some(mf) = morale_faces {
+                groups.push(mf);
+                want_rolls.push("spell_morale|1x4+|Def".into());
+            }
+            let cast = CastInput { spell: "Rifle".into(), ..test_bolt() };
+            let (done, asked) = replay(&statics, &st, cast, &groups);
+            let ActStep::Done { state, lines: got_lines, .. } = done else { panic!("seed {}: {done:?}", case["seed"]) };
+            assert_eq!(asked, want_rolls, "seed {}: rolls", case["seed"]);
+            let ours: Vec<String> = got_lines.iter().skip(3).map(|l| format!("COMBAT|{}", l.text)).collect();
+            let save_at = lines.iter().position(|l| *l == "COMBAT|Def saves on 4+").unwrap();
+            let want: Vec<String> = lines[save_at..].iter().filter(|l| !l.starts_with("COMBAT|AI (")).map(|l| (*l).to_string()).collect();
+            assert_eq!(ours, want, "seed {}: lines", case["seed"]);
+            let def_end = &case["final"][1];
+            assert_eq!(
+                (state.alive[2], state.wounds[2].iter().sum::<i64>(), state.shaken[2]),
+                (def_end["alive"].as_i64().unwrap(), def_end["wounds"].as_i64().unwrap(), def_end["shaken"].as_bool().unwrap()),
+                "seed {}: state", case["seed"]
+            );
+            replayed += 1;
+        }
+        assert_eq!(replayed, 3, "the 3 hitting Deadly golden cases (seeds 0, 17, 49)");
+    }
+
+    /// CC-6b: Regeneration and Resistance roll at the SPELL threshold (`regen_target_spell`, e.g. 2+ for Resistance instead of
+    /// its weapon threshold 6+), and Deadly(X) rolls all X dice per unsaved wound before the model's Tough cap (A4: "Drei Wuerfe
+    /// muessen gelingen"). Planted fault: using the weapon threshold `regen_target` (6+) instead of `regen_target_spell` (2+) -> RED.
+    #[test]
+    fn spell_regeneration_and_resistance_use_the_spell_threshold_including_deadly_a4() {
+        // (1) Plain spell vs Resistance (6+ vs weapons, 2+ vs spells): 4 unsaved -> asks 4x2+, faces [2, 3, 4, 1] ignore 3 -> 1 dies.
+        let (st, mut statics) = bolt_board(4, &[], 6);
+        statics[2].ctx.regeneration = true;
+        statics[2].ctx.regen_target = 6;
+        statics[2].ctx.regen_target_spell = 2;
+        statics[2].ctx.regen_named = false;
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![1, 1, 1, 1], vec![2, 3, 4, 1]]);
+        let ActStep::Done { state, .. } = done else { panic!("plain resistance: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|4x4+|Foe", "spell_attack|4x2+|Foe"], "Resistance rolls at spell threshold 2+, not weapon 6+");
+        assert_eq!(state.alive[2], 5, "3 of 4 wounds ignored at 2+");
+
+        // (2) Deadly(3) vs 1-wound Resistance models (A4): 2 unsaved -> two separate 3-die rolls at 2+.
+        // Roll 1 [2, 2, 2] ignores all 3 (survives); Roll 2 [2, 2, 1] lets 1 through (kills 1 model, no carry-over).
+        let (st, mut statics) = bolt_board(2, &["Deadly(3)"], 6);
+        statics[2].ctx.regeneration = true;
+        statics[2].ctx.regen_target = 6;
+        statics[2].ctx.regen_target_spell = 2;
+        statics[2].ctx.regen_named = false;
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![1, 1], vec![2, 2, 2], vec![2, 2, 1]]);
+        let ActStep::Done { state, lines, .. } = done else { panic!("deadly resistance: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|2x4+|Foe", "spell_attack|3x2+|Foe", "spell_attack|3x2+|Foe"]);
+        assert_eq!(state.alive[2], 5);
+        assert!(lines.iter().any(|l| l.text == "Deadly(3): 2 unsaved \u{00d7}3, no carry-over \u{2192} 1 wound dealt (Test Bolt)"), "{lines:?}");
+
+        // (3) Deadly(3) vs Tough(2) Regeneration (5+): 1 unsaved rolls ALL 3 dice, overkill capped at 2 (no carry-over).
+        let (mut st, mut statics) = bolt_board(1, &["Deadly(3)"], 3);
+        (statics[2].wounds_max, statics[2].ctx.tough) = (vec![2; 3], 2);
+        statics[2].ctx.regeneration = true;
+        statics[2].ctx.regen_target = 5;
+        statics[2].ctx.regen_target_spell = 5;
+        statics[2].ctx.regen_named = true;
+        let mut list = st.profiles.list.clone();
+        list[2].wounds_max = vec![2; 3];
+        st.profiles = Rc::new(crate::state::Profiles { list, index: Default::default() });
+        st.wounds[2] = vec![2; 3];
+        st.kits[2] = Rc::new(vec![Kit { weapons: vec![], equipment: 0, wounds_max: 2 }; 3]);
+        let (done, asked) = replay(&statics, &st, test_bolt(), &[vec![6], vec![1], vec![1, 1, 1]]);
+        let ActStep::Done { state, lines, .. } = done else { panic!("deadly tough2 regen: {done:?}") };
+        assert_eq!(asked, ["cast|1x2+|Mystic", "spell_defense|1x4+|Foe", "spell_attack|3x5+|Foe"]);
+        assert_eq!((state.alive[2], &state.wounds[2]), (2, &vec![2, 2]), "Tough(2) cap loses overkill 1, no carry-over");
+        assert!(lines.iter().any(|l| l.text == "Deadly(3): 1 unsaved \u{00d7}3, no carry-over \u{2192} 2 wounds dealt (Test Bolt)"), "{lines:?}");
+    }
+
+    /// CC-6b: `ignores_regen` (Bane / Disintegrate facets) skips Regeneration (named), while Resistance (not named Regeneration)
+    /// still rolls at its spell threshold (2+) from EPOCH_82_IGNORE_BY_NAME (R-1), both plain and Deadly(3).
+    #[test]
+    fn spell_ignores_regen_bypasses_regeneration_but_not_resistance_at_v36() {
+        use crate::dice::ShootResult;
+        use crate::sim::tray_cast;
+        let run = |rules: &[&str], regen_named: bool, target_w: i64, target_sp: i64, faces: Vec<Vec<u8>>| {
+            let (mut st, mut statics) = bolt_board(2, rules, 6);
+            statics[2].ctx.regeneration = true;
+            statics[2].ctx.regen_target = target_w;
+            statics[2].ctx.regen_target_spell = target_sp;
+            statics[2].ctx.regen_named = regen_named;
+            let mut tray = Tray::supplied(faces);
+            let mut shot = ShootResult::default();
+            tray_cast(&statics, &mut st, 0, &test_bolt(), seams(), &mut tray, &mut shot);
+            (st.alive[2], shot.rolls)
+        };
+        // Regeneration (named) bypassed by Disintegrate: only cast + save (no regen roll), 2 die.
+        let (alive, rolls) = run(&["Disintegrate"], true, 5, 5, vec![vec![6], vec![1, 1]]);
+        assert_eq!((alive, rolls.len()), (4, 2), "Disintegrate skips Regeneration (plain): {rolls:?}");
+        // Deadly(3) + Disintegrate vs Regeneration (named): skips regen roll, kills 2 1-wound models.
+        let (alive, rolls) = run(&["Deadly(3)", "Disintegrate"], true, 5, 5, vec![vec![6], vec![1, 1]]);
+        assert_eq!((alive, rolls.len()), (4, 2), "Disintegrate skips Regeneration (Deadly): {rolls:?}");
+        // Resistance (not named Regeneration) + Disintegrate at epoch 90: STILL rolls 2+ (plain: 2 dice at 2+).
+        let (alive, rolls) = run(&["Disintegrate"], false, 6, 2, vec![vec![6], vec![1, 1], vec![2, 2]]);
+        assert_eq!((alive, rolls.len(), rolls[2].target), (6, 3, 2), "Resistance still rolls at 2+ against bypass (plain)");
+        // Resistance + Deadly(3) + Disintegrate at epoch 90: STILL rolls 3 dice per unsaved wound at 2+.
+        let (alive, rolls) = run(&["Deadly(3)", "Disintegrate"], false, 6, 2, vec![vec![6], vec![1, 1], vec![2, 2, 2], vec![2, 2, 1]]);
+        assert_eq!((alive, rolls.len(), rolls[2].target, rolls[3].target), (5, 4, 2, 2), "Resistance still rolls 3x2+ per wound against Deadly bypass");
+    }
+
+    /// CC-6b: when the wound_alloc choice switch is ON, a damage spell opens `wound_alloc:<caster>:<target>:cast:<seq>` after
+    /// the saves and lands Deadly (with forced already-wounded Tough picks taking no pick) and plain wounds on the owner's picks.
+    #[test]
+    fn a_damage_spell_opens_and_honours_wound_alloc_for_plain_and_deadly() {
+        let board = |rules: &[&str]| {
+            let (mut st, mut statics) = bolt_board(2, rules, 2);
+            (statics[2].wounds_max, statics[2].ctx.tough) = (vec![3, 3], 3);
+            let mut list = st.profiles.list.clone();
+            list[2].wounds_max = vec![3, 3];
+            st.profiles = Rc::new(crate::state::Profiles { list, index: Default::default() });
+            st.wounds[2] = vec![3, 3];
+            st.kits[2] = Rc::new(vec![Kit { weapons: vec![1], equipment: 0, wounds_max: 3 }, Kit { weapons: vec![2], equipment: 0, wounds_max: 3 }]);
+            (st, statics)
+        };
+        let id = "wound_alloc:a:b:cast:0";
+        let run = |rules: &[&str], choice: Option<&str>| {
+            let (st, statics) = board(rules);
+            let mut t = vec![Begin, intent(HOLD, None), Input::Cast(test_bolt())];
+            t.extend(choice.map(|o| Input::Choice { id: id.into(), option: o.into() }));
+            for g in [vec![6u8], vec![1, 1], vec![6]] {
+                match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) {
+                    ActStep::NeedRoll { faces, .. } => {
+                        assert_eq!(faces, g.len());
+                        t.push(Faces(g));
+                    }
+                    other => return (other, st),
+                }
+            }
+            (step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true), st)
+        };
+        // Deadly(2): unanswered ask opens NeedChoice after the saves, naming slot:0 and slot:1 for owner "b".
+        let (ask, _) = run(&["Deadly(2)"], Some(""));
+        assert!(matches!(ask, ActStep::NeedChoice { ref id, ref options, ref owner } if id == "wound_alloc:a:b:cast:0" && options == &["slot:0", "slot:1"] && owner == "b"), "{ask:?}");
+        // Deadly(2) auto (no choice) kills slot 0; answered "slot:1,slot:0" puts wound 1 on slot 1 (2/3) and FORCES wound 2 onto slot 1 -> slot 0 stands untouched.
+        let (ActStep::Done { state: auto_st, .. }, start) = run(&["Deadly(2)"], None) else { panic!("auto") };
+        assert_eq!(auto_st.positions[2], vec![start.positions[2][1]], "auto kills lead slot 0");
+        let (ActStep::Done { state: picked_st, lines, .. }, _) = run(&["Deadly(2)"], Some("slot:1,slot:0")) else { panic!("picked") };
+        assert_eq!((&picked_st.positions[2], &picked_st.wounds[2]), (&vec![start.positions[2][0]], &vec![3]), "picked kills slot 1, slot 0 untouched");
+        assert!(lines.iter().any(|l| l.text == "Deadly(2): 2 unsaved \u{00d7}2, no carry-over \u{2192} 3 wounds dealt (Test Bolt)"), "{lines:?}");
+        assert!(lines.iter().any(|l| l.text.starts_with("Deadly(2): 1 wound finish the already-wounded Tough model first")), "{lines:?}");
+        assert!(lines.iter().any(|l| l.text == "b: the owner allocates 1 wound"), "forced wound took no pick: {lines:?}");
+
+        // Plain spell (non-Deadly): "slot:1,slot:1" wounds slot 1 (leaving slot 0 at 3, slot 1 at 1) instead of automatic slot 0.
+        let (ActStep::Done { state: plain_picked, lines: plain_lines, .. }, _) = run(&[], Some("slot:1,slot:1")) else { panic!("plain picked") };
+        assert_eq!(plain_picked.wounds[2], vec![3, 1], "plain spell honours owner wound_alloc picks");
+        assert!(plain_lines.iter().any(|l| l.text == "b: the owner allocates 2 wounds"), "{plain_lines:?}");
     }
 
     // ---- step 12: cancel ----

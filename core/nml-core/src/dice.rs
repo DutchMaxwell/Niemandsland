@@ -3292,18 +3292,33 @@ pub fn resolve_breath_attack_with_tray(
     out
 }
 
-/// CC-6a: a damage spell's fixed hits saved on the tray, `_solo_resolve_spell_damage` main.gd:5747 -> `_solo_save_batch` at the
+/// CC-6a/6b: a damage spell's fixed hits saved on the tray, `_solo_resolve_spell_damage` main.gd:5747 -> `_solo_save_batch` at the
 /// Defense a SPELL hit meets (NML-104): the unit's own Defense, Armor already in it, and neither Shielded nor Cover nor the over-9"
-/// family (their wording limits them to attacks), so the batch saves at `def.defense`, never the volley's ladder. A bare profile
-/// carrying the spell's AP; the wounds come back as they fall (Regeneration, Deadly and the other facets are CC-6b..7b's).
-pub fn resolve_spell_hits_with_tray(hits: i64, ap: i64, def: &Ctx, def_owner: &str, tray: &mut Tray) -> ShootResult {
+/// family (their wording limits them to attacks), so the batch saves at `def.defense`, never the volley's ladder.
+/// CC-6b: Deadly(X) pushes per-model groups (`push_deadly_groups`), Regeneration / Resistance roll at the SPELL threshold
+/// (`def.regen_target_spell`, falling back to `def.regen_target`), and `ignores_regen` bypasses only when `bypass_skips_ignore()` holds.
+#[allow(clippy::too_many_arguments)]
+pub fn resolve_spell_hits_with_tray(
+    hits: i64, ap: i64, deadly: i64, ignores_regen: bool, spell_name: &str, def: &Ctx, def_owner: &str, tray: &mut Tray,
+) -> ShootResult {
     let mut out = ShootResult::default();
     if hits <= 0 {
         return out;
     }
-    let bare = ShootProfile { ap, ..Default::default() };
-    let w = save_batch(&bare, def, def_owner, hits, def.defense, ap, false, false, 1, false, tray, &mut out);
-    (out.caused, out.wounds) = (w, w);
+    let bare = ShootProfile { ap, deadly, ..Default::default() };
+    let w = save_batch(&bare, def, def_owner, hits, def.defense, ap, false, false, 1, deadly > 0, tray, &mut out);
+    let spell_target = if def.regen_target_spell > 0 { def.regen_target_spell } else { def.regen_target };
+    let spell_def = Ctx { regen_target: spell_target, ..*def };
+    let bypass = ignores_regen && spell_def.bypass_skips_ignore();
+    out.caused = w;
+    if deadly > 0 {
+        let first = out.deadly_groups.len();
+        push_deadly_groups(&mut out, w, deadly.max(1), bypass, &spell_def, def_owner, tray);
+        out.deadly_lines.push((spell_name.into(), w, deadly.max(1), out.deadly_groups.len() - first));
+        out.deadly_tally = w;
+    } else {
+        out.wounds = ignore_batch(if bypass { 0 } else { w }, if bypass { w } else { 0 }, &spell_def, def_owner, tray, &mut out.rolls);
+    }
     out
 }
 
