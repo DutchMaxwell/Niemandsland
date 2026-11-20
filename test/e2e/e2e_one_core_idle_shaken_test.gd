@@ -113,13 +113,11 @@ func test_an_idle_shaken_unit_outside_dangerous_terrain_recovers_without_a_core_
 
 ## The same activation on the table alone and through the core, seed for seed: the unit ends the same (every model's alive /
 ## wounds, Shaken) and the tray is at the same state. The battle log differs only by (a) the table's pooled "takes N wound(s)
-## (a/b)" line, which the core does not write (the known door difference), (b) the order of the two wound sentences and (c) one
-## core line "fails morale - Shaken": the Dangerous wipe-down owes the end-of-activation morale test, which a Shaken unit
-## always fails (GF 3.6 p.10), and the core writes the rules-must-log lines for that automatic fail (the "is already Shaken -
-## automatically fails morale" sentence, then the outcome) while the table's idle path skips the test and writes none (its
-## `_solo_morale_test` says the sentence, but the idle branch never calls it). No die is drawn either way and the unit recovers as the activation's last step (the core
-## recovers after the test, `sim.rs`), so the state and the tray are equal. A destroyed unit's Shaken flag (the table never
-## recovers a dead unit) is not compared. 3 models reach the
+## (a/b)" line, which the core does not write (the known door difference) and (b) the order of the two wound sentences. The
+## Dangerous wipe-down owes the end-of-activation morale test (GF 3.6 p.10), which a Shaken unit always fails: both sides now
+## say the "is already Shaken - automatically fails morale" sentence and the outcome line, draw no die, and the unit recovers
+## as the activation's last step (the core after the test, `sim.rs`; the table after `_solo_shooting_morale`). A destroyed
+## unit's Shaken flag (the table never recovers a dead unit) is not compared. 3 models reach the
 ## end-morale threshold now and then, 1 model dies in the test.
 @warning_ignore('unused_parameter')
 func test_the_core_and_the_table_end_every_idle_shaken_activation_alike(timeout := 900000,
@@ -139,9 +137,6 @@ func test_the_core_and_the_table_end_every_idle_shaken_activation_alike(timeout 
 				bad.append("%d models seed %d: table %s rng %s, core %s rng %s" % [models, s, t["final"], t["rng"], c["final"], c["rng"]])
 			var tl: Array = (t["lines"] as Array).filter(func(l: String) -> bool: return pooled.search(l) == null)
 			var cl: Array = (c["lines"] as Array).duplicate()
-			if cl.has("Att fails morale — Shaken") and not c["final"][0]["shaken"]:
-				cl.erase("Att fails morale — Shaken")   # (c), erases one
-				cl = cl.filter(func(l: String) -> bool: return not l.begins_with("Att is already Shaken — automatically fails morale"))   # (c)'s sentence
 			tl.sort()
 			cl.sort()
 			if tl != cl:

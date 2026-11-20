@@ -1773,6 +1773,10 @@ pub(crate) fn resolve_volley_with_pick_label(
             im_fired.push(sh.owner);
             out.log.push(format!(
                 "Indirect: no moved penalty: {} shoots after moving", sh.owner));
+        } else if att.indirect_own && att.moved_this_round && im_fired.iter().all(|o| *o != sh.owner) {
+            // PENDING_EPOCH_OWN_INDIRECT: an Indirect granted to the shooter's own unit makes every shot Indirect (`granted_indirect_of`).
+            im_fired.push(sh.owner);
+            out.log.push(format!("Indirect: no moved penalty: {} shoots after moving", sh.owner));
         }
         if im == 0
             && p.indirect_moved_hit_penalty > 0
@@ -2423,7 +2427,7 @@ pub(crate) fn resolve_volley_with_pick_label(
             out.deadly_tally += w;
         } else if deadly_per_model && p.deadly > 0 {
             let first = out.deadly_groups.len();
-            push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, def_owner, tray);
+            push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, def_owner, tray, None);
             out.deadly_lines.push((p.name.clone(), w, p.deadly.max(1), out.deadly_groups.len() - first));
             out.deadly_tally += w;
         } else if ignores_regen {
@@ -2512,9 +2516,13 @@ pub(crate) fn resolve_volley_with_pick_label(
 /// landing group per wound, a wound whose X are all ignored lands nothing. Below 72 (or with nothing
 /// to roll) the legacy leg: one roll on the RAW unsaved count, then ×X per model.
 #[allow(clippy::too_many_arguments)] // the two bypass flags and the landing context
-fn push_deadly_groups(out: &mut ShootResult, w: i64, x: i64, ignores_regen: bool, bypass_flag: bool, def: &Ctx, def_owner: &str, tray: &mut Tray) {
+fn push_deadly_groups(out: &mut ShootResult, w: i64, x: i64, ignores_regen: bool, bypass_flag: bool, def: &Ctx, def_owner: &str, tray: &mut Tray, wiped: Option<&dyn Fn(&ShootResult) -> bool>) {
     if def.playtest_rules && !ignores_regen && def.regeneration && def.regen_target > 0 {
         for _ in 0..w {
+            // The table drops the wounds left once the chain is dead: no pick, no ignore dice (`wiped`, melee only, from the pending epoch).
+            if wiped.is_some_and(|f| f(out)) {
+                break;
+            }
             let post = regen_batch(x, if bypass_flag { x } else { 0 }, def, def_owner, tray, &mut out.rolls);
             // A wound whose X are all ignored still takes its pick (the table's `deadly_pick` runs before the ignore roll, so the "finish the
             // already-wounded Tough model first" count includes it): an x = 0 group lands nothing and only counts the forced pick.
@@ -3490,7 +3498,8 @@ pub fn resolve_melee_leg_wipe(
                 out.deadly_tally += w;
             } else if deadly_per_model && p.deadly > 0 {
                 let first = out.deadly_groups.len();
-                push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, def_owner, tray);
+                let stops = deadly_wipes.filter(|_| rule_on(sh.att.rules_epoch, crate::acts::PENDING_EPOCH_DEADLY_STOPS));
+                push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, def_owner, tray, stops);
                 out.deadly_lines.push((p.name.clone(), w, p.deadly.max(1), out.deadly_groups.len() - first));
                 out.deadly_marks.push(tray.mark());
                 out.deadly_tally += w;
@@ -3700,6 +3709,7 @@ fn compose_to_hit_note(
         if rule_on(att.rules_epoch, EPOCH_73_V36) { notes.push("Indirect: no moved penalty".into()); }
         else if im != 0 { notes.push(format!("Indirect moved {im}")); }
     }
+    if att.moved_this_round && att.indirect_own && !p.indirect { notes.push("Indirect: no moved penalty".into()); }   // PENDING_EPOCH_OWN_INDIRECT
     if att.spot_hit_note != 0 { notes.push(format!("Spotted {:+}", att.spot_hit_note)); }
     if att.tag_hit_note != 0 { notes.push(format!("Tagged {:+}", att.tag_hit_note)); }
     (base_note, notes.join(", "))
@@ -3851,7 +3861,7 @@ pub fn resolve_spell_hits_with_tray(
     out.caused = w;
     if deadly > 0 {
         let first = out.deadly_groups.len();
-        push_deadly_groups(&mut out, w, deadly.max(1), bypass, ignores_regen, &spell_def, def_owner, tray);
+        push_deadly_groups(&mut out, w, deadly.max(1), bypass, ignores_regen, &spell_def, def_owner, tray, None);
         out.deadly_lines.push((spell_name.into(), w, deadly.max(1), out.deadly_groups.len() - first));
         out.deadly_tally = w;
     } else {

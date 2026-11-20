@@ -834,6 +834,11 @@ pub const EPOCH_70_TRAY_EXACT: u32 = 70;
 /// reads it. Records stamped 66-70 were recorded while that writer was missing and replay byte-exact
 /// with the legacy bearer-side once-grant. Every call site reads THIS constant, not `71`.
 pub const EPOCH_71_RAPID_CHARGE_MARK: u32 = 71;
+/// Placeholder gate for the PIERCING FIGHTING MARK's melee scope (`tray_vs_marks`, `ctx_live_vs`): the table records the Mark on the MARKED unit with the entry's own
+/// `melee` scope (`_solo_apply_vs_marks`), where a volley never spends it, so it waits for the next charger. The core put it on the attacker's own ledger with the scope dropped
+/// and a volley spent it. From 94 the Mark lands on the target like the Rapid Charge Mark, a charger's strikes read it there (`pierce_melee_grant`) and the exchange that uses it
+/// spends it. Below 94 byte-identical. Every call site reads THIS constant, not `94`.
+pub const PENDING_EPOCH_MELEE_MARK_SCOPE: u32 = 94;
 /// The 29.10.2026 play-test fixes (A1/A2/A4), the table's #1911/#1912/#1914 in the core and its
 /// GDScript sim twins: from this epoch (A1) a printed Lacerate keeps the defender's Regeneration
 /// roll (only Bane bypasses it), (A2) wounds that leave a unit at half strength or less trigger
@@ -922,12 +927,26 @@ pub const PENDING_EPOCH_SHAKEN_MIRROR: u32 = 94;
 /// best target. Records stamped 83 or below replay byte-exact. Every call site reads THIS constant, not `84`. The recorder mirror
 /// stamps 84 with it.
 pub const EPOCH_84_IGNORE_GROUPS: u32 = 84;
+/// Placeholder gate for the ZERO-MOVE STAMP (soak game 23, a Skeleton Archers + Leader chain whose Advance the planner clamped to zero): the table stamps
+/// `moved_round` for an EXECUTED move only (`_solo_animate_move` walks `last_move_paths`, which `_execute_move` empties when nothing moved). The door hands the
+/// core the chain where it stands and the step API calls a placement HOLD only when it matches the HOST's models (`effective_kind`), so a unit with a joined
+/// hero kept its Advance and the core stamped the placement as a move: the stamp row said "table 3, core 4" and a later volley read a unit that never moved as
+/// moved. From 94 a placement in which no model left its place stamps nothing (the volley's `moved` stays true, as the table's `report["moved"]`). Below 94
+/// byte-identical. Every call site reads THIS constant, not `94`.
+pub const PENDING_EPOCH_ZERO_MOVE_STAMP: u32 = 94;
 /// The pooled target gate of a step-path volley lets through a target nobody sees when a living chain member's weapon carries an Indirect
 /// that waives the sight test and reaches it (table twin `_solo_pick_overlay_target`, whose per-shot sight count ignores LOS for a weapon's
 /// own Indirect; rules 3.6 SHO-01a: a Hold not kept loses the waiver where the entry says so). Before, a holding Artillery beast with an
 /// Indirect gun fired nothing at a unit hidden behind a blocker, the table fired. Records stamped 84 or below replay byte-exact. Every
 /// call site reads THIS constant, not `85`. The recorder mirror stamps 85 with it.
 pub const EPOCH_85_INDIRECT_GATE: u32 = 85;
+/// Placeholder gate for an Indirect GRANTED TO THE SHOOTER'S OWN UNIT (a spell record on the attacker that is not an attackers-side mark; table twin
+/// `SoloController.granted_indirect_of`, read by `_solo_shot_eligibility` and the volley's moved note): the table waives the sight test of every
+/// weapon of such a unit and, after a move, says the Indirect moved penalty is not taken. The core read only a weapon's own Indirect and the
+/// target-side mark, so the grant was invisible to the per-weapon sight count and to the notes. The pick itself stays blind to it, as the table's
+/// (`_solo_pick_overlay_target` reads the weapon and the mark only). No shipped spell grants it today (every Indirect spell is an attackers-side
+/// mark), so no recorded game moves; from 94 the grant is read. Below 94 byte-identical. Every call site reads THIS constant, not `94`.
+pub const PENDING_EPOCH_OWN_INDIRECT: u32 = 94;
 /// The played volley's modifier distance (Valiant gate, over-9" modifiers) counts only the model pairs within the vertical reach (3", `melee_vertical_in`),
 /// and a unit with no pair in reach keeps the horizontal unit-centre distance: the table's `_solo_ai_volley_distance_in` over `nearest_melee_gap_in`.
 /// Before, a unit on a platform measured as close as the ground beside it (the soak's Hive Bond +1, table 4+ vs core 5+). Step path only. Records
@@ -1046,6 +1065,12 @@ pub const PENDING_EPOCH_HEIGHT: u32 = 94;
 /// spell killing 5 of 6 models in a line left slot 2 standing where the table leaves slot 3). From 94 the core measures in f32 the
 /// same way. Only paths with `Seams::tray_exact` use the order. Every call site reads THIS constant, not the literal `94`.
 pub const PENDING_EPOCH_CASUALTY_TIES: u32 = 94;
+/// Placeholder gate for the melee Deadly landing that stops rolling (melee95, 20.11.): the table lands a Deadly weapon's unsaved wounds one at a
+/// time and, once the target's whole chain is dead, drops the rest without a single ignore die (`_solo_land_deadly_wounds`: the pick is empty, the
+/// loop breaks); the core rolled every wound's X ignore dice before landing, so a Tough hero with Cursed Undead / Regeneration hit by two Deadly(3)
+/// wounds threw six dice in the core and three at the table. From the bump the melee fold asks (`deadly_wipes`) before each wound. Below it
+/// byte-identical. Every call site reads THIS constant.
+pub const PENDING_EPOCH_DEADLY_STOPS: u32 = 94;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -1348,6 +1373,12 @@ pub const EPOCH_22_SCREENED_MELEE: u32 = 22;
 /// change. Every call site reads THIS constant, not the literal `23` or
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_23_INERT_MARKS: u32 = 23;
+/// Placeholder gate for the SLAYER MARK's grant to the marked unit's attackers (`ctx_live_vs`): the table hands an attacker the Slayer rule the target's
+/// once-record names (`_solo_bridge_granted_flags` -> `AiSpell.granted_rules_of`, the gf / aof Slayer Mark picked in the pre-attack slot, `beneficiary: attackers`),
+/// so a shooter that held, or a charger, gets AP(+2) against a Tough(3+) target. The core bridged Rending, Furious, Relentless, Shred and Surge from that record
+/// and not Slayer, so its saves ran 2 AP lighter (and said no `Slayer: AP(+2) because <U> held` line). From 94 the volley and strike seams read it too.
+/// Below 94 byte-identical. Every call site reads THIS constant, not `94`.
+pub const PENDING_EPOCH_SLAYER_MARK_GRANT: u32 = 94;
 /// The TERRAIN DEBUFF gate (14.09., sweep A — rows `Dangerous Terrain Debuff`
 /// / `Difficult Terrain Debuff`, `STANDALONE_SWEEP_A_2026-09-14.md`): both
 /// layers announce the debuff — the table's log even appends a dead
