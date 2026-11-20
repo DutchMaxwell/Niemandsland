@@ -2,8 +2,9 @@ class_name BoardgenRails
 extends Node3D
 ## Safety railings for the look pass of a seeded boardgen board: a thin rail (posts, top and mid rail, a kick plate) along every tier
 ## edge that drops to a lower cell inside the board, a taller post at every convex corner, and a clear gap around the top of each
-## ladder. Everything stands within REACH_IN of the edge, so the tier top stays standing room for bases. One MultiMesh of boxes;
-## VISUAL ONLY (no collider). plan() is a pure function of the layout (its seed feeds one RandomNumberGenerator).
+## ladder. Everything stands within REACH_IN of the edge, so the tier top stays standing room for bases. VISUAL ONLY (no collider).
+## parts() is a pure function of the layout (its seed feeds one RandomNumberGenerator); plan() turns it into boxes (ONE MultiMesh: the
+## procedural look), kit_plan() into instances of the authored K1 modules (BoardgenKit: tube rails with mesh infill, round posts).
 
 const INCHES_TO_METERS := 0.0254
 const INSET_IN := 0.07   # the rail line stands this far in off the tier edge
@@ -11,10 +12,46 @@ const REACH_IN := 0.2   # nothing of a railing goes further in than this
 const GAP_IN := 0.9   # a ladder top leaves this much clear on each side of its edge point
 const STEEL := Color(0.30, 0.31, 0.33)
 const RUST := Color(0.36, 0.19, 0.10)
+const KIT_MODULES: Array[String] = ["rail_span", "rail_post", "rail_post_corner"]
+const SPAN_MODULE_IN := 3.0   # the length of the rail_span module; an instance stretches along the run to its span
 
 
 ## Every box of the railings, in metres off the board centre: {shape: "box", xf: Transform3D, colour: Color}.
 static func plan(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for p in parts(layout):
+		var yaw: Basis = p["yaw"]
+		var d: Vector2i = p["d"]
+		var top: float = p["top"]
+		var tint: Color = p["tint"]
+		if p["part"] == "span":
+			var len: float = p["len"]
+			out.append(_box(p["at"], top + 0.8, yaw, Vector3(len, 0.05, 0.05), tint))
+			out.append(_box(p["at"], top + 0.45, yaw, Vector3(len, 0.04, 0.04), tint))
+			out.append(_box(p["at"] + Vector2(d) * 0.03, top + 0.075, yaw, Vector3(len, 0.15, 0.03), tint))
+		else:
+			var corner: bool = p["part"] == "corner"
+			out.append(_box(p["at"], top + (0.55 if corner else 0.42), yaw, Vector3(0.1, 1.1, 0.1) if corner else Vector3(0.07, 0.84, 0.07), tint))
+			if corner:
+				out.append(_box(p["at"], top + 1.12, yaw, Vector3(0.13, 0.04, 0.13), tint))
+	return out
+
+
+## The railings as instances of the K1 kit modules: {rail_span | rail_post | rail_post_corner: [{xf, colour}]}, metres off the board centre.
+static func kit_plan(layout: Dictionary) -> Dictionary:
+	var out := {"rail_span": [], "rail_post": [], "rail_post_corner": []}
+	for p in parts(layout):
+		var span: bool = p["part"] == "span"
+		var scale := Vector3(float(p["len"]) / SPAN_MODULE_IN, 1.0, 1.0) if span else Vector3.ONE
+		var at: Vector2 = p["at"]
+		out["rail_span" if span else "rail_post_corner" if p["part"] == "corner" else "rail_post"].append(
+			{"xf": Transform3D((p["yaw"] as Basis) * Basis.from_scale(scale), Vector3(at.x, p["top"], at.y) * INCHES_TO_METERS), "colour": p["tint"]})
+	return out
+
+
+## The railings as abstract parts (board inches): {part: span | post | corner, at: the rail line point (a span: its middle), yaw: Basis with
+## local +z off the edge, d: the drop direction, top: the tier top, tint, len (spans)}.
+static func parts(layout: Dictionary) -> Array[Dictionary]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(layout["seed"]) * 69069 + 5
 	var nx: int = layout["nx"]
@@ -48,9 +85,7 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 					var len := span.y - span.x
 					var mid := line + along * (span.x + span.y) * 0.5
 					var tint := STEEL.lerp(RUST, rng.randf() * 0.35)
-					out.append(_box(mid, top + 0.8, yaw, Vector3(len, 0.05, 0.05), tint))
-					out.append(_box(mid, top + 0.45, yaw, Vector3(len, 0.04, 0.04), tint))
-					out.append(_box(mid + Vector2(d) * 0.03, top + 0.075, yaw, Vector3(len, 0.15, 0.03), tint))
+					out.append({"part": "span", "at": mid, "yaw": yaw, "d": d, "top": top, "len": len, "tint": tint})
 					for end: float in [span.x, span.y]:
 						var e := Vector2i((along * signf(end)).round())   # the way along the edge past this end
 						var corner: bool = absf(end) >= cell * 0.5 - 0.001 and _drops(layout, Vector2i(x, z), e)
@@ -58,9 +93,7 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 						if posts.has(Vector2i((at * 100.0).round())):
 							continue
 						posts[Vector2i((at * 100.0).round())] = true
-						out.append(_box(at, top + (0.55 if corner else 0.42), yaw, Vector3(0.1, 1.1, 0.1) if corner else Vector3(0.07, 0.84, 0.07), tint))
-						if corner:
-							out.append(_box(at, top + 1.12, yaw, Vector3(0.13, 0.04, 0.13), tint))
+						out.append({"part": "corner" if corner else "post", "at": at, "yaw": yaw, "d": d, "top": top, "tint": tint})
 	return out
 
 
@@ -76,24 +109,18 @@ static func _box(pos: Vector2, y: float, rot: Basis, size: Vector3, colour: Colo
 	return {"shape": "box", "xf": Transform3D(rot * Basis.from_scale(size * INCHES_TO_METERS), Vector3(pos.x, y, pos.y) * INCHES_TO_METERS), "colour": colour}
 
 
-## All the boxes in ONE MultiMesh: one draw call.
-func build(layout: Dictionary) -> void:
-	var boxes := plan(layout)
+## The kit modules when `kit` has them all cached (one MultiMesh each), else every box in ONE MultiMesh: one draw call.
+func build(layout: Dictionary, kit: BoardgenKit = null) -> void:
+	if kit != null and kit.usable(KIT_MODULES):
+		var groups := kit_plan(layout)
+		for module in KIT_MODULES:
+			BoardgenKit.add_multimesh(self, module, kit.mesh_or(module), groups[module], module == "rail_span")   # only the span throws a shadow
+		return
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
 	mat.vertex_color_is_srgb = true
 	mat.roughness = 0.6
 	mat.metallic = 0.4
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	mm.mesh = BoxMesh.new()
-	mm.mesh.material = mat
-	mm.instance_count = boxes.size()
-	for i in boxes.size():
-		mm.set_instance_transform(i, boxes[i]["xf"])
-		mm.set_instance_color(i, boxes[i]["colour"])
-	var mmi := MultiMeshInstance3D.new()
-	mmi.name = "Rails"
-	mmi.multimesh = mm
-	add_child(mmi)
+	var mesh := BoxMesh.new()
+	mesh.material = mat
+	BoardgenKit.add_multimesh(self, "Rails", mesh, plan(layout))
