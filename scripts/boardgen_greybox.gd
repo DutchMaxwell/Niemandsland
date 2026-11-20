@@ -177,6 +177,7 @@ static func _town_landmarks(layout: Dictionary, origin: Vector2) -> Array[Dictio
 					_box(Vector2(hi.x - RIM_IN, lo.y + RIM_IN), hi - Vector2(0.0, RIM_IN), top, top + RIM_IN, "rim", false)])
 		for b in boxes:
 			b["landmark"] = i
+			b["lm"] = lm["kind"]
 		out.append_array(boxes)
 		i += 1
 	return out
@@ -252,7 +253,7 @@ func build(layout: Dictionary) -> void:
 		var b: Dictionary = boxes[i]
 		var size: Vector3 = (b["hi"] - b["lo"]) * INCHES_TO_METERS
 		var centre: Vector3 = (b["hi"] + b["lo"]) * 0.5 * INCHES_TO_METERS
-		mm.set_instance_transform(i, Transform3D(Basis.from_scale(size if draws_itself(b) else Vector3.ZERO), centre))
+		mm.set_instance_transform(i, Transform3D(Basis.from_scale(size if draws_itself(b) and not (kit_town and town_kit.draws_landmark(b)) else Vector3.ZERO), centre))   # (a solid box the kit draws keeps its collider)
 		mm.set_instance_custom_data(i, custom_data(b, theme["kinds"]))
 		if b["solid"]:
 			var shape := BoxShape3D.new()

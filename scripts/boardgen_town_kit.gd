@@ -21,7 +21,8 @@ const TINT := {"roof_tiles": Color(0.62, 0.30, 0.22), "timber": Color(0.42, 0.30
 const TEXTURED_TINT := {"roof_tiles": Color(1.35, 0.85, 0.7), "timber": Color(1.0, 1.0, 1.0), "coursed_stone": Color(0.62, 0.68, 0.76), "none": Color.WHITE}
 ## The authored clutter of BoardgenTownClutter (batches A2 / A2b / A6): the texture set each module is drawn with (the rest is "none": the kit's vertex colours, real colours for plants and cloth).
 const CLUTTER_SET := {"barrel": "timber", "crate": "timber", "bucket": "timber", "woodpile": "timber", "barrel_broken": "timber", "crate_broken": "timber", "cart_wreck": "timber", "loose_wheel": "timber",
-	"splinters_flat": "timber", "trough": "coursed_stone", "debris_flat_a": "coursed_stone", "debris_flat_b": "coursed_stone"}
+	"splinters_flat": "timber", "trough": "coursed_stone", "debris_flat_a": "coursed_stone", "debris_flat_b": "coursed_stone",
+	"fountain_basin": "coursed_stone", "fountain_column": "coursed_stone", "statue_plinth": "coursed_stone", "statue_stump": "coursed_stone", "pool_kerb": "coursed_stone", "well_ring": "coursed_stone", "well_frame": "timber"}
 ## Glass of a lamp and the coals of a brazier: drawn with an emissive material, the OmniLight sits at their origin.
 const GLOW := {"lantern_glow": Color(1.0, 0.72, 0.38), "brazier_coals": Color(1.0, 0.45, 0.18)}
 
@@ -46,7 +47,7 @@ func active() -> bool:
 static func set_of(module: String) -> String:
 	if BoardgenTownKit.CLUTTER_SET.has(module):
 		return CLUTTER_SET[module]
-	if module.begins_with(("weeds")) or module.begins_with("bramble") or module.begins_with("dead_tree") or module.begins_with("ivy") or module.begins_with("lantern") or module in ["cloth_flat", "laundry_line", "sack_pile"]:
+	if module.begins_with(("weeds")) or module.begins_with("bramble") or module.begins_with("dead_tree") or module.begins_with("ivy") or module.begins_with("lantern") or module in ["cloth_flat", "laundry_line", "sack_pile", "fountain_leaves"]:
 		return "none"
 	if module in ["roof_rafters", "beam_end", "shutter", "shutter_open", "door"]:
 		return "timber"
@@ -56,6 +57,16 @@ static func set_of(module: String) -> String:
 ## True for a greybox box the kit draws instead (a chimney or a merlon).
 static func replaces(box: Dictionary) -> bool:
 	return box.get("merlon", false) or box["kind"] == "brick"
+
+
+## True for the SOLID box of a fountain or a statue plinth when the kit draws that landmark instead (its collider stays).
+func draws_landmark(box: Dictionary) -> bool:
+	match box.get("lm", ""):
+		"TankCluster":
+			return kit.usable(BoardgenTownClutter.FOUNTAIN_MODULES)
+		"Crane":
+			return kit.usable(BoardgenTownClutter.STATUE_MODULES)
+	return false
 
 
 ## True for a greybox box an authored clutter module draws instead: a lamp post / its glass cube when the lamp modules are cached, a strip prop whose piece is cached.

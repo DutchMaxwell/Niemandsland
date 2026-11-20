@@ -16,6 +16,8 @@ const FLAT := ["debris_flat_a", "debris_flat_b", "splinters_flat", "weeds_flat",
 const PLOT_TREES := ["dead_tree_a", "dead_tree_b", "dead_tree_c"]
 const PLOT_BRAMBLES := ["bramble_a", "bramble_b"]
 const LAMP_MODULES := ["lantern_post", "lantern_glow"]
+const FOUNTAIN_MODULES := ["fountain_basin", "fountain_column", "fountain_leaves"]
+const STATUE_MODULES := ["statue_plinth", "statue_stump"]
 
 
 static func _item(yaw: float, at_in: Vector3) -> Dictionary:
@@ -67,6 +69,7 @@ static func plan(layout: Dictionary) -> Dictionary:
 	_flat(layout, out)
 	_plots(layout, out)
 	_ivy(layout, out)
+	_landmarks(layout, out)
 	return out
 
 
@@ -171,3 +174,35 @@ static func _ivy(layout: Dictionary, out: Dictionary) -> void:
 			var along := 0.8 + 1.4 * BoardgenTownDressing._hash(i, half, 90 + side)
 			var pos := Vector2(lo.x + along, lo.y if d.y < 0 else lo.y + cell_in) if d.x == 0 else Vector2(lo.x if d.x < 0 else lo.x + cell_in, lo.y + along)
 			_add(out, "ivy_strand_a" if BoardgenTownDressing._hash(i, half, 95 + side) < 0.5 else "ivy_strand_b", _item(atan2(float(d.x), float(d.y)), Vector3(pos.x, 0.0, pos.y)))
+
+
+## The landmarks of the town (R-L9 looks): the centre FOUNTAIN (basin, column with a broken bowl, leaves) on the market square, a STATUE (plinth and a broken stump, no figure) on a 1 x 1 post, a pool of
+## 2 x 2 cells as a pond with a stone KERB round it (3 in runs, +z over the water), a smaller pool as a WELL (ring and winch frame). Each stays inside its footprint; the core's class and collider
+## of the landmark are untouched (the solid fountain / statue boxes keep their colliders, the kit only draws them).
+static func _landmarks(layout: Dictionary, out: Dictionary) -> void:
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	for lm: Dictionary in layout["landmarks"]:
+		var lo := origin + Vector2(lm["x"], lm["z"]) * cell_in
+		var size := Vector2(lm["w"], lm["h"]) * cell_in
+		var centre := lo + size * 0.5
+		match lm["kind"]:
+			"TankCluster":
+				for m in FOUNTAIN_MODULES:
+					_add(out, m, _item(0.0, Vector3(centre.x, 0.0, centre.y)))
+			"Crane":
+				for m in STATUE_MODULES:
+					_add(out, m, _item(float(lm["turn"]) * PI * 0.5, Vector3(centre.x, 0.0 if m == "statue_plinth" else 1.57, centre.y)))
+			"Sump":
+				if lm["w"] >= 2 and lm["h"] >= 2:
+					for ix in int(lm["w"]):   # north and south edges
+						_add(out, "pool_kerb", _item(0.0, Vector3(lo.x + (ix + 0.5) * cell_in, 0.0, lo.y)))
+						_add(out, "pool_kerb", _item(PI, Vector3(lo.x + (ix + 0.5) * cell_in, 0.0, lo.y + size.y)))
+					for iz in int(lm["h"]):   # west and east edges
+						_add(out, "pool_kerb", _item(PI * 0.5, Vector3(lo.x, 0.0, lo.y + (iz + 0.5) * cell_in)))
+						_add(out, "pool_kerb", _item(-PI * 0.5, Vector3(lo.x + size.x, 0.0, lo.y + (iz + 0.5) * cell_in)))
+				else:
+					for m in ["well_ring", "well_frame"]:
+						_add(out, m, _item(0.0 if lm["w"] >= lm["h"] else PI * 0.5, Vector3(centre.x, 0.0, centre.y)))

@@ -110,3 +110,26 @@ func test_plot_pieces_stand_on_garden_plots_and_yards_and_ivy_never_on_a_ladder_
 			var c := Vector2i((Vector2(item["xf"].origin.x, item["xf"].origin.z) / 0.0254 - origin) / cell)
 			assert_bool(c.y * 16 + c.x == 5 * 16 + 8 or c.y * 16 + c.x == 5 * 16 + 9).is_false()
 	assert_dict(BoardgenTownClutter.plan(_town())).is_equal(BoardgenTownClutter.plan(_town()))   # deterministic
+
+
+## The landmarks: a fountain and a statue and the pools stand inside their footprints; the solid boxes keep their colliders (the greybox draws them zero-size when the kit draws them).
+func test_the_landmark_modules_stand_inside_their_footprints() -> void:
+	var layout := _town()
+	layout["landmarks"] = [
+		{"kind": "TankCluster", "x": 7, "z": 7, "w": 2, "h": 2, "turn": 0, "terrain": 2, "solid": true},
+		{"kind": "Crane", "x": 2, "z": 5, "w": 1, "h": 1, "turn": 1, "terrain": 2, "solid": true},
+		{"kind": "Sump", "x": 9, "z": 11, "w": 2, "h": 2, "turn": 0, "terrain": 1, "solid": false},
+		{"kind": "Sump", "x": 13, "z": 2, "w": 1, "h": 2, "turn": 0, "terrain": 1, "solid": false}]
+	var plan := BoardgenTownClutter.plan(layout)
+	for m in BoardgenTownClutter.FOUNTAIN_MODULES + BoardgenTownClutter.STATUE_MODULES + ["pool_kerb", "well_ring", "well_frame"]:
+		assert_bool(plan.has(m)).override_failure_message("no `%s` in the plan" % m).is_true()
+	assert_int((plan["pool_kerb"] as Array).size()).is_equal(8)   # 2 x 2: two runs on each of the four edges
+	var cell := 3.0
+	var origin := Vector2(-24.0, -24.0)
+	for item: Dictionary in plan["fountain_basin"]:
+		var p := Vector2(item["xf"].origin.x, item["xf"].origin.z) / 0.0254
+		assert_vector(p).is_equal_approx(Vector2(0.0, 0.0), Vector2.ONE * 0.001)   # the centre of the board
+	for item: Dictionary in plan["pool_kerb"]:
+		var p := Vector2(item["xf"].origin.x, item["xf"].origin.z) / 0.0254 - origin
+		assert_bool(p.x >= 9 * cell - 0.001 and p.x <= 11 * cell + 0.001 and p.y >= 11 * cell - 0.001 and p.y <= 13 * cell + 0.001).override_failure_message("a kerb run off its pool: %s" % p).is_true()
+	assert_float(plan["statue_stump"][0]["xf"].origin.y).is_equal_approx(1.57 * 0.0254, 0.0001)   # on top of the plinth
