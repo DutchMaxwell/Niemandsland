@@ -6934,7 +6934,7 @@ func _solo_log_crossing_strike_melee(striker: GameUnit) -> void:
 ## profiles at the hero's Quality — a joined hero fights WITH its unit (field-test lock). Each profile's
 ## attack count is SCALED so dead models no longer attack (goal 003 P3, mirrors the sim fix): shooting scales
 ## by alive/max; melee (with `enemy`) scales by the models within 2" of an enemy model ("Who Can Strike", p.9).
-func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: GameUnit = null) -> Array:
+func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: GameUnit = null, quiet := false) -> Array:
 	var members: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
@@ -6981,7 +6981,7 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 			# (walker/vehicle) from their own melee — the charger rolled nothing, only the defender struck.
 			melee_count = solo_controller.striking_models_for(member, enemy)
 			# MEL-02 (rules-must-log): when fewer models strike than are alive, say how many are in reach.
-			if melee_count < member.get_alive_count() and battle_log != null:
+			if melee_count < member.get_alive_count() and battle_log != null and not quiet:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d of %d models are within %d\" and strike" % [
 					member.get_name(), melee_count, member.get_alive_count(),
 					int(SoloController.melee_reach_in())], true)
@@ -7071,7 +7071,7 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 ## profile list inside a group that is still there. Below epoch 73 the old all-or-nothing read of the
 ## group list stays byte-exact.
 func _solo_strike_back_block(unit: GameUnit, enemy: GameUnit) -> String:
-	var groups: Array = _solo_attack_groups(unit, 0.0, true, enemy)
+	var groups: Array = _solo_attack_groups(unit, 0.0, true, enemy, true)   # the gate is a question, not a strike: it must not say MEL-02's line (the strike does)
 	if groups.is_empty():
 		return "none"
 	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:

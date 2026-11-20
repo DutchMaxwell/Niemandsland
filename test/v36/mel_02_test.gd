@@ -153,3 +153,20 @@ func test_the_strike_log_names_the_models_in_reach_at_72() -> void:
 	var foe := _foe()
 	var log := await _strike(AiActRecorder.EPOCH_72_PLAYTEST_RULES, striker, foe)
 	assert_str(log).contains("Pistols: 1 of 3 models are within 2\" and strike")
+
+
+## The strike-back GATE (`_solo_strike_back_block`) asks whether the defender may strike; it is a question, not a strike, so it must not say MEL-02's line
+## (the strike says it once): the table said it twice in a row for a defender with fewer strikers than models alive (melee roster sweep, 10 charges, the
+## core said it once). RED: the gate's call logs the line.
+func test_the_strike_back_gate_does_not_say_the_models_in_reach_line() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	var striker := _unit([Vector3.ZERO, Vector3(20 * INCH, 0, 0), Vector3(20 * INCH, 0, 0.2 * INCH)], [_ccw()])
+	var foe := _foe()
+	_main.battle_log.clear()
+	assert_str(str(_main._solo_strike_back_block(striker, foe))).is_equal("")
+	var gate_log := ""
+	for e in _main.battle_log.entries():
+		gate_log += str((e as Dictionary)["text"]) + "\n"
+	assert_str(gate_log).not_contains("models are within")
+	var strike_log := await _strike(AiActRecorder.EPOCH_73_V36, striker, foe)
+	assert_int(strike_log.count("models are within")).override_failure_message("the strike says the line once").is_equal(1)
