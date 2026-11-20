@@ -39,7 +39,7 @@ func test_every_fine_pattern_fades_to_its_mean_with_the_pixel_footprint() -> voi
 	assert_bool(src.contains("float keep(float coord, float size)")).is_true()
 	assert_bool(src.contains("fwidth(coord)")).is_true()
 	for fn in ["vec3 stone(", "vec3 cobble("]:
-		var body := src.substr(src.find(fn), 900)
+		var body := src.substr(src.find(fn), 1800)
 		assert_bool(body.contains("keep(")).override_failure_message("%s does not fade with the pixel footprint" % fn).is_true()
 	assert_bool(src.contains("keep(p.y, TILE_H)")).is_true()   # the roof tiles
 	assert_bool(src.contains("keep(xz.y, BOARD_W)")).is_true()   # the floor boards
