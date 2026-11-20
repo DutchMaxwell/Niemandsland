@@ -733,6 +733,20 @@ func test_a_versatile_shooter_against_a_to_hit_modifier_is_refused_as_a_pair() -
 	var art_vers := _unit(["Versatile Attack", "Artillery"], [[]])
 	art_vers.unit_properties["faction_folder"] = "battle_brothers"
 	assert_array(CoreSlice.pair_refusals(art_vers, plain)).override_failure_message("the shooter's own Artillery modifies the number too").is_equal(["versatile_pick_modified_to_hit"])
+	# H-10 (Plan H): Unpredictable Shooter's +1 to hit (the 4-6 half) is folded into the number the table latches the pick on: Vinci Tech
+	# (Versatile Attack) + Unpredictable Shooter differed on 5 of 16 seeds at over 9 in. RED: take the primitive out of TO_HIT_ON_SHOOTER.
+	var vinci := _unit(["Vinci Tech", "Unpredictable Shooter"], [[]])
+	vinci.unit_properties["game_system"] = "aof"
+	vinci.unit_properties["faction_folder"] = "duchies_of_vinci"
+	assert_array(CoreSlice.pair_refusals(vinci, plain)).override_failure_message("Versatile + Unpredictable Shooter picks on a modified number").is_equal(["versatile_pick_modified_to_hit"])
+	var vinci_only := _unit(["Vinci Tech"], [[]])
+	vinci_only.unit_properties["game_system"] = "aof"
+	vinci_only.unit_properties["faction_folder"] = "duchies_of_vinci"
+	assert_array(CoreSlice.pair_refusals(vinci_only, plain)).override_failure_message("Versatile alone stays on the core").is_empty()
+	var unpredictable_only := _unit(["Unpredictable Shooter"], [[]])
+	unpredictable_only.unit_properties["game_system"] = "aof"
+	unpredictable_only.unit_properties["faction_folder"] = "duchies_of_vinci"
+	assert_array(CoreSlice.pair_refusals(unpredictable_only, plain)).override_failure_message("no Versatile pick, nothing to differ on").is_empty()
 	var host := _unit([], [[]])
 	var hero := _unit(["Versatile Attack"], [])
 	hero.unit_properties["faction_folder"] = "battle_brothers"
