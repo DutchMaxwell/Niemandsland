@@ -723,6 +723,10 @@ pub struct UnitDelta {
     /// activation is in `buffs_spent` only (no news for the table: it lands the effect itself and spends it). Report only:
     /// the door lands each name from its own spell entry (`CoreActivation._land_spell_buffs`), the core pushes nothing.
     pub buffs_gained: Vec<String>,
+    /// Landing lane: the melee-scoped Marks (once, attackers-side, scope `melee`: Rapid Charge, Piercing Fighting, Precision Fighting) this unit holds at the end and
+    /// did not hold at the start, as (record name, scope, granted rule). The table keeps such a record on the marked unit after a volley for a later charger; the door
+    /// never ran the table's `_solo_apply_vs_marks`, so `land_delta` records them (silently: the core said the pick and the record's lines).
+    pub marks_left: Vec<(String, String, String)>,
 }
 
 /// The once buffs of `before` that `after` no longer holds, as (record name, scope). Each record is first matched to an identical
@@ -742,6 +746,21 @@ fn spent_buffs(before: &[LiveMod], after: &State, u: usize) -> Vec<(String, Stri
         }
     }
     out.extend(cast_spent_of(after, u).map(|r| (r.name.to_string(), r.scope.to_string())));
+    out
+}
+
+/// The melee-scoped once Marks `after` holds on unit `u` beyond `before`'s (matched one for one), in ledger order.
+fn marks_left(before: &[LiveMod], after: &State, u: usize) -> Vec<(String, String, String)> {
+    let mut known: Vec<&LiveMod> = before.iter().collect();
+    let mut out = Vec::new();
+    for r in after.buffs[u].iter().filter(|r| r.attackers && r.once && &*r.scope == "melee") {
+        match known.iter().position(|b| *b == r) {
+            Some(i) => {
+                known.remove(i);
+            }
+            None => out.push((r.name.to_string(), r.scope.to_string(), r.grants_rule.to_string())),
+        }
+    }
     out
 }
 
@@ -850,6 +869,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 surprise_attack_used: after.surprise_attack_used[u],
                 buffs_spent: spent_buffs(&before.buffs[u], after, u),
                 buffs_gained: cast_gained_of(after, u).map(|r| r.name.to_string()).collect(),
+                marks_left: marks_left(&before.buffs[u], after, u),
             });
         }
     }
