@@ -390,7 +390,8 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 			var interference := id.begins_with("interference:")
 			if interference and not cx.is_empty():
 				await _cast_throw(main, cx)   # CC-14a: the table shows the cast (markers, seal, "Cast" card) BEFORE the foe is asked
-			var option: String = await main._owner_choice(owner, id, options, choice_purpose(id, transcript), wounds)
+			var option: String = await main._owner_choice(owner, id, options, choice_purpose(id, transcript), wounds,
+				_interference_context(main, cx) if interference else {})
 			probes.erase(id)   # asked once: the answer follows, or the core's automatic pick stands
 			if answer_fits(id, options, option):
 				transcript.append({"t": "choice", "id": id, "option": option})
@@ -492,7 +493,7 @@ static func _cast_spell_of(transcript: Array, owner_key: String) -> String:
 ## volley's stage opens then: the table's casts run in their own stages before it).
 static func cast_context(main, report: Dictionary, volley: Callable = Callable()) -> Dictionary:
 	var before: Dictionary = main._solo_act_flags if not main._solo_act_flags.is_empty() else main._solo_unit_flags()
-	return {"casts": report.get("casts", []), "next": 0, "cur": {}, "began": false, "ended": false, "landed": {},
+	return {"report": report, "casts": report.get("casts", []), "next": 0, "cur": {}, "began": false, "ended": false, "landed": {},
 		"before": before, "volley": volley, "volley_open": false, "pre_due": false}
 
 
@@ -508,6 +509,7 @@ static func _cast_line(main, unit: GameUnit, cx: Dictionary, line: Dictionary) -
 	var text := str(line["text"])
 	if bool(cx["began"]) and text.begins_with("%s fires" % unit.get_name()):
 		await _cast_finish(main, cx)
+		main._solo_flush_volley_note(cx["report"])   # the table's order: casts, the volley's note, then its first line
 		_cast_open_volley(cx)
 		cx["pre_due"] = true   # the casts' casualties of this very step land after its lines: `drive` writes the `pre` block then
 		return
@@ -575,6 +577,19 @@ static func _cast_throw(main, cx: Dictionary) -> void:
 	cur["announce"] = main._solo_show_attack_announce(c.get("caster_unit", c["caster"]), targets[0], "casts %s at" % name, false)
 	cur["seal"] = main._vfx_seal_begin(c["caster"], entry, entry.get("effect", {}), name)
 	await main._solo_stage_phase("Cast", SoloController.Pace.ANNOUNCE)
+
+
+## CC-14b: what the foe's dialog shows about the cast on the stage: caster, spell, targets, the base target after the casting net
+## (conduit mod included, as the table's `_solo_resolve_one_cast` clamps it) and the boost. {} when no cast is on the stage.
+static func _interference_context(main, cx: Dictionary) -> Dictionary:
+	var c := _cast_of(cx)
+	if c.is_empty():
+		return {}
+	var caster: GameUnit = c["caster"]
+	var base := int(c.get("base_target", 4))   # the planner always sets it; 4 is the book's base cast target
+	var net := int(SoloController.caster_casting_net(caster, int(main.solo_controller.caster_conduit(caster).get("mod", 0)))["net"])
+	return {"caster": caster.get_name(), "spell": str(c.get("name", "?")), "targets": main._solo_cast_target_label(_cast_targets(c)),
+		"base": clampi(base - net, 2, 6) if net != 0 else base, "boost": int(c.get("boost", 0))}
 
 
 ## CC-14a: a foe's interference answer `n` for choice `id`: the tokens leave the pool's units the way the core takes them and the table

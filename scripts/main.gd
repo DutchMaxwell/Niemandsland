@@ -4985,7 +4985,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		return
 	if bool(report.get("moved", false)) and battle_log != null and SoloController.has_indirect_ranged(_solo_all_weapons(unit)) \
 			and SoloController.indirect_ignores_los(unit) and not SoloController.indirect_ignores_los(unit, false):
-		battle_log.log_event(BattleLog.Category.COMBAT, "Indirect: %s did not Hold — its Indirect weapons need line of sight" % unit.get_name(), true)
+		_solo_volley_note(report, "Indirect: %s did not Hold — its Indirect weapons need line of sight" % unit.get_name())
 	# Split fire: assign each shot the best target under its weapon overlay, then group shots by target.
 	# Target validity is PER MODEL (GF v3.5.1 p.8): the shot's MEMBER needs a model with range+LOS.
 	var groups: Dictionary = {}   # target unit_id -> {"target": GameUnit, "shots": Array}
@@ -5050,6 +5050,24 @@ func _solo_log_no_volley(unit: GameUnit, report: Dictionary, why: String) -> voi
 		unit.get_name(), why, hold_note], true)
 
 
+## A table line the volley's body writes BEFORE its core call but the table's order puts AFTER the activation's casts (the Indirect
+## note: casts, note, "<unit> fires at ..."). With the cast door the core's one call resolves the casts, so the note waits in the
+## report: `CoreActivation._cast_line` writes it when the cast leg is over (before the volley's first line), `_solo_flush_volley_note`
+## when the core call ends or hands the activation back to the table (after the table's own casts).
+func _solo_volley_note(report: Dictionary, text: String) -> void:
+	if report.has("cast_door"):
+		report["volley_note"] = text
+	elif battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, text, true)
+
+
+func _solo_flush_volley_note(report: Dictionary) -> void:
+	var text := str(report.get("volley_note", ""))
+	report.erase("volley_note")
+	if not text.is_empty() and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, text, true)
+
+
 ## One-core cast door (CC-13a): the AI body's cast slot. With the switch OFF, or an activation the core does not take, the table
 ## resolves the planned casts as it always did. With it ON and the activation taken, a dry probe asks the core first (before any die):
 ## taken -> the report is marked `cast_door` and the core's one call resolves the casts (Dangerous, casts, volley); refused -> the
@@ -5079,10 +5097,12 @@ func _solo_ai_core_call(unit: GameUnit, report: Dictionary, target: GameUnit, sh
 			report["core_took_dangerous"] = true
 		report.erase("core_through")
 		report.erase("cast_door")
+		_solo_flush_volley_note(report)   # a cast-only activation never reached the volley's first line
 		return true
 	await _solo_pay_dangerous(unit, report)
 	if report.erase("cast_door"):   # CC-13a: the core refused before any die: the casts the probe left to it, after the test, in the table's order
 		await _solo_resolve_ai_casts(report)
+	_solo_flush_volley_note(report)   # the table's volley follows: its note after the casts, as always
 	return false
 
 
@@ -11963,9 +11983,9 @@ func _owner_roll_fallback(unit: GameUnit, count: int, target: int, roll_kind: St
 ## `request_roll` with `ask.choice` and answers `roll_result` with its option id. No answer (vacant seat or
 ## the timeout) leaves the core's automatic pick and says so in ONE battle-log line. The caller validates
 ## the returned option against the core's options; "" always means "automatic".
-func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String, wounds := 0) -> String:
+func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String, wounds := 0, ctx := {}) -> String:
 	if _solo_is_ai_unit(unit) or _solo_i_own_unit(unit):
-		return await _solo_choice_local(unit, id, options, wounds)
+		return await _solo_choice_local(unit, id, options, wounds, ctx)
 	var owner_peer := _solo_peer_for_slot(unit_owner_slot(unit.unit_properties))
 	if owner_peer == 0 and _rejoin_handshake_pending():
 		var wait_until := Time.get_ticks_msec() + int(OWNER_REJOIN_WAIT_S * 1000.0)
@@ -11976,7 +11996,7 @@ func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String, 
 		if id.begins_with("interference:") and battle_log != null:   # CC-14a: the table says whom it waits for (`_solo_remote_interference`)
 			battle_log.log_event(BattleLog.Category.COMBAT, "Waiting for %s — interference against %s" % [_solo_owner_name(unit), purpose], true)
 		var reply: Dictionary = await _owner_request(owner_peer, {"unit": unit.unit_id, "kind": "choice",
-			"count": 0, "target": 0, "purpose": purpose, "ask": {"choice": {"id": id, "options": options, "wounds": wounds}}})
+			"count": 0, "target": 0, "purpose": purpose, "ask": {"choice": {"id": id, "options": options, "wounds": wounds, "ctx": ctx}}})
 		if bool(reply.get("done", false)):
 			var answered: Array = reply.get("faces", [])
 			var option := str(answered[0]) if not answered.is_empty() else ""
@@ -11994,8 +12014,12 @@ func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String, 
 ## P4.0-6: the answer on the choice's OWN machine. An AI unit (or the headless batch) keeps the core's
 ## automatic pick, so nothing waits. The first real choice is the Takedown model pick: the table's own
 ## click prompt, handed back as one of the core's options ("" when no option fits or the pick was skipped).
-func _solo_choice_local(unit: GameUnit, id: String, options: Array, wounds := 0) -> String:
-	if _solo_is_ai_unit(unit) or _solo_batch:
+func _solo_choice_local(unit: GameUnit, id: String, options: Array, wounds := 0, ctx := {}) -> String:
+	if _solo_is_ai_unit(unit):
+		return ""
+	if id.get_slice(":", 0) == "interference":   # CC-14b: the table's own prompt never looked at the batch flag, neither does the door's
+		return await _solo_pick_interference(options, ctx)
+	if _solo_batch:
 		return ""
 	if id.get_slice(":", 0) == "wound_alloc":
 		return await _solo_pick_wound_slots(opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2)), options, wounds)
@@ -12013,6 +12037,20 @@ func _solo_choice_local(unit: GameUnit, id: String, options: Array, wounds := 0)
 	var slot: int = target.get_alive_models().find(picked.models[idx])
 	var option := "slot:%d" % slot
 	return option if slot >= 0 and options.has(option) else ""
+
+
+## CC-14b: the owner's answer to the core's interference choice - the table's own tableau (`InterferenceDialog`, +/- tokens with a live
+## cast-roll preview) in collect mode: it only ASKS, the driver spends the tokens (`CoreActivation._land_interference`). `ctx` = the
+## cast's facts from the host (caster, spell, targets label, base target after the casting net, boost); the options are "0".."pool".
+## "" = no context (an older host): the core then reads no answer as no interference.
+func _solo_pick_interference(options: Array, ctx: Dictionary) -> String:
+	if ctx.is_empty() or options.size() < 2:
+		return ""
+	var dlg := InterferenceDialog.new()
+	add_child(dlg)
+	var spent: int = await dlg.ask(str(ctx.get("caster", "")), str(ctx.get("spell", "")), str(ctx.get("targets", "")),
+		int(ctx.get("base", AiSpell.CAST_BASE_TARGET)), int(ctx.get("boost", 0)), options.size() - 1)
+	return str(clampi(spent, 0, options.size() - 1))
 
 
 ## P4.D-24: the owner's answer to the core's wound allocation (`wound_alloc:...`) - the #172 prompt in collect mode. A click
@@ -12052,7 +12090,7 @@ func _rpc_request_roll(rq: Dictionary, from_peer: int) -> void:
 	if ask.has("choice"):
 		# P4.0-6: OUR pick for the core's choice; a skipped pick answers nothing, so the core falls back.
 		var c: Dictionary = ask["choice"]
-		var option: String = await _solo_choice_local(unit, str(c.get("id", "")), c.get("options", []), int(c.get("wounds", 0)))
+		var option: String = await _solo_choice_local(unit, str(c.get("id", "")), c.get("options", []), int(c.get("wounds", 0)), c.get("ctx", {}))
 		faces = [option] if not option.is_empty() else []
 	elif ask.has("spell"):
 		# #1719: an online cast at our side — the interference is OUR player's choice (`_solo_remote_interference`).

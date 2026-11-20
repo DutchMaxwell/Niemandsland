@@ -44,6 +44,10 @@ func _core(host_shaken: bool) -> Dictionary:
 		"hero": {"alive": 1, "wounds": [1], "shaken": false, "fatigued": false}}}
 
 
+func before_test() -> void:
+	CoreShadow._wiped_at_capture = {}
+
+
 func test_a_joined_hero_reads_its_hosts_core_shaken() -> void:
 	assert_str(CoreShadow._state_diff(_main_with_shaken_chain(), _core(true))).is_equal("")
 
@@ -61,3 +65,30 @@ func test_a_hero_signed_roll_matches_its_hosts_label() -> void:
 	assert_bool(CoreShadow.same_roll(["defense", 2, 4, "Elite Pathfinder"], ["defense", 2, 5, "Assault Brothers"], host_of)).is_false()
 	assert_bool(CoreShadow.same_roll(["defense", 2, 5, "Elite Pathfinder"], ["defense", 2, 5, "Assault Brothers"], {})).is_false()
 	assert_bool(CoreShadow.same_roll(["attack", 3, 5, "Grunt Veteran"], ["attack", 3, 5, "Grunt Veteran"], host_of)).is_true()
+
+
+## Gate 10 (game 12, d46589e10): the host was wiped Shaken in an EARLIER activation; the hero fought on alone, idled and
+## recovered. Both sides read the hero 0, but the compare mirrored the dead host's stale 1 onto it (3 false "shaken").
+## RED: drop `not _wiped_at_capture.has(host)` in `CoreShadow._state_diff` -> this case answers "shaken".
+func test_a_host_wiped_before_the_activation_is_not_mirrored() -> void:
+	var main := _main_with_shaken_chain()
+	var host: GameUnit = main.opr_army_manager.game_units["host"]
+	var hero: GameUnit = main.opr_army_manager.game_units["hero"]
+	(host.models[0] as ModelInstance).is_alive = false
+	hero.is_shaken = false   # the lone hero spent its activation idle and recovered; the dead host keeps its flag
+	CoreShadow.note_wiped(main.opr_army_manager)   # the capture: the host is already gone
+	var core := {"units": {"host": {"alive": 0, "wounds": [], "shaken": true, "fatigued": false},
+		"hero": {"alive": 1, "wounds": [1], "shaken": false, "fatigued": false}}}
+	assert_str(CoreShadow._state_diff(main, core)).is_equal("")
+
+
+## The other half (game 12 volleys 2 and 7): the host is shaken AND wiped inside this activation; the table's landing
+## mirrors that onto the hero, so the compare must still mirror. RED for a "host alive at the end" guard: "shaken".
+func test_a_host_wiped_in_this_activation_is_still_mirrored() -> void:
+	var main := _main_with_shaken_chain()
+	var host: GameUnit = main.opr_army_manager.game_units["host"]
+	CoreShadow.note_wiped(main.opr_army_manager)   # the capture: the host still stands
+	(host.models[0] as ModelInstance).is_alive = false   # this volley wipes it, Shaken; the hero reads Shaken too
+	var core := {"units": {"host": {"alive": 0, "wounds": [], "shaken": true, "fatigued": false},
+		"hero": {"alive": 1, "wounds": [1], "shaken": false, "fatigued": false}}}
+	assert_str(CoreShadow._state_diff(main, core)).is_equal("")
