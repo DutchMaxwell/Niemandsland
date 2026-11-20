@@ -83,6 +83,7 @@ same commit as the struct change.
 | `charge_no_difficult` | act_recorder.gd:846 | no | no | no (capture input) |
 | `charge_probe_r` | act_recorder.gd:845 | no | no | no (capture input) |
 | `buffs` | main.gd:447 | spent once buffs (`land_delta`, C-15 / #2924); a buff the core ADDS is not carried | no | no (delta) |
+| `cast_buffs` | none (core bookkeeping) | names the once records this activation's casts placed and its volley or next cast spent (`buffs_spent`, CAST-O7) | no | no (report-only list, cleared at the activation start) |
 | `vs_mark_round` | main.gd:24332 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `hit_and_run_round` | solo_controller.gd:12793 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `moved_round` | main.gd:1761 | yes (`land_delta`, P4.0-4e) | X/Z only | no (delta) |
@@ -218,4 +219,5 @@ and the `buffs` spend (`sim.rs:10594`).
 Counts: **33 (a), 1 (b), 2 (c)**; the (b) is fixed by #2803 (volley) and #2804 (morale). The single (b) was the live buff ledger: the core's `spend_once`
 was the one plain-path write whose result no surface carried (the capture sends the ledger, the core
 spends in its copy) and the table's own spend is skipped on the core path. C-15 / #2924 closed it: the
-delta's `buffs_spent` (per record its name and scope) lands in `_land_buffs`.
+delta's `buffs_spent` (per record its name and scope) lands in `_land_buffs`. CAST-O7: a once record the activation's own cast placed before its attack and the
+volley spent is named there too (`State::cast_buffs`; it was never in the capture, so the before/after diff missed it).

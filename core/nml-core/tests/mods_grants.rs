@@ -95,6 +95,7 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
         charge_no_difficult: vec![false; 2],
         charge_probe_r: vec![0.0; 2],
         buffs: vec![Vec::new(), Vec::new()],
+        cast_buffs: Vec::new(),
         vs_mark_round: vec![-1; 2],
         hit_and_run_round: vec![-1; 2],
         moved_round: vec![-1; 2],

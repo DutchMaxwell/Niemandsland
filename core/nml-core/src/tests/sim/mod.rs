@@ -82,6 +82,7 @@
             charge_no_difficult: vec![false; 4],
             charge_probe_r: vec![0.0; 4],
             buffs: vec![Vec::new(); 4],
+            cast_buffs: Vec::new(),
             vs_mark_round: vec![-1; 4],
             hit_and_run_round: vec![-1; 4],
             moved_round: vec![-1; 4],

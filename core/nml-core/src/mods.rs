@@ -358,9 +358,21 @@ pub fn spend_once_except(
     state: &mut State, i: usize, roles: &[Role], melee: bool, keep: impl Fn(&LiveMod) -> bool,
 ) {
     let host = state.attached_to[i];
+    // CAST-O7: a record this activation's casts placed is named in the delta when it is spent here (`State::cast_buffs`).
+    let track = !state.cast_buffs.is_empty();
     for u in [Some(i), host].into_iter().flatten() {
+        let mut gone: Vec<LiveMod> = Vec::new();
         state.buffs[u].retain(|r| {
-            !(r.once && roles.iter().any(|&role| matches(r, role, melee)) && !keep(r))
+            let spend = r.once && roles.iter().any(|&role| matches(r, role, melee)) && !keep(r);
+            if spend && track {
+                gone.push(r.clone());
+            }
+            !spend
         });
+        for r in gone {
+            if let Some(e) = state.cast_buffs.iter_mut().find(|(cu, cr, spent)| *cu == u && !*spent && *cr == r) {
+                e.2 = true;
+            }
+        }
     }
 }
