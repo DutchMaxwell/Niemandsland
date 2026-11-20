@@ -3033,6 +3033,11 @@ pub fn resolve_melee_leg_wipe(
                 faces: faces.clone(),
                 owner: sh.owner.into(),
             });
+            // MEL-02 (rules-must-log): a Limited weapon's spend names itself right after its roll, as the table's strike loop does; the engine-log line
+            // (`strike_phase`) never reaches the door.
+            if p.limited {
+                say_rule(tray, "limited", sh.att.side, || format!("{} (Limited) is used up in melee", p.name));
+            }
             if p.hazardous {
                 let ones = faces.iter().filter(|&&f| f == 1).count() as i64;
                 if ones > 0 {
