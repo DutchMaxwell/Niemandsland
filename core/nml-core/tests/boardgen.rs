@@ -427,3 +427,135 @@ fn town_boards_are_accepted_and_connected_over_200_seeds() {
         }
     }}
 }
+
+/// What one batch of boards looks like: means over the boards, the shares the plan's census asks for.
+#[derive(Default, Debug)]
+struct Census {
+    boards: f64, retried: f64, failed: f64,
+    tier: [f64; 4],                       // mean cells per level
+    lots: f64, lot_area: f64, open_lot_area: f64, lot_kinds: [f64; 5],     // mean count, lot cells, level-0 lot cells, count per LotKind
+    ground: [f64; 5],                     // level-0 cells: street, hazard, yard (Terrace rest), other lot ground, empty ground
+    ladders: f64, towers: f64, tower_blob: usize,
+    band_blocked: f64, edge_lanes: f64, longest_lane_in: f64,
+    kinds: [f64; 4],                      // boards carrying a TankCluster / Crane / Sump / PumpHouse
+    dangerous_cells: f64, solid_cells: f64,
+    pieces: f64, sight_pieces: f64, dangerous_pieces: f64,   // lots + landmark pieces; those with a raised cell or a solid; Hazard lots + pools
+}
+
+fn census(theme: Theme, sym: Symmetry, seeds: std::ops::RangeInclusive<i64>) -> Census {
+    use nml_core::boardgen::LotKind;
+    let mut c = Census::default();
+    for seed in seeds {
+        let l = generate_themed(seed, sym, theme);
+        c.boards += 1.0;
+        c.retried += f64::from(u8::from(l.attempt > 0));
+        c.failed += f64::from(u8::from(!l.problems().is_empty()));
+        let sol = solid(&l);
+        for cell in &l.cells {
+            c.tier[usize::from(cell.level)] += 1.0;
+            if cell.level == 0 {
+                let i = cell.z * GRID + cell.x;
+                let k = if cell.lot_kind == LotKind::Hazard { 1 } else if cell.street { 0 } else if cell.lot_kind == LotKind::Terrace { 2 } else if cell.lot_kind != LotKind::Street { 3 } else { 4 };
+                c.ground[if sol[i] { 4 } else { k }] += 1.0;
+            }
+        }
+        c.lots += l.lots.len() as f64;
+        for lot in &l.lots {
+            c.lot_area += (lot.w * lot.h) as f64;
+            c.lot_kinds[lot.kind as usize] += 1.0;
+            c.open_lot_area += (0..lot.h).flat_map(|dz| (0..lot.w).map(move |dx| (lot.x + dx, lot.z + dz))).filter(|&(x, z)| l.cell(x, z).level == 0).count() as f64;
+        }
+        let raised_lot = |lot: &nml_core::boardgen::Lot| (0..lot.h).any(|dz| (0..lot.w).any(|dx| l.cell(lot.x + dx, lot.z + dz).level > 0));
+        c.pieces += (l.lots.len() + l.landmarks.len()) as f64;
+        c.sight_pieces += (l.lots.iter().filter(|lot| raised_lot(lot)).count() + l.landmarks.iter().filter(|lm| lm.kind.is_solid()).count()) as f64;
+        c.dangerous_pieces += (l.lots.iter().filter(|lot| lot.kind == LotKind::Hazard).count() + l.landmarks.iter().filter(|lm| lm.kind == LandmarkKind::Sump).count()) as f64;
+        c.ladders += l.connectors.len() as f64;
+        c.towers += l.towers() as f64;
+        c.band_blocked += blocked_share(&l, 3, &band_pairs(), true);
+        let open = |x: usize, z: usize| l.cell(x, z).level == 0 && !sol[z * GRID + x];
+        let (mut edge, mut longest) = (0, 0);
+        for line in 0..GRID { for along_x in [true, false] {
+            let (mut run, mut full) = (0, true);
+            for k in 0..GRID {
+                if if along_x { open(k, line) } else { open(line, k) } { run += 1; longest = longest.max(run) } else { run = 0; full = false }
+            }
+            edge += usize::from(full);
+        }}
+        c.edge_lanes += f64::from(u8::from(edge > 0));
+        c.longest_lane_in += longest as f64 * 3.0;
+        for lm in &l.landmarks { c.kinds[lm.kind as usize] += 0.0; }
+        for (k, kind) in [LandmarkKind::TankCluster, LandmarkKind::Crane, LandmarkKind::Sump, LandmarkKind::PumpHouse].into_iter().enumerate() {
+            c.kinds[k] += f64::from(u8::from(l.landmarks.iter().any(|lm| lm.kind == kind)));
+        }
+        c.dangerous_cells += l.cells.iter().filter(|x| x.lot_kind == LotKind::Hazard).count() as f64;
+        c.solid_cells += sol.iter().filter(|&&s| s).count() as f64;
+        // the largest connected blob of level-3 cells
+        let mut seen = vec![false; GRID * GRID];
+        for s in 0..GRID * GRID {
+            if seen[s] || l.cells[s].level != 3 { continue }
+            let (mut stack, mut n) = (vec![s], 0);
+            seen[s] = true;
+            while let Some(i) = stack.pop() { n += 1; for j in nbrs(i) { if !seen[j] && l.cells[j].level == 3 { seen[j] = true; stack.push(j) } } }
+            c.tower_blob = c.tower_blob.max(n);
+        }
+    }
+    c
+}
+
+fn census_report(name: &str, c: &Census) -> String {
+    let n = c.boards;
+    let g = |v: f64| v / n;
+    let pct = |v: f64| 100.0 * v / n / 256.0;
+    let ground: f64 = c.ground.iter().sum();
+    format!("| {name} | {:.1} | {:.1} | {:.1} / {:.1} / {:.1} / {:.1} | {:.1} ({:.1} cells) | {:.1} / {:.1} / {:.1} / {:.1} / {:.1} | {:.1} % | {:.1} / {:.1} / {:.1} / {:.1} / {:.1} % | {:.1} | {:.1} (blob {}) | {:.1} % | {:.2} | {:.1} in | {:.0} / {:.0} / {:.0} / {:.0} % | {:.1} | {:.1} | {:.1} pieces: {:.0} % sight-blocking, {:.1} dangerous |",
+        100.0 * c.retried / n, 100.0 * c.failed / n, pct(c.tier[0]), pct(c.tier[1]), pct(c.tier[2]), pct(c.tier[3]), g(c.lots), g(c.lot_area),
+        g(c.lot_kinds[0]), g(c.lot_kinds[1]), g(c.lot_kinds[2]), g(c.lot_kinds[3]), g(c.lot_kinds[4]), 100.0 * c.open_lot_area / c.lot_area,
+        100.0 * c.ground[0] / ground, 100.0 * c.ground[1] / ground, 100.0 * c.ground[2] / ground, 100.0 * c.ground[3] / ground, 100.0 * c.ground[4] / ground,
+        g(c.ladders), g(c.towers), c.tower_blob, 100.0 * g(c.band_blocked), g(c.edge_lanes), g(c.longest_lane_in),
+        100.0 * g(c.kinds[0]), 100.0 * g(c.kinds[1]), 100.0 * g(c.kinds[2]), 100.0 * g(c.kinds[3]), g(c.dangerous_cells), g(c.solid_cells), g(c.pieces), 100.0 * c.sight_pieces / c.pieces, g(c.dangerous_pieces))
+}
+
+#[test]
+#[ignore = "measurement: NML_CENSUS_OUT=<file> cargo test --test boardgen census_of_a_town -- --ignored"]
+fn census_of_a_town() {
+    let mut out = String::from("| set | retried % | failed % | level 0/3/6/9 in % of cells | lots (area cells) | lots Street/Block/Terrace/Deck/Hazard | open (level-0) share of lot cells | level-0 cells street/hazard/yard/other lot/empty-or-solid % | ladders | tower cells | opening-turn rays blocked | boards with an edge-to-edge lane | longest open lane | boards with fountain/statue/pool/hall % | hazard cells | solid cells | terrain pieces |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+    for (theme, name) in [(Theme::Deepworks, "Deepworks"), (Theme::RuinTown, "RuinTown")] {
+        for sym in BOTH {
+            out += &census_report(&format!("{name} {sym:?}"), &census(theme, sym, 1..=1000));
+            out.push('\n');
+        }
+    }
+    eprintln!("{out}");
+    if let Ok(path) = std::env::var("NML_CENSUS_OUT") { std::fs::write(path, &out).expect("census file"); }
+}
+
+/// Ruin-town windows of the lane's census (ds/ruintown_census.md): many small buildings, no straight open lane across the board.
+#[test]
+fn a_town_is_many_small_buildings_and_no_open_lane_runs_edge_to_edge() {
+    let (mut lots, mut min_lots, mut retried, mut blocked, n) = (0, usize::MAX, 0, 0.0, 300);
+    for seed in 1..=n {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        assert!(l.problems().is_empty(), "seed {seed}: {:?}", l.problems());
+        lots += l.lots.len();
+        min_lots = min_lots.min(l.lots.len());
+        retried += usize::from(l.attempt > 0);
+        blocked += blocked_share(&l, 3, &band_pairs(), true);
+        assert!(l.lots.iter().all(|lot| lot.w * lot.h <= 6 && lot.w.max(lot.h) <= 3), "seed {seed}: a lot bigger than 3 x 2 cells");
+        let sol = solid(&l);
+        let open = |x: usize, z: usize| l.cell(x, z).level == 0 && !sol[z * GRID + x];   // written here, not taken from the module
+        let lane = (0..GRID).any(|a| (0..GRID).all(|k| open(k, a)) || (0..GRID).all(|k| open(a, k)));
+        assert!(!lane, "seed {seed}: an open lane runs from edge to edge\n{}", l.to_ascii());
+    }
+    let (mean, share, rays) = (lots as f64 / n as f64, retried as f64 / n as f64, blocked / n as f64);
+    eprintln!("town lots mean {mean:.1} min {min_lots}, retried {share:.3}, opening-turn rays blocked {rays:.3}");
+    assert!(mean >= 24.0 && min_lots >= 18, "lots per board: mean {mean:.1}, min {min_lots}");
+    assert!(share <= 0.60, "{share:.2} of the town boards needed a later sub-seed");
+    assert!(rays >= 0.70, "the opening-turn sight lines are {rays:.2} blocked");
+}
+
+#[test]
+fn only_the_town_asks_for_a_lane_free_board() {
+    assert!(Theme::RuinTown.budgets().lane_free && !Theme::Deepworks.budgets().lane_free);
+    let with_lane = (1..=200).filter(|&seed| generate(seed, Symmetry::Point180).has_edge_to_edge_lane()).count();
+    assert!(with_lane > 0, "the Deepworks boards are left as they were: some still have a lane");
+}
