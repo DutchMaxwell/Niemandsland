@@ -41,6 +41,8 @@ func test_the_recorded_layout_is_a_whole_board() -> void:
 	assert_int(layout["cells"].size()).is_equal(CELLS)
 	assert_array(layout["level_in"]).is_equal([0, 3, 6, 9])
 	assert_array(layout["problems"]).is_empty()
+	assert_bool(layout["landmarks"].size() in [2, 4]).is_true()   # one or two mirrored pairs, each with the core's terrain class and solidity
+	assert_bool(layout["landmarks"].all(func(lm: Dictionary) -> bool: return lm.has("terrain") and lm.has("solid"))).is_true()
 	var core := _core()
 	if core != null:   # the recording still is what the core makes (this check wakes up once the binding is merged)
 		assert_dict(core.boardgen_layout(42)).is_equal(layout)

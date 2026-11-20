@@ -2520,6 +2520,43 @@
 "low_xz": [4, 14]
 }],
 "deploy_depth_cells": 4,
+"landmarks": [{
+"h": 2,
+"kind": "TankCluster",
+"solid": true,
+"terrain": 3,
+"turn": 2,
+"w": 2,
+"x": 4,
+"z": 4
+}, {
+"h": 2,
+"kind": "TankCluster",
+"solid": true,
+"terrain": 3,
+"turn": 0,
+"w": 2,
+"x": 10,
+"z": 10
+}, {
+"h": 1,
+"kind": "Crane",
+"solid": true,
+"terrain": 3,
+"turn": 2,
+"w": 1,
+"x": 1,
+"z": 6
+}, {
+"h": 1,
+"kind": "Crane",
+"solid": true,
+"terrain": 3,
+"turn": 0,
+"w": 1,
+"x": 14,
+"z": 9
+}],
 "level_in": [0, 3, 6, 9],
 "lots": [{
 "h": 3,
