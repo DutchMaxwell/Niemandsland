@@ -444,13 +444,24 @@ static func _pos(u: GameUnit) -> Array:
 	return a
 
 
-## Whether two sorted position lists agree within 0.01" per model.
+## Whether two position lists agree within 0.01" per model, in whatever order the models are listed: each model of `a` takes the nearest model of
+## `b` not taken yet. (`_pos` sorts by x, so two mirror models of a formation, equal in x up to float noise, swapped places between the halves and a
+## sorted compare paired the wrong two: a false 2.5" difference for models 0.00004" apart.)
 static func positions_near(a: Array, b: Array) -> bool:
 	if a.size() != b.size():
 		return false
-	for i in a.size():
-		if (a[i] as Vector2).distance_to(b[i]) > 0.01:
+	var free: Array = b.duplicate()
+	for p in a:
+		var best := -1
+		var best_d := INF
+		for j in free.size():
+			var d: float = (p as Vector2).distance_to(free[j])
+			if d < best_d:
+				best_d = d
+				best = j
+		if best < 0 or best_d > 0.01:
 			return false
+		free.remove_at(best)
 	return true
 
 

@@ -258,6 +258,25 @@ static func rule_name_matches(candidate: String, rule: String) -> bool:
 	return s.begins_with(rule) and s.substr(rule.length()).strip_edges().begins_with("(")
 
 
+## The striker rules whose unit-level scans matched by PREFIX, each with the explicit spellings that make the BEARER itself one (the scoped books entries "This model gets Bane in melee").
+## A Mark / Buff / Aura label that only starts with the name is none of them: it hands the rule to OTHER units, once or through the expansion (ds/h_prefix_labels.md).
+const STRIKER_FAMILIES := {
+	"Bane": ["Bane", "Bane in Melee", "Bane when Shooting"], "Lacerate": ["Lacerate"],
+	"Rending": ["Rending", "Rending in Melee", "Rending when Shooting"], "Unstoppable": ["Unstoppable", "Unstoppable in Melee", "Unstoppable when Shooting"]}
+
+
+## The core twin is rules.rs `is_unlisted_striker_label`. Read from `AiActRecorder.PENDING_EPOCH_EXACT_STRIKER_LABELS` on.
+static func is_unlisted_striker_label(rule: String) -> bool:
+	var s := rule.strip_edges()
+	for family in STRIKER_FAMILIES:
+		if s.begins_with(family):
+			for alias in STRIKER_FAMILIES[family]:
+				if rule_name_matches(s, alias):
+					return false
+			return true
+	return false
+
+
 ## Checks if this unit has a specific special rule (exact name or its parametrised form).
 func has_special_rule(rule: String) -> bool:
 	var rules = get_special_rules()
