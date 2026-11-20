@@ -12,10 +12,13 @@ const INCHES_TO_METERS := 0.0254
 const ROOF_L_IN := 6.6   # the reference roof the modules were built at; each lot stretches it
 const ROOF_W_IN := 3.6
 const ROOF_H_IN := {"roof_gable_low": 1.6, "roof_gable_steep": 2.6, "roof_broken_a": 2.0, "roof_broken_b": 2.0, "roof_rafters": 2.0}
+const ROOF_UV_TILE_IN := 3.0   # the roof modules' UVs count tiles of this size (kr1_town.py roof_uv)
 const CHIMNEY_TOP_IN := 3.6   # a chimney module's cap height above its foot (the foot sinks into the house)
 const MODULES := ["roof_gable_low", "roof_gable_steep", "roof_broken_a", "roof_broken_b", "roof_rafters", "chimney_pots", "chimney_broken",
 	"merlon", "merlon_broken", "rubble_a", "rubble_b", "rubble_c"]
 const TINT := {"roof_tiles": Color(0.62, 0.30, 0.22), "timber": Color(0.42, 0.30, 0.20), "coursed_stone": Color(0.62, 0.58, 0.52)}
+## The instance colour on a textured module: warms the dark clay tiles towards the town's red roofs, cools the stone towards the wall's grey.
+const TEXTURED_TINT := {"roof_tiles": Color(1.35, 0.85, 0.7), "timber": Color(1.0, 1.0, 1.0), "coursed_stone": Color(0.62, 0.68, 0.76)}
 
 var kit: BoardgenKit
 var lib: TiefwerkLibrary
@@ -36,7 +39,7 @@ func active() -> bool:
 
 ## The texture set a module is drawn with.
 static func set_of(module: String) -> String:
-	if module == "roof_rafters":
+	if module in ["roof_rafters", "beam_end", "shutter", "shutter_open", "door"]:
 		return "timber"
 	return "roof_tiles" if module.begins_with("roof_") else "coursed_stone"
 
@@ -102,8 +105,10 @@ func build(layout: Dictionary) -> void:
 	for m: String in p:
 		var mmi := BoardgenKit.add_multimesh(self, m, kit.mesh_or(m), p[m], m.begins_with("roof_g") or m.begins_with("chimney"))
 		var mat := lib.set_material(set_of(m))
-		if mat != null:
-			mmi.material_override = mat
-		else:
-			for i in mmi.multimesh.instance_count:
-				mmi.multimesh.set_instance_color(i, TINT[set_of(m)])
+		if mat != null and m.begins_with("roof_") and m != "roof_rafters":   # the roofs carry UVs in tiles (courses parallel to the eaves)
+			mat.uv1_triplanar = false
+			mat.uv1_scale = Vector3.ONE * ROOF_UV_TILE_IN / lib.tile_in("roof_tiles")
+			mat.normal_enabled = false   # the GLB has no tangents; the course lips are the relief
+		mmi.material_override = mat
+		for i in mmi.multimesh.instance_count:
+			mmi.multimesh.set_instance_color(i, (TEXTURED_TINT if mat != null else TINT)[set_of(m)])
