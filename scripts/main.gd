@@ -4985,7 +4985,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		return
 	if bool(report.get("moved", false)) and battle_log != null and SoloController.has_indirect_ranged(_solo_all_weapons(unit)) \
 			and SoloController.indirect_ignores_los(unit) and not SoloController.indirect_ignores_los(unit, false):
-		battle_log.log_event(BattleLog.Category.COMBAT, "Indirect: %s did not Hold — its Indirect weapons need line of sight" % unit.get_name(), true)
+		_solo_volley_note(report, "Indirect: %s did not Hold — its Indirect weapons need line of sight" % unit.get_name())
 	# Split fire: assign each shot the best target under its weapon overlay, then group shots by target.
 	# Target validity is PER MODEL (GF v3.5.1 p.8): the shot's MEMBER needs a model with range+LOS.
 	var groups: Dictionary = {}   # target unit_id -> {"target": GameUnit, "shots": Array}
@@ -5050,6 +5050,24 @@ func _solo_log_no_volley(unit: GameUnit, report: Dictionary, why: String) -> voi
 		unit.get_name(), why, hold_note], true)
 
 
+## A table line the volley's body writes BEFORE its core call but the table's order puts AFTER the activation's casts (the Indirect
+## note: casts, note, "<unit> fires at ..."). With the cast door the core's one call resolves the casts, so the note waits in the
+## report: `CoreActivation._cast_line` writes it when the cast leg is over (before the volley's first line), `_solo_flush_volley_note`
+## when the core call ends or hands the activation back to the table (after the table's own casts).
+func _solo_volley_note(report: Dictionary, text: String) -> void:
+	if report.has("cast_door"):
+		report["volley_note"] = text
+	elif battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, text, true)
+
+
+func _solo_flush_volley_note(report: Dictionary) -> void:
+	var text := str(report.get("volley_note", ""))
+	report.erase("volley_note")
+	if not text.is_empty() and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, text, true)
+
+
 ## One-core cast door (CC-13a): the AI body's cast slot. With the switch OFF, or an activation the core does not take, the table
 ## resolves the planned casts as it always did. With it ON and the activation taken, a dry probe asks the core first (before any die):
 ## taken -> the report is marked `cast_door` and the core's one call resolves the casts (Dangerous, casts, volley); refused -> the
@@ -5079,10 +5097,12 @@ func _solo_ai_core_call(unit: GameUnit, report: Dictionary, target: GameUnit, sh
 			report["core_took_dangerous"] = true
 		report.erase("core_through")
 		report.erase("cast_door")
+		_solo_flush_volley_note(report)   # a cast-only activation never reached the volley's first line
 		return true
 	await _solo_pay_dangerous(unit, report)
 	if report.erase("cast_door"):   # CC-13a: the core refused before any die: the casts the probe left to it, after the test, in the table's order
 		await _solo_resolve_ai_casts(report)
+	_solo_flush_volley_note(report)   # the table's volley follows: its note after the casts, as always
 	return false
 
 
