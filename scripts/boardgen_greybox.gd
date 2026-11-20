@@ -31,6 +31,7 @@ const SHADER := preload("res://shaders/tiefwerk_board.gdshader")
 var layout_seed: int = 0
 var _material: ShaderMaterial
 var _footprint := Rect2()   # the ground kept free of the table's scatter, in table-local metres: the board and all round it
+var _layout: Dictionary = {}
 
 
 ## The board of NML_BOARDGEN_SEED on `table`, or null when the flag is off (release build, unset or not an integer).
@@ -165,6 +166,31 @@ func build(layout: Dictionary) -> void:
 	rails.build(layout)
 	add_child(rails)
 	_anchor()
+	_layout = layout
+	var settings := _settings()
+	if settings != null:
+		settings.board_mist_changed.connect(refresh_atmosphere)
+	refresh_atmosphere()
+
+
+## The GraphicsSettings autoload by path (a script compiled before the autoloads exist cannot name it).
+static func _settings() -> Node:
+	return (Engine.get_main_loop() as SceneTree).root.get_node_or_null("GraphicsSettings")
+
+
+## The low ground mist (GraphicsSettings.board_mist_enabled): built while the setting is on, freed at once when it goes off.
+func refresh_atmosphere() -> void:
+	var mist := get_node_or_null("Mist")
+	var settings := _settings()
+	var want: bool = settings == null or settings.board_mist_enabled()
+	if want and mist == null:
+		mist = BoardgenMist.new()
+		mist.name = "Mist"
+		mist.build(_layout)
+		add_child(mist)
+	elif not want and mist != null:
+		remove_child(mist)
+		mist.free()
 
 
 func _ready() -> void:
