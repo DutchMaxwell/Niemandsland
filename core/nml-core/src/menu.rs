@@ -688,7 +688,7 @@ pub fn best_charge(
     // per-unit constant, so it rides BOTH the futile bar and the score.
     let (_, danger_loss) = crate::sim::terrain_debuff_folds(statics, state, i);
     let centre_us = geom::centre(&state.positions[i]);
-    let path_ix = tuning.charge_needs_path.then(|| crate::sim::walled_reach_index_for_state(state, terrain)).flatten();
+    let path_ix = tuning.charge_needs_path.then(|| crate::sim::walled_reach_index_for_state(state, terrain, rules_epoch)).flatten();
     let mut best = None;
     let mut best_score = f64::NEG_INFINITY;
     for e in enemy_keys_tuned(state, i, tuning.target_units) {
@@ -863,7 +863,7 @@ pub fn nearest_chargeable(
     melee_profiles_of(us_static, state.alive[i], sc);
     let our_attacks = sc.attacks.clone();
     let us = ctx_live(ctx_of(us_static, state, i), statics, state, i, true, rules_epoch);
-    let path_ix = tuning.charge_needs_path.then(|| crate::sim::walled_reach_index_for_state(state, terrain)).flatten();
+    let path_ix = tuning.charge_needs_path.then(|| crate::sim::walled_reach_index_for_state(state, terrain, rules_epoch)).flatten();
     let mut best = None;
     let mut best_gap = f64::INFINITY;
     for e in enemy_keys_tuned(state, i, tuning.target_units) {

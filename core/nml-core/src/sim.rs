@@ -8027,8 +8027,8 @@ pub fn reach_index_for_state(state: &State, terrain: &Terrain) -> Option<ReachIn
 /// (`Terrain::walls_in`) as impassable segments, the way the table's charge
 /// move treats them. Only the menu's charge path check (`charge_needs_path`)
 /// asks for it; every other planner user keeps the wall-less index.
-pub fn walled_reach_index_for_state(state: &State, terrain: &Terrain) -> Option<ReachIndex> {
-    reach_index_with_walls(state, terrain, terrain.walls_in())
+pub fn walled_reach_index_for_state(state: &State, terrain: &Terrain, rules_epoch: u32) -> Option<ReachIndex> {
+    reach_index_with_walls(state, terrain, terrain.walls_in_at(rules_epoch)) // from EPOCH_94_PARITY_BATCH the cliffs too
 }
 
 fn reach_index_with_walls(state: &State, terrain: &Terrain, walls: &[crate::mv::cost::Wall]) -> Option<ReachIndex> {

@@ -332,6 +332,9 @@ pub struct Terrain {
     /// Heightfield plan step 6 - the blocks and the contours of `tiers`, derived once at `build` (empty on a flat board).
     tier_boxes: Vec<TierBox>,
     tier_edges: Vec<TierEdge>,
+    /// Heightfield plan step 11b - `walls_in` plus the tier cliffs, for the readers that must keep a base off a sheer edge
+    /// (`walls_in_tiered`). Filled only on a board with tier edges; a flat board answers `walls_in` itself.
+    walls_tiered_in: Vec<WallSeg>,
     /// Content identity for memos keyed on a board: every `build` / `absent` / content-changing setter mints a fresh
     /// value, a clone keeps it. 0 = a bare `Default`, which no memo trusts.
     uid: u64,
@@ -438,6 +441,20 @@ impl Terrain {
         cliffs.map(|e| self.tier_seg_in(e)).collect()
     }
 
+    /// Heightfield plan step 11b - the walls a base may not rest against or be pushed through: `walls_in` plus the cliffs
+    /// of a tier board (R10: a base never ends partly over a sheer edge). A ladder is no wall. On a board with no tier
+    /// edges this IS `walls_in`, so every flat board and corpus reads exactly what it read.
+    #[inline]
+    pub fn walls_in_tiered(&self) -> &[WallSeg] {
+        if self.tier_edges.is_empty() { &self.walls_in } else { &self.walls_tiered_in }
+    }
+
+    /// `walls_in_tiered` from `EPOCH_94_PARITY_BATCH`, `walls_in` below it (the epoch-gated readers).
+    #[inline]
+    pub fn walls_in_at(&self, rules_epoch: u32) -> &[WallSeg] {
+        if rule_on(rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) { self.walls_in_tiered() } else { &self.walls_in }
+    }
+
     /// The board's wall segments in WORLD METRES, f32 at the Vector2 boundary
     /// — the load-time narrowing of the raw values (step 6a, see the field doc).
     #[inline]
@@ -477,6 +494,7 @@ impl Terrain {
                 ]
             })
             .collect();
+        self.walls_tiered_in = if self.tier_edges.is_empty() { Vec::new() } else { self.walls_in.iter().copied().chain(self.tier_walls_in()).collect() };
     }
 
     /// NML-1155 — loads the bank v2 keys (`tools/terrain_bank_dump.gd`):
@@ -694,6 +712,7 @@ impl Terrain {
             tiers: p.tiers.clone(),
             tier_boxes: p.tiers.as_ref().map_or_else(Vec::new, TierGrid::boxes),
             tier_edges: p.tiers.as_ref().map_or_else(Vec::new, TierGrid::edges),
+            walls_tiered_in: Vec::new(),
             uid: fresh_uid(),
         };
         out.set_walls_world_m(&p.walls);
@@ -1124,6 +1143,38 @@ mod tests {
         ];
         // the centre is -6", the same point the single-model case blocks from
         assert_eq!(t.los_pairs(&units), vec!["10", "01"]);
+    }
+
+    /// A 4 x 4 board of 3 in cells (board-centred, x and z from -6 to 6 in): the two columns at x >= 0 are a 3 in tier, a ladder
+    /// joins it in the row z -3..0 (cells 5 and 6), the rest of the border at x = 0 is a cliff.
+    fn laddered() -> Terrain {
+        tier_board_for_test(4, 4, (0..16).map(|i| if i % 4 >= 2 { 3.0 } else { 0.0 }).collect(), vec![[5, 6]])
+    }
+
+    /// Heightfield plan step 11b: the cliffs are walls for the readers that keep a base off a sheer edge, the ladder is not;
+    /// the epoch-gated view carries them from the height gate only; a flat board answers `walls_in` itself.
+    #[test]
+    fn the_cliffs_join_the_resting_walls_and_the_gated_view_only_at_the_gate() {
+        use crate::acts::EPOCH_94_PARITY_BATCH as gate;
+        let t = laddered();
+        assert!(t.walls_in().is_empty());
+        assert_eq!(t.walls_in_tiered().len(), 2, "the cliffs z -6..-3 and z 0..6; the ladder is no wall");
+        assert_eq!((t.walls_in_at(gate).len(), t.walls_in_at(gate - 1).len()), (2, 0));
+        let flat = school(&[(15, 15, FOREST)]);
+        assert_eq!(flat.walls_in_tiered(), flat.walls_in());
+    }
+
+    /// The same sentence for rest legality (R10): a base does not end 0.2 in from a cliff, on either side of it, but may
+    /// stand as close to the ladder; a flat board has no such wall. Planner frame = board-centred + 6 in.
+    #[test]
+    fn a_base_may_not_rest_against_a_cliff_but_may_beside_a_ladder() {
+        let (t, flat) = (laddered(), Terrain::build(&PlainTerrain { cell_params: CellParams { table_size_feet: [1.0, 1.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: IN2M }, ..Default::default() }));
+        let rest = |t: &Terrain, x: f64, z: f64| crate::mv::gate::rest_forbidden([x, z], 0.5, t);
+        assert!(rest(&t, 5.8, 9.0), "0.2 in from the cliff, low side");
+        assert!(rest(&t, 6.2, 9.0), "and on the roof side");
+        assert!(!rest(&t, 4.0, 9.0), "2 in away");
+        assert!(!rest(&t, 5.8, 4.5), "beside the ladder: no wall");
+        assert!(!rest(&flat, 5.8, 9.0), "a flat board has no such wall");
     }
 
     /// A 3 x 3 board of 3 in cells, rows are z, columns are x: deliberately not symmetric under x <-> z.

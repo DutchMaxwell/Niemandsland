@@ -344,7 +344,8 @@ pub(crate) fn rest_forbidden(c: [f64; 2], r_in: f64, t: &Terrain) -> bool {
         return true;
     }
     let lim = r_in + WALL_REST_CLEARANCE_IN;
-    t.walls_in().iter().any(|w| point_seg_distance(p, w[0], w[1]) <= lim)
+    // a tier board's cliffs are walls here too (heightfield plan step 11b, R10); no tiers: exactly `walls_in`
+    t.walls_in_tiered().iter().any(|w| point_seg_distance(p, w[0], w[1]) <= lim)
 }
 
 /// AIG-L6b (`EPOCH_73_V36`): does a base of `r_in` at `c` OVERLAP what it may not rest on, from the GROUND? A base that
@@ -788,7 +789,7 @@ fn clamp_gate_walls(cfg: &mut [Disc], goal: &[[f64; 2]], external: &[Disc], flag
     if flags.flying {
         return; // Flying crosses walls legally; its push is no tunnel (:6479)
     }
-    let walls: &[[V2; 2]] = terrain.map_or(&[][..], |t| t.walls_in());
+    let walls: &[[V2; 2]] = terrain.map_or(&[][..], |t| t.walls_in_at(flags.rules_epoch));
     if walls.is_empty() && external.is_empty() {
         return;
     }
