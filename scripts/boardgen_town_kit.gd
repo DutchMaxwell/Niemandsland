@@ -1,0 +1,109 @@
+class_name BoardgenTownKit
+extends Node3D
+## The authored K-R1 modules of a ruin-town board (PLAN_RUINTOWN phase B): tiled gable roofs (two pitches; a quarter broken over a
+## rafter frame), chimneys, merlons (wall, towers, hall) and rubble heaps against both ends of every wall breach. VISUAL ONLY, in the
+## same places as the procedural pieces they replace (nobody stands on a roof; a heap stays inside the 0.75 in wall strip).
+## Each module is drawn with the world-triplanar material of ONE texture set (TiefwerkLibrary keyed "ruintown") when the set is cached,
+## else with the kit's vertex-colour material and a tint. active() is false on Low / web or while a module is missing: then the
+## procedural look stays (prism roofs, chimney and merlon boxes). Dev: NML_RUINTOWN_KIT_DIR (GLBs), NML_RUINTOWN_LIB_DIR (manifest + .ctex).
+
+const THEME := "ruintown"
+const INCHES_TO_METERS := 0.0254
+const ROOF_L_IN := 6.6   # the reference roof the modules were built at; each lot stretches it
+const ROOF_W_IN := 3.6
+const ROOF_H_IN := {"roof_gable_low": 1.6, "roof_gable_steep": 2.6, "roof_broken_a": 2.0, "roof_broken_b": 2.0, "roof_rafters": 2.0}
+const CHIMNEY_TOP_IN := 3.6   # a chimney module's cap height above its foot (the foot sinks into the house)
+const MODULES := ["roof_gable_low", "roof_gable_steep", "roof_broken_a", "roof_broken_b", "roof_rafters", "chimney_pots", "chimney_broken",
+	"merlon", "merlon_broken", "rubble_a", "rubble_b", "rubble_c"]
+const TINT := {"roof_tiles": Color(0.62, 0.30, 0.22), "timber": Color(0.42, 0.30, 0.20), "coursed_stone": Color(0.62, 0.58, 0.52)}
+
+var kit: BoardgenKit
+var lib: TiefwerkLibrary
+
+
+func _init() -> void:
+	kit = BoardgenKit.new(THEME)
+	kit.name = "Kit"
+	add_child(kit)
+	lib = TiefwerkLibrary.new(THEME)
+	lib.name = "Library"
+	add_child(lib)
+
+
+func active() -> bool:
+	return kit.usable(MODULES)
+
+
+## The texture set a module is drawn with.
+static func set_of(module: String) -> String:
+	if module == "roof_rafters":
+		return "timber"
+	return "roof_tiles" if module.begins_with("roof_") else "coursed_stone"
+
+
+## True for a greybox box the kit draws instead (a chimney or a merlon).
+static func replaces(box: Dictionary) -> bool:
+	return box.get("merlon", false) or box["kind"] == "brick"
+
+
+static func _item(basis: Basis, at_in: Vector3) -> Dictionary:
+	return {"xf": Transform3D(basis, at_in * INCHES_TO_METERS), "colour": Color.WHITE}
+
+
+## {module: [{xf, colour}]}, metres off the board centre. Pure data.
+static func plan(layout: Dictionary) -> Dictionary:
+	var out := {}
+	var add := func(m: String, item: Dictionary) -> void:
+		if not out.has(m):
+			out[m] = []
+		out[m].append(item)
+	for r: Dictionary in BoardgenTownDressing.roofs(layout):
+		var h := BoardgenTownDressing._hash(r["lot"], r["half"], 7)
+		var m := ("roof_broken_a" if h < 0.12 else "roof_broken_b") if h < 0.25 else ("roof_gable_low" if float(r["height"]) < 2.1 else "roof_gable_steep")
+		var yaw := (0.0 if r["along_x"] else PI * 0.5) + (PI if BoardgenTownDressing._hash(r["lot"], r["half"], 8) < 0.5 else 0.0)
+		var at := Vector3(r["centre"].x, BoardgenTownDressing.BODY_IN, r["centre"].y)
+		for part in ([m, "roof_rafters"] if m.begins_with("roof_broken") else [m]):
+			var s := Vector3(float(r["length"]) / ROOF_L_IN, float(r["height"]) / ROOF_H_IN[part], float(r["width"]) / ROOF_W_IN)
+			add.call(part, _item(Basis(Vector3.UP, yaw) * Basis.from_scale(s), at))
+	var chimneys := BoardgenTownDressing.chimneys(layout)
+	for i in chimneys.size():
+		var c: Dictionary = chimneys[i]
+		var centre: Vector3 = (c["lo"] + c["hi"]) * 0.5
+		var m := "chimney_pots" if BoardgenTownDressing._hash(i, 0, 9) < 0.7 else "chimney_broken"
+		add.call(m, _item(Basis(Vector3.UP, PI * 0.5 * (i % 4)), Vector3(centre.x, c["hi"].y - CHIMNEY_TOP_IN, centre.z)))
+	var merlons := BoardgenTownDressing.merlons(layout) + BoardgenTownDressing.hall_merlons(layout)
+	for i in merlons.size():
+		var b: Dictionary = merlons[i]
+		var size: Vector3 = b["hi"] - b["lo"]
+		var centre: Vector3 = (b["lo"] + b["hi"]) * 0.5
+		var yaw := (PI * 0.5 if size.z > size.x else 0.0) + (PI if i % 2 == 1 else 0.0)
+		add.call("merlon_broken" if BoardgenTownDressing._hash(i, 1, 11) < 0.2 else "merlon", _item(Basis(Vector3.UP, yaw), Vector3(centre.x, b["lo"].y, centre.z)))
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	for cd: Dictionary in layout["cells"]:   # a breach: a level-0 wall cell; a heap against each wall end beside it
+		if cd["lot_kind"] != "Wall" or cd["level"] != 0:
+			continue
+		for d: Vector2i in [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]:
+			var n := Vector2i(cd["x"], cd["z"]) + d
+			if n.x < 0 or n.y < 0 or n.x >= nx or n.y >= nz or int(layout["cells"][n.y * nx + n.x]["level"]) == 0:
+				continue
+			var face := origin + (Vector2(cd["x"], cd["z"]) + Vector2(0.5, 0.5) + Vector2(d) * 0.5) * cell_in
+			var id: int = cd["z"] * nx + cd["x"]
+			var m: String = ["rubble_a", "rubble_b", "rubble_c"][int(BoardgenTownDressing._hash(id, d.x + 2 * d.y + 3, 12) * 3.0) % 3]
+			add.call(m, _item(Basis(Vector3.UP, atan2(-float(d.x), -float(d.y))), Vector3(face.x, 0.0, face.y)))   # local +z into the breach
+	return out
+
+
+## One MultiMesh per module, on its set's material (or the tinted kit material while the set is not cached).
+func build(layout: Dictionary) -> void:
+	var p := plan(layout)
+	for m: String in p:
+		var mmi := BoardgenKit.add_multimesh(self, m, kit.mesh_or(m), p[m], m.begins_with("roof_g") or m.begins_with("chimney"))
+		var mat := lib.set_material(set_of(m))
+		if mat != null:
+			mmi.material_override = mat
+		else:
+			for i in mmi.multimesh.instance_count:
+				mmi.multimesh.set_instance_color(i, TINT[set_of(m)])

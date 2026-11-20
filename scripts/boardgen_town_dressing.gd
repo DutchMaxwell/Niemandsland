@@ -269,8 +269,8 @@ static func prism_mesh() -> ArrayMesh:
 
 
 ## The roofs in ONE MultiMesh with the board's material (the kind "roof" in its instance data).
-func build(layout: Dictionary, material: Material) -> void:
-	var list := roofs(layout)
+func build(layout: Dictionary, material: Material, prism_roofs := true) -> void:   # prism_roofs false: BoardgenTownKit draws them
+	var list := roofs(layout) if prism_roofs else ([] as Array[Dictionary])
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_custom_data = true
