@@ -3945,8 +3945,24 @@ func _solo_rules_system() -> String:
 	var slot: int = solo_controller.human_slot if solo_controller != null else 1
 	var army = opr_army_manager.armies.get(slot) if opr_army_manager != null else null
 	if army == null:
-		return RulesRegistry.DEFAULT_SYSTEM
+		return _table_system()
 	return RulesRegistry.normalize_system(str(army.game_system_abbrev))
+
+
+## The table's game system: the value the table was set to, else the system of the first loaded list (lowest slot),
+## else the default (PLAN_GAME_SYSTEM_SWITCH). Never "" - a caller can hand it straight to RulesRegistry / GameSystem.
+func _table_system() -> String:
+	if opr_army_manager == null:
+		return RulesRegistry.DEFAULT_SYSTEM
+	if not str(opr_army_manager.table_system).is_empty():
+		return RulesRegistry.normalize_system(str(opr_army_manager.table_system))
+	var slots: Array = opr_army_manager.armies.keys()
+	slots.sort()
+	for slot in slots:
+		var army = opr_army_manager.armies[slot]
+		if army != null:
+			return RulesRegistry.normalize_system(str(army.game_system_abbrev))
+	return RulesRegistry.DEFAULT_SYSTEM
 
 
 ## The picked mission's attacker points factor (> 1 only for a roles mission that grants one).
