@@ -1474,6 +1474,13 @@ static func land_step(main, _gu: GameUnit, landings: Array, start_models: Array,
 				main.radial_menu_controller._update_wound_marker(m)
 				if main.network_manager != null and main.network_manager.has_method("broadcast_model_wounds"):
 					main.network_manager.broadcast_model_wounds(m)
+			elif int(lm["wounds_left"]) > before:
+				# H-5a (Plan H): more wounds left than the model holds = the core healed it (Mend, `sim.rs` `tray_mend`, which
+				# also said the table's line); the table's own writers, as `_solo_apply_mend`.
+				m.heal(int(lm["wounds_left"]) - before)
+				main.radial_menu_controller._update_wound_marker(m)
+				if main.network_manager != null and main.network_manager.has_method("broadcast_model_wounds"):
+					main.network_manager.broadcast_model_wounds(m)
 		if not died.is_empty():
 			main._core_said_losses = bool(entry.get("loss_line", false))   # step 27: the core said this loss line
 			await main._solo_remove_dead_models(lgu, died, int(lgu.unit_properties.get("player_id", 1)))
