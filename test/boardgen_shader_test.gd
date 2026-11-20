@@ -126,3 +126,23 @@ func test_the_painted_rivet_discs_stay_only_on_low_and_the_occlusion_moves_to_th
 	assert_str(_line_with(src, "AO_LIGHT_AFFECT")).is_not_empty()
 	assert_str(_line_with(src, "nrel = wall_relief(")).is_not_empty()
 	assert_bool(src.contains("if (detail > 0.5) {\n\t\t\tfloat rh;")).override_failure_message("the wall relief is gated by the detail uniform").is_true()
+
+
+func test_floor_deck_and_roof_relief_is_one_height_function_and_water_lies_level() -> void:
+	var src := _source()
+	assert_bool(src.contains("float top_height(vec2 uv, int k, vec2 half_board, float px)")).is_true()
+	assert_bool(src.contains("vec3 top_relief(vec2 uv, int k, vec2 half_board, float px, float wet, out float h0)")).is_true()
+	assert_str(_line_with(src, "float hu = (top_height(")).contains("/ DE")   # finite differences of the one function
+	assert_str(_line_with(src, "float s = 1.0 - 0.95 * wet;")).is_not_empty()   # a puddle flattens the relief
+	assert_str(_line_with(src, "wet = pud;")).is_not_empty()
+	assert_str(_line_with(src, "nrel = top_relief(")).contains("wet")
+	assert_bool(src.contains("if (detail > 0.5) {\n\t\t\tfloat th;")).override_failure_message("the top relief is gated by the detail uniform").is_true()
+
+
+func test_hatches_grates_and_deck_rivets_have_relief_with_the_albedo_shapes_of_the_same_size() -> void:
+	var src := _source()
+	assert_bool(src.contains("float hatch_height(vec2 fp, float R, float px)")).is_true()
+	assert_int(src.count("hatch_height(")).override_failure_message("definition plus floor, deck and roof uses").is_greater_equal(4)
+	assert_str(_line_with(src, "float bar = smoothstep(0.5, 0.58, f)")).is_not_empty()   # the grate's slots, 6 per inch like the albedo
+	assert_str(_line_with(src, "rivet heads")).contains("dome(")
+	assert_str(_line_with(src, "tread ribs")).is_not_empty()
