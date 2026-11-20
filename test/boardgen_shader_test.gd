@@ -6,7 +6,7 @@ const SHADER_PATH := "res://shaders/tiefwerk_board.gdshader"
 
 
 const INCLUDES := ["res://shaders/tiefwerk_noise.gdshaderinc", "res://shaders/tiefwerk_edges.gdshaderinc", "res://shaders/tiefwerk_relief.gdshaderinc",
-	"res://shaders/tiefwerk_value.gdshaderinc", "res://shaders/tiefwerk_micro.gdshaderinc"]
+	"res://shaders/tiefwerk_value.gdshaderinc", "res://shaders/tiefwerk_micro.gdshaderinc", "res://shaders/tiefwerk_scale.gdshaderinc"]
 
 
 ## The board shader with its includes appended (the pins below do not care which file a function lives in).
@@ -103,9 +103,9 @@ func test_the_sump_liquid_flows_ripples_and_stains_what_is_round_it() -> void:
 
 func test_the_wall_relief_is_one_height_function_whose_gradient_is_the_normal() -> void:
 	var src := _source()
-	assert_bool(src.contains("float wall_height(vec2 uv, float px)")).is_true()
-	assert_bool(src.contains("vec3 wall_relief(vec2 uv, vec3 n, float px, out float h0)")).is_true()
-	assert_str(_line_with(src, "float hu =")).contains("wall_height(uv + vec2(DE, 0.0), px)")   # finite differences of that one function
+	assert_bool(src.contains("float wall_height(vec2 uv, float px, vec3 ctx)")).is_true()
+	assert_bool(src.contains("vec3 wall_relief(vec2 uv, vec3 n, float px, vec3 ctx, out float h0)")).is_true()
+	assert_str(_line_with(src, "float hu =")).contains("wall_height(uv + vec2(DE, 0.0), px, ctx)")   # finite differences of that one function
 	assert_str(_line_with(src, "return normalize(n - hu * tu")).is_not_empty()
 	assert_str(_line_with(src, "nrel = wall_relief(")).is_not_empty()
 	assert_str(_line_with(src, "NORMAL = normalize((VIEW_MATRIX")).contains("nrel")
@@ -183,3 +183,21 @@ func test_worn_paint_goes_through_the_chips_with_the_finer_look_and_keeps_the_so
 	assert_str(_line_with(src, "smoothstep(0.1, 0.0, ed) * (detail > 0.5")).contains("chipped_wear(n3, 0.45, 0.7, uv, px)")
 	assert_str(_line_with(src, "vec4 ew =")).contains("chips(uv, 0.05, px)")   # the edge highlight breaks up in the same chips when close
 	assert_str(_line_with(src, "dust(alb, rh, n2, mic)")).is_not_empty()   # dust in the recesses of a wall
+
+
+func test_the_wall_has_human_scale_cues_a_door_of_0_7_by_1_4_a_plinth_slit_windows_and_columns_and_panels_that_divide_three() -> void:
+	var src := _source()
+	assert_str(_line_with(src, "const float DOOR_W")).contains("0.7")
+	assert_str(_line_with(src, "const float DOOR_H")).contains("1.4")
+	assert_str(_line_with(src, "const float PLINTH_H")).contains("0.3")
+	assert_bool(src.contains("vec4 door_cell(float u, float hy, float ok)")).is_true()
+	assert_bool(src.contains("vec3 slit_cell(float u, float hy, float door_w)")).is_true()
+	assert_str(_line_with(src, "float s = floor((hy - 1.1) / STOREY")).is_not_empty()   # slit windows at 1.1 in, once per storey
+	var plate := _line_with(src, "return h < 0.25 ? 0.75")
+	assert_str(plate).contains("1.5").contains("3.0")   # 0.75 / 1.5 / 3 in: all divide the 3 in bay, so a plate never crosses a bay
+
+
+func test_a_door_never_stands_onto_a_sump_or_at_the_foot_of_a_ladder() -> void:
+	var src := _source()
+	assert_str(_line_with(src, "sctx = vec3(p.y - low_y, step(oc.y, 0.5) * step(oc.w, 0.5)")).is_not_empty()   # green = sump, alpha = ladder foot of the cell outside
+	assert_str(_line_with(src, "step(0.0, hy));")).contains("ok *")   # and never below the floor

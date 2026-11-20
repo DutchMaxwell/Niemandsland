@@ -157,6 +157,12 @@ func test_the_board_shader_gets_a_height_texel_per_cell_and_knows_every_surface_
 	for c: Dictionary in layout["cells"]:
 		assert_int(cells.get_pixel(c["x"], c["z"]).r8).is_equal(int(layout["level_in"][c["level"]]))
 		assert_int(cells.get_pixel(c["x"], c["z"]).b8).override_failure_message("the lot id must reach the shader (a roof has one look per lot)").is_equal(int(c["lot_id"]) % 256)
+	var feet := {}   # the floor cell at the foot of a ladder is flagged in the alpha channel (the shader puts no door there)
+	for conn: Dictionary in layout["connectors"]:
+		feet[Vector2i(conn["low_xz"][0], conn["low_xz"][1])] = true
+	assert_bool(feet.size() > 0).is_true()
+	for c: Dictionary in layout["cells"]:
+		assert_int(cells.get_pixel(c["x"], c["z"]).a8).override_failure_message("ladder foot flag wrong at %d,%d" % [c["x"], c["z"]]).is_equal(255 if feet.has(Vector2i(c["x"], c["z"])) else 0)
 	for b in BoardgenGreybox.plan(layout):   # (the per-instance kind itself is not readable back on the headless renderer)
 		assert_int(BoardgenGreybox.KINDS.find(b["kind"])).override_failure_message("the board shader has no kind '%s'" % b["kind"]).is_greater_equal(0)
 
