@@ -63,9 +63,22 @@ func _compare(shooter: Dictionary, target: Dictionary, prefix: String, swap_face
 
 
 func _aof(entry: Dictionary) -> Dictionary:
-	(entry["unit"] as OPRApiClient.OPRUnit).game_system = "aof"
-	entry["system"] = "aof"
+	return _sys(entry, "aof")
+
+
+func _sys(entry: Dictionary, system: String) -> Dictionary:
+	(entry["unit"] as OPRApiClient.OPRUnit).game_system = system
+	entry["system"] = system
 	return entry
+
+
+## H-14: an AP(2) volley at a target that holds Fortified through an aura (aofs / gff: a Fortified-primitive entry; gf / aof: an Aura Channel).
+func _rifles(system: String, faction: String) -> Dictionary:
+	return _sys(DoorLines.entry("Rifles AP", 10, [], ["AP(2)"], faction, 10), system)
+
+
+func _squad(system: String, faction: String, rules: Array, size := 10) -> Dictionary:
+	return _sys(DoorLines.entry("Squad", size, rules, [], faction, 0), system)
 
 
 ## [label, shooter, target, line prefix that proves the rule acted]
@@ -81,6 +94,14 @@ func _cases() -> Array:
 		# `Relentless: +N hits`). DS-N2 G14 was the sweep harness missing the import's aura pass (ds/h_probe_aura_names.md); `spawn` runs it now.
 		["Relentless Aura gf shooters", DoorLines.entry("Auras", 10, ["Relentless Aura"], [], "robot_legions", 5), plain, "Relentless:"],
 		["Relentless Aura aof shooters", _aof(DoorLines.entry("Auras", 10, ["Relentless Aura"], [], "high_elves", 5)), plain_aof, "Relentless:"],
+		# H-14 Fortified Aura / Guardian Boost Aura / Gleaming Armour (an item whose content is Fortified Aura), a LIVE bearer (ds/h14_probe_fortified_aura.md): dice,
+		# end state and the `Fortified:` / `Guardian Boost[ Aura]:` line are equal in every system. The fallen-bearer state is refused by the slice, see below.
+		["Fortified Aura aofs", _rifles("aofs", "duchies_of_vinci"), _squad("aofs", "duchies_of_vinci", ["Fortified Aura"]), "Fortified:"],
+		["Fortified Aura gff", _rifles("gff", "blessed_sisters"), _squad("gff", "blessed_sisters", ["Fortified Aura"]), "Fortified:"],
+		["Guardian Boost Aura aofs", _rifles("aofs", "hired_guards"), _squad("aofs", "hired_guards", ["Guardian Boost Aura"]), "Guardian Boost"],
+		["Guardian Boost Aura gff", _rifles("gff", "custodian_brothers"), _squad("gff", "custodian_brothers", ["Guardian Boost Aura"]), "Guardian Boost"],
+		["Fortified Aura aof channel", _rifles("aof", "mummified_undead"), _squad("aof", "mummified_undead", ["Fortified Aura"]), "Fortified:"],
+		["Gleaming Armour aof bearer", _rifles("aof", "mummified_undead"), _squad("aof", "mummified_undead", ["Hero", "Gleaming Armour", "Fortified Aura"], 1), "Fortified:"],
 	]
 
 

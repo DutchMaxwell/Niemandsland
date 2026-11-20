@@ -851,6 +851,60 @@ func test_a_takedown_shooter_against_an_item_carrier_is_refused_as_a_pair() -> v
 	SlicePin.release_dice_only()
 
 
+## H-14 (Plan H): Fortified Aura, Guardian Boost Aura and Gleaming Armour left the deny names (equal dice, state and lines with a LIVE bearer, 16 seeds in
+## `core_deny_lift_door_test.gd`). The one state left on the table is an aofs / gff aura-granted Fortified whose bearer has fallen: the table says
+## `<aura>: bearer killed -> benefit lost` (once, guarded across volleys) where the core writes no line, and for the alias walk (Guardian Boost) the core keeps
+## the benefit (defense 5+ against the table's 6+, probe 16 of 16), so the TARGET is refused by state and the dice-only pin keeps it (a state difference).
+## Controls: a live joined bearer, a unit that carries the aura itself, the gf / aof Aura Channel spelling (no loss rule) and a SHOOTER in that state stay taken.
+func test_a_fallen_fortified_aura_bearer_is_refused_as_a_target() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	for row in [["aofs", "duchies_of_vinci", "Fortified", "Fortified Aura"], ["gff", "custodian_brothers", "Guardian Boost", "Guardian Boost Aura"]]:
+		var squad := _ignorer([row[2]], row[1], row[0])
+		squad.unit_properties["aura_granted"] = [row[2]]
+		squad.models.append(ModelInstance.new())
+		var hero := _ignorer(["Hero", row[3], row[2]], row[1], row[0])
+		var bearer := ModelInstance.new()
+		hero.models.append(bearer)
+		EquipmentDistributor.attach_hero_to_unit(hero, squad)
+		assert_array(CoreSlice.refusals(squad, true)).override_failure_message("%s: a live bearer keeps the benefit on both sides" % row[3]).is_empty()
+		bearer.is_alive = false
+		assert_array(CoreSlice.refusals(squad, true)).override_failure_message("%s: the fallen bearer's loss line is the table's" % row[3]).is_equal(["fortified_aura_bearer_dead"])
+		assert_array(CoreSlice.refusals(squad)).override_failure_message("a shooter's own Fortified is not read").is_empty()
+		SlicePin.dice_only()
+		assert_array(CoreSlice.refusals(squad, true)).override_failure_message("the alias's dice differ: the dice-only slice keeps the refusal").is_equal(["fortified_aura_bearer_dead"])
+		SlicePin.release_dice_only()
+		bearer.is_alive = true
+		squad.unit_properties["aura_granted"] = []
+		var own := _ignorer([row[3], row[2]], row[1], row[0])
+		own.unit_properties["aura_granted"] = [row[2]]
+		own.models.append(ModelInstance.new())
+		assert_array(CoreSlice.refusals(own, true)).override_failure_message("a unit that carries the aura itself is its own bearer").is_empty()
+	var channel := _ignorer(["Fortified"], "mummified_undead", "aof")
+	channel.unit_properties["aura_granted"] = ["Fortified"]
+	channel.models.append(ModelInstance.new())
+	assert_array(CoreSlice.refusals(channel, true)).override_failure_message("the aof Aura Channel has no loss rule").is_empty()
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+
+
+## The lift the test above rests on can fail without editing the committed file: a COPY of the deny file with the three names put back refuses a bearer of each,
+## the committed file takes it.
+func test_putting_the_fortified_aura_names_back_refuses_them() -> void:
+	var copy: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.DENY_PATH))
+	var names := ["Fortified Aura", "Guardian Boost Aura", "Gleaming Armour"]
+	for n in names:
+		(copy["deny_names"] as Dictionary)[n] = "put back for the check"
+	var tmp := "user://deny_with_fortified_names.json"
+	var f := FileAccess.open(tmp, FileAccess.WRITE)
+	f.store_string(JSON.stringify(copy))
+	f.close()
+	for n in names:
+		assert_array(CoreSlice.refusals_in(CoreSlice.DENY_PATH, _unit([n], []))).override_failure_message("the committed file refuses %s" % n).is_empty()
+		assert_array(CoreSlice.refusals_in(tmp, _unit([n], []))).override_failure_message("the copy with %s does not refuse it: the check cannot fail" % n).is_equal(["unit_rule:" + n])
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
+
+
 ## A target unit of `faction` / `system` with `rules` (the Warding family lives in faction maps: Knightborn / Warding in knight_brothers, Angelic Blessing in kingdom_of_angels).
 func _ignorer(rules: Array, faction: String, system := "gf") -> GameUnit:
 	var gu := _unit(rules, [[]])
