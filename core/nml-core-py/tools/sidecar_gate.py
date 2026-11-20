@@ -6,6 +6,9 @@ This one holds them to the same FILE: every top-level field, and inside
 `planner_positions`, every row's `board` / `ids` / `features` and the two
 counterfactual sidecars `pair` (E0b) and `fork` (E2-v2).
 
+The frozen LAST Godot recording (the tool is being retired, plan G) is
+`~/selfplay_out/g_oracle_538b05c1`: pairing A seeds 27-46, B seeds 27-36.
+
     ~/venvs/nmlcore/bin/python core/nml-core-py/tools/sidecar_gate.py \\
         --ref ~/selfplay_out/m3_ref_v2 --bank ~/selfplay_out/terrain_bank \\
         --army1 $NML_AI_LISTS_DIR/robot_legions_1000.json \\

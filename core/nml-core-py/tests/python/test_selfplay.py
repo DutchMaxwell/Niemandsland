@@ -1048,6 +1048,45 @@ def test_the_python_harness_plays_the_fresh_oracle_seed_for_seed(ref_dir, monkey
           % (ref_dir.name, _vocab_of(ref_dir, seeds[0]), len(seeds), len(seeds)))
 
 
+def _rust_pin() -> Path | None:
+    """PLAN G step 14: `NML_RUST_PIN`, else the newest `~/selfplay_out/g_rust_pin_*_e<CURRENT_RULES_EPOCH>`."""
+    if os.environ.get("NML_RUST_PIN"):
+        return Path(os.path.expanduser(os.environ["NML_RUST_PIN"]))
+    pins = list(Path(os.path.expanduser("~/selfplay_out")).glob("g_rust_pin_*_e%d" % nml_core.CURRENT_RULES_EPOCH))
+    return max(pins, key=lambda p: p.stat().st_mtime) if pins else None
+
+
+def test_the_trainers_own_game_replays_the_frozen_rust_pin(monkeypatch):
+    """REGRESSION PIN, NOT A CORRECTNESS PROOF: `play_game` at its defaults replays a frozen recording of ITSELF
+    (`selfplay.py` CLI at its defaults, pairing A and B, seed 27 of each) through both oracle gates, so the producer
+    cannot change by accident. It says nothing about whether the game is RIGHT (that is the table-vs-core gates).
+    Re-record deliberately at every rules-epoch bump (log sha + epoch). SKIPS without a pin of this epoch; with
+    `NML_REQUIRE_ORACLE=1` a missing pin or a dirty/stale core FAILS instead."""
+    import tool_parity as tp  # noqa: E402
+
+    def refuse(why: str):
+        (pytest.fail if os.environ.get("NML_REQUIRE_ORACLE") == "1" else pytest.skip)(why)
+
+    pin = _rust_pin()
+    if pin is None or not (pin / "A").is_dir() or not (pin / "B").is_dir():
+        return refuse("no Rust regression pin of epoch %d (set NML_RUST_PIN or record one)" % nml_core.CURRENT_RULES_EPOCH)
+    if not os.environ.get("NML_AI_LISTS_DIR") or not LISTS.is_dir():
+        return refuse("NML_AI_LISTS_DIR is not set to the AI lists")
+    if (why := tp._core_mismatch(tp._repo_head(str(REPO)))) is not None:
+        return refuse("installed nml_core is not this checkout's build: %s" % why)
+    monkeypatch.setattr(list_to_profile, "LEGACY_CORE_SELFPLAY", False)   # the trainer's loader, not the legacy reading
+    nml_core.set_legacy_no_cond_ap(False)
+    core, bad = nml_core.load(str(REPO)), []
+    for pairing in ("A", "B"):
+        armies = json.loads((pin / pairing / "core_s27.json").read_text(encoding="utf-8"))["armies"]
+        summary = tp.run_parity(
+            pin / pairing, [27], lambda: (lambda seed: sp.play_game(seed, LISTS / armies["p1"], LISTS / armies["p2"], REPO, BANK_DIR, core)),
+            log=lambda *_: None, config="trainer")
+        if tp.exit_code(summary):
+            bad.append((pairing, summary["refused"], summary["diffs"][:3]))
+    assert not bad, "the producer drifted from the pin %s: %s" % (pin.name, bad)
+
+
 @pytest.mark.skipif(not _gate_seeds_v4(), reason="no m3_ref_v4 recording on this machine")
 def test_the_charge_probe_radius_folds_the_attached_heroes(monkeypatch):
     """`charge_probe_r` is `_move_base_radius_of` (act_recorder.gd:311-322) over
