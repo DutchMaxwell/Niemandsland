@@ -22,6 +22,11 @@ const INCHES_TO_METERS := 0.0254
 const GROUND_COLLISION_LAYER := 1
 ## Thickness of the level-0 ground skin that covers the biome texture, in inches.
 const SKIN_IN := 0.04
+## The town greybox draws a landmark as one plain box: the core's solid is the 2.5 in container whatever the piece is, a pool is a film
+## over the ground skin, a hall mark a rim line on its block.
+const SOLID_IN := 2.5
+const POOL_IN := 0.07   # a hair above the 0.04 in ground skin
+const RIM_IN := 0.3
 const LADDER_WIDTH_IN := 1.0
 const LADDER_OFFSET_IN := 0.12   # the ladder stands this far off the wall face
 const LADDER_RAIL_IN := 0.12
@@ -95,9 +100,10 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 			while x + run < nx and _cell_kind(cells[z * nx + x + run], town) == kind:
 				run += 1
 			var level: int = cells[z * nx + x]["level"]
+			var body := kind == "roofed"   # an intact house: level-0 solid ground, as high as the core's solid (2.5 in); its ridge is drawn below
 			out.append({"lo": Vector3(origin.x + x * cell_in, 0.0, origin.y + z * cell_in),
-				"hi": Vector3(origin.x + (x + run) * cell_in, float(level_in[level]) if level > 0 else SKIN_IN, origin.y + (z + 1) * cell_in),
-				"kind": kind, "solid": level > 0})
+				"hi": Vector3(origin.x + (x + run) * cell_in, float(level_in[level]) if level > 0 else (SOLID_IN if body else SKIN_IN), origin.y + (z + 1) * cell_in),
+				"kind": kind, "solid": level > 0 or body})
 			x += run
 	for c: Dictionary in layout["connectors"]:
 		var base: float = level_in[cells[c["low"]]["level"]]
@@ -111,7 +117,9 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 		for k in range(1, int(rise / LADDER_RUNG_GAP_IN)):
 			out.append(_slab(edge, away, side, LADDER_OFFSET_IN, LADDER_OFFSET_IN + LADDER_RAIL_IN, LADDER_WIDTH_IN,
 				base + k * LADDER_RUNG_GAP_IN, base + k * LADDER_RUNG_GAP_IN + LADDER_RAIL_IN, "ladder", false))
-	if not town:
+	if town:
+		out.append_array(_town_landmarks(layout, origin))
+	else:
 		out.append_array(BoardgenSumps.kerbs(layout))   # the low rim round each toxic sump (the town draws its pools as flat boxes)
 	return out
 
@@ -134,11 +142,53 @@ static func ladder_kit_plan(layout: Dictionary) -> Dictionary:
 	return out
 
 
+## The town's landmarks as plain boxes (greybox), each inside its footprint: fountain (TankCluster) and statue plinth (Crane) are the solid
+## 2.5 in piece, a Sump (pool, well yard) a flat film, a PumpHouse (hall) a rim line on top of its block. `landmark` = its index in the layout.
+static func _town_landmarks(layout: Dictionary, origin: Vector2) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var cell_in := float(layout["cell_in"])
+	var nx: int = layout["nx"]
+	var i := 0
+	for lm: Dictionary in layout["landmarks"]:
+		var lo := origin + Vector2(lm["x"], lm["z"]) * cell_in
+		var hi := lo + Vector2(lm["w"], lm["h"]) * cell_in
+		var boxes: Array[Dictionary] = []
+		match lm["kind"]:
+			"TankCluster", "Crane":
+				boxes.append(_box(lo, hi, 0.0, SOLID_IN, "stone", true))
+			"Sump":
+				boxes.append(_box(lo, hi, 0.0, POOL_IN, "hazard", false))
+			"PumpHouse":
+				var top := 0.0
+				for dz in int(lm["h"]):
+					for dx in int(lm["w"]):
+						top = maxf(top, float(layout["level_in"][layout["cells"][(int(lm["z"]) + dz) * nx + int(lm["x"]) + dx]["level"]]))
+				boxes.append_array([_box(lo, Vector2(hi.x, lo.y + RIM_IN), top, top + RIM_IN, "rim", false),
+					_box(Vector2(lo.x, hi.y - RIM_IN), hi, top, top + RIM_IN, "rim", false),
+					_box(lo + Vector2(0.0, RIM_IN), Vector2(lo.x + RIM_IN, hi.y - RIM_IN), top, top + RIM_IN, "rim", false),
+					_box(Vector2(hi.x - RIM_IN, lo.y + RIM_IN), hi - Vector2(0.0, RIM_IN), top, top + RIM_IN, "rim", false)])
+		for b in boxes:
+			b["landmark"] = i
+		out.append_array(boxes)
+		i += 1
+	return out
+
+
+static func _box(lo: Vector2, hi: Vector2, y0: float, y1: float, kind: String, solid: bool) -> Dictionary:
+	return {"lo": Vector3(lo.x, y0, lo.y), "hi": Vector3(hi.x, y1, hi.y), "kind": kind, "solid": solid}
+
+
 static func _cell_kind(cell: Dictionary, town := false) -> String:
+	if town and cell["lot_kind"] == "Roofed":
+		return "roofed"   # an intact house
+	if town and cell["lot_kind"] == "Wall":
+		return "wall" if cell["level"] > 0 else "rubble"   # the city wall (ridge, tower, buttress) or the rubble of its breach
 	if cell["level"] > 0:
 		return "tier%d" % cell["level"]
 	if cell["lot_kind"] == "Hazard":
 		return "hazard"
+	if town and cell["lot_kind"] == "Rough":
+		return "rough"   # a garden plot
 	if town and cell["lot_kind"] == "Terrace" and not cell["street"]:
 		return "yard"   # the level-0 rest of a half-collapsed house: ruin ground
 	return "street" if cell["street"] else "ground"
