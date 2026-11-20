@@ -201,3 +201,27 @@ func test_a_door_never_stands_onto_a_sump_or_at_the_foot_of_a_ladder() -> void:
 	var src := _source()
 	assert_str(_line_with(src, "sctx = vec3(p.y - low_y, step(oc.y, 0.5) * step(oc.w, 0.5)")).is_not_empty()   # green = sump, alpha = ladder foot of the cell outside
 	assert_str(_line_with(src, "step(0.0, hy));")).contains("ok *")   # and never below the floor
+
+
+func test_no_function_is_defined_twice_across_the_board_shader_and_its_includes() -> void:
+	# A merge once left the relief include with its step-4 block twice; headless runs never compile a shader, so only a text check can see it.
+	var rx := RegEx.create_from_string("(?m)^(?:float|vec2|vec3|vec4|int|ivec2|bool|void)\\s+(\\w+)\\s*\\(")
+	var seen := {}
+	var twice: Array[String] = []
+	var queue: Array[String] = ["res://shaders/tiefwerk_board.gdshader"]
+	var done := {}
+	while not queue.is_empty():
+		var path: String = queue.pop_back()
+		if done.has(path):
+			continue
+		done[path] = true
+		var text := FileAccess.get_file_as_string(path)
+		for line in text.split("\n"):
+			if line.begins_with("#include"):
+				queue.append(line.split("\"")[1])
+		for m in rx.search_all(text):
+			var fn := m.get_string(1)
+			if seen.has(fn):
+				twice.append("%s (%s)" % [fn, path])
+			seen[fn] = true
+	assert_array(twice).override_failure_message("defined twice: %s" % [twice]).is_empty()
