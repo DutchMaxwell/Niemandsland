@@ -296,6 +296,9 @@ const EPOCH_92_MELEE_CAUSES := 92
 ## 3.6 faction folders resolving their rules (the table's registry already does, nothing to gate here); (3) the volley's legacy
 ## spell rider off (`BattleSim.resolve`, the cast-phase-off branch).
 const EPOCH_93_DANGER_RULES_RIDER := 93
+## The core's `PENDING_EPOCH_CASUALTY_TIES` (acts.rs): from here the core ranks casualties by the table's own f32 distance to the
+## centroid. Nothing in the table gates on it (the table is the reference); the shadow compares the survivors' positions from here.
+const PENDING_EPOCH_CASUALTY_TIES := 94
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
