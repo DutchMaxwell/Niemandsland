@@ -11969,6 +11969,8 @@ func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String, 
 			await get_tree().create_timer(0.1).timeout
 			owner_peer = _solo_peer_for_slot(unit_owner_slot(unit.unit_properties))
 	if owner_peer != 0:
+		if id.begins_with("interference:") and battle_log != null:   # CC-14a: the table says whom it waits for (`_solo_remote_interference`)
+			battle_log.log_event(BattleLog.Category.COMBAT, "Waiting for %s — interference against %s" % [_solo_owner_name(unit), purpose], true)
 		var reply: Dictionary = await _owner_request(owner_peer, {"unit": unit.unit_id, "kind": "choice",
 			"count": 0, "target": 0, "purpose": purpose, "ask": {"choice": {"id": id, "options": options, "wounds": wounds}}})
 		if bool(reply.get("done", false)):
@@ -11976,7 +11978,10 @@ func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String, 
 			var option := str(answered[0]) if not answered.is_empty() else ""
 			if CoreActivation.answer_fits(id, options, option):
 				return option
-	if battle_log != null:
+	if id.begins_with("interference:"):   # CC-14a (O3): the table's own words for a foe nobody answers for (`_solo_remote_interference`)
+		_log_rule_event(BattleLog.Category.COMBAT, ("%s: %s's seat is empty — no interference" if owner_peer == 0
+			else "%s: no answer from %s — no interference") % [purpose, _solo_owner_name(unit)], true)
+	elif battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s: no answer to the %s — the automatic pick stands" % [_solo_owner_name(unit), purpose], true)
 	return ""
