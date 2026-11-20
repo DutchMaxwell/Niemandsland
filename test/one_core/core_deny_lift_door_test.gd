@@ -1,0 +1,119 @@
+extends GdUnitTestSuite
+## PLAN H, the refusal tail: a rule NAME leaves the deny list (`deny_names` of assets/solo/core_slice_deny.json) once its probe reads table and core
+## EQUAL on the dice, the end state of BOTH units and the rule's battle-log lines, 16 seeds per fixture. Each lifted name adds a row to CASES;
+## the suite is the probe the lift's PR names (ds/h_probe_*.md). H-12: Hazardous (the 5-seed sweep showed the shooter's wounds differing on a
+## natural 1, DS-N2 G9; the sweep dump never carried them, the probe reads both units).
+## RED: put the name back into `deny_names` -> the unit is refused (`deny` reads the reason) and the first assertion fails. The control leg (one
+## core face swapped) must read UNEQUAL, so the comparison can fail.
+
+const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
+const DoorLines := preload("res://test/one_core/door_lines.gd")
+const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
+const DICE := "user://hazardous_door_dice"
+const SEEDS := 16
+
+var _runner: GdUnitSceneRunner
+var _main: Node
+var _root_before: Array
+
+
+func before_test() -> void:
+	E2EBoot.arm_harness_mode()
+	_root_before = E2EBoot.root_children(get_tree())
+	_runner = scene_runner(E2EBoot.MAIN_SCENE)
+	_main = _runner.scene()
+	await _runner.simulate_frames(4)
+	RosterSweep.arm(_main, ProjectSettings.globalize_path(DICE))
+
+
+func after_test() -> void:
+	RosterSweep.disarm(_main)
+	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
+	_main = null
+	_runner = null
+
+
+func _faces(rolls: Array) -> Array:
+	return rolls.map(func(r: Dictionary) -> String: return "%s:%d:%s" % [r["kind"], int(r["count"]), r["faces"]])
+
+
+func _named(lines: Array, prefix: String) -> Array:
+	return lines.filter(func(l: String) -> bool: return l.begins_with("COMBAT|" + prefix))
+
+
+## 16 seeds of `shooter` at `target` on both halves; returns {"differing": seeds whose dice, end state or `prefix` lines differ,
+## "lines": seeds with such a line on the table, "deny": the pair's deny-slice reasons (read on seed 0)}.
+func _compare(shooter: Dictionary, target: Dictionary, prefix: String, swap_face := -1) -> Dictionary:
+	var dice := ProjectSettings.globalize_path(DICE)
+	var differing := 0
+	var with_line := 0
+	var deny: Array = []
+	for s in SEEDS:
+		var opts := {} if swap_face < 0 else {"core_swap_face": swap_face}
+		var t := await RosterSweep.volley(_main, shooter, target, s, false, dice, opts)
+		var c := await RosterSweep.volley(_main, shooter, target, s, true, dice, opts)
+		if s == 0:
+			deny = t["deny"]
+		if not _named(t["lines"], prefix).is_empty():
+			with_line += 1
+		if _faces(t["rolls"]) != _faces(c["rolls"]) or RosterSweep.first_state_diff(t["state"], c["state"]) != "" \
+				or _named(t["lines"], prefix) != _named(c["lines"], prefix):
+			differing += 1
+	return {"differing": differing, "lines": with_line, "deny": deny}
+
+
+func _aof(entry: Dictionary) -> Dictionary:
+	(entry["unit"] as OPRApiClient.OPRUnit).game_system = "aof"
+	entry["system"] = "aof"
+	return entry
+
+
+## [label, shooter, target, line prefix that proves the rule acted]
+func _cases() -> Array:
+	var plain := DoorLines.entry("Plain", 10, [], [], "battle_brothers", 0)
+	var plain_aof := _aof(DoorLines.entry("Plain", 10, [], [], "human_empire", 0))
+	return [
+		# H-12 Hazardous: the wound goes to the SHOOTING unit on an unmodified 1 to hit, line `Hazardous: <U> model N takes 1 wound (<weapon>)`.
+		["Hazardous gf carbines", DoorLines.entry("Carbines", 5, [], ["Hazardous"], "ratmen_clans", 5), plain, "Hazardous"],
+		["Hazardous gf lone bearer", DoorLines.entry("Bearer", 1, [], ["Hazardous"], "ratmen_clans", 1), plain, "Hazardous"],
+		["Hazardous aof carbines", _aof(DoorLines.entry("Carbines", 5, [], ["Hazardous"], "ratmen", 5)), plain_aof, "Hazardous"],
+	]
+
+
+func test_a_lifted_name_is_taken_and_equal_on_both_paths() -> void:
+	for c in _cases():
+		var r := await _compare(c[1], c[2], c[3])
+		assert_array(r["deny"]).override_failure_message("%s: the deny slice still refuses %s" % [c[0], r["deny"]]).is_empty()
+		assert_int(int(r["lines"])).override_failure_message("%s: the rule never acted in 16 seeds, the check proved nothing" % c[0]).is_greater(0)
+		assert_int(int(r["differing"])).override_failure_message("%s: %d of 16 seeds differ" % [c[0], r["differing"]]).is_equal(0)
+
+
+## The comparison can fail: one recorded core face swapped makes every seed unequal.
+func test_the_comparison_reads_a_planted_fault() -> void:
+	var c: Array = _cases()[0]
+	var r := await _compare(c[1], c[2], c[3], 0)
+	assert_int(int(r["differing"])).override_failure_message("the planted fault was not seen").is_greater(0)
+
+
+## The check the lift rests on can fail without editing the committed file: a COPY of the deny file with the name put back refuses the same
+## unit (the reason the sweep reported before the lift), the committed file does not.
+func test_putting_the_name_back_into_the_deny_list_refuses_the_unit() -> void:
+	var bearer := GameUnit.new()
+	bearer.unit_properties["special_rules"] = []
+	bearer.unit_properties["game_system"] = "gf"
+	bearer.unit_properties["faction_folder"] = "ratmen_clans"
+	var src := OPRApiClient.OPRUnit.new()
+	var w := OPRApiClient.OPRWeapon.new()
+	w.special_rules.assign(["Hazardous"])
+	src.weapons.append(w)
+	bearer.source_type = "opr"
+	bearer.source_data = src
+	var committed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.DENY_PATH))
+	assert_array(CoreSlice.refusals_in(CoreSlice.DENY_PATH, bearer)).override_failure_message("the committed deny file refuses Hazardous").is_empty()
+	(committed["deny_names"] as Dictionary)["Hazardous"] = "put back for the check"
+	var tmp := "user://deny_with_hazardous.json"
+	var f := FileAccess.open(tmp, FileAccess.WRITE)
+	f.store_string(JSON.stringify(committed))
+	f.close()
+	assert_array(CoreSlice.refusals_in(tmp, bearer)).override_failure_message("the copy with the name does not refuse it: the check cannot fail").is_equal(["weapon_rule:Hazardous"])
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
