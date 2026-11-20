@@ -122,6 +122,9 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 		out.append_array(BoardgenTownDressing.chimneys(layout))
 		out.append_array(BoardgenTownDressing.merlons(layout))
 		out.append_array(BoardgenTownDressing.lantern_boxes(layout))
+		out.append_array(BoardgenTownDressing.props(layout))
+		out.append_array(BoardgenTownDressing.breach_rubble(layout))
+		out.append_array(BoardgenTownDressing.hall_merlons(layout))
 	else:
 		out.append_array(BoardgenSumps.kerbs(layout))   # the low rim round each toxic sump (the town draws its pools as flat boxes)
 	return out
