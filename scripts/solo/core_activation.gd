@@ -1494,11 +1494,11 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 			main._solo_mirror_shaken(gu)
 		_land_positions(main, gu, d, start_models)
 		_land_ledger(main, gu, d)
+		_land_versatile_mode(main, gu, d)   # before the stamps: it reads the table's own `versatile_pick_round`
 		_land_stamps(main, gu, d)
 		_land_pools(main, gu, d)
 		_land_piercing(main, gu, d)
 		_land_surprise(main, gu, d)
-		_land_versatile_mode(main, gu, d)
 		_land_feats(main, gu, d)
 		_land_once_latches(main, gu, d)
 		_land_growth(main, gu, d)
@@ -1661,7 +1661,11 @@ static func _land_versatile_mode(main, gu: GameUnit, d: Dictionary) -> void:
 	var was: Dictionary = gu.unit_properties.get("versatile_pick", {})
 	if was == vm:
 		return
-	push_error("CoreActivation.land_delta: %s.versatile_pick differs (table %s, core %s)" % [gu.get_name(), str(was), str(vm)])
+	# The table's latch counts only in the round it was written (`_solo_versatile_latch_read`): a core-resolved volley never ran the table's
+	# pick, so an empty or older latch is no table pick to differ from - the core is the first writer this round.
+	if int(gu.unit_properties.get("versatile_pick_round", -1)) == int(main.opr_army_manager.current_round):
+		stamp_splits += 1
+		push_error("CoreActivation.land_delta: %s.versatile_pick differs (table %s, core %s)" % [gu.get_name(), str(was), str(vm)])
 	main._sync_unit_property(gu, "versatile_pick", vm)
 
 
@@ -1684,7 +1688,8 @@ static func _land_stamps(main, gu: GameUnit, d: Dictionary) -> void:
 			continue
 		# On a core-resolved charge, the table never ran `_solo_melee_strike_phase`, so the core is the first writer
 		# of melee-only once-per-round stamps (`growth_strike_round` -> `regenerative_strength_round`).
-		if not (_charge_landing and key == "growth_strike_round"):
+		var first_pick: bool = key == "versatile_pick_round" and value == int(main.opr_army_manager.current_round) and was < value   # the core latched this round, the table did not (see `_land_versatile_mode`)
+		if not (_charge_landing and key == "growth_strike_round") and not first_pick:
 			stamp_splits += 1
 			push_error("CoreActivation.land_delta: %s.%s differs (table %d, core %d)" % [gu.get_name(), prop, was, value])
 		main._sync_unit_property(gu, prop, value)
