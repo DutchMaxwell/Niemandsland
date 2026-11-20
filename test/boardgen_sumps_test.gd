@@ -14,7 +14,7 @@ func _layout(sump: Array, tier: Array = []) -> Dictionary:
 	for z in NZ:
 		for x in NX:
 			var c := Vector2i(x, z)
-			cells.append({"x": x, "z": z, "level": 1 if tier.has(c) else 0, "lot_kind": "Hazard" if sump.has(c) else "Street", "street": false})
+			cells.append({"x": x, "z": z, "level": 1 if tier.has(c) else 0, "lot_kind": "Hazard" if sump.has(c) else "Street", "lot_id": 0, "street": false})
 	return {"seed": 5, "nx": NX, "nz": NZ, "cell_in": CELL_IN, "board_in": [NX * CELL_IN, NZ * CELL_IN], "cells": cells, "level_in": [0, 3, 6, 9], "connectors": []}
 
 
