@@ -992,6 +992,12 @@ pub const EPOCH_92_MELEE_CAUSES: u32 = 92;
 /// `CURRENT_RULES_EPOCH`. The recorder mirror (`act_recorder.gd`) stamps 93 in the same change.
 pub const EPOCH_93_DANGER_RULES_RIDER: u32 = 93;
 pub const CURRENT_RULES_EPOCH: u32 = 93;
+/// Placeholder gate for EXACT STRIKER LABELS (Plan H, lead order 20.11.; table twin `AiActRecorder.PENDING_EPOCH_EXACT_STRIKER_LABELS`, planner twin
+/// `BattleSim._profiles_of`): the unit-level striker scans (`unit.rs::stamp_unit_strikers`, `_solo_striker_has_bane`) matched Bane / Lacerate / Rending / Unstoppable by
+/// PREFIX, so a label that only STARTS with one of them counted as the rule. The army-book texts (ds/h_prefix_labels.md) say `Bane Mark`, `Rending Mark`, `Unstoppable Mark` mark
+/// ONE enemy unit and hand the rule once to the friendly units attacking it, and `Bane in Melee Buff` hands it once to another unit: none makes its bearer a bearer. From 94 only the
+/// rule and its explicit aliases (`rules::is_unlisted_striker_label`) count; the Aura labels stay inert as before. Below 94 byte-identical. Every call site reads THIS constant.
+pub const PENDING_EPOCH_EXACT_STRIKER_LABELS: u32 = 94;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
