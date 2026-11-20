@@ -302,6 +302,9 @@ const PENDING_EPOCH_EXACT_STRIKER_LABELS := 94
 ## Placeholder gate (acts.rs `PENDING_EPOCH_VERSATILE_MODIFIED_HIT`, the core twin): from 94 the core picks Versatile Attack on the number the first eligible shot rolls at, as the table
 ## does, so a Versatile shooter at a to-hit modifier is no longer refused as a pair (`CoreSlice.pair_refusals`).
 const PENDING_EPOCH_VERSATILE_MODIFIED_HIT := 94
+## The core's `PENDING_EPOCH_HEIGHT` (acts.rs, heightfield plan): from 94 the core reads a generated board's heights. The table
+## draws and collides the same materialised board and gates on nothing here yet.
+const PENDING_EPOCH_HEIGHT := 94
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
