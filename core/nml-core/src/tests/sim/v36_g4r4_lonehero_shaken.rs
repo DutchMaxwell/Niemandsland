@@ -52,11 +52,16 @@ fn line(epoch: u32, host_shaken: bool) -> (State, Vec<UnitStatic>) {
 
 /// One HOLD+shoot activation at the lone hero (the aim the gate maps a dead host to), on the tray path.
 fn shoot(st: &State, statics: &[UnitStatic], seed: i64, epoch: u32) -> (State, ShootResult) {
+    shoot_at(st, statics, seed, epoch, "bh")
+}
+
+/// `shoot` at the unit `key`.
+fn shoot_at(st: &State, statics: &[UnitStatic], seed: i64, epoch: u32, key: &str) -> (State, ShootResult) {
     let action = Action {
         kind: HOLD,
         unit: "a".into(),
         dest: None,
-        shoot: Some("bh".into()),
+        shoot: Some(key.into()),
         charge: None,
         patient: false,
         split: None,
@@ -119,3 +124,98 @@ fn below_73_the_hosts_flag_changes_nothing() {
     assert_eq!(shot.rolls, shot_plain.rolls);
     assert_eq!(after.shaken[3], after_plain.shaken[3]);
 }
+
+// ---- PENDING_EPOCH_SHAKEN_MIRROR (94): the table's Shaken flag of a joined chain ----
+
+const MIRROR: u32 = crate::acts::PENDING_EPOCH_SHAKEN_MIRROR;
+
+/// The seed of the first volley that leaves the chain `after`-shaped by `pick` (a failed test), at `epoch`.
+fn failed_test_seed(st: &State, statics: &[UnitStatic], epoch: u32, key: &str, pick: impl Fn(&State) -> bool) -> i64 {
+    (0..2000).find(|&s| pick(&shoot_at(st, statics, s, epoch, key).0)).expect("a seed whose morale test fails")
+}
+
+/// A host with four models and its hero (one model): five models, so three host casualties leave the chain at two of five and the test is due.
+fn live_host_line(epoch: u32) -> (State, Vec<UnitStatic>) {
+    let (mut st, mut statics) = line(epoch, false);
+    let at = |x: f64| [x * IN2M, 0.0, 0.0];
+    st.positions[2] = vec![at(4.0), at(4.25), at(4.5), at(4.75)];
+    st.positions[3] = vec![at(5.0)];
+    Rc::make_mut(&mut st.radii)[2] = vec![IN2M; 4];
+    Rc::make_mut(&mut st.radii)[3] = vec![IN2M];
+    (st.wounds[2], st.wounds[3], st.alive[2], st.alive[3]) = (vec![1; 4], vec![1], 4, 1);
+    (statics[2].model_count, statics[2].wounds_max, statics[3].model_count, statics[3].wounds_max) = (4, vec![1; 4], 1, vec![1]);
+    (st, statics)
+}
+
+/// The table's Shaken outcome of a test about a LIVE host: the host is toggled, the flag is mirrored onto its joined hero. RED: the core
+/// flagged the host alone, so the hero idled one activation late on the table's recapture and the "fights on alone" carry had nothing to say.
+#[test]
+fn a_failed_test_mirrors_the_hosts_shaken_onto_its_hero_from_the_pending_epoch() {
+    let (st, statics) = live_host_line(MIRROR);
+    let seed = failed_test_seed(&st, &statics, MIRROR, "b", |a| a.shaken[2] && a.alive[2] > 0);
+    let (after, _) = shoot_at(&st, &statics, seed, MIRROR, "b");
+    assert!(after.shaken[3], "the joined hero carries the host's Shaken inside the activation");
+    let (st, statics) = live_host_line(MIRROR - 1);
+    let (below, _) = shoot_at(&st, &statics, seed, MIRROR - 1, "b");
+    assert!(below.shaken[2] && !below.shaken[3], "below the pending epoch the flag stays on the aimed unit alone");
+}
+
+/// A lone hero whose dead host is not Shaken: the table toggles the dead host and mirrors onto the hero, so BOTH carry the flag (the
+/// host's stays behind when the hero recovers alone, which is what the next test pins).
+#[test]
+fn a_failed_lone_hero_test_flags_the_dead_host_and_the_hero_from_the_pending_epoch() {
+    let (st, statics) = line(MIRROR, false);
+    let seed = failed_test_seed(&st, &statics, MIRROR, "bh", |a| a.shaken[3]);
+    let (after, _) = shoot(&st, &statics, seed, MIRROR);
+    assert!(after.shaken[2] && after.shaken[3], "host {} hero {}", after.shaken[2], after.shaken[3]);
+}
+
+/// Lead rule call 20.11. (reading B): a lone hero that recovered is no longer Shaken, and the dead host's flag outlives that recovery (nothing
+/// clears a dead unit's Shaken), so from the pending epoch it does NOT fail the hero's next test: the hero rolls its die and a failed die flags
+/// the hero (and the dead host). Below the gate the stale flag still fails the test without a die and the hero is flagged (the pin of the 73 test).
+/// RED with reading A (the stale flag read at the gate): no die is rolled.
+#[test]
+fn a_stale_dead_host_flag_does_not_fail_a_recovered_lone_heros_test_from_the_pending_epoch() {
+    let (st, statics) = line(MIRROR, true);
+    let seed = due_seed(&st, &statics, MIRROR);
+    let (_, shot) = shoot(&st, &statics, seed, MIRROR);
+    assert_eq!(morale_dice(&shot), 1, "the hero's own flag is clear: it rolls: {:?}", shot.rolls);
+    let failed = failed_test_seed(&st, &statics, MIRROR, "bh", |a| a.shaken[3]);
+    let (after, shot) = shoot(&st, &statics, failed, MIRROR);
+    assert_eq!(morale_dice(&shot), 1, "{:?}", shot.rolls);
+    assert!(after.shaken[3] && after.shaken[2], "a failed die flags the hero and mirrors onto the dead host's chain");
+    let (st, statics) = line(MIRROR - 1, true);
+    let (below, shot) = shoot(&st, &statics, seed, MIRROR - 1);
+    assert_eq!(morale_dice(&shot), 0, "below the pending epoch the stale host flag fails the test without a die");
+    assert!(below.shaken[3]);
+}
+
+/// The other half of the same rule: a lone hero that IS Shaken fails its test without a die even when its dead host never was flagged.
+#[test]
+fn a_shaken_lone_hero_fails_its_test_without_a_die_whatever_its_dead_hosts_flag_says() {
+    let (mut st, statics) = line(MIRROR, false);
+    st.shaken[3] = true;
+    let seed = due_seed(&st, &statics, MIRROR);
+    let (after, shot) = shoot(&st, &statics, seed, MIRROR);
+    assert_eq!(morale_dice(&shot), 0, "{:?}", shot.rolls);
+    assert!(after.shaken[3]);
+}
+
+/// The table's idle recovery clears the unit's joined heroes with it (`_solo_mirror_shaken`).
+#[test]
+fn an_idle_recovery_clears_the_heros_flag_with_the_hosts_from_the_pending_epoch() {
+    let hold = Action { kind: HOLD, unit: "b".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None };
+    let recover = |epoch: u32| {
+        let (mut st, statics) = live_host_line(epoch);
+        st.profiles = Rc::new(Profiles { list: vec![st.profiles.list[0].clone(); 4], index: HashMap::new() });
+        (st.shaken[2], st.shaken[3], st.player[2]) = (true, true, 1);
+        let seams = Seams { rules_epoch: epoch, hero_attach: true, hero_counts_in_size: true, ..Seams::default() };
+        let mut tray = Tray::seeded(3);
+        resolve_stochastic_tray_on_board(&statics, &st, &hold, &Terrain::default(), seams, &mut GodotRng::new(0), &mut tray).unwrap().0
+    };
+    let on = recover(MIRROR);
+    assert_eq!((on.shaken[2], on.shaken[3]), (false, false), "the host recovers and its hero with it");
+    let below = recover(MIRROR - 1);
+    assert_eq!((below.shaken[2], below.shaken[3]), (false, true), "below the pending epoch the hero keeps the flag");
+}
+

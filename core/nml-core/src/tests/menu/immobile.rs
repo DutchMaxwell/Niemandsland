@@ -99,7 +99,7 @@ use super::*;
             charge_no_difficult: vec![false; n],
             charge_probe_r: vec![0.0; n],
             buffs: (0..n).map(|_| Vec::new()).collect(),
-            cast_buffs: Vec::new(),
+            cast_buffs: Vec::new(), casualty_f32: false,
             vs_mark_round: vec![-1; n],
             hit_and_run_round: vec![-1; n],
             moved_round: vec![-1; n],
