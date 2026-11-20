@@ -37,7 +37,6 @@ var _material: ShaderMaterial
 var _kit: BoardgenKit
 var _tiefwerk: TiefwerkLibrary = null   # the authored surfaces (R2, on demand); the board is procedural until they are cached
 var _decals: BoardgenDecals = null
-var _layout := {}
 var _footprint := Rect2()   # the ground kept free of the table's scatter, in table-local metres: the board and all round it
 var _layout: Dictionary = {}
 
