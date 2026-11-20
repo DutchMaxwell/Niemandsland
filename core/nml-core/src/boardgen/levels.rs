@@ -96,13 +96,14 @@ fn raise_wall(cells: &mut [Cell], wall: &[bool], rng: &mut GodotRng) {
     let snap = cells.to_vec();
     let col: Vec<usize> = (0..GRID * GRID).filter(|&i| wall[i] && i % GRID < GRID / 2).collect();   // the west twin, top to bottom
     let set = |cells: &mut [Cell], i: usize, level: u8, kind: LotKind| for j in [i, mirror(i)] { cells[j].level = level; cells[j].lot_kind = kind; };
-    for &i in &col { set(cells, i, 2, LotKind::Wall); }
-    let inner: Vec<usize> = col.iter().copied().filter(|&i| col.contains(&(i - GRID)) && col.contains(&(i + GRID))).collect();
+    // inside a deployment band the wall is a ruined low wall (3 in, cover, no towers): nobody gets plunging fire into a deployment zone from it
+    for &i in &col { set(cells, i, if cells[i].deploy == 0 { 2 } else { 1 }, LotKind::Wall); }
+    let inner: Vec<usize> = col.iter().copied().filter(|&i| cells[i].deploy == 0 && i >= GRID && col.contains(&(i - GRID)) && col.contains(&(i + GRID))).collect();
     if !inner.is_empty() { set(cells, inner[rng.randi_range(0, inner.len() as i64 - 1) as usize], 0, LotKind::Wall); }
     // runs of wall cells (the walkway); a run of two has a wall tower at one end, a run of three or more at both, and every run gets one buttress on free ground beside a
     // level-2 cell, nearest the run's middle first (a tower is 9 in: a 3 in buttress cannot reach it)
     let mut runs: Vec<Vec<usize>> = Vec::new();
-    for &i in &col { if cells[i].lot_kind == LotKind::Wall && cells[i].level == 2 { if runs.last().is_some_and(|r| r.last() == Some(&(i - GRID))) { runs.last_mut().expect("a run").push(i); } else { runs.push(vec![i]); } } }
+    for &i in &col { if cells[i].lot_kind == LotKind::Wall && cells[i].level == 2 { if runs.last().is_some_and(|r| r.last().is_some_and(|&l| l + GRID == i)) { runs.last_mut().expect("a run").push(i); } else { runs.push(vec![i]); } } }
     for run in runs {
         let towers = match run.len() { 0 | 1 => Vec::new(), 2 => vec![run[0]], n => vec![run[0], run[n - 1]] };
         for &i in &towers { set(cells, i, 3, LotKind::Wall); }

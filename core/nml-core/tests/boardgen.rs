@@ -564,7 +564,7 @@ fn a_town_is_many_small_buildings_and_no_open_lane_runs_edge_to_edge() {
     }
     let (mean, share, rays) = (lots as f64 / n as f64, retried as f64 / n as f64, blocked / n as f64);
     eprintln!("town lots mean {mean:.1} min {min_lots}, retried {share:.3}, opening-turn rays blocked {rays:.3}");
-    assert!(mean >= 15.0 && min_lots >= 10, "lots per board: mean {mean:.1}, min {min_lots}");
+    assert!(mean >= 18.0 && min_lots >= 12, "lots per board: mean {mean:.1}, min {min_lots}");
     assert!(share <= 0.97, "{share:.2} of the town boards needed a later sub-seed");
     assert!(rays >= 0.70, "the opening-turn sight lines are {rays:.2} blocked");
 }
@@ -616,7 +616,7 @@ fn a_town_has_garden_plots_that_stay_flat_and_the_deepworks_has_none() {
         let plots: Vec<_> = l.lots.iter().filter(|lot| lot.kind == LotKind::Rough).collect();
         total += plots.len();
         least = least.min(plots.len());
-        assert!(plots.iter().all(|lot| lot.w * lot.h <= 2), "seed {seed}: a plot of more than 2 cells");
+        assert!(plots.iter().all(|lot| lot.w * lot.h == 1), "seed {seed}: a plot of more than one cell");
         assert!(l.cells.iter().filter(|c| c.lot_kind == LotKind::Rough).all(|c| c.level == 0 && !c.street), "seed {seed}: a raised or street plot cell");
         let on_plot = |lm: &Landmark| footprint(lm).iter().any(|&i| l.cells[i].lot_kind == LotKind::Rough);
         assert!(!l.landmarks.iter().any(on_plot), "seed {seed}: a landmark stands on a plot");
@@ -624,7 +624,7 @@ fn a_town_has_garden_plots_that_stay_flat_and_the_deepworks_has_none() {
     }
     let mean = total as f64 / 300.0;
     eprintln!("garden plots per town board: mean {mean:.1}, least {least}");
-    assert!(mean >= 7.0 && least >= 5, "plots per board: mean {mean:.1}, least {least}");
+    assert!(mean >= 5.0 && least >= 4, "plots per board: mean {mean:.1}, least {least}");
 }
 
 #[test]
@@ -686,9 +686,12 @@ fn a_town_has_two_half_turn_city_walls_with_a_gate_a_breach_towers_and_a_ladder_
         let (west, east): (Vec<&nml_core::boardgen::Cell>, Vec<&nml_core::boardgen::Cell>) = ridge.iter().copied().partition(|c| c.x < GRID / 2);
         assert!(!west.is_empty() && west.len() == east.len(), "seed {seed}: the walls are not twins ({} / {})", west.len(), east.len());
         let col = west[0].x;
-        assert!(wall.iter().filter(|c| c.level != 1).all(|c| c.x == col || c.x == GRID - 1 - col) && (DEPLOY_DEPTH_CELLS..GRID - DEPLOY_DEPTH_CELLS).contains(&west[0].z), "seed {seed}: the wall leaves its column or enters a band");
-        // a gate (a street cell in the line), a breach (a level-0 wall cell) and a wall tower (level 3) on each twin
-        let line: Vec<_> = (DEPLOY_DEPTH_CELLS..GRID - DEPLOY_DEPTH_CELLS).map(|z| l.cell(col, z)).collect();
+        assert!(wall.iter().all(|c| c.x == col || c.x == GRID - 1 - col || c.level == 1), "seed {seed}: the wall leaves its column");
+        // in a band the wall is the 3 in low wall: nothing of it is 6 or 9 in up
+        assert!(wall.iter().filter(|c| c.deploy != 0).all(|c| c.level <= 1), "seed {seed}: a 6 in wall or a tower in a deployment band");
+        assert!((0..GRID).any(|z| l.cell(col, z).deploy != 0 && l.cell(col, z).lot_kind == LotKind::Wall && l.cell(col, z).level == 1) || (0..GRID).all(|z| l.cell(col, z).street || l.cell(col, z).deploy == 0 || l.cell(col, z).lot_kind != LotKind::Wall), "seed {seed}: no low wall in the bands");
+        // a gate (a street cell in the line), a breach (a level-0 wall cell) and a wall tower on each twin
+        let line: Vec<_> = (0..GRID).map(|z| l.cell(col, z)).collect();
         assert!(line.iter().any(|c| c.street && c.level == 0), "seed {seed}: no gate");
         assert!(line.iter().any(|c| c.lot_kind == LotKind::Wall && c.level == 0), "seed {seed}: no breach");
         let two_in_a_row = line.windows(2).any(|w| w.iter().all(|c| c.lot_kind == LotKind::Wall && c.level >= 2));
