@@ -23,10 +23,12 @@ void vertex() {
 	kind = INSTANCE_CUSTOM.x;
 }
 
+// A hash without lattice correlation (the old one left near-equal values in neighbouring lattice cells, so the value noise showed
+// axis-aligned rectangular patches: the "square puddles").
 float h21(vec2 p) {
-	p = fract(p * vec2(123.34, 456.21));
-	p += dot(p, p + 45.32);
-	return fract(p.x * p.y);
+	vec3 q = fract(vec3(p.xyx) * 0.1031);
+	q += dot(q, q.yzx + 33.33);
+	return fract((q.x + q.y) * q.z);
 }
 
 float vnoise(vec2 p) {
@@ -55,6 +57,21 @@ vec4 cell_at(ivec2 c) {   // x = height in inches, y = sump; outside the board =
 		return vec4(0.0);
 	}
 	return texelFetch(cells, c, 0) * 255.0;
+}
+
+// Distance in inches from the point g (cell units) to the nearest cell taller than h among the 3x3 around cell c; 9 = none. Euclidean,
+// so it has no square corners and no cell-edge cut-offs (the grime and the puddles that collect along walls follow it).
+float wall_dist(vec2 g, ivec2 c, float h) {
+	float best = 9.0;
+	for (int j = -1; j <= 1; j++) {
+		for (int i = -1; i <= 1; i++) {
+			ivec2 o = c + ivec2(i, j);
+			if ((i != 0 || j != 0) && cell_at(o).x > h) {
+				best = min(best, length(max(abs(g - (vec2(o) + 0.5)) - 0.5, 0.0)) * cell_in);
+			}
+		}
+	}
+	return best;
 }
 
 void fragment() {
@@ -94,29 +111,41 @@ void fragment() {
 		ivec2 c = ivec2(floor(g));
 		vec2 f = fract(g) * cell_in;
 		vec4 me = cell_at(c);
-		float lip = 9.0, contact = 9.0, rim = 9.0;
+		float lip = 9.0, rim = 9.0;
 		for (int i = 0; i < 4; i++) {
 			vec2 d = vec2(DIRS[i]);
 			float dist = d.x > 0.5 ? cell_in - f.x : d.x < -0.5 ? f.x : d.y > 0.5 ? cell_in - f.y : f.y;
 			vec4 nb = cell_at(c + DIRS[i]);
 			lip = nb.x < me.x ? min(lip, dist) : lip;
-			contact = nb.x > me.x ? min(contact, dist) : contact;
 			rim = (nb.y > 0.5) != (me.y > 0.5) ? min(rim, dist) : rim;
 		}
-		if (k <= 2) {   // wet concrete: joints, grime, puddles, contact shadow at the foot of a wall
+		if (k <= 2) {   // wet concrete: joints, grime at the walls, organic puddles, oil, contact shadow at the foot of a wall
+			float wd = wall_dist(g, c, me.x);
 			alb = mix(vec3(0.20, 0.20, 0.21), vec3(0.31, 0.305, 0.30), n1) * (k == 1 ? 1.15 : 1.0);
 			alb *= mix(0.55, 1.0, seam(uv.x, 1.5, 0.04) * seam(uv.y, 1.5, 0.04));
 			alb *= mix(0.8, 1.0, smoothstep(0.5, 0.75, fbm(uv * 0.3 + 3.0)));
-			float pud = smoothstep(0.58, 0.64, fbm(uv * 0.22 + 11.0));
-			alb *= mix(1.0, 0.9, pud);
-			rough = mix(0.8, 0.15, pud);
-			ao = mix(0.6, 1.0, smoothstep(0.0, 1.0, contact));
-			if (me.y > 0.5) {   // sump: murky condensate
-				alb = vec3(0.04, 0.075, 0.035) * mix(0.7, 1.3, n2);
-				rough = 0.06;
-				emis = vec3(0.07, 0.15, 0.01) * smoothstep(0.4, 0.9, fbm(uv * 0.8 + TIME * 0.04));
+			alb *= mix(0.65, 1.0, smoothstep(0.0, 1.4, wd + (n2 - 0.5) * 0.9));   // grime gradient: darker the closer to a wall
+			// Water: a world-space noise field (domain-warped, so the outline is irregular), biased to collect along the walls. Nothing here
+			// reads the cell grid, so no puddle is clipped at a cell edge; a damp ring and a soft rim surround the open water.
+			vec2 warp = vec2(fbm(uv * 0.8 + 3.1), fbm(uv * 0.8 + 8.7)) - 0.5;
+			float field = fbm(uv * 0.26 + warp * 1.4 + 11.0) + 0.2 * smoothstep(1.6, 0.0, wd);
+			float damp = smoothstep(0.54, 0.64, field);
+			float pud = smoothstep(0.65, 0.72, field);
+			alb *= mix(1.0, 0.8, damp);
+			alb = mix(alb, alb * vec3(0.72, 0.78, 0.85), pud);
+			rough = mix(mix(0.8, 0.35, damp), 0.05, pud);
+			float oil = smoothstep(0.67, 0.73, fbm(uv * 0.7 + 41.0)) * (1.0 - pud);   // oil stains: dark, glossy, a faint rainbow sheen
+			alb = mix(alb, vec3(0.06, 0.05, 0.045), oil * 0.8);
+			rough = mix(rough, 0.15, oil);
+			emis += oil * 0.006 * (0.5 + 0.5 * cos(6.28 * (n1 * 2.0 + vec3(0.0, 0.33, 0.67))));
+			ao = mix(0.6, 1.0, smoothstep(0.0, 1.0, wd));
+			if (me.y > 0.5) {   // sump: an irregular shoreline inside the hazard cells, a sludge bank, murky green liquid
+				float liquid = smoothstep(0.3, 0.55, rim + (n2 - 0.5) * 0.9);
+				alb = mix(vec3(0.10, 0.09, 0.05) * mix(0.7, 1.3, n3), vec3(0.04, 0.075, 0.035) * mix(0.7, 1.3, n2), liquid);
+				rough = mix(0.9, 0.06, liquid);
+				emis = vec3(0.07, 0.15, 0.01) * liquid * smoothstep(0.4, 0.9, fbm(uv * 0.8 + TIME * 0.04));
 			}
-			if (rim < 0.28) {   // painted rim of a sump
+			if (rim < 0.28 && n2 + 0.3 * n3 > 0.45) {   // the painted rim of a sump, chipped
 				alb = mix(vec3(0.05), YELLOW, step(0.5, fract((p.x + p.z) * 0.8))) * mix(0.6, 1.0, n2);
 			}
 		} else if (k == 3) {   // rusted plate deck: 1.5 in plates, rivets, seams
