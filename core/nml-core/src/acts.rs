@@ -967,6 +967,13 @@ pub const EPOCH_91_JOINED_HERO_FATIGUE: u32 = 91;
 /// `CURRENT_RULES_EPOCH`. The recorder mirror (`act_recorder.gd`) stamps 92 in the same change.
 pub const EPOCH_92_MELEE_CAUSES: u32 = 92;
 pub const CURRENT_RULES_EPOCH: u32 = 92;
+/// Placeholder gate for #3090 part 2 (the AI steps into Dangerous ground it could skirt), plain moves only.
+/// First, the "destination is Dangerous, route straight in" exception reads the unit's own goal (its centre at the end
+/// of the rigid move, base edge included), no longer any single model's rigid end point. Second, a plan that still
+/// crosses Dangerous re-plans with the goal shifted sideways, perpendicular to the move (+1, -1, +2, -2, +3, -3, +4,
+/// -4 inches, + = right of travel), and keeps the FIRST plan that crosses none.
+/// Table twin `SoloController._execute_move` / `PENDING_EPOCH_DANGER_AVOID` in `act_recorder.gd`. Stays 93 (lead assignment); CURRENT is 92.
+pub const PENDING_EPOCH_DANGER_AVOID: u32 = 93;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
