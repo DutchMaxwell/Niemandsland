@@ -1318,8 +1318,8 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# same slot the Caster resolution uses ("at any point before attacking").
 	# Plan H (H-5), the beats guard: a Mend bearer the core takes leaves the beat to the core's one call (it resolves it from the
 	# board it captured before the beat); the table pays it only when that call is not made or refused (`_solo_pay_dangerous`).
-	# H-6: Breath Attack the same way (the core says its lines and lands its wounds).
-	if core_takes and (_solo_has_beat(unit, "Mend") or _solo_has_beat(unit, "Breath Attack")):
+	# H-6 / H-7: Breath Attack and Storm Attack the same way (the core says their lines and lands their wounds).
+	if core_takes and (_solo_has_beat(unit, "Mend") or _solo_has_beat(unit, "Breath Attack") or _solo_has_storm(unit)):
 		report["core_beats"] = true
 	else:
 		await _solo_apply_mend(unit)
@@ -1334,7 +1334,8 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 		await _solo_try_precision_spot(unit)   # rules 3.6: the spot rolls BEFORE the bearer's attacks
 	await _solo_apply_reckless_piercing(unit)
-	await _solo_apply_storm_attack(unit)
+	if not report.has("core_beats"):   # H-7: held for the core's one call, paid by `_solo_pay_dangerous` on a refusal
+		await _solo_apply_storm_attack(unit)
 	# Surprise Attack moved to activation start (D19 a, above the move) — see the call there.
 	await _solo_apply_teleport(unit, report)   # design #816 PR 1: the before-attack reposition beat
 	if _solo_activation_unit_gone(unit):
@@ -5165,7 +5166,7 @@ func _solo_ai_core_call(unit: GameUnit, report: Dictionary, target: GameUnit, sh
 
 
 ## One core P4.D-19/37 + H-5: the table pays what the body left to the core (no core call is made, or it refused): the Dangerous
-## test, then the pre-attack beats the guard held back (Mend, Breath Attack), then the move-through attacks (Strafing, Crossing Attack). A Mend
+## test, then the pre-attack beats the guard held back (Mend, Breath Attack, Storm Attack), then the move-through attacks (Strafing, Crossing Attack). A Mend
 ## caster is never taken (`cast_chain_clear`), so held casts and a held Mend never meet.
 func _solo_pay_dangerous(unit: GameUnit, report: Dictionary) -> void:
 	var dice := int(report.get("core_dangerous", 0))
@@ -5175,6 +5176,7 @@ func _solo_pay_dangerous(unit: GameUnit, report: Dictionary) -> void:
 	if report.erase("core_beats") and not _solo_activation_unit_gone(unit):
 		await _solo_apply_mend(unit)
 		await _solo_apply_breath_attack(unit)
+		await _solo_apply_storm_attack(unit)
 	if report.erase("core_through") and not _solo_activation_unit_gone(unit):
 		await _solo_apply_strafing(unit)
 		await _solo_apply_crossing_attack(unit)
@@ -8286,6 +8288,21 @@ func _solo_reanimation_spot_ok(pos: Vector3, r: float, model: ModelInstance, anc
 					< r + _solo_base_radius(oi) + 0.001:
 				return false
 	return true
+
+
+## H-7: a living bearer of an unspent Storm Attack entry (primitive; Storm of Change / Lust / Plague / War) in `unit`'s chain.
+func _solo_has_storm(unit: GameUnit) -> bool:
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		chain = chain + unit.get_attached_heroes()
+	for b in chain:
+		var bu := b as GameUnit
+		if bu == null or bu.get_alive_count() == 0:
+			continue
+		for e in RulesRegistry.unit_rules_of_primitive(bu, "Storm Attack"):
+			if not bool(bu.unit_properties.get("storm_used_%s" % str((e as Dictionary)["name"]).to_snake_case(), false)):
+				return true
+	return false
 
 
 ## A living bearer of the beat `rule` in `unit`'s chain (the unit and its attached heroes): what `_solo_apply_mend` and the beats
