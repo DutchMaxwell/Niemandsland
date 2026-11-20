@@ -1767,6 +1767,7 @@ mod joined_hero_fatigue;
 mod playtest_morale;
 mod fearless_shaken;
 mod bearers_last;
+mod height_settle;
 mod hit_and_run;
 mod hit_and_run_boost_band;
 mod grounded_reinforcement;

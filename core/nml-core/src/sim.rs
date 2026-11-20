@@ -11403,6 +11403,10 @@ fn resolve_with(
         growth_round_start_heroes(statics, &mut next, si, was_shaken, seams);
     }
 
+    // Heightfield plan step 12: the pre-attack beats above (Teleport, Mind Control, a revived model) may have moved a
+    // model in x/z only; the volley below reads its height (3D sight), so it stands on its surface first.
+    settle_on_surface(&mut next, state, cover, seams.rules_epoch);
+
     // --- shoot (battle_sim.gd:608-630); HOLD and ADVANCE only, plus RUSH for
     // a Quick Shot carrier (block B11, solo_controller.gd:1846/:2257/:4033 —
     // "may shoot after using Rush actions": its move-and-shoot band becomes
@@ -12438,6 +12442,25 @@ fn resolve_with(
     Ok(finish_activation(statics, state, next, si, seams, cover))
 }
 
+/// Heightfield plan step 12 (`EPOCH_94_PARITY_BATCH`, a board with tiers): every model of a unit that moved in this
+/// activation stands on the surface under its x/z. A planned move already ends there (`Landing.end` reads
+/// `surface_y_m`); the writers that shift a model in x/z and keep its y (rigid steps, Hit & Run, Mind Control, a
+/// Teleport, the charge snap, the pile-in, a revived model) are repaired here, once, so the board has one height truth.
+/// A flat board and every epoch below the gate are left exactly as they were.
+fn settle_on_surface(next: &mut State, parent: &State, cover: Cover<'_>, rules_epoch: u32) {
+    let Cover::Board(t) = cover else { return };
+    if !rule_on(rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) || t.tier_boxes().is_empty() {
+        return;
+    }
+    for (now, before) in next.positions.iter_mut().zip(&parent.positions) {
+        if now != before {
+            for p in now.iter_mut() {
+                p[1] = sight::surface_y_m(t, [p[0], p[2]], rules_epoch);
+            }
+        }
+    }
+}
+
 /// Shared end-of-activation bookkeeping (normal finish and CC-7a early exit when a cast wipes the activating unit):
 /// mark the unit + joined heroes activated, check Second Wind, refresh LOS pairs on a live board, and sync positions.
 fn finish_activation(statics: &[UnitStatic], state: &State, mut next: State, si: usize, seams: Seams, cover: Cover<'_>) -> State {
@@ -12471,6 +12494,7 @@ fn finish_activation(statics: &[UnitStatic], state: &State, mut next: State, si:
     // Refreshed only on the LIVE board (`Cover::Board`) and only when the parent
     // carried a matrix at all: a `Cover::Recorded` replay reads each node's own
     // recorded rows, and a state with no matrix had no `los_blocked` seam.
+    settle_on_surface(&mut next, state, cover, seams.rules_epoch);
     if let Cover::Board(terrain) = cover {
         refresh_los_pairs(&mut next, state, terrain, seams);
     }

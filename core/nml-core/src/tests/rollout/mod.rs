@@ -34,6 +34,7 @@
     mod battleborn;
     mod coordinate;
     mod delayed_action;
+    mod height_invariant;
     mod policy_memo;
     mod round_cycle;
     mod rush_demotion;
