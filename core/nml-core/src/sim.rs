@@ -8598,19 +8598,15 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
 /// CC-8b: a buff or debuff spell's effect on every standing target (`_solo_record_spell_mod` main.gd:6078). Builds the
 /// table's `PlainBuff` shape and converts it through `PlainBuff::to_live_mod` (the capture's own conversion), so the
 /// core's `LiveMod` equals what capturing the landed table record produces. A spell with neither a non-zero modifier nor a
-/// grant is resolved with nothing pushed (table: announce + token only).
+/// grant is resolved with nothing pushed on the board (table: announce + token only). CC-8c: every standing target of a hit
+/// buff / debuff cast, effect-less ones included, is also named in `State::cast_buffs` (the delta's `buffs_gained`).
 fn tray_spell_effect(state: &mut State, targets: &[usize], c: &CastInput, spell: &Spell, rules_epoch: u32) {
     let m = spell.modifier;
-    if !m.present && spell.grants_rule.is_empty() {
-        return;
-    }
     let (hit, def, cast, morale, range, adv, rush) = (
         m.hit_mod as i64, m.def_mod as i64, m.casting_mod as i64, m.morale_mod as i64,
         m.range_in as i64, m.advance_in as i64, m.rush_in as i64,
     );
-    if (hit, def, cast, morale, range, adv, rush) == (0, 0, 0, 0, 0, 0, 0) && spell.grants_rule.is_empty() {
-        return;
-    }
+    let effect_less = spell.grants_rule.is_empty() && (!m.present || (hit, def, cast, morale, range, adv, rush) == (0, 0, 0, 0, 0, 0, 0));
     let rec = crate::io::PlainBuff {
         spell: spell.name.clone(),
         hit_mod: hit,
@@ -8627,10 +8623,10 @@ fn tray_spell_effect(state: &mut State, targets: &[usize], c: &CastInput, spell:
     };
     let live = rec.to_live_mod(rules_epoch);
     for &t in targets {
-        state.buffs[t].push(live.clone());
-        if live.once {
-            state.cast_buffs.push((t, live.clone(), false)); // CAST-O7: the delta names it if this activation spends it
+        if !effect_less {
+            state.buffs[t].push(live.clone());
         }
+        state.cast_buffs.push((t, live.clone(), false)); // CAST-O7 / CC-8c: the delta names it (gained, or spent by this activation)
     }
 }
 
