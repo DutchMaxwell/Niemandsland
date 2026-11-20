@@ -9522,10 +9522,9 @@ func cumbersome_settle(unit: GameUnit, action: int, do_shoot: bool, shoot_range:
 static func hold_only_rule(unit_rules: Array) -> String:
 	var artillery_holds := AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36
 	for r in unit_rules:
-		var s := str(r).strip_edges()
-		if s.begins_with("Immobile"):
+		if GameUnit.rule_name_matches(str(r), "Immobile"):
 			return "Immobile"
-		if artillery_holds and s.begins_with("Artillery"):
+		if artillery_holds and GameUnit.rule_name_matches(str(r), "Artillery"):
 			return "Artillery"
 	return ""
 
@@ -9539,10 +9538,9 @@ static func hold_only_param(unit: GameUnit) -> bool:
 	if unit == null:
 		return true
 	for r in unit.get_special_rules():
-		var s := str(r).strip_edges()
-		if s.begins_with("Immobile"):
+		if GameUnit.rule_name_matches(str(r), "Immobile"):
 			return bool(RulesRegistry.unit_param(unit, "Immobile", "hold_only", true))
-		if s.begins_with("Artillery"):
+		if GameUnit.rule_name_matches(str(r), "Artillery"):
 			return bool(RulesRegistry.unit_param(unit, "Artillery", "hold_only", true))
 	return true
 
@@ -9640,7 +9638,8 @@ static func strikes_back_at_all(unit: GameUnit) -> bool:
 ## non-Counter units in their section) and to the strike-first melee phase.
 static func has_counter(melee_profiles: Array, unit_rules: Array) -> bool:
 	for r in unit_rules:
-		if str(r).strip_edges().begins_with("Counter"):
+		# The rule, or one of its two data aliases the core stamps by name (unit.rs: "Counter-Attack", "Counter in Melee"); a Counter Aura / Buff label only grants it.
+		if GameUnit.rule_name_matches(str(r), "Counter") or GameUnit.rule_name_matches(str(r), "Counter-Attack") or GameUnit.rule_name_matches(str(r), "Counter in Melee"):
 			return true
 	for p in melee_profiles:
 		if bool((p as Dictionary).get("counter", false)):

@@ -164,6 +164,10 @@ use super::*;
         assert!(forces_hold(&["Immobile".to_string()]));
         assert!(forces_hold(&[" Artillery".to_string()]), "the read trims before it matches");
         assert!(!forces_hold(&["Ethereal".to_string()]), "a near-neighbour name must not match");
+        assert!(forces_hold(&["Immobile (spell)".to_string()]), "the qualifier form is the rule");
+        // NML-1112: a label that merely STARTS with the name is another rule (no such rule exists today; the prefix read would have taken it).
+        assert!(!forces_hold(&["Immobile Mark".to_string(), "Artillery Aura".to_string()]), "a bare prefix is not the rule");
+        assert!(!forces_hold_at(&["Immobile Mark".to_string()], crate::acts::EPOCH_73_V36), "nor at 3.6");
     }
 
     /// THE MENU: an Immobile carrier's candidates end after the holds — no
