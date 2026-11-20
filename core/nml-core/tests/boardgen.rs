@@ -621,3 +621,16 @@ fn a_town_has_garden_plots_that_stay_flat_and_the_deepworks_has_none() {
     eprintln!("garden plots per town board: mean {mean:.1}, least {least}");
     assert!(mean >= 7.0 && least >= 6, "plots per board: mean {mean:.1}, least {least}");
 }
+
+#[test]
+fn a_town_has_a_four_by_four_market_square_in_the_middle_and_the_deepworks_none() {
+    let plaza: Vec<(usize, usize)> = (6..10).flat_map(|z| (6..10).map(move |x| (x, z))).collect();
+    let mut deep_squares = 0;
+    for seed in 1..=300 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        assert!(plaza.iter().all(|&(x, z)| l.cell(x, z).street && l.cell(x, z).level == 0), "seed {seed}: the square is not open street\n{}", l.to_ascii());
+        assert!(l.problems().is_empty(), "seed {seed}: {:?}", l.problems());
+        deep_squares += usize::from(plaza.iter().all(|&(x, z)| generate(seed, Symmetry::Point180).cell(x, z).street));
+    }
+    assert!(deep_squares < 60, "the Deepworks board has no reserved square ({deep_squares} of 300 have street there by chance)");
+}

@@ -55,6 +55,8 @@ pub struct Budgets {
     pub garden_area: usize,
     /// The fewest garden plots a board must have (0 = no demand).
     pub garden_min: usize,
+    /// Side in cells of the market square kept as street cells about the board centre (even; 0 = none).
+    pub plaza: usize,
     /// Reject a board with a straight open lane (a full row or column of level-0 cells, no solid piece) from edge to edge: it is a sight corridor.
     pub lane_free: bool,
     /// Sub-seeds tried before the last one is returned as it is (the caller then sees `problems()`).
@@ -69,11 +71,11 @@ impl Theme {
         match self {
             Self::Deepworks => Budgets { raised: RAISED_PERMILLE, high: HIGH_PERMILLE, tower_pairs: TOWER_PAIRS, landmark_pieces: LANDMARK_PIECES,
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
-                lot_pairs: 9, lot_shapes: &[(3, 2), (2, 3), (2, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[], garden_area: 0, garden_min: 0, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1 },
+                lot_pairs: 9, lot_shapes: &[(3, 2), (2, 3), (2, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[], garden_area: 0, garden_min: 0, plaza: 0, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1 },
             // First town values (step 6 of the ruin-town plan re-fits them): more raised ground, one tower pair, more terraces.
             Self::RuinTown => Budgets { raised: (300, 400), high: (60, 150), tower_pairs: (1, 1), landmark_pieces: LANDMARK_PIECES,
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
-                lot_pairs: 13, lot_shapes: &[(3, 2), (2, 3), (2, 2), (2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[(3, 2)], garden_area: 2, garden_min: 6, lane_free: true, max_attempts: 32, tower_side: 2 },
+                lot_pairs: 13, lot_shapes: &[(3, 2), (2, 3), (2, 2), (2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[(3, 2)], garden_area: 2, garden_min: 6, plaza: 4, lane_free: true, max_attempts: 32, tower_side: 2 },
         }
     }
     fn salt(self) -> i64 { if self.is_default() { 0 } else { TOWN_SALT } }
