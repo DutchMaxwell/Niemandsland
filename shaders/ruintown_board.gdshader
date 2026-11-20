@@ -88,7 +88,7 @@ void fragment() {
 		} else if (k == 12 || k == 9 || k == 16) {   // city wall, stone pieces, chimney: coursed stone (brick for the chimney)
 			alb = k == 16 ? stone(uv, seed, 0.25, 0.55, tint) : stone(uv, seed, 0.55, 1.0, tint);
 		} else if (k == 3 || k == 4 || k == 6) {   // ruined house tiers and towers, by storey
-			float band = floor(uv.y / 3.0);
+			float band = k == 6 ? 2.0 : floor(uv.y / 3.0);   // a tower is stone all the way up
 			if (band < 0.5) {
 				alb = mix(stone(uv, seed, 0.55, 1.0, tint * 0.9), vec3(0.09, 0.06, 0.04), door(uv, seed));
 			} else if (band < 1.5) {
