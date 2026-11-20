@@ -208,7 +208,7 @@ void fragment() {
 		}
 		if (detail > 0.5) {
 			float th;
-			nrel = top_relief(uv, k, half_board, px, wet, th);   // plate seams, hatches, grates, deck rivets and tread, roof joints
+			nrel = top_relief(uv, k, half_board, px, max(wet, step(0.5, me.y)), th);   // plate seams, hatches, grates, deck rivets and tread, roof joints; a sump's liquid lies level too
 			rough = clamp(rough - th * 4.0 * (1.0 - wet), 0.05, 1.0);
 			ao *= 1.0 + 4.0 * min(th, 0.0);
 		}
