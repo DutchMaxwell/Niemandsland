@@ -887,6 +887,10 @@ pub struct CondAp {
     /// pre-wave behaviour logs nothing and old replays stay byte-identical —
     /// only the wave-3 named forms carry it (Piercing Hunter family).
     pub name: String,
+    /// Plan H (H-17a): the rule name the STEP path's battle-log line carries (`dice.rs` `say_rule`, "<rule>: AP(+N) against <U>"), stamped by
+    /// the generic pass for every conditional-AP rule the table words (Disintegrate, Puncture, Tear, ...). The rules-must-log line above
+    /// (`name`, `ShootResult.log`, the Python twin) stays empty for them, so no recorded entry or replay moves; only the tray's line is new.
+    pub say_name: String,
     /// EPOCH 46 DISINTEGRATE REGEN — the entry's Regeneration bypass and its
     /// melee/shooting facet (`bypass_regen` / `melee_only` /
     /// `shooting_only`, the table's weapon-rule arm reads the same three
@@ -6208,6 +6212,7 @@ fn cond_ap_of(reg: &mut Registries, p: &Profile, base: &str) -> (Option<CondAp>,
             // Rules 3.6 hook: a new spelling carries its rule name, so the dice
             // folds' rules-must-log line names it; older spellings stay unnamed.
             name: if crate::combat::cond_ap_why(e.param_s("condition")).is_empty() && e.param_s("condition") != "on_charge" { String::new() } else { base.to_string() },
+            say_name: base.to_string(),
             ..Default::default()
         }),
         on6,

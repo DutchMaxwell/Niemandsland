@@ -87,3 +87,12 @@ func test_the_unpredictable_die_names_the_rule_and_the_roll() -> void:
 	var generic := _aof(DoorLines.entry("Gunners", 10, ["Unpredictable"], [], "duchies_of_vinci"))
 	await _same("unpredictable", generic, _aof(DoorLines.entry("Targets", 10, [], [], "human_empire", 0)), "Unpredictable:", 12)
 
+
+## H-17a (Plan H): the generic conditional-AP rules say the table's line too (`Disintegrate: AP(+2) against <U>`, `Tear: AP(+4) against <U>`),
+## so the `door_omits_conditional_ap_line` group left the deny file. Disintegrate bites a target at Defense 3+ or better, Tear a Tough(9)+ one.
+## RED: restore the group, or drop `say_name` from the core's dice fold -> the table says the line and the door does not.
+func test_the_generic_conditional_ap_rules_name_themselves() -> void:
+	var armoured := _target()
+	(armoured["unit"] as OPRApiClient.OPRUnit).defense = 3
+	await _same("disintegrate", DoorLines.entry("Gunners", 10, [], ["Disintegrate"], "dao_union"), armoured, "Disintegrate:", 6)
+	await _same("tear", DoorLines.entry("Gunners", 10, [], ["Tear"], "orc_marauders"), _target(1, ["Tough(9)"]), "Tear:", 6)
