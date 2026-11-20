@@ -390,7 +390,8 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 			var interference := id.begins_with("interference:")
 			if interference and not cx.is_empty():
 				await _cast_throw(main, cx)   # CC-14a: the table shows the cast (markers, seal, "Cast" card) BEFORE the foe is asked
-			var option: String = await main._owner_choice(owner, id, options, choice_purpose(id, transcript), wounds)
+			var option: String = await main._owner_choice(owner, id, options, choice_purpose(id, transcript), wounds,
+				_interference_context(main, cx) if interference else {})
 			probes.erase(id)   # asked once: the answer follows, or the core's automatic pick stands
 			if answer_fits(id, options, option):
 				transcript.append({"t": "choice", "id": id, "option": option})
@@ -492,7 +493,7 @@ static func _cast_spell_of(transcript: Array, owner_key: String) -> String:
 ## volley's stage opens then: the table's casts run in their own stages before it).
 static func cast_context(main, report: Dictionary, volley: Callable = Callable()) -> Dictionary:
 	var before: Dictionary = main._solo_act_flags if not main._solo_act_flags.is_empty() else main._solo_unit_flags()
-	return {"casts": report.get("casts", []), "next": 0, "cur": {}, "began": false, "ended": false, "landed": {},
+	return {"report": report, "casts": report.get("casts", []), "next": 0, "cur": {}, "began": false, "ended": false, "landed": {},
 		"before": before, "volley": volley, "volley_open": false, "pre_due": false}
 
 
@@ -508,6 +509,7 @@ static func _cast_line(main, unit: GameUnit, cx: Dictionary, line: Dictionary) -
 	var text := str(line["text"])
 	if bool(cx["began"]) and text.begins_with("%s fires" % unit.get_name()):
 		await _cast_finish(main, cx)
+		main._solo_flush_volley_note(cx["report"])   # the table's order: casts, the volley's note, then its first line
 		_cast_open_volley(cx)
 		cx["pre_due"] = true   # the casts' casualties of this very step land after its lines: `drive` writes the `pre` block then
 		return
@@ -575,6 +577,19 @@ static func _cast_throw(main, cx: Dictionary) -> void:
 	cur["announce"] = main._solo_show_attack_announce(c.get("caster_unit", c["caster"]), targets[0], "casts %s at" % name, false)
 	cur["seal"] = main._vfx_seal_begin(c["caster"], entry, entry.get("effect", {}), name)
 	await main._solo_stage_phase("Cast", SoloController.Pace.ANNOUNCE)
+
+
+## CC-14b: what the foe's dialog shows about the cast on the stage: caster, spell, targets, the base target after the casting net
+## (conduit mod included, as the table's `_solo_resolve_one_cast` clamps it) and the boost. {} when no cast is on the stage.
+static func _interference_context(main, cx: Dictionary) -> Dictionary:
+	var c := _cast_of(cx)
+	if c.is_empty():
+		return {}
+	var caster: GameUnit = c["caster"]
+	var base := int(c.get("base_target", 4))   # the planner always sets it; 4 is the book's base cast target
+	var net := int(SoloController.caster_casting_net(caster, int(main.solo_controller.caster_conduit(caster).get("mod", 0)))["net"])
+	return {"caster": caster.get_name(), "spell": str(c.get("name", "?")), "targets": main._solo_cast_target_label(_cast_targets(c)),
+		"base": clampi(base - net, 2, 6) if net != 0 else base, "boost": int(c.get("boost", 0))}
 
 
 ## CC-14a: a foe's interference answer `n` for choice `id`: the tokens leave the pool's units the way the core takes them and the table
@@ -840,7 +855,9 @@ static func dump_legacy() -> void:
 	var path := OS.get_environment("NML_TABLE_CENSUS")
 	var f := FileAccess.open(path, FileAccess.WRITE) if path != "" else null
 	if f != null:
-		var out := {"legacy": legacy, "legacy_sets": legacy_sets, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals}
+		var out := {"legacy": legacy, "legacy_sets": legacy_sets, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals,
+			"cast_door": {"seen": cast_seen, "taken": cast_taken, "fallbacks": cast_fallbacks, "probe_refusals": cast_probe_refusals,
+			"reasons": cast_probe_reasons.slice(0, 40), "not_asked": cast_not_asked}}
 		if not CoreShadow.records.is_empty():
 			out["shadow"] = CoreShadow.records   # C-4: the shadow run's volleys (NML_CORE_SHADOW=1)
 		if not CoreShadow.melee_records.is_empty():
@@ -1097,6 +1114,34 @@ static func cast_chain_clear(unit: GameUnit) -> bool:
 ## CC-13a: the casts a probe refused (named reasons, before any die) and how many: what the AI smoke reads.
 static var cast_probe_refusals := 0
 static var cast_probe_reasons: Array = []
+## CC-15 prep: the cast door's census for the soak (`dump_legacy`, key "cast_door"): casting activations that reached the body's cast
+## slot (`cast_seen`), the probe's takes (`cast_taken`), and the marked ones whose core call could not run, so the table cast after all
+## (`cast_fallbacks`, the late-lines case: the volley's own pre-lines print before the table's casts).
+static var cast_seen := 0
+static var cast_taken := 0
+static var cast_fallbacks := 0
+## CC-15 prep: why a casting activation was not even asked of the door, reason -> count (`note_cast_not_asked`).
+static var cast_not_asked: Dictionary = {}
+
+
+## CC-15 prep: the first reason `takes_ai_activation` (in its own order) said no to a casting activation: the switch is off, no board,
+## no dice roller, a unit the slice refuses (its first refusal named), an action the door does not take, a table-only pre-attack beat
+## on the chain (`cast_chain_clear`), else the move-through refusal.
+static func note_cast_not_asked(main, unit: GameUnit, report: Dictionary) -> void:
+	var why := "through_refused"
+	if not cast_door_enabled():
+		why = "switch_off"
+	elif main._solo_core_ai_h == 0:
+		why = "no_handle"
+	elif main.dice_roller_control == null:
+		why = "no_dice_roller"
+	elif not is_plain(unit):
+		why = "unit:%s" % str((CoreSlice.refusals(unit) + ["?"])[0])
+	elif not takes_action(unit, int(report.get("action", -1))):
+		why = "action:%d" % int(report.get("action", -1))
+	elif not cast_chain_clear(unit):
+		why = "beat_primitive"
+	cast_not_asked[why] = int(cast_not_asked.get(why, 0)) + 1
 
 
 ## CC-13a: the dry probe at the body's cast slot: the activation's placement, intent and cast inputs, no faces. The core checks every

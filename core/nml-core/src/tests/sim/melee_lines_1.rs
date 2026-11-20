@@ -117,3 +117,14 @@ use super::melee_landing_gaps::{exact_seams, two_unit_melee};
         let lines = strike_lines(setup, vec![vec![4, 4, 4, 4, 1, 1], vec![1, 1, 1, 1]]);
         assert!(lines.iter().any(|l| l == "Def: 4 wounds ignore only Regeneration — Self-Repair still rolls"), "{lines:?}");
     }
+
+    /// A Limited weapon in melee says it is used up right after its roll ("<weapon> (Limited) is used up in melee", the table's strike loop), once, before the strike
+    /// line; a weapon without Limited says nothing. RED: the line reached the engine log only.
+    #[test]
+    fn a_limited_strike_says_it_is_used_up() {
+        let lines = strike_lines(|s, _| s[0].melee[0].limited = true, vec![vec![4, 4, 1, 1, 1, 1]]);
+        let at = lines.iter().position(|l| l == "Blade (Limited) is used up in melee").unwrap_or_else(|| panic!("{lines:?}"));
+        assert!(lines[at + 1].starts_with("Att strikes with Blade at Def"), "before the strike line: {lines:?}");
+        assert_eq!(lines.iter().filter(|l| l.contains("(Limited)")).count(), 1, "once: {lines:?}");
+        assert!(strike_lines(|_, _| {}, vec![vec![4, 4, 1, 1, 1, 1]]).iter().all(|l| !l.contains("Limited")), "no Limited, no line");
+    }

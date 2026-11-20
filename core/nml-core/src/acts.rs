@@ -992,6 +992,13 @@ pub const EPOCH_92_MELEE_CAUSES: u32 = 92;
 /// `CURRENT_RULES_EPOCH`. The recorder mirror (`act_recorder.gd`) stamps 93 in the same change.
 pub const EPOCH_93_DANGER_RULES_RIDER: u32 = 93;
 pub const CURRENT_RULES_EPOCH: u32 = 93;
+/// Placeholder gate for the FLYING MOVE-THROUGH (`mv::step`, the planner call's `zones_rest_only` and the sidestep probe `has_lateral_room`): the table lets a
+/// Flying unit's route ignore the other units' 1 in spacing zones from `EPOCH_75_TABLE_FIXES` (`flies_through_units`, the same read as Traversal: the zones
+/// stop blocking the ROUTE, rest legality stays strict) and calls its lateral room always open. The core read only the Traversal rule, so a lone flying
+/// charger's route bent round the defender's zone (a grid detour: it landed 0.46 in off the defender's axis, the table's straight slot) and every other
+/// Flying move near a unit planned differently. From 94 a Flying unit's route reads the Traversal way; the gate's own base-crossing clamp stays Traversal-only,
+/// as on the table. Below 94 byte-identical. Every call site reads THIS constant, not `94`.
+pub const PENDING_EPOCH_FLYING_THROUGH: u32 = 94;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff

@@ -27,7 +27,7 @@ use crate::state::State;
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
 use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_74_CLIMB_COST, EPOCH_8_PLANNER_MENU, EPOCH_73_V36, EPOCH_77_CHARGE_CAP,
-    EPOCH_78_FLIER_CUT, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER};
+    EPOCH_78_FLIER_CUT, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER, PENDING_EPOCH_FLYING_THROUGH};
 
 use super::cost::{ledge_cost, trim_polyline_priced, CellSet, Grid, Ledge, Wall, Zone};
 use super::entry::plan_unit_step_call;
@@ -590,6 +590,12 @@ impl Move<'_> {
         )
     }
 
+/// `is_traversal(unit) or flies_through_units(unit)`: the route ignores the other units' spacing zones. A Flying unit does from `PENDING_EPOCH_FLYING_THROUGH`
+/// (the table since 75); the gate's base-crossing exemption stays Traversal-only (`gate_traversal := is_traversal`).
+fn through_units(&self) -> bool {
+    self.traversal || (self.flying && rule_on(self.rules_epoch, PENDING_EPOCH_FLYING_THROUGH))
+}
+
 /// `walls_and_ledges_of` for this move.
 fn walls_and_ledges(&self) -> (Vec<Wall>, Vec<Ledge>) {
     walls_and_ledges_of(self.t, self.flying, self.rules_epoch)
@@ -678,7 +684,7 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dan
             } else {
                 Some(DIFFICULT_MOVE_CAP_IN)
             },
-            zones_rest_only: self.traversal,
+            zones_rest_only: self.through_units(),
             // :6222 — the arc allowance and the body goal are CHARGE-only; a
             // plain move sends neither, so `allowance()` falls back to the
             // straight delta length (io.rs:512).
@@ -858,7 +864,7 @@ fn external_discs(&self) -> Vec<super::gate::Disc> {
 /// `_has_lateral_room`: an eight-point perimeter probe around the original anchor.
 /// Own models move together; attached units are absent from the obstacle list.
 fn has_lateral_room(&self, reach_in: f64) -> bool {
-    if self.traversal { return true; }
+    if self.through_units() { return true; }
     let anchor = geom::div(self.pos.iter().fold([0.0; 3], |a, p| geom::add(a, *p)), self.pos.len() as f64);
     let probe = reach_in * 0.5 * IN2M;
     let others: Vec<V2> = (0..self.state.units()).filter(|&u|

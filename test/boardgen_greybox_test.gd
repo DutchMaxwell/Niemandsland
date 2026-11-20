@@ -128,6 +128,26 @@ func test_build_draws_the_whole_board_in_one_multimesh_and_a_ground_layer_collid
 	assert_bool(node.is_in_group("sandbox_terrain") or node.is_in_group("terrain")).is_false()
 
 
+func test_every_box_hands_the_shader_its_kind_and_its_size_in_inches_and_the_mesh_is_the_unit_cube() -> void:
+	for layout in _layouts():
+		for b in BoardgenGreybox.plan(layout):
+			var c := BoardgenGreybox.custom_data(b)
+			var size: Vector3 = b["hi"] - b["lo"]
+			assert_float(c.r).is_equal(float(BoardgenGreybox.KINDS.find(b["kind"])))
+			assert_vector(Vector3(c.g, c.b, c.a)).is_equal_approx(size, Vector3.ONE * 0.001)
+	var surfaces := _built(_fixture()).find_child("Surfaces", false, false) as MultiMeshInstance3D
+	assert_vector((surfaces.multimesh.mesh as BoxMesh).size).is_equal(Vector3.ONE)   # the shader reads VERTEX * size as inches in the box
+
+
+func test_the_finer_look_is_on_from_medium_and_off_on_performance_low_and_the_compatibility_renderer() -> void:
+	var q: Dictionary = GraphicsSettings.QualityPreset
+	assert_bool(BoardgenGreybox.detail_for(q.MEDIUM, false)).is_true()
+	assert_bool(BoardgenGreybox.detail_for(q.ULTRA, false)).is_true()
+	assert_bool(BoardgenGreybox.detail_for(q.LOW, false)).is_false()
+	assert_bool(BoardgenGreybox.detail_for(q.PERFORMANCE, false)).is_false()
+	assert_bool(BoardgenGreybox.detail_for(q.ULTRA, true)).is_false()
+
+
 func test_the_board_shader_gets_a_height_texel_per_cell_and_knows_every_surface_kind() -> void:
 	var layout := _fixture()
 	var surfaces := _built(layout).find_child("Surfaces", false, false) as MultiMeshInstance3D

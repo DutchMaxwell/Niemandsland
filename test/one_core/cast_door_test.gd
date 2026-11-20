@@ -332,6 +332,49 @@ func test_a_core_call_that_cannot_run_leaves_the_casts_to_the_table() -> void:
 		assert_bool(bool(body["takes"]) and not bool(body["marked"])).is_true()
 
 
+## CC-15 prep: the door's census for the soak. Casting activations seen at the body's cast slot, the probe's takes, its refusals (with
+## the core's reason) and the marked activations whose core call could not run, all in the census file the soak reads.
+func test_the_door_counts_what_it_takes_refuses_and_falls_back_for_the_soak() -> void:
+	CoreActivation._cast_env = 1
+	CoreActivation.cast_seen = 0
+	CoreActivation.cast_taken = 0
+	CoreActivation.cast_fallbacks = 0
+	CoreActivation.cast_probe_refusals = 0
+	CoreActivation.cast_probe_reasons = []
+	CoreActivation.cast_not_asked = {}
+	await _run(TERROR_SEEKER, 0, "body")   # taken
+	await _run(UNKNOWN_BOLT, 0, "body")   # refused by the probe before any die
+	await _run(TERROR_SEEKER, 0, "body", {"no_core_call": true})   # taken, the core call cannot run: the table casts after all
+	CoreActivation._cast_env = 0
+	await _run(TERROR_SEEKER, 0, "body")   # the switch is off: seen, not asked
+	var path := ProjectSettings.globalize_path("user://cc15_census.json")
+	var saved := OS.get_environment("NML_TABLE_CENSUS")
+	OS.set_environment("NML_TABLE_CENSUS", path)
+	CoreActivation.dump_legacy()
+	OS.set_environment("NML_TABLE_CENSUS", saved)
+	var door: Dictionary = (JSON.parse_string(FileAccess.get_file_as_string(path)) as Dictionary).get("cast_door", {})
+	assert_int(int(door.get("seen", -1))).is_equal(4)
+	assert_int(int(door.get("taken", -1))).is_equal(2)
+	assert_int(int(door.get("fallbacks", -1))).is_equal(1)
+	assert_int(int(door.get("probe_refusals", -1))).is_equal(1)
+	assert_int((door.get("reasons", []) as Array).size()).is_equal(1)
+	assert_str(str((door["reasons"] as Array)[0])).contains("has no spell named")
+	assert_int(int((door.get("not_asked", {}) as Dictionary).get("switch_off", -1))).is_equal(1)
+	# why a casting activation is not asked: no board, a unit the slice refuses (Mend is on the deny list), an action the door does not take
+	CoreActivation._cast_env = 1
+	CoreActivation.cast_not_asked = {}
+	var plain := ParityTable._make_unit(_main, MYSTIC, STAFF)
+	var mender := ParityTable._make_unit(_main, MYSTIC.merged({"key": "mn", "name": "Mender", "faction_folder": "robot_legions", "rules": ["Caster", "Mend"]}, true), STAFF)
+	var report := {"action": AiDecision.Action.HOLD, "casts": [{}]}
+	CoreActivation.note_cast_not_asked(_main, plain, report)   # no handle
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	CoreActivation.note_cast_not_asked(_main, mender, report)   # a Mend carrier: the slice refuses it first
+	CoreActivation.note_cast_not_asked(_main, plain, {"action": AiDecision.Action.CHARGE, "casts": [{}]})
+	_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+	_main._solo_core_ai_h = 0
+	assert_dict(CoreActivation.cast_not_asked).is_equal({"no_handle": 1, "unit:unit_rule:Mend": 1, "action:%d" % AiDecision.Action.CHARGE: 1})
+
+
 ## CC-13a: the cast predicate: a unit (or a joined hero) that carries a table-only pre-attack beat (Mend here) stays on the table
 ## even with the switch ON; a plain caster is taken.
 func test_a_unit_with_a_pre_attack_beat_stays_on_the_table() -> void:
@@ -347,3 +390,82 @@ func test_a_unit_with_a_pre_attack_beat_stays_on_the_table() -> void:
 	_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
 	_main._solo_core_ai_h = 0
 	Harness._free_units(_main, [plain, mender])
+
+
+const MORTAR := {"name": "Mortar", "range_in": 24, "attacks": 1, "count": 1, "rules": ["Indirect"]}
+const INDIRECT_NOTE := "Indirect: Mystic did not Hold \u2014 its Indirect weapons need line of sight"
+
+
+## The volley body's own call (`_run_ai_shooting`) after the cast slot: an Advancing caster with an Indirect weapon. `door` = the cast
+## slot's probe marks the report and the core's call resolves casts and volley; else the table casts, then shoots. Returns the lines.
+func _run_note(seed: int, door: bool, no_core := false) -> Array:
+	var caster := ParityTable._make_unit(_main, MYSTIC, MORTAR)
+	var foe := ParityTable._make_unit(_main, FOE, {})
+	var cast := {"caster": caster, "caster_unit": caster, "name": str(BLOODTHIRST["name"]), "spell": BLOODTHIRST, "targets": [foe],
+		"boost": 0, "interference": 0, "base_target": 4, "threshold": 1, "owner_label": "AI (Mystic)", "interference_open": false,
+		"boost_sources": [], "interference_sources": [], "conduit": null, "conduit_shaken": [], "pools": []}
+	var report := {"unit": caster, "action": AiDecision.Action.ADVANCE, "moved": true, "can_shoot": true, "casts": [cast]}
+	_main.solo_controller.ai_slot = 1   # the caster (player 1) is the AI's: `_run_ai_shooting` picks the other side's Foe as its target
+	_main.solo_controller.human_slot = 2
+	_main._solo_spell_tokens_active.clear()
+	caster.casts_current = 1
+	var h := CoreActivation.capture(_main) if door else 0
+	caster.spend_caster_points(1)
+	_main._solo_act_flags = _main._solo_unit_flags()
+	var lines: Array = []
+	var tap := Harness._line_tap(lines)
+	_main.battle_log.entry_added.connect(tap)
+	_main.seed_tray_rng(seed)
+	if door:
+		_main._solo_core_ai_h = h
+		var takes: bool = CoreActivation.takes_ai_activation(_main, caster, report)
+		await _main._solo_ai_casts(caster, report, takes)
+		assert_bool(report.has("cast_door")).override_failure_message("the probe did not take the activation: %s" % str(CoreActivation.cast_probe_reasons)).is_true()
+		if no_core:
+			_main._solo_core_ai_h = 0   # the core call cannot run: the table's fallback casts after the note's line was held
+		await _main._run_ai_shooting(report)
+		assert_bool(report.has("volley_note")).override_failure_message("the held note outlived the call").is_false()
+		_main._solo_core_ai_h = 0
+		_main.solo_controller._core_node_ready().release(h)
+	else:
+		await _main._solo_resolve_ai_casts(report)
+		await _main._run_ai_shooting(report)
+	_main.battle_log.entry_added.disconnect(tap)
+	_main.solo_controller.ai_slot = 2
+	_main.solo_controller.human_slot = 1
+	for gu in [caster, foe]:
+		_main._solo_spell_mods.erase((gu as GameUnit).get_instance_id())
+	_main._solo_spell_tokens_active.clear()
+	Harness._free_units(_main, [caster, foe])
+	await _main.get_tree().process_frame
+	return lines
+
+
+## The lines up to and including the Indirect note ("" -> the whole list when it is missing): what the casts and the note must agree on.
+## What follows (the volley's own lines: the table writes "To-hit vs ...: Indirect: no moved penalty", the core "Indirect: no moved penalty:
+## <unit> shoots after moving") is a different matter, a volley-door line difference that casts do not touch.
+func _until_note(lines: Array) -> Array:
+	var texts := lines.map(func(l: Variant) -> String: return str(l).get_slice("|", 1))
+	var at := texts.find(INDIRECT_NOTE)
+	return lines.slice(0, at + 1) if at >= 0 else lines
+
+
+## The Indirect note is the volley body's line, written before its core call; the table's order is casts, note, "<unit> fires at": with
+## the cast door (taken, or handed back to the table when the core call cannot run) the note waits and lands there too. The note is
+## written exactly once, and the casts' lines before it are the table's.
+func test_the_indirect_note_keeps_the_tables_place_behind_the_casts() -> void:
+	CoreActivation._cast_env = 1
+	var bad: Array = []
+	for s in SEEDS:
+		var table := await _run_note(s, false)
+		var texts := table.map(func(l: Variant) -> String: return str(l).get_slice("|", 1))
+		if texts.count(INDIRECT_NOTE) != 1 or texts.find(INDIRECT_NOTE) < 4:
+			bad.append("seed %d: the table's note is not after its casts (the fixture is wrong): %s" % [s, str(texts)])
+			continue
+		for variant in [false, true]:
+			var door := await _run_note(s, true, variant)
+			var d := _until_note(door)
+			var t := _until_note(table)
+			if d != t or door.map(func(l: Variant) -> String: return str(l).get_slice("|", 1)).count(INDIRECT_NOTE) != 1:
+				bad.append("seed %d (core call can run: %s):\n table %s\n door  %s" % [s, not variant, str(t), str(d)])
+	assert_array(bad).override_failure_message("\n".join(bad.slice(0, 2))).is_empty()
