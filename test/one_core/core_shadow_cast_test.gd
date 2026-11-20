@@ -17,6 +17,7 @@ const FOE := {"key": "foe", "player": 2, "name": "Foe", "models": 4, "quality": 
 	"x_in": 8.0, "z_step_in": 1.3, "base_radius_in": 0.63, "game_system": "gf", "faction_folder": "alien_hives",
 	"rules": []}
 const STAFF := {"name": "Staff", "range_in": 0, "attacks": 1, "count": 1, "rules": []}
+const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 1, "rules": []}
 ## A friendly once-buff (the token lands on the caster) and an enemy once-debuff (the token lands on the foe).
 const TERROR_SEEKER := {"name": "Terror Seeker", "threshold": 1, "range_in": 12,
 	"target": {"side": "friendly", "count": 1, "kind": "unit"},
@@ -150,3 +151,46 @@ func test_the_cast_replay_is_off_by_default() -> void:
 	assert_int(CoreShadow.records.size()).is_equal(0)
 	Harness._free_units(_main, [caster])
 	await _main.get_tree().process_frame
+
+
+## An activation that casts AND shoots: the volley's hold carries the casts, so the body's second flush (its wrapper's, on
+## every exit) must find nothing left to compare. RED on 56ba3c4e2: `flush` kept `_cast_pending` after the held compare, so a
+## second, cast-only record followed every cast+volley activation (targets [], first_diff "table_rolled_more": the tap still
+## held the volley's dice). The order below is the body's: capture, plan spend, placement, casts, volley, hold, flush (end of
+## the body), flush (the wrapper), release. The debuff lands on a second foe the volley does not shoot at (a once-grant on
+## the volley's own target is spent by that volley on the table, which the core does not report yet), and the caster holds
+## exactly the cast's price (a spare token feeds the core's modelled spell rider on a volley).
+func test_a_cast_and_volley_activation_yields_exactly_one_record() -> void:
+	for seed in [0, 1, 2]:
+		var caster := ParityTable._make_unit(_main, MYSTIC, RIFLE)
+		var foe := ParityTable._make_unit(_main, FOE, {})
+		var other := ParityTable._make_unit(_main, FOE.merged({"key": "other", "name": "Other", "x_in": 9.0}, true), {})
+		var cast := {"caster": caster, "caster_unit": caster, "name": "Infuse Bloodthirst", "spell": BLOODTHIRST,
+			"targets": [other], "boost": 0, "interference": 0, "base_target": 4, "threshold": 1,
+			"owner_label": "AI (Mystic)", "interference_open": false, "boost_sources": [], "interference_sources": [],
+			"conduit": null, "conduit_shaken": [], "pools": []}
+		var report := {"action": AiDecision.Action.HOLD, "moved": false, "casts": [cast]}
+		_main._solo_spell_tokens_active.clear()
+		caster.casts_current = 1
+		_main._solo_core_shadow_h = CoreShadow.capture(_main, caster)
+		assert_int(_main._solo_core_shadow_h).override_failure_message("no shadow board").is_not_equal(0)
+		caster.spend_caster_points(1)
+		CoreShadow.note_placed(_main, caster, report)
+		_main.seed_tray_rng(seed)
+		await _main._solo_resolve_ai_casts(report)
+		var dist_in := float(FOE["x_in"]) - float(MYSTIC["x_in"])
+		var shots: Array = []
+		for pr in AiShooting.profiles_in_range([(caster.source_data as OPRApiClient.OPRUnit).weapons[0]], dist_in):
+			shots.append({"member": caster, "quality": caster.get_quality(), "alive": caster.get_alive_count(),
+				"max": caster.models.size(), "reach": float(RIFLE["range_in"]), "profile": pr})
+		await _main._solo_resolve_ai_volley(caster, foe, shots)
+		CoreShadow.hold(_main, caster, report, {foe.unit_id: {"target": foe, "shots": shots}}, [foe.unit_id])
+		CoreShadow.flush(_main)   # main.gd:1374, the body's own
+		CoreShadow.flush(_main)   # main.gd:1124, the wrapper's on every exit
+		CoreShadow.release(_main)
+		assert_int(CoreShadow.records.size()).override_failure_message("seed %d: %s" % [seed, CoreShadow.records]).is_equal(1)
+		assert_dict(CoreShadow.records[0]).override_failure_message("seed %d: %s" % [seed, CoreShadow.records]) \
+			.contains_key_value("equal", true).contains_key_value("targets", ["Foe"])
+		CoreShadow.records.clear()
+		Harness._free_units(_main, [caster, foe, other])
+		await _main.get_tree().process_frame
