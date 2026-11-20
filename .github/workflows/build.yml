@@ -410,6 +410,8 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/shard_assign.py --shards ${{ needs.changes.outputs.shard_count }} --check
+          # The LOOK path class stays isolated from the game (one door in main.gd): tools/ci_path_classes.py.
+          python3 tools/ci_path_classes.py --check
 
       # tools/shard_assign_test.py reads the real test/ tree (the *_test.gd file list and
       # test/shard_weights.json): the balance check (max shard within 15 % of the mean) and the
@@ -424,6 +426,7 @@ jobs:
           set -euo pipefail
           python3 -m pip install --quiet pytest
           python3 -m pytest tools/shard_assign_test.py tools/ci_rust_paths_test.py tools/table_census_test.py -q
+          python3 -m pytest tools/ci_path_classes_test.py -q
 
   relay-tests:
     name: Relay tests
