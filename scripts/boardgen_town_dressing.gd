@@ -563,8 +563,10 @@ static func catslide_mesh() -> ArrayMesh:
 
 
 ## The roofs in one MultiMesh PER TYPE (gable, hip, catslide: "Roofs", "RoofsHip", "RoofsCatslide") with the board's material (the kind "roof" in its instance data).
-func build(layout: Dictionary, material: Material) -> void:
+func build(layout: Dictionary, material: Material, prism_roofs := true) -> void:   # prism_roofs false: BoardgenTownKit draws the gable roofs (hip and catslide have no module: they stay procedural)
 	var list := roofs(layout)
+	if not prism_roofs:
+		list = list.filter(func(r: Dictionary) -> bool: return r["type"] != "gable")
 	var meshes := {"gable": [prism_mesh(), "Roofs"], "hip": [hip_mesh(), "RoofsHip"], "catslide": [catslide_mesh(), "RoofsCatslide"]}
 	var kind := float(BoardgenTheme.TOWN_KINDS.find("roof"))
 	for type: String in meshes:
