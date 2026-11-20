@@ -96,3 +96,7 @@ func test_no_kite_action_exists_in_official_output() -> void:
 					for sa in [true, false]:
 						var a = int(_dec(arch, obj, iw, ec, sa)["action"])
 						assert_bool(a in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE, AiDecision.Action.RUSH, AiDecision.Action.CHARGE]).is_true()
+
+
+func test_planted_red_third_slice() -> void:
+	assert_bool(false).is_true()
