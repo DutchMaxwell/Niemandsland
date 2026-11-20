@@ -41,3 +41,20 @@ fn a_unit_behind_another_unit_saves_one_better_from_95_only() {
     assert!(at94.log.iter().all(|l| !l.contains("cover") && !l.contains("Cover")), "no cover at 94: {:?}", at94.log);
     assert!(!saves(&at94).is_empty() && saves(&at94).iter().all(|&t| t == 4), "no +1 at 94: {:?}", at94.rolls);
 }
+
+/// PLAN_COVER_36 step 8: the Takedown pick (resolved as a unit of one) is in cover when the volley's screen hides THAT model,
+/// in slot order after the earlier groups landed; no screen (below 95) leaves the unit flag. Three models: the launcher
+/// (Tough 2, picked first) hidden behind a wall, two in the open. RED before: `hidden` was not read, the pick had no cover.
+#[test]
+fn the_takedown_pick_reads_its_own_screen() {
+    let mut st = four_unit_line();
+    st.positions[0] = vec![[4.0 * IN2M, 0.0, 0.0], [7.0 * IN2M, 0.0, 0.0], [8.0 * IN2M, 0.0, 0.0]];
+    (st.wounds[0], Rc::make_mut(&mut st.radii)[0], st.alive[0]) = (vec![2, 1, 1], vec![0.016; 3], 3);
+    let k = |w: u16, x: i64| crate::state::Kit { weapons: vec![w], equipment: 0, wounds_max: x };
+    st.kits = vec![Rc::new(vec![k(1, 2), k(0, 1), k(0, 1)])];
+    let hidden = [true, false, false];
+    let at = |h: Option<&[bool]>, groups: &[i64]| takedown_pick_info_after(&[], &st, 0, Cover::Recorded(None), false, h, groups, None).0;
+    assert!(at(Some(&hidden), &[]), "the launcher behind the wall is in cover of its own");
+    assert!(!at(Some(&hidden), &[2]), "killed: the next pick stands in the open");
+    assert!(!at(None, &[]), "no screen (below 95): the unit flag, no cover");
+}
