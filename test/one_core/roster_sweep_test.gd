@@ -9,6 +9,7 @@ extends GdUnitTestSuite
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
+const DoorLines := preload("res://test/one_core/door_lines.gd")
 const LISTS := ["res://assets/arena_lists/p1_2000.json", "res://assets/arena_lists/p2_2000.json"]
 const WOLF := "res://test/fixtures/wolf_brothers_3000.json"
 const DICE := "user://roster_sweep_dice"
@@ -28,6 +29,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	RosterSweep.aura_pass = true
 	RosterSweep.disarm(_main)
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
@@ -170,6 +172,33 @@ func test_a_twelve_inch_weapon_fires_across_the_base_edge_on_both_paths() -> voi
 	var table_attacks := _attacks(t["rolls"])
 	assert_int(table_attacks).override_failure_message("the table never fired the 12 in flamer: %s" % [t["rolls"]]).is_greater(0)
 	assert_int(_attacks(c["rolls"])).override_failure_message("the core fired nothing at 11.7 in base edge: %s" % [c["rolls"]]).is_equal(table_attacks)
+
+
+## Plan H (H-10): the sweep harness runs the import's aura pass (`OPRArmyManager.expand_auras_of`). A shooter with Relentless Aura (gf robot_legions:
+## "this model and its unit get Relentless") gets one extra hit per unmodified 6 from over 9 in: the core reads the aura through its registry, the table only
+## through the base rule the import's pass adds. RED (the first leg): switch the pass off and 16 seeds show the dice differing on the extra hits;
+## GREEN: with it the two halves' dice are equal on all 16.
+func test_the_aura_pass_makes_an_aura_shooter_equal_on_both_paths() -> void:
+	RosterSweep.arm(_main, ProjectSettings.globalize_path(DICE))
+	var dice := ProjectSettings.globalize_path(DICE)
+	var shooter := DoorLines.entry("Auras", 10, ["Relentless Aura"], [], "robot_legions", 5)
+	var target := DoorLines.entry("Plain", 10, [], [], "battle_brothers", 0)
+	for pass_on in [false, true]:
+		RosterSweep.aura_pass = pass_on
+		var differing := 0
+		for seed_n in 16:
+			var t := await RosterSweep.volley(_main, shooter, target, seed_n, false, dice)
+			var c := await RosterSweep.volley(_main, shooter, target, seed_n, true, dice)
+			if _faces(t["rolls"]) != _faces(c["rolls"]):
+				differing += 1
+		if pass_on:
+			assert_int(differing).override_failure_message("with the aura pass the halves still differ on %d of 16 seeds" % differing).is_equal(0)
+		else:
+			assert_int(differing).override_failure_message("without the pass the check saw no difference: it cannot fail").is_greater(0)
+
+
+func _faces(rolls: Array) -> Array:
+	return rolls.map(func(r: Dictionary) -> String: return "%s:%d:%s" % [r["kind"], int(r["count"]), r["faces"]])
 
 
 func _attacks(rolls: Array) -> int:
