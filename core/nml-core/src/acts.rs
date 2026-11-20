@@ -890,6 +890,12 @@ pub const EPOCH_80_ROLLOUT_CUMBERSOME: u32 = 80;
 /// auto-failed test of an already Shaken unit (or of a dead Shaken host's unit). Records stamped 80 or below replay byte-exact.
 /// Every call site reads THIS constant, not `81`. The recorder mirror stamps 81 with it.
 pub const EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF: u32 = 81;
+/// Placeholder gate for the joined hero's moved stamp: the table's `_solo_animate_move` stamps `moved_round` on the unit of EVERY model it
+/// moves, so a hero that walks with its host (a move, a flight, a charge, a consolidation) is stamped moved too; the core stamped the
+/// host alone, so a hero row of the state delta carried a stale round (`land_delta` reported "table N, core -1", cast lane soak, 20.11.)
+/// and the hero's own Stealth / Entrenched style reads saw a unit that never moved. From 94 the core stamps the living joined heroes
+/// with the host. Every call site reads THIS constant, not the literal `94`.
+pub const PENDING_EPOCH_HERO_MOVED_STAMP: u32 = 94;
 /// Wound-ignore rules by name (#2595, table twin `_solo_ignore_wounds`): a bypass (Bane, Rending, Unstoppable, ...) skips only the
 /// roll of the rule named Regeneration (own, aura / buff granted, Medical Training); a unit whose ignore rule is anything else
 /// (Self-Repair, Resistance, Plaguebound, Angelic Blessing, ...) still rolls the bypassed wounds with the rest. Before, the core

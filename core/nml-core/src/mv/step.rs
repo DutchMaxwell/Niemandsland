@@ -1463,7 +1463,7 @@ pub(crate) fn snap_charge_state_per_model(self, state: &mut State, si: usize, ci
     for (m, _) in from.iter().zip(&moving).filter(|(_, mv)| **mv) {
         state.positions[m.unit][m.model] = geom::to_f64(geom::add(pos_of(state, *m), delta));
     }
-    state.moved_round[si] = state.round;
+    crate::sim::stamp_moved(state, si, hero_attach, self.rules_epoch);
     Some((snap, moving.iter().filter(|m| !**m).count()))
 }
 
@@ -1478,7 +1478,7 @@ pub(crate) fn snap_charge_state(self, state: &mut State, si: usize, ci: usize,
         state.positions[m.unit][m.model] = geom::to_f64(geom::add(pos_of(state, m), delta));
     }
     // Wave 4 (port-entrenched) — the engage snap is an EXECUTED move.
-    state.moved_round[si] = state.round;
+    crate::sim::stamp_moved(state, si, hero_attach, self.rules_epoch);
     Some(snap)
 }
 
