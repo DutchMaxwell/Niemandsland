@@ -6,14 +6,18 @@ extends Node
 ## (vertex colour = part tone x baked AO, the MultiMesh instance colour = the tint), so the whole kit stays one material.
 ## get_mesh() is null until a module is cached: the caller keeps its own primitive, the procedural look is the fallback (offline, Low, web).
 ## Dev override: NML_TIEFWERK_KIT_DIR = a folder of <module>.glb files, read without manifest or network.
+## Keyed by board theme: BoardgenKit.new("ruintown") reads res://assets/ruintown_manifest.json, caches in user://ruintown_cache and takes its dev
+## folder from NML_RUINTOWN_KIT_DIR (the consts below are the default theme's, "tiefwerk").
 
 const BUNDLED_MANIFEST_PATH := "res://assets/tiefwerk_manifest.json"
 const CACHE_DIR := "user://tiefwerk_cache"
 const DIR_ENV := "NML_TIEFWERK_KIT_DIR"
+const DEFAULT_THEME := "tiefwerk"
 
 signal prefetched(all_cached: bool)
 
 var local_dir := ""   # a folder of <module>.glb (tests, dev); empty = the manifest and the cache
+var theme_id := DEFAULT_THEME
 var _downloader: AssetDownloadManager
 var _modules: Dictionary = {}   # module name -> { url, sha256, size }
 var _base_url := ""
@@ -21,14 +25,28 @@ static var _meshes: Dictionary = {}   # cached file PATH -> parsed Mesh, shared 
 static var _material: StandardMaterial3D
 
 
-func _init() -> void:   # (not _ready: a board builds before it is in the tree)
+func _init(theme := DEFAULT_THEME) -> void:   # (not _ready: a board builds before it is in the tree)
+	theme_id = theme
 	_downloader = AssetDownloadManager.new()
 	_downloader.name = "TiefwerkKitDownloads"
-	_downloader.cache_dir = CACHE_DIR
+	_downloader.cache_dir = cache_dir_of(theme)
 	add_child(_downloader)
-	local_dir = OS.get_environment(DIR_ENV)
-	if FileAccess.file_exists(BUNDLED_MANIFEST_PATH):
-		apply_manifest_text(FileAccess.get_file_as_string(BUNDLED_MANIFEST_PATH))
+	local_dir = OS.get_environment(dir_env_of(theme))
+	if FileAccess.file_exists(manifest_path_of(theme)):
+		apply_manifest_text(FileAccess.get_file_as_string(manifest_path_of(theme)))
+
+
+## The bundled manifest, the cache folder and the dev-folder variable of a theme's kit.
+static func manifest_path_of(theme: String) -> String:
+	return "res://assets/%s_manifest.json" % theme
+
+
+static func cache_dir_of(theme: String) -> String:
+	return "user://%s_cache" % theme
+
+
+static func dir_env_of(theme: String) -> String:
+	return "NML_%s_KIT_DIR" % theme.to_upper()
 
 
 ## Parses a manifest JSON string ({"base_url", "models": {name: {url, sha256, size}}}) into the index (also used by tests).
@@ -71,8 +89,8 @@ func all_cached(names: Array) -> bool:
 
 
 ## One MultiMeshInstance3D named `node_name` under `parent` that draws `mesh` once per {xf, colour} item. A mesh that casts shadows is drawn
-## again in every shadow cascade: small thin modules leave it off (the draw-call budget of the board).
-static func add_multimesh(parent: Node3D, node_name: String, mesh: Mesh, items: Array, cast_shadows := true) -> void:
+## again in every shadow cascade: small thin modules leave it off (the draw-call budget of the board). Returns the node (for a material_override).
+static func add_multimesh(parent: Node3D, node_name: String, mesh: Mesh, items: Array, cast_shadows := true) -> MultiMeshInstance3D:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
@@ -86,6 +104,7 @@ static func add_multimesh(parent: Node3D, node_name: String, mesh: Mesh, items: 
 	mmi.multimesh = mm
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if cast_shadows else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(mmi)
+	return mmi
 
 
 ## Downloads the missing modules among `names` (awaitable); emits prefetched(true) when every one is cached afterwards.
