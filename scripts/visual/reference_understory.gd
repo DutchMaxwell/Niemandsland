@@ -8,12 +8,14 @@ var _presentation: Node3D
 var _exclusions: Array[Vector3] = []
 var _walls: Array = []
 var _path_segments := PackedVector4Array()
+var _keepout := Rect2()   # a generated board covers the ground here (the table's "scatter_keepout" meta): no scatter in it
 
 func build(presentation: Node3D,main: Node,size: Vector2) -> void:
 	_presentation = presentation
 	if _table_tier():
 		_path_segments = TablePaths.of(main.get_node("Table")).surface_segments()
 	_rng.seed = 170927
+	_keepout = main.get_node("Table").get_meta("scatter_keepout", Rect2())
 	_walls = main.terrain_overlay.get_wall_segments_world()
 	for obj in main.object_manager.get_children():
 		if obj is Node3D and obj.is_in_group("selectable"):
@@ -241,6 +243,8 @@ func _litter_drifts(litter_transforms: Array[Transform3D],litter_colors: Array[C
 
 
 func _excluded(p: Vector2) -> bool:
+	if _keepout.has_point(p):
+		return true
 	for e in _exclusions:
 		if p.distance_squared_to(Vector2(e.x,e.y))<e.z*e.z:
 			return true

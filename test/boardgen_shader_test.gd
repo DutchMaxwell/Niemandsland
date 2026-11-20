@@ -44,3 +44,21 @@ func test_every_uniform_the_greybox_sets_is_declared() -> void:
 		for line in declared:
 			found = found or (line.begins_with("uniform ") and line.contains(" %s" % name))
 		assert_bool(found).override_failure_message("uniform %s missing" % name).is_true()
+
+
+func test_the_round_hatch_is_one_function_used_on_floors_decks_and_roofs() -> void:
+	var src := _source()
+	assert_bool(src.contains("vec4 hatch(vec2 fp, float R, float n)")).is_true()
+	assert_int(src.count("hatch(")).override_failure_message("expected the definition plus floor, deck and roof uses").is_greater_equal(4)
+
+
+func test_the_signage_is_bars_of_hashed_length_not_a_glyph_like_block_grid() -> void:
+	var src := _source()
+	assert_bool(src.contains("float row = floor((fp.y + 0.27) / 0.18)")).is_true()
+	assert_bool(src.contains("fp.x * 7.0")).is_false()
+
+
+func test_the_hazard_band_is_gated_per_tier_edge_and_the_plate_is_1_5_inches() -> void:
+	var src := _source()
+	assert_bool(_line_with(src, "hazard band only on some edges").contains("h21(")).is_true()
+	assert_bool(src.contains("const float PLATE = 1.5;")).is_true()

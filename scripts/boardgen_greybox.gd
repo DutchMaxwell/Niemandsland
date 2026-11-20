@@ -27,6 +27,7 @@ const SHADER := preload("res://shaders/tiefwerk_board.gdshader")
 
 var layout_seed: int = 0
 var _material: ShaderMaterial
+var _footprint := Rect2()   # the board, in table-local metres
 
 
 ## The board of NML_BOARDGEN_SEED on `table`, or null when the flag is off (release build, unset or not an integer).
@@ -134,6 +135,12 @@ func build(layout: Dictionary) -> void:
 	props.name = "Props"
 	props.build(layout)
 	add_child(props)
+	var debris := BoardgenDebris.new()
+	debris.name = "Debris"
+	debris.build(layout)
+	add_child(debris)
+	var board := Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) * INCHES_TO_METERS
+	_footprint = Rect2(board * -0.5, board).grow(0.5 * INCHES_TO_METERS)
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = "Surfaces"
 	mmi.multimesh = mm
@@ -149,6 +156,20 @@ func build(layout: Dictionary) -> void:
 
 func _ready() -> void:
 	_anchor()
+	_scatter_off(_footprint)
+
+
+func _exit_tree() -> void:
+	_scatter_off(Rect2())
+
+
+## The table's own ground scatter (grass tufts, the biome dressing's straw, leaves and puddles) stays off under the board.
+func _scatter_off(rect: Rect2) -> void:
+	var table := get_parent()
+	if table != null:
+		table.set_meta("scatter_keepout", rect)
+		if table.has_node("GrassField"):
+			table.get_node("GrassField").set_keepout(rect)
 
 
 ## The shader reads board inches off the board centre, so it is told where that is in the world.

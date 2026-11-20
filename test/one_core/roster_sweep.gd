@@ -478,7 +478,10 @@ static func _charge_half(main: Node, att_spec: Variant, foe_spec: Variant, seed_
 		h = CoreActivation.capture(main)
 	main._solo_core_ai_h = h
 	var from_in: float = sc.charge_from_in(att, foe, MoveIntent.distance_inches(sc.unit_centre(att), sc.unit_centre(foe)))
-	sc._charge_move(att, foe, float(opts.get("band_in", 12.0)))
+	# The charger's own band (Fast, Slow, Quick, ...), cut by a Melee Shrouding target, as the AI's charge move reads it (the matrix CLI's `_half`):
+	# a fixed 12 in moved Slow and Fast chargers further or shorter on the table half than the door's own `charge_move`.
+	var band := float(opts["band_in"]) if opts.has("band_in") else float(MovementRangeController.move_bands_for_props(att.unit_properties).get("charge", 12.0))
+	sc._charge_move(att, foe, sc.melee_shroud_charge_in(band, foe))
 	att.unit_properties["moved_round"] = 1
 	var report := {"unit": att, "target": foe, "action": AiDecision.Action.CHARGE, "charge_from_in": from_in, "moved": true}
 	var refusals: Array = CoreActivation.charge_refusals(main, att, report)
