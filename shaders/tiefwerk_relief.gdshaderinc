@@ -43,3 +43,58 @@ vec3 wall_relief(vec2 uv, vec3 n, float px, out float h0) {
 	vec3 tu = abs(n.x) > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);   // uv.x runs along z on x-facing walls, along x on z-facing ones
 	return normalize(n - hu * tu - hv * vec3(0.0, 1.0, 0.0));
 }
+
+// Round inset hatch of radius R at the origin of fp (inches): a raised lid in a groove, eight bolt heads on a ring. Same maths as hatch().
+float hatch_height(vec2 fp, float R, float px) {
+	float rr = length(fp) / R;
+	float arc = (fract(atan(fp.y, fp.x) / 0.7854 + 0.5) - 0.5) * 0.7854 * rr;
+	float groove = smoothstep(0.07, 0.0, abs(rr - 1.04));
+	float bolt = dome(length(vec2(rr - 0.78, arc)) * R, 0.08 * R, 0.018);
+	return (rr < 1.0 ? 0.012 : 0.0) - 0.035 * groove * feature(0.07 * R, px) + bolt * feature(0.16 * R, px);
+}
+
+// Floors (kind 0-2), plate decks (3) and roofs (4, 6): plate seams, hatches, drain grates, deck rivets and tread ribs, roof joints.
+float top_height(vec2 uv, int k, vec2 half_board, float px) {
+	vec2 fp = (fract(uv / PLATE) - 0.5) * PLATE;
+	float ed = PLATE * 0.5 - max(abs(fp.x), abs(fp.y));
+	float h = 0.0;
+	if (k <= 2) {
+		float ph = h21(floor(uv / PLATE) + 3.7);
+		h = -0.04 * smoothstep(0.07, 0.0, ed) * feature(0.07, px) + 0.03 * smoothstep(0.0, 0.15, ed) * feature(0.15, px);   // the seam between two plates, the plate rising off it
+		if (ph < 0.03) {
+			h += hatch_height(fp, 0.5, px);
+		} else if (ph < 0.06) {   // a drain grate: slots between bars, in a frame
+			float frame = max(abs(fp.x), abs(fp.y));
+			float f = fract(fp.x * 6.0);
+			float bar = smoothstep(0.5, 0.58, f) * smoothstep(1.0, 0.92, f);
+			h += (-0.06 * (1.0 - bar) * step(frame, 0.5) - 0.02 * smoothstep(0.04, 0.0, abs(frame - 0.53))) * feature(0.08, px);
+		}
+	} else if (k == 3) {
+		float ph = h21(floor(uv / 1.5));
+		h = -0.02 * smoothstep(0.04, 0.0, ed) * feature(0.04, px);
+		h += dome(length(abs(fract(uv / 1.5) - 0.5) * 1.5 - vec2(0.6)), 0.07, 0.02) * feature(0.14, px);   // rivet heads
+		float t = fract((uv.x + (ph > 0.5 ? uv.y : -uv.y)) / 0.32);   // tread ribs, the direction flips from plate to plate
+		h += 0.012 * smoothstep(0.3, 0.2, abs(t - 0.5)) * feature(0.1, px);
+		if (ph < 0.06) {
+			h += hatch_height(fp, 0.5, px);
+		}
+	} else {   // roof slab: 3 in slabs with sunk tar joints
+		vec2 sl = (uv + half_board) / cell_in;
+		float joint = min(abs(fract(sl.x + 0.5) - 0.5), abs(fract(sl.y + 0.5) - 0.5)) * cell_in;
+		h = -0.03 * smoothstep(0.07, 0.0, joint) * feature(0.07, px);
+		if (h21(floor(sl) + 5.0) < 0.1) {
+			h += hatch_height((fract(sl) - 0.5) * cell_in, 1.0, px);
+		}
+	}
+	return h;
+}
+
+// The shading normal (world space) of a top face and its height; `wet` (0..1) flattens it: water lies level.
+vec3 top_relief(vec2 uv, int k, vec2 half_board, float px, float wet, out float h0) {
+	const float DE = 0.008;
+	h0 = top_height(uv, k, half_board, px);
+	float hu = (top_height(uv + vec2(DE, 0.0), k, half_board, px) - h0) / DE;
+	float hv = (top_height(uv + vec2(0.0, DE), k, half_board, px) - h0) / DE;
+	float s = 1.0 - wet;
+	return normalize(vec3(-hu * s, 1.0, -hv * s));
+}
