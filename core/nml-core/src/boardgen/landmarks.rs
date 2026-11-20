@@ -84,7 +84,7 @@ fn rects(kind: LandmarkKind, top: bool, rng: &mut GodotRng) -> Vec<(usize, usize
 fn fits(l: &Landmark, cells: &[Cell], taken: &[bool], conns: &[Connector]) -> bool {
     let level = cells[l.z * GRID + l.x].level;
     l.cells().all(|i| { let c = &cells[i]; !taken[i] && c.deploy == 0 && !conns.iter().any(|k| usize::from(k.low) == i || usize::from(k.high) == i)
-        && if l.kind == LandmarkKind::PumpHouse { (1..=2).contains(&level) && c.level == level } else { c.level == 0 && !c.street && c.lot_kind != LotKind::Hazard } })
+        && if l.kind == LandmarkKind::PumpHouse { (1..=2).contains(&level) && c.level == level } else { c.level == 0 && !c.street && !matches!(c.lot_kind, LotKind::Hazard | LotKind::Rough) } })
 }
 
 /// Keep later pieces a cell away; a sump turns its ground into hazard ground.

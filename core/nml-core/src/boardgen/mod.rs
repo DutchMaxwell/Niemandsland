@@ -51,6 +51,10 @@ pub struct Budgets {
     pub lot_pairs: usize, pub lot_shapes: &'static [(usize, usize)], pub lot_fill: &'static [(usize, usize)],
     /// Shapes of the first lot pairs, placed before all others and outside the deployment bands (the town's tower site: a 3 x 2 block).
     pub lot_first: &'static [(usize, usize)],
+    /// A lot of at most this many cells is a garden plot (`LotKind::Rough`): flat, never raised. 0 = none (Deepworks).
+    pub garden_area: usize,
+    /// The fewest garden plots a board must have (0 = no demand).
+    pub garden_min: usize,
     /// Reject a board with a straight open lane (a full row or column of level-0 cells, no solid piece) from edge to edge: it is a sight corridor.
     pub lane_free: bool,
     /// Sub-seeds tried before the last one is returned as it is (the caller then sees `problems()`).
@@ -65,11 +69,11 @@ impl Theme {
         match self {
             Self::Deepworks => Budgets { raised: RAISED_PERMILLE, high: HIGH_PERMILLE, tower_pairs: TOWER_PAIRS, landmark_pieces: LANDMARK_PIECES,
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
-                lot_pairs: 9, lot_shapes: &[(3, 2), (2, 3), (2, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[], lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1 },
+                lot_pairs: 9, lot_shapes: &[(3, 2), (2, 3), (2, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[], garden_area: 0, garden_min: 0, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1 },
             // First town values (step 6 of the ruin-town plan re-fits them): more raised ground, one tower pair, more terraces.
             Self::RuinTown => Budgets { raised: (300, 400), high: (60, 150), tower_pairs: (1, 1), landmark_pieces: LANDMARK_PIECES,
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
-                lot_pairs: 14, lot_shapes: &[(3, 2), (2, 3), (2, 2), (2, 2), (2, 1), (1, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], lot_first: &[(3, 2)], lane_free: true, max_attempts: 32, tower_side: 2 },
+                lot_pairs: 13, lot_shapes: &[(3, 2), (2, 3), (2, 2), (2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[(3, 2)], garden_area: 2, garden_min: 6, lane_free: true, max_attempts: 32, tower_side: 2 },
         }
     }
     fn salt(self) -> i64 { if self.is_default() { 0 } else { TOWN_SALT } }
@@ -97,10 +101,10 @@ pub fn budget(permille: (usize, usize)) -> (usize, usize) {
 impl Layout {
     pub fn cell(&self, x: usize, z: usize) -> &Cell { &self.cells[z * self.nx + x] }
     pub fn to_json(&self) -> String { serde_json::to_string(self).expect("layout JSON") }
-    /// One char per cell: `3`/`2`/`1` raised, `~` hazard lot, `.` street, `,` other ground.
+    /// One char per cell: `3`/`2`/`1` raised, `~` hazard lot, `"` rough plot, `.` street, `,` other ground.
     pub fn to_ascii(&self) -> String {
         self.cells.chunks(self.nx).map(|row| row.iter().map(|c| match (c.level, c.lot_kind, c.street) {
-            (3, _, _) => '3', (2, _, _) => '2', (1, _, _) => '1', (_, LotKind::Hazard, _) => '~', (_, _, true) => '.', _ => ',',
+            (3, _, _) => '3', (2, _, _) => '2', (1, _, _) => '1', (_, LotKind::Hazard, _) => '~', (_, LotKind::Rough, _) => '"', (_, _, true) => '.', _ => ',',
         }).chain(Some('\n')).collect::<String>()).collect()
     }
     pub fn raised(&self) -> usize { self.cells.iter().filter(|c| c.level >= 1).count() }
@@ -132,6 +136,7 @@ impl Layout {
         if !(2 * b.tower_side.pow(2) * b.tower_pairs.0..=2 * b.tower_side.pow(2) * b.tower_pairs.1).contains(&self.towers()) { p.push("level-3 area outside its budget"); }
         if !(b.landmark_pieces.0..=b.landmark_pieces.1).contains(&self.landmarks.len()) { p.push("landmark count outside its budget"); }
         if self.landmarks.iter().flat_map(Landmark::cells).any(|i| self.connectors.iter().any(|c| usize::from(c.low) == i || usize::from(c.high) == i)) { p.push("a landmark stands on a ladder foot"); }
+        if self.lots.iter().filter(|l| l.kind == LotKind::Rough).count() < b.garden_min { p.push("too few garden plots"); }
         if b.lane_free && self.has_edge_to_edge_lane() { p.push("a straight open lane runs from edge to edge"); }
         if connect::component_count(&self.cells, &self.connectors, &landmarks::solid_mask(&self.landmarks)) != 1 { p.push("board is not one connected walkable area"); }
         if connect::ascent_shortfall(&self.cells, &self.connectors) > 0 { p.push("an island has fewer ascents than it could have (max 2)"); }

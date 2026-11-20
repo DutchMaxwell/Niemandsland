@@ -9,9 +9,9 @@ use super::{budget, Budgets, Symmetry, DEPLOY_DEPTH_CELLS, GRID};
 
 /// Lot archetypes (theme-neutral; a kit table picks the look). `Block`: solid mass, walkable roof, blocks sight.
 /// `Terrace`: an L-shaped step, the rest of the lot stays ground. `Deck`: open raised platform, sight passes.
-/// `Hazard`: flat area hazard, never raised.
+/// `Hazard`: flat area hazard, never raised. `Rough`: a flat plot (garden, rubble) that is never raised and gets no piece on it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LotKind { Street, Block, Terrace, Deck, Hazard }
+pub enum LotKind { Street, Block, Terrace, Deck, Hazard, Rough }
 
 /// One lattice cell. `level` 0/1/2/3 = 0/3/6/9 in; `deploy` 1/2 = the player whose band it is, 0 = neither.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,7 +27,8 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
     let (mut hazards, pool) = (0, b.lot_pool);
     for p in 0..lots.len() / 2 {
         let in_deploy = [2 * p, 2 * p + 1].iter().any(|&i| lots[i].z < DEPLOY_DEPTH_CELLS || lots[i].z + lots[i].h > nz - DEPLOY_DEPTH_CELLS);
-        let mut kind = match p { 0 => LotKind::Block, 1 => LotKind::Terrace, 2 => LotKind::Deck, _ => pool[rng.randi_range(0, pool.len() as i64 - 1) as usize] };
+        let garden = lots[2 * p].w * lots[2 * p].h <= b.garden_area;
+        let mut kind = match p { _ if garden => LotKind::Rough, 0 => LotKind::Block, 1 => LotKind::Terrace, 2 => LotKind::Deck, _ => pool[rng.randi_range(0, pool.len() as i64 - 1) as usize] };
         if kind == LotKind::Hazard && (in_deploy || hazards >= 1) { kind = LotKind::Deck } else if kind == LotKind::Hazard { hazards += 1 }
         let r1 = rng.randi_range(0, 3) as usize;
         let r2 = if sym == Symmetry::Point180 { (r1 + 2) % 4 } else { (r1 + rng.randi_range(1, 3) as usize) % 4 };
@@ -47,7 +48,7 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
     let raised = |cs: &[Cell]| cs.iter().filter(|c| c.level >= 1).count();
     // Grow a terrace next to raised ground, or shave non-block cells, until the raised share fits.
     while raised(&cells) < min_r {
-        let grow = |i: usize, cs: &[Cell]| cs[i].level == 0 && !cs[i].street && cs[i].lot_kind != LotKind::Hazard && neighbours(i).any(|j| cs[j].level >= 1);
+        let grow = |i: usize, cs: &[Cell]| cs[i].level == 0 && !cs[i].street && !matches!(cs[i].lot_kind, LotKind::Hazard | LotKind::Rough) && neighbours(i).any(|j| cs[j].level >= 1);
         let Some((a, b)) = paired(&cells, sym, &mut rng, grow, |_| 0).into_iter().next() else { break };
         cells[a].level = 1; cells[b].level = 1;
     }
