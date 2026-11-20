@@ -120,6 +120,13 @@ func test_the_foot_of_a_connector_and_the_sump_cells_stay_bare() -> void:
 				assert_bool(layout["cells"][c.y * layout["nx"] + c.x]["lot_kind"] == "Hazard").override_failure_message("a %s item shows in the sump cell %s" % [item["shape"], c]).is_false()
 
 
+func test_a_landmark_footprint_stays_bare() -> void:
+	var layout := _fixture()
+	assert_int(BoardgenDebris.plan(layout).size()).is_greater(30)
+	layout["landmarks"] = [{"kind": "TankCluster", "x": 0, "z": 0, "w": 16, "h": 16, "turn": 0}]   # every cell is some landmark's
+	assert_int(BoardgenDebris.plan(layout).size()).is_equal(0)
+
+
 func test_the_kit_is_two_multimeshes_and_nothing_physical() -> void:
 	var layout := _fixture()
 	var node: BoardgenDebris = auto_free(BoardgenDebris.new())

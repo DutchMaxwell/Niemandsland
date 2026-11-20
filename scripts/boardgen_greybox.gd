@@ -135,6 +135,10 @@ func build(layout: Dictionary) -> void:
 	props.name = "Props"
 	props.build(layout)
 	add_child(props)
+	var landmarks := BoardgenLandmarks.new()
+	landmarks.name = "Landmarks"
+	landmarks.build(layout)
+	add_child(landmarks)
 	var debris := BoardgenDebris.new()
 	debris.name = "Debris"
 	debris.build(layout)

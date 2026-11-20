@@ -25,6 +25,10 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 	var feet := {}   # the floor cell at the foot of a ladder or stair stays bare
 	for c: Dictionary in layout["connectors"]:
 		feet[Vector2i(c["low_xz"][0], c["low_xz"][1])] = true
+	for lm: Dictionary in layout.get("landmarks", []):   # a landmark's footprint stays bare too
+		for dz in int(lm["h"]):
+			for dx in int(lm["w"]):
+				feet[Vector2i(int(lm["x"]) + dx, int(lm["z"]) + dz)] = true
 	var busy := {}   # the cells that carry a prop of the BoardgenProps kit: the loose debris keeps off them
 	for prop: Dictionary in BoardgenProps.plan(layout):
 		if prop["shape"] != "light" and prop["xf"].origin.y > FLAT_IN * INCHES_TO_METERS:

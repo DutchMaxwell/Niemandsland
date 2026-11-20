@@ -35,6 +35,10 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 	var feet := {}   # the floor cell at the foot of a ladder stays bare
 	for c: Dictionary in layout["connectors"]:
 		feet[Vector2i(c["low_xz"][0], c["low_xz"][1])] = true
+	for lm: Dictionary in layout.get("landmarks", []):   # a landmark's footprint stays bare too
+		for dz in int(lm["h"]):
+			for dx in int(lm["w"]):
+				feet[Vector2i(int(lm["x"]) + dx, int(lm["z"]) + dz)] = true
 	var out: Array[Dictionary] = []
 	var lamps: Array[Dictionary] = []
 	for z in nz:
