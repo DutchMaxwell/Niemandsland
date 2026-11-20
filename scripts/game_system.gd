@@ -23,6 +23,7 @@ const _LABELS := {
 	"aofs": "Age of Fantasy: Skirmish",
 	"aofr": "Age of Fantasy: Regiments",
 }
+const _SHORT := {"gf": "GF", "gff": "GFF", "aof": "AoF", "aofs": "AoFS", "aofr": "AoFR"}
 const _SETTINGS := {
 	"gf": SETTING_GRIMDARK, "gff": SETTING_GRIMDARK,
 	"aof": SETTING_FANTASY, "aofs": SETTING_FANTASY, "aofr": SETTING_FANTASY,
@@ -51,6 +52,22 @@ static func is_known(id: String) -> bool:
 
 static func label(id: String) -> String:
 	return str(_LABELS[normalize(id)])
+
+
+## Short form for a crowded list ("GF", "GFF", "AoF", "AoFS", "AoFR").
+static func short(id: String) -> String:
+	return str(_SHORT[normalize(id)])
+
+
+## The faction keys of an AI-list manifest a table of `system` is offered: exactly the lists of that system, no family
+## folding ("" = nothing names a system yet: all of them). An entry without a "system" is a gf list.
+static func manifest_keys(manifest: Dictionary, system: String) -> Array:
+	var out: Array = []
+	for fk in manifest:
+		var of_system := normalize(str((manifest[fk] as Dictionary).get("system", DEFAULT_ID)))
+		if system.is_empty() or of_system == normalize(system):
+			out.append(fk)
+	return out
 
 
 ## "grimdark" (gf, gff) or "fantasy" (aof, aofs, aofr).

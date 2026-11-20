@@ -21580,19 +21580,22 @@ func _open_ai_opponent_dialog() -> void:
 
 ## The AI Opponent question over an already loaded manifest. `loader(file, slot)` runs on OK
 ## (default: _load_ai_opponent_list) so the dialog can be driven without the network.
-## Only the lists of the system the human army plays are offered (an entry without "system" is "gf");
-## with no human army yet every list is offered, suffixed " (GF)" / " (AoF)" when the manifest mixes both.
+## Only the lists of the table's game system are offered, exactly (an entry without "system" is "gf"; no gff / aofs / aofr
+## folding onto the battle-size families); with no system named yet every list is offered, suffixed " (GF)" / " (AoF)" ...
+## when the manifest mixes systems.
 func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable()) -> void:
-	var human_army = opr_army_manager.armies.get(solo_controller.human_slot if solo_controller != null else 1) if opr_army_manager != null else null
-	var played := "" if human_army == null else ("aof" if RulesRegistry.normalize_system(human_army.game_system_abbrev).begins_with("aof") else "gf")
+	var played := _table_system_or_empty()   # "" = nothing names a game system yet: every AI list is on offer
 	var system_of := {}
 	for fk in manifest:
-		system_of[fk] = str((manifest[fk] as Dictionary).get("system", "gf"))
-	var fac_keys: Array = manifest.keys().filter(func(fk) -> bool: return played.is_empty() or system_of[fk] == played)
+		system_of[fk] = GameSystem.normalize(str((manifest[fk] as Dictionary).get("system", "gf")))
+	var fac_keys: Array = GameSystem.manifest_keys(manifest, played)
 	if fac_keys.is_empty():
 		_solo_show_toast("No AI lists for this game system yet — import any list with the AI checkbox instead")
 		return
-	var mixed: bool = played.is_empty() and system_of.values().has("gf") and system_of.values().has("aof")
+	var distinct := {}
+	for v in system_of.values():
+		distinct[v] = true
+	var mixed: bool = played.is_empty() and distinct.size() > 1
 	var parts := HouseStyle.overlay_sheet("AI Opponent", SOLO_DIALOG_MIN_WIDTH)
 	var layer := CanvasLayer.new()
 	layer.name = "AiOpponentLayer"
@@ -21605,7 +21608,7 @@ func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable(
 	for i in fac_keys.size():
 		var fk: String = fac_keys[i]
 		var fac_name := str((manifest[fk] as Dictionary).get("name", fk))
-		fac_opt.add_item(fac_name + ((" (AoF)" if system_of[fk] == "aof" else " (GF)") if mixed else ""), i)
+		fac_opt.add_item(fac_name + ((" (%s)" % GameSystem.short(system_of[fk])) if mixed else ""), i)
 	box.add_child(HouseStyle.field_row("Faction:", fac_opt))
 
 	var pts_opt := OptionButton.new()
