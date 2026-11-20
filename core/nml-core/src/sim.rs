@@ -665,7 +665,7 @@ fn landing_of(state: &State, u: usize, at: &[[f64; 3]], wounds: &[i64], gone: &[
             None => Some(LandedModel { at: *p, slot, wounds_left: 0, dead: true }),
         }
     }).collect();
-    (!models.is_empty()).then_some(Landing { unit: u, models, loss_line: false })
+    (!models.is_empty()).then_some(Landing { unit: u, models, loss_line: false, moved_to: Vec::new() })
 }
 
 /// The table AI's Takedown pick (`attacker_pick_target`): the host's most valuable living model,
@@ -1033,7 +1033,7 @@ pub(crate) fn tray_mend(
         let gone = tray.dead_slots(pu);
         let slot = (0..).filter(|s| !gone.contains(s)).nth(pm).unwrap_or(pm);
         let (at, now) = (next.positions[pu][pm], next.wounds[pu][pm]);
-        tray.land(|| Landing { unit: pu, models: vec![LandedModel { at, slot, wounds_left: now, dead: false }], loss_line: false });
+        tray.land(|| Landing { unit: pu, models: vec![LandedModel { at, slot, wounds_left: now, dead: false }], loss_line: false, moved_to: Vec::new() });
         let name = statics[next.roster.profile[si]].name.clone();
         tray.say(|| LogLine { rule: "mend", category: Category::Combat, side: next.player[si], detail: None,
             text: format!("Mend: {name} heals {healed} wound{} (D3 rolled {f0}) — patient now {now}/{wmax}",
@@ -2302,7 +2302,7 @@ fn tray_vs_marks(
                 // member of that chain — the unit itself or its joined caster
                 // hero; with none, the target simply has no pool to lose.
                 let passed = control_morale_passed(statics, next, ti,
-                    ControlMoraleSource { owner: &owner, rule: "Spell Drain" }, seams, tray, shot);
+                    ControlMoraleSource { owner: &owner, rule: "Spell Drain", on_target: false }, seams, tray, shot);
                 if passed {
                     shot.log.push(format!("Spell Drain: {} passes the Morale test, no tokens lost", target_name));
                     trace_rule("cast", "Spell Drain", &format!("{} drains {}: no tokens (test passed)",
@@ -2450,6 +2450,9 @@ fn say_marks_consumed(statics: &[UnitStatic], next: &State, tray: &mut Tray, sho
 struct ControlMoraleSource<'a> {
     owner: &'a str,
     rule: &'a str,
+    /// H-8: the test is rolled on the target's tray and its outcome said (Mind Control / Fatigue Debuff, the table's
+    /// `_solo_morale_test(tgt, _roller_label(tgt))`); false keeps the bearer-signed die (Spell Drain).
+    on_target: bool,
 }
 
 fn control_morale_passed(
@@ -2472,9 +2475,15 @@ fn control_morale_passed(
     if next.shaken[ti] {
         say_rule(tray, "morale", next.player[ti], || format!("{} is already Shaken — automatically fails morale ({CITE})", us.name));
     }
+    // H-8 (Plan H): Mind Control's test is rolled on the TARGET's tray (`_solo_morale_test(tgt, _roller_label(tgt))`): the die's
+    // owner and the Fearless line name the target, and the outcome line follows (`tray_morale_for`'s). Labels and lines only.
+    let (roller, roller_unit) = if source.on_target { (us.name.as_str(), Some(ti)) } else { (source.owner, None) };
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
-        &ctx, source.owner, None, false, false, next.shaken[ti], wounds_left(next, ti), tray,
+        &ctx, roller, roller_unit, false, false, next.shaken[ti], wounds_left(next, ti), tray,
     );
+    let shown = &statics[next.roster.profile[morale_root(next, ti, seams)]].name;
+    if source.on_target { tray.say(|| LogLine { rule: "morale", category: Category::Combat, side: next.player[ti], detail: None,
+        text: if outcome == Morale::Passed { format!("{shown} passes morale") } else { format!("{shown} fails morale — Shaken") } }); }
     // EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF: an auto-failed test (no die) spends no once morale buff (table `_solo_morale_test`, #2804).
     if !(next.shaken[ti] && rule_on(seams.rules_epoch, crate::acts::EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF)) {
         mods::spend_once_except(next, ti, &[mods::Role::Morale], false, |r| {
@@ -2521,18 +2530,28 @@ pub(crate) fn tray_fatigue_debuff(
             if spec.effect != "fatigue" { continue; }
             let pick = spec.as_pick();
             let Some(&ti) = utility_targets(statics, next, bearer, &pick, seams).first() else { continue; };
-            if control_morale_passed(statics, next, ti,
-                ControlMoraleSource { owner: &owner, rule: &spec.name }, seams, tray, shot) { continue; }
+            let passed = control_morale_passed(statics, next, ti, ControlMoraleSource { owner: &owner, rule: &spec.name, on_target: true }, seams, tray, shot);
+            say_control_test(next.player[bearer], &spec.name, &owner, &statics[next.roster.profile[ti]].name, passed, tray);
+            if passed { continue; }
             // Fatigue Debuff (:17022-17025): the failed test fatigues the
             // target AND its joined chain instead of displacing it.
             let mut chain = vec![ti];
             if seams.hero_attach { chain.extend(next.attached[ti].iter().copied()); }
             for cm in chain { next.fatigued[cm] = true; }
+            let tname = &statics[next.roster.profile[ti]].name;
+            tray.say(|| LogLine { rule: "mind_control", category: Category::Combat, side: next.player[bearer], detail: None,
+                text: format!("{}: {tname} is FATIGUED (melee hits only on unmodified 6s)", spec.name) });
             shot.log.push(format!(
                 "{}: {} is FATIGUED (melee hits only on unmodified 6s)",
                 spec.name, statics[next.roster.profile[ti]].name));
         }
     }
+}
+
+/// H-8 (Plan H): the table's line after a Mind Control / Fatigue Debuff test (`_solo_apply_mind_control`).
+fn say_control_test(side: i64, rule: &str, owner: &str, tname: &str, passed: bool, tray: &mut Tray) {
+    tray.say(|| LogLine { rule: "mind_control", category: Category::Combat, side, detail: None,
+        text: format!("{rule}: {owner} forces a morale test on {tname} — {}", if passed { "passed" } else { "FAILED" }) });
 }
 
 /// `main._solo_apply_mind_control` :17031-17038, the DISPLACEMENT arm of the
@@ -2567,11 +2586,16 @@ pub(crate) fn tray_mind_control(
             let pick = spec.as_pick();
             let Some(&ti) = utility_targets(statics, next, bearer, &pick, seams).first() else { continue; };
             let owner = &statics[next.roster.profile[bearer]].name;
-            if control_morale_passed(statics, next, ti,
-                ControlMoraleSource { owner, rule: &spec.name }, seams, tray, shot) { continue; }
+            let passed = control_morale_passed(statics, next, ti, ControlMoraleSource { owner, rule: &spec.name, on_target: true }, seams, tray, shot);
+            say_control_test(next.player[bearer], &spec.name, owner, &statics[next.roster.profile[ti]].name, passed, tray);
+            if passed { continue; }
+            let tname = &statics[next.roster.profile[ti]].name;
+            let side = next.player[bearer];
             // MOR-18, rules 3.6: the same unit is MOVED by Mind Control only
             // once per round — the test above still ran and its Shaken stands.
             if rule_on(seams.rules_epoch, EPOCH_73_V36) && next.mind_control_moved_round[ti] == next.round {
+                tray.say(|| LogLine { rule: "mind_control", category: Category::Movement, side, detail: None,
+                    text: format!("{}: {tname} was already moved by Mind Control this round — it stays put", spec.name) });
                 shot.log.push(format!(
                     "{}: {} was already moved by Mind Control this round — it stays put",
                     spec.name, statics[next.roster.profile[ti]].name));
@@ -2585,6 +2609,10 @@ pub(crate) fn tray_mind_control(
             if len < 1e-3 { continue; }
             let dir = [away[0] / len, away[2] / len];
             let dist_in = clamp_move_to_board(terrain, &next.positions[ti], dir, spec.move_in as f32);
+            // H-8 (Plan H): the table's movement line (`_solo_apply_mind_control`), said for a zero move too, as the table does.
+            tray.say(|| LogLine { rule: "mind_control", category: Category::Movement, side, detail: None,
+                text: format!("{}: {tname} fails the morale test — Shaken, moved {:.0}\" in a straight line (away from the marker)",
+                    spec.name, dist_in.max(0.0)) });
             if dist_in <= 0.0 { continue; }
             let step_m = dist_in * IN2M as f32;
             let mut chain = vec![ti];
@@ -2593,6 +2621,10 @@ pub(crate) fn tray_mind_control(
                 for p in next.positions[cm].iter_mut() {
                     *p = [p[0] + (dir[0] * step_m) as f64, p[1], p[2] + (dir[1] * step_m) as f64];
                 }
+                // H-8 (Plan H): the push is its own step event, in the order it happened: the table moves the unit before
+                // the volley's landings, whose `at` is the pushed position.
+                let moved_to = next.positions[cm].clone();
+                tray.land(|| Landing { unit: cm, models: Vec::new(), loss_line: false, moved_to });
             }
             if rule_on(seams.rules_epoch, EPOCH_73_V36) { next.mind_control_moved_round[ti] = next.round; }
             if rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) {
@@ -5667,6 +5699,7 @@ fn hazardous_self_wounds(
                     unit,
                     models: vec![LandedModel { at, slot, wounds_left, dead: killed }],
                     loss_line: true,
+                    moved_to: Vec::new(),
                 });
             }
             None => {

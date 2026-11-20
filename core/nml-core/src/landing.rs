@@ -20,4 +20,8 @@ pub struct Landing {
     pub unit: usize,
     pub models: Vec<LandedModel>,
     pub loss_line: bool,
+    /// H-8 (Plan H): a pre-attack beat MOVED the unit (Mind Control's push): its living models' positions after the move, in
+    /// capture slot order with the dead left out. The table moves them before any later landing (whose `at` is post-move).
+    /// Empty for every wound / casualty landing.
+    pub moved_to: Vec<[f64; 3]>,
 }

@@ -155,6 +155,11 @@ fn landings_of(state: &State, landings: &[Landing]) -> VarArray {
         d.set("unit", state.roster.keys[l.unit].as_str());
         d.set("models", &models);
         d.set("loss_line", l.loss_line);
+        let mut moved_to = VarArray::new();   // H-8: a beat's push (Mind Control), landed before later landings
+        for p in &l.moved_to {
+            moved_to.push(&Vector3::new(p[0] as f32, p[1] as f32, p[2] as f32).to_variant());
+        }
+        d.set("moved_to", &moved_to);
         out.push(&d.to_variant());
     }
     out

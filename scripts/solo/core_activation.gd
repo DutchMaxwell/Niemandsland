@@ -963,7 +963,9 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	var cx := cast_context(main, report, open_volley) if cast_taken else {}
 	if cx.is_empty():
 		open_volley.call()
+	_beat_actor = unit if report.has("core_beats") else null   # H-8: the beats guard handed this unit's beats to the core
 	var r: Dictionary = await drive(main, h, unit, t, true, Callable(), false, beat if shows or dice > 0 else Callable(), cx)
+	_beat_actor = null
 	if str(r["step"]) == "done":
 		if st["first"] and dice > 0:
 			_dangerous_mismatch(unit, dice, "it threw no die")
@@ -983,6 +985,8 @@ static var ai_charges := 0
 ## True while the charge door drives: the core moves both units before it wounds them, so a landing names its model by slot
 ## (the table's start positions are the planner's, not the core's), and the fatigue the fight writes is the core's own.
 static var _charge_landing := false
+## H-8 (Plan H): the unit whose pre-attack beats the core resolves in this call (the beats guard, `report["core_beats"]`); null else.
+static var _beat_actor: GameUnit = null
 
 
 ## P4.D-48: does the charge door take this AI charge? A board captured before the move, the tray, a CHARGE at a target, both
@@ -1460,6 +1464,9 @@ static func land_step(main, _gu: GameUnit, landings: Array, start_models: Array,
 		var entry: Dictionary = landings[event]
 		var lgu: GameUnit = main.opr_army_manager.game_units.get(str(entry["unit"]))
 		var by_slot: Array = _models_by_slot(start_models, lgu) if lgu != null else []
+		if lgu != null and not (entry.get("moved_to", []) as Array).is_empty():
+			_land_push(main, lgu, entry["moved_to"], start_models, done, "%d:%s:move" % [event, entry["unit"]])
+			continue
 		var died: Array[ModelInstance] = []
 		for lm in entry["models"]:
 			var m: ModelInstance = _model_at(start_models, lgu, lm["at"]) if lgu != null else null
@@ -1497,6 +1504,24 @@ static func land_step(main, _gu: GameUnit, landings: Array, start_models: Array,
 			main._core_said_losses = bool(entry.get("loss_line", false))   # step 27: the core said this loss line
 			await main._solo_remove_dead_models(lgu, died, int(lgu.unit_properties.get("player_id", 1)))
 			main._core_said_losses = false
+
+
+## H-8 (Plan H): a pre-attack beat's push (Mind Control) as its own step event: the unit's living models, in capture slot order,
+## move to the core's positions with the table's own writer (`_apply_model_positions`), and their start entries follow them, so
+## a later landing of the same activation (the volley's, `at` = the pushed position) finds them. Landed once (`done`).
+static func _land_push(main, gu: GameUnit, to: Array, start_models: Array, done: Dictionary, key: String) -> void:
+	if done.has(key):
+		return
+	done[key] = null
+	var alive: Array = _models_by_slot(start_models, gu).filter(func(m: ModelInstance) -> bool: return m.is_alive)
+	if alive.size() != to.size():
+		push_error("CoreActivation.land_step: %s was pushed with %d models in the core, the table holds %d" % [gu.get_name(), to.size(), alive.size()])
+		return
+	main.solo_controller._apply_model_positions(alive, to)
+	for e in start_models:
+		var i := alive.find(e["model"])
+		if i >= 0:
+			e["at"] = to[i]
 
 
 ## The activation's final delta (binding step 17): Shaken onto the table; a unit that moved AND lost models is
@@ -1803,7 +1828,8 @@ static func _land_stamps(main, gu: GameUnit, d: Dictionary) -> void:
 		# On a core-resolved charge, the table never ran `_solo_melee_strike_phase`, so the core is the first writer
 		# of melee-only once-per-round stamps (`growth_strike_round` -> `regenerative_strength_round`).
 		var first_pick: bool = key == "versatile_pick_round" and value == int(main.opr_army_manager.current_round) and was < value   # the core latched this round, the table did not (see `_land_versatile_mode`)
-		if not (_charge_landing and key == "growth_strike_round") and not first_pick:
+		# H-8: likewise the core is the first writer of the push stamp when the beats guard held Mind Control.
+		if not (_charge_landing and key == "growth_strike_round") and not first_pick and not (_beat_actor != null and key == "mind_control_moved_round"):
 			stamp_splits += 1
 			push_error("CoreActivation.land_delta: %s.%s differs (table %d, core %d)" % [gu.get_name(), prop, was, value])
 		main._sync_unit_property(gu, prop, value)
@@ -1856,7 +1882,9 @@ static func _land_surprise(main, gu: GameUnit, d: Dictionary) -> void:
 ## core/table split (reported); the core's value lands either way, as `shaken` does.
 static func _land_ledger(main, gu: GameUnit, d: Dictionary) -> void:
 	if d.has("fatigued") and bool(d["fatigued"]) != gu.is_fatigued:
-		if not _charge_landing:   # P4.D-48: the fight's fatigue is the core's outcome, not a split
+		# P4.D-48: the fight's fatigue is the core's outcome, not a split; H-8: so is the fatigue a held beat (Fatigue Debuff) put on
+		# another unit than the actor.
+		if not _charge_landing and not (_beat_actor != null and gu != _beat_actor and bool(d["fatigued"])):
 			push_error("CoreActivation.land_delta: %s fatigue differs (table %s, core %s)" % [
 				gu.get_name(), gu.is_fatigued, bool(d["fatigued"])])
 		if main.radial_menu_controller != null:

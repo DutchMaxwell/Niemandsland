@@ -34,7 +34,8 @@ fn run(rule: &str, faction: &str, target_rule: &str, shaken: bool, bonus: i64, e
 #[test]
 fn shaken_target_auto_fails_mind_control_without_a_die() {
     let (next, shot) = run("Mind Control", "jackals", "", true, 0, EPOCH_65_MELEE_TRUTH, 3);
-    assert!(shot.rolls.iter().all(|r| r.owner != "Mover"), "Shaken draws no morale die");
+    // H-8 (Plan H): from 65 the test die is the target's (the table rolls it on the target's tray).
+    assert!(shot.rolls.iter().all(|r| r.owner != "Victim"), "Shaken draws no morale die");
     assert!(next.positions[1][0][0] > 0.05, "failed test moves the target");
     let (_, old) = run("Mind Control", "jackals", "", true, 0, EPOCH_64_DEPLOY_LARGE_RESPOT, 3);
     assert!(old.rolls.iter().any(|r| r.owner == "Mover"), "old records keep the bare roll");
@@ -54,7 +55,7 @@ fn failed_mind_control_shakes_the_target_before_moving_it() {
 #[test]
 fn fearless_target_gets_a_recovery_die_and_bonus_changes_the_target() {
     let (_, shot) = run("Mind Control", "jackals", "\"Fearless\"", false, 0, EPOCH_65_MELEE_TRUTH, 3);
-    assert_eq!(shot.rolls.iter().filter(|r| r.owner == "Mover").count(), 2);
+    assert_eq!(shot.rolls.iter().filter(|r| r.owner == "Victim").count(), 2, "test + recovery die, both the target's (H-8)");
     assert_eq!(shot.rolls[1].target, 4);
     let (_, bonus) = run("Mind Control", "jackals", "", false, 1, EPOCH_65_MELEE_TRUTH, 3);
     assert_eq!(bonus.rolls[0].target, 3, "Banner lowers the shared morale target");
