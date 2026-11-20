@@ -86,6 +86,7 @@ fn by_terrain() -> Terrain {
             grid_size_inches: 3.0,
             inches_to_meters: crate::IN2M,
         },
+        ..Default::default()
     })
 }
 

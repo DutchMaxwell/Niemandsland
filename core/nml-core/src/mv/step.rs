@@ -1938,6 +1938,7 @@ pub(crate) mod tests {
                 grid_size_inches: 3.0,
                 inches_to_meters: IN2M,
             },
+            ..Default::default()
         })
     }
 
@@ -1976,6 +1977,7 @@ pub(crate) mod tests {
                 grid_size_inches: 3.0,
                 inches_to_meters: IN2M,
             },
+            ..Default::default()
         })
     }
 
@@ -2170,6 +2172,7 @@ pub(crate) mod tests {
                 grid_size_inches: f(&cp["grid_size_inches"]),
                 inches_to_meters: f(&cp["inches_to_meters"]),
             },
+            ..Default::default()
         });
 
         // `_moving_models` :5375 lists the unit's own models first and the
@@ -2270,6 +2273,7 @@ pub(crate) mod tests {
                 grid_size_inches: f(&cp["grid_size_inches"]),
                 inches_to_meters: f(&cp["inches_to_meters"]),
             },
+            ..Default::default()
         });
 
         let mradii = arr(&fx["radii_in"]);
@@ -2357,6 +2361,7 @@ pub(crate) mod tests {
                 grid_size_inches: f(&cp["grid_size_inches"]),
                 inches_to_meters: f(&cp["inches_to_meters"]),
             },
+            ..Default::default()
         });
 
         let mradii = arr(&fx["radii_in"]);
@@ -2448,6 +2453,7 @@ pub(crate) mod tests {
                 grid_size_inches: f(&cp["grid_size_inches"]),
                 inches_to_meters: f(&cp["inches_to_meters"]),
             },
+            ..Default::default()
         });
         let mradii = arr(&fx["radii_in"]);
         let world: Vec<V3> =
@@ -2729,6 +2735,7 @@ pub(crate) mod tests {
                 grid_size_inches: 3.0,
                 inches_to_meters: IN2M,
             },
+            ..Default::default()
         })
     }
 
@@ -2847,6 +2854,7 @@ pub(crate) mod tests {
             walls: vec![],
             cell_params: CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0,
                 inches_to_meters: IN2M },
+            ..Default::default()
         })
     }
 

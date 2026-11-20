@@ -23,6 +23,7 @@ use super::*;
                 grid_size_inches: 3.0,
                 inches_to_meters: IN2M,
             },
+            ..Default::default()
         })
     }
 

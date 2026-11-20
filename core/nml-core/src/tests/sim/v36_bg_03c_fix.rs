@@ -58,6 +58,7 @@ fn one_cell_board(kind: i32) -> Terrain {
             grid_size_inches: 3.0,
             inches_to_meters: IN2M,
         },
+        ..Default::default()
     })
 }
 

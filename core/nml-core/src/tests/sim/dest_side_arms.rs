@@ -59,6 +59,7 @@ use super::*;
                 grid_size_inches: 3.0,
                 inches_to_meters: IN2M,
             },
+            ..Default::default()
         });
         let dest = [(30.0 - RETREAT_GOAL_IN) * IN2M, 0.0, 24.0 * IN2M];
         let action = Action {

@@ -2935,6 +2935,7 @@ fn no_terrain() -> Terrain {
             grid_size_inches: 6.0,
             inches_to_meters: 0.0254,
         },
+        ..Default::default()
     })
 }
 

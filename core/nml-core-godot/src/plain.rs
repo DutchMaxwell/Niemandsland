@@ -19,7 +19,7 @@ use godot::builtin::VariantType;
 
 use nml_core::io::{fold_ledger, los_positions, PlainLedger};
 use nml_core::state::{Bands, MoveBands, Roster};
-use nml_core::terrain::{CellParams, ContainerObb, Obb, PlainTerrain, Slab};
+use nml_core::terrain::{CellParams, ContainerObb, Obb, PlainTerrain, Slab, TierGrid};
 use nml_core::{
     Knobs, Marker, MeleeReach, Mods, Objective, Profile, ProfileDyn, Profiles, SearchMode, Sighting, State,
     TreeDice, TreeLeaf, Weapon,
@@ -1052,6 +1052,8 @@ pub fn terrain_of(d: &VarDictionary) -> PlainTerrain {
             .map(|b| ContainerObb { c: pair(&darr(&b, "c")), he: pair(&darr(&b, "he")), yaw: dnum(&b, "yaw", 0.0) })
             .collect(),
         walls,
+        // Heightfield plan step 1 - the generated tier board; no key = none (every header the table writes today).
+        tiers: tiers_of(d),
         cell_params: CellParams {
             table_size_feet: pair(&darr(&cp, "table_size_feet")),
             grid_rotation_degrees: dnum(&cp, "grid_rotation_degrees", 0.0),
@@ -1059,6 +1061,30 @@ pub fn terrain_of(d: &VarDictionary) -> PlainTerrain {
             inches_to_meters: dnum(&cp, "inches_to_meters", 0.0254),
         },
     }
+}
+
+/// The terrain object's optional `tiers` key (`TierGrid`): absent or not a dictionary = `None`.
+fn tiers_of(d: &VarDictionary) -> Option<TierGrid> {
+    let t = d.get("tiers")?.try_to::<VarDictionary>().ok()?;
+    let idx = |v: i64| v.clamp(0, i64::from(u16::MAX)) as u16;
+    let pairs = |k: &str| -> Vec<[u16; 2]> {
+        darr(&t, k)
+            .iter_shared()
+            .map(|v| {
+                let a = any_array(&v);
+                let at = |i: usize| if i < a.len() { idx(int(&a.at(i))) } else { 0 };
+                [at(0), at(1)]
+            })
+            .collect()
+    };
+    Some(TierGrid {
+        nx: idx(dint(&t, "nx", 0)),
+        nz: idx(dint(&t, "nz", 0)),
+        cell_in: dnum(&t, "cell_in", 3.0),
+        level_in: darr(&t, "level_in").iter_shared().map(|v| num(&v)).collect(),
+        ladders: pairs("ladders"),
+        stairs: pairs("stairs"),
+    })
 }
 
 /// `AiActRecorder._header_line`'s `"knobs"` (act_recorder.gd:126-133). Every

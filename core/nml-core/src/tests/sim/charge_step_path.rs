@@ -52,6 +52,7 @@ mod charge_step {
         crate::terrain::Terrain::build(&crate::terrain::PlainTerrain {
             cells: vec![], sandbox: vec![], walls: vec![], pieces: vec![], containers: Vec::new(),
             cell_params: crate::terrain::CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: IN2M },
+            ..Default::default()
         })
     }
 
