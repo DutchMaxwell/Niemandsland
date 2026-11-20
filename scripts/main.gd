@@ -1311,7 +1311,12 @@ func _solo_activate_one_ai_body() -> GameUnit:
 		return unit
 	# Mend + Breath Attack (army-book, grill round 2 cut A): once per activation, BEFORE attacking —
 	# same slot the Caster resolution uses ("at any point before attacking").
-	await _solo_apply_mend(unit)
+	# Plan H (H-5), the beats guard: a Mend bearer the core takes leaves the beat to the core's one call (it resolves it from the
+	# board it captured before the beat); the table pays it only when that call is not made or refused (`_solo_pay_dangerous`).
+	if core_takes and _solo_has_mend(unit):
+		report["core_beats"] = true
+	else:
+		await _solo_apply_mend(unit)
 	await _solo_apply_breath_attack(unit)
 	# Coverage wave: the Utility-Buff family + Mind Control + Piercing Tag share the same
 	# once-per-activation before-attacking slot (data-driven via the primitive layer).
@@ -1344,7 +1349,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	var _prof_atk_t0 := BattleSim.prof_t0()   # NML-1072: live shoot/melee resolution
 	if bool(report.get("can_shoot", false)):
 		await _run_ai_shooting(report)
-	elif report.has("core_dangerous") or report.has("core_through") or report.has("cast_door"):   # P4.D-19/37, CC-13a: a unit that cannot shoot still owes its test / its move-through attacks / its casts: the core call, no volley
+	elif report.has("core_dangerous") or report.has("core_through") or report.has("cast_door") or report.has("core_beats"):   # P4.D-19/37, CC-13a, H-5: a unit that cannot shoot still owes its test / its move-through attacks / its casts / its beats: the core call, no volley
 		await _solo_ai_core_call(unit, report, null, [])
 	elif int(report.get("action", 0)) == AiDecision.Action.CHARGE:
 		# One core P4.D-48: a charge the melee slice takes resolves in the core (charge, strikes, result, morale, consolidation).
@@ -5124,7 +5129,7 @@ func _solo_ai_casts(unit: GameUnit, report: Dictionary, core_takes: bool) -> voi
 ## the core took the activation. Anything else (no board, a refused call) leaves the table to resolve the volley, and
 ## pays an owed test first, on the table, so a refusal costs nothing but the old order.
 func _solo_ai_core_call(unit: GameUnit, report: Dictionary, target: GameUnit, shots: Array, rest: Array = []) -> bool:
-	var owed := report.has("core_dangerous") or report.has("core_through") or report.has("cast_door")   # CC-13a: the casts are owed too
+	var owed := report.has("core_dangerous") or report.has("core_through") or report.has("cast_door") or report.has("core_beats")   # CC-13a: the casts are owed too; H-5: the beats
 	if _solo_core_ai_h != 0 and (target != null or owed) \
 			and await CoreActivation.run_ai(self, unit, report, target, _solo_core_ai_h, shots, owed, rest):
 		if report.erase("core_dangerous"):
@@ -5132,6 +5137,7 @@ func _solo_ai_core_call(unit: GameUnit, report: Dictionary, target: GameUnit, sh
 		report.erase("core_through")
 		report.erase("cast_door")
 		_solo_flush_volley_note(report)   # a cast-only activation never reached the volley's first line
+		report.erase("core_beats")
 		return true
 	await _solo_pay_dangerous(unit, report)
 	if report.erase("cast_door"):   # CC-13a: the core refused before any die: the casts the probe left to it, after the test, in the table's order
@@ -5141,13 +5147,16 @@ func _solo_ai_core_call(unit: GameUnit, report: Dictionary, target: GameUnit, sh
 	return false
 
 
-## One core P4.D-19/37: the table pays what the body left to the core (no core call is made, or it refused): the Dangerous
-## test, then the move-through attacks (Strafing, Crossing Attack).
+## One core P4.D-19/37 + H-5: the table pays what the body left to the core (no core call is made, or it refused): the Dangerous
+## test, then the pre-attack beats the guard held back (Mend), then the move-through attacks (Strafing, Crossing Attack). A Mend
+## caster is never taken (`cast_chain_clear`), so held casts and a held Mend never meet.
 func _solo_pay_dangerous(unit: GameUnit, report: Dictionary) -> void:
 	var dice := int(report.get("core_dangerous", 0))
 	report.erase("core_dangerous")
 	if dice > 0:
 		await _run_ai_dangerous(unit, dice)
+	if report.erase("core_beats") and not _solo_activation_unit_gone(unit):
+		await _solo_apply_mend(unit)
 	if report.erase("core_through") and not _solo_activation_unit_gone(unit):
 		await _solo_apply_strafing(unit)
 		await _solo_apply_crossing_attack(unit)
@@ -8223,6 +8232,18 @@ func _solo_reanimation_spot_ok(pos: Vector3, r: float, model: ModelInstance, anc
 	return true
 
 
+## A living bearer of Mend in `unit`'s chain (the unit and its attached heroes): what `_solo_apply_mend` and the beats guard (H-5) both ask.
+func _solo_has_mend(unit: GameUnit) -> bool:
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		chain = chain + unit.get_attached_heroes()
+	for b in chain:
+		var bu := b as GameUnit
+		if bu != null and bu.get_alive_count() > 0 and RulesRegistry.unit_rule_active(bu, "Mend"):
+			return true
+	return false
+
+
 ## Mend (army-book, grill round 2 cut A — rule Mend: once per activation, before attacking, the
 ## bearer heals D3 wounds on one friendly Tough model within 3"): the AI heals the WOUNDED
 ## Tough model (wounds_max > 1 — Tough(1) regiment pools are excluded by the rule's wording) with the
@@ -8245,13 +8266,7 @@ func _solo_apply_mend(unit: GameUnit) -> void:
 	var bearers: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		bearers = bearers + unit.get_attached_heroes()
-	var has_mend := false
-	for b in bearers:
-		var bu := b as GameUnit
-		if bu != null and bu.get_alive_count() > 0 and RulesRegistry.unit_rule_active(bu, "Mend"):
-			has_mend = true
-			break
-	if not has_mend:
+	if not _solo_has_mend(unit):
 		return
 	var patient := _solo_mend_pick(unit, bearers)
 	if patient == null:
