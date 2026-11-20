@@ -120,3 +120,87 @@ func test_the_kit_is_one_multimesh_with_taller_corner_posts_and_nothing_physical
 	assert_int(node.find_children("*", "CollisionObject3D", true, false).size()).is_equal(0)
 	var tall := items.filter(func(i: Dictionary) -> bool: return i["xf"].basis.get_scale().y / BoardgenRails.INCHES_TO_METERS > 1.0)
 	assert_int(tall.size()).is_greater(0)   # the corner posts are 1.1 in, a plain post 0.84
+
+
+## ---- the authored K1 kit (AAA step 15): the same railing as instances of rail_span / rail_post / rail_post_corner ----
+
+const FIXTURE_DIR := "user://boardgen_rails_test"
+
+
+## A kit whose three rail modules are stand-in GLBs (a sphere each) in FIXTURE_DIR; `with_modules` false = an empty folder.
+func _kit(with_modules: bool) -> BoardgenKit:
+	DirAccess.make_dir_recursive_absolute(FIXTURE_DIR)
+	for module in BoardgenRails.KIT_MODULES:
+		var path := "%s/%s.glb" % [FIXTURE_DIR, module]
+		if with_modules and not FileAccess.file_exists(path):
+			var holder := MeshInstance3D.new()
+			holder.mesh = SphereMesh.new()
+			var state := GLTFState.new()
+			GLTFDocument.new().append_from_scene(holder, state)
+			GLTFDocument.new().write_to_filesystem(state, path)
+			holder.free()
+		elif not with_modules and FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
+	var kit := BoardgenKit.new()
+	add_child(kit)
+	kit.local_dir = FIXTURE_DIR
+	return auto_free(kit)
+
+
+## True when a tier top of exactly height `p.y` is under `p` (or within 0.05 in of it: a shared post stands on a boundary).
+func _on_a_tier_top(layout: Dictionary, p: Vector3) -> bool:
+	for dx in [-0.05, 0.0, 0.05]:
+		for dz in [-0.05, 0.0, 0.05]:
+			var level := _level(layout, _cell(layout, Vector3(p.x + dx, p.y, p.z + dz)))
+			if level > 0 and absf(float(layout["level_in"][level]) - p.y) < 0.001:
+				return true
+	return false
+
+
+func test_the_kit_plan_is_the_same_railing_drawn_as_modules() -> void:
+	var layout := _fixture()
+	var kit := BoardgenRails.kit_plan(layout)
+	var spans: int = kit["rail_span"].size()
+	var corners: int = kit["rail_post_corner"].size()
+	assert_int(spans).is_greater(20)
+	assert_int(corners).is_greater(0)
+	# a span is 3 boxes, a post 1, a corner post 2: the box plan is these very parts
+	assert_int(BoardgenRails.plan(layout).size()).is_equal(spans * 3 + kit["rail_post"].size() + corners * 2)
+	assert_dict(BoardgenRails.kit_plan(_fixture())).is_equal(kit)
+	for module: String in kit:
+		for item: Dictionary in kit[module]:   # every module origin stands on a tier top within reach of a drop edge
+			var p: Vector3 = item["xf"].origin / BoardgenRails.INCHES_TO_METERS
+			assert_bool(_near_drop(layout, p) and _on_a_tier_top(layout, p)).override_failure_message("%s at %s is not on a tier top at a drop edge" % [module, p]).is_true()
+
+
+func test_a_kit_span_ends_at_least_the_gap_from_a_ladder_top() -> void:
+	var layout := _fixture()
+	var origin := Vector2(layout["nx"], layout["nz"]) * CELL_IN * -0.5
+	var ends: Array[Vector3] = []
+	for item: Dictionary in BoardgenRails.kit_plan(layout)["rail_span"]:
+		var half: Vector3 = item["xf"].basis.x * (BoardgenRails.SPAN_MODULE_IN * 0.5) / BoardgenRails.INCHES_TO_METERS
+		ends.append(item["xf"].origin / BoardgenRails.INCHES_TO_METERS + half)
+		ends.append(item["xf"].origin / BoardgenRails.INCHES_TO_METERS - half)
+	for c: Dictionary in layout["connectors"]:
+		var at := Vector2(c["edge_in"][0], c["edge_in"][1]) + origin
+		for e in ends:
+			if absf(e.y - float(layout["level_in"][layout["cells"][c["high"]]["level"]])) < 0.001:
+				assert_float(Vector2(e.x, e.z).distance_to(at)).override_failure_message("a rail span ends %s in from the ladder top at %s" % [Vector2(e.x, e.z).distance_to(at), at]).is_greater_equal(0.85)
+
+
+func test_build_draws_the_modules_when_they_are_cached_and_the_boxes_otherwise() -> void:
+	var layout := _fixture()
+	var with_kit: BoardgenRails = auto_free(BoardgenRails.new())
+	add_child(with_kit)
+	with_kit.build(layout, _kit(true))
+	var plan := BoardgenRails.kit_plan(layout)
+	assert_int(with_kit.get_child_count()).is_equal(3)   # one MultiMesh per module: three draws
+	for module: String in BoardgenRails.KIT_MODULES:
+		assert_int((with_kit.get_node(module) as MultiMeshInstance3D).multimesh.instance_count).is_equal(plan[module].size())
+	for module: String in BoardgenRails.KIT_MODULES:   # a mesh that casts a shadow is drawn again in every cascade: only the span does
+		assert_bool((with_kit.get_node(module) as MultiMeshInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_ON).is_equal(module == "rail_span")
+	var without: BoardgenRails = auto_free(BoardgenRails.new())
+	add_child(without)
+	without.build(layout, _kit(false))   # a module missing = the procedural boxes, still ONE MultiMesh
+	assert_int(without.get_child_count()).is_equal(1)
+	assert_int((without.get_node("Rails") as MultiMeshInstance3D).multimesh.instance_count).is_equal(BoardgenRails.plan(layout).size())

@@ -264,6 +264,25 @@ impl Tray {
         }
     }
 
+    /// Where the next line would stand: how many lines this tray holds and how many draws it has taken (both 0 on a seeded one), the mark
+    /// `say_at` goes back to.
+    pub fn mark(&self) -> (usize, usize) {
+        (self.lines.len(), self.feed.as_ref().map_or(0, |f| f.next))
+    }
+
+    /// A line said at an earlier `mark`, not at the end, stamped with the draws taken then: the table lands a Deadly weapon right after its
+    /// saves, ahead of the next weapon's rolls, and the core only knows the landing once the whole fold has rolled. A seeded tray keeps nothing.
+    pub fn say_at(&mut self, mark: (usize, usize), f: impl FnOnce() -> LogLine) {
+        if self.feed.is_none() {
+            return;
+        }
+        let at = mark.0.min(self.lines.len());
+        self.lines.insert(at, (mark.1, f()));
+        if let Some(held) = self.outcome_at.as_mut().filter(|h| **h >= at) {
+            *held += 1;
+        }
+    }
+
     /// The line just said is a morale outcome the test's own wounds (No Retreat's self-wounds) are to be reported ahead of:
     /// the table logs "has No Retreat", the wounds it dealt, and only then "passes morale". Seeded trays keep nothing.
     pub fn hold_outcome(&mut self) {
@@ -522,6 +541,9 @@ pub struct ShootResult {
     /// The vs-target Marks (`tray_vs_marks`) this activation placed and has not yet seen spent: `(mark name, unit holding the record,
     /// marked target)`. Sim-level bookkeeping for the table's consumption line (`say_marks_consumed`); never merged by `absorb`.
     pub marks_open: Vec<(String, usize, usize)>,
+    /// The melee fold's tray mark (`Tray::mark`) when each `deadly_lines` entry was pushed (that weapon's own save lines are behind it): the table
+    /// lands a Deadly weapon right there, so the landing's lines go back to that mark. Empty unless the melee fold filled it.
+    pub deadly_marks: Vec<(usize, usize)>,
     /// Wounds the target's ignore rules (Regeneration and its family) cancelled in the melee being resolved, summed over its phases by the
     /// sim (`strike_phase`, Impact) for the table's "cancelled by Regeneration" note on the melee result line (`_solo_regen_ignored`).
     pub regen_ignored: i64,
@@ -566,6 +588,7 @@ impl ShootResult {
         self.bane_rerolled += other.bane_rerolled;
         self.deadly_groups.extend(other.deadly_groups);
         self.deadly_lines.extend(other.deadly_lines);
+        self.deadly_marks.extend(other.deadly_marks);
         self.deadly_tally += other.deadly_tally;
         self.takedown_groups.extend(other.takedown_groups);
         self.takedown_lines.extend(other.takedown_lines);
@@ -3191,7 +3214,12 @@ pub fn resolve_melee_leg_wipe(
             // Furious :4477 — the unit-level rule the table stamps onto every
             // melee profile (main.gd:4343): unmodified 6s, charge only.
             if charging && sh.att.furious {
-                hits += sixes(trig);
+                let furious_hits = sixes(trig);
+                hits += furious_hits;
+                if furious_hits > 0 {
+                    // The table's line (`_solo_hits`, rules-must-log): a Furious bearer names the extra hits; one named rule, one line, one hit per 6.
+                    say_rule(tray, "furious", sh.att.side, || format!("Furious: +{furious_hits} hit{} on the charge (unmodified 6s)", if furious_hits == 1 { "" } else { "s" }));
+                }
             }
             if p.sergeant_attacks > 0 {
                 hits += sixes(trig).min(p.sergeant_attacks);
@@ -3452,6 +3480,7 @@ pub fn resolve_melee_leg_wipe(
                 let first = out.deadly_groups.len();
                 push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, def_owner, tray);
                 out.deadly_lines.push((p.name.clone(), w, p.deadly.max(1), out.deadly_groups.len() - first));
+                out.deadly_marks.push(tray.mark());
                 out.deadly_tally += w;
             } else if ignores_regen {
                 regen_proof += w;
