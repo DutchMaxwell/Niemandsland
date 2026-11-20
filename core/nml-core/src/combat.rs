@@ -869,7 +869,7 @@ pub fn profile_ev(
     let pierce = crate::dice::pierce_ignores(p, att);
     let mut defense = shielded_defense(def.defense, if pierce { 0 } else { def.shielded_bonus() }, def.def_floor());
     if !melee && p.blast <= 1 && !p.indirect && !p.ignores_cover {
-        defense = covered_defense(defense, if pierce { false } else { def.in_cover }, def.def_floor());
+        defense = covered_defense(defense, if pierce { false } else { def.in_cover || def.screened }, def.def_floor());
     }
     // Audit 2026-09-13 §2.4 — the Sturdy-kind Boost replaces the gate; a
     // MAX over the two readings, never a second -1 (the dice fold's twin).
