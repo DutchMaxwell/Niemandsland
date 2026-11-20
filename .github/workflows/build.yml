@@ -417,11 +417,13 @@ jobs:
       # weights and suite files change on most GDScript PRs, so the guard lives here, on every PR.
       # tools/ci_rust_paths_test.py rides along: a PR that edits only a workflow's path list does not
       # match rust.yml's own filter, so the rust-gate wiring is guarded here too.
+      # tools/table_census_test.py rides along (plan G step 1b): the census tool's own tests, including the
+      # per-file gate (--gate-file) that guards the retired GDScript tools, were not run by any CI job.
       - name: Shard assignment tests (balance and real-tree coverage) and rust-gate wiring
         run: |
           set -euo pipefail
           python3 -m pip install --quiet pytest
-          python3 -m pytest tools/shard_assign_test.py tools/ci_rust_paths_test.py -q
+          python3 -m pytest tools/shard_assign_test.py tools/ci_rust_paths_test.py tools/table_census_test.py -q
 
   relay-tests:
     name: Relay tests
