@@ -1368,6 +1368,12 @@ pub const EPOCH_22_SCREENED_MELEE: u32 = 22;
 /// change. Every call site reads THIS constant, not the literal `23` or
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_23_INERT_MARKS: u32 = 23;
+/// Placeholder gate for the SLAYER MARK's grant to the marked unit's attackers (`ctx_live_vs`): the table hands an attacker the Slayer rule the target's
+/// once-record names (`_solo_bridge_granted_flags` -> `AiSpell.granted_rules_of`, the gf / aof Slayer Mark picked in the pre-attack slot, `beneficiary: attackers`),
+/// so a shooter that held, or a charger, gets AP(+2) against a Tough(3+) target. The core bridged Rending, Furious, Relentless, Shred and Surge from that record
+/// and not Slayer, so its saves ran 2 AP lighter (and said no `Slayer: AP(+2) because <U> held` line). From 94 the volley and strike seams read it too.
+/// Below 94 byte-identical. Every call site reads THIS constant, not `94`.
+pub const PENDING_EPOCH_SLAYER_MARK_GRANT: u32 = 94;
 /// The TERRAIN DEBUFF gate (14.09., sweep A — rows `Dangerous Terrain Debuff`
 /// / `Difficult Terrain Debuff`, `STANDALONE_SWEEP_A_2026-09-14.md`): both
 /// layers announce the debuff — the table's log even appends a dead

@@ -4670,6 +4670,9 @@ pub fn ctx_live_vs(
     c.furious = c.furious || mods::granted_vs(state, target, "Furious");
     c.relentless_grant = c.relentless_grant || mods::granted_vs(state, target, "Relentless");
     c.shred_grant = c.shred_grant || mods::granted_vs(state, target, "Shred");
+    if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_SLAYER_MARK_GRANT) {
+        c.slayer_grant = c.slayer_grant || mods::granted_vs(state, target, "Slayer");
+    }
     // G4R3 F-SURGE-GRANT (EPOCH_73_V36): a spell's once-grant of Surge to the target's attackers (the table's
     // `_solo_bridge_granted_flags`) pays like the Surge mark; the exchange spends the record.
     c.surge_mark_grant = c.surge_mark_grant
