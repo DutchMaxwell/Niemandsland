@@ -364,6 +364,56 @@ func _anchor() -> void:
 		_material.set_shader_parameter("board_origin", global_position)
 
 
+## The town's ground map, one RGBA8 texel per cell (row by row): R = the cell's surface kind (its index in `kinds`), G = how a street runs through it (0 along x, 255 along z: the
+## street is at least 3 cells long that way and at most 2 across; 128 a junction or a square: anything else), BA = where the middle of its junction is, as an offset from the
+## cell's centre (6 in = 0..255, 128 = none).
+## The shader looks the ground up through a noise-bent point, so the cobble / earth border wanders off the 3 in grid; pure data, the rules never read it.
+static func ground_map(layout: Dictionary, kinds: Array) -> PackedByteArray:
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cells: Array = layout["cells"]
+	var street := func(x: int, z: int) -> bool: return x >= 0 and z >= 0 and x < nx and z < nz and cells[z * nx + x]["street"]
+	var reach := func(x: int, z: int, dx: int, dz: int) -> int:   # street cells in a straight line from (x, z) in one direction, not counting (x, z)
+		var n := 0
+		while street.call(x + (n + 1) * dx, z + (n + 1) * dz):
+			n += 1
+		return n
+	var run_of := func(x: int, z: int) -> int:
+		if not street.call(x, z):
+			return 128
+		var h: int = 1 + reach.call(x, z, 1, 0) + reach.call(x, z, -1, 0)
+		var v: int = 1 + reach.call(x, z, 0, 1) + reach.call(x, z, 0, -1)
+		return 0 if h >= 3 and v <= 2 else (255 if v >= 3 and h <= 2 else 128)
+	var junction := func(x: int, z: int) -> bool: return street.call(x, z) and run_of.call(x, z) == 128
+	var centre := {}   # junction cell -> the mean of its 4-connected junction blob, in cells
+	for i in nx * nz:
+		if centre.has(i) or not junction.call(i % nx, i / nx):
+			continue
+		var blob: Array[int] = [i]
+		var at := 0
+		while at < blob.size():
+			var c := blob[at]
+			at += 1
+			for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var n := (c / nx + d.y) * nx + c % nx + d.x
+				if junction.call(c % nx + d.x, c / nx + d.y) and not blob.has(n):
+					blob.append(n)
+		var mean := Vector2.ZERO
+		for c in blob:
+			mean += Vector2(c % nx, c / nx)
+		for c in blob:
+			centre[c] = mean / blob.size() - Vector2(c % nx, c / nx)
+	var bytes := PackedByteArray()
+	var cell_in := float(layout["cell_in"])
+	for i in nx * nz:
+		var x := i % nx
+		var z := i / nx
+		var run: int = run_of.call(x, z)
+		var off := (centre.get(i, Vector2.ZERO) as Vector2) * cell_in
+		bytes.append_array([kinds.find(_cell_kind(cells[i], true)), run, clampi(roundi(off.x / 6.0 * 255.0 + 127.5), 0, 255), clampi(roundi(off.y / 6.0 * 255.0 + 127.5), 0, 255)])
+	return bytes
+
+
 ## The theme's board shader. Deepworks: a one-texel-per-cell texture, red = height of the cell's top in inches, green = 255 for a sump.
 ## A town greybox reads its colours from the theme's palette.
 func _make_material(layout: Dictionary, theme: Dictionary) -> ShaderMaterial:
@@ -372,6 +422,8 @@ func _make_material(layout: Dictionary, theme: Dictionary) -> ShaderMaterial:
 	mat.set_shader_parameter("cell_in", float(layout["cell_in"]))
 	if theme["id"] == BoardgenTheme.RUIN_TOWN:
 		mat.set_shader_parameter("palette", PackedColorArray(theme["palette"]))
+		mat.set_shader_parameter("ground_map", ImageTexture.create_from_image(Image.create_from_data(layout["nx"], layout["nz"], false, Image.FORMAT_RGBA8, ground_map(layout, theme["kinds"]))))
+		mat.set_shader_parameter("board_cells", Vector2(layout["nx"], layout["nz"]))
 		return mat
 	var bytes := PackedByteArray()
 	for c: Dictionary in layout["cells"]:

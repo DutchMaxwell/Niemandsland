@@ -9,6 +9,8 @@ shader_type spatial;
 uniform vec4 palette[19];   // display colours by kind index (BoardgenTheme.TOWN_KINDS)
 uniform vec3 board_origin;   // world position of the board centre
 uniform float cell_in = 3.0;
+uniform sampler2D ground_map : filter_nearest;   // one texel per cell: R = surface kind, G = how a street runs (0 along x, 1 along z, 0.5 junction / square), BA = offset of the junction's centre (6 in = 0..1)
+uniform vec2 board_cells = vec2(16.0, 16.0);
 
 varying vec3 wpos;
 varying vec3 wnrm;
@@ -57,13 +59,35 @@ vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis) {
 	return mix(c, vec3(0.06, 0.05, 0.05), lit);
 }
 
-// Cobbles: staggered rounded setts about 0.6 x 0.4 in, a tone per sett, dark joints.
-vec3 cobble(vec2 xz, float seed, vec3 tint) {
-	float row = floor(xz.y / 0.42);
-	float x = xz.x / 0.62 + 0.5 * mod(row, 2.0) + h21(vec2(row, seed)) * 0.3;
-	vec2 f = vec2(fract(x), fract(xz.y / 0.42)) - 0.5;
+// Cobbles: staggered rounded setts about 0.6 x 0.4 in, a tone per sett, dark joints. They run along the street (`run` 0 = along x, 1 = along z) and fan round the
+// middle of a junction or a square (`fan` = the offset of that middle from the sample, inches).
+vec3 cobble(vec2 xz, float seed, vec3 tint, float run, vec2 fan) {
+	float row;
+	float x;
+	vec2 f;
+	if (run > 0.25 && run < 0.75) {
+		float r = length(fan);
+		row = floor(r / 0.42);
+		float n = max(floor(6.2832 * (row + 0.5) * 0.42 / 0.62), 3.0);   // a whole number of setts in every ring: no seam
+		x = (atan(fan.y, fan.x) / 6.2832 + 0.5) * n + 0.5 * mod(row, 2.0) + h21(vec2(row, seed)) * 0.3;
+		f = vec2(fract(x), fract(r / 0.42)) - 0.5;
+	} else {
+		vec2 q = run > 0.75 ? xz.yx : xz;
+		row = floor(q.y / 0.42);
+		x = q.x / 0.62 + 0.5 * mod(row, 2.0) + h21(vec2(row, seed)) * 0.3;
+		f = vec2(fract(x), fract(q.y / 0.42)) - 0.5;
+	}
 	float sett = smoothstep(0.17, 0.10, length(max(abs(f) - vec2(0.3), 0.0)));
 	return mix(vec3(0.10, 0.09, 0.09), tint * mix(0.7, 1.15, h21(vec2(floor(x), row) + seed)) * mix(0.9, 1.1, vnoise(xz * 3.0)), sett);
+}
+
+// The ground map at a point (inches off the board centre), and the noise that bends the lookup: the earth / cobble border follows the bent point, not the 3 in grid.
+vec4 ground_at(vec2 xz) {
+	return texture(ground_map, clamp(xz / (cell_in * board_cells) + 0.5, vec2(0.001), vec2(0.999)));
+}
+
+vec2 wander(vec2 xz) {
+	return (vec2(fbm(xz * 0.31 + vec2(3.0)), fbm(xz * 0.31 + vec2(11.0))) - 0.47) * 2.4;
 }
 
 // A door in the stone ground storey: 0.7 x 1.4 in in the middle of some 3 in cells.
@@ -111,15 +135,36 @@ void fragment() {
 	} else if (wnrm.y > 0.5) {   // a top face, by kind
 		vec2 xz = p.xz;
 		vec2 e = abs(fract(xz / cell_in) - 0.5);
-		float grid = mix(1.0, 0.86, smoothstep(0.48, 0.495, max(e.x, e.y)));   // the 3 in cell, faint
+		float grid = mix(1.0, 0.86, smoothstep(0.48, 0.495, max(e.x, e.y)));   // the 3 in cell, faint (not on the open ground: it has no cell grid)
+		float run = 0.5;
+		vec2 fan = vec2(1.0, 0.0);
+		float gutter = 0.0;
+		if (k <= 1) {   // the open ground (earth, street): the border between the two wanders off the grid; RUINS, FOREST and DANGEROUS ground keep their exact cell edge
+			vec2 w = xz + wander(xz);
+			vec4 g = ground_at(w);
+			if (int(g.r * 255.0 + 0.5) <= 1) {
+				k = int(g.r * 255.0 + 0.5);
+				tint = palette[k].rgb;
+				alb = tint;
+				run = g.g;
+				vec2 centre = (floor(w / cell_in) + 0.5) * cell_in + (g.ba - 0.5) * 6.0;
+				fan = xz - centre;   // the sett pattern itself is not bent: only the border is
+			}
+			for (int d = 0; d < 4; d++) {   // a gutter: wet dark stone where the street ends within 0.3 in of earth
+				vec2 o = vec2(d < 2 ? (d == 0 ? 0.3 : -0.3) : 0.0, d >= 2 ? (d == 2 ? 0.3 : -0.3) : 0.0);
+				gutter = max(gutter, float(int(ground_at(w + o).r * 255.0 + 0.5) == 0));
+			}
+		}
 		if (k == 1) {   // streets: cobbles
-			alb = cobble(xz, seed, tint * 1.15) * grid;
+			alb = mix(cobble(xz, seed, tint * 1.15, run, fan), vec3(0.06, 0.055, 0.05), 0.55 * gutter);
 		} else if (k == 0) {   // earth: packed, with pebbles, weeds and broken stones
 			vec2 cellp = floor(xz * 5.0);
 			float speck = h21(cellp + seed);
-			alb = tint * mix(0.78, 1.15, fbm(xz * 1.6 + seed)) * mix(1.0, 1.3, step(0.94, h21(floor(xz * 7.0)))) * grid;
+			alb = tint * mix(0.78, 1.15, fbm(xz * 1.6 + seed)) * mix(1.0, 1.3, step(0.94, h21(floor(xz * 7.0))));
 			alb = mix(alb, vec3(0.30, 0.38, 0.17), step(0.84, speck) * step(length(fract(xz * 5.0) - 0.5), 0.34) * 0.7);   // a weed tuft
 			alb = mix(alb, vec3(0.26, 0.25, 0.23) * mix(0.8, 1.25, h21(cellp + 3.0)), step(0.965, speck) * step(length(fract(xz * 5.0) - 0.5), 0.26));   // a broken stone
+			float path = smoothstep(0.03, 0.0, abs(vnoise(xz * 0.21 + seed) - 0.5)) * step(0.5, vnoise(xz * 0.07 + 5.0));   // a worn path: pale, meandering (a noise stand-in until the doors of R12c exist)
+			alb = mix(alb, tint * vec3(1.4, 1.34, 1.2), 0.75 * path);
 		} else if (k == 3 || k == 4 || k == 8) {   // floor boards of a ruined house or yard, scorched in patches
 			alb = tint * mix(0.72, 1.05, h21(vec2(floor(xz.x / 2.1), floor(xz.y / 0.5) + seed))) * mix(0.8, 1.0, seam(xz.y, 0.5, 0.05)) * mix(0.84, 1.0, smoothstep(0.35, 0.6, fbm(xz * 0.9 + seed))) * grid;
 		} else if (k == 6 || k == 12 || k == 9 || k == 10) {   // tower and wall tops, stone pieces: flagstones
