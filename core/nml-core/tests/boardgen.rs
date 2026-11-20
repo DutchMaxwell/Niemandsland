@@ -1,7 +1,7 @@
 //! `nml_core::boardgen` (heightfield stage): determinism, budgets, reachability, mirror symmetry, 48 x 48 in.
 //! The reachability and ascent checks are written here from scratch, not taken from the module.
 use std::collections::{BTreeSet, HashSet, VecDeque};
-use nml_core::boardgen::{budget, generate, ConnectorKind, Landmark, LandmarkKind, Layout, Symmetry, BOARD_IN, DEPLOY_DEPTH_CELLS, GRID, HIGH_PERMILLE, RAISED_PERMILLE};
+use nml_core::boardgen::{budget, generate, generate_themed, ConnectorKind, Landmark, LandmarkKind, Layout, Symmetry, Theme, BOARD_IN, DEPLOY_DEPTH_CELLS, GRID, HIGH_PERMILLE, RAISED_PERMILLE};
 
 /// Two cells as (x, z) pairs: one sight line.
 type CellPair = ((usize, usize), (usize, usize));
@@ -370,4 +370,60 @@ fn census_of_landmarks() {
     assert!(pieces[2] >= 300 && pieces[4] >= 300, "one pair and two pairs both occur: {pieces:?}");
     assert!(kinds.len() == 4 && kinds.values().all(|&n| n >= 400), "every kind turns up often enough: {kinds:?}");
     assert!(retried <= 300, "landmarks must not add retries: {retried}");
+}
+
+/// The Deepworks board as JSON, seeds 1..=200 under both symmetries, FNV-1a 64 over the concatenation. Pinned on main
+/// before the theme existed: a theme must never move a Deepworks board (the layout JSON itself, not only its plain form).
+fn deepworks_json_pin() -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for seed in 1..=200 { for sym in BOTH { for b in generate(seed, sym).to_json().bytes() { h = (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3); } } }
+    format!("{h:016x}")
+}
+
+#[test]
+fn deepworks_layouts_stay_byte_identical_over_200_seeds() {
+    assert_eq!(deepworks_json_pin(), "ec25eb2d0382236f", "a theme (or any stage change) moved a Deepworks board");
+    for seed in [3, 42] { assert_eq!(generate(seed, Symmetry::Point180).to_json(), generate_themed(seed, Symmetry::Point180, Theme::Deepworks).to_json()); }
+}
+
+#[test]
+fn a_town_differs_from_the_deepworks_of_the_same_seed() {
+    for seed in [3, 7, 25, 42] { for sym in BOTH {
+        let (d, t) = (generate(seed, sym), generate_themed(seed, sym, Theme::RuinTown));
+        assert_eq!((d.theme, t.theme), (Theme::Deepworks, Theme::RuinTown));
+        assert_ne!(d.cells, t.cells, "seed {seed} {sym:?}: the town is the Deepworks board");
+        assert!(!d.to_json().contains("theme") && t.to_json().contains(r#""theme":"RuinTown""#), "only a town names its theme");
+        assert_eq!(serde_json::from_str::<Layout>(&t.to_json()).unwrap(), t, "a town survives its JSON");
+        assert_eq!(serde_json::from_str::<Layout>(&d.to_json()).unwrap().theme, Theme::Deepworks, "an old layout without the key reads as Deepworks");
+    }}
+}
+
+#[test]
+fn town_budgets_hold_over_200_seeds() {
+    let b = Theme::RuinTown.budgets();
+    let (r, h, retried) = (budget(b.raised), budget(b.high), std::cell::Cell::new(0));
+    for seed in 1..=200 { for sym in BOTH {
+        let l = generate_themed(seed, sym, Theme::RuinTown);
+        retried.set(retried.get() + usize::from(l.attempt > 0));
+        assert!((r.0..=r.1).contains(&l.raised()), "seed {seed} {sym:?}: raised {} outside {r:?}", l.raised());
+        assert!((h.0..=h.1).contains(&l.high()), "seed {seed} {sym:?}: high {} outside {h:?}", l.high());
+        assert_eq!(l.towers(), 2, "seed {seed} {sym:?}: the town has exactly one tower pair");
+        assert!((b.landmark_pieces.0..=b.landmark_pieces.1).contains(&l.landmarks.len()));
+        assert!(l.cells.iter().all(|c| c.level < 2 || c.deploy == 0), "level 2 or 3 in a band");
+        assert!(l.max_drop_in() <= 9, "seed {seed}: sheer drop {} in", l.max_drop_in());
+    }}
+    eprintln!("400 town boards, {} needed a later sub-seed", retried.get());
+}
+
+#[test]
+fn town_boards_are_accepted_and_connected_over_200_seeds() {
+    for seed in 1..=200 { for sym in BOTH {
+        let l = generate_themed(seed, sym, Theme::RuinTown);
+        assert!(l.problems().is_empty(), "seed {seed} {sym:?} attempt {}: {:?}\n{}", l.attempt, l.problems(), l.to_ascii());
+        let sol = solid(&l);
+        for p in [1, 2] {
+            let seen = reach(&l, p);
+            assert!(seen.iter().zip(&sol).all(|(&s, &x)| s || x), "seed {seed} {sym:?}: a cell is unreachable from player {p}\n{}", l.to_ascii());
+        }
+    }}
 }

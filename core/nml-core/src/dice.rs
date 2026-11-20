@@ -654,6 +654,15 @@ fn piercing_assault_grant_cond() -> CondAp {
     CondAp { ap_bonus: 1, condition: "on_charge".into(), ..Default::default() }
 }
 
+/// The table's `_solo_log_armor` line (`<U> has Armor(X): counts as Defense X+`), said once before the volley's announce when Armor improves the
+/// target's Defense; ahead of the Shielded / growth lines, which fold on top of it.
+pub(crate) fn say_armor(tray: &mut Tray, def: &Ctx, name: &str) {
+    if def.armor_line > 0 {
+        let x = def.armor_line;
+        say_rule(tray, "armor", def.side, || format!("{name} has Armor({x}): counts as Defense {x}+"));
+    }
+}
+
 /// A rule's battle-log line on a supplied tray, in the table's words (a seeded tray never builds the text).
 /// The table's `_solo_log_defense_parts` line for the Shielded family (`<U> is <rule>: +N Defense (saves on M+)`), said once before the
 /// volley's announce; the rule is the literal or the alias that drives `shielded`. None when the target has no bonus to name.
@@ -1704,7 +1713,7 @@ pub(crate) fn resolve_volley_with_pick_label(
             im_fired.push(sh.owner);
             out.log.push(format!("Indirect moved {im}: {} shoots after moving", sh.owner));
         } else if rule_on(att.rules_epoch, EPOCH_73_V36)
-            && p.indirect
+            && (p.indirect || def.indirect_mark) // a mark on the target makes the shot Indirect, as the table's profile bridge does
             && att.moved_this_round
             && im_fired.iter().all(|o| *o != sh.owner)
         {
@@ -3589,7 +3598,7 @@ fn compose_to_hit_note(
         notes.push(format!("{n} {:+} (closest target)", att.instinctive_applied));
     }
     let base_note = notes.join(", ");
-    if att.moved_this_round && p.indirect {
+    if att.moved_this_round && (p.indirect || (def.indirect_mark && rule_on(att.rules_epoch, EPOCH_73_V36))) {
         if rule_on(att.rules_epoch, EPOCH_73_V36) { notes.push("Indirect: no moved penalty".into()); }
         else if im != 0 { notes.push(format!("Indirect moved {im}")); }
     }

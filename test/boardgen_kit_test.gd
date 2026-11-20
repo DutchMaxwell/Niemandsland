@@ -54,3 +54,12 @@ func test_local_module_parses_onto_the_shared_material_with_lods() -> void:
 func test_bundled_manifest_parses() -> void:
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(BoardgenKit.BUNDLED_MANIFEST_PATH))
 	assert_bool(typeof(data) == TYPE_DICTIONARY and data.has("models")).is_true()
+
+
+func test_the_kit_is_for_medium_and_up_on_forward_plus_only() -> void:
+	var q := GraphicsSettings.QualityPreset
+	assert_bool(BoardgenKit.wanted_for(q.MEDIUM, false)).is_true()
+	assert_bool(BoardgenKit.wanted_for(q.ULTRA, false)).is_true()
+	assert_bool(BoardgenKit.wanted_for(q.LOW, false)).is_false()
+	assert_bool(BoardgenKit.wanted_for(q.PERFORMANCE, false)).is_false()
+	assert_bool(BoardgenKit.wanted_for(q.MEDIUM, true)).is_false()   # the web build

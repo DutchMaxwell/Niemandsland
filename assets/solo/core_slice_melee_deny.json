@@ -82,6 +82,12 @@
       "kind": "measured",
       "why": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 34 of 112 (Harassing and the other aliases): the charger ends 1 to 5 in from the table's end, the dice are equal.",
       "leaves_with": "the table's and the core's Hit & Run step after a melee agree, a 16/16 probe"
+    },
+    "ambush_flying_landing": {
+      "primitives": [],
+      "kind": "measured",
+      "why": "Melee soak 20.11. (24 games, shadow deny view, forced rules epoch 94): 1 of 6 taken charges unequal, Blood Guard Brothers (Ambush, Flying) at an Organ Tank: the charger's five models end 5.7 in from where the table puts them. The flat-board sweep takes the same two rules equal (Grunt Veteran, 10 of 12), so the cause is a real-board landing that was not probed. Refused by predicate (`CoreSlice`: a charger with both rules), switched on by this group.",
+      "leaves_with": "a probe of the Flying charge on a real board and its fix, then a 16/16 re-probe"
     }
   }
 }

@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## The landmark meshes of a seeded boardgen layout: a tank cluster has its tanks and manifold, a crane keeps its tower in
-## its cell and its arm high and over the board, everything is two instanced meshes with no colliders, and the same layout
-## always plans the same parts. The layouts are the recorded seed 42 (so this suite stands on its own) with the landmarks
+## its cell and its arm high and over the board, a pump house lies flat on its roof, a sump is flat glowing liquid, everything is
+## a handful of instanced meshes with no colliders, and the same layout always plans the same parts. The layouts are the recorded seed 42 (so this suite stands on its own) with the landmarks
 ## written out by hand, and live seeds when NmlCore hands landmarks over.
 
 const FIXTURE := "res://test/fixtures/boardgen/layout_42.txt"
@@ -101,13 +101,56 @@ func test_one_layout_plans_the_same_parts_and_a_different_layout_other_parts() -
 	assert_bool(BoardgenLandmarks.plan(a) == BoardgenLandmarks.plan(_with([_lm("TankCluster", 6, 5, 2, 2), _lm("Crane", 9, 9, 1, 1, 1)]))).is_false()
 
 
+## First raised cell of the recorded board (x, z, level) and how many of its four neighbours lie lower or off the board.
+func _a_raised_cell() -> Dictionary:
+	var layout := _fixture()
+	for i in layout["cells"].size():
+		var level: int = layout["cells"][i]["level"]
+		if level < 1:
+			continue
+		var x: int = i % 16
+		var z: int = i / 16
+		var lower := 0
+		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n := Vector2i(x, z) + d
+			if n.x >= 0 and n.x < 16 and n.y >= 0 and n.y < 16 and layout["cells"][n.y * 16 + n.x]["level"] < level:
+				lower += 1
+		if lower > 0:
+			return {"x": x, "z": z, "level": level, "lower": lower}
+	return {}
+
+
+func test_a_pump_house_lies_flat_on_its_roof_and_mounts_pipes_and_louvres_only_on_lower_walls() -> void:
+	var at := _a_raised_cell()
+	var lm := _lm("PumpHouse", at["x"], at["z"], 1, 1)
+	var top := float(_fixture()["level_in"][at["level"]])
+	var parts := BoardgenLandmarks.plan(_with([lm]))
+	assert_int(parts.size()).is_equal(2 + 2 * int(at["lower"]))   # roof plate and grate, then a pipe and a louvre per lower wall
+	for p in parts:
+		assert_float(p["hi"].y).is_less_equal(top + BoardgenLandmarks.GRATE_IN + 0.0001)   # nothing stands on the roof
+		if p["hi"].y > top:   # the flat roof parts lie inside the cell; a mount hangs below the roof edge
+			assert_bool(_inside(p, _rect(lm))).is_true()
+		else:
+			assert_bool(_inside(p, _rect(lm), BoardgenLandmarks.MOUNT_IN + 0.001)).is_true()
+
+
+func test_a_sump_is_a_few_flat_glowing_bubbles_inside_its_footprint() -> void:
+	var lm := _lm("Sump", 6, 6, 2, 3)
+	var parts := BoardgenLandmarks.plan(_with([lm]))
+	assert_int(parts.size()).is_equal(5)   # five bubbles; the liquid itself is the board shader's
+	for p in parts:
+		assert_bool(p["glow"]).is_true()
+		assert_float(p["hi"].y).is_less(BoardgenLandmarks.SKIN_IN + 0.1)   # a model stands in it: nothing rises out of it
+		assert_bool(_inside(p, _rect(lm))).is_true()
+
+
 func test_build_draws_every_part_in_a_few_instanced_meshes_and_makes_no_colliders() -> void:
-	var layout := _with([_lm("TankCluster", 5, 5, 3, 2), _lm("Crane", 9, 9, 1, 1, 1)])
+	var layout := _with([_lm("TankCluster", 5, 5, 3, 2), _lm("Crane", 9, 9, 1, 1, 1), _lm("Sump", 6, 6, 2, 2)])
 	var node: BoardgenLandmarks = auto_free(BoardgenLandmarks.new())
 	add_child(node)
 	node.build(layout)
 	var meshes := node.find_children("*", "MultiMeshInstance3D", false, false)
-	assert_int(meshes.size()).is_equal(3)   # boxes, cylinders and rings
+	assert_int(meshes.size()).is_between(3, 5)   # boxes, cylinders (plain and glowing) and rings
 	var instances := 0
 	for m: MultiMeshInstance3D in meshes:
 		instances += m.multimesh.instance_count
@@ -115,7 +158,7 @@ func test_build_draws_every_part_in_a_few_instanced_meshes_and_makes_no_collider
 	assert_int(node.find_children("*", "CollisionObject3D", true, false).size()).is_equal(0)
 
 
-func test_live_boards_keep_every_part_over_the_board_and_a_tank_cluster_inside_its_footprint() -> void:
+func test_live_boards_keep_every_part_over_the_board_and_a_landmark_inside_its_footprint() -> void:
 	var core := _core()
 	if core == null:
 		return
@@ -127,10 +170,10 @@ func test_live_boards_keep_every_part_over_the_board_and_a_tank_cluster_inside_i
 			assert_bool(absf(p["lo"].x) <= BOARD_HALF_IN and absf(p["hi"].x) <= BOARD_HALF_IN and absf(p["lo"].z) <= BOARD_HALF_IN and absf(p["hi"].z) <= BOARD_HALF_IN) \
 				.override_failure_message("seed %s: part over the table edge: %s" % [board_seed, p]).is_true()
 		for lm: Dictionary in layout["landmarks"]:
-			if lm["kind"] != "TankCluster":
+			if lm["kind"] == "Crane":
 				continue
 			for p in BoardgenLandmarks.plan(_with_layout(layout, [lm])):
-				assert_bool(_inside(p, _rect(lm), 0.001)).override_failure_message("seed %s: %s part %s" % [board_seed, lm["kind"], p]).is_true()
+				assert_bool(_inside(p, _rect(lm), BoardgenLandmarks.MOUNT_IN + 0.001)).override_failure_message("seed %s: %s part %s" % [board_seed, lm["kind"], p]).is_true()
 
 
 func _with_layout(layout: Dictionary, landmarks: Array) -> Dictionary:
