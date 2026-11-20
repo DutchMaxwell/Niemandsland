@@ -124,15 +124,13 @@ func test_a_lamp_cone_points_down_and_leans_away_from_its_wall() -> void:
 
 
 func test_the_shadow_goes_to_the_four_lamps_nearest_the_board_centre() -> void:
-	var lamps := _lamp_props(_fixture())
-	var chosen := BoardgenProps.shadow_lamps(lamps, BoardgenProps.SHADOW_LAMPS)
-	assert_int(chosen.size()).is_equal(mini(BoardgenProps.SHADOW_LAMPS, lamps.size()))
-	var far_of_chosen := 0.0
-	for i in chosen:
-		far_of_chosen = maxf(far_of_chosen, Vector2(lamps[i]["xf"].origin.x, lamps[i]["xf"].origin.z).length())
-	for i in lamps.size():
-		if not chosen.has(i):
-			assert_float(Vector2(lamps[i]["xf"].origin.x, lamps[i]["xf"].origin.z).length()).is_greater_equal(far_of_chosen)
+	var lamps: Array = []
+	for dist in [0.9, 0.1, 0.7, 0.3, 0.5, 0.2]:   # metres off the board centre, in this (scrambled) order
+		lamps.append({"xf": Transform3D(Basis(), Vector3(dist, 0.1, 0.0))})
+	assert_array(BoardgenProps.shadow_lamps(lamps, 4)).contains_exactly_in_any_order([1, 5, 3, 4])
+	assert_array(BoardgenProps.shadow_lamps(lamps, 10)).has_size(6)   # fewer lamps than shadows: all of them
+	var real := _lamp_props(_fixture())
+	assert_int(BoardgenProps.shadow_lamps(real, BoardgenProps.SHADOW_LAMPS).size()).is_equal(mini(BoardgenProps.SHADOW_LAMPS, real.size()))
 
 
 func test_the_finer_look_shows_the_cones_with_four_shadows_and_low_keeps_the_plain_omni_lamps() -> void:
