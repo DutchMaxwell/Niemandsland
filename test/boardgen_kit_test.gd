@@ -63,3 +63,19 @@ func test_the_kit_is_for_medium_and_up_on_forward_plus_only() -> void:
 	assert_bool(BoardgenKit.wanted_for(q.LOW, false)).is_false()
 	assert_bool(BoardgenKit.wanted_for(q.PERFORMANCE, false)).is_false()
 	assert_bool(BoardgenKit.wanted_for(q.MEDIUM, true)).is_false()   # the web build
+
+
+func test_a_theme_keys_its_own_manifest_cache_and_dev_folder() -> void:
+	assert_str(BoardgenKit.manifest_path_of("tiefwerk")).is_equal(BoardgenKit.BUNDLED_MANIFEST_PATH)   # the default theme did not move
+	assert_str(BoardgenKit.cache_dir_of("tiefwerk")).is_equal(BoardgenKit.CACHE_DIR)
+	assert_str(BoardgenKit.dir_env_of("tiefwerk")).is_equal(BoardgenKit.DIR_ENV)
+	assert_str(BoardgenKit.manifest_path_of("ruintown")).is_equal("res://assets/ruintown_manifest.json")
+	assert_str(BoardgenKit.cache_dir_of("ruintown")).is_equal("user://ruintown_cache")
+	_fixture("fixture_town")
+	OS.set_environment("NML_KITTHEMETEST_KIT_DIR", DIR)
+	var town: BoardgenKit = auto_free(BoardgenKit.new("kitthemetest"))
+	var deep: BoardgenKit = auto_free(BoardgenKit.new())
+	OS.unset_environment("NML_KITTHEMETEST_KIT_DIR")
+	assert_str(town.theme_id).is_equal("kitthemetest")
+	assert_bool(town.all_cached(["fixture_town"])).is_true()   # the theme's own dev folder
+	assert_str(deep.local_dir).is_not_equal(DIR)   # the other theme does not see it
