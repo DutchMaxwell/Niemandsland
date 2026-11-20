@@ -36,6 +36,8 @@ var layout_seed: int = 0
 var _material: ShaderMaterial
 var _kit: BoardgenKit
 var _tiefwerk: TiefwerkLibrary = null   # the authored surfaces (R2, on demand); the board is procedural until they are cached
+var _decals: BoardgenDecals = null
+var _layout := {}
 var _footprint := Rect2()   # the ground kept free of the table's scatter, in table-local metres: the board and all round it
 var _layout: Dictionary = {}
 
@@ -142,6 +144,7 @@ static func custom_data(b: Dictionary) -> Color:
 ## The whole board in ONE MultiMesh (one draw call, one shared procedural material) plus a collider per solid box.
 func build(layout: Dictionary) -> void:
 	layout_seed = int(layout.get("seed", 0))
+	_layout = layout
 	var body := StaticBody3D.new()
 	body.name = "Colliders"
 	body.collision_layer = GROUND_COLLISION_LAYER
@@ -195,6 +198,7 @@ func build(layout: Dictionary) -> void:
 	_footprint = Rect2(board * -0.5, board).grow(SCATTER_OFF_M)
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = "Surfaces"
+	mmi.layers |= BoardgenDecals.RENDER_LAYER   # the only mesh the board's decals project onto
 	mmi.multimesh = mm
 	_material = _make_material(layout)
 	mmi.material_override = _material
@@ -270,6 +274,8 @@ func _apply_detail() -> void:
 	var on: bool = graphics != null and detail_for(int(graphics.current_preset), RenderingServer.get_current_rendering_method() == "gl_compatibility")
 	if _material != null and graphics != null:
 		_material.set_shader_parameter("detail", 1.0 if on else 0.0)
+		if _decals != null:
+			_decals.visible = on   # no decals on Low, Performance and in the Compatibility renderer
 		if on:
 			_attach_surfaces()   # a later switch up to Medium fetches them then
 	BoardgenMood.apply(self, on)   # the dim industrial light, board-scale SSAO, the grade and the model fill come with the finer look
@@ -295,6 +301,14 @@ func _attach_surfaces() -> void:
 	if not _tiefwerk.sets_cached():
 		await _tiefwerk.ensure_sets()
 	wire_surfaces(_material, _tiefwerk)
+	if not _tiefwerk.decals_cached():
+		await _tiefwerk.ensure_decals()
+	if is_inside_tree() and _decals == null and _tiefwerk.decals_cached():
+		_decals = BoardgenDecals.new()
+		_decals.name = "Decals"
+		_decals.build(_layout, _tiefwerk)
+		add_child(_decals)
+		_apply_detail()
 
 
 ## Hands the cached sets to the board shader and switches them on; false (and the shader stays procedural) while any texture is missing.
