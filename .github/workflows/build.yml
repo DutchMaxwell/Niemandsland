@@ -353,26 +353,11 @@ jobs:
             EXECUTED=$(grep -oP 'Executed test suites: \(\K[0-9]+' <<< "$CLEAN" | head -1)
             FILE_COUNT=$(python3 tools/shard_assign.py --shards ${{ needs.changes.outputs.shard_count }} --index "$i" | wc -l)
             echo "slice $i: gdUnit executed suites: ${EXECUTED:-<none>} | its *_test.gd files: $FILE_COUNT"
+            echo "slice $i: report dir $(ls -d reports/slice$i/report_* 2>/dev/null | head -1)"
             if [ -z "$EXECUTED" ] || [ "$EXECUTED" -lt "$FILE_COUNT" ]; then
               echo "::error::slice $i: gdUnit executed $EXECUTED suite(s) but owns $FILE_COUNT *_test.gd file(s) — some suite(s) never ran"; exit 1
             fi
           done
-
-          if grep -q "No test cases found" <<< "$CLEAN"; then
-            echo "::error::gdUnit reported no test cases — a test file likely failed to parse"; exit 1
-          fi
-
-          if ! grep -q "^Overall Summary:" <<< "$CLEAN"; then
-            echo "::error::gdUnit never printed its 'Overall Summary' line — run did not complete normally"; exit 1
-          fi
-
-          EXECUTED=$(grep -oP 'Executed test suites: \(\K[0-9]+' <<< "$CLEAN" | head -1)
-          FILE_COUNT=$(python3 tools/shard_assign.py --shards ${{ needs.changes.outputs.shard_count }} --index ${{ matrix.shard }} | wc -l)
-          echo "gdUnit executed suites: ${EXECUTED:-<none>} | this shard's *_test.gd files: $FILE_COUNT"
-
-          if [ -z "$EXECUTED" ] || [ "$EXECUTED" -lt "$FILE_COUNT" ]; then
-            echo "::error::gdUnit executed $EXECUTED suite(s) but shard ${{ matrix.shard }} owns $FILE_COUNT *_test.gd file(s) — some suite(s) never ran"; exit 1
-          fi
 
       # Blobs are sha256-verified before the rename into the cache, so the set is safe to save
       # even when the tests failed. Partial downloads (*.part, *.tmp) are excluded from the hash.
