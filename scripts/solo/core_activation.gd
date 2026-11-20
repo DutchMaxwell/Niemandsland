@@ -492,7 +492,7 @@ static func _cast_spell_of(transcript: Array, owner_key: String) -> String:
 ## volley's stage opens then: the table's casts run in their own stages before it).
 static func cast_context(main, report: Dictionary, volley: Callable = Callable()) -> Dictionary:
 	var before: Dictionary = main._solo_act_flags if not main._solo_act_flags.is_empty() else main._solo_unit_flags()
-	return {"casts": report.get("casts", []), "next": 0, "cur": {}, "began": false, "ended": false, "landed": {},
+	return {"report": report, "casts": report.get("casts", []), "next": 0, "cur": {}, "began": false, "ended": false, "landed": {},
 		"before": before, "volley": volley, "volley_open": false, "pre_due": false}
 
 
@@ -508,6 +508,7 @@ static func _cast_line(main, unit: GameUnit, cx: Dictionary, line: Dictionary) -
 	var text := str(line["text"])
 	if bool(cx["began"]) and text.begins_with("%s fires" % unit.get_name()):
 		await _cast_finish(main, cx)
+		main._solo_flush_volley_note(cx["report"])   # the table's order: casts, the volley's note, then its first line
 		_cast_open_volley(cx)
 		cx["pre_due"] = true   # the casts' casualties of this very step land after its lines: `drive` writes the `pre` block then
 		return
