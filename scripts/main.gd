@@ -5058,8 +5058,10 @@ func _solo_log_no_volley(unit: GameUnit, report: Dictionary, why: String) -> voi
 func _solo_ai_casts(unit: GameUnit, report: Dictionary, core_takes: bool) -> void:
 	if (report.get("casts", []) as Array).is_empty():
 		return
+	CoreActivation.cast_seen += 1
 	if core_takes and CoreActivation.cast_door_enabled():
 		if CoreActivation.probe_casts(self, unit, report):
+			CoreActivation.cast_taken += 1
 			report["cast_door"] = true
 			return
 		await _solo_pay_dangerous(unit, report)
@@ -5082,6 +5084,7 @@ func _solo_ai_core_call(unit: GameUnit, report: Dictionary, target: GameUnit, sh
 		return true
 	await _solo_pay_dangerous(unit, report)
 	if report.erase("cast_door"):   # CC-13a: the core refused before any die: the casts the probe left to it, after the test, in the table's order
+		CoreActivation.cast_fallbacks += 1
 		await _solo_resolve_ai_casts(report)
 	return false
 

@@ -332,6 +332,34 @@ func test_a_core_call_that_cannot_run_leaves_the_casts_to_the_table() -> void:
 		assert_bool(bool(body["takes"]) and not bool(body["marked"])).is_true()
 
 
+## CC-15 prep: the door's census for the soak. Casting activations seen at the body's cast slot, the probe's takes, its refusals (with
+## the core's reason) and the marked activations whose core call could not run, all in the census file the soak reads.
+func test_the_door_counts_what_it_takes_refuses_and_falls_back_for_the_soak() -> void:
+	CoreActivation._cast_env = 1
+	CoreActivation.cast_seen = 0
+	CoreActivation.cast_taken = 0
+	CoreActivation.cast_fallbacks = 0
+	CoreActivation.cast_probe_refusals = 0
+	CoreActivation.cast_probe_reasons = []
+	await _run(TERROR_SEEKER, 0, "body")   # taken
+	await _run(UNKNOWN_BOLT, 0, "body")   # refused by the probe before any die
+	await _run(TERROR_SEEKER, 0, "body", {"no_core_call": true})   # taken, the core call cannot run: the table casts after all
+	CoreActivation._cast_env = 0
+	await _run(TERROR_SEEKER, 0, "body")   # the switch is off: seen, not asked
+	var path := ProjectSettings.globalize_path("user://cc15_census.json")
+	var saved := OS.get_environment("NML_TABLE_CENSUS")
+	OS.set_environment("NML_TABLE_CENSUS", path)
+	CoreActivation.dump_legacy()
+	OS.set_environment("NML_TABLE_CENSUS", saved)
+	var door: Dictionary = (JSON.parse_string(FileAccess.get_file_as_string(path)) as Dictionary).get("cast_door", {})
+	assert_int(int(door.get("seen", -1))).is_equal(4)
+	assert_int(int(door.get("taken", -1))).is_equal(2)
+	assert_int(int(door.get("fallbacks", -1))).is_equal(1)
+	assert_int(int(door.get("probe_refusals", -1))).is_equal(1)
+	assert_int((door.get("reasons", []) as Array).size()).is_equal(1)
+	assert_str(str((door["reasons"] as Array)[0])).contains("has no spell named")
+
+
 ## CC-13a: the cast predicate: a unit (or a joined hero) that carries a table-only pre-attack beat (Mend here) stays on the table
 ## even with the switch ON; a plain caster is taken.
 func test_a_unit_with_a_pre_attack_beat_stays_on_the_table() -> void:

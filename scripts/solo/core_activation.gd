@@ -840,7 +840,9 @@ static func dump_legacy() -> void:
 	var path := OS.get_environment("NML_TABLE_CENSUS")
 	var f := FileAccess.open(path, FileAccess.WRITE) if path != "" else null
 	if f != null:
-		var out := {"legacy": legacy, "legacy_sets": legacy_sets, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals}
+		var out := {"legacy": legacy, "legacy_sets": legacy_sets, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals,
+			"cast_door": {"seen": cast_seen, "taken": cast_taken, "fallbacks": cast_fallbacks, "probe_refusals": cast_probe_refusals,
+			"reasons": cast_probe_reasons.slice(0, 40)}}
 		if not CoreShadow.records.is_empty():
 			out["shadow"] = CoreShadow.records   # C-4: the shadow run's volleys (NML_CORE_SHADOW=1)
 		if not CoreShadow.melee_records.is_empty():
@@ -1091,6 +1093,12 @@ static func cast_chain_clear(unit: GameUnit) -> bool:
 ## CC-13a: the casts a probe refused (named reasons, before any die) and how many: what the AI smoke reads.
 static var cast_probe_refusals := 0
 static var cast_probe_reasons: Array = []
+## CC-15 prep: the cast door's census for the soak (`dump_legacy`, key "cast_door"): casting activations that reached the body's cast
+## slot (`cast_seen`), the probe's takes (`cast_taken`), and the marked ones whose core call could not run, so the table cast after all
+## (`cast_fallbacks`, the late-lines case: the volley's own pre-lines print before the table's casts).
+static var cast_seen := 0
+static var cast_taken := 0
+static var cast_fallbacks := 0
 
 
 ## CC-13a: the dry probe at the body's cast slot: the activation's placement, intent and cast inputs, no faces. The core checks every
