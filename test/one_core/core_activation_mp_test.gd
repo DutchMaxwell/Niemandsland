@@ -252,6 +252,83 @@ func test_an_ai_volley_through_the_core_announces_one_check_in_a_room_and_none_i
 		_main.opr_army_manager.game_units.erase(foe.unit_id)
 
 
+## ---- CC-13c: the cast door's digest check names the casts' targets and token payers ----
+
+const MYSTIC := {"key": "my", "player": 2, "name": "Mystic", "models": 1, "quality": 4, "defense": 4, "tough": 1,
+	"x_in": 0.0, "z_step_in": 1.2, "base_radius_in": 0.63, "game_system": "gf", "faction_folder": "alien_hives", "rules": ["Caster"]}
+const HELPER := {"key": "hp", "player": 2, "name": "Helper", "models": 1, "quality": 4, "defense": 4, "tough": 1,
+	"x_in": -4.0, "z_step_in": 1.2, "base_radius_in": 0.63, "game_system": "gf", "faction_folder": "alien_hives", "rules": ["Caster"]}
+const FOE := {"key": "foe", "player": 1, "name": "Foe", "models": 6, "quality": 4, "defense": 4, "tough": 1,
+	"x_in": 8.0, "z_step_in": 1.3, "base_radius_in": 0.63, "game_system": "gf", "faction_folder": "alien_hives", "rules": []}
+const STAFF := {"name": "Staff", "range_in": 0, "attacks": 1, "count": 1, "rules": []}
+const PSYCHIC_BLAST := {"name": "Psychic Blast", "threshold": 1, "range_in": 18,
+	"target": {"side": "enemy", "count": 1, "kind": "unit"},
+	"effect": {"kind": "damage", "hits": 6, "weapon_rules": ["AP(2)"]}}
+
+
+## `cast_touched`: every cast's targets and the units that paid its boost / interference, each once, in plan order; a report
+## without casts touches nothing. Pure.
+func test_cast_touched_is_the_targets_then_the_payers_each_once() -> void:
+	var a := _plain(2, "Mystic", 0.0)
+	var b := _plain(1, "Foe", 8.0)
+	var c := _plain(2, "Helper", 2.0)
+	var d := _plain(1, "Warden", 12.0)
+	var report := {"casts": [
+		{"targets": [b], "boost_sources": [{"unit": c, "tokens": 1}], "interference_sources": [{"unit": d, "tokens": 2}]},
+		{"targets": [b, a], "boost_sources": [{"unit": c, "tokens": 1}], "interference_sources": []}]}
+	assert_array(CoreActivation.cast_touched(report)).contains_exactly([b, c, d, a])
+	assert_array(CoreActivation.cast_touched({})).is_empty()
+	assert_array(CoreActivation.touched_units(_main, a, b, [c, b])).contains_exactly([a, b, c])
+
+
+## A cast-only activation (no volley) the core resolved announces ONE check that names the caster, the cast's target and the
+## unit that paid the boost; a wound only the receiver's table differs by on the cast target is then a mismatch (RED without
+## the cast units in the check: the foe is not in it and the planted difference is invisible), an equal table stays silent.
+func test_a_core_cast_announces_its_target_and_payer_and_a_planted_target_difference_is_seen() -> void:
+	_room(true, RulesAutomation.Level.AUTOMATIC, {2: true})
+	_main._solo_auto_saves = true
+	var caster := ParityTable._make_unit(_main, MYSTIC, STAFF)
+	var helper := ParityTable._make_unit(_main, HELPER, STAFF)
+	var foe := ParityTable._make_unit(_main, FOE, {})
+	var cast := {"caster": caster, "caster_unit": caster, "name": "Psychic Blast", "spell": PSYCHIC_BLAST, "targets": [foe],
+		"boost": 1, "interference": 0, "base_target": 4, "threshold": 1, "owner_label": "AI (Mystic)", "interference_open": false,
+		"boost_sources": [{"unit": helper, "tokens": 1}], "interference_sources": [], "conduit": null, "conduit_shaken": [], "pools": []}
+	var report := {"action": AiDecision.Action.HOLD, "moved": false, "casts": [cast], "cast_door": true}
+	_main._solo_spell_tokens_active.clear()
+	caster.casts_current = 3
+	helper.casts_current = 2
+	var h := CoreActivation.capture(_main)   # the tokens BEFORE the plan's spend: the core pays them itself
+	caster.spend_caster_points(1)
+	helper.spend_caster_points(1)
+	_main._solo_act_flags = _main._solo_unit_flags()
+	_main.seed_tray_rng(3)
+	var took: bool = await CoreActivation.run_ai(_main, caster, report, null, h, [], true)
+	_main.solo_controller._core_node_ready().release(h)
+	assert_bool(took).override_failure_message("the core did not take the cast activation").is_true()
+	var checks := _frames("activation_check")
+	assert_int(checks.size()).override_failure_message("frames: %s" % [_names()]).is_equal(1)
+	if checks.is_empty():
+		return
+	var check: Dictionary = checks[0]["p"]
+	assert_array(check["units"]).is_equal([caster.unit_id, foe.unit_id, helper.unit_id])
+	var touched := [caster, foe, helper]
+	assert_str(str(check["digest"])).is_equal(CoreActivation.digest(touched))
+	_net.wire.clear()
+	var ok_before := CoreActivation.checks_ok
+	_receive(check)
+	assert_array(_quiet_wire()).override_failure_message("an equal table answered: %s" % [_names()]).is_empty()
+	assert_int(CoreActivation.checks_ok).is_equal(ok_before + 1)
+	var m: ModelInstance = foe.models[0]
+	var kept := m.wounds_current
+	m.wounds_current = kept + 1   # the other table's copy of the cast target differs by one wound
+	_receive(check)
+	m.wounds_current = kept
+	assert_array(_names()).override_failure_message("the planted target difference went unseen: %s" % [_names()]).contains_exactly(["activation_mismatch"])
+	_main._solo_spell_tokens_active.clear()
+	for gu in touched:
+		_main._solo_spell_mods.erase((gu as GameUnit).get_instance_id())
+
+
 ## ---- Step 51: the receiver ----
 
 const SENDER_PEER := 7
