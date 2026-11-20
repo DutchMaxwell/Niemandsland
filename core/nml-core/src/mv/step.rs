@@ -27,7 +27,7 @@ use crate::state::State;
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
 use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_74_CLIMB_COST, EPOCH_8_PLANNER_MENU, EPOCH_73_V36, EPOCH_77_CHARGE_CAP,
-    EPOCH_78_FLIER_CUT, PENDING_EPOCH_DANGER_AVOID, PENDING_EPOCH_MELEE_GMC2};
+    EPOCH_78_FLIER_CUT, EPOCH_92_MELEE_CAUSES, PENDING_EPOCH_DANGER_AVOID};
 
 use super::cost::{ledge_cost, trim_polyline_priced, CellSet, Grid, Ledge, Wall, Zone};
 use super::entry::plan_unit_step_call;
@@ -1292,10 +1292,10 @@ fn execute_from(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64],
         .enumerate()
         .map(|(i, m)| {
             let p = planned.get(i).copied().unwrap_or_else(|| t.to_inch(pos_of(state, *m)));
-            // DS-GMC2 (`PENDING_EPOCH_MELEE_GMC2`, table twin `_plan_positions`): moved endpoints use the same
+            // DS-GMC2 (`EPOCH_92_MELEE_CAUSES`, table twin `_plan_positions`): moved endpoints use the same
             // `to_world_f32` multiply-then-subtract as every intermediate step and the table (avoiding 1-ULP `from_inch`
             // drift that flips exact contact/separation tie-breaks); unmoved (`!stirred`) models keep `self.pos[i]`.
-            let w = if rule_on(self.rules_epoch, PENDING_EPOCH_MELEE_GMC2) {
+            let w = if rule_on(self.rules_epoch, EPOCH_92_MELEE_CAUSES) {
                 if !stirred {
                     self.pos[i]
                 } else {
@@ -2795,12 +2795,12 @@ pub(crate) mod tests {
         assert!(arc > 7.9 && arc <= budget + 0.03, "arc {arc:.2} of {budget:.1}");
     }
 
-    /// DS-GMC2 Cause 1 (`PENDING_EPOCH_MELEE_GMC2`): `Move::execute` converts moved endpoints via `to_world_f32`
+    /// DS-GMC2 Cause 1 (`EPOCH_92_MELEE_CAUSES`): `Move::execute` converts moved endpoints via `to_world_f32`
     /// (matching `SoloController._plan_positions`), eliminating the 1-ULP `from_inch` drift that flips exact
     /// base-contact/separation tie-breaks on Versatile Reach and Fast, while keeping `!stirred` models verbatim
-    /// and preserving legacy `from_inch` below the epoch gate.
+    /// and preserving legacy `from_inch` below the epoch gate (91).
     #[test]
-    fn pending_epoch_gmc2_endpoints_match_to_world_f32_and_legacy_stays_frozen() {
+    fn epoch_92_endpoints_match_to_world_f32_and_91_stays_frozen() {
         let t = board(vec![]);
         let r = 0.63 * IN2M;
         let att: Vec<V3> = (0..5).map(|i| [0.0, 0.0, (i as f64 * 1.3 * IN2M) as f32]).collect();
@@ -2811,8 +2811,8 @@ pub(crate) mod tests {
                 .charge_move(&state, &t, 0, 1, 14.0, false, true, crate::mv::FAST_PLANNER_GUARD)
                 .expect("charge lands")
         };
-        let old = run(crate::acts::CURRENT_RULES_EPOCH);
-        let new = run(PENDING_EPOCH_MELEE_GMC2);
+        let old = run(crate::acts::EPOCH_91_JOINED_HERO_FATIGUE);
+        let new = run(EPOCH_92_MELEE_CAUSES);
         let mut ulp_fixed = 0usize;
         for (i, tr) in new.trails.iter().enumerate() {
             let p = *tr.last().expect("trail end");
@@ -2825,10 +2825,10 @@ pub(crate) mod tests {
             }
         }
         assert!(ulp_fixed > 0, "fixture must exercise at least one 1-ULP from_inch vs to_world_f32 difference");
-        // Unmoved (!stirred) coherent unit keeps exact original world positions at PENDING_EPOCH_MELEE_GMC2.
+        // Unmoved (!stirred) coherent unit keeps exact original world positions at EPOCH_92_MELEE_CAUSES.
         let stay_pos = vec![vec![[0.0, 0.0, 0.0], [(1.5 * IN2M) as f32, 0.0, 0.0], [(3.0 * IN2M) as f32, 0.0, 0.0]]];
         let stay_st = units_state(stay_pos, vec![vec![0.5 * IN2M; 3]], vec![vec![]]);
-        let stay = stay_put(PENDING_EPOCH_MELEE_GMC2, &stay_st, &t);
+        let stay = stay_put(EPOCH_92_MELEE_CAUSES, &stay_st, &t);
         for i in 0..3 {
             assert_eq!(stay.end[i], pos_of(&stay_st, Mover { unit: 0, model: i }), "unmoved model {i} drifted");
         }

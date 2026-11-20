@@ -231,19 +231,19 @@ mod charge_step {
             shot.rolls.len(), rep_st.positions[0]);
     }
 
-    /// DS-GMC2 Cause 3 (`PENDING_EPOCH_MELEE_GMC2`, Melee Shrouding GF v3.5.3): `resolve_with` applies
-    /// `gate::melee_shroud_charge_in` to `band_in` on CHARGE behind `PENDING_EPOCH_MELEE_GMC2`. At 11.8"
-    /// (edge gap 10.54"): shrouded 10" band falls short (0 rolls, ends ~0.54" away), while legacy epoch 90 keeps
+    /// DS-GMC2 Cause 3 (`EPOCH_92_MELEE_CAUSES`, Melee Shrouding GF v3.5.3): `resolve_with` applies
+    /// `gate::melee_shroud_charge_in` to `band_in` on CHARGE behind `EPOCH_92_MELEE_CAUSES`. At 11.8"
+    /// (edge gap 10.54"): shrouded 10" band falls short (0 rolls, ends ~0.54" away), while epoch 91 keeps
     /// the unshrouded 12" band so recorded corpora stay byte-exact.
     #[test]
-    fn melee_shrouding_shortens_charge_band_behind_pending_epoch_gmc2() {
+    fn melee_shrouding_shortens_charge_band_from_epoch_92() {
         let (st, statics) = row_scene(11.8, "battle_brothers", (6.0, 12.0), &[], Some([2.0, 6.0]));
         let board = clear_board();
-        let legacy = seams();
+        let legacy = Seams { rules_epoch: crate::acts::EPOCH_91_JOINED_HERO_FATIGUE, ..seams() };
         let (_, legacy_rolls) = run_stepped_charge(&st, &statics, &board, legacy, 0);
-        assert!(legacy_rolls > 0, "epoch 90 must keep unshrouded 12\" band for recorded games");
+        assert!(legacy_rolls > 0, "epoch 91 must keep unshrouded 12\" band for recorded games");
 
-        let gmc2 = Seams { rules_epoch: crate::acts::PENDING_EPOCH_MELEE_GMC2, ..seams() };
+        let gmc2 = Seams { rules_epoch: crate::acts::EPOCH_92_MELEE_CAUSES, ..seams() };
         let (end, shrouded_rolls) = run_stepped_charge(&st, &statics, &board, gmc2, 0);
         assert_eq!(shrouded_rolls, 0, "Melee Shrouding (-2\" -> 10\" band) must fall short at 10.54\" edge gap");
         let rem_gap = crate::geom::edge_gap_in(&end.positions[0], &end.radii[0], &end.positions[1], &end.radii[1], crate::menu::DEFAULT_BASE_RADIUS_M);
@@ -252,12 +252,12 @@ mod charge_step {
 
     /// End-to-end verification of all 4 DS-GMC2 "charge reach" matrix cells against the exact Godot table endpoints
     /// captured from `melee_matrix_cli.gd` (Melee Shrouding TU gap=10.8 seed 0, Versatile Reach CU gap=14.0 seed 8,
-    /// Fast CU gap=15.0 seed 0, Slow CU gap=8.3 seed 0) at `PENDING_EPOCH_MELEE_GMC2`.
+    /// Fast CU gap=15.0 seed 0, Slow CU gap=8.3 seed 0) at `EPOCH_92_MELEE_CAUSES`.
     #[test]
     fn gmc2_all_four_charge_reach_cells_match_table_endpoints() {
         let board = clear_board();
         let gmc2 = Seams {
-            rules_epoch: crate::acts::PENDING_EPOCH_MELEE_GMC2,
+            rules_epoch: crate::acts::EPOCH_92_MELEE_CAUSES,
             bands_prefolded: true,
             charge_landing: true,
             melee_reach: true,
