@@ -132,10 +132,11 @@ static func on_move_path(main, gu: GameUnit) -> bool:
 	return is_core_unit(main, gu)
 
 
-## A core handle for the board as it stands (BattleSim.capture, plain form, gate reads); 0 on failure. The first
+## A core handle for the board as it stands (BattleSim.capture, plain form, gate reads); 0 on failure. `ai`: the AI activation's board, whose table once-records
+## the landing compares against later (`land_late_once_records`). The first
 ## capture of a game sends the game header, exactly as the AI's `_core_plan` does (one header per game, shared with it),
 ## so every step runs at the game's rules epoch, not at epoch 0.
-static func capture(main) -> int:
+static func capture(main, ai := false) -> int:
 	var sc: SoloController = main.solo_controller
 	var core: Object = sc._core_node_ready() if sc != null else null
 	if core == null:
@@ -157,7 +158,8 @@ static func capture(main) -> int:
 	_stamp_spent_ignore_feats(state, plain)
 	_stamp_step_ledger(state, plain, sc)
 	var h := int(core.capture_plain(plain))
-	_once_seen = {"h": h, "mods": _once_sigs(main)}   # what the core's board holds of the table's once-records (`land_late_once_records`)
+	if ai:   # the AI activation's own board (main's activation start): the shadow's capture of the same moment must not replace it
+		_once_seen = {"h": h, "mods": _once_sigs(main)}   # what the core's board holds of the table's once-records (`land_late_once_records`)
 	return h
 
 

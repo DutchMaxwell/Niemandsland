@@ -1148,7 +1148,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	var peek: GameUnit = solo_controller.peek_next_ai_unit()
 	await begin_activation(peek)
 	# One-core P3 step 42 (flag on): a plain unit's board BEFORE its move, for the core's volley (_run_ai_shooting).
-	_solo_core_ai_h = CoreActivation.capture(self) \
+	_solo_core_ai_h = CoreActivation.capture(self, true) \
 		if peek != null and CoreActivation.applies(self) and CoreActivation.is_plain(peek) else 0
 	_solo_core_shadow_h = CoreShadow.capture(self, peek)   # C-3: 0 unless NML_CORE_SHADOW=1 (counting only)
 	# P4.0-7 (D5): the AI's activation-start snapshot for a save taken mid-volley (the body's end clears it).

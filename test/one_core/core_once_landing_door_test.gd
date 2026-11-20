@@ -49,6 +49,7 @@ func before_test() -> void:
 func after_test() -> void:
 	CoreActivation._env = 1
 	CoreActivation.land_late_once = true
+	CoreShadow._env = -1
 	CoreSlice.path_override = ""
 	CoreSlice.reset_cache()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SLICE))
@@ -168,3 +169,13 @@ func test_without_the_landing_the_record_goes_stale() -> void:
 	assert_array(_mods(off)["Def"]).is_empty()
 	assert_array(_consumed(on)).is_empty()
 	assert_int(_consumed(off).size()).is_equal(1)
+
+
+## The shadow (`NML_CORE_SHADOW=1`) captures the same moment a second time through `CoreActivation.capture`: its board must not replace the AI activation's snapshot.
+func test_the_landing_holds_with_the_shadow_capture_on() -> void:
+	CoreShadow._env = 1
+	var on := await _probe("gf", "custodian_brothers", "Shred Mark", 0, 7.0, ["Caster(2)"], 3.0, true)
+	var off := await _probe("gf", "custodian_brothers", "Shred Mark", 0, 7.0, ["Caster(2)"], 3.0, false)
+	assert_int(int(on["ran"])).is_equal(1)
+	assert_dict(_mods(on)).is_equal(_mods(off))
+	assert_int(_consumed(on).size()).is_equal(1)
