@@ -369,7 +369,7 @@ void fragment() {
 	// moss band 0.3 in high at the foot of every wall face; soot under the eaves of an intact house; a ragged, course-stepped dark line at the top of a ruined tier. Box faces only (a
 	// roof prism or a lantern has no box).
 	vec3 fa = abs(wnrm);
-	bool boxed = k != 15 && k != 17 && (fa.x > 0.85 || fa.y > 0.85 || fa.z > 0.85) && box_in.x > 0.0;
+	bool boxed = k != 15 && k != 17 && (fa.x > 0.85 || fa.y > 0.85 || fa.z > 0.85) && box_in.x > 0.0 && box_in.y > 0.5;   // a thin film (the ground skin, a pool) has no chipped edge: its 0.06 in rim read as a dashed pale line
 	if (boxed) {
 		vec3 e = box_in * 0.5 - abs(lpos);
 		float d_top = e.y - 0.0 + (lpos.y > 0.0 ? 0.0 : 1000.0);   // the distance below the box's top (1000 for a point in its lower half)

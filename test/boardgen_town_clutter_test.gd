@@ -133,3 +133,10 @@ func test_the_landmark_modules_stand_inside_their_footprints() -> void:
 		var p := Vector2(item["xf"].origin.x, item["xf"].origin.z) / 0.0254 - origin
 		assert_bool(p.x >= 9 * cell - 0.001 and p.x <= 11 * cell + 0.001 and p.y >= 11 * cell - 0.001 and p.y <= 13 * cell + 0.001).override_failure_message("a kerb run off its pool: %s" % p).is_true()
 	assert_float(plan["statue_stump"][0]["xf"].origin.y).is_equal_approx(1.57 * 0.0254, 0.0001)   # on top of the plinth
+
+
+## The pond kerb is tinted down through the kit's own per-module instance colour (not a shader hack): a pale run read as a dashed white line round the water from above.
+func test_the_pool_kerb_is_a_weathered_stone_tint_not_a_white_run() -> void:
+	var tint: Color = BoardgenTownKit.MODULE_TINT["pool_kerb"]
+	assert_float(tint.get_luminance()).is_less(0.65)
+	assert_float(tint.get_luminance()).is_greater(0.3)   # darker, not black

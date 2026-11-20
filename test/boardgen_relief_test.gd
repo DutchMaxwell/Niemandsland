@@ -77,3 +77,9 @@ func test_standing_water_is_teal_with_a_sheen_and_ripples_not_a_black_mirror() -
 	assert_bool(src.contains("alb = vec3(0.05, 0.11, 0.13) * mix(0.7, 1.3, swirl);")).is_true()
 	assert_bool(src.contains("emis += vec3(0.02, 0.045, 0.07)")).override_failure_message("no sheen: the water mirrors a black sky").is_true()
 	assert_bool(src.contains("rough = 0.12;")).is_false()
+
+
+## The R3 chips are for solid boxes: the thin pool film and the ground skin have no chipped edge (the dashed pale line round the pond from above was exactly that rim).
+func test_thin_films_get_no_chipped_edge() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	assert_bool(src.contains("box_in.x > 0.0 && box_in.y > 0.5;")).override_failure_message("a thin box would get chips on its rim").is_true()
