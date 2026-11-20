@@ -83,6 +83,19 @@ use crate::logline::Category;
         assert!(lines_before_the_die(2, 2, "", true, 6).is_empty());
     }
 
+    /// A Shaken unit fails its test without a die and the table says so before the outcome (`_solo_morale_test`'s "is already Shaken" line).
+    /// RED on main: the outcome line stood alone.
+    #[test]
+    fn a_shaken_unit_says_it_fails_its_test_without_a_die() {
+        let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact: true, ..Seams::default() };
+        let (mut st, mut statics) = att_def(5, 1);
+        (statics[2].model_count, statics[2].ctx.quality, st.shaken[2]) = (10, 4, true);
+        let mut tray = Tray::supplied(vec![]);
+        tray_morale_for(&mut st, &statics, 2, false, true, None, seams, &mut tray, &mut ShootResult::default(), None, None);
+        let said: Vec<_> = tray.all_lines().into_iter().map(|l| l.text).collect();
+        assert_eq!(said, ["Def is already Shaken — automatically fails morale ({cite})", "Def fails morale — Shaken"]);
+    }
+
     /// A rule-forced test takes the Banner share back out (rules 3.6): the bonus the line names is what is left, so a
     /// plain Banner on a Dangerous-terrain test says no line (the table's `morale_bonus > 0` guard), the rating stays.
     #[test]

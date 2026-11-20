@@ -21,7 +21,7 @@ static var _meshes: Dictionary = {}   # cached file PATH -> parsed Mesh, shared 
 static var _material: StandardMaterial3D
 
 
-func _ready() -> void:
+func _init() -> void:   # (not _ready: a board builds before it is in the tree)
 	_downloader = AssetDownloadManager.new()
 	_downloader.name = "TiefwerkKitDownloads"
 	_downloader.cache_dir = CACHE_DIR
@@ -53,12 +53,45 @@ func cached_path(module: String) -> String:
 	return _downloader.cache_path(sha) if not sha.is_empty() and _downloader.is_cached(sha) else ""
 
 
+## The kit is for Medium and up on the Forward+ renderer: Performance / Low and the web build (Compatibility) keep the procedural look and cost.
+static func wanted_for(preset: int, compatibility: bool) -> bool:
+	return preset >= GraphicsSettings.QualityPreset.MEDIUM and not compatibility
+
+
+## True when the kit is wanted by the current preset / renderer AND every module of `names` is cached: the callers' one question.
+func usable(names: Array) -> bool:
+	var tree := Engine.get_main_loop() as SceneTree
+	var graphics: Node = tree.root.get_node_or_null("GraphicsSettings") if tree != null else null
+	var preset := int(graphics.current_preset) if graphics != null else GraphicsSettings.QualityPreset.MEDIUM
+	return wanted_for(preset, RenderingServer.get_current_rendering_method() == "gl_compatibility") and all_cached(names)
+
+
 func all_cached(names: Array) -> bool:
 	return names.all(func(n: String) -> bool: return not cached_path(n).is_empty())
 
 
+## One MultiMeshInstance3D named `node_name` under `parent` that draws `mesh` once per {xf, colour} item. A mesh that casts shadows is drawn
+## again in every shadow cascade: small thin modules leave it off (the draw-call budget of the board).
+static func add_multimesh(parent: Node3D, node_name: String, mesh: Mesh, items: Array, cast_shadows := true) -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = mesh
+	mm.instance_count = items.size()
+	for i in items.size():
+		mm.set_instance_transform(i, items[i]["xf"])
+		mm.set_instance_color(i, items[i]["colour"])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = node_name
+	mmi.multimesh = mm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if cast_shadows else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mmi)
+
+
 ## Downloads the missing modules among `names` (awaitable); emits prefetched(true) when every one is cached afterwards.
 func prefetch(names: Array) -> void:
+	if not is_inside_tree():
+		return
 	var todo: Array = []
 	for n: String in names:
 		var e: Dictionary = _modules.get(n, {})
