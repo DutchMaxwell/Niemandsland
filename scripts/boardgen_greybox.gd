@@ -11,6 +11,8 @@ extends Node3D
 ## land on the tiers.
 
 const ENV_SEED := "NML_BOARDGEN_SEED"
+## NML_BOARDGEN_THEME=ruintown picks the ruined-town board for the seed above; unset = the original board.
+const ENV_THEME := "NML_BOARDGEN_THEME"
 ## setup_table (load, resize) frees the table's other children; this group keeps the board.
 const TABLE_OVERLAY_GROUP := "table_overlay"
 ## The table's ground scatter (tufts, leaves, straw) is off on the board AND round it, whatever the table size: no biome dressing
@@ -33,6 +35,7 @@ const KINDS := ["ground", "street", "hazard", "tier1", "tier2", "ladder", "tier3
 const SHADER := preload("res://shaders/tiefwerk_board.gdshader")
 
 var layout_seed: int = 0
+var layout_theme := "Deepworks"   # the layout's own `theme` key; a Deepworks layout has none
 var _material: ShaderMaterial
 var _kit: BoardgenKit
 var _footprint := Rect2()   # the ground kept free of the table's scatter, in table-local metres: the board and all round it
@@ -48,7 +51,18 @@ static func attach_from_env(table: Node) -> BoardgenGreybox:
 	if not core.has_method("boardgen_layout"):
 		push_error("BoardgenGreybox: this NmlCore has no boardgen_layout")
 		return null
-	return attach(table, core.boardgen_layout(int(raw)))
+	var theme := theme_from_env()
+	if theme.is_empty():
+		return attach(table, core.boardgen_layout(int(raw)))
+	if not core.has_method("boardgen_layout_themed"):
+		push_error("BoardgenGreybox: this NmlCore has no boardgen_layout_themed")
+		return null
+	return attach(table, core.boardgen_layout_themed(int(raw), theme))
+
+
+## The theme id the dev flag asks for, trimmed and lower-cased; "" = not set (the original board).
+static func theme_from_env() -> String:
+	return OS.get_environment(ENV_THEME).strip_edges().to_lower()
 
 
 static func attach(table: Node, layout: Dictionary) -> BoardgenGreybox:
@@ -141,6 +155,7 @@ static func custom_data(b: Dictionary) -> Color:
 ## The whole board in ONE MultiMesh (one draw call, one shared procedural material) plus a collider per solid box.
 func build(layout: Dictionary) -> void:
 	layout_seed = int(layout.get("seed", 0))
+	layout_theme = str(layout.get("theme", "Deepworks"))
 	var body := StaticBody3D.new()
 	body.name = "Colliders"
 	body.collision_layer = GROUND_COLLISION_LAYER

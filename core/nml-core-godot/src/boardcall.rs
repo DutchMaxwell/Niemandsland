@@ -1,18 +1,28 @@
 //! `NmlCore.boardgen_layout`: the seeded 48 x 48 in heightfield board (`nml_core::boardgen`) as plain data.
 //! Pure Rust (a `serde_json::Value`), so `cargo test` covers it without an engine; `lib.rs` only converts the
 //! value to a `VarDictionary`.
-use nml_core::boardgen::{self, Symmetry, CELL_IN, LEVEL_IN};
+use nml_core::boardgen::{self, Symmetry, Theme, CELL_IN, LEVEL_IN};
 use serde_json::{json, Value};
 
 /// The layout's own JSON plus what a reader should not recompute: `level_in` (inches for level 0/1/2/3), `problems`
 /// (what the accepted-board check still finds; empty = accepted) and, per connector, its cell coordinates and the
 /// midpoint of the edge it crosses in board inches (origin at the board corner, x right, z down).
-pub fn layout_value(seed: i64) -> Value {
-    let layout = boardgen::generate(seed, Symmetry::Point180);
+pub fn layout_value(seed: i64) -> Value { layout_value_themed(seed, "") }
+
+/// The theme a flag value names: `ruintown`, `deepworks` or empty (= the original board), case-insensitive; anything else is unknown.
+fn theme_of(id: &str) -> Option<Theme> {
+    match id.trim().to_ascii_lowercase().as_str() { "" | "deepworks" => Some(Theme::Deepworks), "ruintown" => Some(Theme::RuinTown), _ => None }
+}
+
+/// [`layout_value`] for a theme. A town layout names itself (`theme`: "RuinTown"); a Deepworks layout carries no `theme` key, so it is
+/// byte-identical to the one before themes. An unknown theme id gives the Deepworks board and an extra `problems` entry.
+pub fn layout_value_themed(seed: i64, theme: &str) -> Value {
+    let known = theme_of(theme);
+    let layout = boardgen::generate_themed(seed, Symmetry::Point180, known.unwrap_or_default());
     let mut v = serde_json::to_value(&layout).expect("layout JSON");
     let nx = layout.nx;
     v["level_in"] = json!(LEVEL_IN);
-    v["problems"] = json!(layout.problems());
+    v["problems"] = json!(layout.problems().into_iter().chain(known.is_none().then_some("unknown theme")).collect::<Vec<_>>());
     // Each landmark also names the core terrain class of its footprint (0 = none) and whether it is solid.
     v["landmarks"] = Value::Array(layout.landmarks.iter().map(|l| { let mut o = serde_json::to_value(l).expect("landmark JSON"); o["terrain"] = json!(l.kind.terrain_class()); o["solid"] = json!(l.kind.is_solid()); o }).collect());
     v["connectors"] = Value::Array(layout.connectors.iter().map(|c| {
@@ -49,6 +59,23 @@ mod tests {
             let want = match kind { "TankCluster" | "Crane" => nml_core::terrain::CONTAINER, "Sump" => nml_core::terrain::DANGEROUS, _ => nml_core::terrain::NONE };
             assert_eq!((terrain, l["solid"].as_bool().unwrap()), (i64::from(want), matches!(kind, "TankCluster" | "Crane")), "{kind}");
         }
+    }
+
+    #[test]
+    fn a_themed_layout_names_its_theme() {
+        let town = layout_value_themed(7, "ruintown");
+        assert_eq!((town["theme"].as_str(), &town["problems"]), (Some("RuinTown"), &json!([])));
+        assert_ne!(town["cells"], layout_value(7)["cells"], "the town is another board");
+        assert_eq!(layout_value_themed(7, " RuinTown ")["cells"], town["cells"], "ids are trimmed and case-insensitive");
+        for id in ["", "deepworks"] { assert_eq!(layout_value_themed(42, id), layout_value(42)); }
+        assert!(layout_value(42).get("theme").is_none(), "a Deepworks layout has no theme key (the recorded fixture stays byte-identical)");
+    }
+
+    #[test]
+    fn an_unknown_theme_is_the_deepworks_board_with_a_problem() {
+        let (v, plain) = (layout_value_themed(42, "castle"), layout_value(42));
+        assert_eq!(v["problems"], json!(["unknown theme"]));
+        assert_eq!((&v["cells"], v.get("theme")), (&plain["cells"], None));
     }
 
     #[test]
