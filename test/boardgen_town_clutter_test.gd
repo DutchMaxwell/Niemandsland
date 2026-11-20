@@ -212,3 +212,28 @@ func test_every_tower_corner_turret_fills_its_tower_not_the_air() -> void:
 	for corner in 4:
 		var quad := Basis(Vector3.UP, BoardgenTownClutter.TURRET_YAW[corner]) * Vector3(1, 0, 1)
 		assert_vector(Vector2(quad.x, quad.z).round()).override_failure_message("corner %d turns its turret off the tower" % corner).is_equal(inward[corner])
+
+
+## The kit ladder replaces the box ladder only if the walkable / ladder data stays identical (lead's condition): the kit plan IS BoardgenGreybox.ladder_kit_plan renamed - one segment per 3 in of every
+## connector's rise at the same edge point - and the box ladders it replaces are not solid, so no collider disappears.
+func test_the_kit_ladder_carries_exactly_the_ladder_data_of_the_box_ladder() -> void:
+	var layout := _town()
+	layout["level_in"] = [0, 3, 6, 9]
+	layout["connectors"] = [{"kind": "Ladder", "low": 5 * 16 + 8, "high": 5 * 16 + 9, "low_xz": [8, 5], "high_xz": [9, 5], "edge_in": [27.0, 16.5]}]
+	layout["cells"][5 * 16 + 9]["level"] = 1   # the core only joins cells one level apart: a 3 in rise
+	var box_plan := BoardgenGreybox.plan(layout)
+	var ladders := box_plan.filter(func(b: Dictionary) -> bool: return b["kind"] == "ladder" and not b.get("lantern", false))
+	assert_int(ladders.size()).is_greater(0)
+	for b: Dictionary in ladders:
+		assert_bool(b["solid"]).override_failure_message("a solid ladder box: its collider would disappear with the kit ladder").is_false()
+	var kit_plan := BoardgenGreybox.ladder_kit_plan(layout)
+	var segments := 0
+	for key: String in kit_plan:
+		segments += (kit_plan[key] as Array).size()
+	assert_int(segments).is_equal(1)   # a 3 in rise is one segment: the top one
+	assert_int((kit_plan["ladder_top"] as Array).size()).is_equal(1)
+	# the town kit's ladder items are those very transforms
+	var town := BoardgenTownKit.new()
+	var from_kit := BoardgenTownKit.plan(layout)
+	assert_array(from_kit["timber_ladder_top"]).is_equal(kit_plan["ladder_top"])
+	town.free()

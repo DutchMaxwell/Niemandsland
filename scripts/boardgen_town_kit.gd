@@ -27,6 +27,9 @@ const CLUTTER_SET := {"barrel": "timber", "crate": "timber", "bucket": "timber",
 	"rubble_heap_a": "coursed_stone", "rubble_heap_b": "coursed_stone", "stall_frame": "timber", "stall_frame_ruined": "timber", "sign_board_loaf": "timber", "sign_board_boot": "timber", "timber_ladder_3in": "timber", "timber_ladder_top": "timber"}
 ## A module's own instance tint on top of its set's (the vertex colour of the module is baked by the assets lane; this is the table's side of the same knob): the pool kerb's pale top read as a dashed
 ## white line round the pond from above, so its run is tinted down to a weathered stone.
+## The kit's ladder segments (a 3 in segment and the top segment with stiles past the edge): the SAME transforms as the Deepworks kit ladders - BoardgenGreybox.ladder_kit_plan(layout), one segment per
+## 3 in of every connector's rise, the origin on the wall face at the connector's edge point, +z away from the wall - so the walkable / ladder data is identical (boxes of kind ladder are not solid).
+const LADDER_MODULES := ["timber_ladder_3in", "timber_ladder_top"]
 const MODULE_TINT := {"pool_kerb": Color(0.52, 0.55, 0.6)}
 ## Glass of a lamp and the coals of a brazier: drawn with an emissive material, the OmniLight sits at their origin.
 const GLOW := {"lantern_glow": Color(1.0, 0.72, 0.38), "brazier_coals": Color(1.0, 0.45, 0.18)}
@@ -76,6 +79,8 @@ func draws_landmark(box: Dictionary) -> bool:
 
 ## True for a greybox box an authored clutter module draws instead: a lamp post / its glass cube when the lamp modules are cached, a strip prop whose piece is cached.
 func replaces_clutter(box: Dictionary) -> bool:
+	if box["kind"] == "ladder" and not box.get("lantern", false):   # a timber box ladder (not a lamp post, which borrows the colour): its rails and rungs are the kit's ladder segments
+		return kit.usable(LADDER_MODULES)
 	if box.get("lantern", false):
 		return kit.usable(BoardgenTownClutter.LAMP_MODULES)
 	var m := BoardgenTownClutter.prop_module(box)
@@ -93,6 +98,9 @@ static func plan(layout: Dictionary) -> Dictionary:
 		if not out.has(m):
 			out[m] = []
 		out[m].append(item)
+	var add_all := func(m: String, items: Array) -> void:
+		for item: Dictionary in items:
+			add.call(m, item)
 	for r: Dictionary in BoardgenTownDressing.roofs(layout).filter(func(r: Dictionary) -> bool: return r["type"] == "gable"):   # hips and catslides have no module: the procedural meshes stay
 		var h := BoardgenTownDressing._hash(r["lot"], r["half"], 7)
 		var m := ("roof_broken_a" if h < 0.12 else "roof_broken_b") if h < 0.25 else ("roof_gable_low" if float(r["height"]) < 2.1 else "roof_gable_steep")
@@ -107,6 +115,9 @@ static func plan(layout: Dictionary) -> Dictionary:
 		var centre: Vector3 = (c["lo"] + c["hi"]) * 0.5
 		var m := "chimney_pots" if BoardgenTownDressing._hash(i, 0, 9) < 0.7 else "chimney_broken"
 		add.call(m, _item(Basis(Vector3.UP, PI * 0.5 * (i % 4)), Vector3(centre.x, c["hi"].y - CHIMNEY_TOP_IN, centre.z)))
+	var ladders := BoardgenGreybox.ladder_kit_plan(layout)
+	for key: String in ladders:
+		add_all.call("timber_" + key, ladders[key])
 	var clutter := BoardgenTownClutter.plan(layout)
 	for m: String in clutter:
 		for item: Dictionary in clutter[m]:
