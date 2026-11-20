@@ -60,6 +60,7 @@ float wall_dist(vec2 g, ivec2 c, float h) {
 #include "res://shaders/tiefwerk_relief.gdshaderinc"
 #include "res://shaders/tiefwerk_value.gdshaderinc"
 #include "res://shaders/tiefwerk_micro.gdshaderinc"
+#include "res://shaders/tiefwerk_t1.gdshaderinc"
 
 // Distance in inches from the point g to the nearest sump cell among the 3x3 around cell c (the toxic stain on the floor and the walls); 9 = none.
 float sump_dist(vec2 g, ivec2 c) {
@@ -302,6 +303,10 @@ void fragment() {
 		if (lip < 0.2) {   // the tier's trim: a pale lip with a dark groove behind it, no railing
 			alb = lip < 0.08 ? alb * 1.5 + 0.08 : alb * 0.5;
 		}
+	}
+	vec2 duv_x = dFdx(uv), duv_y = dFdy(uv);   // taken outside any branch: derivatives need every pixel of the quad
+	if (t1_on > 0.5 && detail > 0.5 && k != 5) {
+		t1_apply(k, top, uv, duv_x, duv_y, n, alb, rough, ao, nrel);   // the authored surface under the procedural marks (AAA step 10)
 	}
 	vec4 ew = box_in.x > 0.0 && detail > 0.5 ? edge_wear(lpos, box_in * 0.5, lnrm, p, k, half_board, micro_amount(px) > 0.0 ? mix(smoothstep(0.48, 0.56, n3 * 0.6 + n2 * 0.5), chips(uv, 0.05, px), micro_amount(px)) : smoothstep(0.48, 0.56, n3 * 0.6 + n2 * 0.5)) : vec4(0.0);   // every real box edge: a broken pale highlight, a bent normal
 	alb = mix(alb, mix(alb * 1.5 + 0.08, vec3(0.62, 0.6, 0.57), 0.6), ew.x);

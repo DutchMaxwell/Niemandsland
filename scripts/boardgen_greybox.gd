@@ -35,6 +35,7 @@ const SHADER := preload("res://shaders/tiefwerk_board.gdshader")
 var layout_seed: int = 0
 var _material: ShaderMaterial
 var _kit: BoardgenKit
+var _tiefwerk: TiefwerkLibrary = null   # the authored surfaces (R2, on demand); the board is procedural until they are cached
 var _footprint := Rect2()   # the ground kept free of the table's scatter, in table-local metres: the board and all round it
 var _layout: Dictionary = {}
 
@@ -243,6 +244,7 @@ func _ready() -> void:
 	if graphics != null:
 		graphics.settings_applied.connect(_on_settings_applied)
 	_apply_detail()
+	_attach_surfaces()
 
 
 func _exit_tree() -> void:
@@ -268,12 +270,48 @@ func _apply_detail() -> void:
 	var on: bool = graphics != null and detail_for(int(graphics.current_preset), RenderingServer.get_current_rendering_method() == "gl_compatibility")
 	if _material != null and graphics != null:
 		_material.set_shader_parameter("detail", 1.0 if on else 0.0)
+		if on:
+			_attach_surfaces()   # a later switch up to Medium fetches them then
 	BoardgenMood.apply(self, on)   # the dim industrial light, board-scale SSAO, the grade and the model fill come with the finer look
 
 
 ## The board's visuals sit on their own render layer: the models' fill light (BoardgenMood) never reaches them.
 func _assign_layers() -> void:
 	BoardgenMood.assign_layers(self)
+
+
+## The four authored PBR sets under the procedural look (AAA step 10): wired as soon as they are cached, fetched in the background the
+## first time (offline or refused: the board stays procedural). Not in a headless run, so no test or tool touches the network.
+const T1_SETS: Array[String] = ["painted_steel", "rusted_plate", "concrete", "roof_slab"]
+const T1_MAPS := {"alb": "albedo", "nrm": "normal", "orm": "orm"}
+
+
+func _attach_surfaces() -> void:
+	if _material == null or DisplayServer.get_name() == "headless" or _tiefwerk != null or float(_material.get_shader_parameter("detail")) < 0.5:
+		return   # (Low, Performance and the Compatibility renderer never download them)
+	_tiefwerk = TiefwerkLibrary.new()
+	_tiefwerk.name = "Tiefwerk"
+	add_child(_tiefwerk)
+	if not _tiefwerk.sets_cached():
+		await _tiefwerk.ensure_sets()
+	wire_surfaces(_material, _tiefwerk)
+
+
+## Hands the cached sets to the board shader and switches them on; false (and the shader stays procedural) while any texture is missing.
+static func wire_surfaces(material: ShaderMaterial, lib: TiefwerkLibrary) -> bool:
+	if material == null or not is_instance_valid(lib) or not lib.is_inside_tree():
+		return false
+	var found := {}
+	for i in T1_SETS.size():
+		for short: String in T1_MAPS:
+			var tex := lib.set_texture(T1_SETS[i], T1_MAPS[short])
+			if tex == null:
+				return false
+			found["t1_%s_%d" % [short, i]] = tex
+	for uniform: String in found:
+		material.set_shader_parameter(uniform, found[uniform])
+	material.set_shader_parameter("t1_on", 1.0)
+	return true
 
 
 ## The table's own ground scatter (grass tufts, the biome dressing's straw, leaves and puddles) stays off under the board.
