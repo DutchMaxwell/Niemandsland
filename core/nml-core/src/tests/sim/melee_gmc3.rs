@@ -4,7 +4,7 @@
 //! 3. Piercing Hunter (`ranged_over_or_charge`: `Havocbound` / `Piercing Warrior`) on a weapon (`CW`) + `cond_ap` melee battle-log line (`CU`, `CW`)
 
 use super::*;
-use crate::acts::{CURRENT_RULES_EPOCH, PENDING_EPOCH_MELEE_GMC3};
+use crate::acts::{CURRENT_RULES_EPOCH, EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_92_MELEE_CAUSES};
 use crate::rules::Registries;
 use crate::state::{Profile, Weapon};
 
@@ -105,13 +105,13 @@ fn run_melee_charge(
 // ---- Part 1: Counter as a unit rule (TU) + Counter battle-log line (TU/TW) ----
 
 #[test]
-fn counter_as_unit_rule_strikes_first_and_logs_at_pending_epoch_only() {
+fn counter_as_unit_rule_strikes_first_and_logs_from_epoch_92_only() {
     let att_p = make_profile("att", "Att", "robot_legions", 5, &[], &[]);
     let def_p = make_profile("def", "Def", "robot_legions", 8, &["Counter"], &[]);
 
-    // At PENDING_EPOCH_MELEE_GMC3: unit-level Counter folds onto melee profiles, strikes first, and logs.
+    // At EPOCH_92_MELEE_CAUSES: unit-level Counter folds onto melee profiles, strikes first, and logs.
     let (shot_on, lines_on, statics_on) = run_melee_charge(
-        att_p.clone(), def_p.clone(), PENDING_EPOCH_MELEE_GMC3, 5.74, false, None,
+        att_p.clone(), def_p.clone(), EPOCH_92_MELEE_CAUSES, 5.74, false, None,
     );
     assert!(statics_on[1].melee[0].counter, "unit rule Counter must fold onto melee profiles");
     assert_eq!(statics_on[1].melee[0].counter_strikes_first, Some(true));
@@ -125,21 +125,21 @@ fn counter_as_unit_rule_strikes_first_and_logs_at_pending_epoch_only() {
         "Counter TU must emit battle-log line, got: {lines_on:?}"
     );
 
-    // At CURRENT_RULES_EPOCH (90): recorded games keep pre-fix behavior byte-exact.
+    // At 91 (the last epoch before the gate): recorded games keep pre-fix behavior byte-exact.
     let (shot_off, _lines_off, statics_off) = run_melee_charge(
-        att_p.clone(), def_p, CURRENT_RULES_EPOCH, 5.74, false, None,
+        att_p.clone(), def_p, EPOCH_91_JOINED_HERO_FATIGUE, 5.74, false, None,
     );
-    assert!(!statics_off[1].melee[0].counter, "epoch <= 90 stays unchanged for recorded games");
+    assert!(!statics_off[1].melee[0].counter, "epoch <= 91 stays unchanged for recorded games");
     assert_eq!(
         (shot_off.rolls[0].kind, shot_off.rolls[0].owner.as_str()),
         ("attack", "Att"),
-        "epoch <= 90 keeps charger striking first"
+        "epoch <= 91 keeps charger striking first"
     );
 
     // Exact rule name matching: an unrelated prefix name must not match.
     let aura_p = make_profile("def", "Def", "robot_legions", 8, &["Counter-Attack Aura"], &[]);
     let (_, _, statics_aura) = run_melee_charge(
-        att_p, aura_p, PENDING_EPOCH_MELEE_GMC3, 5.74, false, None,
+        att_p, aura_p, EPOCH_92_MELEE_CAUSES, 5.74, false, None,
     );
     assert!(!statics_aura[1].melee[0].counter, "unexpanded aura name must not match plain Counter");
 }
@@ -184,13 +184,13 @@ fn first_defense_target(shot: &ShootResult, owner: &str) -> Option<i64> {
 }
 
 #[test]
-fn destructive_v36_cw_and_tw_apply_above_half_strength_ap_and_log_at_pending_epoch_only() {
+fn destructive_v36_cw_and_tw_apply_above_half_strength_ap_and_log_from_epoch_92_only() {
     // CW: Att carries 3.6.0 Destructive (gf/elven_jesters, above_half_strength -> AP+1).
     let att_cw = make_profile("att", "Att", "elven_jesters", 5, &[], &["Destructive"]);
     let def_plain = make_profile("def", "Def", "elven_jesters", 8, &[], &[]);
 
     let (shot_on, lines_on, _) = run_melee_charge(
-        att_cw.clone(), def_plain.clone(), PENDING_EPOCH_MELEE_GMC3, 5.74, false, None,
+        att_cw.clone(), def_plain.clone(), EPOCH_92_MELEE_CAUSES, 5.74, false, None,
     );
     assert_eq!(first_defense_target(&shot_on, "Def"), Some(5), "Destructive CW above half -> AP(+1), saves on 5+");
     assert!(
@@ -200,7 +200,7 @@ fn destructive_v36_cw_and_tw_apply_above_half_strength_ap_and_log_at_pending_epo
 
     // At half strength (4/8 models alive): inactive on both AP and log.
     let (shot_half, lines_half, _) = run_melee_charge(
-        att_cw.clone(), def_plain.clone(), PENDING_EPOCH_MELEE_GMC3, 5.74, false, Some(4),
+        att_cw.clone(), def_plain.clone(), EPOCH_92_MELEE_CAUSES, 5.74, false, Some(4),
     );
     assert_eq!(first_defense_target(&shot_half, "Def"), Some(4), "Destructive CW at half strength -> AP(0)");
     assert!(
@@ -208,17 +208,17 @@ fn destructive_v36_cw_and_tw_apply_above_half_strength_ap_and_log_at_pending_epo
         "Destructive CW at half strength must not log: {lines_half:?}"
     );
 
-    // Epoch 90: recorded games keep pre-fix AP(0) byte-exact.
-    let (shot_90, _, _) = run_melee_charge(
-        att_cw, def_plain, CURRENT_RULES_EPOCH, 5.74, false, None,
+    // Epoch 91: recorded games keep pre-fix AP(0) byte-exact.
+    let (shot_91, _, _) = run_melee_charge(
+        att_cw, def_plain, EPOCH_91_JOINED_HERO_FATIGUE, 5.74, false, None,
     );
-    assert_eq!(first_defense_target(&shot_90, "Def"), Some(4), "epoch <= 90 stays AP(0) for recorded games");
+    assert_eq!(first_defense_target(&shot_91, "Def"), Some(4), "epoch <= 91 stays AP(0) for recorded games");
 
     // TW: Def carries 3.6.0 Destructive, Att is 5/5 alive (above half strength) on strike-back.
     let att_plain = make_profile("att", "Att", "elven_jesters", 5, &[], &[]);
     let def_tw = make_profile("def", "Def", "elven_jesters", 8, &[], &["Destructive"]);
     let (shot_tw, lines_tw, _) = run_melee_charge(
-        att_plain.clone(), def_tw.clone(), PENDING_EPOCH_MELEE_GMC3, 5.74, false, None,
+        att_plain.clone(), def_tw.clone(), EPOCH_92_MELEE_CAUSES, 5.74, false, None,
     );
     assert_eq!(first_defense_target(&shot_tw, "Att"), Some(5), "Destructive TW above half -> AP(+1), Att saves on 5+");
     assert!(
@@ -226,10 +226,10 @@ fn destructive_v36_cw_and_tw_apply_above_half_strength_ap_and_log_at_pending_epo
         "Destructive TW must emit battle-log line, got: {lines_tw:?}"
     );
 
-    let (shot_tw90, _, _) = run_melee_charge(
-        att_plain, def_tw, CURRENT_RULES_EPOCH, 5.74, false, None,
+    let (shot_tw91, _, _) = run_melee_charge(
+        att_plain, def_tw, EPOCH_91_JOINED_HERO_FATIGUE, 5.74, false, None,
     );
-    assert_eq!(first_defense_target(&shot_tw90, "Att"), Some(4), "epoch <= 90 TW stays AP(0)");
+    assert_eq!(first_defense_target(&shot_tw91, "Att"), Some(4), "epoch <= 91 TW stays AP(0)");
 }
 
 #[test]
@@ -249,13 +249,13 @@ fn havocbound_unit_rule_emits_cond_ap_battle_log_line_in_melee() {
 // ---- Part 3: Piercing Hunter (ranged_over_or_charge) on a weapon (CW) ----
 
 #[test]
-fn piercing_hunter_ranged_over_or_charge_on_weapon_applies_and_logs_at_pending_epoch_only() {
+fn piercing_hunter_ranged_over_or_charge_on_weapon_applies_and_logs_from_epoch_92_only() {
     let def_plain = make_profile("def", "Def", "havoc_brothers", 6, &[], &[]);
 
-    // Havocbound on CW, charge > 6" at PENDING_EPOCH_MELEE_GMC3 -> AP(+1) + log line.
+    // Havocbound on CW, charge > 6" at EPOCH_92_MELEE_CAUSES -> AP(+1) + log line.
     let att_cw = make_profile("att", "Att", "havoc_brothers", 5, &[], &["Havocbound"]);
     let (shot_on, lines_on, _) = run_melee_charge(
-        att_cw.clone(), def_plain.clone(), PENDING_EPOCH_MELEE_GMC3, 7.74, false, None,
+        att_cw.clone(), def_plain.clone(), EPOCH_92_MELEE_CAUSES, 7.74, false, None,
     );
     assert_eq!(first_defense_target(&shot_on, "Def"), Some(5), "Havocbound CW >6\" -> AP(+1), saves on 5+");
     assert!(
@@ -265,21 +265,21 @@ fn piercing_hunter_ranged_over_or_charge_on_weapon_applies_and_logs_at_pending_e
 
     // Charge <= 6": stays inert at 3.6 (>6" gate).
     let (shot_short, lines_short, _) = run_melee_charge(
-        att_cw.clone(), def_plain.clone(), PENDING_EPOCH_MELEE_GMC3, 4.74, false, None,
+        att_cw.clone(), def_plain.clone(), EPOCH_92_MELEE_CAUSES, 4.74, false, None,
     );
     assert_eq!(first_defense_target(&shot_short, "Def"), Some(4), "Havocbound CW <=6\" -> AP(0)");
     assert!(!lines_short.iter().any(|l| l.contains("Havocbound:")));
 
-    // Epoch 90: recorded games keep pre-fix AP(0) byte-exact.
-    let (shot_90, _, _) = run_melee_charge(
-        att_cw, def_plain.clone(), CURRENT_RULES_EPOCH, 7.74, false, None,
+    // Epoch 91: recorded games keep pre-fix AP(0) byte-exact.
+    let (shot_91, _, _) = run_melee_charge(
+        att_cw, def_plain.clone(), EPOCH_91_JOINED_HERO_FATIGUE, 7.74, false, None,
     );
-    assert_eq!(first_defense_target(&shot_90, "Def"), Some(4), "epoch <= 90 CW stays AP(0)");
+    assert_eq!(first_defense_target(&shot_91, "Def"), Some(4), "epoch <= 91 CW stays AP(0)");
 
     // Piercing Warrior on CW -> same shared ranged_over_or_charge weapon expansion.
     let att_pw = make_profile("att", "Att", "havoc_brothers", 5, &[], &["Piercing Warrior"]);
     let (shot_pw, lines_pw, _) = run_melee_charge(
-        att_pw, def_plain.clone(), PENDING_EPOCH_MELEE_GMC3, 7.74, false, None,
+        att_pw, def_plain.clone(), EPOCH_92_MELEE_CAUSES, 7.74, false, None,
     );
     assert_eq!(first_defense_target(&shot_pw, "Def"), Some(5), "Piercing Warrior CW >6\" -> AP(+1)");
     assert!(
@@ -290,7 +290,7 @@ fn piercing_hunter_ranged_over_or_charge_on_weapon_applies_and_logs_at_pending_e
     // Dedup: Havocbound on both CU and CW must not double-count AP(+1) -> AP(+2).
     let att_both = make_profile("att", "Att", "havoc_brothers", 5, &["Havocbound"], &["Havocbound"]);
     let (shot_both, lines_both, _) = run_melee_charge(
-        att_both, def_plain, PENDING_EPOCH_MELEE_GMC3, 7.74, false, None,
+        att_both, def_plain, EPOCH_92_MELEE_CAUSES, 7.74, false, None,
     );
     assert_eq!(first_defense_target(&shot_both, "Def"), Some(5), "CU+CW Havocbound must not double-stack AP");
     assert_eq!(

@@ -949,22 +949,24 @@ pub const EPOCH_90_JOINED_ONE_RECOVERY: u32 = 90;
 /// kept striking at full Quality while the table's hero struck on unmodified 6s. Records stamped 90 or below replay
 /// byte-exact. The recorder mirror (`act_recorder.gd`) stamps 91 in the same change.
 pub const EPOCH_91_JOINED_HERO_FATIGUE: u32 = 91;
-pub const CURRENT_RULES_EPOCH: u32 = 91;
-/// Placeholder epoch gate for DS-GMC3 melee fixes (Counter as a unit rule, Destructive 3.6.0 / target-state
-/// conditional AP in melee, Piercing Hunter weapon seat `ranged_over_or_charge`).
-/// `CURRENT_RULES_EPOCH` is not touched, so every recorded game replays byte-exact; the lead batches
-/// this placeholder into the next daily epoch bump.
-pub const PENDING_EPOCH_MELEE_GMC3: u32 = CURRENT_RULES_EPOCH + 1;
-/// Placeholder gate for DS-GMC2 ("charge reach" melee cause group):
-/// 1) `mv::step::Move::execute` converts moved endpoints via `to_world_f32` (matching `SoloController._plan_positions`,
-///    preventing 1-ULP `from_inch` drift that flips tie-breaks in Versatile Reach pile-in and Fast 1" separation),
-///    and keeps `!stirred` models verbatim.
-/// 2) `sim::resolve_with` applies `gate::melee_shroud_charge_in` to `band_in` on `CHARGE` (matching
-///    `SoloController.melee_shroud_charge_in`, GF v3.5.3 army books).
+/// The melee cause groups of Plan E land together (GMC1, GMC2, GMC3; each is a measured table-vs-core difference of the
+/// melee matrix, and the table is the reference). From 92 on, on EVERY path (seeded and step):
 ///
-/// `CURRENT_RULES_EPOCH` is not touched, so every recorded game replays byte-exact; the lead batches
-/// this placeholder into the next daily epoch bump (it may share the number of `PENDING_EPOCH_MELEE_GMC3`).
-pub const PENDING_EPOCH_MELEE_GMC2: u32 = CURRENT_RULES_EPOCH + 1;
+/// GMC1: Regenerative Strength token wounds land before the strikes, so the Retaliate pool no longer counts them as
+/// wounds taken (the table's `pools_before` snapshot); the Self-Destruct survival hits land in the table's casualty
+/// order (`land_wounds_with(.., tray_exact)`, a wounded Tough model first).
+///
+/// GMC2: a moved model's charge endpoint converts through `to_world_f32` and an unmoved one keeps its world position
+/// (`Move::execute`, the table's `_plan_positions`); Melee Shrouding shortens the charge band (`melee_shroud_charge_in`).
+///
+/// GMC3: a unit-level Counter rule folds onto the melee profiles (the unit strikes first); a melee conditional AP reads
+/// the target's state (Destructive); the weapon-seat `ranged_over_or_charge` rules (Havocbound, Piercing Warrior, the
+/// Piercing Hunter seat) expand into the table's charge + ranged legs.
+///
+/// Records stamped 91 or below replay byte-exact. Every call site reads THIS constant, not `92` or
+/// `CURRENT_RULES_EPOCH`. The recorder mirror (`act_recorder.gd`) stamps 92 in the same change.
+pub const EPOCH_92_MELEE_CAUSES: u32 = 92;
+pub const CURRENT_RULES_EPOCH: u32 = 92;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2284,7 +2286,7 @@ mod tests {
         EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT, EPOCH_79_EV_MOVED_ROUND, EPOCH_80_ROLLOUT_CUMBERSOME,
         EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME, EPOCH_83_LONE_HERO_TARGET, EPOCH_84_IGNORE_GROUPS, EPOCH_85_INDIRECT_GATE,
         EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_87_WALKED_DANGEROUS, EPOCH_88_SPLIT_LONE_HERO, EPOCH_89_SHARED_BEARERS,
-        EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_91_JOINED_HERO_FATIGUE,
+        EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_92_MELEE_CAUSES,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2305,7 +2307,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 91, "the live epoch is EPOCH_91_JOINED_HERO_FATIGUE");
+        assert_eq!(CURRENT_RULES_EPOCH, 92, "the live epoch is EPOCH_92_MELEE_CAUSES");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2315,11 +2317,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":91}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":92}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 91"
+            "a fresh play_game() now stamps the bumped epoch, 92"
         );
     }
 
@@ -2461,6 +2463,14 @@ mod tests {
         assert!(rule_on(EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_90_JOINED_ONE_RECOVERY), "a record at 90 rolls once per pair");
         assert!(rule_on(EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_89_SHARED_BEARERS), "90 keeps the shared bearers on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_90_JOINED_ONE_RECOVERY), "a fresh play_game() stamps it on");
+    }
+
+    #[test]
+    fn epoch_92_gate_is_closed_at_epoch_91_and_open_from_92() {
+        assert!(!rule_on(EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_92_MELEE_CAUSES), "a record at 91 replays the old melee causes");
+        assert!(rule_on(EPOCH_92_MELEE_CAUSES, EPOCH_92_MELEE_CAUSES), "a record at 92 plays the table's melee causes");
+        assert!(rule_on(EPOCH_92_MELEE_CAUSES, EPOCH_91_JOINED_HERO_FATIGUE), "92 keeps the joined hero fatigue on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_92_MELEE_CAUSES), "a fresh play_game() stamps it on");
     }
 
     #[test]

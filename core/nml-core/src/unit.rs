@@ -6416,7 +6416,7 @@ fn stamp_conditional_ap_named(
     }
 }
 
-/// DS-GMC3 (`PENDING_EPOCH_MELEE_GMC3`) — expand weapon-seat `condition: "ranged_over_or_charge"`
+/// DS-GMC3 (`EPOCH_92_MELEE_CAUSES`) — expand weapon-seat `condition: "ranged_over_or_charge"`
 /// conditional-AP rules (`Havocbound`, `Piercing Warrior`) into the same `on_charge` + `ranged_over`
 /// legs that the unit-seat arms stamp, deduplicated against unit-seat stamps by name.
 fn stamp_weapon_ranged_over_or_charge(
@@ -7479,7 +7479,7 @@ impl UnitStatic {
         if (rule_on(rules_epoch, EPOCH_3_TABLE_RULES)
             && (rule_on_all_models(p, "Counter-Attack")
                 || rule_on_all_models(p, "Counter in Melee")))
-            || (rule_on(rules_epoch, crate::acts::PENDING_EPOCH_MELEE_GMC3)
+            || (rule_on(rules_epoch, crate::acts::EPOCH_92_MELEE_CAUSES)
                 && (has_special_rule(&p.special_rules, "Counter")
                     || has_special_rule(&p.item_grants, "Counter")))
         {
@@ -7661,7 +7661,7 @@ impl UnitStatic {
         if rule_on(rules_epoch, EPOCH_7_TABLE_RULES) {
             stamp_conditional_ap_named(reg, p, rules_epoch, &mut shoot, &mut melee);
         }
-        if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_MELEE_GMC3) {
+        if rule_on(rules_epoch, crate::acts::EPOCH_92_MELEE_CAUSES) {
             stamp_weapon_ranged_over_or_charge(reg, p, rules_epoch, &mut shoot, &mut melee);
         }
         // Wave 4 (rules-wave4-renames), gated on the FROZEN

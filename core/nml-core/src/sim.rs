@@ -36,7 +36,7 @@ use crate::acts::{
     EPOCH_66_DISTANCE_TRUTH, EPOCH_67_MARKERS_BURSTS, EPOCH_68_MODIFIER_SUM,
     EPOCH_71_RAPID_CHARGE_MARK, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_75_TABLE_FIXES,
     EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_79_EV_MOVED_ROUND, EPOCH_83_LONE_HERO_TARGET, EPOCH_88_SPLIT_LONE_HERO,
-    EPOCH_89_SHARED_BEARERS, EPOCH_91_JOINED_HERO_FATIGUE, PENDING_EPOCH_MELEE_GMC2,
+    EPOCH_89_SHARED_BEARERS, EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_92_MELEE_CAUSES,
 };
 use crate::io::{Action, Seams, SplitShot};
 use crate::landing::{LandedModel, Landing};
@@ -6514,10 +6514,10 @@ fn strike_phase(
     // MEL-12 (`EPOCH_73_V36`): Regenerative Strength token wounds land immediately BEFORE weapon
     // strikes (main.gd:9461-9472), keeping their own casualty-order step and tray landing.
     let (mut gs_caused, mut gs_taken, mut gs_ignored) = (0i64, 0i64, 0i64);
-    // PENDING_EPOCH_MELEE_GMC1: the separate landing moves the Retaliate pool snapshot (the token wounds no longer
-    // count as "taken") and the casualty order, so a seeded outcome would change. Step path only until the lead
-    // assigns the rules epoch; a seeded tray keeps the pooled landing inside `resolve_melee_leg_wipe`.
-    if tray.feed().is_some()
+    // DS-GMC1 (`EPOCH_92_MELEE_CAUSES`): the separate landing moves the Retaliate pool snapshot (the token wounds no longer
+    // count as "taken") and the casualty order, so it applies on every path (seeded and step) from 92; below 92 the
+    // pooled landing inside `resolve_melee_leg_wipe` is kept.
+    if rule_on(seams.rules_epoch, EPOCH_92_MELEE_CAUSES)
         && !parts.iter().any(|(_, _, a)| a.unpredictable || a.ravage > 0)
         && parts.iter().any(|(_, _, a)| a.growth_wound_dice > 0)
     {
@@ -6975,9 +6975,8 @@ fn self_destruct_post_melee(
             hits, &ectx, &eu.name, tray, &mut shot.rolls,
         );
         let before_enemy = chain_snapshot(next, enemy, tray);
-        // PENDING_EPOCH_MELEE_GMC1: the table's casualty order (a wounded Tough first, kits) moves seeded outcomes;
-        // step path only until the lead assigns the rules epoch.
-        land_wounds_with(next, enemy, landed, seams.tray_exact && tray.feed().is_some());
+        // DS-GMC1 (`EPOCH_92_MELEE_CAUSES`): the table's casualty order (a wounded Tough first, kits) on every path from 92.
+        land_wounds_with(next, enemy, landed, seams.tray_exact && rule_on(seams.rules_epoch, EPOCH_92_MELEE_CAUSES));
         land_chain_report(statics, next, tray, enemy, before_enemy);
     }
 }
@@ -10588,9 +10587,9 @@ fn resolve_with(
         );
     }
     let band_in = parts.total();
-    // DS-GMC2 (`PENDING_EPOCH_MELEE_GMC2`, table twin `SoloController.melee_shroud_charge_in`):
+    // DS-GMC2 (`EPOCH_92_MELEE_CAUSES`, table twin `SoloController.melee_shroud_charge_in`):
     // Melee Shrouding shortens the working CHARGE band (-2"/-3", floor 6") against a shrouded target.
-    let band_in = if kind == CHARGE && rule_on(seams.rules_epoch, PENDING_EPOCH_MELEE_GMC2) {
+    let band_in = if kind == CHARGE && rule_on(seams.rules_epoch, EPOCH_92_MELEE_CAUSES) {
         ci.map_or(band_in, |ti| crate::gate::melee_shroud_charge_in(band_in, &next, ti))
     } else {
         band_in
