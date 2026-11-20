@@ -992,6 +992,12 @@ pub const EPOCH_92_MELEE_CAUSES: u32 = 92;
 /// `CURRENT_RULES_EPOCH`. The recorder mirror (`act_recorder.gd`) stamps 93 in the same change.
 pub const EPOCH_93_DANGER_RULES_RIDER: u32 = 93;
 pub const CURRENT_RULES_EPOCH: u32 = 93;
+/// Placeholder gate for the casualty order's tie-break: the table measures a model's distance to its unit's centroid as a Godot
+/// `Vector2.length()` (f32); the core used an f64 hypot, which parts two mirror models of a symmetric formation (equal in exact
+/// arithmetic) by noise, so the core could remove another model of the pair than the table does (cast door probe, 20.11.: a
+/// spell killing 5 of 6 models in a line left slot 2 standing where the table leaves slot 3). From 94 the core measures in f32 the
+/// same way. Only paths with `Seams::tray_exact` use the order. Every call site reads THIS constant, not the literal `94`.
+pub const PENDING_EPOCH_CASUALTY_TIES: u32 = 94;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff

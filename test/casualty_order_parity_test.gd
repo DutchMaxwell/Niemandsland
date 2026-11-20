@@ -55,3 +55,15 @@ func test_the_tables_casualty_order_matches_the_shared_fixture() -> void:
 		var want: Array = (spec["expected"] as Array).map(func(x: Variant) -> int: return int(x))  # JSON numbers are floats
 		assert_array(got).override_failure_message("%s: table %s, fixture %s" % [
 			spec["name"], str(got), str(want)]).is_equal(want)
+
+
+## PENDING_EPOCH_CASUALTY_TIES: symmetric formations whose mirror models tie or part by rounding only. The fixture's `ties` hold
+## the Godot board's f32 positions; the table's order on them is the reference the core's `f32_dist` reading is pinned to
+## (casualty.rs). Never more than 12 models: Godot's sort is unstable above 16, so its ties are unspecified there.
+func test_the_tables_casualty_order_on_symmetric_formations_matches_the_shared_fixture() -> void:
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(FIXTURE))
+	for spec in data["ties"]:
+		var got: Array = SoloController.casualty_order(_unit(spec))
+		var want: Array = (spec["expected"] as Array).map(func(x: Variant) -> int: return int(x))
+		assert_array(got).override_failure_message("%s: table %s, fixture %s" % [
+			spec["name"], str(got), str(want)]).is_equal(want)

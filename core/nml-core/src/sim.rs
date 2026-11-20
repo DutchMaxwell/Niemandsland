@@ -709,7 +709,7 @@ fn takedown_pick_info_after(
     let mut kits: Vec<crate::state::Kit> = state.kits.get(ti).map(|k| k.to_vec()).unwrap_or_default();
     let pick = |kits: &[crate::state::Kit], pos: &[[f64; 3]], wounds: &[i64]| -> usize {
         if !kits.is_empty() && kits.len() == pos.len() {
-            crate::casualty::casualty_order_of(kits, pos, wounds).last().copied().unwrap_or(pos.len() - 1)
+            crate::casualty::casualty_order_of(kits, pos, wounds, state.casualty_f32).last().copied().unwrap_or(pos.len() - 1)
         } else {
             pos.len() - 1
         }
@@ -10575,6 +10575,7 @@ fn resolve_with(
     // #816 PR 2 — the activation-start latch clear (main.gd:17456's erase).
     next.teleport_used[si] = false;
     next.cast_buffs.clear(); // CAST-O7: a board that already ran an activation carries no ledger into this one
+    next.casualty_f32 = rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_CASUALTY_TIES);
     sc.rules_epoch = seams.rules_epoch; // wave-3 mark consumers read it off Scratch
 
     // --- REANIMATION (main.gd:953-957), the activation trigger BEFORE the

@@ -167,7 +167,9 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 		if plant_name() == "cast_buff":
 			_drop_one_buff()
 	if r.has("handle"):
-		diff = diff if diff != "" else _state_diff(main, core.plain_of(int(r["handle"])), _core_buffs)
+		var plain: Dictionary = core.plain_of(int(r["handle"]))
+		diff = diff if diff != "" else _state_diff(main, plain, _core_buffs)
+		diff = diff if diff != "" else _positions_diff(main, plain)   # WHICH models stand, not only how many (the casualty order)
 		core.release(int(r["handle"]))
 	var labels: Array = CoreActivation.why_not(main, unit, null)
 	for id in order:
@@ -545,7 +547,8 @@ static func _melee_diff(main, unit: GameUnit, report: Dictionary, table_lines: A
 	return diff
 
 
-## The first unit whose living models stand elsewhere in the core (XZ, sorted, 0.01"): "" = none, else "positions".
+## The first unit whose living models stand elsewhere in the core (XZ, sorted, 0.01"): "" = none, else "positions". Models of
+## one unit are told apart by where they stand, so this is the reading of WHICH models survived (counts and wounds are `_state_diff`'s).
 static func _positions_diff(main, core_plain: Dictionary) -> String:
 	var table: Dictionary = BattleSim.capture(main.opr_army_manager)
 	for uid in table["units"]:
