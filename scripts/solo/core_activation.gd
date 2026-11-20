@@ -132,10 +132,11 @@ static func on_move_path(main, gu: GameUnit) -> bool:
 	return is_core_unit(main, gu)
 
 
-## A core handle for the board as it stands (BattleSim.capture, plain form, gate reads); 0 on failure. The first
+## A core handle for the board as it stands (BattleSim.capture, plain form, gate reads); 0 on failure. `ai`: the AI activation's board, whose table once-records
+## the landing compares against later (`land_late_once_records`). The first
 ## capture of a game sends the game header, exactly as the AI's `_core_plan` does (one header per game, shared with it),
 ## so every step runs at the game's rules epoch, not at epoch 0.
-static func capture(main) -> int:
+static func capture(main, ai := false) -> int:
 	var sc: SoloController = main.solo_controller
 	var core: Object = sc._core_node_ready() if sc != null else null
 	if core == null:
@@ -156,7 +157,10 @@ static func capture(main) -> int:
 	AiActRecorder._stamp_gate_reads(state, plain)
 	_stamp_spent_ignore_feats(state, plain)
 	_stamp_step_ledger(state, plain, sc)
-	return int(core.capture_plain(plain))
+	var h := int(core.capture_plain(plain))
+	if ai:   # the AI activation's own board (main's activation start): the shadow's capture of the same moment must not replace it
+		_once_seen = {"h": h, "mods": _once_sigs(main)}   # what the core's board holds of the table's once-records (`land_late_once_records`)
+	return h
 
 
 ## C-10: the table's round stamps and latches `_ledger_of` does not carry, the table property each is read from (the State name where
@@ -962,6 +966,9 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 		if st["first"] and dice > 0:
 			_dangerous_mismatch(unit, dice, "it threw no die")
 		ai_runs += 1
+		if shows:   # an exchange was fought (the table's `_solo_consume_once_mods` follows a volley, never a bare Dangerous test or cast)
+			land_late_once_records(main, h, unit, parts.map(func(p: Dictionary) -> GameUnit: return p["target"]),
+				(cx.get("casts", []) as Array).map(func(c: Dictionary) -> String: return str(c.get("name", ""))))
 		announce(main, unit, target, cast_touched(report) if cast_taken else [])   # step 50/51 (+ CC-13c: the casts' targets and payers): the table that ran the AI activation announces its digest check
 		return true
 	ai_refusals += 1
@@ -1605,6 +1612,68 @@ static func _land_buffs(main, gu: GameUnit, d: Dictionary) -> void:
 			and str((rd as Dictionary).get("scope", "")) == str(e[1]) and str((rd as Dictionary).get("duration", "")) == "once")
 		if not hit.is_empty():
 			main._solo_spend_records(gu, [hit[0]])
+
+
+## Landing lane (PLAN H): the once-records the TABLE placed between the capture and the core's call are not on the board the core
+## captured: the table's pre-attack beat block (a Furious Buff on a friend, a Shred / Slayer / Indirect / Quick Shot / Increased Shooting
+## Range Mark on the foe) runs first, the core resolves its own copy of the beat and spends it, and the delta cannot name the table's record
+## (`buffs_spent` diffs against the capture's ledger). Without this the record stays stale and the table's `"X" on U is consumed` line is
+## never said. WORKS ONLY on records the capture did not hold (`_once_seen`, by signature), so the core stays the authority on every
+## record it knew (`_land_buffs`), and spends them with the table's own exchange spend (`_solo_spend_once_mods`: its roles, scope, log line,
+## wire message). Test seam: false = the old behaviour.
+static var land_late_once := true
+## The once-records the table held when handle `h` was captured: {"h": h, "mods": {unit instance id: [record signature, ...]}}.
+static var _once_seen := {"h": 0, "mods": {}}
+
+
+## A once-record's identity for the capture compare: its fields without the Regeneration grant's `used` flag, which flips with the exchange.
+static func _rec_sig(rd: Dictionary) -> String:
+	var c := rd.duplicate()
+	c.erase("used")
+	return JSON.stringify(c, "", true)
+
+
+static func _once_sigs(main) -> Dictionary:
+	var out := {}
+	for key in main._solo_spell_mods:
+		var sigs: Array = []
+		for rd in main._solo_spell_mods[key]:
+			if str((rd as Dictionary).get("duration", "")) == "once":
+				sigs.append(_rec_sig(rd))
+		if not sigs.is_empty():
+			out[key] = sigs
+	return out
+
+
+## After a core-resolved exchange of `attacker` at `targets` (the capture is handle `h`): spend the table's once-records this exchange
+## would spend (the attacker chain's own / grant / range, the defenders' vs_target / defense / grants) that the capture did not hold.
+## `skip` names records a cast placed (the cast lane's `buffs_gained` / `buffs_spent` own them).
+static func land_late_once_records(main, h: int, attacker: GameUnit, targets: Array, skip: Array = []) -> void:
+	if not land_late_once or h == 0 or int(_once_seen["h"]) != h:
+		return
+	var sides: Array = [[attacker, ["attacker_own", "grant", "range"]]]
+	for t in targets:
+		sides.append([t, ["vs_target", "defense", "grant", "grant_vs"]])
+	for side in sides:
+		var unit := side[0] as GameUnit
+		if unit == null:
+			continue
+		for u in [unit, unit.get_attached_to() if unit.has_method("get_attached_to") else null]:
+			var uu := u as GameUnit
+			if uu == null:
+				continue
+			var known: Array = ((_once_seen["mods"] as Dictionary).get(uu.get_instance_id(), []) as Array).duplicate()
+			var late: Array = []
+			for rd in main._solo_spell_mods.get(uu.get_instance_id(), []):
+				if str((rd as Dictionary).get("duration", "")) != "once":
+					continue
+				var at := known.find(_rec_sig(rd))
+				if at >= 0:
+					known.remove_at(at)
+				elif not skip.has(str((rd as Dictionary).get("spell", ""))):
+					late.append(rd)
+			if not late.is_empty():
+				main._solo_spend_once_mods(uu, side[1], false, "", unit == attacker, late)
 
 
 ## CC-12a (CC-8c's `buffs_gained`): the buff / debuff effects this activation's casts landed on the unit and left standing
