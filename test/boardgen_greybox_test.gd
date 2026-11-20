@@ -192,3 +192,24 @@ func test_the_kit_ladders_stand_on_the_wall_face_facing_away_from_it() -> void:
 			var away := Vector2(Vector2i(c["low_xz"][0], c["low_xz"][1]) - Vector2i(c["high_xz"][0], c["high_xz"][1]))
 			assert_vector(xf.origin / BoardgenGreybox.INCHES_TO_METERS).is_equal_approx(Vector3(at.x, layout["level_in"][layout["cells"][c["low"]]["level"]], at.y), Vector3.ONE * 0.001)
 			assert_vector(xf.basis * Vector3.BACK).is_equal_approx(Vector3(away.x, 0.0, away.y), Vector3.ONE * 0.001)
+
+
+func test_the_theme_flag_is_off_unless_set() -> void:
+	OS.set_environment(BoardgenGreybox.ENV_THEME, "")
+	assert_str(BoardgenGreybox.theme_from_env()).is_empty()
+	OS.set_environment(BoardgenGreybox.ENV_THEME, "  RuinTown ")
+	assert_str(BoardgenGreybox.theme_from_env()).is_equal("ruintown")
+	var core := _core()
+	if OS.is_debug_build() and core != null and core.has_method("boardgen_layout_themed"):
+		var table: Node3D = auto_free(Node3D.new())
+		add_child(table)
+		OS.set_environment(BoardgenGreybox.ENV_SEED, "7")
+		var town := BoardgenGreybox.attach_from_env(table)
+		OS.set_environment(BoardgenGreybox.ENV_THEME, "")
+		var plain_board := BoardgenGreybox.attach_from_env(table)
+		OS.set_environment(BoardgenGreybox.ENV_SEED, "")
+		assert_str(town.layout_theme).is_equal("RuinTown")
+		assert_str(plain_board.layout_theme).is_equal("Deepworks")   # no flag, no theme: the original board
+		assert_dict(core.boardgen_layout_themed(7, "castle")).contains_keys(["problems"])
+		assert_array(core.boardgen_layout_themed(7, "castle")["problems"]).contains(["unknown theme"])
+	OS.set_environment(BoardgenGreybox.ENV_THEME, "")
