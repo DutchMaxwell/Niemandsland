@@ -3961,8 +3961,15 @@ func _solo_rules_system() -> String:
 ## The table's game system: the value the table was set to, else the system of the first loaded list (lowest slot),
 ## else the default (PLAN_GAME_SYSTEM_SWITCH). Never "" - a caller can hand it straight to RulesRegistry / GameSystem.
 func _table_system() -> String:
+	var system := _table_system_or_empty()
+	return system if not system.is_empty() else RulesRegistry.DEFAULT_SYSTEM
+
+
+## "" when nothing on the table names a game system: no set value, no loaded list and no unit with a system (the next
+## list then names it, see _admit_list_system).
+func _table_system_or_empty() -> String:
 	if opr_army_manager == null:
-		return RulesRegistry.DEFAULT_SYSTEM
+		return ""
 	if not str(opr_army_manager.table_system).is_empty():
 		return RulesRegistry.normalize_system(str(opr_army_manager.table_system))
 	var slots: Array = opr_army_manager.armies.keys()
@@ -3971,7 +3978,11 @@ func _table_system() -> String:
 		var army = opr_army_manager.armies[slot]
 		if army != null:
 			return RulesRegistry.normalize_system(str(army.game_system_abbrev))
-	return RulesRegistry.DEFAULT_SYSTEM
+	for unit in opr_army_manager.game_units.values():   # a loaded save / a peer's list carries units but no OPRArmy
+		var raw := str((unit as GameUnit).unit_properties.get("game_system", ""))
+		if not raw.is_empty():
+			return RulesRegistry.normalize_system(raw)
+	return ""
 
 
 ## The picked mission's attacker points factor (> 1 only for a roles mission that grants one).
@@ -18281,6 +18292,18 @@ func set_table_system(id: String, who: String) -> bool:
 	return false
 
 
+## A peer's list of another game system than this table's: the peer vetted it on its own machine, so this side never
+## refuses it (a room of mixed build versions must not desync) - one battle-log line only.
+func _note_remote_list_system(units: Array, army_name: String) -> void:
+	var table_system := _table_system_or_empty()
+	if table_system.is_empty() or units.is_empty() or battle_log == null:
+		return
+	var raw := str(((units[0] as Dictionary).get("unit_properties", {}) as Dictionary).get("game_system", ""))
+	if not raw.is_empty() and RulesRegistry.normalize_system(raw) != table_system:
+		battle_log.log_event(BattleLog.Category.GENERAL, "%s is a list for %s, this table plays %s (a peer's list, kept)" % [
+			army_name, GameSystem.label(raw), GameSystem.label(table_system)])
+
+
 ## A list is on the table: an imported one, or units that came from a save or a peer's list.
 func _table_has_list() -> bool:
 	for army in opr_army_manager.armies.values():
@@ -18289,12 +18312,31 @@ func _table_has_list() -> bool:
 	return not opr_army_manager.game_units.is_empty()
 
 
-func _refuse_table_system(reason: String) -> void:
-	var text := "Game system unchanged: %s" % reason
+func _refuse_table_system(reason: String, prefix: String = "Game system unchanged") -> void:
+	var text := "%s: %s" % [prefix, reason]
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, text)
 	if get_node_or_null("UI") != null:
 		_show_toast(text)
+
+
+## The import door's game-system check (PLAN_GAME_SYSTEM_SWITCH): a list of another system than the table's is refused
+## before anything is stored or spawned, with one sentence naming both (log line + toast). A table nothing has named a
+## system for yet takes the first list's system ("set by the first list"). True = import on.
+func _admit_list_system(army: OPRApiClient.OPRArmy) -> bool:
+	var list_system := RulesRegistry.normalize_system(str(army.game_system_abbrev))
+	var table_system := _table_system_or_empty()
+	if table_system.is_empty():
+		opr_army_manager.table_system = list_system
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Game system: %s" % GameSystem.label(list_system), false, "set by the first list, %s" % army.name)
+		if network_manager != null and network_manager.is_multiplayer_active() and network_manager.is_host:
+			network_manager.broadcast_table_settings({"game_system": list_system})
+		return true
+	if list_system == table_system:
+		return true
+	_refuse_table_system("%s is a list for %s, this table plays %s." % [army.name, GameSystem.label(list_system), GameSystem.label(table_system)], "Import refused")
+	return false
 
 
 ## The chip beside the round button; built lazily, shown only while the rules-automation UI flag is on.
@@ -21732,6 +21774,8 @@ func _load_ai_list_manifest() -> Dictionary:
 ## Handle army imported from dialog
 func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_controlled: bool = false) -> void:
 	print("Importing army '%s' for Player %d%s" % [army.name, player_id, " (AI-controlled)" if ai_controlled else ""])
+	if not _admit_list_system(army):
+		return   # a list of another game system than the table's: nothing stored, nothing spawned
 	# D5 (b), 27.10.2026: a book NEWER than the pinned rules imports WITH a visible warning — the
 	# player may play on, the refusal for online rooms and saves follows in 0.3.15. Same major.minor
 	# (3.5.3 on 3.5.1) says nothing. The rules version is the maps' own _meta.core_version, never a
@@ -21954,6 +21998,7 @@ func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> 
 	var units: Array = buf.get("units", [])
 	var object_groups: Array = buf.get("objects", [])
 	print("[ArmySync] Complete: building %d units (player_id=%d)" % [units.size(), player_id])
+	_note_remote_list_system(units, str(buf.get("army_name", "")))
 	# A remote army has no OPRArmy here, but its slot still counts: register it (null = "Army" row) and refresh
 	# the left panel, otherwise a side that imported nothing itself never gets the section / Rules automation switch.
 	if not opr_army_manager.armies.has(player_id):
