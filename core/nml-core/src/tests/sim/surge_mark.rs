@@ -69,7 +69,7 @@ fn surge_mark_carrier(rules_epoch: u32) -> UnitStatic {
 /// `buff_line` with the carrier on "a" (eight shots so the unmodified 6s are
 /// always in the roll) and a hardened "b" — three models of three wounds each,
 /// so the marked volley can never wipe the target before the spent one fires.
-fn surge_mark_line(rules_epoch: u32) -> (State, Vec<UnitStatic>) {
+pub(super) fn surge_mark_line(rules_epoch: u32) -> (State, Vec<UnitStatic>) {
     let (mut st, mut statics) = buff_line();
     let carrier = surge_mark_carrier(rules_epoch);
     let mut a = UnitStatic { model_count: 2, wounds_max: vec![1, 1], ..carrier };

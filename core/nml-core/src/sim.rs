@@ -2282,6 +2282,15 @@ fn tray_vs_marks(
             // pick names itself the one time the mark lands (the consumption
             // half logs at the dice folds). Trace-gated like every other
             // core-side seam line.
+            // Rules-must-log (Plan H): the table says the pick and the record's activation (`_solo_apply_vs_marks`, then the
+            // record's own `... is ACTIVE` line), both naming the MARKED unit, which holds the record there; the core keeps the
+            // legacy attacker-side grant below EPOCH_71 for the Rapid Charge Mark and for every other Mark, so the lines carry the target.
+            let (bearer_name, target_name) = (&statics[pb].name, &statics[next.roster.profile[ti]].name);
+            say_rule(tray, "mark", next.player[bearer], || format!(
+                "{}: {} marks {} — friendly units attacking it gain {} (once)", b.name, bearer_name, target_name, grant));
+            say_rule(tray, "mark", next.player[bearer], || format!(
+                "{} on {} is ACTIVE: grants {}{} — applies ONCE", b.name, target_name, grant,
+                if b.scope.is_empty() { String::new() } else { format!(" ({} only)", b.scope) }));
             if b.name == "Surge Mark" {
                 trace_rule("mark", &b.name, &format!(
                     "{} marks {} — friendly units attacking it gain {} (once)",
@@ -2299,6 +2308,7 @@ fn tray_vs_marks(
                 trace_rule("mark", &b.name, &format!(
                     "{} marks {} — friendly units attacking it gain {} (once)",
                     statics[pb].name, statics[next.roster.profile[ti]].name, grant));
+                shot.marks_open.push((b.name.clone(), ti, ti));
                 next.buffs[ti].push(mods::LiveMod {
                     hit_mod: 0,
                     casting_mod: 0,
@@ -2315,6 +2325,7 @@ fn tray_vs_marks(
                     name: Rc::from(b.name.as_str()),
                 });
             } else {
+                shot.marks_open.push((b.name.clone(), si, ti));
                 next.buffs[si].push(mods::LiveMod {
                     hit_mod: 0,
                     casting_mod: 0,
@@ -2332,6 +2343,19 @@ fn tray_vs_marks(
                 });
             }
         }
+    }
+}
+
+/// The table's consumption line for a Mark (`_solo_spend_records`): the exchange spent the record `tray_vs_marks` placed, said once, naming the
+/// MARKED unit. A record still on its holder (an exchange its role does not match) stays open for the next exchange of the activation.
+fn say_marks_consumed(statics: &[UnitStatic], next: &State, tray: &mut Tray, shot: &mut ShootResult) {
+    for (name, holder, ti) in std::mem::take(&mut shot.marks_open) {
+        if next.buffs[holder].iter().any(|r| r.once && &*r.name == name.as_str()) {
+            shot.marks_open.push((name, holder, ti));
+            continue;
+        }
+        say_rule(tray, "mark", next.player[holder], || format!(
+            "\"{name}\" on {} is consumed (applies once)", statics[next.roster.profile[ti]].name));
     }
 }
 
@@ -6807,6 +6831,7 @@ fn strike_phase(
     }
     let att_wounded = att_incoming > 0;
     spend_exchange_wounded(next, si, ti, true, att_wounded, def_incoming, seams.rules_epoch); // main.gd:6152, per strike phase
+    say_marks_consumed(statics, next, tray, shot);
     spend_protection_feat(statics, next, ti, def_incoming, seams.rules_epoch);
     (caused, retaliated, hazard_self, scourge_taken)
 }
@@ -11873,6 +11898,7 @@ fn resolve_with(
                             // once-mods BEFORE the post-volley morale test.
     let att_wounded = att_incoming > 0;
                             spend_exchange_wounded(&mut next, si, g.ti, false, att_wounded, def_incoming, seams.rules_epoch);
+                            say_marks_consumed(statics, &next, tray, shot);
                             spend_protection_feat(statics, &mut next, g.ti, def_incoming, seams.rules_epoch);
                             // D1-B5b: the volley's morale test is the NEXT
                             // thing on the table's tray (main.gd:8248-8251),
