@@ -1170,17 +1170,26 @@ pub(crate) fn tray_breath_attack(
         faces,
         owner: statics[next.roster.profile[si]].name.clone(),
     });
+    // H-6 (Plan H): the table's own lines (`_solo_apply_breath_attack`) and the landing the step API hands the table.
+    let name = statics[next.roster.profile[si]].name.clone();
     if crate::dice::faces_to_hits(&[f0], BREATH_TRIGGER as u8) == 0 {
+        tray.say(|| LogLine { rule: "breath_attack", category: Category::Combat, side: pid, detail: None,
+            text: format!("Breath Attack: {name} rolls {f0} — fizzles (needs {BREATH_TRIGGER}+)") });
         return;
     }
     let hits = BREATH_BLAST.min(blast_cap_models(next, ti, seams, next.book(ti))).max(1);
     let ut = &statics[next.roster.profile[ti]];
+    tray.say(|| LogLine { rule: "breath_attack", category: Category::Combat, side: pid, detail: None,
+        text: format!("Breath Attack: {name} breathes on {} — {hits} hit{} (Blast({BREATH_BLAST}), AP({BREATH_AP}))", ut.name,
+            if hits == 1 { "" } else { "s" }) });
     let def = ctx_of(ut, next, ti);
     let alive_before = morale_alive(next, ti, seams);
     let wounds_before = morale_wounds_left(next, ti, seams);
     let out = crate::dice::resolve_breath_attack_with_tray(hits, BREATH_AP, &def, &ut.name, tray);
     let landed = shot.absorb(out);
+    let before = chain_snapshot(next, ti, tray);
     land_wounds_with(next, ti, landed, seams.tray_exact);
+    land_chain_report(statics, next, tray, ti, before);
     if shooting_morale_trigger(next, statics, seams, ut, ti, alive_before, wounds_before) {
         tray_morale_for(next, statics, ti, false, true, Some("Breath Attack"), seams, tray, shot, None, None);
     }
