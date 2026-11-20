@@ -222,3 +222,65 @@ use super::*;
         assert!(off.rolls.iter().all(|r| r.kind != "attack"),
             "off rolls: {:?} — the entry's ignores_los:false must darken the profile waiver — on main it cannot (RED)", off.rolls);
     }
+
+    /// `PENDING_EPOCH_OWN_INDIRECT` (table twin `granted_indirect_of`, read by `_solo_shot_eligibility`): an Indirect in the SHOOTER's own store, not
+    /// an attackers-side mark on the target, waives the sight test of its weapons. Split fire (the fixture of SHO-01a): the volley's pick `bh` is
+    /// seen, but a plain Rifle is aimed at `b`, which `a` does not see. The table's AI pick never reads the grant (`_solo_pick_overlay_target`),
+    /// so the pooled gate stays blind to it; only the per-weapon sight count waives. RED before the fix: the grant is on the ledger and no resolver
+    /// reads it (the first assert sees no attack die). Controls: a melee-scoped record, an attackers-side record on the shooter, another rule
+    /// and no record stay blind; the pending epoch minus one replays the old reading.
+    #[test]
+    fn an_indirect_granted_to_the_shooters_own_unit_waives_sight_from_the_pending_epoch() {
+        use crate::acts::PENDING_EPOCH_OWN_INDIRECT as OWN;
+        let own = |rule: &str, scope: &str, attackers: bool| crate::mods::LiveMod { scope: Rc::from(scope), attackers, ..mark(rule) };
+        let fires = |epoch: u32, m: Option<crate::mods::LiveMod>| -> bool {
+            let (mut st, statics) = buff_line();
+            let mut dark = vec![true; 16];
+            dark[2] = false; // los_pairs[0 * 4 + 2] - a does not see b, but sees bh
+            st.los_pairs = Some(Rc::new(dark));
+            st.alive[3] = 1;
+            st.positions[3] = vec![[6.0 * IN2M, 0.0, 0.0]];
+            Rc::make_mut(&mut st.radii)[3] = vec![IN2M];
+            st.wounds[3] = vec![1];
+            st.attached = Rc::new(vec![vec![1], vec![], vec![], vec![]]);
+            st.attached_to = Rc::new(vec![None, Some(0), None, None]);
+            st.buffs[0] = m.into_iter().collect();
+            let mut act = buff_action(Some("bh"));
+            act.split = Some(vec![crate::io::SplitShot { member: "a".into(), weapon: "Rifle".into(), target: "b".into() }]);
+            let seams = Seams { sighting: true, rules_epoch: epoch, ..Default::default() };
+            let (_, shot) = resolve_stochastic_tray_on_board(&statics, &st, &act, &crate::terrain::Terrain::default(), seams,
+                &mut crate::rng::GodotRng::new(0), &mut Tray::seeded(11)).unwrap();
+            shot.rolls.iter().any(|r| r.kind == "attack" && r.count == 1)
+        };
+        assert!(fires(OWN, Some(own("Indirect", "", false))), "own Indirect: the unseen aim is shot at");
+        assert!(fires(OWN, Some(own("Indirect when Shooting", "shooting", false))), "a `when` qualifier is cut off the name");
+        assert!(!fires(OWN - 1, Some(own("Indirect", "", false))), "below the pending epoch the grant stays unread");
+        assert!(!fires(OWN, Some(own("Indirect", "melee", false))), "a melee-scoped grant is not a shooting one");
+        assert!(!fires(OWN, Some(own("Indirect", "", true))), "an attackers-side record belongs to whoever shoots its bearer");
+        assert!(!fires(OWN, Some(own("Furious", "", false))), "another rule waives nothing");
+        assert!(!fires(OWN, None), "no record, no waiver");
+    }
+
+    /// The same grant on a shooter that MOVED: its shots are Indirect ones, so the volley and the to-hit note say the moved penalty is not taken,
+    /// as the table does (`granted_indirect_of` in `_solo_resolve_ai_volley`). RED before the fix: only a weapon's own Indirect said it.
+    #[test]
+    fn an_own_indirect_grant_names_the_moved_penalty_it_waives() {
+        use crate::acts::PENDING_EPOCH_OWN_INDIRECT as OWN;
+        let lines = |epoch: u32, grant: bool, kind: i64| -> Vec<String> {
+            let (mut st, mut statics) = super::volley_landings::volley_line();
+            st.profiles = Rc::new(Profiles { list: vec![st.profiles.list[0].clone(); 4], index: HashMap::new() });
+            (statics[0].name, statics[2].name, statics[0].shoot[0].name) = ("Att".into(), "Def".into(), "Rifle".into());
+            (statics[0].ctx.quality, statics[0].ctx.rules_epoch, statics[2].ctx.rules_epoch) = (4, epoch, epoch);
+            if grant { st.buffs[0] = vec![crate::mods::LiveMod { scope: Rc::from(""), attackers: false, ..mark("Indirect") }]; }
+            let seams = Seams { rules_epoch: epoch, tray_exact: true, movement: kind == ADVANCE, moved_shoot: kind == ADVANCE, ..Seams::default() };
+            let action = Action { kind, dest: (kind == ADVANCE).then_some([6.0 * IN2M, 0.0, 0.0]), ..buff_action(Some("b")) };
+            let mut tray = Tray::supplied(vec![vec![6, 1, 1, 1], vec![1]]);
+            let res = resolve_stochastic_tray_on_board(&statics, &st, &action, &crate::terrain::Terrain::default(), seams, &mut crate::rng::GodotRng::new(0), &mut tray).unwrap().1;
+            res.log.into_iter().chain(tray.all_lines().into_iter().map(|l| l.text)).collect()
+        };
+        let said = |l: &[String]| l.iter().filter(|l| l.contains("Indirect: no moved penalty")).count();
+        assert_eq!(said(&lines(OWN, true, ADVANCE)), 2, "the volley line and the to-hit note");
+        assert_eq!(said(&lines(OWN - 1, true, ADVANCE)), 0, "below the pending epoch the grant is unread");
+        assert_eq!(said(&lines(OWN, true, HOLD)), 0, "a shooter that did not move has no penalty to waive");
+        assert_eq!(said(&lines(OWN, false, ADVANCE)), 0, "no grant, no Indirect");
+    }

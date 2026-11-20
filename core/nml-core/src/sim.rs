@@ -4519,6 +4519,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // stays blind, the sighting seam's own asymmetry.
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
         c.indirect_mark = grants && mods::granted_vs(state, i, "Indirect");
+        c.indirect_own = grants && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_OWN_INDIRECT) && mods::granted_own_indirect(state, i);
         c.range_mark_in = if grants && mods::granted_vs(state, i, "+6\" shooting range") {
             INCREASED_SHOOTING_RANGE_MARK_IN
         } else {
@@ -6079,6 +6080,8 @@ fn sighted_profiles_of(
     // inert reading — the grant lands on the ledger but no resolver reads it.
     let epoch6 = rule_on(sc.rules_epoch, EPOCH_6_TABLE_RULES);
     let mark_indirect = epoch6 && mods::granted_vs(state, ti, "Indirect");
+    // PENDING_EPOCH_OWN_INDIRECT: an Indirect in the shooter's own store waives the sight test of every weapon (`_solo_shot_eligibility`).
+    let own_indirect = rule_on(sc.rules_epoch, crate::acts::PENDING_EPOCH_OWN_INDIRECT) && mods::granted_own_indirect(state, mi);
     let mark_range = if epoch6 && mods::granted_vs(state, ti, "+6\" shooting range") {
         INCREASED_SHOOTING_RANGE_MARK_IN
     } else {
@@ -6104,12 +6107,12 @@ fn sighted_profiles_of(
         // goes (main.gd:4136-4138).
         let lost = p.indirect_los_needs_hold && !held; // Rules 3.6 (SHO-01a): the waiver needs Hold
         let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach,
-            (p.indirect && p.indirect_ignores_los.unwrap_or(true) && !lost) || mark_indirect,
+            (p.indirect && p.indirect_ignores_los.unwrap_or(true) && !lost) || mark_indirect || own_indirect,
             rule_on(sc.rules_epoch, EPOCH_66_DISTANCE_TRUTH), sc.rules_epoch);
         if let Some(n) = sc.sighted.get_mut(i) {
             *n = seen;
         }
-        if lost && !mark_indirect {
+        if lost && !mark_indirect && !own_indirect {
             trace_rule("volley", "Indirect",
                 &format!("{} did not Hold: {} needs line of sight", statics[state.roster.profile[mi]].name, p.name));
         }

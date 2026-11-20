@@ -935,6 +935,13 @@ pub const PENDING_EPOCH_ZERO_MOVE_STAMP: u32 = 94;
 /// Indirect gun fired nothing at a unit hidden behind a blocker, the table fired. Records stamped 84 or below replay byte-exact. Every
 /// call site reads THIS constant, not `85`. The recorder mirror stamps 85 with it.
 pub const EPOCH_85_INDIRECT_GATE: u32 = 85;
+/// Placeholder gate for an Indirect GRANTED TO THE SHOOTER'S OWN UNIT (a spell record on the attacker that is not an attackers-side mark; table twin
+/// `SoloController.granted_indirect_of`, read by `_solo_shot_eligibility` and the volley's moved note): the table waives the sight test of every
+/// weapon of such a unit and, after a move, says the Indirect moved penalty is not taken. The core read only a weapon's own Indirect and the
+/// target-side mark, so the grant was invisible to the per-weapon sight count and to the notes. The pick itself stays blind to it, as the table's
+/// (`_solo_pick_overlay_target` reads the weapon and the mark only). No shipped spell grants it today (every Indirect spell is an attackers-side
+/// mark), so no recorded game moves; from 94 the grant is read. Below 94 byte-identical. Every call site reads THIS constant, not `94`.
+pub const PENDING_EPOCH_OWN_INDIRECT: u32 = 94;
 /// The played volley's modifier distance (Valiant gate, over-9" modifiers) counts only the model pairs within the vertical reach (3", `melee_vertical_in`),
 /// and a unit with no pair in reach keeps the horizontal unit-centre distance: the table's `_solo_ai_volley_distance_in` over `nearest_melee_gap_in`.
 /// Before, a unit on a platform measured as close as the ground beside it (the soak's Hive Bond +1, table 4+ vs core 5+). Step path only. Records
