@@ -23,7 +23,7 @@ const STRIP_IN := 0.75
 const FLAT_IN := 0.12
 ## The authored K2 pipe modules (BoardgenKit) are cut for this bore (outer diameter, inches); a run draws them at bore / KIT_BORE_IN, uniformly.
 ## The pipe axis stands KIT_WALL_RATIO x its bore off the wall (the clamps and the elbow's collar are cut for it: 0.255 in at the reference bore).
-const KIT_MODULES: Array[String] = ["pipe", "elbow", "flange", "bracket", "valve"]
+const KIT_MODULES: Array[String] = ["pipe", "elbow", "flange", "bracket", "valve", "lamp_caged", "junction_box"]
 const KIT_BORE_IN := 0.34
 const KIT_WALL_RATIO := 0.75
 const KIT_WALL_IN := 0.255
@@ -31,7 +31,8 @@ const COLLAR_IN := 0.3   # the elbow's wall collar is 0.28 in in radius at the r
 ## Module extents at the reference bore, inches (min corner, size): the standing-room test reads them.
 const KIT_BOUNDS := {"pipe": AABB(Vector3(-1.5, -0.184, -0.184), Vector3(3.0, 0.368, 0.368)), "elbow": AABB(Vector3(-0.375, -0.28, -0.17), Vector3(0.655, 0.56, 0.447)),
 	"flange": AABB(Vector3(-0.074, -0.246, -0.246), Vector3(0.148, 0.492, 0.492)), "bracket": AABB(Vector3(-0.08, -0.215, -0.211), Vector3(0.16, 0.427, 0.471)),
-	"valve": AABB(Vector3(-0.23, -0.238, -0.238), Vector3(0.459, 0.878, 0.476))}
+	"valve": AABB(Vector3(-0.23, -0.238, -0.238), Vector3(0.459, 0.878, 0.476)), "lamp_caged": AABB(Vector3(-0.24, -0.25, -0.71), Vector3(0.48, 0.51, 0.71)),
+	"junction_box": AABB(Vector3(-0.25, -0.18, -0.255), Vector3(0.5, 0.52, 0.255))}
 
 
 ## Every prop of the board, in metres off the board centre: {shape: box | cyl | bulb | ball | ring | light, xf: Transform3D, colour: Color}. With
@@ -99,7 +100,7 @@ static func plan(layout: Dictionary, kit := false) -> Array[Dictionary]:
 	for l in chosen:
 		var d: Vector2i = l["d"]
 		var y: float = l["h"] - 0.8
-		_lamp(out, l["at"], d, l["yaw"], y, l["h"])
+		_lamp(out, l["at"], d, l["yaw"], y, l["h"], kit)
 		out.append({"shape": "light", "xf": Transform3D(Basis(), Vector3(l["at"].x - d.x * 0.9, y, l["at"].y - d.y * 0.9) * INCHES_TO_METERS), "colour": SODIUM})
 	return out
 
@@ -188,7 +189,18 @@ static func _kit(module: String, pos: Vector2, basis: Basis, scale: Vector3, y: 
 
 
 ## A wall lamp: back plate, bracket arm, hood, a cage of four bars round the emissive glass, and a cable up the wall. Reaches 0.7 in off the wall.
-static func _lamp(out: Array[Dictionary], at: Vector2, d: Vector2i, yaw: float, y: float, wall_h: float) -> void:
+## The kit look: the caged lamp module, the bulb (still the emissive primitive), a junction box 0.9 in below it and a conduit that joins the two.
+static func _lamp(out: Array[Dictionary], at: Vector2, d: Vector2i, yaw: float, y: float, wall_h: float, kit := false) -> void:
+	if kit:
+		var basis := Basis(Vector3.UP, yaw)
+		var box_y := y - 0.9
+		var from := box_y + 0.34   # the box's conduit stub ends here, the lamp's back plate starts 0.25 below its centre
+		var on_wall := at - Vector2(d) * 0.001   # (a hair inside the lamp's own cell, not on the boundary)
+		out.append(_kit("lamp_caged", on_wall, basis, Vector3.ONE, y, Color.WHITE))
+		out.append(_kit("junction_box", on_wall, basis, Vector3.ONE, box_y, Color.WHITE))
+		out.append(_kit("pipe", at - Vector2(d) * 0.03, basis * Basis(Vector3.BACK, PI * 0.5), Vector3((y - 0.25 - from) / 3.0, 0.147, 0.147), (from + y - 0.25) * 0.5, Color(0.5, 0.5, 0.52)))
+		out.append(_prop("bulb", at - Vector2(d) * 0.47, yaw, Vector3(0.24, 0.34, 0.24), y, SODIUM))
+		return
 	var s := Vector2(-d.y, d.x)
 	var hub := at - Vector2(d) * 0.47
 	out.append(_prop("box", at - Vector2(d) * 0.03, yaw, Vector3(0.5, 0.55, 0.06), y, STEEL))

@@ -132,7 +132,7 @@ func _ends(pipe: Dictionary) -> Array[Vector3]:
 
 func test_no_pipe_end_is_in_the_air_it_is_joined_or_turns_into_the_wall() -> void:
 	var items := BoardgenProps.plan(_fixture(), true)
-	var pipes := _of(items, "pipe")
+	var pipes := _of(items, "pipe").filter(func(p: Dictionary) -> bool: return absf(p["xf"].basis.x.normalized().y) < 0.01)   # the runs (a lamp's conduit is checked below)
 	var elbows := _of(items, "elbow")
 	var flanges := _of(items, "flange")
 	assert_int(pipes.size()).is_greater(10)
@@ -163,7 +163,7 @@ func test_the_kit_runs_keep_the_wall_strip_and_the_foot_of_a_ladder_bare() -> vo
 	for item in BoardgenProps.plan(layout, true):
 		if not BoardgenProps.KIT_MODULES.has(item["shape"]):
 			continue
-		assert_bool(feet.has(_cell_of(layout, item))).is_false()
+		assert_bool(feet.has(_cell_of(layout, item))).override_failure_message("%s at %s stands in the foot cell of a ladder" % [item["shape"], _inches(item)]).is_false()
 		var box: AABB = BoardgenProps.KIT_BOUNDS[item["shape"]]
 		for sx in [0.0, 1.0]:
 			for sy in [0.0, 1.0]:
@@ -197,4 +197,24 @@ func test_build_draws_the_pipe_modules_when_cached_and_the_primitives_otherwise(
 	var items := BoardgenProps.plan(layout, true)
 	for module: String in BoardgenProps.KIT_MODULES:
 		assert_int((node.get_node(module) as MultiMeshInstance3D).multimesh.instance_count).is_equal(_of(items, module).size())
-	assert_int(node.find_children("*", "MultiMeshInstance3D", false, false).size()).is_equal(10)   # five primitive shapes + five modules
+	assert_int(node.find_children("*", "MultiMeshInstance3D", false, false).size()).is_equal(12)   # five primitive shapes + seven modules
+
+
+func test_every_lamp_of_the_kit_hangs_on_a_conduit_from_a_junction_box() -> void:
+	var items := BoardgenProps.plan(_fixture(), true)
+	var lamps := _of(items, "lamp_caged")
+	var boxes := _of(items, "junction_box")
+	var conduits := _of(items, "pipe").filter(func(p: Dictionary) -> bool: return absf(p["xf"].basis.x.normalized().y) > 0.99)
+	assert_int(lamps.size()).is_between(1, BoardgenProps.MAX_LIGHTS)
+	assert_int(boxes.size()).is_equal(lamps.size())
+	assert_int(conduits.size()).is_equal(lamps.size())
+	assert_int(items.filter(func(p: Dictionary) -> bool: return p["shape"] == "light").size()).is_equal(lamps.size())   # the lights are the same sites
+	for c in conduits:
+		var top: Vector3 = _inches(c) + c["xf"].basis.x * 1.5
+		var bottom: Vector3 = _inches(c) - c["xf"].basis.x * 1.5
+		if top.y < bottom.y:
+			var swap := top
+			top = bottom
+			bottom = swap
+		assert_bool(lamps.any(func(l: Dictionary) -> bool: return absf(_inches(l).y - 0.25 - top.y) < 0.02 and Vector2(_inches(l).x, _inches(l).z).distance_to(Vector2(top.x, top.z)) < 0.05)).override_failure_message("a conduit does not reach a lamp at %s" % top).is_true()
+		assert_bool(boxes.any(func(b: Dictionary) -> bool: return absf(_inches(b).y + 0.34 - bottom.y) < 0.02 and Vector2(_inches(b).x, _inches(b).z).distance_to(Vector2(bottom.x, bottom.z)) < 0.05)).override_failure_message("a conduit does not start at a junction box at %s" % bottom).is_true()
