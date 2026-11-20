@@ -890,13 +890,6 @@ pub const EPOCH_80_ROLLOUT_CUMBERSOME: u32 = 80;
 /// auto-failed test of an already Shaken unit (or of a dead Shaken host's unit). Records stamped 80 or below replay byte-exact.
 /// Every call site reads THIS constant, not `81`. The recorder mirror stamps 81 with it.
 pub const EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF: u32 = 81;
-/// Placeholder gate for the Shaken flag of a joined chain: the table's `_solo_morale_test` toggles the unit it tests (its host, the dead
-/// host for a lone hero) only when that unit is not Shaken yet, then mirrors the flag onto every joined hero (`_solo_mirror_shaken`), and an
-/// idle recovery clears the heroes with the host. The core set the flag on the aimed unit alone: a host that failed a test left its hero
-/// unflagged inside the activation (no "fights on alone" carry, no hero idle), a lone hero was flagged although the table's dead host
-/// already was (nothing toggles then), and a recovered host left its heroes Shaken. From 94 the core does what the table does.
-/// Every call site reads THIS constant, not the literal `94`.
-pub const PENDING_EPOCH_SHAKEN_MIRROR: u32 = 94;
 /// Wound-ignore rules by name (#2595, table twin `_solo_ignore_wounds`): a bypass (Bane, Rending, Unstoppable, ...) skips only the
 /// roll of the rule named Regeneration (own, aura / buff granted, Medical Training); a unit whose ignore rule is anything else
 /// (Self-Repair, Resistance, Plaguebound, Angelic Blessing, ...) still rolls the bypassed wounds with the rest. Before, the core
@@ -909,6 +902,13 @@ pub const EPOCH_82_IGNORE_BY_NAME: u32 = 82;
 /// morale test still reads the chain (`morale_root`). Records stamped 82 or below replay byte-exact. Every call site
 /// reads THIS constant, not `83`. The recorder mirror (`act_recorder.gd`) stamps 83 in the same change.
 pub const EPOCH_83_LONE_HERO_TARGET: u32 = 83;
+/// Placeholder gate for the Shaken flag of a joined chain: the table's `_solo_morale_test` toggles the unit it tests (its host, the dead
+/// host for a lone hero) only when that unit is not Shaken yet, then mirrors the flag onto every joined hero (`_solo_mirror_shaken`), and an
+/// idle recovery clears the heroes with the host. The core set the flag on the aimed unit alone: a host that failed a test left its hero
+/// unflagged inside the activation (no "fights on alone" carry, no hero idle), a lone hero was flagged although the table's dead host
+/// already was (nothing toggles then), and a recovered host left its heroes Shaken. From 94 the core does what the table does.
+/// Every call site reads THIS constant, not the literal `94`.
+pub const PENDING_EPOCH_SHAKEN_MIRROR: u32 = 94;
 /// Differently named wound-ignore rules roll one after the other (#2595, table twin `_solo_regen_pick` / `_solo_ignore_wounds`): the
 /// core's `Ctx::regen_groups` hold the ignore rules by NAME (Regeneration first, then the most generous target, then the name), a
 /// bypassed wound skips only the Regeneration roll and joins the pool at the first other group; before, the family was one roll at the
