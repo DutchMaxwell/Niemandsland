@@ -106,6 +106,7 @@ static func flush(main) -> void:
 		return
 	var h: Array = _held
 	_held = []
+	_cast_pending = []   # the held compare carries this activation's casts: no second, cast-only compare of the same tap
 	compare(main, h[0], h[1], h[2], h[3])
 
 
@@ -263,7 +264,8 @@ static func _buffs_diff(main, core_buffs: Dictionary) -> String:
 	for uid in uids:
 		var had: Array = _buffs_before.get(uid, [])
 		var a: Array = (now.get(uid, []) as Array).filter(func(n: Variant) -> bool: return not had.has(n))
-		var b: Array = (core_buffs.get(uid, []) as Array).duplicate()
+		# A re-cast of a token the unit still held places no second name on the table's list: not a gain on either side.
+		var b: Array = (core_buffs.get(uid, []) as Array).filter(func(n: Variant) -> bool: return not had.has(n))
 		b.sort()
 		if a != b:
 			_detail = {"unit": str(uid), "table": a, "core": b}
@@ -354,13 +356,21 @@ static func _spend_core_buffs(delta: Array) -> void:
 ## CC-10d: the soak's planted faults on the SENT cast inputs (default: none).
 static func _plant_casts(t: Array) -> void:
 	var plant := plant_name()
+	var dice: Array = tap.filter(func(r: Dictionary) -> bool: return str(r["leg"]) == "cast")
+	var k := -1
 	for e in t:
 		var c := e as Dictionary
 		if str(c.get("t", "")) != "cast":
 			continue
+		k += 1
 		if plant == "cast_boost":
-			c["boost"] = int(c.get("boost", 0)) + 1
-			c["boost_sources"] = [[str(c.get("caster", "")), 1]]   # the extra token needs a payer (the spend check)
+			# The die's target moves by one and the payers stay as the table paid them: an unpaid extra boost is refused by
+			# the core's own payer check before any die (never a `rolls` reading). Away from the clamp at 6+ / 2+: up while
+			# the table's die needs less than 6, else down; the table's own die (the tap's k-th cast leg) is the reference.
+			var needs := clampi(int(c.get("base", 0)) - int(c.get("boost", 0)) + int(c.get("interference", 0)), 2, 6)
+			if k < dice.size():
+				needs = int((dice[k] as Dictionary)["target"])
+			c["base"] = int(c.get("base", 0)) + (1 if needs < 6 else -1)
 		elif plant == "cast_payer":
 			c["threshold"] = maxi(int(c.get("threshold", 0)) - 1, 0)
 
