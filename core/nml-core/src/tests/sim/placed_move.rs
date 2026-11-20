@@ -80,7 +80,7 @@ use super::*;
         st.positions[0] = vec![[0.0, 0.0, 0.0], [-2.0 * IN2M, 0.0, 0.0]];
         let cells = [[16.0, 14.0], [16.0, 15.0], [17.0, 14.0], [17.0, 15.0]].map(|c| [c[0], c[1], crate::terrain::RUINS as f64]).to_vec();
         let cell_params = crate::terrain::CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: IN2M };
-        let ruins = crate::terrain::Terrain::build(&crate::terrain::PlainTerrain { cells, sandbox: vec![], walls: vec![], pieces: vec![], containers: Vec::new(), cell_params });
+        let ruins = crate::terrain::Terrain::build(&crate::terrain::PlainTerrain { cells, sandbox: vec![], walls: vec![], pieces: vec![], containers: Vec::new(), cell_params, ..Default::default() });
         let w = |p: &[[f64; 2]]| p.iter().map(|q| [q[0] * IN2M, q[1] * IN2M]).collect::<Vec<_>>();
         let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact: true, ..Seams::default() };
         let run = |end_x: f64| {

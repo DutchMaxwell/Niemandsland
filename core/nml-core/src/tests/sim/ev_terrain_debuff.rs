@@ -224,6 +224,7 @@ use super::*;
                 grid_size_inches: 3.0,
                 inches_to_meters: IN2M,
             },
+            ..Default::default()
         });
         assert_eq!(t.type_at([(10.0 * IN2M) as f32, 0.0, 0.0]), crate::terrain::FOREST, "the target's centre stands in forest");
         assert_eq!(t.type_at([(8.0 * IN2M) as f32, 0.0, 0.0]), crate::terrain::NONE, "the charger's contact point does not");

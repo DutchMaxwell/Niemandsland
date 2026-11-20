@@ -190,6 +190,7 @@ fn school(cells: &[(i64, i64, i32)]) -> Terrain {
             grid_size_inches: 3.0,
             inches_to_meters: 0.0254,
         },
+        ..Default::default()
     })
 }
 
@@ -418,6 +419,7 @@ fn the_wall_clamp_reverts_a_gate_push_that_tunnels() {
             grid_size_inches: 3.0,
             inches_to_meters: 0.0254,
         },
+        ..Default::default()
     });
     let planned: Vec<V2> = vec![[37.5, 25.5]];
     let (got, rep) = finalize_placement(
