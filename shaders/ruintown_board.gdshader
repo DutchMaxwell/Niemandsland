@@ -118,6 +118,9 @@ void fragment() {
 		} else if (k == 18) {   // a wooden prop: planks with iron bands
 			alb = tint * mix(0.7, 1.15, h21(vec2(floor(uv.x * 4.0), seed))) * mix(0.55, 1.0, smoothstep(0.0, 0.05, abs(fract(uv.y * 2.5) - 0.5) - 0.42)) * mix(0.8, 1.0, seam(uv.x, 0.25, 0.03));
 		} else if (k == 3 || k == 4 || k == 6) {   // ruined house tiers and towers, by storey
+			float part = k == 6 ? 0.5 : ground_at(p.xz - wnrm.xz * 0.2).g;   // the part of a ruined row this face belongs to (its tone and where its storey band falls)
+			tint *= mix(0.86, 1.12, part);
+			uv.y += (part - 0.5) * 0.7;
 			float band = k == 6 ? 2.0 : floor(uv.y / 3.0);   // a tower is stone all the way up
 			if (band < 0.5) {
 				alb = mix(stone(uv, seed, 0.55, 1.0, tint * 0.9), vec3(0.09, 0.06, 0.04), door(uv, seed));
@@ -167,6 +170,9 @@ void fragment() {
 			float path = smoothstep(0.03, 0.0, abs(vnoise(xz * 0.21 + seed) - 0.5)) * step(0.5, vnoise(xz * 0.07 + 5.0));   // a worn path: pale, meandering (a noise stand-in until the doors of R12c exist)
 			alb = mix(alb, tint * vec3(1.4, 1.34, 1.2), 0.75 * path);
 		} else if (k == 3 || k == 4 || k == 8) {   // floor boards of a ruined house or yard, scorched in patches
+			if (k != 8) {
+				tint *= mix(0.9, 1.1, ground_at(xz).g);   // each part of a ruined row has its own tone
+			}
 			alb = tint * mix(0.72, 1.05, h21(vec2(floor(xz.x / 2.1), floor(xz.y / 0.5) + seed))) * mix(0.8, 1.0, seam(xz.y, 0.5, 0.05)) * mix(0.84, 1.0, smoothstep(0.35, 0.6, fbm(xz * 0.9 + seed))) * grid;
 		} else if (k == 6 || k == 12 || k == 9 || k == 10) {   // tower and wall tops, stone pieces: flagstones
 			alb = stone(xz, seed, 1.0, 1.4, tint) * mix(0.95, 1.0, grid);

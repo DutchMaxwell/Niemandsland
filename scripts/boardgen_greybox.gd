@@ -124,6 +124,7 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 		out.append_array(BoardgenTownDressing.lantern_boxes(layout))
 		out.append_array(BoardgenTownDressing.props(layout))
 		out.append_array(BoardgenTownDressing.lean_tos(layout))
+		out.append_array(BoardgenTownDressing.party_stubs(layout))
 		out.append_array(BoardgenTownDressing.breach_rubble(layout))
 		out.append_array(BoardgenTownDressing.hall_merlons(layout))
 	else:
@@ -411,10 +412,13 @@ static func ground_map(layout: Dictionary, kinds: Array) -> PackedByteArray:
 			centre[c] = mean / blob.size() - Vector2(c % nx, c / nx)
 	var bytes := PackedByteArray()
 	var cell_in := float(layout["cell_in"])
+	var tiers := BoardgenTownDressing.tier_parts(layout)
 	for i in nx * nz:
 		var x := i % nx
 		var z := i / nx
 		var run: int = run_of.call(x, z)
+		if tiers["cells"].has(i):
+			run = 1 + int(float(tiers["shade"]["%d/%d" % [cells[i]["lot_id"], tiers["cells"][i]]]) * 253.0)   # a ruined tier: the tone of its part (the shader reads it on tier faces)
 		var off := (centre.get(i, Vector2.ZERO) as Vector2) * cell_in
 		bytes.append_array([kinds.find(_cell_kind(cells[i], true)), run, clampi(roundi(off.x / 6.0 * 255.0 + 127.5), 0, 255), clampi(roundi(off.y / 6.0 * 255.0 + 127.5), 0, 255)])
 	return bytes

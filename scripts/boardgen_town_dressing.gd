@@ -274,6 +274,76 @@ static func props(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
+## The parts a ruined, walkable tier (Block, Deck) is drawn as (plan O7): a lot two or more cells long is a row that lost its roofs - two or three houses side by side, cut at cell
+## boundaries along its long axis. {cells: {cell index: part number}, parts: {lot: number of parts}, axis_x: {lot: bool}, shade: {"lot/part": 0..1}}. Pure data; the tier's boxes and tops are
+## not touched, only the paint (stone / timber tone and the storey band) and the short party-wall stubs differ per part.
+static func tier_parts(layout: Dictionary) -> Dictionary:
+	var out := {"cells": {}, "parts": {}, "axis_x": {}, "shade": {}}
+	var nx: int = layout["nx"]
+	for lot: Dictionary in layout.get("lots", []):   # a bare layout (no lots) has no tiers
+		if not ["Block", "Deck"].has(lot["kind"]):
+			continue
+		var axis_x: bool = lot["w"] >= lot["h"]
+		var n: int = lot["w"] if axis_x else lot["h"]
+		var half := 1 if lot["z"] * 2 >= int(layout["nz"]) else 0
+		var cut_at: Array[int] = []   # the cell indices (along the axis) where a new part starts
+		if n == 2 or (n == 3 and _hash(lot["id"], half, 100) < 0.5):
+			cut_at.append(1 + int(n == 3 and _hash(lot["id"], half, 101) < 0.5))   # 2: 1 + 1; 3: 1 + 2 or 2 + 1
+		elif n == 3:
+			cut_at.append_array([1, 2])   # 1 + 1 + 1
+		out["parts"][lot["id"]] = cut_at.size() + 1
+		out["axis_x"][lot["id"]] = axis_x
+		for dz in lot["h"]:
+			for dx in lot["w"]:
+				var part := 0
+				for c in cut_at:
+					part += int((dx if axis_x else dz) >= c)
+				out["cells"][(int(lot["z"]) + dz) * nx + int(lot["x"]) + dx] = part
+				out["shade"]["%d/%d" % [lot["id"], part]] = _hash(lot["id"], half, 110 + part)
+	return out
+
+
+## The party-wall stubs: where two parts of a tier meet, a stub 0.3 in thick and 0.4 in high stands at EACH end of the boundary, 0.6 in long, inside the 0.75 in edge strip, on the tier top
+## (boxes for the greybox plan). The middle of the top stays flat; none at a ladder's top cell.
+static func party_stubs(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var tiers := tier_parts(layout)
+	var feet := {}
+	for c: Dictionary in layout["connectors"]:
+		feet[int(c["high"])] = true
+	var level_in: Array = layout["level_in"]
+	for lot: Dictionary in layout["lots"]:
+		if not tiers["parts"].has(lot["id"]) or tiers["parts"][lot["id"]] < 2:
+			continue
+		var axis_x: bool = tiers["axis_x"][lot["id"]]
+		for dz in lot["h"]:
+			for dx in lot["w"]:
+				var i: int = (int(lot["z"]) + dz) * nx + int(lot["x"]) + dx
+				var nb: int = i + (1 if axis_x else nx)   # the next cell along the axis
+				if (dx + 1 >= lot["w"] if axis_x else dz + 1 >= lot["h"]) or tiers["cells"][nb] == tiers["cells"][i]:
+					continue
+				var edge_end: bool = (dz == 0 or dz == int(lot["h"]) - 1) if axis_x else (dx == 0 or dx == int(lot["w"]) - 1)   # the boundary's end cells
+				if not edge_end or feet.has(i) or feet.has(nb):
+					continue
+				var cell := origin + Vector2(i % nx, i / nx) * cell_in
+				var top: float = level_in[layout["cells"][i]["level"]]
+				var outer_first: bool = (dz == 0) if axis_x else (dx == 0)   # the end on the lot's low-coordinate side
+				var lo := Vector2.ZERO
+				var size := Vector2.ZERO
+				if axis_x:
+					size = Vector2(0.3, 0.6)
+					lo = Vector2(cell.x + cell_in - 0.15, cell.y + (0.05 if outer_first else cell_in - 0.65))
+				else:
+					size = Vector2(0.6, 0.3)
+					lo = Vector2(cell.x + (0.05 if outer_first else cell_in - 0.65), cell.y + cell_in - 0.15)
+				out.append({"lo": Vector3(lo.x, top, lo.y), "hi": Vector3(lo.x + size.x, top + 0.4, lo.y + size.y), "kind": "stone", "solid": false, "prop": true, "party_stub": true, "lot": lot["id"]})
+	return out
+
+
 ## Lean-tos and sheds at the BACK and SIDE of the houses (plan O6): boxes for the greybox plan ({lo, hi, kind, solid, prop, lean_to, lot, face}) on bare ground outside a house face, flush with the
 ## collider's face, at most 0.75 in deep and 1.6 in high, never on the front (the door side), a party wall, a street cell, a ladder foot, a landmark or a pool / garden / hazard cell. A shed is a wooden
 ## box with a tiled lid, a woodpile a low wooden box, a privy a narrow tall box with a lid. Only whole raised or intact houses (Block, Deck, Roofed) carry them. Pure data.
