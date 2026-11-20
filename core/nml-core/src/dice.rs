@@ -1927,8 +1927,10 @@ pub(crate) fn resolve_volley_with_pick_label(
         if (p.relentless || att.relentless_grant) && mod_dist_in > LONG_RANGE_IN {
             hits += sixes(&faces);
             // The table's line for the printed rule (a spell's grant adds its source, which the core does not carry).
-            if p.relentless && sixes(&faces) > 0 {
-                say_rule(tray, "relentless", att.side, || format!("Relentless: +{} hit{} (unmodified 6s)",
+            if (p.relentless || att.relentless_from.is_some()) && sixes(&faces) > 0 {
+                // A grant adds its source and the target (`_relentless_from_spell`), unless the weapon carries the rule itself.
+                let origin = att.relentless_from.filter(|_| !p.relentless).map(|n| format!(" — from {n} on {def_owner}")).unwrap_or_default();
+                say_rule(tray, "relentless", att.side, || format!("Relentless: +{} hit{} (unmodified 6s){origin}",
                     sixes(&faces), if sixes(&faces) == 1 { "" } else { "s" }));
             }
         }
@@ -1998,6 +2000,7 @@ pub(crate) fn resolve_volley_with_pick_label(
                 out.log.push(format!(
                     "Surge Mark: {} — +{} bonus hit{} on unmodified 6s against the marked target (once)",
                     sh.owner, mark_sixes, if mark_sixes == 1 { "" } else { "s" }));
+                say_rule(tray, "surge", att.side, || format!("Surge Mark: +{mark_sixes} hit{} (unmodified 6s) against the marked {def_owner} (once)", if mark_sixes == 1 { "" } else { "s" }));
             }
         }
         // `AiCombatMath.sergeant_bonus_hits` :493-494 — the bearer's unmodified
@@ -2176,6 +2179,8 @@ pub(crate) fn resolve_volley_with_pick_label(
         // epoch-gated Ctx leg (`sim::ctx_live`).
         if att.pierce_shooting_grant {
             ap += 1;
+            // The table's line at its save step (`_solo_save_batch`): the mark's grant names itself and the unit it was placed on.
+            say_rule(tray, "pierce_mark", att.side, || format!("Piercing Mark: friendly attackers get AP(+1) against {def_owner} (once)"));
         }
         // Rung I (audit 2026-09-02, DEFECT_LEDGER row 31) — the SAME `cond_ap`
         // fold `profile_ev` uses (combat.rs) now reaches the dice save target
@@ -3115,6 +3120,7 @@ pub fn resolve_melee_leg_wipe(
                     out.log.push(format!(
                         "Surge Mark: {} — +{} bonus hit{} on unmodified 6s against the marked target (once)",
                         sh.owner, mark_sixes, if mark_sixes == 1 { "" } else { "s" }));
+                    say_rule(tray, "surge", sh.att.side, || format!("Surge Mark: +{mark_sixes} hit{} (unmodified 6s) against the marked {def_owner} (once)", if mark_sixes == 1 { "" } else { "s" }));
                 }
             }
             // Furious :4477 — the unit-level rule the table stamps onto every

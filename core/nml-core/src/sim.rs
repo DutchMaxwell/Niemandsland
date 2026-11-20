@@ -4287,6 +4287,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     c.rending_grant = grants && mods::granted(state, i, "Rending");
     c.thrust_grant = grants && mods::granted(state, i, "Thrust");
     c.relentless_grant = grants && mods::granted(state, i, "Relentless");
+    c.relentless_from = if c.relentless_grant { mods::grant_source(state, i, "Relentless", false) } else { None };
     c.shred_grant = grants && mods::granted(state, i, "Shred");
     c.bane_grant = rule_on(rules_epoch, EPOCH_73_V36) && grants && mods::granted(state, i, "Bane when Shooting");
     c.unpredictable = c.unpredictable || (grants && mods::granted(state, i, "Unpredictable Fighter"));
@@ -4602,7 +4603,9 @@ pub fn ctx_live_vs(
     c = ctx_live(c, statics, state, i, melee, rules_epoch);
     c.rending_grant = c.rending_grant || mods::granted_vs(state, target, "Rending");
     c.furious = c.furious || mods::granted_vs(state, target, "Furious");
-    c.relentless_grant = c.relentless_grant || mods::granted_vs(state, target, "Relentless");
+    if !c.relentless_grant && mods::granted_vs(state, target, "Relentless") {
+        (c.relentless_grant, c.relentless_from) = (true, mods::grant_source(state, target, "Relentless", true));
+    }
     c.shred_grant = c.shred_grant || mods::granted_vs(state, target, "Shred");
     // G4R3 F-SURGE-GRANT (EPOCH_73_V36): a spell's once-grant of Surge to the target's attackers (the table's
     // `_solo_bridge_granted_flags`) pays like the Surge mark; the exchange spends the record.

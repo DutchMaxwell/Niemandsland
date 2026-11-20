@@ -575,6 +575,9 @@ pub struct Ctx {
     /// striker's roll flags where the WEAPON's own `p.relentless` is read
     /// (dice.rs, over-9" volleys). Zero on every `ctx_of`.
     pub relentless_grant: bool,
+    /// The name of the record that handed out `relentless_grant` (a Mark, a spell): the table's line says `... - from <name> on <target>`
+    /// (`_relentless_from_spell`). `None` on every `ctx_of`.
+    pub relentless_from: Option<&'static str>,
     /// A live `grants_rule: "Shred"` — the same bridge's shred leg, folded
     /// into the save batch the way the weapon's own `p.shred` is (dice.rs).
     /// Zero on every `ctx_of`.
@@ -4043,6 +4046,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         rending_grant: false,
         thrust_grant: false,
         relentless_grant: false,
+        relentless_from: None,
         shred_grant: false,
         bane_grant: false,
         slayer_grant: false,

@@ -308,6 +308,27 @@ fn chain_grant_where(
     })
 }
 
+/// The name of the first record on `i`'s joined chain that `chain_grant` would answer for (`attackers` picks the side): the grant's SOURCE, for the
+/// table's `... - from <source> on <target>` lines. `Ctx` is `Copy`, so the name is interned (`intern`).
+pub fn grant_source(state: &State, i: usize, rule: &str, attackers: bool) -> Option<&'static str> {
+    std::iter::once(i).chain(state.attached_to[i]).chain(state.attached[i].iter().copied())
+        .flat_map(|u| state.buffs[u].iter())
+        .find(|r| r.attackers == attackers && !r.grants_rule.is_empty() && base_rule_is(&r.grants_rule, rule))
+        .map(|r| intern(&r.name))
+}
+
+/// A record name that lives as long as the process, so a `Copy` context can carry it: a handful of distinct names, a handful of leaked strings.
+fn intern(name: &str) -> &'static str {
+    static NAMES: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<&'static str>>> = std::sync::OnceLock::new();
+    let mut set = NAMES.get_or_init(Default::default).lock().unwrap();
+    if let Some(&n) = set.get(name) {
+        return n;
+    }
+    let n: &'static str = Box::leak(name.to_string().into_boxed_str());
+    set.insert(n);
+    n
+}
+
 fn chain_grant(state: &State, i: usize, rule: &str, attackers: bool) -> bool {
     chain_grant_where(state, i, rule, attackers, |_| true)
 }
