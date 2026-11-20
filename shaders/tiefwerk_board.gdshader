@@ -2,7 +2,8 @@ shader_type spatial;
 // Look of a generated undercity board (BoardgenGreybox): ONE material for every box of the board. The surface kind comes per
 // instance (INSTANCE_CUSTOM.x); the neighbouring cell heights (tier lips, cliff stripes, contact shadow, sump rim) come from a
 // one-texel-per-cell texture. Everything is procedural: no texture file, nothing from a third party.
-// kinds: 0 ground, 1 street, 2 sump, 3 tier 1 (rusted plate deck), 4 tier 2 (rooftop slab), 5 ladder (every connector is a ladder).
+// kinds: 0 ground, 1 street, 2 sump, 3 tier 1 (rusted plate deck), 4 tier 2 (rooftop slab), 5 ladder (every connector is a ladder),
+// 6 tier 3 (a tower top: the rooftop slab, cooler and paler).
 
 uniform sampler2D cells : filter_nearest;   // red = height of the cell's top in inches, green = 255 for a sump cell
 uniform vec2 board_cells = vec2(16.0);
@@ -97,7 +98,7 @@ void fragment() {
 		float top_y = cell_at(ivec2(floor(g_in))).x;
 		float low_y = cell_at(ivec2(floor(g_out))).x;
 		float dtop = top_y - p.y;
-		alb = mix(vec3(0.17, 0.165, 0.16), vec3(0.30, 0.285, 0.27), n1) * (k == 4 ? 1.25 : 1.0);
+		alb = mix(vec3(0.17, 0.165, 0.16), vec3(0.30, 0.285, 0.27), n1) * (k == 4 ? 1.25 : k == 6 ? 1.45 : 1.0);
 		alb *= mix(0.55, 1.0, seam(uv.y, 1.5, 0.05)) * mix(0.7, 1.0, seam(uv.x, 1.5, 0.04));
 		float drip = smoothstep(0.55, 0.8, fbm(vec2(uv.x * 1.7, uv.y * 0.18))) * smoothstep(3.0, 0.0, dtop);
 		alb = mix(alb, vec3(0.33, 0.15, 0.06), drip);
@@ -164,6 +165,9 @@ void fragment() {
 			alb *= mix(0.2, 1.0, seam(uv.x + half_board.x, cell_in, 0.06) * seam(uv.y + half_board.y, cell_in, 0.06));
 			alb *= mix(0.88, 1.08, n3) * mix(0.7, 1.0, smoothstep(0.5, 0.72, n2));
 			rough = 0.85;
+		}
+		if (k == 6) {
+			alb *= vec3(0.82, 0.9, 1.08);
 		}
 		if (lip < 0.2) {   // the tier's trim: a pale lip with a dark groove behind it, no railing
 			alb = lip < 0.08 ? alb * 1.5 + 0.08 : alb * 0.5;

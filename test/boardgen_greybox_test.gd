@@ -39,7 +39,7 @@ func _area_in(b: Dictionary) -> float:
 func test_the_recorded_layout_is_a_whole_board() -> void:
 	var layout := _fixture()
 	assert_int(layout["cells"].size()).is_equal(CELLS)
-	assert_array(layout["level_in"]).is_equal([0, 3, 6])
+	assert_array(layout["level_in"]).is_equal([0, 3, 6, 9])
 	assert_array(layout["problems"]).is_empty()
 	var core := _core()
 	if core != null:   # the recording still is what the core makes (this check wakes up once the binding is merged)
@@ -48,12 +48,12 @@ func test_the_recorded_layout_is_a_whole_board() -> void:
 
 func test_the_blocks_tile_the_board_once_and_count_the_cells_of_each_tier() -> void:
 	for layout in _layouts():
-		var blocks := _of_kind(BoardgenGreybox.plan(layout), ["street", "ground", "hazard", "tier1", "tier2"])
+		var blocks := _of_kind(BoardgenGreybox.plan(layout), ["street", "ground", "hazard", "tier1", "tier2", "tier3"])
 		var area := 0.0
 		for b in blocks:
 			area += _area_in(b)
 		assert_float(area).is_equal(CELLS * CELL_IN * CELL_IN)
-		for level in [1, 2]:
+		for level in [1, 2, 3]:
 			var want: int = layout["cells"].filter(func(c: Dictionary) -> bool: return c["level"] == level).size()
 			var got := 0.0
 			for b in _of_kind(blocks, ["tier%d" % level]):
@@ -66,12 +66,23 @@ func test_a_tier_block_is_as_high_as_its_level_in_inches() -> void:
 		var level_in: Array = layout["level_in"]
 		var seen := {}
 		for b in BoardgenGreybox.plan(layout):
-			for level in [1, 2]:
+			for level in [1, 2, 3]:
 				if b["kind"] == "tier%d" % level:
 					seen[level] = true
 					assert_float(b["hi"].y).is_equal(float(level_in[level]))
 					assert_float(b["lo"].y).is_equal(0.0)
-		assert_int(seen.size()).is_equal(2)   # the board has both tiers
+		assert_int(seen.size()).is_equal(3)   # the board has all three tiers
+
+
+func test_a_tower_is_nine_inches_high_and_a_six_to_nine_ladder_climbs_it() -> void:
+	for layout in _layouts():
+		var boxes := BoardgenGreybox.plan(layout)
+		var towers := _of_kind(boxes, ["tier3"])
+		assert_int(towers.size()).is_greater(0)
+		assert_bool(towers.all(func(b: Dictionary) -> bool: return is_equal_approx(b["hi"].y, 9.0) and b["lo"].y == 0.0)).is_true()
+		# A ladder up to a tower: two rails that stand from the 6 in tier to the 9 in top.
+		var rails := _of_kind(boxes, ["ladder"]).filter(func(b: Dictionary) -> bool: return is_equal_approx(b["hi"].y, 9.0) and is_equal_approx(b["lo"].y, 6.0))
+		assert_int(rails.size()).is_greater_equal(2)
 
 
 func test_every_connector_is_a_ladder_drawn_as_rails_and_rungs_and_no_stair_is_built() -> void:
@@ -82,7 +93,7 @@ func test_every_connector_is_a_ladder_drawn_as_rails_and_rungs_and_no_stair_is_b
 		# Two rails and five rungs per 3 in ladder; no other connector shape exists.
 		assert_int(_of_kind(boxes, ["ladder"]).size()).is_equal(conns.size() * 7)
 		assert_int(_of_kind(boxes, ["stair"]).size()).is_equal(0)
-		assert_int(boxes.size()).is_equal(_of_kind(boxes, ["street", "ground", "hazard", "tier1", "tier2", "ladder"]).size())
+		assert_int(boxes.size()).is_equal(_of_kind(boxes, ["street", "ground", "hazard", "tier1", "tier2", "tier3", "ladder"]).size())
 		assert_bool(BoardgenGreybox.KINDS.has("stair")).is_false()
 	assert_int(_fixture()["connectors"].size()).is_greater(0)
 
