@@ -10,13 +10,78 @@
     "Army Standard Bearer": "An upgrade's own label; the rules it grants (Fear(2)) are carried and checked on their own in melee.",
     "Courage": "The bare base the Courage Aura expansion stamps; no map entry on either side - the +1 morale in melee rides the aura's own Banner entry."
   },
-  "deny_names": {},
+  "deny_names": {
+    "Angelic Blessing": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 24 of 31 (a Regeneration alias): the table says `Warding: no N+ ignore, X was charged from within 1in`, the core does not.",
+    "Unmovable": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 4 of 4 (a Battleborn alias): a line differs.",
+    "Power Shrooms": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 8 of 16: the to-hit target of the first attack roll differs (4+ against 3+).",
+    "Cleric": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 10 of 18: the defense dice count of the first roll differs.",
+    "Furious Buff": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 10 of 18 (a Utility Buff alias): the defense dice count differs after the buff's Furious grant.",
+    "Precision Attacks Buff": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 8 of 16 (a Utility Buff alias): the to-hit target of the first attack roll differs.",
+    "Hold the Line": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 14 of 40 (a Banner alias): the defense dice count of one roll differs.",
+    "Destroyer": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 13 of 31 (a Shred alias): a line and a roll differ."
+  },
   "groups": {
     "attached_heroes": {
       "primitives": [],
       "kind": "measured",
       "why": "ME-HERO probe (19.11., after #3048): remaining joined-hero melee differences on both seats (1 in separation guard / moves back vs stays put, Hero tests on behalf of host line, Hero fights on alone line, pile-in line). Listing this group refuses attachments in deny mode.",
       "leaves_with": "the joined-hero melee fixes (lane hlines) and a 16/16 equal ME-HERO re-probe"
+    },
+    "unpredictable_fighter_die": {
+      "primitives": [
+        "Unpredictable Fighter"
+      ],
+      "kind": "rule_line",
+      "why": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 50 of the 53 taken charges that carry it differ: the table says `Unpredictable Fighter: X rolls N -> +N to hit` (or AP(+N)) and the core's die and line do not match (lines 34, a roll 3).",
+      "leaves_with": "the Unpredictable Fighter die and its lines on the step path, a 16/16 probe of both seats"
+    },
+    "strafing_not_in_melee": {
+      "primitives": [
+        "Strafing"
+      ],
+      "kind": "rule_line",
+      "why": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 30 of 30: the table says `Strafing: W attacks only when X moves through an enemy unit - it does not strike in melee`, the core says nothing and the defense dice of 16 of them differ.",
+      "leaves_with": "the core's strike filter says the Strafing line and drops the weapon the table drops, a 16/16 probe"
+    },
+    "evasive_to_hit_line": {
+      "primitives": [
+        "Evasive"
+      ],
+      "kind": "rule_line",
+      "why": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 14 of 14: the table says `To-hit vs X: Evasive -1 -> hits on 5+`, the core's melee leg stays silent (dice and state equal).",
+      "leaves_with": "the core's melee leg says the Evasive to-hit line"
+    },
+    "breath_attack_dice_in_melee": {
+      "primitives": [
+        "Breath Attack"
+      ],
+      "kind": "beat",
+      "why": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 11 of 14: the core rolls the Breath Attack dice (2-3 dice) in the melee where the table rolls none (roll count 0 against 2 or 3).",
+      "leaves_with": "the melee leg does not roll a trigger beat, or the table's beat joins the transcript"
+    },
+    "ravage_line": {
+      "primitives": [
+        "Ravage"
+      ],
+      "kind": "rule_line",
+      "why": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 9 of 10: the table says `Ravage(N): X rolls N dice -> N wounds (no save)`, the core does not.",
+      "leaves_with": "the core's melee leg says the Ravage line"
+    },
+    "armor_line": {
+      "primitives": [
+        "Armor"
+      ],
+      "kind": "rule_line",
+      "why": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 13 of 14: the table says `X has Armor(N): counts as Defense M+`, the core does not.",
+      "leaves_with": "the core's melee leg says the Armor line"
+    },
+    "hit_and_run_landing": {
+      "primitives": [
+        "Hit & Run"
+      ],
+      "kind": "measured",
+      "why": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 34 of 112 (Harassing and the other aliases): the charger ends 1 to 5 in from the table's end, the dice are equal.",
+      "leaves_with": "the table's and the core's Hit & Run step after a melee agree, a 16/16 probe"
     }
   }
 }
