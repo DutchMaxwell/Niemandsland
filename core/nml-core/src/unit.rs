@@ -200,6 +200,9 @@ pub struct Ctx {
     /// Fighter" NEVER reaches this flag. One die per volley, before any
     /// weapon fires (main.gd:3096-3110).
     pub unpredictable_shooting: bool,
+    /// Plan H (H-15a): the book rule the volley die belongs to ("Unpredictable", "Unpredictable Shooter"; "" without), for the step path's line
+    /// `<rule>: <unit>'s volley rolls N -> AP(+1) | +1 to hit` (the table's `_solo_unpredictable_rule`). No die, no outcome moves.
+    pub unpredictable_name: &'static str,
     /// The volley die's own registry params (`assets/solo/rules_mechanics_*
     /// .json`, both "Unpredictable" and "Unpredictable Shooter"): a face at
     /// or under `low_roll_max` is AP(+ap_bonus) on every profile of the
@@ -3643,6 +3646,14 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         && unit_rule_active(reg, p, "Unpredictable"))
         || (has_exact_rule(&p.special_rules, "Unpredictable Shooter")
             && unit_rule_active(reg, p, "Unpredictable Shooter"));
+    // The rule's name for the table's line, in `_solo_unpredictable_rule`'s order (the generic spelling first).
+    let upr_name: &'static str = if has_exact_rule(&p.special_rules, "Unpredictable") && unit_rule_active(reg, p, "Unpredictable") {
+        "Unpredictable"
+    } else if upr_shooting {
+        "Unpredictable Shooter"
+    } else {
+        ""
+    };
     let (upr_ap_bonus, upr_hit_bonus, upr_low_roll_max) = if upr_shooting {
         unpredictable_shooting_params(reg, p)
     } else {
@@ -3856,6 +3867,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         // two branches (:5406/:5409-5410) — see `upr_shooting` above. The
         // melee-only "Unpredictable Fighter" is never consulted here.
         unpredictable_shooting: upr_shooting,
+        unpredictable_name: upr_name,
         // The die's three params come off the carried rule's own registry
         // entry (defaults 1/1/3, the table's `unpredictable_fighter_effect`).
         unpredictable_ap_bonus: upr_ap_bonus,
