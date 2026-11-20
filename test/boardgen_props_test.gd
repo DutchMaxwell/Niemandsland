@@ -35,6 +35,13 @@ func test_one_seed_dresses_the_same_board_and_another_seed_another() -> void:
 	assert_bool(BoardgenProps.plan(other) == first).is_false()
 
 
+func test_a_landmark_footprint_stays_bare() -> void:
+	var layout := _fixture()
+	assert_int(BoardgenProps.plan(layout).size()).is_greater(40)
+	layout["landmarks"] = [{"kind": "TankCluster", "x": 0, "z": 0, "w": 16, "h": 16, "turn": 0}]   # every cell is some landmark's
+	assert_int(BoardgenProps.plan(layout).size()).is_equal(0)
+
+
 ## True when `corner` (inches off the board centre) is not standing room: inside a tier block, within STRIP_IN of a tier wall in its level-0 cell.
 func _outside_standing_room(layout: Dictionary, corner: Vector3) -> bool:
 	var half := Vector2(layout["nx"], layout["nz"]) * CELL_IN * 0.5
