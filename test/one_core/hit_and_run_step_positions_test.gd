@@ -220,3 +220,21 @@ func test_a_unit_that_lost_a_model_still_lands_its_step() -> void:
 			Vector2((to[i] as Vector3).x, (to[i] as Vector3).z))).override_failure_message(
 			"survivor %d stands on the core's spot: %s vs %s" % [i, got[i], to[i]]).is_less(0.001)
 	_free(units)
+
+
+## melee95: a core step of half a millimetre to a millimetre (the defender's last pile-in step, 0.0005 m is the table's own smallest move) is
+## landed like any other. RED with the old millimetre tolerance: the model stays 0.7 mm short of the core's spot (0.02 in in the melee sweep).
+func test_a_core_step_of_under_a_millimetre_is_still_landed() -> void:
+	CoreActivation.reset_all(_main)
+	var units := _pair()
+	var att: GameUnit = units[0]
+	var start := CoreActivation._start_models(_main)
+	var to: Array = att.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
+	to[0] = (to[0] as Vector3) + Vector3(0.0007, 0.0, 0.0)
+	var row := {"unit": att.unit_id, "removed": [], "shaken": false, "alive": to.size(), "moved": true, "unknown": true,
+		"positions": to, "stamps": {}}
+	await CoreActivation.land_delta(_main, [row], start, {})
+	var now: Vector3 = (att.get_alive_models()[0] as ModelInstance).node.global_position
+	assert_float(Vector2(now.x, now.z).distance_to(Vector2((to[0] as Vector3).x, (to[0] as Vector3).z))).override_failure_message(
+		"the 0.7 mm step landed: %s vs %s" % [now, to[0]]).is_less(0.0001)
+	_free(units)
