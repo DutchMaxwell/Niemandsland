@@ -59,3 +59,13 @@ func test_the_box_size_reaches_the_fragment_and_the_edges_foot_eaves_and_top_cou
 	assert_bool(src.contains("soot under the eaves")).is_true()
 	assert_bool(src.contains("float d_top = e.y")).is_true()   # the ragged top course is measured from the box top (its size is in the instance data), the collider is untouched
 	assert_bool(src.contains("k != 15 && k != 17")).is_true()   # the roof prism and the lantern are no boxes
+
+
+## The earth's pebbles and tufts (lead, 21.11., after R3 macro): small, dark, irregular and sparse - never yellow coins.
+func test_the_earth_has_sparse_dark_irregular_pebbles_and_no_yellow_coins() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	assert_bool(src.contains("vec3(0.30, 0.38, 0.17)")).override_failure_message("the yellow-green coin tuft is back").is_false()
+	assert_bool(src.contains("step(0.955, sp)")).is_true()   # a pebble in one cell of 22
+	assert_bool(src.contains("1.0 + 1.4 * h21(ci + 5.0)")).is_true()   # stretched, so no round coin
+	assert_bool(src.contains("vec3(0.13, 0.12, 0.11)")).is_true()   # a dark stone
+	assert_bool(src.contains("+ 0.35 * pebble")).is_true()   # and it stands proud (relief)
