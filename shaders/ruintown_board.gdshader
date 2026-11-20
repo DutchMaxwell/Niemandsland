@@ -118,8 +118,8 @@ void fragment() {
 			vec2 cellp = floor(xz * 5.0);
 			float speck = h21(cellp + seed);
 			alb = tint * mix(0.78, 1.15, fbm(xz * 1.6 + seed)) * mix(1.0, 1.3, step(0.94, h21(floor(xz * 7.0)))) * grid;
-			alb = mix(alb, vec3(0.30, 0.38, 0.17), step(0.86, speck) * step(length(fract(xz * 5.0) - 0.5), 0.34) * 0.8);   // a weed tuft
-			alb = mix(alb, vec3(0.45, 0.43, 0.40) * mix(0.8, 1.2, h21(cellp + 3.0)), step(0.95, speck) * step(length(fract(xz * 5.0) - 0.5), 0.3));   // a broken stone
+			alb = mix(alb, vec3(0.30, 0.38, 0.17), step(0.84, speck) * step(length(fract(xz * 5.0) - 0.5), 0.34) * 0.7);   // a weed tuft
+			alb = mix(alb, vec3(0.26, 0.25, 0.23) * mix(0.8, 1.25, h21(cellp + 3.0)), step(0.965, speck) * step(length(fract(xz * 5.0) - 0.5), 0.26));   // a broken stone
 		} else if (k == 3 || k == 4 || k == 8) {   // floor boards of a ruined house or yard, scorched in patches
 			alb = tint * mix(0.72, 1.05, h21(vec2(floor(xz.x / 2.1), floor(xz.y / 0.5) + seed))) * mix(0.8, 1.0, seam(xz.y, 0.5, 0.05)) * mix(0.84, 1.0, smoothstep(0.35, 0.6, fbm(xz * 0.9 + seed))) * grid;
 		} else if (k == 6 || k == 12 || k == 9 || k == 10) {   // tower and wall tops, stone pieces: flagstones
