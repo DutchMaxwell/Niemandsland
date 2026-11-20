@@ -1712,6 +1712,10 @@ pub(crate) fn resolve_volley_with_pick_label(
             im_fired.push(sh.owner);
             out.log.push(format!(
                 "Indirect: no moved penalty: {} shoots after moving", sh.owner));
+        } else if att.indirect_own && att.moved_this_round && im_fired.iter().all(|o| *o != sh.owner) {
+            // PENDING_EPOCH_OWN_INDIRECT: an Indirect granted to the shooter's own unit makes every shot Indirect (`granted_indirect_of`).
+            im_fired.push(sh.owner);
+            out.log.push(format!("Indirect: no moved penalty: {} shoots after moving", sh.owner));
         }
         if im == 0
             && p.indirect_moved_hit_penalty > 0
@@ -3593,6 +3597,7 @@ fn compose_to_hit_note(
         if rule_on(att.rules_epoch, EPOCH_73_V36) { notes.push("Indirect: no moved penalty".into()); }
         else if im != 0 { notes.push(format!("Indirect moved {im}")); }
     }
+    if att.moved_this_round && att.indirect_own && !p.indirect { notes.push("Indirect: no moved penalty".into()); }   // PENDING_EPOCH_OWN_INDIRECT
     if att.spot_hit_note != 0 { notes.push(format!("Spotted {:+}", att.spot_hit_note)); }
     if att.tag_hit_note != 0 { notes.push(format!("Tagged {:+}", att.tag_hit_note)); }
     (base_note, notes.join(", "))

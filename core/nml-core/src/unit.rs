@@ -620,6 +620,9 @@ pub struct Ctx {
     /// Mark) — whoever SHOOTS at it may waive the sight test. Zero on every
     /// `ctx_of`; only `sim::ctx_live` folds the ledger's once-record.
     pub indirect_mark: bool,
+    /// An Indirect granted to THIS unit's own store (`mods::granted_own_indirect`, from `PENDING_EPOCH_OWN_INDIRECT`): its shots after a move
+    /// are Indirect ones, so the to-hit note names the waived moved penalty. Zero on every `ctx_of`; only `sim::ctx_live` folds it.
+    pub indirect_own: bool,
     /// A live attackers-side `grants_rule: "+6\" shooting range"` (Increased
     /// Shooting Range Mark) — the shooter's volley reach gains this many
     /// inches. `0.0` on every `ctx_of`.
@@ -4057,6 +4060,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         pierce_assault_grant: false,
         surge_mark_grant: false,
         indirect_mark: false,
+        indirect_own: false,
         range_mark_in: 0.0,
         growth_ap_mod: 0,
         growth_hit_mod: 0,
