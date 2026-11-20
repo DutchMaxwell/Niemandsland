@@ -20,7 +20,7 @@ func _wire(missing: String) -> Array:
 	add_child(lib)
 	auto_free(lib)
 	var mat := ShaderMaterial.new()
-	mat.shader = BoardgenGreybox.SHADER
+	mat.shader = load("res://shaders/tiefwerk_board.gdshader")   # the Deepworks board shader (the theme table names it)
 	return [BoardgenGreybox.wire_surfaces(mat, lib), mat]
 
 
