@@ -5,7 +5,7 @@ extends GdUnitTestSuite
 const SHADER_PATH := "res://shaders/tiefwerk_board.gdshader"
 
 
-const INCLUDES := ["res://shaders/tiefwerk_edges.gdshaderinc"]
+const INCLUDES := ["res://shaders/tiefwerk_noise.gdshaderinc", "res://shaders/tiefwerk_edges.gdshaderinc"]
 
 
 ## The board shader with its includes appended (the pins below do not care which file a function lives in).
