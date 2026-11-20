@@ -12583,8 +12583,10 @@ func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 			await get_tree().create_timer(total).timeout
 		if tw != null and tw.is_valid():
 			tw.kill()
-		# Snap onto the exact final (the tween end) so state and visuals agree to the millimetre.
-		var fin := path.back() as Vector3
+		# Snap onto the exact final so state and visuals agree to the millimetre: the placement the move published (`end`: what the gate left the model on
+		# and what `_apply_model_positions` wrote and broadcast), else the route's last point. The retraced route may end up to 0.0005 m short of the
+		# gated placement, which left a model 0.01 to 0.02 in off its own state after every glide.
+		var fin := (entry as Dictionary).get("end", path.back()) as Vector3
 		node.global_position = Vector3(fin.x, node.global_position.y, fin.z)
 	await _solo_glide_turn_back(end_yaws, SOLO_GLIDE_TURN_M / speed)
 	# The corridors fade now that the whole unit has flowed through (persisted corridors faded here, not on spawn).
