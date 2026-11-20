@@ -880,7 +880,7 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 		if st["first"] and dice > 0:
 			_dangerous_mismatch(unit, dice, "it threw no die")
 		ai_runs += 1
-		announce(main, unit, target)   # step 50/51: the table that ran the AI activation announces its digest check
+		announce(main, unit, target, cast_touched(report) if cast_taken else [])   # step 50/51 (+ CC-13c: the casts' targets and payers): the table that ran the AI activation announces its digest check
 		return true
 	ai_refusals += 1
 	push_error("CoreActivation.run_ai: %s - the core answered %s: %s" % [unit.get_name(), r["step"], r.get("reason", "")])
@@ -2208,12 +2208,34 @@ static func _carries_buff(u: GameUnit, named: Array = []) -> bool:
 
 
 ## Step 49 (N6 b): the units an activation touched - the actor and its joined chain (the host it joined, its attached
-## heroes), then the target's chain; a null target = the actor side only. Each unit once.
-static func touched_units(main, actor: GameUnit, target: GameUnit = null) -> Array:
+## heroes), then the target's chain; a null target = the actor side only. Each unit once. CC-13c: `extra` = further units the
+## activation touched (`cast_touched`), each with its own joined chain, after the target's.
+static func touched_units(main, actor: GameUnit, target: GameUnit = null, extra: Array = []) -> Array:
 	var out: Array = main._solo_joined_chain(actor)
 	for gu in main._solo_joined_chain(target):
 		if not out.has(gu):
 			out.append(gu)
+	for x in extra:
+		for gu in main._solo_joined_chain(x as GameUnit):
+			if not out.has(gu):
+				out.append(gu)
+	return out
+
+
+## CC-13c: the units the core-resolved casts of a report touched beyond the actor's chain and the volley's target: every cast's
+## targets (a spell's wounds, a buff's record land there) and the units that paid its boost / interference tokens (their counts
+## moved), each once, in plan order. [] for a report without casts. Pure.
+static func cast_touched(report: Dictionary) -> Array:
+	var out: Array = []
+	for c in report.get("casts", []):
+		var cast := c as Dictionary
+		var units: Array = (cast.get("targets", []) as Array).duplicate()
+		for key in ["boost_sources", "interference_sources"]:
+			for src in cast.get(key, []):
+				units.append((src as Dictionary).get("unit"))
+		for u in units:
+			if u is GameUnit and not out.has(u):
+				out.append(u)
 	return out
 
 
@@ -2255,14 +2277,14 @@ static var _announced: Dictionary = {}
 ## `activation_check` to every other table with the touched units, their digest and their rows (the rows let the
 ## receiver tell a sub-millimetre rounding split from a real difference, step 51). Nothing with the flag off, outside a
 ## room (solo, hotseat), in a Manual room, or for any other unit.
-static func announce(main, actor: GameUnit, target: GameUnit = null) -> void:
+static func announce(main, actor: GameUnit, target: GameUnit = null, extra: Array = []) -> void:
 	var nm = main.network_manager
 	if actor == null or not applies(main) or nm == null or not nm.is_multiplayer_active():
 		return
 	if not is_core_unit(main, actor) and not (main._solo_is_ai_unit(actor) and is_plain(actor)):
 		return
 	var round_no: int = main.opr_army_manager.current_round
-	var touched := touched_units(main, actor, target)
+	var touched := touched_units(main, actor, target, extra)
 	var ids: Array = touched.map(func(gu: GameUnit) -> String: return gu.unit_id)
 	_announced[actor.unit_id] = round_no
 	nm.send_command("activation_check", {"unit": actor.unit_id, "units": ids, "round": round_no, "digest": digest(touched),
