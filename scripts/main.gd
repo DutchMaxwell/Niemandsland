@@ -2942,7 +2942,7 @@ func _solo_defender_places_markers() -> void:
 	if solo_controller == null or defender != solo_controller.ai_slot:
 		return
 	var dropped: int = terrain_overlay.get_objectives().size()
-	var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")))
+	var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")), _deploy_board_in())
 	var stamp := ObjectiveLayout.generate(int(_solo_deploy_fsm.get("seed", 0)), mission, style,
 		terrain_overlay.grid_cells, map_layout_editor._calculate_grid_dimensions().x,
 		table.table_size.x * 12.0, table.table_size.y * 12.0)
@@ -3807,7 +3807,7 @@ func _solo_apply_mission_if_chosen() -> void:
 	var mmeta: Array = SoloController.marker_metadata(mk)
 	SoloController.mission_reset(str(mission.get("scoring", "end")), (mission.get("vp", {}) as Dictionary), mmeta)
 	if terrain_overlay != null and table != null:
-		var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")))
+		var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")), _deploy_board_in())
 		var resolved: Array = MissionCatalog.marker_positions(mission, style,
 			table.table_size.x * 12.0, table.table_size.y * 12.0)
 		if not resolved.is_empty():
@@ -4250,6 +4250,11 @@ func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
 		_solo_deploy_show_human_turn()
 
 
+## The table's board in inches: the key into the per-board deployment catalogue (a 4 x 4 table must not draw a 72 x 48 zone).
+func _deploy_board_in() -> Vector2:
+	return table.table_size * 12.0 if table != null else DeploymentCatalog.DEFAULT_BOARD_IN
+
+
 ## D7a: the zone style's bounding rect in world metres (what the AI's search scans).
 func _solo_style_rect(style: Dictionary, player: int = 1) -> Rect2:
 	var lo := Vector2(INF, INF)
@@ -4266,10 +4271,10 @@ func _solo_style_rect(style: Dictionary, player: int = 1) -> Rect2:
 func _solo_phase_zone(entry: Array, slot: int) -> Dictionary:
 	var id := str(entry[2])
 	if id != "own":
-		return {"style": DeploymentCatalog.get_style(id), "id": id, "player": 1}
+		return {"style": DeploymentCatalog.get_style(id, _deploy_board_in()), "id": id, "player": 1}
 	var sid := str(MissionCatalog.get_mission(_solo_mission_id).get("deployment", "front_line"))
 	var ai_key: int = 1 if bool(_solo_deploy_fsm.get("ai_neg_z", true)) else 2
-	return {"style": DeploymentCatalog.get_style(sid), "id": sid,
+	return {"style": DeploymentCatalog.get_style(sid, _deploy_board_in()), "id": sid,
 		"player": ai_key if slot == solo_controller.ai_slot else 3 - ai_key}
 
 
@@ -4299,7 +4304,7 @@ func _solo_phase_start() -> void:
 		terrain_overlay.set_style_zones(style, int(zone["player"]) if str((phases[i] as Array)[2]) == "own" else 0)
 	if ai_side:
 		solo_controller.deploy_set_zone(_solo_style_rect(style, int(zone["player"])),
-			DeploymentCatalog.zone_test(str(zone["id"]), int(zone["player"])))
+			DeploymentCatalog.zone_test(str(zone["id"]), int(zone["player"]), _deploy_board_in()))
 		solo_controller.deploy_set_gates(phase_gates)
 		var done: Array = solo_controller.deploy_place_n(quota)
 		placed[slot] = int(placed.get(slot, 0)) + done.size()
@@ -4465,7 +4470,7 @@ func _solo_mission_reserve_rolls(round_number: int) -> void:
 			_log_rule_event(BattleLog.Category.GENERAL, "Reserve roll: %s rolls %d (needs %d+) — %s" % [
 				(e["unit"] as GameUnit).get_name(), int(e["roll"]), on,
 				"arrives this round" if bool(e["arrives"]) else "stays off the table"], slot == solo_controller.ai_slot)
-	solo_controller.mission_arrival_set(DeploymentCatalog.zone_test(str(cfg.get("zone", "anywhere")), 1),
+	solo_controller.mission_arrival_set(DeploymentCatalog.zone_test(str(cfg.get("zone", "anywhere")), 1, _deploy_board_in()),
 		(cfg.get("gates", {}) as Dictionary))
 
 
@@ -4478,7 +4483,7 @@ func _solo_reserve_arrival_violation(placed: Array) -> String:
 		if cfg.is_empty() or gu == null or not bool(gu.unit_properties.get("mission_reserve", false)):
 			continue
 		var c := solo_controller.unit_centre(gu)
-		if not DeploymentCatalog.in_zone(DeploymentCatalog.get_style(str(cfg.get("zone", "anywhere"))), 1, Vector2(c.x, c.z) / 0.0254):
+		if not DeploymentCatalog.in_zone(DeploymentCatalog.get_style(str(cfg.get("zone", "anywhere")), _deploy_board_in()), 1, Vector2(c.x, c.z) / 0.0254):
 			return "%s must arrive inside the marked zone — move it, then ✓" % gu.get_name()
 		var models: Array = []
 		for m in gu.get_alive_models():
