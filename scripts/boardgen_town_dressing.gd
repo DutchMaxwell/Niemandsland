@@ -44,30 +44,57 @@ static func house_bodies(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
-## One roof per intact lot: {lot, centre (Vector2, board inches), length, width (along / across the ridge), height, along_x, half, yaw, eaves}. Pure data.
+## The roofs of the intact lots (plan O4), pure data: {lot, centre (Vector2, board inches), length, width (along / across the ridge), height, along_x, half, yaw, eaves, type, back, annex}.
+## The ridge runs ALONG the street (eaves-on) or ACROSS it (gable-on) by the lot's hash, from the frontage (a lot with no street beside it keeps the long axis). The type is a gable, a
+## hip (the ends slope too) or, for an eaves-on roof only, a catslide (the back slope runs down past the eaves; `back` = which side of the ridge is the back, -1 / +1). A lot of two or
+## more cells may carry an ANNEX: its last cell at one end of the ridge gets its own, lower gable roof (`annex` true; the main roof is shorter by that cell). The yaw is the body's plus a skew
+## of at most 2 degrees. VISUAL ONLY: the body below stays the core's 2.5 in solid.
 static func roofs(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var cell_in := float(layout["cell_in"])
 	var board := Vector2(layout["nx"], layout["nz"]) * cell_in
+	var fronts := {}
+	for f: Dictionary in frontage(layout):
+		fronts[f["lot"]] = f["front"]
 	for lot: Dictionary in layout["lots"]:
 		if lot["kind"] != "Roofed":
 			continue
+		var id: int = lot["id"]
 		var size := Vector2(lot["w"], lot["h"]) * cell_in
 		var centre := Vector2(lot["x"], lot["z"]) * cell_in + size * 0.5 - board * 0.5
 		var half := 1 if centre.y > 0.0 else 0
-		var along_x := size.x > size.y or (size.x == size.y and _hash(lot["id"], half, 1) < 0.5)
+		var front: String = fronts.get(id, "")
+		var along_x := size.x > size.y or (size.x == size.y and _hash(id, half, 1) < 0.5)
+		if front != "" and _hash(id, half, 8) < 0.7:
+			along_x = front in ["N", "S"]   # eaves-on: the ridge parallels the street
+		elif front != "":
+			along_x = front in ["E", "W"]   # gable-on: the ridge points at it
 		var run := size.x if along_x else size.y
 		var across := size.y if along_x else size.x
-		var look := house_look(lot["id"], half, size)
-		out.append({"lot": lot["id"], "centre": centre, "length": run + 2.0 * OVERHANG_IN, "width": across + 2.0 * OVERHANG_IN,
-			"height": 1.5 + 1.2 * _hash(lot["id"], half, 2), "along_x": along_x, "half": half, "yaw": look["yaw"], "eaves": look["top"]})
+		var look := house_look(id, half, size)
+		var pick := _hash(id, half, 9)
+		var eaves_on := front != "" and along_x == (front in ["N", "S"])
+		var type := "gable" if pick < 0.45 or (pick >= 0.75 and not eaves_on) else ("hip" if pick < 0.75 else "catslide")
+		var back := 1 if front in ["N", "W"] else -1   # the side of the ridge away from the street (+z / +x for a front on the north / west)
+		var height := 1.5 + 1.2 * _hash(id, half, 2)
+		var yaw: float = look["yaw"] + (2.0 * _hash(id, half, 10) - 1.0) * deg_to_rad(2.0)
+		var roof := {"lot": id, "centre": centre, "length": run + 2.0 * OVERHANG_IN, "width": across + 2.0 * OVERHANG_IN, "height": height, "along_x": along_x, "half": half,
+			"yaw": yaw, "eaves": look["top"], "type": type, "back": back, "annex": false}
+		if run >= 2.0 * cell_in and _hash(id, half, 11) < 0.4:
+			var end := 1.0 if _hash(id, half, 12) < 0.5 else -1.0
+			var shift := Vector2(end, 0.0) if along_x else Vector2(0.0, end)
+			var annex := roof.duplicate()
+			annex.merge({"centre": centre + shift * (run * 0.5 - cell_in * 0.5), "length": cell_in + 2.0 * OVERHANG_IN, "height": height * 0.55, "type": "gable", "annex": true}, true)
+			roof.merge({"centre": centre - shift * cell_in * 0.5, "length": run - cell_in + 2.0 * OVERHANG_IN}, true)
+			out.append(annex)
+		out.append(roof)
 	return out
 
 
 ## A brick chimney on the ridge of every roof, at the end the lot's hash picks: boxes for the greybox plan ({lo, hi, kind, solid}).
 static func chimneys(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	for r: Dictionary in roofs(layout):
+	for r: Dictionary in roofs(layout).filter(func(r: Dictionary) -> bool: return not r["annex"]):
 		var end_sign := 1.0 if _hash(r["lot"], r["half"], 3) < 0.5 else -1.0
 		var offset: float = end_sign * (float(r["length"]) * 0.5 - 0.9)
 		var centre: Vector2 = r["centre"] + (Vector2(offset, 0.0) if r["along_x"] else Vector2(0.0, offset))
@@ -344,29 +371,74 @@ static func prism_mesh() -> ArrayMesh:
 	return st.commit()
 
 
-## The roofs in ONE MultiMesh with the board's material (the kind "roof" in its instance data).
+## A triangle added wound clockwise seen from outside (`ref` = a point inside the shape), with its flat normal.
+static func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, ref: Vector3) -> void:
+	var n := (b - a).cross(c - a)
+	var out := n.dot((a + b + c) / 3.0 - ref) > 0.0   # counter-clockwise from outside: swap to clockwise
+	for v: Vector3 in ([a, c, b] if out else [a, b, c]):
+		st.set_normal(n.normalized() if out else -n.normalized())
+		st.add_vertex(v)
+
+
+## The unit HIP roof: ridge at height 1 from x = -0.2 to 0.2 over z = 0, eaves at y = 0 on the whole rectangle (x, z in -0.5..0.5): four slopes, no gable end.
+static func hip_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var ref := Vector3(0, 0.3, 0)
+	var a := Vector3(-0.2, 1, 0)
+	var b := Vector3(0.2, 1, 0)
+	for z in [-0.5, 0.5]:
+		_tri(st, Vector3(-0.5, 0, z), Vector3(0.5, 0, z), b, ref)
+		_tri(st, Vector3(-0.5, 0, z), b, a, ref)
+	_tri(st, Vector3(0.5, 0, -0.5), Vector3(0.5, 0, 0.5), b, ref)
+	_tri(st, Vector3(-0.5, 0, 0.5), Vector3(-0.5, 0, -0.5), a, ref)
+	return st.commit()
+
+
+## The unit CATSLIDE roof: like the gable prism, but the ridge is at z = +0.15 and the slope on the -z side runs on down to y = -0.45 at the edge (the back, which the caller flips).
+static func catslide_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var ref := Vector3(0, 0.3, 0)
+	var a := Vector3(-0.5, 1, 0.15)
+	var b := Vector3(0.5, 1, 0.15)
+	_tri(st, Vector3(-0.5, 0, 0.5), Vector3(0.5, 0, 0.5), b, ref)
+	_tri(st, Vector3(-0.5, 0, 0.5), b, a, ref)
+	_tri(st, Vector3(0.5, -0.45, -0.5), Vector3(-0.5, -0.45, -0.5), a, ref)
+	_tri(st, Vector3(0.5, -0.45, -0.5), a, b, ref)
+	_tri(st, Vector3(0.5, 0, 0.5), Vector3(0.5, -0.45, -0.5), b, ref)
+	_tri(st, Vector3(-0.5, -0.45, -0.5), Vector3(-0.5, 0, 0.5), a, ref)
+	return st.commit()
+
+
+## The roofs in one MultiMesh PER TYPE (gable, hip, catslide: "Roofs", "RoofsHip", "RoofsCatslide") with the board's material (the kind "roof" in its instance data).
 func build(layout: Dictionary, material: Material) -> void:
 	var list := roofs(layout)
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_custom_data = true
-	mm.mesh = prism_mesh()
-	mm.instance_count = list.size()
+	var meshes := {"gable": [prism_mesh(), "Roofs"], "hip": [hip_mesh(), "RoofsHip"], "catslide": [catslide_mesh(), "RoofsCatslide"]}
 	var kind := float(BoardgenTheme.TOWN_KINDS.find("roof"))
-	for i in list.size():
-		var r: Dictionary = list[i]
-		var basis := Basis.from_scale(Vector3(r["length"], r["height"], r["width"]) * INCHES_TO_METERS)
-		if not r["along_x"]:
-			basis = Basis(Vector3.UP, PI * 0.5) * basis
-		basis = Basis(Vector3.UP, r["yaw"]) * basis   # the roof follows its body's yaw
-		var at: Vector2 = r["centre"]
-		mm.set_instance_transform(i, Transform3D(basis, Vector3(at.x, r["eaves"], at.y) * INCHES_TO_METERS))
-		mm.set_instance_custom_data(i, Color(kind, r["length"], r["height"], r["width"]))
-	var mmi := MultiMeshInstance3D.new()
-	mmi.name = "Roofs"
-	mmi.multimesh = mm
-	mmi.material_override = material
-	add_child(mmi)
+	for type: String in meshes:
+		var of := list.filter(func(r: Dictionary) -> bool: return r["type"] == type)
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_custom_data = true
+		mm.mesh = meshes[type][0]
+		mm.instance_count = of.size()
+		for i in of.size():
+			var r: Dictionary = of[i]
+			var basis := Basis.from_scale(Vector3(r["length"], r["height"], r["width"]) * INCHES_TO_METERS)
+			if type == "catslide" and r["back"] > 0:
+				basis = Basis(Vector3.UP, PI) * basis   # the mesh's long slope is on -z: half a turn puts it on the back (a mirror would flip the faces)
+			if not r["along_x"]:
+				basis = Basis(Vector3.UP, PI * 0.5) * basis
+			basis = Basis(Vector3.UP, r["yaw"]) * basis   # the roof follows its body's yaw
+			var at: Vector2 = r["centre"]
+			mm.set_instance_transform(i, Transform3D(basis, Vector3(at.x, r["eaves"], at.y) * INCHES_TO_METERS))
+			mm.set_instance_custom_data(i, Color(kind, r["length"], r["height"], r["width"]))
+		var mmi := MultiMeshInstance3D.new()
+		mmi.name = meshes[type][1]
+		mmi.multimesh = mm
+		mmi.material_override = material
+		add_child(mmi)
 	_add_bodies(layout, material)
 	_add_lights(layout)
 

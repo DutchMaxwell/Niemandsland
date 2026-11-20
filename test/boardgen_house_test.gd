@@ -67,12 +67,12 @@ func test_a_drawn_body_stays_inside_its_cells_and_within_the_reach_of_the_collid
 func test_eaves_plinth_and_inset_vary_per_house_and_the_roof_follows_its_body() -> void:
 	var layout := _town()
 	var bodies := BoardgenTownDressing.house_bodies(layout)
-	var roofs := BoardgenTownDressing.roofs(layout)
+	var roofs := BoardgenTownDressing.roofs(layout).filter(func(r: Dictionary) -> bool: return not r["annex"])
 	for i in bodies.size():
 		assert_float(bodies[i]["top"]).is_between(2.2, 2.8)
 		assert_float(bodies[i]["plinth"]).is_between(0.3, 0.6)
 		assert_float(roofs[i]["eaves"]).is_equal(bodies[i]["top"])
-		assert_float(roofs[i]["yaw"]).is_equal(bodies[i]["yaw"])
+		assert_float(absf(roofs[i]["yaw"] - bodies[i]["yaw"])).is_less_equal(deg_to_rad(2.0) + 0.0001)   # the roof's skew on top of its body's yaw
 	# the two neighbours share no eaves line and no wall line (their drawn east / west faces differ)
 	assert_float(absf(bodies[0]["top"] - bodies[1]["top"])).is_greater(0.01)
 	assert_float(absf(bodies[0]["centre"].x + bodies[0]["size"].x * 0.5 - bodies[1]["centre"].x + bodies[1]["size"].x * 0.5)).is_greater(0.01)

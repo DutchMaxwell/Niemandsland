@@ -177,19 +177,23 @@ func test_a_deepworks_plan_never_uses_the_town_kinds() -> void:
 		assert_bool(BoardgenGreybox.KINDS.has(b["kind"])).override_failure_message("a Deepworks box of kind %s" % b["kind"]).is_true()
 
 
-func test_an_intact_house_gets_a_gable_roof_over_its_body_and_the_halves_vary_the_pitch() -> void:
+func test_an_intact_house_gets_a_roof_over_its_body_and_the_halves_vary_the_pitch() -> void:
 	var layout := _town_with_wall_house_and_plot()
 	var roofs := BoardgenTownDressing.roofs(layout)
-	assert_int(roofs.size()).is_equal(1)
-	var r: Dictionary = roofs[0]
-	assert_int(r["lot"]).is_equal(99)   # the lot is square: the hash of lot and half picks the ridge axis
-	assert_float(r["length"]).is_equal_approx(6.6, 0.001)   # the 6 in lot and an overhang each side
+	var mains := roofs.filter(func(r: Dictionary) -> bool: return not r["annex"])
+	assert_int(mains.size()).is_equal(1)   # one main roof per intact lot (an annex, if the lot has one, comes on top)
+	var r: Dictionary = mains[0]
+	assert_int(r["lot"]).is_equal(99)
+	assert_float(r["length"]).is_equal_approx(6.6 if roofs.size() == 1 else 3.6, 0.001)   # the 6 in lot and an overhang each side; an annex takes one 3 in cell off the main roof
 	assert_float(r["height"]).is_between(1.5, 2.7)
 	assert_int(BoardgenTownDressing.prism_mesh().surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size()).is_equal(18)   # two slopes and two gable ends
 	var node: BoardgenTownDressing = auto_free(BoardgenTownDressing.new())
 	add_child(node)
 	node.build(layout, ShaderMaterial.new())
-	assert_int((node.find_child("Roofs", false, false) as MultiMeshInstance3D).multimesh.instance_count).is_equal(1)
+	var drawn := 0
+	for n in ["Roofs", "RoofsHip", "RoofsCatslide"]:
+		drawn += (node.find_child(n, false, false) as MultiMeshInstance3D).multimesh.instance_count
+	assert_int(drawn).is_equal(roofs.size())   # every planned roof is in one of the three type meshes
 	assert_int(node.find_children("*", "CollisionShape3D", true, false).size()).is_equal(0)   # nobody stands on a roof
 	var differing := 0
 	for id in range(1, 40):
