@@ -11,9 +11,6 @@
     "Courage": "The bare base the Courage Aura expansion stamps; no map entry on either side - the +1 morale rides the aura's own Banner entry."
   },
   "deny_names": {
-    "Gleaming Armour": "Measured (5-seed sweep): 5 taken volleys, the target's Defense differs by one.",
-    "Fortified Aura": "door omits the table's aura-loss line (`_solo_fortified_aura_loss_log`) when the bearer dies, dlines_gap row 21: the Fortified line itself is said since dlines2 train 2.",
-    "Guardian Boost Aura": "door omits the table's aura-loss line (`_solo_fortified_aura_loss_log`) when the bearer dies, dlines_gap row 21: the Fortified line itself is said since dlines2 train 2.",
     "Grounded Protection": "door omits the table's terrain trace (Grounded Protection) or once-per-game lines (Protection Feat), dlines_gap row 3; the roll, bypass and Warding gate lines are said since dlines2/3.",
     "Enhanced Knightborn": "the table names the roll group by whichever of Knightborn / Enhanced Knightborn is live at the shot's distance (the gated Knightborn folds nothing within 9in); the core's group name is static, dlines_gap row 3.",
     "Protection Feat": "door omits the table's terrain trace (Grounded Protection) or once-per-game lines (Protection Feat), dlines_gap row 3; the roll, bypass and Warding gate lines are said since dlines2/3.",
@@ -43,6 +40,12 @@
       "kind": "rule_line",
       "why": "The table names a target's Armor(X) before the announce (`<U> has Armor(X): counts as Defense N+`); the core applies it and writes no line. Measured 19.11.: 3 volleys at 1500 and at 2000 pts, dlines_gap row 23.",
       "leaves_with": "the dlines3 train that says the Armor line"
+    },
+    "door_omits_fortified_aura_loss_line": {
+      "primitives": [],
+      "kind": "state_difference",
+      "why": "An aofs / gff aura-granted Fortified (Fortified Aura, Guardian Boost Aura; Gleaming Armour carries Fortified Aura) is a Fortified-primitive entry with `lost_if_bearer_killed`: when the bearer (the unit or a joined hero) has fallen the table stands the benefit down and says `<aura>: bearer killed -> benefit lost` once, guarded across volleys. The core stands the bare Fortified down on the same dice but writes no line (probe 16 of 16, line only); for the alias walk (Guardian Boost) it keeps the benefit, so the dice differ (defense 5+ against the table's 6+, 16 of 16). Not a rule name: `CoreSlice` refuses a TARGET in that state (`fortified_aura_bearer_dead`), switched on by this group. A live bearer and the gf / aof Aura Channel spelling are equal and taken. Probed 20.11. (ds/h14_probe_fortified_aura.md).",
+      "leaves_with": "the core reading the alias loss and carrying the once-guard with its line (an epoch: the alias dice change)"
     },
     "door_versatile_pick_modified_to_hit": {
       "primitives": [],

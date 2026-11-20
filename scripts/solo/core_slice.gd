@@ -23,6 +23,7 @@ const SIMULTANEOUS_FIRE_GROUP := "door_omits_simultaneous_fire_line"
 const OWN_SHRED_GROUP := "door_own_shred_beside_alias"
 const VERSATILE_PAIR_GROUP := "door_versatile_pick_modified_to_hit"
 const TAKEDOWN_LABEL_GROUP := "door_takedown_names_an_equipment_carrier"
+const FORTIFIED_LOSS_GROUP := "door_omits_fortified_aura_loss_line"
 ## The primitives whose rules move a SHOOTING to-hit number: on the target (Artillery's -1, the Stealth and Evasive families, Aircraft) and on the shooter.
 const TO_HIT_ON_TARGET := ["Artillery", "Stealth", "Evasive", "Aircraft"]
 ## H-10 (Plan H): Unpredictable Shooter's 4-6 half is a +1 to hit the table folds into the number a Versatile pick is latched on; probed 5 of 16
@@ -167,6 +168,11 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 			for r in refusals(hero as GameUnit, true):
 				if r != "attached" and r != "spell_hit_mod" and r != "vengeance_markers" and not out.has(r):
 					out.append(r)
+	# Deny mode, a TARGET: an aofs / gff aura-granted Fortified whose bearer has fallen. The table says `<aura>: bearer killed -> benefit lost` once
+	# on the first save batch it bites (`_solo_fortified_aura_loss_log`, a guard kept across volleys); the core stands the benefit down too (same
+	# dice) but writes no line (dlines_gap row 21). A line gap by STATE, so the volley stays on the table until the core carries the guard.
+	if as_target and c["mode"] == "deny" and _has_group(FORTIFIED_LOSS_GROUP) and _fortified_aura_bearer_dead(gu):
+		out.append("fortified_aura_bearer_dead")
 	for r in _ledger_hit_refusals(gu, as_target):
 		if not out.has(r):
 			out.append(r)
@@ -252,6 +258,15 @@ static func _has_shooting_hit_record(records: Array, as_target: bool) -> bool:
 		if scope == "charging" or scope == "melee" or int(rd.get("hit_mod", 0)) == 0:
 			continue
 		if (str(rd.get("beneficiary", "")) == "attackers") == as_target:
+			return true
+	return false
+
+
+## `gu` holds an aura-granted Fortified-family rule (import provenance `aura_granted`) whose aura entry says `lost_if_bearer_killed` and whose bearer
+## (the unit itself or an alive joined hero) is gone: the table's save seam logs the loss (`RulesRegistry.fortified_aura_dead_bearer`, one truth for both).
+static func _fortified_aura_bearer_dead(gu: GameUnit) -> bool:
+	for granted in gu.unit_properties.get("aura_granted", []) as Array:
+		if RulesRegistry.fortified_aura_dead_bearer(gu, str(granted)) != "":
 			return true
 	return false
 
