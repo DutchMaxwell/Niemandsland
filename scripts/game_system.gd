@@ -106,3 +106,16 @@ static func offers(kind: String, id: String, system: String) -> bool:
 	if scales is Array and not (scales as Array).has(scale(system)):
 		return false
 	return true
+
+
+## The generated boards a table of `system` is offered in its table chooser (PLAN_HEIGHTFIELD step 23 calls this): the
+## "generated_board" rows that are available and fit the system's setting and scale. Tiefwerk = gff only; the ruined town is
+## aofs only and has no entry until its row is flipped to available. The developer flag (NML_BOARDGEN_SEED) stays system-blind.
+static func generated_boards(system: String) -> Array:
+	var rows: Variant = _terrain_rows().get("generated_board")
+	var out: Array = []
+	if rows is Dictionary:
+		for id in rows:
+			if offers("generated_board", str(id), system):
+				out.append(str(id))
+	return out
