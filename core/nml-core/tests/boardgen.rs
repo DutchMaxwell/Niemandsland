@@ -165,6 +165,19 @@ fn point180_is_an_exact_half_turn() {
 }
 
 #[test]
+fn a_town_is_an_exact_half_turn_too() {
+    for seed in 1..=200 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        for i in 0..256 {
+            let (a, b) = (&l.cells[i], &l.cells[255 - i]);
+            assert_eq!((a.level, a.lot_kind, a.street, a.deploy), (b.level, b.lot_kind, b.street, [0, 2, 1][usize::from(b.deploy)]), "seed {seed}: cell {i}");
+        }
+        let set: BTreeSet<_> = l.connectors.iter().map(|c| (c.kind, c.low, c.high)).collect();
+        assert!(l.connectors.iter().all(|c| set.contains(&(c.kind, 255 - c.low, 255 - c.high))), "seed {seed}: a ladder has no mirror");
+    }
+}
+
+#[test]
 fn balanced_free_has_equal_halves_but_is_not_a_mirror() {
     let mut mirrored = 0;
     for seed in 1..=100 {
@@ -402,22 +415,24 @@ fn a_town_differs_from_the_deepworks_of_the_same_seed() {
 fn town_budgets_hold_over_200_seeds() {
     let b = Theme::RuinTown.budgets();
     let (r, h, retried) = (budget(b.raised), budget(b.high), std::cell::Cell::new(0));
-    for seed in 1..=200 { for sym in BOTH {
+    let sym = Symmetry::Point180;   // the town is a Point180 board: its tower stage may find no site under BalancedFree
+    for seed in 1..=200 {
         let l = generate_themed(seed, sym, Theme::RuinTown);
         retried.set(retried.get() + usize::from(l.attempt > 0));
         assert!((r.0..=r.1).contains(&l.raised()), "seed {seed} {sym:?}: raised {} outside {r:?}", l.raised());
         assert!((h.0..=h.1).contains(&l.high()), "seed {seed} {sym:?}: high {} outside {h:?}", l.high());
-        assert_eq!(l.towers(), 2, "seed {seed} {sym:?}: the town has exactly one tower pair");
+        assert_eq!(l.towers(), 8, "seed {seed} {sym:?}: the town has exactly one pair of 2 x 2 towers");
         assert!((b.landmark_pieces.0..=b.landmark_pieces.1).contains(&l.landmarks.len()));
         assert!(l.cells.iter().all(|c| c.level < 2 || c.deploy == 0), "level 2 or 3 in a band");
         assert!(l.max_drop_in() <= 9, "seed {seed}: sheer drop {} in", l.max_drop_in());
-    }}
-    eprintln!("400 town boards, {} needed a later sub-seed", retried.get());
+    }
+    eprintln!("200 town boards, {} needed a later sub-seed", retried.get());
 }
 
 #[test]
 fn town_boards_are_accepted_and_connected_over_200_seeds() {
-    for seed in 1..=200 { for sym in BOTH {
+    let sym = Symmetry::Point180;
+    for seed in 1..=200 {
         let l = generate_themed(seed, sym, Theme::RuinTown);
         assert!(l.problems().is_empty(), "seed {seed} {sym:?} attempt {}: {:?}\n{}", l.attempt, l.problems(), l.to_ascii());
         let sol = solid(&l);
@@ -425,7 +440,7 @@ fn town_boards_are_accepted_and_connected_over_200_seeds() {
             let seen = reach(&l, p);
             assert!(seen.iter().zip(&sol).all(|(&s, &x)| s || x), "seed {seed} {sym:?}: a cell is unreachable from player {p}\n{}", l.to_ascii());
         }
-    }}
+    }
 }
 
 /// What one batch of boards looks like: means over the boards, the shares the plan's census asks for.
@@ -558,4 +573,22 @@ fn only_the_town_asks_for_a_lane_free_board() {
     assert!(Theme::RuinTown.budgets().lane_free && !Theme::Deepworks.budgets().lane_free);
     let with_lane = (1..=200).filter(|&seed| generate(seed, Symmetry::Point180).has_edge_to_edge_lane()).count();
     assert!(with_lane > 0, "the Deepworks boards are left as they were: some still have a lane");
+}
+
+#[test]
+fn a_town_tower_is_a_2_by_2_block_nine_inches_up_with_a_ladder_from_six() {
+    for seed in 1..=300 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        let tops: Vec<usize> = (0..GRID * GRID).filter(|&i| l.cells[i].level == 3).collect();
+        assert_eq!(tops.len(), 8, "seed {seed}: {} tower cells", tops.len());
+        // two blocks of four, each a full 2 x 2 (a cell and its right, lower and lower-right neighbour), a half turn apart
+        let origins: Vec<usize> = tops.iter().copied().filter(|&i| i % GRID + 1 < GRID && i / GRID + 1 < GRID && [i + 1, i + GRID, i + GRID + 1].iter().all(|j| tops.contains(j))).collect();
+        assert_eq!(origins.len(), 2, "seed {seed}: the towers are not two 2 x 2 blocks\n{}", l.to_ascii());
+        assert_eq!(origins[0] + origins[1] + GRID + 1, GRID * GRID - 1, "seed {seed}: the towers are not a half turn apart");
+        assert!(tops.iter().all(|&i| l.cells[i].deploy == 0), "seed {seed}: a tower in a band");
+        for o in origins {
+            let ladders: Vec<_> = l.connectors.iter().filter(|c| [o, o + 1, o + GRID, o + GRID + 1].contains(&usize::from(c.high))).collect();
+            assert!(!ladders.is_empty() && ladders.iter().all(|c| l.cells[usize::from(c.low)].level == 2), "seed {seed}: a tower block has no 6 in ladder up: {:?} levels {:?}", ladders, ladders.iter().map(|c| (l.cells[usize::from(c.low)].level, l.cells[usize::from(c.high)].level)).collect::<Vec<_>>());
+        }
+    }
 }

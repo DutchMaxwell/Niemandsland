@@ -56,6 +56,7 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
         let Some((a, b)) = paired(&cells, sym, &mut rng, shave, |c| u8::from(c.lot_kind == LotKind::Block)).into_iter().next() else { break };
         cells[a].level = 0; cells[b].level = 0;
     }
+    if b.tower_side == 2 { raise_towers_2x2(&mut cells, sym, &mut rng, b.tower_pairs); }
     // Level 2: raised cells outside the deployment bands. A pair is kept only if the board stays one piece when every
     // step of at most one level counts as a possible way up, so no island of level 2 is ever cut off.
     let (min_h, max_h) = budget(b.high);
@@ -71,7 +72,7 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
     // Level 3: a few level-2 cells rise once more, as mirrored pairs, each kept only if the board stays one piece (so a
     // tower is always reachable by a ladder from level 2). A pair next to an existing tower comes first (blocks, not
     // single posts), then the cell with the fewest ground neighbours (the shortest sheer wall).
-    for _ in 0..rng.randi_range(b.tower_pairs.0 as i64, b.tower_pairs.1 as i64) {
+    for _ in 0..if b.tower_side == 2 { 0 } else { rng.randi_range(b.tower_pairs.0 as i64, b.tower_pairs.1 as i64) } {
         let snap = cells.clone();
         let key = |c: &Cell| { let i = c.z * nx + c.x; if neighbours(i).any(|j| snap[j].level == 3) { 0 } else { 1 + neighbours(i).filter(|&j| snap[j].level == 0).count() as u8 } };
         for (a, b) in paired(&snap, sym, &mut rng, |i, cs| cs[i].level == 2, key) {
@@ -80,6 +81,37 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
         }
     }
     (lots, cells)
+}
+
+/// Town towers, raised before the level-2 lift: a 2 x 2 block of level-1 cells outside the bands rises to level 3, with one level-1 cell beside it
+/// lifted to level 2 (the ladder up), as mirrored pairs; the board must stay one piece. The block with the most lower neighbours goes first (the
+/// tallest sheer faces). The level-2 lift then runs on what is left.
+fn raise_towers_2x2(cells: &mut [Cell], sym: Symmetry, rng: &mut GodotRng, pairs: (usize, usize)) {
+    let block = |o: usize| [o, o + 1, o + GRID, o + GRID + 1];
+    for _ in 0..rng.randi_range(pairs.0 as i64, pairs.1 as i64) {
+        let snap = cells.to_vec();
+        let around = |o: usize| block(o).into_iter().flat_map(neighbours).filter(move |j| !block(o).contains(j)).collect::<Vec<_>>();
+        let step = |o: usize| around(o).into_iter().find(|&j| snap[j].level == 1 && snap[j].deploy == 0);   // the cell that becomes the 6 in step
+        let ok = |o: usize| o % GRID + 1 < GRID && o / GRID + 1 < GRID && block(o).iter().all(|&i| snap[i].level == 1 && snap[i].deploy == 0) && step(o).is_some();
+        let lower = |o: usize| around(o).iter().filter(|&&j| snap[j].level == 0).count();
+        let mut cand: Vec<(usize, usize)> = if sym == Symmetry::Point180 {
+            // the half-turn image of the block at `o` has its origin at 238 - o
+            (0..GRID * GRID - GRID - 1).filter_map(|o| { let t = GRID * GRID - GRID - 2 - o; (o < t && ok(o) && ok(t) && !block(o).iter().any(|i| block(t).contains(i))).then_some((o, t)) }).collect()
+        } else {
+            let (mut a, mut c): (Vec<_>, Vec<_>) = ((0..GRID * GRID).filter(|&o| o / GRID + 1 < GRID / 2 && ok(o)).collect(), (0..GRID * GRID).filter(|&o| o / GRID >= GRID / 2 && ok(o)).collect());
+            shuffle(&mut a, rng); shuffle(&mut c, rng); a.into_iter().zip(c).collect()
+        };
+        shuffle(&mut cand, rng);
+        cand.sort_by_key(|&(o, t)| usize::MAX - lower(o) - lower(t));
+        for (o, t) in cand {
+            let s1 = step(o).expect("ok() found a step");
+            let steps = [s1, if sym == Symmetry::Point180 { mirror(s1) } else { step(t).expect("ok() found a step") }];   // a half-turn twin has the half-turn step
+            if steps.iter().any(|j| block(o).contains(j) || block(t).contains(j)) { continue; }
+            for i in block(o).into_iter().chain(block(t)) { cells[i].level = 3; }
+            for &j in &steps { cells[j].level = 2; }
+            if one_piece(cells) { break } else { for i in block(o).into_iter().chain(block(t)).chain(steps) { cells[i].level = snap[i].level; } }
+        }
+    }
 }
 
 /// True if the cells that touch and differ by at most one level form a single area.
