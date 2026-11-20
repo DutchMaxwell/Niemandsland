@@ -1,6 +1,7 @@
 class_name BoardgenDebris
 extends Node3D
-## Urban debris for the look pass of a seeded boardgen board: paper scraps that lie flat anywhere, and rubble piles, cans, leaning scrap
+## Urban debris for the look pass of a seeded boardgen board: a few small, dirty paper scraps that lie flat in clusters at the foot of a
+## tier wall (more in a corner, none in the open and none on a roof), and rubble piles, cans, leaning scrap
 ## plates and cables that lie ONLY in the wall strip (STRIP_IN off a tier wall), so the open floor stays clear for bases. The foot of a
 ## connector and the sump cells stay bare. Boxes and cylinders in two MultiMeshes; VISUAL ONLY (no collider). plan() is a pure
 ## function of the layout (its seed feeds one RandomNumberGenerator).
@@ -11,6 +12,10 @@ const FLAT_IN := 0.12   # an item no higher than this above its floor (paper) do
 const SKIN_IN := 0.04
 const CHUNKS: Array[Color] = [Color(0.40, 0.19, 0.14), Color(0.33, 0.17, 0.13), Color(0.42, 0.42, 0.40), Color(0.30, 0.30, 0.29)]
 const CANS: Array[Color] = [Color(0.55, 0.16, 0.12), Color(0.14, 0.27, 0.45), Color(0.18, 0.38, 0.22)]
+const PAPER_CHANCE := 0.16   # per wall foot; a corner (two walls) is likelier
+const PAPER_CORNER_CHANCE := 0.4
+## Wet, grimy grey-brown scraps (the old pale paper read as confetti): each is darkened by chance and some are nearly black with damp.
+const PAPER: Array[Color] = [Color(0.41, 0.37, 0.30), Color(0.35, 0.32, 0.27), Color(0.30, 0.27, 0.23), Color(0.20, 0.18, 0.15)]
 
 
 ## Every item of the board, in metres off the board centre: {shape: box | cyl, xf: Transform3D, colour: Color}.
@@ -34,16 +39,23 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 		if prop["shape"] != "light" and prop["xf"].origin.y > FLAT_IN * INCHES_TO_METERS:
 			busy[Vector2i(floori(prop["xf"].origin.x / INCHES_TO_METERS / cell + nx * 0.5), floori(prop["xf"].origin.z / INCHES_TO_METERS / cell + nz * 0.5))] = true
 	var out: Array[Dictionary] = []
+	var paper_rng := RandomNumberGenerator.new()
+	paper_rng.seed = int(layout["seed"]) * 7919 + 53
 	for z in nz:
 		for x in nx:
 			var me: Dictionary = cells[z * nx + x]
 			if me["lot_kind"] == "Hazard" or feet.has(Vector2i(x, z)):
 				continue
 			var centre := origin + (Vector2(x, z) + Vector2(0.5, 0.5)) * cell
-			if rng.randf() < 0.18:   # paper scraps, flat, anywhere in the cell
-				for i in rng.randi_range(1, 3):
-					var at := centre + Vector2(rng.randf_range(-0.9, 0.9), rng.randf_range(-0.9, 0.9))
-					out.append(_item("box", at, (float(layout["level_in"][me["level"]]) if me["level"] > 0 else SKIN_IN) + 0.008, Basis(Vector3.UP, rng.randf() * TAU), Vector3(rng.randf_range(0.5, 0.9), 0.012, rng.randf_range(0.4, 0.7)), Color(0.66, 0.63, 0.55).darkened(rng.randf() * 0.3)))
+			if me["level"] == 0:   # paper: a few dirty scraps at the foot of a wall, more in a corner (its own generator: the rest of the kit keeps its plan)
+				var walls: Array[Vector2i] = []
+				for d in BoardgenProps.DIRS:
+					var o := Vector2i(x, z) + d
+					if o.x >= 0 and o.y >= 0 and o.x < nx and o.y < nz and cells[o.y * nx + o.x]["level"] > 0:
+						walls.append(d)
+				for d in walls:
+					if paper_rng.randf() < (PAPER_CORNER_CHANCE if walls.size() > 1 else PAPER_CHANCE):
+						_paper(out, paper_rng, centre + Vector2(d) * cell * 0.5, d)
 			for d in BoardgenProps.DIRS:
 				var o := Vector2i(x, z) + d
 				if me["level"] > 0 or busy.has(Vector2i(x, z)) or o.x < 0 or o.y < 0 or o.x >= nx or o.y >= nz or cells[o.y * nx + o.x]["level"] == 0:
@@ -70,9 +82,20 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
+## A cluster of two to four small scraps at the wall plane point `wall` (inches): inside the wall strip, thin, a corner sunk into the
+## floor so they look pressed in, none of them white.
+static func _paper(out: Array[Dictionary], rng: RandomNumberGenerator, wall: Vector2, d: Vector2i) -> void:
+	var along := Vector2(-d.y, d.x)
+	var heart := wall - Vector2(d) * rng.randf_range(0.2, 0.45) + along * rng.randf_range(-0.9, 0.9)
+	for i in rng.randi_range(2, 4):
+		var at := heart + along * rng.randf_range(-0.35, 0.35) - Vector2(d) * rng.randf_range(-0.1, 0.25)   # 0.1 to 0.7 in off the wall: never in it
+		var tilt := Basis(Vector3.RIGHT, rng.randf_range(0.03, 0.12)) * Basis(Vector3.FORWARD, rng.randf_range(-0.08, 0.08))
+		out.append(_item("box", at, SKIN_IN + rng.randf_range(0.002, 0.008), Basis(Vector3.UP, rng.randf() * TAU) * tilt, Vector3(rng.randf_range(0.28, 0.55), 0.012, rng.randf_range(0.22, 0.4)), PAPER[rng.randi() % PAPER.size()].darkened(rng.randf() * 0.25), true))
+
+
 ## One item: `size` inches (a cylinder: x = diameter, y = height) turned by `rot` at `pos` inches, centre height `y`.
-static func _item(shape: String, pos: Vector2, y: float, rot: Basis, size: Vector3, colour: Color) -> Dictionary:
-	return {"shape": shape, "xf": Transform3D(rot * Basis.from_scale(size * INCHES_TO_METERS), Vector3(pos.x, y, pos.y) * INCHES_TO_METERS), "colour": colour}
+static func _item(shape: String, pos: Vector2, y: float, rot: Basis, size: Vector3, colour: Color, paper := false) -> Dictionary:
+	return {"shape": shape, "xf": Transform3D(rot * Basis.from_scale(size * INCHES_TO_METERS), Vector3(pos.x, y, pos.y) * INCHES_TO_METERS), "colour": colour, "paper": paper}
 
 
 ## One MultiMesh per shape, so the whole kit is two draw calls.

@@ -78,6 +78,46 @@ func test_nothing_loose_stands_outside_the_wall_strip_only_flat_paper_lies_in_th
 	assert_int(loose).is_greater(15)
 
 
+func _paper(layout: Dictionary) -> Array[Dictionary]:
+	return BoardgenDebris.plan(layout).filter(func(i: Dictionary) -> bool: return i["paper"])
+
+
+func test_paper_is_few_small_dark_and_lies_at_wall_feet_never_in_the_open_or_on_a_roof() -> void:
+	var layout := _fixture()
+	var paper := _paper(layout)
+	assert_int(paper.size()).is_between(12, 45)   # the confetti was 80 scraps on this layout
+	for item in paper:
+		var at: Vector3 = item["xf"].origin / BoardgenDebris.INCHES_TO_METERS
+		assert_int(_level(layout, _cell(layout, at))).override_failure_message("paper on a roof at %s" % at).is_equal(0)
+		assert_bool(_in_strip(layout, at)).override_failure_message("paper in the open at %s" % at).is_true()
+		assert_float(item["xf"].basis.get_scale().x / BoardgenDebris.INCHES_TO_METERS).is_less_equal(0.56)
+		assert_float(item["colour"].v).override_failure_message("a pale scrap: %s" % item["colour"]).is_less_equal(0.45)
+
+
+func test_a_corner_collects_more_paper_than_a_straight_wall_foot() -> void:
+	var layout := _fixture()
+	var walls := {}   # cell -> how many of its four sides are a tier wall
+	for z in layout["nz"]:
+		for x in layout["nx"]:
+			var c := Vector2i(x, z)
+			if _level(layout, c) == 0:
+				var n := 0
+				for d in BoardgenProps.DIRS:
+					n += 1 if _level(layout, c + d) > 0 and c.x + d.x >= 0 and c.y + d.y >= 0 and c.x + d.x < layout["nx"] and c.y + d.y < layout["nz"] else 0
+				walls[c] = n
+	var pieces := {1: 0, 2: 0}
+	var cells := {1: 0, 2: 0}
+	for c: Vector2i in walls:
+		if walls[c] > 0:
+			cells[mini(walls[c], 2)] += 1
+	for item in _paper(layout):
+		var n: int = walls.get(_cell(layout, item["xf"].origin / BoardgenDebris.INCHES_TO_METERS), 0)
+		if n > 0:
+			pieces[mini(n, 2)] += 1
+	assert_int(cells[2]).is_greater(3)
+	assert_float(float(pieces[2]) / cells[2]).is_greater(float(pieces[1]) / cells[1])
+
+
 func test_loose_debris_keeps_off_the_cells_that_carry_a_prop_of_the_kit() -> void:
 	var layout := _fixture()
 	var busy := {}

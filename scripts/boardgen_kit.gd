@@ -1,0 +1,119 @@
+class_name BoardgenKit
+extends Node
+## Loader for the authored kit modules of the Tiefwerk board look (rails, ladders, pipes, lamps ...): small hard-surface GLBs in the
+## project's GLB norm (metres, +Y up, origin on the mounting face, bevelled, baked AO in the vertex colours), delivered on demand from R2
+## through assets/tiefwerk_manifest.json - the HazardsLibrary pattern, see docs/ASSET_DELIVERY.md. ONE shared material draws every module
+## (vertex colour = part tone x baked AO, the MultiMesh instance colour = the tint), so the whole kit stays one material.
+## get_mesh() is null until a module is cached: the caller keeps its own primitive, the procedural look is the fallback (offline, Low, web).
+## Dev override: NML_TIEFWERK_KIT_DIR = a folder of <module>.glb files, read without manifest or network.
+
+const BUNDLED_MANIFEST_PATH := "res://assets/tiefwerk_manifest.json"
+const CACHE_DIR := "user://tiefwerk_cache"
+const DIR_ENV := "NML_TIEFWERK_KIT_DIR"
+
+signal prefetched(all_cached: bool)
+
+var local_dir := ""   # a folder of <module>.glb (tests, dev); empty = the manifest and the cache
+var _downloader: AssetDownloadManager
+var _modules: Dictionary = {}   # module name -> { url, sha256, size }
+var _base_url := ""
+static var _meshes: Dictionary = {}   # cached file PATH -> parsed Mesh, shared by every board
+static var _material: StandardMaterial3D
+
+
+func _ready() -> void:
+	_downloader = AssetDownloadManager.new()
+	_downloader.name = "TiefwerkKitDownloads"
+	_downloader.cache_dir = CACHE_DIR
+	add_child(_downloader)
+	local_dir = OS.get_environment(DIR_ENV)
+	if FileAccess.file_exists(BUNDLED_MANIFEST_PATH):
+		apply_manifest_text(FileAccess.get_file_as_string(BUNDLED_MANIFEST_PATH))
+
+
+## Parses a manifest JSON string ({"base_url", "models": {name: {url, sha256, size}}}) into the index (also used by tests).
+func apply_manifest_text(text: String) -> void:
+	var data: Variant = JSON.parse_string(text)
+	if typeof(data) != TYPE_DICTIONARY:
+		return
+	_base_url = AssetCDN.expand(data.get("base_url", ""))
+	_modules = data.get("models", {}) if typeof(data.get("models", {})) == TYPE_DICTIONARY else {}
+
+
+func has_module(module: String) -> bool:
+	return _modules.has(module) or not _local_path(module).is_empty()
+
+
+## The local GLB of a module, or "" when it is not cached (sync, no network).
+func cached_path(module: String) -> String:
+	var local := _local_path(module)
+	if not local.is_empty():
+		return local
+	var sha: String = _modules.get(module, {}).get("sha256", "")
+	return _downloader.cache_path(sha) if not sha.is_empty() and _downloader.is_cached(sha) else ""
+
+
+func all_cached(names: Array) -> bool:
+	return names.all(func(n: String) -> bool: return not cached_path(n).is_empty())
+
+
+## Downloads the missing modules among `names` (awaitable); emits prefetched(true) when every one is cached afterwards.
+func prefetch(names: Array) -> void:
+	var todo: Array = []
+	for n: String in names:
+		var e: Dictionary = _modules.get(n, {})
+		if cached_path(n).is_empty() and not e.is_empty():
+			var url: String = e.get("url", "")
+			todo.append({"url": url if url.begins_with("http") else _base_url.path_join(url), "sha256": e.get("sha256", ""), "path": _downloader.cache_path(e.get("sha256", ""))})
+	await _downloader.ensure_batch_parallel(todo)
+	prefetched.emit(all_cached(names))
+
+
+## The module's mesh (every surface on the shared material, LODs generated), or `fallback` when it is not cached or does not parse.
+func mesh_or(module: String, fallback: Mesh = null) -> Mesh:
+	var path := cached_path(module)
+	if path.is_empty():
+		return fallback
+	if not _meshes.has(path):
+		_meshes[path] = _parse(path)
+	return _meshes[path] if _meshes[path] != null else fallback
+
+
+## The one material of the whole kit: the vertex colour (tone x AO) times the instance colour (tint), both read as sRGB like the other boardgen kits.
+static func material() -> StandardMaterial3D:
+	if _material == null:
+		_material = StandardMaterial3D.new()
+		_material.vertex_color_use_as_albedo = true
+		_material.vertex_color_is_srgb = true
+		_material.roughness = 0.6
+		_material.metallic = 0.4
+	return _material
+
+
+func _local_path(module: String) -> String:
+	var p := local_dir.path_join(module + ".glb")
+	return p if not local_dir.is_empty() and FileAccess.file_exists(p) else ""
+
+
+static func _parse(path: String) -> Mesh:
+	var doc := GLTFDocument.new()
+	var state := GLTFState.new()
+	if doc.append_from_file(path, state) != OK:
+		push_warning("BoardgenKit: cannot parse %s" % path)
+		return null
+	var root := doc.generate_scene(state)
+	if root == null:
+		return null
+	var found := [root] if root is MeshInstance3D else root.find_children("*", "MeshInstance3D", true, false)   # a one-node glTF IS the mesh
+	var mesh: ArrayMesh = (found[0] as MeshInstance3D).mesh as ArrayMesh if not found.is_empty() else null
+	root.free()
+	return with_lods(mesh).get_mesh() if mesh != null else null
+
+
+## The mesh with its surfaces on the shared material and the LODs of the engine's simplifier (far views draw fewer triangles).
+static func with_lods(mesh: ArrayMesh) -> ImporterMesh:
+	var im := ImporterMesh.new()
+	for s in mesh.get_surface_count():
+		im.add_surface(Mesh.PRIMITIVE_TRIANGLES, mesh.surface_get_arrays(s), [], {}, material())
+	im.generate_lods(25.0, 60.0, [])
+	return im
