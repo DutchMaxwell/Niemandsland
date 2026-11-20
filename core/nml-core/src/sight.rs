@@ -50,7 +50,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_66_DISTANCE_TRUTH, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_66_DISTANCE_TRUTH, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, PENDING_EPOCH_HEIGHT};
 use crate::state::State;
 use crate::terrain::{self, Terrain};
 
@@ -529,7 +529,8 @@ pub fn zones_of_at(t: &Terrain, rules_epoch: u32) -> Vec<Zone> {
 
 /// `VolumetricLos.surface_y_at` (:211) over the board's solid volumes - the height a model standing at the flat world
 /// point `p` stands on: the roof of the container holding it (a placed box, or a painted container cell no box covers,
-/// the same two the zones above keep), else the table at 0. Metres. G4R5 R3: the table settles every moved model here.
+/// the same two the zones above keep), else the table at 0; from `PENDING_EPOCH_HEIGHT` the higher of that and the tier
+/// under the point. Metres. G4R5 R3: the table settles every moved model here.
 pub fn surface_y_m(t: &Terrain, p: [f64; 2], rules_epoch: u32) -> f64 {
     let boxes: &[terrain::ContainerObb] = if rule_on(rules_epoch, EPOCH_73_V36) { t.containers() } else { &[] };
     let covered = |q: [f64; 2]| boxes.iter().any(|b| BoxFoot { c: b.c, he: b.he, yaw: b.yaw, y0: 0.0 }.holds_point(q));
@@ -537,7 +538,14 @@ pub fn surface_y_m(t: &Terrain, p: [f64; 2], rules_epoch: u32) -> f64 {
     let k = cell_of(p, t.grid_yaw(), t.cell_m());
     let (lx, lz) = ((k.0 as f64 + 0.5) * t.cell_m(), (k.1 as f64 + 0.5) * t.cell_m());
     let painted = t.type_at([p[0] as f32, 0.0, p[1] as f32]) == terrain::CONTAINER && !covered([lx * cos - lz * sin, lx * sin + lz * cos]);
-    if covered(p) || painted { volume_height_in(terrain::CONTAINER) * IN2M } else { 0.0 }
+    let roof = if covered(p) || painted { volume_height_in(terrain::CONTAINER) * IN2M } else { 0.0 };
+    // Heightfield plan step 10: a generated tier board's level under the point is a surface too (`tier_in_at` is the
+    // board-centred inch frame; a board without tiers answers 0). Below the gate the same header plays flat.
+    if rule_on(rules_epoch, PENDING_EPOCH_HEIGHT) {
+        roof.max(t.tier_in_at(p[0] / t.in2m(), p[1] / t.in2m()) * t.in2m())
+    } else {
+        roof
+    }
 }
 
 /// `zones_of`, plus with `shelf` (the dormant `Seams::shelf_sight`) every freely
@@ -725,6 +733,43 @@ mod tests {
 
     fn blocker(x_in: f64, z_in: f64, base_mm: f64, unit: usize) -> Blocker {
         Blocker { cyl: cyl(x_in, z_in, base_mm), unit, aircraft: false }
+    }
+
+    /// A 4 x 4 board of 3 in cells (board-centred, x and z from -6 to 6 in); the two columns at x >= 0 stand 6 in high.
+    fn half_raised() -> Terrain {
+        let level_in = (0..16).map(|i| if i % 4 >= 2 { 6.0 } else { 0.0 }).collect();
+        terrain::tier_board_for_test(4, 4, level_in, Vec::new())
+    }
+
+    /// Heightfield plan step 10: the height gate makes a tier a surface. Red before: `surface_y_m` knew containers
+    /// only and answered 0 on the 6 in tier.
+    #[test]
+    fn a_model_on_a_6in_tier_stands_at_6in_from_the_height_gate() {
+        let (t, at) = (half_raised(), |x_in: f64, z_in: f64| [x_in * M, z_in * M]);
+        assert_eq!(surface_y_m(&t, at(1.5, 0.0), PENDING_EPOCH_HEIGHT), 6.0 * M);
+        assert_eq!(surface_y_m(&t, at(4.5, -4.5), PENDING_EPOCH_HEIGHT), 6.0 * M, "any cell of the block");
+        assert_eq!(surface_y_m(&t, at(-1.5, 0.0), PENDING_EPOCH_HEIGHT), 0.0, "the ground column");
+        assert_eq!(surface_y_m(&t, at(9.0, 0.0), PENDING_EPOCH_HEIGHT), 0.0, "off the grid is the table");
+        // the gate: one epoch below, and a board with no tiers at the gate, both play flat
+        assert_eq!(surface_y_m(&t, at(1.5, 0.0), PENDING_EPOCH_HEIGHT - 1), 0.0);
+        let flat = board(&[]);
+        assert_eq!(surface_y_m(&flat, at(1.5, 0.0), PENDING_EPOCH_HEIGHT), 0.0);
+    }
+
+    /// A container on a tier stands on whichever is higher: its 2.5 in roof over the ground, the 3 in tier under it.
+    #[test]
+    fn a_container_roof_and_a_tier_give_the_higher_surface() {
+        let level_in: Vec<f64> = (0..16).map(|i| if i % 4 >= 2 { 3.0 } else { 0.0 }).collect();
+        let mut p = terrain::PlainTerrain {
+            cell_params: terrain::CellParams { table_size_feet: [1.0, 1.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: M },
+            tiers: Some(terrain::TierGrid { nx: 4, nz: 4, cell_in: 3.0, level_in, ladders: Vec::new(), stairs: Vec::new() }),
+            ..Default::default()
+        };
+        p.containers = vec![terrain::ContainerObb { c: [-1.5 * M, 0.0], he: [1.0 * M, 1.0 * M], yaw: 0.0 }, terrain::ContainerObb { c: [1.5 * M, 0.0], he: [1.0 * M, 1.0 * M], yaw: 0.0 }];
+        let t = Terrain::build(&p);
+        let h = |x_in: f64| surface_y_m(&t, [x_in * M, 0.0], PENDING_EPOCH_HEIGHT);
+        assert_eq!(h(-1.5), 2.5 * M, "a container on the ground");
+        assert_eq!(h(1.5), 3.0 * M, "a container on a 3 in tier: the tier is higher");
     }
 
     #[test]

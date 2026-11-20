@@ -912,6 +912,22 @@ pub fn base_in_terrain(centre: V3, radius: f64, t: &Terrain, class_check: fn(i32
     false
 }
 
+/// Test board of the heightfield steps: an `nx` x `nz` tier grid of 3 in cells on a table of the same size (yaw 0,
+/// board-centred), no painted terrain. `level_in` is row-major; `ladders` are `[low, high]` cell indices.
+#[cfg(test)]
+pub(crate) fn tier_board_for_test(nx: u16, nz: u16, level_in: Vec<f64>, ladders: Vec<[u16; 2]>) -> Terrain {
+    Terrain::build(&PlainTerrain {
+        cell_params: CellParams {
+            table_size_feet: [f64::from(nx) * 0.25, f64::from(nz) * 0.25],
+            grid_rotation_degrees: 0.0,
+            grid_size_inches: 3.0,
+            inches_to_meters: crate::IN2M,
+        },
+        tiers: Some(TierGrid { nx, nz, cell_in: 3.0, level_in, ladders, stairs: Vec::new() }),
+        ..Default::default()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
