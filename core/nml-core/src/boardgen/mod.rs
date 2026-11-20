@@ -4,15 +4,17 @@
 //! The board is a 16 x 16 lattice of 3-inch cells. Every cell carries ONE level (0, 3, 6 or 9 in above the table):
 //! a heightfield, so no walkable surface lies above another and `y = f(x, z)` stays true. Stages, each with its own
 //! seed stream (`seed ^ SALT`): [`graph`] streets and lots -> [`levels`] heights -> [`connect`] ladders (3 in
-//! rise, one level each; no stairs). A tier edge without a ladder is a cliff. All maths is integer; floats
+//! rise, one level each; no stairs) -> [`landmarks`] a few mirrored multi-cell pieces. A tier edge without a ladder is a cliff. All maths is integer; floats
 //! never appear. A board that misses a budget or a reachability check is dropped and the next sub-seed is tried.
 pub mod connect;
 pub mod graph;
+pub mod landmarks;
 pub mod levels;
 
 use serde::{Deserialize, Serialize};
 pub use connect::{Connector, ConnectorKind};
 pub use graph::{Artery, Lot, SectorGraph};
+pub use landmarks::{Landmark, LandmarkKind};
 pub use levels::{Cell, LotKind};
 
 pub const BOARD_IN: [u32; 2] = [48, 48];
@@ -28,7 +30,9 @@ pub const HIGH_PERMILLE: (usize, usize) = (80, 150);
 pub const TOWER_PAIRS: (usize, usize) = (1, 3);
 pub const MAX_ATTEMPTS: u8 = 16;
 const SUBSEED_STEP: i64 = 0x9E37_79B9;
-const SALTS: [i64; 3] = [0x5449_4546_0001, 0x5449_4546_0002, 0x5449_4546_0003];
+const SALTS: [i64; 4] = [0x5449_4546_0001, 0x5449_4546_0002, 0x5449_4546_0003, 0x5449_4546_0004];
+/// Landmark pieces per board, inclusive: one or two mirrored pairs.
+pub const LANDMARK_PIECES: (usize, usize) = (2, 4);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Symmetry { Point180, BalancedFree }
@@ -37,7 +41,7 @@ pub enum Symmetry { Point180, BalancedFree }
 pub struct Layout {
     pub seed: i64, pub attempt: u8, pub symmetry: Symmetry, pub board_in: [u32; 2], pub nx: usize, pub nz: usize,
     pub cell_in: u32, pub deploy_depth_cells: usize,
-    pub arteries: Vec<Artery>, pub lots: Vec<Lot>, pub cells: Vec<Cell>, pub connectors: Vec<Connector>,
+    pub arteries: Vec<Artery>, pub lots: Vec<Lot>, pub cells: Vec<Cell>, pub connectors: Vec<Connector>, pub landmarks: Vec<Landmark>,
 }
 
 /// Inclusive cell-count window for a per-mille range on the 256-cell board (min rounded up, max down).
@@ -75,7 +79,9 @@ impl Layout {
         if !(r.0..=r.1).contains(&self.raised()) { p.push("raised area outside its budget"); }
         if !(h.0..=h.1).contains(&self.high()) { p.push("level-2 area outside its budget"); }
         if !(2 * TOWER_PAIRS.0..=2 * TOWER_PAIRS.1).contains(&self.towers()) { p.push("level-3 area outside its budget"); }
-        if connect::component_count(&self.cells, &self.connectors) != 1 { p.push("board is not one connected walkable area"); }
+        if !(LANDMARK_PIECES.0..=LANDMARK_PIECES.1).contains(&self.landmarks.len()) { p.push("landmark count outside its budget"); }
+        if self.landmarks.iter().flat_map(Landmark::cells).any(|i| self.connectors.iter().any(|c| usize::from(c.low) == i || usize::from(c.high) == i)) { p.push("a landmark stands on a ladder foot"); }
+        if connect::component_count(&self.cells, &self.connectors, &landmarks::solid_mask(&self.landmarks)) != 1 { p.push("board is not one connected walkable area"); }
         if connect::ascent_shortfall(&self.cells, &self.connectors) > 0 { p.push("an island has fewer ascents than it could have (max 2)"); }
         p
     }
@@ -88,10 +94,11 @@ pub fn generate(seed: i64, symmetry: Symmetry) -> Layout {
     for attempt in 0..MAX_ATTEMPTS {
         let s = seed.wrapping_add(i64::from(attempt) * SUBSEED_STEP);
         let g = graph::build(s ^ SALTS[0], symmetry);
-        let (lots, cells) = levels::stack(s ^ SALTS[1], &g);
+        let (lots, mut cells) = levels::stack(s ^ SALTS[1], &g);
         let connectors = connect::wire(s ^ SALTS[2], symmetry, &cells);
+        let landmarks = landmarks::place(s ^ SALTS[3], symmetry, &mut cells, &connectors);
         let layout = Layout { seed, attempt, symmetry, board_in: BOARD_IN, nx: g.nx, nz: g.nz, cell_in: CELL_IN,
-            deploy_depth_cells: DEPLOY_DEPTH_CELLS, arteries: g.arteries, lots, cells, connectors };
+            deploy_depth_cells: DEPLOY_DEPTH_CELLS, arteries: g.arteries, lots, cells, connectors, landmarks };
         if layout.problems().is_empty() { return layout; }
         last = Some(layout);
     }

@@ -57,12 +57,13 @@ pub fn wire(seed: i64, sym: Symmetry, cells: &[Cell]) -> Vec<Connector> {
     conns
 }
 
-/// Number of connected walkable areas (same-level neighbours plus connectors). A good board has exactly one.
-pub fn component_count(cells: &[Cell], conns: &[Connector]) -> usize {
+/// Number of connected walkable areas (same-level neighbours plus connectors; `solid` cells are no ground at all).
+/// A good board has exactly one.
+pub fn component_count(cells: &[Cell], conns: &[Connector], solid: &[bool]) -> usize {
     let mut comp = Dsu::new(cells.len());
-    for i in 0..cells.len() { for j in neighbours(i).filter(|&j| cells[j].level == cells[i].level) { comp.union(i, j); } }
+    for i in (0..cells.len()).filter(|&i| !solid[i]) { for j in neighbours(i).filter(|&j| !solid[j] && cells[j].level == cells[i].level) { comp.union(i, j); } }
     for c in conns { comp.union(usize::from(c.low), usize::from(c.high)); }
-    (0..cells.len()).filter(|&i| comp.find(i) == i).count()
+    (0..cells.len()).filter(|&i| !solid[i] && comp.find(i) == i).count()
 }
 
 /// Islands above ground with fewer ascents (connectors to the level below) than `min(2, access pairs they have)`.

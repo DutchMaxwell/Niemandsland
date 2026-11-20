@@ -13,6 +13,8 @@ pub fn layout_value(seed: i64) -> Value {
     let nx = layout.nx;
     v["level_in"] = json!(LEVEL_IN);
     v["problems"] = json!(layout.problems());
+    // Each landmark also names the core terrain class of its footprint (0 = none) and whether it is solid.
+    v["landmarks"] = Value::Array(layout.landmarks.iter().map(|l| { let mut o = serde_json::to_value(l).expect("landmark JSON"); o["terrain"] = json!(l.kind.terrain_class()); o["solid"] = json!(l.kind.is_solid()); o }).collect());
     v["connectors"] = Value::Array(layout.connectors.iter().map(|c| {
         let ((lx, lz), (hx, hz)) = ((usize::from(c.low) % nx, usize::from(c.low) / nx), (usize::from(c.high) % nx, usize::from(c.high) / nx));
         let mid = |a: usize, b: usize| (a + b + 1) as f64 * f64::from(CELL_IN) / 2.0;
@@ -34,6 +36,18 @@ mod tests {
             assert_eq!(v["board_in"], json!([48, 48]));
             assert_eq!(v["problems"], json!([]), "seed {seed}");
             assert!(v["cells"].as_array().unwrap().iter().all(|c| c["level"].as_u64().unwrap() <= 3));
+        }
+    }
+
+    #[test]
+    fn landmarks_carry_their_core_terrain_class() {
+        let v = layout_value(42);
+        let lms = v["landmarks"].as_array().unwrap();
+        assert!(lms.len() == 2 || lms.len() == 4);
+        for l in lms {
+            let (kind, terrain) = (l["kind"].as_str().unwrap(), l["terrain"].as_i64().unwrap());
+            let want = match kind { "TankCluster" | "Crane" => nml_core::terrain::CONTAINER, "Sump" => nml_core::terrain::DANGEROUS, _ => nml_core::terrain::NONE };
+            assert_eq!((terrain, l["solid"].as_bool().unwrap()), (i64::from(want), matches!(kind, "TankCluster" | "Crane")), "{kind}");
         }
     }
 

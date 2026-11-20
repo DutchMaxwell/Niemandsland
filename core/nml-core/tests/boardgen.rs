@@ -1,7 +1,7 @@
 //! `nml_core::boardgen` (heightfield stage): determinism, budgets, reachability, mirror symmetry, 48 x 48 in.
 //! The reachability and ascent checks are written here from scratch, not taken from the module.
 use std::collections::{BTreeSet, HashSet, VecDeque};
-use nml_core::boardgen::{budget, generate, ConnectorKind, Layout, Symmetry, BOARD_IN, DEPLOY_DEPTH_CELLS, GRID, HIGH_PERMILLE, RAISED_PERMILLE};
+use nml_core::boardgen::{budget, generate, ConnectorKind, Landmark, LandmarkKind, Layout, Symmetry, BOARD_IN, DEPLOY_DEPTH_CELLS, GRID, HIGH_PERMILLE, RAISED_PERMILLE};
 
 /// Two cells as (x, z) pairs: one sight line.
 type CellPair = ((usize, usize), (usize, usize));
@@ -17,9 +17,20 @@ fn nbrs(i: usize) -> Vec<usize> {
     v
 }
 
-/// Walkable graph: neighbours at the same level, plus every connector. Returns what a walk from `player`'s band reaches.
+/// The cells a tank cluster or a crane base fills: nobody walks there.
+fn solid(l: &Layout) -> Vec<bool> {
+    let mut s = vec![false; GRID * GRID];
+    for lm in l.landmarks.iter().filter(|lm| matches!(lm.kind, LandmarkKind::TankCluster | LandmarkKind::Crane)) {
+        for z in lm.z..lm.z + lm.h { for x in lm.x..lm.x + lm.w { s[z * GRID + x] = true; } }
+    }
+    s
+}
+
+/// Walkable graph: neighbours at the same level, plus every connector, minus the solid cells. Returns what a walk from
+/// `player`'s band reaches.
 fn reach(l: &Layout, player: u8) -> Vec<bool> {
-    let mut adj: Vec<Vec<usize>> = (0..GRID * GRID).map(|i| nbrs(i).into_iter().filter(|&j| l.cells[j].level == l.cells[i].level).collect()).collect();
+    let sol = solid(l);
+    let mut adj: Vec<Vec<usize>> = (0..GRID * GRID).map(|i| nbrs(i).into_iter().filter(|&j| l.cells[j].level == l.cells[i].level && !sol[j] && !sol[i]).collect()).collect();
     for c in &l.connectors {
         adj[usize::from(c.low)].push(usize::from(c.high));
         adj[usize::from(c.high)].push(usize::from(c.low));
@@ -105,7 +116,8 @@ fn every_cell_is_reachable_from_both_bands_by_climbing_only_through_connectors()
             }
             for p in [1, 2] {
                 let seen = reach(&l, p);
-                assert!(seen.iter().all(|&s| s), "seed {seed} {sym:?}: {} cells unreachable from player {p}\n{}", seen.iter().filter(|&&s| !s).count(), l.to_ascii());
+                let sol = solid(&l);
+                assert!(seen.iter().zip(&sol).all(|(&s, &x)| s || x), "seed {seed} {sym:?}: {} cells unreachable from player {p}\n{}", seen.iter().zip(&sol).filter(|(&s, &x)| !s && !x).count(), l.to_ascii());
             }
         }
     }
@@ -184,6 +196,17 @@ fn the_checks_can_fail() {
     let tower_cells: Vec<_> = (0..256).filter(|&i| good.cells[i].level == 3).collect();
     cut_towers.connectors.retain(|c| !tower_cells.contains(&usize::from(c.high)));
     assert!(reach(&cut_towers, 1).iter().zip(&cut_towers.cells).any(|(&s, c)| !s && c.level == 3), "the test's own walk must see towers without a ladder");
+    let mut on_a_foot = good.clone();
+    let foot = usize::from(good.connectors[0].low);
+    on_a_foot.landmarks.push(Landmark { kind: LandmarkKind::Sump, x: foot % GRID, z: foot / GRID, w: 1, h: 1, turn: 0 });
+    assert!(on_a_foot.problems().contains(&"a landmark stands on a ladder foot"));
+    let mut walled = good.clone();
+    walled.landmarks = (0..GRID).map(|x| Landmark { kind: LandmarkKind::Crane, x, z: 8, w: 1, h: 1, turn: 0 }).collect();
+    assert!(walled.problems().contains(&"board is not one connected walkable area"), "a solid wall across the board must cut it");
+    assert!(reach(&walled, 1).iter().zip(&walled.cells).any(|(&s, c)| !s && c.deploy == 2), "the test's own walk must see the cut too");
+    let mut none = good.clone();
+    none.landmarks.clear();
+    assert!(none.problems().contains(&"landmark count outside its budget"));
     let mut no_ascents = good.clone();
     let ground = |l: &Layout, c: &nml_core::boardgen::Connector| l.cells[usize::from(c.low)].level == 0;
     let kept: Vec<_> = no_ascents.connectors.iter().filter(|c| !ground(&good, c)).copied().collect();
@@ -217,10 +240,16 @@ fn json_round_trips_and_ascii_has_one_line_per_row() {
     assert!(art.lines().all(|r| r.chars().count() == 16));
 }
 
-/// Share of eye-to-eye rays a tier stops, over every cell pair `pairs(l)` offers. Eyes are 1.25 in above the floor they
-/// stand on; `cap` flattens every level above it (3 -> 2 gives the board as it was before the towers).
-fn blocked_share(l: &Layout, cap: u8, pairs: &[CellPair]) -> f64 {
-    let h = |x: f64, z: f64| f64::from(nml_core::boardgen::LEVEL_IN[usize::from(l.cell((x / 3.0) as usize, (z / 3.0) as usize).level.min(cap))]);
+/// Share of eye-to-eye rays a tier stops, over the cell pairs given. Eyes are 1.25 in above the floor they stand on;
+/// `cap` flattens every level above it (3 -> 2 gives the board as it was before the towers); `solids` lets a tank cluster
+/// or crane base stop a ray like the 2.5 in container the core knows.
+fn blocked_share(l: &Layout, cap: u8, pairs: &[CellPair], solids: bool) -> f64 {
+    let sol = solid(l);
+    let h = |x: f64, z: f64| {
+        let (cx, cz) = ((x / 3.0) as usize, (z / 3.0) as usize);
+        let floor = f64::from(nml_core::boardgen::LEVEL_IN[usize::from(l.cell(cx, cz).level.min(cap))]);
+        if solids && sol[cz * GRID + cx] { floor.max(nml_core::terrain::CONTAINER_HEIGHT_IN) } else { floor }
+    };
     let blocked = pairs.iter().filter(|&&((x1, z1), (x2, z2))| {
         let (a, b) = ((x1 as f64 * 3.0 + 1.5, z1 as f64 * 3.0 + 1.5), (x2 as f64 * 3.0 + 1.5, z2 as f64 * 3.0 + 1.5));
         let (ya, yb) = (h(a.0, a.1) + 1.25, h(b.0, b.1) + 1.25);
@@ -240,7 +269,7 @@ fn roof_pairs(l: &Layout) -> Vec<CellPair> {
 #[test]
 fn census_of_towers_and_sight() {
     let (mut towers, mut tiers, mut n) = (Vec::new(), [0usize; 4], 0.0);
-    let (mut band, mut roof) = ([0.0, 0.0], [0.0, 0.0]);
+    let (mut band, mut roof) = ([0.0, 0.0, 0.0], [0.0, 0.0]);
     for seed in 1..=500 {
         for sym in BOTH {
             let l = generate(seed, sym);
@@ -248,17 +277,19 @@ fn census_of_towers_and_sight() {
             for c in &l.cells { tiers[usize::from(c.level)] += 1; }
             n += 1.0;
             for (k, cap) in [3u8, 2].into_iter().enumerate() {
-                band[k] += blocked_share(&l, cap, &band_pairs());
-                roof[k] += blocked_share(&l, cap, &roof_pairs(&l));
+                band[k] += blocked_share(&l, cap, &band_pairs(), true);
+                roof[k] += blocked_share(&l, cap, &roof_pairs(&l), true);
             }
+            band[2] += blocked_share(&l, 3, &band_pairs(), false);
         }
     }
     let share = tiers.map(|t| t as f64 / (n * 256.0));
-    eprintln!("tier shares {share:?}, tower cells {:?}..{:?}, band rays blocked {:.4} (before towers {:.4}), roof rays blocked {:.4} (before towers {:.4})",
-        towers.iter().min(), towers.iter().max(), band[0] / n, band[1] / n, roof[0] / n, roof[1] / n);
+    eprintln!("tier shares {share:?}, tower cells {:?}..{:?}, band rays blocked {:.4} (before towers {:.4}, before landmarks {:.4}), roof rays blocked {:.4} (before towers {:.4})",
+        towers.iter().min(), towers.iter().max(), band[0] / n, band[1] / n, band[2] / n, roof[0] / n, roof[1] / n);
     assert!((0.008..=0.03).contains(&share[3]), "towers are rare: {:.4} of all cells", share[3]);
     assert!(towers.iter().all(|&t| (2..=6).contains(&t)), "a board has 2 to 6 tower cells");
     assert!(band[0] / n <= band[1] / n + 0.01, "towers must not dim the opening-turn sight lines: {:.4} vs {:.4}", band[0] / n, band[1] / n);
+    assert!(band[0] / n <= band[2] / n + 0.03, "landmarks must not dim the opening-turn sight lines much: {:.4} vs {:.4}", band[0] / n, band[2] / n);
     assert!(roof[0] / n <= 0.30, "towers hide at most 30 % of roof-to-roof pairs: {:.4}", roof[0] / n);
 }
 
@@ -278,4 +309,65 @@ fn a_tower_is_nine_inches_up_a_ladder_chain_from_the_ground_and_never_in_a_band(
         }
     }
     assert_eq!(boards_with_a_tower_ladder, 400, "every board with towers has a ladder up to them");
+}
+
+/// The cells of one landmark, written out here (not taken from the module).
+fn footprint(lm: &Landmark) -> Vec<usize> { (lm.z..lm.z + lm.h).flat_map(|z| (lm.x..lm.x + lm.w).map(move |x| z * GRID + x)).collect() }
+
+#[test]
+fn landmarks_are_mirrored_pairs_on_the_right_ground_and_never_on_a_ladder_foot() {
+    for seed in 1..=300 {
+        for sym in BOTH {
+            let l = generate(seed, sym);
+            let lms = &l.landmarks;
+            assert!(lms.len().is_multiple_of(2) && (2..=4).contains(&lms.len()), "seed {seed} {sym:?}: {} pieces", lms.len());
+            let feet: HashSet<usize> = l.connectors.iter().flat_map(|c| [usize::from(c.low), usize::from(c.high)]).collect();
+            let mut used = HashSet::new();
+            for lm in lms {
+                let cells = footprint(lm);
+                assert!(cells.iter().all(|i| l.cells[*i].deploy == 0 && !feet.contains(i) && used.insert(*i)), "seed {seed} {sym:?}: {lm:?} sits in a band, on a ladder foot or on another piece");
+                let level = l.cells[cells[0]].level;
+                match lm.kind {
+                    LandmarkKind::PumpHouse => assert!((1..=2).contains(&level) && cells.iter().all(|&i| l.cells[i].level == level), "seed {seed}: a pump house needs one raised level"),
+                    k => assert!(cells.iter().all(|&i| l.cells[i].level == 0 && !l.cells[i].street), "seed {seed}: {k:?} needs open level-0 ground"),
+                }
+                assert_eq!(cells.iter().all(|&i| l.cells[i].lot_kind == nml_core::boardgen::LotKind::Hazard), lm.kind == LandmarkKind::Sump, "seed {seed}: a sump is hazard ground");
+                let twin = if sym == Symmetry::Point180 { Some(Landmark { x: 16 - lm.x - lm.w, z: 16 - lm.z - lm.h, turn: (lm.turn + 2) % 4, ..*lm }) } else { None };
+                if let Some(t) = twin { assert!(lms.contains(&t), "seed {seed}: {lm:?} has no half-turn twin"); }
+            }
+            let kinds: BTreeSet<_> = lms.iter().map(|lm| lm.kind).collect();
+            assert_eq!(kinds.len() * 2, lms.len(), "seed {seed} {sym:?}: every pair has its own kind");
+            for k in kinds {
+                let half = |top: bool| lms.iter().filter(|lm| lm.kind == k && ((lm.z + lm.h <= 8) == top)).map(|lm| lm.w * lm.h).sum::<usize>();
+                assert!(half(true) > 0 && half(true) == half(false), "seed {seed} {sym:?}: {k:?} is not equal in both halves");
+            }
+        }
+    }
+}
+
+#[test]
+fn each_landmark_maps_to_a_terrain_class_the_core_already_has() {
+    use nml_core::terrain::{is_dangerous, is_forbidden_rest, NONE};
+    assert!(is_forbidden_rest(LandmarkKind::TankCluster.terrain_class()) && is_forbidden_rest(LandmarkKind::Crane.terrain_class()));
+    assert!(is_dangerous(LandmarkKind::Sump.terrain_class()));
+    assert_eq!(LandmarkKind::PumpHouse.terrain_class(), NONE);
+    assert!(LandmarkKind::TankCluster.is_solid() && LandmarkKind::Crane.is_solid() && !LandmarkKind::Sump.is_solid() && !LandmarkKind::PumpHouse.is_solid());
+}
+
+#[test]
+fn census_of_landmarks() {
+    let (mut kinds, mut pieces, mut retried) = (std::collections::BTreeMap::new(), [0usize; 5], 0);
+    for seed in 1..=500 {
+        for sym in BOTH {
+            let l = generate(seed, sym);
+            retried += usize::from(l.attempt > 0);
+            pieces[l.landmarks.len()] += 1;
+            for lm in &l.landmarks { *kinds.entry(lm.kind).or_insert(0usize) += 1; }
+        }
+    }
+    eprintln!("landmark pieces per board {pieces:?}, kinds {kinds:?}, retried {retried}");
+    assert_eq!(pieces[0] + pieces[1] + pieces[3], 0, "a board has one or two pairs");
+    assert!(pieces[2] >= 300 && pieces[4] >= 300, "one pair and two pairs both occur: {pieces:?}");
+    assert!(kinds.len() == 4 && kinds.values().all(|&n| n >= 400), "every kind turns up often enough: {kinds:?}");
+    assert!(retried <= 300, "landmarks must not add retries: {retried}");
 }
