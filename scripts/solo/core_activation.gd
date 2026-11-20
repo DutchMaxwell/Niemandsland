@@ -1048,7 +1048,13 @@ static func ai_transcript(main, unit: GameUnit, report: Dictionary, target: Game
 	# route, not the chord (R3); a model that did not move sends none.
 	var routes := {}
 	for p in main.solo_controller.last_move_paths:
-		routes[p["model"]] = (p["path"] as Array).map(func(v: Vector3) -> Vector2: return Vector2(v.x, v.z))
+		var route: Array = (p["path"] as Array).map(func(v: Vector3) -> Vector2: return Vector2(v.x, v.z))
+		# The glide rests on the placement the gate left (`end`), which the retraced route may fall up to 0.0005 m short of: the core's move
+		# check wants the route to end where the model stands (0.01 in), so the hop to the placement rides along.
+		var end: Variant = (p as Dictionary).get("end")
+		if end is Vector3 and route.size() >= 2 and Vector2((end as Vector3).x, (end as Vector3).z).distance_to(route.back()) > 0.000001:
+			route.append(Vector2((end as Vector3).x, (end as Vector3).z))
+		routes[p["model"]] = route
 	var trails: Array = chain.map(func(m: ModelInstance) -> Array: return routes.get(m, []))
 	var intent := {"t": "intent", "kind": int(report.get("action", -1))}
 	if target != null:
