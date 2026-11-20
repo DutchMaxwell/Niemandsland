@@ -14,6 +14,8 @@ pub struct Lot { pub id: u16, pub x: usize, pub z: usize, pub w: usize, pub h: u
 pub struct SectorGraph {
     pub nx: usize, pub nz: usize, pub symmetry: Symmetry,
     pub arteries: Vec<Artery>, pub is_street: Vec<bool>, pub lots: Vec<Lot>,
+    /// Cells reserved for the city wall (two half-turn twins; empty unless the theme has a wall).
+    pub wall: Vec<bool>,
 }
 
 pub fn build(seed: i64, sym: Symmetry, b: &Budgets) -> SectorGraph {
@@ -35,8 +37,19 @@ pub fn build(seed: i64, sym: Symmetry, b: &Budgets) -> SectorGraph {
     // A market square: a square of street cells about the board centre, on the mid cross street (it always crosses columns 7 and 8).
     for z in hz - b.plaza / 2..hz + b.plaza / 2 { for x in hx - b.plaza / 2..hx + b.plaza / 2 { street[z * nx + x] = true; } }
 
-    let mut g = SectorGraph { nx, nz, symmetry: sym, arteries, is_street: Vec::new(), lots: Vec::new() };
-    let (mut occ, tpls, target) = (vec![false; nx * nz], b.lot_shapes, b.lot_pairs);
+    // A city wall: two half-turn twins running north-south through the middle rows (never in a band) on a column no artery runs along; where it meets a
+    // street that cell stays street (a gate). No usable column = no wall (the validator then rejects the board).
+    let mut wall = vec![false; nx * nz];
+    let cols: Vec<usize> = if b.wall { (2..=5).filter(|&x| {
+        let rows: Vec<usize> = (DEPLOY_DEPTH_CELLS..nz - DEPLOY_DEPTH_CELLS).filter(|&z| street[z * nx + x]).collect();
+        !rows.is_empty() && rows.windows(2).all(|w| w[1] != w[0] + 1 || w[0] == hz - 1)
+    }).collect() } else { Vec::new() };
+    if !cols.is_empty() {
+        let x = cols[rng.randi_range(0, cols.len() as i64 - 1) as usize];
+        for z in DEPLOY_DEPTH_CELLS..nz - DEPLOY_DEPTH_CELLS { for i in [z * nx + x, (nz - 1 - z) * nx + nx - 1 - x] { wall[i] = !street[i]; } }
+    }
+    let mut g = SectorGraph { nx, nz, symmetry: sym, arteries, is_street: Vec::new(), lots: Vec::new(), wall: wall.clone() };
+    let (mut occ, tpls, target) = (wall, b.lot_shapes, b.lot_pairs);
     for _ in 0..220 {
         if g.lots.len() / 2 >= target { break; }
         let first = b.lot_first.get(g.lots.len() / 2).copied();   // the first pairs may have a forced shape and stay out of the bands (a tower site)

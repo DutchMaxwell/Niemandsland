@@ -25,8 +25,9 @@ impl LandmarkKind {
     pub fn terrain_class(self) -> i32 { match self { Self::TankCluster | Self::Crane => CONTAINER, Self::Sump => DANGEROUS, Self::PumpHouse => NONE } }
     pub fn is_solid(self) -> bool { matches!(self, Self::TankCluster | Self::Crane) }
     /// Footprint sizes (w, h) in cells; a pump house also fits a narrow strip of a raised block.
-    fn shapes(self) -> &'static [(usize, usize)] {
-        match self { Self::Crane => &[(1, 1)], Self::PumpHouse => &[(2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], _ => &[(2, 2), (3, 2), (2, 3)] }
+    fn shapes(self, small_pools: bool) -> &'static [(usize, usize)] {
+        match self {
+            Self::Sump if small_pools => &[(2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], Self::Crane => &[(1, 1)], Self::PumpHouse => &[(2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], _ => &[(2, 2), (3, 2), (2, 3)] }
     }
 }
 
@@ -58,7 +59,7 @@ pub fn place(seed: i64, sym: Symmetry, cells: &mut [Cell], conns: &[Connector], 
     }
     for kind in kinds {
         if out.len() >= 2 * pairs + usize::from(b.centre_piece) { break; }
-        let (firsts, seconds) = (rects(kind, true, &mut rng), rects(kind, false, &mut rng));
+        let (firsts, seconds) = (rects(kind, true, b.small_pools, &mut rng), rects(kind, false, b.small_pools, &mut rng));
         'pair: for (x, z, w, h) in firsts {
             let a = Landmark { kind, x, z, w, h, turn: rng.randi_range(0, 3) as u8 };
             if !fits(&a, cells, &taken, conns) { continue; }
@@ -79,8 +80,8 @@ pub fn place(seed: i64, sym: Symmetry, cells: &mut [Cell], conns: &[Connector], 
 }
 
 /// Every footprint of `kind` inside one half of the board and outside the deployment bands, shuffled.
-fn rects(kind: LandmarkKind, top: bool, rng: &mut GodotRng) -> Vec<(usize, usize, usize, usize)> {
-    let mut v: Vec<_> = kind.shapes().iter().flat_map(|&(w, h)| (DEPLOY_DEPTH_CELLS..=GRID - DEPLOY_DEPTH_CELLS - h)
+fn rects(kind: LandmarkKind, top: bool, small_pools: bool, rng: &mut GodotRng) -> Vec<(usize, usize, usize, usize)> {
+    let mut v: Vec<_> = kind.shapes(small_pools).iter().flat_map(|&(w, h)| (DEPLOY_DEPTH_CELLS..=GRID - DEPLOY_DEPTH_CELLS - h)
         .filter(move |&z| (z + h <= GRID / 2) == top).flat_map(move |z| (0..=GRID - w).map(move |x| (x, z, w, h)))).collect();
     shuffle(&mut v, rng);
     v
@@ -91,7 +92,7 @@ fn rects(kind: LandmarkKind, top: bool, rng: &mut GodotRng) -> Vec<(usize, usize
 fn fits(l: &Landmark, cells: &[Cell], taken: &[bool], conns: &[Connector]) -> bool {
     let level = cells[l.z * GRID + l.x].level;
     l.cells().all(|i| { let c = &cells[i]; !taken[i] && c.deploy == 0 && !conns.iter().any(|k| usize::from(k.low) == i || usize::from(k.high) == i)
-        && if l.kind == LandmarkKind::PumpHouse { (1..=2).contains(&level) && c.level == level } else { c.level == 0 && !c.street && !matches!(c.lot_kind, LotKind::Hazard | LotKind::Rough) } })
+        && if l.kind == LandmarkKind::PumpHouse { (1..=2).contains(&level) && c.level == level } else { c.level == 0 && !c.street && c.lot_kind != LotKind::Hazard && (c.lot_kind != LotKind::Rough || l.kind == LandmarkKind::Sump) && c.lot_kind != LotKind::Wall } })
 }
 
 /// Keep later pieces a cell away; a sump turns its ground into hazard ground.

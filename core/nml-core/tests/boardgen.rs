@@ -563,7 +563,7 @@ fn a_town_is_many_small_buildings_and_no_open_lane_runs_edge_to_edge() {
     }
     let (mean, share, rays) = (lots as f64 / n as f64, retried as f64 / n as f64, blocked / n as f64);
     eprintln!("town lots mean {mean:.1} min {min_lots}, retried {share:.3}, opening-turn rays blocked {rays:.3}");
-    assert!(mean >= 19.0 && min_lots >= 14, "lots per board: mean {mean:.1}, min {min_lots}");
+    assert!(mean >= 15.0 && min_lots >= 10, "lots per board: mean {mean:.1}, min {min_lots}");
     assert!(share <= 0.85, "{share:.2} of the town boards needed a later sub-seed");
     assert!(rays >= 0.70, "the opening-turn sight lines are {rays:.2} blocked");
 }
@@ -579,7 +579,7 @@ fn only_the_town_asks_for_a_lane_free_board() {
 fn a_town_tower_is_a_2_by_2_block_nine_inches_up_with_a_ladder_from_six() {
     for seed in 1..=300 {
         let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
-        let tops: Vec<usize> = (0..GRID * GRID).filter(|&i| l.cells[i].level == 3).collect();
+        let tops: Vec<usize> = (0..GRID * GRID).filter(|&i| l.cells[i].level == 3 && l.cells[i].lot_kind != nml_core::boardgen::LotKind::Wall).collect();
         assert_eq!(tops.len(), 8, "seed {seed}: {} tower cells", tops.len());
         // two blocks of four, each a full 2 x 2 (a cell and its right, lower and lower-right neighbour), a half turn apart
         let origins: Vec<usize> = tops.iter().copied().filter(|&i| i % GRID + 1 < GRID && i / GRID + 1 < GRID && [i + 1, i + GRID, i + GRID + 1].iter().all(|j| tops.contains(j))).collect();
@@ -619,7 +619,7 @@ fn a_town_has_garden_plots_that_stay_flat_and_the_deepworks_has_none() {
     }
     let mean = total as f64 / 300.0;
     eprintln!("garden plots per town board: mean {mean:.1}, least {least}");
-    assert!(mean >= 7.0 && least >= 6, "plots per board: mean {mean:.1}, least {least}");
+    assert!(mean >= 7.0 && least >= 5, "plots per board: mean {mean:.1}, least {least}");
 }
 
 #[test]
@@ -649,6 +649,53 @@ fn every_town_has_a_fountain_in_the_middle_and_a_statue_pool_and_hall_as_mirrore
             assert_eq!(v.len(), 2, "seed {seed}: {k:?} x {}", v.len());
             let (a, b) = (v[0], v[1]);
             assert_eq!((a.x + b.x + a.w, a.z + b.z + a.h, a.w, a.h), (GRID, GRID, b.w, b.h), "seed {seed}: the {k:?} pair is not a half turn");
+        }
+    }
+}
+
+#[test]
+#[ignore = "measurement: where a city-wall column (x in 2..=5, rows 4..=11) could go on the town boards"]
+fn census_of_wall_columns() {
+    let (mut counts, mut gates) = ([0usize; 5], [0usize; 6]);
+    for seed in 1..=1000 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        let ok: Vec<usize> = (2..=5).filter(|&x| {
+            let rows: Vec<usize> = (4..=11).filter(|&z| l.cell(x, z).street).collect();
+            let runs_ok = rows.windows(2).all(|w| w[1] != w[0] + 1 || (w[0] == 7 && w[1] == 8)) && !rows.windows(3).any(|w| w[1] == w[0] + 1 && w[2] == w[1] + 1);
+            !rows.is_empty() && runs_ok
+        }).collect();
+        counts[ok.len()] += 1;
+        if let Some(&x) = ok.first() { gates[(4..=11).filter(|&z| l.cell(x, z).street).count().min(5)] += 1; }
+    }
+    eprintln!("boards by number of usable wall columns {counts:?}; gates (street cells crossed) on the first usable column {gates:?}");
+}
+
+#[test]
+fn a_town_has_two_half_turn_city_walls_with_a_gate_a_breach_towers_and_a_ladder_up() {
+    use nml_core::boardgen::LotKind;
+    for seed in 1..=300 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        assert!(l.problems().is_empty(), "seed {seed}: {:?}\n{}", l.problems(), l.to_ascii());
+        let wall: Vec<&nml_core::boardgen::Cell> = l.cells.iter().filter(|c| c.lot_kind == LotKind::Wall).collect();
+        let ridge: Vec<&nml_core::boardgen::Cell> = wall.iter().copied().filter(|c| c.level >= 2).collect();
+        let (west, east): (Vec<&nml_core::boardgen::Cell>, Vec<&nml_core::boardgen::Cell>) = ridge.iter().copied().partition(|c| c.x < GRID / 2);
+        assert!(!west.is_empty() && west.len() == east.len(), "seed {seed}: the walls are not twins ({} / {})", west.len(), east.len());
+        let col = west[0].x;
+        assert!(wall.iter().filter(|c| c.level != 1).all(|c| c.x == col || c.x == GRID - 1 - col) && (DEPLOY_DEPTH_CELLS..GRID - DEPLOY_DEPTH_CELLS).contains(&west[0].z), "seed {seed}: the wall leaves its column or enters a band");
+        // a gate (a street cell in the line), a breach (a level-0 wall cell) and a wall tower (level 3) on each twin
+        let line: Vec<_> = (DEPLOY_DEPTH_CELLS..GRID - DEPLOY_DEPTH_CELLS).map(|z| l.cell(col, z)).collect();
+        assert!(line.iter().any(|c| c.street && c.level == 0), "seed {seed}: no gate");
+        assert!(line.iter().any(|c| c.lot_kind == LotKind::Wall && c.level == 0), "seed {seed}: no breach");
+        let two_in_a_row = line.windows(2).any(|w| w.iter().all(|c| c.lot_kind == LotKind::Wall && c.level >= 2));
+        assert!(!two_in_a_row || wall.iter().any(|c| c.level == 3 && c.x == col), "seed {seed}: a wall run of two or more has no tower");
+        // every wall ridge cell sits on a level-2 island that a ladder reaches from below (or touches a 9 in tower, which has its own ladder)
+        for c in ridge.iter().filter(|c| c.level == 2 && c.x == col) {
+            let mut seen = HashSet::from([c.z * GRID + c.x]);
+            let mut queue = VecDeque::from([c.z * GRID + c.x]);
+            while let Some(i) = queue.pop_front() { for j in nbrs(i) { if l.cells[j].level == 2 && seen.insert(j) { queue.push_back(j); } } }
+            let up = l.connectors.iter().any(|k| seen.contains(&usize::from(k.high)) && l.cells[usize::from(k.low)].level == 1);
+            let tower = seen.iter().any(|&i| nbrs(i).iter().any(|&j| l.cells[j].level == 3));
+            assert!(up || tower, "seed {seed}: the wall cell {} has no way up\n{}", c.z * GRID + c.x, l.to_ascii());
         }
     }
 }
