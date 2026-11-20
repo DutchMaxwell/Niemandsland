@@ -761,6 +761,10 @@ func test_a_versatile_shooter_against_a_to_hit_modifier_is_refused_as_a_pair() -
 	vinci.unit_properties["game_system"] = "aof"
 	vinci.unit_properties["faction_folder"] = "duchies_of_vinci"
 	assert_array(CoreSlice.pair_refusals(vinci, plain)).override_failure_message("Versatile + Unpredictable Shooter picks on a modified number").is_equal(["versatile_pick_modified_to_hit"])
+	var vinci_generic := _unit(["Vinci Tech", "Unpredictable"], [[]])   # the generic "when attacking" spelling: the same die in shooting
+	vinci_generic.unit_properties["game_system"] = "aof"
+	vinci_generic.unit_properties["faction_folder"] = "duchies_of_vinci"
+	assert_array(CoreSlice.pair_refusals(vinci_generic, plain)).override_failure_message("Versatile + Unpredictable picks on a modified number").is_equal(["versatile_pick_modified_to_hit"])
 	var vinci_only := _unit(["Vinci Tech"], [[]])
 	vinci_only.unit_properties["game_system"] = "aof"
 	vinci_only.unit_properties["faction_folder"] = "duchies_of_vinci"

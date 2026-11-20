@@ -26,8 +26,9 @@ const TAKEDOWN_LABEL_GROUP := "door_takedown_names_an_equipment_carrier"
 ## The primitives whose rules move a SHOOTING to-hit number: on the target (Artillery's -1, the Stealth and Evasive families, Aircraft) and on the shooter.
 const TO_HIT_ON_TARGET := ["Artillery", "Stealth", "Evasive", "Aircraft"]
 ## H-10 (Plan H): Unpredictable Shooter's 4-6 half is a +1 to hit the table folds into the number a Versatile pick is latched on; probed 5 of 16
-## seeds with different dice at over 9 in (Vinci Tech + Unpredictable Shooter, ds/h_probe_experimental_tinctures.md).
-const TO_HIT_ON_SHOOTER := ["Artillery", "Shot Modifier", "Instinctive", "Unpredictable Shooter"]
+## seeds with different dice at over 9 in (Vinci Tech + Unpredictable Shooter, ds/h_probe_experimental_tinctures.md); the generic "Unpredictable"
+## ("when attacking": the same die in shooting) measured the same, 5 of 16 seeds (Plan H, H-10 follow-up). Precise and Thrust measured equal.
+const TO_HIT_ON_SHOOTER := ["Artillery", "Shot Modifier", "Instinctive", "Unpredictable Shooter", "Unpredictable"]
 
 
 static func _has_group(group: String) -> bool:
