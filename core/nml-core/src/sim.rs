@@ -1766,6 +1766,9 @@ pub(crate) fn tray_storm_attack(
             });
             let successes = crate::dice::faces_to_hits(&faces, spec.trigger as u8) as i64;
             shot.log.push(format!("{}: {} unleashes the storm — {} of {} dice hit (once per game)", spec.name, owner, successes, spec.dice));
+            // H-7 (Plan H): the table's own line (`_solo_apply_storm_attack`) and, per success, the landing the step API hands the table.
+            tray.say(|| LogLine { rule: "storm_attack", category: Category::Combat, side: next.player[b], detail: None,
+                text: format!("{}: {} unleashes the storm — {} of {} dice hit (once per game)", spec.name, owner, successes, spec.dice) });
             for _ in 0..successes {
                 targets.retain(|&ti| combined_alive(next, ti, seams) > 0);
                 // Best target per success, FIRST on a tie (the table's own
@@ -1793,7 +1796,9 @@ pub(crate) fn tray_storm_attack(
                     StormFacet::Shred => (0, false, true), StormFacet::Surge => (0, false, false),
                 };
                 let landed = shot.absorb(crate::dice::resolve_storm_hits_with_tray(hits, ap, bane, shred, &def, &ut.name, tray));
+                let before = chain_snapshot(next, best, tray);
                 land_wounds_with(next, best, landed, seams.tray_exact);
+                land_chain_report(statics, next, tray, best, before);
                 if shooting_morale_trigger(next, statics, seams, ut, best, alive_before, wounds_before) {
                     tray_morale_for(next, statics, best, false, true, Some(&spec.name), seams, tray, shot, None, None);
                 }
