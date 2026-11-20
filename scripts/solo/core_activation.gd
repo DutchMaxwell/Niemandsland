@@ -1615,12 +1615,17 @@ static func _land_growth(main, gu: GameUnit, d: Dictionary) -> void:
 ## and after the morale die (P4.0-4b / -4c), which picked the records by role and knew no grant. From epoch 81 the core keeps a
 ## once morale buff through a Shaken unit's auto-failed test, as the table does (#2804).
 static func _land_buffs(main, gu: GameUnit, d: Dictionary) -> void:
+	# One spend for the whole delta: records of the same spell stacked on the unit (a cast that was not used up in an earlier round) are
+	# all spent by the core's exchange; the table says that once (`_solo_spend_records` dedupes the sentence), not once per record.
+	var spend: Array = []
+	var pool: Array = (main._solo_spell_mods.get(gu.get_instance_id(), []) as Array).duplicate()
 	for e in d.get("buffs_spent", []):
-		var records: Array = main._solo_spell_mods.get(gu.get_instance_id(), [])
-		var hit: Array = records.filter(func(rd: Variant) -> bool: return str((rd as Dictionary).get("spell", "")) == str(e[0]) \
+		var hit: Array = pool.filter(func(rd: Variant) -> bool: return str((rd as Dictionary).get("spell", "")) == str(e[0]) \
 			and str((rd as Dictionary).get("scope", "")) == str(e[1]) and str((rd as Dictionary).get("duration", "")) == "once")
 		if not hit.is_empty():
-			main._solo_spend_records(gu, [hit[0]])
+			spend.append(hit[0])
+			pool.erase(hit[0])   # equal records are interchangeable: the next entry takes the next one
+	main._solo_spend_records(gu, spend)
 
 
 ## Landing lane (PLAN H): the once-records the TABLE placed between the capture and the core's call are not on the board the core
