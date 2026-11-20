@@ -64,6 +64,12 @@ func _prefetch() -> void:
 
 # === Public ===
 
+## Does a removed model leave an OIL pool and fires? Only a vehicle (a machine), and only on a table whose game system offers the
+## oil stain (assets/terrain_systems.json: a fantasy table does not): there it leaves blood like any other model. A look only.
+static func uses_oil(is_vehicle: bool, system: String) -> bool:
+	return is_vehicle and GameSystem.offers("stain", OIL_PANEL, system)
+
+
 ## Leave a stain where a model was removed. `world_pos` is the table position, `base_radius_m`
 ## its base radius (the pool matches the base), `is_vehicle` picks oil+fire vs blood, and
 ## `seed_val` makes the orientation + fire scatter deterministic (multiplayer/replay safe).
