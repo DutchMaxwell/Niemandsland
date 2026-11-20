@@ -3210,6 +3210,9 @@ pub fn resolve_melee_leg_wipe(
                     } else if d > 0 && !c.name.is_empty() {
                         out.log.push(format!("{}: AP(+{}) on {}'s strike{}", c.name, d, sh.owner, cond_ap_why(&c.condition)));
                         say_rule(tray, "cond_ap", sh.att.side, || format!("{}: AP(+{}) against {def_owner}{}", c.name, d, cond_ap_why(&c.condition)));
+                    } else if d > 0 && !c.say_name.is_empty() {
+                        // H-17a's melee twin: the generic pass's rules (Disintegrate, Tear, ...) say the table's line; `out.log` stays as it was.
+                        say_rule(tray, "cond_ap", sh.att.side, || format!("{}: AP(+{}) against {def_owner}", c.say_name, d));
                     }
                 }
                 // Wave 2 — the Slayer mark and Piercing Assault on their
