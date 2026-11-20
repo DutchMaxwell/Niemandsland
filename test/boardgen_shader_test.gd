@@ -5,8 +5,15 @@ extends GdUnitTestSuite
 const SHADER_PATH := "res://shaders/tiefwerk_board.gdshader"
 
 
+const INCLUDES := ["res://shaders/tiefwerk_edges.gdshaderinc"]
+
+
+## The board shader with its includes appended (the pins below do not care which file a function lives in).
 func _source() -> String:
-	return FileAccess.get_file_as_string(SHADER_PATH)
+	var src := FileAccess.get_file_as_string(SHADER_PATH)
+	for path: String in INCLUDES:
+		src += "\n" + FileAccess.get_file_as_string(path)
+	return src
 
 
 func _line_with(src: String, needle: String) -> String:
@@ -39,7 +46,7 @@ func test_the_wall_term_is_the_euclidean_distance_to_the_nearest_taller_cell_in_
 
 func test_every_uniform_the_greybox_sets_is_declared() -> void:
 	var declared := _source().split("\n")
-	for name in ["cells", "board_cells", "cell_in", "board_origin"]:
+	for name in ["cells", "board_cells", "cell_in", "board_origin", "detail"]:
 		var found := false
 		for line in declared:
 			found = found or (line.begins_with("uniform ") and line.contains(" %s" % name))
@@ -62,3 +69,25 @@ func test_the_hazard_band_is_gated_per_tier_edge_and_the_plate_is_1_5_inches() -
 	var src := _source()
 	assert_bool(_line_with(src, "hazard band only on some edges").contains("h21(")).is_true()
 	assert_bool(src.contains("const float PLATE = 1.5;")).is_true()
+
+
+func test_edge_wear_counts_real_edges_only_not_the_seams_between_the_boxes_of_one_level() -> void:
+	var src := _source()
+	assert_bool(src.contains("vec4 edge_wear(")).is_true()
+	var gate := _line_with(src, "> p.y - 0.5")   # the surface goes on past this edge: a seam, no edge
+	assert_str(gate).contains("cell_at(")
+	assert_bool(src.contains("if (k != 5) {")).override_failure_message("ladders are free-standing: every edge of them is real").is_true()
+	assert_str(_line_with(src, "a wall's foot is concave")).is_not_empty()
+
+
+func test_the_edge_wear_is_gated_by_the_detail_uniform() -> void:
+	var src := _source()
+	assert_bool(src.contains("uniform float detail")).is_true()
+	assert_str(_line_with(src, "vec4 ew =")).contains("detail > 0.5")
+
+
+func test_the_box_size_reaches_the_fragment_and_the_bend_goes_through_the_view_matrix() -> void:
+	var src := _source()
+	assert_str(_line_with(src, "box_in = INSTANCE_CUSTOM.gba")).is_not_empty()
+	assert_str(_line_with(src, "lpos = VERTEX * box_in")).is_not_empty()
+	assert_str(_line_with(src, "NORMAL = normalize((VIEW_MATRIX")).contains("ew.yzw")
