@@ -327,12 +327,13 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 		if ok:
 			card.resolve(bool(payload.get("yes", false)))
 	elif action == "set_game_system":
-		# PLAN_GAME_SYSTEM_SWITCH step 5: the host sets its table's system; the guest only PUSHES the key over the real
-		# door, as a hacked peer would (its own table stays as it is) - the host must ignore that push.
+		# PLAN_GAME_SYSTEM_SWITCH steps 5 / 6: the host sets its table's system through the switch; the guest only PUSHES the key
+		# over the real door, as a hacked peer would (its own table stays as it is) - the host must ignore that push.
 		var system := str(payload.get("system", ""))
 		if _role == "host":
-			_main.opr_army_manager.table_system = system
-		_main.network_manager.broadcast_table_settings({"game_system": system})
+			ok = _main.set_table_system(system, "the harness")   # the real switch door: sets it and pushes it
+		else:
+			_main.network_manager.broadcast_table_settings({"game_system": system})
 	elif action == "set_automatic":
 		_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
 		_main._hotseat_turn = null
