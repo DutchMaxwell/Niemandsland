@@ -24,7 +24,7 @@ use crate::combat::{
 use crate::sight;
 use crate::geom::{self, V3};
 use crate::acts::{
-    rule_on, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES,
+    rule_on, CURRENT_RULES_EPOCH, PENDING_EPOCH_VERSATILE_MODIFIED_HIT, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES,
     EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU,
     EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND, EPOCH_12_MOVE_BUFF,
     EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING, EPOCH_19_MOVE_GRANTS_FOLD,
@@ -9412,24 +9412,23 @@ fn versatile_latch(
     );
     next.versatile_pick_round[mi] = next.round;
     next.versatile_pick_mode[mi] = if ap_mod > 0 { 2 } else { 1 };
-    log.push(format!(
-        "{rule_name}: {} picks {} for this activation",
-        statics[next.roster.profile[mi]].name,
-        if ap_mod > 0 { "AP(+1)" } else { "+1 to hit" }
-    ));
-    if let Some(t) = tray {
-        // The table's line (`_solo_log_versatile_pick`): once per activation, where the volley decides.
-        say_rule(t, "versatile", next.player[mi], || log.last().cloned().unwrap_or_default());
-    }
-    // Rules 3.6 (row W1.TRACE) — the once-per-activation pick names itself
-    // (arm `versatile-attack`).
-    if rule_on(rules_epoch, EPOCH_73_V36) {
-        trace_rule("versatile-attack", "Versatile Attack", &format!(
-            "{} picks {} for this activation",
-            statics[next.roster.profile[mi]].name,
-            if ap_mod > 0 { "AP(+1)" } else { "+1 to hit" }));
-    }
+    say_versatile_pick(rule_name, &statics[next.roster.profile[mi]].name, ap_mod > 0, next.player[mi], log, tray, rules_epoch);
     (hit_mod, ap_mod, true)
+}
+
+/// The once-per-activation pick's rules-must-log line: the book rule's name, who picked, which mode. The table's
+/// `_solo_log_versatile_pick`, said where the volley decides (`versatile_latch` before the dice, or the dice themselves from
+/// `PENDING_EPOCH_VERSATILE_MODIFIED_HIT`).
+pub(crate) fn say_versatile_pick(rule_name: &str, unit: &str, ap_mode: bool, side: i64, log: &mut Vec<String>, tray: Option<&mut Tray>, rules_epoch: u32) {
+    let mode = if ap_mode { "AP(+1)" } else { "+1 to hit" };
+    log.push(format!("{rule_name}: {unit} picks {mode} for this activation"));
+    if let Some(t) = tray {
+        say_rule(t, "versatile", side, || log.last().cloned().unwrap_or_default());
+    }
+    // Rules 3.6 (row W1.TRACE) — the once-per-activation pick names itself (arm `versatile-attack`).
+    if rule_on(rules_epoch, EPOCH_73_V36) {
+        trace_rule("versatile-attack", "Versatile Attack", &format!("{unit} picks {mode} for this activation"));
+    }
 }
 
 /// Folds `action.split` onto the state, or answers `None` when the activation
@@ -11728,7 +11727,13 @@ fn resolve_with(
                                     } else {
                                         shoot36.iter().find(|p| p.versatile_attack)
                                     };
-                                    if prof36.is_some() || att.versatile_grant {
+                                    if (prof36.is_some() || att.versatile_grant)
+                                        && rule_on(seams.rules_epoch, PENDING_EPOCH_VERSATILE_MODIFIED_HIT)
+                                        && next.versatile_pick_round[*mi] != next.round
+                                    {
+                                        // The dice decide on the number the first eligible shot rolls at; stamped after the volley below.
+                                        att.versatile_defer = true;
+                                    } else if prof36.is_some() || att.versatile_grant {
                                         let (vh, va, vl) = versatile_latch(&mut next, statics, *mi,
                                             crate::combat::reliable_quality(att.quality,
                                                 prof36.map(|p| p.reliable).unwrap_or(false)),
@@ -11813,6 +11818,9 @@ fn resolve_with(
                             // The Deadly groups' raw tally rides `caused` but
                             // lands separately below — not an ignored wound.
                             let ignored = r.caused - r.wounds - r.deadly_tally;
+                            for &(mi, ap_mode) in &r.versatile_picks {
+                                (next.versatile_pick_round[mi], next.versatile_pick_mode[mi]) = (next.round, if ap_mode { 2 } else { 1 });
+                            }
                             // DAT-17a: spend on wounds coming IN (pre-Regeneration),
                             // not on the post-roll count that `wounds_before_g` measures.
                             let def_incoming = r.caused > 0;

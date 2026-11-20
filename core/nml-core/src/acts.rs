@@ -999,6 +999,13 @@ pub const CURRENT_RULES_EPOCH: u32 = 93;
 /// Flying move near a unit planned differently. From 94 a Flying unit's route reads the Traversal way; the gate's own base-crossing clamp stays Traversal-only,
 /// as on the table. Below 94 byte-identical. Every call site reads THIS constant, not `94`.
 pub const PENDING_EPOCH_FLYING_THROUGH: u32 = 94;
+/// Placeholder gate for the VERSATILE PICK ON THE MODIFIED TO-HIT (Plan H, H-18; lead decision 20.11.): the table latches an
+/// activation's Versatile Attack pick on the number the first eligible weapon really rolls at (Stealth, Evasive, Artillery, Aircraft,
+/// Shot Modifier, Instinctive, the Unpredictable die all folded in); the core latched it before the dice on the plain Quality. From 94
+/// the volley's first eligible shot decides inside the dice, on its modified number, Defense after the Guarded fold and AP with the
+/// Unpredictable bonus; every later shot, volley and charge of the activation reuses the stamped pick. Below 94 byte-identical.
+/// Every call site reads THIS constant, not the literal `94`.
+pub const PENDING_EPOCH_VERSATILE_MODIFIED_HIT: u32 = 94;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff

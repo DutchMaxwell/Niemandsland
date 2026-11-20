@@ -601,6 +601,9 @@ pub struct Ctx {
     pub versatile_pick_hit: i64,
     pub versatile_pick_ap: i64,
     pub versatile_latched: bool,
+    /// PENDING_EPOCH_VERSATILE_MODIFIED_HIT — the activation has no pick yet and the sim leaves it to the dice: the first eligible shot
+    /// picks on the number it rolls at and reports it (`ShootResult::versatile_picks`). Set only by the volley seam; false on every `ctx_of`.
+    pub versatile_defer: bool,
     /// SHO-19 / SHO-19b — the Versatile pick ignores the 9"/6" distance gate at
     /// `EPOCH_73_V36` (Versatile Expert, Enhanced Watchborn).
     pub versatile_no_gate: bool,
@@ -4055,6 +4058,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         versatile_pick_hit: 0,
         versatile_pick_ap: 0,
         versatile_latched: false,
+        versatile_defer: false,
         versatile_no_gate,
         pierce_shooting_grant: false,
         pierce_melee_grant: false,
