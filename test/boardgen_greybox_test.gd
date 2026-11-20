@@ -74,14 +74,17 @@ func test_a_tier_block_is_as_high_as_its_level_in_inches() -> void:
 		assert_int(seen.size()).is_equal(2)   # the board has both tiers
 
 
-func test_every_connector_is_drawn_as_rails_and_rungs_on_the_flat_wall_and_never_as_stairs() -> void:
+func test_every_connector_is_a_ladder_drawn_as_rails_and_rungs_and_no_stair_is_built() -> void:
 	for layout in _layouts():
+		var conns: Array = layout["connectors"]
+		assert_bool(conns.all(func(c: Dictionary) -> bool: return c["kind"] == "Ladder")).override_failure_message("seed %s: a connector is not a ladder" % layout["seed"]).is_true()
 		var boxes := BoardgenGreybox.plan(layout)
+		# Two rails and five rungs per 3 in ladder; no other connector shape exists.
+		assert_int(_of_kind(boxes, ["ladder"]).size()).is_equal(conns.size() * 7)
 		assert_int(_of_kind(boxes, ["stair"]).size()).is_equal(0)
-		# Two rails and five rungs per 3 in ladder, whatever the generator calls the connector.
-		assert_int(_of_kind(boxes, ["ladder"]).size()).is_equal(layout["connectors"].size() * 7)
-	var kinds: Array = _fixture()["connectors"].map(func(c: Dictionary) -> String: return c["kind"])
-	assert_bool(kinds.has("Stair") and kinds.has("Ladder")).is_true()   # the recorded board still has both kinds: both are ladders now
+		assert_int(boxes.size()).is_equal(_of_kind(boxes, ["street", "ground", "hazard", "tier1", "tier2", "ladder"]).size())
+		assert_bool(BoardgenGreybox.KINDS.has("stair")).is_false()
+	assert_int(_fixture()["connectors"].size()).is_greater(0)
 
 
 func test_one_layout_builds_the_same_board_and_another_layout_a_different_one() -> void:

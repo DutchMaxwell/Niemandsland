@@ -51,7 +51,7 @@ mod tests {
         for c in conns {
             let (low, high) = (c["low"].as_u64().unwrap() as usize, c["high"].as_u64().unwrap() as usize);
             assert_eq!(cells[high]["level"].as_u64().unwrap(), cells[low]["level"].as_u64().unwrap() + 1);
-            assert!(matches!(c["kind"].as_str(), Some("Stair" | "Ladder")));
+            assert_eq!(c["kind"].as_str(), Some("Ladder"), "no stairs on a generated board");
             let (e, (lx, lz)) = (c["edge_in"].as_array().unwrap(), (low % 16, low / 16));
             let (ex, ez) = (e[0].as_f64().unwrap(), e[1].as_f64().unwrap());
             // The edge midpoint lies on the boundary of the low cell: half a cell from its centre along one axis only.

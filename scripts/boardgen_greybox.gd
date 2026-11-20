@@ -1,13 +1,14 @@
 class_name BoardgenGreybox
 extends Node3D
 ## Greybox 3D of a seeded boardgen layout (NmlCore.boardgen_layout): one raised block per run of same-level cells (flat
-## neutral colour per tier; a tier edge is simply the block's plain wall), every connector as a ladder (rails and rungs on the
-## flat wall; the generator's Stair connectors are drawn as ladders too, models only ever stand on whole flat cells). A dev view only (debug build + NML_BOARDGEN_SEED=<seed>); no menu offers it.
+## neutral colour per tier; a tier edge is simply the block's plain wall) and ladders as rails and rungs - the only way
+## up, there are no stairs (models stand on flat whole cells only). A dev view only (debug build +
+## NML_BOARDGEN_SEED=<seed>); no menu offers it.
 ##
 ## VISUAL ONLY for the rules: the terrain code the sight and move rules read (sandbox shapes, TerrainRules) has no
 ## per-cell height - a solid is the fixed 2.5 in container - so nothing here is handed to it and the core still sees a
-## flat table. The raised blocks do carry colliders on the ground layer, so the drag floor-picker
-## and the camera rays land on the tiers.
+## flat table. The raised blocks do carry colliders on the ground layer, so the drag floor-picker and the camera rays
+## land on the tiers.
 
 const ENV_SEED := "NML_BOARDGEN_SEED"
 ## setup_table (load, resize) frees the table's other children; this group keeps the board.

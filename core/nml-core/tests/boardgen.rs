@@ -1,7 +1,7 @@
 //! `nml_core::boardgen` (heightfield stage): determinism, budgets, reachability, mirror symmetry, 48 x 48 in.
 //! The reachability and ascent checks are written here from scratch, not taken from the module.
 use std::collections::{BTreeSet, HashSet, VecDeque};
-use nml_core::boardgen::{budget, generate, Layout, Symmetry, BOARD_IN, DEPLOY_DEPTH_CELLS, GRID, HIGH_PERMILLE, RAISED_PERMILLE};
+use nml_core::boardgen::{budget, generate, ConnectorKind, Layout, Symmetry, BOARD_IN, DEPLOY_DEPTH_CELLS, GRID, HIGH_PERMILLE, RAISED_PERMILLE};
 
 const BOTH: [Symmetry; 2] = [Symmetry::Point180, Symmetry::BalancedFree];
 
@@ -180,6 +180,21 @@ fn the_checks_can_fail() {
     no_ascents.connectors = kept;
     assert!(no_ascents.problems().contains(&"an island has fewer ascents than it could have (max 2)"));
     assert!(reach(&no_ascents, 1).iter().any(|&s| !s), "the test's own walk must see the missing ascents too");
+}
+
+#[test]
+fn every_connector_is_a_ladder_and_no_stair_exists_over_1000_seeds() {
+    // Maintainer decision 20.11.: models cannot stand on stairs and stair steps are not 3 in units, so every level change is a ladder.
+    let mut ladders = 0;
+    for seed in 1..=500 {
+        for sym in BOTH {
+            let l = generate(seed, sym);
+            assert!(l.connectors.iter().all(|c| c.kind == ConnectorKind::Ladder), "seed {seed} {sym:?}: a connector is not a ladder");
+            assert!(!l.to_json().contains("Stair"), "seed {seed} {sym:?}: the JSON still names a stair");
+            ladders += l.connectors.len();
+        }
+    }
+    assert!(ladders >= 1000, "only {ladders} ladders over 1000 boards: the generator stopped wiring");
 }
 
 #[test]

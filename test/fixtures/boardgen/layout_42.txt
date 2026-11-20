@@ -2071,146 +2071,6 @@
 "z": 15
 }],
 "connectors": [{
-"edge_in": [30.0, 7.5],
-"high": 42,
-"high_xz": [10, 2],
-"kind": "Stair",
-"low": 41,
-"low_xz": [9, 2]
-}, {
-"edge_in": [46.5, 15.0],
-"high": 95,
-"high_xz": [15, 5],
-"kind": "Stair",
-"low": 79,
-"low_xz": [15, 4]
-}, {
-"edge_in": [21.0, 16.5],
-"high": 87,
-"high_xz": [7, 5],
-"kind": "Stair",
-"low": 86,
-"low_xz": [6, 5]
-}, {
-"edge_in": [31.5, 15.0],
-"high": 74,
-"high_xz": [10, 4],
-"kind": "Stair",
-"low": 90,
-"low_xz": [10, 5]
-}, {
-"edge_in": [39.0, 16.5],
-"high": 93,
-"high_xz": [13, 5],
-"kind": "Stair",
-"low": 92,
-"low_xz": [12, 5]
-}, {
-"edge_in": [46.5, 18.0],
-"high": 111,
-"high_xz": [15, 6],
-"kind": "Stair",
-"low": 95,
-"low_xz": [15, 5]
-}, {
-"edge_in": [1.5, 18.0],
-"high": 80,
-"high_xz": [0, 5],
-"kind": "Stair",
-"low": 96,
-"low_xz": [0, 6]
-}, {
-"edge_in": [40.5, 18.0],
-"high": 93,
-"high_xz": [13, 5],
-"kind": "Stair",
-"low": 109,
-"low_xz": [13, 6]
-}, {
-"edge_in": [3.0, 22.5],
-"high": 113,
-"high_xz": [1, 7],
-"kind": "Stair",
-"low": 112,
-"low_xz": [0, 7]
-}, {
-"edge_in": [6.0, 22.5],
-"high": 113,
-"high_xz": [1, 7],
-"kind": "Stair",
-"low": 114,
-"low_xz": [2, 7]
-}, {
-"edge_in": [42.0, 25.5],
-"high": 142,
-"high_xz": [14, 8],
-"kind": "Stair",
-"low": 141,
-"low_xz": [13, 8]
-}, {
-"edge_in": [45.0, 25.5],
-"high": 142,
-"high_xz": [14, 8],
-"kind": "Stair",
-"low": 143,
-"low_xz": [15, 8]
-}, {
-"edge_in": [7.5, 30.0],
-"high": 162,
-"high_xz": [2, 10],
-"kind": "Stair",
-"low": 146,
-"low_xz": [2, 9]
-}, {
-"edge_in": [46.5, 30.0],
-"high": 175,
-"high_xz": [15, 10],
-"kind": "Stair",
-"low": 159,
-"low_xz": [15, 9]
-}, {
-"edge_in": [1.5, 30.0],
-"high": 144,
-"high_xz": [0, 9],
-"kind": "Stair",
-"low": 160,
-"low_xz": [0, 10]
-}, {
-"edge_in": [9.0, 31.5],
-"high": 162,
-"high_xz": [2, 10],
-"kind": "Stair",
-"low": 163,
-"low_xz": [3, 10]
-}, {
-"edge_in": [16.5, 33.0],
-"high": 181,
-"high_xz": [5, 11],
-"kind": "Stair",
-"low": 165,
-"low_xz": [5, 10]
-}, {
-"edge_in": [27.0, 31.5],
-"high": 168,
-"high_xz": [8, 10],
-"kind": "Stair",
-"low": 169,
-"low_xz": [9, 10]
-}, {
-"edge_in": [1.5, 33.0],
-"high": 160,
-"high_xz": [0, 10],
-"kind": "Stair",
-"low": 176,
-"low_xz": [0, 11]
-}, {
-"edge_in": [18.0, 40.5],
-"high": 213,
-"high_xz": [5, 13],
-"kind": "Stair",
-"low": 214,
-"low_xz": [6, 13]
-}, {
 "edge_in": [34.5, 6.0],
 "high": 43,
 "high_xz": [11, 2],
@@ -2238,6 +2098,13 @@
 "kind": "Ladder",
 "low": 37,
 "low_xz": [5, 2]
+}, {
+"edge_in": [30.0, 7.5],
+"high": 42,
+"high_xz": [10, 2],
+"kind": "Ladder",
+"low": 41,
+"low_xz": [9, 2]
 }, {
 "edge_in": [4.5, 12.0],
 "high": 65,
@@ -2295,6 +2162,13 @@
 "low": 72,
 "low_xz": [8, 4]
 }, {
+"edge_in": [46.5, 15.0],
+"high": 95,
+"high_xz": [15, 5],
+"kind": "Ladder",
+"low": 79,
+"low_xz": [15, 4]
+}, {
 "edge_in": [1.5, 15.0],
 "high": 64,
 "high_xz": [0, 4],
@@ -2308,6 +2182,13 @@
 "kind": "Ladder",
 "low": 81,
 "low_xz": [1, 5]
+}, {
+"edge_in": [21.0, 16.5],
+"high": 87,
+"high_xz": [7, 5],
+"kind": "Ladder",
+"low": 86,
+"low_xz": [6, 5]
 }, {
 "edge_in": [22.5, 15.0],
 "high": 71,
@@ -2323,12 +2204,40 @@
 "low": 89,
 "low_xz": [9, 5]
 }, {
+"edge_in": [31.5, 15.0],
+"high": 74,
+"high_xz": [10, 4],
+"kind": "Ladder",
+"low": 90,
+"low_xz": [10, 5]
+}, {
+"edge_in": [39.0, 16.5],
+"high": 93,
+"high_xz": [13, 5],
+"kind": "Ladder",
+"low": 92,
+"low_xz": [12, 5]
+}, {
 "edge_in": [45.0, 16.5],
 "high": 94,
 "high_xz": [14, 5],
 "kind": "Ladder",
 "low": 95,
 "low_xz": [15, 5]
+}, {
+"edge_in": [46.5, 18.0],
+"high": 111,
+"high_xz": [15, 6],
+"kind": "Ladder",
+"low": 95,
+"low_xz": [15, 5]
+}, {
+"edge_in": [1.5, 18.0],
+"high": 80,
+"high_xz": [0, 5],
+"kind": "Ladder",
+"low": 96,
+"low_xz": [0, 6]
 }, {
 "edge_in": [22.5, 18.0],
 "high": 87,
@@ -2344,6 +2253,48 @@
 "low": 106,
 "low_xz": [10, 6]
 }, {
+"edge_in": [40.5, 18.0],
+"high": 93,
+"high_xz": [13, 5],
+"kind": "Ladder",
+"low": 109,
+"low_xz": [13, 6]
+}, {
+"edge_in": [3.0, 22.5],
+"high": 113,
+"high_xz": [1, 7],
+"kind": "Ladder",
+"low": 112,
+"low_xz": [0, 7]
+}, {
+"edge_in": [6.0, 22.5],
+"high": 113,
+"high_xz": [1, 7],
+"kind": "Ladder",
+"low": 114,
+"low_xz": [2, 7]
+}, {
+"edge_in": [42.0, 25.5],
+"high": 142,
+"high_xz": [14, 8],
+"kind": "Ladder",
+"low": 141,
+"low_xz": [13, 8]
+}, {
+"edge_in": [45.0, 25.5],
+"high": 142,
+"high_xz": [14, 8],
+"kind": "Ladder",
+"low": 143,
+"low_xz": [15, 8]
+}, {
+"edge_in": [7.5, 30.0],
+"high": 162,
+"high_xz": [2, 10],
+"kind": "Ladder",
+"low": 146,
+"low_xz": [2, 9]
+}, {
 "edge_in": [16.5, 30.0],
 "high": 165,
 "high_xz": [5, 10],
@@ -2358,12 +2309,40 @@
 "low": 152,
 "low_xz": [8, 9]
 }, {
+"edge_in": [46.5, 30.0],
+"high": 175,
+"high_xz": [15, 10],
+"kind": "Ladder",
+"low": 159,
+"low_xz": [15, 9]
+}, {
+"edge_in": [1.5, 30.0],
+"high": 144,
+"high_xz": [0, 9],
+"kind": "Ladder",
+"low": 160,
+"low_xz": [0, 10]
+}, {
 "edge_in": [3.0, 31.5],
 "high": 161,
 "high_xz": [1, 10],
 "kind": "Ladder",
 "low": 160,
 "low_xz": [0, 10]
+}, {
+"edge_in": [9.0, 31.5],
+"high": 162,
+"high_xz": [2, 10],
+"kind": "Ladder",
+"low": 163,
+"low_xz": [3, 10]
+}, {
+"edge_in": [16.5, 33.0],
+"high": 181,
+"high_xz": [5, 11],
+"kind": "Ladder",
+"low": 165,
+"low_xz": [5, 10]
 }, {
 "edge_in": [18.0, 31.5],
 "high": 165,
@@ -2379,6 +2358,13 @@
 "low": 168,
 "low_xz": [8, 10]
 }, {
+"edge_in": [27.0, 31.5],
+"high": 168,
+"high_xz": [8, 10],
+"kind": "Ladder",
+"low": 169,
+"low_xz": [9, 10]
+}, {
 "edge_in": [45.0, 31.5],
 "high": 175,
 "high_xz": [15, 10],
@@ -2392,6 +2378,13 @@
 "kind": "Ladder",
 "low": 175,
 "low_xz": [15, 10]
+}, {
+"edge_in": [1.5, 33.0],
+"high": 160,
+"high_xz": [0, 10],
+"kind": "Ladder",
+"low": 176,
+"low_xz": [0, 11]
 }, {
 "edge_in": [21.0, 34.5],
 "high": 182,
@@ -2448,6 +2441,13 @@
 "kind": "Ladder",
 "low": 206,
 "low_xz": [14, 12]
+}, {
+"edge_in": [18.0, 40.5],
+"high": 213,
+"high_xz": [5, 13],
+"kind": "Ladder",
+"low": 214,
+"low_xz": [6, 13]
 }, {
 "edge_in": [30.0, 40.5],
 "high": 217,

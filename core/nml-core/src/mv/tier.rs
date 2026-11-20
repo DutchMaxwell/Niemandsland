@@ -31,10 +31,8 @@ pub type P = [f64; 2];
 pub enum TierKind {
     /// A bare contour with no connector — a cliff unless a rule says otherwise.
     Cliff,
-    /// A flank of a stair: the side wall of the treads. A stair's walked (open) end is NO edge, so a
-    /// flank is a wall, never a connector (plan L-2: the treads themselves cost ground distance only).
-    StairFlank,
-    /// A short ladder connector.
+    /// A ladder: the only connector. There are no stairs (maintainer decision 20.11.): models stand on flat
+    /// whole cells only and every level change is a ladder, so a tier edge is a cliff or a ladder.
     Ladder,
 }
 
@@ -125,13 +123,13 @@ mod tests {
 
     #[test]
     fn a_leg_that_climbs_reports_an_up_crossing() {
-        let edge = east_border(3.0, TierKind::StairFlank);
+        let edge = east_border(3.0, TierKind::Ladder);
         let got = tier_crossings([0.0, -1.0], [0.0, 1.0], &[edge]);
         assert_eq!(got.len(), 1);
         assert!((got[0].t - 0.5).abs() < 1e-12);
         assert_eq!(got[0].dy_in, 3.0);
         assert!(!got[0].down, "low -> high must be an UP crossing");
-        assert_eq!(got[0].kind, TierKind::StairFlank);
+        assert_eq!(got[0].kind, TierKind::Ladder);
     }
 
     #[test]
@@ -156,7 +154,7 @@ mod tests {
 
     #[test]
     fn two_tiers_in_one_leg_come_out_sorted() {
-        let west = TierEdge { a: [0.0, -5.0], b: [0.0, 5.0], dy_in: 3.0, high: HighSide::Right, kind: TierKind::StairFlank };
+        let west = TierEdge { a: [0.0, -5.0], b: [0.0, 5.0], dy_in: 3.0, high: HighSide::Right, kind: TierKind::Cliff };
         let east = TierEdge { a: [1.0, -5.0], b: [1.0, 5.0], dy_in: 6.0, high: HighSide::Right, kind: TierKind::Ladder };
         // Feed them east-first so the sort, not the input order, decides.
         let got = tier_crossings([-1.0, 0.0], [2.0, 0.0], &[east, west]);
@@ -167,9 +165,16 @@ mod tests {
         // High side is to the right (east) of each north-running edge; travelling
         // east means climbing both.
         assert!(!got[0].down && !got[1].down);
-        assert_eq!(got[0].kind, TierKind::StairFlank);
+        assert_eq!(got[0].kind, TierKind::Cliff);
         assert_eq!(got[1].kind, TierKind::Ladder);
         assert_eq!((got[0].dy_in, got[1].dy_in), (3.0, 6.0));
+    }
+
+    #[test]
+    fn a_tier_edge_is_a_cliff_or_a_ladder_and_nothing_else() {
+        // Exhaustive on purpose: there are no stairs (maintainer decision 20.11.), so a new kind is a deliberate change here.
+        let n = |k: TierKind| match k { TierKind::Cliff => 0, TierKind::Ladder => 1 };
+        assert_eq!((n(TierKind::Cliff), n(TierKind::Ladder)), (0, 1));
     }
 
     #[test]

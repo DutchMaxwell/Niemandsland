@@ -3,8 +3,8 @@
 //!
 //! The board is a 16 x 16 lattice of 3-inch cells. Every cell carries ONE level (0, 3 or 6 in above the table):
 //! a heightfield, so no walkable surface lies above another and `y = f(x, z)` stays true. Stages, each with its own
-//! seed stream (`seed ^ SALT`): [`graph`] streets and lots -> [`levels`] heights -> [`connect`] stairs and short
-//! ladders (3 in rise, one level each). A tier edge without a connector is a cliff. All maths is integer; floats
+//! seed stream (`seed ^ SALT`): [`graph`] streets and lots -> [`levels`] heights -> [`connect`] ladders (3 in
+//! rise, one level each; no stairs). A tier edge without a ladder is a cliff. All maths is integer; floats
 //! never appear. A board that misses a budget or a reachability check is dropped and the next sub-seed is tried.
 pub mod connect;
 pub mod graph;
