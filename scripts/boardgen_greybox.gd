@@ -119,6 +119,8 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 				base + k * LADDER_RUNG_GAP_IN, base + k * LADDER_RUNG_GAP_IN + LADDER_RAIL_IN, "ladder", false))
 	if town:
 		out.append_array(_town_landmarks(layout, origin))
+		out.append_array(BoardgenTownDressing.chimneys(layout))
+		out.append_array(BoardgenTownDressing.merlons(layout))
 	else:
 		out.append_array(BoardgenSumps.kerbs(layout))   # the low rim round each toxic sump (the town draws its pools as flat boxes)
 	return out
@@ -256,6 +258,11 @@ func build(layout: Dictionary) -> void:
 	mmi.material_override = _material
 	add_child(mmi)
 	_dress(layout, theme, ["Rails"], kit)
+	if theme["id"] == BoardgenTheme.RUIN_TOWN:
+		var town := BoardgenTownDressing.new()   # the gable roofs of the intact houses
+		town.name = "TownDressing"
+		town.build(layout, _material)
+		add_child(town)
 	_anchor()
 	_layout = layout
 	var settings := _settings()

@@ -108,14 +108,32 @@ void fragment() {
 		float tile = floor(along / 0.45 + row * 0.5);
 		vec3 base = tint * mix(0.7, 1.15, h21(vec2(tile, row + seed)));
 		alb = base * mix(0.62, 1.0, smoothstep(0.0, 0.7, fract(p.y * 4.0))) * mix(1.0, 0.8, smoothstep(0.55, 0.7, fbm(vec2(along, p.y) * 1.3 + seed)));
-	} else if (wnrm.y > 0.5) {   // a top face: the cell grid at low contrast, boards on the house floors
+	} else if (wnrm.y > 0.5) {   // a top face, by kind
 		vec2 xz = p.xz;
 		vec2 e = abs(fract(xz / cell_in) - 0.5);
-		alb *= mix(1.0, 0.82, smoothstep(0.47, 0.49, max(e.x, e.y)));
-		if (k == 3 || k == 4) {
-			alb *= mix(0.8, 1.0, seam(xz.y, 0.5, 0.04));
-		} else if (k == 8) {
-			alb *= mix(1.0, 0.8, step(0.5, fract((xz.x + xz.y) / cell_in * 3.0)));
+		float grid = mix(1.0, 0.86, smoothstep(0.48, 0.495, max(e.x, e.y)));   // the 3 in cell, faint
+		if (k == 1) {   // streets: cobbles
+			alb = cobble(xz, seed, tint * 1.15) * grid;
+		} else if (k == 0) {   // earth: packed, with pebbles, weeds and broken stones
+			vec2 cellp = floor(xz * 5.0);
+			float speck = h21(cellp + seed);
+			alb = tint * mix(0.78, 1.15, fbm(xz * 1.6 + seed)) * mix(1.0, 1.3, step(0.94, h21(floor(xz * 7.0)))) * grid;
+			alb = mix(alb, vec3(0.30, 0.38, 0.17), step(0.84, speck) * step(length(fract(xz * 5.0) - 0.5), 0.34) * 0.7);   // a weed tuft
+			alb = mix(alb, vec3(0.26, 0.25, 0.23) * mix(0.8, 1.25, h21(cellp + 3.0)), step(0.965, speck) * step(length(fract(xz * 5.0) - 0.5), 0.26));   // a broken stone
+		} else if (k == 3 || k == 4 || k == 8) {   // floor boards of a ruined house or yard, scorched in patches
+			alb = tint * mix(0.72, 1.05, h21(vec2(floor(xz.x / 2.1), floor(xz.y / 0.5) + seed))) * mix(0.8, 1.0, seam(xz.y, 0.5, 0.05)) * mix(0.84, 1.0, smoothstep(0.35, 0.6, fbm(xz * 0.9 + seed))) * grid;
+		} else if (k == 6 || k == 12 || k == 9 || k == 10) {   // tower and wall tops, stone pieces: flagstones
+			alb = stone(xz, seed, 1.0, 1.4, tint) * mix(0.95, 1.0, grid);
+		} else if (k == 11) {   // garden plot: overgrown, weeds and bare patches
+			alb = tint * mix(0.6, 1.25, fbm(xz * 2.4 + seed)) * mix(1.0, 0.7, step(0.9, h21(floor(xz * 9.0))));
+		} else if (k == 14) {   // rubble: broken stones
+			alb = tint * mix(0.55, 1.2, h21(floor(xz * 4.0) + seed)) * mix(0.8, 1.0, vnoise(xz * 8.0));
+		} else {
+			alb = tint * grid;
+		}
+		if (k == 2) {   // dangerous ground: dark standing water
+			alb = tint * mix(0.7, 1.2, fbm(xz * 0.6 + seed));
+			rough = 0.12;
 		}
 	}
 	if (k == 17) {   // a lit lantern

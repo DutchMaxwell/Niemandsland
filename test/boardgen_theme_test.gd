@@ -159,6 +159,10 @@ func test_a_town_draws_its_wall_its_plots_and_its_intact_houses_with_kinds_of_th
 	assert_int(roofed.size()).is_greater(0)
 	for b: Dictionary in roofed:
 		assert_array([b["solid"], b["hi"].y]).is_equal([true, 2.5])   # the body is as high as the core's solid
+	var chimneys: Array = of.call("brick")
+	assert_int(chimneys.size()).is_equal(1)   # one chimney on lot 99's roof
+	for b: Dictionary in chimneys:
+		assert_array([b["solid"], b["lo"].y, b["hi"].y > 2.5]).is_equal([false, 2.5, true])   # it rises from the body, visual only
 	var wall_tops: Array = of.call("wall").filter(func(b: Dictionary) -> bool: return not b.has("merlon")).map(func(b: Dictionary) -> float: return b["hi"].y)
 	wall_tops.sort()
 	assert_array(wall_tops).is_equal([3.0, 6.0, 9.0])
@@ -171,6 +175,45 @@ func test_a_deepworks_plan_never_uses_the_town_kinds() -> void:
 	layout.erase("theme")
 	for b in BoardgenGreybox.plan(layout):
 		assert_bool(BoardgenGreybox.KINDS.has(b["kind"])).override_failure_message("a Deepworks box of kind %s" % b["kind"]).is_true()
+
+
+func test_an_intact_house_gets_a_gable_roof_over_its_body_and_the_halves_vary_the_pitch() -> void:
+	var layout := _town_with_wall_house_and_plot()
+	var roofs := BoardgenTownDressing.roofs(layout)
+	assert_int(roofs.size()).is_equal(1)
+	var r: Dictionary = roofs[0]
+	assert_int(r["lot"]).is_equal(99)   # the lot is square: the hash of lot and half picks the ridge axis
+	assert_float(r["length"]).is_equal_approx(6.6, 0.001)   # the 6 in lot and an overhang each side
+	assert_float(r["height"]).is_between(1.5, 2.7)
+	assert_int(BoardgenTownDressing.prism_mesh().surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size()).is_equal(18)   # two slopes and two gable ends
+	var node: BoardgenTownDressing = auto_free(BoardgenTownDressing.new())
+	add_child(node)
+	node.build(layout, ShaderMaterial.new())
+	assert_int((node.find_child("Roofs", false, false) as MultiMeshInstance3D).multimesh.instance_count).is_equal(1)
+	assert_int(node.find_children("*", "CollisionShape3D", true, false).size()).is_equal(0)   # nobody stands on a roof
+	var differing := 0
+	for id in range(1, 40):
+		differing += int(not is_equal_approx(BoardgenTownDressing._hash(id, 0, 2), BoardgenTownDressing._hash(id, 1, 2)))
+	assert_int(differing).is_greater(30)   # the two halves pick other pitches for the same lot id
+
+
+func test_the_wall_and_the_towers_are_crowned_with_merlons_inside_the_edge_strip_and_the_south_loses_more() -> void:
+	var layout := _town_with_wall_house_and_plot()   # a 6 in wall cell (5,6) and a 9 in one (5,7) on the recorded board
+	var merlons := BoardgenTownDressing.merlons(layout).filter(func(b: Dictionary) -> bool: return b.has("merlon"))
+	assert_int(merlons.size()).is_greater(0)
+	for b: Dictionary in merlons:
+		var size: Vector3 = b["hi"] - b["lo"]
+		assert_bool(b["solid"]).is_false()
+		assert_bool(minf(size.x, size.z) <= 0.4001 and maxf(size.x, size.z) <= 0.7001 and size.y <= 0.7001).override_failure_message("a merlon outside the edge strip: %s" % size).is_true()
+		assert_bool(b["lo"].y == 6.0 or b["lo"].y == 9.0).is_true()   # on the 6 in ridge or the 9 in crown only
+	# a wall of 8 cells in a row has merlons on both sides: far more in the south half than missing ones in the north (hash rates 0.28 / 0.10)
+	var big := _town()
+	for z in range(0, 16):
+		_put(big, 4, z, 2, "Wall")
+		_put(big, 11, z, 2, "Wall")
+	var count := func(north: bool) -> int:
+		return BoardgenTownDressing.merlons(big).filter(func(b: Dictionary) -> bool: return (b["lo"].z < 0.0) == north and b.has("merlon")).size()
+	assert_int(count.call(true)).is_greater(count.call(false))   # the north half keeps more of its battlements
 
 
 func test_the_town_has_no_tiefwerk_mist_or_steam_and_a_deepworks_board_keeps_both() -> void:
