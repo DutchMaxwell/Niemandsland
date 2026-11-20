@@ -645,7 +645,7 @@ func test_the_melee_deny_slice_takes_ap_and_refuses_attachments() -> void:
 	assert_array((data.get("inert", {}) as Dictionary).keys()).contains(["Unique", "Army Standard Bearer", "Courage"])
 	assert_array((data.get("deny_names", {}) as Dictionary).keys()).is_equal(["Angelic Blessing", "Unmovable", "Power Shrooms", "Cleric", "Furious Buff", "Precision Attacks Buff", "Hold the Line", "Destroyer"])
 	assert_array((data.get("groups", {}) as Dictionary).keys()).is_equal(["attached_heroes", "unpredictable_fighter_die", "strafing_not_in_melee", "evasive_to_hit_line",
-		"breath_attack_dice_in_melee", "ravage_line", "armor_line", "hit_and_run_landing"])
+		"breath_attack_dice_in_melee", "ravage_line", "armor_line", "hit_and_run_landing", "ambush_flying_landing"])
 	for g in (data["groups"] as Dictionary):
 		assert_str(str(data["groups"][g].get("why", ""))).override_failure_message("group %s names its measurement" % g).is_not_empty()
 		assert_str(str(data["groups"][g].get("leaves_with", ""))).override_failure_message("group %s names what lifts it" % g).is_not_empty()
@@ -664,6 +664,11 @@ func test_the_melee_deny_slice_takes_ap_and_refuses_attachments() -> void:
 	assert_array(CoreSlice.melee_refusals(_unit([], [["Unpredictable Fighter"]]), false, true)).override_failure_message("an Unpredictable Fighter weapon is refused in the deny view").is_not_empty()
 	assert_array(CoreSlice.melee_refusals(_unit(["Armor(1)"], [["AP(1)"]]), false, true)).override_failure_message("an Armor unit is refused in the deny view").is_not_empty()
 	assert_array(CoreSlice.melee_refusals(_unit(["Angelic Blessing"], [["AP(1)"]]), true, true)).override_failure_message("a denied name is refused on the target side").is_not_empty()
+	# melee95: Ambush and Flying on ONE charger is refused as a pair; either alone, and the pair on a target, are taken.
+	assert_array(CoreSlice.melee_refusals(_unit(["Ambush", "Flying"], [["AP(1)"]]), false, true)).override_failure_message("an Ambush + Flying charger is refused").is_equal(["ambush_flying_landing"])
+	assert_array(CoreSlice.melee_refusals(_unit(["Ambush"], [["AP(1)"]]), false, true)).override_failure_message("Ambush alone is taken").is_empty()
+	assert_array(CoreSlice.melee_refusals(_unit(["Flying"], [["AP(1)"]]), false, true)).override_failure_message("Flying alone is taken").is_empty()
+	assert_array(CoreSlice.melee_refusals(_unit(["Ambush", "Flying"], [["AP(1)"]]), true, true)).override_failure_message("the pair on a target is taken").is_empty()
 	OS.set_environment("NML_CORE_SLICE", "allow")
 	CoreSlice.reset_cache()
 	assert_array(CoreSlice.melee_refusals(ap, false, true)).is_empty()

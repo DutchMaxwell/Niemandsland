@@ -21,6 +21,7 @@ const DENY_PATH := "res://assets/solo/core_slice_deny.json"
 ## the group (a test's own, the dice-only pin for the line-only one) refuses nothing of the kind.
 const SIMULTANEOUS_FIRE_GROUP := "door_omits_simultaneous_fire_line"
 const OWN_SHRED_GROUP := "door_own_shred_beside_alias"
+const AMBUSH_FLYING_GROUP := "ambush_flying_landing"
 const VERSATILE_PAIR_GROUP := "door_versatile_pick_modified_to_hit"
 const TAKEDOWN_LABEL_GROUP := "door_takedown_names_an_equipment_carrier"
 ## The primitives whose rules move a SHOOTING to-hit number: on the target (Artillery's -1, the Stealth and Evasive families, Aircraft) and on the shooter.
@@ -187,6 +188,10 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 	# difference (the target's wounds), not a missing line, so the dice-only pin keeps this refusal.
 	if not as_target and out.is_empty() and config()["mode"] == "deny" and _has_group(OWN_SHRED_GROUP) and _own_shred_beside_alias(gu):
 		out.append("own_shred_beside_alias")
+	# Deny mode, a CHARGER carrying both Ambush and Flying (melee95, the melee soak's Blood Guard Brothers at an Organ Tank): on a real board the core's landing
+	# and the table's end up 5.7 in apart. Not a rule name: either rule alone is taken equal in the sweep, so the refusal is the pair on one charger.
+	if not as_target and out.is_empty() and config()["mode"] == "deny" and _has_group(AMBUSH_FLYING_GROUP) and gu.has_special_rule("Ambush") and gu.has_special_rule("Flying"):
+		out.append("ambush_flying_landing")
 	return out
 
 
