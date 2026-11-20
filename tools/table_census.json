@@ -47,6 +47,50 @@
     "scripts/main.gd:_solo_takedown_pick": ["@human_shoot", "@melee_charge", "@ai_volley"],
     "scripts/main.gd:_solo_volley_outcome": ["@ai_volley", "scripts/solo/core_activation.gd:_present"]
   },
+  "owners": {
+    "groups": ["hit_save_shared", "dangerous_morale"],
+    "retire": {
+      "ai_volley": "P4.D-41/H-28",
+      "human_volley": "P4.D-43/H-34",
+      "melee": "P4.D-49/E-32",
+      "deathstrike": "P4.D-49/H-35",
+      "self_destruct": "P4.D-49/H-35",
+      "melee_exception": "H-39",
+      "spells": "H-45",
+      "breath": "H-38",
+      "other_rule_hits": "H-38",
+      "trap": "H-42",
+      "jump_fall": "H-43",
+      "transport_spill": "H-41",
+      "dangerous_ai_activation": "H-44",
+      "dangerous_player_auto": "H-32",
+      "table_internal": "H-46"
+    },
+    "functions": {
+      "scripts/main.gd:_solo_resolve_ai_volley": "ai_volley",
+      "scripts/main.gd:_run_human_shooting": "human_volley",
+      "scripts/main.gd:_solo_melee_strike_phase": "melee",
+      "scripts/main.gd:_solo_charge_impact": "melee",
+      "scripts/main.gd:_run_ai_melee": "melee",
+      "scripts/main.gd:_run_human_melee": "melee",
+      "scripts/main.gd:_solo_consolidate_melee": "melee",
+      "scripts/main.gd:_solo_deathstrike_hits": "deathstrike",
+      "scripts/main.gd:_solo_self_destruct_post_melee": "self_destruct",
+      "scripts/main.gd:_solo_retreating_strike": "melee_exception",
+      "scripts/main.gd:_solo_resolve_spell_damage": "spells",
+      "scripts/main.gd:_solo_apply_breath_attack": "breath",
+      "scripts/main.gd:_solo_apply_storm_attack": "other_rule_hits",
+      "scripts/main.gd:_solo_apply_surprise_attack": "other_rule_hits",
+      "scripts/main.gd:_solo_apply_crossing_attack": "other_rule_hits",
+      "scripts/main.gd:_solo_secret_trap_hits": "trap",
+      "scripts/main.gd:_resolve_skirmish_drop": "jump_fall",
+      "scripts/main.gd:_on_transport_spill_dangerous": "transport_spill",
+      "scripts/main.gd:_solo_activate_one_ai_body": "dangerous_ai_activation",
+      "scripts/main.gd:_solo_pay_dangerous": "dangerous_ai_activation",
+      "scripts/main.gd:_run_player_intent": "dangerous_player_auto",
+      "scripts/main.gd:_solo_resolve_saves": "table_internal"
+    }
+  },
   "tag_vocabulary": "erlkoenig live_helper table_live tree gd_search table_dead tools_only test_only dead",
   "planner_tags": {
     "scripts/solo/ai_combat_math.gd": {
