@@ -290,8 +290,6 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	var changed := _unit(["Changebound"], [])
 	changed.unit_properties["faction_folder"] = "change_disciples"   # the faction whose map entry gives it primitive Stealth
 	assert_array(CoreSlice.refusals(changed, true)).is_empty()
-	# A rule still refused by NAME (an item whose Defense bonus differs between the halves).
-	assert_array(CoreSlice.refusals(_unit(["Gleaming Armour"], []))).is_equal(["unit_rule:Gleaming Armour"])
 	# OD-H8: Teleport / Ethereal / plain Infiltrate left the ledger group (real-activation probe, core_ledger_lift_door_test.gd); the Surprise Attack
 	# burst, an Infiltrate-primitive entry, stays refused by NAME (it rolls twice with the door on).
 	var teleporter := _unit(["Teleport"], [])
@@ -688,14 +686,14 @@ class _StubMain extends RefCounted:
 
 
 ## DLINES2: `SlicePin.dice_only()` is the production deny list minus its line refusals - the helper the dice parity tests read. RED: if it kept the
-## `rule_line` groups the Grounded Protection row below is refused; if it dropped every refusal Gleaming Armour (a DICE difference) would be taken.
+## `rule_line` groups the Grounded Protection row below is refused; if it dropped every refusal Surprise Attack (a DICE difference: its burst rolls twice) would be taken.
 func test_the_dice_only_slice_drops_the_line_refusals_and_keeps_the_dice_ones() -> void:
 	var self_repair := _unit(["Grounded Protection"], [])
 	self_repair.unit_properties["faction_folder"] = "soul_snatcher_cults"
 	SlicePin.dice_only()
 	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("Grounded Protection's missing line is not a dice difference").is_true()
 	assert_bool(CoreSlice.takes(_unit(["Shred"], []), true)).override_failure_message("Shred's missing line is not a dice difference").is_true()
-	assert_bool(CoreSlice.takes(_unit(["Gleaming Armour"], []), true)).override_failure_message("Gleaming Armour changes the dice: still refused").is_false()
+	assert_bool(CoreSlice.takes(_unit(["Surprise Attack"], []), true)).override_failure_message("Surprise Attack changes the dice: still refused").is_false()
 	SlicePin.release_dice_only()
 	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("the production list refuses Grounded Protection again").is_false()
 
