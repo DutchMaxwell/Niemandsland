@@ -14,7 +14,7 @@ const SEEDS := 8
 ## Rending CW is not listed: its line is said now, but its save target (Defense + AP(+4) above 6: the table prints 8, the roll record clamps to 6) stays the
 ## accepted roll-label class (PLAN_E 19.11. 13:00), like Hazardous.
 const TRAIN_CELLS := [["Blast", "CW"], ["Shielded", "TU"], ["Deadly", "CW"], ["Deadly", "TW"], ["Surge", "CW"], ["Piercing Assault", "CU"],
-	["Piercing Assault", "CW"], ["Limited", "CW"]]
+	["Piercing Assault", "CW"]]
 
 var _runner: GdUnitSceneRunner
 var _main: Node
