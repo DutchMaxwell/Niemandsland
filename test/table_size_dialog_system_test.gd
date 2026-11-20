@@ -91,3 +91,34 @@ func test_a_skirmish_table_can_be_confirmed_as_four_by_four() -> void:
 	dialog._confirm()
 	assert_int(picked.size()).is_equal(1)
 	assert_vector(picked[0]).is_equal(Vector2(4, 4))
+
+
+# === step 20a: the first row of the setup (the dropdown on the title line) ===
+
+func test_the_game_system_row_lists_the_five_official_names_and_drives_the_dialog() -> void:
+	var option: OptionButton = dialog._system_option
+	assert_int(option.item_count).is_equal(5)
+	for i in GameSystem.IDS.size():
+		assert_str(option.get_item_text(i)).is_equal(GameSystem.label(GameSystem.IDS[i]))
+	assert_str(dialog.selected_system).is_equal("gf")
+	assert_int(option.selected).is_equal(0)
+	option.select(3)   # Age of Fantasy: Skirmish
+	option.item_selected.emit(3)
+	assert_str(dialog.selected_system).is_equal("aofs")
+	assert_str(dialog.selected_size).is_equal("square")
+	assert_bool(dialog._biome_buttons.urban_ruins.visible).is_false()
+	dialog.set_system("gff")   # set from code: the row follows
+	assert_int(option.selected).is_equal(1)
+
+
+func test_a_fantasy_dialog_with_four_biomes_still_fits_1280x720() -> void:
+	var original := get_tree().root.size
+	get_tree().root.size = Vector2i(1280, 720)
+	var d: TableSizeDialog = auto_free(TableSizeDialog.new())
+	add_child(d)
+	d.set_system("aofs")
+	for _i in 4:
+		await get_tree().process_frame
+	assert_float(d._page.get_combined_minimum_size().y).override_failure_message("the page needs scrolling").is_less_equal(d._scroll.size.y)
+	assert_bool(Rect2(Vector2.ZERO, d.get_visible_rect().size).encloses(d._create.get_global_rect())).override_failure_message("Create is outside the window").is_true()
+	get_tree().root.size = original
