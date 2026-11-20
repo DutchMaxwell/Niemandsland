@@ -30,9 +30,11 @@ const LADDER_RUNG_GAP_IN := 0.5
 const KIT_LADDERS: Array[String] = ["ladder_3in", "ladder_top"]
 const LADDER_SEGMENT_IN := 3.0
 const LADDER_TINT := Color(0.60, 0.43, 0.06)   # weathered safety yellow, like the board shader's ladder kind
-## Surface kinds in the order the board shader knows them (INSTANCE_CUSTOM.x, shaders/tiefwerk_board.gdshader).
+## Surface kinds in the order the Deepworks board shader knows them (INSTANCE_CUSTOM.x, shaders/tiefwerk_board.gdshader); a theme names its own list (BoardgenTheme).
 const KINDS := ["ground", "street", "hazard", "tier1", "tier2", "ladder", "tier3", "kerb"]
-const SHADER := preload("res://shaders/tiefwerk_board.gdshader")
+## The dressing builders a theme may switch on (BoardgenTheme `dressing`); each is a `build(layout)` Node3D (Props and Rails also take the kit).
+const DRESSING := {"Props": preload("res://scripts/boardgen_props.gd"), "Landmarks": preload("res://scripts/boardgen_landmarks.gd"),
+		"Debris": preload("res://scripts/boardgen_debris.gd"), "Sumps": preload("res://scripts/boardgen_sumps.gd"), "Rails": preload("res://scripts/boardgen_rails.gd")}
 
 var layout_seed: int = 0
 var layout_theme := "Deepworks"   # the layout's own `theme` key; a Deepworks layout has none
@@ -82,14 +84,15 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 	var cell_in := float(layout["cell_in"])
 	var level_in: Array = layout["level_in"]
 	var cells: Array = layout["cells"]
+	var town := str(layout.get("theme", BoardgenTheme.DEEPWORKS)) == BoardgenTheme.RUIN_TOWN
 	var origin := Vector2(nx, nz) * cell_in * -0.5
 	# Blocks: runs of same-kind cells along x. Level 0 is a thin skin coloured by what the cell is.
 	for z in nz:
 		var x := 0
 		while x < nx:
-			var kind := _cell_kind(cells[z * nx + x])
+			var kind := _cell_kind(cells[z * nx + x], town)
 			var run := 1
-			while x + run < nx and _cell_kind(cells[z * nx + x + run]) == kind:
+			while x + run < nx and _cell_kind(cells[z * nx + x + run], town) == kind:
 				run += 1
 			var level: int = cells[z * nx + x]["level"]
 			out.append({"lo": Vector3(origin.x + x * cell_in, 0.0, origin.y + z * cell_in),
@@ -108,7 +111,8 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 		for k in range(1, int(rise / LADDER_RUNG_GAP_IN)):
 			out.append(_slab(edge, away, side, LADDER_OFFSET_IN, LADDER_OFFSET_IN + LADDER_RAIL_IN, LADDER_WIDTH_IN,
 				base + k * LADDER_RUNG_GAP_IN, base + k * LADDER_RUNG_GAP_IN + LADDER_RAIL_IN, "ladder", false))
-	out.append_array(BoardgenSumps.kerbs(layout))   # the low rim round each toxic sump
+	if not town:
+		out.append_array(BoardgenSumps.kerbs(layout))   # the low rim round each toxic sump (the town draws its pools as flat boxes)
 	return out
 
 
@@ -130,11 +134,13 @@ static func ladder_kit_plan(layout: Dictionary) -> Dictionary:
 	return out
 
 
-static func _cell_kind(cell: Dictionary) -> String:
+static func _cell_kind(cell: Dictionary, town := false) -> String:
 	if cell["level"] > 0:
 		return "tier%d" % cell["level"]
 	if cell["lot_kind"] == "Hazard":
 		return "hazard"
+	if town and cell["lot_kind"] == "Terrace" and not cell["street"]:
+		return "yard"   # the level-0 rest of a half-collapsed house: ruin ground
 	return "street" if cell["street"] else "ground"
 
 
@@ -147,9 +153,9 @@ static func _slab(edge: Vector2, away: Vector2, side: Vector2, from: float, to: 
 
 
 ## INSTANCE_CUSTOM of a box: x = its surface kind, gba = its size in inches (the shader's edge wear needs to know where the box ends).
-static func custom_data(b: Dictionary) -> Color:
+static func custom_data(b: Dictionary, kinds: Array = KINDS) -> Color:
 	var size: Vector3 = b["hi"] - b["lo"]
-	return Color(KINDS.find(b["kind"]), size.x, size.y, size.z)
+	return Color(kinds.find(b["kind"]), size.x, size.y, size.z)
 
 
 ## The whole board in ONE MultiMesh (one draw call, one shared procedural material) plus a collider per solid box.
@@ -161,12 +167,13 @@ func build(layout: Dictionary) -> void:
 	body.collision_layer = GROUND_COLLISION_LAYER
 	body.collision_mask = 0
 	add_child(body)
+	var theme := BoardgenTheme.of(layout)
 	var kit := BoardgenKit.new()
 	kit.name = "Kit"
 	add_child(kit)
 	_kit = kit
 	var ladders := ladder_kit_plan(layout)
-	var kit_ladders: bool = not ladders.is_empty() and kit.usable(ladders.keys())
+	var kit_ladders: bool = theme["id"] == BoardgenTheme.DEEPWORKS and not ladders.is_empty() and kit.usable(ladders.keys())   # the town keeps its timber box ladders
 	var boxes := plan(layout).filter(func(b: Dictionary) -> bool: return not (kit_ladders and b["kind"] == "ladder"))
 	if kit_ladders:   # the authored ladders replace the box ladders
 		for module: String in ladders:
@@ -181,7 +188,7 @@ func build(layout: Dictionary) -> void:
 		var size: Vector3 = (b["hi"] - b["lo"]) * INCHES_TO_METERS
 		var centre: Vector3 = (b["hi"] + b["lo"]) * 0.5 * INCHES_TO_METERS
 		mm.set_instance_transform(i, Transform3D(Basis.from_scale(size), centre))
-		mm.set_instance_custom_data(i, custom_data(b))
+		mm.set_instance_custom_data(i, custom_data(b, theme["kinds"]))
 		if b["solid"]:
 			var shape := BoxShape3D.new()
 			shape.size = size
@@ -189,34 +196,16 @@ func build(layout: Dictionary) -> void:
 			col.shape = shape
 			col.position = centre
 			body.add_child(col)
-	var props := BoardgenProps.new()
-	props.name = "Props"
-	props.build(layout, kit)
-	add_child(props)
-	var landmarks := BoardgenLandmarks.new()
-	landmarks.name = "Landmarks"
-	landmarks.build(layout)
-	add_child(landmarks)
-	var debris := BoardgenDebris.new()
-	debris.name = "Debris"
-	debris.build(layout)
-	add_child(debris)
-	var sumps := BoardgenSumps.new()
-	sumps.name = "Sumps"
-	sumps.build(layout)
-	add_child(sumps)
+	_dress(layout, theme, ["Props", "Landmarks", "Debris", "Sumps"], kit)
 	var board := Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) * INCHES_TO_METERS
 	_footprint = Rect2(board * -0.5, board).grow(SCATTER_OFF_M)
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = "Surfaces"
 	mmi.multimesh = mm
-	_material = _make_material(layout)
+	_material = _make_material(layout, theme)
 	mmi.material_override = _material
 	add_child(mmi)
-	var rails := BoardgenRails.new()
-	rails.name = "Rails"
-	rails.build(layout, kit)
-	add_child(rails)
+	_dress(layout, theme, ["Rails"], kit)
 	_anchor()
 	_layout = layout
 	var settings := _settings()
@@ -234,8 +223,11 @@ static func _settings() -> Node:
 func refresh_atmosphere() -> void:
 	var settings := _settings()
 	var want: bool = settings == null or settings.board_mist_enabled()
+	var air: Array = BoardgenTheme.of(_layout)["atmosphere"]
 	for part: Array in [["Mist", BoardgenMist], ["Steam", BoardgenSteam]]:
 		var node: Node = get_node_or_null(part[0])
+		if not air.has(part[0]):
+			continue   # the theme has no such air (the town)
 		if want and node == null:
 			node = part[1].new()
 			node.name = part[0]
@@ -246,9 +238,22 @@ func refresh_atmosphere() -> void:
 			node.free()
 
 
+## The dressing builders of `names` that the theme switches on (the ruin town draws none of the Deepworks ones: no pipe, lamp or tank).
+func _dress(layout: Dictionary, theme: Dictionary, names: Array, kit: BoardgenKit) -> void:
+	for dressing: String in names:
+		if theme["dressing"].has(dressing):
+			var node: Node3D = DRESSING[dressing].new()
+			node.name = dressing
+			if dressing == "Props" or dressing == "Rails":
+				node.build(layout, kit)
+			else:
+				node.build(layout)
+			add_child(node)
+
+
 func _ready() -> void:
 	_anchor()
-	if _kit != null:   # a module missing now is cached for the next board
+	if _kit != null and layout_theme == BoardgenTheme.DEEPWORKS:   # a module missing now is cached for the next board (the town uses no kit)
 		_kit.prefetch(KIT_LADDERS + BoardgenRails.KIT_MODULES + BoardgenProps.KIT_MODULES)
 	_scatter_off(_footprint)
 	var graphics := get_node_or_null("/root/GraphicsSettings")
@@ -295,14 +300,18 @@ func _anchor() -> void:
 		_material.set_shader_parameter("board_origin", global_position)
 
 
-## The board shader with a one-texel-per-cell texture: red = height of the cell's top in inches, green = 255 for a sump.
-func _make_material(layout: Dictionary) -> ShaderMaterial:
+## The theme's board shader. Deepworks: a one-texel-per-cell texture, red = height of the cell's top in inches, green = 255 for a sump.
+## A town greybox reads its colours from the theme's palette.
+func _make_material(layout: Dictionary, theme: Dictionary) -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = theme["shader"]
+	mat.set_shader_parameter("cell_in", float(layout["cell_in"]))
+	if theme["id"] == BoardgenTheme.RUIN_TOWN:
+		mat.set_shader_parameter("palette", PackedColorArray(theme["palette"]))
+		return mat
 	var bytes := PackedByteArray()
 	for c: Dictionary in layout["cells"]:
 		bytes.append_array([int(layout["level_in"][c["level"]]), 255 if c["lot_kind"] == "Hazard" else 0])
-	var mat := ShaderMaterial.new()
-	mat.shader = SHADER
 	mat.set_shader_parameter("cells", ImageTexture.create_from_image(Image.create_from_data(layout["nx"], layout["nz"], false, Image.FORMAT_RG8, bytes)))
 	mat.set_shader_parameter("board_cells", Vector2(layout["nx"], layout["nz"]))
-	mat.set_shader_parameter("cell_in", float(layout["cell_in"]))
 	return mat
