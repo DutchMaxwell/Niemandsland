@@ -698,6 +698,11 @@ pub struct UnitDelta {
     /// the once records this activation's own casts placed and its spends took (never in `before`), in placement order. Records the
     /// core ADDED any other way (a pre-attack placement) are not carried.
     pub buffs_spent: Vec<(String, String)>,
+    /// CC-8c: the spell names of the buff / debuff effects this activation's casts landed on this unit and that it still holds at
+    /// the end (the table's `_solo_place_spell_tokens` names), in placement order; a record placed and spent by the same
+    /// activation is in `buffs_spent` only (no news for the table: it lands the effect itself and spends it). Report only:
+    /// the door lands each name from its own spell entry (`CoreActivation._land_spell_buffs`), the core pushes nothing.
+    pub buffs_gained: Vec<String>,
 }
 
 /// The once buffs of `before` that `after` no longer holds, as (record name, scope). Each record is first matched to an identical
@@ -723,6 +728,11 @@ fn spent_buffs(before: &[LiveMod], after: &State, u: usize) -> Vec<(String, Stri
 /// CAST-O7: the once records this activation's casts placed on unit `u` that its spends took.
 fn cast_spent_of(after: &State, u: usize) -> impl Iterator<Item = &LiveMod> {
     after.cast_buffs.iter().filter(move |(cu, _, spent)| *cu == u && *spent).map(|(_, r, _)| r)
+}
+
+/// CC-8c: the effects this activation's casts landed on unit `u` and nothing spent, in placement order.
+fn cast_gained_of(after: &State, u: usize) -> impl Iterator<Item = &LiveMod> {
+    after.cast_buffs.iter().filter(move |(cu, _, spent)| *cu == u && !*spent).map(|(_, r, _)| r)
 }
 
 /// The names `after` holds that `before` did not, in `after`'s order.
@@ -795,6 +805,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
             || before.surprise_attack_used[u] != after.surprise_attack_used[u]
             || before.buffs[u] != after.buffs[u]
             || cast_spent_of(after, u).next().is_some()
+            || cast_gained_of(after, u).next().is_some()
         {
             out.push(UnitDelta {
                 key: key.clone(),
@@ -818,6 +829,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 piercing_tag_persistent: after.piercing_tag_persistent[u],
                 surprise_attack_used: after.surprise_attack_used[u],
                 buffs_spent: spent_buffs(&before.buffs[u], after, u),
+                buffs_gained: cast_gained_of(after, u).map(|r| r.name.to_string()).collect(),
             });
         }
     }
@@ -2857,6 +2869,70 @@ mod tests {
         let cast = Input::Cast(CastInput { seq: 0, spell: "Marked".into(), targets: vec!["b".into()], base: 2, threshold: 1, once: true, ..bolt(0) });
         let ActStep::Done { state: after, .. } = finish_with(&statics, &held, seams(), vec![Begin, intent(HOLD, Some("b")), cast]) else { panic!("a cast and a volley") };
         assert_eq!(spent(&held, &after, "b"), Some([pair("Marked", "shooting"), pair("Marked", "shooting")].concat()), "the captured record and the cast one are two spends");
+    }
+
+    /// CC-8c: the delta's `buffs_gained` names, per unit and in placement order, the effects this activation's casts landed
+    /// and the activation did not spend: once and round records, a record the volley never reads (melee scope), and an
+    /// effect-less spell (no modifier, no grant: nothing on the board, the table still announces it and places its token).
+    /// A record placed and spent inside the activation is in `buffs_spent` only; a failed cast gains nothing; a plain
+    /// activation reports no gain. RED: `cast_gained_of` returning nothing -> every "gained" below is empty; the old early
+    /// return for an effect-less spell -> the "Lore" case is empty; spent records counted as gained -> the "Withering" case.
+    #[test]
+    fn cc8c_the_delta_names_the_effects_the_casts_landed_and_nothing_spent() {
+        use crate::rules::{Spell, SpellModifier};
+        let (st, mut statics) = bolt_board(0, &[], 6);
+        statics[0].shoot = vec![ShootProfile { name: "Rifle".into(), attacks: 1, count: 1, range: 24, ..Default::default() }];
+        statics[0].ctx.quality = 4;
+        let spell = |name: &str, kind: &str, scope: &str, m: SpellModifier| Spell {
+            name: name.into(), effect_kind: kind.into(), threshold: 1, target_count: 1, scope: scope.into(), modifier: m, ..Default::default()
+        };
+        let m = |def: f64| SpellModifier { present: true, def_mod: def, ..Default::default() };
+        statics[0].spells = vec![
+            spell("Crippling", "debuff", "melee", m(-1.0)),
+            spell("Withering", "debuff", "shooting", m(-1.0)),
+            spell("Ward", "buff", "", m(1.0)),
+            spell("Lore", "buff", "", SpellModifier::default()),
+            Spell { name: "Fearless Chant".into(), effect_kind: "buff".into(), threshold: 1, target_count: 1, grants_rule: "Fearless".into(), ..Default::default() },
+        ];
+        // `ok`: the cast die passes (6) or fails (1); the volley's attack dice always hit, its saves always fail.
+        let run = |casts: &[(&str, &str, bool)], ok: bool| {
+            let mut st = st.clone();
+            st.casts[0] = 5;
+            let mut t = vec![Begin, intent(HOLD, Some("b"))];
+            t.extend(casts.iter().enumerate().map(|(i, (name, at, once))| Input::Cast(CastInput { seq: i as i64, spell: (*name).into(), targets: vec![(*at).into()], base: 2, threshold: 1, once: *once, ..bolt(0) })));
+            loop {
+                match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) {
+                    ActStep::NeedRoll { kind, faces, .. } => t.push(Faces(vec![if kind == "defense" || (kind == "cast" && !ok) { 1 } else { 6 }; faces])),
+                    ActStep::Done { state, .. } => return (st.clone(), state),
+                    other => panic!("{casts:?}: {other:?}"),
+                }
+            }
+        };
+        let gained = |st: &State, after: &State, key: &str| delta_of(st, after).into_iter().find(|d| d.key == key).map(|d| d.buffs_gained);
+        let names = |v: &[&str]| Some(v.iter().map(|n| n.to_string()).collect::<Vec<_>>());
+        // (1) kept: a melee-scope once debuff (the volley never reads it), a round buff on the caster, a grant
+        let (b, a) = run(&[("Crippling", "b", true)], true);
+        assert_eq!(gained(&b, &a, "b"), names(&["Crippling"]), "a once record the volley leaves");
+        let (b, a) = run(&[("Ward", "a", false)], true);
+        assert_eq!(gained(&b, &a, "a"), names(&["Ward"]), "a round record");
+        let (b, a) = run(&[("Fearless Chant", "a", false)], true);
+        assert_eq!(gained(&b, &a, "a"), names(&["Fearless Chant"]), "a granted rule");
+        // (2) an effect-less spell: nothing on the board, still named
+        let (b, a) = run(&[("Lore", "b", false)], true);
+        assert!(a.buffs[2].is_empty(), "nothing was pushed on the board");
+        assert_eq!(gained(&b, &a, "b"), names(&["Lore"]), "effect-less spells are named too");
+        // (3) placement order across casts on one unit
+        let (b, a) = run(&[("Ward", "a", false), ("Fearless Chant", "a", false)], true);
+        assert_eq!(gained(&b, &a, "a"), names(&["Ward", "Fearless Chant"]), "placement order");
+        // (4) placed and spent by this activation's own volley: spent only, not gained (no news for the table)
+        let (b, a) = run(&[("Withering", "b", true)], true);
+        let row = delta_of(&b, &a).into_iter().find(|d| d.key == "b").expect("the foe's row");
+        assert_eq!((row.buffs_gained.clone(), row.buffs_spent.len()), (Vec::new(), 1), "{row:?}");
+        // (5) a failed cast lands nothing; an activation without a cast reports no gain
+        let (b, a) = run(&[("Ward", "a", false)], false);
+        assert_eq!(gained(&b, &a, "a").map_or(0, |v| v.len()), 0, "a failed cast gains nothing");
+        let ActStep::Done { state: a, .. } = finish_with(&statics, &st, seams(), vec![Begin, intent(HOLD, Some("b"))]) else { panic!("a plain volley") };
+        assert!(delta_of(&st, &a).iter().all(|d| d.buffs_gained.is_empty()), "no cast, no gain");
     }
 
     /// CAST-O7: answers every die the core asks, a success for the shooter and a failed save for the foe, to the end.

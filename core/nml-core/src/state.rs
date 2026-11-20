@@ -557,10 +557,12 @@ pub struct State {
     /// (`SoloController.active_mod_net_of`, battle_sim.gd:1530), never records,
     /// so a captured state can only start this ledger empty.
     pub buffs: Vec<Vec<crate::mods::LiveMod>>,
-    /// CAST-O7: the once-records THIS activation's casts placed (`tray_spell_effect`), as (unit, record, spent). `spent` turns true
-    /// when `spend_once_except` removes a record equal to it. A record placed and spent inside one activation is in neither the
-    /// capture nor the end board, so the delta's before/after diff cannot name it; `delta_of` reads this list for it. Cleared at
-    /// the activation's start, not serialised (the `buffs` shape); empty on every path with no tray cast.
+    /// CAST-O7 / CC-8c: the buff / debuff effects THIS activation's casts landed (`tray_spell_effect`), once or round, effect-less
+    /// spells included (those sit here only, never in `buffs`), as (unit, record, spent). `spent` turns true when
+    /// `spend_once_except` removes a once record equal to it. A record placed and spent inside one activation is in neither the
+    /// capture nor the end board, so the delta's before/after diff cannot name it; `delta_of` reads this list for both:
+    /// `buffs_spent` takes the spent ones, `buffs_gained` the others. Cleared at the activation's start, not serialised (the
+    /// `buffs` shape); empty on every path with no tray cast.
     pub cast_buffs: Vec<(usize, crate::mods::LiveMod, bool)>,
     /// `unit_properties["vs_mark_round"]` (main.gd:16752) — the once-per-
     /// activation stamp of the vs-target Mark arm, -1 for never.
