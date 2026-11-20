@@ -202,6 +202,7 @@ func build(layout: Dictionary) -> void:
 	rails.name = "Rails"
 	rails.build(layout, kit)
 	add_child(rails)
+	add_child(BoardgenMood.make_fill_light())   # lights the models only (render layer), shown with the finer look
 	_anchor()
 	_layout = layout
 	var settings := _settings()
@@ -235,6 +236,8 @@ func _ready() -> void:
 	if _kit != null:   # a module missing now is cached for the next board
 		_kit.prefetch(KIT_LADDERS + BoardgenRails.KIT_MODULES + BoardgenProps.KIT_MODULES)
 	_scatter_off(_footprint)
+	_assign_layers()
+	child_entered_tree.connect(func(_child: Node) -> void: _assign_layers.call_deferred())   # whatever a builder adds later joins the board layer too
 	var graphics := get_node_or_null("/root/GraphicsSettings")
 	if graphics != null:
 		graphics.settings_applied.connect(_on_settings_applied)
@@ -246,6 +249,7 @@ func _exit_tree() -> void:
 	var graphics := get_node_or_null("/root/GraphicsSettings")
 	if graphics != null and graphics.settings_applied.is_connected(_on_settings_applied):
 		graphics.settings_applied.disconnect(_on_settings_applied)
+	BoardgenMood.apply(self, false)
 
 
 ## The finer look of the surfaces (edge wear, later the relief of walls and floors) is on from Medium up; Performance / Low and the
@@ -260,8 +264,15 @@ func _on_settings_applied(_preset_name: String) -> void:
 
 func _apply_detail() -> void:
 	var graphics := get_node_or_null("/root/GraphicsSettings")
+	var on: bool = graphics != null and detail_for(int(graphics.current_preset), RenderingServer.get_current_rendering_method() == "gl_compatibility")
 	if _material != null and graphics != null:
-		_material.set_shader_parameter("detail", 1.0 if detail_for(int(graphics.current_preset), RenderingServer.get_current_rendering_method() == "gl_compatibility") else 0.0)
+		_material.set_shader_parameter("detail", 1.0 if on else 0.0)
+	BoardgenMood.apply(self, on)   # the dim industrial light, board-scale SSAO, the grade and the model fill come with the finer look
+
+
+## The board's visuals sit on their own render layer: the models' fill light (BoardgenMood) never reaches them.
+func _assign_layers() -> void:
+	BoardgenMood.assign_layers(self)
 
 
 ## The table's own ground scatter (grass tufts, the biome dressing's straw, leaves and puddles) stays off under the board.
