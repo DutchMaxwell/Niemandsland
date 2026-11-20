@@ -418,6 +418,26 @@ impl Terrain {
         (walls, ledges)
     }
 
+    /// Heightfield plan step 11 - a tier edge as a planner segment: board-centred inches into the 0-origin inch frame.
+    fn tier_seg_in(&self, e: &crate::mv::tier::TierEdge) -> WallSeg {
+        let h = [self.board_in[0] * 0.5, self.board_in[1] * 0.5];
+        [[(e.a[0] + h[0]) as f32, (e.a[1] + h[1]) as f32], [(e.b[0] + h[0]) as f32, (e.b[1] + h[1]) as f32]]
+    }
+
+    /// Heightfield plan step 11 - the ladders of a tier board as priced climbs: `(segment, rise in inches)` in the
+    /// planner's inch frame (the frame of `walls_in`). Empty on a flat board.
+    pub fn tier_ledges_in(&self) -> Vec<(WallSeg, f64)> {
+        let ladders = self.tier_edges.iter().filter(|e| e.kind == crate::mv::tier::TierKind::Ladder);
+        ladders.map(|e| (self.tier_seg_in(e), e.dy_in)).collect()
+    }
+
+    /// Heightfield plan step 11 - the cliffs of a tier board (every tier edge that is not a ladder: sheer, not
+    /// climbable, both ways) as wall segments in the planner's inch frame. Empty on a flat board.
+    pub fn tier_walls_in(&self) -> Vec<WallSeg> {
+        let cliffs = self.tier_edges.iter().filter(|e| e.kind == crate::mv::tier::TierKind::Cliff);
+        cliffs.map(|e| self.tier_seg_in(e)).collect()
+    }
+
     /// The board's wall segments in WORLD METRES, f32 at the Vector2 boundary
     /// — the load-time narrowing of the raw values (step 6a, see the field doc).
     #[inline]
