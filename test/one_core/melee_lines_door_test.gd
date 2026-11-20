@@ -14,7 +14,7 @@ const SEEDS := 8
 ## Rending CW is not listed: its line is said now, but its save target (Defense + AP(+4) above 6: the table prints 8, the roll record clamps to 6) stays the
 ## accepted roll-label class (PLAN_E 19.11. 13:00), like Hazardous.
 const TRAIN_CELLS := [["Blast", "CW"], ["Shielded", "TU"], ["Deadly", "CW"], ["Deadly", "TW"], ["Surge", "CW"], ["Piercing Assault", "CU"],
-	["Piercing Assault", "CW"]]
+	["Piercing Assault", "CW"], ["Furious", "CU"], ["Aura Channel", "CU"]]
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -51,3 +51,28 @@ func test_the_melee_line_cells_of_the_train_are_equal() -> void:
 	for row in report["cells"]:
 		print("MELEE_LINES %s %s -> %s %d/%d fired=%d %s" % [row["primitive"], row["seat"], row["verdict"], row["equal_seeds"], SEEDS, row["fired_seeds"], row["first_diff"]])
 		assert_str(str(row["verdict"])).override_failure_message("%s %s: %s (%s)" % [row["primitive"], row["seat"], row["verdict"], row["first_diff"]]).is_equal("EQUAL")
+
+
+## Furious (and the Furious Aura that grants it): the table says `Furious: +N hits on the charge (unmodified 6s)` and the door now says it too. Same-name
+## rules do not stack (lead ruling 20.11.): a bearer with its OWN Furious inside a Furious Aura gets ONE extra hit per unmodified 6, on the table (the aura
+## pass skips a name the unit already carries) and on the door (one flag). Proof: the same seed gives the SAME Furious line with the rule alone and with
+## the rule plus the aura, and the door equals the table on that cell.
+func test_a_bearer_with_its_own_furious_inside_a_furious_aura_gets_one_extra_hit_per_six() -> void:
+	var alone := {"primitive": "Furious", "seat": "CU", "rule": "Furious", "system": "aof", "faction": "beastmen"}
+	var both := {"primitive": "Aura Channel", "seat": "CU", "rule": "Furious Aura", "system": "aof", "faction": "beastmen",
+		"att": {"expand_aura": true, "rules": ["Furious"]}}
+	for seed_n in [0, 1, 2]:
+		var a: Dictionary = await Cli._half(_main, alone, seed_n, false, false)
+		var b: Dictionary = await Cli._half(_main, both, seed_n, false, false)
+		var fa: Array = (a["lines"] as Array).filter(func(l: String) -> bool: return l.contains("Furious:"))
+		var fb: Array = (b["lines"] as Array).filter(func(l: String) -> bool: return l.contains("Furious:"))
+		assert_array(fa).override_failure_message("seed %d: the rule alone says no Furious line, nothing to compare" % seed_n).is_not_empty()
+		assert_array(fb).override_failure_message("seed %d: own Furious + aura Furious differ from the rule alone: %s vs %s" % [seed_n, fa, fb]).is_equal(fa)
+	var report: Dictionary = await Cli.run_matrix(_main, [both], SEEDS)
+	assert_bool(bool(report.get("ok", false))).override_failure_message("run refused: %s" % report.get("error", "")).is_true()
+	if bool(report.get("ok", false)):
+		var row: Dictionary = (report["cells"] as Array)[0]
+		# INERT is the proof, not a gap: the control strips only the aura and keeps the bearer's own Furious, so "the aura changed nothing on the table" (fired 0)
+		# IS the non-stacking; the door equals the table on every seed either way.
+		assert_int(int(row["equal_seeds"])).override_failure_message("door vs table on own Furious + aura: %s" % row["first_diff"]).is_equal(SEEDS)
+		assert_int(int(row["fired_seeds"])).override_failure_message("the aura changed the table's run: the two Furious stacked").is_equal(0)

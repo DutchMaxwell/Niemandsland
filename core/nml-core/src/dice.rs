@@ -3125,7 +3125,12 @@ pub fn resolve_melee_leg_wipe(
             // Furious :4477 — the unit-level rule the table stamps onto every
             // melee profile (main.gd:4343): unmodified 6s, charge only.
             if charging && sh.att.furious {
-                hits += sixes(trig);
+                let furious_hits = sixes(trig);
+                hits += furious_hits;
+                if furious_hits > 0 {
+                    // The table's line (`_solo_hits`, rules-must-log): a Furious bearer names the extra hits; one named rule, one line, one hit per 6.
+                    say_rule(tray, "furious", sh.att.side, || format!("Furious: +{furious_hits} hit{} on the charge (unmodified 6s)", if furious_hits == 1 { "" } else { "s" }));
+                }
             }
             if p.sergeant_attacks > 0 {
                 hits += sixes(trig).min(p.sergeant_attacks);
