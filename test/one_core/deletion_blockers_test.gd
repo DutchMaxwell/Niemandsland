@@ -38,8 +38,8 @@ const BLOCKERS: Array[Dictionary] = [
 		"header": "static func human_path() -> String:", "needles": ["return PATH"]},
 	{"name": "hotseat Automatic is OFF unless NML_ONE_CORE_HOTSEAT is set", "retire": "P4.D-43c / H-31", "file": ACTIVATION,
 		"header": "static func hotseat_enabled() -> bool:", "needles": ["_hotseat_env = 1 if (raw == \"1\" or raw == \"on\") else 0"]},
-	{"name": "the AI door takes a Rush only for a move-through bearer", "retire": "P4.D-41 / H-23", "file": ACTIVATION,
-		"header": "static func takes_action(", "needles": ["kind == AiDecision.Action.RUSH and moves_through(unit)"]},
+	{"name": "the AI door takes a Rush only for a move-through bearer or a caster", "retire": "P4.D-41 / H-23", "file": ACTIVATION,
+		"header": "static func takes_action(", "needles": ["kind == AiDecision.Action.RUSH and (casting or moves_through(unit))"]},
 ]
 
 

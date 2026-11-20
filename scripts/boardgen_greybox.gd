@@ -215,19 +215,20 @@ static func _settings() -> Node:
 	return (Engine.get_main_loop() as SceneTree).root.get_node_or_null("GraphicsSettings")
 
 
-## The low ground mist (GraphicsSettings.board_mist_enabled): built while the setting is on, freed at once when it goes off.
+## The low ground mist and the vent steam (GraphicsSettings.board_mist_enabled): built while the setting is on, freed at once when it goes off.
 func refresh_atmosphere() -> void:
-	var mist := get_node_or_null("Mist")
 	var settings := _settings()
 	var want: bool = settings == null or settings.board_mist_enabled()
-	if want and mist == null:
-		mist = BoardgenMist.new()
-		mist.name = "Mist"
-		mist.build(_layout)
-		add_child(mist)
-	elif not want and mist != null:
-		remove_child(mist)
-		mist.free()
+	for part: Array in [["Mist", BoardgenMist], ["Steam", BoardgenSteam]]:
+		var node: Node = get_node_or_null(part[0])
+		if want and node == null:
+			node = part[1].new()
+			node.name = part[0]
+			node.call("build", _layout)
+			add_child(node)
+		elif not want and node != null:
+			remove_child(node)
+			node.free()
 
 
 func _ready() -> void:

@@ -310,6 +310,24 @@ func test_a_landed_wound_shows_on_the_wound_marker() -> void:
 	assert_object(m.node.get_node_or_null("WoundMarker")).override_failure_message("no wound marker").is_not_null()
 
 
+## H-5a (Plan H): a landing with MORE wounds left than the model holds is the core's heal (Mend, `tray_mend`): it lands with the
+## table's own writer, the marker follows, and a repeat of the list heals nothing twice. RED without the heal branch: the model
+## stays at 1 wound.
+func test_a_landed_heal_restores_the_wounds_once() -> void:
+	var friend := ParityTable._make_unit(_main, {"player": 2, "name": "Mended", "models": 3, "x_in": 12.0, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 3, "game_system": "gf", "faction_folder": "robot_legions", "rules": []}, {})
+	var m: ModelInstance = friend.models[2]
+	m.wounds_current = 1
+	var start := CoreActivation._start_models(_main)
+	var landing := [{"unit": friend.unit_id, "models": [{"at": m.node.global_position, "slot": 2, "wounds_left": 3, "dead": false}]}]
+	var done := {}
+	await CoreActivation.land_step(_main, friend, landing, start, done)
+	assert_int(m.wounds_current).override_failure_message("the heal did not land").is_equal(3)
+	m.wounds_current = 2
+	await CoreActivation.land_step(_main, friend, landing, start, done)
+	assert_int(m.wounds_current).override_failure_message("the repeat healed again").is_equal(2)
+
+
 ## P4.0-1: a landed model carries the core's slot, and the position still decides which model it is (the old rule: no
 ## player-visible change). A landing whose slot and position disagree wounds the model at the position and reports the
 ## disagreement. RED when the slot decides: model 2 takes the wound, model 0 none.

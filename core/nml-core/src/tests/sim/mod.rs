@@ -1810,6 +1810,7 @@ mod rule_lines_hit_roll;
 mod rule_lines_defense;
 mod rule_lines_growth;
 mod melee_lines_1;
+mod melee_lines_deadly;
 mod rule_lines_attack;
 mod rule_lines_to_hit;
 mod rapid_charge_mark;
