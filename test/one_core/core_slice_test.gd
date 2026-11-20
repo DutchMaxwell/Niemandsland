@@ -272,7 +272,7 @@ func test_a_missing_or_malformed_file_is_the_empty_slice() -> void:
 ## The deny file refuses its listed primitives (a Teleport unit) and takes a unit whose
 ## rules are automated and not listed (AP, Tough); a name no map knows is taken (unmapped_inert). The list only shrinks: CEILING.
 ## RED: read PATH regardless of the switch -> the first assertion reads mode "allow".
-const DENY_CEILING := 10   # H-17a (Plan H): Disintegrate and Tear left with their line, the core says `<rule>: AP(+N) against <U>` (12 -> 10). DLINES train 4 (DS-GHITN): the to-hit note (6 primitives: Artillery, Stealth, Evasive, Aircraft, Shot Modifier, Instinctive) and Takedown left with their lines (19 -> 12). DLINES3 train 3: Shred, Self-Repair and Resistance left with their lines (19 -> 16), then the probes at 1500 / 2000 / 3000 pts showed three more families whose line the door omits: Armor, Disintegrate, Tear (+3 -> 19). DLINES2 train 2: Ranged Shrouding, Lacerate, Shielded, Fortified and Regeneration left with their lines (24 -> 19). 19.11.: +15 primitives in eight `rule_line` groups (a rule whose table line the door omits stays on the table until the line exists, dlines_gap rows 2, 3, 7, 13, 15, 16, 17, 21), they leave group by group with their lines. BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
+const DENY_CEILING := 9   # H-5 (Plan H): Mend left the beat group through the beats guard (10 -> 9). H-17a (Plan H): Disintegrate and Tear left with their line, the core says `<rule>: AP(+N) against <U>` (12 -> 10). DLINES train 4 (DS-GHITN): the to-hit note (6 primitives: Artillery, Stealth, Evasive, Aircraft, Shot Modifier, Instinctive) and Takedown left with their lines (19 -> 12). DLINES3 train 3: Shred, Self-Repair and Resistance left with their lines (19 -> 16), then the probes at 1500 / 2000 / 3000 pts showed three more families whose line the door omits: Armor, Disintegrate, Tear (+3 -> 19). DLINES2 train 2: Ranged Shrouding, Lacerate, Shielded, Fortified and Regeneration left with their lines (24 -> 19). 19.11.: +15 primitives in eight `rule_line` groups (a rule whose table line the door omits stays on the table until the line exists, dlines_gap rows 2, 3, 7, 13, 15, 16, 17, 21), they leave group by group with their lines. BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
 
 
 func test_the_deny_switch_reads_the_measured_deny_list() -> void:
@@ -526,7 +526,7 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
 	var cases := [
-		["gf", "battle_brothers", "Mend"], ["gf", "alien_hives", "Breath Attack"], ["gf", "jackals", "Mind Control"],
+		["gf", "alien_hives", "Breath Attack"], ["gf", "jackals", "Mind Control"],
 		["gf", "daemons_of_war", "Fatigue Debuff"], ["gf", "daemons_of_war", "Storm of War"],
 		["aof", "daemons_of_war", "Reckless Piercing"], ["gf", "human_defense_force", "Precision Shooter Buff"],
 		["gf", "jackals", "Precision Tag"], ["gf", "battle_brothers", "Re-Position Artillery"]]
@@ -550,6 +550,10 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 	var furious := _unit(["Furious Buff", "Tough(3)"], [["AP(1)"]])
 	furious.unit_properties["faction_folder"] = "alien_hives"
 	assert_array(CoreSlice.refusals(furious)).override_failure_message("Furious Buff differs through the door and stays refused").is_equal(["unit_rule:Furious Buff"])
+	# H-5: Mend left the group (the beats guard hands its beat to the core's one call), so a Mend bearer is taken.
+	var mender := _unit(["Mend", "Tough(3)"], [["AP(1)"]])
+	mender.unit_properties["faction_folder"] = "battle_brothers"
+	assert_array(CoreSlice.refusals(mender)).override_failure_message("Mend is guarded, not denied, from H-5").is_empty()
 	# The same unit without the beat rule is taken (the group refuses the rule, not the faction).
 	var plain := _unit(["Tough(3)"], [["AP(1)"]])
 	plain.unit_properties["faction_folder"] = "battle_brothers"
@@ -557,11 +561,11 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 	# A joined hero's beat rule keeps its host on the table (deny mode reads the hero's rules too).
 	var host := _unit(["Tough(3)"], [["AP(1)"]])
 	host.unit_properties["faction_folder"] = "battle_brothers"
-	var healer := _unit(["Hero", "Mend"], [])
-	healer.unit_properties["faction_folder"] = "battle_brothers"
+	var healer := _unit(["Hero", "Breath Attack"], [])
+	healer.unit_properties["faction_folder"] = "alien_hives"
 	EquipmentDistributor.attach_hero_to_unit(healer, host)
-	assert_array(CoreSlice.refusals(host)).contains(["unit_rule:Mend"])
-	assert_array(CoreSlice.refusals(host, true)).override_failure_message("the same host shot at: the hero's Mend does not act in the volley").is_empty()
+	assert_array(CoreSlice.refusals(host)).contains(["unit_rule:Breath Attack"])
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("the same host shot at: the hero's Breath Attack does not act in the volley").is_empty()
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 
