@@ -305,6 +305,9 @@ const PENDING_EPOCH_VERSATILE_MODIFIED_HIT := 94
 ## The core's `PENDING_EPOCH_HEIGHT` (acts.rs, heightfield plan): from 94 the core reads a generated board's heights. The table
 ## draws and collides the same materialised board and gates on nothing here yet.
 const PENDING_EPOCH_HEIGHT := 94
+## The core's `PENDING_EPOCH_CASUALTY_TIES` (acts.rs): from here the core ranks casualties by the table's own f32 distance to the
+## centroid. Nothing in the table gates on it (the table is the reference); the shadow compares the survivors' positions from here.
+const PENDING_EPOCH_CASUALTY_TIES := 94
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
