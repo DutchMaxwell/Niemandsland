@@ -96,10 +96,14 @@ static func lanterns(layout: Dictionary) -> Array[Dictionary]:
 	var origin := Vector2(nx, nz) * cell_in * -0.5
 	for corner in [Vector2(-5.5, -5.5), Vector2(5.5, -5.5), Vector2(-5.5, 5.5), Vector2(5.5, 5.5)]:
 		out.append({"at": corner, "half": 1 if corner.y > 0.0 else 0})
-	var wall_cols := {}
+	var per_column := {}   # a wall column is a column with a run of wall cells (a stray buttress beside it does not count)
 	for cd: Dictionary in layout["cells"]:
 		if cd["lot_kind"] == "Wall" and cd["level"] >= 1:
-			wall_cols[cd["x"]] = true
+			per_column[cd["x"]] = int(per_column.get(cd["x"], 0)) + 1
+	var wall_cols := {}
+	for x in per_column:
+		if per_column[x] >= 5:
+			wall_cols[x] = true
 	for cd: Dictionary in layout["cells"]:
 		if cd["street"] and wall_cols.has(cd["x"]) and cd["level"] == 0:
 			var half := 1 if cd["z"] >= nz / 2 else 0
