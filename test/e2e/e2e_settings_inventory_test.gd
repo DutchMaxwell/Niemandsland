@@ -208,7 +208,7 @@ func test_display_toggles_reach_graphics_settings_and_are_put_back() -> void:
 	var fields := {"Reduce Motion": "reduce_motion", "Show Move Trails": "show_move_trails",
 		"Show Rule Texts at the Table": "show_rule_floats", "Tilt-Shift (Depth of Field)": "tilt_shift",
 		"Combat Stage (paces the resolution)": "show_combat_stage", "Enforce Movement Limit": "enforce_movement_limit",
-		"AI Explanations Stay Up": "ai_explain_persistent", "Combat Effects": "show_combat_effects"}
+		"AI Explanations Stay Up": "ai_explain_persistent", "Combat Effects": "show_combat_effects", "Board Mist and Steam": "show_board_mist"}
 	for text: String in fields:
 		var t := _toggle(text)
 		var field: String = fields[text]

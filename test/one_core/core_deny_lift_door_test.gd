@@ -63,15 +63,29 @@ func _compare(shooter: Dictionary, target: Dictionary, prefix: String, swap_face
 
 
 func _aof(entry: Dictionary) -> Dictionary:
-	(entry["unit"] as OPRApiClient.OPRUnit).game_system = "aof"
-	entry["system"] = "aof"
+	return _sys(entry, "aof")
+
+
+func _sys(entry: Dictionary, system: String) -> Dictionary:
+	(entry["unit"] as OPRApiClient.OPRUnit).game_system = system
+	entry["system"] = system
 	return entry
+
+
+## H-14: an AP(2) volley at a target that holds Fortified through an aura (aofs / gff: a Fortified-primitive entry; gf / aof: an Aura Channel).
+func _rifles(system: String, faction: String) -> Dictionary:
+	return _sys(DoorLines.entry("Rifles AP", 10, [], ["AP(2)"], faction, 10), system)
+
+
+func _squad(system: String, faction: String, rules: Array, size := 10) -> Dictionary:
+	return _sys(DoorLines.entry("Squad", size, rules, [], faction, 0), system)
 
 
 ## [label, shooter, target, line prefix that proves the rule acted]
 func _cases() -> Array:
 	var plain := DoorLines.entry("Plain", 10, [], [], "battle_brothers", 0)
 	var plain_aof := _aof(DoorLines.entry("Plain", 10, [], [], "human_empire", 0))
+	var rifles := DoorLines.entry("Rifles", 10, [], [], "battle_brothers", 10)
 	return [
 		# H-12 Hazardous: the wound goes to the SHOOTING unit on an unmodified 1 to hit, line `Hazardous: <U> model N takes 1 wound (<weapon>)`.
 		["Hazardous gf carbines", DoorLines.entry("Carbines", 5, [], ["Hazardous"], "ratmen_clans", 5), plain, "Hazardous"],
@@ -85,6 +99,22 @@ func _cases() -> Array:
 		# said since #3133). The target row compares EVERY combat line of the volley. Zairetia's Versatile Attack beside the die stays refused as a pair (#3131).
 		["Experimental Tinctures aof shooter", _aof(DoorLines.entry("Alchemists", 10, ["Experimental Tinctures", "Unpredictable Shooter Aura"], [], "duchies_of_vinci", 5)), plain_aof, "Unpredictable Shooter:"],
 		["Experimental Tinctures aof target", _aof(DoorLines.entry("Gunners", 10, [], [], "human_empire", 5)), _aof(DoorLines.entry("Alchemists", 10, ["Experimental Tinctures", "Unpredictable Shooter Aura"], [], "duchies_of_vinci", 0)), ""],
+		# H-14 Fortified Aura / Guardian Boost Aura / Gleaming Armour (an item whose content is Fortified Aura), a LIVE bearer (ds/h14_probe_fortified_aura.md): dice,
+		# end state and the `Fortified:` / `Guardian Boost[ Aura]:` line are equal in every system. The fallen-bearer state is refused by the slice, see below.
+		["Fortified Aura aofs", _rifles("aofs", "duchies_of_vinci"), _squad("aofs", "duchies_of_vinci", ["Fortified Aura"]), "Fortified:"],
+		["Fortified Aura gff", _rifles("gff", "blessed_sisters"), _squad("gff", "blessed_sisters", ["Fortified Aura"]), "Fortified:"],
+		["Guardian Boost Aura aofs", _rifles("aofs", "hired_guards"), _squad("aofs", "hired_guards", ["Guardian Boost Aura"]), "Guardian Boost"],
+		["Guardian Boost Aura gff", _rifles("gff", "custodian_brothers"), _squad("gff", "custodian_brothers", ["Guardian Boost Aura"]), "Guardian Boost"],
+		["Fortified Aura aof channel", _rifles("aof", "mummified_undead"), _squad("aof", "mummified_undead", ["Fortified Aura"]), "Fortified:"],
+		["Gleaming Armour aof bearer", _rifles("aof", "mummified_undead"), _squad("aof", "mummified_undead", ["Hero", "Gleaming Armour", "Fortified Aura"], 1), "Fortified:"],
+		# H-9a: a pre-attack beat is the bearer's own act, so a bearer SHOT AT is taken (the group's side is the shooter); every combat line of the volley compared.
+		["Furious Buff target", rifles, DoorLines.entry("Squad", 10, ["Furious Buff"], [], "alien_hives", 0), ""],
+		["Precision Fighter Buff target", rifles, DoorLines.entry("Squad", 10, ["Precision Fighter Buff"], [], "blessed_sisters", 0), ""],
+		["Speed Debuff target", rifles, DoorLines.entry("Squad", 10, ["Speed Debuff"], [], "dwarf_guilds", 0), ""],
+		["Breath Attack target", rifles, DoorLines.entry("Squad", 10, ["Breath Attack"], [], "alien_hives", 0), ""],
+		["Re-Position Artillery target", rifles, DoorLines.entry("Squad", 10, ["Re-Position Artillery"], [], "battle_brothers", 0), ""],
+		["Mend target", rifles, DoorLines.entry("Squad", 10, ["Mend"], [], "battle_brothers", 0), ""],
+		["Regeneration Buff target", rifles, DoorLines.entry("Squad", 10, ["Regeneration Buff"], [], "dark_elf_raiders", 0), ""],
 	]
 
 

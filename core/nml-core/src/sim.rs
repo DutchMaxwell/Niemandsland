@@ -1477,13 +1477,55 @@ fn land_chain_report(statics: &[UnitStatic], next: &State, tray: &mut Tray, ti: 
     land_chain_report_inline(statics, next, tray, ti, before, 0);
 }
 
+/// The lines of a landing's casualties: per chain member that lost models (`lost`, parallel to `members`), "loses a model", "loses N
+/// models" or "destroyed", the counter read from `next` as it stands (host and joined heroes counted together for the host).
+fn chain_loss_lines(statics: &[UnitStatic], next: &State, ti: usize, members: &[usize], lost: &[i64]) -> Vec<LogLine> {
+    let size = |u: usize| statics[next.roster.profile[u]].model_count;
+    let (alive, total) = members.iter().fold((0, 0), |(a, t), &u| (a + next.alive[u], t + size(u)));
+    members.iter().zip(lost).filter_map(|(&u, &lost)| {
+        let (a, t) = if u == ti { (alive, total) } else { (next.alive[u], size(u)) };
+        let name = &statics[next.roster.profile[u]].name;
+        let text = match (lost, a) {
+            (..=0, _) => return None,
+            (_, 0) => format!("{name} destroyed"),
+            (1, _) => format!("{name} loses a model ({a}/{t})"),
+            _ => format!("{name} loses {lost} models ({a}/{t})"),
+        };
+        Some(LogLine { rule: "shoot", category: Category::Combat, side: next.player[u], text, detail: None })
+    }).collect()
+}
+
+/// One line of a Deadly weapon's landing: at its mark among the strike's lines when it has one (`at` moves past it), else at the end.
+fn say_at_mark(tray: &mut Tray, at: &mut Option<(usize, usize)>, line: LogLine) {
+    match at {
+        Some(a) => { tray.say_at(*a, || line); a.0 += 1; }
+        None => tray.say(|| line),
+    }
+}
+
+/// How many models each member of a chain holds now.
+fn model_counts(next: &State, members: &[usize]) -> Vec<usize> {
+    members.iter().map(|&u| next.positions[u].len()).collect()
+}
+
+/// What the table's wound line counts when part of the event landed inline (a melee's Deadly / Takedown): `said[i]` the
+/// models member `i` of the chain already lost under the Deadly landing's own line, `pool` the pool wounds that got past the ignore rolls.
+/// The table says "takes N wounds" only when some reach the pool, and N then counts the inline wounds too (`_solo_apply_wounds`'s
+/// `taken_before`, #2826); the casualty line after it names the pool's own.
+struct InlineSaid { said: Vec<i64>, pool: i64 }
+
 /// `land_chain_report`, less the wounds the table lands model by model with their own line (the volley's Deadly): `inline`.
 fn land_chain_report_inline(statics: &[UnitStatic], next: &State, tray: &mut Tray, ti: usize, before: Option<ChainBefore>, inline: i64) {
+    land_chain_report_said(statics, next, tray, ti, before, inline, None);
+}
+
+fn land_chain_report_said(statics: &[UnitStatic], next: &State, tray: &mut Tray, ti: usize, before: Option<ChainBefore>, inline: i64, said: Option<&InlineSaid>) {
     let Some(ch) = before else { return };
     let ut = &statics[next.roster.profile[ti]];
     let size = |u: usize| statics[next.roster.profile[u]].model_count;
     let (alive, total) = ch.iter().fold((0, 0), |(a, t), (u, ..)| (a + next.alive[*u], t + size(*u)));
-    let took: i64 = ch.iter().map(|(u, _, w)| w.iter().sum::<i64>() - next.wounds[*u].iter().sum::<i64>()).sum::<i64>() - inline;
+    let took_all: i64 = ch.iter().map(|(u, _, w)| w.iter().sum::<i64>() - next.wounds[*u].iter().sum::<i64>()).sum();
+    let took = match said { Some(s) => if s.pool > 0 { took_all } else { 0 }, None => took_all - inline };
     // NML-1091: a unit that IS one multi-wound model counts that model's wounds instead.
     let (n, of, unit) = match ut.wounds_max.first() {
         Some(&m) if total == 1 && m > 1 => (next.wounds[ti].first().copied().unwrap_or(0).max(0), m, " wounds"),
@@ -1493,17 +1535,19 @@ fn land_chain_report_inline(statics: &[UnitStatic], next: &State, tray: &mut Tra
         tray.say_wounds(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[ti],
             text: format!("{} takes {took} wound{} ({n}/{of}{unit})", ut.name, if took == 1 { "" } else { "s" }), detail: None });
     }
-    for (u, at, _) in &ch {
-        let lost = at.len() as i64 - next.positions[*u].len() as i64;
-        let (a, t) = if *u == ti { (alive, total) } else { (next.alive[*u], size(*u)) };
-        let name = &statics[next.roster.profile[*u]].name;
-        let text = match (lost, a) {
-            (..=0, _) => continue,
-            (_, 0) => format!("{name} destroyed"),
-            (1, _) => format!("{name} loses a model ({a}/{t})"),
-            _ => format!("{name} loses {lost} models ({a}/{t})"),
-        };
-        tray.say_wounds(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[*u], text, detail: None });
+    let members: Vec<usize> = ch.iter().map(|(u, ..)| *u).collect();
+    let lost: Vec<i64> = ch.iter().enumerate().map(|(i, (u, at, _))| at.len() as i64 - next.positions[*u].len() as i64 - said.map_or(0, |s| s.said[i])).collect();
+    for line in chain_loss_lines(statics, next, ti, &members, &lost) {
+        tray.say_wounds(|| line);
+    }
+    // The table's `_solo_hero_carries_on` (the end of `_solo_apply_wounds`): the host has no model left, so each living joined hero that
+    // carries the unit's Shaken / Fatigue says so.
+    if took > 0 && next.alive[ti] <= 0 {
+        for &h in next.attached[ti].iter().filter(|&&h| next.alive[h] > 0 && (next.shaken[h] || next.fatigued[h])) {
+            let state = match (next.shaken[h], next.fatigued[h]) { (true, true) => "Shaken + Fatigue", (true, false) => "Shaken", _ => "Fatigue" };
+            let text = format!("{} fights on alone — carries the unit's {state} ({CITE})", statics[next.roster.profile[h]].name);
+            tray.say_wounds(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[h], text, detail: None });
+        }
     }
     tray.release_outcome();
     for (u, at, wounds) in ch {
@@ -2383,6 +2427,9 @@ fn control_morale_passed(
     ctx.side = next.player[ti]; // the seat the morale dice lines (Fearless, No Retreat) are said for
     let banner_dropped = drop_banner_for_cause(statics, next, ti, false, true, Some(source.rule), None, None, seams, &mut ctx, shot, tray);
     say_morale_bonus(statics, next, ti, false, Some(source.rule), seams, &ctx, banner_dropped, tray);
+    if next.shaken[ti] {
+        say_rule(tray, "morale", next.player[ti], || format!("{} is already Shaken — automatically fails morale ({CITE})", us.name));
+    }
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
         &ctx, source.owner, None, false, false, next.shaken[ti], wounds_left(next, ti), tray,
     );
@@ -6718,13 +6765,22 @@ fn strike_phase(
     // table's order holds: Takedown, Deadly, then the pool.
     let mut dealt: i64 = shot.takedown_groups.iter().sum();
     let td_dealt = land_takedown_groups(next, ti, shot, seams.takedown_pick, None);
-    // The table lands Deadly inline per weapon and says one line per weapon (`_solo_land_deadly_wounds`), not a "takes N wounds" line for
-    // them: the strike's Deadly lines (the volley's shape), then the report of the pool wounds alone.
+    // The table lands Deadly inline per weapon and says one line per weapon (`_solo_land_deadly_wounds`), then the report of the pool
+    // wounds, whose "takes N wounds" count includes the inline ones (`land_chain_report_said`).
     let side = next.player[si];
     let mut deadly_dealt = 0;
     let mut groups = std::mem::take(&mut shot.deadly_groups).into_iter();
-    for (weapon, unsaved, dx, n) in std::mem::take(&mut shot.deadly_lines) {
+    // The table lands each Deadly weapon right after that weapon's own saves, ahead of the next weapon's rolls: its line, then the casualties
+    // that landing removed. `marks` (the fold's line counts) say where; a supplied tray only (`landed`), the others say nothing.
+    let marks = std::mem::take(&mut shot.deadly_marks);
+    let deadly_lines = std::mem::take(&mut shot.deadly_lines);
+    let marks = if marks.len() == deadly_lines.len() { marks } else { Vec::new() };
+    let inline_on = seams.tray_exact && landed.is_some();
+    let members: Vec<usize> = landed.iter().flatten().map(|(u, ..)| *u).collect();
+    let (mut said, mut shift) = (vec![0i64; members.len()], 0);
+    for (i, (weapon, unsaved, dx, n)) in deadly_lines.into_iter().enumerate() {
         let (mut wdealt, mut forced) = (0, 0);
+        let lens0 = if inline_on { model_counts(next, &members) } else { Vec::new() };
         for (post, gx) in groups.by_ref().take(n) {
             let d = land_deadly_group(next, ti, post, gx, seams, &mut None, &mut forced);
             shot.log.push(format!("Deadly({gx}): {post} unsaved ×{gx}, no carry-over → {d} wounds dealt"));
@@ -6733,10 +6789,21 @@ fn strike_phase(
         deadly_dealt += wdealt;
         let s = |n: i64| if n == 1 { "" } else { "s" };
         if wdealt > 0 {
-            say_rule(tray, "deadly", side, || format!("Deadly({dx}): {unsaved} unsaved ×{dx}, no carry-over → {wdealt} wound{} dealt ({weapon})", s(wdealt)));
+            let mut at = if inline_on { marks.get(i).map(|m| (m.0 + shift, m.1)) } else { None };
+            let at0 = at;
+            let line = |text: String| LogLine { rule: "deadly", category: Category::Combat, side, text, detail: None };
+            say_at_mark(tray, &mut at, line(format!("Deadly({dx}): {unsaved} unsaved ×{dx}, no carry-over → {wdealt} wound{} dealt ({weapon})", s(wdealt))));
             if forced > 0 {
-                say_rule(tray, "deadly", side, || format!("Deadly({dx}): {forced} wound{} finish the already-wounded Tough model first ({CITE})", s(forced)));
+                say_at_mark(tray, &mut at, line(format!("Deadly({dx}): {forced} wound{} finish the already-wounded Tough model first ({CITE})", s(forced))));
             }
+            if inline_on {
+                let lost: Vec<i64> = lens0.iter().zip(model_counts(next, &members)).map(|(&a, b)| a as i64 - b as i64).collect();
+                for l in chain_loss_lines(statics, next, ti, &members, &lost) {
+                    say_at_mark(tray, &mut at, l);
+                }
+                lost.iter().zip(said.iter_mut()).for_each(|(l, sd)| *sd += l);
+            }
+            shift += at.zip(at0).map_or(0, |(a, b)| a.0 - b.0);
         }
     }
     for (post, gx) in groups {
@@ -6748,7 +6815,8 @@ fn strike_phase(
     if seams.tray_exact {
         land_pool_wounds(next, ti, w, true, seams, &mut shot.log);
     }
-    land_chain_report_inline(statics, next, tray, ti, landed, deadly_dealt + td_dealt);
+    let inline_said = (inline_on && deadly_dealt + td_dealt > 0).then_some(InlineSaid { said, pool: w });
+    land_chain_report_said(statics, next, tray, ti, landed, deadly_dealt + td_dealt, inline_said.as_ref());
     caused = caused - raw_deadly + dealt;
     // rules-wave3-growthmark (epoch 6) — the ignore-wound marker AFTER the
     // landing: a bearer that ignored some of these wounds banks for them.
@@ -7276,7 +7344,7 @@ fn say_morale_bonus(
     let us = &statics[state.roster.profile[i]];
     let shown = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
     if unit_shaken(state, i, seams) {
-        return; // a Shaken unit rolls no die and the table writes no bonus line (its "already Shaken" line: see the gap list, not said here)
+        return; // a Shaken unit rolls no die and the table writes no bonus line (its "already Shaken" line is the caller's)
     }
     let target = morale_target(ctx.quality, ctx.morale_bonus);
     let bonus = state.morale_bonus[i] - banner_gone(statics, state, i, seams) - banner_dropped;
@@ -7345,6 +7413,10 @@ pub(crate) fn tray_morale_for(
     if shaken && !state.shaken[i] {
         let host = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
         shot.log.push(format!("Shaken: {} is the unit of its dead host {host}, which is Shaken — the test fails without a die", us.name));
+    }
+    if shaken {
+        // The table's `_solo_morale_test` says it before the outcome line: a lone hero's test is its host's (the unit it was aimed at).
+        say_rule(tray, "morale", state.player[i], || format!("{shown} is already Shaken — automatically fails morale ({CITE})"));
     }
     // EPOCH_39_MORALE_RATING — rules-must-log (main.gd:8596-8602): the test
     // that adds the rating names it, once per drawn die. A Shaken auto-fail
@@ -11754,6 +11826,7 @@ fn resolve_with(
                             if tray.feed().is_some() && parts.iter().any(|(_, m, _)| !m.keep.is_empty()) {
                                 // The table names the target it was aimed at: a lone hero's host, not the hero (see above).
                                 let aimed = lone_host.map_or(ut_g.name.as_str(), |h| statics[next.roster.profile[h]].name.as_str());
+                                crate::dice::say_armor(tray, &def, ut_g.name.as_str());
                                 crate::dice::say_shielded(tray, &def, aimed);
                                 crate::dice::say_growth_defense(tray, &def, aimed, &growth_defense_parts(statics, &next, g.ti));
                                 tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[si],
