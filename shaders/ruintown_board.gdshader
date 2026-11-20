@@ -211,14 +211,20 @@ void fragment() {
 			rough = mix(0.55, 0.8, smoothstep(0.3, 0.7, crown));   // damp joints, dry crowns
 			ao = mix(0.55, 1.0, smoothstep(0.1, 0.5, crown));
 		} else if (k == 0) {   // earth: packed, with pebbles, weeds and broken stones
-			vec2 cellp = floor(xz * 5.0);
-			float speck = h21(cellp + seed);
-			alb = tint * mix(0.78, 1.15, fbm(xz * 1.6 + seed)) * mix(1.0, 1.3, step(0.94, h21(floor(xz * 7.0))));
-			alb = mix(alb, vec3(0.30, 0.38, 0.17), step(0.84, speck) * step(length(fract(xz * 5.0) - 0.5), 0.34) * 0.7);   // a weed tuft
-			alb = mix(alb, vec3(0.26, 0.25, 0.23) * mix(0.8, 1.25, h21(cellp + 3.0)), step(0.965, speck) * step(length(fract(xz * 5.0) - 0.5), 0.26));   // a broken stone
+			alb = tint * mix(0.78, 1.15, fbm(xz * 1.6 + seed));
+			vec2 cp = xz * 3.0;   // 0.33 in cells, a pebble or a weed tuft in some of them: sparse, small, dark and irregular (rotated, stretched, off the cell centre)
+			vec2 ci = floor(cp);
+			float sp = h21(ci + seed);
+			float ang = h21(ci + 3.0) * 6.2832;
+			vec2 lf = (fract(cp) - 0.5 - (vec2(h21(ci + 7.0), h21(ci + 13.0)) - 0.5) * 0.4);
+			lf = vec2(cos(ang) * lf.x - sin(ang) * lf.y, sin(ang) * lf.x + cos(ang) * lf.y) * vec2(1.0, 1.0 + 1.4 * h21(ci + 5.0));
+			float pebble = step(0.955, sp) * smoothstep(0.2, 0.1, length(lf));
+			float tuft = step(0.915, sp) * step(sp, 0.955) * smoothstep(0.26, 0.12, length(lf));
+			alb = mix(alb, vec3(0.12, 0.15, 0.07) * mix(0.7, 1.2, h21(ci + 9.0)), 0.75 * tuft);   // a dull green-brown tuft, never a yellow coin
+			alb = mix(alb, vec3(0.13, 0.12, 0.11) * mix(0.6, 1.3, h21(ci + 4.0)), pebble);   // a dark stone
 			float path = smoothstep(0.03, 0.0, abs(vnoise(xz * 0.21 + seed) - 0.5)) * step(0.5, vnoise(xz * 0.07 + 5.0));   // a worn path: pale, meandering (a noise stand-in until the doors of R12c exist)
 			alb = mix(alb, tint * vec3(1.4, 1.34, 1.2), 0.75 * path);
-			rel = 0.2 + 0.6 * fbm(xz * 3.0 + seed) - 0.15 * path;   // packed earth: lumps, and the worn paths lie lower
+			rel = clamp(0.2 + 0.6 * fbm(xz * 3.0 + seed) - 0.15 * path + 0.35 * pebble, 0.0, 1.0);   // packed earth: lumps, and the worn paths lie lower
 			depth_in = 0.05;
 			rough = 0.95;
 		} else if (k == 3 || k == 4 || k == 8) {   // floor boards of a ruined house or yard, scorched in patches
@@ -271,7 +277,7 @@ void fragment() {
 		}
 	}
 	if (k == 17) {   // a lit lantern
-		emis = tint * 3.0;
+		emis = tint * 1.4;   // a lantern head, not a sun: the bloom must not wash the plaster
 	}
 	if (depth_in > 0.0) {   // the relief: a bent normal from the screen-space gradient of the height (no tangents needed), and its occlusion
 		float h = (rel - 0.5) * depth_in * IN;

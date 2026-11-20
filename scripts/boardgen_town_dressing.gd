@@ -206,23 +206,34 @@ func _add_lights(layout: Dictionary) -> void:
 		light.name = "Lantern%d" % i
 		light.position = Vector3(at.x, 2.55, at.y) * INCHES_TO_METERS
 		light.light_color = LANTERN_COLOUR
-		light.light_energy = 0.5
+		light.light_energy = 0.18   # not hotter than this at arm's length: the plaster must not clip beside a lantern
 		light.omni_range = 0.24
-		light.omni_attenuation = 1.3
+		light.omni_attenuation = 2.1
+		light.light_specular = 0.4
 		light.shadow_enabled = i < 4
 		add_child(light)
 
 
-## The dusk of the town: a low warm sun, a cool violet sky fill, a touch less exposure; applied to the scene's lighting controller (a dev view, so it is not restored).
+## The BLUE HOUR of the town (decision D-R4): a cool pale moon as the key, high on one side; the last warm light low on the opposite horizon (the scene's fill light, turned round) as a rim; a
+## cool sky; the lanterns are the only strong warm source. Applied to the scene's lighting controller (a dev view, so it is not restored).
 static func dusk(lighting: Object) -> void:
 	if lighting == null:
 		return
-	lighting.set_sun_color(Color(1.0, 0.66, 0.42))
-	lighting.set_sun_energy(1.0)
-	lighting.set_sun_angles(-50.0, 14.0)
-	lighting.set_ambient_color(Color(0.36, 0.40, 0.66))
-	lighting.set_ambient_energy(0.8)
+	lighting.set_sun_color(Color(0.60, 0.70, 1.0))
+	lighting.set_sun_energy(0.75)
+	lighting.set_sun_angles(-55.0, 52.0)
+	lighting.set_ambient_color(Color(0.30, 0.38, 0.62))
+	lighting.set_ambient_energy(0.85)
 	lighting.set_exposure(0.95)
+	lighting.set_fill_light_color(Color(1.0, 0.58, 0.32))
+	lighting.set_fill_light_energy(0.18)
+	var fill: Variant = lighting.get("_fill_light")   # no setter for its direction: turn it to the far horizon by hand
+	if fill is DirectionalLight3D:
+		var light := fill as DirectionalLight3D
+		var h := deg_to_rad(125.0)
+		var v := deg_to_rad(7.0)
+		light.position = Vector3(cos(v) * sin(h), sin(v), cos(v) * cos(h)) * 10.0
+		light.look_at(Vector3.ZERO, Vector3.UP)
 
 
 ## Props against the house walls: crates, barrels, wood piles and sacks on bare ground, only in the 0.75 in strip beside a wall face of a raised house, an intact
