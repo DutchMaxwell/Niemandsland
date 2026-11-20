@@ -140,6 +140,10 @@ func build(layout: Dictionary) -> void:
 	_material = _make_material(layout)
 	mmi.material_override = _material
 	add_child(mmi)
+	var rails := BoardgenRails.new()
+	rails.name = "Rails"
+	rails.build(layout)
+	add_child(rails)
 	_anchor()
 
 
