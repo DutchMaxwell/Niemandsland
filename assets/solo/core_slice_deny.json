@@ -12,8 +12,6 @@
   },
   "deny_names": {
     "Experimental Tinctures": "Measured (5-seed sweep): 25 taken volleys at Zairetia, the core opens a 12 in shot the table refuses; refused by name until diagnosed.",
-    "Changebound": "Measured (5-seed sweep): 8 taken volleys, the core applies a target-side hit penalty the table does not.",
-    "Stealth Aura": "Measured (5-seed sweep): 8 taken volleys, the same target-side hit penalty as Changebound.",
     "Gleaming Armour": "Measured (5-seed sweep): 5 taken volleys, the target's Defense differs by one.",
     "Relentless Aura": "Measured (5-seed sweep): 1 taken volley, the core pays one defense die more on a natural 6.",
     "Fortified Aura": "door omits the table's aura-loss line (`_solo_fortified_aura_loss_log`) when the bearer dies, dlines_gap row 21: the Fortified line itself is said since dlines2 train 2.",
@@ -23,6 +21,12 @@
     "Protection Feat": "door omits the table's terrain trace (Grounded Protection) or once-per-game lines (Protection Feat), dlines_gap row 3; the roll, bypass and Warding gate lines are said since dlines2/3."
   },
   "groups": {
+    "door_omits_unstoppable_fold_line": {
+      "primitives": [],
+      "kind": "rule_line",
+      "why": "A shooter with an Unstoppable weapon at a target whose rules lower the to-hit number (Stealth and its aliases such as Changebound and Stealth Aura, Evasive, Artillery, Aircraft): the table says `Unstoppable: negative to-hit modifiers ignored` when the weapon swallows the minus (`_solo_unstoppable_fold`), the core says it only for the granted mark and aura (dice.rs: a weapon's own flag stays silent). The dice are equal (stealth_target_door_test.gd, 8 taken Changebound volleys of the 1000 pts census). Not a rule name: `CoreSlice.pair_refusals` refuses the PAIR, switched on by this group.",
+      "leaves_with": "the core saying the table's Unstoppable fold line for a weapon's own Unstoppable"
+    },
     "ledger_not_round_tripped": {
       "primitives": ["Teleport", "Infiltrate"],
       "kind": "ledger",
