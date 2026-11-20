@@ -651,6 +651,15 @@ fn piercing_assault_grant_cond() -> CondAp {
     CondAp { ap_bonus: 1, condition: "on_charge".into(), ..Default::default() }
 }
 
+/// The table's `_solo_log_armor` line (`<U> has Armor(X): counts as Defense X+`), said once before the volley's announce when Armor improves the
+/// target's Defense; ahead of the Shielded / growth lines, which fold on top of it.
+pub(crate) fn say_armor(tray: &mut Tray, def: &Ctx, name: &str) {
+    if def.armor_line > 0 {
+        let x = def.armor_line;
+        say_rule(tray, "armor", def.side, || format!("{name} has Armor({x}): counts as Defense {x}+"));
+    }
+}
+
 /// A rule's battle-log line on a supplied tray, in the table's words (a seeded tray never builds the text).
 /// The table's `_solo_log_defense_parts` line for the Shielded family (`<U> is <rule>: +N Defense (saves on M+)`), said once before the
 /// volley's announce; the rule is the literal or the alias that drives `shielded`. None when the target has no bonus to name.

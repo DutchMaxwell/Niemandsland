@@ -327,7 +327,6 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 	CoreSlice.reset_cache()
 	var rep: Array = [
 		["Grounded Protection", "soul_snatcher_cults"], ["Protection Feat", "alien_hives"],
-		["Armor", ""],
 	]
 	for row in rep:
 		var as_unit := _unit([row[0]], [[]])
@@ -341,6 +340,7 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 		assert_array(CoreSlice.refusals(as_weapon)).override_failure_message("%s as a weapon rule is taken" % row[0]).is_equal(["weapon_rule:" + row[0]])
 	for kept in [["Blast(3)"], ["Reliable"], ["Surge when Shooting"], ["Rending"], ["Sturdy"], ["Slayer"], ["Tough(3)"]]:
 		assert_bool(CoreSlice.takes(_unit(kept, [["AP(1)"]]))).override_failure_message("%s stays on the core" % kept[0]).is_true()
+	# H-17b: Armor left with its line (`<U> has Armor(X): counts as Defense X+`, door_lines_defense_test.gd).
 	# Train 2 (lines said, groups lifted): the Ranged Shrouding range cut, the Bane re-roll named by plain Bane / Lacerate / the unit-level aliases, the
 	# Shielded and Fortified lines, the plain Regeneration group's roll.
 	for lifted in [["Ranged Shrouding", "custodian_brothers"], ["Bane", ""], ["Lacerate", "battle_brothers"], ["Anti-Regen", ""],
@@ -348,7 +348,7 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 			["Shielded", "battle_brothers"], ["Fortified", "alien_hives"], ["Regeneration", ""], ["Regeneration Aura", "alien_hives"],
 			["Shred", ""], ["Warbound", "war_disciples"], ["Self-Repair", "robot_legions"], ["Resistance", "alien_hives"], ["Plaguebound", "plague_disciples"],
 			["Artillery", ""], ["Stealth", ""], ["Evasive", "battle_brothers"], ["Aircraft", ""],
-			["Precision Fighter", ""], ["Instinctive", "goblin_reclaimers"], ["Takedown", ""]]:
+			["Precision Fighter", ""], ["Instinctive", "goblin_reclaimers"], ["Takedown", ""], ["Armor", ""]]:
 		var lifted_unit := _unit([lifted[0]], [[lifted[0]]])
 		if lifted[1] != "":
 			lifted_unit.unit_properties["faction_folder"] = lifted[1]
