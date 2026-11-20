@@ -1318,11 +1318,12 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# same slot the Caster resolution uses ("at any point before attacking").
 	# Plan H (H-5), the beats guard: a Mend bearer the core takes leaves the beat to the core's one call (it resolves it from the
 	# board it captured before the beat); the table pays it only when that call is not made or refused (`_solo_pay_dangerous`).
-	if core_takes and _solo_has_mend(unit):
+	# H-6: Breath Attack the same way (the core says its lines and lands its wounds).
+	if core_takes and (_solo_has_beat(unit, "Mend") or _solo_has_beat(unit, "Breath Attack")):
 		report["core_beats"] = true
 	else:
 		await _solo_apply_mend(unit)
-	await _solo_apply_breath_attack(unit)
+		await _solo_apply_breath_attack(unit)
 	# Coverage wave: the Utility-Buff family + Mind Control + Piercing Tag share the same
 	# once-per-activation before-attacking slot (data-driven via the primitive layer).
 	await _solo_apply_utility_buffs(unit)
@@ -5164,7 +5165,7 @@ func _solo_ai_core_call(unit: GameUnit, report: Dictionary, target: GameUnit, sh
 
 
 ## One core P4.D-19/37 + H-5: the table pays what the body left to the core (no core call is made, or it refused): the Dangerous
-## test, then the pre-attack beats the guard held back (Mend), then the move-through attacks (Strafing, Crossing Attack). A Mend
+## test, then the pre-attack beats the guard held back (Mend, Breath Attack), then the move-through attacks (Strafing, Crossing Attack). A Mend
 ## caster is never taken (`cast_chain_clear`), so held casts and a held Mend never meet.
 func _solo_pay_dangerous(unit: GameUnit, report: Dictionary) -> void:
 	var dice := int(report.get("core_dangerous", 0))
@@ -5173,6 +5174,7 @@ func _solo_pay_dangerous(unit: GameUnit, report: Dictionary) -> void:
 		await _run_ai_dangerous(unit, dice)
 	if report.erase("core_beats") and not _solo_activation_unit_gone(unit):
 		await _solo_apply_mend(unit)
+		await _solo_apply_breath_attack(unit)
 	if report.erase("core_through") and not _solo_activation_unit_gone(unit):
 		await _solo_apply_strafing(unit)
 		await _solo_apply_crossing_attack(unit)
@@ -8286,14 +8288,15 @@ func _solo_reanimation_spot_ok(pos: Vector3, r: float, model: ModelInstance, anc
 	return true
 
 
-## A living bearer of Mend in `unit`'s chain (the unit and its attached heroes): what `_solo_apply_mend` and the beats guard (H-5) both ask.
-func _solo_has_mend(unit: GameUnit) -> bool:
+## A living bearer of the beat `rule` in `unit`'s chain (the unit and its attached heroes): what `_solo_apply_mend` and the beats
+## guard (H-5, H-6) ask.
+func _solo_has_beat(unit: GameUnit, rule: String) -> bool:
 	var chain: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		chain = chain + unit.get_attached_heroes()
 	for b in chain:
 		var bu := b as GameUnit
-		if bu != null and bu.get_alive_count() > 0 and RulesRegistry.unit_rule_active(bu, "Mend"):
+		if bu != null and bu.get_alive_count() > 0 and RulesRegistry.unit_rule_active(bu, rule):
 			return true
 	return false
 
@@ -8320,7 +8323,7 @@ func _solo_apply_mend(unit: GameUnit) -> void:
 	var bearers: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		bearers = bearers + unit.get_attached_heroes()
-	if not _solo_has_mend(unit):
+	if not _solo_has_beat(unit, "Mend"):
 		return
 	var patient := _solo_mend_pick(unit, bearers)
 	if patient == null:
