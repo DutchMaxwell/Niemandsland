@@ -7373,6 +7373,17 @@ pub(crate) fn tray_morale_for(
     }
     match outcome {
         Morale::Passed => {}
+        Morale::Shaken if seams.hero_attach && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SHAKEN_MIRROR) => {
+            // The table's Shaken outcome: the unit the volley named (a lone hero's host) is toggled only when it is not Shaken yet, the flag is
+            // then mirrored onto every joined hero (`_solo_mirror_shaken`) and each newly Shaken member drops what it carries.
+            let unit = morale_root(state, i, seams);
+            if !state.shaken[unit] {
+                for u in std::iter::once(unit).chain(state.attached[unit].clone()) {
+                    state.shaken[u] = true;
+                    drop_carried(state, u);
+                }
+            }
+        }
         Morale::Shaken => {
             state.shaken[i] = true;
             drop_carried(state, i);
@@ -12196,6 +12207,12 @@ fn resolve_with(
     // --- shaken recovery (battle_sim.gd:648-650) ---
     if was_shaken && kind == HOLD && shoot_key.is_empty() {
         next.shaken[si] = false;
+        // The table's idle recovery mirrors the cleared flag onto the unit's joined heroes (`_solo_mirror_shaken`).
+        if seams.hero_attach && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SHAKEN_MIRROR) {
+            for h in next.attached[si].clone() {
+                next.shaken[h] = false;
+            }
+        }
     }
     Ok(finish_activation(statics, state, next, si, seams, cover))
 }
