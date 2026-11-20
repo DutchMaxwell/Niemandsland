@@ -8,7 +8,7 @@ use crate::state::{Kit, State};
 use crate::sim::DEFAULT_BASE_RADIUS_M;
 use crate::IN2M;
 
-/// `SoloController.casualty_order` (solo_controller.gd:9151-9204): a unit's living slots in
+/// `SoloController.casualty_order` (solo_controller.gd:9151-9204); `f32_dist` = the table's f32 distance (`PENDING_EPOCH_CASUALTY_TIES`): a unit's living slots in
 /// removal order, cheapest first. Per slot the value is 2 per weapon entry and 2 per equipment
 /// item, +3 once for a RARE weapon (one carried by at most max(n/2, 1) of the living models'
 /// entries: rarity marks the bearer) and +8 for a Tough above the unit's lowest; the rank is
@@ -16,7 +16,7 @@ use crate::IN2M;
 /// wounded Tough body always goes first. Ascending; Rust's sort is stable where Godot's
 /// `sort_custom` is not, and the shared fixture (tests/fixtures/casualty_order.json) carries no
 /// exact ties.
-pub fn casualty_order_of(kits: &[Kit], positions: &[[f64; 3]], wounds: &[i64]) -> Vec<usize> {
+pub fn casualty_order_of(kits: &[Kit], positions: &[[f64; 3]], wounds: &[i64], f32_dist: bool) -> Vec<usize> {
     let n = kits.len();
     if n <= 1 {
         return (0..n).collect();
@@ -39,7 +39,11 @@ pub fn casualty_order_of(kits: &[Kit], positions: &[[f64; 3]], wounds: &[i64]) -
             v += 8.0;
         }
         let taken = (k.wounds_max - wounds.get(i).copied().unwrap_or(k.wounds_max)).max(0) as f64;
-        let d = (positions[i][0] - cx).hypot(positions[i][2] - cz);
+        let (dx, dz) = (positions[i][0] - cx, positions[i][2] - cz);
+        // PENDING_EPOCH_CASUALTY_TIES: the table's distance is a Godot `Vector2(dx, dz).length()`, f32 (components rounded to f32,
+        // `sqrtf(x*x + y*y)` in f32). Two mirror models of a symmetric formation are equal in exact arithmetic and tie or part by
+        // rounding only; the f64 hypot parted them the other way in the f64 noise (the table's own sort is then stable on a real tie).
+        let d = if f32_dist { let (x, z) = (dx as f32, dz as f32); f64::from((x * x + z * z).sqrt()) } else { dx.hypot(dz) };
         v * 1000.0 - d - taken * 1_000_000.0
     };
     let mut order: Vec<usize> = (0..n).collect();
@@ -51,7 +55,7 @@ pub fn casualty_order_of(kits: &[Kit], positions: &[[f64; 3]], wounds: &[i64]) -
 /// none, and the caller keeps the core's slot order.
 pub fn casualty_order(state: &State, u: usize) -> Option<Vec<usize>> {
     let kits = state.kits.get(u).filter(|k| !k.is_empty() && k.len() == state.positions[u].len())?;
-    Some(casualty_order_of(kits, &state.positions[u], &state.wounds[u]))
+    Some(casualty_order_of(kits, &state.positions[u], &state.wounds[u], state.casualty_f32))
 }
 
 /// `CoherencyChecker._get_edge_distance_in_direction`: a base's edge in metres along (dx, dz),
@@ -183,8 +187,38 @@ mod tests {
             }
             let want: Vec<usize> =
                 u["expected"].as_array().unwrap().iter().map(|x| x.as_u64().unwrap() as usize).collect();
-            assert_eq!(casualty_order_of(&kits, &pos, &wounds), want, "{}", u["name"]);
+            assert_eq!(casualty_order_of(&kits, &pos, &wounds, false), want, "{}", u["name"]);
         }
+    }
+
+    /// `PENDING_EPOCH_CASUALTY_TIES`: symmetric formations (lines, grids) where mirror models tie or part by rounding only
+    /// (`ties` of the shared fixture: the Godot board's f32 positions, `expected` = the table's order). The table measures the
+    /// distance to the centroid as a Godot `Vector2.length()` (f32) and sorts stably; the f64 hypot of the core parted the mirror
+    /// pairs the other way (a six-line: 0 5 1 4 3 2 against the table's 0 5 4 1 2 3), so a spell killing five of six models left
+    /// slot 2 standing where the table leaves 3 (cast door probe, 20.11.). With `f32_dist` the core returns the table's order on
+    /// every entry; below the epoch the old reading is unchanged (pinned on the six-line). RED: the f64 reading on every
+    /// entry that differs; planted: `f32_dist` ignored.
+    #[test]
+    fn symmetric_formations_part_their_mirror_pairs_as_the_tables_f32_distance_does() {
+        let fx: serde_json::Value = serde_json::from_str(include_str!("../tests/fixtures/casualty_order.json")).unwrap();
+        let (mut differing, mut names) = (0, Vec::new());
+        for u in fx["ties"].as_array().unwrap() {
+            let (mut kits, mut pos, mut wounds) = (Vec::new(), Vec::new(), Vec::new());
+            for m in u["models"].as_array().unwrap() {
+                kits.push(Kit { weapons: vec![0], equipment: 0, wounds_max: m["wounds_max"].as_i64().unwrap() });
+                let p = m["pos"].as_array().unwrap();
+                pos.push([p[0].as_f64().unwrap() as f32 as f64, p[1].as_f64().unwrap() as f32 as f64, p[2].as_f64().unwrap() as f32 as f64]);
+                wounds.push(m["wounds"].as_i64().unwrap());
+            }
+            let want: Vec<usize> = u["expected"].as_array().unwrap().iter().map(|x| x.as_u64().unwrap() as usize).collect();
+            assert_eq!(casualty_order_of(&kits, &pos, &wounds, true), want, "{}: the table's order", u["name"]);
+            if casualty_order_of(&kits, &pos, &wounds, false) != want {
+                differing += 1;
+                names.push(u["name"].to_string());
+            }
+        }
+        assert!(differing > 0, "the fixture must hold shapes where the f64 reading differs, or it proves nothing");
+        assert!(names.iter().any(|n| n.contains("line 6")), "the six-line (the probe's case) is one of them: {names:?}");
     }
 
     /// Firefight step 5: `chain_casualty_order` reads `rules::book(..).chain_in`.

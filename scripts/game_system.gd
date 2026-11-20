@@ -49,6 +49,19 @@ static func is_known(id: String) -> bool:
 	return IDS.has(id.strip_edges().to_lower())
 
 
+## Applies the "system" key of a pending table setup (what the setup screen picked) to the army manager and returns
+## the battle-log line ("" when the setup has no key: harness, tutorial, scenario and old paths stay "never set").
+## A value that is no system changes nothing and says so.
+static func apply_table_setup(setup: Dictionary, manager: Object) -> String:
+	if manager == null or not setup.has("system"):
+		return ""
+	var raw := str(setup["system"])
+	if not is_known(raw):
+		return "Game system: \"%s\" is not a game system, the table keeps none" % raw
+	manager.table_system = raw.strip_edges().to_lower()
+	return "Game system: %s" % label(manager.table_system)
+
+
 static func label(id: String) -> String:
 	return str(_LABELS[normalize(id)])
 
@@ -106,3 +119,16 @@ static func offers(kind: String, id: String, system: String) -> bool:
 	if scales is Array and not (scales as Array).has(scale(system)):
 		return false
 	return true
+
+
+## The generated boards a table of `system` is offered in its table chooser (PLAN_HEIGHTFIELD step 23 calls this): the
+## "generated_board" rows that are available and fit the system's setting and scale. Tiefwerk = gff only; the ruined town is
+## aofs only and has no entry until its row is flipped to available. The developer flag (NML_BOARDGEN_SEED) stays system-blind.
+static func generated_boards(system: String) -> Array:
+	var rows: Variant = _terrain_rows().get("generated_board")
+	var out: Array = []
+	if rows is Dictionary:
+		for id in rows:
+			if offers("generated_board", str(id), system):
+				out.append(str(id))
+	return out

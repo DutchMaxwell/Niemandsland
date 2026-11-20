@@ -226,6 +226,19 @@ pub fn rule_name_matches(candidate: &str, rule: &str) -> bool {
     s.starts_with(rule) && s[rule.len()..].trim_start().starts_with('(')
 }
 
+/// A rule name that only STARTS with a striker rule (Bane / Lacerate / Rending / Unstoppable) without being the rule or one of its explicit aliases: a Mark, a Buff or an Aura label
+/// (ds/h_prefix_labels.md). The unit-level striker scans skip it from `PENDING_EPOCH_EXACT_STRIKER_LABELS`; the aliases are the scoped spellings the books grant to the bearer itself.
+pub fn is_unlisted_striker_label(rule: &str) -> bool {
+    const FAMILIES: [(&str, &[&str]); 4] = [
+        ("Bane", &["Bane", "Bane in Melee", "Bane when Shooting"]),
+        ("Lacerate", &["Lacerate"]),
+        ("Rending", &["Rending", "Rending in Melee", "Rending when Shooting"]),
+        ("Unstoppable", &["Unstoppable", "Unstoppable in Melee", "Unstoppable when Shooting"]),
+    ];
+    let s = rule.trim();
+    FAMILIES.iter().any(|(family, aliases)| s.starts_with(family) && !aliases.iter().any(|a| rule_name_matches(s, a)))
+}
+
 /// LEGACY REPLAY ONLY — restores the pre-NML-1112 PREFIX reading of every rule
 /// name, and nothing else in this crate reads it. `false` (the default, and the
 /// only setting a fresh corpus may use) is the shipped rule: exact name or

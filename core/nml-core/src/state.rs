@@ -564,6 +564,10 @@ pub struct State {
     /// `buffs_spent` takes the spent ones, `buffs_gained` the others. Cleared at the activation's start, not serialised (the
     /// `buffs` shape); empty on every path with no tray cast.
     pub cast_buffs: Vec<(usize, crate::mods::LiveMod, bool)>,
+    /// `PENDING_EPOCH_CASUALTY_TIES`: the casualty order measures a model's distance to the centroid the table's way (f32, see
+    /// `casualty::casualty_order_of`). Set from the seams at the activation's start (`sim::resolve_with`), not serialised;
+    /// false on every board that never ran one, so a capture reads the old order.
+    pub casualty_f32: bool,
     /// `unit_properties["vs_mark_round"]` (main.gd:16752) — the once-per-
     /// activation stamp of the vs-target Mark arm, -1 for never.
     pub vs_mark_round: Vec<i64>,

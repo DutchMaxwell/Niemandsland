@@ -167,3 +167,34 @@ fn unit_static_ignores_scoped_aliases_on_melee_weapons() {
     assert_eq!(us_plain.ctx.brace_impact_per_model, Some(2), "Brace(2) on a weapon must keep its rating");
     assert!(us_plain.ctx.unwieldy, "plain Unwieldy on a melee weapon must still match");
 }
+
+/// Plan H (pending epoch 94, ds/h_prefix_labels.md): the UNIT-level striker scan counted `Bane Mark`, `Rending Mark`, `Unstoppable Mark` and `Bane in Melee Buff` as the rule by
+/// PREFIX. From `PENDING_EPOCH_EXACT_STRIKER_LABELS` only the rule and its explicit aliases count; below it nothing moves. The control rows (plain rules, the scoped aliases the
+/// books grant to the bearer itself) read the same at both epochs.
+#[test]
+fn unit_level_striker_labels_are_no_bearers_from_the_pending_epoch() {
+    let profile = |id: &str, rules: &str| {
+        format!(r#""{id}":{{"unit_id":"{id}","name":"{id}","quality":4,"defense":4,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"battle_brothers","special_rules":[{rules}],"item_grants":[],"attached_hero_rules":[],"move_bands":{{"advance":6.0,"rush":12.0}},"weapons":[{{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}},{{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}}]}}"#)
+    };
+    let raw = format!(r#"{{"kind":"header","knobs":{{}},"profiles":{{{},{},{},{}}}}}"#,
+        profile("labels", r#""Bane Mark","Rending Mark","Unstoppable Mark""#),
+        profile("buff", r#""Bane in Melee Buff""#),
+        profile("rules", r#""Bane","Rending","Unstoppable""#),
+        profile("aliases", r#""Bane when Shooting","Bane in Melee""#));
+    let header = read_act_header(&raw).expect("header");
+    let mut reg = Registries::new(&repo_root());
+    let mut build = |id: &str, epoch: u32| UnitStatic::build_for(&mut reg, header.profiles.get(id).expect("profile"), epoch);
+    let pending = crate::acts::PENDING_EPOCH_EXACT_STRIKER_LABELS;
+    let (below, from) = (build("labels", pending - 1), build("labels", pending));
+    assert!(below.shoot[0].bane && below.shoot[0].rending && below.shoot[0].unstoppable_ev, "below the epoch the prefix read stands");
+    assert!(!from.shoot[0].bane && !from.shoot[0].rending && !from.shoot[0].unstoppable_ev, "from it a Mark is no bearer");
+    assert!(build("buff", pending - 1).melee[0].bane && !build("buff", pending).melee[0].bane, "Bane in Melee Buff hands the rule to another unit");
+    for epoch in [pending - 1, pending] {
+        let plain = build("rules", epoch);
+        assert!(plain.shoot[0].bane && plain.shoot[0].rending && plain.shoot[0].unstoppable_ev, "the plain rules count at {epoch}");
+        let scoped = build("aliases", epoch);
+        assert!(scoped.shoot[0].bane && scoped.melee[0].bane, "the scoped spellings the books grant to the bearer count at {epoch}");
+    }
+    assert!(crate::rules::is_unlisted_striker_label("Bane Mark") && crate::rules::is_unlisted_striker_label("Unstoppable when Shooting Aura"));
+    assert!(!crate::rules::is_unlisted_striker_label("Rending (spell)") && !crate::rules::is_unlisted_striker_label("Hero"));
+}
