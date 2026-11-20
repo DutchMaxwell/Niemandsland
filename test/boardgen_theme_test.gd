@@ -247,14 +247,19 @@ func test_the_town_has_lanterns_at_the_square_and_the_gates_inside_the_edge_stri
 	assert_int(BoardgenTheme.TOWN_PALETTE.size()).is_equal(BoardgenTheme.TOWN_KINDS.size())
 
 
-func test_dusk_sets_a_low_warm_sun_and_a_cool_sky_on_a_lighting_controller() -> void:
+func test_dusk_is_a_blue_hour_a_cool_high_moon_a_warm_rim_low_on_the_far_side_and_a_cool_sky() -> void:
 	var seen := {}
 	var lc := RefCounted.new()
 	lc.set_script(preload("res://test/fixtures/boardgen/lighting_stub.gd"))
 	BoardgenTownDressing.dusk(lc)
-	assert_bool(lc.calls.has("set_sun_angles")).is_true()
-	assert_float((lc.calls["set_sun_color"] as Color).r).is_greater((lc.calls["set_sun_color"] as Color).b)   # warm sun
+	var sun: Color = lc.calls["set_sun_color"]
+	assert_float(sun.b).is_greater(sun.r)   # the key is a cool pale moon
+	assert_float(lc.calls["set_sun_angles"][1]).is_greater_equal(40.0)   # high on one side
+	var rim: Color = lc.calls["set_fill_light_color"]
+	assert_float(rim.r).is_greater(rim.b)   # the last warm light ...
+	assert_float(lc.calls["set_fill_light_energy"]).is_less(lc.calls["set_sun_energy"])   # ... a rim, not a second key
 	assert_float((lc.calls["set_ambient_color"] as Color).b).is_greater((lc.calls["set_ambient_color"] as Color).r)   # cool sky
+	assert_float(BoardgenTownDressing.LANTERN_COLOUR.r).is_greater(BoardgenTownDressing.LANTERN_COLOUR.b)   # the lanterns are the only strong warm source
 	BoardgenTownDressing.dusk(null)   # no lighting controller (a table without one): nothing happens
 	assert_bool(seen.is_empty()).is_true()
 
