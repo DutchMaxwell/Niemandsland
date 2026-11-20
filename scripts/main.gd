@@ -297,6 +297,7 @@ var _solo_grade_logged := ""   # the grade line this game already logged ("" = n
 var _solo_opponent_brain: Dictionary = {}  # the opponent the game really runs (GameRecordCollector.opponent_brain),
                                            # set with the "opponent:" line; {} = no AI seat graded
 var _rules_chip: Label = null                # rules-automation chip beside the round button (plan 1.3)
+var _system_chip: Label = null               # read-only game-system chip beside the rules chip (PLAN_GAME_SYSTEM_SWITCH)
 var _turn_chip: Label = null                 # hotseat turn chip beside the rules chip (plan 2.T2a)
 var _rules_proposal_pending := false         # online: waiting for the other player's answer (plan 3.0)
 var _rules_agreement_mode := 0               # 0 idle, 1 proposing, 2 confirming (plan 3.0)
@@ -836,6 +837,9 @@ func _ready() -> void:
 	map_layout_editor.theme_requested.connect(func(theme_id: String) -> void:
 		if apply_table_theme(theme_id):
 			map_layout_editor._on_close_pressed())   # close the editor so the laid-out table shows
+	map_layout_editor.system_requested.connect(func(id: String) -> void:
+		set_table_system(id, "the map editor")
+		_update_system_chip())   # a refusal puts the row back on the real system
 	map_layout_editor.relic_drop_chosen.connect(_solo_relic_drop_chosen)
 	map_layout_editor.vip_spot_chosen.connect(_solo_vip_spot_chosen)
 	map_layout_editor.vip_pick_refused.connect(func() -> void:
@@ -1017,6 +1021,7 @@ func _ready() -> void:
 	var system_line := GameSystem.apply_table_setup(table_setup,opr_army_manager)
 	if system_line != "":
 		_log_rule_event(BattleLog.Category.GENERAL,system_line)
+		_update_rules_chip()   # the chip may already exist (built with the default system): show the picked one
 	var joining_client: bool = pending_internet and not ProjectSettings.get_setting("niemandsland/internet_is_host", false)
 	# Headless MP test harness (test/mp/): skip the interactive table-size chooser AND the
 	# cinematic intro and drop straight onto a live, RPC-capable table. Inert in normal play.
@@ -18288,6 +18293,7 @@ func set_table_system(id: String, who: String) -> bool:
 				battle_log.log_event(BattleLog.Category.GENERAL, "Game system: %s" % GameSystem.label(system), false, "changed by %s" % who)
 			if online:
 				network_manager.broadcast_table_settings({"game_system": system})
+			_update_rules_chip()
 		return true
 	return false
 
@@ -18332,11 +18338,27 @@ func _admit_list_system(army: OPRApiClient.OPRArmy) -> bool:
 			battle_log.log_event(BattleLog.Category.GENERAL, "Game system: %s" % GameSystem.label(list_system), false, "set by the first list, %s" % army.name)
 		if network_manager != null and network_manager.is_multiplayer_active() and network_manager.is_host:
 			network_manager.broadcast_table_settings({"game_system": list_system})
+		_update_rules_chip()
 		return true
 	if list_system == table_system:
 		return true
 	_refuse_table_system("%s is a list for %s, this table plays %s." % [army.name, GameSystem.label(list_system), GameSystem.label(table_system)], "Import refused")
 	return false
+
+
+func _update_system_chip() -> void:
+	if next_round_btn == null or opr_army_manager == null:
+		return
+	if _system_chip == null:
+		_system_chip = Label.new()
+		_system_chip.theme_type_variation = HouseStyle.CAPTION
+		_system_chip.mouse_filter = Control.MOUSE_FILTER_STOP   # labels ignore the mouse by default - needed for the tooltip
+		next_round_btn.add_sibling(_system_chip)
+	var system := _table_system()
+	_system_chip.text = "SYSTEM: %s" % GameSystem.short(system)
+	_system_chip.tooltip_text = "%s (%s scale). Changed in the map editor while no list is on the table." % [GameSystem.label(system), GameSystem.scale(system)]
+	if map_layout_editor != null and map_layout_editor.has_method("set_game_system"):
+		map_layout_editor.set_game_system(system, "Locked while a list is on the table" if _table_has_list() else "")
 
 
 ## The chip beside the round button; built lazily, shown only while the rules-automation UI flag is on.
@@ -18351,6 +18373,7 @@ func _update_rules_chip() -> void:
 		next_round_btn.add_sibling(_rules_chip)
 	_rules_chip.visible = RulesAutomation.ui_enabled()
 	_rules_chip.text = RulesAutomation.chip_text(opr_army_manager.rules_automation, not solo_ai_slots.is_empty())
+	_update_system_chip()
 	if _turn_chip == null:
 		_turn_chip = Label.new()
 		_turn_chip.theme_type_variation = HouseStyle.CAPTION
@@ -20931,6 +20954,7 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 			opr_army_manager.table_system = host_system
 			if battle_log != null:   # this table's own line - never re-broadcast (the host logged and sent its own)
 				battle_log.log_event(BattleLog.Category.GENERAL, "Game system: %s" % GameSystem.label(host_system))
+			_update_rules_chip()
 
 	if settings.has("paths"):   # a table theme's worn paths (D14)
 		TablePaths.of(table).set_paths(settings["paths"])
@@ -22451,6 +22475,7 @@ func _on_graphics_quality_changed(index: int) -> void:
 func _on_map_layout_pressed() -> void:
 	if map_layout_editor:
 		map_layout_editor.set_table_size(table.table_size)
+		_update_system_chip()   # the editor's "Game system" row shows the table's system and whether it is locked
 		map_layout_editor.visible = true
 		map_layout_editor.editor_opened.emit()
 		$UI/HUD.visible = false  # Hide main HUD while in layout mode
