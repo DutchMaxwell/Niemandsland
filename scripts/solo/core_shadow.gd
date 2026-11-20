@@ -23,11 +23,8 @@ static var _detail := {}
 static var _held: Array = []
 ## The replay gates' reading (tools/parity/parity_compare.py): these kinds fold to "attack", a defense target clamps to 2..6.
 const FOLD := ["morale", "fearless", "no_retreat", "regeneration", "ravage", "battleborn", "dangerous"]
-## CC-10c: the core's cast legs as the door names them on the tray: [kind, leg]. `cast` is the die (tray kind attack, leg
-## cast); every `spell_*` leg is a plain kind with leg spell (the table's own tags, main.gd:5548/:5688).
-const CAST_KINDS := {"cast": ["attack", "cast"], "spell_attack": ["attack", "spell"],
-	"spell_defense": ["defense", "spell"], "spell_morale": ["morale", "spell"],
-	"spell_fearless": ["fearless", "spell"], "spell_no_retreat": ["no_retreat", "spell"]}
+## CC-10c: the core's cast legs as the door names them on the tray: [kind, leg] (`CoreActivation.CAST_KINDS`, one map for both).
+const CAST_KINDS := CoreActivation.CAST_KINDS
 ## CC-10c: env NML_CORE_SHADOW_CAST=1|on (soaks only, default OFF). The replay carries the activation's cast inputs and
 ## keeps the tap's cast/spell legs, so the core's cast slot is compared too - a cast-only activation included.
 static var _cast_env := -1

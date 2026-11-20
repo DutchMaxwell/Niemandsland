@@ -315,13 +315,18 @@ static func answer_fits(id: String, options: Array, option: String) -> bool:
 ## who releases it.
 ## P4.0-6: a choice whose switch is ON is probed once; a `need_choice` answer asks its OWNER (local, or over the
 ## owner-request path), and only an answer the core offered is appended; no answer leaves the core's automatic pick.
+## CC-12: `cx` (`cast_context`) is the activation's planned casts: the core's cast legs are thrown on the tray under the
+## table's own kind, leg and purpose (`CAST_KINDS`), the cast presentation follows the core's lines and dice, a hit buff /
+## debuff lands on the table as the cast resolves, and the cast leg's `pre` block is written when the casts are over. Empty = no casts.
 static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
-		on_throw: Callable = Callable(), keep_handle := false, beat: Callable = Callable()) -> Dictionary:
+		on_throw: Callable = Callable(), keep_handle := false, beat: Callable = Callable(), cx := {}) -> Dictionary:
 	var core: Object = (main.solo_controller as SoloController)._core_node_ready()
 	var enforce: bool = main.object_manager._strict_movement_enforced()
 	var printed := 0
 	var start_models := _start_models(main)
 	var landed := {}
+	if not cx.is_empty():
+		landed["cx"] = cx   # `_land_spell_buffs` reads the planned casts from here
 	var core_us := 0
 	var max_us := 0
 	var r: Dictionary = {}
@@ -341,11 +346,15 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		var lines: Array = r.get("lines", [])
 		for i in range(printed, lines.size()):
 			var line: Dictionary = lines[i]
+			if not cx.is_empty():
+				await _cast_line(main, unit, cx, line)
 			# P4.D-48: a melee line carries "{cite}" where the table cites its rules book (the core holds no book version).
 			main._log_rule_event(int(line["category"]), str(line["text"]).replace("{cite}",
 				OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))), ai, str(line["detail"]))
 		printed = maxi(printed, lines.size())
 		await land_step(main, unit, r.get("landings", []), start_models, landed)
+		if not cx.is_empty() and bool(cx["pre_due"]):
+			_cast_leg_end(main, cx)
 		if str(r["step"]) == "need_choice":
 			var options: Array = r.get("options", [])
 			# The choice's owner is a roster KEY (the Takedown shooter, the wounded target): never the shooter by default.
@@ -357,32 +366,59 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 				transcript.append({"t": "choice", "id": str(r["id"]), "option": option})
 			continue
 		if str(r["step"]) == "done":
+			if not cx.is_empty():
+				await _cast_finish(main, cx)
 			await land_delta(main, r.get("delta", []), start_models, landed)
 			if not keep_handle:
 				core.release(int(r.get("handle", 0)))
 				r.erase("handle")
 		if str(r["step"]) != "need_roll":
+			if not cx.is_empty():
+				await _cast_finish(main, cx)
+				_cast_leg_end(main, cx)
 			if beat.is_valid():
 				await beat.call(str(r["step"]), r, [])
 			r.merge({"steps": step + 1, "core_us": core_us, "max_us": max_us}, true)
 			return r
 		var owner := str(r["owner"])
+		var kind := str(r["kind"])
 		var roller := _roller_of(main, unit, transcript, owner, str(r.get("owner_key", "")))
 		var label: String = "AI (%s)" % _shown_owner(roller, owner) if main._solo_is_ai_unit(roller) else main._roller_label(roller)
+		# CC-12b/12c: a cast leg is the tray's own kind with the table's leg and purpose; any other roll after the cast leg
+		# (Dangerous came before it) closes the casts first - their effects have landed and the `pre` block is written.
+		var mapped: Array = CAST_KINDS.get(kind, [])
+		var tray_kind := kind if mapped.is_empty() else str(mapped[0])
+		var purpose := ""
+		if kind == "cast":
+			purpose = "Casting %s (%d+)" % [_cast_spell_of(transcript, str(r.get("owner_key", ""))), int(r["target"])]
+		if not cx.is_empty() and mapped.is_empty() and kind != "dangerous":
+			await _cast_finish(main, cx)
+			_cast_leg_end(main, cx)
 		if on_throw.is_valid():
-			on_throw.call(str(r["kind"]), int(r["index"]))
-		if beat.is_valid():
+			on_throw.call(kind, int(r["index"]))
+		if beat.is_valid() and mapped.is_empty():
 			await beat.call("throw", r, [])
+		if kind == "cast" and not cx.is_empty():
+			await _cast_throw(main, cx)
 		if str(r["kind"]) == "defense" and roller != unit and not main._solo_is_ai_unit(roller) \
 				and main._solo_i_own_unit(roller):   # step 42 (O21): a local defender sees its saves coming, as on the table
 			await main._solo_ask_saves(unit, roller, _shot_weapon(unit, lines), int(r["faces"]), int(r["target"]), 0)
-		var faces: Array = await main._owner_roll(roller, int(r["faces"]), int(r["target"]), str(r["kind"]), "",
-			{"label": label, "what": "%s dice" % r["kind"]})
+		var leg_before: String = main._solo_leg
+		if not mapped.is_empty():
+			main._solo_leg = str(mapped[1])   # AI-G4 H1a: dice.jsonl's `leg` of the roll
+		var faces: Array = await main._owner_roll(roller, int(r["faces"]), int(r["target"]), tray_kind, purpose,
+			{"label": label, "what": purpose if not purpose.is_empty() else "%s dice" % kind})
+		main._solo_leg = leg_before
 		transcript.append({"t": "faces", "faces": faces})
-		if str(r["kind"]) == "defense":
+		if kind == "defense" or kind == "spell_defense":
 			var defender := str(r.get("owner_key", ""))
 			unsaved[defender] = int(unsaved.get(defender, 0)) + failed_saves(faces, int(r["target"]))
-		if beat.is_valid():
+		if kind == "cast" and not cx.is_empty():
+			_cast_thrown(main, cx, r, faces)
+		elif kind == "spell_defense" and not cx.is_empty() and not (cx["cur"] as Dictionary).is_empty():
+			var seen: Dictionary = (cx["cur"] as Dictionary)["hits"]   # one save die per spell hit: the outcome toast's hit count
+			seen[str(r.get("owner_key", ""))] = int(seen.get(str(r.get("owner_key", "")), 0)) + faces.size()
+		if beat.is_valid() and mapped.is_empty():
 			await beat.call("thrown", r, faces)
 	push_error("CoreActivation.drive: %s still needs dice after %d steps" % [unit.get_name(), MAX_STEPS])
 	r.merge({"steps": MAX_STEPS, "core_us": core_us, "max_us": max_us}, true)
@@ -398,6 +434,218 @@ static func _shot_weapon(unit: GameUnit, lines: Array) -> String:
 			if str((lines[i] as Dictionary)["text"]).contains(" fires %s at " % w.name):
 				return w.name
 	return ""
+
+
+## CC-12b/12c: the core's cast legs as the door names them on the tray: [tray kind, leg]. `cast` is the die (tray kind attack,
+## leg cast); every `spell_*` leg is a plain kind with leg spell (the table's own tags, main.gd `_solo_resolve_one_cast`).
+## The shadow reads the same map (`CoreShadow.CAST_KINDS`).
+const CAST_KINDS := {"cast": ["attack", "cast"], "spell_attack": ["attack", "spell"],
+	"spell_defense": ["defense", "spell"], "spell_morale": ["morale", "spell"],
+	"spell_fearless": ["fearless", "spell"], "spell_no_retreat": ["no_retreat", "spell"]}
+
+
+## CC-12b: the spell of `owner_key`'s cast in the transcript (a caster casts once per activation), "?" when none.
+static func _cast_spell_of(transcript: Array, owner_key: String) -> String:
+	for e in transcript:
+		if str((e as Dictionary).get("t", "")) == "cast" and str(e["caster"]) == owner_key:
+			return str(e["spell"])
+	return "?"
+
+
+## CC-12: the cast side of one core-driven activation: the planned casts (`report["casts"]`, plan order), the presentation's
+## cursor (`next` planned cast, `cur` the cast on the stage), which casts landed their effect on the table, the board's flags
+## from before the activation's Dangerous test (the `pre` diff's start) and `volley`, called once the casts are over (the
+## volley's stage opens then: the table's casts run in their own stages before it).
+static func cast_context(main, report: Dictionary, volley: Callable = Callable()) -> Dictionary:
+	var before: Dictionary = main._solo_act_flags if not main._solo_act_flags.is_empty() else main._solo_unit_flags()
+	return {"casts": report.get("casts", []), "next": 0, "cur": {}, "began": false, "ended": false, "landed": {},
+		"before": before, "volley": volley, "volley_open": false, "pre_due": false}
+
+
+## CC-12b: the cast presentation, driven by the core's lines, each looked at before it is printed. The first line tagged `cast` /
+## `spell` opens the cast's stage (the table: `_solo_stage_begin` first); the next cast's first `cast` line closes the one on the
+## stage; the volley's own announce ("<unit> fires at ...") ends the cast leg (the spell's saves, wounds and morale lines carry the
+## shared machinery's tags - `save`, `shoot`, `morale` - so the tag alone cannot say where the leg ends). The cards close where
+## the table's do: the cast die's line closes "Cast roll", the spell's own lines "Effect".
+static func _cast_line(main, unit: GameUnit, cx: Dictionary, line: Dictionary) -> void:
+	if bool(cx["ended"]):
+		return
+	var rule := str(line["rule"])
+	var text := str(line["text"])
+	if bool(cx["began"]) and text.begins_with("%s fires" % unit.get_name()):
+		await _cast_finish(main, cx)
+		_cast_open_volley(cx)
+		cx["pre_due"] = true   # the casts' casualties of this very step land after its lines: `drive` writes the `pre` block then
+		return
+	var is_result := text.contains(": cast roll ")   # the die's own line (rule `cast`) belongs to the cast on the stage
+	var cur: Dictionary = cx["cur"]
+	if not cur.is_empty() and bool(cur.get("result", false)) and not bool(cur.get("roll_card", false)):
+		cur["roll_card"] = true
+		await main._solo_stage_phase("Cast roll")
+	if rule != "cast" and rule != "spell":
+		if not cur.is_empty():
+			var wound := CAST_WOUND_LINE.search(text)   # the spell damage's landed wounds, for the outcome toast
+			if wound != null:
+				(cur["wounds"] as Dictionary)[wound.get_string(1)] = int(wound.get_string(2))
+		return   # an effect line of the cast on the stage: it joins that card
+	if not cur.is_empty() and rule == "cast" and not is_result and (bool(cur.get("rolled", false)) or bool(cur.get("fizzle", false))):
+		await _cast_finish(main, cx)
+		cur = {}
+	if cur.is_empty():
+		var casts: Array = cx["casts"]
+		var idx := int(cx["next"])
+		while idx < casts.size() and ((casts[idx] as Dictionary).get("caster") == null \
+				or ((casts[idx] as Dictionary)["caster"] as GameUnit).get_alive_count() == 0):
+			idx += 1   # a caster that is gone before its turn casts silently nothing (the table skips it)
+		if idx >= casts.size():
+			return
+		cx["next"] = idx + 1
+		cx["began"] = true
+		cur = {"idx": idx, "announce": [], "seal": 0, "rolled": false, "success": false, "hits": {}, "wounds": {}, "before": {}}
+		cx["cur"] = cur
+		var c: Dictionary = casts[idx]
+		main._solo_stage_begin("%s casts %s" % [(c["caster"] as GameUnit).get_name(), str(c.get("name", "?"))])
+	if is_result:
+		cur["result"] = true
+	elif text.contains(" fizzles ") and text.contains("no target remains"):
+		cur["fizzle"] = true
+
+
+## The core's "<target> takes N wound(s) (a/b)" line of a spell's damage.
+static var CAST_WOUND_LINE := RegEx.create_from_string("^(.+) takes (\\d+) wounds? \\(")
+
+
+## The planned cast on the stage: its cast dict, its caster, the targets that still stand.
+static func _cast_of(cx: Dictionary) -> Dictionary:
+	var cur: Dictionary = cx["cur"]
+	return (cx["casts"] as Array)[int(cur["idx"])] if not cur.is_empty() else {}
+
+
+static func _cast_targets(c: Dictionary) -> Array:
+	return (c.get("targets", []) as Array).filter(func(t: Variant) -> bool: return t is GameUnit and not (t as GameUnit).is_destroyed())
+
+
+## CC-12b: before the cast die is thrown (the table: announce markers, the seal, the "needs" line, then the "Cast" card).
+static func _cast_throw(main, cx: Dictionary) -> void:
+	var c := _cast_of(cx)
+	var targets := _cast_targets(c)
+	if c.is_empty() or targets.is_empty():
+		return
+	var cur: Dictionary = cx["cur"]
+	for t in targets:
+		(cur["before"] as Dictionary)[(t as GameUnit).unit_id] = main._solo_combined_alive(t)
+	var name := str(c.get("name", "?"))
+	var entry: Dictionary = c.get("spell", {})
+	cur["announce"] = main._solo_show_attack_announce(c.get("caster_unit", c["caster"]), targets[0], "casts %s at" % name, false)
+	cur["seal"] = main._vfx_seal_begin(c["caster"], entry, entry.get("effect", {}), name)
+	await main._solo_stage_phase("Cast", SoloController.Pace.ANNOUNCE)
+
+
+## CC-12b: after the cast die: the core's own target number reads the face as the table does; the seal ends with the outcome.
+static func _cast_thrown(main, cx: Dictionary, r: Dictionary, faces: Array) -> void:
+	var cur: Dictionary = cx["cur"]
+	if cur.is_empty():
+		return
+	cur["rolled"] = true
+	var success := not faces.is_empty() and DiceRules.is_success(int(faces[0]), int(r["target"]), 0)
+	cur["success"] = success
+	var c := _cast_of(cx)
+	if int(cur["seal"]) > 0:
+		main._vfx_emit({"k": "seal_end", "sid": int(cur["seal"]), "o": int(SpellSeal.Outcome.SUCCESS if success else SpellSeal.Outcome.FAIL),
+			"tg": _cast_targets(c).map(main._vfx_unit_eye).filter(func(e: Vector3) -> bool: return e != Vector3.INF) if success else [],
+			"dmg": str(((c.get("spell", {}) as Dictionary).get("effect", {}) as Dictionary).get("kind", "")) == "damage"})
+
+
+## CC-12b: the cast on the stage is over: its "Cast roll" card, the effect (a hit buff / debuff lands on the table now,
+## `land_cast_effect`: the table's own lines and token) and its "Effect" card, then the outcome toast and the stage's end.
+## A fizzle closes after its "Cast" card, as the table's does.
+static func _cast_finish(main, cx: Dictionary) -> void:
+	var cur: Dictionary = cx["cur"]
+	if cur.is_empty():
+		return
+	cx["cur"] = {}
+	var c: Dictionary = (cx["casts"] as Array)[int(cur["idx"])]
+	var name := str(c.get("name", "?"))
+	var caster: GameUnit = c["caster"]
+	if bool(cur.get("fizzle", false)):
+		await main._solo_stage_phase("Cast")
+		main._solo_stage_end()
+		return
+	var effect: Dictionary = (c.get("spell", {}) as Dictionary).get("effect", {})
+	var success := bool(cur["success"])
+	if not bool(cur.get("roll_card", false)):
+		await main._solo_stage_phase("Cast roll")
+	if not success:
+		main._solo_clear_announce(cur["announce"])
+		await main._solo_show_outcome("%s fails to cast %s" % [caster.get_name(), name])
+		main._solo_stage_end()
+		return
+	if str(effect.get("kind", "")) != "damage":
+		land_cast_effect(main, cx, int(cur["idx"]))
+	else:
+		for t in c.get("targets", []):   # the table's toast after each target's damage (`_solo_resolve_spell_damage`)
+			var hits := int((cur["hits"] as Dictionary).get((t as GameUnit).unit_id, 0))
+			if hits <= 0:
+				continue
+			var landed := int((cur["wounds"] as Dictionary).get((t as GameUnit).get_name(), 0))
+			var lost: int = int((cur["before"] as Dictionary).get((t as GameUnit).unit_id, 0)) - main._solo_combined_alive(t)
+			await main._solo_show_outcome("%s: %d hit%s → %d wound%s land — %s loses %d model%s" % [
+				name, hits, ("" if hits == 1 else "s"), landed, ("" if landed == 1 else "s"), (t as GameUnit).get_name(), lost,
+				("" if lost == 1 else "s")])
+	await main._solo_stage_phase("Effect")
+	main._solo_clear_announce(cur["announce"])
+	await main._solo_show_outcome("%s resolves %s" % [caster.get_name(), name])
+	main._solo_stage_end()
+
+
+## CC-12a: a hit buff / debuff / other non-damage cast takes effect on the table, once: the table's own announce line,
+## its spell record and token on every standing target (`_solo_announce_spell_effect`, `_solo_place_spell_tokens`) - the table
+## rebuilds the effect from ITS spell entry, the core only said it landed. The cast presentation lands it as the cast resolves
+## (before the volley's first die, as the table's order); `_land_spell_buffs` lands what the delta names and nothing did yet.
+static func land_cast_effect(main, cx: Dictionary, idx: int) -> void:
+	var landed: Dictionary = cx["landed"]
+	if landed.has(idx):
+		return
+	landed[idx] = true
+	var c: Dictionary = (cx["casts"] as Array)[idx]
+	var targets := _cast_targets(c)
+	if targets.is_empty():
+		return
+	var caster: GameUnit = c["caster"]
+	var name := str(c.get("name", "?"))
+	var effect: Dictionary = (c.get("spell", {}) as Dictionary).get("effect", {})
+	main._solo_announce_spell_effect(caster, name, effect, targets)
+	var placed := effect.duplicate()
+	var once: bool = main._solo_spell_lasts_once(caster, name, effect)
+	placed["once"] = once
+	placed["duration"] = "once" if once else "round"
+	main._solo_place_spell_tokens(name, targets, placed)
+
+
+## CC-12b: the volley's stage opens once the cast leg is over (the table's casts run in their own stages before it), BEFORE the
+## volley's first line is printed. Once per activation.
+static func _cast_open_volley(cx: Dictionary) -> void:
+	if bool(cx["volley_open"]):
+		return
+	cx["volley_open"] = true
+	if (cx["volley"] as Callable).is_valid():
+		(cx["volley"] as Callable).call()
+
+
+## CC-12a/12c: the cast leg is over and its casualties have landed (the next roll is the volley's, or the core is done): the
+## caster discs show the spent tokens, and the leg's `pre` block is written - the units the casts changed, so the replay gates
+## start the core from the state the volley started from (the table's `_solo_resolve_ai_casts` tail). Once per activation.
+## A Shaken a spell's morale test left lands with the delta, after a volley's `pre`: the block misses it (known gap).
+static func _cast_leg_end(main, cx: Dictionary) -> void:
+	if bool(cx["ended"]):
+		return
+	cx["ended"] = true
+	cx["pre_due"] = false
+	main._solo_refresh_caster_markers()
+	var before: Dictionary = main._solo_act_flags if not main._solo_act_flags.is_empty() else cx["before"]
+	main._solo_act_flags = {}
+	main._solo_record_pre_leg(before)
+	_cast_open_volley(cx)
 
 
 ## Step 43: the AI volleys the core resolved and the ones it refused (the AI smoke resets and reads them).
@@ -556,9 +804,12 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	var parts: Array = [{"target": target, "shots": shots}] + rest
 	var aim := split_aim(parts)
 	# A unit that cast this activation: the table resolved the casts after the capture (`_solo_resolve_ai_casts`), so the
-	# board `h` holds no spell effect - the volley stays on the table (the shadow's "cast" reason names it).
+	# board `h` holds no spell effect - the volley stays on the table (the shadow's "cast" reason names it). CC-12: unless the
+	# caller marked the report `cast_door` (the cast door took the activation; CC-13a sets it, nothing does today): then the core
+	# resolves the planned casts from this capture and the table does not.
 	var cast := not (report.get("casts", []) as Array).is_empty()
-	if h == 0 or not takes_action(unit, kind) or not is_plain(unit) or table_rolled or cast or _aim_ambiguous(aim) \
+	var cast_taken := cast and bool(report.get("cast_door", false))
+	if h == 0 or not takes_action(unit, kind) or not is_plain(unit) or table_rolled or (cast and not cast_taken) or _aim_ambiguous(aim) \
 			or (target == null and not owns_dangerous) or (target != null and not is_plain_target(target)) \
 			or rest.any(func(p: Dictionary) -> bool: return not is_plain_target(p["target"])) \
 			or parts.any(func(p: Dictionary) -> bool: return not CoreSlice.pair_refusals(unit, p["target"]).is_empty()):
@@ -575,6 +826,8 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 			unit.get_name(), chooser[0]["target"].get_name()], true)
 		return false
 	var t: Array = ai_transcript(main, unit, report, target, aim)
+	if cast_taken:
+		t.append_array(cast_inputs(report))   # CC-12: the planned casts, after the intent and before the first faces
 	# Step 42b: the table's presentation of the volley (_present); its stage opens before the core's first line.
 	# P4.D-19: the core prints no sentence for the Dangerous test (its first throw): the table's own two stand in for it, in
 	# the table's words and places - the test line before the roll, the wound line right after it - and the staged volley
@@ -615,9 +868,14 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 				cur = sts[at[0]]
 				main._solo_stage_begin("%s fires at %s" % [unit.get_name(), g["target"].get_name()])
 			await _present(main, unit, g["target"], g["shots"], cur, ev, a, faces)
-	if shows:
-		main._solo_stage_begin("%s fires at %s" % [unit.get_name(), target.get_name()])
-	var r: Dictionary = await drive(main, h, unit, t, true, Callable(), false, beat if shows or dice > 0 else Callable())
+	# CC-12b: with casts the volley's stage opens when the cast leg is over (`cast_context`'s `volley`): the casts run in their own stages.
+	var open_volley := func() -> void:
+		if shows:
+			main._solo_stage_begin("%s fires at %s" % [unit.get_name(), target.get_name()])
+	var cx := cast_context(main, report, open_volley) if cast_taken else {}
+	if cx.is_empty():
+		open_volley.call()
+	var r: Dictionary = await drive(main, h, unit, t, true, Callable(), false, beat if shows or dice > 0 else Callable(), cx)
 	if str(r["step"]) == "done":
 		if st["first"] and dice > 0:
 			_dangerous_mismatch(unit, dice, "it threw no die")
@@ -1073,6 +1331,7 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		_land_once_latches(main, gu, d)
 		_land_growth(main, gu, d)
 		_land_buffs(main, gu, d)
+		_land_spell_buffs(main, gu, d, done)
 
 
 ## HR-POS: the unit's surviving model positions after the activation (the delta's `positions`, capture slot order with the
@@ -1172,6 +1431,26 @@ static func _land_buffs(main, gu: GameUnit, d: Dictionary) -> void:
 			and str((rd as Dictionary).get("scope", "")) == str(e[1]) and str((rd as Dictionary).get("duration", "")) == "once")
 		if not hit.is_empty():
 			main._solo_spend_records(gu, [hit[0]])
+
+
+## CC-12a (CC-8c's `buffs_gained`): the buff / debuff effects this activation's casts landed on the unit and left standing
+## (spell names, placement order). The planned cast with that name and this unit among its targets lands from the table's own
+## spell entry (`land_cast_effect`), unless the cast presentation landed it already (no news). A name no planned cast explains is a
+## core/table split: reported, nothing written. A record placed and spent in the same activation is not named (it is in
+## `buffs_spent`; the table placed it at the cast and `_land_buffs` spends it).
+static func _land_spell_buffs(main, gu: GameUnit, d: Dictionary, done: Dictionary) -> void:
+	var cx: Dictionary = done.get("cx", {})
+	for name in d.get("buffs_gained", []):
+		var idx := -1
+		for i in (cx.get("casts", []) as Array).size():
+			var c: Dictionary = cx["casts"][i]
+			if str(c.get("name", "")) == str(name) and (c.get("targets", []) as Array).has(gu) \
+					and (idx < 0 or not (cx["landed"] as Dictionary).has(i) and (cx["landed"] as Dictionary).has(idx)):
+				idx = i
+		if idx < 0:
+			push_error("CoreActivation.land_delta: the core landed %s on %s, no planned cast explains it" % [name, gu.get_name()])
+			continue
+		land_cast_effect(main, cx, idx)
 
 
 ## P4.D-38a: the once-per-game feat latches the core SPENT in this activation (the delta's `feats_used`, inventory row of the
