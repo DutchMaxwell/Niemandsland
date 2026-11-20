@@ -23,7 +23,6 @@ const SIMULTANEOUS_FIRE_GROUP := "door_omits_simultaneous_fire_line"
 const OWN_SHRED_GROUP := "door_own_shred_beside_alias"
 const VERSATILE_PAIR_GROUP := "door_versatile_pick_modified_to_hit"
 const TAKEDOWN_LABEL_GROUP := "door_takedown_names_an_equipment_carrier"
-const UNSTOPPABLE_FOLD_GROUP := "door_omits_unstoppable_fold_line"
 ## The primitives whose rules move a SHOOTING to-hit number: on the target (Artillery's -1, the Stealth and Evasive families, Aircraft) and on the shooter.
 const TO_HIT_ON_TARGET := ["Artillery", "Stealth", "Evasive", "Aircraft"]
 ## H-10 (Plan H): Unpredictable Shooter's 4-6 half is a +1 to hit the table folds into the number a Versatile pick is latched on; probed 5 of 16
@@ -202,10 +201,6 @@ static func pair_refusals(shooter: GameUnit, target: GameUnit) -> Array:
 	if _has_group(VERSATILE_PAIR_GROUP) and _chain_carries(shooter, ["Versatile Attack"]) \
 			and (_chain_carries(target, TO_HIT_ON_TARGET) or _chain_carries(shooter, TO_HIT_ON_SHOOTER)):
 		out.append("versatile_pick_modified_to_hit")
-	# The table says "Unstoppable: negative to-hit modifiers ignored" when a shooter's Unstoppable weapon swallows a minus (`_solo_unstoppable_fold`);
-	# the core says it only for the granted mark and aura, the weapon's own flag stays silent. The dice are equal: a missing line, refused until it exists.
-	if _has_group(UNSTOPPABLE_FOLD_GROUP) and _chain_carries(shooter, ["Unstoppable"]) and _chain_carries(target, TO_HIT_ON_TARGET):
-		out.append("unstoppable_fold_line")
 	# The table labels a Takedown pick that is no Tough and no special-weapon model by its first item (`_solo_model_label`); the core holds only an item COUNT.
 	if _has_group(TAKEDOWN_LABEL_GROUP) and _chain_carries(shooter, ["Takedown"]) \
 			and ([target] + target.get_attached_heroes()).any(func(u) -> bool: return u is GameUnit and (u as GameUnit).models.any(
