@@ -999,6 +999,12 @@ pub const CURRENT_RULES_EPOCH: u32 = 93;
 /// Flying move near a unit planned differently. From 94 a Flying unit's route reads the Traversal way; the gate's own base-crossing clamp stays Traversal-only,
 /// as on the table. Below 94 byte-identical. Every call site reads THIS constant, not `94`.
 pub const PENDING_EPOCH_FLYING_THROUGH: u32 = 94;
+/// Placeholder gate for the melee Deadly landing that stops rolling (melee95, 20.11.): the table lands a Deadly weapon's unsaved wounds one at a
+/// time and, once the target's whole chain is dead, drops the rest without a single ignore die (`_solo_land_deadly_wounds`: the pick is empty, the
+/// loop breaks); the core rolled every wound's X ignore dice before landing, so a Tough hero with Cursed Undead / Regeneration hit by two Deadly(3)
+/// wounds threw six dice in the core and three at the table. From the bump the melee fold asks (`deadly_wipes`) before each wound. Below it
+/// byte-identical. Every call site reads THIS constant.
+pub const PENDING_EPOCH_DEADLY_STOPS: u32 = 94;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
