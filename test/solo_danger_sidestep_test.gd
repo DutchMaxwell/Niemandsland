@@ -10,11 +10,16 @@ const IN2M := 0.0254
 var _mgr: OPRArmyManager
 var _solo: SoloController
 var _epoch0: int
+var _fast0: bool
 var _rect := Rect2()   # inches: x0, z0, w, h
 
 
 func before_test() -> void:
 	_epoch0 = AiActRecorder.rules_epoch
+	# The precise planner, as the other solo planner suites pin it: an earlier suite in the shard (main.gd's solo
+	# setup) can leave the static fast planner on, and the geometry below is measured on the precise one.
+	_fast0 = MovementPlanner.fast_planner
+	MovementPlanner.fast_planner = false
 	_mgr = auto_free(OPRArmyManager.new())
 	_solo = auto_free(SoloController.new())
 	add_child(_solo)
@@ -28,6 +33,7 @@ func before_test() -> void:
 
 func after_test() -> void:
 	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests - restore
+	MovementPlanner.fast_planner = _fast0
 
 
 ## `n` models in rows of 5 (1.5" apart, rows 1.5" back, 32 mm bases) from z 0 move `inches` toward (0, goal_z);
