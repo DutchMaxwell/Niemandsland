@@ -31,6 +31,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
 import list_to_profile  # noqa: E402
 from list_to_profile import (  # noqa: E402
     ROYAL_LEGION_RANGE_BONUS_IN,
+    _registry_entry,
+    _registry_map,
     _rule_to_string,
     _rules_in_upgrade_label,
     base_shape_of,
@@ -571,6 +573,47 @@ def test_a_registry_alias_of_quick_moves_the_bands():
         "rush": 16.0,
         "charge": 18.0,
     }
+
+
+#: The 3.6 renamed army books (test/v36/dat_02_test.gd RENAMED): an old folder the
+#: rules map does not key must resolve the same-system book's faction rules.
+_RENAMED_RULES_FOLDERS = [
+    ("gf", "wormhole_daemons_of_change", "daemons_of_change"),
+    ("gf", "wormhole_daemons_of_lust", "daemons_of_lust"),
+    ("gf", "wormhole_daemons_of_plague", "daemons_of_plague"),
+    ("gf", "wormhole_daemons_of_war", "daemons_of_war"),
+    ("gf", "saurian_starhost", "saurian_starhosts"),
+    ("aof", "rift_daemons_of_change", "daemons_of_change"),
+    ("aof", "rift_daemons_of_lust", "daemons_of_lust"),
+    ("aof", "rift_daemons_of_plague", "daemons_of_plague"),
+    ("aof", "rift_daemons_of_war", "daemons_of_war"),
+    ("gff", "daemons_of_change", "wormhole_daemons_of_change"),
+    ("gff", "daemons_of_lust", "wormhole_daemons_of_lust"),
+    ("gff", "daemons_of_plague", "wormhole_daemons_of_plague"),
+    ("gff", "daemons_of_war", "wormhole_daemons_of_war"),
+    ("gff", "saurian_starhosts", "saurian_starhost"),
+    ("aofs", "daemons_of_change", "rift_daemons_of_change"),
+    ("aofs", "daemons_of_lust", "rift_daemons_of_lust"),
+    ("aofs", "daemons_of_plague", "rift_daemons_of_plague"),
+    ("aofs", "daemons_of_war", "rift_daemons_of_war"),
+    ("aofr", "daemons_of_change", "rift_daemons_of_change"),
+    ("aofr", "daemons_of_lust", "rift_daemons_of_lust"),
+    ("aofr", "daemons_of_plague", "rift_daemons_of_plague"),
+    ("aofr", "daemons_of_war", "rift_daemons_of_war"),
+]
+
+
+def test_v36_renamed_rules_folders_resolve_the_same_faction_entries():
+    for system, alias, canonical in _RENAMED_RULES_FOLDERS:
+        m = _registry_map(system)
+        canonical_rules = m.get("factions", {}).get(canonical, {})
+        common = m.get("common", {})
+        canonical_only = [n for n in canonical_rules if n not in common]
+        assert canonical_only, f"{system}/{canonical} has no faction-only rule"
+        name = canonical_only[0]
+        assert _registry_entry(system, alias, name) == canonical_rules[name], (
+            f"{system}/{alias} must resolve {canonical}"
+        )
 
 
 def test_royal_legion_lands_on_the_charge_band_and_the_shooting_range():

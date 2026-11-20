@@ -150,12 +150,13 @@ pub fn normalize_system(system: &str) -> String {
     }
 }
 
-/// 3.6 army-list folder -> committed spell-map key for the nine renamed books
+/// 3.6 army-list folder -> committed map key for the nine renamed books
 /// (`test/v36/dat_02_test.gd` RENAMED): the daemon books lost their
 /// Wormhole/Rift prefix, the GF Saurian Starhost book gained a plural "s". A
 /// list keeps the folder it was built against, so an alias still names the SAME
 /// book in the SAME system — never a cross-system guess. `None` for non-aliases.
-fn spell_faction_alias(system: &str, faction: &str) -> Option<String> {
+/// ONE table for BOTH registries: the spell book and the faction rules map.
+fn faction_alias(system: &str, faction: &str) -> Option<String> {
     for sub in ["change", "lust", "plague", "war"] {
         let of = format!("daemons_of_{sub}");
         let wormhole = format!("wormhole_daemons_of_{sub}");
@@ -389,24 +390,56 @@ fn entries_of(map: &Value) -> HashMap<String, Entry> {
 #[derive(Debug, Default)]
 pub struct RulesMap {
     pub empty: bool,
+    /// The system this map belongs to — the alias table is system-scoped.
+    system: String,
     common: HashMap<String, Entry>,
     factions: HashMap<String, HashMap<String, Entry>>,
+    /// The record epoch this map answers at (`Registries::set_rules_epoch`).
+    /// Gates the 3.6 folder aliases (`acts::PENDING_EPOCH_RULES_ALIAS`): below
+    /// the gate an old folder keeps its old common-only read, byte-exact.
+    rules_epoch: u32,
 }
 
 impl RulesMap {
+    /// The faction key a lookup reads: its own key when the map holds one, else
+    /// the 3.6 same-system alias once the rules epoch has reached the gate.
+    fn resolved_faction(&self, faction: &str) -> Option<String> {
+        if self.factions.contains_key(faction) {
+            return Some(faction.to_string());
+        }
+        if !crate::acts::rule_on(self.rules_epoch, crate::acts::PENDING_EPOCH_RULES_ALIAS) {
+            return None;
+        }
+        let alias = faction_alias(&self.system, faction)?;
+        self.factions.contains_key(&alias).then_some(alias)
+    }
+
     /// `RulesRegistry.lookup` rules_registry.gd:57-66 — faction first, then common.
+    /// A 3.6 renamed folder falls back to its same-system alias (gated, see above).
     pub fn lookup(&self, faction: &str, rule_name: &str) -> Option<&Entry> {
         if self.empty {
             return None;
         }
         if !faction.is_empty() && faction != COMMON {
-            if let Some(f) = self.factions.get(faction) {
+            if let Some(f) = self.resolved_faction(faction).and_then(|k| self.factions.get(&k)) {
                 if let Some(e) = f.get(rule_name) {
                     return Some(e);
                 }
             }
         }
         self.common.get(rule_name)
+    }
+
+    /// The faction's OWN rule names (no common fallback), alias-resolved — the
+    /// rule SET a 3.6 old folder and its canonical folder must share.
+    pub fn faction_rule_names(&self, faction: &str) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .resolved_faction(faction)
+            .and_then(|k| self.factions.get(&k))
+            .map(|m| m.keys().cloned().collect())
+            .unwrap_or_default();
+        names.sort();
+        names
     }
 
     /// `RulesRegistry.has_primitive` rules_registry.gd:73-75 — an unautomated
@@ -487,6 +520,9 @@ pub struct Registries {
     /// `path.display()`, in first-failure order, once per path (a cached
     /// system never re-reads, so it never re-pushes).
     missing: Vec<String>,
+    /// The record epoch every rules map answers at (0 = pre-epoch, aliases off).
+    /// `UnitStatic::build_for`/`unit::ctx_for` stamp the record's own epoch.
+    rules_epoch: u32,
 }
 
 impl Registries {
@@ -494,6 +530,17 @@ impl Registries {
         Registries {
             root: repo_root.to_string(),
             ..Default::default()
+        }
+    }
+
+    /// The record epoch this registry answers at — the 3.6 folder aliases
+    /// (`acts::PENDING_EPOCH_RULES_ALIAS`) switch on from 93, so a pre-93 record
+    /// replays its old common-only faction reads byte-exact. Cached maps are
+    /// re-stamped; a map loaded later inherits the stamp in `rules_for`.
+    pub fn set_rules_epoch(&mut self, rules_epoch: u32) {
+        self.rules_epoch = rules_epoch;
+        for map in self.rules.values_mut() {
+            map.rules_epoch = rules_epoch;
         }
     }
 
@@ -517,12 +564,16 @@ impl Registries {
                     }
                     RulesMap {
                         empty: false,
+                        system: s.clone(),
+                        rules_epoch: self.rules_epoch,
                         common: entries_of(v.get("common").unwrap_or(&Value::Null)),
                         factions,
                     }
                 }
                 None => RulesMap {
                     empty: true,
+                    system: s.clone(),
+                    rules_epoch: self.rules_epoch,
                     ..Default::default()
                 },
             };
@@ -531,9 +582,16 @@ impl Registries {
         &self.rules[&s]
     }
 
+    /// The faction's own rule names under `system`, alias-resolved at the
+    /// registry's current epoch — the rule SET the alias test compares.
+    pub fn faction_rule_names(&mut self, system: &str, faction: &str) -> Vec<String> {
+        let s = normalize_system(system);
+        self.rules_for(&s).faction_rule_names(faction)
+    }
+
     /// `SpellsRegistry.spells_for` spells_registry.gd:63-81 — [] when the map or
     /// the faction is unknown (conservative: that faction simply never casts).
-    /// A 3.6 renamed folder falls back to its same-system alias (`spell_faction_alias`).
+    /// A 3.6 renamed folder falls back to its same-system alias (`faction_alias`).
     pub fn spells_for(&mut self, system: &str, faction: &str) -> &[Spell] {
         let s = normalize_system(system);
         if !self.spells.contains_key(&s) {
@@ -567,7 +625,7 @@ impl Registries {
         if let Some(v) = by_faction.get(faction) {
             return v.as_slice();
         }
-        if let Some(alias) = spell_faction_alias(&s, faction) {
+        if let Some(alias) = faction_alias(&s, faction) {
             if let Some(v) = by_faction.get(&alias) {
                 return v.as_slice();
             }
@@ -778,6 +836,39 @@ mod tests {
             }
         }
         assert!(zero.is_empty(), "3.6 folder aliases resolve ZERO spell books: {}", zero.join(", "));
+    }
+
+    /// The RULES side of the same rename: `rules_mechanics_<system>.json` keys
+    /// only the 3.6 folder, so an old-folder unit resolved ZERO faction rules
+    /// (the granted-reach lookup then missed its spells' granted rules). Gated at
+    /// `PENDING_EPOCH_RULES_ALIAS`: at 92 the old common-only read stays, from 93
+    /// each alias resolves its canonical faction's rule set.
+    #[test]
+    fn every_v36_renamed_rules_folder_alias_resolves_the_same_rule_set_from_93() {
+        let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+        let mut reg = Registries::new(&root);
+        reg.set_rules_epoch(crate::acts::PENDING_EPOCH_RULES_ALIAS - 1);
+        let mut leaked = Vec::new();
+        for (system, alias, _canonical) in V36_SPELL_BOOK_ALIASES {
+            if !reg.faction_rule_names(system, alias).is_empty() {
+                leaked.push(format!("{system}/{alias}"));
+            }
+        }
+        assert!(
+            leaked.is_empty(),
+            "below the gate an old folder resolved faction rules: {}",
+            leaked.join(", ")
+        );
+        reg.set_rules_epoch(crate::acts::PENDING_EPOCH_RULES_ALIAS);
+        for (system, alias, canonical) in V36_SPELL_BOOK_ALIASES {
+            let alias_set = reg.faction_rule_names(system, alias);
+            let canonical_set = reg.faction_rule_names(system, canonical);
+            assert!(
+                !canonical_set.is_empty(),
+                "{system}/{canonical} is not a committed faction section"
+            );
+            assert_eq!(alias_set, canonical_set, "{system}/{alias} must resolve {canonical}");
+        }
     }
 
     /// CC-4b: the spell entry's `effect.scope` and `target.kind` parse; an entry without them reads "" for both. RED: the two

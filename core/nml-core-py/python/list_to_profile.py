@@ -490,13 +490,22 @@ def _registry_map(system: str) -> dict:
 def _registry_entry(system: str, faction: str, rule_name: str) -> dict:
     """rules_registry.gd:lookup — the faction's own entry first, then the
     system's "common" one. ALWAYS keyed (system, faction, name), never by name
-    alone: 154 of 383 rule names mean different things across game systems."""
-    m = _registry_map(system)
+    alone: 154 of 383 rule names mean different things across game systems.
+    A 3.6 army-list folder the map does not key (wormhole_/rift_daemons_of_*,
+    saurian_starhost) falls back to its same-system alias from
+    _SPELL_FACTION_ALIASES — one shared table, never a cross-system guess."""
+    s = system.strip().lower()
+    if s not in REGISTRY_SYSTEMS:
+        s = REGISTRY_DEFAULT_SYSTEM
+    m = _registry_map(s)
     if not m:
         return {}
     factions = m.get("factions", {})
-    if faction and faction != "common" and rule_name in factions.get(faction, {}):
-        return factions[faction][rule_name]
+    key = faction
+    if faction and faction != "common" and faction not in factions:
+        key = _SPELL_FACTION_ALIASES.get(s, {}).get(faction, faction)
+    if key and key != "common" and rule_name in factions.get(key, {}):
+        return factions[key][rule_name]
     return m.get("common", {}).get(rule_name, {})
 
 
