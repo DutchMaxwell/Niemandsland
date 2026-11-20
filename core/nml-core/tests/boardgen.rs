@@ -652,3 +652,20 @@ fn every_town_has_a_fountain_in_the_middle_and_a_statue_pool_and_hall_as_mirrore
         }
     }
 }
+
+#[test]
+#[ignore = "measurement: where a city-wall column (x in 2..=5, rows 4..=11) could go on the town boards"]
+fn census_of_wall_columns() {
+    let (mut counts, mut gates) = ([0usize; 5], [0usize; 6]);
+    for seed in 1..=1000 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        let ok: Vec<usize> = (2..=5).filter(|&x| {
+            let rows: Vec<usize> = (4..=11).filter(|&z| l.cell(x, z).street).collect();
+            let runs_ok = rows.windows(2).all(|w| w[1] != w[0] + 1 || (w[0] == 7 && w[1] == 8)) && !rows.windows(3).any(|w| w[1] == w[0] + 1 && w[2] == w[1] + 1);
+            !rows.is_empty() && runs_ok
+        }).collect();
+        counts[ok.len()] += 1;
+        if let Some(&x) = ok.first() { gates[(4..=11).filter(|&z| l.cell(x, z).street).count().min(5)] += 1; }
+    }
+    eprintln!("boards by number of usable wall columns {counts:?}; gates (street cells crossed) on the first usable column {gates:?}");
+}
