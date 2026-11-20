@@ -542,14 +542,12 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 	# H-9b: the Utility Buff names probed equal through real activations leave the group by name (`lifted_names`); the rest of the family stays refused.
 	for lifted in [["gf", "eternal_dynasty", "Casting Buff"], ["gf", "blessed_sisters", "Courage Buff"], ["gf", "dwarf_guilds", "Speed Debuff"],
 			["gf", "blessed_sisters", "Precision Fighter Buff"], ["gf", "robot_legions", "Unstoppable when Shooting Aura"],
-			["gf", "dark_elf_raiders", "Regeneration Buff"]]:
+			["gf", "dark_elf_raiders", "Regeneration Buff"], ["gf", "alien_hives", "Furious Buff"], ["gf", "custodian_brothers", "Shred Mark"],
+			["gf", "daemons_of_lust", "Quick Shot Mark"], ["gf", "eternal_dynasty", "Increased Shooting Range Mark"]]:
 		var buffer := _unit([lifted[2], "Tough(3)"], [["AP(1)"]])
 		buffer.unit_properties["game_system"] = lifted[0]
 		buffer.unit_properties["faction_folder"] = lifted[1]
 		assert_array(CoreSlice.refusals(buffer)).override_failure_message("%s was probed equal through the door and leaves the group" % lifted[2]).is_empty()
-	var furious := _unit(["Furious Buff", "Tough(3)"], [["AP(1)"]])
-	furious.unit_properties["faction_folder"] = "alien_hives"
-	assert_array(CoreSlice.refusals(furious)).override_failure_message("Furious Buff differs through the door and stays refused").is_equal(["unit_rule:Furious Buff"])
 	# The same unit without the beat rule is taken (the group refuses the rule, not the faction).
 	var plain := _unit(["Tough(3)"], [["AP(1)"]])
 	plain.unit_properties["faction_folder"] = "battle_brothers"
@@ -844,6 +842,24 @@ func test_a_cached_slice_dict_without_the_newer_keys_still_reads() -> void:
 	assert_array(CoreSlice.refusals_in(path, tgt, true)).override_failure_message("an empty deny slice takes a mapped rule, as target").is_empty()
 	assert_array(CoreSlice.refusals_in(path, tgt)).override_failure_message("and as shooter").is_empty()
 	CoreSlice._cache_by_path.erase(path)
+
+
+## Plan H, H-18: from the pending epoch 94 the core's dice pick Versatile Attack on the modified to-hit number, so the pair is taken (the door test
+## `versatile_pick_door_test.gd` shows both halves equal there). Below it the pair stays refused, in the dice-only pin too. RED: drop the epoch clause.
+func test_the_versatile_pair_is_taken_from_the_pending_epoch() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	var vers := _unit(["Versatile Attack"], [[]])
+	vers.unit_properties["faction_folder"] = "battle_brothers"
+	var stealth := _unit(["Stealth"], [[]])
+	var epoch_before := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_VERSATILE_MODIFIED_HIT - 1
+	var below := CoreSlice.pair_refusals(vers, stealth)
+	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_VERSATILE_MODIFIED_HIT
+	var at_pending := CoreSlice.pair_refusals(vers, stealth)
+	AiActRecorder.rules_epoch = epoch_before
+	assert_array(below).override_failure_message("below 94 the core still latches on the plain Quality").is_equal(["versatile_pick_modified_to_hit"])
+	assert_array(at_pending).override_failure_message("from 94 both halves pick on the modified number").is_empty()
 
 
 ## DLINES train 4 (review): the table names a Takedown's picked model by its first item when it is no Tough and no special-weapon model; the core holds

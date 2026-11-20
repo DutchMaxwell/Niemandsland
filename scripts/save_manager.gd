@@ -333,6 +333,9 @@ func _serialize_game_state() -> Dictionary:
 		"rule_state": army_manager.rule_state.duplicate(true) if army_manager else {},
 		# Rules-automation level (Manual/Automatic). Optional key, rides the MP full-state push too.
 		RulesAutomation.SAVE_KEY: army_manager.rules_automation if army_manager else RulesAutomation.Level.MANUAL,
+		# The table's game system (GameSystem.IDS, "" = never set). Optional key, no SAVE_VERSION bump (same reasoning
+		# as rule_state); it travels with the MP full-state push too, and a save without it resolves from its lists.
+		"game_system": army_manager.table_system if army_manager else "",
 		# S1-15: the Solo mission (id + SoloController's live scoring state), so a loaded game keeps scoring
 		# by its own mission's rule. Rides the MP full-state push too, since that reuses this serializer.
 		"solo_mission": SoloController.mission_state_to_dict(
@@ -1095,6 +1098,13 @@ func _deserialize_game_state(state_data: Dictionary) -> void:
 		# Rules-automation level: optional key, no SAVE_VERSION bump (same reasoning as rule_state);
 		# a save without it loads as Manual.
 		army_manager.rules_automation = RulesAutomation.playable(RulesAutomation.from_game_state(state_data))   # M-3: no core, no Automatic
+		# Game system: a load REPLACES the table's system; no key (every older save) or a value that is no system = "never
+		# set", which resolves from the loaded lists (Main._table_system).
+		var gs := str(state_data.get("game_system", "")).strip_edges().to_lower()
+		if not gs.is_empty() and not RulesRegistry.SYSTEMS.has(gs):
+			push_warning("[SAVE] game_system \"%s\" is not a game system - the table keeps none" % gs)
+			gs = ""
+		army_manager.table_system = gs
 	# S1-15: a load REPLACES the Solo mission state whole (before load_completed fires). Optional key, no
 	# SAVE_VERSION bump (the rule_state reasoning above): a save without it carried no mission, and "no
 	# mission" with the default scoring is how such a save has always played.

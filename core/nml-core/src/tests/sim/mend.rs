@@ -90,3 +90,29 @@ use super::*;
             assert_eq!(mend_d3(face), want);
         }
     }
+
+    /// H-5a (Plan H): the heal reaches the table. A supplied tray (the door's) keeps one landing on the patient's capture slot with
+    /// its healed wounds (above its own count = a heal) and the table's `_solo_apply_mend` line; the die and the state stay as before.
+    /// RED: without the landing / the line in `tray_mend` the door's table keeps the patient wounded and the line is missing.
+    #[test]
+    fn a_supplied_tray_lands_the_heal_and_says_the_tables_mend_line() {
+        let (st, statics) = mend_line();
+        let mut next = st.clone();
+        let mut tray = Tray::supplied(vec![vec![5]]);
+        let mut shot = ShootResult::default();
+        tray_mend(&statics, &mut next, 0, Seams { hero_attach: true, ..Seams::default() }, &mut tray, &mut shot);
+        assert_eq!(next.wounds[1][0], 4, "face 5 = D3 3, capped at the hero's 2 missing wounds");
+        let landing = Landing { unit: 1, models: vec![LandedModel { at: st.positions[1][0], slot: 0, wounds_left: 4, dead: false }], loss_line: false };
+        assert_eq!(tray.all_landings(), vec![landing]);
+        let lines: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).collect();
+        assert_eq!(lines, ["Mend: a heals 2 wounds (D3 rolled 5) — patient now 4/4"]);
+        // A one-wound heal says the singular; a seeded tray keeps neither landing nor line.
+        let mut one = st.clone();
+        (one.wounds[1], one.wounds[2]) = (vec![3], vec![3, 3]);
+        let mut tray = Tray::supplied(vec![vec![1]]);
+        tray_mend(&statics, &mut one, 0, Seams { hero_attach: true, ..Seams::default() }, &mut tray, &mut ShootResult::default());
+        assert_eq!(tray.all_lines().into_iter().map(|l| l.text).collect::<Vec<_>>(), ["Mend: a heals 1 wound (D3 rolled 1) — patient now 4/4"]);
+        let mut seeded = Tray::seeded(7);
+        tray_mend(&statics, &mut st.clone(), 0, Seams { hero_attach: true, ..Seams::default() }, &mut seeded, &mut ShootResult::default());
+        assert!(seeded.all_landings().is_empty() && seeded.all_lines().is_empty());
+    }

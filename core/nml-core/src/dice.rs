@@ -532,6 +532,9 @@ pub struct ShootResult {
     /// (`SoloController.apply_deadly_wounds`, solo_controller.gd:8333). Empty
     /// on every non-Deadly activation; the landing sites drain it.
     pub deadly_groups: Vec<(i64, i64)>,
+    /// PENDING_EPOCH_VERSATILE_MODIFIED_HIT: the picks the volley made inside the dice, `(roster index, AP(+1) mode)`, one per member
+    /// whose activation had no pick yet. The volley seam stamps them on the State's round latch after the call.
+    pub versatile_picks: Vec<(usize, bool)>,
     /// The volley's Deadly weapons, one entry per weapon for the table's line (`_solo_land_deadly_wounds`): `(weapon, raw
     /// unsaved, X, how many of `deadly_groups` it pushed)`, in the same order. The volley landing drains both together.
     pub deadly_lines: Vec<(String, i64, i64, usize)>,
@@ -757,10 +760,12 @@ pub(crate) fn say_rule(tray: &mut Tray, rule: &'static str, side: i64, text: imp
 }
 
 /// The table's `blast_log_text`: names Blast(X) and, when the model count clamps the multiplier, the cap.
-fn blast_log(x: i64, hits: i64, boosted: i64, models: i64) -> String {
+fn blast_log(x: i64, hits: i64, boosted: i64, models: i64, stale: bool) -> String {
     let mult = boosted / hits.max(1);
     let capped = if mult >= x { String::new() } else { format!(" (capped by {models} model{} in target)", if models == 1 { "" } else { "s" }) };
-    format!("Blast({x}): {hits} hit{} ×{mult}{capped} → {boosted} hits", if hits == 1 { "" } else { "s" })
+    // the table's note when casualties since the volley began made the cap's model count out of date (`blast_models > alive`)
+    let note = if stale { " (cap read when the volley started)" } else { "" };
+    format!("Blast({x}): {hits} hit{} ×{mult}{capped} → {boosted} hits{note}", if hits == 1 { "" } else { "s" })
 }
 
 fn surge_attack_hits(p: &ShootProfile, faces: &[u8], count_target: i64, owner: &str, tray: &mut Tray, rolls: &mut Vec<Roll>) -> i64 {
@@ -1349,6 +1354,10 @@ pub fn resolve_volley_with_tray(
     resolve_volley_leg(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates, shred_alias_dice, shred_boost_dice, false, false, &|_| false, &|_, _| None, tray)
 }
 
+/// `PENDING_EPOCH_DEADLY_INLINE`: the caller's landing of one weapon's Deadly groups on a scratch state; answers the models the target's chain
+/// still has (0 = wiped).
+pub(crate) type InlineLand<'a> = &'a mut dyn FnMut(&[(i64, i64)]) -> i64;
+
 /// The table's resolve-first rank of a shot (`_solo_shot_priority`): Takedown, then Deadly, then the rest.
 pub fn shot_rank(p: &ShootProfile) -> u8 {
     if p.takedown {
@@ -1383,7 +1392,7 @@ pub fn resolve_volley_leg(
 ) -> ShootResult {
     resolve_volley_with_pick_label(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates,
         shred_alias_dice, shred_boost_dice, deadly_per_model, takedown_exact,
-        &|gr| (takedown_cover(gr), "trooper".into()), sighted, tray)
+        &|gr| (takedown_cover(gr), "trooper".into()), sighted, None, tray)
 }
 
 /// `resolve_volley_leg` whose Takedown pick callback also answers the picked model's label (the table's `_solo_model_label`),
@@ -1393,8 +1402,15 @@ pub(crate) fn resolve_volley_with_pick_label(
     shooters: &[Shooter<'_>], def: &Ctx, def_owner: &str, dist_in: f64, mod_dist_in: f64,
     cond_ap_dice: bool, surge_gates: bool, shred_alias_dice: bool, shred_boost_dice: bool,
     deadly_per_model: bool, takedown_exact: bool, takedown_pick_info: &dyn Fn(&[i64]) -> (bool, String),
-    sighted: &dyn Fn(usize, usize) -> Option<(i64, i64, &'static str)>, tray: &mut Tray,
+    sighted: &dyn Fn(usize, usize) -> Option<(i64, i64, &'static str)>,
+    // `PENDING_EPOCH_DEADLY_INLINE`: asked after each Deadly weapon with the (unsaved, X) groups it pushed; the caller lands them on a scratch
+    // copy of the state and answers how many models the target's chain has left (0 = wiped: the weapons still to fire then read `Ctx::wiped`).
+    // `None` below 94.
+    inline_land: Option<InlineLand<'_>>, tray: &mut Tray,
 ) -> ShootResult {
+    let mut inline_land = inline_land;
+    let mut wiped = false;
+    let mut live_models: Option<i64> = None; // the target's models after the Deadly groups landed so far (inline mode only)
     let mut out = ShootResult::default();
     let (mut regenable, mut regen_proof) = (0i64, 0i64);
     // the wounds of bypass weapons that JOINED the pool (the target has no group named Regeneration): the table's `ignore only Regeneration` line counts them
@@ -1409,6 +1425,7 @@ pub(crate) fn resolve_volley_with_pick_label(
     let mut upr_ap = 0i64;
     let mut upr_hit = 0i64;
     let mut hero_upr: Vec<(usize, i64, i64)> = Vec::new(); // (shooter index, ap, hit): a joined hero's own die
+    let mut versatile_made: Vec<(Option<usize>, (i64, i64))> = Vec::new(); // the picks made in this volley (`Ctx::versatile_defer`)
     if shooters.first().is_some_and(|sh| sh.att.unpredictable_shooting) {
         let att0 = shooters[0].att;
         tray.owner_next(att0.unit);
@@ -1456,6 +1473,8 @@ pub(crate) fn resolve_volley_with_pick_label(
     let mut alias_cover_logged = false;
     // Rules 3.6 (SHO-01b) — the kept-cover line's once-per-volley flag.
     let mut indirect_cover_logged = false;
+    // I4 (table `cover_logged`): the plain "is in cover" line, said once per volley and only when a save really used the cover.
+    let mut cover_logged = false;
     // Rules 3.6 (SHO-14) — the Pierce line's once-per-volley flag.
     let mut pierce_logged = false;
     // Wave 3 — the Shot Modifier family's two runtime-gated members name
@@ -1516,6 +1535,8 @@ pub(crate) fn resolve_volley_with_pick_label(
         };
         if gate_shut { c.gate_shut() } else { c }
     };
+    let def_live: &Ctx = def;
+    let def_wiped: Ctx = if inline_land.is_some() { def_live.wiped() } else { *def_live };
     // FLATTENED on purpose: one pass over the (member, profile) pairs, so the
     // body below stays the single-shooter one.
     //
@@ -1545,6 +1566,7 @@ pub(crate) fn resolve_volley_with_pick_label(
             def.ranged_shroud_name, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in));
     }
     for (sh, k, pi) in shots {
+        let def: &Ctx = if wiped { &def_wiped } else { def_live };
         let att = sh.att;
         let p = &sh.profiles[pi];
         // The member's own die when a joined hero rolled one (AIG-G2 R5), else the unit's (the host's) die.
@@ -1593,6 +1615,13 @@ pub(crate) fn resolve_volley_with_pick_label(
                     text: format!("{}: {} silent — {why}", sh.owner, p.name), detail: None });
             }
             continue;
+        }
+        // PENDING_EPOCH_DEADLY_INLINE, the table's `Simultaneous fire` line (SHO-PAR-F6): casualties since the declaration did not shrink this shot.
+        if def.blast_models.zip(live_models).is_some_and(|(declared, live)| declared > live) {
+            if let Some((seen, _, _)) = shooters.iter().position(|s| std::ptr::eq(s, sh)).and_then(|i| sighted(i, pi)) {
+                say_rule(tray, "simultaneous", att.side, || format!("Simultaneous fire: {} fires {} as declared ({seen} model{} in range and sight before the first roll)",
+                    sh.owner, p.name, if seen == 1 { "" } else { "s" }));
+            }
         }
         // G4R4 C-GRANTED-BANE (`EPOCH_73_V36`): a live "Bane when Shooting" grant makes this ranged weapon a Bane
         // weapon for the volley (the table's `_solo_striker_has_bane`); the re-roll's log line names the book rule.
@@ -1847,6 +1876,25 @@ pub(crate) fn resolve_volley_with_pick_label(
                 (att.versatile_pick_hit, att.versatile_pick_ap)
             } else if p.versatile_both {
                 (1, 1)
+            } else if let Some(&(_, pick)) = versatile_made.iter().find(|(u, _)| *u == att.unit) {
+                pick
+            } else if att.versatile_defer {
+                // PENDING_EPOCH_VERSATILE_MODIFIED_HIT: the activation's first eligible shot decides on the number it rolls at (the table's
+                // `to_hit` after every modifier), the Defense after the Guarded fold (`shot_base`) and AP with the Unpredictable bonus.
+                let guarded = def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded;
+                let pick = versatile_best_mode(
+                    target,
+                    guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), guarded, def.def_floor()),
+                    p.ap + upr_ap,
+                    p.bane,
+                );
+                versatile_made.push((att.unit, pick));
+                if let Some(mi) = att.unit {
+                    out.versatile_picks.push((mi, pick.1 > 0));
+                }
+                let rule = if p.versatile_name.is_empty() { "Versatile Attack" } else { p.versatile_name.as_str() };
+                crate::sim::say_versatile_pick(rule, sh.owner, pick.1 > 0, att.side, &mut out.log, Some(&mut *tray), att.rules_epoch);
+                pick
             } else {
                 versatile_best_mode(
                     target,
@@ -1862,7 +1910,7 @@ pub(crate) fn resolve_volley_with_pick_label(
             // earlier epoch's replay is byte-identical. At 36 the latched
             // activation already named its pick at the stamp — once per
             // activation, never per volley.
-            if !p.versatile_name.is_empty() && !att.versatile_latched {
+            if !p.versatile_name.is_empty() && !att.versatile_latched && !att.versatile_defer {
                 let what = if p.versatile_both {
                     "AP(+1) and +1 to hit"
                 } else if ap_mod > 0 {
@@ -2045,9 +2093,10 @@ pub(crate) fn resolve_volley_with_pick_label(
             let cap = if unit_of_one { 1 } else { def.blast_models.unwrap_or(def.models).max(1) };
             let boosted = hits * p.blast.clamp(1, cap);
             if def.blast_models.is_some() {
-                out.log.push(blast_log(p.blast, hits, boosted, cap));
+                out.log.push(blast_log(p.blast, hits, boosted, cap, false));
             }
-            say_rule(tray, "blast", att.side, || blast_log(p.blast, hits, boosted, cap)); // the table says it always (#169)
+            let stale = def.blast_models.zip(live_models).is_some_and(|(declared, live)| declared > live);
+            say_rule(tray, "blast", att.side, || blast_log(p.blast, hits, boosted, cap, stale)); // the table says it always (#169)
             hits = boosted;
         }
         // One-core P3 step 24: the table's line after `_solo_hits` (main.gd:5056-5057), a miss included; step 27: with
@@ -2169,12 +2218,22 @@ pub(crate) fn resolve_volley_with_pick_label(
             out.log
                 .push(format!("{rule}: {} — {}'s cover save is skipped", sh.owner, def_owner));
         }
-        // Rules 3.6 (FAB-A3) — rules-must-log: an Indirect shot's target KEEPS its terrain cover.
-        if !indirect_cover_logged && indirect_keeps_cover && def.in_cover && p.blast <= 1 {
+        // The table's `shot_uses_cover`: the save rolls at the covered Defense, and the cover really lowered it (a Defense already at
+        // the floor, or a Pierce shot, leaves cover == base and the table says nothing).
+        let uses_cover = cov_def < base && save_def == cov_def;
+        // Rules 3.6 (FAB-A3) — rules-must-log: an Indirect shot's target KEEPS its terrain cover. A mark on the target makes the
+        // shot Indirect on the table (profile bridge, `def.indirect_mark`): its cover counts, so the line is said for it too.
+        let marked_indirect = def.indirect_mark && !p.indirect && rule_on(att.rules_epoch, EPOCH_73_V36);
+        if !indirect_cover_logged && (indirect_keeps_cover || marked_indirect) && uses_cover && p.blast <= 1 {
             indirect_cover_logged = true;
             out.log.push(format!(
                 "Indirect: {} — {}'s cover counts (only sight-blocker cover is ignored)",
                 sh.owner, def_owner));
+        }
+        // I4 (table `_solo_ai_shoot` / the human volley): a covered save says so once, with the Defense it rolls on.
+        if !unit_of_one && !cover_logged && uses_cover {
+            cover_logged = true;
+            out.log.push(format!("{def_owner} is in cover: +1 Defense (saves on {}+)", save_def.clamp(BEST_HIT_TARGET, 6)));
         }
         // Block B7 — Piercing Growth: main.gd:4287's marker-driven AP delta,
         // shooting and melee both (`_solo_attack_groups` adds it to `prof
@@ -2354,6 +2413,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         if p.deadly > 0 && !deadly_per_model {
             out.mark("deadly");
         }
+        let groups_before = out.deadly_groups.len();
         if takedown_exact && p.takedown {
             // Tray-exact S7 — the table's Takedown landing: w x max(Deadly, 1) BEFORE the
             // picked model's own Regeneration roll, all of it for that one model (the drain).
@@ -2374,7 +2434,16 @@ pub(crate) fn resolve_volley_with_pick_label(
                 regen_joined += w;
             }
         }
+        // PENDING_EPOCH_DEADLY_INLINE: the table lands this weapon's Deadly wounds NOW, before the next weapon rolls.
+        if out.deadly_groups.len() > groups_before {
+            if let Some(land) = inline_land.as_mut() {
+                let left = land(&out.deadly_groups[groups_before..]);
+                live_models = Some(left);
+                wiped |= left <= 0;
+            }
+        }
     }
+    let def: &Ctx = if wiped { &def_wiped } else { def_live };
     // --- `_solo_land_wounds` :6623 -> `_solo_apply_regeneration` :6543 ---
     if shroud_shortened {
         out.log.push(format!(
@@ -3171,9 +3240,9 @@ pub fn resolve_melee_leg_wipe(
                 let cap = if tray_exact && p.takedown { 1 } else { def.blast_models.unwrap_or(def.models).max(1) };
                 let boosted = hits * p.blast.clamp(1, cap);
                 if def.blast_models.is_some() {
-                    out.log.push(blast_log(p.blast, hits, boosted, cap));
+                    out.log.push(blast_log(p.blast, hits, boosted, cap, false));
                 }
-                say_rule(tray, "blast", sh.att.side, || blast_log(p.blast, hits, boosted, cap)); // the table says it always (#169), melee too
+                say_rule(tray, "blast", sh.att.side, || blast_log(p.blast, hits, boosted, cap, false)); // the table says it always (#169), melee too
                 hits = boosted;
             }
             // P4.D-48: the table's line after each melee hit roll (`_solo_melee_strike_phase`), a miss included.

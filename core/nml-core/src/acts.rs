@@ -890,6 +890,12 @@ pub const EPOCH_80_ROLLOUT_CUMBERSOME: u32 = 80;
 /// auto-failed test of an already Shaken unit (or of a dead Shaken host's unit). Records stamped 80 or below replay byte-exact.
 /// Every call site reads THIS constant, not `81`. The recorder mirror stamps 81 with it.
 pub const EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF: u32 = 81;
+/// Placeholder gate for the joined hero's moved stamp: the table's `_solo_animate_move` stamps `moved_round` on the unit of EVERY model it
+/// moves, so a hero that walks with its host (a move, a flight, a charge, a consolidation) is stamped moved too; the core stamped the
+/// host alone, so a hero row of the state delta carried a stale round (`land_delta` reported "table N, core -1", cast lane soak, 20.11.)
+/// and the hero's own Stealth / Entrenched style reads saw a unit that never moved. From 94 the core stamps the living joined heroes
+/// with the host. Every call site reads THIS constant, not the literal `94`.
+pub const PENDING_EPOCH_HERO_MOVED_STAMP: u32 = 94;
 /// Wound-ignore rules by name (#2595, table twin `_solo_ignore_wounds`): a bypass (Bane, Rending, Unstoppable, ...) skips only the
 /// roll of the rule named Regeneration (own, aura / buff granted, Medical Training); a unit whose ignore rule is anything else
 /// (Self-Repair, Resistance, Plaguebound, Angelic Blessing, ...) still rolls the bypassed wounds with the rest. Before, the core
@@ -902,6 +908,14 @@ pub const EPOCH_82_IGNORE_BY_NAME: u32 = 82;
 /// morale test still reads the chain (`morale_root`). Records stamped 82 or below replay byte-exact. Every call site
 /// reads THIS constant, not `83`. The recorder mirror (`act_recorder.gd`) stamps 83 in the same change.
 pub const EPOCH_83_LONE_HERO_TARGET: u32 = 83;
+/// Placeholder gate for the Shaken flag of a joined chain (lead rule call 20.11., reading B). The table's `_solo_morale_test` toggles the
+/// unit it tests (its host, the dead host for a lone hero) and mirrors the flag onto every joined hero (`_solo_mirror_shaken`); an idle
+/// recovery clears the heroes with the host. The core set the flag on the aimed unit alone: a host that failed a test left its hero
+/// unflagged inside the activation (no "fights on alone" carry), and a recovered host left its heroes Shaken. A lone hero that recovered
+/// is no longer Shaken: the dead host's flag outlives the recovery (nothing clears a dead unit's Shaken) and used to fail the hero's next
+/// test without a die. From 94 the test reads the lone hero's OWN flag on both sides (core `unit_shaken`, table
+/// `Main._solo_test_unit_shaken`) and a failed test flags host and heroes the way the table does. Every call site reads THIS constant.
+pub const PENDING_EPOCH_SHAKEN_MIRROR: u32 = 94;
 /// Differently named wound-ignore rules roll one after the other (#2595, table twin `_solo_regen_pick` / `_solo_ignore_wounds`): the
 /// core's `Ctx::regen_groups` hold the ignore rules by NAME (Regeneration first, then the most generous target, then the name), a
 /// bypassed wound skips only the Regeneration roll and joins the pool at the first other group; before, the family was one roll at the
@@ -999,6 +1013,39 @@ pub const CURRENT_RULES_EPOCH: u32 = 93;
 /// Flying move near a unit planned differently. From 94 a Flying unit's route reads the Traversal way; the gate's own base-crossing clamp stays Traversal-only,
 /// as on the table. Below 94 byte-identical. Every call site reads THIS constant, not `94`.
 pub const PENDING_EPOCH_FLYING_THROUGH: u32 = 94;
+/// Placeholder gate for the VERSATILE PICK ON THE MODIFIED TO-HIT (Plan H, H-18; lead decision 20.11.): the table latches an
+/// activation's Versatile Attack pick on the number the first eligible weapon really rolls at (Stealth, Evasive, Artillery, Aircraft,
+/// Shot Modifier, Instinctive, the Unpredictable die all folded in); the core latched it before the dice on the plain Quality. From 94
+/// the volley's first eligible shot decides inside the dice, on its modified number, Defense after the Guarded fold and AP with the
+/// Unpredictable bonus; every later shot, volley and charge of the activation reuses the stamped pick. Below 94 byte-identical.
+/// Every call site reads THIS constant, not the literal `94`.
+pub const PENDING_EPOCH_VERSATILE_MODIFIED_HIT: u32 = 94;
+/// Placeholder gate for DEADLY LANDING INLINE (Plan H, the dlines2 train; lead decision 20.11.): the table lands a Deadly weapon's
+/// unsaved wounds right after that weapon's saves, so a LATER weapon of the same volley reads the target as it stands then; a target
+/// whose last model the Deadly wounds killed no longer lends its rules (Stealth, Evasive, Aircraft, Fortified, Shielded, Regeneration ...)
+/// to the later weapons ("dead models lend nothing", ruling 20.11.). The core landed Deadly after all the dice and kept the captured
+/// target for every weapon. From 94 the volley fold lands each Deadly weapon's groups on a scratch copy of the state and, once the
+/// target's chain is wiped, reads `Ctx::wiped` for the weapons still to fire; blast caps, the attack counts and the range gates stay
+/// as declared. Below 94 byte-identical. Every call site reads THIS constant, not the literal `94`.
+pub const PENDING_EPOCH_DEADLY_INLINE: u32 = 94;
+/// Placeholder gate for EXACT STRIKER LABELS (Plan H, lead order 20.11.; table twin `AiActRecorder.PENDING_EPOCH_EXACT_STRIKER_LABELS`, planner twin
+/// `BattleSim._profiles_of`): the unit-level striker scans (`unit.rs::stamp_unit_strikers`, `_solo_striker_has_bane`) matched Bane / Lacerate / Rending / Unstoppable by
+/// PREFIX, so a label that only STARTS with one of them counted as the rule. The army-book texts (ds/h_prefix_labels.md) say `Bane Mark`, `Rending Mark`, `Unstoppable Mark` mark
+/// ONE enemy unit and hand the rule once to the friendly units attacking it, and `Bane in Melee Buff` hands it once to another unit: none makes its bearer a bearer. From 94 only the
+/// rule and its explicit aliases (`rules::is_unlisted_striker_label`) count; the Aura labels stay inert as before. Below 94 byte-identical. Every call site reads THIS constant.
+pub const PENDING_EPOCH_EXACT_STRIKER_LABELS: u32 = 94;
+/// Placeholder gate for the heightfield plan (a generated tier board, `PlainTerrain.tiers`): from 94 the core reads the
+/// board's heights - a model stands on its tier, a tier block hides what stands behind it, a cliff is not walked, a ladder
+/// costs its rise. Below 94 the same header plays like a flat board; a header with no `tiers` plays flat at every epoch.
+/// Every call site reads THIS constant, not the literal `94` or `CURRENT_RULES_EPOCH`. Table twin `PENDING_EPOCH_HEIGHT`
+/// in `act_recorder.gd`. Nothing reads it yet.
+pub const PENDING_EPOCH_HEIGHT: u32 = 94;
+/// Placeholder gate for the casualty order's tie-break: the table measures a model's distance to its unit's centroid as a Godot
+/// `Vector2.length()` (f32); the core used an f64 hypot, which parts two mirror models of a symmetric formation (equal in exact
+/// arithmetic) by noise, so the core could remove another model of the pair than the table does (cast door probe, 20.11.: a
+/// spell killing 5 of 6 models in a line left slot 2 standing where the table leaves slot 3). From 94 the core measures in f32 the
+/// same way. Only paths with `Seams::tray_exact` use the order. Every call site reads THIS constant, not the literal `94`.
+pub const PENDING_EPOCH_CASUALTY_TIES: u32 = 94;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2320,6 +2367,16 @@ mod tests {
         EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_87_WALKED_DANGEROUS, EPOCH_88_SPLIT_LONE_HERO, EPOCH_89_SHARED_BEARERS,
         EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER,
     };
+
+    /// Heightfield plan step 7: the gate exists, sits ahead of the live epoch (so no recorded or fresh game reads it yet),
+    /// is off one epoch below and on from its own number.
+    #[test]
+    fn the_height_gate_is_pending_ahead_of_the_live_epoch() {
+        use super::PENDING_EPOCH_HEIGHT as gate;
+        assert_eq!(gate, 94);
+        assert!(!rule_on(CURRENT_RULES_EPOCH, gate), "pending: the live epoch must not reach the heightfield yet");
+        assert!(!rule_on(gate - 1, gate) && rule_on(gate, gate));
+    }
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
     /// `rule_on` is a plain `>=`, tested at its own boundary — `since_epoch`

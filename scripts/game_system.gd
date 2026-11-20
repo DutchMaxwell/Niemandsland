@@ -8,6 +8,7 @@ extends RefCounted
 ## Same ids, same order as RulesRegistry.SYSTEMS and rules.rs SYSTEMS.
 const IDS: Array = ["gf", "gff", "aof", "aofs", "aofr"]
 const DEFAULT_ID: String = "gf"
+const TERRAIN_PATH: String = "res://assets/terrain_systems.json"
 
 const SETTING_GRIMDARK := "grimdark"
 const SETTING_FANTASY := "fantasy"
@@ -48,6 +49,19 @@ static func is_known(id: String) -> bool:
 	return IDS.has(id.strip_edges().to_lower())
 
 
+## Applies the "system" key of a pending table setup (what the setup screen picked) to the army manager and returns
+## the battle-log line ("" when the setup has no key: harness, tutorial, scenario and old paths stay "never set").
+## A value that is no system changes nothing and says so.
+static func apply_table_setup(setup: Dictionary, manager: Object) -> String:
+	if manager == null or not setup.has("system"):
+		return ""
+	var raw := str(setup["system"])
+	if not is_known(raw):
+		return "Game system: \"%s\" is not a game system, the table keeps none" % raw
+	manager.table_system = raw.strip_edges().to_lower()
+	return "Game system: %s" % label(manager.table_system)
+
+
 static func label(id: String) -> String:
 	return str(_LABELS[normalize(id)])
 
@@ -65,3 +79,43 @@ static func scale(id: String) -> String:
 ## The board the setup screen preselects for this system, in feet (width, depth).
 static func default_board_feet(id: String) -> Vector2i:
 	return _BOARD_FEET[normalize(id)]
+
+
+static var _rows: Dictionary = {}
+static var _rows_loaded := false
+
+
+static func reset_cache() -> void:
+	_rows = {}
+	_rows_loaded = false
+
+
+static func _terrain_rows() -> Dictionary:
+	if not _rows_loaded:
+		_rows_loaded = true
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(TERRAIN_PATH))
+		if parsed is Dictionary:
+			_rows = parsed
+		else:
+			push_warning("[GAME SYSTEM] %s missing or unparseable - every terrain item is offered" % TERRAIN_PATH)
+	return _rows
+
+
+## Does a table of `system` OFFER terrain item `id` of `kind` (assets/terrain_systems.json)? It filters offers only,
+## never what already stands on a table. Fails OPEN: a kind or id with no row is offered (test/game_system_offers_test.gd
+## fails CLOSED for every catalogued id), and so is an empty or unknown system (it folds to the default, today's offers).
+## A row with `available: false` is offered nowhere yet.
+static func offers(kind: String, id: String, system: String) -> bool:
+	var of_kind: Variant = _terrain_rows().get(kind)
+	if not (of_kind is Dictionary) or not ((of_kind as Dictionary).get(id) is Dictionary):
+		return true
+	var row: Dictionary = (of_kind as Dictionary)[id]
+	if not bool(row.get("available", true)):
+		return false
+	var settings: Variant = row.get("settings")
+	if settings is Array and not (settings as Array).has(setting(system)):
+		return false
+	var scales: Variant = row.get("scales")
+	if scales is Array and not (scales as Array).has(scale(system)):
+		return false
+	return true
