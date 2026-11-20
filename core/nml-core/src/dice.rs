@@ -516,6 +516,9 @@ pub struct ShootResult {
     /// The volley's Deadly weapons, one entry per weapon for the table's line (`_solo_land_deadly_wounds`): `(weapon, raw
     /// unsaved, X, how many of `deadly_groups` it pushed)`, in the same order. The volley landing drains both together.
     pub deadly_lines: Vec<(String, i64, i64, usize)>,
+    /// The vs-target Marks (`tray_vs_marks`) this activation placed and has not yet seen spent: `(mark name, unit holding the record,
+    /// marked target)`. Sim-level bookkeeping for the table's consumption line (`say_marks_consumed`); never merged by `absorb`.
+    pub marks_open: Vec<(String, usize, usize)>,
     /// Wounds the target's ignore rules (Regeneration and its family) cancelled in the melee being resolved, summed over its phases by the
     /// sim (`strike_phase`, Impact) for the table's "cancelled by Regeneration" note on the melee result line (`_solo_regen_ignored`).
     pub regen_ignored: i64,

@@ -1829,6 +1829,7 @@ mod shaken_strikeback;
 mod second_wind;
 mod second_wind_score;
 mod surge_mark;
+mod mark_lines;
 mod spell_accumulator;
 mod spell_conduit;
 mod spell_grants_batch1;
