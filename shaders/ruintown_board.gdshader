@@ -18,6 +18,19 @@ varying flat float kind;
 
 const float IN = 0.0254;
 
+// Tabletop scale (plan D-R2: true 1:56 x ~1.4, so the texture survives at arm's length): feature sizes in inches. A pawn base (~1 in) covers about seven setts and a wall course is a fifth of a pawn.
+const float SETT_W = 0.14;
+const float SETT_H = 0.11;
+const float COURSE = 0.24;   // wall stone: courses 0.24 in high, stones 0.3 - 0.8 in long (len 0.5 x 0.7 .. 1.5)
+const float TILE_W = 0.16;
+const float TILE_H = 0.13;
+const float BOARD_W = 0.18;   // floor boards 0.18 in wide, 1.5 - 3 in long
+
+// How much of a pattern whose features are `size` inches survives at this pixel: 1 when a feature spans 3.5 pixels or more, 0 below 1.5 (it averages out instead of shimmering).
+float keep(float coord, float size) {
+	return smoothstep(1.5, 3.5, size / max(fwidth(coord), 0.00001));
+}
+
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wnrm = normalize(MODEL_NORMAL_MATRIX * NORMAL);
@@ -31,9 +44,10 @@ vec3 stone(vec2 uv, float seed, float course, float len, vec3 tint) {
 	float x = uv.x + h21(vec2(row, seed)) * 4.0;
 	float col = floor(x / l);
 	vec2 f = vec2(fract(x / l) * l, fract(uv.y / course) * course);
-	float edge = smoothstep(0.0, 0.05, min(min(f.x, l - f.x), min(f.y, course - f.y)));
+	float edge = smoothstep(0.0, course * 0.11, min(min(f.x, l - f.x), min(f.y, course - f.y)));
 	float tone = h21(vec2(col, row) + seed);
-	return mix(vec3(0.15, 0.14, 0.13), tint * mix(0.72, 1.12, tone) * mix(0.9, 1.1, vnoise(uv * 4.0)), edge);
+	vec3 laid = mix(vec3(0.15, 0.14, 0.13), tint * mix(0.72, 1.12, tone) * mix(0.9, 1.1, vnoise(uv * 4.0)), edge);
+	return mix(tint * 0.8, laid, keep(uv.y, course));   // too fine for the pixel: the mean of stone and mortar
 }
 
 // Half-timber of one 3 in storey (uv.y = height in inches, a storey starts at a multiple of 3): dark posts every 1.5 in, rails at the storey
@@ -67,18 +81,19 @@ vec3 cobble(vec2 xz, float seed, vec3 tint, float run, vec2 fan) {
 	vec2 f;
 	if (run > 0.25 && run < 0.75) {
 		float r = length(fan);
-		row = floor(r / 0.42);
-		float n = max(floor(6.2832 * (row + 0.5) * 0.42 / 0.62), 3.0);   // a whole number of setts in every ring: no seam
+		row = floor(r / SETT_H);
+		float n = max(floor(6.2832 * (row + 0.5) * SETT_H / SETT_W), 3.0);   // a whole number of setts in every ring: no seam
 		x = (atan(fan.y, fan.x) / 6.2832 + 0.5) * n + 0.5 * mod(row, 2.0) + h21(vec2(row, seed)) * 0.3;
-		f = vec2(fract(x), fract(r / 0.42)) - 0.5;
+		f = vec2(fract(x), fract(r / SETT_H)) - 0.5;
 	} else {
 		vec2 q = run > 0.75 ? xz.yx : xz;
-		row = floor(q.y / 0.42);
-		x = q.x / 0.62 + 0.5 * mod(row, 2.0) + h21(vec2(row, seed)) * 0.3;
-		f = vec2(fract(x), fract(q.y / 0.42)) - 0.5;
+		row = floor(q.y / SETT_H);
+		x = q.x / SETT_W + 0.5 * mod(row, 2.0) + h21(vec2(row, seed)) * 0.3;
+		f = vec2(fract(x), fract(q.y / SETT_H)) - 0.5;
 	}
 	float sett = smoothstep(0.17, 0.10, length(max(abs(f) - vec2(0.3), 0.0)));
-	return mix(vec3(0.10, 0.09, 0.09), tint * mix(0.7, 1.15, h21(vec2(floor(x), row) + seed)) * mix(0.9, 1.1, vnoise(xz * 3.0)), sett);
+	vec3 laid = mix(vec3(0.10, 0.09, 0.09), tint * mix(0.7, 1.15, h21(vec2(floor(x), row) + seed)) * mix(0.9, 1.1, vnoise(xz * 3.0)), sett);
+	return mix(tint * 0.78, laid, keep(xz.x, SETT_W));   // setts of 0.14 in are ~3 px at the play camera: below that they average out instead of crawling
 }
 
 // The ground map at a point (inches off the board centre), and the noise that bends the lookup: the earth / cobble border follows the bent point, not the 3 in grid.
@@ -112,9 +127,9 @@ void fragment() {
 			alb = timber(uv, seed, palette[13].rgb, emis);
 		} else if (k == 13) {   // an intact house: half-timber on a stone plinth
 			float plinth = 0.3 + 0.75 * fract(kind);   // the house's own plinth height rides in the fraction of its kind
-			alb = uv.y < plinth ? stone(uv, seed, 0.45, 0.9, vec3(0.5, 0.48, 0.44)) : timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed), emis);
+			alb = uv.y < plinth ? stone(uv, seed, 0.2, 0.45, vec3(0.5, 0.48, 0.44)) : timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed), emis);
 		} else if (k == 12 || k == 9 || k == 10 || k == 16) {   // city wall, stone pieces, chimney: coursed stone (brick for the chimney)
-			alb = k == 16 ? stone(uv, seed, 0.25, 0.55, tint) : stone(uv, seed, 0.55, 1.0, tint);
+			alb = k == 16 ? stone(uv, seed, 0.1, 0.22, tint) : stone(uv, seed, COURSE, 0.5, tint);
 		} else if (k == 18) {   // a wooden prop: planks with iron bands
 			alb = tint * mix(0.7, 1.15, h21(vec2(floor(uv.x * 4.0), seed))) * mix(0.55, 1.0, smoothstep(0.0, 0.05, abs(fract(uv.y * 2.5) - 0.5) - 0.42)) * mix(0.8, 1.0, seam(uv.x, 0.25, 0.03));
 		} else if (k == 3 || k == 4 || k == 6) {   // ruined house tiers and towers, by storey
@@ -123,23 +138,23 @@ void fragment() {
 			uv.y += (part - 0.5) * 0.7;
 			float band = k == 6 ? 2.0 : floor(uv.y / 3.0);   // a tower is stone all the way up
 			if (band < 0.5) {
-				alb = mix(stone(uv, seed, 0.55, 1.0, tint * 0.9), vec3(0.09, 0.06, 0.04), door(uv, seed));
+				alb = mix(stone(uv, seed, COURSE, 0.5, tint * 0.9), vec3(0.09, 0.06, 0.04), door(uv, seed));
 			} else if (band < 1.5) {
 				alb = timber(uv, seed, tint * 1.02, emis);
 			} else {
-				alb = stone(uv, seed, 0.5, 1.1, tint * 1.05);
+				alb = stone(uv, seed, COURSE, 0.55, tint * 1.05);
 			}
 		}
 	} else if (wnrm.y < 0.95 && k == 15) {   // a sloped roof face: rows of tiles, a tone per tile, a shadow under each row
 		float along = abs(wnrm.x) > abs(wnrm.z) ? p.z : p.x;
-		float row = floor(p.y * 4.0);
-		float tile = floor(along / 0.45 + row * 0.5);
+		float row = floor(p.y / TILE_H);
+		float tile = floor(along / TILE_W + row * 0.5);
 		vec3 base = tint * mix(0.7, 1.15, h21(vec2(tile, row + seed)));
-		alb = base * mix(0.62, 1.0, smoothstep(0.0, 0.7, fract(p.y * 4.0))) * mix(1.0, 0.8, smoothstep(0.55, 0.7, fbm(vec2(along, p.y) * 1.3 + seed)));
+		vec3 laid = base * mix(0.62, 1.0, smoothstep(0.0, 0.7, fract(p.y / TILE_H))) * mix(1.0, 0.8, smoothstep(0.55, 0.7, fbm(vec2(along, p.y) * 1.3 + seed)));
+		alb = mix(tint * 0.82, laid, keep(p.y, TILE_H));   // 0.16 x 0.13 in tiles: the mean below ~3 px
 	} else if (wnrm.y > 0.5) {   // a top face, by kind
 		vec2 xz = p.xz;
-		vec2 e = abs(fract(xz / cell_in) - 0.5);
-		float grid = mix(1.0, 0.86, smoothstep(0.48, 0.495, max(e.x, e.y)));   // the 3 in cell, faint (not on the open ground: it has no cell grid)
+		float grid = 1.0;   // the faint 3 in cell line is gone from every top (plan R1: no grid to count on the table)
 		float run = 0.5;
 		vec2 fan = vec2(1.0, 0.0);
 		float gutter = 0.0;
@@ -173,9 +188,9 @@ void fragment() {
 			if (k != 8) {
 				tint *= mix(0.9, 1.1, ground_at(xz).g);   // each part of a ruined row has its own tone
 			}
-			alb = tint * mix(0.72, 1.05, h21(vec2(floor(xz.x / 2.1), floor(xz.y / 0.5) + seed))) * mix(0.8, 1.0, seam(xz.y, 0.5, 0.05)) * mix(0.84, 1.0, smoothstep(0.35, 0.6, fbm(xz * 0.9 + seed))) * grid;
+			alb = tint * mix(0.72, 1.05, h21(vec2(floor(xz.x / 2.2), floor(xz.y / BOARD_W) + seed))) * mix(0.8, 1.0, mix(1.0, seam(xz.y, BOARD_W, 0.018), keep(xz.y, BOARD_W))) * mix(0.84, 1.0, smoothstep(0.35, 0.6, fbm(xz * 0.9 + seed))) * grid;
 		} else if (k == 6 || k == 12 || k == 9 || k == 10) {   // tower and wall tops, stone pieces: flagstones
-			alb = stone(xz, seed, 1.0, 1.4, tint) * mix(0.95, 1.0, grid);
+			alb = stone(xz, seed, 0.45, 0.6, tint);   // flagstones 0.45 - 0.8 in
 		} else if (k == 11) {   // garden plot: overgrown, weeds and bare patches
 			alb = tint * mix(0.6, 1.25, fbm(xz * 2.4 + seed)) * mix(1.0, 0.7, step(0.9, h21(floor(xz * 9.0))));
 		} else if (k == 14) {   // rubble: broken stones
