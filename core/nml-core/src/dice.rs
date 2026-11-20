@@ -667,7 +667,42 @@ pub(crate) fn say_shielded(tray: &mut Tray, def: &Ctx, name: &str) {
     };
     let note = if def.shielded_alias == ShieldedAlias::None && def.shielded_note { " (most of its models carry it)" } else { "" };
     say_rule(tray, "shielded", def.side, || format!("{name} is {rule}{note}: +{bonus} Defense (saves on {}+)",
-        shielded_defense(def.defense, bonus, def.def_floor()).clamp(BEST_HIT_TARGET, 6)));
+        parts_defense(def).clamp(BEST_HIT_TARGET, 6)));
+}
+
+/// The working Defense the table's defence-part lines print as "saves on N+" (`_solo_defense_vs`: Shielded, then the growth ladder and the
+/// ledger's token modifier, no cover, no AP): `save_batch`'s own fold without the AP. Shielded alone reads as it always did.
+fn parts_defense(def: &Ctx) -> i64 {
+    let d = shielded_defense(def.defense, def.shielded_bonus(), def.def_floor());
+    let gd = def.growth_def_mod;
+    if gd == 0 {
+        d
+    } else if def.modifier_sum {
+        d - gd + def.defense_mod
+    } else if def.growth_def_lowers {
+        ((d - gd).clamp(2, 6) + def.defense_mod).max(BEST_HIT_TARGET)
+    } else {
+        (d + gd + def.defense_mod).max(BEST_HIT_TARGET)
+    }
+}
+
+/// The table's `_solo_log_defense_parts` lines for the Growth Markers defence ladder (Defensive Growth / Frenzy): one line per rule that
+/// earned a bonus, `<U> is <rule>: +N Defense (saves on M+)`, after the Shielded line and before the announce.
+pub(crate) fn say_growth_defense(tray: &mut Tray, def: &Ctx, name: &str, parts: &[(String, i64)]) {
+    if def.growth_def_mod == 0 {
+        return;
+    }
+    for (rule, bonus) in parts {
+        say_rule(tray, "growth_def", def.side, || format!("{name} is {rule}: +{bonus} Defense (saves on {}+)", parts_defense(def).clamp(BEST_HIT_TARGET, 6)));
+    }
+}
+
+/// The table's line for the Growth-marker AP a save batch carries (`_solo_resolve_saves`, from `EPOCH_73_V36`), after the conditional AP
+/// lines: `<rule>: <striker> adds AP(+N) from its growth markers`, once per weapon profile that has hits to save.
+pub(crate) fn say_growth_ap(tray: &mut Tray, att: &Ctx, owner: &str) {
+    if att.growth_ap_mod > 0 && att.v36_rules && !att.growth_ap_name.is_empty() {
+        say_rule(tray, "growth_ap", att.side, || format!("{}: {owner} adds AP(+{}) from its growth markers", att.growth_ap_name, att.growth_ap_mod));
+    }
 }
 
 pub(crate) fn say_rule(tray: &mut Tray, rule: &'static str, side: i64, text: impl FnOnce() -> String) {
@@ -907,6 +942,15 @@ fn save_batch(
         // The table's line (`_solo_save_batch`), once per save batch whose AP the rule cut, before the threshold line.
         say_rule(tray, "fortified", def.side, || format!("{fortified_rule}: {def_owner} takes the hits at AP({eff_ap}) instead of AP({ap}) — saves on {}+{}", stat + eff_ap,
             if fortified_note { " (most of its models carry it)" } else { "" }));
+    }
+    // Fortified Growth's own cut composes with a Fortified above and says its own line after it (the table's `_solo_resolve_saves`,
+    // NML-937): AP before = the AP the plain rule left, AP after = the floored sum, the Defense it then saves on, no "most models" note.
+    if def.growth_fortify_ap != 0 && !def.growth_fortify_name.is_empty() {
+        let after = (eff_ap + def.growth_fortify_ap).max(0);
+        if after < eff_ap {
+            say_rule(tray, "fortified", def.side, || format!("{}: {def_owner} takes the hits at AP({after}) instead of AP({eff_ap}) — saves on {}+",
+                def.growth_fortify_name, stat + after));
+        }
     }
     // One-core P3 step 25: the table's threshold line before the save dice (`_solo_log_save_threshold`,
     // main.gd:9823), from the stat and the AP `target` was built from (only modifier_sum clamps the sum).
@@ -2150,6 +2194,7 @@ pub(crate) fn resolve_volley_with_pick_label(
                 }
             }
         }
+        say_growth_ap(tray, att, sh.owner);
         let normal = hits - ap4;
         // SHO-18 (rules 3.6): a Shred ALIAS fires only from a shot over 9".
         let shred_alias_fires = shred_alias_dice
@@ -3138,6 +3183,7 @@ pub fn resolve_melee_leg_wipe(
                     ap += conditional_ap_bonus(&piercing_assault_grant_cond(), def.tough.max(1), def.defense, charging, 0.0, true);
                 }
             }
+            say_growth_ap(tray, sh.att, sh.owner);
             // 1 = the base shred window — melee NEVER widens: the Shred
             // Boost's charge half needs a pre-charge gap this port never
             // measured (see the NOT-PORTED list on resolve_melee_with_tray).

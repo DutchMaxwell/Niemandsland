@@ -649,6 +649,11 @@ pub struct Ctx {
     /// with (negative — the `enemy_ap_per_two` ladder), floored at the hard 0
     /// in `dice::save_batch`.
     pub growth_fortify_ap: i64,
+    /// Door lines (growth lines train): the rule names the table prints for the three facets above, stamped by `sim::ctx_live` beside
+    /// them ("" = no such facet). Piercing Growth / Frenzy join their names with ", " like the table's `ap_names`; Fortified Growth is the
+    /// first `enemy_ap_per_two` rule. Interned (`Ctx` is `Copy`).
+    pub growth_ap_name: &'static str,
+    pub growth_fortify_name: &'static str,
     /// Issue #854 (wave 4) — the DICE-side DIRECTION of `growth_def_mod`.
     /// The table folds every defence part as `base = clampi(base - bonus, 2, 6)`
     /// (main.gd:5510), so from `EPOCH_7_TABLE_RULES` the save rung SUBTRACTS
@@ -4041,6 +4046,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         growth_hit_mod: 0,
         growth_def_mod: 0,
         growth_fortify_ap: 0,
+        growth_ap_name: "",
+        growth_fortify_name: "",
         growth_def_lowers: false,
         growth_wounds_not_attacks,
         growth_wound_dice: 0,

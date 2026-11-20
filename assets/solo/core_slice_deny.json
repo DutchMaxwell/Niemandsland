@@ -25,9 +25,9 @@
   },
   "groups": {
     "ledger_not_round_tripped": {
-      "primitives": ["Teleport", "Infiltrate", "Growth Markers"],
+      "primitives": ["Teleport", "Infiltrate"],
       "kind": "ledger",
-      "why": "Their marker pools / once-per-game stamps do not come back from the core's delta yet (slice design 1d). Growth Markers measured: a joined hero's Piercing Growth AP differs between the core and the table (C-18 soak, Hive Swarms + Grunt Veteran). Hit & Run and Hit & Run Shooter lifted again (HR-POS): the delta carries the stepped positions and the table lands them (door probe 8/8).",
+      "why": "Their marker pools / once-per-game stamps do not come back from the core's delta yet (slice design 1d). Hit & Run and Hit & Run Shooter lifted again (HR-POS): the delta carries the stepped positions and the table lands them (door probe 8/8). Growth Markers lifted: the growth count rides the delta (C-13), the joined hero's AP is folded on the table (DS-PG), and the door says the family's four lines (door_lines_growth_test).",
       "leaves_with": "C-12 / C-13 and the activation-level steps"
     },
     "pre_attack_beat_twice": {
