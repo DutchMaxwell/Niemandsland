@@ -23,6 +23,8 @@ const RNG_SEED := 71823  # deterministic scatter (purely cosmetic, but stable)
 
 var _table_size := Vector2(1.22, 1.22)
 var _biome := ""
+## Table-local metres where no tuft grows (a generated board covers the ground there); an empty Rect2 = none.
+var _keepout := Rect2()
 ## The tuft mesh (geometry + blade texture + material) is identical for every rebuild,
 ## but _blade_texture() does per-pixel CPU work; build it once and reuse so quality
 ## switches and table resizes only re-scatter instances, never regenerate the texture.
@@ -42,6 +44,12 @@ func set_table_size(size_m: Vector2) -> void:
 		return
 	_table_size = size_m
 	_rebuild()
+
+
+func set_keepout(rect: Rect2) -> void:
+	if rect != _keepout:
+		_keepout = rect
+		_rebuild()
 
 
 ## Grass only grows on the grassland biome; other biomes clear the field.
@@ -73,13 +81,18 @@ func _rebuild() -> void:
 	grass.mesh = mesh
 	grass.instance_count = count
 	var half := _table_size / 2.0
+	var kept := 0   # the tufts inside the keepout are skipped; the rest fill the front of the multimesh
 	for i in count:
 		var height := rng.randf_range(TUFT_HEIGHT_MIN_M, TUFT_HEIGHT_MAX_M)
 		var basis := Basis(Vector3.UP, rng.randf() * TAU)
 		basis = basis.scaled(Vector3(rng.randf_range(0.8, 1.2), height / TUFT_HEIGHT_MAX_M, rng.randf_range(0.8, 1.2)))
 		var origin := Vector3(rng.randf_range(-half.x, half.x), 0.0, rng.randf_range(-half.y, half.y))
-		grass.set_instance_transform(i, Transform3D(basis, origin))
-		grass.set_instance_color(i, BASE_COLOR * rng.randf_range(COLOR_JITTER_MIN, COLOR_JITTER_MAX))
+		if _keepout.has_point(Vector2(origin.x, origin.z)):
+			continue
+		grass.set_instance_transform(kept, Transform3D(basis, origin))
+		grass.set_instance_color(kept, BASE_COLOR * rng.randf_range(COLOR_JITTER_MIN, COLOR_JITTER_MAX))
+		kept += 1
+	grass.visible_instance_count = kept
 	multimesh = grass
 
 
