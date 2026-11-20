@@ -25,7 +25,7 @@ const LADDER_OFFSET_IN := 0.12   # the ladder stands this far off the wall face
 const LADDER_RAIL_IN := 0.12
 const LADDER_RUNG_GAP_IN := 0.5
 ## Surface kinds in the order the board shader knows them (INSTANCE_CUSTOM.x, shaders/tiefwerk_board.gdshader).
-const KINDS := ["ground", "street", "hazard", "tier1", "tier2", "ladder", "tier3"]
+const KINDS := ["ground", "street", "hazard", "tier1", "tier2", "ladder", "tier3", "kerb"]
 const SHADER := preload("res://shaders/tiefwerk_board.gdshader")
 
 var layout_seed: int = 0
@@ -89,6 +89,7 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 		for k in range(1, int(rise / LADDER_RUNG_GAP_IN)):
 			out.append(_slab(edge, away, side, LADDER_OFFSET_IN, LADDER_OFFSET_IN + LADDER_RAIL_IN, LADDER_WIDTH_IN,
 				base + k * LADDER_RUNG_GAP_IN, base + k * LADDER_RUNG_GAP_IN + LADDER_RAIL_IN, "ladder", false))
+	out.append_array(BoardgenSumps.kerbs(layout))   # the low rim round each toxic sump
 	return out
 
 
@@ -153,6 +154,10 @@ func build(layout: Dictionary) -> void:
 	debris.name = "Debris"
 	debris.build(layout)
 	add_child(debris)
+	var sumps := BoardgenSumps.new()
+	sumps.name = "Sumps"
+	sumps.build(layout)
+	add_child(sumps)
 	var board := Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) * INCHES_TO_METERS
 	_footprint = Rect2(board * -0.5, board).grow(SCATTER_OFF_M)
 	var mmi := MultiMeshInstance3D.new()
