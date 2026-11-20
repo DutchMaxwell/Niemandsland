@@ -48,4 +48,27 @@ planner_tag test_only 1 4
 planner_tag tools_only 71 1027
 planner_tag tree 27 536
 planner_tag TOTAL 345 5981
+owner dangerous_morale ai_volley 1 P4.D-41/H-28
+owner dangerous_morale breath 1 H-38
+owner dangerous_morale dangerous_ai_activation 4 H-44
+owner dangerous_morale dangerous_player_auto 1 H-32
+owner dangerous_morale human_volley 1 P4.D-43/H-34
+owner dangerous_morale melee 2 P4.D-49/E-32
+owner dangerous_morale other_rule_hits 2 H-38
+owner dangerous_morale spells 1 H-45
+owner dangerous_morale transport_spill 1 H-41
+owner dangerous_morale TOTAL 14 -
+owner hit_save_shared ai_volley 10 P4.D-41/H-28
+owner hit_save_shared breath 2 H-38
+owner hit_save_shared deathstrike 2 P4.D-49/H-35
+owner hit_save_shared human_volley 10 P4.D-43/H-34
+owner hit_save_shared jump_fall 1 H-43
+owner hit_save_shared melee 20 P4.D-49/E-32
+owner hit_save_shared melee_exception 1 H-39
+owner hit_save_shared other_rule_hits 6 H-38
+owner hit_save_shared self_destruct 2 P4.D-49/H-35
+owner hit_save_shared spells 5 H-45
+owner hit_save_shared table_internal 3 H-46
+owner hit_save_shared trap 2 H-42
+owner hit_save_shared TOTAL 64 -
 TABLE LINES LEFT: 11417

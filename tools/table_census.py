@@ -15,6 +15,11 @@ and their call sites, counted like the group callers (`name(` and Callable/call(
 the class of the function's file, so a same-named function of another planner file is not charged. The section is
 printed, never committed.
 
+The manifest's `owners` section (Plan H, H-1) names the groups whose prod call sites are counted per owner: each calling
+function maps to an owner, each owner to the plan step that retires its sites. The report carries
+`owner <group> <owner> <sites> <retire>` rows (plus a TOTAL per group); --check is red on a call site whose enclosing
+function has no owner row.
+
   python3 tools/table_census.py            print the report
   python3 tools/table_census.py --write    rewrite the committed report (lines and prod callers only)
   python3 tools/table_census.py --runtime census.json   print the report + the soak's table share of AI volleys
@@ -85,8 +90,9 @@ class Source:
         return self.funcs[k][1] if k >= 0 else "<file>"
 
 
-def census(root, manifest):
-    """Return (rows, new callers). rows: (group, id, lines, prod, test)."""
+def census(root, manifest, sites=None):
+    """Return (rows, new callers). rows: (group, id, lines, prod, test). A list passed as `sites` collects every prod
+    call site as (group, id, "file:enclosing function"), the input of owner_rows."""
     sources = {}
     for sub in ("scripts", "tools", "test"):
         for p in sorted((root / sub).rglob("*.gd")):
@@ -118,10 +124,37 @@ def census(root, manifest):
                         n[not rel.startswith("test/")] += 1
                         caller = f"{rel}:{other.enclosing(i)}"
                         ok = {caller, "@" + members.get(caller, "\0")} & set(allowed.get(ident, []))
+                        if not rel.startswith("test/") and sites is not None:
+                            sites.append((group, ident, caller))
                         if not rel.startswith("test/") and not ok:
                             bad.add((ident, caller))
             rows.append((group, ident, src.span(name), n[True], n[False]))
     return rows, sorted(bad)
+
+
+def owner_rows(sites, manifest):
+    """Return (rows, unowned). The manifest's `owners` section names the groups whose prod call sites are counted per owner
+    (`groups`), maps each calling function to an owner (`functions`, "file:function") and each owner to the plan step that
+    retires its sites (`retire`, one token). rows: (group, owner, sites, retire), sorted, plus one `TOTAL` row per group;
+    unowned: the call sites whose enclosing function has no owner row, as (callee, caller). A listed function that is gone is
+    fine on purpose (its sites shrink); an owner without a retire token is a manifest error."""
+    spec = manifest.get("owners")
+    if not spec:
+        return [], []
+    counts, unowned = {}, []
+    for group, ident, caller in sites:
+        if group not in spec["groups"]:
+            continue
+        owner = spec["functions"].get(caller)
+        if owner is None:
+            unowned.append((ident, caller))
+            continue
+        if owner not in spec["retire"]:
+            raise SystemExit(f"table census: owner {owner!r} of {caller} has no retire step in owners.retire")
+        counts[(group, owner)] = counts.get((group, owner), 0) + 1
+    rows = [(g, o, n, spec["retire"][o]) for (g, o), n in sorted(counts.items())]
+    rows += [(g, "TOTAL", sum(n for (gg, _), n in counts.items() if gg == g), "-") for g in sorted({g for g, _ in counts})]
+    return sorted(rows, key=lambda r: (r[0], r[1] == "TOTAL", r[1])), sorted(set(unowned))
 
 
 def planner_tags(root, manifest):
@@ -200,7 +233,7 @@ def tool_callers(root, manifest, files):
     return rows, hits
 
 
-def render(rows, tags=None, callers=None):
+def render(rows, tags=None, callers=None, owners=None):
     out, total = [], 0
     for group in sorted({r[0] for r in rows}):
         mine = [r for r in rows if r[0] == group]
@@ -211,6 +244,7 @@ def render(rows, tags=None, callers=None):
         out.append(f"planner_tag {tag} {n} {lines}")
     if tags:
         out.append(f"planner_tag TOTAL {sum(n for n, _ in tags.values())} {sum(ln for _, ln in tags.values())}")
+    out += [f"owner {g} {o} {n} {retire}" for g, o, n, retire in owners or []]
     out.append(f"TABLE LINES LEFT: {total}")
     if callers:
         out += ["", "TEST CALLERS BY TAG"] + [f"test_callers {tag} {n} {sites}" for tag, (n, sites) in sorted(callers.items())]
@@ -222,7 +256,7 @@ def prod_only(text):
     the text `--write` commits. A test added or removed must not move the committed file nor turn --check red; the
     printed report keeps both."""
     head = text.split("TEST CALLERS BY TAG", 1)[0].rstrip()
-    return "".join(" ".join(p[:-1] if len(p) == 5 else p) + "\n" for p in (ln.split() for ln in head.splitlines()))
+    return "".join(" ".join(p[:-1] if len(p) == 5 and p[0] != "owner" else p) + "\n" for p in (ln.split() for ln in head.splitlines()))
 
 
 def _parse_report(text):
@@ -233,7 +267,9 @@ def _parse_report(text):
             out[("TABLE LINES LEFT:",)] = (int(ln.split(":", 1)[1].strip()),)
         else:
             p = ln.split()
-            if len(p) == 4:
+            if p and p[0] == "owner" and len(p) == 5:
+                out[("owner", f"{p[1]}:{p[2]}")] = (int(p[3]),)
+            elif len(p) == 4:
                 out[(p[0], p[1])] = (int(p[2]), int(p[3]))
     return out
 
@@ -420,16 +456,20 @@ def main(argv=None):
             ap.error(f"--gate-tag {t}: unknown planner tag (tag_vocabulary)")
     if args.gate_file:
         return tool_gate(args, manifest, gate_tags)
-    rows, bad = census(args.root, manifest)
+    sites = []
+    rows, bad = census(args.root, manifest, sites)
+    owners, unowned = owner_rows(sites, manifest)
     tags, untagged = planner_tags(args.root, manifest)
     callers, hits = test_callers(args.root, manifest)
     gate = hits.get(args.gate_tag, []) if args.gate_tag else []
     for ident in gate:
         print(f"::error::test caller of {args.gate_tag}: {ident}")
-    text = render(rows, tags, callers)
+    text = render(rows, tags, callers, owners)
     for problem in untagged:
         print(f"::error::{problem}")
-    if untagged and (args.write or args.check):
+    for callee, caller in unowned:
+        print(f"::error::call site of {callee} in {caller} has no owner row (add the function to owners.functions of tools/table_census.json)")
+    if (untagged or unowned) and (args.write or args.check):
         return 1
     want = prod_only(text)
     if args.write:

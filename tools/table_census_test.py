@@ -498,3 +498,48 @@ def test_the_real_manifest_lists_the_cast_resolvers_as_group_cast():
     assert any(ln.startswith("cast TOTAL ") for ln in printed)
     committed_rows = (REPO / "test/one_core/table_census.txt").read_text().splitlines()
     assert sum(ln.startswith("cast scripts/main.gd:") for ln in committed_rows) == 3   # lines + prod callers only
+
+
+OWNERS = {"groups": ["grp"], "retire": {"door": "P4.D-1/H-1", "rest": "H-2"},
+          "functions": {"scripts/a.gd:door": "door", "scripts/a.gd:old_b": "rest"}}
+
+
+def owned_repo(tmp_path, sneak=False, owner_row=False):
+    root = tmp_path if (tmp_path / "scripts/a.gd").exists() else repo(tmp_path)   # callable twice on one tmp dir
+    manifest = json.loads(json.dumps(MANIFEST))
+    manifest["owners"] = json.loads(json.dumps(OWNERS))
+    (root / "scripts/a.gd").write_text(PROD)
+    if sneak:   # a NEW prod function that calls the group; listed as an allowed caller so only the owner check can fail
+        (root / "scripts/a.gd").write_text(PROD + "\nfunc sneak() -> void:\n\told_a(9)\n")
+        manifest["allowed_callers"]["scripts/a.gd:old_a"].append("scripts/a.gd:sneak")
+    if owner_row:
+        manifest["owners"]["functions"]["scripts/a.gd:sneak"] = "rest"
+    (root / "tools/table_census.json").write_text(json.dumps(manifest))
+    return root
+
+
+def test_owner_rows_count_the_call_sites_per_owner_and_the_committed_report_keeps_them_whole(tmp_path):
+    root = owned_repo(tmp_path)
+    txt = committed(root).read_text().splitlines()
+    assert "owner grp door 1 P4.D-1/H-1" in txt and "owner grp rest 1 H-2" in txt and "owner grp TOTAL 2 -" in txt
+    assert run(root, "--check").returncode == 0
+
+
+def test_check_is_red_on_a_call_site_whose_function_has_no_owner_row_and_green_once_it_has_one(tmp_path):
+    root = owned_repo(tmp_path)
+    committed(root)
+    owned_repo(tmp_path, sneak=True)   # the planted fault: a new function calls old_a, no owner row
+    res = run(root, "--check")
+    assert res.returncode == 1 and "scripts/a.gd:sneak has no owner row" in res.stdout
+    owned_repo(tmp_path, sneak=True, owner_row=True)
+    assert run(root, "--write").returncode == 0 and run(root, "--check").returncode == 0
+
+
+def test_the_real_manifest_owner_rows_equal_the_d50_counts():
+    rows = [ln.split() for ln in run(REPO).stdout.splitlines() if ln.startswith("owner ")]
+    by = {(r[1], r[2]): int(r[3]) for r in rows}
+    assert by[("hit_save_shared", "TOTAL")] == 64 and by[("dangerous_morale", "TOTAL")] == 14
+    sites = lambda *owners: sum(n for (_, o), n in by.items() if o in owners)
+    assert (sites("ai_volley"), sites("human_volley"), sites("melee")) == (11, 11, 22)
+    assert sites("deathstrike", "self_destruct") == 4
+    assert sum(int(r[3]) for r in rows if r[2] != "TOTAL" and not r[4].startswith("P4.D-")) == 30   # no door step of its own
