@@ -56,7 +56,7 @@ static func reset_cache() -> void:
 static func config() -> Dictionary:
 	if not _loaded.is_empty():
 		return _loaded
-	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}, "unmapped_inert": false, "group_names": []}
+	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}, "unmapped_inert": false, "group_names": [], "shooter_only": {}, "lifted_names": {}}
 	var live := path_override.is_empty()
 	var path := live_path()
 	# Each file belongs to one door: the melee files only through MELEE_PATH / MELEE_DENY_PATH, every other path (shipped, deny, a test file) is the shoot door's.
@@ -70,6 +70,9 @@ static func config() -> Dictionary:
 	for g in data.get("groups", {}):
 		for p in data["groups"][g].get("primitives", []):
 			_loaded["primitives"][str(p)] = str(g)
+			# H-9a: a group with "side": "shooter" refuses its primitives on the SHOOTING unit only (a pre-attack beat is the bearer's own act).
+			if str(data["groups"][g].get("side", "")) == "shooter":
+				_loaded["shooter_only"][str(p)] = true
 	_loaded["attached"] = (data.get("groups", {}) as Dictionary).has("attached_heroes")
 	_loaded["group_names"] = (data.get("groups", {}) as Dictionary).keys()
 	# Deny mode only: rule names with no effect on a volley (list-building rules, an item's own label) - taken although the
@@ -77,6 +80,7 @@ static func config() -> Dictionary:
 	if _loaded["mode"] == "deny":
 		_loaded["inert"] = data.get("inert", {})
 		_loaded["deny_names"] = data.get("deny_names", {})   # one rule NAME refused where its primitive is shared
+		_loaded["lifted_names"] = data.get("lifted_names", {})   # H-9b: one rule NAME taken where its primitive's group is refused
 		_loaded["unmapped_inert"] = bool(data.get("unmapped_inert", false))
 	if live:
 		print(mode_line())   # C-19: one line per load of the live slice (once per process outside the tests), so a log names the slice in use
@@ -124,12 +128,14 @@ static func rule_label(r) -> String:
 
 
 ## `gu`'s rule `label` is one the slice takes: listed in "allow", not listed in "deny"; no primitive = no.
-static func _rule_taken(gu: GameUnit, label: String) -> bool:
+static func _rule_taken(gu: GameUnit, label: String, as_target := false) -> bool:
 	var c := config()
 	if (c["inert"] as Dictionary).has(label):
 		return true
 	if (c["deny_names"] as Dictionary).has(label):
 		return false
+	if (c["lifted_names"] as Dictionary).has(label):
+		return true
 	var prims: Dictionary = c["primitives"]
 	var allow: bool = c["mode"] == "allow"
 	if allow and prims.is_empty():
@@ -138,6 +144,8 @@ static func _rule_taken(gu: GameUnit, label: String) -> bool:
 	if entry.is_empty() and bool(c["unmapped_inert"]):
 		return true   # a name no map knows (an upgrade's own label): neither side reads it, the rules it grants are listed apart
 	var p: Variant = entry.get("primitive")
+	if as_target and not allow and p is String and (c["shooter_only"] as Dictionary).has(p):
+		return true   # H-9a: a target's beat rule never acts in the volley it is shot by
 	return p is String and prims.has(p) == allow
 
 
@@ -145,10 +153,12 @@ static func _rule_taken(gu: GameUnit, label: String) -> bool:
 
 ## Why the slice refuses `gu` - the labels the P4.D-3 census counts ("unit_rule:<name>", "attached", "non_opr",
 ## "weapon_rule:<name>"); [] = the core door takes it. `as_target`: a target needs no OPR profile (P4.D-13b).
-static func refusals(gu: GameUnit, as_target := false) -> Array:
+static func refusals(gu: GameUnit, as_target := false, shooters_hero := false) -> Array:
 	var out: Array = []
+	# H-9a: `shooters_hero` = the recursion below reads a SHOOTER's joined hero (as a target for the profile rules, but its beats are the shooter's own).
+	var shot_at := as_target and not shooters_hero
 	for r in gu.get_special_rules():
-		if not _rule_taken(gu, rule_label(r)):
+		if not _rule_taken(gu, rule_label(r), shot_at):
 			out.append("unit_rule:" + rule_label(r))
 	var c := config()
 	if (gu.has_attached_heroes() or gu.is_attached()) and c["attached"] != (c["mode"] == "allow"):
@@ -165,7 +175,7 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 				and gu.get_attached_heroes().any(func(h) -> bool: return h is GameUnit and (h as GameUnit).get_alive_count() > 0):
 			out.append("lone_hero_target")
 		for hero in gu.get_attached_heroes():
-			for r in refusals(hero as GameUnit, true):
+			for r in refusals(hero as GameUnit, true, not as_target):
 				if r != "attached" and r != "spell_hit_mod" and r != "vengeance_markers" and not out.has(r):
 					out.append(r)
 	# Deny mode, a TARGET: an aofs / gff aura-granted Fortified whose bearer has fallen. The table says `<aura>: bearer killed -> benefit lost` once
@@ -180,7 +190,7 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 		return out if as_target else out + ["non_opr"]
 	for w in (gu.source_data as OPRApiClient.OPRUnit).weapons:
 		for r in w.special_rules:
-			if not _rule_taken(gu, rule_label(r)):
+			if not _rule_taken(gu, rule_label(r), shot_at):
 				out.append("weapon_rule:" + rule_label(r))
 	# Deny mode, a SHOOTER: a Deadly weapon beside another ranged weapon (dlines_gap rows 18 and 1). The table lands Deadly wounds
 	# inline, so a later weapon of the same volley can see fewer models and says so ("Simultaneous fire: ...", Blast's "cap read when the

@@ -538,6 +538,20 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 		bearer.unit_properties["faction_folder"] = c[1]
 		assert_array(CoreSlice.refusals(bearer)).override_failure_message(
 			"%s (%s/%s) must stay on the table in deny mode" % [c[2], c[0], c[1]]).is_equal(["unit_rule:" + c[2]])
+		# H-9a: the beat is the bearer's own act, so a bearer SHOT AT is taken (the group's side is the shooter; probe ds/h_probe_beat_targets.md).
+		assert_array(CoreSlice.refusals(bearer, true)).override_failure_message(
+			"%s (%s/%s) as a target does not act in the volley" % [c[2], c[0], c[1]]).is_empty()
+	# H-9b: the Utility Buff names probed equal through real activations leave the group by name (`lifted_names`); the rest of the family stays refused.
+	for lifted in [["gf", "eternal_dynasty", "Casting Buff"], ["gf", "blessed_sisters", "Courage Buff"], ["gf", "dwarf_guilds", "Speed Debuff"],
+			["gf", "blessed_sisters", "Precision Fighter Buff"], ["gf", "robot_legions", "Unstoppable when Shooting Aura"],
+			["gf", "dark_elf_raiders", "Regeneration Buff"]]:
+		var buffer := _unit([lifted[2], "Tough(3)"], [["AP(1)"]])
+		buffer.unit_properties["game_system"] = lifted[0]
+		buffer.unit_properties["faction_folder"] = lifted[1]
+		assert_array(CoreSlice.refusals(buffer)).override_failure_message("%s was probed equal through the door and leaves the group" % lifted[2]).is_empty()
+	var furious := _unit(["Furious Buff", "Tough(3)"], [["AP(1)"]])
+	furious.unit_properties["faction_folder"] = "alien_hives"
+	assert_array(CoreSlice.refusals(furious)).override_failure_message("Furious Buff differs through the door and stays refused").is_equal(["unit_rule:Furious Buff"])
 	# The same unit without the beat rule is taken (the group refuses the rule, not the faction).
 	var plain := _unit(["Tough(3)"], [["AP(1)"]])
 	plain.unit_properties["faction_folder"] = "battle_brothers"
@@ -549,6 +563,7 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 	healer.unit_properties["faction_folder"] = "battle_brothers"
 	EquipmentDistributor.attach_hero_to_unit(healer, host)
 	assert_array(CoreSlice.refusals(host)).contains(["unit_rule:Mend"])
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("the same host shot at: the hero's Mend does not act in the volley").is_empty()
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 
