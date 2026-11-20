@@ -922,6 +922,13 @@ pub const PENDING_EPOCH_SHAKEN_MIRROR: u32 = 94;
 /// best target. Records stamped 83 or below replay byte-exact. Every call site reads THIS constant, not `84`. The recorder mirror
 /// stamps 84 with it.
 pub const EPOCH_84_IGNORE_GROUPS: u32 = 84;
+/// Placeholder gate for the ZERO-MOVE STAMP (soak game 23, a Skeleton Archers + Leader chain whose Advance the planner clamped to zero): the table stamps
+/// `moved_round` for an EXECUTED move only (`_solo_animate_move` walks `last_move_paths`, which `_execute_move` empties when nothing moved). The door hands the
+/// core the chain where it stands and the step API calls a placement HOLD only when it matches the HOST's models (`effective_kind`), so a unit with a joined
+/// hero kept its Advance and the core stamped the placement as a move: the stamp row said "table 3, core 4" and a later volley read a unit that never moved as
+/// moved. From 94 a placement in which no model left its place stamps nothing (the volley's `moved` stays true, as the table's `report["moved"]`). Below 94
+/// byte-identical. Every call site reads THIS constant, not `94`.
+pub const PENDING_EPOCH_ZERO_MOVE_STAMP: u32 = 94;
 /// The pooled target gate of a step-path volley lets through a target nobody sees when a living chain member's weapon carries an Indirect
 /// that waives the sight test and reaches it (table twin `_solo_pick_overlay_target`, whose per-shot sight count ignores LOS for a weapon's
 /// own Indirect; rules 3.6 SHO-01a: a Hold not kept loses the waiver where the entry says so). Before, a holding Artillery beast with an

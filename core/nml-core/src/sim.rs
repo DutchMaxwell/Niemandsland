@@ -11101,6 +11101,12 @@ fn resolve_with(
         // One-core P3 step 61: the walked paths the tray carries become the move's landing, so the Dangerous test
         // below reads each model's route, not only its end (`dangerous_dice`'s end-only arm); a climb names its rule.
         let trails = dice.as_ref().and_then(|d| d.0.placed_trails()).filter(|t| !t.is_empty()).map(|t| t.to_vec());
+        // PENDING_EPOCH_ZERO_MOVE_STAMP: the table stamps an EXECUTED move; remember the chain's stamps and whether any model left its place.
+        let chain: Vec<usize> = std::iter::once(si).chain(next.attached[si].iter().copied()
+            .filter(|_| seams.hero_attach && p.len() == crate::activation::placed_chain_len(&next, si))).collect();
+        let stamps: Vec<(usize, i64)> = chain.iter().map(|&u| (u, next.moved_round[u])).collect();
+        let left_place = chain.iter().flat_map(|&u| next.positions[u].iter()).zip(p.iter())
+            .any(|(a, b)| geom::length(geom::sub(geom::to_f32(*a), geom::to_f32(*b))) > 0.0005);
         // S1: a placement past the host's models moves the joined heroes with it (host first, then each hero in
         // `attached` order); a host-only placement leaves them where they stood, as before.
         let host_n = next.positions[si].len();
@@ -11125,6 +11131,11 @@ fn resolve_with(
         if let Cover::Board(t) = cover {
             if t.is_valid() {
                 land_cover(statics, &mut next, si, t, seams, dice.as_mut().map(|d| &mut *d.1));
+            }
+        }
+        if !left_place && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_ZERO_MOVE_STAMP) {
+            for (u, round) in stamps {
+                next.moved_round[u] = round;
             }
         }
     }
