@@ -174,7 +174,7 @@ func build(layout: Dictionary) -> void:
 			body.add_child(col)
 	var props := BoardgenProps.new()
 	props.name = "Props"
-	props.build(layout)
+	props.build(layout, kit)
 	add_child(props)
 	var landmarks := BoardgenLandmarks.new()
 	landmarks.name = "Landmarks"
@@ -202,7 +202,7 @@ func build(layout: Dictionary) -> void:
 func _ready() -> void:
 	_anchor()
 	if _kit != null:   # a module missing now is cached for the next board
-		_kit.prefetch(KIT_LADDERS + BoardgenRails.KIT_MODULES)
+		_kit.prefetch(KIT_LADDERS + BoardgenRails.KIT_MODULES + BoardgenProps.KIT_MODULES)
 	_scatter_off(_footprint)
 	var graphics := get_node_or_null("/root/GraphicsSettings")
 	if graphics != null:

@@ -108,3 +108,93 @@ func test_build_makes_three_multimeshes_and_the_lights_and_nothing_physical() ->
 		assert_int(m.multimesh.instance_count).is_equal(props.filter(func(p: Dictionary) -> bool: return p["shape"] == m.name).size())
 	assert_int(node.find_children("*", "OmniLight3D", false, false).size()).is_equal(props.filter(func(p: Dictionary) -> bool: return p["shape"] == "light").size())
 	assert_int(node.find_children("*", "CollisionObject3D", true, false).size()).is_equal(0)
+
+
+## ---- the authored K2 pipes (AAA step 17): runs as modules, and no pipe ends in the air ----
+
+const FIXTURE_DIR := "user://boardgen_props_test"
+
+
+## The pipe runs of the kit plan: items of one module.
+func _of(items: Array[Dictionary], module: String) -> Array[Dictionary]:
+	return items.filter(func(p: Dictionary) -> bool: return p["shape"] == module)
+
+
+func _inches(item: Dictionary) -> Vector3:
+	return item["xf"].origin / BoardgenProps.INCHES_TO_METERS
+
+
+## A pipe's two end points on the board (inches): the 3 in module is 1.5 in either side of its origin along its (stretched) x.
+func _ends(pipe: Dictionary) -> Array[Vector3]:
+	var half: Vector3 = pipe["xf"].basis.x * 1.5
+	return [_inches(pipe) + half, _inches(pipe) - half]
+
+
+func test_no_pipe_end_is_in_the_air_it_is_joined_or_turns_into_the_wall() -> void:
+	var items := BoardgenProps.plan(_fixture(), true)
+	var pipes := _of(items, "pipe")
+	var elbows := _of(items, "elbow")
+	var flanges := _of(items, "flange")
+	assert_int(pipes.size()).is_greater(10)
+	assert_int(elbows.size()).is_greater(0)
+	for pipe in pipes:
+		for end in _ends(pipe):
+			var ok := flanges.any(func(f: Dictionary) -> bool: return _inches(f).distance_to(end) < 0.02)   # joined to the next run
+			# an elbow's inlet (its -x end, one wall-offset from its corner) meets the pipe's end
+			ok = ok or elbows.any(func(e: Dictionary) -> bool: return (_inches(e) - e["xf"].basis.x.normalized() * BoardgenProps.KIT_WALL_IN * e["xf"].basis.get_scale().x).distance_to(end) < 0.02)
+			assert_bool(ok).override_failure_message("a pipe ends in the air at %s" % end).is_true()
+
+
+func _on_grid(v: float) -> bool:
+	return absf(v + 24.0 - roundf((v + 24.0) / CELL_IN) * CELL_IN) < 0.01
+
+
+func test_an_elbow_outlet_lands_on_a_wall_plane() -> void:
+	var items := BoardgenProps.plan(_fixture(), true)
+	for e in _of(items, "elbow"):
+		var out: Vector3 = _inches(e) + (e["xf"].basis * Vector3.BACK).normalized() * BoardgenProps.KIT_WALL_IN * e["xf"].basis.get_scale().x
+		var on_plane := _on_grid(out.x) or _on_grid(out.z)   # walls stand on the 3 in cell grid, the board is 48 in wide
+		assert_bool(on_plane).override_failure_message("an elbow outlet at %s is not on a wall plane" % out).is_true()
+
+
+func test_the_kit_runs_keep_the_wall_strip_and_the_foot_of_a_ladder_bare() -> void:
+	var layout := _fixture()
+	var feet: Array = layout["connectors"].map(func(c: Dictionary) -> Vector2i: return Vector2i(c["low_xz"][0], c["low_xz"][1]))
+	for item in BoardgenProps.plan(layout, true):
+		if not BoardgenProps.KIT_MODULES.has(item["shape"]):
+			continue
+		assert_bool(feet.has(_cell_of(layout, item))).is_false()
+		var box: AABB = BoardgenProps.KIT_BOUNDS[item["shape"]]
+		for sx in [0.0, 1.0]:
+			for sy in [0.0, 1.0]:
+				for sz in [0.0, 1.0]:
+					var corner: Vector3 = item["xf"] * ((box.position + box.size * Vector3(sx, sy, sz)) * BoardgenProps.INCHES_TO_METERS) / BoardgenProps.INCHES_TO_METERS
+					assert_bool(_outside_standing_room(layout, corner)).override_failure_message("%s reaches into standing room at %s" % [item["shape"], corner]).is_true()
+
+
+func test_the_kit_does_not_change_what_the_board_is_dressed_with_otherwise() -> void:
+	var layout := _fixture()
+	var rest := func(items: Array[Dictionary]) -> Array: return items.filter(func(p: Dictionary) -> bool: return p["shape"] in ["light"]).map(func(p: Dictionary) -> Vector3: return p["xf"].origin)
+	assert_array(rest.call(BoardgenProps.plan(layout, true))).is_equal(rest.call(BoardgenProps.plan(layout)))   # the same seeded draws: the same lamps
+
+
+func test_build_draws_the_pipe_modules_when_cached_and_the_primitives_otherwise() -> void:
+	var layout := _fixture()
+	DirAccess.make_dir_recursive_absolute(FIXTURE_DIR)
+	for module in BoardgenProps.KIT_MODULES:
+		var holder := MeshInstance3D.new()
+		holder.mesh = SphereMesh.new()
+		var state := GLTFState.new()
+		GLTFDocument.new().append_from_scene(holder, state)
+		GLTFDocument.new().write_to_filesystem(state, "%s/%s.glb" % [FIXTURE_DIR, module])
+		holder.free()
+	var kit: BoardgenKit = auto_free(BoardgenKit.new())
+	add_child(kit)
+	kit.local_dir = FIXTURE_DIR
+	var node: BoardgenProps = auto_free(BoardgenProps.new())
+	add_child(node)
+	node.build(layout, kit)
+	var items := BoardgenProps.plan(layout, true)
+	for module: String in BoardgenProps.KIT_MODULES:
+		assert_int((node.get_node(module) as MultiMeshInstance3D).multimesh.instance_count).is_equal(_of(items, module).size())
+	assert_int(node.find_children("*", "MultiMeshInstance3D", false, false).size()).is_equal(10)   # five primitive shapes + five modules
