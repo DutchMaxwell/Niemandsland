@@ -104,7 +104,8 @@ fn cut_lanes(lots: &mut Vec<Lot>, cells: &mut [Cell], rng: &mut GodotRng) {
             let (mx, mz) = (GRID - x0 - w, GRID - z0 - h);
             let cells_of = |x: usize, z: usize| (z..z + h).flat_map(move |zz| (x..x + w).map(move |xx| zz * GRID + xx));
             let apart = x0 + w < mx || mx + w < x0 || z0 + h < mz || mz + h < z0;
-            if !apart || !cells_of(x0, z0).chain(cells_of(mx, mz)).all(|i| free(cells, i)) { continue; }
+            let alone = |i: usize| neighbours(i).all(|j| cells[j].lot_id == 0 || cells[j].lot_kind == LotKind::Rough);   // a lane cutter never joins a row (no party wall): it stands alone
+            if !apart || !cells_of(x0, z0).chain(cells_of(mx, mz)).all(|i| free(cells, i) && alone(i)) { continue; }
             let cut = [(x0, z0), (mx, mz)].iter().map(|&(x, z)| (z..z + h).filter(|&zz| rows[zz]).count() + (x..x + w).filter(|&xx| cols[xx]).count()).sum::<usize>();
             let door = cells_of(x0, z0).any(|i| neighbours(i).any(|j| cells[j].street));
             if cut > 0 { cands.push((2 * cut + usize::from(door), (x0, z0, w, h))); }

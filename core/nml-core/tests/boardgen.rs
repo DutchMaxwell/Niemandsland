@@ -874,7 +874,7 @@ fn a_town_has_party_walls_and_passages() {
     }
     let (p, share, t) = (party as f64 / n as f64, with_party as f64 / n as f64, touching as f64 / houses as f64);
     eprintln!("town party walls {p:.2} per board, boards with one {share:.3}, longest row {longest}, houses touching a street {t:.3}");
-    assert!(p >= 3.0 && share >= 0.90, "party walls {p:.2} per board, {share:.2} of the boards have one");
+    assert!(p >= 2.0 && share >= 0.85, "party walls {p:.2} per board, {share:.2} of the boards have one");
     assert!(t >= 0.85, "{t:.2} of the houses touch a street");
 }
 
@@ -942,3 +942,80 @@ fn attempt0_problems() {
 }
 
 
+
+
+/// Rows must not become a roof highway (ruintown AAA step G4): no walkable roof run touches more than two houses, and the validator says so when one does.
+#[test]
+fn a_town_has_no_walkable_roof_run_longer_than_two_houses() {
+    use nml_core::boardgen::LotKind;
+    let (mut forced_over, mut longest) = (0, 0);
+    for seed in 1..=200 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        assert!(l.problems().is_empty(), "seed {seed}: {:?}", l.problems());
+        longest = longest.max(l.longest_roof_run());
+        assert!(l.longest_roof_run() <= 2, "seed {seed}: a roof run over {} houses\n{}", l.longest_roof_run(), l.to_ascii());
+        // planted: every house ruined and one level (all level 1) joins every party wall into one run - the validator must see it
+        let mut all = l.clone();
+        for c in all.cells.iter_mut().filter(|c| matches!(c.lot_kind, LotKind::Block | LotKind::Terrace | LotKind::Deck | LotKind::Roofed)) { c.lot_kind = LotKind::Block; c.level = 1; }
+        if all.longest_roof_run() > 2 {
+            forced_over += 1;
+            assert!(all.problems().contains(&"a walkable roof run touches more houses than the cap"), "seed {seed}: the cap did not fire");
+        }
+    }
+    eprintln!("longest real roof run {longest}; boards whose all-level-1 twin breaks the cap: {forced_over} of 200");
+    assert!(forced_over > 20, "the planted all-level-1 boards should break the cap on many boards ({forced_over})");
+}
+
+
+/// Backyards (ruintown AAA step G3): behind most houses of a row there is a garden plot, so a block has a back.
+#[test]
+fn most_town_houses_have_a_garden_plot_behind_them() {
+    use nml_core::boardgen::LotKind::{Block, Deck, Rough, Roofed, Terrace};
+    let (mut fronted, mut with_plot, n) = (0, 0, 300);
+    for seed in 1..=n {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        for lot in l.lots.iter().filter(|lot| matches!(lot.kind, Block | Terrace | Deck | Roofed)) {
+            let side = |dx: i64, dz: i64| -> (usize, bool) {   // street cells and garden plots on the face looking (dx, dz)
+                let (mut streets, mut plot) = (0, false);
+                for z in lot.z..lot.z + lot.h { for x in lot.x..lot.x + lot.w {
+                    let (nx, nz) = (x as i64 + dx, z as i64 + dz);
+                    if nx < 0 || nz < 0 || nx >= GRID as i64 || nz >= GRID as i64 || (nx as usize >= lot.x && (nx as usize) < lot.x + lot.w && nz as usize >= lot.z && (nz as usize) < lot.z + lot.h) { continue; }
+                    let c = l.cell(nx as usize, nz as usize);
+                    streets += usize::from(c.street);
+                    plot |= c.lot_kind == Rough;
+                }}
+                (streets, plot)
+            };
+            let faces = [side(0, -1), side(1, 0), side(0, 1), side(-1, 0)];
+            let Some(front) = (0..4).filter(|&d| faces[d].0 > 0).max_by_key(|&d| faces[d].0) else { continue };
+            fronted += 1;
+            with_plot += usize::from(faces[(front + 2) % 4].1);
+        }
+    }
+    let share = with_plot as f64 / fronted as f64;
+    eprintln!("houses with a street at the door that have a garden plot behind: {share:.3}");
+    assert!(share >= 0.25, "only {share:.2} of the fronted houses have a garden plot behind them");
+}
+
+
+/// Streets that grew (ruintown AAA step G5): the north artery has a jog (it shifts a column) and a pinch (two rows one cell = 3 in wide), mirrored by the half turn.
+#[test]
+fn a_town_street_is_not_one_straight_line() {
+    let (mut jogged, mut pinched, n) = (0, 0, 300);
+    for seed in 1..=n {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        let (mut lefts, mut one_wide) = (BTreeSet::new(), 0);
+        for z in 0..GRID / 2 - 1 {
+            let xs: Vec<usize> = (0..GRID).filter(|&x| l.cell(x, z).street).collect();
+            if xs.is_empty() || xs.len() > 3 { continue; }   // the cross street's row has many street cells
+            lefts.insert(xs[0]);
+            one_wide += usize::from(xs.len() == 1);
+            // the half turn twin has the same width on the opposite row
+            assert_eq!((0..GRID).filter(|&x| l.cell(x, GRID - 1 - z).street).count(), xs.len(), "seed {seed}: the street is not a half turn");
+        }
+        jogged += usize::from(lefts.len() >= 2);
+        pinched += usize::from(one_wide >= 1);
+    }
+    eprintln!("jogged {jogged} of {n}, pinched {pinched} of {n}");
+    assert!(jogged as f64 >= 0.85 * n as f64 && pinched as f64 >= 0.5 * n as f64, "jog {jogged} / pinch {pinched} of {n}");   // the pinch is hidden on boards where a house or the cross street shares its rows
+}

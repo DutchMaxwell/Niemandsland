@@ -6,6 +6,8 @@ use crate::rng::GodotRng;
 use super::levels::LotKind;
 use super::{Budgets, Symmetry, CELL_IN, DEPLOY_DEPTH_CELLS, GRID};
 
+/// The share (percent) of the houses of a row that get a garden plot behind them.
+const YARD_PERCENT: i64 = 85;
 /// Lots in one row of houses, inclusive.
 const RUN_LOTS: (i64, i64) = (2, 4);
 
@@ -35,8 +37,10 @@ pub fn build(seed: i64, sym: Symmetry, b: &Budgets) -> SectorGraph {
     let mut street = vec![false; nx * nz];
     for a in &arteries { for dz in 0..a.h { for dx in 0..a.w { street[(a.z + dz) * nx + a.x + dx] = true; } } }
     let cz1 = rng.randi_range(1, (hz as i64 - 2).max(1)) as usize;
+    if b.rows && sym == Symmetry::Point180 { bend_arteries(&mut street, ax1, cz1, &mut rng); }
     let cz2 = if sym == Symmetry::Point180 { nz - 1 - cz1 } else { rng.randi_range(hz as i64 + 1, (nz as i64 - 2).max(hz as i64 + 1)) as usize };
     for x in 0..nx { street[(if x < hx { cz1 } else { cz2 }) * nx + x] = true; }
+    if b.rows && sym == Symmetry::Point180 { second_square(&mut street, cz1, &mut rng); }
     // A market square: a square of street cells about the board centre, on the mid cross street (it always crosses columns 7 and 8).
     for z in hz - b.plaza.1 / 2..hz + b.plaza.1 / 2 { for x in hx - b.plaza.0 / 2..hx + b.plaza.0 / 2 { street[z * nx + x] = true; } }
 
@@ -150,6 +154,19 @@ fn grow_rows(g: &mut SectorGraph, st: &[bool], occ: &mut [bool], rng: &mut Godot
             placed += 1;
         }
         if placed < RUN_LOTS.0 { g.lots.truncate(mark); occ.copy_from_slice(&before); }   // a lone house is no row: take it back
+        else {   // a backyard: behind most houses of the row a single garden plot, so a block has a back (the pair of the lots just placed is [house, twin, house, twin, ...])
+            for k in (mark..g.lots.len()).step_by(2) {
+                let (lx, lz, lw, lh) = { let l = &g.lots[k]; (l.x as i64, l.z as i64, l.w as i64, l.h as i64) };
+                if rng.randi_range(0, 99) >= YARD_PERCENT { continue; }
+                // the cells just behind the house, tried from a random one: the first that takes a plot (ring relaxed along the row) gets it
+                let backs: Vec<(i64, i64)> = if along_x { (lx..lx + lw).map(|x| (x, if dz < 0 { lz - 1 } else { lz + lh })).collect() } else { (lz..lz + lh).map(|z| (if dx < 0 { lx - 1 } else { lx + lw }, z)).collect() };
+                let start = rng.randi_range(0, backs.len() as i64 - 1) as usize;
+                for t in 0..backs.len() {
+                    let (bx, bz) = backs[(start + t) % backs.len()];
+                    if bx >= 0 && bz >= 0 && bx < nx && bz < nz && try_pair(g, st, occ, &row, rng, (bx as usize, bz as usize, 1, 1)) { break; }
+                }
+            }
+        }
     }
     // Backyard gardens: single plots on bare ground beside a house (a mirrored pair each), until the board has the plots it must have.
     let (mut plots, no_row) = (g.lots.iter().filter(|l| l.w * l.h <= b.garden_area).count() / 2, vec![false; g.nx * g.nz]);
@@ -158,5 +175,39 @@ fn grow_rows(g: &mut SectorGraph, st: &[bool], occ: &mut [bool], rng: &mut Godot
         let (x, z) = (rng.randi_range(0, nx - 1), rng.randi_range(0, hz - 1));
         let near_house = [(1i64, 0i64), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)].iter().any(|&(dx, dz)| { let (px, pz) = (x + 2 * dx, z + 2 * dz); px >= 0 && pz >= 0 && px < nx && pz < nz && occ[(pz * nx + px) as usize] });
         if near_house && try_pair(g, st, occ, &no_row, rng, (x as usize, z as usize, 1, 1)) { plots += 1; }
+    }
+}
+
+/// Streets that grew (budget `rows`, north half, every change mirrored by the half turn): the north artery is not one ruler line. From a row `j` on it shifts one column toward the board
+/// centre (a 1-cell JOG; the street stays connected through the shared column and still meets the mid cross street), and two rows somewhere else lose their outer column: a 2-cell PINCH
+/// where the street is 3 in wide (every base passes).
+fn bend_arteries(street: &mut [bool], ax: usize, cz: usize, rng: &mut GodotRng) {
+    let (nx, nz, hz) = (GRID, GRID, GRID / 2);
+    let toward: i64 = if ax + 1 < nx / 2 { 1 } else { -1 };
+    let mut set = |x: i64, z: usize, v: bool| { let i = z * nx + x as usize; street[i] = v; street[nz * nx - 1 - i] = v; };
+    let js: Vec<usize> = (2..=hz - 4).filter(|&j| j != cz && j - 1 != cz).collect();   // the jog is not on the cross street's row
+    let j = js[rng.randi_range(0, js.len() as i64 - 1) as usize];
+    for z in j..hz - 1 {
+        if toward > 0 { set(ax as i64, z, false); set(ax as i64 + 2, z, true); } else { set(ax as i64 + 1, z, false); set(ax as i64 - 1, z, true); }
+    }
+    let rows: Vec<usize> = (0..hz - 2).filter(|&p| (p + 1 < j || p > j) && p != cz && p + 1 != cz).collect();   // two rows on one side of the jog, short of the mid street, clear of the cross street
+    let p = rows[rng.randi_range(0, rows.len() as i64 - 1) as usize];
+    for z in p..p + 2 {
+        let outer = if z < j { if toward > 0 { ax as i64 } else { ax as i64 + 1 } } else if toward > 0 { ax as i64 + 2 } else { ax as i64 - 1 };
+        set(outer, z, false);
+    }
+}
+
+/// A second, small square: where the cross street of the north half meets the artery, the cross street is two cells wide for two cells beside the crossing (a 2 x 2 block of street, and its
+/// half-turn twin).
+fn second_square(street: &mut [bool], cz: usize, rng: &mut GodotRng) {
+    let (nx, nz) = (GRID, GRID);
+    let crossings: Vec<usize> = (1..nx / 2 - 2).filter(|&x| cz + 2 < nz / 2 - 1 && street[cz * nx + x] && street[(cz + 1) * nx + x] && !street[(cz + 1) * nx + x + 1]).collect();   // the artery's east edge on the cross street
+    if crossings.is_empty() { return; }
+    let x = crossings[rng.randi_range(0, crossings.len() as i64 - 1) as usize];
+    for dx in [1, 2] {
+        let i = (cz + 1) * nx + x + dx;
+        street[i] = true;
+        street[nz * nx - 1 - i] = true;
     }
 }
