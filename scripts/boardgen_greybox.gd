@@ -121,6 +121,7 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 		out.append_array(_town_landmarks(layout, origin))
 		out.append_array(BoardgenTownDressing.chimneys(layout))
 		out.append_array(BoardgenTownDressing.merlons(layout))
+		out.append_array(BoardgenTownDressing.lantern_boxes(layout))
 	else:
 		out.append_array(BoardgenSumps.kerbs(layout))   # the low rim round each toxic sump (the town draws its pools as flat boxes)
 	return out
@@ -310,6 +311,9 @@ func _dress(layout: Dictionary, theme: Dictionary, names: Array, kit: BoardgenKi
 
 func _ready() -> void:
 	_anchor()
+	if layout_theme == BoardgenTheme.RUIN_TOWN and is_inside_tree():   # the town is lit at dusk (a dev view: not restored)
+		var scene := get_tree().current_scene
+		BoardgenTownDressing.dusk(scene.get("lighting_controller") if scene != null else null)
 	if _kit != null and layout_theme == BoardgenTheme.DEEPWORKS:   # a module missing now is cached for the next board (the town uses no kit)
 		_kit.prefetch(KIT_LADDERS + BoardgenRails.KIT_MODULES + BoardgenProps.KIT_MODULES)
 	_scatter_off(_footprint)
