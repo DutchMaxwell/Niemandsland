@@ -18,7 +18,33 @@ static func _hash(lot_id: int, half: int, salt: int) -> float:
 	return float(posmod((lot_id * 73856093) ^ (half * 19349663) ^ (salt * 83492791), 1000)) / 1000.0
 
 
-## One roof per intact lot: {lot, centre (Vector2, board inches), length, width (along / across the ridge), height, along_x, half}. Pure data.
+## How an intact house is DRAWN differently from its collider (plan O3), per lot and half of the board: the drawn body is inset 0.06-0.14 in on every side (inward only), yawed so
+## that no corner swings out of the lot's cells (the yaw is at most 3 degrees, and at most what the inset allows, so the drawn wall is never more than 0.2 in off the collider's face),
+## its top (= its eaves) is 2.5 in +- 0.3, its stone plinth 0.3-0.6 in high. The collider and the class stay the core's 2.5 in solid; nothing here is a rule.
+static func house_look(lot_id: int, half: int, size: Vector2) -> Dictionary:
+	var inset := 0.06 + 0.08 * _hash(lot_id, half, 4)
+	var room := minf(inset, 0.2 - inset)   # how far a corner may swing out of the inset body and still stay in its cells with a gap <= 0.2 in
+	var yaw_max := minf(deg_to_rad(3.0), asin(room / (maxf(size.x, size.y) * 0.5)))
+	return {"inset": inset, "yaw": (2.0 * _hash(lot_id, half, 5) - 1.0) * yaw_max, "top": BODY_IN + (_hash(lot_id, half, 6) - 0.5) * 0.6, "plinth": 0.3 + 0.3 * _hash(lot_id, half, 7)}
+
+
+## The drawn bodies of the intact houses (ruined, walkable tiers are never touched): {lot, centre (Vector2, board inches), size (inset), yaw, top, plinth, half}. Pure data.
+static func house_bodies(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var cell_in := float(layout["cell_in"])
+	var board := Vector2(layout["nx"], layout["nz"]) * cell_in
+	for lot: Dictionary in layout["lots"]:
+		if lot["kind"] != "Roofed":
+			continue
+		var size := Vector2(lot["w"], lot["h"]) * cell_in
+		var centre := Vector2(lot["x"], lot["z"]) * cell_in + size * 0.5 - board * 0.5
+		var half := 1 if centre.y > 0.0 else 0
+		var look := house_look(lot["id"], half, size)
+		out.append({"lot": lot["id"], "centre": centre, "size": size - Vector2.ONE * 2.0 * float(look["inset"]), "yaw": look["yaw"], "top": look["top"], "plinth": look["plinth"], "half": half})
+	return out
+
+
+## One roof per intact lot: {lot, centre (Vector2, board inches), length, width (along / across the ridge), height, along_x, half, yaw, eaves}. Pure data.
 static func roofs(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var cell_in := float(layout["cell_in"])
@@ -32,8 +58,9 @@ static func roofs(layout: Dictionary) -> Array[Dictionary]:
 		var along_x := size.x > size.y or (size.x == size.y and _hash(lot["id"], half, 1) < 0.5)
 		var run := size.x if along_x else size.y
 		var across := size.y if along_x else size.x
+		var look := house_look(lot["id"], half, size)
 		out.append({"lot": lot["id"], "centre": centre, "length": run + 2.0 * OVERHANG_IN, "width": across + 2.0 * OVERHANG_IN,
-			"height": 1.5 + 1.2 * _hash(lot["id"], half, 2), "along_x": along_x, "half": half})
+			"height": 1.5 + 1.2 * _hash(lot["id"], half, 2), "along_x": along_x, "half": half, "yaw": look["yaw"], "eaves": look["top"]})
 	return out
 
 
@@ -331,12 +358,37 @@ func build(layout: Dictionary, material: Material) -> void:
 		var basis := Basis.from_scale(Vector3(r["length"], r["height"], r["width"]) * INCHES_TO_METERS)
 		if not r["along_x"]:
 			basis = Basis(Vector3.UP, PI * 0.5) * basis
+		basis = Basis(Vector3.UP, r["yaw"]) * basis   # the roof follows its body's yaw
 		var at: Vector2 = r["centre"]
-		mm.set_instance_transform(i, Transform3D(basis, Vector3(at.x, BODY_IN, at.y) * INCHES_TO_METERS))
+		mm.set_instance_transform(i, Transform3D(basis, Vector3(at.x, r["eaves"], at.y) * INCHES_TO_METERS))
 		mm.set_instance_custom_data(i, Color(kind, r["length"], r["height"], r["width"]))
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = "Roofs"
 	mmi.multimesh = mm
 	mmi.material_override = material
 	add_child(mmi)
+	_add_bodies(layout, material)
 	_add_lights(layout)
+
+
+## The drawn bodies of the intact houses in ONE MultiMesh with the board's material (kind "roofed"; the fraction of the kind carries the plinth height for the shader).
+## The greybox's own boxes for these cells draw nothing (zero scale) and only keep the collider.
+func _add_bodies(layout: Dictionary, material: Material) -> void:
+	var list := house_bodies(layout)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	mm.mesh = BoxMesh.new()
+	mm.instance_count = list.size()
+	var kind := float(BoardgenTheme.TOWN_KINDS.find("roofed"))
+	for i in list.size():
+		var b: Dictionary = list[i]
+		var size := Vector3(b["size"].x, b["top"], b["size"].y)
+		var at: Vector2 = b["centre"]
+		mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, b["yaw"]) * Basis.from_scale(size * INCHES_TO_METERS), Vector3(at.x, size.y * 0.5, at.y) * INCHES_TO_METERS))
+		mm.set_instance_custom_data(i, Color(kind + (float(b["plinth"]) - 0.3) / 0.75, size.x, size.y, size.z))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = "Houses"
+	mmi.multimesh = mm
+	mmi.material_override = material
+	add_child(mmi)

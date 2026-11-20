@@ -111,7 +111,8 @@ void fragment() {
 		if (k == 15) {   // a gable end: plaster and a timber frame
 			alb = timber(uv, seed, palette[13].rgb, emis);
 		} else if (k == 13) {   // an intact house: half-timber on a stone plinth
-			alb = uv.y < 0.45 ? stone(uv, seed, 0.45, 0.9, vec3(0.5, 0.48, 0.44)) : timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed), emis);
+			float plinth = 0.3 + 0.75 * fract(kind);   // the house's own plinth height rides in the fraction of its kind
+			alb = uv.y < plinth ? stone(uv, seed, 0.45, 0.9, vec3(0.5, 0.48, 0.44)) : timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed), emis);
 		} else if (k == 12 || k == 9 || k == 10 || k == 16) {   // city wall, stone pieces, chimney: coursed stone (brick for the chimney)
 			alb = k == 16 ? stone(uv, seed, 0.25, 0.55, tint) : stone(uv, seed, 0.55, 1.0, tint);
 		} else if (k == 18) {   // a wooden prop: planks with iron bands

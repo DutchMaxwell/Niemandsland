@@ -214,6 +214,11 @@ static func custom_data(b: Dictionary, kinds: Array = KINDS) -> Color:
 	return Color(kinds.find(b["kind"]), size.x, size.y, size.z)
 
 
+## Does a plan box draw itself? An intact house does not: BoardgenTownDressing draws its inset, yawed body, and this box only keeps the collider.
+static func draws_itself(b: Dictionary) -> bool:
+	return b["kind"] != "roofed"
+
+
 ## The whole board in ONE MultiMesh (one draw call, one shared procedural material) plus a collider per solid box.
 func build(layout: Dictionary) -> void:
 	layout_seed = int(layout.get("seed", 0))
@@ -243,7 +248,7 @@ func build(layout: Dictionary) -> void:
 		var b: Dictionary = boxes[i]
 		var size: Vector3 = (b["hi"] - b["lo"]) * INCHES_TO_METERS
 		var centre: Vector3 = (b["hi"] + b["lo"]) * 0.5 * INCHES_TO_METERS
-		mm.set_instance_transform(i, Transform3D(Basis.from_scale(size), centre))
+		mm.set_instance_transform(i, Transform3D(Basis.from_scale(size if draws_itself(b) else Vector3.ZERO), centre))
 		mm.set_instance_custom_data(i, custom_data(b, theme["kinds"]))
 		if b["solid"]:
 			var shape := BoxShape3D.new()
