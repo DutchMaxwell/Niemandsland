@@ -183,6 +183,10 @@ var game_phase: int = GamePhase.DEPLOYMENT
 ## Default MANUAL; the "new games start Automatic" default belongs to the table setup.
 var rules_automation: int = RulesAutomation.Level.MANUAL
 
+## The table's game system (PLAN_GAME_SYSTEM_SWITCH): one of GameSystem.IDS, "" = never set (old saves, harness,
+## tutorial, lesson boards). Host-owned in MP. Main._table_system() resolves it; "" falls back to the loaded lists.
+var table_system: String = ""
+
 ## NML-949 — match-level RULE state that is not per-unit: once-per-game / per-round
 ## bookkeeping that used to live only in Main or in the SoloController and was therefore
 ## lost on a load, on an MP rejoin, and on every controller rebuild (AI-slot change,

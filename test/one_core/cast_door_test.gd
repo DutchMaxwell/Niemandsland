@@ -132,6 +132,9 @@ func _run(spell: Dictionary, seed: int, mode: String, opts := {}) -> Dictionary:
 		"owner_label": "AI (Mystic)", "interference_open": false, "boost_sources": [], "interference_sources": [],
 		"conduit": null, "conduit_shaken": [], "pools": []}
 	var report := {"action": AiDecision.Action.HOLD, "moved": false, "casts": [cast]}
+	if bool(opts.get("rush", false)):   # the planner's Rush: 8 in away from the foe (the table has moved it; the capture below is the start)
+		report["action"] = AiDecision.Action.RUSH
+		report["moved"] = true
 	var out_takes := false
 	var out_marked := false
 	var runs_before := CoreActivation.ai_runs
@@ -144,6 +147,10 @@ func _run(spell: Dictionary, seed: int, mode: String, opts := {}) -> Dictionary:
 	caster.casts_current = 1 if shoot else 3   # a spare token would feed the core's modelled spell rider on the volley (#3110, pending epoch 93)
 	var h := CoreActivation.capture(_main) if door else 0   # the tokens BEFORE the plan's spend: the core pays them itself
 	caster.spend_caster_points(1)   # the planner pays the attempt at plan time
+	if bool(opts.get("rush", false)):
+		for m in caster.models:
+			(m as ModelInstance).node.global_position += Vector3(-8.0 * 0.0254, 0.0, 0.0)
+		caster.unit_properties["moved_round"] = _main.opr_army_manager.current_round   # the table's own stamp of a move
 	_main._solo_act_flags = _main._solo_unit_flags()   # the AI body's own, taken before the Dangerous test
 	var pre_path := "user://cast_door_pre_%s.jsonl" % ("door" if door else "table")
 	AiActRecorder._stream = FileAccess.open(pre_path, FileAccess.WRITE)
@@ -322,6 +329,24 @@ func test_a_refused_probe_leaves_the_table_its_old_order() -> void:
 		assert_bool(bool(body["takes"]) and not bool(body["marked"])).override_failure_message("taken by the predicate, not by the probe").is_true()
 		assert_bool(str((body["rolls"] as Array)[0]).begins_with("dangerous|")).override_failure_message("the Dangerous test comes first: %s" % str(body["rolls"])).is_true()
 	assert_int(CoreActivation.cast_probe_refusals).override_failure_message(str(CoreActivation.cast_probe_reasons)).is_equal(3)
+
+
+## A caster that RUSHES is taken too: the door used to take a Rush only for a unit that moves through, so every rushing caster stayed on
+## the table (23 of the 25 casting activations never asked of the door in a 10-game soak). The planner's Rush (8 in, inside the 12 in
+## allowance) then the casts, through the body's seams, equal to the table: lines, rolls, units (positions included), records, tokens.
+## The core must have resolved them (`core_ran`), not the fallback.
+func test_a_rushing_caster_is_taken_by_the_door(timeout := 600000) -> void:
+	CoreActivation._cast_env = 1
+	var bad: Array = []
+	bad.append_array(await _grid(TERROR_SEEKER, {"rush": true}, "body"))
+	bad.append_array(await _grid(BLOODTHIRST, {"rush": true}, "body"))
+	bad.append_array(await _grid(PSYCHIC_BLAST, {"rush": true, "foe_models": 10}, "body"))
+	assert_array(bad).override_failure_message("\n".join(bad.slice(0, 2))).is_empty()
+	var caster := ParityTable._make_unit(_main, MYSTIC, STAFF)
+	assert_bool(CoreActivation.takes_action(caster, AiDecision.Action.RUSH)).override_failure_message("a Rush without casts is taken").is_false()
+	assert_bool(CoreActivation.takes_action(caster, AiDecision.Action.RUSH, true)).is_true()
+	assert_bool(CoreActivation.takes_action(caster, AiDecision.Action.CHARGE, true)).override_failure_message("a Charge caster is another door").is_false()
+	Harness._free_units(_main, [caster])
 
 
 ## CC-13a: with the switch OFF nothing changes: the activation is not taken (CC-2c's line), no mark, the table casts.
