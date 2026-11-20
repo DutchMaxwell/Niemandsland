@@ -14,6 +14,17 @@ func _town() -> Dictionary:
 		c["lot_kind"] = spec[3]
 		c["street"] = false
 	layout["lots"].append({"id": 99, "x": 0, "z": 0, "w": 2, "h": 1, "sector": [0, 0], "kind": "Roofed"})
+	var placed := 0
+	for z in range(15, 8, -1):   # a few more intact houses on free ground (a 2 x 1 pair of cells with no lot), so that at least one roof is a gable whatever the hashes pick
+		for x in range(0, 15, 3):
+			var a: Dictionary = layout["cells"][z * 16 + x]
+			var b: Dictionary = layout["cells"][z * 16 + x + 1]
+			if placed < 6 and a["lot_id"] == 0 and b["lot_id"] == 0 and not a["street"] and not b["street"] and a["level"] == 0 and b["level"] == 0:
+				layout["lots"].append({"id": 100 + placed, "x": x, "z": z, "w": 2, "h": 1, "sector": [0, 0], "kind": "Roofed"})
+				for c: Dictionary in [a, b]:
+					c["lot_id"] = 100 + placed
+					c["lot_kind"] = "Roofed"
+				placed += 1
 	return layout
 
 
@@ -28,7 +39,7 @@ func _count(plan: Dictionary, prefix: String) -> int:
 func test_every_piece_gets_one_module_where_the_procedural_one_stood() -> void:
 	var layout := _town()
 	var plan := BoardgenTownKit.plan(layout)
-	var roofs := BoardgenTownDressing.roofs(layout).size()
+	var roofs := BoardgenTownDressing.roofs(layout).filter(func(r: Dictionary) -> bool: return r["type"] == "gable").size()   # the kit draws the gable roofs; hips and catslides stay procedural
 	assert_int(roofs).is_greater(0)
 	assert_int(_count(plan, "roof_") - _count(plan, "roof_rafters")).is_equal(roofs)
 	assert_int(_count(plan, "roof_rafters")).is_equal(_count(plan, "roof_broken"))   # a broken roof shows its frame
