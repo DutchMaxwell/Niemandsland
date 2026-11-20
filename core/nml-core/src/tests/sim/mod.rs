@@ -1798,6 +1798,7 @@ mod dangerous_landing;
 mod door_morale_lines;
 mod hit_lines;
 mod save_lines;
+mod melee_lines_guarded;
 mod morale_lines;
 mod rule_lines;
 mod precision_debuff;

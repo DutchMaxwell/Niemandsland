@@ -6475,6 +6475,13 @@ fn strike_phase(
     // The table's `_solo_log_defense_parts` lines, the first thing `_solo_melee_strike_phase` says: the Shielded family, then the growth ladder.
     crate::dice::say_shielded(tray, &def, &ut.name);
     crate::dice::say_growth_defense(tray, &def, &ut.name, &growth_defense_parts(statics, next, ti));
+    // The Guarded family's line, the next one the table says (`_solo_melee_strike_phase`): a charge from over the gate gives the defender +1 Defense.
+    let gate = if def.guarded_charge_over_in > 0.0 { def.guarded_charge_over_in } else { crate::combat::LONG_RANGE_IN };
+    if charging && def.guarded && charge_from_in > gate && !def.sturdy_boost_gates_guarded && (seams.tray_exact || def.guarded_charge_over_in > 0.0) {
+        let saves = crate::combat::guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), true, def.def_floor());
+        say_rule(tray, "guarded", def.side, || format!("{} ({}): charged from over {}\" — +1 Defense (saves on {}+)",
+            ut.name, def.guarded_name, gate as i64, saves.clamp(BEST_HIT_TARGET, 6)));
+    }
     // MEL-07c-fix (`EPOCH_73_V36`) — the strike Parry counts the host AND its
     // joined heroes, the same sum the Impact event reads (`parry_dice_total`).
     if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
