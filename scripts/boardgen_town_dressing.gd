@@ -247,6 +247,55 @@ static func hall_merlons(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
+## The frontage table of the building lots (plan O1, no visual change yet): for every house lot (Block, Terrace, Deck, Roofed) its FRONT face - the face with the most
+## street cells beside it, ties toward the square - its back (opposite), its sides, the faces that are party walls (a building lot of its own right beside them) and
+## whether it is a corner lot (street beside two adjacent faces). A lot with no street beside any face has front "" (a backyard house). Faces are "N" (z - 1), "E", "S", "W".
+## Pure data: [{lot, front, back, sides, party {face: bool}, corner, streets {face: count}}].
+static func frontage(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cells: Array = layout["cells"]
+	var dirs := {"N": Vector2i(0, -1), "E": Vector2i(1, 0), "S": Vector2i(0, 1), "W": Vector2i(-1, 0)}
+	var opposite := {"N": "S", "E": "W", "S": "N", "W": "E"}
+	var houses := ["Block", "Terrace", "Deck", "Roofed"]
+	for lot: Dictionary in layout["lots"]:
+		if not houses.has(lot["kind"]):
+			continue
+		var streets := {"N": 0, "E": 0, "S": 0, "W": 0}
+		var party := {"N": false, "E": false, "S": false, "W": false}
+		for dz in int(lot["h"]):
+			for dx in int(lot["w"]):
+				var x: int = int(lot["x"]) + dx
+				var z: int = int(lot["z"]) + dz
+				for face: String in dirs:
+					var at: Vector2i = Vector2i(x, z) + (dirs[face] as Vector2i)
+					if at.x < 0 or at.y < 0 or at.x >= nx or at.y >= nz or (at.x >= int(lot["x"]) and at.x < int(lot["x"]) + int(lot["w"]) and at.y >= int(lot["z"]) and at.y < int(lot["z"]) + int(lot["h"])):
+						continue
+					var nb: Dictionary = cells[at.y * nx + at.x]
+					if nb["street"]:
+						streets[face] += 1
+					elif nb["lot_id"] != 0 and nb["lot_id"] != lot["id"] and houses.has(String(nb["lot_kind"])):
+						party[face] = true
+		var centre := Vector2(float(lot["x"]) + float(lot["w"]) * 0.5 - float(nx) * 0.5, float(lot["z"]) + float(lot["h"]) * 0.5 - float(nz) * 0.5)
+		var front := ""
+		var best_key := Vector2(0.0, -INF)   # (street cells, how much the face points at the board centre)
+		for face: String in dirs:
+			if streets[face] == 0:
+				continue
+			var key := Vector2(float(streets[face]), -(Vector2(dirs[face] as Vector2i)).dot(centre))
+			if key.x > best_key.x or (key.x == best_key.x and key.y > best_key.y):
+				best_key = key
+				front = face
+		var sides: Array = []
+		for face: String in dirs:
+			if front != "" and face != front and face != opposite[front]:
+				sides.append(face)
+		out.append({"lot": lot["id"], "front": front, "back": opposite[front] if front != "" else "", "sides": sides, "party": party, "streets": streets,
+			"corner": (streets["N"] > 0 or streets["S"] > 0) and (streets["E"] > 0 or streets["W"] > 0)})
+	return out
+
+
 ## The unit gable prism: ridge along x at height 1 over z = 0, eaves at y = 0 on z = -0.5 / +0.5, x from -0.5 to 0.5.
 static func prism_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
