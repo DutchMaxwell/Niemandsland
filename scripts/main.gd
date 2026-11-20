@@ -20032,6 +20032,9 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# is not part of the serialized .nml game state, so it must be pushed separately).
 	if table != null:
 		network_manager.broadcast_table_settings({"biome": table.biome})
+	# The game system is host-owned table state and must reach the joiner before its first list does.
+	if opr_army_manager != null and not str(opr_army_manager.table_system).is_empty():
+		network_manager.broadcast_table_settings({"game_system": opr_army_manager.table_system})
 	# #194 belt-and-braces: re-push the deployment-zone type so the joiner builds the zone
 	# GEOMETRY even if the state-sync race loses — without meshes, its "Show Deployment
 	# Zones" tick was a silent no-op (visibility only flips existing meshes).
@@ -20812,6 +20815,14 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 			table.setup_table(size_feet)
 			_adjust_camera_for_table_size(size_feet)
 			print("[Settings] Table resized to %.1fx%.1f feet" % [size_feet.x, size_feet.y])
+
+	# The host's game system (network_manager already dropped a guest's push of it).
+	if settings.has("game_system") and opr_army_manager != null:
+		var host_system := str(settings["game_system"])
+		if GameSystem.is_known(host_system) and host_system != str(opr_army_manager.table_system):
+			opr_army_manager.table_system = host_system
+			if battle_log != null:   # this table's own line - never re-broadcast (the host logged and sent its own)
+				battle_log.log_event(BattleLog.Category.GENERAL, "Game system: %s" % GameSystem.label(host_system))
 
 	if settings.has("paths"):   # a table theme's worn paths (D14)
 		TablePaths.of(table).set_paths(settings["paths"])
