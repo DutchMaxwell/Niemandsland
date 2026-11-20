@@ -9416,11 +9416,11 @@ static func hold_and_shoot_rule(weapons: Array, enemy_in_range: bool, unit: Game
 		var rules: Array = (w as Object).special_rules if (w is Object and (w as Object).get("special_rules") != null) else []
 		for r in rules:
 			var s := str(r).strip_edges()
-			if s.begins_with("Relentless"):
+			if GameUnit.rule_name_matches(s, "Relentless"):   # exact (NML-1112): "Relentless Mark" / "Relentless Aura" label a grant, not the rule
 				return "Relentless"
 			# The Indirect trigger's hold_and_shoot param (dead-parameter fold, twin of #1006):
 			# with no unit in scope (the pre-wave-5 callers/tests) the recorded true stands.
-			if s.begins_with("Indirect") and (unit == null \
+			if GameUnit.rule_name_matches(s, "Indirect") and (unit == null \
 					or bool(RulesRegistry.unit_param(unit, "Indirect", "hold_and_shoot", true))):
 				return "Indirect"
 	return ""
@@ -9440,7 +9440,7 @@ static func has_indirect_ranged(weapons: Array) -> bool:
 			continue
 		var rules: Array = (w as Object).special_rules if (w is Object and (w as Object).get("special_rules") != null) else []
 		for r in rules:
-			if str(r).strip_edges().begins_with("Indirect"):
+			if GameUnit.rule_name_matches(str(r), "Indirect"):
 				return true
 	return false
 
@@ -9680,7 +9680,7 @@ static func counter_models_of(unit: GameUnit) -> int:
 				continue   # Counter strikes "with this weapon" — a melee-weapon rule
 			var rules: Array = (w as Object).special_rules if (w as Object).get("special_rules") != null else []
 			for r in rules:
-				if str(r).strip_edges().begins_with("Counter"):
+				if GameUnit.rule_name_matches(str(r), "Counter"):
 					bearers += maxi(int((w as Object).count) if (w as Object).get("count") != null else 1, 1)
 					break
 		total += mini(bearers, alive) * int(RulesRegistry.unit_param(member, "Counter", "impact_reduction_per_model", 1))

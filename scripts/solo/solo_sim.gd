@@ -700,7 +700,7 @@ static func _forces_hold_and_shoot(unit: Dictionary, enemy_in_range: bool) -> bo
 		if int((w as Dictionary).get("range_value", 0)) <= 0:
 			continue
 		for r in (w as Dictionary).get("special_rules", []):
-			if str(r).begins_with("Relentless"):
+			if GameUnit.rule_name_matches(str(r), "Relentless"):
 				return true
 	return false
 

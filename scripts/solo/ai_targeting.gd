@@ -31,13 +31,14 @@ static func weapon_overlay(special_rules: Array) -> Overlay:
 	var has_blast := false
 	for r in special_rules:
 		var s := str(r).strip_edges()
-		if s.begins_with("Takedown"):
+		# Exact names (NML-1112): the core reads a weapon's rules the same way (`weapon_has`), so "Deadly Gaze" is no Deadly.
+		if GameUnit.rule_name_matches(s, "Takedown"):
 			has_takedown = true
-		elif s.begins_with("Deadly"):
+		elif GameUnit.rule_name_matches(s, "Deadly"):
 			has_deadly = true
-		elif s.begins_with("AP"):
+		elif GameUnit.rule_name_matches(s, "AP"):
 			has_ap = true
-		elif s.begins_with("Blast"):
+		elif GameUnit.rule_name_matches(s, "Blast"):
 			has_blast = true
 	if has_takedown:
 		return Overlay.TAKEDOWN
