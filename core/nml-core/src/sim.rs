@@ -1013,6 +1013,17 @@ pub(crate) fn tray_mend(
     let healed = d3.min(wmax - next.wounds[pu][pm]);
     if healed > 0 {
         next.wounds[pu][pm] += healed;
+        // H-5a (Plan H): the heal reaches the table as a landing on the patient's capture slot (`wounds_left` above the
+        // model's own count = a heal, `CoreActivation.land_step`), and the table's own line (`_solo_apply_mend`) is said.
+        // Lines and landings only: the die and the state are untouched, a seeded tray keeps neither.
+        let gone = tray.dead_slots(pu);
+        let slot = (0..).filter(|s| !gone.contains(s)).nth(pm).unwrap_or(pm);
+        let (at, now) = (next.positions[pu][pm], next.wounds[pu][pm]);
+        tray.land(|| Landing { unit: pu, models: vec![LandedModel { at, slot, wounds_left: now, dead: false }], loss_line: false });
+        let name = statics[next.roster.profile[si]].name.clone();
+        tray.say(|| LogLine { rule: "mend", category: Category::Combat, side: next.player[si], detail: None,
+            text: format!("Mend: {name} heals {healed} wound{} (D3 rolled {f0}) — patient now {now}/{wmax}",
+                if healed == 1 { "" } else { "s" }) });
     }
 }
 

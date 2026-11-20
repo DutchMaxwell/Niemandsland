@@ -1456,6 +1456,8 @@ pub(crate) fn resolve_volley_with_pick_label(
     let mut alias_cover_logged = false;
     // Rules 3.6 (SHO-01b) — the kept-cover line's once-per-volley flag.
     let mut indirect_cover_logged = false;
+    // I4 (table `cover_logged`): the plain "is in cover" line, said once per volley and only when a save really used the cover.
+    let mut cover_logged = false;
     // Rules 3.6 (SHO-14) — the Pierce line's once-per-volley flag.
     let mut pierce_logged = false;
     // Wave 3 — the Shot Modifier family's two runtime-gated members name
@@ -2169,12 +2171,22 @@ pub(crate) fn resolve_volley_with_pick_label(
             out.log
                 .push(format!("{rule}: {} — {}'s cover save is skipped", sh.owner, def_owner));
         }
-        // Rules 3.6 (FAB-A3) — rules-must-log: an Indirect shot's target KEEPS its terrain cover.
-        if !indirect_cover_logged && indirect_keeps_cover && def.in_cover && p.blast <= 1 {
+        // The table's `shot_uses_cover`: the save rolls at the covered Defense, and the cover really lowered it (a Defense already at
+        // the floor, or a Pierce shot, leaves cover == base and the table says nothing).
+        let uses_cover = cov_def < base && save_def == cov_def;
+        // Rules 3.6 (FAB-A3) — rules-must-log: an Indirect shot's target KEEPS its terrain cover. A mark on the target makes the
+        // shot Indirect on the table (profile bridge, `def.indirect_mark`): its cover counts, so the line is said for it too.
+        let marked_indirect = def.indirect_mark && !p.indirect && rule_on(att.rules_epoch, EPOCH_73_V36);
+        if !indirect_cover_logged && (indirect_keeps_cover || marked_indirect) && uses_cover && p.blast <= 1 {
             indirect_cover_logged = true;
             out.log.push(format!(
                 "Indirect: {} — {}'s cover counts (only sight-blocker cover is ignored)",
                 sh.owner, def_owner));
+        }
+        // I4 (table `_solo_ai_shoot` / the human volley): a covered save says so once, with the Defense it rolls on.
+        if !unit_of_one && !cover_logged && uses_cover {
+            cover_logged = true;
+            out.log.push(format!("{def_owner} is in cover: +1 Defense (saves on {}+)", save_def.clamp(BEST_HIT_TARGET, 6)));
         }
         // Block B7 — Piercing Growth: main.gd:4287's marker-driven AP delta,
         // shooting and melee both (`_solo_attack_groups` adds it to `prof

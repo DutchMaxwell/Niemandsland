@@ -133,7 +133,7 @@ void fragment() {
 		float long_in = dims.y > max(dims.x, dims.z) ? h : max(dims.x, dims.z) * (lpos.x + 0.5);   // bolts on a post or a chord, a weld every few
 		alb += smoothstep(0.05, 0.02, length(vec2((fract(long_in / 1.1) - 0.5) * 1.1, uv.x))) * 0.3;
 		alb = mix(alb, RUST * 0.8, smoothstep(0.5, 0.75, n2) * 0.75);   // rust runs down
-		alb *= mix(0.4, 1.0, smoothstep(0.0, 3.5, h)) * mix(0.8, 1.0, n1);   // grime from the foot
+		alb *= mix(0.62, 1.0, smoothstep(0.0, min(3.5, dims.y), h)) * mix(0.8, 1.0, n1);   // grime from the foot
 		rough = mix(0.35, 0.85, max(chip, n2));
 		met = mix(0.3, 0.1, chip);
 		spec = 0.6;

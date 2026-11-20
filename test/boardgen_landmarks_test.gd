@@ -120,18 +120,26 @@ func _a_raised_cell() -> Dictionary:
 	return {}
 
 
-func test_a_pump_house_lies_flat_on_its_roof_and_mounts_pipes_and_louvres_only_on_lower_walls() -> void:
+func test_a_pump_house_has_a_vented_ridge_a_stack_and_big_intake_pipes_and_motors_at_the_foot_of_its_lower_walls() -> void:
 	var at := _a_raised_cell()
-	var lm := _lm("PumpHouse", at["x"], at["z"], 1, 1)
 	var top := float(_fixture()["level_in"][at["level"]])
+	var lm := _lm("PumpHouse", at["x"], at["z"], 2, 2)
 	var parts := BoardgenLandmarks.plan(_with([lm]))
-	assert_int(parts.size()).is_equal(2 + 2 * int(at["lower"]))   # roof plate and grate, then a pipe and a louvre per lower wall
+	var teal := parts.filter(func(p: Dictionary) -> bool: return p["colour"] == BoardgenLandmarks.TEAL or p["colour"] == BoardgenLandmarks.TEAL.lightened(0.15) or p["colour"] == BoardgenLandmarks.TEAL.darkened(0.2))
+	assert_bool(teal.size() >= 3).is_true()   # its own colour: the ridge in three steps (and a motor per lower wall face)
+	var roof := parts.filter(func(p: Dictionary) -> bool: return p["lo"].y >= top - 0.001)
+	assert_bool(roof.any(func(p: Dictionary) -> bool: return p["hi"].y > top + 3.0)).is_true()   # the exhaust stack stands out above the roofline
+	for shape in [[2, 2], [2, 1], [1, 2], [1, 1]]:   # whatever stands up on the roof lies in the edge strip: the rest of the roof stays free
+		var house := _lm("PumpHouse", at["x"], at["z"], shape[0], shape[1])
+		var inner := _rect(house)
+		inner = [inner[0] + Vector2.ONE * BoardgenLandmarks.MOUNT_IN, inner[1] - Vector2.ONE * BoardgenLandmarks.MOUNT_IN]
+		for p in BoardgenLandmarks.plan(_with([house])).filter(func(q: Dictionary) -> bool: return q["lo"].y >= top - 0.001 and q["hi"].y > top + BoardgenLandmarks.GRATE_IN + 0.001):
+			var clear: bool = p["hi"].x <= inner[0].x + 0.001 or p["lo"].x >= inner[1].x - 0.001 or p["hi"].z <= inner[0].y + 0.001 or p["lo"].z >= inner[1].y - 0.001
+			assert_bool(clear).override_failure_message("a roof part stands beyond the edge strip: %s (%dx%d)" % [p, shape[0], shape[1]]).is_true()
 	for p in parts:
-		assert_float(p["hi"].y).is_less_equal(top + BoardgenLandmarks.GRATE_IN + 0.0001)   # nothing stands on the roof
-		if p["hi"].y > top:   # the flat roof parts lie inside the cell; a mount hangs below the roof edge
-			assert_bool(_inside(p, _rect(lm))).is_true()
-		else:
-			assert_bool(_inside(p, _rect(lm), BoardgenLandmarks.MOUNT_IN + 0.001)).is_true()
+		assert_bool(_inside(p, _rect(lm), BoardgenLandmarks.MOUNT_IN + 0.001)).override_failure_message("part leaves the footprint and the wall strip: %s" % [p]).is_true()
+	var pipes := parts.filter(func(p: Dictionary) -> bool: return p["shape"] == "cyl" and p["axis"] != 1 and is_equal_approx(p["hi"].y - p["lo"].y, 0.6))   # a 0.6 in intake pipe per lower wall face
+	assert_int(pipes.size()).is_greater_equal(1)
 
 
 func test_a_sump_is_a_few_flat_glowing_bubbles_inside_its_footprint() -> void:
@@ -150,7 +158,7 @@ func test_build_draws_every_part_in_a_few_instanced_meshes_and_makes_no_collider
 	add_child(node)
 	node.build(layout)
 	var meshes := node.find_children("*", "MultiMeshInstance3D", false, false)
-	assert_int(meshes.size()).is_between(3, 5)   # boxes, cylinders (plain and glowing) and rings
+	assert_int(meshes.size()).is_between(3, 5)   # boxes, cylinders and rings, plain and glowing
 	var instances := 0
 	for m: MultiMeshInstance3D in meshes:
 		instances += m.multimesh.instance_count
