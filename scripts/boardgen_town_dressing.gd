@@ -28,11 +28,16 @@ static func house_look(lot_id: int, half: int, size: Vector2) -> Dictionary:
 	return {"inset": inset, "yaw": (2.0 * _hash(lot_id, half, 5) - 1.0) * yaw_max, "top": BODY_IN + (_hash(lot_id, half, 6) - 0.5) * 0.6, "plinth": 0.3 + 0.3 * _hash(lot_id, half, 7)}
 
 
-## The drawn bodies of the intact houses (ruined, walkable tiers are never touched): {lot, centre (Vector2, board inches), size (inset), yaw, top, plinth, half}. Pure data.
+## The drawn bodies of the intact houses (ruined, walkable tiers are never touched): {lot, centre (Vector2, board inches), size (inset), yaw, top, plinth, half, front, jetty, storey}. A house
+## with a street at its door ("front", from the frontage table) may carry a JETTY (plan O5): its upper storey (above `storey`, 1.5-1.9 in) overhangs the ground storey on the front face by `jetty`
+## 0.15-0.2 in - a recess inside the house's own cells, never over ground a model could stand on. Pure data.
 static func house_bodies(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var cell_in := float(layout["cell_in"])
 	var board := Vector2(layout["nx"], layout["nz"]) * cell_in
+	var fronts := {}
+	for f: Dictionary in frontage(layout):
+		fronts[f["lot"]] = f["front"]
 	for lot: Dictionary in layout["lots"]:
 		if lot["kind"] != "Roofed":
 			continue
@@ -40,8 +45,23 @@ static func house_bodies(layout: Dictionary) -> Array[Dictionary]:
 		var centre := Vector2(lot["x"], lot["z"]) * cell_in + size * 0.5 - board * 0.5
 		var half := 1 if centre.y > 0.0 else 0
 		var look := house_look(lot["id"], half, size)
-		out.append({"lot": lot["id"], "centre": centre, "size": size - Vector2.ONE * 2.0 * float(look["inset"]), "yaw": look["yaw"], "top": look["top"], "plinth": look["plinth"], "half": half})
+		var front: String = fronts.get(lot["id"], "")
+		var jetty := (0.15 + 0.05 * _hash(lot["id"], half, 13)) if front != "" and _hash(lot["id"], half, 14) < 0.6 else 0.0
+		out.append({"lot": lot["id"], "centre": centre, "size": size - Vector2.ONE * 2.0 * float(look["inset"]), "yaw": look["yaw"], "top": look["top"], "plinth": look["plinth"], "half": half,
+			"front": front, "jetty": jetty, "storey": 1.5 + 0.4 * _hash(lot["id"], half, 15)})
 	return out
+
+
+## The boxes a drawn body is made of: one, or - with a jetty - the ground storey (below `storey`, its front face pulled back by `jetty`) and the upper storey (the whole body above it).
+## {centre (Vector2, board inches, before the yaw is applied), size (Vector2), y0, y1}. Pure data.
+static func house_parts(body: Dictionary) -> Array[Dictionary]:
+	var upper := {"centre": body["centre"], "size": body["size"], "y0": 0.0, "y1": body["top"]}
+	if body["jetty"] <= 0.0:
+		return [upper]
+	var pull: Vector2 = {"N": Vector2(0, 1), "S": Vector2(0, -1), "E": Vector2(-1, 0), "W": Vector2(1, 0)}[body["front"]]   # which way the ground storey's front face moves in
+	var lower := {"centre": body["centre"] + (pull * float(body["jetty"]) * 0.5).rotated(-float(body["yaw"])), "size": body["size"] - pull.abs() * float(body["jetty"]), "y0": 0.0, "y1": body["storey"]}
+	upper["y0"] = body["storey"]
+	return [lower, upper]
 
 
 ## The roofs of the intact lots (plan O4), pure data: {lot, centre (Vector2, board inches), length, width (along / across the ridge), height, along_x, half, yaw, eaves, type, back, annex}.
@@ -446,18 +466,21 @@ func build(layout: Dictionary, material: Material) -> void:
 ## The drawn bodies of the intact houses in ONE MultiMesh with the board's material (kind "roofed"; the fraction of the kind carries the plinth height for the shader).
 ## The greybox's own boxes for these cells draw nothing (zero scale) and only keep the collider.
 func _add_bodies(layout: Dictionary, material: Material) -> void:
-	var list := house_bodies(layout)
+	var parts: Array[Dictionary] = []
+	for b: Dictionary in house_bodies(layout):
+		for part in house_parts(b):
+			parts.append(part.merged({"yaw": b["yaw"], "plinth": b["plinth"]}))
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_custom_data = true
 	mm.mesh = BoxMesh.new()
-	mm.instance_count = list.size()
+	mm.instance_count = parts.size()
 	var kind := float(BoardgenTheme.TOWN_KINDS.find("roofed"))
-	for i in list.size():
-		var b: Dictionary = list[i]
-		var size := Vector3(b["size"].x, b["top"], b["size"].y)
+	for i in parts.size():
+		var b: Dictionary = parts[i]
+		var size := Vector3(b["size"].x, float(b["y1"]) - float(b["y0"]), b["size"].y)
 		var at: Vector2 = b["centre"]
-		mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, b["yaw"]) * Basis.from_scale(size * INCHES_TO_METERS), Vector3(at.x, size.y * 0.5, at.y) * INCHES_TO_METERS))
+		mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, b["yaw"]) * Basis.from_scale(size * INCHES_TO_METERS), Vector3(at.x, (float(b["y0"]) + float(b["y1"])) * 0.5, at.y) * INCHES_TO_METERS))
 		mm.set_instance_custom_data(i, Color(kind + (float(b["plinth"]) - 0.3) / 0.75, size.x, size.y, size.z))
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = "Houses"

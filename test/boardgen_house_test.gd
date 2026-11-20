@@ -94,4 +94,7 @@ func test_the_greybox_keeps_the_collider_of_an_intact_house_and_draws_its_body_e
 		heights[snappedf((shape as CollisionShape3D).shape.size.y / BoardgenGreybox.INCHES_TO_METERS, 0.01)] = true
 	assert_bool(heights.has(2.5)).override_failure_message("the 2.5 in solid collider of the intact houses is gone").is_true()   # ... the collider stays
 	var houses := (board.find_child("TownDressing", false, false).find_child("Houses", false, false) as MultiMeshInstance3D).multimesh
-	assert_int(houses.instance_count).is_equal(3)
+	var parts := 0
+	for b in BoardgenTownDressing.house_bodies(layout):
+		parts += BoardgenTownDressing.house_parts(b).size()
+	assert_int(houses.instance_count).is_equal(parts)   # one box per body, two for a jettied one

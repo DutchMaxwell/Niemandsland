@@ -85,3 +85,31 @@ func test_the_hip_and_catslide_meshes_have_outward_normals_and_close_over_the_ea
 			# winding agrees with the normal: clockwise seen from outside means the geometric normal of (a, b, c) points INTO the shape
 			var geo := (verts[3 * t + 1] - verts[3 * t]).cross(verts[3 * t + 2] - verts[3 * t])
 			assert_float(geo.dot(normals[3 * t])).is_less(0.0)
+
+
+## Jetties (plan O5): an intact house with a street at its door may carry an upper storey that overhangs the ground storey on the front face by 0.15-0.2 in - a recess inside its own cells.
+func test_a_jetty_is_a_recess_of_at_most_a_fifth_of_an_inch_on_the_front_face_only() -> void:
+	var layout := _street_of_houses()
+	var jetties := 0
+	for b in BoardgenTownDressing.house_bodies(layout):
+		var parts := BoardgenTownDressing.house_parts(b)
+		if b["jetty"] <= 0.0:
+			assert_int(parts.size()).is_equal(1)
+			continue
+		jetties += 1
+		assert_int(parts.size()).is_equal(2)
+		assert_float(b["jetty"]).is_between(0.15, 0.2)
+		assert_float(b["storey"]).is_between(1.5, 1.9)
+		var lower: Dictionary = parts[0]
+		var upper: Dictionary = parts[1]
+		var shrink: Vector2 = (upper["size"] as Vector2) - (lower["size"] as Vector2)
+		assert_float(shrink.x + shrink.y).is_equal_approx(b["jetty"], 0.0001)   # the ground storey is shorter by the jetty along ONE axis ...
+		assert_bool(is_zero_approx(shrink.x) or is_zero_approx(shrink.y)).is_true()   # ... and only on the front side
+		assert_float(lower["y1"]).is_equal(upper["y0"])
+		assert_float(upper["y1"]).is_equal(b["top"])
+		assert_str(b["front"]).is_not_empty()
+	assert_int(jetties).is_greater(0)
+	var fronts := {}
+	for b in BoardgenTownDressing.house_bodies(layout):
+		fronts[b["front"]] = true
+	assert_bool(fronts.has("N") and fronts.has("S")).is_true()   # the houses on both sides of the street face it
