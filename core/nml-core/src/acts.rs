@@ -992,6 +992,12 @@ pub const EPOCH_92_MELEE_CAUSES: u32 = 92;
 /// `CURRENT_RULES_EPOCH`. The recorder mirror (`act_recorder.gd`) stamps 93 in the same change.
 pub const EPOCH_93_DANGER_RULES_RIDER: u32 = 93;
 pub const CURRENT_RULES_EPOCH: u32 = 93;
+/// Placeholder gate for the heightfield plan (a generated tier board, `PlainTerrain.tiers`): from 94 the core reads the
+/// board's heights - a model stands on its tier, a tier block hides what stands behind it, a cliff is not walked, a ladder
+/// costs its rise. Below 94 the same header plays like a flat board; a header with no `tiers` plays flat at every epoch.
+/// Every call site reads THIS constant, not the literal `94` or `CURRENT_RULES_EPOCH`. Table twin `PENDING_EPOCH_HEIGHT`
+/// in `act_recorder.gd`. Nothing reads it yet.
+pub const PENDING_EPOCH_HEIGHT: u32 = 94;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2313,6 +2319,16 @@ mod tests {
         EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_87_WALKED_DANGEROUS, EPOCH_88_SPLIT_LONE_HERO, EPOCH_89_SHARED_BEARERS,
         EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER,
     };
+
+    /// Heightfield plan step 7: the gate exists, sits ahead of the live epoch (so no recorded or fresh game reads it yet),
+    /// is off one epoch below and on from its own number.
+    #[test]
+    fn the_height_gate_is_pending_ahead_of_the_live_epoch() {
+        use super::PENDING_EPOCH_HEIGHT as gate;
+        assert_eq!(gate, 94);
+        assert!(!rule_on(CURRENT_RULES_EPOCH, gate), "pending: the live epoch must not reach the heightfield yet");
+        assert!(!rule_on(gate - 1, gate) && rule_on(gate, gate));
+    }
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
     /// `rule_on` is a plain `>=`, tested at its own boundary — `since_epoch`

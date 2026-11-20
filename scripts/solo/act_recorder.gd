@@ -296,6 +296,9 @@ const EPOCH_92_MELEE_CAUSES := 92
 ## 3.6 faction folders resolving their rules (the table's registry already does, nothing to gate here); (3) the volley's legacy
 ## spell rider off (`BattleSim.resolve`, the cast-phase-off branch).
 const EPOCH_93_DANGER_RULES_RIDER := 93
+## The core's `PENDING_EPOCH_HEIGHT` (acts.rs, heightfield plan): from 94 the core reads a generated board's heights. The table
+## draws and collides the same materialised board and gates on nothing here yet.
+const PENDING_EPOCH_HEIGHT := 94
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
