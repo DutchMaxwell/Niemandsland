@@ -1329,6 +1329,9 @@ pub fn resolve_volley_with_tray(
     resolve_volley_leg(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates, shred_alias_dice, shred_boost_dice, false, false, &|_| false, &|_, _| None, tray)
 }
 
+/// `PENDING_EPOCH_DEADLY_INLINE`: the caller's landing of one weapon's Deadly groups on a scratch state; true = the target's chain is wiped.
+pub(crate) type InlineLand<'a> = &'a mut dyn FnMut(&[(i64, i64)]) -> bool;
+
 /// The table's resolve-first rank of a shot (`_solo_shot_priority`): Takedown, then Deadly, then the rest.
 pub fn shot_rank(p: &ShootProfile) -> u8 {
     if p.takedown {
@@ -1363,7 +1366,7 @@ pub fn resolve_volley_leg(
 ) -> ShootResult {
     resolve_volley_with_pick_label(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates,
         shred_alias_dice, shred_boost_dice, deadly_per_model, takedown_exact,
-        &|gr| (takedown_cover(gr), "trooper".into()), sighted, tray)
+        &|gr| (takedown_cover(gr), "trooper".into()), sighted, None, tray)
 }
 
 /// `resolve_volley_leg` whose Takedown pick callback also answers the picked model's label (the table's `_solo_model_label`),
@@ -1373,8 +1376,13 @@ pub(crate) fn resolve_volley_with_pick_label(
     shooters: &[Shooter<'_>], def: &Ctx, def_owner: &str, dist_in: f64, mod_dist_in: f64,
     cond_ap_dice: bool, surge_gates: bool, shred_alias_dice: bool, shred_boost_dice: bool,
     deadly_per_model: bool, takedown_exact: bool, takedown_pick_info: &dyn Fn(&[i64]) -> (bool, String),
-    sighted: &dyn Fn(usize, usize) -> Option<(i64, i64, &'static str)>, tray: &mut Tray,
+    sighted: &dyn Fn(usize, usize) -> Option<(i64, i64, &'static str)>,
+    // `PENDING_EPOCH_DEADLY_INLINE`: asked after each Deadly weapon with the (unsaved, X) groups it pushed; the caller lands them on a scratch
+    // copy of the state and answers whether the target's chain is wiped now (the weapons still to fire then read `Ctx::wiped`). `None` below 94.
+    inline_land: Option<InlineLand<'_>>, tray: &mut Tray,
 ) -> ShootResult {
+    let mut inline_land = inline_land;
+    let mut wiped = false;
     let mut out = ShootResult::default();
     let (mut regenable, mut regen_proof) = (0i64, 0i64);
     // the wounds of bypass weapons that JOINED the pool (the target has no group named Regeneration): the table's `ignore only Regeneration` line counts them
@@ -1497,6 +1505,8 @@ pub(crate) fn resolve_volley_with_pick_label(
         };
         if gate_shut { c.gate_shut() } else { c }
     };
+    let def_live: &Ctx = def;
+    let def_wiped: Ctx = if inline_land.is_some() { def_live.wiped() } else { *def_live };
     // FLATTENED on purpose: one pass over the (member, profile) pairs, so the
     // body below stays the single-shooter one.
     //
@@ -1526,6 +1536,7 @@ pub(crate) fn resolve_volley_with_pick_label(
             def.ranged_shroud_name, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in));
     }
     for (sh, k, pi) in shots {
+        let def: &Ctx = if wiped { &def_wiped } else { def_live };
         let att = sh.att;
         let p = &sh.profiles[pi];
         // The member's own die when a joined hero rolled one (AIG-G2 R5), else the unit's (the host's) die.
@@ -2354,6 +2365,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         if p.deadly > 0 && !deadly_per_model {
             out.mark("deadly");
         }
+        let groups_before = out.deadly_groups.len();
         if takedown_exact && p.takedown {
             // Tray-exact S7 — the table's Takedown landing: w x max(Deadly, 1) BEFORE the
             // picked model's own Regeneration roll, all of it for that one model (the drain).
@@ -2374,7 +2386,14 @@ pub(crate) fn resolve_volley_with_pick_label(
                 regen_joined += w;
             }
         }
+        // PENDING_EPOCH_DEADLY_INLINE: the table lands this weapon's Deadly wounds NOW, before the next weapon rolls.
+        if out.deadly_groups.len() > groups_before {
+            if let Some(land) = inline_land.as_mut() {
+                wiped |= land(&out.deadly_groups[groups_before..]);
+            }
+        }
     }
+    let def: &Ctx = if wiped { &def_wiped } else { def_live };
     // --- `_solo_land_wounds` :6623 -> `_solo_apply_regeneration` :6543 ---
     if shroud_shortened {
         out.log.push(format!(

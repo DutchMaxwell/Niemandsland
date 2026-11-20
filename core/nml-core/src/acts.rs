@@ -1006,6 +1006,14 @@ pub const PENDING_EPOCH_FLYING_THROUGH: u32 = 94;
 /// Unpredictable bonus; every later shot, volley and charge of the activation reuses the stamped pick. Below 94 byte-identical.
 /// Every call site reads THIS constant, not the literal `94`.
 pub const PENDING_EPOCH_VERSATILE_MODIFIED_HIT: u32 = 94;
+/// Placeholder gate for DEADLY LANDING INLINE (Plan H, the dlines2 train; lead decision 20.11.): the table lands a Deadly weapon's
+/// unsaved wounds right after that weapon's saves, so a LATER weapon of the same volley reads the target as it stands then; a target
+/// whose last model the Deadly wounds killed no longer lends its rules (Stealth, Evasive, Aircraft, Fortified, Shielded, Regeneration ...)
+/// to the later weapons ("dead models lend nothing", ruling 20.11.). The core landed Deadly after all the dice and kept the captured
+/// target for every weapon. From 94 the volley fold lands each Deadly weapon's groups on a scratch copy of the state and, once the
+/// target's chain is wiped, reads `Ctx::wiped` for the weapons still to fire; blast caps, the attack counts and the range gates stay
+/// as declared. Below 94 byte-identical. Every call site reads THIS constant, not the literal `94`.
+pub const PENDING_EPOCH_DEADLY_INLINE: u32 = 94;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff

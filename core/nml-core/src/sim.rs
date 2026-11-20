@@ -1684,6 +1684,7 @@ pub(crate) fn tray_strafing(
         seams.tray_exact,
         &|gr: &[i64]| takedown_pick_info_after(statics, next, target, cover, def.in_cover, gr, seams.takedown_pick),
         &|_, _| None,
+        None,
         tray,
     );
     // The volley tail, the shoot branch's own shape: spent Limited marks,
@@ -11770,6 +11771,21 @@ fn resolve_with(
                             // melee half above.
                             // A lone hero's hit lines call the target by its host's name, as the table does.
                             tray.aim(lone_host.map(|h| statics[next.roster.profile[h]].name.clone()));
+                            // PENDING_EPOCH_DEADLY_INLINE: a volley with a Deadly weapon beside another fires its Deadly groups onto a scratch copy of
+                            // the state as the weapons go (the table's inline landing); the fold asks whether the target's chain is wiped by then.
+                            // Below 94, or with nothing to land inline, no clone is made and the fold is exactly what it was.
+                            let inline_on = rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_DEADLY_INLINE)
+                                && rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING)
+                                && parts.iter().map(|(mi, msc, _)| msc.keep.iter().filter(|&&k| statics[next.roster.profile[*mi]].shoot[k].deadly > 0).count()).sum::<usize>() > 0
+                                && parts.iter().map(|(_, msc, _)| msc.keep.len()).sum::<usize>() > 1;
+                            let mut scratch_state = if inline_on { Some(next.clone()) } else { None };
+                            let mut inline_land = |groups: &[(i64, i64)]| -> bool {
+                                let Some(sc) = scratch_state.as_mut() else { return false };
+                                for &(post, gx) in groups {
+                                    land_deadly_group(sc, g.ti, post, gx, seams, &mut None, &mut 0);
+                                }
+                                sc.alive[g.ti] <= 0 && sc.attached[g.ti].iter().all(|&h| sc.alive[h] <= 0)
+                            };
                             let r = crate::dice::resolve_volley_with_pick_label(
                                 &shooters_of(&parts, statics, &next),
                                 &def, &ut_g.name, g.d, g.mod_d,
@@ -11790,6 +11806,7 @@ fn resolve_with(
                                 &|gr: &[i64]| takedown_pick_info_after(statics, &next, g.ti, cover, def.in_cover, gr, seams.takedown_pick),
                                 &|i, pi| parts.get(i).and_then(|(mi, msc, _)| msc.sighted.get(pi)
                                     .map(|&n| (n, next.alive[*mi], msc.silent.get(pi).copied().unwrap_or("")))),
+                                if inline_on { Some(&mut inline_land) } else { None },
                                 tray,
                             );
                             // WAVE 3, rules-must-log — the arm lowered a
