@@ -945,6 +945,13 @@ impl NmlCore {
         plain::variant_of(&boardcall::layout_value(seed)).try_to::<VarDictionary>().unwrap_or_default()
     }
 
+    /// [`boardgen_layout`] for a board theme: `"ruintown"` (the ruined town; the layout then carries `theme: "RuinTown"`), `""` or
+    /// `"deepworks"` (the original board, no `theme` key). Any other id gives the original board and the problem "unknown theme".
+    #[func]
+    fn boardgen_layout_themed(&self, seed: i64, theme: GString) -> VarDictionary {
+        plain::variant_of(&boardcall::layout_value_themed(seed, &theme.to_string())).try_to::<VarDictionary>().unwrap_or_default()
+    }
+
     #[func]
     fn live_handles(&self) -> i64 {
         self.slab.iter().filter(|s| s.is_some()).count() as i64
