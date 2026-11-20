@@ -15,6 +15,7 @@ varying vec3 wnrm;
 varying flat float kind;
 
 const float IN = 0.0254;
+const float PLATE = 1.5;   // the modular plate of floors and walls, in inches
 const vec3 YELLOW = vec3(0.78, 0.55, 0.05);
 const ivec2 DIRS[4] = ivec2[4](ivec2(1, 0), ivec2(-1, 0), ivec2(0, 1), ivec2(0, -1));
 
@@ -51,6 +52,16 @@ float fbm(vec2 p) {
 // A thin line every `step_in` inches (0 on the line, 1 off it).
 float seam(float v, float step_in, float w) {
 	return smoothstep(0.0, w, abs(fract(v / step_in + 0.5) - 0.5) * step_in);
+}
+
+// A round inset hatch of radius R at the origin of fp (inches): rgb = its paint, a = how much of the surface it covers (lid and groove).
+vec4 hatch(vec2 fp, float R, float n) {
+	float rr = length(fp) / R;
+	float groove = smoothstep(0.07, 0.0, abs(rr - 1.04));
+	float arc = (fract(atan(fp.y, fp.x) / 0.7854 + 0.5) - 0.5) * 0.7854 * rr;   // eight bolts on a ring
+	float bolt = smoothstep(0.1, 0.06, length(vec2(rr - 0.78, arc)));
+	float handle = step(abs(fp.y / R), 0.06) * step(abs(fp.x / R), 0.38);
+	return vec4(vec3(0.27, 0.26, 0.25) * mix(0.8, 1.1, n) * (1.0 + 0.4 * bolt) * (1.0 - 0.5 * handle) * (1.0 - 0.6 * groove), max(smoothstep(0.98, 0.94, rr), groove));
 }
 
 vec4 cell_at(ivec2 c) {   // x = height in inches, y = sump; outside the board = ground
@@ -100,10 +111,35 @@ void fragment() {
 		float dtop = top_y - p.y;
 		alb = mix(vec3(0.17, 0.165, 0.16), vec3(0.30, 0.285, 0.27), n1) * (k == 4 ? 1.25 : k == 6 ? 1.45 : 1.0);
 		alb *= mix(0.55, 1.0, seam(uv.y, 1.5, 0.05)) * mix(0.7, 1.0, seam(uv.x, 1.5, 0.04));
+		// Layered panels, 1.5 in: an inset frame, rivets, vents with soot above them, signage plates (abstract marks, no text), conduit runs.
+		vec2 pid = floor(uv / PLATE);
+		vec2 fp = (fract(uv / PLATE) - 0.5) * PLATE;
+		vec2 ap = abs(fp);
+		float ph = h21(pid + 9.1);
+		float ed = PLATE * 0.5 - max(ap.x, ap.y);
+		alb *= (1.0 - 0.45 * smoothstep(0.035, 0.0, abs(ed - 0.14))) * mix(0.92, 1.06, smoothstep(0.0, 0.1, ed - 0.14));
+		float rv = min(length(ap - 0.6), min(length(ap - vec2(0.6, 0.0)), length(ap - vec2(0.0, 0.6))));
+		alb = mix(alb, alb * 1.6 + 0.05, smoothstep(0.05, 0.03, rv) * step(0.1, ph));
+		if (ph < 0.1) {   // a vent
+			alb = mix(alb, mix(vec3(0.015), vec3(0.2, 0.2, 0.21), step(0.5, fract(uv.y * 5.0))), step(ap.x, 0.5) * step(ap.y, 0.42));
+			alb *= 1.0 - 0.55 * smoothstep(0.42, 0.75, fp.y) * step(ap.x, 0.6);
+		} else if (ph < 0.2) {   // a signage plate: a coloured ground with three bars
+			vec3 ground = ph < 0.13 ? YELLOW * 0.9 : ph < 0.17 ? vec3(0.62, 0.6, 0.55) : vec3(0.2, 0.32, 0.34);
+			float row = floor((fp.y + 0.27) / 0.18);   // three bars of hashed length, like a label (abstract, no glyphs)
+			float len = 0.12 + 0.4 * h21(vec2(row, pid.x * 7.0 + pid.y));
+			float mark = step(abs(fract((fp.y + 0.27) / 0.18) - 0.5), 0.28) * step(fp.x + 0.5, len) * step(ap.x, 0.5) * step(ap.y, 0.27);
+			alb = mix(alb, ground * mix(1.0, 0.15, mark) * mix(0.7, 1.0, n2), step(ap.x, 0.55) * step(ap.y, 0.32));
+		} else if (h21(vec2(floor(uv.y / PLATE), floor(uv.x / 6.0)) + 21.0) > 0.82) {   // a conduit, clamped at the seams
+			float t = (fp.y - 0.45) / 0.07;
+			alb = abs(t) < 1.0 ? vec3(0.30, 0.28, 0.25) * (0.4 + 0.6 * sqrt(1.0 - t * t)) * (1.0 - 0.5 * step(0.72, ap.x)) : alb;
+		}
+		if (h21(pid - vec2(0.0, 1.0) + 9.1) < 0.1) {
+			alb *= 1.0 - 0.5 * smoothstep(-0.2, -0.75, fp.y);   // the soot of the vent below
+		}
 		float drip = smoothstep(0.55, 0.8, fbm(vec2(uv.x * 1.7, uv.y * 0.18))) * smoothstep(3.0, 0.0, dtop);
 		alb = mix(alb, vec3(0.33, 0.15, 0.06), drip);
 		ao = mix(0.4, 1.0, smoothstep(0.0, 1.6, p.y - low_y));
-		if (top_y - low_y >= 2.0 && dtop > 0.25 && dtop < 0.85) {   // hazard band, chipped and dirty
+		if (top_y - low_y >= 2.0 && dtop > 0.25 && dtop < 0.85 && h21(vec2(floor(uv.x / cell_in) + top_y, low_y + 7.0)) > 0.45) {   // hazard band only on some edges, chipped and dirty
 			vec3 paint = mix(vec3(0.04), YELLOW * 0.8, step(0.5, fract((uv.x + p.y) * 0.9)));
 			alb = mix(paint, alb, smoothstep(0.45, 0.65, n2 + 0.2 * n3));
 		}
@@ -126,6 +162,21 @@ void fragment() {
 			alb *= mix(0.55, 1.0, seam(uv.x, 1.5, 0.04) * seam(uv.y, 1.5, 0.04));
 			alb *= mix(0.8, 1.0, smoothstep(0.5, 0.75, fbm(uv * 0.3 + 3.0)));
 			alb *= mix(0.65, 1.0, smoothstep(0.0, 1.4, wd + (n2 - 0.5) * 0.9));   // grime gradient: darker the closer to a wall
+			vec2 fp = (fract(uv / PLATE) - 0.5) * PLATE;   // modular floor plates: tone, grime in the seams, worn edges, hatches, drain grates, worn paint
+			float ph = h21(floor(uv / PLATE) + 3.7);
+			float ed = PLATE * 0.5 - max(abs(fp.x), abs(fp.y));
+			alb *= mix(0.88, 1.08, ph) * (1.0 - 0.45 * smoothstep(0.08, 0.0, ed) * (0.4 + n2));
+			alb = mix(alb, vec3(0.45, 0.44, 0.42), smoothstep(0.1, 0.0, ed) * smoothstep(0.45, 0.7, n3) * 0.5);
+			if (ph < 0.03) {
+				vec4 h = hatch(fp, 0.5, n3);
+				alb = mix(alb, h.rgb, h.a);
+			} else if (ph < 0.06) {   // drain grate: dark slots between steel bars in a frame
+				float frame = max(abs(fp.x), abs(fp.y));
+				alb = mix(alb, mix(vec3(0.015), vec3(0.2, 0.2, 0.21), step(0.5, fract(fp.x * 6.0))), step(frame, 0.5));
+				alb *= 1.0 - 0.6 * smoothstep(0.04, 0.0, abs(frame - 0.53));
+			} else if (ph > 0.94 && k == 1) {   // a worn safety-yellow stripe on the street
+				alb = mix(alb, YELLOW * 0.7, step(abs(fp.x), 0.09) * smoothstep(0.45, 0.65, n2 + 0.3 * n3));
+			}
 			// Water: a world-space noise field (domain-warped, so the outline is irregular), biased to collect along the walls. Nothing here
 			// reads the cell grid, so no puddle is clipped at a cell edge; a damp ring and a soft rim surround the open water.
 			vec2 warp = vec2(fbm(uv * 0.8 + 3.1), fbm(uv * 0.8 + 8.7)) - 0.5;
@@ -157,6 +208,8 @@ void fragment() {
 			alb *= mix(0.65, 1.0, smoothstep(0.45, 0.7, n2));
 			float riv = smoothstep(0.075, 0.045, length(abs(fract(uv / 1.5) - 0.5) * 1.5 - vec2(0.6)));
 			alb += riv * 0.12;
+			vec4 hd = hatch((fract(uv / PLATE) - 0.5) * PLATE, 0.5, n3);
+			alb = mix(alb, hd.rgb, hd.a * step(ph, 0.06));
 			rough = 0.7;
 			met = 0.35;
 		} else {   // rooftop slab: 3 in slabs, tar joints, gravel
@@ -165,6 +218,8 @@ void fragment() {
 			alb *= mix(0.2, 1.0, seam(uv.x + half_board.x, cell_in, 0.06) * seam(uv.y + half_board.y, cell_in, 0.06));
 			alb *= mix(0.88, 1.08, n3) * mix(0.7, 1.0, smoothstep(0.5, 0.72, n2));
 			rough = 0.85;
+			vec4 hr = hatch((fract((uv + half_board) / cell_in) - 0.5) * cell_in, 1.0, n3);
+			alb = mix(alb, hr.rgb, hr.a * step(h21(sl + 5.0), 0.1));
 		}
 		if (k == 6) {
 			alb *= vec3(0.82, 0.9, 1.08);
