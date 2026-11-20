@@ -733,3 +733,112 @@ fn about_four_in_ten_town_houses_are_intact_solid_roofs_and_the_rest_ruined_walk
     eprintln!("intact {intact}, ruined {ruined}: {share:.2}");
     assert!((0.30..=0.50).contains(&share), "{share:.2} of the houses are intact");
 }
+
+/// What "grown" means in numbers (ruintown AAA step G1): per town board the shares the growth stage has to move.
+#[derive(Default)]
+struct Growth {
+    boards: f64, houses: f64, with_street_face: f64, party_walls: f64, boards_with_party: f64, with_yard_behind: f64, with_sealed_yard: f64, backyard_only: f64,
+    longest_run_cells: f64, widths: f64, width_hist: [f64; 5], roof_run_lots: f64, roof_run_max: usize, boards_roof_run_over_2: f64, any_level_run_lots: f64, blocked: f64,
+}
+
+fn growth(seeds: std::ops::RangeInclusive<i64>) -> Growth {
+    use nml_core::boardgen::LotKind::{Block, Deck, Roofed, Terrace, Wall};
+    let mut g = Growth::default();
+    let house = |k: nml_core::boardgen::LotKind| matches!(k, Block | Terrace | Deck | Roofed);
+    for seed in seeds {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        g.boards += 1.0;
+        let at = |x: i64, z: i64| if x < 0 || z < 0 || x >= GRID as i64 || z >= GRID as i64 { None } else { Some(l.cell(x as usize, z as usize)) };
+        let dirs: [(i64, i64); 4] = [(0, -1), (1, 0), (0, 1), (-1, 0)];
+        let mut party: HashSet<(u16, u16)> = HashSet::new();
+        for lot in l.lots.iter().filter(|lot| house(lot.kind)) {
+            g.houses += 1.0;
+            // per face: the street cells beside it, and the cells beyond (a yard = ground that is neither street nor another house)
+            let mut face = [(0usize, 0usize); 4];   // (street cells, yard cells)
+            for dz in 0..lot.h { for dx in 0..lot.w {
+                for (d, &(ox, oz)) in dirs.iter().enumerate() {
+                    let (nx, nz) = ((lot.x + dx) as i64 + ox, (lot.z + dz) as i64 + oz);
+                    let Some(nb) = at(nx, nz) else { continue };
+                    if nb.lot_id == lot.id { continue }
+                    if nb.street { face[d].0 += 1 } else if house(nb.lot_kind) { party.insert((lot.id.min(nb.lot_id), lot.id.max(nb.lot_id))); } else if nb.lot_kind != Wall { face[d].1 += 1 }
+                }
+            }}
+            let front = (0..4).filter(|&d| face[d].0 > 0).max_by_key(|&d| face[d].0);
+            match front {
+                None => g.backyard_only += 1.0,
+                Some(f) => {
+                    g.with_street_face += 1.0;
+                    g.with_yard_behind += f64::from(u8::from(face[(f + 2) % 4].1 > 0));
+                    // a SEALED yard: every cell right behind the back face is ground (no street, no house, no wall) and no street touches it either - the back of a block
+                    let (bx, bz) = dirs[(f + 2) % 4];
+                    let back: Vec<(i64, i64)> = (0..lot.h).flat_map(|dz| (0..lot.w).map(move |dx| (dx, dz))).map(|(dx, dz)| ((lot.x + dx) as i64, (lot.z + dz) as i64))
+                        .filter(|&(x, z)| at(x + bx, z + bz).is_some_and(|c| c.lot_id != lot.id) && at(x - bx, z - bz).is_none_or(|c| c.lot_id != lot.id)).map(|(x, z)| (x + bx, z + bz)).collect();
+                    let sealed = !back.is_empty() && back.iter().all(|&(x, z)| {
+                        let c = at(x, z).unwrap();
+                        !c.street && !house(c.lot_kind) && c.lot_kind != Wall && dirs.iter().all(|&(ox, oz)| at(x + ox, z + oz).is_none_or(|n| !n.street))
+                    });
+                    g.with_sealed_yard += f64::from(u8::from(sealed));
+                }
+            }
+        }
+        g.party_walls += party.len() as f64;
+        g.boards_with_party += f64::from(u8::from(!party.is_empty()));
+        // longest straight street run and the street widths (across = the shorter of the two runs through a street cell, 4+ = junction or square)
+        let street = |x: usize, z: usize| l.cell(x, z).street;
+        let (mut longest, mut kinds) = (0, [false; 5]);
+        for a in 0..GRID {
+            for horizontal in [true, false] {
+                let mut run = 0;
+                for k in 0..GRID { if if horizontal { street(k, a) } else { street(a, k) } { run += 1; longest = longest.max(run) } else { run = 0 } }
+            }
+        }
+        let run_through = |x: usize, z: usize, dx: usize, dz: usize| {
+            let mut n = 1;
+            let (mut a, mut b) = ((x, z), (x, z));
+            while a.0 >= dx && a.1 >= dz && street(a.0 - dx, a.1 - dz) { a = (a.0 - dx, a.1 - dz); n += 1 }
+            while b.0 + dx < GRID && b.1 + dz < GRID && street(b.0 + dx, b.1 + dz) { b = (b.0 + dx, b.1 + dz); n += 1 }
+            n
+        };
+        for z in 0..GRID { for x in 0..GRID { if street(x, z) {
+            let w = run_through(x, z, 1, 0).min(run_through(x, z, 0, 1)).min(4);
+            g.width_hist[w] += 1.0;
+            kinds[w] = true;
+        }}}
+        g.longest_run_cells += longest as f64;
+        g.widths += kinds[1..4].iter().filter(|&&k| k).count() as f64;
+        // roof runs: walkable raised building cells, edge-adjacent, counted in lots (same level; and any level)
+        let sol = solid(&l);
+        for same_level in [true, false] {
+            let walk = |i: usize| l.cells[i].level > 0 && !sol[i] && !matches!(l.cells[i].lot_kind, Wall | nml_core::boardgen::LotKind::Street);
+            let mut seen = vec![false; GRID * GRID];
+            let mut best = 0;
+            for s in (0..GRID * GRID).filter(|&i| walk(i)) {
+                if seen[s] { continue }
+                let (mut stack, mut lots) = (vec![s], HashSet::new());
+                seen[s] = true;
+                while let Some(i) = stack.pop() {
+                    lots.insert(l.cells[i].lot_id);
+                    for j in nbrs(i) { if !seen[j] && walk(j) && (!same_level || l.cells[j].level == l.cells[i].level) { seen[j] = true; stack.push(j) } }
+                }
+                best = best.max(lots.len());
+            }
+            if same_level { g.roof_run_lots += best as f64; g.roof_run_max = g.roof_run_max.max(best); g.boards_roof_run_over_2 += f64::from(u8::from(best > 2)) } else { g.any_level_run_lots += best as f64 }
+        }
+        g.blocked += blocked_share(&l, 3, &band_pairs(), true);
+    }
+    g
+}
+
+#[test]
+#[ignore = "measurement: NML_GROWTH_OUT=<file> cargo test --test boardgen census_of_growth -- --ignored"]
+fn census_of_growth() {
+    let g = growth(1..=1000);
+    let n = g.boards;
+    let w: f64 = g.width_hist.iter().sum();
+    let out = format!("| houses | with a street face | party walls / board (boards with any) | houses with a yard behind (of those with a front) | of those, a SEALED yard (ground, no street touching it) | backyard-only houses | longest straight street run | distinct street widths (1-3 cells) | street cells by width 1/2/3/4+ % | longest same-level walkable roof run in lots (mean, max, boards > 2) | longest any-level run in lots | opening-turn rays blocked |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n| {:.1} | {:.1} ({:.0} %) | {:.2} ({:.0} %) | {:.1} ({:.0} %) | {:.1} ({:.0} %) | {:.1} | {:.1} cells = {:.0} in | {:.2} | {:.0} / {:.0} / {:.0} / {:.0} | {:.2}, {}, {:.0} % | {:.2} | {:.1} % |",
+        g.houses / n, g.with_street_face / n, 100.0 * g.with_street_face / g.houses, g.party_walls / n, 100.0 * g.boards_with_party / n, g.with_yard_behind / n, 100.0 * g.with_yard_behind / g.with_street_face.max(1.0), g.with_sealed_yard / n, 100.0 * g.with_sealed_yard / g.with_street_face.max(1.0), g.backyard_only / n,
+        g.longest_run_cells / n, g.longest_run_cells / n * 3.0, g.widths / n, 100.0 * g.width_hist[1] / w, 100.0 * g.width_hist[2] / w, 100.0 * g.width_hist[3] / w, 100.0 * g.width_hist[4] / w,
+        g.roof_run_lots / n, g.roof_run_max, 100.0 * g.boards_roof_run_over_2 / n, g.any_level_run_lots / n, 100.0 * g.blocked / n);
+    eprintln!("{out}");
+    if let Ok(path) = std::env::var("NML_GROWTH_OUT") { std::fs::write(path, &out).expect("growth census file"); }
+}
