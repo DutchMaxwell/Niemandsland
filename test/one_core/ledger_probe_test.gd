@@ -18,7 +18,7 @@ const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_s
 	"faction_folder": "robot_legions", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
 ## The delta row of a unit, key for key (sorted): what the core hands back. A key added there is a field the landing must map.
-const DELTA_KEYS := ["alive", "buffs_gained", "buffs_spent", "casts", "fatigued", "feats_used", "growth_markers", "limited_used", "moved",
+const DELTA_KEYS := ["alive", "buffs_gained", "buffs_spent", "casts", "fatigued", "feats_used", "growth_markers", "limited_used", "marks_left", "moved",
 	"piercing_tag_persistent", "piercing_tag_used", "pools", "positions", "precision_used", "removed", "shaken", "stamps",
 	"storm_used", "surprise_attack_used", "unit", "unknown", "versatile_pick_mode"]
 ## The round stamps the capture does NOT send (`_ledger_of` has no key for them), with the table property each is landed under.

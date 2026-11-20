@@ -262,6 +262,11 @@ pub fn granted_exact(state: &State, i: usize, rule: &str) -> bool {
     chain_grant_exact(state, i, rule, false)
 }
 
+/// `granted_exact`'s attackers-side half: the records on the TARGET's chain that belong to whoever attacks it (`granted_vs` with the full-string compare).
+pub fn granted_vs_exact(state: &State, target: usize, rule: &str) -> bool {
+    chain_grant_exact(state, target, rule, true)
+}
+
 fn chain_grant_exact(state: &State, i: usize, rule: &str, attackers: bool) -> bool {
     let mut who: Vec<usize> = vec![i];
     if let Some(h) = state.attached_to[i] {

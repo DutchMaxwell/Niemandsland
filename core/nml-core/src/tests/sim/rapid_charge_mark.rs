@@ -151,3 +151,65 @@ fn the_rapid_charge_mark_leaves_the_marked_enemy_clean_at_epoch_70() {
         "legacy path: no Rapid Charge record on the marked enemy: {:?}", state.buffs[2]
     );
 }
+
+/// The Piercing Fighting Mark's melee scope (aof/goblins' own entry, `vs_target`, scope `melee`, grants "AP(+1) in melee"): the table records it on the MARKED unit with
+/// that scope, where a volley never spends it, so it waits for the next charger. `PENDING_EPOCH_MELEE_MARK_SCOPE` puts the core's record there too, keeps it through the
+/// volley and reports it in the delta's `marks_left`; below the gate the Mark stays on the bearer with the scope dropped and the volley spends it.
+fn piercing_fighting_setup(e: u32) -> (State, Vec<UnitStatic>) {
+    let (st, mut statics) = mark_setup(e);
+    let mut registry = crate::rules::Registries::new(&repo_root());
+    let profile: Profile = serde_json::from_str(
+        r#"{"unit_id":"a","name":"a","game_system":"aof","faction_folder":"goblins","special_rules":["Piercing Fighting Mark"]}"#,
+    ).unwrap();
+    let marker = UnitStatic::build_for(&mut registry, &profile, e);
+    assert_eq!((marker.utility_buffs.len(), marker.utility_buffs[0].scope.as_str()), (1, "melee"), "the entry is the melee-scoped vs-target Mark");
+    statics[0].utility_buffs = marker.utility_buffs;
+    statics[0].rapid_charge_grant_in = 0.0;
+    (st, statics)
+}
+
+#[test]
+fn from_the_gate_a_volley_leaves_the_piercing_fighting_mark_on_the_marked_unit() {
+    use crate::acts::PENDING_EPOCH_MELEE_MARK_SCOPE as GATE;
+    let (st, statics) = piercing_fighting_setup(GATE);
+    let (after, _) = mark_run(&st, &statics, &buff_action(Some("b")), GATE);
+    assert!(after.buffs[2].iter().any(|r| r.attackers && r.once && &*r.scope == "melee" && &*r.grants_rule == "AP(+1) in melee"),
+        "the Mark waits on the marked unit: {:?}", after.buffs[2]);
+    assert!(after.buffs[0].is_empty(), "and never on the bearer: {:?}", after.buffs[0]);
+    let row = crate::activation::delta_of(&st, &after).into_iter().find(|d| d.key == "b").expect("the marked unit's row");
+    assert_eq!(row.marks_left, vec![("Piercing Fighting Mark".to_string(), "melee".to_string(), "AP(+1) in melee".to_string())]);
+    assert!(crate::activation::delta_of(&st, &after).iter().all(|d| d.key == "b" || d.marks_left.is_empty()), "only the marked unit carries it");
+}
+
+#[test]
+fn below_the_gate_the_piercing_fighting_mark_is_spent_by_the_volley() {
+    use crate::acts::PENDING_EPOCH_MELEE_MARK_SCOPE as GATE;
+    let (st, statics) = piercing_fighting_setup(GATE - 1);
+    let (after, _) = mark_run(&st, &statics, &buff_action(Some("b")), GATE - 1);
+    assert!(after.buffs[2].is_empty() && after.buffs[0].is_empty(), "spent, nothing left: {:?} / {:?}", after.buffs[0], after.buffs[2]);
+    assert!(crate::activation::delta_of(&st, &after).iter().all(|d| d.marks_left.is_empty()));
+}
+
+/// The Rapid Charge Mark (kept on the target since epoch 71) is reported too: the table holds the same record after a volley.
+#[test]
+fn the_rapid_charge_mark_a_volley_leaves_is_reported_in_marks_left() {
+    use crate::acts::EPOCH_71_RAPID_CHARGE_MARK as E;
+    let (st, statics) = mark_setup(E);
+    let (after, _) = mark_run(&st, &statics, &buff_action(Some("b")), E);
+    let row = crate::activation::delta_of(&st, &after).into_iter().find(|d| d.key == "b").expect("the marked unit's row");
+    assert_eq!(row.marks_left, vec![("Rapid Charge Mark".to_string(), "melee".to_string(), "Rapid Charge".to_string())]);
+}
+
+/// A charger's strikes read the record off the marked unit from the gate on (`ctx_live_vs`, melee only): AP(+1) in melee; a volley and a lower epoch read nothing.
+#[test]
+fn a_charger_reads_the_waiting_piercing_fighting_mark_from_the_gate() {
+    use crate::acts::PENDING_EPOCH_MELEE_MARK_SCOPE as GATE;
+    let (st, statics) = piercing_fighting_setup(GATE);
+    let (marked, _) = mark_run(&st, &statics, &buff_action(Some("b")), GATE);
+    let read = |epoch: u32, melee: bool| {
+        crate::sim::ctx_live_vs(ctx_of(&statics[0], &marked, 0), &statics, &marked, 0, 2, melee, epoch).pierce_melee_grant
+    };
+    assert!(read(GATE, true), "the charger's strikes carry AP(+1)");
+    assert!(!read(GATE, false), "a volley never reads a melee-scoped record");
+    assert!(!read(GATE - 1, true), "below the gate nothing reads it");
+}

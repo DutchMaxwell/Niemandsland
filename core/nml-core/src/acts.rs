@@ -834,6 +834,11 @@ pub const EPOCH_70_TRAY_EXACT: u32 = 70;
 /// reads it. Records stamped 66-70 were recorded while that writer was missing and replay byte-exact
 /// with the legacy bearer-side once-grant. Every call site reads THIS constant, not `71`.
 pub const EPOCH_71_RAPID_CHARGE_MARK: u32 = 71;
+/// Placeholder gate for the PIERCING FIGHTING MARK's melee scope (`tray_vs_marks`, `ctx_live_vs`): the table records the Mark on the MARKED unit with the entry's own
+/// `melee` scope (`_solo_apply_vs_marks`), where a volley never spends it, so it waits for the next charger. The core put it on the attacker's own ledger with the scope dropped
+/// and a volley spent it. From 94 the Mark lands on the target like the Rapid Charge Mark, a charger's strikes read it there (`pierce_melee_grant`) and the exchange that uses it
+/// spends it. Below 94 byte-identical. Every call site reads THIS constant, not `94`.
+pub const PENDING_EPOCH_MELEE_MARK_SCOPE: u32 = 94;
 /// The 29.10.2026 play-test fixes (A1/A2/A4), the table's #1911/#1912/#1914 in the core and its
 /// GDScript sim twins: from this epoch (A1) a printed Lacerate keeps the defender's Regeneration
 /// roll (only Bane bypasses it), (A2) wounds that leave a unit at half strength or less trigger

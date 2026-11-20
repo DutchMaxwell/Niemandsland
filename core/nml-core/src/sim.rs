@@ -2366,7 +2366,9 @@ fn tray_vs_marks(
             // `EPOCH_71_RAPID_CHARGE_MARK` the Mark lands on the TARGET; below it
             // the legacy once-grant stays on the bearer so older corpora
             // replay byte-exact. Rules-must-log: the placement names itself.
-            if grant == "Rapid Charge" && rule_on(seams.rules_epoch, EPOCH_71_RAPID_CHARGE_MARK) {
+            let on_target = (grant == "Rapid Charge" && rule_on(seams.rules_epoch, EPOCH_71_RAPID_CHARGE_MARK))
+                || (grant == "AP(+1) in melee" && b.scope == "melee" && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_MELEE_MARK_SCOPE));
+            if on_target {
                 trace_rule("mark", &b.name, &format!(
                     "{} marks {} — friendly units attacking it gain {} (once)",
                     statics[pb].name, statics[next.roster.profile[ti]].name, grant));
@@ -4672,6 +4674,10 @@ pub fn ctx_live_vs(
     c.shred_grant = c.shred_grant || mods::granted_vs(state, target, "Shred");
     if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_SLAYER_MARK_GRANT) {
         c.slayer_grant = c.slayer_grant || mods::granted_vs(state, target, "Slayer");
+    }
+    // The melee-scoped Piercing Fighting Mark waits on the marked unit for its charger (`PENDING_EPOCH_MELEE_MARK_SCOPE`); a volley never reads it.
+    if melee && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_MELEE_MARK_SCOPE) {
+        c.pierce_melee_grant = c.pierce_melee_grant || mods::granted_vs_exact(state, target, "AP(+1) in melee");
     }
     // G4R3 F-SURGE-GRANT (EPOCH_73_V36): a spell's once-grant of Surge to the target's attackers (the table's
     // `_solo_bridge_granted_flags`) pays like the Surge mark; the exchange spends the record.
