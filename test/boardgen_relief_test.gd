@@ -47,3 +47,15 @@ func test_walls_and_roofs_have_relief_and_the_materials_their_roughness() -> voi
 	for needle in ["depth_in = 0.025;", "depth_in = 0.03;"]:
 		bumped += src.count(needle)
 	assert_int(bumped).is_greater_equal(5)
+
+
+## R3 (edges and wear): the box size reaches the fragment; chips within 0.06 in of an edge, a damp band at the wall foot, soot under the eaves, a ragged top course on ruined tiers.
+func test_the_box_size_reaches_the_fragment_and_the_edges_foot_eaves_and_top_course_wear() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	assert_bool(src.contains("box_in = INSTANCE_CUSTOM.gba;")).is_true()
+	assert_bool(src.contains("lpos = VERTEX * INSTANCE_CUSTOM.gba;")).is_true()
+	assert_bool(src.contains("1.0 - smoothstep(0.0, 0.06, d_edge)")).override_failure_message("the chipped edge is not within 0.06 in").is_true()
+	assert_bool(src.contains("1.0 - smoothstep(0.0, 0.3, p.y)")).override_failure_message("the wall foot band is not 0.3 in").is_true()
+	assert_bool(src.contains("soot under the eaves")).is_true()
+	assert_bool(src.contains("float d_top = e.y")).is_true()   # the ragged top course is measured from the box top (its size is in the instance data), the collider is untouched
+	assert_bool(src.contains("k != 15 && k != 17")).is_true()   # the roof prism and the lantern are no boxes

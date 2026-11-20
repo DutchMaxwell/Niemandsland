@@ -15,6 +15,8 @@ uniform vec2 board_cells = vec2(16.0, 16.0);
 varying vec3 wpos;
 varying vec3 wnrm;
 varying flat float kind;
+varying flat vec3 box_in;   // the size of the box in inches (INSTANCE_CUSTOM.gba): where its edges are
+varying vec3 lpos;   // the point inside the box, in inches off the box's centre
 
 const float IN = 0.0254;
 
@@ -35,6 +37,8 @@ void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wnrm = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 	kind = INSTANCE_CUSTOM.x;
+	box_in = INSTANCE_CUSTOM.gba;
+	lpos = VERTEX * INSTANCE_CUSTOM.gba;   // the unit cube's corners are +-0.5
 }
 
 // Coursed stone: courses `course` in high, stones about `len` in long, offset per course, dark mortar, a tone per stone.
@@ -239,6 +243,31 @@ void fragment() {
 		if (k == 2) {   // dangerous ground: dark standing water
 			alb = tint * mix(0.7, 1.2, fbm(xz * 0.6 + seed));
 			rough = 0.12;
+		}
+	}
+	// EDGES AND WEAR (plan R3): from the box size, within 0.06 in of an edge of its face a noise-broken chipped highlight (stone loses chips, plaster spalls to the stone beneath); a damp
+	// moss band 0.3 in high at the foot of every wall face; soot under the eaves of an intact house; a ragged, course-stepped dark line at the top of a ruined tier. Box faces only (a
+	// roof prism or a lantern has no box).
+	vec3 fa = abs(wnrm);
+	bool boxed = k != 15 && k != 17 && (fa.x > 0.85 || fa.y > 0.85 || fa.z > 0.85) && box_in.x > 0.0;
+	if (boxed) {
+		vec3 e = box_in * 0.5 - abs(lpos);
+		float d_top = e.y - 0.0 + (lpos.y > 0.0 ? 0.0 : 1000.0);   // the distance below the box's top (1000 for a point in its lower half)
+		float d_edge = min(min(e.x + 100.0 * fa.x, e.y + 100.0 * fa.y), e.z + 100.0 * fa.z);   // the distance to the nearest edge of THIS face
+		float chip = (1.0 - smoothstep(0.0, 0.06, d_edge)) * smoothstep(0.35, 0.7, vnoise(p.xz * 17.0 + p.y * 13.0 + seed));
+		bool stoney = k == 12 || k == 9 || k == 10 || k == 6 || k == 16 || k == 3 || k == 4;
+		alb = mix(alb, stoney ? alb * 1.3 : vec3(0.55, 0.52, 0.48), chip * keep(d_edge, 0.06));   // fresh stone / the stone beneath the plaster
+		if (abs(wnrm.y) < 0.2) {   // a wall face
+			float foot = (1.0 - smoothstep(0.0, 0.3, p.y)) * smoothstep(0.3, 0.6, fbm(p.xz * 2.0 + p.y * 3.0 + seed));
+			alb = mix(alb, vec3(0.10, 0.14, 0.07), 0.55 * foot);   // damp and moss at the foot
+			rough = mix(rough, 0.6, foot);
+			if (k == 13) {
+				alb *= 1.0 - 0.45 * (1.0 - smoothstep(0.0, 0.6, d_top));   // soot under the eaves
+			}
+			if (k == 3 || k == 4 || k == 6) {
+				float ragged = 0.3 * (0.35 + 0.65 * h21(floor(vec2((abs(wnrm.x) > 0.5 ? p.z : p.x) / 0.4, 0.0)) + seed));   // a broken top course, stepped per stone
+				alb *= mix(0.5, 1.0, smoothstep(0.0, ragged, d_top));
+			}
 		}
 	}
 	if (k == 17) {   // a lit lantern
