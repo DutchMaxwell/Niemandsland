@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
-## The low ground mist of a boardgen layout (BoardgenMist) and its graphics setting: thicker over the sumps and in wells, none over raised
-## tiers, thin planes between ankle and knee height, one draw call, nothing physical, one layout always the same, and the setting adds and
+## The low ground mist of a boardgen layout (BoardgenMist) and its graphics setting: thin on open floor, thicker along walls, in wells and over the sumps,
+## a halo (not drawn: the block hides it) over raised tiers, thin planes between ankle and knee height, one draw call, nothing physical, one layout always the same, and the setting adds and
 ## removes the node (off on Low and Performance and in calm mode). Synthetic 8 x 8 layouts, so the suite stands on its own.
 
 const NX := 8
@@ -31,11 +31,12 @@ func after_test() -> void:
 	GraphicsSettings.calm_mode = false
 
 
-func test_the_density_is_zero_over_a_tier_thick_over_a_sump_and_thicker_in_a_well() -> void:
+func test_the_density_has_a_wall_halo_is_thin_on_open_floor_thick_over_a_sump_and_thicker_in_a_well() -> void:
 	var layout := _layout([Vector2i(1, 1)], [Vector2i(5, 4), Vector2i(5, 5), Vector2i(4, 5), Vector2i(6, 5), Vector2i(5, 6)])
 	var d := BoardgenMist.density(layout)
 	assert_int(d.size()).is_equal(NX * NZ * 2)
-	assert_int(_thick(d, 5, 5)).is_equal(0)   # a raised tier carries no mist
+	assert_int(_thick(d, 5, 5)).is_equal(int(round(BoardgenMist.WALL_HALO * 255.0)))   # a raised tier: its block hides the planes, the halo thickens the mist towards the wall
+	assert_int(_thick(d, 5, 5)).is_greater(_thick(d, 7, 0))
 	assert_int(_thick(d, 1, 1)).is_equal(255)
 	assert_int(_toxic(d, 1, 1)).is_equal(255)
 	assert_int(_toxic(d, 2, 1)).is_equal(128)   # beside a sump: toxic mist, thick
@@ -63,7 +64,7 @@ func test_the_mist_is_three_thin_planes_below_the_knee_in_one_multimesh_with_not
 	assert_int(mist.find_children("*", "CollisionObject3D", true, false).size()).is_equal(0)
 	var mat := mist.material_override as ShaderMaterial
 	assert_bool(mat.shader.code.contains("hint_depth_texture")).is_true()   # soft where it meets geometry
-	assert_bool(mat.shader.code.contains("ALPHA = clamp(a, 0.0, 0.5);")).is_true()   # never a wall
+	assert_bool(mat.shader.code.contains("ALPHA = clamp(a, 0.0, mix(0.3, 0.14, c.g));")).is_true()   # never a wall, and softer still over a sump (no hard streak across the liquid)
 
 
 func _board(layout: Dictionary) -> BoardgenGreybox:
@@ -96,3 +97,12 @@ func test_a_board_built_while_the_setting_is_off_has_no_mist_and_the_low_presets
 		assert_bool(GraphicsSettings.board_mist_enabled()).is_true()
 	GraphicsSettings.calm_mode = true
 	assert_bool(GraphicsSettings.board_mist_enabled()).is_false()
+
+
+func test_a_layout_without_board_in_still_builds_the_mist_from_its_cells() -> void:
+	var layout := _layout([])
+	layout.erase("board_in")
+	var mist: BoardgenMist = auto_free(BoardgenMist.new())
+	add_child(mist)
+	mist.build(layout)
+	assert_vector(((mist.material_override as ShaderMaterial).get_shader_parameter("board_in") as Vector2)).is_equal(Vector2(24.0, 24.0))

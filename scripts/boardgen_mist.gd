@@ -9,12 +9,16 @@ const INCHES_TO_METERS := 0.0254
 ## Plane heights over the table in inches: ankle, shin, knee.
 const LAYER_HEIGHTS_IN: Array[float] = [0.10, 0.24, 0.40]
 const MARGIN_IN := 1.0
+## A raised tier is drawn at this thickness: the planes lie inside its block so none of it shows, but the texture is filtered, so the mist
+## thickens towards a wall instead of thinning out (pooling along the walls).
+const WALL_HALO := 0.65
 const SHADER := preload("res://shaders/tiefwerk_mist.gdshader")
 const DIRS8: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 1), Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1)]
 
 
-## One RG pair per cell, row by row: R = how thick the mist lies there (0 over a raised tier; open floor 0.35 plus a little for each raised
-## neighbour, so a well between tiers fills; a sump and its rim 1), G = how toxic it is (a sump 255, the cells round it 128).
+## One RG pair per cell, row by row: R = how thick the mist lies there (WALL_HALO over a raised tier; open floor only 0.14, so a street keeps wisps
+## with clear gaps; +0.22 for each wall it touches and a little for each diagonal one, so mist pools along walls and in wells between
+## tiers; a sump and its rim 0.8 to 1), G = how toxic it is (a sump 255, the cells round it 128).
 static func density(layout: Dictionary) -> PackedByteArray:
 	var nx: int = layout["nx"]
 	var nz: int = layout["nz"]
@@ -24,27 +28,29 @@ static func density(layout: Dictionary) -> PackedByteArray:
 		for x in nx:
 			var me: Dictionary = cells[z * nx + x]
 			var raised := 0
+			var walled := 0
 			var sump := 0
 			for d in DIRS8:
 				var o := Vector2i(x, z) + d
 				if o.x >= 0 and o.y >= 0 and o.x < nx and o.y < nz:
 					var c: Dictionary = cells[o.y * nx + o.x]
 					raised += 1 if c["level"] > 0 else 0
+					walled += 1 if c["level"] > 0 and (d.x == 0 or d.y == 0) else 0
 					sump += 1 if c["level"] == 0 and c["lot_kind"] == "Hazard" else 0
-			var thick := 0.0 if me["level"] > 0 else 0.35 + 0.06 * raised
+			var thick := WALL_HALO if me["level"] > 0 else 0.14 + 0.22 * walled + 0.04 * (raised - walled)
 			var toxic := 0.0
 			if me["level"] == 0 and me["lot_kind"] == "Hazard":
 				thick = 1.0
 				toxic = 1.0
 			elif me["level"] == 0 and sump > 0:
-				thick = maxf(thick, 0.75)
+				thick = maxf(thick, 0.8)
 				toxic = 0.5
 			out.append_array([int(round(clampf(thick, 0.0, 1.0) * 255.0)), int(round(toxic * 255.0))])
 	return out
 
 
 func build(layout: Dictionary) -> void:
-	var board := Vector2(layout["board_in"][0], layout["board_in"][1])
+	var board := Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"])   # (a layout without board_in works too)
 	var plane := PlaneMesh.new()
 	plane.size = (board + Vector2.ONE * MARGIN_IN * 2.0) * INCHES_TO_METERS
 	var mm := MultiMesh.new()
