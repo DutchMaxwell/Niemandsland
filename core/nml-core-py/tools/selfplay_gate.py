@@ -8,7 +8,9 @@ plays. This runner holds it to that, on games recorded from the trainer itself:
         army1=<list> army2=<list> seed=<n> games=1 out=<dir>
 
 recorded with `NML_ACT_DUMP=<dir>/acts_<n>` so each game also leaves the
-per-activation oracle next to its result. Then:
+per-activation oracle next to its result. The frozen LAST such recording (the
+tool is being retired, plan G) is `~/selfplay_out/g_oracle_538b05c1`: pairing A
+seeds 27-46 and B seeds 27-36 from main 538b05c13. Then:
 
     ~/venvs/nmlcore/bin/python core/nml-core-py/tools/selfplay_gate.py \\
         --ref ~/selfplay_out/m3_ref_v2 --bank ~/selfplay_out/terrain_bank \\
