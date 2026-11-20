@@ -456,6 +456,22 @@ func test_the_way_back_reads_the_shipped_allow_file() -> void:
 	CoreSlice.reset_cache()
 
 
+## H-15 (Plan H): Experimental Tinctures left `deny_names` (ds/h_probe_experimental_tinctures.md; core_deny_lift_door_test.gd rows). The check can fail without editing the
+## committed file: a COPY of the deny file with the name put back refuses a bearer (as a shooter and as a target), the committed file takes both.
+func test_putting_experimental_tinctures_back_refuses_the_bearer() -> void:
+	var copy: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.DENY_PATH))
+	(copy["deny_names"] as Dictionary)["Experimental Tinctures"] = "put back for the check"
+	var tmp := "user://deny_with_experimental_tinctures.json"
+	var f := FileAccess.open(tmp, FileAccess.WRITE)
+	f.store_string(JSON.stringify(copy))
+	f.close()
+	var bearer := _unit(["Experimental Tinctures"], [[]])
+	for as_target in [false, true]:
+		assert_array(CoreSlice.refusals_in(CoreSlice.DENY_PATH, bearer, as_target)).override_failure_message("the committed file refuses Experimental Tinctures").is_empty()
+		assert_array(CoreSlice.refusals_in(tmp, bearer, as_target)).override_failure_message("the copy with the name does not refuse it: the check cannot fail").is_equal(["unit_rule:Experimental Tinctures"])
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
+
+
 ## LD-6 (18.11.): the deny list's EQUAL-probe names leave in one batch. Each name's volley replays equal 16/16
 ## (wave1116/ds/probe_*.md) and its state comes back from the core (STATE_DELTA_INVENTORY). RED on the old list:
 ## every name below is refused by its primitive; the failure message names it.
