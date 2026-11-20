@@ -1,12 +1,14 @@
 class_name BoardgenLandmarks
 extends Node3D
 ## Procedural meshes for the landmarks of a seeded boardgen layout (NmlCore.boardgen_layout()["landmarks"]): a storage-tank
-## cluster (cylinders and a pipe manifold) and a crane (plinth, lattice tower, arm). Every part is an axis-aligned primitive in
-## inches, drawn instanced: one MultiMesh per shape, so the whole set is two draw calls.
+## cluster (cylinders and a pipe manifold), a crane (plinth, lattice tower, arm), a pump house (a raised block with flat roof
+## plates and wall-mounted pipes and louvres) and a toxic sump (flat glowing bubbles on the board's own sump water). Every part is an axis-aligned primitive in
+## inches, drawn instanced: one MultiMesh per shape and look, so the whole set is a handful of draw calls.
 ##
 ## VISUAL ONLY. What the rules make of a landmark is the core's terrain class the binding hands over (`terrain`, `solid`);
 ## nothing here is read by sight or movement. A tank cluster and a crane base are solid ground (impassable, nobody stands on
-## them) and carry no collider; the crane's tower and arm stand far above any model.
+## them) and carry no collider; the crane's tower and arm stand far above any model. A part a model can stand on (pump-house
+## roof plates, sump bubbles) is flat; only wall mounts stand out, and by at most MOUNT_IN.
 
 const INCHES_TO_METERS := 0.0254
 const SKIN_IN := 0.04              # the level-0 ground skin of the greybox
@@ -14,9 +16,13 @@ const TANK_R := 1.2
 const TANK_H := 3.0                # one tier-1 block high; the core knows a solid only as a 2.5 in container
 const CRANE_TOP := 15.0
 const CRANE_ARM_IN := 10.0
+const MOUNT_IN := 0.3              # the most a wall mount stands off a wall face
+const GRATE_IN := 0.08             # a roof grate lies this flat
 const STEEL := Color(0.36, 0.38, 0.42)
 const OCHRE := Color(0.74, 0.52, 0.14)
 const DARK := Color(0.10, 0.10, 0.11)
+const BRICK := Color(0.42, 0.22, 0.17)
+const ACID := Color(0.30, 0.90, 0.15)
 const TANK := Color(0.52, 0.55, 0.52)
 const VALVE := Color(0.85, 0.12, 0.06)
 const SHADER := preload("res://shaders/tiefwerk_landmark.gdshader")
@@ -45,6 +51,10 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 				_tanks(out, lo, lm, cell_in)
 			"Crane":
 				_crane(out, lo + size * 0.5, int(lm["turn"]), half)
+			"PumpHouse":
+				_pump_house(out, layout, lm, lo, cell_in)
+			"Sump":
+				_sump(out, lo, size, int(lm["x"]) * 31 + int(lm["z"]))
 	return out
 
 
@@ -147,11 +157,41 @@ static func _crane(out: Array[Dictionary], c: Vector2, turn: int, half: Vector2)
 	_ring(out, Vector3(tip.x, 8.45, tip.y), 0.3, STEEL)
 
 
-## One MultiMeshInstance3D per shape (box or cylinder), a colour per instance, no colliders.
+static func _pump_house(out: Array[Dictionary], layout: Dictionary, lm: Dictionary, lo: Vector2, cell_in: float) -> void:
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var level := func(c: Vector2i) -> int: return int(layout["cells"][c.y * nx + c.x]["level"]) if c.x >= 0 and c.x < nx and c.y >= 0 and c.y < nz else 99
+	var first := Vector2i(lm["x"], lm["z"])
+	var top := float(layout["level_in"][level.call(first)])
+	_box(out, Vector3(lo.x + 0.15, top, lo.y + 0.15), Vector3(lo.x + lm["w"] * cell_in - 0.15, top + SKIN_IN, lo.y + lm["h"] * cell_in - 0.15), BRICK)   # roof tiles, flat
+	for dz in int(lm["h"]):
+		for dx in int(lm["w"]):
+			var at := first + Vector2i(dx, dz)
+			var c := lo + (Vector2(dx, dz) + Vector2(0.5, 0.5)) * cell_in
+			_box(out, Vector3(c.x - 0.7, top + SKIN_IN, c.y - 0.7), Vector3(c.x + 0.7, top + GRATE_IN, c.y + 0.7), DARK)   # a flush vent grate
+			for dir: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				if level.call(at + dir) >= level.call(at):
+					continue   # mounts only on a real wall face, never on a roof edge that carries on or the table edge
+				var n := Vector2(dir)
+				var face := c + n * cell_in * 0.5
+				_cyl(out, Vector3(face.x + n.x * 0.16, top - 1.2, face.y + n.y * 0.16), 0.14, 2.6, 2 if dir.x != 0 else 0, STEEL)   # a pipe run
+				_span(out, face + n * 0.02, Vector2(absf(n.y), absf(n.x)), -0.5, 0.5, top - 2.4, top - 1.5, 0.02, DARK)   # a louvre, flat on the wall
+
+
+## The board shader already draws a hazard cell as murky sump water with a painted rim; what a sump landmark adds is the toxic
+## glow: bubbles that burst at fixed spots, flat enough to lie in the liquid a model stands in.
+static func _sump(out: Array[Dictionary], lo: Vector2, size: Vector2, salt: int) -> void:
+	for i in 5:
+		var f := Vector2(fposmod(salt * 0.37 + i * 0.29, 0.7) + 0.15, fposmod(salt * 0.53 + i * 0.43, 0.7) + 0.15)
+		_cyl(out, Vector3(lo.x + size.x * f.x, SKIN_IN + 0.03, lo.y + size.y * f.y), 0.14 + 0.05 * (i % 3), 0.04, 1, ACID, true)
+
+
+## One MultiMeshInstance3D per shape and look (box or cylinder, plain or glowing), a colour per instance, no colliders.
 func build(layout: Dictionary) -> void:
 	var groups := {}
 	for p: Dictionary in plan(layout):
-		groups[p["shape"]] = groups.get(p["shape"], []) + [p]
+		var key := "%s_%s" % [p["shape"], "glow" if p["glow"] else "plain"]
+		groups[key] = groups.get(key, []) + [p]
 	for key: String in groups:
 		var parts: Array = groups[key]
 		var mm := MultiMesh.new()
@@ -169,7 +209,7 @@ func build(layout: Dictionary) -> void:
 		var mmi := MultiMeshInstance3D.new()
 		mmi.name = key
 		mmi.multimesh = mm
-		mmi.material_override = _look_material()
+		mmi.material_override = _material(true) if key.ends_with("glow") else _look_material()
 		add_child(mmi)
 
 
@@ -207,4 +247,17 @@ static func _unit_mesh(shape: String) -> Mesh:
 static func _look_material() -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = SHADER
+	return mat
+
+
+static func _material(glow: bool) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.vertex_color_is_srgb = true   # the colours above are display values
+	mat.roughness = 0.8
+	mat.metallic = 0.25
+	if glow:
+		mat.emission_enabled = true
+		mat.emission = ACID
+		mat.emission_energy_multiplier = 2.0
 	return mat
