@@ -107,6 +107,12 @@ static func _slab(edge: Vector2, away: Vector2, side: Vector2, from: float, to: 
 	return {"lo": Vector3(p.x - half.x, y0, p.y - half.y), "hi": Vector3(p.x + half.x, y1, p.y + half.y), "kind": kind, "solid": solid}
 
 
+## INSTANCE_CUSTOM of a box: x = its surface kind, gba = its size in inches (the shader's edge wear needs to know where the box ends).
+static func custom_data(b: Dictionary) -> Color:
+	var size: Vector3 = b["hi"] - b["lo"]
+	return Color(KINDS.find(b["kind"]), size.x, size.y, size.z)
+
+
 ## The whole board in ONE MultiMesh (one draw call, one shared procedural material) plus a collider per solid box.
 func build(layout: Dictionary) -> void:
 	layout_seed = int(layout.get("seed", 0))
@@ -126,7 +132,7 @@ func build(layout: Dictionary) -> void:
 		var size: Vector3 = (b["hi"] - b["lo"]) * INCHES_TO_METERS
 		var centre: Vector3 = (b["hi"] + b["lo"]) * 0.5 * INCHES_TO_METERS
 		mm.set_instance_transform(i, Transform3D(Basis.from_scale(size), centre))
-		mm.set_instance_custom_data(i, Color(KINDS.find(b["kind"]), 0.0, 0.0, 0.0))
+		mm.set_instance_custom_data(i, custom_data(b))
 		if b["solid"]:
 			var shape := BoxShape3D.new()
 			shape.size = size
@@ -164,10 +170,33 @@ func build(layout: Dictionary) -> void:
 func _ready() -> void:
 	_anchor()
 	_scatter_off(_footprint)
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics != null:
+		graphics.settings_applied.connect(_on_settings_applied)
+	_apply_detail()
 
 
 func _exit_tree() -> void:
 	_scatter_off(Rect2())
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics != null and graphics.settings_applied.is_connected(_on_settings_applied):
+		graphics.settings_applied.disconnect(_on_settings_applied)
+
+
+## The finer look of the surfaces (edge wear, later the relief of walls and floors) is on from Medium up; Performance / Low and the
+## Compatibility renderer (web) keep the plain procedural look and its cost.
+static func detail_for(preset: int, compatibility: bool) -> bool:
+	return preset >= GraphicsSettings.QualityPreset.MEDIUM and not compatibility
+
+
+func _on_settings_applied(_preset_name: String) -> void:
+	_apply_detail()
+
+
+func _apply_detail() -> void:
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if _material != null and graphics != null:
+		_material.set_shader_parameter("detail", 1.0 if detail_for(int(graphics.current_preset), RenderingServer.get_current_rendering_method() == "gl_compatibility") else 0.0)
 
 
 ## The table's own ground scatter (grass tufts, the biome dressing's straw, leaves and puddles) stays off under the board.

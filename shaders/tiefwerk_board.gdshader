@@ -9,10 +9,14 @@ uniform sampler2D cells : filter_nearest;   // red = height of the cell's top in
 uniform vec2 board_cells = vec2(16.0);
 uniform float cell_in = 3.0;
 uniform vec3 board_origin;   // world position of the board centre
+uniform float detail = 1.0;   // 1 = the finer look (edge wear, relief); 0 on Performance / Low and the Compatibility renderer
 
 varying vec3 wpos;
 varying vec3 wnrm;
 varying flat float kind;
+varying vec3 lpos;        // position in the box, inches off its centre
+varying flat vec3 box_in;   // the box's size in inches (INSTANCE_CUSTOM.gba; 0 = not told)
+varying flat vec3 lnrm;     // the face's normal in the box
 
 const float IN = 0.0254;
 const float PLATE = 1.5;   // the modular plate of floors and walls, in inches
@@ -23,6 +27,9 @@ void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wnrm = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 	kind = INSTANCE_CUSTOM.x;
+	box_in = INSTANCE_CUSTOM.gba;
+	lpos = VERTEX * box_in;   // the mesh is the unit cube
+	lnrm = NORMAL;
 }
 
 // A hash without lattice correlation (the old one left near-equal values in neighbouring lattice cells, so the value noise showed
@@ -85,6 +92,8 @@ float wall_dist(vec2 g, ivec2 c, float h) {
 	}
 	return best;
 }
+
+#include "res://shaders/tiefwerk_edges.gdshaderinc"
 
 void fragment() {
 	vec3 p = (wpos - board_origin) / IN;   // board inches, origin = board centre
@@ -227,6 +236,12 @@ void fragment() {
 		if (lip < 0.2) {   // the tier's trim: a pale lip with a dark groove behind it, no railing
 			alb = lip < 0.08 ? alb * 1.5 + 0.08 : alb * 0.5;
 		}
+	}
+	vec4 ew = box_in.x > 0.0 && detail > 0.5 ? edge_wear(lpos, box_in * 0.5, lnrm, p, k, half_board, smoothstep(0.48, 0.56, n3 * 0.6 + n2 * 0.5)) : vec4(0.0);   // every real box edge: a broken pale highlight, a bent normal
+	alb = mix(alb, mix(alb * 1.5 + 0.08, vec3(0.62, 0.6, 0.57), 0.6), ew.x);
+	rough = mix(rough, 0.45, ew.x);
+	if (dot(ew.yzw, ew.yzw) > 0.0001) {
+		NORMAL = normalize((VIEW_MATRIX * vec4(normalize(n + ew.yzw * 0.9), 0.0)).xyz);
 	}
 	ALBEDO = pow(alb, vec3(2.2)) * ao;   // the numbers above are display values
 	ROUGHNESS = rough;
