@@ -12,14 +12,14 @@ var _solo: SoloController
 var _epoch0: int
 var _fast0: bool
 var _rect := Rect2()   # inches: x0, z0, w, h
+var _front := 0.0      # the last moved unit's front z, inches
 
 
 func before_test() -> void:
 	_epoch0 = AiActRecorder.rules_epoch
-	# The precise planner, as the other solo planner suites pin it: an earlier suite in the shard (main.gd's solo
-	# setup) can leave the static fast planner on, and the geometry below is measured on the precise one.
+	# Each test runs on BOTH planners (`fast` parameter): interactive solo play uses the bounded fast planner
+	# (main.gd's solo setup), the graded arena the precise one. The static is restored after each test.
 	_fast0 = MovementPlanner.fast_planner
-	MovementPlanner.fast_planner = false
 	_mgr = auto_free(OPRArmyManager.new())
 	_solo = auto_free(SoloController.new())
 	add_child(_solo)
@@ -37,7 +37,7 @@ func after_test() -> void:
 
 
 ## `n` models in rows of 5 (1.5" apart, rows 1.5" back, 32 mm bases) from z 0 move `inches` toward (0, goal_z);
-## answers the Dangerous model count.
+## answers the Dangerous model count. The unit leaves the board afterwards, so moves never block each other.
 func _line_move(tag: String, epoch: int, patch: Rect2, goal_z: float, inches: float, n: int = 5) -> int:
 	AiActRecorder.rules_epoch = epoch
 	_rect = patch
@@ -56,10 +56,16 @@ func _line_move(tag: String, epoch: int, patch: Rect2, goal_z: float, inches: fl
 		m.node.global_position = Vector3((float(i % 5) - 2.0) * 1.5 * IN2M, 0, -floorf(i / 5.0) * 1.5 * IN2M)
 		u.models.append(m)
 	_mgr.game_units[tag] = u
-	return _solo._execute_move(u, Vector3(0, 0, goal_z * IN2M), inches, false)
+	var dang: int = _solo._execute_move(u, Vector3(0, 0, goal_z * IN2M), inches, false)
+	_front = -INF
+	for m in u.models:
+		_front = maxf(_front, (m as ModelInstance).node.global_position.z / IN2M)
+	_mgr.game_units.erase(tag)
+	return dang
 
 
-func test_a_line_sidesteps_a_patch_mid_route_and_logs_it() -> void:
+func test_a_line_sidesteps_a_patch_mid_route_and_logs_it(fast: bool, test_parameters := [[false], [true]]) -> void:
+	MovementPlanner.fast_planner = fast
 	var patch := Rect2(2.5, 4.0, 3.0, 4.0)
 	assert_int(_line_move("Old", 91, patch, 14.0, 12.0)).is_greater(0)
 	assert_array(_solo.board_clamp_notes).is_empty()
@@ -67,29 +73,30 @@ func test_a_line_sidesteps_a_patch_mid_route_and_logs_it() -> void:
 	assert_str(str(_solo.board_clamp_notes)).contains("New sidesteps Dangerous ground (")
 
 
-func test_one_clipped_corner_no_longer_switches_avoidance_off() -> void:
+func test_one_clipped_corner_no_longer_switches_avoidance_off(fast: bool, test_parameters := [[false], [true]]) -> void:
+	MovementPlanner.fast_planner = fast
 	var patch := Rect2(2.5, 10.0, 3.0, 4.0)
 	assert_int(_line_move("Old", 91, patch, 14.0, 12.0)).is_greater(0)
 	assert_int(_line_move("New", AiActRecorder.PENDING_EPOCH_DANGER_AVOID, patch, 14.0, 12.0)).is_equal(0)
 
 
-func test_a_big_unit_stops_short_of_a_patch_it_cannot_skirt() -> void:
+func test_a_big_unit_stops_short_of_a_patch_it_cannot_skirt(fast: bool, test_parameters := [[false], [true]]) -> void:
+	MovementPlanner.fast_planner = fast
 	var patch := Rect2(-1.5, 4.0, 3.0, 4.0)
 	assert_int(_line_move("Old", 91, patch, 14.0, 12.0, 10)).is_greater(0)
 	assert_int(_line_move("Big", AiActRecorder.PENDING_EPOCH_DANGER_AVOID, patch, 14.0, 12.0, 10)).is_equal(0)
-	var front := -INF
-	for m in (_mgr.game_units["Big"] as GameUnit).models:
-		front = maxf(front, (m as ModelInstance).node.global_position.z / IN2M)
-	assert_float(front).is_less(4.0)
+	assert_float(_front).is_less(4.0)
 	assert_str(str(_solo.board_clamp_notes)).contains("Big stops short of Dangerous ground (")
 
 
-func test_an_advance_that_stops_short_of_the_patch_is_unchanged() -> void:
+func test_an_advance_that_stops_short_of_the_patch_is_unchanged(fast: bool, test_parameters := [[false], [true]]) -> void:
+	MovementPlanner.fast_planner = fast
 	assert_int(_line_move("Adv", AiActRecorder.PENDING_EPOCH_DANGER_AVOID, Rect2(2.5, 10.0, 3.0, 4.0), 8.0, 6.0)).is_equal(0)
 	assert_array(_solo.board_clamp_notes).is_empty()
 
 
-func test_a_player_order_is_never_re_aimed() -> void:
+func test_a_player_order_is_never_re_aimed(fast: bool, test_parameters := [[false], [true]]) -> void:
+	MovementPlanner.fast_planner = fast
 	_solo._player_move = true
 	var dang := _line_move("Mine", AiActRecorder.PENDING_EPOCH_DANGER_AVOID, Rect2(2.5, 4.0, 3.0, 4.0), 14.0, 12.0)
 	_solo._player_move = false
