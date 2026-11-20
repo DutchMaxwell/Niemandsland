@@ -53,7 +53,7 @@ vec3 stone(vec2 uv, float seed, float course, float len, vec3 tint, out float re
 
 // Half-timber of one 3 in storey (uv.y = height in inches, a storey starts at a multiple of 3): dark posts every 1.5 in, rails at the storey
 // edges, a brace in some panels, plaster between, a small shuttered window in some panels.
-vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis) {
+vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis, out float rel) {
 	float y = mod(uv.y, 3.0);
 	float px = uv.x / 1.5;
 	float panel = floor(px);
@@ -68,6 +68,8 @@ vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis) {
 	float d = max(w.x, w.y);
 	float has_win = step(0.5, h21(vec2(panel, seed + 9.0)));
 	vec3 c = mix(fill, wood, max(post, max(rail, brace)));
+	rel = mix(0.35 + 0.25 * fbm(uv * 5.0 + seed), 0.95, max(post, max(rail, brace)));   // plaster with a trowel's waviness, the frame timbers proud of it
+	rel = mix(rel, 0.05, has_win * step(d, 0.07));   // a window is a recess
 	c = mix(c, wood, has_win * step(d, 0.07));
 	float lit = has_win * step(d, -0.06);
 	emis += vec3(1.0, 0.55, 0.22) * lit * step(0.8, h21(vec2(panel, seed + 5.0))) * 0.9;   // a few windows glow
@@ -129,12 +131,21 @@ void fragment() {
 	if (abs(wnrm.y) < 0.2) {   // a wall face (or a gable end)
 		vec2 uv = vec2(abs(wnrm.x) > 0.5 ? p.z : p.x, p.y);
 		if (k == 15) {   // a gable end: plaster and a timber frame
-			alb = timber(uv, seed, palette[13].rgb, emis);
+			alb = timber(uv, seed, palette[13].rgb, emis, rel);
+			depth_in = 0.03;
+			rough = mix(0.95, 0.8, step(0.8, rel));
+			ao = mix(0.6, 1.0, smoothstep(0.1, 0.5, rel));
 		} else if (k == 13) {   // an intact house: half-timber on a stone plinth
 			float plinth = 0.3 + 0.75 * fract(kind);   // the house's own plinth height rides in the fraction of its kind
-			alb = uv.y < plinth ? stone(uv, seed, 0.2, 0.45, vec3(0.5, 0.48, 0.44), rel) : timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed), emis);
+			alb = uv.y < plinth ? stone(uv, seed, 0.2, 0.45, vec3(0.5, 0.48, 0.44), rel) : timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed), emis, rel);
+			depth_in = 0.03;
+			rough = uv.y < plinth ? 0.85 : mix(0.95, 0.8, step(0.8, rel));
+			ao = mix(0.6, 1.0, smoothstep(0.1, 0.5, rel));
 		} else if (k == 12 || k == 9 || k == 10 || k == 16) {   // city wall, stone pieces, chimney: coursed stone (brick for the chimney)
 			alb = k == 16 ? stone(uv, seed, 0.1, 0.22, tint, rel) : stone(uv, seed, COURSE, 0.5, tint, rel);
+			depth_in = 0.025;
+			rough = 0.85;
+			ao = mix(0.6, 1.0, smoothstep(0.2, 0.7, rel));
 		} else if (k == 18) {   // a wooden prop: planks with iron bands
 			alb = tint * mix(0.7, 1.15, h21(vec2(floor(uv.x * 4.0), seed))) * mix(0.55, 1.0, smoothstep(0.0, 0.05, abs(fract(uv.y * 2.5) - 0.5) - 0.42)) * mix(0.8, 1.0, seam(uv.x, 0.25, 0.03));
 		} else if (k == 3 || k == 4 || k == 6) {   // ruined house tiers and towers, by storey
@@ -144,11 +155,16 @@ void fragment() {
 			float band = k == 6 ? 2.0 : floor(uv.y / 3.0);   // a tower is stone all the way up
 			if (band < 0.5) {
 				alb = mix(stone(uv, seed, COURSE, 0.5, tint * 0.9, rel), vec3(0.09, 0.06, 0.04), door(uv, seed));
+				rough = 0.85;
 			} else if (band < 1.5) {
-				alb = timber(uv, seed, tint * 1.02, emis);
+				alb = timber(uv, seed, tint * 1.02, emis, rel);
+				rough = mix(0.95, 0.8, step(0.8, rel));
 			} else {
 				alb = stone(uv, seed, COURSE, 0.55, tint * 1.05, rel);
+				rough = 0.85;
 			}
+			depth_in = 0.03;
+			ao = mix(0.6, 1.0, smoothstep(0.1, 0.6, rel));
 		}
 	} else if (wnrm.y < 0.95 && k == 15) {   // a sloped roof face: rows of tiles, a tone per tile, a shadow under each row
 		float along = abs(wnrm.x) > abs(wnrm.z) ? p.z : p.x;
@@ -157,6 +173,10 @@ void fragment() {
 		vec3 base = tint * mix(0.7, 1.15, h21(vec2(tile, row + seed)));
 		vec3 laid = base * mix(0.62, 1.0, smoothstep(0.0, 0.7, fract(p.y / TILE_H))) * mix(1.0, 0.8, smoothstep(0.55, 0.7, fbm(vec2(along, p.y) * 1.3 + seed)));
 		alb = mix(tint * 0.82, laid, keep(p.y, TILE_H));   // 0.16 x 0.13 in tiles: the mean below ~3 px
+		rel = mix(0.5, fract(p.y / TILE_H) * (0.8 + 0.2 * h21(vec2(tile, row))), keep(p.y, TILE_H));   // every row of tiles is a step: a line of shadow under each
+		depth_in = 0.03;
+		rough = 0.7;
+		ao = mix(0.6, 1.0, smoothstep(0.0, 0.5, rel));
 	} else if (wnrm.y > 0.5) {   // a top face, by kind
 		vec2 xz = p.xz;
 		float grid = 1.0;   // the faint 3 in cell line is gone from every top (plan R1: no grid to count on the table)
@@ -232,6 +252,8 @@ void fragment() {
 		vec3 r2 = cross(NORMAL, dpdx);
 		float det = dot(dpdx, r1);
 		vec3 grad = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2);
+		float tilt = length(grad) / max(abs(det), 0.0000001);   // never bend the normal by more than ~50 degrees: a mortar edge must not throw a pinprick of specular
+		grad *= min(1.0, 1.2 / max(tilt, 0.0001));
 		NORMAL = normalize(abs(det) * NORMAL - grad);
 		AO = ao;
 		AO_LIGHT_AFFECT = 0.35;
