@@ -31,6 +31,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
 import list_to_profile  # noqa: E402
 from list_to_profile import (  # noqa: E402
     ROYAL_LEGION_RANGE_BONUS_IN,
+    _registry_entry,
+    _registry_map,
     _rule_to_string,
     _rules_in_upgrade_label,
     base_shape_of,
@@ -573,6 +575,80 @@ def test_a_registry_alias_of_quick_moves_the_bands():
     }
 
 
+#: The 3.6 renamed army books (test/v36/dat_02_test.gd RENAMED): an old folder the
+#: rules map does not key must resolve the same-system book's faction rules.
+_RENAMED_RULES_FOLDERS = [
+    ("gf", "wormhole_daemons_of_change", "daemons_of_change"),
+    ("gf", "wormhole_daemons_of_lust", "daemons_of_lust"),
+    ("gf", "wormhole_daemons_of_plague", "daemons_of_plague"),
+    ("gf", "wormhole_daemons_of_war", "daemons_of_war"),
+    ("gf", "saurian_starhost", "saurian_starhosts"),
+    ("aof", "rift_daemons_of_change", "daemons_of_change"),
+    ("aof", "rift_daemons_of_lust", "daemons_of_lust"),
+    ("aof", "rift_daemons_of_plague", "daemons_of_plague"),
+    ("aof", "rift_daemons_of_war", "daemons_of_war"),
+    ("gff", "daemons_of_change", "wormhole_daemons_of_change"),
+    ("gff", "daemons_of_lust", "wormhole_daemons_of_lust"),
+    ("gff", "daemons_of_plague", "wormhole_daemons_of_plague"),
+    ("gff", "daemons_of_war", "wormhole_daemons_of_war"),
+    ("gff", "saurian_starhosts", "saurian_starhost"),
+    ("aofs", "daemons_of_change", "rift_daemons_of_change"),
+    ("aofs", "daemons_of_lust", "rift_daemons_of_lust"),
+    ("aofs", "daemons_of_plague", "rift_daemons_of_plague"),
+    ("aofs", "daemons_of_war", "rift_daemons_of_war"),
+    ("aofr", "daemons_of_change", "rift_daemons_of_change"),
+    ("aofr", "daemons_of_lust", "rift_daemons_of_lust"),
+    ("aofr", "daemons_of_plague", "rift_daemons_of_plague"),
+    ("aofr", "daemons_of_war", "rift_daemons_of_war"),
+]
+
+
+def test_v36_renamed_rules_folders_resolve_the_same_faction_entries():
+    import nml_core
+    for system, alias, canonical in _RENAMED_RULES_FOLDERS:
+        m = _registry_map(system)
+        canonical_rules = m.get("factions", {}).get(canonical, {})
+        common = m.get("common", {})
+        canonical_only = [n for n in canonical_rules if n not in common]
+        assert canonical_only, f"{system}/{canonical} has no faction-only rule"
+        name = canonical_only[0]
+        # Outside a profile build (no record epoch) and below the gate the old read stays.
+        assert _registry_entry(system, alias, name) == common.get(name, {})
+        with list_to_profile._rules_alias_epoch(nml_core.PENDING_EPOCH_RULES_ALIAS - 1):
+            assert _registry_entry(system, alias, name) == common.get(name, {})
+        with list_to_profile._rules_alias_epoch(nml_core.PENDING_EPOCH_RULES_ALIAS):
+            assert _registry_entry(system, alias, name) == canonical_rules[name], (
+                f"{system}/{alias} must resolve {canonical}"
+            )
+
+
+def _lust_bands(folder: str, rules_epoch: int, system: str = "gf") -> dict:
+    sel = _selection("u", "Lust Warrior", rules=[{"label": "Lustbound"}])
+    return profiles_from_army_forge_json(
+        {"gameSystem": system, "units": [sel]}, folder, player=1, rules_epoch=rules_epoch
+    )["p1_0_u"]["move_bands"]
+
+
+def test_the_rules_alias_reaches_the_profile_only_from_the_pending_epoch():
+    """An old-folder daemons list builds the same profile as its 3.6 folder only from
+    `PENDING_EPOCH_RULES_ALIAS`; below it the corpus keeps its old common-only reads, so a
+    trainer run at the live epoch replays identically. Lustbound (a faction-only Quick rule)
+    moves the bands, which makes the alias visible in the profile."""
+    import nml_core
+    gate = nml_core.PENDING_EPOCH_RULES_ALIAS
+    plain = {"advance": 6.0, "rush": 12.0}
+    boosted = _lust_bands("daemons_of_lust", gate)
+    assert boosted != plain, "the 3.6 folder carries Lustbound's Quick bands at any epoch"
+    assert _lust_bands("daemons_of_lust", gate - 1) == boosted
+    assert _lust_bands("wormhole_daemons_of_lust", gate - 1) == plain
+    assert _lust_bands("wormhole_daemons_of_lust", gate) == boosted
+    # Never a cross-system guess: an AoF folder in a GF list is no alias, and the default
+    # (live) epoch is below the gate while the pending constant is ahead of it.
+    assert _lust_bands("rift_daemons_of_lust", gate) == plain
+    assert nml_core.CURRENT_RULES_EPOCH < gate
+    assert _lust_bands("wormhole_daemons_of_lust", nml_core.CURRENT_RULES_EPOCH) == plain
+
+
 def test_royal_legion_lands_on_the_charge_band_and_the_shooting_range():
     """solo_controller.gd:5436 + the registry move pass — Royal Legion is one
     rule with two halves: +4" range when shooting (unit_profile_dyn's
@@ -855,6 +931,21 @@ def test_an_unresolvable_spell_book_is_loud_not_silent():
     is what let three corpus generations record a game without magic."""
     with pytest.warns(UserWarning, match="zero spell books"):
         profiles_from_army_forge_json(_a_caster(), "no_such_faction", player=1)
+
+
+def test_every_3_6_renamed_folder_resolves_the_same_spell_book_as_its_map_key():
+    """The nine 3.6 renamed army-book folders (Wormhole/Rift Daemons lost their
+    prefix, the GF Saurian Starhost book gained an "s") key no book in the
+    committed maps; the alias table hands each the SAME book its map key holds.
+    Mirrors the Rust `V36_SPELL_BOOK_ALIASES` and the GDScript `FACTION_ALIASES`."""
+    zero = []
+    for system, table in list_to_profile._SPELL_FACTION_ALIASES.items():
+        for alias, canonical in table.items():
+            book = list_to_profile.spells_for(system, canonical)
+            assert book, f"{system}/{canonical} is not a committed book"
+            if list_to_profile.spells_for(system, alias) != book:
+                zero.append(f"{system}/{alias}")
+    assert not zero, f"renamed folders do not resolve their book: {zero}"
 
 
 # === loud rules resolution (rules-slug fix, second half) ========================

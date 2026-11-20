@@ -335,6 +335,47 @@ func test_lookup_falls_back_from_faction_to_common() -> void:
 	assert_bool(RulesRegistry.lookup("gf", "alien_hives", "No Such Rule").is_empty()).is_true()
 
 
+func test_3_6_renamed_rules_folders_resolve_the_same_rule_set() -> void:
+	# The rules 3.6 rename (test/v36/dat_02_test.gd RENAMED): rules_mechanics_<system>.json
+	# keys only the 3.6 folder, so an old-folder unit resolved ZERO faction rules. The
+	# shared SpellsRegistry.FACTION_ALIASES table resolves the same-system book on the table.
+	var rows := [
+		["gf", "wormhole_daemons_of_change", "daemons_of_change"],
+		["gf", "wormhole_daemons_of_lust", "daemons_of_lust"],
+		["gf", "wormhole_daemons_of_plague", "daemons_of_plague"],
+		["gf", "wormhole_daemons_of_war", "daemons_of_war"],
+		["gf", "saurian_starhost", "saurian_starhosts", "Bounding"],
+		["aof", "rift_daemons_of_change", "daemons_of_change"],
+		["aof", "rift_daemons_of_lust", "daemons_of_lust"],
+		["aof", "rift_daemons_of_plague", "daemons_of_plague"],
+		["aof", "rift_daemons_of_war", "daemons_of_war"],
+		["gff", "daemons_of_change", "wormhole_daemons_of_change"],
+		["gff", "daemons_of_lust", "wormhole_daemons_of_lust"],
+		["gff", "daemons_of_plague", "wormhole_daemons_of_plague"],
+		["gff", "daemons_of_war", "wormhole_daemons_of_war"],
+		["gff", "saurian_starhosts", "saurian_starhost", "Bounding"],
+		["aofs", "daemons_of_change", "rift_daemons_of_change"],
+		["aofs", "daemons_of_lust", "rift_daemons_of_lust"],
+		["aofs", "daemons_of_plague", "rift_daemons_of_plague"],
+		["aofs", "daemons_of_war", "rift_daemons_of_war"],
+		["aofr", "daemons_of_change", "rift_daemons_of_change"],
+		["aofr", "daemons_of_lust", "rift_daemons_of_lust"],
+		["aofr", "daemons_of_plague", "rift_daemons_of_plague"],
+		["aofr", "daemons_of_war", "rift_daemons_of_war"],
+	]
+	RulesRegistry.reset_cache()
+	for row in rows:
+		var probe := str(row[3]) if row.size() > 3 else "Ambush Aura"
+		var alias_entry := RulesRegistry.lookup(str(row[0]), str(row[1]), probe)
+		var canonical_entry := RulesRegistry.lookup(str(row[0]), str(row[2]), probe)
+		assert_bool(canonical_entry.is_empty()) \
+			.override_failure_message("%s/%s has no committed faction section" % [row[0], row[2]]).is_false()
+		assert_dict(alias_entry) \
+			.override_failure_message("%s/%s must resolve %s" % [row[0], row[1], row[2]]) \
+			.is_equal(canonical_entry)
+	RulesRegistry.reset_cache()
+
+
 func test_system_scoping_banner_and_musician_params_diverge() -> void:
 	# THE cross-system divergence proof (wave-5 gate 4): the full-scale games (GF / AoF / AoF
 	# Regiments) grant Banner/Musician to the bearer's UNIT; the skirmish-scale games (GFF / AoF

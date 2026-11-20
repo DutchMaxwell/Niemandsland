@@ -974,6 +974,12 @@ pub const CURRENT_RULES_EPOCH: u32 = 92;
 /// -4 inches, + = right of travel), and keeps the FIRST plan that crosses none.
 /// Table twin `SoloController._execute_move` / `PENDING_EPOCH_DANGER_AVOID` in `act_recorder.gd`. Stays 93 (lead assignment); CURRENT is 92.
 pub const PENDING_EPOCH_DANGER_AVOID: u32 = 93;
+/// Placeholder gate for the 3.6 faction-folder aliases in the RULES registry (the spell-book twins
+/// landed ungated in #3098): an old folder (`wormhole_/rift_daemons_of_*`, `saurian_starhost`) now
+/// resolves its same-system 3.6 book's rules. That changes outcomes for units that gain their rules,
+/// so it waits for a real epoch: from 93 the alias answers, below it the old common-only read stays.
+/// Every call site reads THIS constant, not the literal `93` or `CURRENT_RULES_EPOCH`.
+pub const PENDING_EPOCH_RULES_ALIAS: u32 = 93;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff

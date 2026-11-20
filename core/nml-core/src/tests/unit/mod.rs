@@ -1017,6 +1017,7 @@ mod mentioned_pins;
 mod playtest_rules;
 mod rending_shooting_aura;
 mod renames;
+mod rules_alias_gate;
 mod takedown_strike;
 mod tohit_shroud;
 mod v36_ai;

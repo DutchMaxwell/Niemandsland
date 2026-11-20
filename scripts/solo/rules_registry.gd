@@ -90,13 +90,22 @@ static func registry_state(system: String) -> Dictionary:
 ## THE lookup: the mechanics entry for `rule_name` — the faction's own entry first, then the system's
 ## common (core) entry. {} when the rule is unknown to the map. `rule_name` is the base name (rating
 ## stripped: "Armor(4)" -> "Armor" — callers strip via base_rule_name).
+##
+## A 3.6 army-list folder that the committed map does not key (`wormhole_/rift_daemons_of_*`,
+## `saurian_starhost`) falls back to its same-system alias from SpellsRegistry.FACTION_ALIASES —
+## one shared table for both registries, never a cross-system guess. The table has no per-record
+## epoch gate for registry lookups, so the alias answers on the table now.
 static func lookup(system: String, faction: String, rule_name: String) -> Dictionary:
-	var m := map_for(system)
+	var s := normalize_system(system)
+	var m := map_for(s)
 	if m.is_empty():
 		return {}
 	var factions: Dictionary = m.get("factions", {})
-	if not faction.is_empty() and faction != COMMON and factions.has(faction):
-		var fmap: Dictionary = factions[faction]
+	var key := faction
+	if not faction.is_empty() and faction != COMMON and not factions.has(faction):
+		key = SpellsRegistry.book_key(s, faction)
+	if not key.is_empty() and key != COMMON and factions.has(key):
+		var fmap: Dictionary = factions[key]
 		if fmap.has(rule_name):
 			return fmap[rule_name]
 	var common: Dictionary = m.get("common", {})

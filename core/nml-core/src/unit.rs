@@ -3537,6 +3537,9 @@ fn parry_weapons_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<
 /// `AiEv.ctx_for` ai_ev.gd:135-165. `models` stays at the live-unit reading;
 /// `BattleSim._ctx_of` overwrites it with the snapshot's `alive` on every call.
 fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
+    // The record's own epoch answers every registry read below (the 3.6 folder
+    // aliases stay off below `PENDING_EPOCH_RULES_ALIAS`, byte-exact).
+    reg.set_rules_epoch(rules_epoch);
     let trace73 = rule_on(rules_epoch, EPOCH_73_V36) && crate::mv::plain_memo::trace_rules_on();
     let armor = if unit_rule_active(reg, p, "Armor") {
         unit_rating(&p.special_rules, "Armor")
@@ -7402,6 +7405,10 @@ impl UnitStatic {
     /// `lib::build_statics`/`act_statics` and the two host caches do — so the
     /// gate rides the same line the profile table does.
     pub fn build_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> UnitStatic {
+        // Stamp the registry with the record's own epoch: the 3.6 folder aliases
+        // (`PENDING_EPOCH_RULES_ALIAS`) switch on from 93 for every read below,
+        // and a pre-93 record keeps its old common-only faction reads byte-exact.
+        reg.set_rules_epoch(rules_epoch);
         // Wave 3 aura expansion reads (`EPOCH_6_TABLE_RULES`, frozen): the
         // core's own additive leg of the import expansion — post-import
         // profiles expand byte-identical (the loader's dedup), a
