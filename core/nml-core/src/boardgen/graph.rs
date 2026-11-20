@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 use crate::rng::GodotRng;
 use super::levels::LotKind;
-use super::{Symmetry, CELL_IN, GRID};
+use super::{Budgets, Symmetry, CELL_IN, GRID};
 
 /// A main street: a rectangle of cells. `width_in` is its short side in inches.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -16,7 +16,7 @@ pub struct SectorGraph {
     pub arteries: Vec<Artery>, pub is_street: Vec<bool>, pub lots: Vec<Lot>,
 }
 
-pub fn build(seed: i64, sym: Symmetry) -> SectorGraph {
+pub fn build(seed: i64, sym: Symmetry, b: &Budgets) -> SectorGraph {
     let (nx, nz, mut rng) = (GRID, GRID, GodotRng::new(seed));
     let (hx, hz) = (nx / 2, nz / 2);
     let mut ax1 = rng.randi_range(1, (hx as i64 - 3).max(1)) as usize;
@@ -34,16 +34,16 @@ pub fn build(seed: i64, sym: Symmetry) -> SectorGraph {
     for x in 0..nx { street[(if x < hx { cz1 } else { cz2 }) * nx + x] = true; }
 
     let mut g = SectorGraph { nx, nz, symmetry: sym, arteries, is_street: Vec::new(), lots: Vec::new() };
-    let (mut occ, tpls, target) = (vec![false; nx * nz], [(3usize, 2usize), (2, 3), (2, 2)], 9);
+    let (mut occ, tpls, target) = (vec![false; nx * nz], b.lot_shapes, b.lot_pairs);
     for _ in 0..220 {
         if g.lots.len() / 2 >= target { break; }
-        let (w, h) = tpls[rng.randi_range(0, 2) as usize];
+        let (w, h) = tpls[rng.randi_range(0, tpls.len() as i64 - 1) as usize];
         if w <= nx && h <= hz {
             let r = (rng.randi_range(0, (nx - w) as i64) as usize, rng.randi_range(0, (hz - h) as i64) as usize, w, h);
             try_pair(&mut g, &street, &mut occ, &mut rng, r);
         }
     }
-    for (w, h) in [(2, 2), (3, 2), (2, 3)] { for z1 in 0..=hz.saturating_sub(h) { for x1 in 0..=nx.saturating_sub(w) {
+    for &(w, h) in b.lot_fill { for z1 in 0..=hz.saturating_sub(h) { for x1 in 0..=nx.saturating_sub(w) {
         if g.lots.len() / 2 < target { try_pair(&mut g, &street, &mut occ, &mut rng, (x1, z1, w, h)); }
     }}}
     g.is_street = street;
