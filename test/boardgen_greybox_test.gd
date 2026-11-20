@@ -95,7 +95,7 @@ func test_every_connector_is_a_ladder_drawn_as_rails_and_rungs_and_no_stair_is_b
 		# Two rails and five rungs per 3 in ladder; no other connector shape exists.
 		assert_int(_of_kind(boxes, ["ladder"]).size()).is_equal(conns.size() * 7)
 		assert_int(_of_kind(boxes, ["stair"]).size()).is_equal(0)
-		assert_int(boxes.size()).is_equal(_of_kind(boxes, ["street", "ground", "hazard", "tier1", "tier2", "tier3", "ladder"]).size())
+		assert_int(boxes.size()).is_equal(_of_kind(boxes, ["street", "ground", "hazard", "tier1", "tier2", "tier3", "ladder", "kerb"]).size())
 		assert_bool(BoardgenGreybox.KINDS.has("stair")).is_false()
 	assert_int(_fixture()["connectors"].size()).is_greater(0)
 

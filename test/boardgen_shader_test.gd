@@ -5,7 +5,7 @@ extends GdUnitTestSuite
 const SHADER_PATH := "res://shaders/tiefwerk_board.gdshader"
 
 
-const INCLUDES := ["res://shaders/tiefwerk_edges.gdshaderinc"]
+const INCLUDES := ["res://shaders/tiefwerk_noise.gdshaderinc", "res://shaders/tiefwerk_edges.gdshaderinc"]
 
 
 ## The board shader with its includes appended (the pins below do not care which file a function lives in).
@@ -91,3 +91,10 @@ func test_the_box_size_reaches_the_fragment_and_the_bend_goes_through_the_view_m
 	assert_str(_line_with(src, "box_in = INSTANCE_CUSTOM.gba")).is_not_empty()
 	assert_str(_line_with(src, "lpos = VERTEX * box_in")).is_not_empty()
 	assert_str(_line_with(src, "NORMAL = normalize((VIEW_MATRIX")).contains("ew.yzw")
+
+func test_the_sump_liquid_flows_ripples_and_stains_what_is_round_it() -> void:
+	var src := _source()
+	assert_bool(src.contains("float sump_dist(vec2 g, ivec2 c)")).is_true()   # the stain on the floor measures its distance to a pool cell
+	assert_bool(_line_with(src, "float swell(vec2 q)") != "" and src.contains("TIME * 0.05")).is_true()   # the liquid moves
+	assert_bool(src.contains("vec2 bubbles(vec2 q)") and src.contains("NORMAL = normalize((VIEW_MATRIX")).is_true()   # bubbles pop, ripples tilt the normal
+	assert_bool(src.contains("} else if (k == 7) {")).is_true()   # the kerb has its own surface

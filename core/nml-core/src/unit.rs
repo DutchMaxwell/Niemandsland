@@ -203,6 +203,9 @@ pub struct Ctx {
     /// Plan H (H-15a): the book rule the volley die belongs to ("Unpredictable", "Unpredictable Shooter"; "" without), for the step path's line
     /// `<rule>: <unit>'s volley rolls N -> AP(+1) | +1 to hit` (the table's `_solo_unpredictable_rule`). No die, no outcome moves.
     pub unpredictable_name: &'static str,
+    /// Plan H (H-17b): the Armor(X) rating when it IMPROVES this unit's Defense (`armored_defense` below the printed Defense), else 0, for the
+    /// step path's line `<unit> has Armor(X): counts as Defense X+` (the table's `_solo_log_armor`). `defense` already carries the effect.
+    pub armor_line: i64,
     /// The volley die's own registry params (`assets/solo/rules_mechanics_*
     /// .json`, both "Unpredictable" and "Unpredictable Shooter"): a face at
     /// or under `low_roll_max` is AP(+ap_bonus) on every profile of the
@@ -3875,6 +3878,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         // melee-only "Unpredictable Fighter" is never consulted here.
         unpredictable_shooting: upr_shooting,
         unpredictable_name: upr_name,
+        armor_line: if armor >= crate::combat::BEST_HIT_TARGET && armor < p.defense { armor } else { 0 },
         // The die's three params come off the carried rule's own registry
         // entry (defaults 1/1/3, the table's `unpredictable_fighter_effect`).
         unpredictable_ap_bonus: upr_ap_bonus,
