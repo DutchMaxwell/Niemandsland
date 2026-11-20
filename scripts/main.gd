@@ -6111,6 +6111,8 @@ func _solo_place_spell_tokens(spell_name: String, targets: Array, effect: Dictio
 		var tu := t as GameUnit
 		if tu == null or tu.is_destroyed():
 			continue
+		if _solo_spell_refreshed(tu, spell_name, _solo_spell_rec(spell_name, effect)):
+			continue   # the same spell does not stack: no second token, no second record
 		if radial_menu_controller.apply_library_token(tu, spell_name):
 			# Maintainer rules check (31.07.): "once (next time the effect would apply)" spells
 			# PERSIST until they apply — there is no blanket round-end rule in the book; only
@@ -6163,10 +6165,23 @@ func _solo_log_accumulator_lends(draws: Array, caster_name: String) -> void:
 ## unit; the hit path (_solo_hit_mod_info) and the defense seam (_solo_defense_parts) read it,
 ## each application logs (rules-must-log). Cleared with the tokens at round end.
 func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary) -> void:
+	var rec := _solo_spell_rec(spell_name, effect)
+	if rec.is_empty() or _solo_spell_refreshed(tu, spell_name, rec):
+		return
+	var grants := str(rec["grants_rule"])
+	var key := tu.get_instance_id()
+	if not _solo_spell_mods.has(key):
+		_solo_spell_mods[key] = []
+	(_solo_spell_mods[key] as Array).append(rec)
+	_solo_place_spell_rec(tu, spell_name, effect, rec, grants)
+
+
+## The record a spell effect leaves on its target ({} = nothing to record: no modifier and no grant).
+func _solo_spell_rec(spell_name: String, effect: Dictionary) -> Dictionary:
 	var modifier: Dictionary = effect.get("modifier", {})
 	var grants := str(effect.get("grants_rule", ""))
 	if modifier.is_empty() and grants.is_empty():
-		return
+		return {}
 	var rec := {"spell": spell_name, "hit_mod": int(modifier.get("hit_mod", 0)),
 		"def_mod": int(modifier.get("def_mod", 0)),
 		"casting_mod": int(modifier.get("casting_mod", 0)),
@@ -6186,11 +6201,32 @@ func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary
 	if rec["hit_mod"] == 0 and rec["def_mod"] == 0 and rec["casting_mod"] == 0 \
 			and rec["morale_mod"] == 0 and rec["range_in"] == 0 and rec["advance_in"] == 0 \
 			and rec["rush_in"] == 0 and grants.is_empty():
-		return
-	var key := tu.get_instance_id()
-	if not _solo_spell_mods.has(key):
-		_solo_spell_mods[key] = []
-	(_solo_spell_mods[key] as Array).append(rec)
+		return {}
+	return rec
+
+
+## PENDING_EPOCH_SPELL_NO_STACK (GF 3.6, "Rules priority & stacking effects": the same spell does not stack; core twin `sim::tray_spell_effect`):
+## true when `tu` already carries an identical record of the spell (the live grant's `granted_to` and the Regeneration `used` flag aside).
+## The existing record stands (it is the refreshed one), nothing is added, the line says so.
+func _solo_spell_refreshed(tu: GameUnit, spell_name: String, rec: Dictionary) -> bool:
+	if rec.is_empty() or AiActRecorder.rules_epoch < AiActRecorder.PENDING_EPOCH_SPELL_NO_STACK:
+		return false
+	var sig := func(rd: Dictionary) -> String:
+		var c := rd.duplicate()
+		c.erase("granted_to")
+		c.erase("used")
+		return JSON.stringify(c, "", true)
+	var want: String = sig.call(rec)
+	for old in _solo_spell_mods.get(tu.get_instance_id(), []):
+		if sig.call(old) == want:
+			_log_rule_event(BattleLog.Category.COMBAT, "\"%s\" on %s is already active - the same spell does not stack, the effect stands" % [
+				spell_name, tu.get_name()], true)
+			return true
+	return false
+
+
+## The placement half of `_solo_record_spell_mod`: grant overlay, stamps, wire and the ACTIVE line.
+func _solo_place_spell_rec(tu: GameUnit, spell_name: String, effect: Dictionary, rec: Dictionary, grants: String) -> void:
 	# NML-006 side effects: a granted rule goes onto the LIVE special_rules overlay, speed/range
 	# deltas onto the props stamps — every existing engine read then honours them.
 	_solo_apply_grant(tu, rec)
