@@ -1148,7 +1148,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	var peek: GameUnit = solo_controller.peek_next_ai_unit()
 	await begin_activation(peek)
 	# One-core P3 step 42 (flag on): a plain unit's board BEFORE its move, for the core's volley (_run_ai_shooting).
-	_solo_core_ai_h = CoreActivation.capture(self) \
+	_solo_core_ai_h = CoreActivation.capture(self, true) \
 		if peek != null and CoreActivation.applies(self) and CoreActivation.is_plain(peek) else 0
 	_solo_core_shadow_h = CoreShadow.capture(self, peek)   # C-3: 0 unless NML_CORE_SHADOW=1 (counting only)
 	# P4.0-7 (D5): the AI's activation-start snapshot for a save taken mid-volley (the body's end clears it).
@@ -2942,7 +2942,7 @@ func _solo_defender_places_markers() -> void:
 	if solo_controller == null or defender != solo_controller.ai_slot:
 		return
 	var dropped: int = terrain_overlay.get_objectives().size()
-	var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")))
+	var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")), _deploy_board_in())
 	var stamp := ObjectiveLayout.generate(int(_solo_deploy_fsm.get("seed", 0)), mission, style,
 		terrain_overlay.grid_cells, map_layout_editor._calculate_grid_dimensions().x,
 		table.table_size.x * 12.0, table.table_size.y * 12.0)
@@ -3807,7 +3807,7 @@ func _solo_apply_mission_if_chosen() -> void:
 	var mmeta: Array = SoloController.marker_metadata(mk)
 	SoloController.mission_reset(str(mission.get("scoring", "end")), (mission.get("vp", {}) as Dictionary), mmeta)
 	if terrain_overlay != null and table != null:
-		var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")))
+		var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")), _deploy_board_in())
 		var resolved: Array = MissionCatalog.marker_positions(mission, style,
 			table.table_size.x * 12.0, table.table_size.y * 12.0)
 		if not resolved.is_empty():
@@ -4250,6 +4250,11 @@ func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
 		_solo_deploy_show_human_turn()
 
 
+## The table's board in inches: the key into the per-board deployment catalogue (a 4 x 4 table must not draw a 72 x 48 zone).
+func _deploy_board_in() -> Vector2:
+	return table.table_size * 12.0 if table != null else DeploymentCatalog.DEFAULT_BOARD_IN
+
+
 ## D7a: the zone style's bounding rect in world metres (what the AI's search scans).
 func _solo_style_rect(style: Dictionary, player: int = 1) -> Rect2:
 	var lo := Vector2(INF, INF)
@@ -4266,10 +4271,10 @@ func _solo_style_rect(style: Dictionary, player: int = 1) -> Rect2:
 func _solo_phase_zone(entry: Array, slot: int) -> Dictionary:
 	var id := str(entry[2])
 	if id != "own":
-		return {"style": DeploymentCatalog.get_style(id), "id": id, "player": 1}
+		return {"style": DeploymentCatalog.get_style(id, _deploy_board_in()), "id": id, "player": 1}
 	var sid := str(MissionCatalog.get_mission(_solo_mission_id).get("deployment", "front_line"))
 	var ai_key: int = 1 if bool(_solo_deploy_fsm.get("ai_neg_z", true)) else 2
-	return {"style": DeploymentCatalog.get_style(sid), "id": sid,
+	return {"style": DeploymentCatalog.get_style(sid, _deploy_board_in()), "id": sid,
 		"player": ai_key if slot == solo_controller.ai_slot else 3 - ai_key}
 
 
@@ -4299,7 +4304,7 @@ func _solo_phase_start() -> void:
 		terrain_overlay.set_style_zones(style, int(zone["player"]) if str((phases[i] as Array)[2]) == "own" else 0)
 	if ai_side:
 		solo_controller.deploy_set_zone(_solo_style_rect(style, int(zone["player"])),
-			DeploymentCatalog.zone_test(str(zone["id"]), int(zone["player"])))
+			DeploymentCatalog.zone_test(str(zone["id"]), int(zone["player"]), _deploy_board_in()))
 		solo_controller.deploy_set_gates(phase_gates)
 		var done: Array = solo_controller.deploy_place_n(quota)
 		placed[slot] = int(placed.get(slot, 0)) + done.size()
@@ -4465,7 +4470,7 @@ func _solo_mission_reserve_rolls(round_number: int) -> void:
 			_log_rule_event(BattleLog.Category.GENERAL, "Reserve roll: %s rolls %d (needs %d+) — %s" % [
 				(e["unit"] as GameUnit).get_name(), int(e["roll"]), on,
 				"arrives this round" if bool(e["arrives"]) else "stays off the table"], slot == solo_controller.ai_slot)
-	solo_controller.mission_arrival_set(DeploymentCatalog.zone_test(str(cfg.get("zone", "anywhere")), 1),
+	solo_controller.mission_arrival_set(DeploymentCatalog.zone_test(str(cfg.get("zone", "anywhere")), 1, _deploy_board_in()),
 		(cfg.get("gates", {}) as Dictionary))
 
 
@@ -4478,7 +4483,7 @@ func _solo_reserve_arrival_violation(placed: Array) -> String:
 		if cfg.is_empty() or gu == null or not bool(gu.unit_properties.get("mission_reserve", false)):
 			continue
 		var c := solo_controller.unit_centre(gu)
-		if not DeploymentCatalog.in_zone(DeploymentCatalog.get_style(str(cfg.get("zone", "anywhere"))), 1, Vector2(c.x, c.z) / 0.0254):
+		if not DeploymentCatalog.in_zone(DeploymentCatalog.get_style(str(cfg.get("zone", "anywhere")), _deploy_board_in()), 1, Vector2(c.x, c.z) / 0.0254):
 			return "%s must arrive inside the marked zone — move it, then ✓" % gu.get_name()
 		var models: Array = []
 		for m in gu.get_alive_models():
@@ -6364,7 +6369,7 @@ func _solo_grant_waits_to_be_attacked(rd: Dictionary) -> bool:
 ## F4/NML-006 — spend every once-record on ONE unit that matches `roles` (role- and scope-filtered
 ## exactly like the reads). Reverts the NML-006 side effects (grant overlay off, props stamps
 ## recomputed), removes the paired library token and logs each spend (rules-must-log).
-func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: String = "", attacking: bool = false) -> void:
+func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: String = "", attacking: bool = false, only: Array = []) -> void:
 	var key := uu.get_instance_id()
 	var records: Array = _solo_spell_mods.get(key, [])
 	if records.is_empty():
@@ -6374,6 +6379,8 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: 
 		for rd in AiSpell.mods_for(records, str(role), melee):
 			if keep_spell != "" and str((rd as Dictionary).get("spell", "")) == keep_spell:
 				continue
+			if not only.is_empty() and not only.has(rd):
+				continue   # one-core landing: only the records the table placed after the capture (CoreActivation.land_late_once)
 			if attacking and _solo_grant_waits_to_be_attacked(rd as Dictionary):
 				continue   # G4-T10: the bearer own attack does not use an attacked-only grant
 			if str((rd as Dictionary).get("duration", "")) == "once" and not spent.has(rd):
@@ -9972,38 +9979,10 @@ func _solo_deadly_wounds(w: int, profile: Dictionary, target: GameUnit) -> int:
 	return w
 
 
-## Sweep F row `Fortified Aura` (epoch 55): the aofs/gff aura entries
-## ("Fortified Aura", "Guardian Boost Aura" — primitive `Fortified` with
-## `aura_expand`, `max_picks`, `lost_if_bearer_killed`) must END the family's
-## AP(-1) when the bearer is killed. The save seam consults this pure helper
-## for both its reads — the exact-name "Fortified" branch and the
-## Fortified-primitive alias walk — `source_rule` naming the rule whose
-## benefit is at stake. Returns "" while the benefit is live (not
-## aura-sourced, no aura entry in this book, or a living bearer), else the
-## DEAD aura entry's name so the seam's rules-must-log line can say so.
-## Aura-sourced = the import expansion's own provenance
-## (`unit_properties["aura_granted"]`, the Reanimation-wave stamp): a rule
-## the unit owns itself is never demoted. The bearer is any ALIVE chain
-## member (the defender itself, or an attached hero) carrying the aura name.
+## Sweep F row `Fortified Aura` (epoch 55): the save seam's bearer-liveness answer ("" = benefit live, else the dead aura entry's name); the rule is
+## `RulesRegistry.fortified_aura_dead_bearer` (H-14: the one-core slice reads it too).
 static func fortified_aura_dead_bearer(defender: GameUnit, source_rule: String) -> String:
-	var aura_name := source_rule + " Aura"
-	var entry := RulesRegistry.lookup(RulesRegistry.system_of_unit(defender),
-		RulesRegistry.faction_of_unit(defender), aura_name)
-	if str(entry.get("primitive", "")) != "Fortified":
-		return ""
-	var params: Dictionary = entry.get("params", {}) as Dictionary
-	if not (bool(params.get("aura_expand", false)) and bool(params.get("lost_if_bearer_killed", false))):
-		return ""
-	if not (defender.unit_properties.get("aura_granted", []) as Array).has(source_rule):
-		return ""
-	if AiEv.has_exact_rule(defender, aura_name):
-		return ""
-	if defender.has_method("get_attached_heroes"):
-		for h in defender.get_attached_heroes():
-			var hero := h as GameUnit
-			if hero != null and hero.get_alive_count() > 0 and AiEv.has_exact_rule(hero, aura_name):
-				return ""
-	return aura_name
+	return RulesRegistry.fortified_aura_dead_bearer(defender, source_rule)
 
 
 ## The loss line's once-guard (rules-must-log): the demotion is a STATE —

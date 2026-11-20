@@ -25,12 +25,13 @@ const LADDER_OFFSET_IN := 0.12   # the ladder stands this far off the wall face
 const LADDER_RAIL_IN := 0.12
 const LADDER_RUNG_GAP_IN := 0.5
 ## Surface kinds in the order the board shader knows them (INSTANCE_CUSTOM.x, shaders/tiefwerk_board.gdshader).
-const KINDS := ["ground", "street", "hazard", "tier1", "tier2", "ladder", "tier3"]
+const KINDS := ["ground", "street", "hazard", "tier1", "tier2", "ladder", "tier3", "kerb"]
 const SHADER := preload("res://shaders/tiefwerk_board.gdshader")
 
 var layout_seed: int = 0
 var _material: ShaderMaterial
 var _footprint := Rect2()   # the ground kept free of the table's scatter, in table-local metres: the board and all round it
+var _layout: Dictionary = {}
 
 
 ## The board of NML_BOARDGEN_SEED on `table`, or null when the flag is off (release build, unset or not an integer).
@@ -88,6 +89,7 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 		for k in range(1, int(rise / LADDER_RUNG_GAP_IN)):
 			out.append(_slab(edge, away, side, LADDER_OFFSET_IN, LADDER_OFFSET_IN + LADDER_RAIL_IN, LADDER_WIDTH_IN,
 				base + k * LADDER_RUNG_GAP_IN, base + k * LADDER_RUNG_GAP_IN + LADDER_RAIL_IN, "ladder", false))
+	out.append_array(BoardgenSumps.kerbs(layout))   # the low rim round each toxic sump
 	return out
 
 
@@ -152,6 +154,10 @@ func build(layout: Dictionary) -> void:
 	debris.name = "Debris"
 	debris.build(layout)
 	add_child(debris)
+	var sumps := BoardgenSumps.new()
+	sumps.name = "Sumps"
+	sumps.build(layout)
+	add_child(sumps)
 	var board := Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) * INCHES_TO_METERS
 	_footprint = Rect2(board * -0.5, board).grow(SCATTER_OFF_M)
 	var mmi := MultiMeshInstance3D.new()
@@ -165,6 +171,31 @@ func build(layout: Dictionary) -> void:
 	rails.build(layout)
 	add_child(rails)
 	_anchor()
+	_layout = layout
+	var settings := _settings()
+	if settings != null:
+		settings.board_mist_changed.connect(refresh_atmosphere)
+	refresh_atmosphere()
+
+
+## The GraphicsSettings autoload by path (a script compiled before the autoloads exist cannot name it).
+static func _settings() -> Node:
+	return (Engine.get_main_loop() as SceneTree).root.get_node_or_null("GraphicsSettings")
+
+
+## The low ground mist (GraphicsSettings.board_mist_enabled): built while the setting is on, freed at once when it goes off.
+func refresh_atmosphere() -> void:
+	var mist := get_node_or_null("Mist")
+	var settings := _settings()
+	var want: bool = settings == null or settings.board_mist_enabled()
+	if want and mist == null:
+		mist = BoardgenMist.new()
+		mist.name = "Mist"
+		mist.build(_layout)
+		add_child(mist)
+	elif not want and mist != null:
+		remove_child(mist)
+		mist.free()
 
 
 func _ready() -> void:

@@ -257,3 +257,46 @@ static func params_claim_ambush(params: Dictionary) -> bool:
 		return true
 	var grants := str(params.get("grants", ""))
 	return grants == "Ambush" or grants == "Infiltrate"
+
+
+## Sweep F row `Fortified Aura` (epoch 55): the aofs/gff aura entries
+## ("Fortified Aura", "Guardian Boost Aura" — primitive `Fortified` with
+## `aura_expand`, `max_picks`, `lost_if_bearer_killed`) must END the family's
+## AP(-1) when the bearer is killed. The save seam consults this pure helper
+## for both its reads — the exact-name "Fortified" branch and the
+## Fortified-primitive alias walk — `source_rule` naming the rule whose
+## benefit is at stake. Returns "" while the benefit is live (not
+## aura-sourced, no aura entry in this book, or a living bearer), else the
+## DEAD aura entry's name so the seam's rules-must-log line can say so.
+## Aura-sourced = the import expansion's own provenance
+## (`unit_properties["aura_granted"]`, the Reanimation-wave stamp): a rule
+## the unit owns itself is never demoted. The bearer is any ALIVE chain
+## member (the defender itself, or an attached hero) carrying the aura name.
+## H-14: lives here (not in main.gd) so the one-core slice reads the very same truth the table's save seam logs from.
+static func fortified_aura_dead_bearer(defender: GameUnit, source_rule: String) -> String:
+	var aura_name := source_rule + " Aura"
+	var entry := lookup(system_of_unit(defender),
+		faction_of_unit(defender), aura_name)
+	if str(entry.get("primitive", "")) != "Fortified":
+		return ""
+	var params: Dictionary = entry.get("params", {}) as Dictionary
+	if not (bool(params.get("aura_expand", false)) and bool(params.get("lost_if_bearer_killed", false))):
+		return ""
+	if not (defender.unit_properties.get("aura_granted", []) as Array).has(source_rule):
+		return ""
+	if _has_exact_rule(defender, aura_name):
+		return ""
+	if defender.has_method("get_attached_heroes"):
+		for h in defender.get_attached_heroes():
+			var hero := h as GameUnit
+			if hero != null and hero.get_alive_count() > 0 and _has_exact_rule(hero, aura_name):
+				return ""
+	return aura_name
+
+
+## The unit's own rule list holds `rule` by EXACT name, rating stripped (`AiEv.has_exact_rule`'s reading; a prefix match would let "Fortified Growth" pass for "Fortified").
+static func _has_exact_rule(unit: GameUnit, rule: String) -> bool:
+	for r in unit.get_special_rules():
+		if base_rule_name(str((r as Dictionary).get("name", "")) if r is Dictionary else str(r)) == rule:
+			return true
+	return false

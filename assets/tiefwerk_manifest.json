@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "godot_version": "4.6",
+  "base_url": "{cdn}/terrain-source/tiefwerk",
+  "models": {},
+  "sets": {
+    "painted_steel": {
+      "tile_in": 3.0, "source": "polyhaven:green_metal_rust", "license": "CC0-1.0",
+      "albedo": {"url": "9e062b86513cf931788041a1eb5c7cf4f7902d47d77f827d0da88342ee512c47.ctex", "sha256": "9e062b86513cf931788041a1eb5c7cf4f7902d47d77f827d0da88342ee512c47", "size": 1398180},
+      "normal": {"url": "8609ebe229b6a449a67f3b70f51866eb46f37f4d45bdc4c9312ed81a48ea4002.ctex", "sha256": "8609ebe229b6a449a67f3b70f51866eb46f37f4d45bdc4c9312ed81a48ea4002", "size": 1398180},
+      "orm": {"url": "2dbc6a609241c139304910f6151ff65706e3d2ad25a9b95b02519dc797520ac6.ctex", "sha256": "2dbc6a609241c139304910f6151ff65706e3d2ad25a9b95b02519dc797520ac6", "size": 349604}
+    },
+    "rusted_plate": {
+      "tile_in": 3.0, "source": "polyhaven:rusty_metal_05", "license": "CC0-1.0",
+      "albedo": {"url": "fd48c471893a3f963bb400313e892eb1d5b50c3e037187845aca04a102f2c884.ctex", "sha256": "fd48c471893a3f963bb400313e892eb1d5b50c3e037187845aca04a102f2c884", "size": 1398180},
+      "normal": {"url": "bd6235ff42e3398c4c344b5d192e51f880bbfdd77acd3f207eded31491b94022.ctex", "sha256": "bd6235ff42e3398c4c344b5d192e51f880bbfdd77acd3f207eded31491b94022", "size": 1398180},
+      "orm": {"url": "9cee4865b2c2fcc56640d16066cd342a8769a4de15b45f4fac0914540efca7e3.ctex", "sha256": "9cee4865b2c2fcc56640d16066cd342a8769a4de15b45f4fac0914540efca7e3", "size": 349604}
+    },
+    "concrete": {
+      "tile_in": 3.0, "source": "polyhaven:concrete_floor_02", "license": "CC0-1.0",
+      "albedo": {"url": "480c50ad7d0b257524d52b7a610b0806713807d9230fd0b919b3a7e801305d92.ctex", "sha256": "480c50ad7d0b257524d52b7a610b0806713807d9230fd0b919b3a7e801305d92", "size": 1398180},
+      "normal": {"url": "abfdce76efec490b2963cf29d0a87e7b986c2b42320f261477eb521d16fa50c1.ctex", "sha256": "abfdce76efec490b2963cf29d0a87e7b986c2b42320f261477eb521d16fa50c1", "size": 1398180},
+      "orm": {"url": "ef1c1212694bd8535da487203bb170e381bb8cff28469c67ae293126f3fe31a9.ctex", "sha256": "ef1c1212694bd8535da487203bb170e381bb8cff28469c67ae293126f3fe31a9", "size": 349604}
+    },
+    "roof_slab": {
+      "tile_in": 3.0, "source": "polyhaven:rough_concrete", "license": "CC0-1.0",
+      "albedo": {"url": "b73f9602c614af0483ae75672684be16178d5a25e9fd4a64affb88c21f84020c.ctex", "sha256": "b73f9602c614af0483ae75672684be16178d5a25e9fd4a64affb88c21f84020c", "size": 1398180},
+      "normal": {"url": "30cb9993e89e54f8df3959bf95b8c867ded5a6518bd4985cf30dce71c37febd9.ctex", "sha256": "30cb9993e89e54f8df3959bf95b8c867ded5a6518bd4985cf30dce71c37febd9", "size": 1398180},
+      "orm": {"url": "a45759e03173815a7dd60064b41e9df7cccbe8037561439abaf881c5d622158f.ctex", "sha256": "a45759e03173815a7dd60064b41e9df7cccbe8037561439abaf881c5d622158f", "size": 349604}
+    }
+  },
+  "decals": {
+    "atlas_px": 2048, "texels_per_inch": 256, "license": "CC-BY-SA-4.0",
+    "albedo": {"url": "5870d6e68884b08512b7cfc5cac1f9cbd886204f530ba41c32ce209fc8414b3b.webp", "sha256": "5870d6e68884b08512b7cfc5cac1f9cbd886204f530ba41c32ce209fc8414b3b", "size": 1207660},
+    "normal": {"url": "5f2539106c8677eb785e6f3a71188cc81c3696d72617763eb0c0f7d856ffd5a8.webp", "sha256": "5f2539106c8677eb785e6f3a71188cc81c3696d72617763eb0c0f7d856ffd5a8", "size": 698012},
+    "orm": {"url": "fb72564dc49d7dbd99e1cba9eca7c784476b420ca41170e623d309089bfe3f0c.webp", "sha256": "fb72564dc49d7dbd99e1cba9eca7c784476b420ca41170e623d309089bfe3f0c", "size": 584048},
+    "cells": {
+      "door_service": {"x": 1696, "y": 4, "w": 208, "h": 384, "tiles_x": false},
+      "door_plant": {"x": 4, "y": 520, "w": 208, "h": 384, "tiles_x": false},
+      "door_shutter": {"x": 216, "y": 520, "w": 208, "h": 384, "tiles_x": false},
+      "hatch_square": {"x": 332, "y": 908, "w": 232, "h": 232, "tiles_x": false},
+      "hatch_round": {"x": 568, "y": 908, "w": 232, "h": 232, "tiles_x": false},
+      "louvre_slats6": {"x": 4, "y": 1364, "w": 256, "h": 160, "tiles_x": false},
+      "louvre_slats9": {"x": 264, "y": 1364, "w": 256, "h": 160, "tiles_x": false},
+      "louvre_mesh": {"x": 524, "y": 1364, "w": 256, "h": 160, "tiles_x": false},
+      "sign_electric": {"x": 804, "y": 908, "w": 384, "h": 192, "tiles_x": false},
+      "sign_noentry": {"x": 1192, "y": 908, "w": 384, "h": 192, "tiles_x": false},
+      "sign_exit": {"x": 1580, "y": 908, "w": 384, "h": 192, "tiles_x": false},
+      "sign_flow": {"x": 4, "y": 1168, "w": 384, "h": 192, "tiles_x": false},
+      "sign_gauge": {"x": 392, "y": 1168, "w": 384, "h": 192, "tiles_x": false},
+      "sign_lamp": {"x": 780, "y": 1168, "w": 384, "h": 192, "tiles_x": false},
+      "sign_bars": {"x": 1168, "y": 1168, "w": 384, "h": 192, "tiles_x": false},
+      "sign_ladder": {"x": 1556, "y": 1168, "w": 384, "h": 192, "tiles_x": false},
+      "num_0": {"x": 624, "y": 520, "w": 160, "h": 256, "tiles_x": false},
+      "num_1": {"x": 788, "y": 520, "w": 160, "h": 256, "tiles_x": false},
+      "num_2": {"x": 952, "y": 520, "w": 160, "h": 256, "tiles_x": false},
+      "num_3": {"x": 1116, "y": 520, "w": 160, "h": 256, "tiles_x": false},
+      "num_4": {"x": 1280, "y": 520, "w": 160, "h": 256, "tiles_x": false},
+      "num_5": {"x": 1444, "y": 520, "w": 160, "h": 256, "tiles_x": false},
+      "num_6": {"x": 1608, "y": 520, "w": 160, "h": 256, "tiles_x": false},
+      "num_7": {"x": 1772, "y": 520, "w": 160, "h": 256, "tiles_x": false},
+      "num_8": {"x": 4, "y": 908, "w": 160, "h": 256, "tiles_x": false},
+      "num_9": {"x": 168, "y": 908, "w": 160, "h": 256, "tiles_x": false},
+      "hazard_yellow": {"x": 776, "y": 1528, "w": 768, "h": 64, "tiles_x": true},
+      "hazard_red": {"x": 4, "y": 1628, "w": 768, "h": 64, "tiles_x": true},
+      "leak_rust": {"x": 520, "y": 4, "w": 128, "h": 512, "tiles_x": false},
+      "leak_oil": {"x": 652, "y": 4, "w": 128, "h": 512, "tiles_x": false},
+      "leak_lime": {"x": 784, "y": 4, "w": 128, "h": 512, "tiles_x": false},
+      "leak_algae": {"x": 916, "y": 4, "w": 128, "h": 512, "tiles_x": false},
+      "grime_strip": {"x": 784, "y": 1364, "w": 768, "h": 128, "tiles_x": true},
+      "grime_corner": {"x": 1048, "y": 4, "w": 384, "h": 384, "tiles_x": false},
+      "scorch": {"x": 1436, "y": 4, "w": 256, "h": 384, "tiles_x": false},
+      "floor_arrow": {"x": 428, "y": 520, "w": 192, "h": 384, "tiles_x": false},
+      "bay_box": {"x": 4, "y": 4, "w": 512, "h": 512, "tiles_x": false},
+      "cable_run": {"x": 4, "y": 1528, "w": 768, "h": 96, "tiles_x": true}
+    }
+  }
+}

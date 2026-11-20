@@ -91,6 +91,14 @@ func test_a_shielded_target_names_its_defense_bonus() -> void:
 	await _same("defense rating", _striker([], []), DoorLines.entry("Ranks", 10, ["Defense(1)"], [], "battle_brothers", 0), "Ranks is", 6)
 
 
+## H-17b (Plan H): an Armor(X) target that the rating IMPROVES names it once before the announce (`<U> has Armor(X): counts as Defense X+`, the table's
+## `_solo_log_armor`); a rating no better than the printed Defense (4+) says nothing on either side. RED: drop `say_armor` from the volley seam -> the table says the line and the door does not.
+func test_an_armored_target_names_its_defense() -> void:
+	await _same("armor", _striker([], []), DoorLines.entry("Ranks", 10, ["Armor(3)"], [], "battle_brothers", 0), "Ranks has Armor", 6)
+	await _same("armor 2+", _striker([], []), DoorLines.entry("Ranks", 10, ["Armor(2)"], [], "battle_brothers", 0), "Ranks has Armor", 6)
+	await _same("armor no better", _striker([], []), DoorLines.entry("Ranks", 10, ["Armor(5)"], [], "battle_brothers", 0), "Ranks has Armor", 0)
+
+
 ## The plain Regeneration group names its roll ("regeneration", the table's own spelling) and, against a bypass weapon, the skip.
 func test_the_regeneration_group_names_its_roll_and_the_bypass() -> void:
 	await _same("regeneration", _striker([], []), DoorLines.entry("Ranks", 10, ["Regeneration"], [], "battle_brothers", 0), "Ranks rolls", 6)

@@ -516,6 +516,9 @@ pub struct ShootResult {
     /// The volley's Deadly weapons, one entry per weapon for the table's line (`_solo_land_deadly_wounds`): `(weapon, raw
     /// unsaved, X, how many of `deadly_groups` it pushed)`, in the same order. The volley landing drains both together.
     pub deadly_lines: Vec<(String, i64, i64, usize)>,
+    /// The vs-target Marks (`tray_vs_marks`) this activation placed and has not yet seen spent: `(mark name, unit holding the record,
+    /// marked target)`. Sim-level bookkeeping for the table's consumption line (`say_marks_consumed`); never merged by `absorb`.
+    pub marks_open: Vec<(String, usize, usize)>,
     /// Wounds the target's ignore rules (Regeneration and its family) cancelled in the melee being resolved, summed over its phases by the
     /// sim (`strike_phase`, Impact) for the table's "cancelled by Regeneration" note on the melee result line (`_solo_regen_ignored`).
     pub regen_ignored: i64,
@@ -649,6 +652,15 @@ fn slayer_grant_cond() -> CondAp {
 
 fn piercing_assault_grant_cond() -> CondAp {
     CondAp { ap_bonus: 1, condition: "on_charge".into(), ..Default::default() }
+}
+
+/// The table's `_solo_log_armor` line (`<U> has Armor(X): counts as Defense X+`), said once before the volley's announce when Armor improves the
+/// target's Defense; ahead of the Shielded / growth lines, which fold on top of it.
+pub(crate) fn say_armor(tray: &mut Tray, def: &Ctx, name: &str) {
+    if def.armor_line > 0 {
+        let x = def.armor_line;
+        say_rule(tray, "armor", def.side, || format!("{name} has Armor({x}): counts as Defense {x}+"));
+    }
 }
 
 /// A rule's battle-log line on a supplied tray, in the table's words (a seeded tray never builds the text).
@@ -1701,7 +1713,7 @@ pub(crate) fn resolve_volley_with_pick_label(
             im_fired.push(sh.owner);
             out.log.push(format!("Indirect moved {im}: {} shoots after moving", sh.owner));
         } else if rule_on(att.rules_epoch, EPOCH_73_V36)
-            && p.indirect
+            && (p.indirect || def.indirect_mark) // a mark on the target makes the shot Indirect, as the table's profile bridge does
             && att.moved_this_round
             && im_fired.iter().all(|o| *o != sh.owner)
         {
@@ -3215,6 +3227,9 @@ pub fn resolve_melee_leg_wipe(
                     } else if d > 0 && !c.name.is_empty() {
                         out.log.push(format!("{}: AP(+{}) on {}'s strike{}", c.name, d, sh.owner, cond_ap_why(&c.condition)));
                         say_rule(tray, "cond_ap", sh.att.side, || format!("{}: AP(+{}) against {def_owner}{}", c.name, d, cond_ap_why(&c.condition)));
+                    } else if d > 0 && !c.say_name.is_empty() {
+                        // H-17a's melee twin: the generic pass's rules (Disintegrate, Tear, ...) say the table's line; `out.log` stays as it was.
+                        say_rule(tray, "cond_ap", sh.att.side, || format!("{}: AP(+{}) against {def_owner}", c.say_name, d));
                     }
                 }
                 // Wave 2 — the Slayer mark and Piercing Assault on their
@@ -3583,7 +3598,7 @@ fn compose_to_hit_note(
         notes.push(format!("{n} {:+} (closest target)", att.instinctive_applied));
     }
     let base_note = notes.join(", ");
-    if att.moved_this_round && p.indirect {
+    if att.moved_this_round && (p.indirect || (def.indirect_mark && rule_on(att.rules_epoch, EPOCH_73_V36))) {
         if rule_on(att.rules_epoch, EPOCH_73_V36) { notes.push("Indirect: no moved penalty".into()); }
         else if im != 0 { notes.push(format!("Indirect moved {im}")); }
     }

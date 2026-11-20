@@ -337,6 +337,16 @@ func _build_ui() -> void:
 			pivot.set_tilt_shift_enabled(on))
 	vbox.add_child(tilt_cb)
 	_switch_toggles["tilt_shift"] = tilt_cb
+
+	# Low ground mist and wall steam on a generated board (dev flag): shader-only; off on Low/Performance and in calm mode.
+	var mist_cb := CheckButton.new()
+	mist_cb.text = "Board Mist and Steam"
+	mist_cb.button_pressed = GraphicsSettings.show_board_mist
+	mist_cb.tooltip_text = "Ground mist and steam on a generated board. Off on Low/Performance and in Calm mode."
+	mist_cb.toggled.connect(func(on: bool) -> void:
+		GraphicsSettings.show_board_mist = on
+		GraphicsSettings.save_settings())
+	vbox.add_child(mist_cb)
 	var frame := OptionButton.new()
 	frame.name = "TableFrameOption"
 	for title in ["Frame: Today's look", "Frame: Walnut", "Frame: Oak", "Frame: Ivory"]:

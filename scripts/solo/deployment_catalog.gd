@@ -9,6 +9,8 @@ extends RefCounted
 
 const CATALOG_PATH: String = "res://assets/solo/deployments.json"
 const IN2M := 0.0254   # catalog polygons are centered table inches; the table is metres
+## The board the top-level `styles` map is stated for (the per-board entries live under `boards`).
+const DEFAULT_BOARD_IN := Vector2(72, 48)
 
 ## Built-in fallback == today's one implicit deployment style, stated as data.
 const FRONT_LINE: Dictionary = {
@@ -20,11 +22,15 @@ const FRONT_LINE: Dictionary = {
 }
 
 static var _cache: Dictionary = {}
+static var _boards: Dictionary = {}   # "48x48" -> {style id -> style}: the catalogue's per-board entries
+static var _runtime: Dictionary = {}   # D14.4 styles registered at run time (valid on every board)
 static var _loaded := false
 
 
 static func reset_cache() -> void:
 	_cache = {}
+	_boards = {}
+	_runtime = {}
 	_loaded = false
 
 
@@ -35,6 +41,8 @@ static func _catalog() -> Dictionary:
 			FileAccess.get_file_as_string(CATALOG_PATH))
 		if parsed is Dictionary and (parsed as Dictionary).get("styles") is Dictionary:
 			_cache = (parsed as Dictionary)["styles"]
+			var boards: Variant = (parsed as Dictionary).get("boards")
+			_boards = boards if boards is Dictionary else {}
 		else:
 			push_warning("[DEPLOYMENTS] catalog missing/unparseable at %s — FRONT_LINE fallback only" % CATALOG_PATH)
 			_cache = {}
@@ -46,6 +54,25 @@ static func _catalog() -> Dictionary:
 ## `reset_cache()` forgets it.
 static func register_style(id: String, style: Dictionary) -> void:
 	_catalog()[id] = style
+	_runtime[id] = style
+
+
+## Catalogue board key in whole inches ("48x48"): the key deployment.rs `board_size_key` builds.
+static func board_key(board_in: Vector2) -> String:
+	return "%dx%d" % [roundi(board_in.x), roundi(board_in.y)]
+
+
+## The styles DEFINED for a board, by the lookup deployment.rs `catalog_zones_for_board` does: `boards[key]`, and for
+## 72 x 48 the top-level `styles`; plus the styles registered at run time. {} = none defined for this board.
+static func styles_for_board(board_in: Vector2 = DEFAULT_BOARD_IN) -> Dictionary:
+	_catalog()
+	var key := board_key(board_in)
+	var out: Dictionary = _cache.duplicate() if key == board_key(DEFAULT_BOARD_IN) else {}
+	var per_board: Variant = _boards.get(key)
+	if per_board is Dictionary:
+		out.merge(per_board as Dictionary, true)
+	out.merge(_runtime, true)
+	return out
 
 
 ## A role-agnostic disc zone (both player keys, like the D4a styles) around `centre_in` (table inches).
@@ -54,20 +81,28 @@ static func disc_style(centre_in: Vector2, r_in: float) -> Dictionary:
 	return {"name": "Disc around the marker", "family": "attack_defend", "zones": {"1": zone, "2": zone.duplicate(true)}}
 
 
-static func style_ids() -> Array:
-	var ids: Array = _catalog().keys()
+## What the table offers on a board: its defined styles; a board the catalogue does not describe at all (a custom
+## size) keeps today's behaviour, the top-level styles, instead of losing every style.
+static func _offered(board_in: Vector2) -> Dictionary:
+	var defined := styles_for_board(board_in)
+	return defined if not defined.is_empty() else _catalog()
+
+
+static func style_ids(board_in: Vector2 = DEFAULT_BOARD_IN) -> Array:
+	var ids: Array = _offered(board_in).keys()
 	ids.sort()
 	return ids if not ids.is_empty() else ["front_line"]
 
 
-## The deployment style for `id`; unknown ids return FRONT_LINE (loudly), so
-## a stale save or a typo'd env can never select a style that does not exist.
-static func get_style(id: String) -> Dictionary:
-	var c := _catalog()
+## The deployment style for `id` on a board (default 72 x 48 = today's table); an id the board does not define
+## returns that board's front_line (loudly), so a stale save or a typo'd env can never select a style that does
+## not exist - and a 48 x 48 table never gets a 72 x 48 polygon.
+static func get_style(id: String, board_in: Vector2 = DEFAULT_BOARD_IN) -> Dictionary:
+	var c := _offered(board_in)
 	if c.has(id):
 		return c[id]
 	if id != "front_line":
-		push_warning("[DEPLOYMENTS] unknown style id '%s' — falling back to front_line" % id)
+		push_warning("[DEPLOYMENTS] style id '%s' is not defined for board %s — falling back to front_line" % [id, board_key(board_in)])
 	return c.get("front_line", FRONT_LINE)
 
 
@@ -98,8 +133,8 @@ static func in_zone(style: Dictionary, player: int, p: Vector2) -> bool:
 ## over `player`'s polygons of style `id`. The deploy machinery treats
 ## "outside the zone" like blocking terrain, so the spot search polygon-
 ## checks every candidate base. Conversion to catalog inches happens here.
-static func zone_test(id: String, player: int) -> Callable:
-	var style := get_style(id)
+static func zone_test(id: String, player: int, board_in: Vector2 = DEFAULT_BOARD_IN) -> Callable:
+	var style := get_style(id, board_in)
 	return func(p_m: Vector2) -> bool:
 		return in_zone(style, player, p_m / IN2M)
 
