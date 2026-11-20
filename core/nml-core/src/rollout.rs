@@ -837,6 +837,7 @@ fn reinforcement_arrivals(statics: &[UnitStatic], terrain: &Terrain, rules_epoch
         }
         let round = st.round;
         deployment::arrive_unit(st, i, spot, round, &statics[pi]);
+        crate::sim::settle_models(terrain, &mut st.positions[i], rules_epoch); // heightfield plan step 14: arrive_unit writes y 0
         // Rules-must-log: one stderr line when NML_TRACE_RULES=1.
         let note = if ringed { " and over 9\" from every enemy" } else { "" };
         let msg = format!("{}: {} models stand within {:.0}\" of a table edge{}", st.key(i), n, statics[pi].reinforcement.within_in, note);
@@ -1075,6 +1076,7 @@ pub fn spawn_round_start(statics: &[UnitStatic], terrain: &Terrain, seams: Seams
             round,
             &crate::unit::UnitStatic { base_radius: tp_base_radius, ..Default::default() },
         );
+        crate::sim::settle_models(terrain, &mut st.positions[j], seams.rules_epoch); // heightfield plan step 14
         st.reinforcement_used[i] = true;
         // Rules-must-log: one stderr line when NML_TRACE_RULES=1.
         crate::sim::trace_rule(

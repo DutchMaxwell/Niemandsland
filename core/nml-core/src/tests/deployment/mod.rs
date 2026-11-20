@@ -55,6 +55,7 @@
     mod deploy_large;
     mod reinforcement;
     mod spawn;
+    mod tier_board;
     mod v36_ux;
     mod v36_ux_13;
     mod v36_ux_14;

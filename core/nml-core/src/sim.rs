@@ -12454,9 +12454,16 @@ fn settle_on_surface(next: &mut State, parent: &State, cover: Cover<'_>, rules_e
     }
     for (now, before) in next.positions.iter_mut().zip(&parent.positions) {
         if now != before {
-            for p in now.iter_mut() {
-                p[1] = sight::surface_y_m(t, [p[0], p[2]], rules_epoch);
-            }
+            settle_models(t, now, rules_epoch);
+        }
+    }
+}
+
+/// Heightfield plan step 14: put `models` on the surface under their x/z (a board with tiers at the height gate only).
+pub(crate) fn settle_models(t: &Terrain, models: &mut [[f64; 3]], rules_epoch: u32) {
+    if rule_on(rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) && !t.tier_boxes().is_empty() {
+        for p in models {
+            p[1] = sight::surface_y_m(t, [p[0], p[2]], rules_epoch);
         }
     }
 }

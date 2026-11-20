@@ -335,6 +335,8 @@ pub struct Terrain {
     /// Heightfield plan step 11b - `walls_in` plus the tier cliffs, for the readers that must keep a base off a sheer edge
     /// (`walls_in_tiered`). Filled only on a board with tier edges; a flat board answers `walls_in` itself.
     walls_tiered_in: Vec<WallSeg>,
+    /// Heightfield plan step 14 - the same list in WORLD METRES (`walls_world` plus the cliffs), for deployment.
+    walls_tiered_world: Vec<WallSeg>,
     /// Content identity for memos keyed on a board: every `build` / `absent` / content-changing setter mints a fresh
     /// value, a clone keeps it. 0 = a bare `Default`, which no memo trusts.
     uid: u64,
@@ -449,6 +451,13 @@ impl Terrain {
         if self.tier_edges.is_empty() { &self.walls_in } else { &self.walls_tiered_in }
     }
 
+    /// Heightfield plan step 14 - `walls_world_m` plus the tier cliffs (world metres), what deployment keeps a spot off. On a
+    /// board with no tier edges this IS `walls_world_m`.
+    #[inline]
+    pub fn walls_world_tiered_m(&self) -> &[WallSeg] {
+        if self.tier_edges.is_empty() { &self.walls_world } else { &self.walls_tiered_world }
+    }
+
     /// `walls_in_tiered` from `EPOCH_94_PARITY_BATCH`, `walls_in` below it (the epoch-gated readers).
     #[inline]
     pub fn walls_in_at(&self, rules_epoch: u32) -> &[WallSeg] {
@@ -495,6 +504,11 @@ impl Terrain {
             })
             .collect();
         self.walls_tiered_in = if self.tier_edges.is_empty() { Vec::new() } else { self.walls_in.iter().copied().chain(self.tier_walls_in()).collect() };
+        // a tier edge is board-centred inches, the world frame is metres from the same centre
+        let m = self.in2m;
+        let cliffs = self.tier_edges.iter().filter(|e| e.kind == crate::mv::tier::TierKind::Cliff)
+            .map(|e| [[(e.a[0] * m) as f32, (e.a[1] * m) as f32], [(e.b[0] * m) as f32, (e.b[1] * m) as f32]]);
+        self.walls_tiered_world = if self.tier_edges.is_empty() { Vec::new() } else { self.walls_world.iter().copied().chain(cliffs).collect() };
     }
 
     /// NML-1155 — loads the bank v2 keys (`tools/terrain_bank_dump.gd`):
@@ -713,6 +727,7 @@ impl Terrain {
             tier_boxes: p.tiers.as_ref().map_or_else(Vec::new, TierGrid::boxes),
             tier_edges: p.tiers.as_ref().map_or_else(Vec::new, TierGrid::edges),
             walls_tiered_in: Vec::new(),
+            walls_tiered_world: Vec::new(),
             uid: fresh_uid(),
         };
         out.set_walls_world_m(&p.walls);
