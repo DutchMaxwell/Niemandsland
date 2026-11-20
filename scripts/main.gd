@@ -1305,7 +1305,8 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# Plan H (H-5), the beats guard: a Mend bearer the core takes leaves the beat to the core's one call (it resolves it from the
 	# board it captured before the beat); the table pays it only when that call is not made or refused (`_solo_pay_dangerous`).
 	# H-6 / H-7: Breath Attack and Storm Attack the same way (the core says their lines and lands their wounds).
-	if core_takes and (_solo_has_beat(unit, "Mend") or _solo_has_beat(unit, "Breath Attack") or _solo_has_storm(unit)):
+	if core_takes and (_solo_has_beat(unit, "Mend") or _solo_has_beat(unit, "Breath Attack") or _solo_has_storm(unit) \
+			or _solo_has_mind_control(unit)):
 		report["core_beats"] = true
 	else:
 		await _solo_apply_mend(unit)
@@ -1313,7 +1314,8 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# Coverage wave: the Utility-Buff family + Mind Control + Piercing Tag share the same
 	# once-per-activation before-attacking slot (data-driven via the primitive layer).
 	await _solo_apply_utility_buffs(unit)
-	await _solo_apply_mind_control(unit)
+	if not report.has("core_beats"):   # H-8: held for the core's one call, paid by `_solo_pay_dangerous` on a refusal
+		await _solo_apply_mind_control(unit)
 	await _solo_apply_piercing_tag(unit)
 	await _solo_apply_precision_tag(unit)
 	_solo_apply_precision_target(unit)
@@ -5125,7 +5127,7 @@ func _solo_ai_core_call(unit: GameUnit, report: Dictionary, target: GameUnit, sh
 
 
 ## One core P4.D-19/37 + H-5: the table pays what the body left to the core (no core call is made, or it refused): the Dangerous
-## test, then the pre-attack beats the guard held back (Mend, Breath Attack, Storm Attack), then the move-through attacks (Strafing, Crossing Attack). A Mend
+## test, then the pre-attack beats the guard held back (Mend, Breath Attack, Mind Control / Fatigue Debuff, Storm Attack), then the move-through attacks (Strafing, Crossing Attack). A Mend
 ## caster is never taken (`cast_chain_clear`), so held casts and a held Mend never meet.
 func _solo_pay_dangerous(unit: GameUnit, report: Dictionary) -> void:
 	var dice := int(report.get("core_dangerous", 0))
@@ -5135,6 +5137,7 @@ func _solo_pay_dangerous(unit: GameUnit, report: Dictionary) -> void:
 	if report.erase("core_beats") and not _solo_activation_unit_gone(unit):
 		await _solo_apply_mend(unit)
 		await _solo_apply_breath_attack(unit)
+		await _solo_apply_mind_control(unit)
 		await _solo_apply_storm_attack(unit)
 	if report.erase("core_through") and not _solo_activation_unit_gone(unit):
 		await _solo_apply_strafing(unit)
@@ -8223,6 +8226,18 @@ func _solo_has_storm(unit: GameUnit) -> bool:
 		for e in RulesRegistry.unit_rules_of_primitive(bu, "Storm Attack"):
 			if not bool(bu.unit_properties.get("storm_used_%s" % str((e as Dictionary)["name"]).to_snake_case(), false)):
 				return true
+	return false
+
+
+## H-8: a living bearer of a Mind Control entry (primitive; Mind Control, Fatigue Debuff) in `unit`'s chain.
+func _solo_has_mind_control(unit: GameUnit) -> bool:
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		chain = chain + unit.get_attached_heroes()
+	for b in chain:
+		var bu := b as GameUnit
+		if bu != null and bu.get_alive_count() > 0 and not RulesRegistry.unit_rules_of_primitive(bu, "Mind Control").is_empty():
+			return true
 	return false
 
 

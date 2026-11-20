@@ -183,3 +183,21 @@ use super::*;
             dx / IN2M
         );
     }
+
+    /// H-8 (Plan H): a supplied tray (the door's) says the table's `_solo_apply_mind_control` lines: the forced test's outcome and
+    /// the shift (a pass says only the outcome). RED: without the sim.rs hunk neither line is said.
+    #[test]
+    fn a_supplied_tray_says_the_tables_mind_control_lines() {
+        let epoch = crate::acts::CURRENT_RULES_EPOCH;
+        let (st, statics) = mind_control_line(epoch);
+        let seams = Seams { rules_epoch: epoch, ..Seams::default() };
+        let said = |face: u8| {
+            let mut next = st.clone();
+            let mut tray = Tray::supplied(vec![vec![face]]);
+            tray_mind_control(&statics, &mut next, 0, seams, &mut tray, &mut ShootResult::default(), Cover::Recorded(None));
+            tray.all_lines().into_iter().map(|l| l.text).filter(|l| l.starts_with("Mind Control")).collect::<Vec<_>>()
+        };
+        assert_eq!(said(1), ["Mind Control: a forces a morale test on b — FAILED",
+            "Mind Control: b fails the morale test — Shaken, moved 6\" in a straight line (away from the marker)"]);
+        assert_eq!(said(6), ["Mind Control: a forces a morale test on b — passed"]);
+    }

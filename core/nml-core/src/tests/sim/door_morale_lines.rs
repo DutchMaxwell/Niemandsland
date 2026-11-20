@@ -70,7 +70,7 @@ use crate::mods::LiveMod;
         (statics[2].model_count, statics[2].ctx.quality, statics[2].quality, statics[2].ctx.morale_rating) = (10, 4, 4, 1);
         (st.morale_bonus[2], statics[2].morale_family) = (2, "Banner".into());
         let mut tray = Tray::supplied(vec![vec![6]]);
-        control_morale_passed(&statics, &mut st, 2, ControlMoraleSource { owner: "Def", rule: "Mind Control" }, seams, &mut tray, &mut ShootResult::default());
+        control_morale_passed(&statics, &mut st, 2, ControlMoraleSource { owner: "Def", rule: "Mind Control", on_target: true }, seams, &mut tray, &mut ShootResult::default());
         let lines: Vec<String> = tray.lines_upto(0).into_iter().map(|l| l.text).collect();
         assert_eq!(lines, [
             "Banner: Def gets no +1 against Mind Control (only shooting or melee)",

@@ -59,7 +59,8 @@ func _digest(units: Array) -> Dictionary:
 		var gu := u as GameUnit
 		var wounds: Array = gu.get_alive_models().map(func(m: ModelInstance) -> int: return m.wounds_current)
 		wounds.sort()
-		out[gu.get_name()] = {"alive": gu.get_alive_count(), "wounds": wounds, "shaken": gu.is_shaken, "fatigued": gu.is_fatigued}
+		var at: Array = gu.get_alive_models().map(func(m: ModelInstance) -> String: return "%.3f,%.3f" % [m.node.global_position.x, m.node.global_position.z])
+		out[gu.get_name()] = {"alive": gu.get_alive_count(), "wounds": wounds, "shaken": gu.is_shaken, "fatigued": gu.is_fatigued, "at": at}
 	return out
 
 
@@ -154,3 +155,21 @@ func test_a_storm_bearer_the_core_takes_storms_once_and_lands_what_the_table_lan
 			assert_array(on["latches"]).override_failure_message("%s: latch %s / %s" % [tag, on["latches"], off["latches"]]).is_equal(off["latches"])
 			stormed += 1 if (off["lines"] as Array).any(func(l: String) -> bool: return l.contains("unleashes the storm")) else 0
 	assert_int(stormed).override_failure_message("no seed stormed: the check proved nothing").is_greater(0)
+
+
+## H-8: a Mind Control bearer (the target is shifted) and a Fatigue Debuff bearer (the target is fatigued), 14 in from the target:
+## every die, the end state (positions included), every battle-log line equal the table's. RED: delete the Mind Control half of the
+## guard (the body forces the test, then the core forces it again from its capture) -> the morale die rolls twice.
+func test_a_mind_control_bearer_the_core_takes_forces_one_test_and_lands_what_the_table_lands() -> void:
+	var failed := 0
+	for entry in [["Mind Control", "jackals"], ["Fatigue Debuff", "daemons_of_war"]]:
+		for s in 8:
+			var on := await _activation(s, true, [], "battle_brothers", entry[0], 7.0, entry[1])
+			var off := await _activation(s, false, [], "battle_brothers", entry[0], 7.0, entry[1])
+			var tag := "%s seed %d" % [entry[0], s]
+			assert_int(int(on["ran"])).override_failure_message("%s: the core did not take the activation" % tag).is_equal(1)
+			assert_array(on["rolls"]).override_failure_message("%s: dice differ: %s / %s" % [tag, on["rolls"], off["rolls"]]).is_equal(off["rolls"])
+			assert_dict(on["digest"]).override_failure_message("%s: end state differs: %s / %s" % [tag, on["digest"], off["digest"]]).is_equal(off["digest"])
+			assert_array(on["lines"]).override_failure_message("%s: lines differ:\n%s\n---\n%s" % [tag, "\n".join(on["lines"]), "\n".join(off["lines"])]).is_equal(off["lines"])
+			failed += 1 if (off["lines"] as Array).any(func(l: String) -> bool: return l.contains("FAILED")) else 0
+	assert_int(failed).override_failure_message("no seed failed the forced test: the check proved nothing").is_greater(0)
