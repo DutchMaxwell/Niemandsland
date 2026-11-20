@@ -7664,6 +7664,19 @@ fn lone_hero_of(state: &State, ti: usize, seams: Seams) -> Option<usize> {
     state.attached[ti].iter().copied().find(|&h| state.alive[h] > 0)
 }
 
+/// The table's executed-move stamp (`_solo_animate_move`): the host's `moved_round`, and from `PENDING_EPOCH_HERO_MOVED_STAMP` the living
+/// joined heroes' too (their models are in the move paths, the stamp goes to the unit of each model).
+pub(crate) fn stamp_moved(state: &mut State, si: usize, hero_attach: bool, rules_epoch: u32) {
+    state.moved_round[si] = state.round;
+    if hero_attach && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_HERO_MOVED_STAMP) {
+        for h in state.attached[si].clone() {
+            if state.alive[h] > 0 {
+                state.moved_round[h] = state.round;
+            }
+        }
+    }
+}
+
 /// `BattleSim._unit_group` battle_sim.gd:528-547 as a membership test — is unit
 /// `oi` part of the group `key_i` moves and ends as? That is `key_i` itself plus
 /// its attached heroes, plus (only when `include_host`) its host. Only the
@@ -10280,7 +10293,7 @@ fn consolidate_after_melee(next: &mut State, statics: &[UnitStatic], cover: Cove
             next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
         }
         // Wave 4 (port-entrenched) — consolidation counts as moving.
-        next.moved_round[winner] = next.round;
+        stamp_moved(next, winner, seams.hero_attach, seams.rules_epoch);
         if let (true, Some((tray, shot))) = (n > 0, dice) {
             shot.log.push(format!("Dangerous terrain: {name} takes one test for the whole unit ({n} dice)"));
             tray.owner_next(Some(winner));
@@ -10760,7 +10773,8 @@ fn resolve_with(
             for u in chain.collect::<Vec<_>>() {
                 next.positions[u].iter_mut().for_each(|p| *p = geom::to_f64(geom::add(geom::to_f32(*p), d)));
             }
-            (flew, moved, next.moved_round[si]) = (true, true, next.round);
+            (flew, moved) = (true, true);
+            stamp_moved(&mut next, si, seams.hero_attach, seams.rules_epoch);
             let line = format!(
                 "Aircraft: {} flies {AIRCRAFT_MOVE_IN:.0}\" straight (heading {:.0}\u{b0})",
                 statics[pi_s].name, (d[2] as f64).atan2(d[0] as f64).to_degrees()
@@ -10819,7 +10833,7 @@ fn resolve_with(
             }
         }
         // Wave 4 (port-entrenched) — every EXECUTED move stamps (main.gd:7786).
-        next.moved_round[si] = next.round;
+        stamp_moved(&mut next, si, seams.hero_attach, seams.rules_epoch);
         for (i, m) in land.movers.iter().enumerate() {
             next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
         }
@@ -10849,7 +10863,7 @@ fn resolve_with(
         && !next.positions[si].is_empty()
     {
         moved = true;
-        next.moved_round[si] = next.round;
+        stamp_moved(&mut next, si, seams.hero_attach, seams.rules_epoch);
         let dest = geom::to_f32(action.dest.unwrap());
         let centre = geom::centre(&next.positions[si]);
         let mut delta = geom::sub(dest, centre);
@@ -10967,7 +10981,7 @@ fn resolve_with(
         }
         next.positions[si] = p.into_iter().take(host_n).collect();
         moved = true;
-        next.moved_round[si] = next.round;
+        stamp_moved(&mut next, si, seams.hero_attach, seams.rules_epoch);
         if let (Some(trails), Cover::Board(t)) = (trails, cover) {
             let land = crate::mv::step::placed_landing(&next, si, t, &trails, band_in, seams.hero_attach, seams.rules_epoch);
             if let (true, Some((_, shot))) = (land.climb_in > 0.0, dice.as_mut()) {
