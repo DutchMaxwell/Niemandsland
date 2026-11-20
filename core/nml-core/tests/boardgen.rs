@@ -3,6 +3,8 @@
 use std::collections::{BTreeSet, HashSet, VecDeque};
 use nml_core::boardgen::{budget, generate, ConnectorKind, Layout, Symmetry, BOARD_IN, DEPLOY_DEPTH_CELLS, GRID, HIGH_PERMILLE, RAISED_PERMILLE};
 
+/// Two cells as (x, z) pairs: one sight line.
+type CellPair = ((usize, usize), (usize, usize));
 const BOTH: [Symmetry; 2] = [Symmetry::Point180, Symmetry::BalancedFree];
 
 fn nbrs(i: usize) -> Vec<usize> {
@@ -74,7 +76,7 @@ fn arteries_are_wide_flat_and_staggered() {
 }
 
 #[test]
-fn budgets_hold_and_sheer_height_stays_within_6_in_over_1000_seeds() {
+fn budgets_hold_and_sheer_height_stays_within_9_in_over_1000_seeds() {
     let (r, h) = (budget(RAISED_PERMILLE), budget(HIGH_PERMILLE));
     let (mut retried, t0) = (0, std::time::Instant::now());
     for seed in 1..=500 {
@@ -84,8 +86,8 @@ fn budgets_hold_and_sheer_height_stays_within_6_in_over_1000_seeds() {
             assert!(l.problems().is_empty(), "seed {seed} {sym:?} attempt {}: {:?}\n{}", l.attempt, l.problems(), l.to_ascii());
             assert!((r.0..=r.1).contains(&l.raised()), "seed {seed}: raised {}", l.raised());
             assert!((h.0..=h.1).contains(&l.high()), "seed {seed}: high {}", l.high());
-            assert!(l.cells.iter().all(|c| c.level <= 2 && (c.level < 2 || c.deploy == 0)), "level 2 in a band or above 2");
-            assert!(l.max_drop_in() <= 6, "seed {seed}: sheer drop {} in", l.max_drop_in());
+            assert!(l.cells.iter().all(|c| c.level <= 3 && (c.level < 2 || c.deploy == 0)), "level 2 or 3 in a band, or above 3");
+            assert!(l.max_drop_in() <= 9, "seed {seed}: sheer drop {} in", l.max_drop_in());
         }
     }
     eprintln!("1000 boards in {:?}, {retried} needed a later sub-seed", t0.elapsed());
@@ -157,7 +159,8 @@ fn balanced_free_has_equal_halves_but_is_not_a_mirror() {
         let l = generate(seed, Symmetry::BalancedFree);
         let half = |lo: usize, f: &dyn Fn(u8) -> bool| l.cells[lo..lo + 128].iter().filter(|c| f(c.level)).count();
         assert_eq!(half(0, &|v| v >= 1), half(128, &|v| v >= 1), "seed {seed}: raised area per half");
-        assert_eq!(half(0, &|v| v == 2), half(128, &|v| v == 2), "seed {seed}: level-2 area per half");
+        assert_eq!(half(0, &|v| v >= 2), half(128, &|v| v >= 2), "seed {seed}: level-2 area per half");
+        assert_eq!(half(0, &|v| v == 3), half(128, &|v| v == 3), "seed {seed}: tower area per half");
         mirrored += usize::from((0..256).all(|i| l.cells[i].level == l.cells[255 - i].level));
     }
     assert!(mirrored <= 10, "{mirrored} of 100 free boards are mirror images");
@@ -174,6 +177,13 @@ fn the_checks_can_fail() {
     no_ways.connectors.clear();
     assert!(no_ways.problems().contains(&"board is not one connected walkable area"));
     assert!(reach(&no_ways, 1).iter().any(|&s| !s), "the test's own walk must see the cut too");
+    let mut flat_towers = good.clone();
+    flat_towers.cells.iter_mut().filter(|c| c.level == 3).for_each(|c| c.level = 2);
+    assert!(flat_towers.problems().contains(&"level-3 area outside its budget"), "a board without towers misses the tower budget");
+    let mut cut_towers = good.clone();
+    let tower_cells: Vec<_> = (0..256).filter(|&i| good.cells[i].level == 3).collect();
+    cut_towers.connectors.retain(|c| !tower_cells.contains(&usize::from(c.high)));
+    assert!(reach(&cut_towers, 1).iter().zip(&cut_towers.cells).any(|(&s, c)| !s && c.level == 3), "the test's own walk must see towers without a ladder");
     let mut no_ascents = good.clone();
     let ground = |l: &Layout, c: &nml_core::boardgen::Connector| l.cells[usize::from(c.low)].level == 0;
     let kept: Vec<_> = no_ascents.connectors.iter().filter(|c| !ground(&good, c)).copied().collect();
@@ -205,4 +215,67 @@ fn json_round_trips_and_ascii_has_one_line_per_row() {
     let art = l.to_ascii();
     assert_eq!(art.lines().count(), 16);
     assert!(art.lines().all(|r| r.chars().count() == 16));
+}
+
+/// Share of eye-to-eye rays a tier stops, over every cell pair `pairs(l)` offers. Eyes are 1.25 in above the floor they
+/// stand on; `cap` flattens every level above it (3 -> 2 gives the board as it was before the towers).
+fn blocked_share(l: &Layout, cap: u8, pairs: &[CellPair]) -> f64 {
+    let h = |x: f64, z: f64| f64::from(nml_core::boardgen::LEVEL_IN[usize::from(l.cell((x / 3.0) as usize, (z / 3.0) as usize).level.min(cap))]);
+    let blocked = pairs.iter().filter(|&&((x1, z1), (x2, z2))| {
+        let (a, b) = ((x1 as f64 * 3.0 + 1.5, z1 as f64 * 3.0 + 1.5), (x2 as f64 * 3.0 + 1.5, z2 as f64 * 3.0 + 1.5));
+        let (ya, yb) = (h(a.0, a.1) + 1.25, h(b.0, b.1) + 1.25);
+        (1..100).any(|k| { let t = f64::from(k) / 100.0; h(a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t) > ya + (yb - ya) * t })
+    }).count();
+    blocked as f64 / pairs.len().max(1) as f64
+}
+
+/// Band 1 row 1 against band 2 row 14, every column pair: the sight lines of the opening turn.
+fn band_pairs() -> Vec<CellPair> { (0..GRID).flat_map(|x1| (0..GRID).map(move |x2| ((x1, 1), (x2, 14)))).collect() }
+/// Every pair of level-2 roof cells (the towers themselves are no endpoints): the roof-top duels.
+fn roof_pairs(l: &Layout) -> Vec<CellPair> {
+    let roofs: Vec<_> = l.cells.iter().filter(|c| c.level == 2).map(|c| (c.x, c.z)).collect();
+    roofs.iter().enumerate().flat_map(|(i, &a)| roofs[i + 1..].iter().map(move |&b| (a, b))).collect()
+}
+
+#[test]
+fn census_of_towers_and_sight() {
+    let (mut towers, mut tiers, mut n) = (Vec::new(), [0usize; 4], 0.0);
+    let (mut band, mut roof) = ([0.0, 0.0], [0.0, 0.0]);
+    for seed in 1..=500 {
+        for sym in BOTH {
+            let l = generate(seed, sym);
+            towers.push(l.towers());
+            for c in &l.cells { tiers[usize::from(c.level)] += 1; }
+            n += 1.0;
+            for (k, cap) in [3u8, 2].into_iter().enumerate() {
+                band[k] += blocked_share(&l, cap, &band_pairs());
+                roof[k] += blocked_share(&l, cap, &roof_pairs(&l));
+            }
+        }
+    }
+    let share = tiers.map(|t| t as f64 / (n * 256.0));
+    eprintln!("tier shares {share:?}, tower cells {:?}..{:?}, band rays blocked {:.4} (before towers {:.4}), roof rays blocked {:.4} (before towers {:.4})",
+        towers.iter().min(), towers.iter().max(), band[0] / n, band[1] / n, roof[0] / n, roof[1] / n);
+    assert!((0.008..=0.03).contains(&share[3]), "towers are rare: {:.4} of all cells", share[3]);
+    assert!(towers.iter().all(|&t| (2..=6).contains(&t)), "a board has 2 to 6 tower cells");
+    assert!(band[0] / n <= band[1] / n + 0.01, "towers must not dim the opening-turn sight lines: {:.4} vs {:.4}", band[0] / n, band[1] / n);
+    assert!(roof[0] / n <= 0.30, "towers hide at most 30 % of roof-to-roof pairs: {:.4}", roof[0] / n);
+}
+
+#[test]
+fn a_tower_is_nine_inches_up_a_ladder_chain_from_the_ground_and_never_in_a_band() {
+    let mut boards_with_a_tower_ladder = 0;
+    for seed in 1..=200 {
+        for sym in BOTH {
+            let l = generate(seed, sym);
+            let lv = |i: u16| l.cells[usize::from(i)].level;
+            assert!((1..=3).contains(&(l.towers() / 2)), "seed {seed} {sym:?}: {} tower cells", l.towers());
+            assert!(l.cells.iter().filter(|c| c.level == 3).all(|c| c.deploy == 0), "seed {seed}: a tower in a deployment band");
+            let top: Vec<_> = l.connectors.iter().filter(|c| lv(c.high) == 3).collect();
+            assert!(top.iter().all(|c| lv(c.low) == 2), "seed {seed}: a 9 in ladder must start at 6 in");
+            boards_with_a_tower_ladder += usize::from(!top.is_empty());
+            assert!((0..2).all(|p| reach(&l, p + 1).iter().zip(&l.cells).all(|(&seen, c)| seen || c.level < 3)), "seed {seed}: a tower is cut off");
+        }
+    }
+    assert_eq!(boards_with_a_tower_ladder, 400, "every board with towers has a ladder up to them");
 }

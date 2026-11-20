@@ -8553,7 +8553,8 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
     let name = |u: usize| statics[state.roster.profile[u]].name.as_str();
     let standing_idx: Vec<usize> = c.targets.iter().filter_map(|k| state.roster.index.get(k.as_str()).copied()).filter(|&t| state.alive[t] > 0).collect();
     // CC-6a hazard 2: a record placed by an earlier cast in the same activation was not present at activation start;
-    // re-check standing targets of a damage spell before rolling its die.
+    // re-check standing targets of a damage spell before rolling its die. CC-13e: `step_activation` refuses the case at activation
+    // start (`earlier_record_break`), so this stays the guard for a direct caller.
     if statics[state.roster.profile[ci]].spells.iter().any(|s| s.name == c.spell && s.effect_kind == "damage") {
         if let Some(&t) = standing_idx.iter().find(|&&t| !crate::activation::damage_target_plain(statics, state, t)) {
             tray.note_cast_refused(c.seq, format!("cast {}: {} meets {} with a rule the core does not say for spell damage yet", c.seq, name(t), c.spell));
@@ -8661,6 +8662,14 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
     }
 }
 
+/// CC-8b / CC-13e: a hit of this buff / debuff spell leaves nothing on the board: neither a non-zero modifier nor a grant (the table
+/// announces it and places the token only). The one predicate `tray_spell_effect` and the activation's static hazard-2 check share.
+pub(crate) fn spell_effect_less(spell: &Spell) -> bool {
+    let m = spell.modifier;
+    let parts = (m.hit_mod as i64, m.def_mod as i64, m.casting_mod as i64, m.morale_mod as i64, m.range_in as i64, m.advance_in as i64, m.rush_in as i64);
+    spell.grants_rule.is_empty() && (!m.present || parts == (0, 0, 0, 0, 0, 0, 0))
+}
+
 /// CC-8b: a buff or debuff spell's effect on every standing target (`_solo_record_spell_mod` main.gd:6078). Builds the
 /// table's `PlainBuff` shape and converts it through `PlainBuff::to_live_mod` (the capture's own conversion), so the
 /// core's `LiveMod` equals what capturing the landed table record produces. A spell with neither a non-zero modifier nor a
@@ -8668,11 +8677,8 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
 /// buff / debuff cast, effect-less ones included, is also named in `State::cast_buffs` (the delta's `buffs_gained`).
 fn tray_spell_effect(state: &mut State, targets: &[usize], c: &CastInput, spell: &Spell, rules_epoch: u32) {
     let m = spell.modifier;
-    let (hit, def, cast, morale, range, adv, rush) = (
-        m.hit_mod as i64, m.def_mod as i64, m.casting_mod as i64, m.morale_mod as i64,
-        m.range_in as i64, m.advance_in as i64, m.rush_in as i64,
-    );
-    let effect_less = spell.grants_rule.is_empty() && (!m.present || (hit, def, cast, morale, range, adv, rush) == (0, 0, 0, 0, 0, 0, 0));
+    let (hit, def, cast, morale, range) = (m.hit_mod as i64, m.def_mod as i64, m.casting_mod as i64, m.morale_mod as i64, m.range_in as i64);
+    let effect_less = spell_effect_less(spell);
     let rec = crate::io::PlainBuff {
         spell: spell.name.clone(),
         hit_mod: hit,

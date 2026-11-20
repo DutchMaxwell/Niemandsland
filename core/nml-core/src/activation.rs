@@ -348,9 +348,27 @@ fn cast_break(statics: &[UnitStatic], state: &State, left: &mut [i64], c: &CastI
         left[i] -= n;
     }
     if spell.effect_kind == "damage" {
-        return damage_break(statics, state, c, spell).map(|why| format!("cast {}: {why}", c.seq));
+        return damage_break(statics, state, c, spell).map(|why| format!("cast {}: {why}", c.seq)).or_else(|| earlier_record_break(statics, state, c, t));
     }
     None
+}
+
+/// CC-13e (hazard 2, seen at activation start): a damage cast whose standing target - or a unit joined to it - is a target of an EARLIER
+/// cast of the same transcript whose spell places a record (a non-damage spell with a modifier or a grant). `sim::tray_cast` would refuse
+/// it at resolution, after that earlier cast's die was thrown and the rest of the activation lost; here it is refused before any die, so
+/// the table resolves all the casts in its own order. Conservative: the earlier cast may fail its die and place nothing.
+fn earlier_record_break(statics: &[UnitStatic], state: &State, c: &CastInput, t: &[Input]) -> Option<String> {
+    let places = |e: &CastInput| state.roster.index.get(e.caster.as_str()).is_some_and(|&ci| {
+        statics[state.roster.profile[ci]].spells.iter().any(|s| s.name == e.spell && s.effect_kind != "damage" && !crate::sim::spell_effect_less(s))
+    });
+    let placed: Vec<(i64, usize)> = t.iter().filter_map(|x| if let Input::Cast(e) = x { Some(e) } else { None }).filter(|e| e.seq < c.seq && places(e))
+        .flat_map(|e| e.targets.iter().filter_map(|k| state.roster.index.get(k.as_str()).map(|&u| (e.seq, u)))).collect();
+    let spell = &c.spell;
+    c.targets.iter().filter_map(|k| state.roster.index.get(k.as_str()).copied()).filter(|&u| state.alive[u] > 0).find_map(|u| {
+        let chain = std::iter::once(u).chain(state.attached_to[u]).chain(state.attached[u].iter().copied());
+        let (seq, _) = chain.filter_map(|m| placed.iter().find(|p| p.1 == m)).next()?;
+        Some(format!("cast {}: {} meets {spell} after cast {seq} placed a record on it or its joined unit (the core does not say that for spell damage yet)", c.seq, statics[state.roster.profile[u]].name))
+    })
 }
 
 /// CC-6a/8b: whether target `t` carries no rule or live record that moves its save or says a line the core lacks for
@@ -1647,7 +1665,7 @@ mod tests {
         st.shaken[1] = true;
         let cells = vec![[16.0, 14.0, DANGEROUS as f64], [16.0, 15.0, DANGEROUS as f64]];
         let cell_params = CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: INCHES_TO_METERS };
-        let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params });
+        let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params, ..Default::default() });
         let t = vec![Begin, intent(HOLD, None), Input::Cast(CastInput { base: 4, threshold: 1, ..bolt(0) })];
         let first = step_activation(&statics, &st, "a", &board, Seams { dangerous_end_morale: true, ..seams() }, &t, true);
         assert!(matches!(&first, ActStep::NeedRoll { kind: "dangerous", owner_key, count: 2, .. } if owner_key == "a"), "the Dangerous test first, named for its count-the-1s line: {first:?}");
@@ -1830,7 +1848,7 @@ mod tests {
         Rc::make_mut(&mut st.radii)[0] = vec![INCHES_TO_METERS / 2.0; 2];
         let cells = vec![[16.0, 14.0, DANGEROUS as f64], [16.0, 15.0, DANGEROUS as f64]];
         let cell_params = CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: INCHES_TO_METERS };
-        let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params });
+        let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params, ..Default::default() });
         let ask = |t: &[Input]| step_activation(&statics, &st, "a", &board, Seams { dangerous_end_morale: true, ..seams() }, t, true);
         let start = vec![Begin, intent(HOLD, Some("b"))];
         assert!(matches!(ask(&start), ActStep::NeedRoll { owner_key, .. } if owner_key == "a"), "fixture: the Dangerous test is owed first");
@@ -2415,7 +2433,7 @@ mod tests {
         st2.casts = vec![1, 1, 0, 0];
         let cells = vec![[16.0, 14.0, DANGEROUS as f64], [16.0, 15.0, DANGEROUS as f64]];
         let cell_params = CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: INCHES_TO_METERS };
-        let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params });
+        let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params, ..Default::default() });
         let mut t2 = vec![
             Begin, intent(HOLD, Some("b")),
             Input::Cast(CastInput { seq: 0, caster: "a".into(), ..test_bolt() }),
@@ -3075,43 +3093,42 @@ mod tests {
         assert_eq!((&*state.buffs[0][0].grants_rule, &*state.buffs[1][0].grants_rule), ("Fearless", "Fearless"));
     }
 
-    /// CC-6a hazard 2: a record placed by an earlier cast in the SAME activation is not present at activation start, so a
-    /// following damage cast re-checks its standing targets at resolution and is refused (without asking its die) when an
-    /// earlier cast landed a record on the target or its joined chain.
+    /// CC-6a hazard 2, CC-13e: a record an earlier cast of the SAME activation would place is not on the board at activation start,
+    /// so a following damage cast on that target (or its joined unit) used to be refused at resolution, after the earlier cast's
+    /// die. `earlier_record_break` refuses it at its own input before any die, whatever the earlier die shows.
     #[test]
-    fn cc8b_damage_cast_rechecks_target_after_earlier_cast_in_same_activation() {
+    fn cc13e_damage_cast_after_an_earlier_record_is_refused_before_any_die() {
         use crate::rules::{Spell, SpellModifier};
         let (mut st, mut statics) = bolt_board(2, &[], 6);
         st.casts = vec![4, 0, 0, 0];
         let debuff = Spell { name: "Withering".into(), effect_kind: "debuff".into(), threshold: 1, target_count: 1, modifier: SpellModifier { present: true, def_mod: -1.0, ..Default::default() }, ..Default::default() };
-        statics[0].spells.push(debuff);
-        let c0 = CastInput { seq: 0, spell: "Withering".into(), targets: vec!["b".into()], base: 4, threshold: 1, once: false, ..bolt(0) };
-        let c1 = CastInput { seq: 1, ..test_bolt() };
-        let base_t = vec![Begin, intent(HOLD, None), Input::Cast(c0.clone()), Input::Cast(c1.clone())];
-        // Before Cast 0 rolls: Foe is still plain -> asks Cast 0's die (not statically refused).
-        assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &base_t, true), ActStep::NeedRoll { kind: "cast", target: 4, .. }));
-        // If Cast 0 FAILS ([1]): Foe stays plain -> Cast 1 asks its die and resolves normally.
-        let mut fail_t = base_t.clone();
-        fail_t.push(Faces(vec![1]));
-        assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &fail_t, true), ActStep::NeedRoll { kind: "cast", target: 2, .. }), "Cast 0 failed: Cast 1 proceeds");
-        // If Cast 0 SUCCEEDS ([6]): Withering lands on Foe -> Cast 1 is REFUSED at index 3 before asking its die.
-        let mut hit_t = base_t.clone();
-        hit_t.push(Faces(vec![6]));
-        match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &hit_t, true) {
-            ActStep::Refused { index: 3, reason } => assert_eq!(reason, "cast 1: Foe meets Test Bolt with a rule the core does not say for spell damage yet"),
-            other => panic!("expected Cast 1 refused after Cast 0 placed a record on Foe, got {other:?}"),
+        let hollow = Spell { name: "Hollow".into(), effect_kind: "debuff".into(), threshold: 1, target_count: 1, ..Default::default() };
+        statics[0].spells.extend([debuff, hollow]);
+        let first = |spell: &str, target: &str| CastInput { seq: 0, spell: spell.into(), targets: vec![target.into()], base: 4, threshold: 1, once: false, ..bolt(0) };
+        let run = |c0: CastInput, c1: CastInput, st: &State, faces: Option<u8>| {
+            let mut t = vec![Begin, intent(HOLD, None), Input::Cast(c0), Input::Cast(c1)];
+            t.extend(faces.map(|f| Faces(vec![f])));
+            step_activation(&statics, st, "a", &Terrain::default(), seams(), &t, true)
+        };
+        let why = "cast 1: Foe meets Test Bolt after cast 0 placed a record on it or its joined unit (the core does not say that for spell damage yet)";
+        // The earlier cast would put a debuff on Foe: the damage cast is refused at its input (index 3), no die asked, and the same
+        // whatever the earlier die shows (Cast 0 is not even rolled).
+        for faces in [None, Some(6), Some(1)] {
+            match run(first("Withering", "b"), CastInput { seq: 1, ..test_bolt() }, &st, faces) {
+                ActStep::Refused { index: 3, reason } => assert_eq!(reason, why, "faces {faces:?}"),
+                other => panic!("faces {faces:?}: expected Cast 1 refused at start, got {other:?}"),
+            }
         }
-        // Control: Cast 0 lands on "a" (self, not Foe's chain) -> Cast 1 on "b" is NOT refused and asks its die.
-        let c0_self = CastInput { targets: vec!["a".into()], ..c0 };
-        let self_t = vec![Begin, intent(HOLD, None), Input::Cast(c0_self), Input::Cast(c1), Faces(vec![6])];
-        assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &self_t, true), ActStep::NeedRoll { kind: "cast", target: 2, .. }), "buff on self does not block damage on Foe");
-        // Joined hero: Cast 0 lands on host "b", Cast 1 targets attached hero "bh" -> Cast 1 is refused at index 3.
+        // Controls: a buff on self (not Foe's chain), an effect-less debuff on Foe (places nothing) and a damage cast first: the earlier die is asked.
+        for c0 in [first("Withering", "a"), first("Hollow", "b"), CastInput { seq: 0, ..test_bolt() }] {
+            assert!(matches!(run(c0, CastInput { seq: 1, ..test_bolt() }, &st, None), ActStep::NeedRoll { kind: "cast", .. }), "not refused");
+        }
+        // Joined hero: the debuff lands on host "b", the damage cast targets attached hero "bh": refused too.
         st.attached_to = Rc::new(vec![None, None, None, Some(2)]);
         st.attached = Rc::new(vec![vec![], vec![], vec![3], vec![]]);
         (st.alive[3], st.wounds[3], st.positions[3]) = (1, vec![1], vec![[8.0 * INCHES_TO_METERS, 0.0, 0.0]]);
-        let c1_hero = CastInput { seq: 1, targets: vec!["bh".into()], ..test_bolt() };
-        let hero_t = vec![Begin, intent(HOLD, None), Input::Cast(CastInput { seq: 0, spell: "Withering".into(), targets: vec!["b".into()], base: 4, threshold: 1, once: false, ..bolt(0) }), Input::Cast(c1_hero), Faces(vec![6])];
-        assert!(matches!(step_activation(&statics, &st, "a", &Terrain::default(), seams(), &hero_t, true), ActStep::Refused { index: 3, reason } if reason == "cast 1: bh meets Test Bolt with a rule the core does not say for spell damage yet"));
+        let hero = CastInput { seq: 1, targets: vec!["bh".into()], ..test_bolt() };
+        assert!(matches!(run(first("Withering", "b"), hero, &st, None), ActStep::Refused { index: 3, reason } if reason.starts_with("cast 1: bh meets Test Bolt after cast 0")));
     }
 
     // ---- CC-9a: NeedChoice carries lines and landings ----
@@ -3129,7 +3146,7 @@ mod tests {
         Rc::make_mut(&mut st.radii)[0] = vec![INCHES_TO_METERS / 2.0; 2];
         let cells = vec![[16.0, 14.0, DANGEROUS as f64], [16.0, 15.0, DANGEROUS as f64]];
         let cell_params = CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: INCHES_TO_METERS };
-        let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params });
+        let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params, ..Default::default() });
         let mut t = vec![Begin, intent(HOLD, Some("b")), Input::Choice { id: ALLOC_ID.into(), option: String::new() }];
         let mut step_n = 0;
         let ask = loop {
@@ -3824,6 +3841,7 @@ mod tests {
             containers: Vec::new(),
             walls: vec![e(3.0, -18.0, 6.0, -18.0), e(6.0, -18.0, 6.0, 18.0), e(6.0, 18.0, 3.0, 18.0), e(3.0, 18.0, 3.0, -18.0)],
             cell_params: CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: INCHES_TO_METERS },
+            ..Default::default()
         })
     }
 
@@ -3852,7 +3870,7 @@ mod tests {
         use crate::terrain::{CellParams, PlainTerrain, FOREST};
         let cells = vec![[16.0, 14.0, FOREST as f64], [16.0, 15.0, FOREST as f64]];
         let cell_params = CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: INCHES_TO_METERS };
-        Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params })
+        Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params, ..Default::default() })
     }
 
     /// RUSH: model A's trail clips the forest, so EVERY model is capped at 6" and B's 8" in the open
@@ -3932,7 +3950,7 @@ mod tests {
         Rc::make_mut(&mut st.radii)[0] = vec![INCHES_TO_METERS / 2.0; 2];
         let cells = vec![[16.0, 14.0, DANGEROUS as f64], [16.0, 15.0, DANGEROUS as f64]];
         let cell_params = CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: INCHES_TO_METERS };
-        let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params });
+        let board = Terrain::build(&PlainTerrain { cells, sandbox: vec![], pieces: vec![], containers: Vec::new(), walls: vec![], cell_params, ..Default::default() });
         let seams = Seams { dangerous_end_morale: true, ..seams() };
         let (mut t, mut asked) = (vec![Begin, intent(HOLD, Some("b"))], Vec::new());
         while let ActStep::NeedRoll { faces, kind, owner, owner_key, .. } = step_activation(&statics, &st, "a", &board, seams, &t, true) {

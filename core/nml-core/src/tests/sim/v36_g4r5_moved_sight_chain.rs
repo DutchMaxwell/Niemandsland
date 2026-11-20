@@ -39,6 +39,7 @@ fn wood_board() -> crate::terrain::Terrain {
         containers: Vec::new(),
         walls: vec![],
         cell_params: CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: IN2M },
+        ..Default::default()
     })
 }
 

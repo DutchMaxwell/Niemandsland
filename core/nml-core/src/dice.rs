@@ -1742,6 +1742,21 @@ pub(crate) fn resolve_volley_with_pick_label(
         // the same grant the Regeneration split below already reads. The
         // rules-must-log line names the grant the one time the clamp actually
         // bites for it; a weapon's own flag stays silent as before.
+        // The table's `_solo_unstoppable_fold` names the fold of a weapon's own Unstoppable, one line per weapon (the granted mark and aura
+        // say theirs below). Same three shapes and wording; below EPOCH_73_V36 `own` is 0, so only the first shape can occur.
+        if p.unstoppable {
+            let rest = m - own;
+            let fold = if own >= 0 {
+                (rest < 0).then(|| "Unstoppable: negative to-hit modifiers ignored".to_string())
+            } else if rest >= 0 {
+                Some(format!("Unstoppable: own rules' {own} to hit kept"))
+            } else {
+                Some(format!("Unstoppable: {rest} to hit from other sources ignored, own rules' {own} kept"))
+            };
+            if let Some(text) = fold {
+                say_rule(tray, "unstoppable_fold", att.side, || text);
+            }
+        }
         if (p.unstoppable || att.unstoppable_mark || att.unstoppable_aura) && m - own < 0 {
             if att.unstoppable_mark {
                 out.log.push(format!(
@@ -2190,6 +2205,9 @@ pub(crate) fn resolve_volley_with_pick_label(
                 } else if d > 0 && !c.name.is_empty() {
                     out.log.push(format!("{}: AP(+{}) on {}'s volley{}", c.name, d, sh.owner, cond_ap_why(&c.condition)));
                     say_rule(tray, "cond_ap", att.side, || format!("{}: AP(+{}) against {def_owner}{}", c.name, d, cond_ap_why(&c.condition)));
+                } else if d > 0 && !c.say_name.is_empty() {
+                    // H-17a: the generic pass's rules (Disintegrate, Tear, ...) say the table's line; `out.log` stays as it was.
+                    say_rule(tray, "cond_ap", att.side, || format!("{}: AP(+{}) against {def_owner}", c.say_name, d));
                 }
             }
             // Wave 2 — the Slayer mark's granted conditional (epoch-gated).

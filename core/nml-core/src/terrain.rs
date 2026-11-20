@@ -109,7 +109,10 @@ pub struct ContainerObb {
 }
 
 /// `TerrainOverlay`'s grid geometry — act_recorder.gd:150-153.
-#[derive(Debug, Clone, Deserialize)]
+///
+/// `Default` (all zeros) exists only so `PlainTerrain` can derive it for the `..Default::default()` filler of a
+/// literal; a board always states its own `cell_params`.
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct CellParams {
     pub table_size_feet: [f64; 2],
     pub grid_rotation_degrees: f64,
@@ -117,8 +120,29 @@ pub struct CellParams {
     pub inches_to_meters: f64,
 }
 
+/// Heightfield plan step 1 - a generated tier board as the header carries it (`boardgen::Layout`, materialised): one
+/// level per (x, z), row-major, board-centred, grid yaw 0. Data only; nothing reads it yet.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct TierGrid {
+    pub nx: u16,
+    pub nz: u16,
+    /// Edge of one tier cell, inches.
+    pub cell_in: f64,
+    /// Height of each cell above the table, inches; `nx * nz` entries, row-major.
+    pub level_in: Vec<f64>,
+    /// `[low, high]` cell indices of every ladder (one level apart).
+    #[serde(default)]
+    pub ladders: Vec<[u16; 2]>,
+    /// `[low, high]` cell indices of every stair (one level apart).
+    #[serde(default)]
+    pub stairs: Vec<[u16; 2]>,
+}
+
 /// The header's `"terrain"` object, deserialized as written.
-#[derive(Debug, Clone, Deserialize)]
+///
+/// Build a literal with `..Default::default()` after the fields you set (`cell_params` always among them): a field
+/// added later then does not break it.
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct PlainTerrain {
     /// `[cx, cz, type]` triples — act_recorder.gd:137-139.
     pub cells: Vec<[f64; 3]>,
@@ -141,6 +165,10 @@ pub struct PlainTerrain {
     /// F-CONT — the header's `containers` (written from `EPOCH_73_V36`; absent from every older recording).
     #[serde(default)]
     pub containers: Vec<ContainerObb>,
+    /// Heightfield plan step 1 - the generated tier board, absent from every header written so far = today's flat
+    /// behaviour (`None`).
+    #[serde(default)]
+    pub tiers: Option<TierGrid>,
     pub cell_params: CellParams,
 }
 
@@ -788,11 +816,52 @@ mod tests {
                 grid_size_inches: 3.0,
                 inches_to_meters: IN2M,
             },
+            ..Default::default()
         })
     }
 
     fn at(x_in: f64, z_in: f64) -> V3 {
         [(x_in * IN2M) as f32, 0.0, (z_in * IN2M) as f32]
+    }
+
+    /// A header's `terrain` object as the recorder writes it, with or without the heightfield key.
+    fn header(tiers: Option<serde_json::Value>) -> serde_json::Value {
+        let mut h = serde_json::json!({"cells": [[0.0, 0.0, RUINS as f64]], "sandbox": [], "walls": [],
+            "cell_params": {"table_size_feet": [6.0, 4.0], "grid_rotation_degrees": 0.0, "grid_size_inches": 3.0,
+                "inches_to_meters": IN2M}});
+        if let Some(t) = tiers {
+            h["tiers"] = t;
+        }
+        h
+    }
+
+    /// Heightfield plan step 1: the tier grid rides in the header and comes back as written. Red before the step:
+    /// `PlainTerrain` had no `tiers` field, the test did not compile.
+    #[test]
+    fn a_header_with_tiers_keeps_them() {
+        let tiers = serde_json::json!({"nx": 2, "nz": 2, "cell_in": 3.0, "level_in": [0.0, 3.0, 6.0, 3.0],
+            "ladders": [[0, 1]], "stairs": [[1, 2]]});
+        let p: PlainTerrain = serde_json::from_value(header(Some(tiers))).unwrap();
+        let want = TierGrid { nx: 2, nz: 2, cell_in: 3.0, level_in: vec![0.0, 3.0, 6.0, 3.0], ladders: vec![[0, 1]], stairs: vec![[1, 2]] };
+        assert_eq!(p.tiers, Some(want));
+        // a grid without connectors is a legal board: both lists default to empty
+        let bare = serde_json::json!({"nx": 1, "nz": 1, "cell_in": 3.0, "level_in": [0.0]});
+        let q: PlainTerrain = serde_json::from_value(header(Some(bare))).unwrap();
+        assert!(q.tiers.is_some_and(|t| t.ladders.is_empty() && t.stairs.is_empty()));
+    }
+
+    /// Every header written so far has no `tiers` key: it reads as `None`, and the data is inert at this step - a board
+    /// built with a grid answers every terrain lookup like the same board without one.
+    #[test]
+    fn a_header_without_tiers_is_today_and_tiers_change_no_lookup_yet() {
+        let flat: PlainTerrain = serde_json::from_value(header(None)).unwrap();
+        assert!(flat.tiers.is_none());
+        let tiers = serde_json::json!({"nx": 1, "nz": 1, "cell_in": 3.0, "level_in": [6.0]});
+        let high: PlainTerrain = serde_json::from_value(header(Some(tiers))).unwrap();
+        let (a, b) = (Terrain::build(&flat), Terrain::build(&high));
+        for p in [(0.0, 0.0), (1.5, 1.5), (-4.0, 7.0), (20.0, -9.0)] {
+            assert_eq!(a.type_at(at(p.0, p.1)), b.type_at(at(p.0, p.1)));
+        }
     }
 
     /// `map_layout._calculate_grid_dimensions()`: the 6x4 ft diagonal is 86.53",

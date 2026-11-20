@@ -272,7 +272,7 @@ func test_a_missing_or_malformed_file_is_the_empty_slice() -> void:
 ## The deny file refuses its listed primitives (a Teleport unit) and takes a unit whose
 ## rules are automated and not listed (AP, Tough); a name no map knows is taken (unmapped_inert). The list only shrinks: CEILING.
 ## RED: read PATH regardless of the switch -> the first assertion reads mode "allow".
-const DENY_CEILING := 12   # DLINES train 4 (DS-GHITN): the to-hit note (6 primitives: Artillery, Stealth, Evasive, Aircraft, Shot Modifier, Instinctive) and Takedown left with their lines (19 -> 12). DLINES3 train 3: Shred, Self-Repair and Resistance left with their lines (19 -> 16), then the probes at 1500 / 2000 / 3000 pts showed three more families whose line the door omits: Armor, Disintegrate, Tear (+3 -> 19). DLINES2 train 2: Ranged Shrouding, Lacerate, Shielded, Fortified and Regeneration left with their lines (24 -> 19). 19.11.: +15 primitives in eight `rule_line` groups (a rule whose table line the door omits stays on the table until the line exists, dlines_gap rows 2, 3, 7, 13, 15, 16, 17, 21), they leave group by group with their lines. BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
+const DENY_CEILING := 10   # H-17a (Plan H): Disintegrate and Tear left with their line, the core says `<rule>: AP(+N) against <U>` (12 -> 10). DLINES train 4 (DS-GHITN): the to-hit note (6 primitives: Artillery, Stealth, Evasive, Aircraft, Shot Modifier, Instinctive) and Takedown left with their lines (19 -> 12). DLINES3 train 3: Shred, Self-Repair and Resistance left with their lines (19 -> 16), then the probes at 1500 / 2000 / 3000 pts showed three more families whose line the door omits: Armor, Disintegrate, Tear (+3 -> 19). DLINES2 train 2: Ranged Shrouding, Lacerate, Shielded, Fortified and Regeneration left with their lines (24 -> 19). 19.11.: +15 primitives in eight `rule_line` groups (a rule whose table line the door omits stays on the table until the line exists, dlines_gap rows 2, 3, 7, 13, 15, 16, 17, 21), they leave group by group with their lines. BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
 
 
 func test_the_deny_switch_reads_the_measured_deny_list() -> void:
@@ -286,10 +286,12 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	assert_array(CoreSlice.refusals(grounded)).is_equal(["unit_rule:Grounded Protection"])
 	assert_bool(CoreSlice.takes(_unit(["Regeneration"], [["AP(1)"]]))).is_true()
 	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
-	# A rule refused by NAME where its primitive is shared (Changebound = Stealth; plain Stealth stays taken).
+	# DS-STEALTH: Changebound (primitive Stealth) left the deny names; the dice are equal (stealth_target_door_test.gd), the one difference sits behind a refused shooter.
 	var changed := _unit(["Changebound"], [])
 	changed.unit_properties["faction_folder"] = "change_disciples"   # the faction whose map entry gives it primitive Stealth
-	assert_array(CoreSlice.refusals(changed)).is_equal(["unit_rule:Changebound"])
+	assert_array(CoreSlice.refusals(changed, true)).is_empty()
+	# A rule still refused by NAME (an item whose Defense bonus differs between the halves).
+	assert_array(CoreSlice.refusals(_unit(["Gleaming Armour"], []))).is_equal(["unit_rule:Gleaming Armour"])
 	var teleporter := _unit(["Teleport"], [])
 	teleporter.unit_properties["faction_folder"] = "elven_jesters"   # a faction whose map gives Teleport its primitive
 	assert_array(CoreSlice.refusals(teleporter)).is_equal(["unit_rule:Teleport"])
@@ -320,7 +322,7 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 	CoreSlice.reset_cache()
 	var rep: Array = [
 		["Grounded Protection", "soul_snatcher_cults"], ["Protection Feat", "alien_hives"],
-		["Armor", ""], ["Disintegrate", "custodian_brothers"], ["Tear", "custodian_brothers"],
+		["Armor", ""],
 	]
 	for row in rep:
 		var as_unit := _unit([row[0]], [[]])
@@ -462,8 +464,7 @@ func test_deny_mode_takes_the_lifted_equal_probes() -> void:
 		gu.unit_properties["faction_folder"] = unit_rules[name]
 		assert_bool(CoreSlice.takes(gu)).override_failure_message(
 			"deny mode takes a unit that carries %s" % name).is_true()
-	# DLINES3: Tear left this list: its dice are equal but the table names its conditional AP (`Tear: AP(+N) against <U>`) and the door says
-	# nothing for it (dlines_gap row 11), so the conditional-AP group refuses it (test above).
+	# DLINES3: Tear was refused for its missing conditional-AP line (dlines_gap row 11); H-17a: the door says it now (door_lines_hit_roll_test), the group is gone.
 	# Lifted again (C-19): the soak's unequal volley was a shot at base contact the table read as melee, not Point-Blank
 	# Surge (surge_contact_door_test.gd, 16/16 equal through the door in deny mode after the table fix).
 	var sisters := _unit(["Point-Blank Surge"], [])
@@ -651,14 +652,14 @@ class _StubMain extends RefCounted:
 
 
 ## DLINES2: `SlicePin.dice_only()` is the production deny list minus its line refusals - the helper the dice parity tests read. RED: if it kept the
-## `rule_line` groups the Grounded Protection row below is refused; if it dropped every refusal Changebound (a DICE difference) would be taken.
+## `rule_line` groups the Grounded Protection row below is refused; if it dropped every refusal Gleaming Armour (a DICE difference) would be taken.
 func test_the_dice_only_slice_drops_the_line_refusals_and_keeps_the_dice_ones() -> void:
 	var self_repair := _unit(["Grounded Protection"], [])
 	self_repair.unit_properties["faction_folder"] = "soul_snatcher_cults"
 	SlicePin.dice_only()
 	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("Grounded Protection's missing line is not a dice difference").is_true()
 	assert_bool(CoreSlice.takes(_unit(["Shred"], []), true)).override_failure_message("Shred's missing line is not a dice difference").is_true()
-	assert_bool(CoreSlice.takes(_unit(["Changebound"], []), true)).override_failure_message("Changebound changes the dice: still refused").is_false()
+	assert_bool(CoreSlice.takes(_unit(["Gleaming Armour"], []), true)).override_failure_message("Gleaming Armour changes the dice: still refused").is_false()
 	SlicePin.release_dice_only()
 	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("the production list refuses Grounded Protection again").is_false()
 
@@ -734,6 +735,35 @@ func test_state_refusals_for_spell_hit_modifiers_and_vengeance_markers() -> void
 	assert_array(CoreSlice.refusals(host)).is_empty()
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
+
+
+## DS-STEALTH: the table says "Unstoppable: negative to-hit modifiers ignored" when a shooter's Unstoppable weapon swallows a minus and the
+## core stays silent for a weapon's own flag (found by the 1000 pts census once Changebound / Stealth Aura left the deny names: 8 taken volleys,
+## one table-only line). The PAIR is refused: an Unstoppable shooter (weapon or joined hero) and a target rule that lowers the to-hit number.
+## Either side alone, the allow slice (no group) stay taken; the dice-only pin drops it (a line, not the dice).
+func test_an_unstoppable_shooter_against_a_to_hit_target_rule_is_refused_as_a_pair() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	var unstoppable := _unit([], [["Unstoppable"]])
+	var plain := _unit([], [[]])
+	for rule in ["Stealth", "Evasive", "Artillery", "Aircraft"]:
+		var tgt := _unit([rule], [[]])
+		tgt.unit_properties["faction_folder"] = "battle_brothers"   # Evasive is a faction entry
+		assert_array(CoreSlice.pair_refusals(unstoppable, tgt)).override_failure_message("an Unstoppable weapon at a %s target" % rule).is_equal(["unstoppable_fold_line"])
+		assert_array(CoreSlice.pair_refusals(plain, tgt)).override_failure_message("no Unstoppable, no fold line").is_empty()
+	var changed := _unit(["Changebound"], [[]])
+	changed.unit_properties["faction_folder"] = "change_disciples"
+	assert_array(CoreSlice.pair_refusals(unstoppable, changed)).override_failure_message("Changebound is the Stealth primitive").is_equal(["unstoppable_fold_line"])
+	assert_array(CoreSlice.pair_refusals(unstoppable, plain)).override_failure_message("nothing lowers the number").is_empty()
+	var host := _unit([], [[]])
+	EquipmentDistributor.attach_hero_to_unit(_unit(["Hero"], [["Unstoppable"]]), host)
+	assert_array(CoreSlice.pair_refusals(host, changed)).override_failure_message("a joined hero's weapon fires in the host's volley").is_equal(["unstoppable_fold_line"])
+	SlicePin.dice_only()
+	assert_array(CoreSlice.pair_refusals(unstoppable, changed)).override_failure_message("a missing line, not the dice: the dice-only pin drops it").is_empty()
+	SlicePin.release_dice_only()
+	SlicePin.narrow()
+	assert_array(CoreSlice.pair_refusals(unstoppable, changed)).override_failure_message("the allow slice has no such group").is_empty()
+	SlicePin.release()
 
 
 ## DLINES train 4 (review): the core latches a Versatile Attack pick on the plain Quality, the table on the MODIFIED to-hit number, so a

@@ -4,7 +4,7 @@
 use nml_core::boardgen::{self, Symmetry, CELL_IN, LEVEL_IN};
 use serde_json::{json, Value};
 
-/// The layout's own JSON plus what a reader should not recompute: `level_in` (inches for level 0/1/2), `problems`
+/// The layout's own JSON plus what a reader should not recompute: `level_in` (inches for level 0/1/2/3), `problems`
 /// (what the accepted-board check still finds; empty = accepted) and, per connector, its cell coordinates and the
 /// midpoint of the edge it crosses in board inches (origin at the board corner, x right, z down).
 pub fn layout_value(seed: i64) -> Value {
@@ -30,10 +30,10 @@ mod tests {
         for seed in [1, 7, 42, 1000] {
             let v = layout_value(seed);
             assert_eq!(v["cells"].as_array().unwrap().len(), 256);
-            assert_eq!(v["level_in"], json!([0, 3, 6]));
+            assert_eq!(v["level_in"], json!([0, 3, 6, 9]));
             assert_eq!(v["board_in"], json!([48, 48]));
             assert_eq!(v["problems"], json!([]), "seed {seed}");
-            assert!(v["cells"].as_array().unwrap().iter().all(|c| c["level"].as_u64().unwrap() <= 2));
+            assert!(v["cells"].as_array().unwrap().iter().all(|c| c["level"].as_u64().unwrap() <= 3));
         }
     }
 

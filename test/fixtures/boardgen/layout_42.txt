@@ -903,7 +903,7 @@
 "z": 6
 }, {
 "deploy": 0,
-"level": 2,
+"level": 3,
 "lot_id": 7,
 "lot_kind": "Deck",
 "street": false,
@@ -911,7 +911,7 @@
 "z": 6
 }, {
 "deploy": 0,
-"level": 2,
+"level": 3,
 "lot_id": 7,
 "lot_kind": "Deck",
 "street": false,
@@ -1175,7 +1175,7 @@
 "z": 8
 }, {
 "deploy": 0,
-"level": 2,
+"level": 3,
 "lot_id": 8,
 "lot_kind": "Deck",
 "street": false,
@@ -1183,7 +1183,7 @@
 "z": 9
 }, {
 "deploy": 0,
-"level": 2,
+"level": 3,
 "lot_id": 8,
 "lot_kind": "Deck",
 "street": false,
@@ -2218,16 +2218,23 @@
 "low": 92,
 "low_xz": [12, 5]
 }, {
-"edge_in": [45.0, 16.5],
+"edge_in": [42.0, 16.5],
 "high": 94,
 "high_xz": [14, 5],
 "kind": "Ladder",
-"low": 95,
-"low_xz": [15, 5]
+"low": 93,
+"low_xz": [13, 5]
 }, {
-"edge_in": [46.5, 18.0],
-"high": 111,
-"high_xz": [15, 6],
+"edge_in": [43.5, 18.0],
+"high": 110,
+"high_xz": [14, 6],
+"kind": "Ladder",
+"low": 94,
+"low_xz": [14, 5]
+}, {
+"edge_in": [45.0, 16.5],
+"high": 94,
+"high_xz": [14, 5],
 "kind": "Ladder",
 "low": 95,
 "low_xz": [15, 5]
@@ -2267,6 +2274,13 @@
 "low": 112,
 "low_xz": [0, 7]
 }, {
+"edge_in": [4.5, 24.0],
+"high": 129,
+"high_xz": [1, 8],
+"kind": "Ladder",
+"low": 113,
+"low_xz": [1, 7]
+}, {
 "edge_in": [6.0, 22.5],
 "high": 113,
 "high_xz": [1, 7],
@@ -2274,12 +2288,33 @@
 "low": 114,
 "low_xz": [2, 7]
 }, {
+"edge_in": [46.5, 21.0],
+"high": 111,
+"high_xz": [15, 6],
+"kind": "Ladder",
+"low": 127,
+"low_xz": [15, 7]
+}, {
+"edge_in": [1.5, 27.0],
+"high": 144,
+"high_xz": [0, 9],
+"kind": "Ladder",
+"low": 128,
+"low_xz": [0, 8]
+}, {
 "edge_in": [42.0, 25.5],
 "high": 142,
 "high_xz": [14, 8],
 "kind": "Ladder",
 "low": 141,
 "low_xz": [13, 8]
+}, {
+"edge_in": [43.5, 24.0],
+"high": 126,
+"high_xz": [14, 7],
+"kind": "Ladder",
+"low": 142,
+"low_xz": [14, 8]
 }, {
 "edge_in": [45.0, 25.5],
 "high": 142,
@@ -2316,19 +2351,26 @@
 "low": 159,
 "low_xz": [15, 9]
 }, {
-"edge_in": [1.5, 30.0],
-"high": 144,
-"high_xz": [0, 9],
-"kind": "Ladder",
-"low": 160,
-"low_xz": [0, 10]
-}, {
 "edge_in": [3.0, 31.5],
 "high": 161,
 "high_xz": [1, 10],
 "kind": "Ladder",
 "low": 160,
 "low_xz": [0, 10]
+}, {
+"edge_in": [4.5, 30.0],
+"high": 145,
+"high_xz": [1, 9],
+"kind": "Ladder",
+"low": 161,
+"low_xz": [1, 10]
+}, {
+"edge_in": [6.0, 31.5],
+"high": 161,
+"high_xz": [1, 10],
+"kind": "Ladder",
+"low": 162,
+"low_xz": [2, 10]
 }, {
 "edge_in": [9.0, 31.5],
 "high": 162,
@@ -2478,7 +2520,7 @@
 "low_xz": [4, 14]
 }],
 "deploy_depth_cells": 4,
-"level_in": [0, 3, 6],
+"level_in": [0, 3, 6, 9],
 "lots": [{
 "h": 3,
 "id": 1,

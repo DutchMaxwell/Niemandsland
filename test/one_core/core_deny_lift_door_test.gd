@@ -77,6 +77,10 @@ func _cases() -> Array:
 		["Hazardous gf carbines", DoorLines.entry("Carbines", 5, [], ["Hazardous"], "ratmen_clans", 5), plain, "Hazardous"],
 		["Hazardous gf lone bearer", DoorLines.entry("Bearer", 1, [], ["Hazardous"], "ratmen_clans", 1), plain, "Hazardous"],
 		["Hazardous aof carbines", _aof(DoorLines.entry("Carbines", 5, [], ["Hazardous"], "ratmen", 5)), plain_aof, "Hazardous"],
+		# H-13 Relentless Aura ("this model and its unit get Relentless": an unmodified 6 to hit from over 9 in is one extra hit, line
+		# `Relentless: +N hits`). DS-N2 G14 was the sweep harness missing the import's aura pass (ds/h_probe_aura_names.md); `spawn` runs it now.
+		["Relentless Aura gf shooters", DoorLines.entry("Auras", 10, ["Relentless Aura"], [], "robot_legions", 5), plain, "Relentless:"],
+		["Relentless Aura aof shooters", _aof(DoorLines.entry("Auras", 10, ["Relentless Aura"], [], "high_elves", 5)), plain_aof, "Relentless:"],
 	]
 
 
@@ -97,23 +101,30 @@ func test_the_comparison_reads_a_planted_fault() -> void:
 
 ## The check the lift rests on can fail without editing the committed file: a COPY of the deny file with the name put back refuses the same
 ## unit (the reason the sweep reported before the lift), the committed file does not.
-func test_putting_the_name_back_into_the_deny_list_refuses_the_unit() -> void:
-	var bearer := GameUnit.new()
-	bearer.unit_properties["special_rules"] = []
-	bearer.unit_properties["game_system"] = "gf"
-	bearer.unit_properties["faction_folder"] = "ratmen_clans"
+func _unit_with(unit_rules: Array, weapon_rules: Array, faction: String) -> GameUnit:
+	var gu := GameUnit.new()
+	gu.unit_properties["special_rules"] = unit_rules
+	gu.unit_properties["game_system"] = "gf"
+	gu.unit_properties["faction_folder"] = faction
 	var src := OPRApiClient.OPRUnit.new()
 	var w := OPRApiClient.OPRWeapon.new()
-	w.special_rules.assign(["Hazardous"])
+	w.special_rules.assign(weapon_rules)
 	src.weapons.append(w)
-	bearer.source_type = "opr"
-	bearer.source_data = src
-	var committed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.DENY_PATH))
-	assert_array(CoreSlice.refusals_in(CoreSlice.DENY_PATH, bearer)).override_failure_message("the committed deny file refuses Hazardous").is_empty()
-	(committed["deny_names"] as Dictionary)["Hazardous"] = "put back for the check"
-	var tmp := "user://deny_with_hazardous.json"
-	var f := FileAccess.open(tmp, FileAccess.WRITE)
-	f.store_string(JSON.stringify(committed))
-	f.close()
-	assert_array(CoreSlice.refusals_in(tmp, bearer)).override_failure_message("the copy with the name does not refuse it: the check cannot fail").is_equal(["weapon_rule:Hazardous"])
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
+	gu.source_type = "opr"
+	gu.source_data = src
+	return gu
+
+
+func test_putting_the_name_back_into_the_deny_list_refuses_the_unit() -> void:
+	for row in [["Hazardous", [], ["Hazardous"], "ratmen_clans", "weapon_rule:Hazardous"],
+			["Relentless Aura", ["Relentless Aura"], [], "robot_legions", "unit_rule:Relentless Aura"]]:
+		var bearer := _unit_with(row[1], row[2], row[3])
+		var committed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.DENY_PATH))
+		assert_array(CoreSlice.refusals_in(CoreSlice.DENY_PATH, bearer)).override_failure_message("the committed deny file refuses %s" % row[0]).is_empty()
+		(committed["deny_names"] as Dictionary)[row[0]] = "put back for the check"
+		var tmp := "user://deny_with_%s.json" % str(row[0]).replace(" ", "_").to_lower()
+		var f := FileAccess.open(tmp, FileAccess.WRITE)
+		f.store_string(JSON.stringify(committed))
+		f.close()
+		assert_array(CoreSlice.refusals_in(tmp, bearer)).override_failure_message("the copy with %s does not refuse it: the check cannot fail" % row[0]).is_equal([row[4]])
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
