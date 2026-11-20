@@ -6472,6 +6472,9 @@ fn strike_phase(
     let ut = &statics[next.roster.profile[ti]];
     let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch), statics, next, ti, seams), seams.rules_epoch);
     def.side = next.player[ti];
+    // The table's `_solo_log_defense_parts` lines, the first thing `_solo_melee_strike_phase` says: the Shielded family, then the growth ladder.
+    crate::dice::say_shielded(tray, &def, &ut.name);
+    crate::dice::say_growth_defense(tray, &def, &ut.name, &growth_defense_parts(statics, next, ti));
     // MEL-07c-fix (`EPOCH_73_V36`) — the strike Parry counts the host AND its
     // joined heroes, the same sum the Impact event reads (`parry_dice_total`).
     if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
@@ -6536,7 +6539,7 @@ fn strike_phase(
                     crate::combat::BEST_HIT_TARGET,
                 ),
                 &def, guarded_folds(&def, charge_from_in, if def.guarded_charge_over_in > 0.0 { def.guarded_charge_over_in } else { crate::combat::LONG_RANGE_IN }, seams.rules_epoch),
-                prof36, &mut shot.log, None, seams.rules_epoch);
+                prof36, &mut shot.log, Some(&mut *tray), seams.rules_epoch);
             att.versatile_pick_hit = vh;
             att.versatile_pick_ap = va;
             att.versatile_latched = vl;
@@ -6656,6 +6659,7 @@ fn strike_phase(
     // Deadly groups' raw tally rides `caused` but lands separately below, so
     // it is not an ignored wound.
     let ignored = (r.caused - r.wounds - r.deadly_tally) + gs_ignored;
+    shot.regen_ignored += ignored;
     // DAT-17a: the grant is spent by wounds coming IN, not by wounds landing
     // after Regeneration. `caused` is the pre-Regeneration tally, so an
     // all-ignored roll still reads as wounding and a zero-wound exchange not.
@@ -6682,17 +6686,38 @@ fn strike_phase(
     // LANDED, overkill included (`caused += td_dealt`, main.gd:7284), and the
     // table's order holds: Takedown, Deadly, then the pool.
     let mut dealt: i64 = shot.takedown_groups.iter().sum();
-    land_takedown_groups(next, ti, shot, seams.takedown_pick, None);
-    for &(post, dx) in std::mem::take(&mut shot.deadly_groups).iter() {
-        let d = land_deadly_wounds(next, ti, post, dx, seams);
-        dealt += d;
-        shot.log.push(format!(
-            "Deadly({dx}): {post} unsaved ×{dx}, no carry-over → {d} wounds dealt"));
+    let td_dealt = land_takedown_groups(next, ti, shot, seams.takedown_pick, None);
+    // The table lands Deadly inline per weapon and says one line per weapon (`_solo_land_deadly_wounds`), not a "takes N wounds" line for
+    // them: the strike's Deadly lines (the volley's shape), then the report of the pool wounds alone.
+    let side = next.player[si];
+    let mut deadly_dealt = 0;
+    let mut groups = std::mem::take(&mut shot.deadly_groups).into_iter();
+    for (weapon, unsaved, dx, n) in std::mem::take(&mut shot.deadly_lines) {
+        let (mut wdealt, mut forced) = (0, 0);
+        for (post, gx) in groups.by_ref().take(n) {
+            let d = land_deadly_group(next, ti, post, gx, seams, &mut None, &mut forced);
+            shot.log.push(format!("Deadly({gx}): {post} unsaved ×{gx}, no carry-over → {d} wounds dealt"));
+            wdealt += d;
+        }
+        deadly_dealt += wdealt;
+        let s = |n: i64| if n == 1 { "" } else { "s" };
+        if wdealt > 0 {
+            say_rule(tray, "deadly", side, || format!("Deadly({dx}): {unsaved} unsaved ×{dx}, no carry-over → {wdealt} wound{} dealt ({weapon})", s(wdealt)));
+            if forced > 0 {
+                say_rule(tray, "deadly", side, || format!("Deadly({dx}): {forced} wound{} finish the already-wounded Tough model first ({CITE})", s(forced)));
+            }
+        }
     }
+    for (post, gx) in groups {
+        let d = land_deadly_wounds(next, ti, post, gx, seams);
+        deadly_dealt += d;
+        shot.log.push(format!("Deadly({gx}): {post} unsaved ×{gx}, no carry-over → {d} wounds dealt"));
+    }
+    dealt += deadly_dealt;
     if seams.tray_exact {
         land_pool_wounds(next, ti, w, true, seams, &mut shot.log);
     }
-    land_chain_report(statics, next, tray, ti, landed);
+    land_chain_report_inline(statics, next, tray, ti, landed, deadly_dealt + td_dealt);
     caused = caused - raw_deadly + dealt;
     // rules-wave3-growthmark (epoch 6) — the ignore-wound marker AFTER the
     // landing: a bearer that ignored some of these wounds banks for them.
@@ -6826,6 +6851,7 @@ fn impact_with_parry(
         let r = crate::dice::impact_saves_with_tray(h, ap, &def, &ut.name, charge, tray);
         // MEL-10r (`EPOCH_73_V36`) — Impact wounds Regeneration cancels are not TAKEN.
         caused += if tally_post_regen { r.wounds } else { r.caused };
+        shot.regen_ignored += r.caused - r.wounds;
         let w = shot.absorb(r);
         let before = chain_snapshot(next, ti, tray);
         land_wounds_with(next, ti, w, exact);
@@ -6945,6 +6971,7 @@ fn impact_phase(
         );
         // MEL-10r (`EPOCH_73_V36`) — Impact wounds Regeneration cancels are not TAKEN.
         caused += if tally_post_regen { r.wounds } else { r.caused };
+        shot.regen_ignored += r.caused - r.wounds;
         let w = shot.absorb(r);
         let before = chain_snapshot(next, ti, tray);
         land_wounds_with(next, ti, w, exact);
@@ -7415,6 +7442,7 @@ fn tray_charge_with_self_wounds(
 ) -> Option<usize> {
     let mut charger_self_wounds = charger_self_wounds;
     let mut defender_self_wounds = 0;
+    let regen_ignored_before = shot.regen_ignored;
     // P4.D-48: the table's announce line (`_solo_show_attack_announce`), after the pile-in and before any strike.
     let (sname, tname) = (statics[next.roster.profile[si]].name.clone(), statics[next.roster.profile[ti]].name.clone());
     say_melee(tray, next.player[si], format!("{sname} charges {tname}"));
@@ -7516,6 +7544,7 @@ fn tray_charge_with_self_wounds(
                     "{} has no melee weapons - cannot strike back",
                     statics[next.roster.profile[ti]].name
                 ));
+                say_melee(tray, next.player[ti], format!("{} has no melee weapons — cannot strike back ({CITE})", statics[next.roster.profile[ti]].name));
             } else {
                 // R3-C1 (`EPOCH_73_V36`, the Hero rule): the host's models are gone, a joined hero stands - it strikes back.
                 if let Some(h) = next.attached[ti].iter().copied().find(|&h| next.alive[h] > 0).filter(|_| next.alive[ti] <= 0) {
@@ -7551,7 +7580,7 @@ fn tray_charge_with_self_wounds(
         let loser_without = melee_loser(next, si, ti, a_base, b_base, seams);
         let loser_with = melee_loser(next, si, ti, a, b, seams);
         // P4.D-48: the table's result line (`_solo_log_melee_result`): what each side TOOK = the enemy's score, with the Fear
-        // and self-inflicted parts named. The Regeneration and Scourge notes are not said (those rules stay off the door).
+        // and self-inflicted parts named. The Regeneration note is said; the Scourge notes are not (that rule stays off the door).
         let tally = |struck: i64, taken: i64, fear: i64| {
             let mut extra = Vec::new();
             if fear > 0 { extra.push(format!("Fear: {fear}")); }
@@ -7563,7 +7592,10 @@ fn tray_charge_with_self_wounds(
             None if combined_alive(next, si, seams) <= 0 && combined_alive(next, ti, seams) <= 0 => "both destroyed — no morale test".into(),
             None => "a draw — no morale test".into(),
         };
-        let text = format!("Melee result: {sname} took {}, {tname} took {} — {verdict}",
+        // MEL-10r: only when Regeneration cancelled a wound that would have counted (`_solo_log_melee_result`).
+        let cancelled = shot.regen_ignored - regen_ignored_before;
+        let regen_note = if cancelled > 0 { format!(" ({cancelled} wound{} cancelled by Regeneration {} not count)", if cancelled == 1 { "" } else { "s" }, if cancelled == 1 { "does" } else { "do" }) } else { String::new() };
+        let text = format!("Melee result: {sname} took {}, {tname} took {} — {verdict}{regen_note}",
             tally(by_tu, b, chain_fear(statics, next, ti, seams)), tally(by_su, a, chain_fear(statics, next, si, seams)));
         say_melee(tray, next.player[si], text);
         shot.log.push(format!(
@@ -10210,9 +10242,6 @@ fn consolidate_after_melee(next: &mut State, statics: &[UnitStatic], cover: Cove
     let wname = statics[next.roster.profile[winner]].name.clone();
     let side = next.player[winner];
     let say = |dice: &mut Option<(&mut Tray, &mut ShootResult)>, text: String| if let (true, Some((tray, _))) = (v36, dice.as_mut()) { say_melee(tray, side, text) };
-    if sep {
-        say(&mut dice, format!("Consolidation: {wname} moves back 1\" (the charger separates — {CITE})"));
-    }
     let holds = format!("Consolidation: {wname} holds its ground (enemy destroyed, no room to move — {CITE})");
     let (goal, band_in, what) = if sep {
         let (c, d) = (geom::centre(&next.positions[si]), geom::centre(&next.positions[ti]));
@@ -10223,8 +10252,12 @@ fn consolidate_after_melee(next: &mut State, statics: &[UnitStatic], cover: Cove
     };
     let land = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).plain_move(
         next, t, winner, goal, band_in, seams.hero_attach, true, crate::mv::FAST_PLANNER_GUARD);
-    if !sep {
-        let moved = land.as_ref().is_some_and(|l| l.movers.iter().zip(&l.end).any(|(m, e)| geom::length(geom::sub(*e, geom::to_f32(next.positions[m.unit][m.model]))) > 0.0005));
+    let moved = land.as_ref().is_some_and(|l| l.movers.iter().zip(&l.end).any(|(m, e)| geom::length(geom::sub(*e, geom::to_f32(next.positions[m.unit][m.model]))) > 0.0005));
+    if sep {
+        // The table says what the models really did (`_solo_consolidate_melee`): the step back, or that no legal spot let them take it.
+        say(&mut dice, if moved { format!("Consolidation: {wname} moves back 1\" (the charger separates — {CITE})") }
+            else { format!("Consolidation: {wname} stays put (no legal spot to move back 1\" — {CITE})") });
+    } else {
         say(&mut dice, if moved { format!("{wname} consolidates up to 3\" (enemy destroyed — {CITE})") } else { holds });
     }
     if let Some(land) = land {

@@ -516,6 +516,9 @@ pub struct ShootResult {
     /// The volley's Deadly weapons, one entry per weapon for the table's line (`_solo_land_deadly_wounds`): `(weapon, raw
     /// unsaved, X, how many of `deadly_groups` it pushed)`, in the same order. The volley landing drains both together.
     pub deadly_lines: Vec<(String, i64, i64, usize)>,
+    /// Wounds the target's ignore rules (Regeneration and its family) cancelled in the melee being resolved, summed over its phases by the
+    /// sim (`strike_phase`, Impact) for the table's "cancelled by Regeneration" note on the melee result line (`_solo_regen_ignored`).
+    pub regen_ignored: i64,
     /// The same groups' PRE-regeneration raw unsaved count — the shooting
     /// tally keeps it (`total_caused += w`, main.gd:3318) while the landing
     /// uses the group's post-regeneration count.
@@ -702,6 +705,15 @@ pub(crate) fn say_growth_defense(tray: &mut Tray, def: &Ctx, name: &str, parts: 
 pub(crate) fn say_growth_ap(tray: &mut Tray, att: &Ctx, owner: &str) {
     if att.growth_ap_mod > 0 && att.v36_rules && !att.growth_ap_name.is_empty() {
         say_rule(tray, "growth_ap", att.side, || format!("{}: {owner} adds AP(+{}) from its growth markers", att.growth_ap_name, att.growth_ap_mod));
+    }
+}
+
+/// The table's line before the AP-on-6 batch (`_solo_resolve_saves`): Rending, Destructive or the book entry's name, shooting and melee alike.
+fn say_on6_ap(tray: &mut Tray, p: &ShootProfile, att: &Ctx, ap4: i64, on6: i64) {
+    if ap4 > 0 {
+        let label = if p.rending || att.rending_grant { "Rending" } else if p.destructive { "Destructive" }
+            else if p.on6_rule.is_empty() { "Crack" } else { p.on6_rule.as_str() };
+        say_rule(tray, "on6_ap", att.side, || format!("{label}: {ap4} hit{} on a 6 → AP(+{on6})", if ap4 == 1 { "" } else { "s" }));
     }
 }
 
@@ -2219,12 +2231,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         // scaling, so the share is a fraction of the weapon's whole attack pool (`p.attacks`), not of the
         // sighted dice `n` (the stamp exists only from `EPOCH_73_V36`, so below it nothing changes).
         let sgt_hits = sergeant_hits(p, p.attacks.max(n), normal, att);
-        if ap4 > 0 {
-            // The table's line before the AP-on-6 batch (`_solo_resolve_saves`): Rending, Destructive or the book entry's name.
-            let label = if p.rending || att.rending_grant { "Rending" } else if p.destructive { "Destructive" }
-                else if p.on6_rule.is_empty() { "Crack" } else { p.on6_rule.as_str() };
-            say_rule(tray, "on6_ap", att.side, || format!("{label}: {ap4} hit{} on a 6 → AP(+{on6})", if ap4 == 1 { "" } else { "s" }));
-        }
+        say_on6_ap(tray, p, att, ap4, on6);
         let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, shred_alias_fires, shred_low, deadly_per_model, tray, &mut out);
         if sgt_hits > 0 {
             let line = sergeant_line(p, sh.owner, sgt_hits);
@@ -3040,6 +3047,8 @@ pub fn resolve_melee_leg_wipe(
             let alias_fires = !p.alias_gate
                 || p.surge_alias_rule.is_empty()
                 || charge_from_in > crate::combat::CHARGE_LONG_RANGE_IN;
+            let surge_before = hits;
+            let mut surge_fives = 0;
             if p.surge && alias_fires {
                 // No flag: at 0.0" this IS the table's gated read (the within
                 // cap passes, the low window below opens only for the sentinel).
@@ -3053,12 +3062,23 @@ pub fn resolve_melee_leg_wipe(
                 // `EPOCH_50_SURGE_LOW` — the Boost's 9.0 stays shut here,
                 // exactly like the table (main.gd:4539 at dist 0.0).
                 if p.surge_low < 6 && p.surge_over_in < 0.0 {
-                    hits += trig.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
+                    surge_fives = trig.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
+                    hits += surge_fives;
                 }
                 if !p.surge_alias_rule.is_empty() && sixes(trig) > 0 {
                     out.log.push(format!("{}: charged from over {:.0}in — bonus hits on unmodified 6s",
                         p.surge_alias_rule, crate::combat::CHARGE_LONG_RANGE_IN));
                 }
+            }
+            if p.surge && alias_fires && hits > surge_before {
+                // The table's lines (`_solo_hits`): a charging alias names its gate, then the plain total (a strike-back pays no alias).
+                let bonus = hits - surge_before;
+                if charging && !p.surge_alias_rule.is_empty() {
+                    say_rule(tray, "surge", sh.att.side, || format!("{}: charged from over {}\" — bonus hits on unmodified 6s",
+                        p.surge_alias_rule, crate::combat::CHARGE_LONG_RANGE_IN as i64));
+                }
+                say_rule(tray, "surge", sh.att.side, || format!("Surge: +{bonus} hit{} (unmodified {})",
+                    if bonus == 1 { "" } else { "s" }, if surge_fives == 0 { "6s" } else { "5-6s" }));
             }
             // Block B6 — the extra-ATTACK-DIE Surge siblings (Predator Fighter
             // is melee-only, so this is the branch it actually fires on).
@@ -3090,6 +3110,7 @@ pub fn resolve_melee_leg_wipe(
                 if def.blast_models.is_some() {
                     out.log.push(blast_log(p.blast, hits, boosted, cap));
                 }
+                say_rule(tray, "blast", sh.att.side, || blast_log(p.blast, hits, boosted, cap)); // the table says it always (#169), melee too
                 hits = boosted;
             }
             // P4.D-48: the table's line after each melee hit roll (`_solo_melee_strike_phase`), a miss included.
@@ -3211,6 +3232,7 @@ pub fn resolve_melee_leg_wipe(
             // AI-G2: the melee half of the volley's Bane-condition gate (the table's `bane_applies`, melee = true).
             out.bane_gated = !p.bane_condition.is_empty() && !cond_met(&CondAp { condition: p.bane_condition.clone(), threshold: p.bane_threshold, ..Default::default() }, &CondApTarget::of(def, p.range as f64), false, 0.0, true);
             out.bane_low = if p.bane_low > 1 && 0.0 > p.bane_over_in && !out.bane_gated { p.bane_low } else { 0 };
+            say_on6_ap(tray, p, sh.att, ap4, on6);
             let normal = hits - ap4;
             let sgt_hits = sergeant_hits(p, n, normal, sh.att);
             let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, sh.att.shred_grant, shred_alias_fires, 1, deadly_per_model, tray, &mut out);
@@ -3332,7 +3354,9 @@ pub fn resolve_melee_leg_wipe(
                 out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, if bypass_flag && !ignores_regen { td } else { 0 }, def, def_owner, tray, &mut out.rolls));
                 out.deadly_tally += w;
             } else if deadly_per_model && p.deadly > 0 {
+                let first = out.deadly_groups.len();
                 push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, def_owner, tray);
+                out.deadly_lines.push((p.name.clone(), w, p.deadly.max(1), out.deadly_groups.len() - first));
                 out.deadly_tally += w;
             } else if ignores_regen {
                 regen_proof += w;
@@ -3341,9 +3365,6 @@ pub fn resolve_melee_leg_wipe(
                 if bypass_flag {
                     regen_joined += w;
                 }
-            if bypass_flag {
-                regen_joined += w;
-            }
             }
         }
     }
