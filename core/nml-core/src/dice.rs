@@ -513,6 +513,9 @@ pub struct ShootResult {
     /// (`SoloController.apply_deadly_wounds`, solo_controller.gd:8333). Empty
     /// on every non-Deadly activation; the landing sites drain it.
     pub deadly_groups: Vec<(i64, i64)>,
+    /// PENDING_EPOCH_VERSATILE_MODIFIED_HIT: the picks the volley made inside the dice, `(roster index, AP(+1) mode)`, one per member
+    /// whose activation had no pick yet. The volley seam stamps them on the State's round latch after the call.
+    pub versatile_picks: Vec<(usize, bool)>,
     /// The volley's Deadly weapons, one entry per weapon for the table's line (`_solo_land_deadly_wounds`): `(weapon, raw
     /// unsaved, X, how many of `deadly_groups` it pushed)`, in the same order. The volley landing drains both together.
     pub deadly_lines: Vec<(String, i64, i64, usize)>,
@@ -1374,6 +1377,7 @@ pub(crate) fn resolve_volley_with_pick_label(
     let mut upr_ap = 0i64;
     let mut upr_hit = 0i64;
     let mut hero_upr: Vec<(usize, i64, i64)> = Vec::new(); // (shooter index, ap, hit): a joined hero's own die
+    let mut versatile_made: Vec<(Option<usize>, (i64, i64))> = Vec::new(); // the picks made in this volley (`Ctx::versatile_defer`)
     if shooters.first().is_some_and(|sh| sh.att.unpredictable_shooting) {
         let att0 = shooters[0].att;
         tray.owner_next(att0.unit);
@@ -1812,6 +1816,25 @@ pub(crate) fn resolve_volley_with_pick_label(
                 (att.versatile_pick_hit, att.versatile_pick_ap)
             } else if p.versatile_both {
                 (1, 1)
+            } else if let Some(&(_, pick)) = versatile_made.iter().find(|(u, _)| *u == att.unit) {
+                pick
+            } else if att.versatile_defer {
+                // PENDING_EPOCH_VERSATILE_MODIFIED_HIT: the activation's first eligible shot decides on the number it rolls at (the table's
+                // `to_hit` after every modifier), the Defense after the Guarded fold (`shot_base`) and AP with the Unpredictable bonus.
+                let guarded = def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded;
+                let pick = versatile_best_mode(
+                    target,
+                    guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), guarded, def.def_floor()),
+                    p.ap + upr_ap,
+                    p.bane,
+                );
+                versatile_made.push((att.unit, pick));
+                if let Some(mi) = att.unit {
+                    out.versatile_picks.push((mi, pick.1 > 0));
+                }
+                let rule = if p.versatile_name.is_empty() { "Versatile Attack" } else { p.versatile_name.as_str() };
+                crate::sim::say_versatile_pick(rule, sh.owner, pick.1 > 0, att.side, &mut out.log, Some(&mut *tray), att.rules_epoch);
+                pick
             } else {
                 versatile_best_mode(
                     target,
@@ -1827,7 +1850,7 @@ pub(crate) fn resolve_volley_with_pick_label(
             // earlier epoch's replay is byte-identical. At 36 the latched
             // activation already named its pick at the stamp — once per
             // activation, never per volley.
-            if !p.versatile_name.is_empty() && !att.versatile_latched {
+            if !p.versatile_name.is_empty() && !att.versatile_latched && !att.versatile_defer {
                 let what = if p.versatile_both {
                     "AP(+1) and +1 to hit"
                 } else if ap_mod > 0 {

@@ -299,6 +299,9 @@ const EPOCH_93_DANGER_RULES_RIDER := 93
 ## Placeholder gate (acts.rs `PENDING_EPOCH_EXACT_STRIKER_LABELS`, the core twin): from 94 the unit-level Bane / Lacerate / Rending / Unstoppable scans skip a name that only STARTS with the
 ## rule (`GameUnit.is_unlisted_striker_label`: Bane Mark, Rending Mark, Unstoppable Mark, Bane in Melee Buff hand the rule to OTHER units, ds/h_prefix_labels.md).
 const PENDING_EPOCH_EXACT_STRIKER_LABELS := 94
+## Placeholder gate (acts.rs `PENDING_EPOCH_VERSATILE_MODIFIED_HIT`, the core twin): from 94 the core picks Versatile Attack on the number the first eligible shot rolls at, as the table
+## does, so a Versatile shooter at a to-hit modifier is no longer refused as a pair (`CoreSlice.pair_refusals`).
+const PENDING_EPOCH_VERSATILE_MODIFIED_HIT := 94
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

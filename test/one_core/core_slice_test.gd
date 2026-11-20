@@ -817,6 +817,24 @@ func test_a_versatile_shooter_against_a_to_hit_modifier_is_refused_as_a_pair() -
 	SlicePin.release()
 
 
+## Plan H, H-18: from the pending epoch 94 the core's dice pick Versatile Attack on the modified to-hit number, so the pair is taken (the door test
+## `versatile_pick_door_test.gd` shows both halves equal there). Below it the pair stays refused, in the dice-only pin too. RED: drop the epoch clause.
+func test_the_versatile_pair_is_taken_from_the_pending_epoch() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	var vers := _unit(["Versatile Attack"], [[]])
+	vers.unit_properties["faction_folder"] = "battle_brothers"
+	var stealth := _unit(["Stealth"], [[]])
+	var epoch_before := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_VERSATILE_MODIFIED_HIT - 1
+	var below := CoreSlice.pair_refusals(vers, stealth)
+	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_VERSATILE_MODIFIED_HIT
+	var at_pending := CoreSlice.pair_refusals(vers, stealth)
+	AiActRecorder.rules_epoch = epoch_before
+	assert_array(below).override_failure_message("below 94 the core still latches on the plain Quality").is_equal(["versatile_pick_modified_to_hit"])
+	assert_array(at_pending).override_failure_message("from 94 both halves pick on the modified number").is_empty()
+
+
 ## DLINES train 4 (review): the table names a Takedown's picked model by its first item when it is no Tough and no special-weapon model; the core holds
 ## only an item count, so its line says "trooper" (door test, one Banner carrier: 12 of 12 seeds differ). A Takedown shooter at a target with a living
 ## item-carrying model is refused as a pair; no item, a dead carrier, no Takedown, and the dice-only pin (it drops line refusals) stay taken.
