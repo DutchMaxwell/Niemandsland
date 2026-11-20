@@ -10,7 +10,7 @@
 //! scripts/solo/terrain_rules.gd:139-144).
 
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::acts::{rule_on, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
 use crate::geom::V3;
@@ -76,7 +76,7 @@ pub fn is_forbidden_rest(t: i32) -> bool {
 
 /// One freely placed shelf piece — `TerrainOverlay._sandbox_shapes()`, flattened
 /// by `AiActRecorder._terrain_line` (act_recorder.gd:143-149).
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Obb {
     pub c: [f64; 2],
     pub he: [f64; 2],
@@ -90,7 +90,7 @@ pub struct Obb {
 }
 
 /// One floor slab of a free ruin - a thin SOLID box from `y0` to `y1` (metres), `yaw` as in `Obb`.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Slab {
     pub c: [f64; 2],
     pub he: [f64; 2],
@@ -101,7 +101,7 @@ pub struct Slab {
 
 /// F-CONT (rules 3.6, `EPOCH_73_V36`) — one placed container's exact 6"x3" box, `TerrainOverlay._blocker_obbs`
 /// flattened by `AiActRecorder._container_boxes`: world metres, `yaw` as in `Obb`. Always solid, 2.5" tall.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ContainerObb {
     pub c: [f64; 2],
     pub he: [f64; 2],
@@ -112,7 +112,7 @@ pub struct ContainerObb {
 ///
 /// `Default` (all zeros) exists only so `PlainTerrain` can derive it for the `..Default::default()` filler of a
 /// literal; a board always states its own `cell_params`.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct CellParams {
     pub table_size_feet: [f64; 2],
     pub grid_rotation_degrees: f64,
@@ -122,7 +122,7 @@ pub struct CellParams {
 
 /// Heightfield plan step 1 - a generated tier board as the header carries it (`boardgen::Layout`, materialised): one
 /// level per (x, z), row-major, board-centred, grid yaw 0. Data only; nothing reads it yet.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TierGrid {
     pub nx: u16,
     pub nz: u16,
@@ -142,7 +142,7 @@ pub struct TierGrid {
 ///
 /// Build a literal with `..Default::default()` after the fields you set (`cell_params` always among them): a field
 /// added later then does not break it.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PlainTerrain {
     /// `[cx, cz, type]` triples — act_recorder.gd:137-139.
     pub cells: Vec<[f64; 3]>,
@@ -862,6 +862,30 @@ mod tests {
         for p in [(0.0, 0.0), (1.5, 1.5), (-4.0, 7.0), (20.0, -9.0)] {
             assert_eq!(a.type_at(at(p.0, p.1)), b.type_at(at(p.0, p.1)));
         }
+    }
+
+    /// Heightfield plan step 2: a header written by the core reads back as the same board (step 3 writes one, the hash
+    /// of step 3 and the save of step 21 are taken over exactly these bytes). Every optional key is filled, tiers
+    /// included. Red before: `PlainTerrain` and the structs inside it had no `Serialize` / `PartialEq`, no compile.
+    #[test]
+    fn plain_terrain_round_trips() {
+        let mut h = header(Some(serde_json::json!({"nx": 2, "nz": 2, "cell_in": 3.0, "level_in": [0.0, 3.0, 6.0, 3.0],
+            "ladders": [[0, 1], [1, 2]]})));
+        h["sandbox"] = serde_json::json!([{"c": [0.5, -0.25], "he": [0.1, 0.2], "yaw": 0.7, "type": RUINS,
+            "slabs": [{"c": [0.5, -0.25], "he": [0.1, 0.2], "yaw": 0.7, "y0": 0.05, "y1": 0.08}]}]);
+        h["walls"] = serde_json::json!([[[0.0, 0.0], [1.0, 0.0]], [[1.0, 0.0], [1.0, 2.5]]]);
+        h["pieces"] = serde_json::json!([[1.0, 4.5, -7.5, 3.0, 6.0, 90.0], [2.0, -3.0, 1.5, 6.0, 3.0, 0.0]]);
+        h["containers"] = serde_json::json!([{"c": [0.1, 0.2], "he": [0.0762, 0.1524], "yaw": 1.5}]);
+        let before: PlainTerrain = serde_json::from_value(h).unwrap();
+        assert!(before.tiers.is_some() && !before.pieces.is_empty() && !before.containers.is_empty() && !before.walls.is_empty());
+        let json = serde_json::to_string(&before).unwrap();
+        let after: PlainTerrain = serde_json::from_str(&json).unwrap();
+        assert_eq!(after, before, "serialize then parse must return the same board");
+        // a flat header (no tiers) writes `tiers: null` and reads back as None, not as a missing grid
+        let flat: PlainTerrain = serde_json::from_value(header(None)).unwrap();
+        let flat_back: PlainTerrain = serde_json::from_str(&serde_json::to_string(&flat).unwrap()).unwrap();
+        assert_eq!(flat_back, flat);
+        assert!(flat_back.tiers.is_none());
     }
 
     /// `map_layout._calculate_grid_dimensions()`: the 6x4 ft diagonal is 86.53",
