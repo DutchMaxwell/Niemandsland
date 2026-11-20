@@ -27,7 +27,7 @@ use crate::state::State;
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
 use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_74_CLIMB_COST, EPOCH_8_PLANNER_MENU, EPOCH_73_V36, EPOCH_77_CHARGE_CAP,
-    EPOCH_78_FLIER_CUT, EPOCH_92_MELEE_CAUSES, PENDING_EPOCH_DANGER_AVOID};
+    EPOCH_78_FLIER_CUT, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER};
 
 use super::cost::{ledge_cost, trim_polyline_priced, CellSet, Grid, Ledge, Wall, Zone};
 use super::entry::plan_unit_step_call;
@@ -38,7 +38,7 @@ use super::io::{CallOpts, MoveCall};
 const BOUNDS_MARGIN_M: f64 = 0.02;
 /// `SoloController.DIFFICULT_MOVE_CAP_IN` :67 — GF/AoF v3.5.1 p.11.
 pub(crate) const DIFFICULT_MOVE_CAP_IN: f64 = 6.0;
-/// #3090 (`PENDING_EPOCH_DANGER_AVOID`): the sideways goal shifts tried, in order (table twin `DANGER_SIDESTEP_IN`).
+/// #3090 (`EPOCH_93_DANGER_RULES_RIDER`): the sideways goal shifts tried, in order (table twin `DANGER_SIDESTEP_IN`).
 const DANGER_SIDESTEP_IN: [f64; 24] = [0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.0, -2.0, 2.5, -2.5, 3.0, -3.0, 3.5, -3.5,
     4.0, -4.0, 4.5, -4.5, 5.0, -5.0, 5.5, -5.5, 6.0, -6.0];
 /// #3090: full plans at most in the sidestep; the rest is the cheap rigid sweep (table twin `DANGER_SIDESTEP_PLANS`).
@@ -336,7 +336,7 @@ fn targets_in(
     pos.iter().any(|p| terrain::base_in_terrain(geom::add(*p, delta), radius_m, t, class))
 }
 
-/// #3090 (`PENDING_EPOCH_DANGER_AVOID`, table twin `_goal_in_dangerous`): does the unit's own GOAL, its centre at the
+/// #3090 (`EPOCH_93_DANGER_RULES_RIDER`, table twin `_goal_in_dangerous`): does the unit's own GOAL, its centre at the
 /// end of the rigid move, land (base edge included) in that class? One model's rigid corner no longer decides.
 fn goal_in(pos: &[V3], goal: V3, reach_in: f64, radius_m: f64, t: &Terrain, half: [f64; 2], class: fn(i32) -> bool) -> bool {
     if !t.is_valid() || pos.is_empty() {
@@ -920,9 +920,9 @@ fn execute(&self, band_in: f64, avoid_diff: bool, radii_m: &[f64]) -> Landing {
         trails = re.1;
         call = re.2;
     }
-    // #3090 (`PENDING_EPOCH_DANGER_AVOID`, table twin in `_execute_move`): a plan that still crosses Dangerous ground
+    // #3090 (`EPOCH_93_DANGER_RULES_RIDER`, table twin in `_execute_move`): a plan that still crosses Dangerous ground
     // first tries a sideways goal shift, then stopping short (`danger_detour`).
-    if rule_on(self.rules_epoch, PENDING_EPOCH_DANGER_AVOID) && self.avoid_dang && !self.flying && !self.allow_contact
+    if rule_on(self.rules_epoch, EPOCH_93_DANGER_RULES_RIDER) && self.avoid_dang && !self.flying && !self.allow_contact
         && self.any_dangerous(&trails, radii_m)
     {
         let check_diff = !self.ignores_difficult && !capped;
@@ -943,7 +943,7 @@ fn rigid_sweep_dangerous(&self, goal: V3, reach_in: f64, radii_m: &[f64]) -> usi
     }).count()
 }
 
-/// #3090 (`PENDING_EPOCH_DANGER_AVOID`, table twin `_danger_detour`): the planned route still crosses Dangerous ground.
+/// #3090 (`EPOCH_93_DANGER_RULES_RIDER`, table twin `_danger_detour`): the planned route still crosses Dangerous ground.
 /// A: shift the goal sideways (+ = right of travel); rank the `DANGER_SIDESTEP_IN` shifts by how many models' rigid
 /// straight sweep crosses (fewest first, then list order), full-plan the best `DANGER_SIDESTEP_PLANS`, first clean wins. C: else stop at the farthest
 /// clear rigid reach (`DANGER_STOP_STEP_IN` steps) when the expected toll (whole unit, one die per wound left, 1/6 each)
@@ -1749,8 +1749,8 @@ fn plain_move_fresh(
     // land in them, in which case going around is impossible.
     let avoid_diff = !ignores_difficult
         && !targets_in(&pos, goal, band_in, own_r_m, t, half, terrain::is_difficult);
-    // #3090 (`PENDING_EPOCH_DANGER_AVOID`): the exception reads the unit's goal, not one model's rigid corner.
-    let goal_in_danger = if rule_on(self.rules_epoch, PENDING_EPOCH_DANGER_AVOID) {
+    // #3090 (`EPOCH_93_DANGER_RULES_RIDER`): the exception reads the unit's goal, not one model's rigid corner.
+    let goal_in_danger = if rule_on(self.rules_epoch, EPOCH_93_DANGER_RULES_RIDER) {
         goal_in(&pos, goal, band_in, own_r_m, t, half, terrain::is_dangerous)
     } else {
         targets_in(&pos, goal, band_in, own_r_m, t, half, terrain::is_dangerous)
@@ -2871,23 +2871,23 @@ pub(crate) mod tests {
         (land.dangerous.iter().any(|d| *d), cx, front)
     }
 
-    /// #3090 part 2, option C (`PENDING_EPOCH_DANGER_AVOID`): ten models, a patch dead ahead mid-route that no sideways
+    /// #3090 part 2, option C (`EPOCH_93_DANGER_RULES_RIDER`): ten models, a patch dead ahead mid-route that no sideways
     /// shift clears. The expected toll (10 dice, 1.67 wounds, x 6") outweighs the ~8.6" given up, so the unit stops
     /// short of the patch instead of walking through. RED below the gate (crosses), GREEN at it.
     #[test]
     fn a_big_unit_stops_short_of_a_patch_it_cannot_skirt() {
-        let (old, _, _) = rush_rows(crate::acts::CURRENT_RULES_EPOCH, 10, -1.5, 4.0);
-        let (new, _, front) = rush_rows(PENDING_EPOCH_DANGER_AVOID, 10, -1.5, 4.0);
+        let (old, _, _) = rush_rows(EPOCH_93_DANGER_RULES_RIDER - 1, 10, -1.5, 4.0);
+        let (new, _, front) = rush_rows(EPOCH_93_DANGER_RULES_RIDER, 10, -1.5, 4.0);
         assert!(old, "below the gate the unit walks through");
         assert!(!new && front < 4.0, "at the gate it stops short of the patch, front z {front:.2}\"");
     }
 
-    /// #3090 part 2, cause 2 (`PENDING_EPOCH_DANGER_AVOID`): the right-hand model's own route clips a patch mid-route
+    /// #3090 part 2, cause 2 (`EPOCH_93_DANGER_RULES_RIDER`): the right-hand model's own route clips a patch mid-route
     /// although the unit could skirt it. RED below the gate (today: crosses); GREEN at it: a sideways goal shift clears.
     #[test]
     fn a_line_sidesteps_a_dangerous_patch_mid_route() {
-        let (old, old_cx) = rush_past_patch(crate::acts::CURRENT_RULES_EPOCH, 2.5, 4.0);
-        let (new, cx) = rush_past_patch(PENDING_EPOCH_DANGER_AVOID, 2.5, 4.0);
+        let (old, old_cx) = rush_past_patch(EPOCH_93_DANGER_RULES_RIDER - 1, 2.5, 4.0);
+        let (new, cx) = rush_past_patch(EPOCH_93_DANGER_RULES_RIDER, 2.5, 4.0);
         assert!(old, "below the gate the route still crosses (centroid x {old_cx:.2}\")");
         assert!(!new, "at the gate the sidestep clears the patch (centroid x {cx:.2}\")");
         assert!(cx < old_cx - 0.5, "the unit stepped LEFT, away from the patch: {old_cx:.2}\" -> {cx:.2}\"");
@@ -2897,8 +2897,8 @@ pub(crate) mod tests {
     /// avoidance off for the whole unit; at the gate the goal (unit centre) is clear, so the unit routes around.
     #[test]
     fn one_clipped_corner_no_longer_switches_avoidance_off() {
-        let (old, _) = rush_past_patch(crate::acts::CURRENT_RULES_EPOCH, 2.5, 10.0);
-        let (new, cx) = rush_past_patch(PENDING_EPOCH_DANGER_AVOID, 2.5, 10.0);
+        let (old, _) = rush_past_patch(EPOCH_93_DANGER_RULES_RIDER - 1, 2.5, 10.0);
+        let (new, cx) = rush_past_patch(EPOCH_93_DANGER_RULES_RIDER, 2.5, 10.0);
         assert!(old, "below the gate the clipped corner walks in");
         assert!(!new, "at the gate the unit keeps out (centroid x {cx:.2}\")");
     }

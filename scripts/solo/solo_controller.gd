@@ -212,7 +212,7 @@ const NO_OBJECTIVE := Vector3(INF, INF, INF)   # _nearest_uncontrolled_objective
 ## through difficult terrain at any point of its move, then all models in the unit may not move more
 ## than 6” for that movement." — a 6" CAP on the whole move, NOT a halving.
 const DIFFICULT_MOVE_CAP_IN := 6.0
-## #3090 (PENDING_EPOCH_DANGER_AVOID): the sideways goal shifts `_execute_move` tries, in order (core twin `DANGER_SIDESTEP_IN`).
+## #3090 (EPOCH_93_DANGER_RULES_RIDER): the sideways goal shifts `_execute_move` tries, in order (core twin `DANGER_SIDESTEP_IN`).
 const DANGER_SIDESTEP_IN: Array[float] = [0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.0, -2.0, 2.5, -2.5, 3.0, -3.0,
 	3.5, -3.5, 4.0, -4.0, 4.5, -4.5, 5.0, -5.0, 5.5, -5.5, 6.0, -6.0]
 const DANGER_SIDESTEP_PLANS := 2   # full plans at most; the rest is the cheap rigid sweep
@@ -6197,9 +6197,9 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# DANGEROUS terrain is also routed AROUND when a clear path exists (field-test finding 4). Only Flying
 	# ignores it (Strider ignores Difficult but NOT Dangerous — GF/AoF v3.5.1 p.13/p.14); if the destination
 	# itself is dangerous, going around is impossible, so the model routes in and takes its dangerous test.
-	# #3090 (PENDING_EPOCH_DANGER_AVOID, core twin `plain_move_fresh`): a plain move reads the unit's GOAL, not one model's
+	# #3090 (EPOCH_93_DANGER_RULES_RIDER, core twin `plain_move_fresh`): a plain move reads the unit's GOAL, not one model's
 	# rigid corner; a charge keeps the per-model test (its front models must reach a target standing in it).
-	var danger_avoid: bool = not allow_contact and AiActRecorder.rules_epoch >= AiActRecorder.PENDING_EPOCH_DANGER_AVOID
+	var danger_avoid: bool = not allow_contact and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_93_DANGER_RULES_RIDER
 	var goal_in_danger: bool = not flying and (_goal_in_dangerous(positions, goal, reach, own_r_m) if danger_avoid
 		else _targets_in_dangerous(positions, goal, reach, own_r_m))
 	var avoid_dangerous: bool = not flying and not goal_in_danger
@@ -6221,7 +6221,7 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		capped = true
 		trails = []
 		new_positions = _plan_move(unit, models, positions, goal, reach, allow_contact, false, avoid_dangerous, trails, charge_target)
-	# #3090 (PENDING_EPOCH_DANGER_AVOID, core twin `Move::execute`): a plan that still crosses Dangerous ground first tries
+	# #3090 (EPOCH_93_DANGER_RULES_RIDER, core twin `Move::execute`): a plan that still crosses Dangerous ground first tries
 	# a sideways goal shift, then stopping short (`_danger_detour`). A player's order is never re-aimed.
 	if danger_avoid and avoid_dangerous and not flying and not _player_move \
 			and _dangerous_trail_flags(trails, trail_radii_m).has(true):
@@ -6696,7 +6696,7 @@ func _targets_in_dangerous(positions: Array, goal: Vector3, reach_in: float, rad
 	return false
 
 
-## #3090 (PENDING_EPOCH_DANGER_AVOID, core twin `rigid_sweep_dangerous`): how many models' RIGID straight legs toward
+## #3090 (EPOCH_93_DANGER_RULES_RIDER, core twin `rigid_sweep_dangerous`): how many models' RIGID straight legs toward
 ## `g` (reach `r_in`) would take the p.12 test? Cheap: one straight leg per model, no planner.
 func _rigid_sweep_dangerous(positions: Array, g: Vector3, r_in: float, radii_m: Array) -> int:
 	var d := _clamp_delta_to_bounds(positions, MoveIntent.plan_unit_move(positions, g, r_in))
@@ -6706,7 +6706,7 @@ func _rigid_sweep_dangerous(positions: Array, g: Vector3, r_in: float, radii_m: 
 	return _dangerous_trail_flags(legs, radii_m).count(true)
 
 
-## #3090 (PENDING_EPOCH_DANGER_AVOID, core twin `Move::danger_detour`): the planned route still crosses Dangerous ground.
+## #3090 (EPOCH_93_DANGER_RULES_RIDER, core twin `Move::danger_detour`): the planned route still crosses Dangerous ground.
 ## A: shift the goal sideways (perpendicular to the move, + = right of travel); rank the DANGER_SIDESTEP_IN shifts by how
 ## many models' rigid straight sweep crosses (fewest first, then list order), full-plan the best DANGER_SIDESTEP_PLANS,
 ## first clean plan wins.
@@ -6748,7 +6748,7 @@ func _danger_detour(unit: GameUnit, models: Array, positions: Array, goal: Vecto
 	return {"goal": goal, "reach": r_free, "positions": p6, "trails": t6}
 
 
-## #3090 (PENDING_EPOCH_DANGER_AVOID, core twin `goal_in`): does the unit's own GOAL, its centre at the end of the rigid
+## #3090 (EPOCH_93_DANGER_RULES_RIDER, core twin `goal_in`): does the unit's own GOAL, its centre at the end of the rigid
 ## move, land (base edge included) in DANGEROUS terrain? One model's rigid corner no longer turns avoidance off.
 func _goal_in_dangerous(positions: Array, goal: Vector3, reach_in: float, radius_m: float = 0.0) -> bool:
 	if not terrain_type_at.is_valid() or positions.is_empty():

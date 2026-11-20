@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## #3090 part 2 (PENDING_EPOCH_DANGER_AVOID): the AI steps into Dangerous ground it could skirt. A plain move reads the
+## #3090 part 2 (EPOCH_93_DANGER_RULES_RIDER): the AI steps into Dangerous ground it could skirt. A plain move reads the
 ## Dangerous exception on the unit's GOAL (not one model's rigid corner) and, when the plan still crosses, re-plans with
 ## the goal shifted sideways, else stops short when the toll outweighs the distance, and logs it. Core twins in mv::step:
 ## `a_line_sidesteps_a_dangerous_patch_mid_route`, `one_clipped_corner_no_longer_switches_avoidance_off`,
@@ -67,38 +67,38 @@ func _line_move(tag: String, epoch: int, patch: Rect2, goal_z: float, inches: fl
 func test_a_line_sidesteps_a_patch_mid_route_and_logs_it(fast: bool, test_parameters := [[false], [true]]) -> void:
 	MovementPlanner.fast_planner = fast
 	var patch := Rect2(2.5, 4.0, 3.0, 4.0)
-	assert_int(_line_move("Old", 91, patch, 14.0, 12.0)).is_greater(0)
+	assert_int(_line_move("Old", AiActRecorder.EPOCH_93_DANGER_RULES_RIDER - 1, patch, 14.0, 12.0)).is_greater(0)
 	assert_array(_solo.board_clamp_notes).is_empty()
-	assert_int(_line_move("New", AiActRecorder.PENDING_EPOCH_DANGER_AVOID, patch, 14.0, 12.0)).is_equal(0)
+	assert_int(_line_move("New", AiActRecorder.EPOCH_93_DANGER_RULES_RIDER, patch, 14.0, 12.0)).is_equal(0)
 	assert_str(str(_solo.board_clamp_notes)).contains("New sidesteps Dangerous ground (")
 
 
 func test_one_clipped_corner_no_longer_switches_avoidance_off(fast: bool, test_parameters := [[false], [true]]) -> void:
 	MovementPlanner.fast_planner = fast
 	var patch := Rect2(2.5, 10.0, 3.0, 4.0)
-	assert_int(_line_move("Old", 91, patch, 14.0, 12.0)).is_greater(0)
-	assert_int(_line_move("New", AiActRecorder.PENDING_EPOCH_DANGER_AVOID, patch, 14.0, 12.0)).is_equal(0)
+	assert_int(_line_move("Old", AiActRecorder.EPOCH_93_DANGER_RULES_RIDER - 1, patch, 14.0, 12.0)).is_greater(0)
+	assert_int(_line_move("New", AiActRecorder.EPOCH_93_DANGER_RULES_RIDER, patch, 14.0, 12.0)).is_equal(0)
 
 
 func test_a_big_unit_stops_short_of_a_patch_it_cannot_skirt(fast: bool, test_parameters := [[false], [true]]) -> void:
 	MovementPlanner.fast_planner = fast
 	var patch := Rect2(-1.5, 4.0, 3.0, 4.0)
-	assert_int(_line_move("Old", 91, patch, 14.0, 12.0, 10)).is_greater(0)
-	assert_int(_line_move("Big", AiActRecorder.PENDING_EPOCH_DANGER_AVOID, patch, 14.0, 12.0, 10)).is_equal(0)
+	assert_int(_line_move("Old", AiActRecorder.EPOCH_93_DANGER_RULES_RIDER - 1, patch, 14.0, 12.0, 10)).is_greater(0)
+	assert_int(_line_move("Big", AiActRecorder.EPOCH_93_DANGER_RULES_RIDER, patch, 14.0, 12.0, 10)).is_equal(0)
 	assert_float(_front).is_less(4.0)
 	assert_str(str(_solo.board_clamp_notes)).contains("Big stops short of Dangerous ground (")
 
 
 func test_an_advance_that_stops_short_of_the_patch_is_unchanged(fast: bool, test_parameters := [[false], [true]]) -> void:
 	MovementPlanner.fast_planner = fast
-	assert_int(_line_move("Adv", AiActRecorder.PENDING_EPOCH_DANGER_AVOID, Rect2(2.5, 10.0, 3.0, 4.0), 8.0, 6.0)).is_equal(0)
+	assert_int(_line_move("Adv", AiActRecorder.EPOCH_93_DANGER_RULES_RIDER, Rect2(2.5, 10.0, 3.0, 4.0), 8.0, 6.0)).is_equal(0)
 	assert_array(_solo.board_clamp_notes).is_empty()
 
 
 func test_a_player_order_is_never_re_aimed(fast: bool, test_parameters := [[false], [true]]) -> void:
 	MovementPlanner.fast_planner = fast
 	_solo._player_move = true
-	var dang := _line_move("Mine", AiActRecorder.PENDING_EPOCH_DANGER_AVOID, Rect2(2.5, 4.0, 3.0, 4.0), 14.0, 12.0)
+	var dang := _line_move("Mine", AiActRecorder.EPOCH_93_DANGER_RULES_RIDER, Rect2(2.5, 4.0, 3.0, 4.0), 14.0, 12.0)
 	_solo._player_move = false
 	assert_int(dang).is_greater(0)
 	assert_array(_solo.board_clamp_notes).is_empty()

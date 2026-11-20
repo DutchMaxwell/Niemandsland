@@ -473,7 +473,7 @@ def _rule_base_name(rule: str) -> str:
 
 
 #: Whether the 3.6 folder aliases answer for the profile being built. The Rust core gates them at
-#: `acts::PENDING_EPOCH_RULES_ALIAS` (exported as `nml_core.PENDING_EPOCH_RULES_ALIAS`), so a corpus
+#: `acts::EPOCH_93_DANGER_RULES_RIDER` (exported as `nml_core.EPOCH_93_DANGER_RULES_RIDER`), so a corpus
 #: built at a lower epoch keeps its old common-only faction reads and replays identically. OFF by
 #: default: a registry read outside a profile build (no record epoch) keeps the old behaviour.
 _RULES_ALIAS_ON: contextvars.ContextVar[bool] = contextvars.ContextVar(
@@ -486,7 +486,7 @@ def _rules_alias_epoch(rules_epoch: int | None):
     import nml_core
     if rules_epoch is None:
         rules_epoch = nml_core.CURRENT_RULES_EPOCH
-    token = _RULES_ALIAS_ON.set(rules_epoch >= nml_core.PENDING_EPOCH_RULES_ALIAS)
+    token = _RULES_ALIAS_ON.set(rules_epoch >= nml_core.EPOCH_93_DANGER_RULES_RIDER)
     try:
         yield
     finally:
@@ -518,7 +518,7 @@ def _registry_entry(system: str, faction: str, rule_name: str) -> dict:
     saurian_starhost) falls back to its same-system alias from
     _SPELL_FACTION_ALIASES — one shared table, never a cross-system guess — but
     only inside a profile build whose record epoch has reached
-    PENDING_EPOCH_RULES_ALIAS (`_rules_alias_epoch`)."""
+    EPOCH_93_DANGER_RULES_RIDER (`_rules_alias_epoch`)."""
     s = system.strip().lower()
     if s not in REGISTRY_SYSTEMS:
         s = REGISTRY_DEFAULT_SYSTEM

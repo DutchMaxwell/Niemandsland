@@ -392,7 +392,7 @@ pub struct RulesMap {
     common: HashMap<String, Entry>,
     factions: HashMap<String, HashMap<String, Entry>>,
     /// The record epoch this map answers at (`Registries::set_rules_epoch`).
-    /// Gates the 3.6 folder aliases (`acts::PENDING_EPOCH_RULES_ALIAS`): below
+    /// Gates the 3.6 folder aliases (`acts::EPOCH_93_DANGER_RULES_RIDER`): below
     /// the gate an old folder keeps its old common-only read, byte-exact.
     rules_epoch: u32,
 }
@@ -404,7 +404,7 @@ impl RulesMap {
         if self.factions.contains_key(faction) {
             return Some(faction.to_string());
         }
-        if !crate::acts::rule_on(self.rules_epoch, crate::acts::PENDING_EPOCH_RULES_ALIAS) {
+        if !crate::acts::rule_on(self.rules_epoch, crate::acts::EPOCH_93_DANGER_RULES_RIDER) {
             return None;
         }
         let alias = faction_alias(&self.system, faction)?;
@@ -531,7 +531,7 @@ impl Registries {
     }
 
     /// The record epoch this registry answers at — the 3.6 folder aliases
-    /// (`acts::PENDING_EPOCH_RULES_ALIAS`) switch on from 93, so a pre-93 record
+    /// (`acts::EPOCH_93_DANGER_RULES_RIDER`) switch on from 93, so a pre-93 record
     /// replays its old common-only faction reads byte-exact. Cached maps are
     /// re-stamped; a map loaded later inherits the stamp in `rules_for`.
     pub fn set_rules_epoch(&mut self, rules_epoch: u32) {
@@ -853,13 +853,13 @@ mod tests {
     /// The RULES side of the same rename: `rules_mechanics_<system>.json` keys
     /// only the 3.6 folder, so an old-folder unit resolved ZERO faction rules
     /// (the granted-reach lookup then missed its spells' granted rules). Gated at
-    /// `PENDING_EPOCH_RULES_ALIAS`: at 92 the old common-only read stays, from 93
+    /// `EPOCH_93_DANGER_RULES_RIDER`: at 92 the old common-only read stays, from 93
     /// each alias resolves its canonical faction's rule set.
     #[test]
     fn every_v36_renamed_rules_folder_alias_resolves_the_same_rule_set_from_93() {
         let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
         let mut reg = Registries::new(&root);
-        reg.set_rules_epoch(crate::acts::PENDING_EPOCH_RULES_ALIAS - 1);
+        reg.set_rules_epoch(crate::acts::EPOCH_93_DANGER_RULES_RIDER - 1);
         let mut leaked = Vec::new();
         for (system, alias, _canonical) in V36_SPELL_BOOK_ALIASES {
             if !reg.faction_rule_names(system, alias).is_empty() {
@@ -871,7 +871,7 @@ mod tests {
             "below the gate an old folder resolved faction rules: {}",
             leaked.join(", ")
         );
-        reg.set_rules_epoch(crate::acts::PENDING_EPOCH_RULES_ALIAS);
+        reg.set_rules_epoch(crate::acts::EPOCH_93_DANGER_RULES_RIDER);
         for (system, alias, canonical) in V36_SPELL_BOOK_ALIASES {
             let alias_set = reg.faction_rule_names(system, alias);
             let canonical_set = reg.faction_rule_names(system, canonical);

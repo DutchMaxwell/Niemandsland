@@ -214,7 +214,9 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## A melee fatiguing the unit's joined heroes with it is stamped 91 with EPOCH_91_JOINED_HERO_FATIGUE.
 ## The melee cause groups (Regenerative Strength token wounds before the strikes, the Self-Destruct casualty order, the charge-reach
 ## endpoints and Melee Shrouding band, Counter / Destructive / Piercing Hunter in melee) are stamped 92 with EPOCH_92_MELEE_CAUSES.
-static var rules_epoch: int = 92
+## The AI skirting Dangerous ground (a plain move's goal read and the sideways re-plan), the 3.6 faction folders resolving their rules
+## and the volley's spell rider switched off are stamped 93 with EPOCH_93_DANGER_RULES_RIDER.
+static var rules_epoch: int = 93
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -289,9 +291,11 @@ const EPOCH_91_JOINED_HERO_FATIGUE := 91
 ## The core's frozen `EPOCH_92_MELEE_CAUSES` (acts.rs): the melee cause groups of Plan E, all of them already what the table does.
 ## Nothing in the table gates on it.
 const EPOCH_92_MELEE_CAUSES := 92
-## The core's `PENDING_EPOCH_DANGER_AVOID` (acts.rs, #3090 part 2): a plain move's Dangerous exception reads the unit's
-## goal, and a plan that still crosses Dangerous retries with the goal shifted sideways (`SoloController._execute_move`).
-const PENDING_EPOCH_DANGER_AVOID := 93
+## The core's frozen `EPOCH_93_DANGER_RULES_RIDER` (acts.rs): (1) #3090 part 2, a plain move's Dangerous exception reads the unit's
+## goal, and a plan that still crosses Dangerous retries with the goal shifted sideways (`SoloController._execute_move`); (2) the
+## 3.6 faction folders resolving their rules (the table's registry already does, nothing to gate here); (3) the volley's legacy
+## spell rider off (`BattleSim.resolve`, the cast-phase-off branch).
+const EPOCH_93_DANGER_RULES_RIDER := 93
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
