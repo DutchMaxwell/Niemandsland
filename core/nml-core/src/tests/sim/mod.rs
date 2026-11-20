@@ -1815,6 +1815,7 @@ mod rule_lines_to_hit;
 mod rapid_charge_mark;
 mod reckless_piercing;
 mod reposition_artillery;
+mod melee_deadly_stops;
 mod retaliate;
 mod rule_lines_lone_hero;
 mod rule_lines_save_step;

@@ -1046,6 +1046,12 @@ pub const PENDING_EPOCH_HEIGHT: u32 = 94;
 /// spell killing 5 of 6 models in a line left slot 2 standing where the table leaves slot 3). From 94 the core measures in f32 the
 /// same way. Only paths with `Seams::tray_exact` use the order. Every call site reads THIS constant, not the literal `94`.
 pub const PENDING_EPOCH_CASUALTY_TIES: u32 = 94;
+/// Placeholder gate for the melee Deadly landing that stops rolling (melee95, 20.11.): the table lands a Deadly weapon's unsaved wounds one at a
+/// time and, once the target's whole chain is dead, drops the rest without a single ignore die (`_solo_land_deadly_wounds`: the pick is empty, the
+/// loop breaks); the core rolled every wound's X ignore dice before landing, so a Tough hero with Cursed Undead / Regeneration hit by two Deadly(3)
+/// wounds threw six dice in the core and three at the table. From the bump the melee fold asks (`deadly_wipes`) before each wound. Below it
+/// byte-identical. Every call site reads THIS constant.
+pub const PENDING_EPOCH_DEADLY_STOPS: u32 = 94;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
