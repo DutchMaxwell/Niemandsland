@@ -22,7 +22,9 @@ const TEXTURED_TINT := {"roof_tiles": Color(1.35, 0.85, 0.7), "timber": Color(1.
 ## The authored clutter of BoardgenTownClutter (batches A2 / A2b / A6): the texture set each module is drawn with (the rest is "none": the kit's vertex colours, real colours for plants and cloth).
 const CLUTTER_SET := {"barrel": "timber", "crate": "timber", "bucket": "timber", "woodpile": "timber", "barrel_broken": "timber", "crate_broken": "timber", "cart_wreck": "timber", "loose_wheel": "timber",
 	"splinters_flat": "timber", "trough": "coursed_stone", "debris_flat_a": "coursed_stone", "debris_flat_b": "coursed_stone",
-	"fountain_basin": "coursed_stone", "fountain_column": "coursed_stone", "statue_plinth": "coursed_stone", "statue_stump": "coursed_stone", "pool_kerb": "coursed_stone", "well_ring": "coursed_stone", "well_frame": "timber"}
+	"fountain_basin": "coursed_stone", "fountain_column": "coursed_stone", "statue_plinth": "coursed_stone", "statue_stump": "coursed_stone", "pool_kerb": "coursed_stone", "well_ring": "coursed_stone", "well_frame": "timber",
+	"hall_column_a": "coursed_stone", "hall_column_b": "coursed_stone", "hall_pediment": "coursed_stone", "hall_step": "coursed_stone", "tower_turret": "coursed_stone", "pool_spout": "coursed_stone",
+	"rubble_heap_a": "coursed_stone", "rubble_heap_b": "coursed_stone", "stall_frame": "timber", "stall_frame_ruined": "timber", "sign_board_loaf": "timber", "sign_board_boot": "timber", "timber_ladder_3in": "timber", "timber_ladder_top": "timber"}
 ## A module's own instance tint on top of its set's (the vertex colour of the module is baked by the assets lane; this is the table's side of the same knob): the pool kerb's pale top read as a dashed
 ## white line round the pond from above, so its run is tinted down to a weathered stone.
 const MODULE_TINT := {"pool_kerb": Color(0.52, 0.55, 0.6)}
@@ -50,7 +52,7 @@ func active() -> bool:
 static func set_of(module: String) -> String:
 	if BoardgenTownKit.CLUTTER_SET.has(module):
 		return CLUTTER_SET[module]
-	if module.begins_with(("weeds")) or module.begins_with("bramble") or module.begins_with("dead_tree") or module.begins_with("ivy") or module.begins_with("lantern") or module in ["cloth_flat", "laundry_line", "sack_pile", "fountain_leaves"]:
+	if module.begins_with(("weeds")) or module.begins_with("bramble") or module.begins_with("dead_tree") or module.begins_with("ivy") or module.begins_with("lantern") or module in ["cloth_flat", "laundry_line", "sack_pile", "fountain_leaves", "stall_awning", "stall_awning_ruined", "brazier", "tower_cap_burnt", "sign_bracket"]:
 		return "none"
 	if module in ["roof_rafters", "beam_end", "shutter", "shutter_open", "door"]:
 		return "timber"

@@ -140,3 +140,75 @@ func test_the_pool_kerb_is_a_weathered_stone_tint_not_a_white_run() -> void:
 	var tint: Color = BoardgenTownKit.MODULE_TINT["pool_kerb"]
 	assert_float(tint.get_luminance()).is_less(0.65)
 	assert_float(tint.get_luminance()).is_greater(0.3)   # darker, not black
+
+
+func _edge_between(layout: Dictionary, item: Dictionary, wall_ok: Callable) -> bool:
+	var cell := float(layout["cell_in"])
+	var origin := Vector2(16, 16) * cell * -0.5
+	var xf: Transform3D = item["xf"]
+	var at := Vector2(xf.origin.x, xf.origin.z) / 0.0254 - origin
+	var into := Vector2(xf.basis.z.x, xf.basis.z.z).round()
+	var behind := Vector2i((at - into * 0.3) / cell)
+	var ahead := Vector2i((at + into * 0.3) / cell)
+	return wall_ok.call(layout["cells"][behind.y * 16 + behind.x], layout["cells"][ahead.y * 16 + ahead.x])
+
+
+## The hall, the towers, the square and the yards (second batch of A2 / A2b / A3).
+func test_hall_towers_square_walls_and_yards_follow_the_strip_rules() -> void:
+	var layout := _town()
+	var put := func(x: int, z: int, level: int, kind: String, street := false) -> void:
+		var c: Dictionary = layout["cells"][z * 16 + x]
+		c["level"] = level
+		c["lot_kind"] = kind
+		c["street"] = street
+	for x in range(6, 10):   # the market square
+		for z in range(5, 11):
+			put.call(x, z, 0, "Street", true)
+	for z in range(5, 11):   # a house row on its west side
+		put.call(5, z, 2, "Block")
+	for x in [13, 14]:   # three towers
+		for z in [2, 3]:
+			put.call(x, z, 3, "Block")
+	for x in [1, 2]:
+		for z in [12, 13]:
+			put.call(x, z, 3, "Block")
+	for x in [1, 2]:
+		for z in [1, 2]:
+			put.call(x, z, 3, "Block")
+	for spec in [[1, 9], [2, 9], [1, 10], [2, 10], [3, 9], [3, 10], [1, 11], [2, 11]]:
+		put.call(spec[0], spec[1], 0, "Terrace")   # yard cells
+	layout["landmarks"] = [{"kind": "PumpHouse", "x": 10, "z": 5, "w": 2, "h": 2, "turn": 0, "terrain": 0, "solid": false}]
+	var plan := BoardgenTownClutter.plan(layout)
+	assert_int((plan.get("hall_column_a", []) as Array).size() + (plan.get("hall_column_b", []) as Array).size()).is_equal(4)
+	assert_int((plan["hall_pediment"] as Array).size()).is_equal(1)
+	for m in ["hall_column_a", "hall_column_b", "hall_pediment"]:
+		for item: Dictionary in plan.get(m, []):
+			assert_float(item["xf"].origin.y).is_equal_approx(3.0 * 0.0254, 0.0001)   # on the hall block's top
+	var towers := (plan.get("tower_turret", []) as Array).size() + (plan.get("tower_cap_burnt", []) as Array).size()
+	assert_int(towers).is_greater(0)
+	for item: Dictionary in plan.get("tower_turret", []):
+		var xf: Transform3D = item["xf"]
+		var corner := Vector2(xf.origin.x, xf.origin.z) / 0.0254 + Vector2(24, 24)   # inches off the board's corner
+		var inward := Vector2(xf.basis.x.x + xf.basis.z.x, xf.basis.x.z + xf.basis.z.z)   # +x and +z of the module: the quadrant it fills
+		var mid := corner + inward * 0.4
+		var c := Vector2i(mid / 3.0)
+		assert_int(int(layout["cells"][c.y * 16 + c.x]["level"])).override_failure_message("a turret points off its tower: %s" % corner).is_equal(3)
+	for m in ["stall_frame", "stall_frame_ruined", "stall_awning", "stall_awning_ruined", "brazier", "brazier_coals", "sign_bracket", "sign_board_loaf", "sign_board_boot"]:
+		for item: Dictionary in plan.get(m, []):
+			assert_bool(_edge_between(layout, item, func(behind: Dictionary, ahead: Dictionary) -> bool: return behind["level"] >= 1 and ahead["level"] == 0 and ahead["street"])).override_failure_message("`%s` is not on a house face of the square" % m).is_true()
+	var square_pieces := 0
+	for m in ["stall_frame", "stall_frame_ruined", "brazier", "sign_bracket"]:
+		square_pieces += (plan.get(m, []) as Array).size()
+	assert_int(square_pieces).is_greater(0)
+	assert_int((plan.get("laundry_line", []) as Array).size()).is_less_equal(2)
+	for item: Dictionary in plan.get("rubble_heap_a", []) + plan.get("rubble_heap_b", []):
+		var c := Vector2i((Vector2(item["xf"].origin.x, item["xf"].origin.z) / 0.0254 + Vector2(24, 24)) / 3.0)
+		assert_str(layout["cells"][c.y * 16 + c.x]["lot_kind"]).is_equal("Terrace")   # only on a RUINS yard
+
+
+func test_every_tower_corner_turret_fills_its_tower_not_the_air() -> void:
+	# corners NW, NE, SE, SW of a tower top; the module fills local +x / +z, so after the yaw that quadrant must point into the tower
+	var inward := [Vector2(1, 1), Vector2(-1, 1), Vector2(-1, -1), Vector2(1, -1)]
+	for corner in 4:
+		var quad := Basis(Vector3.UP, BoardgenTownClutter.TURRET_YAW[corner]) * Vector3(1, 0, 1)
+		assert_vector(Vector2(quad.x, quad.z).round()).override_failure_message("corner %d turns its turret off the tower" % corner).is_equal(inward[corner])
