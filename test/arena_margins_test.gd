@@ -77,3 +77,7 @@ func test_elimination_latches_the_first_round_a_side_is_at_zero() -> void:
 	ArenaMatch.latch_eliminations(latched, {1: 0, 2: 0}, 3)            # a later check must not move round 2
 	assert_int(int(latched[2])).is_equal(2)
 	assert_int(int(latched[1])).is_equal(3)
+
+
+func test_planted_parse_error(:
+	pass
