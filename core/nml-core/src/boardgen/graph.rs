@@ -32,6 +32,8 @@ pub fn build(seed: i64, sym: Symmetry, b: &Budgets) -> SectorGraph {
     let cz1 = rng.randi_range(1, (hz as i64 - 2).max(1)) as usize;
     let cz2 = if sym == Symmetry::Point180 { nz - 1 - cz1 } else { rng.randi_range(hz as i64 + 1, (nz as i64 - 2).max(hz as i64 + 1)) as usize };
     for x in 0..nx { street[(if x < hx { cz1 } else { cz2 }) * nx + x] = true; }
+    // A market square: a square of street cells about the board centre, on the mid cross street (it always crosses columns 7 and 8).
+    for z in hz - b.plaza / 2..hz + b.plaza / 2 { for x in hx - b.plaza / 2..hx + b.plaza / 2 { street[z * nx + x] = true; } }
 
     let mut g = SectorGraph { nx, nz, symmetry: sym, arteries, is_street: Vec::new(), lots: Vec::new() };
     let (mut occ, tpls, target) = (vec![false; nx * nz], b.lot_shapes, b.lot_pairs);
