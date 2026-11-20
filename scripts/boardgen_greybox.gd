@@ -26,8 +26,6 @@ const SKIN_IN := 0.04
 ## over the ground skin, a hall mark a rim line on its block.
 const SOLID_IN := 2.5
 const POOL_IN := 0.07   # a hair above the 0.04 in ground skin
-const RIDGE_IN := 1.4   # an intact house's gable ridge above its body
-const RIDGE_WIDTH_IN := 1.0
 const RIM_IN := 0.3
 const LADDER_WIDTH_IN := 1.0
 const LADDER_OFFSET_IN := 0.12   # the ladder stands this far off the wall face
@@ -121,7 +119,8 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 				base + k * LADDER_RUNG_GAP_IN, base + k * LADDER_RUNG_GAP_IN + LADDER_RAIL_IN, "ladder", false))
 	if town:
 		out.append_array(_town_landmarks(layout, origin))
-		out.append_array(_town_ridges(layout, origin))
+		out.append_array(BoardgenTownDressing.chimneys(layout))
+		out.append_array(BoardgenTownDressing.merlons(layout))
 	else:
 		out.append_array(BoardgenSumps.kerbs(layout))   # the low rim round each toxic sump (the town draws its pools as flat boxes)
 	return out
@@ -142,27 +141,6 @@ static func ladder_kit_plan(layout: Dictionary) -> Dictionary:
 			var top_piece := k == int(rise / LADDER_SEGMENT_IN) - 1
 			(out.get_or_add("ladder_top" if top_piece else "ladder_3in", []) as Array).append(
 				{"xf": Transform3D(yaw, Vector3(edge.x, base + k * LADDER_SEGMENT_IN, edge.y) * INCHES_TO_METERS), "colour": LADDER_TINT})
-	return out
-
-
-## The gable of every intact (Roofed) house: a ridge along its long side and a chimney at one end, above the 2.5 in body (visual only: the
-## core sees the house as a 2.5 in solid). `ridge` = the lot's id.
-static func _town_ridges(layout: Dictionary, origin: Vector2) -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	var cell_in := float(layout["cell_in"])
-	for lot: Dictionary in layout["lots"]:
-		if lot["kind"] != "Roofed":
-			continue
-		var lo := origin + Vector2(lot["x"], lot["z"]) * cell_in
-		var size := Vector2(lot["w"], lot["h"]) * cell_in
-		var along_x: bool = size.x >= size.y
-		var mid := lo + size * 0.5
-		var half := (Vector2(size.x - 0.6, RIDGE_WIDTH_IN) if along_x else Vector2(RIDGE_WIDTH_IN, size.y - 0.6)) * 0.5
-		out.append({"lo": Vector3(mid.x - half.x, SOLID_IN, mid.y - half.y), "hi": Vector3(mid.x + half.x, SOLID_IN + RIDGE_IN, mid.y + half.y),
-			"kind": "ridge", "solid": false, "ridge": lot["id"]})
-		var at := mid + (Vector2(half.x - 0.35, 0.0) if along_x else Vector2(0.0, half.y - 0.35))
-		out.append({"lo": Vector3(at.x - 0.35, SOLID_IN, at.y - 0.35), "hi": Vector3(at.x + 0.35, SOLID_IN + RIDGE_IN + 0.9, at.y + 0.35),
-			"kind": "ridge", "solid": false, "ridge": lot["id"]})
 	return out
 
 
@@ -280,6 +258,11 @@ func build(layout: Dictionary) -> void:
 	mmi.material_override = _material
 	add_child(mmi)
 	_dress(layout, theme, ["Rails"], kit)
+	if theme["id"] == BoardgenTheme.RUIN_TOWN:
+		var town := BoardgenTownDressing.new()   # the gable roofs of the intact houses
+		town.name = "TownDressing"
+		town.build(layout, _material)
+		add_child(town)
 	_anchor()
 	_layout = layout
 	var settings := _settings()
@@ -297,8 +280,11 @@ static func _settings() -> Node:
 func refresh_atmosphere() -> void:
 	var settings := _settings()
 	var want: bool = settings == null or settings.board_mist_enabled()
+	var air: Array = BoardgenTheme.of(_layout)["atmosphere"]
 	for part: Array in [["Mist", BoardgenMist], ["Steam", BoardgenSteam]]:
 		var node: Node = get_node_or_null(part[0])
+		if not air.has(part[0]):
+			continue   # the theme has no such air (the town)
 		if want and node == null:
 			node = part[1].new()
 			node.name = part[0]
@@ -324,7 +310,7 @@ func _dress(layout: Dictionary, theme: Dictionary, names: Array, kit: BoardgenKi
 
 func _ready() -> void:
 	_anchor()
-	if _kit != null:   # a module missing now is cached for the next board
+	if _kit != null and layout_theme == BoardgenTheme.DEEPWORKS:   # a module missing now is cached for the next board (the town uses no kit)
 		_kit.prefetch(KIT_LADDERS + BoardgenRails.KIT_MODULES + BoardgenProps.KIT_MODULES)
 	_scatter_off(_footprint)
 	var graphics := get_node_or_null("/root/GraphicsSettings")
