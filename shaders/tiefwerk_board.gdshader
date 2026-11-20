@@ -3,7 +3,7 @@ shader_type spatial;
 // instance (INSTANCE_CUSTOM.x); the neighbouring cell heights (tier lips, cliff stripes, contact shadow, sump rim) come from a
 // one-texel-per-cell texture. Everything is procedural: no texture file, nothing from a third party.
 // kinds: 0 ground, 1 street, 2 sump, 3 tier 1 (rusted plate deck), 4 tier 2 (rooftop slab), 5 ladder (every connector is a ladder),
-// 6 tier 3 (a tower top: the rooftop slab, cooler and paler).
+// 6 tier 3 (a tower top: the rooftop slab, cooler and paler), 7 kerb (the low concrete rim round a sump).
 
 uniform sampler2D cells : filter_nearest;   // red = height of the cell's top in inches, green = 255 for a sump cell
 uniform vec2 board_cells = vec2(16.0);
@@ -95,6 +95,37 @@ float wall_dist(vec2 g, ivec2 c, float h) {
 
 #include "res://shaders/tiefwerk_edges.gdshaderinc"
 
+// Distance in inches from the point g to the nearest sump cell among the 3x3 around cell c (the toxic stain on the floor and the walls); 9 = none.
+float sump_dist(vec2 g, ivec2 c) {
+	float best = 9.0;
+	for (int j = -1; j <= 1; j++) {
+		for (int i = -1; i <= 1; i++) {
+			ivec2 o = c + ivec2(i, j);
+			if (cell_at(o).y > 0.5) {
+				best = min(best, length(max(abs(g - (vec2(o) + 0.5)) - 0.5, 0.0)) * cell_in);
+			}
+		}
+	}
+	return best;
+}
+
+// The liquid's slow swell: two layers of noise drifting against each other (its gradient is the ripple normal).
+float swell(vec2 q) {
+	return 0.6 * vnoise(q * 1.5 + vec2(TIME * 0.05, TIME * 0.03)) + 0.4 * vnoise(q * 3.3 + vec2(-TIME * 0.04, TIME * 0.06));
+}
+
+// A few bubbles: a 1.25 in grid, a quarter of the cells hold one that swells, pops in a ring and flashes, then rests. x = skin and glint, y = pop ring.
+vec2 bubbles(vec2 q) {
+	vec2 g = q / 1.25, id = floor(g);
+	float h = h21(id + 3.7);
+	float ph = fract(TIME * (0.12 + 0.08 * h21(id + 9.1)) + h * 7.0);
+	float d = length(g - (id + 0.3 + 0.4 * vec2(h21(id + 1.3), h21(id + 5.9)))) * 1.25;
+	float r = 0.05 + 0.13 * smoothstep(0.0, 0.45, ph);
+	float body = ph < 0.45 ? smoothstep(0.035, 0.0, abs(d - r)) + 0.5 * smoothstep(r, 0.0, d) : 0.0;
+	float pop = ph > 0.45 && ph < 0.6 ? smoothstep(0.075, 0.0, abs(d - r - (ph - 0.45) * 1.2)) * (1.0 - (ph - 0.45) / 0.15) : 0.0;
+	return step(0.75, h) * vec2(body, pop);
+}
+
 void fragment() {
 	vec3 p = (wpos - board_origin) / IN;   // board inches, origin = board centre
 	vec3 n = normalize(wnrm);
@@ -105,12 +136,20 @@ void fragment() {
 	float n1 = fbm(uv * 0.55), n2 = fbm(uv * 2.1 + 7.0), n3 = vnoise(uv * 11.0);
 	vec3 alb = vec3(0.3);
 	vec3 emis = vec3(0.0);
-	float rough = 0.9, met = 0.0, ao = 1.0;
+	float rough = 0.9, met = 0.0, ao = 1.0, spec = 0.5;
+	vec3 nw = n;   // the shading normal: the sump's liquid ripples it
+	bool liquid_on = false;
 
 	if (k == 5) {   // ladder: weathered safety yellow
 		alb = YELLOW * mix(0.5, 0.9, n2);
 		rough = 0.5;
 		met = 0.5;
+	} else if (k == 7) {   // kerb: poured concrete, a chipped hazard stripe on top, green crust and a tide line on the inside
+		float stripe = step(0.5, fract((p.x + p.z) * 0.8));
+		alb = mix(vec3(0.24, 0.235, 0.23), vec3(0.36, 0.35, 0.33), n2) * mix(0.8, 1.0, n3);
+		float crust = top ? 0.0 : 0.6 * smoothstep(0.12, 0.0, p.y - 0.06 - 0.08 * n3) + 0.3 * smoothstep(0.6, 0.9, n2);
+		alb = top ? mix(vec3(0.05), YELLOW * 0.9, stripe) * mix(0.55, 1.0, smoothstep(0.35, 0.6, n2 + 0.3 * n3)) : mix(alb * 0.7, vec3(0.07, 0.11, 0.03), crust);
+		emis = vec3(0.02, 0.06, 0.005) * crust * crust;
 	} else if (!top) {   // cliff wall of a tier: formwork concrete, rust drips from the lip, hazard band under it
 		vec2 nh = normalize(n.xz + 0.0001);
 		vec2 g_in = (p.xz - nh * 0.02 + half_board) / cell_in;
@@ -148,6 +187,9 @@ void fragment() {
 		float drip = smoothstep(0.55, 0.8, fbm(vec2(uv.x * 1.7, uv.y * 0.18))) * smoothstep(3.0, 0.0, dtop);
 		alb = mix(alb, vec3(0.33, 0.15, 0.06), drip);
 		ao = mix(0.4, 1.0, smoothstep(0.0, 1.6, p.y - low_y));
+		float tide = step(0.5, cell_at(ivec2(floor(g_out))).y) * smoothstep(1.8, 0.0, p.y + (n2 - 0.5) * 1.2);   // a toxic sump at the foot: tide marks
+		alb = mix(alb, vec3(0.07, 0.12, 0.035) * mix(0.7, 1.4, n3), tide * 0.85);
+		emis += vec3(0.03, 0.11, 0.01) * tide * smoothstep(0.7, 0.0, p.y);
 		if (top_y - low_y >= 2.0 && dtop > 0.25 && dtop < 0.85 && h21(vec2(floor(uv.x / cell_in) + top_y, low_y + 7.0)) > 0.45) {   // hazard band only on some edges, chipped and dirty
 			vec3 paint = mix(vec3(0.04), YELLOW * 0.8, step(0.5, fract((uv.x + p.y) * 0.9)));
 			alb = mix(paint, alb, smoothstep(0.45, 0.65, n2 + 0.2 * n3));
@@ -200,14 +242,32 @@ void fragment() {
 			rough = mix(rough, 0.15, oil);
 			emis += oil * 0.006 * (0.5 + 0.5 * cos(6.28 * (n1 * 2.0 + vec3(0.0, 0.33, 0.67))));
 			ao = mix(0.6, 1.0, smoothstep(0.0, 1.0, wd));
-			if (me.y > 0.5) {   // sump: an irregular shoreline inside the hazard cells, a sludge bank, murky green liquid
-				float liquid = smoothstep(0.3, 0.55, rim + (n2 - 0.5) * 0.9);
-				alb = mix(vec3(0.10, 0.09, 0.05) * mix(0.7, 1.3, n3), vec3(0.04, 0.075, 0.035) * mix(0.7, 1.3, n2), liquid);
-				rough = mix(0.9, 0.06, liquid);
-				emis = vec3(0.07, 0.15, 0.01) * liquid * smoothstep(0.4, 0.9, fbm(uv * 0.8 + TIME * 0.04));
-			}
-			if (rim < 0.28 && n2 + 0.3 * n3 > 0.45) {   // the painted rim of a sump, chipped
-				alb = mix(vec3(0.05), YELLOW, step(0.5, fract((p.x + p.z) * 0.8))) * mix(0.6, 1.0, n2);
+			float sd = sump_dist(g, c);   // the sump's stain creeps over the floor round it: wet, green-black crust with ragged tongues
+			float reach = 0.35 + 1.7 * fbm(uv * 1.1 + 5.0);   // ragged tongues: how far the stain goes from the pool at this spot
+			float creep = smoothstep(reach, reach - 0.45, sd) * step(me.y, 0.5);
+			alb = mix(alb, vec3(0.045, 0.07, 0.025) * mix(0.7, 1.3, n3), creep * 0.85);
+			rough = mix(rough, 0.7, creep);
+			emis += vec3(0.02, 0.08, 0.006) * smoothstep(0.4, 0.0, sd) * creep * n2;
+			if (me.y > 0.5) {   // sump: a sunken basin; the liquid is dark where deep and bright at the shore, ripples slowly, with scum, glints and popping bubbles
+				float depth = smoothstep(0.5, 1.9, rim);
+				vec3 vd = (INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz;
+				vec2 q = p.xz - vd.xz / max(vd.y, 0.2) * 0.3 * depth;   // the surface lies below the kerb: the pattern slides with the eye
+				float h0 = swell(q);
+				nw = normalize(vec3(-(swell(q + vec2(0.1, 0.0)) - h0) * 3.5, 1.0, -(swell(q + vec2(0.0, 0.1)) - h0) * 3.5));
+				float liquid = smoothstep(0.42, 0.8, rim + (n2 - 0.5) * 0.6);
+				float scum = smoothstep(0.5, 0.62, fbm(q * 0.9 + vec2(TIME * 0.02, TIME * 0.01) + 5.0)) * (0.5 + 0.5 * (1.0 - depth));
+				float vein = pow(1.0 - abs(2.0 * fbm(q * 1.1 + TIME * 0.03) - 1.0), 4.0);
+				vec2 bub = bubbles(q);
+				vec3 bank = vec3(0.10, 0.09, 0.05) * mix(0.7, 1.3, n3);
+				vec3 deep = mix(vec3(0.04, 0.11, 0.03), vec3(0.008, 0.03, 0.02), depth);
+				alb = mix(bank, mix(deep, vec3(0.30, 0.34, 0.07) * mix(0.8, 1.2, n2), scum * 0.8), liquid);
+				rough = mix(0.9, mix(0.04, 0.6, scum), liquid);
+				spec = mix(0.5, 1.0, liquid * (1.0 - scum));
+				float pulse = 0.65 + 0.35 * vnoise(q * 0.9 + TIME * 0.1);
+				emis = (mix(vec3(0.10, 0.34, 0.015), vec3(0.0, 0.05, 0.03), depth) * pulse * (1.0 - scum * 0.7) + vec3(0.1, 0.5, 0.07) * vein * 0.3) * liquid;
+				emis += (vec3(0.5, 1.0, 0.3) * bub.x * 0.5 + vec3(0.8, 1.0, 0.5) * bub.y * 0.7) * liquid;
+				ao = mix(0.5, 1.0, smoothstep(0.28, 0.9, rim));
+				liquid_on = true;
 			}
 		} else if (k == 3) {   // rusted plate deck: 1.5 in plates, rivets, seams
 			float ph = h21(floor(uv / 1.5));
@@ -247,4 +307,8 @@ void fragment() {
 	ROUGHNESS = rough;
 	METALLIC = met;
 	EMISSION = emis;
+	SPECULAR = spec;
+	if (liquid_on) {
+		NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
+	}
 }
