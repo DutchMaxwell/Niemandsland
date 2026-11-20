@@ -2695,6 +2695,51 @@ mod tests {
         assert_eq!(seen.values().copied().collect::<Vec<_>>(), [6, 6, 6, 6, 2], "all 26 golden_cast_effects cases: {seen:?}");
     }
 
+    /// The tray path's spell tokens left, `[off: cast + volley, off: plain volley, on: cast + volley, on: plain volley]`,
+    /// for a caster holding 4 tokens: a planned Ward cast (costs 1) and a "Big Bolt" damage spell the legacy volley rider
+    /// could still buy (cost 1, in range), at `rules_epoch`. "off"/"on" is `seam_cast`.
+    fn rider_tokens(rules_epoch: u32) -> [i64; 4] {
+        use crate::rules::{Spell, SpellModifier};
+        let (mut st, mut statics) = bolt_board(0, &[], 6);
+        statics[0].shoot = vec![ShootProfile { name: "Rifle".into(), attacks: 1, count: 1, range: 24, ..Default::default() }];
+        statics[0].ctx.quality = 4;
+        statics[0].spells = vec![
+            Spell { name: "Ward".into(), effect_kind: "buff".into(), threshold: 1, target_count: 1, modifier: SpellModifier { present: true, def_mod: 1.0, ..Default::default() }, ..Default::default() },
+            Spell { name: "Big Bolt".into(), effect_kind: "damage".into(), effect_hits: 3, weapon_rules: vec![], threshold: 1, range_in: 24.0, target_count: 1, ..Default::default() },
+        ];
+        st.casts[0] = 4; // spare tokens: the planned cast costs 1, the volley's rider could still buy "Big Bolt"
+        let ward = CastInput { spell: "Ward".into(), targets: vec!["a".into()], base: 2, threshold: 1, ..bolt(0) };
+        let tokens_after = |on: bool, t: Vec<Input>| {
+            let s = Seams { cast: on, rules_epoch, ..seams() };
+            let ActStep::Done { state, .. } = finish_with(&statics, &st, s, t) else { panic!("seam_cast {on}: the activation ends") };
+            state.casts[0]
+        };
+        let with_cast = vec![Begin, intent(HOLD, Some("b")), Input::Cast(ward.clone())];
+        let plain = vec![Begin, intent(HOLD, Some("b"))];
+        [
+            tokens_after(false, with_cast.clone()), tokens_after(false, plain.clone()),
+            tokens_after(true, with_cast), tokens_after(true, plain),
+        ]
+    }
+
+    /// `PENDING_EPOCH_RIDER_OFF` (found by the CAST-O7 probe): with `seam_cast` OFF (every shipped header) the volley's legacy spell
+    /// rider (sim.rs `resolve`, the `!seams.cast` branch) spent tokens on the tray path too: a caster with SPARE tokens and
+    /// an affordable damage spell in range paid for a cast it never makes, on top of the tokens its planned casts paid. The
+    /// table has no rider (its casts are the planned ones, paid at plan time), so the shadow read `casts` core 0 vs table 2.
+    /// From 93 the off side keeps the table's 3 and 4. RED: the gate removed -> the 93 row reads `[2, 3, 3, 2]`.
+    #[test]
+    fn rider_off_93_the_volleys_spell_rider_spends_no_token_on_the_tray_path() {
+        // The ON side is untouched (its plain volley reads 2 because the core's own cast sub-phase fires when no tray cast
+        // is offered, the seam's intended self-play meaning): only the OFF side moves, to the table's numbers.
+        assert_eq!(rider_tokens(crate::acts::PENDING_EPOCH_RIDER_OFF), [3, 4, 3, 2], "[off cast+volley, off plain, on cast+volley, on plain]");
+    }
+
+    /// Below 93 the rider stays byte-identical: the OFF side pays 1 more token than the table (the old reading).
+    #[test]
+    fn rider_off_93_below_93_the_legacy_rider_still_spends_a_token() {
+        assert_eq!(rider_tokens(crate::acts::PENDING_EPOCH_RIDER_OFF - 1), [2, 3, 3, 2], "[off cast+volley, off plain, on cast+volley, on plain]");
+    }
+
     /// CC-8b: a debuff placed by a cast is read by the SAME activation's volley, and obeys `scope` (a melee-scoped debuff
     /// stays out of the shooting volley and stays unspent; an attackers-beneficiary hit buff improves the volley's to-hit).
     /// Planted fault: dropping `scope` makes the melee-scoped debuff fire on shooting (5+ instead of 4+) and spend -> RED.

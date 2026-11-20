@@ -980,6 +980,13 @@ pub const PENDING_EPOCH_DANGER_AVOID: u32 = 93;
 /// so it waits for a real epoch: from 93 the alias answers, below it the old common-only read stays.
 /// Every call site reads THIS constant, not the literal `93` or `CURRENT_RULES_EPOCH`.
 pub const PENDING_EPOCH_RULES_ALIAS: u32 = 93;
+/// Placeholder gate for the volley's LEGACY SPELL RIDER (`sim::resolve`, the `!seams.cast` branch): below 93 a seam-off
+/// volley by a caster with spare tokens prices (and, on the dice path, pays for) the best affordable in-range damage spell
+/// inside the shoot pick, a cast nobody makes: the table has no such rider (its casts are the planned ones, paid at plan
+/// time), so a 4-token caster ended a plain volley at 3 tokens in the core against 4 at the table. From 93 the rider is off
+/// on EVERY path (dice and expectation alike): the volley is the weapons only and spends no spell token. `seam_cast` ON
+/// never had the rider, so its paths are untouched. Every call site reads THIS constant, not the literal `93`.
+pub const PENDING_EPOCH_RIDER_OFF: u32 = 93;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff

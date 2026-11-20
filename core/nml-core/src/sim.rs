@@ -11305,7 +11305,8 @@ fn resolve_with(
                         }
                         phantom *= crate::dice::SCOURGE_PHANTOM_WOUNDS as f64;
                     }
-                    if seams.cast {
+                    // PENDING_EPOCH_RIDER_OFF: from 93 the rider is off on every path (the table has none), as seam ON always was.
+                    if seams.cast || rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_RIDER_OFF) {
                         (shooting, 0, phantom)
                     } else {
                         let (sp_ev, sp_cost) = match caster {
