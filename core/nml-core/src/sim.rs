@@ -8628,6 +8628,9 @@ fn tray_spell_effect(state: &mut State, targets: &[usize], c: &CastInput, spell:
     let live = rec.to_live_mod(rules_epoch);
     for &t in targets {
         state.buffs[t].push(live.clone());
+        if live.once {
+            state.cast_buffs.push((t, live.clone(), false)); // CAST-O7: the delta names it if this activation spends it
+        }
     }
 }
 
@@ -10508,6 +10511,7 @@ fn resolve_with(
     let mut sc = Scratch::default();
     // #816 PR 2 — the activation-start latch clear (main.gd:17456's erase).
     next.teleport_used[si] = false;
+    next.cast_buffs.clear(); // CAST-O7: a board that already ran an activation carries no ledger into this one
     sc.rules_epoch = seams.rules_epoch; // wave-3 mark consumers read it off Scratch
 
     // --- REANIMATION (main.gd:953-957), the activation trigger BEFORE the

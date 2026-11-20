@@ -166,7 +166,7 @@ pub fn synth_state(a: &Value, b: &Value, zone_a: &Zone, zone_b: &Zone, markers: 
         los: vec![None; n], sees_tab: None, los_pairs: None,
         bands,
         shroud: vec![None; n], charge_no_difficult: vec![false; n], charge_probe_r: vec![0.0; n],
-        buffs: vec![Vec::new(); n], vs_mark_round: vec![-1; n], hit_and_run_round: vec![-1; n],
+        buffs: vec![Vec::new(); n], cast_buffs: Vec::new(), vs_mark_round: vec![-1; n], hit_and_run_round: vec![-1; n],
         moved_round: vec![-1; n],
         delayed_action_round: vec![-1; n],
         coordinate_via_round: vec![-1; n],

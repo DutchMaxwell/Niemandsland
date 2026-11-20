@@ -535,6 +535,7 @@ pub fn build_state(
         charge_no_difficult: Vec::with_capacity(n),
         charge_probe_r: Vec::with_capacity(n),
         buffs: vec![Vec::new(); n],
+        cast_buffs: Vec::new(),
         vs_mark_round: vec![-1; n],
         hit_and_run_round: vec![-1; n],
         moved_round: vec![-1; n],

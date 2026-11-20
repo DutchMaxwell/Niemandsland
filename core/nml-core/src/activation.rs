@@ -694,15 +694,18 @@ pub struct UnitDelta {
     /// re-opens a burned latch.
     pub surprise_attack_used: bool,
     /// C-15: the once buffs this activation SPENT (inventory class (b)): per record its own name (the table's `spell`) and scope, in
-    /// `before`'s order. The core spends in its own copy of the ledger; `land_delta` spends the matching table records. Records the
-    /// core ADDED (a pre-attack placement) are not carried.
+    /// `before`'s order. The core spends in its own copy of the ledger; `land_delta` spends the matching table records. CAST-O7: then
+    /// the once records this activation's own casts placed and its spends took (never in `before`), in placement order. Records the
+    /// core ADDED any other way (a pre-attack placement) are not carried.
     pub buffs_spent: Vec<(String, String)>,
 }
 
 /// The once buffs of `before` that `after` no longer holds, as (record name, scope). Each record is first matched to an identical
-/// one in `after`, so a buff the activation did not touch is never named.
-fn spent_buffs(before: &[LiveMod], after: &[LiveMod]) -> Vec<(String, String)> {
-    let mut kept: Vec<&LiveMod> = after.iter().collect();
+/// one in `after`, so a buff the activation did not touch is never named. CAST-O7: then the once records this activation's casts
+/// placed on unit `u` and its spends took (`State::cast_buffs`) - never in `before`, so the diff cannot see them - in placement
+/// order. Records the core added any other way (a pre-attack mark) are still not carried.
+fn spent_buffs(before: &[LiveMod], after: &State, u: usize) -> Vec<(String, String)> {
+    let mut kept: Vec<&LiveMod> = after.buffs[u].iter().collect();
     let mut out = Vec::new();
     for b in before {
         match kept.iter().position(|a| *a == b) {
@@ -713,7 +716,13 @@ fn spent_buffs(before: &[LiveMod], after: &[LiveMod]) -> Vec<(String, String)> {
             None => {}
         }
     }
+    out.extend(cast_spent_of(after, u).map(|r| (r.name.to_string(), r.scope.to_string())));
     out
+}
+
+/// CAST-O7: the once records this activation's casts placed on unit `u` that its spends took.
+fn cast_spent_of(after: &State, u: usize) -> impl Iterator<Item = &LiveMod> {
+    after.cast_buffs.iter().filter(move |(cu, _, spent)| *cu == u && *spent).map(|(_, r, _)| r)
 }
 
 /// The names `after` holds that `before` did not, in `after`'s order.
@@ -785,6 +794,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
             || before.piercing_tag_persistent[u] != after.piercing_tag_persistent[u]
             || before.surprise_attack_used[u] != after.surprise_attack_used[u]
             || before.buffs[u] != after.buffs[u]
+            || cast_spent_of(after, u).next().is_some()
         {
             out.push(UnitDelta {
                 key: key.clone(),
@@ -807,7 +817,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 piercing_tag_used: after.piercing_tag_used[u],
                 piercing_tag_persistent: after.piercing_tag_persistent[u],
                 surprise_attack_used: after.surprise_attack_used[u],
-                buffs_spent: spent_buffs(&before.buffs[u], &after.buffs[u]),
+                buffs_spent: spent_buffs(&before.buffs[u], after, u),
             });
         }
     }
@@ -2732,6 +2742,86 @@ mod tests {
         let ActStep::Done { state, .. } = done else { panic!("Marked: {done:?}") };
         assert_eq!(asked, ["cast|1x2+|Mystic", "attack|1x3+|Mystic", "defense|1x4+|Foe"]);
         assert!(state.buffs[2].is_empty(), "attackers once-mark spent by the volley");
+    }
+
+    /// CAST-O7 (lead ruling O7, 20.11.): a once-grant spell cast in an activation BEFORE its own attack is spent by that same
+    /// activation's volley (casting precedes attacking; the table's `_solo_spend_once_mods` does the same). The record is placed
+    /// and spent inside one call, so it is in neither the capture nor the end board: the delta must still name it in
+    /// `buffs_spent` (name, scope), on the unit that held it, even when that unit changed in nothing else. A once record the
+    /// volley does not spend (melee scope), a round record and a record placed by NO cast (the old before/after diff) stay as they
+    /// were. RED: `delta_of` reading only before vs after -> every "spent" row below is empty.
+    #[test]
+    fn cast_o7_a_once_buff_cast_before_the_volley_and_spent_by_it_is_in_the_delta() {
+        use crate::rules::{Spell, SpellModifier};
+        let (st, mut statics) = bolt_board(0, &[], 6);
+        statics[0].shoot = vec![ShootProfile { name: "Rifle".into(), attacks: 1, count: 1, range: 24, ..Default::default() }];
+        statics[0].ctx.quality = 4;
+        let spell = |name: &str, kind: &str, scope: &str, who: &str, m: SpellModifier| Spell {
+            name: name.into(), effect_kind: kind.into(), threshold: 1, target_count: 1, scope: scope.into(), beneficiary: who.into(), modifier: m, ..Default::default()
+        };
+        let m = |hit: f64, def: f64, cast: f64, range: f64| SpellModifier { present: true, hit_mod: hit, def_mod: def, casting_mod: cast, range_in: range, ..Default::default() };
+        statics[0].spells = vec![
+            spell("Marked", "debuff", "shooting", "attackers", m(1.0, 0.0, 0.0, 0.0)),
+            spell("Withering", "debuff", "shooting", "", m(0.0, -1.0, 0.0, 0.0)),
+            spell("Crippling", "debuff", "melee", "", m(0.0, -1.0, 0.0, 0.0)),
+            spell("Battle Rune", "buff", "shooting", "", m(0.0, 0.0, 0.0, 6.0)),
+            spell("Focus", "buff", "", "", m(0.0, 0.0, 1.0, 0.0)),
+            spell("Ward", "buff", "", "", m(0.0, 1.0, 0.0, 0.0)),
+        ];
+        // `miss`: every attack die fails (the foe's row would not exist without the spent record); otherwise every hit lands.
+        let run = |casts: &[(&str, &str, bool)], tokens: i64, miss: bool| {
+            let mut st = st.clone();
+            st.casts[0] = tokens;
+            let mut t = vec![Begin, intent(HOLD, Some("b"))];
+            t.extend(casts.iter().enumerate().map(|(i, (name, at, once))| Input::Cast(CastInput { seq: i as i64, spell: (*name).into(), targets: vec![(*at).into()], base: 2, threshold: 1, once: *once, ..bolt(0) })));
+            loop {
+                match step_activation(&statics, &st, "a", &Terrain::default(), seams(), &t, true) {
+                    ActStep::NeedRoll { kind, faces, .. } => t.push(Faces(vec![if (kind == "attack" && miss) || kind == "defense" { 1 } else { 6 }; faces])),
+                    ActStep::Done { state, .. } => return (st.clone(), state),
+                    other => panic!("{casts:?}: {other:?}"),
+                }
+            }
+        };
+        let spent = |st: &State, after: &State, key: &str| delta_of(st, after).into_iter().find(|d| d.key == key).map(|d| d.buffs_spent);
+        let pair = |n: &str, scope: &str| vec![(n.to_string(), scope.to_string())];
+        // (1) a debuff on the foe the volley's save reads (def role), and the attackers-side mark its to-hit reads (vs-target role)
+        let (before, after) = run(&[("Withering", "b", true)], 1, false);
+        assert!(after.buffs[2].is_empty(), "the core spent it (the old behaviour)");
+        assert_eq!(spent(&before, &after, "b"), Some(pair("Withering", "shooting")), "defense debuff spent by the volley");
+        let (before, after) = run(&[("Marked", "b", true)], 1, true);
+        assert_eq!(spent(&before, &after, "b"), Some(pair("Marked", "shooting")), "vs-target mark: the foe changed in nothing else, its row still names the spend");
+        // (2) the caster's own buff (range) on itself
+        let (before, after) = run(&[("Battle Rune", "a", true)], 1, false);
+        assert_eq!(spent(&before, &after, "a"), Some(pair("Battle Rune", "shooting")), "the caster's own once buff");
+        // (3) a casting once-record spent by the NEXT cast's roll, not by the volley
+        let (before, after) = run(&[("Focus", "a", true), ("Ward", "a", false)], 2, false);
+        assert_eq!(spent(&before, &after, "a"), Some(pair("Focus", "")), "Focus is spent by the second cast's die, the round Ward stays");
+        assert_eq!(after.buffs[0].len(), 1, "only the round Ward is held at the end");
+        // (4) what is NOT spent is not reported: a melee-scoped once record, a round record
+        let (before, after) = run(&[("Crippling", "b", true)], 1, false);
+        assert_eq!((after.buffs[2].len(), spent(&before, &after, "b").map_or(0, |v| v.len())), (1, 0), "melee scope stays out of the volley");
+        let (before, after) = run(&[("Withering", "b", false)], 1, false);
+        assert_eq!((after.buffs[2].len(), spent(&before, &after, "b").map_or(0, |v| v.len())), (1, 0), "a round record is never spent");
+        // (5) a record the capture already held (no cast): the old before/after diff still names it, once
+        let mut held = st.clone();
+        held.buffs[2] = vec![LiveMod { attackers: true, ..once_buff("Marked", "shooting", true) }];
+        let ActStep::Done { state: after, .. } = finish_with(&statics, &held, seams(), vec![Begin, intent(HOLD, Some("b"))]) else { panic!("a plain volley") };
+        assert_eq!(spent(&held, &after, "b"), Some(pair("Marked", "shooting")), "a captured once record spent by the volley");
+        // (6) a record in the capture AND an identical one cast on it: the volley spends both and both are named
+        held.casts[0] = 1;
+        let cast = Input::Cast(CastInput { seq: 0, spell: "Marked".into(), targets: vec!["b".into()], base: 2, threshold: 1, once: true, ..bolt(0) });
+        let ActStep::Done { state: after, .. } = finish_with(&statics, &held, seams(), vec![Begin, intent(HOLD, Some("b")), cast]) else { panic!("a cast and a volley") };
+        assert_eq!(spent(&held, &after, "b"), Some([pair("Marked", "shooting"), pair("Marked", "shooting")].concat()), "the captured record and the cast one are two spends");
+    }
+
+    /// CAST-O7: answers every die the core asks, a success for the shooter and a failed save for the foe, to the end.
+    fn finish_with(statics: &[UnitStatic], st: &State, seams: Seams, mut t: Vec<Input>) -> ActStep {
+        loop {
+            match step_activation(statics, st, "a", &Terrain::default(), seams, &t, true) {
+                ActStep::NeedRoll { kind, faces, .. } => t.push(Faces(vec![if kind == "defense" { 1 } else { 6 }; faces])),
+                other => return other,
+            }
+        }
     }
 
     /// CC-8b: a reach spell cast in the same activation widens the activation's volley — both a `modifier.range_in` buff
