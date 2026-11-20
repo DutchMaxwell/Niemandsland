@@ -2830,7 +2830,7 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 		var obj_type: String = obj.get("object_type", "tree")
 		if obj_type == "tree" and not (_tree_panels_ready() and _tree_models_ready()):
 			_request_tree_panels()
-		elif obj_type == "container" and not use_container_panels:
+		elif obj_type == "container" and not use_container_panels and not _stone_blockers():
 			_request_container_panels()
 		elif obj_type == "mine" and hazard_model != "":
 			if not _hazard_model_ready(hazard_model):
@@ -2890,6 +2890,8 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 		if object_type == "tree" and use_tree_panels:
 			model = _create_textured_tree(obj)
 			handles_own_facing = true
+		elif object_type == "container" and _stone_blockers():
+			model = _create_stone_blocker()
 		elif object_type == "container" and use_container_panels:
 			model = _create_textured_container(obj)
 		elif object_type == "mine" and hazard_model != "":
@@ -3220,6 +3222,36 @@ func _fetch_container_panels() -> void:
 		return
 	if not _last_objects.is_empty():
 		update_placed_objects(_last_objects, _last_obj_table_size, _last_obj_rotation)
+
+
+## A fantasy table has no shipping containers: its grid blocker is drawn as the plain stone solid a free blocker is
+## (PLAN_GAME_SYSTEM_SWITCH step 13, assets/terrain_systems.json container_look). Look only: the type, the box and the rules are
+## the container's. Read when the objects are built, so a layout drawn before a system change keeps its look until it is redrawn.
+func _stone_blockers() -> bool:
+	return not GameSystem.offers("container_look", "container_red", _table_system())
+
+
+func _table_system() -> String:
+	var main := get_node_or_null("/root/Main") if is_inside_tree() else null
+	return str(main.call("_table_system")) if main != null and main.has_method("_table_system") else ""
+
+
+## The stone blocker: the free blocker's plain look in the container's 6x3x2.5" rule box, with the container's own collider.
+func _create_stone_blocker() -> StaticBody3D:
+	var length := CONTAINER_LENGTH_INCHES * INCHES_TO_METERS
+	var depth := CONTAINER_DEPTH_INCHES * INCHES_TO_METERS
+	var height := CONTAINER_HEIGHT_INCHES * INCHES_TO_METERS
+	var body := StaticBody3D.new()
+	body.add_to_group("terrain")
+	body.add_to_group("terrain_piece")
+	SandboxSolidProp.add_look_meshes(body, "plain", {})
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(length, height, depth)
+	collision.shape = shape
+	collision.position.y = height / 2.0 - Z_FIGHT_OFFSET
+	body.add_child(collision)
+	return body
 
 
 ## A blocker as a textured shipping container: a 6x3x2.5" box built from quads wearing
