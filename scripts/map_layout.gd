@@ -33,6 +33,15 @@ const TERRAIN_NAMES := {
 	TerrainType.DANGEROUS: "Dangerous"
 }
 
+## The label a terrain type carries on the table's game system (PLAN_GAME_SYSTEM_SWITCH step 12): the CONTAINER type
+## (Impassable + Sight Blocking) is a "Container" on a grimdark table and a "Blocker" on a fantasy one. The type id, the
+## button name and the rules text stay the same; only the label differs.
+static func terrain_label(type: int, system: String) -> String:
+	if type == TerrainType.CONTAINER and GameSystem.setting(system) == GameSystem.SETTING_FANTASY:
+		return "Blocker"
+	return TERRAIN_NAMES[type]
+
+
 ## Elevation program: the tooltips name each piece's REAL height in inches instead of the old Asgard
 ## height CATEGORY. Every piece used to read "Height 5", which said nothing about what a model on the
 ## table can actually see over — and the sight truth no longer uses categories at all. The numbers come
@@ -646,8 +655,9 @@ func _setup_terrain_buttons() -> void:
 		child.queue_free()
 
 	for type in [TerrainType.RUINS, TerrainType.FOREST, TerrainType.CONTAINER, TerrainType.DANGEROUS, TerrainType.NONE]:
-		var btn := HouseStyle.button(TERRAIN_NAMES[type], HouseStyle.SEGMENT, 36)
+		var btn := HouseStyle.button(terrain_label(type, _table_system()), HouseStyle.SEGMENT, 36)
 		btn.name = "Terrain%sButton" % TERRAIN_NAMES[type]
+		btn.set_meta("terrain_type", type)
 		btn.icon = _terrain_chip(TERRAIN_COLORS[type])
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		HouseStyle.set_selected(btn, type == selected_terrain_type)
@@ -656,6 +666,21 @@ func _setup_terrain_buttons() -> void:
 
 		if TERRAIN_DESCRIPTIONS.has(type):
 			btn.tooltip_text = TERRAIN_DESCRIPTIONS[type]
+
+
+## The game system of the table this editor belongs to (Main._table_system); "" without a Main (tests): grimdark labels.
+func _table_system() -> String:
+	var main := get_node_or_null("/root/Main") if is_inside_tree() else null
+	return str(main.call("_table_system")) if main != null and main.has_method("_table_system") else ""
+
+
+## The type buttons' labels follow the table's game system, which can change between two openings of the editor.
+func _refresh_terrain_labels() -> void:
+	if not visible or terrain_buttons == null:
+		return
+	for child in terrain_buttons.get_children():
+		if child is Button and child.has_meta("terrain_type"):
+			child.text = terrain_label(int(child.get_meta("terrain_type")), _table_system())
 
 
 ## A small square in the terrain's own colour (data colour, same on the canvas) for a type button.
@@ -669,7 +694,7 @@ func _terrain_chip(color: Color) -> ImageTexture:
 func _select_terrain_button(type: TerrainType) -> void:
 	for child in terrain_buttons.get_children():
 		if child is Button:
-			HouseStyle.set_selected(child, child.text == TERRAIN_NAMES[type])
+			HouseStyle.set_selected(child, child.name == "Terrain%sButton" % TERRAIN_NAMES[type])
 
 
 func _on_terrain_button_pressed(type: TerrainType, _button: Button) -> void:
@@ -1179,6 +1204,7 @@ func _setup_theme_entry() -> void:
 	_theme_entry.pressed.connect(func() -> void: theme_requested.emit(THEME_ID))
 	autogen_button.add_sibling(_theme_entry)
 	visibility_changed.connect(_refresh_theme_entry)
+	visibility_changed.connect(_refresh_terrain_labels)
 	_refresh_theme_entry()
 
 
