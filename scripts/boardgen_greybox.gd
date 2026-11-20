@@ -1,12 +1,12 @@
 class_name BoardgenGreybox
 extends Node3D
 ## Greybox 3D of a seeded boardgen layout (NmlCore.boardgen_layout): one raised block per run of same-level cells (flat
-## neutral colour per tier; a tier edge is simply the block's plain wall), stairs as stepped boxes, ladders as rails and
-## rungs. A dev view only (debug build + NML_BOARDGEN_SEED=<seed>); no menu offers it.
+## neutral colour per tier; a tier edge is simply the block's plain wall), every connector as a ladder (rails and rungs on the
+## flat wall; the generator's Stair connectors are drawn as ladders too, models only ever stand on whole flat cells). A dev view only (debug build + NML_BOARDGEN_SEED=<seed>); no menu offers it.
 ##
 ## VISUAL ONLY for the rules: the terrain code the sight and move rules read (sandbox shapes, TerrainRules) has no
 ## per-cell height - a solid is the fixed 2.5 in container - so nothing here is handed to it and the core still sees a
-## flat table. The raised blocks and the stair steps do carry colliders on the ground layer, so the drag floor-picker
+## flat table. The raised blocks do carry colliders on the ground layer, so the drag floor-picker
 ## and the camera rays land on the tiers.
 
 const ENV_SEED := "NML_BOARDGEN_SEED"
@@ -16,15 +16,12 @@ const INCHES_TO_METERS := 0.0254
 const GROUND_COLLISION_LAYER := 1
 ## Thickness of the level-0 ground skin that covers the biome texture, in inches.
 const SKIN_IN := 0.04
-const STAIR_STEPS := 3
-const STAIR_WIDTH_IN := 2.0
-const STAIR_RUN_IN := 0.75
 const LADDER_WIDTH_IN := 1.0
 const LADDER_OFFSET_IN := 0.12   # the ladder stands this far off the wall face
 const LADDER_RAIL_IN := 0.12
 const LADDER_RUNG_GAP_IN := 0.5
 ## Surface kinds in the order the board shader knows them (INSTANCE_CUSTOM.x, shaders/tiefwerk_board.gdshader).
-const KINDS := ["ground", "street", "hazard", "tier1", "tier2", "stair", "ladder"]
+const KINDS := ["ground", "street", "hazard", "tier1", "tier2", "ladder"]
 const SHADER := preload("res://shaders/tiefwerk_board.gdshader")
 
 var layout_seed: int = 0
@@ -80,11 +77,6 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 		var edge := Vector2(c["edge_in"][0], c["edge_in"][1]) + origin
 		var away := Vector2(Vector2i(c["low_xz"][0], c["low_xz"][1]) - Vector2i(c["high_xz"][0], c["high_xz"][1]))   # wall -> low cell
 		var side := Vector2(away.y, away.x)   # along the edge
-		if c["kind"] == "Stair":
-			for i in STAIR_STEPS:
-				out.append(_slab(edge, away, side, i * STAIR_RUN_IN, (i + 1) * STAIR_RUN_IN, STAIR_WIDTH_IN,
-					base, base + rise * (STAIR_STEPS - i) / STAIR_STEPS, "stair", true))
-			continue
 		for s: float in [-1.0, 1.0]:
 			out.append(_slab(edge + side * s * LADDER_WIDTH_IN * 0.5, away, side, LADDER_OFFSET_IN,
 				LADDER_OFFSET_IN + LADDER_RAIL_IN, LADDER_RAIL_IN, base, base + rise, "ladder", false))

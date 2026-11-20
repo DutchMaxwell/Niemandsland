@@ -2,7 +2,7 @@ shader_type spatial;
 // Look of a generated undercity board (BoardgenGreybox): ONE material for every box of the board. The surface kind comes per
 // instance (INSTANCE_CUSTOM.x); the neighbouring cell heights (tier lips, cliff stripes, contact shadow, sump rim) come from a
 // one-texel-per-cell texture. Everything is procedural: no texture file, nothing from a third party.
-// kinds: 0 ground, 1 street, 2 sump, 3 tier 1 (rusted plate deck), 4 tier 2 (rooftop slab), 5 stair, 6 ladder.
+// kinds: 0 ground, 1 street, 2 sump, 3 tier 1 (rusted plate deck), 4 tier 2 (rooftop slab), 5 ladder (every connector is a ladder).
 
 uniform sampler2D cells : filter_nearest;   // red = height of the cell's top in inches, green = 255 for a sump cell
 uniform vec2 board_cells = vec2(16.0);
@@ -69,15 +69,10 @@ void fragment() {
 	vec3 emis = vec3(0.0);
 	float rough = 0.9, met = 0.0, ao = 1.0;
 
-	if (k == 6) {   // ladder: weathered safety yellow
+	if (k == 5) {   // ladder: weathered safety yellow
 		alb = YELLOW * mix(0.5, 0.9, n2);
 		rough = 0.5;
 		met = 0.5;
-	} else if (k == 5) {   // stair: perforated steel treads
-		float hole = top ? step(length(fract(uv * 4.0) - 0.5), 0.26) : 0.0;
-		alb = vec3(0.34, 0.35, 0.38) * mix(1.0, 0.3, hole) * mix(0.8, 1.0, n2);
-		rough = 0.45;
-		met = 0.6;
 	} else if (!top) {   // cliff wall of a tier: formwork concrete, rust drips from the lip, hazard band under it
 		vec2 nh = normalize(n.xz + 0.0001);
 		vec2 g_in = (p.xz - nh * 0.02 + half_board) / cell_in;

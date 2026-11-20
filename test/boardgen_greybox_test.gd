@@ -74,17 +74,14 @@ func test_a_tier_block_is_as_high_as_its_level_in_inches() -> void:
 		assert_int(seen.size()).is_equal(2)   # the board has both tiers
 
 
-func test_every_connector_is_drawn_as_steps_or_as_rails_and_rungs() -> void:
+func test_every_connector_is_drawn_as_rails_and_rungs_on_the_flat_wall_and_never_as_stairs() -> void:
 	for layout in _layouts():
-		var stairs: int = layout["connectors"].filter(func(c: Dictionary) -> bool: return c["kind"] == "Stair").size()
-		var ladders: int = layout["connectors"].size() - stairs
 		var boxes := BoardgenGreybox.plan(layout)
-		assert_int(_of_kind(boxes, ["stair"]).size()).is_equal(stairs * BoardgenGreybox.STAIR_STEPS)
-		# Two rails and five rungs per 3 in ladder.
-		assert_int(_of_kind(boxes, ["ladder"]).size()).is_equal(ladders * 7)
-	var fixed := _fixture()
-	assert_bool(fixed["connectors"].any(func(c: Dictionary) -> bool: return c["kind"] == "Stair")).is_true()
-	assert_bool(fixed["connectors"].any(func(c: Dictionary) -> bool: return c["kind"] == "Ladder")).is_true()
+		assert_int(_of_kind(boxes, ["stair"]).size()).is_equal(0)
+		# Two rails and five rungs per 3 in ladder, whatever the generator calls the connector.
+		assert_int(_of_kind(boxes, ["ladder"]).size()).is_equal(layout["connectors"].size() * 7)
+	var kinds: Array = _fixture()["connectors"].map(func(c: Dictionary) -> String: return c["kind"])
+	assert_bool(kinds.has("Stair") and kinds.has("Ladder")).is_true()   # the recorded board still has both kinds: both are ladders now
 
 
 func test_one_layout_builds_the_same_board_and_another_layout_a_different_one() -> void:
