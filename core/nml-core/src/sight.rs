@@ -738,6 +738,24 @@ pub fn sighted_count(
     })
 }
 
+/// `screen` for one volley in a game (PLAN_COVER_36 step 4): each shooter-chain member's models with its own unit radius and
+/// height, the defense holder's models (and, for the sighting set only, its joined heroes') with the holder's, as
+/// `sighted_count` builds them; `blockers_of` keeps both chains and dormant units out. A unit built with one model is `single`.
+pub fn screen_of(state: &State, zones: &[Zone], shooter: usize, target: usize, rules_epoch: u32) -> Screen {
+    let mut shooters = Vec::new();
+    for &m in std::iter::once(&shooter).chain(state.attached[shooter].iter()) {
+        let (r, h) = (unit_radius_m(state, m), unit_height_m(state, m, rules_epoch));
+        shooters.extend(state.positions[m].iter().map(|p| Cyl { c: [p[0], p[2]], r, y0: p[1], y1: p[1] + h }));
+    }
+    let (r, h) = (unit_radius_m(state, target), unit_height_m(state, target, rules_epoch));
+    let cyl = |p: &[f64; 3]| Cyl { c: [p[0], p[2]], r, y0: p[1], y1: p[1] + h };
+    let targets: Vec<Cyl> = state.positions[target].iter().map(cyl).collect();
+    let also: Vec<Cyl> = state.attached[target].iter().flat_map(|&t| state.positions[t].iter().map(cyl)).collect();
+    let blockers = blockers_of(state, shooter, target, rules_epoch);
+    let single = state.profile(target).model_count <= 1;
+    screen(&shooters, &targets, &also, single, state.aircraft[target], zones, &blockers)
+}
+
 /// `main.SOLO_LOS_UNBOUNDED_RANGE_IN` main.gd:9174 — the "range never gates"
 /// sentinel the unit-level query passes so `sighted_count` is a pure sight test.
 pub const UNBOUNDED_RANGE_IN: f64 = 9999.0;
@@ -917,6 +935,23 @@ mod tests {
         }
         assert_eq!(cases.len(), 12);
         assert!(bad.is_empty(), "{}", bad.join("\n"));
+    }
+
+    /// PLAN_COVER_36 step 4: a third unit of short models between shooter 0 and target 2 hides the target's feet, not its
+    /// head; the same unit still in reserve (dormant) hides nothing.
+    #[test]
+    fn a_third_unit_between_screens_the_target_unless_it_is_dormant() {
+        let mut st = crate::sim::tests::four_unit_line();
+        st.attached = std::rc::Rc::new(vec![vec![]; 4]);
+        st.attached_to = std::rc::Rc::new(vec![None; 4]);
+        st.positions[1] = vec![at(0.0, 50.0)];
+        st.positions[3] = vec![at(10.0, 0.0)];
+        st.radii = std::rc::Rc::new(vec![vec![M], vec![M], vec![M], vec![0.5 * M]]);
+        let got = screen_of(&st, &[], 0, 2, 95);
+        assert_eq!(got, Screen { sighting: 1, hidden: vec![true], screened: true }, "head over unit 3, feet behind it");
+        st.dormant[3] = true;
+        let got = screen_of(&st, &[], 0, 2, 95);
+        assert_eq!(got, Screen { sighting: 1, hidden: vec![false], screened: false }, "a unit in reserve is not on the table");
     }
 
     #[test]
