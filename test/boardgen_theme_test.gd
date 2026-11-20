@@ -166,7 +166,7 @@ func test_a_town_draws_its_wall_its_plots_and_its_intact_houses_with_kinds_of_th
 	var wall_tops: Array = of.call("wall").filter(func(b: Dictionary) -> bool: return not b.has("merlon")).map(func(b: Dictionary) -> float: return b["hi"].y)
 	wall_tops.sort()
 	assert_array(wall_tops).is_equal([3.0, 6.0, 9.0])
-	assert_int(of.call("rubble").size()).is_equal(1)
+	assert_int(of.call("rubble").filter(func(b: Dictionary) -> bool: return not b.has("prop")).size()).is_equal(1)   # the breach cell itself (its stones are props)
 	assert_int(of.call("rough").size()).is_equal(1)
 
 
@@ -253,3 +253,42 @@ func test_dusk_sets_a_low_warm_sun_and_a_cool_sky_on_a_lighting_controller() -> 
 	assert_float((lc.calls["set_ambient_color"] as Color).b).is_greater((lc.calls["set_ambient_color"] as Color).r)   # cool sky
 	BoardgenTownDressing.dusk(null)   # no lighting controller (a table without one): nothing happens
 	assert_bool(seen.is_empty()).is_true()
+
+
+func test_props_stand_in_the_strip_beside_a_wall_face_and_never_on_a_street_a_plot_or_a_ladder_foot() -> void:
+	var layout := _town()   # the recorded board with the town theme
+	var props := BoardgenTownDressing.props(layout)
+	assert_int(props.size()).is_greater(0)
+	var feet := {}
+	for c: Dictionary in layout["connectors"]:
+		feet[int(c["low"])] = true
+		feet[int(c["high"])] = true
+	for b: Dictionary in props:
+		var size: Vector3 = b["hi"] - b["lo"]
+		assert_bool(b["solid"]).is_false()
+		assert_float(minf(size.x, size.z)).is_less(0.71)   # inside the 0.75 in strip
+		var centre: Vector3 = (b["hi"] + b["lo"]) * 0.5
+		var cx := int(floor(centre.x / 3.0 + 8.0))
+		var cz := int(floor(centre.z / 3.0 + 8.0))
+		var cd: Dictionary = layout["cells"][cz * 16 + cx]
+		assert_bool(cd["street"] or cd["level"] != 0 or feet.has(cz * 16 + cx) or ["Hazard", "Rough", "Wall", "Roofed"].has(cd["lot_kind"])).override_failure_message("a prop on %s" % cd).is_false()
+	# both halves get props, and the same cell decides differently in the north and the south (the half is part of the hash)
+	var north := props.filter(func(b: Dictionary) -> bool: return b["lo"].z < 0.0).size()
+	assert_bool(north > 0 and north < props.size()).is_true()
+	var differing := 0
+	for i in range(1, 60):
+		differing += int(not is_equal_approx(BoardgenTownDressing._hash(i, 0, 40), BoardgenTownDressing._hash(i, 1, 40)))
+	assert_int(differing).is_greater(50)
+
+
+func test_a_breach_is_strewn_with_flat_stones_and_the_hall_gets_merlons() -> void:
+	var layout := _town_with_wall_house_and_plot()   # a breach at (5, 8)
+	var rubble := BoardgenTownDressing.breach_rubble(layout)
+	assert_int(rubble.size()).is_equal(8)
+	for b: Dictionary in rubble:
+		assert_float(b["hi"].y).is_less(0.26)   # flat enough to stand on
+	layout["landmarks"] = [{"kind": "PumpHouse", "x": 12, "z": 6, "w": 2, "h": 2, "turn": 0, "terrain": 0, "solid": false}]
+	var merlons := BoardgenTownDressing.hall_merlons(layout)
+	assert_int(merlons.size()).is_greater(8)   # 24 places round a 2 x 2 footprint, some broken
+	for b: Dictionary in merlons:
+		assert_float(b["hi"].y - b["lo"].y).is_equal_approx(0.7, 0.001)

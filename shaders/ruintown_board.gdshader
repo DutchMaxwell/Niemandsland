@@ -6,7 +6,7 @@ shader_type spatial;
 // and the stone pieces are coursed stone, a chimney is brick. The two halves of the board draw their stones, plaster and tiles with other seeds.
 #include "res://shaders/tiefwerk_noise.gdshaderinc"
 
-uniform vec4 palette[18];   // display colours by kind index (BoardgenTheme.TOWN_KINDS)
+uniform vec4 palette[19];   // display colours by kind index (BoardgenTheme.TOWN_KINDS)
 uniform vec3 board_origin;   // world position of the board centre
 uniform float cell_in = 3.0;
 
@@ -74,7 +74,7 @@ float door(vec2 uv, float seed) {
 }
 
 void fragment() {
-	int k = clamp(int(kind + 0.5), 0, 17);
+	int k = clamp(int(kind + 0.5), 0, 18);
 	vec3 p = (wpos - board_origin) / IN;   // inches off the board centre, y up
 	float half_seed = step(0.0, p.z);   // the south half draws with other seeds: a half turn does not look like the other half
 	float seed = 17.0 * half_seed;
@@ -88,8 +88,10 @@ void fragment() {
 			alb = timber(uv, seed, palette[13].rgb, emis);
 		} else if (k == 13) {   // an intact house: half-timber on a stone plinth
 			alb = uv.y < 0.45 ? stone(uv, seed, 0.45, 0.9, vec3(0.5, 0.48, 0.44)) : timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed), emis);
-		} else if (k == 12 || k == 9 || k == 16) {   // city wall, stone pieces, chimney: coursed stone (brick for the chimney)
+		} else if (k == 12 || k == 9 || k == 10 || k == 16) {   // city wall, stone pieces, chimney: coursed stone (brick for the chimney)
 			alb = k == 16 ? stone(uv, seed, 0.25, 0.55, tint) : stone(uv, seed, 0.55, 1.0, tint);
+		} else if (k == 18) {   // a wooden prop: planks with iron bands
+			alb = tint * mix(0.7, 1.15, h21(vec2(floor(uv.x * 4.0), seed))) * mix(0.55, 1.0, smoothstep(0.0, 0.05, abs(fract(uv.y * 2.5) - 0.5) - 0.42)) * mix(0.8, 1.0, seam(uv.x, 0.25, 0.03));
 		} else if (k == 3 || k == 4 || k == 6) {   // ruined house tiers and towers, by storey
 			float band = k == 6 ? 2.0 : floor(uv.y / 3.0);   // a tower is stone all the way up
 			if (band < 0.5) {
@@ -112,8 +114,12 @@ void fragment() {
 		float grid = mix(1.0, 0.86, smoothstep(0.48, 0.495, max(e.x, e.y)));   // the 3 in cell, faint
 		if (k == 1) {   // streets: cobbles
 			alb = cobble(xz, seed, tint * 1.15) * grid;
-		} else if (k == 0) {   // earth: packed, with pebbles
+		} else if (k == 0) {   // earth: packed, with pebbles, weeds and broken stones
+			vec2 cellp = floor(xz * 5.0);
+			float speck = h21(cellp + seed);
 			alb = tint * mix(0.78, 1.15, fbm(xz * 1.6 + seed)) * mix(1.0, 1.3, step(0.94, h21(floor(xz * 7.0)))) * grid;
+			alb = mix(alb, vec3(0.30, 0.38, 0.17), step(0.86, speck) * step(length(fract(xz * 5.0) - 0.5), 0.34) * 0.8);   // a weed tuft
+			alb = mix(alb, vec3(0.45, 0.43, 0.40) * mix(0.8, 1.2, h21(cellp + 3.0)), step(0.95, speck) * step(length(fract(xz * 5.0) - 0.5), 0.3));   // a broken stone
 		} else if (k == 3 || k == 4 || k == 8) {   // floor boards of a ruined house or yard, scorched in patches
 			alb = tint * mix(0.72, 1.05, h21(vec2(floor(xz.x / 2.1), floor(xz.y / 0.5) + seed))) * mix(0.8, 1.0, seam(xz.y, 0.5, 0.05)) * mix(0.84, 1.0, smoothstep(0.35, 0.6, fbm(xz * 0.9 + seed))) * grid;
 		} else if (k == 6 || k == 12 || k == 9 || k == 10) {   // tower and wall tops, stone pieces: flagstones

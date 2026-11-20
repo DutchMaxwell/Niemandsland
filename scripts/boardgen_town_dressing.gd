@@ -151,6 +151,102 @@ static func dusk(lighting: Object) -> void:
 	lighting.set_exposure(0.95)
 
 
+## Props against the house walls: crates, barrels, wood piles and sacks on bare ground, only in the 0.75 in strip beside a wall face of a raised house, an intact
+## house or the wall, never on a street, a plot, a pool, a ladder foot or a landmark (a prop never takes standing room). The north half stacks more barrels and
+## fewer crates than the south half. Boxes ({lo, hi, kind, solid}).
+static func props(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var cells: Array = layout["cells"]
+	var feet := {}
+	for c: Dictionary in layout["connectors"]:
+		feet[int(c["low"])] = true
+		feet[int(c["high"])] = true
+	var taken := {}
+	for lm: Dictionary in layout["landmarks"]:
+		for dz in int(lm["h"]):
+			for dx in int(lm["w"]):
+				taken[(int(lm["z"]) + dz) * nx + int(lm["x"]) + dx] = true
+	for cd: Dictionary in cells:
+		var i: int = cd["z"] * nx + cd["x"]
+		if cd["level"] != 0 or cd["street"] or feet.has(i) or taken.has(i) or ["Hazard", "Rough", "Wall", "Roofed"].has(cd["lot_kind"]):
+			continue
+		var half := 1 if cd["z"] >= nz / 2 else 0
+		for side in 4:
+			var d := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)][side] as Vector2i
+			var at := Vector2i(cd["x"], cd["z"]) + d
+			if at.x < 0 or at.y < 0 or at.x >= nx or at.y >= nz:
+				continue
+			var n: Dictionary = cells[at.y * nx + at.x]
+			if n["level"] == 0 and n["lot_kind"] != "Roofed":
+				continue   # no wall face on that side
+			if _hash(i, half, 40 + side) > (0.42 if half == 0 else 0.3):
+				continue
+			var kind := int(_hash(i, half, 50 + side) * (4.0 if half == 0 else 3.99))   # 0 barrel .. 3 crate; the north half draws from a longer list
+			var size := [Vector3(0.5, 0.75, 0.5), Vector3(0.9, 0.4, 0.4), Vector3(0.7, 0.3, 0.45), Vector3(0.6, 0.55, 0.6)][kind % 4] as Vector3
+			var along := 0.8 + 1.4 * _hash(i, half, 60 + side)   # position along the 3 in edge
+			var lo := origin + Vector2(cd["x"], cd["z"]) * cell_in
+			var depth := minf(size.z, 0.7)
+			var box_lo := Vector2.ZERO
+			var box_size := Vector2(size.x, depth) if d.x == 0 else Vector2(depth, size.x)
+			if d.x == 0:
+				box_lo = Vector2(lo.x + along, lo.y + 0.05 if d.y < 0 else lo.y + cell_in - depth - 0.05)
+			else:
+				box_lo = Vector2(lo.x + 0.05 if d.x < 0 else lo.x + cell_in - depth - 0.05, lo.y + along)
+			out.append({"lo": Vector3(box_lo.x, 0.0, box_lo.y), "hi": Vector3(box_lo.x + box_size.x, size.y, box_lo.y + box_size.y), "kind": "wood", "solid": false, "prop": true})
+	return out
+
+
+## The rubble of a wall breach: eight low stones (0.08-0.25 in) scattered over the gap, flat enough to stand on (the breach is Difficult ground).
+static func breach_rubble(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var nx: int = layout["nx"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, layout["nz"]) * cell_in * -0.5
+	for cd: Dictionary in layout["cells"]:
+		if cd["lot_kind"] != "Wall" or cd["level"] != 0:
+			continue
+		var id: int = cd["z"] * nx + cd["x"]
+		for k in 8:
+			var w := 0.3 + 0.4 * _hash(id, 0, 70 + k)
+			var at := origin + Vector2(cd["x"], cd["z"]) * cell_in + Vector2(0.2 + (cell_in - 0.4 - w) * _hash(id, 1, 80 + k), 0.2 + (cell_in - 0.4 - w) * _hash(id, 0, 90 + k))
+			out.append({"lo": Vector3(at.x, 0.0, at.y), "hi": Vector3(at.x + w, 0.08 + 0.17 * _hash(id, 1, 100 + k), at.y + w * 0.8), "kind": "rubble", "solid": false, "prop": true})
+	return out
+
+
+## Battlements round the hall: merlons along the outer edges of every hall footprint (a pumphouse landmark) on its block, like the wall's, inside the rim.
+static func hall_merlons(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var nx: int = layout["nx"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, layout["nz"]) * cell_in * -0.5
+	var n := 0
+	for lm: Dictionary in layout["landmarks"]:
+		n += 1
+		if lm["kind"] != "PumpHouse":
+			continue
+		var top := 0.0
+		for dz in int(lm["h"]):
+			for dx in int(lm["w"]):
+				top = maxf(top, float(layout["level_in"][layout["cells"][(int(lm["z"]) + dz) * nx + int(lm["x"]) + dx]["level"]]))
+		var lo := origin + Vector2(lm["x"], lm["z"]) * cell_in
+		var size := Vector2(lm["w"], lm["h"]) * cell_in
+		var half := 1 if lo.y + size.y * 0.5 > 0.0 else 0
+		for edge in 4:   # north, east, south, west: 3 merlons per 3 in of edge
+			var length := size.x if edge % 2 == 0 else size.y
+			for i in int(length / cell_in) * 3:
+				if _hash(n * 31 + edge, half, 110 + i) < (0.28 if half == 1 else 0.10):
+					continue
+				var t := 0.5 + float(i)
+				var box_lo := Vector2(lo.x + t - 0.35, lo.y if edge == 0 else lo.y + size.y - 0.4) if edge % 2 == 0 else Vector2(lo.x if edge == 3 else lo.x + size.x - 0.4, lo.y + t - 0.35)
+				var box_size := Vector2(0.7, 0.4) if edge % 2 == 0 else Vector2(0.4, 0.7)
+				out.append({"lo": Vector3(box_lo.x, top, box_lo.y), "hi": Vector3(box_lo.x + box_size.x, top + 0.7, box_lo.y + box_size.y), "kind": "wall", "solid": false, "merlon": true})
+	return out
+
+
 ## The unit gable prism: ridge along x at height 1 over z = 0, eaves at y = 0 on z = -0.5 / +0.5, x from -0.5 to 0.5.
 static func prism_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
