@@ -842,7 +842,7 @@ static func dump_legacy() -> void:
 	if f != null:
 		var out := {"legacy": legacy, "legacy_sets": legacy_sets, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals,
 			"cast_door": {"seen": cast_seen, "taken": cast_taken, "fallbacks": cast_fallbacks, "probe_refusals": cast_probe_refusals,
-			"reasons": cast_probe_reasons.slice(0, 40)}}
+			"reasons": cast_probe_reasons.slice(0, 40), "not_asked": cast_not_asked}}
 		if not CoreShadow.records.is_empty():
 			out["shadow"] = CoreShadow.records   # C-4: the shadow run's volleys (NML_CORE_SHADOW=1)
 		if not CoreShadow.melee_records.is_empty():
@@ -1099,6 +1099,28 @@ static var cast_probe_reasons: Array = []
 static var cast_seen := 0
 static var cast_taken := 0
 static var cast_fallbacks := 0
+## CC-15 prep: why a casting activation was not even asked of the door, reason -> count (`note_cast_not_asked`).
+static var cast_not_asked: Dictionary = {}
+
+
+## CC-15 prep: the first reason `takes_ai_activation` (in its own order) said no to a casting activation: the switch is off, no board,
+## no dice roller, a unit the slice refuses (its first refusal named), an action the door does not take, a table-only pre-attack beat
+## on the chain (`cast_chain_clear`), else the move-through refusal.
+static func note_cast_not_asked(main, unit: GameUnit, report: Dictionary) -> void:
+	var why := "through_refused"
+	if not cast_door_enabled():
+		why = "switch_off"
+	elif main._solo_core_ai_h == 0:
+		why = "no_handle"
+	elif main.dice_roller_control == null:
+		why = "no_dice_roller"
+	elif not is_plain(unit):
+		why = "unit:%s" % str((CoreSlice.refusals(unit) + ["?"])[0])
+	elif not takes_action(unit, int(report.get("action", -1))):
+		why = "action:%d" % int(report.get("action", -1))
+	elif not cast_chain_clear(unit):
+		why = "beat_primitive"
+	cast_not_asked[why] = int(cast_not_asked.get(why, 0)) + 1
 
 
 ## CC-13a: the dry probe at the body's cast slot: the activation's placement, intent and cast inputs, no faces. The core checks every

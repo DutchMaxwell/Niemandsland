@@ -5065,6 +5065,8 @@ func _solo_ai_casts(unit: GameUnit, report: Dictionary, core_takes: bool) -> voi
 			report["cast_door"] = true
 			return
 		await _solo_pay_dangerous(unit, report)
+	else:
+		CoreActivation.note_cast_not_asked(self, unit, report)
 	await _solo_resolve_ai_casts(report)
 
 
