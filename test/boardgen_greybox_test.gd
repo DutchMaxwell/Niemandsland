@@ -156,6 +156,7 @@ func test_the_board_shader_gets_a_height_texel_per_cell_and_knows_every_surface_
 	assert_int(cells.get_width() * cells.get_height()).is_equal(CELLS)
 	for c: Dictionary in layout["cells"]:
 		assert_int(cells.get_pixel(c["x"], c["z"]).r8).is_equal(int(layout["level_in"][c["level"]]))
+		assert_int(cells.get_pixel(c["x"], c["z"]).b8).override_failure_message("the lot id must reach the shader (a roof has one look per lot)").is_equal(int(c["lot_id"]) % 256)
 	for b in BoardgenGreybox.plan(layout):   # (the per-instance kind itself is not readable back on the headless renderer)
 		assert_int(BoardgenGreybox.KINDS.find(b["kind"])).override_failure_message("the board shader has no kind '%s'" % b["kind"]).is_greater_equal(0)
 

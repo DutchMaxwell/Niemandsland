@@ -5,7 +5,8 @@ extends GdUnitTestSuite
 const SHADER_PATH := "res://shaders/tiefwerk_board.gdshader"
 
 
-const INCLUDES := ["res://shaders/tiefwerk_noise.gdshaderinc", "res://shaders/tiefwerk_edges.gdshaderinc", "res://shaders/tiefwerk_relief.gdshaderinc"]
+const INCLUDES := ["res://shaders/tiefwerk_noise.gdshaderinc", "res://shaders/tiefwerk_edges.gdshaderinc", "res://shaders/tiefwerk_relief.gdshaderinc",
+	"res://shaders/tiefwerk_value.gdshaderinc"]
 
 
 ## The board shader with its includes appended (the pins below do not care which file a function lives in).
@@ -147,3 +148,17 @@ func test_hatches_grates_and_deck_rivets_have_relief_with_the_albedo_shapes_of_t
 	assert_str(_line_with(src, "float bar = smoothstep(0.5, 0.58, f)")).is_not_empty()   # the grate's slots, 6 per inch like the albedo
 	assert_str(_line_with(src, "rivet heads")).contains("dome(")
 	assert_str(_line_with(src, "tread ribs")).is_not_empty()
+
+
+func test_a_roof_has_one_look_per_lot_and_the_value_ladder_runs_floor_deck_roof_tower() -> void:
+	var src := _source()
+	assert_bool(src.contains("vec3 lot_hue(float lot)")).override_failure_message("the roof's colour must come from the lot id alone, never from a plate").is_true()
+	assert_str(_line_with(src, "alb = value_top(")).contains("me.z")   # the lot id of the cell texture's blue channel
+	assert_str(src.substr(src.find("alb = value_top(") - 40, 40)).contains("detail > 0.5")   # the finer look only: Low keeps main's colours
+	var gains := {}
+	for gain in ["FLOOR_GAIN", "DECK_GAIN", "ROOF_GAIN", "TOWER_GAIN"]:
+		var line := _line_with(src, "const float %s =" % gain)
+		assert_str(line).override_failure_message("%s missing" % gain).is_not_empty()
+		gains[gain] = float(line.get_slice("=", 1).get_slice(";", 0))
+	# the floor is darkened, a tower top is lifted over the roofs (the deck's own base value is lower than the roofs', so its gain may be above 1)
+	assert_bool(gains["FLOOR_GAIN"] < 1.0 and gains["FLOOR_GAIN"] < gains["DECK_GAIN"] and gains["ROOF_GAIN"] < gains["TOWER_GAIN"]).is_true()

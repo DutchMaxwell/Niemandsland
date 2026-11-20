@@ -5,7 +5,7 @@ shader_type spatial;
 // kinds: 0 ground, 1 street, 2 sump, 3 tier 1 (rusted plate deck), 4 tier 2 (rooftop slab), 5 ladder (every connector is a ladder),
 // 6 tier 3 (a tower top: the rooftop slab, cooler and paler), 7 kerb (the low concrete rim round a sump).
 
-uniform sampler2D cells : filter_nearest;   // red = height of the cell's top in inches, green = 255 for a sump cell
+uniform sampler2D cells : filter_nearest;   // red = height of the cell's top in inches, green = 255 for a sump cell, blue = the lot id (mod 256)
 uniform vec2 board_cells = vec2(16.0);
 uniform float cell_in = 3.0;
 uniform vec3 board_origin;   // world position of the board centre
@@ -58,6 +58,7 @@ float wall_dist(vec2 g, ivec2 c, float h) {
 
 #include "res://shaders/tiefwerk_edges.gdshaderinc"
 #include "res://shaders/tiefwerk_relief.gdshaderinc"
+#include "res://shaders/tiefwerk_value.gdshaderinc"
 
 // Distance in inches from the point g to the nearest sump cell among the 3x3 around cell c (the toxic stain on the floor and the walls); 9 = none.
 float sump_dist(vec2 g, ivec2 c) {
@@ -273,7 +274,9 @@ void fragment() {
 			rough = clamp(rough - th * 4.0 * (1.0 - wet), 0.05, 1.0);
 			ao *= 1.0 + 4.0 * min(th, 0.0);
 		}
-		if (k == 6) {
+		if (detail > 0.5) {
+			alb = value_top(alb, k, me.z);   // the level's value step, a quiet floor, ONE roof look per lot (lot id = the cell texture's blue channel)
+		} else if (k == 6) {
 			alb *= vec3(0.82, 0.9, 1.08);
 		}
 		if (lip < 0.2) {   // the tier's trim: a pale lip with a dark groove behind it, no railing

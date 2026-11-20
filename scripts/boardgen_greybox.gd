@@ -290,14 +290,15 @@ func _anchor() -> void:
 		_material.set_shader_parameter("board_origin", global_position)
 
 
-## The board shader with a one-texel-per-cell texture: red = height of the cell's top in inches, green = 255 for a sump.
+## The board shader with a one-texel-per-cell texture: red = height of the cell's top in inches, green = 255 for a sump, blue = the lot id
+## (mod 256: a roof has one look per lot), alpha = 0 (free).
 func _make_material(layout: Dictionary) -> ShaderMaterial:
 	var bytes := PackedByteArray()
 	for c: Dictionary in layout["cells"]:
-		bytes.append_array([int(layout["level_in"][c["level"]]), 255 if c["lot_kind"] == "Hazard" else 0])
+		bytes.append_array([int(layout["level_in"][c["level"]]), 255 if c["lot_kind"] == "Hazard" else 0, int(c["lot_id"]) % 256, 0])
 	var mat := ShaderMaterial.new()
 	mat.shader = SHADER
-	mat.set_shader_parameter("cells", ImageTexture.create_from_image(Image.create_from_data(layout["nx"], layout["nz"], false, Image.FORMAT_RG8, bytes)))
+	mat.set_shader_parameter("cells", ImageTexture.create_from_image(Image.create_from_data(layout["nx"], layout["nz"], false, Image.FORMAT_RGBA8, bytes)))
 	mat.set_shader_parameter("board_cells", Vector2(layout["nx"], layout["nz"]))
 	mat.set_shader_parameter("cell_in", float(layout["cell_in"]))
 	return mat
