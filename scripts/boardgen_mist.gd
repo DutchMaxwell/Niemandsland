@@ -18,8 +18,9 @@ const DIRS8: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1),
 
 ## One RG pair per cell, row by row: R = how thick the mist lies there (WALL_HALO over a raised tier; open floor only 0.14, so a street keeps wisps
 ## with clear gaps; +0.22 for each wall it touches and a little for each diagonal one, so mist pools along walls and in wells between
-## tiers; a sump and its rim 0.8 to 1), G = how toxic it is (a sump 255, the cells round it 128).
-static func density(layout: Dictionary) -> PackedByteArray:
+## tiers; a sump and its rim 0.8 to 1; the floor cell in front of a steam vent at least 0.75), G = how toxic it is (a sump 255, the cells
+## round it 128).
+static func density(layout: Dictionary, vent_cells: Array = []) -> PackedByteArray:
 	var nx: int = layout["nx"]
 	var nz: int = layout["nz"]
 	var cells: Array = layout["cells"]
@@ -38,6 +39,7 @@ static func density(layout: Dictionary) -> PackedByteArray:
 					walled += 1 if c["level"] > 0 and (d.x == 0 or d.y == 0) else 0
 					sump += 1 if c["level"] == 0 and c["lot_kind"] == "Hazard" else 0
 			var thick := WALL_HALO if me["level"] > 0 else 0.14 + 0.22 * walled + 0.04 * (raised - walled)
+			thick = maxf(thick, 0.75) if vent_cells.has(Vector2i(x, z)) else thick
 			var toxic := 0.0
 			if me["level"] == 0 and me["lot_kind"] == "Hazard":
 				thick = 1.0
@@ -64,7 +66,7 @@ func build(layout: Dictionary) -> void:
 	multimesh = mm
 	var mat := ShaderMaterial.new()
 	mat.shader = SHADER
-	mat.set_shader_parameter("cells", ImageTexture.create_from_image(Image.create_from_data(layout["nx"], layout["nz"], false, Image.FORMAT_RG8, density(layout))))
+	mat.set_shader_parameter("cells", ImageTexture.create_from_image(Image.create_from_data(layout["nx"], layout["nz"], false, Image.FORMAT_RG8, density(layout, BoardgenSteam.vents(layout).map(func(v: Dictionary) -> Vector2i: return v["cell"])))))
 	mat.set_shader_parameter("board_in", board)
 	material_override = mat
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
