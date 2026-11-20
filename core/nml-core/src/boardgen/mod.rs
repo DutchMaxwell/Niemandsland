@@ -57,6 +57,9 @@ pub struct Budgets {
     pub garden_min: usize,
     /// Side in cells of the market square kept as street cells about the board centre (even; 0 = none).
     pub plaza: usize,
+    /// The landmark kinds drawn as mirrored pairs, how many pairs a board gets (inclusive), and whether the fountain (a `TankCluster`) stands alone
+    /// at the board centre, on the market square.
+    pub landmark_kinds: &'static [LandmarkKind], pub landmark_pairs: (usize, usize), pub centre_piece: bool,
     /// Reject a board with a straight open lane (a full row or column of level-0 cells, no solid piece) from edge to edge: it is a sight corridor.
     pub lane_free: bool,
     /// Sub-seeds tried before the last one is returned as it is (the caller then sees `problems()`).
@@ -71,11 +74,13 @@ impl Theme {
         match self {
             Self::Deepworks => Budgets { raised: RAISED_PERMILLE, high: HIGH_PERMILLE, tower_pairs: TOWER_PAIRS, landmark_pieces: LANDMARK_PIECES,
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
-                lot_pairs: 9, lot_shapes: &[(3, 2), (2, 3), (2, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[], garden_area: 0, garden_min: 0, plaza: 0, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1 },
+                lot_pairs: 9, lot_shapes: &[(3, 2), (2, 3), (2, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[], garden_area: 0, garden_min: 0, plaza: 0,
+                landmark_kinds: &[LandmarkKind::TankCluster, LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (1, 2), centre_piece: false, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1 },
             // First town values (step 6 of the ruin-town plan re-fits them): more raised ground, one tower pair, more terraces.
-            Self::RuinTown => Budgets { raised: (300, 400), high: (60, 150), tower_pairs: (1, 1), landmark_pieces: LANDMARK_PIECES,
+            Self::RuinTown => Budgets { raised: (300, 400), high: (60, 150), tower_pairs: (1, 1), landmark_pieces: (7, 7),
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
-                lot_pairs: 13, lot_shapes: &[(3, 2), (2, 3), (2, 2), (2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[(3, 2)], garden_area: 2, garden_min: 6, plaza: 4, lane_free: true, max_attempts: 32, tower_side: 2 },
+                lot_pairs: 13, lot_shapes: &[(3, 2), (2, 3), (2, 2), (2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[(3, 2)], garden_area: 2, garden_min: 6, plaza: 4,
+                landmark_kinds: &[LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (3, 3), centre_piece: true, lane_free: true, max_attempts: 32, tower_side: 2 },
         }
     }
     fn salt(self) -> i64 { if self.is_default() { 0 } else { TOWN_SALT } }
@@ -159,7 +164,7 @@ pub fn generate_themed(seed: i64, symmetry: Symmetry, theme: Theme) -> Layout {
         let g = graph::build(s ^ SALTS[0] ^ salt, symmetry, &b);
         let (lots, mut cells) = levels::stack(s ^ SALTS[1] ^ salt, &g, &b);
         let connectors = connect::wire(s ^ SALTS[2] ^ salt, symmetry, &cells);
-        let landmarks = landmarks::place(s ^ SALTS[3] ^ salt, symmetry, &mut cells, &connectors);
+        let landmarks = landmarks::place(s ^ SALTS[3] ^ salt, symmetry, &mut cells, &connectors, &b);
         let layout = Layout { theme, seed, attempt, symmetry, board_in: BOARD_IN, nx: g.nx, nz: g.nz, cell_in: CELL_IN,
             deploy_depth_cells: DEPLOY_DEPTH_CELLS, arteries: g.arteries, lots, cells, connectors, landmarks };
         if layout.problems().is_empty() { return layout; }

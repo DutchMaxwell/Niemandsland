@@ -634,3 +634,21 @@ fn a_town_has_a_four_by_four_market_square_in_the_middle_and_the_deepworks_none(
     }
     assert!(deep_squares < 60, "the Deepworks board has no reserved square ({deep_squares} of 300 have street there by chance)");
 }
+
+#[test]
+fn every_town_has_a_fountain_in_the_middle_and_a_statue_pool_and_hall_as_mirrored_pairs() {
+    for seed in 1..=300 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        assert!(l.problems().is_empty(), "seed {seed}: {:?}", l.problems());
+        let of = |k: LandmarkKind| l.landmarks.iter().filter(move |lm| lm.kind == k).collect::<Vec<_>>();
+        let fountain = of(LandmarkKind::TankCluster);
+        assert_eq!(fountain.len(), 1, "seed {seed}: {} fountains", fountain.len());
+        assert_eq!((fountain[0].x, fountain[0].z, fountain[0].w, fountain[0].h), (7, 7, 2, 2), "seed {seed}: the fountain is not on the centre");
+        for k in [LandmarkKind::Crane, LandmarkKind::Sump, LandmarkKind::PumpHouse] {
+            let v = of(k);
+            assert_eq!(v.len(), 2, "seed {seed}: {k:?} x {}", v.len());
+            let (a, b) = (v[0], v[1]);
+            assert_eq!((a.x + b.x + a.w, a.z + b.z + a.h, a.w, a.h), (GRID, GRID, b.w, b.h), "seed {seed}: the {k:?} pair is not a half turn");
+        }
+    }
+}
