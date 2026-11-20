@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 use crate::rng::GodotRng;
 use super::levels::LotKind;
-use super::{Budgets, Symmetry, CELL_IN, GRID};
+use super::{Budgets, Symmetry, CELL_IN, DEPLOY_DEPTH_CELLS, GRID};
 
 /// A main street: a rectangle of cells. `width_in` is its short side in inches.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,9 +37,11 @@ pub fn build(seed: i64, sym: Symmetry, b: &Budgets) -> SectorGraph {
     let (mut occ, tpls, target) = (vec![false; nx * nz], b.lot_shapes, b.lot_pairs);
     for _ in 0..220 {
         if g.lots.len() / 2 >= target { break; }
-        let (w, h) = tpls[rng.randi_range(0, tpls.len() as i64 - 1) as usize];
+        let first = b.lot_first.get(g.lots.len() / 2).copied();   // the first pairs may have a forced shape and stay out of the bands (a tower site)
+        let (w, h) = first.unwrap_or_else(|| tpls[rng.randi_range(0, tpls.len() as i64 - 1) as usize]);
         if w <= nx && h <= hz {
-            let r = (rng.randi_range(0, (nx - w) as i64) as usize, rng.randi_range(0, (hz - h) as i64) as usize, w, h);
+            let z0 = if first.is_some() { DEPLOY_DEPTH_CELLS as i64 } else { 0 };
+            let r = (rng.randi_range(0, (nx - w) as i64) as usize, rng.randi_range(z0, (hz - h) as i64) as usize, w, h);
             try_pair(&mut g, &street, &mut occ, &mut rng, r);
         }
     }
