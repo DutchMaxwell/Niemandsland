@@ -110,21 +110,7 @@ func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_lo
 	col.shape = shape
 	col.position.y = size.y * 0.5
 	add_child(col)
-	# The look: boxes of LOOKS[p_look] (unknown -> plain), one material per colour. Rules never read it.
-	for part: Array in LOOKS.get(p_look, LOOKS["plain"]):
-		var lo := Vector3(part[0], part[2], part[4])
-		var hi := Vector3(part[1], part[3], part[5])
-		if not _mats.has(part[6]):
-			_mats[part[6]] = StandardMaterial3D.new()
-			_mats[part[6]].albedo_color = COLOURS[part[6]]
-			_mats[part[6]].roughness = 0.93
-		var mesh := BoxMesh.new()
-		mesh.size = (hi - lo) * INCHES_TO_METERS
-		mesh.material = _mats[part[6]]
-		var visual := MeshInstance3D.new()
-		visual.mesh = mesh
-		visual.position = (hi + lo) * 0.5 * INCHES_TO_METERS
-		add_child(visual)
+	add_look_meshes(self, p_look, _mats)
 	add_child(GrasslandFootScatter.new().setup(footprint_inches, false))   # stones + grass at the foot (S6-2)
 	# Soft contact shadow (maintainer 05.10.): a Decal child, so it moves, turns and goes with the piece. Decoration only.
 	var skirt := Decal.new()
@@ -135,6 +121,25 @@ func configure(p_prop_id: String, p_kind: int, p_footprint_inches: Vector2, p_lo
 		footprint_inches.y + 2.0 * SKIRT_MARGIN_INCHES) * INCHES_TO_METERS
 	add_child(skirt)
 	add_child(GrasslandFootDressing.new().setup(footprint_inches))   # earth + moss at the foot (S6-1)
+
+
+## The look: boxes of LOOKS[look] (unknown -> plain) under `parent`, one material per colour kept in `mats` (so the owner can
+## tint them). Rules never read it. Shared with the grid editor's blocker on a fantasy table (terrain_overlay.gd).
+static func add_look_meshes(parent: Node3D, look: String, mats: Dictionary) -> void:
+	for part: Array in LOOKS.get(look, LOOKS["plain"]):
+		var lo := Vector3(part[0], part[2], part[4])
+		var hi := Vector3(part[1], part[3], part[5])
+		if not mats.has(part[6]):
+			mats[part[6]] = StandardMaterial3D.new()
+			mats[part[6]].albedo_color = COLOURS[part[6]]
+			mats[part[6]].roughness = 0.93
+		var mesh := BoxMesh.new()
+		mesh.size = (hi - lo) * INCHES_TO_METERS
+		mesh.material = mats[part[6]]
+		var visual := MeshInstance3D.new()
+		visual.mesh = mesh
+		visual.position = (hi + lo) * 0.5 * INCHES_TO_METERS
+		parent.add_child(visual)
 
 
 ## Opaque under the footprint, fading (squared) to nothing SKIRT_MARGIN_INCHES outside its edge, 10 px per inch; built
