@@ -274,6 +274,67 @@ static func props(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
+## Lean-tos and sheds at the BACK and SIDE of the houses (plan O6): boxes for the greybox plan ({lo, hi, kind, solid, prop, lean_to, lot, face}) on bare ground outside a house face, flush with the
+## collider's face, at most 0.75 in deep and 1.6 in high, never on the front (the door side), a party wall, a street cell, a ladder foot, a landmark or a pool / garden / hazard cell. A shed is a wooden
+## box with a tiled lid, a woodpile a low wooden box, a privy a narrow tall box with a lid. Only whole raised or intact houses (Block, Deck, Roofed) carry them. Pure data.
+static func lean_tos(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var cells: Array = layout["cells"]
+	var feet := {}
+	for c: Dictionary in layout["connectors"]:
+		feet[int(c["low"])] = true
+		feet[int(c["high"])] = true
+	var taken := {}
+	for lm: Dictionary in layout["landmarks"]:
+		for dz in int(lm["h"]):
+			for dx in int(lm["w"]):
+				taken[(int(lm["z"]) + dz) * nx + int(lm["x"]) + dx] = true
+	var dirs := {"N": Vector2i(0, -1), "E": Vector2i(1, 0), "S": Vector2i(0, 1), "W": Vector2i(-1, 0)}
+	var lots := {}
+	for lot: Dictionary in layout["lots"]:
+		lots[lot["id"]] = lot
+	for f: Dictionary in frontage(layout):
+		var lot: Dictionary = lots[f["lot"]]
+		if f["front"] == "" or not ["Block", "Deck", "Roofed"].has(lot["kind"]):
+			continue
+		var half := 1 if lot["z"] * 2 >= nz else 0
+		for face: String in [f["back"]] + f["sides"]:
+			if f["party"][face] or _hash(f["lot"], half, 20 + "NESW".find(face)) > (0.55 if face == f["back"] else 0.3):
+				continue
+			var d: Vector2i = dirs[face]
+			var along_x := d.x == 0   # the face runs along x (a north or south face)
+			var run: int = lot["w"] if along_x else lot["h"]
+			var idx := int(_hash(f["lot"], half, 30 + "NESW".find(face)) * run)
+			var out_cell := Vector2i(lot["x"], lot["z"]) + (Vector2i(idx, 0) if along_x else Vector2i(0, idx)) + (Vector2i(0, lot["h"]) if face == "S" else Vector2i(lot["w"], 0) if face == "E" else Vector2i.ZERO) + (d if face in ["N", "W"] else Vector2i.ZERO)
+			if out_cell.x < 0 or out_cell.y < 0 or out_cell.x >= nx or out_cell.y >= nz:
+				continue
+			var cd: Dictionary = cells[out_cell.y * nx + out_cell.x]
+			var i := out_cell.y * nx + out_cell.x
+			if cd["level"] != 0 or cd["street"] or cd["lot_id"] != 0 or cd["lot_kind"] != "Street" or feet.has(i) or taken.has(i):
+				continue
+			var pick := int(_hash(f["lot"], half, 70 + "NESW".find(face)) * 3.0)
+			var length: float = [2.0, 1.6, 0.7][pick]
+			var height: float = [1.3, 0.7, 1.6][pick]
+			var depth := 0.5 + 0.25 * _hash(f["lot"], half, 80 + "NESW".find(face))
+			var cell_lo := origin + Vector2(out_cell) * cell_in
+			var along := 0.3 + (cell_in - 0.6 - length) * _hash(f["lot"], half, 90 + "NESW".find(face))
+			var lo := Vector2.ZERO
+			var size := Vector2(length, depth) if along_x else Vector2(depth, length)
+			if along_x:
+				lo = Vector2(cell_lo.x + along, cell_lo.y + cell_in - depth if face == "N" else cell_lo.y)   # flush with the house face
+			else:
+				lo = Vector2(cell_lo.x + cell_in - depth if face == "W" else cell_lo.x, cell_lo.y + along)
+			var box := {"lo": Vector3(lo.x, 0.0, lo.y), "hi": Vector3(lo.x + size.x, height, lo.y + size.y), "kind": "wood", "solid": false, "prop": true, "lean_to": true, "lot": f["lot"], "face": face}
+			out.append(box)
+			if pick != 1:   # a shed and a privy get a tiled lid, a little proud of the box
+				out.append({"lo": Vector3(lo.x - 0.05, height, lo.y - 0.05), "hi": Vector3(lo.x + size.x + 0.05, height + 0.12, lo.y + size.y + 0.05), "kind": "roof", "solid": false, "prop": true, "lean_to": true, "lot": f["lot"], "face": face})
+	return out
+
+
 ## The rubble of a wall breach: eight low stones (0.08-0.25 in) scattered over the gap, flat enough to stand on (the breach is Difficult ground).
 static func breach_rubble(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []

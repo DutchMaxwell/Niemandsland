@@ -123,6 +123,7 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 		out.append_array(BoardgenTownDressing.merlons(layout))
 		out.append_array(BoardgenTownDressing.lantern_boxes(layout))
 		out.append_array(BoardgenTownDressing.props(layout))
+		out.append_array(BoardgenTownDressing.lean_tos(layout))
 		out.append_array(BoardgenTownDressing.breach_rubble(layout))
 		out.append_array(BoardgenTownDressing.hall_merlons(layout))
 	else:
