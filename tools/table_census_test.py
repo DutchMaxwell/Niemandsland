@@ -538,8 +538,8 @@ def test_check_is_red_on_a_call_site_whose_function_has_no_owner_row_and_green_o
 def test_the_real_manifest_owner_rows_equal_the_d50_counts():
     rows = [ln.split() for ln in run(REPO).stdout.splitlines() if ln.startswith("owner ")]
     by = {(r[1], r[2]): int(r[3]) for r in rows}
-    assert by[("hit_save_shared", "TOTAL")] == 64 and by[("dangerous_morale", "TOTAL")] == 14
+    assert by[("hit_save_shared", "TOTAL")] == 64 and by[("dangerous_morale", "TOTAL")] == 15   # 14 + the idle Shaken branch's end morale (gaps3)
     sites = lambda *owners: sum(n for (_, o), n in by.items() if o in owners)
     assert (sites("ai_volley"), sites("human_volley"), sites("melee")) == (11, 11, 22)
     assert sites("deathstrike", "self_destruct") == 4
-    assert sum(int(r[3]) for r in rows if r[2] != "TOTAL" and not r[4].startswith("P4.D-")) == 30   # no door step of its own
+    assert sum(int(r[3]) for r in rows if r[2] != "TOTAL" and not r[4].startswith("P4.D-")) == 31   # no door step of its own

@@ -1202,7 +1202,13 @@ func _solo_activate_one_ai_body() -> GameUnit:
 				report["core_dangerous"] = int(report["dangerous_dice"])
 				await _solo_ai_core_call(unit, report, null, [])
 			else:
+				var idle_alive: int = SoloController.combined_alive(unit)
+				var idle_wounds: int = _solo_unit_wounds_now(unit)
 				await _run_ai_dangerous(unit, int(report["dangerous_dice"]))
+				# GF 3.6 p.10: wounds that leave the unit at half or less owe the end-of-activation morale test; a Shaken
+				# unit fails it without a die (the core's order: test while Shaken, recover last).
+				if not unit.is_destroyed():
+					await _solo_shooting_morale(unit, idle_alive, _roller_label(unit), idle_wounds, "Dangerous terrain")
 			if unit.is_destroyed():
 				return unit
 		if bool(report.get("aircraft", false)) and not solo_controller.last_move_paths.is_empty():

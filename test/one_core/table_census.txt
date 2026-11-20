@@ -6,8 +6,8 @@ cast scripts/main.gd:_solo_resolve_one_cast 128 2
 cast scripts/main.gd:_solo_resolve_spell_damage 122 1
 cast TOTAL 270 5
 dangerous_morale scripts/main.gd:_run_ai_dangerous 24 7
-dangerous_morale scripts/main.gd:_solo_shooting_morale 43 7
-dangerous_morale TOTAL 67 14
+dangerous_morale scripts/main.gd:_solo_shooting_morale 43 8
+dangerous_morale TOTAL 67 15
 hit_save_shared scripts/main.gd:_solo_apply_vs_marks 56 4
 hit_save_shared scripts/main.gd:_solo_hazardous_self_wounds 28 3
 hit_save_shared scripts/main.gd:_solo_hits 139 4
@@ -50,14 +50,14 @@ planner_tag tree 27 536
 planner_tag TOTAL 345 5986
 owner dangerous_morale ai_volley 1 P4.D-41/H-28
 owner dangerous_morale breath 1 H-38
-owner dangerous_morale dangerous_ai_activation 4 H-44
+owner dangerous_morale dangerous_ai_activation 5 H-44
 owner dangerous_morale dangerous_player_auto 1 H-32
 owner dangerous_morale human_volley 1 P4.D-43/H-34
 owner dangerous_morale melee 2 P4.D-49/E-32
 owner dangerous_morale other_rule_hits 2 H-38
 owner dangerous_morale spells 1 H-45
 owner dangerous_morale transport_spill 1 H-41
-owner dangerous_morale TOTAL 14 -
+owner dangerous_morale TOTAL 15 -
 owner hit_save_shared ai_volley 10 P4.D-41/H-28
 owner hit_save_shared breath 2 H-38
 owner hit_save_shared deathstrike 2 P4.D-49/H-35
