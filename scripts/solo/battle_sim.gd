@@ -1212,8 +1212,11 @@ static func _profiles_of(su: Dictionary, melee: bool, d := 0.0, state := {}) -> 
 	var u_bypass := false   # A1: the Regeneration-bypass half, its own flag (unit.rs `u_bypass`)
 	var u_rending := false
 	var u_unstop := false
+	var exact_labels: bool = AiActRecorder.rules_epoch >= AiActRecorder.PENDING_EPOCH_EXACT_STRIKER_LABELS
 	for r in u.get_special_rules():
 		var rs := str(r).strip_edges()
+		if exact_labels and GameUnit.is_unlisted_striker_label(rs):
+			continue   # the core twin: unit.rs stamp_unit_strikers (a Mark / Buff / Aura label is no bearer)
 		if rs.begins_with("Bane") or rs.begins_with("Lacerate"):
 			u_bane = true
 			# A1 (EPOCH_72_PLAYTEST_RULES, the table's #1911): a unit-level Lacerate re-rolls the sixes only.
