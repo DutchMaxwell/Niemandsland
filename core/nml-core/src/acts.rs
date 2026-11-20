@@ -966,27 +966,32 @@ pub const EPOCH_91_JOINED_HERO_FATIGUE: u32 = 91;
 /// Records stamped 91 or below replay byte-exact. Every call site reads THIS constant, not `92` or
 /// `CURRENT_RULES_EPOCH`. The recorder mirror (`act_recorder.gd`) stamps 92 in the same change.
 pub const EPOCH_92_MELEE_CAUSES: u32 = 92;
-pub const CURRENT_RULES_EPOCH: u32 = 92;
-/// Placeholder gate for #3090 part 2 (the AI steps into Dangerous ground it could skirt), plain moves only.
-/// First, the "destination is Dangerous, route straight in" exception reads the unit's own goal (its centre at the end
-/// of the rigid move, base edge included), no longer any single model's rigid end point. Second, a plan that still
-/// crosses Dangerous re-plans with the goal shifted sideways, perpendicular to the move (+1, -1, +2, -2, +3, -3, +4,
-/// -4 inches, + = right of travel), and keeps the FIRST plan that crosses none.
-/// Table twin `SoloController._execute_move` / `PENDING_EPOCH_DANGER_AVOID` in `act_recorder.gd`. Stays 93 (lead assignment); CURRENT is 92.
-pub const PENDING_EPOCH_DANGER_AVOID: u32 = 93;
-/// Placeholder gate for the 3.6 faction-folder aliases in the RULES registry (the spell-book twins
-/// landed ungated in #3098): an old folder (`wormhole_/rift_daemons_of_*`, `saurian_starhost`) now
-/// resolves its same-system 3.6 book's rules. That changes outcomes for units that gain their rules,
-/// so it waits for a real epoch: from 93 the alias answers, below it the old common-only read stays.
-/// Every call site reads THIS constant, not the literal `93` or `CURRENT_RULES_EPOCH`.
-pub const PENDING_EPOCH_RULES_ALIAS: u32 = 93;
-/// Placeholder gate for the volley's LEGACY SPELL RIDER (`sim::resolve`, the `!seams.cast` branch): below 93 a seam-off
-/// volley by a caster with spare tokens prices (and, on the dice path, pays for) the best affordable in-range damage spell
-/// inside the shoot pick, a cast nobody makes: the table has no such rider (its casts are the planned ones, paid at plan
-/// time), so a 4-token caster ended a plain volley at 3 tokens in the core against 4 at the table. From 93 the rider is off
-/// on EVERY path (dice and expectation alike): the volley is the weapons only and spends no spell token. `seam_cast` ON
-/// never had the rider, so its paths are untouched. Every call site reads THIS constant, not the literal `93`.
-pub const PENDING_EPOCH_RIDER_OFF: u32 = 93;
+/// Three changes of Plan G land together (each a measured table-vs-core difference; the table is the reference). From 93
+/// on, on EVERY path:
+///
+/// DANGER_AVOID (#3090 part 2, plain moves only): the AI steps into Dangerous ground it could skirt. First, the
+/// "destination is Dangerous, route straight in" exception reads the unit's own goal (its centre at the end of the rigid
+/// move, base edge included), no longer any single model's rigid end point. Second, a plan that still crosses Dangerous
+/// re-plans with the goal shifted sideways, perpendicular to the move (+1, -1, +2, -2, +3, -3, +4, -4 inches, + = right
+/// of travel), and keeps the FIRST plan that crosses none. Table twin `SoloController._execute_move`.
+///
+/// RULES_ALIAS (3.6 faction-folder aliases in the RULES registry; the spell-book twins landed ungated in #3098): an old
+/// folder (`wormhole_/rift_daemons_of_*`, `saurian_starhost`) resolves its same-system 3.6 book's rules, so units that
+/// gain their rules change outcomes; below 93 the old common-only read stays. Python reads it as
+/// `nml_core.EPOCH_93_DANGER_RULES_RIDER`.
+///
+/// RIDER_OFF (the volley's LEGACY SPELL RIDER, `sim::resolve`, the `!seams.cast` branch): below 93 a seam-off volley by a
+/// caster with spare tokens prices (and, on the dice path, pays for) the best affordable in-range damage spell inside the
+/// shoot pick, a cast nobody makes: the table has no such rider (its casts are the planned ones, paid at plan time), so a
+/// 4-token caster ended a plain volley at 3 tokens in the core against 4 at the table. From 93 the rider is off on EVERY
+/// path (dice and expectation alike): the volley is the weapons only and spends no spell token. `seam_cast` ON never had
+/// the rider, so its paths are untouched. The GDScript fallback planner (`BattleSim.resolve`) drops its own rider from
+/// the same epoch.
+///
+/// Records stamped 92 or below replay byte-exact. Every call site reads THIS constant, not `93` or
+/// `CURRENT_RULES_EPOCH`. The recorder mirror (`act_recorder.gd`) stamps 93 in the same change.
+pub const EPOCH_93_DANGER_RULES_RIDER: u32 = 93;
+pub const CURRENT_RULES_EPOCH: u32 = 93;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2306,7 +2311,7 @@ mod tests {
         EPOCH_74_CLIMB_COST, EPOCH_75_TABLE_FIXES, EPOCH_76_MOVE_FIXES, EPOCH_77_CHARGE_CAP, EPOCH_78_FLIER_CUT, EPOCH_79_EV_MOVED_ROUND, EPOCH_80_ROLLOUT_CUMBERSOME,
         EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME, EPOCH_83_LONE_HERO_TARGET, EPOCH_84_IGNORE_GROUPS, EPOCH_85_INDIRECT_GATE,
         EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_87_WALKED_DANGEROUS, EPOCH_88_SPLIT_LONE_HERO, EPOCH_89_SHARED_BEARERS,
-        EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_92_MELEE_CAUSES,
+        EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER,
     };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
@@ -2327,7 +2332,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 92, "the live epoch is EPOCH_92_MELEE_CAUSES");
+        assert_eq!(CURRENT_RULES_EPOCH, 93, "the live epoch is EPOCH_93_DANGER_RULES_RIDER");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2337,11 +2342,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":92}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":93}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 92"
+            "a fresh play_game() now stamps the bumped epoch, 93"
         );
     }
 
@@ -2483,6 +2488,14 @@ mod tests {
         assert!(rule_on(EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_90_JOINED_ONE_RECOVERY), "a record at 90 rolls once per pair");
         assert!(rule_on(EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_89_SHARED_BEARERS), "90 keeps the shared bearers on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_90_JOINED_ONE_RECOVERY), "a fresh play_game() stamps it on");
+    }
+
+    #[test]
+    fn epoch_93_gate_is_closed_at_epoch_92_and_open_from_93() {
+        assert!(!rule_on(EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER), "a record at 92 replays the old danger, alias and rider reads");
+        assert!(rule_on(EPOCH_93_DANGER_RULES_RIDER, EPOCH_93_DANGER_RULES_RIDER), "a record at 93 plays the new ones");
+        assert!(rule_on(EPOCH_93_DANGER_RULES_RIDER, EPOCH_92_MELEE_CAUSES), "93 keeps the melee causes on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_93_DANGER_RULES_RIDER), "a fresh play_game() stamps it on");
     }
 
     #[test]

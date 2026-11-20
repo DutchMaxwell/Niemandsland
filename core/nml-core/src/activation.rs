@@ -2734,7 +2734,7 @@ mod tests {
         ]
     }
 
-    /// `PENDING_EPOCH_RIDER_OFF` (found by the CAST-O7 probe): with `seam_cast` OFF (every shipped header) the volley's legacy spell
+    /// `EPOCH_93_DANGER_RULES_RIDER` (found by the CAST-O7 probe): with `seam_cast` OFF (every shipped header) the volley's legacy spell
     /// rider (sim.rs `resolve`, the `!seams.cast` branch) spent tokens on the tray path too: a caster with SPARE tokens and
     /// an affordable damage spell in range paid for a cast it never makes, on top of the tokens its planned casts paid. The
     /// table has no rider (its casts are the planned ones, paid at plan time), so the shadow read `casts` core 0 vs table 2.
@@ -2743,13 +2743,13 @@ mod tests {
     fn rider_off_93_the_volleys_spell_rider_spends_no_token_on_the_tray_path() {
         // The ON side is untouched (its plain volley reads 2 because the core's own cast sub-phase fires when no tray cast
         // is offered, the seam's intended self-play meaning): only the OFF side moves, to the table's numbers.
-        assert_eq!(rider_tokens(crate::acts::PENDING_EPOCH_RIDER_OFF), [3, 4, 3, 2], "[off cast+volley, off plain, on cast+volley, on plain]");
+        assert_eq!(rider_tokens(crate::acts::EPOCH_93_DANGER_RULES_RIDER), [3, 4, 3, 2], "[off cast+volley, off plain, on cast+volley, on plain]");
     }
 
     /// Below 93 the rider stays byte-identical: the OFF side pays 1 more token than the table (the old reading).
     #[test]
     fn rider_off_93_below_93_the_legacy_rider_still_spends_a_token() {
-        assert_eq!(rider_tokens(crate::acts::PENDING_EPOCH_RIDER_OFF - 1), [2, 3, 3, 2], "[off cast+volley, off plain, on cast+volley, on plain]");
+        assert_eq!(rider_tokens(crate::acts::EPOCH_93_DANGER_RULES_RIDER - 1), [2, 3, 3, 2], "[off cast+volley, off plain, on cast+volley, on plain]");
     }
 
     /// CC-8b: a debuff placed by a cast is read by the SAME activation's volley, and obeys `scope` (a melee-scoped debuff

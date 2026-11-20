@@ -958,11 +958,13 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 					var with_shred := AiEv.profile_ev(probe, att, phantom_def, d, false)
 					var without := AiEv.profile_ev(plain, att, phantom_def, d, false)
 					phantom += int(round((with_shred - without) * per))
-			if cast_phase_enabled():
+			# EPOCH_93_DANGER_RULES_RIDER (core twin `sim::resolve`): from 93 the legacy rider is off on every path, the
+			# volley is the weapons only and spends no spell token — the table has no such rider, its casts are the planned ones.
+			if cast_phase_enabled() or AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_93_DANGER_RULES_RIDER:
 				_apply_expected_wounds(tu, AiEv.shoot_ev(profiles, att,
 					_ctx_of(tu, false, _held_for(tu, round_now)), d))
 			else:
-				# Seam OFF: the legacy spell rider, verbatim from dabd1da — the
+				# Seam OFF below 93: the legacy spell rider, verbatim from dabd1da — the
 				# sub-phase above never ran, so casting only happens inside a shoot pick.
 				var volley := AiEv.shoot_ev(profiles, att,
 					_ctx_of(tu, false, _held_for(tu, round_now)), d)
