@@ -55,8 +55,9 @@ static func applies(main) -> bool:
 ## P4.0-6: the per-choice switch. A choice id's prefix (`takedown_model:<shooter>:<target>`) names its
 ## switch: ON only for `NML_ONE_CORE_CHOICE_<PREFIX>` = "1"/"on", so the core's automatic pick resolves exactly as before
 ## unless it is turned on. P4.D-27: the kinds in CHOICE_DEFAULT_ON start ON instead - `NML_ONE_CORE_CHOICE_WOUND_ALLOC=0`
-## (or "off") is the way back until the switch and the #172 guard are deleted. Tests set the entry per kind.
-const CHOICE_KINDS := ["takedown_model", "wound_alloc"]
+## (or "off") is the way back until the switch and the #172 guard are deleted. Tests set the entry per kind. CC-14a: `interference`
+## (a foe's token spend against an AI cast, `interference:<seq>:<caster>:<slot>`) starts OFF like the Takedown pick.
+const CHOICE_KINDS := ["takedown_model", "wound_alloc", "interference"]
 const CHOICE_DEFAULT_ON := ["wound_alloc"]
 static var _choice_on: Dictionary = {}
 
@@ -246,7 +247,7 @@ const METERS_TO_INCHES := 39.3701
 ## groups join it with their own index) is probed unseen - the core opens it only where a group's landing has a real
 ## choice, and a probe nothing reached asks nothing. An empty answer means "no probe", i.e. the automatic pick.
 static func pending_choices(main, unit: GameUnit, transcript: Array) -> Array:
-	var ids: Array = []
+	var ids: Array = interference_probes(transcript)
 	if not any_choice_enabled():
 		return ids
 	for i in range(transcript.size() - 1, -1, -1):
@@ -266,6 +267,29 @@ static func pending_choices(main, unit: GameUnit, transcript: Array) -> Array:
 	return ids
 
 
+## CC-14a: the interference choices the transcript's OPEN casts may ask, probed unseen like the wound allocation: one
+## `interference:<seq>:<caster>:<slot>` per pool slot that holds a token. An open cast whose pools hold none still needs ONE entry
+## (the core's static check wants a choice for every open cast; nothing reaches it, the core says "no caster ... no interference"),
+## so its first pool's id covers it. [] with the switch OFF (the core then refuses an open cast and the table keeps it). Pure.
+static func interference_probes(transcript: Array) -> Array:
+	var ids: Array = []
+	if not choice_enabled("interference"):
+		return ids
+	for e in transcript:
+		var c: Dictionary = e
+		if str(c.get("t", "")) != "cast" or not bool(c.get("open", false)):
+			continue
+		var pools: Array = c.get("pools", [])
+		var stem := "interference:%d:%s:" % [int(c["seq"]), str(c["caster"])]
+		var from := ids.size()
+		for p in pools:
+			if ((p as Array)[1] as Array).any(func(pay: Variant) -> bool: return int((pay as Array)[1]) > 0):
+				ids.append(stem + str(int((p as Array)[0])))
+		if ids.size() == from:
+			ids.append(stem + str(int((pools[0] as Array)[0]) if not pools.is_empty() else 0))
+	return ids
+
+
 ## Whether `unit` carries a Takedown shooting profile — the core's `ShootProfile.takedown` is stamped from
 ## the same weapon entries (`weapon_has(w, "Takedown")`).
 static func _takedown_weapon(unit: GameUnit) -> bool:
@@ -278,12 +302,14 @@ static func _takedown_weapon(unit: GameUnit) -> bool:
 
 
 ## The sentence the fallback line and the owner's request use for a choice id.
-static func choice_purpose(id: String) -> String:
+static func choice_purpose(id: String, transcript: Array = []) -> String:
 	match id.get_slice(":", 0):
 		"takedown_model":
 			return "Takedown model pick"
 		"wound_alloc":
 			return "wound allocation"
+		"interference":
+			return _cast_spell_of(transcript, id.get_slice(":", 2)) if not transcript.is_empty() else "interference"   # the table's request names the spell
 	return "choice"
 
 
@@ -360,10 +386,18 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 			# The choice's owner is a roster KEY (the Takedown shooter, the wounded target): never the shooter by default.
 			var owner := _roller_of(main, unit, transcript, str(r["owner"]), str(r["owner"]))
 			var wounds := int(unsaved.get(str(r["owner"]), 0)) + int(unsaved.get("", 0))
-			var option: String = await main._owner_choice(owner, str(r["id"]), options, choice_purpose(str(r["id"])), wounds)
-			probes.erase(str(r["id"]))   # asked once: the answer follows, or the core's automatic pick stands
-			if answer_fits(str(r["id"]), options, option):
-				transcript.append({"t": "choice", "id": str(r["id"]), "option": option})
+			var id := str(r["id"])
+			var interference := id.begins_with("interference:")
+			if interference and not cx.is_empty():
+				await _cast_throw(main, cx)   # CC-14a: the table shows the cast (markers, seal, "Cast" card) BEFORE the foe is asked
+			var option: String = await main._owner_choice(owner, id, options, choice_purpose(id, transcript), wounds)
+			probes.erase(id)   # asked once: the answer follows, or the core's automatic pick stands
+			if answer_fits(id, options, option):
+				transcript.append({"t": "choice", "id": id, "option": option})
+				if interference:
+					_land_interference(main, cx, transcript, id, int(option))
+			elif interference:
+				transcript.append({"t": "choice", "id": id, "option": "0"})   # O3: no answer is no interference; the core's static check wants the entry
 			continue
 		if str(r["step"]) == "done":
 			if not cx.is_empty():
@@ -526,12 +560,14 @@ static func _cast_targets(c: Dictionary) -> Array:
 
 
 ## CC-12b: before the cast die is thrown (the table: announce markers, the seal, the "needs" line, then the "Cast" card).
+## CC-14a: once per cast - a foe's interference choice shows it first (the table asks the foe after the card), the die finds it done.
 static func _cast_throw(main, cx: Dictionary) -> void:
 	var c := _cast_of(cx)
 	var targets := _cast_targets(c)
-	if c.is_empty() or targets.is_empty():
+	if c.is_empty() or targets.is_empty() or bool((cx["cur"] as Dictionary).get("thrown", false)):
 		return
 	var cur: Dictionary = cx["cur"]
+	cur["thrown"] = true
 	for t in targets:
 		(cur["before"] as Dictionary)[(t as GameUnit).unit_id] = main._solo_combined_alive(t)
 	var name := str(c.get("name", "?"))
@@ -539,6 +575,31 @@ static func _cast_throw(main, cx: Dictionary) -> void:
 	cur["announce"] = main._solo_show_attack_announce(c.get("caster_unit", c["caster"]), targets[0], "casts %s at" % name, false)
 	cur["seal"] = main._vfx_seal_begin(c["caster"], entry, entry.get("effect", {}), name)
 	await main._solo_stage_phase("Cast", SoloController.Pace.ANNOUNCE)
+
+
+## CC-14a: a foe's interference answer `n` for choice `id`: the tokens leave the pool's units the way the core takes them and the table
+## did (in the pool's list order, nearest first = the planner's `_draw_aura_tokens`), every machine hears of it, and the seal dims.
+## Done at the answer, so the core's end counts (`land_delta`'s casts check) agree with the table's.
+static func _land_interference(main, cx: Dictionary, transcript: Array, id: String, n: int) -> void:
+	var cast := {}
+	for e in transcript:
+		if str((e as Dictionary).get("t", "")) == "cast" and int(e["seq"]) == int(id.get_slice(":", 1)):
+			cast = e
+	var left := n
+	for p in cast.get("pools", []):
+		if int((p as Array)[0]) != int(id.get_slice(":", 3)):
+			continue
+		for pay in (p as Array)[1]:
+			var gu = main.opr_army_manager.game_units.get(str((pay as Array)[0]))
+			var take := mini(int((pay as Array)[1]), left)
+			if gu is GameUnit and take > 0:
+				(gu as GameUnit).spend_caster_points(take)
+				if main.network_manager != null and main.network_manager.has_method("broadcast_unit_casts"):
+					main.network_manager.broadcast_unit_casts(gu)
+				left -= take
+	var cur: Dictionary = cx.get("cur", {})
+	if n > 0 and not cur.is_empty() and int(cur.get("seal", 0)) > 0:
+		main._vfx_emit({"k": "seal_dim", "sid": int(cur["seal"])})
 
 
 ## CC-12b: after the cast die: the core's own target number reads the face as the table does; the seal ends with the outcome.
@@ -1042,13 +1103,20 @@ static func probe_casts(main, unit: GameUnit, report: Dictionary) -> bool:
 		return false
 	var core: Object = (main.solo_controller as SoloController)._core_node_ready()
 	var t: Array = ai_transcript(main, unit, report, null) + cast_inputs(report)
+	var probes := interference_probes(t)
+	if not probes.is_empty() and main._solo_ai_cast_foes().size() > 1:   # CC-14a: the planner's pools carry ONE human slot, the table asks every one
+		return _probe_refused("an open cast with more than one human foe slot (the pools carry one)")
+	for id in probes:
+		t.append({"t": "choice", "id": id, "option": ""})
 	var r: Dictionary = core.step_activation(h, unit.unit_id, t, main.object_manager._strict_movement_enforced())
 	if r.has("handle"):
 		core.release(int(r["handle"]))
-	if str(r["step"]) != "refused":
-		return true
+	return str(r["step"]) != "refused" or _probe_refused(str(r.get("reason", "")))
+
+
+static func _probe_refused(why: String) -> bool:
 	cast_probe_refusals += 1
-	cast_probe_reasons.append(str(r.get("reason", "")))
+	cast_probe_reasons.append(why)
 	return false
 
 
