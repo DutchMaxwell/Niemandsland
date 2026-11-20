@@ -1704,7 +1704,7 @@ pub(crate) fn resolve_volley_with_pick_label(
             im_fired.push(sh.owner);
             out.log.push(format!("Indirect moved {im}: {} shoots after moving", sh.owner));
         } else if rule_on(att.rules_epoch, EPOCH_73_V36)
-            && p.indirect
+            && (p.indirect || def.indirect_mark) // a mark on the target makes the shot Indirect, as the table's profile bridge does
             && att.moved_this_round
             && im_fired.iter().all(|o| *o != sh.owner)
         {
@@ -3589,7 +3589,7 @@ fn compose_to_hit_note(
         notes.push(format!("{n} {:+} (closest target)", att.instinctive_applied));
     }
     let base_note = notes.join(", ");
-    if att.moved_this_round && p.indirect {
+    if att.moved_this_round && (p.indirect || (def.indirect_mark && rule_on(att.rules_epoch, EPOCH_73_V36))) {
         if rule_on(att.rules_epoch, EPOCH_73_V36) { notes.push("Indirect: no moved penalty".into()); }
         else if im != 0 { notes.push(format!("Indirect moved {im}")); }
     }
