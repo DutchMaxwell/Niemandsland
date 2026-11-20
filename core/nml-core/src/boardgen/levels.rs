@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use crate::rng::GodotRng;
 use super::graph::{Lot, SectorGraph};
-use super::{budget, Symmetry, DEPLOY_DEPTH_CELLS, GRID, HIGH_PERMILLE, RAISED_PERMILLE, TOWER_PAIRS};
+use super::{budget, Budgets, Symmetry, DEPLOY_DEPTH_CELLS, GRID};
 
 /// Lot archetypes (theme-neutral; a kit table picks the look). `Block`: solid mass, walkable roof, blocks sight.
 /// `Terrace`: an L-shaped step, the rest of the lot stays ground. `Deck`: open raised platform, sight passes.
@@ -17,17 +17,17 @@ pub enum LotKind { Street, Block, Terrace, Deck, Hazard }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Cell { pub x: usize, pub z: usize, pub deploy: u8, pub street: bool, pub lot_id: u16, pub lot_kind: LotKind, pub level: u8 }
 
-pub fn stack(seed: i64, g: &SectorGraph) -> (Vec<Lot>, Vec<Cell>) {
+pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
     let (nx, nz, sym, mut rng, mut lots) = (g.nx, g.nz, g.symmetry, GodotRng::new(seed), g.lots.clone());
     let mut cells: Vec<Cell> = (0..nx * nz).map(|i| {
         let (x, z) = (i % nx, i / nx);
         let deploy = if z < DEPLOY_DEPTH_CELLS { 1 } else if z >= nz - DEPLOY_DEPTH_CELLS { 2 } else { 0 };
         Cell { x, z, deploy, street: g.is_street[i], lot_id: 0, lot_kind: LotKind::Street, level: 0 }
     }).collect();
-    let (mut hazards, pool) = (0, [LotKind::Block, LotKind::Terrace, LotKind::Deck, LotKind::Hazard]);
+    let (mut hazards, pool) = (0, b.lot_pool);
     for p in 0..lots.len() / 2 {
         let in_deploy = [2 * p, 2 * p + 1].iter().any(|&i| lots[i].z < DEPLOY_DEPTH_CELLS || lots[i].z + lots[i].h > nz - DEPLOY_DEPTH_CELLS);
-        let mut kind = match p { 0 => LotKind::Block, 1 => LotKind::Terrace, 2 => LotKind::Deck, _ => pool[rng.randi_range(0, 3) as usize] };
+        let mut kind = match p { 0 => LotKind::Block, 1 => LotKind::Terrace, 2 => LotKind::Deck, _ => pool[rng.randi_range(0, pool.len() as i64 - 1) as usize] };
         if kind == LotKind::Hazard && (in_deploy || hazards >= 1) { kind = LotKind::Deck } else if kind == LotKind::Hazard { hazards += 1 }
         let r1 = rng.randi_range(0, 3) as usize;
         let r2 = if sym == Symmetry::Point180 { (r1 + 2) % 4 } else { (r1 + rng.randi_range(1, 3) as usize) % 4 };
@@ -43,7 +43,7 @@ pub fn stack(seed: i64, g: &SectorGraph) -> (Vec<Lot>, Vec<Cell>) {
             }}
         }
     }
-    let (min_r, max_r) = budget(RAISED_PERMILLE);
+    let (min_r, max_r) = budget(b.raised);
     let raised = |cs: &[Cell]| cs.iter().filter(|c| c.level >= 1).count();
     // Grow a terrace next to raised ground, or shave non-block cells, until the raised share fits.
     while raised(&cells) < min_r {
@@ -58,7 +58,7 @@ pub fn stack(seed: i64, g: &SectorGraph) -> (Vec<Lot>, Vec<Cell>) {
     }
     // Level 2: raised cells outside the deployment bands. A pair is kept only if the board stays one piece when every
     // step of at most one level counts as a possible way up, so no island of level 2 is ever cut off.
-    let (min_h, max_h) = budget(HIGH_PERMILLE);
+    let (min_h, max_h) = budget(b.high);
     let (lo, hi) = ((min_h + 1) & !1, max_h & !1);
     let target = lo + 2 * rng.randi_range(0, ((hi - lo) / 2) as i64) as usize;
     let lift = |i: usize, cs: &[Cell]| cs[i].level == 1 && cs[i].deploy == 0;
@@ -71,7 +71,7 @@ pub fn stack(seed: i64, g: &SectorGraph) -> (Vec<Lot>, Vec<Cell>) {
     // Level 3: a few level-2 cells rise once more, as mirrored pairs, each kept only if the board stays one piece (so a
     // tower is always reachable by a ladder from level 2). A pair next to an existing tower comes first (blocks, not
     // single posts), then the cell with the fewest ground neighbours (the shortest sheer wall).
-    for _ in 0..rng.randi_range(TOWER_PAIRS.0 as i64, TOWER_PAIRS.1 as i64) {
+    for _ in 0..rng.randi_range(b.tower_pairs.0 as i64, b.tower_pairs.1 as i64) {
         let snap = cells.clone();
         let key = |c: &Cell| { let i = c.z * nx + c.x; if neighbours(i).any(|j| snap[j].level == 3) { 0 } else { 1 + neighbours(i).filter(|&j| snap[j].level == 0).count() as u8 } };
         for (a, b) in paired(&snap, sym, &mut rng, |i, cs| cs[i].level == 2, key) {
