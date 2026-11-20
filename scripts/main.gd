@@ -10365,8 +10365,11 @@ func _solo_striker_has_bane(striker: GameUnit, profile: Dictionary, melee: bool)
 	var sources: Array = (profile.get("rules", []) as Array).duplicate()
 	if striker != null:
 		sources.append_array(striker.get_special_rules())
+	var exact_labels: bool = AiActRecorder.rules_epoch >= AiActRecorder.PENDING_EPOCH_EXACT_STRIKER_LABELS
 	for r in sources:
 		var s := str(r).strip_edges()
+		if exact_labels and GameUnit.is_unlisted_striker_label(s):
+			continue   # a Mark / Buff / Aura label hands the rule to OTHER units: no bearer (ds/h_prefix_labels.md)
 		if s.ends_with("Aura"):
 			continue
 		# Lacerate (army-book rule, GF and AoF) shares Bane's Defense-6 re-roll, with no melee/shooting

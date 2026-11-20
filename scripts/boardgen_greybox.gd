@@ -13,6 +13,9 @@ extends Node3D
 const ENV_SEED := "NML_BOARDGEN_SEED"
 ## setup_table (load, resize) frees the table's other children; this group keeps the board.
 const TABLE_OVERLAY_GROUP := "table_overlay"
+## The table's ground scatter (tufts, leaves, straw) is off on the board AND round it, whatever the table size: no biome dressing
+## while a generated board is on the table (a board is the whole playing surface; the rest of the table is its frame).
+const SCATTER_OFF_M := 3.0
 const INCHES_TO_METERS := 0.0254
 const GROUND_COLLISION_LAYER := 1
 ## Thickness of the level-0 ground skin that covers the biome texture, in inches.
@@ -27,7 +30,7 @@ const SHADER := preload("res://shaders/tiefwerk_board.gdshader")
 
 var layout_seed: int = 0
 var _material: ShaderMaterial
-var _footprint := Rect2()   # the board, in table-local metres
+var _footprint := Rect2()   # the ground kept free of the table's scatter, in table-local metres: the board and all round it
 
 
 ## The board of NML_BOARDGEN_SEED on `table`, or null when the flag is off (release build, unset or not an integer).
@@ -144,7 +147,7 @@ func build(layout: Dictionary) -> void:
 	debris.build(layout)
 	add_child(debris)
 	var board := Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) * INCHES_TO_METERS
-	_footprint = Rect2(board * -0.5, board).grow(0.5 * INCHES_TO_METERS)
+	_footprint = Rect2(board * -0.5, board).grow(SCATTER_OFF_M)
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = "Surfaces"
 	mmi.multimesh = mm

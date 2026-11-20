@@ -81,6 +81,10 @@ func _cases() -> Array:
 		# `Relentless: +N hits`). DS-N2 G14 was the sweep harness missing the import's aura pass (ds/h_probe_aura_names.md); `spawn` runs it now.
 		["Relentless Aura gf shooters", DoorLines.entry("Auras", 10, ["Relentless Aura"], [], "robot_legions", 5), plain, "Relentless:"],
 		["Relentless Aura aof shooters", _aof(DoorLines.entry("Auras", 10, ["Relentless Aura"], [], "high_elves", 5)), plain_aof, "Relentless:"],
+		# H-15 Experimental Tinctures (an item whose content is `Unpredictable Shooter Aura`: the unit gets Unpredictable Shooter through the aura pass; the die's line is
+		# said since #3133). The target row compares EVERY combat line of the volley. Zairetia's Versatile Attack beside the die stays refused as a pair (#3131).
+		["Experimental Tinctures aof shooter", _aof(DoorLines.entry("Alchemists", 10, ["Experimental Tinctures", "Unpredictable Shooter Aura"], [], "duchies_of_vinci", 5)), plain_aof, "Unpredictable Shooter:"],
+		["Experimental Tinctures aof target", _aof(DoorLines.entry("Gunners", 10, [], [], "human_empire", 5)), _aof(DoorLines.entry("Alchemists", 10, ["Experimental Tinctures", "Unpredictable Shooter Aura"], [], "duchies_of_vinci", 0)), ""],
 	]
 
 

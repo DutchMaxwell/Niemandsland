@@ -188,12 +188,12 @@ func test_the_penalty_is_lost_only_when_an_earlier_deadly_weapon_kills_the_targe
 	assert_int(int(ctl["bad"])).override_failure_message("control: the same shooter without Deadly is equal").is_equal(0)
 
 
-## The line the lift exposed: an Unstoppable weapon swallows the Stealth -1 (hit on 4+ instead of 5+). The dice are equal, the table says so, the
-## core stays silent (dice.rs says it only for the granted mark and aura), so the PAIR is refused until the core says it too.
-func test_an_unstoppable_weapon_against_a_changebound_unit_is_equal_in_the_dice_and_refused_for_its_line() -> void:
+## The line the lift exposed (#3134) and the core now says (#3145): an Unstoppable weapon swallows the Stealth -1 (hit on 4+ instead of 5+), the
+## table says so once per weapon and so does the core, so the pair is no longer refused. RED: the line missing on the door side (core_said 0).
+func test_an_unstoppable_weapon_against_a_changebound_unit_says_the_same_line_on_both_paths() -> void:
 	var tgt := _entry("Shifters", 5, ["Changebound"], "change_disciples", [])
 	var res := await _run(_rifles([["Cannon", 24, 4, ["Unstoppable"]]]), tgt)
 	assert_int(int(res["bad"])).override_failure_message("the dice are equal").is_equal(0)
 	assert_int(int(res["table_said"])).override_failure_message("the table says the fold line").is_greater(0)
-	assert_int(int(res["core_said"])).override_failure_message("the core is silent for a weapon's own Unstoppable: the line is missing").is_equal(0)
-	assert_array(res["deny"]).override_failure_message("the pair is refused").is_equal(["unstoppable_fold_line"])
+	assert_int(int(res["core_said"])).override_failure_message("the core says it as often as the table").is_equal(int(res["table_said"]))
+	assert_array(res["deny"]).override_failure_message("the pair is taken").is_empty()

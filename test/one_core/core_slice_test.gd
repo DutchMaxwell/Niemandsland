@@ -292,9 +292,14 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	assert_array(CoreSlice.refusals(changed, true)).is_empty()
 	# A rule still refused by NAME (an item whose Defense bonus differs between the halves).
 	assert_array(CoreSlice.refusals(_unit(["Gleaming Armour"], []))).is_equal(["unit_rule:Gleaming Armour"])
+	# OD-H8: Teleport / Ethereal / plain Infiltrate left the ledger group (real-activation probe, core_ledger_lift_door_test.gd); the Surprise Attack
+	# burst, an Infiltrate-primitive entry, stays refused by NAME (it rolls twice with the door on).
 	var teleporter := _unit(["Teleport"], [])
 	teleporter.unit_properties["faction_folder"] = "elven_jesters"   # a faction whose map gives Teleport its primitive
-	assert_array(CoreSlice.refusals(teleporter)).is_equal(["unit_rule:Teleport"])
+	assert_array(CoreSlice.refusals(teleporter)).is_empty()
+	var surprise := _unit(["Surprise Attack"], [])
+	surprise.unit_properties["faction_folder"] = "alien_hives"
+	assert_array(CoreSlice.refusals(surprise)).is_equal(["unit_rule:Surprise Attack"])
 	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
 	# HR-POS: the after-volley step comes back through the delta (`positions`), so Hit & Run goes to the core again.
 	var raider := _unit(["Hit & Run"], [["AP(1)"]])
@@ -451,6 +456,22 @@ func test_the_way_back_reads_the_shipped_allow_file() -> void:
 	CoreSlice.reset_cache()
 
 
+## H-15 (Plan H): Experimental Tinctures left `deny_names` (ds/h_probe_experimental_tinctures.md; core_deny_lift_door_test.gd rows). The check can fail without editing the
+## committed file: a COPY of the deny file with the name put back refuses a bearer (as a shooter and as a target), the committed file takes both.
+func test_putting_experimental_tinctures_back_refuses_the_bearer() -> void:
+	var copy: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.DENY_PATH))
+	(copy["deny_names"] as Dictionary)["Experimental Tinctures"] = "put back for the check"
+	var tmp := "user://deny_with_experimental_tinctures.json"
+	var f := FileAccess.open(tmp, FileAccess.WRITE)
+	f.store_string(JSON.stringify(copy))
+	f.close()
+	var bearer := _unit(["Experimental Tinctures"], [[]])
+	for as_target in [false, true]:
+		assert_array(CoreSlice.refusals_in(CoreSlice.DENY_PATH, bearer, as_target)).override_failure_message("the committed file refuses Experimental Tinctures").is_empty()
+		assert_array(CoreSlice.refusals_in(tmp, bearer, as_target)).override_failure_message("the copy with the name does not refuse it: the check cannot fail").is_equal(["unit_rule:Experimental Tinctures"])
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
+
+
 ## LD-6 (18.11.): the deny list's EQUAL-probe names leave in one batch. Each name's volley replays equal 16/16
 ## (wave1116/ds/probe_*.md) and its state comes back from the core (STATE_DELTA_INVENTORY). RED on the old list:
 ## every name below is refused by its primitive; the failure message names it.
@@ -477,7 +498,7 @@ func test_deny_mode_takes_the_lifted_equal_probes() -> void:
 
 ## LIFT92 (20.11.): the Growth Markers family leaves the ledger group once the door says its four lines (the AP, the Defense bonus, Fortified
 ## Growth's cut, the Frenzy kill marker: door_lines_growth_test.gd) - its dice, end state and ledger were equal on the door already. Each row is
-## [game system, faction folder, rule]; the folder is the map that gives the rule its primitive. Teleport and Infiltrate stay refused.
+## [game system, faction folder, rule]; the folder is the map that gives the rule its primitive. Teleport and Infiltrate left with OD-H8 (the Surprise Attack burst stays refused by name).
 ## RED on the old list: every family name below is refused by its primitive.
 func test_deny_mode_takes_the_growth_markers_family() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
@@ -492,7 +513,7 @@ func test_deny_mode_takes_the_growth_markers_family() -> void:
 		assert_array(CoreSlice.refusals(bearer, true)).override_failure_message("deny mode takes a target that carries %s" % c[2]).is_empty()
 	var teleporter := _unit(["Teleport"], [])
 	teleporter.unit_properties["faction_folder"] = "elven_jesters"
-	assert_array(CoreSlice.refusals(teleporter)).is_equal(["unit_rule:Teleport"])
+	assert_array(CoreSlice.refusals(teleporter)).is_empty()   # OD-H8: lifted with the ledger group
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 
@@ -735,35 +756,6 @@ func test_state_refusals_for_spell_hit_modifiers_and_vengeance_markers() -> void
 	assert_array(CoreSlice.refusals(host)).is_empty()
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
-
-
-## DS-STEALTH: the table says "Unstoppable: negative to-hit modifiers ignored" when a shooter's Unstoppable weapon swallows a minus and the
-## core stays silent for a weapon's own flag (found by the 1000 pts census once Changebound / Stealth Aura left the deny names: 8 taken volleys,
-## one table-only line). The PAIR is refused: an Unstoppable shooter (weapon or joined hero) and a target rule that lowers the to-hit number.
-## Either side alone, the allow slice (no group) stay taken; the dice-only pin drops it (a line, not the dice).
-func test_an_unstoppable_shooter_against_a_to_hit_target_rule_is_refused_as_a_pair() -> void:
-	OS.set_environment("NML_CORE_SLICE", "deny")
-	CoreSlice.reset_cache()
-	var unstoppable := _unit([], [["Unstoppable"]])
-	var plain := _unit([], [[]])
-	for rule in ["Stealth", "Evasive", "Artillery", "Aircraft"]:
-		var tgt := _unit([rule], [[]])
-		tgt.unit_properties["faction_folder"] = "battle_brothers"   # Evasive is a faction entry
-		assert_array(CoreSlice.pair_refusals(unstoppable, tgt)).override_failure_message("an Unstoppable weapon at a %s target" % rule).is_equal(["unstoppable_fold_line"])
-		assert_array(CoreSlice.pair_refusals(plain, tgt)).override_failure_message("no Unstoppable, no fold line").is_empty()
-	var changed := _unit(["Changebound"], [[]])
-	changed.unit_properties["faction_folder"] = "change_disciples"
-	assert_array(CoreSlice.pair_refusals(unstoppable, changed)).override_failure_message("Changebound is the Stealth primitive").is_equal(["unstoppable_fold_line"])
-	assert_array(CoreSlice.pair_refusals(unstoppable, plain)).override_failure_message("nothing lowers the number").is_empty()
-	var host := _unit([], [[]])
-	EquipmentDistributor.attach_hero_to_unit(_unit(["Hero"], [["Unstoppable"]]), host)
-	assert_array(CoreSlice.pair_refusals(host, changed)).override_failure_message("a joined hero's weapon fires in the host's volley").is_equal(["unstoppable_fold_line"])
-	SlicePin.dice_only()
-	assert_array(CoreSlice.pair_refusals(unstoppable, changed)).override_failure_message("a missing line, not the dice: the dice-only pin drops it").is_empty()
-	SlicePin.release_dice_only()
-	SlicePin.narrow()
-	assert_array(CoreSlice.pair_refusals(unstoppable, changed)).override_failure_message("the allow slice has no such group").is_empty()
-	SlicePin.release()
 
 
 ## DLINES train 4 (review): the core latches a Versatile Attack pick on the plain Quality, the table on the MODIFIED to-hit number, so a
