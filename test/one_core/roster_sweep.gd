@@ -71,6 +71,10 @@ static func rule_names(system: String) -> Array:
 	return out
 
 
+## The import's aura pass over every spawned unit (see `spawn`); a test may switch it off to prove what it fixes.
+static var aura_pass := true
+
+
 ## One real unit on the table: the importer's own `create_from_opr_unit` over fresh model nodes in `ROW`-wide ranks, centred on
 ## (`x_in`, 0), registered with the table. Rules, weapons and loadouts are the list's; only the position is the harness's.
 static func spawn(main: Node, entry: Dictionary, seat: int, x_in: float) -> GameUnit:
@@ -85,6 +89,12 @@ static func spawn(main: Node, entry: Dictionary, seat: int, x_in: float) -> Game
 			(float(i % ROW) - float(mini(n, ROW) - 1) / 2.0) * step * INCH)
 		nodes.append(nd)
 	var gu := EquipmentDistributor.create_from_opr_unit(ou, nodes, seat)
+	if aura_pass:
+		# The game's import runs this pass (`OPRArmyManager._expand_auras`, opr_army_manager.gd:403): a carried "X Aura" adds the base rule X to the
+		# unit, which the table reads (it has no Aura Channel handling of its own) and the core reads through its registry. Without it a
+		# sweep unit that carries "Relentless Aura" / "Fortified Aura" / "Unpredictable Shooter Aura" differs on the dice for a reason no
+		# real game has (Plan H, H-10: the G3 / G5 / G14 groups). A joined hero is not attached here, so only the unit's own aura applies.
+		OPRArmyManager.expand_auras_of([ou], {ou: gu})
 	gu.unit_properties["faction_folder"] = str(entry["faction"])
 	gu.unit_properties["network_id"] = gu.unit_id
 	main.opr_army_manager.game_units[gu.unit_id] = gu
