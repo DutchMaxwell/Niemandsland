@@ -110,6 +110,45 @@ func test_build_makes_three_multimeshes_and_the_lights_and_nothing_physical() ->
 	assert_int(node.find_children("*", "CollisionObject3D", true, false).size()).is_equal(0)
 
 
+func _lamp_props(layout: Dictionary) -> Array:
+	return BoardgenProps.plan(layout).filter(func(p: Dictionary) -> bool: return p["shape"] == "light")
+
+
+func test_a_lamp_cone_points_down_and_leans_away_from_its_wall() -> void:
+	for out: Vector2 in [Vector2(1, 0), Vector2(-1, 0), Vector2(0, 1), Vector2(0, -1)]:
+		var fwd := -BoardgenProps.spot_basis(out).z   # a spot light shines along -Z
+		assert_float(fwd.y).is_less(-0.9)
+		assert_float(fwd.x * out.x + fwd.z * out.y).is_greater(0.2)   # leans out of the wall, never into it
+	for lamp in _lamp_props(_fixture()):
+		assert_bool(lamp.has("out") and absf(lamp["out"].length() - 1.0) < 0.001).is_true()
+
+
+func test_the_shadow_goes_to_the_four_lamps_nearest_the_board_centre() -> void:
+	var lamps: Array = []
+	for dist in [0.9, 0.1, 0.7, 0.3, 0.5, 0.2]:   # metres off the board centre, in this (scrambled) order
+		lamps.append({"xf": Transform3D(Basis(), Vector3(dist, 0.1, 0.0))})
+	assert_array(BoardgenProps.shadow_lamps(lamps, 4)).contains_exactly_in_any_order([1, 5, 3, 4])
+	assert_array(BoardgenProps.shadow_lamps(lamps, 10)).has_size(6)   # fewer lamps than shadows: all of them
+	var real := _lamp_props(_fixture())
+	assert_int(BoardgenProps.shadow_lamps(real, BoardgenProps.SHADOW_LAMPS).size()).is_equal(mini(BoardgenProps.SHADOW_LAMPS, real.size()))
+
+
+func test_the_finer_look_shows_the_cones_with_four_shadows_and_low_keeps_the_plain_omni_lamps() -> void:
+	var node: BoardgenProps = auto_free(BoardgenProps.new())
+	node.build(_fixture())
+	var omnis := node.find_children("*", "OmniLight3D", false, false)
+	var spots := node.find_children("*", "SpotLight3D", false, false)
+	assert_int(spots.size()).is_equal(omnis.size())
+	node.apply_detail(true)
+	assert_int(spots.filter(func(l: Light3D) -> bool: return l.visible).size()).is_equal(spots.size())
+	assert_int(omnis.filter(func(l: Light3D) -> bool: return l.visible).size()).is_equal(0)
+	assert_int(spots.filter(func(l: Light3D) -> bool: return l.shadow_enabled).size()).is_equal(mini(BoardgenProps.SHADOW_LAMPS, spots.size()))
+	assert_int(spots.filter(func(l: Light3D) -> bool: return not is_equal_approx(l.spot_attenuation, 2.0)).size()).is_equal(0)   # inverse square
+	node.apply_detail(false)   # Low: exactly the old lamps
+	assert_int(omnis.filter(func(l: Light3D) -> bool: return l.visible).size()).is_equal(omnis.size())
+	assert_int(spots.filter(func(l: Light3D) -> bool: return l.visible or l.shadow_enabled).size()).is_equal(0)
+	assert_int(omnis.filter(func(l: Light3D) -> bool: return l.shadow_enabled or l.light_color != BoardgenProps.SODIUM or not is_equal_approx(l.light_energy, 0.6)).size()).is_equal(0)
+
 ## ---- the authored K2 pipes (AAA step 17): runs as modules, and no pipe ends in the air ----
 
 const FIXTURE_DIR := "user://boardgen_props_test"

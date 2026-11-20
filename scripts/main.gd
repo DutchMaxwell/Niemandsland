@@ -1014,6 +1014,9 @@ func _ready() -> void:
 	var rules_line := RulesAutomation.apply_table_setup(table_setup,opr_army_manager)
 	if rules_line != "":
 		_log_rule_event(BattleLog.Category.GENERAL,rules_line)
+	var system_line := GameSystem.apply_table_setup(table_setup,opr_army_manager)
+	if system_line != "":
+		_log_rule_event(BattleLog.Category.GENERAL,system_line)
 	var joining_client: bool = pending_internet and not ProjectSettings.get_setting("niemandsland/internet_is_host", false)
 	# Headless MP test harness (test/mp/): skip the interactive table-size chooser AND the
 	# cinematic intro and drop straight onto a live, RPC-capable table. Inert in normal play.
@@ -1199,7 +1202,13 @@ func _solo_activate_one_ai_body() -> GameUnit:
 				report["core_dangerous"] = int(report["dangerous_dice"])
 				await _solo_ai_core_call(unit, report, null, [])
 			else:
+				var idle_alive: int = SoloController.combined_alive(unit)
+				var idle_wounds: int = _solo_unit_wounds_now(unit)
 				await _run_ai_dangerous(unit, int(report["dangerous_dice"]))
+				# GF 3.6 p.10: wounds that leave the unit at half or less owe the end-of-activation morale test; a Shaken
+				# unit fails it without a die (the core's order: test while Shaken, recover last).
+				if not unit.is_destroyed():
+					await _solo_shooting_morale(unit, idle_alive, _roller_label(unit), idle_wounds, "Dangerous terrain")
 			if unit.is_destroyed():
 				return unit
 		if bool(report.get("aircraft", false)) and not solo_controller.last_move_paths.is_empty():
@@ -13629,13 +13638,25 @@ func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
 		"Let a living Hero test morale for %s from now on?" % unit.get_name(), "Use Hero", "Use unit", true)
 
 
+## The Shaken flag a morale test of `unit` reads. From `AiActRecorder.PENDING_EPOCH_SHAKEN_MIRROR` a host with no models left is
+## tested through its living lone hero, which IS the unit now (p.14): the hero's own flag decides. The dead host's flag is stale once the
+## hero recovered alone (nothing clears a dead unit's Shaken) and no longer auto-fails the test. Below it the unit's own flag, as always.
+func _solo_test_unit_shaken(unit: GameUnit) -> bool:
+	if AiActRecorder.rules_epoch >= AiActRecorder.PENDING_EPOCH_SHAKEN_MIRROR and unit.get_alive_count() <= 0:
+		for h in unit.get_attached_heroes():
+			var hu := h as GameUnit
+			if hu != null and hu.get_alive_count() > 0:
+				return hu.is_shaken
+	return unit.is_shaken
+
+
 ## `cause` names the rule that forced the test; "" = shooting or melee (Rules 3.6 Banner, MOR-08).
 func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause: String = "",
 		over_in: float = -1.0, charge_from_in: float = -1.0) -> bool:
 	await _solo_ask_hero_morale_once(unit)
 	var below_half := _solo_below_half_strength(unit)   # single models: tough-wounds scale (p.10)
 	var result: int
-	if unit.is_shaken:
+	if _solo_test_unit_shaken(unit):
 		# A unit that is ALREADY Shaken auto-fails any further morale test (GF/AoF v3.5.1 p.10: "Shaken
 		# units … always fail morale tests") — no Quality roll. At half or less this Routs it; otherwise it
 		# stays Shaken (field-test finding 8: a Shaken unit was rolling — and could pass — a repeat test).
@@ -13765,8 +13786,9 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s passes morale" % unit.get_name())
 		AiCombatMath.Morale.SHAKEN:
-			if not unit.is_shaken and radial_menu_controller != null:
-				radial_menu_controller.card_toggle_shaken(unit)   # state + marker + MP broadcast
+			if not _solo_test_unit_shaken(unit) and radial_menu_controller != null:
+				if not unit.is_shaken:
+					radial_menu_controller.card_toggle_shaken(unit)   # state + marker + MP broadcast
 				_solo_mirror_shaken(unit)   # the joined hero shares the unit's state (p.14), no 2nd token
 				_solo_drop_carried(unit, "shaken")
 			if battle_log != null:

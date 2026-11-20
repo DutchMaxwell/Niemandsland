@@ -49,6 +49,19 @@ static func is_known(id: String) -> bool:
 	return IDS.has(id.strip_edges().to_lower())
 
 
+## Applies the "system" key of a pending table setup (what the setup screen picked) to the army manager and returns
+## the battle-log line ("" when the setup has no key: harness, tutorial, scenario and old paths stay "never set").
+## A value that is no system changes nothing and says so.
+static func apply_table_setup(setup: Dictionary, manager: Object) -> String:
+	if manager == null or not setup.has("system"):
+		return ""
+	var raw := str(setup["system"])
+	if not is_known(raw):
+		return "Game system: \"%s\" is not a game system, the table keeps none" % raw
+	manager.table_system = raw.strip_edges().to_lower()
+	return "Game system: %s" % label(manager.table_system)
+
+
 static func label(id: String) -> String:
 	return str(_LABELS[normalize(id)])
 

@@ -11,6 +11,10 @@ const LAMP_GAP_IN := 14.0
 const LAMP_RANGE_IN := 13.0
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const SODIUM := Color(1.0, 0.6, 0.24)
+## The finer look's lamp: a paler sodium (the walls keep their own colours under it), a downward cone with inverse-square falloff,
+## shadows on the lamps nearest the board centre (rails and pipes throw one, nothing is lit behind a wall).
+const LAMP_COLOUR := Color(1.0, 0.72, 0.45)
+const SHADOW_LAMPS := 4
 const CRATES: Array[Color] = [Color(0.38, 0.32, 0.22), Color(0.25, 0.31, 0.27), Color(0.42, 0.28, 0.18)]
 const BARRELS: Array[Color] = [Color(0.17, 0.27, 0.36), Color(0.36, 0.17, 0.10), Color(0.24, 0.30, 0.18)]
 const PIPE := Color(0.45, 0.40, 0.33)
@@ -33,6 +37,10 @@ const KIT_BOUNDS := {"pipe": AABB(Vector3(-1.5, -0.184, -0.184), Vector3(3.0, 0.
 	"flange": AABB(Vector3(-0.074, -0.246, -0.246), Vector3(0.148, 0.492, 0.492)), "bracket": AABB(Vector3(-0.08, -0.215, -0.211), Vector3(0.16, 0.427, 0.471)),
 	"valve": AABB(Vector3(-0.23, -0.238, -0.238), Vector3(0.459, 0.878, 0.476)), "lamp_caged": AABB(Vector3(-0.24, -0.25, -0.71), Vector3(0.48, 0.51, 0.71)),
 	"junction_box": AABB(Vector3(-0.25, -0.18, -0.255), Vector3(0.5, 0.52, 0.255))}
+
+var _omnis: Array[OmniLight3D] = []   # the plain lamps (Low) and, one for one, the cones (Medium up)
+var _spots: Array[SpotLight3D] = []
+var _shadowed: Array[int] = []
 
 
 ## Every prop of the board, in metres off the board centre: {shape: box | cyl | bulb | ball | ring | light, xf: Transform3D, colour: Color}. With
@@ -101,7 +109,7 @@ static func plan(layout: Dictionary, kit := false) -> Array[Dictionary]:
 		var d: Vector2i = l["d"]
 		var y: float = l["h"] - 0.8
 		_lamp(out, l["at"], d, l["yaw"], y, l["h"], kit)
-		out.append({"shape": "light", "xf": Transform3D(Basis(), Vector3(l["at"].x - d.x * 0.9, y, l["at"].y - d.y * 0.9) * INCHES_TO_METERS), "colour": SODIUM})
+		out.append({"shape": "light", "xf": Transform3D(Basis(), Vector3(l["at"].x - d.x * 0.9, y, l["at"].y - d.y * 0.9) * INCHES_TO_METERS), "colour": SODIUM, "out": Vector2(-d.x, -d.y)})
 	return out
 
 
@@ -223,7 +231,7 @@ static func _prop(shape: String, pos: Vector2, yaw: float, size: Vector3, y: flo
 	return {"shape": shape, "xf": Transform3D(basis * Basis.from_scale(size * INCHES_TO_METERS), Vector3(pos.x, y, pos.y) * INCHES_TO_METERS), "colour": colour}
 
 
-## One MultiMesh per shape (so the whole kit is three draw calls) and at most MAX_LIGHTS shadowless omni lights.
+## One MultiMesh per shape (so the whole kit is three draw calls) and at most MAX_LIGHTS lamps, each as a plain omni light and a spot cone (only one of them shows).
 func build(layout: Dictionary, kit: BoardgenKit = null) -> void:
 	var use_kit := kit != null and kit.usable(KIT_MODULES)
 	var props := plan(layout, use_kit)
@@ -244,7 +252,9 @@ func build(layout: Dictionary, kit: BoardgenKit = null) -> void:
 		mmi.name = shape
 		mmi.multimesh = mm
 		add_child(mmi)
-	for l in props.filter(func(p: Dictionary) -> bool: return p["shape"] == "light"):
+	var lamps := props.filter(func(p: Dictionary) -> bool: return p["shape"] == "light")
+	_shadowed = shadow_lamps(lamps, SHADOW_LAMPS)
+	for l in lamps:
 		var light := OmniLight3D.new()
 		light.position = l["xf"].origin
 		light.light_color = SODIUM
@@ -254,6 +264,69 @@ func build(layout: Dictionary, kit: BoardgenKit = null) -> void:
 		light.distance_fade_begin = 2.5
 		light.distance_fade_length = 1.0
 		add_child(light)
+		_omnis.append(light)
+		var spot := SpotLight3D.new()
+		spot.transform = Transform3D(spot_basis(l["out"]), l["xf"].origin)
+		spot.light_color = LAMP_COLOUR
+		spot.light_energy = 0.3
+		spot.spot_range = LAMP_RANGE_IN * INCHES_TO_METERS
+		spot.spot_angle = 80.0
+		spot.spot_attenuation = 2.0
+		spot.spot_angle_attenuation = 2.0   # the cone fades out towards its edge instead of cutting
+		spot.shadow_blur = 1.5
+		spot.shadow_bias = 0.01
+		spot.shadow_normal_bias = 1.5
+		spot.distance_fade_enabled = true
+		spot.distance_fade_begin = 2.5
+		spot.distance_fade_length = 1.0
+		add_child(spot)
+		_spots.append(spot)
+	if is_inside_tree():
+		_on_settings_applied("")
+	else:
+		apply_detail(false)   # _ready follows the preset once the board is in the tree
+
+
+func _ready() -> void:
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics != null:
+		graphics.settings_applied.connect(_on_settings_applied)
+	_on_settings_applied("")
+
+
+func _exit_tree() -> void:
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics != null and graphics.settings_applied.is_connected(_on_settings_applied):
+		graphics.settings_applied.disconnect(_on_settings_applied)
+
+
+func _on_settings_applied(_preset_name: String) -> void:
+	var graphics := get_node_or_null("/root/GraphicsSettings")
+	if graphics != null:
+		apply_detail(BoardgenGreybox.detail_for(int(graphics.current_preset), RenderingServer.get_current_rendering_method() == "gl_compatibility"))
+
+
+## The finer look (Medium up): spot cones with shadows on the lamps nearest the board centre. Off (Performance / Low, Compatibility):
+## the plain omni lamps, unchanged.
+func apply_detail(on: bool) -> void:
+	for i in _spots.size():
+		_omnis[i].visible = not on
+		_spots[i].visible = on
+		_spots[i].shadow_enabled = on and _shadowed.has(i)
+
+
+## A lamp's cone: down, leaning a little away from the wall it hangs on (`out` = the wall's outward direction, board plane).
+static func spot_basis(out: Vector2) -> Basis:
+	return Basis.looking_at(Vector3(out.x * 0.35, -1.0, out.y * 0.35).normalized(), Vector3.UP)
+
+
+## Indices (into `lamps`) of the `n` lamps nearest the board centre: the ones that get a shadow.
+static func shadow_lamps(lamps: Array, n: int) -> Array[int]:
+	var order: Array[int] = []
+	for i in lamps.size():
+		order.append(i)
+	order.sort_custom(func(a: int, b: int) -> bool: return Vector2(lamps[a]["xf"].origin.x, lamps[a]["xf"].origin.z).length() < Vector2(lamps[b]["xf"].origin.x, lamps[b]["xf"].origin.z).length())
+	return order.slice(0, mini(n, order.size()))
 
 
 func _unit_mesh(shape: String) -> Mesh:

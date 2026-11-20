@@ -3716,14 +3716,25 @@ func apply_solid_model(solid: SandboxSolidProp, model: String) -> void:
 ## Catalogue of placeable sandbox pieces for the shelf browser. EVERY biome lists the ruins +
 ## forest/hazard groups; a ruin's wall panels and a forest's trees/floor are themed from the biome
 ## prefix carried in each entry's prop_id. Each entry is {prop_id, kind, label}.
-func sandbox_catalog(biome_prefix: String = "") -> Array:
+func sandbox_catalog(biome_prefix: String = "", system: String = "") -> Array:
 	var entries: Array = []
+	if system.is_empty():
+		system = table_system()
+	# The shelf offers what the table's game system offers (assets/terrain_systems.json); it never touches what already
+	# stands on the table, in a save or from a peer (spawn_sandbox_terrain does not ask).
+	var biome: Variant = TableTheme.BIOME_PREFIX.find_key(biome_prefix)
+	if biome != null and not GameSystem.offers("biome", str(biome), system):
+		return entries
 	for id in SANDBOX_RUINS.keys():
+		if not GameSystem.offers("ruin", id, system):
+			continue
 		var ruin: Dictionary = SANDBOX_RUINS[id]
 		# A ruin carries its biome in the prop_id (e.g. "desert_ruin_small_1f"), like a forest, so
 		# save/broadcast round-trip it via the existing prop_id field; the prefix themes its panels.
 		entries.append({"prop_id": biome_prefix + id, "kind": SandboxPropKind.RUIN, "label": ruin.get("label", id)})
 	for id in SANDBOX_GROUPS.keys():
+		if not GameSystem.offers("group", id, system):
+			continue
 		var spec: Dictionary = SANDBOX_GROUPS[id]
 		var kind: int = spec.get("kind", SandboxPropKind.FOREST)
 		# Forests AND hazard fields carry their biome in the prop_id (e.g. "desert_forest_small",
@@ -3732,8 +3743,15 @@ func sandbox_catalog(biome_prefix: String = "") -> Array:
 		var entry_id: String = (biome_prefix + id) if (kind == SandboxPropKind.FOREST or kind == SandboxPropKind.HAZARD_CLUSTER) else id
 		entries.append({"prop_id": entry_id, "kind": kind, "label": spec.get("label", id)})
 	for id in SANDBOX_SOLIDS.keys():
-		entries.append({"prop_id": id, "kind": SANDBOX_SOLIDS[id]["kind"], "label": SANDBOX_SOLIDS[id]["label"]})
+		if GameSystem.offers("solid", id, system):
+			entries.append({"prop_id": id, "kind": SANDBOX_SOLIDS[id]["kind"], "label": SANDBOX_SOLIDS[id]["label"]})
 	return entries
+
+
+## The game system of the table these pieces stand on (Main._table_system); "" with no Main (tests, tools): no filter.
+func table_system() -> String:
+	var main := get_node_or_null("/root/Main") if is_inside_tree() else null
+	return str(main.call("_table_system")) if main != null and main.has_method("_table_system") else ""
 
 
 ## Split a sandbox forest prop_id into [biome_prefix, base_id] — e.g. "desert_forest_small" ->

@@ -147,3 +147,33 @@ use super::*;
         assert_eq!(off.rolls[0].target, 4, "epoch 6: no grant read, no penalty");
         assert!(!off.log.iter().any(|l| l.contains("[Entrenched]")));
     }
+
+    /// `_solo_animate_move` stamps the unit of EVERY model it moves, so a joined hero walking with its host is "moved" too. The core stamped the
+    /// host alone: the hero's row of the delta carried a stale round (`land_delta`: "table 2, core 1") and the hero's own moved-reads saw a unit
+    /// that never moved. From `PENDING_EPOCH_HERO_MOVED_STAMP` the living hero is stamped with the host; below it nothing changes.
+    /// RED: stamp the host only and the hero's round stays -1 at the gate.
+    #[test]
+    fn a_joined_hero_walking_with_its_host_is_stamped_moved() {
+        let (mut st, statics) = buff_line();
+        let mut prof_list = st.profiles.list.clone();
+        prof_list[0].move_bands.advance = 6.0;
+        st.profiles = Rc::new(Profiles { list: prof_list, index: HashMap::new() });
+        st.attached = Rc::new(vec![vec![1], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, Some(0), None, None]);
+        let advance = Action {
+            kind: ADVANCE, unit: "a".into(), dest: Some([3.0 * IN2M, 0.0, 0.0]),
+            shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None,
+        };
+        let after = |epoch: u32| {
+            let seams = Seams { hero_attach: true, rules_epoch: epoch, ..Seams::default() };
+            let mut tray = Tray::seeded(11);
+            resolve_stochastic_tray_on_board(&statics, &st, &advance, &crate::terrain::Terrain::default(), seams, &mut crate::rng::GodotRng::new(0), &mut tray).unwrap().0
+        };
+        let gate = crate::acts::PENDING_EPOCH_HERO_MOVED_STAMP;
+        let on = after(gate);
+        assert_ne!(on.positions[1], st.positions[1], "fixture: the hero walks with its host");
+        assert_eq!((on.moved_round[0], on.moved_round[1]), (on.round, on.round), "the hero is stamped with its host");
+        let below = after(gate - 1);
+        assert_eq!((below.moved_round[0], below.moved_round[1]), (below.round, -1), "below the gate the hero keeps its round");
+    }
+

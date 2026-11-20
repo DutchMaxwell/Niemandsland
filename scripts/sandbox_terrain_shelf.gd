@@ -75,6 +75,7 @@ func setup(object_manager: Node) -> void:
 ## Open the shelf (docked left).
 func open() -> void:
 	show()
+	_fill_biome_options()   # the table's game system may have changed since the last time
 	_refresh_list()
 
 # === Private ===
@@ -103,8 +104,7 @@ func _build_ui() -> void:
 	vbox.add_child(hint)
 
 	_biome_option = OptionButton.new()
-	for biome in BIOMES:
-		_biome_option.add_item(biome["label"])
+	_fill_biome_options()
 	_biome_option.item_selected.connect(_on_biome_selected)
 	vbox.add_child(HouseStyle.field_row("Biome", _biome_option))
 
@@ -145,11 +145,25 @@ func _on_biome_selected(_index: int) -> void:
 	_refresh_list()
 
 
+## The biome filter lists the biomes the table's game system offers (item id = index into BIOMES); the selection stays
+## when it is still on offer.
+func _fill_biome_options() -> void:
+	var system: String = _object_manager.table_system() if _object_manager != null and _object_manager.has_method("table_system") else ""
+	var keep: int = _biome_option.get_selected_id() if _biome_option.selected >= 0 else 0
+	_biome_option.clear()
+	for i in BIOMES.size():
+		var biome: Variant = TableTheme.BIOME_PREFIX.find_key(BIOMES[i]["prefix"])
+		if biome == null or GameSystem.offers("biome", str(biome), system):
+			_biome_option.add_item(BIOMES[i]["label"], i)
+	var at := _biome_option.get_item_index(keep)
+	_biome_option.select(at if at >= 0 else 0)
+
+
 func _refresh_list() -> void:
 	if _list == null or _object_manager == null:
 		return
 	_list.clear()
-	var prefix: String = BIOMES[_biome_option.selected]["prefix"] if _biome_option != null else ""
+	var prefix: String = BIOMES[_biome_option.get_selected_id()]["prefix"] if _biome_option != null and _biome_option.selected >= 0 else ""
 	for entry in _object_manager.sandbox_catalog(prefix):
 		_list.add_item(entry.get("label", entry.get("prop_id", "?")))
 		_list.set_item_metadata(_list.item_count - 1, entry)

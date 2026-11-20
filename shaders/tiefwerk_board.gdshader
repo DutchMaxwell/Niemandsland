@@ -170,6 +170,7 @@ void fragment() {
 			alb = mix(paint, alb, smoothstep(0.45, 0.65, n2 + 0.2 * n3));
 		}
 	} else {   // top faces
+		float wet = 0.0;   // water lies level: the relief flattens under it
 		vec2 g = (p.xz + half_board) / cell_in;
 		ivec2 c = ivec2(floor(g));
 		vec2 f = fract(g) * cell_in;
@@ -209,6 +210,7 @@ void fragment() {
 			float field = fbm(uv * 0.26 + warp * 1.4 + 11.0) + 0.2 * smoothstep(1.6, 0.0, wd);
 			float damp = smoothstep(0.54, 0.64, field);
 			float pud = smoothstep(0.65, 0.72, field);
+			wet = pud;
 			alb *= mix(1.0, 0.8, damp);
 			alb = mix(alb, alb * vec3(0.72, 0.78, 0.85), pud);
 			rough = mix(mix(0.8, 0.35, damp), 0.05, pud);
@@ -264,6 +266,12 @@ void fragment() {
 			rough = 0.85;
 			vec4 hr = hatch((fract((uv + half_board) / cell_in) - 0.5) * cell_in, 1.0, n3);
 			alb = mix(alb, hr.rgb, hr.a * step(h21(sl + 5.0), 0.1));
+		}
+		if (detail > 0.5) {
+			float th;
+			nrel = top_relief(uv, k, half_board, px, max(wet, step(0.5, me.y)), th);   // plate seams, hatches, grates, deck rivets and tread, roof joints; a sump's liquid lies level too
+			rough = clamp(rough - th * 4.0 * (1.0 - wet), 0.05, 1.0);
+			ao *= 1.0 + 4.0 * min(th, 0.0);
 		}
 		if (k == 6) {
 			alb *= vec3(0.82, 0.9, 1.08);
