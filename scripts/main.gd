@@ -19914,6 +19914,9 @@ func _on_table_size_chosen(size_feet: Vector2, dialog: Window = null, biome_name
 	var td := dialog as TableSizeDialog
 	if td:
 		biome_name = td.selected_biome
+		var system_line := GameSystem.apply_table_setup({"system": td.selected_system}, opr_army_manager)   # the direct-to-main chooser
+		if system_line != "":
+			_log_rule_event(BattleLog.Category.GENERAL, system_line)
 	if biome_name != "" and table.has_method("set_biome"):
 		table.set_biome(biome_name)
 		# Sync the biome to other players (host-authoritative, via the table-settings RPC).
