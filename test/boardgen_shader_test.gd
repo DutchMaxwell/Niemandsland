@@ -5,7 +5,7 @@ extends GdUnitTestSuite
 const SHADER_PATH := "res://shaders/tiefwerk_board.gdshader"
 
 
-const INCLUDES := ["res://shaders/tiefwerk_noise.gdshaderinc", "res://shaders/tiefwerk_edges.gdshaderinc"]
+const INCLUDES := ["res://shaders/tiefwerk_noise.gdshaderinc", "res://shaders/tiefwerk_edges.gdshaderinc", "res://shaders/tiefwerk_relief.gdshaderinc"]
 
 
 ## The board shader with its includes appended (the pins below do not care which file a function lives in).
@@ -91,3 +91,31 @@ func test_the_box_size_reaches_the_fragment_and_the_bend_goes_through_the_view_m
 	assert_str(_line_with(src, "box_in = INSTANCE_CUSTOM.gba")).is_not_empty()
 	assert_str(_line_with(src, "lpos = VERTEX * box_in")).is_not_empty()
 	assert_str(_line_with(src, "NORMAL = normalize((VIEW_MATRIX")).contains("ew.yzw")
+
+
+func test_the_wall_relief_is_one_height_function_whose_gradient_is_the_normal() -> void:
+	var src := _source()
+	assert_bool(src.contains("float wall_height(vec2 uv, float px)")).is_true()
+	assert_bool(src.contains("vec3 wall_relief(vec2 uv, vec3 n, float px, out float h0)")).is_true()
+	assert_str(_line_with(src, "float hu =")).contains("wall_height(uv + vec2(DE, 0.0), px)")   # finite differences of that one function
+	assert_str(_line_with(src, "return normalize(n - hu * tu")).is_not_empty()
+	assert_str(_line_with(src, "nrel = wall_relief(")).is_not_empty()
+	assert_str(_line_with(src, "NORMAL = normalize((VIEW_MATRIX")).contains("nrel")
+
+
+func test_rivets_are_domes_and_features_below_a_pixel_fade_out() -> void:
+	var src := _source()
+	assert_bool(src.contains("float dome(float d, float r, float h)")).is_true()
+	assert_str(_line_with(src, "float rv = length(vec2((fract(along / 0.25")).is_not_empty()   # a row along the frame, 0.25 in apart
+	assert_str(_line_with(src, "h += dome(rv, 0.026, 0.02)")).contains("feature(0.05, px)")
+	assert_bool(src.contains("float px = max(length(fwidth(uv)), 0.0001)")).is_true()
+
+
+func test_the_painted_rivet_discs_stay_only_on_low_and_the_occlusion_moves_to_the_ao_output() -> void:
+	var src := _source()
+	assert_bool(src.contains("if (detail < 0.5) {   // Low keeps the painted rivets")).is_true()
+	assert_str(_line_with(src, "ALBEDO = pow(alb")).contains("(detail > 0.5 ? 1.0 : ao)")
+	assert_str(_line_with(src, "AO = detail > 0.5 ? ao : 1.0")).is_not_empty()
+	assert_str(_line_with(src, "AO_LIGHT_AFFECT")).is_not_empty()
+	assert_str(_line_with(src, "nrel = wall_relief(")).is_not_empty()
+	assert_bool(src.contains("if (detail > 0.5) {\n\t\t\tfloat rh;")).override_failure_message("the wall relief is gated by the detail uniform").is_true()

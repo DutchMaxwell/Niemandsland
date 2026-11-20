@@ -57,14 +57,17 @@ float wall_dist(vec2 g, ivec2 c, float h) {
 }
 
 #include "res://shaders/tiefwerk_edges.gdshaderinc"
+#include "res://shaders/tiefwerk_relief.gdshaderinc"
 
 void fragment() {
 	vec3 p = (wpos - board_origin) / IN;   // board inches, origin = board centre
 	vec3 n = normalize(wnrm);
+	vec3 nrel = n;   // the shading normal: the relief of walls and floors bends it
 	int k = int(kind + 0.5);
 	vec2 half_board = board_cells * cell_in * 0.5;
 	bool top = n.y > 0.5;
 	vec2 uv = top ? p.xz : vec2(abs(n.x) > 0.5 ? p.z : p.x, p.y);
+	float px = max(length(fwidth(uv)), 0.0001);   // inches per pixel: the relief fades out below that
 	float n1 = fbm(uv * 0.55), n2 = fbm(uv * 2.1 + 7.0), n3 = vnoise(uv * 11.0);
 	vec3 alb = vec3(0.3);
 	vec3 emis = vec3(0.0);
@@ -91,7 +94,9 @@ void fragment() {
 		float ed = PLATE * 0.5 - max(ap.x, ap.y);
 		alb *= (1.0 - 0.45 * smoothstep(0.035, 0.0, abs(ed - 0.14))) * mix(0.92, 1.06, smoothstep(0.0, 0.1, ed - 0.14));
 		float rv = min(length(ap - 0.6), min(length(ap - vec2(0.6, 0.0)), length(ap - vec2(0.0, 0.6))));
-		alb = mix(alb, alb * 1.6 + 0.05, smoothstep(0.05, 0.03, rv) * step(0.1, ph));
+		if (detail < 0.5) {   // Low keeps the painted rivets; the finer look has them as relief
+			alb = mix(alb, alb * 1.6 + 0.05, smoothstep(0.05, 0.03, rv) * step(0.1, ph));
+		}
 		if (ph < 0.1) {   // a vent
 			alb = mix(alb, mix(vec3(0.015), vec3(0.2, 0.2, 0.21), step(0.5, fract(uv.y * 5.0))), step(ap.x, 0.5) * step(ap.y, 0.42));
 			alb *= 1.0 - 0.55 * smoothstep(0.42, 0.75, fp.y) * step(ap.x, 0.6);
@@ -111,6 +116,12 @@ void fragment() {
 		float drip = smoothstep(0.55, 0.8, fbm(vec2(uv.x * 1.7, uv.y * 0.18))) * smoothstep(3.0, 0.0, dtop);
 		alb = mix(alb, vec3(0.33, 0.15, 0.06), drip);
 		ao = mix(0.4, 1.0, smoothstep(0.0, 1.6, p.y - low_y));
+		if (detail > 0.5) {
+			float rh;
+			nrel = wall_relief(uv, n, px, rh);   // frame, inset, rivets, louvres, plates and conduits as relief
+			rough = clamp(0.8 - rh * 3.0, 0.45, 1.0);   // recesses stay dull, raised parts are worn smooth
+			ao *= 1.0 + 4.0 * min(rh, 0.0);
+		}
 		if (top_y - low_y >= 2.0 && dtop > 0.25 && dtop < 0.85 && h21(vec2(floor(uv.x / cell_in) + top_y, low_y + 7.0)) > 0.45) {   // hazard band only on some edges, chipped and dirty
 			vec3 paint = mix(vec3(0.04), YELLOW * 0.8, step(0.5, fract((uv.x + p.y) * 0.9)));
 			alb = mix(paint, alb, smoothstep(0.45, 0.65, n2 + 0.2 * n3));
@@ -203,10 +214,12 @@ void fragment() {
 	vec4 ew = box_in.x > 0.0 && detail > 0.5 ? edge_wear(lpos, box_in * 0.5, lnrm, p, k, half_board, smoothstep(0.48, 0.56, n3 * 0.6 + n2 * 0.5)) : vec4(0.0);   // every real box edge: a broken pale highlight, a bent normal
 	alb = mix(alb, mix(alb * 1.5 + 0.08, vec3(0.62, 0.6, 0.57), 0.6), ew.x);
 	rough = mix(rough, 0.45, ew.x);
-	if (dot(ew.yzw, ew.yzw) > 0.0001) {
-		NORMAL = normalize((VIEW_MATRIX * vec4(normalize(n + ew.yzw * 0.9), 0.0)).xyz);
+	if (dot(ew.yzw, ew.yzw) > 0.0001 || dot(nrel - n, nrel - n) > 0.0) {
+		NORMAL = normalize((VIEW_MATRIX * vec4(normalize(nrel + ew.yzw * 0.9), 0.0)).xyz);
 	}
-	ALBEDO = pow(alb, vec3(2.2)) * ao;   // the numbers above are display values
+	ALBEDO = pow(alb, vec3(2.2)) * (detail > 0.5 ? 1.0 : ao);   // the numbers above are display values; Low keeps the occlusion baked into the colour
+	AO = detail > 0.5 ? ao : 1.0;   // the finer look: the cell occlusion shades the ambient light and part of the direct light
+	AO_LIGHT_AFFECT = 0.6;
 	ROUGHNESS = rough;
 	METALLIC = met;
 	EMISSION = emis;
