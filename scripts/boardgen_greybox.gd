@@ -239,7 +239,7 @@ func build(layout: Dictionary) -> void:
 	var kit_ladders: bool = theme["id"] == BoardgenTheme.DEEPWORKS and not ladders.is_empty() and kit.usable(ladders.keys())   # the town keeps its timber box ladders
 	var town_kit: BoardgenTownKit = BoardgenTownKit.new() if theme["id"] == BoardgenTheme.RUIN_TOWN else null
 	var kit_town := town_kit != null and town_kit.active()   # the authored roofs, chimneys and merlons (else the boxes below)
-	var boxes := plan(layout).filter(func(b: Dictionary) -> bool: return not (kit_ladders and b["kind"] == "ladder") and not (kit_town and BoardgenTownKit.replaces(b)))
+	var boxes := plan(layout).filter(func(b: Dictionary) -> bool: return not (kit_ladders and b["kind"] == "ladder") and not (kit_town and (BoardgenTownKit.replaces(b) or town_kit.replaces_clutter(b))))
 	if kit_ladders:   # the authored ladders replace the box ladders
 		for module: String in ladders:
 			BoardgenKit.add_multimesh(self, module, kit.mesh_or(module), ladders[module], false)

@@ -281,7 +281,8 @@ static func props(layout: Dictionary) -> Array[Dictionary]:
 				box_lo = Vector2(lo.x + along, lo.y + 0.05 if d.y < 0 else lo.y + cell_in - depth - 0.05)
 			else:
 				box_lo = Vector2(lo.x + 0.05 if d.x < 0 else lo.x + cell_in - depth - 0.05, lo.y + along)
-			out.append({"lo": Vector3(box_lo.x, 0.0, box_lo.y), "hi": Vector3(box_lo.x + box_size.x, size.y, box_lo.y + box_size.y), "kind": "wood", "solid": false, "prop": true})
+			out.append({"lo": Vector3(box_lo.x, 0.0, box_lo.y), "hi": Vector3(box_lo.x + box_size.x, size.y, box_lo.y + box_size.y), "kind": "wood", "solid": false, "prop": true,
+				"face": d, "at": Vector2(cd["x"], cd["z"]), "along": along})   # the wall side and the cell: where an authored module of the strip stands instead of the box
 	return out
 
 

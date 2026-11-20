@@ -16,9 +16,14 @@ const ROOF_UV_TILE_IN := 3.0   # the roof modules' UVs count tiles of this size 
 const CHIMNEY_TOP_IN := 3.6   # a chimney module's cap height above its foot (the foot sinks into the house)
 const MODULES := ["roof_gable_low", "roof_gable_steep", "roof_broken_a", "roof_broken_b", "roof_rafters", "chimney_pots", "chimney_broken",
 	"merlon", "merlon_broken", "rubble_a", "rubble_b", "rubble_c"]
-const TINT := {"roof_tiles": Color(0.62, 0.30, 0.22), "timber": Color(0.42, 0.30, 0.20), "coursed_stone": Color(0.62, 0.58, 0.52)}
+const TINT := {"roof_tiles": Color(0.62, 0.30, 0.22), "timber": Color(0.42, 0.30, 0.20), "coursed_stone": Color(0.62, 0.58, 0.52), "none": Color.WHITE}
 ## The instance colour on a textured module: warms the dark clay tiles towards the town's red roofs, cools the stone towards the wall's grey.
-const TEXTURED_TINT := {"roof_tiles": Color(1.35, 0.85, 0.7), "timber": Color(1.0, 1.0, 1.0), "coursed_stone": Color(0.62, 0.68, 0.76)}
+const TEXTURED_TINT := {"roof_tiles": Color(1.35, 0.85, 0.7), "timber": Color(1.0, 1.0, 1.0), "coursed_stone": Color(0.62, 0.68, 0.76), "none": Color.WHITE}
+## The authored clutter of BoardgenTownClutter (batches A2 / A2b / A6): the texture set each module is drawn with (the rest is "none": the kit's vertex colours, real colours for plants and cloth).
+const CLUTTER_SET := {"barrel": "timber", "crate": "timber", "bucket": "timber", "woodpile": "timber", "barrel_broken": "timber", "crate_broken": "timber", "cart_wreck": "timber", "loose_wheel": "timber",
+	"splinters_flat": "timber", "trough": "coursed_stone", "debris_flat_a": "coursed_stone", "debris_flat_b": "coursed_stone"}
+## Glass of a lamp and the coals of a brazier: drawn with an emissive material, the OmniLight sits at their origin.
+const GLOW := {"lantern_glow": Color(1.0, 0.72, 0.38), "brazier_coals": Color(1.0, 0.45, 0.18)}
 
 var kit: BoardgenKit
 var lib: TiefwerkLibrary
@@ -39,6 +44,10 @@ func active() -> bool:
 
 ## The texture set a module is drawn with.
 static func set_of(module: String) -> String:
+	if BoardgenTownKit.CLUTTER_SET.has(module):
+		return CLUTTER_SET[module]
+	if module.begins_with(("weeds")) or module.begins_with("bramble") or module.begins_with("dead_tree") or module.begins_with("ivy") or module.begins_with("lantern") or module in ["cloth_flat", "laundry_line", "sack_pile"]:
+		return "none"
 	if module in ["roof_rafters", "beam_end", "shutter", "shutter_open", "door"]:
 		return "timber"
 	return "roof_tiles" if module.begins_with("roof_") else "coursed_stone"
@@ -47,6 +56,14 @@ static func set_of(module: String) -> String:
 ## True for a greybox box the kit draws instead (a chimney or a merlon).
 static func replaces(box: Dictionary) -> bool:
 	return box.get("merlon", false) or box["kind"] == "brick"
+
+
+## True for a greybox box an authored clutter module draws instead: a lamp post / its glass cube when the lamp modules are cached, a strip prop whose piece is cached.
+func replaces_clutter(box: Dictionary) -> bool:
+	if box.get("lantern", false):
+		return kit.usable(BoardgenTownClutter.LAMP_MODULES)
+	var m := BoardgenTownClutter.prop_module(box)
+	return m != "" and kit.usable([m])
 
 
 static func _item(basis: Basis, at_in: Vector3) -> Dictionary:
@@ -74,6 +91,10 @@ static func plan(layout: Dictionary) -> Dictionary:
 		var centre: Vector3 = (c["lo"] + c["hi"]) * 0.5
 		var m := "chimney_pots" if BoardgenTownDressing._hash(i, 0, 9) < 0.7 else "chimney_broken"
 		add.call(m, _item(Basis(Vector3.UP, PI * 0.5 * (i % 4)), Vector3(centre.x, c["hi"].y - CHIMNEY_TOP_IN, centre.z)))
+	var clutter := BoardgenTownClutter.plan(layout)
+	for m: String in clutter:
+		for item: Dictionary in clutter[m]:
+			add.call(m, item)
 	var merlons := BoardgenTownDressing.merlons(layout) + BoardgenTownDressing.hall_merlons(layout)
 	for i in merlons.size():
 		var b: Dictionary = merlons[i]
@@ -103,8 +124,20 @@ static func plan(layout: Dictionary) -> Dictionary:
 func build(layout: Dictionary) -> void:
 	var p := plan(layout)
 	for m: String in p:
-		var mmi := BoardgenKit.add_multimesh(self, m, kit.mesh_or(m), p[m], m.begins_with("roof_g") or m.begins_with("chimney"))
+		if not kit.usable([m]):
+			continue   # a clutter module that is not cached: the procedural box (or nothing) stays
+		var mmi := BoardgenKit.add_multimesh(self, m, kit.mesh_or(m), p[m], m.begins_with("roof_g") or m.begins_with("chimney") or CLUTTER_SET.get(m, "") == "timber")
 		var mat := lib.set_material(set_of(m))
+		if GLOW.has(m):
+			var glow := StandardMaterial3D.new()
+			glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			glow.albedo_color = GLOW[m]
+			glow.emission_enabled = true
+			glow.emission = GLOW[m]
+			glow.emission_energy_multiplier = 1.2
+			mmi.material_override = glow
+			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			continue
 		if mat != null and m.begins_with("roof_") and m != "roof_rafters":   # the roofs carry UVs in tiles (courses parallel to the eaves)
 			mat.uv1_triplanar = false
 			mat.uv1_scale = Vector3.ONE * ROOF_UV_TILE_IN / lib.tile_in("roof_tiles")
