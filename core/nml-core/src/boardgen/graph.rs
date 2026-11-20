@@ -53,7 +53,22 @@ pub fn build(seed: i64, sym: Symmetry, b: &Budgets) -> SectorGraph {
     }).collect() } else { Vec::new() };
     if !cols.is_empty() {
         let x = cols[rng.randi_range(0, cols.len() as i64 - 1) as usize];
-        for z in 0..nz { for i in [z * nx + x, (nz - 1 - z) * nx + nx - 1 - x] { wall[i] = !street[i]; } }
+        // a KINK (rows mode): from row `k` on the wall runs in the next usable column, with both columns walled on row `k` itself (a 1-cell step), the kink clear of every street
+        let kink: Option<(usize, usize)> = if b.rows && sym == Symmetry::Point180 {
+            let no_artery = |c: usize| { let rows: Vec<usize> = (0..nz).filter(|&z| street[z * nx + c]).collect(); rows.windows(2).all(|w| w[1] != w[0] + 1 || w[0] == hz - 1) };
+            let next: Vec<usize> = [x.wrapping_sub(1), x + 1].into_iter().filter(|&c| (2..=5).contains(&c) && no_artery(c)).collect();   // a neighbouring column no artery runs along
+            let rows: Vec<usize> = (2..=hz - 2).filter(|&k| next.iter().any(|&c| (k - 1..=k + 1).all(|z| !street[z * nx + x] && !street[z * nx + c]))).collect();
+            (!next.is_empty() && !rows.is_empty()).then(|| {
+                let k = rows[rng.randi_range(0, rows.len() as i64 - 1) as usize];
+                let ok: Vec<usize> = next.iter().copied().filter(|&c| (k - 1..=k + 1).all(|z| !street[z * nx + x] && !street[z * nx + c])).collect();
+                (k, ok[rng.randi_range(0, ok.len() as i64 - 1) as usize])
+            })
+        } else { None };
+        for z in 0..nz {
+            let zn = z.min(nz - 1 - z);   // the north half decides; the half turn mirrors it
+            let cols_here: Vec<usize> = match kink { Some((k, c)) if zn > k => vec![c], Some((k, c)) if zn == k => vec![x, c], _ => vec![x] };
+            for col in cols_here { for i in [z * nx + col, (nz - 1 - z) * nx + nx - 1 - col] { wall[i] = !street[i]; } }
+        }
     }
     let mut g = SectorGraph { nx, nz, symmetry: sym, arteries, is_street: Vec::new(), lots: Vec::new(), wall: wall.clone() };
     let (mut occ, tpls, target) = (wall, b.lot_shapes, b.lot_pairs);

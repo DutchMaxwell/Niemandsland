@@ -175,6 +175,6 @@ mod tests {
         assert_ne!(board_hash(&moved), board_hash(&p), "a changed class must change the hash");
     }
 
-    const PINNED_TOWN_42: &str = "56f7bf564da44534";
+    const PINNED_TOWN_42: &str = "63edd6d402067a23";
     const PINNED_SEED_42: &str = "cbcd64fada596527";
 }
