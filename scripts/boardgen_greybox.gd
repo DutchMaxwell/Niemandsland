@@ -22,6 +22,13 @@ const INCHES_TO_METERS := 0.0254
 const GROUND_COLLISION_LAYER := 1
 ## Thickness of the level-0 ground skin that covers the biome texture, in inches.
 const SKIN_IN := 0.04
+## The town greybox draws a landmark as one plain box: the core's solid is the 2.5 in container whatever the piece is, a pool is a film
+## over the ground skin, a hall mark a rim line on its block.
+const SOLID_IN := 2.5
+const POOL_IN := 0.07   # a hair above the 0.04 in ground skin
+const RIDGE_IN := 1.4   # an intact house's gable ridge above its body
+const RIDGE_WIDTH_IN := 1.0
+const RIM_IN := 0.3
 const LADDER_WIDTH_IN := 1.0
 const LADDER_OFFSET_IN := 0.12   # the ladder stands this far off the wall face
 const LADDER_RAIL_IN := 0.12
@@ -30,9 +37,11 @@ const LADDER_RUNG_GAP_IN := 0.5
 const KIT_LADDERS: Array[String] = ["ladder_3in", "ladder_top"]
 const LADDER_SEGMENT_IN := 3.0
 const LADDER_TINT := Color(0.60, 0.43, 0.06)   # weathered safety yellow, like the board shader's ladder kind
-## Surface kinds in the order the board shader knows them (INSTANCE_CUSTOM.x, shaders/tiefwerk_board.gdshader).
+## Surface kinds in the order the Deepworks board shader knows them (INSTANCE_CUSTOM.x, shaders/tiefwerk_board.gdshader); a theme names its own list (BoardgenTheme).
 const KINDS := ["ground", "street", "hazard", "tier1", "tier2", "ladder", "tier3", "kerb"]
-const SHADER := preload("res://shaders/tiefwerk_board.gdshader")
+## The dressing builders a theme may switch on (BoardgenTheme `dressing`); each is a `build(layout)` Node3D (Props and Rails also take the kit).
+const DRESSING := {"Props": preload("res://scripts/boardgen_props.gd"), "Landmarks": preload("res://scripts/boardgen_landmarks.gd"),
+		"Debris": preload("res://scripts/boardgen_debris.gd"), "Sumps": preload("res://scripts/boardgen_sumps.gd"), "Rails": preload("res://scripts/boardgen_rails.gd")}
 
 var layout_seed: int = 0
 var layout_theme := "Deepworks"   # the layout's own `theme` key; a Deepworks layout has none
@@ -82,19 +91,21 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 	var cell_in := float(layout["cell_in"])
 	var level_in: Array = layout["level_in"]
 	var cells: Array = layout["cells"]
+	var town := str(layout.get("theme", BoardgenTheme.DEEPWORKS)) == BoardgenTheme.RUIN_TOWN
 	var origin := Vector2(nx, nz) * cell_in * -0.5
 	# Blocks: runs of same-kind cells along x. Level 0 is a thin skin coloured by what the cell is.
 	for z in nz:
 		var x := 0
 		while x < nx:
-			var kind := _cell_kind(cells[z * nx + x])
+			var kind := _cell_kind(cells[z * nx + x], town)
 			var run := 1
-			while x + run < nx and _cell_kind(cells[z * nx + x + run]) == kind:
+			while x + run < nx and _cell_kind(cells[z * nx + x + run], town) == kind:
 				run += 1
 			var level: int = cells[z * nx + x]["level"]
+			var body := kind == "roofed"   # an intact house: level-0 solid ground, as high as the core's solid (2.5 in); its ridge is drawn below
 			out.append({"lo": Vector3(origin.x + x * cell_in, 0.0, origin.y + z * cell_in),
-				"hi": Vector3(origin.x + (x + run) * cell_in, float(level_in[level]) if level > 0 else SKIN_IN, origin.y + (z + 1) * cell_in),
-				"kind": kind, "solid": level > 0})
+				"hi": Vector3(origin.x + (x + run) * cell_in, float(level_in[level]) if level > 0 else (SOLID_IN if body else SKIN_IN), origin.y + (z + 1) * cell_in),
+				"kind": kind, "solid": level > 0 or body})
 			x += run
 	for c: Dictionary in layout["connectors"]:
 		var base: float = level_in[cells[c["low"]]["level"]]
@@ -108,7 +119,11 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 		for k in range(1, int(rise / LADDER_RUNG_GAP_IN)):
 			out.append(_slab(edge, away, side, LADDER_OFFSET_IN, LADDER_OFFSET_IN + LADDER_RAIL_IN, LADDER_WIDTH_IN,
 				base + k * LADDER_RUNG_GAP_IN, base + k * LADDER_RUNG_GAP_IN + LADDER_RAIL_IN, "ladder", false))
-	out.append_array(BoardgenSumps.kerbs(layout))   # the low rim round each toxic sump
+	if town:
+		out.append_array(_town_landmarks(layout, origin))
+		out.append_array(_town_ridges(layout, origin))
+	else:
+		out.append_array(BoardgenSumps.kerbs(layout))   # the low rim round each toxic sump (the town draws its pools as flat boxes)
 	return out
 
 
@@ -130,11 +145,76 @@ static func ladder_kit_plan(layout: Dictionary) -> Dictionary:
 	return out
 
 
-static func _cell_kind(cell: Dictionary) -> String:
+## The gable of every intact (Roofed) house: a ridge along its long side and a chimney at one end, above the 2.5 in body (visual only: the
+## core sees the house as a 2.5 in solid). `ridge` = the lot's id.
+static func _town_ridges(layout: Dictionary, origin: Vector2) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var cell_in := float(layout["cell_in"])
+	for lot: Dictionary in layout["lots"]:
+		if lot["kind"] != "Roofed":
+			continue
+		var lo := origin + Vector2(lot["x"], lot["z"]) * cell_in
+		var size := Vector2(lot["w"], lot["h"]) * cell_in
+		var along_x: bool = size.x >= size.y
+		var mid := lo + size * 0.5
+		var half := (Vector2(size.x - 0.6, RIDGE_WIDTH_IN) if along_x else Vector2(RIDGE_WIDTH_IN, size.y - 0.6)) * 0.5
+		out.append({"lo": Vector3(mid.x - half.x, SOLID_IN, mid.y - half.y), "hi": Vector3(mid.x + half.x, SOLID_IN + RIDGE_IN, mid.y + half.y),
+			"kind": "ridge", "solid": false, "ridge": lot["id"]})
+		var at := mid + (Vector2(half.x - 0.35, 0.0) if along_x else Vector2(0.0, half.y - 0.35))
+		out.append({"lo": Vector3(at.x - 0.35, SOLID_IN, at.y - 0.35), "hi": Vector3(at.x + 0.35, SOLID_IN + RIDGE_IN + 0.9, at.y + 0.35),
+			"kind": "ridge", "solid": false, "ridge": lot["id"]})
+	return out
+
+
+## The town's landmarks as plain boxes (greybox), each inside its footprint: fountain (TankCluster) and statue plinth (Crane) are the solid
+## 2.5 in piece, a Sump (pool, well yard) a flat film, a PumpHouse (hall) a rim line on top of its block. `landmark` = its index in the layout.
+static func _town_landmarks(layout: Dictionary, origin: Vector2) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var cell_in := float(layout["cell_in"])
+	var nx: int = layout["nx"]
+	var i := 0
+	for lm: Dictionary in layout["landmarks"]:
+		var lo := origin + Vector2(lm["x"], lm["z"]) * cell_in
+		var hi := lo + Vector2(lm["w"], lm["h"]) * cell_in
+		var boxes: Array[Dictionary] = []
+		match lm["kind"]:
+			"TankCluster", "Crane":
+				boxes.append(_box(lo, hi, 0.0, SOLID_IN, "stone", true))
+			"Sump":
+				boxes.append(_box(lo, hi, 0.0, POOL_IN, "hazard", false))
+			"PumpHouse":
+				var top := 0.0
+				for dz in int(lm["h"]):
+					for dx in int(lm["w"]):
+						top = maxf(top, float(layout["level_in"][layout["cells"][(int(lm["z"]) + dz) * nx + int(lm["x"]) + dx]["level"]]))
+				boxes.append_array([_box(lo, Vector2(hi.x, lo.y + RIM_IN), top, top + RIM_IN, "rim", false),
+					_box(Vector2(lo.x, hi.y - RIM_IN), hi, top, top + RIM_IN, "rim", false),
+					_box(lo + Vector2(0.0, RIM_IN), Vector2(lo.x + RIM_IN, hi.y - RIM_IN), top, top + RIM_IN, "rim", false),
+					_box(Vector2(hi.x - RIM_IN, lo.y + RIM_IN), hi - Vector2(0.0, RIM_IN), top, top + RIM_IN, "rim", false)])
+		for b in boxes:
+			b["landmark"] = i
+		out.append_array(boxes)
+		i += 1
+	return out
+
+
+static func _box(lo: Vector2, hi: Vector2, y0: float, y1: float, kind: String, solid: bool) -> Dictionary:
+	return {"lo": Vector3(lo.x, y0, lo.y), "hi": Vector3(hi.x, y1, hi.y), "kind": kind, "solid": solid}
+
+
+static func _cell_kind(cell: Dictionary, town := false) -> String:
+	if town and cell["lot_kind"] == "Roofed":
+		return "roofed"   # an intact house
+	if town and cell["lot_kind"] == "Wall":
+		return "wall" if cell["level"] > 0 else "rubble"   # the city wall (ridge, tower, buttress) or the rubble of its breach
 	if cell["level"] > 0:
 		return "tier%d" % cell["level"]
 	if cell["lot_kind"] == "Hazard":
 		return "hazard"
+	if town and cell["lot_kind"] == "Rough":
+		return "rough"   # a garden plot
+	if town and cell["lot_kind"] == "Terrace" and not cell["street"]:
+		return "yard"   # the level-0 rest of a half-collapsed house: ruin ground
 	return "street" if cell["street"] else "ground"
 
 
@@ -147,9 +227,9 @@ static func _slab(edge: Vector2, away: Vector2, side: Vector2, from: float, to: 
 
 
 ## INSTANCE_CUSTOM of a box: x = its surface kind, gba = its size in inches (the shader's edge wear needs to know where the box ends).
-static func custom_data(b: Dictionary) -> Color:
+static func custom_data(b: Dictionary, kinds: Array = KINDS) -> Color:
 	var size: Vector3 = b["hi"] - b["lo"]
-	return Color(KINDS.find(b["kind"]), size.x, size.y, size.z)
+	return Color(kinds.find(b["kind"]), size.x, size.y, size.z)
 
 
 ## The whole board in ONE MultiMesh (one draw call, one shared procedural material) plus a collider per solid box.
@@ -161,12 +241,13 @@ func build(layout: Dictionary) -> void:
 	body.collision_layer = GROUND_COLLISION_LAYER
 	body.collision_mask = 0
 	add_child(body)
+	var theme := BoardgenTheme.of(layout)
 	var kit := BoardgenKit.new()
 	kit.name = "Kit"
 	add_child(kit)
 	_kit = kit
 	var ladders := ladder_kit_plan(layout)
-	var kit_ladders: bool = not ladders.is_empty() and kit.usable(ladders.keys())
+	var kit_ladders: bool = theme["id"] == BoardgenTheme.DEEPWORKS and not ladders.is_empty() and kit.usable(ladders.keys())   # the town keeps its timber box ladders
 	var boxes := plan(layout).filter(func(b: Dictionary) -> bool: return not (kit_ladders and b["kind"] == "ladder"))
 	if kit_ladders:   # the authored ladders replace the box ladders
 		for module: String in ladders:
@@ -181,7 +262,7 @@ func build(layout: Dictionary) -> void:
 		var size: Vector3 = (b["hi"] - b["lo"]) * INCHES_TO_METERS
 		var centre: Vector3 = (b["hi"] + b["lo"]) * 0.5 * INCHES_TO_METERS
 		mm.set_instance_transform(i, Transform3D(Basis.from_scale(size), centre))
-		mm.set_instance_custom_data(i, custom_data(b))
+		mm.set_instance_custom_data(i, custom_data(b, theme["kinds"]))
 		if b["solid"]:
 			var shape := BoxShape3D.new()
 			shape.size = size
@@ -189,34 +270,16 @@ func build(layout: Dictionary) -> void:
 			col.shape = shape
 			col.position = centre
 			body.add_child(col)
-	var props := BoardgenProps.new()
-	props.name = "Props"
-	props.build(layout, kit)
-	add_child(props)
-	var landmarks := BoardgenLandmarks.new()
-	landmarks.name = "Landmarks"
-	landmarks.build(layout)
-	add_child(landmarks)
-	var debris := BoardgenDebris.new()
-	debris.name = "Debris"
-	debris.build(layout)
-	add_child(debris)
-	var sumps := BoardgenSumps.new()
-	sumps.name = "Sumps"
-	sumps.build(layout)
-	add_child(sumps)
+	_dress(layout, theme, ["Props", "Landmarks", "Debris", "Sumps"], kit)
 	var board := Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) * INCHES_TO_METERS
 	_footprint = Rect2(board * -0.5, board).grow(SCATTER_OFF_M)
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = "Surfaces"
 	mmi.multimesh = mm
-	_material = _make_material(layout)
+	_material = _make_material(layout, theme)
 	mmi.material_override = _material
 	add_child(mmi)
-	var rails := BoardgenRails.new()
-	rails.name = "Rails"
-	rails.build(layout, kit)
-	add_child(rails)
+	_dress(layout, theme, ["Rails"], kit)
 	_anchor()
 	_layout = layout
 	var settings := _settings()
@@ -244,6 +307,19 @@ func refresh_atmosphere() -> void:
 		elif not want and node != null:
 			remove_child(node)
 			node.free()
+
+
+## The dressing builders of `names` that the theme switches on (the ruin town draws none of the Deepworks ones: no pipe, lamp or tank).
+func _dress(layout: Dictionary, theme: Dictionary, names: Array, kit: BoardgenKit) -> void:
+	for dressing: String in names:
+		if theme["dressing"].has(dressing):
+			var node: Node3D = DRESSING[dressing].new()
+			node.name = dressing
+			if dressing == "Props" or dressing == "Rails":
+				node.build(layout, kit)
+			else:
+				node.build(layout)
+			add_child(node)
 
 
 func _ready() -> void:
@@ -295,14 +371,18 @@ func _anchor() -> void:
 		_material.set_shader_parameter("board_origin", global_position)
 
 
-## The board shader with a one-texel-per-cell texture: red = height of the cell's top in inches, green = 255 for a sump.
-func _make_material(layout: Dictionary) -> ShaderMaterial:
+## The theme's board shader. Deepworks: a one-texel-per-cell texture, red = height of the cell's top in inches, green = 255 for a sump.
+## A town greybox reads its colours from the theme's palette.
+func _make_material(layout: Dictionary, theme: Dictionary) -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = theme["shader"]
+	mat.set_shader_parameter("cell_in", float(layout["cell_in"]))
+	if theme["id"] == BoardgenTheme.RUIN_TOWN:
+		mat.set_shader_parameter("palette", PackedColorArray(theme["palette"]))
+		return mat
 	var bytes := PackedByteArray()
 	for c: Dictionary in layout["cells"]:
 		bytes.append_array([int(layout["level_in"][c["level"]]), 255 if c["lot_kind"] == "Hazard" else 0])
-	var mat := ShaderMaterial.new()
-	mat.shader = SHADER
 	mat.set_shader_parameter("cells", ImageTexture.create_from_image(Image.create_from_data(layout["nx"], layout["nz"], false, Image.FORMAT_RG8, bytes)))
 	mat.set_shader_parameter("board_cells", Vector2(layout["nx"], layout["nz"]))
-	mat.set_shader_parameter("cell_in", float(layout["cell_in"]))
 	return mat
