@@ -82,7 +82,7 @@
             charge_no_difficult: vec![false; 4],
             charge_probe_r: vec![0.0; 4],
             buffs: vec![Vec::new(); 4],
-            cast_buffs: Vec::new(),
+            cast_buffs: Vec::new(), casualty_f32: false,
             vs_mark_round: vec![-1; 4],
             hit_and_run_round: vec![-1; 4],
             moved_round: vec![-1; 4],
@@ -1878,6 +1878,7 @@ mod v36_g4r5_hero_reach;
 mod v36_g4r5_hostdead_shoot;
 mod v36_g4r5_primal_grant;
 mod v36_g4r5_versatile_def;
+mod versatile_modified_hit;
 mod v36_g4r5_moved_sight_chain;
 mod v36_bg_03a;
 mod v36_bg_03a2;

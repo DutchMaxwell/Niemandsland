@@ -43,6 +43,20 @@ static var _core_buffs: Dictionary = {}
 static var _wiped_at_capture: Dictionary = {}
 
 
+## PENDING_EPOCH_CASUALTY_TIES: env NML_CORE_SHADOW_SLOTS=1|on (soaks only, default OFF) compares WHICH models survived, below the
+## epoch too: the core's old f64 casualty order parts mirror models of a symmetric formation the other way than the table, so a
+## compare below 94 reads "positions" on such boards (a soak that wants the prevalence of that gap turns it on). From epoch 94 the
+## compare is always on: the epoch claims the table's order.
+static var _slots_env := -1
+
+
+static func slots_enabled() -> bool:
+	if _slots_env < 0:
+		var raw := OS.get_environment("NML_CORE_SHADOW_SLOTS").to_lower()
+		_slots_env = 1 if (raw == "1" or raw == "on") else 0
+	return _slots_env == 1 or AiActRecorder.rules_epoch >= AiActRecorder.PENDING_EPOCH_CASUALTY_TIES
+
+
 ## The flag, read once: ON only for "1" / "on".
 static func enabled() -> bool:
 	if _env < 0:
@@ -179,7 +193,10 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 		if plant_name() == "cast_buff":
 			_drop_one_buff()
 	if r.has("handle"):
-		diff = diff if diff != "" else _state_diff(main, core.plain_of(int(r["handle"])), _core_buffs)
+		var plain: Dictionary = core.plain_of(int(r["handle"]))
+		diff = diff if diff != "" else _state_diff(main, plain, _core_buffs)
+		if diff == "" and slots_enabled():
+			diff = _positions_diff(main, plain)   # WHICH models stand, not only how many (the casualty order)
 		core.release(int(r["handle"]))
 	var labels: Array = CoreActivation.why_not(main, unit, null)
 	for id in order:
@@ -557,7 +574,8 @@ static func _melee_diff(main, unit: GameUnit, report: Dictionary, table_lines: A
 	return diff
 
 
-## The first unit whose living models stand elsewhere in the core (XZ, sorted, 0.01"): "" = none, else "positions".
+## The first unit whose living models stand elsewhere in the core (XZ, sorted, 0.01"): "" = none, else "positions". Models of
+## one unit are told apart by where they stand, so this is the reading of WHICH models survived (counts and wounds are `_state_diff`'s).
 static func _positions_diff(main, core_plain: Dictionary) -> String:
 	var table: Dictionary = BattleSim.capture(main.opr_army_manager)
 	for uid in table["units"]:

@@ -16,6 +16,10 @@ const MYSTIC := {"key": "my", "player": 1, "name": "Mystic", "models": 1, "quali
 const FOE := {"key": "foe", "player": 2, "name": "Foe", "models": 4, "quality": 4, "defense": 4, "tough": 1,
 	"x_in": 8.0, "z_step_in": 1.3, "base_radius_in": 0.63, "game_system": "gf", "faction_folder": "alien_hives",
 	"rules": []}
+## A damage spell: six AP(2) hits at a unit; five of six foes fall on the seeds below, the survivor is the casualty order's call.
+const PSYCHIC_BLAST := {"name": "Psychic Blast", "threshold": 1, "range_in": 18,
+	"target": {"side": "enemy", "count": 1, "kind": "unit"},
+	"effect": {"kind": "damage", "hits": 6, "weapon_rules": ["AP(2)"]}}
 const STAFF := {"name": "Staff", "range_in": 0, "attacks": 1, "count": 1, "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 1, "rules": []}
 ## A friendly once-buff (the token lands on the caster) and an enemy once-debuff (the token lands on the foe).
@@ -60,6 +64,7 @@ func after_test() -> void:
 	CoreActivation._env = -1
 	CoreShadow._env = -1
 	CoreShadow._cast_env = -1
+	CoreShadow._slots_env = -1
 	CoreShadow.records.clear()
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
@@ -244,3 +249,27 @@ func test_a_once_grant_cast_at_the_volleys_target_is_spent_by_it_and_reads_equal
 		Harness._free_units(_main, [caster, foe])
 		await _main.get_tree().process_frame
 	assert_int(table_spent).override_failure_message("no seed passed the cast die and spent the grant on the table: the test proved nothing").is_greater(0)
+
+
+## PENDING_EPOCH_CASUALTY_TIES (94): WHICH models survive a spell is compared, not only how many. Six foes in a line, a spell that
+## kills five: the table's casualty order leaves slot 3 standing, the core's f64 distance left slot 2 (cast door probe, 20.11.);
+## the shadow compared counts and a sorted wounds multiset, so it read this equal. RED on a core without the epoch's reading: first_diff
+## "positions" at 94; below the epoch the old reading stays (the same cases read "positions" at 93 once NML_CORE_SHADOW_SLOTS asks
+## for the compare, and "" without it), so the gate is pinned too.
+func test_a_spell_that_kills_five_of_six_leaves_the_same_model_standing() -> void:
+	var seen_kill := 0
+	for epoch in [94, 93, -93]:   # -93: epoch 93 with the compare switched on
+		for seed in [0, 1]:
+			CoreShadow._slots_env = 1 if epoch == -93 else -1
+			AiActRecorder.rules_epoch = absi(epoch)
+			_main.solo_controller._core_header_done = false   # the header carries the epoch: rebuild it for this one
+			var caster := ParityTable._make_unit(_main, MYSTIC, STAFF)
+			var foe := ParityTable._make_unit(_main, FOE.merged({"models": 6}, true), {})
+			var rec := await _shadow_cast(caster, PSYCHIC_BLAST, [foe], seed)
+			seen_kill += 1 if foe.get_alive_count() == 1 else 0
+			assert_dict(rec).override_failure_message("epoch %d seed %d: %s" % [epoch, seed, rec]) \
+				.contains_key_value("first_diff", "positions" if epoch == -93 else "")
+			Harness._free_units(_main, [caster, foe])
+			await _main.get_tree().process_frame
+	CoreShadow._slots_env = -1
+	assert_int(seen_kill).override_failure_message("no case killed five of six: the test proved nothing").is_equal(6)
