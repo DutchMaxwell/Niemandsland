@@ -23,13 +23,12 @@ const LADDER_WIDTH_IN := 1.0
 const LADDER_OFFSET_IN := 0.12   # the ladder stands this far off the wall face
 const LADDER_RAIL_IN := 0.12
 const LADDER_RUNG_GAP_IN := 0.5
-const COLOURS := {
-	"street": Color(0.30, 0.30, 0.31), "ground": Color(0.22, 0.22, 0.23), "hazard": Color(0.12, 0.19, 0.24),
-	"tier1": Color(0.42, 0.42, 0.44), "tier2": Color(0.62, 0.62, 0.65),
-	"stair": Color(0.80, 0.80, 0.83), "ladder": Color(0.90, 0.62, 0.20),
-}
+## Surface kinds in the order the board shader knows them (INSTANCE_CUSTOM.x, shaders/tiefwerk_board.gdshader).
+const KINDS := ["ground", "street", "hazard", "tier1", "tier2", "stair", "ladder"]
+const SHADER := preload("res://shaders/tiefwerk_board.gdshader")
 
 var layout_seed: int = 0
+var _material: ShaderMaterial
 
 
 ## The board of NML_BOARDGEN_SEED on `table`, or null when the flag is off (release build, unset or not an integer).
@@ -111,7 +110,7 @@ static func _slab(edge: Vector2, away: Vector2, side: Vector2, from: float, to: 
 	return {"lo": Vector3(p.x - half.x, y0, p.y - half.y), "hi": Vector3(p.x + half.x, y1, p.y + half.y), "kind": kind, "solid": solid}
 
 
-## One BoxMesh per box (one shared material per kind) plus a collider per solid box.
+## The whole board in ONE MultiMesh (one draw call, one shared procedural material) plus a collider per solid box.
 func build(layout: Dictionary) -> void:
 	layout_seed = int(layout.get("seed", 0))
 	var body := StaticBody3D.new()
@@ -119,21 +118,18 @@ func build(layout: Dictionary) -> void:
 	body.collision_layer = GROUND_COLLISION_LAYER
 	body.collision_mask = 0
 	add_child(body)
-	var mats := {}
-	for b: Dictionary in plan(layout):
+	var boxes := plan(layout)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	mm.mesh = BoxMesh.new()   # the unit cube; every instance scales it
+	mm.instance_count = boxes.size()
+	for i in boxes.size():
+		var b: Dictionary = boxes[i]
 		var size: Vector3 = (b["hi"] - b["lo"]) * INCHES_TO_METERS
 		var centre: Vector3 = (b["hi"] + b["lo"]) * 0.5 * INCHES_TO_METERS
-		if not mats.has(b["kind"]):
-			mats[b["kind"]] = StandardMaterial3D.new()
-			mats[b["kind"]].albedo_color = COLOURS[b["kind"]]
-			mats[b["kind"]].roughness = 0.95
-		var mesh := BoxMesh.new()
-		mesh.size = size
-		mesh.material = mats[b["kind"]]
-		var mi := MeshInstance3D.new()
-		mi.mesh = mesh
-		mi.position = centre
-		add_child(mi)
+		mm.set_instance_transform(i, Transform3D(Basis.from_scale(size), centre))
+		mm.set_instance_custom_data(i, Color(KINDS.find(b["kind"]), 0.0, 0.0, 0.0))
 		if b["solid"]:
 			var shape := BoxShape3D.new()
 			shape.size = size
@@ -141,3 +137,33 @@ func build(layout: Dictionary) -> void:
 			col.shape = shape
 			col.position = centre
 			body.add_child(col)
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = "Surfaces"
+	mmi.multimesh = mm
+	_material = _make_material(layout)
+	mmi.material_override = _material
+	add_child(mmi)
+	_anchor()
+
+
+func _ready() -> void:
+	_anchor()
+
+
+## The shader reads board inches off the board centre, so it is told where that is in the world.
+func _anchor() -> void:
+	if _material != null and is_inside_tree():
+		_material.set_shader_parameter("board_origin", global_position)
+
+
+## The board shader with a one-texel-per-cell texture: red = height of the cell's top in inches, green = 255 for a sump.
+func _make_material(layout: Dictionary) -> ShaderMaterial:
+	var bytes := PackedByteArray()
+	for c: Dictionary in layout["cells"]:
+		bytes.append_array([int(layout["level_in"][c["level"]]), 255 if c["lot_kind"] == "Hazard" else 0])
+	var mat := ShaderMaterial.new()
+	mat.shader = SHADER
+	mat.set_shader_parameter("cells", ImageTexture.create_from_image(Image.create_from_data(layout["nx"], layout["nz"], false, Image.FORMAT_RG8, bytes)))
+	mat.set_shader_parameter("board_cells", Vector2(layout["nx"], layout["nz"]))
+	mat.set_shader_parameter("cell_in", float(layout["cell_in"]))
+	return mat
