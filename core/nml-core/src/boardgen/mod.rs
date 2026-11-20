@@ -55,8 +55,8 @@ pub struct Budgets {
     pub garden_area: usize,
     /// The fewest garden plots a board must have (0 = no demand).
     pub garden_min: usize,
-    /// Side in cells of the market square kept as street cells about the board centre (even; 0 = none).
-    pub plaza: usize,
+    /// Size (cells across, cells deep; both even; (0, 0) = none) of the market square kept as street cells about the board centre. Deeper than wide: it is the one open place between the staggered arteries.
+    pub plaza: (usize, usize),
     /// Whether the board has a city wall (two half-turn twins of a 6 in ridge with a gate, a breach, towers and a buttress each).
     pub wall: bool,
     /// The landmark kinds drawn as mirrored pairs, how many pairs a board gets (inclusive), and whether the fountain (a `TankCluster`) stands alone
@@ -72,6 +72,8 @@ pub struct Budgets {
     pub max_attempts: u8,
     /// Side of a tower in cells (level-3 blocks): 1 = single cells, 2 = 2 x 2 blocks; `tower_pairs` counts mirrored pairs of towers.
     pub tower_side: usize,
+    /// Houses stand in rows along the streets (party walls, a passage after each row) instead of scattered with an alley ring round each (`Point180` only).
+    pub rows: bool,
 }
 
 impl Theme {
@@ -80,13 +82,13 @@ impl Theme {
         match self {
             Self::Deepworks => Budgets { raised: RAISED_PERMILLE, high: HIGH_PERMILLE, lift: HIGH_PERMILLE, tower_pairs: TOWER_PAIRS, landmark_pieces: LANDMARK_PIECES,
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
-                lot_pairs: 9, lot_shapes: &[(3, 2), (2, 3), (2, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[], garden_area: 0, garden_min: 0, plaza: 0, wall: false,
-                landmark_kinds: &[LandmarkKind::TankCluster, LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (1, 2), centre_piece: false, small_pools: false, intact_percent: 0, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1 },
+                lot_pairs: 9, lot_shapes: &[(3, 2), (2, 3), (2, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[], garden_area: 0, garden_min: 0, plaza: (0, 0), wall: false,
+                landmark_kinds: &[LandmarkKind::TankCluster, LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (1, 2), centre_piece: false, small_pools: false, intact_percent: 0, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1, rows: false },
             // First town values (step 6 of the ruin-town plan re-fits them): more raised ground, one tower pair, more terraces.
             Self::RuinTown => Budgets { raised: (230, 460), high: (60, 200), lift: (30, 70), tower_pairs: (1, 1), landmark_pieces: (7, 7),
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
-                lot_pairs: 18, lot_shapes: &[(2, 2), (2, 2), (3, 2), (2, 3), (2, 1), (1, 2), (2, 1), (1, 2), (1, 1)], lot_fill: &[(2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], lot_first: &[(3, 2)], garden_area: 1, garden_min: 4, plaza: 4, wall: true,
-                landmark_kinds: &[LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (3, 3), centre_piece: true, small_pools: true, intact_percent: 50, lane_free: true, max_attempts: 64, tower_side: 2 },
+                lot_pairs: 18, lot_shapes: &[(2, 2), (2, 2), (3, 2), (2, 3), (2, 1), (1, 2), (2, 1), (1, 2), (1, 1)], lot_fill: &[(2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], lot_first: &[(2, 2)], garden_area: 1, garden_min: 4, plaza: (4, 6), wall: true,
+                landmark_kinds: &[LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (3, 3), centre_piece: true, small_pools: true, intact_percent: 50, lane_free: true, max_attempts: 64, tower_side: 2, rows: true },
         }
     }
     fn salt(self) -> i64 { if self.is_default() { 0 } else { TOWN_SALT } }
@@ -164,18 +166,22 @@ pub fn generate(seed: i64, symmetry: Symmetry) -> Layout { generate_themed(seed,
 
 /// [`generate`] for a theme: the same stages on the theme's budgets and its own seed streams.
 pub fn generate_themed(seed: i64, symmetry: Symmetry, theme: Theme) -> Layout {
-    let (b, salt) = (theme.budgets(), theme.salt());
     let mut last = None;
-    for attempt in 0..b.max_attempts {
-        let s = seed.wrapping_add(i64::from(attempt) * SUBSEED_STEP);
-        let g = graph::build(s ^ SALTS[0] ^ salt, symmetry, &b);
-        let (lots, mut cells) = levels::stack(s ^ SALTS[1] ^ salt, &g, &b);
-        let connectors = connect::wire(s ^ SALTS[2] ^ salt, symmetry, &cells);
-        let landmarks = landmarks::place(s ^ SALTS[3] ^ salt, symmetry, &mut cells, &connectors, &b);
-        let layout = Layout { theme, seed, attempt, symmetry, board_in: BOARD_IN, nx: g.nx, nz: g.nz, cell_in: CELL_IN,
-            deploy_depth_cells: DEPLOY_DEPTH_CELLS, arteries: g.arteries, lots, cells, connectors, landmarks };
+    for attempt in 0..theme.budgets().max_attempts {
+        let layout = generate_attempt(seed, symmetry, theme, attempt);
         if layout.problems().is_empty() { return layout; }
         last = Some(layout);
     }
     last.expect("max_attempts > 0")
+}
+
+/// One sub-seed of [`generate_themed`], accepted or not: what `attempt` 0, 1, ... would give (the census asks how often the first one is good).
+pub fn generate_attempt(seed: i64, symmetry: Symmetry, theme: Theme, attempt: u8) -> Layout {
+    let (b, salt) = (theme.budgets(), theme.salt());
+    let s = seed.wrapping_add(i64::from(attempt) * SUBSEED_STEP);
+    let g = graph::build(s ^ SALTS[0] ^ salt, symmetry, &b);
+    let (lots, mut cells) = levels::stack(s ^ SALTS[1] ^ salt, &g, &b);
+    let connectors = connect::wire(s ^ SALTS[2] ^ salt, symmetry, &cells);
+    let landmarks = landmarks::place(s ^ SALTS[3] ^ salt, symmetry, &mut cells, &connectors, &b);
+    Layout { theme, seed, attempt, symmetry, board_in: BOARD_IN, nx: g.nx, nz: g.nz, cell_in: CELL_IN, deploy_depth_cells: DEPLOY_DEPTH_CELLS, arteries: g.arteries, lots, cells, connectors, landmarks }
 }

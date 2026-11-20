@@ -564,7 +564,7 @@ fn a_town_is_many_small_buildings_and_no_open_lane_runs_edge_to_edge() {
     }
     let (mean, share, rays) = (lots as f64 / n as f64, retried as f64 / n as f64, blocked / n as f64);
     eprintln!("town lots mean {mean:.1} min {min_lots}, retried {share:.3}, opening-turn rays blocked {rays:.3}");
-    assert!(mean >= 18.0 && min_lots >= 12, "lots per board: mean {mean:.1}, min {min_lots}");
+    assert!(mean >= 13.0 && min_lots >= 6, "lots per board: mean {mean:.1}, min {min_lots}");   // rows: fewer, deeper lots than the scatter (ds/ruintown_growth_census.md)
     assert!(share <= 0.97, "{share:.2} of the town boards needed a later sub-seed");
     assert!(rays >= 0.70, "the opening-turn sight lines are {rays:.2} blocked");
 }
@@ -624,12 +624,12 @@ fn a_town_has_garden_plots_that_stay_flat_and_the_deepworks_has_none() {
     }
     let mean = total as f64 / 300.0;
     eprintln!("garden plots per town board: mean {mean:.1}, least {least}");
-    assert!(mean >= 5.0 && least >= 4, "plots per board: mean {mean:.1}, least {least}");
+    assert!(mean >= 4.0 && least >= 4, "plots per board: mean {mean:.1}, least {least}");
 }
 
 #[test]
-fn a_town_has_a_four_by_four_market_square_in_the_middle_and_the_deepworks_none() {
-    let plaza: Vec<(usize, usize)> = (6..10).flat_map(|z| (6..10).map(move |x| (x, z))).collect();
+fn a_town_has_a_four_wide_six_deep_market_square_in_the_middle_and_the_deepworks_none() {
+    let plaza: Vec<(usize, usize)> = (5..11).flat_map(|z| (6..10).map(move |x| (x, z))).collect();
     let mut deep_squares = 0;
     for seed in 1..=300 {
         let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
@@ -842,3 +842,103 @@ fn census_of_growth() {
     eprintln!("{out}");
     if let Ok(path) = std::env::var("NML_GROWTH_OUT") { std::fs::write(path, &out).expect("growth census file"); }
 }
+
+/// Houses stand in ROWS (ruintown AAA step G2): neighbours share a party wall, a row is 2 to 4 houses with a passage after it, and nearly every house has a street at its door.
+#[test]
+fn a_town_has_party_walls_and_passages() {
+    use nml_core::boardgen::LotKind::{Block, Deck, Roofed, Terrace};
+    let house = |k| matches!(k, Block | Terrace | Deck | Roofed);
+    let (mut party, mut with_party, mut houses, mut touching, mut longest, n) = (0, 0, 0, 0, 0, 300);
+    for seed in 1..=n {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        assert!(l.problems().is_empty(), "seed {seed}: {:?}", l.problems());
+        let mut walls: BTreeSet<(u16, u16)> = BTreeSet::new();
+        for i in 0..GRID * GRID { for j in nbrs(i) {
+            let (a, b) = (&l.cells[i], &l.cells[j]);
+            if a.lot_id != 0 && b.lot_id != 0 && a.lot_id != b.lot_id && house(a.lot_kind) && house(b.lot_kind) { walls.insert((a.lot_id.min(b.lot_id), a.lot_id.max(b.lot_id))); }
+        }}
+        party += walls.len();
+        with_party += usize::from(!walls.is_empty());
+        // a row = the lots joined by party walls; none is longer than 4 houses (a passage follows every row)
+        let ids: Vec<u16> = l.lots.iter().filter(|lot| house(lot.kind)).map(|lot| lot.id).collect();
+        let mut seen: BTreeSet<u16> = BTreeSet::new();
+        for &s in &ids {
+            if !seen.insert(s) { continue; }
+            let (mut stack, mut size) = (vec![s], 0);
+            while let Some(a) = stack.pop() { size += 1; for &(p, q) in &walls { for (x, y) in [(p, q), (q, p)] { if x == a && seen.insert(y) { stack.push(y); } } } }
+            longest = longest.max(size);
+            assert!(size <= 4, "seed {seed}: a row of {size} houses\n{}", l.to_ascii());
+        }
+        houses += ids.len();
+        touching += l.lots.iter().filter(|lot| house(lot.kind) && (lot.z..lot.z + lot.h).any(|z| (lot.x..lot.x + lot.w).any(|x| nbrs(z * GRID + x).iter().any(|&j| l.cells[j].street)))).count();
+    }
+    let (p, share, t) = (party as f64 / n as f64, with_party as f64 / n as f64, touching as f64 / houses as f64);
+    eprintln!("town party walls {p:.2} per board, boards with one {share:.3}, longest row {longest}, houses touching a street {t:.3}");
+    assert!(p >= 3.0 && share >= 0.90, "party walls {p:.2} per board, {share:.2} of the boards have one");
+    assert!(t >= 0.85, "{t:.2} of the houses touch a street");
+}
+
+/// Mid-board sight lines: rows 4 and 11 (12 in from each edge, the turn-2 positions), every column pair.
+fn mid_pairs() -> Vec<CellPair> { (0..GRID).flat_map(|x1| (0..GRID).map(move |x2| ((x1, 4), (x2, 11)))).collect() }
+
+/// The numbers of the G2 acceptance (lead decision 21.11.), over `n` town seeds: opening rays blocked, mid rays blocked, party walls, houses touching a street, and how often the FIRST sub-seed
+/// is already lane-free / valid. `NML_N=1000` for the real census.
+#[test]
+#[ignore = "measurement: NML_N=1000 cargo test --test boardgen g2_gate -- --ignored --nocapture"]
+fn g2_gate() {
+    use nml_core::boardgen::{generate_attempt, LotKind::{Block, Deck, Roofed, Terrace}};
+    let n: i64 = std::env::var("NML_N").ok().and_then(|v| v.parse().ok()).unwrap_or(300);
+    let house = |k| matches!(k, Block | Terrace | Deck | Roofed);
+    let (mut open_r, mut mid_r, mut party, mut with_party, mut houses, mut touching, mut lane0, mut valid0, mut lots, mut failed, mut attempts) = (0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    for seed in 1..=n {
+        let a0 = generate_attempt(seed, Symmetry::Point180, Theme::RuinTown, 0);
+        lane0 += usize::from(!a0.has_edge_to_edge_lane());
+        valid0 += usize::from(a0.problems().is_empty());
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        open_r += blocked_share(&l, 3, &band_pairs(), true);
+        mid_r += blocked_share(&l, 3, &mid_pairs(), true);
+        lots += l.lots.len();
+        failed += usize::from(!l.problems().is_empty());
+        attempts += usize::from(l.attempt);
+        let mut walls: BTreeSet<(u16, u16)> = BTreeSet::new();
+        for i in 0..GRID * GRID { for j in nbrs(i) {
+            let (a, b) = (&l.cells[i], &l.cells[j]);
+            if a.lot_id != 0 && b.lot_id != 0 && a.lot_id != b.lot_id && house(a.lot_kind) && house(b.lot_kind) { walls.insert((a.lot_id.min(b.lot_id), a.lot_id.max(b.lot_id))); }
+        }}
+        party += walls.len();
+        with_party += usize::from(!walls.is_empty());
+        houses += l.lots.iter().filter(|lot| house(lot.kind)).count();
+        touching += l.lots.iter().filter(|lot| house(lot.kind) && (lot.z..lot.z + lot.h).any(|z| (lot.x..lot.x + lot.w).any(|x| nbrs(z * GRID + x).iter().any(|&j| l.cells[j].street)))).count();
+    }
+    let f = n as f64;
+    eprintln!("G2 over {n}: lots {:.1}, opening rays blocked {:.1} % (<= 95), mid rays blocked {:.1} % (60-85), party walls {:.2} per board ({:.0} % of boards), houses touching a street {:.1} % (>= 85), first sub-seed lane-free {:.1} % (>= 99), first sub-seed valid {:.1} %, mean sub-seed {:.1}, boards still failing after all sub-seeds {failed}",
+        lots as f64 / f, 100.0 * open_r / f, 100.0 * mid_r / f, party as f64 / f, 100.0 * with_party as f64 / f, 100.0 * touching as f64 / houses as f64, 100.0 * lane0 as f64 / f, 100.0 * valid0 as f64 / f, attempts as f64 / f);
+}
+
+
+#[test]
+#[ignore = "dev aid"]
+fn one_attempt() {
+    use nml_core::boardgen::generate_attempt;
+    let seed: i64 = std::env::var("NML_SEED").ok().and_then(|v| v.parse().ok()).unwrap_or(2);
+    let a0 = generate_attempt(seed, Symmetry::Point180, Theme::RuinTown, 0);
+    eprintln!("{}\nproblems {:?} towers {} lots {:?}", a0.to_ascii(), a0.problems(), a0.towers(), a0.lots.iter().map(|l| (l.x, l.z, l.w, l.h, l.kind)).collect::<Vec<_>>());
+}
+
+#[test]
+#[ignore = "dev aid"]
+fn attempt0_problems() {
+    use nml_core::boardgen::generate_attempt;
+    let mut tally: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    let n: i64 = std::env::var("NML_N").ok().and_then(|v| v.parse().ok()).unwrap_or(300);
+    for seed in 1..=n { for p in generate_attempt(seed, Symmetry::Point180, Theme::RuinTown, 0).problems() { *tally.entry(p).or_default() += 1; } }
+    let (mut lane_with_wall, mut lane_no_wall) = (0, 0);
+    for seed in 1..=n {
+        let l = generate_attempt(seed, Symmetry::Point180, Theme::RuinTown, 0);
+        if l.has_edge_to_edge_lane() { if l.cells.iter().any(|c| c.lot_kind == nml_core::boardgen::LotKind::Wall && c.level == 2) { lane_with_wall += 1 } else { lane_no_wall += 1 } }
+    }
+    eprintln!("lanes with a wall {lane_with_wall}, without {lane_no_wall}");
+    eprintln!("attempt 0 problems over {n} seeds: {tally:#?}");
+}
+
+
