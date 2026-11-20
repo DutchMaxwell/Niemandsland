@@ -1,6 +1,6 @@
-ai_volley scripts/main.gd:_solo_resolve_ai_volley 354 2
+ai_volley scripts/main.gd:_solo_resolve_ai_volley 357 2
 ai_volley scripts/main.gd:_solo_volley_outcome 8 1
-ai_volley TOTAL 362 3
+ai_volley TOTAL 365 3
 cast scripts/main.gd:_solo_resolve_ai_casts 20 2
 cast scripts/main.gd:_solo_resolve_one_cast 128 2
 cast scripts/main.gd:_solo_resolve_spell_damage 122 1
@@ -19,8 +19,8 @@ hit_save_shared scripts/main.gd:_solo_save_batch 233 7
 hit_save_shared scripts/main.gd:_solo_takedown_pick 34 3
 hit_save_shared TOTAL 744 64
 human_shoot scripts/main.gd:_run_human_attack_split 38 1
-human_shoot scripts/main.gd:_run_human_shooting 288 3
-human_shoot TOTAL 326 4
+human_shoot scripts/main.gd:_run_human_shooting 291 3
+human_shoot TOTAL 329 4
 melee_charge scripts/main.gd:_run_ai_melee 190 1
 melee_charge scripts/main.gd:_run_human_melee 106 1
 melee_charge scripts/main.gd:_solo_charge_impact 82 4
@@ -71,4 +71,4 @@ owner hit_save_shared spells 5 H-45
 owner hit_save_shared table_internal 3 H-46
 owner hit_save_shared trap 2 H-42
 owner hit_save_shared TOTAL 64 -
-TABLE LINES LEFT: 11422
+TABLE LINES LEFT: 11428

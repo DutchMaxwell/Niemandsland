@@ -332,6 +332,7 @@ var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, ou
 # _solo_apply_regeneration and _solo_ignore_wounds — so no await can ever observe it. Never widen a window across an await:
 # every attack in the game shares those functions, and a leaked flag would rewrite an unrelated save.
 var _solo_takedown_solo: Dictionary = {}     # {unit, index, model} or {}
+var _solo_screen: Dictionary = {}   # PLAN_COVER_36: the open volley's cover from sight blockers (_solo_screen_open), or {}
 var _solo_alias_charge_in: float = 0.0       # SHO-18: the melee charge gap for the alias gate
 ## Sweep F row `Fortified Aura` (epoch 55) — the loss line's once-guard: the
 ## demotion is a STATE, logged on the first save batch it bites, cleared
@@ -5280,6 +5281,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)%s" % [
 				target.get_name(), over9_rule, AiCombatMath.shown_target(base_defense),
 				_solo_most_models_note(target, over9_rule)], true)
+	_solo_screen_open(attacker, target)   # PLAN_COVER_36: before the first cover read of this volley
 	var covered_defense: int = _solo_cover_defense(target, base_defense)   # +1 Defense if majority in cover
 	# Resolver wave A — vs-target Marks: the bearer's pick lands on THIS volley's target.
 	await _solo_apply_vs_marks(attacker, target, dist_in)
@@ -5522,6 +5524,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# DEFENDER is itself AI, the saves auto-roll on the real tray (no human prompt) — the human_defends flag
 		# is derived, never assumed, so an AI-vs-AI game resolves shooting unattended.
 		var save_def: int = shot_base if SoloController.shot_ignores_cover(profile, attacker, _solo_unit_held(attacker)) else shot_cover
+		save_def = _solo_screen_lift(profile, attacker, target, shot_base, save_def)
 		if not indirect_cover_logged and bool(profile.get("indirect", false)) \
 				and not SoloController.indirect_ignores_cover(attacker, _solo_unit_held(attacker)) \
 				and battle_log != null and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
@@ -5569,6 +5572,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		else:
 			regenable += w
 		await _solo_stage_phase(str(profile.get("name", "weapon")))
+	_solo_screen = {}   # PLAN_COVER_36: the saves are done, the latch closes with them
 	var landed: int = await _solo_land_wounds(target, regenable, regen_proof, false, dist_in, -1.0, landed_extra)
 	if _solo_combined_alive(target) <= 0:
 		_solo_growth_on_kill(attacker)   # Defensive Frenzy: volley kill credit
@@ -7290,7 +7294,55 @@ func _solo_shoot_gap_in(a: GameUnit, b: GameUnit, fallback_in: float, own_models
 ## in cover terrain gives +1 Defense (a better, lower save target), floored at 2+. Shooting only. The
 ## arithmetic is the shared AiCombatMath.covered_defense (one truth with the EV metric).
 func _solo_cover_defense(target: GameUnit, base_defense: int) -> int:
-	return AiCombatMath.covered_defense(base_defense, _solo_majority_in_cover(target))
+	return AiCombatMath.covered_defense(base_defense, _solo_majority_in_cover(target) or _solo_screened(target))
+
+
+## PLAN_COVER_36 (core twin: sim.rs resolve_with's def build, from 95): opens the volley's latch of cover from sight blockers for
+## `target`'s defense holder and says the verdict. Keyed by shooter AND target; closed where the volley's saves end.
+func _solo_screen_open(attacker: GameUnit, target: GameUnit) -> void:
+	_solo_screen = {}
+	if AiActRecorder.rules_epoch < AiActRecorder.PENDING_EPOCH_COVER_SCREEN or attacker == null or target == null:
+		return
+	var holder: GameUnit = _solo_defense_holder(target)
+	holder = target if holder == null else holder
+	var sc := _solo_volley_screen(attacker, holder)
+	var models: Array = holder.get_alive_models().filter(func(m: Variant) -> bool:
+		return (m as ModelInstance).node != null and is_instance_valid((m as ModelInstance).node))
+	_solo_screen = {"shooter": attacker, "named": target, "target": holder, "screened": bool(sc["screened"]),
+		"hidden": sc["hidden"], "models": models, "lift_said": []}
+	if bool(sc["screened"]) and battle_log != null:
+		var hid: Array = sc["hidden"]
+		battle_log.log_event(BattleLog.Category.COMBAT, "Cover: %s is behind a sight blocker from %s (%d of %d models) - %s" % [
+			holder.get_name(), attacker.get_name(), hid.count(true), hid.size(),
+			"already in Cover terrain, one +1" if _solo_majority_in_cover(holder) else "+1 Defense"], true)
+
+
+## PLAN_COVER_36: the open volley's cover from sight blockers for `unit` (the named target or its holder). Inside the Takedown
+## window the pick's own model answers with its `hidden` flag, as the terrain half reads the pick's own square.
+func _solo_screened(unit: GameUnit) -> bool:
+	if _solo_screen.is_empty() or unit == null or (unit != _solo_screen["target"] and unit != _solo_screen["named"]):
+		return false
+	if not _solo_takedown_solo.is_empty() and unit == _solo_takedown_solo.get("unit"):
+		var i: int = (_solo_screen["models"] as Array).find(_solo_takedown_solo.get("model"))
+		return i >= 0 and i < (_solo_screen["hidden"] as Array).size() and bool(_solo_screen["hidden"][i])
+	return bool(_solo_screen["screened"])
+
+
+## PLAN_COVER_36 (core twin: dice.rs `lifts_screen`): an Indirect weapon whose cover waiver holds (Hold kept where the entry
+## needs it) ignores the cover a sight blocker gives, terrain cover stays; said once per weapon and volley.
+func _solo_screen_lift(profile: Dictionary, attacker: GameUnit, target: GameUnit, shot_base: int, save_def: int) -> int:
+	var held := _solo_unit_held(attacker)
+	if not _solo_screened(target) or not bool(profile.get("indirect", false)) or bool(profile.get("takedown", false)) \
+			or SoloController.shot_ignores_cover(profile, attacker, held) \
+			or (SoloController.indirect_needs_hold(attacker, "cover_needs_hold") and not held):
+		return save_def
+	var wname := str(profile.get("name", "?"))
+	if not (_solo_screen["lift_said"] as Array).has(wname):
+		(_solo_screen["lift_said"] as Array).append(wname)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "Indirect: %s ignores %s's cover from sight blockers" % [
+				wname, (_solo_screen["target"] as GameUnit).get_name()], true)
+	return AiCombatMath.covered_defense(shot_base, _solo_majority_in_cover(target))
 
 
 ## Hits from a to-hit roll, plus the "on an unmodified 6" bonus-hit rules and Blast. Relentless (>9"
@@ -8637,7 +8689,7 @@ func _solo_pierce_defense(target: GameUnit, melee: bool, ignored: PackedStringAr
 			ignored.append("%s +%d" % [str((p as Dictionary)["name"]), bonus])
 		elif bonus < 0:
 			stripped -= bonus
-	if not melee and _solo_majority_in_cover(target):
+	if not melee and (_solo_majority_in_cover(target) or _solo_screened(target)):
 		ignored.append("Cover +1")
 	return stripped
 
@@ -16120,6 +16172,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): shot from over 9\" — +1 Defense (saves on %d+)%s" % [
 				target.get_name(), h_over9, AiCombatMath.shown_target(shielded_def),
 				_solo_most_models_note(target, h_over9)], true)
+	_solo_screen_open(attacker, target)   # PLAN_COVER_36: before the first cover read of this volley
 	var covered_def: int = _solo_cover_defense(target, shielded_def)
 	# Resolver wave A parity: your volley places vs-target Marks, SPENDS Piercing-Tag markers and
 	# honours the Reckless-Piercing AP stamps — the AI path had these seams, yours silently didn't.
@@ -16297,6 +16350,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				continue
 			# Blast (GF v3.5.1) and Indirect (wave 5) ignore cover — saves at the Shielded (uncovered) Defense.
 			var save_def: int = shot_base if SoloController.shot_ignores_cover(profile, attacker, _solo_unit_held(attacker)) else shot_cover
+			save_def = _solo_screen_lift(profile, attacker, target, shot_base, save_def)
 			if not indirect_cover_logged and bool(profile.get("indirect", false)) \
 					and not SoloController.indirect_ignores_cover(attacker, _solo_unit_held(attacker)) \
 					and battle_log != null and AiCombatMath.shot_uses_cover(save_def, shot_cover, shot_base):
@@ -16348,6 +16402,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	if not fired_any and battle_log != null:
 		_log_rule_event(BattleLog.Category.COMBAT,
 			"%s has no weapon in range of %s — no shots" % [attacker.get_name(), target.get_name()], true)
+	_solo_screen = {}   # PLAN_COVER_36: the saves are done, the latch closes with them
 	await _solo_land_wounds(target, regenable, regen_proof, false, dist, -1.0, landed_extra)
 	if _solo_combined_alive(target) <= 0:
 		_solo_growth_on_kill(attacker)   # Defensive Frenzy: your volley kill counts too (symmetry)

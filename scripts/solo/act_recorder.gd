@@ -314,6 +314,9 @@ const PENDING_EPOCH_CASUALTY_TIES := 94
 ## The core's `PENDING_EPOCH_SPELL_NO_STACK` (acts.rs, lead ruling 20.11.): from 95 a second identical spell record on the same unit refreshes the first and adds none
 ## (`main.gd` `_solo_record_spell_mod`), GF 3.6 "Rules priority & stacking effects".
 const PENDING_EPOCH_SPELL_NO_STACK := 95
+## Placeholder gate (acts.rs `PENDING_EPOCH_COVER_SCREEN`, the core twin): from 95 a unit shot at also takes the Cover +1 when it stands
+## mostly behind a sight blocker from the shooters (`main._solo_volley_screen`, PLAN_COVER_36); terrain cover is read as before.
+const PENDING_EPOCH_COVER_SCREEN := 95
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
