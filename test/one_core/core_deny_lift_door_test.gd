@@ -72,6 +72,7 @@ func _aof(entry: Dictionary) -> Dictionary:
 func _cases() -> Array:
 	var plain := DoorLines.entry("Plain", 10, [], [], "battle_brothers", 0)
 	var plain_aof := _aof(DoorLines.entry("Plain", 10, [], [], "human_empire", 0))
+	var rifles := DoorLines.entry("Rifles", 10, [], [], "battle_brothers", 10)
 	return [
 		# H-12 Hazardous: the wound goes to the SHOOTING unit on an unmodified 1 to hit, line `Hazardous: <U> model N takes 1 wound (<weapon>)`.
 		["Hazardous gf carbines", DoorLines.entry("Carbines", 5, [], ["Hazardous"], "ratmen_clans", 5), plain, "Hazardous"],
@@ -81,6 +82,13 @@ func _cases() -> Array:
 		# `Relentless: +N hits`). DS-N2 G14 was the sweep harness missing the import's aura pass (ds/h_probe_aura_names.md); `spawn` runs it now.
 		["Relentless Aura gf shooters", DoorLines.entry("Auras", 10, ["Relentless Aura"], [], "robot_legions", 5), plain, "Relentless:"],
 		["Relentless Aura aof shooters", _aof(DoorLines.entry("Auras", 10, ["Relentless Aura"], [], "high_elves", 5)), plain_aof, "Relentless:"],
+		# H-9a: a pre-attack beat is the bearer's own act, so a bearer SHOT AT is taken (the group's side is the shooter); every combat line of the volley compared.
+		["Furious Buff target", rifles, DoorLines.entry("Squad", 10, ["Furious Buff"], [], "alien_hives", 0), ""],
+		["Precision Fighter Buff target", rifles, DoorLines.entry("Squad", 10, ["Precision Fighter Buff"], [], "blessed_sisters", 0), ""],
+		["Speed Debuff target", rifles, DoorLines.entry("Squad", 10, ["Speed Debuff"], [], "dwarf_guilds", 0), ""],
+		["Breath Attack target", rifles, DoorLines.entry("Squad", 10, ["Breath Attack"], [], "alien_hives", 0), ""],
+		["Re-Position Artillery target", rifles, DoorLines.entry("Squad", 10, ["Re-Position Artillery"], [], "battle_brothers", 0), ""],
+		["Mend target", rifles, DoorLines.entry("Squad", 10, ["Mend"], [], "battle_brothers", 0), ""],
 	]
 
 

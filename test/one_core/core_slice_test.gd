@@ -517,6 +517,13 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 		bearer.unit_properties["faction_folder"] = c[1]
 		assert_array(CoreSlice.refusals(bearer)).override_failure_message(
 			"%s (%s/%s) must stay on the table in deny mode" % [c[2], c[0], c[1]]).is_equal(["unit_rule:" + c[2]])
+		# H-9a: the beat is the bearer's own act, so a bearer SHOT AT is taken (the group's side is the shooter; probe ds/h_probe_beat_targets.md).
+		assert_array(CoreSlice.refusals(bearer, true)).override_failure_message(
+			"%s (%s/%s) as a target does not act in the volley" % [c[2], c[0], c[1]]).is_empty()
+	# H-9a: the one beat name the target probe found different stays refused on either side (the table's prefix read of Regeneration).
+	var regen_buff := _unit(["Regeneration Buff", "Tough(3)"], [["AP(1)"]])
+	regen_buff.unit_properties["faction_folder"] = "dark_elf_raiders"
+	assert_array(CoreSlice.refusals(regen_buff, true)).override_failure_message("the table rolls regeneration for a Regeneration Buff bearer").is_equal(["unit_rule:Regeneration Buff"])
 	# The same unit without the beat rule is taken (the group refuses the rule, not the faction).
 	var plain := _unit(["Tough(3)"], [["AP(1)"]])
 	plain.unit_properties["faction_folder"] = "battle_brothers"
@@ -528,6 +535,7 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 	healer.unit_properties["faction_folder"] = "battle_brothers"
 	EquipmentDistributor.attach_hero_to_unit(healer, host)
 	assert_array(CoreSlice.refusals(host)).contains(["unit_rule:Mend"])
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("the same host shot at: the hero's Mend does not act in the volley").is_empty()
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 
