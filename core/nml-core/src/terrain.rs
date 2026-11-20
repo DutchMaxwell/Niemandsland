@@ -245,6 +245,8 @@ pub struct Terrain {
     /// `blocker_boxes` key: every bank recorded before step 4d
     /// (default-preserving, like `blockers_m` above).
     blocker_boxes_m: Vec<[f64; 6]>,
+    /// Heightfield plan step 5 - `PlainTerrain::tiers` as written (`tier_in_at` reads it); `None` = a flat board.
+    tiers: Option<TierGrid>,
     /// Content identity for memos keyed on a board: every `build` / `absent` / content-changing setter mints a fresh
     /// value, a clone keeps it. 0 = a bare `Default`, which no memo trusts.
     uid: u64,
@@ -281,6 +283,20 @@ impl Terrain {
     #[inline]
     pub fn board_in(&self) -> [f64; 2] {
         self.board_in
+    }
+
+    /// Heightfield plan step 5 - the height of the tier under a point, inches above the table; `0.0` on a board without
+    /// tiers and off the grid. `x_in` / `z_in` are the world frame in inches: the grid is board-centred with yaw 0.
+    /// A cell is half open, so a point exactly on a border belongs to the cell on its positive side. Nothing reads this
+    /// yet; `surface_y_m` (step 10) will.
+    pub fn tier_in_at(&self, x_in: f64, z_in: f64) -> f64 {
+        let Some(t) = &self.tiers else { return 0.0 };
+        let (fx, fz) = ((x_in / t.cell_in) + f64::from(t.nx) / 2.0, (z_in / t.cell_in) + f64::from(t.nz) / 2.0);
+        // written as "inside" so a NaN, an infinite cell edge or an empty grid all fall out as ground
+        if !(fx >= 0.0 && fz >= 0.0 && fx < f64::from(t.nx) && fz < f64::from(t.nz)) {
+            return 0.0;
+        }
+        t.level_in.get(fz as usize * usize::from(t.nx) + fx as usize).copied().unwrap_or(0.0)
     }
 
     /// The board's wall segments in the planner's INCH frame. Empty = the
@@ -558,6 +574,7 @@ impl Terrain {
             walls_world: Vec::new(),
             blockers_m: Vec::new(),
             blocker_boxes_m: Vec::new(),
+            tiers: p.tiers.clone(),
             uid: fresh_uid(),
         };
         out.set_walls_world_m(&p.walls);
@@ -972,5 +989,48 @@ mod tests {
         ];
         // the centre is -6", the same point the single-model case blocks from
         assert_eq!(t.los_pairs(&units), vec!["10", "01"]);
+    }
+
+    /// A 3 x 3 board of 3 in cells, rows are z, columns are x: deliberately not symmetric under x <-> z.
+    fn tiered(level_in: Vec<f64>) -> Terrain {
+        let tiers = serde_json::json!({"nx": 3, "nz": 3, "cell_in": 3.0, "level_in": level_in});
+        Terrain::build(&serde_json::from_value::<PlainTerrain>(header(Some(tiers))).unwrap())
+    }
+
+    /// Heightfield plan step 5: the level under each cell centre, half-open borders, the world's rim, NaN. Red before:
+    /// `tier_in_at` did not exist; a swapped x/z or a `round` instead of `floor` in it fails this test.
+    #[test]
+    fn tier_in_at_reads_the_cell_under_the_point() {
+        let b = tiered(vec![0.0, 3.0, 6.0, 0.0, 6.0, 3.0, 3.0, 0.0, 6.0]);
+        // centres of columns x = -3, 0, 3 and rows z = -3, 0, 3
+        let want = [[0.0, 3.0, 6.0], [0.0, 6.0, 3.0], [3.0, 0.0, 6.0]];
+        for (iz, z) in [-3.0, 0.0, 3.0].into_iter().enumerate() {
+            for (ix, x) in [-3.0, 0.0, 3.0].into_iter().enumerate() {
+                assert_eq!(b.tier_in_at(x, z), want[iz][ix], "cell ({ix}, {iz})");
+                assert_eq!(b.tier_in_at(x + 1.4, z - 1.4), want[iz][ix], "inside the same cell, away from the centre");
+            }
+        }
+        // a border belongs to the cell on its positive side (x = -1.5 is column 1's west edge, x = 1.5 column 2's)
+        assert_eq!(b.tier_in_at(-1.5, -3.0), 3.0);
+        assert_eq!(b.tier_in_at(-1.5 - 1e-9, -3.0), 0.0);
+        assert_eq!(b.tier_in_at(1.5, 3.0), 6.0);
+        assert_eq!(b.tier_in_at(0.0, 1.5), 0.0, "z = 1.5 is row 2's north edge: row 2, column 1");
+        // the grid covers [-4.5, 4.5): its own corner is in, the far edge and beyond are ground
+        assert_eq!(b.tier_in_at(-4.5, -4.5), 0.0);
+        assert_eq!(b.tier_in_at(4.5 - 1e-9, 4.5 - 1e-9), 6.0);
+        assert_eq!(b.tier_in_at(4.5, 3.0), 0.0);
+        assert_eq!(b.tier_in_at(3.0, -4.5 - 1e-9), 0.0);
+        assert_eq!(b.tier_in_at(f64::NAN, 0.0), 0.0);
+        assert_eq!(b.tier_in_at(0.0, f64::INFINITY), 0.0);
+    }
+
+    #[test]
+    fn tier_in_at_is_ground_without_tiers_and_survives_a_short_level_list() {
+        let flat = Terrain::build(&serde_json::from_value::<PlainTerrain>(header(None)).unwrap());
+        assert_eq!(flat.tier_in_at(0.0, 0.0), 0.0);
+        assert_eq!(Terrain::absent().tier_in_at(0.0, 0.0), 0.0);
+        let short = tiered(vec![6.0, 6.0]);
+        assert_eq!(short.tier_in_at(-3.0, -4.0), 6.0);
+        assert_eq!(short.tier_in_at(3.0, 3.0), 0.0, "a level the list does not carry reads as ground, no panic");
     }
 }
