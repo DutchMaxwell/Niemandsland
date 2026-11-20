@@ -4348,6 +4348,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             rule_on(rules_epoch, EPOCH_44_SURGE_MARK) && (grants && mods::granted(state, i, "Surge"));
         c.unpredictable_shooting =
             c.unpredictable_shooting || (grants && mods::granted(state, i, "Unpredictable Shooter"));
+        if c.unpredictable_shooting && c.unpredictable_name.is_empty() {
+            c.unpredictable_name = "Unpredictable Shooter"; // a spell-granted die (the table's `granted_rules_of` branch)
+        }
         // The Regeneration-primitive boosts: the granted entry's printed
         // targets, folded by the static stamp's own running-MIN rule.
         if grants && mods::granted(state, i, "Enhanced Self-Repair") {

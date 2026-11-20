@@ -71,3 +71,19 @@ func test_the_ap_on_6_rules_name_their_hits() -> void:
 func test_named_conditional_ap_names_the_rule_and_the_target() -> void:
 	await _same("havocbound", DoorLines.entry("Gunners", 10, ["Havocbound"], [], "havoc_brothers"), _target(), "Havocbound:", 6)
 	await _same("slayer", DoorLines.entry("Gunners", 10, ["Slayer"], [], "dao_union"), _target(5, ["Tough(3)"]), "Slayer:", 3)
+
+
+func _aof(entry: Dictionary) -> Dictionary:
+	(entry["unit"] as OPRApiClient.OPRUnit).game_system = "aof"
+	entry["system"] = "aof"
+	return entry
+
+
+## H-15a (Plan H): the volley die of Unpredictable (Shooter) says the table's line, `<rule>: <U>'s volley rolls N -> AP(+1) | +1 to hit`; both
+## spellings (gf jackals, aof duchies_of_vinci). Before, the core threw the die and said nothing on volleys the door already took.
+## RED: drop the `say_rule` of the die in the core's volley fold -> the table says the line and the door does not.
+func test_the_unpredictable_die_names_the_rule_and_the_roll() -> void:
+	await _same("unpredictable shooter", DoorLines.entry("Gunners", 10, ["Unpredictable Shooter"], [], "jackals"), _target(), "Unpredictable Shooter:", 12)
+	var generic := _aof(DoorLines.entry("Gunners", 10, ["Unpredictable"], [], "duchies_of_vinci"))
+	await _same("unpredictable", generic, _aof(DoorLines.entry("Targets", 10, [], [], "human_empire", 0)), "Unpredictable:", 12)
+

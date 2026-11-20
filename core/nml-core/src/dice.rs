@@ -1366,11 +1366,14 @@ pub(crate) fn resolve_volley_with_pick_label(
         let att0 = shooters[0].att;
         tray.owner_next(att0.unit);
         let faces = tray.roll(1);
-        if (faces[0] as i64) <= att0.unpredictable_low_roll_max {
+        let low = (faces[0] as i64) <= att0.unpredictable_low_roll_max;
+        if low {
             upr_ap = att0.unpredictable_ap_bonus;
         } else {
             upr_hit = att0.unpredictable_hit_bonus;
         }
+        let (name, face, owner) = (att0.unpredictable_name, faces[0], shooters[0].owner);
+        say_rule(tray, "unpredictable", att0.side, || format!("{name}: {owner}'s volley rolls {face} → {}", if low { "AP(+1)" } else { "+1 to hit" }));
         out.rolls.push(Roll {
             kind: "attack",
             count: 1,
@@ -1385,6 +1388,8 @@ pub(crate) fn resolve_volley_with_pick_label(
             tray.owner_next(sh.att.unit);
             let faces = tray.roll(1);
             let low = (faces[0] as i64) <= sh.att.unpredictable_low_roll_max;
+            let (name, face, owner) = (sh.att.unpredictable_name, faces[0], sh.owner);
+            say_rule(tray, "unpredictable", sh.att.side, || format!("{name}: {owner}'s volley rolls {face} → {}", if low { "AP(+1)" } else { "+1 to hit" }));
             hero_upr.push((i, if low { sh.att.unpredictable_ap_bonus } else { 0 }, if low { 0 } else { sh.att.unpredictable_hit_bonus }));
             out.rolls.push(Roll { kind: "attack", count: 1, target: BEST_HIT_TARGET, faces, owner: sh.owner.into() });
         }
