@@ -6,7 +6,7 @@ use super::*;
 use crate::acts::{CURRENT_RULES_EPOCH, EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_92_MELEE_CAUSES};
 use crate::state::Kit;
 
-fn two_unit_melee(att_models: usize, def_models: usize, tough: i64) -> (Vec<UnitStatic>, State) {
+pub(super) fn two_unit_melee(att_models: usize, def_models: usize, tough: i64) -> (Vec<UnitStatic>, State) {
     let mut att = UnitStatic {
         ctx: Ctx { quality: 4, defense: 4, tough, models: att_models as i64, ..Default::default() },
         name: "Att".into(),
@@ -55,7 +55,7 @@ fn two_unit_melee(att_models: usize, def_models: usize, tough: i64) -> (Vec<Unit
     (vec![att, def], st)
 }
 
-fn exact_seams() -> Seams {
+pub(super) fn exact_seams() -> Seams {
     seams_at(CURRENT_RULES_EPOCH)
 }
 
