@@ -71,3 +71,44 @@ use crate::unit::ShotModNote;
         assert!(lines.iter().any(|l| l == "Takedown (Rifle): the Tough(3) model of Def is wounded"), "{lines:?}");
         assert!(lines.iter().all(|l| !l.starts_with("Def takes")), "Takedown wounds must not emit a takes-wounds line: {lines:?}");
     }
+
+    /// The table's `_solo_unstoppable_fold` says its fold once per weapon with the same three shapes: a minus from another source swallowed, the
+    /// shooter's own minus kept, both at once. A weapon's own Unstoppable used to stay silent in the core (the mark and aura say their own lines).
+    #[test]
+    fn a_weapons_own_unstoppable_names_its_fold_in_the_tables_three_shapes() {
+        let said = |lines: &[String]| lines.iter().filter(|l| l.starts_with("Unstoppable:")).cloned().collect::<Vec<_>>();
+        let faces = || vec![vec![6, 1, 1, 1], vec![1]];
+        let swallowed = rule_lines(|st, s| {
+            st.positions[2] = vec![[18.0 * IN2M, 0.0, 0.0]; 2];
+            s[0].shoot[0].unstoppable = true;
+            s[2].ctx.stealth = true;
+        }, faces());
+        assert_eq!(said(&swallowed), ["Unstoppable: negative to-hit modifiers ignored"], "{swallowed:?}");
+        let plain = rule_lines(|st, s| {
+            st.positions[2] = vec![[18.0 * IN2M, 0.0, 0.0]; 2];
+            s[0].shoot[0].unstoppable = true;
+        }, faces());
+        assert!(said(&plain).is_empty(), "nothing to swallow, nothing said: {plain:?}");
+        let near = rule_lines(|st, s| {
+            st.positions[2] = vec![[6.0 * IN2M, 0.0, 0.0]; 2];
+            s[0].shoot[0].unstoppable = true;
+            s[2].ctx.stealth = true;
+        }, faces());
+        assert!(said(&near).is_empty(), "Stealth does not reach within 9\": {near:?}");
+        let own_only = rule_lines(|st, s| {
+            st.positions[2] = vec![[18.0 * IN2M, 0.0, 0.0]; 2];
+            (s[0].ctx.v36_rules, s[0].shoot[0].unstoppable, s[0].shoot[0].hit_bonus) = (true, true, -1);
+        }, faces());
+        assert_eq!(said(&own_only), ["Unstoppable: own rules' -1 to hit kept"], "{own_only:?}");
+        let both = rule_lines(|st, s| {
+            st.positions[2] = vec![[18.0 * IN2M, 0.0, 0.0]; 2];
+            (s[0].ctx.v36_rules, s[0].shoot[0].unstoppable, s[0].shoot[0].hit_bonus) = (true, true, -1);
+            s[2].ctx.stealth = true;
+        }, faces());
+        assert_eq!(said(&both), ["Unstoppable: -1 to hit from other sources ignored, own rules' -1 kept"], "{both:?}");
+        let none = rule_lines(|st, s| {
+            st.positions[2] = vec![[18.0 * IN2M, 0.0, 0.0]; 2];
+            s[2].ctx.stealth = true;
+        }, faces());
+        assert!(said(&none).is_empty(), "no Unstoppable, no fold line: {none:?}");
+    }
