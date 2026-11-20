@@ -28,6 +28,8 @@ const MENU_TO_TABLE := {"grassland":"temperate_grassland"}
 ## Preview images keep the diorama's file names (assets/ui/table_setup/<name>.webp).
 const PREVIEW_FILE := {"temperate_grassland":"grassland"}
 var selected_biome := "urban_ruins"
+## The game system the table is set up for (GameSystem.IDS): it filters the biomes on offer (assets/terrain_systems.json).
+var selected_system := GameSystem.DEFAULT_ID
 var selected_size := "standard"
 var custom_inches := Vector2(72,48)
 var _biome_keys: Array = BIOMES.keys()
@@ -352,14 +354,30 @@ func _add_left_air(column: VBoxContainer) -> void:
 func set_biomes(keys: Array, current: String) -> void:
 	_biome_keys = keys.map(func(key: Variant) -> String: return table_biome(str(key))) \
 		.filter(func(key: String) -> bool: return BIOMES.has(key))
-	current = table_biome(current)
-	selected_biome = current if current in _biome_keys else str(_biome_keys[0]) if not _biome_keys.is_empty() else ""
+	_pick_biome(table_biome(current))
+
+
+## The biomes on offer: what the caller listed, minus the ones the selected game system does not offer.
+func _shown_biomes() -> Array:
+	return _biome_keys.filter(func(key: String) -> bool: return GameSystem.offers("biome", key, selected_system))
+
+
+## Selects `current`, or the first biome on offer when it is not on offer (a hidden biome is never selected).
+func _pick_biome(current: String) -> void:
+	var shown := _shown_biomes()
+	selected_biome = current if current in shown else str(shown[0]) if not shown.is_empty() else ""
 	if is_node_ready():
 		_refresh()
 
 
+## Sets the game system the table is for; the biomes it does not offer disappear (the selection falls back if it was one).
+func set_system(id: String) -> void:
+	selected_system = GameSystem.normalize(id)
+	_pick_biome(selected_biome)
+
+
 func _select_biome(key: String) -> void:
-	if key in _biome_keys:
+	if key in _shown_biomes():
 		selected_biome = key
 		_refresh()
 
@@ -418,8 +436,9 @@ func _size_text(inches: Vector2) -> String:
 
 
 func _refresh() -> void:
+	var shown := _shown_biomes()
 	for key in _biome_buttons:
-		_biome_buttons[key].visible = key in _biome_keys
+		_biome_buttons[key].visible = key in shown
 		_style(_biome_buttons[key],key == selected_biome)
 	for key in _size_buttons:
 		_style(_size_buttons[key],key == selected_size)
@@ -427,7 +446,7 @@ func _refresh() -> void:
 	_size_labels.square.text = _size_text(Vector2(48,48))
 	_custom.visible = selected_size == "custom"
 	var inches := chosen_inches()
-	_valid = valid_dimensions(inches) and selected_biome in _biome_keys
+	_valid = valid_dimensions(inches) and selected_biome in shown
 	_create.disabled = not _valid or _emitted
 	_error.visible = not _valid
 	_error.text = "Enter width and depth from 30.48 to 609.6 cm." if _unit_option.selected == 1 else "Enter width and depth from 12 to 240 in."
