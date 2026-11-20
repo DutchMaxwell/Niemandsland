@@ -329,9 +329,15 @@ jobs:
           while IFS= read -r suite; do
             ARGS+=(-a "res://${suite}")
           done < /tmp/shard_suites.txt
-          godot --headless --path . \
+          echo "MEASURE nproc=$(nproc)"; free -m
+          [ -x /usr/bin/time ] || sudo apt-get install -y -qq time
+          /usr/bin/time -v -o gdunit_time.txt godot --headless --path . \
             -s -d res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
             --ignoreHeadlessMode -c "${ARGS[@]}" 2>&1 | tee gdunit_output.log
+
+      - name: MEASURE - CPU and peak RSS of the gdUnit process
+        if: always()
+        run: cat gdunit_time.txt || true
 
       # gdUnit prints "No test cases found, abort test run!" and exits 0 when a test file
       # fails to PARSE (syntax error) instead of failing to assert — a broken suite would
