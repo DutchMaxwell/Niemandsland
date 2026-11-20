@@ -11515,9 +11515,10 @@ func _solo_has_regeneration(unit: GameUnit) -> bool:
 	return false
 
 
+## EXACT rule names (NML-1112, `GameUnit.rule_name_matches`: the name or the name plus a parenthesised qualifier): a bare prefix is another rule ("Regeneration Buff",
+## "Regeneration Aura" are rules of their own, the Fortified Growth lesson), and it never hands a carrier of the label free regeneration dice.
 static func _solo_is_regen_rule(rule: String) -> bool:
-	var s := rule.strip_edges()
-	return s.begins_with("Regeneration") or s.begins_with("Medical Training")
+	return GameUnit.rule_name_matches(rule, "Regeneration") or GameUnit.rule_name_matches(rule, "Medical Training")
 
 
 ## True when the majority of a unit's alive models sit in cover terrain (TerrainRules predicate on the real
