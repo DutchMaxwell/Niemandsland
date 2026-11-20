@@ -32,6 +32,8 @@ const PSYCHIC_BLAST := {"name": "Psychic Blast", "threshold": 1, "range_in": 18,
 const UNKNOWN_BOLT := {"name": "Unknown Bolt", "threshold": 1, "range_in": 18,
 	"target": {"side": "enemy", "count": 1, "kind": "unit"},
 	"effect": {"kind": "damage", "hits": 3, "weapon_rules": []}}
+const TERRIFYING_FURY := {"name": "Terrifying Fury", "threshold": 1, "range_in": 18, "needs_los": true,
+	"target": {"side": "enemy", "count": 1, "kind": "unit"}, "effect": {"kind": "utility"}}
 const SEEDS: Array[int] = [0, 1, 2, 3, 8, 11]
 
 
@@ -114,7 +116,8 @@ func after_test() -> void:
 func _run(spell: Dictionary, seed: int, mode: String, opts := {}) -> Dictionary:
 	var door := mode != "table"
 	var shoot: bool = bool(opts.get("shoot", false))
-	var caster := ParityTable._make_unit(_main, MYSTIC, RIFLE if shoot else STAFF)
+	var caster := ParityTable._make_unit(_main, MYSTIC.merged({"faction_folder": str(opts["faction"])}, true) if opts.has("faction") else MYSTIC,
+		RIFLE if shoot else STAFF)   # `faction`: the book the caster's spell comes from (utility spells live in other factions)
 	var foe := ParityTable._make_unit(_main, FOE.merged({"models": int(opts.get("foe_models", 6))}, true), {})
 	if bool(opts.get("fizzle", false)):
 		Harness._kill_models(foe, foe.models.size())
@@ -294,6 +297,16 @@ func test_the_body_takes_a_cast_through_the_switch(timeout := 600000) -> void:
 	# seed 3's Dangerous die is a 1 that destroys the one-model caster: the door's destroyed-unit lines differ from the table's there
 	# (the volley door's own, `e2e_one_core_ai_dangerous_test`), not a cast matter
 	bad.append_array(await _grid(TERROR_SEEKER, {"dangerous": true, "seeds": [0, 1, 2, 8, 11]}, "body"))
+	assert_array(bad).override_failure_message("\n".join(bad.slice(0, 2))).is_empty()
+	assert_int(CoreActivation.cast_probe_refusals).override_failure_message("a probe refused: %s" % str(CoreActivation.cast_probe_reasons)).is_equal(0)
+
+
+## CC-13f: a UTILITY spell (the table: announce + token + the book's manual note, nothing mechanical) is taken by the door: Terrifying
+## Fury of a Daemons of War caster, through the body's seams, equal to the table (lines incl. the manual note, rolls, records, tokens,
+## stage cards) and resolved by the core, over seeds that pass and fail the 4+ die.
+func test_a_utility_spell_is_taken_by_the_door(timeout := 600000) -> void:
+	CoreActivation._cast_env = 1
+	var bad: Array = await _grid(TERRIFYING_FURY, {"faction": "daemons_of_war"}, "body")
 	assert_array(bad).override_failure_message("\n".join(bad.slice(0, 2))).is_empty()
 	assert_int(CoreActivation.cast_probe_refusals).override_failure_message("a probe refused: %s" % str(CoreActivation.cast_probe_reasons)).is_equal(0)
 

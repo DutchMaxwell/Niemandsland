@@ -8654,7 +8654,7 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
             }
             CastEnd::Landed
         }
-        "buff" | "debuff" => {
+        "buff" | "debuff" | "utility" => {
             tray_spell_effect(state, &standing_idx, c, spell, seams.rules_epoch);
             CastEnd::Landed
         }
