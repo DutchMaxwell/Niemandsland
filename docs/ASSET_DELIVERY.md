@@ -119,6 +119,7 @@ shared `asset_download_manager.gd`:
 | Container faces | `containers_manifest.json` | `containers_library.gd` | `user://containers_cache/` |
 | Minefield hazards | `hazards_manifest.json` | `hazards_library.gd` | `user://hazards_cache/` |
 | Tiefwerk board kit modules (GLB) | `tiefwerk_manifest.json` | `boardgen_kit.gd` | `user://tiefwerk_cache/` |
+| Tiefwerk board surfaces (4 PBR sets as `.ctex`, decal atlas as WebP) | `tiefwerk_manifest.json` | `tiefwerk_library.gd` | `user://tiefwerk_cache/` |
 
 Terrain source art lives under the R2 prefix `terrain-source/<kind>/` (named
 files; the manifest's sha256 still content-addresses the cache).
