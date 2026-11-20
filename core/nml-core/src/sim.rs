@@ -1505,6 +1505,15 @@ fn land_chain_report_inline(statics: &[UnitStatic], next: &State, tray: &mut Tra
         };
         tray.say_wounds(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[*u], text, detail: None });
     }
+    // The table's `_solo_hero_carries_on` (the end of `_solo_apply_wounds`): the host has no model left, so each living joined hero that
+    // carries the unit's Shaken / Fatigue says so.
+    if took > 0 && next.alive[ti] <= 0 {
+        for &h in next.attached[ti].iter().filter(|&&h| next.alive[h] > 0 && (next.shaken[h] || next.fatigued[h])) {
+            let state = match (next.shaken[h], next.fatigued[h]) { (true, true) => "Shaken + Fatigue", (true, false) => "Shaken", _ => "Fatigue" };
+            let text = format!("{} fights on alone — carries the unit's {state} ({CITE})", statics[next.roster.profile[h]].name);
+            tray.say_wounds(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[h], text, detail: None });
+        }
+    }
     tray.release_outcome();
     for (u, at, wounds) in ch {
         if let Some(l) = landing_of(next, u, &at, &wounds, &tray.dead_slots(u)) {
@@ -2383,6 +2392,9 @@ fn control_morale_passed(
     ctx.side = next.player[ti]; // the seat the morale dice lines (Fearless, No Retreat) are said for
     let banner_dropped = drop_banner_for_cause(statics, next, ti, false, true, Some(source.rule), None, None, seams, &mut ctx, shot, tray);
     say_morale_bonus(statics, next, ti, false, Some(source.rule), seams, &ctx, banner_dropped, tray);
+    if next.shaken[ti] {
+        say_rule(tray, "morale", next.player[ti], || format!("{} is already Shaken — automatically fails morale ({CITE})", us.name));
+    }
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
         &ctx, source.owner, None, false, false, next.shaken[ti], wounds_left(next, ti), tray,
     );
@@ -7276,7 +7288,7 @@ fn say_morale_bonus(
     let us = &statics[state.roster.profile[i]];
     let shown = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
     if unit_shaken(state, i, seams) {
-        return; // a Shaken unit rolls no die and the table writes no bonus line (its "already Shaken" line: see the gap list, not said here)
+        return; // a Shaken unit rolls no die and the table writes no bonus line (its "already Shaken" line is the caller's)
     }
     let target = morale_target(ctx.quality, ctx.morale_bonus);
     let bonus = state.morale_bonus[i] - banner_gone(statics, state, i, seams) - banner_dropped;
@@ -7345,6 +7357,10 @@ pub(crate) fn tray_morale_for(
     if shaken && !state.shaken[i] {
         let host = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
         shot.log.push(format!("Shaken: {} is the unit of its dead host {host}, which is Shaken — the test fails without a die", us.name));
+    }
+    if shaken {
+        // The table's `_solo_morale_test` says it before the outcome line: a lone hero's test is its host's (the unit it was aimed at).
+        say_rule(tray, "morale", state.player[i], || format!("{shown} is already Shaken — automatically fails morale ({CITE})"));
     }
     // EPOCH_39_MORALE_RATING — rules-must-log (main.gd:8596-8602): the test
     // that adds the rating names it, once per drawn die. A Shaken auto-fail
