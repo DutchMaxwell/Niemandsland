@@ -292,9 +292,14 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	assert_array(CoreSlice.refusals(changed, true)).is_empty()
 	# A rule still refused by NAME (an item whose Defense bonus differs between the halves).
 	assert_array(CoreSlice.refusals(_unit(["Gleaming Armour"], []))).is_equal(["unit_rule:Gleaming Armour"])
+	# OD-H8: Teleport / Ethereal / plain Infiltrate left the ledger group (real-activation probe, core_ledger_lift_door_test.gd); the Surprise Attack
+	# burst, an Infiltrate-primitive entry, stays refused by NAME (it rolls twice with the door on).
 	var teleporter := _unit(["Teleport"], [])
 	teleporter.unit_properties["faction_folder"] = "elven_jesters"   # a faction whose map gives Teleport its primitive
-	assert_array(CoreSlice.refusals(teleporter)).is_equal(["unit_rule:Teleport"])
+	assert_array(CoreSlice.refusals(teleporter)).is_empty()
+	var surprise := _unit(["Surprise Attack"], [])
+	surprise.unit_properties["faction_folder"] = "alien_hives"
+	assert_array(CoreSlice.refusals(surprise)).is_equal(["unit_rule:Surprise Attack"])
 	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
 	# HR-POS: the after-volley step comes back through the delta (`positions`), so Hit & Run goes to the core again.
 	var raider := _unit(["Hit & Run"], [["AP(1)"]])
@@ -478,7 +483,7 @@ func test_deny_mode_takes_the_lifted_equal_probes() -> void:
 
 ## LIFT92 (20.11.): the Growth Markers family leaves the ledger group once the door says its four lines (the AP, the Defense bonus, Fortified
 ## Growth's cut, the Frenzy kill marker: door_lines_growth_test.gd) - its dice, end state and ledger were equal on the door already. Each row is
-## [game system, faction folder, rule]; the folder is the map that gives the rule its primitive. Teleport and Infiltrate stay refused.
+## [game system, faction folder, rule]; the folder is the map that gives the rule its primitive. Teleport and Infiltrate left with OD-H8 (the Surprise Attack burst stays refused by name).
 ## RED on the old list: every family name below is refused by its primitive.
 func test_deny_mode_takes_the_growth_markers_family() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
@@ -493,7 +498,7 @@ func test_deny_mode_takes_the_growth_markers_family() -> void:
 		assert_array(CoreSlice.refusals(bearer, true)).override_failure_message("deny mode takes a target that carries %s" % c[2]).is_empty()
 	var teleporter := _unit(["Teleport"], [])
 	teleporter.unit_properties["faction_folder"] = "elven_jesters"
-	assert_array(CoreSlice.refusals(teleporter)).is_equal(["unit_rule:Teleport"])
+	assert_array(CoreSlice.refusals(teleporter)).is_empty()   # OD-H8: lifted with the ledger group
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 
