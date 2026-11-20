@@ -158,26 +158,23 @@ pub fn normalize_system(system: &str) -> String {
 /// ONE table for BOTH registries: the spell book and the faction rules map.
 fn faction_alias(system: &str, faction: &str) -> Option<String> {
     for sub in ["change", "lust", "plague", "war"] {
-        let of = format!("daemons_of_{sub}");
-        let wormhole = format!("wormhole_daemons_of_{sub}");
-        let rift = format!("rift_daemons_of_{sub}");
-        if faction != of && faction != wormhole && faction != rift {
-            continue;
-        }
-        let canonical = match system {
-            "gf" | "aof" => of,
-            "gff" => wormhole,
-            "aofs" | "aofr" => rift,
+        let bare = format!("daemons_of_{sub}");
+        let (from, to) = match system {
+            "gf" => (format!("wormhole_{bare}"), bare),
+            "aof" => (format!("rift_{bare}"), bare),
+            "gff" => (bare.clone(), format!("wormhole_{bare}")),
+            "aofs" | "aofr" => (bare.clone(), format!("rift_{bare}")),
             _ => return None,
         };
-        return (faction != canonical.as_str()).then_some(canonical);
+        if faction == from {
+            return Some(to);
+        }
     }
-    let canonical = match (system, faction) {
-        ("gf", "saurian_starhost") => "saurian_starhosts",
-        ("gff", "saurian_starhosts") => "saurian_starhost",
-        _ => return None,
-    };
-    Some(canonical.to_string())
+    match (system, faction) {
+        ("gf", "saurian_starhost") => Some("saurian_starhosts".to_string()),
+        ("gff", "saurian_starhosts") => Some("saurian_starhost".to_string()),
+        _ => None,
+    }
 }
 
 /// `RulesRegistry.base_rule_name` rules_registry.gd:123-124 — "Armor(4)" -> "Armor".
@@ -817,6 +814,21 @@ mod tests {
         ("aofr", "daemons_of_plague", "rift_daemons_of_plague"),
         ("aofr", "daemons_of_war", "rift_daemons_of_war"),
     ];
+
+    /// The alias table is per system: a GF folder never wears the AoF `rift_` prefix and an AoF folder never the GF
+    /// `wormhole_` one, and a name that is already the system's map key aliases to nothing. Python and GDScript key
+    /// the same pairs as `V36_SPELL_BOOK_ALIASES`; this keeps the Rust side from guessing across systems.
+    #[test]
+    fn a_spell_book_alias_never_crosses_the_systems_folder_naming() {
+        assert_eq!(faction_alias("gf", "rift_daemons_of_lust"), None);
+        assert_eq!(faction_alias("aof", "wormhole_daemons_of_lust"), None);
+        assert_eq!(faction_alias("gff", "rift_daemons_of_lust"), None);
+        assert_eq!(faction_alias("aofs", "wormhole_daemons_of_lust"), None);
+        assert_eq!(faction_alias("aof", "saurian_starhost"), None);
+        assert_eq!(faction_alias("gf", "daemons_of_lust"), None);
+        assert_eq!(faction_alias("gff", "wormhole_daemons_of_lust"), None);
+        assert_eq!(faction_alias("aofs", "rift_daemons_of_lust"), None);
+    }
 
     #[test]
     fn every_v36_renamed_spell_book_alias_resolves_its_committed_book() {
