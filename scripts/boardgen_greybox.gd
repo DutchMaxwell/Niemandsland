@@ -379,6 +379,26 @@ func _anchor() -> void:
 		_material.set_shader_parameter("board_origin", global_position)
 
 
+## The authored surface sets of the town as shader parameters (plan R9 hook, T-R1): for coursed stone, plaster, timber and earth the albedo and normal textures when BOTH are cached, and `t_on`
+## (x stone, y plaster, z timber, w earth) = 1 for each set that is complete. A missing set stays 0 and the shader keeps its procedural surface. Pure but for the library's cache.
+static func town_sets(lib: TiefwerkLibrary) -> Dictionary:
+	var out := {"t_on": Vector4.ZERO}
+	var on := [0.0, 0.0, 0.0, 0.0]
+	var tile := [1.3, 3.0, 3.0, 3.0]
+	for i in BoardgenTheme.TOWN_SETS.size():
+		var names: Array = BoardgenTheme.TOWN_SETS[i]   # [library set, shader suffix]
+		var a := lib.set_texture(names[0], "albedo")
+		var n := lib.set_texture(names[0], "normal")
+		if a != null and n != null:
+			on[i] = 1.0
+			out["t_" + names[1]] = a
+			out["n_" + names[1]] = n
+			tile[i] = lib.tile_in(names[0])
+	out["t_on"] = Vector4(on[0], on[1], on[2], on[3])
+	out["t_tile"] = Vector4(tile[0], tile[1], tile[2], tile[3])
+	return out
+
+
 ## The town's ground map, one RGBA8 texel per cell (row by row): R = the cell's surface kind (its index in `kinds`), G = how a street runs through it (0 along x, 255 along z: the
 ## street is at least 3 cells long that way and at most 2 across; 128 a junction or a square: anything else), BA = where the middle of its junction is, as an offset from the
 ## cell's centre (6 in = 0..255, 128 = none).
@@ -442,6 +462,12 @@ func _make_material(layout: Dictionary, theme: Dictionary) -> ShaderMaterial:
 		mat.set_shader_parameter("palette", PackedColorArray(theme["palette"]))
 		mat.set_shader_parameter("ground_map", ImageTexture.create_from_image(Image.create_from_data(layout["nx"], layout["nz"], false, Image.FORMAT_RGBA8, ground_map(layout, theme["kinds"]))))
 		mat.set_shader_parameter("board_cells", Vector2(layout["nx"], layout["nz"]))
+		var lib := TiefwerkLibrary.new(BoardgenTheme.TOWN_LIBRARY)   # the authored T-R1 surfaces when they are cached (NML_RUINTOWN_LIB_DIR in dev); the shader keeps its procedural look otherwise
+		lib.name = "TownLibrary"
+		add_child(lib)
+		var sets := town_sets(lib)
+		for key: String in sets:
+			mat.set_shader_parameter(key, sets[key])
 		return mat
 	var bytes := PackedByteArray()
 	for c: Dictionary in layout["cells"]:

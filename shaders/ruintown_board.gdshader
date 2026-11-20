@@ -12,6 +12,64 @@ uniform float cell_in = 3.0;
 uniform sampler2D ground_map : filter_nearest;   // one texel per cell: R = surface kind, G = how a street runs (0 along x, 1 along z, 0.5 junction / square), BA = offset of the junction's centre (6 in = 0..1)
 uniform vec2 board_cells = vec2(16.0, 16.0);
 
+// The authored T-R1 surface sets (plan R9; the CC0 sets staged by the assets lane), read when the library has them cached: coursed stone, plaster, timber, earth. `t_on` = 1 per complete set;
+// 0 keeps the procedural surface. The albedo is used as a RATIO to the set's own mean, so the palette and per-lot tints survive and only the detail comes from the texture; the normal map
+// replaces the procedural relief on the faces it covers. `t_tile` = inches per tile.
+uniform sampler2D t_stone : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D t_plaster : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D t_timber : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D t_earth : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D n_stone : hint_normal, filter_linear_mipmap, repeat_enable;
+uniform sampler2D n_plaster : hint_normal, filter_linear_mipmap, repeat_enable;
+uniform sampler2D n_timber : hint_normal, filter_linear_mipmap, repeat_enable;
+uniform sampler2D n_earth : hint_normal, filter_linear_mipmap, repeat_enable;
+uniform vec4 t_on = vec4(0.0);   // stone, plaster, timber, earth
+uniform vec4 t_tile = vec4(1.3, 3.0, 3.0, 3.0);
+const vec3 MEAN_STONE = vec3(0.377, 0.244, 0.137);
+const vec3 MEAN_PLASTER = vec3(0.4065, 0.3669, 0.3513);
+const vec3 MEAN_TIMBER = vec3(0.1207, 0.0743, 0.0443);
+const vec3 MEAN_EARTH = vec3(0.1747, 0.1326, 0.0824);
+
+vec3 ratio_of(sampler2D t, vec2 uv, vec3 mean) {
+	return clamp(texture(t, uv).rgb / mean, vec3(0.3), vec3(2.6));
+}
+
+vec3 normal_of(sampler2D n, vec2 uv) {
+	return texture(n, uv).xyz * 2.0 - 1.0;
+}
+
+// The coursed-stone set on a face point (uv in inches: image up = the direction of increasing uv.y): true when it is cached, with its detail ratio and normal.
+bool use_stone(vec2 uv, inout vec3 ratio, inout vec3 tn) {
+	if (t_on.x < 0.5) {
+		return false;
+	}
+	vec2 tuv = vec2(uv.x, -uv.y) / t_tile.x;
+	ratio = ratio_of(t_stone, tuv, MEAN_STONE);
+	tn = normal_of(n_stone, tuv);
+	return true;
+}
+
+// Plaster between the frame timbers and the timbers themselves (`wood` = 1 on a timber): each set that is cached; true when either is.
+bool use_frame(vec2 uv, float wood, inout vec3 ratio, inout vec3 tn) {
+	vec3 rp = vec3(1.0);
+	vec3 np = vec3(0.0, 0.0, 1.0);
+	vec3 rt = vec3(1.0);
+	vec3 nt = vec3(0.0, 0.0, 1.0);
+	if (t_on.y > 0.5) {
+		vec2 pu = vec2(uv.x, -uv.y) / t_tile.y;
+		rp = ratio_of(t_plaster, pu, MEAN_PLASTER);
+		np = normal_of(n_plaster, pu);
+	}
+	if (t_on.z > 0.5) {
+		vec2 tu = vec2(uv.x, -uv.y) / t_tile.z;
+		rt = ratio_of(t_timber, tu, MEAN_TIMBER);
+		nt = normal_of(n_timber, tu);
+	}
+	ratio = mix(rp, rt, wood);
+	tn = mix(np, nt, wood);
+	return t_on.y > 0.5 || t_on.z > 0.5;
+}
+
 varying vec3 wpos;
 varying vec3 wnrm;
 varying flat float kind;
@@ -132,6 +190,12 @@ void fragment() {
 	float rel = 0.5;     // the height of the surface pattern, 0 = joint / gap, 1 = crown (0.5 = flat): the end of fragment() turns it into a bent normal, roughness and occlusion
 	float depth_in = 0.0;   // how deep that relief is, in inches (0 = none)
 	float ao = 1.0;
+	vec3 tex_ratio = vec3(1.0);   // the authored set's detail on this face (1 = none) and its tangent-space normal
+	vec3 tex_n = vec3(0.0, 0.0, 1.0);
+	float tex_on = 0.0;
+	bool wall_face = abs(wnrm.y) < 0.5;
+	vec3 tex_t = wall_face ? (abs(wnrm.x) > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0)) : vec3(1.0, 0.0, 0.0);   // image right and image up of the face in world space
+	vec3 tex_b = wall_face ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
 	if (abs(wnrm.y) < 0.2) {   // a wall face (or a gable end)
 		vec2 uv = vec2(abs(wnrm.x) > 0.5 ? p.z : p.x, p.y);
 		if (k == 15) {   // a gable end: plaster and a timber frame
@@ -139,17 +203,42 @@ void fragment() {
 			depth_in = 0.03;
 			rough = mix(0.95, 0.8, step(0.8, rel));
 			ao = mix(0.6, 1.0, smoothstep(0.1, 0.5, rel));
+			if (use_frame(uv, smoothstep(0.7, 0.9, rel), tex_ratio, tex_n)) {
+				tex_on = 1.0;
+				depth_in = 0.0;
+			}
 		} else if (k == 13) {   // an intact house: half-timber on a stone plinth
 			float plinth = 0.3 + 0.75 * fract(kind);   // the house's own plinth height rides in the fraction of its kind
-			alb = uv.y < plinth ? stone(uv, seed, 0.2, 0.45, vec3(0.5, 0.48, 0.44), rel) : timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed), emis, rel);
-			depth_in = 0.03;
-			rough = uv.y < plinth ? 0.85 : mix(0.95, 0.8, step(0.8, rel));
-			ao = mix(0.6, 1.0, smoothstep(0.1, 0.5, rel));
+			if (uv.y < plinth) {
+				alb = stone(uv, seed, 0.2, 0.45, vec3(0.5, 0.48, 0.44), rel);
+				rough = 0.85;
+				depth_in = 0.03;
+				if (use_stone(uv, tex_ratio, tex_n)) {
+					alb = vec3(0.5, 0.48, 0.44);
+					tex_on = 1.0;
+					depth_in = 0.0;
+				}
+			} else {
+				alb = timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed), emis, rel);
+				depth_in = 0.03;
+				rough = mix(0.95, 0.8, step(0.8, rel));
+				ao = mix(0.6, 1.0, smoothstep(0.1, 0.5, rel));
+				if (use_frame(uv, smoothstep(0.7, 0.9, rel), tex_ratio, tex_n)) {
+					tex_on = 1.0;
+					depth_in = 0.0;
+				}
+			}
 		} else if (k == 12 || k == 9 || k == 10 || k == 16) {   // city wall, stone pieces, chimney: coursed stone (brick for the chimney)
 			alb = k == 16 ? stone(uv, seed, 0.1, 0.22, tint, rel) : stone(uv, seed, COURSE, 0.5, tint, rel);
 			depth_in = 0.025;
 			rough = 0.85;
 			ao = mix(0.6, 1.0, smoothstep(0.2, 0.7, rel));
+			if (k != 16 && use_stone(uv, tex_ratio, tex_n)) {
+				alb = tint * 0.95;   // the palette tone; the set brings the stones, the mortar and the wear
+				tex_on = 1.0;
+				depth_in = 0.0;
+				ao = 1.0;
+			}
 		} else if (k == 18) {   // a wooden prop: planks with iron bands
 			alb = tint * mix(0.7, 1.15, h21(vec2(floor(uv.x * 4.0), seed))) * mix(0.55, 1.0, smoothstep(0.0, 0.05, abs(fract(uv.y * 2.5) - 0.5) - 0.42)) * mix(0.8, 1.0, seam(uv.x, 0.25, 0.03));
 		} else if (k == 3 || k == 4 || k == 6) {   // ruined house tiers and towers, by storey
@@ -157,18 +246,27 @@ void fragment() {
 			tint *= mix(0.86, 1.12, part);
 			uv.y += (part - 0.5) * 0.7;
 			float band = k == 6 ? 2.0 : floor(uv.y / 3.0);   // a tower is stone all the way up
-			if (band < 0.5) {
-				alb = mix(stone(uv, seed, COURSE, 0.5, tint * 0.9, rel), vec3(0.09, 0.06, 0.04), door(uv, seed));
+			if (band < 0.5 || band > 1.5) {
+				alb = band < 0.5 ? mix(stone(uv, seed, COURSE, 0.5, tint * 0.9, rel), vec3(0.09, 0.06, 0.04), door(uv, seed)) : stone(uv, seed, COURSE, 0.55, tint * 1.05, rel);
 				rough = 0.85;
-			} else if (band < 1.5) {
+				depth_in = 0.03;
+				ao = mix(0.6, 1.0, smoothstep(0.1, 0.6, rel));
+				if (use_stone(uv, tex_ratio, tex_n)) {
+					alb = band < 0.5 ? mix(tint * 0.95, vec3(0.09, 0.06, 0.04), door(uv, seed)) : tint * 1.05;
+					tex_on = 1.0;
+					depth_in = 0.0;
+					ao = 1.0;
+				}
+			} else {
 				alb = timber(uv, seed, tint * 1.02, emis, rel);
 				rough = mix(0.95, 0.8, step(0.8, rel));
-			} else {
-				alb = stone(uv, seed, COURSE, 0.55, tint * 1.05, rel);
-				rough = 0.85;
+				depth_in = 0.03;
+				ao = mix(0.6, 1.0, smoothstep(0.1, 0.6, rel));
+				if (use_frame(uv, smoothstep(0.7, 0.9, rel), tex_ratio, tex_n)) {
+					tex_on = 1.0;
+					depth_in = 0.0;
+				}
 			}
-			depth_in = 0.03;
-			ao = mix(0.6, 1.0, smoothstep(0.1, 0.6, rel));
 		}
 	} else if (wnrm.y < 0.95 && k == 15) {   // a sloped roof face: rows of tiles, a tone per tile, a shadow under each row
 		float along = abs(wnrm.x) > abs(wnrm.z) ? p.z : p.x;
@@ -224,12 +322,18 @@ void fragment() {
 			alb = mix(alb, vec3(0.13, 0.12, 0.11) * mix(0.6, 1.3, h21(ci + 4.0)), pebble);   // a dark stone
 			float path = smoothstep(0.03, 0.0, abs(vnoise(xz * 0.21 + seed) - 0.5)) * step(0.5, vnoise(xz * 0.07 + 5.0));   // a worn path: pale, meandering (a noise stand-in until the doors of R12c exist)
 			alb = mix(alb, tint * vec3(1.4, 1.34, 1.2), 0.75 * path);
+			if (t_on.w > 0.5) {
+				tex_ratio = ratio_of(t_earth, xz / t_tile.w, MEAN_EARTH);   // real rock and soil under the pebbles, the tufts and the paths
+			}
 			rel = clamp(0.2 + 0.6 * fbm(xz * 3.0 + seed) - 0.15 * path + 0.35 * pebble, 0.0, 1.0);   // packed earth: lumps, and the worn paths lie lower
 			depth_in = 0.05;
 			rough = 0.95;
 		} else if (k == 3 || k == 4 || k == 8) {   // floor boards of a ruined house or yard, scorched in patches
 			if (k != 8) {
 				tint *= mix(0.9, 1.1, ground_at(xz).g);   // each part of a ruined row has its own tone
+			}
+			if (t_on.z > 0.5) {
+				tex_ratio = ratio_of(t_timber, xz / t_tile.z, MEAN_TIMBER);   // the grain of the real planks on the boards
 			}
 			rel = mix(0.5, seam(xz.y, BOARD_W, 0.018), keep(xz.y, BOARD_W));   // a dark gap between boards
 			depth_in = 0.02;
@@ -239,6 +343,11 @@ void fragment() {
 			alb = stone(xz, seed, 0.45, 0.6, tint, rel);   // flagstones 0.45 - 0.8 in
 			depth_in = 0.03;
 			rough = 0.85;
+			if (use_stone(xz, tex_ratio, tex_n)) {
+				alb = tint;
+				tex_on = 1.0;
+				depth_in = 0.0;
+			}
 		} else if (k == 11) {   // garden plot: overgrown, weeds and bare patches
 			alb = tint * mix(0.6, 1.25, fbm(xz * 2.4 + seed)) * mix(1.0, 0.7, step(0.9, h21(floor(xz * 9.0))));
 		} else if (k == 14) {   // rubble: broken stones
@@ -279,6 +388,10 @@ void fragment() {
 	if (k == 17) {   // a lit lantern
 		emis = tint * 1.4;   // a lantern head, not a sun: the bloom must not wash the plaster
 	}
+	if (tex_on > 0.5) {   // the authored normal map replaces the procedural relief on this face
+		vec3 wp = normalize(tex_n.x * tex_t + tex_n.y * tex_b + max(tex_n.z, 0.2) * normalize(wnrm));
+		NORMAL = normalize((VIEW_MATRIX * vec4(wp, 0.0)).xyz);
+	}
 	if (depth_in > 0.0) {   // the relief: a bent normal from the screen-space gradient of the height (no tangents needed), and its occlusion
 		float h = (rel - 0.5) * depth_in * IN;
 		vec3 dpdx = dFdx(VERTEX);
@@ -293,7 +406,7 @@ void fragment() {
 		AO = ao;
 		AO_LIGHT_AFFECT = 0.35;
 	}
-	ALBEDO = pow(alb, vec3(2.2));
+	ALBEDO = pow(alb, vec3(2.2)) * tex_ratio;
 	EMISSION = emis;
 	ROUGHNESS = rough;
 }
