@@ -11741,12 +11741,12 @@ fn resolve_with(
                                 && parts.iter().map(|(mi, msc, _)| msc.keep.iter().filter(|&&k| statics[next.roster.profile[*mi]].shoot[k].deadly > 0).count()).sum::<usize>() > 0
                                 && parts.iter().map(|(_, msc, _)| msc.keep.len()).sum::<usize>() > 1;
                             let mut scratch_state = if inline_on { Some(next.clone()) } else { None };
-                            let mut inline_land = |groups: &[(i64, i64)]| -> bool {
-                                let Some(sc) = scratch_state.as_mut() else { return false };
+                            let mut inline_land = |groups: &[(i64, i64)]| -> i64 {
+                                let Some(sc) = scratch_state.as_mut() else { return i64::MAX };
                                 for &(post, gx) in groups {
                                     land_deadly_group(sc, g.ti, post, gx, seams, &mut None, &mut 0);
                                 }
-                                sc.alive[g.ti] <= 0 && sc.attached[g.ti].iter().all(|&h| sc.alive[h] <= 0)
+                                combined_alive(sc, g.ti, seams)
                             };
                             let r = crate::dice::resolve_volley_with_pick_label(
                                 &shooters_of(&parts, statics, &next),
