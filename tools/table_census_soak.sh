@@ -7,7 +7,9 @@
 #   tools/table_census_soak.sh [N]       play N games (default 24), then merge
 #   tools/table_census_soak.sh merge DIR sum DIR/game_*.json into DIR/census.json, print the top 15 reasons
 # Env: LISTS_GF, LISTS_AOF (dirs of <faction>_<points>.json lists; required), SIZES (default "1000 2000"),
-#      OUT (default ./census_soak), GODOT (default godot), DRY_RUN=1 (print the commands, play nothing).
+#      OUT (default ./census_soak), GODOT (default godot), DRY_RUN=1 (print the commands, play nothing),
+#      ARMY_BOOKS_DIR (a snapshot dir of army books, handed to every game as NML_ARMY_BOOKS_DIR: without it the spell and rule texts
+#      come from the live API per game, and a flaky answer makes two runs of the SAME games differ in their "takes effect" lines).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -49,6 +51,7 @@ OUT="${OUT:-census_soak}"
 GODOT="${GODOT:-godot}"
 read -r -a SIZES <<<"${SIZES:-1000 2000}"
 mkdir -p "$OUT"
+[[ -n "${ARMY_BOOKS_DIR:-}" ]] || echo "[soak] note: ARMY_BOOKS_DIR is not set - army-book texts come from the live API (a flaky answer shows as a text difference between runs)" >&2
 for ((i = 0; i < N; i++)); do
 	sys=gf dir="${LISTS_GF:-}"
 	if ((i % 2 == 1)); then sys=aof dir="${LISTS_AOF:-}"; fi
@@ -60,7 +63,7 @@ for ((i = 0; i < N; i++)); do
 	fi
 	a="${files[$((i % ${#files[@]}))]}" b="${files[$(((i + 1) % ${#files[@]}))]}"
 	cmd=(env NML_AI_SEED=$((i + 1)) NML_AI_ARMY1="$a" NML_AI_ARMY2="$b" NML_AI_OUT="$OUT/arena"
-		NML_TABLE_CENSUS="$OUT/game_$i.json" systemd-run --user --scope -q -p MemoryMax=12G
+		NML_TABLE_CENSUS="$OUT/game_$i.json" ${ARMY_BOOKS_DIR:+NML_ARMY_BOOKS_DIR="$ARMY_BOOKS_DIR"} systemd-run --user --scope -q -p MemoryMax=12G
 		"$GODOT" --headless --path . -s res://tools/arena_match.gd)
 	echo "[soak] game $i ($sys $size pts): ${cmd[*]}"
 	[[ "${DRY_RUN:-0}" == "1" ]] || "${cmd[@]}" >"$OUT/game_$i.log" 2>&1

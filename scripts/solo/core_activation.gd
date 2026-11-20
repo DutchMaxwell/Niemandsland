@@ -760,10 +760,12 @@ static func moves_through(gu: GameUnit) -> bool:
 
 
 ## The actions the AI door takes: a Hold or an Advance; a Rush only for a unit that moves through (it cannot shoot, but its
-## move-through attacks fire after the move).
-static func takes_action(unit: GameUnit, kind: int) -> bool:
+## move-through attacks fire after the move) or that CASTS this activation (`casting`: a rushed caster may still cast, the core
+## resolves the move's Dangerous test and the casts; measured 20.11.: 23 of the 25 casting activations the door was never asked about
+## in a 10-game soak were Rushes).
+static func takes_action(unit: GameUnit, kind: int, casting := false) -> bool:
 	return kind in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE] \
-		or (kind == AiDecision.Action.RUSH and moves_through(unit))
+		or (kind == AiDecision.Action.RUSH and (casting or moves_through(unit)))
 
 
 ## P4.D-19: does the AI body hand this activation to the core? A board was captured for it before its move, the tray
@@ -778,7 +780,7 @@ static func takes_action(unit: GameUnit, kind: int) -> bool:
 static func takes_ai_activation(main, unit: GameUnit, report: Dictionary) -> bool:
 	var casts: Array = report.get("casts", [])
 	var takes: bool = main._solo_core_ai_h != 0 and main.dice_roller_control != null and is_plain(unit) \
-		and takes_action(unit, int(report.get("action", -1))) \
+		and takes_action(unit, int(report.get("action", -1)), not casts.is_empty()) \
 		and (casts.is_empty() or (cast_door_enabled() and cast_chain_clear(unit)))
 	if takes and moves_through(unit) and not main.solo_controller.last_move_paths.is_empty() \
 			and not crossed_plain(main, unit, chords_of(main.solo_controller.last_move_paths)):
@@ -895,7 +897,7 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	# resolves the planned casts from this capture and the table does not.
 	var cast := not (report.get("casts", []) as Array).is_empty()
 	var cast_taken := cast and bool(report.get("cast_door", false))
-	if h == 0 or not takes_action(unit, kind) or not is_plain(unit) or table_rolled or (cast and not cast_taken) or _aim_ambiguous(aim) \
+	if h == 0 or not takes_action(unit, kind, cast_taken) or not is_plain(unit) or table_rolled or (cast and not cast_taken) or _aim_ambiguous(aim) \
 			or (target == null and not owns_dangerous) or (target != null and not is_plain_target(target)) \
 			or rest.any(func(p: Dictionary) -> bool: return not is_plain_target(p["target"])) \
 			or parts.any(func(p: Dictionary) -> bool: return not CoreSlice.pair_refusals(unit, p["target"]).is_empty()):
@@ -1507,11 +1509,11 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 			main._solo_mirror_shaken(gu)
 		_land_positions(main, gu, d, start_models)
 		_land_ledger(main, gu, d)
+		_land_versatile_mode(main, gu, d)   # before the stamps: it reads the table's own `versatile_pick_round`
 		_land_stamps(main, gu, d)
 		_land_pools(main, gu, d)
 		_land_piercing(main, gu, d)
 		_land_surprise(main, gu, d)
-		_land_versatile_mode(main, gu, d)
 		_land_feats(main, gu, d)
 		_land_once_latches(main, gu, d)
 		_land_growth(main, gu, d)
@@ -1736,7 +1738,11 @@ static func _land_versatile_mode(main, gu: GameUnit, d: Dictionary) -> void:
 	var was: Dictionary = gu.unit_properties.get("versatile_pick", {})
 	if was == vm:
 		return
-	push_error("CoreActivation.land_delta: %s.versatile_pick differs (table %s, core %s)" % [gu.get_name(), str(was), str(vm)])
+	# The table's latch counts only in the round it was written (`_solo_versatile_latch_read`): a core-resolved volley never ran the table's
+	# pick, so an empty or older latch is no table pick to differ from - the core is the first writer this round.
+	if int(gu.unit_properties.get("versatile_pick_round", -1)) == int(main.opr_army_manager.current_round):
+		stamp_splits += 1
+		push_error("CoreActivation.land_delta: %s.versatile_pick differs (table %s, core %s)" % [gu.get_name(), str(was), str(vm)])
 	main._sync_unit_property(gu, "versatile_pick", vm)
 
 
@@ -1759,7 +1765,8 @@ static func _land_stamps(main, gu: GameUnit, d: Dictionary) -> void:
 			continue
 		# On a core-resolved charge, the table never ran `_solo_melee_strike_phase`, so the core is the first writer
 		# of melee-only once-per-round stamps (`growth_strike_round` -> `regenerative_strength_round`).
-		if not (_charge_landing and key == "growth_strike_round"):
+		var first_pick: bool = key == "versatile_pick_round" and value == int(main.opr_army_manager.current_round) and was < value   # the core latched this round, the table did not (see `_land_versatile_mode`)
+		if not (_charge_landing and key == "growth_strike_round") and not first_pick:
 			stamp_splits += 1
 			push_error("CoreActivation.land_delta: %s.%s differs (table %d, core %d)" % [gu.get_name(), prop, was, value])
 		main._sync_unit_property(gu, prop, value)

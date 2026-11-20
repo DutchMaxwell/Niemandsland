@@ -175,3 +175,20 @@ func test_the_dev_flag_is_off_unless_the_env_var_is_set() -> void:
 		assert_bool(node.is_in_group("table_overlay")).is_true()   # survives Table.setup_table's child sweep
 	else:
 		assert_object(node).is_null()
+
+
+func test_the_kit_ladders_stand_on_the_wall_face_facing_away_from_it() -> void:
+	for layout in _layouts():
+		var conns: Array = layout["connectors"]
+		var groups := BoardgenGreybox.ladder_kit_plan(layout)
+		var items: Array = groups.get("ladder_top", []) + groups.get("ladder_3in", [])
+		assert_int(items.size()).is_equal(conns.size())   # every ladder of the core rises 3 in: one segment, the top piece
+		assert_bool(groups.has("ladder_3in")).is_false()
+		var origin := Vector2(layout["nx"], layout["nz"]) * CELL_IN * -0.5
+		for i in conns.size():
+			var c: Dictionary = conns[i]
+			var xf: Transform3D = items[i]["xf"]
+			var at := Vector2(c["edge_in"][0], c["edge_in"][1]) + origin
+			var away := Vector2(Vector2i(c["low_xz"][0], c["low_xz"][1]) - Vector2i(c["high_xz"][0], c["high_xz"][1]))
+			assert_vector(xf.origin / BoardgenGreybox.INCHES_TO_METERS).is_equal_approx(Vector3(at.x, layout["level_in"][layout["cells"][c["low"]]["level"]], at.y), Vector3.ONE * 0.001)
+			assert_vector(xf.basis * Vector3.BACK).is_equal_approx(Vector3(away.x, 0.0, away.y), Vector3.ONE * 0.001)

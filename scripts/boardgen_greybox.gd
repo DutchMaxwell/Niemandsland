@@ -24,12 +24,17 @@ const LADDER_WIDTH_IN := 1.0
 const LADDER_OFFSET_IN := 0.12   # the ladder stands this far off the wall face
 const LADDER_RAIL_IN := 0.12
 const LADDER_RUNG_GAP_IN := 0.5
+## The authored K1 ladder: a 3 in segment per 3 in of rise, the top one carries the grab rails and hoops above the deck (BoardgenKit).
+const KIT_LADDERS: Array[String] = ["ladder_3in", "ladder_top"]
+const LADDER_SEGMENT_IN := 3.0
+const LADDER_TINT := Color(0.60, 0.43, 0.06)   # weathered safety yellow, like the board shader's ladder kind
 ## Surface kinds in the order the board shader knows them (INSTANCE_CUSTOM.x, shaders/tiefwerk_board.gdshader).
 const KINDS := ["ground", "street", "hazard", "tier1", "tier2", "ladder", "tier3", "kerb"]
 const SHADER := preload("res://shaders/tiefwerk_board.gdshader")
 
 var layout_seed: int = 0
 var _material: ShaderMaterial
+var _kit: BoardgenKit
 var _footprint := Rect2()   # the ground kept free of the table's scatter, in table-local metres: the board and all round it
 var _layout: Dictionary = {}
 
@@ -93,6 +98,24 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
+## The kit ladders: {ladder_3in | ladder_top: [{xf, colour}]} (a key only when used), metres off the board centre. A ladder is rise / 3 in
+## segments (the core's are all 3 in: one ladder_top each), the topmost one a ladder_top; its origin is on the wall face at the edge point, local +z points away from the wall (over the lower cell).
+static func ladder_kit_plan(layout: Dictionary) -> Dictionary:
+	var out := {}
+	var origin := Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) * -0.5
+	for c: Dictionary in layout["connectors"]:
+		var base: float = layout["level_in"][layout["cells"][c["low"]]["level"]]
+		var rise: float = layout["level_in"][layout["cells"][c["high"]]["level"]] - base
+		var edge := Vector2(c["edge_in"][0], c["edge_in"][1]) + origin
+		var away := Vector2(Vector2i(c["low_xz"][0], c["low_xz"][1]) - Vector2i(c["high_xz"][0], c["high_xz"][1]))
+		var yaw := Basis(Vector3.UP, atan2(away.x, away.y))
+		for k in int(rise / LADDER_SEGMENT_IN):
+			var top_piece := k == int(rise / LADDER_SEGMENT_IN) - 1
+			(out.get_or_add("ladder_top" if top_piece else "ladder_3in", []) as Array).append(
+				{"xf": Transform3D(yaw, Vector3(edge.x, base + k * LADDER_SEGMENT_IN, edge.y) * INCHES_TO_METERS), "colour": LADDER_TINT})
+	return out
+
+
 static func _cell_kind(cell: Dictionary) -> String:
 	if cell["level"] > 0:
 		return "tier%d" % cell["level"]
@@ -123,7 +146,16 @@ func build(layout: Dictionary) -> void:
 	body.collision_layer = GROUND_COLLISION_LAYER
 	body.collision_mask = 0
 	add_child(body)
-	var boxes := plan(layout)
+	var kit := BoardgenKit.new()
+	kit.name = "Kit"
+	add_child(kit)
+	_kit = kit
+	var ladders := ladder_kit_plan(layout)
+	var kit_ladders: bool = not ladders.is_empty() and kit.usable(ladders.keys())
+	var boxes := plan(layout).filter(func(b: Dictionary) -> bool: return not (kit_ladders and b["kind"] == "ladder"))
+	if kit_ladders:   # the authored ladders replace the box ladders
+		for module: String in ladders:
+			BoardgenKit.add_multimesh(self, module, kit.mesh_or(module), ladders[module], false)
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_custom_data = true
@@ -144,7 +176,7 @@ func build(layout: Dictionary) -> void:
 			body.add_child(col)
 	var props := BoardgenProps.new()
 	props.name = "Props"
-	props.build(layout)
+	props.build(layout, kit)
 	add_child(props)
 	var landmarks := BoardgenLandmarks.new()
 	landmarks.name = "Landmarks"
@@ -168,7 +200,7 @@ func build(layout: Dictionary) -> void:
 	add_child(mmi)
 	var rails := BoardgenRails.new()
 	rails.name = "Rails"
-	rails.build(layout)
+	rails.build(layout, kit)
 	add_child(rails)
 	_anchor()
 	_layout = layout
@@ -183,23 +215,26 @@ static func _settings() -> Node:
 	return (Engine.get_main_loop() as SceneTree).root.get_node_or_null("GraphicsSettings")
 
 
-## The low ground mist (GraphicsSettings.board_mist_enabled): built while the setting is on, freed at once when it goes off.
+## The low ground mist and the vent steam (GraphicsSettings.board_mist_enabled): built while the setting is on, freed at once when it goes off.
 func refresh_atmosphere() -> void:
-	var mist := get_node_or_null("Mist")
 	var settings := _settings()
 	var want: bool = settings == null or settings.board_mist_enabled()
-	if want and mist == null:
-		mist = BoardgenMist.new()
-		mist.name = "Mist"
-		mist.build(_layout)
-		add_child(mist)
-	elif not want and mist != null:
-		remove_child(mist)
-		mist.free()
+	for part: Array in [["Mist", BoardgenMist], ["Steam", BoardgenSteam]]:
+		var node: Node = get_node_or_null(part[0])
+		if want and node == null:
+			node = part[1].new()
+			node.name = part[0]
+			node.call("build", _layout)
+			add_child(node)
+		elif not want and node != null:
+			remove_child(node)
+			node.free()
 
 
 func _ready() -> void:
 	_anchor()
+	if _kit != null:   # a module missing now is cached for the next board
+		_kit.prefetch(KIT_LADDERS + BoardgenRails.KIT_MODULES + BoardgenProps.KIT_MODULES)
 	_scatter_off(_footprint)
 	var graphics := get_node_or_null("/root/GraphicsSettings")
 	if graphics != null:

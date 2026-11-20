@@ -1,0 +1,56 @@
+{
+  "_comment": "Which game systems a terrain offer is shown on (PLAN_GAME_SYSTEM_SWITCH, step 9). Setting = grimdark (gf, gff) / fantasy (aof, aofs, aofr); scales = battle (gf, aof, aofr) / skirmish (gff, aofs); available false = nothing offers it yet. It filters OFFERS only: pieces already on a table, in a save or sent by a peer are always drawn. GameSystem.offers reads it and fails OPEN for an id with no row; test/game_system_offers_test.gd fails CLOSED for every catalogued id.",
+  "biome": {
+    "temperate_grassland": {"settings": ["grimdark", "fantasy"]},
+    "arid_desert": {"settings": ["grimdark", "fantasy"]},
+    "frozen_tundra": {"settings": ["grimdark", "fantasy"]},
+    "volcanic_ash": {"settings": ["grimdark", "fantasy"]},
+    "alien_jungle": {"settings": ["grimdark"]},
+    "urban_ruins": {"settings": ["grimdark"]}
+  },
+  "ruin": {
+    "ruin_small_1f": {"settings": ["grimdark", "fantasy"]},
+    "ruin_corner_wall": {"settings": ["grimdark", "fantasy"]},
+    "ruin_medium_1f": {"settings": ["grimdark", "fantasy"]},
+    "ruin_medium_2f": {"settings": ["grimdark", "fantasy"]},
+    "ruin_large_2f": {"settings": ["grimdark", "fantasy"]},
+    "ruin_large_3f": {"settings": ["grimdark", "fantasy"]}
+  },
+  "group": {
+    "forest_small": {"settings": ["grimdark", "fantasy"]},
+    "forest_large": {"settings": ["grimdark", "fantasy"]},
+    "minefield": {"settings": ["grimdark", "fantasy"]}
+  },
+  "solid": {
+    "blocker_6x3": {"settings": ["grimdark", "fantasy"]},
+    "longhouse_6x3": {"settings": ["grimdark", "fantasy"]},
+    "outcrop_6x3": {"settings": ["grimdark", "fantasy"]}
+  },
+  "prefab": {
+    "ruine_9x9": {"settings": ["grimdark", "fantasy"]},
+    "ruine_9x6": {"settings": ["grimdark", "fantasy"]},
+    "wald_9x9": {"settings": ["grimdark", "fantasy"]},
+    "blocker_6x3": {"settings": ["grimdark", "fantasy"]},
+    "dangerous_9x6": {"settings": ["grimdark", "fantasy"]}
+  },
+  "container_look": {
+    "container_red": {"settings": ["grimdark"]},
+    "container_blue": {"settings": ["grimdark"]}
+  },
+  "hazard_look": {
+    "anti_tank_mine": {"settings": ["grimdark"]},
+    "lava_crater": {"settings": ["grimdark", "fantasy"]},
+    "carnivore_plant": {"settings": ["grimdark"]}
+  },
+  "stain": {
+    "blood_stain": {"settings": ["grimdark", "fantasy"]},
+    "oil_stain": {"settings": ["grimdark"]}
+  },
+  "theme": {
+    "ruined_borderland": {"settings": ["grimdark", "fantasy"], "scales": ["battle"]}
+  },
+  "generated_board": {
+    "tiefwerk": {"settings": ["grimdark"], "scales": ["skirmish"]},
+    "ruined_town": {"settings": ["fantasy"], "scales": ["skirmish"], "available": false}
+  }
+}
