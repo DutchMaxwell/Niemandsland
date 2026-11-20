@@ -133,9 +133,10 @@ func test_floor_deck_and_roof_relief_is_one_height_function_and_water_lies_level
 	assert_bool(src.contains("float top_height(vec2 uv, int k, vec2 half_board, float px)")).is_true()
 	assert_bool(src.contains("vec3 top_relief(vec2 uv, int k, vec2 half_board, float px, float wet, out float h0)")).is_true()
 	assert_str(_line_with(src, "float hu = (top_height(")).contains("/ DE")   # finite differences of the one function
-	assert_str(_line_with(src, "float s = 1.0 - 0.95 * wet;")).is_not_empty()   # a puddle flattens the relief
+	assert_str(_line_with(src, "float s = 1.0 - wet;")).is_not_empty()   # a puddle flattens the relief
 	assert_str(_line_with(src, "wet = pud;")).is_not_empty()
 	assert_str(_line_with(src, "nrel = top_relief(")).contains("wet")
+	assert_str(_line_with(src, "nrel = top_relief(")).contains("me.y")   # and so does a sump's liquid
 	assert_bool(src.contains("if (detail > 0.5) {\n\t\t\tfloat th;")).override_failure_message("the top relief is gated by the detail uniform").is_true()
 
 

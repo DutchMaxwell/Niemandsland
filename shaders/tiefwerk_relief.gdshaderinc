@@ -95,6 +95,6 @@ vec3 top_relief(vec2 uv, int k, vec2 half_board, float px, float wet, out float 
 	h0 = top_height(uv, k, half_board, px);
 	float hu = (top_height(uv + vec2(DE, 0.0), k, half_board, px) - h0) / DE;
 	float hv = (top_height(uv + vec2(0.0, DE), k, half_board, px) - h0) / DE;
-	float s = 1.0 - 0.95 * wet;
+	float s = 1.0 - wet;
 	return normalize(vec3(-hu * s, 1.0, -hv * s));
 }
