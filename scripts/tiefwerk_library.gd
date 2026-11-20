@@ -5,12 +5,19 @@ extends Node
 ##
 ## assets/tiefwerk_manifest.json is the bundled index. Until a file is cached nothing here blocks and the board keeps its procedural
 ## look (set_texture / decal_textures answer null / {}). Mirrors HazardsLibrary; see docs/ASSET_DELIVERY.md.
+## Keyed by board theme like BoardgenKit: TiefwerkLibrary.new("ruintown") reads res://assets/ruintown_manifest.json into user://ruintown_cache.
+## Dev override: NML_<THEME>_LIB_DIR = a folder with manifest.json and the <sha256>.<ext> files it names, read without network.
 
 # === Constants ===
 
 const BUNDLED_MANIFEST_PATH: String = "res://assets/tiefwerk_manifest.json"
 const CACHE_DIR: String = "user://tiefwerk_cache"
 const MAPS: Array[String] = ["albedo", "normal", "orm"]
+const INCHES_TO_METERS: float = 0.0254
+
+# === Public variables ===
+
+var theme_id: String = BoardgenKit.DEFAULT_THEME
 
 # === Private variables ===
 
@@ -26,11 +33,22 @@ var _cell_textures: Dictionary = {}   # "cell/map" -> ImageTexture
 
 # === Lifecycle ===
 
-func _ready() -> void:
-	_ctex_downloader = _make_downloader("TiefwerkCtexDownloads", "ctex")
-	_webp_downloader = _make_downloader("TiefwerkWebpDownloads", "webp")
-	if FileAccess.file_exists(BUNDLED_MANIFEST_PATH):
-		apply_manifest_text(FileAccess.get_file_as_string(BUNDLED_MANIFEST_PATH))
+func _init(theme := BoardgenKit.DEFAULT_THEME) -> void:   # (not _ready: a board builds before it is in the tree, like BoardgenKit)
+	theme_id = theme
+	var cache := BoardgenKit.cache_dir_of(theme_id)
+	var manifest := BoardgenKit.manifest_path_of(theme_id)
+	var dev := OS.get_environment(dev_env_of(theme_id))
+	if not dev.is_empty() and FileAccess.file_exists(dev.path_join("manifest.json")):
+		cache = dev
+		manifest = dev.path_join("manifest.json")
+	_ctex_downloader = _make_downloader("TiefwerkCtexDownloads", "ctex", cache)
+	_webp_downloader = _make_downloader("TiefwerkWebpDownloads", "webp", cache)
+	if FileAccess.file_exists(manifest):
+		apply_manifest_text(FileAccess.get_file_as_string(manifest))
+
+
+static func dev_env_of(theme: String) -> String:
+	return "NML_%s_LIB_DIR" % theme.to_upper()
 
 # === Public API: tiling sets ===
 
@@ -74,6 +92,25 @@ func set_texture(set_name: String, map: String) -> Texture2D:
 		var path := _cached_path(_ctex_downloader, _sets.get(set_name, {}).get(map, {}))
 		_set_textures[key] = CtexLoader.load_ctex(path) if has_set(set_name) else null
 	return _set_textures[key]
+
+
+## A world-triplanar material of one set for authored kit modules (no UVs needed; the vertex colour, tone x baked AO, darkens the
+## albedo), or null while the set is not cached: the caller keeps its own material.
+func set_material(set_name: String) -> ORMMaterial3D:
+	var albedo := set_texture(set_name, "albedo")
+	if albedo == null:
+		return null
+	var m := ORMMaterial3D.new()
+	m.albedo_texture = albedo
+	m.normal_enabled = true
+	m.normal_texture = set_texture(set_name, "normal")
+	m.orm_texture = set_texture(set_name, "orm")
+	m.vertex_color_use_as_albedo = true
+	m.vertex_color_is_srgb = true
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE / (tile_in(set_name) * INCHES_TO_METERS)
+	return m
 
 # === Public API: decal atlas ===
 
@@ -121,10 +158,10 @@ func decal_textures(cell: String) -> Dictionary:
 
 # === Private helpers ===
 
-func _make_downloader(node_name: String, ext: String) -> AssetDownloadManager:
+func _make_downloader(node_name: String, ext: String, cache: String) -> AssetDownloadManager:
 	var d := AssetDownloadManager.new()
 	d.name = node_name
-	d.cache_dir = CACHE_DIR
+	d.cache_dir = cache
 	d.file_extension = ext
 	add_child(d)
 	return d
