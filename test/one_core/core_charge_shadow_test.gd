@@ -173,7 +173,7 @@ func test_deny_view_compares_an_ap_charger_and_leaves_the_door_untouched() -> vo
 	assert_str(str(bad.get("first_diff", ""))).is_equal("positions")
 	assert_int((bad.get("core_rolls", []) as Array).size()).is_greater_equal(2)
 
-	# Door untouched: even with the charge door on and shadow in deny view, takes_ai_charge still reads the allow file.
+	# Plan E step 20 (the flip): the live door reads the DENY file, so the AP charger the allow file refuses is taken by the door.
 	CoreActivation._charge_env = 1
 	var att := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Att", "models": 5, "x_in": 0.0}, true),
 		BLADE.merged({"count": 5, "rules": ["AP(1)"]}, true))
@@ -181,8 +181,8 @@ func test_deny_view_compares_an_ap_charger_and_leaves_the_door_untouched() -> vo
 		BLADE.merged({"count": 8, "attacks": 1}, true))
 	_main._solo_core_ai_h = CoreActivation.capture(_main)
 	var report := {"unit": att, "target": foe, "action": AiDecision.Action.CHARGE, "moved": true}
-	assert_array(CoreActivation.charge_refusals(_main, att, report)).contains(["weapon_rule:AP"])
-	assert_bool(CoreActivation.takes_ai_charge(_main, att, report)).is_false()
+	assert_array(CoreActivation.charge_refusals(_main, att, report)).contains(["weapon_rule:AP"])   # the allow view (the shadow's `1`) still lists it
+	assert_bool(CoreActivation.takes_ai_charge(_main, att, report)).override_failure_message("the flipped door reads the deny file: an AP charger is taken").is_true()
 	_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
 	_main._solo_core_ai_h = 0
 	_free([att, foe])

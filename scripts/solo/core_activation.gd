@@ -960,18 +960,18 @@ static var _charge_landing := false
 
 
 ## P4.D-48: does the charge door take this AI charge? A board captured before the move, the tray, a CHARGE at a target, both
-## units taken by the melee slice (`CoreSlice.MELEE_PATH`: no rule at all to start), a target with a statline, no Dangerous
+## units taken by the melee DENY slice (`CoreSlice.MELEE_DENY_PATH`, since the flip), a target with a statline, no Dangerous
 ## test the table rolled and no cast (the board holds neither). An AI defender only: a human defender's strike-back is
 ## its owner's choice on the table (`_solo_confirm_strike_back`), which the core does not ask yet.
-## WIP switch, default OFF (`NML_ONE_CORE_CHARGE=1` turns it on): the core's tray melee does not yet say the table's
-## melee lines nor land its strike losses per step (measured, test/one_core/core_charge_door_test.gd), so no game takes it.
+## Plan E step 20 (the melee C-19 flip): the switch `NML_ONE_CORE_CHARGE` defaults ON; `=0` / `off` keeps the table's melee for one release. The slice the
+## door reads is the measured melee deny file (`core_slice_melee_deny.json`: a unit that carries a listed primitive or an attachment stays on the table).
 static var _charge_env := -1
 
 
 static func charge_door_enabled() -> bool:
 	if _charge_env < 0:
 		var raw := OS.get_environment("NML_ONE_CORE_CHARGE").to_lower()
-		_charge_env = 1 if (raw == "1" or raw == "on") else 0
+		_charge_env = 0 if (raw == "0" or raw == "off") else 1
 	return _charge_env == 1
 
 
@@ -982,12 +982,12 @@ const MELEE_MAX_MODELS := 10
 
 static func takes_ai_charge(main, unit: GameUnit, report: Dictionary) -> bool:
 	return charge_door_enabled() and main._solo_core_ai_h != 0 and main.dice_roller_control != null \
-		and charge_refusals(main, unit, report).is_empty()
+		and charge_refusals(main, unit, report, true).is_empty()
 
 
 ## Plan E (melee shadow): why the charge door's slice refuses this AI charge, by reason ([] = it takes it); the door's own
 ## predicate apart from the switch, the board and the tray. Read before the table fights (the sizes are the start's).
-## `deny` reads `CoreSlice.MELEE_DENY_PATH` instead of the live allow file (shadow deny view only; the door leaves it false).
+## `deny` reads `CoreSlice.MELEE_DENY_PATH` instead of the allow file `MELEE_PATH` (the live door and the shadow's deny view pass true; the shadow's `1` view false).
 static func charge_refusals(main, unit: GameUnit, report: Dictionary, deny := false) -> Array:
 	var target = report.get("target")
 	if unit == null or not target is GameUnit or int(report.get("action", -1)) != AiDecision.Action.CHARGE:
