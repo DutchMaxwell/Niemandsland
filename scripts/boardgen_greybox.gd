@@ -129,6 +129,10 @@ func build(layout: Dictionary) -> void:
 			col.shape = shape
 			col.position = centre
 			body.add_child(col)
+	var props := BoardgenProps.new()
+	props.name = "Props"
+	props.build(layout)
+	add_child(props)
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = "Surfaces"
 	mmi.multimesh = mm
