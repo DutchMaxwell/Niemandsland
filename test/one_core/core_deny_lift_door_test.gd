@@ -89,6 +89,7 @@ func _cases() -> Array:
 		["Breath Attack target", rifles, DoorLines.entry("Squad", 10, ["Breath Attack"], [], "alien_hives", 0), ""],
 		["Re-Position Artillery target", rifles, DoorLines.entry("Squad", 10, ["Re-Position Artillery"], [], "battle_brothers", 0), ""],
 		["Mend target", rifles, DoorLines.entry("Squad", 10, ["Mend"], [], "battle_brothers", 0), ""],
+		["Regeneration Buff target", rifles, DoorLines.entry("Squad", 10, ["Regeneration Buff"], [], "dark_elf_raiders", 0), ""],
 	]
 
 
