@@ -9,7 +9,7 @@ use crate::rng::GodotRng;
 use crate::terrain::{CONTAINER, DANGEROUS, NONE};
 use super::connect::{component_count, Connector};
 use super::levels::{shuffle, Cell, LotKind};
-use super::{Symmetry, DEPLOY_DEPTH_CELLS, GRID};
+use super::{Budgets, Symmetry, DEPLOY_DEPTH_CELLS, GRID};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum LandmarkKind { TankCluster, PumpHouse, Sump, Crane }
@@ -44,13 +44,20 @@ pub fn solid_mask(landmarks: &[Landmark]) -> Vec<bool> {
 
 /// One or two mirrored pairs of different kinds (fewer if nothing fits, so the board misses its budget and is retried).
 /// Pieces stay out of the deployment bands, off ladder feet and a cell apart; a solid piece never cuts the walkable board.
-pub fn place(seed: i64, sym: Symmetry, cells: &mut [Cell], conns: &[Connector]) -> Vec<Landmark> {
+pub fn place(seed: i64, sym: Symmetry, cells: &mut [Cell], conns: &[Connector], b: &Budgets) -> Vec<Landmark> {
     let mut rng = GodotRng::new(seed);
-    let mut kinds = [LandmarkKind::TankCluster, LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane];
+    let mut kinds = b.landmark_kinds.to_vec();
     shuffle(&mut kinds, &mut rng);
-    let (pairs, mut out, mut taken) = (1 + rng.randi_range(0, 1) as usize, Vec::<Landmark>::new(), vec![false; cells.len()]);
+    let (lo, hi) = b.landmark_pairs;
+    let (pairs, mut out, mut taken) = (lo + rng.randi_range(0, (hi - lo) as i64) as usize, Vec::<Landmark>::new(), vec![false; cells.len()]);
+    if b.centre_piece {
+        // The fountain: one self-mirrored 2 x 2 solid piece on the market square at the board centre (a half turn maps it onto itself).
+        let c = Landmark { kind: LandmarkKind::TankCluster, x: GRID / 2 - 1, z: GRID / 2 - 1, w: 2, h: 2, turn: 0 };
+        claim(&c, cells, &mut taken);
+        out.push(c);
+    }
     for kind in kinds {
-        if out.len() >= 2 * pairs { break; }
+        if out.len() >= 2 * pairs + usize::from(b.centre_piece) { break; }
         let (firsts, seconds) = (rects(kind, true, &mut rng), rects(kind, false, &mut rng));
         'pair: for (x, z, w, h) in firsts {
             let a = Landmark { kind, x, z, w, h, turn: rng.randi_range(0, 3) as u8 };
