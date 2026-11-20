@@ -27,6 +27,7 @@ use crate::sim::{
     ctx_of, ctx_live, melee_profiles_of, profiles_of, teleport_probe, Scratch, ADVANCE, CHARGE,
     HOLD, REPOSITION, RUSH,
 };
+use crate::rules::rule_name_matches;
 use crate::state::{State, Weapon};
 use crate::terrain::{gives_cover, Terrain};
 use crate::unit::{Ctx, ShootProfile, UnitStatic};
@@ -209,10 +210,8 @@ impl Default for Tuning {
 /// Artillery may only Hold (p.13/p.57), so the menu for a carrier ends after
 /// its two holds.
 pub fn forces_hold(unit_rules: &[String]) -> bool {
-    unit_rules.iter().any(|r| {
-        let s = r.trim();
-        s.starts_with("Immobile") || s.starts_with("Artillery")
-    })
+    // Exact names (NML-1112): a label that merely starts alike is another rule. No name in the rules maps or the books extends either word, so no recorded unit moves.
+    unit_rules.iter().any(|r| rule_name_matches(r, "Immobile") || rule_name_matches(r, "Artillery"))
 }
 
 /// `forces_hold` at a rules epoch: from `EPOCH_73_V36` on (rules 3.6) Artillery
@@ -221,7 +220,7 @@ pub fn forces_hold_at(unit_rules: &[String], rules_epoch: u32) -> bool {
     if !rule_on(rules_epoch, EPOCH_73_V36) {
         return forces_hold(unit_rules);
     }
-    unit_rules.iter().any(|r| r.trim().starts_with("Immobile"))
+    unit_rules.iter().any(|r| rule_name_matches(r, "Immobile"))
 }
 
 /// The one hold-only read every planner surface shares — the menu gate, the
