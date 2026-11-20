@@ -1148,7 +1148,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	var peek: GameUnit = solo_controller.peek_next_ai_unit()
 	await begin_activation(peek)
 	# One-core P3 step 42 (flag on): a plain unit's board BEFORE its move, for the core's volley (_run_ai_shooting).
-	_solo_core_ai_h = CoreActivation.capture(self) \
+	_solo_core_ai_h = CoreActivation.capture(self, true) \
 		if peek != null and CoreActivation.applies(self) and CoreActivation.is_plain(peek) else 0
 	_solo_core_shadow_h = CoreShadow.capture(self, peek)   # C-3: 0 unless NML_CORE_SHADOW=1 (counting only)
 	# P4.0-7 (D5): the AI's activation-start snapshot for a save taken mid-volley (the body's end clears it).
@@ -6369,7 +6369,7 @@ func _solo_grant_waits_to_be_attacked(rd: Dictionary) -> bool:
 ## F4/NML-006 — spend every once-record on ONE unit that matches `roles` (role- and scope-filtered
 ## exactly like the reads). Reverts the NML-006 side effects (grant overlay off, props stamps
 ## recomputed), removes the paired library token and logs each spend (rules-must-log).
-func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: String = "", attacking: bool = false) -> void:
+func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: String = "", attacking: bool = false, only: Array = []) -> void:
 	var key := uu.get_instance_id()
 	var records: Array = _solo_spell_mods.get(key, [])
 	if records.is_empty():
@@ -6379,6 +6379,8 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: 
 		for rd in AiSpell.mods_for(records, str(role), melee):
 			if keep_spell != "" and str((rd as Dictionary).get("spell", "")) == keep_spell:
 				continue
+			if not only.is_empty() and not only.has(rd):
+				continue   # one-core landing: only the records the table placed after the capture (CoreActivation.land_late_once)
 			if attacking and _solo_grant_waits_to_be_attacked(rd as Dictionary):
 				continue   # G4-T10: the bearer own attack does not use an attacked-only grant
 			if str((rd as Dictionary).get("duration", "")) == "once" and not spent.has(rd):

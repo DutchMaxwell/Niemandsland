@@ -25,6 +25,8 @@ licenses — the canonical notice for an open-source release.
 | Bundled textures | CC-BY-SA 4.0 | yes | `assets/terrain/table_surface_default.png`, `assets/terrain/props/ruins_wall.webp`, `assets/sandbox_floor_base.webp`, `assets/sandbox_floor_platform.webp`, `assets/sandbox_forest_floor.webp` (project-generated) |
 | Miniature GLBs | CC-BY-SA 4.0 (AI-generated) | on-demand | see *Generated assets* below |
 | CC0 battlefield ambience | CC0 | on-demand (R2) | freesound.org recordings; manifest `assets/ambience_manifest.json`, see `scripts/ambience_library.gd` |
+| Tiefwerk board textures | CC0 1.0 | on-demand (R2) | four tiling PBR sets from Poly Haven (`green_metal_rust`, `rusty_metal_05`, `concrete_floor_02`, `rough_concrete`; terms: https://polyhaven.com/license), re-encoded to GPU-compressed `.ctex`; manifest `assets/tiefwerk_manifest.json` |
+| Tiefwerk decal atlas | CC-BY-SA 4.0 | on-demand (R2) | doors, hatches, louvres, signage, stencil numerals, markings and stains drawn by the project (no third-party art, no font); same manifest |
 | Microsoft TRELLIS | MIT | no (dev tool) | image→3D model generation (asset-pipeline repo); GLB outputs are ours |
 | `model-viewer` (Google) | Apache-2.0 | no (dev tool) | 3D preview in the Model Forge review UI |
 | gltfpack (meshoptimizer) | MIT | no (dev tool) | GLB optimization (asset-pipeline repo) |
