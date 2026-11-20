@@ -41,7 +41,7 @@ use crate::combat::{
     SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN, SHROUD_RANGE_PENALTY_IN,
 };
 use crate::rules::{
-    base_rule_name, has_special_rule, rule_name_matches, rule_rating, spawn_target_rule,
+    base_rule_name, has_special_rule, is_unlisted_striker_label, rule_name_matches, rule_rating, spawn_target_rule,
     unit_rating, Registries, Spell,
 };
 use crate::state::{Bands, Profile, Profiles, Weapon};
@@ -4456,8 +4456,12 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
     let mut u_unstop = false;
     let mut u_unstop_melee = false;
     let mut facets: Vec<(String, bool, bool)> = Vec::new(); // the unit-level names the re-roll line carries, with their facet
+    let exact_labels = rule_on(rules_epoch, crate::acts::PENDING_EPOCH_EXACT_STRIKER_LABELS);
     for r in &p.special_rules {
         let rs = r.trim();
+        if exact_labels && is_unlisted_striker_label(rs) {
+            continue; // a Mark / Buff / Aura label is no bearer of the rule it hands out (ds/h_prefix_labels.md)
+        }
         if rs.starts_with("Bane") || rs.starts_with("Lacerate") {
             if table_ladder && rs.ends_with("Aura") {
                 continue; // a striker's own aura rule never fires — main.gd:6540
