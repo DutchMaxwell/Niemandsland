@@ -20,12 +20,6 @@
     "Surprise Attack": "OD-H8 probe (core_ledger_lift_door_test.gd, 16 real AI activations, door on against door off): the activation-start burst rolls twice with the door on, the table's beat and then the core's own copy (16 / 16 seeds, the same shape as the pre-attack beats); refused by name until the table's beat or the core's copy steps aside. Teleport, Ethereal and plain Infiltrate read equal."
   },
   "groups": {
-    "door_omits_unstoppable_fold_line": {
-      "primitives": [],
-      "kind": "rule_line",
-      "why": "A shooter with an Unstoppable weapon at a target whose rules lower the to-hit number (Stealth and its aliases such as Changebound and Stealth Aura, Evasive, Artillery, Aircraft): the table says `Unstoppable: negative to-hit modifiers ignored` when the weapon swallows the minus (`_solo_unstoppable_fold`), the core says it only for the granted mark and aura (dice.rs: a weapon's own flag stays silent). The dice are equal (stealth_target_door_test.gd, 8 taken Changebound volleys of the 1000 pts census). Not a rule name: `CoreSlice.pair_refusals` refuses the PAIR, switched on by this group.",
-      "leaves_with": "the core saying the table's Unstoppable fold line for a weapon's own Unstoppable"
-    },
     "pre_attack_beat_twice": {
       "primitives": ["Mend", "Breath Attack", "Mind Control", "Storm Attack", "Reckless Piercing", "Utility Buff"],
       "kind": "pre_attack_beat",
