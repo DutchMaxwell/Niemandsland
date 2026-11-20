@@ -1,6 +1,8 @@
 //! Stage 3: the ways up. A connector joins two neighbouring cells whose levels differ by exactly one (a 3 in rise):
-//! a `Stair` (run of low steps) or a short `Ladder`. Nothing else crosses a tier edge, so a rise of 6 in has no
-//! connector, and the board carries no movement cost: the core prices climbs from the heights it reads.
+//! a `Ladder` (3 in rise). Nothing else crosses a tier edge, so a rise of 6 in has no connector, and the board
+//! carries no movement cost: the core prices climbs from the heights it reads. There are no stairs (maintainer
+//! decision 20.11.): models cannot stand on steps and steps are not 3 in units, so models only ever stand on flat
+//! whole cells and every level change is a ladder.
 //! Each island (a set of same-level neighbours) gets two ascents from the level below where it has room for two;
 //! a final pass joins whatever is still cut off.
 use std::collections::VecDeque;
@@ -10,7 +12,7 @@ use super::levels::{mirror, neighbours, shuffle, Cell};
 use super::Symmetry;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum ConnectorKind { Stair, Ladder }
+pub enum ConnectorKind { Ladder }
 /// `low` and `high` are cell indices (`z * 16 + x`) of neighbouring cells, `level(high) == level(low) + 1`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Connector { pub kind: ConnectorKind, pub low: u16, pub high: u16 }
@@ -19,7 +21,9 @@ pub fn wire(seed: i64, sym: Symmetry, cells: &[Cell]) -> Vec<Connector> {
     let mut rng = GodotRng::new(seed);
     let mut conns: Vec<Connector> = Vec::new();
     let add = |conns: &mut Vec<Connector>, rng: &mut GodotRng, (low, high): (usize, usize)| {
-        let kind = if rng.randi_range(0, 1) == 0 { ConnectorKind::Stair } else { ConnectorKind::Ladder };
+        // The draw of the retired stair/ladder coin flip stays, so every seed keeps its connector positions: only the kind changed.
+        let _ = rng.randi_range(0, 1);
+        let kind = ConnectorKind::Ladder;
         for (l, h) in if sym == Symmetry::Point180 { vec![(low, high), (mirror(low), mirror(high))] } else { vec![(low, high)] } {
             if !conns.iter().any(|c| (c.low, c.high) == (l as u16, h as u16)) { conns.push(Connector { kind, low: l as u16, high: h as u16 }); }
         }
