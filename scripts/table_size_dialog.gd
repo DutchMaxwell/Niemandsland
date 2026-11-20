@@ -370,9 +370,12 @@ func _pick_biome(current: String) -> void:
 		_refresh()
 
 
-## Sets the game system the table is for; the biomes it does not offer disappear (the selection falls back if it was one).
+## Sets the game system the table is for; the biomes it does not offer disappear (the selection falls back if it was one)
+## and the size starts on the system's own board: 4 x 4 ft for the skirmish books, 6 x 4 ft otherwise. Only a PRESELECT:
+## a size picked afterwards wins.
 func set_system(id: String) -> void:
 	selected_system = GameSystem.normalize(id)
+	selected_size = "square" if GameSystem.default_board_feet(selected_system) == Vector2i(4, 4) else "standard"
 	_pick_biome(selected_biome)
 
 

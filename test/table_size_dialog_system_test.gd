@@ -58,3 +58,36 @@ func test_the_system_filter_sits_on_top_of_the_callers_list() -> void:
 func test_an_unknown_system_folds_to_the_default() -> void:
 	dialog.set_system("nonsense")
 	assert_str(dialog.selected_system).is_equal("gf")
+
+
+# === step 16: the size follows the system as a PRESELECT ===
+
+func test_the_skirmish_books_start_on_four_by_four_the_battle_books_on_six_by_four() -> void:
+	for system in ["gff", "aofs"]:
+		dialog.set_system(system)
+		assert_str(dialog.selected_size).override_failure_message("%s did not preselect square" % system).is_equal("square")
+		assert_vector(dialog.chosen_inches()).is_equal(Vector2(48, 48))
+	for system in ["gf", "aof", "aofr"]:
+		dialog.set_system(system)
+		assert_str(dialog.selected_size).override_failure_message("%s did not preselect standard" % system).is_equal("standard")
+		assert_vector(dialog.chosen_inches()).is_equal(Vector2(72, 48))
+
+
+func test_a_size_picked_after_the_system_wins() -> void:
+	dialog.set_system("aofs")
+	dialog._select_size("standard")
+	assert_str(dialog.selected_size).is_equal("standard")
+	dialog._select_size("custom")
+	assert_str(dialog.selected_size).is_equal("custom")
+	assert_vector(dialog.chosen_inches()).is_equal(Vector2(72, 48))   # the custom values are kept as they were
+	dialog.set_system("gff")   # choosing a system again preselects its board again
+	assert_str(dialog.selected_size).is_equal("square")
+
+
+func test_a_skirmish_table_can_be_confirmed_as_four_by_four() -> void:
+	var picked: Array[Vector2] = []
+	dialog.size_chosen.connect(func(v: Vector2) -> void: picked.append(v))
+	dialog.set_system("aofs")
+	dialog._confirm()
+	assert_int(picked.size()).is_equal(1)
+	assert_vector(picked[0]).is_equal(Vector2(4, 4))
