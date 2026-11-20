@@ -29,6 +29,17 @@ const BLOCKERS: Array[Dictionary] = [
 		"needles": ["main._run_ai_melee("]},
 	{"name": "Strafing hands its volley to the AI resolver", "retire": "P4.D-37", "file": MAIN,
 		"header": "func _solo_apply_strafing(", "needles": ["await _solo_resolve_ai_volley(unit, target, shots, true)"]},
+	# PLAN H (H-4): the facts the table-remains plan retires.
+	{"name": "the AI body runs the pre-attack beats itself (Breath Attack before the volley)", "retire": "P4.D-41 / H-5..H-9", "file": MAIN,
+		"header": "func _solo_activate_one_ai_body(", "needles": ["await _solo_apply_breath_attack(unit)"]},
+	{"name": "human_shoot hands an Auto verb's volley back to the table", "retire": "P4.D-43 / H-32", "file": ACTIVATION,
+		"header": "static func human_shoot(", "needles": ["if auto:"]},
+	{"name": "the human door reads the allow file, not the live slice", "retire": "P4.D-43f / H-30", "file": SLICE,
+		"header": "static func human_path() -> String:", "needles": ["return PATH"]},
+	{"name": "hotseat Automatic is OFF unless NML_ONE_CORE_HOTSEAT is set", "retire": "P4.D-43c / H-31", "file": ACTIVATION,
+		"header": "static func hotseat_enabled() -> bool:", "needles": ["_hotseat_env = 1 if (raw == \"1\" or raw == \"on\") else 0"]},
+	{"name": "the AI door takes a Rush only for a move-through bearer", "retire": "P4.D-41 / H-23", "file": ACTIVATION,
+		"header": "static func takes_action(", "needles": ["kind == AiDecision.Action.RUSH and moves_through(unit)"]},
 ]
 
 
@@ -74,7 +85,7 @@ func test_every_deletion_blocker_still_holds() -> void:
 
 
 func test_the_list_is_not_empty_and_names_a_step_per_row() -> void:
-	assert_int(BLOCKERS.size()).is_greater_equal(6)
+	assert_int(BLOCKERS.size()).is_greater_equal(11)
 	for b in BLOCKERS:
 		assert_str(String(b["retire"])).override_failure_message("%s names no step" % b["name"]).contains("P4.D-")
 
