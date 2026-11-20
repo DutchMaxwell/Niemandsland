@@ -9,6 +9,8 @@ const INCHES_TO_METERS := 0.0254
 const BODY_IN := 2.5   # the intact house's body: the core's solid height
 const OVERHANG_IN := 0.3
 const CHIMNEY_IN := 0.62
+const MAX_LIGHTS := 8
+const LANTERN_COLOUR := Color(1.0, 0.62, 0.30)
 
 
 ## A 0..1 hash of a lot id and the half of the board it stands in (0 = north, 1 = south), stable per layout.
@@ -84,6 +86,67 @@ static func merlons(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
+## Where the lanterns stand (board inches, {at, half}): a post at each corner of the market square and one at every gate of the wall, against the wall
+## face (north side of the gate in the north half, south side in the south half), so nothing stands in the middle of a passage and nothing takes more than the 0.75 in strip.
+static func lanterns(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	for corner in [Vector2(-5.5, -5.5), Vector2(5.5, -5.5), Vector2(-5.5, 5.5), Vector2(5.5, 5.5)]:
+		out.append({"at": corner, "half": 1 if corner.y > 0.0 else 0})
+	var wall_cols := {}
+	for cd: Dictionary in layout["cells"]:
+		if cd["lot_kind"] == "Wall" and cd["level"] >= 1:
+			wall_cols[cd["x"]] = true
+	for cd: Dictionary in layout["cells"]:
+		if cd["street"] and wall_cols.has(cd["x"]) and cd["level"] == 0:
+			var half := 1 if cd["z"] >= nz / 2 else 0
+			var at := origin + Vector2(cd["x"] + 0.5, cd["z"] + (0.12 if half == 0 else 0.88)) * cell_in
+			out.append({"at": at, "half": half})
+	return out
+
+
+## Post and lantern boxes for the greybox plan ({lo, hi, kind, solid}): a 0.14 in timber post 2.3 in high, a 0.4 in lantern on top (the kind "lantern" glows).
+static func lantern_boxes(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for l: Dictionary in lanterns(layout):
+		var at: Vector2 = l["at"]
+		out.append({"lo": Vector3(at.x - 0.07, 0.0, at.y - 0.07), "hi": Vector3(at.x + 0.07, 2.3, at.y + 0.07), "kind": "ladder", "solid": false, "lantern": true})
+		out.append({"lo": Vector3(at.x - 0.2, 2.3, at.y - 0.2), "hi": Vector3(at.x + 0.2, 2.85, at.y + 0.2), "kind": "lantern", "solid": false, "lantern": true})
+	return out
+
+
+## The warm lights of the first MAX_LIGHTS lanterns (the square's four first, then the gates nearest the centre); the four nearest the centre cast shadows.
+func _add_lights(layout: Dictionary) -> void:
+	var list := lanterns(layout)
+	list.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a["at"] as Vector2).length() < (b["at"] as Vector2).length())
+	for i in mini(list.size(), MAX_LIGHTS):
+		var at: Vector2 = list[i]["at"]
+		var light := OmniLight3D.new()
+		light.name = "Lantern%d" % i
+		light.position = Vector3(at.x, 2.55, at.y) * INCHES_TO_METERS
+		light.light_color = LANTERN_COLOUR
+		light.light_energy = 1.4
+		light.omni_range = 0.3
+		light.omni_attenuation = 1.3
+		light.shadow_enabled = i < 4
+		add_child(light)
+
+
+## The dusk of the town: a low warm sun, a cool violet sky fill, a touch less exposure; applied to the scene's lighting controller (a dev view, so it is not restored).
+static func dusk(lighting: Object) -> void:
+	if lighting == null:
+		return
+	lighting.set_sun_color(Color(1.0, 0.66, 0.42))
+	lighting.set_sun_energy(1.0)
+	lighting.set_sun_angles(-50.0, 14.0)
+	lighting.set_ambient_color(Color(0.36, 0.40, 0.66))
+	lighting.set_ambient_energy(0.62)
+	lighting.set_exposure(0.95)
+
+
 ## The unit gable prism: ridge along x at height 1 over z = 0, eaves at y = 0 on z = -0.5 / +0.5, x from -0.5 to 0.5.
 static func prism_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
@@ -127,3 +190,4 @@ func build(layout: Dictionary, material: Material) -> void:
 	mmi.multimesh = mm
 	mmi.material_override = material
 	add_child(mmi)
+	_add_lights(layout)

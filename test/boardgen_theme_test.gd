@@ -223,3 +223,33 @@ func test_the_town_has_no_tiefwerk_mist_or_steam_and_a_deepworks_board_keeps_bot
 	node.refresh_atmosphere()
 	assert_object(node.get_node_or_null("Mist")).is_null()
 	assert_object(node.get_node_or_null("Steam")).is_null()
+
+
+func test_the_town_has_lanterns_at_the_square_and_the_gates_inside_the_edge_strip_and_at_most_eight_lights() -> void:
+	var layout := _town_with_wall_house_and_plot()
+	var lanterns := BoardgenTownDressing.lanterns(layout)
+	assert_int(lanterns.size()).is_greater_equal(4)   # the four corners of the square, plus a post at a gate where a street crosses the wall
+	var boxes := BoardgenTownDressing.lantern_boxes(layout)
+	assert_int(boxes.size()).is_equal(lanterns.size() * 2)   # a post and a lantern each
+	for b: Dictionary in boxes:
+		assert_bool(b["solid"]).is_false()   # nothing here takes standing room or a collider
+		assert_float(minf((b["hi"] - b["lo"]).x, (b["hi"] - b["lo"]).z)).is_less(0.41)
+	var node: BoardgenTownDressing = auto_free(BoardgenTownDressing.new())
+	add_child(node)
+	node.build(layout, ShaderMaterial.new())
+	var lights := node.find_children("*", "OmniLight3D", false, false)
+	assert_int(lights.size()).is_equal(mini(lanterns.size(), BoardgenTownDressing.MAX_LIGHTS))
+	assert_int(lights.filter(func(l: Light3D) -> bool: return l.shadow_enabled).size()).is_less_equal(4)
+	assert_int(BoardgenTheme.TOWN_PALETTE.size()).is_equal(BoardgenTheme.TOWN_KINDS.size())
+
+
+func test_dusk_sets_a_low_warm_sun_and_a_cool_sky_on_a_lighting_controller() -> void:
+	var seen := {}
+	var lc := RefCounted.new()
+	lc.set_script(preload("res://test/fixtures/boardgen/lighting_stub.gd"))
+	BoardgenTownDressing.dusk(lc)
+	assert_bool(lc.calls.has("set_sun_angles")).is_true()
+	assert_float((lc.calls["set_sun_color"] as Color).r).is_greater((lc.calls["set_sun_color"] as Color).b)   # warm sun
+	assert_float((lc.calls["set_ambient_color"] as Color).b).is_greater((lc.calls["set_ambient_color"] as Color).r)   # cool sky
+	BoardgenTownDressing.dusk(null)   # no lighting controller (a table without one): nothing happens
+	assert_bool(seen.is_empty()).is_true()

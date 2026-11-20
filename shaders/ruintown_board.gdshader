@@ -6,7 +6,7 @@ shader_type spatial;
 // and the stone pieces are coursed stone, a chimney is brick. The two halves of the board draw their stones, plaster and tiles with other seeds.
 #include "res://shaders/tiefwerk_noise.gdshaderinc"
 
-uniform vec4 palette[17];   // display colours by kind index (BoardgenTheme.TOWN_KINDS)
+uniform vec4 palette[18];   // display colours by kind index (BoardgenTheme.TOWN_KINDS)
 uniform vec3 board_origin;   // world position of the board centre
 uniform float cell_in = 3.0;
 
@@ -36,7 +36,7 @@ vec3 stone(vec2 uv, float seed, float course, float len, vec3 tint) {
 
 // Half-timber of one 3 in storey (uv.y = height in inches, a storey starts at a multiple of 3): dark posts every 1.5 in, rails at the storey
 // edges, a brace in some panels, plaster between, a small shuttered window in some panels.
-vec3 timber(vec2 uv, float seed, vec3 plaster) {
+vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis) {
 	float y = mod(uv.y, 3.0);
 	float px = uv.x / 1.5;
 	float panel = floor(px);
@@ -52,7 +52,9 @@ vec3 timber(vec2 uv, float seed, vec3 plaster) {
 	float has_win = step(0.5, h21(vec2(panel, seed + 9.0)));
 	vec3 c = mix(fill, wood, max(post, max(rail, brace)));
 	c = mix(c, wood, has_win * step(d, 0.07));
-	return mix(c, vec3(0.06, 0.05, 0.05), has_win * step(d, -0.06));
+	float lit = has_win * step(d, -0.06);
+	emis += vec3(1.0, 0.55, 0.22) * lit * step(0.8, h21(vec2(panel, seed + 5.0))) * 0.9;   // a few windows glow
+	return mix(c, vec3(0.06, 0.05, 0.05), lit);
 }
 
 // Cobbles: staggered rounded setts about 0.6 x 0.4 in, a tone per sett, dark joints.
@@ -72,19 +74,20 @@ float door(vec2 uv, float seed) {
 }
 
 void fragment() {
-	int k = clamp(int(kind + 0.5), 0, 16);
+	int k = clamp(int(kind + 0.5), 0, 17);
 	vec3 p = (wpos - board_origin) / IN;   // inches off the board centre, y up
 	float half_seed = step(0.0, p.z);   // the south half draws with other seeds: a half turn does not look like the other half
 	float seed = 17.0 * half_seed;
 	vec3 tint = palette[k].rgb;
 	vec3 alb = tint;
+	vec3 emis = vec3(0.0);
 	float rough = 0.92;
 	if (abs(wnrm.y) < 0.2) {   // a wall face (or a gable end)
 		vec2 uv = vec2(abs(wnrm.x) > 0.5 ? p.z : p.x, p.y);
 		if (k == 15) {   // a gable end: plaster and a timber frame
-			alb = timber(uv, seed, palette[13].rgb);
+			alb = timber(uv, seed, palette[13].rgb, emis);
 		} else if (k == 13) {   // an intact house: half-timber on a stone plinth
-			alb = uv.y < 0.45 ? stone(uv, seed, 0.45, 0.9, vec3(0.5, 0.48, 0.44)) : timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed));
+			alb = uv.y < 0.45 ? stone(uv, seed, 0.45, 0.9, vec3(0.5, 0.48, 0.44)) : timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed), emis);
 		} else if (k == 12 || k == 9 || k == 16) {   // city wall, stone pieces, chimney: coursed stone (brick for the chimney)
 			alb = k == 16 ? stone(uv, seed, 0.25, 0.55, tint) : stone(uv, seed, 0.55, 1.0, tint);
 		} else if (k == 3 || k == 4 || k == 6) {   // ruined house tiers and towers, by storey
@@ -92,7 +95,7 @@ void fragment() {
 			if (band < 0.5) {
 				alb = mix(stone(uv, seed, 0.55, 1.0, tint * 0.9), vec3(0.09, 0.06, 0.04), door(uv, seed));
 			} else if (band < 1.5) {
-				alb = timber(uv, seed, tint * 1.02);
+				alb = timber(uv, seed, tint * 1.02, emis);
 			} else {
 				alb = stone(uv, seed, 0.5, 1.1, tint * 1.05);
 			}
@@ -127,6 +130,10 @@ void fragment() {
 			rough = 0.12;
 		}
 	}
+	if (k == 17) {   // a lit lantern
+		emis = tint * 3.0;
+	}
 	ALBEDO = pow(alb, vec3(2.2));
+	EMISSION = emis;
 	ROUGHNESS = rough;
 }

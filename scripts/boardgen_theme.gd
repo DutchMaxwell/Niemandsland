@@ -10,14 +10,14 @@ const RUIN_TOWN := "RuinTown"
 const DEEPWORKS_KINDS := ["ground", "street", "hazard", "tier1", "tier2", "ladder", "tier3", "kerb"]
 ## ... then a garden plot (rough), the city wall, an intact house (roofed: plaster between its timber), the rubble of a wall breach, a tiled gable
 ## roof and a brick chimney.
-const TOWN_KINDS := ["ground", "street", "hazard", "tier1", "tier2", "ladder", "tier3", "kerb", "yard", "stone", "rim", "rough", "wall", "roofed", "rubble", "roof", "brick"]
+const TOWN_KINDS := ["ground", "street", "hazard", "tier1", "tier2", "ladder", "tier3", "kerb", "yard", "stone", "rim", "rough", "wall", "roofed", "rubble", "roof", "brick", "lantern"]
 ## Base colours of the town by kind (display values; the shader draws its stone, timber, plaster and tiles on them): earth, cobble grey, dangerous
 ## ground (cellar pit, pool), plaster tiers one value step apart per level, timber, a cool tower, the kerb (unused), a yard (the level-0 rest of a
-## half-collapsed house), pale stone pieces, a rim line, a garden plot, the city wall stone, intact-house plaster, rubble, roof tiles, brick.
+## half-collapsed house), pale stone pieces, a rim line, a garden plot, the city wall stone, intact-house plaster, rubble, roof tiles, brick, a lit lantern.
 const TOWN_PALETTE := [Color(0.45, 0.36, 0.26), Color(0.50, 0.52, 0.56), Color(0.13, 0.20, 0.30), Color(0.66, 0.60, 0.48),
-		Color(0.84, 0.78, 0.64), Color(0.38, 0.22, 0.10), Color(0.56, 0.60, 0.68), Color(0.40, 0.40, 0.40), Color(0.58, 0.44, 0.30),
+		Color(0.84, 0.78, 0.64), Color(0.38, 0.22, 0.10), Color(0.60, 0.61, 0.64), Color(0.40, 0.40, 0.40), Color(0.58, 0.44, 0.30),
 		Color(0.88, 0.88, 0.86), Color(0.92, 0.66, 0.24), Color(0.30, 0.46, 0.22), Color(0.64, 0.64, 0.60), Color(0.88, 0.82, 0.70),
-		Color(0.55, 0.50, 0.45), Color(0.72, 0.36, 0.26), Color(0.62, 0.34, 0.26)]
+		Color(0.55, 0.50, 0.45), Color(0.72, 0.36, 0.26), Color(0.62, 0.34, 0.26), Color(1.0, 0.72, 0.36)]
 const DEEPWORKS_DRESSING := ["Props", "Landmarks", "Debris", "Sumps", "Rails"]
 ## The air of a board: the Tiefwerk ground mist and steam. The town has none yet (its dusk mist is a later look step).
 const DEEPWORKS_ATMOSPHERE := ["Mist", "Steam"]
