@@ -6908,13 +6908,14 @@ func _solo_log_own_gap_refusal(member: GameUnit, target: GameUnit, weapon: Strin
 ## Callable only answers "can it see", never "how far".
 ## Step 2.3a: `shared_blockers` (_solo_los_blockers(shooter, null), built once for many targets) skips the
 ## per-target rebuild; the target's own unit is then left out per query by its keys (the same set).
-func _solo_true_los_callable(shooter: GameUnit, target: GameUnit, shared_blockers = null) -> Callable:
+## PLAN_COVER_36: `foot` aims at the target model's FOOT (base centre + VolumetricLos.FOOT_LIFT_M) instead of its eye.
+func _solo_true_los_callable(shooter: GameUnit, target: GameUnit, shared_blockers = null, foot := false) -> Callable:
 	var overlay := terrain_overlay
 	var volumes: Array = overlay.los_volumes() if overlay != null and overlay.has_method("los_volumes") else []
 	var blockers: Array = _solo_los_blockers(shooter, target) if shared_blockers == null else shared_blockers
 	var exclude: Array = [] if shared_blockers == null else _solo_los_chain_ids(target)
 	var from_h: float = _solo_unit_los_height_m(shooter)   # tallest alive model's volumetric height (P1)
-	var to_h: float = _solo_unit_los_height_m(target)
+	var to_h: float = VolumetricLos.FOOT_LIFT_M if foot else _solo_unit_los_height_m(target)
 	var from_r: float = _solo_unit_base_radius_m(shooter)
 	var to_r: float = _solo_unit_base_radius_m(target)
 	# P6: an Aircraft is abstract (GF v3.5.1 p.13) — no altitude coordinate, base transparent to sight,
@@ -6927,6 +6928,26 @@ func _solo_true_los_callable(shooter: GameUnit, target: GameUnit, shared_blocker
 			{"c": Vector2(sp.x, sp.z), "r": from_r, "y0": sp.y, "y1": sp.y + from_h},
 			{"c": Vector2(tp.x, tp.z), "r": to_r, "y0": tp.y, "y1": tp.y + to_h, "is_aircraft": to_air},
 			volumes, blockers, exclude)
+
+
+## PLAN_COVER_36 (twin of core `sight::screen_of`): cover from sight blockers for a volley of `shooter`'s chain at `target`
+## (the defense holder) - per chain member its own sight callable and its foot twin; the holder's joined heroes only widen
+## the sighting set. {sighting, hidden (per alive model of `target`), screened}. No caller yet (step 9b).
+func _solo_volley_screen(shooter: GameUnit, target: GameUnit) -> Dictionary:
+	var groups: Array = []
+	var members: Array = [shooter]
+	if shooter.has_method("get_attached_heroes"):
+		members.append_array(shooter.get_attached_heroes())
+	for m in members:
+		if m != null:
+			groups.append({"pos": SoloController.alive_positions(m), "eye": _solo_true_los_callable(m, target),
+				"foot": _solo_true_los_callable(m, target, null, true)})
+	var also: Array = []
+	if target.has_method("get_attached_heroes"):
+		for h in target.get_attached_heroes():
+			if h != null:
+				also.append_array(SoloController.alive_positions(h))
+	return VolumetricLos.screen(groups, SoloController.alive_positions(target), also)
 
 
 ## Every OTHER unit's alive models as VolumetricLos blocker cylinders: the base circle where the model
