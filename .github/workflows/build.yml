@@ -445,7 +445,7 @@ jobs:
         run: cd relay && python -m pytest -q
 
   # The one name branch protection requires (besides `hygiene`). It is green when every job it needs
-  # is `success`, or `skipped` (the docs/tools fast lane skips the test shards). It runs with
+  # is `success`, or `skipped` where the `changes` outputs explain it (tools/ci/all_required.py). It runs with
   # `if: always()` so a failed or cancelled need shows up as a red check instead of a missing one.
   # Add every new gating job to `needs` below. rust-gate is in `needs` because a check from another
   # workflow cannot be required by name here: a PR with red core tests was mergeable while this was green.
@@ -456,23 +456,18 @@ jobs:
     needs: [changes, core-linux, core-py-linux, test, shards-coverage, relay-tests, rust-gate]
     if: always()
     steps:
-      - name: Every required job is green or skipped
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/ci
+      # A skip is green only where the `changes` outputs explain it (table in tools/ci/all_required.py).
+      - name: Every required job is green or skipped for a path reason
         env:
-          RESULTS: ${{ toJSON(needs) }}
-        run: |
-          python3 - <<'PY'
-          import json, os, sys
-          needs = json.loads(os.environ["RESULTS"])
-          bad = []
-          for job, info in needs.items():
-              result = info.get("result")
-              print(f"{job}: {result}")
-              if result not in ("success", "skipped"):
-                  bad.append(f"{job}={result}")
-          if bad:
-              print("::error::required job(s) not green: " + ", ".join(bad))
-              sys.exit(1)
-          PY
+          NEEDS: ${{ toJSON(needs) }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          NOT_CORE_ONLY: ${{ needs.changes.outputs.not_core_only }}
+          RUST_RELEVANT: ${{ needs.changes.outputs.rust_relevant }}
+        run: python3 tools/ci/all_required.py
 
   export-linux:
     name: Linux Export
