@@ -3216,6 +3216,8 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("EPOCH_66_DISTANCE_TRUTH", nmlcore::acts::EPOCH_66_DISTANCE_TRUTH)?;
     // Rules 3.6 (MOR-19b): the py-side band fold's gate for Ethereal's optional placement.
     m.add("EPOCH_73_V36", nmlcore::acts::EPOCH_73_V36)?;
+    // The 3.6 faction-folder alias gate of the rules registry: the py loader answers the alias from this epoch.
+    m.add("PENDING_EPOCH_RULES_ALIAS", nmlcore::acts::PENDING_EPOCH_RULES_ALIAS)?;
     // 16.09. (window 32): the token layout constants, so python tests and the netlab
     // read the core's window instead of pinning 24 by hand.
     m.add("N_UNITS", nmlcore::tokens::N_UNITS)?;

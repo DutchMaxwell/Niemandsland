@@ -604,6 +604,7 @@ _RENAMED_RULES_FOLDERS = [
 
 
 def test_v36_renamed_rules_folders_resolve_the_same_faction_entries():
+    import nml_core
     for system, alias, canonical in _RENAMED_RULES_FOLDERS:
         m = _registry_map(system)
         canonical_rules = m.get("factions", {}).get(canonical, {})
@@ -611,9 +612,41 @@ def test_v36_renamed_rules_folders_resolve_the_same_faction_entries():
         canonical_only = [n for n in canonical_rules if n not in common]
         assert canonical_only, f"{system}/{canonical} has no faction-only rule"
         name = canonical_only[0]
-        assert _registry_entry(system, alias, name) == canonical_rules[name], (
-            f"{system}/{alias} must resolve {canonical}"
-        )
+        # Outside a profile build (no record epoch) and below the gate the old read stays.
+        assert _registry_entry(system, alias, name) == common.get(name, {})
+        with list_to_profile._rules_alias_epoch(nml_core.PENDING_EPOCH_RULES_ALIAS - 1):
+            assert _registry_entry(system, alias, name) == common.get(name, {})
+        with list_to_profile._rules_alias_epoch(nml_core.PENDING_EPOCH_RULES_ALIAS):
+            assert _registry_entry(system, alias, name) == canonical_rules[name], (
+                f"{system}/{alias} must resolve {canonical}"
+            )
+
+
+def _lust_bands(folder: str, rules_epoch: int, system: str = "gf") -> dict:
+    sel = _selection("u", "Lust Warrior", rules=[{"label": "Lustbound"}])
+    return profiles_from_army_forge_json(
+        {"gameSystem": system, "units": [sel]}, folder, player=1, rules_epoch=rules_epoch
+    )["p1_0_u"]["move_bands"]
+
+
+def test_the_rules_alias_reaches_the_profile_only_from_the_pending_epoch():
+    """An old-folder daemons list builds the same profile as its 3.6 folder only from
+    `PENDING_EPOCH_RULES_ALIAS`; below it the corpus keeps its old common-only reads, so a
+    trainer run at the live epoch replays identically. Lustbound (a faction-only Quick rule)
+    moves the bands, which makes the alias visible in the profile."""
+    import nml_core
+    gate = nml_core.PENDING_EPOCH_RULES_ALIAS
+    plain = {"advance": 6.0, "rush": 12.0}
+    boosted = _lust_bands("daemons_of_lust", gate)
+    assert boosted != plain, "the 3.6 folder carries Lustbound's Quick bands at any epoch"
+    assert _lust_bands("daemons_of_lust", gate - 1) == boosted
+    assert _lust_bands("wormhole_daemons_of_lust", gate - 1) == plain
+    assert _lust_bands("wormhole_daemons_of_lust", gate) == boosted
+    # Never a cross-system guess: an AoF folder in a GF list is no alias, and the default
+    # (live) epoch is below the gate while the pending constant is ahead of it.
+    assert _lust_bands("rift_daemons_of_lust", gate) == plain
+    assert nml_core.CURRENT_RULES_EPOCH < gate
+    assert _lust_bands("wormhole_daemons_of_lust", nml_core.CURRENT_RULES_EPOCH) == plain
 
 
 def test_royal_legion_lands_on_the_charge_band_and_the_shooting_range():

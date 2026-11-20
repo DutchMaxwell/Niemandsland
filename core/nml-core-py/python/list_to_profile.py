@@ -84,6 +84,8 @@ Bounding units read 4.0 instead of nothing.
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import json
 import math
 import os
@@ -470,6 +472,27 @@ def _rule_base_name(rule: str) -> str:
     return rule.split("(")[0].strip()
 
 
+#: Whether the 3.6 folder aliases answer for the profile being built. The Rust core gates them at
+#: `acts::PENDING_EPOCH_RULES_ALIAS` (exported as `nml_core.PENDING_EPOCH_RULES_ALIAS`), so a corpus
+#: built at a lower epoch keeps its old common-only faction reads and replays identically. OFF by
+#: default: a registry read outside a profile build (no record epoch) keeps the old behaviour.
+_RULES_ALIAS_ON: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "rules_alias_on", default=False)
+
+
+@contextlib.contextmanager
+def _rules_alias_epoch(rules_epoch: int | None):
+    """Scope one profile build to its record epoch (`None` = the live epoch, like `_move_bands`)."""
+    import nml_core
+    if rules_epoch is None:
+        rules_epoch = nml_core.CURRENT_RULES_EPOCH
+    token = _RULES_ALIAS_ON.set(rules_epoch >= nml_core.PENDING_EPOCH_RULES_ALIAS)
+    try:
+        yield
+    finally:
+        _RULES_ALIAS_ON.reset(token)
+
+
 def _registry_map(system: str) -> dict:
     """rules_registry.gd:normalize_system + map_for — a system's parsed
     mechanics map, cached; {} when the asset is missing, which degrades every
@@ -493,7 +516,9 @@ def _registry_entry(system: str, faction: str, rule_name: str) -> dict:
     alone: 154 of 383 rule names mean different things across game systems.
     A 3.6 army-list folder the map does not key (wormhole_/rift_daemons_of_*,
     saurian_starhost) falls back to its same-system alias from
-    _SPELL_FACTION_ALIASES — one shared table, never a cross-system guess."""
+    _SPELL_FACTION_ALIASES — one shared table, never a cross-system guess — but
+    only inside a profile build whose record epoch has reached
+    PENDING_EPOCH_RULES_ALIAS (`_rules_alias_epoch`)."""
     s = system.strip().lower()
     if s not in REGISTRY_SYSTEMS:
         s = REGISTRY_DEFAULT_SYSTEM
@@ -502,7 +527,7 @@ def _registry_entry(system: str, faction: str, rule_name: str) -> dict:
         return {}
     factions = m.get("factions", {})
     key = faction
-    if faction and faction != "common" and faction not in factions:
+    if faction and faction != "common" and faction not in factions and _RULES_ALIAS_ON.get():
         key = _SPELL_FACTION_ALIASES.get(s, {}).get(faction, faction)
     if key and key != "common" and rule_name in factions.get(key, {}):
         return factions[key][rule_name]
@@ -1616,9 +1641,10 @@ def profiles_from_army_forge_json(
     # `base_mm` entries; digest-neutral by construction then.
     _apply_manifest_base_overrides(built, faction)
     _expand_auras(built)
-    profiles = {u["unit_id"]: _unit_profile(u, faction, game_system, rules_epoch) for u in built}
-    _warn_unresolved_spell_books(profiles, game_system)
-    _warn_unresolved_rule_names(profiles, game_system)
+    with _rules_alias_epoch(rules_epoch):
+        profiles = {u["unit_id"]: _unit_profile(u, faction, game_system, rules_epoch) for u in built}
+        _warn_unresolved_spell_books(profiles, game_system)
+        _warn_unresolved_rule_names(profiles, game_system)
     return profiles
 
 
@@ -1839,7 +1865,8 @@ def _split_child_template(
         # (main.gd:18145-18149).
         "base": _base_of(definition, game_system, rules),
     }
-    return _unit_profile(u, faction, game_system)
+    with _rules_alias_epoch(None):
+        return _unit_profile(u, faction, game_system)
 
 
 def spawn_profiles_from_army_forge_json(
