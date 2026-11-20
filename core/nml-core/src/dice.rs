@@ -2173,8 +2173,9 @@ pub(crate) fn resolve_volley_with_pick_label(
         // PLAN_COVER_36 (`PENDING_EPOCH_COVER_SCREEN`): cover from sight blockers (`def.screened`, stamped by the volley seam from 95
         // only) joins terrain cover as ONE +1; an Indirect whose cover waiver holds (Hold kept where the entry needs it) or the
         // Indirect mark on the target lifts it, and terrain cover stays.
-        let lifts_screen = (p.indirect && !(p.indirect_cover_needs_hold && !att.held))
-            || (def.indirect_mark && rule_on(att.rules_epoch, EPOCH_73_V36));
+        // A moved Indirect gun without the Hold its entry needs is not firing indirectly: no lift, mark or not (lead 21.11.).
+        let lifts_screen = (p.indirect || (def.indirect_mark && rule_on(att.rules_epoch, EPOCH_73_V36)))
+            && !(p.indirect_cover_needs_hold && !att.held);
         let in_cover = def.in_cover || (def.screened && !lifts_screen);
         let cov_def = covered_defense(base, if pierce { false } else if unit_of_one { td_own } else { in_cover }, def.def_floor());
         let save_def = if skips_cover { base } else { cov_def };

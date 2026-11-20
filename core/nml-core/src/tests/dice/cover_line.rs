@@ -97,3 +97,12 @@ use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
         let met = volley_log(&moved, &screened(4), gun, 1);
         assert_eq!((said(&met, COVER), said(&met, LIFT)), (1, 0), "a moved Indirect needs sight and meets the blocker: {met:?}");
     }
+
+    /// Lead call 21.11.: an Indirect gun that moved without the Hold its entry needs is not firing indirectly, so the
+    /// Indirect mark on the target does not hand it the lift either (the table's reading). RED before: the mark clause lifted.
+    #[test]
+    fn a_moved_indirect_at_a_marked_target_keeps_the_sight_blocker_cover() {
+        let (moved, gun) = held_gun(false);
+        let log = volley_log(&moved, &Ctx { indirect_mark: true, ..screened(4) }, gun, 1);
+        assert_eq!((said(&log, COVER), said(&log, LIFT)), (1, 0), "no waiver, no lift: {log:?}");
+    }
