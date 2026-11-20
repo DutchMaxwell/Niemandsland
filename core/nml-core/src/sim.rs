@@ -11682,6 +11682,18 @@ fn resolve_with(
                             // applies only while the TARGET stands within 1" of
                             // terrain (per model, the majority fold).
                             stealth_alias_terrain_gate(statics, &next, g.ti, cover, &mut def);
+                            // PLAN_COVER_36: cover from sight blockers, one verdict per target group for every weapon (the save fold
+                            // lifts it per weapon for a held Indirect). Placeholder gate, no outcome below 95.
+                            if seams.sighting && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_COVER_SCREEN) {
+                                let sc = sight::screen_of(&next, &zones, si, g.ti, seams.rules_epoch);
+                                def.screened = sc.screened;
+                                if sc.screened {
+                                    let k = sc.hidden.iter().filter(|&&h| h).count();
+                                    let tail = if def.in_cover { "already in Cover terrain, one +1" } else { "+1 Defense" };
+                                    shot.log.push(format!("Cover: {} is behind a sight blocker from {} ({k} of {} models) - {tail}",
+                                        ut_g.name, statics[pi_s].name, sc.hidden.len()));
+                                }
+                            }
                             // rules-wave3-growthmark (epoch 6) — the volley's
                             // LOGGING-RULE lines, named after the entry that
                             // carried the facet (the two Defensive names share
