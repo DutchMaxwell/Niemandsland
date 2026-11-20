@@ -55,9 +55,11 @@ def check(root, files, cls):
         for n, line in enumerate((text or "").splitlines(), 1):
             door = any(f == p and d in line for p, d in spec["doors"])
             if f.startswith(SCAN) and sym.search(line) and not door:
-                errors.append(f"{f}:{n}: names {sym.search(line).group(1)} outside class '{cls}'")
+                door_files = " / ".join(os.path.basename(p) for p, _ in spec["doors"])
+                errors.append(f"{f}:{n}: {cls.upper()} class reaches the game outside {door_files}'s door "
+                              f"(names {sym.search(line).group(1)}); go through the door or move the file into the class")
             if spec["env"] in line and f.startswith(("test/", ".github/")):
-                errors.append(f"{f}:{n}: sets {spec['env']} outside class '{cls}'")
+                errors.append(f"{f}:{n}: {cls.upper()} class flag {spec['env']} set outside the class (test/ or .github/)")
     return errors
 
 
