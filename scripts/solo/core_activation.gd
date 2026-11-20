@@ -692,10 +692,14 @@ static func takes_action(unit: GameUnit, kind: int) -> bool:
 ## C-19 (deny mode): an activation that casts (`report["casts"]`) is NOT taken. `run_ai` refuses it anyway (the "cast" clause), but
 ## by then the body had deferred the Dangerous test and resolved the casts first: cast -> Dangerous, where the table pays Dangerous
 ## -> cast (a caster the test kills must not cast). The whole activation stays on the table, in the table's own order; a caster
-## with nothing to cast this activation is still taken.
+## with nothing to cast this activation is still taken. CC-13a: with the cast switch ON (`cast_door_enabled`) a casting activation
+## IS taken when no member of its chain carries a table-only pre-attack beat (`cast_chain_clear`); the body then probes the casts
+## (`probe_casts`) before it pays or resolves anything.
 static func takes_ai_activation(main, unit: GameUnit, report: Dictionary) -> bool:
+	var casts: Array = report.get("casts", [])
 	var takes: bool = main._solo_core_ai_h != 0 and main.dice_roller_control != null and is_plain(unit) \
-		and takes_action(unit, int(report.get("action", -1))) and (report.get("casts", []) as Array).is_empty()
+		and takes_action(unit, int(report.get("action", -1))) \
+		and (casts.is_empty() or (cast_door_enabled() and cast_chain_clear(unit)))
 	if takes and moves_through(unit) and not main.solo_controller.last_move_paths.is_empty() \
 			and not crossed_plain(main, unit, chords_of(main.solo_controller.last_move_paths)):
 		report["through_refused"] = true   # P4.D-37c: the decision is made once, here; `run_ai` honours it after the table struck
@@ -991,6 +995,61 @@ static func ai_transcript(main, unit: GameUnit, report: Dictionary, target: Game
 	if not split.is_empty():
 		intent["split"] = split
 	return [{"t": "begin"}, {"t": "placed", "positions": at, "trails": trails}, intent]
+
+
+## CC-13a: the switch `NML_ONE_CORE_CAST` (default OFF; "1" / "on" turns it on): the core resolves a casting AI activation's casts
+## in its one call (Dangerous, casts, volley) instead of the table's `_solo_resolve_ai_casts`. Nothing is player-visible with it OFF.
+static var _cast_env := -1
+
+
+static func cast_door_enabled() -> bool:
+	if _cast_env < 0:
+		var raw := OS.get_environment("NML_ONE_CORE_CAST").to_lower()
+		_cast_env = 1 if (raw == "1" or raw == "on") else 0
+	return _cast_env == 1
+
+
+## CC-13a: the rule primitives of the table's pre-attack beats that run in the cast slot's neighbourhood with NO core guard yet
+## (main.gd after the casts: Mend, Breath Attack, the Utility Buff family, Mind Control, Piercing Tag, Precision, Reckless
+## Piercing, Storm Attack, Teleport): a unit carrying one stays on the table until the "beats guard" lane lands (the core, which
+## takes the whole activation, would resolve the beat a second time).
+const CAST_BEAT_PRIMITIVES := ["Mend", "Breath Attack", "Utility Buff", "Mind Control", "Piercing Tag", "Precision Tag",
+	"Precision Target", "Precision Spotter", "Reckless Piercing", "Storm Attack", "Teleport"]
+
+
+## CC-13a: the cast predicate: no member of the unit's chain (the unit and its joined heroes) carries a `CAST_BEAT_PRIMITIVES` rule.
+static func cast_chain_clear(unit: GameUnit) -> bool:
+	if CoreSlice.carries(unit, CAST_BEAT_PRIMITIVES):
+		return false
+	for hero in unit.get_attached_heroes():
+		if hero != null and CoreSlice.carries(hero, CAST_BEAT_PRIMITIVES):
+			return false
+	return true
+
+
+## CC-13a: the casts a probe refused (named reasons, before any die) and how many: what the AI smoke reads.
+static var cast_probe_refusals := 0
+static var cast_probe_reasons: Array = []
+
+
+## CC-13a: the dry probe at the body's cast slot: the activation's placement, intent and cast inputs, no faces. The core checks every
+## planned cast (keys, spell, kind, target rule, interference choice) BEFORE it rolls anything, so a refusal costs no die and the
+## table then pays the Dangerous test and resolves the casts in its own order; anything else (the first die asked, a choice,
+## done) is a taken activation. A `done` answer holds a board: released here.
+static func probe_casts(main, unit: GameUnit, report: Dictionary) -> bool:
+	var h: int = main._solo_core_ai_h
+	if h == 0:
+		return false
+	var core: Object = (main.solo_controller as SoloController)._core_node_ready()
+	var t: Array = ai_transcript(main, unit, report, null) + cast_inputs(report)
+	var r: Dictionary = core.step_activation(h, unit.unit_id, t, main.object_manager._strict_movement_enforced())
+	if r.has("handle"):
+		core.release(int(r["handle"]))
+	if str(r["step"]) != "refused":
+		return true
+	cast_probe_refusals += 1
+	cast_probe_reasons.append(str(r.get("reason", "")))
+	return false
 
 
 ## CC-10b: the planner's cast dicts (`report["casts"]`, plan order) as the core's `Input::Cast` entries: one per planned

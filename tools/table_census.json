@@ -36,7 +36,7 @@
     "scripts/main.gd:_solo_log_melee_result": ["@melee_charge"],
     "scripts/main.gd:_solo_melee_strike_phase": ["@melee_charge"],
     "scripts/main.gd:_solo_parry_strike": ["@melee_charge"],
-    "scripts/main.gd:_solo_resolve_ai_casts": ["scripts/main.gd:_solo_activate_one_ai_body"],
+    "scripts/main.gd:_solo_resolve_ai_casts": ["scripts/main.gd:_solo_ai_casts", "scripts/main.gd:_solo_ai_core_call"],
     "scripts/main.gd:_solo_resolve_ai_volley": ["scripts/main.gd:_run_ai_shooting", "scripts/main.gd:_solo_apply_strafing"],
     "scripts/main.gd:_solo_resolve_one_cast": ["scripts/main.gd:_run_human_cast", "scripts/main.gd:_solo_resolve_ai_casts"],
     "scripts/main.gd:_solo_resolve_saves": ["@human_shoot", "scripts/main.gd:_solo_apply_breath_attack", "@melee_charge", "scripts/main.gd:_solo_deathstrike_hits", "@ai_volley", "scripts/main.gd:_solo_secret_trap_hits", "scripts/main.gd:_solo_self_destruct_post_melee"],

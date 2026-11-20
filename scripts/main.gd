@@ -1297,8 +1297,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# point before attacking"; the official solo procedure casts after moving). The tokens were spent
 	# at plan time (the attempt's cost); here the 4+ cast die rolls on the real tray and the effect
 	# lands (spell damage saves reuse the shooting save path — no Shielded, no Cover against spells).
-	if not (report.get("casts", []) as Array).is_empty():
-		await _solo_resolve_ai_casts(report)
+	await _solo_ai_casts(unit, report, core_takes)
 	if _solo_activation_unit_gone(unit):
 		return unit
 	# Mend + Breath Attack (army-book, grill round 2 cut A): once per activation, BEFORE attacking —
@@ -1336,7 +1335,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	var _prof_atk_t0 := BattleSim.prof_t0()   # NML-1072: live shoot/melee resolution
 	if bool(report.get("can_shoot", false)):
 		await _run_ai_shooting(report)
-	elif report.has("core_dangerous") or report.has("core_through"):   # P4.D-19/37: a unit that cannot shoot still owes its test / its move-through attacks: the core call, no volley
+	elif report.has("core_dangerous") or report.has("core_through") or report.has("cast_door"):   # P4.D-19/37, CC-13a: a unit that cannot shoot still owes its test / its move-through attacks / its casts: the core call, no volley
 		await _solo_ai_core_call(unit, report, null, [])
 	elif int(report.get("action", 0)) == AiDecision.Action.CHARGE:
 		# One core P4.D-48: a charge the melee slice takes resolves in the core (charge, strikes, result, morale, consolidation).
@@ -1345,6 +1344,9 @@ func _solo_activate_one_ai_body() -> GameUnit:
 			await _run_ai_melee(report)
 			CoreShadow.melee_compare(self, unit, report)
 	BattleSim.prof_mark("attack", _prof_atk_t0)
+	if report.has("cast_door"):   # CC-13a: casts left to the core and no core call ran (a branch above): a defect, reported, not repaired after the fact
+		push_error("%s: the cast door took %d casts and no core call resolved them" % [unit.get_name(), (report.get("casts", []) as Array).size()])
+		report.erase("cast_door")
 	if core_dangerous:
 		report["dangerous_wounds_taken"] = wounds_before_dangerous - _solo_unit_wounds_now(unit)
 		if _solo_activation_unit_gone(unit):   # the test took the last model: the old body stopped right after it
@@ -5048,20 +5050,39 @@ func _solo_log_no_volley(unit: GameUnit, report: Dictionary, why: String) -> voi
 		unit.get_name(), why, hold_note], true)
 
 
+## One-core cast door (CC-13a): the AI body's cast slot. With the switch OFF, or an activation the core does not take, the table
+## resolves the planned casts as it always did. With it ON and the activation taken, a dry probe asks the core first (before any die):
+## taken -> the report is marked `cast_door` and the core's one call resolves the casts (Dangerous, casts, volley); refused -> the
+## table pays the Dangerous test the body left to the core and then resolves the casts, the old order exactly (`run_ai` refuses the
+## volley of an unmarked casting report, so the table shoots too).
+func _solo_ai_casts(unit: GameUnit, report: Dictionary, core_takes: bool) -> void:
+	if (report.get("casts", []) as Array).is_empty():
+		return
+	if core_takes and CoreActivation.cast_door_enabled():
+		if CoreActivation.probe_casts(self, unit, report):
+			report["cast_door"] = true
+			return
+		await _solo_pay_dangerous(unit, report)
+	await _solo_resolve_ai_casts(report)
+
+
 ## One core P4.D-19: the core's one call for this AI activation: the volley at `target` (null = none; `rest` = split fire's further
 ## groups, P4.D-14), and the Dangerous
 ## test the body left to the core (`report["core_dangerous"]` = its dice, an end morale from its wounds included). True =
 ## the core took the activation. Anything else (no board, a refused call) leaves the table to resolve the volley, and
 ## pays an owed test first, on the table, so a refusal costs nothing but the old order.
 func _solo_ai_core_call(unit: GameUnit, report: Dictionary, target: GameUnit, shots: Array, rest: Array = []) -> bool:
-	var owed := report.has("core_dangerous") or report.has("core_through")
+	var owed := report.has("core_dangerous") or report.has("core_through") or report.has("cast_door")   # CC-13a: the casts are owed too
 	if _solo_core_ai_h != 0 and (target != null or owed) \
 			and await CoreActivation.run_ai(self, unit, report, target, _solo_core_ai_h, shots, owed, rest):
 		if report.erase("core_dangerous"):
 			report["core_took_dangerous"] = true
 		report.erase("core_through")
+		report.erase("cast_door")
 		return true
 	await _solo_pay_dangerous(unit, report)
+	if report.erase("cast_door"):   # CC-13a: the core refused before any die: the casts the probe left to it, after the test, in the table's order
+		await _solo_resolve_ai_casts(report)
 	return false
 
 
