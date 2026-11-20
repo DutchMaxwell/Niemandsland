@@ -2674,6 +2674,26 @@ pub(crate) mod tests {
         assert!(old_forbidden || (old_x - x).abs() > 0.1, "77 keeps the old reading");
     }
 
+    /// Heightfield plan step 10 (`PENDING_EPOCH_HEIGHT`): a unit that advances onto a 6 in tier ends standing at 6 in, and
+    /// the same move one epoch below ends at 0, as before. Red before: `Landing.end` took its y from `surface_y_m`,
+    /// which knew containers only, so the model stayed at 0 inside the block.
+    #[test]
+    fn a_model_moved_onto_a_6in_tier_stands_at_6in() {
+        let level_in = (0..16).map(|i| if i % 4 >= 2 { 6.0 } else { 0.0 }).collect();
+        let t = terrain::tier_board_for_test(4, 4, level_in, Vec::new());
+        let state = units_state(vec![vec![[(-4.0 * IN2M) as f32, 0.0, 0.0]]], vec![vec![0.5 * IN2M]], vec![vec![]]);
+        let run = |epoch: u32| {
+            MoveRules { rules_epoch: epoch }
+                .plain_move(&state, &t, 0, [(2.0 * IN2M) as f32, 0.0, 0.0], 6.0, true, true, crate::mv::FAST_PLANNER_GUARD)
+                .expect("the port moves the unit")
+                .end[0]
+        };
+        let (up, flat) = (run(crate::acts::PENDING_EPOCH_HEIGHT), run(crate::acts::PENDING_EPOCH_HEIGHT - 1));
+        assert!(up[0] as f64 / IN2M > 0.0, "the unit stands on the tier side, x={:.2}\"", up[0] as f64 / IN2M);
+        assert_eq!(up[1], (6.0 * IN2M) as f32, "6 in up at the gate");
+        assert_eq!(flat[1], 0.0, "one epoch below the gate the board plays flat");
+    }
+
     fn stay_put(rules_epoch: u32, state: &State, t: &Terrain) -> Landing {
         let here = geom::centre(&state.positions[0]);
         MoveRules { rules_epoch }
