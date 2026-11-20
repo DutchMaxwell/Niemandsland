@@ -10,6 +10,7 @@ pub mod connect;
 pub mod graph;
 pub mod landmarks;
 pub mod levels;
+pub mod plain;
 
 use serde::{Deserialize, Serialize};
 pub use connect::{Connector, ConnectorKind};
