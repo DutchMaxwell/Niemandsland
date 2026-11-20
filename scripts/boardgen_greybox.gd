@@ -22,7 +22,7 @@ const LADDER_OFFSET_IN := 0.12   # the ladder stands this far off the wall face
 const LADDER_RAIL_IN := 0.12
 const LADDER_RUNG_GAP_IN := 0.5
 ## Surface kinds in the order the board shader knows them (INSTANCE_CUSTOM.x, shaders/tiefwerk_board.gdshader).
-const KINDS := ["ground", "street", "hazard", "tier1", "tier2", "ladder"]
+const KINDS := ["ground", "street", "hazard", "tier1", "tier2", "ladder", "tier3"]
 const SHADER := preload("res://shaders/tiefwerk_board.gdshader")
 
 var layout_seed: int = 0

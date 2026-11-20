@@ -936,7 +936,7 @@ impl NmlCore {
         self.dropped.iter().map(GString::from).collect()
     }
 
-    /// The seeded 48 x 48 in heightfield board for `seed` (`nml_core::boardgen`, point-symmetric): `cells` (`level` 0/1/2,
+    /// The seeded 48 x 48 in heightfield board for `seed` (`nml_core::boardgen`, point-symmetric): `cells` (`level` 0-3,
     /// inches in `level_in`), `lots`, `arteries`, `connectors` (all `Ladder`, with `edge_in`), `problems` (empty = accepted).
     /// Pure data; nothing in the rules reads it.
     #[func]

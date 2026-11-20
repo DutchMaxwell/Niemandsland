@@ -1,11 +1,11 @@
 //! Stage 2: heights. Each lot gets an archetype and raises its cells to level 1 (3 in); the raised share is then
-//! fitted to its budget and a part of it is lifted to level 2 (6 in). Streets stay flat and level 2 never enters a
-//! deployment band. Every change is a mirrored pair under `Point180` and a one-per-half pair under `BalancedFree`,
+//! fitted to its budget and a part of it is lifted to level 2 (6 in); a few level-2 cells rise once more to level 3
+//! (9 in, the towers). Streets stay flat and levels 2 and 3 never enter a deployment band. Every change is a mirrored pair under `Point180` and a one-per-half pair under `BalancedFree`,
 //! so both sides keep equal counts.
 use serde::{Deserialize, Serialize};
 use crate::rng::GodotRng;
 use super::graph::{Lot, SectorGraph};
-use super::{budget, Symmetry, DEPLOY_DEPTH_CELLS, GRID, HIGH_PERMILLE, RAISED_PERMILLE};
+use super::{budget, Symmetry, DEPLOY_DEPTH_CELLS, GRID, HIGH_PERMILLE, RAISED_PERMILLE, TOWER_PAIRS};
 
 /// Lot archetypes (theme-neutral; a kit table picks the look). `Block`: solid mass, walkable roof, blocks sight.
 /// `Terrace`: an L-shaped step, the rest of the lot stays ground. `Deck`: open raised platform, sight passes.
@@ -13,7 +13,7 @@ use super::{budget, Symmetry, DEPLOY_DEPTH_CELLS, GRID, HIGH_PERMILLE, RAISED_PE
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LotKind { Street, Block, Terrace, Deck, Hazard }
 
-/// One lattice cell. `level` 0/1/2 = 0/3/6 in; `deploy` 1/2 = the player whose band it is, 0 = neither.
+/// One lattice cell. `level` 0/1/2/3 = 0/3/6/9 in; `deploy` 1/2 = the player whose band it is, 0 = neither.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Cell { pub x: usize, pub z: usize, pub deploy: u8, pub street: bool, pub lot_id: u16, pub lot_kind: LotKind, pub level: u8 }
 
@@ -67,6 +67,17 @@ pub fn stack(seed: i64, g: &SectorGraph) -> (Vec<Lot>, Vec<Cell>) {
         if lifted == target / 2 { break; }
         (cells[a].level, cells[b].level) = (2, 2);
         if one_piece(&cells) { lifted += 1 } else { (cells[a].level, cells[b].level) = (1, 1) }
+    }
+    // Level 3: a few level-2 cells rise once more, as mirrored pairs, each kept only if the board stays one piece (so a
+    // tower is always reachable by a ladder from level 2). A pair next to an existing tower comes first (blocks, not
+    // single posts), then the cell with the fewest ground neighbours (the shortest sheer wall).
+    for _ in 0..rng.randi_range(TOWER_PAIRS.0 as i64, TOWER_PAIRS.1 as i64) {
+        let snap = cells.clone();
+        let key = |c: &Cell| { let i = c.z * nx + c.x; if neighbours(i).any(|j| snap[j].level == 3) { 0 } else { 1 + neighbours(i).filter(|&j| snap[j].level == 0).count() as u8 } };
+        for (a, b) in paired(&snap, sym, &mut rng, |i, cs| cs[i].level == 2, key) {
+            (cells[a].level, cells[b].level) = (3, 3);
+            if one_piece(&cells) { break } else { (cells[a].level, cells[b].level) = (2, 2) }
+        }
     }
     (lots, cells)
 }

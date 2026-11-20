@@ -29,7 +29,7 @@ pub fn wire(seed: i64, sym: Symmetry, cells: &[Cell]) -> Vec<Connector> {
         }
     };
     let isl = islands(cells);
-    for level in 1..=2u8 {
+    for level in 1..=3u8 {
         for id in 0..isl.count {
             if cells[isl.first[id]].level != level { continue; }
             let mut pairs = access_pairs(cells, &isl, id);
