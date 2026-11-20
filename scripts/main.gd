@@ -18256,6 +18256,47 @@ func set_rules_automation(level: int, who: String) -> bool:
 	return true
 
 
+## The switch (PLAN_GAME_SYSTEM_SWITCH): sets the table's game system. False, with one battle-log line (and a toast on
+## screen), while a list is on the table, for a guest in multiplayer (the system is host-owned) and for an id that is no
+## system; true when it was set or already was. The line is this table's own - every peer logs its own on applying it.
+func set_table_system(id: String, who: String) -> bool:
+	if opr_army_manager == null:
+		return false
+	var system := id.strip_edges().to_lower()
+	var online: bool = network_manager != null and network_manager.is_multiplayer_active()
+	if not GameSystem.is_known(system):
+		_refuse_table_system("\"%s\" is not a game system" % id)
+	elif online and not network_manager.is_host:
+		_refuse_table_system("only the host sets the game system")
+	elif _table_has_list():
+		_refuse_table_system("Game system is locked while a list is on the table")
+	else:
+		if str(opr_army_manager.table_system) != system:
+			opr_army_manager.table_system = system
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL, "Game system: %s" % GameSystem.label(system), false, "changed by %s" % who)
+			if online:
+				network_manager.broadcast_table_settings({"game_system": system})
+		return true
+	return false
+
+
+## A list is on the table: an imported one, or units that came from a save or a peer's list.
+func _table_has_list() -> bool:
+	for army in opr_army_manager.armies.values():
+		if army != null:
+			return true
+	return not opr_army_manager.game_units.is_empty()
+
+
+func _refuse_table_system(reason: String) -> void:
+	var text := "Game system unchanged: %s" % reason
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, text)
+	if get_node_or_null("UI") != null:
+		_show_toast(text)
+
+
 ## The chip beside the round button; built lazily, shown only while the rules-automation UI flag is on.
 func _update_rules_chip() -> void:
 	if next_round_btn == null or opr_army_manager == null:
