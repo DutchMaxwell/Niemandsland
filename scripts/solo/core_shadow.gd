@@ -38,6 +38,9 @@ static var _plant_read := false
 ## (per unit key, unique names in sorted order) - the two halves of the "buffs" reading.
 static var _buffs_before: Dictionary = {}
 static var _core_buffs: Dictionary = {}
+## Gate 10 (game 12): the units already wiped when this activation's board was captured. A joined hero whose host
+## was gone before the activation fights on alone (p.14) and owns its Shaken; a stale host flag is not mirrored.
+static var _wiped_at_capture: Dictionary = {}
 
 
 ## The flag, read once: ON only for "1" / "on".
@@ -65,7 +68,16 @@ static func capture(main, peek: GameUnit) -> int:
 		return 0
 	var h := CoreActivation.capture(main)
 	tapping = h != 0
+	note_wiped(main.opr_army_manager)
 	return h
+
+
+## The units with no living model at this activation's capture (`_wiped_at_capture`, read by `_state_diff`).
+static func note_wiped(army: OPRArmyManager) -> void:
+	_wiped_at_capture = {}
+	for gu in army.get_all_game_units():
+		if gu is GameUnit and (gu as GameUnit).get_alive_count() <= 0:
+			_wiped_at_capture[(gu as GameUnit).unit_id] = true
 
 
 ## One table tray roll, kept while a shadow board is open (main.gd's `_solo_tray_roll` calls it with `faces` known).
@@ -227,7 +239,7 @@ static func _state_diff(main, core_plain: Dictionary, core_buffs: Variant = null
 			# The core shakes the host only; landing its delta mirrors that onto the joined hero (`land_delta` ->
 			# `_solo_mirror_shaken`, as the table's own morale does), so a hero reads its host's core Shaken here.
 			var host := str(a.get("attached_to", ""))
-			if k == "shaken" and host != "" and core_units.has(host):
+			if k == "shaken" and host != "" and core_units.has(host) and not _wiped_at_capture.has(host):
 				core_v = maxi(int(core_v), _field(core_units[host], k))
 			if _field(a, k) != core_v:
 				_detail = {"unit": str(uid), "table": _field(a, k), "core": core_v}
