@@ -6,7 +6,13 @@ use super::volley_landings::volley_line;
     /// `volley_line` with "b" out of models and its joined hero "bh" (one model, 6 wounds, Defense 6+) the only one standing; "a"
     /// fires its rifle at "b" and three of its four hits are not saved. `faces` = hit dice, saves, then the morale die.
     fn lone_hero_lines(faces: Vec<Vec<u8>>) -> Vec<String> {
+        lone_hero_lines_with(faces, |_| {})
+    }
+
+    /// `lone_hero_lines` with `tune` run on the state first (the hero's flags).
+    fn lone_hero_lines_with(faces: Vec<Vec<u8>>, tune: impl FnOnce(&mut State)) -> Vec<String> {
         let (mut st, mut statics) = volley_line();
+        tune(&mut st);
         (st.positions[2], st.wounds[2], st.alive[2]) = (vec![], vec![], 0);
         Rc::make_mut(&mut st.radii)[2] = vec![];
         (st.positions[3], st.wounds[3], st.alive[3]) = (vec![[12.0 * IN2M, 0.0, 0.0]], vec![6], 1);
@@ -43,3 +49,26 @@ use super::volley_landings::volley_line;
             "Cultists fails morale — Shaken",
         ]);
     }
+
+    /// The host is wiped and the hero carries the unit's flag: the table says so after the wound lines (`_solo_hero_carries_on`), and the
+    /// morale test that follows is the Shaken unit's own (no die). RED on main: neither line was said.
+    #[test]
+    fn a_hero_that_fights_on_alone_says_the_flag_it_carries() {
+        let flagged = |shaken: bool, fatigued: bool| lone_hero_lines_with(vec![vec![6; 4], vec![1, 1, 1, 6]], |st| (st.shaken[3], st.fatigued[3]) = (shaken, fatigued));
+        assert_eq!(flagged(true, false), [
+            "Hero: Champion is the unit now — shots from Gunners at Cultists are measured and saved as the hero",
+            "Gunners fires at Cultists",
+            "Gunners fires Rifle at Cultists — 4 hits",
+            "Champion saves on 6+",
+            "Cultists takes 3 wounds (1/3)",
+            "Champion fights on alone — carries the unit's Shaken ({cite})",
+            "Cultists takes wounds at half strength or less (1/3 models) — morale test ({cite})",
+            "Cultists is already Shaken — automatically fails morale ({cite})",
+            "Cultists fails morale — Shaken",
+        ]);
+        let said = |lines: &[String]| lines.iter().filter(|l| l.contains("fights on alone")).cloned().collect::<Vec<_>>();
+        assert_eq!(said(&flagged(true, true)), ["Champion fights on alone — carries the unit's Shaken + Fatigue ({cite})"]);
+        assert_eq!(said(&flagged(false, true)), ["Champion fights on alone — carries the unit's Fatigue ({cite})"]);
+        assert!(said(&flagged(false, false)).is_empty(), "no flag, no line");
+    }
+
