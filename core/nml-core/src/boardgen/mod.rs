@@ -47,6 +47,12 @@ pub enum Theme { #[default] Deepworks, RuinTown }
 pub struct Budgets {
     pub raised: (usize, usize), pub high: (usize, usize), pub tower_pairs: (usize, usize), pub landmark_pieces: (usize, usize),
     pub lot_pool: &'static [LotKind],
+    /// Mirrored lot pairs the graph aims for, the lot footprints (w, h in cells) it draws from at random, and the order it fills gaps in.
+    pub lot_pairs: usize, pub lot_shapes: &'static [(usize, usize)], pub lot_fill: &'static [(usize, usize)],
+    /// Reject a board with a straight open lane (a full row or column of level-0 cells, no solid piece) from edge to edge: it is a sight corridor.
+    pub lane_free: bool,
+    /// Sub-seeds tried before the last one is returned as it is (the caller then sees `problems()`).
+    pub max_attempts: u8,
 }
 
 impl Theme {
@@ -54,10 +60,12 @@ impl Theme {
     pub fn budgets(self) -> Budgets {
         match self {
             Self::Deepworks => Budgets { raised: RAISED_PERMILLE, high: HIGH_PERMILLE, tower_pairs: TOWER_PAIRS, landmark_pieces: LANDMARK_PIECES,
-                lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Deck, LotKind::Hazard] },
+                lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
+                lot_pairs: 9, lot_shapes: &[(3, 2), (2, 3), (2, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lane_free: false, max_attempts: MAX_ATTEMPTS },
             // First town values (step 6 of the ruin-town plan re-fits them): more raised ground, one tower pair, more terraces.
             Self::RuinTown => Budgets { raised: (300, 400), high: (60, 110), tower_pairs: (1, 1), landmark_pieces: LANDMARK_PIECES,
-                lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Terrace, LotKind::Deck, LotKind::Hazard] },
+                lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
+                lot_pairs: 14, lot_shapes: &[(3, 2), (2, 3), (2, 2), (2, 2), (2, 1), (1, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], lane_free: true, max_attempts: 32 },
         }
     }
     fn salt(self) -> i64 { if self.is_default() { 0 } else { TOWN_SALT } }
@@ -104,6 +112,12 @@ impl Layout {
         }}
         m
     }
+    /// True if a full row or column is open ground (level 0, no solid landmark): a straight lane from edge to edge.
+    pub fn has_edge_to_edge_lane(&self) -> bool {
+        let solid = landmarks::solid_mask(&self.landmarks);
+        let open = |x: usize, z: usize| self.cell(x, z).level == 0 && !solid[z * self.nx + x];
+        (0..GRID).any(|a| (0..GRID).all(|k| open(k, a)) || (0..GRID).all(|k| open(a, k)))
+    }
     /// What this board still gets wrong; empty = accepted.
     pub fn problems(&self) -> Vec<&'static str> {
         let mut p = Vec::new();
@@ -114,6 +128,7 @@ impl Layout {
         if !(2 * b.tower_pairs.0..=2 * b.tower_pairs.1).contains(&self.towers()) { p.push("level-3 area outside its budget"); }
         if !(b.landmark_pieces.0..=b.landmark_pieces.1).contains(&self.landmarks.len()) { p.push("landmark count outside its budget"); }
         if self.landmarks.iter().flat_map(Landmark::cells).any(|i| self.connectors.iter().any(|c| usize::from(c.low) == i || usize::from(c.high) == i)) { p.push("a landmark stands on a ladder foot"); }
+        if b.lane_free && self.has_edge_to_edge_lane() { p.push("a straight open lane runs from edge to edge"); }
         if connect::component_count(&self.cells, &self.connectors, &landmarks::solid_mask(&self.landmarks)) != 1 { p.push("board is not one connected walkable area"); }
         if connect::ascent_shortfall(&self.cells, &self.connectors) > 0 { p.push("an island has fewer ascents than it could have (max 2)"); }
         p
@@ -128,9 +143,9 @@ pub fn generate(seed: i64, symmetry: Symmetry) -> Layout { generate_themed(seed,
 pub fn generate_themed(seed: i64, symmetry: Symmetry, theme: Theme) -> Layout {
     let (b, salt) = (theme.budgets(), theme.salt());
     let mut last = None;
-    for attempt in 0..MAX_ATTEMPTS {
+    for attempt in 0..b.max_attempts {
         let s = seed.wrapping_add(i64::from(attempt) * SUBSEED_STEP);
-        let g = graph::build(s ^ SALTS[0] ^ salt, symmetry);
+        let g = graph::build(s ^ SALTS[0] ^ salt, symmetry, &b);
         let (lots, mut cells) = levels::stack(s ^ SALTS[1] ^ salt, &g, &b);
         let connectors = connect::wire(s ^ SALTS[2] ^ salt, symmetry, &cells);
         let landmarks = landmarks::place(s ^ SALTS[3] ^ salt, symmetry, &mut cells, &connectors);
@@ -139,5 +154,5 @@ pub fn generate_themed(seed: i64, symmetry: Symmetry, theme: Theme) -> Layout {
         if layout.problems().is_empty() { return layout; }
         last = Some(layout);
     }
-    last.expect("MAX_ATTEMPTS > 0")
+    last.expect("max_attempts > 0")
 }
