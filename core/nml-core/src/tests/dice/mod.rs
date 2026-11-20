@@ -417,6 +417,7 @@ mod modifier_sum;
     mod growth_markers;
     mod heavy_impact;
 mod indirect_moved;
+mod cover_line;
 mod guarded_over9;
 mod melee_impact_order;
 mod relentless_thrust;

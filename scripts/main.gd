@@ -1014,6 +1014,9 @@ func _ready() -> void:
 	var rules_line := RulesAutomation.apply_table_setup(table_setup,opr_army_manager)
 	if rules_line != "":
 		_log_rule_event(BattleLog.Category.GENERAL,rules_line)
+	var system_line := GameSystem.apply_table_setup(table_setup,opr_army_manager)
+	if system_line != "":
+		_log_rule_event(BattleLog.Category.GENERAL,system_line)
 	var joining_client: bool = pending_internet and not ProjectSettings.get_setting("niemandsland/internet_is_host", false)
 	# Headless MP test harness (test/mp/): skip the interactive table-size chooser AND the
 	# cinematic intro and drop straight onto a live, RPC-capable table. Inert in normal play.
