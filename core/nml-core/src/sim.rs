@@ -12457,6 +12457,17 @@ fn settle_on_surface(next: &mut State, parent: &State, cover: Cover<'_>, rules_e
             settle_models(t, now, rules_epoch);
         }
     }
+    settle_objectives(t, &mut next.objectives, &parent.objectives, rules_epoch);
+}
+
+/// Heightfield plan step 15: a marker the activation moved (a relic dropped ~1 in from its carrier keeps the carrier's y) stands
+/// on the surface under its new x/z; one that did not move is left as captured (the table owns marker heights, step 20).
+pub(crate) fn settle_objectives(t: &Terrain, now: &mut [crate::state::Objective], before: &[crate::state::Objective], rules_epoch: u32) {
+    if rule_on(rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) && !t.tier_boxes().is_empty() {
+        for (o, _) in now.iter_mut().zip(before).filter(|(o, b)| o.pos != b.pos) {
+            o.pos[1] = sight::surface_y_m(t, [o.pos[0], o.pos[2]], rules_epoch);
+        }
+    }
 }
 
 /// Heightfield plan step 14: put `models` on the surface under their x/z (a board with tiers at the height gate only).

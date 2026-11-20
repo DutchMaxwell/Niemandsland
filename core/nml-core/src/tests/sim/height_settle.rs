@@ -41,3 +41,25 @@ use crate::acts::EPOCH_94_PARITY_BATCH;
             assert!(next.positions[0].iter().all(|p| p[0] > 0.0 && p[1] == 6.0 * IN2M), "{:?}", next.positions[0]);
         }
     }
+
+    /// Heightfield plan step 15: the core never decides a marker's height - a captured marker keeps the table's y - except
+    /// when the activation moves it: a relic dropped by its carrier (`mission::drop_carried`) lands ~1 in away at the
+    /// CARRIER's y. Here the carrier stood on the 6 in roof, the relic lands off the roof edge: it stands on the ground.
+    /// Red before: the relic hung at 6 in over the ground. A marker the activation did not move is not touched.
+    #[test]
+    fn a_dropped_relic_lands_at_its_tier_height() {
+        let (parent, _) = buff_line();
+        let mut parent = parent;
+        let (on_roof, away) = ([1.0 * IN2M, 6.0 * IN2M, 0.0], [5.0 * IN2M, 0.0, 0.0]);
+        parent.objectives = vec![crate::state::Objective { pos: on_roof, owner: 0 }, crate::state::Objective { pos: away, owner: 0 }];
+        let mut next = parent.clone();
+        next.objectives[0].pos = [-IN2M, 6.0 * IN2M, 0.0]; // dropped 2 in west of where it was, still at the carrier's y
+        let t = roof_column();
+        let mut settled = next.clone();
+        settle_on_surface(&mut settled, &parent, Cover::Board(&t), EPOCH_94_PARITY_BATCH);
+        assert_eq!(settled.objectives[0].pos[1], 0.0, "the dropped relic stands on the ground");
+        assert_eq!(settled.objectives[1].pos, away, "a marker that did not move is left as captured");
+        let mut below = next.clone();
+        settle_on_surface(&mut below, &parent, Cover::Board(&t), EPOCH_94_PARITY_BATCH - 1);
+        assert_eq!(below.objectives[0].pos[1], 6.0 * IN2M, "below the gate nothing changes");
+    }
