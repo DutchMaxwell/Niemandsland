@@ -56,7 +56,7 @@ static func reset_cache() -> void:
 static func config() -> Dictionary:
 	if not _loaded.is_empty():
 		return _loaded
-	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}, "unmapped_inert": false, "group_names": [], "shooter_only": {}}
+	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}, "unmapped_inert": false, "group_names": [], "shooter_only": {}, "lifted_names": {}}
 	var live := path_override.is_empty()
 	var path := live_path()
 	# Each file belongs to one door: the melee files only through MELEE_PATH / MELEE_DENY_PATH, every other path (shipped, deny, a test file) is the shoot door's.
@@ -80,6 +80,7 @@ static func config() -> Dictionary:
 	if _loaded["mode"] == "deny":
 		_loaded["inert"] = data.get("inert", {})
 		_loaded["deny_names"] = data.get("deny_names", {})   # one rule NAME refused where its primitive is shared
+		_loaded["lifted_names"] = data.get("lifted_names", {})   # H-9b: one rule NAME taken where its primitive's group is refused
 		_loaded["unmapped_inert"] = bool(data.get("unmapped_inert", false))
 	if live:
 		print(mode_line())   # C-19: one line per load of the live slice (once per process outside the tests), so a log names the slice in use
@@ -133,6 +134,8 @@ static func _rule_taken(gu: GameUnit, label: String, as_target := false) -> bool
 		return true
 	if (c["deny_names"] as Dictionary).has(label):
 		return false
+	if (c["lifted_names"] as Dictionary).has(label):
+		return true
 	var prims: Dictionary = c["primitives"]
 	var allow: bool = c["mode"] == "allow"
 	if allow and prims.is_empty():

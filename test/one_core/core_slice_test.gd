@@ -520,6 +520,16 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 		# H-9a: the beat is the bearer's own act, so a bearer SHOT AT is taken (the group's side is the shooter; probe ds/h_probe_beat_targets.md).
 		assert_array(CoreSlice.refusals(bearer, true)).override_failure_message(
 			"%s (%s/%s) as a target does not act in the volley" % [c[2], c[0], c[1]]).is_empty()
+	# H-9b: the Utility Buff names probed equal through real activations leave the group by name (`lifted_names`); the rest of the family stays refused.
+	for lifted in [["gf", "eternal_dynasty", "Casting Buff"], ["gf", "blessed_sisters", "Courage Buff"], ["gf", "dwarf_guilds", "Speed Debuff"],
+			["gf", "blessed_sisters", "Precision Fighter Buff"], ["gf", "robot_legions", "Unstoppable when Shooting Aura"]]:
+		var buffer := _unit([lifted[2], "Tough(3)"], [["AP(1)"]])
+		buffer.unit_properties["game_system"] = lifted[0]
+		buffer.unit_properties["faction_folder"] = lifted[1]
+		assert_array(CoreSlice.refusals(buffer)).override_failure_message("%s was probed equal through the door and leaves the group" % lifted[2]).is_empty()
+	var furious := _unit(["Furious Buff", "Tough(3)"], [["AP(1)"]])
+	furious.unit_properties["faction_folder"] = "alien_hives"
+	assert_array(CoreSlice.refusals(furious)).override_failure_message("Furious Buff differs through the door and stays refused").is_equal(["unit_rule:Furious Buff"])
 	# H-9a: the one beat name the target probe found different stays refused on either side (the table's prefix read of Regeneration).
 	var regen_buff := _unit(["Regeneration Buff", "Tough(3)"], [["AP(1)"]])
 	regen_buff.unit_properties["faction_folder"] = "dark_elf_raiders"

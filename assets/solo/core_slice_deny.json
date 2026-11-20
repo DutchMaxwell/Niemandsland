@@ -20,6 +20,25 @@
     "Enhanced Knightborn": "the table names the roll group by whichever of Knightborn / Enhanced Knightborn is live at the shot's distance (the gated Knightborn folds nothing within 9in); the core's group name is static, dlines_gap row 3.",
     "Protection Feat": "door omits the table's terrain trace (Grounded Protection) or once-per-game lines (Protection Feat), dlines_gap row 3; the roll, bypass and Warding gate lines are said since dlines2/3."
   },
+  "lifted_names": {
+    "Casting Buff": "Utility Buff names probed through real AI activations, door on against off (ds/h_probe_beat_names.md): dice, end state and battle-log lines equal in three placements, the core ran every activation and the table's line named the rule; the beat is no double resolution for these.",
+    "Casting Debuff": "same probe",
+    "Courage Buff": "same probe",
+    "Defense Buff": "same probe",
+    "Great Banner": "same probe",
+    "Great Musician": "same probe",
+    "Increased Shooting Range Buff": "same probe",
+    "Melee Evasion Buff": "same probe",
+    "Morale Debuff": "same probe",
+    "Piercing Debuff": "same probe",
+    "Precision Debuff": "same probe",
+    "Precision Fighter Buff": "same probe",
+    "Precision Fighting Mark": "same probe",
+    "Speed Debuff": "same probe",
+    "Thrust in Melee Aura": "same probe",
+    "Unstoppable when Shooting Aura": "same probe",
+    "Unwieldy Debuff": "same probe"
+  },
   "groups": {
     "door_omits_unstoppable_fold_line": {
       "primitives": [],
