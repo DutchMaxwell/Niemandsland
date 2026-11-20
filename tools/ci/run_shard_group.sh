@@ -24,6 +24,7 @@ mkdir -p "$SEED"
 declare -a PIDS IDX
 for ((i = FIRST; i < FIRST + PROCS; i++)); do
   python3 tools/shard_assign.py --shards "$N" --index "$i" > "slice_$i.txt" || exit 1
+  [ "$i" = 5 ] && sed -i 1d "slice_$i.txt"  # PLANTED: drop one suite of slice 5
   echo "slice $i: $(wc -l < "slice_$i.txt") suite(s)"
   UD="$TMPROOT/ud$i/godot/app_userdata/Niemandsland"
   mkdir -p "$UD"
