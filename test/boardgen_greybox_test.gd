@@ -74,17 +74,14 @@ func test_a_tier_block_is_as_high_as_its_level_in_inches() -> void:
 		assert_int(seen.size()).is_equal(2)   # the board has both tiers
 
 
-func test_every_connector_is_drawn_as_steps_or_as_rails_and_rungs() -> void:
+func test_every_connector_is_drawn_as_rails_and_rungs_on_the_flat_wall_and_never_as_stairs() -> void:
 	for layout in _layouts():
-		var stairs: int = layout["connectors"].filter(func(c: Dictionary) -> bool: return c["kind"] == "Stair").size()
-		var ladders: int = layout["connectors"].size() - stairs
 		var boxes := BoardgenGreybox.plan(layout)
-		assert_int(_of_kind(boxes, ["stair"]).size()).is_equal(stairs * BoardgenGreybox.STAIR_STEPS)
-		# Two rails and five rungs per 3 in ladder.
-		assert_int(_of_kind(boxes, ["ladder"]).size()).is_equal(ladders * 7)
-	var fixed := _fixture()
-	assert_bool(fixed["connectors"].any(func(c: Dictionary) -> bool: return c["kind"] == "Stair")).is_true()
-	assert_bool(fixed["connectors"].any(func(c: Dictionary) -> bool: return c["kind"] == "Ladder")).is_true()
+		assert_int(_of_kind(boxes, ["stair"]).size()).is_equal(0)
+		# Two rails and five rungs per 3 in ladder, whatever the generator calls the connector.
+		assert_int(_of_kind(boxes, ["ladder"]).size()).is_equal(layout["connectors"].size() * 7)
+	var kinds: Array = _fixture()["connectors"].map(func(c: Dictionary) -> String: return c["kind"])
+	assert_bool(kinds.has("Stair") and kinds.has("Ladder")).is_true()   # the recorded board still has both kinds: both are ladders now
 
 
 func test_one_layout_builds_the_same_board_and_another_layout_a_different_one() -> void:
@@ -94,19 +91,37 @@ func test_one_layout_builds_the_same_board_and_another_layout_a_different_one() 
 		assert_bool(BoardgenGreybox.plan(layouts[0]) == BoardgenGreybox.plan(layouts[i])).is_false()
 
 
-func test_build_makes_a_mesh_per_box_and_a_ground_layer_collider_per_solid_box() -> void:
-	var layout := _fixture()
+func _built(layout: Dictionary) -> BoardgenGreybox:
 	var node: BoardgenGreybox = auto_free(BoardgenGreybox.new())
 	add_child(node)
 	node.build(layout)
+	return node
+
+
+func test_build_draws_the_whole_board_in_one_multimesh_and_a_ground_layer_collider_per_solid_box() -> void:
+	var layout := _fixture()
+	var node := _built(layout)
 	var boxes := BoardgenGreybox.plan(layout)
-	var meshes := node.find_children("*", "MeshInstance3D", false, false)
-	assert_int(meshes.size()).is_equal(boxes.size())
+	var surfaces := node.find_child("Surfaces", false, false) as MultiMeshInstance3D
+	assert_int(surfaces.multimesh.instance_count).is_equal(boxes.size())
+	assert_int(node.find_children("*", "MeshInstance3D", false, false).size()).is_equal(0)   # one draw call, not one node per box
 	var body := node.find_child("Colliders", false, false) as StaticBody3D
 	assert_int(body.get_child_count()).is_equal(boxes.filter(func(b: Dictionary) -> bool: return b["solid"]).size())
 	assert_int(body.collision_layer).is_equal(BoardgenGreybox.GROUND_COLLISION_LAYER)
 	# Visual only for the rules: the board is none of the shelf pieces the sight and terrain rules read.
 	assert_bool(node.is_in_group("sandbox_terrain") or node.is_in_group("terrain")).is_false()
+
+
+func test_the_board_shader_gets_a_height_texel_per_cell_and_knows_every_surface_kind() -> void:
+	var layout := _fixture()
+	var surfaces := _built(layout).find_child("Surfaces", false, false) as MultiMeshInstance3D
+	var mat := surfaces.material_override as ShaderMaterial
+	var cells: Image = (mat.get_shader_parameter("cells") as ImageTexture).get_image()
+	assert_int(cells.get_width() * cells.get_height()).is_equal(CELLS)
+	for c: Dictionary in layout["cells"]:
+		assert_int(cells.get_pixel(c["x"], c["z"]).r8).is_equal(int(layout["level_in"][c["level"]]))
+	for b in BoardgenGreybox.plan(layout):   # (the per-instance kind itself is not readable back on the headless renderer)
+		assert_int(BoardgenGreybox.KINDS.find(b["kind"])).override_failure_message("the board shader has no kind '%s'" % b["kind"]).is_greater_equal(0)
 
 
 func test_the_dev_flag_is_off_unless_the_env_var_is_set() -> void:
