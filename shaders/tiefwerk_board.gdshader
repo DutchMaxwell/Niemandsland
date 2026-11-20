@@ -59,6 +59,7 @@ float wall_dist(vec2 g, ivec2 c, float h) {
 #include "res://shaders/tiefwerk_edges.gdshaderinc"
 #include "res://shaders/tiefwerk_relief.gdshaderinc"
 #include "res://shaders/tiefwerk_value.gdshaderinc"
+#include "res://shaders/tiefwerk_micro.gdshaderinc"
 
 // Distance in inches from the point g to the nearest sump cell among the 3x3 around cell c (the toxic stain on the floor and the walls); 9 = none.
 float sump_dist(vec2 g, ivec2 c) {
@@ -165,10 +166,15 @@ void fragment() {
 			nrel = wall_relief(uv, n, px, rh);   // frame, inset, rivets, louvres, plates and conduits as relief
 			rough = clamp(0.8 - rh * 3.0, 0.45, 1.0);   // recesses stay dull, raised parts are worn smooth
 			ao *= 1.0 + 4.0 * min(rh, 0.0);
+			float mic = micro_amount(px);   // the micro tier (chips, streaks, dust) fades out below ~2 px per feature
+			if (mic > 0.0) {
+				alb = dust(alb, rh, n2, mic);
+				alb = mix(alb, alb * vec3(0.55, 0.45, 0.38), 0.6 * mic * streaks(uv, px) * smoothstep(-0.6, 0.7, fp.y));   // streaks run down from the top of each plate
+			}
 		}
 		if (top_y - low_y >= 2.0 && dtop > 0.25 && dtop < 0.85 && h21(vec2(floor(uv.x / cell_in) + top_y, low_y + 7.0)) > 0.45) {   // hazard band only on some edges, chipped and dirty
 			vec3 paint = mix(vec3(0.04), YELLOW * 0.8, step(0.5, fract((uv.x + p.y) * 0.9)));
-			alb = mix(paint, alb, smoothstep(0.45, 0.65, n2 + 0.2 * n3));
+			alb = mix(paint, alb, detail > 0.5 ? chipped_wear(n2 + 0.2 * n3, 0.45, 0.65, uv, px) : smoothstep(0.45, 0.65, n2 + 0.2 * n3));
 		}
 	} else {   // top faces
 		float wet = 0.0;   // water lies level: the relief flattens under it
@@ -194,7 +200,7 @@ void fragment() {
 			float ph = h21(floor(uv / PLATE) + 3.7);
 			float ed = PLATE * 0.5 - max(abs(fp.x), abs(fp.y));
 			alb *= mix(0.88, 1.08, ph) * (1.0 - 0.45 * smoothstep(0.08, 0.0, ed) * (0.4 + n2));
-			alb = mix(alb, vec3(0.45, 0.44, 0.42), smoothstep(0.1, 0.0, ed) * smoothstep(0.45, 0.7, n3) * 0.5);
+			alb = mix(alb, vec3(0.45, 0.44, 0.42), smoothstep(0.1, 0.0, ed) * (detail > 0.5 ? chipped_wear(n3, 0.45, 0.7, uv, px) : smoothstep(0.45, 0.7, n3)) * 0.5);
 			if (ph < 0.03) {
 				vec4 h = hatch(fp, 0.5, n3);
 				alb = mix(alb, h.rgb, h.a);
@@ -203,7 +209,7 @@ void fragment() {
 				alb = mix(alb, mix(vec3(0.015), vec3(0.2, 0.2, 0.21), step(0.5, fract(fp.x * 6.0))), step(frame, 0.5));
 				alb *= 1.0 - 0.6 * smoothstep(0.04, 0.0, abs(frame - 0.53));
 			} else if (ph > 0.94 && k == 1) {   // a worn safety-yellow stripe on the street
-				alb = mix(alb, YELLOW * 0.7, step(abs(fp.x), 0.09) * smoothstep(0.45, 0.65, n2 + 0.3 * n3));
+				alb = mix(alb, YELLOW * 0.7, step(abs(fp.x), 0.09) * (detail > 0.5 ? chipped_wear(n2 + 0.3 * n3, 0.45, 0.65, uv, px) : smoothstep(0.45, 0.65, n2 + 0.3 * n3)));
 			}
 			// Water: a world-space noise field (domain-warped, so the outline is irregular), biased to collect along the walls. Nothing here
 			// reads the cell grid, so no puddle is clipped at a cell edge; a damp ring and a soft rim surround the open water.
@@ -273,6 +279,7 @@ void fragment() {
 			nrel = top_relief(uv, k, half_board, px, max(wet, step(0.5, me.y)), th);   // plate seams, hatches, grates, deck rivets and tread, roof joints; a sump's liquid lies level too
 			rough = clamp(rough - th * 4.0 * (1.0 - wet), 0.05, 1.0);
 			ao *= 1.0 + 4.0 * min(th, 0.0);
+			alb = dust(alb, th * (1.0 - wet), n2, micro_amount(px));   // dust settles in the sunk seams and grates, never on water
 		}
 		if (detail > 0.5) {
 			alb = value_top(alb, k, me.z);   // the level's value step, a quiet floor, ONE roof look per lot (lot id = the cell texture's blue channel)
@@ -283,7 +290,7 @@ void fragment() {
 			alb = lip < 0.08 ? alb * 1.5 + 0.08 : alb * 0.5;
 		}
 	}
-	vec4 ew = box_in.x > 0.0 && detail > 0.5 ? edge_wear(lpos, box_in * 0.5, lnrm, p, k, half_board, smoothstep(0.48, 0.56, n3 * 0.6 + n2 * 0.5)) : vec4(0.0);   // every real box edge: a broken pale highlight, a bent normal
+	vec4 ew = box_in.x > 0.0 && detail > 0.5 ? edge_wear(lpos, box_in * 0.5, lnrm, p, k, half_board, micro_amount(px) > 0.0 ? mix(smoothstep(0.48, 0.56, n3 * 0.6 + n2 * 0.5), chips(uv, 0.05, px), micro_amount(px)) : smoothstep(0.48, 0.56, n3 * 0.6 + n2 * 0.5)) : vec4(0.0);   // every real box edge: a broken pale highlight, a bent normal
 	alb = mix(alb, mix(alb * 1.5 + 0.08, vec3(0.62, 0.6, 0.57), 0.6), ew.x);
 	rough = mix(rough, 0.45, ew.x);
 	if (dot(ew.yzw, ew.yzw) > 0.0001 || dot(nrel - n, nrel - n) > 0.0) {

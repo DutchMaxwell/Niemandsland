@@ -6,7 +6,7 @@ const SHADER_PATH := "res://shaders/tiefwerk_board.gdshader"
 
 
 const INCLUDES := ["res://shaders/tiefwerk_noise.gdshaderinc", "res://shaders/tiefwerk_edges.gdshaderinc", "res://shaders/tiefwerk_relief.gdshaderinc",
-	"res://shaders/tiefwerk_value.gdshaderinc"]
+	"res://shaders/tiefwerk_value.gdshaderinc", "res://shaders/tiefwerk_micro.gdshaderinc"]
 
 
 ## The board shader with its includes appended (the pins below do not care which file a function lives in).
@@ -162,3 +162,24 @@ func test_a_roof_has_one_look_per_lot_and_the_value_ladder_runs_floor_deck_roof_
 		gains[gain] = float(line.get_slice("=", 1).get_slice(";", 0))
 	# the floor is darkened, a tower top is lifted over the roofs (the deck's own base value is lower than the roofs', so its gain may be above 1)
 	assert_bool(gains["FLOOR_GAIN"] < 1.0 and gains["FLOOR_GAIN"] < gains["DECK_GAIN"] and gains["ROOF_GAIN"] < gains["TOWER_GAIN"]).is_true()
+
+
+func test_the_micro_tier_is_sharp_chips_and_thin_streaks_that_fade_out_below_two_pixels() -> void:
+	var src := _source()
+	assert_bool(src.contains("float chips(vec2 uv, float size, float px)")).is_true()
+	assert_str(_line_with(src, "m = max(m, smoothstep(rad + w")).is_not_empty()   # a chip has a hard edge one pixel wide, not an airbrushed blob
+	assert_str(_line_with(src, "float w = px / size;")).is_not_empty()
+	assert_str(_line_with(src, "return 1.0 - smoothstep(")).contains("0.012").contains("0.025")   # gone from 0.025 in per pixel on: the play camera sees none of it
+	assert_str(_line_with(src, "float s = vnoise(vec2(uv.x * 24.0")).contains("uv.y * 2.0")   # streaks stretched 1:12 down the wall
+	assert_str(_line_with(src, "float hard = max(step(hi, t)")).contains("chips(uv, 0.045, px)")   # chips of 0.045 in (the plan's 0.02-0.05)
+
+
+func test_worn_paint_goes_through_the_chips_with_the_finer_look_and_keeps_the_soft_blend_on_low() -> void:
+	var src := _source()
+	var hazard := _line_with(src, "alb = mix(paint, alb,")
+	assert_str(hazard).contains("detail > 0.5 ? chipped_wear(").contains(": smoothstep(0.45, 0.65, n2 + 0.2 * n3)")
+	var street := _line_with(src, "alb = mix(alb, YELLOW * 0.7, step(abs(fp.x)")
+	assert_str(street).contains("detail > 0.5 ? chipped_wear(").contains(": smoothstep(")
+	assert_str(_line_with(src, "smoothstep(0.1, 0.0, ed) * (detail > 0.5")).contains("chipped_wear(n3, 0.45, 0.7, uv, px)")
+	assert_str(_line_with(src, "vec4 ew =")).contains("chips(uv, 0.05, px)")   # the edge highlight breaks up in the same chips when close
+	assert_str(_line_with(src, "dust(alb, rh, n2, mic)")).is_not_empty()   # dust in the recesses of a wall
