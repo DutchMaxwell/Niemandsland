@@ -28,6 +28,10 @@ const BLOODTHIRST := {"name": "Infuse Bloodthirst", "threshold": 1, "range_in": 
 const PSYCHIC_BLAST := {"name": "Psychic Blast", "threshold": 1, "range_in": 18,
 	"target": {"side": "enemy", "count": 1, "kind": "unit"},
 	"effect": {"kind": "damage", "hits": 6, "weapon_rules": ["AP(2)"]}}
+## A spell the core's spell book does not hold: its probe refuses it before any die (the table casts it from the planner's entry).
+const UNKNOWN_BOLT := {"name": "Unknown Bolt", "threshold": 1, "range_in": 18,
+	"target": {"side": "enemy", "count": 1, "kind": "unit"},
+	"effect": {"kind": "damage", "hits": 3, "weapon_rules": []}}
 const SEEDS: Array[int] = [0, 1, 2, 3, 8, 11]
 
 
@@ -83,9 +87,13 @@ func before_test() -> void:
 	_main.add_child(_rec)
 	_main.combat_stage = _rec
 	CoreActivation._env = 1
+	CoreActivation._cast_env = -1
+	CoreActivation.cast_probe_refusals = 0
+	CoreActivation.cast_probe_reasons.clear()
 
 
 func after_test() -> void:
+	CoreActivation._cast_env = -1
 	AiActRecorder.rules_epoch = _epoch_before
 	AiActRecorder._stream = null
 	AiActRecorder._checked = false
@@ -98,20 +106,32 @@ func after_test() -> void:
 	_runner = null
 
 
-## One activation on fresh units: the caster (a rifle when `shoot`), the foe (six models, or gone for `fizzle`). `door` = through
-## the core. Returns everything both paths must agree on.
-func _run(spell: Dictionary, seed: int, door: bool, opts := {}) -> Dictionary:
+## One activation on fresh units: the caster (a rifle when `shoot`), the foe (six models, or gone for `fizzle`). `mode`: "table" =
+## the table's resolvers; "run_ai" = `CoreActivation.run_ai` with the report marked `cast_door` (CC-12); "body" = the AI body's own
+## seams behind the switch (CC-13a): `takes_ai_activation`, `_solo_ai_casts` (the probe), `_solo_ai_core_call`. `opts.dangerous`
+## = a Dangerous block under the caster (the test the body owes) (the core's when it takes the activation, else the table pays it before the casts).
+## Returns everything both paths must agree on.
+func _run(spell: Dictionary, seed: int, mode: String, opts := {}) -> Dictionary:
+	var door := mode != "table"
 	var shoot: bool = bool(opts.get("shoot", false))
 	var caster := ParityTable._make_unit(_main, MYSTIC, RIFLE if shoot else STAFF)
 	var foe := ParityTable._make_unit(_main, FOE.merged({"models": int(opts.get("foe_models", 6))}, true), {})
 	if bool(opts.get("fizzle", false)):
 		Harness._kill_models(foe, foe.models.size())
+	var painted := {}   # a Dangerous block under the caster: the core rolls the test from the captured board, the table's forced dice match
+	var dangerous := 0
+	if bool(opts.get("dangerous", false)):
+		painted = Harness._paint_cover(_main, caster, _main.terrain_overlay.TerrainType.DANGEROUS)
+		dangerous = OPRArmyManager.dangerous_dice_for(caster)
 	var on_self: bool = str((spell["target"] as Dictionary)["side"]) == "friendly"
 	var cast := {"caster": caster, "caster_unit": caster, "name": str(spell["name"]), "spell": spell,
 		"targets": [caster] if on_self else [foe], "boost": 0, "interference": 0, "base_target": 4, "threshold": 1,
 		"owner_label": "AI (Mystic)", "interference_open": false, "boost_sources": [], "interference_sources": [],
 		"conduit": null, "conduit_shaken": [], "pools": []}
 	var report := {"action": AiDecision.Action.HOLD, "moved": false, "casts": [cast]}
+	var out_takes := false
+	var out_marked := false
+	var runs_before := CoreActivation.ai_runs
 	var shots: Array = []
 	if shoot:
 		for pr in AiShooting.profiles_in_range([(caster.source_data as OPRApiClient.OPRUnit).weapons[0]], float(FOE["x_in"])):
@@ -133,12 +153,31 @@ func _run(spell: Dictionary, seed: int, door: bool, opts := {}) -> Dictionary:
 	CoreShadow.tapping = true
 	_rec.calls.clear()
 	_main.seed_tray_rng(seed)
-	if door:
+	if mode == "run_ai":
 		report["cast_door"] = true
 		var ran: bool = await CoreActivation.run_ai(_main, caster, report, foe if shoot else null, h, shots, not shoot)
 		assert_bool(ran).override_failure_message("the door refused the cast activation").is_true()
 		_main.solo_controller._core_node_ready().release(h)
+	elif mode == "body":
+		_main._solo_core_ai_h = h
+		if dangerous > 0:
+			report["dangerous_dice"] = dangerous
+		var takes: bool = CoreActivation.takes_ai_activation(_main, caster, report)
+		out_takes = takes
+		if dangerous > 0 and takes:
+			report["core_dangerous"] = dangerous   # the body's deferral: the core's one call pays it
+		elif dangerous > 0:
+			await _main._run_ai_dangerous(caster, dangerous)
+		await _main._solo_ai_casts(caster, report, takes)
+		if opts.get("no_core_call", false):
+			_main._solo_core_ai_h = 0   # the call cannot run (no board): the fallback owes the casts
+		await _main._solo_ai_core_call(caster, report, foe if shoot else null, shots)
+		out_marked = report.has("cast_door")
+		_main._solo_core_ai_h = 0
+		_main.solo_controller._core_node_ready().release(h)
 	else:
+		if dangerous > 0:
+			await _main._run_ai_dangerous(caster, dangerous)
 		await _main._solo_resolve_ai_casts(report)
 		if shoot:
 			await _main._solo_resolve_ai_volley(caster, foe, shots)
@@ -159,11 +198,12 @@ func _run(spell: Dictionary, seed: int, door: bool, opts := {}) -> Dictionary:
 		return _CONSUMED.sub(c, "", true))
 	var out := {"lines": lines, "rolls": rolls, "final": Harness._final([caster, foe]), "rng": Harness._rng_state(_main),
 		"mods": Harness._spell_state(_main, [caster, foe]), "tokens": caster.casts_current, "pre": pre,
-		"cards": cards, "ledger": AiActRecorder._ledger_of(caster).get("buffs", []).size()
+		"takes": out_takes, "marked": out_marked, "core_ran": CoreActivation.ai_runs - runs_before, "cards": cards, "ledger": AiActRecorder._ledger_of(caster).get("buffs", []).size()
 			+ AiActRecorder._ledger_of(foe).get("buffs", []).size()}
 	for gu in [caster, foe]:
 		_main._solo_spell_mods.erase((gu as GameUnit).get_instance_id())
 	_main._solo_spell_tokens_active.clear()
+	Harness._unpaint_cover(_main, painted)
 	Harness._free_units(_main, [caster, foe])
 	await _main.get_tree().process_frame
 	return out
@@ -171,7 +211,7 @@ func _run(spell: Dictionary, seed: int, door: bool, opts := {}) -> Dictionary:
 
 ## The first field two runs differ in, as text; "" = equal.
 func _diff(table: Dictionary, door: Dictionary) -> String:
-	for k in ["lines", "rolls", "final", "rng", "mods", "tokens", "pre", "ledger", "cards"]:
+	for k in ["lines", "rolls", "final", "rng", "mods", "tokens", "pre", "ledger", "cards"]:   # `takes` / `marked` are the switch's own
 		if table[k] != door[k]:
 			var a: Array = table[k] if table[k] is Array else [table[k]]
 			var b: Array = door[k] if door[k] is Array else [door[k]]
@@ -180,16 +220,19 @@ func _diff(table: Dictionary, door: Dictionary) -> String:
 	return ""
 
 
-func _grid(spell: Dictionary, opts := {}) -> Array:
+func _grid(spell: Dictionary, opts := {}, mode := "run_ai") -> Array:
 	var bad: Array = []
 	var landed := 0
-	for s in SEEDS:
-		var table := await _run(spell, s, false, opts)
-		var door := await _run(spell, s, true, opts)
+	for s in (opts.get("seeds", SEEDS) as Array):
+		var table := await _run(spell, s, "table", opts)
+		var door := await _run(spell, s, mode, opts)
 		landed += 1 if (door["rolls"] as Array).size() > 0 else 0
 		var d := _diff(table, door)
 		if d != "":
 			bad.append("%s seed %d: %s" % [spell["name"], s, d])
+		if mode == "body" and (not bool(door["takes"]) or bool(door["marked"]) or int(door["core_ran"]) != 1):
+			bad.append("%s seed %d: takes %s, mark left %s, core ran %d (must be 1: the core resolved the casts, not the table's fallback)" % [
+				spell["name"], s, door["takes"], door["marked"], door["core_ran"]])
 	if not bool(opts.get("fizzle", false)):
 		assert_int(landed).override_failure_message("no activation rolled a die").is_greater(0)
 	return bad
@@ -212,7 +255,7 @@ func test_a_cast_through_the_door_is_the_table_cast(timeout := 600000) -> void:
 func test_a_hit_buff_is_on_the_table_and_in_the_next_capture() -> void:
 	var hit := 0
 	for s in SEEDS:
-		var door := await _run(TERROR_SEEKER, s, true)
+		var door := await _run(TERROR_SEEKER, s, "run_ai")
 		var passed: bool = int(str((door["rolls"] as Array)[0]).get_slice("|", 4)) >= 4   # the cast die's face against its 4+
 		hit += 1 if passed else 0
 		assert_int(int(door["ledger"])).override_failure_message("seed %d: rolls %s ledger %s" % [s, door["rolls"], door["ledger"]]) \
@@ -235,3 +278,72 @@ func test_the_delta_lands_a_gained_buff_once() -> void:
 	_main._solo_spell_mods.erase(caster.get_instance_id())
 	_main._solo_spell_tokens_active.clear()
 	Harness._free_units(_main, [caster])
+
+
+## CC-13a: with the switch ON the AI body's own seams take the cast: `takes_ai_activation`, the probe, the core's one call. The same
+## cases as the door grid above, through `_solo_ai_casts` + `_solo_ai_core_call` instead of a hand-marked `run_ai`; the Dangerous
+## test the body owes rides the core's call and is thrown BEFORE the cast die, as the table pays it. Equal to the table path.
+func test_the_body_takes_a_cast_through_the_switch(timeout := 600000) -> void:
+	CoreActivation._cast_env = 1
+	var bad: Array = []
+	bad.append_array(await _grid(TERROR_SEEKER, {}, "body"))
+	bad.append_array(await _grid(BLOODTHIRST, {}, "body"))
+	bad.append_array(await _grid(PSYCHIC_BLAST, {"foe_models": 10}, "body"))
+	bad.append_array(await _grid(BLOODTHIRST, {"fizzle": true}, "body"))
+	bad.append_array(await _grid(BLOODTHIRST, {"shoot": true}, "body"))
+	# seed 3's Dangerous die is a 1 that destroys the one-model caster: the door's destroyed-unit lines differ from the table's there
+	# (the volley door's own, `e2e_one_core_ai_dangerous_test`), not a cast matter
+	bad.append_array(await _grid(TERROR_SEEKER, {"dangerous": true, "seeds": [0, 1, 2, 8, 11]}, "body"))
+	assert_array(bad).override_failure_message("\n".join(bad.slice(0, 2))).is_empty()
+	assert_int(CoreActivation.cast_probe_refusals).override_failure_message("a probe refused: %s" % str(CoreActivation.cast_probe_reasons)).is_equal(0)
+
+
+## CC-13a: a spell the core cannot take is refused by the probe BEFORE any die, and the table then does what it always did: it
+## pays the Dangerous test the body had left to the core, then resolves the cast (never cast -> Dangerous, c19_cast_dangerous_order).
+func test_a_refused_probe_leaves_the_table_its_old_order() -> void:
+	CoreActivation._cast_env = 1
+	for s in [0, 1, 2]:
+		var table := await _run(UNKNOWN_BOLT, s, "table", {"dangerous": true})
+		var body := await _run(UNKNOWN_BOLT, s, "body", {"dangerous": true})
+		assert_str(_diff(table, body)).override_failure_message("seed %d: %s" % [s, _diff(table, body)]).is_empty()
+		assert_bool(bool(body["takes"]) and not bool(body["marked"])).override_failure_message("taken by the predicate, not by the probe").is_true()
+		assert_bool(str((body["rolls"] as Array)[0]).begins_with("dangerous|")).override_failure_message("the Dangerous test comes first: %s" % str(body["rolls"])).is_true()
+	assert_int(CoreActivation.cast_probe_refusals).override_failure_message(str(CoreActivation.cast_probe_reasons)).is_equal(3)
+
+
+## CC-13a: with the switch OFF nothing changes: the activation is not taken (CC-2c's line), no mark, the table casts.
+func test_the_switch_off_keeps_the_old_path() -> void:
+	CoreActivation._cast_env = 0
+	var table := await _run(TERROR_SEEKER, 0, "table")
+	var body := await _run(TERROR_SEEKER, 0, "body")
+	assert_str(_diff(table, body)).is_empty()
+	assert_bool(bool(body["takes"]) or bool(body["marked"])).is_false()
+	assert_int(CoreActivation.cast_probe_refusals).is_equal(0)
+
+
+## CC-13a: a marked activation whose core call cannot run (no board) owes the casts: the fallback pays the test and casts on the
+## table, the activation's old order.
+func test_a_core_call_that_cannot_run_leaves_the_casts_to_the_table() -> void:
+	CoreActivation._cast_env = 1
+	for s in [0, 1]:
+		var table := await _run(TERROR_SEEKER, s, "table", {"dangerous": true})
+		var body := await _run(TERROR_SEEKER, s, "body", {"dangerous": true, "no_core_call": true})
+		assert_str(_diff(table, body)).override_failure_message("seed %d: %s" % [s, _diff(table, body)]).is_empty()
+		assert_bool(bool(body["takes"]) and not bool(body["marked"])).is_true()
+
+
+## CC-13a: the cast predicate: a unit (or a joined hero) that carries a table-only pre-attack beat (Mend here) stays on the table
+## even with the switch ON; a plain caster is taken.
+func test_a_unit_with_a_pre_attack_beat_stays_on_the_table() -> void:
+	CoreActivation._cast_env = 1
+	var plain := ParityTable._make_unit(_main, MYSTIC, STAFF)
+	var mender := ParityTable._make_unit(_main, MYSTIC.merged({"key": "mn", "name": "Mender", "faction_folder": "robot_legions", "rules": ["Caster", "Mend"]}, true), STAFF)
+	var cast := {"caster": mender, "caster_unit": mender, "name": "Terror Seeker", "spell": TERROR_SEEKER, "targets": [mender]}
+	var report := {"action": AiDecision.Action.HOLD, "moved": false, "casts": [cast]}
+	assert_bool(CoreActivation.cast_chain_clear(plain)).is_true()
+	assert_bool(CoreActivation.cast_chain_clear(mender)).override_failure_message("Mend is a table-only beat").is_false()
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	assert_bool(CoreActivation.takes_ai_activation(_main, mender, report)).is_false()
+	_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+	_main._solo_core_ai_h = 0
+	Harness._free_units(_main, [plain, mender])
