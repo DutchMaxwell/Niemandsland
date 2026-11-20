@@ -9,9 +9,10 @@ use super::{budget, Budgets, Symmetry, DEPLOY_DEPTH_CELLS, GRID};
 
 /// Lot archetypes (theme-neutral; a kit table picks the look). `Block`: solid mass, walkable roof, blocks sight.
 /// `Terrace`: an L-shaped step, the rest of the lot stays ground. `Deck`: open raised platform, sight passes.
-/// `Hazard`: flat area hazard, never raised. `Rough`: a flat plot (garden, rubble) that is never raised and gets no piece on it.
+/// `Hazard`: flat area hazard, never raised. `Rough`: a flat plot (garden, rubble) that is never raised and gets no piece on it. `Wall`: a cell of the
+/// city wall (its 6 in ridge, a 9 in wall tower or a 3 in buttress stair), set by the wall stage and never by a lot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LotKind { Street, Block, Terrace, Deck, Hazard, Rough }
+pub enum LotKind { Street, Block, Terrace, Deck, Hazard, Rough, Wall }
 
 /// One lattice cell. `level` 0/1/2/3 = 0/3/6/9 in; `deploy` 1/2 = the player whose band it is, 0 = neither.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -58,12 +59,13 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
         cells[a].level = 0; cells[b].level = 0;
     }
     if b.tower_side == 2 { raise_towers_2x2(&mut cells, sym, &mut rng, b.tower_pairs); }
+    if g.wall.iter().any(|&w| w) { raise_wall(&mut cells, &g.wall, &mut rng); }
     // Level 2: raised cells outside the deployment bands. A pair is kept only if the board stays one piece when every
     // step of at most one level counts as a possible way up, so no island of level 2 is ever cut off.
-    let (min_h, max_h) = budget(b.high);
+    let (min_h, max_h) = budget(b.lift);
     let (lo, hi) = ((min_h + 1) & !1, max_h & !1);
     let target = lo + 2 * rng.randi_range(0, ((hi - lo) / 2) as i64) as usize;
-    let lift = |i: usize, cs: &[Cell]| cs[i].level == 1 && cs[i].deploy == 0;
+    let lift = |i: usize, cs: &[Cell]| cs[i].level == 1 && cs[i].deploy == 0 && cs[i].lot_kind != LotKind::Wall;
     let (mut lifted, order) = (0, paired(&cells, sym, &mut rng, lift, |c| match c.lot_kind { LotKind::Block | LotKind::Terrace => 0, LotKind::Deck => 1, _ => 2 }));
     for (a, b) in order {
         if lifted == target / 2 { break; }
@@ -82,6 +84,31 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
         }
     }
     (lots, cells)
+}
+
+/// The city wall. The reserved cells rise to level 2 (lot kind `Wall`); the first and last cell of each run of two or more become level-3 wall
+/// towers; one inner cell is a breach (level 0, kind `Wall`: rubble); and a level-1 buttress stands beside every run (the way up for the ladders), all done
+/// for the west twin and mirrored, so the board stays a half turn. If the result is not one piece the wall is dropped (the validator rejects the board).
+fn raise_wall(cells: &mut [Cell], wall: &[bool], rng: &mut GodotRng) {
+    let snap = cells.to_vec();
+    let col: Vec<usize> = (0..GRID * GRID).filter(|&i| wall[i] && i % GRID < GRID / 2).collect();   // the west twin, top to bottom
+    let set = |cells: &mut [Cell], i: usize, level: u8, kind: LotKind| for j in [i, mirror(i)] { cells[j].level = level; cells[j].lot_kind = kind; };
+    for &i in &col { set(cells, i, 2, LotKind::Wall); }
+    let inner: Vec<usize> = col.iter().copied().filter(|&i| col.contains(&(i - GRID)) && col.contains(&(i + GRID))).collect();
+    if !inner.is_empty() { set(cells, inner[rng.randi_range(0, inner.len() as i64 - 1) as usize], 0, LotKind::Wall); }
+    // runs of wall cells (the walkway); a run of two has a wall tower at one end, a run of three or more at both, and every run gets one buttress on free ground beside a
+    // level-2 cell, nearest the run's middle first (a tower is 9 in: a 3 in buttress cannot reach it)
+    let mut runs: Vec<Vec<usize>> = Vec::new();
+    for &i in &col { if cells[i].lot_kind == LotKind::Wall && cells[i].level == 2 { if runs.last().is_some_and(|r| r.last() == Some(&(i - GRID))) { runs.last_mut().expect("a run").push(i); } else { runs.push(vec![i]); } } }
+    for run in runs {
+        let towers = match run.len() { 0 | 1 => Vec::new(), 2 => vec![run[0]], n => vec![run[0], run[n - 1]] };
+        for &i in &towers { set(cells, i, 3, LotKind::Wall); }
+        let mut by_middle: Vec<usize> = run.iter().copied().filter(|i| !towers.contains(i)).collect();
+        by_middle.sort_by_key(|&i| i.abs_diff(run[run.len() / 2]));
+        let free = |cells: &[Cell], j: usize| cells[j].level == 0 && !cells[j].street && cells[j].lot_kind == LotKind::Street && !wall[j] && cells[j].deploy == 0;
+        if let Some(j) = by_middle.iter().flat_map(|&i| [i + 1, i - 1]).find(|&j| free(cells, j) && free(cells, mirror(j))) { set(cells, j, 1, LotKind::Wall); }
+    }
+    if !one_piece(cells) { cells.clone_from_slice(&snap); }
 }
 
 /// Town towers, raised before the level-2 lift: a 2 x 2 block of level-1 cells outside the bands rises to level 3, with one level-1 cell beside it

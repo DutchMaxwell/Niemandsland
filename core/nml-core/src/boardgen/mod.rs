@@ -45,7 +45,7 @@ pub enum Theme { #[default] Deepworks, RuinTown }
 /// and the lot kinds the free lots draw from.
 #[derive(Debug, Clone, Copy)]
 pub struct Budgets {
-    pub raised: (usize, usize), pub high: (usize, usize), pub tower_pairs: (usize, usize), pub landmark_pieces: (usize, usize),
+    pub raised: (usize, usize), pub high: (usize, usize), pub lift: (usize, usize), pub tower_pairs: (usize, usize), pub landmark_pieces: (usize, usize),
     pub lot_pool: &'static [LotKind],
     /// Mirrored lot pairs the graph aims for, the lot footprints (w, h in cells) it draws from at random, and the order it fills gaps in.
     pub lot_pairs: usize, pub lot_shapes: &'static [(usize, usize)], pub lot_fill: &'static [(usize, usize)],
@@ -57,9 +57,13 @@ pub struct Budgets {
     pub garden_min: usize,
     /// Side in cells of the market square kept as street cells about the board centre (even; 0 = none).
     pub plaza: usize,
+    /// Whether the board has a city wall (two half-turn twins of a 6 in ridge with a gate, a breach, towers and a buttress each).
+    pub wall: bool,
     /// The landmark kinds drawn as mirrored pairs, how many pairs a board gets (inclusive), and whether the fountain (a `TankCluster`) stands alone
     /// at the board centre, on the market square.
     pub landmark_kinds: &'static [LandmarkKind], pub landmark_pairs: (usize, usize), pub centre_piece: bool,
+    /// Whether a pool may also be a 2 x 1 / 1 x 2 well yard (a garden plot is one).
+    pub small_pools: bool,
     /// Reject a board with a straight open lane (a full row or column of level-0 cells, no solid piece) from edge to edge: it is a sight corridor.
     pub lane_free: bool,
     /// Sub-seeds tried before the last one is returned as it is (the caller then sees `problems()`).
@@ -72,15 +76,15 @@ impl Theme {
     pub fn is_default(&self) -> bool { *self == Self::Deepworks }
     pub fn budgets(self) -> Budgets {
         match self {
-            Self::Deepworks => Budgets { raised: RAISED_PERMILLE, high: HIGH_PERMILLE, tower_pairs: TOWER_PAIRS, landmark_pieces: LANDMARK_PIECES,
+            Self::Deepworks => Budgets { raised: RAISED_PERMILLE, high: HIGH_PERMILLE, lift: HIGH_PERMILLE, tower_pairs: TOWER_PAIRS, landmark_pieces: LANDMARK_PIECES,
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
-                lot_pairs: 9, lot_shapes: &[(3, 2), (2, 3), (2, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[], garden_area: 0, garden_min: 0, plaza: 0,
-                landmark_kinds: &[LandmarkKind::TankCluster, LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (1, 2), centre_piece: false, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1 },
+                lot_pairs: 9, lot_shapes: &[(3, 2), (2, 3), (2, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[], garden_area: 0, garden_min: 0, plaza: 0, wall: false,
+                landmark_kinds: &[LandmarkKind::TankCluster, LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (1, 2), centre_piece: false, small_pools: false, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1 },
             // First town values (step 6 of the ruin-town plan re-fits them): more raised ground, one tower pair, more terraces.
-            Self::RuinTown => Budgets { raised: (300, 400), high: (60, 150), tower_pairs: (1, 1), landmark_pieces: (7, 7),
+            Self::RuinTown => Budgets { raised: (300, 460), high: (60, 200), lift: (30, 70), tower_pairs: (1, 1), landmark_pieces: (7, 7),
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
-                lot_pairs: 13, lot_shapes: &[(3, 2), (2, 3), (2, 2), (2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[(3, 2)], garden_area: 2, garden_min: 6, plaza: 4,
-                landmark_kinds: &[LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (3, 3), centre_piece: true, lane_free: true, max_attempts: 32, tower_side: 2 },
+                lot_pairs: 13, lot_shapes: &[(3, 2), (2, 3), (2, 2), (2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[(3, 2)], garden_area: 2, garden_min: 5, plaza: 4, wall: true,
+                landmark_kinds: &[LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (3, 3), centre_piece: true, small_pools: true, lane_free: true, max_attempts: 64, tower_side: 2 },
         }
     }
     fn salt(self) -> i64 { if self.is_default() { 0 } else { TOWN_SALT } }
@@ -116,7 +120,7 @@ impl Layout {
     }
     pub fn raised(&self) -> usize { self.cells.iter().filter(|c| c.level >= 1).count() }
     pub fn high(&self) -> usize { self.cells.iter().filter(|c| c.level >= 2).count() }
-    pub fn towers(&self) -> usize { self.cells.iter().filter(|c| c.level == 3).count() }
+    pub fn towers(&self) -> usize { self.cells.iter().filter(|c| c.level == 3 && c.lot_kind != LotKind::Wall).count() }
     /// Largest height step between two neighbouring cells, in inches.
     pub fn max_drop_in(&self) -> u32 {
         let lv = |x: usize, z: usize| LEVEL_IN[usize::from(self.cell(x, z).level)];
@@ -144,6 +148,7 @@ impl Layout {
         if !(b.landmark_pieces.0..=b.landmark_pieces.1).contains(&self.landmarks.len()) { p.push("landmark count outside its budget"); }
         if self.landmarks.iter().flat_map(Landmark::cells).any(|i| self.connectors.iter().any(|c| usize::from(c.low) == i || usize::from(c.high) == i)) { p.push("a landmark stands on a ladder foot"); }
         if self.lots.iter().filter(|l| l.kind == LotKind::Rough).count() < b.garden_min { p.push("too few garden plots"); }
+        if b.wall && !self.cells.iter().any(|c| c.lot_kind == LotKind::Wall && c.level == 2) { p.push("no city wall"); }
         if b.lane_free && self.has_edge_to_edge_lane() { p.push("a straight open lane runs from edge to edge"); }
         if connect::component_count(&self.cells, &self.connectors, &landmarks::solid_mask(&self.landmarks)) != 1 { p.push("board is not one connected walkable area"); }
         if connect::ascent_shortfall(&self.cells, &self.connectors) > 0 { p.push("an island has fewer ascents than it could have (max 2)"); }
