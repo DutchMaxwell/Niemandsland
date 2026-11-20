@@ -56,12 +56,6 @@
       "why": "The table names a target's Armor(X) before the announce (`<U> has Armor(X): counts as Defense N+`); the core applies it and writes no line. Measured 19.11.: 3 volleys at 1500 and at 2000 pts, dlines_gap row 23.",
       "leaves_with": "the dlines3 train that says the Armor line"
     },
-    "door_omits_conditional_ap_line": {
-      "primitives": ["Disintegrate", "Tear"],
-      "kind": "rule_line",
-      "why": "The table names the conditional AP of Disintegrate and Tear (`<rule>: AP(+N) against <U>`) on every volley that gets it; the core applies it and its step path writes no line for these two (its named forms Havocbound, Slayer, ... do). Measured 19.11.: 3 + 12 + 6 volleys at 1500 / 2000 / 3000 pts, dlines_gap row 11.",
-      "leaves_with": "the dlines3 train that says the Disintegrate / Tear line"
-    },
     "door_versatile_pick_modified_to_hit": {
       "primitives": [],
       "kind": "state_difference",
