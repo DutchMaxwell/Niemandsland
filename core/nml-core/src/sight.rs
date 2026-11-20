@@ -423,6 +423,62 @@ pub fn has_los(
     true
 }
 
+/// PLAN_COVER_36: the far end of the FOOT line sits this high above where the target model stands (L-8).
+pub const FOOT_LIFT_M: f64 = 0.001;
+
+/// One volley's cover from sight blockers (PLAN_COVER_36 rule lines 1-5): `sighting` = the shooter models that see at least
+/// one model of the target chain, `hidden[t]` = target model `t` is behind a blocker for a strict majority of them, `screened` = the unit is.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Screen {
+    pub sighting: usize,
+    pub hidden: Vec<bool>,
+    pub screened: bool,
+}
+
+/// Cover from sight blockers through the sight test itself (no new geometry): a target model is behind a blocker for a shooter
+/// model that does not see it, or sees its eye but not its FOOT (the line from the shooter's eye to the base centre, lifted
+/// `FOOT_LIFT_M`). Strict majorities on both levels; a unit of one model is screened when that model is hidden. `targets` are the
+/// defense holder's own models (the count, L-5); `also_seen` the rest of its chain, which only widens the sighting set.
+#[allow(clippy::too_many_arguments)]
+pub fn screen(
+    shooters: &[Cyl],
+    targets: &[Cyl],
+    also_seen: &[Cyl],
+    single: bool,
+    to_aircraft: bool,
+    zones: &[Zone],
+    blockers: &[Blocker],
+) -> Screen {
+    let sees = |s: &Cyl, t: &Cyl| has_los(s, t, to_aircraft, zones, blockers);
+    let sighting: Vec<&Cyl> =
+        shooters.iter().filter(|s| targets.iter().chain(also_seen).any(|t| sees(s, t))).collect();
+    let n = sighting.len();
+    let hidden: Vec<bool> = targets
+        .iter()
+        .map(|t| {
+            let foot = Cyl { y1: t.y0 + FOOT_LIFT_M, ..*t };
+            let (mut behind, mut open) = (0, 0);
+            for s in &sighting {
+                if !sees(s, t) || !sees(s, &foot) {
+                    behind += 1;
+                } else {
+                    open += 1;
+                }
+                if behind * 2 > n || open * 2 >= n {
+                    break; // this model's majority is decided
+                }
+            }
+            behind * 2 > n
+        })
+        .collect();
+    let screened = if single {
+        hidden.first().copied().unwrap_or(false)
+    } else {
+        hidden.iter().filter(|&&h| h).count() * 2 > hidden.len()
+    };
+    Screen { sighting: n, hidden, screened }
+}
+
 /// `SoloController.sighted_models` — shooter models with BOTH range and sight to
 /// at least one target model. `los` is injected so the geometry stays pure.
 pub fn sighted_models(
@@ -825,6 +881,42 @@ mod tests {
         let foot = cyl_on(-1.0, 0.0, 32.0);
         assert!(!has_los(&cyl_on(8.0, 6.0, 32.0), &foot, false, &zones, &[]), "from the back of the roof the rim hides the foot");
         assert!(has_los(&cyl_on(1.0, 6.0, 32.0), &cyl_on(-8.0, 0.0, 32.0), false, &zones, &[]), "from the rim it sees the far ground");
+    }
+
+    /// PLAN_COVER_36 step 3: the shared case file (`test/fixtures/one_core/cover_screen_cases.json`, also read by the
+    /// gdUnit twin) through `screen`, every case.
+    #[test]
+    fn cover_screen_matches_the_shared_cases() {
+        let path = format!("{}/../../test/fixtures/one_core/cover_screen_cases.json", env!("CARGO_MANIFEST_DIR"));
+        let doc: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).expect("the cover case file")).unwrap();
+        assert_eq!(doc["foot_lift_m"].as_f64(), Some(FOOT_LIFT_M));
+        let f = |v: &serde_json::Value| v.as_f64().unwrap();
+        let xy = |v: &serde_json::Value| [f(&v[0]), f(&v[1])];
+        let cyls = |c: &serde_json::Value, k: &str| -> Vec<Cyl> {
+            let (r, h) = (f(&c[format!("{k}_r")]), f(&c[format!("{k}_h")]));
+            let pts = c[format!("{k}s")].as_array().unwrap();
+            pts.iter().map(|p| Cyl { c: [f(&p[0]), f(&p[2])], r, y0: f(&p[1]), y1: f(&p[1]) + h }).collect()
+        };
+        let cases = doc["cases"].as_array().unwrap();
+        let mut bad = Vec::new();
+        for c in cases {
+            let blockers: Vec<Blocker> = c["blockers"].as_array().unwrap().iter().map(|b| Blocker {
+                cyl: Cyl { c: xy(&b["c"]), r: f(&b["r"]), y0: f(&b["y0"]), y1: f(&b["y1"]) },
+                unit: b["unit"].as_u64().unwrap() as usize,
+                aircraft: b["aircraft"].as_bool().unwrap(),
+            }).collect();
+            let zones: Vec<Zone> = c["boxes"].as_array().unwrap().iter()
+                .map(|b| Zone::shelf_box(xy(&b["c"]), xy(&b["he"]), f(&b["yaw"]), f(&b["y0"]), f(&b["y1"]), true)).collect();
+            let got = screen(&cyls(c, "shooter"), &cyls(c, "target"), &[], c["single"].as_bool().unwrap(), false, &zones, &blockers);
+            let want = &c["want"];
+            let hidden: Vec<bool> = want["hidden"].as_array().unwrap().iter().map(|h| h.as_bool().unwrap()).collect();
+            let want = Screen { sighting: want["sighting"].as_u64().unwrap() as usize, hidden, screened: want["screened"].as_bool().unwrap() };
+            if got != want {
+                bad.push(format!("{}: got {got:?}, want {want:?}", c["name"]));
+            }
+        }
+        assert_eq!(cases.len(), 12);
+        assert!(bad.is_empty(), "{}", bad.join("\n"));
     }
 
     #[test]
