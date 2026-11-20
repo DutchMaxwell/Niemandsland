@@ -8,7 +8,7 @@
 use std::collections::VecDeque;
 use serde::{Deserialize, Serialize};
 use crate::rng::GodotRng;
-use super::levels::{mirror, neighbours, shuffle, Cell};
+use super::levels::{mirror, neighbours, shuffle, Cell, LotKind};
 use super::Symmetry;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -44,7 +44,7 @@ pub fn wire(seed: i64, sym: Symmetry, cells: &[Cell]) -> Vec<Connector> {
     let mut comp = Dsu::new(cells.len());
     for i in 0..cells.len() { for j in neighbours(i).filter(|&j| cells[j].level == cells[i].level) { comp.union(i, j); } }
     for c in &conns { comp.union(usize::from(c.low), usize::from(c.high)); }
-    let mut bridges: Vec<(usize, usize)> = (0..cells.len()).flat_map(|i| neighbours(i).filter(move |&j| cells[j].level == cells[i].level + 1)
+    let mut bridges: Vec<(usize, usize)> = (0..cells.len()).filter(|&i| cells[i].lot_kind != LotKind::Roofed).flat_map(|i| neighbours(i).filter(move |&j| cells[j].level == cells[i].level + 1)
         .map(move |j| (i, j))).collect();
     shuffle(&mut bridges, &mut rng);
     for (low, high) in bridges {
@@ -94,7 +94,7 @@ fn islands(cells: &[Cell]) -> Islands {
 
 /// Every (low cell, island cell) neighbour pair that could carry an ascent into island `id`.
 fn access_pairs(cells: &[Cell], isl: &Islands, id: usize) -> Vec<(usize, usize)> {
-    (0..cells.len()).filter(|&h| isl.of[h] == id).flat_map(|h| neighbours(h).filter(move |&l| cells[l].level + 1 == cells[h].level).map(move |l| (l, h))).collect()
+    (0..cells.len()).filter(|&h| isl.of[h] == id).flat_map(|h| neighbours(h).filter(move |&l| cells[l].level + 1 == cells[h].level && cells[l].lot_kind != LotKind::Roofed).map(move |l| (l, h))).collect()
 }
 
 struct Dsu(Vec<usize>);

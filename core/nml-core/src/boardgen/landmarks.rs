@@ -43,6 +43,13 @@ pub fn solid_mask(landmarks: &[Landmark]) -> Vec<bool> {
     solid
 }
 
+/// The cells no walker may enter: every solid landmark and every intact (roofed) house.
+pub fn solid_cells(cells: &[Cell], landmarks: &[Landmark]) -> Vec<bool> {
+    let mut solid = solid_mask(landmarks);
+    for (i, c) in cells.iter().enumerate() { solid[i] |= c.lot_kind == LotKind::Roofed; }
+    solid
+}
+
 /// One or two mirrored pairs of different kinds (fewer if nothing fits, so the board misses its budget and is retried).
 /// Pieces stay out of the deployment bands, off ladder feet and a cell apart; a solid piece never cuts the walkable board.
 pub fn place(seed: i64, sym: Symmetry, cells: &mut [Cell], conns: &[Connector], b: &Budgets) -> Vec<Landmark> {
@@ -68,7 +75,7 @@ pub fn place(seed: i64, sym: Symmetry, cells: &mut [Cell], conns: &[Connector], 
             for b in twins {
                 let apart = b.cells().all(|i| !a.cells().any(|j| i == j));
                 let all: Vec<Landmark> = out.iter().copied().chain([a, b]).collect();
-                if apart && fits(&b, cells, &taken, conns) && component_count(cells, conns, &solid_mask(&all)) == 1 {
+                if apart && fits(&b, cells, &taken, conns) && component_count(cells, conns, &solid_cells(cells, &all)) == 1 {
                     for l in [a, b] { claim(&l, cells, &mut taken); }
                     out.extend([a, b]);
                     break 'pair;
@@ -92,7 +99,7 @@ fn rects(kind: LandmarkKind, top: bool, small_pools: bool, rng: &mut GodotRng) -
 fn fits(l: &Landmark, cells: &[Cell], taken: &[bool], conns: &[Connector]) -> bool {
     let level = cells[l.z * GRID + l.x].level;
     l.cells().all(|i| { let c = &cells[i]; !taken[i] && c.deploy == 0 && !conns.iter().any(|k| usize::from(k.low) == i || usize::from(k.high) == i)
-        && if l.kind == LandmarkKind::PumpHouse { (1..=2).contains(&level) && c.level == level } else { c.level == 0 && !c.street && c.lot_kind != LotKind::Hazard && (c.lot_kind != LotKind::Rough || l.kind == LandmarkKind::Sump) && c.lot_kind != LotKind::Wall } })
+        && if l.kind == LandmarkKind::PumpHouse { (1..=2).contains(&level) && c.level == level } else { c.level == 0 && !c.street && c.lot_kind != LotKind::Hazard && (c.lot_kind != LotKind::Rough || l.kind == LandmarkKind::Sump) && !matches!(c.lot_kind, LotKind::Wall | LotKind::Roofed) } })
 }
 
 /// Keep later pieces a cell away; a sump turns its ground into hazard ground.
