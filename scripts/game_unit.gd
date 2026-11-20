@@ -265,7 +265,7 @@ const STRIKER_FAMILIES := {
 	"Rending": ["Rending", "Rending in Melee", "Rending when Shooting"], "Unstoppable": ["Unstoppable", "Unstoppable in Melee", "Unstoppable when Shooting"]}
 
 
-## The core twin is rules.rs `is_unlisted_striker_label`. Read from `AiActRecorder.PENDING_EPOCH_EXACT_STRIKER_LABELS` on.
+## The core twin is rules.rs `is_unlisted_striker_label`. Read from `AiActRecorder.EPOCH_94_PARITY_BATCH` on.
 static func is_unlisted_striker_label(rule: String) -> bool:
 	var s := rule.strip_edges()
 	for family in STRIKER_FAMILIES:

@@ -857,9 +857,9 @@ func test_the_versatile_pair_is_taken_from_the_pending_epoch() -> void:
 	vers.unit_properties["faction_folder"] = "battle_brothers"
 	var stealth := _unit(["Stealth"], [[]])
 	var epoch_before := AiActRecorder.rules_epoch
-	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_VERSATILE_MODIFIED_HIT - 1
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_94_PARITY_BATCH - 1
 	var below := CoreSlice.pair_refusals(vers, stealth)
-	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_VERSATILE_MODIFIED_HIT
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_94_PARITY_BATCH
 	var at_pending := CoreSlice.pair_refusals(vers, stealth)
 	AiActRecorder.rules_epoch = epoch_before
 	assert_array(below).override_failure_message("below 94 the core still latches on the plain Quality").is_equal(["versatile_pick_modified_to_hit"])

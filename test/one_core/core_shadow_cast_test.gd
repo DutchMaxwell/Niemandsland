@@ -251,7 +251,7 @@ func test_a_once_grant_cast_at_the_volleys_target_is_spent_by_it_and_reads_equal
 	assert_int(table_spent).override_failure_message("no seed passed the cast die and spent the grant on the table: the test proved nothing").is_greater(0)
 
 
-## PENDING_EPOCH_CASUALTY_TIES (94): WHICH models survive a spell is compared, not only how many. Six foes in a line, a spell that
+## EPOCH_94_PARITY_BATCH (94): WHICH models survive a spell is compared, not only how many. Six foes in a line, a spell that
 ## kills five: the table's casualty order leaves slot 3 standing, the core's f64 distance left slot 2 (cast door probe, 20.11.);
 ## the shadow compared counts and a sorted wounds multiset, so it read this equal. RED on a core without the epoch's reading: first_diff
 ## "positions" at 94; below the epoch the old reading stays (the same cases read "positions" at 93 once NML_CORE_SHADOW_SLOTS asks

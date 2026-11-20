@@ -27,7 +27,7 @@ use crate::state::State;
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
 use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_74_CLIMB_COST, EPOCH_8_PLANNER_MENU, EPOCH_73_V36, EPOCH_77_CHARGE_CAP,
-    EPOCH_78_FLIER_CUT, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER, PENDING_EPOCH_FLYING_THROUGH};
+    EPOCH_78_FLIER_CUT, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER, EPOCH_94_PARITY_BATCH};
 
 use super::cost::{ledge_cost, trim_polyline_priced, CellSet, Grid, Ledge, Wall, Zone};
 use super::entry::plan_unit_step_call;
@@ -590,10 +590,10 @@ impl Move<'_> {
         )
     }
 
-/// `is_traversal(unit) or flies_through_units(unit)`: the route ignores the other units' spacing zones. A Flying unit does from `PENDING_EPOCH_FLYING_THROUGH`
+/// `is_traversal(unit) or flies_through_units(unit)`: the route ignores the other units' spacing zones. A Flying unit does from `EPOCH_94_PARITY_BATCH`
 /// (the table since 75); the gate's base-crossing exemption stays Traversal-only (`gate_traversal := is_traversal`).
 fn through_units(&self) -> bool {
-    self.traversal || (self.flying && rule_on(self.rules_epoch, PENDING_EPOCH_FLYING_THROUGH))
+    self.traversal || (self.flying && rule_on(self.rules_epoch, EPOCH_94_PARITY_BATCH))
 }
 
 /// `walls_and_ledges_of` for this move.

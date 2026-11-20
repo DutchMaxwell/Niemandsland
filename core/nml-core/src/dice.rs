@@ -532,7 +532,7 @@ pub struct ShootResult {
     /// (`SoloController.apply_deadly_wounds`, solo_controller.gd:8333). Empty
     /// on every non-Deadly activation; the landing sites drain it.
     pub deadly_groups: Vec<(i64, i64)>,
-    /// PENDING_EPOCH_VERSATILE_MODIFIED_HIT: the picks the volley made inside the dice, `(roster index, AP(+1) mode)`, one per member
+    /// EPOCH_94_PARITY_BATCH: the picks the volley made inside the dice, `(roster index, AP(+1) mode)`, one per member
     /// whose activation had no pick yet. The volley seam stamps them on the State's round latch after the call.
     pub versatile_picks: Vec<(usize, bool)>,
     /// The volley's Deadly weapons, one entry per weapon for the table's line (`_solo_land_deadly_wounds`): `(weapon, raw
@@ -1354,7 +1354,7 @@ pub fn resolve_volley_with_tray(
     resolve_volley_leg(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates, shred_alias_dice, shred_boost_dice, false, false, &|_| false, &|_, _| None, tray)
 }
 
-/// `PENDING_EPOCH_DEADLY_INLINE`: the caller's landing of one weapon's Deadly groups on a scratch state; answers the models the target's chain
+/// `EPOCH_94_PARITY_BATCH`: the caller's landing of one weapon's Deadly groups on a scratch state; answers the models the target's chain
 /// still has (0 = wiped).
 pub(crate) type InlineLand<'a> = &'a mut dyn FnMut(&[(i64, i64)]) -> i64;
 
@@ -1403,7 +1403,7 @@ pub(crate) fn resolve_volley_with_pick_label(
     cond_ap_dice: bool, surge_gates: bool, shred_alias_dice: bool, shred_boost_dice: bool,
     deadly_per_model: bool, takedown_exact: bool, takedown_pick_info: &dyn Fn(&[i64]) -> (bool, String),
     sighted: &dyn Fn(usize, usize) -> Option<(i64, i64, &'static str)>,
-    // `PENDING_EPOCH_DEADLY_INLINE`: asked after each Deadly weapon with the (unsaved, X) groups it pushed; the caller lands them on a scratch
+    // `EPOCH_94_PARITY_BATCH`: asked after each Deadly weapon with the (unsaved, X) groups it pushed; the caller lands them on a scratch
     // copy of the state and answers how many models the target's chain has left (0 = wiped: the weapons still to fire then read `Ctx::wiped`).
     // `None` below 94.
     inline_land: Option<InlineLand<'_>>, tray: &mut Tray,
@@ -1616,7 +1616,7 @@ pub(crate) fn resolve_volley_with_pick_label(
             }
             continue;
         }
-        // PENDING_EPOCH_DEADLY_INLINE, the table's `Simultaneous fire` line (SHO-PAR-F6): casualties since the declaration did not shrink this shot.
+        // EPOCH_94_PARITY_BATCH, the table's `Simultaneous fire` line (SHO-PAR-F6): casualties since the declaration did not shrink this shot.
         if def.blast_models.zip(live_models).is_some_and(|(declared, live)| declared > live) {
             if let Some((seen, _, _)) = shooters.iter().position(|s| std::ptr::eq(s, sh)).and_then(|i| sighted(i, pi)) {
                 say_rule(tray, "simultaneous", att.side, || format!("Simultaneous fire: {} fires {} as declared ({seen} model{} in range and sight before the first roll)",
@@ -1774,7 +1774,7 @@ pub(crate) fn resolve_volley_with_pick_label(
             out.log.push(format!(
                 "Indirect: no moved penalty: {} shoots after moving", sh.owner));
         } else if att.indirect_own && att.moved_this_round && im_fired.iter().all(|o| *o != sh.owner) {
-            // PENDING_EPOCH_OWN_INDIRECT: an Indirect granted to the shooter's own unit makes every shot Indirect (`granted_indirect_of`).
+            // EPOCH_94_PARITY_BATCH: an Indirect granted to the shooter's own unit makes every shot Indirect (`granted_indirect_of`).
             im_fired.push(sh.owner);
             out.log.push(format!("Indirect: no moved penalty: {} shoots after moving", sh.owner));
         }
@@ -1883,7 +1883,7 @@ pub(crate) fn resolve_volley_with_pick_label(
             } else if let Some(&(_, pick)) = versatile_made.iter().find(|(u, _)| *u == att.unit) {
                 pick
             } else if att.versatile_defer {
-                // PENDING_EPOCH_VERSATILE_MODIFIED_HIT: the activation's first eligible shot decides on the number it rolls at (the table's
+                // EPOCH_94_PARITY_BATCH: the activation's first eligible shot decides on the number it rolls at (the table's
                 // `to_hit` after every modifier), the Defense after the Guarded fold (`shot_base`) and AP with the Unpredictable bonus.
                 let guarded = def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded;
                 let pick = versatile_best_mode(
@@ -2438,7 +2438,7 @@ pub(crate) fn resolve_volley_with_pick_label(
                 regen_joined += w;
             }
         }
-        // PENDING_EPOCH_DEADLY_INLINE: the table lands this weapon's Deadly wounds NOW, before the next weapon rolls.
+        // EPOCH_94_PARITY_BATCH: the table lands this weapon's Deadly wounds NOW, before the next weapon rolls.
         if out.deadly_groups.len() > groups_before {
             if let Some(land) = inline_land.as_mut() {
                 let left = land(&out.deadly_groups[groups_before..]);
@@ -3498,7 +3498,7 @@ pub fn resolve_melee_leg_wipe(
                 out.deadly_tally += w;
             } else if deadly_per_model && p.deadly > 0 {
                 let first = out.deadly_groups.len();
-                let stops = deadly_wipes.filter(|_| rule_on(sh.att.rules_epoch, crate::acts::PENDING_EPOCH_DEADLY_STOPS));
+                let stops = deadly_wipes.filter(|_| rule_on(sh.att.rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH));
                 push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, def_owner, tray, stops);
                 out.deadly_lines.push((p.name.clone(), w, p.deadly.max(1), out.deadly_groups.len() - first));
                 out.deadly_marks.push(tray.mark());
@@ -3709,7 +3709,7 @@ fn compose_to_hit_note(
         if rule_on(att.rules_epoch, EPOCH_73_V36) { notes.push("Indirect: no moved penalty".into()); }
         else if im != 0 { notes.push(format!("Indirect moved {im}")); }
     }
-    if att.moved_this_round && att.indirect_own && !p.indirect { notes.push("Indirect: no moved penalty".into()); }   // PENDING_EPOCH_OWN_INDIRECT
+    if att.moved_this_round && att.indirect_own && !p.indirect { notes.push("Indirect: no moved penalty".into()); }   // EPOCH_94_PARITY_BATCH
     if att.spot_hit_note != 0 { notes.push(format!("Spotted {:+}", att.spot_hit_note)); }
     if att.tag_hit_note != 0 { notes.push(format!("Tagged {:+}", att.tag_hit_note)); }
     (base_note, notes.join(", "))

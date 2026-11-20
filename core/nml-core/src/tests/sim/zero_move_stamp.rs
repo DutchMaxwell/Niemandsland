@@ -1,11 +1,11 @@
 use super::*;
 
-    /// `PENDING_EPOCH_ZERO_MOVE_STAMP` (soak game 23): a placement in which no model left its place (a joined-hero chain the planner clamped to zero) must not
+    /// `EPOCH_94_PARITY_BATCH` (soak game 23): a placement in which no model left its place (a joined-hero chain the planner clamped to zero) must not
     /// stamp the unit, the table stamps an EXECUTED move only. RED before the fix: the first assert. Controls: the pending epoch minus one replays the stamp, a
     /// model that really walked stamps at every epoch.
     #[test]
     fn an_advance_that_moved_nobody_does_not_stamp_the_unit_moved_from_the_pending_epoch() {
-        use crate::acts::PENDING_EPOCH_ZERO_MOVE_STAMP as ZERO;
+        use crate::acts::EPOCH_94_PARITY_BATCH as ZERO;
         let stamped = |epoch: u32, shift_in: f64| -> bool {
             let (st, statics) = buff_line();
             let mut at = st.positions[0].clone();

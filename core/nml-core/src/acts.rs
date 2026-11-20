@@ -834,11 +834,6 @@ pub const EPOCH_70_TRAY_EXACT: u32 = 70;
 /// reads it. Records stamped 66-70 were recorded while that writer was missing and replay byte-exact
 /// with the legacy bearer-side once-grant. Every call site reads THIS constant, not `71`.
 pub const EPOCH_71_RAPID_CHARGE_MARK: u32 = 71;
-/// Placeholder gate for the PIERCING FIGHTING MARK's melee scope (`tray_vs_marks`, `ctx_live_vs`): the table records the Mark on the MARKED unit with the entry's own
-/// `melee` scope (`_solo_apply_vs_marks`), where a volley never spends it, so it waits for the next charger. The core put it on the attacker's own ledger with the scope dropped
-/// and a volley spent it. From 94 the Mark lands on the target like the Rapid Charge Mark, a charger's strikes read it there (`pierce_melee_grant`) and the exchange that uses it
-/// spends it. Below 94 byte-identical. Every call site reads THIS constant, not `94`.
-pub const PENDING_EPOCH_MELEE_MARK_SCOPE: u32 = 94;
 /// The 29.10.2026 play-test fixes (A1/A2/A4), the table's #1911/#1912/#1914 in the core and its
 /// GDScript sim twins: from this epoch (A1) a printed Lacerate keeps the defender's Regeneration
 /// roll (only Bane bypasses it), (A2) wounds that leave a unit at half strength or less trigger
@@ -895,12 +890,6 @@ pub const EPOCH_80_ROLLOUT_CUMBERSOME: u32 = 80;
 /// auto-failed test of an already Shaken unit (or of a dead Shaken host's unit). Records stamped 80 or below replay byte-exact.
 /// Every call site reads THIS constant, not `81`. The recorder mirror stamps 81 with it.
 pub const EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF: u32 = 81;
-/// Placeholder gate for the joined hero's moved stamp: the table's `_solo_animate_move` stamps `moved_round` on the unit of EVERY model it
-/// moves, so a hero that walks with its host (a move, a flight, a charge, a consolidation) is stamped moved too; the core stamped the
-/// host alone, so a hero row of the state delta carried a stale round (`land_delta` reported "table N, core -1", cast lane soak, 20.11.)
-/// and the hero's own Stealth / Entrenched style reads saw a unit that never moved. From 94 the core stamps the living joined heroes
-/// with the host. Every call site reads THIS constant, not the literal `94`.
-pub const PENDING_EPOCH_HERO_MOVED_STAMP: u32 = 94;
 /// Wound-ignore rules by name (#2595, table twin `_solo_ignore_wounds`): a bypass (Bane, Rending, Unstoppable, ...) skips only the
 /// roll of the rule named Regeneration (own, aura / buff granted, Medical Training); a unit whose ignore rule is anything else
 /// (Self-Repair, Resistance, Plaguebound, Angelic Blessing, ...) still rolls the bypassed wounds with the rest. Before, the core
@@ -913,40 +902,18 @@ pub const EPOCH_82_IGNORE_BY_NAME: u32 = 82;
 /// morale test still reads the chain (`morale_root`). Records stamped 82 or below replay byte-exact. Every call site
 /// reads THIS constant, not `83`. The recorder mirror (`act_recorder.gd`) stamps 83 in the same change.
 pub const EPOCH_83_LONE_HERO_TARGET: u32 = 83;
-/// Placeholder gate for the Shaken flag of a joined chain (lead rule call 20.11., reading B). The table's `_solo_morale_test` toggles the
-/// unit it tests (its host, the dead host for a lone hero) and mirrors the flag onto every joined hero (`_solo_mirror_shaken`); an idle
-/// recovery clears the heroes with the host. The core set the flag on the aimed unit alone: a host that failed a test left its hero
-/// unflagged inside the activation (no "fights on alone" carry), and a recovered host left its heroes Shaken. A lone hero that recovered
-/// is no longer Shaken: the dead host's flag outlives the recovery (nothing clears a dead unit's Shaken) and used to fail the hero's next
-/// test without a die. From 94 the test reads the lone hero's OWN flag on both sides (core `unit_shaken`, table
-/// `Main._solo_test_unit_shaken`) and a failed test flags host and heroes the way the table does. Every call site reads THIS constant.
-pub const PENDING_EPOCH_SHAKEN_MIRROR: u32 = 94;
 /// Differently named wound-ignore rules roll one after the other (#2595, table twin `_solo_regen_pick` / `_solo_ignore_wounds`): the
 /// core's `Ctx::regen_groups` hold the ignore rules by NAME (Regeneration first, then the most generous target, then the name), a
 /// bypassed wound skips only the Regeneration roll and joins the pool at the first other group; before, the family was one roll at the
 /// best target. Records stamped 83 or below replay byte-exact. Every call site reads THIS constant, not `84`. The recorder mirror
 /// stamps 84 with it.
 pub const EPOCH_84_IGNORE_GROUPS: u32 = 84;
-/// Placeholder gate for the ZERO-MOVE STAMP (soak game 23, a Skeleton Archers + Leader chain whose Advance the planner clamped to zero): the table stamps
-/// `moved_round` for an EXECUTED move only (`_solo_animate_move` walks `last_move_paths`, which `_execute_move` empties when nothing moved). The door hands the
-/// core the chain where it stands and the step API calls a placement HOLD only when it matches the HOST's models (`effective_kind`), so a unit with a joined
-/// hero kept its Advance and the core stamped the placement as a move: the stamp row said "table 3, core 4" and a later volley read a unit that never moved as
-/// moved. From 94 a placement in which no model left its place stamps nothing (the volley's `moved` stays true, as the table's `report["moved"]`). Below 94
-/// byte-identical. Every call site reads THIS constant, not `94`.
-pub const PENDING_EPOCH_ZERO_MOVE_STAMP: u32 = 94;
 /// The pooled target gate of a step-path volley lets through a target nobody sees when a living chain member's weapon carries an Indirect
 /// that waives the sight test and reaches it (table twin `_solo_pick_overlay_target`, whose per-shot sight count ignores LOS for a weapon's
 /// own Indirect; rules 3.6 SHO-01a: a Hold not kept loses the waiver where the entry says so). Before, a holding Artillery beast with an
 /// Indirect gun fired nothing at a unit hidden behind a blocker, the table fired. Records stamped 84 or below replay byte-exact. Every
 /// call site reads THIS constant, not `85`. The recorder mirror stamps 85 with it.
 pub const EPOCH_85_INDIRECT_GATE: u32 = 85;
-/// Placeholder gate for an Indirect GRANTED TO THE SHOOTER'S OWN UNIT (a spell record on the attacker that is not an attackers-side mark; table twin
-/// `SoloController.granted_indirect_of`, read by `_solo_shot_eligibility` and the volley's moved note): the table waives the sight test of every
-/// weapon of such a unit and, after a move, says the Indirect moved penalty is not taken. The core read only a weapon's own Indirect and the
-/// target-side mark, so the grant was invisible to the per-weapon sight count and to the notes. The pick itself stays blind to it, as the table's
-/// (`_solo_pick_overlay_target` reads the weapon and the mark only). No shipped spell grants it today (every Indirect spell is an attackers-side
-/// mark), so no recorded game moves; from 94 the grant is read. Below 94 byte-identical. Every call site reads THIS constant, not `94`.
-pub const PENDING_EPOCH_OWN_INDIRECT: u32 = 94;
 /// The played volley's modifier distance (Valiant gate, over-9" modifiers) counts only the model pairs within the vertical reach (3", `melee_vertical_in`),
 /// and a unit with no pair in reach keeps the horizontal unit-centre distance: the table's `_solo_ai_volley_distance_in` over `nearest_melee_gap_in`.
 /// Before, a unit on a platform measured as close as the ground beside it (the soak's Hive Bond +1, table 4+ vs core 5+). Step path only. Records
@@ -1024,53 +991,24 @@ pub const EPOCH_92_MELEE_CAUSES: u32 = 92;
 /// Records stamped 92 or below replay byte-exact. Every call site reads THIS constant, not `93` or
 /// `CURRENT_RULES_EPOCH`. The recorder mirror (`act_recorder.gd`) stamps 93 in the same change.
 pub const EPOCH_93_DANGER_RULES_RIDER: u32 = 93;
-pub const CURRENT_RULES_EPOCH: u32 = 93;
-/// Placeholder gate for the FLYING MOVE-THROUGH (`mv::step`, the planner call's `zones_rest_only` and the sidestep probe `has_lateral_room`): the table lets a
-/// Flying unit's route ignore the other units' 1 in spacing zones from `EPOCH_75_TABLE_FIXES` (`flies_through_units`, the same read as Traversal: the zones
-/// stop blocking the ROUTE, rest legality stays strict) and calls its lateral room always open. The core read only the Traversal rule, so a lone flying
-/// charger's route bent round the defender's zone (a grid detour: it landed 0.46 in off the defender's axis, the table's straight slot) and every other
-/// Flying move near a unit planned differently. From 94 a Flying unit's route reads the Traversal way; the gate's own base-crossing clamp stays Traversal-only,
-/// as on the table. Below 94 byte-identical. Every call site reads THIS constant, not `94`.
-pub const PENDING_EPOCH_FLYING_THROUGH: u32 = 94;
-/// Placeholder gate for the VERSATILE PICK ON THE MODIFIED TO-HIT (Plan H, H-18; lead decision 20.11.): the table latches an
-/// activation's Versatile Attack pick on the number the first eligible weapon really rolls at (Stealth, Evasive, Artillery, Aircraft,
-/// Shot Modifier, Instinctive, the Unpredictable die all folded in); the core latched it before the dice on the plain Quality. From 94
-/// the volley's first eligible shot decides inside the dice, on its modified number, Defense after the Guarded fold and AP with the
-/// Unpredictable bonus; every later shot, volley and charge of the activation reuses the stamped pick. Below 94 byte-identical.
-/// Every call site reads THIS constant, not the literal `94`.
-pub const PENDING_EPOCH_VERSATILE_MODIFIED_HIT: u32 = 94;
-/// Placeholder gate for DEADLY LANDING INLINE (Plan H, the dlines2 train; lead decision 20.11.): the table lands a Deadly weapon's
-/// unsaved wounds right after that weapon's saves, so a LATER weapon of the same volley reads the target as it stands then; a target
-/// whose last model the Deadly wounds killed no longer lends its rules (Stealth, Evasive, Aircraft, Fortified, Shielded, Regeneration ...)
-/// to the later weapons ("dead models lend nothing", ruling 20.11.). The core landed Deadly after all the dice and kept the captured
-/// target for every weapon. From 94 the volley fold lands each Deadly weapon's groups on a scratch copy of the state and, once the
-/// target's chain is wiped, reads `Ctx::wiped` for the weapons still to fire; blast caps, the attack counts and the range gates stay
-/// as declared. Below 94 byte-identical. Every call site reads THIS constant, not the literal `94`.
-pub const PENDING_EPOCH_DEADLY_INLINE: u32 = 94;
-/// Placeholder gate for EXACT STRIKER LABELS (Plan H, lead order 20.11.; table twin `AiActRecorder.PENDING_EPOCH_EXACT_STRIKER_LABELS`, planner twin
-/// `BattleSim._profiles_of`): the unit-level striker scans (`unit.rs::stamp_unit_strikers`, `_solo_striker_has_bane`) matched Bane / Lacerate / Rending / Unstoppable by
-/// PREFIX, so a label that only STARTS with one of them counted as the rule. The army-book texts (ds/h_prefix_labels.md) say `Bane Mark`, `Rending Mark`, `Unstoppable Mark` mark
-/// ONE enemy unit and hand the rule once to the friendly units attacking it, and `Bane in Melee Buff` hands it once to another unit: none makes its bearer a bearer. From 94 only the
-/// rule and its explicit aliases (`rules::is_unlisted_striker_label`) count; the Aura labels stay inert as before. Below 94 byte-identical. Every call site reads THIS constant.
-pub const PENDING_EPOCH_EXACT_STRIKER_LABELS: u32 = 94;
-/// Placeholder gate for the heightfield plan (a generated tier board, `PlainTerrain.tiers`): from 94 the core reads the
-/// board's heights - a model stands on its tier, a tier block hides what stands behind it, a cliff is not walked, a ladder
-/// costs its rise. Below 94 the same header plays like a flat board; a header with no `tiers` plays flat at every epoch.
-/// Every call site reads THIS constant, not the literal `94` or `CURRENT_RULES_EPOCH`. Table twin `PENDING_EPOCH_HEIGHT`
-/// in `act_recorder.gd`. Nothing reads it yet.
-pub const PENDING_EPOCH_HEIGHT: u32 = 94;
-/// Placeholder gate for the casualty order's tie-break: the table measures a model's distance to its unit's centroid as a Godot
-/// `Vector2.length()` (f32); the core used an f64 hypot, which parts two mirror models of a symmetric formation (equal in exact
-/// arithmetic) by noise, so the core could remove another model of the pair than the table does (cast door probe, 20.11.: a
-/// spell killing 5 of 6 models in a line left slot 2 standing where the table leaves slot 3). From 94 the core measures in f32 the
-/// same way. Only paths with `Seams::tray_exact` use the order. Every call site reads THIS constant, not the literal `94`.
-pub const PENDING_EPOCH_CASUALTY_TIES: u32 = 94;
-/// Placeholder gate for the melee Deadly landing that stops rolling (melee95, 20.11.): the table lands a Deadly weapon's unsaved wounds one at a
-/// time and, once the target's whole chain is dead, drops the rest without a single ignore die (`_solo_land_deadly_wounds`: the pick is empty, the
-/// loop breaks); the core rolled every wound's X ignore dice before landing, so a Tough hero with Cursed Undead / Regeneration hit by two Deadly(3)
-/// wounds threw six dice in the core and three at the table. From the bump the melee fold asks (`deadly_wipes`) before each wound. Below it
-/// byte-identical. Every call site reads THIS constant.
-pub const PENDING_EPOCH_DEADLY_STOPS: u32 = 94;
+/// The EPOCH 94 BATCH: thirteen table-vs-core differences that sat behind `PENDING_EPOCH_*` placeholders (all 94) are now one frozen
+/// constant, and `CURRENT_RULES_EPOCH` is bumped to it in the same change. Records stamped 93 or below replay byte-exact. Every call site
+/// reads THIS constant, not the literal `94` or `CURRENT_RULES_EPOCH`. The recorder mirror (`act_recorder.gd`) stamps 94 in the same change.
+/// - FLYING_THROUGH: a Flying unit's route ignores the other units' spacing zones (the Traversal read); rest legality stays strict.
+/// - VERSATILE_MODIFIED_HIT: the Versatile Attack pick is made inside the dice, on the first eligible shot's modified to-hit number.
+/// - DEADLY_INLINE: a volley's Deadly weapons land inline; a target wiped by an earlier weapon lends no rules to the later ones.
+/// - EXACT_STRIKER_LABELS: the unit-level Bane / Lacerate / Rending / Unstoppable scans match exact labels, not prefixes.
+/// - HEIGHT: the core reads a generated board's tier heights (heightfield plan); a header with no `tiers` plays flat at every epoch.
+/// - CASUALTY_TIES: the casualty order measures distance as the table's f32 `Vector2.length()`.
+/// - HERO_MOVED_STAMP: a joined hero that walks with its host is stamped moved too.
+/// - SHAKEN_MIRROR: a joined chain's Shaken flag follows the table's toggle and mirror; a lone hero reads its own flag.
+/// - DEADLY_STOPS: a melee Deadly landing stops rolling ignore dice once the chain is dead.
+/// - ZERO_MOVE_STAMP: a placement in which no model left its place keeps the chain's stamps.
+/// - OWN_INDIRECT: an Indirect granted to the shooter's own unit is read (sight and the moved-penalty note).
+/// - SLAYER_MARK_GRANT: the Slayer Mark's grant reaches the marked unit's attackers.
+/// - MELEE_MARK_SCOPE: a melee-scoped Piercing Fighting Mark stays on the marked unit after a volley.
+pub const EPOCH_94_PARITY_BATCH: u32 = 94;
+pub const CURRENT_RULES_EPOCH: u32 = 94;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -1373,12 +1311,6 @@ pub const EPOCH_22_SCREENED_MELEE: u32 = 22;
 /// change. Every call site reads THIS constant, not the literal `23` or
 /// `CURRENT_RULES_EPOCH`.
 pub const EPOCH_23_INERT_MARKS: u32 = 23;
-/// Placeholder gate for the SLAYER MARK's grant to the marked unit's attackers (`ctx_live_vs`): the table hands an attacker the Slayer rule the target's
-/// once-record names (`_solo_bridge_granted_flags` -> `AiSpell.granted_rules_of`, the gf / aof Slayer Mark picked in the pre-attack slot, `beneficiary: attackers`),
-/// so a shooter that held, or a charger, gets AP(+2) against a Tough(3+) target. The core bridged Rending, Furious, Relentless, Shred and Surge from that record
-/// and not Slayer, so its saves ran 2 AP lighter (and said no `Slayer: AP(+2) because <U> held` line). From 94 the volley and strike seams read it too.
-/// Below 94 byte-identical. Every call site reads THIS constant, not `94`.
-pub const PENDING_EPOCH_SLAYER_MARK_GRANT: u32 = 94;
 /// The TERRAIN DEBUFF gate (14.09., sweep A — rows `Dangerous Terrain Debuff`
 /// / `Difficult Terrain Debuff`, `STANDALONE_SWEEP_A_2026-09-14.md`): both
 /// layers announce the debuff — the table's log even appends a dead
@@ -2397,15 +2329,16 @@ mod tests {
         EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME, EPOCH_83_LONE_HERO_TARGET, EPOCH_84_IGNORE_GROUPS, EPOCH_85_INDIRECT_GATE,
         EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_87_WALKED_DANGEROUS, EPOCH_88_SPLIT_LONE_HERO, EPOCH_89_SHARED_BEARERS,
         EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER,
+        EPOCH_94_PARITY_BATCH,
     };
 
-    /// Heightfield plan step 7: the gate exists, sits ahead of the live epoch (so no recorded or fresh game reads it yet),
-    /// is off one epoch below and on from its own number.
+    /// Heightfield plan step 7 (the placeholder became the frozen batch epoch at the 94 bump): the gate is 94, on in a fresh game, off one
+    /// epoch below.
     #[test]
-    fn the_height_gate_is_pending_ahead_of_the_live_epoch() {
-        use super::PENDING_EPOCH_HEIGHT as gate;
+    fn the_height_gate_is_on_from_the_epoch_94_batch() {
+        use super::EPOCH_94_PARITY_BATCH as gate;
         assert_eq!(gate, 94);
-        assert!(!rule_on(CURRENT_RULES_EPOCH, gate), "pending: the live epoch must not reach the heightfield yet");
+        assert!(rule_on(CURRENT_RULES_EPOCH, gate), "a fresh play_game() reads the heightfield gate");
         assert!(!rule_on(gate - 1, gate) && rule_on(gate, gate));
     }
 
@@ -2427,7 +2360,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 93, "the live epoch is EPOCH_93_DANGER_RULES_RIDER");
+        assert_eq!(CURRENT_RULES_EPOCH, 94, "the live epoch is EPOCH_94_PARITY_BATCH");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2437,11 +2370,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":93}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":94}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 93"
+            "a fresh play_game() now stamps the bumped epoch, 94"
         );
     }
 
@@ -2583,6 +2516,14 @@ mod tests {
         assert!(rule_on(EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_90_JOINED_ONE_RECOVERY), "a record at 90 rolls once per pair");
         assert!(rule_on(EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_89_SHARED_BEARERS), "90 keeps the shared bearers on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_90_JOINED_ONE_RECOVERY), "a fresh play_game() stamps it on");
+    }
+
+    #[test]
+    fn epoch_94_gate_is_closed_at_epoch_93_and_open_from_94() {
+        assert!(!rule_on(EPOCH_93_DANGER_RULES_RIDER, EPOCH_94_PARITY_BATCH), "a record at 93 replays every placeholder read the old way");
+        assert!(rule_on(EPOCH_94_PARITY_BATCH, EPOCH_94_PARITY_BATCH), "a record at 94 plays the batch");
+        assert!(rule_on(EPOCH_94_PARITY_BATCH, EPOCH_93_DANGER_RULES_RIDER), "94 keeps the danger, alias and rider reads on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_94_PARITY_BATCH), "a fresh play_game() stamps it on");
     }
 
     #[test]

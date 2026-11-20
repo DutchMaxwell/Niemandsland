@@ -125,9 +125,9 @@ fn below_73_the_hosts_flag_changes_nothing() {
     assert_eq!(after.shaken[3], after_plain.shaken[3]);
 }
 
-// ---- PENDING_EPOCH_SHAKEN_MIRROR (94): the table's Shaken flag of a joined chain ----
+// ---- EPOCH_94_PARITY_BATCH (94): the table's Shaken flag of a joined chain ----
 
-const MIRROR: u32 = crate::acts::PENDING_EPOCH_SHAKEN_MIRROR;
+const MIRROR: u32 = crate::acts::EPOCH_94_PARITY_BATCH;
 
 /// The seed of the first volley that leaves the chain `after`-shaped by `pick` (a failed test), at `epoch`.
 fn failed_test_seed(st: &State, statics: &[UnitStatic], epoch: u32, key: &str, pick: impl Fn(&State) -> bool) -> i64 {

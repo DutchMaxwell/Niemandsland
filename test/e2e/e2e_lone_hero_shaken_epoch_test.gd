@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Pending epoch 94 (acts.rs `PENDING_EPOCH_SHAKEN_MIRROR`, lead rule call 20.11., reading B): a lone joined hero is the unit once its host
+## Pending epoch 94 (acts.rs `EPOCH_94_PARITY_BATCH`, lead rule call 20.11., reading B): a lone joined hero is the unit once its host
 ## has no model left, so ITS Shaken flag decides the morale test. The dead host's flag outlives the hero's recovery (nothing clears a dead
 ## unit's Shaken) and used to fail the hero's next test without a die. Below 94 the table reads the unit's own flag, as always.
 
@@ -54,7 +54,7 @@ func _log_text() -> String:
 
 
 func test_a_stale_dead_host_flag_does_not_fail_the_recovered_lone_hero_from_94() -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_SHAKEN_MIRROR
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_94_PARITY_BATCH
 	var host := _lone_hero(true, false)
 	_main.seed_tray_rng(7)
 	await _main._solo_morale_test(host, "AI (Squad)")
@@ -63,7 +63,7 @@ func test_a_stale_dead_host_flag_does_not_fail_the_recovered_lone_hero_from_94()
 
 
 func test_below_94_the_stale_dead_host_flag_still_fails_the_test_without_a_die() -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_SHAKEN_MIRROR - 1
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_94_PARITY_BATCH - 1
 	var host := _lone_hero(true, false)
 	_main.seed_tray_rng(7)
 	await _main._solo_morale_test(host, "AI (Squad)")
@@ -72,7 +72,7 @@ func test_below_94_the_stale_dead_host_flag_still_fails_the_test_without_a_die()
 
 
 func test_a_shaken_lone_hero_fails_without_a_die_from_94_whatever_its_dead_host_says() -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_SHAKEN_MIRROR
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_94_PARITY_BATCH
 	var host := _lone_hero(false, true)
 	_main.seed_tray_rng(7)
 	await _main._solo_morale_test(host, "AI (Squad)")
@@ -80,7 +80,7 @@ func test_a_shaken_lone_hero_fails_without_a_die_from_94_whatever_its_dead_host_
 
 
 func test_a_failed_die_flags_the_recovered_lone_hero_over_the_stale_host_flag() -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_SHAKEN_MIRROR
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_94_PARITY_BATCH
 	var flagged := false
 	for seed in range(1, 40):
 		var host := _lone_hero(true, false)

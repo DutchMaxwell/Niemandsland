@@ -216,7 +216,7 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## endpoints and Melee Shrouding band, Counter / Destructive / Piercing Hunter in melee) are stamped 92 with EPOCH_92_MELEE_CAUSES.
 ## The AI skirting Dangerous ground (a plain move's goal read and the sideways re-plan), the 3.6 faction folders resolving their rules
 ## and the volley's spell rider switched off are stamped 93 with EPOCH_93_DANGER_RULES_RIDER.
-static var rules_epoch: int = 93
+static var rules_epoch: int = 94
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -265,9 +265,6 @@ const EPOCH_82_IGNORE_BY_NAME := 82
 ## The core's frozen `EPOCH_83_LONE_HERO_TARGET` (acts.rs): a volley at a host with no models left is shot and saved as
 ## its living joined hero, as `_solo_defense_holder` does on the table. Nothing in the table gates on it.
 const EPOCH_83_LONE_HERO_TARGET := 83
-## Placeholder gate (acts.rs `PENDING_EPOCH_SHAKEN_MIRROR`, the core twin): from 94 a lone hero's morale test reads the hero's own Shaken flag, not the stale flag of
-## its dead host (`Main._solo_test_unit_shaken`), and the core mirrors the flag onto a joined chain the way the table does (lead rule call 20.11., reading B).
-const PENDING_EPOCH_SHAKEN_MIRROR := 94
 ## The core's frozen `EPOCH_84_IGNORE_GROUPS` (acts.rs): the core rolls differently named wound-ignore rules one after the other, as
 ## `_solo_ignore_wounds` does. Nothing in the table gates on it.
 const EPOCH_84_IGNORE_GROUPS := 84
@@ -299,18 +296,10 @@ const EPOCH_92_MELEE_CAUSES := 92
 ## 3.6 faction folders resolving their rules (the table's registry already does, nothing to gate here); (3) the volley's legacy
 ## spell rider off (`BattleSim.resolve`, the cast-phase-off branch).
 const EPOCH_93_DANGER_RULES_RIDER := 93
-## Placeholder gate (acts.rs `PENDING_EPOCH_EXACT_STRIKER_LABELS`, the core twin): from 94 the unit-level Bane / Lacerate / Rending / Unstoppable scans skip a name that only STARTS with the
-## rule (`GameUnit.is_unlisted_striker_label`: Bane Mark, Rending Mark, Unstoppable Mark, Bane in Melee Buff hand the rule to OTHER units, ds/h_prefix_labels.md).
-const PENDING_EPOCH_EXACT_STRIKER_LABELS := 94
-## Placeholder gate (acts.rs `PENDING_EPOCH_VERSATILE_MODIFIED_HIT`, the core twin): from 94 the core picks Versatile Attack on the number the first eligible shot rolls at, as the table
-## does, so a Versatile shooter at a to-hit modifier is no longer refused as a pair (`CoreSlice.pair_refusals`).
-const PENDING_EPOCH_VERSATILE_MODIFIED_HIT := 94
-## The core's `PENDING_EPOCH_HEIGHT` (acts.rs, heightfield plan): from 94 the core reads a generated board's heights. The table
-## draws and collides the same materialised board and gates on nothing here yet.
-const PENDING_EPOCH_HEIGHT := 94
-## The core's `PENDING_EPOCH_CASUALTY_TIES` (acts.rs): from here the core ranks casualties by the table's own f32 distance to the
-## centroid. Nothing in the table gates on it (the table is the reference); the shadow compares the survivors' positions from here.
-const PENDING_EPOCH_CASUALTY_TIES := 94
+## The core's frozen `EPOCH_94_PARITY_BATCH` (acts.rs): the thirteen table-vs-core differences that sat behind `PENDING_EPOCH_*` placeholders (flying move-through,
+## Versatile pick on the modified to-hit, inline Deadly, exact striker labels, heightfield reads, casualty ties in f32, joined hero moved stamp, Shaken mirror,
+## Deadly stops, zero-move stamp, own-unit Indirect, Slayer Mark grant, melee Mark scope). Where the table has its own side of one it reads this constant.
+const EPOCH_94_PARITY_BATCH := 94
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
