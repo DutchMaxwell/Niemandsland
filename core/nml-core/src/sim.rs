@@ -282,7 +282,13 @@ fn granted_reach<'a>(us: &'a UnitStatic, state: &'a State, mi: usize) -> (f64, &
 /// G4R4 C-LONEHERO-SHAKEN (`EPOCH_73_V36`): the Shaken a morale test reads. A lone joined hero (its host has no models
 /// left) is the host's unit and the table keeps the flag on that unit, so the dead host's Shaken is the hero's; every
 /// other unit reads its own flag, and below 73 every unit does.
+///
+/// From `PENDING_EPOCH_SHAKEN_MIRROR` only the unit's OWN flag counts (lead rule call 20.11.): a dead host's flag is stale once the hero
+/// recovered alone, so the lone hero rolls its die; the table's `_solo_test_unit_shaken` reads the same.
 fn unit_shaken(state: &State, i: usize, seams: Seams) -> bool {
+    if rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SHAKEN_MIRROR) {
+        return state.shaken[i];
+    }
     let root = morale_root(state, i, seams);
     state.shaken[i] || (root != i && state.alive[root] <= 0 && state.shaken[root])
 }
@@ -7374,10 +7380,10 @@ pub(crate) fn tray_morale_for(
     match outcome {
         Morale::Passed => {}
         Morale::Shaken if seams.hero_attach && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SHAKEN_MIRROR) => {
-            // The table's Shaken outcome: the unit the volley named (a lone hero's host) is toggled only when it is not Shaken yet, the flag is
-            // then mirrored onto every joined hero (`_solo_mirror_shaken`) and each newly Shaken member drops what it carries.
+            // The table's Shaken outcome: a unit that is not Shaken yet (the lone hero's own flag decides) gets the flag on the unit the volley
+            // named (its host, a dead one for a lone hero), mirrored onto every joined hero (`_solo_mirror_shaken`); each member drops what it carries.
             let unit = morale_root(state, i, seams);
-            if !state.shaken[unit] {
+            if !state.shaken[i] {
                 for u in std::iter::once(unit).chain(state.attached[unit].clone()) {
                     state.shaken[u] = true;
                     drop_carried(state, u);

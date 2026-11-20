@@ -170,19 +170,35 @@ fn a_failed_lone_hero_test_flags_the_dead_host_and_the_hero_from_the_pending_epo
     assert!(after.shaken[2] && after.shaken[3], "host {} hero {}", after.shaken[2], after.shaken[3]);
 }
 
-/// TABLE PARITY, not a rule reading: the dead host's flag outlives the hero's own recovery (nothing clears a dead unit's Shaken), so a later test
-/// of the lone hero reads the host's flag, fails without a die, and - the host being Shaken already - toggles and mirrors NOTHING: the hero
-/// stays unflagged. The core flagged the hero (soak game 9: the table's hero charged in round 4, the core's idled). RED below the gate.
+/// Lead rule call 20.11. (reading B): a lone hero that recovered is no longer Shaken, and the dead host's flag outlives that recovery (nothing
+/// clears a dead unit's Shaken), so from the pending epoch it does NOT fail the hero's next test: the hero rolls its die and a failed die flags
+/// the hero (and the dead host). Below the gate the stale flag still fails the test without a die and the hero is flagged (the pin of the 73 test).
+/// RED with reading A (the stale flag read at the gate): no die is rolled.
 #[test]
-fn a_stale_dead_host_flag_fails_the_lone_heros_test_and_flags_nobody_from_the_pending_epoch() {
+fn a_stale_dead_host_flag_does_not_fail_a_recovered_lone_heros_test_from_the_pending_epoch() {
     let (st, statics) = line(MIRROR, true);
     let seed = due_seed(&st, &statics, MIRROR);
-    let (after, shot) = shoot(&st, &statics, seed, MIRROR);
-    assert_eq!(morale_dice(&shot), 0, "the host's flag decides: no die");
-    assert!(!after.shaken[3], "the table toggles nothing, so the hero stays as it was");
+    let (_, shot) = shoot(&st, &statics, seed, MIRROR);
+    assert_eq!(morale_dice(&shot), 1, "the hero's own flag is clear: it rolls: {:?}", shot.rolls);
+    let failed = failed_test_seed(&st, &statics, MIRROR, "bh", |a| a.shaken[3]);
+    let (after, shot) = shoot(&st, &statics, failed, MIRROR);
+    assert_eq!(morale_dice(&shot), 1, "{:?}", shot.rolls);
+    assert!(after.shaken[3] && after.shaken[2], "a failed die flags the hero and mirrors onto the dead host's chain");
     let (st, statics) = line(MIRROR - 1, true);
-    let (below, _) = shoot(&st, &statics, seed, MIRROR - 1);
-    assert!(below.shaken[3], "below the pending epoch the hero is flagged (the pin above)");
+    let (below, shot) = shoot(&st, &statics, seed, MIRROR - 1);
+    assert_eq!(morale_dice(&shot), 0, "below the pending epoch the stale host flag fails the test without a die");
+    assert!(below.shaken[3]);
+}
+
+/// The other half of the same rule: a lone hero that IS Shaken fails its test without a die even when its dead host never was flagged.
+#[test]
+fn a_shaken_lone_hero_fails_its_test_without_a_die_whatever_its_dead_hosts_flag_says() {
+    let (mut st, statics) = line(MIRROR, false);
+    st.shaken[3] = true;
+    let seed = due_seed(&st, &statics, MIRROR);
+    let (after, shot) = shoot(&st, &statics, seed, MIRROR);
+    assert_eq!(morale_dice(&shot), 0, "{:?}", shot.rolls);
+    assert!(after.shaken[3]);
 }
 
 /// The table's idle recovery clears the unit's joined heroes with it (`_solo_mirror_shaken`).

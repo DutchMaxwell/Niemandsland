@@ -902,12 +902,13 @@ pub const EPOCH_82_IGNORE_BY_NAME: u32 = 82;
 /// morale test still reads the chain (`morale_root`). Records stamped 82 or below replay byte-exact. Every call site
 /// reads THIS constant, not `83`. The recorder mirror (`act_recorder.gd`) stamps 83 in the same change.
 pub const EPOCH_83_LONE_HERO_TARGET: u32 = 83;
-/// Placeholder gate for the Shaken flag of a joined chain: the table's `_solo_morale_test` toggles the unit it tests (its host, the dead
-/// host for a lone hero) only when that unit is not Shaken yet, then mirrors the flag onto every joined hero (`_solo_mirror_shaken`), and an
-/// idle recovery clears the heroes with the host. The core set the flag on the aimed unit alone: a host that failed a test left its hero
-/// unflagged inside the activation (no "fights on alone" carry, no hero idle), a lone hero was flagged although the table's dead host
-/// already was (nothing toggles then), and a recovered host left its heroes Shaken. From 94 the core does what the table does.
-/// Every call site reads THIS constant, not the literal `94`.
+/// Placeholder gate for the Shaken flag of a joined chain (lead rule call 20.11., reading B). The table's `_solo_morale_test` toggles the
+/// unit it tests (its host, the dead host for a lone hero) and mirrors the flag onto every joined hero (`_solo_mirror_shaken`); an idle
+/// recovery clears the heroes with the host. The core set the flag on the aimed unit alone: a host that failed a test left its hero
+/// unflagged inside the activation (no "fights on alone" carry), and a recovered host left its heroes Shaken. A lone hero that recovered
+/// is no longer Shaken: the dead host's flag outlives the recovery (nothing clears a dead unit's Shaken) and used to fail the hero's next
+/// test without a die. From 94 the test reads the lone hero's OWN flag on both sides (core `unit_shaken`, table
+/// `Main._solo_test_unit_shaken`) and a failed test flags host and heroes the way the table does. Every call site reads THIS constant.
 pub const PENDING_EPOCH_SHAKEN_MIRROR: u32 = 94;
 /// Differently named wound-ignore rules roll one after the other (#2595, table twin `_solo_regen_pick` / `_solo_ignore_wounds`): the
 /// core's `Ctx::regen_groups` hold the ignore rules by NAME (Regeneration first, then the most generous target, then the name), a

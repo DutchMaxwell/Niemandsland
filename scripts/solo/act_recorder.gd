@@ -265,6 +265,9 @@ const EPOCH_82_IGNORE_BY_NAME := 82
 ## The core's frozen `EPOCH_83_LONE_HERO_TARGET` (acts.rs): a volley at a host with no models left is shot and saved as
 ## its living joined hero, as `_solo_defense_holder` does on the table. Nothing in the table gates on it.
 const EPOCH_83_LONE_HERO_TARGET := 83
+## Placeholder gate (acts.rs `PENDING_EPOCH_SHAKEN_MIRROR`, the core twin): from 94 a lone hero's morale test reads the hero's own Shaken flag, not the stale flag of
+## its dead host (`Main._solo_test_unit_shaken`), and the core mirrors the flag onto a joined chain the way the table does (lead rule call 20.11., reading B).
+const PENDING_EPOCH_SHAKEN_MIRROR := 94
 ## The core's frozen `EPOCH_84_IGNORE_GROUPS` (acts.rs): the core rolls differently named wound-ignore rules one after the other, as
 ## `_solo_ignore_wounds` does. Nothing in the table gates on it.
 const EPOCH_84_IGNORE_GROUPS := 84
