@@ -32,6 +32,7 @@ pub mod replay;
 pub mod step;
 pub mod theta;
 pub mod theta_memo;
+pub mod tier;
 
 pub use cap::{cap_difficult_polylines, difficult_at_point, trail_crosses_difficult_cells, CapReport};
 pub use charge::{charge_contact_slots, nearest_base_dist};
@@ -72,6 +73,7 @@ pub use theta::{
     board_extents, cell_before, cell_center_fine, theta_reconstruct, theta_star, theta_star_b,
     theta_star_bent, theta_star_traced, theta_star_traced_bent, Cell, ThetaBend, ThetaCfg, ThetaOpts,
 };
+pub use tier::{tier_crossings, Crossing, HighSide, TierEdge, TierKind};
 
 // === movement_planner.gd constants (:25-90) ===============================
 
