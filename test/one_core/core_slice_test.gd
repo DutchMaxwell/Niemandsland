@@ -823,6 +823,17 @@ func test_a_versatile_shooter_against_a_to_hit_modifier_is_refused_as_a_pair() -
 	SlicePin.release()
 
 
+## A slice dict a test injects through `CoreSlice._cache_by_path` (melee_morale_lines_test.gd) predates the `lifted_names` (H-9b) and `shooter_only` (H-9a) keys: the readers
+## default to empty, they do not abort the engine ("Invalid access to property or key 'lifted_names'", gdUnit shard 9). RED: read both with `c["..."]` -> SCRIPT ERROR.
+func test_a_cached_slice_dict_without_the_newer_keys_still_reads() -> void:
+	var path := "user://slice_cache_without_newer_keys.json"
+	CoreSlice._cache_by_path[path] = {"mode": "deny", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}, "unmapped_inert": false}
+	var tgt := _unit(["Stealth"], [[]])
+	assert_array(CoreSlice.refusals_in(path, tgt, true)).override_failure_message("an empty deny slice takes a mapped rule, as target").is_empty()
+	assert_array(CoreSlice.refusals_in(path, tgt)).override_failure_message("and as shooter").is_empty()
+	CoreSlice._cache_by_path.erase(path)
+
+
 ## DLINES train 4 (review): the table names a Takedown's picked model by its first item when it is no Tough and no special-weapon model; the core holds
 ## only an item count, so its line says "trooper" (door test, one Banner carrier: 12 of 12 seeds differ). A Takedown shooter at a target with a living
 ## item-carrying model is refused as a pair; no item, a dead carrier, no Takedown, and the dice-only pin (it drops line refusals) stay taken.

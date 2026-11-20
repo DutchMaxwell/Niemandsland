@@ -134,7 +134,7 @@ static func _rule_taken(gu: GameUnit, label: String, as_target := false) -> bool
 		return true
 	if (c["deny_names"] as Dictionary).has(label):
 		return false
-	if (c["lifted_names"] as Dictionary).has(label):
+	if (c.get("lifted_names", {}) as Dictionary).has(label):   # .get: a test or an older cache entry may hold a slice dict without the key
 		return true
 	var prims: Dictionary = c["primitives"]
 	var allow: bool = c["mode"] == "allow"
@@ -144,7 +144,7 @@ static func _rule_taken(gu: GameUnit, label: String, as_target := false) -> bool
 	if entry.is_empty() and bool(c["unmapped_inert"]):
 		return true   # a name no map knows (an upgrade's own label): neither side reads it, the rules it grants are listed apart
 	var p: Variant = entry.get("primitive")
-	if as_target and not allow and p is String and (c["shooter_only"] as Dictionary).has(p):
+	if as_target and not allow and p is String and (c.get("shooter_only", {}) as Dictionary).has(p):
 		return true   # H-9a: a target's beat rule never acts in the volley it is shot by
 	return p is String and prims.has(p) == allow
 
