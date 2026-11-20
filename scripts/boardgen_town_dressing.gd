@@ -128,8 +128,8 @@ func _add_lights(layout: Dictionary) -> void:
 		light.name = "Lantern%d" % i
 		light.position = Vector3(at.x, 2.55, at.y) * INCHES_TO_METERS
 		light.light_color = LANTERN_COLOUR
-		light.light_energy = 1.4
-		light.omni_range = 0.3
+		light.light_energy = 0.5
+		light.omni_range = 0.24
 		light.omni_attenuation = 1.3
 		light.shadow_enabled = i < 4
 		add_child(light)
@@ -143,7 +143,7 @@ static func dusk(lighting: Object) -> void:
 	lighting.set_sun_energy(1.0)
 	lighting.set_sun_angles(-50.0, 14.0)
 	lighting.set_ambient_color(Color(0.36, 0.40, 0.66))
-	lighting.set_ambient_energy(0.62)
+	lighting.set_ambient_energy(0.8)
 	lighting.set_exposure(0.95)
 
 
