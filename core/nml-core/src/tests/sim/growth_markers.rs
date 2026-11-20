@@ -40,14 +40,14 @@ use super::*;
         let mut statics = vec![UnitStatic::default()];
         statics[0].growth =
             vec![GrowthRule { on_kill: true, max_markers: 2, hit_per_marker: 1, ..Default::default() }];
-        growth_on_kill(&statics, &mut st, 0);
-        growth_on_kill(&statics, &mut st, 0);
-        growth_on_kill(&statics, &mut st, 0);
+        growth_on_kill(&statics, &mut st, 0, &mut Tray::seeded(0));
+        growth_on_kill(&statics, &mut st, 0, &mut Tray::seeded(0));
+        growth_on_kill(&statics, &mut st, 0, &mut Tray::seeded(0));
         assert_eq!(st.growth_markers[0], 2, "capped at max_markers");
 
         let mut st2 = four_unit_line();
         let bare = vec![UnitStatic::default()];
-        growth_on_kill(&bare, &mut st2, 0);
+        growth_on_kill(&bare, &mut st2, 0, &mut Tray::seeded(0));
         assert_eq!(st2.growth_markers[0], 0, "no Growth Markers rule at all: untouched");
     }
 

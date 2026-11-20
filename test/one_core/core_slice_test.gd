@@ -474,6 +474,28 @@ func test_deny_mode_takes_the_lifted_equal_probes() -> void:
 	CoreSlice.reset_cache()
 
 
+## LIFT92 (20.11.): the Growth Markers family leaves the ledger group once the door says its four lines (the AP, the Defense bonus, Fortified
+## Growth's cut, the Frenzy kill marker: door_lines_growth_test.gd) - its dice, end state and ledger were equal on the door already. Each row is
+## [game system, faction folder, rule]; the folder is the map that gives the rule its primitive. Teleport and Infiltrate stay refused.
+## RED on the old list: every family name below is refused by its primitive.
+func test_deny_mode_takes_the_growth_markers_family() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	for c in [["gf", "alien_hives", "Piercing Growth"], ["gf", "infected_colonies", "Precision Growth"], ["gf", "human_inquisition", "Defensive Growth"],
+			["aof", "daemons_of_plague", "Fortified Growth"], ["aof", "dark_elves", "Piercing Frenzy"], ["aof", "dwarves", "Precision Frenzy"],
+			["aof", "daemons_of_war", "Defensive Frenzy"], ["aof", "dark_elves", "Regenerative Strength"]]:
+		var bearer := _unit([c[2]], [["AP(1)"]])
+		bearer.unit_properties["game_system"] = c[0]
+		bearer.unit_properties["faction_folder"] = c[1]
+		assert_array(CoreSlice.refusals(bearer)).override_failure_message("deny mode takes a unit that carries %s" % c[2]).is_empty()
+		assert_array(CoreSlice.refusals(bearer, true)).override_failure_message("deny mode takes a target that carries %s" % c[2]).is_empty()
+	var teleporter := _unit(["Teleport"], [])
+	teleporter.unit_properties["faction_folder"] = "elven_jesters"
+	assert_array(CoreSlice.refusals(teleporter)).is_equal(["unit_rule:Teleport"])
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+
+
 ## BEATS (19.11.): a unit that carries a pre-attack beat rule (main.gd, the block between the casts and the volley) stays on
 ## the table in deny mode: the table resolves the beat, and a core that took the activation would resolve it a second time
 ## from its stale capture (door probe on one real AI activation: Mend 8/8, Breath Attack 8/8, Mind Control, Storm Attack,

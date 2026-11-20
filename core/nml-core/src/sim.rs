@@ -4521,6 +4521,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     let (ap, hit) = growth_bonus_of(statics, state, i);
     c.growth_ap_mod = ap;
     c.growth_hit_mod = hit;
+    c.growth_ap_name = growth_ap_name_of(statics, state, i);
     // rules-wave3-growthmark — the family's DEFENDER-side facets, gated on
     // `EPOCH_6_TABLE_RULES` (frozen at 6, the stamping-gap rule): a record
     // stamping `rules_epoch: 5` (the recording fleet's live epoch) replays
@@ -4529,6 +4530,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         let (dm, fa) = growth_defense_of(statics, state, i);
         c.growth_def_mod = dm;
         c.growth_fortify_ap = fa;
+        if fa != 0 {
+            c.growth_fortify_name = growth_fortify_name_of(statics, state, i);
+        }
     }
     // Issue #854 (wave 4) — the defence facet's SAVE-RUNG direction flips to
     // the table's at the FROZEN `EPOCH_7_TABLE_RULES`: `dice::save_batch` then
@@ -4600,6 +4604,30 @@ fn growth_bonus_of(statics: &[UnitStatic], state: &State, i: usize) -> (i64, i64
     (ap, hit)
 }
 
+/// Door lines: the names of the rules that gave `i` its marker AP (Piercing Growth / Frenzy), joined with ", " like the table's
+/// `_solo_growth_attack_bonus` `ap_names`; "" when none did.
+fn growth_ap_name_of(statics: &[UnitStatic], state: &State, i: usize) -> &'static str {
+    let markers = state.growth_markers[i];
+    let names: Vec<&str> = statics[state.roster.profile[i]].growth.iter()
+        .filter(|g| markers > 0 && g.ap_per_marker * markers + g.ap_per_two * (markers / 2) > 0)
+        .map(|g| g.name.as_str()).collect();
+    if names.is_empty() { "" } else { crate::rules::intern(&names.join(", ")) }
+}
+
+/// Door lines: one `(rule name, Defense bonus)` per Defensive Growth / Frenzy rule that earned a bonus at the unit's marker count, in the
+/// table's order (`_solo_growth_defense_parts`); empty when none did.
+fn growth_defense_parts(statics: &[UnitStatic], state: &State, i: usize) -> Vec<(String, i64)> {
+    let markers = state.growth_markers[i];
+    statics[state.roster.profile[i]].growth.iter()
+        .map(|g| (g.name.clone(), g.defense_per_marker * markers + g.defense_per_two * (markers / 2)))
+        .filter(|(_, b)| markers > 0 && *b > 0).collect()
+}
+
+/// Door lines: the Fortified Growth rule's name (the first `enemy_ap_per_two` rule the unit carries).
+fn growth_fortify_name_of(statics: &[UnitStatic], state: &State, i: usize) -> &'static str {
+    statics[state.roster.profile[i]].growth.iter().find(|g| g.enemy_ap_per_two != 0).map_or("", |g| crate::rules::intern(&g.name))
+}
+
 /// rules-wave3-growthmark (epoch 6) — `growth_bonus_of`'s DEFENDER-side
 /// sister, per `growth_defense_of`'s rule text: Defensive Frenzy/Growth sum
 /// `defense_per_marker`/`defense_per_two` (the +X-to-Defense ladder) and
@@ -4647,13 +4675,16 @@ fn growth_round_start(statics: &[UnitStatic], next: &mut State, si: usize, shake
 /// rule's own `max_markers`. Called with the WIPING side's own index, never a
 /// per-member split (main.gd credits the acting `attacker`/`charger` GameUnit,
 /// not the individual model or weapon that landed the last wound).
-fn growth_on_kill(statics: &[UnitStatic], next: &mut State, si: usize) {
+fn growth_on_kill(statics: &[UnitStatic], next: &mut State, si: usize, tray: &mut Tray) {
     let us = &statics[next.roster.profile[si]];
-    let Some(cap) = us.growth.iter().find(|g| g.on_kill).map(|g| g.max_markers) else {
+    let Some((cap, rule)) = us.growth.iter().find(|g| g.on_kill).map(|g| (g.max_markers, g.name.as_str())) else {
         return;
     };
     if next.growth_markers[si] < cap {
         next.growth_markers[si] += 1;
+        // The table's line (`_solo_growth_on_kill`), said where the marker is placed.
+        let n = next.growth_markers[si];
+        crate::dice::say_rule(tray, "growth_kill", next.player[si], || format!("{rule}: {} gains a marker for the kill ({n}/{cap})", us.name));
     }
 }
 
@@ -4673,14 +4704,14 @@ fn growth_round_start_heroes(statics: &[UnitStatic], next: &mut State, si: usize
 
 /// The kill credit of `growth_on_kill`, plus (AIG-G2 R2, `EPOCH_73_V36`, hero seam on) one per living attached hero
 /// of the wiping side who carries an on_kill rule himself. Table twin: `_solo_growth_on_kill` over the chain.
-fn growth_credit_kill(statics: &[UnitStatic], next: &mut State, wiper: usize, seams: Seams) {
-    growth_on_kill(statics, next, wiper);
+fn growth_credit_kill(statics: &[UnitStatic], next: &mut State, wiper: usize, seams: Seams, tray: &mut Tray) {
+    growth_on_kill(statics, next, wiper, tray);
     if !seams.hero_attach || !rule_on(seams.rules_epoch, EPOCH_73_V36) {
         return;
     }
     for h in next.attached[wiper].clone() {
         if next.alive[h] > 0 {
-            growth_on_kill(statics, next, h);
+            growth_on_kill(statics, next, h, tray);
         }
     }
 }
@@ -11650,6 +11681,7 @@ fn resolve_with(
                                 // The table names the target it was aimed at: a lone hero's host, not the hero (see above).
                                 let aimed = lone_host.map_or(ut_g.name.as_str(), |h| statics[next.roster.profile[h]].name.as_str());
                                 crate::dice::say_shielded(tray, &def, aimed);
+                                crate::dice::say_growth_defense(tray, &def, aimed, &growth_defense_parts(statics, &next, g.ti));
                                 tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[si],
                                     text: format!("{} fires at {}", statics[pi_s].name, aimed), detail: None });
                             }
@@ -11776,7 +11808,7 @@ fn resolve_with(
                             // own kill marker when this volley just fully
                             // destroyed its target.
                             if alive_before_g > 0 && next.alive[g.ti] <= 0 {
-                                growth_credit_kill(statics, &mut next, si, seams);
+                                growth_credit_kill(statics, &mut next, si, seams, tray);
                             }
                             // Wave 4 follow-up (port-vengeance) — the volley's
                             // wiped target banks its Vengeance markers on the
@@ -11946,9 +11978,9 @@ fn resolve_with(
                     // marker, win-by-wipe only — a mutual wipe or a fight
                     // that leaves both sides standing earns nothing.
                     if next.alive[ti] <= 0 && next.alive[si] > 0 {
-                        growth_credit_kill(statics, &mut next, si, seams);
+                        growth_credit_kill(statics, &mut next, si, seams, tray);
                     } else if next.alive[si] <= 0 && next.alive[ti] > 0 {
-                        growth_credit_kill(statics, &mut next, ti, seams);
+                        growth_credit_kill(statics, &mut next, ti, seams, tray);
                     }
                     // Wave 4 follow-up (port-vengeance) — Vengeance at the
                     // melee consolidation's own guards (main.gd:8226-8231):
