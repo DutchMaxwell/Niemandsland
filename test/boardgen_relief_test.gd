@@ -69,3 +69,11 @@ func test_the_earth_has_sparse_dark_irregular_pebbles_and_no_yellow_coins() -> v
 	assert_bool(src.contains("1.0 + 1.4 * h21(ci + 5.0)")).is_true()   # stretched, so no round coin
 	assert_bool(src.contains("vec3(0.13, 0.12, 0.11)")).is_true()   # a dark stone
 	assert_bool(src.contains("+ 0.35 * pebble")).is_true()   # and it stands proud (relief)
+
+
+## Standing water (the pools): a teal depth with a faint sheen and ripples, never a black mirror (the stills read the old one as a hole in the table).
+func test_standing_water_is_teal_with_a_sheen_and_ripples_not_a_black_mirror() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	assert_bool(src.contains("alb = vec3(0.05, 0.11, 0.13) * mix(0.7, 1.3, swirl);")).is_true()
+	assert_bool(src.contains("emis += vec3(0.02, 0.045, 0.07)")).override_failure_message("no sheen: the water mirrors a black sky").is_true()
+	assert_bool(src.contains("rough = 0.12;")).is_false()

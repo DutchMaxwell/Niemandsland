@@ -355,9 +355,14 @@ void fragment() {
 		} else {
 			alb = tint * grid;
 		}
-		if (k == 2) {   // dangerous ground: dark standing water
-			alb = tint * mix(0.7, 1.2, fbm(xz * 0.6 + seed));
-			rough = 0.12;
+		if (k == 2) {   // dangerous ground: dark standing water - a teal depth, a faint sky sheen (no probe to reflect: a black mirror read as a hole in the table), small ripples
+			float swirl = fbm(xz * 0.6 + seed);
+			alb = vec3(0.05, 0.11, 0.13) * mix(0.7, 1.3, swirl);
+			emis += vec3(0.02, 0.045, 0.07) * (0.5 + fbm(xz * 1.3 + seed + 5.0));
+			rough = 0.2;
+			rel = fbm(xz * 2.6 + seed);
+			depth_in = 0.02;
+			ao = 1.0;
 		}
 	}
 	// EDGES AND WEAR (plan R3): from the box size, within 0.06 in of an edge of its face a noise-broken chipped highlight (stone loses chips, plaster spalls to the stone beneath); a damp
