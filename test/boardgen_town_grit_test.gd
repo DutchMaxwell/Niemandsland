@@ -235,3 +235,17 @@ func _vec3(src: String, head: String) -> Color:
 	var at := src.find(head)
 	var nums := src.substr(at + head.length(), 40).split(")")[0].split(",")
 	return Color(float(nums[0]), float(nums[1]), float(nums[2]))
+
+
+## A WALL IS NOT ONE WALLPAPER (plan W0, maintainer 21.11.): the authored stone and plaster are read through the period breaker - three takes per point on a triangle grid, each at its own
+## offset ALONG the courses only (the bed joints stay level; the stone size is untouched, decision D-R2) - never straight off the 1.3 in tile; and the wall faces get their own structure.
+func test_the_stone_and_plaster_sets_are_read_without_their_period() -> void:
+	var board := FileAccess.get_file_as_string("res://shaders/ruintown_board.gdshader")
+	var tile := FileAccess.get_file_as_string("res://shaders/ruintown_grit_tile.gdshaderinc")
+	assert_bool(board.contains("ratio_of(t_stone")).override_failure_message("the stone set is read straight off its tile").is_false()
+	assert_bool(board.contains("ratio_of(t_plaster")).is_false()
+	assert_bool(board.contains("grit_albedo(t_stone, tuv)") and board.contains("grit_normal(n_stone, tuv)")).is_true()
+	assert_bool(board.contains("grit_albedo(t_plaster, pu)") and board.contains("grit_normal(n_plaster, pu)")).is_true()
+	assert_bool(tile.contains("return vec2((fract(h * 7.13) < 0.5 ? st.x : -st.x) + h * 17.0, st.y);")).override_failure_message("a take moves across the courses").is_true()
+	assert_bool(board.contains("/ t_tile.x;")).is_true()   # the tile size (stone size) itself is the manifest's
+	assert_bool(board.contains("grit_wall(p, wnrm, k, seed, alb, rel);")).is_true()

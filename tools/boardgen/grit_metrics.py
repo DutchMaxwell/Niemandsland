@@ -87,6 +87,23 @@ def measure(look, cls, px_per_in):
     return row
 
 
+def repetition(look, px_per_in, period_in, frac=(0.2, 0.8, 0.3, 0.7)):
+    """How strongly a still repeats at the texture's period (plan W0): the horizontal autocorrelation of the luminance of the central crop (x 20-80 %, y 30-70 %), every row high-passed (minus its moving mean over one period), at the lag of one period (the best lag within +-12 % of it), normalised by the lag-0 value. ~1 = a wallpaper, ~0 = no repeat at that period."""
+    rgb = np.asarray(Image.open(look).convert("L"), dtype=np.float32) / 255.0
+    h, w = rgb.shape
+    c = rgb[int(h * frac[2]):int(h * frac[3]), int(w * frac[0]):int(w * frac[1])]
+    p = period_in * px_per_in
+    k = max(int(round(p)), 1)   # high-pass: minus the moving mean over one period (keeps the periodic part, drops the slow drift of light and tone)
+    ker = np.ones(k, np.float32) / k
+    c = c - np.apply_along_axis(lambda r: np.convolve(r, ker, mode="same"), 1, c)
+    c = c[:, k:-k] if c.shape[1] > 3 * k else c
+    best = -1.0
+    var = float((c * c).mean())
+    for lag in range(max(int(p * 0.88), 1), min(int(p * 1.12) + 1, c.shape[1] - 8)):
+        best = max(best, float((c[:, :-lag] * c[:, lag:]).mean()) / max(var, 1e-9))
+    return best
+
+
 def verdicts(row):
     out = []
     for key, (lo, hi) in TARGETS.items():
@@ -109,6 +126,10 @@ def run(stills, masks, out):
         info = json.load(open(mman)).get("still_info", info)   # the masks' capture knows the camera (same cameras, maybe a newer capture)
     lines = []
     for still in man["stills"]:
+        if "_macro_wall" in still:   # plan W0: the wall's repetition at the coursed-stone set's period (manifest tile_in 1.3 in)
+            ppi = float(info.get(still, {}).get("px_per_in", 8.0))
+            lines.append("%-28s repeat@1.3in %.3f  (px per in %.1f)" % (still, repetition(os.path.join(stills, still), ppi, 1.3, (0.15, 0.85, 0.25, 0.58)), ppi))
+            continue
         png = os.path.join(masks, os.path.splitext(still)[0] + "_grit.png")
         if not os.path.exists(png):
             continue
@@ -152,6 +173,19 @@ def self_test():
     print("planted gritty:   ", fmt("b", good))
     vb, vg = " ".join(verdicts(bad)), " ".join(verdicts(good))
     ok = all(("%s FAIL" % k) in vb for k in ["pristine", "sat", "hue_sd", "missing", "sunken"]) and all(("%s PASS" % k) in vg for k in ["pristine", "sat", "hue_sd", "missing", "sunken"])
+    rng = np.random.default_rng(7)   # the repetition: a tiled wallpaper must read high, the same tile under a random per-band offset low
+    tile = (rng.random((40, 40)) * 255).astype(np.uint8)
+    wall = np.tile(tile, (6, 12))
+    Image.fromarray(wall).save(os.path.join(d, "wall.png"))
+    broken = wall.copy()
+    for y in range(0, broken.shape[0], 40):
+        for x0 in range(0, broken.shape[1], 40):
+            broken[y:y + 40, x0:x0 + 40] = np.roll(np.roll(tile, rng.integers(5, 35), axis=1), rng.integers(5, 35), axis=0)
+    Image.fromarray(broken).save(os.path.join(d, "broken.png"))
+    r_tiled = repetition(os.path.join(d, "wall.png"), 40 / 1.3, 1.3, (0.0, 1.0, 0.0, 1.0))
+    r_broken = repetition(os.path.join(d, "broken.png"), 40 / 1.3, 1.3, (0.0, 1.0, 0.0, 1.0))
+    print("planted repetition: tiled %.3f, phase per tile %.3f" % (r_tiled, r_broken))
+    ok = ok and r_tiled > 0.9 and r_broken < 0.5
     print("SELF_TEST", "OK" if ok else "BROKEN")
     return 0 if ok else 1
 

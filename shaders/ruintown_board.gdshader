@@ -31,6 +31,8 @@ const vec3 MEAN_PLASTER = vec3(0.4065, 0.3669, 0.3513);
 const vec3 MEAN_TIMBER = vec3(0.1207, 0.0743, 0.0443);
 const vec3 MEAN_EARTH = vec3(0.1747, 0.1326, 0.0824);
 
+#include "res://shaders/ruintown_grit_tile.gdshaderinc"
+
 vec3 ratio_of(sampler2D t, vec2 uv, vec3 mean) {
 	return clamp(texture(t, uv).rgb / mean, vec3(0.3), vec3(2.6));
 }
@@ -45,8 +47,8 @@ bool use_stone(vec2 uv, inout vec3 ratio, inout vec3 tn) {
 		return false;
 	}
 	vec2 tuv = vec2(uv.x, -uv.y) / t_tile.x;
-	ratio = ratio_of(t_stone, tuv, MEAN_STONE);
-	tn = normal_of(n_stone, tuv);
+	ratio = clamp(grit_albedo(t_stone, tuv) / MEAN_STONE, vec3(0.3), vec3(2.6));   // (plan W0: without its 1.3 in period)
+	tn = grit_normal(n_stone, tuv);
 	return true;
 }
 
@@ -58,8 +60,8 @@ bool use_frame(vec2 uv, float wood, inout vec3 ratio, inout vec3 tn) {
 	vec3 nt = vec3(0.0, 0.0, 1.0);
 	if (t_on.y > 0.5) {
 		vec2 pu = vec2(uv.x, -uv.y) / t_tile.y;
-		rp = ratio_of(t_plaster, pu, MEAN_PLASTER);
-		np = normal_of(n_plaster, pu);
+		rp = clamp(grit_albedo(t_plaster, pu) / MEAN_PLASTER, vec3(0.3), vec3(2.6));
+		np = grit_normal(n_plaster, pu);
 	}
 	if (t_on.z > 0.5) {
 		vec2 tu = vec2(uv.x, -uv.y) / t_tile.z;
@@ -457,6 +459,7 @@ void fragment() {
 		float moss = smoothstep(0.55, 0.95, shade);
 		float patchy = wnrm.y > 0.5 ? fbm(p.xz * 1.3 + seed * 3.0) : fbm(vec2(p.x + p.z, p.y) * 1.3 + seed * 3.0);   // a top has no height to vary over: its patches follow the plan
 		if (abs(wnrm.y) < 0.2) {   // a wall face
+			grit_wall(p, wnrm, k, seed, alb, rel);   // (plan W0: a wall is not one wallpaper)
 			float scorch = smoothstep(0.2, 0.6, fire) * (1.0 - smoothstep(0.0, mix(1.4, 6.5, fire), p.y)) * smoothstep(0.12, 0.45, patchy);   // rising from the foot, two storeys high on the fire side
 			alb *= 1.0 - 0.4 * fire * fire;   // smoke over everything on that side
 			alb = mix(alb, vec3(0.035, 0.03, 0.028), 0.9 * scorch);

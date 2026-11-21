@@ -151,6 +151,38 @@ vec3 grit_fill(vec3 alb) {
 	return grit_on > 0.5 ? pow(alb, vec3(2.2)) * GRIT_FILL : vec3(0.0);
 }
 
+// A WALL IS NOT ONE WALLPAPER (plan W0): on the stone faces of the city wall, the towers and the ruined rows - a macro drift of value and hue over 6-12 in, repairs in a paler cooler stone,
+// a plinth course of larger dressed blocks at the foot (city wall, towers), rows of putlog holes, a few long vertical cracks. `p` inches off the board centre, `n` the face normal.
+void grit_wall(vec3 p, vec3 n, int k, float seed, inout vec3 alb, inout float rel) {
+	if (grit_on < 0.5 || !(k == 12 || k == 6 || k == 3 || k == 4 || k == 9 || k == 10)) {
+		return;
+	}
+	vec2 uv = vec2(abs(n.x) > 0.5 ? p.z : p.x, p.y);
+	alb *= mix(0.86, 1.12, vnoise(uv * 0.11 + seed + 3.0)) * mix(vec3(1.04, 1.0, 0.94), vec3(0.95, 0.99, 1.05), vnoise(uv * 0.08 + seed + 9.0));
+	float rp = smoothstep(0.7, 0.74, vnoise(uv * vec2(0.42, 0.55) + seed + 21.0));   // a repair in another stone
+	alb = mix(alb, vec3(dot(alb, LUMA)) * vec3(1.14, 1.12, 1.08), 0.55 * rp);
+	if (k == 12 || k == 6) {   // the plinth: one course of large dressed blocks 0.45 in high, a dark bed joint over it
+		float bx = floor(uv.x / 0.85);
+		float jx = fract(uv.x / 0.85) * 0.85;
+		float joint = max(1.0 - smoothstep(0.015, 0.04, min(jx, 0.85 - jx)), 1.0 - smoothstep(0.015, 0.04, abs(uv.y - 0.45)));
+		float plinth = 1.0 - smoothstep(0.43, 0.47, uv.y);
+		alb = mix(alb, mix(alb * mix(0.85, 1.12, h21(vec2(bx, seed + 5.0))), vec3(0.06, 0.055, 0.05), joint), max(plinth, joint * step(uv.y, 0.47)));
+		rel = mix(rel, mix(0.75, 0.05, joint), plinth);
+	}
+	float lv = uv.y < 4.4 ? 3.1 : 5.7;   // putlog holes: two rows, about every 1.6 in, a few left out
+	float cx = floor(uv.x / 1.6);
+	vec2 hd = abs(vec2(fract(uv.x / 1.6) * 1.6 - 0.8, uv.y - lv)) - vec2(0.07);
+	float hole = step(max(hd.x, hd.y), 0.0) * step(0.3, h21(vec2(cx, lv + seed)));
+	alb = mix(alb, vec3(0.03, 0.028, 0.025), 0.9 * hole);
+	rel = mix(rel, 0.0, hole);
+	float cc = floor(uv.x / 7.3);   // a long vertical crack in some 7.3 in stretches
+	float ch = h21(vec2(cc, seed + 41.0));
+	float crx = (cc + 0.2 + 0.6 * ch) * 7.3 + (vnoise(vec2(uv.y * 1.7, cc + seed)) - 0.5) * 0.5;
+	float crack = (1.0 - smoothstep(0.008, 0.025, abs(uv.x - crx))) * step(0.5, ch) * step(0.6 + 2.0 * ch, uv.y) * step(uv.y, 2.5 + 4.0 * ch);
+	alb = mix(alb, vec3(0.03, 0.028, 0.026), 0.85 * crack);
+	rel = mix(rel, 0.0, crack);
+}
+
 // The earth beside a street (plan G3): damp and darker within 1 in of the setts.
 void grit_earth(vec2 w, inout vec3 alb, inout float rough) {
 	if (grit_on < 0.5) {
