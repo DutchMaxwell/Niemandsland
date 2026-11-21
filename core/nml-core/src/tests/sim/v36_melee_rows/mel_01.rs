@@ -25,3 +25,14 @@ fn a_plain_melee_weapon_logs_no_assault_line() {
     let log = strike_log(vec![blade]);
     assert!(log.iter().all(|l| !l.starts_with("Assault:")), "{log:?}");
 }
+
+/// Lines audit: the Assault line is said on the tray the door writes (the table's words), not only in `ShootResult.log`.
+/// RED on main: the supplied tray held no Assault line.
+#[test]
+fn the_door_tray_says_the_assault_line() {
+    let (mut st, mut statics) = duel(0);
+    statics[0].melee = vec![ShootProfile { name: "Assault Pistol".into(), attacks: 6, count: 3, printed_range: 12, ..Default::default() }];
+    let mut tray = Tray::supplied(Vec::new());
+    strike_phase(&statics, &mut st, 0, 1, false, 0.0, Seams::default(), &mut tray, &mut ShootResult::default(), StrikeSet::All, Cover::Recorded(None));
+    assert!(tray.all_lines().iter().any(|l| l.text == "Assault: Assault Pistol also strikes in melee"), "{:?}", tray.all_lines());
+}

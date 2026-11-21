@@ -731,9 +731,16 @@ pub(crate) fn say_armor(tray: &mut Tray, def: &Ctx, name: &str) {
 /// The table's `_solo_log_defense_parts` line for the Shielded family (`<U> is <rule>: +N Defense (saves on M+)`), said once before the
 /// volley's announce; the rule is the literal or the alias that drives `shielded`. None when the target has no bonus to name.
 pub(crate) fn say_shielded(tray: &mut Tray, def: &Ctx, name: &str) {
+    let Some((rule, bonus)) = shielded_label(def) else { return };
+    say_rule(tray, "shielded", def.side, || format!("{name} is {rule}: +{bonus} Defense (saves on {}+)", parts_defense(def).clamp(BEST_HIT_TARGET, 6)));
+}
+
+/// The Shielded family's part as the table names it (`_solo_defense_parts`): the rule (the literal or the alias driving `shielded`, with
+/// its most-models note) and the bonus; None when the target has no bonus to name.
+fn shielded_label(def: &Ctx) -> Option<(String, i64)> {
     let bonus = def.shielded_bonus();
     if !def.shielded || bonus <= 0 {
-        return;
+        return None;
     }
     let rule = match def.shielded_alias {
         ShieldedAlias::None => "Shielded",
@@ -745,8 +752,7 @@ pub(crate) fn say_shielded(tray: &mut Tray, def: &Ctx, name: &str) {
         ShieldedAlias::DefenseRating => "Defense",
     };
     let note = if def.shielded_alias == ShieldedAlias::None && def.shielded_note { " (most of its models carry it)" } else { "" };
-    say_rule(tray, "shielded", def.side, || format!("{name} is {rule}{note}: +{bonus} Defense (saves on {}+)",
-        parts_defense(def).clamp(BEST_HIT_TARGET, 6)));
+    Some((format!("{rule}{note}"), bonus))
 }
 
 /// The working Defense the table's defence-part lines print as "saves on N+" (`_solo_defense_vs`: Shielded, then the growth ladder and the
@@ -2059,6 +2065,9 @@ pub(crate) fn resolve_volley_with_pick_label(
             out.log.push(format!(
                 "{}: {} makes one extra attack at Quality {}+ with AP({}), Deadly({}), Takedown (once per game)",
                 p.name, sh.owner, p.extra_attack_q, p.ap, p.deadly));
+            say_rule(tray, "takedown_bonus", att.side, || format!(
+                "{}: {} makes one extra attack at Quality {}+ with AP({}), Deadly({}), Takedown (once per game)",
+                p.name, sh.owner, p.extra_attack_q, p.ap, p.deadly));
         }
         // --- `_solo_hits` :4404-4487 ---
         let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
@@ -2136,6 +2145,8 @@ pub(crate) fn resolve_volley_with_pick_label(
                 out.log.push(format!(
                     "Surge Mark: {} — +{} bonus hit{} on unmodified 6s against the marked target (once)",
                     sh.owner, mark_sixes, if mark_sixes == 1 { "" } else { "s" }));
+                // The table's own words (`_solo_hits`): the mark's total replaces the plain Surge line.
+                say_rule(tray, "surge_mark", att.side, || format!("Surge Mark: +{mark_sixes} hit{} (unmodified 6s) against the marked {def_owner} (once)", if mark_sixes == 1 { "" } else { "s" }));
             }
         }
         // `AiCombatMath.sergeant_bonus_hits` :493-494 — the bearer's unmodified
@@ -2239,7 +2250,19 @@ pub(crate) fn resolve_volley_with_pick_label(
             if guarded_applies { ign.push("Guarded +1".into()); }
             if def.growth_def_mod > 0 { ign.push(format!("Defensive growth +{}", def.growth_def_mod)); }
             if def.defense_mod < 0 { ign.push(format!("Defense Buff +{}", -def.defense_mod)); }
+            // tray twin: pierce
             if !ign.is_empty() { out.log.push(format!("Pierce: {} ignores {}", sh.owner, ign.join(", "))); }
+        }
+        // The table's Pierce line (`_solo_resolve_saves`, said for every weapon with hits to save, not once per volley): the weapon's name and
+        // the target's positive Defense parts in `_solo_defense_parts` order (Shielded, growth ladder, spell token), then Cover.
+        if pierce && tray.feed().is_some() {
+            let mut ignored: Vec<String> = shielded_label(def).map(|(n, b)| format!("{n} +{b}")).into_iter().collect();
+            if !def.growth_def_parts.is_empty() { ignored.push(def.growth_def_parts.to_string()); }
+            if def.defense_mod < 0 { ignored.push(format!("Defense Buff +{}", -def.defense_mod)); }
+            if if unit_of_one { td_own } else { def.in_cover || def.screened } { ignored.push("Cover +1".into()); }
+            if !ignored.is_empty() {
+                say_rule(tray, "pierce", att.side, || format!("Pierce: {} ignores {}", p.name, ignored.join(", ")));
+            }
         }
         if unit_of_one {
             // Tray-exact S10 — `_solo_log_takedown_context`: the save the pick really rolls, and why.
@@ -2469,6 +2492,12 @@ pub(crate) fn resolve_volley_with_pick_label(
             && (!att.v36_rules || (def.regeneration && def.regen_target > 0 && def.bypass_skips_ignore()))
         {
             out.log.push(format!("{}: Regeneration ignored", p.regen_bypass_rule));
+        }
+        // The door's twin (`_solo_ignores_regen`, asked once per weapon with hits: a Deadly or Takedown weapon asks only when it dealt wounds,
+        // a plain one always, even when every save held).
+        let regen_asked = if p.deadly > 0 || (takedown_exact && p.takedown) { w > 0 } else { true };
+        if disintegrate_regen && regen_asked && (!att.v36_rules || (def.regeneration && def.regen_target > 0 && def.bypass_skips_ignore())) {
+            say_rule(tray, "anti_regen", att.side, || format!("{}: Regeneration ignored", p.regen_bypass_rule));
         }
         // EPOCH 34 UNSTOPPABLE MARK — rules-must-log, the Regeneration half:
         // the granted mark names itself the one time its bypass is the reason
@@ -2910,6 +2939,7 @@ fn parry_event(def: &Ctx, def_owner: &str, hits: i64, gated: bool, tray: &mut Tr
     let k = faces.iter().filter(|&&f| f >= 6).count() as i64;
     out.rolls.push(Roll { kind: "parry", count: n, target: 6, faces, owner: def_owner.into() });
     out.log.push(format!("Parry: {def_owner} rolls {n} dice and cancels {k} strike hits"));
+    say_rule(tray, "parry", def.side, || format!("Parry: {def_owner} rolls {n} dice and cancels {k} strike hits"));
     k
 }
 
@@ -3173,6 +3203,9 @@ pub fn resolve_melee_leg_wipe(
                 out.log.push(format!(
                     "{}: {} makes one extra attack at Quality {}+ with AP({}), Deadly({}), Takedown (once per game)",
                     p.name, sh.owner, p.extra_attack_q, p.ap, p.deadly));
+                say_rule(tray, "takedown_bonus", sh.att.side, || format!(
+                    "{}: {} makes one extra attack at Quality {}+ with AP({}), Deadly({}), Takedown (once per game)",
+                    p.name, sh.owner, p.extra_attack_q, p.ap, p.deadly));
             }
             if p.takedown {
                 if tray_exact {
@@ -3306,6 +3339,8 @@ pub fn resolve_melee_leg_wipe(
                     out.log.push(format!(
                         "Surge Mark: {} — +{} bonus hit{} on unmodified 6s against the marked target (once)",
                         sh.owner, mark_sixes, if mark_sixes == 1 { "" } else { "s" }));
+                    // The table's own words (`_solo_hits`): the mark's total replaces the plain Surge line.
+                    say_rule(tray, "surge_mark", sh.att.side, || format!("Surge Mark: +{mark_sixes} hit{} (unmodified 6s) against the marked {def_owner} (once)", if mark_sixes == 1 { "" } else { "s" }));
                 }
             }
             // Furious :4477 — the unit-level rule the table stamps onto every
@@ -3489,6 +3524,11 @@ pub fn resolve_melee_leg_wipe(
                         "{}: {} blocked 1{} — {} rolls {} extra attack{}",
                         p.bloodthirsty_rule, bt_ones, if bt_ones == 1 { "" } else { "s" },
                         sh.owner, bt_extra, if bt_extra == 1 { "" } else { "s" }));
+                    // The table's line names the weapon too (`_solo_attack_groups`' Bloodthirsty leg).
+                    say_rule(tray, "bloodthirsty", sh.att.side, || format!(
+                        "{}: {} blocked 1{} — {} rolls {} extra attack{} with {}",
+                        p.bloodthirsty_rule, bt_ones, if bt_ones == 1 { "" } else { "s" },
+                        sh.owner, bt_extra, if bt_extra == 1 { "" } else { "s" }, p.name));
                     tray.owner_next(sh.att.unit);
                     let bt_faces = tray.roll(bt_extra as usize);
                     out.rolls.push(Roll {

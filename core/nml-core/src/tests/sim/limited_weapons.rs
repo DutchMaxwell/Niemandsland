@@ -90,3 +90,20 @@ use super::*;
         let e72 = crate::acts::EPOCH_72_PLAYTEST_RULES;
         assert_eq!(price(false, e72), vec!["Cannon".to_string(), "Rifle".into()], "below 73 the spent Cannon is priced as fresh");
     }
+
+    /// Lines audit: the spent weapon's line is said on the tray the door writes, in the table's words (`_solo_log_limited_spent`:
+    /// `Limited: <member>'s <weapon> is used up - once per game`, the recorded log leaves out the member). RED on main: no tray line.
+    #[test]
+    fn a_spent_limited_weapon_says_the_tables_line_on_the_door_tray() {
+        let (mut st, mut statics) = buff_line();
+        statics[0].shoot = cannon_and_rifle();
+        fold_spent(&mut st, 0, crate::acts::EPOCH_73_V36, SPENT_CANNON);
+        let seams = Seams { rules_epoch: crate::acts::EPOCH_73_V36, ..Seams::default() };
+        let terrain = crate::terrain::Terrain::default();
+        let run = |tray: &mut Tray| resolve_stochastic_tray_on_board(&statics, &st, &buff_action(Some("b")), &terrain, seams, &mut crate::rng::GodotRng::new(0), tray).unwrap().1;
+        let seeded = run(&mut Tray::seeded(11));
+        let mut tray = Tray::supplied(seeded.rolls.iter().map(|r| r.faces.clone()).collect());
+        run(&mut tray);
+        let said: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).collect();
+        assert!(said.iter().any(|l| l == &format!("Limited: {}'s Cannon is used up — once per game", statics[0].name)), "{said:?}");
+    }

@@ -65,6 +65,11 @@ fn charge(epoch: u32, attacks: i64, weapon_rules: Vec<&str>) -> ShootResult {
 }
 
 fn charge_with(epoch: u32, charger: Profile) -> ShootResult {
+    charge_on(epoch, charger, &mut Tray::seeded(27))
+}
+
+/// `charge_with` on the caller's tray (a supplied one says the door's lines).
+fn charge_on(epoch: u32, charger: Profile, tray: &mut Tray) -> ShootResult {
     let mut reg = Registries::new(&repo_root());
     let charger = UnitStatic::build_for(&mut reg, &charger, epoch);
     let defender = UnitStatic::build_for(&mut reg, &profile("Defender", 0.0, 1, vec![]), epoch);
@@ -80,8 +85,8 @@ fn charge_with(epoch: u32, charger: Profile) -> ShootResult {
     (st.positions[0], st.wounds[0], Rc::make_mut(&mut st.radii)[0]) = (vec![[0.0, 0.0, 0.0]], vec![40], vec![IN2M]);
     (st.positions[1], st.wounds[1], Rc::make_mut(&mut st.radii)[1]) = (vec![[0.0, 0.0, 0.0]], vec![40], vec![IN2M]);
     let seams = Seams { rules_epoch: epoch, ..Default::default() };
-    let (mut tray, mut shot) = (Tray::seeded(27), ShootResult::default());
-    tray_charge(&statics, &mut st, 0, 1, seams, &mut tray, &mut shot, 0.0, Cover::Recorded(None));
+    let mut shot = ShootResult::default();
+    tray_charge(&statics, &mut st, 0, 1, seams, tray, &mut shot, 0.0, Cover::Recorded(None));
     shot
 }
 
@@ -210,4 +215,19 @@ fn a_weapon_borne_imprecise_is_inert_at_epoch_72_when_shooting() {
     let hits = shot.rolls.iter().find(|r| r.kind == "defense").map(|r| r.count).unwrap_or(0);
     assert_eq!(hits, at_least(&faces, 4));
     assert!(!shot.log.iter().any(|l| l.contains("Imprecise")), "{:?}", shot.log);
+}
+
+/// Lines audit: the door writes the tray's lines, and the Unwieldy sentences (the table's `_run_ai_melee`, same words) were in
+/// `ShootResult.log` only. RED on main: no tray line.
+#[test]
+fn the_door_tray_says_the_unwieldy_lines() {
+    let said = |charger: Profile| {
+        let mut tray = Tray::supplied(Vec::new());
+        charge_on(E73, charger, &mut tray);
+        tray.all_lines().into_iter().map(|l| l.text).collect::<Vec<_>>()
+    };
+    let last = said(profile("Charger", 0.0, 1, vec!["Unwieldy"]));
+    assert!(last.iter().any(|l| l == "Unwieldy: Charger strikes last on the charge"), "{last:?}");
+    let mixed = said(with_dagger(profile("Charger", 0.0, 1, vec!["Unwieldy"]), vec![]));
+    assert!(mixed.iter().any(|l| l == MIXED_LINE), "{mixed:?}");
 }

@@ -2898,13 +2898,15 @@ fn tray_piercing_tag(
                 next.piercing_spot_round[bearer] = next.round;
                 let face = tray.roll(1).first().copied().unwrap_or(1) as i64;
                 if face < t.place_roll {
-                    shot.log.push(format!(
+                    let line = format!(
                         "{}: {} misses the mark on {} (needed {}+)",
                         t.name,
                         statics[pb].name,
                         statics[next.roster.profile[ti]].name,
                         t.place_roll
-                    ));
+                    );
+                    shot.log.push(line.clone());
+                    say_rule(tray, "marker_place", next.player[bearer], || line);
                     continue;
                 }
             } else {
@@ -2917,7 +2919,9 @@ fn tray_piercing_tag(
                     next.piercing_tag_markers[u] += 1;
                     next.piercing_tag_persistent[u] = true;
                 }
-                shot.log.push(target_place_line("Piercing Target", &statics[pb].name, statics, next, &hit, "+1 AP"));
+                let line = target_place_line("Piercing Target", &statics[pb].name, statics, next, &hit, "+1 AP");
+                shot.log.push(line.clone());
+                say_rule(tray, "marker_place", next.player[bearer], || line);
                 continue;
             }
             let v36_tag = v36 && t.name == "Piercing Tag";
@@ -2926,7 +2930,9 @@ fn tray_piercing_tag(
                 next.piercing_tag_markers[u] += per;
             }
             if v36_tag {
-                shot.log.push(tag_place_line("Piercing Tag", &statics[pb].name, statics, next, &hit, per, "+1 AP"));
+                let line = tag_place_line("Piercing Tag", &statics[pb].name, statics, next, &hit, per, "+1 AP");
+                shot.log.push(line.clone());
+                say_rule(tray, "marker_place", next.player[bearer], || line);
                 continue;
             }
             // D42 (a), EPOCH_67_MARKERS_BURSTS: "Piercing Target" has no removal
@@ -2937,14 +2943,16 @@ fn tray_piercing_tag(
                 next.piercing_tag_persistent[ti] = true;
             }
             // Rules-must-log — the table's own line, main.gd:17025-17027.
-            shot.log.push(format!(
+            let line = format!(
                 "{}: {} places {} marker{} on {} — friendly attackers may spend them for +AP",
                 t.name,
                 statics[pb].name,
                 t.markers,
                 if t.markers == 1 { "" } else { "s" },
                 statics[next.roster.profile[ti]].name
-            ));
+            );
+            shot.log.push(line.clone());
+            say_rule(tray, "marker_place", next.player[bearer], || line);
         }
     }
 }
@@ -3095,13 +3103,23 @@ fn tray_precision_markers(
                     shot.log.push(format!(
                         "Precision Spotter: {} misses the mark on {} (needed {}+, {} di{})",
                         owner, tn, b.place_roll, dice, if dice == 1 { "e" } else { "ce" }));
+                    // The table's wording (`_solo_ai_spot`): "die" / "dies".
+                    say_rule(tray, "marker_place", next.player[bearer], || format!(
+                        "Precision Spotter: {owner} misses the mark on {tn} (needed {}+, {dice} die{})", b.place_roll, if dice == 1 { "" } else { "s" }));
                     continue;
                 }
+                let before = next.spot_markers[ti];
                 let placed = b.markers * hits;
                 next.spot_markers[ti] += placed;
                 shot.log.push(format!(
                     "Precision Spotter: {} marks {} ({} marker{} — attackers may remove markers for +1 to hit each)",
                     owner, tn, placed, if placed == 1 { "" } else { "s" }));
+                // The table places one marker per hit and says each (`_solo_place_spot_marker`, the running count).
+                for k in 1..=hits {
+                    let n = before + b.markers * k;
+                    say_rule(tray, "marker_place", next.player[bearer], || format!(
+                        "Precision Spotter: {owner} marks {tn} ({n} marker{} — attackers may remove markers for +1 to hit each)", if n == 1 { "" } else { "s" }));
+                }
             } else {
                 // TAG / TARGET — the piercing twins' TOUGHEST-enemy pick.
                 let probe = UtilityBuff {
@@ -3125,12 +3143,17 @@ fn tray_precision_markers(
                     for &u in &picks {
                         push_precision_target(next, u, hit_mod, &b.name);
                     }
-                    shot.log.push(if v36 {
+                    let line = if v36 {
                         target_place_line("Precision Target", &owner, statics, next, &picks, "+1 to hit")
                     } else {
                         format!("Precision Target: {} places {} marker{} on {} — friendly units get +{} to hit against it",
                             owner, b.markers, if b.markers == 1 { "" } else { "s" }, tn, b.bonus)
-                    });
+                    };
+                    shot.log.push(line.clone());
+                    // The table says the Target's placement from 73 only (`_solo_apply_precision_target`).
+                    if v36 {
+                        say_rule(tray, "marker_place", next.player[bearer], || line);
+                    }
                 } else {
                     let v36 = rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36);
                     let (hit, per) = tag_picks(statics, next, bearer, &probe, b.markers, v36, seams);
@@ -3138,12 +3161,16 @@ fn tray_precision_markers(
                         next.tag_markers[u] += per;
                     }
                     if v36 {
-                        shot.log.push(tag_place_line("Precision Tag", &owner, statics, next, &hit, per, "+1 to hit"));
+                        let line = tag_place_line("Precision Tag", &owner, statics, next, &hit, per, "+1 to hit");
+                        shot.log.push(line.clone());
+                        say_rule(tray, "marker_place", next.player[bearer], || line);
                         continue;
                     }
-                    shot.log.push(format!(
+                    let line = format!(
                         "Precision Tag: {} places {} marker{} on {} — friendly attackers may remove markers for +1 to hit each",
-                        owner, b.markers, if b.markers == 1 { "" } else { "s" }, tn));
+                        owner, b.markers, if b.markers == 1 { "" } else { "s" }, tn);
+                    shot.log.push(line.clone());
+                    say_rule(tray, "marker_place", next.player[bearer], || line);
                 }
             }
         }
@@ -3195,6 +3222,8 @@ fn precision_markers_spend(
     ti: usize,
     rules_epoch: u32,
     log: &mut Vec<String>,
+    tray: &mut Tray,
+    side: i64,
 ) -> (i64, i64) {
     if !rule_on(rules_epoch, EPOCH_61_PRECISION_MARKERS) {
         return (0, 0);
@@ -3205,6 +3234,8 @@ fn precision_markers_spend(
         log.push(format!(
             "Precision Spotter: {spot} marker{} removed — +{spot} to hit this volley",
             if spot == 1 { "" } else { "s" }));
+        // The table's line (`_solo_consume_spot_markers`, the AI takes them all): the same words on the tray.
+        say_rule(tray, "marker_spend", side, || log.last().cloned().unwrap_or_default());
     }
     let tag = next.tag_markers[ti].max(0);
     let mut tag_spent = 0;
@@ -3220,6 +3251,7 @@ fn precision_markers_spend(
                 "Precision Tag: {tag} marker{} removed — +{tag} to hit this volley",
                 if tag == 1 { "" } else { "s" })
         });
+        say_rule(tray, "marker_spend", side, || log.last().cloned().unwrap_or_default());
     }
     (spot, tag_spent)
 }
@@ -3570,6 +3602,10 @@ pub(crate) fn tray_retreating_strike(
         shot.log.push(format!(
             "{}: {} strikes while retreating -- {} dice -> {} wound(s) on {} (no save)",
             spec.name, statics[next.roster.profile[bearer]].name, dice, w, def_owner));
+        // The table's words (`_solo_apply_retreating_strike`): an em dash, an arrow, `wound`/`wounds`.
+        say_rule(tray, "retreating_strike", next.player[bearer], || format!(
+            "{}: {} strikes while retreating — {} dice → {} wound{} on {} (no save)",
+            spec.name, statics[next.roster.profile[bearer]].name, dice, w, if w == 1 { "" } else { "s" }, def_owner));
     }
 }
 /// Returns whether the unit actually moved — the caller logs the battle-log
@@ -4687,6 +4723,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         let (dm, fa) = growth_defense_of(statics, state, i);
         c.growth_def_mod = dm;
         c.growth_fortify_ap = fa;
+        if dm != 0 {
+            c.growth_def_parts = growth_def_parts_of(statics, state, i);
+        }
         if fa != 0 {
             c.growth_fortify_name = growth_fortify_name_of(statics, state, i);
         }
@@ -4786,6 +4825,11 @@ fn growth_defense_parts(statics: &[UnitStatic], state: &State, i: usize) -> Vec<
     statics[state.roster.profile[i]].growth.iter()
         .map(|g| (g.name.clone(), g.defense_per_marker * markers + g.defense_per_two * (markers / 2)))
         .filter(|(_, b)| markers > 0 && *b > 0).collect()
+}
+
+/// Door lines: the growth ladder's Defense parts as the table's Pierce line lists what it ignores (`<rule> +<bonus>`, ", "-joined).
+fn growth_def_parts_of(statics: &[UnitStatic], state: &State, i: usize) -> &'static str {
+    crate::rules::intern(&growth_defense_parts(statics, state, i).iter().map(|(n, b)| format!("{n} +{b}")).collect::<Vec<_>>().join(", "))
 }
 
 /// Door lines: the Fortified Growth rule's name (the first `enemy_ap_per_two` rule the unit carries).
@@ -6551,6 +6595,7 @@ fn strike_phase(
         for &k in &sc.keep {
             if melee[k].printed_range > 0 {
                 shot.log.push(format!("Assault: {} also strikes in melee", melee[k].name));
+                say_melee(tray, next.player[*mi], format!("Assault: {} also strikes in melee", melee[k].name));
             }
         }
     }
@@ -7555,6 +7600,7 @@ pub(crate) fn tray_morale_for(
         let (with, total) = fearless_models(statics, state, i, seams);
         if with < total {
             shot.log.push(format!("Fearless: {with} of {total} models of {} have it — most do, so the whole unit counts", us.name));
+            say_rule(tray, "morale", state.player[i], || format!("Fearless: {with} of {total} models of {} have it — most do, so the whole unit counts", us.name));
         }
     }
     // EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF: an auto-failed test (no die) spends no once morale buff (table `_solo_morale_test`, #2804).
@@ -7752,8 +7798,10 @@ fn tray_charge_with_self_wounds(
     let charger_static = &statics[next.roster.profile[si]];
     if charger_last && rule_on(seams.rules_epoch, EPOCH_73_V36) {
         shot.log.push(format!("Unwieldy: {} strikes last on the charge", charger_static.name));
+        say_melee(tray, next.player[si], format!("Unwieldy: {} strikes last on the charge", charger_static.name));
     } else if charger_static.ctx.unwieldy_mixed {
         shot.log.push(format!("Unwieldy: {} has it on some weapons only - normal strike order (per-weapon order not modelled)", charger_static.name));
+        say_melee(tray, next.player[si], format!("Unwieldy: {} has it on some weapons only - normal strike order (per-weapon order not modelled)", charger_static.name));
     }
     let strike_back_set = if counter_first { StrikeSet::NonCounter } else { StrikeSet::All };
     for slot in 0..2 {
@@ -11747,6 +11795,8 @@ fn resolve_with(
                             // spends EVERY marker on THIS volley (main.gd
                             // :3123 AI / :9857 human, shooting only — the
                             // melee seams never call it), once per group.
+                            // The Piercing spend lines (`Piercing Tag: one token spent ...`, `Piercing Target: ... stands`) are the DOOR's: it runs the
+                            // table's own `_solo_spend_piercing_tag` (`CoreActivation._spend_tag`), which writes them. The core says none on the tray.
                             let tag_ap = piercing_tag_spend(&mut next, g.ti, seams.rules_epoch);
                             if tag_ap > 0 {
                                 if next.piercing_tag_persistent[g.ti] {
@@ -11771,7 +11821,8 @@ fn resolve_with(
                             // Wave 6 — Precision Spotter/Tag: the marked
                             // target's pools spend EVERY marker on THIS
                             // volley (+1 to hit per marker), once per group.
-                            let (spot_hit, tag_hit) = precision_markers_spend(&mut next, g.ti, seams.rules_epoch, &mut shot.log);
+                            let side_now = next.player[si];
+                            let (spot_hit, tag_hit) = precision_markers_spend(&mut next, g.ti, seams.rules_epoch, &mut shot.log, tray, side_now);
                             let precision_hit = spot_hit + tag_hit;
                             let ut_g = &statics[next.roster.profile[g.ti]];
                             let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch), statics, &next, g.ti, seams), seams.rules_epoch);
@@ -11865,6 +11916,8 @@ fn resolve_with(
                                     for p in msc.keep.iter().map(|&k| &um.shoot[k]) {
                                         if p.limited && next.limited_used[mi].iter().any(|n| n == &p.name) {
                                             shot.log.push(format!("Limited: {} is used up — once per game", p.name));
+                                            // The table's line names the member (`_solo_log_limited_spent`).
+                                            say_rule(tray, "limited_spent", next.player[si], || format!("Limited: {}'s {} is used up — once per game", um.name, p.name));
                                         }
                                     }
                                 }
