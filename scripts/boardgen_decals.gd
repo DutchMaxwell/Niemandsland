@@ -80,7 +80,7 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 ## a puddle rim on every grit puddle, leaves and straw in the lee corners of the open ground, droppings at the foot of the city wall, cracks on the tower tops, plaster loss and a repair patch
 ## on the street faces of the ruined rows, soot / scorch on the fire side's faces. Capped per kind (TOWN_CAPS, <= MAX_DECALS together). Nothing on a ladder foot, a dangerous cell or a
 ## landmark; ground decals are flat (they never stand on open ground), the board shader's surfaces receive them, the models never.
-const TOWN_CAPS := {"cart_ruts": 4, "drain": 4, "puddle_rim": 6, "leaf_drift": 6, "straw_scatter": 6, "bird_droppings": 4, "crack": 6, "plaster_loss": 6, "repair_patch": 2, "soot": 4}
+const TOWN_CAPS := {"cart_ruts": 4, "drain": 4, "puddle_rim": 6, "leaf_drift": 6, "straw_scatter": 6, "bird_droppings": 4, "crack": 6, "plaster_loss": 0, "repair_patch": 0, "soot": 4}   # (no plaster loss / repair decals: they projected white blots onto the towers next to the faces; the shader draws the losses, W2)
 
 
 static func town_plan(layout: Dictionary) -> Array[Dictionary]:

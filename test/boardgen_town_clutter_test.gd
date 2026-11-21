@@ -54,6 +54,9 @@ func test_strip_pieces_stand_on_a_wall_face_facing_away_from_it_and_inside_their
 			var xf: Transform3D = item["xf"]
 			var at := Vector2(xf.origin.x, xf.origin.z) / 0.0254 - origin   # inches off the board's corner
 			var c := Vector2i(at / cell)
+			var own: Dictionary = layout["cells"][clampi(c.y, 0, 15) * 16 + clampi(c.x, 0, 15)]
+			if own["lot_kind"] == "Terrace" and int(own["level"]) == 0 and not own["street"]:
+				continue   # a story scene's piece in a yard (plan PLAN_RUINTOWN_GRIT S1: solid pieces stand in the strip OR in a yard)
 			# the piece's origin is on the edge between its cell and a raised cell; +z points into its own cell
 			var into := Vector2(xf.basis.z.x, xf.basis.z.z).round()
 			var wall_cell := Vector2i(Vector2(at + into * 0.2 * -1.0) / cell) if false else c

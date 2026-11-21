@@ -26,6 +26,8 @@ func build(layout: Dictionary, board: Node) -> void:
 	for n in board.find_children("*", "Light3D", true, false):
 		var nm := str(n.name)
 		if nm.begins_with("Lantern") or nm.begins_with("Ember"):
+			if nm.begins_with("Ember"):
+				(n as Light3D).light_energy *= 0.35   # embers glow LOW inside the heaps (lead 21.11.): a dull red, not a lamp
 			_lights.append([n, (n as Light3D).light_energy, rng.randf() * 100.0])
 	_add_smoke(layout, rng)
 	_add_crows(layout, rng)

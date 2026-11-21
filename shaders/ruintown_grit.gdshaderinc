@@ -341,6 +341,68 @@ vec3 grit_roof(vec3 alb, float tile, float row, float seed, float lot, vec2 at, 
 	return alb;
 }
 
+// HOUSE WALLS (lead review of the life train: the procedural coursed stone read as cartoon brick): a house is PLASTERED RUBBLE or timber frame over a STONE PLINTH - the city wall's
+// rubble language at a smaller stone (~0.13 x 0.08 in, a few of 0.3 x 0.2 in), a plinth of it 0.8 in high, plaster above (the lot's faded plaster, W2) with loss patches that show the
+// rubble behind, more of them low and on the fire side's ruins. Never a running bond. `lot` = the lot's hash, `band` = the storey (0 ground, 1 half-timber, 2 top), `door` = the door mask.
+vec3 grit_house_rubble(vec2 uv, float seed, out float rel) {
+	float big_id;
+	float id;
+	float edge = grit_voronoi(uv, vec2(0.3, 0.2), seed + 5.0, big_id);
+	if (fract(big_id * 3.3) >= 0.25) {
+		edge = grit_voronoi(uv, vec2(0.13, 0.08), seed, id);
+	} else {
+		id = big_id;
+	}
+	edge += (vnoise(uv * 41.0 + seed) - 0.5) * 0.01;
+	float kp = keep(uv.y, 0.1);
+	float stone = smoothstep(0.003, 0.02, edge);
+	vec3 tone = grit_stone_tone(id) * vec3(0.34, 0.32, 0.29) * mix(0.85, 1.1, vnoise(uv * 18.0 + id * 9.0));
+	rel = mix(0.5, mix(0.3, 0.5 + 0.5 * smoothstep(0.0, 0.07, edge), stone), kp);
+	return mix(vec3(0.3, 0.29, 0.27), mix(vec3(0.22, 0.21, 0.2), tone, stone), kp);
+}
+
+void grit_house_wall(int k, vec3 p, vec3 n, float seed, float lot, float band, float plinth_in, float door_m, inout vec3 alb, inout float rel, inout float depth_in, inout float tex_on,
+		inout vec3 tex_ratio, inout vec3 tex_n, inout float ao) {
+	if (grit_on < 0.5) {
+		return;
+	}
+	vec2 uv = vec2(abs(n.x) > 0.5 ? p.z : p.x, p.y);
+	bool ruin = k == 3 || k == 4;
+	if (!(ruin && band != 1.0) && !(k == 13 && uv.y < plinth_in)) {
+		return;
+	}
+	float r;
+	vec3 rubble = grit_house_rubble(uv, seed + lot * 31.0, r);
+	vec3 c = rubble;
+	float rr = r;
+	float local_y = ruin ? mod(uv.y, 3.0) : uv.y;
+	if (ruin && !(band == 0.0 && local_y < 0.8)) {   // plaster over the rubble above the plinth, with losses
+		float k4 = floor(lot * 3.999);
+		vec3 pl = grit_plaster(k4 < 0.5 ? vec3(0.86, 0.80, 0.68) : (k4 < 1.5 ? vec3(0.78, 0.62, 0.36) : (k4 < 2.5 ? vec3(0.62, 0.36, 0.28) : vec3(0.60, 0.65, 0.57)))) * mix(0.82, 1.05, fbm(uv * 1.7 + seed));
+		float lossz = mix(0.64, 0.56, 1.0 - smoothstep(0.8, 2.0, local_y)) - (band == 2.0 ? 0.06 : 0.0);
+		float loss = smoothstep(lossz, lossz + 0.02, fbm(uv * vec2(0.55, 0.8) + seed + lot * 17.0) + (vnoise(uv * 6.0 + lot) - 0.5) * 0.08);   // ragged, irregular losses, not round dots
+		c = mix(pl, rubble, loss);
+		rr = mix(0.45 + 0.1 * fbm(uv * 5.0), r, loss);
+	}
+	alb = mix(c * (ruin ? 1.0 : 0.92), vec3(0.09, 0.06, 0.04), door_m);
+	rel = mix(rr, 0.05, door_m);
+	tex_on = 0.0;
+	tex_ratio = vec3(1.0);
+	tex_n = vec3(0.0, 0.0, 1.0);
+	depth_in = 0.03;
+	ao = mix(0.6, 1.0, smoothstep(0.15, 0.6, rel));
+}
+
+// GARDEN PLOTS (lead): no flat saturated green square - desaturated, darker, the hard cell edge broken by dirt and weeds creeping in. `edge_d` = the distance to the plot cell's edge.
+vec3 grit_plot(vec3 alb, vec2 xz, float edge_d, vec3 earth) {
+	if (grit_on < 0.5) {
+		return alb;
+	}
+	alb = mix(vec3(dot(alb, LUMA)), alb, 0.38) * vec3(0.92, 0.95, 0.85);
+	float ragged = edge_d + (vnoise(xz * 2.3) - 0.5) * 0.7 + (vnoise(xz * 7.1) - 0.5) * 0.2;
+	return mix(earth, alb, smoothstep(0.1, 0.45, ragged));
+}
+
 // A WALL IS NOT ONE WALLPAPER (plan W0): on the stone faces of the city wall, the towers and the ruined rows - a macro drift of value and hue over 6-12 in, repairs in a paler cooler stone,
 // a plinth course of larger dressed blocks at the foot (city wall, towers), rows of putlog holes, a few long vertical cracks. `p` inches off the board centre, `n` the face normal.
 void grit_wall(vec3 p, vec3 n, int k, float seed, float d_top, float street_side, inout vec3 alb, inout float rel) {
