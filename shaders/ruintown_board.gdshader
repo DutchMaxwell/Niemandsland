@@ -137,10 +137,10 @@ vec3 wood_of(float lot) {
 	return k < 0.5 ? vec3(0.07, 0.05, 0.04) : (k < 1.5 ? vec3(0.30, 0.28, 0.25) : vec3(0.20, 0.12, 0.07));
 }
 
-// The four roofs of the town (plan R4b), picked by the lot's hash: two clays, a dark slate, a mossy clay.
+// The four roofs of the town (plan R4b), picked by the lot's hash: two slates, a dull clay, a mossy clay.
 vec3 roof_of(float lot, vec3 clay) {
 	float k = floor(fract(lot * 5.0) * 3.999);
-	return k < 0.5 ? clay : (k < 1.5 ? clay * vec3(1.1, 0.86, 0.72) : (k < 2.5 ? vec3(0.27, 0.29, 0.33) : mix(clay * 0.85, vec3(0.28, 0.38, 0.20), 0.4)));
+	return k < 0.5 ? vec3(0.30, 0.32, 0.36) : (k < 1.5 ? mix(clay, vec3(0.3, 0.29, 0.28), 0.5) : (k < 2.5 ? vec3(0.27, 0.29, 0.33) : mix(clay * 0.85, vec3(0.28, 0.38, 0.20), 0.4)));   // (train 3, H2: two slates, a dull clay, a mossy clay - no toy red)
 }
 
 // Half-timber with a grammar (plan R4a), one 3 in cell wide and one 3 in storey high: a sill beam, a mid rail and a top plate; posts every 0.75 in; an opening (a window between two posts

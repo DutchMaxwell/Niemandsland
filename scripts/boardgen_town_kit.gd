@@ -11,7 +11,11 @@ const THEME := "ruintown"
 const INCHES_TO_METERS := 0.0254
 const ROOF_L_IN := 6.6   # the reference roof the modules were built at; each lot stretches it
 const ROOF_W_IN := 3.6
-const ROOF_H_IN := {"roof_gable_low": 1.6, "roof_gable_steep": 2.6, "roof_broken_a": 2.0, "roof_broken_b": 2.0, "roof_rafters": 2.0}
+const ROOF_H_IN := {"roof_gable_low": 1.6, "roof_gable_steep": 2.6, "roof_sag_low": 1.6, "roof_sag_steep": 2.6, "roof_broken_a": 2.0, "roof_broken_b": 2.0, "roof_rafters": 2.0}
+const BROKEN_ROOF_SHARE := 0.34   # (train 3, H2: one roof in three is broken, at least one per board half)
+## (train 3, H2) the instance colour per roof on top of the set's tint: 60 % slate blue-grey, 40 % a dull clay (the toy red is gone).
+const ROOF_SLATE := Color(0.46, 0.74, 0.98)
+const ROOF_CLAY := Color(0.55, 0.75, 0.92)
 const ROOF_UV_TILE_IN := 3.0   # the roof modules' UVs count tiles of this size (kr1_town.py roof_uv)
 const CHIMNEY_TOP_IN := 3.6   # a chimney module's cap height above its foot (the foot sinks into the house)
 const MODULES := ["roof_gable_low", "roof_gable_steep", "roof_broken_a", "roof_broken_b", "roof_rafters", "chimney_pots", "chimney_broken",
@@ -109,14 +113,25 @@ static func plan(layout: Dictionary) -> Dictionary:
 	var add_all := func(m: String, items: Array) -> void:
 		for item: Dictionary in items:
 			add.call(m, item)
-	for r: Dictionary in BoardgenTownDressing.roofs(layout).filter(func(r: Dictionary) -> bool: return r["type"] == "gable"):   # hips and catslides have no module: the procedural meshes stay
+	var gables := BoardgenTownDressing.roofs(layout).filter(func(r: Dictionary) -> bool: return r["type"] == "gable")   # hips and catslides have no module: the procedural meshes stay
+	var lowest := {}   # per half: the gable with the lowest hash breaks if none does by its own hash
+	for r: Dictionary in gables:
 		var h := BoardgenTownDressing._hash(r["lot"], r["half"], 7)
-		var m := ("roof_broken_a" if h < 0.12 else "roof_broken_b") if h < 0.25 else ("roof_gable_low" if float(r["height"]) < 2.1 else "roof_gable_steep")
+		if not lowest.has(r["half"]) or h < BoardgenTownDressing._hash(lowest[r["half"]]["lot"], r["half"], 7):
+			lowest[r["half"]] = r
+	for r: Dictionary in gables:
+		var h := BoardgenTownDressing._hash(r["lot"], r["half"], 7)
+		var broken := h < BROKEN_ROOF_SHARE or int(lowest[r["half"]]["lot"]) == int(r["lot"])
+		var m := ("roof_broken_a" if h < BROKEN_ROOF_SHARE * 0.5 else "roof_broken_b") if broken else ("roof_sag_low" if float(r["height"]) < 2.1 else "roof_sag_steep")
+		var tint := ROOF_SLATE if BoardgenTownDressing._hash(r["lot"], r["half"], 16) < 0.6 else ROOF_CLAY
 		var yaw := float(r["yaw"]) + (0.0 if r["along_x"] else PI * 0.5) + (PI if BoardgenTownDressing._hash(r["lot"], r["half"], 8) < 0.5 else 0.0)   # the body's yaw and skew, as the procedural roofs have it
 		var at := Vector3(r["centre"].x, r["eaves"], r["centre"].y)   # on the house's own eaves line
 		for part in ([m, "roof_rafters"] if m.begins_with("roof_broken") else [m]):
 			var s := Vector3(float(r["length"]) / ROOF_L_IN, float(r["height"]) / ROOF_H_IN[part], float(r["width"]) / ROOF_W_IN)
-			add.call(part, _item(Basis(Vector3.UP, yaw) * Basis.from_scale(s), at))
+			var item := _item(Basis(Vector3.UP, yaw) * Basis.from_scale(s), at)
+			if part != "roof_rafters":
+				item["colour"] = tint
+			add.call(part, item)
 	var chimneys := BoardgenTownDressing.chimneys(layout)
 	for i in chimneys.size():
 		var c: Dictionary = chimneys[i]
@@ -192,11 +207,11 @@ const NO_SHADOW := ["fence_", "sign_", "splinters_flat", "debris_flat", "cloth_f
 
 
 static func casts_shadow(m: String) -> bool:
-	return (m.begins_with("roof_g") or m.begins_with("chimney") or CLUTTER_SET.get(m, "") == "timber") and not NO_SHADOW.any(func(pre: String) -> bool: return m.begins_with(pre))
+	return (m.begins_with("roof_g") or m.begins_with("roof_sag") or m.begins_with("chimney") or CLUTTER_SET.get(m, "") == "timber") and not NO_SHADOW.any(func(pre: String) -> bool: return m.begins_with(pre))
 
 
 ## A7 modules that replace a K-R1 / A2 one in the same frame: while one is not cached, the board draws the older module in its place.
-const FALLBACK := {"merlon_v1": "merlon", "merlon_v2": "merlon", "merlon_v3": "merlon", "merlon_v4": "merlon_broken", "fountain_basin_b": "fountain_basin"}
+const FALLBACK := {"roof_sag_low": "roof_gable_low", "roof_sag_steep": "roof_gable_steep", "merlon_v1": "merlon", "merlon_v2": "merlon", "merlon_v3": "merlon", "merlon_v4": "merlon_broken", "fountain_basin_b": "fountain_basin"}
 
 
 ## One MultiMesh per module, on its set's material (or the tinted kit material while the set is not cached).
