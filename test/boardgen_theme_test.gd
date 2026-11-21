@@ -329,3 +329,21 @@ func test_an_unshadowed_lantern_throws_no_pool_wider_than_a_cell() -> void:
 			assert_float(radius).override_failure_message("lantern %d (no shadow) throws a %.1f in pool: light through a wall" % [i, radius]).is_less_equal(3.0)
 		else:
 			assert_float(radius).is_greater(3.0)   # the wide ones are the point of the cone
+
+
+## R7b: board-scale occlusion, one probe rendered once, and one window in eight lit.
+func test_the_blue_hour_sets_board_scale_occlusion_and_the_board_has_one_probe_rendered_once() -> void:
+	var lc := RefCounted.new()
+	lc.set_script(preload("res://test/fixtures/boardgen/lighting_stub.gd"))
+	BoardgenTownDressing.dusk(lc)
+	assert_float(lc.calls["set_ssao_radius"]).override_failure_message("the preset's SSAO radius (0.8 - 1.2 m) is wider than the whole board").is_less_equal(0.1)
+	assert_float(lc.calls["set_ssao_intensity"]).is_greater(1.0)
+	var node: BoardgenTownDressing = auto_free(BoardgenTownDressing.new())
+	add_child(node)
+	node.build(_town_with_wall_house_and_plot(), ShaderMaterial.new())
+	var probes := node.find_children("*", "ReflectionProbe", false, false)
+	assert_int(probes.size()).is_equal(1)
+	assert_int((probes[0] as ReflectionProbe).update_mode).is_equal(ReflectionProbe.UPDATE_ONCE)
+	assert_float((probes[0] as ReflectionProbe).size.x).is_greater(0.8)   # it covers the board
+	var src := FileAccess.get_file_as_string("res://shaders/ruintown_board.gdshader")
+	assert_bool(src.contains("float glow = step(0.875, h21(vec2(cell, seed + 5.0)));")).override_failure_message("one window in eight").is_true()

@@ -166,7 +166,9 @@ vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis, out float rel, f
 	rel = mix(rel, 0.05, max(inside, hole * (1.0 - members)));   // an opening and a hole are recesses
 	c = mix(c, vec3(0.06, 0.05, 0.05), inside);
 	float lit = inside * step(d, -0.08);
-	emis += vec3(1.0, 0.55, 0.22) * lit * step(0.8, h21(vec2(cell, seed + 5.0))) * 0.9;   // a few windows glow
+	float glow = step(0.875, h21(vec2(cell, seed + 5.0)));   // one window in eight is lit (plan R7b): a dim warm glow and a flat warm patch of spill on the wall under its sill
+	emis += vec3(1.0, 0.55, 0.22) * lit * glow * 0.6;
+	emis += vec3(1.0, 0.55, 0.22) * has_open * glow * step(y, 0.95) * smoothstep(0.7, 0.15, abs(x - 1.5)) * smoothstep(0.0, 0.4, y) * 0.12;
 	wood_mask = members;
 	soot_mask = has_open * (step(2.15, y) * smoothstep(0.75, 0.0, abs(x - 1.5) - (y - 2.15) * 0.5) + 0.5 * step(y, 0.95) * smoothstep(0.45, 0.0, abs(x - 1.5) - 0.55) * vnoise(vec2(x * 8.0, y * 2.0)));   // soot fanning above an opening, a streak under its sill
 	return c;

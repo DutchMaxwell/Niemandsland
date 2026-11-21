@@ -17,6 +17,8 @@ const LANTERN_CONE_DEG := 48.0
 const LANTERN_CONE_SHADOWED_DEG := 75.0
 ## A spot's energy is not an omni's: the cone, the cookie (mean ~0.4) and the 1 / d fall-off over 2.5 in of height set it; 3.5 keeps the plaster beside a post under the clip cap.
 const LANTERN_ENERGY := 3.5
+const SSAO_RADIUS_M := 0.06   # 2.4 in: a wall's foot, a roof's eave, a joint between two tiers
+const SSAO_INTENSITY := 1.4
 const SHADOWED_LANTERNS := 4   # the nearest the centre cast shadows
 
 
@@ -248,6 +250,18 @@ func _add_lights(layout: Dictionary) -> void:
 		add_child(light)
 
 
+## One ReflectionProbe over the board, rendered ONCE after the build (plan R7b): the water and the wet stone mirror the sky instead of black. The box is the board plus a margin, low (the pieces stand
+## up to 9 in = 0.23 m).
+func _add_probe(layout: Dictionary) -> void:
+	var probe := ReflectionProbe.new()
+	probe.name = "BoardProbe"
+	probe.update_mode = ReflectionProbe.UPDATE_ONCE
+	probe.size = Vector3(float(layout["nx"]) * float(layout["cell_in"]) * INCHES_TO_METERS * 1.1, 0.5, float(layout["nz"]) * float(layout["cell_in"]) * INCHES_TO_METERS * 1.1)
+	probe.position = Vector3(0.0, 0.2, 0.0)
+	probe.intensity = 0.8
+	add_child(probe)
+
+
 ## The decay story of a board (plan R5): the board's seed picks the way the fire came from (a unit vector) and, a quarter turn off it, the shade side where moss grows. Returned as a Color
 ## (r, g = fire x, z; b, a = shade x, z) for the shader's `story` uniform. Pure: the same seed, the same story.
 static func story(seed: int) -> Color:
@@ -270,6 +284,9 @@ static func dusk(lighting: Object) -> void:
 	lighting.set_ambient_color(Color(0.42, 0.47, 0.62))
 	lighting.set_ambient_energy(1.2)
 	lighting.set_exposure(1.0)
+	if lighting.has_method("set_ssao_radius"):   # board-scale occlusion (plan R7b): the presets' 0.8 - 1.2 m radius is wider than the whole 1.2 m board
+		lighting.set_ssao_radius(SSAO_RADIUS_M)
+		lighting.set_ssao_intensity(SSAO_INTENSITY)
 	lighting.set_fill_light_color(Color(1.0, 0.58, 0.32))
 	lighting.set_fill_light_energy(0.18)
 	var fill: Variant = lighting.get("_fill_light")   # no setter for its direction: turn it to the far horizon by hand
@@ -651,6 +668,7 @@ func build(layout: Dictionary, material: Material, prism_roofs := true) -> void:
 		add_child(mmi)
 	_add_bodies(layout, material)
 	_add_lights(layout)
+	_add_probe(layout)
 
 
 ## The drawn bodies of the intact houses in ONE MultiMesh with the board's material (kind "roofed"; the fraction of the kind carries the plinth height for the shader).

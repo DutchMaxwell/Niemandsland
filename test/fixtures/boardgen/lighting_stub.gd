@@ -12,3 +12,5 @@ func set_ambient_energy(v: float) -> void: calls["set_ambient_energy"] = v
 func set_exposure(v: float) -> void: calls["set_exposure"] = v
 func set_fill_light_color(v: Color) -> void: calls["set_fill_light_color"] = v
 func set_fill_light_energy(v: float) -> void: calls["set_fill_light_energy"] = v
+func set_ssao_radius(v: float) -> void: calls["set_ssao_radius"] = v
+func set_ssao_intensity(v: float) -> void: calls["set_ssao_intensity"] = v
