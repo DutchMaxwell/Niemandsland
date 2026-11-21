@@ -96,8 +96,8 @@ func _cases() -> Array:
 		["Relentless Aura gf shooters", DoorLines.entry("Auras", 10, ["Relentless Aura"], [], "robot_legions", 5), plain, "Relentless:"],
 		["Relentless Aura aof shooters", _aof(DoorLines.entry("Auras", 10, ["Relentless Aura"], [], "high_elves", 5)), plain_aof, "Relentless:"],
 		# H-15 Experimental Tinctures (an item whose content is `Unpredictable Shooter Aura`: the unit gets Unpredictable Shooter through the aura pass; the die's line is
-		# said since #3133). The target row compares EVERY combat line of the volley. Zairetia's Versatile Attack beside the die stays refused as a pair (#3131).
-		["Experimental Tinctures aof shooter", _aof(DoorLines.entry("Alchemists", 10, ["Experimental Tinctures", "Unpredictable Shooter Aura"], [], "duchies_of_vinci", 5)), plain_aof, "Unpredictable Shooter:"],
+		# said since #3133). The target row compares EVERY combat line of the volley. The die bearer as a SHOOTER is refused again (group
+		# `unpredictable_die_without_weapon_in_reach`, gate 12: the core throws the die with no weapon in reach); unpredictable_die_door_test.gd holds it.
 		["Experimental Tinctures aof target", _aof(DoorLines.entry("Gunners", 10, [], [], "human_empire", 5)), _aof(DoorLines.entry("Alchemists", 10, ["Experimental Tinctures", "Unpredictable Shooter Aura"], [], "duchies_of_vinci", 0)), ""],
 		# H-14 Fortified Aura / Guardian Boost Aura / Gleaming Armour (an item whose content is Fortified Aura), a LIVE bearer (ds/h14_probe_fortified_aura.md): dice,
 		# end state and the `Fortified:` / `Guardian Boost[ Aura]:` line are equal in every system. The fallen-bearer state is refused by the slice, see below.
