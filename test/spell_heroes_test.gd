@@ -39,5 +39,5 @@ func test_a_meteor_lands_once_and_cleans_up(timeout := 5000) -> void:
 	assert_int(randi()).is_equal(expected)
 	await get_tree().create_timer(0.6).timeout
 	assert_int(hits[0]).override_failure_message("the impact fires once").is_equal(1)
-	await get_tree().create_timer(1.8).timeout
+	await get_tree().create_timer(2.5).timeout   # the impact's gunsmoke puffs now live 2.2 s (FxBurst v3)
 	assert_int(h.get_child_count()).is_equal(0)

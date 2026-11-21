@@ -6,6 +6,16 @@ extends GdUnitTestSuite
 const VolleyCueScript = preload("res://scripts/vfx/volley_cue.gd")
 const A := Vector3(0.1, 0.03, -0.15)
 const B := Vector3(-0.05, 0.05, 0.16)
+var _motion_before: bool
+
+
+func before_test() -> void:
+	_motion_before = GraphicsSettings.reduce_motion
+	GraphicsSettings.reduce_motion = false
+
+
+func after_test() -> void:
+	GraphicsSettings.reduce_motion = _motion_before
 
 
 func _cue():
@@ -87,3 +97,17 @@ func test_tracers_leave_the_game_rng_alone() -> void:
 	seed(777)
 	c.fire([[A, B], [B, A]], VolleyCueScript.Family.ENERGY)
 	assert_int(randi()).is_equal(expected)
+
+
+func test_reduce_motion_draws_static_lines_only_and_frees(timeout := 5000) -> void:
+	var preset_before: int = GraphicsSettings.current_preset
+	var motion_before: bool = GraphicsSettings.reduce_motion
+	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.HIGH
+	GraphicsSettings.reduce_motion = true
+	var c = _cue()
+	c.fire([[A, B], [B, A]], VolleyCueScript.Family.BALLISTIC)
+	assert_int(c.get_child_count()).override_failure_message("static lines only, no moving slugs").is_equal(2)
+	await get_tree().create_timer(VolleyCueScript.STILL_LINGER_S + 0.2).timeout
+	GraphicsSettings.reduce_motion = motion_before
+	GraphicsSettings.current_preset = preset_before
+	assert_int(c.get_child_count()).override_failure_message("static lines freed with no orphans").is_equal(0)

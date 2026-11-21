@@ -11,15 +11,19 @@ const ShotScript = preload("res://scripts/vfx/shot_show.gd")
 const PAIRS := [[Vector3(0, 0.03, 0), Vector3(0.3, 0.03, 0)], [Vector3(0, 0.03, 0.03), Vector3(0.3, 0.03, 0.03)],
 	[Vector3(0, 0.03, 0.06), Vector3(0.3, 0.03, 0.06)]]
 var _preset_before: int
+var _motion_before: bool
 
 
 func before_test() -> void:
 	_preset_before = GraphicsSettings.current_preset
+	_motion_before = GraphicsSettings.reduce_motion
 	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.MEDIUM
+	GraphicsSettings.reduce_motion = false
 
 
 func after_test() -> void:
 	GraphicsSettings.current_preset = _preset_before
+	GraphicsSettings.reduce_motion = _motion_before
 
 
 func _show() -> Node3D:
@@ -160,3 +164,149 @@ func test_a_blast_draws_a_ring_on_the_ground() -> void:
 	var rings := show.get_children().filter(func(c: Node) -> bool: return c is MeshInstance3D and (c as MeshInstance3D).mesh is PlaneMesh)
 	assert_int(rings.size()).override_failure_message("one ring, for the Blast impact only").is_equal(1)
 	assert_float((rings[0] as Node3D).global_position.y).override_failure_message("on the ground").is_less(0.02)
+
+
+func _planes(show: Node3D, code: String) -> Array:
+	return show.get_children().filter(func(c: Node) -> bool: return c is MeshInstance3D and (c as MeshInstance3D).mesh is PlaneMesh \
+		and ((c as MeshInstance3D).material_override as ShaderMaterial).shader.code == code)
+
+
+func test_a_blast_goes_in_three_beats_flash_fireball_and_smoke_that_lingers() -> void:
+	var show := _show()
+	show._impact(Vector3(0.3, 0.05, 0), Vector3.LEFT, VolleyCue.Family.ARTILLERY, 1, 2, 3, 0.04)
+	var lives: Array = show.get_children().filter(func(c: Node) -> bool: return c is FxBurst) \
+		.map(func(c: Node) -> float: return float(((c as FxBurst).material_override as ShaderMaterial).get_shader_parameter("life")))
+	lives.sort()
+	assert_float(lives[0]).override_failure_message("beat 1: a very short flash").is_less_equal(0.08)
+	assert_bool(lives.any(func(l: float) -> bool: return l >= 0.25 and l <= 0.35)).override_failure_message("beat 2: a fireball").is_true()
+	assert_float(lives[-1]).override_failure_message("beat 3: smoke that lingers").is_greater_equal(1.4)
+	assert_int(_planes(show, ShotScript.BLAST_WAVE).size()).override_failure_message("the ring front").is_equal(1)
+
+
+func test_a_shell_marks_its_landing_before_it_lands_and_not_on_low(timeout := 6000) -> void:
+	var show := _show()
+	var a := Vector3(0, 0.03, 0)
+	var b := Vector3(0.3, 0.03, 0)
+	var flight: float = ShotScript.SHOTS[VolleyCue.Family.ARTILLERY][0]
+	show._fire(a, b, VolleyCue.Family.ARTILLERY, 3, 2, 1.0, false, 3, 0.03)
+	show._fire(a, b + Vector3(0, 0, 0.2), VolleyCue.Family.ARTILLERY, 4, 1, 1.0, false, 3, 0.03)   # Low: no reticle
+	assert_int(_planes(show, ShotScript.BLAST_RETICLE).size()).is_equal(0)
+	await get_tree().create_timer(flight - ShotScript.RETICLE_S + 0.08).timeout
+	assert_int(_planes(show, ShotScript.BLAST_RETICLE).size()).override_failure_message("one reticle, Medium only").is_equal(1)
+	await get_tree().create_timer(ShotScript.RETICLE_S + 0.1).timeout
+	assert_int(_planes(show, ShotScript.BLAST_RETICLE).size()).override_failure_message("gone when it lands").is_equal(0)
+	assert_int(_planes(show, ShotScript.BLAST_WAVE).size()).is_greater_equal(1)
+
+
+func test_a_flamer_fires_a_continuous_stream_along_the_line_not_a_puff(timeout := 5000) -> void:
+	var show := _show()
+	show._fire(Vector3(0, 0.03, 0), Vector3(0.127, 0.03, 0), VolleyCue.Family.FLAME, 8, 2)
+	var bursts: Array = show.get_children().filter(func(c: Node) -> bool: return c is FxBurst)
+	var quads := 0
+	var stream: ShaderMaterial = null
+	for c in bursts:
+		var mm := (c as FxBurst).multimesh
+		quads += mm.instance_count
+		var m := (c as FxBurst).material_override as ShaderMaterial
+		if float(m.get_shader_parameter("emit_gap")) > 0.0:
+			stream = m
+	assert_object(stream).override_failure_message("the gout is one streamed burst").is_not_null()
+	assert_float(float(stream.get_shader_parameter("emit_gap")) * ShotScript.FLAME_QUADS) \
+		.override_failure_message("tongues are born over the whole stream, not in one frame").is_equal_approx(ShotScript.FLAME_STREAM_S, 1e-4)
+	assert_int(quads).override_failure_message("modest: at most 56 quads for the whole gout").is_less_equal(56)
+	await get_tree().create_timer(0.5).timeout
+	assert_bool(show.get_children().any(func(c: Node) -> bool: return c is FxBurst \
+		and float(((c as FxBurst).material_override as ShaderMaterial).get_shader_parameter("emit_gap")) > 0.0)) \
+		.override_failure_message("still burning 0.5 s in").is_true()
+	assert_float(ShotScript._start_delay(VolleyCue.Family.FLAME, ShotScript.CHAOS_S)).is_between(0.1, 0.25)
+	assert_float(ShotScript._start_delay(VolleyCue.Family.BALLISTIC, 0.4)).is_equal(0.4)
+
+
+func test_a_flame_lands_as_fire_licking_the_base() -> void:
+	var show := _show()
+	show._impact(Vector3(0.1, 0.03, 0), Vector3.LEFT, VolleyCue.Family.FLAME, 5, 2, 0, 0.03)
+	var lives: Array = show.get_children().filter(func(c: Node) -> bool: return c is FxBurst) \
+		.map(func(c: Node) -> float: return float(((c as FxBurst).material_override as ShaderMaterial).get_shader_parameter("life")))
+	assert_bool(lives.any(func(l: float) -> bool: return is_equal_approx(l, 0.6))).override_failure_message("a 0.6 s base fire").is_true()
+
+
+func test_batched_hdr_ribbons_and_light_pool_cap_create_and_free(timeout := 5000) -> void:
+	var show := _show()
+	for i in 10:
+		var a := Vector3(0.0, 0.03, i * 0.08)
+		var b := Vector3(0.3, 0.03, i * 0.08)
+		show._fire(a, b, VolleyCue.Family.BALLISTIC, 200 + i, 2)
+	await get_tree().process_frame
+	var batches := show.get_children().filter(func(c: Node) -> bool: return c is VfxRibbonBatch)
+	var lights := show.get_children().filter(func(c: Node) -> bool: return c is OmniLight3D)
+	assert_int(batches.size()).override_failure_message("all 10 tracers batched in 1 MultiMesh draw call").is_equal(1)
+	assert_int((batches[0] as VfxRibbonBatch).active_count()).is_equal(10)
+	assert_int(lights.size()).override_failure_message("pooled ring buffer capped at MAX_LIGHTS").is_equal(ShotScript.MAX_LIGHTS)
+	assert_float((lights[0] as OmniLight3D).omni_range).is_between(ShotScript.LIGHT_RANGE_M * ShotScript.LIGHT_RANGE_END_K, ShotScript.LIGHT_RANGE_M)
+	assert_float(ShotScript.LIGHT_RANGE_M).override_failure_message("muzzle light stays base-local").is_less_equal(0.09)
+	assert_float(ShotScript.LIGHT_ATTENUATION).override_failure_message("metres: a decay above ~0.3 burns the core to white (d^-decay)").is_less_equal(0.3)
+	assert_float(ShotScript.LIGHT_ENERGY).is_between(1.0, 3.0)
+	assert_bool((lights[0] as OmniLight3D).shadow_enabled).is_false()
+	await get_tree().create_timer(2.6).timeout
+	assert_int(show.get_child_count()).override_failure_message("ribbon batch, light pool and bursts all freed").is_equal(0)
+
+
+func test_volley_caps_pooled_lights_per_volley_even_across_a_pool_release(timeout := 6000) -> void:
+	var show := _show()
+	var wide_pairs: Array = []
+	for i in 10:
+		wide_pairs.append([Vector3(0.0, 0.03, i * 0.12), Vector3(0.3, 0.03, i * 0.12)])
+	show.volley(wide_pairs, VolleyCue.Family.BALLISTIC, 77)
+	await get_tree().create_timer(ShotScript.CHAOS_S * 0.4).timeout
+	show.release_light_pool()   # what the idle timer does after 0.35 s without a light: the cap must outlive it
+	await get_tree().create_timer(ShotScript.CHAOS_S + 0.5).timeout
+	assert_int(show.light_starts).override_failure_message("a 10-pair volley lights at most 2 muzzle + 2 impact lights") \
+		.is_less_equal(ShotScript.MAX_MUZZLE_LIGHTS_PER_VOLLEY + ShotScript.MAX_IMPACT_LIGHTS_PER_VOLLEY)
+	assert_int(show.light_starts).is_greater(0)
+	assert_bool(show._volley_lights.is_empty() and show._volley_open.is_empty()) \
+		.override_failure_message("the volley's light budget is dropped with its last round").is_true()
+	await get_tree().create_timer(2.5).timeout
+	assert_int(show.get_child_count()).is_equal(0)
+
+
+func test_the_flash_eases_out_without_a_cut() -> void:
+	assert_float(ShotScript.light_curve(0.0)).is_equal(1.0)
+	assert_float(ShotScript.light_curve(1.0)).is_equal(0.0)
+	var prev := 1.0
+	for i in range(1, 21):
+		var e: float = ShotScript.light_curve(i / 20.0)
+		assert_float(e).override_failure_message("never rises again").is_less_equal(prev)
+		prev = e
+	assert_float(ShotScript.light_curve(0.95)).override_failure_message("a soft tail, no step at the end").is_less(0.02)
+
+
+func test_ensure_ribbon_batch_replaces_batch_queued_for_deletion() -> void:
+	var show := _show()
+	var first: VfxRibbonBatch = show._ensure_ribbon_batch()
+	first.queue_free()
+	assert_bool(first.is_queued_for_deletion()).is_true()
+	var second: VfxRibbonBatch = show._ensure_ribbon_batch()
+	assert_object(second).is_not_null()
+	assert_object(second).override_failure_message("must not push into a batch queued for deletion").is_not_same(first)
+	assert_bool(second.is_queued_for_deletion()).is_false()
+	second.queue_free()
+
+
+func test_low_preset_uses_zero_lights_and_reduce_motion_draws_static_threads(timeout := 5000) -> void:
+	var low_show := _show()
+	low_show._fire(Vector3(0, 0.03, 0), Vector3(0.3, 0.03, 0), VolleyCue.Family.BALLISTIC, 11, 1)
+	assert_int(low_show.get_children().filter(func(c: Node) -> bool: return c is OmniLight3D).size()).is_equal(0)
+	var motion_before: bool = GraphicsSettings.reduce_motion
+	GraphicsSettings.reduce_motion = true
+	var rm_show := _show()
+	rm_show.volley(PAIRS, VolleyCue.Family.BALLISTIC, 12)
+	var batches := rm_show.get_children().filter(func(c: Node) -> bool: return c is VfxRibbonBatch)
+	assert_int(batches.size()).override_failure_message("static sight-line thread batch created immediately").is_equal(1)
+	var batch := batches[0] as VfxRibbonBatch
+	assert_int(batch.active_count()).is_equal(PAIRS.size())
+	assert_bool(batch.is_slot_static(0)).override_failure_message("reduced motion takes static thread path").is_true()
+	assert_int(rm_show.get_children().filter(func(c: Node) -> bool: return c is OmniLight3D).size()).is_equal(0)
+	await get_tree().create_timer(ShotScript.STATIC_THREAD_LIFE_S + 0.25).timeout
+	GraphicsSettings.reduce_motion = motion_before
+	assert_int(rm_show.get_children().filter(func(c: Node) -> bool: return c is VfxRibbonBatch).size()) \
+		.override_failure_message("static thread batch freed after 0.5 s fade").is_equal(0)
