@@ -4,7 +4,9 @@
 //! (`Landing::trails`, the inch frame) must never enter a roofed cell; the end must never be one either.
 //! The second test is the instrument check: the same lanes on a board whose houses carry no terrain class MUST cross.
 //!
-//! KNOWN FAILURE (measured 21.11. on main 6a2972697): the first test is RED and `#[ignore]`d - 16 of 16 lanes cross a house and 5 end
+//! FIXED by L-RF1 F1-F3 (`PlainTerrain::solid_cells`: cliffs round every house cell, no roof exemption over it); the third
+//! test adds the corner-to-corner lanes through every 2 x 2 house (the corner graze case) on seeds 1..=60.
+//! WAS A KNOWN FAILURE (measured 21.11. on main 6a2972697): the first test was RED and `#[ignore]`d - 16 of 16 lanes cross a house and 5 end
 //! inside one. `to_plain` writes no wall segments and a level-0 roofed cell has no tier edge, so the planner sees the house as open ground
 //! (class CONTAINER only forbids a REST, and a centre over the footprint counts as standing on the roof, `gate::overlaps_block`).
 //! Smallest repro: seed 7 (Point180, RuinTown), the 2 x 1 house at cell (4,5): from cell (5,4) to cell (5,6) the route is
@@ -55,6 +57,24 @@ fn lanes(l: &Layout) -> Vec<Lane> {
     out
 }
 
+/// Both diagonals, both ways, through every house of at least 2 x 2 cells, corner cell to corner cell (ground on both).
+fn diagonals(l: &Layout) -> Vec<Lane> {
+    let ground = |x: i64, z: i64| (0..l.nx as i64).contains(&x) && (0..l.nz as i64).contains(&z)
+        && { let c = l.cell(x as usize, z as usize); c.level == 0 && c.lot_kind != LotKind::Roofed && c.lot_kind != LotKind::Hazard };
+    let mut out = Vec::new();
+    for lot in l.lots.iter().filter(|lot| lot.kind == LotKind::Roofed && lot.w >= 2 && lot.h >= 2) {
+        let (x0, z0, x1, z1) = (lot.x as i64 - 1, lot.z as i64 - 1, (lot.x + lot.w) as i64, (lot.z + lot.h) as i64);
+        for (a, b) in [((x0, z0), (x1, z1)), ((x1, z0), (x0, z1))] {
+            if ground(a.0, a.1) && ground(b.0, b.1) {
+                let (a, b) = ((a.0 as usize, a.1 as usize), (b.0 as usize, b.1 as usize));
+                out.push((lot.x, lot.z, a, b));
+                out.push((lot.x, lot.z, b, a));
+            }
+        }
+    }
+    out
+}
+
 /// Does the route (inch frame, 0.25 in samples) enter a roofed cell?
 fn enters_a_roof(l: &Layout, trail: &[[f32; 2]]) -> bool {
     let roofed = |p: [f32; 2]| p[0] >= 0.0 && p[1] >= 0.0 && ((p[0] / 3.0) as usize) < l.nx && ((p[1] / 3.0) as usize) < l.nz && l.cell((p[0] / 3.0) as usize, (p[1] / 3.0) as usize).lot_kind == LotKind::Roofed;
@@ -66,13 +86,18 @@ fn enters_a_roof(l: &Layout, trail: &[[f32; 2]]) -> bool {
 
 /// The lanes over the seeds, as `(lanes asked, one line per lane whose route enters a roof)`; `classed` false strips CONTAINER from the terrain.
 fn crossings(classed: bool) -> (usize, Vec<String>) {
+    crossings_on(&[7, 25, 41], classed, lanes)
+}
+
+/// `crossings` over `seeds` along the lanes `lanes_of` names.
+fn crossings_on(seeds: &[i64], classed: bool, lanes_of: fn(&Layout) -> Vec<Lane>) -> (usize, Vec<String>) {
     let (mut asked, mut crossed) = (0, Vec::new());
-    for seed in [7, 25, 41] {
+    for &seed in seeds {
         let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
         let mut plain = to_plain(&l);
-        if !classed { plain.cells.retain(|c| c[2] as i32 != CONTAINER); }
+        if !classed { plain.cells.retain(|c| c[2] as i32 != CONTAINER); plain.solid_cells.clear(); }
         let t = Terrain::build(&plain);
-        for (lx, lz, a, b) in lanes(&l) {
+        for (lx, lz, a, b) in lanes_of(&l) {
             let ((ax, az), (bx, bz)) = (centre_m(&l, a), centre_m(&l, b));
             let st = state_at(ax, az);
             let dest = [bx as f32, 0.0, bz as f32];
@@ -93,7 +118,6 @@ fn crossings(classed: bool) -> (usize, Vec<String>) {
 }
 
 #[test]
-#[ignore = "L-RF1 known failure: to_plain gives a roofed house no wall segments and no tier edge, so the planner routes straight through it (16 of 16 lanes on seeds 7/25/41, 5 end inside); the fix is the heightfield chain's"]
 fn no_move_passes_through_a_roofed_house() {
     let (asked, crossed) = crossings(true);
     assert!(asked >= 10, "the seeds must give lanes, or the run proves nothing: {asked}");
@@ -104,4 +128,16 @@ fn no_move_passes_through_a_roofed_house() {
 fn the_crossing_check_sees_a_house_when_its_terrain_class_is_removed() {
     let (asked, crossed) = crossings(false);
     assert!(asked >= 10 && !crossed.is_empty(), "with no CONTAINER class the same lanes must cross a house, or the check cannot fail: {} of {asked}", crossed.len());
+}
+
+/// L-RF1 corner graze: a leg exactly through a grid vertex of a 2 x 2 house touches the END of two cliff runs. Every
+/// diagonal lane through such a house on seeds 1..=60 must stay out; the twin without the house class must cross.
+#[test]
+fn no_move_cuts_a_house_corner_to_corner() {
+    let seeds: Vec<i64> = (1..=60).collect();
+    let (asked, crossed) = crossings_on(&seeds, true, diagonals);
+    assert!(asked >= 4, "the seeds must give 2 x 2 houses with open corners: {asked}");
+    assert!(crossed.is_empty(), "{} of {asked} diagonal lanes cut a house:\n{}", crossed.len(), crossed.join("\n"));
+    let (open_asked, open) = crossings_on(&seeds, false, diagonals);
+    assert!(!open.is_empty(), "planted: with no house class the diagonals must cut a house: 0 of {open_asked}");
 }
