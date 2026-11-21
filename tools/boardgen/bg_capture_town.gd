@@ -1,7 +1,7 @@
 extends SceneTree
 ## Ruin-town M1 capture (plan PLAN_RUINTOWN, M1): the greybox stills of the town, REAL display, 1600 px JPG q90.
 ##   godot --path . -s <abs>/bg_capture_town.gd -- <out> [seeds=3,7,25] [theme=ruintown] [only=overview,top] [yaw=0] [presets=medium,ultra,low]
-## Cameras per seed (Medium): overview45 (28 and 118 deg), top, play (game camera, both armies), street (model eye height, four models
+## Cameras per seed (Medium): overview45 (28 and 118 deg), top, play (game camera, both armies), halfplay (the play camera at half its distance), street (model eye height, four models
 ## ahead), fountain / statue / pool / hall (one close-up per landmark kind the seed has, two models beside), tower (a 9 in cell).
 ## Also writes <out>/s<seed>_plan.txt (the ASCII plan with landmarks) and <out>/manifest.json (written LAST = the result artefact).
 ## Derived from bg_capture_aaa.gd (same table clearing, armies, street pick). `perf=1`: the perf sweep. `baseline=1` (plan PLAN_RUINTOWN_AAA step R0): Medium + Ultra + Low,
@@ -239,6 +239,9 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 		if _baseline:
 			await _readability(tag, _suffix)
 			await _perf_one(1, preset, board_seed, "ruintown", 0)
+	if _want("halfplay"):   # the play camera at half the distance on the board's middle (40 px per inch: a story piece reads by kind here, not at the full-board zoom)
+		_pose(_play_yaw, PLAY_PITCH, PLAY_ZOOM * 0.5)
+		await _still(tag, "halfplay")
 	if _want("macro"):
 		var m := _macro_pick(layout)
 		if not m.is_empty():
