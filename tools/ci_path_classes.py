@@ -23,7 +23,7 @@ CLASSES = {
     },
 }
 SCAN = ("scripts/", "scenes/", "shaders/", "materials/", "assets/", "tools/", "addons/", "test/", "project.godot")
-SELF = ("tools/ci_path_classes.py", "tools/ci_path_classes_test.py")
+SELF = ("tools/ci_path_classes.py", "tools/ci_path_classes_test.py", "tools/ci_look_paths.txt")
 
 
 def in_class(path, cls):
