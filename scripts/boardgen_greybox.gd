@@ -49,6 +49,7 @@ var _tiefwerk: TiefwerkLibrary = null   # the authored surfaces (R2, on demand);
 var _decals: BoardgenDecals = null
 var _footprint := Rect2()   # the ground kept free of the table's scatter, in table-local metres: the board and all round it
 var _layout: Dictionary = {}
+var _atmosphere: Object = null   # the town re-applies its dusk after every mood change while it is on the table
 
 
 ## The board of NML_BOARDGEN_SEED on `table`, or null when the flag is off (release build, unset or not an integer).
@@ -341,7 +342,14 @@ func _ready() -> void:
 	_anchor()
 	if layout_theme == BoardgenTheme.RUIN_TOWN and is_inside_tree():   # the town is lit at dusk (a dev view: not restored)
 		var scene := get_tree().current_scene
-		BoardgenTownDressing.dusk(scene.get("lighting_controller") if scene != null else null)
+		var lighting: Variant = scene.get("lighting_controller") if scene != null else null
+		BoardgenTownDressing.dusk(lighting)
+		# the table's biome presenter restores the table mood one frame after a board arrives (atmosphere + table mood): that overwrote the dusk of the FIRST town board
+		# (sun 0.8, exposure 1.0 - the "too dark" board, 21.11.). Every mood change is followed by the dusk again, at the end of that frame.
+		var atmosphere: Variant = scene.get("atmosphere_controller") if scene != null else null
+		if atmosphere != null and atmosphere.has_signal("atmosphere_changed"):
+			atmosphere.atmosphere_changed.connect(func(_name: String) -> void: _dusk_again.call_deferred(lighting))
+			_atmosphere = atmosphere
 	if _kit != null and layout_theme == BoardgenTheme.DEEPWORKS:   # a module missing now is cached for the next board (the town uses no kit)
 		_kit.prefetch(KIT_LADDERS + BoardgenRails.KIT_MODULES + BoardgenProps.KIT_MODULES)
 	_scatter_off(_footprint)
@@ -354,8 +362,18 @@ func _ready() -> void:
 	_attach_surfaces()
 
 
+func _dusk_again(lighting: Object) -> void:
+	if is_inside_tree() and is_instance_valid(lighting):
+		BoardgenTownDressing.dusk(lighting)
+
+
 func _exit_tree() -> void:
 	_scatter_off(Rect2())
+	if _atmosphere != null and is_instance_valid(_atmosphere):
+		for c: Dictionary in _atmosphere.atmosphere_changed.get_connections():
+			if (c["callable"] as Callable).get_object() == self:
+				_atmosphere.atmosphere_changed.disconnect(c["callable"])
+	_atmosphere = null
 	var graphics := get_node_or_null("/root/GraphicsSettings")
 	if graphics != null and graphics.settings_applied.is_connected(_on_settings_applied):
 		graphics.settings_applied.disconnect(_on_settings_applied)

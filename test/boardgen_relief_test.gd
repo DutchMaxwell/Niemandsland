@@ -139,7 +139,13 @@ func test_ruined_tops_break_only_in_the_outer_edge_strip() -> void:
 ## Lead 21.11. (readability gate): the ground the models stand on - streets, packed earth, garden plots, the decks of yards and tier floors - sits a step below the models' own values.
 func test_the_ground_the_models_stand_on_sits_below_the_models() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
-	assert_bool(src.contains("cobble(xz, seed, tint * vec3(1.15, 0.98, 0.78) * 0.27, run")).override_failure_message("streets must stay dark (and warm: the pawns of both armies read against a warm dark road)").is_true()
-	assert_bool(src.contains("alb = tint * 0.32 * mix(0.78, 1.15, fbm(xz * 1.6 + seed));")).override_failure_message("packed earth must stay dark").is_true()
+	assert_bool(src.contains("cobble(xz, seed, tint * vec3(1.15, 0.98, 0.78) * GROUND_COBBLE, run")).override_failure_message("streets must stay warm: the pawns of both armies read against a warm dark road").is_true()
+	assert_bool(src.contains("alb = tint * GROUND_EARTH * mix(0.78, 1.15, fbm(xz * 1.6 + seed));")).is_true()
+	# maintainer 21.11. "too dark": a floor under the ground (no near-black earth or road), and still a step below the models
+	for name: String in ["GROUND_COBBLE", "GROUND_EARTH"]:
+		var at := src.find("const float %s = " % name)
+		assert_int(at).is_greater(-1)
+		var v := float(src.substr(at + ("const float %s = " % name).length(), 6).get_slice(";", 0))
+		assert_float(v).override_failure_message("%s %f: the ground must sit between near-black and the models" % [name, v]).is_between(0.4, 0.6)
 	assert_bool(src.contains("alb = tint * 0.55 * mix(0.6, 1.25, fbm(xz * 2.4 + seed))")).override_failure_message("garden plots must stay dark").is_true()
 	assert_bool(src.contains("			alb *= 0.5;   // the decks the models stand on")).override_failure_message("the decks must stay dark").is_true()
