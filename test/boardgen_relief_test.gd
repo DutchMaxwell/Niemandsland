@@ -130,3 +130,12 @@ func test_ruined_tops_break_only_in_the_outer_edge_strip() -> void:
 	assert_bool(src.contains("float outer = step(0.004, abs(ground_at(xz).b - ground_at(xz + to_edge * (ed + 0.3)).b));")).override_failure_message("an edge inside a lot must not break").is_true()
 	assert_bool(src.contains("float lost = step(1.0 - 0.7 * strip,")).override_failure_message("the loss must fade to nothing at the strip's inner line").is_true()
 	assert_bool(src.contains("float crack = smoothstep(0.02, 0.0,")).override_failure_message("no cracked flags").is_true()
+
+
+## Lead 21.11. (readability gate): the ground the models stand on - streets, packed earth, garden plots, the decks of yards and tier floors - sits a step below the models' own values.
+func test_the_ground_the_models_stand_on_sits_below_the_models() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	assert_bool(src.contains("cobble(xz, seed, tint * 0.27, run")).override_failure_message("streets must stay dark").is_true()
+	assert_bool(src.contains("alb = tint * 0.32 * mix(0.78, 1.15, fbm(xz * 1.6 + seed));")).override_failure_message("packed earth must stay dark").is_true()
+	assert_bool(src.contains("alb = tint * 0.55 * mix(0.6, 1.25, fbm(xz * 2.4 + seed))")).override_failure_message("garden plots must stay dark").is_true()
+	assert_bool(src.contains("			alb *= 0.5;   // the decks the models stand on")).override_failure_message("the decks must stay dark").is_true()

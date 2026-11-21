@@ -278,6 +278,18 @@ func set_fill_light_color(color: Color) -> void:
 		current_preset.fill_light_color = color
 
 
+func set_sdfgi_energy(value: float) -> void:
+	if _environment:
+		_set_env("sdfgi_energy", value)
+		current_preset.sdfgi_energy = value
+
+
+func set_ssil_intensity(value: float) -> void:
+	if _environment:
+		_set_env("ssil_intensity", value)
+		current_preset.ssil_intensity = value
+
+
 func set_ssao_radius(value: float) -> void:
 	if _environment:
 		_set_env("ssao_radius", value)

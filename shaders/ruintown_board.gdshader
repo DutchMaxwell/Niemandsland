@@ -343,13 +343,13 @@ void fragment() {
 		}
 		if (k == 1) {   // streets: cobbles
 			float crown;
-			alb = mix(cobble(xz, seed, tint * 0.575, run, fan, crown), vec3(0.06, 0.055, 0.05), 0.55 * gutter);   // 0.575 = the old 1.15 x 0.5: figures read against a darker road (readability gate)
+			alb = mix(cobble(xz, seed, tint * 0.27, run, fan, crown), vec3(0.06, 0.055, 0.05), 0.55 * gutter);   // 0.27 (was 1.15): the streets sit well below the models' own values (readability gate, lead 21.11.)
 			rel = crown;
 			depth_in = 0.045;
 			rough = mix(0.55, 0.8, smoothstep(0.3, 0.7, crown));   // damp joints, dry crowns
 			ao = mix(0.55, 1.0, smoothstep(0.1, 0.5, crown));
 		} else if (k == 0) {   // earth: packed, with pebbles, weeds and broken stones
-			alb = tint * 0.7 * mix(0.78, 1.15, fbm(xz * 1.6 + seed));   // x0.7: figures read against darker packed earth (readability gate)
+			alb = tint * 0.32 * mix(0.78, 1.15, fbm(xz * 1.6 + seed));   // 0.32 (was 1.0): the packed earth of the deployment bands sits below the models too (readability gate)
 			vec2 cp = xz * 3.0;   // 0.33 in cells, a pebble or a weed tuft in some of them: sparse, small, dark and irregular (rotated, stretched, off the cell centre)
 			vec2 ci = floor(cp);
 			float sp = h21(ci + seed);
@@ -379,6 +379,7 @@ void fragment() {
 			depth_in = 0.02;
 			rough = 0.82;
 			alb = tint * mix(0.72, 1.05, h21(vec2(floor(xz.x / 2.2), floor(xz.y / BOARD_W) + seed))) * mix(0.8, 1.0, mix(1.0, seam(xz.y, BOARD_W, 0.018), keep(xz.y, BOARD_W))) * mix(0.84, 1.0, smoothstep(0.35, 0.6, fbm(xz * 0.9 + seed))) * grid;
+			alb *= 0.5;   // the decks the models stand on (the deployment bands' yards, the tier floors) sit a step below the models' own values (readability gate)
 			if (k != 8 && box_in.x > 0.0) {   // A BROKEN FLOOR (plan R6): inside the 0.75 in edge strip of the tier, and only where the edge is the lot's outer edge, boards are missing and the joists show; the middle stays solid
 				vec2 e2 = box_in.xz * 0.5 - abs(lpos.xz);
 				bool nx = e2.x < e2.y;
@@ -410,7 +411,7 @@ void fragment() {
 			alb = mix(alb, vec3(0.04, 0.04, 0.045), 0.7 * crack);
 			alb = mix(alb, vec3(0.14, 0.24, 0.08), 0.6 * crack * step(0.7, h21(floor(xz * 2.5) + seed)));
 		} else if (k == 11) {   // garden plot: overgrown, weeds and bare patches
-			alb = tint * mix(0.6, 1.25, fbm(xz * 2.4 + seed)) * mix(1.0, 0.7, step(0.9, h21(floor(xz * 9.0))));
+			alb = tint * 0.55 * mix(0.6, 1.25, fbm(xz * 2.4 + seed)) * mix(1.0, 0.7, step(0.9, h21(floor(xz * 9.0))));   // x0.55: the plots in the deployment bands sit below the models' own values (readability gate)
 		} else if (k == 14) {   // rubble: broken stones
 			alb = tint * mix(0.55, 1.2, h21(floor(xz * 4.0) + seed)) * mix(0.8, 1.0, vnoise(xz * 8.0));
 		} else {

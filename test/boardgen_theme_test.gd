@@ -248,7 +248,12 @@ func test_the_town_has_lanterns_at_the_square_and_the_gates_inside_the_edge_stri
 		assert_float((l.global_transform.basis * Vector3.FORWARD).y).override_failure_message("a lantern cone points down").is_less(-0.99)   # SpotLight3D shines along -Z; rotated -90 deg about x it looks down
 		assert_object(l.light_projector).is_not_null()
 		assert_float(l.light_energy).is_less_equal(5.0)   # lit plaster must not clip (measured at 3.5: <= 0.2 % of pixels above 0.95)
-	assert_int(node.find_children("*", "OmniLight3D", false, false).size()).is_equal(0)
+	var fills := node.find_children("LanternFill*", "OmniLight3D", false, false)   # a weak wide fill inside each pool: no hard black rim
+	assert_int(fills.size()).is_equal(lights.size())
+	for f: OmniLight3D in fills:
+		assert_float(f.light_energy).is_less_equal(0.1)
+		assert_bool(f.shadow_enabled).is_false()
+		assert_float(f.light_specular).is_equal(0.0)
 	assert_int(BoardgenTheme.TOWN_PALETTE.size()).is_equal(BoardgenTheme.TOWN_KINDS.size())
 
 
@@ -338,6 +343,9 @@ func test_the_blue_hour_sets_board_scale_occlusion_and_the_board_has_one_probe_r
 	BoardgenTownDressing.dusk(lc)
 	assert_float(lc.calls["set_ssao_radius"]).override_failure_message("the preset's SSAO radius (0.8 - 1.2 m) is wider than the whole board").is_less_equal(0.1)
 	assert_float(lc.calls["set_ssao_intensity"]).is_greater(1.0)
+	assert_float(lc.calls["set_sdfgi_energy"]).override_failure_message("the Ultra bounce light (1.1) lifted the lit walls round the models: the blue hour turns it down").is_less_equal(0.6)
+	assert_float(lc.calls["set_ssil_intensity"]).is_less_equal(0.6)
+	assert_float(lc.calls["set_sun_angles"][0]).override_failure_message("the key comes from the play camera's side (azimuth near -20)").is_between(-30.0, -10.0)
 	var node: BoardgenTownDressing = auto_free(BoardgenTownDressing.new())
 	add_child(node)
 	node.build(_town_with_wall_house_and_plot(), ShaderMaterial.new())

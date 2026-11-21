@@ -19,6 +19,13 @@ const LANTERN_CONE_SHADOWED_DEG := 75.0
 const LANTERN_ENERGY := 3.5
 const SSAO_RADIUS_M := 0.06   # 2.4 in: a wall's foot, a roof's eave, a joint between two tiers
 const SSAO_INTENSITY := 1.4
+## The Ultra preset's bounce light (SDFGI 1.1, SSIL 1.0) is tuned for daylight: under a strong moon it lifts the lit walls and decks round the models and cost their contrast (the Ultra rows of the readability
+## gate: with both off the worst row went 0.62 -> 0.72). The blue hour turns them down, not off.
+const SDFGI_ENERGY := 0.45
+const SSIL_INTENSITY := 0.4
+## A weak wide fill inside every lantern's pool (lead 21.11.): an omni with no shadow map, so the cone's pool has no hard black rim; weak enough that light leaking through a wall is a glow, not a pool.
+const FILL_ENERGY := 0.05
+const FILL_RANGE_M := 0.2
 const SHADOWED_LANTERNS := 4   # the nearest the centre cast shadows
 
 
@@ -248,6 +255,16 @@ func _add_lights(layout: Dictionary) -> void:
 		light.light_specular = 0.4
 		light.shadow_enabled = i < SHADOWED_LANTERNS
 		add_child(light)
+		var fill := OmniLight3D.new()
+		fill.name = "LanternFill%d" % i
+		fill.position = light.position
+		fill.light_color = LANTERN_COLOUR
+		fill.light_energy = FILL_ENERGY
+		fill.omni_range = FILL_RANGE_M
+		fill.omni_attenuation = 2.0
+		fill.light_specular = 0.0
+		fill.shadow_enabled = false
+		add_child(fill)
 
 
 ## One ReflectionProbe over the board, rendered ONCE after the build (plan R7b): the water and the wet stone mirror the sky instead of black. The box is the board plus a margin, low (the pieces stand
@@ -273,20 +290,25 @@ static func story(seed: int) -> Color:
 
 ## The BLUE HOUR of the town (decision D-R4): a cool pale moon as the key, high on one side; the last warm light low on the opposite horizon (the scene's fill light, turned round) as a rim; a
 ## cool sky; the lanterns are the only strong warm source. Applied to the scene's lighting controller (a dev view, so it is not restored).
-## Readability tuning (gate_cmp.py against the plain-table baseline): a strongly blue moon washed the figures' colours and lit the ground to their level, so the key is pale (nearly neutral), strong, and the
-## ground values of the shader (cobbles x0.5, packed earth x0.7) sit lower; the blue stays in the sky, the ambient and the shadows.
+## Readability tuning (tools: gate3.sh, the median of three repeats per row against the plain-table baseline; lead 21.11.): a strongly blue moon washed the figures' colours, so the key is pale (nearly
+## neutral) and strong (5.5), comes from the side of the play camera (azimuth -20 deg; at -55 deg the far models stood against lit walls) and the ambient is lower (0.9); the shader's ground values (cobbles,
+## packed earth, garden plots, the decks of yards and tiers) sit below the models' own values, and the Ultra preset's bounce light is turned down (SDFGI_ENERGY, SSIL_INTENSITY). The blue stays in the sky,
+## the ambient and the shadows. The measured moves are in PLAN_RUINTOWN_AAA.md.
 static func dusk(lighting: Object) -> void:
 	if lighting == null:
 		return
 	lighting.set_sun_color(Color(0.93, 0.95, 1.0))
-	lighting.set_sun_energy(2.0)
-	lighting.set_sun_angles(-55.0, 52.0)
+	lighting.set_sun_energy(5.5)
+	lighting.set_sun_angles(-20.0, 52.0)
 	lighting.set_ambient_color(Color(0.42, 0.47, 0.62))
-	lighting.set_ambient_energy(1.2)
+	lighting.set_ambient_energy(0.9)
 	lighting.set_exposure(1.0)
 	if lighting.has_method("set_ssao_radius"):   # board-scale occlusion (plan R7b): the presets' 0.8 - 1.2 m radius is wider than the whole 1.2 m board
 		lighting.set_ssao_radius(SSAO_RADIUS_M)
 		lighting.set_ssao_intensity(SSAO_INTENSITY)
+	if lighting.has_method("set_sdfgi_energy"):
+		lighting.set_sdfgi_energy(SDFGI_ENERGY)
+		lighting.set_ssil_intensity(SSIL_INTENSITY)
 	lighting.set_fill_light_color(Color(1.0, 0.58, 0.32))
 	lighting.set_fill_light_energy(0.18)
 	var fill: Variant = lighting.get("_fill_light")   # no setter for its direction: turn it to the far horizon by hand
