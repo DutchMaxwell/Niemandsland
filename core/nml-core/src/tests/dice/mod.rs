@@ -418,6 +418,7 @@ mod modifier_sum;
     mod heavy_impact;
 mod indirect_moved;
 mod cover_line;
+mod log_twins;
 mod guarded_over9;
 mod melee_impact_order;
 mod relentless_thrust;
