@@ -4,9 +4,9 @@
 //!
 //! [`GENERATOR_VERSION`] names the generator's output. Whoever changes what `generate(seed)` returns for a seed
 //! bumps it and re-pins the hash test below, so a stored board is never taken for the output of a newer generator.
-use crate::terrain::{CellParams, PlainTerrain, TierGrid, DANGEROUS, NONE};
+use crate::terrain::{CellParams, PlainTerrain, TierGrid, CONTAINER, DANGEROUS, FOREST, NONE, RUINS};
 use super::levels::LotKind;
-use super::{Layout, LEVEL_IN};
+use super::{Layout, Theme, LEVEL_IN};
 
 pub const GENERATOR_VERSION: u32 = 1;
 
@@ -19,14 +19,24 @@ fn grid_margin(l: &Layout) -> i64 {
 }
 
 /// The board as the core reads it: Hazard lots become DANGEROUS cells in the overlay's grid and landmark footprints take
-/// the terrain class of their kind (`LandmarkKind::terrain_class`), the table is the board
+/// the terrain class of their kind (`LandmarkKind::terrain_class`); on a ruin town also the level-0 rest of a Terrace lot reads RUINS (cover, sight in and
+/// out, Unstable), a garden plot and a wall breach FOREST (Difficult + cover) and an intact house CONTAINER (solid, 2.5 in); the table is the board
 /// (4 x 4 ft, 3 in cells, yaw 0), and `tiers` carries every level (inches) and every ladder. No stairs exist.
 pub fn to_plain(l: &Layout) -> PlainTerrain {
     let m = grid_margin(l);
     // one class per cell, row-major: a Hazard lot is DANGEROUS, a landmark's footprint carries the class of its kind
     // (a classless pump house leaves the cell as it was)
-    let mut classes: std::collections::BTreeMap<(usize, usize), i32> = l.cells.iter().filter(|c| c.lot_kind == LotKind::Hazard)
-        .map(|c| ((c.z, c.x), DANGEROUS)).collect();
+    let town = |c: &&super::Cell| -> Option<i32> {
+        if l.theme != Theme::RuinTown { return None; }
+        match (c.lot_kind, c.level) {
+            (LotKind::Terrace, 0) if !c.street => Some(RUINS),
+            (LotKind::Rough | LotKind::Wall, 0) => Some(FOREST),
+            (LotKind::Roofed, _) => Some(CONTAINER),
+            _ => None,
+        }
+    };
+    let mut classes: std::collections::BTreeMap<(usize, usize), i32> = l.cells.iter().filter_map(|c| town(&c).map(|k| ((c.z, c.x), k))).collect();
+    classes.extend(l.cells.iter().filter(|c| c.lot_kind == LotKind::Hazard).map(|c| ((c.z, c.x), DANGEROUS)));
     for lm in l.landmarks.iter().filter(|lm| lm.kind.terrain_class() != NONE) {
         for i in lm.cells() {
             classes.insert((i / l.nx, i % l.nx), lm.kind.terrain_class());
@@ -58,7 +68,7 @@ fn fnv1a64(bytes: &[u8]) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::boardgen::{generate, Symmetry};
+    use crate::boardgen::{generate, generate_themed, Symmetry};
     use crate::terrain::{Terrain, NONE};
 
     fn ground(x: usize, z: usize) -> [f32; 3] {
@@ -114,6 +124,35 @@ mod tests {
     }
 
     #[test]
+    fn a_town_yard_reads_ruins_a_plot_and_a_breach_read_forest_and_an_intact_house_reads_container() {
+        let (mut ruins, mut forest, mut container) = (0, 0, 0);
+        for seed in 1..=60 {
+            let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+            let board = Terrain::build(&to_plain(&l));
+            let landmark = |c: &crate::boardgen::Cell| l.landmarks.iter().find(|m| m.cells().any(|i| i == c.z * 16 + c.x)).map(|m| m.kind.terrain_class()).filter(|&k| k != NONE);
+            for c in &l.cells {
+                let want = match (landmark(c), c.lot_kind, c.level) {
+                    (Some(k), _, _) => k,
+                    (_, LotKind::Hazard, _) => DANGEROUS,
+                    (_, LotKind::Terrace, 0) if !c.street => RUINS,
+                    (_, LotKind::Rough | LotKind::Wall, 0) => FOREST,
+                    (_, LotKind::Roofed, _) => CONTAINER,
+                    _ => NONE,
+                };
+                ruins += usize::from(want == RUINS);
+                forest += usize::from(want == FOREST);
+                container += usize::from(want == CONTAINER && c.lot_kind == LotKind::Roofed);
+                assert_eq!(board.type_at(ground(c.x, c.z)), want, "seed {seed} cell ({}, {}) {:?} level {}", c.x, c.z, c.lot_kind, c.level);
+            }
+            // the same cells on a Deepworks layout of the same seed never read the town classes
+            let d = generate(seed, Symmetry::Point180);
+            let deep = Terrain::build(&to_plain(&d));
+            assert!(d.cells.iter().all(|c| ![RUINS, FOREST].contains(&deep.type_at(ground(c.x, c.z)))), "seed {seed}: a Deepworks board reads a town class");
+        }
+        assert!(ruins > 0 && forest > 0 && container > 0, "the class mapping proved nothing: {ruins} ruins, {forest} forest, {container} container cells");
+    }
+
+    #[test]
     fn the_hash_pins_seed_42_version_1_and_sees_one_level() {
         let p = to_plain(&generate(42, Symmetry::Point180));
         assert_eq!(GENERATOR_VERSION, 1);
@@ -126,5 +165,16 @@ mod tests {
         assert_ne!(board_hash(&moved), board_hash(&p), "one changed level must change the hash");
     }
 
+    #[test]
+    fn the_town_hash_pins_seed_42_and_a_class_change_moves_it() {
+        let l = generate_themed(42, Symmetry::Point180, Theme::RuinTown);
+        let p = to_plain(&l);
+        assert_eq!(format!("{:016x}", board_hash(&p)), PINNED_TOWN_42, "the town generator or its class mapping changed: re-pin on purpose");
+        let mut moved = p.clone();
+        moved.cells.pop();
+        assert_ne!(board_hash(&moved), board_hash(&p), "a changed class must change the hash");
+    }
+
+    const PINNED_TOWN_42: &str = "71932a8e281edb6d";
     const PINNED_SEED_42: &str = "cbcd64fada596527";
 }

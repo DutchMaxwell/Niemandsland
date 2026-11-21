@@ -229,6 +229,16 @@ pub fn granted_vs(state: &State, target: usize, rule: &str) -> bool {
     chain_grant(state, target, rule, true)
 }
 
+/// `SoloController.granted_indirect_of` (`PENDING_EPOCH_OWN_INDIRECT`): an Indirect handed to the shooter's OWN unit. Only the unit's own records
+/// count (not the joined chain's), never an attackers-side mark (that one rides the target) and never a melee-scoped one; a `... when ...`
+/// qualifier is cut off the name, as the table does.
+pub fn granted_own_indirect(state: &State, i: usize) -> bool {
+    state.buffs[i].iter().any(|r| {
+        let base = r.grants_rule.trim().split('(').next().unwrap_or("").trim();
+        !r.attackers && &*r.scope != "melee" && base.split(" when ").next() == Some("Indirect")
+    })
+}
+
 /// STANDALONE_SWEEP_A_2026-09-14, rows `Dangerous Terrain Debuff` /
 /// `Difficult Terrain Debuff` — the unit-level terrain debuffs. The hazard
 /// the debuff promises is a property of the UNIT, not of the ground it
@@ -250,6 +260,11 @@ pub fn granted_terrain_debuff(state: &State, i: usize, rule: &str, rules_epoch: 
 /// comparison.
 pub fn granted_exact(state: &State, i: usize, rule: &str) -> bool {
     chain_grant_exact(state, i, rule, false)
+}
+
+/// `granted_exact`'s attackers-side half: the records on the TARGET's chain that belong to whoever attacks it (`granted_vs` with the full-string compare).
+pub fn granted_vs_exact(state: &State, target: usize, rule: &str) -> bool {
+    chain_grant_exact(state, target, rule, true)
 }
 
 fn chain_grant_exact(state: &State, i: usize, rule: &str, attackers: bool) -> bool {
