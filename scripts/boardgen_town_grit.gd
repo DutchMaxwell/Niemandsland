@@ -131,7 +131,6 @@ static func patches(layout: Dictionary, cls: PackedByteArray) -> Array[Dictionar
 	var nx: int = layout["nx"]
 	var nz: int = layout["nz"]
 	var cell := float(layout["cell_in"])
-	var tables := _tables(cell, TEXELS_PER_CELL)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(layout.get("seed", 0)) * 7919 + 31
 	var out: Array[Dictionary] = []
@@ -149,7 +148,8 @@ static func patches(layout: Dictionary, cls: PackedByteArray) -> Array[Dictionar
 				break
 			var i: int = cells[rng.randi_range(0, cells.size() - 1)]
 			var t := rng.randi_range(0, TEXELS_PER_CELL * TEXELS_PER_CELL - 1)
-			var edge: float = _near(cls, nx, nz, i % nx, i / nx, (1 << 0) | (1 << 2) | (1 << 3), EDGE_CAP_IN, tables)[t]
+			var f := (Vector2(t % TEXELS_PER_CELL, t / TEXELS_PER_CELL) + Vector2(0.5, 0.5)) * (cell / TEXELS_PER_CELL)
+			var edge := _near_one(cls, nx, nz, i % nx, i / nx, f, cell, (1 << 0) | (1 << 2) | (1 << 3), EDGE_CAP_IN)
 			if edge < 0.3 or edge > 1.2:
 				continue
 			var at := (Vector2(i % nx, i / nx) - Vector2(nx, nz) * 0.5) * cell + (Vector2(t % TEXELS_PER_CELL, t / TEXELS_PER_CELL) + Vector2(0.5, 0.5)) * (cell / TEXELS_PER_CELL)
@@ -162,12 +162,11 @@ static func patches(layout: Dictionary, cls: PackedByteArray) -> Array[Dictionar
 
 ## The puddles of a board (style bible 8, plan G5): 6-10 {at (board inches), r (inches, 0.2-0.6: 0.4-1.2 across; at most 0.3 in the middle of a street)} where water gathers - in a damage
 ## patch, on a lane's kennel, in an artery's rut - never within 1.5 in of a dangerous cell (or the fountain), never on a ladder's foot cell, 3 in or more apart, wholly on the setts.
-static func puddles(layout: Dictionary, cls: PackedByteArray) -> Array[Dictionary]:
+static func puddles(layout: Dictionary, cls: PackedByteArray, pts: Array[Dictionary] = []) -> Array[Dictionary]:
 	var nx: int = layout["nx"]
 	var nz: int = layout["nz"]
 	var cell := float(layout["cell_in"])
 	var tpc := TEXELS_PER_CELL
-	var tables := _tables(cell, tpc)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(layout.get("seed", 0)) * 6271 + 17
 	var feet := {}
@@ -179,7 +178,7 @@ static func puddles(layout: Dictionary, cls: PackedByteArray) -> Array[Dictionar
 		if cls[i] == 3:
 			water.append(Rect2((Vector2(i % nx, i / nx) - Vector2(nx, nz) * 0.5) * cell, Vector2(cell, cell)))
 	var cands: Array[Vector2] = []
-	for pt: Dictionary in patches(layout, cls):
+	for pt: Dictionary in (pts if not pts.is_empty() else patches(layout, cls)):
 		cands.append(pt["at"])
 	var section := runs(layout, cls)
 	var keys := section.keys()
@@ -209,8 +208,7 @@ static func puddles(layout: Dictionary, cls: PackedByteArray) -> Array[Dictionar
 		if cx < 0 or cz < 0 or cx >= nx or cz >= nz or cls[cz * nx + cx] != 1 or feet.has(cz * nx + cx):
 			continue
 		var f := at - (Vector2(cx, cz) - Vector2(nx, nz) * 0.5) * cell
-		var t := clampi(int(f.y / cell * tpc), 0, tpc - 1) * tpc + clampi(int(f.x / cell * tpc), 0, tpc - 1)
-		var edge: float = _near(cls, nx, nz, cx, cz, (1 << 0) | (1 << 2) | (1 << 3), EDGE_CAP_IN, tables)[t]
+		var edge := _near_one(cls, nx, nz, cx, cz, f, cell, (1 << 0) | (1 << 2) | (1 << 3), EDGE_CAP_IN)
 		var rad := rng.randf_range(0.2, 0.6)
 		if edge > 0.55:
 			rad = minf(rad, 0.3)   # the middle of a street keeps its puddles small (style bible 15)
@@ -248,6 +246,20 @@ static func _near(cls: PackedByteArray, nx: int, nz: int, cx: int, cz: int, want
 			if t[i] < out[i]:
 				out[i] = t[i]
 	return out
+
+
+## The distance (inches) from the point `f` inside the cell (cx, cz) to the nearest neighbour cell whose class bit is in `want` (the one-point form of _near).
+static func _near_one(cls: PackedByteArray, nx: int, nz: int, cx: int, cz: int, f: Vector2, cell: float, want: int, cap: float) -> float:
+	var best := cap
+	for d: Vector2i in NEIGHBOURS:
+		var x := cx + d.x
+		var z := cz + d.y
+		if x < 0 or z < 0 or x >= nx or z >= nz or (want >> cls[z * nx + x]) & 1 == 0:
+			continue
+		var ex := f.x if d.x < 0 else (cell - f.x if d.x > 0 else 0.0)
+		var ez := f.y if d.y < 0 else (cell - f.y if d.y > 0 else 0.0)
+		best = minf(best, sqrt(ex * ex + ez * ez))
+	return best
 
 
 ## Per neighbour direction, the distance of every texel centre of a cell (row by row) to that neighbour cell.
@@ -309,7 +321,8 @@ static func map(layout: Dictionary) -> Image:
 							bytes[o + 3] = 77   # 0.3 along the ruts
 					bytes[o + 1] = int(round(maxf((1.0 - halo[i] / HALO_IN) * 0.6, (1.0 - other[i] / reach) * 0.7) * 255.0))
 					o += 4
-	for pd: Dictionary in puddles(layout, cls):
+	var pts := patches(layout, cls)
+	for pd: Dictionary in puddles(layout, cls, pts):
 		var at: Vector2 = pd["at"]
 		var big: float = float(pd["r"]) / 0.9   # 0.775 (the shader's edge) at r
 		var lo := ((at - Vector2(big, big)) / step + Vector2(w, h) * 0.5).floor()
@@ -320,7 +333,7 @@ static func map(layout: Dictionary) -> Image:
 				if d < big:
 					var o := (tz * w + tx) * 4 + 1
 					bytes[o] = maxi(bytes[o], roundi(255.0 * (0.75 + 0.25 * (1.0 - d / big))))
-	for pt: Dictionary in patches(layout, cls):
+	for pt: Dictionary in pts:
 		var at: Vector2 = pt["at"]
 		var r: float = pt["r"]
 		var lo := ((at - Vector2(r, r)) / step + Vector2(w, h) * 0.5).floor()
