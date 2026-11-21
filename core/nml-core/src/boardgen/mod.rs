@@ -73,6 +73,8 @@ pub struct Budgets {
     pub max_attempts: u8,
     /// Side of a tower in cells (level-3 blocks): 1 = single cells, 2 = 2 x 2 blocks; `tower_pairs` counts mirrored pairs of towers.
     pub tower_side: usize,
+    /// A town tower (`tower_side` 2) is a slender 2 x 1 / 1 x 2 block instead of a 2 x 2 one (silhouette round: a 6 x 6 x 9 in cube read as a block from above).
+    pub tower_slender: bool,
     /// Houses stand in rows along the streets (party walls, a passage after each row) instead of scattered with an alley ring round each (`Point180` only).
     pub rows: bool,
     /// The most houses one walkable roof run may touch (0 = no cap): rows must not become a roof highway (a plunging-fire platform across the town).
@@ -86,12 +88,12 @@ impl Theme {
             Self::Deepworks => Budgets { raised: RAISED_PERMILLE, high: HIGH_PERMILLE, lift: HIGH_PERMILLE, tower_pairs: TOWER_PAIRS, landmark_pieces: LANDMARK_PIECES,
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
                 lot_pairs: 9, lot_shapes: &[(3, 2), (2, 3), (2, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[], garden_area: 0, garden_min: 0, plaza: (0, 0), wall: false,
-                landmark_kinds: &[LandmarkKind::TankCluster, LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (1, 2), centre_piece: false, small_pools: false, intact_percent: 0, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1, rows: false, roof_run_max: 0 },
+                landmark_kinds: &[LandmarkKind::TankCluster, LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (1, 2), centre_piece: false, small_pools: false, intact_percent: 0, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1, tower_slender: false, rows: false, roof_run_max: 0 },
             // First town values (step 6 of the ruin-town plan re-fits them): more raised ground, one tower pair, more terraces.
             Self::RuinTown => Budgets { raised: (230, 460), high: (60, 200), lift: (30, 70), tower_pairs: (1, 1), landmark_pieces: (7, 7),
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
                 lot_pairs: 18, lot_shapes: &[(2, 2), (2, 2), (3, 2), (2, 3), (2, 1), (1, 2), (2, 1), (1, 2), (1, 1)], lot_fill: &[(2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], lot_first: &[(2, 2)], garden_area: 1, garden_min: 4, plaza: (4, 6), wall: true,
-                landmark_kinds: &[LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (3, 3), centre_piece: true, small_pools: true, intact_percent: 50, lane_free: true, max_attempts: 64, tower_side: 2, rows: true, roof_run_max: 2 },
+                landmark_kinds: &[LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (3, 3), centre_piece: true, small_pools: true, intact_percent: 65, lane_free: true, max_attempts: 64, tower_side: 2, tower_slender: true, rows: true, roof_run_max: 2 },
         }
     }
     fn salt(self) -> i64 { if self.is_default() { 0 } else { TOWN_SALT } }
@@ -168,7 +170,8 @@ impl Layout {
         let (r, h) = (budget(b.raised), budget(b.high));
         if !(r.0..=r.1).contains(&self.raised()) { p.push("raised area outside its budget"); }
         if !(h.0..=h.1).contains(&self.high()) { p.push("level-2 area outside its budget"); }
-        if !(2 * b.tower_side.pow(2) * b.tower_pairs.0..=2 * b.tower_side.pow(2) * b.tower_pairs.1).contains(&self.towers()) { p.push("level-3 area outside its budget"); }
+        let per = if b.tower_slender { b.tower_side } else { b.tower_side.pow(2) };
+        if !(2 * per * b.tower_pairs.0..=2 * per * b.tower_pairs.1).contains(&self.towers()) { p.push("level-3 area outside its budget"); }
         if !(b.landmark_pieces.0..=b.landmark_pieces.1).contains(&self.landmarks.len()) { p.push("landmark count outside its budget"); }
         if self.landmarks.iter().flat_map(Landmark::cells).any(|i| self.connectors.iter().any(|c| usize::from(c.low) == i || usize::from(c.high) == i)) { p.push("a landmark stands on a ladder foot"); }
         if self.lots.iter().filter(|l| l.kind == LotKind::Rough).count() < b.garden_min { p.push("too few garden plots"); }

@@ -61,7 +61,7 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
         let Some((a, b)) = paired(&cells, sym, &mut rng, shave, |c| u8::from(c.lot_kind == LotKind::Block)).into_iter().next() else { break };
         cells[a].level = 0; cells[b].level = 0;
     }
-    if b.tower_side == 2 { raise_towers_2x2(&mut cells, sym, &mut rng, b.tower_pairs); }
+    if b.tower_side == 2 { raise_towers_2x2(&mut cells, sym, &mut rng, b.tower_pairs, b.tower_slender); }
     if g.wall.iter().any(|&w| w) { raise_wall(&mut cells, &g.wall, &mut rng); }
     // Level 2: raised cells outside the deployment bands. A pair is kept only if the board stays one piece when every
     // step of at most one level counts as a possible way up, so no island of level 2 is ever cut off.
@@ -156,9 +156,13 @@ fn raise_wall(cells: &mut [Cell], wall: &[bool], rng: &mut GodotRng) {
     // runs of wall cells (the walkway); a run of two has a wall tower at one end, a run of three or more at both, and every run gets one buttress on free ground beside a
     // level-2 cell, nearest the run's middle first (a tower is 9 in: a 3 in buttress cannot reach it)
     let mut runs: Vec<Vec<usize>> = Vec::new();
-    for &i in &col { if cells[i].lot_kind == LotKind::Wall && cells[i].level == 2 { if runs.last().is_some_and(|r| r.last().is_some_and(|&l| l + GRID == i)) { runs.last_mut().expect("a run").push(i); } else { runs.push(vec![i]); } } }
+    let mut by_column = col.clone();
+    by_column.sort_by_key(|&i| (i % GRID, i / GRID));   // column by column: a kinked wall's two columns are separate runs (row order interleaved them and cut runs short)
+    for &i in &by_column { if cells[i].lot_kind == LotKind::Wall && cells[i].level == 2 { if runs.last().is_some_and(|r| r.last().is_some_and(|&l| l + GRID == i)) { runs.last_mut().expect("a run").push(i); } else { runs.push(vec![i]); } } }
     for run in runs {
-        let towers = match run.len() { 0 | 1 => Vec::new(), 2 => vec![run[0]], n => vec![run[0], run[n - 1]] };
+        // one wall tower per run (silhouette round: a tower at both ends of every run made the wall a row of keeps), at the end nearer the board's middle row
+        let mid = |i: usize| (2 * (i / GRID)).abs_diff(GRID - 1);
+        let towers = match run.len() { 0 | 1 => Vec::new(), n => vec![if mid(run[n - 1]) < mid(run[0]) { run[n - 1] } else { run[0] }] };
         for &i in &towers { set(cells, i, 3, LotKind::Wall); }
         let mut by_middle: Vec<usize> = run.iter().copied().filter(|i| !towers.contains(i)).collect();
         by_middle.sort_by_key(|&i| i.abs_diff(run[run.len() / 2]));
@@ -168,33 +172,43 @@ fn raise_wall(cells: &mut [Cell], wall: &[bool], rng: &mut GodotRng) {
     if !one_piece(cells) { cells.clone_from_slice(&snap); }
 }
 
-/// Town towers, raised before the level-2 lift: a 2 x 2 block of level-1 cells outside the bands rises to level 3, with one level-1 cell beside it
-/// lifted to level 2 (the ladder up), as mirrored pairs; the board must stay one piece. The block with the most lower neighbours goes first (the
-/// tallest sheer faces). The level-2 lift then runs on what is left.
-fn raise_towers_2x2(cells: &mut [Cell], sym: Symmetry, rng: &mut GodotRng, pairs: (usize, usize)) {
-    let block = |o: usize| [o, o + 1, o + GRID, o + GRID + 1];
+/// Town towers, raised before the level-2 lift: a 2 x 2 block (or, `slender`, a 2 x 1 / 1 x 2 one) of level-1 cells outside the bands rises to level 3, with one level-1 cell beside
+/// it lifted to level 2 (the ladder up), as mirrored pairs; the board must stay one piece. The block with the most lower neighbours goes first (the tallest sheer faces). The level-2
+/// lift then runs on what is left.
+fn raise_towers_2x2(cells: &mut [Cell], sym: Symmetry, rng: &mut GodotRng, pairs: (usize, usize), slender: bool) {
+    let shapes: &[(usize, usize)] = if slender { &[(2, 1), (1, 2)] } else { &[(2, 2)] };
+    let block = |o: usize, (w, h): (usize, usize)| (0..h).flat_map(move |dz| (0..w).map(move |dx| o + dz * GRID + dx)).collect::<Vec<_>>();
     for _ in 0..rng.randi_range(pairs.0 as i64, pairs.1 as i64) {
         let snap = cells.to_vec();
-        let around = |o: usize| block(o).into_iter().flat_map(neighbours).filter(move |j| !block(o).contains(j)).collect::<Vec<_>>();
-        let step = |o: usize| around(o).into_iter().find(|&j| snap[j].level == 1 && snap[j].deploy == 0);   // the cell that becomes the 6 in step
-        let ok = |o: usize| o % GRID + 1 < GRID && o / GRID + 1 < GRID && block(o).iter().all(|&i| snap[i].level == 1 && snap[i].deploy == 0) && step(o).is_some();
-        let lower = |o: usize| around(o).iter().filter(|&&j| snap[j].level == 0).count();
-        let mut cand: Vec<(usize, usize)> = if sym == Symmetry::Point180 {
-            // the half-turn image of the block at `o` has its origin at 238 - o
-            (0..GRID * GRID - GRID - 1).filter_map(|o| { let t = GRID * GRID - GRID - 2 - o; (o < t && ok(o) && ok(t) && !block(o).iter().any(|i| block(t).contains(i))).then_some((o, t)) }).collect()
-        } else {
-            let (mut a, mut c): (Vec<_>, Vec<_>) = ((0..GRID * GRID).filter(|&o| o / GRID + 1 < GRID / 2 && ok(o)).collect(), (0..GRID * GRID).filter(|&o| o / GRID >= GRID / 2 && ok(o)).collect());
-            shuffle(&mut a, rng); shuffle(&mut c, rng); a.into_iter().zip(c).collect()
-        };
+        let around = |b: &[usize]| b.iter().flat_map(|&i| neighbours(i)).filter(|j| !b.contains(j)).collect::<Vec<_>>();
+        let step = |b: &[usize]| around(b).into_iter().find(|&j| snap[j].level == 1 && snap[j].deploy == 0);   // the cell that becomes the 6 in step
+        let fits = |o: usize, (w, h): (usize, usize)| o % GRID + w <= GRID && o / GRID + h <= GRID;
+        let ok = |b: &[usize]| b.iter().all(|&i| snap[i].level == 1 && snap[i].deploy == 0) && step(b).is_some();
+        let lower = |b: &[usize]| around(b).iter().filter(|&&j| snap[j].level == 0).count();
+        let mut cand: Vec<(Vec<usize>, Vec<usize>)> = Vec::new();
+        for &shape in shapes {
+            if sym == Symmetry::Point180 {
+                // the half-turn image of a block is the block of the mirrored cells
+                for o in (0..GRID * GRID).filter(|&o| fits(o, shape)) {
+                    let a = block(o, shape);
+                    let t: Vec<usize> = a.iter().map(|&i| mirror(i)).collect();
+                    if a[0] < t[0] && ok(&a) && ok(&t) && !a.iter().any(|i| t.contains(i)) { cand.push((a, t)); }
+                }
+            } else {
+                let (mut a, mut c): (Vec<_>, Vec<_>) = ((0..GRID * GRID).filter(|&o| fits(o, shape) && o / GRID + shape.1 < GRID / 2 + 1 && ok(&block(o, shape))).collect(), (0..GRID * GRID).filter(|&o| fits(o, shape) && o / GRID >= GRID / 2 && ok(&block(o, shape))).collect());
+                shuffle(&mut a, rng); shuffle(&mut c, rng);
+                cand.extend(a.into_iter().zip(c).map(|(x, y)| (block(x, shape), block(y, shape))));
+            }
+        }
         shuffle(&mut cand, rng);
-        cand.sort_by_key(|&(o, t)| usize::MAX - lower(o) - lower(t));
-        for (o, t) in cand {
-            let s1 = step(o).expect("ok() found a step");
-            let steps = [s1, if sym == Symmetry::Point180 { mirror(s1) } else { step(t).expect("ok() found a step") }];   // a half-turn twin has the half-turn step
-            if steps.iter().any(|j| block(o).contains(j) || block(t).contains(j)) { continue; }
-            for i in block(o).into_iter().chain(block(t)) { cells[i].level = 3; }
+        cand.sort_by_key(|(a, t)| usize::MAX - lower(a) - lower(t));
+        for (a, t) in cand {
+            let s1 = step(&a).expect("ok() found a step");
+            let steps = [s1, if sym == Symmetry::Point180 { mirror(s1) } else { step(&t).expect("ok() found a step") }];   // a half-turn twin has the half-turn step
+            if steps.iter().any(|j| a.contains(j) || t.contains(j)) { continue; }
+            for &i in a.iter().chain(&t) { cells[i].level = 3; }
             for &j in &steps { cells[j].level = 2; }
-            if one_piece(cells) { break } else { for i in block(o).into_iter().chain(block(t)).chain(steps) { cells[i].level = snap[i].level; } }
+            if one_piece(cells) { break } else { for &i in a.iter().chain(&t).chain(&steps) { cells[i].level = snap[i].level; } }
         }
     }
 }
