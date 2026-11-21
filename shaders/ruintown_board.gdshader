@@ -362,6 +362,7 @@ void fragment() {
 			rough = mix(0.55, 0.8, smoothstep(0.3, 0.7, crown));   // damp joints, dry crowns
 			ao = mix(0.55, 1.0, smoothstep(0.1, 0.5, crown));
 			dbg = grit_debug == 2 ? grit_map_colour(gw) : grit_street(xz, gw, sett, run, alb, rel, rough);
+			emis += grit_fill(alb);
 		} else if (k == 0) {   // earth: packed, with pebbles, weeds and broken stones
 			alb = tint * GROUND_EARTH * mix(0.78, 1.15, fbm(xz * 1.6 + seed));   // 0.32 (was 1.0): the packed earth of the deployment bands sits below the models too (readability gate)
 			vec2 cp = xz * 3.0;   // 0.33 in cells, a pebble or a weed tuft in some of them: sparse, small, dark and irregular (rotated, stretched, off the cell centre)
@@ -383,6 +384,7 @@ void fragment() {
 			depth_in = 0.05;
 			rough = 0.95;
 			grit_earth(gw, alb, rough);
+			emis += grit_fill(alb);
 			dbg = grit_debug == 2 ? grit_map_colour(gw) : vec3(0.0);
 		} else if (k == 3 || k == 4 || k == 8) {   // floor boards of a ruined house or yard, scorched in patches
 			if (k != 8) {

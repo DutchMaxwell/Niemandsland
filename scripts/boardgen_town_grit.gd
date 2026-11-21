@@ -5,7 +5,8 @@ extends RefCounted
 ## TEXELS_PER_CELL texels per 3 in cell (0.19 in; ~14 ms per board: per-neighbour distance tables, not a
 ## per-texel search), texel centres symmetric about the board centre, so a half-turned layout gives the half-turned map for the data channels:
 ##   R = EDGE: on a street texel the distance to the nearest non-street cell, 0..3 in -> 0..1 (the shader's WEAR: the middle of a street is walked, the 1 in beside a wall is not); 0 off the street.
-##   G = WET / MUD: 0..0.7, the mud creeping 1.5 in onto the setts from an earth border, the damp 1 in of earth beside a street, the damp halo 1.5 in round a well, pool or fountain.
+##   G = WET / MUD: 0..0.7, the mud creeping 1.5 in onto the setts from an earth border, the damp 1 in of earth beside a street, the damp halo 1.5 in round a well, pool or fountain;
+##       0.75..1 = a PUDDLE (its edge at 0.775: 6-10 per board, see puddles()).
 ##   B = THE SECTION of a straight street (not a junction or square): the signed offset across it from its centre line, which wanders +-0.3 in along the run (the kennel of a lane lies on
 ##       it, the cart ruts of an artery 0.7 in either side of it): a lane 64 + 16 x offset (0..127), an ARTERY (a straight run of 10+ street cells) 192 + 16 x offset (128..255);
 ##       255 off a run. Not half-turn true on purpose (the look need not mirror).
@@ -159,6 +160,71 @@ static func patches(layout: Dictionary, cls: PackedByteArray) -> Array[Dictionar
 	return out
 
 
+## The puddles of a board (style bible 8, plan G5): 6-10 {at (board inches), r (inches, 0.2-0.6: 0.4-1.2 across; at most 0.3 in the middle of a street)} where water gathers - in a damage
+## patch, on a lane's kennel, in an artery's rut - never within 1.5 in of a dangerous cell (or the fountain), never on a ladder's foot cell, 3 in or more apart, wholly on the setts.
+static func puddles(layout: Dictionary, cls: PackedByteArray) -> Array[Dictionary]:
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell := float(layout["cell_in"])
+	var tpc := TEXELS_PER_CELL
+	var tables := _tables(cell, tpc)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(layout.get("seed", 0)) * 6271 + 17
+	var feet := {}
+	for c: Dictionary in layout.get("connectors", []):
+		feet[int(c["low"])] = true
+		feet[int(c["high"])] = true
+	var water: Array[Rect2] = []
+	for i in nx * nz:
+		if cls[i] == 3:
+			water.append(Rect2((Vector2(i % nx, i / nx) - Vector2(nx, nz) * 0.5) * cell, Vector2(cell, cell)))
+	var cands: Array[Vector2] = []
+	for pt: Dictionary in patches(layout, cls):
+		cands.append(pt["at"])
+	var section := runs(layout, cls)
+	var keys := section.keys()
+	keys.sort()
+	for k in 40:
+		if keys.is_empty():
+			break
+		var i: int = keys[rng.randi_range(0, keys.size() - 1)]
+		var r: Dictionary = section[i]
+		var along := ((i % nx if r["axis"] == 0 else i / nx) - (nx if r["axis"] == 0 else nz) * 0.5 + rng.randf_range(0.15, 0.85)) * cell
+		var across: float = float(r["centre"]) + wander(along, r["phase"]) + ((RUT_IN if rng.randf() < 0.5 else -RUT_IN) if r["artery"] else 0.0)
+		cands.append(Vector2(along, across) if r["axis"] == 0 else Vector2(across, along))
+	var out: Array[Dictionary] = []
+	var want := 6 + rng.randi_range(0, 4)
+	var order := range(cands.size())
+	for k in order.size():   # a seeded shuffle
+		var j := rng.randi_range(k, order.size() - 1)
+		var t: int = order[k]
+		order[k] = order[j]
+		order[j] = t
+	for k: int in order:
+		if out.size() >= want:
+			break
+		var at: Vector2 = cands[k]
+		var cx := floori(at.x / cell + nx * 0.5)
+		var cz := floori(at.y / cell + nz * 0.5)
+		if cx < 0 or cz < 0 or cx >= nx or cz >= nz or cls[cz * nx + cx] != 1 or feet.has(cz * nx + cx):
+			continue
+		var f := at - (Vector2(cx, cz) - Vector2(nx, nz) * 0.5) * cell
+		var t := clampi(int(f.y / cell * tpc), 0, tpc - 1) * tpc + clampi(int(f.x / cell * tpc), 0, tpc - 1)
+		var edge: float = _near(cls, nx, nz, cx, cz, (1 << 0) | (1 << 2) | (1 << 3), EDGE_CAP_IN, tables)[t]
+		var rad := rng.randf_range(0.2, 0.6)
+		if edge > 0.55:
+			rad = minf(rad, 0.3)   # the middle of a street keeps its puddles small (style bible 15)
+		if edge < rad + 0.1 or out.any(func(p: Dictionary) -> bool: return (p["at"] as Vector2).distance_to(at) < 3.0):
+			continue
+		var dry := true
+		for wr: Rect2 in water:
+			var q := Vector2(clampf(at.x, wr.position.x, wr.end.x), clampf(at.y, wr.position.y, wr.end.y))
+			dry = dry and q.distance_to(at) >= 1.5 + rad
+		if dry:
+			out.append({"at": at, "r": rad})
+	return out
+
+
 ## The wander of a run's centre line at `along` inches (+-WANDER_IN, two slow waves).
 static func wander(along: float, phase: float) -> float:
 	return WANDER_IN * (0.8 * sin(along * 0.31 + phase) + 0.2 * sin(along * 0.77 + phase * 2.3))
@@ -243,6 +309,17 @@ static func map(layout: Dictionary) -> Image:
 							bytes[o + 3] = 77   # 0.3 along the ruts
 					bytes[o + 1] = int(round(maxf((1.0 - halo[i] / HALO_IN) * 0.6, (1.0 - other[i] / reach) * 0.7) * 255.0))
 					o += 4
+	for pd: Dictionary in puddles(layout, cls):
+		var at: Vector2 = pd["at"]
+		var big: float = float(pd["r"]) / 0.9   # 0.775 (the shader's edge) at r
+		var lo := ((at - Vector2(big, big)) / step + Vector2(w, h) * 0.5).floor()
+		var hi := ((at + Vector2(big, big)) / step + Vector2(w, h) * 0.5).ceil()
+		for tz in range(maxi(int(lo.y), 0), mini(int(hi.y), h)):
+			for tx in range(maxi(int(lo.x), 0), mini(int(hi.x), w)):
+				var d := ((Vector2(tx + 0.5, tz + 0.5) - Vector2(w, h) * 0.5) * step - at).length()
+				if d < big:
+					var o := (tz * w + tx) * 4 + 1
+					bytes[o] = maxi(bytes[o], roundi(255.0 * (0.75 + 0.25 * (1.0 - d / big))))
 	for pt: Dictionary in patches(layout, cls):
 		var at: Vector2 = pt["at"]
 		var r: float = pt["r"]

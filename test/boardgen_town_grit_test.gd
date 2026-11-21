@@ -29,7 +29,7 @@ func test_the_map_is_the_same_for_the_same_seed() -> void:
 		assert_bool(BoardgenTownGrit.map(_layout(s)).get_data() == BoardgenTownGrit.map(_layout(s)).get_data()).is_true()
 
 
-func test_a_half_turned_layout_gives_the_half_turned_map_for_wear_and_wet() -> void:
+func test_a_half_turned_layout_gives_the_half_turned_map_for_wear_and_wet_outside_the_puddles() -> void:
 	for s: int in SEEDS:
 		var layout := _layout(s)
 		var a := BoardgenTownGrit.map(layout)
@@ -41,6 +41,8 @@ func test_a_half_turned_layout_gives_the_half_turned_map_for_wear_and_wet() -> v
 			for x in w:
 				var ca := a.get_pixel(x, z)
 				var cb := b.get_pixel(w - 1 - x, h - 1 - z)
+				if ca.g8 > 179 or cb.g8 > 179:
+					continue   # a puddle (G5): the look, not the data - it need not mirror
 				worst = maxf(worst, maxf(absf(ca.r - cb.r), absf(ca.g - cb.g)))
 		assert_float(worst).override_failure_message("seed %d: wear / wet differ by %.3f under a half turn" % [s, worst]).is_less_equal(1.5 / 255.0)
 
@@ -126,8 +128,9 @@ func test_street_mud_never_covers_more_than_40_percent_of_the_setts() -> void:
 		var worst := 0
 		for z in img.get_height():
 			for x in img.get_width():
-				if cls[(z / tpc) * nx + x / tpc] == 1:
-					worst = maxi(worst, img.get_pixel(x, z).g8)
+				var g8 := img.get_pixel(x, z).g8
+				if cls[(z / tpc) * nx + x / tpc] == 1 and g8 < 191:   # 191+ is a puddle (G5), not mud
+					worst = maxi(worst, g8)
 		assert_int(worst).override_failure_message("seed %d: wet / mud %d on a street texel" % [s, worst]).is_less_equal(179)
 
 
@@ -174,3 +177,61 @@ func test_the_odds_of_the_setts_give_the_style_bibles_broken_paving() -> void:
 	var src := FileAccess.get_file_as_string("res://shaders/ruintown_grit.gdshaderinc")
 	for u in ["grit_odds_base", "grit_odds_damage", "grit_lane_keep"]:
 		assert_bool(src.contains("uniform vec") and src.contains(" %s " % u)).override_failure_message("uniform %s" % u).is_true()
+
+
+## THE LOOK MUST NOT LIE (plan G5): a puddle never reads as the dangerous pool - its colour stays 25 deg of hue and 0.15 of saturation away from the hazard water's teal, it is no wider than
+## 1.2 in, never on a ladder's foot, never within 1.5 in of a dangerous cell; and there are 6-10 of them.
+func test_a_puddle_is_never_the_hazard_pool() -> void:
+	var grit := FileAccess.get_file_as_string("res://shaders/ruintown_grit.gdshaderinc")
+	var board := FileAccess.get_file_as_string("res://shaders/ruintown_board.gdshader")
+	var tint := _vec3(grit, "const vec3 GRIT_PUDDLE_TINT = vec3(")
+	var m := RegEx.create_from_string("alb = vec3\\(([^)]*)\\) \\* mix\\(0\\.7, 1\\.3, swirl\\)").search(board)   # the hazard water's body (k == 2)
+	assert_object(m).is_not_null()
+	var tn := m.get_string(1).split(",")
+	var teal := Color(float(tn[0]), float(tn[1]), float(tn[2]))
+	assert_bool(grit.contains("alb = mix(alb, alb * 0.45 + GRIT_PUDDLE_TINT, 0.75 * pud);")).is_true()
+	var mean := _vec3(grit, "const vec3 GRIT_COOL = vec3(") * 0.5   # a dark street sett under the water
+	var water := mean.lerp(mean * 0.45 + tint, 0.75)
+	var dh := absf(water.h - teal.h) * 360.0
+	dh = minf(dh, 360.0 - dh)
+	assert_float(dh).override_failure_message("puddle hue %.0f vs teal %.0f" % [water.h * 360.0, teal.h * 360.0]).is_greater_equal(25.0)
+	assert_float(absf(water.s - teal.s)).is_greater_equal(0.15)
+	assert_bool(grit.contains("EMISSION")).is_false()
+	for s: int in SEEDS:
+		var layout := _layout(s)
+		var cls := BoardgenTownGrit.classes(layout)
+		var pds := BoardgenTownGrit.puddles(layout, cls)
+		assert_int(pds.size()).override_failure_message("seed %d: %d puddles" % [s, pds.size()]).is_between(6, 10)
+		var nx: int = layout["nx"]
+		var nz: int = layout["nz"]
+		var cell := float(layout["cell_in"])
+		var feet := {}
+		for c: Dictionary in layout["connectors"]:
+			feet[int(c["low"])] = true
+			feet[int(c["high"])] = true
+		for pd: Dictionary in pds:
+			var at: Vector2 = pd["at"]
+			assert_float(float(pd["r"]) * 2.0).is_less_equal(1.2)
+			var i := floori(at.y / cell + nz * 0.5) * nx + floori(at.x / cell + nx * 0.5)
+			assert_bool(feet.has(i)).is_false()
+			for j in nx * nz:
+				if cls[j] == 3:
+					var r := Rect2((Vector2(j % nx, j / nx) - Vector2(nx, nz) * 0.5) * cell, Vector2(cell, cell))
+					var q := Vector2(clampf(at.x, r.position.x, r.end.x), clampf(at.y, r.position.y, r.end.y))
+					assert_float(q.distance_to(at)).is_greater_equal(1.5)
+
+
+## THE LOOK MUST NOT LIE (plan G5): nothing of the grit stands higher than 0.08 in on open standing ground - it is all paint and a bent normal on the existing surface (no vertex moves, no
+## node is added), and its relief depths stay the street's own.
+func test_the_grit_adds_no_height_to_the_open_ground() -> void:
+	var grit := FileAccess.get_file_as_string("res://shaders/ruintown_grit.gdshaderinc")
+	assert_bool(grit.contains("VERTEX")).is_false()
+	assert_bool(grit.contains("depth_in")).is_false()
+	var src := FileAccess.get_file_as_string("res://scripts/boardgen_town_grit.gd")
+	assert_bool(src.contains("add_child") or src.contains("Mesh")).is_false()
+
+
+func _vec3(src: String, head: String) -> Color:
+	var at := src.find(head)
+	var nums := src.substr(at + head.length(), 40).split(")")[0].split(",")
+	return Color(float(nums[0]), float(nums[1]), float(nums[2]))

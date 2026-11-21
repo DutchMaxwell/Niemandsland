@@ -82,6 +82,8 @@ def measure(look, cls, px_per_in):
                 means.append(float(luma[y:y + b, x:x + b][m].mean()))
     if len(means) >= 4:
         row["midvar"] = float(np.std(means) / max(np.mean(means), 1e-6))
+        row["dark"] = float(np.mean(np.array(means) < 18.0 / 255.0))   # lead rule 21.11.: no walkable street region under ~18 / 255 mean (share of 1 in blocks below it)
+        row["p10_255"] = float(np.percentile(means, 10) * 255.0)
     return row
 
 
@@ -94,8 +96,8 @@ def verdicts(row):
 
 
 def fmt(name, row):
-    keys = ["pristine", "missing", "sunken", "cracked", "repair", "mud", "wet", "puddle", "sat", "hue_sd", "luma", "midvar", "accent"]
-    vals = " ".join("%s %s" % (k, ("%.1f" % row[k]) if k == "hue_sd" else ("%.3f" % row[k])) for k in keys if k in row)
+    keys = ["pristine", "worn", "missing", "sunken", "cracked", "repair", "mud", "wet", "puddle", "sat", "hue_sd", "luma", "midvar", "dark", "p10_255", "accent"]
+    vals = " ".join("%s %s" % (k, ("%.1f" % row[k]) if k in ("hue_sd", "p10_255") else ("%.3f" % row[k])) for k in keys if k in row)
     return "%-28s street_px %7d | %s | %s" % (name, row.get("street_px", 0), vals, " ".join(verdicts(row)))
 
 

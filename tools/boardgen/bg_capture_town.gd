@@ -274,6 +274,9 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 				for l: Dictionary in BoardgenTownDressing.lanterns(layout):
 					if (l["at"] as Vector2).distance_to(Vector2(at3.x, at3.z) / IN) < 4.0:
 						clear = false
+				var lens := Vector2(at3.x, at3.z) / IN + Vector2(sin(deg_to_rad(walk["yaw"])), cos(deg_to_rad(walk["yaw"]))) * 0.16 / IN
+				if not _open(layout, lens):
+					clear = false   # the lens itself must stand on open ground (seed 25: it stood inside a house, the still was 3 / 4 black)
 				if clear:
 					cam_t = t
 					break

@@ -29,7 +29,7 @@ const vec3 GRIT_BROWN = vec3(0.208, 0.203, 0.198);
 const vec3 GRIT_OCHRE = vec3(0.236, 0.202, 0.160);
 const vec3 GRIT_MEAN = GRIT_COOL * 0.6 + GRIT_BROWN * 0.25 + GRIT_OCHRE * 0.15;
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
-const float GRIT_TONE = 0.93;
+const float GRIT_TONE = 0.88;
 
 // The street's base tint: the family's mean at the warm road's own luminance (the palette and GROUND_COBBLE keep deciding the value) with the map, the warm road without it.
 vec3 grit_street_tint(vec3 warm) {
@@ -87,6 +87,10 @@ int grit_fate(float h, float dmg, float wet, float lane) {
 	return u < pm ? 1 : (u < pm + ps ? 2 : (u < pm + ps + pc ? 3 : (u < pm + ps + pc + pr ? 4 : 0)));
 }
 
+// WATER (style bible 8, plan G5): a puddle is brown-grey water with the setts showing through, matt-ish (roughness 0.25, never the pool's mirror), flat, without emission - never the
+// hazard pool's teal (a test keeps it 25 deg of hue and 0.15 of saturation away).
+const vec3 GRIT_PUDDLE_TINT = vec3(0.07, 0.055, 0.035);
+
 // The street's grit at a point: `xz` inches off the board centre, `w` the noise-bent lookup point of the earth / street border, `sett` from cobble() (hash, stone mask, point in the
 // sett), `run` the ground map's run. Changes the albedo, relief and roughness; returns the debug colour of the fragment.
 vec3 grit_street(vec2 xz, vec2 w, vec4 sett, float run, inout vec3 alb, inout float rel, inout float rough) {
@@ -98,15 +102,18 @@ vec3 grit_street(vec2 xz, vec2 w, vec4 sett, float run, inout vec3 alb, inout fl
 	float kp = keep(xz.x, SETT_W);
 	float joint = mix(0.3, 1.0 - sett.y, kp);   // below ~3 px a joint is its share of the area
 	vec3 mudc = grit_mud_colour();
-	float foot = 0.55 * (1.0 - smoothstep(0.2, 1.0, g.r * GRIT_EDGE_CAP));   // dirt gathers at the wall foot and the street's edge too (style bible 15: grit is strongest in the 1 in there)
-	float mud = grit_mud(max(g.g, foot), xz);
+	float foot = 0.55 * (1.0 - smoothstep(0.3, 1.5, g.r * GRIT_EDGE_CAP));   // dirt gathers at the wall foot and the street's edge too (style bible 15: grit is strongest in the 1 in there)
+	float lane = smoothstep(0.55, 1.1, g.r * GRIT_EDGE_CAP);   // the walked middle of a street (style bible 15: the calmest ground)
+	float walked = lane * step(0.25, abs(run - 0.5));   // the wear lane proper: the middle of a straight street (a square keeps its calm middle for the fates, not a polish)
+	float mud = grit_mud(max(g.g, foot), xz) * (1.0 - 0.8 * walked);   // feet rub the dirt away
+	alb *= mix(1.0, 1.08, walked);   // the wear lane: a little paler and smoother
+	rough -= 0.1 * walked;
 	float fill = smoothstep(0.15, 0.5, mud);
 	alb = mix(alb, mudc, 0.9 * joint * fill);   // joints full of mud
 	rel = mix(rel, max(rel, 0.45), joint * fill);
 	float cover = min(GRIT_MUD_COVER, 0.75 * mud) * smoothstep(0.35, 0.65, vnoise(xz * 1.9 + 7.0));   // a broken film: the setts show through
 	alb = mix(alb, mudc * 1.15, cover);
 	rough = mix(rough, 0.55, 0.6 * mud);
-	float lane = smoothstep(0.55, 1.1, g.r * GRIT_EDGE_CAP);   // the walked middle of a street (style bible 15: the calmest ground)
 	int fate = grit_fate(sett.x, g.a, min(g.g, 0.7), lane);
 	float f1 = kp * float(fate == 1);   // every fate fades out below ~3 px (keep): nothing crawls at the play camera
 	alb = mix(alb, mudc * 1.25, f1 * sett.y);   // a missing sett: a hole of mud, paler than the joints round it
@@ -119,12 +126,29 @@ vec3 grit_street(vec2 xz, vec2 w, vec4 sett, float run, inout vec3 alb, inout fl
 	float f4 = kp * float(fate == 4) * sett.y;
 	alb = mix(alb, vec3(dot(alb, LUMA)) * vec3(1.6, 1.55, 1.42), 0.7 * f4);   // an odd pale stone, a repair
 	float ken = grit_kennel(g, run);
-	alb = mix(alb, mudc * 0.7, 0.7 * ken);   // the kennel: dark, wet, a channel
+	alb = mix(alb, mudc * 0.8, 0.6 * ken);   // the kennel: dark, wet, a channel
 	rel = mix(rel, 0.25, ken);
 	rough = mix(rough, 0.35, ken);
-	int c = ken > 0.5 ? 3 : (mud > 0.35 ? 2 : 0);
+	float b = g.b * 255.0;   // the cart ruts of an artery: a pair of 0.12 in grooves 1.4 in apart, mud and water in them
+	float rut = (1.0 - smoothstep(0.04, 0.08, abs(abs((b - 192.0) / 16.0) - 0.7))) * step(127.5, b) * step(b, 254.5) * step(0.25, abs(run - 0.5));
+	alb = mix(alb, mudc * 0.95, 0.5 * rut);
+	rel = mix(rel, 0.12, rut);
+	rough = mix(rough, 0.4, rut);
+	float pud = smoothstep(0.765, 0.79, g.g + (vnoise(xz * 3.1 + 11.0) - 0.5) * 0.03);   // a puddle: its edge broken a little
+	alb = mix(alb, alb * 0.45 + GRIT_PUDDLE_TINT, 0.75 * pud);
+	rough = mix(rough, 0.25, pud);
+	rel = mix(rel, 0.5, pud);   // flat water
+	int c = pud > 0.5 ? 4 : (ken > 0.5 || rut > 0.5 ? 3 : (mud > 0.35 ? 2 : (walked > 0.5 ? 1 : 0)));
 	c = fate > 0 && c != 4 ? 6 + fate : c;   // the instrument counts the fate where it is, even where the look fades it out
 	return grit_class_colour(c);
+}
+
+// A FLOOR for the open ground in unlit alleys (lead rule 21.11.: no walkable street region under ~18 / 255 at the street camera): a faint moon fill as emission in proportion to the
+// ground's own albedo - it lifts the black alleys most in relative terms and a lit street barely; GRIT_TONE was lowered with it so the lit street stays at or below the old road.
+const float GRIT_FILL = 1.0;
+
+vec3 grit_fill(vec3 alb) {
+	return grit_on > 0.5 ? pow(alb, vec3(2.2)) * GRIT_FILL : vec3(0.0);
 }
 
 // The earth beside a street (plan G3): damp and darker within 1 in of the setts.
