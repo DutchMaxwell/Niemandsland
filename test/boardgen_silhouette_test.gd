@@ -135,3 +135,38 @@ func test_the_town_dressing_builds_the_silhouette_on_the_board_material() -> voi
 	assert_int(mmi.multimesh.instance_count).is_equal(BoardgenTownSilhouette.wall_parts(layout).size() + BoardgenTownSilhouette.ruin_gables(layout).size() + BoardgenTownSilhouette.rafters(layout).size())
 	assert_object(mmi.material_override).is_same(mat)
 	assert_int(node.find_children("*", "CollisionShape3D", true, false).size()).is_equal(0)
+
+
+## Towers plan L1: a 2 x 2 block of tall scenery tower cells (lot kind "Tower", level 0, `tower_in` 12) is drawn as a stone body up to 12 in inside its own footprint, crowned with
+## merlons on its OUTER edges only (none on the seam between its cells, the highest top <= 13.5 in), and the greybox keeps one solid 12 in collider per cell. Red before L1: no part.
+func _with_tower(seed_: int) -> Dictionary:
+	var layout: Dictionary = ClassDB.instantiate("NmlCore").boardgen_layout_themed(seed_, "ruintown").duplicate(true)
+	layout["tower_in"] = 12.0
+	for i: int in [6 * 16, 6 * 16 + 1, 7 * 16, 7 * 16 + 1]:
+		layout["cells"][i]["lot_kind"] = "Tower"
+		layout["cells"][i]["level"] = 0
+	return layout
+
+
+func test_a_tall_tower_is_a_twelve_inch_body_in_its_footprint_with_merlons_on_its_outer_edges_and_a_twelve_inch_collider() -> void:
+	var layout := _with_tower(41)
+	var block := Rect2(_origin(layout) + Vector2(0, 6) * 3.0, Vector2(6.0, 6.0))
+	var tower := {96: true, 97: true, 112: true, 113: true}
+	var parts := BoardgenTownSilhouette.wall_parts(layout).filter(func(b: Dictionary) -> bool: return tower.has(b["cell"]))
+	assert_int(parts.size()).is_equal(16)
+	var top := 0.0
+	for b: Dictionary in parts:
+		top = maxf(top, b["hi"].y)
+		assert_bool(block.grow(EPS).encloses(Rect2(Vector2(b["lo"].x, b["lo"].z), Vector2(b["hi"].x - b["lo"].x, b["hi"].z - b["lo"].z)))).override_failure_message("a tower part leaves the footprint").is_true()
+	assert_float(top).is_equal_approx(12.0, EPS)
+	var crown := BoardgenTownDressing.merlons(layout).filter(func(m: Dictionary) -> bool: return block.has_point(Vector2(m["lo"].x, m["lo"].z) + Vector2(0.01, 0.01)))
+	assert_int(crown.size()).is_greater(4)
+	for m: Dictionary in crown:
+		assert_float(m["hi"].y).is_less_equal(13.5)
+		var outer: bool = m["lo"].x <= block.position.x + EPS or m["hi"].x >= block.end.x - EPS or m["lo"].z <= block.position.y + EPS or m["hi"].z >= block.end.y - EPS
+		assert_bool(outer).override_failure_message("a merlon on the seam inside the tower").is_true()
+	var colliders := BoardgenGreybox.plan(layout).filter(func(b: Dictionary) -> bool: return b["solid"] and tower.has(_cell_at(layout, Vector2(b["lo"].x, b["lo"].z) + Vector2(0.01, 0.01))))
+	assert_int(colliders.size()).is_equal(4)
+	for b: Dictionary in colliders:
+		assert_float(b["hi"].y).is_equal_approx(12.0, EPS)
+		assert_bool(b.get("hidden", false)).is_true()

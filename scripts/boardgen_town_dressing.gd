@@ -175,14 +175,16 @@ static func merlons(layout: Dictionary) -> Array[Dictionary]:
 	var origin := Vector2(nx, nz) * cell_in * -0.5
 	for cd: Dictionary in layout["cells"]:
 		var level: int = cd["level"]
-		if level < 2 or (level == 2 and cd["lot_kind"] != "Wall"):
+		var tall: bool = cd["lot_kind"] == "Tower"   # a tall scenery tower (towers plan L1): merlons on every open edge of its crown at `tower_in`
+		if not tall and (level < 2 or (level == 2 and cd["lot_kind"] != "Wall")):
 			continue
-		var top: float = layout["level_in"][level]
+		var top: float = float(layout.get("tower_in", 12.0)) if tall else float(layout["level_in"][level])
 		var half := 1 if cd["z"] >= nz / 2 else 0
 		for side in 4:
 			var d := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)][side] as Vector2i
 			var at := Vector2i(cd["x"], cd["z"]) + d
-			if at.x >= 0 and at.y >= 0 and at.x < nx and at.y < nz and int(layout["cells"][at.y * nx + at.x]["level"]) >= level:
+			var inside := at.x >= 0 and at.y >= 0 and at.x < nx and at.y < nz
+			if inside and (layout["cells"][at.y * nx + at.x]["lot_kind"] == "Tower" if tall else int(layout["cells"][at.y * nx + at.x]["level"]) >= level):
 				continue   # a neighbour as high: this edge is no open edge
 			if level == 2 and side != (3 if int(cd["x"]) * 2 < nx else 1):
 				continue   # a wall ridge has its parapet on the FIELD side only: the town side of the walk is open (a thin wall with a walk, not a crenellated block)

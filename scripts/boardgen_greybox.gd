@@ -108,9 +108,10 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 				run += 1
 			var level: int = cells[z * nx + x]["level"]
 			var body := kind == "roofed"   # an intact house: level-0 solid ground, as high as the core's solid (2.5 in); its ridge is drawn below
+			var tall: bool = cells[z * nx + x]["lot_kind"] == "Tower" and level == 0
 			var box := {"lo": Vector3(origin.x + x * cell_in, 0.0, origin.y + z * cell_in),
-				"hi": Vector3(origin.x + (x + run) * cell_in, float(level_in[level]) if level > 0 else (SOLID_IN if body else SKIN_IN), origin.y + (z + 1) * cell_in),
-				"kind": kind, "solid": level > 0 or body}
+				"hi": Vector3(origin.x + (x + run) * cell_in, float(level_in[level]) if level > 0 else (float(layout.get("tower_in", 12.0)) if tall else (SOLID_IN if body else SKIN_IN)), origin.y + (z + 1) * cell_in),
+				"kind": kind, "solid": level > 0 or body or tall}
 			if own.has(z * nx + x):
 				box["hidden"] = true
 			out.append(box)
@@ -199,6 +200,8 @@ static func _box(lo: Vector2, hi: Vector2, y0: float, y1: float, kind: String, s
 static func _cell_kind(cell: Dictionary, town := false) -> String:
 	if town and cell["lot_kind"] == "Roofed":
 		return "roofed"   # an intact house
+	if town and cell["lot_kind"] == "Tower":
+		return "tier3"   # a tall scenery tower (towers plan L1): drawn by BoardgenTownSilhouette, its box keeps a `tower_in` collider
 	if town and cell["lot_kind"] == "Wall":
 		return "wall" if cell["level"] > 0 else "rubble"   # the city wall (ridge, tower, buttress) or the rubble of its breach
 	if cell["level"] > 0:

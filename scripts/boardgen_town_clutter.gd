@@ -319,7 +319,8 @@ static func _ivy_clusters(layout: Dictionary, out: Dictionary, reserved: Diction
 	for cd: Dictionary in cells:
 		var i: int = cd["z"] * nx + cd["x"]
 		var house: bool = cd["lot_kind"] == "Roofed"   # (an intact house stands solid at level 0)
-		if (cd["level"] < 1 and not house) or clear.has(i):
+		var tall: bool = cd["lot_kind"] == "Tower"   # a tall scenery tower (towers plan L1): ivy masses hang from `tower_in`
+		if (cd["level"] < 1 and not house and not tall) or clear.has(i):
 			continue   # (townC4: C's houses carry ivy too - small climbing clumps only, never a mass over the frames)
 		var half := 1 if cd["z"] >= nz / 2 else 0
 		for side in 4:   # (plan TARGET C, train 2, V2: all four faces - the shade faces east / west 0.45 of them, the lit faces 0.15; was east / west only, 0.3)
@@ -329,9 +330,9 @@ static func _ivy_clusters(layout: Dictionary, out: Dictionary, reserved: Diction
 				continue
 			var j: int = n.y * nx + n.x
 			var nb: Dictionary = cells[j]
-			if nb["level"] != 0 or clear.has(j) or ["Hazard", "Roofed"].has(nb["lot_kind"]) or (not house and BoardgenTownDressing._hash(i, half, 84 + side) <= strand_share(cd)):
+			if nb["level"] != 0 or clear.has(j) or ["Hazard", "Roofed", "Tower"].has(nb["lot_kind"]) or (not house and BoardgenTownDressing._hash(i, half, 84 + side) <= strand_share(cd)):
 				continue   # (the last: a strand of _ivy is there)
-			var tower := int(cd["level"]) >= 3   # (train 3: C hangs ivy masses down the tower faces)
+			var tower := int(cd["level"]) >= 3 or tall   # (train 3: C hangs ivy masses down the tower faces)
 			var share := (0.45 if d.x != 0 else 0.15) * (1.7 if tower else (0.6 if house else 1.0))
 			var h := BoardgenTownDressing._hash(i, half, 220 + side)
 			if h > share:
@@ -339,11 +340,11 @@ static func _ivy_clusters(layout: Dictionary, out: Dictionary, reserved: Diction
 			var lo := origin + Vector2(cd["x"], cd["z"]) * cell_in
 			var yaw := atan2(float(d.x), float(d.y))
 			var face := Vector2(lo.x if d.x < 0 else lo.x + cell_in, 0.0) if d.x != 0 else Vector2(0.0, lo.y if d.y < 0 else lo.y + cell_in)
-			var top := float(layout["level_in"][int(cd["level"])])
+			var top := float(layout.get("tower_in", 12.0)) if tall else float(layout["level_in"][int(cd["level"])])
 			var raised := [false, false]
 			for k in [-1, 1]:   # its neighbours along the face are raised as high (the large mass is 3.6 in wide)
 				var m := Vector2i(cd["x"], cd["z"] + k) if d.x != 0 else Vector2i(cd["x"] + k, cd["z"])
-				raised[(k + 1) / 2] = m.x >= 0 and m.y >= 0 and m.x < nx and m.y < nz and int(cells[m.y * nx + m.x]["level"]) >= int(cd["level"])
+				raised[(k + 1) / 2] = m.x >= 0 and m.y >= 0 and m.x < nx and m.y < nz and (cells[m.y * nx + m.x]["lot_kind"] == "Tower" if tall else int(cells[m.y * nx + m.x]["level"]) >= int(cd["level"]))
 			var wide: bool = raised[0] and raised[1]
 			var large: bool = not house and h < share * 0.6 and (wide or (tower and (raised[0] or raised[1])))   # a 2 x 2 tower's face: the mass slides toward its raised neighbour and stays on the face
 			var along := (1.5 if wide else (2.0 if raised[1] else 1.0)) if large else 0.8 + 1.4 * BoardgenTownDressing._hash(i, half, 224 + side)
@@ -487,7 +488,7 @@ static func _ivy(layout: Dictionary, out: Dictionary) -> void:
 				continue
 			var nb: Dictionary = cells[n.y * nx + n.x]
 			var j: int = n.y * nx + n.x
-			if nb["level"] != 0 or nb["lot_kind"] == "Roofed" or clear.has(j) or BoardgenTownDressing._hash(i, half, 84 + side) > strand_share(cd):   # (townC4: street faces too - C's ivy climbs the towers at the square)
+			if nb["level"] != 0 or ["Roofed", "Tower"].has(nb["lot_kind"]) or clear.has(j) or BoardgenTownDressing._hash(i, half, 84 + side) > strand_share(cd):   # (townC4: street faces too - C's ivy climbs the towers at the square)
 				continue
 			var lo := origin + Vector2(cd["x"], cd["z"]) * cell_in
 			var along := 0.8 + 1.4 * BoardgenTownDressing._hash(i, half, 90 + side)

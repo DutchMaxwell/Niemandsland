@@ -32,6 +32,10 @@ static func _level(layout: Dictionary, x: int, z: int) -> int:
 	return int(layout["cells"][z * int(layout["nx"]) + x]["level"])
 
 
+static func _is_tower(layout: Dictionary, x: int, z: int) -> bool:
+	return _level(layout, x, z) >= 0 and layout["cells"][z * int(layout["nx"]) + x]["lot_kind"] == "Tower"
+
+
 ## {cell index: [side, ...]}: the sides (index into DIRS) of every cell where a ladder arrives at its top.
 static func _ladder_tops(layout: Dictionary) -> Dictionary:
 	var out := {}
@@ -52,11 +56,12 @@ static func _hall_cells(layout: Dictionary) -> Dictionary:
 	return out
 
 
-## The cells wall_parts draws: every raised city-wall cell (the 3 in low wall of the bands and the buttress too) and every 9 in tower cell. The greybox draws none of these itself (it keeps their colliders).
+## The cells wall_parts draws: every raised city-wall cell (the 3 in low wall of the bands and the buttress too), every 9 in tower cell and every tall scenery tower cell (lot kind "Tower", towers plan L1).
+## The greybox draws none of these itself (it keeps their colliders).
 static func drawn_cells(layout: Dictionary) -> Dictionary:
 	var out := {}
 	for cd: Dictionary in layout["cells"]:
-		if int(cd["level"]) >= 3 or (int(cd["level"]) >= 1 and cd["lot_kind"] == "Wall"):
+		if int(cd["level"]) >= 3 or (int(cd["level"]) >= 1 and cd["lot_kind"] == "Wall") or cd["lot_kind"] == "Tower":
 			out[int(cd["z"]) * int(layout["nx"]) + int(cd["x"])] = true
 	return out
 
@@ -72,13 +77,15 @@ static func wall_parts(layout: Dictionary) -> Array[Dictionary]:
 	for i: int in drawn_cells(layout):
 		var cd: Dictionary = layout["cells"][i]
 		var level: int = cd["level"]
-		var top: float = layout["level_in"][level]
+		var tall: bool = cd["lot_kind"] == "Tower"   # a tall scenery tower: level 0 in the layout, `tower_in` high to the core; a face is open where the neighbour is no tower cell
+		var top: float = float(layout.get("tower_in", 12.0)) if tall else float(layout["level_in"][level])
 		var kind := "wall" if cd["lot_kind"] == "Wall" else "tier3"
 		var lo := origin + Vector2(cd["x"], cd["z"]) * cell_in
 		var inset := [0.0, 0.0, 0.0, 0.0]
 		for side in 4:
 			var d := DIRS[side]
-			if _level(layout, cd["x"] + d.x, cd["z"] + d.y) < level and not (ladders.get(i, []) as Array).has(side):
+			var open := not _is_tower(layout, cd["x"] + d.x, cd["z"] + d.y) if tall else _level(layout, cd["x"] + d.x, cd["z"] + d.y) < level
+			if open and not (ladders.get(i, []) as Array).has(side):
 				inset[side] = REACH_IN
 		var cut := func(f: float, y0: float, y1: float) -> Dictionary:
 			return {"lo": Vector3(lo.x + inset[3] * f, y0, lo.y + inset[0] * f), "hi": Vector3(lo.x + cell_in - inset[1] * f, y1, lo.y + cell_in - inset[2] * f), "kind": kind, "cell": i}
