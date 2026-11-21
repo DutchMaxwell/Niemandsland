@@ -8,6 +8,9 @@ var _server_pid := -1
 var _env := {}
 var _core_env := -1
 var _planner_statics: Array = []
+## Wall-clock bound of every wait in this suite. Generous on purpose: a wait only ever runs to the end when
+## something is really broken, and a loaded CI runner (three gdUnit processes per box) can stall far past 200 ms.
+const WAIT_MS := 10000
 
 
 func before_test() -> void:
@@ -18,7 +21,11 @@ func before_test() -> void:
 	OS.set_environment("NML_CORE", "1")
 	OS.set_environment("NML_BRAIN_URL", "")
 	OS.set_environment("NML_BRAIN_W", "1")
-	OS.set_environment("NML_BRAIN_TIMEOUT_MS", "200")
+	# The core's handshake with the fake brain (connect + one Python request) must finish inside this budget.
+	# When it does not, set_game_header silently keeps the SHIPPED brain (a refused or silent developer URL
+	# is not an error there) and the test saw `onnx` instead of `constant-test`: 200 ms was a flake on a
+	# loaded runner. A dead server is refused at once, so the long budget costs the decline step nothing.
+	OS.set_environment("NML_BRAIN_TIMEOUT_MS", "5000")
 	BattleSim._core_env = -1
 	Boot.arm_harness_mode()
 	_roots = Boot.root_children(get_tree())
@@ -102,17 +109,16 @@ func _pick(sc: SoloController) -> GameUnit:
 
 
 func test_fake_brain_is_in_decisions_and_killed_server_declines() -> void:
-	var port_file := "user://brain_port_%d.txt" % Time.get_ticks_usec()
+	var port_file := "user://brain_port_%d_%d.txt" % [OS.get_process_id(), Time.get_ticks_usec()]
 	_server_pid = OS.create_process("python3", [ProjectSettings.globalize_path(
 		"res://test/e2e/brain_fixture.py"), ProjectSettings.globalize_path(port_file)])
 	assert_int(_server_pid).is_greater(0)
-	for _i in range(300):
-		if FileAccess.file_exists(port_file):
-			break
-		await get_tree().process_frame
-	assert_bool(FileAccess.file_exists(port_file)).is_true()
-	var port := FileAccess.get_file_as_string(port_file).strip_edges()
+	assert_bool(await _wait_until(func() -> bool: return _read_port(port_file).is_valid_int())).is_true()
+	var port := _read_port(port_file)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(port_file))
+	# Ready, not just started: one real request first, so the fake has served once (Python's cold first
+	# request is paid here, not inside the core's handshake).
+	assert_bool(await _server_answers(port)).is_true()
 	OS.set_environment("NML_BRAIN_URL", "http://127.0.0.1:" + port)
 	var sc := _controller()
 	_main.solo_controller = sc
@@ -127,9 +133,62 @@ func test_fake_brain_is_in_decisions_and_killed_server_declines() -> void:
 	assert_str(JSON.stringify(sc.decision_log)).contains("constant-test")
 	OS.kill(_server_pid)
 	_server_pid = -1
+	# Dead, not just signalled: the next pick must meet a closed port, not a dying server.
+	assert_bool(await _wait_until(func() -> bool: return _port_is_closed(int(port)))).is_true()
 	assert_object(_pick(sc)).is_not_null()
 	assert_str(str(sc._core_declines)).contains("LeafValue")
 	await Boot.settle(get_tree())
+
+
+## Polls `cond` once per timer tick until it is true or `limit_ms` of wall clock ran out (frames are
+## no clock: a headless loop spins them as fast as it can).
+func _wait_until(cond: Callable, limit_ms: int = WAIT_MS) -> bool:
+	var deadline := Time.get_ticks_msec() + limit_ms
+	while Time.get_ticks_msec() < deadline:
+		if cond.call():
+			return true
+		await get_tree().create_timer(0.02).timeout
+	return bool(cond.call())
+
+
+## The fake's port once the file exists AND holds a whole number ("" before): a half-written file is no port.
+func _read_port(port_file: String) -> String:
+	if not FileAccess.file_exists(port_file):
+		return ""
+	return FileAccess.get_file_as_string(port_file).strip_edges()
+
+
+## True once nothing listens on the loopback `port` any more (the connect is refused or reset).
+## OS.is_process_running is no probe for this: once the child is gone it logs an engine ERROR.
+func _port_is_closed(port: int) -> bool:
+	var tcp := StreamPeerTCP.new()
+	if tcp.connect_to_host("127.0.0.1", port) != OK:
+		return true
+	var deadline := Time.get_ticks_msec() + 500
+	while Time.get_ticks_msec() < deadline:
+		tcp.poll()
+		var status := tcp.get_status()
+		if status == StreamPeerTCP.STATUS_ERROR or status == StreamPeerTCP.STATUS_NONE:
+			return true
+		if status == StreamPeerTCP.STATUS_CONNECTED:
+			tcp.disconnect_from_host()
+			return false
+		OS.delay_msec(2)
+	tcp.disconnect_from_host()
+	return false
+
+
+## One POST shaped like the core's handshake (empty leaf batch); true on a 200 answer.
+func _server_answers(port: String) -> bool:
+	var http: HTTPRequest = auto_free(HTTPRequest.new())
+	http.timeout = WAIT_MS / 1000.0
+	add_child(http)
+	var body := JSON.stringify({"schema": 1, "leaves": []})
+	if http.request("http://127.0.0.1:" + port, ["Content-Type: application/json"],
+			HTTPClient.METHOD_POST, body) != OK:
+		return false
+	var done: Array = await http.request_completed
+	return int(done[0]) == HTTPRequest.RESULT_SUCCESS and int(done[1]) == 200
 
 
 ## Ship path (22.09.): without a developer URL the grade follows the SHIPPED brain —

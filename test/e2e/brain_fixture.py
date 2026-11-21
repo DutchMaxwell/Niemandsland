@@ -21,5 +21,10 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     server = HTTPServer(("127.0.0.1", 0), Handler)
-    Path(sys.argv[1]).write_text(str(server.server_port))
+    port_file = Path(sys.argv[1])
+    # Publish the port atomically: a reader that sees the file sees the whole number, never the empty
+    # file between create and write.
+    staging = port_file.with_name(port_file.name + ".tmp")
+    staging.write_text(str(server.server_port))
+    staging.replace(port_file)
     server.serve_forever()
