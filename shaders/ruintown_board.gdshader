@@ -205,11 +205,11 @@ vec3 cobble(vec2 xz, float seed, vec3 tint, float run, vec2 fan, out float rel, 
 		x = q.x / SETT_W + 0.5 * mod(row, 2.0) + h21(vec2(row, seed)) * 0.3;
 		f = vec2(fract(x), fract(q.y / SETT_H)) - 0.5;
 	}
-	float sett = smoothstep(0.17, 0.10, length(max(abs(f) - vec2(0.3), 0.0)));
+	float sett = smoothstep(0.17, 0.09, length(max(abs(f) - vec2(0.26), 0.0)));   // (train 2: wider joints)
 	float sh = h21(vec2(floor(x), row) + seed);
-	vec3 laid = mix(vec3(0.10, 0.09, 0.09), grit_sett_tint(tint, sh) * mix(0.9, 1.1, vnoise(xz * 3.0)), sett);
+	vec3 laid = mix(vec3(0.05, 0.05, 0.045), grit_sett_tint(tint, sh) * mix(0.9, 1.1, vnoise(xz * 3.0)), sett);   // (train 2: dark dirty joints)
 	sett_out = vec4(sh, sett, f);
-	rel = mix(0.5, sett * (0.6 + 0.4 * clamp(1.0 - 1.6 * length(f), 0.0, 1.0)), keep(xz.x, SETT_W));   // a domed sett in a recessed joint
+	rel = mix(0.5, sett * (0.3 + 0.7 * clamp(1.0 - 3.2 * dot(f, f), 0.0, 1.0)), keep(xz.x, SETT_W));   // a rounded, worn sett in a recessed joint (train 2: pillowed, not a flat tile)
 	return mix(tint * 0.78, laid, keep(xz.x, SETT_W));   // setts of 0.14 in are ~3 px at the play camera: below that they average out instead of crawling
 }
 
@@ -367,11 +367,11 @@ void fragment() {
 		if (k == 1) {   // streets: cobbles
 			float crown;
 			vec4 sett;
-			alb = mix(cobble(xz, seed, grit_street_tint(tint * vec3(1.15, 0.98, 0.78) * GROUND_COBBLE), run, fan, crown, sett), vec3(0.06, 0.055, 0.05), 0.55 * gutter * (1.0 - grit_on));   // (the grit map draws the mud and the kennel instead)   // 0.27 (was 1.15): the streets sit well below the models' own values (readability gate, lead 21.11.)
+			alb = mix(cobble(xz, seed, grit_street_tint(tint * vec3(0.96, 1.0, 1.08) * GROUND_COBBLE), run, fan, crown, sett), vec3(0.06, 0.055, 0.05), 0.55 * gutter * (1.0 - grit_on));   // (the grit map draws the mud and the kennel instead)   // 0.27 (was 1.15): the streets sit well below the models' own values (readability gate, lead 21.11.)
 			rel = crown;
-			depth_in = 0.045;
-			rough = mix(0.55, 0.8, smoothstep(0.3, 0.7, crown));   // damp joints, dry crowns
-			ao = mix(0.55, 1.0, smoothstep(0.1, 0.5, crown));
+			depth_in = 0.07;   // (train 2: was 0.045)
+			rough = mix(0.85, 0.55, smoothstep(0.3, 0.7, crown));   // (train 2) worn crowns catch the light, dirty joints stay matt
+			ao = mix(0.4, 1.0, smoothstep(0.1, 0.5, crown));
 			dbg = grit_debug == 2 ? grit_map_colour(gw) : grit_street(xz, gw, sett, run, alb, rel, rough);
 			emis += grit_fill(alb);
 		} else if (k == 0) {   // earth: packed, with pebbles, weeds and broken stones
