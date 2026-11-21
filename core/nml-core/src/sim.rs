@@ -6712,6 +6712,15 @@ fn strike_phase(
     for (side, line) in who_can_strike {
         say_melee(tray, side, line);
     }
+    // S1-02 rules-must-log (the table's `_solo_melee_strike_phase`, once per member group before its first weapon): a Shaken unit strikes back counting as
+    // Fatigued. The Counter-only pre-phase says nothing; the main phase names each Shaken member (the host's Shaken covers its joined heroes).
+    if rule_on(seams.rules_epoch, EPOCH_73_V36) && set != StrikeSet::CounterOnly {
+        for (mi, _, _) in &parts {
+            if next.shaken[si] || next.shaken[*mi] {
+                say_melee(tray, next.player[*mi], format!("Shaken: {} strikes back counting as fatigued (6+)", statics[next.roster.profile[*mi]].name));
+            }
+        }
+    }
     let members: Vec<crate::dice::Shooter<'_>> = parts
         .iter()
         .map(|(mi, sc, att)| {
