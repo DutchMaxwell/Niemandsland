@@ -57,7 +57,13 @@ fn main() {
     // (`rules_epoch`), and an epoch-62 corpus declines every ADVANCE+shoot
     // rollout with `Unsupported::MovedShootLos`. `seams_of`/`tuning_of` are
     // the canonical knobs→seams/tuning mappings `plan_with_rollout` uses.
-    let seams = seams_of(&c.knobs);
+    let mut seams = seams_of(&c.knobs);
+    // PLAN_COVER_36 step 10: `NML_BENCH_EPOCH=<n>` forces the resolve epoch and `NML_BENCH_SIGHTING=1` the per-model sighting
+    // seam (the fixtures predate it), so a 94 vs 95 pair isolates what cover from sight blockers adds to a rollout.
+    if let Some(e) = std::env::var("NML_BENCH_EPOCH").ok().and_then(|v| v.parse().ok()) {
+        seams.rules_epoch = e;
+    }
+    seams.sighting |= std::env::var("NML_BENCH_SIGHTING").is_ok_and(|v| v == "1");
     let mut pol = Policy::new(&statics, &c.terrain, seams);
     pol.tuning = tuning_of(&c.knobs);
     let roll = Rollout::new(pol, c.knobs);
