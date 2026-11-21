@@ -386,9 +386,10 @@ void fragment() {
 			alb = mix(alb, vec3(0.12, 0.15, 0.07) * mix(0.7, 1.2, h21(ci + 9.0)), 0.75 * tuft);   // a dull green-brown tuft, never a yellow coin
 			alb = mix(alb, vec3(0.13, 0.12, 0.11) * mix(0.6, 1.3, h21(ci + 4.0)), pebble);   // a dark stone
 			float path = smoothstep(0.03, 0.0, abs(vnoise(xz * 0.21 + seed) - 0.5)) * step(0.5, vnoise(xz * 0.07 + 5.0)) * (1.0 - grit_on);   // (gone with the grit map: it led nowhere)   // a worn path: pale, meandering (a noise stand-in until the doors of R12c exist)
-			alb = mix(alb, tint * vec3(1.4, 1.34, 1.2), 0.75 * path);
+			alb = mix(alb, tint * vec3(1.3, 1.3, 1.28), 0.75 * path);   // (was 1.4 1.34 1.2: an orange path; plan TARGET C, E1)
 			if (t_on.w > 0.5) {
-				tex_ratio = ratio_of(t_earth, xz / t_tile.w, MEAN_EARTH);   // real rock and soil under the pebbles, the tufts and the paths
+				vec3 r = ratio_of(t_earth, xz / t_tile.w, MEAN_EARTH);   // real rock and soil under the pebbles, the tufts and the paths
+				tex_ratio = mix(vec3(dot(r, vec3(0.333))), r, 0.5);   // halfway to its own grey: the soil keeps its detail and loses its orange (plan TARGET C, E1)
 			}
 			rel = clamp(0.2 + 0.6 * fbm(xz * 3.0 + seed) - 0.15 * path + 0.35 * pebble, 0.0, 1.0);   // packed earth: lumps, and the worn paths lie lower
 			depth_in = 0.05;
