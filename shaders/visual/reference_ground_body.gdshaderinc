@@ -16,8 +16,8 @@ float relief(vec2 p) {
 	if (urban_mode) { amp = 0.15; }
 	return ((surface_noise(p*2.6)-0.5)*0.008+(surface_noise(p*7.5)-0.5)*0.003)*amp;
 }
-// A generated board covers the ground inside this rect (world xz: min x, min z, max x, max z; all zero = none): the ground stays flat there,
-// or its mounds and 7 mm wall ridges poke through the board's 1 mm skin (BoardgenGreybox.flatten_relief).
+// The ground stays flat inside this rect (world xz: min x, min z, max x, max z; all zero = none): whatever covers the table with a thin skin (a generated board, 1 mm)
+// would otherwise show the mounds and 7 mm wall ridges through it. Set by Table.sync_flat_rect().
 uniform vec4 flat_rect = vec4(0.0);
 // The drift mound is vertex-only: the fragment needs relief four times for the normal,
 // and the drift loop there cost ~9 ms. The mound still reads from its silhouette and

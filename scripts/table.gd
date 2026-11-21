@@ -319,6 +319,25 @@ static func plane_uv_params(size_feet: Vector2) -> Dictionary:
 	}
 
 
+## A rect of table-local metres whose ground stays flat (empty = none): the reference ground lifts mounds and 7 mm ridges along terrain walls, which would poke through
+## whatever covers the table with a thin skin. Whoever owns that footprint (a generated board) sets it; the biome presenter calls sync_flat_rect() after it builds a ground.
+var flat_rect := Rect2()
+
+
+func set_flat_rect(rect: Rect2) -> void:
+	flat_rect = rect
+	sync_flat_rect()
+
+
+## Writes flat_rect (world metres: min x, min z, max x, max z; zero = none) to the shader uniform of the table mesh's ground and of the shared base top.
+func sync_flat_rect() -> void:
+	var at := Vector2(global_position.x, global_position.z) if is_inside_tree() else Vector2.ZERO
+	var flat := Vector4(flat_rect.position.x + at.x, flat_rect.position.y + at.y, flat_rect.end.x + at.x, flat_rect.end.y + at.y) if flat_rect.has_area() else Vector4.ZERO
+	for mat in [mesh_instance.material_override if mesh_instance != null else null, get_base_top_material()]:
+		if mat is ShaderMaterial:
+			mat.set_shader_parameter("flat_rect", flat)
+
+
 ## The shared terrain-projected material for model base tops. Created on first use; kept current by
 ## _update_base_top_material() on every ground rebuild. BaseDecor bases reference this one instance.
 func get_base_top_material() -> ShaderMaterial:
