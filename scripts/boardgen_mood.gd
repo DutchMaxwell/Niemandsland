@@ -59,10 +59,11 @@ static func environment_values() -> Dictionary:
 		"tonemap_agx_contrast": 1.1}
 
 
-## The RenderState "board" layer of the ruin town: the grade and the town sky.
+## The RenderState "board" layer of the ruin town: the grade and the town sky. The table's reference layer reflects the sky; over a town the reflections are off, so the
+## sky stays a backdrop (measured 21.11.: reflected, it cooled the street setts 43.6 -> 36.2 % warm and raised the earth's saturation 0.48 -> 0.52 at seed 41).
 static func town_values() -> Dictionary:
 	return {"tonemap_agx_contrast": TOWN_AGX_CONTRAST, "adjustment_enabled": true, "adjustment_contrast": TOWN_CONTRAST, "adjustment_saturation": TOWN_SATURATION,
-		"sky": town_sky()}
+		"sky": town_sky(), "reflected_light_source": Environment.REFLECTION_SOURCE_DISABLED}
 
 
 ## The town's sky (one shared instance): zenith, horizon band and the ground below by the view's elevation (shaders/ruintown_sky.gdshader).
