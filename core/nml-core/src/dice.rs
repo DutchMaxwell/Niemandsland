@@ -2281,6 +2281,8 @@ pub(crate) fn resolve_volley_with_pick_label(
             out.log.push(format!(
                 "Indirect: {} — {}'s cover counts (only sight-blocker cover is ignored)",
                 sh.owner, def_owner));
+            say_rule(tray, "cover_kept", def.side, || format!(
+                "Indirect: {} — {def_owner}'s cover counts (only sight-blocker cover is ignored)", sh.owner));
         }
         if def.screened && lifts_screen && !skips_cover && !screen_lift_logged.contains(&p.name) {
             screen_lift_logged.push(p.name.clone());
@@ -2290,6 +2292,8 @@ pub(crate) fn resolve_volley_with_pick_label(
         if !unit_of_one && !cover_logged && uses_cover {
             cover_logged = true;
             out.log.push(format!("{def_owner} is in cover: +1 Defense (saves on {}+)", save_def.clamp(BEST_HIT_TARGET, 6)));
+            // The door writes the tray's lines, not `out.log` (the recorded log): without this the human and AI doors said no cover line.
+            say_rule(tray, "cover", def.side, || format!("{def_owner} is in cover: +1 Defense (saves on {}+)", save_def.clamp(BEST_HIT_TARGET, 6)));
         }
         // Block B7 — Piercing Growth: main.gd:4287's marker-driven AP delta,
         // shooting and melee both (`_solo_attack_groups` adds it to `prof
