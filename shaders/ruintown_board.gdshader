@@ -377,6 +377,16 @@ void fragment() {
 			rough = mix(0.85, 0.55, smoothstep(0.3, 0.7, crown));   // (train 2) worn crowns catch the light, dirty joints stay matt
 			ao = mix(0.4, 1.0, smoothstep(0.1, 0.5, crown));
 			dbg = grit_debug == 2 ? grit_map_colour(gw) : grit_street(xz, gw, sett, run, alb, rel, rough);
+			float ne = 0.0;   // (train 2, C3) the setts thin out into the earth: within 0.8 in of an earth border some are gone (earth in the hole), weeds grow in the joints
+			for (int d = 0; d < 8; d++) {
+				vec2 o = vec2(cos(float(d) * 0.785), sin(float(d) * 0.785));
+				ne = max(ne, max(float(int(ground_at(gw + o * 0.4).r * 255.0 + 0.5) == 0), 0.6 * float(int(ground_at(gw + o * 0.8).r * 255.0 + 0.5) == 0)));
+			}
+			ne *= mix(0.4, 1.2, vnoise(xz * 1.4 + 41.0));
+			float gone = step(fract(sett.x * 31.7), 0.6 * ne) * keep(xz.x, SETT_W);
+			alb = mix(alb, palette[0].rgb * GROUND_EARTH * 0.75, gone);
+			rel = mix(rel, 0.15, gone);
+			alb = mix(alb, vec3(0.07, 0.09, 0.045), 0.7 * ne * (1.0 - sett.y) * (1.0 - gone));
 			emis += grit_fill(alb);
 		} else if (k == 0) {   // earth: packed, with pebbles, weeds and broken stones
 			alb = tint * GROUND_EARTH * mix(0.78, 1.15, fbm(xz * 1.6 + seed));   // 0.32 (was 1.0): the packed earth of the deployment bands sits below the models too (readability gate)
