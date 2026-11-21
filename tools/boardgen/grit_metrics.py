@@ -104,6 +104,25 @@ def repetition(look, px_per_in, period_in, frac=(0.2, 0.8, 0.3, 0.7)):
     return best
 
 
+def repetition_v(look, px_per_in, lo_in=0.3, hi_in=1.4, frac=(0.15, 0.85, 0.2, 0.62)):
+    """The VERTICAL banding of a wall (plan W0 round 2): the column-wise autocorrelation of the crop (each column high-passed over 1.4 in), its peak over the lags 0.3-1.4 in. A banded
+    set (a course of big blocks, then rubble, every ~0.5 in) reads high at its band period; random rubble low."""
+    g = np.asarray(Image.open(look).convert("L"), dtype=np.float32) / 255.0
+    h, w = g.shape
+    c = g[int(h * frac[2]):int(h * frac[3]), int(w * frac[0]):int(w * frac[1])].T   # columns as rows
+    k = max(int(round(hi_in * px_per_in)), 1)
+    ker = np.ones(k, np.float32) / k
+    c = c - np.apply_along_axis(lambda r: np.convolve(r, ker, mode="same"), 1, c)
+    c = c[:, k // 2:-(k // 2)] if c.shape[1] > 2 * k else c
+    var = float((c * c).mean())
+    best = -1.0
+    lo = max(int(lo_in * px_per_in), 1)
+    for lag in range(lo, min(int(hi_in * px_per_in), c.shape[1] - 8)):
+        r = float((c[:, :-lag] * c[:, lag:]).mean()) / max(var, 1e-9)
+        best = max(best, r)
+    return best
+
+
 def verdicts(row):
     out = []
     for key, (lo, hi) in TARGETS.items():
@@ -128,7 +147,8 @@ def run(stills, masks, out):
     for still in man["stills"]:
         if "_macro_wall" in still:   # plan W0: the wall's repetition at the coursed-stone set's period (manifest tile_in 1.3 in)
             ppi = float(info.get(still, {}).get("px_per_in", 8.0))
-            lines.append("%-28s repeat@1.3in %.3f  (px per in %.1f)" % (still, repetition(os.path.join(stills, still), ppi, 1.3, (0.15, 0.85, 0.25, 0.58)), ppi))
+            lines.append("%-28s repeat@1.3in %.3f  vertical band %.3f  (px per in %.1f; targets < 0.15)" % (still, repetition(os.path.join(stills, still), ppi, 1.3, (0.15, 0.85, 0.25, 0.58)),
+                         repetition_v(os.path.join(stills, still), ppi), ppi))
             continue
         png = os.path.join(masks, os.path.splitext(still)[0] + "_grit.png")
         if not os.path.exists(png):
@@ -185,7 +205,14 @@ def self_test():
     r_tiled = repetition(os.path.join(d, "wall.png"), 40 / 1.3, 1.3, (0.0, 1.0, 0.0, 1.0))
     r_broken = repetition(os.path.join(d, "broken.png"), 40 / 1.3, 1.3, (0.0, 1.0, 0.0, 1.0))
     print("planted repetition: tiled %.3f, phase per tile %.3f" % (r_tiled, r_broken))
-    ok = ok and r_tiled > 0.9 and r_broken < 0.5
+    bands = np.clip((np.arange(480)[:, None] // 10 % 2) * 120 + rng.random((480, 400)) * 135, 0, 255).astype(np.uint8)   # a course of one kind every 20 px (0.5 in at 40 px / in) under noise
+    Image.fromarray(bands).save(os.path.join(d, "bands.png"))
+    rubble = (rng.random((480, 400)) * 255).astype(np.uint8)
+    Image.fromarray(rubble).save(os.path.join(d, "rubble.png"))
+    v_bands = repetition_v(os.path.join(d, "bands.png"), 40.0, 0.3, 1.4, (0.0, 1.0, 0.0, 1.0))
+    v_rubble = repetition_v(os.path.join(d, "rubble.png"), 40.0, 0.3, 1.4, (0.0, 1.0, 0.0, 1.0))
+    print("planted vertical band: banded %.3f, rubble %.3f" % (v_bands, v_rubble))
+    ok = ok and r_tiled > 0.9 and r_broken < 0.5 and v_bands > 0.5 and v_rubble < 0.15
     print("SELF_TEST", "OK" if ok else "BROKEN")
     return 0 if ok else 1
 
