@@ -125,10 +125,10 @@ pub fn budget(permille: (usize, usize)) -> (usize, usize) {
 impl Layout {
     pub fn cell(&self, x: usize, z: usize) -> &Cell { &self.cells[z * self.nx + x] }
     pub fn to_json(&self) -> String { serde_json::to_string(self).expect("layout JSON") }
-    /// One char per cell: `3`/`2`/`1` raised, `~` hazard lot, `"` rough plot, `.` street, `,` other ground.
+    /// One char per cell: `T` tall tower, `3`/`2`/`1` raised, `~` hazard lot, `"` rough plot, `.` street, `,` other ground.
     pub fn to_ascii(&self) -> String {
         self.cells.chunks(self.nx).map(|row| row.iter().map(|c| match (c.level, c.lot_kind, c.street) {
-            (3, _, _) => '3', (2, _, _) => '2', (1, _, _) => '1', (_, LotKind::Hazard, _) => '~', (_, LotKind::Rough, _) => '"', (_, _, true) => '.', _ => ',',
+            (_, LotKind::Tower, _) => 'T', (3, _, _) => '3', (2, _, _) => '2', (1, _, _) => '1', (_, LotKind::Hazard, _) => '~', (_, LotKind::Rough, _) => '"', (_, _, true) => '.', _ => ',',
         }).chain(Some('\n')).collect::<String>()).collect()
     }
     pub fn raised(&self) -> usize { self.cells.iter().filter(|c| c.level >= 1).count() }
