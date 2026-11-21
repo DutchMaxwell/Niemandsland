@@ -326,7 +326,7 @@ void fragment() {
 		}
 		grit_city_masonry(k, p, wnrm, seed, tint, box_in, lpos, alb, rel, depth_in, tex_on, tex_ratio, tex_n, ao);   // (plan W0: the city wall's own masonry, no banded set)
 		float hband = k == 3 || k == 4 ? floor(uv.y / 3.0) : -1.0;   // (the storey of a ruined row: its branch has shifted uv by its part already)
-		grit_house_wall(k, p, wnrm, seed, lot_h, hband, 0.3 + 0.75 * fract(kind), hband == 0.0 ? door(uv, seed) : 0.0, alb, rel, depth_in, tex_on, tex_ratio, tex_n, ao);   // (plastered rubble over a stone plinth)
+		grit_house_wall(k, p, wnrm, seed, lot_h, hband, 0.3 + 0.75 * fract(kind), hband == 0.0 ? door(uv, seed) : 0.0, int(ground_at(p.xz + wnrm.xz * 0.4).r * 255.0 + 0.5), alb, rel, depth_in, tex_on, tex_ratio, tex_n, ao);   // (plastered rubble in a timber frame over a stone plinth; rubble onto a yard)
 	} else if (wnrm.y < 0.95 && k == 15) {   // a sloped roof face: rows of tiles, a tone per tile, a shadow under each row
 		tint = roof_of(ground_at(p.xz - wnrm.xz * 0.2).b, tint);   // each roof its own clay, slate or mossy clay
 		float along = abs(wnrm.x) > abs(wnrm.z) ? p.z : p.x;

@@ -361,7 +361,7 @@ vec3 grit_house_rubble(vec2 uv, float seed, out float rel) {
 	return mix(vec3(0.3, 0.29, 0.27), mix(vec3(0.22, 0.21, 0.2), tone, stone), kp);
 }
 
-void grit_house_wall(int k, vec3 p, vec3 n, float seed, float lot, float band, float plinth_in, float door_m, inout vec3 alb, inout float rel, inout float depth_in, inout float tex_on,
+void grit_house_wall(int k, vec3 p, vec3 n, float seed, float lot, float band, float plinth_in, float door_m, int front_kind, inout vec3 alb, inout float rel, inout float depth_in, inout float tex_on,
 		inout vec3 tex_ratio, inout vec3 tex_n, inout float ao) {
 	if (grit_on < 0.5) {
 		return;
@@ -376,13 +376,24 @@ void grit_house_wall(int k, vec3 p, vec3 n, float seed, float lot, float band, f
 	vec3 c = rubble;
 	float rr = r;
 	float local_y = ruin ? mod(uv.y, 3.0) : uv.y;
-	if (ruin && !(band == 0.0 && local_y < 0.8)) {   // plaster over the rubble above the plinth, with losses
-		float k4 = floor(lot * 3.999);
-		vec3 pl = grit_plaster(k4 < 0.5 ? vec3(0.86, 0.80, 0.68) : (k4 < 1.5 ? vec3(0.78, 0.62, 0.36) : (k4 < 2.5 ? vec3(0.62, 0.36, 0.28) : vec3(0.60, 0.65, 0.57)))) * mix(0.82, 1.05, fbm(uv * 1.7 + seed));
-		float lossz = mix(0.64, 0.56, 1.0 - smoothstep(0.8, 2.0, local_y)) - (band == 2.0 ? 0.06 : 0.0);
+	if (ruin && front_kind != 8 && !(band == 0.0 && local_y < 0.8)) {   // plaster over the rubble above the plinth, in a timber frame, with losses (a face onto a YARD stays rubble)
+		vec3 pl = mix(vec3(0.6, 0.57, 0.5), vec3(0.56, 0.48, 0.36), step(0.5, fract(lot * 5.3)));   // dirty off-white or ochre - never pink (lead 21.11.)
+		pl *= mix(0.72, 1.05, fbm(uv * 1.7 + seed)) * mix(0.62, 1.0, smoothstep(0.8, 2.2, local_y)) * mix(0.85, 1.0, smoothstep(0.3, 0.6, fbm(uv * 0.6 + seed + 9.0)));   // patchy, damp and dirtier low
+		float streak = smoothstep(0.55, 0.75, vnoise(vec2(uv.x * 5.0, uv.y * 0.4) + seed)) * (1.0 - smoothstep(0.0, 1.6, 2.85 - local_y));   // grime running down from the top plate
+		pl *= 1.0 - 0.3 * streak;
+		float lossz = mix(0.58, 0.5, 1.0 - smoothstep(0.8, 2.0, local_y)) - (band == 2.0 ? 0.04 : 0.0);
 		float loss = smoothstep(lossz, lossz + 0.02, fbm(uv * vec2(0.55, 0.8) + seed + lot * 17.0) + (vnoise(uv * 6.0 + lot) - 0.5) * 0.08);   // ragged, irregular losses, not round dots
 		c = mix(pl, rubble, loss);
 		rr = mix(0.45 + 0.1 * fbm(uv * 5.0), r, loss);
+		float px = fract(uv.x / 1.5) * 1.5;   // the timber frame: posts every 1.5 in, a sill on the plinth, a top plate, beam ends of the floor above
+		float post = 1.0 - smoothstep(0.055, 0.07, min(px, 1.5 - px));
+		float sill = step(0.8, local_y) * step(local_y, 0.93) * float(band == 0.0);
+		float plate = step(2.82, local_y);
+		float bend = step(2.62, local_y) * step(local_y, 2.82) * (1.0 - smoothstep(0.07, 0.09, abs(fract(uv.x / 0.75 + 0.5) - 0.5) * 0.75));
+		float wood = max(max(post, sill), max(plate, bend));
+		vec3 timber_c = vec3(0.2, 0.15, 0.11) * mix(0.7, 1.15, vnoise(vec2(uv.x * 9.0, uv.y * 1.5) + seed));
+		c = mix(c, timber_c, wood);
+		rr = mix(rr, 0.9, wood);
 	}
 	alb = mix(c * (ruin ? 1.0 : 0.92), vec3(0.09, 0.06, 0.04), door_m);
 	rel = mix(rr, 0.05, door_m);
