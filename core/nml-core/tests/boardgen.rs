@@ -210,6 +210,10 @@ fn the_checks_can_fail() {
     let tower_cells: Vec<_> = (0..256).filter(|&i| good.cells[i].level == 3).collect();
     cut_towers.connectors.retain(|c| !tower_cells.contains(&usize::from(c.high)));
     assert!(reach(&cut_towers, 1).iter().zip(&cut_towers.cells).any(|(&s, c)| !s && c.level == 3), "the test's own walk must see towers without a ladder");
+    let mut gutted = generate_themed(41, Symmetry::Point180, Theme::RuinTown);
+    assert!(gutted.problems().is_empty());
+    gutted.lots.iter_mut().filter(|l| l.kind == nml_core::boardgen::LotKind::Roofed).for_each(|l| l.kind = nml_core::boardgen::LotKind::Block);
+    assert!(gutted.problems().contains(&"too few intact houses"), "a town whose houses are all ruins misses the intact floor");
     let mut on_a_foot = good.clone();
     let foot = usize::from(good.connectors[0].low);
     on_a_foot.landmarks.push(Landmark { kind: LandmarkKind::Sump, x: foot % GRID, z: foot / GRID, w: 1, h: 1, turn: 0 });
@@ -979,6 +983,18 @@ fn a_town_has_infill_houses_only_between_the_bands_with_a_street_at_the_door() {
     assert!(infill >= 300 * 4, "the infill stage placed only {infill} houses on 300 boards");
 }
 
+/// Roofs plan K4: every town board has at least four intact (roofed) houses - a skyline on every board, not only on the average one.
+#[test]
+fn every_town_has_at_least_four_intact_houses() {
+    let mut few = Vec::new();
+    for seed in 1..=1000 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        let houses = l.lots.iter().filter(|lot| lot.kind == nml_core::boardgen::LotKind::Roofed).count();
+        if houses < 4 { few.push((seed, houses)); }
+    }
+    assert!(few.is_empty(), "{} of 1000 town boards have fewer than 4 intact houses: {:?}", few.len(), &few[..few.len().min(20)]);
+}
+
 /// Roofs plan K2: the town's raised minimum is 15 %, so the generator grows few filler slabs (raised cells on free earth: no lot, not the wall).
 /// Before K2 (minimum 23 %) the mean over 200 seeds was ~38 cells per board.
 #[test]
@@ -993,12 +1009,12 @@ fn a_town_grows_few_filler_slabs() {
 }
 
 /// BASELINE of PLAN_RUINTOWN_ROOFS step K0: origin/main 6a2972697, town theme, Point180, seeds 1..=1000 (means per board, sq in, percent).
-/// Re-pinned by K2 (raised minimum 23 -> 15 %) and K3 (infill houses), 1000 seeds. The roofs steps K2+ move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
+/// Re-pinned by K2 (raised minimum 23 -> 15 %), K3 (infill houses) and K4 (at least 4 houses), 1000 seeds. The roofs steps K2+ move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
 const ROOFS_BASELINE: [(&str, f64); 19] = [
-    ("intact houses", 9.04), ("boards with <= 2 houses %", 1.7), ("roofed cells", 21.76), ("raised cells in house plots", 13.73), ("raised cells on free earth", 22.41), ("raised cells in the city wall", 34.23),
-    ("roof share of footprints %", 37.58), ("walkable sq in 0 in", 1420.85), ("walkable sq in 3 in", 357.8), ("walkable sq in 6 in", 207.54), ("walkable sq in 9 in", 68.0), ("ladders", 45.6),
-    ("opening rays blocked %", 95.36), ("mid rays blocked %", 78.81), ("tier-to-tier rays blocked, house 2.5 in %", 52.59), ("tier-to-tier rays blocked, ridge 4.5 in %", 57.2),
-    ("roofed cells in the bands", 9.48), ("raised cells in the bands", 29.43), ("asymmetric cells", 0.0),
+    ("intact houses", 9.18), ("boards with <= 2 houses %", 0.0), ("roofed cells", 22.07), ("raised cells in house plots", 13.73), ("raised cells on free earth", 22.35), ("raised cells in the city wall", 34.19),
+    ("roof share of footprints %", 37.95), ("walkable sq in 0 in", 1418.94), ("walkable sq in 3 in", 357.39), ("walkable sq in 6 in", 207.29), ("walkable sq in 9 in", 67.77), ("ladders", 45.43),
+    ("opening rays blocked %", 95.36), ("mid rays blocked %", 78.78), ("tier-to-tier rays blocked, house 2.5 in %", 52.53), ("tier-to-tier rays blocked, ridge 4.5 in %", 57.21),
+    ("roofed cells in the bands", 9.62), ("raised cells in the bands", 29.43), ("asymmetric cells", 0.0),
 ];
 
 /// Roofs census over `NML_N` town seeds (default 1000, the baseline's size; the baseline is asserted only at 1000, within +-0.5 on every number). `NML_ROOFS_OUT=<file>` also writes the report.
