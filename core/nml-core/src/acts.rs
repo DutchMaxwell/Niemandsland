@@ -1037,6 +1037,17 @@ pub const PENDING_EPOCH_UNIT_BANE_ALIAS: u32 = 96;
 /// bearer, not one for the whole unit (`sim::takedown_shot_gate`). A one-model Hero (every carrier in the shipped lists) is unchanged.
 /// Records stamped 95 or below replay byte-exact. Every call site reads THIS constant, not the literal `96`.
 pub const PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL: u32 = 96;
+/// Placeholder gate for SPOTTER ROLL RECORD (coverage ledger shoot m1, lane covfix-dice): the Precision Spotter / Piercing Spotter
+/// placement die (3.6 army books: before attacking, roll, a 4+ places a token) is a real tray draw, and from 96 it pushes its roll
+/// record (kind "attack", the table's `_solo_tray_roll` kind, target = the printed 4+). Before, the draw had no record, so the step
+/// driver refused the whole exchange ("a resolver drew dice without a roll record"). Core: `sim::tray_precision_markers`,
+/// `sim::tray_piercing_tag`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant, not the literal `96`.
+pub const PENDING_EPOCH_SPOTTER_ROLL_RECORD: u32 = 96;
+/// Placeholder gate for ENHANCED PRIMAL NEEDS PRIMAL (coverage ledger shoot m1, lane covfix-dice; 3.6 army books: Enhanced Primal widens
+/// the bearer's OWN Primal to 5-6, a model without Primal gains nothing): an "Enhanced Primal" grant (Enhanced Primal Buff) on a member
+/// whose profile has no printed extra-attack form rolls no extras group. Before, it rolled its own group on 6s. Core:
+/// `dice::primal_grant_reaches`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant, not the literal `96`.
+pub const PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL: u32 = 96;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2379,6 +2390,20 @@ mod tests {
         assert_eq!(super::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL, 96);
         assert!(!rule_on(95, super::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL), "a record at 95 keeps the single bonus die");
         assert!(rule_on(96, super::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL));
+    }
+
+    #[test]
+    fn spotter_roll_record_gate_starts_at_96() {
+        assert_eq!(super::PENDING_EPOCH_SPOTTER_ROLL_RECORD, 96);
+        assert!(!rule_on(95, super::PENDING_EPOCH_SPOTTER_ROLL_RECORD), "a record at 95 keeps the silent spotter draw");
+        assert!(rule_on(96, super::PENDING_EPOCH_SPOTTER_ROLL_RECORD));
+    }
+
+    #[test]
+    fn enhanced_primal_needs_primal_gate_starts_at_96() {
+        assert_eq!(super::PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL, 96);
+        assert!(!rule_on(95, super::PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL), "a record at 95 keeps the grant's own extras group");
+        assert!(rule_on(96, super::PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL));
     }
 
     #[test]
