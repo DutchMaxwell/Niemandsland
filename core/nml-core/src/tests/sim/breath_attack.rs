@@ -104,3 +104,24 @@ use super::*;
         let save = &shot.rolls[1];
         assert_eq!((save.count, save.target), (1, 5));
     }
+
+    /// H-6 (Plan H): a supplied tray (the door's) says the table's breath lines and hands the wounds over as a landing; a fizzle says
+    /// its own line. RED: without the sim.rs hunk neither line is said and no landing is kept (the door's table loses no model).
+    #[test]
+    fn a_supplied_tray_says_the_breath_lines_and_lands_the_wounds() {
+        let (st, statics) = breath_line();
+        let mut next = st.clone();
+        let mut tray = Tray::supplied(vec![vec![6], vec![1, 1, 1]]);
+        tray_breath_attack(&statics, &mut next, 0, Seams::default(), &mut tray, &mut ShootResult::default());
+        let lines: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).collect();
+        assert_eq!(lines.first().map(String::as_str), Some("Breath Attack: a breathes on b — 3 hits (Blast(3), AP(1))"), "{lines:?}");
+        assert!(lines.iter().any(|l| l == "b destroyed"), "{lines:?}");
+        let landings = tray.all_landings();
+        assert_eq!(landings.len(), 1, "{landings:?}");
+        assert_eq!((landings[0].unit, landings[0].models.iter().filter(|m| m.dead).count()), (2, 3));
+        let mut fizzled = st.clone();
+        let mut tray = Tray::supplied(vec![vec![1]]);
+        tray_breath_attack(&statics, &mut fizzled, 0, Seams::default(), &mut tray, &mut ShootResult::default());
+        assert_eq!(tray.all_lines().into_iter().map(|l| l.text).collect::<Vec<_>>(), ["Breath Attack: a rolls 1 — fizzles (needs 2+)"]);
+        assert!(tray.all_landings().is_empty());
+    }

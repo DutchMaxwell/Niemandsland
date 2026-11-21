@@ -138,7 +138,7 @@ fn lines_of(lines: &[LogLine]) -> Value {
 fn landings_of(state: &State, landings: &[Landing]) -> Value {
     Value::Array(landings.iter().map(|l| {
         let models = Value::Array(l.models.iter().map(|m| json!({"at": [m.at[0] as f32 as f64, m.at[1] as f32 as f64, m.at[2] as f32 as f64], "slot": m.slot as i64, "wounds_left": m.wounds_left, "dead": m.dead})).collect());
-        json!({"unit": state.roster.keys[l.unit], "models": models, "loss_line": l.loss_line})
+        json!({"unit": state.roster.keys[l.unit], "models": models, "loss_line": l.loss_line, "moved_to": l.moved_to})
     }).collect())
 }
 

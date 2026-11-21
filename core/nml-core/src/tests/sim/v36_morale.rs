@@ -24,9 +24,9 @@ fn seed_rolling_a_three() -> i64 {
     (0..500).find(|&s| Tray::seeded(s).roll(1)[0] == 3).expect("some seed rolls a 3")
 }
 
-/// The Mind Control test die: one die, signed by the bearer.
+/// The Mind Control test die: one die, signed by the TARGET (H-8: the table rolls it on the target's tray).
 fn mind_control_die(shot: &ShootResult) -> &crate::dice::Roll {
-    shot.rolls.iter().find(|r| r.count == 1 && r.owner == "a").expect("the Mind Control morale die is drawn")
+    shot.rolls.iter().find(|r| r.count == 1 && r.owner == "b").expect("the Mind Control morale die is drawn")
 }
 
 /// RED: from epoch 73 Mind Control is neither shooting nor melee, so the

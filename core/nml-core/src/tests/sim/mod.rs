@@ -279,6 +279,23 @@
         assert_eq!(next5.wounds[2], vec![1, 1, 1]);
     }
 
+    /// H-7 (Plan H): a supplied tray (the door's) says the table's storm line and hands each success's wounds over as a landing
+    /// (wound and loss lines included). RED: without the sim.rs hunk no line is said and no landing is kept.
+    #[test]
+    fn a_supplied_tray_says_the_storm_line_and_lands_the_wounds() {
+        let (st, statics) = storm_line("Storm of War", "daemons_of_war", crate::acts::CURRENT_RULES_EPOCH);
+        let mut next = st.clone();
+        let mut tray = Tray::supplied(vec![vec![1, 1, 2], vec![1, 1, 1]]);
+        let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, ..Seams::default() };
+        tray_storm_attack(&statics, &mut next, 0, seams, &mut tray, &mut ShootResult::default());
+        let lines: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).collect();
+        assert_eq!(lines.first().map(String::as_str), Some("Storm of War: a unleashes the storm — 1 of 3 dice hit (once per game)"), "{lines:?}");
+        assert!(lines.iter().any(|l| l == "b destroyed"), "{lines:?}");
+        let landings = tray.all_landings();
+        assert_eq!(landings.len(), 1, "{landings:?}");
+        assert_eq!((landings[0].unit, landings[0].models.iter().filter(|m| m.dead).count()), (2, 3));
+    }
+
     /// Storm of Lust, payload Surge — one die PER HIT, each 6 adds a hit
     /// (the Surge primitive's own facet). Seed 3: storm [1, 1, 4] (one
     /// success), surge dice [4, 6, 4] add one, the grown batch [3, 1, 2, 5]

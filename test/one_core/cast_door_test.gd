@@ -398,19 +398,19 @@ func test_the_door_counts_what_it_takes_refuses_and_falls_back_for_the_soak() ->
 	assert_int((door.get("reasons", []) as Array).size()).is_equal(1)
 	assert_str(str((door["reasons"] as Array)[0])).contains("has no spell named")
 	assert_int(int((door.get("not_asked", {}) as Dictionary).get("switch_off", -1))).is_equal(1)
-	# why a casting activation is not asked: no board, a unit the slice refuses (Breath Attack is on the deny list), an action the door does not take
+	# why a casting activation is not asked: no board, a unit the slice refuses (Precision Tag is on the deny list), an action the door does not take
 	CoreActivation._cast_env = 1
 	CoreActivation.cast_not_asked = {}
 	var plain := ParityTable._make_unit(_main, MYSTIC, STAFF)
-	var mender := ParityTable._make_unit(_main, MYSTIC.merged({"key": "mn", "name": "Mender", "faction_folder": "alien_hives", "rules": ["Caster", "Breath Attack"]}, true), STAFF)
+	var mender := ParityTable._make_unit(_main, MYSTIC.merged({"key": "mn", "name": "Mender", "faction_folder": "jackals", "rules": ["Caster", "Precision Tag"]}, true), STAFF)
 	var report := {"action": AiDecision.Action.HOLD, "casts": [{}]}
 	CoreActivation.note_cast_not_asked(_main, plain, report)   # no handle
 	_main._solo_core_ai_h = CoreActivation.capture(_main)
-	CoreActivation.note_cast_not_asked(_main, mender, report)   # a Breath Attack carrier: the slice refuses it first
+	CoreActivation.note_cast_not_asked(_main, mender, report)   # a Precision Tag carrier: the slice refuses it first
 	CoreActivation.note_cast_not_asked(_main, plain, {"action": AiDecision.Action.CHARGE, "casts": [{}]})
 	_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
 	_main._solo_core_ai_h = 0
-	assert_dict(CoreActivation.cast_not_asked).is_equal({"no_handle": 1, "unit:unit_rule:Breath Attack": 1, "action:%d" % AiDecision.Action.CHARGE: 1})
+	assert_dict(CoreActivation.cast_not_asked).is_equal({"no_handle": 1, "unit:unit_rule:Precision Tag": 1, "action:%d" % AiDecision.Action.CHARGE: 1})
 
 
 ## CC-13a: the cast predicate: a unit (or a joined hero) that carries a table-only pre-attack beat (Mend here) stays on the table

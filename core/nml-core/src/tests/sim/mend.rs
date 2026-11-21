@@ -102,7 +102,7 @@ use super::*;
         let mut shot = ShootResult::default();
         tray_mend(&statics, &mut next, 0, Seams { hero_attach: true, ..Seams::default() }, &mut tray, &mut shot);
         assert_eq!(next.wounds[1][0], 4, "face 5 = D3 3, capped at the hero's 2 missing wounds");
-        let landing = Landing { unit: 1, models: vec![LandedModel { at: st.positions[1][0], slot: 0, wounds_left: 4, dead: false }], loss_line: false };
+        let landing = Landing { unit: 1, models: vec![LandedModel { at: st.positions[1][0], slot: 0, wounds_left: 4, dead: false }], loss_line: false, moved_to: Vec::new() };
         assert_eq!(tray.all_landings(), vec![landing]);
         let lines: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).collect();
         assert_eq!(lines, ["Mend: a heals 2 wounds (D3 rolled 5) — patient now 4/4"]);

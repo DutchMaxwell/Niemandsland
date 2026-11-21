@@ -59,19 +59,20 @@ func _digest(units: Array) -> Dictionary:
 		var gu := u as GameUnit
 		var wounds: Array = gu.get_alive_models().map(func(m: ModelInstance) -> int: return m.wounds_current)
 		wounds.sort()
-		out[gu.get_name()] = {"alive": gu.get_alive_count(), "wounds": wounds, "shaken": gu.is_shaken, "fatigued": gu.is_fatigued}
+		var at: Array = gu.get_alive_models().map(func(m: ModelInstance) -> String: return "%.3f,%.3f" % [m.node.global_position.x, m.node.global_position.z])
+		out[gu.get_name()] = {"alive": gu.get_alive_count(), "wounds": wounds, "shaken": gu.is_shaken, "fatigued": gu.is_fatigued, "at": at}
 	return out
 
 
 ## One whole AI activation (`_solo_activate_one_ai`) of a Mend bearer with a wounded Tough model, a target 7 in away. `target_rules` /
 ## `target_faction`: the target's rules (a denied rule makes the core refuse the call, so the table pays the beat).
-func _activation(seed_n: int, door: bool, target_rules: Array = [], target_faction := "battle_brothers") -> Dictionary:
+func _activation(seed_n: int, door: bool, target_rules: Array = [], target_faction := "battle_brothers", beat := "Mend", x_in := 7.0, att_faction := "battle_brothers") -> Dictionary:
 	CoreActivation._env = 1 if door else 0
 	var side := {"quality": 4, "defense": 4, "tough": 3, "z_step_in": 1.2, "game_system": "gf", "faction_folder": "battle_brothers"}
-	var att := ParityTable._make_unit(_main, side.merged({"player": 2, "name": "Att", "models": 5, "x_in": -7.0, "rules": ["Mend"]}, true),
+	var att := ParityTable._make_unit(_main, side.merged({"player": 2, "name": "Att", "models": 5, "x_in": -x_in, "rules": [beat], "faction_folder": att_faction}, true),
 		{"name": "Rifle", "range_in": 24, "attacks": 1, "count": 5, "rules": []})
 	(att.models[4] as ModelInstance).wounds_current = 1   # the patient: a wounded Tough model within 3 in
-	var foe := ParityTable._make_unit(_main, side.merged({"player": 1, "name": "Def", "models": 5, "x_in": 7.0, "rules": target_rules,
+	var foe := ParityTable._make_unit(_main, side.merged({"player": 1, "name": "Def", "models": 5, "x_in": x_in, "rules": target_rules,
 		"faction_folder": target_faction}, true), {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 5, "rules": []})
 	var units: Array = [att, foe]
 	_main.seed_tray_rng(seed_n)
@@ -82,8 +83,10 @@ func _activation(seed_n: int, door: bool, target_rules: Array = [], target_facti
 	await _main._solo_activate_one_ai()
 	_main.battle_log.entry_added.disconnect(tap)
 	var rolls := _rolls()
+	var latches: Array = att.unit_properties.keys().filter(func(k) -> bool: return str(k).begins_with("storm_used_") and bool(att.unit_properties[k]))
 	var out := {"ran": CoreActivation.ai_runs - runs_before, "rolls": rolls, "mend_dice": rolls.filter(func(r: String) -> bool: return r.begins_with("1@1:")).size(),
-		"mend_lines": lines.filter(func(l: String) -> bool: return l.contains("Mend")), "digest": _digest(units)}
+		"mend_lines": lines.filter(func(l: String) -> bool: return l.contains("Mend")), "digest": _digest(units),
+		"latches": latches, "lines": lines.filter(func(l: String) -> bool: return not l.contains("[core]")), "beat_dice": rolls.filter(func(r: String) -> bool: return r.begins_with("1@2:")).size()}
 	Harness._free_units(_main, units)
 	_main.solo_controller._peeked_unit = null
 	await _main.get_tree().process_frame
@@ -115,3 +118,60 @@ func test_a_refused_call_pays_the_mend_on_the_table_once() -> void:
 		assert_int(int(on["mend_dice"])).override_failure_message("seed %d: the refused activation rolled Mend %d times" % [s, on["mend_dice"]]).is_equal(1)
 		assert_dict(on["digest"]).override_failure_message("seed %d: end state differs" % s).is_equal(off["digest"])
 		assert_array(on["mend_lines"]).is_equal(off["mend_lines"])
+
+
+## H-6: a Breath Attack bearer 4 in from its target (the breath reaches 6 in): the trigger die rolls once (the core's), the end state
+## and the whole battle log of the activation equal the table's. RED: delete the Breath half of the guard (the body breathes, then the
+## core breathes again from its capture) -> two trigger dice.
+func test_a_breath_bearer_the_core_takes_breathes_once_and_lands_what_the_table_lands() -> void:
+	var breathed := 0
+	for s in SEEDS:
+		var on := await _activation(s, true, [], "battle_brothers", "Breath Attack", 2.0, "alien_hives")
+		var off := await _activation(s, false, [], "battle_brothers", "Breath Attack", 2.0, "alien_hives")
+		assert_int(int(on["ran"])).override_failure_message("seed %d: the core did not take the activation" % s).is_equal(1)
+		assert_int(int(on["beat_dice"])).override_failure_message("seed %d: door on rolled %s / off %s" % [s, on["rolls"], off["rolls"]]).is_equal(int(off["beat_dice"]))
+		assert_array(on["rolls"]).override_failure_message("seed %d: dice differ" % s).is_equal(off["rolls"])
+		assert_dict(on["digest"]).override_failure_message("seed %d: end state differs: %s / %s" % [s, on["digest"], off["digest"]]).is_equal(off["digest"])
+		assert_array(on["lines"]).override_failure_message("seed %d: lines differ:\n%s\n---\n%s" % [s, "\n".join(on["lines"]), "\n".join(off["lines"])]).is_equal(off["lines"])
+		breathed += 1 if (off["lines"] as Array).any(func(l: String) -> bool: return l.contains("breathes on")) else 0
+	assert_int(breathed).override_failure_message("no seed breathed: the check proved nothing").is_greater(0)
+
+
+## H-7: a Storm Attack bearer of each facet (War = AP(1), Lust = surge, Plague = Bane, Change = Shred) 8 in from its target: every die,
+## the end state, every battle-log line and the once-per-game latch equal the table's. RED: delete the Storm half of the guard (the
+## body storms, then the core storms again from its capture) -> the trigger dice roll twice.
+func test_a_storm_bearer_the_core_takes_storms_once_and_lands_what_the_table_lands() -> void:
+	var stormed := 0
+	for facet in [["Storm of War", "daemons_of_war"], ["Storm of Lust", "daemons_of_lust"], ["Storm of Plague", "daemons_of_plague"],
+			["Storm of Change", "daemons_of_change"]]:
+		for s in 8:
+			var on := await _activation(s, true, [], "battle_brothers", facet[0], 4.0, facet[1])
+			var off := await _activation(s, false, [], "battle_brothers", facet[0], 4.0, facet[1])
+			var tag := "%s seed %d" % [facet[0], s]
+			assert_int(int(on["ran"])).override_failure_message("%s: the core did not take the activation" % tag).is_equal(1)
+			assert_array(on["rolls"]).override_failure_message("%s: dice differ: %s / %s" % [tag, on["rolls"], off["rolls"]]).is_equal(off["rolls"])
+			assert_dict(on["digest"]).override_failure_message("%s: end state differs: %s / %s" % [tag, on["digest"], off["digest"]]).is_equal(off["digest"])
+			assert_array(on["lines"]).override_failure_message("%s: lines differ:\n%s\n---\n%s" % [tag, "\n".join(on["lines"]), "\n".join(off["lines"])]).is_equal(off["lines"])
+			assert_array(on["latches"]).override_failure_message("%s: latch %s / %s" % [tag, on["latches"], off["latches"]]).is_equal(off["latches"])
+			stormed += 1 if (off["lines"] as Array).any(func(l: String) -> bool: return l.contains("unleashes the storm")) else 0
+	assert_int(stormed).override_failure_message("no seed stormed: the check proved nothing").is_greater(0)
+
+
+## H-8: a Mind Control bearer (the target is shifted) and a Fatigue Debuff bearer (the target is fatigued), 14 in from the target:
+## every die, the end state (positions included), every battle-log line equal the table's. RED: delete the Mind Control half of the
+## guard (the body forces the test, then the core forces it again from its capture) -> the morale die rolls twice.
+func test_a_mind_control_bearer_the_core_takes_forces_one_test_and_lands_what_the_table_lands() -> void:
+	var failed := 0
+	for entry in [["Mind Control", "jackals"], ["Fatigue Debuff", "daemons_of_war"]]:
+		for s in 8:
+			var splits := CoreActivation.stamp_splits
+			var on := await _activation(s, true, [], "battle_brothers", entry[0], 7.0, entry[1])
+			assert_int(CoreActivation.stamp_splits - splits).override_failure_message("%s seed %d: the landing reported a stamp split" % [entry[0], s]).is_equal(0)
+			var off := await _activation(s, false, [], "battle_brothers", entry[0], 7.0, entry[1])
+			var tag := "%s seed %d" % [entry[0], s]
+			assert_int(int(on["ran"])).override_failure_message("%s: the core did not take the activation" % tag).is_equal(1)
+			assert_array(on["rolls"]).override_failure_message("%s: dice differ: %s / %s" % [tag, on["rolls"], off["rolls"]]).is_equal(off["rolls"])
+			assert_dict(on["digest"]).override_failure_message("%s: end state differs: %s / %s" % [tag, on["digest"], off["digest"]]).is_equal(off["digest"])
+			assert_array(on["lines"]).override_failure_message("%s: lines differ:\n%s\n---\n%s" % [tag, "\n".join(on["lines"]), "\n".join(off["lines"])]).is_equal(off["lines"])
+			failed += 1 if (off["lines"] as Array).any(func(l: String) -> bool: return l.contains("FAILED")) else 0
+	assert_int(failed).override_failure_message("no seed failed the forced test: the check proved nothing").is_greater(0)
