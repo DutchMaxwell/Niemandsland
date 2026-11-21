@@ -83,3 +83,73 @@ fn nobody_stands_on_a_solid_cell_but_a_container_roof_stays() {
     assert_eq!(crate::sight::surface_y_m(&house, w, epoch), 0.0, "no model height on a house");
     assert!(crate::sight::surface_y_m(&roof, w, epoch) > 0.0, "planted: a container roof keeps its 2.5 in");
 }
+
+/// L-RF1 F4: the human drop check (`activation::check_move`) on a 2 x 2 house (cells 5, 6, 9, 10 of the 4 x 4 board).
+/// Unit "a" starts at the centre of cell (0,1), world (-4.5, -1.5) in. Measured on the parent of F4: the straight
+/// crossing was refused only as a cliff, the end inside by Flying and the corner-to-corner trail were Ok (red).
+mod human_drop {
+    use super::painted;
+    use crate::activation::{check_move, Check, Drop};
+    use crate::io::Seams;
+    use crate::sim::RUSH;
+    use crate::unit::UnitStatic;
+    use std::rc::Rc;
+
+    fn w(x_in: f64, z_in: f64) -> [f64; 2] {
+        [x_in * crate::IN2M, z_in * crate::IN2M]
+    }
+
+    fn go(flying: bool, start: [f64; 2], trail: Vec<[f64; 2]>) -> Check {
+        let mut st = crate::sim::tests::four_unit_line();
+        let keys = st.roster.keys.clone();
+        st.roster = Rc::new(crate::state::Roster { index: keys.iter().cloned().zip(0..).collect(), keys, profile: vec![0; 4] });
+        if flying {
+            Rc::get_mut(&mut st.profiles).expect("owned").list[0].special_rules.push("Flying".into());
+        }
+        st.positions[0] = vec![[start[0], 0.0, start[1]]];
+        let end = *trail.last().unwrap();
+        let statics = vec![UnitStatic { name: "Squad".into(), ..Default::default() }];
+        let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, ..Seams::default() };
+        let t = painted(vec![0.0; 16], vec![5, 6, 9, 10], true);
+        check_move(&statics, &st, 0, seams, &t, &Drop { mode: RUSH, placed: vec![[end[0], 0.0, end[1]]], trails: vec![trail] }, true)
+    }
+
+    fn refused() -> Check {
+        Check::Refused { reason: "Squad: a building is impassable".into() }
+    }
+
+    #[test]
+    fn a_drop_through_into_or_across_the_corner_of_a_house_is_refused() {
+        let a = w(-4.5, -1.5);
+        assert_eq!(go(false, a, vec![a, w(4.5, -1.5)]), refused(), "straight through");
+        assert_eq!(go(false, a, vec![a, w(-1.5, -1.5)]), refused(), "ends inside");
+        assert_eq!(go(true, a, vec![a, w(-1.5, -1.5)]), refused(), "Flying ends inside");
+        // the diagonal runs exactly through the house's grid vertices (-3,-3), (0,0), (3,3): 9.9 in, inside the Rush band
+        let c = w(-3.5, -3.5);
+        assert_eq!(go(false, c, vec![c, w(3.5, 3.5)]), refused(), "corner to corner through the 2 x 2 house");
+        // lead review: a leg exactly through a house corner into the house (the corner vertex (-3,-3) is where the north
+        // and west cliff runs END, so the segment test sees no crossing) is refused
+        assert_eq!(go(false, w(-4.5, -4.5), vec![w(-4.5, -4.5), w(-1.5, -1.5)]), refused(), "through the exact corner, into the house");
+        assert!(matches!(go(true, a, vec![a, w(4.5, -1.5)]), Check::Ok { .. }), "Flying crosses a house");
+        assert!(matches!(go(false, a, vec![a, w(-4.5, 4.5)]), Check::Ok { .. }), "planted: a drop beside the house is Ok");
+    }
+
+    /// Lead review: a leg through the point where two cliff pieces meet. Cell 5 is a house, cell 6 east of it a 3 in block,
+    /// so the border z = -3 is two runs (house x -3..0, block x 0..3) joined at (0,-3); the leg from cell (2,0) into the
+    /// house passes exactly through that joint, where the segment test sees neither run.
+    #[test]
+    fn a_leg_through_a_cliff_joint_into_a_house_is_refused() {
+        let mut levels = vec![0.0; 16];
+        levels[6] = 3.0;
+        let mut st = crate::sim::tests::four_unit_line();
+        let keys = st.roster.keys.clone();
+        st.roster = Rc::new(crate::state::Roster { index: keys.iter().cloned().zip(0..).collect(), keys, profile: vec![0; 4] });
+        let (a, b) = (w(1.5, -4.5), w(-1.5, -1.5));
+        st.positions[0] = vec![[a[0], 0.0, a[1]]];
+        let statics = vec![UnitStatic { name: "Squad".into(), ..Default::default() }];
+        let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, ..Seams::default() };
+        let t = painted(levels, vec![5], true);
+        let drop = Drop { mode: RUSH, placed: vec![[b[0], 0.0, b[1]]], trails: vec![vec![a, b]] };
+        assert_eq!(check_move(&statics, &st, 0, seams, &t, &drop, true), refused());
+    }
+}
