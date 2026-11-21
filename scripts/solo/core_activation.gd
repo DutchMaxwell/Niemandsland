@@ -128,12 +128,6 @@ static func is_core_unit(main, gu: GameUnit) -> bool:
 	return is_lifecycle_unit(main, gu) and is_plain_human(gu) and not CoreSlice.carries(gu, ["Crossing Attack", "Hit & Run", "Hit & Run Shooter"])
 
 
-## H-30: the core's volley writes no "is in cover: +1 Defense" line (rules-must-log, dlines_gap "Cover lines"), the table does: a
-## human volley at a target in cover stays on the table until the core says it (the Game School cover lesson reads that line).
-static func table_says_cover(main, target: GameUnit) -> bool:
-	return target != null and bool(main._solo_majority_in_cover(target))
-
-
 ## (3) Equal to (2) for now; step 82 widens it by movement rule.
 static func on_move_path(main, gu: GameUnit) -> bool:
 	return is_core_unit(main, gu)
@@ -2180,7 +2174,7 @@ static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Ca
 		return true   # nothing was shot: `last_target` is not the target, the caller returns and the activation stays open
 	if auto:
 		return false   # an Auto verb moved the unit through the engine, not through the session's drop: the core would shoot from the start
-	if not is_core_unit(main, attacker) or not is_plain_target_human(target) or table_says_cover(main, target) \
+	if not is_core_unit(main, attacker) or not is_plain_target_human(target) \
 			or int(main.object_manager._movement_cap) == CAP_CHARGE or table_struck(attacker):
 		return false
 	if main.core_door_refused(attacker):
@@ -2220,7 +2214,6 @@ static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Ca
 ## `human_attack_resolved`, `_solo_complete_human_attack`) and closes the session.
 static func human_shoot_split(main, attacker: GameUnit, target_a: GameUnit, target_b: GameUnit, b_names: Array) -> bool:
 	if not is_core_unit(main, attacker) or not is_plain_target_human(target_a) or not is_plain_target_human(target_b) \
-			or table_says_cover(main, target_a) or table_says_cover(main, target_b) \
 			or int(main.object_manager._movement_cap) == CAP_CHARGE or table_struck(attacker):
 		return false
 	if main.core_door_refused(attacker):
