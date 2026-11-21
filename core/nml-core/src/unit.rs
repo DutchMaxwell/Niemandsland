@@ -4519,11 +4519,6 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
     for r in &p.special_rules {
         let rs = r.trim();
         if exact_labels && is_unlisted_striker_label(rs) {
-            // PENDING_EPOCH_UNIT_BANE_ALIAS: the Mark's bearer marks its own target before attacking and attacks it as a friendly unit.
-            if unit_alias && base_rule_name(rs) == "Bane Mark" {
-                u_bane = true;
-                u_bypass = true;
-            }
             continue; // a Mark / Buff / Aura label is no bearer of the rule it hands out (ds/h_prefix_labels.md)
         }
         if rs.starts_with("Bane") || rs.starts_with("Lacerate") {

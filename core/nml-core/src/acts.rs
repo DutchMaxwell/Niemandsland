@@ -1027,9 +1027,8 @@ pub const PENDING_EPOCH_UNIT_IMPRECISE: u32 = 96;
 /// Placeholder gate for UNIT BANE ALIASES (coverage ledger shoot m1, lane covfix-dice; 3.6 army books): (a) a unit that carries a
 /// CONDITIONAL Bane-family rule as its own rule (Obliterate, Reap, Fragment, Smash: a condition and / or a wider save window, an
 /// Obliterate that ignores Regeneration) reads it exactly like the same rule printed on a weapon (`stamp_weapon_bane_alias`), instead of
-/// the flat sixes re-roll with no Regeneration bypass; (b) a Bane Mark bearer marks the enemy it attacks before attacking and is itself a
-/// friendly unit attacking it, so its attacks get Bane (Regeneration ignored, Defense 6s re-rolled). Before, the 94 exact-label scan
-/// dropped the Mark entirely. Core: `unit::stamp_unit_strikers`. Records stamped 95 or below replay byte-exact. Every call site reads
+/// the flat sixes re-roll with no Regeneration bypass. Bane Mark is NOT read here: it is a runtime mark (once, 18", line of sight, before
+/// attacking), open for the Utility Buff path. Core: `unit::stamp_unit_strikers`. Records stamped 95 or below replay byte-exact. Every call site reads
 /// THIS constant, not the literal `96`.
 pub const PENDING_EPOCH_UNIT_BANE_ALIAS: u32 = 96;
 /// Placeholder gate for TAKEDOWN SHOT PER MODEL (coverage ledger shoot m1, lane covfix-dice; GF 3.6 army books: the rule is a MODEL's

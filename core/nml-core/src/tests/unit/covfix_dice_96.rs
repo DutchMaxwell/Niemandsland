@@ -52,12 +52,9 @@ mod pending_96 {
     }
 
     #[test]
-    fn a_bane_mark_bearer_attacks_with_bane_from_96() {
-        let e = PENDING_EPOCH_UNIT_BANE_ALIAS;
-        let old = &carrier("saurian_starhosts", &["Bane Mark"], &[], e - 1).shoot[0];
-        assert!(!old.bane && !old.bypass_regen, "95: the 94 exact-label scan drops the Mark");
-        let new = &carrier("saurian_starhosts", &["Bane Mark"], &[], e).shoot[0];
-        assert!(new.bane && new.bypass_regen, "96: the bearer marks its target and attacks it with Bane");
+    fn a_bane_mark_gives_its_bearer_no_standing_bane_at_96() {
+        let us = carrier("saurian_starhosts", &["Bane Mark"], &[], PENDING_EPOCH_UNIT_BANE_ALIAS);
+        assert!(!us.shoot[0].bane && !us.melee[0].bane, "96: the Mark is a runtime mark, never a standing Bane on the bearer");
     }
 
     /// The real volley of 64 shots from `us`'s rifle with an Enhanced Primal grant live, at `epoch`.
