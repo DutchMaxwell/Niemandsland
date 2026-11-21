@@ -97,3 +97,72 @@ func test_at_least_thirty_percent_of_the_open_cells_stay_empty() -> void:
 		var empty := 1.0 - float(carried.size()) / float(open.size())
 		print("CLUTTER seed %d open %d flat/100 %.1f solid/100 %.1f empty %.2f" % [s, open.size(), 100.0 * flat / open.size(), 100.0 * solid / open.size(), empty])
 		assert_float(empty).is_greater_equal(0.3)
+
+
+## Scenes v2 (kit batch A7): every strip scene is led by a HERO piece that reads at the play camera, its load / cloth at the same origin; a stall trades onto a street.
+func test_every_strip_scene_has_its_hero_and_the_load_sits_on_it() -> void:
+	var heroes := {"cart": ["cart_toppled", "handcart"], "stall": ["stall_collapsed"], "barricade": ["barricade"], "back": ["woodpile_block", "hay_heap"], "table": ["table_overturned"]}
+	for s: int in SEEDS + [17, 19, 23, 29, 31, 37, 43]:
+		var layout := _layout(s)
+		var plan := BoardgenTownScenes.plan(layout)
+		var items: Dictionary = plan["items"]
+		for sc: Dictionary in plan["scenes"]:
+			if not heroes.has(sc["kind"]):
+				continue
+			var near := 0
+			for m: String in heroes[sc["kind"]]:
+				for it: Dictionary in items.get(m, []):
+					var o: Vector3 = (it["xf"] as Transform3D).origin / IN
+					near += 1 if Vector2(o.x, o.z).distance_to(sc["at"]) <= float(sc["span"]) * 0.5 + 1.0 else 0
+			assert_int(near).override_failure_message("seed %d: %s scene without its hero" % [s, sc["kind"]]).is_greater(0)
+			if sc["kind"] == "stall":
+				assert_bool(layout["cells"][int(sc["cell"])]["street"]).override_failure_message("seed %d: a stall off the street" % s).is_true()
+		for pair: Array in [["cart_toppled", "cart_toppled_load"], ["handcart", "handcart_load"], ["stall_collapsed", "stall_collapsed_cloth"], ["table_overturned", "table_overturned_load"]]:
+			var a: Array = items.get(pair[0], [])
+			var b: Array = items.get(pair[1], [])
+			assert_int(b.size()).is_equal(a.size())
+			for k in a.size():
+				assert_bool((a[k]["xf"] as Transform3D).is_equal_approx(b[k]["xf"])).is_true()
+
+
+## The ladder and lamp rule (the asset lane's proof placement ignored it): no solid scene piece stands over a ladder's foot, a lamp post or a square stall / brazier / spout.
+func test_no_scene_piece_stands_on_a_ladder_or_a_lamp_post() -> void:
+	for s: int in SEEDS + [17, 19, 23, 29, 31, 37, 43]:
+		var layout := _layout(s)
+		var occupied := BoardgenTownScenes._occupied(layout)
+		var plan := BoardgenTownScenes.plan(layout)
+		for m: String in plan["items"]:
+			if BoardgenTownScenes.FLAT_MODULES.has(m):
+				continue
+			var ext: Vector2 = BoardgenTownClutter.STRIP.get(m, BoardgenTownScenes.EXTRA_SPAN.get(m, Vector2(-0.3, 0.3)))
+			for it: Dictionary in plan["items"][m]:
+				var xf: Transform3D = it["xf"]
+				var o := Vector2(xf.origin.x, xf.origin.z) / IN
+				var lx := Vector2(xf.basis.x.x, xf.basis.x.z)
+				var lz := Vector2(xf.basis.z.x, xf.basis.z.z)
+				for p: Vector2 in occupied:
+					var a := (p - o).dot(lx)
+					var out := (p - o).dot(lz)
+					assert_bool(a > ext.x - 0.2 and a < ext.y + 0.2 and out > -0.2 and out < 1.0).override_failure_message("seed %d: %s at %s over a ladder / lamp at %s" % [s, m, o, p]).is_false()
+
+
+## Where the scenes go (style bible 12): carts and barricades at lane mouths and gates, woodpiles / hay / troughs behind the houses.
+func test_carts_and_barricades_seek_the_lane_mouths_and_the_backs_stay_off_the_street() -> void:
+	var mouth := 0
+	var lanes := 0
+	var back_street := 0
+	var backs := 0
+	for s: int in SEEDS + [17, 19, 23, 29, 31, 37, 43]:
+		var layout := _layout(s)
+		for sc: Dictionary in BoardgenTownScenes.plan(layout)["scenes"]:
+			var i: int = sc["cell"]
+			if ["cart", "barricade"].has(sc["kind"]):
+				lanes += 1
+				mouth += 1 if BoardgenTownScenes._mouth(layout, i) or BoardgenTownScenes._gate(layout, i) else 0
+			elif sc["kind"] == "back":
+				backs += 1
+				back_street += 1 if layout["cells"][i]["street"] else 0
+	print("SCENES v2 carts/barricades at a mouth or gate %d / %d, backs on a street %d / %d" % [mouth, lanes, back_street, backs])
+	assert_int(lanes).is_greater(0)
+	assert_float(float(mouth) / lanes).is_greater_equal(0.6)
+	assert_float(float(back_street) / maxi(backs, 1)).is_less_equal(0.2)

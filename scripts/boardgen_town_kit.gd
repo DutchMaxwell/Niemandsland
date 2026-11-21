@@ -24,7 +24,10 @@ const CLUTTER_SET := {"tower_cap_burnt": "timber", "barrel": "timber", "crate": 
 	"splinters_flat": "timber", "trough": "coursed_stone", "debris_flat_a": "coursed_stone", "debris_flat_b": "coursed_stone",
 	"fountain_basin": "coursed_stone", "fountain_column": "coursed_stone", "statue_plinth": "coursed_stone", "statue_stump": "coursed_stone", "pool_kerb": "coursed_stone", "well_ring": "coursed_stone", "well_frame": "timber",
 	"hall_column_a": "coursed_stone", "hall_column_b": "coursed_stone", "hall_pediment": "coursed_stone", "hall_step": "coursed_stone", "tower_turret": "coursed_stone", "pool_spout": "coursed_stone",
-	"rubble_heap_a": "coursed_stone", "rubble_heap_b": "coursed_stone", "stall_frame": "timber", "stall_frame_ruined": "timber", "sign_board_loaf": "timber", "sign_board_boot": "timber", "timber_ladder_3in": "timber", "timber_ladder_top": "timber"}
+	"rubble_heap_a": "coursed_stone", "rubble_heap_b": "coursed_stone", "stall_frame": "timber", "stall_frame_ruined": "timber", "sign_board_loaf": "timber", "sign_board_boot": "timber", "timber_ladder_3in": "timber", "timber_ladder_top": "timber",
+	"cart_toppled": "timber", "handcart": "timber", "table_overturned": "timber", "stall_collapsed": "timber", "barricade": "timber", "woodpile_block": "timber", "trough_used": "coursed_stone"}
+## The A7 / A8 modules drawn in their own vertex colours (loads, cloth, hay: a texture set would draw wood grain on sacks and canvas).
+const OWN_COLOUR := ["cart_toppled_load", "handcart_load", "table_overturned_load", "stall_collapsed_cloth", "hay_heap"]
 ## A module's own instance tint on top of its set's (the vertex colour of the module is baked by the assets lane; this is the table's side of the same knob): the pool kerb's pale top read as a dashed
 ## white line round the pond from above, so its run is tinted down to a weathered stone.
 ## The kit's ladder segments (a 3 in segment and the top segment with stiles past the edge): the SAME transforms as the Deepworks kit ladders - BoardgenGreybox.ladder_kit_plan(layout), one segment per
@@ -55,7 +58,7 @@ func active() -> bool:
 static func set_of(module: String) -> String:
 	if BoardgenTownKit.CLUTTER_SET.has(module):
 		return CLUTTER_SET[module]
-	if module.begins_with(("weeds")) or module.begins_with("bramble") or module.begins_with("dead_tree") or module.begins_with("ivy") or module.begins_with("lantern") or module in ["cloth_flat", "laundry_line", "sack_pile", "fountain_leaves", "stall_awning", "stall_awning_ruined", "brazier", "sign_bracket"]:
+	if module.begins_with(("weeds")) or module.begins_with("bramble") or module.begins_with("dead_tree") or module.begins_with("ivy") or module.begins_with("lantern") or module in OWN_COLOUR or module in ["cloth_flat", "laundry_line", "sack_pile", "fountain_leaves", "stall_awning", "stall_awning_ruined", "brazier", "sign_bracket"]:
 		return "none"
 	if module in ["roof_rafters", "beam_end", "shutter", "shutter_open", "door"]:
 		return "timber"
