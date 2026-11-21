@@ -2021,7 +2021,7 @@ pub(crate) fn resolve_volley_with_pick_label(
                     out.versatile_picks.push((mi, pick.1 > 0));
                 }
                 let rule = if p.versatile_name.is_empty() { "Versatile Attack" } else { p.versatile_name.as_str() };
-                crate::sim::say_versatile_pick(rule, sh.owner, pick.1 > 0, att.side, &mut out.log, Some(&mut *tray), att.rules_epoch);
+                crate::sim::say_versatile_pick(rule, &p.versatile_say_name, sh.owner, pick.1 > 0, att.side, &mut out.log, Some(&mut *tray), att.rules_epoch);
                 pick
             } else {
                 versatile_best_mode(

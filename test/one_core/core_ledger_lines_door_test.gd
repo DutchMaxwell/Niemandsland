@@ -100,3 +100,9 @@ func _expect_equal(name: String, leg: Array, probe: String, probe_kind := "") ->
 ## differed, and the door's own volley beats read the die as a hit roll. A target with Regeneration, Tough(3), 16 seeds, the kinds compared.
 func test_a_regeneration_die_carries_the_tables_kind() -> void:
 	await _expect_equal("Regeneration", _leg("gf", "battle_brothers", "", true), "", "regeneration")
+
+
+## Ledger 2 (21 cells): the pick line names the book rule the bearer carries, whatever its spelling.
+func test_the_versatile_pick_names_the_rule_the_bearer_carries() -> void:
+	for c in [["Versatile Warrior", "aof", "human_empire"], ["Enhanced Watchborn", "gf", "watch_brothers"], ["Enhanced Vinci Tech", "aof", "duchies_of_vinci"]]:
+		await _expect_equal(c[0], _leg(c[1], c[2], c[0]), "%s: Cov Shooter picks" % c[0])

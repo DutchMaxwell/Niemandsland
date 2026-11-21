@@ -1171,6 +1171,10 @@ pub struct ShootProfile {
     /// every generic stamp (the primitive walk), so pre-wave behaviour logs
     /// nothing and every earlier epoch's replay stays byte-identical.
     pub versatile_name: String,
+    /// Coverage ledger (21.11.): the BOOK rule the table's pick line names (`primitive_book_name`: the first rule of the unit, own then
+    /// item-granted, whose registry entry is the Versatile Attack primitive and whose name is not the primitive's), for the TRAY's line
+    /// only. `versatile_name` above stays the recorded log's own, so no replay moves. Empty = no such rule: the line says "Versatile Attack".
+    pub versatile_say_name: String,
     /// The "Vinci Tech Boost" form (`pick_one: false` in the registry): the
     /// bearer gets BOTH arms (AP(+1) AND +1 to hit) instead of
     /// `versatile_best_mode`'s pick. Stamped only when the model also
@@ -7906,6 +7910,13 @@ impl UnitStatic {
                     sp.versatile_name = vn.clone();
                     sp.versatile_both = both;
                 }
+            }
+        }
+        // The tray's pick line says what the table's `primitive_book_name` does, whatever the family spelling (Versatile Warrior, Enhanced
+        // Watchborn, ...): the recorded log keeps `versatile_name` above, so only a supplied tray (a door) says the new name.
+        if let Some(book) = rules_of_primitive(reg, p, "Versatile Attack").into_iter().map(|h| h.name).find(|n| n != "Versatile Attack") {
+            for sp in shoot.iter_mut().chain(melee.iter_mut()) {
+                sp.versatile_say_name = book.clone();
             }
         }
         for u in melee_unimpl {
