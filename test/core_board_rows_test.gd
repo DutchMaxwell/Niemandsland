@@ -9,9 +9,6 @@ extends GdUnitTestSuite
 
 const IN2M := 0.0254
 
-var CoreSelfplay := load("res://tools/core_selfplay.gd")
-
-
 func _state() -> Dictionary:
 	return {
 		"round": 1,
@@ -31,7 +28,7 @@ func _state() -> Dictionary:
 
 
 func test_unit_rows_carry_full_status() -> void:
-	var rows: Array = CoreSelfplay._board_rows(_state())
+	var rows: Array = BattleSim.board_rows(_state())
 	var units := rows.filter(func(r: Variant) -> bool: return int(r[0]) == 1 or int(r[0]) == 2)   # NML-1012: rows also carry objective (3) and game-state (4) lines now
 	assert_int(units.size()).is_equal(2)  # dead unit excluded
 	for r in units:
@@ -51,7 +48,7 @@ func test_unit_rows_carry_full_status() -> void:
 
 
 func test_objective_rows_present_with_owner() -> void:
-	var rows: Array = CoreSelfplay._board_rows(_state())
+	var rows: Array = BattleSim.board_rows(_state())
 	var objs := rows.filter(func(r: Variant) -> bool: return int(r[0]) == 3)
 	assert_int(objs.size()).is_equal(2)
 	for r in objs:
@@ -82,7 +79,7 @@ func test_v4_precomputed_power_and_rule_flags() -> void:
 		"special_rules": ["Fearless"]}
 	var st := _state()
 	(st["units"]["p1_a"] as Dictionary)["unit"] = gu
-	var rows: Array = CoreSelfplay._board_rows(st)
+	var rows: Array = BattleSim.board_rows(st)
 	var a: Array = rows.filter(func(r: Variant) -> bool: return int(r[0]) == 1)[0]
 	assert_int(int(a[20])).is_equal(1)  # Fearless ist deklariert -> ein Regel-Paar
 	# [.., 12 sev12, 13 mev, 14 fearless, 15 ambush, 16 flying, 17 stealth, 18 furious, 19 regen]
@@ -112,7 +109,7 @@ func test_stat_line_from_opr_unit() -> void:
 	gu.source_data = ou
 	var st := _state()
 	(st["units"]["p1_a"] as Dictionary)["unit"] = gu
-	var rows: Array = CoreSelfplay._board_rows(st)
+	var rows: Array = BattleSim.board_rows(st)
 	var a: Array = rows.filter(func(r: Variant) -> bool: return int(r[0]) == 1)[0]
 	# [.., range_max, attacks_total, quality, defense]
 	assert_int(int(a[8])).is_equal(24)
@@ -145,7 +142,7 @@ func test_v5_sparse_rule_pairs_from_vocab() -> void:
 		"special_rules": ["Tough(3)", "Fearless"]}
 	var st := _state()
 	(st["units"]["p1_a"] as Dictionary)["unit"] = gu
-	var rows: Array = CoreSelfplay._board_rows(st)
+	var rows: Array = BattleSim.board_rows(st)
 	var a: Array = rows.filter(func(r: Variant) -> bool: return int(r[0]) == 1)[0]
 	assert_int(int(a[20])).is_equal(3)  # Tough + Fearless + Deadly
 	var pairs := {}
@@ -155,7 +152,7 @@ func test_v5_sparse_rule_pairs_from_vocab() -> void:
 	assert_int(int(pairs.get(deadly_slot, -1))).is_equal(6)
 	# unknown rule is collected loudly, never silently dropped
 	gu.unit_properties["special_rules"] = ["Frobnicate(2)"]
-	CoreSelfplay._board_rows(st)
+	BattleSim.board_rows(st)
 	assert_bool(BattleSim.unknown_rules.has("Frobnicate")).is_true()
 
 
