@@ -103,3 +103,21 @@ func test_roofs_have_four_tints_by_lot_and_the_tops_a_value_ladder() -> void:
 	assert_bool(src.contains("float k = floor(fract(lot * 5.0) * 3.999);")).override_failure_message("four roofs, two clays, a slate and a mossy clay").is_true()
 	assert_bool(src.contains("tint = roof_of(ground_at(p.xz - wnrm.xz * 0.2).b, tint);")).override_failure_message("the roof must read the lot under it").is_true()
 	assert_bool(src.contains("alb *= mix(0.88, 1.12, clamp(p.y / 9.0, 0.0, 1.0));")).override_failure_message("no value ladder on the tops").is_true()
+
+
+## R5: a board's decay story - the fire side and the shade side come from the board's seed, are unit vectors a quarter turn apart, and the shader folds them by the half turn.
+func test_the_decay_story_is_a_function_of_the_seed_and_the_shader_folds_it_by_the_half_turn() -> void:
+	var a := BoardgenTownDressing.story(42)
+	assert_object(BoardgenTownDressing.story(42)).is_equal(a)   # same seed, same story
+	var seen := {}
+	for seed in 20:
+		var c := BoardgenTownDressing.story(seed)
+		assert_float(Vector2(c.r, c.g).length()).is_equal_approx(1.0, 0.0001)
+		assert_float(Vector2(c.b, c.a).length()).is_equal_approx(1.0, 0.0001)
+		assert_float(Vector2(c.r, c.g).dot(Vector2(c.b, c.a))).is_equal_approx(0.0, 0.0001)   # the shade side is a quarter turn off the fire
+		seen[snappedf(c.r, 0.1)] = true
+	assert_int(seen.size()).override_failure_message("every board tells the same story").is_greater(4)
+	var src := FileAccess.get_file_as_string(SHADER)
+	assert_bool(src.contains("vec2 q = (p.z >= 0.0 ? -p.xz : p.xz) + vec2(0.0, 12.0);")).override_failure_message("the story must fold by the half turn: one half may not burn more than the other").is_true()
+	assert_bool(src.contains("* (k == 13 ? 0.35 : 1.0);")).override_failure_message("an intact house burns less than a ruin").is_true()
+	assert_bool(src.contains("float lost = smoothstep(0.62, 0.7,")).override_failure_message("no missing tiles").is_true()

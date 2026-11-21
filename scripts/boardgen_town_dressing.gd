@@ -214,6 +214,15 @@ func _add_lights(layout: Dictionary) -> void:
 		add_child(light)
 
 
+## The decay story of a board (plan R5): the board's seed picks the way the fire came from (a unit vector) and, a quarter turn off it, the shade side where moss grows. Returned as a Color
+## (r, g = fire x, z; b, a = shade x, z) for the shader's `story` uniform. Pure: the same seed, the same story.
+static func story(seed: int) -> Color:
+	var fire := _hash(seed, 0, 210) * TAU
+	var turn := 1.0 if _hash(seed, 0, 211) < 0.5 else -1.0
+	var shade := fire + turn * PI * 0.5
+	return Color(cos(fire), sin(fire), cos(shade), sin(shade))
+
+
 ## The BLUE HOUR of the town (decision D-R4): a cool pale moon as the key, high on one side; the last warm light low on the opposite horizon (the scene's fill light, turned round) as a rim; a
 ## cool sky; the lanterns are the only strong warm source. Applied to the scene's lighting controller (a dev view, so it is not restored).
 ## Readability tuning (gate_cmp.py against the plain-table baseline): a strongly blue moon washed the figures' colours and lit the ground to their level, so the key is pale (nearly neutral), strong, and the

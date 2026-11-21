@@ -23,6 +23,7 @@ uniform sampler2D n_stone : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform sampler2D n_plaster : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform sampler2D n_timber : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform sampler2D n_earth : hint_normal, filter_linear_mipmap, repeat_enable;
+uniform vec4 story = vec4(1.0, 0.0, 0.0, 1.0);   // the board's decay story (plan R5): xy = the way the fire came from (a unit vector), zw = the shade side (moss grows there)
 uniform vec4 t_on = vec4(0.0);   // stone, plaster, timber, earth
 uniform vec4 t_tile = vec4(1.3, 3.0, 3.0, 3.0);
 const vec3 MEAN_STONE = vec3(0.377, 0.244, 0.137);
@@ -133,7 +134,7 @@ vec3 roof_of(float lot, vec3 clay) {
 // Half-timber with a grammar (plan R4a), one 3 in cell wide and one 3 in storey high: a sill beam, a mid rail and a top plate; posts every 0.75 in; an opening (a window between two posts
 // with a sill and a lintel) in most cells, braces only in the CORNER bays and never across it; the infill by bay: plaster, brick nogging, bare lath or - on a ruin (`holes` > 0) - a hole.
 // The lot's hash picks the plaster and the timber; `rel` = the relief height (frame proud, opening recessed).
-vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis, out float rel, float lot, float holes) {
+vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis, out float rel, float lot, float holes, out float wood_mask, out float soot_mask) {
 	float y = mod(uv.y, 3.0);
 	float cell = floor(uv.x / 3.0);
 	float x = uv.x - cell * 3.0;
@@ -166,6 +167,8 @@ vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis, out float rel, f
 	c = mix(c, vec3(0.06, 0.05, 0.05), inside);
 	float lit = inside * step(d, -0.08);
 	emis += vec3(1.0, 0.55, 0.22) * lit * step(0.8, h21(vec2(cell, seed + 5.0))) * 0.9;   // a few windows glow
+	wood_mask = members;
+	soot_mask = has_open * (step(2.15, y) * smoothstep(0.75, 0.0, abs(x - 1.5) - (y - 2.15) * 0.5) + 0.5 * step(y, 0.95) * smoothstep(0.45, 0.0, abs(x - 1.5) - 0.55) * vnoise(vec2(x * 8.0, y * 2.0)));   // soot fanning above an opening, a streak under its sill
 	return c;
 }
 
@@ -219,6 +222,8 @@ void fragment() {
 	vec3 emis = vec3(0.0);
 	float rough = 0.92;
 	float rel = 0.5;     // the height of the surface pattern, 0 = joint / gap, 1 = crown (0.5 = flat): the end of fragment() turns it into a bent normal, roughness and occlusion
+	float wood_m = 0.0;   // 1 where a half-timber face shows its timbers, soot_m: the soot of its openings (plan R5)
+	float soot_m = 0.0;
 	float depth_in = 0.0;   // how deep that relief is, in inches (0 = none)
 	float ao = 1.0;
 	vec3 tex_ratio = vec3(1.0);   // the authored set's detail on this face (1 = none) and its tangent-space normal
@@ -231,7 +236,7 @@ void fragment() {
 		float lot_h = ground_at(p.xz - wnrm.xz * 0.2).b;   // the lot's hash (ground map blue: house cells only): its plaster and timber
 		vec2 uv = vec2(abs(wnrm.x) > 0.5 ? p.z : p.x, p.y);
 		if (k == 15) {   // a gable end: plaster and a timber frame
-			alb = timber(uv, seed, palette[13].rgb, emis, rel, lot_h, 0.0);
+			alb = timber(uv, seed, palette[13].rgb, emis, rel, lot_h, 0.0, wood_m, soot_m);
 			depth_in = 0.03;
 			rough = mix(0.95, 0.8, step(0.8, rel));
 			ao = mix(0.6, 1.0, smoothstep(0.1, 0.5, rel));
@@ -251,7 +256,7 @@ void fragment() {
 					depth_in = 0.0;
 				}
 			} else {
-				alb = timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed), emis, rel, lot_h, 0.0);
+				alb = timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed), emis, rel, lot_h, 0.0, wood_m, soot_m);
 				depth_in = 0.03;
 				rough = mix(0.95, 0.8, step(0.8, rel));
 				ao = mix(0.6, 1.0, smoothstep(0.1, 0.5, rel));
@@ -290,7 +295,7 @@ void fragment() {
 					ao = 1.0;
 				}
 			} else {
-				alb = timber(uv, seed, tint * 1.02, emis, rel, lot_h, 0.1);
+				alb = timber(uv, seed, tint * 1.02, emis, rel, lot_h, 0.1, wood_m, soot_m);
 				rough = mix(0.95, 0.8, step(0.8, rel));
 				depth_in = 0.03;
 				ao = mix(0.6, 1.0, smoothstep(0.1, 0.6, rel));
@@ -396,6 +401,32 @@ void fragment() {
 			rel = fbm(xz * 2.6 + seed);
 			depth_in = 0.02;
 			ao = 1.0;
+		}
+	}
+	// DECAY WITH A STORY (plan R5): the board's seed picks the side the fire came from and the shade side. Folded by the half turn (like the board), so both halves tell the same story in their own frame.
+	if (k == 15 || k == 13 || k == 3 || k == 4 || k == 6 || k == 9 || k == 10 || k == 12 || k == 16) {
+		vec2 q = (p.z >= 0.0 ? -p.xz : p.xz) + vec2(0.0, 12.0);   // folded into one half, then centred on that half: the story is the same in both
+		float lh = ground_at(p.xz - wnrm.xz * 0.2).b;
+		float fire = clamp(0.5 + 0.65 * clamp(dot(q, story.xy) / (abs(story.x) * 24.0 + abs(story.y) * 12.0), -1.0, 1.0) + (lh - 0.5) * 0.4, 0.0, 1.0) * (k == 13 ? 0.35 : 1.0);   // the ruins on the fire side burn most, an intact house far less
+		float shade = clamp(0.5 + 0.65 * clamp(dot(q, story.zw) / (abs(story.z) * 24.0 + abs(story.w) * 12.0), -1.0, 1.0) + (lh - 0.5) * 0.3, 0.0, 1.0);
+		float moss = smoothstep(0.55, 0.95, shade);
+		float patchy = fbm(vec2(p.x + p.z, p.y) * 1.3 + seed * 3.0);
+		if (abs(wnrm.y) < 0.2) {   // a wall face
+			float scorch = smoothstep(0.2, 0.6, fire) * (1.0 - smoothstep(0.0, mix(1.4, 6.5, fire), p.y)) * smoothstep(0.12, 0.45, patchy);   // rising from the foot, two storeys high on the fire side
+			alb *= 1.0 - 0.4 * fire * fire;   // smoke over everything on that side
+			alb = mix(alb, vec3(0.035, 0.03, 0.028), 0.9 * scorch);
+			alb *= 1.0 - 0.55 * fire * soot_m;   // the fan of soot above an opening, the streak under its sill
+			alb = mix(alb, vec3(0.022, 0.019, 0.017), 0.85 * wood_m * fire * smoothstep(0.35, 0.6, patchy));   // charred timber: black and cracked
+			rough = mix(rough, 0.35, 0.6 * wood_m * fire);
+			alb = mix(alb, vec3(0.15, 0.25, 0.09), 0.7 * moss * (1.0 - smoothstep(0.0, 2.2, p.y)) * smoothstep(0.4, 0.7, patchy));   // moss and algae low on the shade side
+		} else if (wnrm.y > 0.5 && k != 15) {   // a top
+			alb = mix(alb, vec3(0.15, 0.25, 0.09), 0.65 * moss * smoothstep(0.45, 0.7, patchy));   // moss on the wall tops of the shade side
+			alb = mix(alb, vec3(0.04, 0.035, 0.03), 0.6 * fire * smoothstep(0.55, 0.8, patchy) * float(k != 12));   // scorched patches on a ruin's top
+		} else if (k == 15) {   // a roof face
+			float lost = smoothstep(0.62, 0.7, fbm(vec2(p.x + p.z, p.y) * 0.9 + seed * 5.0)) * mix(0.25, 1.0, fire);
+			alb = mix(alb, vec3(0.045, 0.04, 0.036), 0.7 * smoothstep(0.5, 0.85, fire) * smoothstep(0.3, 0.6, patchy));   // a burnt roof is black in patches   // tile slip and missing patches showing the battens
+			alb = mix(alb, vec3(0.16, 0.11, 0.07) * (0.55 + 0.45 * step(0.5, fract(p.y / 0.35))), lost);
+			alb = mix(alb, vec3(0.20, 0.30, 0.11), 0.5 * moss * smoothstep(0.4, 0.7, patchy));
 		}
 	}
 	if (wnrm.y > 0.5 && k != 15 && k != 17 && k != 2) {

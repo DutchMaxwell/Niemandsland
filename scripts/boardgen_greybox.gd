@@ -466,6 +466,8 @@ func _make_material(layout: Dictionary, theme: Dictionary) -> ShaderMaterial:
 		mat.set_shader_parameter("palette", PackedColorArray(theme["palette"]))
 		mat.set_shader_parameter("ground_map", ImageTexture.create_from_image(Image.create_from_data(layout["nx"], layout["nz"], false, Image.FORMAT_RGBA8, ground_map(layout, theme["kinds"]))))
 		mat.set_shader_parameter("board_cells", Vector2(layout["nx"], layout["nz"]))
+		var tale := BoardgenTownDressing.story(int(layout.get("seed", 0)))
+		mat.set_shader_parameter("story", Vector4(tale.r, tale.g, tale.b, tale.a))
 		var lib := TiefwerkLibrary.new(BoardgenTheme.TOWN_LIBRARY)   # the authored T-R1 surfaces when they are cached (NML_RUINTOWN_LIB_DIR in dev); the shader keeps its procedural look otherwise
 		lib.name = "TownLibrary"
 		add_child(lib)
