@@ -4,6 +4,8 @@ extends GdUnitTestSuite
 
 const TableScript := preload("res://scripts/table.gd")
 const GROUND := preload("res://shaders/visual/reference_ground_table.gdshader")
+const Menu := preload("res://scripts/menu_battlefield.gd")
+const Reference := preload("res://scripts/visual/grassland_reference.gd")
 
 
 func _table() -> TableScript:
@@ -43,3 +45,15 @@ func test_a_ground_material_built_later_is_told_the_rect_when_the_table_syncs() 
 	assert_object(_flat(fresh)).is_equal(Vector4.ZERO)
 	table.sync_flat_rect()
 	assert_object(_flat(fresh)).is_equal(Vector4(-0.5, -0.5, 0.5, 0.5))
+
+
+func test_the_presenter_syncs_the_rect_on_the_game_table_and_leaves_the_main_menus_surface_alone() -> void:
+	var table := _table()
+	table.set_flat_rect(Rect2(-0.5, -0.5, 1.0, 1.0))
+	var fresh := _ground()
+	table.mesh_instance.material_override = fresh
+	Reference.sync_flat(table)   # the game's Table: the new ground is told
+	assert_object(_flat(fresh)).is_equal(Vector4(-0.5, -0.5, 0.5, 0.5))
+	var menu: Node3D = auto_free(Menu.MenuSurface.new())   # the menu's stand-in sits in the same slot and has no hook: an unguarded call is a SCRIPT ERROR
+	Reference.sync_flat(menu)
+	assert_bool(menu.has_method("sync_flat_rect")).is_false()

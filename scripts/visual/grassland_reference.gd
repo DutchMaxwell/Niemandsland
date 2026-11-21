@@ -64,6 +64,12 @@ func prepare() -> void:
 		await _biome_forest.prepare(biome)
 
 
+## A footprint the table keeps flat stays flat on the ground material this build made. The table slot is not always the game's Table: the main menu's surface stand-in has no such hook.
+static func sync_flat(table: Node) -> void:
+	if table.has_method("sync_flat_rect"):
+		table.sync_flat_rect()
+
+
 func apply(main: Node) -> void:
 	_main = main
 	_profile = Biomes.get_profile(biome)
@@ -164,7 +170,7 @@ func apply(main: Node) -> void:
 		mat.set_shader_parameter("wall_regions",wall_regions)
 		mat.set_shader_parameter("drift_count",drift_count)
 		mat.set_shader_parameter("drift_points",drift_points)
-	table.sync_flat_rect()   # a footprint the table keeps flat stays flat on the ground material this build made
+	sync_flat(table)
 	if table_tier:
 		if not _profile.get("urban_mode",false):   # the urban ground draws no mounds
 			ReferenceMaterials.set_mounds(wall_regions.slice(0,wall_count),drift_points.slice(0,drift_count))
