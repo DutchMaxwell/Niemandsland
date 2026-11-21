@@ -101,6 +101,35 @@ func _differing(target: Dictionary, epoch: int, shooter := {}, prefixes := []) -
 	return {"bad": bad, "said": said}
 
 
+## A shooter of ten with `weapons` ([name, copies, rules]) and a plain unit of six: the inline-landing lines fixtures.
+func _armed(weapons: Array) -> Dictionary:
+	var ou := OPRApiClient.OPRUnit.new()
+	ou.name = "Multi"
+	ou.size = 10
+	ou.quality = 3
+	ou.defense = 4
+	ou.game_system = "gf"
+	for w in weapons:
+		ou.weapons.append(_weapon(w[0], w[1], w[2]))
+	return {"unit": ou, "faction": "battle_brothers", "system": "gf"}
+
+
+## H-17 lines: beside another weapon the table lands a Deadly or Takedown weapon inline and says its lines right there (the weapon's line,
+## the casualties, `Simultaneous fire` for the next weapon), then "takes N wounds" counting them too; the door says the same, in that order.
+func test_inline_landings_say_their_lines_where_the_table_does() -> void:
+	var ranks := _hero([], "battle_brothers")
+	ranks["unit"].name = "Ranks"
+	ranks["unit"].size = 6
+	ranks["unit"].special_rules.assign([])
+	var cases := [["two Deadly", _armed([["Deadly Launcher", 1, ["Deadly(3)", "AP(2)"]], ["Deadly Launcher B", 1, ["Deadly(3)", "AP(2)"]],
+		["Plain Rifle", 5, []]])], ["Takedown", _armed([["Takedown Rifle", 1, ["Takedown"]], ["Plain Rifle", 5, []]])]]
+	for c in cases:
+		var r: Dictionary = await _differing(ranks, PENDING_EPOCH, c[1], ["Simultaneous fire", "Deadly(", "Takedown (", "Ranks "])
+		assert_int(int(r["said"])).override_failure_message("%s: the table said none of the lines, the check proved nothing" % c[0]).is_greater(0)
+		assert_int(int(r["bad"])).override_failure_message("%s: %d of 16 seeds say other lines or another order" % [c[0], r["bad"]]).is_equal(0)
+
+
+
 func test_a_hero_the_deadly_weapon_killed_lends_no_rule_to_the_later_weapon_from_94() -> void:
 	var cases := [["Stealth", _hero(["Stealth"], "alien_hives")], ["Changebound", _hero(["Changebound"], "change_disciples")],
 		["Stealth Aura", _hero(["Stealth Aura"], "robot_legions")], ["Evasive", _hero(["Evasive"], "battle_brothers")]]

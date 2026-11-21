@@ -595,6 +595,8 @@ pub struct ShootResult {
     pub takedown_groups: Vec<i64>,
     /// Per Takedown group pushed into `takedown_groups`: `(weapon_name, picked_model_label)` for the landing line.
     pub takedown_lines: Vec<(String, String)>,
+    /// The volley fold's tray mark after each Takedown group beside another weapon: the table lands it there, so its lines go back to it.
+    pub takedown_marks: Vec<(usize, usize)>,
     /// Rules 3.6 (`EPOCH_73_V36`) — Hazardous self-wounds the dice legs read off the hit roll:
     /// `(owner, weapon, unmodified 1s, X)` with X = max(Blast, Deadly, 1). The sim lands them on the
     /// bearer (main.gd `_solo_hazardous_self_wounds`); below the gate they are ignored.
@@ -630,6 +632,7 @@ impl ShootResult {
         self.deadly_tally += other.deadly_tally;
         self.takedown_groups.extend(other.takedown_groups);
         self.takedown_lines.extend(other.takedown_lines);
+        self.takedown_marks.extend(other.takedown_marks);
         self.hazardous_self.extend(other.hazardous_self);
         for u in other.unported {
             self.mark(u);
@@ -1395,6 +1398,8 @@ pub fn resolve_volley_with_tray(
 /// `EPOCH_94_PARITY_BATCH`: the caller's landing of one weapon's Deadly groups on a scratch state; answers the models the target's chain
 /// still has (0 = wiped).
 pub(crate) type InlineLand<'a> = &'a mut dyn FnMut(&[(i64, i64)]) -> i64;
+/// The Takedown pick callback: after `groups`, (the next pick in cover, its label, models the groups killed so far).
+pub(crate) type TakedownPickInfo<'a> = &'a dyn Fn(&[i64]) -> (bool, String, i64);
 
 /// The table's resolve-first rank of a shot (`_solo_shot_priority`): Takedown, then Deadly, then the rest.
 pub fn shot_rank(p: &ShootProfile) -> u8 {
@@ -1430,7 +1435,7 @@ pub fn resolve_volley_leg(
 ) -> ShootResult {
     resolve_volley_with_pick_label(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates,
         shred_alias_dice, shred_boost_dice, deadly_per_model, takedown_exact,
-        &|gr| (takedown_cover(gr), "trooper".into()), sighted, None, None, tray)
+        &|gr| (takedown_cover(gr), "trooper".into(), 0), sighted, None, None, tray)
 }
 
 /// `resolve_volley_leg` whose Takedown pick callback also answers the picked model's label (the table's `_solo_model_label`),
@@ -1439,7 +1444,7 @@ pub fn resolve_volley_leg(
 pub(crate) fn resolve_volley_with_pick_label(
     shooters: &[Shooter<'_>], def: &Ctx, def_owner: &str, dist_in: f64, mod_dist_in: f64,
     cond_ap_dice: bool, surge_gates: bool, shred_alias_dice: bool, shred_boost_dice: bool,
-    deadly_per_model: bool, takedown_exact: bool, takedown_pick_info: &dyn Fn(&[i64]) -> (bool, String),
+    deadly_per_model: bool, takedown_exact: bool, takedown_pick_info: TakedownPickInfo<'_>,
     sighted: &dyn Fn(usize, usize) -> Option<(i64, i64, &'static str)>,
     // `EPOCH_94_PARITY_BATCH`: asked after each Deadly weapon with the (unsaved, X) groups it pushed; the caller lands them on a scratch
     // copy of the state and answers how many models the target's chain has left (0 = wiped: the weapons still to fire then read `Ctx::wiped`).
@@ -1619,6 +1624,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         say_rule(tray, "shroud", def.side, || format!("{}: {def_owner} — weapon ranges against it {}\" shorter (min {}\")",
             def.ranged_shroud_name, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in));
     }
+    let n_shots = shots.len();
     for (sh, k, pi) in shots {
         let def: &Ctx = if wiped { &def_wiped } else { def_live };
         let att = sh.att;
@@ -1895,10 +1901,10 @@ pub(crate) fn resolve_volley_with_pick_label(
             m = own;
         }
         let unit_of_one = takedown_exact && p.takedown;
-        let (td_own, td_label) = if unit_of_one {
+        let (td_own, td_label, _) = if unit_of_one {
             takedown_pick_info(&out.takedown_groups)
         } else {
-            (false, String::new())
+            (false, String::new(), 0)
         };
         if unit_of_one {
             let rule = if p.takedown_rule.is_empty() { "Takedown" } else { p.takedown_rule.as_str() };
@@ -2501,11 +2507,24 @@ pub(crate) fn resolve_volley_with_pick_label(
             let td = w * p.deadly.max(1);
             out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, if bypass_flag && !ignores_regen { td } else { 0 }, def, def_owner, tray, &mut out.rolls));
             out.takedown_lines.push((p.name.clone(), td_label));
+            // Plan H (H-17 lines): beside another weapon the table lands the Takedown here - its lines go back to this mark, and a model it
+            // killed makes the next weapon say `Simultaneous fire`. Lines only: the dice keep reading the declared target.
+            if n_shots > 1 && tray.feed().is_some() {
+                out.takedown_marks.push(tray.mark());
+                let killed = takedown_pick_info(&out.takedown_groups).2;
+                if killed > 0 {
+                    live_models = def.blast_models.map(|m| m - killed);
+                }
+            }
             out.deadly_tally += w;
         } else if deadly_per_model && p.deadly > 0 {
             let first = out.deadly_groups.len();
             push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, def_owner, tray, deadly_wipes);
             out.deadly_lines.push((p.name.clone(), w, p.deadly.max(1), out.deadly_groups.len() - first));
+            // Inline mode only: the table lands this weapon right here, so its landing lines go back to this mark (the melee fold's twin).
+            if inline_land.is_some() {
+                out.deadly_marks.push(tray.mark());
+            }
             out.deadly_tally += w;
         } else if ignores_regen {
             regen_proof += w;
