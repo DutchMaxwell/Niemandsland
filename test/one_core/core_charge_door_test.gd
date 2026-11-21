@@ -115,3 +115,44 @@ func test_a_charge_under_an_old_epoch_stays_on_the_table() -> void:
 	AiActRecorder.rules_epoch = before
 	assert_array(CoreActivation.charge_refusals(_main, att, report, true)).override_failure_message("the current epoch is the door's").is_empty()
 	RosterSweep.free_units(_main, [att, foe])
+
+
+## Plan E-25: an AI charge at a HUMAN defender is the door's too: the core asks the strike-back (E-24) and `drive` answers it with
+## the table's own prompt, asked once; `strike` and `hold` both land, the one line is said once. RED: the `human_defender`
+## clause back in `charge_refusals`, or no probe in `pending_choices` -> no prompt, the charger always struck back.
+func test_a_human_defender_answers_the_strike_back_once() -> void:
+	_main.solo_ai_slots = {2: true}
+	for answer in [true, false]:
+		var att := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Att", "models": 5, "x_in": 0.0}, true), BLADE.merged({"count": 5}, true))
+		var foe := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Def", "models": 8, "x_in": 7.0}, true), BLADE.merged({"count": 8, "attacks": 1}, true))
+		att.unit_properties["moved_round"] = 1   # the AI body stamps it before the hand-over (roster sweep)
+		var report := {"unit": att, "target": foe, "action": AiDecision.Action.CHARGE, "moved": true}
+		assert_array(CoreActivation.charge_refusals(_main, att, report)).override_failure_message("a human defender is the door's").is_empty()
+		var n: int = _main.battle_log.entries().size()
+		var alive_before := att.get_alive_models().size()
+		CoreActivation.reset_all(_main)
+		var h := CoreActivation.capture(_main)
+		_main._solo_core_ai_h = h
+		var out: Array = []
+		(func() -> void: out.append(await CoreActivation.run_ai_charge(_main, att, report))).call()
+		var asked := 0
+		for _i in 600:
+			if not out.is_empty():
+				break
+			for node: Node in _main.get_tree().root.find_children("*", "", true, false):
+				if node is PromptCard and not node.is_queued_for_deletion() and (node as PromptCard)._outcome.is_empty():
+					asked += 1
+					(node as PromptCard).resolve(answer)
+			await get_tree().process_frame
+		assert_bool(not out.is_empty() and bool(out[0])).override_failure_message("the door did not resolve the charge").is_true()
+		assert_int(asked).override_failure_message("the strike-back prompt must come up exactly once").is_equal(1)
+		var text := ""
+		for i in range(n, _main.battle_log.entries().size()):
+			text += str((_main.battle_log.entries()[i] as Dictionary)["text"]) + "\n"
+		var line := "Def strikes back" if answer else "Def holds — no strike back"
+		assert_int(text.count(line)).override_failure_message("'%s' once in:\n%s" % [line, text]).is_equal(1)
+		if not answer:
+			assert_int(att.get_alive_models().size()).override_failure_message("a held strike-back kills nobody").is_equal(alive_before)
+		_main._solo_core_ai_h = 0
+		_main.solo_controller._core_node_ready().release(h)
+		RosterSweep.free_units(_main, [att, foe])
