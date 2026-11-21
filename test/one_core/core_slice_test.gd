@@ -865,6 +865,13 @@ func test_the_versatile_pair_is_taken_from_the_epoch_94_batch() -> void:
 	assert_array(at_pending).override_failure_message("from 94 both halves pick on the modified number").is_empty()
 
 
+## H-18 lift (Versatile half): the deny file names no Versatile pair group any more; the pair is taken from 94 (the clause is the epoch alone, kept for
+## replays under an older stamp). RED: put `door_versatile_pick_modified_to_hit` back into the file -> this fails.
+func test_the_deny_file_names_no_versatile_pair_group() -> void:
+	var committed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.DENY_PATH))
+	assert_array((committed["groups"] as Dictionary).keys()).override_failure_message("the Versatile pair group left the deny file at the lift").not_contains(["door_versatile_pick_modified_to_hit"])
+
+
 ## DLINES train 4 (review): the table names a Takedown's picked model by its first item when it is no Tough and no special-weapon model; the core holds
 ## only an item count, so its line says "trooper" (door test, one Banner carrier: 12 of 12 seeds differ). A Takedown shooter at a target with a living
 ## item-carrying model is refused as a pair; no item, a dead carrier, no Takedown, and the dice-only pin (it drops line refusals) stay taken.

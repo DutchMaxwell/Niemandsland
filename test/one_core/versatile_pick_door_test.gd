@@ -70,11 +70,18 @@ func _faces(rolls: Array) -> Array:
 	return rolls.map(func(r: Dictionary) -> String: return "%s:%d:%s" % [r["kind"], int(r["count"]), r["faces"]])
 
 
+## EVERY battle-log line of the volley (H-18 lift: the door says what the table says), in a stable order.
+func _sorted(lines: Array) -> Array:
+	var out := lines.duplicate()
+	out.sort()
+	return out
+
+
 func _picks(lines: Array) -> Array:
 	return lines.filter(func(l: String) -> bool: return l.begins_with(PICK))
 
 
-## Seeds (of 16) whose dice, end state or pick line differ between the table and the core at `epoch`, and the table's first pick line.
+## Seeds (of 16) whose dice, end state or any battle-log line differ between the table and the core at `epoch`, and the table's first pick line.
 func _differing(shooter: Dictionary, target: Dictionary, epoch: int) -> Dictionary:
 	AiActRecorder.rules_epoch = epoch
 	var dice := ProjectSettings.globalize_path(DICE)
@@ -85,7 +92,8 @@ func _differing(shooter: Dictionary, target: Dictionary, epoch: int) -> Dictiona
 		var c := await RosterSweep.volley(_main, shooter, target, s, true, dice)
 		var tp := _picks(t["lines"])
 		first = first if first != "" else (str(tp[0]) if not tp.is_empty() else "no pick line")
-		if _faces(t["rolls"]) != _faces(c["rolls"]) or RosterSweep.first_state_diff(t["state"], c["state"]) != "" or tp != _picks(c["lines"]):
+		if _faces(t["rolls"]) != _faces(c["rolls"]) or RosterSweep.first_state_diff(t["state"], c["state"]) != "" or tp != _picks(c["lines"]) \
+				or _sorted(t["lines"]) != _sorted(c["lines"]):
 			bad += 1
 	return {"bad": bad, "pick": first}
 
