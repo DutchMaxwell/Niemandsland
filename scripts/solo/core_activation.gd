@@ -1029,6 +1029,10 @@ static func charge_refusals(main, unit: GameUnit, report: Dictionary, deny := fa
 		out.append("dangerous")
 	if not (report.get("casts", []) as Array).is_empty():
 		out.append("cast")
+	# The core's melee transcript is the rules-3.6 one (its result line and the sides' tallies read `EPOCH_73_V36`, the table's older line says
+	# "dealt" where the core says "took"): a charge under an older stamp (a replay, a pinned test) stays on the table, as a pre-83 lone hero does for a volley.
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
+		out.append("old_epoch")
 	return out
 
 
