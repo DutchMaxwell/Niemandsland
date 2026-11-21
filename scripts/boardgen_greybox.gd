@@ -49,6 +49,7 @@ var _tiefwerk: TiefwerkLibrary = null   # the authored surfaces (R2, on demand);
 var _decals: BoardgenDecals = null
 var _footprint := Rect2()   # the ground kept free of the table's scatter, in table-local metres: the board and all round it
 var _layout: Dictionary = {}
+var _atmosphere: Object = null   # the town re-applies its dusk after every mood change while it is on the table
 
 
 ## The board of NML_BOARDGEN_SEED on `table`, or null when the flag is off (release build, unset or not an integer).
@@ -93,19 +94,23 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 	var cells: Array = layout["cells"]
 	var town := str(layout.get("theme", BoardgenTheme.DEEPWORKS)) == BoardgenTheme.RUIN_TOWN
 	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var own := BoardgenTownSilhouette.drawn_cells(layout) if town else {}   # wall and tower cells the silhouette draws thinner: one collider box each, drawn by it
 	# Blocks: runs of same-kind cells along x. Level 0 is a thin skin coloured by what the cell is.
 	for z in nz:
 		var x := 0
 		while x < nx:
 			var kind := _cell_kind(cells[z * nx + x], town)
 			var run := 1
-			while x + run < nx and _cell_kind(cells[z * nx + x + run], town) == kind:
+			while not own.has(z * nx + x) and x + run < nx and not own.has(z * nx + x + run) and _cell_kind(cells[z * nx + x + run], town) == kind:
 				run += 1
 			var level: int = cells[z * nx + x]["level"]
 			var body := kind == "roofed"   # an intact house: level-0 solid ground, as high as the core's solid (2.5 in); its ridge is drawn below
-			out.append({"lo": Vector3(origin.x + x * cell_in, 0.0, origin.y + z * cell_in),
+			var box := {"lo": Vector3(origin.x + x * cell_in, 0.0, origin.y + z * cell_in),
 				"hi": Vector3(origin.x + (x + run) * cell_in, float(level_in[level]) if level > 0 else (SOLID_IN if body else SKIN_IN), origin.y + (z + 1) * cell_in),
-				"kind": kind, "solid": level > 0 or body})
+				"kind": kind, "solid": level > 0 or body}
+			if own.has(z * nx + x):
+				box["hidden"] = true
+			out.append(box)
 			x += run
 	for c: Dictionary in layout["connectors"]:
 		var base: float = level_in[cells[c["low"]]["level"]]
@@ -128,7 +133,6 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 		out.append_array(BoardgenTownDressing.lean_tos(layout))
 		out.append_array(BoardgenTownDressing.party_stubs(layout))
 		out.append_array(BoardgenTownDressing.breach_rubble(layout))
-		out.append_array(BoardgenTownDressing.hall_merlons(layout))
 	else:
 		out.append_array(BoardgenSumps.kerbs(layout))   # the low rim round each toxic sump (the town draws its pools as flat boxes)
 	return out
@@ -219,9 +223,9 @@ static func custom_data(b: Dictionary, kinds: Array = KINDS) -> Color:
 	return Color(kinds.find(b["kind"]), size.x, size.y, size.z)
 
 
-## Does a plan box draw itself? An intact house does not: BoardgenTownDressing draws its inset, yawed body, and this box only keeps the collider.
+## Does a plan box draw itself? An intact house does not (BoardgenTownDressing draws its inset, yawed body), nor a wall or tower cell (BoardgenTownSilhouette draws it thinner): the box only keeps the collider.
 static func draws_itself(b: Dictionary) -> bool:
-	return b["kind"] != "roofed"
+	return b["kind"] != "roofed" and not b.get("hidden", false)
 
 
 ## The whole board in ONE MultiMesh (one draw call, one shared procedural material) plus a collider per solid box.
@@ -338,7 +342,14 @@ func _ready() -> void:
 	_anchor()
 	if layout_theme == BoardgenTheme.RUIN_TOWN and is_inside_tree():   # the town is lit at dusk (a dev view: not restored)
 		var scene := get_tree().current_scene
-		BoardgenTownDressing.dusk(scene.get("lighting_controller") if scene != null else null)
+		var lighting: Variant = scene.get("lighting_controller") if scene != null else null
+		BoardgenTownDressing.dusk(lighting)
+		# the table's biome presenter restores the table mood one frame after a board arrives (atmosphere + table mood): that overwrote the dusk of the FIRST town board
+		# (sun 0.8, exposure 1.0 - the "too dark" board, 21.11.). Every mood change is followed by the dusk again, at the end of that frame.
+		var atmosphere: Variant = scene.get("atmosphere_controller") if scene != null else null
+		if atmosphere != null and atmosphere.has_signal("atmosphere_changed"):
+			atmosphere.atmosphere_changed.connect(func(_name: String) -> void: _dusk_again.call_deferred(lighting))
+			_atmosphere = atmosphere
 	if _kit != null and layout_theme == BoardgenTheme.DEEPWORKS:   # a module missing now is cached for the next board (the town uses no kit)
 		_kit.prefetch(KIT_LADDERS + BoardgenRails.KIT_MODULES + BoardgenProps.KIT_MODULES)
 	_scatter_off(_footprint)
@@ -351,8 +362,18 @@ func _ready() -> void:
 	_attach_surfaces()
 
 
+func _dusk_again(lighting: Object) -> void:
+	if is_inside_tree() and is_instance_valid(lighting):
+		BoardgenTownDressing.dusk(lighting)
+
+
 func _exit_tree() -> void:
 	_scatter_off(Rect2())
+	if _atmosphere != null and is_instance_valid(_atmosphere):
+		for c: Dictionary in _atmosphere.atmosphere_changed.get_connections():
+			if (c["callable"] as Callable).get_object() == self:
+				_atmosphere.atmosphere_changed.disconnect(c["callable"])
+	_atmosphere = null
 	var graphics := get_node_or_null("/root/GraphicsSettings")
 	if graphics != null and graphics.settings_applied.is_connected(_on_settings_applied):
 		graphics.settings_applied.disconnect(_on_settings_applied)

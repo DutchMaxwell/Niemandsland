@@ -71,6 +71,9 @@ bool use_frame(vec2 uv, float wood, inout vec3 ratio, inout vec3 tn) {
 	return t_on.y > 0.5 || t_on.z > 0.5;
 }
 
+// The ground's floor (silhouette round 21.11., maintainer: "too dark"): the streets and the packed earth sit below the models' own values (readability gate) but no longer near black.
+const float GROUND_COBBLE = 0.42;   // was 0.27
+const float GROUND_EARTH = 0.55;   // was 0.32
 varying vec3 wpos;
 varying vec3 wnrm;
 varying flat float kind;
@@ -344,13 +347,13 @@ void fragment() {
 		}
 		if (k == 1) {   // streets: cobbles
 			float crown;
-			alb = mix(cobble(xz, seed, tint * vec3(1.15, 0.98, 0.78) * 0.27, run, fan, crown), vec3(0.06, 0.055, 0.05), 0.55 * gutter);   // 0.27 (was 1.15): the streets sit well below the models' own values (readability gate, lead 21.11.)
+			alb = mix(cobble(xz, seed, tint * vec3(1.15, 0.98, 0.78) * GROUND_COBBLE, run, fan, crown), vec3(0.06, 0.055, 0.05), 0.55 * gutter);   // 0.27 (was 1.15): the streets sit well below the models' own values (readability gate, lead 21.11.)
 			rel = crown;
 			depth_in = 0.045;
 			rough = mix(0.55, 0.8, smoothstep(0.3, 0.7, crown));   // damp joints, dry crowns
 			ao = mix(0.55, 1.0, smoothstep(0.1, 0.5, crown));
 		} else if (k == 0) {   // earth: packed, with pebbles, weeds and broken stones
-			alb = tint * 0.32 * mix(0.78, 1.15, fbm(xz * 1.6 + seed));   // 0.32 (was 1.0): the packed earth of the deployment bands sits below the models too (readability gate)
+			alb = tint * GROUND_EARTH * mix(0.78, 1.15, fbm(xz * 1.6 + seed));   // 0.32 (was 1.0): the packed earth of the deployment bands sits below the models too (readability gate)
 			vec2 cp = xz * 3.0;   // 0.33 in cells, a pebble or a weed tuft in some of them: sparse, small, dark and irregular (rotated, stretched, off the cell centre)
 			vec2 ci = floor(cp);
 			float sp = h21(ci + seed);
@@ -372,6 +375,8 @@ void fragment() {
 		} else if (k == 3 || k == 4 || k == 8) {   // floor boards of a ruined house or yard, scorched in patches
 			if (k != 8) {
 				tint *= mix(0.9, 1.1, ground_at(xz).g);   // each part of a ruined row has its own tone
+				float lot_h = fract(ground_at(xz).b * 7.13);   // and each ruined house its own weather (silhouette round 21.11.: one brown for every flat top read as one slab): grey sun-bleached, dark tarred, warm
+				tint *= lot_h < 0.33 ? vec3(0.95, 0.97, 1.05) * 1.12 : (lot_h < 0.66 ? vec3(0.78, 0.74, 0.72) : vec3(1.1, 0.98, 0.84));
 			}
 			if (t_on.z > 0.5) {
 				tex_ratio = ratio_of(t_timber, xz / t_tile.z, MEAN_TIMBER);   // the grain of the real planks on the boards

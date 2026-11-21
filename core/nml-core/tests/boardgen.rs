@@ -422,7 +422,7 @@ fn town_budgets_hold_over_200_seeds() {
         retried.set(retried.get() + usize::from(l.attempt > 0));
         assert!((r.0..=r.1).contains(&l.raised()), "seed {seed} {sym:?}: raised {} outside {r:?}", l.raised());
         assert!((h.0..=h.1).contains(&l.high()), "seed {seed} {sym:?}: high {} outside {h:?}", l.high());
-        assert_eq!(l.towers(), 8, "seed {seed} {sym:?}: the town has exactly one pair of 2 x 2 towers");
+        assert_eq!(l.towers(), 4, "seed {seed} {sym:?}: the town has exactly one pair of slender 2 x 1 towers");
         assert!((b.landmark_pieces.0..=b.landmark_pieces.1).contains(&l.landmarks.len()));
         assert!(l.cells.iter().all(|c| c.level < 2 || c.deploy == 0), "level 2 or 3 in a band");
         assert!(l.max_drop_in() <= 9, "seed {seed}: sheer drop {} in", l.max_drop_in());
@@ -577,15 +577,15 @@ fn only_the_town_asks_for_a_lane_free_board() {
 }
 
 #[test]
-fn a_town_tower_is_a_2_by_2_block_nine_inches_up_with_a_ladder_from_six() {
+fn a_town_tower_is_a_slender_2_by_1_block_nine_inches_up_with_a_ladder_from_six() {
     for seed in 1..=300 {
         let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
         let tops: Vec<usize> = (0..GRID * GRID).filter(|&i| l.cells[i].level == 3 && l.cells[i].lot_kind != nml_core::boardgen::LotKind::Wall).collect();
-        assert_eq!(tops.len(), 8, "seed {seed}: {} tower cells", tops.len());
-        // two blocks of four, each a full 2 x 2 (a cell and its right, lower and lower-right neighbour), a half turn apart
-        let origins: Vec<usize> = tops.iter().copied().filter(|&i| i % GRID + 1 < GRID && i / GRID + 1 < GRID && [i + 1, i + GRID, i + GRID + 1].iter().all(|j| tops.contains(j))).collect();
-        assert_eq!(origins.len(), 2, "seed {seed}: the towers are not two 2 x 2 blocks\n{}", l.to_ascii());
-        assert_eq!(origins[0] + origins[1] + GRID + 1, GRID * GRID - 1, "seed {seed}: the towers are not a half turn apart");
+        assert_eq!(tops.len(), 4, "seed {seed}: {} tower cells", tops.len());
+        // two blocks of two (a cell and its right or lower neighbour), a half turn apart (silhouette round 21.11.: slender, not a 2 x 2 cube)
+        let origins: Vec<usize> = tops.iter().copied().filter(|&i| (i % GRID + 1 < GRID && tops.contains(&(i + 1))) || tops.contains(&(i + GRID))).collect();
+        assert_eq!(origins.len(), 2, "seed {seed}: the towers are not two 2 x 1 blocks\n{}", l.to_ascii());
+        assert!(tops.iter().all(|&i| tops.contains(&(GRID * GRID - 1 - i))), "seed {seed}: the towers are not a half turn apart");
         assert!(tops.iter().all(|&i| l.cells[i].deploy == 0), "seed {seed}: a tower in a band");
         for o in origins {
             // the level-3 island the block belongs to (a wall tower may touch it) is reached by a ladder from a 6 in cell
@@ -711,8 +711,29 @@ fn a_town_has_two_half_turn_city_walls_with_a_gate_a_breach_towers_and_a_ladder_
     }
 }
 
+/// Silhouette round (21.11.): a wall run carries ONE tower, at its end nearer the board's middle row (a tower at both ends made the wall a row of keeps).
 #[test]
-fn about_four_in_ten_town_houses_are_intact_solid_roofs_and_the_rest_ruined_walkable_ones() {
+fn a_town_wall_run_has_one_tower_at_its_end_nearer_the_middle() {
+    use nml_core::boardgen::LotKind;
+    for seed in 1..=300 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        for x in 0..GRID / 2 {
+            let col: Vec<_> = (0..GRID).map(|z| l.cell(x, z)).collect();
+            let mut z = 0;
+            while z < GRID {
+                if !(col[z].lot_kind == LotKind::Wall && col[z].level >= 2) { z += 1; continue; }
+                let start = z;
+                while z < GRID && col[z].lot_kind == LotKind::Wall && col[z].level >= 2 { z += 1; }
+                let towers: Vec<usize> = (start..z).filter(|&k| col[k].level == 3).collect();
+                assert!(towers.len() <= 1, "seed {seed}: the wall run {start}..{z} in column {x} has {} towers\n{}", towers.len(), l.to_ascii());
+                if let Some(&t) = towers.first() { assert!(t == start || t == z - 1, "seed {seed}: a wall tower inside its run {start}..{z} col {x} at {t}\n{}", l.to_ascii()); }
+            }
+        }
+    }
+}
+
+#[test]
+fn about_half_the_town_houses_are_intact_solid_roofs_and_the_rest_ruined_walkable_ones() {
     use nml_core::boardgen::LotKind;
     let (mut intact, mut ruined) = (0, 0);
     for seed in 1..=300 {
@@ -734,7 +755,7 @@ fn about_four_in_ten_town_houses_are_intact_solid_roofs_and_the_rest_ruined_walk
     }
     let share = intact as f64 / (intact + ruined) as f64;
     eprintln!("intact {intact}, ruined {ruined}: {share:.2}");
-    assert!((0.30..=0.50).contains(&share), "{share:.2} of the houses are intact");
+    assert!((0.40..=0.60).contains(&share), "{share:.2} of the houses are intact");   // silhouette round 21.11.: more intact gables, fewer flat platforms (was 0.30 - 0.50)
 }
 
 /// What "grown" means in numbers (ruintown AAA step G1): per town board the shares the growth stage has to move.
@@ -893,6 +914,7 @@ fn g2_gate() {
     let n: i64 = std::env::var("NML_N").ok().and_then(|v| v.parse().ok()).unwrap_or(300);
     let house = |k| matches!(k, Block | Terrace | Deck | Roofed);
     let (mut open_r, mut mid_r, mut party, mut with_party, mut houses, mut touching, mut lane0, mut valid0, mut lots, mut failed, mut attempts) = (0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    let (mut walk_up, mut walk_l3, mut intact) = (0, 0, 0);   // standing room above the ground (raised cells that are not an intact house), its 9 in part, intact houses
     for seed in 1..=n {
         let a0 = generate_attempt(seed, Symmetry::Point180, Theme::RuinTown, 0);
         lane0 += usize::from(!a0.has_edge_to_edge_lane());
@@ -901,6 +923,9 @@ fn g2_gate() {
         open_r += blocked_share(&l, 3, &band_pairs(), true);
         mid_r += blocked_share(&l, 3, &mid_pairs(), true);
         lots += l.lots.len();
+        walk_up += l.cells.iter().filter(|c| c.level >= 1 && c.lot_kind != Roofed).count();
+        walk_l3 += l.cells.iter().filter(|c| c.level == 3).count();
+        intact += l.lots.iter().filter(|lot| lot.kind == Roofed).count();
         failed += usize::from(!l.problems().is_empty());
         attempts += usize::from(l.attempt);
         let mut walls: BTreeSet<(u16, u16)> = BTreeSet::new();
@@ -914,8 +939,8 @@ fn g2_gate() {
         touching += l.lots.iter().filter(|lot| house(lot.kind) && (lot.z..lot.z + lot.h).any(|z| (lot.x..lot.x + lot.w).any(|x| nbrs(z * GRID + x).iter().any(|&j| l.cells[j].street)))).count();
     }
     let f = n as f64;
-    eprintln!("G2 over {n}: lots {:.1}, opening rays blocked {:.1} % (<= 95), mid rays blocked {:.1} % (60-85), party walls {:.2} per board ({:.0} % of boards), houses touching a street {:.1} % (>= 85), first sub-seed lane-free {:.1} % (>= 99), first sub-seed valid {:.1} %, mean sub-seed {:.1}, boards still failing after all sub-seeds {failed}",
-        lots as f64 / f, 100.0 * open_r / f, 100.0 * mid_r / f, party as f64 / f, 100.0 * with_party as f64 / f, 100.0 * touching as f64 / houses as f64, 100.0 * lane0 as f64 / f, 100.0 * valid0 as f64 / f, attempts as f64 / f);
+    eprintln!("G2 over {n}: lots {:.1}, opening rays blocked {:.1} % (<= 95), mid rays blocked {:.1} % (60-85), party walls {:.2} per board ({:.0} % of boards), houses touching a street {:.1} % (>= 85), first sub-seed lane-free {:.1} % (>= 99), first sub-seed valid {:.1} %, mean sub-seed {:.1}, boards still failing after all sub-seeds {failed}, walkable raised cells {:.1} per board (9 in: {:.1}), intact houses {:.1}",
+        lots as f64 / f, 100.0 * open_r / f, 100.0 * mid_r / f, party as f64 / f, 100.0 * with_party as f64 / f, 100.0 * touching as f64 / houses as f64, 100.0 * lane0 as f64 / f, 100.0 * valid0 as f64 / f, attempts as f64 / f, walk_up as f64 / f, walk_l3 as f64 / f, intact as f64 / f);
 }
 
 

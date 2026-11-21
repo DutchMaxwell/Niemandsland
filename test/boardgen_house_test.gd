@@ -86,7 +86,8 @@ func test_the_greybox_keeps_the_collider_of_an_intact_house_and_draws_its_body_e
 	board.build(layout)
 	var roofed := 0
 	for b in BoardgenGreybox.plan(layout):
-		assert_bool(BoardgenGreybox.draws_itself(b)).is_equal(b["kind"] != "roofed")   # nothing drawn by the greybox box of an intact house ...
+		if b["kind"] == "roofed":
+			assert_bool(BoardgenGreybox.draws_itself(b)).is_false()   # nothing drawn by the greybox box of an intact house ... (a wall cell's box hides too: boardgen_silhouette_test)
 		roofed += int(b["kind"] == "roofed")
 	assert_int(roofed).is_greater(0)
 	var heights := {}

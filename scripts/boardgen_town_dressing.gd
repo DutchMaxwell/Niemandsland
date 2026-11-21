@@ -9,7 +9,7 @@ const INCHES_TO_METERS := 0.0254
 const BODY_IN := 2.5   # the intact house's body: the core's solid height
 const OVERHANG_IN := 0.3
 const CHIMNEY_IN := 0.62
-const MAX_LIGHTS := 8
+const MAX_LIGHTS := 14   # 8 before the outer streets got their lamps (silhouette round 21.11.); only the SHADOWED_LANTERNS nearest the centre cast shadows
 const LANTERN_COLOUR := Color(1.0, 0.74, 0.48)
 ## A lantern is a down-cone (plan R7a): without a shadow the half-angle keeps the pool on the ground (height x tan) inside a 3 in cell's width - the light of a post against a wall must not reach the far side.
 const LANTERN_CONE_DEG := 48.0
@@ -24,6 +24,10 @@ const MOON_ELEVATION := 52.0
 const MOON_ENERGY := 2.0
 const MOON2_ENERGY := 2.0
 const MOON2_SHADOWS := true
+## Maintainer 21.11. "too dark": the whole board one step brighter, evenly (exposure, a paler and stronger sky fill); was exposure 1.0, ambient 0.9 at (0.42, 0.47, 0.62).
+const EXPOSURE := 1.6
+const AMBIENT_ENERGY := 1.5
+const AMBIENT_COLOUR := Color(0.48, 0.52, 0.64)
 const MOON_SPECULAR := 0.0   # no specular from the moons: on the glossy pawns it is a white veil that washes their colours (gate, opposite player side: 0.63 -> 0.78 on seed 13)
 const SSAO_RADIUS_M := 0.06   # 2.4 in: a wall's foot, a roof's eave, a joint between two tiers
 const SSAO_INTENSITY := 1.4
@@ -34,6 +38,9 @@ const SSIL_INTENSITY := 0.4
 ## A weak wide fill inside every lantern's pool (lead 21.11.): an omni with no shadow map, so the cone's pool has no hard black rim; weak enough that light leaking through a wall is a glow, not a pool.
 const FILL_ENERGY := 0.05
 const FILL_RANGE_M := 0.2
+const EMBER_COLOUR := Color(1.0, 0.5, 0.2)
+const EMBER_ENERGY := 0.7
+const EMBER_RANGE_M := 0.18
 const SHADOWED_LANTERNS := 4   # the nearest the centre cast shadows
 
 
@@ -153,8 +160,8 @@ static func chimneys(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
-## The battlements: merlons (0.7 x 0.7 x 0.4 in, three to a 3 in edge) round the open edges of every wall ridge and tower crown (a cell of the wall at
-## 6 in or more, or any 9 in cell), inside the 0.4 in edge strip so the walkway keeps its width. Some are missing, more in the south half than in the north
+## The battlements: merlons (0.7 x 0.7 x 0.4 in, three to a 3 in edge) along the open FIELD edge of every wall ridge (6 in) and round the open edges of every tower crown (any 9 in
+## cell), inside the 0.4 in edge strip so the walkway keeps its width. Some are missing, more in the south half than in the north
 ## one (a broken battlement is a look; no merlon is cover the core knows). Boxes for the greybox plan ({lo, hi, kind, solid}).
 static func merlons(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -173,6 +180,8 @@ static func merlons(layout: Dictionary) -> Array[Dictionary]:
 			var at := Vector2i(cd["x"], cd["z"]) + d
 			if at.x >= 0 and at.y >= 0 and at.x < nx and at.y < nz and int(layout["cells"][at.y * nx + at.x]["level"]) >= level:
 				continue   # a neighbour as high: this edge is no open edge
+			if level == 2 and side != (3 if int(cd["x"]) * 2 < nx else 1):
+				continue   # a wall ridge has its parapet on the FIELD side only: the town side of the walk is open (a thin wall with a walk, not a crenellated block)
 			for i in 3:
 				if _hash(cd["x"] * 16 + cd["z"], half, 10 + side * 3 + i) < (0.28 if half == 1 else 0.10):
 					continue
@@ -213,6 +222,53 @@ static func lanterns(layout: Dictionary) -> Array[Dictionary]:
 			var half := 1 if cd["z"] >= nz / 2 else 0
 			var at := origin + Vector2(cd["x"] + 0.5, cd["z"] + (0.12 if half == 0 else 0.88)) * cell_in
 			out.append({"at": at, "half": half})
+	out.append_array(outer_lanterns(layout))
+	return out
+
+
+## Lamps out to the edges (maintainer 21.11.: "too dark" outside the square): on the street cells of the second row from each board edge (inside the deployment bands) where a street runs
+## to the edge, a post at the cell's corner beside a non-street neighbour (0.12 in off the edge, the 0.75 in strip), every street that reaches the edge once. Half-turn twins by construction.
+static func outer_lanterns(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var cells: Array = layout["cells"]
+	for z: int in [1, nz - 2]:
+		var half := 1 if z >= nz / 2 else 0
+		for x in nx:
+			var cd: Dictionary = cells[z * nx + x]
+			if not cd["street"] or int(cd["level"]) != 0:
+				continue
+			var left: bool = x > 0 and not cells[z * nx + x - 1]["street"]
+			var right: bool = x + 1 < nx and not cells[z * nx + x + 1]["street"]
+			if not (left if half == 0 else right):
+				continue   # one post per street: on its west side in the north band, its east side in the south (the half turn)
+			out.append({"at": origin + Vector2(x + (0.12 if half == 0 else 0.88), z + 0.5) * cell_in, "half": half})
+	return out
+
+
+## Embers of the burnt-out town (maintainer 21.11.: "too dark"): a low warm glow over every wall breach and over the level-0 rest of a ruined house (a RUINS yard), the
+## yards nearest the board edges first, at most `limit` (a half-turn pair each). Light only: nothing here takes standing room. [{at (Vector2, inches), half}]
+static func ember_glows(layout: Dictionary, limit := 6) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var spots: Array = []
+	for cd: Dictionary in layout["cells"]:
+		var breach: bool = cd["lot_kind"] == "Wall" and int(cd["level"]) == 0
+		var yard: bool = cd["lot_kind"] == "Terrace" and int(cd["level"]) == 0 and not cd["street"]
+		if (breach or yard) and int(cd["z"]) * 2 < nz:
+			spots.append([0 if breach else 1, absf(float(cd["z"]) - 7.5) * -1.0, cd])
+	spots.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]))
+	for sp: Array in spots.slice(0, limit / 2):
+		var cd: Dictionary = sp[2]
+		var at := origin + Vector2(float(cd["x"]) + 0.5, float(cd["z"]) + 0.5) * cell_in
+		out.append({"at": at, "half": 0})
+		out.append({"at": -at, "half": 1})
 	return out
 
 
@@ -275,6 +331,24 @@ func _add_lights(layout: Dictionary) -> void:
 		add_child(fill)
 
 
+## The ember glows: warm omni lights 0.6 in over the ground, no shadow (a cheap light), range 7 in.
+func _add_embers(layout: Dictionary) -> void:
+	var i := 0
+	for e: Dictionary in ember_glows(layout):
+		var at: Vector2 = e["at"]
+		var light := OmniLight3D.new()
+		light.name = "Ember%d" % i
+		light.position = Vector3(at.x, 0.6, at.y) * INCHES_TO_METERS
+		light.light_color = EMBER_COLOUR
+		light.light_energy = EMBER_ENERGY
+		light.omni_range = EMBER_RANGE_M
+		light.omni_attenuation = 1.6
+		light.light_specular = 0.0
+		light.shadow_enabled = false
+		add_child(light)
+		i += 1
+
+
 ## One ReflectionProbe over the board, rendered ONCE after the build (plan R7b): the water and the wet stone mirror the sky instead of black. The box is the board plus a margin, low (the pieces stand
 ## up to 9 in = 0.23 m).
 func _add_probe(layout: Dictionary) -> void:
@@ -308,9 +382,9 @@ static func dusk(lighting: Object) -> void:
 	lighting.set_sun_color(MOON_COLOUR)
 	lighting.set_sun_energy(MOON_ENERGY)
 	lighting.set_sun_angles(MOON_AZIMUTH, MOON_ELEVATION)
-	lighting.set_ambient_color(Color(0.42, 0.47, 0.62))
-	lighting.set_ambient_energy(0.9)
-	lighting.set_exposure(1.0)
+	lighting.set_ambient_color(AMBIENT_COLOUR)
+	lighting.set_ambient_energy(AMBIENT_ENERGY)
+	lighting.set_exposure(EXPOSURE)
 	if lighting.has_method("set_ssao_radius"):   # board-scale occlusion (plan R7b): the presets' 0.8 - 1.2 m radius is wider than the whole 1.2 m board
 		lighting.set_ssao_radius(SSAO_RADIUS_M)
 		lighting.set_ssao_intensity(SSAO_INTENSITY)
@@ -531,36 +605,6 @@ static func breach_rubble(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
-## Battlements round the hall: merlons along the outer edges of every hall footprint (a pumphouse landmark) on its block, like the wall's, inside the rim.
-static func hall_merlons(layout: Dictionary) -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	var nx: int = layout["nx"]
-	var cell_in := float(layout["cell_in"])
-	var origin := Vector2(nx, layout["nz"]) * cell_in * -0.5
-	var n := 0
-	for lm: Dictionary in layout["landmarks"]:
-		n += 1
-		if lm["kind"] != "PumpHouse":
-			continue
-		var top := 0.0
-		for dz in int(lm["h"]):
-			for dx in int(lm["w"]):
-				top = maxf(top, float(layout["level_in"][layout["cells"][(int(lm["z"]) + dz) * nx + int(lm["x"]) + dx]["level"]]))
-		var lo := origin + Vector2(lm["x"], lm["z"]) * cell_in
-		var size := Vector2(lm["w"], lm["h"]) * cell_in
-		var half := 1 if lo.y + size.y * 0.5 > 0.0 else 0
-		for edge in 4:   # north, east, south, west: 3 merlons per 3 in of edge
-			var length := size.x if edge % 2 == 0 else size.y
-			for i in int(length / cell_in) * 3:
-				if _hash(n * 31 + edge, half, 110 + i) < (0.28 if half == 1 else 0.10):
-					continue
-				var t := 0.5 + float(i)
-				var box_lo := Vector2(lo.x + t - 0.35, lo.y if edge == 0 else lo.y + size.y - 0.4) if edge % 2 == 0 else Vector2(lo.x if edge == 3 else lo.x + size.x - 0.4, lo.y + t - 0.35)
-				var box_size := Vector2(0.7, 0.4) if edge % 2 == 0 else Vector2(0.4, 0.7)
-				out.append({"lo": Vector3(box_lo.x, top, box_lo.y), "hi": Vector3(box_lo.x + box_size.x, top + 0.7, box_lo.y + box_size.y), "kind": "wall", "solid": false, "merlon": true})
-	return out
-
-
 ## The frontage table of the building lots (plan O1, no visual change yet): for every house lot (Block, Terrace, Deck, Roofed) its FRONT face - the face with the most
 ## street cells beside it, ties toward the square - its back (opposite), its sides, the faces that are party walls (a building lot of its own right beside them) and
 ## whether it is a corner lot (street beside two adjacent faces). A lot with no street beside any face has front "" (a backyard house). Faces are "N" (z - 1), "E", "S", "W".
@@ -702,7 +746,9 @@ func build(layout: Dictionary, material: Material, prism_roofs := true) -> void:
 		mmi.material_override = material
 		add_child(mmi)
 	_add_bodies(layout, material)
+	BoardgenTownSilhouette.build(self, layout, material)
 	_add_lights(layout)
+	_add_embers(layout)
 	_add_probe(layout)
 
 

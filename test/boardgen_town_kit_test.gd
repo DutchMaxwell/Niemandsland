@@ -44,7 +44,7 @@ func test_every_piece_gets_one_module_where_the_procedural_one_stood() -> void:
 	assert_int(_count(plan, "roof_") - _count(plan, "roof_rafters")).is_equal(roofs)
 	assert_int(_count(plan, "roof_rafters")).is_equal(_count(plan, "roof_broken"))   # a broken roof shows its frame
 	assert_int(_count(plan, "chimney")).is_equal(BoardgenTownDressing.chimneys(layout).size())
-	assert_int(_count(plan, "merlon")).is_equal(BoardgenTownDressing.merlons(layout).size() + BoardgenTownDressing.hall_merlons(layout).size())
+	assert_int(_count(plan, "merlon")).is_equal(BoardgenTownDressing.merlons(layout).size())
 	for m: String in plan:
 		assert_bool(BoardgenTownKit.MODULES.has(m) or BoardgenTownKit.set_of(m) != "").is_true()   # a K-R1 module or an authored clutter one (A2 / A2b / A6, BoardgenTownClutter)
 

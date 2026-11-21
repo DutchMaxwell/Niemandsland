@@ -175,6 +175,7 @@ mod tests {
         assert_ne!(board_hash(&moved), board_hash(&p), "a changed class must change the hash");
     }
 
-    const PINNED_TOWN_42: &str = "63edd6d402067a23";
+    // re-pinned 21.11. (silhouette round): slender 2 x 1 town towers, one tower per wall run, 65 % intact houses
+    const PINNED_TOWN_42: &str = "593b1257da9d696f";
     const PINNED_SEED_42: &str = "cbcd64fada596527";
 }
