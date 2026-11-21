@@ -19,7 +19,7 @@ func test_the_patterns_report_their_height_and_fade_it_with_the_pixel_footprint(
 	for fn in ["vec3 stone(", "vec3 cobble("]:
 		var head := src.substr(src.find(fn), 160)
 		assert_bool(head.contains("out float rel")).override_failure_message("%s does not report a height" % fn).is_true()
-	assert_bool(src.contains("rel = mix(0.5, sett *")).is_true()   # a sett that is too fine for the pixel is flat again (no shimmer)
+	assert_bool(src.contains("rel = mix(0.5, mix(0.34,")).is_true()   # a sett that is too fine for the pixel is flat again (no shimmer)
 	assert_bool(src.contains("rel = mix(0.5, edge *")).is_true()
 	# the ground is bumped: cobbles, earth, boards, flagstones each set a depth
 	for needle in ["depth_in = 0.06;", "depth_in = 0.05;", "depth_in = 0.02;", "depth_in = 0.03;"]:
@@ -28,7 +28,7 @@ func test_the_patterns_report_their_height_and_fade_it_with_the_pixel_footprint(
 
 func test_roughness_follows_the_material_worn_crowns_matt_joints() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
-	assert_bool(src.contains("rough = mix(0.85, 0.55, smoothstep(0.3, 0.7, crown));")).is_true()   # (target C, train 2) a dirty joint matt 0.85, a worn crown 0.55 (the grit map's wet makes damp joints shine)
+	assert_bool(src.contains("rough = mix(0.85, 0.65, smoothstep(0.3, 0.7, crown));")).is_true()   # (target C, train 2) a dirty joint matt 0.85, a worn crown 0.65 (the grit map's wet makes damp joints shine)
 	assert_bool(src.contains("rough = 0.95;")).is_true()   # packed earth
 
 
