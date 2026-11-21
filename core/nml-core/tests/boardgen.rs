@@ -258,11 +258,17 @@ fn json_round_trips_and_ascii_has_one_line_per_row() {
 /// `cap` flattens every level above it (3 -> 2 gives the board as it was before the towers); `solids` lets a tank cluster
 /// or crane base stop a ray like the 2.5 in container the core knows.
 fn blocked_share(l: &Layout, cap: u8, pairs: &[CellPair], solids: bool) -> f64 {
+    blocked_share_roofs(l, cap, pairs, solids, nml_core::terrain::CONTAINER_HEIGHT_IN)
+}
+
+/// `blocked_share` with the roofed houses stopping a ray at `roof_in` (the core reads a house as 2.5 in; the look draws the ridge at 4.0-5.2 in).
+fn blocked_share_roofs(l: &Layout, cap: u8, pairs: &[CellPair], solids: bool, roof_in: f64) -> f64 {
     let sol = solid(l);
     let h = |x: f64, z: f64| {
         let (cx, cz) = ((x / 3.0) as usize, (z / 3.0) as usize);
         let floor = f64::from(nml_core::boardgen::LEVEL_IN[usize::from(l.cell(cx, cz).level.min(cap))]);
-        if solids && sol[cz * GRID + cx] { floor.max(nml_core::terrain::CONTAINER_HEIGHT_IN) } else { floor }
+        let top = if l.cell(cx, cz).lot_kind == nml_core::boardgen::LotKind::Roofed { roof_in } else { nml_core::terrain::CONTAINER_HEIGHT_IN };
+        if solids && sol[cz * GRID + cx] { floor.max(top) } else { floor }
     };
     let blocked = pairs.iter().filter(|&&((x1, z1), (x2, z2))| {
         let (a, b) = ((x1 as f64 * 3.0 + 1.5, z1 as f64 * 3.0 + 1.5), (x2 as f64 * 3.0 + 1.5, z2 as f64 * 3.0 + 1.5));
@@ -941,6 +947,68 @@ fn g2_gate() {
     let f = n as f64;
     eprintln!("G2 over {n}: lots {:.1}, opening rays blocked {:.1} % (<= 95), mid rays blocked {:.1} % (60-85), party walls {:.2} per board ({:.0} % of boards), houses touching a street {:.1} % (>= 85), first sub-seed lane-free {:.1} % (>= 99), first sub-seed valid {:.1} %, mean sub-seed {:.1}, boards still failing after all sub-seeds {failed}, walkable raised cells {:.1} per board (9 in: {:.1}), intact houses {:.1}",
         lots as f64 / f, 100.0 * open_r / f, 100.0 * mid_r / f, party as f64 / f, 100.0 * with_party as f64 / f, 100.0 * touching as f64 / houses as f64, 100.0 * lane0 as f64 / f, 100.0 * valid0 as f64 / f, attempts as f64 / f, walk_up as f64 / f, walk_l3 as f64 / f, intact as f64 / f);
+}
+
+
+/// BASELINE of PLAN_RUINTOWN_ROOFS step K0: origin/main 6a2972697, town theme, Point180, seeds 1..=1000 (means per board, sq in, percent).
+/// The roofs steps K2+ move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
+const ROOFS_BASELINE: [(&str, f64); 19] = [
+    ("intact houses", 4.04), ("boards with <= 2 houses %", 35.4), ("roofed cells", 11.0), ("raised cells in house plots", 13.3), ("raised cells on free earth", 38.0), ("raised cells in the city wall", 33.8),
+    ("roof share of footprints %", 17.7), ("walkable sq in 0 in", 1385.0), ("walkable sq in 3 in", 490.0), ("walkable sq in 6 in", 208.0), ("walkable sq in 9 in", 68.0), ("ladders", 46.8),
+    ("opening rays blocked %", 94.6), ("mid rays blocked %", 79.5), ("tier-to-tier rays blocked, house 2.5 in %", 56.2), ("tier-to-tier rays blocked, ridge 4.5 in %", 59.2),
+    ("roofed cells in the bands", 7.95), ("raised cells in the bands", 37.5), ("asymmetric cells", 0.0),
+];
+
+/// Roofs census over `NML_N` town seeds (default 1000, the baseline's size; the baseline is asserted only at 1000, within +-0.5 on every number). `NML_ROOFS_OUT=<file>` also writes the report.
+#[test]
+#[ignore = "measurement: NML_N=1000 cargo test --release --test boardgen census_of_roofs -- --ignored --nocapture"]
+fn census_of_roofs() {
+    use nml_core::boardgen::LotKind;
+    let n: i64 = std::env::var("NML_N").ok().and_then(|v| v.parse().ok()).unwrap_or(1000);
+    let (mut houses, mut roofed, mut raised, mut walk, mut ladders, mut band, mut asym) = (Vec::new(), 0, [0usize; 3], [0usize; 4], 0, [0usize; 2], 0);
+    let (mut rays, mut failed) = ([0.0f64; 4], 0);
+    for seed in 1..=n {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        failed += usize::from(!l.problems().is_empty());
+        houses.push(l.lots.iter().filter(|lot| lot.kind == LotKind::Roofed).count());
+        let sol = solid(&l);
+        for (i, c) in l.cells.iter().enumerate() {
+            let is_roof = c.lot_kind == LotKind::Roofed;
+            roofed += usize::from(is_roof);
+            band[0] += usize::from(is_roof && c.deploy != 0);
+            if c.level > 0 && !is_roof {
+                raised[if c.lot_kind == LotKind::Wall { 2 } else if c.lot_id != 0 { 0 } else { 1 }] += 1;
+                band[1] += usize::from(c.deploy != 0);
+            }
+            walk[usize::from(c.level)] += usize::from(!sol[i]);
+            let twin = &l.cells[GRID * GRID - 1 - i];
+            asym += usize::from((twin.level, twin.lot_kind) != (c.level, c.lot_kind));
+        }
+        ladders += l.connectors.len();
+        let tiers: Vec<(usize, usize)> = l.cells.iter().filter(|c| c.level >= 1 && c.lot_kind != LotKind::Roofed).map(|c| (c.x, c.z)).collect();
+        let duels: Vec<CellPair> = tiers.iter().enumerate().flat_map(|(i, &a)| tiers[i + 1..].iter().map(move |&b| (a, b))).collect();
+        rays[0] += blocked_share(&l, 3, &band_pairs(), true);
+        rays[1] += blocked_share(&l, 3, &mid_pairs(), true);
+        rays[2] += blocked_share(&l, 3, &duels, true);
+        rays[3] += blocked_share_roofs(&l, 3, &duels, true, 4.5);
+    }
+    houses.sort_unstable();
+    let f = n as f64;
+    let got = [
+        houses.iter().sum::<usize>() as f64 / f, 100.0 * houses.iter().filter(|&&h| h <= 2).count() as f64 / f, roofed as f64 / f,
+        raised[0] as f64 / f, raised[1] as f64 / f, raised[2] as f64 / f, 100.0 * roofed as f64 / (roofed + raised[0] + raised[1]) as f64,
+        walk[0] as f64 * 9.0 / f, walk[1] as f64 * 9.0 / f, walk[2] as f64 * 9.0 / f, walk[3] as f64 * 9.0 / f, ladders as f64 / f,
+        100.0 * rays[0] / f, 100.0 * rays[1] / f, 100.0 * rays[2] / f, 100.0 * rays[3] / f, band[0] as f64 / f, band[1] as f64 / f, asym as f64,
+    ];
+    let mut out = format!("roofs census over {n} town seeds (Point180); houses min {} p10 {} median {} max {}; boards failing {failed}\n", houses[0], houses[houses.len() / 10], houses[houses.len() / 2], houses[houses.len() - 1]);
+    let mut off = Vec::new();
+    for (&(name, base), g) in ROOFS_BASELINE.iter().zip(got) {
+        out += &format!("{name}: {g:.2} (baseline {base})\n");
+        if (g - base).abs() > 0.5 { off.push(format!("{name}: {g:.2} vs {base}")); }
+    }
+    eprintln!("{out}");
+    if let Ok(path) = std::env::var("NML_ROOFS_OUT") { std::fs::write(path, &out).expect("roofs census file"); }
+    if n == 1000 { assert!(off.is_empty(), "the town moved off the K0 baseline (re-pin ROOFS_BASELINE on purpose): {off:?}"); }
 }
 
 
