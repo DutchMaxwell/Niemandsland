@@ -197,6 +197,30 @@ use super::*;
         assert_eq!(next2.tag_markers[2], 0);
     }
 
+    /// covfix-dice (`PENDING_EPOCH_SPOTTER_ROLL_RECORD`): from 96 the spotter's placement die is a recorded roll, so the step driver
+    /// answers the act on the recorded faces. At 95 the draw has no record and the driver refuses the whole act.
+    #[test]
+    fn the_spotter_die_is_a_recorded_roll_from_96() {
+        let (st, statics) = spotter_line();
+        let e = crate::acts::PENDING_EPOCH_SPOTTER_ROLL_RECORD;
+        let step = |epoch: u32| {
+            let terrain = crate::terrain::Terrain::default();
+            let seams = Seams { rules_epoch: epoch, ..Seams::default() };
+            let run = |tray: &mut Tray| {
+                resolve_stochastic_tray_on_board(&statics, &st, &spot_hold(), &terrain, seams, &mut crate::rng::GodotRng::new(0), tray).unwrap().1
+            };
+            let faces: Vec<Vec<u8>> = run(&mut Tray::seeded(1)).rolls.iter().map(|r| r.faces.clone()).collect();
+            crate::step::shoot_step(&faces, run)
+        };
+        assert!(matches!(step(e - 1), crate::step::Step::Refused { .. }), "95: the silent spot draw is refused");
+        match step(e) {
+            crate::step::Step::Done(r, ..) => {
+                assert_eq!((r.rolls[0].kind, r.rolls[0].target), ("attack", 4), "96: the spot die is the act's first record")
+            }
+            other => panic!("96: the driver must answer the act: {other:?}"),
+        }
+    }
+
     /// The tray lines of one act (a seeded run draws the dice, a supplied tray replays them): what a door step writes.
     fn tray_lines_of(st: &State, statics: &[UnitStatic], action: &Action, seed: i64, epoch: u32) -> Vec<String> {
         tray_lines_after(st, statics, action, seed, epoch, Vec::new())

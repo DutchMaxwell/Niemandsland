@@ -2923,7 +2923,15 @@ fn tray_piercing_tag(
             };
             if spotter {
                 next.piercing_spot_round[bearer] = next.round;
-                let face = tray.roll(1).first().copied().unwrap_or(1) as i64;
+                let record = rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SPOTTER_ROLL_RECORD);
+                if record {
+                    tray.owner_next(Some(bearer));
+                }
+                let faces = tray.roll(1);
+                if record {
+                    shot.rolls.push(crate::dice::Roll { kind: "attack", count: 1, target: t.place_roll, faces: faces.clone(), owner: statics[pb].name.clone() });
+                }
+                let face = faces.first().copied().unwrap_or(1) as i64;
                 if face < t.place_roll {
                     let line = format!(
                         "{}: {} misses the mark on {} (needed {}+)",
@@ -3123,7 +3131,13 @@ fn tray_precision_markers(
                 } else {
                     1
                 };
+                if rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SPOTTER_ROLL_RECORD) {
+                    tray.owner_next(Some(bearer));
+                }
                 let faces = tray.roll(dice);
+                if rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SPOTTER_ROLL_RECORD) {
+                    shot.rolls.push(crate::dice::Roll { kind: "attack", count: dice as i64, target: b.place_roll, faces: faces.clone(), owner: owner.clone() });
+                }
                 let hits = faces.iter().filter(|&&f| f as i64 >= b.place_roll).count() as i64;
                 let tn = statics[next.roster.profile[ti]].name.clone();
                 if hits <= 0 {
@@ -5961,6 +5975,10 @@ fn takedown_shot_gate(
         msc.keep.remove(k);
         msc.attacks.remove(k);
     } else {
+        // PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL: each living model of the bearer makes its own extra attack.
+        if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL) {
+            msc.attacks[k] = shoot[pi].attacks * state.alive[mi].max(1);
+        }
         spent.push(mi);
     }
 }
