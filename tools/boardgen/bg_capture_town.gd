@@ -464,6 +464,9 @@ func _readability(tag: String, pname: String) -> void:
 		_backdrop()
 		await process_frame
 		_hide_scatter()
+	var env: Environment = _main.world_environment.environment   # what the gate frames are graded with (the board's mood layer must show up here)
+	_manifest["grade"] = {"tonemap_mode": env.tonemap_mode, "agx_contrast": env.tonemap_agx_contrast, "adjustment": env.adjustment_enabled,
+		"contrast": env.adjustment_contrast, "saturation": env.adjustment_saturation, "curve": env.adjustment_color_correction != null}
 	var cam := root.get_viewport().get_camera_3d()
 	var img := root.get_texture().get_image()
 	var k := float(img.get_width()) / root.get_visible_rect().size.x
