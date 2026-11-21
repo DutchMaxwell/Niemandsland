@@ -1477,6 +1477,8 @@ pub(crate) fn resolve_volley_with_pick_label(
     let mut cover_logged = false;
     // Rules 3.6 (SHO-14) — the Pierce line's once-per-volley flag.
     let mut pierce_logged = false;
+    // PLAN_COVER_36 — the weapons whose Indirect already said it lifts the sight-blocker cover (one line per weapon).
+    let mut screen_lift_logged: Vec<String> = Vec::new();
     // Wave 3 — the Shot Modifier family's two runtime-gated members name
     // themselves once per volley per firing member (rules-must-log): the
     // member's owner, its hit bonus and (Mobile Artillery only) its own
@@ -2161,19 +2163,27 @@ pub(crate) fn resolve_volley_with_pick_label(
         let guarded_applies = def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded;
         base = guarded_defense(base, guarded_applies && !pierce, def.def_floor());
         shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
-        // Rules 3.6 (FAB-A3): an Indirect shot lifts cover granted by sight blockers only, and the
-        // engine grants Cover terrain only — so a HELD shot keeps it too. Blast and Ignores Cover
+        // Rules 3.6 (FAB-A3): an Indirect shot lifts cover granted by sight blockers only, so terrain cover
+        // (`in_cover`) stays for it, held or not; the sight-blocker half (`screened`, from 95) is lifted per
+        // weapon by `lifts_screen` below. Blast and Ignores Cover
         // keep dropping it at every epoch (`indirect_cover_needs_hold` is stamped only from
         // EPOCH_73_V36, so older records keep their unconditional skip).
         let indirect_keeps_cover = p.indirect && p.indirect_cover_needs_hold;
         let skips_cover = p.blast > 1 || p.ignores_cover || (p.indirect && !indirect_keeps_cover);
-        let cov_def = covered_defense(base, if pierce { false } else if unit_of_one { td_own } else { def.in_cover }, def.def_floor());
+        // PLAN_COVER_36 (`PENDING_EPOCH_COVER_SCREEN`): cover from sight blockers (`def.screened`, stamped by the volley seam from 95
+        // only) joins terrain cover as ONE +1; an Indirect whose cover waiver holds (Hold kept where the entry needs it) or the
+        // Indirect mark on the target lifts it, and terrain cover stays.
+        // A moved Indirect gun without the Hold its entry needs is not firing indirectly: no lift, mark or not (lead 21.11.).
+        let lifts_screen = (p.indirect || (def.indirect_mark && rule_on(att.rules_epoch, EPOCH_73_V36)))
+            && !(p.indirect_cover_needs_hold && !att.held);
+        let in_cover = def.in_cover || (def.screened && !lifts_screen);
+        let cov_def = covered_defense(base, if pierce { false } else if unit_of_one { td_own } else { in_cover }, def.def_floor());
         let save_def = if skips_cover { base } else { cov_def };
         if pierce && !pierce_logged {
             pierce_logged = true;
             let mut ign: Vec<String> = Vec::new();
             if def.shielded_bonus() > 0 { ign.push(format!("Shielded +{}", def.shielded_bonus())); }
-            if !skips_cover && (if unit_of_one { td_own } else { def.in_cover }) { ign.push("Cover +1".into()); }
+            if !skips_cover && (if unit_of_one { td_own } else { in_cover }) { ign.push("Cover +1".into()); }
             if guarded_applies { ign.push("Guarded +1".into()); }
             if def.growth_def_mod > 0 { ign.push(format!("Defensive growth +{}", def.growth_def_mod)); }
             if def.defense_mod < 0 { ign.push(format!("Defense Buff +{}", -def.defense_mod)); }
@@ -2206,7 +2216,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         // skip lands (`Ranged Shrouding`'s one-line shape). An epoch-5 static
         // carries no markers and stays silent.
         if !alias_cover_logged
-            && def.in_cover
+            && (def.in_cover || def.screened)
             && skips_cover
             && p.blast <= 1
             && (p.indirect_alias || p.ignores_cover_alias || !p.cover_rule.is_empty())
@@ -2233,6 +2243,10 @@ pub(crate) fn resolve_volley_with_pick_label(
             out.log.push(format!(
                 "Indirect: {} — {}'s cover counts (only sight-blocker cover is ignored)",
                 sh.owner, def_owner));
+        }
+        if def.screened && lifts_screen && !skips_cover && !screen_lift_logged.contains(&p.name) {
+            screen_lift_logged.push(p.name.clone());
+            out.log.push(format!("Indirect: {} ignores {def_owner}'s cover from sight blockers", p.name));
         }
         // I4 (table `_solo_ai_shoot` / the human volley): a covered save says so once, with the Defense it rolls on.
         if !unit_of_one && !cover_logged && uses_cover {

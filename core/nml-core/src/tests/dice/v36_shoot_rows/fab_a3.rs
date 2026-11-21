@@ -1,6 +1,6 @@
 //! FAB-A3 tests (rules 3.6, lane shoot): the Indirect entry lifts cover granted by SIGHT BLOCKERS
-//! only. The engine grants Cover terrain and nothing else, so from epoch 73 a Held Indirect shot
-//! keeps the target's Cover +1 too. Below 73 the unconditional skip stays byte-identical, and
+//! only. Cover terrain is not one of them, so from epoch 73 a Held Indirect shot keeps the target's
+//! terrain Cover +1 too; the sight-blocker half (`Ctx.screened`, from 95) is in `cover_line.rs`. Below 73 the unconditional skip stays byte-identical, and
 //! Blast / Ignores Cover keep dropping cover at every epoch.
 use super::super::*;
 

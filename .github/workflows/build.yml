@@ -52,6 +52,8 @@ jobs:
       rust_relevant: ${{ steps.rust_filter.outputs.rust_relevant }}
       shard_count: ${{ steps.shards.outputs.shard_count }}
       shards: ${{ steps.shards.outputs.shards }}
+      procs: ${{ steps.shards.outputs.procs }}
+      jobs: ${{ steps.shards.outputs.jobs }}
     steps:
       # THE one place that decides how many gdUnit4 shards exist. The test matrix, the
       # shard assignment (tools/shard_assign.py) in the test job and in the shards-coverage guard
@@ -60,7 +62,12 @@ jobs:
         id: shards
         run: |
           COUNT=12
+          # gdUnit processes per runner (PLAN_CI_THROUGHPUT step 1 measured CPU and peak RSS per process).
+          PROCS=3
+          [ $((COUNT % PROCS)) -eq 0 ] || { echo "::error::COUNT=$COUNT not divisible by PROCS=$PROCS"; exit 1; }
           echo "shard_count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "procs=$PROCS" >> "$GITHUB_OUTPUT"
+          echo "jobs=$(python3 -c "import json,sys; print(json.dumps(list(range(int(sys.argv[1])))))" "$((COUNT / PROCS))")" >> "$GITHUB_OUTPUT"
           echo "shards=$(python3 -c "import json,sys; print(json.dumps(list(range(int(sys.argv[1])))))" "$COUNT")" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -216,7 +223,7 @@ jobs:
           if-no-files-found: error
 
   test:
-    name: gdUnit4 Tests (shard ${{ matrix.shard }})
+    name: gdUnit4 Tests (group ${{ matrix.group }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: [changes, core-linux, core-py-linux]
@@ -224,7 +231,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: ${{ fromJSON(needs.changes.outputs.shards) }}
+        group: ${{ fromJSON(needs.changes.outputs.jobs) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -280,10 +287,10 @@ jobs:
             ~/.local/share/godot/app_userdata/Niemandsland/ruins_cache
             ~/.local/share/godot/app_userdata/Niemandsland/trees_cache
             ~/.local/share/godot/app_userdata/Niemandsland/reference_terrain_cache
-          key: nml-asset-cache-v2-shard${{ matrix.shard }}-${{ hashFiles('assets/model_manifest.json') }}-restore
+          key: nml-asset-cache-v3-group${{ matrix.group }}-${{ hashFiles('assets/model_manifest.json') }}-restore
           restore-keys: |
-            nml-asset-cache-v2-shard${{ matrix.shard }}-${{ hashFiles('assets/model_manifest.json') }}-
-            nml-asset-cache-v2-shard${{ matrix.shard }}-
+            nml-asset-cache-v3-group${{ matrix.group }}-${{ hashFiles('assets/model_manifest.json') }}-
+            nml-asset-cache-v3-group${{ matrix.group }}-
 
       - name: Hash restored CDN blobs
         id: blobs_before
@@ -314,24 +321,15 @@ jobs:
           print("OK: NmlCore loaded in the test lane (class_present True)")
           PY
 
-      # Each shard builds its own deterministic slice of the suite: sort every
+      # Each group runs PROCS slices side by side (tools/ci/run_shard_group.sh); each slice: sort every
       # *_test.gd under test/ (recursive, LC_ALL=C), then let tools/shard_assign.py split them into
       # shard_count (from the `changes` job) time-balanced slices, longest-processing-time-first
       # from test/shard_weights.json (a suite missing there gets the median weight). Time-balanced — not contiguous
       # blocks — spreads the slow test/e2e suites evenly across the runners.
       - name: Run gdUnit4 tests
         run: |
-          set -o pipefail
-          find test -name '*_test.gd' | LC_ALL=C sort > /tmp/all_suites.txt
-          python3 tools/shard_assign.py --shards ${{ needs.changes.outputs.shard_count }} --index ${{ matrix.shard }} > /tmp/shard_suites.txt
-          echo "shard ${{ matrix.shard }}: $(wc -l < /tmp/shard_suites.txt) suite(s) of $(wc -l < /tmp/all_suites.txt) total"
-          ARGS=()
-          while IFS= read -r suite; do
-            ARGS+=(-a "res://${suite}")
-          done < /tmp/shard_suites.txt
-          godot --headless --path . \
-            -s -d res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
-            --ignoreHeadlessMode -c "${ARGS[@]}" 2>&1 | tee gdunit_output.log
+          bash tools/ci/run_shard_group.sh --shards ${{ needs.changes.outputs.shard_count }} \
+            --first $(( ${{ matrix.group }} * ${{ needs.changes.outputs.procs }} )) --procs ${{ needs.changes.outputs.procs }}
 
       # gdUnit prints "No test cases found, abort test run!" and exits 0 when a test file
       # fails to PARSE (syntax error) instead of failing to assert — a broken suite would
@@ -343,23 +341,23 @@ jobs:
       # shard slices together still cover every file.
       - name: Verify gdUnit executed the full suite
         run: |
-          CLEAN=$(sed -r 's/\x1b\[[0-9;]*m//g' gdunit_output.log)
-
-          if grep -q "No test cases found" <<< "$CLEAN"; then
-            echo "::error::gdUnit reported no test cases — a test file likely failed to parse"; exit 1
-          fi
-
-          if ! grep -q "^Overall Summary:" <<< "$CLEAN"; then
-            echo "::error::gdUnit never printed its 'Overall Summary' line — run did not complete normally"; exit 1
-          fi
-
-          EXECUTED=$(grep -oP 'Executed test suites: \(\K[0-9]+' <<< "$CLEAN" | head -1)
-          FILE_COUNT=$(python3 tools/shard_assign.py --shards ${{ needs.changes.outputs.shard_count }} --index ${{ matrix.shard }} | wc -l)
-          echo "gdUnit executed suites: ${EXECUTED:-<none>} | this shard's *_test.gd files: $FILE_COUNT"
-
-          if [ -z "$EXECUTED" ] || [ "$EXECUTED" -lt "$FILE_COUNT" ]; then
-            echo "::error::gdUnit executed $EXECUTED suite(s) but shard ${{ matrix.shard }} owns $FILE_COUNT *_test.gd file(s) — some suite(s) never ran"; exit 1
-          fi
+          P=${{ needs.changes.outputs.procs }}; FIRST=$(( ${{ matrix.group }} * P ))
+          for ((i = FIRST; i < FIRST + P; i++)); do
+            CLEAN=$(sed -r 's/\x1b\[[0-9;]*m//g' "gdunit_output_$i.log")
+            if grep -q "No test cases found" <<< "$CLEAN"; then
+              echo "::error::slice $i: gdUnit reported no test cases — a test file likely failed to parse"; exit 1
+            fi
+            if ! grep -q "^Overall Summary:" <<< "$CLEAN"; then
+              echo "::error::slice $i: gdUnit never printed its 'Overall Summary' line — run did not complete normally"; exit 1
+            fi
+            EXECUTED=$(grep -oP 'Executed test suites: \(\K[0-9]+' <<< "$CLEAN" | head -1)
+            FILE_COUNT=$(python3 tools/shard_assign.py --shards ${{ needs.changes.outputs.shard_count }} --index "$i" | wc -l)
+            echo "slice $i: gdUnit executed suites: ${EXECUTED:-<none>} | its *_test.gd files: $FILE_COUNT"
+            echo "slice $i: report dir $(ls -d reports/slice$i/report_* 2>/dev/null | head -1)"
+            if [ -z "$EXECUTED" ] || [ "$EXECUTED" -lt "$FILE_COUNT" ]; then
+              echo "::error::slice $i: gdUnit executed $EXECUTED suite(s) but owns $FILE_COUNT *_test.gd file(s) — some suite(s) never ran"; exit 1
+            fi
+          done
 
       # Blobs are sha256-verified before the rename into the cache, so the set is safe to save
       # even when the tests failed. Partial downloads (*.part, *.tmp) are excluded from the hash.
@@ -391,7 +389,7 @@ jobs:
             ~/.local/share/godot/app_userdata/Niemandsland/ruins_cache
             ~/.local/share/godot/app_userdata/Niemandsland/trees_cache
             ~/.local/share/godot/app_userdata/Niemandsland/reference_terrain_cache
-          key: nml-asset-cache-v2-shard${{ matrix.shard }}-${{ hashFiles('assets/model_manifest.json') }}-${{ steps.blobs_after.outputs.hash }}
+          key: nml-asset-cache-v3-group${{ matrix.group }}-${{ hashFiles('assets/model_manifest.json') }}-${{ steps.blobs_after.outputs.hash }}
 
   # Guard for the sharded gdUnit4 test job: recompute the same deterministic
   # assignment the shards use (tools/shard_assign.py --check), and fail unless every
@@ -423,7 +421,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --quiet pytest
-          python3 -m pytest tools/shard_assign_test.py tools/ci_rust_paths_test.py tools/table_census_test.py tools/ci_all_required_test.py -q
+          python3 -m pytest tools/shard_assign_test.py tools/ci_rust_paths_test.py tools/table_census_test.py tools/ci_all_required_test.py tools/ci_run_shard_group_test.py -q
 
   relay-tests:
     name: Relay tests
