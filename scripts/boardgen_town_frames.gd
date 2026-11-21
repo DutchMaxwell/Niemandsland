@@ -1,15 +1,16 @@
 class_name BoardgenTownFrames
 ## Half-timber shells as real geometry (plan PLAN_RUINTOWN_TARGET_C, train 3): the kit's frame panels (posts, rails, braces 0.07 in proud of the face, dark openings with
 ## depth, shutters, boards, lath where the plaster fell) on the drawn faces of the intact houses and on the faces of the ruined tiers; timber gable ends, snapped corner
-## posts and chimney stacks on the ruined lots. VISUAL ONLY: every piece lies on a face (<= 0.2 in proud of the collider) or on a tier top
+## posts and chimney stacks on the ruined lots; one burnt shell per board half. VISUAL ONLY: every piece lies on a face (<= 0.2 in proud of the collider) or on a tier top
 ## inside the 0.75 in edge strip; nothing changes a collider, a level or a cell. While a module is not cached the shader's painted frame stays.
 
 const IN_M := 0.0254
 ## The panel kinds in the order they follow each other along a face (each differs from both neighbours, the cycle too): a face walks this list from an offset by hash.
 const PANELS := ["hf_panel_window", "hf_panel_brace1", "hf_panel_lath", "hf_panel_plain", "hf_panel_boarded", "hf_panel_shutter", "hf_panel_brace"]
-const MODULES := ["hf_panel_window", "hf_panel_shutter", "hf_panel_boarded", "hf_panel_brace", "hf_panel_lath", "hf_panel_plain", "hf_panel_brace1", "hf_door", "hf_post", "hf_gable", "hf_stub_post"]
+const MODULES := ["hf_panel_window", "hf_panel_shutter", "hf_panel_boarded", "hf_panel_brace", "hf_panel_lath", "hf_panel_plain", "hf_panel_brace1", "hf_door", "hf_post", "hf_gable", "hf_gable_burnt", "hf_stub_post", "hf_beam_fallen"]
 const GABLE_W_IN := 3.03   # the gable module's width at scale 1, rounded up so its ends stay inside the face
 const GABLE_H_IN := 1.942   # the gable module's peak at scale 1 (its peak is scaled to the masonry gable's, never above it)
+const CHARRED := Color(0.16, 0.15, 0.14)
 ## (lead 21.11.: C's timber is dark weathered grey-brown - not black - on dirty cream-grey infill) the instance colour of the timber set on a frame, varied +-15 % per panel.
 const TIMBER := Color(0.66, 0.6, 0.53)
 const DIRS: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]   # N, E, S, W
@@ -43,13 +44,46 @@ static func _item(module: String, basis: Basis, at_in: Vector3, colour := Color.
 	return {"module": module, "xf": Transform3D(basis, at_in * IN_M), "colour": colour}
 
 
-## The ruined, walkable lots (Block / Deck) that are timber shells: half of them by hash. {lot id: true}
+## How much the board's fire story burns a point (board inches), as the shader folds it (both halves the same story); 0..1.
+static func fire_at(layout: Dictionary, p: Vector2) -> float:
+	var st := BoardgenTownDressing.story(int(layout.get("seed", 0)))
+	var q := (-p if p.y >= 0.0 else p) + Vector2(0.0, 12.0)
+	return clampf(0.5 + 0.65 * clampf(q.dot(Vector2(st.r, st.g)) / (absf(st.r) * 24.0 + absf(st.g) * 12.0), -1.0, 1.0), 0.0, 1.0)
+
+
+static func _lot_centre(layout: Dictionary, lot: Dictionary) -> Vector2:
+	var cell_in := float(layout["cell_in"])
+	return (Vector2(lot["x"], lot["z"]) + Vector2(lot["w"], lot["h"]) * 0.5 - Vector2(layout["nx"], layout["nz"]) * 0.5) * cell_in
+
+
+## The ruined, walkable lots (Block / Deck) that are timber shells: half of them by hash, and the burnt ones. {lot id: true}
 static func timber_lots(layout: Dictionary) -> Dictionary:
-	var out := {}
+	var out := burnt_lots(layout)
 	var tiers := BoardgenTownDressing.tier_parts(layout)
 	for lot: Dictionary in layout["lots"]:
 		if tiers["axis_x"].has(lot["id"]) and BoardgenTownDressing._hash(lot["id"], 1 if int(lot["z"]) * 2 >= int(layout["nz"]) else 0, 310) < TIMBER_SHARE:
 			out[lot["id"]] = true
+	return out
+
+
+## The burnt shell (plan H5): in each board half the ruined, walkable lot the fire story burns most. {lot id: true}
+static func burnt_lots(layout: Dictionary) -> Dictionary:
+	var best := [-1.0, -1.0]
+	var pick := [-1, -1]
+	var tiers := BoardgenTownDressing.tier_parts(layout)
+	for lot: Dictionary in layout["lots"]:
+		if not tiers["axis_x"].has(lot["id"]):
+			continue
+		var c := _lot_centre(layout, lot)
+		var half := 1 if c.y > 0.0 else 0
+		var f := fire_at(layout, c)
+		if f > best[half]:
+			best[half] = f
+			pick[half] = lot["id"]
+	var out := {}
+	for id: int in pick:
+		if id >= 0:
+			out[id] = true
 	return out
 
 
@@ -107,7 +141,8 @@ static func house_items(layout: Dictionary) -> Array[Dictionary]:
 
 ## The panels of the ruined tiers (Block / Deck / raised Terrace): every open face of a raised tier cell in its GROUND storey (the shader's plastered frame over the 0.8 in rubble
 ## plinth, up to 3 in - never on a face onto a yard, which stays rubble) and, on a 6 in tier, its half-timber storey (the shader's band 1); both bands shifted by the
-## part's tone exactly as the shader shifts them, two rows of panels each, one ground bay in four a doorway; never on a face a ladder leans on. [{module, xf, colour}]
+## part's tone exactly as the shader shifts them, two rows of panels each, one ground bay in four a doorway; never on a face a ladder leans on. A burnt lot's panels
+## are charred and lath / brace only. [{module, xf, colour}]
 static func tier_items(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var nx: int = layout["nx"]
@@ -116,14 +151,16 @@ static func tier_items(layout: Dictionary) -> Array[Dictionary]:
 	var origin := Vector2(nx, nz) * cell_in * -0.5
 	var tiers := BoardgenTownDressing.tier_parts(layout)
 	var ladders := BoardgenTownSilhouette._ladder_tops(layout)
+	var burnt := burnt_lots(layout)
 	var level_in: Array = layout["level_in"]
 	for i in nx * nz:
 		var cd: Dictionary = layout["cells"][i]
 		var level: int = cd["level"]
 		if level < 1 or level > 2 or ["Wall", "Roofed"].has(cd["lot_kind"]):
 			continue   # (every 3 / 6 in cell the shader paints as a ruined row: Block, Deck, a raised Terrace or a street sector's raised ruin)
+		var lot_id: int = cd["lot_id"]
 		var half := 1 if int(cd["z"]) * 2 >= nz else 0
-		var shift := (float((1 + int(float(tiers["shade"]["%d/%d" % [cd["lot_id"], tiers["cells"][i]]]) * 253.0)) if tiers["cells"].has(i) else 128) / 255.0 - 0.5) * 0.7   # the shader's uv.y shift of this cell's storey bands (the ground map's green: a tier part's tone, else 128)
+		var shift := (float((1 + int(float(tiers["shade"]["%d/%d" % [lot_id, tiers["cells"][i]]]) * 253.0)) if tiers["cells"].has(i) else 128) / 255.0 - 0.5) * 0.7   # the shader's uv.y shift of this cell's storey bands (the ground map's green: a tier part's tone, else 128)
 		var top: float = level_in[level]
 		for side in 4:
 			var d := DIRS[side]
@@ -148,18 +185,22 @@ static func tier_items(layout: Dictionary) -> Array[Dictionary]:
 				for row in rows:
 					var salt: int = i * 16 + side * 4 + row + (2 if bd[2] else 0)
 					var line: int = (int(cd["z"]) if d.y != 0 else int(cd["x"])) * 4 + side   # the face line this cell's face lies on; `along` walks it
-					var door: bool = bd[2] and row == 0 and BoardgenTownDressing._hash(i * 4 + side, half, 331) < 0.25   # a doorway from the ground up through the plinth
+					var door: bool = not burnt.has(lot_id) and bd[2] and row == 0 and BoardgenTownDressing._hash(i * 4 + side, half, 331) < 0.25   # a doorway from the ground up through the plinth
 					var m := "hf_door" if door else _pick(line * 4 + row + (2 if bd[2] else 0), int(cd["x"]) if d.y != 0 else int(cd["z"]), 2)
+					if burnt.has(lot_id):
+						m = "hf_panel_lath" if BoardgenTownDressing._hash(salt, half, 330) < 0.6 else "hf_panel_brace"
 					out.append(_item(m, _panel_basis(a, Vector3(cell_in / 3.0, y0 + h if door else h, 1.0), salt, row == 0 and rows == 2 and not door), Vector3(mid.x, 0.0 if door else y0 + h * float(row), mid.y),
-						_timber(salt)))
+						CHARRED if burnt.has(lot_id) else _timber(salt)))
 	return out
 
 
 ## The skyline of the ruined lots: timber gable ends (H4) on the ladder-free gable faces of the timber lots, as high as the masonry gable they replace; a chimney stack in
-## one gable of most ruined lots; snapped posts on the timber lots' bare corners. [{module, xf, colour}]
+## one gable of most ruined lots; snapped posts on the timber lots' bare corners. The burnt lots (H5) take the burnt gable, charred posts and a fallen beam at the foot of
+## one open face (STRIP: on the ground below, <= 0.7 in out, never a ladder foot). [{module, xf, colour}]
 static func ruin_items(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var timber := timber_lots(layout)
+	var burnt := burnt_lots(layout)
 	var faces: Array = []
 	BoardgenTownSilhouette.ruin_gables(layout, {}, faces)
 	for f: Dictionary in faces:
@@ -168,8 +209,9 @@ static func ruin_items(layout: Dictionary) -> Array[Dictionary]:
 		var d := DIRS[f["side"]]
 		var a := atan2(float(d.x), float(d.y))
 		var mid: Vector2 = f["mid"]
-		out.append(_item("hf_gable", Basis(Vector3.UP, a) * Basis.from_scale(Vector3(float(f["width"]) / GABLE_W_IN, float(f["peak"]) / GABLE_H_IN, 1.0)),
-			Vector3(mid.x, f["top"], mid.y), _timber(int(f["lot"]) * 4 + int(f["side"]))))
+		var b := burnt.has(f["lot"])
+		out.append(_item("hf_gable_burnt" if b else "hf_gable", Basis(Vector3.UP, a) * Basis.from_scale(Vector3(float(f["width"]) / GABLE_W_IN, float(f["peak"]) / GABLE_H_IN, 1.0)),
+			Vector3(mid.x, f["top"], mid.y), CHARRED if b else _timber(int(f["lot"]) * 4 + int(f["side"]))))
 	var stacked := {}
 	for f: Dictionary in faces:   # a chimney stack standing in the gable (ruined lots, ladder-free gable faces, one per lot): the skyline of a town that lost its roofs
 		if not f["free"] or stacked.has(f["lot"]) or _rnd(int(f["lot"]), 0, 350) >= STACK_SHARE:
@@ -179,7 +221,7 @@ static func ruin_items(layout: Dictionary) -> Array[Dictionary]:
 		var mid: Vector2 = f["mid"]
 		var at := mid - Vector2(d) * 0.4
 		var hgt := minf(float(f["peak"]) + 0.6, STACK_TOP_IN - float(f["top"]))
-		out.append(_item("chimney_broken" if _rnd(int(f["lot"]), 1, 351) < 0.4 else "chimney_pots",
+		out.append(_item("chimney_broken" if burnt.has(f["lot"]) or _rnd(int(f["lot"]), 1, 351) < 0.4 else "chimney_pots",
 			Basis(Vector3.UP, atan2(float(d.x), float(d.y))) * Basis.from_scale(Vector3(STACK_IN, hgt / 3.78, STACK_IN)), Vector3(at.x, f["top"], at.y)))
 	var nx: int = layout["nx"]
 	var cell_in := float(layout["cell_in"])
@@ -209,7 +251,25 @@ static func ruin_items(layout: Dictionary) -> Array[Dictionary]:
 			var at := origin + Vector2(cx + sx, cz + sz) * cell_in + Vector2(0.2 if sx == 0 else -0.2, 0.2 if sz == 0 else -0.2)
 			if ladder_tops.any(func(t: Vector2) -> bool: return t.distance_to(at) < BoardgenTownSilhouette.LADDER_GAP_IN + 0.2):
 				continue
-			out.append(_item("hf_stub_post", Basis(Vector3.UP, BoardgenTownDressing._hash(lot["id"] * 4 + corner, 0, 340) * TAU), Vector3(at.x, float(layout["level_in"][level]), at.y), _timber(int(lot["id"]) * 4 + corner)))
+			out.append(_item("hf_stub_post", Basis(Vector3.UP, BoardgenTownDressing._hash(lot["id"] * 4 + corner, 0, 340) * TAU), Vector3(at.x, float(layout["level_in"][level]), at.y), CHARRED if burnt.has(lot["id"]) else _timber(int(lot["id"]) * 4 + corner)))
+	var feet := {}
+	for c: Dictionary in layout["connectors"]:
+		feet[int(c["low"])] = true
+	for lot: Dictionary in layout["lots"]:
+		if not burnt.has(lot["id"]):
+			continue
+		var done := false
+		for dz in int(lot["h"]):
+			for dx in int(lot["w"]):
+				for side in 4:
+					var d := DIRS[side]
+					var x := int(lot["x"]) + dx + d.x
+					var z := int(lot["z"]) + dz + d.y
+					if done or BoardgenTownSilhouette._level(layout, x, z) != 0 or feet.has(z * nx + x) or layout["cells"][z * nx + x]["lot_kind"] == "Hazard":
+						continue
+					var face := origin + (Vector2(int(lot["x"]) + dx, int(lot["z"]) + dz) + Vector2(0.5, 0.5) + Vector2(d) * 0.5) * cell_in
+					out.append(_item("hf_beam_fallen", Basis(Vector3.UP, atan2(float(d.x), float(d.y))), Vector3(face.x, 0.0, face.y), CHARRED))
+					done = true
 	return out
 
 
