@@ -947,6 +947,12 @@ pub const EPOCH_85_INDIRECT_GATE: u32 = 85;
 /// (`_solo_pick_overlay_target` reads the weapon and the mark only). No shipped spell grants it today (every Indirect spell is an attackers-side
 /// mark), so no recorded game moves; from 94 the grant is read. Below 94 byte-identical. Every call site reads THIS constant, not `94`.
 pub const PENDING_EPOCH_OWN_INDIRECT: u32 = 94;
+/// Placeholder gate for COVER FROM SIGHT BLOCKERS (PLAN_COVER_36, rules 3.6): from 95 a unit shot at gets the Cover +1 Defense also when
+/// the majority of its models stands behind a sight blocker as seen from the shooters that see it (the foot line `sight::screen`: eye of
+/// the shooter to the target model's foot is blocked by terrain, tier blocks, containers or the bodies of other units), not only when it
+/// stands fully inside Cover terrain. `in_cover` keeps its meaning (the Grounded family reads it); the new `screened` flag feeds only the
+/// shooting save. Records stamped 94 or below replay byte-exact. Every call site reads THIS constant, not `95`.
+pub const PENDING_EPOCH_COVER_SCREEN: u32 = 95;
 /// The played volley's modifier distance (Valiant gate, over-9" modifiers) counts only the model pairs within the vertical reach (3", `melee_vertical_in`),
 /// and a unit with no pair in reach keeps the horizontal unit-centre distance: the table's `_solo_ai_volley_distance_in` over `nearest_melee_gap_in`.
 /// Before, a unit on a platform measured as close as the ground beside it (the soak's Hive Bond +1, table 4+ vs core 5+). Step path only. Records
@@ -1071,6 +1077,12 @@ pub const PENDING_EPOCH_CASUALTY_TIES: u32 = 94;
 /// wounds threw six dice in the core and three at the table. From the bump the melee fold asks (`deadly_wipes`) before each wound. Below it
 /// byte-identical. Every call site reads THIS constant.
 pub const PENDING_EPOCH_DEADLY_STOPS: u32 = 94;
+/// Placeholder gate for SPELL NO-STACK (lead ruling 20.11., GF 3.6 "Rules priority & stacking effects": the same spell does not stack): a second cast of a spell on a
+/// unit that already carries an identical record of it refreshes that record and adds none, so one spend and one "consumed" line (soak game 16 forced to 94 held three
+/// stacked "Triangulation Bots" on one foe; the core spent all three at once, the table one per exchange). Core: `sim::tray_spell_effect` pushes no duplicate `LiveMod`
+/// (and names none in `cast_buffs`). Table twin `AiActRecorder.PENDING_EPOCH_SPELL_NO_STACK` (`_solo_record_spell_mod`). Below 95 byte-identical. Every call site reads THIS
+/// constant, not the literal `95`.
+pub const PENDING_EPOCH_SPELL_NO_STACK: u32 = 95;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2412,6 +2424,14 @@ mod tests {
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
     /// `rule_on` is a plain `>=`, tested at its own boundary — `since_epoch`
     /// itself turns a rule on, one below it does not, and above it stays on.
+    /// PLAN_COVER_36 step 1: cover from sight blockers is off for every record stamped 94 or below.
+    #[test]
+    fn cover_screen_gate_starts_at_95() {
+        assert_eq!(super::PENDING_EPOCH_COVER_SCREEN, 95);
+        assert!(!rule_on(94, super::PENDING_EPOCH_COVER_SCREEN), "a record at 94 replays terrain-only cover");
+        assert!(rule_on(95, super::PENDING_EPOCH_COVER_SCREEN), "a record at 95 reads cover from sight blockers");
+    }
+
     #[test]
     fn rule_on_is_true_from_its_since_epoch_onward() {
         assert!(!rule_on(0, 1), "epoch 0 is before since_epoch 1: off");

@@ -109,6 +109,24 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   or cast, and press End activation where the action does not end it. Chapter 4 also shows Cancel.
   A lesson only moves on once the activation is really open.
 
+### Changed — game system
+- **You pick the game system when you set up the table.** The table setup has a **Game system**
+  row (Grimdark Future, Grimdark Future: Firefight, Age of Fantasy, Age of Fantasy: Skirmish, Age of
+  Fantasy: Regiments); the last pick is remembered. It decides what is on offer, never a rule: the
+  board size the setup starts on (4 × 4 ft for the two skirmish games, 6 × 4 ft otherwise; you can
+  still pick another size), the biomes (no urban ruins or alien jungle on a fantasy table), the free
+  terrain shelf, the "Blocker" label and stone look of the grid editor's container type on a
+  fantasy table, a wreck that leaves blood instead of oil there, the army lists of the AI opponent
+  dialog (exactly the lists of the table's system), and the deployment styles printed for the board.
+  A table already built, a save, or a piece a peer sends is always drawn and played as it is.
+- **A list of another game system is refused when you import it.** The table's system is set
+  first; a list of another system is refused at the import, with one line naming the list and both
+  systems, before anything is placed. A table with no system yet (an old save, the tutorial) takes
+  the system of its first list. The system can be changed in the map editor while no list is on the
+  table, travels with the save, and in multiplayer belongs to the host: it reaches a joiner before
+  the first list does and a guest cannot change it. The game shows it as a small chip beside the
+  rules chip.
+
 ### Changed — startup
 - **A rules core that fails to load is reported at start.** Every start writes a line to the log
   saying whether the Rust rules core loaded. An exported build whose core did not load also shows a

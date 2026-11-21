@@ -92,10 +92,23 @@ const BIOME_HAZARD_MODEL_BY_PREFIX: Dictionary = {
 	"volcanic_": "lava_crater",
 	"jungle_": "carnivore_plant",
 }
+## A fantasy table (aof / aofs / aofr) has no minefield and no warning signs: each biome draws its own hazard prop (PLAN_GAME_SYSTEM_SWITCH
+## step 14, decision M-5; assets/terrain_systems.json hazard_look). Volcanic keeps the lava crater; the rest fall back to the thorn field.
+const FANTASY_HAZARD_MODEL_BY_PREFIX: Dictionary = {
+	"": "thorn_field",
+	"desert_": "sinkhole",
+	"tundra_": "stone_circle",
+	"volcanic_": "lava_crater",
+}
+## Marks the root of fantasy_fallback() (the async GLB upgrade and the tests find it).
+const FANTASY_FALLBACK_META := "fantasy_hazard_fallback"
 ## The footprint diameter (inches) each hazard GLB is scaled to fit (matches terrain_overlay.gd).
 const HAZARD_MODEL_DIAMETER_INCHES: Dictionary = {
 	"lava_crater": 2.4,
 	"carnivore_plant": 1.8,
+	"thorn_field": 2.2,
+	"sinkhole": 2.4,
+	"stone_circle": 2.2,
 }
 ## GLB-prop biomes (lava crater / carnivore plant) place fewer, larger props than a minefield.
 const HAZARD_PROP_COUNT := 3
@@ -113,6 +126,8 @@ var prop_kind: int = 0
 var footprint_inches: Vector2 = Vector2.ZERO
 ## Biome prefix ("" = grassland) selecting the forest's tree set + floor texture.
 var biome_prefix: String = ""
+## The table's setting ("grimdark" / "fantasy", GameSystem.setting) when the cluster was built; picks the hazard look.
+var table_setting: String = ""
 
 # === Private state ===
 
@@ -435,7 +450,7 @@ static func _load_texture(path: String) -> Texture2D:
 ## biome-aware via the shared battlemap-crop upgrade below.
 func _build_hazards(rng: RandomNumberGenerator) -> void:
 	var base_top := _build_ground_pad()
-	var model: String = BIOME_HAZARD_MODEL_BY_PREFIX.get(biome_prefix, "")
+	var model := hazard_model_for(biome_prefix, table_setting)
 	var count := HAZARD_PROP_COUNT if not model.is_empty() else HAZARD_MINE_COUNT
 	for i in range(count):
 		_adopt_scattered(_make_hazard_member(model), rng, base_top)
@@ -459,7 +474,45 @@ func _make_hazard_member(model: String) -> Node3D:
 			var d: float = float(HAZARD_MODEL_DIAMETER_INCHES.get(model, 2.0)) * INCHES_TO_METERS
 			_fit_to_diameter(inst, d)
 			return inst
-	return _make_mine()
+	return fantasy_fallback() if table_setting == GameSystem.SETTING_FANTASY else _make_mine()
+
+
+## The hazard prop of a biome on a table of `setting`: a GLB model name, or "" for the anti-tank mine (grimdark only).
+static func hazard_model_for(prefix: String, setting: String) -> String:
+	if setting == GameSystem.SETTING_FANTASY:
+		return FANTASY_HAZARD_MODEL_BY_PREFIX.get(prefix, "thorn_field")
+	return BIOME_HAZARD_MODEL_BY_PREFIX.get(prefix, "")
+
+
+## What a fantasy table shows while its hazard GLB is not cached (offline, first use): a dark trampled patch with a few low stones -
+## never the mine. Low (0.25 in) so models on Dangerous terrain stay readable.
+static func fantasy_fallback() -> Node3D:
+	var root := Node3D.new()
+	root.name = "FantasyHazardFallback"
+	root.set_meta(FANTASY_FALLBACK_META, true)
+	var earth := StandardMaterial3D.new()
+	earth.albedo_color = Color(0.24, 0.19, 0.14)
+	earth.roughness = 0.95
+	var patch := CylinderMesh.new()
+	patch.top_radius = 0.9 * INCHES_TO_METERS
+	patch.bottom_radius = 1.0 * INCHES_TO_METERS
+	patch.height = 0.04 * INCHES_TO_METERS
+	var disc := MeshInstance3D.new()
+	disc.mesh = patch
+	disc.material_override = earth
+	disc.position.y = patch.height * 0.5
+	root.add_child(disc)
+	for i in 5:
+		var stone := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = Vector3(0.22, 0.25, 0.16) * INCHES_TO_METERS
+		stone.mesh = box
+		stone.material_override = earth
+		var a := TAU * i / 5.0
+		stone.position = Vector3(cos(a), 0.0, sin(a)) * 0.65 * INCHES_TO_METERS + Vector3(0, box.size.y * 0.5, 0)
+		stone.rotation.y = a
+		root.add_child(stone)
+	return root
 
 
 ## Whether the biome's hazard art still needs downloading (so the procedural fallback should be

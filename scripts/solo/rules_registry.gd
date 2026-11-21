@@ -9,8 +9,9 @@ extends RefCounted
 ## (game_system, "common", name), NEVER by name alone across systems: 154 of 383 cross-system rule
 ## names diverge (the skirmish-scale games rewrite Banner/Musician/auras/ranges), so the same name can
 ## mean different parameters in GF vs GFF vs AoF-Skirmish. The game system at runtime is the imported
-## army's `gameSystem` field (carried into unit_properties["game_system"]); a system-selection UI is a
-## later package.
+## army's `gameSystem` field (carried into unit_properties["game_system"]). The TABLE's game system is chosen
+## in the table setup (OPRArmyManager.table_system, GameSystem) and the one import door refuses a list of
+## another system, so a unit's system and the table's cannot disagree.
 ##
 ## Every reader returns a caller-supplied fallback when the map (or the rule) is absent, so the
 ## wave-1..4 behaviour is byte-identical whenever data is missing — data refines, never breaks.

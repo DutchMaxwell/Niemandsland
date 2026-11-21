@@ -3773,6 +3773,8 @@ func _build_terrain_group(prop_id: String, kind: int, obj_network_id: int) -> Te
 	base.name = "SandboxTerrainGroup_%d" % _object_counter
 	# Keep the FULL (biome-prefixed) prop_id on the base so save/meta round-trips the biome.
 	base.configure(prop_id, kind, footprint, biome_prefix)
+	var system := table_system()
+	base.table_setting = GameSystem.setting(system) if not system.is_empty() else ""
 	base.set_meta("network_id", obj_network_id)
 	return base
 

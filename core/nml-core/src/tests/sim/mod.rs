@@ -1740,6 +1740,7 @@ mod deathstrike;
 mod dest_side_arms;
 mod entrenched;
 mod zero_move_stamp;
+mod spell_no_stack;
 mod v36_fab_a5;
 mod ev_live_grants;
 mod ev_move_grants;

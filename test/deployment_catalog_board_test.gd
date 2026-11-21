@@ -6,6 +6,15 @@ extends GdUnitTestSuite
 
 const B48 := Vector2(48, 48)
 const B72 := Vector2(72, 48)
+## PLAN_GAME_SYSTEM_SWITCH step 18 (L-6): the standard family the Firefight / Skirmish books draw on their square diagrams.
+const STANDARD_48: Array = ["disordered", "front_line", "ground_war", "opposing_forces", "side_battle", "spearhead"]
+## ... plus the three Attack & Defend mission zones, whose text ("within 12 inches of an edge / of the centre") does not depend on the board.
+const ALL_48: Array = ["anywhere", "centre_disc_12", "disordered", "edge_band_12", "front_line", "ground_war", "opposing_forces", "side_battle", "spearhead"]
+const AD_POINTS_48 := {
+	"centre_disc_12": [[0, 0, true], [11, 0, true], [13, 0, false], [0, -13, false], [8, 8, true], [9, 9, false]],
+	"edge_band_12": [[0, -20, true], [20, 0, true], [13, 0, true], [0, 0, false], [11, 0, false], [0, 11, false]],
+	"anywhere": [[0, 0, true], [23, 23, true], [-23, -23, true], [25, 0, false], [0, 25, false], [25, 25, false]],
+}
 
 
 func before_test() -> void:
@@ -29,8 +38,8 @@ func _max_abs_x(style: Dictionary) -> float:
 	return hi
 
 
-func test_a_48_by_48_table_is_handed_the_48_front_line_and_one_style() -> void:
-	assert_array(DeploymentCatalog.style_ids(B48)).is_equal(["front_line"])
+func test_a_48_by_48_table_is_handed_the_48_front_line_and_nine_styles() -> void:
+	assert_array(DeploymentCatalog.style_ids(B48)).is_equal(ALL_48)
 	var style := DeploymentCatalog.get_style("front_line", B48)
 	assert_float(_max_abs_x(style)).is_equal(24.0)
 	assert_bool(DeploymentCatalog.in_zone(style, 1, Vector2(0, -20))).is_true()
@@ -45,7 +54,7 @@ func test_72_by_48_keeps_today_nine_styles_and_the_wide_front_line() -> void:
 
 
 func test_a_style_the_board_does_not_define_falls_back_to_that_boards_front_line() -> void:
-	assert_dict(DeploymentCatalog.get_style("spearhead", B48)).is_equal(DeploymentCatalog.get_style("front_line", B48))
+	assert_dict(DeploymentCatalog.get_style("long_haul", B48)).is_equal(DeploymentCatalog.get_style("front_line", B48))
 
 
 func test_zone_test_follows_the_board() -> void:
@@ -102,3 +111,49 @@ func _assert_fits(id: String, style: Dictionary, board: Vector2) -> void:
 			for xz in poly:
 				assert_bool(absf(xz[0]) <= board.x * 0.5 + 1e-6 and absf(xz[1]) <= board.y * 0.5 + 1e-6) \
 					.override_failure_message("%s vertex %s exceeds %s" % [id, xz, board]).is_true()
+
+
+## The mission zones answer on a 4 x 4 table instead of falling back to front_line (the same six points as 72 x 48, scaled to the board).
+func test_the_48_mission_zones_are_defined_and_role_agnostic() -> void:
+	for id in AD_POINTS_48:
+		var style := DeploymentCatalog.get_style(id, B48)
+		assert_str(str(style.get("family"))).override_failure_message("%s fell back to front_line" % id).is_equal("attack_defend")
+		for pt in AD_POINTS_48[id]:
+			for player in [1, 2]:
+				assert_bool(DeploymentCatalog.in_zone(style, player, Vector2(pt[0], pt[1]))) \
+					.override_failure_message("%s p%d (%s, %s)" % [id, player, pt[0], pt[1]]).is_equal(pt[2])
+
+
+func _mean_z(style: Dictionary, player: int) -> float:
+	var sum := 0.0
+	var n := 0
+	for poly in DeploymentCatalog.zone_polygons(style, player):
+		for p in poly:
+			sum += p.y
+			n += 1
+	return sum / maxf(n, 1.0)
+
+
+func test_player_one_owns_the_z_negative_side_in_every_48_style() -> void:
+	for id in STANDARD_48:
+		var style := DeploymentCatalog.get_style(id, B48)
+		assert_float(_mean_z(style, 1)).override_failure_message("%s: player 1 is not on the z-negative side" % id).is_less(0.0)
+		assert_float(_mean_z(style, 2)).override_failure_message("%s: player 2 is not on the z-positive side" % id).is_greater(0.0)
+
+
+## The book's square diagrams, probed one inch either side of every printed edge: [style, player, x, z, inside?].
+func test_the_48_styles_match_the_book_diagrams() -> void:
+	var cases := [
+		["ground_war", 1, 5, -20, true], ["ground_war", 1, 20, -5, true], ["ground_war", 1, 5, -5, false], ["ground_war", 1, -5, -20, false],
+		["ground_war", 2, -5, 20, true], ["ground_war", 2, -20, 5, true], ["ground_war", 2, -5, 5, false],
+		["side_battle", 1, -20, -22, true], ["side_battle", 1, -23, -3, true], ["side_battle", 1, -23, -2, false], ["side_battle", 1, 19, -24, false],
+		["side_battle", 2, 20, 22, true], ["side_battle", 2, 23, 3, true], ["side_battle", 2, 23, 2, false],
+		["disordered", 1, -20, -20, true], ["disordered", 1, -10, -10, false], ["disordered", 2, 20, 20, true], ["disordered", 2, 0, 0, false],
+		["spearhead", 1, 0, -13, true], ["spearhead", 1, 0, -11, false], ["spearhead", 1, 20, -23, true], ["spearhead", 1, 20, -20, false],
+		["spearhead", 2, 0, 13, true], ["spearhead", 2, 0, 11, false],
+		["opposing_forces", 1, 12, -18, true], ["opposing_forces", 1, 12, -10, false], ["opposing_forces", 1, -12, -18, false],
+		["opposing_forces", 2, -12, 18, true], ["opposing_forces", 2, -12, 10, false], ["opposing_forces", 2, 12, 18, false],
+	]
+	for c in cases:
+		var got := DeploymentCatalog.in_zone(DeploymentCatalog.get_style(c[0], B48), c[1], Vector2(c[2], c[3]))
+		assert_bool(got).override_failure_message("%s player %d at (%d, %d): expected %s" % [c[0], c[1], c[2], c[3], c[4]]).is_equal(c[4])

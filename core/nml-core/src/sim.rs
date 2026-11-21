@@ -8853,6 +8853,10 @@ fn tray_spell_effect(state: &mut State, targets: &[usize], c: &CastInput, spell:
     };
     let live = rec.to_live_mod(rules_epoch);
     for &t in targets {
+        // PENDING_EPOCH_SPELL_NO_STACK: the same spell does not stack (GF 3.6), an identical record already on the target is refreshed, none is added
+        if !effect_less && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_SPELL_NO_STACK) && state.buffs[t].contains(&live) {
+            continue;
+        }
         if !effect_less {
             state.buffs[t].push(live.clone());
         }
