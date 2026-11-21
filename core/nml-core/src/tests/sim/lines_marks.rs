@@ -21,27 +21,28 @@ fn has(lines: &[String], text: &str) -> bool {
     lines.iter().any(|l| l == text)
 }
 
-/// Piercing Tag below 73 (the table's 3.5 words) and at 73 (one token, +1 AP): the placement and the spend each say themselves on the tray.
-/// RED on main: both were `ShootResult.log` only.
+/// Piercing Tag below 73 (the table's 3.5 words) and at 73 (one token, +1 AP): the placement says itself on the tray; the SPEND does not
+/// (the door runs the table's own spend, `CoreActivation._spend_tag`, which writes the line: a tray line would say it twice).
+/// RED on main: the placement was `ShootResult.log` only.
 #[test]
-fn a_piercing_tag_says_its_placement_and_its_spend_on_the_door_tray() {
+fn a_piercing_tag_says_its_placement_on_the_door_tray_and_leaves_the_spend_to_the_door() {
     let (st, statics) = tag_line("Piercing Tag", 1, 24.0);
     let old = tray_texts(&st, &statics, &volley_on_b(), 27, 6);
     assert!(has(&old, "Piercing Tag: tagger places 1 marker on b — friendly attackers may spend them for +AP"), "{old:?}");
-    assert!(has(&old, "Piercing Tag: 1 marker spent — +AP(1) on this volley"), "{old:?}");
+    assert!(old.iter().all(|l| !l.contains(" spent")), "the door says the spend: {old:?}");
     let v36 = tray_texts(&st, &statics, &volley_on_b(), 27, crate::acts::EPOCH_73_V36);
     assert!(has(&v36, "Piercing Tag: tagger places 1 token, stacked on b — a friendly attack may spend one token for +1 AP"), "{v36:?}");
-    assert!(has(&v36, "Piercing Tag: one token spent — +1 AP on this volley (0 left)"), "{v36:?}");
+    assert!(v36.iter().all(|l| !l.contains(" spent")), "the door says the spend: {v36:?}");
 }
 
-/// Piercing Target stands while its target lives (from 67): below 73 `+AP(<markers>)`, from 73 the table's `+AP(1) ... (+1 (Target))` (the recorded
-/// log words it `+1 (Target) stands`).
+/// Piercing Target placements in the table's words; the `... stands while <T> lives` spend is the door's (`CoreActivation._spend_tag`).
 #[test]
-fn a_piercing_target_says_it_stands_in_the_tables_words() {
+fn a_piercing_target_says_its_placement_in_the_tables_words() {
     let (st, statics) = tag_line("Piercing Target", 1, 18.0);
     let old = tray_texts(&st, &statics, &volley_on_b(), 27, crate::acts::EPOCH_67_MARKERS_BURSTS);
-    assert!(has(&old, "Piercing Target: +AP(1) stands while b lives"), "{old:?}");
+    assert!(has(&old, "Piercing Target: tagger places 1 marker on b — friendly attackers may spend them for +AP"), "{old:?}");
+    assert!(old.iter().all(|l| !l.contains("stands while")), "the door says the spend: {old:?}");
     let v36 = tray_texts(&st, &statics, &volley_on_b(), 27, crate::acts::EPOCH_73_V36);
     assert!(has(&v36, "Piercing Target: tagger places 1 token on each of b — a friendly attack gets +1 AP"), "{v36:?}");
-    assert!(has(&v36, "Piercing Target: +AP(1) stands while b lives (+1 (Target))"), "{v36:?}");
+    assert!(v36.iter().all(|l| !l.contains("stands while")), "the door says the spend: {v36:?}");
 }

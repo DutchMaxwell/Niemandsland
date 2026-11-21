@@ -11787,22 +11787,21 @@ fn resolve_with(
                             // spends EVERY marker on THIS volley (main.gd
                             // :3123 AI / :9857 human, shooting only — the
                             // melee seams never call it), once per group.
+                            // The Piercing spend lines (`Piercing Tag: one token spent ...`, `Piercing Target: ... stands`) are the DOOR's: it runs the
+                            // table's own `_solo_spend_piercing_tag` (`CoreActivation._spend_tag`), which writes them. The core says none on the tray.
                             let tag_ap = piercing_tag_spend(&mut next, g.ti, seams.rules_epoch);
                             if tag_ap > 0 {
                                 if next.piercing_tag_persistent[g.ti] {
                                     let tn = statics[next.roster.profile[g.ti]].name.clone();
                                     if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
-                                        // tray twin: marker_spend
                                         shot.log.push(format!("Piercing Target: +1 (Target) stands while {tn} lives"));
                                     } else {
-                                        // tray twin: marker_spend
                                         shot.log.push(format!(
                                             "Piercing Target: +AP({tag_ap}) stands while {tn} lives"
                                         ));
                                     }
                                 } else if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
                                     let left = next.piercing_tag_markers[g.ti];
-                                    // tray twin: marker_spend
                                     shot.log.push(format!("Piercing Tag: one token spent — +1 AP on this volley ({left} left)"));
                                 } else {
                                     let s = if tag_ap == 1 { "" } else { "s" };
@@ -11810,15 +11809,6 @@ fn resolve_with(
                                         "Piercing Tag: {tag_ap} marker{s} spent — +AP({tag_ap}) on this volley"
                                     ));
                                 }
-                                // The table's lines (`_solo_spend_piercing_tag`); a standing Target says its flat +AP and, from 73, the "(+1 (Target))" note.
-                                let v36 = rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36);
-                                say_rule(tray, "marker_spend", next.player[si], || if next.piercing_tag_persistent[g.ti] {
-                                    format!("Piercing Target: +AP({tag_ap}) stands while {} lives{}", statics[next.roster.profile[g.ti]].name, if v36 { " (+1 (Target))" } else { "" })
-                                } else if v36 {
-                                    format!("Piercing Tag: one token spent — +1 AP on this volley ({} left)", next.piercing_tag_markers[g.ti])
-                                } else {
-                                    format!("Piercing Tag: {tag_ap} marker{} spent — +AP({tag_ap}) on this volley", if tag_ap == 1 { "" } else { "s" })
-                                });
                             }
                             // Wave 6 — Precision Spotter/Tag: the marked
                             // target's pools spend EVERY marker on THIS
