@@ -81,7 +81,8 @@ func test_gables_stand_in_the_edge_strip_of_a_ruined_house_and_keep_a_ladder_top
 			var cd: Dictionary = layout["cells"][i]
 			assert_array(["Block", "Deck"]).contains([str(cd["lot_kind"])])
 			assert_float(b["lo"].y).is_equal_approx(float(layout["level_in"][cd["level"]]), EPS)   # stands ON the top
-			assert_float(b["hi"].y - b["lo"].y).is_less_equal(1.9 + EPS)
+			assert_float(b["hi"].y - b["lo"].y).is_less_equal(BoardgenTownSilhouette.GABLE_PEAK_IN.y + EPS)
+			assert_float(b["hi"].y).is_less(9.0)   # never as high as the tower crown
 			assert_float(minf(b["hi"].x - b["lo"].x, b["hi"].z - b["lo"].z)).is_less_equal(BoardgenTownSilhouette.GABLE_T_IN + EPS)
 			var r := _cell_rect(layout, i)
 			var to_edge := minf(minf(b["lo"].x - r.position.x, r.end.x - b["hi"].x), minf(b["lo"].z - r.position.y, r.end.y - b["hi"].z))

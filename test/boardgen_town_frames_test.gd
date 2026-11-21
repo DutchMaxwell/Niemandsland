@@ -1,6 +1,7 @@
 extends GdUnitTestSuite
 ## The half-timber shells (plan PLAN_RUINTOWN_TARGET_C, train 3) on real town boards from the core: the frame panels lie ON a house face (at most 0.2 in proud of the
-## collider), the ruins' panels stay on their tier's face, below its top and off every ladder face. Nothing here touches a level, a cell or a collider.
+## collider), the ruins' panels stay on their tier's face below its top and off every ladder face, the timber gables, corner posts and chimney stacks stay inside the
+## 0.75 in edge strip (gables no higher than the masonry gable they replace, stacks below the 9 in tower crown). Nothing here touches a level, a cell or a collider.
 
 const SEEDS := [3, 7, 11, 13, 25, 41]
 const EPS := 0.002
@@ -88,3 +89,76 @@ func test_tier_panels_stay_on_their_tier_face_below_its_top_and_off_every_ladder
 			for p: Vector3 in _corners(item):
 				assert_float(p.y).override_failure_message("a ruin panel above its tier's top").is_between(-EPS, float(layout["level_in"][cd["level"]]) + EPS)
 	assert_int(total).is_greater(20)
+
+
+func test_timber_gables_stay_in_the_edge_strip_and_never_above_the_masonry_gable() -> void:
+	var total := 0
+	for layout in _towns():
+		var faces: Array = []
+		BoardgenTownSilhouette.ruin_gables(layout, {}, faces)
+		var lots := {}
+		for lot: Dictionary in layout["lots"]:
+			lots[lot["id"]] = lot
+		var timber := BoardgenTownFrames.timber_lots(layout)
+		var masonry := BoardgenTownSilhouette.ruin_gables(layout, timber)
+		assert_int(masonry.size()).is_less(BoardgenTownSilhouette.ruin_gables(layout).size() + 1)
+		for item: Dictionary in BoardgenTownFrames.ruin_items(layout).filter(func(i: Dictionary) -> bool: return str(i["module"]).begins_with("hf_gable")):
+			total += 1
+			var cs := _corners(item)
+			var mid := (cs[0] + cs[7]) * 0.5
+			var f: Dictionary = faces.filter(func(f: Dictionary) -> bool: return (f["mid"] as Vector2).distance_to(Vector2(mid.x, mid.z)) < 0.3).front()
+			assert_bool(f["free"]).is_true()   # never on a face with a ladder top
+			var r := _lot_rect(layout, lots[f["lot"]])
+			for p: Vector3 in cs:
+				assert_float(_outside(r, Vector2(p.x, p.z))).is_less_equal(EPS)   # inside the lot
+				assert_float(p.y).is_less_equal(float(f["top"]) + float(f["peak"]) + EPS)
+				var d := DIRS_TO_DEPTH(r, f["side"], Vector2(p.x, p.z))
+				assert_float(d).override_failure_message("a gable %.3f in deep" % d).is_less_equal(0.75)
+	assert_int(total).is_greater(0)
+
+
+## Depth of a point behind the lot's face on `side` (N, E, S, W).
+func DIRS_TO_DEPTH(r: Rect2, side: int, p: Vector2) -> float:
+	match side:
+		0:
+			return p.y - r.position.y
+		1:
+			return r.end.x - p.x
+		2:
+			return r.end.y - p.y
+	return p.x - r.position.x
+
+
+func test_snapped_corner_posts_stand_on_a_tier_corner_inside_the_strip() -> void:
+	var total := 0
+	for layout in _towns():
+		for item: Dictionary in BoardgenTownFrames.ruin_items(layout).filter(func(i: Dictionary) -> bool: return i["module"] == "hf_stub_post"):
+			total += 1
+			var at: Vector3 = (item["xf"] as Transform3D).origin / BoardgenTownFrames.IN_M
+			var q := ((Vector2(at.x, at.z) - _origin(layout)) / float(layout["cell_in"])).floor()
+			var cd: Dictionary = layout["cells"][int(q.y) * int(layout["nx"]) + int(q.x)]
+			assert_float(at.y).is_equal_approx(float(layout["level_in"][cd["level"]]), EPS)   # stands ON the tier top
+			var r := Rect2(_origin(layout) + q * float(layout["cell_in"]), Vector2.ONE * float(layout["cell_in"]))
+			for p: Vector3 in _corners(item):
+				assert_float(_outside(r, Vector2(p.x, p.z))).is_less_equal(EPS)
+				var dx := minf(p.x - r.position.x, r.end.x - p.x)
+				var dz := minf(p.z - r.position.y, r.end.y - p.z)
+				assert_float(maxf(dx, dz)).override_failure_message("a corner post off its corner").is_less_equal(0.75)
+	assert_int(total).is_greater_equal(0)
+
+
+func test_chimney_stacks_on_ruins_stay_in_the_strip_and_below_the_tower_crown() -> void:
+	var total := 0
+	for layout in _towns():
+		for item: Dictionary in BoardgenTownFrames.ruin_items(layout).filter(func(i: Dictionary) -> bool: return str(i["module"]).begins_with("chimney")):
+			total += 1
+			var xf: Transform3D = item["xf"]
+			var at := xf.origin / BoardgenTownFrames.IN_M
+			var half := xf.basis.x.length() * 0.38   # the corbel's half width (0.76 in), scaled
+			var q := ((Vector2(at.x, at.z) - _origin(layout)) / float(layout["cell_in"])).floor()
+			var r := Rect2(_origin(layout) + q * float(layout["cell_in"]), Vector2.ONE * float(layout["cell_in"]))
+			var to_edge := minf(minf(at.x - r.position.x, r.end.x - at.x), minf(at.z - r.position.y, r.end.y - at.z))
+			assert_float(to_edge + half).override_failure_message("a stack off the edge strip").is_less_equal(0.75 + EPS)
+			assert_float(to_edge - half).is_greater_equal(-EPS)
+			assert_float(at.y + xf.basis.y.length() * 3.78).is_less_equal(BoardgenTownFrames.STACK_TOP_IN + EPS)
+	assert_int(total).is_greater(0)

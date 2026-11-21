@@ -13,6 +13,7 @@ const FOOT_IN := 0.45
 const BATTER_IN := 0.9
 const CORBEL_IN := 0.5
 const GABLE_T_IN := 0.3
+const GABLE_PEAK_IN := Vector2(1.4, 2.6)   # (train 3, lead: the skyline of a town that lost its roofs) was 1.0-1.9; non-walkable, in the strip, below the 9 in tower crown
 const STRIP_IN := 0.75
 const LADDER_GAP_IN := 0.9   # half the gap kept free round a ladder's top
 const RAFTER_IN := Vector2(0.13, 0.78)   # section, length
@@ -86,9 +87,11 @@ static func wall_parts(layout: Dictionary) -> Array[Dictionary]:
 
 
 ## Broken crow-stepped gable ends on the END faces (across the lot's long axis) of every ruined, walkable house lot (Block / Deck) whose end column is one level and drops on its whole
-## face: masonry 0.3 in thick, flush inside the face, 3-5 steps from each corner up to a 1.0-1.9 in peak, one side broken off at a step the lot's hash picks; a gable that lost its
+## face: masonry 0.3 in thick, flush inside the face, 3-5 steps from each corner up to a 1.4-2.6 in peak (GABLE_PEAK_IN), one side broken off at a step the lot's hash picks; a gable that lost its
 ## middle keeps only its two corner stubs. Nothing within LADDER_GAP_IN of a ladder's top. [{lo, hi, kind, lot}]
-static func ruin_gables(layout: Dictionary) -> Array[Dictionary]:
+## `timber` (train 3, H4): lots whose ladder-free gable faces carry the kit's timber gable instead (no masonry there); `faces` collects every gable face found
+## ({lot, side, mid (Vector2, the face's outer middle), width, top, peak, free (no ladder top on it)}).
+static func ruin_gables(layout: Dictionary, timber: Dictionary = {}, faces: Array = []) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var nx: int = layout["nx"]
 	var nz: int = layout["nz"]
@@ -124,13 +127,17 @@ static func ruin_gables(layout: Dictionary) -> Array[Dictionary]:
 			var plane := c0 + (Vector2(cell_in - GABLE_T_IN, 0.0) if side == 1 else Vector2(0.0, cell_in - GABLE_T_IN) if side == 2 else Vector2.ZERO)
 			var salt := int(lot["id"]) * 4 + end
 			var steps := 3 + int(_h(salt, half, 200) * 3.0)
-			var peak := 1.0 + 0.9 * _h(salt, half, 201)
+			var peak := GABLE_PEAK_IN.x + (GABLE_PEAK_IN.y - GABLE_PEAK_IN.x) * _h(salt, half, 201)
 			var broken_at := int(_h(salt, half, 202) * float(2 * steps))   # the step from which on one side is gone
 			var stubs_only := _h(salt, half, 203) < 0.3
 			var gaps: Array[float] = []   # along the face: ladder tops
 			for k in span:
 				if (ladders.get(face[k], []) as Array).has(side):
 					gaps.append((float(k) + 0.5) * cell_in)
+			var outer := c0 + (Vector2(cell_in, 0.0) if side == 1 else Vector2(0.0, cell_in) if side == 2 else Vector2.ZERO)
+			faces.append({"lot": lot["id"], "side": side, "mid": outer + (Vector2(0.0, width * 0.5) if axis_x else Vector2(width * 0.5, 0.0)), "width": width, "top": top, "peak": peak, "free": gaps.is_empty()})
+			if timber.has(lot["id"]) and gaps.is_empty():
+				continue
 			var w := width * 0.5 / float(steps)
 			for s in 2 * steps:   # left to right: rising, then falling
 				var rank := s if s < steps else 2 * steps - 1 - s
@@ -203,11 +210,11 @@ static func turrets(layout: Dictionary) -> Array[Dictionary]:
 
 
 ## All of it on the board's material: the boxes in one MultiMesh, the turret shafts and their cones in one each.
-static func build(parent: Node3D, layout: Dictionary, material: Material) -> void:
+static func build(parent: Node3D, layout: Dictionary, material: Material, timber: Dictionary = {}) -> void:
 	var m := BoardgenTownDressing.INCHES_TO_METERS
 	var kinds: Array = BoardgenTheme.TOWN_KINDS
 	var items: Array = []   # [basis, origin, custom]
-	for b: Dictionary in wall_parts(layout) + ruin_gables(layout):
+	for b: Dictionary in wall_parts(layout) + ruin_gables(layout, timber):
 		var size: Vector3 = b["hi"] - b["lo"]
 		items.append([Basis.from_scale(size * m), (b["lo"] + b["hi"]) * 0.5 * m, Color(kinds.find(b["kind"]), size.x, size.y, size.z)])
 	for r: Dictionary in rafters(layout):
