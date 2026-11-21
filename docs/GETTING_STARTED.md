@@ -53,7 +53,7 @@ The same menu entry lists eleven lessons in total, each on its own prepared tabl
 
 ### Start a game
 
-From the start menu, choose **Prepare a new table**. Pick a biome (six to choose from) and the table size — Standard 6×4 ft (default), Square 4×4 ft or Custom (12–240 in) — then press **Create table**. The size is fixed once the table exists. Terrain comes after that: open **Map Layout…** in the left panel (☰) to lay it out, or generate one automatically.
+From the start menu, choose **Prepare a new table**. Start with the **Game system** (top right: Grimdark Future, Grimdark Future: Firefight, Age of Fantasy, Age of Fantasy: Skirmish or Age of Fantasy: Regiments; your last pick is remembered): it decides which biomes, terrain and army lists the table offers and which board it starts on. Then pick a biome (six to choose from on a Grimdark table, four on a fantasy one) and the table size — Standard 6×4 ft, Square 4×4 ft (the start for the two skirmish games) or Custom (12–240 in) — then press **Create table**. An army list of another game system than the table's is refused at the import; until the first list is on the table the system can be changed in the **Map Layout…** editor. The size is fixed once the table exists. Terrain comes after that: open **Map Layout…** in the left panel (☰) to lay it out, or generate one automatically.
 
 The table opens in the **Deployment** phase — place your army, then press **Start Game** (left panel) to begin play. In multiplayer both players signal ready and the host starts once both are. During play, dragging a model paints a measured **move trail** (`T` hides / `Shift`+`T` clears); the *Enforce Movement Limit* setting (on by default) stops the drag at the model's Advance/Rush-Charge band.
 

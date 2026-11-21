@@ -94,6 +94,10 @@ not there yet and what to watch for. The full done / in-progress / planned break
 - **Walker orientation** on oval bases is decided by the unit **name** containing "Walker" (the
   only signal available at runtime). A walker-type unit named otherwise won't be auto-oriented
   crosswise — tell us the name and we'll extend it.
+- **Dangerous terrain on a fantasy table still looks like a minefield.** The game system decides
+  which terrain looks a table offers, but a fantasy look for dangerous terrain (a stake pit or a
+  thorn thicket) does not exist yet; until it ships, the anti-tank mine and warning sign show on
+  grassland, desert and tundra tables of every system. The rules are the same either way.
 - **Auto buff-tokens** from special rules use a curated list + a heuristic (auras / buffs /
   `+1`-`-1` / re-rolls). It won't catch every faction's custom rule; missed ones are a one-line map
   addition.
