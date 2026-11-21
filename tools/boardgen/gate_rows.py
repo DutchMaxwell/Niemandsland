@@ -6,6 +6,8 @@ tools/boardgen/gate_run.sh. The baseline score of every model is the MEDIAN over
   - the median of the per-model ratio  after / before   (>= 0.9),
   - its 10th percentile                                  (>= 0.7: the bar),
   - the growth of the number of models below score 1     (<= 4).
+Models the capture reports as occluded (something of the board in front of them; gate change 21.11.) have no score and are left out; their count (median over the
+repeats) is printed per row, so a gate that goes blind shows it.
 Models whose disc is not wholly inside the 1600 x 900 frame are left out (their ring would read clamped border pixels). Exit status 1 when any row is under a bar.
 """
 import glob, json, os, statistics as st, sys
@@ -42,6 +44,7 @@ for key in sorted(after, key=lambda k: (k[2], k[0], int(k[1].lstrip("s")))):
             per_model.setdefault(i, []).append(v)
     s0 = {i: st.median(v) for i, v in per_model.items()}
     p10s, meds, grows, below = [], [], [], []
+    occl = st.median(g.get("occluded", 0) for g in after[key])
     for g in after[key]:
         s1 = scores(g)
         ratios = sorted(s1[i] / s0[i] for i in s0 if s0[i] > 0.05 and i in s1)
@@ -53,8 +56,8 @@ for key in sorted(after, key=lambda k: (k[2], k[0], int(k[1].lstrip("s")))):
     p10, med, grow = st.median(p10s), st.median(meds), st.median(grows)
     good = p10 >= 0.7 and med >= 0.9 and grow <= 4
     ok = ok and good
-    lines.append("%-6s %-4s yaw %3d | below1 %d -> %d | ratio median %.2f | p10 %.2f [repeats %s] | %s" % (
-        key[0], key[1], int(key[2]), below[0][0], st.median(b[1] for b in below), med, p10, " ".join("%.2f" % p for p in p10s), "PASS" if good else "FAIL"))
+    lines.append("%-6s %-4s yaw %3d | below1 %d -> %d | occluded %d | ratio median %.2f | p10 %.2f [repeats %s] | %s" % (
+        key[0], key[1], int(key[2]), below[0][0], st.median(b[1] for b in below), occl, med, p10, " ".join("%.2f" % p for p in p10s), "PASS" if good else "FAIL"))
 if not lines:
     ok = False   # no row matched the baseline (other seeds, presets or yaws): a gate that compared nothing is not green
     lines.append("no row of %s matches a row of %s" % (tag, base_tag))

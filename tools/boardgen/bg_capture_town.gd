@@ -17,8 +17,10 @@ const PLAY_PITCH := -50.0
 const PLAY_ZOOM := 1.1
 const WIDTH := 1600
 const MEDIUM := 2
+const VIS_MIN := 0.4   # gate: a model with less than this share of its own silhouette visible (inside its disc) is `occluded`, not scored (gate change 21.11.)
 
 var _out := ""
+var _gate_test := false   # gate_test=1: the sampler's own red / green on three test pawns (_gate_self_test)
 var _main: Node
 var _theme := "ruintown"
 var _perf_mode := false
@@ -70,6 +72,8 @@ func _run() -> void:
 			_theme = a.trim_prefix("theme=")
 		elif a == "perf=1":
 			_perf_mode = true
+		elif a == "gate_test=1":
+			_gate_test = true
 		elif a == "baseline=1":
 			_baseline = true
 		elif a == "table=1":
@@ -238,6 +242,8 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 		await _still(tag, "play")
 		if _baseline:
 			await _readability(tag, _suffix)
+			if _gate_test:
+				await _gate_self_test()
 			await _perf_one(1, preset, board_seed, "ruintown", 0)
 	if _want("halfplay"):   # the play camera at half the distance on the board's middle (40 px per inch: a story piece reads by kind here, not at the full-board zoom)
 		_pose(_play_yaw, PLAY_PITCH, PLAY_ZOOM * 0.5)
@@ -425,7 +431,7 @@ func _stage_table() -> void:
 
 
 ## A neutral backdrop instead of the star field, set AFTER a preset is applied (the render state rewrites the environment whenever a preset lands). Capture only.
-func _backdrop() -> void:
+func _backdrop(_for_gate := false) -> void:
 	var env: Environment = _main.world_environment.environment
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.13, 0.13, 0.14)
@@ -508,13 +514,13 @@ func _luma(c: Color) -> float:
 
 
 ## Mean colour of the pixels within the annulus r0..r1 (px) round `c`, skipping pixels inside any of the `skip` discs (port of bg_capture_aaa2.gd).
-func _mean_ring(img: Image, c: Vector2, r0: float, r1: float, skip: Array) -> Color:
+func _mean_ring(img: Image, c: Vector2, r0: float, r1: float, skip: Array, mask: Image = null, want := false) -> Color:
 	var sum := Color(0, 0, 0, 0)
 	var n := 0
 	for y in range(maxi(int(c.y - r1), 0), mini(int(c.y + r1) + 1, img.get_height())):
 		for x in range(maxi(int(c.x - r1), 0), mini(int(c.x + r1) + 1, img.get_width())):
 			var d := Vector2(x, y).distance_to(c)
-			if d < r0 or d > r1:
+			if d < r0 or d > r1 or (mask != null and _is_mark(mask.get_pixel(x, y)) != want):   # mask: only model pixels (want) or only non-model pixels
 				continue
 			var hidden := false
 			for sk: Dictionary in skip:
@@ -539,6 +545,7 @@ func _readability(tag: String, pname: String) -> void:
 		"contrast": env.adjustment_contrast, "saturation": env.adjustment_saturation, "curve": env.adjustment_color_correction != null}
 	var cam := root.get_viewport().get_camera_3d()
 	var img := root.get_texture().get_image()
+	var masks := await _model_masks(_models)
 	var k := float(img.get_width()) / root.get_visible_rect().size.x
 	var discs: Array[Dictionary] = []
 	var occluded := 0
@@ -564,14 +571,13 @@ func _readability(tag: String, pname: String) -> void:
 		discs.append({"i": i, "c": c, "r": maxf(r, 2.5)})
 	var scores: Array[float] = []
 	var rows: Array = []
+	var hidden_px := 0
 	for d: Dictionary in discs:
 		var others := discs.filter(func(o: Dictionary) -> bool: return o["i"] != d["i"])
-		var body := _mean_ring(img, d["c"], 0.0, float(d["r"]) * 0.9, [])
-		var ring := _mean_ring(img, d["c"], float(d["r"]) * 1.3, float(d["r"]) * 1.9, others)
-		var dy := absf(_luma(body) - _luma(ring))
-		var cb := Vector2(body.r - body.g, body.b - (body.r + body.g) * 0.5)
-		var cr := Vector2(ring.r - ring.g, ring.b - (ring.r + ring.g) * 0.5)
-		var score := maxf(dy / 0.10, cb.distance_to(cr) / 0.10)
+		var score := _score(img, masks, d["c"], d["r"], others)
+		if score < 0.0:
+			hidden_px += 1   # something of the board stands in front of the model: its disc would read that, not the model
+			continue
 		scores.append(score)
 		var at := ((_models[int(d["i"])].global_position - _cur_board.global_position) / IN) if _cur_board != null else Vector3.ZERO
 		var cx := clampi(int(floorf(at.x / 3.0 + 8.0)), 0, 15)
@@ -583,9 +589,107 @@ func _readability(tag: String, pname: String) -> void:
 	var low := 0
 	for sc: float in scores:
 		low += 1 if sc < 1.0 else 0
-	_gate.append({"seed": tag, "yaw": _play_yaw, "preset": "medium" if pname == "" else pname.trim_prefix("_"), "models": scores.size(), "occluded": occluded, "offframe": offframe, "below_1": low,
+	_gate.append({"seed": tag, "yaw": _play_yaw, "preset": "medium" if pname == "" else pname.trim_prefix("_"), "models": scores.size(), "occluded": occluded + hidden_px, "occluded_mask": hidden_px, "offframe": offframe, "below_1": low,
 		"min": snappedf(sorted[0] if not sorted.is_empty() else 0.0, 0.01), "median": snappedf(sorted[sorted.size() / 2] if not sorted.is_empty() else 0.0, 0.01), "scores": rows})
-	print("GATE ", tag, pname, " models ", scores.size(), " below1 ", low)
+	print("GATE ", tag, pname, " models ", scores.size(), " below1 ", low, " occluded ", occluded + hidden_px)
+
+
+## The score of one model (gate change 21.11.): its VISIBLE body pixels against the ring of board round its base without any model pixel, score = max(dY / 0.10, dC / 0.10);
+## -1 (occluded) when less than VIS_MIN of its whole silhouette inside the disc is visible.
+func _score(img: Image, masks: Array[Image], c: Vector2, r: float, others: Array) -> float:
+	var whole := _mean_ring(masks[1], c, 0.0, r * 0.9, [], masks[1], true).a
+	var body := _mean_ring(img, c, 0.0, r * 0.9, [], masks[0], true)
+	if whole < 1.0 or body.a / whole < VIS_MIN:
+		return -1.0
+	var ring := _mean_ring(img, c, r * 1.3, r * 1.9, others, masks[0], false)
+	var cb := Vector2(body.r - body.g, body.b - (body.r + body.g) * 0.5)
+	var cr := Vector2(ring.r - ring.g, ring.b - (ring.r + ring.g) * 0.5)
+	return maxf(absf(_luma(body) - _luma(ring)) / 0.10, cb.distance_to(cr) / 0.10)
+
+
+## The gate's model masks: every model drawn flat magenta (unshaded), once with the board as it stands (what is in front of a model hides it) and once with every other
+## piece of the board hidden (the model's whole silhouette). Returns [visible, whole]; everything is put back.
+func _model_masks(models: Array) -> Array[Image]:
+	var mark := StandardMaterial3D.new()
+	mark.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mark.albedo_color = Color(0.6, 0.0, 0.6)
+	var saved := {}
+	for m: Node3D in models:
+		for g: GeometryInstance3D in m.find_children("*", "GeometryInstance3D", true, false):
+			saved[g] = g.material_override
+			g.material_override = mark
+	var out: Array[Image] = [await _gate_frame()]
+	var hidden: Array[Node3D] = []
+	for ch: Node in _cur_board.get_children():
+		if ch is Node3D and (ch as Node3D).visible and not models.any(func(m: Node3D) -> bool: return ch == m or ch.is_ancestor_of(m)):
+			(ch as Node3D).visible = false
+			hidden.append(ch)
+	out.append(await _gate_frame())
+	for ch: Node3D in hidden:
+		ch.visible = true
+	for g: GeometryInstance3D in saved:
+		g.material_override = saved[g]
+	return out
+
+
+func _gate_frame() -> Image:
+	for _i in 8:
+		_backdrop(true)
+		await process_frame
+		_hide_scatter()
+	return root.get_texture().get_image()
+
+
+func _is_mark(c: Color) -> bool:
+	return c.r - c.g > 0.2 and c.b - c.g > 0.2 and absf(c.r - c.b) < 0.25
+
+
+## gate_test=1 (red / green of the sampler): three copies of the first model float 12 in above the board's middle, where nothing of the board can stand in front of them.
+## One behind a 2 in box must read `occluded`; one painted flat pale on a plate of the same flat pale must read below 1 (visible, but no contrast); the same pale pawn on a
+## black plate must read 1 or more.
+func _gate_self_test() -> void:
+	var cam := root.get_viewport().get_camera_3d()
+	var tests: Array = []
+	var props: Array[Node3D] = []
+	var pale := StandardMaterial3D.new()
+	pale.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	pale.albedo_color = Color(0.8, 0.8, 0.78)
+	var dark := pale.duplicate() as StandardMaterial3D
+	dark.albedo_color = Color.BLACK
+	for t in 3:
+		var pawn := _models[0].duplicate() as Node3D
+		_cur_board.add_child(pawn)
+		pawn.global_position = _cur_board.global_position + Vector3((t - 1) * 6.0, 12.0, 0.0) * IN
+		tests.append(pawn)
+		if t > 0:
+			for g: GeometryInstance3D in pawn.find_children("*", "GeometryInstance3D", true, false):
+				g.material_override = pale
+		var prop := MeshInstance3D.new()
+		if t == 0:
+			prop.mesh = BoxMesh.new()
+			(prop.mesh as BoxMesh).size = Vector3.ONE * 2.0 * IN
+			_cur_board.add_child(prop)
+			prop.global_position = pawn.global_position + (cam.global_position - pawn.global_position).normalized() * 2.0 * IN
+		else:
+			prop.mesh = PlaneMesh.new()
+			(prop.mesh as PlaneMesh).size = Vector2.ONE * 3.0 * IN
+			prop.material_override = pale if t == 1 else dark
+			_cur_board.add_child(prop)
+			prop.global_position = pawn.global_position - Vector3.UP * 0.0005
+		props.append(prop)
+	var img := await _gate_frame()
+	var masks := await _model_masks(tests)
+	var k := float(img.get_width()) / root.get_visible_rect().size.x
+	var got: Array[float] = []
+	for pawn: Node3D in tests:
+		var p := pawn.global_position + Vector3.UP * 0.004
+		var c := cam.unproject_position(p) * k
+		got.append(_score(img, masks, c, maxf((cam.unproject_position(p + cam.global_transform.basis.x * 0.016) * k - c).length(), 2.5), []))
+	var ok := got[0] < 0.0 and got[1] >= 0.0 and got[1] < 1.0 and got[2] >= 1.0
+	_manifest["gate_test"] = {"behind_box": got[0], "pale_on_pale": got[1], "on_black": got[2], "pass": ok}
+	print("GATE_TEST behind_box %.2f (occluded = -1) pale_on_pale %.2f (< 1) on_black %.2f (>= 1) -> %s" % [got[0], got[1], got[2], "PASS" if ok else "FAIL"])
+	for n: Node3D in tests + props:
+		n.free()
 
 
 ## The ASCII plan: 3 / 2 / 1 raised, ~ hazard lot, y yard (level-0 rest of a Terrace), " garden plot, R intact house, w breach / b buttress / W wall ridge / T wall tower, . street, , ground; landmarks overlaid: F fountain,
