@@ -184,10 +184,10 @@ func test_no_check_with_the_flag_off_or_in_a_manual_room() -> void:
 		assert_array(_frames("activation_check")).override_failure_message("manual %s: %s" % [manual, _names()]).is_empty()
 
 
-## A lifecycle unit with one special rule is not a core unit: its End sends no check.
+## A lifecycle unit with a rule the deny slice refuses (Grounded Protection, H-30) is not a core unit: its End sends no check.
 func test_no_check_for_a_unit_with_a_special_rule() -> void:
 	_room()
-	var u := _plain(1, "Berserkers", 0.0, ["Furious"])
+	var u := _plain(1, "Guards", 0.0, ["Grounded Protection"])
 	_plain(2, "Guards", 18.0)
 	await _start_and_end(u)
 	assert_bool(u.is_activated).is_true()

@@ -417,27 +417,24 @@ func test_the_ai_door_reads_the_deny_list_unless_the_way_back_is_asked_for() -> 
 	CoreSlice.reset_cache()
 
 
-## C-19: the HUMAN door is not switched by the default (the gate measured the AI door; DS-109 switches the human door): with
-## no env it still reads the allow file, so a unit with rules is a table unit for it and a deny-list unit for the AI door.
-## An explicit `deny` reads the deny-list for both doors (as before C-19); `allow` reads the allow file for both; a test
-## seam (`path_override`) is read by both. RED (the human door follows the AI door): the unset case takes the unit.
-func test_the_human_door_keeps_the_allow_file_until_it_is_switched() -> void:
+## H-30 (DS-109): the HUMAN door reads the live slice, the AI door's own: with no env the deny-list takes a unit with rules for
+## both doors; `NML_CORE_SLICE=allow` (the way back) refuses it for both; a test seam (`path_override`) is read by both.
+## RED (the human door keeps the allow file): the unset case refuses the unit and the startup line names the allow file.
+func test_the_human_door_reads_the_live_slice_like_the_ai_door() -> void:
 	var ruled := _unit(["Tough(3)"], [["AP(1)"]])
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 	assert_bool(CoreSlice.takes(ruled)).override_failure_message("AI door, no env").is_true()
-	assert_bool(CoreSlice.takes_human(ruled)).override_failure_message("human door, no env: switched by C-19").is_false()
-	assert_array(CoreSlice.refusals_human(ruled)).is_equal(["unit_rule:Tough", "weapon_rule:AP"])
-	assert_bool(CoreSlice.takes_human(_unit([], [[]]))).override_failure_message("a plain unit stays taken").is_true()
-	assert_bool(CoreSlice.takes_human(ruled, true)).override_failure_message("human door, target").is_false()
-	assert_str(CoreSlice.mode_line()).contains("human door allow (core_slice_allow.json)")
-	OS.set_environment("NML_CORE_SLICE", "deny")
-	CoreSlice.reset_cache()
-	assert_bool(CoreSlice.takes_human(ruled)).override_failure_message("explicit deny reads the deny-list for both doors").is_true()
+	assert_bool(CoreSlice.takes_human(ruled)).override_failure_message("human door, no env: the deny-list takes it").is_true()
+	assert_array(CoreSlice.refusals_human(ruled)).is_empty()
+	assert_bool(CoreSlice.takes_human(ruled, true)).override_failure_message("human door, target").is_true()
+	assert_str(CoreSlice.human_path()).is_equal(CoreSlice.live_path())
 	assert_str(CoreSlice.mode_line()).contains("human door deny (core_slice_deny.json)")
 	OS.set_environment("NML_CORE_SLICE", "allow")
 	CoreSlice.reset_cache()
-	assert_bool(CoreSlice.takes_human(ruled)).is_false()
+	assert_bool(CoreSlice.takes_human(ruled)).override_failure_message("the way back refuses it for the human door too").is_false()
+	assert_array(CoreSlice.refusals_human(ruled)).is_equal(["unit_rule:Tough", "weapon_rule:AP"])
+	assert_str(CoreSlice.mode_line()).contains("human door allow (core_slice_allow.json)")
 	OS.unset_environment("NML_CORE_SLICE")
 	_allow({}, "deny")   # a test seam is read by both doors
 	assert_bool(CoreSlice.takes_human(ruled)).override_failure_message("the seam's slice is the human door's too").is_true()

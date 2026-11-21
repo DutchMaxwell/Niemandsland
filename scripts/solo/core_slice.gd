@@ -102,11 +102,8 @@ static func live_path() -> String:
 	return PATH if allow_switched() else DENY_PATH
 
 
-## C-19: the file the HUMAN door reads. Not switched by C-19: PATH unless the env or a test seam names a slice (an explicit
-## `NML_CORE_SLICE=deny` still selects the deny-list for both doors, as before). DS-109 makes this `live_path()`.
+## DS-109 / H-30: the file the HUMAN door reads - the same slice as the AI door (the deny-list unless `NML_CORE_SLICE=allow`).
 static func human_path() -> String:
-	if path_override.is_empty() and OS.get_environment("NML_CORE_SLICE").to_lower() != "deny":
-		return PATH
 	return live_path()
 
 
@@ -356,11 +353,9 @@ static func takes(gu: GameUnit, as_target := false) -> bool:
 	return refusals(gu, as_target).is_empty()
 
 
-## C-19: `refusals` / `takes` for the HUMAN door (`human_path`): the live slice when the human door reads it too, else the file
-## the human door keeps until DS-109 (read through `refusals_in`, cached apart, the live slice untouched).
+## C-19: `refusals` / `takes` for the HUMAN door. H-30: its slice is the live one (`human_path` == `live_path`), so these ask `refusals`.
 static func refusals_human(gu: GameUnit, as_target := false) -> Array:
-	var path := human_path()
-	return refusals(gu, as_target) if path == live_path() else refusals_in(path, gu, as_target)
+	return refusals(gu, as_target)
 
 
 static func takes_human(gu: GameUnit, as_target := false) -> bool:

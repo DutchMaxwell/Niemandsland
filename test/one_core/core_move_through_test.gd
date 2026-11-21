@@ -251,7 +251,8 @@ func test_a_refused_core_call_leaves_the_strafe_to_the_table_once() -> void:
 
 ## The human door (P4.D-37b): a Strafing bearer is a core unit (its strike comes with the activation's Fire / End), a Crossing
 ## Attack bearer stays on the table (the table never rolled that rule for a human unit; the core would). The slice takes both
-## (`is_plain`). RED: drop the Crossing Attack clause from `is_core_unit` -> the human Crossing Attack bearer is a core unit.
+## (`is_plain`). RED: drop the Crossing Attack clause from `is_core_unit` -> the human Crossing Attack bearer is a core unit; drop
+## "Hit & Run Shooter" from it -> the human Hit & Run bearer is one.
 func test_the_human_door_takes_a_strafe_bearer_but_not_a_crossing_attack_bearer() -> void:
 	_main.solo_ai_slots = {2: true}
 	var strafer := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Strafer", "models": 2, "x_in": 0.0}), STRAFE_GUN)
@@ -261,7 +262,11 @@ func test_the_human_door_takes_a_strafe_bearer_but_not_a_crossing_attack_bearer(
 	assert_bool(CoreActivation.is_core_unit(_main, plain)).override_failure_message("a plain human unit is not a core unit").is_true()
 	assert_bool(CoreActivation.is_core_unit(_main, strafer)).override_failure_message("the human Strafing bearer is no core unit").is_true()
 	assert_bool(CoreActivation.is_core_unit(_main, crosser)).override_failure_message("the human Crossing Attack bearer is a core unit").is_false()
-	_free([strafer, crosser, plain])
+	# H-30: a Hit & Run bearer stays on the table too (the core steps for it and spends the round's use; a human drags the step).
+	var runner := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Runner", "models": 2, "x_in": 30.0, "faction_folder": "custodian_brothers", "rules": ["Hit & Run Shooter"]}, true), RIFLE)
+	assert_bool(CoreActivation.is_plain(runner)).override_failure_message("the slice no longer takes the Hit & Run bearer").is_true()
+	assert_bool(CoreActivation.is_core_unit(_main, runner)).override_failure_message("the human Hit & Run bearer is a core unit").is_false()
+	_free([strafer, crosser, plain, runner])
 
 
 ## A refused core call pays the move-through attacks on the table BEFORE the volley, which was aimed earlier: a target the strafe
