@@ -93,19 +93,23 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 	var cells: Array = layout["cells"]
 	var town := str(layout.get("theme", BoardgenTheme.DEEPWORKS)) == BoardgenTheme.RUIN_TOWN
 	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var own := BoardgenTownSilhouette.drawn_cells(layout) if town else {}   # wall and tower cells the silhouette draws thinner: one collider box each, drawn by it
 	# Blocks: runs of same-kind cells along x. Level 0 is a thin skin coloured by what the cell is.
 	for z in nz:
 		var x := 0
 		while x < nx:
 			var kind := _cell_kind(cells[z * nx + x], town)
 			var run := 1
-			while x + run < nx and _cell_kind(cells[z * nx + x + run], town) == kind:
+			while not own.has(z * nx + x) and x + run < nx and not own.has(z * nx + x + run) and _cell_kind(cells[z * nx + x + run], town) == kind:
 				run += 1
 			var level: int = cells[z * nx + x]["level"]
 			var body := kind == "roofed"   # an intact house: level-0 solid ground, as high as the core's solid (2.5 in); its ridge is drawn below
-			out.append({"lo": Vector3(origin.x + x * cell_in, 0.0, origin.y + z * cell_in),
+			var box := {"lo": Vector3(origin.x + x * cell_in, 0.0, origin.y + z * cell_in),
 				"hi": Vector3(origin.x + (x + run) * cell_in, float(level_in[level]) if level > 0 else (SOLID_IN if body else SKIN_IN), origin.y + (z + 1) * cell_in),
-				"kind": kind, "solid": level > 0 or body})
+				"kind": kind, "solid": level > 0 or body}
+			if own.has(z * nx + x):
+				box["hidden"] = true
+			out.append(box)
 			x += run
 	for c: Dictionary in layout["connectors"]:
 		var base: float = level_in[cells[c["low"]]["level"]]
@@ -128,7 +132,6 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 		out.append_array(BoardgenTownDressing.lean_tos(layout))
 		out.append_array(BoardgenTownDressing.party_stubs(layout))
 		out.append_array(BoardgenTownDressing.breach_rubble(layout))
-		out.append_array(BoardgenTownDressing.hall_merlons(layout))
 	else:
 		out.append_array(BoardgenSumps.kerbs(layout))   # the low rim round each toxic sump (the town draws its pools as flat boxes)
 	return out
@@ -219,9 +222,9 @@ static func custom_data(b: Dictionary, kinds: Array = KINDS) -> Color:
 	return Color(kinds.find(b["kind"]), size.x, size.y, size.z)
 
 
-## Does a plan box draw itself? An intact house does not: BoardgenTownDressing draws its inset, yawed body, and this box only keeps the collider.
+## Does a plan box draw itself? An intact house does not (BoardgenTownDressing draws its inset, yawed body), nor a wall or tower cell (BoardgenTownSilhouette draws it thinner): the box only keeps the collider.
 static func draws_itself(b: Dictionary) -> bool:
-	return b["kind"] != "roofed"
+	return b["kind"] != "roofed" and not b.get("hidden", false)
 
 
 ## The whole board in ONE MultiMesh (one draw call, one shared procedural material) plus a collider per solid box.

@@ -153,8 +153,8 @@ static func chimneys(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
-## The battlements: merlons (0.7 x 0.7 x 0.4 in, three to a 3 in edge) round the open edges of every wall ridge and tower crown (a cell of the wall at
-## 6 in or more, or any 9 in cell), inside the 0.4 in edge strip so the walkway keeps its width. Some are missing, more in the south half than in the north
+## The battlements: merlons (0.7 x 0.7 x 0.4 in, three to a 3 in edge) along the open FIELD edge of every wall ridge (6 in) and round the open edges of every tower crown (any 9 in
+## cell), inside the 0.4 in edge strip so the walkway keeps its width. Some are missing, more in the south half than in the north
 ## one (a broken battlement is a look; no merlon is cover the core knows). Boxes for the greybox plan ({lo, hi, kind, solid}).
 static func merlons(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -173,6 +173,8 @@ static func merlons(layout: Dictionary) -> Array[Dictionary]:
 			var at := Vector2i(cd["x"], cd["z"]) + d
 			if at.x >= 0 and at.y >= 0 and at.x < nx and at.y < nz and int(layout["cells"][at.y * nx + at.x]["level"]) >= level:
 				continue   # a neighbour as high: this edge is no open edge
+			if level == 2 and side != (3 if int(cd["x"]) * 2 < nx else 1):
+				continue   # a wall ridge has its parapet on the FIELD side only: the town side of the walk is open (a thin wall with a walk, not a crenellated block)
 			for i in 3:
 				if _hash(cd["x"] * 16 + cd["z"], half, 10 + side * 3 + i) < (0.28 if half == 1 else 0.10):
 					continue
@@ -531,36 +533,6 @@ static func breach_rubble(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
-## Battlements round the hall: merlons along the outer edges of every hall footprint (a pumphouse landmark) on its block, like the wall's, inside the rim.
-static func hall_merlons(layout: Dictionary) -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	var nx: int = layout["nx"]
-	var cell_in := float(layout["cell_in"])
-	var origin := Vector2(nx, layout["nz"]) * cell_in * -0.5
-	var n := 0
-	for lm: Dictionary in layout["landmarks"]:
-		n += 1
-		if lm["kind"] != "PumpHouse":
-			continue
-		var top := 0.0
-		for dz in int(lm["h"]):
-			for dx in int(lm["w"]):
-				top = maxf(top, float(layout["level_in"][layout["cells"][(int(lm["z"]) + dz) * nx + int(lm["x"]) + dx]["level"]]))
-		var lo := origin + Vector2(lm["x"], lm["z"]) * cell_in
-		var size := Vector2(lm["w"], lm["h"]) * cell_in
-		var half := 1 if lo.y + size.y * 0.5 > 0.0 else 0
-		for edge in 4:   # north, east, south, west: 3 merlons per 3 in of edge
-			var length := size.x if edge % 2 == 0 else size.y
-			for i in int(length / cell_in) * 3:
-				if _hash(n * 31 + edge, half, 110 + i) < (0.28 if half == 1 else 0.10):
-					continue
-				var t := 0.5 + float(i)
-				var box_lo := Vector2(lo.x + t - 0.35, lo.y if edge == 0 else lo.y + size.y - 0.4) if edge % 2 == 0 else Vector2(lo.x if edge == 3 else lo.x + size.x - 0.4, lo.y + t - 0.35)
-				var box_size := Vector2(0.7, 0.4) if edge % 2 == 0 else Vector2(0.4, 0.7)
-				out.append({"lo": Vector3(box_lo.x, top, box_lo.y), "hi": Vector3(box_lo.x + box_size.x, top + 0.7, box_lo.y + box_size.y), "kind": "wall", "solid": false, "merlon": true})
-	return out
-
-
 ## The frontage table of the building lots (plan O1, no visual change yet): for every house lot (Block, Terrace, Deck, Roofed) its FRONT face - the face with the most
 ## street cells beside it, ties toward the square - its back (opposite), its sides, the faces that are party walls (a building lot of its own right beside them) and
 ## whether it is a corner lot (street beside two adjacent faces). A lot with no street beside any face has front "" (a backyard house). Faces are "N" (z - 1), "E", "S", "W".
@@ -702,6 +674,7 @@ func build(layout: Dictionary, material: Material, prism_roofs := true) -> void:
 		mmi.material_override = material
 		add_child(mmi)
 	_add_bodies(layout, material)
+	BoardgenTownSilhouette.build(self, layout, material)
 	_add_lights(layout)
 	_add_probe(layout)
 

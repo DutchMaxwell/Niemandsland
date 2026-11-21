@@ -122,7 +122,7 @@ static func plan(layout: Dictionary) -> Dictionary:
 	for m: String in clutter:
 		for item: Dictionary in clutter[m]:
 			add.call(m, item)
-	var merlons := BoardgenTownDressing.merlons(layout) + BoardgenTownDressing.hall_merlons(layout)
+	var merlons := BoardgenTownDressing.merlons(layout)
 	for i in merlons.size():
 		var b: Dictionary = merlons[i]
 		var size: Vector3 = b["hi"] - b["lo"]

@@ -317,17 +317,25 @@ func test_props_stand_in_the_strip_beside_a_wall_face_and_never_on_a_street_a_pl
 	assert_int(differing).is_greater(50)
 
 
-func test_a_breach_is_strewn_with_flat_stones_and_the_hall_gets_merlons() -> void:
+func test_a_breach_is_strewn_with_flat_stones() -> void:
 	var layout := _town_with_wall_house_and_plot()   # a breach at (5, 8)
 	var rubble := BoardgenTownDressing.breach_rubble(layout)
 	assert_int(rubble.size()).is_equal(8)
 	for b: Dictionary in rubble:
 		assert_float(b["hi"].y).is_less(0.26)   # flat enough to stand on
-	layout["landmarks"] = [{"kind": "PumpHouse", "x": 12, "z": 6, "w": 2, "h": 2, "turn": 0, "terrain": 0, "solid": false}]
-	var merlons := BoardgenTownDressing.hall_merlons(layout)
-	assert_int(merlons.size()).is_greater(8)   # 24 places round a 2 x 2 footprint, some broken
+
+
+## Silhouette round (21.11.): a wall ridge carries its parapet on the field side only (x < 8: west, else east); the town side of the walk stays open.
+func test_a_wall_ridge_has_merlons_on_its_field_side_only() -> void:
+	var big := _town()
+	for z in range(0, 16):
+		_put(big, 4, z, 2, "Wall")
+		_put(big, 11, z, 2, "Wall")
+	var merlons := BoardgenTownDressing.merlons(big)
+	assert_int(merlons.size()).is_greater(20)
 	for b: Dictionary in merlons:
-		assert_float(b["hi"].y - b["lo"].y).is_equal_approx(0.7, 0.001)
+		var x: float = (b["lo"].x + b["hi"].x) * 0.5
+		assert_bool(x < -24.0 + 4.0 * 3.0 + 0.5 or x > -24.0 + 12.0 * 3.0 - 0.5).override_failure_message("a merlon on the town side at x = %f" % x).is_true()
 
 
 ## R7a: the cookie is a 128 px picture with a hot core, a fall-off to the rim and thin dark frame bars across the pool.
