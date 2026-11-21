@@ -381,8 +381,8 @@ static func _landmarks(layout: Dictionary, out: Dictionary) -> void:
 		var centre := lo + size * 0.5
 		match lm["kind"]:
 			"TankCluster":
-				for m in FOUNTAIN_MODULES:
-					_add(out, m, _item(0.0, Vector3(centre.x, 0.0, centre.y)))
+				for m in FOUNTAIN_MODULES:   # the basin of separate ashlars and a broken side (kit batch A7; the kit draws the older basin while it is not cached)
+					_add(out, "fountain_basin_b" if m == "fountain_basin" else m, _item(0.0, Vector3(centre.x, 0.0, centre.y)))
 			"Crane":
 				for m in STATUE_MODULES:
 					_add(out, m, _item(float(lm["turn"]) * PI * 0.5, Vector3(centre.x, 0.0 if m == "statue_plinth" else 1.57, centre.y)))

@@ -95,3 +95,49 @@ func test_the_greybox_swaps_to_the_kit_only_when_every_module_is_there() -> void
 	var surfaces := (node.get_node("Surfaces") as MultiMeshInstance3D).multimesh
 	for i in surfaces.instance_count:
 		assert_str(kinds[int(surfaces.get_instance_custom_data(i).r)]).is_not_equal("brick")   # no chimney box left
+
+
+## Kit batch A7: three merlon joint patterns and a broken one, and a capstone run on the FIELD edge of every wall top that drops there (inside the 0.5 in parapet line, 0.18 in high).
+func test_merlon_variants_and_capstones_on_the_field_edge() -> void:
+	var layout: Dictionary = ClassDB.instantiate("NmlCore").boardgen_layout_themed(41, "ruintown")
+	var plan := BoardgenTownKit.plan(layout)
+	assert_bool(plan.has("merlon") or plan.has("merlon_broken")).is_false()
+	var kinds := 0
+	for m in ["merlon_v1", "merlon_v2", "merlon_v3", "merlon_v4"]:
+		kinds += 1 if plan.has(m) else 0
+	assert_int(kinds).is_equal(4)
+	assert_int(_count(plan, "merlon_v")).is_equal(BoardgenTownDressing.merlons(layout).size())
+	var runs := 0
+	for m in ["coping_a", "coping_b", "coping_c"]:
+		for item: Dictionary in plan.get(m, []):
+			runs += 1
+			var p: Vector3 = item["xf"].origin / 0.0254 + Vector3(24, 0, 24)
+			var edge := fposmod(p.x, 3.0)
+			var c := Vector2i(int(p.x / 3.0), int(p.z / 3.0))
+			var cd: Dictionary = layout["cells"][c.y * 16 + c.x]
+			assert_str(cd["lot_kind"]).is_equal("Wall")
+			assert_float(p.y).is_equal_approx(float(layout["level_in"][int(cd["level"])]), 0.001)   # on the wall's top
+			assert_float(edge if c.x * 2 < 16 else 3.0 - edge).is_equal_approx(0.25, 0.001)   # 0.25 in in from the field edge
+	assert_int(runs).is_greater(10)
+
+
+## While an A7 module is not cached, the kit draws the older module in its frame: no merlon goes missing over a stale cache.
+func test_a_variant_that_is_not_cached_draws_the_older_module() -> void:
+	DirAccess.make_dir_recursive_absolute(DIR)
+	for m: String in BoardgenTownKit.MODULES:
+		var holder := MeshInstance3D.new()
+		holder.mesh = BoxMesh.new()
+		var state := GLTFState.new()
+		var doc := GLTFDocument.new()
+		doc.append_from_scene(holder, state)
+		doc.write_to_filesystem(state, "%s/%s.glb" % [DIR, m])
+		holder.free()
+	OS.set_environment("NML_RUINTOWN_KIT_DIR", ProjectSettings.globalize_path(DIR))
+	var node := _built()
+	OS.unset_environment("NML_RUINTOWN_KIT_DIR")
+	var drawn := 0
+	for n in node.get_node("TownKit").get_children():
+		if str(n.name).begins_with("merlon_v"):
+			drawn += (n as MultiMeshInstance3D).multimesh.instance_count
+	assert_int(drawn).is_greater(0)
+	assert_int(drawn).is_equal(BoardgenTownDressing.merlons(_town()).size())

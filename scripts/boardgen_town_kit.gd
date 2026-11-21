@@ -132,7 +132,10 @@ static func plan(layout: Dictionary) -> Dictionary:
 		var size: Vector3 = b["hi"] - b["lo"]
 		var centre: Vector3 = (b["lo"] + b["hi"]) * 0.5
 		var yaw := (PI * 0.5 if size.z > size.x else 0.0) + (PI if i % 2 == 1 else 0.0)
-		add.call("merlon_broken" if BoardgenTownDressing._hash(i, 1, 11) < 0.2 else "merlon", _item(Basis(Vector3.UP, yaw), Vector3(centre.x, b["lo"].y, centre.z)))
+		var whole := "merlon_v%d" % (1 + int(BoardgenTownDressing._hash(i, 2, 13) * 3.0) % 3)   # three joint patterns break the kit's tiling (kit batch A7)
+		add.call("merlon_v4" if BoardgenTownDressing._hash(i, 1, 11) < 0.2 else whole, _item(Basis(Vector3.UP, yaw), Vector3(centre.x, b["lo"].y, centre.z)))
+	for item: Dictionary in coping(layout):
+		add.call(item["module"], item)
 	var nx: int = layout["nx"]
 	var nz: int = layout["nz"]
 	var cell_in := float(layout["cell_in"])
@@ -151,13 +154,44 @@ static func plan(layout: Dictionary) -> Dictionary:
 	return out
 
 
+## The capstone runs of the city wall (kit batch A7): one 3 in run on the FIELD edge of every wall cell's top that drops on that side, its middle 0.25 in in from the edge (the parapet line
+## the merlons stand on; 0.18 in high), a third of them turned end for end; three runs (a stone missing, one tilted) break the tiling. [{xf, colour, module}].
+static func coping(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	for cd: Dictionary in layout["cells"]:
+		var level := int(cd["level"])
+		if cd["lot_kind"] != "Wall" or level < 1:
+			continue
+		var field := -1 if int(cd["x"]) * 2 < nx else 1
+		var fx := int(cd["x"]) + field
+		if fx >= 0 and fx < nx and int(layout["cells"][int(cd["z"]) * nx + fx]["level"]) >= level:
+			continue   # no drop on the field side: no edge
+		var i: int = cd["z"] * nx + cd["x"]
+		var x := origin.x + (float(cd["x"]) + (0.0 if field < 0 else 1.0)) * cell_in - float(field) * 0.25
+		var z := origin.y + (float(cd["z"]) + 0.5) * cell_in
+		var h := BoardgenTownDressing._hash(i, 3, 14)
+		var item := _item(Basis(Vector3.UP, PI * 0.5 + (PI if BoardgenTownDressing._hash(i, 3, 15) < 0.33 else 0.0)), Vector3(x, float(layout["level_in"][level]), z))
+		item["module"] = "coping_a" if h < 0.34 else ("coping_b" if h < 0.67 else "coping_c")
+		out.append(item)
+	return out
+
+
+## A7 modules that replace a K-R1 / A2 one in the same frame: while one is not cached, the board draws the older module in its place.
+const FALLBACK := {"merlon_v1": "merlon", "merlon_v2": "merlon", "merlon_v3": "merlon", "merlon_v4": "merlon_broken", "fountain_basin_b": "fountain_basin"}
+
+
 ## One MultiMesh per module, on its set's material (or the tinted kit material while the set is not cached).
 func build(layout: Dictionary) -> void:
 	var p := plan(layout)
 	for m: String in p:
-		if not kit.usable([m]):
+		var src := m if kit.usable([m]) or not FALLBACK.has(m) else String(FALLBACK[m])
+		if not kit.usable([src]):
 			continue   # a clutter module that is not cached: the procedural box (or nothing) stays
-		var mmi := BoardgenKit.add_multimesh(self, m, kit.mesh_or(m), p[m], m.begins_with("roof_g") or m.begins_with("chimney") or CLUTTER_SET.get(m, "") == "timber")
+		var mmi := BoardgenKit.add_multimesh(self, m, kit.mesh_or(src), p[m], m.begins_with("roof_g") or m.begins_with("chimney") or CLUTTER_SET.get(m, "") == "timber")
 		var mat := lib.set_material(set_of(m))
 		if GLOW.has(m):
 			var glow := StandardMaterial3D.new()
