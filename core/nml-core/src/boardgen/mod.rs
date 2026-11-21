@@ -11,6 +11,7 @@ pub mod graph;
 pub mod landmarks;
 pub mod levels;
 pub mod plain;
+pub mod solids;
 
 use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
@@ -79,6 +80,8 @@ pub struct Budgets {
     pub rows: bool,
     /// The most houses one walkable roof run may touch (0 = no cap): rows must not become a roof highway (a plunging-fire platform across the town).
     pub roof_run_max: usize,
+    /// Intact houses leave the cells and become free boxes (`solids::free_solids`): `sandbox` + `containers` in the plain board.
+    pub free_solids: bool,
 }
 
 impl Theme {
@@ -88,12 +91,12 @@ impl Theme {
             Self::Deepworks => Budgets { raised: RAISED_PERMILLE, high: HIGH_PERMILLE, lift: HIGH_PERMILLE, tower_pairs: TOWER_PAIRS, landmark_pieces: LANDMARK_PIECES,
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
                 lot_pairs: 9, lot_shapes: &[(3, 2), (2, 3), (2, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[], garden_area: 0, garden_min: 0, plaza: (0, 0), wall: false,
-                landmark_kinds: &[LandmarkKind::TankCluster, LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (1, 2), centre_piece: false, small_pools: false, intact_percent: 0, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1, tower_slender: false, rows: false, roof_run_max: 0 },
+                landmark_kinds: &[LandmarkKind::TankCluster, LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (1, 2), centre_piece: false, small_pools: false, intact_percent: 0, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1, tower_slender: false, rows: false, roof_run_max: 0, free_solids: false },
             // First town values (step 6 of the ruin-town plan re-fits them): more raised ground, one tower pair, more terraces.
             Self::RuinTown => Budgets { raised: (230, 460), high: (60, 200), lift: (30, 70), tower_pairs: (1, 1), landmark_pieces: (7, 7),
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
                 lot_pairs: 18, lot_shapes: &[(2, 2), (2, 2), (3, 2), (2, 3), (2, 1), (1, 2), (2, 1), (1, 2), (1, 1)], lot_fill: &[(2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], lot_first: &[(2, 2)], garden_area: 1, garden_min: 4, plaza: (4, 6), wall: true,
-                landmark_kinds: &[LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (3, 3), centre_piece: true, small_pools: true, intact_percent: 65, lane_free: true, max_attempts: 64, tower_side: 2, tower_slender: true, rows: true, roof_run_max: 2 },
+                landmark_kinds: &[LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (3, 3), centre_piece: true, small_pools: true, intact_percent: 65, lane_free: true, max_attempts: 64, tower_side: 2, tower_slender: true, rows: true, roof_run_max: 2, free_solids: true },
         }
     }
     fn salt(self) -> i64 { if self.is_default() { 0 } else { TOWN_SALT } }
@@ -180,6 +183,7 @@ impl Layout {
         if b.lane_free && self.has_edge_to_edge_lane() { p.push("a straight open lane runs from edge to edge"); }
         if connect::component_count(&self.cells, &self.connectors, &landmarks::solid_cells(&self.cells, &self.landmarks)) != 1 { p.push("board is not one connected walkable area"); }
         if connect::ascent_shortfall(&self.cells, &self.connectors) > 0 { p.push("an island has fewer ascents than it could have (max 2)"); }
+        if b.free_solids && solids::trap_gaps(self, &solids::free_solids(self)) > 0 { p.push("a gap between solids is a trap"); }
         p
     }
 }
