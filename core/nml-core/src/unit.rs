@@ -860,8 +860,9 @@ impl Ctx {
             ..*self
         } };
         Ctx {
-            artillery: d.artillery, artillery_target_hit_penalty: d.artillery_target_hit_penalty,
-            artillery_target_hit_penalty_v36: d.artillery_target_hit_penalty_v36, artillery_target_over_in: d.artillery_target_over_in, artillery_target_most_models: d.artillery_target_most_models,
+            // The 3.6 Artillery target keeps its rule and gate, so the note says "most models lack it" as the table does; no penalty applies.
+            artillery: self.artillery && self.artillery_target_over_in > 0.0, artillery_target_hit_penalty: d.artillery_target_hit_penalty,
+            artillery_target_most_models: d.artillery_target_most_models,
             stealth: d.stealth, stealth_most_models: d.stealth_most_models, stealth_grant: d.stealth_grant,
             stealth_alias_penalty: d.stealth_alias_penalty, stealth_alias_over_in: d.stealth_alias_over_in, stealth_alias_name: d.stealth_alias_name,
             stealth_alias_applies_charged: d.stealth_alias_applies_charged, stealth_alias_near_terrain: d.stealth_alias_near_terrain,
