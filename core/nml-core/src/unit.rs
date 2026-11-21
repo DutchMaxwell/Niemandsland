@@ -670,6 +670,9 @@ pub struct Ctx {
     /// first `enemy_ap_per_two` rule. Interned (`Ctx` is `Copy`).
     pub growth_ap_name: &'static str,
     pub growth_fortify_name: &'static str,
+    /// Door lines: the growth ladder's Defense parts as the table's Pierce line lists them (`<rule> +<bonus>`, joined with ", ";
+    /// `_solo_pierce_defense`), stamped by `sim::ctx_live` beside `growth_def_mod` ("" = none). Interned.
+    pub growth_def_parts: &'static str,
     /// Issue #854 (wave 4) — the DICE-side DIRECTION of `growth_def_mod`.
     /// The table folds every defence part as `base = clampi(base - bonus, 2, 6)`
     /// (main.gd:5510), so from `EPOCH_7_TABLE_RULES` the save rung SUBTRACTS
@@ -4111,6 +4114,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         growth_fortify_ap: 0,
         growth_ap_name: "",
         growth_fortify_name: "",
+        growth_def_parts: "",
         growth_def_lowers: false,
         growth_wounds_not_attacks,
         growth_wound_dice: 0,

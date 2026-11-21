@@ -4679,6 +4679,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         let (dm, fa) = growth_defense_of(statics, state, i);
         c.growth_def_mod = dm;
         c.growth_fortify_ap = fa;
+        if dm != 0 {
+            c.growth_def_parts = growth_def_parts_of(statics, state, i);
+        }
         if fa != 0 {
             c.growth_fortify_name = growth_fortify_name_of(statics, state, i);
         }
@@ -4778,6 +4781,11 @@ fn growth_defense_parts(statics: &[UnitStatic], state: &State, i: usize) -> Vec<
     statics[state.roster.profile[i]].growth.iter()
         .map(|g| (g.name.clone(), g.defense_per_marker * markers + g.defense_per_two * (markers / 2)))
         .filter(|(_, b)| markers > 0 && *b > 0).collect()
+}
+
+/// Door lines: the growth ladder's Defense parts as the table's Pierce line lists what it ignores (`<rule> +<bonus>`, ", "-joined).
+fn growth_def_parts_of(statics: &[UnitStatic], state: &State, i: usize) -> &'static str {
+    crate::rules::intern(&growth_defense_parts(statics, state, i).iter().map(|(n, b)| format!("{n} +{b}")).collect::<Vec<_>>().join(", "))
 }
 
 /// Door lines: the Fortified Growth rule's name (the first `enemy_ap_per_two` rule the unit carries).
