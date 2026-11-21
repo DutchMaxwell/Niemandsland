@@ -387,15 +387,15 @@ void fragment() {
 				float outer = step(0.004, abs(ground_at(xz).b - ground_at(xz + to_edge * (ed + 0.3)).b));   // across the edge is another lot or open ground (a lot is one hash)
 				float strip = outer * (1.0 - smoothstep(0.1, 0.75, ed));
 				float along = nx ? xz.y : xz.x;
-				float lost = step(1.0 - 0.7 * strip, h21(vec2(floor(along / 0.45), floor(ed / 0.25) + seed + 11.0))) * step(0.0001, strip);
+				float lost = step(1.0 - 0.7 * strip, h21(vec2(floor(along / 0.5), floor(ed / 0.25) + seed + 11.0))) * step(0.0001, strip);
 				alb = mix(alb, mix(vec3(0.012), vec3(0.09, 0.055, 0.035), step(0.75, fract(along / 0.8))), lost);   // a dark gap with a joist across it
 				rel = mix(rel, 0.0, lost);
 				depth_in = mix(depth_in, 0.06, lost);
 				vec2 sc = xz / 0.55;   // a flat scatter of tile and stone bits, denser at the edge
 				vec2 sci = floor(sc);
 				float sh = h21(sci + seed + 31.0);
-				float lump = step(0.9 - 0.12 * strip, sh) * smoothstep(0.28, 0.16, length(fract(sc) - 0.5 - (vec2(h21(sci + 3.0), h21(sci + 9.0)) - 0.5) * 0.3));
-				alb = mix(alb, sh > 0.95 ? vec3(0.56, 0.28, 0.20) : vec3(0.30, 0.29, 0.27), lump * (1.0 - lost));
+				float lump = step(0.95 - 0.1 * strip, sh) * smoothstep(0.2, 0.1, length(fract(sc) - 0.5 - (vec2(h21(sci + 3.0), h21(sci + 9.0)) - 0.5) * 0.3));
+				alb = mix(alb, sh > 0.985 ? vec3(0.46, 0.24, 0.18) : vec3(0.22, 0.21, 0.19), 0.8 * lump * (1.0 - lost));
 			}
 		} else if (k == 6 || k == 12 || k == 9 || k == 10) {   // tower and wall tops, stone pieces: flagstones
 			alb = stone(xz, seed, 0.45, 0.6, tint, rel);   // flagstones 0.45 - 0.8 in
