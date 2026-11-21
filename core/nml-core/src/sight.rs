@@ -589,6 +589,11 @@ pub fn zones_of_at(t: &Terrain, rules_epoch: u32) -> Vec<Zone> {
             let (c, he) = ([(b.lo[0] + b.hi[0]) * 0.5 * m, (b.lo[1] + b.hi[1]) * 0.5 * m], [(b.hi[0] - b.lo[0]) * 0.5 * m, (b.hi[1] - b.lo[1]) * 0.5 * m]);
             Zone::shelf_box(c, he, 0.0, 0.0, b.top_in * m, true)
         }));
+        // L-RF1 F8: a building is Sight Blocking from any height - a solid cell (an intact house) is a box up to SOLID_TOP_IN
+        out.extend(t.solid_rects_in().iter().map(|(lo, hi)| {
+            let (c, he) = ([(lo[0] + hi[0]) * 0.5 * m, (lo[1] + hi[1]) * 0.5 * m], [(hi[0] - lo[0]) * 0.5 * m, (hi[1] - lo[1]) * 0.5 * m]);
+            Zone::shelf_box(c, he, 0.0, 0.0, terrain::SOLID_TOP_IN * m, true)
+        }));
     }
     out
 }

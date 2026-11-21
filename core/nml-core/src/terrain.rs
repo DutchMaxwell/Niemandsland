@@ -472,6 +472,13 @@ impl Terrain {
         cliffs.map(|e| self.tier_seg_in(e)).collect()
     }
 
+    /// L-RF1 F8 - each solid tier cell as `(lo, hi)` corners, board-centred inches (sight blocks it at every height).
+    pub fn solid_rects_in(&self) -> Vec<([f64; 2], [f64; 2])> {
+        let Some(t) = &self.tiers else { return Vec::new() };
+        let nx = usize::from(t.nx);
+        self.solid_cells.iter().map(|&i| (usize::from(i) % nx, usize::from(i) / nx)).map(|(x, z)| (t.vertex(x, z), t.vertex(x + 1, z + 1))).collect()
+    }
+
     /// L-RF1 F6 - the cliffs round the solid cells only (an edge rising to `SOLID_TOP_IN`), WORLD METRES: what a pile-in
     /// may not cross or end over. Empty on every board without `solid_cells`.
     pub fn solid_walls_world_m(&self) -> Vec<WallSeg> {

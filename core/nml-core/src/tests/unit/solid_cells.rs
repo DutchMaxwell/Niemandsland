@@ -153,3 +153,22 @@ mod human_drop {
         assert_eq!(check_move(&statics, &st, 0, seams, &t, &drop, true), refused());
     }
 }
+
+/// L-RF1 F8: a model on a 6 in tier (cell 4) looks over a house (cell 5) at a ground model two cells beyond it. Red before:
+/// the house was only the 2.5 in container block, the ray passes it at 4.25-6.25 in, so the viewer saw over it. A building
+/// blocks sight from any height; planted: the same board without the solid cell sees.
+#[test]
+fn a_house_blocks_sight_from_a_raised_tier() {
+    let sees = |solid: Vec<u16>| {
+        let mut levels = vec![0.0; 16];
+        levels[4] = 6.0;
+        let t = painted(levels, solid, true);
+        let zones = crate::sight::zones_of_at(&t, crate::acts::CURRENT_RULES_EPOCH);
+        let m = crate::IN2M;
+        let from = crate::sight::Cyl { c: [-4.5 * m, -1.5 * m], r: 0.5 * m, y0: 6.0 * m, y1: 7.25 * m };
+        let to = crate::sight::Cyl { c: [4.5 * m, -1.5 * m], r: 0.5 * m, y0: 0.0, y1: 1.25 * m };
+        crate::sight::has_los(&from, &to, false, &zones, &[])
+    };
+    assert!(!sees(vec![5]), "a building is sight blocking, full stop");
+    assert!(sees(vec![]), "planted: the 2.5 in container alone is seen over from 6 in");
+}
