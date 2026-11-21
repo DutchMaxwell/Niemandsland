@@ -30,7 +30,7 @@ const CLUTTER_SET := {"tower_cap_burnt": "timber", "barrel": "timber", "crate": 
 ## The kit's ladder segments (a 3 in segment and the top segment with stiles past the edge): the SAME transforms as the Deepworks kit ladders - BoardgenGreybox.ladder_kit_plan(layout), one segment per
 ## 3 in of every connector's rise, the origin on the wall face at the connector's edge point, +z away from the wall - so the walkable / ladder data is identical (boxes of kind ladder are not solid).
 const LADDER_MODULES := ["timber_ladder_3in", "timber_ladder_top"]
-const MODULE_TINT := {"pool_kerb": Color(0.52, 0.55, 0.6), "tower_cap_burnt": Color(0.32, 0.30, 0.28)}   # a charred frame: the timber grain, dark
+const MODULE_TINT := {"pool_kerb": Color(0.52, 0.55, 0.6), "tower_cap_burnt": Color(0.32, 0.30, 0.28), "rubble_heap_a": Color(0.5, 0.44, 0.38), "rubble_heap_b": Color(0.36, 0.32, 0.28)}   # (heaps: grey-brown rubble and ash, never a white blob - lead 21.11.)   # a charred frame: the timber grain, dark
 ## Glass of a lamp and the coals of a brazier: drawn with an emissive material, the OmniLight sits at their origin.
 const GLOW := {"lantern_glow": Color(1.0, 0.72, 0.38), "brazier_coals": Color(1.0, 0.45, 0.18)}
 

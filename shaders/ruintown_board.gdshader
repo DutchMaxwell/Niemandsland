@@ -46,6 +46,9 @@ bool use_stone(vec2 uv, inout vec3 ratio, inout vec3 tn) {
 	if (t_on.x < 0.5) {
 		return false;
 	}
+	if (grit_on > 0.5) {   // (plan PLAN_RUINTOWN_GRIT life train: with the grit map the house walls and the flag tops keep the procedural coursed stone - a stone per hash, no tile period)
+		return false;
+	}
 	vec2 tuv = vec2(uv.x, -uv.y) / t_tile.x;
 	ratio = clamp(grit_albedo(t_stone, tuv) / MEAN_STONE, vec3(0.3), vec3(2.6));   // (plan W0: without its 1.3 in period)
 	tn = grit_normal(n_stone, tuv);
@@ -322,6 +325,8 @@ void fragment() {
 			}
 		}
 		grit_city_masonry(k, p, wnrm, seed, tint, box_in, lpos, alb, rel, depth_in, tex_on, tex_ratio, tex_n, ao);   // (plan W0: the city wall's own masonry, no banded set)
+		float hband = k == 3 || k == 4 ? floor(uv.y / 3.0) : -1.0;   // (the storey of a ruined row: its branch has shifted uv by its part already)
+		grit_house_wall(k, p, wnrm, seed, lot_h, hband, 0.3 + 0.75 * fract(kind), hband == 0.0 ? door(uv, seed) : 0.0, int(ground_at(p.xz + wnrm.xz * 0.4).r * 255.0 + 0.5), alb, rel, depth_in, tex_on, tex_ratio, tex_n, ao);   // (plastered rubble in a timber frame over a stone plinth; rubble onto a yard)
 	} else if (wnrm.y < 0.95 && k == 15) {   // a sloped roof face: rows of tiles, a tone per tile, a shadow under each row
 		tint = roof_of(ground_at(p.xz - wnrm.xz * 0.2).b, tint);   // each roof its own clay, slate or mossy clay
 		float along = abs(wnrm.x) > abs(wnrm.z) ? p.z : p.x;
@@ -437,6 +442,8 @@ void fragment() {
 			alb = mix(alb, vec3(0.14, 0.24, 0.08), 0.6 * crack * step(0.7, h21(floor(xz * 2.5) + seed)));
 		} else if (k == 11) {   // garden plot: overgrown, weeds and bare patches
 			alb = tint * 0.55 * mix(0.6, 1.25, fbm(xz * 2.4 + seed)) * mix(1.0, 0.7, step(0.9, h21(floor(xz * 9.0))));   // x0.55: the plots in the deployment bands sit below the models' own values (readability gate)
+			vec2 pf = fract(xz / cell_in) * cell_in;
+			alb = grit_plot(alb, xz, min(min(pf.x, cell_in - pf.x), min(pf.y, cell_in - pf.y)), palette[0].rgb * GROUND_EARTH * 0.85);   // (lead: no flat green square)
 		} else if (k == 14) {   // rubble: broken stones
 			alb = tint * mix(0.55, 1.2, h21(floor(xz * 4.0) + seed)) * mix(0.8, 1.0, vnoise(xz * 8.0));
 		} else {

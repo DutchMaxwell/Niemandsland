@@ -72,3 +72,19 @@ fn plain_ones_do_not_count_at_epoch_73() {
     let hits = above_half_with_ones(false, crate::acts::EPOCH_73_V36);
     assert!(hits.iter().all(|h| !h.2), "only the 1s against Scourge hits count");
 }
+
+/// Lines audit: the Scourge note is said on the tray the door writes (the table's `_solo_scourge_decides`, same words), after the volley's
+/// half-strength line and ahead of the test. RED on main: `ShootResult.log` only.
+#[test]
+fn the_door_tray_says_the_scourge_note() {
+    let e73 = crate::acts::EPOCH_73_V36;
+    let seed = (0..300).find(|&s| { let (alive, ones, _, _) = volley(true, e73, s); alive * 2 > 5 && ones > 0 }).expect("fixture seed");
+    let (st, statics) = scourge_line(true);
+    let run = |tray: &mut Tray| resolve_stochastic_tray_on_board(&statics, &st, &buff_action(Some("b")), &crate::terrain::Terrain::default(),
+        Seams { rules_epoch: e73, ..Default::default() }, &mut crate::rng::GodotRng::new(0), tray).unwrap().1;
+    let seeded = run(&mut Tray::seeded(seed));
+    let mut tray = Tray::supplied(seeded.rolls.iter().map(|r| r.faces.clone()).collect());
+    run(&mut tray);
+    let said: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).collect();
+    assert_eq!(said.iter().filter(|l| l.starts_with("Scourge: ") && l.contains(" phantom wounds count against b — they decide its morale test")).count(), 1, "{said:?}");
+}

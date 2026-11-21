@@ -803,6 +803,52 @@ pub(crate) fn say_rule(tray: &mut Tray, rule: &'static str, side: i64, text: imp
     tray.say(|| LogLine { rule, category: Category::Combat, side, text: text(), detail: None });
 }
 
+/// The table's Pierce line (`_solo_resolve_saves`, shooting and melee alike): the weapon's name and the target's positive Defense parts in
+/// `_solo_defense_parts` order (Shielded, growth ladder, spell token), then Cover when the target has it (`cover`; never in melee).
+fn say_pierce(tray: &mut Tray, side: i64, weapon: &str, def: &Ctx, cover: bool) {
+    if tray.feed().is_none() {
+        return;
+    }
+    let mut ignored: Vec<String> = shielded_label(def).map(|(n, b)| format!("{n} +{b}")).into_iter().collect();
+    if !def.growth_def_parts.is_empty() { ignored.push(def.growth_def_parts.to_string()); }
+    if def.defense_mod < 0 { ignored.push(format!("Defense Buff +{}", -def.defense_mod)); }
+    if cover { ignored.push("Cover +1".into()); }
+    if !ignored.is_empty() {
+        say_rule(tray, "pierce", side, || format!("Pierce: {weapon} ignores {}", ignored.join(", ")));
+    }
+}
+
+/// The table's Regeneration-bypass naming (`_solo_ignores_regen`, asked once per weapon with hits), in its arm order: a Bane / Rending
+/// weapon answers silently; the printed Unstoppable says `Unstoppable: Regeneration ignored`; a registry bypass rule says its own name
+/// (`<rule>: Regeneration ignored`); the granted Unstoppable Mark says `Unstoppable Mark: <U> — Regeneration is ignored (once)`. From 73
+/// only a target that really has a Regeneration roll to skip is told so (`_solo_regen_bypass_named`). The aura grant answers silently.
+/// `asked` = the table asked for this weapon at all (a Deadly or Takedown weapon only when it dealt wounds).
+fn say_regen_bypass(tray: &mut Tray, side: i64, p: &ShootProfile, att: &Ctx, def: &Ctx, owner: &str, asked: bool) {
+    if !asked || tray.feed().is_none() || (att.v36_rules && !(def.regeneration && def.regen_target > 0 && def.bypass_skips_ignore())) {
+        return;
+    }
+    for r in &p.rules {
+        let s = r.trim();
+        if s.starts_with("Bane") || s.starts_with("Rending") {
+            return;
+        }
+        if s.starts_with("Lacerate") {
+            continue;
+        }
+        if s.split('(').next().is_some_and(|b| b.trim() == "Unstoppable") {
+            say_rule(tray, "anti_regen", side, || "Unstoppable: Regeneration ignored".to_string());
+            return;
+        }
+        if !p.regen_bypass_rule.is_empty() && crate::rules::base_rule_name(s) == p.regen_bypass_rule {
+            say_rule(tray, "anti_regen", side, || format!("{}: Regeneration ignored", p.regen_bypass_rule));
+            return;
+        }
+    }
+    if att.unstoppable_mark {
+        say_rule(tray, "anti_regen", side, || format!("Unstoppable Mark: {owner} — Regeneration is ignored (once)"));
+    }
+}
+
 /// The table's `blast_log_text`: names Blast(X) and, when the model count clamps the multiplier, the cap.
 fn blast_log(x: i64, hits: i64, boosted: i64, models: i64, stale: bool) -> String {
     let mult = boosted / hits.max(1);
@@ -2255,14 +2301,8 @@ pub(crate) fn resolve_volley_with_pick_label(
         }
         // The table's Pierce line (`_solo_resolve_saves`, said for every weapon with hits to save, not once per volley): the weapon's name and
         // the target's positive Defense parts in `_solo_defense_parts` order (Shielded, growth ladder, spell token), then Cover.
-        if pierce && tray.feed().is_some() {
-            let mut ignored: Vec<String> = shielded_label(def).map(|(n, b)| format!("{n} +{b}")).into_iter().collect();
-            if !def.growth_def_parts.is_empty() { ignored.push(def.growth_def_parts.to_string()); }
-            if def.defense_mod < 0 { ignored.push(format!("Defense Buff +{}", -def.defense_mod)); }
-            if if unit_of_one { td_own } else { def.in_cover || def.screened } { ignored.push("Cover +1".into()); }
-            if !ignored.is_empty() {
-                say_rule(tray, "pierce", att.side, || format!("Pierce: {} ignores {}", p.name, ignored.join(", ")));
-            }
+        if pierce {
+            say_pierce(tray, att.side, &p.name, def, if unit_of_one { td_own } else { def.in_cover || def.screened });
         }
         if unit_of_one {
             // Tray-exact S10 — `_solo_log_takedown_context`: the save the pick really rolls, and why.
@@ -2496,14 +2536,13 @@ pub(crate) fn resolve_volley_with_pick_label(
         // The door's twin (`_solo_ignores_regen`, asked once per weapon with hits: a Deadly or Takedown weapon asks only when it dealt wounds,
         // a plain one always, even when every save held).
         let regen_asked = if p.deadly > 0 || (takedown_exact && p.takedown) { w > 0 } else { true };
-        if disintegrate_regen && regen_asked && (!att.v36_rules || (def.regeneration && def.regen_target > 0 && def.bypass_skips_ignore())) {
-            say_rule(tray, "anti_regen", att.side, || format!("{}: Regeneration ignored", p.regen_bypass_rule));
-        }
+        say_regen_bypass(tray, att.side, p, att, def, sh.owner, regen_asked);
         // EPOCH 34 UNSTOPPABLE MARK — rules-must-log, the Regeneration half:
         // the granted mark names itself the one time its bypass is the reason
         // this weapon's wounds skip the regen pool. Gated with the clamp half
         // (the stamp), so every pre-34 corpus replays its silent bypass.
         if ignores_regen && att.unstoppable_mark && w > 0 {
+            // tray twin: anti_regen
             out.log.push(format!(
                 "Unstoppable: {} — ignores {}'s Regeneration (once)", sh.owner, def_owner));
         }
@@ -3400,6 +3439,9 @@ pub fn resolve_melee_leg_wipe(
                 out.log.push(format!("{rule}: {def_owner} charged from over {}in — +1 Defense", gate_in as i64));
             }
             let pierce = pierce_ignores(p, sh.att);
+            if pierce {
+                say_pierce(tray, sh.att.side, &p.name, def, false); // the table's line is said for a strike too (no Cover in melee)
+            }
             let save_def = guarded_defense(
                 shielded_defense(def.defense, if pierce { 0 } else { def.shielded_bonus() }, def.def_floor()),
                 applies && !pierce, def.def_floor());
@@ -3596,11 +3638,16 @@ pub fn resolve_melee_leg_wipe(
             {
                 out.log.push(format!("{}: Regeneration ignored", p.regen_bypass_rule));
             }
+            // The table asks once per strike weapon with hits (`_solo_ignores_regen`): a Takedown or per-model Deadly weapon only when it
+            // dealt wounds. The line (`<rule>: Regeneration ignored`, the printed `Unstoppable: ...`, the Mark's) goes on the tray here.
+            let regen_asked = if (tray_exact && p.takedown) || (deadly_per_model && p.deadly > 0) { w > 0 } else { true };
+            say_regen_bypass(tray, sh.att.side, p, sh.att, def, sh.owner, regen_asked);
             // EPOCH 34 UNSTOPPABLE MARK — rules-must-log, the melee Regeneration
             // half, the volley fold's twin: the granted mark names itself the
             // one time its bypass is the reason this weapon's wounds skip the
             // regen pool. Gated with the clamp half, replay-exact below 34.
             if ignores_regen && sh.att.unstoppable_mark && w > 0 {
+                // tray twin: anti_regen
                 out.log.push(format!(
                     "Unstoppable: {} — ignores {}'s Regeneration (once)", sh.owner, def_owner));
             }

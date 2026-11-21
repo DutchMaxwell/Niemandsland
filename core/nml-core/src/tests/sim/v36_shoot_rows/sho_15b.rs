@@ -147,3 +147,17 @@ fn a_plain_blade_is_unchanged_at_epoch_73() {
         assert!(no_scourge_line(&shot), "seed {seed}: no rule line without Scourge: {:?}", shot.log);
     }
 }
+
+/// Lines audit: the melee result's Scourge note is said on the tray the door writes, right after the result line, in the table's words
+/// (the charger's side first). RED on main: `ShootResult.log` only.
+#[test]
+fn the_door_tray_says_the_melee_scourge_note() {
+    let seed = *flip_seeds().first().expect("fixture seed");
+    let (mut st, statics) = duel(true);
+    let mut tray = Tray::supplied(fight(true, EPOCH_73_V36, seed).2.rolls.iter().map(|r| r.faces.clone()).collect());
+    tray_charge_with_self_wounds(&statics, &mut st, 0, 1, Seams { rules_epoch: EPOCH_73_V36, ..Seams::default() }, &mut tray, &mut ShootResult::default(),
+        0.0, Cover::Recorded(None), 0, 0, 0);
+    let said: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).collect();
+    let at = said.iter().position(|l| l.starts_with("Scourge: 2 phantom wounds count for Defender in the melee result")).unwrap_or_else(|| panic!("{said:?}"));
+    assert!(said[..at].iter().any(|l| l.starts_with("Melee result:")), "after the result line: {said:?}");
+}

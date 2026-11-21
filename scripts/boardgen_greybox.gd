@@ -49,6 +49,7 @@ var _material: ShaderMaterial
 var _kit: BoardgenKit
 var _tiefwerk: TiefwerkLibrary = null   # the authored surfaces (R2, on demand); the board is procedural until they are cached
 var _decals: BoardgenDecals = null
+var _life: BoardgenTownLife = null
 var _footprint := Rect2()   # the ground kept free of the table's scatter, in table-local metres: the board and all round it
 var _layout: Dictionary = {}
 var _atmosphere: Object = null   # the town re-applies its dusk after every mood change while it is on the table
@@ -293,6 +294,16 @@ func build(layout: Dictionary) -> void:
 			add_child(town_kit)
 		else:
 			town_kit.free()
+		var town_lib := get_node_or_null("TownLibrary") as TiefwerkLibrary   # the town's decals (plan PLAN_RUINTOWN_GRIT D1) when the T-R2 atlas is cached
+		if town_lib != null and town_lib.decals_cached():
+			_decals = BoardgenDecals.new()
+			_decals.name = "Decals"
+			_decals.build(layout, town_lib)
+			add_child(_decals)
+		_life = BoardgenTownLife.new()   # flicker, smoke, crows, rats (plan PLAN_RUINTOWN_GRIT L1-L3)
+		_life.name = "Life"
+		add_child(_life)
+		_life.build(layout, self)
 	if theme["id"] == BoardgenTheme.DEEPWORKS:
 		add_child(BoardgenMood.make_fill_light())   # lights the models only (render layer), shown with the finer look
 	_anchor()
@@ -399,6 +410,8 @@ func _apply_detail() -> void:
 		_material.set_shader_parameter("detail", 1.0 if on else 0.0)
 		if _decals != null:
 			_decals.visible = on   # no decals on Low, Performance and in the Compatibility renderer
+		if _life != null:
+			_life.apply_settings()
 		if on:
 			_attach_surfaces()   # a later switch up to Medium fetches them then
 	BoardgenMood.apply(self, on and (layout_theme == BoardgenTheme.DEEPWORKS or layout_theme == BoardgenTheme.RUIN_TOWN), layout_theme == BoardgenTheme.RUIN_TOWN)   # the dim industrial light, board-scale SSAO, the grade and the model fill come with the finer look; the ruin town has its own dusk and only the grade
