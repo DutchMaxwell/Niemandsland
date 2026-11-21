@@ -117,7 +117,7 @@ func test_the_target_side_of_the_non_opr_clause_is_gone() -> void:
 
 
 ## P4.D-41 retired the row "the core door shows the table's volley outcome sentence": `_present` asks the door's own
-## `volley_outcome` (the table's sentence, moved verbatim), and the table function now only delegates to it.
+## `volley_outcome` (the table's sentence, moved verbatim); DN-2 removed the table wrapper, the resolver asks the door itself.
 ## RED: put `main._solo_volley_outcome(` back into `_present`, or drop either `volley_outcome` call.
 func test_the_core_door_owns_the_volley_outcome_sentence() -> void:
 	var door := _span(_source(ACTIVATION), "static func _present(")
@@ -126,9 +126,11 @@ func test_the_core_door_owns_the_volley_outcome_sentence() -> void:
 		"_present calls the table's sentence again").is_false()
 	assert_bool(door.contains("CoreActivation.volley_outcome(")).override_failure_message(
 		"_present lost the door's own sentence").is_true()
-	var table := _span(_source(MAIN), "func _solo_volley_outcome(")
-	assert_bool(table.contains("CoreActivation.volley_outcome(")).override_failure_message(
-		"the table's _solo_volley_outcome no longer delegates").is_true()
+	# DN-2: the table's wrapper is gone, the resolver asks the door's sentence itself.
+	assert_bool(_source(MAIN).contains("func _solo_volley_outcome(")).override_failure_message(
+		"the table wrapper is still there").is_false()
+	assert_bool(_span(_source(MAIN), "func _solo_resolve_ai_volley(").contains("CoreActivation.volley_outcome(")).override_failure_message(
+		"the resolver does not ask the door's sentence").is_true()
 	assert_bool(_span(_source(ACTIVATION), "static func volley_outcome(").contains("loses %d model%s")).override_failure_message(
 		"the door does not build the sentence itself").is_true()
 	for b in BLOCKERS:

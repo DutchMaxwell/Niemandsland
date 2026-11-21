@@ -4,13 +4,12 @@
     "Counts come from the script, not from this file; the notes record callers a reader would not guess.",
     "tools/solo_selfplay.gd (the headless harness that drove the table directly) was deleted by P4.D-39; tools/arena_match.gd plays through the game loop and its core door.",
     "test/parity/parity_table.gd no longer calls _solo_resolve_ai_volley (P4.D-38: the shoot parity table half is the frozen record in test/parity/golden/shoot/); test/parity/parity_table_melee.gd:66 still calls _run_ai_melee (P4.D-49).",
-    "_solo_volley_outcome has no prod caller outside main.gd since P4.D-41: the sentence moved into CoreActivation.volley_outcome and this function only delegates (the core path shows it).",
     "A listed caller that disappears is fine on purpose; only an unlisted NEW prod caller turns --check red. To allow one, add 'file:function' to allowed_callers of the callee in the same diff as a plan step that says so.",
     "Whole-file entries (planner groups) are not gated and keep the counter; planner_tags tags every column-0 function of the 7 planner files; a new planner function must get a tag in the same diff.",
     "Tags: erlkoenig = needed by the Rust search hand-off (_core_plan: capture, state_to_plain, AiPlanner statics, act recorder); live_helper = live game logic that is not search (mission scoring); table_live = still called by a main.gd function that survives the table deletion; tree = decision tree / AiPosition; gd_search = the GDScript search (reached on a core decline or in debug/test defaults; includes its profiling marks); table_dead = dies with the table deletion (a function that gd_search also calls dies with the later of the table deletion and the search deletion); tools_only / test_only = no prod caller; dead = no caller."
   ],
   "groups": {
-    "ai_volley": ["scripts/main.gd:_solo_resolve_ai_volley", "scripts/main.gd:_solo_volley_outcome"],
+    "ai_volley": ["scripts/main.gd:_solo_resolve_ai_volley"],
     "human_shoot": ["scripts/main.gd:_run_human_shooting", "scripts/main.gd:_run_human_attack_split"],
     "melee_charge": ["scripts/main.gd:_run_ai_melee", "scripts/main.gd:_solo_melee_strike_phase", "scripts/main.gd:_run_human_melee", "scripts/main.gd:_solo_charge_impact", "scripts/main.gd:_solo_consolidate_melee", "scripts/main.gd:_solo_log_melee_result", "scripts/main.gd:_solo_parry_strike", "scripts/main.gd:_solo_retreating_strike"],
     "hit_save_shared": ["scripts/main.gd:_solo_hits", "scripts/main.gd:_solo_resolve_saves", "scripts/main.gd:_solo_save_batch", "scripts/main.gd:_solo_land_wounds", "scripts/main.gd:_solo_land_deadly_wounds", "scripts/main.gd:_solo_land_takedown_wounds", "scripts/main.gd:_solo_takedown_pick", "scripts/main.gd:_solo_hazardous_self_wounds", "scripts/main.gd:_solo_apply_vs_marks"],
@@ -44,8 +43,7 @@
     "scripts/main.gd:_solo_retreating_strike": ["scripts/main.gd:_run_human_attack", "scripts/main.gd:_solo_activate_one_ai_body"],
     "scripts/main.gd:_solo_save_batch": ["scripts/main.gd:_solo_apply_storm_attack", "scripts/main.gd:_solo_apply_surprise_attack", "@hit_save_shared", "scripts/main.gd:_solo_resolve_spell_damage"],
     "scripts/main.gd:_solo_shooting_morale": ["@human_shoot", "scripts/main.gd:_solo_activate_one_ai_body", "scripts/main.gd:_solo_apply_breath_attack", "scripts/main.gd:_solo_apply_storm_attack", "scripts/main.gd:_solo_apply_surprise_attack", "@ai_volley", "scripts/main.gd:_solo_resolve_spell_damage"],
-    "scripts/main.gd:_solo_takedown_pick": ["@human_shoot", "@melee_charge", "@ai_volley"],
-    "scripts/main.gd:_solo_volley_outcome": ["@ai_volley", "scripts/solo/core_activation.gd:_present"]
+    "scripts/main.gd:_solo_takedown_pick": ["@human_shoot", "@melee_charge", "@ai_volley"]
   },
   "owners": {
     "groups": ["hit_save_shared", "dangerous_morale"],

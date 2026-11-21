@@ -5587,7 +5587,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	_solo_clear_announce(announce)
 	_solo_clear_auto_fan()   # Bug 17: the volley is resolved — the fan leaves with the announce
 	# OUTCOME: one readable summary line, held on screen (toast + battle log).
-	await _solo_show_outcome(_solo_volley_outcome(target, total_hits, landed + landed_extra,
+	await _solo_show_outcome(CoreActivation.volley_outcome(target, total_hits, landed + landed_extra,
 		models_before - _solo_combined_alive(target)))
 	await _solo_stage_phase("Result")
 	# NML-966 gap B: Deadly/Takedown wounds bypass the regen pool and never reached `landed` —
@@ -5613,11 +5613,6 @@ func _solo_record_shot(attacker: GameUnit, member: GameUnit, target: GameUnit, p
 		"reach_in": float(range_in) + (_solo_unit_base_radius_m(member) + _solo_unit_base_radius_m(target)) \
 			/ MoveIntent.INCHES_TO_METERS,
 		"indirect": bool(profile.get("indirect", false))})
-
-
-## The AI volley's outcome toast; P4.D-41 moved the sentence into CoreActivation.volley_outcome, this only delegates.
-func _solo_volley_outcome(target: GameUnit, hits: int, wounds: int, lost: int) -> String:
-	return CoreActivation.volley_outcome(target, hits, wounds, lost)
 
 
 ## VFX #2: one tracer per firing model along the eye-to-eye segment the LOS rule tested (same heights as
