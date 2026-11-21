@@ -944,6 +944,12 @@ fn surge_attack_say(
     hits
 }
 
+/// `PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL`: the "Enhanced Primal" grant only widens a printed extra-attack form; a profile
+/// without one gains nothing from it. Below the gate every grant reaches (byte-exact).
+fn primal_grant_reaches(p: &ShootProfile, rules_epoch: u32) -> bool {
+    p.surge_attack || !rule_on(rules_epoch, crate::acts::PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL)
+}
+
 /// G4R5 F-PRIMAL-GRANT-ONCE (`EPOCH_73_V36`): ONE live "Enhanced Primal" grant is carried in two channels (the overlay rule on
 /// the unit's rules and the ledger buff the spell records) and rolls ONE extras group, like the table's idempotent profile flag.
 /// On a member that PRINTS the extra-die form the grant only LOWERS that form's threshold to 5s; only a member without the
@@ -2220,7 +2226,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         // helper's own doc). Draws its own tray slot right after Surge's,
         // matching `_solo_hits`'s order.
         // Wave 2 — a granted "Primal Boost", the same low-surge form (one group per member: `primal_extras`).
-        hits += primal_extras(p, att.surge_grant, rule_on(att.rules_epoch, EPOCH_73_V36), &faces, count_target, sh.owner, att.side, tray, &mut out);
+        hits += primal_extras(p, att.surge_grant && primal_grant_reaches(p, att.rules_epoch), rule_on(att.rules_epoch, EPOCH_73_V36), &faces, count_target, sh.owner, att.side, tray, &mut out);
         // EPOCH 44 SURGE MARK — the mark's once-grant ("Surge", placed by
         // `tray_vs_marks` at the attack seam, spent with the exchange) reads
         // against the marked target ONLY: +1 hit per unmodified 6, the plain
@@ -3428,7 +3434,7 @@ pub fn resolve_melee_leg_wipe(
             // Block B6 — the extra-ATTACK-DIE Surge siblings (Predator Fighter
             // is melee-only, so this is the branch it actually fires on).
             // Wave 2 — a granted "Primal Boost", the same low-surge form (one group per member: `primal_extras`).
-            hits += primal_extras(p, sh.att.surge_grant, rule_on(sh.att.rules_epoch, EPOCH_73_V36), trig, count_target, sh.owner, sh.att.side, tray, &mut out);
+            hits += primal_extras(p, sh.att.surge_grant && primal_grant_reaches(p, sh.att.rules_epoch), rule_on(sh.att.rules_epoch, EPOCH_73_V36), trig, count_target, sh.owner, sh.att.side, tray, &mut out);
             // EPOCH 44 SURGE MARK — the strike fold's twin of the volley leg
             // above: the mark's once-grant adds +1 hit per unmodified 6
             // against the marked target only, named once when it fires.

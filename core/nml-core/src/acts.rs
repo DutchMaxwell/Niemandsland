@@ -1018,6 +1018,36 @@ pub const EPOCH_94_PARITY_BATCH: u32 = 94;
 /// - UPR_NEEDS_SHOT: no Unpredictable Shooter die for a volley in which no weapon is in reach.
 pub const EPOCH_95_PARITY_BATCH: u32 = 95;
 pub const CURRENT_RULES_EPOCH: u32 = 95;
+/// Placeholder gate for UNIT IMPRECISE (coverage ledger shoot m1, lane covfix-dice; GF/AoF 3.6 army books: Imprecise = the bearer gets -1
+/// to hit when attacking): a unit that carries Imprecise as its OWN rule (not on a weapon) folds the -1 into its shooting to-hit like the
+/// other flat Shot Modifier names, and names it in the to-hit note. Before, only a weapon-borne Imprecise was read (`EPOCH_73_V36`); the
+/// table already folded the unit rule. Core: `unit::stamp_shot_modifier` / `shot_mod_notes_of`. Records stamped 95 or below replay
+/// byte-exact. Every call site reads THIS constant, not the literal `96`.
+pub const PENDING_EPOCH_UNIT_IMPRECISE: u32 = 96;
+/// Placeholder gate for UNIT BANE ALIASES (coverage ledger shoot m1, lane covfix-dice; 3.6 army books): a unit that carries a
+/// CONDITIONAL Bane-family rule as its own rule (Obliterate, Reap, Decimate, Fragment, Smash: a condition and / or a wider save window,
+/// an Obliterate that ignores Regeneration) reads it exactly like the same rule printed on a weapon (`stamp_weapon_bane_alias`), instead
+/// of the flat sixes re-roll with no Regeneration bypass. Decimate's strength gate is read as the volley was declared (lead ruling 21.11.,
+/// the H-17 line: all weapons fire simultaneously), so `Ctx::wiped` keeps `above_half_strength`. Bane Mark is NOT read here: it is a runtime
+/// mark (once, 18", line of sight, before attacking), open for the Utility Buff path. Core: `unit::stamp_unit_strikers`,
+/// `unit::Ctx::wiped`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant, not the literal `96`.
+pub const PENDING_EPOCH_UNIT_BANE_ALIAS: u32 = 96;
+/// Placeholder gate for TAKEDOWN SHOT PER MODEL (coverage ledger shoot m1, lane covfix-dice; GF 3.6 army books: the rule is a MODEL's
+/// rule, each model that shoots makes its own extra attack once per game): the bonus group rolls one attack per living model of the
+/// bearer, not one for the whole unit (`sim::takedown_shot_gate`). A one-model Hero (every carrier in the shipped lists) is unchanged.
+/// Records stamped 95 or below replay byte-exact. Every call site reads THIS constant, not the literal `96`.
+pub const PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL: u32 = 96;
+/// Placeholder gate for SPOTTER ROLL RECORD (coverage ledger shoot m1, lane covfix-dice): the Precision Spotter / Piercing Spotter
+/// placement die (3.6 army books: before attacking, roll, a 4+ places a token) is a real tray draw, and from 96 it pushes its roll
+/// record (kind "attack", the table's `_solo_tray_roll` kind, target = the printed 4+). Before, the draw had no record, so the step
+/// driver refused the whole exchange ("a resolver drew dice without a roll record"). Core: `sim::tray_precision_markers`,
+/// `sim::tray_piercing_tag`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant, not the literal `96`.
+pub const PENDING_EPOCH_SPOTTER_ROLL_RECORD: u32 = 96;
+/// Placeholder gate for ENHANCED PRIMAL NEEDS PRIMAL (coverage ledger shoot m1, lane covfix-dice; 3.6 army books: Enhanced Primal widens
+/// the bearer's OWN Primal to 5-6, a model without Primal gains nothing): an "Enhanced Primal" grant (Enhanced Primal Buff) on a member
+/// whose profile has no printed extra-attack form rolls no extras group. Before, it rolled its own group on 6s. Core:
+/// `dice::primal_grant_reaches`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant, not the literal `96`.
+pub const PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL: u32 = 96;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2340,6 +2370,41 @@ mod tests {
         EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER,
         EPOCH_94_PARITY_BATCH, EPOCH_95_PARITY_BATCH,
     };
+
+    #[test]
+    fn unit_imprecise_gate_starts_at_96() {
+        assert_eq!(super::PENDING_EPOCH_UNIT_IMPRECISE, 96);
+        assert!(!rule_on(95, super::PENDING_EPOCH_UNIT_IMPRECISE), "a record at 95 keeps the unit-borne Imprecise unread");
+        assert!(rule_on(96, super::PENDING_EPOCH_UNIT_IMPRECISE));
+    }
+
+    #[test]
+    fn unit_bane_alias_gate_starts_at_96() {
+        assert_eq!(super::PENDING_EPOCH_UNIT_BANE_ALIAS, 96);
+        assert!(!rule_on(95, super::PENDING_EPOCH_UNIT_BANE_ALIAS), "a record at 95 keeps the flat unit alias read");
+        assert!(rule_on(96, super::PENDING_EPOCH_UNIT_BANE_ALIAS));
+    }
+
+    #[test]
+    fn takedown_shot_per_model_gate_starts_at_96() {
+        assert_eq!(super::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL, 96);
+        assert!(!rule_on(95, super::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL), "a record at 95 keeps the single bonus die");
+        assert!(rule_on(96, super::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL));
+    }
+
+    #[test]
+    fn spotter_roll_record_gate_starts_at_96() {
+        assert_eq!(super::PENDING_EPOCH_SPOTTER_ROLL_RECORD, 96);
+        assert!(!rule_on(95, super::PENDING_EPOCH_SPOTTER_ROLL_RECORD), "a record at 95 keeps the silent spotter draw");
+        assert!(rule_on(96, super::PENDING_EPOCH_SPOTTER_ROLL_RECORD));
+    }
+
+    #[test]
+    fn enhanced_primal_needs_primal_gate_starts_at_96() {
+        assert_eq!(super::PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL, 96);
+        assert!(!rule_on(95, super::PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL), "a record at 95 keeps the grant's own extras group");
+        assert!(rule_on(96, super::PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL));
+    }
 
     #[test]
     fn upr_needs_shot_gate_starts_at_95() {

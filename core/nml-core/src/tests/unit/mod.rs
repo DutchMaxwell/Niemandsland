@@ -1004,6 +1004,7 @@ mod boost_base_pins;
 mod boostbases2;
 mod condap;
 mod counter_models;
+mod covfix_dice_96;
 mod disintegrate_regen;
 mod fortified_aura;
 mod grounded_protection;

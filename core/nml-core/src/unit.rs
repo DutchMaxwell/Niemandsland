@@ -880,7 +880,9 @@ impl Ctx {
             regeneration: d.regeneration, regen_target: d.regen_target, regen_target_spell: d.regen_target_spell, regen_pending: d.regen_pending,
             regen_pending_spell: d.regen_pending_spell, regen_feat: d.regen_feat, regen_named: d.regen_named, regen_groups: d.regen_groups,
             regen_names: d.regen_names, regen_gated: d.regen_gated, regen_gate_shut: d.regen_gate_shut, regen_most_name: d.regen_most_name,
-            above_half_strength: false, near_terrain: false,
+            // PENDING_EPOCH_UNIT_BANE_ALIAS: the strength gate (Decimate) is read as declared, like the Defense above.
+            above_half_strength: self.above_half_strength && rule_on(self.rules_epoch, crate::acts::PENDING_EPOCH_UNIT_BANE_ALIAS),
+            near_terrain: false,
             ..base
         }
     }
@@ -4515,6 +4517,7 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
     let mut u_unstop_melee = false;
     let mut facets: Vec<(String, bool, bool)> = Vec::new(); // the unit-level names the re-roll line carries, with their facet
     let exact_labels = rule_on(rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH);
+    let unit_alias = rule_on(rules_epoch, crate::acts::PENDING_EPOCH_UNIT_BANE_ALIAS);
     for r in &p.special_rules {
         let rs = r.trim();
         if exact_labels && is_unlisted_striker_label(rs) {
@@ -4585,6 +4588,9 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         for hit in rules_of_primitive(reg, p, "Bane") {
             if hit.name.starts_with("Bane") || hit.name.ends_with("Aura") {
                 continue;
+            }
+            if unit_alias && conditional_bane_alias(reg, p, &hit.name) {
+                continue; // read like the weapon-borne alias, `stamp_weapon_bane_alias`
             }
             if wave3_alias(&hit.name) {
                 if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
@@ -4722,9 +4728,18 @@ fn stamp_weapon_bane_alias(reg: &mut Registries, p: &Profile, shoot: &mut [Shoot
     if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
         return;
     }
+    // PENDING_EPOCH_UNIT_BANE_ALIAS: the unit's own conditional aliases join each profile's printed rules, after them.
+    let unit_aliases: Vec<String> = if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_UNIT_BANE_ALIAS) {
+        let names: Vec<String> = p.special_rules.iter().map(|r| base_rule_name(r)).collect();
+        names.into_iter().filter(|n| conditional_bane_alias(reg, p, n)).collect()
+    } else {
+        Vec::new()
+    };
     let map = reg.rules_for(&p.game_system);
     for sp in shoot.iter_mut().filter(|sp| !sp.bane) {
-        for n in sp.rules.iter().map(|r| base_rule_name(r)).collect::<Vec<_>>() {
+        let mut names: Vec<String> = sp.rules.iter().map(|r| base_rule_name(r)).collect();
+        names.extend(unit_aliases.iter().cloned());
+        for n in names {
             let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
             let on = facet_applies(e.param_b("melee_only"), e.param_b("shooting_only"), sp.range);
             if !on || e.primitive.as_deref() != Some("Bane") || !e.param_b("reroll_save_sixes") || n.starts_with("Bane") || n.ends_with("Aura") {
@@ -4741,6 +4756,20 @@ fn stamp_weapon_bane_alias(reg: &mut Registries, p: &Profile, shoot: &mut [Shoot
             break;
         }
     }
+}
+
+/// `PENDING_EPOCH_UNIT_BANE_ALIAS`: a Bane-family alias whose entry carries a condition or ignores Regeneration (Obliterate, Reap,
+/// Decimate, Fragment, Smash) and upgrades no other rule. A unit that carries one as its own rule reads it like the weapon-borne alias.
+fn conditional_bane_alias(reg: &mut Registries, p: &Profile, name: &str) -> bool {
+    if name.starts_with("Bane") || name.ends_with("Aura") {
+        return false;
+    }
+    let Some(e) = reg.rules_for(&p.game_system).lookup(&p.faction_folder, name) else { return false };
+    let upgrades = e.param_s("upgrades");
+    e.primitive.as_deref() == Some("Bane")
+        && e.param_b("reroll_save_sixes")
+        && (upgrades.is_empty() || upgrades == name)
+        && (!e.param_s("condition").is_empty() || e.param_b("bypass_regen"))
 }
 
 /// AI-08a (`EPOCH_73_V36`): a weapon rule read through its map entry, not its 3.5 name (Anti-Cover:
@@ -5043,11 +5072,14 @@ const SHOOT_SHOT_MODS: [&str; 8] = [
 /// once-per-game PLAYER CHOICE the table never automates, so stamping it
 /// flat would be bug #489's over-credit.
 fn stamp_shot_modifier(
-    reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], trace73: bool,
+    reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], trace73: bool, rules_epoch: u32,
 ) {
     let mut flat = 0;
     let mut over9 = 0;
-    for name in SHOOT_SHOT_MODS {
+    // A weapon that prints Imprecise itself already pays its -1 in the dice fold (`ShootProfile::imprecise`); the unit's own
+    // Imprecise must not charge it twice.
+    let mut unit_imprecise = 0;
+    for name in SHOOT_SHOT_MODS.iter().copied().chain(unit_imprecise_name(rules_epoch)) {
         if !unit_rule_active(reg, p, name) {
             continue;
         }
@@ -5059,16 +5091,32 @@ fn stamp_shot_modifier(
         let band = if e.param_f("over_in", 0.0) > 0.0 { "over 9in" } else { "flat" };
         trace_stamp(trace73 && hb != 0, "shot-modifier", name,
             &format!("{}: {} stamped {:+} to hit ({})", p.name, name, hb, band));
-        if e.param_f("over_in", 0.0) > 0.0 {
+        if name == "Imprecise" {
+            unit_imprecise += hb;
+        } else if e.param_f("over_in", 0.0) > 0.0 {
             over9 += hb;
         } else {
             flat += hb;
         }
     }
     for sp in shoot.iter_mut() {
-        sp.hit_bonus += flat;
+        sp.hit_bonus += flat + if sp.imprecise { 0 } else { unit_imprecise };
         sp.hit_bonus_over9 += over9;
     }
+}
+
+/// `PENDING_EPOCH_UNIT_IMPRECISE`: the unit-borne Imprecise joins the flat shooting Shot Modifier names (3.6 army books: the bearer gets
+/// -1 to hit when attacking). Below the gate it stays unread, byte-exact.
+fn unit_imprecise_name(rules_epoch: u32) -> Option<&'static str> {
+    rule_on(rules_epoch, crate::acts::PENDING_EPOCH_UNIT_IMPRECISE).then_some("Imprecise")
+}
+
+/// `PENDING_EPOCH_UNIT_IMPRECISE`, melee leg: the unit carries Imprecise and its faction map names it a to-hit Shot Modifier.
+fn unit_imprecise_carried(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> bool {
+    unit_imprecise_name(rules_epoch).is_some()
+        && unit_rule_active(reg, p, "Imprecise")
+        && reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Imprecise")
+            .is_some_and(|e| e.primitive.as_deref() == Some("Shot Modifier") && e.param_i("hit_bonus", 0) < 0)
 }
 
 /// Wave 3 — the Shot Modifier family's two RUNTIME-GATED shooting members,
@@ -5119,7 +5167,7 @@ fn shot_mod_notes_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> [Sh
         if n >= out.len() { break; }
         let name = base_rule_name(r);
         if name.is_empty() || out[..n].iter().any(|x| x.name == name) { continue; }
-        let kind = if SHOOT_SHOT_MODS.contains(&name.as_str()) { 0u8 }
+        let kind = if SHOOT_SHOT_MODS.contains(&name.as_str()) || unit_imprecise_name(rules_epoch) == Some(name.as_str()) { 0u8 }
             else if name == "Mobile Artillery" && rule_on(rules_epoch, EPOCH_6_TABLE_RULES) { 1 }
             else if name == "Grounded Precision" && rule_on(rules_epoch, EPOCH_6_TABLE_RULES) { 2 }
             else if name == "Precision Feat" && rule_on(rules_epoch, EPOCH_7_TABLE_RULES) { 3 }
@@ -7573,9 +7621,13 @@ impl UnitStatic {
         stamp_conditional_ap(reg, p, rules_epoch, &mut shoot);
         stamp_unit_strikers(reg, p, &mut shoot, rules_epoch);
         stamp_regen_unit_arm(reg, p, &mut shoot, rules_epoch);
-        stamp_shot_modifier(reg, p, &mut shoot, trace73);
+        stamp_shot_modifier(reg, p, &mut shoot, trace73, rules_epoch);
 
         let mut melee = melee_profiles_at(&p.weapons, rules_epoch);
+        // PENDING_EPOCH_UNIT_IMPRECISE: the unit's own Imprecise reaches its strikes as the weapon-borne flag does (one -1, never two).
+        if unit_imprecise_carried(reg, p, rules_epoch) {
+            melee.iter_mut().for_each(|sp| sp.imprecise = true);
+        }
         // NML-002 Strafing — the move-through trigger's own array, stamped
         // UNGATED and UNSTAMPED: the table builds it raw off the weapons
         // (`AiShooting.strafing_profiles`, main.gd:2976-2985) and the
