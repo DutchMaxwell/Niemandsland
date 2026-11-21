@@ -46,3 +46,17 @@ fn a_piercing_target_says_its_placement_in_the_tables_words() {
     assert!(has(&v36, "Piercing Target: tagger places 1 token on each of b — a friendly attack gets +1 AP"), "{v36:?}");
     assert!(v36.iter().all(|l| !l.contains("stands while")), "the door says the spend: {v36:?}");
 }
+
+/// The fallen Vengeance unit's marker line, in the table's words (`_solo_vengeance_on_destroyed`: `Vengeance marker(s)`, both units by name);
+/// the recorded log says `marker(s)`. RED on main: `ShootResult.log` only.
+#[test]
+fn the_door_tray_says_the_vengeance_line_in_the_tables_words() {
+    let (mut st, mut statics) = buff_line();
+    statics[2].vengeance_active = true;
+    statics[2].model_count = 3;
+    let mut tray = Tray::supplied(Vec::new());
+    vengeance_on_kill(&statics, &mut st, 2, 0, &mut ShootResult::default(), &mut tray);
+    let said: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).collect();
+    let want = format!("Vengeance: {} falls — 3 Vengeance markers on {} (its enemies get +1 to hit per marker)", statics[2].name, statics[0].name);
+    assert!(has(&said, &want), "{said:?}");
+}
