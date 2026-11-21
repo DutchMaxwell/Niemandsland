@@ -299,13 +299,62 @@ void grit_city_masonry(int k, vec3 p, vec3 n, float seed, vec3 tint, vec3 box, v
 	ao = mix(0.6, 1.0, smoothstep(0.15, 0.6, rel));
 }
 
+// PLASTER (plan W2, style bible 5): the four per-lot plasters drop to off-white / dirty ochre / grey-pink / grey-green at saturation <= 0.22 (they stay four), and every panel shows its
+// age - grime under each beam, loss patches low and at the cell's corners showing the lath or the stone behind.
+vec3 grit_plaster(vec3 c) {
+	if (grit_on < 0.5) {
+		return c;
+	}
+	float mx = max(c.r, max(c.g, c.b));
+	float sat = (mx - min(c.r, min(c.g, c.b))) / max(mx, 0.0001);
+	return mix(vec3(dot(c, LUMA)), c, min(1.0, 0.22 / max(sat, 0.0001)));
+}
+
+// `infill` of a half-timber panel at the face point `uv`, `x` / `y` inside its 3 in cell and storey, `wood` the frame's timber colour.
+vec3 grit_plaster_wear(vec3 infill, vec2 uv, float x, float y, float seed, vec3 wood) {
+	if (grit_on < 0.5) {
+		return infill;
+	}
+	float under = max((1.0 - smoothstep(0.0, 0.55, 1.425 - y)) * step(y, 1.425), (1.0 - smoothstep(0.0, 0.55, 2.83 - y)) * step(y, 2.83));   // grime streaking down under the mid rail and the top plate
+	infill *= 1.0 - 0.3 * under * mix(0.5, 1.0, vnoise(vec2(uv.x * 9.0, uv.y * 1.5) + seed));
+	float zone = max(1.0 - smoothstep(0.6, 1.1, y), 1.0 - smoothstep(0.25, 0.6, min(x, 3.0 - x)));   // low on the panel and at the corners
+	float loss = smoothstep(0.6, 0.64, vnoise(uv * 2.1 + seed + 41.0) * (0.75 + 0.35 * zone));
+	vec3 behind = fract(h21(floor(uv / 3.0) + seed) * 3.0) < 0.5 ? mix(wood * 1.3, wood * 0.55, step(0.5, fract(uv.y / 0.09))) : vec3(0.36, 0.33, 0.29) * mix(0.75, 1.1, h21(floor(uv / vec2(0.3, 0.15)) + seed));
+	return mix(infill, behind, loss);
+}
+
+// ROOFS (plan W3): per tile 3-6 % missing (the dark batten gap shows), ~5 % slipped (darker, out of line), one roof in four with a paler patch of newer tiles; the whole roof a
+// little less saturated (style bible 5: faded clay). `lot` = the lot's hash.
+vec3 grit_roof(vec3 alb, float tile, float row, float seed, float lot, vec2 at, float kp, inout float rel) {
+	if (grit_on < 0.5) {
+		return alb;
+	}
+	alb = mix(vec3(dot(alb, LUMA)), alb, 0.75);
+	float u = h21(vec2(tile, row + seed + 83.0));
+	float miss = kp * step(u, 0.045);
+	float slip = kp * step(0.045, u) * step(u, 0.095);
+	alb *= mix(1.0, 0.72, slip);
+	rel = mix(rel, rel * 0.6, slip);
+	float patch = step(fract(lot * 11.0), 0.25) * smoothstep(0.62, 0.66, vnoise(at * 0.6 + lot * 37.0));
+	alb = mix(alb, alb * vec3(1.18, 1.1, 1.0), patch);
+	alb = mix(alb, vec3(0.05, 0.04, 0.035), miss);
+	rel = mix(rel, 0.0, miss);
+	return alb;
+}
+
 // A WALL IS NOT ONE WALLPAPER (plan W0): on the stone faces of the city wall, the towers and the ruined rows - a macro drift of value and hue over 6-12 in, repairs in a paler cooler stone,
 // a plinth course of larger dressed blocks at the foot (city wall, towers), rows of putlog holes, a few long vertical cracks. `p` inches off the board centre, `n` the face normal.
-void grit_wall(vec3 p, vec3 n, int k, float seed, float d_top, inout vec3 alb, inout float rel) {
-	if (grit_on < 0.5 || !(k == 12 || k == 6 || k == 3 || k == 4 || k == 9 || k == 10)) {
+void grit_wall(vec3 p, vec3 n, int k, float seed, float d_top, float street_side, inout vec3 alb, inout float rel) {
+	if (grit_on < 0.5) {
 		return;
 	}
 	vec2 uv = vec2(abs(n.x) > 0.5 ? p.z : p.x, p.y);
+	alb *= mix(vec3(0.84, 0.84, 0.85), vec3(1.0), smoothstep(0.0, 3.0, uv.y));   // (plan W1) darker low, every wall (barely cooler: the moon already is)
+	float splash = street_side * (1.0 - smoothstep(0.28, 0.5, uv.y + (vnoise(vec2(uv.x * 4.0, seed)) - 0.5) * 0.16));   // the splash band where a street meets the wall: mud thrown up, a ragged top
+	alb = mix(alb, grit_mud_colour() * 1.1, 0.55 * splash);
+	if (!(k == 12 || k == 6 || k == 3 || k == 4 || k == 9 || k == 10)) {
+		return;
+	}
 	alb *= mix(0.86, 1.12, vnoise(uv * 0.11 + seed + 3.0)) * mix(vec3(1.04, 1.0, 0.94), vec3(0.95, 0.99, 1.05), vnoise(uv * 0.08 + seed + 9.0));
 	float rp = smoothstep(0.7, 0.74, vnoise(uv * vec2(0.42, 0.55) + seed + 21.0));   // a repair in another stone
 	alb = mix(alb, vec3(dot(alb, LUMA)) * vec3(1.14, 1.12, 1.08), 0.55 * rp * float(k != 12 && k != 6));   // (the city masonry has its own patches)
