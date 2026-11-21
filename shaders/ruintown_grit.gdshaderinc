@@ -26,10 +26,10 @@ vec3 grit_class_colour(int c) {
 // the warmth. GRIT_MEAN is the family's mean; GRIT_TONE pins the street's mean luminance to the warm road's of the 21.11. gate (no grit term may make the street brighter).
 const vec3 GRIT_COOL = vec3(0.184, 0.204, 0.238);
 const vec3 GRIT_BROWN = vec3(0.208, 0.203, 0.198);
-const vec3 GRIT_OCHRE = vec3(0.236, 0.202, 0.160);
+const vec3 GRIT_OCHRE = vec3(0.226, 0.204, 0.176);
 const vec3 GRIT_MEAN = GRIT_COOL * 0.6 + GRIT_BROWN * 0.25 + GRIT_OCHRE * 0.15;
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
-const float GRIT_TONE = 0.88;
+const float GRIT_TONE = 0.84;
 
 // The street's base tint: the family's mean at the warm road's own luminance (the palette and GROUND_COBBLE keep deciding the value) with the map, the warm road without it.
 vec3 grit_street_tint(vec3 warm) {
@@ -53,7 +53,7 @@ const float GRIT_MUD_COVER = 0.4;
 // Wet dark mud: the earth's colour, darker and greyer.
 vec3 grit_mud_colour() {
 	vec3 earth = palette[0].rgb * GROUND_EARTH;
-	return mix(earth, vec3(dot(earth, LUMA)), 0.5) * 0.62;
+	return mix(earth, vec3(dot(earth, LUMA)), 0.7) * 0.62;
 }
 
 // The mud amount at a point from the map's WET / MUD, broken up by noise (0..1).
@@ -102,7 +102,7 @@ vec3 grit_street(vec2 xz, vec2 w, vec4 sett, float run, inout vec3 alb, inout fl
 	float kp = keep(xz.x, SETT_W);
 	float joint = mix(0.3, 1.0 - sett.y, kp);   // below ~3 px a joint is its share of the area
 	vec3 mudc = grit_mud_colour();
-	float foot = 0.55 * (1.0 - smoothstep(0.3, 1.5, g.r * GRIT_EDGE_CAP));   // dirt gathers at the wall foot and the street's edge too (style bible 15: grit is strongest in the 1 in there)
+	float foot = 0.55 * (1.0 - smoothstep(0.3, 1.9, g.r * GRIT_EDGE_CAP));   // dirt gathers at the wall foot and the street's edge too (style bible 15: grit is strongest in the 1 in there)
 	float lane = smoothstep(0.55, 1.1, g.r * GRIT_EDGE_CAP);   // the walked middle of a street (style bible 15: the calmest ground)
 	float walked = lane * step(0.25, abs(run - 0.5));   // the wear lane proper: the middle of a straight street (a square keeps its calm middle for the fates, not a polish)
 	float mud = grit_mud(max(g.g, foot), xz) * (1.0 - 0.8 * walked);   // feet rub the dirt away
@@ -145,10 +145,121 @@ vec3 grit_street(vec2 xz, vec2 w, vec4 sett, float run, inout vec3 alb, inout fl
 
 // A FLOOR for the open ground in unlit alleys (lead rule 21.11.: no walkable street region under ~18 / 255 at the street camera): a faint moon fill as emission in proportion to the
 // ground's own albedo - it lifts the black alleys most in relative terms and a lit street barely; GRIT_TONE was lowered with it so the lit street stays at or below the old road.
-const float GRIT_FILL = 1.0;
+const float GRIT_FILL = 1.8;
 
 vec3 grit_fill(vec3 alb) {
 	return grit_on > 0.5 ? pow(alb, vec3(2.2)) * GRIT_FILL : vec3(0.0);
+}
+
+// THE CITY WALL'S OWN MASONRY (plan W0 round 2, lead 21.11.: the authored set is banded - a course of big square blocks, then rubble, every ~0.5 in - and no offset hides a band): the city
+// wall and the towers are laid procedurally - large dressed ashlar in the lowest 1.1 in, random rubble above (stones 0.2-0.45 in, no course, no period), a warm grey stone family
+// (no green cast: moss is the shade side's job), a few patched repairs in small coursed stone. The house walls keep the authored set. Returns the tone factor on the palette tint.
+const float GRIT_ASHLAR_IN = 1.1;
+
+vec3 grit_stone_tone(float h) {
+	float f = fract(h * 5.37);
+	vec3 c = f < 0.45 ? vec3(1.06, 0.99, 0.88) : (f < 0.75 ? vec3(0.98, 0.95, 0.9) : (f < 0.9 ? vec3(1.1, 0.98, 0.82) : vec3(0.93, 0.91, 0.88)));
+	return c * mix(0.72, 1.12, fract(h * 3.91));
+}
+
+// Random rubble: a stretched jittered cell grid; F2 - F1 is the mortar. `id` = the stone's hash.
+float grit_rubble(vec2 uv, float seed, out float id) {
+	vec2 q = uv / vec2(0.22, 0.12);
+	vec2 c = floor(q);
+	float f1 = 9.0;
+	float f2 = 9.0;
+	id = 0.0;
+	for (int j = -1; j <= 1; j++) {
+		for (int i = -1; i <= 1; i++) {
+			vec2 g = c + vec2(float(i), float(j));
+			vec2 o = vec2(h21(g + seed + 3.1) * 0.8 + 0.1, h21(g + seed + 7.7) * 0.3 + 0.35);   // stones lie roughly in courses: little vertical jitter
+			float d = length((g + o - q) * vec2(0.22, 0.12));
+			if (d < f1) {
+				f2 = f1;
+				f1 = d;
+				id = h21(g + seed + 11.3);
+			} else if (d < f2) {
+				f2 = d;
+			}
+		}
+	}
+	return f2 - f1;
+}
+
+vec3 grit_masonry(vec2 uv, float seed, out float rel) {
+	float kp = keep(uv.y, 0.22);
+	float id;
+	float edge;
+	if (uv.y < GRIT_ASHLAR_IN) {   // ashlar: three courses of long dressed blocks
+		float row = floor(uv.y / 0.275);
+		float x = uv.x + h21(vec2(row, seed)) * 3.0;
+		float l = 0.42 + 0.3 * h21(vec2(row, floor(x / 0.6) + seed + 2.0));
+		float col = floor(x / l);
+		vec2 f = vec2(fract(x / l) * l, fract(uv.y / 0.275) * 0.275);
+		edge = min(min(f.x, l - f.x), min(f.y, 0.275 - f.y)) * 2.0;
+		id = h21(vec2(col, row) + seed + 5.0);
+	} else {
+		edge = grit_rubble(uv, seed, id);
+	}
+	float cellx = floor(uv.x / 9.0);   // a patched repair in small coursed stone in some 9 in stretches
+	float ph = h21(vec2(cellx, seed + 61.0));
+	vec2 pc = vec2((cellx + 0.25 + 0.5 * ph) * 9.0, 1.6 + 2.2 * fract(ph * 7.0));
+	vec2 pd = abs(uv - pc) - vec2(0.9 + 0.8 * fract(ph * 3.0), 0.55 + 0.4 * fract(ph * 5.0)) + (vnoise(uv * 3.0 + seed) - 0.5) * 0.3;
+	if (step(0.55, ph) * step(max(pd.x, pd.y), 0.0) > 0.5) {
+		float row = floor(uv.y / 0.13);
+		float x = uv.x + h21(vec2(row, seed + 63.0)) * 2.0;
+		vec2 f = vec2(fract(x / 0.26) * 0.26, fract(uv.y / 0.13) * 0.13);
+		edge = min(min(f.x, 0.26 - f.x), min(f.y, 0.13 - f.y)) * 2.0;
+		id = h21(vec2(floor(x / 0.26), row) + seed + 67.0) * 0.3 + 0.55;
+	}
+	float stone = smoothstep(0.006, 0.022, edge);
+	vec3 tone = grit_stone_tone(id) * mix(0.82, 1.12, vnoise(uv * 14.0 + id * 13.0)) * mix(0.9, 1.06, vnoise(uv * 41.0 + id * 7.0));   // weathered, pitted faces
+	rel = mix(0.5, mix(0.15, 0.5 + 0.5 * smoothstep(0.0, 0.12, edge) * (0.7 + 0.3 * vnoise(uv * 23.0 + id)), stone), kp);
+	return mix(vec3(0.93, 0.91, 0.88), mix(vec3(0.62, 0.6, 0.56), tone, stone), kp);
+}
+
+// The city wall (12) and the towers (6) take the procedural masonry instead of the authored set (with the map; the set stays without it).
+void grit_city_masonry(int k, vec3 p, vec3 n, float seed, vec3 tint, inout vec3 alb, inout float rel, inout float depth_in, inout float tex_on, inout vec3 tex_ratio, inout vec3 tex_n, inout float ao) {
+	if (grit_on < 0.5 || (k != 12 && k != 6)) {
+		return;
+	}
+	vec2 uv = vec2(abs(n.x) > 0.5 ? p.z : p.x, p.y);
+	alb = tint * grit_masonry(uv, seed, rel);
+	tex_on = 0.0;
+	tex_ratio = vec3(1.0);
+	tex_n = vec3(0.0, 0.0, 1.0);
+	depth_in = 0.03;
+	ao = mix(0.6, 1.0, smoothstep(0.15, 0.6, rel));
+}
+
+// A WALL IS NOT ONE WALLPAPER (plan W0): on the stone faces of the city wall, the towers and the ruined rows - a macro drift of value and hue over 6-12 in, repairs in a paler cooler stone,
+// a plinth course of larger dressed blocks at the foot (city wall, towers), rows of putlog holes, a few long vertical cracks. `p` inches off the board centre, `n` the face normal.
+void grit_wall(vec3 p, vec3 n, int k, float seed, float d_top, inout vec3 alb, inout float rel) {
+	if (grit_on < 0.5 || !(k == 12 || k == 6 || k == 3 || k == 4 || k == 9 || k == 10)) {
+		return;
+	}
+	vec2 uv = vec2(abs(n.x) > 0.5 ? p.z : p.x, p.y);
+	alb *= mix(0.86, 1.12, vnoise(uv * 0.11 + seed + 3.0)) * mix(vec3(1.04, 1.0, 0.94), vec3(0.95, 0.99, 1.05), vnoise(uv * 0.08 + seed + 9.0));
+	float rp = smoothstep(0.7, 0.74, vnoise(uv * vec2(0.42, 0.55) + seed + 21.0));   // a repair in another stone
+	alb = mix(alb, vec3(dot(alb, LUMA)) * vec3(1.14, 1.12, 1.08), 0.55 * rp * float(k != 12 && k != 6));   // (the city masonry has its own patches)
+	if (k == 12 || k == 6) {   // a stain streak down from every merlon gap (the gaps sit on the whole inches of the board: merlons stand at the half inches), 0.3-1.2 in long
+		float gx = round(uv.x);
+		float len = 0.3 + 0.9 * h21(vec2(gx, seed + 71.0));
+		float streak = (1.0 - smoothstep(0.03, 0.09, abs(uv.x - gx + (vnoise(vec2(uv.y * 2.0, gx)) - 0.5) * 0.06))) * (1.0 - smoothstep(0.0, len, d_top)) * step(d_top, len);
+		alb *= 1.0 - 0.45 * streak;
+	}
+	float lv = uv.y < 4.4 ? 3.1 : 5.7;   // putlog holes: two rows, about every 1.6 in, a few left out
+	float cx = floor(uv.x / 1.6);
+	vec2 hd = abs(vec2(fract(uv.x / 1.6) * 1.6 - 0.8, uv.y - lv)) - vec2(0.07);
+	float hole = step(max(hd.x, hd.y), 0.0) * step(0.3, h21(vec2(cx, lv + seed)));
+	alb = mix(alb, vec3(0.03, 0.028, 0.025), 0.9 * hole);
+	rel = mix(rel, 0.0, hole);
+	float cc = floor(uv.x / 7.3);   // a long vertical crack in some 7.3 in stretches
+	float ch = h21(vec2(cc, seed + 41.0));
+	float crx = (cc + 0.2 + 0.6 * ch) * 7.3 + (vnoise(vec2(uv.y * 1.7, cc + seed)) - 0.5) * 0.5;
+	float crack = (1.0 - smoothstep(0.008, 0.025, abs(uv.x - crx))) * step(0.5, ch) * step(0.6 + 2.0 * ch, uv.y) * step(uv.y, 2.5 + 4.0 * ch);
+	alb = mix(alb, vec3(0.03, 0.028, 0.026), 0.85 * crack);
+	rel = mix(rel, 0.0, crack);
 }
 
 // The earth beside a street (plan G3): damp and darker within 1 in of the setts.

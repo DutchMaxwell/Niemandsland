@@ -254,6 +254,16 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 			await _still(tag, "macro_ground")
 			for m: Node3D in shown:
 				m.visible = true
+	if _want("macro_wall"):
+		var mw := _macro_wall_pick(layout)
+		if not mw.is_empty():
+			var shown_w: Array = _models.filter(func(m: Node3D) -> bool: return m.visible)
+			for m: Node3D in shown_w:
+				m.visible = false
+			_pose(mw["yaw"], -5.0, 6.0 * IN, mw["target"])   # 6 in in front of the city wall, square on: the repeat of its stone (plan W0)
+			await _still(tag, "macro_wall")
+			for m: Node3D in shown_w:
+				m.visible = true
 	armies.free()
 	if _want("street"):
 		var walk := _street(layout)
@@ -727,6 +737,41 @@ func _grit_still(file: String) -> void:
 		m.visible = true
 	for _i in 4:
 		await process_frame
+
+
+## The city wall close-up (plan PLAN_RUINTOWN_GRIT W0): the longest run of standing wall cells (level 1+) in one column whose face has open level-0 ground in front of at least half of it
+## and whose lens spot 6 in out is open ground or off the board; square on, the target half way up the run's lowest cell on the cell edge at the run's middle: {yaw, target (m)}.
+func _macro_wall_pick(layout: Dictionary) -> Dictionary:
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell := float(layout["cell_in"])
+	var best := {}
+	for x in nx:
+		var run := 0
+		var low := 99
+		for z in nz + 1:
+			var cd: Dictionary = layout["cells"][z * nx + x] if z < nz else {}
+			if z < nz and cd["lot_kind"] == "Wall" and int(cd["level"]) >= 1:
+				run += 1
+				low = mini(low, int(cd["level"]))
+				continue
+			if run >= 3 and (best.is_empty() or run > int(best["len"])):
+				for side in [-1, 1]:
+					var open := 0
+					for zz in range(z - run, z):
+						if x + side >= 0 and x + side < nx and _open(layout, (Vector2(x + side, zz) + Vector2(0.5, 0.5) - Vector2(nx, nz) * 0.5) * cell):
+							open += 1
+					var ex: float = (float(x) + (1.0 if side > 0 else 0.0) - nx * 0.5) * cell
+					var ez: float = (float(z) - run * 0.5 - nz * 0.5) * cell
+					var lens := Vector2(ex + side * 6.0, ez)
+					var off_board := absf(lens.x) > nx * cell * 0.5
+					if open * 2 >= run and (off_board or _open(layout, lens)) and (best.is_empty() or run > int(best["len"])):
+						best = {"len": run, "yaw": 90.0 if side > 0 else -90.0, "target": Vector3(ex * IN, float(layout["level_in"][low]) * 0.5 * IN, ez * IN)}
+			run = 0
+			low = 99
+	if best.is_empty():
+		return {}
+	return {"yaw": best["yaw"], "target": best["target"]}
 
 
 ## The paving close-up (plan PLAN_RUINTOWN_GRIT G0): a level-0 street cell beside a level-0 earth cell, nearest the board centre, whose camera spot 5 in out over the street is open

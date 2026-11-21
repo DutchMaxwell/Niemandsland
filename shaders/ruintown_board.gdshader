@@ -31,6 +31,8 @@ const vec3 MEAN_PLASTER = vec3(0.4065, 0.3669, 0.3513);
 const vec3 MEAN_TIMBER = vec3(0.1207, 0.0743, 0.0443);
 const vec3 MEAN_EARTH = vec3(0.1747, 0.1326, 0.0824);
 
+#include "res://shaders/ruintown_grit_tile.gdshaderinc"
+
 vec3 ratio_of(sampler2D t, vec2 uv, vec3 mean) {
 	return clamp(texture(t, uv).rgb / mean, vec3(0.3), vec3(2.6));
 }
@@ -45,8 +47,8 @@ bool use_stone(vec2 uv, inout vec3 ratio, inout vec3 tn) {
 		return false;
 	}
 	vec2 tuv = vec2(uv.x, -uv.y) / t_tile.x;
-	ratio = ratio_of(t_stone, tuv, MEAN_STONE);
-	tn = normal_of(n_stone, tuv);
+	ratio = clamp(grit_albedo(t_stone, tuv) / MEAN_STONE, vec3(0.3), vec3(2.6));   // (plan W0: without its 1.3 in period)
+	tn = grit_normal(n_stone, tuv);
 	return true;
 }
 
@@ -58,8 +60,8 @@ bool use_frame(vec2 uv, float wood, inout vec3 ratio, inout vec3 tn) {
 	vec3 nt = vec3(0.0, 0.0, 1.0);
 	if (t_on.y > 0.5) {
 		vec2 pu = vec2(uv.x, -uv.y) / t_tile.y;
-		rp = ratio_of(t_plaster, pu, MEAN_PLASTER);
-		np = normal_of(n_plaster, pu);
+		rp = clamp(grit_albedo(t_plaster, pu) / MEAN_PLASTER, vec3(0.3), vec3(2.6));
+		np = grit_normal(n_plaster, pu);
 	}
 	if (t_on.z > 0.5) {
 		vec2 tu = vec2(uv.x, -uv.y) / t_tile.z;
@@ -318,6 +320,7 @@ void fragment() {
 				}
 			}
 		}
+		grit_city_masonry(k, p, wnrm, seed, tint, alb, rel, depth_in, tex_on, tex_ratio, tex_n, ao);   // (plan W0: the city wall's own masonry, no banded set)
 	} else if (wnrm.y < 0.95 && k == 15) {   // a sloped roof face: rows of tiles, a tone per tile, a shadow under each row
 		tint = roof_of(ground_at(p.xz - wnrm.xz * 0.2).b, tint);   // each roof its own clay, slate or mossy clay
 		float along = abs(wnrm.x) > abs(wnrm.z) ? p.z : p.x;
@@ -457,13 +460,14 @@ void fragment() {
 		float moss = smoothstep(0.55, 0.95, shade);
 		float patchy = wnrm.y > 0.5 ? fbm(p.xz * 1.3 + seed * 3.0) : fbm(vec2(p.x + p.z, p.y) * 1.3 + seed * 3.0);   // a top has no height to vary over: its patches follow the plan
 		if (abs(wnrm.y) < 0.2) {   // a wall face
+			grit_wall(p, wnrm, k, seed, box_in.x > 0.0 ? box_in.y * 0.5 - lpos.y : 99.0, alb, rel);   // (plan W0: a wall is not one wallpaper)
 			float scorch = smoothstep(0.2, 0.6, fire) * (1.0 - smoothstep(0.0, mix(1.4, 6.5, fire), p.y)) * smoothstep(0.12, 0.45, patchy);   // rising from the foot, two storeys high on the fire side
 			alb *= 1.0 - 0.4 * fire * fire;   // smoke over everything on that side
 			alb = mix(alb, vec3(0.035, 0.03, 0.028), 0.9 * scorch);
 			alb *= 1.0 - 0.55 * fire * soot_m;   // the fan of soot above an opening, the streak under its sill
 			alb = mix(alb, vec3(0.022, 0.019, 0.017), 0.85 * wood_m * fire * smoothstep(0.35, 0.6, patchy));   // charred timber: black and cracked
 			rough = mix(rough, 0.35, 0.6 * wood_m * fire);
-			alb = mix(alb, vec3(0.15, 0.25, 0.09), 0.7 * moss * (1.0 - smoothstep(0.0, 2.2, p.y)) * smoothstep(0.4, 0.7, patchy));   // moss and algae low on the shade side
+			alb = mix(alb, grit_on > 0.5 ? vec3(0.11, 0.15, 0.08) : vec3(0.15, 0.25, 0.09), 0.7 * moss * (1.0 - smoothstep(0.0, 2.2, p.y)) * smoothstep(0.4, 0.7, patchy));   // moss and algae low on the shade side (green-black with the grit map, style bible 8)
 		} else if (wnrm.y > 0.5 && k != 15) {   // a top
 			alb = mix(alb, vec3(0.15, 0.25, 0.09), 0.65 * moss * smoothstep(0.45, 0.7, patchy));   // moss on the wall tops of the shade side
 			alb = mix(alb, vec3(0.04, 0.035, 0.03), 0.6 * fire * smoothstep(0.55, 0.8, patchy) * float(k != 12));   // scorched patches on a ruin's top
@@ -491,7 +495,7 @@ void fragment() {
 		alb = mix(alb, stoney ? alb * 1.3 : vec3(0.55, 0.52, 0.48), chip * keep(d_edge, 0.06));   // fresh stone / the stone beneath the plaster
 		if (abs(wnrm.y) < 0.2) {   // a wall face
 			float foot = (1.0 - smoothstep(0.0, 0.3, p.y)) * smoothstep(0.3, 0.6, fbm(p.xz * 2.0 + p.y * 3.0 + seed));
-			alb = mix(alb, vec3(0.10, 0.14, 0.07), 0.55 * foot);   // damp and moss at the foot
+			alb = mix(alb, grit_on > 0.5 ? vec3(0.075, 0.078, 0.068) : vec3(0.10, 0.14, 0.07), 0.55 * foot);   // damp and moss at the foot (with the grit map: a dark damp band, moss is the shade side's)
 			rough = mix(rough, 0.6, foot);
 			if (k == 13) {
 				alb *= 1.0 - 0.45 * (1.0 - smoothstep(0.0, 0.6, d_top));   // soot under the eaves
