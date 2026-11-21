@@ -206,3 +206,25 @@ use super::*;
         assert_ne!(statics[0].ctx.quality, 2, "the fixture's bearer is not a 2+ shooter anyway");
         assert_eq!(atk[0].target, 2, "the entry's own Quality, not the bearer's {}: {:?}", statics[0].ctx.quality, shot.rolls);
     }
+
+    /// covfix-dice (`PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL`): Takedown Shot is each model's rule, so a three-model bearer makes three
+    /// extra attacks from 96. At 95 the whole unit made one (the replay).
+    #[test]
+    fn a_three_model_bearer_makes_one_extra_attack_per_model_from_96() {
+        let e = crate::acts::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL;
+        let counts = |epoch: u32| {
+            let (mut st, mut statics) = ts_line(epoch);
+            st.alive[0] = 3;
+            st.positions[0] = vec![[0.0, 0.0, 0.0], [0.0, 0.02, 0.0], [0.0, 0.04, 0.0]];
+            st.wounds[0] = vec![1, 1, 1];
+            Rc::make_mut(&mut st.radii)[0] = vec![IN2M; 3];
+            statics[0].model_count = 3;
+            statics[0].wounds_max = vec![1, 1, 1];
+            let any: Profile = serde_json::from_str(r#"{"unit_id":"u","name":"u"}"#).unwrap();
+            st.profiles = Rc::new(Profiles { list: vec![any; 4], index: HashMap::new() });
+            let (_, shot) = run_shoot(&st, &statics, epoch);
+            attack_rolls(&shot).iter().map(|r| r.count).collect::<Vec<_>>()
+        };
+        assert_eq!(counts(e - 1), vec![1], "95: one die for the whole unit");
+        assert_eq!(counts(e), vec![3], "96: one extra attack per living model");
+    }
