@@ -172,6 +172,18 @@ impl Tray {
         }
     }
 
+    /// Coverage ledger: a damage spell's wound-ignore dice stay the cast leg's plain `spell_attack` (the door maps it to the tray kind attack,
+    /// leg spell; `CAST_KINDS` has no `spell_regeneration`), so the `regeneration` name `roll_ignore_group` gave the draws taken since `from` is
+    /// taken back. Seeded trays ignore the call.
+    pub fn tag_spell_regeneration(&mut self, from: usize) {
+        let Some(feed) = self.feed.as_mut() else { return };
+        for (at, k) in &mut feed.kinds {
+            if *at >= from && *k == "regeneration" {
+                *k = "spell_attack";
+            }
+        }
+    }
+
     /// One-core P4 step 4.0-9: the unit a resolver is about to draw for, stamped for the next draw. A supplied tray keeps
     /// it for `NeedRoll`'s `owner_key` (no second resolve); a seeded tray ignores the call.
     pub fn owner_next(&mut self, unit: Option<usize>) {
@@ -2715,6 +2727,10 @@ fn roll_ignore_group(w: i64, target: i64, name: &str, def: &Ctx, def_owner: &str
         return w.max(0);
     }
     tray.owner_next(def.unit);
+    // The table asks every wound-ignore die as `regeneration` (`_solo_roll_ignore_group`: `_owner_roll(.., "regeneration", ..)`): the step names
+    // it so, and the door's volley beats no longer read it as a hit roll (a tracer, the shot counter). The roll RECORD keeps the replay gates'
+    // `attack` below (as the morale die does): the gates compare recordings that call it `attack`.
+    tray.name_next("regeneration");
     let faces = tray.roll(w as usize);
     let ignored = faces.iter().filter(|&&f| f as i64 >= target).count() as i64;
     if !name.is_empty() {

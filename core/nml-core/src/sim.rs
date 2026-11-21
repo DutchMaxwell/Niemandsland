@@ -9140,12 +9140,14 @@ fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, host:
     if upgraded > 0 {
         spell_say(tray, caster_side, format!("{}: {upgraded} hit{} on a 6 → AP(+{})", spell.name, if upgraded == 1 { "" } else { "s" }, facets.on6_ap));
     }
+    let draw0 = tray.feed().map_or(0, |f| f.draws());
     let mut out = crate::dice::resolve_spell_hits_with_tray(
         total_hits, upgraded, ap, facets.on6_ap, facets.deadly, facets.ignores_regen, bane, facets.shred, &spell.weapon_rules, &spell.name, &def, &ut.name, tray,
     );
     for r in &mut out.rolls {
         r.kind = if r.kind == "defense" { "spell_defense" } else { "spell_attack" };
     }
+    tray.tag_spell_regeneration(draw0); // the cast leg keeps its plain `spell_attack` for the ignore dice (the ignore groups name them `regeneration`)
     let def_incoming = out.caused > 0;
     let w = shot.absorb(out);
     let before = chain_snapshot(state, ti, tray);
