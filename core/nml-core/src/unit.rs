@@ -880,7 +880,9 @@ impl Ctx {
             regeneration: d.regeneration, regen_target: d.regen_target, regen_target_spell: d.regen_target_spell, regen_pending: d.regen_pending,
             regen_pending_spell: d.regen_pending_spell, regen_feat: d.regen_feat, regen_named: d.regen_named, regen_groups: d.regen_groups,
             regen_names: d.regen_names, regen_gated: d.regen_gated, regen_gate_shut: d.regen_gate_shut, regen_most_name: d.regen_most_name,
-            above_half_strength: false, near_terrain: false,
+            // PENDING_EPOCH_UNIT_BANE_ALIAS: the strength gate (Decimate) is read as declared, like the Defense above.
+            above_half_strength: self.above_half_strength && rule_on(self.rules_epoch, crate::acts::PENDING_EPOCH_UNIT_BANE_ALIAS),
+            near_terrain: false,
             ..base
         }
     }
@@ -4757,7 +4759,7 @@ fn stamp_weapon_bane_alias(reg: &mut Registries, p: &Profile, shoot: &mut [Shoot
 }
 
 /// `PENDING_EPOCH_UNIT_BANE_ALIAS`: a Bane-family alias whose entry carries a condition or ignores Regeneration (Obliterate, Reap,
-/// Fragment, Smash) and upgrades no other rule. A unit that carries one as its own rule reads it like the weapon-borne alias.
+/// Decimate, Fragment, Smash) and upgrades no other rule. A unit that carries one as its own rule reads it like the weapon-borne alias.
 fn conditional_bane_alias(reg: &mut Registries, p: &Profile, name: &str) -> bool {
     if name.starts_with("Bane") || name.ends_with("Aura") {
         return false;
@@ -4768,9 +4770,6 @@ fn conditional_bane_alias(reg: &mut Registries, p: &Profile, name: &str) -> bool
         && e.param_b("reroll_save_sixes")
         && (upgrades.is_empty() || upgrades == name)
         && (!e.param_s("condition").is_empty() || e.param_b("bypass_regen"))
-        // Decimate's strength gate stays on the old flat read: whether it is read as declared (the volley is simultaneous) or
-        // per weapon after an earlier weapon's wounds is an open rules call (PLAN_COVERAGE_GATE Log, covfix-dice 21.11.).
-        && e.param_s("condition") != "above_half_strength"
 }
 
 /// AI-08a (`EPOCH_73_V36`): a weapon rule read through its map entry, not its 3.5 name (Anti-Cover:

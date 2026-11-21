@@ -53,18 +53,28 @@ mod pending_96 {
     }
 
     #[test]
-    fn a_bane_mark_gives_its_bearer_no_standing_bane_at_96() {
-        let us = carrier("saurian_starhosts", &["Bane Mark"], &[], PENDING_EPOCH_UNIT_BANE_ALIAS);
-        assert!(!us.shoot[0].bane && !us.melee[0].bane, "96: the Mark is a runtime mark, never a standing Bane on the bearer");
-    }
-
-    #[test]
     fn a_unit_borne_imprecise_reaches_the_strikes_once_from_96() {
         let e = PENDING_EPOCH_UNIT_IMPRECISE;
         assert!(!carrier("alien_hives", &["Imprecise"], &[], e - 1).melee[0].imprecise, "95: the strikes keep the unread rule");
         assert!(carrier("alien_hives", &["Imprecise"], &[], e).melee[0].imprecise, "96: the bearer strikes at -1");
         let both = carrier("alien_hives", &["Imprecise"], &["Imprecise"], e);
         assert!(both.melee[0].imprecise && both.melee[0].hit_bonus == 0, "one flag, one -1: no second charge");
+    }
+
+    #[test]
+    fn a_unit_borne_decimate_reads_its_strength_gate_as_declared_from_96() {
+        let e = PENDING_EPOCH_UNIT_BANE_ALIAS;
+        assert_eq!(carrier("plague_disciples", &["Decimate"], &[], e - 1).shoot[0].bane_condition, "", "95: the flat sixes re-roll");
+        assert_eq!(carrier("plague_disciples", &["Decimate"], &[], e).shoot[0].bane_condition, "above_half_strength", "96: gated");
+        let declared = |epoch: u32| Ctx { rules_epoch: epoch, above_half_strength: true, ..Default::default() }.wiped().above_half_strength;
+        assert!(!declared(e - 1), "95: a wiped target lends no strength gate");
+        assert!(declared(e), "96: the gate holds as declared for every weapon of the volley");
+    }
+
+    #[test]
+    fn a_bane_mark_gives_its_bearer_no_standing_bane_at_96() {
+        let us = carrier("saurian_starhosts", &["Bane Mark"], &[], PENDING_EPOCH_UNIT_BANE_ALIAS);
+        assert!(!us.shoot[0].bane && !us.melee[0].bane, "96: the Mark is a runtime mark, never a standing Bane on the bearer");
     }
 
     /// The real volley of 64 shots from `us`'s rifle with an Enhanced Primal grant live, at `epoch`.

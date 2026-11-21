@@ -1024,12 +1024,13 @@ pub const CURRENT_RULES_EPOCH: u32 = 95;
 /// table already folded the unit rule. Core: `unit::stamp_shot_modifier` / `shot_mod_notes_of`. Records stamped 95 or below replay
 /// byte-exact. Every call site reads THIS constant, not the literal `96`.
 pub const PENDING_EPOCH_UNIT_IMPRECISE: u32 = 96;
-/// Placeholder gate for UNIT BANE ALIASES (coverage ledger shoot m1, lane covfix-dice; 3.6 army books): (a) a unit that carries a
-/// CONDITIONAL Bane-family rule as its own rule (Obliterate, Reap, Fragment, Smash: a condition and / or a wider save window, an
-/// Obliterate that ignores Regeneration) reads it exactly like the same rule printed on a weapon (`stamp_weapon_bane_alias`), instead of
-/// the flat sixes re-roll with no Regeneration bypass. Bane Mark is NOT read here: it is a runtime mark (once, 18", line of sight, before
-/// attacking), open for the Utility Buff path. Core: `unit::stamp_unit_strikers`. Records stamped 95 or below replay byte-exact. Every call site reads
-/// THIS constant, not the literal `96`.
+/// Placeholder gate for UNIT BANE ALIASES (coverage ledger shoot m1, lane covfix-dice; 3.6 army books): a unit that carries a
+/// CONDITIONAL Bane-family rule as its own rule (Obliterate, Reap, Decimate, Fragment, Smash: a condition and / or a wider save window,
+/// an Obliterate that ignores Regeneration) reads it exactly like the same rule printed on a weapon (`stamp_weapon_bane_alias`), instead
+/// of the flat sixes re-roll with no Regeneration bypass. Decimate's strength gate is read as the volley was declared (lead ruling 21.11.,
+/// the H-17 line: all weapons fire simultaneously), so `Ctx::wiped` keeps `above_half_strength`. Bane Mark is NOT read here: it is a runtime
+/// mark (once, 18", line of sight, before attacking), open for the Utility Buff path. Core: `unit::stamp_unit_strikers`,
+/// `unit::Ctx::wiped`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant, not the literal `96`.
 pub const PENDING_EPOCH_UNIT_BANE_ALIAS: u32 = 96;
 /// Placeholder gate for TAKEDOWN SHOT PER MODEL (coverage ledger shoot m1, lane covfix-dice; GF 3.6 army books: the rule is a MODEL's
 /// rule, each model that shoots makes its own extra attack once per game): the bonus group rolls one attack per living model of the
