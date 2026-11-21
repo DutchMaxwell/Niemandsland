@@ -509,8 +509,15 @@ pub(crate) fn walls_and_ledges_of(t: &Terrain, flying: bool, rules_epoch: u32) -
     if !rule_on(rules_epoch, EPOCH_73_V36) {
         return (t.walls_in().to_vec(), Vec::new());
     }
-    let (walls, edges) = t.walls_and_ledges();
-    (walls, edges.iter().map(|e| Ledge { a: e[0], b: e[1], dy_in: terrain::CONTAINER_HEIGHT_IN }).collect())
+    let (mut walls, edges) = t.walls_and_ledges();
+    let mut ledges: Vec<Ledge> = edges.iter().map(|e| Ledge { a: e[0], b: e[1], dy_in: terrain::CONTAINER_HEIGHT_IN }).collect();
+    // Heightfield plan step 11 (`EPOCH_94_PARITY_BATCH`, a board with `tiers`): a cliff is a wall both ways, a ladder is a
+    // climb priced at its rise (the 3 in cap above joins the walls). A flat board has no tier edges: nothing is added.
+    if rule_on(rules_epoch, EPOCH_94_PARITY_BATCH) {
+        walls.extend(t.tier_walls_in());
+        ledges.extend(t.tier_ledges_in().into_iter().map(|(s, dy_in)| Ledge { a: s[0], b: s[1], dy_in }));
+    }
+    (walls, ledges)
 }
 
 /// `_ledges_world` — the climbs in the table's world frame (metres), for the trims, the gate slack and the core's
@@ -2676,12 +2683,14 @@ pub(crate) mod tests {
 
     /// Heightfield plan step 10 (`EPOCH_94_PARITY_BATCH`): a unit that advances onto a 6 in tier ends standing at 6 in, and
     /// the same move one epoch below ends at 0, as before. Red before: `Landing.end` took its y from `surface_y_m`,
-    /// which knew containers only, so the model stayed at 0 inside the block.
+    /// which knew containers only, so the model stayed at 0 inside the block. The unit flies: from step 11 a walker
+    /// stops at the sheer face of a tier with no ladder, a flier ignores walls and climbs alike.
     #[test]
     fn a_model_moved_onto_a_6in_tier_stands_at_6in() {
         let level_in = (0..16).map(|i| if i % 4 >= 2 { 6.0 } else { 0.0 }).collect();
         let t = terrain::tier_board_for_test(4, 4, level_in, Vec::new());
-        let state = units_state(vec![vec![[(-4.0 * IN2M) as f32, 0.0, 0.0]]], vec![vec![0.5 * IN2M]], vec![vec![]]);
+        let mut state = units_state(vec![vec![[(-4.0 * IN2M) as f32, 0.0, 0.0]]], vec![vec![0.5 * IN2M]], vec![vec![]]);
+        Rc::get_mut(&mut state.profiles).expect("the test owns its profiles").list[0].special_rules = vec!["Flying".into()];
         let run = |epoch: u32| {
             MoveRules { rules_epoch: epoch }
                 .plain_move(&state, &t, 0, [(2.0 * IN2M) as f32, 0.0, 0.0], 6.0, true, true, crate::mv::FAST_PLANNER_GUARD)
@@ -2692,6 +2701,64 @@ pub(crate) mod tests {
         assert!(up[0] as f64 / IN2M > 0.0, "the unit stands on the tier side, x={:.2}\"", up[0] as f64 / IN2M);
         assert_eq!(up[1], (6.0 * IN2M) as f32, "6 in up at the gate");
         assert_eq!(flat[1], 0.0, "one epoch below the gate the board plays flat");
+    }
+
+    /// A 4 x 4 board of 3 in cells (x and z from -6 to 6 in): the two columns at x >= 0 stand 3 in high, one ladder joins
+    /// the ground to the tier in the row z -3..0 (cells 5 and 6); the rest of the border at x = 0 is a cliff.
+    fn laddered() -> Terrain {
+        terrain::tier_board_for_test(4, 4, (0..16).map(|i| if i % 4 >= 2 { 3.0 } else { 0.0 }).collect(), vec![[5, 6]])
+    }
+
+    /// One 0.5 in model at (`from`) advancing to (`to`) (inches, board-centred) on `t`, `band_in` of move.
+    fn advance_on(t: &Terrain, epoch: u32, from: [f64; 2], to: [f64; 2], band_in: f64) -> Landing {
+        let state = units_state(vec![vec![[(from[0] * IN2M) as f32, 0.0, (from[1] * IN2M) as f32]]], vec![vec![0.5 * IN2M]], vec![vec![]]);
+        MoveRules { rules_epoch: epoch }
+            .plain_move(&state, t, 0, [(to[0] * IN2M) as f32, 0.0, (to[1] * IN2M) as f32], band_in, true, true, crate::mv::FAST_PLANNER_GUARD)
+            .expect("the port moves the unit")
+    }
+
+    /// Heightfield plan step 11. Red before: the planner saw no tier edge, so the ladder cost nothing and the end stood
+    /// at the ground height of the start.
+    #[test]
+    fn a_ladder_costs_3_in() {
+        let t = laddered();
+        // The planner is handed the delta to the goal (here 6.5 in), and a climb is paid out of it (GF p.11): 3.5 in of
+        // ground and the 3 in ladder, so the unit is across and stands at 3.5 - 2 = 1.5 in on the tier.
+        let up = advance_on(&t, EPOCH_94_PARITY_BATCH, [-2.0, -1.5], [4.5, -1.5], 8.0);
+        assert!((up.climb_in - 3.0).abs() < 1e-6, "the ladder is a 3 in climb, got {}", up.climb_in);
+        assert!((up.arc_in - 6.5).abs() < 0.05, "3.5 in of ground and 3 in of ladder, got {}", up.arc_in);
+        let x = up.end[0][0] as f64 / IN2M;
+        assert!((x - 1.5).abs() < 0.1, "the unit climbed and walked on: x={x:.2}\"");
+        assert_eq!(up.end[0][1], (3.0 * IN2M) as f32, "and stands on the 3 in tier");
+        // a goal 4 in away cannot pay the 3 in ladder: the unit halts short of it, nobody ends mid-climb
+        let short = advance_on(&t, EPOCH_94_PARITY_BATCH, [-2.0, -1.5], [2.0, -1.5], 8.0);
+        assert!(short.end[0][0] as f64 / IN2M < 0.0 && short.climb_in == 0.0, "x={:.2}\"", short.end[0][0] as f64 / IN2M);
+        // one epoch below the gate the same board is flat: no climb at all
+        let flat = advance_on(&t, EPOCH_94_PARITY_BATCH - 1, [-2.0, -1.5], [4.5, -1.5], 8.0);
+        assert_eq!((flat.climb_in, flat.end[0][1]), (0.0, 0.0));
+    }
+
+    #[test]
+    fn a_cliff_is_not_crossed() {
+        let t = laddered();
+        // the row z 0..3 has no ladder: the border at x = 0 is a sheer wall, and the ladder is 3 in around the corner
+        let blocked = advance_on(&t, EPOCH_94_PARITY_BATCH, [-2.0, 1.5], [2.0, 1.5], 6.0);
+        assert!(blocked.end[0][0] as f64 / IN2M < 0.0, "stopped at the cliff: x={:.2}\"", blocked.end[0][0] as f64 / IN2M);
+        assert_eq!(blocked.end[0][1], 0.0, "still on the ground");
+        let flat = advance_on(&t, EPOCH_94_PARITY_BATCH - 1, [-2.0, 1.5], [2.0, 1.5], 6.0);
+        assert!(flat.end[0][0] as f64 / IN2M > 0.0, "one epoch below the gate the board is flat and the unit walks on");
+    }
+
+    /// The planner's view: a cliff is a wall (the 4 sheer runs, merged), a ladder one ledge of its rise; below the
+    /// gate, and for a flier, nothing is added.
+    #[test]
+    fn the_tier_edges_join_the_planner_view_at_the_gate_only() {
+        let t = laddered();
+        let (walls, ledges) = walls_and_ledges_of(&t, false, EPOCH_94_PARITY_BATCH);
+        assert_eq!((walls.len(), ledges.len()), (2, 1), "cliff z -6..-3, cliff z 0..6, ladder z -3..0");
+        assert_eq!(ledges[0].dy_in, 3.0);
+        assert_eq!(walls_and_ledges_of(&t, false, EPOCH_94_PARITY_BATCH - 1), (Vec::new(), Vec::new()));
+        assert_eq!(walls_and_ledges_of(&t, true, EPOCH_94_PARITY_BATCH), (Vec::new(), Vec::new()), "a flier ignores walls and climbs alike");
     }
 
     fn stay_put(rules_epoch: u32, state: &State, t: &Terrain) -> Landing {

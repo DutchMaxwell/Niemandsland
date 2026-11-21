@@ -2,13 +2,16 @@
 //! answers the core gives, the order rules on the inputs, and
 //! `step_activation`, which resolves the activation through the step API.
 
+use crate::acts::{rule_on, EPOCH_94_PARITY_BATCH};
 use crate::dice::Tray;
 use crate::gate::INCHES_TO_METERS;
 use crate::io::{Action, Seams, SplitShot};
 use crate::landing::Landing;
 use crate::logline::{Category, LogLine};
 use crate::mods::LiveMod;
+use crate::mv::cost::LEDGE_CLIMB_MAX_IN;
 use crate::mv::step::{leg_crosses, DIFFICULT_MOVE_CAP_IN};
+use crate::mv::tier::{tier_crossings, TierKind};
 use crate::rng::GodotRng;
 use crate::sim::{band_parts, resolve_stochastic_tray_on_board, terrain_debuff_folds, Cover, ADVANCE, CHARGE, HOLD, REPOSITION, RUSH};
 use crate::state::State;
@@ -212,6 +215,32 @@ pub fn placed_chain_len(state: &State, si: usize) -> usize {
     state.positions[si].len() + state.attached[si].iter().map(|&h| state.positions[h].len()).sum::<usize>()
 }
 
+/// Heightfield plan steps 13 / 13b: the inches a walked path (world XZ metres) drops down the cliffs of a tier board, or
+/// `None` when it crosses a cliff it may not. A tier edge without a ladder is a sheer face: never climbed; a DROP of up to
+/// 3 in is regular movement where the book prints drops (`drops`: gff / aofs, BG36 p.15) and counts its height (D4), every
+/// other drop is refused. A leg through a grid vertex, where the segment test sees no edge, counts as the cliff it grazed
+/// when the tier level changes on it with no ladder. A flat board has no edges and no levels: `Some(0.0)`.
+fn cliff_drop_in(terrain: &Terrain, path: &[[f64; 2]], drops: bool) -> Option<f64> {
+    let at = |p: [f64; 2]| [p[0] / terrain.in2m(), p[1] / terrain.in2m()];
+    let mut dropped = 0.0;
+    for w in path.windows(2) {
+        let (a, b) = (at(w[0]), at(w[1]));
+        let hits = tier_crossings(a, b, terrain.tier_edges());
+        let cliffs: Vec<_> = hits.iter().filter(|c| c.kind == TierKind::Cliff).collect();
+        let (la, lb) = (terrain.tier_in_at(a[0], a[1]), terrain.tier_in_at(b[0], b[1]));
+        let grazed = cliffs.is_empty() && la != lb && !hits.iter().any(|c| c.kind == TierKind::Ladder);
+        // (rise of the step, down?) per cliff the leg takes
+        let steps: Vec<(f64, bool)> = if grazed { vec![((la - lb).abs(), la > lb)] } else { cliffs.iter().map(|c| (c.dy_in, c.down)).collect() };
+        for (dy, down) in steps {
+            if !(drops && down && dy <= LEDGE_CLIMB_MAX_IN) {
+                return None;
+            }
+            dropped += dy;
+        }
+    }
+    Some(dropped)
+}
+
 pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams, terrain: &Terrain, drop: &Drop, enforce: bool) -> Check {
     let (mode, m) = match drop.mode {
         ADVANCE => ("Advance", 0),
@@ -229,7 +258,7 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
     // The climbs the AI's move pays (GF p.11), in the trail's world frame: none for Flying or below epoch 74.
     let flying = state.profile(si).special_rules.iter().any(|r| r == "Flying");
     let ledges = crate::mv::step::world_ledges_of(terrain, flying, seams.rules_epoch);
-    let mut x = 0.0f64;
+    let (mut x, mut dropped) = (0.0f64, 0.0f64);
     // Each model's path: its trail, else (R3: no chord bypass) the straight segment [start, end] once it moved past the
     // drop floor, so its climbs and its Difficult crossing count all the same; a model that stayed has none.
     let mut paths: Vec<Vec<[f64; 2]>> = Vec::with_capacity(start.len());
@@ -243,7 +272,15 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
             None if inch(a, b) > DROP_FLOOR_IN => vec![a, b],
             None => Vec::new(),
         };
-        x = x.max(if path.is_empty() { inch(a, b) } else { crate::mv::step::trail_walk_in(&path, &ledges).0 });
+        // Heightfield plan steps 13 / 13b (`EPOCH_94_PARITY_BATCH`): the AI planner never walks a cliff, a placed move is stopped
+        // the same way unless it is a drop the book allows, which pays its height. A Flying unit ignores the edges.
+        let drop_in = match (rule_on(seams.rules_epoch, EPOCH_94_PARITY_BATCH) && !flying).then(|| cliff_drop_in(terrain, &path, state.book(si).vertical_moves)) {
+            Some(None) => return Check::Refused { reason: format!("{}: cliff: no ladder here", statics[state.roster.profile[si]].name) },
+            Some(Some(d)) => d,
+            None => 0.0,
+        };
+        dropped = dropped.max(drop_in);
+        x = x.max(drop_in + if path.is_empty() { inch(a, b) } else { crate::mv::step::trail_walk_in(&path, &ledges).0 });
         paths.push(path);
     }
     // GF p.11: Difficult terrain caps the WHOLE unit; Flying and Strider ignore it (read as `mv::step` reads them).
@@ -258,15 +295,18 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
     let full = [a.advance, a.rush, a.charge][m];
     let capped = difficult && full > DIFFICULT_MOVE_CAP_IN;
     let y = if capped { DIFFICULT_MOVE_CAP_IN } else { full };
+    // Rules-must-log: the drop names itself once (the biggest of the unit's models).
+    let drop_line = (dropped > 0.0).then(|| LogLine { rule: "drop", category: Category::Movement, side: state.player[si],
+        text: format!("{}: Drop {dropped:.0} in - a drop is regular movement and counts its height", statics[state.roster.profile[si]].name), detail: None });
     if x <= y + 0.01 {
-        return Check::Ok { lines: Vec::new() };
+        return Check::Ok { lines: drop_line.into_iter().collect() };
     }
     let text = format!("{}: a model moved {x:.1}\" - the {mode} allowance is {y:.1}\".", statics[state.roster.profile[si]].name);
     if enforce {
         return Check::Refused { reason: text };
     }
     let detail = if capped { Some("Difficult terrain".to_string()) } else { (!a.widened_by.is_empty()).then(|| a.widened_by.join(", ")) };
-    Check::Ok { lines: vec![LogLine { rule: "move_overrun", category: Category::Movement, side: state.player[si], text, detail }] }
+    Check::Ok { lines: drop_line.into_iter().chain([LogLine { rule: "move_overrun", category: Category::Movement, side: state.player[si], text, detail }]).collect() }
 }
 
 /// P4.0-5: the one choice the step API offers so far — the Takedown model pick (`sim::takedown_pick`'s
@@ -3793,6 +3833,80 @@ mod tests {
         assert_eq!(go(ADVANCE, vec![[0.0, 9.0 * INCHES_TO_METERS, 0.0]]), OK, "height is not horizontal");
         assert_eq!(go(HOLD, east(1.0)), refusal("movement mode not declared"));
         assert_eq!(go(ADVANCE, vec![]), refusal("placement does not match the unit's models"));
+    }
+
+    /// Heightfield plan step 13. A 4 x 4 board of 3 in cells (x, z from -6 to 6 in): the columns at x >= 0 are a 3 in tier, a
+    /// ladder joins it in the row z -3..0, the rest of the border at x = 0 is a cliff. Unit "a" starts 2 in west of it.
+    fn laddered_start(z_in: f64) -> (State, Vec<UnitStatic>, Terrain) {
+        let (mut st, statics) = squad_line();
+        st.positions[0] = vec![[-2.0 * INCHES_TO_METERS, 0.0, z_in * INCHES_TO_METERS]];
+        let t = crate::terrain::tier_board_for_test(4, 4, (0..16).map(|i| if i % 4 >= 2 { 3.0 } else { 0.0 }).collect(), vec![[5, 6]]);
+        (st, statics, t)
+    }
+
+    fn go_at(st: &State, statics: &[UnitStatic], t: &Terrain, epoch: u32, mode: i64, to: [f64; 3]) -> Check {
+        let seams = Seams { rules_epoch: epoch, ..seams() };
+        check_move(statics, st, 0, seams, t, &Drop { mode, placed: vec![to], ..Default::default() }, true)
+    }
+
+    /// Red before: the check measured the ground only, so a placement up a sheer face was accepted.
+    #[test]
+    fn a_placed_move_up_a_cliff_is_refused() {
+        let (st, statics, t) = laddered_start(1.5);
+        let to = [2.0 * INCHES_TO_METERS, 0.0, 1.5 * INCHES_TO_METERS];
+        assert_eq!(go_at(&st, &statics, &t, EPOCH_94_PARITY_BATCH, ADVANCE, to), refusal("Squad: cliff: no ladder here"));
+        assert_eq!(go_at(&st, &statics, &t, EPOCH_94_PARITY_BATCH, RUSH, to), refusal("Squad: cliff: no ladder here"), "every mode");
+        assert_eq!(go_at(&st, &statics, &t, EPOCH_94_PARITY_BATCH - 1, ADVANCE, to), OK, "one epoch below the gate the board is flat");
+        // a move that stays on the ground side of the cliff is no crossing
+        assert_eq!(go_at(&st, &statics, &t, EPOCH_94_PARITY_BATCH, ADVANCE, [-4.0 * INCHES_TO_METERS, 0.0, 1.5 * INCHES_TO_METERS]), OK);
+    }
+
+    /// Pins what step 11 already gives: the ladder is a climb, so 4 in of ground + 3 in of ladder is a 7 in move.
+    #[test]
+    fn a_placed_move_up_a_ladder_pays_3_in() {
+        let (st, statics, t) = laddered_start(-1.5);
+        let to = [2.0 * INCHES_TO_METERS, 0.0, -1.5 * INCHES_TO_METERS];
+        assert_eq!(go_at(&st, &statics, &t, EPOCH_94_PARITY_BATCH, ADVANCE, to), refusal("Squad: a model moved 7.0\" - the Advance allowance is 6.0\"."));
+        assert_eq!(go_at(&st, &statics, &t, EPOCH_94_PARITY_BATCH, RUSH, to), OK, "the Rush band pays it");
+        assert_eq!(go_at(&st, &statics, &t, EPOCH_94_PARITY_BATCH - 1, ADVANCE, to), OK, "no climb below the gate: 4 in of ground");
+    }
+
+    /// Heightfield plan step 13b (lead call L-3): a drop of up to 3 in is regular movement where the book prints drops (gff,
+    /// aofs) and counts its height; the mass-battle books refuse every cliff, and a drop over 3 in or a climb is refused
+    /// everywhere. Unit "a" stands on the 3 in tier, 1 in east of the cliff; the row z 0..3 has no ladder.
+    #[test]
+    fn a_placed_drop_of_3_in_is_regular_movement_in_gff_only() {
+        let (mut st, statics, t) = laddered_start(1.5);
+        st.positions[0] = vec![[1.0 * INCHES_TO_METERS, 3.0 * INCHES_TO_METERS, 1.5 * INCHES_TO_METERS]];
+        let to = |x_in: f64| [x_in * INCHES_TO_METERS, 0.0, 1.5 * INCHES_TO_METERS];
+        let go = |st: &State, x_in: f64| go_at(st, &statics, &t, EPOCH_94_PARITY_BATCH, ADVANCE, to(x_in));
+        assert_eq!(go(&st, -1.0), refusal("Squad: cliff: no ladder here"), "gf: a cliff is impassable both ways");
+        Rc::get_mut(&mut st.profiles).expect("owned").list[0].game_system = "gff".into();
+        let line = LogLine { rule: "drop", category: Category::Movement, side: 0,
+            text: "Squad: Drop 3 in - a drop is regular movement and counts its height".into(), detail: None };
+        assert_eq!(go(&st, -1.0), Check::Ok { lines: vec![line] }, "gff: 2 in of ground + the 3 in drop = 5 in, one line");
+        assert_eq!(go(&st, -3.5), refusal("Squad: a model moved 7.5\" - the Advance allowance is 6.0\"."), "4.5 in + the 3 in drop pays its height");
+        assert_eq!(go_at(&st, &statics, &t, EPOCH_94_PARITY_BATCH - 1, ADVANCE, to(-1.0)), OK, "below the gate the board is flat: no drop, no line");
+        // the other way is a climb: refused in gff too; a 6 in face is no drop either
+        let (up_st, ..) = laddered_start(1.5);
+        let mut up_st = up_st;
+        Rc::get_mut(&mut up_st.profiles).expect("owned").list[0].game_system = "gff".into();
+        assert_eq!(go(&up_st, 2.0), refusal("Squad: cliff: no ladder here"));
+        let tall = crate::terrain::tier_board_for_test(4, 4, (0..16).map(|i| if i % 4 >= 2 { 6.0 } else { 0.0 }).collect(), Vec::new());
+        assert_eq!(go_at(&st, &statics, &tall, EPOCH_94_PARITY_BATCH, ADVANCE, to(-1.0)), refusal("Squad: cliff: no ladder here"), "6 in");
+    }
+
+    /// A leg through the grid vertex where the ladder ends and the cliff begins crosses no edge in the segment test; the
+    /// level change on the leg still makes it a cliff. A Flying unit goes over.
+    #[test]
+    fn a_leg_through_a_grid_vertex_is_no_way_up_and_a_flier_ignores_cliffs() {
+        let (mut st, mut statics, t) = laddered_start(-1.5);
+        st.positions[0] = vec![[-1.5 * INCHES_TO_METERS, 0.0, -1.5 * INCHES_TO_METERS]];
+        let to = [1.5 * INCHES_TO_METERS, 0.0, 1.5 * INCHES_TO_METERS];
+        assert_eq!(go_at(&st, &statics, &t, EPOCH_94_PARITY_BATCH, ADVANCE, to), refusal("Squad: cliff: no ladder here"), "through (0, 0)");
+        statics[0].name = "Flier".into();
+        Rc::get_mut(&mut st.profiles).expect("owned").list[0].special_rules = vec!["Flying".into()];
+        assert_eq!(go_at(&st, &statics, &t, EPOCH_94_PARITY_BATCH, ADVANCE, to), OK);
     }
 
     /// Enforce off: the drop stands and exactly one line names the overrun (O3 verbatim).

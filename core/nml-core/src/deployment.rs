@@ -440,7 +440,7 @@ pub fn wall_blocked(board: &Terrain, p: (f64, f64)) -> bool {
     let clear_in = DEPLOY_WALL_CLEARANCE_M / board.in2m();
     let in2m = board.in2m();
     board
-        .walls_in()
+        .walls_in_tiered() // a tier board's cliffs are walls too (heightfield plan step 14); no tiers: `walls_in`
         .iter()
         .any(|s| (point_seg_distance_in(q, s[0], s[1], in2m) as f64) < clear_in)
 }
@@ -487,7 +487,7 @@ pub fn spot_blocked(
         let edges = disc_sample_offsets(base_r);
         for off in footprint {
             let m = [px + off.0 as f32, py + off.1 as f32];
-            if edges.iter().any(|e| hit([m[0] + e[0], m[1] + e[1]])) {
+            if edges.iter().any(|e| hit([m[0] + e[0], m[1] + e[1]])) || straddles_tiers(board, (m[0] as f64, m[1] as f64), &edges) {
                 return true;
             }
         }
@@ -496,9 +496,17 @@ pub fn spot_blocked(
     if probe_radius <= 0.0 {
         return false;
     }
-    disc_sample_offsets(probe_radius)
-        .iter()
-        .any(|e| *e != [0.0f32, 0.0] && hit([px + e[0], py + e[1]]))
+    let ring = disc_sample_offsets(probe_radius);
+    ring.iter().any(|e| *e != [0.0f32, 0.0] && hit([px + e[0], py + e[1]])) || straddles_tiers(board, p, &ring)
+}
+
+/// Heightfield plan step 14 (R10): a base never stands partly over a tier edge - one of its rim samples reads another tier
+/// level than its centre. A board with no tiers reads level 0 everywhere: never.
+fn straddles_tiers(board: &Terrain, c: (f64, f64), ring: &[[f32; 2]]) -> bool {
+    let m = board.in2m();
+    let level = |x: f64, z: f64| board.tier_in_at(x / m, z / m);
+    let here = level(c.0, c.1);
+    ring.iter().any(|e| level(c.0 + f64::from(e[0]), c.1 + f64::from(e[1])) != here)
 }
 
 // ---- the compact deployment grid (NML-1152 step 4b). TWO grids exist on the
@@ -1712,7 +1720,7 @@ pub fn deploy_side_gated(
     let mut q = deploy_begin(specs, zone, seed_value);
     q.zones = zones.map(|z| z.to_vec());
     q.gates = gates.copied();
-    let walls = board.walls_world_m();
+    let walls = board.walls_world_tiered_m();
     let order: Vec<usize> = q.main.iter().chain(q.scouts.iter()).copied().collect();
     for i in order {
         deploy_place_next(&mut q, specs, i, objectives, board, walls, rules_epoch, enemy);
@@ -1798,7 +1806,7 @@ pub fn deploy_phased_reserving(
     first: i64,
     rules_epoch: u32,
 ) -> InterleavedDeploy {
-    let walls = board.walls_world_m();
+    let walls = board.walls_world_tiered_m();
     let specs = [specs1, specs2];
     let mut q = [deploy_begin(specs1, zone1, seed1), deploy_begin(specs2, zone2, seed2)];
     let home = [(q[0].zone, q[0].forward_y), (q[1].zone, q[1].forward_y)];
@@ -1979,7 +1987,7 @@ pub fn deploy_interleaved_gated(
     first: i64,
     rules_epoch: u32,
 ) -> InterleavedDeploy {
-    let walls = board.walls_world_m();
+    let walls = board.walls_world_tiered_m();
     let specs = [specs1, specs2];
     let mut q = [deploy_begin(specs1, zone1, seed1), deploy_begin(specs2, zone2, seed2)];
     q[0].zones = zones[0].map(|z| z.to_vec());

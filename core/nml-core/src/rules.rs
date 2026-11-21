@@ -60,12 +60,14 @@ const BOOK_GF: Book = Book {
 
 // The 3.6 Firefight book prints a 9 in chain (beginner's guide p.7); today's 6 in stays until the epoch-gated
 // Firefight rules flip it, because a different chain changes how a `gff` game plays.
+// The Firefight and Skirmish books print jumps and drops (beginner's guide p.15): `vertical_moves` is true for these two
+// only. Read by the heightfield drop rule behind `EPOCH_94_PARITY_BATCH` (`activation::check_move`) and nothing else yet.
 const BOOK_GFF: Book = Book {
     system: "gff",
     chain_in: crate::mv::SKIRMISH_CHAIN_IN,
     hero_aura: DEFAULT_HERO_AURA,
     blast_spread_in: None,
-    vertical_moves: false,
+    vertical_moves: true,
     default_board_in: [48.0, 48.0],
 };
 
@@ -84,7 +86,7 @@ const BOOK_AOFS: Book = Book {
     chain_in: crate::mv::SKIRMISH_CHAIN_IN,
     hero_aura: DEFAULT_HERO_AURA,
     blast_spread_in: None,
-    vertical_moves: false,
+    vertical_moves: true,
     default_board_in: [48.0, 48.0],
 };
 
@@ -969,7 +971,7 @@ mod tests {
             assert_eq!(b.hero_aura.min_tough, crate::sim::HERO_AURA_TOUGH, "min_tough for {sys}");
             assert!(b.hero_aura.joins, "joins stays true today for {sys}");
             assert_eq!(b.blast_spread_in, None, "blast spread stays off today for {sys}");
-            assert!(!b.vertical_moves, "vertical moves stay off today for {sys}");
+            assert_eq!(b.vertical_moves, sys == "gff" || sys == "aofs", "only the Firefight and Skirmish books print drops: {sys}");
             assert_eq!(b.default_board_in, board_in, "default_board_in for {sys}");
         }
         assert_eq!(book(" GF ").system, "gf");

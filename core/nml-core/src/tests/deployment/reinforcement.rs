@@ -359,3 +359,23 @@ use super::*;
         assert!(end.round > st.round, "the rollout crossed a round boundary at all");
         assert!(end.dormant[i], "and the destroyed carrier withdrew at that boundary");
     }
+
+    /// Heightfield plan step 14: `arrive_unit` writes y 0, so on a tier board the arrival beat settles the copy on the
+    /// surface. The whole 6 x 4 ft board is one 3 in tier (no edge), so wherever the copy lands it stands at 3 in; one
+    /// epoch below the height gate it stays at 0. Red before: the copy stood at 0 inside the block.
+    #[test]
+    fn the_copy_arrives_standing_on_the_tier() {
+        let run = |epoch: u32| {
+            let (mut st, statics) = line(epoch);
+            let board = crate::terrain::tier_board_for_test(24, 16, vec![3.0; 24 * 16], Vec::new());
+            for round in [1, 2] {
+                st.round = round;
+                reinforcement_round_start(&statics, &board, seams_at(epoch), &mut st);
+            }
+            let i = idx(&st, "p1_0_a");
+            assert_eq!(st.positions[i].len(), 3, "the copy is on the table");
+            st.positions[i].iter().map(|p| p[1]).collect::<Vec<_>>()
+        };
+        assert!(run(crate::acts::EPOCH_94_PARITY_BATCH).iter().all(|&y| y == 3.0 * crate::IN2M));
+        assert!(run(crate::acts::EPOCH_94_PARITY_BATCH - 1).iter().all(|&y| y == 0.0));
+    }

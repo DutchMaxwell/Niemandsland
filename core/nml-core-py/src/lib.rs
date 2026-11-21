@@ -3139,7 +3139,7 @@ fn deploy_finish(
         trays.get("1").unwrap_or(&Vec::new()).iter().map(|m| ([m[0] as f32, m[1] as f32], m[2])).collect(),
         trays.get("2").unwrap_or(&Vec::new()).iter().map(|m| ([m[0] as f32, m[1] as f32], m[2])).collect(),
     );
-    let walls = board.inner.walls_world_m();
+    let walls = board.inner.walls_world_tiered_m();
     let finish = |specs: &[UnitSpec], sd: &mut SideDeploy, zone: &Rect, tray: &[([f32; 2], f64)]| {
         let st = deployment::settle_units_at(specs, sd, zone, rules_epoch);
         let mut units: Vec<SettleUnit> = st.iter().map(|p| p.1.clone()).collect();
