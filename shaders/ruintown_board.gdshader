@@ -77,7 +77,7 @@ bool use_frame(vec2 uv, float wood, inout vec3 ratio, inout vec3 tn) {
 }
 
 // The ground's floor (silhouette round 21.11., maintainer: "too dark"): the streets and the packed earth sit below the models' own values (readability gate) but no longer near black.
-const float GROUND_COBBLE = 0.64;   // was 0.42 (train 2: the lamp pools shrank, the moon carries the street now), 0.27 before
+const float GROUND_COBBLE = 0.7;   // was 0.42 (train 2: the lamp pools shrank, the moon carries the street now), 0.27 before
 const float GROUND_EARTH = 0.55;   // was 0.32
 const float COVER_CUT = 0.54;   // the fbm level above which the earth is overgrown (~25 % of the earth; plan TARGET C, E2)
 varying vec3 wpos;
@@ -194,20 +194,24 @@ vec3 cobble(vec2 xz, float seed, vec3 tint, float run, vec2 fan, out float rel, 
 	float x;
 	vec2 f;
 	if (run > 0.25 && run < 0.75) {
-		float r = length(fan);
+		float r = length(fan) + (vnoise(fan * 0.5 + seed) - 0.5) * 0.12;   // (train 2) the rings wobble
 		row = floor(r / SETT_H);
 		float n = max(floor(6.2832 * (row + 0.5) * SETT_H / SETT_W), 3.0);   // a whole number of setts in every ring: no seam
 		x = (atan(fan.y, fan.x) / 6.2832 + 0.5) * n + 0.5 * mod(row, 2.0) + h21(vec2(row, seed)) * 0.3;
 		f = vec2(fract(x), fract(r / SETT_H)) - 0.5;
 	} else {
 		vec2 q = run > 0.75 ? xz.yx : xz;
+		q.y += (vnoise(vec2(q.x * 0.35, seed)) - 0.5) * 0.14;   // (train 2) the rows bend a little
 		row = floor(q.y / SETT_H);
-		x = q.x / SETT_W + 0.5 * mod(row, 2.0) + h21(vec2(row, seed)) * 0.3;
+		x = q.x / (SETT_W * mix(0.85, 1.2, h21(vec2(row, seed + 5.0)))) + 0.5 * mod(row, 2.0) + h21(vec2(row, seed)) * 0.3;   // each row its own stone length
 		f = vec2(fract(x), fract(q.y / SETT_H)) - 0.5;
 	}
-	float sett = smoothstep(0.17, 0.09, length(max(abs(f) - vec2(0.26), 0.0)));   // (train 2: wider joints)
 	float sh = h21(vec2(floor(x), row) + seed);
-	vec3 laid = mix(vec3(0.05, 0.05, 0.045), grit_sett_tint(tint, sh) * mix(0.9, 1.1, vnoise(xz * 3.0)), sett);   // (train 2: dark dirty joints)
+	// (train 2) every stone its own size and seat in its cell: uneven joints; one in twelve runs on over its end joint (a long stone)
+	vec2 hs = vec2(fract(sh * 9.13) > 0.92 ? 0.49 : 0.2 + 0.12 * fract(sh * 3.71), 0.2 + 0.1 * fract(sh * 5.29));
+	f -= (vec2(fract(sh * 2.17), fract(sh * 6.61)) - 0.5) * 0.08;
+	float sett = smoothstep(0.17, 0.09, length(max(abs(f) - hs, 0.0)));
+	vec3 laid = mix(vec3(0.05, 0.05, 0.045), grit_sett_tint(tint, sh) * mix(0.9, 1.1, vnoise(xz * 3.0)) * mix(0.86, 1.08, vnoise(xz * 11.0 + sh * 7.0)), sett);   // (train 2: dark dirty joints, a grain in every stone)
 	sett_out = vec4(sh, sett, f);
 	rel = mix(0.5, sett * (0.3 + 0.7 * clamp(1.0 - 3.2 * dot(f, f), 0.0, 1.0)), keep(xz.x, SETT_W));   // a rounded, worn sett in a recessed joint (train 2: pillowed, not a flat tile)
 	return mix(tint * 0.78, laid, keep(xz.x, SETT_W));   // setts of 0.14 in are ~3 px at the play camera: below that they average out instead of crawling
@@ -369,7 +373,7 @@ void fragment() {
 			vec4 sett;
 			alb = mix(cobble(xz, seed, grit_street_tint(tint * vec3(0.96, 1.0, 1.08) * GROUND_COBBLE), run, fan, crown, sett), vec3(0.06, 0.055, 0.05), 0.55 * gutter * (1.0 - grit_on));   // (the grit map draws the mud and the kennel instead)   // 0.27 (was 1.15): the streets sit well below the models' own values (readability gate, lead 21.11.)
 			rel = crown;
-			depth_in = 0.07;   // (train 2: was 0.045)
+			depth_in = 0.06;   // (train 2: was 0.045)
 			rough = mix(0.85, 0.55, smoothstep(0.3, 0.7, crown));   // (train 2) worn crowns catch the light, dirty joints stay matt
 			ao = mix(0.4, 1.0, smoothstep(0.1, 0.5, crown));
 			dbg = grit_debug == 2 ? grit_map_colour(gw) : grit_street(xz, gw, sett, run, alb, rel, rough);
