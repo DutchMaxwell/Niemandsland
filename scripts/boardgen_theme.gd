@@ -18,6 +18,12 @@ const TOWN_PALETTE := [Color(0.45, 0.36, 0.26), Color(0.50, 0.52, 0.56), Color(0
 		Color(0.84, 0.78, 0.64), Color(0.38, 0.22, 0.10), Color(0.60, 0.61, 0.64), Color(0.40, 0.40, 0.40), Color(0.58, 0.44, 0.30),
 		Color(0.88, 0.88, 0.86), Color(0.66, 0.64, 0.58), Color(0.30, 0.46, 0.22), Color(0.64, 0.64, 0.60), Color(0.88, 0.82, 0.70),
 		Color(0.55, 0.50, 0.45), Color(0.72, 0.36, 0.26), Color(0.62, 0.34, 0.26), Color(1.0, 0.72, 0.36), Color(0.52, 0.36, 0.20)]
+## The authored T-R1 surface sets the town shader can read (library set -> shader suffix), in the order of the shader's `t_on`: coursed stone, plaster, timber, earth. The theme key of
+## TiefwerkLibrary / BoardgenKit for the town.
+const TOWN_LIBRARY := "ruintown"
+const TOWN_SETS := [["coursed_stone", "stone"], ["plaster", "plaster"], ["timber", "timber"], ["earth", "earth"]]
+## The mean linear albedo of each set (measured on the staged masters): the shader multiplies its palette tone by texture / mean, so a tint survives and only the detail changes.
+const TOWN_SET_MEANS := {"stone": Vector3(0.377, 0.244, 0.137), "plaster": Vector3(0.4065, 0.3669, 0.3513), "timber": Vector3(0.1207, 0.0743, 0.0443), "earth": Vector3(0.1747, 0.1326, 0.0824)}
 const DEEPWORKS_DRESSING := ["Props", "Landmarks", "Debris", "Sumps", "Rails"]
 ## The air of a board: the Tiefwerk ground mist and steam. The town has none yet (its dusk mist is a later look step).
 const DEEPWORKS_ATMOSPHERE := ["Mist", "Steam"]
