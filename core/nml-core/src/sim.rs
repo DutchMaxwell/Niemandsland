@@ -5961,6 +5961,10 @@ fn takedown_shot_gate(
         msc.keep.remove(k);
         msc.attacks.remove(k);
     } else {
+        // PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL: each living model of the bearer makes its own extra attack.
+        if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL) {
+            msc.attacks[k] = shoot[pi].attacks * state.alive[mi].max(1);
+        }
         spent.push(mi);
     }
 }

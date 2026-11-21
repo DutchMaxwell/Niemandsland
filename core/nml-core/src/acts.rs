@@ -1032,6 +1032,11 @@ pub const PENDING_EPOCH_UNIT_IMPRECISE: u32 = 96;
 /// dropped the Mark entirely. Core: `unit::stamp_unit_strikers`. Records stamped 95 or below replay byte-exact. Every call site reads
 /// THIS constant, not the literal `96`.
 pub const PENDING_EPOCH_UNIT_BANE_ALIAS: u32 = 96;
+/// Placeholder gate for TAKEDOWN SHOT PER MODEL (coverage ledger shoot m1, lane covfix-dice; GF 3.6 army books: the rule is a MODEL's
+/// rule, each model that shoots makes its own extra attack once per game): the bonus group rolls one attack per living model of the
+/// bearer, not one for the whole unit (`sim::takedown_shot_gate`). A one-model Hero (every carrier in the shipped lists) is unchanged.
+/// Records stamped 95 or below replay byte-exact. Every call site reads THIS constant, not the literal `96`.
+pub const PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL: u32 = 96;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2367,6 +2372,13 @@ mod tests {
         assert_eq!(super::PENDING_EPOCH_UNIT_BANE_ALIAS, 96);
         assert!(!rule_on(95, super::PENDING_EPOCH_UNIT_BANE_ALIAS), "a record at 95 keeps the flat unit alias read");
         assert!(rule_on(96, super::PENDING_EPOCH_UNIT_BANE_ALIAS));
+    }
+
+    #[test]
+    fn takedown_shot_per_model_gate_starts_at_96() {
+        assert_eq!(super::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL, 96);
+        assert!(!rule_on(95, super::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL), "a record at 95 keeps the single bonus die");
+        assert!(rule_on(96, super::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL));
     }
 
     #[test]
