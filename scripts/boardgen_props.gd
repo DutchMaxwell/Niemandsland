@@ -15,8 +15,10 @@ const SODIUM := Color(1.0, 0.6, 0.24)
 ## shadows on the lamps nearest the board centre (rails and pipes throw one, nothing is lit behind a wall).
 const LAMP_COLOUR := Color(1.0, 0.72, 0.45)
 const SHADOW_LAMPS := 4
-const CRATES: Array[Color] = [Color(0.38, 0.32, 0.22), Color(0.25, 0.31, 0.27), Color(0.42, 0.28, 0.18)]
-const BARRELS: Array[Color] = [Color(0.17, 0.27, 0.36), Color(0.36, 0.17, 0.10), Color(0.24, 0.30, 0.18)]
+## The accents of the board are ochre, oxide red, the sump's green and one cool teal (value and colour structure, AAA step 6): the models stay the
+## only saturated things (and the only blue ones).
+const CRATES: Array[Color] = [Color(0.40, 0.32, 0.18), Color(0.27, 0.29, 0.29), Color(0.40, 0.22, 0.13)]
+const BARRELS: Array[Color] = [Color(0.10, 0.30, 0.31), Color(0.36, 0.17, 0.10), Color(0.11, 0.25, 0.11)]
 const PIPE := Color(0.45, 0.40, 0.33)
 const RUST := Color(0.42, 0.20, 0.09)
 const STEEL := Color(0.12, 0.12, 0.13)

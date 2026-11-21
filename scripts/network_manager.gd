@@ -1896,9 +1896,15 @@ signal remote_table_settings_changed(settings: Dictionary)
 
 ## RPC: Sync table settings (deployment type, visibility, biome, terrain layout,
 ## objectives, etc.). Accepted from any peer so guest-side map-layout edits also
-## propagate — table configuration is collaborative, not host-only.
+## propagate — table configuration is collaborative, not host-only. The one exception is
+## "game_system" (PLAN_GAME_SYSTEM_SWITCH): the table's game system is host-owned, so a
+## guest's push of it is dropped here, at the one door every peer's settings come through.
 @rpc("any_peer", "call_remote", "reliable")
 func sync_table_settings(settings: Dictionary) -> void:
+	if settings.has("game_system") and _get_sender() != HOST_PEER_ID:
+		print("[Network] Ignored game_system from peer %d: the game system is host-owned" % _get_sender())
+		settings = settings.duplicate()
+		settings.erase("game_system")
 	print("[Network] Received table settings: %s" % str(settings))
 	remote_table_settings_changed.emit(settings)
 

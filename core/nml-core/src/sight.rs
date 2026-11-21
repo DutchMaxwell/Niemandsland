@@ -478,7 +478,8 @@ pub fn zones_of(t: &Terrain) -> Vec<Zone> {
     zones_of_at(t, EPOCH_72_PLAYTEST_RULES)
 }
 
-/// `zones_of` as the game at `rules_epoch` reads the board: from `EPOCH_73_V36` a ruin is no volume.
+/// `zones_of` as the game at `rules_epoch` reads the board: from `EPOCH_73_V36` a ruin is no volume, from
+/// `PENDING_EPOCH_HEIGHT` every tier block of a generated board is a solid box.
 pub fn zones_of_at(t: &Terrain, rules_epoch: u32) -> Vec<Zone> {
     if !t.is_valid() {
         return Vec::new();
@@ -524,6 +525,15 @@ pub fn zones_of_at(t: &Terrain, rules_epoch: u32) -> Vec<Zone> {
     }
     let roof = volume_height_in(terrain::CONTAINER) * IN2M;
     out.extend(boxes.iter().map(|b| Zone::shelf_box(b.c, b.he, b.yaw, 0.0, roof, true)));
+    // Heightfield plan step 10b: every block of a generated tier board is a solid box of its real height, so a tier hides
+    // what stands behind it and a model on a roof sees over the lower ones. Below the gate, and with no `tiers`, nothing.
+    if rule_on(rules_epoch, PENDING_EPOCH_HEIGHT) {
+        let m = t.in2m();
+        out.extend(t.tier_boxes().iter().map(|b| {
+            let (c, he) = ([(b.lo[0] + b.hi[0]) * 0.5 * m, (b.lo[1] + b.hi[1]) * 0.5 * m], [(b.hi[0] - b.lo[0]) * 0.5 * m, (b.hi[1] - b.lo[1]) * 0.5 * m]);
+            Zone::shelf_box(c, he, 0.0, 0.0, b.top_in * m, true)
+        }));
+    }
     out
 }
 
@@ -770,6 +780,51 @@ mod tests {
         let h = |x_in: f64| surface_y_m(&t, [x_in * M, 0.0], PENDING_EPOCH_HEIGHT);
         assert_eq!(h(-1.5), 2.5 * M, "a container on the ground");
         assert_eq!(h(1.5), 3.0 * M, "a container on a 3 in tier: the tier is higher");
+    }
+
+    /// A model of `base_mm` standing at `x_in` on a surface `y_in` high (z = 0).
+    fn cyl_on(x_in: f64, y_in: f64, base_mm: f64) -> Cyl {
+        let r = base_mm / 2000.0;
+        Cyl { c: [x_in * M, 0.0], r, y0: y_in * M, y1: y_in * M + model_height_m(r) }
+    }
+
+    /// A 6 x 2 board of 3 in cells (x from -9 to 9 in), the columns given by `levels` (same on both rows).
+    fn strip(levels: [f64; 6]) -> Terrain {
+        terrain::tier_board_for_test(6, 2, (0..12).map(|i| levels[i % 6]).collect(), Vec::new())
+    }
+
+    /// Heightfield plan step 10b. Red before: a tier made no zone, two models on the ground saw each other through a
+    /// 6 in block (and the gate and the no-tiers board keep that: nothing changes there).
+    #[test]
+    fn a_tier_blocks_sight_on_the_ground() {
+        let t = strip([0.0, 0.0, 6.0, 6.0, 0.0, 0.0]);
+        let (a, b) = (cyl_on(-6.0, 0.0, 32.0), cyl_on(6.0, 0.0, 32.0));
+        let sees = |t: &Terrain, epoch: u32| has_los(&a, &b, false, &zones_of_at(t, epoch), &[]);
+        assert!(!sees(&t, PENDING_EPOCH_HEIGHT), "the block stands between them");
+        assert!(sees(&t, PENDING_EPOCH_HEIGHT - 1), "one epoch below the gate the board plays flat");
+        assert!(sees(&strip([0.0; 6]), PENDING_EPOCH_HEIGHT), "no raised cell, no block");
+        assert_eq!(zones_of_at(&t, PENDING_EPOCH_HEIGHT).len(), 1, "the two raised cells of a row run are one block");
+    }
+
+    /// A model on the edge of a 6 in roof sees over the 3 in tier below it to the ground beyond; the same target is
+    /// hidden from the back of the roof, where the roof's own rim is in the way.
+    #[test]
+    fn a_roof_sees_over_a_lower_tier() {
+        let t = strip([6.0, 6.0, 3.0, 0.0, 0.0, 0.0]);
+        let zones = zones_of_at(&t, PENDING_EPOCH_HEIGHT);
+        assert_eq!(zones.len(), 2, "the 6 in roof and the 3 in tier");
+        let ground = cyl_on(4.0, 0.0, 32.0);
+        assert!(has_los(&cyl_on(-3.5, 6.0, 32.0), &ground, false, &zones, &[]), "over the 3 in tier at 4 in");
+        assert!(!has_los(&cyl_on(-8.5, 6.0, 32.0), &ground, false, &zones, &[]), "from the back of the roof the rim hides it");
+    }
+
+    #[test]
+    fn the_foot_of_a_wall_is_hidden_from_the_back_of_the_roof() {
+        let t = strip([0.0, 0.0, 0.0, 6.0, 6.0, 6.0]);
+        let zones = zones_of_at(&t, PENDING_EPOCH_HEIGHT);
+        let foot = cyl_on(-1.0, 0.0, 32.0);
+        assert!(!has_los(&cyl_on(8.0, 6.0, 32.0), &foot, false, &zones, &[]), "from the back of the roof the rim hides the foot");
+        assert!(has_los(&cyl_on(1.0, 6.0, 32.0), &cyl_on(-8.0, 0.0, 32.0), false, &zones, &[]), "from the rim it sees the far ground");
     }
 
     #[test]

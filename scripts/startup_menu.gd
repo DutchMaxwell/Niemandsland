@@ -193,6 +193,7 @@ func _show_table_setup(host_settings: Dictionary = {}) -> void:
 		return
 	_table_setup = TableSizeDialog.new()
 	_table_setup.online = not host_settings.is_empty()   # Create room: online stays Manual
+	_table_setup.selected_system = GameSystem.default_pick()   # the last pick; the dialog applies it in _ready
 	add_child(_table_setup)
 	_table_setup.set_biomes(MenuDiorama.Battlefield.BIOMES,diorama.biome)
 	_table_setup.size_chosen.connect(_on_table_setup_chosen.bind(host_settings))
@@ -202,7 +203,8 @@ func _show_table_setup(host_settings: Dictionary = {}) -> void:
 
 
 func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> void:
-	ProjectSettings.set_setting("niemandsland/pending_table_setup",{"size":size_feet,"biome":_table_setup.selected_biome,"rules":_table_setup.selected_rules})
+	ProjectSettings.set_setting("niemandsland/pending_table_setup",{"size":size_feet,"biome":_table_setup.selected_biome,"rules":_table_setup.selected_rules,"system":_table_setup.selected_system})
+	GameSystem.remember_pick(_table_setup.selected_system)
 	if RulesAutomation.ui_enabled() and not _table_setup.online:
 		RulesAutomation.remember_pick(_table_setup.selected_rules)
 	for key in host_settings:
