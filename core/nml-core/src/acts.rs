@@ -920,6 +920,11 @@ pub const EPOCH_85_INDIRECT_GATE: u32 = 85;
 /// stands fully inside Cover terrain. `in_cover` keeps its meaning (the Grounded family reads it); the new `screened` flag feeds only the
 /// shooting save. Records stamped 94 or below replay byte-exact. Every call site reads THIS constant, not `95`.
 pub const PENDING_EPOCH_COVER_SCREEN: u32 = 95;
+/// Placeholder gate for VOLLEY DEADLY STOPS (gate 12, Eternal Artillery -> Ancient Wraith): the volley twin of the melee DEADLY_STOPS in
+/// `EPOCH_94_PARITY_BATCH`. A volley's Deadly wounds left once the target's chain is dead roll no ignore dice; the table's
+/// `_solo_land_deadly_wounds` finds no model to pick and stops. Records stamped 94 or below replay byte-exact. Every call site reads THIS
+/// constant, not the literal `95`.
+pub const PENDING_EPOCH_VOLLEY_DEADLY_STOPS: u32 = 95;
 /// The played volley's modifier distance (Valiant gate, over-9" modifiers) counts only the model pairs within the vertical reach (3", `melee_vertical_in`),
 /// and a unit with no pair in reach keeps the horizontal unit-centre distance: the table's `_solo_ai_volley_distance_in` over `nearest_melee_gap_in`.
 /// Before, a unit on a platform measured as close as the ground beside it (the soak's Hive Bond +1, table 4+ vs core 5+). Step path only. Records
@@ -2363,6 +2368,12 @@ mod tests {
         assert_eq!(super::PENDING_EPOCH_COVER_SCREEN, 95);
         assert!(!rule_on(94, super::PENDING_EPOCH_COVER_SCREEN), "a record at 94 replays terrain-only cover");
         assert!(rule_on(95, super::PENDING_EPOCH_COVER_SCREEN), "a record at 95 reads cover from sight blockers");
+    }
+
+    #[test]
+    fn volley_deadly_stops_gate_starts_at_95() {
+        assert_eq!(super::PENDING_EPOCH_VOLLEY_DEADLY_STOPS, 95);
+        assert!(!rule_on(94, super::PENDING_EPOCH_VOLLEY_DEADLY_STOPS), "a record at 94 rolls every Deadly wound's ignore dice");
     }
 
     #[test]
