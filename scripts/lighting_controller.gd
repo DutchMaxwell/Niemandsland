@@ -14,6 +14,10 @@ var _render_state: RenderState = null
 var current_preset: Dictionary = {}
 ## The table world's clouds dim the sun by this factor (set_sun_scale); 1.0 everywhere else.
 var _sun_scale := 1.0
+## A generated Tiefwerk board's own dim industrial light (BoardgenMood.light_look): while it is set, its sun_energy / sun_color /
+## ambient_energy / ambient_color / exposure replace the mood's. The mood keeps writing its own values into current_preset, so
+## clearing the look ({}) puts the mood back, and a mood blend or the lighting panel never undoes the look.
+var _board_look := {}
 
 # Lighting definitions backing each ATMOSPHERE mood (Day->Default, Sunset->Warm
 # Sunset, Night->Night, Overcast->Cool Overcast, Rain->Storm). These are no longer a
@@ -184,10 +188,18 @@ func apply_preset(preset_name: String) -> void:
 	set_saturation(preset.saturation)
 
 
+## Set the board's light ({} = none) and re-apply the mood's current values through it.
+func set_board_look(look: Dictionary) -> void:
+	_board_look = look.duplicate()
+	for key: String in ["sun_energy", "sun_color", "ambient_energy", "ambient_color", "exposure"]:
+		if current_preset.has(key):
+			call("set_" + key, current_preset[key])
+
+
 ## Individual parameter setters
 func set_sun_energy(value: float) -> void:
 	if _directional_light:
-		_directional_light.light_energy = value * _sun_scale
+		_directional_light.light_energy = float(_board_look.get("sun_energy", value)) * _sun_scale
 		current_preset.sun_energy = value
 
 
@@ -196,12 +208,12 @@ func set_sun_energy(value: float) -> void:
 func set_sun_scale(scale: float) -> void:
 	_sun_scale = scale
 	if _directional_light and current_preset.has("sun_energy"):
-		_directional_light.light_energy = float(current_preset.sun_energy) * _sun_scale
+		_directional_light.light_energy = float(_board_look.get("sun_energy", current_preset.sun_energy)) * _sun_scale
 
 
 func set_sun_color(color: Color) -> void:
 	if _directional_light:
-		_directional_light.light_color = color
+		_directional_light.light_color = _board_look.get("sun_color", color)
 		current_preset.sun_color = color
 
 
@@ -226,19 +238,19 @@ func set_sun_angles(horizontal: float, vertical: float) -> void:
 
 func set_ambient_energy(value: float) -> void:
 	if _environment:
-		_environment.ambient_light_energy = value
+		_environment.ambient_light_energy = float(_board_look.get("ambient_energy", value))
 		current_preset.ambient_energy = value
 
 
 func set_ambient_color(color: Color) -> void:
 	if _environment:
-		_environment.ambient_light_color = color
+		_environment.ambient_light_color = _board_look.get("ambient_color", color)
 		current_preset.ambient_color = color
 
 
 func set_exposure(value: float) -> void:
 	if _environment:
-		_environment.tonemap_exposure = value
+		_environment.tonemap_exposure = float(_board_look.get("exposure", value))
 		current_preset.exposure = value
 
 

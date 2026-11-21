@@ -45,6 +45,8 @@ var layout_seed: int = 0
 var layout_theme := "Deepworks"   # the layout's own `theme` key; a Deepworks layout has none
 var _material: ShaderMaterial
 var _kit: BoardgenKit
+var _tiefwerk: TiefwerkLibrary = null   # the authored surfaces (R2, on demand); the board is procedural until they are cached
+var _decals: BoardgenDecals = null
 var _footprint := Rect2()   # the ground kept free of the table's scatter, in table-local metres: the board and all round it
 var _layout: Dictionary = {}
 
@@ -218,6 +220,7 @@ static func custom_data(b: Dictionary, kinds: Array = KINDS) -> Color:
 func build(layout: Dictionary) -> void:
 	layout_seed = int(layout.get("seed", 0))
 	layout_theme = str(layout.get("theme", "Deepworks"))
+	_layout = layout
 	var body := StaticBody3D.new()
 	body.name = "Colliders"
 	body.collision_layer = GROUND_COLLISION_LAYER
@@ -257,6 +260,7 @@ func build(layout: Dictionary) -> void:
 	_footprint = Rect2(board * -0.5, board).grow(SCATTER_OFF_M)
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = "Surfaces"
+	mmi.layers |= BoardgenDecals.RENDER_LAYER   # the only mesh the board's decals project onto
 	mmi.multimesh = mm
 	_material = _make_material(layout, theme)
 	mmi.material_override = _material
@@ -267,6 +271,8 @@ func build(layout: Dictionary) -> void:
 		town.name = "TownDressing"
 		town.build(layout, _material)
 		add_child(town)
+	if theme["id"] == BoardgenTheme.DEEPWORKS:
+		add_child(BoardgenMood.make_fill_light())   # lights the models only (render layer), shown with the finer look
 	_anchor()
 	_layout = layout
 	var settings := _settings()
@@ -320,10 +326,13 @@ func _ready() -> void:
 	if _kit != null and layout_theme == BoardgenTheme.DEEPWORKS:   # a module missing now is cached for the next board (the town uses no kit)
 		_kit.prefetch(KIT_LADDERS + BoardgenRails.KIT_MODULES + BoardgenProps.KIT_MODULES)
 	_scatter_off(_footprint)
+	_assign_layers()
+	child_entered_tree.connect(func(_child: Node) -> void: _assign_layers.call_deferred())   # whatever a builder adds later joins the board layer too
 	var graphics := get_node_or_null("/root/GraphicsSettings")
 	if graphics != null:
 		graphics.settings_applied.connect(_on_settings_applied)
 	_apply_detail()
+	_attach_surfaces()
 
 
 func _exit_tree() -> void:
@@ -331,6 +340,7 @@ func _exit_tree() -> void:
 	var graphics := get_node_or_null("/root/GraphicsSettings")
 	if graphics != null and graphics.settings_applied.is_connected(_on_settings_applied):
 		graphics.settings_applied.disconnect(_on_settings_applied)
+	BoardgenMood.apply(self, false)
 
 
 ## The finer look of the surfaces (edge wear, later the relief of walls and floors) is on from Medium up; Performance / Low and the
@@ -345,8 +355,61 @@ func _on_settings_applied(_preset_name: String) -> void:
 
 func _apply_detail() -> void:
 	var graphics := get_node_or_null("/root/GraphicsSettings")
+	var on: bool = graphics != null and detail_for(int(graphics.current_preset), RenderingServer.get_current_rendering_method() == "gl_compatibility")
 	if _material != null and graphics != null:
-		_material.set_shader_parameter("detail", 1.0 if detail_for(int(graphics.current_preset), RenderingServer.get_current_rendering_method() == "gl_compatibility") else 0.0)
+		_material.set_shader_parameter("detail", 1.0 if on else 0.0)
+		if _decals != null:
+			_decals.visible = on   # no decals on Low, Performance and in the Compatibility renderer
+		if on:
+			_attach_surfaces()   # a later switch up to Medium fetches them then
+	BoardgenMood.apply(self, on and layout_theme == BoardgenTheme.DEEPWORKS)   # the dim industrial light, board-scale SSAO, the grade and the model fill come with the finer look (the ruin town has its own dusk)
+
+
+## The board's visuals sit on their own render layer: the models' fill light (BoardgenMood) never reaches them.
+func _assign_layers() -> void:
+	BoardgenMood.assign_layers(self)
+
+
+## The four authored PBR sets under the procedural look (AAA step 10): wired as soon as they are cached, fetched in the background the
+## first time (offline or refused: the board stays procedural). Not in a headless run, so no test or tool touches the network.
+const T1_SETS: Array[String] = ["painted_steel", "rusted_plate", "concrete", "roof_slab"]
+const T1_MAPS := {"alb": "albedo", "nrm": "normal", "orm": "orm"}
+
+
+func _attach_surfaces() -> void:
+	if _material == null or layout_theme != BoardgenTheme.DEEPWORKS or DisplayServer.get_name() == "headless" or _tiefwerk != null or float(_material.get_shader_parameter("detail")) < 0.5:
+		return   # (Low, Performance and the Compatibility renderer never download them)
+	_tiefwerk = TiefwerkLibrary.new()
+	_tiefwerk.name = "Tiefwerk"
+	add_child(_tiefwerk)
+	if not _tiefwerk.sets_cached():
+		await _tiefwerk.ensure_sets()
+	wire_surfaces(_material, _tiefwerk)
+	if not _tiefwerk.decals_cached():
+		await _tiefwerk.ensure_decals()
+	if is_inside_tree() and _decals == null and _tiefwerk.decals_cached():
+		_decals = BoardgenDecals.new()
+		_decals.name = "Decals"
+		_decals.build(_layout, _tiefwerk)
+		add_child(_decals)
+		_apply_detail()
+
+
+## Hands the cached sets to the board shader and switches them on; false (and the shader stays procedural) while any texture is missing.
+static func wire_surfaces(material: ShaderMaterial, lib: TiefwerkLibrary) -> bool:
+	if material == null or not is_instance_valid(lib) or not lib.is_inside_tree():
+		return false
+	var found := {}
+	for i in T1_SETS.size():
+		for short: String in T1_MAPS:
+			var tex := lib.set_texture(T1_SETS[i], T1_MAPS[short])
+			if tex == null:
+				return false
+			found["t1_%s_%d" % [short, i]] = tex
+	for uniform: String in found:
+		material.set_shader_parameter(uniform, found[uniform])
+	material.set_shader_parameter("t1_on", 1.0)
+	return true
 
 
 ## The table's own ground scatter (grass tufts, the biome dressing's straw, leaves and puddles) stays off under the board.
@@ -364,7 +427,8 @@ func _anchor() -> void:
 		_material.set_shader_parameter("board_origin", global_position)
 
 
-## The theme's board shader. Deepworks: a one-texel-per-cell texture, red = height of the cell's top in inches, green = 255 for a sump.
+## The theme's board shader. Deepworks: a one-texel-per-cell texture, red = height of the cell's top in inches, green = 255 for a sump, blue = the lot id
+## (mod 256: a roof has one look per lot), alpha = 255 for the floor cell at the foot of a ladder (the board shader puts no door on the wall there).
 ## A town greybox reads its colours from the theme's palette.
 func _make_material(layout: Dictionary, theme: Dictionary) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
@@ -374,8 +438,12 @@ func _make_material(layout: Dictionary, theme: Dictionary) -> ShaderMaterial:
 		mat.set_shader_parameter("palette", PackedColorArray(theme["palette"]))
 		return mat
 	var bytes := PackedByteArray()
-	for c: Dictionary in layout["cells"]:
-		bytes.append_array([int(layout["level_in"][c["level"]]), 255 if c["lot_kind"] == "Hazard" else 0])
-	mat.set_shader_parameter("cells", ImageTexture.create_from_image(Image.create_from_data(layout["nx"], layout["nz"], false, Image.FORMAT_RG8, bytes)))
+	var feet := {}
+	for conn: Dictionary in layout["connectors"]:
+		feet[int(conn["low_xz"][1]) * int(layout["nx"]) + int(conn["low_xz"][0])] = true
+	for i in layout["cells"].size():
+		var c: Dictionary = layout["cells"][i]
+		bytes.append_array([int(layout["level_in"][c["level"]]), 255 if c["lot_kind"] == "Hazard" else 0, int(c["lot_id"]) % 256, 255 if feet.has(i) else 0])
+	mat.set_shader_parameter("cells", ImageTexture.create_from_image(Image.create_from_data(layout["nx"], layout["nz"], false, Image.FORMAT_RGBA8, bytes)))
 	mat.set_shader_parameter("board_cells", Vector2(layout["nx"], layout["nz"]))
 	return mat

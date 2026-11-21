@@ -5,7 +5,7 @@ shader_type spatial;
 // kinds: 0 ground, 1 street, 2 sump, 3 tier 1 (rusted plate deck), 4 tier 2 (rooftop slab), 5 ladder (every connector is a ladder),
 // 6 tier 3 (a tower top: the rooftop slab, cooler and paler), 7 kerb (the low concrete rim round a sump).
 
-uniform sampler2D cells : filter_nearest;   // red = height of the cell's top in inches, green = 255 for a sump cell
+uniform sampler2D cells : filter_nearest;   // red = height of the cell's top in inches, green = 255 for a sump cell, blue = the lot id (mod 256), alpha = 255 at a ladder's foot
 uniform vec2 board_cells = vec2(16.0);
 uniform float cell_in = 3.0;
 uniform vec3 board_origin;   // world position of the board centre
@@ -58,6 +58,9 @@ float wall_dist(vec2 g, ivec2 c, float h) {
 
 #include "res://shaders/tiefwerk_edges.gdshaderinc"
 #include "res://shaders/tiefwerk_relief.gdshaderinc"
+#include "res://shaders/tiefwerk_value.gdshaderinc"
+#include "res://shaders/tiefwerk_micro.gdshaderinc"
+#include "res://shaders/tiefwerk_t1.gdshaderinc"
 
 // Distance in inches from the point g to the nearest sump cell among the 3x3 around cell c (the toxic stain on the floor and the walls); 9 = none.
 float sump_dist(vec2 g, ivec2 c) {
@@ -123,34 +126,47 @@ void fragment() {
 		float top_y = cell_at(ivec2(floor(g_in))).x;
 		float low_y = cell_at(ivec2(floor(g_out))).x;
 		float dtop = top_y - p.y;
+		vec3 sctx = vec3(0.0);   // the scale cues' context (step 8): height above the floor outside, a door may stand here, closeness to a convex corner
+		if (detail > 0.5) {
+			vec4 oc = cell_at(ivec2(floor(g_out)));
+			vec3 oo;
+			float col = box_in.x > 0.0 ? max(edge_one(0, lpos, box_in * 0.5, lnrm, p, COLUMN_W, k, half_board, oo), edge_one(2, lpos, box_in * 0.5, lnrm, p, COLUMN_W, k, half_board, oo)) : 0.0;
+			sctx = vec3(p.y - low_y, step(oc.y, 0.5) * step(oc.w, 0.5), col);   // never a door onto a sump or at the foot of a ladder
+		}
+		float plate = detail > 0.5 ? wall_plate(uv) : PLATE;   // panels of 0.75 / 1.5 / 3 in by hash
 		alb = mix(vec3(0.17, 0.165, 0.16), vec3(0.30, 0.285, 0.27), n1) * (k == 4 ? 1.25 : k == 6 ? 1.45 : 1.0);
-		alb *= mix(0.55, 1.0, seam(uv.y, 1.5, 0.05)) * mix(0.7, 1.0, seam(uv.x, 1.5, 0.04));
+		alb *= mix(0.55, 1.0, seam(uv.y, plate, 0.05)) * mix(0.7, 1.0, seam(uv.x, plate, 0.04));
 		// Layered panels, 1.5 in: an inset frame, rivets, vents with soot above them, signage plates (abstract marks, no text), conduit runs.
-		vec2 pid = floor(uv / PLATE);
-		vec2 fp = (fract(uv / PLATE) - 0.5) * PLATE;
+		vec2 pid = floor(uv / plate);
+		vec2 fp = (fract(uv / plate) - 0.5) * plate;
 		vec2 ap = abs(fp);
 		float ph = h21(pid + 9.1);
-		float ed = PLATE * 0.5 - max(ap.x, ap.y);
+		float ed = plate * 0.5 - max(ap.x, ap.y);
 		alb *= (1.0 - 0.45 * smoothstep(0.035, 0.0, abs(ed - 0.14))) * mix(0.92, 1.06, smoothstep(0.0, 0.1, ed - 0.14));
 		float rv = min(length(ap - 0.6), min(length(ap - vec2(0.6, 0.0)), length(ap - vec2(0.0, 0.6))));
 		if (detail < 0.5) {   // Low keeps the painted rivets; the finer look has them as relief
 			alb = mix(alb, alb * 1.6 + 0.05, smoothstep(0.05, 0.03, rv) * step(0.1, ph));
 		}
-		if (ph < 0.1) {   // a vent
+		if (ph < 0.1 && plate > 1.4) {   // a vent
 			alb = mix(alb, mix(vec3(0.015), vec3(0.2, 0.2, 0.21), step(0.5, fract(uv.y * 5.0))), step(ap.x, 0.5) * step(ap.y, 0.42));
 			alb *= 1.0 - 0.55 * smoothstep(0.42, 0.75, fp.y) * step(ap.x, 0.6);
-		} else if (ph < 0.2) {   // a signage plate: a coloured ground with three bars
+		} else if (ph < 0.2 && plate > 1.4) {   // a signage plate: a coloured ground with three bars
 			vec3 ground = ph < 0.13 ? YELLOW * 0.9 : ph < 0.17 ? vec3(0.62, 0.6, 0.55) : vec3(0.2, 0.32, 0.34);
 			float row = floor((fp.y + 0.27) / 0.18);   // three bars of hashed length, like a label (abstract, no glyphs)
 			float len = 0.12 + 0.4 * h21(vec2(row, pid.x * 7.0 + pid.y));
 			float mark = step(abs(fract((fp.y + 0.27) / 0.18) - 0.5), 0.28) * step(fp.x + 0.5, len) * step(ap.x, 0.5) * step(ap.y, 0.27);
 			alb = mix(alb, ground * mix(1.0, 0.15, mark) * mix(0.7, 1.0, n2), step(ap.x, 0.55) * step(ap.y, 0.32));
-		} else if (h21(vec2(floor(uv.y / PLATE), floor(uv.x / 6.0)) + 21.0) > 0.82) {   // a conduit, clamped at the seams
+		} else if (plate > 1.4 && plate < 1.6 && h21(vec2(floor(uv.y / PLATE), floor(uv.x / 6.0)) + 21.0) > 0.82) {   // a conduit, clamped at the seams
 			float t = (fp.y - 0.45) / 0.07;
 			alb = abs(t) < 1.0 ? vec3(0.30, 0.28, 0.25) * (0.4 + 0.6 * sqrt(1.0 - t * t)) * (1.0 - 0.5 * step(0.72, ap.x)) : alb;
 		}
-		if (h21(pid - vec2(0.0, 1.0) + 9.1) < 0.1) {
+		if (plate > 1.4 && h21(pid - vec2(0.0, 1.0) + 9.1) < 0.1) {
 			alb *= 1.0 - 0.5 * smoothstep(-0.2, -0.75, fp.y);   // the soot of the vent below
+		}
+		if (detail > 0.5) {
+			vec3 glow;
+			alb = scale_albedo(alb, uv, sctx, glow);   // doors, slit windows with a dim glow, the plinth, columns at the convex corners
+			emis += glow;
 		}
 		float drip = smoothstep(0.55, 0.8, fbm(vec2(uv.x * 1.7, uv.y * 0.18))) * smoothstep(3.0, 0.0, dtop);
 		alb = mix(alb, vec3(0.33, 0.15, 0.06), drip);
@@ -161,13 +177,18 @@ void fragment() {
 
 		if (detail > 0.5) {
 			float rh;
-			nrel = wall_relief(uv, n, px, rh);   // frame, inset, rivets, louvres, plates and conduits as relief
+			nrel = wall_relief(uv, n, px, sctx, rh);   // frame, inset, rivets, louvres, plates and conduits as relief
 			rough = clamp(0.8 - rh * 3.0, 0.45, 1.0);   // recesses stay dull, raised parts are worn smooth
 			ao *= 1.0 + 4.0 * min(rh, 0.0);
+			float mic = micro_amount(px);   // the micro tier (chips, streaks, dust) fades out below ~2 px per feature
+			if (mic > 0.0) {
+				alb = dust(alb, rh, n2, mic);
+				alb = mix(alb, alb * vec3(0.55, 0.45, 0.38), 0.6 * mic * streaks(uv, px) * smoothstep(-0.6, 0.7, fp.y));   // streaks run down from the top of each plate
+			}
 		}
 		if (top_y - low_y >= 2.0 && dtop > 0.25 && dtop < 0.85 && h21(vec2(floor(uv.x / cell_in) + top_y, low_y + 7.0)) > 0.45) {   // hazard band only on some edges, chipped and dirty
 			vec3 paint = mix(vec3(0.04), YELLOW * 0.8, step(0.5, fract((uv.x + p.y) * 0.9)));
-			alb = mix(paint, alb, smoothstep(0.45, 0.65, n2 + 0.2 * n3));
+			alb = mix(paint, alb, detail > 0.5 ? chipped_wear(n2 + 0.2 * n3, 0.45, 0.65, uv, px) : smoothstep(0.45, 0.65, n2 + 0.2 * n3));
 		}
 	} else {   // top faces
 		float wet = 0.0;   // water lies level: the relief flattens under it
@@ -193,7 +214,7 @@ void fragment() {
 			float ph = h21(floor(uv / PLATE) + 3.7);
 			float ed = PLATE * 0.5 - max(abs(fp.x), abs(fp.y));
 			alb *= mix(0.88, 1.08, ph) * (1.0 - 0.45 * smoothstep(0.08, 0.0, ed) * (0.4 + n2));
-			alb = mix(alb, vec3(0.45, 0.44, 0.42), smoothstep(0.1, 0.0, ed) * smoothstep(0.45, 0.7, n3) * 0.5);
+			alb = mix(alb, vec3(0.45, 0.44, 0.42), smoothstep(0.1, 0.0, ed) * (detail > 0.5 ? chipped_wear(n3, 0.45, 0.7, uv, px) : smoothstep(0.45, 0.7, n3)) * 0.5);
 			if (ph < 0.03) {
 				vec4 h = hatch(fp, 0.5, n3);
 				alb = mix(alb, h.rgb, h.a);
@@ -202,7 +223,7 @@ void fragment() {
 				alb = mix(alb, mix(vec3(0.015), vec3(0.2, 0.2, 0.21), step(0.5, fract(fp.x * 6.0))), step(frame, 0.5));
 				alb *= 1.0 - 0.6 * smoothstep(0.04, 0.0, abs(frame - 0.53));
 			} else if (ph > 0.94 && k == 1) {   // a worn safety-yellow stripe on the street
-				alb = mix(alb, YELLOW * 0.7, step(abs(fp.x), 0.09) * smoothstep(0.45, 0.65, n2 + 0.3 * n3));
+				alb = mix(alb, YELLOW * 0.7, step(abs(fp.x), 0.09) * (detail > 0.5 ? chipped_wear(n2 + 0.3 * n3, 0.45, 0.65, uv, px) : smoothstep(0.45, 0.65, n2 + 0.3 * n3)));
 			}
 			// Water: a world-space noise field (domain-warped, so the outline is irregular), biased to collect along the walls. Nothing here
 			// reads the cell grid, so no puddle is clipped at a cell edge; a damp ring and a soft rim surround the open water.
@@ -272,15 +293,22 @@ void fragment() {
 			nrel = top_relief(uv, k, half_board, px, max(wet, step(0.5, me.y)), th);   // plate seams, hatches, grates, deck rivets and tread, roof joints; a sump's liquid lies level too
 			rough = clamp(rough - th * 4.0 * (1.0 - wet), 0.05, 1.0);
 			ao *= 1.0 + 4.0 * min(th, 0.0);
+			alb = dust(alb, th * (1.0 - wet), n2, micro_amount(px));   // dust settles in the sunk seams and grates, never on water
 		}
-		if (k == 6) {
+		if (detail > 0.5) {
+			alb = value_top(alb, k, me.z);   // the level's value step, a quiet floor, ONE roof look per lot (lot id = the cell texture's blue channel)
+		} else if (k == 6) {
 			alb *= vec3(0.82, 0.9, 1.08);
 		}
 		if (lip < 0.2) {   // the tier's trim: a pale lip with a dark groove behind it, no railing
 			alb = lip < 0.08 ? alb * 1.5 + 0.08 : alb * 0.5;
 		}
 	}
-	vec4 ew = box_in.x > 0.0 && detail > 0.5 ? edge_wear(lpos, box_in * 0.5, lnrm, p, k, half_board, smoothstep(0.48, 0.56, n3 * 0.6 + n2 * 0.5)) : vec4(0.0);   // every real box edge: a broken pale highlight, a bent normal
+	vec2 duv_x = dFdx(uv), duv_y = dFdy(uv);   // taken outside any branch: derivatives need every pixel of the quad
+	if (t1_on > 0.5 && detail > 0.5 && k != 5) {
+		t1_apply(k, top, uv, duv_x, duv_y, n, alb, rough, ao, nrel);   // the authored surface under the procedural marks (AAA step 10)
+	}
+	vec4 ew = box_in.x > 0.0 && detail > 0.5 ? edge_wear(lpos, box_in * 0.5, lnrm, p, k, half_board, micro_amount(px) > 0.0 ? mix(smoothstep(0.48, 0.56, n3 * 0.6 + n2 * 0.5), chips(uv, 0.05, px), micro_amount(px)) : smoothstep(0.48, 0.56, n3 * 0.6 + n2 * 0.5)) : vec4(0.0);   // every real box edge: a broken pale highlight, a bent normal
 	alb = mix(alb, mix(alb * 1.5 + 0.08, vec3(0.62, 0.6, 0.57), 0.6), ew.x);
 	rough = mix(rough, 0.45, ew.x);
 	if (dot(ew.yzw, ew.yzw) > 0.0001 || dot(nrel - n, nrel - n) > 0.0) {
