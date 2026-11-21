@@ -1,0 +1,24 @@
+{
+ "constants": {
+  "agx": 1.25,
+  "contrast": 1.08,
+  "saturation": 1.15,
+  "exposure_gain": 1.4
+ },
+ "ungraded": {
+  "s25_overview45": 34.6,
+  "s25_play": 44.0,
+  "s41_overview45": 35.5,
+  "s41_play": 43.6,
+  "s7_overview45": 34.3,
+  "s7_play": 43.4
+ },
+ "graded": {
+  "s25_overview45": 35.5,
+  "s25_play": 46.6,
+  "s41_overview45": 36.5,
+  "s41_play": 45.9,
+  "s7_overview45": 35.0,
+  "s7_play": 45.7
+ }
+}

@@ -3,6 +3,7 @@ extends GdUnitTestSuite
 ## layers that always come off again, a fill light that reaches the models and never the board, and a hand-over that survives a re-attach.
 
 const FIXTURE := "res://test/fixtures/boardgen/layout_42.txt"
+const LUMA := "res://tools/boardgen/town_grade_luma.json"   # the measured mean luma of the stills with and without the town's grade (tools/boardgen/luma_rows.py)
 
 
 func _fixture() -> Dictionary:
@@ -154,15 +155,19 @@ func test_the_ruin_town_gets_only_the_grade_in_the_board_layer_and_no_light_look
 	var lc := _lighting()
 	var sun: DirectionalLight3D = lc.get_meta("sun")
 	lc.apply_preset("Warm Sunset")
+	var lit: Environment = lc.get_meta("env")
+	var mood_exposure := lit.tonemap_exposure
 	var main := _main_with(state, lc)
 	var board := _board_on(main)
 	BoardgenMood.apply(board, true, true)
+	assert_float(lit.tonemap_exposure).override_failure_message("the exposure gain that cancels the grade's darkening did not arrive").is_equal_approx(BoardgenTownDressing.EXPOSURE * BoardgenMood.TOWN_EXPOSURE_GAIN, 0.0001)
 	assert_float(env.tonemap_agx_contrast).is_equal_approx(BoardgenMood.TOWN_AGX_CONTRAST, 0.0001)
 	assert_float(env.adjustment_contrast).is_equal_approx(BoardgenMood.TOWN_CONTRAST, 0.0001)
 	assert_float(env.adjustment_saturation).is_equal_approx(BoardgenMood.TOWN_SATURATION, 0.0001)
 	assert_float(sun.light_energy).override_failure_message("the town took the Tiefwerk light look").is_equal_approx(1.5, 0.0001)   # Warm Sunset's own sun
 	BoardgenMood.apply(board, false, true)
 	assert_float(env.adjustment_saturation).is_equal_approx(1.0, 0.0001)
+	assert_float(lit.tonemap_exposure).is_equal_approx(mood_exposure, 0.0001)
 
 
 func test_a_ruin_town_board_puts_the_grade_on_with_the_finer_look_and_takes_it_off_on_low() -> void:
@@ -179,3 +184,16 @@ func test_a_ruin_town_board_puts_the_grade_on_with_the_finer_look_and_takes_it_o
 	board._apply_detail()   # the player switched down: the finer look goes, the table keeps the mood the player chose
 	assert_float(env.adjustment_contrast).is_equal_approx(1.0, 0.0001)
 	assert_float(env.adjustment_saturation).is_equal_approx(1.0, 0.0001)
+
+
+func test_the_recorded_luma_measurement_was_taken_with_the_towns_grade_constants() -> void:
+	var c: Dictionary = (JSON.parse_string(FileAccess.get_file_as_string(LUMA)) as Dictionary)["constants"]
+	for pair: Array in [["agx", BoardgenMood.TOWN_AGX_CONTRAST], ["contrast", BoardgenMood.TOWN_CONTRAST], ["saturation", BoardgenMood.TOWN_SATURATION], ["exposure_gain", BoardgenMood.TOWN_EXPOSURE_GAIN]]:
+		assert_float(float(c[pair[0]])).override_failure_message("a grade constant changed (%s): measure the stills again with tools/boardgen/luma_rows.py and update town_grade_luma.json" % pair[0]).is_equal_approx(pair[1], 0.0001)
+
+
+func test_the_graded_play_and_overview_stills_are_not_darker_than_the_ungraded_ones() -> void:
+	var luma: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(LUMA))
+	assert_int((luma["ungraded"] as Dictionary).size()).is_equal(6)   # three boards x overview and play
+	for key: String in luma["ungraded"]:
+		assert_float(float(luma["graded"][key])).override_failure_message("%s: the grade darkens the town (%s -> %s of 255); the exposure gain has to bring it back" % [key, luma["ungraded"][key], luma["graded"][key]]).is_greater_equal(float(luma["ungraded"][key]))

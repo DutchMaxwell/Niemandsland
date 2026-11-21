@@ -32,6 +32,8 @@ const FILL_YAW_DEG := 12.0
 const TOWN_AGX_CONTRAST := 1.25
 const TOWN_CONTRAST := 1.08
 const TOWN_SATURATION := 1.15
+## The grade alone darkens the mean luminance of the play and overview stills by about 12 %; the exposure (the dusk's own EXPOSURE times this) brings it back (lead 21.11.: the maintainer said "too dark").
+const TOWN_EXPOSURE_GAIN := 1.4
 
 const OWNER_META := "boardgen_mood_owner"
 
@@ -55,6 +57,11 @@ static func environment_values() -> Dictionary:
 ## The RenderState "board" layer of the ruin town: the grade only.
 static func town_values() -> Dictionary:
 	return {"tonemap_agx_contrast": TOWN_AGX_CONTRAST, "adjustment_enabled": true, "adjustment_contrast": TOWN_CONTRAST, "adjustment_saturation": TOWN_SATURATION}
+
+
+## The lighting controller's board look of the ruin town: only the exposure (the dusk's, raised by the gain that cancels the grade's darkening).
+static func town_look() -> Dictionary:
+	return {"exposure": BoardgenTownDressing.EXPOSURE * TOWN_EXPOSURE_GAIN}
 
 
 ## A per-channel curve: the blacks lean cool and are lifted a hair, the highlights lean warm (the lamps), the middle stays.
@@ -107,7 +114,7 @@ static func apply(board: Node, on: bool, town := false) -> void:
 		render_state.set_layer("board", (town_values() if town else environment_values()) if on else {})
 	var lighting: Node = main.get("lighting_controller")
 	if lighting != null and lighting.has_method("set_board_look"):
-		lighting.set_board_look(light_look() if on and not town else {})
+		lighting.set_board_look((town_look() if town else light_look()) if on else {})
 	if on:
 		main.set_meta(OWNER_META, board.get_instance_id())
 	else:
