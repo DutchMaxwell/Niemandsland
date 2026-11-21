@@ -117,3 +117,41 @@ use super::melee_landing_gaps::{exact_seams, two_unit_melee};
         let lines = strike_lines(setup, vec![vec![4, 4, 4, 4, 1, 1], vec![1, 1, 1, 1]]);
         assert!(lines.iter().any(|l| l == "Def: 4 wounds ignore only Regeneration — Self-Repair still rolls"), "{lines:?}");
     }
+
+    /// A Limited weapon in melee says it is used up right after its roll ("<weapon> (Limited) is used up in melee", the table's strike loop), once, before the strike
+    /// line; a weapon without Limited says nothing. RED: the line reached the engine log only.
+    #[test]
+    fn a_limited_strike_says_it_is_used_up() {
+        let lines = strike_lines(|s, _| s[0].melee[0].limited = true, vec![vec![4, 4, 1, 1, 1, 1]]);
+        let at = lines.iter().position(|l| l == "Blade (Limited) is used up in melee").unwrap_or_else(|| panic!("{lines:?}"));
+        assert!(lines[at + 1].starts_with("Att strikes with Blade at Def"), "before the strike line: {lines:?}");
+        assert_eq!(lines.iter().filter(|l| l.contains("(Limited)")).count(), 1, "once: {lines:?}");
+        assert!(strike_lines(|_, _| {}, vec![vec![4, 4, 1, 1, 1, 1]]).iter().all(|l| !l.contains("Limited")), "no Limited, no line");
+    }
+
+    /// A Furious charger names its extra hits ("Furious: +N hits on the charge (unmodified 6s)", the table's `_solo_hits`) right before the strike
+    /// line; a strike-back (not charging) and a Fatigued striker (the 6s fire no rule) pay and say nothing. RED: the core paid the hits, said nothing.
+    #[test]
+    fn a_furious_charge_names_its_extra_hits() {
+        let furious = |s: &mut [UnitStatic], _: &mut State| s[0].ctx.furious = true;
+        let lines = strike_lines(furious, vec![vec![6, 6, 4, 1, 1, 1]]);
+        let at = lines.iter().position(|l| l == "Furious: +2 hits on the charge (unmodified 6s)").unwrap_or_else(|| panic!("{lines:?}"));
+        assert!(lines[at + 1].starts_with("Att strikes with Blade at Def — 5 hits"), "3 hits and 2 extra: {lines:?}");
+        assert!(strike_lines(|_, _| {}, vec![vec![6, 6, 4, 1, 1, 1]]).iter().all(|l| !l.starts_with("Furious")), "no Furious, no line");
+        let one = strike_lines(furious, vec![vec![6, 4, 1, 1, 1, 1]]);
+        assert!(one.iter().any(|l| l == "Furious: +1 hit on the charge (unmodified 6s)"), "singular: {one:?}");
+    }
+
+    /// Lead ruling 20.11.: a unit never gains the same named rule twice. An own "Furious", a "Furious Aura" and both together build the SAME one flag
+    /// (one extra hit per unmodified 6, one line); nothing in the strike can pay the rule a second time. Guards the sweep's old Furious Aura diffs
+    /// (a harness gap, the table half had no aura pass), not a core fix.
+    #[test]
+    fn furious_from_its_own_rule_and_from_an_aura_is_one_rule() {
+        let mut reg = crate::Registries::new(&repo_root());
+        let mut built = |rules: &[&str]| {
+            let p: Profile = serde_json::from_str(&format!(r#"{{"unit_id":"u","name":"u","game_system":"gf","faction_folder":"alien_hives","special_rules":{rules:?},"quality":4,"defense":4,"model_count":1,"wounds_max":[1]}}"#)).unwrap();
+            UnitStatic::build_for(&mut reg, &p, crate::acts::CURRENT_RULES_EPOCH).ctx.furious
+        };
+        assert!(built(&["Furious"]) && built(&["Furious Aura"]) && built(&["Furious", "Furious Aura"]), "the flag is one bool whatever hands it over");
+        assert!(!built(&["Fast"]), "control: no Furious source, no flag");
+    }

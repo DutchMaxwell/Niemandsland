@@ -4,7 +4,8 @@ extends GdUnitTestSuite
 ## a human foe seat holds the pool (one Caster with 2 tokens). The foe's owner is a peer this test plays (a recording NetworkManager):
 ## it is asked over the owner-request path, its first answer applies once, a silent or absent owner is "no interference" with the
 ## table's own line. The switch `NML_ONE_CORE_CHOICE_INTERFERENCE` starts OFF: an open cast is then refused by the probe BEFORE any
-## die and stays on the table (CC-13a's refused branch). No dialog yet (CC-14b): a human on this machine is answered 0.
+## die and stays on the table (CC-13a's refused branch). CC-14b: the owner's answer is the table's own `InterferenceDialog` in collect
+## mode (it asks, the driver spends), on the host's machine for a local human and on the owner's machine for a remote one.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -264,17 +265,78 @@ func test_a_foe_nobody_answers_is_no_interference_with_the_tables_line(timeout :
 		await get_tree().process_frame
 
 
-## A human on THIS machine is answered 0 until the dialog exists (CC-14b): the cast goes on, nothing is asked over the wire.
-func test_a_local_human_foe_is_answered_zero_for_now(timeout := 120000) -> void:
+func _card() -> PromptCard:
+	for n in _main.get_children():
+		if n is InterferenceDialog:
+			for c in n.get_children():
+				if c is PromptCard and (c as PromptCard).title == "Enemy spell!":
+					return c
+	return null
+
+
+## A human on THIS machine is asked with the table's tableau (a card on this screen, nothing on the wire): the count they pick
+## is the answer, the core spends it - the same lines and tokens as the remote case.
+func test_a_local_human_foe_answers_on_the_dialog(timeout := 120000) -> void:
 	_session({GUEST_PEER: 1})
 	_net.my_slot = 1
+	_main._solo_batch = false
 	var sc := _scenario()
+	var since: int = _main.battle_log.entries().size()
 	var out := {}
 	_start(sc, out)
+	await _until(func() -> bool: return _card() != null or out.has("r"))
+	var card := _card()
+	assert_object(card).override_failure_message("no dialog opened for the local foe: %s" % _log_text(since)).is_not_null()
+	if card != null:
+		card.resolve(2)
 	await _finish(sc, out)
 	assert_array(_requests()).override_failure_message("a local foe was asked over the wire").is_empty()
 	assert_bool(bool(out.get("r", false))).is_true()
-	assert_int((sc["helper"] as GameUnit).casts_current).is_equal(2)
+	assert_int((sc["helper"] as GameUnit).casts_current).is_equal(0)
+	assert_str(_log_text(since)).contains("Interference: Helper \u00d72 spends 2 tokens \u2014 the cast roll worsens to 6+")
+
+
+## The remote owner's MACHINE: the host's request carries the cast's facts (`ask.choice.ctx`); the owner's machine opens the
+## dialog from them, answers with the count, and the host spends it once. The facts are the dialog's own arguments.
+func test_the_owners_machine_opens_the_dialog_from_the_hosts_facts(timeout := 120000) -> void:
+	_session({GUEST_PEER: 1})
+	_main._solo_batch = false
+	var sc := _scenario()
+	var since: int = _main.battle_log.entries().size()
+	var out := {}
+	_start(sc, out)
+	await _until(func() -> bool: return not _requests().is_empty() or out.has("r"))
+	var asked := _choice_frames()
+	assert_int(asked.size()).override_failure_message("not asked: %s" % _log_text(since)).is_equal(1)
+	if asked.is_empty():
+		return
+	var rq: Dictionary = asked[0]["p"]
+	assert_dict((rq["ask"]["choice"] as Dictionary)["ctx"]).is_equal({"caster": "Mystic", "spell": "Infuse Bloodthirst", "targets": "Foe", "base": 4, "boost": 0})
+	assert_object(_card()).override_failure_message("the host's screen opened the foe's dialog").is_null()
+	_net.sent.clear()
+	_net.my_slot = 1   # the owner's machine
+	(func() -> void: await _main._rpc_request_roll(rq, 7)).call()
+	await _until(func() -> bool: return _card() != null)
+	var card := _card()
+	assert_object(card).override_failure_message("the owner's machine showed no dialog").is_not_null()
+	if card != null:
+		card.resolve(1)
+	await _until(func() -> bool: return not _net.sent.filter(func(f: Dictionary) -> bool: return str(f["t"]) == "roll_result").is_empty())
+	var replies := _net.sent.filter(func(f: Dictionary) -> bool: return str(f["t"]) == "roll_result")
+	assert_int(replies.size()).override_failure_message("the owner's machine did not answer: %s" % str(_net.sent)).is_equal(1)
+	_net.my_slot = 2   # back on the host
+	if not replies.is_empty():
+		_main._rpc_roll_result(int((replies[0]["p"] as Dictionary)["req"]), (replies[0]["p"] as Dictionary)["faces"])
+	await _finish(sc, out)
+	assert_int((sc["helper"] as GameUnit).casts_current).is_equal(1)
+	assert_str(_log_text(since)).contains("Interference: Helper \u00d71 spends 1 token \u2014 the cast roll worsens to 5+")
+
+
+## No facts (an older host) or no pool: nothing to ask, so no answer (the host reads it as no interference).
+func test_no_context_or_no_pool_asks_nobody() -> void:
+	assert_str(await _main._solo_pick_interference(["0", "1"], {})).is_empty()
+	assert_str(await _main._solo_pick_interference(["0"], {"caster": "a", "spell": "b", "targets": "c", "base": 4, "boost": 0})).is_empty()
+	assert_object(_card()).is_null()
 
 
 ## The landing alone: 3 tokens against two holders (2 + 5): the nearest gives 2, the next 1; the rest of the pool is untouched;

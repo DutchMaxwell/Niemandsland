@@ -24,7 +24,7 @@ use crate::combat::{
 use crate::sight;
 use crate::geom::{self, V3};
 use crate::acts::{
-    rule_on, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES,
+    rule_on, CURRENT_RULES_EPOCH, PENDING_EPOCH_VERSATILE_MODIFIED_HIT, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES,
     EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU,
     EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND, EPOCH_12_MOVE_BUFF,
     EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING, EPOCH_19_MOVE_GRANTS_FOLD,
@@ -282,7 +282,13 @@ fn granted_reach<'a>(us: &'a UnitStatic, state: &'a State, mi: usize) -> (f64, &
 /// G4R4 C-LONEHERO-SHAKEN (`EPOCH_73_V36`): the Shaken a morale test reads. A lone joined hero (its host has no models
 /// left) is the host's unit and the table keeps the flag on that unit, so the dead host's Shaken is the hero's; every
 /// other unit reads its own flag, and below 73 every unit does.
+///
+/// From `PENDING_EPOCH_SHAKEN_MIRROR` only the unit's OWN flag counts (lead rule call 20.11.): a dead host's flag is stale once the hero
+/// recovered alone, so the lone hero rolls its die; the table's `_solo_test_unit_shaken` reads the same.
 fn unit_shaken(state: &State, i: usize, seams: Seams) -> bool {
+    if rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SHAKEN_MIRROR) {
+        return state.shaken[i];
+    }
     let root = morale_root(state, i, seams);
     state.shaken[i] || (root != i && state.alive[root] <= 0 && state.shaken[root])
 }
@@ -709,7 +715,7 @@ fn takedown_pick_info_after(
     let mut kits: Vec<crate::state::Kit> = state.kits.get(ti).map(|k| k.to_vec()).unwrap_or_default();
     let pick = |kits: &[crate::state::Kit], pos: &[[f64; 3]], wounds: &[i64]| -> usize {
         if !kits.is_empty() && kits.len() == pos.len() {
-            crate::casualty::casualty_order_of(kits, pos, wounds).last().copied().unwrap_or(pos.len() - 1)
+            crate::casualty::casualty_order_of(kits, pos, wounds, state.casualty_f32).last().copied().unwrap_or(pos.len() - 1)
         } else {
             pos.len() - 1
         }
@@ -1013,6 +1019,17 @@ pub(crate) fn tray_mend(
     let healed = d3.min(wmax - next.wounds[pu][pm]);
     if healed > 0 {
         next.wounds[pu][pm] += healed;
+        // H-5a (Plan H): the heal reaches the table as a landing on the patient's capture slot (`wounds_left` above the
+        // model's own count = a heal, `CoreActivation.land_step`), and the table's own line (`_solo_apply_mend`) is said.
+        // Lines and landings only: the die and the state are untouched, a seeded tray keeps neither.
+        let gone = tray.dead_slots(pu);
+        let slot = (0..).filter(|s| !gone.contains(s)).nth(pm).unwrap_or(pm);
+        let (at, now) = (next.positions[pu][pm], next.wounds[pu][pm]);
+        tray.land(|| Landing { unit: pu, models: vec![LandedModel { at, slot, wounds_left: now, dead: false }], loss_line: false });
+        let name = statics[next.roster.profile[si]].name.clone();
+        tray.say(|| LogLine { rule: "mend", category: Category::Combat, side: next.player[si], detail: None,
+            text: format!("Mend: {name} heals {healed} wound{} (D3 rolled {f0}) — patient now {now}/{wmax}",
+                if healed == 1 { "" } else { "s" }) });
     }
 }
 
@@ -1477,13 +1494,55 @@ fn land_chain_report(statics: &[UnitStatic], next: &State, tray: &mut Tray, ti: 
     land_chain_report_inline(statics, next, tray, ti, before, 0);
 }
 
+/// The lines of a landing's casualties: per chain member that lost models (`lost`, parallel to `members`), "loses a model", "loses N
+/// models" or "destroyed", the counter read from `next` as it stands (host and joined heroes counted together for the host).
+fn chain_loss_lines(statics: &[UnitStatic], next: &State, ti: usize, members: &[usize], lost: &[i64]) -> Vec<LogLine> {
+    let size = |u: usize| statics[next.roster.profile[u]].model_count;
+    let (alive, total) = members.iter().fold((0, 0), |(a, t), &u| (a + next.alive[u], t + size(u)));
+    members.iter().zip(lost).filter_map(|(&u, &lost)| {
+        let (a, t) = if u == ti { (alive, total) } else { (next.alive[u], size(u)) };
+        let name = &statics[next.roster.profile[u]].name;
+        let text = match (lost, a) {
+            (..=0, _) => return None,
+            (_, 0) => format!("{name} destroyed"),
+            (1, _) => format!("{name} loses a model ({a}/{t})"),
+            _ => format!("{name} loses {lost} models ({a}/{t})"),
+        };
+        Some(LogLine { rule: "shoot", category: Category::Combat, side: next.player[u], text, detail: None })
+    }).collect()
+}
+
+/// One line of a Deadly weapon's landing: at its mark among the strike's lines when it has one (`at` moves past it), else at the end.
+fn say_at_mark(tray: &mut Tray, at: &mut Option<(usize, usize)>, line: LogLine) {
+    match at {
+        Some(a) => { tray.say_at(*a, || line); a.0 += 1; }
+        None => tray.say(|| line),
+    }
+}
+
+/// How many models each member of a chain holds now.
+fn model_counts(next: &State, members: &[usize]) -> Vec<usize> {
+    members.iter().map(|&u| next.positions[u].len()).collect()
+}
+
+/// What the table's wound line counts when part of the event landed inline (a melee's Deadly / Takedown): `said[i]` the
+/// models member `i` of the chain already lost under the Deadly landing's own line, `pool` the pool wounds that got past the ignore rolls.
+/// The table says "takes N wounds" only when some reach the pool, and N then counts the inline wounds too (`_solo_apply_wounds`'s
+/// `taken_before`, #2826); the casualty line after it names the pool's own.
+struct InlineSaid { said: Vec<i64>, pool: i64 }
+
 /// `land_chain_report`, less the wounds the table lands model by model with their own line (the volley's Deadly): `inline`.
 fn land_chain_report_inline(statics: &[UnitStatic], next: &State, tray: &mut Tray, ti: usize, before: Option<ChainBefore>, inline: i64) {
+    land_chain_report_said(statics, next, tray, ti, before, inline, None);
+}
+
+fn land_chain_report_said(statics: &[UnitStatic], next: &State, tray: &mut Tray, ti: usize, before: Option<ChainBefore>, inline: i64, said: Option<&InlineSaid>) {
     let Some(ch) = before else { return };
     let ut = &statics[next.roster.profile[ti]];
     let size = |u: usize| statics[next.roster.profile[u]].model_count;
     let (alive, total) = ch.iter().fold((0, 0), |(a, t), (u, ..)| (a + next.alive[*u], t + size(*u)));
-    let took: i64 = ch.iter().map(|(u, _, w)| w.iter().sum::<i64>() - next.wounds[*u].iter().sum::<i64>()).sum::<i64>() - inline;
+    let took_all: i64 = ch.iter().map(|(u, _, w)| w.iter().sum::<i64>() - next.wounds[*u].iter().sum::<i64>()).sum();
+    let took = match said { Some(s) => if s.pool > 0 { took_all } else { 0 }, None => took_all - inline };
     // NML-1091: a unit that IS one multi-wound model counts that model's wounds instead.
     let (n, of, unit) = match ut.wounds_max.first() {
         Some(&m) if total == 1 && m > 1 => (next.wounds[ti].first().copied().unwrap_or(0).max(0), m, " wounds"),
@@ -1493,17 +1552,19 @@ fn land_chain_report_inline(statics: &[UnitStatic], next: &State, tray: &mut Tra
         tray.say_wounds(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[ti],
             text: format!("{} takes {took} wound{} ({n}/{of}{unit})", ut.name, if took == 1 { "" } else { "s" }), detail: None });
     }
-    for (u, at, _) in &ch {
-        let lost = at.len() as i64 - next.positions[*u].len() as i64;
-        let (a, t) = if *u == ti { (alive, total) } else { (next.alive[*u], size(*u)) };
-        let name = &statics[next.roster.profile[*u]].name;
-        let text = match (lost, a) {
-            (..=0, _) => continue,
-            (_, 0) => format!("{name} destroyed"),
-            (1, _) => format!("{name} loses a model ({a}/{t})"),
-            _ => format!("{name} loses {lost} models ({a}/{t})"),
-        };
-        tray.say_wounds(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[*u], text, detail: None });
+    let members: Vec<usize> = ch.iter().map(|(u, ..)| *u).collect();
+    let lost: Vec<i64> = ch.iter().enumerate().map(|(i, (u, at, _))| at.len() as i64 - next.positions[*u].len() as i64 - said.map_or(0, |s| s.said[i])).collect();
+    for line in chain_loss_lines(statics, next, ti, &members, &lost) {
+        tray.say_wounds(|| line);
+    }
+    // The table's `_solo_hero_carries_on` (the end of `_solo_apply_wounds`): the host has no model left, so each living joined hero that
+    // carries the unit's Shaken / Fatigue says so.
+    if took > 0 && next.alive[ti] <= 0 {
+        for &h in next.attached[ti].iter().filter(|&&h| next.alive[h] > 0 && (next.shaken[h] || next.fatigued[h])) {
+            let state = match (next.shaken[h], next.fatigued[h]) { (true, true) => "Shaken + Fatigue", (true, false) => "Shaken", _ => "Fatigue" };
+            let text = format!("{} fights on alone — carries the unit's {state} ({CITE})", statics[next.roster.profile[h]].name);
+            tray.say_wounds(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[h], text, detail: None });
+        }
     }
     tray.release_outcome();
     for (u, at, wounds) in ch {
@@ -1684,6 +1745,7 @@ pub(crate) fn tray_strafing(
         seams.tray_exact,
         &|gr: &[i64]| takedown_pick_info_after(statics, next, target, cover, def.in_cover, gr, seams.takedown_pick),
         &|_, _| None,
+        None,
         tray,
     );
     // The volley tail, the shoot branch's own shape: spent Limited marks,
@@ -2282,6 +2344,15 @@ fn tray_vs_marks(
             // pick names itself the one time the mark lands (the consumption
             // half logs at the dice folds). Trace-gated like every other
             // core-side seam line.
+            // Rules-must-log (Plan H): the table says the pick and the record's activation (`_solo_apply_vs_marks`, then the
+            // record's own `... is ACTIVE` line), both naming the MARKED unit, which holds the record there; the core keeps the
+            // legacy attacker-side grant below EPOCH_71 for the Rapid Charge Mark and for every other Mark, so the lines carry the target.
+            let (bearer_name, target_name) = (&statics[pb].name, &statics[next.roster.profile[ti]].name);
+            say_rule(tray, "mark", next.player[bearer], || format!(
+                "{}: {} marks {} — friendly units attacking it gain {} (once)", b.name, bearer_name, target_name, grant));
+            say_rule(tray, "mark", next.player[bearer], || format!(
+                "{} on {} is ACTIVE: grants {}{} — applies ONCE", b.name, target_name, grant,
+                if b.scope.is_empty() { String::new() } else { format!(" ({} only)", b.scope) }));
             if b.name == "Surge Mark" {
                 trace_rule("mark", &b.name, &format!(
                     "{} marks {} — friendly units attacking it gain {} (once)",
@@ -2295,10 +2366,13 @@ fn tray_vs_marks(
             // `EPOCH_71_RAPID_CHARGE_MARK` the Mark lands on the TARGET; below it
             // the legacy once-grant stays on the bearer so older corpora
             // replay byte-exact. Rules-must-log: the placement names itself.
-            if grant == "Rapid Charge" && rule_on(seams.rules_epoch, EPOCH_71_RAPID_CHARGE_MARK) {
+            let on_target = (grant == "Rapid Charge" && rule_on(seams.rules_epoch, EPOCH_71_RAPID_CHARGE_MARK))
+                || (grant == "AP(+1) in melee" && b.scope == "melee" && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_MELEE_MARK_SCOPE));
+            if on_target {
                 trace_rule("mark", &b.name, &format!(
                     "{} marks {} — friendly units attacking it gain {} (once)",
                     statics[pb].name, statics[next.roster.profile[ti]].name, grant));
+                shot.marks_open.push((b.name.clone(), ti, ti));
                 next.buffs[ti].push(mods::LiveMod {
                     hit_mod: 0,
                     casting_mod: 0,
@@ -2315,6 +2389,7 @@ fn tray_vs_marks(
                     name: Rc::from(b.name.as_str()),
                 });
             } else {
+                shot.marks_open.push((b.name.clone(), si, ti));
                 next.buffs[si].push(mods::LiveMod {
                     hit_mod: 0,
                     casting_mod: 0,
@@ -2332,6 +2407,19 @@ fn tray_vs_marks(
                 });
             }
         }
+    }
+}
+
+/// The table's consumption line for a Mark (`_solo_spend_records`): the exchange spent the record `tray_vs_marks` placed, said once, naming the
+/// MARKED unit. A record still on its holder (an exchange its role does not match) stays open for the next exchange of the activation.
+fn say_marks_consumed(statics: &[UnitStatic], next: &State, tray: &mut Tray, shot: &mut ShootResult) {
+    for (name, holder, ti) in std::mem::take(&mut shot.marks_open) {
+        if next.buffs[holder].iter().any(|r| r.once && &*r.name == name.as_str()) {
+            shot.marks_open.push((name, holder, ti));
+            continue;
+        }
+        say_rule(tray, "mark", next.player[holder], || format!(
+            "\"{name}\" on {} is consumed (applies once)", statics[next.roster.profile[ti]].name));
     }
 }
 
@@ -2359,6 +2447,9 @@ fn control_morale_passed(
     ctx.side = next.player[ti]; // the seat the morale dice lines (Fearless, No Retreat) are said for
     let banner_dropped = drop_banner_for_cause(statics, next, ti, false, true, Some(source.rule), None, None, seams, &mut ctx, shot, tray);
     say_morale_bonus(statics, next, ti, false, Some(source.rule), seams, &ctx, banner_dropped, tray);
+    if next.shaken[ti] {
+        say_rule(tray, "morale", next.player[ti], || format!("{} is already Shaken — automatically fails morale ({CITE})", us.name));
+    }
     let (outcome, rolled) = crate::dice::resolve_morale_with_tray(
         &ctx, source.owner, None, false, false, next.shaken[ti], wounds_left(next, ti), tray,
     );
@@ -4430,6 +4521,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // stays blind, the sighting seam's own asymmetry.
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
         c.indirect_mark = grants && mods::granted_vs(state, i, "Indirect");
+        c.indirect_own = grants && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_OWN_INDIRECT) && mods::granted_own_indirect(state, i);
         c.range_mark_in = if grants && mods::granted_vs(state, i, "+6\" shooting range") {
             INCREASED_SHOOTING_RANGE_MARK_IN
         } else {
@@ -4580,6 +4672,13 @@ pub fn ctx_live_vs(
     c.furious = c.furious || mods::granted_vs(state, target, "Furious");
     c.relentless_grant = c.relentless_grant || mods::granted_vs(state, target, "Relentless");
     c.shred_grant = c.shred_grant || mods::granted_vs(state, target, "Shred");
+    if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_SLAYER_MARK_GRANT) {
+        c.slayer_grant = c.slayer_grant || mods::granted_vs(state, target, "Slayer");
+    }
+    // The melee-scoped Piercing Fighting Mark waits on the marked unit for its charger (`PENDING_EPOCH_MELEE_MARK_SCOPE`); a volley never reads it.
+    if melee && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_MELEE_MARK_SCOPE) {
+        c.pierce_melee_grant = c.pierce_melee_grant || mods::granted_vs_exact(state, target, "AP(+1) in melee");
+    }
     // G4R3 F-SURGE-GRANT (EPOCH_73_V36): a spell's once-grant of Surge to the target's attackers (the table's
     // `_solo_bridge_granted_flags`) pays like the Surge mark; the exchange spends the record.
     c.surge_mark_grant = c.surge_mark_grant
@@ -5990,6 +6089,8 @@ fn sighted_profiles_of(
     // inert reading — the grant lands on the ledger but no resolver reads it.
     let epoch6 = rule_on(sc.rules_epoch, EPOCH_6_TABLE_RULES);
     let mark_indirect = epoch6 && mods::granted_vs(state, ti, "Indirect");
+    // PENDING_EPOCH_OWN_INDIRECT: an Indirect in the shooter's own store waives the sight test of every weapon (`_solo_shot_eligibility`).
+    let own_indirect = rule_on(sc.rules_epoch, crate::acts::PENDING_EPOCH_OWN_INDIRECT) && mods::granted_own_indirect(state, mi);
     let mark_range = if epoch6 && mods::granted_vs(state, ti, "+6\" shooting range") {
         INCREASED_SHOOTING_RANGE_MARK_IN
     } else {
@@ -6015,12 +6116,12 @@ fn sighted_profiles_of(
         // goes (main.gd:4136-4138).
         let lost = p.indirect_los_needs_hold && !held; // Rules 3.6 (SHO-01a): the waiver needs Hold
         let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach,
-            (p.indirect && p.indirect_ignores_los.unwrap_or(true) && !lost) || mark_indirect,
+            (p.indirect && p.indirect_ignores_los.unwrap_or(true) && !lost) || mark_indirect || own_indirect,
             rule_on(sc.rules_epoch, EPOCH_66_DISTANCE_TRUTH), sc.rules_epoch);
         if let Some(n) = sc.sighted.get_mut(i) {
             *n = seen;
         }
-        if lost && !mark_indirect {
+        if lost && !mark_indirect && !own_indirect {
             trace_rule("volley", "Indirect",
                 &format!("{} did not Hold: {} needs line of sight", statics[state.roster.profile[mi]].name, p.name));
         }
@@ -6475,6 +6576,13 @@ fn strike_phase(
     // The table's `_solo_log_defense_parts` lines, the first thing `_solo_melee_strike_phase` says: the Shielded family, then the growth ladder.
     crate::dice::say_shielded(tray, &def, &ut.name);
     crate::dice::say_growth_defense(tray, &def, &ut.name, &growth_defense_parts(statics, next, ti));
+    // The Guarded family's line, the next one the table says (`_solo_melee_strike_phase`): a charge from over the gate gives the defender +1 Defense.
+    let gate = if def.guarded_charge_over_in > 0.0 { def.guarded_charge_over_in } else { crate::combat::LONG_RANGE_IN };
+    if charging && def.guarded && charge_from_in > gate && !def.sturdy_boost_gates_guarded && (seams.tray_exact || def.guarded_charge_over_in > 0.0) {
+        let saves = crate::combat::guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), true, def.def_floor());
+        say_rule(tray, "guarded", def.side, || format!("{} ({}): charged from over {}\" — +1 Defense (saves on {}+)",
+            ut.name, def.guarded_name, gate as i64, saves.clamp(BEST_HIT_TARGET, 6)));
+    }
     // MEL-07c-fix (`EPOCH_73_V36`) — the strike Parry counts the host AND its
     // joined heroes, the same sum the Impact event reads (`parry_dice_total`).
     if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
@@ -6687,13 +6795,22 @@ fn strike_phase(
     // table's order holds: Takedown, Deadly, then the pool.
     let mut dealt: i64 = shot.takedown_groups.iter().sum();
     let td_dealt = land_takedown_groups(next, ti, shot, seams.takedown_pick, None);
-    // The table lands Deadly inline per weapon and says one line per weapon (`_solo_land_deadly_wounds`), not a "takes N wounds" line for
-    // them: the strike's Deadly lines (the volley's shape), then the report of the pool wounds alone.
+    // The table lands Deadly inline per weapon and says one line per weapon (`_solo_land_deadly_wounds`), then the report of the pool
+    // wounds, whose "takes N wounds" count includes the inline ones (`land_chain_report_said`).
     let side = next.player[si];
     let mut deadly_dealt = 0;
     let mut groups = std::mem::take(&mut shot.deadly_groups).into_iter();
-    for (weapon, unsaved, dx, n) in std::mem::take(&mut shot.deadly_lines) {
+    // The table lands each Deadly weapon right after that weapon's own saves, ahead of the next weapon's rolls: its line, then the casualties
+    // that landing removed. `marks` (the fold's line counts) say where; a supplied tray only (`landed`), the others say nothing.
+    let marks = std::mem::take(&mut shot.deadly_marks);
+    let deadly_lines = std::mem::take(&mut shot.deadly_lines);
+    let marks = if marks.len() == deadly_lines.len() { marks } else { Vec::new() };
+    let inline_on = seams.tray_exact && landed.is_some();
+    let members: Vec<usize> = landed.iter().flatten().map(|(u, ..)| *u).collect();
+    let (mut said, mut shift) = (vec![0i64; members.len()], 0);
+    for (i, (weapon, unsaved, dx, n)) in deadly_lines.into_iter().enumerate() {
         let (mut wdealt, mut forced) = (0, 0);
+        let lens0 = if inline_on { model_counts(next, &members) } else { Vec::new() };
         for (post, gx) in groups.by_ref().take(n) {
             let d = land_deadly_group(next, ti, post, gx, seams, &mut None, &mut forced);
             shot.log.push(format!("Deadly({gx}): {post} unsaved ×{gx}, no carry-over → {d} wounds dealt"));
@@ -6702,10 +6819,21 @@ fn strike_phase(
         deadly_dealt += wdealt;
         let s = |n: i64| if n == 1 { "" } else { "s" };
         if wdealt > 0 {
-            say_rule(tray, "deadly", side, || format!("Deadly({dx}): {unsaved} unsaved ×{dx}, no carry-over → {wdealt} wound{} dealt ({weapon})", s(wdealt)));
+            let mut at = if inline_on { marks.get(i).map(|m| (m.0 + shift, m.1)) } else { None };
+            let at0 = at;
+            let line = |text: String| LogLine { rule: "deadly", category: Category::Combat, side, text, detail: None };
+            say_at_mark(tray, &mut at, line(format!("Deadly({dx}): {unsaved} unsaved ×{dx}, no carry-over → {wdealt} wound{} dealt ({weapon})", s(wdealt))));
             if forced > 0 {
-                say_rule(tray, "deadly", side, || format!("Deadly({dx}): {forced} wound{} finish the already-wounded Tough model first ({CITE})", s(forced)));
+                say_at_mark(tray, &mut at, line(format!("Deadly({dx}): {forced} wound{} finish the already-wounded Tough model first ({CITE})", s(forced))));
             }
+            if inline_on {
+                let lost: Vec<i64> = lens0.iter().zip(model_counts(next, &members)).map(|(&a, b)| a as i64 - b as i64).collect();
+                for l in chain_loss_lines(statics, next, ti, &members, &lost) {
+                    say_at_mark(tray, &mut at, l);
+                }
+                lost.iter().zip(said.iter_mut()).for_each(|(l, sd)| *sd += l);
+            }
+            shift += at.zip(at0).map_or(0, |(a, b)| a.0 - b.0);
         }
     }
     for (post, gx) in groups {
@@ -6717,7 +6845,8 @@ fn strike_phase(
     if seams.tray_exact {
         land_pool_wounds(next, ti, w, true, seams, &mut shot.log);
     }
-    land_chain_report_inline(statics, next, tray, ti, landed, deadly_dealt + td_dealt);
+    let inline_said = (inline_on && deadly_dealt + td_dealt > 0).then_some(InlineSaid { said, pool: w });
+    land_chain_report_said(statics, next, tray, ti, landed, deadly_dealt + td_dealt, inline_said.as_ref());
     caused = caused - raw_deadly + dealt;
     // rules-wave3-growthmark (epoch 6) — the ignore-wound marker AFTER the
     // landing: a bearer that ignored some of these wounds banks for them.
@@ -6800,6 +6929,7 @@ fn strike_phase(
     }
     let att_wounded = att_incoming > 0;
     spend_exchange_wounded(next, si, ti, true, att_wounded, def_incoming, seams.rules_epoch); // main.gd:6152, per strike phase
+    say_marks_consumed(statics, next, tray, shot);
     spend_protection_feat(statics, next, ti, def_incoming, seams.rules_epoch);
     (caused, retaliated, hazard_self, scourge_taken)
 }
@@ -7244,7 +7374,7 @@ fn say_morale_bonus(
     let us = &statics[state.roster.profile[i]];
     let shown = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
     if unit_shaken(state, i, seams) {
-        return; // a Shaken unit rolls no die and the table writes no bonus line (its "already Shaken" line: see the gap list, not said here)
+        return; // a Shaken unit rolls no die and the table writes no bonus line (its "already Shaken" line is the caller's)
     }
     let target = morale_target(ctx.quality, ctx.morale_bonus);
     let bonus = state.morale_bonus[i] - banner_gone(statics, state, i, seams) - banner_dropped;
@@ -7314,6 +7444,10 @@ pub(crate) fn tray_morale_for(
         let host = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
         shot.log.push(format!("Shaken: {} is the unit of its dead host {host}, which is Shaken — the test fails without a die", us.name));
     }
+    if shaken {
+        // The table's `_solo_morale_test` says it before the outcome line: a lone hero's test is its host's (the unit it was aimed at).
+        say_rule(tray, "morale", state.player[i], || format!("{shown} is already Shaken — automatically fails morale ({CITE})"));
+    }
     // EPOCH_39_MORALE_RATING — rules-must-log (main.gd:8596-8602): the test
     // that adds the rating names it, once per drawn die. A Shaken auto-fail
     // draws no die and adds nothing, so it stays silent.
@@ -7373,6 +7507,17 @@ pub(crate) fn tray_morale_for(
     }
     match outcome {
         Morale::Passed => {}
+        Morale::Shaken if seams.hero_attach && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SHAKEN_MIRROR) => {
+            // The table's Shaken outcome: a unit that is not Shaken yet (the lone hero's own flag decides) gets the flag on the unit the volley
+            // named (its host, a dead one for a lone hero), mirrored onto every joined hero (`_solo_mirror_shaken`); each member drops what it carries.
+            let unit = morale_root(state, i, seams);
+            if !state.shaken[i] {
+                for u in std::iter::once(unit).chain(state.attached[unit].clone()) {
+                    state.shaken[u] = true;
+                    drop_carried(state, u);
+                }
+            }
+        }
         Morale::Shaken => {
             state.shaken[i] = true;
             drop_carried(state, i);
@@ -7662,6 +7807,19 @@ fn lone_hero_of(state: &State, ti: usize, seams: Seams) -> Option<usize> {
         return None;
     }
     state.attached[ti].iter().copied().find(|&h| state.alive[h] > 0)
+}
+
+/// The table's executed-move stamp (`_solo_animate_move`): the host's `moved_round`, and from `PENDING_EPOCH_HERO_MOVED_STAMP` the living
+/// joined heroes' too (their models are in the move paths, the stamp goes to the unit of each model).
+pub(crate) fn stamp_moved(state: &mut State, si: usize, hero_attach: bool, rules_epoch: u32) {
+    state.moved_round[si] = state.round;
+    if hero_attach && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_HERO_MOVED_STAMP) {
+        for h in state.attached[si].clone() {
+            if state.alive[h] > 0 {
+                state.moved_round[h] = state.round;
+            }
+        }
+    }
 }
 
 /// `BattleSim._unit_group` battle_sim.gd:528-547 as a membership test — is unit
@@ -8654,7 +8812,7 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
             }
             CastEnd::Landed
         }
-        "buff" | "debuff" => {
+        "buff" | "debuff" | "utility" => {
             tray_spell_effect(state, &standing_idx, c, spell, seams.rules_epoch);
             CastEnd::Landed
         }
@@ -8695,6 +8853,10 @@ fn tray_spell_effect(state: &mut State, targets: &[usize], c: &CastInput, spell:
     };
     let live = rec.to_live_mod(rules_epoch);
     for &t in targets {
+        // PENDING_EPOCH_SPELL_NO_STACK: the same spell does not stack (GF 3.6), an identical record already on the target is refreshed, none is added
+        if !effect_less && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_SPELL_NO_STACK) && state.buffs[t].contains(&live) {
+            continue;
+        }
         if !effect_less {
             state.buffs[t].push(live.clone());
         }
@@ -9380,24 +9542,23 @@ fn versatile_latch(
     );
     next.versatile_pick_round[mi] = next.round;
     next.versatile_pick_mode[mi] = if ap_mod > 0 { 2 } else { 1 };
-    log.push(format!(
-        "{rule_name}: {} picks {} for this activation",
-        statics[next.roster.profile[mi]].name,
-        if ap_mod > 0 { "AP(+1)" } else { "+1 to hit" }
-    ));
-    if let Some(t) = tray {
-        // The table's line (`_solo_log_versatile_pick`): once per activation, where the volley decides.
-        say_rule(t, "versatile", next.player[mi], || log.last().cloned().unwrap_or_default());
-    }
-    // Rules 3.6 (row W1.TRACE) — the once-per-activation pick names itself
-    // (arm `versatile-attack`).
-    if rule_on(rules_epoch, EPOCH_73_V36) {
-        trace_rule("versatile-attack", "Versatile Attack", &format!(
-            "{} picks {} for this activation",
-            statics[next.roster.profile[mi]].name,
-            if ap_mod > 0 { "AP(+1)" } else { "+1 to hit" }));
-    }
+    say_versatile_pick(rule_name, &statics[next.roster.profile[mi]].name, ap_mod > 0, next.player[mi], log, tray, rules_epoch);
     (hit_mod, ap_mod, true)
+}
+
+/// The once-per-activation pick's rules-must-log line: the book rule's name, who picked, which mode. The table's
+/// `_solo_log_versatile_pick`, said where the volley decides (`versatile_latch` before the dice, or the dice themselves from
+/// `PENDING_EPOCH_VERSATILE_MODIFIED_HIT`).
+pub(crate) fn say_versatile_pick(rule_name: &str, unit: &str, ap_mode: bool, side: i64, log: &mut Vec<String>, tray: Option<&mut Tray>, rules_epoch: u32) {
+    let mode = if ap_mode { "AP(+1)" } else { "+1 to hit" };
+    log.push(format!("{rule_name}: {unit} picks {mode} for this activation"));
+    if let Some(t) = tray {
+        say_rule(t, "versatile", side, || log.last().cloned().unwrap_or_default());
+    }
+    // Rules 3.6 (row W1.TRACE) — the once-per-activation pick names itself (arm `versatile-attack`).
+    if rule_on(rules_epoch, EPOCH_73_V36) {
+        trace_rule("versatile-attack", "Versatile Attack", &format!("{unit} picks {mode} for this activation"));
+    }
 }
 
 /// Folds `action.split` onto the state, or answers `None` when the activation
@@ -10280,7 +10441,7 @@ fn consolidate_after_melee(next: &mut State, statics: &[UnitStatic], cover: Cove
             next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
         }
         // Wave 4 (port-entrenched) — consolidation counts as moving.
-        next.moved_round[winner] = next.round;
+        stamp_moved(next, winner, seams.hero_attach, seams.rules_epoch);
         if let (true, Some((tray, shot))) = (n > 0, dice) {
             shot.log.push(format!("Dangerous terrain: {name} takes one test for the whole unit ({n} dice)"));
             tray.owner_next(Some(winner));
@@ -10581,6 +10742,7 @@ fn resolve_with(
     // #816 PR 2 — the activation-start latch clear (main.gd:17456's erase).
     next.teleport_used[si] = false;
     next.cast_buffs.clear(); // CAST-O7: a board that already ran an activation carries no ledger into this one
+    next.casualty_f32 = rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_CASUALTY_TIES);
     sc.rules_epoch = seams.rules_epoch; // wave-3 mark consumers read it off Scratch
 
     // --- REANIMATION (main.gd:953-957), the activation trigger BEFORE the
@@ -10760,7 +10922,8 @@ fn resolve_with(
             for u in chain.collect::<Vec<_>>() {
                 next.positions[u].iter_mut().for_each(|p| *p = geom::to_f64(geom::add(geom::to_f32(*p), d)));
             }
-            (flew, moved, next.moved_round[si]) = (true, true, next.round);
+            (flew, moved) = (true, true);
+            stamp_moved(&mut next, si, seams.hero_attach, seams.rules_epoch);
             let line = format!(
                 "Aircraft: {} flies {AIRCRAFT_MOVE_IN:.0}\" straight (heading {:.0}\u{b0})",
                 statics[pi_s].name, (d[2] as f64).atan2(d[0] as f64).to_degrees()
@@ -10819,7 +10982,7 @@ fn resolve_with(
             }
         }
         // Wave 4 (port-entrenched) — every EXECUTED move stamps (main.gd:7786).
-        next.moved_round[si] = next.round;
+        stamp_moved(&mut next, si, seams.hero_attach, seams.rules_epoch);
         for (i, m) in land.movers.iter().enumerate() {
             next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
         }
@@ -10849,7 +11012,7 @@ fn resolve_with(
         && !next.positions[si].is_empty()
     {
         moved = true;
-        next.moved_round[si] = next.round;
+        stamp_moved(&mut next, si, seams.hero_attach, seams.rules_epoch);
         let dest = geom::to_f32(action.dest.unwrap());
         let centre = geom::centre(&next.positions[si]);
         let mut delta = geom::sub(dest, centre);
@@ -10954,6 +11117,12 @@ fn resolve_with(
         // One-core P3 step 61: the walked paths the tray carries become the move's landing, so the Dangerous test
         // below reads each model's route, not only its end (`dangerous_dice`'s end-only arm); a climb names its rule.
         let trails = dice.as_ref().and_then(|d| d.0.placed_trails()).filter(|t| !t.is_empty()).map(|t| t.to_vec());
+        // PENDING_EPOCH_ZERO_MOVE_STAMP: the table stamps an EXECUTED move; remember the chain's stamps and whether any model left its place.
+        let chain: Vec<usize> = std::iter::once(si).chain(next.attached[si].iter().copied()
+            .filter(|_| seams.hero_attach && p.len() == crate::activation::placed_chain_len(&next, si))).collect();
+        let stamps: Vec<(usize, i64)> = chain.iter().map(|&u| (u, next.moved_round[u])).collect();
+        let left_place = chain.iter().flat_map(|&u| next.positions[u].iter()).zip(p.iter())
+            .any(|(a, b)| geom::length(geom::sub(geom::to_f32(*a), geom::to_f32(*b))) > 0.0005);
         // S1: a placement past the host's models moves the joined heroes with it (host first, then each hero in
         // `attached` order); a host-only placement leaves them where they stood, as before.
         let host_n = next.positions[si].len();
@@ -10967,7 +11136,7 @@ fn resolve_with(
         }
         next.positions[si] = p.into_iter().take(host_n).collect();
         moved = true;
-        next.moved_round[si] = next.round;
+        stamp_moved(&mut next, si, seams.hero_attach, seams.rules_epoch);
         if let (Some(trails), Cover::Board(t)) = (trails, cover) {
             let land = crate::mv::step::placed_landing(&next, si, t, &trails, band_in, seams.hero_attach, seams.rules_epoch);
             if let (true, Some((_, shot))) = (land.climb_in > 0.0, dice.as_mut()) {
@@ -10978,6 +11147,11 @@ fn resolve_with(
         if let Cover::Board(t) = cover {
             if t.is_valid() {
                 land_cover(statics, &mut next, si, t, seams, dice.as_mut().map(|d| &mut *d.1));
+            }
+        }
+        if !left_place && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_ZERO_MOVE_STAMP) {
+            for (u, round) in stamps {
+                next.moved_round[u] = round;
             }
         }
     }
@@ -11696,7 +11870,13 @@ fn resolve_with(
                                     } else {
                                         shoot36.iter().find(|p| p.versatile_attack)
                                     };
-                                    if prof36.is_some() || att.versatile_grant {
+                                    if (prof36.is_some() || att.versatile_grant)
+                                        && rule_on(seams.rules_epoch, PENDING_EPOCH_VERSATILE_MODIFIED_HIT)
+                                        && next.versatile_pick_round[*mi] != next.round
+                                    {
+                                        // The dice decide on the number the first eligible shot rolls at; stamped after the volley below.
+                                        att.versatile_defer = true;
+                                    } else if prof36.is_some() || att.versatile_grant {
                                         let (vh, va, vl) = versatile_latch(&mut next, statics, *mi,
                                             crate::combat::reliable_quality(att.quality,
                                                 prof36.map(|p| p.reliable).unwrap_or(false)),
@@ -11722,6 +11902,7 @@ fn resolve_with(
                             if tray.feed().is_some() && parts.iter().any(|(_, m, _)| !m.keep.is_empty()) {
                                 // The table names the target it was aimed at: a lone hero's host, not the hero (see above).
                                 let aimed = lone_host.map_or(ut_g.name.as_str(), |h| statics[next.roster.profile[h]].name.as_str());
+                                crate::dice::say_armor(tray, &def, ut_g.name.as_str());
                                 crate::dice::say_shielded(tray, &def, aimed);
                                 crate::dice::say_growth_defense(tray, &def, aimed, &growth_defense_parts(statics, &next, g.ti));
                                 tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[si],
@@ -11732,6 +11913,21 @@ fn resolve_with(
                             // melee half above.
                             // A lone hero's hit lines call the target by its host's name, as the table does.
                             tray.aim(lone_host.map(|h| statics[next.roster.profile[h]].name.clone()));
+                            // PENDING_EPOCH_DEADLY_INLINE: a volley with a Deadly weapon beside another fires its Deadly groups onto a scratch copy of
+                            // the state as the weapons go (the table's inline landing); the fold asks whether the target's chain is wiped by then.
+                            // Below 94, or with nothing to land inline, no clone is made and the fold is exactly what it was.
+                            let inline_on = rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_DEADLY_INLINE)
+                                && rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING)
+                                && parts.iter().map(|(mi, msc, _)| msc.keep.iter().filter(|&&k| statics[next.roster.profile[*mi]].shoot[k].deadly > 0).count()).sum::<usize>() > 0
+                                && parts.iter().map(|(_, msc, _)| msc.keep.len()).sum::<usize>() > 1;
+                            let mut scratch_state = if inline_on { Some(next.clone()) } else { None };
+                            let mut inline_land = |groups: &[(i64, i64)]| -> i64 {
+                                let Some(sc) = scratch_state.as_mut() else { return i64::MAX };
+                                for &(post, gx) in groups {
+                                    land_deadly_group(sc, g.ti, post, gx, seams, &mut None, &mut 0);
+                                }
+                                combined_alive(sc, g.ti, seams)
+                            };
                             let r = crate::dice::resolve_volley_with_pick_label(
                                 &shooters_of(&parts, statics, &next),
                                 &def, &ut_g.name, g.d, g.mod_d,
@@ -11752,6 +11948,7 @@ fn resolve_with(
                                 &|gr: &[i64]| takedown_pick_info_after(statics, &next, g.ti, cover, def.in_cover, gr, seams.takedown_pick),
                                 &|i, pi| parts.get(i).and_then(|(mi, msc, _)| msc.sighted.get(pi)
                                     .map(|&n| (n, next.alive[*mi], msc.silent.get(pi).copied().unwrap_or("")))),
+                                if inline_on { Some(&mut inline_land) } else { None },
                                 tray,
                             );
                             // WAVE 3, rules-must-log — the arm lowered a
@@ -11780,6 +11977,9 @@ fn resolve_with(
                             // The Deadly groups' raw tally rides `caused` but
                             // lands separately below — not an ignored wound.
                             let ignored = r.caused - r.wounds - r.deadly_tally;
+                            for &(mi, ap_mode) in &r.versatile_picks {
+                                (next.versatile_pick_round[mi], next.versatile_pick_mode[mi]) = (next.round, if ap_mode { 2 } else { 1 });
+                            }
                             // DAT-17a: spend on wounds coming IN (pre-Regeneration),
                             // not on the post-roll count that `wounds_before_g` measures.
                             let def_incoming = r.caused > 0;
@@ -11866,6 +12066,7 @@ fn resolve_with(
                             // once-mods BEFORE the post-volley morale test.
     let att_wounded = att_incoming > 0;
                             spend_exchange_wounded(&mut next, si, g.ti, false, att_wounded, def_incoming, seams.rules_epoch);
+                            say_marks_consumed(statics, &next, tray, shot);
                             spend_protection_feat(statics, &mut next, g.ti, def_incoming, seams.rules_epoch);
                             // D1-B5b: the volley's morale test is the NEXT
                             // thing on the table's tray (main.gd:8248-8251),
@@ -12196,6 +12397,12 @@ fn resolve_with(
     // --- shaken recovery (battle_sim.gd:648-650) ---
     if was_shaken && kind == HOLD && shoot_key.is_empty() {
         next.shaken[si] = false;
+        // The table's idle recovery mirrors the cleared flag onto the unit's joined heroes (`_solo_mirror_shaken`).
+        if seams.hero_attach && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SHAKEN_MIRROR) {
+            for h in next.attached[si].clone() {
+                next.shaken[h] = false;
+            }
+        }
     }
     Ok(finish_activation(statics, state, next, si, seams, cover))
 }

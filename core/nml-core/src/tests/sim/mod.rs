@@ -82,7 +82,7 @@
             charge_no_difficult: vec![false; 4],
             charge_probe_r: vec![0.0; 4],
             buffs: vec![Vec::new(); 4],
-            cast_buffs: Vec::new(),
+            cast_buffs: Vec::new(), casualty_f32: false,
             vs_mark_round: vec![-1; 4],
             hit_and_run_round: vec![-1; 4],
             moved_round: vec![-1; 4],
@@ -1739,6 +1739,8 @@ mod deadly_landing;
 mod deathstrike;
 mod dest_side_arms;
 mod entrenched;
+mod zero_move_stamp;
+mod spell_no_stack;
 mod v36_fab_a5;
 mod ev_live_grants;
 mod ev_move_grants;
@@ -1798,6 +1800,7 @@ mod dangerous_landing;
 mod door_morale_lines;
 mod hit_lines;
 mod save_lines;
+mod melee_lines_guarded;
 mod morale_lines;
 mod rule_lines;
 mod precision_debuff;
@@ -1808,11 +1811,13 @@ mod rule_lines_hit_roll;
 mod rule_lines_defense;
 mod rule_lines_growth;
 mod melee_lines_1;
+mod melee_lines_deadly;
 mod rule_lines_attack;
 mod rule_lines_to_hit;
 mod rapid_charge_mark;
 mod reckless_piercing;
 mod reposition_artillery;
+mod melee_deadly_stops;
 mod retaliate;
 mod rule_lines_lone_hero;
 mod rule_lines_save_step;
@@ -1829,6 +1834,7 @@ mod shaken_strikeback;
 mod second_wind;
 mod second_wind_score;
 mod surge_mark;
+mod mark_lines;
 mod spell_accumulator;
 mod spell_conduit;
 mod spell_grants_batch1;
@@ -1875,6 +1881,7 @@ mod v36_g4r5_hero_reach;
 mod v36_g4r5_hostdead_shoot;
 mod v36_g4r5_primal_grant;
 mod v36_g4r5_versatile_def;
+mod versatile_modified_hit;
 mod v36_g4r5_moved_sight_chain;
 mod v36_bg_03a;
 mod v36_bg_03a2;

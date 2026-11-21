@@ -2675,6 +2675,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	var dang := 0
 	var move_inches := 0.0   # A4: what THIS move actually requested — not the raw band (the kite/
 			# arrival branches deliberately ask for less; only a further, gate-driven shortfall is a cap)
+	var chain_before := chain_positions(unit)   # for `moved`: did the move below really shift a model
 	match action:
 		AiDecision.Action.RUSH:
 			move_inches = minf(band_in, goal_dist) if (to_objective or to_flank) else band_in
@@ -2740,6 +2741,11 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 	report["dist_in"] = d2
 	report["charge_from_in"] = charge_from   # pre-move distance — the charge gates' measure (edge gap from 73)
 	report["moved"] = action != AiDecision.Action.HOLD   # Indirect's -1 to hit fires when shooting after moving
+	# Not moving is a Hold (the human drop floor; the core's `effective_kind` reads the placement, not the declaration): an Advance or
+	# Rush the planner clamped to nothing left every model in place, so the volley after it is a held one on the table too.
+	if bool(report["moved"]) and (action == AiDecision.Action.ADVANCE or action == AiDecision.Action.RUSH) \
+			and not chain_moved_since(unit, chain_before):
+		report["moved"] = false
 	# Rules-must-log (DAT-16a): the AI's committed move names the move-band rules that widened it.
 	if bool(report["moved"]):
 		var widened := MovementRangeController.move_band_rule_names_for_props(unit.unit_properties)

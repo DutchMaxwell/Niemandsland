@@ -2824,13 +2824,13 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 	# Biomes with a 3D dangerous-terrain prop (volcanic lava crater / alien-jungle carnivore
 	# plant) render their own GLB instead of mines and show NO warning signs, so they fetch
 	# the model GLB (+ the lava texture for volcanic) rather than the mine/sign panel set.
-	var hazard_model: String = BIOME_HAZARD_MODELS.get(_prop_theme, "")
+	var hazard_model := TerrainGroupBase.hazard_model_for(_prop_theme, _table_setting())   # a fantasy table: no mines, no signs
 	_crater_positions.clear()
 	for obj in objects:
 		var obj_type: String = obj.get("object_type", "tree")
 		if obj_type == "tree" and not (_tree_panels_ready() and _tree_models_ready()):
 			_request_tree_panels()
-		elif obj_type == "container" and not use_container_panels:
+		elif obj_type == "container" and not use_container_panels and not _stone_blockers():
 			_request_container_panels()
 		elif obj_type == "mine" and hazard_model != "":
 			if not _hazard_model_ready(hazard_model):
@@ -2890,6 +2890,8 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 		if object_type == "tree" and use_tree_panels:
 			model = _create_textured_tree(obj)
 			handles_own_facing = true
+		elif object_type == "container" and _stone_blockers():
+			model = _create_stone_blocker()
 		elif object_type == "container" and use_container_panels:
 			model = _create_textured_container(obj)
 		elif object_type == "mine" and hazard_model != "":
@@ -2898,7 +2900,12 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 			# slots that would overlap an already-placed one.
 			if _crater_spot_free(rotated_x, rotated_z):
 				_crater_positions.append(Vector2(rotated_x, rotated_z))
-				model = _create_lava_pool(obj) if _prop_theme == "volcanic_" else _create_carnivore_plant(obj)
+				if hazard_model == LAVA_CRATER_MODEL:
+					model = _create_lava_pool(obj)
+				elif hazard_model == CARNIVORE_MODEL:
+					model = _create_carnivore_plant(obj)
+				else:
+					model = _create_fantasy_hazard(obj, hazard_model)
 				handles_own_facing = true
 			# else: model stays null -> this overlapping mine slot is skipped
 		elif object_type == "warning_sign" and hazard_model != "":
@@ -3220,6 +3227,59 @@ func _fetch_container_panels() -> void:
 		return
 	if not _last_objects.is_empty():
 		update_placed_objects(_last_objects, _last_obj_table_size, _last_obj_rotation)
+
+
+## A fantasy table has no shipping containers: its grid blocker is drawn as the plain stone solid a free blocker is
+## (PLAN_GAME_SYSTEM_SWITCH step 13, assets/terrain_systems.json container_look). Look only: the type, the box and the rules are
+## the container's. Read when the objects are built, so a layout drawn before a system change keeps its look until it is redrawn.
+func _stone_blockers() -> bool:
+	return not GameSystem.offers("container_look", "container_red", _table_system())
+
+
+func _table_system() -> String:
+	var main := get_node_or_null("/root/Main") if is_inside_tree() else null
+	return str(main.call("_table_system")) if main != null and main.has_method("_table_system") else ""
+
+
+## "grimdark" / "fantasy" of the table's game system, "" when no Main answers (tests, tools).
+func _table_setting() -> String:
+	var system := _table_system()
+	return GameSystem.setting(system) if not system.is_empty() else ""
+
+
+## A fantasy hazard prop (thorn field / sinkhole / stone circle, PLAN_GAME_SYSTEM_SWITCH step 14): the GLB fit to its footprint once
+## cached, else TerrainGroupBase's low procedural patch - never a mine. Facing seeded from the object's identity.
+func _create_fantasy_hazard(obj: Dictionary, model_name: String) -> Node3D:
+	var root := Node3D.new()
+	var scene: PackedScene = _hazards_library.get_model_scene(model_name) if _hazard_model_ready(model_name) else null
+	if scene != null:
+		var prop := scene.instantiate() as Node3D
+		_fit_to_footprint(prop, float(TerrainGroupBase.HAZARD_MODEL_DIAMETER_INCHES.get(model_name, 2.2)) * INCHES_TO_METERS)
+		root.add_child(prop)
+	else:
+		root.add_child(TerrainGroupBase.fantasy_fallback())
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _placed_object_seed(obj)
+	root.rotation.y = rng.randf() * TAU
+	return root
+
+
+## The stone blocker: the free blocker's plain look in the container's 6x3x2.5" rule box, with the container's own collider.
+func _create_stone_blocker() -> StaticBody3D:
+	var length := CONTAINER_LENGTH_INCHES * INCHES_TO_METERS
+	var depth := CONTAINER_DEPTH_INCHES * INCHES_TO_METERS
+	var height := CONTAINER_HEIGHT_INCHES * INCHES_TO_METERS
+	var body := StaticBody3D.new()
+	body.add_to_group("terrain")
+	body.add_to_group("terrain_piece")
+	SandboxSolidProp.add_look_meshes(body, "plain", {})
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(length, height, depth)
+	collision.shape = shape
+	collision.position.y = height / 2.0 - Z_FIGHT_OFFSET
+	body.add_child(collision)
+	return body
 
 
 ## A blocker as a textured shipping container: a 6x3x2.5" box built from quads wearing

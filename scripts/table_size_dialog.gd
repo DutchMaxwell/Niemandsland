@@ -28,6 +28,8 @@ const MENU_TO_TABLE := {"grassland":"temperate_grassland"}
 ## Preview images keep the diorama's file names (assets/ui/table_setup/<name>.webp).
 const PREVIEW_FILE := {"temperate_grassland":"grassland"}
 var selected_biome := "urban_ruins"
+## The game system the table is set up for (GameSystem.IDS): it filters the biomes on offer (assets/terrain_systems.json).
+var selected_system := GameSystem.DEFAULT_ID
 var selected_size := "standard"
 var custom_inches := Vector2(72,48)
 var _biome_keys: Array = BIOMES.keys()
@@ -36,6 +38,8 @@ var _unit_option: OptionButton
 var _width_input: LineEdit
 var _length_input: LineEdit
 var _biome_buttons: Dictionary = {}
+var _system_option: OptionButton   # the first row: the game system (item index = index into GameSystem.IDS)
+var _title_row: BoxContainer
 var _size_buttons: Dictionary = {}
 var _size_labels: Dictionary = {}
 var _custom: HBoxContainer
@@ -104,6 +108,7 @@ func _ready() -> void:
 			_back.grab_focus.call_deferred())
 	_fit_host()
 	_sync_inputs()
+	set_system(selected_system)   # the row's pick (default gf) filters the biomes and preselects the size
 	_refresh()
 
 
@@ -153,7 +158,24 @@ func _build_ui() -> void:
 	var intro := VBoxContainer.new()
 	intro.add_theme_constant_override("separation",8)
 	_page.add_child(intro)
-	intro.add_child(_label("Prepare your table.",34))
+	_title_row = BoxContainer.new()   # the first row of the setup: the game system sits on the title line, so it costs no height
+	intro.add_child(_title_row)
+	var title := _label("Prepare your table.",34)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_title_row.add_child(title)
+	var system_caption := _label("Game system",12,HouseStyle.MUTED)
+	system_caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_title_row.add_child(system_caption)
+	_system_option = OptionButton.new()
+	_system_option.name = "SystemOption"
+	_system_option.tooltip_text = "Sets the terrain on offer, the table size it starts on and the army lists the table accepts."
+	_system_option.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	for id in GameSystem.IDS:
+		_system_option.add_item(GameSystem.label(id))
+	_system_option.add_theme_font_override("font",FONT)
+	_system_option.add_theme_font_size_override("font_size",13)
+	_system_option.item_selected.connect(func(index: int) -> void: set_system(GameSystem.IDS[index]))
+	_title_row.add_child(_system_option)
 	intro.add_child(_label("Choose the setting and the space. Build the battlefield your way.",13,HouseStyle.MUTED,true))
 	_columns = BoxContainer.new()
 	_columns.add_theme_constant_override("separation",36)
@@ -352,14 +374,33 @@ func _add_left_air(column: VBoxContainer) -> void:
 func set_biomes(keys: Array, current: String) -> void:
 	_biome_keys = keys.map(func(key: Variant) -> String: return table_biome(str(key))) \
 		.filter(func(key: String) -> bool: return BIOMES.has(key))
-	current = table_biome(current)
-	selected_biome = current if current in _biome_keys else str(_biome_keys[0]) if not _biome_keys.is_empty() else ""
+	_pick_biome(table_biome(current))
+
+
+## The biomes on offer: what the caller listed, minus the ones the selected game system does not offer.
+func _shown_biomes() -> Array:
+	return _biome_keys.filter(func(key: String) -> bool: return GameSystem.offers("biome", key, selected_system))
+
+
+## Selects `current`, or the first biome on offer when it is not on offer (a hidden biome is never selected).
+func _pick_biome(current: String) -> void:
+	var shown := _shown_biomes()
+	selected_biome = current if current in shown else str(shown[0]) if not shown.is_empty() else ""
 	if is_node_ready():
 		_refresh()
 
 
+## Sets the game system the table is for; the biomes it does not offer disappear (the selection falls back if it was one)
+## and the size starts on the system's own board: 4 x 4 ft for the skirmish books, 6 x 4 ft otherwise. Only a PRESELECT:
+## a size picked afterwards wins.
+func set_system(id: String) -> void:
+	selected_system = GameSystem.normalize(id)
+	selected_size = "square" if GameSystem.default_board_feet(selected_system) == Vector2i(4, 4) else "standard"
+	_pick_biome(selected_biome)
+
+
 func _select_biome(key: String) -> void:
-	if key in _biome_keys:
+	if key in _shown_biomes():
 		selected_biome = key
 		_refresh()
 
@@ -418,8 +459,10 @@ func _size_text(inches: Vector2) -> String:
 
 
 func _refresh() -> void:
+	var shown := _shown_biomes()
+	_system_option.select(GameSystem.IDS.find(selected_system))
 	for key in _biome_buttons:
-		_biome_buttons[key].visible = key in _biome_keys
+		_biome_buttons[key].visible = key in shown
 		_style(_biome_buttons[key],key == selected_biome)
 	for key in _size_buttons:
 		_style(_size_buttons[key],key == selected_size)
@@ -427,7 +470,7 @@ func _refresh() -> void:
 	_size_labels.square.text = _size_text(Vector2(48,48))
 	_custom.visible = selected_size == "custom"
 	var inches := chosen_inches()
-	_valid = valid_dimensions(inches) and selected_biome in _biome_keys
+	_valid = valid_dimensions(inches) and selected_biome in shown
 	_create.disabled = not _valid or _emitted
 	_error.visible = not _valid
 	_error.text = "Enter width and depth from 30.48 to 609.6 cm." if _unit_option.selected == 1 else "Enter width and depth from 12 to 240 in."
@@ -478,6 +521,7 @@ func _layout(refill := true) -> void:
 	# so wide windows keep the 16:9 proportions of cards and preview instead of stretching them.
 	var padding := maxi(maxi(20,int(area.x*0.04)),int((area.x-area.y*PAGE_ASPECT)*0.5))
 	_header.vertical = area.x < 560
+	_title_row.vertical = area.x < 760
 	_footer.vertical = narrow
 	for side in ["left","right"]:
 		_margin.add_theme_constant_override("margin_"+side,padding)

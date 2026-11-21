@@ -50,7 +50,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_66_DISTANCE_TRUTH, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
+use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_66_DISTANCE_TRUTH, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, PENDING_EPOCH_HEIGHT};
 use crate::state::State;
 use crate::terrain::{self, Terrain};
 
@@ -423,6 +423,62 @@ pub fn has_los(
     true
 }
 
+/// PLAN_COVER_36: the far end of the FOOT line sits this high above where the target model stands (L-8).
+pub const FOOT_LIFT_M: f64 = 0.001;
+
+/// One volley's cover from sight blockers (PLAN_COVER_36 rule lines 1-5): `sighting` = the shooter models that see at least
+/// one model of the target chain, `hidden[t]` = target model `t` is behind a blocker for a strict majority of them, `screened` = the unit is.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Screen {
+    pub sighting: usize,
+    pub hidden: Vec<bool>,
+    pub screened: bool,
+}
+
+/// Cover from sight blockers through the sight test itself (no new geometry): a target model is behind a blocker for a shooter
+/// model that does not see it, or sees its eye but not its FOOT (the line from the shooter's eye to the base centre, lifted
+/// `FOOT_LIFT_M`). Strict majorities on both levels; a unit of one model is screened when that model is hidden. `targets` are the
+/// defense holder's own models (the count, L-5); `also_seen` the rest of its chain, which only widens the sighting set.
+#[allow(clippy::too_many_arguments)]
+pub fn screen(
+    shooters: &[Cyl],
+    targets: &[Cyl],
+    also_seen: &[Cyl],
+    single: bool,
+    to_aircraft: bool,
+    zones: &[Zone],
+    blockers: &[Blocker],
+) -> Screen {
+    let sees = |s: &Cyl, t: &Cyl| has_los(s, t, to_aircraft, zones, blockers);
+    let sighting: Vec<&Cyl> =
+        shooters.iter().filter(|s| targets.iter().chain(also_seen).any(|t| sees(s, t))).collect();
+    let n = sighting.len();
+    let hidden: Vec<bool> = targets
+        .iter()
+        .map(|t| {
+            let foot = Cyl { y1: t.y0 + FOOT_LIFT_M, ..*t };
+            let (mut behind, mut open) = (0, 0);
+            for s in &sighting {
+                if !sees(s, t) || !sees(s, &foot) {
+                    behind += 1;
+                } else {
+                    open += 1;
+                }
+                if behind * 2 > n || open * 2 >= n {
+                    break; // this model's majority is decided
+                }
+            }
+            behind * 2 > n
+        })
+        .collect();
+    let screened = if single {
+        hidden.first().copied().unwrap_or(false)
+    } else {
+        hidden.iter().filter(|&&h| h).count() * 2 > hidden.len()
+    };
+    Screen { sighting: n, hidden, screened }
+}
+
 /// `SoloController.sighted_models` — shooter models with BOTH range and sight to
 /// at least one target model. `los` is injected so the geometry stays pure.
 pub fn sighted_models(
@@ -478,7 +534,8 @@ pub fn zones_of(t: &Terrain) -> Vec<Zone> {
     zones_of_at(t, EPOCH_72_PLAYTEST_RULES)
 }
 
-/// `zones_of` as the game at `rules_epoch` reads the board: from `EPOCH_73_V36` a ruin is no volume.
+/// `zones_of` as the game at `rules_epoch` reads the board: from `EPOCH_73_V36` a ruin is no volume, from
+/// `PENDING_EPOCH_HEIGHT` every tier block of a generated board is a solid box.
 pub fn zones_of_at(t: &Terrain, rules_epoch: u32) -> Vec<Zone> {
     if !t.is_valid() {
         return Vec::new();
@@ -524,12 +581,22 @@ pub fn zones_of_at(t: &Terrain, rules_epoch: u32) -> Vec<Zone> {
     }
     let roof = volume_height_in(terrain::CONTAINER) * IN2M;
     out.extend(boxes.iter().map(|b| Zone::shelf_box(b.c, b.he, b.yaw, 0.0, roof, true)));
+    // Heightfield plan step 10b: every block of a generated tier board is a solid box of its real height, so a tier hides
+    // what stands behind it and a model on a roof sees over the lower ones. Below the gate, and with no `tiers`, nothing.
+    if rule_on(rules_epoch, PENDING_EPOCH_HEIGHT) {
+        let m = t.in2m();
+        out.extend(t.tier_boxes().iter().map(|b| {
+            let (c, he) = ([(b.lo[0] + b.hi[0]) * 0.5 * m, (b.lo[1] + b.hi[1]) * 0.5 * m], [(b.hi[0] - b.lo[0]) * 0.5 * m, (b.hi[1] - b.lo[1]) * 0.5 * m]);
+            Zone::shelf_box(c, he, 0.0, 0.0, b.top_in * m, true)
+        }));
+    }
     out
 }
 
 /// `VolumetricLos.surface_y_at` (:211) over the board's solid volumes - the height a model standing at the flat world
 /// point `p` stands on: the roof of the container holding it (a placed box, or a painted container cell no box covers,
-/// the same two the zones above keep), else the table at 0. Metres. G4R5 R3: the table settles every moved model here.
+/// the same two the zones above keep), else the table at 0; from `PENDING_EPOCH_HEIGHT` the higher of that and the tier
+/// under the point. Metres. G4R5 R3: the table settles every moved model here.
 pub fn surface_y_m(t: &Terrain, p: [f64; 2], rules_epoch: u32) -> f64 {
     let boxes: &[terrain::ContainerObb] = if rule_on(rules_epoch, EPOCH_73_V36) { t.containers() } else { &[] };
     let covered = |q: [f64; 2]| boxes.iter().any(|b| BoxFoot { c: b.c, he: b.he, yaw: b.yaw, y0: 0.0 }.holds_point(q));
@@ -537,7 +604,14 @@ pub fn surface_y_m(t: &Terrain, p: [f64; 2], rules_epoch: u32) -> f64 {
     let k = cell_of(p, t.grid_yaw(), t.cell_m());
     let (lx, lz) = ((k.0 as f64 + 0.5) * t.cell_m(), (k.1 as f64 + 0.5) * t.cell_m());
     let painted = t.type_at([p[0] as f32, 0.0, p[1] as f32]) == terrain::CONTAINER && !covered([lx * cos - lz * sin, lx * sin + lz * cos]);
-    if covered(p) || painted { volume_height_in(terrain::CONTAINER) * IN2M } else { 0.0 }
+    let roof = if covered(p) || painted { volume_height_in(terrain::CONTAINER) * IN2M } else { 0.0 };
+    // Heightfield plan step 10: a generated tier board's level under the point is a surface too (`tier_in_at` is the
+    // board-centred inch frame; a board without tiers answers 0). Below the gate the same header plays flat.
+    if rule_on(rules_epoch, PENDING_EPOCH_HEIGHT) {
+        roof.max(t.tier_in_at(p[0] / t.in2m(), p[1] / t.in2m()) * t.in2m())
+    } else {
+        roof
+    }
 }
 
 /// `zones_of`, plus with `shelf` (the dormant `Seams::shelf_sight`) every freely
@@ -664,6 +738,24 @@ pub fn sighted_count(
     })
 }
 
+/// `screen` for one volley in a game (PLAN_COVER_36 step 4): each shooter-chain member's models with its own unit radius and
+/// height, the defense holder's models (and, for the sighting set only, its joined heroes') with the holder's, as
+/// `sighted_count` builds them; `blockers_of` keeps both chains and dormant units out. A unit built with one model is `single`.
+pub fn screen_of(state: &State, zones: &[Zone], shooter: usize, target: usize, rules_epoch: u32) -> Screen {
+    let mut shooters = Vec::new();
+    for &m in std::iter::once(&shooter).chain(state.attached[shooter].iter()) {
+        let (r, h) = (unit_radius_m(state, m), unit_height_m(state, m, rules_epoch));
+        shooters.extend(state.positions[m].iter().map(|p| Cyl { c: [p[0], p[2]], r, y0: p[1], y1: p[1] + h }));
+    }
+    let (r, h) = (unit_radius_m(state, target), unit_height_m(state, target, rules_epoch));
+    let cyl = |p: &[f64; 3]| Cyl { c: [p[0], p[2]], r, y0: p[1], y1: p[1] + h };
+    let targets: Vec<Cyl> = state.positions[target].iter().map(cyl).collect();
+    let also: Vec<Cyl> = state.attached[target].iter().flat_map(|&t| state.positions[t].iter().map(cyl)).collect();
+    let blockers = blockers_of(state, shooter, target, rules_epoch);
+    let single = state.profile(target).model_count <= 1;
+    screen(&shooters, &targets, &also, single, state.aircraft[target], zones, &blockers)
+}
+
 /// `main.SOLO_LOS_UNBOUNDED_RANGE_IN` main.gd:9174 — the "range never gates"
 /// sentinel the unit-level query passes so `sighted_count` is a pure sight test.
 pub const UNBOUNDED_RANGE_IN: f64 = 9999.0;
@@ -725,6 +817,141 @@ mod tests {
 
     fn blocker(x_in: f64, z_in: f64, base_mm: f64, unit: usize) -> Blocker {
         Blocker { cyl: cyl(x_in, z_in, base_mm), unit, aircraft: false }
+    }
+
+    /// A 4 x 4 board of 3 in cells (board-centred, x and z from -6 to 6 in); the two columns at x >= 0 stand 6 in high.
+    fn half_raised() -> Terrain {
+        let level_in = (0..16).map(|i| if i % 4 >= 2 { 6.0 } else { 0.0 }).collect();
+        terrain::tier_board_for_test(4, 4, level_in, Vec::new())
+    }
+
+    /// Heightfield plan step 10: the height gate makes a tier a surface. Red before: `surface_y_m` knew containers
+    /// only and answered 0 on the 6 in tier.
+    #[test]
+    fn a_model_on_a_6in_tier_stands_at_6in_from_the_height_gate() {
+        let (t, at) = (half_raised(), |x_in: f64, z_in: f64| [x_in * M, z_in * M]);
+        assert_eq!(surface_y_m(&t, at(1.5, 0.0), PENDING_EPOCH_HEIGHT), 6.0 * M);
+        assert_eq!(surface_y_m(&t, at(4.5, -4.5), PENDING_EPOCH_HEIGHT), 6.0 * M, "any cell of the block");
+        assert_eq!(surface_y_m(&t, at(-1.5, 0.0), PENDING_EPOCH_HEIGHT), 0.0, "the ground column");
+        assert_eq!(surface_y_m(&t, at(9.0, 0.0), PENDING_EPOCH_HEIGHT), 0.0, "off the grid is the table");
+        // the gate: one epoch below, and a board with no tiers at the gate, both play flat
+        assert_eq!(surface_y_m(&t, at(1.5, 0.0), PENDING_EPOCH_HEIGHT - 1), 0.0);
+        let flat = board(&[]);
+        assert_eq!(surface_y_m(&flat, at(1.5, 0.0), PENDING_EPOCH_HEIGHT), 0.0);
+    }
+
+    /// A container on a tier stands on whichever is higher: its 2.5 in roof over the ground, the 3 in tier under it.
+    #[test]
+    fn a_container_roof_and_a_tier_give_the_higher_surface() {
+        let level_in: Vec<f64> = (0..16).map(|i| if i % 4 >= 2 { 3.0 } else { 0.0 }).collect();
+        let mut p = terrain::PlainTerrain {
+            cell_params: terrain::CellParams { table_size_feet: [1.0, 1.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: M },
+            tiers: Some(terrain::TierGrid { nx: 4, nz: 4, cell_in: 3.0, level_in, ladders: Vec::new(), stairs: Vec::new() }),
+            ..Default::default()
+        };
+        p.containers = vec![terrain::ContainerObb { c: [-1.5 * M, 0.0], he: [1.0 * M, 1.0 * M], yaw: 0.0 }, terrain::ContainerObb { c: [1.5 * M, 0.0], he: [1.0 * M, 1.0 * M], yaw: 0.0 }];
+        let t = Terrain::build(&p);
+        let h = |x_in: f64| surface_y_m(&t, [x_in * M, 0.0], PENDING_EPOCH_HEIGHT);
+        assert_eq!(h(-1.5), 2.5 * M, "a container on the ground");
+        assert_eq!(h(1.5), 3.0 * M, "a container on a 3 in tier: the tier is higher");
+    }
+
+    /// A model of `base_mm` standing at `x_in` on a surface `y_in` high (z = 0).
+    fn cyl_on(x_in: f64, y_in: f64, base_mm: f64) -> Cyl {
+        let r = base_mm / 2000.0;
+        Cyl { c: [x_in * M, 0.0], r, y0: y_in * M, y1: y_in * M + model_height_m(r) }
+    }
+
+    /// A 6 x 2 board of 3 in cells (x from -9 to 9 in), the columns given by `levels` (same on both rows).
+    fn strip(levels: [f64; 6]) -> Terrain {
+        terrain::tier_board_for_test(6, 2, (0..12).map(|i| levels[i % 6]).collect(), Vec::new())
+    }
+
+    /// Heightfield plan step 10b. Red before: a tier made no zone, two models on the ground saw each other through a
+    /// 6 in block (and the gate and the no-tiers board keep that: nothing changes there).
+    #[test]
+    fn a_tier_blocks_sight_on_the_ground() {
+        let t = strip([0.0, 0.0, 6.0, 6.0, 0.0, 0.0]);
+        let (a, b) = (cyl_on(-6.0, 0.0, 32.0), cyl_on(6.0, 0.0, 32.0));
+        let sees = |t: &Terrain, epoch: u32| has_los(&a, &b, false, &zones_of_at(t, epoch), &[]);
+        assert!(!sees(&t, PENDING_EPOCH_HEIGHT), "the block stands between them");
+        assert!(sees(&t, PENDING_EPOCH_HEIGHT - 1), "one epoch below the gate the board plays flat");
+        assert!(sees(&strip([0.0; 6]), PENDING_EPOCH_HEIGHT), "no raised cell, no block");
+        assert_eq!(zones_of_at(&t, PENDING_EPOCH_HEIGHT).len(), 1, "the two raised cells of a row run are one block");
+    }
+
+    /// A model on the edge of a 6 in roof sees over the 3 in tier below it to the ground beyond; the same target is
+    /// hidden from the back of the roof, where the roof's own rim is in the way.
+    #[test]
+    fn a_roof_sees_over_a_lower_tier() {
+        let t = strip([6.0, 6.0, 3.0, 0.0, 0.0, 0.0]);
+        let zones = zones_of_at(&t, PENDING_EPOCH_HEIGHT);
+        assert_eq!(zones.len(), 2, "the 6 in roof and the 3 in tier");
+        let ground = cyl_on(4.0, 0.0, 32.0);
+        assert!(has_los(&cyl_on(-3.5, 6.0, 32.0), &ground, false, &zones, &[]), "over the 3 in tier at 4 in");
+        assert!(!has_los(&cyl_on(-8.5, 6.0, 32.0), &ground, false, &zones, &[]), "from the back of the roof the rim hides it");
+    }
+
+    #[test]
+    fn the_foot_of_a_wall_is_hidden_from_the_back_of_the_roof() {
+        let t = strip([0.0, 0.0, 0.0, 6.0, 6.0, 6.0]);
+        let zones = zones_of_at(&t, PENDING_EPOCH_HEIGHT);
+        let foot = cyl_on(-1.0, 0.0, 32.0);
+        assert!(!has_los(&cyl_on(8.0, 6.0, 32.0), &foot, false, &zones, &[]), "from the back of the roof the rim hides the foot");
+        assert!(has_los(&cyl_on(1.0, 6.0, 32.0), &cyl_on(-8.0, 0.0, 32.0), false, &zones, &[]), "from the rim it sees the far ground");
+    }
+
+    /// PLAN_COVER_36 step 3: the shared case file (`test/fixtures/one_core/cover_screen_cases.json`, also read by the
+    /// gdUnit twin) through `screen`, every case.
+    #[test]
+    fn cover_screen_matches_the_shared_cases() {
+        let path = format!("{}/../../test/fixtures/one_core/cover_screen_cases.json", env!("CARGO_MANIFEST_DIR"));
+        let doc: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).expect("the cover case file")).unwrap();
+        assert_eq!(doc["foot_lift_m"].as_f64(), Some(FOOT_LIFT_M));
+        let f = |v: &serde_json::Value| v.as_f64().unwrap();
+        let xy = |v: &serde_json::Value| [f(&v[0]), f(&v[1])];
+        let cyls = |c: &serde_json::Value, k: &str| -> Vec<Cyl> {
+            let (r, h) = (f(&c[format!("{k}_r")]), f(&c[format!("{k}_h")]));
+            let pts = c[format!("{k}s")].as_array().unwrap();
+            pts.iter().map(|p| Cyl { c: [f(&p[0]), f(&p[2])], r, y0: f(&p[1]), y1: f(&p[1]) + h }).collect()
+        };
+        let cases = doc["cases"].as_array().unwrap();
+        let mut bad = Vec::new();
+        for c in cases {
+            let blockers: Vec<Blocker> = c["blockers"].as_array().unwrap().iter().map(|b| Blocker {
+                cyl: Cyl { c: xy(&b["c"]), r: f(&b["r"]), y0: f(&b["y0"]), y1: f(&b["y1"]) },
+                unit: b["unit"].as_u64().unwrap() as usize,
+                aircraft: b["aircraft"].as_bool().unwrap(),
+            }).collect();
+            let zones: Vec<Zone> = c["boxes"].as_array().unwrap().iter()
+                .map(|b| Zone::shelf_box(xy(&b["c"]), xy(&b["he"]), f(&b["yaw"]), f(&b["y0"]), f(&b["y1"]), true)).collect();
+            let got = screen(&cyls(c, "shooter"), &cyls(c, "target"), &[], c["single"].as_bool().unwrap(), false, &zones, &blockers);
+            let want = &c["want"];
+            let hidden: Vec<bool> = want["hidden"].as_array().unwrap().iter().map(|h| h.as_bool().unwrap()).collect();
+            let want = Screen { sighting: want["sighting"].as_u64().unwrap() as usize, hidden, screened: want["screened"].as_bool().unwrap() };
+            if got != want {
+                bad.push(format!("{}: got {got:?}, want {want:?}", c["name"]));
+            }
+        }
+        assert_eq!(cases.len(), 12);
+        assert!(bad.is_empty(), "{}", bad.join("\n"));
+    }
+
+    /// PLAN_COVER_36 step 4: a third unit of short models between shooter 0 and target 2 hides the target's feet, not its
+    /// head; the same unit still in reserve (dormant) hides nothing.
+    #[test]
+    fn a_third_unit_between_screens_the_target_unless_it_is_dormant() {
+        let mut st = crate::sim::tests::four_unit_line();
+        st.attached = std::rc::Rc::new(vec![vec![]; 4]);
+        st.attached_to = std::rc::Rc::new(vec![None; 4]);
+        st.positions[1] = vec![at(0.0, 50.0)];
+        st.positions[3] = vec![at(10.0, 0.0)];
+        st.radii = std::rc::Rc::new(vec![vec![M], vec![M], vec![M], vec![0.5 * M]]);
+        let got = screen_of(&st, &[], 0, 2, 95);
+        assert_eq!(got, Screen { sighting: 1, hidden: vec![true], screened: true }, "head over unit 3, feet behind it");
+        st.dormant[3] = true;
+        let got = screen_of(&st, &[], 0, 2, 95);
+        assert_eq!(got, Screen { sighting: 1, hidden: vec![false], screened: false }, "a unit in reserve is not on the table");
     }
 
     #[test]

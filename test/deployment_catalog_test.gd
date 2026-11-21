@@ -48,10 +48,49 @@ func test_spearhead_wedge_sanity() -> void:
 
 func test_opposing_forces_corners() -> void:
 	var style := DeploymentCatalog.get_style("opposing_forces")
-	assert_bool(DeploymentCatalog.in_zone(style, 1, Vector2(-30, 20))).is_true()
-	assert_bool(DeploymentCatalog.in_zone(style, 1, Vector2(-30, -20))).is_false()
-	assert_bool(DeploymentCatalog.in_zone(style, 2, Vector2(30, -20))).is_true()
-	assert_bool(DeploymentCatalog.in_zone(style, 2, Vector2(30, 20))).is_false()
+	assert_bool(DeploymentCatalog.in_zone(style, 2, Vector2(-30, 20))).is_true()
+	assert_bool(DeploymentCatalog.in_zone(style, 2, Vector2(-30, -20))).is_false()
+	assert_bool(DeploymentCatalog.in_zone(style, 1, Vector2(30, -20))).is_true()
+	assert_bool(DeploymentCatalog.in_zone(style, 1, Vector2(30, 20))).is_false()
+
+
+## The role convention (the front-line overlay's too): player 1 owns the z-negative side; a style that splits left / right
+## (equal z) gives player 1 the x-negative side. Role-agnostic styles carry the same zone under both keys and have no side.
+## Read from the JSON for EVERY style on EVERY board, so a new entry cannot drift from it.
+func test_player_one_owns_the_negative_side_of_every_style_on_every_board() -> void:
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(DeploymentCatalog.CATALOG_PATH))
+	var sets := {"72x48": data["styles"]}
+	for key in data.get("boards", {}):
+		sets[key] = data["boards"][key]
+	var checked := 0
+	for board in sets:
+		for id in sets[board]:
+			var zones: Dictionary = sets[board][id]["zones"]
+			if zones["1"] == zones["2"]:
+				continue
+			checked += 1
+			var m1 := _mean_xz(zones["1"])
+			var m2 := _mean_xz(zones["2"])
+			var ok: bool = m1.y < m2.y - 1e-6 or (absf(m1.y - m2.y) <= 1e-6 and m1.x < m2.x - 1e-6)
+			assert_bool(ok).override_failure_message("%s/%s: player 1 is not on the negative side (z %.1f vs %.1f, x %.1f vs %.1f)" % [
+				board, id, m1.y, m2.y, m1.x, m2.x]).is_true()
+	assert_int(checked).is_greater_equal(5)
+
+
+## Mean of every vertex (a disc counts as its centre) of a player's zone list, as (x, z).
+func _mean_xz(polys: Array) -> Vector2:
+	var sum := Vector2.ZERO
+	var n := 0
+	for poly in polys:
+		if poly is Dictionary:
+			var c: Array = (poly as Dictionary)["disc"]["c"]
+			sum += Vector2(c[0], c[1])
+			n += 1
+			continue
+		for xz in poly:
+			sum += Vector2(xz[0], xz[1])
+			n += 1
+	return sum / maxf(n, 1.0)
 
 
 ## D4a: the SAME six points per style are pinned in core/nml-core/tests/objectives.rs (D4b).

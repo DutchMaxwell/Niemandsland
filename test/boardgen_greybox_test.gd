@@ -95,7 +95,7 @@ func test_every_connector_is_a_ladder_drawn_as_rails_and_rungs_and_no_stair_is_b
 		# Two rails and five rungs per 3 in ladder; no other connector shape exists.
 		assert_int(_of_kind(boxes, ["ladder"]).size()).is_equal(conns.size() * 7)
 		assert_int(_of_kind(boxes, ["stair"]).size()).is_equal(0)
-		assert_int(boxes.size()).is_equal(_of_kind(boxes, ["street", "ground", "hazard", "tier1", "tier2", "tier3", "ladder"]).size())
+		assert_int(boxes.size()).is_equal(_of_kind(boxes, ["street", "ground", "hazard", "tier1", "tier2", "tier3", "ladder", "kerb"]).size())
 		assert_bool(BoardgenGreybox.KINDS.has("stair")).is_false()
 	assert_int(_fixture()["connectors"].size()).is_greater(0)
 
@@ -128,6 +128,26 @@ func test_build_draws_the_whole_board_in_one_multimesh_and_a_ground_layer_collid
 	assert_bool(node.is_in_group("sandbox_terrain") or node.is_in_group("terrain")).is_false()
 
 
+func test_every_box_hands_the_shader_its_kind_and_its_size_in_inches_and_the_mesh_is_the_unit_cube() -> void:
+	for layout in _layouts():
+		for b in BoardgenGreybox.plan(layout):
+			var c := BoardgenGreybox.custom_data(b)
+			var size: Vector3 = b["hi"] - b["lo"]
+			assert_float(c.r).is_equal(float(BoardgenGreybox.KINDS.find(b["kind"])))
+			assert_vector(Vector3(c.g, c.b, c.a)).is_equal_approx(size, Vector3.ONE * 0.001)
+	var surfaces := _built(_fixture()).find_child("Surfaces", false, false) as MultiMeshInstance3D
+	assert_vector((surfaces.multimesh.mesh as BoxMesh).size).is_equal(Vector3.ONE)   # the shader reads VERTEX * size as inches in the box
+
+
+func test_the_finer_look_is_on_from_medium_and_off_on_performance_low_and_the_compatibility_renderer() -> void:
+	var q: Dictionary = GraphicsSettings.QualityPreset
+	assert_bool(BoardgenGreybox.detail_for(q.MEDIUM, false)).is_true()
+	assert_bool(BoardgenGreybox.detail_for(q.ULTRA, false)).is_true()
+	assert_bool(BoardgenGreybox.detail_for(q.LOW, false)).is_false()
+	assert_bool(BoardgenGreybox.detail_for(q.PERFORMANCE, false)).is_false()
+	assert_bool(BoardgenGreybox.detail_for(q.ULTRA, true)).is_false()
+
+
 func test_the_board_shader_gets_a_height_texel_per_cell_and_knows_every_surface_kind() -> void:
 	var layout := _fixture()
 	var surfaces := _built(layout).find_child("Surfaces", false, false) as MultiMeshInstance3D
@@ -136,6 +156,13 @@ func test_the_board_shader_gets_a_height_texel_per_cell_and_knows_every_surface_
 	assert_int(cells.get_width() * cells.get_height()).is_equal(CELLS)
 	for c: Dictionary in layout["cells"]:
 		assert_int(cells.get_pixel(c["x"], c["z"]).r8).is_equal(int(layout["level_in"][c["level"]]))
+		assert_int(cells.get_pixel(c["x"], c["z"]).b8).override_failure_message("the lot id must reach the shader (a roof has one look per lot)").is_equal(int(c["lot_id"]) % 256)
+	var feet := {}   # the floor cell at the foot of a ladder is flagged in the alpha channel (the shader puts no door there)
+	for conn: Dictionary in layout["connectors"]:
+		feet[Vector2i(conn["low_xz"][0], conn["low_xz"][1])] = true
+	assert_bool(feet.size() > 0).is_true()
+	for c: Dictionary in layout["cells"]:
+		assert_int(cells.get_pixel(c["x"], c["z"]).a8).override_failure_message("ladder foot flag wrong at %d,%d" % [c["x"], c["z"]]).is_equal(255 if feet.has(Vector2i(c["x"], c["z"])) else 0)
 	for b in BoardgenGreybox.plan(layout):   # (the per-instance kind itself is not readable back on the headless renderer)
 		assert_int(BoardgenGreybox.KINDS.find(b["kind"])).override_failure_message("the board shader has no kind '%s'" % b["kind"]).is_greater_equal(0)
 
@@ -155,3 +182,41 @@ func test_the_dev_flag_is_off_unless_the_env_var_is_set() -> void:
 		assert_bool(node.is_in_group("table_overlay")).is_true()   # survives Table.setup_table's child sweep
 	else:
 		assert_object(node).is_null()
+
+
+func test_the_kit_ladders_stand_on_the_wall_face_facing_away_from_it() -> void:
+	for layout in _layouts():
+		var conns: Array = layout["connectors"]
+		var groups := BoardgenGreybox.ladder_kit_plan(layout)
+		var items: Array = groups.get("ladder_top", []) + groups.get("ladder_3in", [])
+		assert_int(items.size()).is_equal(conns.size())   # every ladder of the core rises 3 in: one segment, the top piece
+		assert_bool(groups.has("ladder_3in")).is_false()
+		var origin := Vector2(layout["nx"], layout["nz"]) * CELL_IN * -0.5
+		for i in conns.size():
+			var c: Dictionary = conns[i]
+			var xf: Transform3D = items[i]["xf"]
+			var at := Vector2(c["edge_in"][0], c["edge_in"][1]) + origin
+			var away := Vector2(Vector2i(c["low_xz"][0], c["low_xz"][1]) - Vector2i(c["high_xz"][0], c["high_xz"][1]))
+			assert_vector(xf.origin / BoardgenGreybox.INCHES_TO_METERS).is_equal_approx(Vector3(at.x, layout["level_in"][layout["cells"][c["low"]]["level"]], at.y), Vector3.ONE * 0.001)
+			assert_vector(xf.basis * Vector3.BACK).is_equal_approx(Vector3(away.x, 0.0, away.y), Vector3.ONE * 0.001)
+
+
+func test_the_theme_flag_is_off_unless_set() -> void:
+	OS.set_environment(BoardgenGreybox.ENV_THEME, "")
+	assert_str(BoardgenGreybox.theme_from_env()).is_empty()
+	OS.set_environment(BoardgenGreybox.ENV_THEME, "  RuinTown ")
+	assert_str(BoardgenGreybox.theme_from_env()).is_equal("ruintown")
+	var core := _core()
+	if OS.is_debug_build() and core != null and core.has_method("boardgen_layout_themed"):
+		var table: Node3D = auto_free(Node3D.new())
+		add_child(table)
+		OS.set_environment(BoardgenGreybox.ENV_SEED, "7")
+		var town := BoardgenGreybox.attach_from_env(table)
+		OS.set_environment(BoardgenGreybox.ENV_THEME, "")
+		var plain_board := BoardgenGreybox.attach_from_env(table)
+		OS.set_environment(BoardgenGreybox.ENV_SEED, "")
+		assert_str(town.layout_theme).is_equal("RuinTown")
+		assert_str(plain_board.layout_theme).is_equal("Deepworks")   # no flag, no theme: the original board
+		assert_dict(core.boardgen_layout_themed(7, "castle")).contains_keys(["problems"])
+		assert_array(core.boardgen_layout_themed(7, "castle")["problems"]).contains(["unknown theme"])
+	OS.set_environment(BoardgenGreybox.ENV_THEME, "")

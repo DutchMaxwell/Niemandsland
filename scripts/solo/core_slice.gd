@@ -21,9 +21,10 @@ const DENY_PATH := "res://assets/solo/core_slice_deny.json"
 ## the group (a test's own, the dice-only pin for the line-only one) refuses nothing of the kind.
 const SIMULTANEOUS_FIRE_GROUP := "door_omits_simultaneous_fire_line"
 const OWN_SHRED_GROUP := "door_own_shred_beside_alias"
+const AMBUSH_FLYING_GROUP := "ambush_flying_landing"
 const VERSATILE_PAIR_GROUP := "door_versatile_pick_modified_to_hit"
 const TAKEDOWN_LABEL_GROUP := "door_takedown_names_an_equipment_carrier"
-const UNSTOPPABLE_FOLD_GROUP := "door_omits_unstoppable_fold_line"
+const FORTIFIED_LOSS_GROUP := "door_omits_fortified_aura_loss_line"
 ## The primitives whose rules move a SHOOTING to-hit number: on the target (Artillery's -1, the Stealth and Evasive families, Aircraft) and on the shooter.
 const TO_HIT_ON_TARGET := ["Artillery", "Stealth", "Evasive", "Aircraft"]
 ## H-10 (Plan H): Unpredictable Shooter's 4-6 half is a +1 to hit the table folds into the number a Versatile pick is latched on; probed 5 of 16
@@ -56,7 +57,7 @@ static func reset_cache() -> void:
 static func config() -> Dictionary:
 	if not _loaded.is_empty():
 		return _loaded
-	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}, "unmapped_inert": false, "group_names": []}
+	_loaded = {"mode": "allow", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}, "unmapped_inert": false, "group_names": [], "shooter_only": {}, "lifted_names": {}}
 	var live := path_override.is_empty()
 	var path := live_path()
 	# Each file belongs to one door: the melee files only through MELEE_PATH / MELEE_DENY_PATH, every other path (shipped, deny, a test file) is the shoot door's.
@@ -70,6 +71,9 @@ static func config() -> Dictionary:
 	for g in data.get("groups", {}):
 		for p in data["groups"][g].get("primitives", []):
 			_loaded["primitives"][str(p)] = str(g)
+			# H-9a: a group with "side": "shooter" refuses its primitives on the SHOOTING unit only (a pre-attack beat is the bearer's own act).
+			if str(data["groups"][g].get("side", "")) == "shooter":
+				_loaded["shooter_only"][str(p)] = true
 	_loaded["attached"] = (data.get("groups", {}) as Dictionary).has("attached_heroes")
 	_loaded["group_names"] = (data.get("groups", {}) as Dictionary).keys()
 	# Deny mode only: rule names with no effect on a volley (list-building rules, an item's own label) - taken although the
@@ -77,6 +81,7 @@ static func config() -> Dictionary:
 	if _loaded["mode"] == "deny":
 		_loaded["inert"] = data.get("inert", {})
 		_loaded["deny_names"] = data.get("deny_names", {})   # one rule NAME refused where its primitive is shared
+		_loaded["lifted_names"] = data.get("lifted_names", {})   # H-9b: one rule NAME taken where its primitive's group is refused
 		_loaded["unmapped_inert"] = bool(data.get("unmapped_inert", false))
 	if live:
 		print(mode_line())   # C-19: one line per load of the live slice (once per process outside the tests), so a log names the slice in use
@@ -124,12 +129,14 @@ static func rule_label(r) -> String:
 
 
 ## `gu`'s rule `label` is one the slice takes: listed in "allow", not listed in "deny"; no primitive = no.
-static func _rule_taken(gu: GameUnit, label: String) -> bool:
+static func _rule_taken(gu: GameUnit, label: String, as_target := false) -> bool:
 	var c := config()
 	if (c["inert"] as Dictionary).has(label):
 		return true
 	if (c["deny_names"] as Dictionary).has(label):
 		return false
+	if (c.get("lifted_names", {}) as Dictionary).has(label):   # .get: a test or an older cache entry may hold a slice dict without the key
+		return true
 	var prims: Dictionary = c["primitives"]
 	var allow: bool = c["mode"] == "allow"
 	if allow and prims.is_empty():
@@ -138,6 +145,8 @@ static func _rule_taken(gu: GameUnit, label: String) -> bool:
 	if entry.is_empty() and bool(c["unmapped_inert"]):
 		return true   # a name no map knows (an upgrade's own label): neither side reads it, the rules it grants are listed apart
 	var p: Variant = entry.get("primitive")
+	if as_target and not allow and p is String and (c.get("shooter_only", {}) as Dictionary).has(p):
+		return true   # H-9a: a target's beat rule never acts in the volley it is shot by
 	return p is String and prims.has(p) == allow
 
 
@@ -145,10 +154,12 @@ static func _rule_taken(gu: GameUnit, label: String) -> bool:
 
 ## Why the slice refuses `gu` - the labels the P4.D-3 census counts ("unit_rule:<name>", "attached", "non_opr",
 ## "weapon_rule:<name>"); [] = the core door takes it. `as_target`: a target needs no OPR profile (P4.D-13b).
-static func refusals(gu: GameUnit, as_target := false) -> Array:
+static func refusals(gu: GameUnit, as_target := false, shooters_hero := false) -> Array:
 	var out: Array = []
+	# H-9a: `shooters_hero` = the recursion below reads a SHOOTER's joined hero (as a target for the profile rules, but its beats are the shooter's own).
+	var shot_at := as_target and not shooters_hero
 	for r in gu.get_special_rules():
-		if not _rule_taken(gu, rule_label(r)):
+		if not _rule_taken(gu, rule_label(r), shot_at):
 			out.append("unit_rule:" + rule_label(r))
 	var c := config()
 	if (gu.has_attached_heroes() or gu.is_attached()) and c["attached"] != (c["mode"] == "allow"):
@@ -165,9 +176,14 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 				and gu.get_attached_heroes().any(func(h) -> bool: return h is GameUnit and (h as GameUnit).get_alive_count() > 0):
 			out.append("lone_hero_target")
 		for hero in gu.get_attached_heroes():
-			for r in refusals(hero as GameUnit, true):
+			for r in refusals(hero as GameUnit, true, not as_target):
 				if r != "attached" and r != "spell_hit_mod" and r != "vengeance_markers" and not out.has(r):
 					out.append(r)
+	# Deny mode, a TARGET: an aofs / gff aura-granted Fortified whose bearer has fallen. The table says `<aura>: bearer killed -> benefit lost` once
+	# on the first save batch it bites (`_solo_fortified_aura_loss_log`, a guard kept across volleys); the core stands the benefit down too (same
+	# dice) but writes no line (dlines_gap row 21). A line gap by STATE, so the volley stays on the table until the core carries the guard.
+	if as_target and c["mode"] == "deny" and _has_group(FORTIFIED_LOSS_GROUP) and _fortified_aura_bearer_dead(gu):
+		out.append("fortified_aura_bearer_dead")
 	for r in _ledger_hit_refusals(gu, as_target):
 		if not out.has(r):
 			out.append(r)
@@ -175,7 +191,7 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 		return out if as_target else out + ["non_opr"]
 	for w in (gu.source_data as OPRApiClient.OPRUnit).weapons:
 		for r in w.special_rules:
-			if not _rule_taken(gu, rule_label(r)):
+			if not _rule_taken(gu, rule_label(r), shot_at):
 				out.append("weapon_rule:" + rule_label(r))
 	# Deny mode, a SHOOTER: a Deadly weapon beside another ranged weapon (dlines_gap rows 18 and 1). The table lands Deadly wounds
 	# inline, so a later weapon of the same volley can see fewer models and says so ("Simultaneous fire: ...", Blast's "cap read when the
@@ -188,24 +204,24 @@ static func refusals(gu: GameUnit, as_target := false) -> Array:
 	# difference (the target's wounds), not a missing line, so the dice-only pin keeps this refusal.
 	if not as_target and out.is_empty() and config()["mode"] == "deny" and _has_group(OWN_SHRED_GROUP) and _own_shred_beside_alias(gu):
 		out.append("own_shred_beside_alias")
+	# Deny mode, a CHARGER carrying both Ambush and Flying (melee95, the melee soak's Blood Guard Brothers at an Organ Tank): on a real board the core's landing
+	# and the table's end up 5.7 in apart. Not a rule name: either rule alone is taken equal in the sweep, so the refusal is the pair on one charger.
+	if not as_target and out.is_empty() and config()["mode"] == "deny" and _has_group(AMBUSH_FLYING_GROUP) and gu.has_special_rule("Ambush") and gu.has_special_rule("Flying"):
+		out.append("ambush_flying_landing")
 	return out
 
 
 ## Deny mode, a PAIR (two groups). Versatile: the core latches a Versatile Attack pick on the plain Quality, the table on the MODIFIED to-hit
 ## number, so a Versatile shooter and any to-hit modifier in play (on the target, or on the shooter itself) can pick differently: a state
-## difference, kept by the dice-only pin. Takedown: a line difference (the picked model's label), dropped by it.
+## difference, kept by the dice-only pin until the core reads the modified number (epoch 94, `PENDING_EPOCH_VERSATILE_MODIFIED_HIT`). Takedown: a line difference (the picked model's label), dropped by it.
 ## `pair_refusals_in` reads a named slice file like `refusals_in` (the shadow's census reads the deny file whatever the live slice is).
 static func pair_refusals(shooter: GameUnit, target: GameUnit) -> Array:
 	var out: Array = []
 	if shooter == null or target == null or config()["mode"] != "deny":
 		return out
-	if _has_group(VERSATILE_PAIR_GROUP) and _chain_carries(shooter, ["Versatile Attack"]) \
+	if _has_group(VERSATILE_PAIR_GROUP) and AiActRecorder.rules_epoch < AiActRecorder.PENDING_EPOCH_VERSATILE_MODIFIED_HIT and _chain_carries(shooter, ["Versatile Attack"]) \
 			and (_chain_carries(target, TO_HIT_ON_TARGET) or _chain_carries(shooter, TO_HIT_ON_SHOOTER)):
 		out.append("versatile_pick_modified_to_hit")
-	# The table says "Unstoppable: negative to-hit modifiers ignored" when a shooter's Unstoppable weapon swallows a minus (`_solo_unstoppable_fold`);
-	# the core says it only for the granted mark and aura, the weapon's own flag stays silent. The dice are equal: a missing line, refused until it exists.
-	if _has_group(UNSTOPPABLE_FOLD_GROUP) and _chain_carries(shooter, ["Unstoppable"]) and _chain_carries(target, TO_HIT_ON_TARGET):
-		out.append("unstoppable_fold_line")
 	# The table labels a Takedown pick that is no Tough and no special-weapon model by its first item (`_solo_model_label`); the core holds only an item COUNT.
 	if _has_group(TAKEDOWN_LABEL_GROUP) and _chain_carries(shooter, ["Takedown"]) \
 			and ([target] + target.get_attached_heroes()).any(func(u) -> bool: return u is GameUnit and (u as GameUnit).models.any(
@@ -257,6 +273,15 @@ static func _has_shooting_hit_record(records: Array, as_target: bool) -> bool:
 		if scope == "charging" or scope == "melee" or int(rd.get("hit_mod", 0)) == 0:
 			continue
 		if (str(rd.get("beneficiary", "")) == "attackers") == as_target:
+			return true
+	return false
+
+
+## `gu` holds an aura-granted Fortified-family rule (import provenance `aura_granted`) whose aura entry says `lost_if_bearer_killed` and whose bearer
+## (the unit itself or an alive joined hero) is gone: the table's save seam logs the loss (`RulesRegistry.fortified_aura_dead_bearer`, one truth for both).
+static func _fortified_aura_bearer_dead(gu: GameUnit) -> bool:
+	for granted in gu.unit_properties.get("aura_granted", []) as Array:
+		if RulesRegistry.fortified_aura_dead_bearer(gu, str(granted)) != "":
 			return true
 	return false
 

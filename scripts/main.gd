@@ -297,6 +297,7 @@ var _solo_grade_logged := ""   # the grade line this game already logged ("" = n
 var _solo_opponent_brain: Dictionary = {}  # the opponent the game really runs (GameRecordCollector.opponent_brain),
                                            # set with the "opponent:" line; {} = no AI seat graded
 var _rules_chip: Label = null                # rules-automation chip beside the round button (plan 1.3)
+var _system_chip: Label = null               # read-only game-system chip beside the rules chip (PLAN_GAME_SYSTEM_SWITCH)
 var _turn_chip: Label = null                 # hotseat turn chip beside the rules chip (plan 2.T2a)
 var _rules_proposal_pending := false         # online: waiting for the other player's answer (plan 3.0)
 var _rules_agreement_mode := 0               # 0 idle, 1 proposing, 2 confirming (plan 3.0)
@@ -836,6 +837,9 @@ func _ready() -> void:
 	map_layout_editor.theme_requested.connect(func(theme_id: String) -> void:
 		if apply_table_theme(theme_id):
 			map_layout_editor._on_close_pressed())   # close the editor so the laid-out table shows
+	map_layout_editor.system_requested.connect(func(id: String) -> void:
+		set_table_system(id, "the map editor")
+		_update_system_chip())   # a refusal puts the row back on the real system
 	map_layout_editor.relic_drop_chosen.connect(_solo_relic_drop_chosen)
 	map_layout_editor.vip_spot_chosen.connect(_solo_vip_spot_chosen)
 	map_layout_editor.vip_pick_refused.connect(func() -> void:
@@ -1014,6 +1018,10 @@ func _ready() -> void:
 	var rules_line := RulesAutomation.apply_table_setup(table_setup,opr_army_manager)
 	if rules_line != "":
 		_log_rule_event(BattleLog.Category.GENERAL,rules_line)
+	var system_line := GameSystem.apply_table_setup(table_setup,opr_army_manager)
+	if system_line != "":
+		_log_rule_event(BattleLog.Category.GENERAL,system_line)
+		_update_rules_chip()   # the chip may already exist (built with the default system): show the picked one
 	var joining_client: bool = pending_internet and not ProjectSettings.get_setting("niemandsland/internet_is_host", false)
 	# Headless MP test harness (test/mp/): skip the interactive table-size chooser AND the
 	# cinematic intro and drop straight onto a live, RPC-capable table. Inert in normal play.
@@ -1148,7 +1156,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	var peek: GameUnit = solo_controller.peek_next_ai_unit()
 	await begin_activation(peek)
 	# One-core P3 step 42 (flag on): a plain unit's board BEFORE its move, for the core's volley (_run_ai_shooting).
-	_solo_core_ai_h = CoreActivation.capture(self) \
+	_solo_core_ai_h = CoreActivation.capture(self, true) \
 		if peek != null and CoreActivation.applies(self) and CoreActivation.is_plain(peek) else 0
 	_solo_core_shadow_h = CoreShadow.capture(self, peek)   # C-3: 0 unless NML_CORE_SHADOW=1 (counting only)
 	# P4.0-7 (D5): the AI's activation-start snapshot for a save taken mid-volley (the body's end clears it).
@@ -1199,7 +1207,13 @@ func _solo_activate_one_ai_body() -> GameUnit:
 				report["core_dangerous"] = int(report["dangerous_dice"])
 				await _solo_ai_core_call(unit, report, null, [])
 			else:
+				var idle_alive: int = SoloController.combined_alive(unit)
+				var idle_wounds: int = _solo_unit_wounds_now(unit)
 				await _run_ai_dangerous(unit, int(report["dangerous_dice"]))
+				# GF 3.6 p.10: wounds that leave the unit at half or less owe the end-of-activation morale test; a Shaken
+				# unit fails it without a die (the core's order: test while Shaken, recover last).
+				if not unit.is_destroyed():
+					await _solo_shooting_morale(unit, idle_alive, _roller_label(unit), idle_wounds, "Dangerous terrain")
 			if unit.is_destroyed():
 				return unit
 		if bool(report.get("aircraft", false)) and not solo_controller.last_move_paths.is_empty():
@@ -1302,7 +1316,12 @@ func _solo_activate_one_ai_body() -> GameUnit:
 		return unit
 	# Mend + Breath Attack (army-book, grill round 2 cut A): once per activation, BEFORE attacking —
 	# same slot the Caster resolution uses ("at any point before attacking").
-	await _solo_apply_mend(unit)
+	# Plan H (H-5), the beats guard: a Mend bearer the core takes leaves the beat to the core's one call (it resolves it from the
+	# board it captured before the beat); the table pays it only when that call is not made or refused (`_solo_pay_dangerous`).
+	if core_takes and _solo_has_mend(unit):
+		report["core_beats"] = true
+	else:
+		await _solo_apply_mend(unit)
 	await _solo_apply_breath_attack(unit)
 	# Coverage wave: the Utility-Buff family + Mind Control + Piercing Tag share the same
 	# once-per-activation before-attacking slot (data-driven via the primitive layer).
@@ -1335,7 +1354,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	var _prof_atk_t0 := BattleSim.prof_t0()   # NML-1072: live shoot/melee resolution
 	if bool(report.get("can_shoot", false)):
 		await _run_ai_shooting(report)
-	elif report.has("core_dangerous") or report.has("core_through") or report.has("cast_door"):   # P4.D-19/37, CC-13a: a unit that cannot shoot still owes its test / its move-through attacks / its casts: the core call, no volley
+	elif report.has("core_dangerous") or report.has("core_through") or report.has("cast_door") or report.has("core_beats"):   # P4.D-19/37, CC-13a, H-5: a unit that cannot shoot still owes its test / its move-through attacks / its casts / its beats: the core call, no volley
 		await _solo_ai_core_call(unit, report, null, [])
 	elif int(report.get("action", 0)) == AiDecision.Action.CHARGE:
 		# One core P4.D-48: a charge the melee slice takes resolves in the core (charge, strikes, result, morale, consolidation).
@@ -2942,7 +2961,7 @@ func _solo_defender_places_markers() -> void:
 	if solo_controller == null or defender != solo_controller.ai_slot:
 		return
 	var dropped: int = terrain_overlay.get_objectives().size()
-	var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")))
+	var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")), _deploy_board_in())
 	var stamp := ObjectiveLayout.generate(int(_solo_deploy_fsm.get("seed", 0)), mission, style,
 		terrain_overlay.grid_cells, map_layout_editor._calculate_grid_dimensions().x,
 		table.table_size.x * 12.0, table.table_size.y * 12.0)
@@ -3807,7 +3826,7 @@ func _solo_apply_mission_if_chosen() -> void:
 	var mmeta: Array = SoloController.marker_metadata(mk)
 	SoloController.mission_reset(str(mission.get("scoring", "end")), (mission.get("vp", {}) as Dictionary), mmeta)
 	if terrain_overlay != null and table != null:
-		var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")))
+		var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")), _deploy_board_in())
 		var resolved: Array = MissionCatalog.marker_positions(mission, style,
 			table.table_size.x * 12.0, table.table_size.y * 12.0)
 		if not resolved.is_empty():
@@ -3945,8 +3964,35 @@ func _solo_rules_system() -> String:
 	var slot: int = solo_controller.human_slot if solo_controller != null else 1
 	var army = opr_army_manager.armies.get(slot) if opr_army_manager != null else null
 	if army == null:
-		return RulesRegistry.DEFAULT_SYSTEM
+		return _table_system()
 	return RulesRegistry.normalize_system(str(army.game_system_abbrev))
+
+
+## The table's game system: the value the table was set to, else the system of the first loaded list (lowest slot),
+## else the default (PLAN_GAME_SYSTEM_SWITCH). Never "" - a caller can hand it straight to RulesRegistry / GameSystem.
+func _table_system() -> String:
+	var system := _table_system_or_empty()
+	return system if not system.is_empty() else RulesRegistry.DEFAULT_SYSTEM
+
+
+## "" when nothing on the table names a game system: no set value, no loaded list and no unit with a system (the next
+## list then names it, see _admit_list_system).
+func _table_system_or_empty() -> String:
+	if opr_army_manager == null:
+		return ""
+	if not str(opr_army_manager.table_system).is_empty():
+		return RulesRegistry.normalize_system(str(opr_army_manager.table_system))
+	var slots: Array = opr_army_manager.armies.keys()
+	slots.sort()
+	for slot in slots:
+		var army = opr_army_manager.armies[slot]
+		if army != null:
+			return RulesRegistry.normalize_system(str(army.game_system_abbrev))
+	for unit in opr_army_manager.game_units.values():   # a loaded save / a peer's list carries units but no OPRArmy
+		var raw := str((unit as GameUnit).unit_properties.get("game_system", ""))
+		if not raw.is_empty():
+			return RulesRegistry.normalize_system(raw)
+	return ""
 
 
 ## The picked mission's attacker points factor (> 1 only for a roles mission that grants one).
@@ -4250,6 +4296,11 @@ func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
 		_solo_deploy_show_human_turn()
 
 
+## The table's board in inches: the key into the per-board deployment catalogue (a 4 x 4 table must not draw a 72 x 48 zone).
+func _deploy_board_in() -> Vector2:
+	return table.table_size * 12.0 if table != null else DeploymentCatalog.DEFAULT_BOARD_IN
+
+
 ## D7a: the zone style's bounding rect in world metres (what the AI's search scans).
 func _solo_style_rect(style: Dictionary, player: int = 1) -> Rect2:
 	var lo := Vector2(INF, INF)
@@ -4266,10 +4317,10 @@ func _solo_style_rect(style: Dictionary, player: int = 1) -> Rect2:
 func _solo_phase_zone(entry: Array, slot: int) -> Dictionary:
 	var id := str(entry[2])
 	if id != "own":
-		return {"style": DeploymentCatalog.get_style(id), "id": id, "player": 1}
+		return {"style": DeploymentCatalog.get_style(id, _deploy_board_in()), "id": id, "player": 1}
 	var sid := str(MissionCatalog.get_mission(_solo_mission_id).get("deployment", "front_line"))
 	var ai_key: int = 1 if bool(_solo_deploy_fsm.get("ai_neg_z", true)) else 2
-	return {"style": DeploymentCatalog.get_style(sid), "id": sid,
+	return {"style": DeploymentCatalog.get_style(sid, _deploy_board_in()), "id": sid,
 		"player": ai_key if slot == solo_controller.ai_slot else 3 - ai_key}
 
 
@@ -4299,7 +4350,7 @@ func _solo_phase_start() -> void:
 		terrain_overlay.set_style_zones(style, int(zone["player"]) if str((phases[i] as Array)[2]) == "own" else 0)
 	if ai_side:
 		solo_controller.deploy_set_zone(_solo_style_rect(style, int(zone["player"])),
-			DeploymentCatalog.zone_test(str(zone["id"]), int(zone["player"])))
+			DeploymentCatalog.zone_test(str(zone["id"]), int(zone["player"]), _deploy_board_in()))
 		solo_controller.deploy_set_gates(phase_gates)
 		var done: Array = solo_controller.deploy_place_n(quota)
 		placed[slot] = int(placed.get(slot, 0)) + done.size()
@@ -4465,7 +4516,7 @@ func _solo_mission_reserve_rolls(round_number: int) -> void:
 			_log_rule_event(BattleLog.Category.GENERAL, "Reserve roll: %s rolls %d (needs %d+) — %s" % [
 				(e["unit"] as GameUnit).get_name(), int(e["roll"]), on,
 				"arrives this round" if bool(e["arrives"]) else "stays off the table"], slot == solo_controller.ai_slot)
-	solo_controller.mission_arrival_set(DeploymentCatalog.zone_test(str(cfg.get("zone", "anywhere")), 1),
+	solo_controller.mission_arrival_set(DeploymentCatalog.zone_test(str(cfg.get("zone", "anywhere")), 1, _deploy_board_in()),
 		(cfg.get("gates", {}) as Dictionary))
 
 
@@ -4478,7 +4529,7 @@ func _solo_reserve_arrival_violation(placed: Array) -> String:
 		if cfg.is_empty() or gu == null or not bool(gu.unit_properties.get("mission_reserve", false)):
 			continue
 		var c := solo_controller.unit_centre(gu)
-		if not DeploymentCatalog.in_zone(DeploymentCatalog.get_style(str(cfg.get("zone", "anywhere"))), 1, Vector2(c.x, c.z) / 0.0254):
+		if not DeploymentCatalog.in_zone(DeploymentCatalog.get_style(str(cfg.get("zone", "anywhere")), _deploy_board_in()), 1, Vector2(c.x, c.z) / 0.0254):
 			return "%s must arrive inside the marked zone — move it, then ✓" % gu.get_name()
 		var models: Array = []
 		for m in gu.get_alive_models():
@@ -4985,7 +5036,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		return
 	if bool(report.get("moved", false)) and battle_log != null and SoloController.has_indirect_ranged(_solo_all_weapons(unit)) \
 			and SoloController.indirect_ignores_los(unit) and not SoloController.indirect_ignores_los(unit, false):
-		battle_log.log_event(BattleLog.Category.COMBAT, "Indirect: %s did not Hold — its Indirect weapons need line of sight" % unit.get_name(), true)
+		_solo_volley_note(report, "Indirect: %s did not Hold — its Indirect weapons need line of sight" % unit.get_name())
 	# Split fire: assign each shot the best target under its weapon overlay, then group shots by target.
 	# Target validity is PER MODEL (GF v3.5.1 p.8): the shot's MEMBER needs a model with range+LOS.
 	var groups: Dictionary = {}   # target unit_id -> {"target": GameUnit, "shots": Array}
@@ -5050,6 +5101,24 @@ func _solo_log_no_volley(unit: GameUnit, report: Dictionary, why: String) -> voi
 		unit.get_name(), why, hold_note], true)
 
 
+## A table line the volley's body writes BEFORE its core call but the table's order puts AFTER the activation's casts (the Indirect
+## note: casts, note, "<unit> fires at ..."). With the cast door the core's one call resolves the casts, so the note waits in the
+## report: `CoreActivation._cast_line` writes it when the cast leg is over (before the volley's first line), `_solo_flush_volley_note`
+## when the core call ends or hands the activation back to the table (after the table's own casts).
+func _solo_volley_note(report: Dictionary, text: String) -> void:
+	if report.has("cast_door"):
+		report["volley_note"] = text
+	elif battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, text, true)
+
+
+func _solo_flush_volley_note(report: Dictionary) -> void:
+	var text := str(report.get("volley_note", ""))
+	report.erase("volley_note")
+	if not text.is_empty() and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, text, true)
+
+
 ## One-core cast door (CC-13a): the AI body's cast slot. With the switch OFF, or an activation the core does not take, the table
 ## resolves the planned casts as it always did. With it ON and the activation taken, a dry probe asks the core first (before any die):
 ## taken -> the report is marked `cast_door` and the core's one call resolves the casts (Dangerous, casts, volley); refused -> the
@@ -5058,11 +5127,15 @@ func _solo_log_no_volley(unit: GameUnit, report: Dictionary, why: String) -> voi
 func _solo_ai_casts(unit: GameUnit, report: Dictionary, core_takes: bool) -> void:
 	if (report.get("casts", []) as Array).is_empty():
 		return
+	CoreActivation.cast_seen += 1
 	if core_takes and CoreActivation.cast_door_enabled():
 		if CoreActivation.probe_casts(self, unit, report):
+			CoreActivation.cast_taken += 1
 			report["cast_door"] = true
 			return
 		await _solo_pay_dangerous(unit, report)
+	else:
+		CoreActivation.note_cast_not_asked(self, unit, report)
 	await _solo_resolve_ai_casts(report)
 
 
@@ -5072,27 +5145,34 @@ func _solo_ai_casts(unit: GameUnit, report: Dictionary, core_takes: bool) -> voi
 ## the core took the activation. Anything else (no board, a refused call) leaves the table to resolve the volley, and
 ## pays an owed test first, on the table, so a refusal costs nothing but the old order.
 func _solo_ai_core_call(unit: GameUnit, report: Dictionary, target: GameUnit, shots: Array, rest: Array = []) -> bool:
-	var owed := report.has("core_dangerous") or report.has("core_through") or report.has("cast_door")   # CC-13a: the casts are owed too
+	var owed := report.has("core_dangerous") or report.has("core_through") or report.has("cast_door") or report.has("core_beats")   # CC-13a: the casts are owed too; H-5: the beats
 	if _solo_core_ai_h != 0 and (target != null or owed) \
 			and await CoreActivation.run_ai(self, unit, report, target, _solo_core_ai_h, shots, owed, rest):
 		if report.erase("core_dangerous"):
 			report["core_took_dangerous"] = true
 		report.erase("core_through")
 		report.erase("cast_door")
+		_solo_flush_volley_note(report)   # a cast-only activation never reached the volley's first line
+		report.erase("core_beats")
 		return true
 	await _solo_pay_dangerous(unit, report)
 	if report.erase("cast_door"):   # CC-13a: the core refused before any die: the casts the probe left to it, after the test, in the table's order
+		CoreActivation.cast_fallbacks += 1
 		await _solo_resolve_ai_casts(report)
+	_solo_flush_volley_note(report)   # the table's volley follows: its note after the casts, as always
 	return false
 
 
-## One core P4.D-19/37: the table pays what the body left to the core (no core call is made, or it refused): the Dangerous
-## test, then the move-through attacks (Strafing, Crossing Attack).
+## One core P4.D-19/37 + H-5: the table pays what the body left to the core (no core call is made, or it refused): the Dangerous
+## test, then the pre-attack beats the guard held back (Mend), then the move-through attacks (Strafing, Crossing Attack). A Mend
+## caster is never taken (`cast_chain_clear`), so held casts and a held Mend never meet.
 func _solo_pay_dangerous(unit: GameUnit, report: Dictionary) -> void:
 	var dice := int(report.get("core_dangerous", 0))
 	report.erase("core_dangerous")
 	if dice > 0:
 		await _run_ai_dangerous(unit, dice)
+	if report.erase("core_beats") and not _solo_activation_unit_gone(unit):
+		await _solo_apply_mend(unit)
 	if report.erase("core_through") and not _solo_activation_unit_gone(unit):
 		await _solo_apply_strafing(unit)
 		await _solo_apply_crossing_attack(unit)
@@ -6047,6 +6127,8 @@ func _solo_place_spell_tokens(spell_name: String, targets: Array, effect: Dictio
 		var tu := t as GameUnit
 		if tu == null or tu.is_destroyed():
 			continue
+		if _solo_spell_refreshed(tu, spell_name, _solo_spell_rec(spell_name, effect)):
+			continue   # the same spell does not stack: no second token, no second record
 		if radial_menu_controller.apply_library_token(tu, spell_name):
 			# Maintainer rules check (31.07.): "once (next time the effect would apply)" spells
 			# PERSIST until they apply — there is no blanket round-end rule in the book; only
@@ -6099,10 +6181,23 @@ func _solo_log_accumulator_lends(draws: Array, caster_name: String) -> void:
 ## unit; the hit path (_solo_hit_mod_info) and the defense seam (_solo_defense_parts) read it,
 ## each application logs (rules-must-log). Cleared with the tokens at round end.
 func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary) -> void:
+	var rec := _solo_spell_rec(spell_name, effect)
+	if rec.is_empty() or _solo_spell_refreshed(tu, spell_name, rec):
+		return
+	var grants := str(rec["grants_rule"])
+	var key := tu.get_instance_id()
+	if not _solo_spell_mods.has(key):
+		_solo_spell_mods[key] = []
+	(_solo_spell_mods[key] as Array).append(rec)
+	_solo_place_spell_rec(tu, spell_name, effect, rec, grants)
+
+
+## The record a spell effect leaves on its target ({} = nothing to record: no modifier and no grant).
+func _solo_spell_rec(spell_name: String, effect: Dictionary) -> Dictionary:
 	var modifier: Dictionary = effect.get("modifier", {})
 	var grants := str(effect.get("grants_rule", ""))
 	if modifier.is_empty() and grants.is_empty():
-		return
+		return {}
 	var rec := {"spell": spell_name, "hit_mod": int(modifier.get("hit_mod", 0)),
 		"def_mod": int(modifier.get("def_mod", 0)),
 		"casting_mod": int(modifier.get("casting_mod", 0)),
@@ -6122,11 +6217,32 @@ func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary
 	if rec["hit_mod"] == 0 and rec["def_mod"] == 0 and rec["casting_mod"] == 0 \
 			and rec["morale_mod"] == 0 and rec["range_in"] == 0 and rec["advance_in"] == 0 \
 			and rec["rush_in"] == 0 and grants.is_empty():
-		return
-	var key := tu.get_instance_id()
-	if not _solo_spell_mods.has(key):
-		_solo_spell_mods[key] = []
-	(_solo_spell_mods[key] as Array).append(rec)
+		return {}
+	return rec
+
+
+## PENDING_EPOCH_SPELL_NO_STACK (GF 3.6, "Rules priority & stacking effects": the same spell does not stack; core twin `sim::tray_spell_effect`):
+## true when `tu` already carries an identical record of the spell (the live grant's `granted_to` and the Regeneration `used` flag aside).
+## The existing record stands (it is the refreshed one), nothing is added, the line says so.
+func _solo_spell_refreshed(tu: GameUnit, spell_name: String, rec: Dictionary) -> bool:
+	if rec.is_empty() or AiActRecorder.rules_epoch < AiActRecorder.PENDING_EPOCH_SPELL_NO_STACK:
+		return false
+	var sig := func(rd: Dictionary) -> String:
+		var c := rd.duplicate()
+		c.erase("granted_to")
+		c.erase("used")
+		return JSON.stringify(c, "", true)
+	var want: String = sig.call(rec)
+	for old in _solo_spell_mods.get(tu.get_instance_id(), []):
+		if sig.call(old) == want:
+			_log_rule_event(BattleLog.Category.COMBAT, "\"%s\" on %s is already active - the same spell does not stack, the effect stands" % [
+				spell_name, tu.get_name()], true)
+			return true
+	return false
+
+
+## The placement half of `_solo_record_spell_mod`: grant overlay, stamps, wire and the ACTIVE line.
+func _solo_place_spell_rec(tu: GameUnit, spell_name: String, effect: Dictionary, rec: Dictionary, grants: String) -> void:
 	# NML-006 side effects: a granted rule goes onto the LIVE special_rules overlay, speed/range
 	# deltas onto the props stamps — every existing engine read then honours them.
 	_solo_apply_grant(tu, rec)
@@ -6339,7 +6455,7 @@ func _solo_grant_waits_to_be_attacked(rd: Dictionary) -> bool:
 ## F4/NML-006 — spend every once-record on ONE unit that matches `roles` (role- and scope-filtered
 ## exactly like the reads). Reverts the NML-006 side effects (grant overlay off, props stamps
 ## recomputed), removes the paired library token and logs each spend (rules-must-log).
-func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: String = "", attacking: bool = false) -> void:
+func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: String = "", attacking: bool = false, only: Array = []) -> void:
 	var key := uu.get_instance_id()
 	var records: Array = _solo_spell_mods.get(key, [])
 	if records.is_empty():
@@ -6349,6 +6465,8 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool, keep_spell: 
 		for rd in AiSpell.mods_for(records, str(role), melee):
 			if keep_spell != "" and str((rd as Dictionary).get("spell", "")) == keep_spell:
 				continue
+			if not only.is_empty() and not only.has(rd):
+				continue   # one-core landing: only the records the table placed after the capture (CoreActivation.land_late_once)
 			if attacking and _solo_grant_waits_to_be_attacked(rd as Dictionary):
 				continue   # G4-T10: the bearer own attack does not use an attacked-only grant
 			if str((rd as Dictionary).get("duration", "")) == "once" and not spent.has(rd):
@@ -6366,6 +6484,7 @@ func _solo_spend_records(uu: GameUnit, spent: Array) -> void:
 		return
 	var key := uu.get_instance_id()
 	var records: Array = _solo_spell_mods.get(key, [])
+	var said := {}   # equal records spent together say their sentence once
 	for rd in spent:
 		records.erase(rd)
 		_solo_revoke_grant(rd as Dictionary)
@@ -6375,7 +6494,8 @@ func _solo_spend_records(uu: GameUnit, spent: Array) -> void:
 		for e in _solo_spell_tokens_active.duplicate():
 			if (e as Dictionary).get("unit") == uu and str((e as Dictionary).get("token")) == spell:
 				_solo_spell_tokens_active.erase(e)
-		if battle_log != null:
+		if battle_log != null and not said.has(spell):
+			said[spell] = true
 			if _solo_is_regen_grant(rd as Dictionary):
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"Regeneration Buff: %s's Regeneration is spent by a wounding exchange" % uu.get_name(), true)
@@ -6934,7 +7054,7 @@ func _solo_log_crossing_strike_melee(striker: GameUnit) -> void:
 ## profiles at the hero's Quality — a joined hero fights WITH its unit (field-test lock). Each profile's
 ## attack count is SCALED so dead models no longer attack (goal 003 P3, mirrors the sim fix): shooting scales
 ## by alive/max; melee (with `enemy`) scales by the models within 2" of an enemy model ("Who Can Strike", p.9).
-func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: GameUnit = null) -> Array:
+func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: GameUnit = null, quiet := false) -> Array:
 	var members: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
@@ -6981,7 +7101,7 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 			# (walker/vehicle) from their own melee — the charger rolled nothing, only the defender struck.
 			melee_count = solo_controller.striking_models_for(member, enemy)
 			# MEL-02 (rules-must-log): when fewer models strike than are alive, say how many are in reach.
-			if melee_count < member.get_alive_count() and battle_log != null:
+			if melee_count < member.get_alive_count() and battle_log != null and not quiet:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d of %d models are within %d\" and strike" % [
 					member.get_name(), melee_count, member.get_alive_count(),
 					int(SoloController.melee_reach_in())], true)
@@ -7071,7 +7191,7 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 ## profile list inside a group that is still there. Below epoch 73 the old all-or-nothing read of the
 ## group list stays byte-exact.
 func _solo_strike_back_block(unit: GameUnit, enemy: GameUnit) -> String:
-	var groups: Array = _solo_attack_groups(unit, 0.0, true, enemy)
+	var groups: Array = _solo_attack_groups(unit, 0.0, true, enemy, true)   # the gate is a question, not a strike: it must not say MEL-02's line (the strike does)
 	if groups.is_empty():
 		return "none"
 	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
@@ -8166,6 +8286,18 @@ func _solo_reanimation_spot_ok(pos: Vector3, r: float, model: ModelInstance, anc
 	return true
 
 
+## A living bearer of Mend in `unit`'s chain (the unit and its attached heroes): what `_solo_apply_mend` and the beats guard (H-5) both ask.
+func _solo_has_mend(unit: GameUnit) -> bool:
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		chain = chain + unit.get_attached_heroes()
+	for b in chain:
+		var bu := b as GameUnit
+		if bu != null and bu.get_alive_count() > 0 and RulesRegistry.unit_rule_active(bu, "Mend"):
+			return true
+	return false
+
+
 ## Mend (army-book, grill round 2 cut A — rule Mend: once per activation, before attacking, the
 ## bearer heals D3 wounds on one friendly Tough model within 3"): the AI heals the WOUNDED
 ## Tough model (wounds_max > 1 — Tough(1) regiment pools are excluded by the rule's wording) with the
@@ -8188,13 +8320,7 @@ func _solo_apply_mend(unit: GameUnit) -> void:
 	var bearers: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		bearers = bearers + unit.get_attached_heroes()
-	var has_mend := false
-	for b in bearers:
-		var bu := b as GameUnit
-		if bu != null and bu.get_alive_count() > 0 and RulesRegistry.unit_rule_active(bu, "Mend"):
-			has_mend = true
-			break
-	if not has_mend:
+	if not _solo_has_mend(unit):
 		return
 	var patient := _solo_mend_pick(unit, bearers)
 	if patient == null:
@@ -9947,38 +10073,10 @@ func _solo_deadly_wounds(w: int, profile: Dictionary, target: GameUnit) -> int:
 	return w
 
 
-## Sweep F row `Fortified Aura` (epoch 55): the aofs/gff aura entries
-## ("Fortified Aura", "Guardian Boost Aura" — primitive `Fortified` with
-## `aura_expand`, `max_picks`, `lost_if_bearer_killed`) must END the family's
-## AP(-1) when the bearer is killed. The save seam consults this pure helper
-## for both its reads — the exact-name "Fortified" branch and the
-## Fortified-primitive alias walk — `source_rule` naming the rule whose
-## benefit is at stake. Returns "" while the benefit is live (not
-## aura-sourced, no aura entry in this book, or a living bearer), else the
-## DEAD aura entry's name so the seam's rules-must-log line can say so.
-## Aura-sourced = the import expansion's own provenance
-## (`unit_properties["aura_granted"]`, the Reanimation-wave stamp): a rule
-## the unit owns itself is never demoted. The bearer is any ALIVE chain
-## member (the defender itself, or an attached hero) carrying the aura name.
+## Sweep F row `Fortified Aura` (epoch 55): the save seam's bearer-liveness answer ("" = benefit live, else the dead aura entry's name); the rule is
+## `RulesRegistry.fortified_aura_dead_bearer` (H-14: the one-core slice reads it too).
 static func fortified_aura_dead_bearer(defender: GameUnit, source_rule: String) -> String:
-	var aura_name := source_rule + " Aura"
-	var entry := RulesRegistry.lookup(RulesRegistry.system_of_unit(defender),
-		RulesRegistry.faction_of_unit(defender), aura_name)
-	if str(entry.get("primitive", "")) != "Fortified":
-		return ""
-	var params: Dictionary = entry.get("params", {}) as Dictionary
-	if not (bool(params.get("aura_expand", false)) and bool(params.get("lost_if_bearer_killed", false))):
-		return ""
-	if not (defender.unit_properties.get("aura_granted", []) as Array).has(source_rule):
-		return ""
-	if AiEv.has_exact_rule(defender, aura_name):
-		return ""
-	if defender.has_method("get_attached_heroes"):
-		for h in defender.get_attached_heroes():
-			var hero := h as GameUnit
-			if hero != null and hero.get_alive_count() > 0 and AiEv.has_exact_rule(hero, aura_name):
-				return ""
-	return aura_name
+	return RulesRegistry.fortified_aura_dead_bearer(defender, source_rule)
 
 
 ## The loss line's once-guard (rules-must-log): the demotion is a STATE —
@@ -11963,9 +12061,9 @@ func _owner_roll_fallback(unit: GameUnit, count: int, target: int, roll_kind: St
 ## `request_roll` with `ask.choice` and answers `roll_result` with its option id. No answer (vacant seat or
 ## the timeout) leaves the core's automatic pick and says so in ONE battle-log line. The caller validates
 ## the returned option against the core's options; "" always means "automatic".
-func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String, wounds := 0) -> String:
+func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String, wounds := 0, ctx := {}) -> String:
 	if _solo_is_ai_unit(unit) or _solo_i_own_unit(unit):
-		return await _solo_choice_local(unit, id, options, wounds)
+		return await _solo_choice_local(unit, id, options, wounds, ctx)
 	var owner_peer := _solo_peer_for_slot(unit_owner_slot(unit.unit_properties))
 	if owner_peer == 0 and _rejoin_handshake_pending():
 		var wait_until := Time.get_ticks_msec() + int(OWNER_REJOIN_WAIT_S * 1000.0)
@@ -11976,7 +12074,7 @@ func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String, 
 		if id.begins_with("interference:") and battle_log != null:   # CC-14a: the table says whom it waits for (`_solo_remote_interference`)
 			battle_log.log_event(BattleLog.Category.COMBAT, "Waiting for %s — interference against %s" % [_solo_owner_name(unit), purpose], true)
 		var reply: Dictionary = await _owner_request(owner_peer, {"unit": unit.unit_id, "kind": "choice",
-			"count": 0, "target": 0, "purpose": purpose, "ask": {"choice": {"id": id, "options": options, "wounds": wounds}}})
+			"count": 0, "target": 0, "purpose": purpose, "ask": {"choice": {"id": id, "options": options, "wounds": wounds, "ctx": ctx}}})
 		if bool(reply.get("done", false)):
 			var answered: Array = reply.get("faces", [])
 			var option := str(answered[0]) if not answered.is_empty() else ""
@@ -11994,8 +12092,12 @@ func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String, 
 ## P4.0-6: the answer on the choice's OWN machine. An AI unit (or the headless batch) keeps the core's
 ## automatic pick, so nothing waits. The first real choice is the Takedown model pick: the table's own
 ## click prompt, handed back as one of the core's options ("" when no option fits or the pick was skipped).
-func _solo_choice_local(unit: GameUnit, id: String, options: Array, wounds := 0) -> String:
-	if _solo_is_ai_unit(unit) or _solo_batch:
+func _solo_choice_local(unit: GameUnit, id: String, options: Array, wounds := 0, ctx := {}) -> String:
+	if _solo_is_ai_unit(unit):
+		return ""
+	if id.get_slice(":", 0) == "interference":   # CC-14b: the table's own prompt never looked at the batch flag, neither does the door's
+		return await _solo_pick_interference(options, ctx)
+	if _solo_batch:
 		return ""
 	if id.get_slice(":", 0) == "wound_alloc":
 		return await _solo_pick_wound_slots(opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2)), options, wounds)
@@ -12013,6 +12115,20 @@ func _solo_choice_local(unit: GameUnit, id: String, options: Array, wounds := 0)
 	var slot: int = target.get_alive_models().find(picked.models[idx])
 	var option := "slot:%d" % slot
 	return option if slot >= 0 and options.has(option) else ""
+
+
+## CC-14b: the owner's answer to the core's interference choice - the table's own tableau (`InterferenceDialog`, +/- tokens with a live
+## cast-roll preview) in collect mode: it only ASKS, the driver spends the tokens (`CoreActivation._land_interference`). `ctx` = the
+## cast's facts from the host (caster, spell, targets label, base target after the casting net, boost); the options are "0".."pool".
+## "" = no context (an older host): the core then reads no answer as no interference.
+func _solo_pick_interference(options: Array, ctx: Dictionary) -> String:
+	if ctx.is_empty() or options.size() < 2:
+		return ""
+	var dlg := InterferenceDialog.new()
+	add_child(dlg)
+	var spent: int = await dlg.ask(str(ctx.get("caster", "")), str(ctx.get("spell", "")), str(ctx.get("targets", "")),
+		int(ctx.get("base", AiSpell.CAST_BASE_TARGET)), int(ctx.get("boost", 0)), options.size() - 1)
+	return str(clampi(spent, 0, options.size() - 1))
 
 
 ## P4.D-24: the owner's answer to the core's wound allocation (`wound_alloc:...`) - the #172 prompt in collect mode. A click
@@ -12052,7 +12168,7 @@ func _rpc_request_roll(rq: Dictionary, from_peer: int) -> void:
 	if ask.has("choice"):
 		# P4.0-6: OUR pick for the core's choice; a skipped pick answers nothing, so the core falls back.
 		var c: Dictionary = ask["choice"]
-		var option: String = await _solo_choice_local(unit, str(c.get("id", "")), c.get("options", []), int(c.get("wounds", 0)))
+		var option: String = await _solo_choice_local(unit, str(c.get("id", "")), c.get("options", []), int(c.get("wounds", 0)), c.get("ctx", {}))
 		faces = [option] if not option.is_empty() else []
 	elif ask.has("spell"):
 		# #1719: an online cast at our side — the interference is OUR player's choice (`_solo_remote_interference`).
@@ -13591,13 +13707,25 @@ func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
 		"Let a living Hero test morale for %s from now on?" % unit.get_name(), "Use Hero", "Use unit", true)
 
 
+## The Shaken flag a morale test of `unit` reads. From `AiActRecorder.PENDING_EPOCH_SHAKEN_MIRROR` a host with no models left is
+## tested through its living lone hero, which IS the unit now (p.14): the hero's own flag decides. The dead host's flag is stale once the
+## hero recovered alone (nothing clears a dead unit's Shaken) and no longer auto-fails the test. Below it the unit's own flag, as always.
+func _solo_test_unit_shaken(unit: GameUnit) -> bool:
+	if AiActRecorder.rules_epoch >= AiActRecorder.PENDING_EPOCH_SHAKEN_MIRROR and unit.get_alive_count() <= 0:
+		for h in unit.get_attached_heroes():
+			var hu := h as GameUnit
+			if hu != null and hu.get_alive_count() > 0:
+				return hu.is_shaken
+	return unit.is_shaken
+
+
 ## `cause` names the rule that forced the test; "" = shooting or melee (Rules 3.6 Banner, MOR-08).
 func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause: String = "",
 		over_in: float = -1.0, charge_from_in: float = -1.0) -> bool:
 	await _solo_ask_hero_morale_once(unit)
 	var below_half := _solo_below_half_strength(unit)   # single models: tough-wounds scale (p.10)
 	var result: int
-	if unit.is_shaken:
+	if _solo_test_unit_shaken(unit):
 		# A unit that is ALREADY Shaken auto-fails any further morale test (GF/AoF v3.5.1 p.10: "Shaken
 		# units … always fail morale tests") — no Quality roll. At half or less this Routs it; otherwise it
 		# stays Shaken (field-test finding 8: a Shaken unit was rolling — and could pass — a repeat test).
@@ -13727,8 +13855,9 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false, cause
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s passes morale" % unit.get_name())
 		AiCombatMath.Morale.SHAKEN:
-			if not unit.is_shaken and radial_menu_controller != null:
-				radial_menu_controller.card_toggle_shaken(unit)   # state + marker + MP broadcast
+			if not _solo_test_unit_shaken(unit) and radial_menu_controller != null:
+				if not unit.is_shaken:
+					radial_menu_controller.card_toggle_shaken(unit)   # state + marker + MP broadcast
 				_solo_mirror_shaken(unit)   # the joined hero shares the unit's state (p.14), no 2nd token
 				_solo_drop_carried(unit, "shaken")
 			if battle_log != null:
@@ -18196,6 +18325,95 @@ func set_rules_automation(level: int, who: String) -> bool:
 	return true
 
 
+## The switch (PLAN_GAME_SYSTEM_SWITCH): sets the table's game system. False, with one battle-log line (and a toast on
+## screen), while a list is on the table, for a guest in multiplayer (the system is host-owned) and for an id that is no
+## system; true when it was set or already was. The line is this table's own - every peer logs its own on applying it.
+func set_table_system(id: String, who: String) -> bool:
+	if opr_army_manager == null:
+		return false
+	var system := id.strip_edges().to_lower()
+	var online: bool = network_manager != null and network_manager.is_multiplayer_active()
+	if not GameSystem.is_known(system):
+		_refuse_table_system("\"%s\" is not a game system" % id)
+	elif online and not network_manager.is_host:
+		_refuse_table_system("only the host sets the game system")
+	elif _table_has_list():
+		_refuse_table_system("Game system is locked while a list is on the table")
+	else:
+		if str(opr_army_manager.table_system) != system:
+			opr_army_manager.table_system = system
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL, "Game system: %s" % GameSystem.label(system), false, "changed by %s" % who)
+			if online:
+				network_manager.broadcast_table_settings({"game_system": system})
+			_update_rules_chip()
+		return true
+	return false
+
+
+## A peer's list of another game system than this table's: the peer vetted it on its own machine, so this side never
+## refuses it (a room of mixed build versions must not desync) - one battle-log line only.
+func _note_remote_list_system(units: Array, army_name: String) -> void:
+	var table_system := _table_system_or_empty()
+	if table_system.is_empty() or units.is_empty() or battle_log == null:
+		return
+	var raw := str(((units[0] as Dictionary).get("unit_properties", {}) as Dictionary).get("game_system", ""))
+	if not raw.is_empty() and RulesRegistry.normalize_system(raw) != table_system:
+		battle_log.log_event(BattleLog.Category.GENERAL, "%s is a list for %s, this table plays %s (a peer's list, kept)" % [
+			army_name, GameSystem.label(raw), GameSystem.label(table_system)])
+
+
+## A list is on the table: an imported one, or units that came from a save or a peer's list.
+func _table_has_list() -> bool:
+	for army in opr_army_manager.armies.values():
+		if army != null:
+			return true
+	return not opr_army_manager.game_units.is_empty()
+
+
+func _refuse_table_system(reason: String, prefix: String = "Game system unchanged") -> void:
+	var text := "%s: %s" % [prefix, reason]
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, text)
+	if get_node_or_null("UI") != null:
+		_show_toast(text)
+
+
+## The import door's game-system check (PLAN_GAME_SYSTEM_SWITCH): a list of another system than the table's is refused
+## before anything is stored or spawned, with one sentence naming both (log line + toast). A table nothing has named a
+## system for yet takes the first list's system ("set by the first list"). True = import on.
+func _admit_list_system(army: OPRApiClient.OPRArmy) -> bool:
+	var list_system := RulesRegistry.normalize_system(str(army.game_system_abbrev))
+	var table_system := _table_system_or_empty()
+	if table_system.is_empty():
+		opr_army_manager.table_system = list_system
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Game system: %s" % GameSystem.label(list_system), false, "set by the first list, %s" % army.name)
+		if network_manager != null and network_manager.is_multiplayer_active() and network_manager.is_host:
+			network_manager.broadcast_table_settings({"game_system": list_system})
+		_update_rules_chip()
+		return true
+	if list_system == table_system:
+		return true
+	_refuse_table_system("%s is a list for %s, this table plays %s." % [army.name, GameSystem.label(list_system), GameSystem.label(table_system)], "Import refused")
+	return false
+
+
+func _update_system_chip() -> void:
+	if next_round_btn == null or opr_army_manager == null:
+		return
+	if _system_chip == null:
+		_system_chip = Label.new()
+		_system_chip.theme_type_variation = HouseStyle.CAPTION
+		_system_chip.mouse_filter = Control.MOUSE_FILTER_STOP   # labels ignore the mouse by default - needed for the tooltip
+		next_round_btn.add_sibling(_system_chip)
+	var system := _table_system()
+	_system_chip.text = "SYSTEM: %s" % GameSystem.short(system)
+	_system_chip.tooltip_text = "%s (%s scale). Changed in the map editor while no list is on the table." % [GameSystem.label(system), GameSystem.scale(system)]
+	if map_layout_editor != null and map_layout_editor.has_method("set_game_system"):
+		map_layout_editor.set_game_system(system, "Locked while a list is on the table" if _table_has_list() else "")
+
+
 ## The chip beside the round button; built lazily, shown only while the rules-automation UI flag is on.
 func _update_rules_chip() -> void:
 	if next_round_btn == null or opr_army_manager == null:
@@ -18208,6 +18426,7 @@ func _update_rules_chip() -> void:
 		next_round_btn.add_sibling(_rules_chip)
 	_rules_chip.visible = RulesAutomation.ui_enabled()
 	_rules_chip.text = RulesAutomation.chip_text(opr_army_manager.rules_automation, not solo_ai_slots.is_empty())
+	_update_system_chip()
 	if _turn_chip == null:
 		_turn_chip = Label.new()
 		_turn_chip.theme_type_variation = HouseStyle.CAPTION
@@ -19771,6 +19990,9 @@ func _on_table_size_chosen(size_feet: Vector2, dialog: Window = null, biome_name
 	var td := dialog as TableSizeDialog
 	if td:
 		biome_name = td.selected_biome
+		var system_line := GameSystem.apply_table_setup({"system": td.selected_system}, opr_army_manager)   # the direct-to-main chooser
+		if system_line != "":
+			_log_rule_event(BattleLog.Category.GENERAL, system_line)
 	if biome_name != "" and table.has_method("set_biome"):
 		table.set_biome(biome_name)
 		# Sync the biome to other players (host-authoritative, via the table-settings RPC).
@@ -19994,6 +20216,9 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# is not part of the serialized .nml game state, so it must be pushed separately).
 	if table != null:
 		network_manager.broadcast_table_settings({"biome": table.biome})
+	# The game system is host-owned table state and must reach the joiner before its first list does.
+	if opr_army_manager != null and not str(opr_army_manager.table_system).is_empty():
+		network_manager.broadcast_table_settings({"game_system": opr_army_manager.table_system})
 	# #194 belt-and-braces: re-push the deployment-zone type so the joiner builds the zone
 	# GEOMETRY even if the state-sync race loses — without meshes, its "Show Deployment
 	# Zones" tick was a silent no-op (visibility only flips existing meshes).
@@ -20775,6 +21000,15 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 			_adjust_camera_for_table_size(size_feet)
 			print("[Settings] Table resized to %.1fx%.1f feet" % [size_feet.x, size_feet.y])
 
+	# The host's game system (network_manager already dropped a guest's push of it).
+	if settings.has("game_system") and opr_army_manager != null:
+		var host_system := str(settings["game_system"])
+		if GameSystem.is_known(host_system) and host_system != str(opr_army_manager.table_system):
+			opr_army_manager.table_system = host_system
+			if battle_log != null:   # this table's own line - never re-broadcast (the host logged and sent its own)
+				battle_log.log_event(BattleLog.Category.GENERAL, "Game system: %s" % GameSystem.label(host_system))
+			_update_rules_chip()
+
 	if settings.has("paths"):   # a table theme's worn paths (D14)
 		TablePaths.of(table).set_paths(settings["paths"])
 	if settings.has("biome") and table.has_method("set_biome"):
@@ -21448,19 +21682,22 @@ func _open_ai_opponent_dialog() -> void:
 
 ## The AI Opponent question over an already loaded manifest. `loader(file, slot)` runs on OK
 ## (default: _load_ai_opponent_list) so the dialog can be driven without the network.
-## Only the lists of the system the human army plays are offered (an entry without "system" is "gf");
-## with no human army yet every list is offered, suffixed " (GF)" / " (AoF)" when the manifest mixes both.
+## Only the lists of the table's game system are offered, exactly (an entry without "system" is "gf"; no gff / aofs / aofr
+## folding onto the battle-size families); with no system named yet every list is offered, suffixed " (GF)" / " (AoF)" ...
+## when the manifest mixes systems.
 func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable()) -> void:
-	var human_army = opr_army_manager.armies.get(solo_controller.human_slot if solo_controller != null else 1) if opr_army_manager != null else null
-	var played := "" if human_army == null else ("aof" if RulesRegistry.normalize_system(human_army.game_system_abbrev).begins_with("aof") else "gf")
+	var played := _table_system_or_empty()   # "" = nothing names a game system yet: every AI list is on offer
 	var system_of := {}
 	for fk in manifest:
-		system_of[fk] = str((manifest[fk] as Dictionary).get("system", "gf"))
-	var fac_keys: Array = manifest.keys().filter(func(fk) -> bool: return played.is_empty() or system_of[fk] == played)
+		system_of[fk] = GameSystem.normalize(str((manifest[fk] as Dictionary).get("system", "gf")))
+	var fac_keys: Array = GameSystem.manifest_keys(manifest, played)
 	if fac_keys.is_empty():
 		_solo_show_toast("No AI lists for this game system yet — import any list with the AI checkbox instead")
 		return
-	var mixed: bool = played.is_empty() and system_of.values().has("gf") and system_of.values().has("aof")
+	var distinct := {}
+	for v in system_of.values():
+		distinct[v] = true
+	var mixed: bool = played.is_empty() and distinct.size() > 1
 	var parts := HouseStyle.overlay_sheet("AI Opponent", SOLO_DIALOG_MIN_WIDTH)
 	var layer := CanvasLayer.new()
 	layer.name = "AiOpponentLayer"
@@ -21473,7 +21710,7 @@ func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable(
 	for i in fac_keys.size():
 		var fk: String = fac_keys[i]
 		var fac_name := str((manifest[fk] as Dictionary).get("name", fk))
-		fac_opt.add_item(fac_name + ((" (AoF)" if system_of[fk] == "aof" else " (GF)") if mixed else ""), i)
+		fac_opt.add_item(fac_name + ((" (%s)" % GameSystem.short(system_of[fk])) if mixed else ""), i)
 	box.add_child(HouseStyle.field_row("Faction:", fac_opt))
 
 	var pts_opt := OptionButton.new()
@@ -21620,6 +21857,8 @@ func _load_ai_list_manifest() -> Dictionary:
 ## Handle army imported from dialog
 func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_controlled: bool = false) -> void:
 	print("Importing army '%s' for Player %d%s" % [army.name, player_id, " (AI-controlled)" if ai_controlled else ""])
+	if not _admit_list_system(army):
+		return   # a list of another game system than the table's: nothing stored, nothing spawned
 	# D5 (b), 27.10.2026: a book NEWER than the pinned rules imports WITH a visible warning — the
 	# player may play on, the refusal for online rooms and saves follows in 0.3.15. Same major.minor
 	# (3.5.3 on 3.5.1) says nothing. The rules version is the maps' own _meta.core_version, never a
@@ -21842,6 +22081,7 @@ func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> 
 	var units: Array = buf.get("units", [])
 	var object_groups: Array = buf.get("objects", [])
 	print("[ArmySync] Complete: building %d units (player_id=%d)" % [units.size(), player_id])
+	_note_remote_list_system(units, str(buf.get("army_name", "")))
 	# A remote army has no OPRArmy here, but its slot still counts: register it (null = "Army" row) and refresh
 	# the left panel, otherwise a side that imported nothing itself never gets the section / Rules automation switch.
 	if not opr_army_manager.armies.has(player_id):
@@ -22288,6 +22528,7 @@ func _on_graphics_quality_changed(index: int) -> void:
 func _on_map_layout_pressed() -> void:
 	if map_layout_editor:
 		map_layout_editor.set_table_size(table.table_size)
+		_update_system_chip()   # the editor's "Game system" row shows the table's system and whether it is locked
 		map_layout_editor.visible = true
 		map_layout_editor.editor_opened.emit()
 		$UI/HUD.visible = false  # Hide main HUD while in layout mode
@@ -23876,7 +24117,7 @@ func _spawn_stain_for_model(model: ModelInstance) -> void:
 		pos = (node.get_meta("revive_transform") as Transform3D).origin
 	# Deterministic seed from the (synced) table position so the fire scatter matches on peers.
 	var seed_val := int(pos.x * 1000.0) * 73856093 ^ int(pos.z * 1000.0) * 19349663
-	battlefield_stains.add_stain(pos, _stain_base_radius_m(props), _stain_is_vehicle(props), seed_val, node)
+	battlefield_stains.add_stain(pos, _stain_base_radius_m(props), BattlefieldStains.uses_oil(_stain_is_vehicle(props), _table_system()), seed_val, node)
 
 
 ## Base radius (metres) of a removed model: half the round base, or half the oval's long axis.

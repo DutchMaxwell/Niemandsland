@@ -11,25 +11,41 @@
     "Courage": "The bare base the Courage Aura expansion stamps; no map entry on either side - the +1 morale rides the aura's own Banner entry."
   },
   "deny_names": {
-    "Gleaming Armour": "Measured (5-seed sweep): 5 taken volleys, the target's Defense differs by one.",
-    "Fortified Aura": "door omits the table's aura-loss line (`_solo_fortified_aura_loss_log`) when the bearer dies, dlines_gap row 21: the Fortified line itself is said since dlines2 train 2.",
-    "Guardian Boost Aura": "door omits the table's aura-loss line (`_solo_fortified_aura_loss_log`) when the bearer dies, dlines_gap row 21: the Fortified line itself is said since dlines2 train 2.",
     "Grounded Protection": "door omits the table's terrain trace (Grounded Protection) or once-per-game lines (Protection Feat), dlines_gap row 3; the roll, bypass and Warding gate lines are said since dlines2/3.",
     "Enhanced Knightborn": "the table names the roll group by whichever of Knightborn / Enhanced Knightborn is live at the shot's distance (the gated Knightborn folds nothing within 9in); the core's group name is static, dlines_gap row 3.",
     "Protection Feat": "door omits the table's terrain trace (Grounded Protection) or once-per-game lines (Protection Feat), dlines_gap row 3; the roll, bypass and Warding gate lines are said since dlines2/3.",
     "Surprise Attack": "OD-H8 probe (core_ledger_lift_door_test.gd, 16 real AI activations, door on against door off): the activation-start burst rolls twice with the door on, the table's beat and then the core's own copy (16 / 16 seeds, the same shape as the pre-attack beats); refused by name until the table's beat or the core's copy steps aside. Teleport, Ethereal and plain Infiltrate read equal."
   },
+  "lifted_names": {
+    "Regeneration Buff": "same probe (ds/h_probe_beat_names.md); the table's free regeneration for the label is fixed (exact rule names, #3156)",
+    "Casting Buff": "Utility Buff names probed through real AI activations, door on against off (ds/h_probe_beat_names.md): dice, end state and battle-log lines equal in three placements, the core ran every activation and the table's line named the rule; the beat is no double resolution for these.",
+    "Casting Debuff": "same probe",
+    "Courage Buff": "same probe",
+    "Defense Buff": "same probe",
+    "Great Banner": "same probe",
+    "Great Musician": "same probe",
+    "Increased Shooting Range Buff": "same probe",
+    "Furious Buff": "the table's pre-attack beat records the once-record after the capture and the door's landing spends it with the table's own spend (CoreActivation.land_late_once_records, #3201): real AI activations, door on against off, 2 placements x 8 seeds, dice, end state (records included) and every battle-log line equal, the core ran every activation (test/one_core/core_once_lift_door_test.gd)",
+    "Shred Mark": "same landing",
+    "Quick Shot Mark": "same landing",
+    "Increased Shooting Range Mark": "same landing",
+    "Melee Evasion Buff": "same probe",
+    "Morale Debuff": "same probe",
+    "Piercing Debuff": "same probe",
+    "Precision Debuff": "same probe",
+    "Precision Fighter Buff": "same probe",
+    "Precision Fighting Mark": "same probe",
+    "Speed Debuff": "same probe",
+    "Thrust in Melee Aura": "same probe",
+    "Unstoppable when Shooting Aura": "same probe",
+    "Unwieldy Debuff": "same probe"
+  },
   "groups": {
-    "door_omits_unstoppable_fold_line": {
-      "primitives": [],
-      "kind": "rule_line",
-      "why": "A shooter with an Unstoppable weapon at a target whose rules lower the to-hit number (Stealth and its aliases such as Changebound and Stealth Aura, Evasive, Artillery, Aircraft): the table says `Unstoppable: negative to-hit modifiers ignored` when the weapon swallows the minus (`_solo_unstoppable_fold`), the core says it only for the granted mark and aura (dice.rs: a weapon's own flag stays silent). The dice are equal (stealth_target_door_test.gd, 8 taken Changebound volleys of the 1000 pts census). Not a rule name: `CoreSlice.pair_refusals` refuses the PAIR, switched on by this group.",
-      "leaves_with": "the core saying the table's Unstoppable fold line for a weapon's own Unstoppable"
-    },
     "pre_attack_beat_twice": {
-      "primitives": ["Mend", "Breath Attack", "Mind Control", "Storm Attack", "Reckless Piercing", "Utility Buff"],
+      "primitives": ["Breath Attack", "Mind Control", "Storm Attack", "Reckless Piercing", "Utility Buff"],
       "kind": "pre_attack_beat",
-      "why": "The table resolves a bearer's pre-attack beat in main.gd before the volley, and the core, which takes the whole activation, resolves it again from the board it captured before that beat. Measured 19.11. (one real AI activation per seed, deny slice, door on against door off, 8 seeds each): Mend 8/8 and Breath Attack 8/8 roll the beat's die twice (a second Blast volley on 7/8), Mind Control (also Fatigue Debuff) 8/8 rolls its morale test twice, Storm Attack 8/8 rolls its trigger dice twice, Reckless Piercing 8/8 rolls its die twice, and the Utility Buff family leaves a stale once-record or marker behind on the table 8/8 (Precision Shooter Buff: a record the core already spent; Precision Tag: a tag marker). The family is one primitive, so its Casting Buff, Precision Target and Precision Spotter (each measured equal, 8/8) and Re-Position Artillery (not measured) go with it. Piercing Tag, Piercing Target and Piercing Spotter (primitive Piercing Tag) run in the same slot but measured equal 8/8 and stay taken (LD-6).",
+      "side": "shooter",
+      "why": "Shooter side only (`side`: a beat is the bearer's own act; 77 of 77 beat names probed as a TARGET are equal, 6 seeds each, ds/h_probe_beat_targets.md, once the table's Regeneration Buff prefix read is fixed). The table resolves a bearer's pre-attack beat in main.gd before the volley, and the core, which takes the whole activation, resolves it again from the board it captured before that beat. Measured 19.11. (one real AI activation per seed, deny slice, door on against door off, 8 seeds each): Mend 8/8 and Breath Attack 8/8 roll the beat's die twice (a second Blast volley on 7/8), Mind Control (also Fatigue Debuff) 8/8 rolls its morale test twice, Storm Attack 8/8 rolls its trigger dice twice, Reckless Piercing 8/8 rolls its die twice, and the Utility Buff family leaves a stale once-record or marker behind on the table 8/8 (Precision Shooter Buff: a record the core already spent; Precision Tag: a tag marker). H-5 (Plan H): Mend left the group - the beats guard in main.gd hands a Mend bearer's beat to the core's one call, which lands the heal and says the line (H-5a; core_beats_guard_test). The family is one primitive, so its Casting Buff, Precision Target and Precision Spotter (each measured equal, 8/8) and Re-Position Artillery (not measured) go with it. Piercing Tag, Piercing Target and Piercing Spotter (primitive Piercing Tag) run in the same slot but measured equal 8/8 and stay taken (LD-6).",
       "leaves_with": "the beats guard in PLAN_C_CAST_LEGS"
     },
     "door_omits_simultaneous_fire_line": {
@@ -44,11 +60,11 @@
       "why": "A weapon's own Shred beside a unit-level Shred rule of another name (Warbound, Destroyer, Infected, ...) is two rules in the table (R-1 A2: each pays its extra wounds, the alias gated by distance); the core pays the unmodified 1s once, so the target's wounds differ (5 of 12 seeds, dlines3 door test). Not a rule name: `CoreSlice` refuses it by predicate (`own_shred_beside_alias`), switched on by this group; a state difference, so the dice-only pin keeps it.",
       "leaves_with": "the core paying the own part and the alias part apart (R-1 A2 on the step path)"
     },
-    "door_omits_armor_line": {
-      "primitives": ["Armor"],
-      "kind": "rule_line",
-      "why": "The table names a target's Armor(X) before the announce (`<U> has Armor(X): counts as Defense N+`); the core applies it and writes no line. Measured 19.11.: 3 volleys at 1500 and at 2000 pts, dlines_gap row 23.",
-      "leaves_with": "the dlines3 train that says the Armor line"
+    "door_omits_fortified_aura_loss_line": {
+      "primitives": [],
+      "kind": "state_difference",
+      "why": "An aofs / gff aura-granted Fortified (Fortified Aura, Guardian Boost Aura; Gleaming Armour carries Fortified Aura) is a Fortified-primitive entry with `lost_if_bearer_killed`: when the bearer (the unit or a joined hero) has fallen the table stands the benefit down and says `<aura>: bearer killed -> benefit lost` once, guarded across volleys. The core stands the bare Fortified down on the same dice but writes no line (probe 16 of 16, line only); for the alias walk (Guardian Boost) it keeps the benefit, so the dice differ (defense 5+ against the table's 6+, 16 of 16). Not a rule name: `CoreSlice` refuses a TARGET in that state (`fortified_aura_bearer_dead`), switched on by this group. A live bearer and the gf / aof Aura Channel spelling are equal and taken. Probed 20.11. (ds/h14_probe_fortified_aura.md).",
+      "leaves_with": "the core reading the alias loss and carrying the once-guard with its line (an epoch: the alias dice change)"
     },
     "door_versatile_pick_modified_to_hit": {
       "primitives": [],

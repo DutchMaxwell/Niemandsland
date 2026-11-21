@@ -132,10 +132,11 @@ static func on_move_path(main, gu: GameUnit) -> bool:
 	return is_core_unit(main, gu)
 
 
-## A core handle for the board as it stands (BattleSim.capture, plain form, gate reads); 0 on failure. The first
+## A core handle for the board as it stands (BattleSim.capture, plain form, gate reads); 0 on failure. `ai`: the AI activation's board, whose table once-records
+## the landing compares against later (`land_late_once_records`). The first
 ## capture of a game sends the game header, exactly as the AI's `_core_plan` does (one header per game, shared with it),
 ## so every step runs at the game's rules epoch, not at epoch 0.
-static func capture(main) -> int:
+static func capture(main, ai := false) -> int:
 	var sc: SoloController = main.solo_controller
 	var core: Object = sc._core_node_ready() if sc != null else null
 	if core == null:
@@ -156,7 +157,10 @@ static func capture(main) -> int:
 	AiActRecorder._stamp_gate_reads(state, plain)
 	_stamp_spent_ignore_feats(state, plain)
 	_stamp_step_ledger(state, plain, sc)
-	return int(core.capture_plain(plain))
+	var h := int(core.capture_plain(plain))
+	if ai:   # the AI activation's own board (main's activation start): the shadow's capture of the same moment must not replace it
+		_once_seen = {"h": h, "mods": _once_sigs(main)}   # what the core's board holds of the table's once-records (`land_late_once_records`)
+	return h
 
 
 ## C-10: the table's round stamps and latches `_ledger_of` does not carry, the table property each is read from (the State name where
@@ -390,7 +394,8 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 			var interference := id.begins_with("interference:")
 			if interference and not cx.is_empty():
 				await _cast_throw(main, cx)   # CC-14a: the table shows the cast (markers, seal, "Cast" card) BEFORE the foe is asked
-			var option: String = await main._owner_choice(owner, id, options, choice_purpose(id, transcript), wounds)
+			var option: String = await main._owner_choice(owner, id, options, choice_purpose(id, transcript), wounds,
+				_interference_context(main, cx) if interference else {})
 			probes.erase(id)   # asked once: the answer follows, or the core's automatic pick stands
 			if answer_fits(id, options, option):
 				transcript.append({"t": "choice", "id": id, "option": option})
@@ -492,7 +497,7 @@ static func _cast_spell_of(transcript: Array, owner_key: String) -> String:
 ## volley's stage opens then: the table's casts run in their own stages before it).
 static func cast_context(main, report: Dictionary, volley: Callable = Callable()) -> Dictionary:
 	var before: Dictionary = main._solo_act_flags if not main._solo_act_flags.is_empty() else main._solo_unit_flags()
-	return {"casts": report.get("casts", []), "next": 0, "cur": {}, "began": false, "ended": false, "landed": {},
+	return {"report": report, "casts": report.get("casts", []), "next": 0, "cur": {}, "began": false, "ended": false, "landed": {},
 		"before": before, "volley": volley, "volley_open": false, "pre_due": false}
 
 
@@ -508,6 +513,7 @@ static func _cast_line(main, unit: GameUnit, cx: Dictionary, line: Dictionary) -
 	var text := str(line["text"])
 	if bool(cx["began"]) and text.begins_with("%s fires" % unit.get_name()):
 		await _cast_finish(main, cx)
+		main._solo_flush_volley_note(cx["report"])   # the table's order: casts, the volley's note, then its first line
 		_cast_open_volley(cx)
 		cx["pre_due"] = true   # the casts' casualties of this very step land after its lines: `drive` writes the `pre` block then
 		return
@@ -575,6 +581,19 @@ static func _cast_throw(main, cx: Dictionary) -> void:
 	cur["announce"] = main._solo_show_attack_announce(c.get("caster_unit", c["caster"]), targets[0], "casts %s at" % name, false)
 	cur["seal"] = main._vfx_seal_begin(c["caster"], entry, entry.get("effect", {}), name)
 	await main._solo_stage_phase("Cast", SoloController.Pace.ANNOUNCE)
+
+
+## CC-14b: what the foe's dialog shows about the cast on the stage: caster, spell, targets, the base target after the casting net
+## (conduit mod included, as the table's `_solo_resolve_one_cast` clamps it) and the boost. {} when no cast is on the stage.
+static func _interference_context(main, cx: Dictionary) -> Dictionary:
+	var c := _cast_of(cx)
+	if c.is_empty():
+		return {}
+	var caster: GameUnit = c["caster"]
+	var base := int(c.get("base_target", 4))   # the planner always sets it; 4 is the book's base cast target
+	var net := int(SoloController.caster_casting_net(caster, int(main.solo_controller.caster_conduit(caster).get("mod", 0)))["net"])
+	return {"caster": caster.get_name(), "spell": str(c.get("name", "?")), "targets": main._solo_cast_target_label(_cast_targets(c)),
+		"base": clampi(base - net, 2, 6) if net != 0 else base, "boost": int(c.get("boost", 0))}
 
 
 ## CC-14a: a foe's interference answer `n` for choice `id`: the tokens leave the pool's units the way the core takes them and the table
@@ -741,10 +760,12 @@ static func moves_through(gu: GameUnit) -> bool:
 
 
 ## The actions the AI door takes: a Hold or an Advance; a Rush only for a unit that moves through (it cannot shoot, but its
-## move-through attacks fire after the move).
-static func takes_action(unit: GameUnit, kind: int) -> bool:
+## move-through attacks fire after the move) or that CASTS this activation (`casting`: a rushed caster may still cast, the core
+## resolves the move's Dangerous test and the casts; measured 20.11.: 23 of the 25 casting activations the door was never asked about
+## in a 10-game soak were Rushes).
+static func takes_action(unit: GameUnit, kind: int, casting := false) -> bool:
 	return kind in [AiDecision.Action.HOLD, AiDecision.Action.ADVANCE] \
-		or (kind == AiDecision.Action.RUSH and moves_through(unit))
+		or (kind == AiDecision.Action.RUSH and (casting or moves_through(unit)))
 
 
 ## P4.D-19: does the AI body hand this activation to the core? A board was captured for it before its move, the tray
@@ -759,7 +780,7 @@ static func takes_action(unit: GameUnit, kind: int) -> bool:
 static func takes_ai_activation(main, unit: GameUnit, report: Dictionary) -> bool:
 	var casts: Array = report.get("casts", [])
 	var takes: bool = main._solo_core_ai_h != 0 and main.dice_roller_control != null and is_plain(unit) \
-		and takes_action(unit, int(report.get("action", -1))) \
+		and takes_action(unit, int(report.get("action", -1)), not casts.is_empty()) \
 		and (casts.is_empty() or (cast_door_enabled() and cast_chain_clear(unit)))
 	if takes and moves_through(unit) and not main.solo_controller.last_move_paths.is_empty() \
 			and not crossed_plain(main, unit, chords_of(main.solo_controller.last_move_paths)):
@@ -840,7 +861,9 @@ static func dump_legacy() -> void:
 	var path := OS.get_environment("NML_TABLE_CENSUS")
 	var f := FileAccess.open(path, FileAccess.WRITE) if path != "" else null
 	if f != null:
-		var out := {"legacy": legacy, "legacy_sets": legacy_sets, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals}
+		var out := {"legacy": legacy, "legacy_sets": legacy_sets, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals,
+			"cast_door": {"seen": cast_seen, "taken": cast_taken, "fallbacks": cast_fallbacks, "probe_refusals": cast_probe_refusals,
+			"reasons": cast_probe_reasons.slice(0, 40), "not_asked": cast_not_asked}}
 		if not CoreShadow.records.is_empty():
 			out["shadow"] = CoreShadow.records   # C-4: the shadow run's volleys (NML_CORE_SHADOW=1)
 		if not CoreShadow.melee_records.is_empty():
@@ -874,7 +897,7 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	# resolves the planned casts from this capture and the table does not.
 	var cast := not (report.get("casts", []) as Array).is_empty()
 	var cast_taken := cast and bool(report.get("cast_door", false))
-	if h == 0 or not takes_action(unit, kind) or not is_plain(unit) or table_rolled or (cast and not cast_taken) or _aim_ambiguous(aim) \
+	if h == 0 or not takes_action(unit, kind, cast_taken) or not is_plain(unit) or table_rolled or (cast and not cast_taken) or _aim_ambiguous(aim) \
 			or (target == null and not owns_dangerous) or (target != null and not is_plain_target(target)) \
 			or rest.any(func(p: Dictionary) -> bool: return not is_plain_target(p["target"])) \
 			or parts.any(func(p: Dictionary) -> bool: return not CoreSlice.pair_refusals(unit, p["target"]).is_empty()):
@@ -945,6 +968,9 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 		if st["first"] and dice > 0:
 			_dangerous_mismatch(unit, dice, "it threw no die")
 		ai_runs += 1
+		if shows:   # an exchange was fought (the table's `_solo_consume_once_mods` follows a volley, never a bare Dangerous test or cast)
+			land_late_once_records(main, h, unit, parts.map(func(p: Dictionary) -> GameUnit: return p["target"]),
+				(cx.get("casts", []) as Array).map(func(c: Dictionary) -> String: return str(c.get("name", ""))))
 		announce(main, unit, target, cast_touched(report) if cast_taken else [])   # step 50/51 (+ CC-13c: the casts' targets and payers): the table that ran the AI activation announces its digest check
 		return true
 	ai_refusals += 1
@@ -1091,6 +1117,34 @@ static func cast_chain_clear(unit: GameUnit) -> bool:
 ## CC-13a: the casts a probe refused (named reasons, before any die) and how many: what the AI smoke reads.
 static var cast_probe_refusals := 0
 static var cast_probe_reasons: Array = []
+## CC-15 prep: the cast door's census for the soak (`dump_legacy`, key "cast_door"): casting activations that reached the body's cast
+## slot (`cast_seen`), the probe's takes (`cast_taken`), and the marked ones whose core call could not run, so the table cast after all
+## (`cast_fallbacks`, the late-lines case: the volley's own pre-lines print before the table's casts).
+static var cast_seen := 0
+static var cast_taken := 0
+static var cast_fallbacks := 0
+## CC-15 prep: why a casting activation was not even asked of the door, reason -> count (`note_cast_not_asked`).
+static var cast_not_asked: Dictionary = {}
+
+
+## CC-15 prep: the first reason `takes_ai_activation` (in its own order) said no to a casting activation: the switch is off, no board,
+## no dice roller, a unit the slice refuses (its first refusal named), an action the door does not take, a table-only pre-attack beat
+## on the chain (`cast_chain_clear`), else the move-through refusal.
+static func note_cast_not_asked(main, unit: GameUnit, report: Dictionary) -> void:
+	var why := "through_refused"
+	if not cast_door_enabled():
+		why = "switch_off"
+	elif main._solo_core_ai_h == 0:
+		why = "no_handle"
+	elif main.dice_roller_control == null:
+		why = "no_dice_roller"
+	elif not is_plain(unit):
+		why = "unit:%s" % str((CoreSlice.refusals(unit) + ["?"])[0])
+	elif not takes_action(unit, int(report.get("action", -1))):
+		why = "action:%d" % int(report.get("action", -1))
+	elif not cast_chain_clear(unit):
+		why = "beat_primitive"
+	cast_not_asked[why] = int(cast_not_asked.get(why, 0)) + 1
 
 
 ## CC-13a: the dry probe at the body's cast slot: the activation's placement, intent and cast inputs, no faces. The core checks every
@@ -1422,6 +1476,13 @@ static func land_step(main, _gu: GameUnit, landings: Array, start_models: Array,
 				main.radial_menu_controller._update_wound_marker(m)
 				if main.network_manager != null and main.network_manager.has_method("broadcast_model_wounds"):
 					main.network_manager.broadcast_model_wounds(m)
+			elif int(lm["wounds_left"]) > before:
+				# H-5a (Plan H): more wounds left than the model holds = the core healed it (Mend, `sim.rs` `tray_mend`, which
+				# also said the table's line); the table's own writers, as `_solo_apply_mend`.
+				m.heal(int(lm["wounds_left"]) - before)
+				main.radial_menu_controller._update_wound_marker(m)
+				if main.network_manager != null and main.network_manager.has_method("broadcast_model_wounds"):
+					main.network_manager.broadcast_model_wounds(m)
 		if not died.is_empty():
 			main._core_said_losses = bool(entry.get("loss_line", false))   # step 27: the core said this loss line
 			await main._solo_remove_dead_models(lgu, died, int(lgu.unit_properties.get("player_id", 1)))
@@ -1449,16 +1510,17 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 			main._solo_mirror_shaken(gu)
 		_land_positions(main, gu, d, start_models)
 		_land_ledger(main, gu, d)
+		_land_versatile_mode(main, gu, d)   # before the stamps: it reads the table's own `versatile_pick_round`
 		_land_stamps(main, gu, d)
 		_land_pools(main, gu, d)
 		_land_piercing(main, gu, d)
 		_land_surprise(main, gu, d)
-		_land_versatile_mode(main, gu, d)
 		_land_feats(main, gu, d)
 		_land_once_latches(main, gu, d)
 		_land_growth(main, gu, d)
 		_land_buffs(main, gu, d)
 		_land_spell_buffs(main, gu, d, done)
+		_land_marks_left(main, gu, d)
 
 
 ## HR-POS: the unit's surviving model positions after the activation (the delta's `positions`, capture slot order with the
@@ -1466,7 +1528,7 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 ## self-wound in the volley) and then stepped carries its survivors: they map onto the start models still alive, in order
 ## (the per-step landings already removed the same dead). The core's own steps move models the table never placed (the Hit & Run
 ## sidestep after a volley, `sim.rs` `tray_hit_and_run`, whose line the core already logged): each model that does not stand
-## where the core left it (XZ, within a millimetre) is put there with the table's own writer (`_apply_model_positions`:
+## where the core left it (XZ, within half a millimetre) is put there with the table's own writer (`_apply_model_positions`:
 ## MP move batch, surface height). A model the table already placed there (a walked move) is no news.
 static func _land_positions(main, gu: GameUnit, d: Dictionary, start_models: Array) -> void:
 	var at: Array = d.get("positions", [])
@@ -1484,7 +1546,9 @@ static func _land_positions(main, gu: GameUnit, d: Dictionary, start_models: Arr
 		if m.node == null or not is_instance_valid(m.node):
 			continue
 		var now: Vector3 = m.node.global_position
-		if Vector2(now.x, now.z).distance_to(Vector2(p.x, p.z)) < 0.001:
+		# The table's own smallest move is 0.0005 m (`_execute_move`'s "nothing moved", pile-in's last step): a core step of half a millimetre to a
+		# millimetre, the defender's last pile-in step for one, is a move. The old millimetre tolerance left the table 0.02 in off the core's end state.
+		if Vector2(now.x, now.z).distance_to(Vector2(p.x, p.z)) < 0.0005:
 			continue
 		models.append(m)
 		to.append(p)
@@ -1552,12 +1616,99 @@ static func _land_growth(main, gu: GameUnit, d: Dictionary) -> void:
 ## and after the morale die (P4.0-4b / -4c), which picked the records by role and knew no grant. From epoch 81 the core keeps a
 ## once morale buff through a Shaken unit's auto-failed test, as the table does (#2804).
 static func _land_buffs(main, gu: GameUnit, d: Dictionary) -> void:
+	# One spend for the whole delta: records of the same spell stacked on the unit (a cast that was not used up in an earlier round) are
+	# all spent by the core's exchange; the table says that once (`_solo_spend_records` dedupes the sentence), not once per record.
+	var spend: Array = []
+	var pool: Array = (main._solo_spell_mods.get(gu.get_instance_id(), []) as Array).duplicate()
 	for e in d.get("buffs_spent", []):
-		var records: Array = main._solo_spell_mods.get(gu.get_instance_id(), [])
-		var hit: Array = records.filter(func(rd: Variant) -> bool: return str((rd as Dictionary).get("spell", "")) == str(e[0]) \
+		var hit: Array = pool.filter(func(rd: Variant) -> bool: return str((rd as Dictionary).get("spell", "")) == str(e[0]) \
 			and str((rd as Dictionary).get("scope", "")) == str(e[1]) and str((rd as Dictionary).get("duration", "")) == "once")
 		if not hit.is_empty():
-			main._solo_spend_records(gu, [hit[0]])
+			spend.append(hit[0])
+			pool.erase(hit[0])   # equal records are interchangeable: the next entry takes the next one
+	main._solo_spend_records(gu, spend)
+
+
+## Landing lane (PLAN H): the once-records the TABLE placed between the capture and the core's call are not on the board the core
+## captured: the table's pre-attack beat block (a Furious Buff on a friend, a Shred / Slayer / Indirect / Quick Shot / Increased Shooting
+## Range Mark on the foe) runs first, the core resolves its own copy of the beat and spends it, and the delta cannot name the table's record
+## (`buffs_spent` diffs against the capture's ledger). Without this the record stays stale and the table's `"X" on U is consumed` line is
+## never said. WORKS ONLY on records the capture did not hold (`_once_seen`, by signature), so the core stays the authority on every
+## record it knew (`_land_buffs`), and spends them with the table's own exchange spend (`_solo_spend_once_mods`: its roles, scope, log line,
+## wire message). Test seam: false = the old behaviour.
+static var land_late_once := true
+## The once-records the table held when handle `h` was captured: {"h": h, "mods": {unit instance id: [record signature, ...]}}.
+static var _once_seen := {"h": 0, "mods": {}}
+
+
+## A once-record's identity for the capture compare: its fields without the Regeneration grant's `used` flag, which flips with the exchange.
+static func _rec_sig(rd: Dictionary) -> String:
+	var c := rd.duplicate()
+	c.erase("used")
+	return JSON.stringify(c, "", true)
+
+
+static func _once_sigs(main) -> Dictionary:
+	var out := {}
+	for key in main._solo_spell_mods:
+		var sigs: Array = []
+		for rd in main._solo_spell_mods[key]:
+			if str((rd as Dictionary).get("duration", "")) == "once":
+				sigs.append(_rec_sig(rd))
+		if not sigs.is_empty():
+			out[key] = sigs
+	return out
+
+
+## After a core-resolved exchange of `attacker` at `targets` (the capture is handle `h`): spend the table's once-records this exchange
+## would spend (the attacker chain's own / grant / range, the defenders' vs_target / defense / grants) that the capture did not hold.
+## `skip` names records a cast placed (the cast lane's `buffs_gained` / `buffs_spent` own them).
+static func land_late_once_records(main, h: int, attacker: GameUnit, targets: Array, skip: Array = []) -> void:
+	if not land_late_once or h == 0 or int(_once_seen["h"]) != h:
+		return
+	var sides: Array = [[attacker, ["attacker_own", "grant", "range"]]]
+	for t in targets:
+		sides.append([t, ["vs_target", "defense", "grant", "grant_vs"]])
+	for side in sides:
+		var unit := side[0] as GameUnit
+		if unit == null:
+			continue
+		for u in [unit, unit.get_attached_to() if unit.has_method("get_attached_to") else null]:
+			var uu := u as GameUnit
+			if uu == null:
+				continue
+			var known: Array = ((_once_seen["mods"] as Dictionary).get(uu.get_instance_id(), []) as Array).duplicate()
+			var late: Array = []
+			for rd in main._solo_spell_mods.get(uu.get_instance_id(), []):
+				if str((rd as Dictionary).get("duration", "")) != "once":
+					continue
+				var at := known.find(_rec_sig(rd))
+				if at >= 0:
+					known.remove_at(at)
+				elif not skip.has(str((rd as Dictionary).get("spell", ""))):
+					late.append(rd)
+			if not late.is_empty():
+				main._solo_spend_once_mods(uu, side[1], false, "", unit == attacker, late)
+
+
+## Landing lane (PLAN H, `PENDING_EPOCH_MELEE_MARK_SCOPE`): the melee-scoped Marks (Rapid Charge, Piercing Fighting) a core volley placed on the marked unit and left
+## standing (the delta's `marks_left`: record name, scope, granted rule). After a volley the table keeps such a record for a later charger (`_solo_apply_vs_marks` records
+## it on the target and the volley's spend skips a melee-scoped record); the door never ran that seam, so the record is landed here, with the table's own writer and
+## silently (the core already said the pick and the `... is ACTIVE` line). A record the table holds already (its own pre-attack beat placed it) is no news: only the
+## difference in count lands.
+static func _land_marks_left(main, gu: GameUnit, d: Dictionary) -> void:
+	var left := {}   # "name|scope" -> [count, grant]
+	for e in d.get("marks_left", []):
+		var key := "%s|%s" % [e[0], e[1]]
+		left[key] = [int((left.get(key, [0, ""]) as Array)[0]) + 1, str(e[2])]
+	for key in left:
+		var parts: PackedStringArray = str(key).split("|")
+		var held: int = (main._solo_spell_mods.get(gu.get_instance_id(), []) as Array).filter(func(rd: Variant) -> bool:
+			return str((rd as Dictionary).get("spell", "")) == parts[0] and str((rd as Dictionary).get("scope", "")) == parts[1] \
+				and str((rd as Dictionary).get("duration", "")) == "once").size()
+		for _i in int(left[key][0]) - held:
+			main._solo_record_spell_mod(gu, parts[0], {"grants_rule": left[key][1], "scope": parts[1], "beneficiary": "attackers",
+				"duration": "once", "no_live_grant": true, "quiet": true})
 
 
 ## CC-12a (CC-8c's `buffs_gained`): the buff / debuff effects this activation's casts landed on the unit and left standing
@@ -1614,7 +1765,11 @@ static func _land_versatile_mode(main, gu: GameUnit, d: Dictionary) -> void:
 	var was: Dictionary = gu.unit_properties.get("versatile_pick", {})
 	if was == vm:
 		return
-	push_error("CoreActivation.land_delta: %s.versatile_pick differs (table %s, core %s)" % [gu.get_name(), str(was), str(vm)])
+	# The table's latch counts only in the round it was written (`_solo_versatile_latch_read`): a core-resolved volley never ran the table's
+	# pick, so an empty or older latch is no table pick to differ from - the core is the first writer this round.
+	if int(gu.unit_properties.get("versatile_pick_round", -1)) == int(main.opr_army_manager.current_round):
+		stamp_splits += 1
+		push_error("CoreActivation.land_delta: %s.versatile_pick differs (table %s, core %s)" % [gu.get_name(), str(was), str(vm)])
 	main._sync_unit_property(gu, "versatile_pick", vm)
 
 
@@ -1637,7 +1792,8 @@ static func _land_stamps(main, gu: GameUnit, d: Dictionary) -> void:
 			continue
 		# On a core-resolved charge, the table never ran `_solo_melee_strike_phase`, so the core is the first writer
 		# of melee-only once-per-round stamps (`growth_strike_round` -> `regenerative_strength_round`).
-		if not (_charge_landing and key == "growth_strike_round"):
+		var first_pick: bool = key == "versatile_pick_round" and value == int(main.opr_army_manager.current_round) and was < value   # the core latched this round, the table did not (see `_land_versatile_mode`)
+		if not (_charge_landing and key == "growth_strike_round") and not first_pick:
 			stamp_splits += 1
 			push_error("CoreActivation.land_delta: %s.%s differs (table %d, core %d)" % [gu.get_name(), prop, was, value])
 		main._sync_unit_property(gu, prop, value)

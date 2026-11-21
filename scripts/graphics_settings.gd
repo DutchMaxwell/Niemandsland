@@ -5,6 +5,7 @@ extends Node
 signal settings_applied(preset_name: String)
 signal idle_motion_changed()
 signal calm_mode_changed()
+signal board_mist_changed()
 
 enum QualityPreset {
 	PERFORMANCE,  # New: Maximum FPS mode
@@ -34,6 +35,10 @@ const BIOME_GRADE_WEIGHTS := {
 	"urban_ruins": 1.8, "volcanic_ash": 0.65, "alien_jungle": 1.8,
 }
 var _biome_grade_curves := {}
+
+func board_mist_enabled() -> bool:
+	return show_board_mist and not calm_mode and current_preset >= QualityPreset.MEDIUM
+
 
 func army_tray_dressing_enabled() -> bool:
 	return current_preset >= QualityPreset.MEDIUM
@@ -121,6 +126,12 @@ var screen_index: int = -1
 var show_move_trails: bool = true
 ## Transparency stage 2: rising rule texts at the table ("Blast ×3", "Artillery +1").
 var show_rule_floats: bool = true
+## Low ground mist and wall steam on a generated board (dev flag NML_BOARDGEN_SEED; shader-only, a few draw calls): on by default,
+## off on the Performance and Low presets and in calm mode (see board_mist_enabled).
+var show_board_mist: bool = true:
+	set(value):
+		show_board_mist = value
+		board_mist_changed.emit()
 ## Combat effects (result marks, shots, falls, spells, hero auras). ON by default (maintainer look GO, 05.10.);
 ## one switch turns them all off.
 var show_combat_effects: bool = true
@@ -172,6 +183,7 @@ func set_calm_mode(on: bool) -> void:
 	apply_environment_settings(PRESETS[current_preset])   # push/strip the calm glow layer
 	_sync_combat_vfx()
 	calm_mode_changed.emit()
+	board_mist_changed.emit()
 
 ## Push show_combat_effects at the running VFX nodes; they read it only at _ready().
 func _sync_combat_vfx() -> void:
@@ -391,6 +403,7 @@ func apply_preset(preset: QualityPreset) -> void:
 		if not calm_mode:
 			idle_motion = preset >= QualityPreset.MEDIUM
 	current_preset = preset
+	board_mist_changed.emit()
 
 	# Apply rendering settings
 	apply_rendering_settings(settings)
@@ -580,6 +593,7 @@ func save_settings() -> void:
 	config.set_value("graphics", "screen_index", screen_index)
 	config.set_value("graphics", "show_move_trails", show_move_trails)
 	config.set_value("graphics", "show_rule_floats", show_rule_floats)
+	config.set_value("graphics", "show_board_mist", show_board_mist)
 	config.set_value("graphics", "show_combat_effects", show_combat_effects)
 	config.set_value("graphics", "tilt_shift", tilt_shift)
 	config.set_value("graphics", "show_combat_stage", show_combat_stage)
@@ -616,6 +630,7 @@ func load_settings() -> void:
 	screen_index = config.get_value("graphics", "screen_index", -1)
 	show_move_trails = config.get_value("graphics", "show_move_trails", true)
 	show_rule_floats = config.get_value("graphics", "show_rule_floats", true)
+	show_board_mist = config.get_value("graphics", "show_board_mist", true)
 	show_combat_effects = config.get_value("graphics", "show_combat_effects", true)
 	tilt_shift = config.get_value("graphics", "tilt_shift", true)
 	show_combat_stage = config.get_value("graphics", "show_combat_stage", true)

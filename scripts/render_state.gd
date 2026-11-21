@@ -8,7 +8,10 @@ extends RefCounted
 ##
 ## Layers, lowest first. A property no layer sets falls back to the value the Environment had when a layer first
 ## touched it (the scene's own value).
-const LAYERS: Array[String] = ["preset", "light", "reference", "world", "grading", "intro", "calm"]
+##
+## "board" sits above the grading: while a generated Tiefwerk board is on the table (BoardgenMood) its SSAO scale, glow and colour
+## grade replace the biome's, since a board is the whole playing surface. The intro and Calm mode still win over it.
+const LAYERS: Array[String] = ["preset", "light", "reference", "world", "grading", "board", "intro", "calm"]
 
 var _env: Environment
 var _base := {}

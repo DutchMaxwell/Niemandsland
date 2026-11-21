@@ -27,7 +27,7 @@ use crate::state::State;
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
 use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_74_CLIMB_COST, EPOCH_8_PLANNER_MENU, EPOCH_73_V36, EPOCH_77_CHARGE_CAP,
-    EPOCH_78_FLIER_CUT, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER};
+    EPOCH_78_FLIER_CUT, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER, PENDING_EPOCH_FLYING_THROUGH};
 
 use super::cost::{ledge_cost, trim_polyline_priced, CellSet, Grid, Ledge, Wall, Zone};
 use super::entry::plan_unit_step_call;
@@ -590,6 +590,12 @@ impl Move<'_> {
         )
     }
 
+/// `is_traversal(unit) or flies_through_units(unit)`: the route ignores the other units' spacing zones. A Flying unit does from `PENDING_EPOCH_FLYING_THROUGH`
+/// (the table since 75); the gate's base-crossing exemption stays Traversal-only (`gate_traversal := is_traversal`).
+fn through_units(&self) -> bool {
+    self.traversal || (self.flying && rule_on(self.rules_epoch, PENDING_EPOCH_FLYING_THROUGH))
+}
+
 /// `walls_and_ledges_of` for this move.
 fn walls_and_ledges(&self) -> (Vec<Wall>, Vec<Ledge>) {
     walls_and_ledges_of(self.t, self.flying, self.rules_epoch)
@@ -678,7 +684,7 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dan
             } else {
                 Some(DIFFICULT_MOVE_CAP_IN)
             },
-            zones_rest_only: self.traversal,
+            zones_rest_only: self.through_units(),
             // :6222 — the arc allowance and the body goal are CHARGE-only; a
             // plain move sends neither, so `allowance()` falls back to the
             // straight delta length (io.rs:512).
@@ -858,7 +864,7 @@ fn external_discs(&self) -> Vec<super::gate::Disc> {
 /// `_has_lateral_room`: an eight-point perimeter probe around the original anchor.
 /// Own models move together; attached units are absent from the obstacle list.
 fn has_lateral_room(&self, reach_in: f64) -> bool {
-    if self.traversal { return true; }
+    if self.through_units() { return true; }
     let anchor = geom::div(self.pos.iter().fold([0.0; 3], |a, p| geom::add(a, *p)), self.pos.len() as f64);
     let probe = reach_in * 0.5 * IN2M;
     let others: Vec<V2> = (0..self.state.units()).filter(|&u|
@@ -1457,7 +1463,7 @@ pub(crate) fn snap_charge_state_per_model(self, state: &mut State, si: usize, ci
     for (m, _) in from.iter().zip(&moving).filter(|(_, mv)| **mv) {
         state.positions[m.unit][m.model] = geom::to_f64(geom::add(pos_of(state, *m), delta));
     }
-    state.moved_round[si] = state.round;
+    crate::sim::stamp_moved(state, si, hero_attach, self.rules_epoch);
     Some((snap, moving.iter().filter(|m| !**m).count()))
 }
 
@@ -1472,7 +1478,7 @@ pub(crate) fn snap_charge_state(self, state: &mut State, si: usize, ci: usize,
         state.positions[m.unit][m.model] = geom::to_f64(geom::add(pos_of(state, m), delta));
     }
     // Wave 4 (port-entrenched) — the engage snap is an EXECUTED move.
-    state.moved_round[si] = state.round;
+    crate::sim::stamp_moved(state, si, hero_attach, self.rules_epoch);
     Some(snap)
 }
 
@@ -1888,7 +1894,7 @@ pub(crate) mod tests {
             charge_no_difficult: vec![false; n],
             charge_probe_r: vec![0.0; n],
             buffs: (0..n).map(|_| Vec::new()).collect(),
-            cast_buffs: Vec::new(),
+            cast_buffs: Vec::new(), casualty_f32: false,
             vs_mark_round: vec![-1; n],
             hit_and_run_round: vec![-1; n],
             moved_round: vec![-1; n],
@@ -2666,6 +2672,26 @@ pub(crate) mod tests {
         assert!(!forbidden, "the flier ended inside the container at x={x:.2}\"");
         assert!((2.0..=2.6).contains(&x), "the flier stops at the last legal spot before the box, x={x:.2}\"");
         assert!(old_forbidden || (old_x - x).abs() > 0.1, "77 keeps the old reading");
+    }
+
+    /// Heightfield plan step 10 (`PENDING_EPOCH_HEIGHT`): a unit that advances onto a 6 in tier ends standing at 6 in, and
+    /// the same move one epoch below ends at 0, as before. Red before: `Landing.end` took its y from `surface_y_m`,
+    /// which knew containers only, so the model stayed at 0 inside the block.
+    #[test]
+    fn a_model_moved_onto_a_6in_tier_stands_at_6in() {
+        let level_in = (0..16).map(|i| if i % 4 >= 2 { 6.0 } else { 0.0 }).collect();
+        let t = terrain::tier_board_for_test(4, 4, level_in, Vec::new());
+        let state = units_state(vec![vec![[(-4.0 * IN2M) as f32, 0.0, 0.0]]], vec![vec![0.5 * IN2M]], vec![vec![]]);
+        let run = |epoch: u32| {
+            MoveRules { rules_epoch: epoch }
+                .plain_move(&state, &t, 0, [(2.0 * IN2M) as f32, 0.0, 0.0], 6.0, true, true, crate::mv::FAST_PLANNER_GUARD)
+                .expect("the port moves the unit")
+                .end[0]
+        };
+        let (up, flat) = (run(crate::acts::PENDING_EPOCH_HEIGHT), run(crate::acts::PENDING_EPOCH_HEIGHT - 1));
+        assert!(up[0] as f64 / IN2M > 0.0, "the unit stands on the tier side, x={:.2}\"", up[0] as f64 / IN2M);
+        assert_eq!(up[1], (6.0 * IN2M) as f32, "6 in up at the gate");
+        assert_eq!(flat[1], 0.0, "one epoch below the gate the board plays flat");
     }
 
     fn stay_put(rules_epoch: u32, state: &State, t: &Terrain) -> Landing {

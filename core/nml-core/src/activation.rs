@@ -286,8 +286,10 @@ fn takedown_choice(statics: &[UnitStatic], state: &State, si: usize, shoot: Opti
     Some((id, living.iter().map(|i| format!("slot:{i}")).collect(), owner))
 }
 
-/// CC-5a: the spell kinds the core will resolve (damage; buff and debuff as a modifier or a grant). `utility` stays with the table.
-const CAST_KINDS: [&str; 3] = ["damage", "buff", "debuff"];
+/// CC-5a: the spell kinds the core will resolve (damage; buff and debuff as a modifier or a grant). CC-13f: `utility` too - the table
+/// resolves a utility spell as announce + token + the book's manual note, nothing mechanical (every utility entry of the spell books
+/// is `{"kind": "utility"}`, no modifier, no grant), which is exactly an effect-less buff here (`sim::tray_spell_effect`).
+const CAST_KINDS: [&str; 4] = ["damage", "buff", "debuff", "utility"];
 
 /// CC-5a/9c: why one planned cast cannot be taken, `None` when it can. The caster and every target are units of the roster, the caster
 /// holds a spell of that EXACT name, the spell's kind is one the core resolves, and `open` (a foe's owner may still answer) requires
@@ -721,6 +723,10 @@ pub struct UnitDelta {
     /// activation is in `buffs_spent` only (no news for the table: it lands the effect itself and spends it). Report only:
     /// the door lands each name from its own spell entry (`CoreActivation._land_spell_buffs`), the core pushes nothing.
     pub buffs_gained: Vec<String>,
+    /// Landing lane: the melee-scoped Marks (once, attackers-side, scope `melee`: Rapid Charge, Piercing Fighting, Precision Fighting) this unit holds at the end and
+    /// did not hold at the start, as (record name, scope, granted rule). The table keeps such a record on the marked unit after a volley for a later charger; the door
+    /// never ran the table's `_solo_apply_vs_marks`, so `land_delta` records them (silently: the core said the pick and the record's lines).
+    pub marks_left: Vec<(String, String, String)>,
 }
 
 /// The once buffs of `before` that `after` no longer holds, as (record name, scope). Each record is first matched to an identical
@@ -740,6 +746,21 @@ fn spent_buffs(before: &[LiveMod], after: &State, u: usize) -> Vec<(String, Stri
         }
     }
     out.extend(cast_spent_of(after, u).map(|r| (r.name.to_string(), r.scope.to_string())));
+    out
+}
+
+/// The melee-scoped once Marks `after` holds on unit `u` beyond `before`'s (matched one for one), in ledger order.
+fn marks_left(before: &[LiveMod], after: &State, u: usize) -> Vec<(String, String, String)> {
+    let mut known: Vec<&LiveMod> = before.iter().collect();
+    let mut out = Vec::new();
+    for r in after.buffs[u].iter().filter(|r| r.attackers && r.once && &*r.scope == "melee") {
+        match known.iter().position(|b| *b == r) {
+            Some(i) => {
+                known.remove(i);
+            }
+            None => out.push((r.name.to_string(), r.scope.to_string(), r.grants_rule.to_string())),
+        }
+    }
     out
 }
 
@@ -848,6 +869,7 @@ pub fn delta_of(before: &State, after: &State) -> Vec<UnitDelta> {
                 surprise_attack_used: after.surprise_attack_used[u],
                 buffs_spent: spent_buffs(&before.buffs[u], after, u),
                 buffs_gained: cast_gained_of(after, u).map(|r| r.name.to_string()).collect(),
+                marks_left: marks_left(&before.buffs[u], after, u),
             });
         }
     }
@@ -1444,12 +1466,13 @@ mod tests {
 
     // ---- CC-5a: the static checks on a planned cast ----
 
-    /// "a" holds a damage spell ("Bolt"), a utility spell ("Mend All") and a buff ("Ward"); everything else is `volley_line`'s.
+    /// "a" holds a damage spell ("Bolt"), a kind the core does not know ("Mend All"), a buff ("Ward") and a utility spell ("Dread");
+    /// everything else is `volley_line`'s.
     fn caster_line() -> (State, Vec<UnitStatic>) {
         let (st, mut statics) = volley_line();
         let spell = |name: &str, kind: &str| crate::rules::Spell { name: name.into(), effect_kind: kind.into(), threshold: 1, target_count: 1, ..Default::default() };
         for u in [0, 1] {
-            (statics[u].is_caster, statics[u].spells) = (true, vec![spell("Bolt", "damage"), spell("Mend All", "utility"), spell("Ward", "buff")]);
+            (statics[u].is_caster, statics[u].spells) = (true, vec![spell("Bolt", "damage"), spell("Mend All", "heal"), spell("Ward", "buff"), spell("Dread", "utility")]);
         }
         (st, statics)
     }
@@ -1474,7 +1497,7 @@ mod tests {
         for (c, why) in [
             (CastInput { caster: "zz".into(), ..bolt(0) }, "cast 0: zz is no unit of this game"),
             (CastInput { spell: "bolt".into(), ..bolt(0) }, "cast 0: a has no spell named bolt"),
-            (CastInput { spell: "Mend All".into(), ..bolt(0) }, "cast 0: the core does not resolve utility spells yet (Mend All)"),
+            (CastInput { spell: "Mend All".into(), ..bolt(0) }, "cast 0: the core does not resolve heal spells yet (Mend All)"),
             (CastInput { targets: vec!["b".into(), "zz".into()], ..bolt(0) }, "cast 0: zz is no unit of this game (a target of Bolt)"),
             (CastInput { open: true, ..bolt(0) }, "cast 0: a foe's answer to Bolt cannot be asked yet"),
             (CastInput { targets: vec![], ..bolt(0) }, "cast 0: Bolt has no targets"),
@@ -3076,13 +3099,16 @@ mod tests {
             Spell { name: "Empty Buff".into(), effect_kind: "buff".into(), threshold: 1, target_count: 1, ..Default::default() },
             Spell { name: "Zero Mod".into(), effect_kind: "debuff".into(), threshold: 1, target_count: 1, modifier: SpellModifier { present: true, ..Default::default() }, ..Default::default() },
             Spell { name: "Mass Ward".into(), effect_kind: "buff".into(), threshold: 1, target_count: 2, grants_rule: "Fearless".into(), ..Default::default() },
+            // CC-13f: a utility spell is the table's announce + token + manual note: effect-less here (no record), named in the ledger
+            Spell { name: "Dread".into(), effect_kind: "utility".into(), threshold: 1, target_count: 1, ..Default::default() },
         ];
-        for name in ["Empty Buff", "Zero Mod"] {
+        for name in ["Empty Buff", "Zero Mod", "Dread"] {
             let cast = CastInput { spell: name.into(), targets: vec!["a".into()], base: 2, threshold: 1, once: false, ..bolt(0) };
             let (ActStep::Done { state, .. }, asked) = replay(&statics, &st, cast, &[vec![6]]) else { panic!("{name}: expected Done") };
             assert_eq!(asked, ["cast|1x2+|Mystic"], "{name}");
             assert!(state.buffs[0].is_empty(), "{name}: no LiveMod pushed");
             assert_eq!(state.casts[0], 0, "{name}: token paid");
+            assert_eq!(state.cast_buffs.len(), 1, "{name}: the delta names the landing (buffs_gained)");
         }
         // Multi-target: "a" and "ah" stand, "b" is dead -> lands on "a" and "ah" only.
         (st.alive[1], st.wounds[1], st.positions[1]) = (1, vec![1], vec![[1.0, 0.0, 0.0]]);

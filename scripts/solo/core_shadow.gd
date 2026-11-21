@@ -38,6 +38,23 @@ static var _plant_read := false
 ## (per unit key, unique names in sorted order) - the two halves of the "buffs" reading.
 static var _buffs_before: Dictionary = {}
 static var _core_buffs: Dictionary = {}
+## Gate 10 (game 12): the units already wiped when this activation's board was captured. A joined hero whose host
+## was gone before the activation fights on alone (p.14) and owns its Shaken; a stale host flag is not mirrored.
+static var _wiped_at_capture: Dictionary = {}
+
+
+## PENDING_EPOCH_CASUALTY_TIES: env NML_CORE_SHADOW_SLOTS=1|on (soaks only, default OFF) compares WHICH models survived, below the
+## epoch too: the core's old f64 casualty order parts mirror models of a symmetric formation the other way than the table, so a
+## compare below 94 reads "positions" on such boards (a soak that wants the prevalence of that gap turns it on). From epoch 94 the
+## compare is always on: the epoch claims the table's order.
+static var _slots_env := -1
+
+
+static func slots_enabled() -> bool:
+	if _slots_env < 0:
+		var raw := OS.get_environment("NML_CORE_SHADOW_SLOTS").to_lower()
+		_slots_env = 1 if (raw == "1" or raw == "on") else 0
+	return _slots_env == 1 or AiActRecorder.rules_epoch >= AiActRecorder.PENDING_EPOCH_CASUALTY_TIES
 
 
 ## The flag, read once: ON only for "1" / "on".
@@ -65,7 +82,16 @@ static func capture(main, peek: GameUnit) -> int:
 		return 0
 	var h := CoreActivation.capture(main)
 	tapping = h != 0
+	note_wiped(main.opr_army_manager)
 	return h
+
+
+## The units with no living model at this activation's capture (`_wiped_at_capture`, read by `_state_diff`).
+static func note_wiped(army: OPRArmyManager) -> void:
+	_wiped_at_capture = {}
+	for gu in army.get_all_game_units():
+		if gu is GameUnit and (gu as GameUnit).get_alive_count() <= 0:
+			_wiped_at_capture[(gu as GameUnit).unit_id] = true
 
 
 ## One table tray roll, kept while a shadow board is open (main.gd's `_solo_tray_roll` calls it with `faces` known).
@@ -167,7 +193,10 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 		if plant_name() == "cast_buff":
 			_drop_one_buff()
 	if r.has("handle"):
-		diff = diff if diff != "" else _state_diff(main, core.plain_of(int(r["handle"])), _core_buffs)
+		var plain: Dictionary = core.plain_of(int(r["handle"]))
+		diff = diff if diff != "" else _state_diff(main, plain, _core_buffs)
+		if diff == "" and slots_enabled():
+			diff = _positions_diff(main, plain)   # WHICH models stand, not only how many (the casualty order)
 		core.release(int(r["handle"]))
 	var labels: Array = CoreActivation.why_not(main, unit, null)
 	for id in order:
@@ -227,7 +256,7 @@ static func _state_diff(main, core_plain: Dictionary, core_buffs: Variant = null
 			# The core shakes the host only; landing its delta mirrors that onto the joined hero (`land_delta` ->
 			# `_solo_mirror_shaken`, as the table's own morale does), so a hero reads its host's core Shaken here.
 			var host := str(a.get("attached_to", ""))
-			if k == "shaken" and host != "" and core_units.has(host):
+			if k == "shaken" and host != "" and core_units.has(host) and not _wiped_at_capture.has(host):
 				core_v = maxi(int(core_v), _field(core_units[host], k))
 			if _field(a, k) != core_v:
 				_detail = {"unit": str(uid), "table": _field(a, k), "core": core_v}
@@ -545,7 +574,8 @@ static func _melee_diff(main, unit: GameUnit, report: Dictionary, table_lines: A
 	return diff
 
 
-## The first unit whose living models stand elsewhere in the core (XZ, sorted, 0.01"): "" = none, else "positions".
+## The first unit whose living models stand elsewhere in the core (XZ, sorted, 0.01"): "" = none, else "positions". Models of
+## one unit are told apart by where they stand, so this is the reading of WHICH models survived (counts and wounds are `_state_diff`'s).
 static func _positions_diff(main, core_plain: Dictionary) -> String:
 	var table: Dictionary = BattleSim.capture(main.opr_army_manager)
 	for uid in table["units"]:

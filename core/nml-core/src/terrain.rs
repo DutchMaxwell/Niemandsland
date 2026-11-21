@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::acts::{rule_on, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
 use crate::geom::V3;
+use crate::mv::tier::{HighSide, TierEdge, TierKind};
 
 /// `TerrainRules.TerrainType` — terrain_rules.gd:24.
 pub const NONE: i32 = 0;
@@ -138,6 +139,87 @@ pub struct TierGrid {
     pub stairs: Vec<[u16; 2]>,
 }
 
+/// One solid block of a tier board: board-centred inches, rising from the table to `top_in`. Sight and the planner see
+/// the same blocks (steps 10b, 11).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TierBox {
+    pub lo: [f64; 2],
+    pub hi: [f64; 2],
+    pub top_in: f64,
+}
+
+impl TierGrid {
+    fn level(&self, x: usize, z: usize) -> f64 {
+        self.level_in.get(z * usize::from(self.nx) + x).copied().unwrap_or(0.0)
+    }
+
+    /// The corner of grid vertex `(i, j)`, board-centred inches.
+    fn vertex(&self, i: usize, j: usize) -> [f64; 2] {
+        [(i as f64 - f64::from(self.nx) / 2.0) * self.cell_in, (j as f64 - f64::from(self.nz) / 2.0) * self.cell_in]
+    }
+
+    /// Heightfield plan step 6 - the raised cells as solid blocks: a row run of one level is one block, and the same run
+    /// in the next row grows it (fewer blocks = fewer sight zones). Ground cells make no block.
+    pub fn boxes(&self) -> Vec<TierBox> {
+        let (nx, nz) = (usize::from(self.nx), usize::from(self.nz));
+        let mut runs: Vec<(usize, usize, usize, usize, f64)> = Vec::new(); // x0, x1, z0, z1 (all exclusive end), level
+        for z in 0..nz {
+            let mut x = 0;
+            while x < nx {
+                let level = self.level(x, z);
+                let mut end = x + 1;
+                while level > 0.0 && end < nx && self.level(end, z) == level {
+                    end += 1;
+                }
+                if level > 0.0 {
+                    match runs.iter_mut().find(|r| r.3 == z && (r.0, r.1, r.4) == (x, end, level)) {
+                        Some(r) => r.3 = z + 1,
+                        None => runs.push((x, end, z, z + 1, level)),
+                    }
+                }
+                x = end;
+            }
+        }
+        runs.into_iter().map(|(x0, x1, z0, z1, top_in)| TierBox { lo: self.vertex(x0, z0), hi: self.vertex(x1, z1), top_in }).collect()
+    }
+
+    /// Heightfield plan step 6 - every cell border whose two sides differ, as `mv::tier` edges in board-centred inches.
+    /// A border with a ladder is a `Ladder` edge of its own; every other one is a `Cliff`, and a straight contour of
+    /// equal height and side is ONE edge (so a leg through a grid vertex on it still crosses). Vertical contours first
+    /// (running +z), then horizontal ones (running +x), each in grid order.
+    pub fn edges(&self) -> Vec<TierEdge> {
+        let (nx, nz) = (usize::from(self.nx), usize::from(self.nz));
+        let ladder = |lo: usize, hi: usize| self.ladders.iter().any(|p| (usize::from(p[0]), usize::from(p[1])) == (lo, hi));
+        let mut out = Vec::new();
+        for vertical in [true, false] {
+            for line in 1..if vertical { nx } else { nz } {
+                // runs along this line: (first position, end position, rise, high side is the positive one, ladder)
+                let mut runs: Vec<(usize, usize, f64, bool, bool)> = Vec::new();
+                for p in 0..if vertical { nz } else { nx } {
+                    let (before, after) = if vertical { ((line - 1, p), (line, p)) } else { ((p, line - 1), (p, line)) };
+                    let (lb, la) = (self.level(before.0, before.1), self.level(after.0, after.1));
+                    if lb == la {
+                        continue;
+                    }
+                    let (high_after, ids) = (la > lb, (before.1 * nx + before.0, after.1 * nx + after.0));
+                    let lad = if high_after { ladder(ids.0, ids.1) } else { ladder(ids.1, ids.0) };
+                    match runs.last_mut() {
+                        Some(r) if !lad && !r.4 && r.1 == p && r.2 == (la - lb).abs() && r.3 == high_after => r.1 = p + 1,
+                        _ => runs.push((p, p + 1, (la - lb).abs(), high_after, lad)),
+                    }
+                }
+                for (p0, p1, dy_in, high_after, lad) in runs {
+                    let (a, b) = if vertical { (self.vertex(line, p0), self.vertex(line, p1)) } else { (self.vertex(p0, line), self.vertex(p1, line)) };
+                    // `Left` = positive cross product of (b - a, point - a) in the (x, z) frame: east of a +z run is Right, south of a +x run is Left
+                    let high = if high_after == vertical { HighSide::Right } else { HighSide::Left };
+                    out.push(TierEdge { a, b, dy_in, high, kind: if lad { TierKind::Ladder } else { TierKind::Cliff } });
+                }
+            }
+        }
+        out
+    }
+}
+
 /// The header's `"terrain"` object, deserialized as written.
 ///
 /// Build a literal with `..Default::default()` after the fields you set (`cell_params` always among them): a field
@@ -247,6 +329,9 @@ pub struct Terrain {
     blocker_boxes_m: Vec<[f64; 6]>,
     /// Heightfield plan step 5 - `PlainTerrain::tiers` as written (`tier_in_at` reads it); `None` = a flat board.
     tiers: Option<TierGrid>,
+    /// Heightfield plan step 6 - the blocks and the contours of `tiers`, derived once at `build` (empty on a flat board).
+    tier_boxes: Vec<TierBox>,
+    tier_edges: Vec<TierEdge>,
     /// Content identity for memos keyed on a board: every `build` / `absent` / content-changing setter mints a fresh
     /// value, a clone keeps it. 0 = a bare `Default`, which no memo trusts.
     uid: u64,
@@ -297,6 +382,18 @@ impl Terrain {
             return 0.0;
         }
         t.level_in.get(fz as usize * usize::from(t.nx) + fx as usize).copied().unwrap_or(0.0)
+    }
+
+    /// Heightfield plan step 6 - the solid blocks of the tier board (board-centred inches). Empty on a flat board.
+    #[inline]
+    pub fn tier_boxes(&self) -> &[TierBox] {
+        &self.tier_boxes
+    }
+
+    /// Heightfield plan step 6 - the cliffs and ladders between tiers (board-centred inches, see `TierGrid::edges`).
+    #[inline]
+    pub fn tier_edges(&self) -> &[TierEdge] {
+        &self.tier_edges
     }
 
     /// The board's wall segments in the planner's INCH frame. Empty = the
@@ -575,6 +672,8 @@ impl Terrain {
             blockers_m: Vec::new(),
             blocker_boxes_m: Vec::new(),
             tiers: p.tiers.clone(),
+            tier_boxes: p.tiers.as_ref().map_or_else(Vec::new, TierGrid::boxes),
+            tier_edges: p.tiers.as_ref().map_or_else(Vec::new, TierGrid::edges),
             uid: fresh_uid(),
         };
         out.set_walls_world_m(&p.walls);
@@ -813,6 +912,22 @@ pub fn base_in_terrain(centre: V3, radius: f64, t: &Terrain, class_check: fn(i32
     false
 }
 
+/// Test board of the heightfield steps: an `nx` x `nz` tier grid of 3 in cells on a table of the same size (yaw 0,
+/// board-centred), no painted terrain. `level_in` is row-major; `ladders` are `[low, high]` cell indices.
+#[cfg(test)]
+pub(crate) fn tier_board_for_test(nx: u16, nz: u16, level_in: Vec<f64>, ladders: Vec<[u16; 2]>) -> Terrain {
+    Terrain::build(&PlainTerrain {
+        cell_params: CellParams {
+            table_size_feet: [f64::from(nx) * 0.25, f64::from(nz) * 0.25],
+            grid_rotation_degrees: 0.0,
+            grid_size_inches: 3.0,
+            inches_to_meters: crate::IN2M,
+        },
+        tiers: Some(TierGrid { nx, nz, cell_in: 3.0, level_in, ladders, stairs: Vec::new() }),
+        ..Default::default()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1032,5 +1147,126 @@ mod tests {
         let short = tiered(vec![6.0, 6.0]);
         assert_eq!(short.tier_in_at(-3.0, -4.0), 6.0);
         assert_eq!(short.tier_in_at(3.0, 3.0), 0.0, "a level the list does not carry reads as ground, no panic");
+    }
+
+    /// 4 x 3 cells; rows are z. Raised cells: (1,0)=3 (2,0)=3 (1,1)=3 (2,1)=6, the rest is ground.
+    fn small_grid(ladders: Vec<[u16; 2]>) -> TierGrid {
+        let level_in = vec![0.0, 3.0, 3.0, 0.0, 0.0, 3.0, 6.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        TierGrid { nx: 4, nz: 3, cell_in: 3.0, level_in, ladders, stairs: vec![] }
+    }
+
+    fn edge(a: [f64; 2], b: [f64; 2], dy_in: f64, high: HighSide, kind: TierKind) -> TierEdge {
+        TierEdge { a, b, dy_in, high, kind }
+    }
+
+    /// Heightfield plan step 6: a straight cliff of one height is ONE edge, a ladder border stays its own edge and
+    /// splits the run, and every edge names its high side. Red before: `edges` did not exist; a swapped high side or no
+    /// run merge fails this exact list.
+    #[test]
+    fn a_cliff_run_is_one_edge_and_a_ladder_border_is_its_own() {
+        use HighSide::{Left, Right};
+        use TierKind::{Cliff, Ladder};
+        // board spans x -6..6, z -4.5..4.5; vertex (i, j) = (-6 + 3i, -4.5 + 3j)
+        let plain = small_grid(vec![]).edges();
+        assert_eq!(plain, vec![
+            edge([-3.0, -4.5], [-3.0, 1.5], 3.0, Right, Cliff), // west face of the block, rows 0-1 in one edge
+            edge([0.0, -1.5], [0.0, 1.5], 3.0, Right, Cliff),   // between (1,1)=3 and (2,1)=6, row 1 only
+            edge([3.0, -4.5], [3.0, -1.5], 3.0, Left, Cliff),   // east face of (2,0)
+            edge([3.0, -1.5], [3.0, 1.5], 6.0, Left, Cliff),    // east face of (2,1): 6 in, no merge with the 3 in run
+            edge([0.0, -1.5], [3.0, -1.5], 3.0, Left, Cliff),   // (2,0)=3 north of (2,1)=6, high side south
+            edge([-3.0, 1.5], [0.0, 1.5], 3.0, Right, Cliff),   // south face of (1,1), high side north
+            edge([0.0, 1.5], [3.0, 1.5], 6.0, Right, Cliff),    // south face of (2,1)
+        ]);
+        // a ladder from the ground cell (0,0) (index 0) up to (1,0) (index 1)
+        let laddered = small_grid(vec![[0, 1]]).edges();
+        assert_eq!(laddered.len(), plain.len() + 1, "the ladder splits the west run in two");
+        assert!(laddered.contains(&edge([-3.0, -4.5], [-3.0, -1.5], 3.0, Right, Ladder)));
+        assert!(laddered.contains(&edge([-3.0, -1.5], [-3.0, 1.5], 3.0, Right, Cliff)));
+        // a ladder between cells of the SAME level is no border at all
+        assert_eq!(small_grid(vec![[1, 2]]).edges(), plain);
+    }
+
+    #[test]
+    fn boxes_are_row_runs_grown_by_identical_rows() {
+        let boxes = small_grid(vec![]).boxes();
+        assert_eq!(boxes, vec![
+            TierBox { lo: [-3.0, -4.5], hi: [3.0, -1.5], top_in: 3.0 }, // (1,0) (2,0)
+            TierBox { lo: [-3.0, -1.5], hi: [0.0, 1.5], top_in: 3.0 },  // (1,1): a different run than row 0's two cells
+            TierBox { lo: [0.0, -1.5], hi: [3.0, 1.5], top_in: 6.0 },   // (2,1)
+        ]);
+        let tall = TierGrid { nx: 2, nz: 3, cell_in: 3.0, level_in: vec![3.0, 3.0, 3.0, 3.0, 0.0, 6.0], ladders: vec![], stairs: vec![] };
+        assert_eq!(tall.boxes(), vec![
+            TierBox { lo: [-3.0, -4.5], hi: [3.0, 1.5], top_in: 3.0 }, // rows 0 and 1 are the same run: one block
+            TierBox { lo: [0.0, 1.5], hi: [3.0, 4.5], top_in: 6.0 },
+        ]);
+    }
+
+    #[test]
+    fn a_flat_board_has_no_blocks_and_no_edges() {
+        let flat = Terrain::build(&serde_json::from_value::<PlainTerrain>(header(None)).unwrap());
+        assert!(flat.tier_boxes().is_empty() && flat.tier_edges().is_empty());
+        let level = tiered(vec![3.0; 9]);
+        assert_eq!(level.tier_boxes().len(), 1);
+        assert!(level.tier_edges().is_empty(), "no border differs, the board edge is no contour");
+    }
+
+    /// The grid of a generated board, built here from the layout (`boardgen::plain::to_plain` is step 3's).
+    fn generated_grid(seed: i64, sym: crate::boardgen::Symmetry) -> TierGrid {
+        let l = crate::boardgen::generate(seed, sym);
+        TierGrid {
+            nx: l.nx as u16, nz: l.nz as u16, cell_in: f64::from(l.cell_in), stairs: vec![],
+            level_in: l.cells.iter().map(|c| f64::from(crate::boardgen::LEVEL_IN[usize::from(c.level)])).collect(),
+            ladders: l.connectors.iter().map(|c| [c.low, c.high]).collect(),
+        }
+    }
+
+    /// Heightfield plan step 6 on real boards: walking from the centre of any cell to the centre of its neighbour crosses
+    /// exactly ONE edge when the two levels differ (up or down as the levels say, its rise, a ladder exactly where the
+    /// generator wired one) and none when they are equal; the blocks tile the raised cells exactly.
+    #[test]
+    fn every_border_with_a_level_difference_has_exactly_one_edge_on_generated_boards() {
+        use crate::mv::tier::tier_crossings;
+        let mut counts = Vec::new();
+        for (seed, sym) in [(42, crate::boardgen::Symmetry::Point180), (7, crate::boardgen::Symmetry::BalancedFree), (1000, crate::boardgen::Symmetry::Point180)] {
+            let g = generated_grid(seed, sym);
+            let (edges, boxes) = (g.edges(), g.boxes());
+            let centre = |x: usize, z: usize| [g.vertex(x, z)[0] + 1.5, g.vertex(x, z)[1] + 1.5];
+            let (mut borders, mut ladders) = (0, 0);
+            for z in 0..16 {
+                for x in 0..16 {
+                    for (nx, nz) in [(x + 1, z), (x, z + 1)] {
+                        if nx > 15 || nz > 15 {
+                            continue;
+                        }
+                        let (l0, l1) = (g.level(x, z), g.level(nx, nz));
+                        let got = tier_crossings(centre(x, z), centre(nx, nz), &edges);
+                        if l0 == l1 {
+                            assert!(got.is_empty(), "seed {seed}: ({x},{z})-({nx},{nz}) are level but cross {got:?}");
+                            continue;
+                        }
+                        borders += 1;
+                        assert_eq!(got.len(), 1, "seed {seed}: ({x},{z})-({nx},{nz}) must cross exactly one edge, got {got:?}");
+                        let (c, (lo, hi)) = (got[0], if l0 < l1 { ((x, z), (nx, nz)) } else { ((nx, nz), (x, z)) });
+                        assert_eq!((c.dy_in, c.down), ((l1 - l0).abs(), l0 > l1), "seed {seed}: ({x},{z})-({nx},{nz})");
+                        let wired = g.ladders.contains(&[(lo.1 * 16 + lo.0) as u16, (hi.1 * 16 + hi.0) as u16]);
+                        assert_eq!(c.kind == TierKind::Ladder, wired, "seed {seed}: ({x},{z})-({nx},{nz}) ladder or cliff");
+                        ladders += usize::from(wired);
+                    }
+                }
+            }
+            assert!(borders > 40 && ladders > 0, "seed {seed}: the board must have contours and ladders ({borders}, {ladders})");
+            assert_eq!(ladders, g.ladders.len(), "seed {seed}: every ladder sits on one border");
+            // the blocks cover every raised cell once, at its own level, and no ground cell
+            for z in 0..16 {
+                for x in 0..16 {
+                    let c = centre(x, z);
+                    let inside: Vec<_> = boxes.iter().filter(|b| c[0] > b.lo[0] && c[0] < b.hi[0] && c[1] > b.lo[1] && c[1] < b.hi[1]).collect();
+                    assert_eq!(inside.len(), usize::from(g.level(x, z) > 0.0), "seed {seed}: cell ({x},{z}) under {} blocks", inside.len());
+                    assert!(inside.iter().all(|b| b.top_in == g.level(x, z)));
+                }
+            }
+            counts.push(boxes.len());
+        }
+        assert!(counts.iter().all(|&n| n <= 80), "a board's blocks are sight zones, keep them few: {counts:?}");
     }
 }

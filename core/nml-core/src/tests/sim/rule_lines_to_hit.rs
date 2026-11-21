@@ -5,6 +5,11 @@ use crate::unit::ShotModNote;
     // ---- Door rule lines (lane dlines train 4, DS-GHITN): to-hit note and Takedown ----
 
     fn rule_lines(tune: impl FnOnce(&mut State, &mut [UnitStatic]), faces: Vec<Vec<u8>>) -> Vec<String> {
+        rule_lines_as(HOLD, None, tune, faces)
+    }
+
+    /// `rule_lines` for an activation of `kind` (an ADVANCE with a `dest` moves the shooter: its weapons shoot "after moving").
+    fn rule_lines_as(kind: i64, dest: Option<[f64; 3]>, tune: impl FnOnce(&mut State, &mut [UnitStatic]), faces: Vec<Vec<u8>>) -> Vec<String> {
         let (mut st, mut statics) = volley_line();
         st.player = vec![1, 1, 0, 0];
         st.profiles = Rc::new(Profiles { list: vec![st.profiles.list[0].clone(); 4], index: HashMap::new() });
@@ -13,9 +18,9 @@ use crate::unit::ShotModNote;
         statics[0].ctx.rules_epoch = crate::acts::CURRENT_RULES_EPOCH;
         statics[2].ctx.rules_epoch = crate::acts::CURRENT_RULES_EPOCH;
         tune(&mut st, &mut statics);
-        let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact: true, ..Seams::default() };
+        let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact: true, movement: dest.is_some(), moved_shoot: dest.is_some(), ..Seams::default() };
         let action = Action {
-            kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None,
+            kind, unit: "a".into(), dest, shoot: Some("b".into()), charge: None,
             patient: false, split: None, traced: None, teleport: None,
         };
         let mut tray = Tray::supplied(faces);
@@ -111,4 +116,22 @@ use crate::unit::ShotModNote;
             s[2].ctx.stealth = true;
         }, faces());
         assert!(said(&none).is_empty(), "no Unstoppable, no fold line: {none:?}");
+    }
+
+    /// A shooter that moved says "Indirect: no moved penalty" in its to-hit note whenever the shot IS Indirect, and the table makes it
+    /// one when the TARGET carries an Indirect mark (`_solo_bridge_granted_flags`: the marked shot is an Indirect profile, soak game 16:
+    /// "Triangulation Bots"). RED: the core said it only for a weapon with its own Indirect, so the marked shot's note was left out.
+    #[test]
+    fn a_marks_indirect_names_the_moved_penalty_it_waives() {
+        let mark = |st: &mut State| st.buffs[2].push(crate::mods::LiveMod {
+            hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, move_mod: 0, range_in: 0,
+            grants_rule: Rc::from("Indirect"), scope: Rc::from(""), attackers: true, once: true, name: Rc::from("Triangulation Bots"),
+        });
+        let (faces, dest, note) = (|| vec![vec![6, 1, 1, 1], vec![1]], Some([6.0 * IN2M, 0.0, 0.0]), "To-hit vs Def: Indirect: no moved penalty → hits on 4+");
+        let moved = rule_lines_as(ADVANCE, dest, |st, _| mark(st), faces());
+        assert!(moved.iter().any(|l| l == note), "{moved:?}");
+        let held = rule_lines(|st, _| mark(st), faces());
+        assert!(held.iter().all(|l| !l.starts_with("To-hit vs")), "a shooter that did not move has no penalty to waive: {held:?}");
+        let unmarked = rule_lines_as(ADVANCE, dest, |_, _| {}, faces());
+        assert!(unmarked.iter().all(|l| !l.starts_with("To-hit vs")), "no Indirect, no note: {unmarked:?}");
     }

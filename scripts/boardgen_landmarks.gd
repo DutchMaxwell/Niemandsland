@@ -1,12 +1,14 @@
 class_name BoardgenLandmarks
 extends Node3D
 ## Procedural meshes for the landmarks of a seeded boardgen layout (NmlCore.boardgen_layout()["landmarks"]): a storage-tank
-## cluster (cylinders and a pipe manifold) and a crane (plinth, lattice tower, arm). Every part is an axis-aligned primitive in
-## inches, drawn instanced: one MultiMesh per shape, so the whole set is two draw calls.
+## cluster (cylinders and a pipe manifold), a crane (plinth, lattice tower, arm), a pump house (a raised block with flat roof
+## plates and wall-mounted pipes and louvres) and a toxic sump (flat glowing bubbles on the board's own sump water). Every part is an axis-aligned primitive in
+## inches, drawn instanced: one MultiMesh per shape and look, so the whole set is a handful of draw calls.
 ##
 ## VISUAL ONLY. What the rules make of a landmark is the core's terrain class the binding hands over (`terrain`, `solid`);
 ## nothing here is read by sight or movement. A tank cluster and a crane base are solid ground (impassable, nobody stands on
-## them) and carry no collider; the crane's tower and arm stand far above any model.
+## them) and carry no collider; the crane's tower and arm stand far above any model. A part a model can stand on (pump-house
+## roof plates, sump bubbles) is flat; only wall mounts stand out, and by at most MOUNT_IN.
 
 const INCHES_TO_METERS := 0.0254
 const SKIN_IN := 0.04              # the level-0 ground skin of the greybox
@@ -14,13 +16,31 @@ const TANK_R := 1.2
 const TANK_H := 3.0                # one tier-1 block high; the core knows a solid only as a 2.5 in container
 const CRANE_TOP := 15.0
 const CRANE_ARM_IN := 10.0
+const MOUNT_IN := 0.75             # the most a wall-foot part stands off its wall: the wall strip
+const GRATE_IN := 0.08             # a roof grate lies this flat
+const RIDGE_IN := 0.7              # the pump house's roof ridge is this wide and lies along a roof edge, inside the MOUNT_IN strip
 const STEEL := Color(0.36, 0.38, 0.42)
-const OCHRE := Color(0.78, 0.56, 0.16)
+const OCHRE := Color(0.74, 0.52, 0.14)
 const DARK := Color(0.10, 0.10, 0.11)
+const TANK := Color(0.52, 0.55, 0.52)
+const VALVE := Color(0.85, 0.12, 0.06)
+const TEAL := Color(0.14, 0.46, 0.50)   # the pump house's own accent
+const SHADER := preload("res://shaders/tiefwerk_landmark.gdshader")
+## `look` of a cylinder part, as the landmark shader knows it (INSTANCE_CUSTOM.x).
+const LOOK_TANK := 1
+const LOOK_CAP := 2
+const LOOK_PIPE := 3
+const LOOK_JACKET := 4
+const LOOK_PAINT := 10
+const LOOK_STRIPE := 11
+const GAUGE := Color(0.88, 0.86, 0.78)
+const BRICK := Color(0.42, 0.22, 0.17)
+const ACID := Color(0.30, 0.90, 0.15)
 
 
 ## Every part of every landmark: {shape "box"|"cyl", axis (0 x, 1 y, 2 z: a cylinder's length axis), lo, hi (inches, origin =
-## board centre, y up), colour}. Pure data, so the layout alone decides the look.
+## board centre, y up), colour, glow, look}. A "torus" is a flat ring of
+## diameter hi.x - lo.x whose tube is 8 % of that. Pure data, so the layout alone decides the look.
 static func plan(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var cell_in := float(layout["cell_in"])
@@ -33,86 +53,199 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 				_tanks(out, lo, lm, cell_in)
 			"Crane":
 				_crane(out, lo + size * 0.5, int(lm["turn"]), half)
+			"PumpHouse":
+				_pump_house(out, layout, lm, lo, cell_in)
+			"Sump":
+				_sump(out, lo, size, int(lm["x"]) * 31 + int(lm["z"]))
 	return out
 
 
-static func _box(out: Array[Dictionary], lo: Vector3, hi: Vector3, colour: Color) -> void:
-	out.append({"shape": "box", "axis": 1, "lo": lo, "hi": hi, "colour": colour})
+static func _box(out: Array[Dictionary], lo: Vector3, hi: Vector3, colour: Color, glow := false, look := 0) -> void:
+	out.append({"shape": "box", "axis": 1, "lo": lo, "hi": hi, "colour": colour, "glow": glow, "look": look})
 
 
 ## A cylinder of `radius` and `length` along `axis`, centred on `at`.
-static func _cyl(out: Array[Dictionary], at: Vector3, radius: float, length: float, axis: int, colour: Color) -> void:
+static func _cyl(out: Array[Dictionary], at: Vector3, radius: float, length: float, axis: int, colour: Color, glow := false, look := 0) -> void:
 	var reach := Vector3(radius, radius, radius)
 	reach[axis] = length * 0.5
-	out.append({"shape": "cyl", "axis": axis, "lo": at - reach, "hi": at + reach, "colour": colour})
+	out.append({"shape": "cyl", "axis": axis, "lo": at - reach, "hi": at + reach, "colour": colour, "glow": glow, "look": look})
+
+
+## A flat ring (a hand rail, a valve wheel) of `diameter` round `at`.
+static func _ring(out: Array[Dictionary], at: Vector3, diameter: float, colour: Color) -> void:
+	var reach := Vector3(diameter * 0.5, diameter * 0.04, diameter * 0.5)
+	out.append({"shape": "torus", "axis": 1, "lo": at - reach, "hi": at + reach, "colour": colour, "glow": false})
 
 
 ## A box along `dir` (a unit axis vector) from `a` to `b` inches off `c`, `half` wide each side, between heights y0 and y1.
-static func _span(out: Array[Dictionary], c: Vector2, dir: Vector2, a: float, b: float, y0: float, y1: float, half: float, colour: Color) -> void:
+static func _span(out: Array[Dictionary], c: Vector2, dir: Vector2, a: float, b: float, y0: float, y1: float, half: float, colour: Color, look := 0) -> void:
 	var p := c + dir * a
 	var q := c + dir * b
-	_box(out, Vector3(minf(p.x, q.x) - half, y0, minf(p.y, q.y) - half), Vector3(maxf(p.x, q.x) + half, y1, maxf(p.y, q.y) + half), colour)
+	_box(out, Vector3(minf(p.x, q.x) - half, y0, minf(p.y, q.y) - half), Vector3(maxf(p.x, q.x) + half, y1, maxf(p.y, q.y) + half), colour, false, look)
 
 
 static func _tanks(out: Array[Dictionary], lo: Vector2, lm: Dictionary, cell: float) -> void:
 	for dz in int(lm["h"]):
 		for dx in int(lm["w"]):
 			var c := lo + (Vector2(dx, dz) + Vector2(0.5, 0.5)) * cell
-			var tint := 0.04 * float((int(lm["x"]) + dx) * 7 % 5 + (int(lm["z"]) + dz) * 3 % 4)   # no two tanks quite alike
-			_cyl(out, Vector3(c.x, SKIN_IN + TANK_H * 0.5, c.y), TANK_R, TANK_H, 1, STEEL.lightened(tint))
-			_cyl(out, Vector3(c.x, SKIN_IN + TANK_H + 0.1, c.y), TANK_R * 0.8, 0.2, 1, STEEL.darkened(0.2))
-			if dx + 1 < int(lm["w"]):   # the manifold: a pipe joins each pair of neighbouring tanks
-				_cyl(out, Vector3(c.x + cell * 0.5, 1.8, c.y), 0.13, cell, 0, OCHRE)
+			var salt := (int(lm["x"]) + dx) * 7 + (int(lm["z"]) + dz) * 13
+			var top := SKIN_IN + TANK_H
+			_cyl(out, Vector3(c.x, SKIN_IN + TANK_H * 0.5, c.y), TANK_R, TANK_H, 1, TANK.lightened(0.04 * (salt % 5)), false, LOOK_TANK)
+			_cyl(out, Vector3(c.x, top + 0.1, c.y), TANK_R * 0.8, 0.2, 1, TANK.darkened(0.15), false, LOOK_CAP)
+			_cyl(out, Vector3(c.x, top, c.y), 1.45, 0.06, 1, STEEL.darkened(0.2))   # the catwalk ring round the top, with its rail
+			_ring(out, Vector3(c.x, top + 0.5, c.y), 2.8, STEEL)
+			for k in 6:
+				var post := c + Vector2.from_angle(k * TAU / 6.0) * 1.4
+				_box(out, Vector3(post.x - 0.03, top, post.y - 0.03), Vector3(post.x + 0.03, top + 0.5, post.y + 0.03), STEEL)
+			for k in 4:   # the catwalk stands on four legs that reach the floor, braced to the shell
+				var leg := c + Vector2.from_angle(PI * 0.25 + k * PI * 0.5) * 1.35
+				_box(out, Vector3(leg.x - 0.05, SKIN_IN, leg.y - 0.05), Vector3(leg.x + 0.05, top, leg.y + 0.05), STEEL.darkened(0.1))
+				_box(out, Vector3(minf(leg.x, c.x + (leg.x - c.x) * 0.9) - 0.03, top - 0.6, minf(leg.y, c.y + (leg.y - c.y) * 0.9) - 0.03), Vector3(maxf(leg.x, c.x + (leg.x - c.x) * 0.9) + 0.03, top - 0.5, maxf(leg.y, c.y + (leg.y - c.y) * 0.9) + 0.03), STEEL.darkened(0.1))
+			var out_dir := Vector2([1, 0, -1, 0][salt % 4], [0, 1, 0, -1][salt % 4])   # a ladder up the side that faces out
+			var foot := c + out_dir * (TANK_R + 0.08)
+			for side in [-0.25, 0.25]:
+				_span(out, foot + Vector2(out_dir.y, out_dir.x) * side, out_dir, 0.0, 0.0, SKIN_IN, top, 0.025, STEEL)
+			for r in 5:
+				_span(out, foot, Vector2(out_dir.y, out_dir.x), -0.25, 0.25, 0.4 + r * 0.5, 0.45 + r * 0.5, 0.025, STEEL)
+			for y in [1.2, 1.9, 2.6]:   # the safety cage: a hoop of three bars round the ladder
+				var hoop := foot + out_dir * 0.2
+				_span(out, hoop, Vector2(out_dir.y, out_dir.x), -0.28, 0.28, y, y + 0.04, 0.02, STEEL)
+				for side in [-0.28, 0.28]:
+					_span(out, hoop + Vector2(out_dir.y, out_dir.x) * side, out_dir, -0.2, 0.0, y, y + 0.04, 0.02, STEEL)
+			var side_dir := Vector2(out_dir.y, out_dir.x)   # a pressure gauge on the quarter turn from the ladder
+			_cyl(out, Vector3(c.x + side_dir.x * (TANK_R + 0.03), 1.3, c.y + side_dir.y * (TANK_R + 0.03)), 0.17, 0.06, 0 if side_dir.x != 0.0 else 2, DARK)
+			_cyl(out, Vector3(c.x + side_dir.x * (TANK_R + 0.06), 1.3, c.y + side_dir.y * (TANK_R + 0.06)), 0.13, 0.04, 0 if side_dir.x != 0.0 else 2, GAUGE)
+			if dx + 1 < int(lm["w"]):   # the manifold: a lagged pipe with flanges and a valve joins each pair of neighbouring tanks
+				_pipe(out, Vector3(c.x + cell * 0.5, 1.8, c.y), 0, cell)
 			if dz + 1 < int(lm["h"]):
-				_cyl(out, Vector3(c.x, 1.2, c.y + cell * 0.5), 0.13, cell, 2, OCHRE)
+				_pipe(out, Vector3(c.x, 1.2, c.y + cell * 0.5), 2, cell)
+
+
+static func _pipe(out: Array[Dictionary], at: Vector3, axis: int, length: float) -> void:
+	_cyl(out, at, 0.17, length, axis, STEEL.lightened(0.1), false, LOOK_PIPE)
+	for f in [-0.7, 0.7]:
+		_cyl(out, at + Vector3(f if axis == 0 else 0.0, 0.0, f if axis == 2 else 0.0), 0.27, 0.1, axis, STEEL.darkened(0.2))   # flanges...
+		_cyl(out, at + Vector3(f * 1.6 if axis == 0 else 0.0, 0.0, f * 1.6 if axis == 2 else 0.0), 0.24, 0.6, axis, STEEL.lightened(0.25), false, LOOK_JACKET)   # ...and the insulated stretch beyond
+	_box(out, at + Vector3(-0.22, 0.1, -0.22), at + Vector3(0.22, 0.5, 0.22), VALVE.darkened(0.3))   # the valve: a bright wheel on a body and stem
+	_cyl(out, at + Vector3(0.0, 0.7, 0.0), 0.05, 0.4, 1, STEEL)
+	_ring(out, at + Vector3(0.0, 0.85, 0.0), 0.75, VALVE)
+	_cyl(out, at + Vector3(0.0 if axis == 2 else -0.5, 0.2, 0.0 if axis == 0 else -0.5), 0.04, 0.3, 1, STEEL)   # a gauge on its stem, face up
+	_cyl(out, at + Vector3(0.0 if axis == 2 else -0.5, 0.38, 0.0 if axis == 0 else -0.5), 0.2, 0.05, 1, GAUGE)
 
 
 static func _crane(out: Array[Dictionary], c: Vector2, turn: int, half: Vector2) -> void:
-	_box(out, Vector3(c.x - 1.4, SKIN_IN, c.y - 1.4), Vector3(c.x + 1.4, 3.0, c.y + 1.4), OCHRE.darkened(0.25))   # the plinth
+	_box(out, Vector3(c.x - 1.4, SKIN_IN, c.y - 1.4), Vector3(c.x + 1.4, 3.0, c.y + 1.4), OCHRE.darkened(0.1), false, LOOK_STRIPE)   # the plinth, with warning stripes
 	for s: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:   # four lattice posts
-		_box(out, Vector3(c.x + s.x * 0.9 - 0.1, 3.0, c.y + s.y * 0.9 - 0.1), Vector3(c.x + s.x * 0.9 + 0.1, CRANE_TOP, c.y + s.y * 0.9 + 0.1), OCHRE)
+		_box(out, Vector3(c.x + s.x * 0.9 - 0.1, 3.0, c.y + s.y * 0.9 - 0.1), Vector3(c.x + s.x * 0.9 + 0.1, CRANE_TOP, c.y + s.y * 0.9 + 0.1), OCHRE, false, LOOK_PAINT)
 	for y: float in [5.0, 8.0, 11.0, 14.0]:   # and the rings that tie them
 		for k: Vector2 in [Vector2(0.9, 0), Vector2(-0.9, 0), Vector2(0, 0.9), Vector2(0, -0.9)]:
-			_span(out, c + k, Vector2(absf(k.y), absf(k.x)).normalized(), -0.9, 0.9, y, y + 0.1, 0.1, OCHRE)
-	_box(out, Vector3(c.x - 0.7, CRANE_TOP, c.y - 0.7), Vector3(c.x + 0.7, CRANE_TOP + 1.3, c.y + 0.7), STEEL)   # the cab
+			_span(out, c + k, Vector2(absf(k.y), absf(k.x)).normalized(), -0.9, 0.9, y, y + 0.1, 0.1, OCHRE, LOOK_PAINT)
+	_box(out, Vector3(c.x - 0.7, CRANE_TOP, c.y - 0.7), Vector3(c.x + 0.7, CRANE_TOP + 1.3, c.y + 0.7), OCHRE.darkened(0.2), false, LOOK_PAINT)   # the cab
 	var dir := Vector2([1, 0, -1, 0][turn], [0, 1, 0, -1][turn])
 	if half.dot(dir.abs()) - c.dot(dir) < 4.0:
 		dir = -dir   # the arm never swings out over the table edge
 	var arm := minf(half.dot(dir.abs()) - c.dot(dir) - 0.4, CRANE_ARM_IN)
 	for y: float in [CRANE_TOP + 0.2, CRANE_TOP + 1.0]:   # two chords, a counterweight, a cable and a hook
-		_span(out, c, dir, 0.0, arm, y, y + 0.15, 0.15, OCHRE)
-	_span(out, c, dir, -1.0, -0.5, CRANE_TOP, CRANE_TOP + 1.0, 0.4, STEEL.darkened(0.3))
+		_span(out, c, dir, 0.0, arm, y, y + 0.15, 0.15, OCHRE, LOOK_PAINT)
+	for t in range(1, int(arm / 1.2) + 1):   # struts between the chords
+		_span(out, c, dir, t * 1.2, t * 1.2, CRANE_TOP + 0.35, CRANE_TOP + 1.0, 0.03, OCHRE, LOOK_PAINT)
+	for k in 3:   # the counterweight: stacked blocks
+		_span(out, c, dir, -1.0, -0.5, CRANE_TOP + k * 0.33, CRANE_TOP + (k + 1) * 0.33, 0.4, STEEL.darkened(0.3 + 0.05 * k), LOOK_PAINT)
 	var tip := c + dir * arm
-	_box(out, Vector3(tip.x - 0.03, 9.0, tip.y - 0.03), Vector3(tip.x + 0.03, CRANE_TOP + 0.2, tip.y + 0.03), DARK)
-	_box(out, Vector3(tip.x - 0.2, 8.6, tip.y - 0.2), Vector3(tip.x + 0.2, 9.0, tip.y + 0.2), STEEL)
+	for side in [-0.07, 0.07]:   # two cables to the hook block, which has its sheaves and a hook ring below
+		_box(out, Vector3(tip.x + side - 0.015, 9.0, tip.y - 0.015), Vector3(tip.x + side + 0.015, CRANE_TOP + 0.2, tip.y + 0.015), DARK)
+	_box(out, Vector3(tip.x - 0.22, 8.55, tip.y - 0.15), Vector3(tip.x + 0.22, 9.0, tip.y + 0.15), OCHRE, false, LOOK_STRIPE)
+	_cyl(out, Vector3(tip.x, 8.95, tip.y), 0.1, 0.34, 2, STEEL.darkened(0.3))
+	_ring(out, Vector3(tip.x, 8.45, tip.y), 0.3, STEEL)
 
 
-## One MultiMeshInstance3D per shape (box or cylinder), a colour per instance, no colliders.
+static func _pump_house(out: Array[Dictionary], layout: Dictionary, lm: Dictionary, lo: Vector2, cell_in: float) -> void:
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var level := func(c: Vector2i) -> int: return int(layout["cells"][c.y * nx + c.x]["level"]) if c.x >= 0 and c.x < nx and c.y >= 0 and c.y < nz else 99
+	var first := Vector2i(lm["x"], lm["z"])
+	var top := float(layout["level_in"][level.call(first)])
+	var size := Vector2(lm["w"], lm["h"]) * cell_in
+	_box(out, Vector3(lo.x + 0.15, top, lo.y + 0.15), Vector3(lo.x + size.x - 0.15, top + SKIN_IN, lo.y + size.y - 0.15), BRICK)   # roof tiles, flat
+	# The roof carries its housing in the edge strip only (MOUNT_IN deep, where no model can stand anyway): a vented ridge with a stepped pitch
+	# along the long side's edge, and the exhaust stack at its far corner. The rest of the roof stays free, flat and walkable.
+	var along := Vector2.RIGHT if size.x >= size.y else Vector2.DOWN
+	var perp := Vector2(along.y, along.x)
+	var long_in := maxf(size.x, size.y)
+	var c := lo + perp * (RIDGE_IN * 0.5 + 0.02) + along * long_in * 0.5
+	var reach := (long_in - 1.6) * 0.5
+	var y := top + GRATE_IN
+	_span(out, c, along, -reach, reach, y, y + 1.1, RIDGE_IN * 0.5, TEAL, LOOK_PAINT)
+	_span(out, c, along, -reach, reach, y + 1.1, y + 1.4, RIDGE_IN * 0.35, TEAL.lightened(0.15), LOOK_PAINT)
+	_span(out, c, along, -reach, reach, y + 1.4, y + 1.65, RIDGE_IN * 0.15, TEAL.darkened(0.2), LOOK_PAINT)
+	for f in [-0.7, -0.25, 0.25, 0.7]:   # louvres down both flanks
+		for side in [-1.0, 1.0]:
+			_span(out, c + perp * side * (RIDGE_IN * 0.5 + 0.015), along, f * reach - 0.2, f * reach + 0.2, y + 0.3, y + 0.9, 0.015, DARK)
+	var stack := lo + perp * 0.4 + along * (long_in - 0.4)   # the exhaust stack, with its colour band and cap, wholly inside the strip
+	_cyl(out, Vector3(stack.x, top + 1.75, stack.y), 0.2, 3.5, 1, STEEL.lightened(0.15), false, LOOK_PIPE)
+	_cyl(out, Vector3(stack.x, top + 1.2, stack.y), 0.23, 0.5, 1, TEAL)
+	_cyl(out, Vector3(stack.x, top + 3.55, stack.y), 0.3, 0.1, 1, STEEL.darkened(0.2))
+	for dz in int(lm["h"]):
+		for dx in int(lm["w"]):
+			var at := first + Vector2i(dx, dz)
+			var cc := lo + (Vector2(dx, dz) + Vector2(0.5, 0.5)) * cell_in
+			for dir: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				if level.call(at + dir) >= level.call(at):
+					continue   # only a real wall face, never a roof edge that carries on or the table edge
+				var n := Vector2(dir)
+				var t := Vector2(absf(n.y), absf(n.x))
+				var face := cc + n * cell_in * 0.5 + n * 0.4   # the strip at the foot of the wall, 0.75 in deep at most
+				var base := float(layout["level_in"][level.call(at + dir)]) + (SKIN_IN if level.call(at + dir) == 0 else 0.0)
+				var axis := 2 if dir.x != 0 else 0
+				var p := face - t * 0.3
+				_cyl(out, Vector3(p.x, base + 0.3, p.y), 0.3, 1.6, axis, STEEL.lightened(0.1), false, LOOK_PIPE)   # a big intake pipe along the wall...
+				var elbow := face - t * 1.1
+				_cyl(out, Vector3(elbow.x, base + 0.3, elbow.y), 0.3, 0.6, 1, STEEL.lightened(0.1), false, LOOK_PIPE)   # ...turning down into the floor through a flange
+				_cyl(out, Vector3(elbow.x, base + 0.03, elbow.y), 0.34, 0.06, 1, STEEL.darkened(0.3))
+				_span(out, face, t, 0.95, 0.95, base, base + 0.9, 0.35, TEAL, LOOK_PAINT)   # and a motor housing with its fan end
+				var fan := face + t * 1.3
+				_cyl(out, Vector3(fan.x, base + 0.45, fan.y), 0.3, 0.12, axis, DARK)
+
+
+## The board shader already draws a hazard cell as murky sump water with a painted rim; what a sump landmark adds is the toxic
+## glow: bubbles that burst at fixed spots, flat enough to lie in the liquid a model stands in.
+static func _sump(out: Array[Dictionary], lo: Vector2, size: Vector2, salt: int) -> void:
+	for i in 5:
+		var f := Vector2(fposmod(salt * 0.37 + i * 0.29, 0.7) + 0.15, fposmod(salt * 0.53 + i * 0.43, 0.7) + 0.15)
+		_cyl(out, Vector3(lo.x + size.x * f.x, SKIN_IN + 0.03, lo.y + size.y * f.y), 0.14 + 0.05 * (i % 3), 0.04, 1, ACID, true)
+
+
+## One MultiMeshInstance3D per shape and look (box or cylinder, plain or glowing), a colour per instance, no colliders.
 func build(layout: Dictionary) -> void:
 	var groups := {}
 	for p: Dictionary in plan(layout):
-		groups[p["shape"]] = groups.get(p["shape"], []) + [p]
+		var key := "%s_%s" % [p["shape"], "glow" if p["glow"] else "plain"]
+		groups[key] = groups.get(key, []) + [p]
 	for key: String in groups:
 		var parts: Array = groups[key]
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.use_colors = true
-		mm.mesh = BoxMesh.new() if parts[0]["shape"] == "box" else _unit_cylinder()
+		mm.use_custom_data = true
+		mm.mesh = _unit_mesh(parts[0]["shape"])
 		mm.instance_count = parts.size()
 		for i in parts.size():
 			var size: Vector3 = (parts[i]["hi"] - parts[i]["lo"]) * INCHES_TO_METERS
 			var centre: Vector3 = (parts[i]["hi"] + parts[i]["lo"]) * 0.5 * INCHES_TO_METERS
 			mm.set_instance_transform(i, Transform3D(_basis(parts[i]["shape"], parts[i]["axis"], size), centre))
 			mm.set_instance_color(i, parts[i]["colour"])
+			mm.set_instance_custom_data(i, Color(parts[i].get("look", 0), 0.0, 0.0, 0.0))
 		var mmi := MultiMeshInstance3D.new()
 		mmi.name = key
 		mmi.multimesh = mm
-		mmi.material_override = _material()
+		mmi.material_override = _look_material() if key.ends_with("plain") else _material(true)
 		add_child(mmi)
 
 
 ## Unit box / cylinder scaled per instance: a cylinder's length axis is y, so one lying along x or z is turned first.
 static func _basis(shape: String, axis: int, size: Vector3) -> Basis:
+	if shape == "torus":
+		return Basis.from_scale(Vector3.ONE * size.x)
 	if shape == "box" or axis == 1:
 		return Basis.from_scale(size)
 	if axis == 0:
@@ -120,20 +253,40 @@ static func _basis(shape: String, axis: int, size: Vector3) -> Basis:
 	return Basis(Vector3.RIGHT, PI * 0.5) * Basis.from_scale(Vector3(size.x, size.z, size.y))
 
 
-static func _unit_cylinder() -> CylinderMesh:
+static func _unit_mesh(shape: String) -> Mesh:
+	if shape == "box":
+		return BoxMesh.new()
+	if shape == "torus":
+		var ring := TorusMesh.new()
+		ring.inner_radius = 0.42
+		ring.outer_radius = 0.5
+		ring.rings = 16
+		ring.ring_segments = 6
+		return ring
 	var mesh := CylinderMesh.new()
 	mesh.top_radius = 0.5
 	mesh.bottom_radius = 0.5
 	mesh.height = 1.0
-	mesh.radial_segments = 16
+	mesh.radial_segments = 24
 	mesh.rings = 1
 	return mesh
 
 
-static func _material() -> StandardMaterial3D:
+## The procedural look of every plain part (tank shells and caps, pipes, jackets, crane paint): one shader, the instance says which.
+static func _look_material() -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = SHADER
+	return mat
+
+
+static func _material(glow: bool) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
 	mat.vertex_color_is_srgb = true   # the colours above are display values
 	mat.roughness = 0.8
 	mat.metallic = 0.25
+	if glow:
+		mat.emission_enabled = true
+		mat.emission = ACID
+		mat.emission_energy_multiplier = 2.0
 	return mat

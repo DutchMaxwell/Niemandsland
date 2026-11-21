@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## The landmark meshes of a seeded boardgen layout: a tank cluster has its tanks and manifold, a crane keeps its tower in
-## its cell and its arm high and over the board, everything is two instanced meshes with no colliders, and the same layout
-## always plans the same parts. The layouts are the recorded seed 42 (so this suite stands on its own) with the landmarks
+## its cell and its arm high and over the board, a pump house lies flat on its roof, a sump is flat glowing liquid, everything is
+## a handful of instanced meshes with no colliders, and the same layout always plans the same parts. The layouts are the recorded seed 42 (so this suite stands on its own) with the landmarks
 ## written out by hand, and live seeds when NmlCore hands landmarks over.
 
 const FIXTURE := "res://test/fixtures/boardgen/layout_42.txt"
@@ -39,17 +39,31 @@ func _inside(p: Dictionary, r: Array[Vector2], slack := 0.001) -> bool:
 	return p["lo"].x >= r[0].x - slack and p["lo"].z >= r[0].y - slack and p["hi"].x <= r[1].x + slack and p["hi"].z <= r[1].y + slack
 
 
-func test_a_tank_cluster_has_one_tank_and_one_cap_per_cell_and_a_pipe_per_neighbouring_pair() -> void:
+func test_a_tank_cluster_has_a_shell_a_cap_and_a_catwalk_per_cell_and_a_valved_pipe_per_neighbouring_pair() -> void:
 	var lm := _lm("TankCluster", 5, 5, 3, 2)
 	var parts := BoardgenLandmarks.plan(_with([lm]))
-	var tanks := parts.filter(func(p: Dictionary) -> bool: return p["shape"] == "cyl" and p["axis"] == 1)
-	var pipes := parts.filter(func(p: Dictionary) -> bool: return p["shape"] == "cyl" and p["axis"] != 1)
-	assert_int(tanks.size()).is_equal(2 * 6)   # a tank and its cap in each of the six cells
-	assert_int(pipes.size()).is_equal(2 * 2 + 1 * 3)   # one pipe per pair of neighbouring cells
-	var tall := tanks.filter(func(p: Dictionary) -> bool: return is_equal_approx(p["hi"].y - p["lo"].y, BoardgenLandmarks.TANK_H))
-	assert_int(tall.size()).is_equal(6)
+	var of_look := func(look: int) -> Array: return parts.filter(func(p: Dictionary) -> bool: return p.get("look", 0) == look)
+	assert_int(of_look.call(BoardgenLandmarks.LOOK_TANK).size()).is_equal(6)
+	assert_int(of_look.call(BoardgenLandmarks.LOOK_CAP).size()).is_equal(6)
+	assert_int(of_look.call(BoardgenLandmarks.LOOK_PIPE).size()).is_equal(2 * 2 + 1 * 3)   # one pipe per pair of neighbouring cells
+	var shells: Array = of_look.call(BoardgenLandmarks.LOOK_TANK)
+	assert_bool(shells.all(func(p: Dictionary) -> bool: return is_equal_approx(p["hi"].y - p["lo"].y, BoardgenLandmarks.TANK_H))).is_true()
+	var rings := parts.filter(func(p: Dictionary) -> bool: return p["shape"] == "torus")
+	assert_int(rings.size()).is_equal(6 + 7)   # a hand rail round each tank top and a valve wheel on each pipe
+	var rungs := parts.filter(func(p: Dictionary) -> bool: return p["shape"] == "box" and is_equal_approx(p["hi"].y - p["lo"].y, 0.05) and p["hi"].y < BoardgenLandmarks.TANK_H)
+	assert_int(rungs.size()).is_equal(6 * 5)   # five rungs on each tank's ladder
+	var hoops := parts.filter(func(p: Dictionary) -> bool: return p["shape"] == "box" and is_equal_approx(p["hi"].y - p["lo"].y, 0.04))
+	assert_int(hoops.size()).is_equal(6 * 3 * 3)   # three cage hoops of three bars on each ladder
+	var legs := parts.filter(func(p: Dictionary) -> bool: return p["shape"] == "box" and is_equal_approx(p["lo"].y, BoardgenLandmarks.SKIN_IN) and p["hi"].y > BoardgenLandmarks.TANK_H and p["hi"].x - p["lo"].x > 0.09)   # 0.1 in square; a ladder rail is 0.05
+	assert_int(legs.size()).is_equal(6 * 4)   # the catwalk of each tank stands on four legs that reach the floor, it does not float
+	var wheels := parts.filter(func(p: Dictionary) -> bool: return p["shape"] == "torus" and p["colour"] == BoardgenLandmarks.VALVE)
+	assert_int(wheels.size()).is_equal(7)
+	assert_bool(wheels.all(func(p: Dictionary) -> bool: return p["hi"].x - p["lo"].x >= 0.7)).is_true()   # a valve wheel you can see from the top of the board
+	assert_int(parts.filter(func(p: Dictionary) -> bool: return p["colour"] == BoardgenLandmarks.GAUGE).size()).is_equal(6 + 7)   # a gauge on each tank and on each pipe
+	assert_int(of_look.call(BoardgenLandmarks.LOOK_JACKET).size()).is_equal(2 * 7)   # two insulated stretches on each pipe
 	for p in parts:
 		assert_bool(_inside(p, _rect(lm))).override_failure_message("part leaves the footprint: %s" % [p]).is_true()
+		assert_float(p["hi"].y).is_less(BoardgenLandmarks.TANK_H + 0.8)   # nothing tall: a tank is a tier-1 block with its rail
 
 
 func test_a_crane_keeps_tower_and_plinth_in_its_cell_and_its_arm_high_and_over_the_board() -> void:
@@ -58,7 +72,7 @@ func test_a_crane_keeps_tower_and_plinth_in_its_cell_and_its_arm_high_and_over_t
 			var lm := _lm("Crane", cell.x, cell.y, 1, 1, turn)
 			var parts := BoardgenLandmarks.plan(_with([lm]))
 			assert_int(parts.size()).is_greater(20)
-			var hook: Dictionary = parts.filter(func(p: Dictionary) -> bool: return is_equal_approx(p["lo"].y, 8.6))[0]   # the arm is never a stub, even beside the table edge
+			var hook: Dictionary = parts.filter(func(p: Dictionary) -> bool: return p.get("look", 0) == BoardgenLandmarks.LOOK_STRIPE and p["lo"].y > 5.0)[0]   # the hook block: the arm is never a stub, even beside the table edge
 			var tip := Vector2(hook["lo"].x + hook["hi"].x, hook["lo"].z + hook["hi"].z) * 0.5
 			assert_float(tip.distance_to((_rect(lm)[0] + _rect(lm)[1]) * 0.5)).is_greater(3.0)
 			for p in parts:
@@ -69,19 +83,82 @@ func test_a_crane_keeps_tower_and_plinth_in_its_cell_and_its_arm_high_and_over_t
 					assert_float(p["lo"].y).is_greater(8.0)
 
 
+func test_a_crane_has_warning_stripes_on_its_base_and_its_hook_block_a_cable_pair_and_struts_between_the_chords() -> void:
+	var lm := _lm("Crane", 6, 5, 1, 1, 0)
+	var parts := BoardgenLandmarks.plan(_with([lm]))
+	var striped := parts.filter(func(p: Dictionary) -> bool: return p.get("look", 0) == BoardgenLandmarks.LOOK_STRIPE)
+	assert_int(striped.size()).is_equal(2)   # the plinth and the hook block
+	assert_bool(striped.any(func(p: Dictionary) -> bool: return p["lo"].y < 0.1 and p["hi"].y == 3.0)).is_true()
+	var cables := parts.filter(func(p: Dictionary) -> bool: return p["colour"] == BoardgenLandmarks.DARK)
+	assert_int(cables.size()).is_equal(2)
+	var struts := parts.filter(func(p: Dictionary) -> bool: return is_equal_approx(p["lo"].y, BoardgenLandmarks.CRANE_TOP + 0.35))
+	assert_int(struts.size()).is_greater(3)
+
+
 func test_one_layout_plans_the_same_parts_and_a_different_layout_other_parts() -> void:
 	var a := _with([_lm("TankCluster", 5, 5, 2, 2), _lm("Crane", 9, 9, 1, 1, 1)])
 	assert_array(BoardgenLandmarks.plan(a)).is_equal(BoardgenLandmarks.plan(a.duplicate(true)))
 	assert_bool(BoardgenLandmarks.plan(a) == BoardgenLandmarks.plan(_with([_lm("TankCluster", 6, 5, 2, 2), _lm("Crane", 9, 9, 1, 1, 1)]))).is_false()
 
 
+## First raised cell of the recorded board (x, z, level) and how many of its four neighbours lie lower or off the board.
+func _a_raised_cell() -> Dictionary:
+	var layout := _fixture()
+	for i in layout["cells"].size():
+		var level: int = layout["cells"][i]["level"]
+		if level < 1:
+			continue
+		var x: int = i % 16
+		var z: int = i / 16
+		var lower := 0
+		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n := Vector2i(x, z) + d
+			if n.x >= 0 and n.x < 16 and n.y >= 0 and n.y < 16 and layout["cells"][n.y * 16 + n.x]["level"] < level:
+				lower += 1
+		if lower > 0:
+			return {"x": x, "z": z, "level": level, "lower": lower}
+	return {}
+
+
+func test_a_pump_house_has_a_vented_ridge_a_stack_and_big_intake_pipes_and_motors_at_the_foot_of_its_lower_walls() -> void:
+	var at := _a_raised_cell()
+	var top := float(_fixture()["level_in"][at["level"]])
+	var lm := _lm("PumpHouse", at["x"], at["z"], 2, 2)
+	var parts := BoardgenLandmarks.plan(_with([lm]))
+	var teal := parts.filter(func(p: Dictionary) -> bool: return p["colour"] == BoardgenLandmarks.TEAL or p["colour"] == BoardgenLandmarks.TEAL.lightened(0.15) or p["colour"] == BoardgenLandmarks.TEAL.darkened(0.2))
+	assert_bool(teal.size() >= 3).is_true()   # its own colour: the ridge in three steps (and a motor per lower wall face)
+	var roof := parts.filter(func(p: Dictionary) -> bool: return p["lo"].y >= top - 0.001)
+	assert_bool(roof.any(func(p: Dictionary) -> bool: return p["hi"].y > top + 3.0)).is_true()   # the exhaust stack stands out above the roofline
+	for shape in [[2, 2], [2, 1], [1, 2], [1, 1]]:   # whatever stands up on the roof lies in the edge strip: the rest of the roof stays free
+		var house := _lm("PumpHouse", at["x"], at["z"], shape[0], shape[1])
+		var inner := _rect(house)
+		inner = [inner[0] + Vector2.ONE * BoardgenLandmarks.MOUNT_IN, inner[1] - Vector2.ONE * BoardgenLandmarks.MOUNT_IN]
+		for p in BoardgenLandmarks.plan(_with([house])).filter(func(q: Dictionary) -> bool: return q["lo"].y >= top - 0.001 and q["hi"].y > top + BoardgenLandmarks.GRATE_IN + 0.001):
+			var clear: bool = p["hi"].x <= inner[0].x + 0.001 or p["lo"].x >= inner[1].x - 0.001 or p["hi"].z <= inner[0].y + 0.001 or p["lo"].z >= inner[1].y - 0.001
+			assert_bool(clear).override_failure_message("a roof part stands beyond the edge strip: %s (%dx%d)" % [p, shape[0], shape[1]]).is_true()
+	for p in parts:
+		assert_bool(_inside(p, _rect(lm), BoardgenLandmarks.MOUNT_IN + 0.001)).override_failure_message("part leaves the footprint and the wall strip: %s" % [p]).is_true()
+	var pipes := parts.filter(func(p: Dictionary) -> bool: return p["shape"] == "cyl" and p["axis"] != 1 and is_equal_approx(p["hi"].y - p["lo"].y, 0.6))   # a 0.6 in intake pipe per lower wall face
+	assert_int(pipes.size()).is_greater_equal(1)
+
+
+func test_a_sump_is_a_few_flat_glowing_bubbles_inside_its_footprint() -> void:
+	var lm := _lm("Sump", 6, 6, 2, 3)
+	var parts := BoardgenLandmarks.plan(_with([lm]))
+	assert_int(parts.size()).is_equal(5)   # five bubbles; the liquid itself is the board shader's
+	for p in parts:
+		assert_bool(p["glow"]).is_true()
+		assert_float(p["hi"].y).is_less(BoardgenLandmarks.SKIN_IN + 0.1)   # a model stands in it: nothing rises out of it
+		assert_bool(_inside(p, _rect(lm))).is_true()
+
+
 func test_build_draws_every_part_in_a_few_instanced_meshes_and_makes_no_colliders() -> void:
-	var layout := _with([_lm("TankCluster", 5, 5, 3, 2), _lm("Crane", 9, 9, 1, 1, 1)])
+	var layout := _with([_lm("TankCluster", 5, 5, 3, 2), _lm("Crane", 9, 9, 1, 1, 1), _lm("Sump", 6, 6, 2, 2)])
 	var node: BoardgenLandmarks = auto_free(BoardgenLandmarks.new())
 	add_child(node)
 	node.build(layout)
 	var meshes := node.find_children("*", "MultiMeshInstance3D", false, false)
-	assert_int(meshes.size()).is_equal(2)   # boxes and cylinders
+	assert_int(meshes.size()).is_between(3, 5)   # boxes, cylinders and rings, plain and glowing
 	var instances := 0
 	for m: MultiMeshInstance3D in meshes:
 		instances += m.multimesh.instance_count
@@ -89,7 +166,7 @@ func test_build_draws_every_part_in_a_few_instanced_meshes_and_makes_no_collider
 	assert_int(node.find_children("*", "CollisionObject3D", true, false).size()).is_equal(0)
 
 
-func test_live_boards_keep_every_part_over_the_board_and_a_tank_cluster_inside_its_footprint() -> void:
+func test_live_boards_keep_every_part_over_the_board_and_a_landmark_inside_its_footprint() -> void:
 	var core := _core()
 	if core == null:
 		return
@@ -101,10 +178,10 @@ func test_live_boards_keep_every_part_over_the_board_and_a_tank_cluster_inside_i
 			assert_bool(absf(p["lo"].x) <= BOARD_HALF_IN and absf(p["hi"].x) <= BOARD_HALF_IN and absf(p["lo"].z) <= BOARD_HALF_IN and absf(p["hi"].z) <= BOARD_HALF_IN) \
 				.override_failure_message("seed %s: part over the table edge: %s" % [board_seed, p]).is_true()
 		for lm: Dictionary in layout["landmarks"]:
-			if lm["kind"] != "TankCluster":
+			if lm["kind"] == "Crane":
 				continue
 			for p in BoardgenLandmarks.plan(_with_layout(layout, [lm])):
-				assert_bool(_inside(p, _rect(lm), 0.001)).override_failure_message("seed %s: %s part %s" % [board_seed, lm["kind"], p]).is_true()
+				assert_bool(_inside(p, _rect(lm), BoardgenLandmarks.MOUNT_IN + 0.001)).override_failure_message("seed %s: %s part %s" % [board_seed, lm["kind"], p]).is_true()
 
 
 func _with_layout(layout: Dictionary, landmarks: Array) -> Dictionary:

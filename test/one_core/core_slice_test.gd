@@ -272,7 +272,7 @@ func test_a_missing_or_malformed_file_is_the_empty_slice() -> void:
 ## The deny file refuses its listed primitives (a Teleport unit) and takes a unit whose
 ## rules are automated and not listed (AP, Tough); a name no map knows is taken (unmapped_inert). The list only shrinks: CEILING.
 ## RED: read PATH regardless of the switch -> the first assertion reads mode "allow".
-const DENY_CEILING := 10   # H-17a (Plan H): Disintegrate and Tear left with their line, the core says `<rule>: AP(+N) against <U>` (12 -> 10). DLINES train 4 (DS-GHITN): the to-hit note (6 primitives: Artillery, Stealth, Evasive, Aircraft, Shot Modifier, Instinctive) and Takedown left with their lines (19 -> 12). DLINES3 train 3: Shred, Self-Repair and Resistance left with their lines (19 -> 16), then the probes at 1500 / 2000 / 3000 pts showed three more families whose line the door omits: Armor, Disintegrate, Tear (+3 -> 19). DLINES2 train 2: Ranged Shrouding, Lacerate, Shielded, Fortified and Regeneration left with their lines (24 -> 19). 19.11.: +15 primitives in eight `rule_line` groups (a rule whose table line the door omits stays on the table until the line exists, dlines_gap rows 2, 3, 7, 13, 15, 16, 17, 21), they leave group by group with their lines. BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
+const DENY_CEILING := 9   # H-5 (Plan H): Mend left the beat group through the beats guard (10 -> 9). H-17a (Plan H): Disintegrate and Tear left with their line, the core says `<rule>: AP(+N) against <U>` (12 -> 10). DLINES train 4 (DS-GHITN): the to-hit note (6 primitives: Artillery, Stealth, Evasive, Aircraft, Shot Modifier, Instinctive) and Takedown left with their lines (19 -> 12). DLINES3 train 3: Shred, Self-Repair and Resistance left with their lines (19 -> 16), then the probes at 1500 / 2000 / 3000 pts showed three more families whose line the door omits: Armor, Disintegrate, Tear (+3 -> 19). DLINES2 train 2: Ranged Shrouding, Lacerate, Shielded, Fortified and Regeneration left with their lines (24 -> 19). 19.11.: +15 primitives in eight `rule_line` groups (a rule whose table line the door omits stays on the table until the line exists, dlines_gap rows 2, 3, 7, 13, 15, 16, 17, 21), they leave group by group with their lines. BEATS 19.11.: the pre-attack beat slot adds 6 primitives, the list stands at exactly 9 (3 ledger + 6 beat), no slack left, they leave with the beats guard; HR-POS: Hit & Run + Hit & Run Shooter lifted again (the delta carries the stepped positions; G10 had re-denied them); C-18: Indirect added, attached_heroes lifted for Growth Markers, wound-ignore by name lifted (C-R1); LD-6 18.11. lifted the six EQUAL-probe names; only shrinks
 
 
 func test_the_deny_switch_reads_the_measured_deny_list() -> void:
@@ -290,8 +290,6 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	var changed := _unit(["Changebound"], [])
 	changed.unit_properties["faction_folder"] = "change_disciples"   # the faction whose map entry gives it primitive Stealth
 	assert_array(CoreSlice.refusals(changed, true)).is_empty()
-	# A rule still refused by NAME (an item whose Defense bonus differs between the halves).
-	assert_array(CoreSlice.refusals(_unit(["Gleaming Armour"], []))).is_equal(["unit_rule:Gleaming Armour"])
 	# OD-H8: Teleport / Ethereal / plain Infiltrate left the ledger group (real-activation probe, core_ledger_lift_door_test.gd); the Surprise Attack
 	# burst, an Infiltrate-primitive entry, stays refused by NAME (it rolls twice with the door on).
 	var teleporter := _unit(["Teleport"], [])
@@ -327,7 +325,6 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 	CoreSlice.reset_cache()
 	var rep: Array = [
 		["Grounded Protection", "soul_snatcher_cults"], ["Protection Feat", "alien_hives"],
-		["Armor", ""],
 	]
 	for row in rep:
 		var as_unit := _unit([row[0]], [[]])
@@ -341,6 +338,7 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 		assert_array(CoreSlice.refusals(as_weapon)).override_failure_message("%s as a weapon rule is taken" % row[0]).is_equal(["weapon_rule:" + row[0]])
 	for kept in [["Blast(3)"], ["Reliable"], ["Surge when Shooting"], ["Rending"], ["Sturdy"], ["Slayer"], ["Tough(3)"]]:
 		assert_bool(CoreSlice.takes(_unit(kept, [["AP(1)"]]))).override_failure_message("%s stays on the core" % kept[0]).is_true()
+	# H-17b: Armor left with its line (`<U> has Armor(X): counts as Defense X+`, door_lines_defense_test.gd).
 	# Train 2 (lines said, groups lifted): the Ranged Shrouding range cut, the Bane re-roll named by plain Bane / Lacerate / the unit-level aliases, the
 	# Shielded and Fortified lines, the plain Regeneration group's roll.
 	for lifted in [["Ranged Shrouding", "custodian_brothers"], ["Bane", ""], ["Lacerate", "battle_brothers"], ["Anti-Regen", ""],
@@ -348,7 +346,7 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 			["Shielded", "battle_brothers"], ["Fortified", "alien_hives"], ["Regeneration", ""], ["Regeneration Aura", "alien_hives"],
 			["Shred", ""], ["Warbound", "war_disciples"], ["Self-Repair", "robot_legions"], ["Resistance", "alien_hives"], ["Plaguebound", "plague_disciples"],
 			["Artillery", ""], ["Stealth", ""], ["Evasive", "battle_brothers"], ["Aircraft", ""],
-			["Precision Fighter", ""], ["Instinctive", "goblin_reclaimers"], ["Takedown", ""]]:
+			["Precision Fighter", ""], ["Instinctive", "goblin_reclaimers"], ["Takedown", ""], ["Armor", ""]]:
 		var lifted_unit := _unit([lifted[0]], [[lifted[0]]])
 		if lifted[1] != "":
 			lifted_unit.unit_properties["faction_folder"] = lifted[1]
@@ -528,7 +526,7 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
 	var cases := [
-		["gf", "battle_brothers", "Mend"], ["gf", "alien_hives", "Breath Attack"], ["gf", "jackals", "Mind Control"],
+		["gf", "alien_hives", "Breath Attack"], ["gf", "jackals", "Mind Control"],
 		["gf", "daemons_of_war", "Fatigue Debuff"], ["gf", "daemons_of_war", "Storm of War"],
 		["aof", "daemons_of_war", "Reckless Piercing"], ["gf", "human_defense_force", "Precision Shooter Buff"],
 		["gf", "jackals", "Precision Tag"], ["gf", "battle_brothers", "Re-Position Artillery"]]
@@ -538,6 +536,22 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 		bearer.unit_properties["faction_folder"] = c[1]
 		assert_array(CoreSlice.refusals(bearer)).override_failure_message(
 			"%s (%s/%s) must stay on the table in deny mode" % [c[2], c[0], c[1]]).is_equal(["unit_rule:" + c[2]])
+		# H-9a: the beat is the bearer's own act, so a bearer SHOT AT is taken (the group's side is the shooter; probe ds/h_probe_beat_targets.md).
+		assert_array(CoreSlice.refusals(bearer, true)).override_failure_message(
+			"%s (%s/%s) as a target does not act in the volley" % [c[2], c[0], c[1]]).is_empty()
+	# H-9b: the Utility Buff names probed equal through real activations leave the group by name (`lifted_names`); the rest of the family stays refused.
+	for lifted in [["gf", "eternal_dynasty", "Casting Buff"], ["gf", "blessed_sisters", "Courage Buff"], ["gf", "dwarf_guilds", "Speed Debuff"],
+			["gf", "blessed_sisters", "Precision Fighter Buff"], ["gf", "robot_legions", "Unstoppable when Shooting Aura"],
+			["gf", "dark_elf_raiders", "Regeneration Buff"], ["gf", "alien_hives", "Furious Buff"], ["gf", "custodian_brothers", "Shred Mark"],
+			["gf", "daemons_of_lust", "Quick Shot Mark"], ["gf", "eternal_dynasty", "Increased Shooting Range Mark"]]:
+		var buffer := _unit([lifted[2], "Tough(3)"], [["AP(1)"]])
+		buffer.unit_properties["game_system"] = lifted[0]
+		buffer.unit_properties["faction_folder"] = lifted[1]
+		assert_array(CoreSlice.refusals(buffer)).override_failure_message("%s was probed equal through the door and leaves the group" % lifted[2]).is_empty()
+	# H-5: Mend left the group (the beats guard hands its beat to the core's one call), so a Mend bearer is taken.
+	var mender := _unit(["Mend", "Tough(3)"], [["AP(1)"]])
+	mender.unit_properties["faction_folder"] = "battle_brothers"
+	assert_array(CoreSlice.refusals(mender)).override_failure_message("Mend is guarded, not denied, from H-5").is_empty()
 	# The same unit without the beat rule is taken (the group refuses the rule, not the faction).
 	var plain := _unit(["Tough(3)"], [["AP(1)"]])
 	plain.unit_properties["faction_folder"] = "battle_brothers"
@@ -545,10 +559,11 @@ func test_deny_mode_refuses_the_pre_attack_beat_bearers() -> void:
 	# A joined hero's beat rule keeps its host on the table (deny mode reads the hero's rules too).
 	var host := _unit(["Tough(3)"], [["AP(1)"]])
 	host.unit_properties["faction_folder"] = "battle_brothers"
-	var healer := _unit(["Hero", "Mend"], [])
-	healer.unit_properties["faction_folder"] = "battle_brothers"
+	var healer := _unit(["Hero", "Breath Attack"], [])
+	healer.unit_properties["faction_folder"] = "alien_hives"
 	EquipmentDistributor.attach_hero_to_unit(healer, host)
-	assert_array(CoreSlice.refusals(host)).contains(["unit_rule:Mend"])
+	assert_array(CoreSlice.refusals(host)).contains(["unit_rule:Breath Attack"])
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("the same host shot at: the hero's Breath Attack does not act in the volley").is_empty()
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 
@@ -643,8 +658,12 @@ func test_the_melee_deny_slice_takes_ap_and_refuses_attachments() -> void:
 	assert_str(str(data.get("mode"))).is_equal("deny")
 	assert_bool(bool(data.get("unmapped_inert", false))).is_true()
 	assert_array((data.get("inert", {}) as Dictionary).keys()).contains(["Unique", "Army Standard Bearer", "Courage"])
-	assert_dict(data.get("deny_names", {}) as Dictionary).is_empty()
-	assert_array((data.get("groups", {}) as Dictionary).keys()).is_equal(["attached_heroes"])
+	assert_array((data.get("deny_names", {}) as Dictionary).keys()).is_equal(["Angelic Blessing", "Unmovable", "Power Shrooms", "Cleric", "Furious Buff", "Precision Attacks Buff", "Hold the Line", "Destroyer"])
+	assert_array((data.get("groups", {}) as Dictionary).keys()).is_equal(["attached_heroes", "unpredictable_fighter_die", "strafing_not_in_melee", "evasive_to_hit_line",
+		"breath_attack_dice_in_melee", "ravage_line", "armor_line", "hit_and_run_landing", "ambush_flying_landing"])
+	for g in (data["groups"] as Dictionary):
+		assert_str(str(data["groups"][g].get("why", ""))).override_failure_message("group %s names its measurement" % g).is_not_empty()
+		assert_str(str(data["groups"][g].get("leaves_with", ""))).override_failure_message("group %s names what lifts it" % g).is_not_empty()
 	var ap := _unit([], [["AP(1)"]])
 	assert_array(CoreSlice.melee_refusals(ap)).is_equal(["weapon_rule:AP"])
 	assert_array(CoreSlice.melee_refusals(ap, true, false)).is_equal(["weapon_rule:AP"])
@@ -657,6 +676,14 @@ func test_the_melee_deny_slice_takes_ap_and_refuses_attachments() -> void:
 	EquipmentDistributor.attach_hero_to_unit(hero, host)
 	assert_array(CoreSlice.melee_refusals(host, false, true)).is_equal(["attached"])
 	assert_array(CoreSlice.melee_refusals(hero, true, true)).is_equal(["attached"])
+	assert_array(CoreSlice.melee_refusals(_unit([], [["Unpredictable Fighter"]]), false, true)).override_failure_message("an Unpredictable Fighter weapon is refused in the deny view").is_not_empty()
+	assert_array(CoreSlice.melee_refusals(_unit(["Armor(1)"], [["AP(1)"]]), false, true)).override_failure_message("an Armor unit is refused in the deny view").is_not_empty()
+	assert_array(CoreSlice.melee_refusals(_unit(["Angelic Blessing"], [["AP(1)"]]), true, true)).override_failure_message("a denied name is refused on the target side").is_not_empty()
+	# melee95: Ambush and Flying on ONE charger is refused as a pair; either alone, and the pair on a target, are taken.
+	assert_array(CoreSlice.melee_refusals(_unit(["Ambush", "Flying"], [["AP(1)"]]), false, true)).override_failure_message("an Ambush + Flying charger is refused").is_equal(["ambush_flying_landing"])
+	assert_array(CoreSlice.melee_refusals(_unit(["Ambush"], [["AP(1)"]]), false, true)).override_failure_message("Ambush alone is taken").is_empty()
+	assert_array(CoreSlice.melee_refusals(_unit(["Flying"], [["AP(1)"]]), false, true)).override_failure_message("Flying alone is taken").is_empty()
+	assert_array(CoreSlice.melee_refusals(_unit(["Ambush", "Flying"], [["AP(1)"]]), true, true)).override_failure_message("the pair on a target is taken").is_empty()
 	OS.set_environment("NML_CORE_SLICE", "allow")
 	CoreSlice.reset_cache()
 	assert_array(CoreSlice.melee_refusals(ap, false, true)).is_empty()
@@ -673,14 +700,14 @@ class _StubMain extends RefCounted:
 
 
 ## DLINES2: `SlicePin.dice_only()` is the production deny list minus its line refusals - the helper the dice parity tests read. RED: if it kept the
-## `rule_line` groups the Grounded Protection row below is refused; if it dropped every refusal Gleaming Armour (a DICE difference) would be taken.
+## `rule_line` groups the Grounded Protection row below is refused; if it dropped every refusal Surprise Attack (a DICE difference: its burst rolls twice) would be taken.
 func test_the_dice_only_slice_drops_the_line_refusals_and_keeps_the_dice_ones() -> void:
 	var self_repair := _unit(["Grounded Protection"], [])
 	self_repair.unit_properties["faction_folder"] = "soul_snatcher_cults"
 	SlicePin.dice_only()
 	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("Grounded Protection's missing line is not a dice difference").is_true()
 	assert_bool(CoreSlice.takes(_unit(["Shred"], []), true)).override_failure_message("Shred's missing line is not a dice difference").is_true()
-	assert_bool(CoreSlice.takes(_unit(["Gleaming Armour"], []), true)).override_failure_message("Gleaming Armour changes the dice: still refused").is_false()
+	assert_bool(CoreSlice.takes(_unit(["Surprise Attack"], []), true)).override_failure_message("Surprise Attack changes the dice: still refused").is_false()
 	SlicePin.release_dice_only()
 	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("the production list refuses Grounded Protection again").is_false()
 
@@ -758,35 +785,6 @@ func test_state_refusals_for_spell_hit_modifiers_and_vengeance_markers() -> void
 	CoreSlice.reset_cache()
 
 
-## DS-STEALTH: the table says "Unstoppable: negative to-hit modifiers ignored" when a shooter's Unstoppable weapon swallows a minus and the
-## core stays silent for a weapon's own flag (found by the 1000 pts census once Changebound / Stealth Aura left the deny names: 8 taken volleys,
-## one table-only line). The PAIR is refused: an Unstoppable shooter (weapon or joined hero) and a target rule that lowers the to-hit number.
-## Either side alone, the allow slice (no group) stay taken; the dice-only pin drops it (a line, not the dice).
-func test_an_unstoppable_shooter_against_a_to_hit_target_rule_is_refused_as_a_pair() -> void:
-	OS.set_environment("NML_CORE_SLICE", "deny")
-	CoreSlice.reset_cache()
-	var unstoppable := _unit([], [["Unstoppable"]])
-	var plain := _unit([], [[]])
-	for rule in ["Stealth", "Evasive", "Artillery", "Aircraft"]:
-		var tgt := _unit([rule], [[]])
-		tgt.unit_properties["faction_folder"] = "battle_brothers"   # Evasive is a faction entry
-		assert_array(CoreSlice.pair_refusals(unstoppable, tgt)).override_failure_message("an Unstoppable weapon at a %s target" % rule).is_equal(["unstoppable_fold_line"])
-		assert_array(CoreSlice.pair_refusals(plain, tgt)).override_failure_message("no Unstoppable, no fold line").is_empty()
-	var changed := _unit(["Changebound"], [[]])
-	changed.unit_properties["faction_folder"] = "change_disciples"
-	assert_array(CoreSlice.pair_refusals(unstoppable, changed)).override_failure_message("Changebound is the Stealth primitive").is_equal(["unstoppable_fold_line"])
-	assert_array(CoreSlice.pair_refusals(unstoppable, plain)).override_failure_message("nothing lowers the number").is_empty()
-	var host := _unit([], [[]])
-	EquipmentDistributor.attach_hero_to_unit(_unit(["Hero"], [["Unstoppable"]]), host)
-	assert_array(CoreSlice.pair_refusals(host, changed)).override_failure_message("a joined hero's weapon fires in the host's volley").is_equal(["unstoppable_fold_line"])
-	SlicePin.dice_only()
-	assert_array(CoreSlice.pair_refusals(unstoppable, changed)).override_failure_message("a missing line, not the dice: the dice-only pin drops it").is_empty()
-	SlicePin.release_dice_only()
-	SlicePin.narrow()
-	assert_array(CoreSlice.pair_refusals(unstoppable, changed)).override_failure_message("the allow slice has no such group").is_empty()
-	SlicePin.release()
-
-
 ## DLINES train 4 (review): the core latches a Versatile Attack pick on the plain Quality, the table on the MODIFIED to-hit number, so a
 ## Versatile shooter and any to-hit modifier in play (a Stealth / Evasive / Artillery / Aircraft target, or the shooter's own Artillery) are
 ## refused as a PAIR (found by the 3000 pts roster sweep once the to-hit families left the deny list: 6 volleys with different dice).
@@ -839,6 +837,35 @@ func test_a_versatile_shooter_against_a_to_hit_modifier_is_refused_as_a_pair() -
 	SlicePin.release()
 
 
+## A slice dict a test injects through `CoreSlice._cache_by_path` (melee_morale_lines_test.gd) predates the `lifted_names` (H-9b) and `shooter_only` (H-9a) keys: the readers
+## default to empty, they do not abort the engine ("Invalid access to property or key 'lifted_names'", gdUnit shard 9). RED: read both with `c["..."]` -> SCRIPT ERROR.
+func test_a_cached_slice_dict_without_the_newer_keys_still_reads() -> void:
+	var path := "user://slice_cache_without_newer_keys.json"
+	CoreSlice._cache_by_path[path] = {"mode": "deny", "primitives": {}, "attached": false, "inert": {}, "deny_names": {}, "unmapped_inert": false}
+	var tgt := _unit(["Stealth"], [[]])
+	assert_array(CoreSlice.refusals_in(path, tgt, true)).override_failure_message("an empty deny slice takes a mapped rule, as target").is_empty()
+	assert_array(CoreSlice.refusals_in(path, tgt)).override_failure_message("and as shooter").is_empty()
+	CoreSlice._cache_by_path.erase(path)
+
+
+## Plan H, H-18: from the pending epoch 94 the core's dice pick Versatile Attack on the modified to-hit number, so the pair is taken (the door test
+## `versatile_pick_door_test.gd` shows both halves equal there). Below it the pair stays refused, in the dice-only pin too. RED: drop the epoch clause.
+func test_the_versatile_pair_is_taken_from_the_pending_epoch() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	var vers := _unit(["Versatile Attack"], [[]])
+	vers.unit_properties["faction_folder"] = "battle_brothers"
+	var stealth := _unit(["Stealth"], [[]])
+	var epoch_before := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_VERSATILE_MODIFIED_HIT - 1
+	var below := CoreSlice.pair_refusals(vers, stealth)
+	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_VERSATILE_MODIFIED_HIT
+	var at_pending := CoreSlice.pair_refusals(vers, stealth)
+	AiActRecorder.rules_epoch = epoch_before
+	assert_array(below).override_failure_message("below 94 the core still latches on the plain Quality").is_equal(["versatile_pick_modified_to_hit"])
+	assert_array(at_pending).override_failure_message("from 94 both halves pick on the modified number").is_empty()
+
+
 ## DLINES train 4 (review): the table names a Takedown's picked model by its first item when it is no Tough and no special-weapon model; the core holds
 ## only an item count, so its line says "trooper" (door test, one Banner carrier: 12 of 12 seeds differ). A Takedown shooter at a target with a living
 ## item-carrying model is refused as a pair; no item, a dead carrier, no Takedown, and the dice-only pin (it drops line refusals) stay taken.
@@ -870,6 +897,60 @@ func test_a_takedown_shooter_against_an_item_carrier_is_refused_as_a_pair() -> v
 	SlicePin.dice_only()
 	assert_array(CoreSlice.pair_refusals(sniper, carrier)).override_failure_message("a missing line is not a dice difference").is_empty()
 	SlicePin.release_dice_only()
+
+
+## H-14 (Plan H): Fortified Aura, Guardian Boost Aura and Gleaming Armour left the deny names (equal dice, state and lines with a LIVE bearer, 16 seeds in
+## `core_deny_lift_door_test.gd`). The one state left on the table is an aofs / gff aura-granted Fortified whose bearer has fallen: the table says
+## `<aura>: bearer killed -> benefit lost` (once, guarded across volleys) where the core writes no line, and for the alias walk (Guardian Boost) the core keeps
+## the benefit (defense 5+ against the table's 6+, probe 16 of 16), so the TARGET is refused by state and the dice-only pin keeps it (a state difference).
+## Controls: a live joined bearer, a unit that carries the aura itself, the gf / aof Aura Channel spelling (no loss rule) and a SHOOTER in that state stay taken.
+func test_a_fallen_fortified_aura_bearer_is_refused_as_a_target() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	for row in [["aofs", "duchies_of_vinci", "Fortified", "Fortified Aura"], ["gff", "custodian_brothers", "Guardian Boost", "Guardian Boost Aura"]]:
+		var squad := _ignorer([row[2]], row[1], row[0])
+		squad.unit_properties["aura_granted"] = [row[2]]
+		squad.models.append(ModelInstance.new())
+		var hero := _ignorer(["Hero", row[3], row[2]], row[1], row[0])
+		var bearer := ModelInstance.new()
+		hero.models.append(bearer)
+		EquipmentDistributor.attach_hero_to_unit(hero, squad)
+		assert_array(CoreSlice.refusals(squad, true)).override_failure_message("%s: a live bearer keeps the benefit on both sides" % row[3]).is_empty()
+		bearer.is_alive = false
+		assert_array(CoreSlice.refusals(squad, true)).override_failure_message("%s: the fallen bearer's loss line is the table's" % row[3]).is_equal(["fortified_aura_bearer_dead"])
+		assert_array(CoreSlice.refusals(squad)).override_failure_message("a shooter's own Fortified is not read").is_empty()
+		SlicePin.dice_only()
+		assert_array(CoreSlice.refusals(squad, true)).override_failure_message("the alias's dice differ: the dice-only slice keeps the refusal").is_equal(["fortified_aura_bearer_dead"])
+		SlicePin.release_dice_only()
+		bearer.is_alive = true
+		squad.unit_properties["aura_granted"] = []
+		var own := _ignorer([row[3], row[2]], row[1], row[0])
+		own.unit_properties["aura_granted"] = [row[2]]
+		own.models.append(ModelInstance.new())
+		assert_array(CoreSlice.refusals(own, true)).override_failure_message("a unit that carries the aura itself is its own bearer").is_empty()
+	var channel := _ignorer(["Fortified"], "mummified_undead", "aof")
+	channel.unit_properties["aura_granted"] = ["Fortified"]
+	channel.models.append(ModelInstance.new())
+	assert_array(CoreSlice.refusals(channel, true)).override_failure_message("the aof Aura Channel has no loss rule").is_empty()
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+
+
+## The lift the test above rests on can fail without editing the committed file: a COPY of the deny file with the three names put back refuses a bearer of each,
+## the committed file takes it.
+func test_putting_the_fortified_aura_names_back_refuses_them() -> void:
+	var copy: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.DENY_PATH))
+	var names := ["Fortified Aura", "Guardian Boost Aura", "Gleaming Armour"]
+	for n in names:
+		(copy["deny_names"] as Dictionary)[n] = "put back for the check"
+	var tmp := "user://deny_with_fortified_names.json"
+	var f := FileAccess.open(tmp, FileAccess.WRITE)
+	f.store_string(JSON.stringify(copy))
+	f.close()
+	for n in names:
+		assert_array(CoreSlice.refusals_in(CoreSlice.DENY_PATH, _unit([n], []))).override_failure_message("the committed file refuses %s" % n).is_empty()
+		assert_array(CoreSlice.refusals_in(tmp, _unit([n], []))).override_failure_message("the copy with %s does not refuse it: the check cannot fail" % n).is_equal(["unit_rule:" + n])
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
 
 
 ## A target unit of `faction` / `system` with `rules` (the Warding family lives in faction maps: Knightborn / Warding in knight_brothers, Angelic Blessing in kingdom_of_angels).

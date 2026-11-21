@@ -41,7 +41,7 @@ use crate::combat::{
     SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN, SHROUD_RANGE_PENALTY_IN,
 };
 use crate::rules::{
-    base_rule_name, has_special_rule, rule_name_matches, rule_rating, spawn_target_rule,
+    base_rule_name, has_special_rule, is_unlisted_striker_label, rule_name_matches, rule_rating, spawn_target_rule,
     unit_rating, Registries, Spell,
 };
 use crate::state::{Bands, Profile, Profiles, Weapon};
@@ -203,6 +203,9 @@ pub struct Ctx {
     /// Plan H (H-15a): the book rule the volley die belongs to ("Unpredictable", "Unpredictable Shooter"; "" without), for the step path's line
     /// `<rule>: <unit>'s volley rolls N -> AP(+1) | +1 to hit` (the table's `_solo_unpredictable_rule`). No die, no outcome moves.
     pub unpredictable_name: &'static str,
+    /// Plan H (H-17b): the Armor(X) rating when it IMPROVES this unit's Defense (`armored_defense` below the printed Defense), else 0, for the
+    /// step path's line `<unit> has Armor(X): counts as Defense X+` (the table's `_solo_log_armor`). `defense` already carries the effect.
+    pub armor_line: i64,
     /// The volley die's own registry params (`assets/solo/rules_mechanics_*
     /// .json`, both "Unpredictable" and "Unpredictable Shooter"): a face at
     /// or under `low_roll_max` is AP(+ap_bonus) on every profile of the
@@ -598,6 +601,9 @@ pub struct Ctx {
     pub versatile_pick_hit: i64,
     pub versatile_pick_ap: i64,
     pub versatile_latched: bool,
+    /// PENDING_EPOCH_VERSATILE_MODIFIED_HIT — the activation has no pick yet and the sim leaves it to the dice: the first eligible shot
+    /// picks on the number it rolls at and reports it (`ShootResult::versatile_picks`). Set only by the volley seam; false on every `ctx_of`.
+    pub versatile_defer: bool,
     /// SHO-19 / SHO-19b — the Versatile pick ignores the 9"/6" distance gate at
     /// `EPOCH_73_V36` (Versatile Expert, Enhanced Watchborn).
     pub versatile_no_gate: bool,
@@ -620,6 +626,9 @@ pub struct Ctx {
     /// Mark) — whoever SHOOTS at it may waive the sight test. Zero on every
     /// `ctx_of`; only `sim::ctx_live` folds the ledger's once-record.
     pub indirect_mark: bool,
+    /// An Indirect granted to THIS unit's own store (`mods::granted_own_indirect`, from `PENDING_EPOCH_OWN_INDIRECT`): its shots after a move
+    /// are Indirect ones, so the to-hit note names the waived moved penalty. Zero on every `ctx_of`; only `sim::ctx_live` folds it.
+    pub indirect_own: bool,
     /// A live attackers-side `grants_rule: "+6\" shooting range"` (Increased
     /// Shooting Range Mark) — the shooter's volley reach gains this many
     /// inches. `0.0` on every `ctx_of`.
@@ -828,6 +837,36 @@ impl Ctx {
             c.regen_target = 0;
         }
         c
+    }
+
+    /// Plan H (`PENDING_EPOCH_DEADLY_INLINE`): the target as the table reads it once every model of its chain is dead: the rules that
+    /// need a living carrier (the unit-trigger "all / most models" forms: the Stealth, Evasive, Artillery and Aircraft to-hit penalties,
+    /// Fortified, Guarded, Shielded, the Regeneration family) answer false, and the state reads of a dead unit (above half strength,
+    /// terrain) are off. Stats, cover, the blast cap and the range gates are NOT touched: they stay as declared.
+    pub fn wiped(&self) -> Ctx {
+        let d = Ctx::default();
+        Ctx {
+            artillery: d.artillery, artillery_target_hit_penalty: d.artillery_target_hit_penalty,
+            artillery_target_hit_penalty_v36: d.artillery_target_hit_penalty_v36, artillery_target_over_in: d.artillery_target_over_in, artillery_target_most_models: d.artillery_target_most_models,
+            stealth: d.stealth, stealth_most_models: d.stealth_most_models, stealth_grant: d.stealth_grant,
+            stealth_alias_penalty: d.stealth_alias_penalty, stealth_alias_over_in: d.stealth_alias_over_in, stealth_alias_name: d.stealth_alias_name,
+            stealth_alias_applies_charged: d.stealth_alias_applies_charged, stealth_alias_near_terrain: d.stealth_alias_near_terrain,
+            stationary_alias_penalty: d.stationary_alias_penalty, stationary_alias_over_in: d.stationary_alias_over_in,
+            stationary_alias_name: d.stationary_alias_name,
+            evasive: d.evasive, evasive_alias: d.evasive_alias, evasive_alias_name: d.evasive_alias_name,
+            evasive_stand_down_name: d.evasive_stand_down_name, dodge: d.dodge,
+            aircraft_hit_penalty: d.aircraft_hit_penalty, aircraft_hit_name: d.aircraft_hit_name,
+            fortified: d.fortified, fortified_boost_ap: d.fortified_boost_ap, fortified_alias_ap: d.fortified_alias_ap,
+            fortified_alias_over_in: d.fortified_alias_over_in, fortified_boost_name: d.fortified_boost_name,
+            fortified_alias_name: d.fortified_alias_name, fortified_alias_over9: d.fortified_alias_over9, fortified_notes: d.fortified_notes,
+            guarded: d.guarded, guarded_name: d.guarded_name,
+            shielded: d.shielded, shielded_note: d.shielded_note, shielded_alias: d.shielded_alias, shielded_rating: d.shielded_rating,
+            regeneration: d.regeneration, regen_target: d.regen_target, regen_target_spell: d.regen_target_spell, regen_pending: d.regen_pending,
+            regen_pending_spell: d.regen_pending_spell, regen_feat: d.regen_feat, regen_named: d.regen_named, regen_groups: d.regen_groups,
+            regen_names: d.regen_names, regen_gated: d.regen_gated, regen_gate_shut: d.regen_gate_shut, regen_most_name: d.regen_most_name,
+            above_half_strength: false, near_terrain: false,
+            ..*self
+        }
     }
 
     pub fn bypass_skips_ignore(&self) -> bool {
@@ -3872,6 +3911,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         // melee-only "Unpredictable Fighter" is never consulted here.
         unpredictable_shooting: upr_shooting,
         unpredictable_name: upr_name,
+        armor_line: if armor >= crate::combat::BEST_HIT_TARGET && armor < p.defense { armor } else { 0 },
         // The die's three params come off the carried rule's own registry
         // entry (defaults 1/1/3, the table's `unpredictable_fighter_effect`).
         unpredictable_ap_bonus: upr_ap_bonus,
@@ -4051,12 +4091,14 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         versatile_pick_hit: 0,
         versatile_pick_ap: 0,
         versatile_latched: false,
+        versatile_defer: false,
         versatile_no_gate,
         pierce_shooting_grant: false,
         pierce_melee_grant: false,
         pierce_assault_grant: false,
         surge_mark_grant: false,
         indirect_mark: false,
+        indirect_own: false,
         range_mark_in: 0.0,
         growth_ap_mod: 0,
         growth_hit_mod: 0,
@@ -4418,8 +4460,12 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
     let mut u_unstop = false;
     let mut u_unstop_melee = false;
     let mut facets: Vec<(String, bool, bool)> = Vec::new(); // the unit-level names the re-roll line carries, with their facet
+    let exact_labels = rule_on(rules_epoch, crate::acts::PENDING_EPOCH_EXACT_STRIKER_LABELS);
     for r in &p.special_rules {
         let rs = r.trim();
+        if exact_labels && is_unlisted_striker_label(rs) {
+            continue; // a Mark / Buff / Aura label is no bearer of the rule it hands out (ds/h_prefix_labels.md)
+        }
         if rs.starts_with("Bane") || rs.starts_with("Lacerate") {
             if table_ladder && rs.ends_with("Aura") {
                 continue; // a striker's own aura rule never fires — main.gd:6540

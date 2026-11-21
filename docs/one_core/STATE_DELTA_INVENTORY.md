@@ -84,6 +84,7 @@ same commit as the struct change.
 | `charge_probe_r` | act_recorder.gd:845 | no | no | no (capture input) |
 | `buffs` | main.gd:447 | spent once buffs (`land_delta`, C-15 / #2924); a buff the core ADDS is not carried | no | no (delta) |
 | `cast_buffs` | none (core bookkeeping) | names the buff / debuff effects this activation's casts landed: the ones its volley or next cast spent (`buffs_spent`, CAST-O7) and the ones still standing (`buffs_gained`, CC-8c; effect-less spells included) | no | no (report-only list, cleared at the activation start) |
+| `casualty_f32` | none (core bookkeeping) | `PENDING_EPOCH_CASUALTY_TIES`: the casualty order measures distance the table's way (f32); set from the seams at the activation's start | no | no (not serialised, false on a board that never ran an activation) |
 | `vs_mark_round` | main.gd:24332 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `hit_and_run_round` | solo_controller.gd:12793 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `moved_round` | main.gd:1761 | yes (`land_delta`, P4.0-4e) | X/Z only | no (delta) |
@@ -220,4 +221,4 @@ Counts: **33 (a), 1 (b), 2 (c)**; the (b) is fixed by #2803 (volley) and #2804 (
 was the one plain-path write whose result no surface carried (the capture sends the ledger, the core
 spends in its copy) and the table's own spend is skipped on the core path. C-15 / #2924 closed it: the
 delta's `buffs_spent` (per record its name and scope) lands in `_land_buffs`. CAST-O7: a once record the activation's own cast placed before its attack and the
-volley spent is named there too (`State::cast_buffs`; it was never in the capture, so the before/after diff missed it). CC-8c: the same ledger names the effects left standing (`buffs_gained`, spell names, placement order); the door lands each from its own spell entry (`CoreActivation._land_spell_buffs`).
+volley spent is named there too (`State::cast_buffs`; it was never in the capture, so the before/after diff missed it). CC-8c: the same ledger names the effects left standing (`buffs_gained`, spell names, placement order); the door lands each from its own spell entry (`CoreActivation._land_spell_buffs`). Landing lane: the melee-scoped Marks (Rapid Charge, Piercing Fighting) a volley left standing on the MARKED unit (a record the core ADDED, which the table keeps for a later charger) are named in the delta's `marks_left` (name, scope, grant) and `CoreActivation._land_marks_left` records them.
