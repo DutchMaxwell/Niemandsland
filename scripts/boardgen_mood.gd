@@ -27,6 +27,12 @@ const FILL_COLOUR := Color(0.93, 0.94, 1.0)
 const FILL_PITCH_DEG := -38.0   # shines from the player's side, a little from above
 const FILL_YAW_DEG := 12.0
 
+## The ruin town's grade (look A/B 21.11., the "grade" part of lookab V1): AgX with more contrast, a touch more colour. The only mood knob of the A/B that kept the
+## readability gate green at about +0.1 ms; the town's light is BoardgenTownDressing.dusk, so it gets no light look, no SSAO change and no model fill.
+const TOWN_AGX_CONTRAST := 1.25
+const TOWN_CONTRAST := 1.08
+const TOWN_SATURATION := 1.15
+
 const OWNER_META := "boardgen_mood_owner"
 
 static var _grade: GradientTexture1D
@@ -44,6 +50,11 @@ static func environment_values() -> Dictionary:
 		"glow_intensity": 0.15, "glow_bloom": 0.0, "adjustment_enabled": true,
 		"adjustment_color_correction": grade_curve(), "adjustment_contrast": 1.03, "adjustment_saturation": 0.97,
 		"tonemap_agx_contrast": 1.1}
+
+
+## The RenderState "board" layer of the ruin town: the grade only.
+static func town_values() -> Dictionary:
+	return {"tonemap_agx_contrast": TOWN_AGX_CONTRAST, "adjustment_enabled": true, "adjustment_contrast": TOWN_CONTRAST, "adjustment_saturation": TOWN_SATURATION}
 
 
 ## A per-channel curve: the blacks lean cool and are lifted a hair, the highlights lean warm (the lamps), the middle stays.
@@ -81,8 +92,8 @@ static func assign_layers(root: Node) -> void:
 
 
 ## Turn the look on or off for `board` (a BoardgenGreybox in a table). The game's Main owns the RenderState and the LightingController
-## (the parent of the table); outside the game (a unit test, the menu) there is none and only the fill light exists.
-static func apply(board: Node, on: bool) -> void:
+## (the parent of the table); outside the game (a unit test, the menu) there is none and only the fill light exists. `town`: the ruin town's grade instead of the Tiefwerk look.
+static func apply(board: Node, on: bool, town := false) -> void:
 	var fill := board.get_node_or_null("ModelFill") as DirectionalLight3D
 	if fill != null:
 		fill.visible = on
@@ -93,10 +104,10 @@ static func apply(board: Node, on: bool) -> void:
 		return   # another board took the look over (a re-attach frees the old board after the new one is ready)
 	var render_state: RenderState = main.get("render_state")
 	if render_state != null:
-		render_state.set_layer("board", environment_values() if on else {})
+		render_state.set_layer("board", (town_values() if town else environment_values()) if on else {})
 	var lighting: Node = main.get("lighting_controller")
 	if lighting != null and lighting.has_method("set_board_look"):
-		lighting.set_board_look(light_look() if on else {})
+		lighting.set_board_look(light_look() if on and not town else {})
 	if on:
 		main.set_meta(OWNER_META, board.get_instance_id())
 	else:

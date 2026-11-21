@@ -399,7 +399,7 @@ func _apply_detail() -> void:
 			_decals.visible = on   # no decals on Low, Performance and in the Compatibility renderer
 		if on:
 			_attach_surfaces()   # a later switch up to Medium fetches them then
-	BoardgenMood.apply(self, on and layout_theme == BoardgenTheme.DEEPWORKS)   # the dim industrial light, board-scale SSAO, the grade and the model fill come with the finer look (the ruin town has its own dusk)
+	BoardgenMood.apply(self, on and (layout_theme == BoardgenTheme.DEEPWORKS or layout_theme == BoardgenTheme.RUIN_TOWN), layout_theme == BoardgenTheme.RUIN_TOWN)   # the dim industrial light, board-scale SSAO, the grade and the model fill come with the finer look; the ruin town has its own dusk and only the grade
 
 
 ## The board's visuals sit on their own render layer: the models' fill light (BoardgenMood) never reaches them.

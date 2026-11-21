@@ -140,3 +140,42 @@ func test_the_look_goes_on_and_off_with_the_board_and_an_old_board_leaving_late_
 	BoardgenMood.apply(fresh, false)
 	assert_float(env.ssao_radius).is_equal_approx(0.8, 0.0001)
 	assert_float(sun.light_energy).is_equal_approx(1.5, 0.0001)   # Warm Sunset's own sun
+
+
+func after_test() -> void:
+	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.MEDIUM
+
+
+func test_the_ruin_town_gets_only_the_grade_in_the_board_layer_and_no_light_look() -> void:
+	var values := BoardgenMood.town_values()
+	assert_array(values.keys()).contains_exactly_in_any_order(["tonemap_agx_contrast", "adjustment_enabled", "adjustment_contrast", "adjustment_saturation"])
+	var env := Environment.new()
+	var state := RenderState.new(env)
+	var lc := _lighting()
+	var sun: DirectionalLight3D = lc.get_meta("sun")
+	lc.apply_preset("Warm Sunset")
+	var main := _main_with(state, lc)
+	var board := _board_on(main)
+	BoardgenMood.apply(board, true, true)
+	assert_float(env.tonemap_agx_contrast).is_equal_approx(BoardgenMood.TOWN_AGX_CONTRAST, 0.0001)
+	assert_float(env.adjustment_contrast).is_equal_approx(BoardgenMood.TOWN_CONTRAST, 0.0001)
+	assert_float(env.adjustment_saturation).is_equal_approx(BoardgenMood.TOWN_SATURATION, 0.0001)
+	assert_float(sun.light_energy).override_failure_message("the town took the Tiefwerk light look").is_equal_approx(1.5, 0.0001)   # Warm Sunset's own sun
+	BoardgenMood.apply(board, false, true)
+	assert_float(env.adjustment_saturation).is_equal_approx(1.0, 0.0001)
+
+
+func test_a_ruin_town_board_puts_the_grade_on_with_the_finer_look_and_takes_it_off_on_low() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore") if ClassDB.class_exists("NmlCore") else null
+	if core == null or not core.has_method("boardgen_layout_themed"):
+		return   # (no NmlCore binding in this run)
+	var env := Environment.new()   # (its own AgX contrast is already 1.25: contrast and saturation carry the check)
+	var main := _main_with(RenderState.new(env), null)
+	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.MEDIUM
+	var board := BoardgenGreybox.attach(main.get_node("Table"), core.boardgen_layout_themed(7, "ruintown"))
+	assert_float(env.adjustment_contrast).is_equal_approx(BoardgenMood.TOWN_CONTRAST, 0.0001)
+	assert_float(env.adjustment_saturation).is_equal_approx(BoardgenMood.TOWN_SATURATION, 0.0001)
+	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.LOW
+	board._apply_detail()   # the player switched down: the finer look goes, the table keeps the mood the player chose
+	assert_float(env.adjustment_contrast).is_equal_approx(1.0, 0.0001)
+	assert_float(env.adjustment_saturation).is_equal_approx(1.0, 0.0001)
