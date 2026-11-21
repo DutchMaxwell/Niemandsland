@@ -22,6 +22,7 @@ var _perf_mode := false
 var _rounds := 3
 var _perf: Array = []
 var _baseline := false
+var _real_table := false   # table=1: the game's own table (mesh, grass, biome dressing) stays visible under and round the board, as a player sees it
 var _suffix := ""
 var _gate: Array = []
 var _cur_layout: Dictionary = {}
@@ -65,6 +66,8 @@ func _run() -> void:
 			_perf_mode = true
 		elif a == "baseline=1":
 			_baseline = true
+		elif a == "table=1":
+			_real_table = true
 		elif a.begins_with("yaw="):
 			_play_yaw = float(a.trim_prefix("yaw="))
 		elif a.begins_with("presets="):
@@ -702,11 +705,11 @@ func _clear_table() -> void:
 	_main.get_node("UI").visible = false
 	_main.atmospheric_clouds.visible = false
 	_main.terrain_overlay.visible = false
-	_main.table.get_node("TableMesh").visible = false
+	_main.table.get_node("TableMesh").visible = _real_table
 	for d in _main.find_children("*", "Decal", true, false):
 		(d as Decal).visible = false
-	_main.get_node("TableBiomePresenter/TableBiomeReference").visible = false
-	_main.table.get_node("GrassField").visible = false
+	_main.get_node("TableBiomePresenter/TableBiomeReference").visible = _real_table
+	_main.table.get_node("GrassField").visible = _real_table
 	for pt in _main.find_children("*", "GPUParticles3D", true, false):
 		(pt as GPUParticles3D).visible = false
 	_hide_by_name(_main)
@@ -728,6 +731,8 @@ func _clear_table() -> void:
 
 
 func _hide_scatter() -> void:
+	if _real_table:
+		return
 	_main.atmospheric_clouds.visible = false
 	var presenter := _main.get_node_or_null("TableBiomePresenter")
 	if presenter != null:

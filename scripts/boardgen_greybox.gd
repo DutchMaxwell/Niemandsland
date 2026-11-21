@@ -18,6 +18,8 @@ const TABLE_OVERLAY_GROUP := "table_overlay"
 ## The table's ground scatter (tufts, leaves, straw) is off on the board AND round it, whatever the table size: no biome dressing
 ## while a generated board is on the table (a board is the whole playing surface; the rest of the table is its frame).
 const SCATTER_OFF_M := 3.0
+## The table's ground relief (mounds, 7 mm ridges along terrain walls) is lifted flat under the board plus this margin (two cells of the relief mesh): the board's skin is 1 mm thick.
+const RELIEF_MARGIN_M := 0.03
 const INCHES_TO_METERS := 0.0254
 const GROUND_COLLISION_LAYER := 1
 ## Thickness of the level-0 ground skin that covers the biome texture, in inches.
@@ -449,11 +451,13 @@ static func wire_surfaces(material: ShaderMaterial, lib: TiefwerkLibrary) -> boo
 	return true
 
 
-## The table's own ground scatter (grass tufts, the biome dressing's straw, leaves and puddles) stays off under the board.
+## The table's own ground scatter (grass tufts, the biome dressing's straw, leaves and puddles) stays off under the board, and so does its ground relief.
 func _scatter_off(rect: Rect2) -> void:
 	var table := get_parent()
 	if table != null:
 		table.set_meta("scatter_keepout", rect)
+		if table.has_method("set_flat_rect"):
+			table.set_flat_rect(rect.grow(RELIEF_MARGIN_M - SCATTER_OFF_M))   # the board itself (an empty rect shrinks to none)
 		if table.has_node("GrassField"):
 			table.get_node("GrassField").set_keepout(rect)
 
