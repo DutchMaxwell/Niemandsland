@@ -121,3 +121,8 @@ func test_a_regeneration_bypass_names_its_rule() -> void:
 func test_the_over_nine_defense_line_stands_before_the_announce() -> void:
 	for c in [["Guarded", "aof", "deep_sea_elves"], ["Sturdy", "gf", "dwarf_guilds"], ["Versatile Defense", "aof", "change_disciples"]]:
 		await _expect_equal(c[0], _leg(c[1], c[2], c[0]), "Cov Target (%s): shot from over 9" % c[0])
+
+
+## Ledger 5 (6 cells): a lone Takedown weapon says the casualty ("loses a model") before its own Takedown line, as the table does.
+func test_a_lone_takedown_says_the_casualty_before_its_line() -> void:
+	await _expect_equal("Takedown", _leg("gf", "battle_brothers", "", false, ["AP(1)", "Takedown"]), "Takedown (Rifle): the")

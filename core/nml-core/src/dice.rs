@@ -2612,12 +2612,13 @@ pub(crate) fn resolve_volley_with_pick_label(
             let td = w * p.deadly.max(1);
             out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, if bypass_flag && !ignores_regen { td } else { 0 }, def, def_owner, tray, &mut out.rolls));
             out.takedown_lines.push((p.name.clone(), td_label));
-            // Plan H (H-17 lines): beside another weapon the table lands the Takedown here - its lines go back to this mark, and a model it
-            // killed makes the next weapon say `Simultaneous fire`. Lines only: the dice keep reading the declared target.
-            if n_shots > 1 && tray.feed().is_some() {
+            // Plan H (H-17 lines): the table lands the Takedown here - its lines go back to this mark, and a model it killed makes the next
+            // weapon (if there is one) say `Simultaneous fire`. Lines only: the dice keep reading the declared target.
+            // A lone Takedown weapon lands the same way (coverage ledger): its casualty line, then its own line, right after its saves.
+            if tray.feed().is_some() {
                 out.takedown_marks.push(tray.mark());
                 let killed = takedown_pick_info(&out.takedown_groups).2;
-                if killed > 0 {
+                if n_shots > 1 && killed > 0 {
                     live_models = def.blast_models.map(|m| m - killed);
                 }
             }

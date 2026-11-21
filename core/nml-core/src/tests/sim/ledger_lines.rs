@@ -41,3 +41,15 @@ use super::volley_landings::volley_line;
     fn name_static(n: &str) -> &'static str {
         match n { "Guarded" => "Guarded", "Sturdy" => "Sturdy", _ => "Versatile Defense" }
     }
+
+    /// Ledger 5 (6 cells): a lone Takedown weapon lands inline as well - the table says the casualty, then the Takedown line, ahead of the
+    /// end report's "takes N wounds" (none here: every wound is the Takedown's). RED on main: the Takedown line came first.
+    #[test]
+    fn a_lone_takedown_weapon_says_the_casualty_before_its_own_line() {
+        let takedown = |p: &mut ShootProfile| { p.takedown = true; p.rules = vec!["Takedown".into()]; };
+        let lines = volley_lines(|_| {}, takedown, vec![vec![6; 4], vec![1; 4], vec![1]]);
+        let killed = lines.iter().position(|l| l.starts_with("Def loses a model (")).unwrap_or_else(|| panic!("{lines:?}"));
+        let said = lines.iter().position(|l| l.starts_with("Takedown (Rifle): the") && l.ends_with("is killed")).unwrap_or_else(|| panic!("{lines:?}"));
+        assert!(killed < said, "the casualty first: {lines:?}");
+        assert_eq!(lines.iter().filter(|l| l.starts_with("Def loses")).count(), 1, "said once, not again by the end report: {lines:?}");
+    }
