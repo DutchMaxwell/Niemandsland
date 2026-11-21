@@ -2824,7 +2824,7 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 	# Biomes with a 3D dangerous-terrain prop (volcanic lava crater / alien-jungle carnivore
 	# plant) render their own GLB instead of mines and show NO warning signs, so they fetch
 	# the model GLB (+ the lava texture for volcanic) rather than the mine/sign panel set.
-	var hazard_model: String = BIOME_HAZARD_MODELS.get(_prop_theme, "")
+	var hazard_model := TerrainGroupBase.hazard_model_for(_prop_theme, _table_setting())   # a fantasy table: no mines, no signs
 	_crater_positions.clear()
 	for obj in objects:
 		var obj_type: String = obj.get("object_type", "tree")
@@ -2900,7 +2900,12 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 			# slots that would overlap an already-placed one.
 			if _crater_spot_free(rotated_x, rotated_z):
 				_crater_positions.append(Vector2(rotated_x, rotated_z))
-				model = _create_lava_pool(obj) if _prop_theme == "volcanic_" else _create_carnivore_plant(obj)
+				if hazard_model == LAVA_CRATER_MODEL:
+					model = _create_lava_pool(obj)
+				elif hazard_model == CARNIVORE_MODEL:
+					model = _create_carnivore_plant(obj)
+				else:
+					model = _create_fantasy_hazard(obj, hazard_model)
 				handles_own_facing = true
 			# else: model stays null -> this overlapping mine slot is skipped
 		elif object_type == "warning_sign" and hazard_model != "":
@@ -3234,6 +3239,29 @@ func _stone_blockers() -> bool:
 func _table_system() -> String:
 	var main := get_node_or_null("/root/Main") if is_inside_tree() else null
 	return str(main.call("_table_system")) if main != null and main.has_method("_table_system") else ""
+
+
+## "grimdark" / "fantasy" of the table's game system, "" when no Main answers (tests, tools).
+func _table_setting() -> String:
+	var system := _table_system()
+	return GameSystem.setting(system) if not system.is_empty() else ""
+
+
+## A fantasy hazard prop (thorn field / sinkhole / stone circle, PLAN_GAME_SYSTEM_SWITCH step 14): the GLB fit to its footprint once
+## cached, else TerrainGroupBase's low procedural patch - never a mine. Facing seeded from the object's identity.
+func _create_fantasy_hazard(obj: Dictionary, model_name: String) -> Node3D:
+	var root := Node3D.new()
+	var scene: PackedScene = _hazards_library.get_model_scene(model_name) if _hazard_model_ready(model_name) else null
+	if scene != null:
+		var prop := scene.instantiate() as Node3D
+		_fit_to_footprint(prop, float(TerrainGroupBase.HAZARD_MODEL_DIAMETER_INCHES.get(model_name, 2.2)) * INCHES_TO_METERS)
+		root.add_child(prop)
+	else:
+		root.add_child(TerrainGroupBase.fantasy_fallback())
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _placed_object_seed(obj)
+	root.rotation.y = rng.randf() * TAU
+	return root
 
 
 ## The stone blocker: the free blocker's plain look in the container's 6x3x2.5" rule box, with the container's own collider.
