@@ -5112,6 +5112,14 @@ fn unit_imprecise_name(rules_epoch: u32) -> Option<&'static str> {
     rule_on(rules_epoch, crate::acts::PENDING_EPOCH_UNIT_IMPRECISE).then_some("Imprecise")
 }
 
+/// `PENDING_EPOCH_UNIT_IMPRECISE`, melee leg: the unit carries Imprecise and its faction map names it a to-hit Shot Modifier.
+fn unit_imprecise_carried(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> bool {
+    unit_imprecise_name(rules_epoch).is_some()
+        && unit_rule_active(reg, p, "Imprecise")
+        && reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Imprecise")
+            .is_some_and(|e| e.primitive.as_deref() == Some("Shot Modifier") && e.param_i("hit_bonus", 0) < 0)
+}
+
 /// Wave 3 — the Shot Modifier family's two RUNTIME-GATED shooting members,
 /// stamped BY NAME (#489's lesson: naming them one by one keeps the rest of
 /// the primitive uncredited). `stamp_shot_modifier` above covers the eight
@@ -7617,6 +7625,10 @@ impl UnitStatic {
         stamp_shot_modifier(reg, p, &mut shoot, trace73, rules_epoch);
 
         let mut melee = melee_profiles_at(&p.weapons, rules_epoch);
+        // PENDING_EPOCH_UNIT_IMPRECISE: the unit's own Imprecise reaches its strikes as the weapon-borne flag does (one -1, never two).
+        if unit_imprecise_carried(reg, p, rules_epoch) {
+            melee.iter_mut().for_each(|sp| sp.imprecise = true);
+        }
         // NML-002 Strafing — the move-through trigger's own array, stamped
         // UNGATED and UNSTAMPED: the table builds it raw off the weapons
         // (`AiShooting.strafing_profiles`, main.gd:2976-2985) and the

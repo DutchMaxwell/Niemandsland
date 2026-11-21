@@ -11,7 +11,8 @@ mod pending_96 {
         "base_radius":0.016,"game_system":"gf","faction_folder":"battle_brothers",
         "special_rules":[],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
-        "weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]}}}"#;
+        "weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]},
+                   {"name":"Blade","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
 
     /// A gf carrier of `faction` whose OWN rules are `unit_rules` and whose one rifle prints `weapon_rules`, read at `epoch`.
     fn carrier(faction: &str, unit_rules: &[&str], weapon_rules: &[&str], epoch: u32) -> UnitStatic {
@@ -55,6 +56,15 @@ mod pending_96 {
     fn a_bane_mark_gives_its_bearer_no_standing_bane_at_96() {
         let us = carrier("saurian_starhosts", &["Bane Mark"], &[], PENDING_EPOCH_UNIT_BANE_ALIAS);
         assert!(!us.shoot[0].bane && !us.melee[0].bane, "96: the Mark is a runtime mark, never a standing Bane on the bearer");
+    }
+
+    #[test]
+    fn a_unit_borne_imprecise_reaches_the_strikes_once_from_96() {
+        let e = PENDING_EPOCH_UNIT_IMPRECISE;
+        assert!(!carrier("alien_hives", &["Imprecise"], &[], e - 1).melee[0].imprecise, "95: the strikes keep the unread rule");
+        assert!(carrier("alien_hives", &["Imprecise"], &[], e).melee[0].imprecise, "96: the bearer strikes at -1");
+        let both = carrier("alien_hives", &["Imprecise"], &["Imprecise"], e);
+        assert!(both.melee[0].imprecise && both.melee[0].hit_bonus == 0, "one flag, one -1: no second charge");
     }
 
     /// The real volley of 64 shots from `us`'s rifle with an Enhanced Primal grant live, at `epoch`.
