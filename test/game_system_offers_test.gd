@@ -23,6 +23,9 @@ func _catalogued() -> Dictionary:
 			themes.append(f.get_basename())
 	var hazard_looks: Array = TerrainGroupBase.BIOME_HAZARD_MODEL_BY_PREFIX.values()
 	hazard_looks.append("anti_tank_mine")
+	for look: String in TerrainGroupBase.FANTASY_HAZARD_MODEL_BY_PREFIX.values():
+		if not hazard_looks.has(look):
+			hazard_looks.append(look)
 	return {
 		"biome": Array(preload("res://scripts/table.gd").BIOMES),
 		"ruin": ObjectManager.SANDBOX_RUINS.keys(),
@@ -65,6 +68,8 @@ func test_a_gf_table_is_offered_everything_main_offers_today() -> void:
 		if kind == "generated_board":
 			continue   # a board chooser entry is new, not something main offers today
 		for id in cat[kind]:
+			if kind == "hazard_look" and not TerrainGroupBase.BIOME_HAZARD_MODEL_BY_PREFIX.values().has(id) and id != "anti_tank_mine":
+				continue   # the fantasy hazard looks of step 14 are new, not something a gf table had
 			for system in ["gf", "", "unknown"]:   # no system set / an unknown one folds to the gf offers
 				assert_bool(GameSystem.offers(kind, id, system)).override_failure_message(
 					"gf table lost %s/%s (system '%s')" % [kind, id, system]).is_true()
@@ -87,7 +92,7 @@ func test_fantasy_tables_drop_the_grimdark_only_looks() -> void:
 
 func test_everything_else_is_offered_on_every_system() -> void:
 	var dropped := ["urban_ruins", "alien_jungle", "container_red", "container_blue", "anti_tank_mine", "carnivore_plant",
-		"oil_stain", "ruined_borderland", "tiefwerk", "ruined_town"]
+		"oil_stain", "ruined_borderland", "tiefwerk", "ruined_town", "thorn_field", "sinkhole", "stone_circle"]   # the last three: fantasy only (step 14)
 	var cat := _catalogued()
 	for kind in cat:
 		for id in cat[kind]:

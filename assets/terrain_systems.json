@@ -40,7 +40,10 @@
   "hazard_look": {
     "anti_tank_mine": {"settings": ["grimdark"]},
     "lava_crater": {"settings": ["grimdark", "fantasy"]},
-    "carnivore_plant": {"settings": ["grimdark"]}
+    "carnivore_plant": {"settings": ["grimdark"]},
+    "thorn_field": {"settings": ["fantasy"]},
+    "sinkhole": {"settings": ["fantasy"]},
+    "stone_circle": {"settings": ["fantasy"]}
   },
   "stain": {
     "blood_stain": {"settings": ["grimdark", "fantasy"]},
