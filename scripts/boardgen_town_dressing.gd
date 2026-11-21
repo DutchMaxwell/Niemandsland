@@ -722,7 +722,7 @@ static func catslide_mesh() -> ArrayMesh:
 
 
 ## The roofs in one MultiMesh PER TYPE (gable, hip, catslide: "Roofs", "RoofsHip", "RoofsCatslide") with the board's material (the kind "roof" in its instance data).
-func build(layout: Dictionary, material: Material, prism_roofs := true) -> void:   # prism_roofs false: BoardgenTownKit draws the gable roofs (hip and catslide have no module: they stay procedural)
+func build(layout: Dictionary, material: Material, prism_roofs := true, timber: Dictionary = {}) -> void:   # prism_roofs false: BoardgenTownKit draws the gable roofs (hip and catslide have no module: they stay procedural)
 	var list := roofs(layout)
 	if not prism_roofs:
 		list = list.filter(func(r: Dictionary) -> bool: return r["type"] != "gable")
@@ -752,7 +752,7 @@ func build(layout: Dictionary, material: Material, prism_roofs := true) -> void:
 		mmi.material_override = material
 		add_child(mmi)
 	_add_bodies(layout, material)
-	BoardgenTownSilhouette.build(self, layout, material)
+	BoardgenTownSilhouette.build(self, layout, material, timber)   # (timber: the ruined lots whose gables the kit draws in timber, BoardgenTownFrames)
 	_add_lights(layout)
 	_add_embers(layout)
 	_add_probe(layout)
