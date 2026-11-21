@@ -389,6 +389,12 @@ impl Terrain {
         t.level_in.get(fz as usize * usize::from(t.nx) + fx as usize).copied().unwrap_or(0.0)
     }
 
+    /// The generated tier board the header carried (`None` on every hand-placed or banked board).
+    #[inline]
+    pub fn tiers(&self) -> Option<&TierGrid> {
+        self.tiers.as_ref()
+    }
+
     /// Heightfield plan step 6 - the solid blocks of the tier board (board-centred inches). Empty on a flat board.
     #[inline]
     pub fn tier_boxes(&self) -> &[TierBox] {
@@ -704,8 +710,12 @@ impl Terrain {
                 slabs: Vec::new(),
             })
             .collect();
-        if bank.is_empty() && p.sandbox.is_empty() {
+        // organic C2: a generated board (`tiers`) carries painted yards / plots / pools AND free solids - the net sees both
+        if bank.is_empty() && (p.sandbox.is_empty() || p.tiers.is_some()) {
             bank = pieces_from_cells(&cells, cell_m, rot_rad, grid_size as f64 / 2.0);
+            if p.tiers.is_some() {
+                bank.extend(p.sandbox.iter().cloned());
+            }
         }
         let mut out = Terrain {
             cells,
@@ -895,7 +905,9 @@ impl Terrain {
                 return true;
             }
         }
-        false
+        // organic C2 (lead L-O1): on a generated board (`tiers`) a free solid house blocks the centre line too; no recorded game has one
+        let (p, q) = ([a[0] as f64, a[2] as f64], [b[0] as f64, b[2] as f64]);
+        self.tiers.is_some() && self.sandbox.iter().any(|s| s.kind == CONTAINER && crate::sight::segment_hits_obb(p, q, s.c, s.he, s.yaw))
     }
 
     /// `BattleSim.state_to_plain`'s `"los_pairs"` block, battle_sim.gd:1492-1506

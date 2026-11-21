@@ -196,6 +196,11 @@ impl BoxFoot {
     }
 }
 
+/// `TerrainRules.segment_intersects_obb` on a flat box (`c`, `he`, `yaw` as `terrain::Obb`): an end inside, or an edge crossed.
+pub fn segment_hits_obb(p: [f64; 2], q: [f64; 2], c: [f64; 2], he: [f64; 2], yaw: f64) -> bool {
+    BoxFoot { c, he, yaw, y0: 0.0 }.hit_by(p, q)
+}
+
 /// `TerrainRules.cell_of(p.rotated(-yaw), cell_size)` — `VolumetricLos.cells_key`.
 #[inline]
 fn cell_of(p: [f64; 2], yaw: f64, cell_m: f64) -> (i64, i64) {

@@ -61,23 +61,28 @@ pub type Poly = Vec<[i64; 2]>;
 pub struct Cells {
     map: HashMap<(i64, i64), i32>,
     n: i64,
+    /// organic C2: a generated board's free solids (`sandbox`, world metres) - a marker never lands inside a house box.
+    boxes: Vec<crate::terrain::Obb>,
 }
 
 impl Cells {
     pub fn from_terrain(t: &Terrain) -> Cells {
-        Cells { map: t.painted_cells().collect(), n: t.n() }
+        let boxes = if t.tiers().is_some() { t.sandbox().iter().filter(|s| s.kind == CONTAINER).cloned().collect() } else { Vec::new() };
+        Cells { map: t.painted_cells().collect(), n: t.n(), boxes }
     }
 
     pub fn from_pairs(pairs: &[((i64, i64), i32)], n: i64) -> Cells {
-        Cells { map: pairs.iter().copied().collect(), n }
+        Cells { map: pairs.iter().copied().collect(), n, boxes: Vec::new() }
     }
 
     /// `SchoolTerrain.cell_of` school_terrain.gd:52-53 — `int(floor(...))`.
     #[inline]
-    fn type_at_in(&self, x_in: i64, z_in: i64) -> i32 {
+    pub(crate) fn type_at_in(&self, x_in: i64, z_in: i64) -> i32 {
         let cx = (x_in as f64 / CELL_IN + self.n as f64 / 2.0).floor() as i64;
         let cz = (z_in as f64 / CELL_IN + self.n as f64 / 2.0).floor() as i64;
-        *self.map.get(&(cx, cz)).unwrap_or(&0)
+        let p = [x_in as f64 * crate::IN2M, z_in as f64 * crate::IN2M];
+        let boxed = self.boxes.iter().any(|s| crate::sight::segment_hits_obb(p, p, s.c, s.he, s.yaw));
+        if boxed { CONTAINER } else { *self.map.get(&(cx, cz)).unwrap_or(&0) }
     }
 }
 

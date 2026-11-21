@@ -245,6 +245,33 @@ mod tests {
         }
     }
 
+    #[test]
+    fn the_cell_only_readers_see_a_free_house() {
+        let (mut houses, mut pieces) = (0, 0);
+        for seed in 1..=60 {
+            let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+            let p = to_plain(&l);
+            let t = Terrain::build(&p);
+            let cells = crate::objectives::Cells::from_terrain(&t);
+            for s in &p.sandbox {
+                houses += 1;
+                // the AI's centre line straight through the house, end to end 1 in outside it, reads blocked
+                let (c, ext) = ([s.c[0] as f32, s.c[1] as f32], (s.he[0].hypot(s.he[1]) + crate::IN2M) as f32);
+                let (a, b) = ([c[0] - ext, 0.0, c[1]], [c[0] + ext, 0.0, c[1]]);
+                assert!(t.los_blocked_at(a, b, crate::acts::CURRENT_RULES_EPOCH), "seed {seed}: an AI line through the house at {:?} reads clear", s.c);
+                // an objective marker at the house centre is illegal ground
+                let (x_in, z_in) = ((s.c[0] / crate::IN2M).round() as i64, (s.c[1] / crate::IN2M).round() as i64);
+                assert_eq!(cells.type_at_in(x_in, z_in), CONTAINER, "seed {seed}: a marker may land inside the house at {:?}", s.c);
+            }
+            // the net's tokens keep the painted yards, plots and pools AND get every house
+            let got = t.pieces();
+            assert!(p.sandbox.iter().all(|s| got.contains(s)), "seed {seed}: a house is missing from the net's pieces");
+            assert!(got.iter().any(|q| q.kind != CONTAINER), "seed {seed}: the net lost the painted yards / plots / pools");
+            pieces += got.len();
+        }
+        assert!(houses >= 120 && pieces > houses, "the check proved too little: {houses} houses, {pieces} pieces");
+    }
+
     // re-pinned 21.11. (silhouette round): slender 2 x 1 town towers, one tower per wall run, 65 % intact houses
     // re-pinned 21.11. (organic C1): the intact houses are free boxes (`sandbox` + `containers`), no longer painted cells
     const PINNED_TOWN_42: &str = "b32aaecb0ffc2557";
