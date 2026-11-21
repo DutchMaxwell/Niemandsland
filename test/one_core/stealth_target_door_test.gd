@@ -180,7 +180,7 @@ func test_the_penalty_is_lost_only_when_an_earlier_deadly_weapon_kills_the_targe
 	var probe := RosterSweep.spawn(_main, deadly, RosterSweep.SEAT_SHOOTER, 0.0)
 	var shooter_refusals := CoreSlice.refusals_in(CoreSlice.DENY_PATH, probe)
 	RosterSweep.free_units(_main, [probe])
-	assert_array(shooter_refusals).override_failure_message("a Deadly weapon beside another weapon keeps the shooter on the table").contains(["deadly_beside_other_weapons"])
+	assert_array(shooter_refusals).override_failure_message("since the epoch 95 lift a Deadly weapon beside another weapon is taken").is_empty()
 	var epoch_before := AiActRecorder.rules_epoch
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_94_PARITY_BATCH - 1
 	var res := await _run(deadly, hero)

@@ -359,26 +359,30 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 	CoreSlice.reset_cache()
 
 
-## DLINES2: a Deadly weapon beside another ranged weapon, as a shooter (the table lands Deadly inline, the core after the dice: "Simultaneous
-## fire" and Blast's cap note are missing); Deadly alone, two plain weapons, a melee weapon beside Deadly and a TARGET are taken. A joined hero's
-## weapons fire in the same volley. RED: drop the predicate -> the first assertion reads [].
-func test_deny_mode_refuses_a_deadly_weapon_beside_another_ranged_weapon() -> void:
+## DLINES2 lift (epoch 95): a Deadly (or Takedown) weapon beside another ranged weapon is taken as a shooter. The core lands Deadly inline from 94 and
+## says `Simultaneous fire` and Blast's cap note, keeps the declared Defense (95), and stops the ignore dice once the target is dead (95); the roster
+## sweep (1000 and 2000 pt, 5 seeds) took every such row and found it equal. The group `door_omits_simultaneous_fire_line` left the deny file.
+## RED: put the group and the predicate back -> the first assertion reads ["deadly_beside_other_weapons"].
+func test_deny_mode_takes_a_deadly_weapon_beside_another_ranged_weapon() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
 	var both := _ranged_unit([["Deadly(3)"], ["AP(1)"]])
-	assert_array(CoreSlice.refusals(both)).is_equal(["deadly_beside_other_weapons"])
+	assert_array(CoreSlice.refusals(both)).override_failure_message("a Deadly weapon beside another one is taken since the lift").is_empty()
 	assert_array(CoreSlice.refusals(both, true)).override_failure_message("as a target the weapons do not matter").is_empty()
-	assert_bool(CoreSlice.takes(_ranged_unit([["Deadly(3)"]]))).override_failure_message("Deadly alone stays on the core").is_true()
-	assert_bool(CoreSlice.takes(_ranged_unit([["Takedown"]]))).override_failure_message("Takedown alone stays on the core").is_true()
-	assert_array(CoreSlice.refusals(_ranged_unit([["Takedown"], ["AP(1)"]]))).override_failure_message("Takedown beside another ranged weapon lands inline").is_equal(["deadly_beside_other_weapons"])
-	assert_bool(CoreSlice.takes(_ranged_unit([["AP(1)"], ["Blast(3)"]]))).override_failure_message("no Deadly: no inline casualties").is_true()
-	assert_bool(CoreSlice.takes(_ranged_unit([["Deadly(3)"]], [["Reliable"]]))).override_failure_message("a melee weapon (range 0) is no second ranged weapon").is_true()
+	assert_bool(CoreSlice.takes(_ranged_unit([["Takedown"], ["AP(1)"]]))).override_failure_message("Takedown beside another ranged weapon is taken too").is_true()
 	var host := _ranged_unit([["AP(1)"]])
 	var hero := _ranged_unit([["Deadly(3)"]])
 	EquipmentDistributor.attach_hero_to_unit(hero, host)
-	assert_array(CoreSlice.refusals(host)).override_failure_message("the hero's Deadly gun fires in the host's volley").is_equal(["deadly_beside_other_weapons"])
+	assert_array(CoreSlice.refusals(host)).override_failure_message("the hero's Deadly gun in the host's volley is taken").is_empty()
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
+
+
+## Epoch 95 lift: the deny file names neither the simultaneous-fire group nor the die-bearer guard any more. RED: put either block back into the file.
+func test_the_deny_file_names_no_simultaneous_fire_or_die_bearer_group() -> void:
+	var committed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.DENY_PATH))
+	assert_array((committed["groups"] as Dictionary).keys()).override_failure_message("both groups left the deny file at the epoch 95 lift") \
+		.not_contains(["door_omits_simultaneous_fire_line", "unpredictable_die_without_weapon_in_reach"])
 
 
 ## A unit whose `ranged` weapons have range 24 and whose `melee` ones range 0.
