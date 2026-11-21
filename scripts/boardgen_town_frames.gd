@@ -7,8 +7,8 @@ const IN_M := 0.0254
 ## The panel kinds in the order they follow each other along a face (each differs from both neighbours, the cycle too): a face walks this list from an offset by hash.
 const PANELS := ["hf_panel_window", "hf_panel_brace1", "hf_panel_lath", "hf_panel_plain", "hf_panel_boarded", "hf_panel_shutter", "hf_panel_brace"]
 const MODULES := ["hf_panel_window", "hf_panel_shutter", "hf_panel_boarded", "hf_panel_brace", "hf_panel_lath", "hf_panel_plain", "hf_panel_brace1", "hf_door", "hf_post"]
-## (lead 21.11.: C's timber is DARK, weathered grey-brown to near black, the infill pale) the instance colour of the timber set on a frame, varied +-15 % per panel.
-const TIMBER := Color(0.36, 0.33, 0.31)
+## (lead 21.11.: C's timber is dark weathered grey-brown - not black - on dirty cream-grey infill) the instance colour of the timber set on a frame, varied +-15 % per panel.
+const TIMBER := Color(0.66, 0.6, 0.53)
 const DIRS: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]   # N, E, S, W
 
 
