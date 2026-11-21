@@ -695,15 +695,19 @@ fn takedown_model_label(kits: &[crate::state::Kit], names: &[String], fallback_w
 
 #[cfg(test)]
 fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: bool, groups: &[i64], picked: Option<usize>) -> bool {
-    takedown_pick_info_after(&[], state, ti, cover, unit_flag, groups, picked).0
+    takedown_pick_info_after(&[], state, ti, cover, unit_flag, None, groups, picked).0
 }
 
 /// Tray-exact S8 — `_solo_model_in_cover` and `_solo_model_label` for the Takedown pick: the centre probe of ITS square
 /// and the model's label. The table picks per profile (main.gd:4171), after the earlier Takedown groups of the volley landed
 /// inline, so this replays `land_takedown_groups` on a scratch copy of the target's slots: a killed pick is gone, a wounded
 /// one ranks first for removal and so never last for the sniper. A recorded node carries no board, so it keeps the unit's flag.
+/// PLAN_COVER_36: `hidden` (the volley's `sight::Screen::hidden`, from 95 only) is the target's models behind a sight blocker,
+/// in slot order; the pick is in cover when its square gives cover OR it is hidden.
+#[allow(clippy::too_many_arguments)]
 fn takedown_pick_info_after(
-    statics: &[UnitStatic], state: &State, ti: usize, cover: Cover, unit_flag: bool, groups: &[i64], picked: Option<usize>,
+    statics: &[UnitStatic], state: &State, ti: usize, cover: Cover, unit_flag: bool, hidden: Option<&[bool]>, groups: &[i64],
+    picked: Option<usize>,
 ) -> (bool, String) {
     let names: &[String] = state.kit_names.get(ti).map_or(&[], |v| v.as_slice());
     let fallback_w = state.roster.profile.get(ti)
@@ -711,6 +715,7 @@ fn takedown_pick_info_after(
         .and_then(|u| u.wounds_max.first().copied())
         .unwrap_or(1);
     let (mut pos, mut wounds) = (state.positions[ti].clone(), state.wounds[ti].clone());
+    let mut hid: Vec<bool> = hidden.map(|h| h.to_vec()).unwrap_or_default();
     let mut picked = picked;
     let mut kits: Vec<crate::state::Kit> = state.kits.get(ti).map(|k| k.to_vec()).unwrap_or_default();
     let pick = |kits: &[crate::state::Kit], pos: &[[f64; 3]], wounds: &[i64]| -> usize {
@@ -733,6 +738,9 @@ fn takedown_pick_info_after(
             if p < kits.len() {
                 kits.remove(p);
             }
+            if p < hid.len() {
+                hid.remove(p);
+            }
         }
     }
     if pos.is_empty() || wounds.len() != pos.len() {
@@ -742,7 +750,7 @@ fn takedown_pick_info_after(
     let in_cover = match cover {
         Cover::Board(t) => crate::terrain::gives_cover(t.type_at([pos[idx][0] as f32, pos[idx][1] as f32, pos[idx][2] as f32])),
         _ => unit_flag,
-    };
+    } || hid.get(idx).copied().unwrap_or(false);
     (in_cover, takedown_model_label(&kits, names, fallback_w, idx))
 }
 
@@ -1743,7 +1751,7 @@ pub(crate) fn tray_strafing(
         shred_boost_active(seams.rules_epoch),
         rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
         seams.tray_exact,
-        &|gr: &[i64]| takedown_pick_info_after(statics, next, target, cover, def.in_cover, gr, seams.takedown_pick),
+        &|gr: &[i64]| takedown_pick_info_after(statics, next, target, cover, def.in_cover, None, gr, seams.takedown_pick),
         &|_, _| None,
         None,
         tray,
@@ -11682,6 +11690,20 @@ fn resolve_with(
                             // applies only while the TARGET stands within 1" of
                             // terrain (per model, the majority fold).
                             stealth_alias_terrain_gate(statics, &next, g.ti, cover, &mut def);
+                            // PLAN_COVER_36: cover from sight blockers, one verdict per target group for every weapon (the save fold
+                            // lifts it per weapon for a held Indirect). Placeholder gate, no outcome below 95.
+                            let mut td_hidden: Option<Vec<bool>> = None; // step 8: the Takedown pick's own screen
+                            if seams.sighting && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_COVER_SCREEN) {
+                                let sc = sight::screen_of(&next, &zones, si, g.ti, seams.rules_epoch);
+                                def.screened = sc.screened;
+                                td_hidden = Some(sc.hidden.clone());
+                                if sc.screened {
+                                    let k = sc.hidden.iter().filter(|&&h| h).count();
+                                    let tail = if def.in_cover { "already in Cover terrain, one +1" } else { "+1 Defense" };
+                                    shot.log.push(format!("Cover: {} is behind a sight blocker from {} ({k} of {} models) - {tail}",
+                                        ut_g.name, statics[pi_s].name, sc.hidden.len()));
+                                }
+                            }
                             // rules-wave3-growthmark (epoch 6) — the volley's
                             // LOGGING-RULE lines, named after the entry that
                             // carried the facet (the two Defensive names share
@@ -11945,7 +11967,7 @@ fn resolve_with(
                                 // `EPOCH_14_DEADLY_LANDING`, pool multiply below.
                                 rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
                                 seams.tray_exact,
-                                &|gr: &[i64]| takedown_pick_info_after(statics, &next, g.ti, cover, def.in_cover, gr, seams.takedown_pick),
+                                &|gr: &[i64]| takedown_pick_info_after(statics, &next, g.ti, cover, def.in_cover, td_hidden.as_deref(), gr, seams.takedown_pick),
                                 &|i, pi| parts.get(i).and_then(|(mi, msc, _)| msc.sighted.get(pi)
                                     .map(|&n| (n, next.alive[*mi], msc.silent.get(pi).copied().unwrap_or("")))),
                                 if inline_on { Some(&mut inline_land) } else { None },
