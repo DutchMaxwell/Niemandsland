@@ -422,11 +422,11 @@ static func front_clusters(layout: Dictionary, reserved: Dictionary = {}) -> Dic
 			taken["%d/%d/%s" % [int(b["at"].x), int(b["at"].y), b["face"]]] = true
 	var lamps := BoardgenTownDressing.lanterns(layout)
 	var open := func(c: Vector2i) -> bool:
-		return c.x >= 0 and c.y >= 0 and c.x < nx and c.y < nz and int(cells[c.y * nx + c.x]["level"]) == 0
+		return c.x >= 0 and c.y >= 0 and c.x < nx and c.y < nz and int(cells[c.y * nx + c.x]["level"]) == 0 and cells[c.y * nx + c.x]["lot_kind"] != "Roofed"   # (an intact house stands at level 0: solid, not open)
 	for cd: Dictionary in cells:
 		var i: int = cd["z"] * nx + cd["x"]
 		var foot := Vector2i(cd["x"], cd["z"])
-		if int(cd["level"]) != 0 or clear.has(i) or reserved.has(i) or int(cd.get("deploy", 0)) != 0 or ["Hazard", "Wall", "Rough"].has(cd["lot_kind"]):
+		if int(cd["level"]) != 0 or clear.has(i) or reserved.has(i) or int(cd.get("deploy", 0)) != 0 or ["Hazard", "Wall", "Rough", "Roofed"].has(cd["lot_kind"]):
 			continue
 		var half := 1 if int(cd["z"]) >= nz / 2 else 0
 		for side in 4:

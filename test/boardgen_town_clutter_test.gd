@@ -63,7 +63,7 @@ func test_strip_pieces_stand_on_a_wall_face_facing_away_from_it_and_inside_their
 			assert_float(absf(Vector2(xf.basis.z.x, xf.basis.z.z).length() - 1.0)).is_less(0.001)
 			var behind := at - into * 0.3   # a hair behind the origin = inside the wall cell
 			var bc := Vector2i(behind / cell)
-			assert_int(int(layout["cells"][bc.y * 16 + bc.x]["level"])).is_greater(0)
+			assert_bool(int(layout["cells"][bc.y * 16 + bc.x]["level"]) > 0 or layout["cells"][bc.y * 16 + bc.x]["lot_kind"] == "Roofed").is_true()   # (an intact house is solid at level 0)
 			var ahead := at + into * 0.3
 			var ac := Vector2i(ahead / cell)
 			assert_int(int(layout["cells"][ac.y * 16 + ac.x]["level"])).is_equal(0)
@@ -421,6 +421,7 @@ func test_weed_clumps_stand_at_open_wall_feet_inside_their_edge_and_never_on_a_l
 
 func test_front_clusters_stand_in_the_strip_of_open_fronts_never_on_a_ladder_a_lamp_a_scene_or_the_deployment_earth() -> void:
 	var total := 0
+	var houses := 0
 	for s: int in [7, 11, 13, 17, 19, 23, 25, 29, 41, 43]:
 		var layout: Dictionary = ClassDB.instantiate("NmlCore").boardgen_layout_themed(s, "ruintown")
 		var nx: int = layout["nx"]
@@ -438,7 +439,9 @@ func test_front_clusters_stand_in_the_strip_of_open_fronts_never_on_a_ladder_a_l
 				var foot := Vector2i((at + into * 0.3) / 3.0)
 				var behind := foot + Vector2i(into)
 				var fc: Dictionary = layout["cells"][foot.y * nx + foot.x]
-				assert_int(int(layout["cells"][wall.y * nx + wall.x]["level"])).override_failure_message("seed %d: `%s` not at a raised face" % [s, m]).is_greater(0)
+				var wc: Dictionary = layout["cells"][wall.y * nx + wall.x]
+				assert_bool(int(wc["level"]) > 0 or wc["lot_kind"] == "Roofed").override_failure_message("seed %d: `%s` not at a raised face or a house" % [s, m]).is_true()
+				houses += 1 if wc["lot_kind"] == "Roofed" else 0
 				assert_int(int(fc["level"])).is_equal(0)
 				assert_bool(clear.has(foot.y * nx + foot.x) or reserved.has(foot.y * nx + foot.x)).override_failure_message("seed %d: `%s` on a ladder end or a scene" % [s, m]).is_false()
 				assert_int(int(fc.get("deploy", 0))).override_failure_message("seed %d: `%s` on the deployment earth" % [s, m]).is_equal(0)
@@ -446,3 +449,4 @@ func test_front_clusters_stand_in_the_strip_of_open_fronts_never_on_a_ladder_a_l
 				for l: Dictionary in lamps:
 					assert_float((l["at"] as Vector2 + Vector2(24, 24)).distance_to(at)).override_failure_message("seed %d: `%s` on a lamp's foot" % [s, m]).is_greater(BoardgenTownClutter.LAMP_FREE_IN)
 	assert_int(total).is_greater(100)
+	assert_int(houses).override_failure_message("no clutter at an intact house's feet (an intact house stands at level 0)").is_greater(10)
