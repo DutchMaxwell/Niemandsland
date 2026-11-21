@@ -16,7 +16,7 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let path = args.next().unwrap_or_else(|| concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/acts_wide_25.jsonl").into());
     let rounds: usize = args.next().and_then(|s| s.parse().ok()).unwrap_or(5);
-    let epoch: u32 = args.next().and_then(|s| s.parse().ok()).unwrap_or(nml_core::acts::PENDING_EPOCH_COVER_SCREEN);
+    let epoch: u32 = args.next().and_then(|s| s.parse().ok()).unwrap_or(nml_core::acts::EPOCH_95_PARITY_BATCH);
     let c = load_acts(&path).unwrap_or_else(|e| panic!("{e}"));
     let zones = zones_of_with_at(&c.terrain, true, epoch);
     let (mut ns, mut screened, mut hidden_models, mut models) = (Vec::new(), 0usize, 0usize, 0usize);

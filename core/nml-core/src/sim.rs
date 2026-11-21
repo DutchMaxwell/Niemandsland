@@ -836,7 +836,7 @@ fn land_takedown_groups(
 /// decides, the same casualty-order convention the plain wound path already
 /// uses. `x` capped at that model's remaining wounds each hit, no carry-over
 /// either way. Returns the wounds actually dealt (the table's `dealt`).
-/// `PENDING_EPOCH_VOLLEY_DEADLY_STOPS`: do a volley's finished Deadly groups, landed on a scratch copy, leave the target's chain dead?
+/// `EPOCH_95_PARITY_BATCH`: do a volley's finished Deadly groups, landed on a scratch copy, leave the target's chain dead?
 fn deadly_wiped(state: &State, ti: usize, r: &ShootResult, seams: Seams) -> bool {
     let mut scratch = state.clone();
     r.deadly_groups.iter().for_each(|&(post, dx)| { land_deadly_wounds(&mut scratch, ti, post, dx, seams); });
@@ -1794,7 +1794,7 @@ pub(crate) fn tray_strafing(
         &|gr: &[i64]| takedown_pick_info_after(statics, next, target, cover, def.in_cover, None, gr, seams.takedown_pick),
         &|_, _| None,
         None,
-        rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_VOLLEY_DEADLY_STOPS).then_some(&|r: &ShootResult| deadly_wiped(next, target, r, seams)),
+        rule_on(seams.rules_epoch, crate::acts::EPOCH_95_PARITY_BATCH).then_some(&|r: &ShootResult| deadly_wiped(next, target, r, seams)),
         tray,
     );
     // The volley tail, the shoot branch's own shape: spent Limited marks,
@@ -9047,8 +9047,8 @@ fn tray_spell_effect(state: &mut State, targets: &[usize], c: &CastInput, spell:
     };
     let live = rec.to_live_mod(rules_epoch);
     for &t in targets {
-        // PENDING_EPOCH_SPELL_NO_STACK: the same spell does not stack (GF 3.6), an identical record already on the target is refreshed, none is added
-        if !effect_less && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_SPELL_NO_STACK) && state.buffs[t].contains(&live) {
+        // EPOCH_95_PARITY_BATCH: the same spell does not stack (GF 3.6), an identical record already on the target is refreshed, none is added
+        if !effect_less && rule_on(rules_epoch, crate::acts::EPOCH_95_PARITY_BATCH) && state.buffs[t].contains(&live) {
             continue;
         }
         if !effect_less {
@@ -11892,7 +11892,7 @@ fn resolve_with(
                             // PLAN_COVER_36: cover from sight blockers, one verdict per target group for every weapon (the save fold
                             // lifts it per weapon for a held Indirect). Placeholder gate, no outcome below 95.
                             let mut td_hidden: Option<Vec<bool>> = None; // step 8: the Takedown pick's own screen
-                            if seams.sighting && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_COVER_SCREEN) {
+                            if seams.sighting && rule_on(seams.rules_epoch, crate::acts::EPOCH_95_PARITY_BATCH) {
                                 let sc = sight::screen_of(&next, &zones, si, g.ti, seams.rules_epoch);
                                 def.screened = sc.screened;
                                 td_hidden = Some(sc.hidden.clone());
@@ -12179,7 +12179,7 @@ fn resolve_with(
                                 &|i, pi| parts.get(i).and_then(|(mi, msc, _)| msc.sighted.get(pi)
                                     .map(|&n| (n, next.alive[*mi], msc.silent.get(pi).copied().unwrap_or("")))),
                                 if inline_on { Some(&mut inline_land) } else { None },
-                                rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_VOLLEY_DEADLY_STOPS).then_some(&|r: &ShootResult| deadly_wiped(&next, g.ti, r, seams)),
+                                rule_on(seams.rules_epoch, crate::acts::EPOCH_95_PARITY_BATCH).then_some(&|r: &ShootResult| deadly_wiped(&next, g.ti, r, seams)),
                                 tray,
                             );
                             // WAVE 3, rules-must-log — the arm lowered a

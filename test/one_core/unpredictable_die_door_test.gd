@@ -81,11 +81,19 @@ func _compare(shooter: Dictionary, target: Dictionary, distance_in: float) -> Di
 
 
 ## The refused case: the bearer 14 in away, its only gun reaching 12: the table rolls nothing, the core throws the die, the slice refuses the shooter.
+## Pinned below the epoch 95 batch (UPR_NEEDS_SHOT): from 95 the core throws no die then and the halves are equal (the next test leg); the deny group stays
+## in the file until its lift, so the refusal assertion holds at both epochs.
 func test_a_die_bearer_out_of_reach_differs_and_is_refused_as_a_shooter() -> void:
+	var epoch_before := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_95_PARITY_BATCH - 1
 	for row in [["Unpredictable Shooter", true], ["Unpredictable Shooter", false], ["Unpredictable", true], ["Unpredictable", false]]:
 		var r := await _compare(_bearer(row[0], row[1]), _squad(), 14.0)
 		assert_int(int(r["differing"])).override_failure_message("%s (Versatile %s): %d of %d seeds differ - the core no longer throws the die, lift the group" % [row[0], row[1], r["differing"], SEEDS]).is_equal(SEEDS)
 		assert_array(r["deny"]).override_failure_message("%s (Versatile %s): the deny slice takes a die bearer out of reach" % [row[0], row[1]]).contains(["unit_rule:" + row[0]])
+	AiActRecorder.rules_epoch = epoch_before
+	# From 95 the same out-of-reach volley is equal: no weapon in reach, no die.
+	var r95 := await _compare(_bearer("Unpredictable Shooter"), _squad(), 14.0)
+	assert_int(int(r95["differing"])).override_failure_message("from 95 an out-of-reach die bearer is equal: %d of %d seeds differ" % [r95["differing"], SEEDS]).is_equal(0)
 
 
 ## In reach both halves are equal: the refusal is wider than the difference (the slice cannot see the reach).

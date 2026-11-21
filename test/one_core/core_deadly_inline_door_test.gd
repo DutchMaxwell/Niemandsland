@@ -190,7 +190,7 @@ func _targets_differ(target: Dictionary, epoch: int) -> int:
 	return bad
 
 
-## H-17 (`PENDING_EPOCH_VOLLEY_DEFENCE_DECLARED` = 95, lead call 21.11.): the volley is fired simultaneously, so a Guarded / Shielded Hero the
+## H-17 (`EPOCH_95_PARITY_BATCH` = 95, lead call 21.11.): the volley is fired simultaneously, so a Guarded / Shielded Hero the
 ## Deadly weapon killed keeps its declared Defense for the later weapon's saves, as the table does; at 94 the core drops it (save one worse).
 func test_a_killed_hero_keeps_its_declared_defense_from_95() -> void:
 	for rule in ["Guarded", "Shielded"]:

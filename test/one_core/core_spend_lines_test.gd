@@ -50,6 +50,10 @@ func _land(spells: Array, spent: Array) -> Dictionary:
 ## RED before the fix: three equal records and three spent entries say the sentence three times. Green: once, and the records are all gone
 ## (the core spent them all). Controls: one record, one sentence; two different spells, one sentence each.
 func test_stacked_equal_records_spent_together_say_their_sentence_once() -> void:
+	# Identical records stack only below the epoch 95 batch (SPELL_NO_STACK: from 95 a second identical record refreshes the first), so this pins the
+	# stacked reading a replay under an older stamp still plays.
+	var epoch_before := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_95_PARITY_BATCH - 1
 	var three := _land(["Triangulation Bots", "Triangulation Bots", "Triangulation Bots"], [["Triangulation Bots", ""], ["Triangulation Bots", ""], ["Triangulation Bots", ""]])
 	assert_array(three["said"]).override_failure_message("three stacked records: %s" % str(three)).has_size(1)
 	assert_int(int(three["left"])).override_failure_message("the core spent all three").is_equal(0)
@@ -61,3 +65,4 @@ func test_stacked_equal_records_spent_together_say_their_sentence_once() -> void
 	var part := _land(["Triangulation Bots", "Triangulation Bots"], [["Triangulation Bots", ""]])
 	assert_array(part["said"]).has_size(1)
 	assert_int(int(part["left"])).override_failure_message("a delta naming one spend leaves the other record").is_equal(1)
+	AiActRecorder.rules_epoch = epoch_before

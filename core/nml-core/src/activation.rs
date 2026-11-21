@@ -2974,8 +2974,12 @@ mod tests {
         // (6) a record in the capture AND an identical one cast on it: the volley spends both and both are named
         held.casts[0] = 1;
         let cast = Input::Cast(CastInput { seq: 0, spell: "Marked".into(), targets: vec!["b".into()], base: 2, threshold: 1, once: true, ..bolt(0) });
+        // below the epoch 95 batch (SPELL_NO_STACK) the two stack and the volley spends both; from 95 the cast refreshes the captured record
+        let below = Seams { rules_epoch: crate::acts::EPOCH_95_PARITY_BATCH - 1, ..seams() };
+        let ActStep::Done { state: after, .. } = finish_with(&statics, &held, below, vec![Begin, intent(HOLD, Some("b")), cast.clone()]) else { panic!("a cast and a volley") };
+        assert_eq!(spent(&held, &after, "b"), Some([pair("Marked", "shooting"), pair("Marked", "shooting")].concat()), "below 95 the captured record and the cast one are two spends");
         let ActStep::Done { state: after, .. } = finish_with(&statics, &held, seams(), vec![Begin, intent(HOLD, Some("b")), cast]) else { panic!("a cast and a volley") };
-        assert_eq!(spent(&held, &after, "b"), Some([pair("Marked", "shooting"), pair("Marked", "shooting")].concat()), "the captured record and the cast one are two spends");
+        assert_eq!(spent(&held, &after, "b"), Some(pair("Marked", "shooting")), "from 95 the identical cast refreshes the captured record: one spend");
     }
 
     /// CC-8c: the delta's `buffs_gained` names, per unit and in placement order, the effects this activation's casts landed
