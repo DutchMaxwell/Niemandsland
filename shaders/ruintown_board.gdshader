@@ -79,7 +79,7 @@ bool use_frame(vec2 uv, float wood, inout vec3 ratio, inout vec3 tn) {
 // The ground's floor (silhouette round 21.11., maintainer: "too dark"): the streets and the packed earth sit below the models' own values (readability gate) but no longer near black.
 const float GROUND_COBBLE = 0.42;   // was 0.27
 const float GROUND_EARTH = 0.55;   // was 0.32
-const float COVER_CUT = 0.52;   // the fbm level above which the earth is overgrown (~25 % of the earth; plan TARGET C, E2)
+const float COVER_CUT = 0.54;   // the fbm level above which the earth is overgrown (~25 % of the earth; plan TARGET C, E2)
 varying vec3 wpos;
 varying vec3 wnrm;
 varying flat float kind;
@@ -390,11 +390,12 @@ void fragment() {
 				vec2 o = vec2(d < 2 ? (d == 0 ? 1.0 : -1.0) : 0.0, d >= 2 ? (d == 2 ? 1.0 : -1.0) : 0.0);
 				near = max(near, float(int(ground_at(gw + o).r * 255.0 + 0.5) >= 2));
 			}
-			float cover = smoothstep(COVER_CUT - 0.04, COVER_CUT + 0.04, fbm(xz * 0.35 + seed * 0.37) + 0.22 * near - 0.4 * path);
+			float cover = smoothstep(COVER_CUT - 0.04, COVER_CUT + 0.04, fbm(xz * 0.35 + seed * 0.37) + 0.35 * near - 0.4 * path)
+				* smoothstep(0.28, 0.48, vnoise(xz * 1.3 + seed * 1.7) + 0.3 * near);   // rough, not turf: bare earth between the clumps in the open
 			float tuft = max(step(0.915, sp) * step(sp, 0.955), cover * step(sp, 0.6)) * smoothstep(0.26, 0.12, length(lf));   // in the cover 60 % of the 0.33 in cells carry a tuft (4 % outside)
 			vec3 soil = alb;
-			alb = mix(alb, vec3(0.14, 0.18, 0.08) * mix(0.55, 1.25, fbm(xz * 3.1 + seed)), cover);   // a dull dark green-brown between the tufts, mottled
-			alb = mix(alb, vec3(0.12, 0.15, 0.07) * mix(0.7, 1.2, h21(ci + 9.0)) * (1.0 + 0.9 * cover), 0.75 * tuft);   // a dull green-brown tuft, never a yellow coin
+			alb = mix(alb, vec3(0.13, 0.16, 0.10) * mix(0.55, 1.25, fbm(xz * 3.1 + seed)), cover);   // a dull dark yellow-grey green between the tufts, mottled
+			alb = mix(alb, vec3(0.13, 0.14, 0.08) * mix(0.7, 1.2, h21(ci + 9.0)) * (1.0 + 0.9 * cover), 0.75 * tuft);   // a dull green-brown tuft, never a yellow coin
 			alb *= min(1.0, (dot(soil, LUMA) + 0.03 * tuft) / max(dot(alb, LUMA), 0.001));   // the cover is never brighter than the soil, a tuft at most 0.03 (the ground stays under the models)
 			alb = mix(alb, vec3(0.13, 0.12, 0.11) * mix(0.6, 1.3, h21(ci + 4.0)), pebble);   // a dark stone
 			alb = mix(alb, tint * vec3(1.3, 1.3, 1.28), 0.75 * path);   // (was 1.4 1.34 1.2: an orange path; plan TARGET C, E1)
