@@ -278,3 +278,32 @@ use super::*;
             .iter().filter(|c| c.kind == REPOSITION).count(), 0,
             "Teleport no longer supplies a HOLD-like standalone action");
     }
+
+    /// L-RF1 F7: a recorded Teleport whose landing centroid is inside an intact house (a solid tier cell) is refused - the
+    /// formation stays, the latch stays clear, and the log names the rule and why. Red before: the beat moved the unit
+    /// onto the house with no terrain check. Planted: the same board without `solid_cells` lands as recorded.
+    #[test]
+    fn a_teleport_never_lands_in_a_house() {
+        let (st, statics) = tp_line(crate::acts::CURRENT_RULES_EPOCH);
+        let from = geom::centre(&st.positions[0]);
+        let to: [f64; 2] = [from[0] as f64 + 2.0 * IN2M, from[2] as f64];
+        let cell = |v: f64, n: f64| ((v / IN2M / 3.0) + n / 2.0).floor() as u16;
+        let board = |solid: bool| {
+            let mut p: crate::terrain::PlainTerrain = serde_json::from_value(serde_json::json!({"cells": [], "sandbox": [],
+                "cell_params": {"table_size_feet": [6.0, 4.0], "grid_rotation_degrees": 0.0, "grid_size_inches": 3.0, "inches_to_meters": IN2M}})).unwrap();
+            p.tiers = Some(crate::terrain::TierGrid { nx: 24, nz: 16, cell_in: 3.0, level_in: vec![0.0; 384], ladders: vec![], stairs: vec![] });
+            if solid { p.solid_cells = vec![cell(to[1], 16.0) * 24 + cell(to[0], 24.0)]; }
+            crate::terrain::Terrain::build(&p)
+        };
+        let run = |t: &crate::terrain::Terrain| {
+            let act = crate::io::Action { kind: ADVANCE, unit: "a".into(), dest: None,
+                shoot: None, charge: None, patient: false, split: None, traced: None, teleport: Some(to) };
+            resolve_stochastic_tray_on_board(&statics, &st, &act, t, Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, ..Seams::default() },
+                &mut crate::rng::GodotRng::new(0), &mut Tray::seeded(11)).unwrap()
+        };
+        let (next, shot) = run(&board(true));
+        assert!(!next.teleport_used[0] && geom::centre(&next.positions[0]) == from, "the unit stays off the house");
+        assert!(shot.log.iter().any(|l| l.contains("Teleport keeps its position - a building is impassable")), "rules-must-log: {:?}", shot.log);
+        let (open, _) = run(&board(false));
+        assert!(open.teleport_used[0], "planted: no solid cell, the record lands");
+    }

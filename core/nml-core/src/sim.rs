@@ -2702,6 +2702,15 @@ pub(crate) fn teleport_beat(
     let (dx, dz) = (to[0] as f32 - from[0], to[1] as f32 - from[2]);
     let mut chain = vec![si];
     if seams.hero_attach { chain.extend(next.attached[si].iter().copied()); } // `_moving_models`
+    // L-RF1 F7: a placement never ends on a building (the rule text is silent on terrain; lead call: refuse)
+    if let Cover::Board(t) = cover {
+        if lands_in_house(t, next, &chain, [dx, dz]) {
+            if let Some(shot) = shot.as_deref_mut() {
+                shot.log.push(format!("{}: {} keeps its position - a building is impassable", statics[next.roster.profile[si]].name, spec.name));
+            }
+            return false;
+        }
+    }
     for u in chain {
         for p in next.positions[u].iter_mut() {
             *p = [p[0] + dx as f64, p[1], p[2] + dz as f64];
@@ -2718,6 +2727,18 @@ pub(crate) fn teleport_beat(
 
 /// The bounded probe set (design §3): objective clamp, away-from-threat,
 /// first cover bearing, self-carried EV heuristic; best landing past margin.
+/// L-RF1 F7: would any model of `chain`, shifted by `d` (world XZ metres), stand over a solid tier cell (an intact house)
+/// or within its base radius of a house wall? Always `false` on a board without `solid_cells`.
+fn lands_in_house(t: &Terrain, next: &State, chain: &[usize], d: [f32; 2]) -> bool {
+    let houses = t.solid_walls_world_m();
+    chain.iter().any(|&u| next.positions[u].iter().enumerate().any(|(k, p)| {
+        let c = [p[0] as f32 + d[0], p[2] as f32 + d[1]];
+        let r = next.radii[u].get(k).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
+        t.solid_at(f64::from(c[0]) / t.in2m(), f64::from(c[1]) / t.in2m())
+            || houses.iter().any(|w| crate::mv::geom2::point_seg_distance(c, w[0], w[1]) < r)
+    }))
+}
+
 pub(crate) fn teleport_probe(
     next: &State, si: usize, cap_in: f64, terrain: Option<&Terrain>,
 ) -> Option<[f64; 2]> {
@@ -2758,6 +2779,7 @@ pub(crate) fn teleport_probe(
     let stay = ev_at(from);
     probes.iter().copied()
         .filter(|&p| p != from && geom::length(geom::sub(p, from)) as f64 / IN2M as f64 <= cap_in + 1e-3)
+        .filter(|&p| !terrain.is_some_and(|t| lands_in_house(t, next, &[si], [p[0] - from[0], p[2] - from[2]])))
         .map(|p| (ev_at(p), p))
         .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
         .filter(|(v, _)| *v > stay + TELEPORT_EV_MARGIN)
