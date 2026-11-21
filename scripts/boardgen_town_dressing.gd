@@ -13,7 +13,7 @@ const MAX_LIGHTS := 14   # 8 before the outer streets got their lamps (silhouett
 const LANTERN_COLOUR := Color(1.0, 0.74, 0.48)
 ## (train 3) the four square lamps (the shadowed, widest cones - the one beside the street camera among them): a paler flame, so their pools stay warm-in-grey
 ## like C's (pool 45 % warm) instead of an orange oval (83 %); the gate and edge lamps keep LANTERN_COLOUR.
-const LANTERN_SQUARE_COLOUR := Color(1.0, 0.86, 0.7)
+const LANTERN_SQUARE_COLOUR := Color(1.0, 0.845, 0.67)   # (townC4: 0.86 / 0.7 left the pool at 37 % warm, C 45 %)
 ## A lantern is a down-cone (plan R7a): without a shadow the half-angle keeps the pool on the ground (height x tan) inside a 3 in cell's width - the light of a post against a wall must not reach the far side.
 const LANTERN_CONE_DEG := 48.0
 ## The four lanterns that cast shadows (the square's corners) throw a wider pool - the walls stop it; the others stay narrow. 58 (was 75: a 9.5 in pool that flooded the

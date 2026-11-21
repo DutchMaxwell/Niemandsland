@@ -47,8 +47,22 @@ func test_a_straight_street_cell_runs_along_its_street_and_a_crossing_is_a_junct
 	bytes = BoardgenGreybox.ground_map(layout, BoardgenTheme.TOWN_KINDS)
 	var lower_right := (9 * 16 + 9) * 4
 	assert_int(bytes[lower_right + 1]).is_equal(128)
-	assert_int(bytes[lower_right + 2]).is_less(100)   # the centre is to the left (x) ...
-	assert_int(bytes[lower_right + 3]).is_less(100)   # ... and above (z)
+	assert_int(bytes[lower_right + 2]).is_equal(127)   # the centre is half a cell to the left (x) ...
+	assert_int(bytes[lower_right + 3]).is_equal(127)   # ... and above (z)
+
+
+## SETT-SEAM (lane townC4): every cell of one market square names the SAME middle, however wide the square (the old 6 in byte range clamped and the setts of two cells fanned
+## round different middles, meeting on a straight seam).
+func test_every_cell_of_a_wide_square_fans_round_one_middle() -> void:
+	var cells: Array = []
+	for i in 256:
+		cells.append({"x": i % 16, "z": i / 16, "street": i % 16 >= 5 and i % 16 <= 10 and i / 16 >= 3 and i / 16 <= 12, "lot_id": 0, "lot_kind": "Street", "level": 0})
+	var bytes := BoardgenGreybox.ground_map({"nx": 16, "nz": 16, "cell_in": 3.0, "cells": cells}, BoardgenTheme.TOWN_KINDS)
+	var middles := {}
+	for i in 256:
+		if cells[i]["street"]:
+			middles[Vector2(i % 16 + 0.5, i / 16 + 0.5) + (Vector2(bytes[i * 4 + 2], bytes[i * 4 + 3]) - Vector2(128, 128)) * 0.5] = true   # as the shader decodes it, in cells
+	assert_array(middles.keys()).is_equal([Vector2(8.0, 8.0)])
 
 
 func test_a_two_cell_wide_street_still_runs_along_its_length() -> void:

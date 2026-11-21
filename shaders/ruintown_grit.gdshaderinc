@@ -41,7 +41,7 @@ vec3 grit_sett_tint(vec3 tint, float h) {
 		return tint * mix(0.7, 1.15, h);
 	}
 	// (plan TARGET C, train 2: one cool grey-blue stone, a narrow value spread - the blue / tan / black dice read as a bathroom mosaic; the family's luminance is kept)
-	vec3 slate = mix(vec3(dot(GRIT_COOL, LUMA)), GRIT_COOL, 0.45);   // slate grey with only a hint of blue (lead review of the macro still: the blue fill was too saturated and too bright)
+	vec3 slate = mix(vec3(dot(GRIT_COOL, LUMA)), GRIT_COOL, 0.78);   // (townC4: 0.45 -> 0.78, the setts were 32 % cool, C 79 %) slate grey with only a hint of blue (lead review of the macro still: the blue fill was too saturated and too bright)
 	vec3 c = slate * (dot(GRIT_MEAN, LUMA) / dot(slate, LUMA)) * mix(vec3(1.0), vec3(1.03, 1.0, 0.96), fract(h * 7.31));
 	return tint / GRIT_MEAN * c * mix(0.74, 1.0, fract(h * 3.17));
 }

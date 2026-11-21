@@ -9,7 +9,7 @@ shader_type spatial;
 uniform vec4 palette[19];   // display colours by kind index (BoardgenTheme.TOWN_KINDS)
 uniform vec3 board_origin;   // world position of the board centre
 uniform float cell_in = 3.0;
-uniform sampler2D ground_map : filter_nearest;   // one texel per cell: R = surface kind, G = how a street runs (0 along x, 1 along z, 0.5 junction / square), BA = offset of the junction's centre (6 in = 0..1)
+uniform sampler2D ground_map : filter_nearest;   // one texel per cell: R = surface kind, G = how a street runs (0 along x, 1 along z, 0.5 junction / square), BA = offset of the junction's centre (half cells, 128 = none)
 uniform vec2 board_cells = vec2(16.0, 16.0);
 
 // The authored T-R1 surface sets (plan R9; the CC0 sets staged by the assets lane), read when the library has them cached: coursed stone, plaster, timber, earth. `t_on` = 1 per complete set;
@@ -78,7 +78,7 @@ bool use_frame(vec2 uv, float wood, inout vec3 ratio, inout vec3 tn) {
 }
 
 // The ground's floor (silhouette round 21.11., maintainer: "too dark"): the streets and the packed earth sit below the models' own values (readability gate) but no longer near black.
-const float GROUND_COBBLE = 0.7;   // was 0.42 (train 2: the lamp pools shrank, the moon carries the street now), 0.27 before
+const float GROUND_COBBLE = 0.66;   // (townC4: 0.7 -> 0.66, the street ground sat on its luma bar) was 0.42 (train 2: the lamp pools shrank, the moon carries the street now), 0.27 before
 const float GROUND_EARTH = 0.55;   // was 0.32
 const float COVER_CUT = 0.58;   // the fbm level above which the earth is overgrown (~25 % of the earth; plan TARGET C, E2)
 varying vec3 wpos;
@@ -365,7 +365,7 @@ void fragment() {
 				tint = palette[k].rgb;
 				alb = tint;
 				run = g.g;
-				vec2 centre = (floor(w / cell_in) + 0.5) * cell_in + (g.ba - 0.5) * 6.0;
+				vec2 centre = (floor(w / cell_in) + 0.5) * cell_in + (floor(g.ba * 255.0 + 0.5) - 128.0) * 0.5 * cell_in;   // one middle per junction / square (SETT-SEAM: half cells, exact)
 				fan = xz - centre;   // the sett pattern itself is not bent: only the border is
 			}
 			for (int d = 0; d < 4; d++) {   // a gutter: wet dark stone where the street ends within 0.3 in of earth
