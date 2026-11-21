@@ -326,7 +326,8 @@ static func _ivy_clusters(layout: Dictionary, out: Dictionary, reserved: Diction
 			var nb: Dictionary = cells[j]
 			if nb["level"] != 0 or clear.has(j) or nb["lot_kind"] == "Hazard" or (not nb["street"] and BoardgenTownDressing._hash(i, half, 84 + side) <= 0.125):
 				continue   # (the last: a strand of _ivy is there)
-			var share := 0.45 if d.x != 0 else 0.15
+			var tower := int(cd["level"]) >= 3   # (train 3: C hangs ivy masses down the tower faces)
+			var share := (0.45 if d.x != 0 else 0.15) * (1.7 if tower else 1.0)
 			var h := BoardgenTownDressing._hash(i, half, 220 + side)
 			if h > share:
 				continue
@@ -334,14 +335,18 @@ static func _ivy_clusters(layout: Dictionary, out: Dictionary, reserved: Diction
 			var yaw := atan2(float(d.x), float(d.y))
 			var face := Vector2(lo.x if d.x < 0 else lo.x + cell_in, 0.0) if d.x != 0 else Vector2(0.0, lo.y if d.y < 0 else lo.y + cell_in)
 			var top := float(layout["level_in"][int(cd["level"])])
-			var wide := true
+			var raised := [false, false]
 			for k in [-1, 1]:   # its neighbours along the face are raised as high (the large mass is 3.6 in wide)
 				var m := Vector2i(cd["x"], cd["z"] + k) if d.x != 0 else Vector2i(cd["x"] + k, cd["z"])
-				wide = wide and m.x >= 0 and m.y >= 0 and m.x < nx and m.y < nz and int(cells[m.y * nx + m.x]["level"]) >= int(cd["level"])
-			var along := 1.5 if h < share * 0.6 and wide else 0.8 + 1.4 * BoardgenTownDressing._hash(i, half, 224 + side)
+				raised[(k + 1) / 2] = m.x >= 0 and m.y >= 0 and m.x < nx and m.y < nz and int(cells[m.y * nx + m.x]["level"]) >= int(cd["level"])
+			var wide: bool = raised[0] and raised[1]
+			var large: bool = h < share * 0.6 and (wide or (tower and (raised[0] or raised[1])))   # a 2 x 2 tower's face: the mass slides toward its raised neighbour and stays on the face
+			var along := (1.5 if wide else (2.0 if raised[1] else 1.0)) if large else 0.8 + 1.4 * BoardgenTownDressing._hash(i, half, 224 + side)
 			var at := Vector2(face.x, lo.y + along) if d.x != 0 else Vector2(lo.x + along, face.y)
-			if h < share * 0.6 and wide:
+			if large:
 				_add(out, "ivy_cluster_large", _item(yaw, Vector3(at.x, top, at.y)))
+				if tower and BoardgenTownDressing._hash(i, half, 228 + side) < 0.6:
+					_add(out, "ivy_cluster_large", _item(yaw, Vector3(at.x, top - 2.3, at.y)))   # a second mass below the first: the tower's face goes green
 			elif not reserved.has(j) and not taken.has("%d/%d/%s" % [n.x, n.y, -d]):
 				_add(out, "ivy_cluster_small", _item(yaw, Vector3(at.x, 0.0, at.y)))
 

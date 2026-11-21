@@ -11,6 +11,9 @@ const OVERHANG_IN := 0.3
 const CHIMNEY_IN := 0.62
 const MAX_LIGHTS := 14   # 8 before the outer streets got their lamps (silhouette round 21.11.); only the SHADOWED_LANTERNS nearest the centre cast shadows
 const LANTERN_COLOUR := Color(1.0, 0.74, 0.48)
+## (train 3) the four square lamps (the shadowed, widest cones - the one beside the street camera among them): a paler flame, so their pools stay warm-in-grey
+## like C's (pool 45 % warm) instead of an orange oval (83 %); the gate and edge lamps keep LANTERN_COLOUR.
+const LANTERN_SQUARE_COLOUR := Color(1.0, 0.86, 0.7)
 ## A lantern is a down-cone (plan R7a): without a shadow the half-angle keeps the pool on the ground (height x tan) inside a 3 in cell's width - the light of a post against a wall must not reach the far side.
 const LANTERN_CONE_DEG := 48.0
 ## The four lanterns that cast shadows (the square's corners) throw a wider pool - the walls stop it; the others stay narrow. 58 (was 75: a 9.5 in pool that flooded the
@@ -311,7 +314,7 @@ func _add_lights(layout: Dictionary) -> void:
 		light.name = "Lantern%d" % i
 		light.position = Vector3(at.x, LANTERN_HEIGHT_IN, at.y) * INCHES_TO_METERS
 		light.rotation_degrees = Vector3(-90.0, 0.0, 0.0)   # straight down
-		light.light_color = LANTERN_COLOUR
+		light.light_color = LANTERN_SQUARE_COLOUR if i < SHADOWED_LANTERNS else LANTERN_COLOUR
 		light.light_energy = LANTERN_ENERGY   # measured: <= 0.2 % of pixels above 0.95 luminance in street, wall and fountain
 		light.spot_range = 0.2   # (was 0.34; 8 in still reaches the ground 2.55 in below at the widest cone)
 		light.spot_angle = lantern_cone_deg(i)
