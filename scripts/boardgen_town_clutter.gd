@@ -17,6 +17,8 @@ const PLOT_TREES := ["dead_tree_a", "dead_tree_b", "dead_tree_c"]
 const PLOT_BRAMBLES := ["bramble_a", "bramble_b"]
 ## The yaw of a tower turret stub per corner of the tower top (NW, NE, SE, SW): the module fills the +x / +z quadrant of its origin, so each turns that quadrant inward.
 const TURRET_YAW := [0.0, -PI * 0.5, PI, PI * 0.5]
+## The share of towers that carry a heavy charred cap frame (lead 21.11.: fewer - the thin frames read as scaffolding when a third of the towers had one).
+const BURNT_CAP_SHARE := 0.12
 const LAMP_MODULES := ["lantern_post", "lantern_glow"]
 const FOUNTAIN_MODULES := ["fountain_basin", "fountain_column", "fountain_leaves"]
 const STATUE_MODULES := ["statue_plinth", "statue_stump"]
@@ -223,7 +225,7 @@ static func _top_of(layout: Dictionary, lm: Dictionary) -> float:
 
 
 ## The HALL (PumpHouse on a raised block) and the tower tops: stub columns (1.78 / 0.98 in) in the edge strip of the hall's top, a fallen pediment lying on one edge, a step at a level-0 edge;
-## on each 2 x 2 tower a corner turret stub inside the 0.75 in corner square (a third of the towers carry a skeletal burnt cap on the crown instead). Every piece inside the strip or see-through.
+## on each 2 x 2 tower a corner turret stub inside the 0.75 in corner square (one tower in eight carries a heavy charred cap frame on the crown instead). Every piece inside the strip or see-through.
 static func _hall_and_towers(layout: Dictionary, out: Dictionary) -> void:
 	var nx: int = layout["nx"]
 	var nz: int = layout["nz"]
@@ -267,7 +269,7 @@ static func _hall_and_towers(layout: Dictionary, out: Dictionary) -> void:
 		var half := 1 if cd["z"] * 2 >= nz else 0
 		var blo := origin + Vector2(cd["x"], cd["z"]) * cell_in
 		var top9 := float(layout["level_in"][3])
-		if BoardgenTownDressing._hash(i, half, 140) < 0.3:
+		if BoardgenTownDressing._hash(i, half, 140) < BURNT_CAP_SHARE:
 			_add(out, "tower_cap_burnt", _item(BoardgenTownDressing._hash(i, half, 141) * TAU, Vector3(blo.x + cell_in, top9, blo.y + cell_in)))
 		elif BoardgenTownDressing._hash(i, half, 142) < 0.7:
 			var corner := int(BoardgenTownDressing._hash(i, half, 143) * 4.0) % 4

@@ -71,12 +71,16 @@ func test_the_earth_has_sparse_dark_irregular_pebbles_and_no_yellow_coins() -> v
 	assert_bool(src.contains("+ 0.35 * pebble")).is_true()   # and it stands proud (relief)
 
 
-## Standing water (the pools): a teal depth with a faint sheen and ripples, never a black mirror (the stills read the old one as a hole in the table).
-func test_standing_water_is_teal_with_a_sheen_and_ripples_not_a_black_mirror() -> void:
+## Standing water (the pools): a deep teal body, a trace of sheen, glossy with full specular and rippled, so the reflection probe shows in it; never a flat teal slab (lead 21.11.) and never a
+## black mirror (the first stills read that as a hole in the table: the probe now supplies the sky).
+func test_standing_water_is_a_deep_teal_that_lets_the_probe_win_over_the_sheen() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
-	assert_bool(src.contains("alb = vec3(0.05, 0.11, 0.13) * mix(0.7, 1.3, swirl);")).is_true()
-	assert_bool(src.contains("emis += vec3(0.02, 0.045, 0.07)")).override_failure_message("no sheen: the water mirrors a black sky").is_true()
-	assert_bool(src.contains("rough = 0.12;")).is_false()
+	assert_bool(src.contains("alb = vec3(0.03, 0.07, 0.085) * mix(0.7, 1.3, swirl);")).is_true()
+	assert_bool(src.contains("emis += vec3(0.004, 0.009, 0.014)")).override_failure_message("a trace of sheen only: the old sheen made a flat slab").is_true()
+	assert_bool(src.contains("emis += vec3(0.02, 0.045, 0.07)")).override_failure_message("the old strong sheen is back").is_false()
+	assert_bool(src.contains("spec = 1.0;")).override_failure_message("the water must be specular to show the probe").is_true()
+	assert_bool(src.contains("SPECULAR = spec;")).is_true()
+	assert_bool(src.contains("rough = 0.05;")).is_true()
 
 
 ## The R3 chips are for solid boxes: the thin pool film and the ground skin have no chipped edge (the dashed pale line round the pond from above was exactly that rim).

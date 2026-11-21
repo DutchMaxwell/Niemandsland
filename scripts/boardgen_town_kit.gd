@@ -20,7 +20,7 @@ const TINT := {"roof_tiles": Color(0.62, 0.30, 0.22), "timber": Color(0.42, 0.30
 ## The instance colour on a textured module: warms the dark clay tiles towards the town's red roofs, cools the stone towards the wall's grey.
 const TEXTURED_TINT := {"roof_tiles": Color(1.35, 0.85, 0.7), "timber": Color(1.0, 1.0, 1.0), "coursed_stone": Color(0.62, 0.68, 0.76), "none": Color.WHITE}
 ## The authored clutter of BoardgenTownClutter (batches A2 / A2b / A6): the texture set each module is drawn with (the rest is "none": the kit's vertex colours, real colours for plants and cloth).
-const CLUTTER_SET := {"barrel": "timber", "crate": "timber", "bucket": "timber", "woodpile": "timber", "barrel_broken": "timber", "crate_broken": "timber", "cart_wreck": "timber", "loose_wheel": "timber",
+const CLUTTER_SET := {"tower_cap_burnt": "timber", "barrel": "timber", "crate": "timber", "bucket": "timber", "woodpile": "timber", "barrel_broken": "timber", "crate_broken": "timber", "cart_wreck": "timber", "loose_wheel": "timber",
 	"splinters_flat": "timber", "trough": "coursed_stone", "debris_flat_a": "coursed_stone", "debris_flat_b": "coursed_stone",
 	"fountain_basin": "coursed_stone", "fountain_column": "coursed_stone", "statue_plinth": "coursed_stone", "statue_stump": "coursed_stone", "pool_kerb": "coursed_stone", "well_ring": "coursed_stone", "well_frame": "timber",
 	"hall_column_a": "coursed_stone", "hall_column_b": "coursed_stone", "hall_pediment": "coursed_stone", "hall_step": "coursed_stone", "tower_turret": "coursed_stone", "pool_spout": "coursed_stone",
@@ -30,7 +30,7 @@ const CLUTTER_SET := {"barrel": "timber", "crate": "timber", "bucket": "timber",
 ## The kit's ladder segments (a 3 in segment and the top segment with stiles past the edge): the SAME transforms as the Deepworks kit ladders - BoardgenGreybox.ladder_kit_plan(layout), one segment per
 ## 3 in of every connector's rise, the origin on the wall face at the connector's edge point, +z away from the wall - so the walkable / ladder data is identical (boxes of kind ladder are not solid).
 const LADDER_MODULES := ["timber_ladder_3in", "timber_ladder_top"]
-const MODULE_TINT := {"pool_kerb": Color(0.52, 0.55, 0.6)}
+const MODULE_TINT := {"pool_kerb": Color(0.52, 0.55, 0.6), "tower_cap_burnt": Color(0.32, 0.30, 0.28)}   # a charred frame: the timber grain, dark
 ## Glass of a lamp and the coals of a brazier: drawn with an emissive material, the OmniLight sits at their origin.
 const GLOW := {"lantern_glow": Color(1.0, 0.72, 0.38), "brazier_coals": Color(1.0, 0.45, 0.18)}
 
@@ -55,7 +55,7 @@ func active() -> bool:
 static func set_of(module: String) -> String:
 	if BoardgenTownKit.CLUTTER_SET.has(module):
 		return CLUTTER_SET[module]
-	if module.begins_with(("weeds")) or module.begins_with("bramble") or module.begins_with("dead_tree") or module.begins_with("ivy") or module.begins_with("lantern") or module in ["cloth_flat", "laundry_line", "sack_pile", "fountain_leaves", "stall_awning", "stall_awning_ruined", "brazier", "tower_cap_burnt", "sign_bracket"]:
+	if module.begins_with(("weeds")) or module.begins_with("bramble") or module.begins_with("dead_tree") or module.begins_with("ivy") or module.begins_with("lantern") or module in ["cloth_flat", "laundry_line", "sack_pile", "fountain_leaves", "stall_awning", "stall_awning_ruined", "brazier", "sign_bracket"]:
 		return "none"
 	if module in ["roof_rafters", "beam_end", "shutter", "shutter_open", "door"]:
 		return "timber"

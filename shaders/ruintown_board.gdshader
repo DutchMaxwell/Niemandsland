@@ -226,6 +226,7 @@ void fragment() {
 	float rel = 0.5;     // the height of the surface pattern, 0 = joint / gap, 1 = crown (0.5 = flat): the end of fragment() turns it into a bent normal, roughness and occlusion
 	float wood_m = 0.0;   // 1 where a half-timber face shows its timbers, soot_m: the soot of its openings (plan R5)
 	float soot_m = 0.0;
+	float spec = 0.5;   // the specular level (the default of a dielectric); water takes 1.0 so the probe's reflection shows
 	float depth_in = 0.0;   // how deep that relief is, in inches (0 = none)
 	float ao = 1.0;
 	vec3 tex_ratio = vec3(1.0);   // the authored set's detail on this face (1 = none) and its tangent-space normal
@@ -419,11 +420,12 @@ void fragment() {
 		}
 		if (k == 2) {   // dangerous ground: dark standing water - a teal depth, a faint sky sheen (no probe to reflect: a black mirror read as a hole in the table), small ripples
 			float swirl = fbm(xz * 0.6 + seed);
-			alb = vec3(0.05, 0.11, 0.13) * mix(0.7, 1.3, swirl);
-			emis += vec3(0.02, 0.045, 0.07) * (0.5 + fbm(xz * 1.3 + seed + 5.0));
-			rough = 0.2;
+			alb = vec3(0.03, 0.07, 0.085) * mix(0.7, 1.3, swirl);   // a deep teal body; the surface is the reflection probe's job (lead 21.11.: the sheen made it a flat teal slab)
+			emis += vec3(0.004, 0.009, 0.014) * (0.5 + fbm(xz * 1.3 + seed + 5.0));   // only a trace of sheen: no probe reflection would read as a black hole, the sheen must not win over it
+			rough = 0.05;
+			spec = 1.0;
 			rel = fbm(xz * 2.6 + seed);
-			depth_in = 0.02;
+			depth_in = 0.05;   // ripples bend the reflection
 			ao = 1.0;
 		}
 	}
@@ -505,4 +507,5 @@ void fragment() {
 	ALBEDO = pow(alb, vec3(2.2)) * tex_ratio;
 	EMISSION = emis;
 	ROUGHNESS = rough;
+	SPECULAR = spec;
 }

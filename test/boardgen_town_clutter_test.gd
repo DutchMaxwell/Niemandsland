@@ -237,3 +237,9 @@ func test_the_kit_ladder_carries_exactly_the_ladder_data_of_the_box_ladder() -> 
 	var from_kit := BoardgenTownKit.plan(layout)
 	assert_array(from_kit["timber_ladder_top"]).is_equal(kit_plan["ladder_top"])
 	town.free()
+
+
+## Lead 21.11.: burnt cap frames are rare (they read as scaffolding when a third of the towers had one).
+func test_burnt_cap_frames_are_rare() -> void:
+	assert_float(BoardgenTownClutter.BURNT_CAP_SHARE).is_less_equal(0.15)
+	assert_float(BoardgenTownClutter.BURNT_CAP_SHARE).is_greater(0.0)   # but they exist
