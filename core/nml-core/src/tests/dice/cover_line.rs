@@ -144,3 +144,42 @@ use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
         let said: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).collect();
         assert_eq!(said.iter().filter(|l| *l == LIFT).count(), 1, "the tray says the lift once: {said:?}");
     }
+
+    // ------- lines audit (21.11.): the cover-family lines the doors never saw (they were `out.log` only) ---
+
+    /// The tray lines of one volley on a SUPPLIED tray (what a door step runs on) with the dice a seeded run drew.
+    fn tray_lines(att: &Ctx, def: &Ctx, weapon: ShootProfile, n: usize) -> Vec<String> {
+        let profiles = [weapon];
+        let run = |tray: &mut Tray| {
+            let shooters: Vec<Shooter> = ["Att", "Mate"].iter().take(n)
+                .map(|o| Shooter { profiles: &profiles, keep: &[0], attacks: &[6], att, owner: o }).collect();
+            resolve_volley_with_tray(&shooters, def, "Def", 12.0, 12.0, true, true, true, true, tray)
+        };
+        let seeded = run(&mut Tray::seeded(27));
+        let mut tray = Tray::supplied(seeded.rolls.iter().map(|r| r.faces.clone()).collect());
+        run(&mut tray);
+        tray.all_lines().into_iter().map(|l| l.text).collect()
+    }
+
+    const SKIP: &str = "Anti-Cover: Att ignores Def's cover (save skipped)";
+
+    /// The table's AI-08a line: a weapon whose cover skip is a named map-read rule (`cover_rule`) says so for every shot that skips a
+    /// cover the target really had (so twice for two shooters), in the table's words. The cases that say nothing: no cover, Blast, a
+    /// Defense at the floor, no rule name. RED on main: the line was only in `ShootResult.log`.
+    #[test]
+    fn an_anti_cover_skip_says_the_tables_line_on_the_door_tray() {
+        let att = shooter(4);
+        let gun = || ShootProfile { ignores_cover: true, cover_rule: "Anti-Cover".into(), ..rifle(6) };
+        let two = tray_lines(&att, &covered(4), gun(), 2);
+        assert_eq!(said(&two, SKIP), 1, "Mate's shot is its own: {two:?}");
+        assert_eq!(said(&two, "Anti-Cover: Mate ignores Def's cover (save skipped)"), 1, "{two:?}");
+        assert!(two.iter().all(|l| !l.contains("in cover")), "the save is not covered: {two:?}");
+        for (why, lines) in [
+            ("no cover", tray_lines(&att, &defender(4, 5), gun(), 1)),
+            ("a Defense at the floor", tray_lines(&att, &covered(2), gun(), 1)),
+            ("Blast", tray_lines(&att, &covered(4), ShootProfile { blast: 3, ..gun() }, 1)),
+            ("no rule name", tray_lines(&att, &covered(4), ShootProfile { cover_rule: String::new(), ..gun() }, 1)),
+        ] {
+            assert!(lines.iter().all(|l| !l.contains("save skipped")), "{why}: {lines:?}");
+        }
+    }
