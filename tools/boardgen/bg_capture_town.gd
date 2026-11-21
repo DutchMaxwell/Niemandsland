@@ -247,8 +247,13 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 	if _want("macro_ground"):
 		var mg := _macro_ground_pick(layout)
 		if not mg.is_empty():
+			var shown: Array = _models.filter(func(m: Node3D) -> bool: return m.visible)
+			for m: Node3D in shown:
+				m.visible = false   # no pawn on the paving close-up
 			_pose(mg["yaw"], -30.0, 6.0 * IN, mg["target"])   # 6 in from the target at 30 deg down: the lens 3 in above the street
 			await _still(tag, "macro_ground")
+			for m: Node3D in shown:
+				m.visible = true
 	armies.free()
 	if _want("street"):
 		var walk := _street(layout)

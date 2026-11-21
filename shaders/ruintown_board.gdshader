@@ -181,7 +181,8 @@ vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis, out float rel, f
 
 // Cobbles: staggered rounded setts about 0.6 x 0.4 in, a tone per sett, dark joints. They run along the street (`run` 0 = along x, 1 = along z) and fan round the
 // middle of a junction or a square (`fan` = the offset of that middle from the sample, inches).
-vec3 cobble(vec2 xz, float seed, vec3 tint, float run, vec2 fan, out float rel) {
+// `sett_out` (plan PLAN_RUINTOWN_GRIT): the sett's own hash, its mask (1 on the stone, 0 in the joint) and the point inside it (-0.5..0.5), for its tone and its fate.
+vec3 cobble(vec2 xz, float seed, vec3 tint, float run, vec2 fan, out float rel, out vec4 sett_out) {
 	float row;
 	float x;
 	vec2 f;
@@ -198,7 +199,9 @@ vec3 cobble(vec2 xz, float seed, vec3 tint, float run, vec2 fan, out float rel) 
 		f = vec2(fract(x), fract(q.y / SETT_H)) - 0.5;
 	}
 	float sett = smoothstep(0.17, 0.10, length(max(abs(f) - vec2(0.3), 0.0)));
-	vec3 laid = mix(vec3(0.10, 0.09, 0.09), tint * mix(0.7, 1.15, h21(vec2(floor(x), row) + seed)) * mix(0.9, 1.1, vnoise(xz * 3.0)), sett);
+	float sh = h21(vec2(floor(x), row) + seed);
+	vec3 laid = mix(vec3(0.10, 0.09, 0.09), grit_sett_tint(tint, sh) * mix(0.9, 1.1, vnoise(xz * 3.0)), sett);
+	sett_out = vec4(sh, sett, f);
 	rel = mix(0.5, sett * (0.6 + 0.4 * clamp(1.0 - 1.6 * length(f), 0.0, 1.0)), keep(xz.x, SETT_W));   // a domed sett in a recessed joint
 	return mix(tint * 0.78, laid, keep(xz.x, SETT_W));   // setts of 0.14 in are ~3 px at the play camera: below that they average out instead of crawling
 }
@@ -352,12 +355,13 @@ void fragment() {
 		}
 		if (k == 1) {   // streets: cobbles
 			float crown;
-			alb = mix(cobble(xz, seed, tint * vec3(1.15, 0.98, 0.78) * GROUND_COBBLE, run, fan, crown), vec3(0.06, 0.055, 0.05), 0.55 * gutter);   // 0.27 (was 1.15): the streets sit well below the models' own values (readability gate, lead 21.11.)
+			vec4 sett;
+			alb = mix(cobble(xz, seed, grit_street_tint(tint * vec3(1.15, 0.98, 0.78) * GROUND_COBBLE), run, fan, crown, sett), vec3(0.06, 0.055, 0.05), 0.55 * gutter);   // 0.27 (was 1.15): the streets sit well below the models' own values (readability gate, lead 21.11.)
 			rel = crown;
 			depth_in = 0.045;
 			rough = mix(0.55, 0.8, smoothstep(0.3, 0.7, crown));   // damp joints, dry crowns
 			ao = mix(0.55, 1.0, smoothstep(0.1, 0.5, crown));
-			dbg = grit_debug == 2 ? grit_map_colour(gw) : grit_street(gw);
+			dbg = grit_debug == 2 ? grit_map_colour(gw) : grit_street(xz, gw, sett, alb);
 		} else if (k == 0) {   // earth: packed, with pebbles, weeds and broken stones
 			alb = tint * GROUND_EARTH * mix(0.78, 1.15, fbm(xz * 1.6 + seed));   // 0.32 (was 1.0): the packed earth of the deployment bands sits below the models too (readability gate)
 			vec2 cp = xz * 3.0;   // 0.33 in cells, a pebble or a weed tuft in some of them: sparse, small, dark and irregular (rotated, stretched, off the cell centre)
