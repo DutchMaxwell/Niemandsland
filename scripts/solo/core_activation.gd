@@ -1344,7 +1344,7 @@ static func _present(main, unit: GameUnit, target: GameUnit, shots: Array, st: D
 
 
 ## P4.D-41: the outcome sentence the AI volley toast shows, moved verbatim out of the table so the core door owns it.
-## The table's `_solo_volley_outcome` now only delegates here; its other caller is the AI volley resolver.
+## DN-2: the table's wrapper is gone; the AI volley resolver asks this sentence itself.
 static func volley_outcome(target: GameUnit, hits: int, wounds: int, lost: int) -> String:
 	return "%s: %d hit%s → %d wound%s land — %s loses %d model%s" % [target.get_name(), hits, ("" if hits == 1 else "s"),
 		wounds, ("" if wounds == 1 else "s"), target.get_name(), lost, ("" if lost == 1 else "s")]
