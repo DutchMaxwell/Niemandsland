@@ -12,7 +12,7 @@ use crate::rollout::cross_round;
 use crate::sight::surface_y_m;
 use crate::sim::Scratch;
 
-const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+pub(super) const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
   "p1_0_a":{"unit_id":"p1_0_a","name":"A","quality":4,"defense":3,"tough":1,
     "wounds_max":[1,1,1],"model_count":3,"caster_value":0,"base_radius":0.016,
     "game_system":"gf","faction_folder":"human_defense_force","special_rules":[],
@@ -35,7 +35,7 @@ const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
     "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
 
 /// One unit of the state JSON: `n` models in a row across the cell centre `(cx, cz)` metres, 0.9 in apart, on the ground.
-fn unit_json(player: i64, n: usize, (cx, cz): (f64, f64)) -> String {
+pub(super) fn unit_json(player: i64, n: usize, (cx, cz): (f64, f64)) -> String {
     let at = |k: usize| format!("[{},0.0,{}]", cx + (k as f64 - (n as f64 - 1.0) * 0.5) * 0.9 * crate::IN2M, cz);
     let (pos, ones, radii) = (
         (0..n).map(at).collect::<Vec<_>>().join(","),
