@@ -51,8 +51,8 @@ func test_every_piece_gets_one_module_where_the_procedural_one_stood() -> void:
 
 func test_a_breach_gets_a_heap_against_the_wall_end_facing_into_the_gap() -> void:
 	var plan := BoardgenTownKit.plan(_town())   # breach (5, 8), wall above it at (5, 7); (5, 9) is open ground
-	assert_int(_count(plan, "rubble_")).is_equal(1)
-	var heap: String = plan.keys().filter(func(m: String) -> bool: return m.begins_with("rubble_"))[0]
+	assert_int(_count(plan, "rubble_") - _count(plan, "rubble_heap")).is_equal(1)   # (the yard heaps of BoardgenTownClutter are rubble_heap_a / b, not the breach heaps)
+	var heap: String = plan.keys().filter(func(m: String) -> bool: return m.begins_with("rubble_") and not m.begins_with("rubble_heap"))[0]
 	var xf: Transform3D = plan[heap][0]["xf"]
 	assert_vector(xf.basis.z).is_equal_approx(Vector3(0, 0, 1), Vector3.ONE * 0.001)   # heaped into the breach (+z), not into the wall
 	assert_float(xf.origin.z).is_equal_approx((8 - 8) * 3.0 * 0.0254, 0.0001)   # on the wall face: the breach cell's north edge
