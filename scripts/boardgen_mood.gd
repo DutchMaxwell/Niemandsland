@@ -11,6 +11,7 @@ extends RefCounted
 
 const MODEL_LAYER := 1   # a render layer bit: models and the rest of the table (the default layer)
 const BOARD_LAYER := 2   # a render layer bit: every visual the board builds
+const LAMP_IRON_LAYER := 1 << 18   # a render layer bit kept beside BOARD_LAYER: the lamp posts' iron, which their own lantern lights skip (lit from 0.1 in inside the cage it read as white bars)
 
 const SUN_ENERGY := 0.8
 const SUN_COLOUR := Color(0.88, 0.90, 0.96)
@@ -93,7 +94,7 @@ static func make_fill_light() -> DirectionalLight3D:
 ## Everything the board draws goes on the BOARD layer (and off the MODEL layer), so the fill light never reaches it.
 static func assign_layers(root: Node) -> void:
 	if root is GeometryInstance3D:   # (a light's reach is its cull mask, not its layer)
-		(root as GeometryInstance3D).layers = BOARD_LAYER
+		(root as GeometryInstance3D).layers = BOARD_LAYER | ((root as GeometryInstance3D).layers & LAMP_IRON_LAYER)
 	for child in root.get_children():
 		assign_layers(child)
 

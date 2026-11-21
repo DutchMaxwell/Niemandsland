@@ -437,9 +437,29 @@ void fragment() {
 				tex_on = 1.0;
 				depth_in = 0.0;
 			}
-			float crack = smoothstep(0.02, 0.0, abs(vnoise(xz * 1.6 + seed * 2.0) - 0.5));   // cracked flags (plan R6), weeds in some of the joints
-			alb = mix(alb, vec3(0.04, 0.04, 0.045), 0.7 * crack);
-			alb = mix(alb, vec3(0.14, 0.24, 0.08), 0.6 * crack * step(0.7, h21(floor(xz * 2.5) + seed)));
+			// weathered flags in the wall's stone family (lead 21.11.: the pale slabs with curly scribbles read as a tile puzzle and were the brightest thing on the board - and the tops are
+			// standing room, so they sit a step below the models): darker and greyer, dirt and moss in the joints, a few flags broken by ONE short straight fracture from joint to joint
+			float frow = floor(xz.y / 0.45);   // the flag this point lies on (as stone() lays them)
+			float fl_l = 0.6 * (0.7 + 0.8 * h21(vec2(frow, seed + 7.0)));
+			float fx = xz.x + h21(vec2(frow, seed)) * 4.0;
+			vec2 fc = vec2(floor(fx / fl_l), frow);
+			vec2 fp = vec2(fract(fx / fl_l) * fl_l, fract(xz.y / 0.45) * 0.45);   // inches inside the flag
+			vec3 tone = mix(vec3(1.0), grit_stone_tone(h21(fc + seed + 41.0)), 0.5);   // (half the wall's spread: a flag floor, not a chequerboard)
+			alb = mix(vec3(dot(alb, vec3(0.3, 0.55, 0.15))), alb, 0.55) * tone * vec3(0.55, 0.52, 0.48);
+			float joint = 1.0 - smoothstep(0.08, 0.45, rel);
+			float mossy = step(0.72, vnoise(xz * 0.7 + seed * 3.0));
+			alb = mix(alb, mossy > 0.5 ? vec3(0.07, 0.09, 0.05) : vec3(0.07, 0.06, 0.05), 0.75 * joint * keep(xz.y, 0.45));
+			float fh = h21(fc + seed + 77.0);
+			float fl = 0.0;
+			if (fh > 0.82) {   // a fracture: one straight line through the flag at its own angle, fading out before the joints
+				vec2 fo = vec2(fl_l * (0.3 + 0.4 * fract(fh * 7.0)), 0.45 * (0.3 + 0.4 * fract(fh * 13.0)));
+				float a = fract(fh * 29.0) * 3.14159;
+				vec2 dir = vec2(cos(a), sin(a));
+				vec2 rp = fp - fo;
+				float inside = smoothstep(0.0, 0.05, min(min(fp.x, fl_l - fp.x), min(fp.y, 0.45 - fp.y)));
+				fl = smoothstep(0.012, 0.0, abs(dot(rp, vec2(-dir.y, dir.x)))) * inside * keep(xz.y, 0.2);
+			}
+			alb = mix(alb, vec3(0.03, 0.03, 0.03), 0.8 * fl);
 		} else if (k == 11) {   // garden plot: overgrown, weeds and bare patches
 			alb = tint * 0.55 * mix(0.6, 1.25, fbm(xz * 2.4 + seed)) * mix(1.0, 0.7, step(0.9, h21(floor(xz * 9.0))));   // x0.55: the plots in the deployment bands sit below the models' own values (readability gate)
 			vec2 pf = fract(xz / cell_in) * cell_in;
@@ -451,10 +471,10 @@ void fragment() {
 		}
 		if (k == 2) {   // dangerous ground: dark standing water - a teal depth, a faint sky sheen (no probe to reflect: a black mirror read as a hole in the table), small ripples
 			float swirl = fbm(xz * 0.6 + seed);
-			alb = vec3(0.03, 0.07, 0.085) * mix(0.7, 1.3, swirl);   // a deep teal body; the surface is the reflection probe's job (lead 21.11.: the sheen made it a flat teal slab)
-			emis += vec3(0.004, 0.009, 0.014) * (0.5 + fbm(xz * 1.3 + seed + 5.0));   // only a trace of sheen: no probe reflection would read as a black hole, the sheen must not win over it
-			rough = 0.05;
-			spec = 1.0;
+			alb = vec3(0.018, 0.028, 0.03) * mix(0.7, 1.3, swirl);   // dark, peaty water (lead 21.11.: still a flat teal plane - the mirror took the teal; now a duller surface over a near-black body)
+			emis += vec3(0.002, 0.004, 0.005) * (0.5 + fbm(xz * 1.3 + seed + 5.0));   // only a trace of sheen: no probe reflection would read as a black hole, the sheen must not win over it
+			rough = 0.16;
+			spec = 0.45;
 			rel = fbm(xz * 2.6 + seed);
 			depth_in = 0.05;   // ripples bend the reflection
 			ao = 1.0;

@@ -24,13 +24,19 @@ const CLUTTER_SET := {"tower_cap_burnt": "timber", "barrel": "timber", "crate": 
 	"splinters_flat": "timber", "trough": "coursed_stone", "debris_flat_a": "coursed_stone", "debris_flat_b": "coursed_stone",
 	"fountain_basin": "coursed_stone", "fountain_column": "coursed_stone", "statue_plinth": "coursed_stone", "statue_stump": "coursed_stone", "pool_kerb": "coursed_stone", "well_ring": "coursed_stone", "well_frame": "timber",
 	"hall_column_a": "coursed_stone", "hall_column_b": "coursed_stone", "hall_pediment": "coursed_stone", "hall_step": "coursed_stone", "tower_turret": "coursed_stone", "pool_spout": "coursed_stone",
-	"rubble_heap_a": "coursed_stone", "rubble_heap_b": "coursed_stone", "stall_frame": "timber", "stall_frame_ruined": "timber", "sign_board_loaf": "timber", "sign_board_boot": "timber", "timber_ladder_3in": "timber", "timber_ladder_top": "timber"}
+	"rubble_heap_a": "coursed_stone", "rubble_heap_b": "coursed_stone", "stall_frame": "timber", "stall_frame_ruined": "timber", "sign_board_loaf": "timber", "sign_board_boot": "timber", "timber_ladder_3in": "timber", "timber_ladder_top": "timber",
+	"cart_toppled": "timber", "handcart": "timber", "table_overturned": "timber", "stall_collapsed": "timber", "barricade": "timber", "woodpile_block": "timber", "trough_used": "coursed_stone",
+	"fence_wattle": "timber", "fence_wattle_gap": "timber", "fence_wattle_corner": "timber", "fence_plank": "timber", "fence_plank_gap": "timber", "fence_plank_corner": "timber",
+	"sign_large_key": "timber", "sign_large_fish": "timber", "sign_large_mug": "timber", "sign_large_shears": "timber"}
+## The A7 / A8 modules drawn in their own vertex colours (loads, cloth, hay: a texture set would draw wood grain on sacks and canvas).
+const OWN_COLOUR := ["cart_toppled_load", "handcart_load", "table_overturned_load", "stall_collapsed_cloth", "hay_heap", "sign_large_iron"]
 ## A module's own instance tint on top of its set's (the vertex colour of the module is baked by the assets lane; this is the table's side of the same knob): the pool kerb's pale top read as a dashed
 ## white line round the pond from above, so its run is tinted down to a weathered stone.
 ## The kit's ladder segments (a 3 in segment and the top segment with stiles past the edge): the SAME transforms as the Deepworks kit ladders - BoardgenGreybox.ladder_kit_plan(layout), one segment per
 ## 3 in of every connector's rise, the origin on the wall face at the connector's edge point, +z away from the wall - so the walkable / ladder data is identical (boxes of kind ladder are not solid).
 const LADDER_MODULES := ["timber_ladder_3in", "timber_ladder_top"]
-const MODULE_TINT := {"pool_kerb": Color(0.52, 0.55, 0.6), "tower_cap_burnt": Color(0.32, 0.30, 0.28), "rubble_heap_a": Color(0.5, 0.44, 0.38), "rubble_heap_b": Color(0.36, 0.32, 0.28)}   # (heaps: grey-brown rubble and ash, never a white blob - lead 21.11.)   # a charred frame: the timber grain, dark
+const MODULE_TINT := {"pool_kerb": Color(0.52, 0.55, 0.6), "tower_cap_burnt": Color(0.32, 0.30, 0.28), "rubble_heap_a": Color(0.5, 0.44, 0.38), "rubble_heap_b": Color(0.36, 0.32, 0.28),
+	"hay_heap": Color(0.7, 0.64, 0.52), "stall_collapsed_cloth": Color(0.76, 0.72, 0.68), "lantern_post": Color(0.17, 0.165, 0.16)}   # (21.11.: the hay and the striped cloth were the palest shapes of a scene; the lamp's base and cage read as white bars - dark iron now, only the glass glows)   # (heaps: grey-brown rubble and ash, never a white blob - lead 21.11.)   # a charred frame: the timber grain, dark
 ## Glass of a lamp and the coals of a brazier: drawn with an emissive material, the OmniLight sits at their origin.
 const GLOW := {"lantern_glow": Color(1.0, 0.72, 0.38), "brazier_coals": Color(1.0, 0.45, 0.18)}
 
@@ -55,7 +61,7 @@ func active() -> bool:
 static func set_of(module: String) -> String:
 	if BoardgenTownKit.CLUTTER_SET.has(module):
 		return CLUTTER_SET[module]
-	if module.begins_with(("weeds")) or module.begins_with("bramble") or module.begins_with("dead_tree") or module.begins_with("ivy") or module.begins_with("lantern") or module in ["cloth_flat", "laundry_line", "sack_pile", "fountain_leaves", "stall_awning", "stall_awning_ruined", "brazier", "sign_bracket"]:
+	if module.begins_with(("weeds")) or module.begins_with("bramble") or module.begins_with("dead_tree") or module.begins_with("ivy") or module.begins_with("lantern") or module in OWN_COLOUR or module in ["cloth_flat", "laundry_line", "sack_pile", "fountain_leaves", "stall_awning", "stall_awning_ruined", "brazier", "sign_bracket"]:
 		return "none"
 	if module in ["roof_rafters", "beam_end", "shutter", "shutter_open", "door"]:
 		return "timber"
@@ -128,7 +134,10 @@ static func plan(layout: Dictionary) -> Dictionary:
 		var size: Vector3 = b["hi"] - b["lo"]
 		var centre: Vector3 = (b["lo"] + b["hi"]) * 0.5
 		var yaw := (PI * 0.5 if size.z > size.x else 0.0) + (PI if i % 2 == 1 else 0.0)
-		add.call("merlon_broken" if BoardgenTownDressing._hash(i, 1, 11) < 0.2 else "merlon", _item(Basis(Vector3.UP, yaw), Vector3(centre.x, b["lo"].y, centre.z)))
+		var whole := "merlon_v%d" % (1 + int(BoardgenTownDressing._hash(i, 2, 13) * 3.0) % 3)   # three joint patterns break the kit's tiling (kit batch A7)
+		add.call("merlon_v4" if BoardgenTownDressing._hash(i, 1, 11) < 0.2 else whole, _item(Basis(Vector3.UP, yaw), Vector3(centre.x, b["lo"].y, centre.z)))
+	for item: Dictionary in coping(layout):
+		add.call(item["module"], item)
 	var nx: int = layout["nx"]
 	var nz: int = layout["nz"]
 	var cell_in := float(layout["cell_in"])
@@ -147,24 +156,65 @@ static func plan(layout: Dictionary) -> Dictionary:
 	return out
 
 
+## The capstone runs of the city wall (kit batch A7): one 3 in run on the FIELD edge of every wall cell's top that drops on that side, its middle 0.25 in in from the edge (the parapet line
+## the merlons stand on; 0.18 in high), a third of them turned end for end; three runs (a stone missing, one tilted) break the tiling. [{xf, colour, module}].
+static func coping(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	for cd: Dictionary in layout["cells"]:
+		var level := int(cd["level"])
+		if cd["lot_kind"] != "Wall" or level < 1:
+			continue
+		var field := -1 if int(cd["x"]) * 2 < nx else 1
+		var fx := int(cd["x"]) + field
+		if fx >= 0 and fx < nx and int(layout["cells"][int(cd["z"]) * nx + fx]["level"]) >= level:
+			continue   # no drop on the field side: no edge
+		var i: int = cd["z"] * nx + cd["x"]
+		var x := origin.x + (float(cd["x"]) + (0.0 if field < 0 else 1.0)) * cell_in - float(field) * 0.25
+		var z := origin.y + (float(cd["z"]) + 0.5) * cell_in
+		var h := BoardgenTownDressing._hash(i, 3, 14)
+		var item := _item(Basis(Vector3.UP, PI * 0.5 + (PI if BoardgenTownDressing._hash(i, 3, 15) < 0.33 else 0.0)), Vector3(x, float(layout["level_in"][level]), z))
+		item["module"] = "coping_a" if h < 0.34 else ("coping_b" if h < 0.67 else "coping_c")
+		out.append(item)
+	return out
+
+
+## Modules that cast NO shadow (lead 21.11., the draw-call budget: a caster is drawn again in every shadow cascade): the fences, the signs, the flat debris (crows and rats have none either).
+const NO_SHADOW := ["fence_", "sign_", "splinters_flat", "debris_flat", "cloth_flat", "weeds_flat"]
+
+
+static func casts_shadow(m: String) -> bool:
+	return (m.begins_with("roof_g") or m.begins_with("chimney") or CLUTTER_SET.get(m, "") == "timber") and not NO_SHADOW.any(func(pre: String) -> bool: return m.begins_with(pre))
+
+
+## A7 modules that replace a K-R1 / A2 one in the same frame: while one is not cached, the board draws the older module in its place.
+const FALLBACK := {"merlon_v1": "merlon", "merlon_v2": "merlon", "merlon_v3": "merlon", "merlon_v4": "merlon_broken", "fountain_basin_b": "fountain_basin"}
+
+
 ## One MultiMesh per module, on its set's material (or the tinted kit material while the set is not cached).
 func build(layout: Dictionary) -> void:
 	var p := plan(layout)
 	for m: String in p:
-		if not kit.usable([m]):
+		var src := m if kit.usable([m]) or not FALLBACK.has(m) else String(FALLBACK[m])
+		if not kit.usable([src]):
 			continue   # a clutter module that is not cached: the procedural box (or nothing) stays
-		var mmi := BoardgenKit.add_multimesh(self, m, kit.mesh_or(m), p[m], m.begins_with("roof_g") or m.begins_with("chimney") or CLUTTER_SET.get(m, "") == "timber")
+		var mmi := BoardgenKit.add_multimesh(self, m, kit.mesh_or(src), p[m], casts_shadow(m))
 		var mat := lib.set_material(set_of(m))
 		if GLOW.has(m):
 			var glow := StandardMaterial3D.new()
 			glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			glow.albedo_color = GLOW[m]
+			glow.albedo_color = GLOW[m] * 0.4   # (lead 21.11.: the lamp glass read as a pure-white block - a warm amber, the light's own hue, clearly below white)
 			glow.emission_enabled = true
 			glow.emission = GLOW[m]
-			glow.emission_energy_multiplier = 1.2
+			glow.emission_energy_multiplier = 0.5
 			mmi.material_override = glow
 			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			continue
+		if m == "lantern_post":
+			mmi.layers |= BoardgenMood.LAMP_IRON_LAYER
 		if mat != null and m.begins_with("roof_") and m != "roof_rafters":   # the roofs carry UVs in tiles (courses parallel to the eaves)
 			mat.uv1_triplanar = false
 			mat.uv1_scale = Vector3.ONE * ROOF_UV_TILE_IN / lib.tile_in("roof_tiles")

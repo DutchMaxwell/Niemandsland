@@ -37,7 +37,7 @@ func test_every_lantern_gets_a_post_and_its_glass_at_the_same_spot() -> void:
 	assert_int((plan["lantern_post"] as Array).size()).is_equal(BoardgenTownDressing.lanterns(_town()).size())
 	assert_int((plan["lantern_glow"] as Array).size()).is_equal((plan["lantern_post"] as Array).size())
 	for i in (plan["lantern_post"] as Array).size():
-		assert_vector(plan["lantern_post"][i]["xf"].origin).is_equal_approx(plan["lantern_glow"][i]["xf"].origin, Vector3.ONE * 0.00001)
+		assert_vector(plan["lantern_post"][i]["xf"].origin + Vector3(0, BoardgenTownDressing.LANTERN_HEIGHT_IN * 0.0254, 0)).is_equal_approx(plan["lantern_glow"][i]["xf"].origin, Vector3.ONE * 0.00001)   # the glass at the head (at the foot it read as a white base)
 
 
 func test_strip_pieces_stand_on_a_wall_face_facing_away_from_it_and_inside_their_cell_edge() -> void:
@@ -131,17 +131,19 @@ func test_the_landmark_modules_stand_inside_their_footprints() -> void:
 		{"kind": "Sump", "x": 9, "z": 11, "w": 2, "h": 2, "turn": 0, "terrain": 1, "solid": false},
 		{"kind": "Sump", "x": 13, "z": 2, "w": 1, "h": 2, "turn": 0, "terrain": 1, "solid": false}]
 	var plan := BoardgenTownClutter.plan(layout)
-	for m in BoardgenTownClutter.FOUNTAIN_MODULES + BoardgenTownClutter.STATUE_MODULES + ["pool_kerb", "well_ring", "well_frame"]:
+	for m in ["fountain_basin_b", "fountain_column", "fountain_leaves"] + BoardgenTownClutter.STATUE_MODULES + ["pool_kerb", "well_ring", "well_frame"]:
 		assert_bool(plan.has(m)).override_failure_message("no `%s` in the plan" % m).is_true()
-	assert_int((plan["pool_kerb"] as Array).size()).is_equal(8)   # 2 x 2: two runs on each of the four edges
+	assert_int((plan["pool_kerb"] as Array).size()).is_equal(14)   # 2 x 2: two runs on each of the four edges; the 1 x 2 well: six runs
 	var cell := 3.0
 	var origin := Vector2(-24.0, -24.0)
-	for item: Dictionary in plan["fountain_basin"]:
+	for item: Dictionary in plan["fountain_basin_b"]:
 		var p := Vector2(item["xf"].origin.x, item["xf"].origin.z) / 0.0254
 		assert_vector(p).is_equal_approx(Vector2(0.0, 0.0), Vector2.ONE * 0.001)   # the centre of the board
 	for item: Dictionary in plan["pool_kerb"]:
 		var p := Vector2(item["xf"].origin.x, item["xf"].origin.z) / 0.0254 - origin
-		assert_bool(p.x >= 9 * cell - 0.001 and p.x <= 11 * cell + 0.001 and p.y >= 11 * cell - 0.001 and p.y <= 13 * cell + 0.001).override_failure_message("a kerb run off its pool: %s" % p).is_true()
+		var pond := p.x >= 9 * cell - 0.001 and p.x <= 11 * cell + 0.001 and p.y >= 11 * cell - 0.001 and p.y <= 13 * cell + 0.001
+		var well := p.x >= 13 * cell - 0.001 and p.x <= 14 * cell + 0.001 and p.y >= 2 * cell - 0.001 and p.y <= 4 * cell + 0.001
+		assert_bool(pond or well).override_failure_message("a kerb run off its pool: %s" % p).is_true()
 	assert_float(plan["statue_stump"][0]["xf"].origin.y).is_equal_approx(1.57 * 0.0254, 0.0001)   # on top of the plinth
 
 
@@ -253,3 +255,119 @@ func test_the_kit_ladder_carries_exactly_the_ladder_data_of_the_box_ladder() -> 
 func test_burnt_cap_frames_are_rare() -> void:
 	assert_float(BoardgenTownClutter.BURNT_CAP_SHARE).is_less_equal(0.15)
 	assert_float(BoardgenTownClutter.BURNT_CAP_SHARE).is_greater(0.0)   # but they exist
+
+
+## Fences round the garden plots (kit batch A7, PLOT-EDGE): every piece inside a plot cell on an edge that looks at open level-0 ground, +z (a corner: both arms) into the plot, never on a
+## street cell; every plot keeps a way in (a broken run or an open edge).
+func test_fences_ring_the_garden_plots_from_inside_with_a_gap() -> void:
+	var boards: Array = [_town()]
+	for s: int in [7, 11, 13, 25, 41]:
+		boards.append(ClassDB.instantiate("NmlCore").boardgen_layout_themed(s, "ruintown"))
+	var total := 0
+	for layout: Dictionary in boards:
+		var nx: int = layout["nx"]
+		var plan := BoardgenTownClutter.plan(layout)
+		var origin := Vector2(nx, int(layout["nz"])) * 3.0 * -0.5
+		var plot_cells := {}
+		for cd: Dictionary in layout["cells"]:
+			if cd["lot_kind"] == "Rough" and int(cd["level"]) == 0 and not cd["street"]:
+				plot_cells[int(cd["z"]) * nx + int(cd["x"])] = true
+		var straight := 0
+		var gaps := 0
+		for style: Array in BoardgenTownClutter.FENCE_STYLES:
+			for k in 3:
+				for it: Dictionary in plan.get(style[k], []):
+					total += 1
+					var xf: Transform3D = it["xf"]
+					var at := Vector2(xf.origin.x, xf.origin.z) / 0.0254 - origin
+					var probes: Array[Vector2] = []
+					if k == 2:   # a corner: a point along each arm, 0.4 in in
+						probes = [at + Vector2(xf.basis.x.x, xf.basis.x.z) * 1.5 + Vector2(xf.basis.z.x, xf.basis.z.z) * 0.4, at + Vector2(xf.basis.z.x, xf.basis.z.z) * 1.5 + Vector2(xf.basis.x.x, xf.basis.x.z) * 0.4]
+					else:
+						probes = [at + Vector2(xf.basis.z.x, xf.basis.z.z) * 0.4]
+						assert_float(minf(fposmod(at.x, 3.0), fposmod(at.y, 3.0))).is_less(0.01)   # on a cell edge
+						straight += 1 if k == 0 else 0
+						gaps += 1 if k == 1 else 0
+					for p: Vector2 in probes:
+						var c := Vector2i(p / 3.0)
+						assert_bool(plot_cells.has(c.y * nx + c.x)).override_failure_message("a fence at %s leans out of its plot" % at).is_true()
+		var edges := 0
+		for i: int in plot_cells:
+			for d: Vector2i in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
+				var n := Vector2i(i % nx, i / nx) + d
+				if n.x >= 0 and n.y >= 0 and n.x < nx and n.y < int(layout["nz"]) and not plot_cells.has(n.y * nx + n.x) and int(layout["cells"][n.y * nx + n.x]["level"]) == 0 and layout["cells"][n.y * nx + n.x]["lot_kind"] != "Hazard":
+					edges += 1
+		var corners := 0
+		for style: Array in BoardgenTownClutter.FENCE_STYLES:
+			corners += (plan.get(style[2], []) as Array).size()
+		if edges > 0:   # a way in: fewer closed runs than plot edges
+			assert_int(straight + 2 * corners).override_failure_message("a plot fenced shut").is_less(edges)
+	assert_int(total).is_greater(0)
+
+
+## The feet and faces of the city wall (kit batch A7): rubble spills at the open feet of the wall cells beside a breach, buttresses on the FIELD face of long runs, ivy clusters on the shade
+## (east / west) faces - every piece with its origin on a wall face, +z out onto open level-0 ground that is no ladder end.
+func test_wall_spills_buttresses_and_ivy_clusters_stand_on_the_right_faces() -> void:
+	var counts := {"wall_rubble_spill": 0, "wall_buttress_a": 0, "wall_buttress_b": 0, "ivy_cluster_large": 0, "ivy_cluster_small": 0}
+	for s: int in [7, 11, 13, 17, 19, 23, 25, 29, 41, 43]:
+		var layout: Dictionary = ClassDB.instantiate("NmlCore").boardgen_layout_themed(s, "ruintown")
+		var nx: int = layout["nx"]
+		var clear := BoardgenTownClutter._kept_clear(layout)
+		var plan := BoardgenTownClutter.plan(layout)
+		for m: String in counts:
+			for it: Dictionary in plan.get(m, []):
+				counts[m] += 1
+				var xf: Transform3D = it["xf"]
+				var at := Vector2(xf.origin.x, xf.origin.z) / 0.0254 + Vector2(24, 24)
+				var into := Vector2(xf.basis.z.x, xf.basis.z.z).round()
+				var wall := Vector2i((at - into * 0.3) / 3.0)
+				var foot := Vector2i((at + into * 0.3) / 3.0)
+				var wc: Dictionary = layout["cells"][wall.y * nx + wall.x]
+				var fc: Dictionary = layout["cells"][foot.y * nx + foot.x]
+				assert_int(int(wc["level"])).override_failure_message("seed %d: %s not on a raised face" % [s, m]).is_greater(0)
+				assert_int(int(fc["level"])).is_equal(0)
+				assert_bool(clear.has(foot.y * nx + foot.x)).override_failure_message("seed %d: %s on a ladder face" % [s, m]).is_false()
+				if m.begins_with("wall_buttress"):
+					assert_str(wc["lot_kind"]).is_equal("Wall")
+					assert_float(into.x).is_equal(-1.0 if wall.x * 2 < nx else 1.0)   # the field side
+				if m.begins_with("ivy_cluster"):
+					assert_float(absf(into.x)).is_equal(1.0)   # a shade face
+				if m == "wall_rubble_spill":
+					var beside := false
+					for d: Vector2i in [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]:
+						var b := wall + d
+						beside = beside or (b.x >= 0 and b.y >= 0 and b.x < nx and b.y < 16 and layout["cells"][b.y * nx + b.x]["lot_kind"] == "Wall" and int(layout["cells"][b.y * nx + b.x]["level"]) == 0)
+					assert_bool(beside).override_failure_message("seed %d: a spill away from any breach" % s).is_true()
+	print("WALL PIECES ", counts)
+	for m: String in counts:
+		assert_int(counts[m]).override_failure_message("no %s on ten boards" % m).is_greater(0)
+
+
+## Large hanging signs (kit batch A8): on a raised house face (not the wall, not an intact house) that looks at a street off the square, +z over the street, at most three a half.
+func test_large_signs_hang_on_street_fronts_off_the_square() -> void:
+	var total := 0
+	for s: int in [7, 11, 13, 17, 19, 23, 25, 29, 41, 43]:
+		var layout: Dictionary = ClassDB.instantiate("NmlCore").boardgen_layout_themed(s, "ruintown")
+		var nx: int = layout["nx"]
+		var plan := BoardgenTownClutter.plan(layout)
+		var irons: Array = plan.get("sign_large_iron", [])
+		var boards := 0
+		for m: String in BoardgenTownClutter.SIGN_BOARDS:
+			boards += (plan.get(m, []) as Array).size()
+		assert_int(boards).is_equal(irons.size())
+		var per_half := [0, 0]
+		for it: Dictionary in irons:
+			total += 1
+			var xf: Transform3D = it["xf"]
+			var at := Vector2(xf.origin.x, xf.origin.z) / 0.0254 + Vector2(24, 24)
+			var into := Vector2(xf.basis.z.x, xf.basis.z.z).round()
+			var house := Vector2i((at - into * 0.3) / 3.0)
+			var street := Vector2i((at + into * 0.3) / 3.0)
+			var hc: Dictionary = layout["cells"][house.y * nx + house.x]
+			var sc: Dictionary = layout["cells"][street.y * nx + street.x]
+			assert_int(int(hc["level"])).is_greater(0)
+			assert_bool(["Wall", "Roofed"].has(hc["lot_kind"])).is_false()
+			assert_bool(sc["street"] and int(sc["level"]) == 0).override_failure_message("seed %d: a sign over no street" % s).is_true()
+			per_half[1 if at.y >= 24.0 else 0] += 1
+		assert_int(per_half.max()).is_less_equal(BoardgenTownClutter.SIGNS_PER_HALF)
+	assert_int(total).is_greater(5)

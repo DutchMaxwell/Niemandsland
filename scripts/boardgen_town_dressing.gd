@@ -317,6 +317,7 @@ func _add_lights(layout: Dictionary) -> void:
 		light.spot_attenuation = 1.0
 		light.light_projector = cookie
 		light.light_specular = 0.4
+		light.light_cull_mask &= ~BoardgenMood.LAMP_IRON_LAYER   # the lamp's own iron is lit by the moon and the other lamps, not from inside its cage
 		light.shadow_enabled = i < SHADOWED_LANTERNS
 		add_child(light)
 		var fill := OmniLight3D.new()
@@ -327,6 +328,7 @@ func _add_lights(layout: Dictionary) -> void:
 		fill.omni_range = FILL_RANGE_M
 		fill.omni_attenuation = 2.0
 		fill.light_specular = 0.0
+		fill.light_cull_mask &= ~BoardgenMood.LAMP_IRON_LAYER
 		fill.shadow_enabled = false
 		add_child(fill)
 

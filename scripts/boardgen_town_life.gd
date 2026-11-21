@@ -18,6 +18,7 @@ var _rats: MultiMeshInstance3D = null
 var _rat_paths: Array = []   # [from (m), to (m), phase]
 var _t := 0.0
 var _motion := true
+var _kit_rat := false   # the A8 rat (its head on local +x) instead of the capsule
 
 
 func build(layout: Dictionary, board: Node) -> void:
@@ -29,9 +30,11 @@ func build(layout: Dictionary, board: Node) -> void:
 			if nm.begins_with("Ember"):
 				(n as Light3D).light_energy *= 0.35   # embers glow LOW inside the heaps (lead 21.11.): a dull red, not a lamp
 			_lights.append([n, (n as Light3D).light_energy, rng.randf() * 100.0])
+	var town_kit := board.get_node_or_null("TownKit") as BoardgenTownKit   # the A8 crows and rats when they are cached (else the plain stand-ins)
+	var kit: BoardgenKit = town_kit.kit if town_kit != null else null
 	_add_smoke(layout, rng)
-	_add_crows(layout, rng)
-	_add_rats(layout, rng)
+	_add_crows(layout, rng, kit)
+	_add_rats(layout, rng, kit)
 	apply_settings()
 
 
@@ -60,7 +63,26 @@ func _process(delta: float) -> void:
 			var s := 0.5 + 0.5 * sin(_t * 0.35 + float(r[2]))
 			var p: Vector3 = (r[0] as Vector3).lerp(r[1], s)
 			var dir: Vector3 = (r[1] - r[0]).normalized() * (1.0 if cos(_t * 0.35 + float(r[2])) > 0.0 else -1.0)
-			_rats.multimesh.set_instance_transform(i, Transform3D(Basis.looking_at(dir, Vector3.UP) * Basis(Vector3.RIGHT, PI * 0.5), p))
+			_rats.multimesh.set_instance_transform(i, Transform3D(_rat_basis(dir), p))
+
+
+func _rat_basis(dir: Vector3) -> Basis:
+	return Basis(Vector3.UP, atan2(-dir.z, dir.x)) if _kit_rat else Basis.looking_at(dir, Vector3.UP) * Basis(Vector3.RIGHT, PI * 0.5)
+
+
+## Where the crows sit (board inches, the perch's top): the merlons, and the ridges of the whole gable roofs (a third and two thirds along) - perches no model can stand on.
+static func crow_perches(layout: Dictionary) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	for m: Dictionary in BoardgenTownDressing.merlons(layout):
+		out.append(Vector3((m["lo"].x + m["hi"].x) * 0.5, float(m["hi"].y), (m["lo"].z + m["hi"].z) * 0.5))
+	for r: Dictionary in BoardgenTownDressing.roofs(layout):
+		if r["type"] != "gable" or BoardgenTownDressing._hash(r["lot"], r["half"], 7) < 0.25:
+			continue   # (a broken roof of the kit has no whole ridge)
+		var dir: Vector2 = (Vector2(1, 0) if r["along_x"] else Vector2(0, 1)).rotated(-float(r["yaw"]))
+		for k in [-0.2, 0.2]:
+			var at: Vector2 = r["centre"] + dir * float(r["length"]) * k
+			out.append(Vector3(at.x, float(r["eaves"]) + float(r["height"]), at.y))
+	return out
 
 
 ## +-FLICKER on every lantern and ember: three slow sines between 2 and 7 Hz, a phase per light (t = 0: the base energy exactly).
@@ -136,16 +158,21 @@ func _add_smoke(layout: Dictionary, rng: RandomNumberGenerator) -> void:
 		add_child(p)
 
 
-func _add_crows(layout: Dictionary, rng: RandomNumberGenerator) -> void:
-	var perches := BoardgenTownDressing.merlons(layout)
+func _add_crows(layout: Dictionary, rng: RandomNumberGenerator, kit: BoardgenKit = null) -> void:
+	var perches := crow_perches(layout)
 	if perches.is_empty():
 		return
-	var mesh := PrismMesh.new()   # a hunched body: 0.22 in long, dull black-grey, far from both armies' hues
-	mesh.size = Vector3(0.09, 0.1, 0.22) * INCHES_TO_METERS
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.06, 0.06, 0.065)
-	mat.roughness = 0.6
-	mesh.material = mat
+	var mesh: Mesh = null
+	if kit != null and kit.usable(["crow_perched"]):
+		mesh = kit.mesh_or("crow_perched")   # the A8 crow (matt black-grey, 0.21 in)
+	if mesh == null:
+		var prism := PrismMesh.new()   # a hunched body: 0.22 in long, dull black-grey, far from both armies' hues
+		prism.size = Vector3(0.09, 0.1, 0.22) * INCHES_TO_METERS
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.06, 0.06, 0.065)
+		mat.roughness = 0.6
+		prism.material = mat
+		mesh = prism
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = mesh
@@ -153,9 +180,10 @@ func _add_crows(layout: Dictionary, rng: RandomNumberGenerator) -> void:
 	mm.instance_count = n
 	var order := range(perches.size())
 	BoardgenTownScenes._shuffle(order, rng)
+	var ridges := order.filter(func(k: int) -> bool: return k >= BoardgenTownDressing.merlons(layout).size())
+	order = ridges.slice(0, 3) + order.filter(func(k: int) -> bool: return not ridges.slice(0, 3).has(k))   # up to three on the roofs, the rest on the battlements
 	for i in n:
-		var m: Dictionary = perches[order[i]]
-		var top := Vector3((m["lo"].x + m["hi"].x) * 0.5, float(m["hi"].y) + 0.05, (m["lo"].z + m["hi"].z) * 0.5)
+		var top: Vector3 = perches[order[i]] + Vector3(0.0, 0.05 if mesh is PrismMesh else 0.0, 0.0)
 		mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, rng.randf() * TAU), top * INCHES_TO_METERS))
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = "Crows"
@@ -164,27 +192,53 @@ func _add_crows(layout: Dictionary, rng: RandomNumberGenerator) -> void:
 	add_child(mmi)
 
 
-func _add_rats(layout: Dictionary, rng: RandomNumberGenerator) -> void:
+func _add_rats(layout: Dictionary, rng: RandomNumberGenerator, kit: BoardgenKit = null) -> void:
 	var strips: Array = []   # wall-foot runs in the strip: [from, to] inches, 0.2 in off a wall face
-	for b: Dictionary in BoardgenTownDressing.props(layout):
-		if typeof(b.get("face")) != TYPE_VECTOR2I:
-			continue
-		var d: Vector2i = b["face"]
-		var cell: Vector2 = b["at"]
-		var lo := Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) * -0.5 + cell * float(layout["cell_in"])
-		var c := float(layout["cell_in"])
+	var c := float(layout["cell_in"])
+	var origin := Vector2(layout["nx"], layout["nz"]) * c * -0.5
+	var run := func(cell: Vector2, d: Vector2i) -> Array:   # the open cell `cell`, its wall in direction d
+		var lo := origin + cell * c
 		var a := Vector2(lo.x + 0.3, lo.y + 0.2) if d.y < 0 else (Vector2(lo.x + 0.3, lo.y + c - 0.2) if d.y > 0 else (Vector2(lo.x + 0.2, lo.y + 0.3) if d.x < 0 else Vector2(lo.x + c - 0.2, lo.y + 0.3)))
-		var e := a + (Vector2(c - 0.6, 0.0) if d.x == 0 else Vector2(0.0, c - 0.6))
-		strips.append([a, e])
+		return [a, a + (Vector2(c - 0.6, 0.0) if d.x == 0 else Vector2(0.0, c - 0.6))]
+	for b: Dictionary in BoardgenTownDressing.props(layout):
+		if typeof(b.get("face")) == TYPE_VECTOR2I:
+			strips.append(run.call(b["at"], b["face"]))
+	var nx: int = layout["nx"]
+	var feet: Array[Vector2] = []   # the city wall's own feet (kit batch A7 wiring): the town side of a wall cell, where no buttress or spill stands
+	var walls := BoardgenTownClutter.wall_feet(layout)
+	for m: String in walls:
+		for it: Dictionary in walls[m]:
+			var o: Vector3 = (it["xf"] as Transform3D).origin / INCHES_TO_METERS
+			feet.append(Vector2(o.x, o.z))
+	var clear := BoardgenTownClutter._kept_clear(layout)
+	for cd: Dictionary in layout["cells"]:
+		if cd["lot_kind"] != "Wall" or int(cd["level"]) < 1:
+			continue
+		var d := Vector2i(1, 0) if int(cd["x"]) * 2 < nx else Vector2i(-1, 0)   # the town side
+		var f := Vector2i(cd["x"], cd["z"]) + d
+		if f.x < 0 or f.x >= nx or clear.has(f.y * nx + f.x):
+			continue
+		var fc: Dictionary = layout["cells"][f.y * nx + f.x]
+		if int(fc["level"]) != 0 or ["Hazard", "Wall", "Rough"].has(fc["lot_kind"]):
+			continue
+		var r: Array = run.call(Vector2(f), -d)
+		if feet.all(func(p: Vector2) -> bool: return p.distance_to((r[0] + r[1]) * 0.5) > 2.0):
+			strips.append(r)
 	if strips.is_empty():
 		return
 	BoardgenTownScenes._shuffle(strips, rng)
-	var mesh := CapsuleMesh.new()   # 0.14 in long, 0.05 in high: far below anything a model could hide behind
-	mesh.radius = 0.025 * INCHES_TO_METERS
-	mesh.height = 0.14 * INCHES_TO_METERS
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.16, 0.13, 0.11)
-	mesh.material = mat
+	var mesh: Mesh = null
+	if kit != null and kit.usable(["rat_running"]):
+		mesh = kit.mesh_or("rat_running")   # the A8 rat (0.14 in body, dull brown-grey)
+		_kit_rat = mesh != null
+	if mesh == null:
+		var capsule := CapsuleMesh.new()   # 0.14 in long, 0.05 in high: far below anything a model could hide behind
+		capsule.radius = 0.025 * INCHES_TO_METERS
+		capsule.height = 0.14 * INCHES_TO_METERS
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.16, 0.13, 0.11)
+		capsule.material = mat
+		mesh = capsule
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = mesh
@@ -192,11 +246,11 @@ func _add_rats(layout: Dictionary, rng: RandomNumberGenerator) -> void:
 	mm.instance_count = n
 	for i in n:
 		var s: Array = strips[i]
-		var from := Vector3(s[0].x, 0.025, s[0].y) * INCHES_TO_METERS
-		var to := Vector3(s[1].x, 0.025, s[1].y) * INCHES_TO_METERS
+		var y := 0.0 if _kit_rat else 0.025
+		var from := Vector3(s[0].x, y, s[0].y) * INCHES_TO_METERS
+		var to := Vector3(s[1].x, y, s[1].y) * INCHES_TO_METERS
 		_rat_paths.append([from, to, rng.randf() * TAU])
-		var basis := Basis.looking_at((to - from).normalized(), Vector3.UP) * Basis(Vector3.RIGHT, PI * 0.5)
-		mm.set_instance_transform(i, Transform3D(basis, from.lerp(to, 0.5)))
+		mm.set_instance_transform(i, Transform3D(_rat_basis((to - from).normalized()), from.lerp(to, 0.5)))
 	_rats = MultiMeshInstance3D.new()
 	_rats.name = "Rats"
 	_rats.multimesh = mm
