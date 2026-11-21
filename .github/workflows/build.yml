@@ -423,7 +423,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --quiet pytest
-          python3 -m pytest tools/shard_assign_test.py tools/ci_rust_paths_test.py tools/table_census_test.py -q
+          python3 -m pytest tools/shard_assign_test.py tools/ci_rust_paths_test.py tools/table_census_test.py tools/ci_all_required_test.py -q
 
   relay-tests:
     name: Relay tests
