@@ -79,7 +79,7 @@ bool use_frame(vec2 uv, float wood, inout vec3 ratio, inout vec3 tn) {
 // The ground's floor (silhouette round 21.11., maintainer: "too dark"): the streets and the packed earth sit below the models' own values (readability gate) but no longer near black.
 const float GROUND_COBBLE = 0.7;   // was 0.42 (train 2: the lamp pools shrank, the moon carries the street now), 0.27 before
 const float GROUND_EARTH = 0.55;   // was 0.32
-const float COVER_CUT = 0.54;   // the fbm level above which the earth is overgrown (~25 % of the earth; plan TARGET C, E2)
+const float COVER_CUT = 0.58;   // the fbm level above which the earth is overgrown (~25 % of the earth; plan TARGET C, E2)
 varying vec3 wpos;
 varying vec3 wnrm;
 varying flat float kind;
@@ -525,7 +525,10 @@ void fragment() {
 			rough = mix(rough, 0.35, 0.6 * wood_m * fire);
 			alb = mix(alb, grit_on > 0.5 ? vec3(0.11, 0.15, 0.08) : vec3(0.15, 0.25, 0.09), 0.7 * moss * (1.0 - smoothstep(0.0, 2.2, p.y)) * smoothstep(0.4, 0.7, patchy));   // moss and algae low on the shade side (green-black with the grit map, style bible 8)
 		} else if (wnrm.y > 0.5 && k != 15) {   // a top
-			alb = mix(alb, vec3(0.15, 0.25, 0.09), 0.65 * moss * smoothstep(0.45, 0.7, patchy));   // moss on the wall tops of the shade side
+			vec2 pc = mod(p.xz, 3.0);
+			float rim = 1.0 - smoothstep(0.1, 0.7, min(min(pc.x, 3.0 - pc.x), min(pc.y, 3.0 - pc.y)));   // (train 2, V2) moss gathers toward a top's edges too
+			alb *= 0.85;   // (train 2, V2) the flat tops one value step down: they were the brightest thing on the board
+			alb = mix(alb, vec3(0.12, 0.17, 0.08), clamp(0.65 * moss + 0.3 * rim, 0.0, 0.8) * smoothstep(0.45, 0.7, patchy));   // moss on the tops of the shade side and at their edges
 			alb = mix(alb, vec3(0.04, 0.035, 0.03), 0.6 * fire * smoothstep(0.55, 0.8, patchy) * float(k != 12));   // scorched patches on a ruin's top
 		} else if (k == 15) {   // a roof face
 			float lost = smoothstep(0.62, 0.7, fbm(vec2(p.x + p.z, p.y) * 0.9 + seed * 5.0)) * mix(0.25, 1.0, fire);

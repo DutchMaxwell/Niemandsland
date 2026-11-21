@@ -299,7 +299,7 @@ static func wall_feet(layout: Dictionary) -> Dictionary:
 	return out
 
 
-## IVY CLUSTERS (kit batch A7, WALL, <= 0.17 in proud) on the SHADE faces - east and west, the faces both moons graze -: a large mass hanging from the top edge of a raised cell whose
+## IVY CLUSTERS (kit batch A7, WALL, <= 0.17 in proud) on every face, most on the SHADE faces - east and west, the faces both moons graze -: a large mass hanging from the top edge of a raised cell whose
 ## neighbours along the face are raised too (it is 3.6 in wide), a small one climbing from the foot where no strip piece or scene stands. Never on a ladder face, never on a strand of _ivy.
 static func _ivy_clusters(layout: Dictionary, out: Dictionary, reserved: Dictionary = {}) -> void:
 	var nx: int = layout["nx"]
@@ -317,7 +317,7 @@ static func _ivy_clusters(layout: Dictionary, out: Dictionary, reserved: Diction
 		if cd["level"] < 1 or cd["lot_kind"] == "Roofed" or clear.has(i):
 			continue
 		var half := 1 if cd["z"] >= nz / 2 else 0
-		for side in [1, 3]:
+		for side in 4:   # (plan TARGET C, train 2, V2: all four faces - the shade faces east / west 0.45 of them, the lit faces 0.15; was east / west only, 0.3)
 			var d: Vector2i = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)][side]
 			var n := Vector2i(cd["x"], cd["z"]) + d
 			if n.x < 0 or n.y < 0 or n.x >= nx or n.y >= nz:
@@ -326,21 +326,24 @@ static func _ivy_clusters(layout: Dictionary, out: Dictionary, reserved: Diction
 			var nb: Dictionary = cells[j]
 			if nb["level"] != 0 or clear.has(j) or nb["lot_kind"] == "Hazard" or (not nb["street"] and BoardgenTownDressing._hash(i, half, 84 + side) <= 0.125):
 				continue   # (the last: a strand of _ivy is there)
+			var share := 0.45 if d.x != 0 else 0.15
 			var h := BoardgenTownDressing._hash(i, half, 220 + side)
-			if h > 0.3:
+			if h > share:
 				continue
 			var lo := origin + Vector2(cd["x"], cd["z"]) * cell_in
 			var yaw := atan2(float(d.x), float(d.y))
-			var x := lo.x if d.x < 0 else lo.x + cell_in
+			var face := Vector2(lo.x if d.x < 0 else lo.x + cell_in, 0.0) if d.x != 0 else Vector2(0.0, lo.y if d.y < 0 else lo.y + cell_in)
 			var top := float(layout["level_in"][int(cd["level"])])
 			var wide := true
-			for dz in [-1, 1]:
-				var m := Vector2i(cd["x"], cd["z"] + dz)
-				wide = wide and m.y >= 0 and m.y < nz and int(cells[m.y * nx + m.x]["level"]) >= int(cd["level"])
-			if h < 0.18 and wide:
-				_add(out, "ivy_cluster_large", _item(yaw, Vector3(x, top, lo.y + 1.5)))
+			for k in [-1, 1]:   # its neighbours along the face are raised as high (the large mass is 3.6 in wide)
+				var m := Vector2i(cd["x"], cd["z"] + k) if d.x != 0 else Vector2i(cd["x"] + k, cd["z"])
+				wide = wide and m.x >= 0 and m.y >= 0 and m.x < nx and m.y < nz and int(cells[m.y * nx + m.x]["level"]) >= int(cd["level"])
+			var along := 1.5 if h < share * 0.6 and wide else 0.8 + 1.4 * BoardgenTownDressing._hash(i, half, 224 + side)
+			var at := Vector2(face.x, lo.y + along) if d.x != 0 else Vector2(lo.x + along, face.y)
+			if h < share * 0.6 and wide:
+				_add(out, "ivy_cluster_large", _item(yaw, Vector3(at.x, top, at.y)))
 			elif not reserved.has(j) and not taken.has("%d/%d/%s" % [n.x, n.y, -d]):
-				_add(out, "ivy_cluster_small", _item(yaw, Vector3(x, 0.0, lo.y + 0.8 + 1.4 * BoardgenTownDressing._hash(i, half, 224 + side))))
+				_add(out, "ivy_cluster_small", _item(yaw, Vector3(at.x, 0.0, at.y)))
 
 
 ## GREEN FEET (plan TARGET C, train 2, V1): weed clumps (kit weeds_a / weeds_b, STRIP, 0.36 in high, 1.03 in wide) at the foot of a raised cell's face that looks at open level-0 ground -

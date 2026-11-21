@@ -309,6 +309,8 @@ func test_fences_ring_the_garden_plots_from_inside_with_a_gap() -> void:
 ## (east / west) faces - every piece with its origin on a wall face, +z out onto open level-0 ground that is no ladder end.
 func test_wall_spills_buttresses_and_ivy_clusters_stand_on_the_right_faces() -> void:
 	var counts := {"wall_rubble_spill": 0, "wall_buttress_a": 0, "wall_buttress_b": 0, "ivy_cluster_large": 0, "ivy_cluster_small": 0}
+	var shade_ivy := 0
+	var lit_ivy := 0
 	for s: int in [7, 11, 13, 17, 19, 23, 25, 29, 41, 43]:
 		var layout: Dictionary = ClassDB.instantiate("NmlCore").boardgen_layout_themed(s, "ruintown")
 		var nx: int = layout["nx"]
@@ -331,7 +333,10 @@ func test_wall_spills_buttresses_and_ivy_clusters_stand_on_the_right_faces() -> 
 					assert_str(wc["lot_kind"]).is_equal("Wall")
 					assert_float(into.x).is_equal(-1.0 if wall.x * 2 < nx else 1.0)   # the field side
 				if m.begins_with("ivy_cluster"):
-					assert_float(absf(into.x)).is_equal(1.0)   # a shade face
+					if absf(into.x) == 1.0:
+						shade_ivy += 1   # a shade face (train 2: every face may carry ivy, the shade faces most)
+					else:
+						lit_ivy += 1
 				if m == "wall_rubble_spill":
 					var beside := false
 					for d: Vector2i in [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]:
@@ -341,6 +346,8 @@ func test_wall_spills_buttresses_and_ivy_clusters_stand_on_the_right_faces() -> 
 	print("WALL PIECES ", counts)
 	for m: String in counts:
 		assert_int(counts[m]).override_failure_message("no %s on ten boards" % m).is_greater(0)
+	assert_int(shade_ivy).override_failure_message("the shade faces must carry most of the ivy").is_greater(lit_ivy)
+	assert_int(lit_ivy).override_failure_message("ivy on the lit faces too (train 2)").is_greater(0)
 
 
 ## Large hanging signs (kit batch A8): on a raised house face (not the wall, not an intact house) that looks at a street off the square, +z over the street, at most three a half.
