@@ -925,6 +925,12 @@ pub const PENDING_EPOCH_COVER_SCREEN: u32 = 95;
 /// `_solo_land_deadly_wounds` finds no model to pick and stops. Records stamped 94 or below replay byte-exact. Every call site reads THIS
 /// constant, not the literal `95`.
 pub const PENDING_EPOCH_VOLLEY_DEADLY_STOPS: u32 = 95;
+/// Placeholder gate for VOLLEY DEFENCE AS DECLARED (Plan H, H-17, lead call reading A): a volley is fired simultaneously, so the target's
+/// Defense as declared holds for every weapon of it. After an inline Deadly landing wipes the target's chain, `Ctx::wiped` keeps the
+/// Defense value the table captured before the first roll (Guarded, Shielded: main.gd `_solo_defense_vs` ahead of the weapon loop);
+/// the to-hit penalties, Fortified and the ignore rolls still drop (the table reads those per hit). Records stamped 94 or below replay byte-exact. Every
+/// call site reads THIS constant, not the literal `95`.
+pub const PENDING_EPOCH_VOLLEY_DEFENCE_DECLARED: u32 = 95;
 /// The played volley's modifier distance (Valiant gate, over-9" modifiers) counts only the model pairs within the vertical reach (3", `melee_vertical_in`),
 /// and a unit with no pair in reach keeps the horizontal unit-centre distance: the table's `_solo_ai_volley_distance_in` over `nearest_melee_gap_in`.
 /// Before, a unit on a platform measured as close as the ground beside it (the soak's Hive Bond +1, table 4+ vs core 5+). Step path only. Records
@@ -2385,6 +2391,17 @@ mod tests {
     fn volley_deadly_stops_gate_starts_at_95() {
         assert_eq!(super::PENDING_EPOCH_VOLLEY_DEADLY_STOPS, 95);
         assert!(!rule_on(94, super::PENDING_EPOCH_VOLLEY_DEADLY_STOPS), "a record at 94 rolls every Deadly wound's ignore dice");
+    }
+
+    #[test]
+    fn volley_defence_declared_gate_starts_at_95() {
+        assert_eq!(super::PENDING_EPOCH_VOLLEY_DEFENCE_DECLARED, 95);
+        assert!(!rule_on(94, super::PENDING_EPOCH_VOLLEY_DEFENCE_DECLARED), "a record at 94 drops the defence reads of a wiped target");
+        let at = |e: u32| crate::unit::Ctx { rules_epoch: e, guarded: true, shielded: true, stealth: true, ..Default::default() }.wiped();
+        let (old, new) = (at(94), at(super::PENDING_EPOCH_VOLLEY_DEFENCE_DECLARED));
+        assert!(!old.guarded && !old.shielded && !old.stealth, "94: a wiped target lends nothing");
+        assert!(new.guarded && new.shielded, "95: Guarded and Shielded stay as declared");
+        assert!(!new.stealth, "95: the to-hit penalty still drops");
     }
 
     #[test]

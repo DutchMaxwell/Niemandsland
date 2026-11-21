@@ -174,3 +174,28 @@ func test_a_blast_line_after_a_deadly_kill_carries_the_cap_note() -> void:
 	assert_int(int(r["said"])).override_failure_message("no Blast / Simultaneous line on the table").is_greater(0)
 	assert_int(int(r["bad"])).override_failure_message("%d of 16 seeds differ in dice, state or the two lines" % r["bad"]).is_equal(0)
 
+
+
+## Seeds (of 16) whose save targets (every roll's kind, faces AND target) or end state differ between the table and the core at `epoch`.
+func _targets_differ(target: Dictionary, epoch: int) -> int:
+	AiActRecorder.rules_epoch = epoch
+	var dice := ProjectSettings.globalize_path(DICE)
+	var at := func(rolls: Array) -> Array: return rolls.map(func(r: Dictionary) -> String: return "%s:%s@%d" % [r["kind"], r["faces"], int(r["target"])])
+	var bad := 0
+	for s in SEEDS:
+		var t := await RosterSweep.volley(_main, _shooter(), target, s, false, dice)
+		var c := await RosterSweep.volley(_main, _shooter(), target, s, true, dice)
+		if at.call(t["rolls"]) != at.call(c["rolls"]) or RosterSweep.first_state_diff(t["state"], c["state"]) != "":
+			bad += 1
+	return bad
+
+
+## H-17 (`PENDING_EPOCH_VOLLEY_DEFENCE_DECLARED` = 95, lead call 21.11.): the volley is fired simultaneously, so a Guarded / Shielded Hero the
+## Deadly weapon killed keeps its declared Defense for the later weapon's saves, as the table does; at 94 the core drops it (save one worse).
+func test_a_killed_hero_keeps_its_declared_defense_from_95() -> void:
+	for rule in ["Guarded", "Shielded"]:
+		var target := _hero([rule], "battle_brothers")
+		var at_94: int = await _targets_differ(target, PENDING_EPOCH)
+		assert_int(at_94).override_failure_message("%s: equal at 94, the check cannot fail" % rule).is_greater(0)
+		var at_95: int = await _targets_differ(target, PENDING_EPOCH + 1)
+		assert_int(at_95).override_failure_message("%s: %d of 16 seeds still differ at 95" % [rule, at_95]).is_equal(0)
