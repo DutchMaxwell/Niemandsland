@@ -8,7 +8,7 @@ use crate::state::{Kit, State};
 use crate::sim::DEFAULT_BASE_RADIUS_M;
 use crate::IN2M;
 
-/// `SoloController.casualty_order` (solo_controller.gd:9151-9204); `f32_dist` = the table's f32 distance (`PENDING_EPOCH_CASUALTY_TIES`): a unit's living slots in
+/// `SoloController.casualty_order` (solo_controller.gd:9151-9204); `f32_dist` = the table's f32 distance (`EPOCH_94_PARITY_BATCH`): a unit's living slots in
 /// removal order, cheapest first. Per slot the value is 2 per weapon entry and 2 per equipment
 /// item, +3 once for a RARE weapon (one carried by at most max(n/2, 1) of the living models'
 /// entries: rarity marks the bearer) and +8 for a Tough above the unit's lowest; the rank is
@@ -40,7 +40,7 @@ pub fn casualty_order_of(kits: &[Kit], positions: &[[f64; 3]], wounds: &[i64], f
         }
         let taken = (k.wounds_max - wounds.get(i).copied().unwrap_or(k.wounds_max)).max(0) as f64;
         let (dx, dz) = (positions[i][0] - cx, positions[i][2] - cz);
-        // PENDING_EPOCH_CASUALTY_TIES: the table's distance is a Godot `Vector2(dx, dz).length()`, f32 (components rounded to f32,
+        // EPOCH_94_PARITY_BATCH: the table's distance is a Godot `Vector2(dx, dz).length()`, f32 (components rounded to f32,
         // `sqrtf(x*x + y*y)` in f32). Two mirror models of a symmetric formation are equal in exact arithmetic and tie or part by
         // rounding only; the f64 hypot parted them the other way in the f64 noise (the table's own sort is then stable on a real tie).
         let d = if f32_dist { let (x, z) = (dx as f32, dz as f32); f64::from((x * x + z * z).sqrt()) } else { dx.hypot(dz) };
@@ -191,7 +191,7 @@ mod tests {
         }
     }
 
-    /// `PENDING_EPOCH_CASUALTY_TIES`: symmetric formations (lines, grids) where mirror models tie or part by rounding only
+    /// `EPOCH_94_PARITY_BATCH`: symmetric formations (lines, grids) where mirror models tie or part by rounding only
     /// (`ties` of the shared fixture: the Godot board's f32 positions, `expected` = the table's order). The table measures the
     /// distance to the centroid as a Godot `Vector2.length()` (f32) and sorts stably; the f64 hypot of the core parted the mirror
     /// pairs the other way (a six-line: 0 5 1 4 3 2 against the table's 0 5 4 1 2 3), so a spell killing five of six models left

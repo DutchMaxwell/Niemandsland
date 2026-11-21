@@ -2,7 +2,7 @@ extends GdUnitTestSuite
 ## PLAN H / landing lane: the Slayer Mark (gf / aof books: `target: enemy, beneficiary: attackers`, picked in the table's pre-attack slot) hands the marked unit's
 ## attackers the Slayer rule. The table reads it (`_solo_bridge_granted_flags`): a shooter that held gets AP(+2) against a Tough(3+) target and says why, one that moved
 ## says `Slayer: no AP, <U> moved`. The core bridged Rending / Furious / Relentless / Shred / Surge from that record and not Slayer (`ctx_live_vs`), so a held volley saved on
-## the plain Defense and said nothing. From `PENDING_EPOCH_SLAYER_MARK_GRANT` (94) the core reads it. One REAL AI activation per seed (`_solo_activate_one_ai`), door on against
+## the plain Defense and said nothing. From `EPOCH_94_PARITY_BATCH` (94) the core reads it. One REAL AI activation per seed (`_solo_activate_one_ai`), door on against
 ## door off, two placements (a foe 14 in away: the AI advances; a foe 7 in away: it holds), the slice = the committed deny file with the Utility Buff primitive taken out of the
 ## beat group (the lift is a data PR of its own): the same dice, the same end state, the same battle-log lines, and the door really ran the core.
 ## RED: at epoch 93 the held placement differs (AP, the save line, the Slayer line) - the second test.

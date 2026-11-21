@@ -22,9 +22,9 @@ use super::melee_landing_gaps::two_unit_melee;
         shot.rolls.iter().filter(|r| r.target == 6 && r.count == 3).count()
     }
 
-    /// RED at the pending epoch: the core threw the second wound's three dice as well (2 rolls against the table's 1). Below it nothing moves.
+    /// RED at the epoch: the core threw the second wound's three dice as well (2 rolls against the table's 1). Below it nothing moves.
     #[test]
     fn a_dead_chain_gets_no_more_ignore_dice_from_the_deadly_wounds_left() {
-        assert_eq!(ignore_rolls(crate::acts::PENDING_EPOCH_DEADLY_STOPS), 1, "94: the second wound is dropped, no dice");
-        assert_eq!(ignore_rolls(crate::acts::CURRENT_RULES_EPOCH), 2, "below the epoch the old fold rolls both wounds' dice");
+        assert_eq!(ignore_rolls(crate::acts::EPOCH_94_PARITY_BATCH), 1, "94: the second wound is dropped, no dice");
+        assert_eq!(ignore_rolls(crate::acts::EPOCH_94_PARITY_BATCH - 1), 2, "below the epoch the old fold rolls both wounds' dice");
     }

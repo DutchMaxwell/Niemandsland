@@ -1,9 +1,9 @@
-//! Plan H, H-18 (`PENDING_EPOCH_VERSATILE_MODIFIED_HIT`): the Versatile Attack pick is made on the number the first eligible shot rolls at,
+//! Plan H, H-18 (`EPOCH_94_PARITY_BATCH`): the Versatile Attack pick is made on the number the first eligible shot rolls at,
 //! not on the plain Quality. A Quality-4 AP(1) shooter at Defense 3+ ties plain (the tie goes to AP(+1), the table's pick); against Stealth
 //! from over 9" the number is 5+ and the hit mode wins. The core latched the pick before the dice on the plain Quality 4 and said AP(+1).
 //! Units are built the way the game builds them (real profiles through `UnitStatic::build_for`).
 use super::*;
-use crate::acts::PENDING_EPOCH_VERSATILE_MODIFIED_HIT as PENDING;
+use crate::acts::EPOCH_94_PARITY_BATCH as PENDING;
 use crate::dice::Tray;
 use crate::read_act_header;
 use crate::rules::Registries;

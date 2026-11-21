@@ -1701,7 +1701,7 @@ static func land_late_once_records(main, h: int, attacker: GameUnit, targets: Ar
 				main._solo_spend_once_mods(uu, side[1], false, "", unit == attacker, late)
 
 
-## Landing lane (PLAN H, `PENDING_EPOCH_MELEE_MARK_SCOPE`): the melee-scoped Marks (Rapid Charge, Piercing Fighting) a core volley placed on the marked unit and left
+## Landing lane (PLAN H, `EPOCH_94_PARITY_BATCH`): the melee-scoped Marks (Rapid Charge, Piercing Fighting) a core volley placed on the marked unit and left
 ## standing (the delta's `marks_left`: record name, scope, granted rule). After a volley the table keeps such a record for a later charger (`_solo_apply_vs_marks` records
 ## it on the target and the volley's spend skips a melee-scoped record); the door never ran that seam, so the record is landed here, with the table's own writer and
 ## silently (the core already said the pick and the `... is ACTIVE` line). A record the table holds already (its own pre-attack beat placed it) is no news: only the

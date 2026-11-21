@@ -1,9 +1,9 @@
 //! The Slayer Mark of the gf / aof books (`target: enemy, beneficiary: attackers`, picked in the pre-attack slot) is a once-grant of "Slayer" on the MARKED unit's
 //! ledger. The table hands the rule to whoever attacks that unit (`_solo_bridge_granted_flags`), so a shooter that held gets AP(+2) against a Tough(3+) target and says
-//! why; `ctx_live_vs` bridged Rending, Furious, Relentless, Shred and Surge from that record and not Slayer. From `PENDING_EPOCH_SLAYER_MARK_GRANT` it does.
+//! why; `ctx_live_vs` bridged Rending, Furious, Relentless, Shred and Surge from that record and not Slayer. From `EPOCH_94_PARITY_BATCH` it does.
 use super::super::*;
 
-use crate::acts::PENDING_EPOCH_SLAYER_MARK_GRANT as GATE;
+use crate::acts::EPOCH_94_PARITY_BATCH as GATE;
 use crate::dice::{ShootResult, Tray};
 
 /// The shooter (unit 0, eight Rifle shots, Quality 4) held in `buff_action`; the target (unit 2, three models of three wounds, Defense 4, Tough 3).

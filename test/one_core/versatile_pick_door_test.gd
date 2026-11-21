@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## PLAN H, H-18 (`PENDING_EPOCH_VERSATILE_MODIFIED_HIT` = 94, lead decision 20.11.): a Versatile Attack pick (+1 to hit or AP(+1), once per
+## PLAN H, H-18 (`EPOCH_94_PARITY_BATCH` = 94, lead decision 20.11.): a Versatile Attack pick (+1 to hit or AP(+1), once per
 ## activation) is made on the number the first eligible weapon really rolls at. The table reads the MODIFIED to-hit (Stealth, Evasive, Artillery
 ## on the target; Artillery, Good Shot, the Unpredictable die on the shooter), the core latched it before the dice on the plain Quality. Q4 AP(1) at Defense 3+: plain, the
 ## two modes tie and the tie goes to AP(+1); at 5+ (the target's minus) the hit mode wins. From 94 the core's dice decide on the modified number.

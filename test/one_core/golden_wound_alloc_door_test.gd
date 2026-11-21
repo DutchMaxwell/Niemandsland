@@ -100,8 +100,9 @@ func test_both_prompt_variants_through_the_core_door_equal_the_golden(timeout :=
 	CoreActivation._choice_on = {}   # P4.D-27: ON is the default
 	var diffs := await _differences()
 	assert_array(diffs).override_failure_message("core door vs golden:\n" + "\n".join(diffs.slice(0, 8))).is_empty()
-	# Pinned: exactly these two seeds hit the exact tie. If the two orders ever agree on them, delete the exception.
-	assert_array(_ties).override_failure_message("the tie cases changed: %s" % str(_ties)).is_equal(["mixed_click seed 49", "mixed_click seed 512"])
+	# From epoch 94 (the casualty order measures in f32 like the table) the two orders agree on the two seeds that used to hit the exact tie
+	# (mixed_click seed 49 and 512), so the mirror-pair exception no longer fires. Pinned empty: a tie that comes back is a regression.
+	assert_array(_ties).override_failure_message("the tie cases changed: %s" % str(_ties)).is_empty()
 
 
 ## Switch OFF (`NML_ONE_CORE_CHOICE_WOUND_ALLOC=0`): the core lands its automatic order and nobody is asked, so the harness's prompt never opens in

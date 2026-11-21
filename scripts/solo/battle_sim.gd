@@ -1212,7 +1212,7 @@ static func _profiles_of(su: Dictionary, melee: bool, d := 0.0, state := {}) -> 
 	var u_bypass := false   # A1: the Regeneration-bypass half, its own flag (unit.rs `u_bypass`)
 	var u_rending := false
 	var u_unstop := false
-	var exact_labels: bool = AiActRecorder.rules_epoch >= AiActRecorder.PENDING_EPOCH_EXACT_STRIKER_LABELS
+	var exact_labels: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_94_PARITY_BATCH
 	for r in u.get_special_rules():
 		var rs := str(r).strip_edges()
 		if exact_labels and GameUnit.is_unlisted_striker_label(rs):

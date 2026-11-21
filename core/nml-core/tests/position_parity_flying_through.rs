@@ -1,4 +1,4 @@
-//! `PENDING_EPOCH_FLYING_THROUGH`: a Flying unit's route ignores the other units' spacing zones (the table's `flies_through_units`, since 75). The case is a
+//! `EPOCH_94_PARITY_BATCH`: a Flying unit's route ignores the other units' spacing zones (the table's `flies_through_units`, since 75). The case is a
 //! lone 40 mm Flying hero charging a lone 40 mm hero 7 in away on an empty board (the melee census' Grunt Veteran -> Master Brother). The table's planner call
 //! (NML_MOVE_DUMP) answers the straight contact slot, (5.425201, 0.0) in world inches; the core's route used to bend round the defender's zone, a grid detour
 //! that landed 0.46 in off the axis. Below 94 the old landing is pinned; a lone walker keeps its landing at 94 (the zones still block a walker's route).
@@ -44,10 +44,10 @@ fn lands_at(epoch: u32, rules: &[&str]) -> [f64; 2] {
 
 #[test]
 fn a_flying_charger_takes_the_straight_slot_from_94() {
-    let new = lands_at(nml_core::acts::PENDING_EPOCH_FLYING_THROUGH, &["Flying", "Strider", "Hero"]);
+    let new = lands_at(nml_core::acts::EPOCH_94_PARITY_BATCH, &["Flying", "Strider", "Hero"]);
     assert!((new[0] - 5.425201).abs() < 1e-4 && new[1].abs() < 1e-4, "from 94 the flying charger lands on the table's slot: {new:?}");
-    let old = lands_at(nml_core::acts::PENDING_EPOCH_FLYING_THROUGH - 1, &["Flying", "Strider", "Hero"]);
+    let old = lands_at(nml_core::acts::EPOCH_94_PARITY_BATCH - 1, &["Flying", "Strider", "Hero"]);
     assert!((old[0] - 5.494150).abs() < 1e-4 && (old[1] + 0.460880).abs() < 1e-4, "below 94 the old landing, byte-identical: {old:?}");
-    let walker = lands_at(nml_core::acts::PENDING_EPOCH_FLYING_THROUGH, &["Strider", "Hero"]);
-    assert_eq!(walker, lands_at(nml_core::acts::PENDING_EPOCH_FLYING_THROUGH - 1, &["Strider", "Hero"]), "a walker's route is untouched by the gate");
+    let walker = lands_at(nml_core::acts::EPOCH_94_PARITY_BATCH, &["Strider", "Hero"]);
+    assert_eq!(walker, lands_at(nml_core::acts::EPOCH_94_PARITY_BATCH - 1, &["Strider", "Hero"]), "a walker's route is untouched by the gate");
 }

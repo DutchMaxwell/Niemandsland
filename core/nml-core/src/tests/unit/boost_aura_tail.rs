@@ -504,9 +504,14 @@ use super::*;
     #[test]
     fn bane_in_melee_buff_reaches_melee_only_at_the_current_epoch() {
         assert_eq!(
-            bane_stamp_of("Bane in Melee Buff", "gf", "human_defense_force", crate::acts::CURRENT_RULES_EPOCH),
+            bane_stamp_of("Bane in Melee Buff", "gf", "human_defense_force", crate::acts::EPOCH_94_PARITY_BATCH - 1),
             (false, true),
-            "the Buff's melee scope"
+            "the Buff's melee scope below the exact-labels epoch"
+        );
+        assert_eq!(
+            bane_stamp_of("Bane in Melee Buff", "gf", "human_defense_force", crate::acts::EPOCH_94_PARITY_BATCH),
+            (false, false),
+            "from 94 the Buff marks another unit and is no bearer"
         );
         assert_eq!(bane_stamp_of("Bane in Melee Buff", "gf", "human_defense_force", 0), (true, true), "flat Gen-0 reading");
     }
@@ -554,9 +559,14 @@ use super::*;
     #[test]
     fn bane_mark_reads_as_plain_bane() {
         assert_eq!(
-            bane_stamp_of("Bane Mark", "gf", "robot_legions", crate::acts::CURRENT_RULES_EPOCH),
+            bane_stamp_of("Bane Mark", "gf", "robot_legions", crate::acts::EPOCH_94_PARITY_BATCH - 1),
             (true, true),
-            "plain-bane arm, both profiles"
+            "plain-bane arm, both profiles, below the exact-labels epoch"
+        );
+        assert_eq!(
+            bane_stamp_of("Bane Mark", "gf", "robot_legions", crate::acts::EPOCH_94_PARITY_BATCH),
+            (false, false),
+            "from 94 the Mark marks one enemy unit and is no bearer"
         );
         assert_eq!(bane_stamp_of("Bane Mark", "gf", "robot_legions", 0), (true, true), "the legacy prefix read too");
     }

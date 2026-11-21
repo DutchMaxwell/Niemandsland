@@ -50,7 +50,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_66_DISTANCE_TRUTH, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, PENDING_EPOCH_HEIGHT};
+use crate::acts::{rule_on, CURRENT_RULES_EPOCH, EPOCH_66_DISTANCE_TRUTH, EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36, EPOCH_94_PARITY_BATCH};
 use crate::state::State;
 use crate::terrain::{self, Terrain};
 
@@ -535,7 +535,7 @@ pub fn zones_of(t: &Terrain) -> Vec<Zone> {
 }
 
 /// `zones_of` as the game at `rules_epoch` reads the board: from `EPOCH_73_V36` a ruin is no volume, from
-/// `PENDING_EPOCH_HEIGHT` every tier block of a generated board is a solid box.
+/// `EPOCH_94_PARITY_BATCH` every tier block of a generated board is a solid box.
 pub fn zones_of_at(t: &Terrain, rules_epoch: u32) -> Vec<Zone> {
     if !t.is_valid() {
         return Vec::new();
@@ -583,7 +583,7 @@ pub fn zones_of_at(t: &Terrain, rules_epoch: u32) -> Vec<Zone> {
     out.extend(boxes.iter().map(|b| Zone::shelf_box(b.c, b.he, b.yaw, 0.0, roof, true)));
     // Heightfield plan step 10b: every block of a generated tier board is a solid box of its real height, so a tier hides
     // what stands behind it and a model on a roof sees over the lower ones. Below the gate, and with no `tiers`, nothing.
-    if rule_on(rules_epoch, PENDING_EPOCH_HEIGHT) {
+    if rule_on(rules_epoch, EPOCH_94_PARITY_BATCH) {
         let m = t.in2m();
         out.extend(t.tier_boxes().iter().map(|b| {
             let (c, he) = ([(b.lo[0] + b.hi[0]) * 0.5 * m, (b.lo[1] + b.hi[1]) * 0.5 * m], [(b.hi[0] - b.lo[0]) * 0.5 * m, (b.hi[1] - b.lo[1]) * 0.5 * m]);
@@ -595,7 +595,7 @@ pub fn zones_of_at(t: &Terrain, rules_epoch: u32) -> Vec<Zone> {
 
 /// `VolumetricLos.surface_y_at` (:211) over the board's solid volumes - the height a model standing at the flat world
 /// point `p` stands on: the roof of the container holding it (a placed box, or a painted container cell no box covers,
-/// the same two the zones above keep), else the table at 0; from `PENDING_EPOCH_HEIGHT` the higher of that and the tier
+/// the same two the zones above keep), else the table at 0; from `EPOCH_94_PARITY_BATCH` the higher of that and the tier
 /// under the point. Metres. G4R5 R3: the table settles every moved model here.
 pub fn surface_y_m(t: &Terrain, p: [f64; 2], rules_epoch: u32) -> f64 {
     let boxes: &[terrain::ContainerObb] = if rule_on(rules_epoch, EPOCH_73_V36) { t.containers() } else { &[] };
@@ -607,7 +607,7 @@ pub fn surface_y_m(t: &Terrain, p: [f64; 2], rules_epoch: u32) -> f64 {
     let roof = if covered(p) || painted { volume_height_in(terrain::CONTAINER) * IN2M } else { 0.0 };
     // Heightfield plan step 10: a generated tier board's level under the point is a surface too (`tier_in_at` is the
     // board-centred inch frame; a board without tiers answers 0). Below the gate the same header plays flat.
-    if rule_on(rules_epoch, PENDING_EPOCH_HEIGHT) {
+    if rule_on(rules_epoch, EPOCH_94_PARITY_BATCH) {
         roof.max(t.tier_in_at(p[0] / t.in2m(), p[1] / t.in2m()) * t.in2m())
     } else {
         roof
@@ -830,14 +830,14 @@ mod tests {
     #[test]
     fn a_model_on_a_6in_tier_stands_at_6in_from_the_height_gate() {
         let (t, at) = (half_raised(), |x_in: f64, z_in: f64| [x_in * M, z_in * M]);
-        assert_eq!(surface_y_m(&t, at(1.5, 0.0), PENDING_EPOCH_HEIGHT), 6.0 * M);
-        assert_eq!(surface_y_m(&t, at(4.5, -4.5), PENDING_EPOCH_HEIGHT), 6.0 * M, "any cell of the block");
-        assert_eq!(surface_y_m(&t, at(-1.5, 0.0), PENDING_EPOCH_HEIGHT), 0.0, "the ground column");
-        assert_eq!(surface_y_m(&t, at(9.0, 0.0), PENDING_EPOCH_HEIGHT), 0.0, "off the grid is the table");
+        assert_eq!(surface_y_m(&t, at(1.5, 0.0), EPOCH_94_PARITY_BATCH), 6.0 * M);
+        assert_eq!(surface_y_m(&t, at(4.5, -4.5), EPOCH_94_PARITY_BATCH), 6.0 * M, "any cell of the block");
+        assert_eq!(surface_y_m(&t, at(-1.5, 0.0), EPOCH_94_PARITY_BATCH), 0.0, "the ground column");
+        assert_eq!(surface_y_m(&t, at(9.0, 0.0), EPOCH_94_PARITY_BATCH), 0.0, "off the grid is the table");
         // the gate: one epoch below, and a board with no tiers at the gate, both play flat
-        assert_eq!(surface_y_m(&t, at(1.5, 0.0), PENDING_EPOCH_HEIGHT - 1), 0.0);
+        assert_eq!(surface_y_m(&t, at(1.5, 0.0), EPOCH_94_PARITY_BATCH - 1), 0.0);
         let flat = board(&[]);
-        assert_eq!(surface_y_m(&flat, at(1.5, 0.0), PENDING_EPOCH_HEIGHT), 0.0);
+        assert_eq!(surface_y_m(&flat, at(1.5, 0.0), EPOCH_94_PARITY_BATCH), 0.0);
     }
 
     /// A container on a tier stands on whichever is higher: its 2.5 in roof over the ground, the 3 in tier under it.
@@ -851,7 +851,7 @@ mod tests {
         };
         p.containers = vec![terrain::ContainerObb { c: [-1.5 * M, 0.0], he: [1.0 * M, 1.0 * M], yaw: 0.0 }, terrain::ContainerObb { c: [1.5 * M, 0.0], he: [1.0 * M, 1.0 * M], yaw: 0.0 }];
         let t = Terrain::build(&p);
-        let h = |x_in: f64| surface_y_m(&t, [x_in * M, 0.0], PENDING_EPOCH_HEIGHT);
+        let h = |x_in: f64| surface_y_m(&t, [x_in * M, 0.0], EPOCH_94_PARITY_BATCH);
         assert_eq!(h(-1.5), 2.5 * M, "a container on the ground");
         assert_eq!(h(1.5), 3.0 * M, "a container on a 3 in tier: the tier is higher");
     }
@@ -874,10 +874,10 @@ mod tests {
         let t = strip([0.0, 0.0, 6.0, 6.0, 0.0, 0.0]);
         let (a, b) = (cyl_on(-6.0, 0.0, 32.0), cyl_on(6.0, 0.0, 32.0));
         let sees = |t: &Terrain, epoch: u32| has_los(&a, &b, false, &zones_of_at(t, epoch), &[]);
-        assert!(!sees(&t, PENDING_EPOCH_HEIGHT), "the block stands between them");
-        assert!(sees(&t, PENDING_EPOCH_HEIGHT - 1), "one epoch below the gate the board plays flat");
-        assert!(sees(&strip([0.0; 6]), PENDING_EPOCH_HEIGHT), "no raised cell, no block");
-        assert_eq!(zones_of_at(&t, PENDING_EPOCH_HEIGHT).len(), 1, "the two raised cells of a row run are one block");
+        assert!(!sees(&t, EPOCH_94_PARITY_BATCH), "the block stands between them");
+        assert!(sees(&t, EPOCH_94_PARITY_BATCH - 1), "one epoch below the gate the board plays flat");
+        assert!(sees(&strip([0.0; 6]), EPOCH_94_PARITY_BATCH), "no raised cell, no block");
+        assert_eq!(zones_of_at(&t, EPOCH_94_PARITY_BATCH).len(), 1, "the two raised cells of a row run are one block");
     }
 
     /// A model on the edge of a 6 in roof sees over the 3 in tier below it to the ground beyond; the same target is
@@ -885,7 +885,7 @@ mod tests {
     #[test]
     fn a_roof_sees_over_a_lower_tier() {
         let t = strip([6.0, 6.0, 3.0, 0.0, 0.0, 0.0]);
-        let zones = zones_of_at(&t, PENDING_EPOCH_HEIGHT);
+        let zones = zones_of_at(&t, EPOCH_94_PARITY_BATCH);
         assert_eq!(zones.len(), 2, "the 6 in roof and the 3 in tier");
         let ground = cyl_on(4.0, 0.0, 32.0);
         assert!(has_los(&cyl_on(-3.5, 6.0, 32.0), &ground, false, &zones, &[]), "over the 3 in tier at 4 in");
@@ -895,7 +895,7 @@ mod tests {
     #[test]
     fn the_foot_of_a_wall_is_hidden_from_the_back_of_the_roof() {
         let t = strip([0.0, 0.0, 0.0, 6.0, 6.0, 6.0]);
-        let zones = zones_of_at(&t, PENDING_EPOCH_HEIGHT);
+        let zones = zones_of_at(&t, EPOCH_94_PARITY_BATCH);
         let foot = cyl_on(-1.0, 0.0, 32.0);
         assert!(!has_los(&cyl_on(8.0, 6.0, 32.0), &foot, false, &zones, &[]), "from the back of the roof the rim hides the foot");
         assert!(has_los(&cyl_on(1.0, 6.0, 32.0), &cyl_on(-8.0, 0.0, 32.0), false, &zones, &[]), "from the rim it sees the far ground");

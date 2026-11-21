@@ -223,7 +223,7 @@ use super::*;
             "off rolls: {:?} — the entry's ignores_los:false must darken the profile waiver — on main it cannot (RED)", off.rolls);
     }
 
-    /// `PENDING_EPOCH_OWN_INDIRECT` (table twin `granted_indirect_of`, read by `_solo_shot_eligibility`): an Indirect in the SHOOTER's own store, not
+    /// `EPOCH_94_PARITY_BATCH` (table twin `granted_indirect_of`, read by `_solo_shot_eligibility`): an Indirect in the SHOOTER's own store, not
     /// an attackers-side mark on the target, waives the sight test of its weapons. Split fire (the fixture of SHO-01a): the volley's pick `bh` is
     /// seen, but a plain Rifle is aimed at `b`, which `a` does not see. The table's AI pick never reads the grant (`_solo_pick_overlay_target`),
     /// so the pooled gate stays blind to it; only the per-weapon sight count waives. RED before the fix: the grant is on the ledger and no resolver
@@ -231,7 +231,7 @@ use super::*;
     /// and no record stay blind; the pending epoch minus one replays the old reading.
     #[test]
     fn an_indirect_granted_to_the_shooters_own_unit_waives_sight_from_the_pending_epoch() {
-        use crate::acts::PENDING_EPOCH_OWN_INDIRECT as OWN;
+        use crate::acts::EPOCH_94_PARITY_BATCH as OWN;
         let own = |rule: &str, scope: &str, attackers: bool| crate::mods::LiveMod { scope: Rc::from(scope), attackers, ..mark(rule) };
         let fires = |epoch: u32, m: Option<crate::mods::LiveMod>| -> bool {
             let (mut st, statics) = buff_line();
@@ -265,7 +265,7 @@ use super::*;
     /// as the table does (`granted_indirect_of` in `_solo_resolve_ai_volley`). RED before the fix: only a weapon's own Indirect said it.
     #[test]
     fn an_own_indirect_grant_names_the_moved_penalty_it_waives() {
-        use crate::acts::PENDING_EPOCH_OWN_INDIRECT as OWN;
+        use crate::acts::EPOCH_94_PARITY_BATCH as OWN;
         let lines = |epoch: u32, grant: bool, kind: i64| -> Vec<String> {
             let (mut st, mut statics) = super::volley_landings::volley_line();
             st.profiles = Rc::new(Profiles { list: vec![st.profiles.list[0].clone(); 4], index: HashMap::new() });

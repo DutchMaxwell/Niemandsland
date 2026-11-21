@@ -605,7 +605,7 @@ pub struct Ctx {
     pub versatile_pick_hit: i64,
     pub versatile_pick_ap: i64,
     pub versatile_latched: bool,
-    /// PENDING_EPOCH_VERSATILE_MODIFIED_HIT — the activation has no pick yet and the sim leaves it to the dice: the first eligible shot
+    /// EPOCH_94_PARITY_BATCH — the activation has no pick yet and the sim leaves it to the dice: the first eligible shot
     /// picks on the number it rolls at and reports it (`ShootResult::versatile_picks`). Set only by the volley seam; false on every `ctx_of`.
     pub versatile_defer: bool,
     /// SHO-19 / SHO-19b — the Versatile pick ignores the 9"/6" distance gate at
@@ -630,7 +630,7 @@ pub struct Ctx {
     /// Mark) — whoever SHOOTS at it may waive the sight test. Zero on every
     /// `ctx_of`; only `sim::ctx_live` folds the ledger's once-record.
     pub indirect_mark: bool,
-    /// An Indirect granted to THIS unit's own store (`mods::granted_own_indirect`, from `PENDING_EPOCH_OWN_INDIRECT`): its shots after a move
+    /// An Indirect granted to THIS unit's own store (`mods::granted_own_indirect`, from `EPOCH_94_PARITY_BATCH`): its shots after a move
     /// are Indirect ones, so the to-hit note names the waived moved penalty. Zero on every `ctx_of`; only `sim::ctx_live` folds it.
     pub indirect_own: bool,
     /// A live attackers-side `grants_rule: "+6\" shooting range"` (Increased
@@ -843,7 +843,7 @@ impl Ctx {
         c
     }
 
-    /// Plan H (`PENDING_EPOCH_DEADLY_INLINE`): the target as the table reads it once every model of its chain is dead: the rules that
+    /// Plan H (`EPOCH_94_PARITY_BATCH`): the target as the table reads it once every model of its chain is dead: the rules that
     /// need a living carrier (the unit-trigger "all / most models" forms: the Stealth, Evasive, Artillery and Aircraft to-hit penalties,
     /// Fortified, Guarded, Shielded, the Regeneration family) answer false, and the state reads of a dead unit (above half strength,
     /// terrain) are off. Stats, cover, the blast cap and the range gates are NOT touched: they stay as declared.
@@ -4465,7 +4465,7 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
     let mut u_unstop = false;
     let mut u_unstop_melee = false;
     let mut facets: Vec<(String, bool, bool)> = Vec::new(); // the unit-level names the re-roll line carries, with their facet
-    let exact_labels = rule_on(rules_epoch, crate::acts::PENDING_EPOCH_EXACT_STRIKER_LABELS);
+    let exact_labels = rule_on(rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH);
     for r in &p.special_rules {
         let rs = r.trim();
         if exact_labels && is_unlisted_striker_label(rs) {

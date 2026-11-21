@@ -68,6 +68,9 @@ func test_fearless_hero_keeps_recovery_after_plain_squad_dies() -> void:
 	squad.unit_properties["attached_heroes"] = [hero]
 	(squad.models[0] as ModelInstance).is_alive = false
 	squad.is_shaken = true
+	# From the epoch 94 batch (SHAKEN_MIRROR, reading B) a lone hero's morale test reads the hero's own Shaken flag, not the dead host's stale
+	# one: the hero is the Shaken one here, as the mirror leaves it when the host fails a test.
+	hero.is_shaken = true
 	_main.seed_tray_rng(7)
 	await _main._solo_morale_test(squad, "AI (Squad)")
 	assert_str(_log_text()).contains("Fearless — recovery die")

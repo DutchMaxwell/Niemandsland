@@ -10463,7 +10463,7 @@ func _solo_striker_has_bane(striker: GameUnit, profile: Dictionary, melee: bool)
 	var sources: Array = (profile.get("rules", []) as Array).duplicate()
 	if striker != null:
 		sources.append_array(striker.get_special_rules())
-	var exact_labels: bool = AiActRecorder.rules_epoch >= AiActRecorder.PENDING_EPOCH_EXACT_STRIKER_LABELS
+	var exact_labels: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_94_PARITY_BATCH
 	for r in sources:
 		var s := str(r).strip_edges()
 		if exact_labels and GameUnit.is_unlisted_striker_label(s):
@@ -13709,11 +13709,11 @@ func _solo_ask_hero_morale_once(unit: GameUnit) -> void:
 		"Let a living Hero test morale for %s from now on?" % unit.get_name(), "Use Hero", "Use unit", true)
 
 
-## The Shaken flag a morale test of `unit` reads. From `AiActRecorder.PENDING_EPOCH_SHAKEN_MIRROR` a host with no models left is
+## The Shaken flag a morale test of `unit` reads. From `AiActRecorder.EPOCH_94_PARITY_BATCH` a host with no models left is
 ## tested through its living lone hero, which IS the unit now (p.14): the hero's own flag decides. The dead host's flag is stale once the
 ## hero recovered alone (nothing clears a dead unit's Shaken) and no longer auto-fails the test. Below it the unit's own flag, as always.
 func _solo_test_unit_shaken(unit: GameUnit) -> bool:
-	if AiActRecorder.rules_epoch >= AiActRecorder.PENDING_EPOCH_SHAKEN_MIRROR and unit.get_alive_count() <= 0:
+	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_94_PARITY_BATCH and unit.get_alive_count() <= 0:
 		for h in unit.get_attached_heroes():
 			var hu := h as GameUnit
 			if hu != null and hu.get_alive_count() > 0:
