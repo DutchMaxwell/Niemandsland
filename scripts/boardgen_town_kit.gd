@@ -35,7 +35,8 @@ const OWN_COLOUR := ["cart_toppled_load", "handcart_load", "table_overturned_loa
 ## The kit's ladder segments (a 3 in segment and the top segment with stiles past the edge): the SAME transforms as the Deepworks kit ladders - BoardgenGreybox.ladder_kit_plan(layout), one segment per
 ## 3 in of every connector's rise, the origin on the wall face at the connector's edge point, +z away from the wall - so the walkable / ladder data is identical (boxes of kind ladder are not solid).
 const LADDER_MODULES := ["timber_ladder_3in", "timber_ladder_top"]
-const MODULE_TINT := {"pool_kerb": Color(0.52, 0.55, 0.6), "tower_cap_burnt": Color(0.32, 0.30, 0.28), "rubble_heap_a": Color(0.5, 0.44, 0.38), "rubble_heap_b": Color(0.36, 0.32, 0.28)}   # (heaps: grey-brown rubble and ash, never a white blob - lead 21.11.)   # a charred frame: the timber grain, dark
+const MODULE_TINT := {"pool_kerb": Color(0.52, 0.55, 0.6), "tower_cap_burnt": Color(0.32, 0.30, 0.28), "rubble_heap_a": Color(0.5, 0.44, 0.38), "rubble_heap_b": Color(0.36, 0.32, 0.28),
+	"hay_heap": Color(0.7, 0.64, 0.52), "stall_collapsed_cloth": Color(0.76, 0.72, 0.68), "lantern_post": Color(0.3, 0.29, 0.28)}   # (21.11.: the hay and the striped cloth were the palest shapes of a scene; the lamp's base and cage read as white bars - dark iron now, only the glass glows)   # (heaps: grey-brown rubble and ash, never a white blob - lead 21.11.)   # a charred frame: the timber grain, dark
 ## Glass of a lamp and the coals of a brazier: drawn with an emissive material, the OmniLight sits at their origin.
 const GLOW := {"lantern_glow": Color(1.0, 0.72, 0.38), "brazier_coals": Color(1.0, 0.45, 0.18)}
 
@@ -204,6 +205,8 @@ func build(layout: Dictionary) -> void:
 			mmi.material_override = glow
 			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			continue
+		if m == "lantern_post":
+			mmi.layers |= BoardgenMood.LAMP_IRON_LAYER
 		if mat != null and m.begins_with("roof_") and m != "roof_rafters":   # the roofs carry UVs in tiles (courses parallel to the eaves)
 			mat.uv1_triplanar = false
 			mat.uv1_scale = Vector3.ONE * ROOF_UV_TILE_IN / lib.tile_in("roof_tiles")

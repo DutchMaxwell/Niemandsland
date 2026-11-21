@@ -214,13 +214,13 @@ static func _occupied(layout: Dictionary) -> Array[Vector2]:
 	return pts
 
 
-## True when a point of `occupied` lies in the run's strip (its span plus 0.5 in at each end, 1.2 in out from the face).
+## True when a point of `occupied` lies in the run's strip (its span plus 0.9 in at each end - a lamp post right at a hero's end crowded it -, 1.2 in out from the face).
 static func _blocked(run: Dictionary, occupied: Array[Vector2]) -> bool:
 	for p: Vector2 in occupied:
 		var rel: Vector2 = p - run["start"]
 		var a: float = rel.dot(run["along"])
 		var o: float = rel.dot(run["into"])
-		if a > -0.5 and a < float(run["span"]) + 0.5 and o > -0.3 and o < 1.2:
+		if a > -0.9 and a < float(run["span"]) + 0.9 and o > -0.3 and o < 1.2:
 			return true
 	return false
 

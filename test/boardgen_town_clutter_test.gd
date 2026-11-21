@@ -37,7 +37,7 @@ func test_every_lantern_gets_a_post_and_its_glass_at_the_same_spot() -> void:
 	assert_int((plan["lantern_post"] as Array).size()).is_equal(BoardgenTownDressing.lanterns(_town()).size())
 	assert_int((plan["lantern_glow"] as Array).size()).is_equal((plan["lantern_post"] as Array).size())
 	for i in (plan["lantern_post"] as Array).size():
-		assert_vector(plan["lantern_post"][i]["xf"].origin).is_equal_approx(plan["lantern_glow"][i]["xf"].origin, Vector3.ONE * 0.00001)
+		assert_vector(plan["lantern_post"][i]["xf"].origin + Vector3(0, BoardgenTownDressing.LANTERN_HEIGHT_IN * 0.0254, 0)).is_equal_approx(plan["lantern_glow"][i]["xf"].origin, Vector3.ONE * 0.00001)   # the glass at the head (at the foot it read as a white base)
 
 
 func test_strip_pieces_stand_on_a_wall_face_facing_away_from_it_and_inside_their_cell_edge() -> void:

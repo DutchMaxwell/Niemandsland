@@ -58,8 +58,8 @@ static func plan(layout: Dictionary) -> Dictionary:
 	for l: Dictionary in BoardgenTownDressing.lanterns(layout):
 		var at: Vector2 = l["at"]
 		var yaw := BoardgenTownDressing._hash(int(at.x * 7.0), int(at.y * 7.0), 72) * TAU
-		for m in LAMP_MODULES:
-			_add(out, m, _item(yaw, Vector3(at.x, 0.0, at.y)))
+		_add(out, "lantern_post", _item(yaw, Vector3(at.x, 0.0, at.y)))
+		_add(out, "lantern_glow", _item(yaw, Vector3(at.x, BoardgenTownDressing.LANTERN_HEIGHT_IN, at.y)))   # the glass at the head, where the light is (its origin is its middle: at the foot it read as a white base)
 	# the wall strip: every prop box of the procedural plan becomes one piece, its origin on the wall face, +z away from the wall, kept inside its cell edge
 	for b: Dictionary in BoardgenTownDressing.props(layout):
 		var m := prop_module(b)

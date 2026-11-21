@@ -173,3 +173,25 @@ func test_crows_perch_where_nobody_stands_and_the_kit_critters_replace_the_stand
 	assert_bool(rats.multimesh.mesh is CapsuleMesh).is_false()
 	for f in DirAccess.get_files_at(DIR):
 		DirAccess.remove_absolute(DIR.path_join(f))
+
+
+## Lead 21.11.: the lamp's base and cage read as white bars, the hay and the stall's cloth were the palest shapes of a scene - the kit tints them down (dark iron; dull straw and canvas).
+func test_lamp_iron_hay_and_cloth_are_tinted_down() -> void:
+	assert_float(BoardgenTownKit.MODULE_TINT.get("lantern_post", Color.WHITE).get_luminance()).is_less(0.4)
+	assert_float(BoardgenTownKit.MODULE_TINT.get("hay_heap", Color.WHITE).get_luminance()).is_less(0.8)
+	assert_float(BoardgenTownKit.MODULE_TINT.get("stall_collapsed_cloth", Color.WHITE).get_luminance()).is_less(0.8)
+	assert_bool(BoardgenTownKit.GLOW.has("lantern_glow")).is_true()   # only the glass glows
+
+
+## The lamp's own lights skip the lamp's iron (lit from inside its cage it read as white bars); the board's layer pass keeps that bit.
+func test_the_lantern_lights_skip_the_lamp_iron() -> void:
+	var g := MeshInstance3D.new()
+	g.layers = BoardgenMood.LAMP_IRON_LAYER
+	BoardgenMood.assign_layers(g)
+	assert_int(g.layers).is_equal(BoardgenMood.BOARD_LAYER | BoardgenMood.LAMP_IRON_LAYER)
+	g.free()
+	var node := _built()
+	var lights := node.find_children("Lantern*", "Light3D", true, false)
+	assert_int(lights.size()).is_greater(0)
+	for l: Light3D in lights:
+		assert_int(l.light_cull_mask & BoardgenMood.LAMP_IRON_LAYER).is_equal(0)
