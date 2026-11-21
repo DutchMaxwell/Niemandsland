@@ -5043,11 +5043,14 @@ const SHOOT_SHOT_MODS: [&str; 8] = [
 /// once-per-game PLAYER CHOICE the table never automates, so stamping it
 /// flat would be bug #489's over-credit.
 fn stamp_shot_modifier(
-    reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], trace73: bool,
+    reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], trace73: bool, rules_epoch: u32,
 ) {
     let mut flat = 0;
     let mut over9 = 0;
-    for name in SHOOT_SHOT_MODS {
+    // A weapon that prints Imprecise itself already pays its -1 in the dice fold (`ShootProfile::imprecise`); the unit's own
+    // Imprecise must not charge it twice.
+    let mut unit_imprecise = 0;
+    for name in SHOOT_SHOT_MODS.iter().copied().chain(unit_imprecise_name(rules_epoch)) {
         if !unit_rule_active(reg, p, name) {
             continue;
         }
@@ -5059,16 +5062,24 @@ fn stamp_shot_modifier(
         let band = if e.param_f("over_in", 0.0) > 0.0 { "over 9in" } else { "flat" };
         trace_stamp(trace73 && hb != 0, "shot-modifier", name,
             &format!("{}: {} stamped {:+} to hit ({})", p.name, name, hb, band));
-        if e.param_f("over_in", 0.0) > 0.0 {
+        if name == "Imprecise" {
+            unit_imprecise += hb;
+        } else if e.param_f("over_in", 0.0) > 0.0 {
             over9 += hb;
         } else {
             flat += hb;
         }
     }
     for sp in shoot.iter_mut() {
-        sp.hit_bonus += flat;
+        sp.hit_bonus += flat + if sp.imprecise { 0 } else { unit_imprecise };
         sp.hit_bonus_over9 += over9;
     }
+}
+
+/// `PENDING_EPOCH_UNIT_IMPRECISE`: the unit-borne Imprecise joins the flat shooting Shot Modifier names (3.6 army books: the bearer gets
+/// -1 to hit when attacking). Below the gate it stays unread, byte-exact.
+fn unit_imprecise_name(rules_epoch: u32) -> Option<&'static str> {
+    rule_on(rules_epoch, crate::acts::PENDING_EPOCH_UNIT_IMPRECISE).then_some("Imprecise")
 }
 
 /// Wave 3 — the Shot Modifier family's two RUNTIME-GATED shooting members,
@@ -5119,7 +5130,7 @@ fn shot_mod_notes_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> [Sh
         if n >= out.len() { break; }
         let name = base_rule_name(r);
         if name.is_empty() || out[..n].iter().any(|x| x.name == name) { continue; }
-        let kind = if SHOOT_SHOT_MODS.contains(&name.as_str()) { 0u8 }
+        let kind = if SHOOT_SHOT_MODS.contains(&name.as_str()) || unit_imprecise_name(rules_epoch) == Some(name.as_str()) { 0u8 }
             else if name == "Mobile Artillery" && rule_on(rules_epoch, EPOCH_6_TABLE_RULES) { 1 }
             else if name == "Grounded Precision" && rule_on(rules_epoch, EPOCH_6_TABLE_RULES) { 2 }
             else if name == "Precision Feat" && rule_on(rules_epoch, EPOCH_7_TABLE_RULES) { 3 }
@@ -7573,7 +7584,7 @@ impl UnitStatic {
         stamp_conditional_ap(reg, p, rules_epoch, &mut shoot);
         stamp_unit_strikers(reg, p, &mut shoot, rules_epoch);
         stamp_regen_unit_arm(reg, p, &mut shoot, rules_epoch);
-        stamp_shot_modifier(reg, p, &mut shoot, trace73);
+        stamp_shot_modifier(reg, p, &mut shoot, trace73, rules_epoch);
 
         let mut melee = melee_profiles_at(&p.weapons, rules_epoch);
         // NML-002 Strafing — the move-through trigger's own array, stamped

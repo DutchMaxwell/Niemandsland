@@ -1018,6 +1018,12 @@ pub const EPOCH_94_PARITY_BATCH: u32 = 94;
 /// - UPR_NEEDS_SHOT: no Unpredictable Shooter die for a volley in which no weapon is in reach.
 pub const EPOCH_95_PARITY_BATCH: u32 = 95;
 pub const CURRENT_RULES_EPOCH: u32 = 95;
+/// Placeholder gate for UNIT IMPRECISE (coverage ledger shoot m1, lane covfix-dice; GF/AoF 3.6 army books: Imprecise = the bearer gets -1
+/// to hit when attacking): a unit that carries Imprecise as its OWN rule (not on a weapon) folds the -1 into its shooting to-hit like the
+/// other flat Shot Modifier names, and names it in the to-hit note. Before, only a weapon-borne Imprecise was read (`EPOCH_73_V36`); the
+/// table already folded the unit rule. Core: `unit::stamp_shot_modifier` / `shot_mod_notes_of`. Records stamped 95 or below replay
+/// byte-exact. Every call site reads THIS constant, not the literal `96`.
+pub const PENDING_EPOCH_UNIT_IMPRECISE: u32 = 96;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2340,6 +2346,13 @@ mod tests {
         EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER,
         EPOCH_94_PARITY_BATCH, EPOCH_95_PARITY_BATCH,
     };
+
+    #[test]
+    fn unit_imprecise_gate_starts_at_96() {
+        assert_eq!(super::PENDING_EPOCH_UNIT_IMPRECISE, 96);
+        assert!(!rule_on(95, super::PENDING_EPOCH_UNIT_IMPRECISE), "a record at 95 keeps the unit-borne Imprecise unread");
+        assert!(rule_on(96, super::PENDING_EPOCH_UNIT_IMPRECISE));
+    }
 
     #[test]
     fn upr_needs_shot_gate_starts_at_95() {
