@@ -9,7 +9,8 @@ extends RefCounted
 ##   B = THE SECTION of a straight street (not a junction or square): the signed offset across it from its centre line, which wanders +-0.3 in along the run (the kennel of a lane lies on
 ##       it, the cart ruts of an artery 0.7 in either side of it): a lane 64 + 16 x offset (0..127), an ARTERY (a straight run of 10+ street cells) 192 + 16 x offset (128..255);
 ##       255 off a run. Not half-turn true on purpose (the look need not mirror).
-##   A = reserved for the damage patches (G4), 0 = none.
+##   A = DAMAGE 0..1: 2-4 seeded patches per half of the board (1-2.5 in across the cells beside a wall or a border, never in the middle of a street: the wear lane stays nearly
+##       intact) and the two rut lines of every artery (0.3); the shader raises the odds of a missing, sunken or cracked sett with it.
 
 const TEXELS_PER_CELL := 16
 const MUD_REACH_IN := 1.5   # mud creeps this far onto the setts from an earth border
@@ -18,6 +19,12 @@ const HALO_IN := 1.5   # the damp ring round water
 const EDGE_CAP_IN := 3.0
 const ARTERY_CELLS := 10   # a straight street run this long carries carts: ruts, and its kennels lie beside the frontage
 const WANDER_IN := 0.3
+const RUT_IN := 0.7
+## The odds of a sett's fate (shader uniforms grit_odds_*, grit_lane_keep): missing, sunken, cracked, repair = BASE + DAMAGE x the map's damage (+ 0.08 x wet for sunken), the missing and
+## sunken odds kept at LANE_KEEP in the walked middle. Tuned with expected_shares() to the style bible: 4-8 / 10-15 / 6-10 / 3-5 %, >= half the missing ones in the patches.
+const ODDS_BASE := Vector4(0.032, 0.125, 0.08, 0.04)
+const ODDS_DAMAGE := Vector4(0.65, 0.35, 0.12, 0.0)
+const LANE_KEEP := Vector2(0.35, 0.5)   # the cart ruts lie this far either side of an artery's centre line (1.4 in apart)
 const NEIGHBOURS := [Vector2i(-1, -1), Vector2i(0, -1), Vector2i(1, -1), Vector2i(-1, 0), Vector2i(1, 0), Vector2i(-1, 1), Vector2i(0, 1), Vector2i(1, 1)]
 
 
@@ -66,6 +73,89 @@ static func runs(layout: Dictionary, cls: PackedByteArray) -> Dictionary:
 		var hi: int = (z + reach.call(x, z, 0, 1)) if axis == 0 else (x + reach.call(x, z, 1, 0))
 		var centre := (float(lo + hi + 1) * 0.5 - float(nz if axis == 0 else nx) * 0.5) * cell
 		out[i] = {"axis": axis, "centre": centre, "artery": (h if axis == 0 else v) >= ARTERY_CELLS, "phase": BoardgenTownDressing._hash(int(round(centre * 8.0)) + 4096 * axis, int(layout.get("seed", 0)) & 1023, 300) * TAU}
+	return out
+
+
+## Sets the map and the odds on the board's material.
+static func apply(mat: ShaderMaterial, layout: Dictionary) -> void:
+	mat.set_shader_parameter("grit_map", ImageTexture.create_from_image(map(layout)))
+	mat.set_shader_parameter("grit_on", 1.0)
+	mat.set_shader_parameter("grit_odds_base", ODDS_BASE)
+	mat.set_shader_parameter("grit_odds_damage", ODDS_DAMAGE)
+	mat.set_shader_parameter("grit_lane_keep", LANE_KEEP)
+
+
+## The walked middle of a street (the shader's `lane`) at `edge_in` inches from its edge.
+static func lane(edge_in: float) -> float:
+	return smoothstep(0.55, 1.1, edge_in)
+
+
+## What the shader will draw, from the map alone (every street texel weighs the same): the shares of missing / sunken / cracked / repair setts, the share of the missing ones inside a
+## damage patch (damage > 0.3), and the missing + sunken odds of the walked middle (lane > 0.5) over those of the rest.
+static func expected_shares(layout: Dictionary) -> Dictionary:
+	var img := map(layout)
+	var cls := classes(layout)
+	var nx: int = layout["nx"]
+	var tpc := TEXELS_PER_CELL
+	var sum := Vector4.ZERO
+	var n := 0
+	var miss_patch := 0.0
+	var mid := Vector2.ZERO   # (odds, texels)
+	var side := Vector2.ZERO
+	for z in img.get_height():
+		for x in img.get_width():
+			if cls[(z / tpc) * nx + x / tpc] != 1:
+				continue
+			var c := img.get_pixel(x, z)
+			var ln := lane(c.r * EDGE_CAP_IN)
+			var pm := (ODDS_BASE.x + ODDS_DAMAGE.x * c.a) * lerpf(1.0, LANE_KEEP.x, ln)
+			var ps := (ODDS_BASE.y + ODDS_DAMAGE.y * c.a + 0.08 * minf(c.g, 0.7)) * lerpf(1.0, LANE_KEEP.y, ln)
+			var o := Vector4(pm, ps, ODDS_BASE.z + ODDS_DAMAGE.z * c.a, ODDS_BASE.w + ODDS_DAMAGE.w * c.a)
+			sum += o
+			n += 1
+			if c.a > 0.3:
+				miss_patch += pm
+			if ln > 0.5:
+				mid += Vector2(pm + ps, 1.0)
+			else:
+				side += Vector2(pm + ps, 1.0)
+	var share := sum / maxf(n, 1)
+	return {"missing": share.x, "sunken": share.y, "cracked": share.z, "repair": share.w, "missing_in_patches": miss_patch / maxf(sum.x, 0.0001),
+		"lane_ratio": (mid.x / maxf(mid.y, 1.0)) / maxf(side.x / maxf(side.y, 1.0), 0.0001)}
+
+
+## The damage patches of a board: 2-4 per half, {at (board inches), r (inches)}, each on a street texel 0.3-1.2 in from the street's edge, 6 in or more apart. Deterministic per seed;
+## the two halves draw their own (the look need not mirror).
+static func patches(layout: Dictionary, cls: PackedByteArray) -> Array[Dictionary]:
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell := float(layout["cell_in"])
+	var tables := _tables(cell, TEXELS_PER_CELL)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(layout.get("seed", 0)) * 7919 + 31
+	var out: Array[Dictionary] = []
+	for half in 2:
+		var cells: Array[int] = []
+		for i in nx * nz:
+			if cls[i] == 1 and ((i / nx) * 2 < nz) == (half == 0):
+				cells.append(i)
+		if cells.is_empty():
+			continue
+		var want := 2 + rng.randi_range(0, 2)
+		var placed := 0
+		for _try in 60:
+			if placed >= want:
+				break
+			var i: int = cells[rng.randi_range(0, cells.size() - 1)]
+			var t := rng.randi_range(0, TEXELS_PER_CELL * TEXELS_PER_CELL - 1)
+			var edge: float = _near(cls, nx, nz, i % nx, i / nx, (1 << 0) | (1 << 2) | (1 << 3), EDGE_CAP_IN, tables)[t]
+			if edge < 0.3 or edge > 1.2:
+				continue
+			var at := (Vector2(i % nx, i / nx) - Vector2(nx, nz) * 0.5) * cell + (Vector2(t % TEXELS_PER_CELL, t / TEXELS_PER_CELL) + Vector2(0.5, 0.5)) * (cell / TEXELS_PER_CELL)
+			if out.any(func(p: Dictionary) -> bool: return (p["at"] as Vector2).distance_to(at) < 6.0):
+				continue
+			out.append({"at": at, "r": rng.randf_range(1.0, 2.5)})
+			placed += 1
 	return out
 
 
@@ -149,6 +239,22 @@ static func map(layout: Dictionary) -> Image:
 						var pz := (cz * tpc + tz + 0.5) * step - nz * cell * 0.5
 						var off: float = (pz if run["axis"] == 0 else px) - float(run["centre"]) - wander(px if run["axis"] == 0 else pz, run["phase"])
 						bytes[o + 2] = clampi(roundi((192.0 if run["artery"] else 64.0) + 16.0 * off), 128 if run["artery"] else 0, 255 if run["artery"] else 127)
+						if run["artery"] and absf(absf(off) - RUT_IN) < 0.3:
+							bytes[o + 3] = 77   # 0.3 along the ruts
 					bytes[o + 1] = int(round(maxf((1.0 - halo[i] / HALO_IN) * 0.6, (1.0 - other[i] / reach) * 0.7) * 255.0))
 					o += 4
+	for pt: Dictionary in patches(layout, cls):
+		var at: Vector2 = pt["at"]
+		var r: float = pt["r"]
+		var lo := ((at - Vector2(r, r)) / step + Vector2(w, h) * 0.5).floor()
+		var hi := ((at + Vector2(r, r)) / step + Vector2(w, h) * 0.5).ceil()
+		for tz in range(maxi(int(lo.y), 0), mini(int(hi.y), h)):
+			for tx in range(maxi(int(lo.x), 0), mini(int(hi.x), w)):
+				if cls[(tz / tpc) * nx + tx / tpc] != 1:
+					continue
+				var d := (Vector2(tx + 0.5, tz + 0.5) - Vector2(w, h) * 0.5) * step - at
+				var mid := smoothstep(0.8, 1.5, bytes[(tz * w + tx) * 4] / 255.0 * EDGE_CAP_IN)   # a patch fades towards the walked middle
+				var v := roundi(255.0 * (1.0 - smoothstep(r * 0.45, r, d.length())) * (1.0 - 0.75 * mid))
+				var o := (tz * w + tx) * 4 + 3
+				bytes[o] = maxi(bytes[o], v)
 	return Image.create_from_data(w, h, false, Image.FORMAT_RGBA8, bytes)

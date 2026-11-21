@@ -71,6 +71,22 @@ float grit_kennel(vec4 g, float run) {
 	return (1.0 - smoothstep(0.1, 0.17, d)) * step(0.25, abs(run - 0.5)) * step(b, 254.5);
 }
 
+// BROKEN PAVING (style bible 6, plan G4): each sett's fate from its own hash against odds raised by the map's DAMAGE (patches, ruts) and wetness, lowered in the wear lane: 1 missing (mud
+// in the hole), 2 sunken (lower, darker), 3 cracked (a dark line across it), 4 an odd pale repair stone, 0 sound. The odds are BoardgenTownGrit's (ODDS_*, LANE_KEEP; its
+// expected_shares() checks them against the style bible on the map itself): missing / sunken / cracked / repair.
+uniform vec4 grit_odds_base = vec4(0.032, 0.125, 0.08, 0.04);
+uniform vec4 grit_odds_damage = vec4(0.65, 0.35, 0.12, 0.0);
+uniform vec2 grit_lane_keep = vec2(0.35, 0.5);
+
+int grit_fate(float h, float dmg, float wet, float lane) {
+	float u = fract(h * 13.71);
+	float pm = (grit_odds_base.x + grit_odds_damage.x * dmg) * mix(1.0, grit_lane_keep.x, lane);
+	float ps = (grit_odds_base.y + grit_odds_damage.y * dmg + 0.08 * wet) * mix(1.0, grit_lane_keep.y, lane);
+	float pc = grit_odds_base.z + grit_odds_damage.z * dmg;
+	float pr = grit_odds_base.w + grit_odds_damage.w * dmg;
+	return u < pm ? 1 : (u < pm + ps ? 2 : (u < pm + ps + pc ? 3 : (u < pm + ps + pc + pr ? 4 : 0)));
+}
+
 // The street's grit at a point: `xz` inches off the board centre, `w` the noise-bent lookup point of the earth / street border, `sett` from cobble() (hash, stone mask, point in the
 // sett), `run` the ground map's run. Changes the albedo, relief and roughness; returns the debug colour of the fragment.
 vec3 grit_street(vec2 xz, vec2 w, vec4 sett, float run, inout vec3 alb, inout float rel, inout float rough) {
@@ -90,11 +106,24 @@ vec3 grit_street(vec2 xz, vec2 w, vec4 sett, float run, inout vec3 alb, inout fl
 	float cover = min(GRIT_MUD_COVER, 0.75 * mud) * smoothstep(0.35, 0.65, vnoise(xz * 1.9 + 7.0));   // a broken film: the setts show through
 	alb = mix(alb, mudc * 1.15, cover);
 	rough = mix(rough, 0.55, 0.6 * mud);
+	float lane = smoothstep(0.55, 1.1, g.r * GRIT_EDGE_CAP);   // the walked middle of a street (style bible 15: the calmest ground)
+	int fate = grit_fate(sett.x, g.a, min(g.g, 0.7), lane);
+	float f1 = kp * float(fate == 1);   // every fate fades out below ~3 px (keep): nothing crawls at the play camera
+	alb = mix(alb, mudc * 1.25, f1 * sett.y);   // a missing sett: a hole of mud, paler than the joints round it
+	rel = mix(rel, 0.1, f1);
+	float f2 = kp * float(fate == 2);
+	alb *= mix(1.0, 0.72, f2);   // a sunken sett: lower and darker
+	rel = mix(rel, rel * 0.45, f2);
+	float f3 = kp * float(fate == 3) * sett.y * (1.0 - smoothstep(0.03, 0.07, abs(sett.z * 0.8 - sett.w + (fract(sett.x * 5.3) - 0.5) * 0.3)));
+	alb = mix(alb, vec3(0.035, 0.033, 0.03), 0.85 * f3);   // a crack across it
+	float f4 = kp * float(fate == 4) * sett.y;
+	alb = mix(alb, vec3(dot(alb, LUMA)) * vec3(1.6, 1.55, 1.42), 0.7 * f4);   // an odd pale stone, a repair
 	float ken = grit_kennel(g, run);
 	alb = mix(alb, mudc * 0.7, 0.7 * ken);   // the kennel: dark, wet, a channel
 	rel = mix(rel, 0.25, ken);
 	rough = mix(rough, 0.35, ken);
 	int c = ken > 0.5 ? 3 : (mud > 0.35 ? 2 : 0);
+	c = fate > 0 && c != 4 ? 6 + fate : c;   // the instrument counts the fate where it is, even where the look fades it out
 	return grit_class_colour(c);
 }
 

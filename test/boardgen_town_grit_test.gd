@@ -129,3 +129,48 @@ func test_street_mud_never_covers_more_than_40_percent_of_the_setts() -> void:
 				if cls[(z / tpc) * nx + x / tpc] == 1:
 					worst = maxi(worst, img.get_pixel(x, z).g8)
 		assert_int(worst).override_failure_message("seed %d: wet / mud %d on a street texel" % [s, worst]).is_less_equal(179)
+
+
+func test_the_damage_lies_in_a_few_patches_beside_the_walls_and_along_the_ruts_not_in_the_wear_lane() -> void:
+	for s: int in SEEDS:
+		var layout := _layout(s)
+		var cls := BoardgenTownGrit.classes(layout)
+		var pts := BoardgenTownGrit.patches(layout, cls)
+		assert_int(pts.size()).override_failure_message("seed %d: %d patches" % [s, pts.size()]).is_between(4, 8)
+		for i in pts.size():
+			assert_float(float(pts[i]["r"]) * 2.0).is_between(2.0, 5.0)
+			for j in range(i + 1, pts.size()):
+				assert_float((pts[i]["at"] as Vector2).distance_to(pts[j]["at"])).is_greater_equal(6.0)
+		var img := BoardgenTownGrit.map(layout)   # the walked middle (edge > 1.2 in) carries less than half the damage of the 1 in beside the walls
+		var side := [0.0, 0]
+		var middle := [0.0, 0]
+		for z in img.get_height():
+			for x in img.get_width():
+				var c := img.get_pixel(x, z)
+				if cls[(z / BoardgenTownGrit.TEXELS_PER_CELL) * int(layout["nx"]) + x / BoardgenTownGrit.TEXELS_PER_CELL] != 1:
+					continue
+				var edge := c.r * BoardgenTownGrit.EDGE_CAP_IN
+				if c.b8 >= 128 and c.b8 < 255 and absf(absf((c.b8 - 192) / 16.0) - BoardgenTownGrit.RUT_IN) < 0.35:
+					continue   # the ruts are damage in the middle by design
+				var bucket: Array = side if edge < 1.0 else (middle if edge > 1.2 else [0.0, 0])
+				bucket[0] += c.a
+				bucket[1] += 1
+		if middle[1] > 0:
+			assert_float(middle[0] / middle[1]).override_failure_message("seed %d: middle %.3f side %.3f" % [s, middle[0] / middle[1], side[0] / side[1]]).is_less(0.5 * side[0] / side[1])
+
+
+## The broken paving the odds give on the map itself (style bible 6): 4-8 % missing, 10-15 % sunken, 6-10 % cracked, 3-5 % repaired, at least half the missing ones in the patches (clustered,
+## never salt and pepper), and the walked middle of a street at less than half the rest's odds. The shader reads the same odds (uniforms set by BoardgenTownGrit.apply).
+func test_the_odds_of_the_setts_give_the_style_bibles_broken_paving() -> void:
+	for s: int in SEEDS:
+		var e := BoardgenTownGrit.expected_shares(_layout(s))
+		print("GRIT_SHARES seed %d %s" % [s, e])
+		assert_float(e["missing"]).override_failure_message("seed %d missing %.3f" % [s, e["missing"]]).is_between(0.04, 0.08)
+		assert_float(e["sunken"]).override_failure_message("seed %d sunken %.3f" % [s, e["sunken"]]).is_between(0.10, 0.15)
+		assert_float(e["cracked"]).is_between(0.06, 0.10)
+		assert_float(e["repair"]).is_between(0.03, 0.05)
+		assert_float(e["missing_in_patches"]).override_failure_message("seed %d clustered %.2f" % [s, e["missing_in_patches"]]).is_greater_equal(0.5)
+		assert_float(e["lane_ratio"]).is_less(0.5)
+	var src := FileAccess.get_file_as_string("res://shaders/ruintown_grit.gdshaderinc")
+	for u in ["grit_odds_base", "grit_odds_damage", "grit_lane_keep"]:
+		assert_bool(src.contains("uniform vec") and src.contains(" %s " % u)).override_failure_message("uniform %s" % u).is_true()
