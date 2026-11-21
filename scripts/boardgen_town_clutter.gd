@@ -20,6 +20,10 @@ const TURRET_YAW := [0.0, -PI * 0.5, PI, PI * 0.5]
 ## The share of towers that carry a heavy charred cap frame (lead 21.11.: fewer - the thin frames read as scaffolding when a third of the towers had one).
 const BURNT_CAP_SHARE := 0.12
 const LAMP_MODULES := ["lantern_post", "lantern_glow"]
+## The fences of a garden plot (kit batch A7, PLOT-EDGE): a straight 3 in run, a run with a 1 in gap (the hurdle lying in the bed), a corner of two arms. One style per plot.
+const FENCE_STYLES := [["fence_wattle", "fence_wattle_gap", "fence_wattle_corner"], ["fence_plank", "fence_plank_gap", "fence_plank_corner"]]
+## The corner piece's yaw for two fenced sides that meet (side, side + 1; sides N, E, S, W): its arms run along local +x and +z from the plot corner.
+const FENCE_CORNER_YAW := [-PI * 0.5, PI, PI * 0.5, 0.0]
 const FOUNTAIN_MODULES := ["fountain_basin", "fountain_column", "fountain_leaves"]
 const STATUE_MODULES := ["statue_plinth", "statue_stump"]
 
@@ -76,6 +80,7 @@ static func plan(layout: Dictionary) -> Dictionary:
 			_add(out, m, it)
 	_flat(layout, out, scenes["reserved"])
 	_plots(layout, out)
+	_fences(layout, out)
 	_ivy(layout, out)
 	_landmarks(layout, out)
 	_hall_and_towers(layout, out)
@@ -157,6 +162,81 @@ static func _plots(layout: Dictionary, out: Dictionary) -> void:
 			continue
 		var at := origin + (Vector2(cd["x"], cd["z"]) + Vector2(0.5, 0.5)) * cell_in + Vector2(BoardgenTownDressing._hash(i, half, 81) - 0.5, BoardgenTownDressing._hash(i, half, 82) - 0.5) * 0.6
 		_add(out, m, _item(BoardgenTownDressing._hash(i, half, 83) * TAU, Vector3(at.x, 0.0, at.y)))
+
+
+## FENCES round the garden plots (Rough, level 0, off the street; kit batch A7, PLOT-EDGE): on every plot edge that looks at open level-0 ground, inside the plot (the origin on the edge,
+## +z into the plot, the fence line 0.15 in in), 0.8-0.91 in high - a border, not cover (the plot is forest already). An edge is a straight run, a broken run (one in six) or open (one in
+## seven); two straight runs that meet become one corner piece; every plot keeps at least one gap. Never on a street cell, a ladder end or along a raised wall.
+static func _fences(layout: Dictionary, out: Dictionary) -> void:
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var clear := _kept_clear(layout)
+	var cells: Array = layout["cells"]
+	var dirs: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
+	var plot := func(i: int) -> bool:
+		var c: Dictionary = cells[i]
+		return c["lot_kind"] == "Rough" and int(c["level"]) == 0 and not c["street"] and not clear.has(i)
+	var group := {}   # cell -> the smallest cell index of its plot (one style per plot)
+	for cd: Dictionary in cells:
+		var i: int = cd["z"] * nx + cd["x"]
+		if group.has(i) or not plot.call(i):
+			continue
+		var todo := [i]
+		group[i] = i
+		while not todo.is_empty():
+			var k: int = todo.pop_back()
+			for d: Vector2i in dirs:
+				var n := Vector2i(k % nx, k / nx) + d
+				var j := n.y * nx + n.x
+				if n.x >= 0 and n.y >= 0 and n.x < nx and n.y < nz and not group.has(j) and plot.call(j):
+					group[j] = i
+					todo.append(j)
+	var fates := {}   # cell -> [fate per side]: "" no fence, "run", "gap", "open"
+	var opened := {}
+	for i: int in group:
+		var half := 1 if i / nx >= nz / 2 else 0
+		var f := ["", "", "", ""]
+		for side in 4:
+			var n := Vector2i(i % nx, i / nx) + dirs[side]
+			if n.x < 0 or n.y < 0 or n.x >= nx or n.y >= nz:
+				continue
+			var j := n.y * nx + n.x
+			if group.get(j, -1) == group[i] or int(cells[j]["level"]) != 0 or cells[j]["lot_kind"] == "Hazard":
+				continue
+			var h := BoardgenTownDressing._hash(i, half, 200 + side)
+			f[side] = "gap" if h < 0.17 else ("open" if h < 0.31 else "run")
+			if f[side] != "run":
+				opened[group[i]] = true
+		fates[i] = f
+	for i: int in fates:   # a plot with no way in gets its first fenced edge broken
+		if opened.has(group[i]):
+			continue
+		for side in 4:
+			if fates[i][side] == "run":
+				fates[i][side] = "gap"
+				opened[group[i]] = true
+				break
+	for i: int in fates:
+		var f: Array = fates[i]
+		var half := 1 if i / nx >= nz / 2 else 0
+		var style: Array = FENCE_STYLES[int(BoardgenTownDressing._hash(group[i], half, 205) * 2.0) % 2]
+		var lo := origin + Vector2(i % nx, i / nx) * cell_in
+		var cornered := [false, false, false, false]
+		for side in 4:
+			var nxt := (side + 1) % 4
+			if f[side] == "run" and f[nxt] == "run" and not cornered[side] and not cornered[nxt]:
+				cornered[side] = true
+				cornered[nxt] = true
+				var c := lo + Vector2(cell_in if side in [0, 1] else 0.0, cell_in if side in [1, 2] else 0.0)   # NE, SE, SW, NW
+				_add(out, style[2], _item(FENCE_CORNER_YAW[side], Vector3(c.x, 0.0, c.y)))
+		for side in 4:
+			if cornered[side] or not ["run", "gap"].has(f[side]):
+				continue
+			var d := dirs[side]
+			var mid := lo + (Vector2(0.5, 0.5) + Vector2(d) * 0.5) * cell_in
+			_add(out, style[0] if f[side] == "run" else style[1], _item(atan2(-float(d.x), -float(d.y)), Vector3(mid.x, 0.0, mid.y)))   # +z into the plot
 
 
 ## WALL pieces: ivy strands up a wall face (<= 0.12 in off it), on one face in eight of a raised cell that looks at open ground, never on a ladder's face.

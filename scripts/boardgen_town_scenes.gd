@@ -200,11 +200,10 @@ static func _occupied(layout: Dictionary) -> Array[Vector2]:
 	var pts: Array[Vector2] = []
 	for l: Dictionary in BoardgenTownDressing.lanterns(layout):
 		pts.append(l["at"])
-	var ladders := BoardgenGreybox.ladder_kit_plan(layout)
-	for key: String in ladders:
-		for it: Dictionary in ladders[key]:
-			var o: Vector3 = (it["xf"] as Transform3D).origin / BoardgenTownClutter.INCHES_TO_METERS
-			pts.append(Vector2(o.x, o.z))
+	var origin := Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) * -0.5
+	for c: Dictionary in layout["connectors"]:
+		if c.has("edge_in"):   # the ladder's foot on its wall face (as BoardgenGreybox.ladder_kit_plan puts it)
+			pts.append(Vector2(c["edge_in"][0], c["edge_in"][1]) + origin)
 	var square := {}
 	BoardgenTownClutter._square_and_walls(layout, square)
 	for m in ["stall_frame", "stall_frame_ruined", "brazier", "pool_spout"]:

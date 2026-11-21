@@ -253,3 +253,52 @@ func test_the_kit_ladder_carries_exactly_the_ladder_data_of_the_box_ladder() -> 
 func test_burnt_cap_frames_are_rare() -> void:
 	assert_float(BoardgenTownClutter.BURNT_CAP_SHARE).is_less_equal(0.15)
 	assert_float(BoardgenTownClutter.BURNT_CAP_SHARE).is_greater(0.0)   # but they exist
+
+
+## Fences round the garden plots (kit batch A7, PLOT-EDGE): every piece inside a plot cell on an edge that looks at open level-0 ground, +z (a corner: both arms) into the plot, never on a
+## street cell; every plot keeps a way in (a broken run or an open edge).
+func test_fences_ring_the_garden_plots_from_inside_with_a_gap() -> void:
+	var boards: Array = [_town()]
+	for s: int in [7, 11, 13, 25, 41]:
+		boards.append(ClassDB.instantiate("NmlCore").boardgen_layout_themed(s, "ruintown"))
+	var total := 0
+	for layout: Dictionary in boards:
+		var nx: int = layout["nx"]
+		var plan := BoardgenTownClutter.plan(layout)
+		var origin := Vector2(nx, int(layout["nz"])) * 3.0 * -0.5
+		var plot_cells := {}
+		for cd: Dictionary in layout["cells"]:
+			if cd["lot_kind"] == "Rough" and int(cd["level"]) == 0 and not cd["street"]:
+				plot_cells[int(cd["z"]) * nx + int(cd["x"])] = true
+		var straight := 0
+		var gaps := 0
+		for style: Array in BoardgenTownClutter.FENCE_STYLES:
+			for k in 3:
+				for it: Dictionary in plan.get(style[k], []):
+					total += 1
+					var xf: Transform3D = it["xf"]
+					var at := Vector2(xf.origin.x, xf.origin.z) / 0.0254 - origin
+					var probes: Array[Vector2] = []
+					if k == 2:   # a corner: a point along each arm, 0.4 in in
+						probes = [at + Vector2(xf.basis.x.x, xf.basis.x.z) * 1.5 + Vector2(xf.basis.z.x, xf.basis.z.z) * 0.4, at + Vector2(xf.basis.z.x, xf.basis.z.z) * 1.5 + Vector2(xf.basis.x.x, xf.basis.x.z) * 0.4]
+					else:
+						probes = [at + Vector2(xf.basis.z.x, xf.basis.z.z) * 0.4]
+						assert_float(minf(fposmod(at.x, 3.0), fposmod(at.y, 3.0))).is_less(0.01)   # on a cell edge
+						straight += 1 if k == 0 else 0
+						gaps += 1 if k == 1 else 0
+					for p: Vector2 in probes:
+						var c := Vector2i(p / 3.0)
+						assert_bool(plot_cells.has(c.y * nx + c.x)).override_failure_message("a fence at %s leans out of its plot" % at).is_true()
+		var edges := 0
+		for i: int in plot_cells:
+			for d: Vector2i in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
+				var n := Vector2i(i % nx, i / nx) + d
+				if n.x >= 0 and n.y >= 0 and n.x < nx and n.y < int(layout["nz"]) and not plot_cells.has(n.y * nx + n.x) and int(layout["cells"][n.y * nx + n.x]["level"]) == 0 and layout["cells"][n.y * nx + n.x]["lot_kind"] != "Hazard":
+					edges += 1
+		var corners := 0
+		for style: Array in BoardgenTownClutter.FENCE_STYLES:
+			corners += (plan.get(style[2], []) as Array).size()
+		if edges > 0:   # a way in: fewer closed runs than plot edges
+			assert_int(straight + 2 * corners).override_failure_message("a plot fenced shut").is_less(edges)
+	assert_int(total).is_greater(0)
+
