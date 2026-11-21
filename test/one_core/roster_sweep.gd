@@ -160,10 +160,16 @@ static func first_state_diff(t: Dictionary, c: Dictionary) -> String:
 ## the core half alone can drop properties before the capture ("core_drop": {"att"|"tgt": [property]}), edit one weapon rule of the
 ## shooter for the volley ("core_edit_rule": {"from", "to"}) or swap one face of the roll stream it recorded ("core_swap_face": roll
 ## index); "distance_in" puts the target that far (centre to centre, inches) from the shooter instead of `DISTANCE_IN` on both halves. Nothing is planted unless asked: the sweep itself never touches either half.
+## PLAN_COVER_36 9c: "blocker" (an entry) stands as a third unit of the SHOOTER's seat (never a target) at "blocker_in" inches on both halves;
+## "core_epoch" runs the core half at that rules epoch (a planted fault: the table at the test's epoch, the door at another).
 static func volley(main: Node, entry_a: Dictionary, entry_b: Dictionary, seed_n: int, core: bool, dump_dir: String, opts := {}) -> Dictionary:
 	var att := spawn(main, entry_a, SEAT_SHOOTER, 0.0)
 	var tgt := spawn(main, entry_b, SEAT_TARGET, float(opts.get("distance_in", DISTANCE_IN)))
 	var by := {"att": att, "tgt": tgt}
+	var blocker: GameUnit = spawn(main, opts["blocker"], SEAT_SHOOTER, float(opts.get("blocker_in", 12.0))) if opts.has("blocker") else null
+	var epoch_was := AiActRecorder.rules_epoch
+	if core and opts.has("core_epoch"):
+		AiActRecorder.rules_epoch = int(opts["core_epoch"])
 	for who in opts.get("ledger", {}):
 		for prop in opts["ledger"][who]:
 			(by[who] as GameUnit).unit_properties[prop] = opts["ledger"][who][prop]
@@ -202,6 +208,7 @@ static func volley(main: Node, entry_a: Dictionary, entry_b: Dictionary, seed_n:
 		await main._run_ai_shooting({"unit": att, "moved": false, "action": AiDecision.Action.HOLD})
 		main.solo_controller.hit_and_run_move(att, true)   # DS-HR1: the body's post-shot tail (main.gd:1347-1349)
 	main.battle_log.entry_added.disconnect(on_entry)
+	AiActRecorder.rules_epoch = epoch_was
 	AiDiceRecorder.close()
 	var rolls: Array = ParityTable._read_dice(dump_dir)
 	if core and opts.has("core_swap_face") and int(opts["core_swap_face"]) < rolls.size():
@@ -214,7 +221,7 @@ static func volley(main: Node, entry_a: Dictionary, entry_b: Dictionary, seed_n:
 		"deny": CoreSlice.refusals_in(CoreSlice.DENY_PATH, att) \
 			+ CoreSlice.refusals_in(CoreSlice.DENY_PATH, tgt, true).map(func(x: String) -> String: return "target_" + x) \
 			+ CoreSlice.pair_refusals_in(CoreSlice.DENY_PATH, att, tgt)}
-	free_units(main, [att, tgt])
+	free_units(main, [att, tgt] + ([blocker] if blocker != null else []))
 	await main.get_tree().process_frame
 	return out
 

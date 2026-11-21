@@ -17,12 +17,29 @@ fn screened_line() -> (State, Vec<UnitStatic>) {
     (st, statics)
 }
 
-fn volley(epoch: u32) -> ShootResult {
+fn volley_said(epoch: u32) -> (ShootResult, Vec<String>) {
     let (st, statics) = screened_line();
     let seams = Seams { sighting: true, rules_epoch: epoch, ..Default::default() };
     let terrain = crate::terrain::Terrain::default();
     let (mut tray, mut rng) = (Tray::seeded(11), crate::rng::GodotRng::new(0));
-    resolve_stochastic_tray_on_board(&statics, &st, &buff_action(Some("b")), &terrain, seams, &mut rng, &mut tray).unwrap().1
+    let shot = resolve_stochastic_tray_on_board(&statics, &st, &buff_action(Some("b")), &terrain, seams, &mut rng, &mut tray).unwrap().1;
+    // A door's tray (supplied with the same faces) keeps the lines it is told.
+    let mut door = Tray::supplied(shot.rolls.iter().map(|r| r.faces.clone()).collect());
+    let mut rng = crate::rng::GodotRng::new(0);
+    resolve_stochastic_tray_on_board(&statics, &st, &buff_action(Some("b")), &terrain, seams, &mut rng, &mut door).unwrap();
+    (shot, door.all_lines().into_iter().map(|l| l.text).collect())
+}
+
+fn volley(epoch: u32) -> ShootResult {
+    volley_said(epoch).0
+}
+
+/// PLAN_COVER_36 step 9c: the doors write the tray's lines (#3286), so the screen line is said there too, once.
+/// RED before: it stood in `ShootResult.log` only.
+#[test]
+fn the_door_tray_says_the_screen_line() {
+    let (_, said) = volley_said(crate::acts::PENDING_EPOCH_COVER_SCREEN);
+    assert_eq!(said.iter().filter(|l| *l == SCREEN).count(), 1, "the tray says it once: {said:?}");
 }
 
 const SCREEN: &str = "Cover: b is behind a sight blocker from a (3 of 3 models) - +1 Defense";

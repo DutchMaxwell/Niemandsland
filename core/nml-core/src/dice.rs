@@ -2287,6 +2287,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         if def.screened && lifts_screen && !skips_cover && !screen_lift_logged.contains(&p.name) {
             screen_lift_logged.push(p.name.clone());
             out.log.push(format!("Indirect: {} ignores {def_owner}'s cover from sight blockers", p.name));
+            say_rule(tray, "cover_screen_lift", def.side, || format!("Indirect: {} ignores {def_owner}'s cover from sight blockers", p.name));
         }
         // I4 (table `_solo_ai_shoot` / the human volley): a covered save says so once, with the Defense it rolls on.
         if !unit_of_one && !cover_logged && uses_cover {
