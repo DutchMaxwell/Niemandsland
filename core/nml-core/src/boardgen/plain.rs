@@ -4,7 +4,7 @@
 //!
 //! [`GENERATOR_VERSION`] names the generator's output. Whoever changes what `generate(seed)` returns for a seed
 //! bumps it and re-pins the hash test below, so a stored board is never taken for the output of a newer generator.
-use crate::terrain::{CellParams, PlainTerrain, TierGrid, CONTAINER, DANGEROUS, FOREST, NONE, RUINS};
+use crate::terrain::{CellParams, ContainerObb, Obb, PlainTerrain, TierGrid, CONTAINER, DANGEROUS, FOREST, NONE, RUINS};
 use super::levels::LotKind;
 use super::{Layout, Theme, LEVEL_IN};
 
@@ -24,6 +24,8 @@ fn grid_margin(l: &Layout) -> i64 {
 /// (4 x 4 ft, 3 in cells, yaw 0), and `tiers` carries every level (inches) and every ladder. No stairs exist.
 pub fn to_plain(l: &Layout) -> PlainTerrain {
     let m = grid_margin(l);
+    // organic C1: on a board with free solids an intact house is a box (`solids::free_solids`), never painted cells
+    let free = l.theme.budgets().free_solids;
     // one class per cell, row-major: a Hazard lot is DANGEROUS, a landmark's footprint carries the class of its kind
     // (a classless pump house leaves the cell as it was)
     let town = |c: &&super::Cell| -> Option<i32> {
@@ -31,7 +33,7 @@ pub fn to_plain(l: &Layout) -> PlainTerrain {
         match (c.lot_kind, c.level) {
             (LotKind::Terrace, 0) if !c.street => Some(RUINS),
             (LotKind::Rough | LotKind::Wall, 0) => Some(FOREST),
-            (LotKind::Roofed, _) => Some(CONTAINER),
+            (LotKind::Roofed, _) if !free => Some(CONTAINER),
             _ => None,
         }
     };
@@ -53,7 +55,11 @@ pub fn to_plain(l: &Layout) -> PlainTerrain {
         table_size_feet: [f64::from(l.board_in[0]) / 12.0, f64::from(l.board_in[1]) / 12.0],
         grid_rotation_degrees: 0.0, grid_size_inches: f64::from(l.cell_in), inches_to_meters: crate::IN2M,
     };
-    PlainTerrain { cells, tiers: Some(tiers), cell_params, ..Default::default() }
+    let solids = super::solids::free_solids(l);
+    let m_of = |v: [f64; 2]| [v[0] * crate::IN2M, v[1] * crate::IN2M];
+    let sandbox = solids.iter().map(|s| Obb { c: m_of(s.c_in), he: m_of(s.he_in), yaw: s.yaw, kind: CONTAINER, slabs: Vec::new() }).collect();
+    let containers = solids.iter().map(|s| ContainerObb { c: m_of(s.c_in), he: m_of(s.he_in), yaw: s.yaw }).collect();
+    PlainTerrain { cells, sandbox, containers, tiers: Some(tiers), cell_params, ..Default::default() }
 }
 
 /// FNV-1a 64 over the serialised JSON of the board: the identity MP peers and a save compare (no hash crate needed).
@@ -175,7 +181,72 @@ mod tests {
         assert_ne!(board_hash(&moved), board_hash(&p), "a changed class must change the hash");
     }
 
+    /// The free board with its houses painted back as CONTAINER cells (the encoding before organic C1).
+    fn painted_back(l: &crate::boardgen::Layout, p: &PlainTerrain) -> PlainTerrain {
+        let m = grid_margin(l) as f64;
+        let mut q = PlainTerrain { sandbox: Vec::new(), containers: Vec::new(), ..p.clone() };
+        q.cells.extend(l.cells.iter().filter(|c| c.lot_kind == LotKind::Roofed).map(|c| [c.x as f64 + m, c.z as f64 + m, f64::from(CONTAINER)]));
+        q
+    }
+
+    /// Movement and sight disagreements between the free board `p` and the painted board `q`: `type_at` at 9 interior
+    /// points per house cell, and eye rays (1.25 in) across each house cell, through it and 0.3 in beside it.
+    fn disagreements(l: &crate::boardgen::Layout, p: &PlainTerrain, q: &PlainTerrain) -> usize {
+        use crate::sight::{has_los, zones_of_at, Cyl};
+        let (a, b) = (Terrain::build(p), Terrain::build(q));
+        let (za, zb) = (zones_of_at(&a, crate::acts::CURRENT_RULES_EPOCH), zones_of_at(&b, crate::acts::CURRENT_RULES_EPOCH));
+        let w = |x: f64, z: f64| [((-24.0 + x) * crate::IN2M) as f32, 0.0, ((-24.0 + z) * crate::IN2M) as f32];
+        let eye = |x: f64, z: f64| Cyl { c: [(-24.0 + x) * crate::IN2M, (-24.0 + z) * crate::IN2M], r: 0.0, y0: 0.0, y1: 1.25 * crate::IN2M };
+        let mut bad = 0;
+        for c in l.cells.iter().filter(|c| c.lot_kind == LotKind::Roofed) {
+            let (x0, z0) = (3.0 * c.x as f64, 3.0 * c.z as f64);
+            for (fx, fz) in [0.25, 1.5, 2.75].into_iter().flat_map(|u| [0.25, 1.5, 2.75].map(move |v| (u, v))) {
+                bad += usize::from(a.type_at(w(x0 + fx, z0 + fz)) != b.type_at(w(x0 + fx, z0 + fz)));
+            }
+            for off in [1.5, -0.3, 3.3] {
+                for (p0, p1) in [((x0 - 4.0, z0 + off), (x0 + 7.0, z0 + off)), ((x0 + off, z0 - 4.0), (x0 + off, z0 + 7.0))] {
+                    let (e0, e1) = (eye(p0.0, p0.1), eye(p1.0, p1.1));
+                    bad += usize::from(has_los(&e0, &e1, false, &za, &[]) != has_los(&e0, &e1, false, &zb, &[]));
+                }
+            }
+        }
+        bad
+    }
+
+    #[test]
+    fn a_free_house_blocks_like_its_cells() {
+        let (mut houses, mut planted) = (0, 0);
+        for seed in 1..=60 {
+            let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+            let p = to_plain(&l);
+            let m = grid_margin(&l) as f64;
+            let house = |c: &&[f64; 3]| l.cells.iter().any(|h| h.lot_kind == LotKind::Roofed && [h.x as f64 + m, h.z as f64 + m] == [c[0], c[1]]);
+            assert!(!p.cells.iter().any(|c| house(&c)), "seed {seed}: a house was still painted");
+            houses += p.sandbox.len();
+            assert_eq!(p.sandbox.len(), p.containers.len());
+            let q = painted_back(&l, &p);
+            assert_eq!(disagreements(&l, &p, &q), 0, "seed {seed}: the free houses block other than their cells");
+            // planted fault: the sight box omitted - the house must stop reading as a sight blocker
+            planted += disagreements(&l, &PlainTerrain { containers: Vec::new(), ..p.clone() }, &q);
+        }
+        assert!(houses >= 120, "only {houses} free houses on 60 boards: the check proved too little");
+        assert!(planted > 0, "omitting every sight box went unnoticed: the sight half of the check cannot fail");
+    }
+
+    #[test]
+    fn a_free_board_is_an_exact_half_turn() {
+        for seed in 1..=200 {
+            let p = to_plain(&generate_themed(seed, Symmetry::Point180, Theme::RuinTown));
+            for s in &p.sandbox {
+                let twin = p.sandbox.iter().any(|t| t.c == [-s.c[0], -s.c[1]] && t.he == s.he && t.yaw == s.yaw && t.kind == s.kind);
+                assert!(twin, "seed {seed}: the box at {:?} has no exact half-turn twin", s.c);
+            }
+            assert!(p.containers.iter().zip(&p.sandbox).all(|(c, s)| c.c == s.c && c.he == s.he && c.yaw == s.yaw), "seed {seed}: sight and movement boxes differ");
+        }
+    }
+
     // re-pinned 21.11. (silhouette round): slender 2 x 1 town towers, one tower per wall run, 65 % intact houses
-    const PINNED_TOWN_42: &str = "593b1257da9d696f";
+    // re-pinned 21.11. (organic C1): the intact houses are free boxes (`sandbox` + `containers`), no longer painted cells
+    const PINNED_TOWN_42: &str = "b32aaecb0ffc2557";
     const PINNED_SEED_42: &str = "cbcd64fada596527";
 }
