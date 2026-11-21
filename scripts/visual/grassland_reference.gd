@@ -164,6 +164,7 @@ func apply(main: Node) -> void:
 		mat.set_shader_parameter("wall_regions",wall_regions)
 		mat.set_shader_parameter("drift_count",drift_count)
 		mat.set_shader_parameter("drift_points",drift_points)
+	BoardgenGreybox.flatten_relief(table)   # a generated board on the table keeps its footprint flat (this build made a new ground material)
 	if table_tier:
 		if not _profile.get("urban_mode",false):   # the urban ground draws no mounds
 			ReferenceMaterials.set_mounds(wall_regions.slice(0,wall_count),drift_points.slice(0,drift_count))

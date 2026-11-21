@@ -18,6 +18,9 @@ const TABLE_OVERLAY_GROUP := "table_overlay"
 ## The table's ground scatter (tufts, leaves, straw) is off on the board AND round it, whatever the table size: no biome dressing
 ## while a generated board is on the table (a board is the whole playing surface; the rest of the table is its frame).
 const SCATTER_OFF_M := 3.0
+## The table's ground relief (mounds, 7 mm ridges along terrain walls) is lifted flat under the board plus this margin (two cells of the relief mesh): the board's skin is 1 mm thick.
+const RELIEF_MARGIN_M := 0.03
+const RELIEF_META := "board_flat_rect"
 const INCHES_TO_METERS := 0.0254
 const GROUND_COLLISION_LAYER := 1
 ## Thickness of the level-0 ground skin that covers the biome texture, in inches.
@@ -449,13 +452,30 @@ static func wire_surfaces(material: ShaderMaterial, lib: TiefwerkLibrary) -> boo
 	return true
 
 
-## The table's own ground scatter (grass tufts, the biome dressing's straw, leaves and puddles) stays off under the board.
+## The table's own ground scatter (grass tufts, the biome dressing's straw, leaves and puddles) stays off under the board, and so does its ground relief.
 func _scatter_off(rect: Rect2) -> void:
 	var table := get_parent()
 	if table != null:
 		table.set_meta("scatter_keepout", rect)
+		table.set_meta(RELIEF_META, rect.grow(RELIEF_MARGIN_M - SCATTER_OFF_M))   # the board itself (an empty rect shrinks to none)
+		flatten_relief(table)
 		if table.has_node("GrassField"):
 			table.get_node("GrassField").set_keepout(rect)
+
+
+## Tells the table's ground materials (the table mesh and the shared base top) to keep the board's rect flat (shader uniform `flat_rect`, world metres). Without it the
+## ground's mounds under trees and its ridges along the terrain walls (up to 7 mm) poked through the board's 1 mm skin as lime slabs on the garden plots (21.11.). The biome
+## presenter calls this again whenever it builds a new ground material.
+static func flatten_relief(table: Node) -> void:
+	var rect: Rect2 = table.get_meta(RELIEF_META, Rect2())
+	var at := Vector2(table.global_position.x, table.global_position.z) if table is Node3D else Vector2.ZERO
+	var flat := Vector4(rect.position.x + at.x, rect.position.y + at.y, rect.end.x + at.x, rect.end.y + at.y) if rect.has_area() else Vector4.ZERO
+	var mats: Array = [table.get_node_or_null("TableMesh").material_override if table.has_node("TableMesh") else null]
+	if table.has_method("get_base_top_material"):
+		mats.append(table.get_base_top_material())
+	for mat in mats:
+		if mat is ShaderMaterial:
+			mat.set_shader_parameter("flat_rect", flat)
 
 
 ## The shader reads board inches off the board centre, so it is told where that is in the world.
