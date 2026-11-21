@@ -70,7 +70,7 @@
         crate::deployment::Rect::new(-w / 2.0, -d / 2.0, w, d)
     }
 
-    /// Firefight step 8: 48x48 board zones (catalogue key per board size, standard style only).
+    /// Firefight step 8 + switch step 18: 48x48 board zones (catalogue key per board size, six standard + three attack_defend styles).
     /// R: a 72x48 zone on a 48-in board is refused; G: both zones 12 in deep, 24 in apart.
     #[test]
     fn board_48x48_deployment_zones_and_72x48_refusal() {
@@ -81,11 +81,25 @@
         assert!(zones_fit_board(&z72, [48.0, 48.0]).is_err(), "72x48 zone on 48x48 board must be refused");
         assert!(zones_fit_board(&z72, [72.0, 48.0]).is_ok(), "72x48 zone fits 72x48 board");
 
-        // 48x48 catalogue: standard style (`front_line`) only; other styles refused.
-        assert!(catalog_zones_for_board(&cat, "spearhead", [48.0, 48.0]).is_err(),
+        // 48x48 catalogue: the six standard + three attack_defend styles; the unshipped families are refused.
+        assert!(catalog_zones_for_board(&cat, "long_haul", [48.0, 48.0]).is_err(),
             "non-standard styles are not enabled on 48x48");
-        assert!(catalog_zones_for_board(&cat, "centre_disc_12", [48.0, 48.0]).is_err(),
-            "attack_defend styles are not enabled on 48x48");
+        // Every shipped 48x48 style resolves for both sides (`zones_fit_board` runs in the lookup).
+        let ids: Vec<&String> = cat["boards"]["48x48"].as_object().unwrap().keys().collect();
+        assert_eq!(ids.len(), 9, "six standard + three attack_defend: {ids:?}");
+        for id in ids {
+            let [a, b] = catalog_zones_for_board(&cat, id, [48.0, 48.0]).unwrap_or_else(|e| panic!("48x48/{id}: {e}"));
+            assert!(!a.is_empty() && !b.is_empty(), "{id} has zones for both sides");
+            if cat["boards"]["48x48"][id.as_str()]["family"] == "attack_defend" {
+                assert_eq!(a, b, "{id} is role-agnostic: the same zone for both sides");
+            }
+        }
+        // Planted faults: a vertex an inch past the half-extent, and a disc that spills over the edge, are refused.
+        let mut bad = cat.clone();
+        bad["boards"]["48x48"]["ground_war"]["zones"]["1"][0][0] = serde_json::json!([25, -24]);
+        assert!(catalog_zones_for_board(&bad, "ground_war", [48.0, 48.0]).is_err(), "a vertex past the board is refused");
+        bad["boards"]["48x48"]["centre_disc_12"]["zones"]["1"][0]["disc"]["r_in"] = serde_json::json!(25);
+        assert!(catalog_zones_for_board(&bad, "centre_disc_12", [48.0, 48.0]).is_err(), "a disc past the board is refused");
 
         // 48x48 front_line: both zones 12 in deep, 24 in apart, spanning x in [-24, 24].
         let [p1, p2] = catalog_zones_for_board(&cat, "front_line", [48.0, 48.0]).unwrap();
