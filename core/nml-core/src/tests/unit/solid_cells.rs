@@ -13,7 +13,13 @@ fn cliff(a: [f64; 2], b: [f64; 2], dy_in: f64, high: HighSide) -> TierEdge {
 }
 
 fn board(level_in: Vec<f64>, solid: Vec<u16>) -> Terrain {
-    let mut p: PlainTerrain = serde_json::from_value(serde_json::json!({"cells": [], "sandbox": [],
+    painted(level_in, solid, false)
+}
+
+/// `board`, with `container` painting the type cell under tier cell 5 CONTAINER (a 1 ft table: type cell = tier cell + 1).
+fn painted(level_in: Vec<f64>, solid: Vec<u16>, container: bool) -> Terrain {
+    let cells = if container { serde_json::json!([[2.0, 2.0, crate::terrain::CONTAINER as f64]]) } else { serde_json::json!([]) };
+    let mut p: PlainTerrain = serde_json::from_value(serde_json::json!({"cells": cells, "sandbox": [],
         "cell_params": {"table_size_feet": [1.0, 1.0], "grid_rotation_degrees": 0.0, "grid_size_inches": 3.0,
             "inches_to_meters": crate::IN2M}})).unwrap();
     p.tiers = Some(grid(level_in));
@@ -58,4 +64,22 @@ fn an_empty_solid_list_does_not_serialise_and_a_written_one_comes_back() {
     p.solid_cells = vec![5, 6];
     let back: PlainTerrain = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
     assert_eq!(back.solid_cells, vec![5, 6]);
+}
+
+/// L-RF1 F2: a base whose centre is over a solid CONTAINER cell is NOT "on the roof" - it overlaps a block and the end cut
+/// walks it out past the cliff; the same cell unlisted stays today's climbable container roof. Red before F2: the first
+/// assert (the roof exemption ignored `solid_cells`).
+#[test]
+fn nobody_stands_on_a_solid_cell_but_a_container_roof_stays() {
+    let (house, roof) = (painted(vec![0.0; 16], vec![5], true), painted(vec![0.0; 16], vec![], true));
+    let centre = [4.5, 4.5]; // tier cell 5 in the planner's 0-origin inch frame (board 12 x 12 in)
+    assert!(crate::mv::gate::overlaps_block(centre, 0.5, &house), "a solid cell is no roof");
+    assert!(!crate::mv::gate::overlaps_block(centre, 0.5, &roof), "planted: an unlisted container is a roof to stand on");
+    let cut = crate::mv::gate::rest_legal_cut(&[[4.5, 10.5], [4.5, 4.5]], 0.5, &house).expect("a legal spot on the route");
+    let end = cut.last().unwrap();
+    assert!(end[1] >= 6.5, "the base ends outside the house and off its cliff: {end:?}");
+    let w = [-1.5 * crate::IN2M, -1.5 * crate::IN2M];
+    let epoch = crate::acts::CURRENT_RULES_EPOCH;
+    assert_eq!(crate::sight::surface_y_m(&house, w, epoch), 0.0, "no model height on a house");
+    assert!(crate::sight::surface_y_m(&roof, w, epoch) > 0.0, "planted: a container roof keeps its 2.5 in");
 }
