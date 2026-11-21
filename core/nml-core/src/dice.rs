@@ -1430,7 +1430,7 @@ pub fn resolve_volley_leg(
 ) -> ShootResult {
     resolve_volley_with_pick_label(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates,
         shred_alias_dice, shred_boost_dice, deadly_per_model, takedown_exact,
-        &|gr| (takedown_cover(gr), "trooper".into()), sighted, None, tray)
+        &|gr| (takedown_cover(gr), "trooper".into()), sighted, None, None, tray)
 }
 
 /// `resolve_volley_leg` whose Takedown pick callback also answers the picked model's label (the table's `_solo_model_label`),
@@ -1444,7 +1444,10 @@ pub(crate) fn resolve_volley_with_pick_label(
     // `EPOCH_94_PARITY_BATCH`: asked after each Deadly weapon with the (unsaved, X) groups it pushed; the caller lands them on a scratch
     // copy of the state and answers how many models the target's chain has left (0 = wiped: the weapons still to fire then read `Ctx::wiped`).
     // `None` below 94.
-    inline_land: Option<InlineLand<'_>>, tray: &mut Tray,
+    inline_land: Option<InlineLand<'_>>,
+    // `PENDING_EPOCH_VOLLEY_DEADLY_STOPS`: on the finished Deadly groups, is the target's chain dead? Its Deadly wounds left then roll no
+    // ignore dice (the melee leg's `deadly_wipes`). `None` below 95.
+    deadly_wipes: Option<&dyn Fn(&ShootResult) -> bool>, tray: &mut Tray,
 ) -> ShootResult {
     let mut inline_land = inline_land;
     let mut wiped = false;
@@ -1464,7 +1467,18 @@ pub(crate) fn resolve_volley_with_pick_label(
     let mut upr_hit = 0i64;
     let mut hero_upr: Vec<(usize, i64, i64)> = Vec::new(); // (shooter index, ap, hit): a joined hero's own die
     let mut versatile_made: Vec<(Option<usize>, (i64, i64))> = Vec::new(); // the picks made in this volley (`Ctx::versatile_defer`)
-    if shooters.first().is_some_and(|sh| sh.att.unpredictable_shooting) {
+    // PENDING_EPOCH_UPR_NEEDS_SHOT: the die is owed only by a shooter with a weapon in reach (the loop's own range gate below);
+    // a volley with none is no volley at the table ("no target in range or sight"), so no die. Below the epoch every shooter owes it.
+    let fires = |sh: &Shooter<'_>| {
+        !rule_on(sh.att.rules_epoch, crate::acts::PENDING_EPOCH_UPR_NEEDS_SHOT)
+            || sh.keep.iter().any(|&pi| {
+                let p = &sh.profiles[pi];
+                let printed = p.range as f64 + p.reach_bonus_in.max(sh.att.granted_reach_in);
+                let reach = if def.ranged_shrouding { shrouded_reach(printed, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in) } else { printed };
+                sh.att.strafe_volley || (p.range > 0 && reach + def.range_mark_in >= sh.att.member_gap_in.unwrap_or(dist_in).ceil())
+            })
+    };
+    if shooters.first().is_some_and(|sh| sh.att.unpredictable_shooting && shooters.iter().any(&fires)) {
         let att0 = shooters[0].att;
         tray.owner_next(att0.unit);
         let faces = tray.roll(1);
@@ -1486,7 +1500,7 @@ pub(crate) fn resolve_volley_with_pick_label(
     } else if shooters.first().is_some_and(|sh| sh.att.v36_rules) {
         // AIG-G2 R5 (EPOCH_73_V36): the host rolled none, so each joined hero who carries the rule himself rolls ONE
         // die for his OWN profiles, before any weapon fires. Table twin: `_solo_hero_unpredictable`.
-        for (i, sh) in shooters.iter().enumerate().skip(1).filter(|(_, sh)| sh.att.unpredictable_shooting) {
+        for (i, sh) in shooters.iter().enumerate().skip(1).filter(|(_, sh)| sh.att.unpredictable_shooting && fires(sh)) {
             tray.owner_next(sh.att.unit);
             let faces = tray.roll(1);
             let low = (faces[0] as i64) <= sh.att.unpredictable_low_roll_max;
@@ -2490,7 +2504,7 @@ pub(crate) fn resolve_volley_with_pick_label(
             out.deadly_tally += w;
         } else if deadly_per_model && p.deadly > 0 {
             let first = out.deadly_groups.len();
-            push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, def_owner, tray, None);
+            push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, def_owner, tray, deadly_wipes);
             out.deadly_lines.push((p.name.clone(), w, p.deadly.max(1), out.deadly_groups.len() - first));
             out.deadly_tally += w;
         } else if ignores_regen {

@@ -920,6 +920,11 @@ pub const EPOCH_85_INDIRECT_GATE: u32 = 85;
 /// stands fully inside Cover terrain. `in_cover` keeps its meaning (the Grounded family reads it); the new `screened` flag feeds only the
 /// shooting save. Records stamped 94 or below replay byte-exact. Every call site reads THIS constant, not `95`.
 pub const PENDING_EPOCH_COVER_SCREEN: u32 = 95;
+/// Placeholder gate for VOLLEY DEADLY STOPS (gate 12, Eternal Artillery -> Ancient Wraith): the volley twin of the melee DEADLY_STOPS in
+/// `EPOCH_94_PARITY_BATCH`. A volley's Deadly wounds left once the target's chain is dead roll no ignore dice; the table's
+/// `_solo_land_deadly_wounds` finds no model to pick and stops. Records stamped 94 or below replay byte-exact. Every call site reads THIS
+/// constant, not the literal `95`.
+pub const PENDING_EPOCH_VOLLEY_DEADLY_STOPS: u32 = 95;
 /// The played volley's modifier distance (Valiant gate, over-9" modifiers) counts only the model pairs within the vertical reach (3", `melee_vertical_in`),
 /// and a unit with no pair in reach keeps the horizontal unit-centre distance: the table's `_solo_ai_volley_distance_in` over `nearest_melee_gap_in`.
 /// Before, a unit on a platform measured as close as the ground beside it (the soak's Hive Bond +1, table 4+ vs core 5+). Step path only. Records
@@ -1021,6 +1026,11 @@ pub const CURRENT_RULES_EPOCH: u32 = 94;
 /// (and names none in `cast_buffs`). Table twin `AiActRecorder.PENDING_EPOCH_SPELL_NO_STACK` (`_solo_record_spell_mod`). Below 95 byte-identical. Every call site reads THIS
 /// constant, not the literal `95`.
 pub const PENDING_EPOCH_SPELL_NO_STACK: u32 = 95;
+/// Placeholder gate for UNPREDICTABLE NEEDS A SHOT (gate 12, Zairetia): the Unpredictable (Shooter) die is owed when the unit shoots, so a
+/// volley in which no weapon reaches the target rolls no die, and a joined hero rolls his own die only when one of his weapons reaches it.
+/// The table builds no volley there ("no target in range or sight"). Core: `dice::resolve_volley_with_pick_label`. Records stamped 94 or
+/// below replay byte-exact. Every call site reads THIS constant, not the literal `95`.
+pub const PENDING_EPOCH_UPR_NEEDS_SHOT: u32 = 95;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2344,6 +2354,12 @@ mod tests {
         EPOCH_94_PARITY_BATCH,
     };
 
+    #[test]
+    fn upr_needs_shot_gate_starts_at_95() {
+        assert_eq!(super::PENDING_EPOCH_UPR_NEEDS_SHOT, 95);
+        assert!(!rule_on(94, super::PENDING_EPOCH_UPR_NEEDS_SHOT), "a record at 94 keeps the die of a volley with nothing in reach");
+    }
+
     /// Heightfield plan step 7 (the placeholder became the frozen batch epoch at the 94 bump): the gate is 94, on in a fresh game, off one
     /// epoch below.
     #[test]
@@ -2363,6 +2379,12 @@ mod tests {
         assert_eq!(super::PENDING_EPOCH_COVER_SCREEN, 95);
         assert!(!rule_on(94, super::PENDING_EPOCH_COVER_SCREEN), "a record at 94 replays terrain-only cover");
         assert!(rule_on(95, super::PENDING_EPOCH_COVER_SCREEN), "a record at 95 reads cover from sight blockers");
+    }
+
+    #[test]
+    fn volley_deadly_stops_gate_starts_at_95() {
+        assert_eq!(super::PENDING_EPOCH_VOLLEY_DEADLY_STOPS, 95);
+        assert!(!rule_on(94, super::PENDING_EPOCH_VOLLEY_DEADLY_STOPS), "a record at 94 rolls every Deadly wound's ignore dice");
     }
 
     #[test]
