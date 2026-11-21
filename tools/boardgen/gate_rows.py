@@ -55,6 +55,9 @@ for key in sorted(after, key=lambda k: (k[2], k[0], int(k[1].lstrip("s")))):
     ok = ok and good
     lines.append("%-6s %-4s yaw %3d | below1 %d -> %d | ratio median %.2f | p10 %.2f [repeats %s] | %s" % (
         key[0], key[1], int(key[2]), below[0][0], st.median(b[1] for b in below), med, p10, " ".join("%.2f" % p for p in p10s), "PASS" if good else "FAIL"))
+if not lines:
+    ok = False   # no row matched the baseline (other seeds, presets or yaws): a gate that compared nothing is not green
+    lines.append("no row of %s matches a row of %s" % (tag, base_tag))
 lines.append("GATE " + ("GREEN" if ok else "RED"))
 print("\n".join(lines))
 open(os.path.join(out, "%s_rows.txt" % tag), "w").write("\n".join(lines) + "\n")
