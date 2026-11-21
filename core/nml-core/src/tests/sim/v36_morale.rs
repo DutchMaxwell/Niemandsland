@@ -652,3 +652,19 @@ mod mor_09b_band_owner {
         panic!("no seed landed the defender's morale test: the fixture must make the defender lose");
     }
 }
+
+/// Lines audit: the mixed unit's Fearless count line (the table's `_solo_morale_test`, same words) is said on the tray the door writes, not
+/// only in `ShootResult.log`; a unit whose every model has the rule says nothing. RED on main: no tray line.
+#[test]
+fn the_door_tray_says_the_fearless_count() {
+    let said = |host: i64, hero_fearless: bool| {
+        let (mut st, statics) = joined_line(host, true, hero_fearless, true);
+        let seams = Seams { rules_epoch: EPOCH_73_V36, hero_attach: true, ..Default::default() };
+        let mut tray = Tray::supplied(vec![vec![4]]);
+        tray_morale(&mut st, &statics, 0, false, seams, &mut tray, &mut ShootResult::default(), None, None);
+        tray.all_lines().into_iter().map(|l| l.text).collect::<Vec<_>>()
+    };
+    let mixed = said(5, false);
+    assert!(mixed.iter().any(|l| l == "Fearless: 5 of 6 models of Squad have it — most do, so the whole unit counts"), "{mixed:?}");
+    assert!(said(5, true).iter().all(|l| !l.starts_with("Fearless:")), "every model has it: no count line");
+}

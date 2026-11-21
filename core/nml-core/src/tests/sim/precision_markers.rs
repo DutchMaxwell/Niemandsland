@@ -196,3 +196,42 @@ use super::*;
         assert_eq!(volley2.rolls[0].target, 4, "once per game: no second placement");
         assert_eq!(next2.tag_markers[2], 0);
     }
+
+    /// The tray lines of one act (a seeded run draws the dice, a supplied tray replays them): what a door step writes.
+    fn tray_lines_of(st: &State, statics: &[UnitStatic], action: &Action, seed: i64, epoch: u32) -> Vec<String> {
+        tray_lines_after(st, statics, action, seed, epoch, Vec::new())
+    }
+
+    /// `tray_lines_of`, with `lead` dice put in front of the recorded rolls (the Spotter's die is not a recorded roll).
+    fn tray_lines_after(st: &State, statics: &[UnitStatic], action: &Action, seed: i64, epoch: u32, lead: Vec<Vec<u8>>) -> Vec<String> {
+        let terrain = crate::terrain::Terrain::default();
+        let seams = Seams { rules_epoch: epoch, ..Seams::default() };
+        let run = |tray: &mut Tray| resolve_stochastic_tray_on_board(statics, st, action, &terrain, seams, &mut crate::rng::GodotRng::new(0), tray).unwrap().1;
+        let seeded = run(&mut Tray::seeded(seed));
+        let mut tray = Tray::supplied(lead.into_iter().chain(seeded.rolls.iter().map(|r| r.faces.clone())).collect());
+        run(&mut tray);
+        tray.all_lines().into_iter().map(|l| l.text).collect()
+    }
+
+    /// Lines audit: the Spotter and Tag placements and spends, and the 3.6 Target placement, say themselves on the door tray in the
+    /// table's words (they were `ShootResult.log` only). The Target says nothing below 73, as the table. RED on main: no tray line.
+    #[test]
+    fn the_precision_markers_say_their_placements_and_spends_on_the_door_tray() {
+        let e61 = crate::acts::EPOCH_61_PRECISION_MARKERS;
+        let has = |lines: &[String], t: &str| lines.iter().any(|l| l == t);
+        let (st, statics) = spotter_line();
+        let placed = tray_lines_after(&st, &statics, &spot_hold(), 1, e61, vec![vec![4]]);
+        assert!(has(&placed, "Precision Spotter: a marks b (1 marker — attackers may remove markers for +1 to hit each)"), "{placed:?}");
+        let (spotted, _) = run_act(&st, &statics, &spot_hold(), 1, e61);
+        let spent = tray_lines_of(&spotted, &statics, &buff_action(Some("b")), 13, e61);
+        assert!(has(&spent, "Precision Spotter: 1 marker removed — +1 to hit this volley"), "{spent:?}");
+        let (st, statics) = tag_line_h();
+        let tag = tray_lines_of(&st, &statics, &buff_action(Some("b")), 13, e61);
+        assert!(has(&tag, "Precision Tag: a places 2 markers on b — friendly attackers may remove markers for +1 to hit each"), "{tag:?}");
+        assert!(has(&tag, "Precision Tag: 2 markers removed — +2 to hit this volley"), "{tag:?}");
+        let (st, statics) = target_line();
+        let old = tray_lines_of(&st, &statics, &buff_action(Some("b")), 13, e61);
+        assert!(old.iter().all(|l| !l.starts_with("Precision Target")), "the table says no placement line below 73: {old:?}");
+        let v36 = tray_lines_of(&st, &statics, &buff_action(Some("b")), 13, crate::acts::EPOCH_73_V36);
+        assert!(has(&v36, "Precision Target: a places 1 token on each of b — a friendly attack gets +1 to hit"), "{v36:?}");
+    }
