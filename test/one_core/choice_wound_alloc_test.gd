@@ -202,7 +202,7 @@ func test_the_switch_is_on_by_default_and_the_environment_turns_it_off() -> void
 ## Switch OFF: the transcript is sent as it always was, nobody is asked, and the core lands its automatic order (the lead
 ## model takes the three wounds and dies).
 func test_with_the_switch_off_the_landing_is_the_automatic_one(timeout := 120000) -> void:
-	CoreActivation._choice_on = {"wound_alloc": false}
+	CoreActivation._choice_on = {"wound_alloc": false, "strike_back": false}   # every switch OFF (strike_back is default ON since E-25)
 	assert_bool(CoreActivation.any_choice_enabled()).is_false()
 	_session({GUEST_PEER: 2})
 	var sc := _scenario(2)

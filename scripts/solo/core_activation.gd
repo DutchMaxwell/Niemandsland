@@ -57,8 +57,8 @@ static func applies(main) -> bool:
 ## unless it is turned on. P4.D-27: the kinds in CHOICE_DEFAULT_ON start ON instead - `NML_ONE_CORE_CHOICE_WOUND_ALLOC=0`
 ## (or "off") is the way back until the switch and the #172 guard are deleted. Tests set the entry per kind. CC-14a: `interference`
 ## (a foe's token spend against an AI cast, `interference:<seq>:<caster>:<slot>`) starts OFF like the Takedown pick.
-const CHOICE_KINDS := ["takedown_model", "wound_alloc", "interference"]
-const CHOICE_DEFAULT_ON := ["wound_alloc"]
+const CHOICE_KINDS := ["takedown_model", "wound_alloc", "interference", "strike_back"]
+const CHOICE_DEFAULT_ON := ["wound_alloc", "strike_back"]
 static var _choice_on: Dictionary = {}
 
 
@@ -260,6 +260,13 @@ static func pending_choices(main, unit: GameUnit, transcript: Array) -> Array:
 			return ids   # already asked in this transcript: never a second probe
 		if str(e.get("t", "")) != "intent":
 			continue
+		# Plan E-25: a charge at a human-owned defender probes its strike-back (`strike_back:<charger>:<defender>`): the core asks
+		# where the table's `_solo_confirm_strike_back` would, the owner's answer follows; an AI defender always strikes back.
+		var charged = main.opr_army_manager.game_units.get(str(e.get("charge", "")))
+		if charged is GameUnit:
+			if choice_enabled("strike_back") and not main._solo_is_ai_unit(charged):
+				ids.append("strike_back:%s:%s" % [unit.unit_id, (charged as GameUnit).unit_id])
+			return ids
 		var target = main.opr_army_manager.game_units.get(str(e.get("shoot", "")))
 		if not target is GameUnit:
 			return ids
@@ -312,6 +319,8 @@ static func choice_purpose(id: String, transcript: Array = []) -> String:
 			return "Takedown model pick"
 		"wound_alloc":
 			return "wound allocation"
+		"strike_back":
+			return "strike-back choice"
 		"interference":
 			return _cast_spell_of(transcript, id.get_slice(":", 2)) if not transcript.is_empty() else "interference"   # the table's request names the spell
 	return "choice"
@@ -991,8 +1000,8 @@ static var _beat_actor: GameUnit = null
 
 ## P4.D-48: does the charge door take this AI charge? A board captured before the move, the tray, a CHARGE at a target, both
 ## units taken by the melee slice (`CoreSlice.MELEE_PATH`: no rule at all to start), a target with a statline, no Dangerous
-## test the table rolled and no cast (the board holds neither). An AI defender only: a human defender's strike-back is
-## its owner's choice on the table (`_solo_confirm_strike_back`), which the core does not ask yet.
+## test the table rolled and no cast (the board holds neither). A human defender's strike-back is its owner's choice: the
+## core asks it (Plan E-24) and `drive` answers it through `_solo_confirm_strike_back` (E-25).
 ## WIP switch, default OFF (`NML_ONE_CORE_CHARGE=1` turns it on): the core's tray melee does not yet say the table's
 ## melee lines nor land its strike losses per step (measured, test/one_core/core_charge_door_test.gd), so no game takes it.
 static var _charge_env := -1
@@ -1023,8 +1032,6 @@ static func charge_refusals(main, unit: GameUnit, report: Dictionary, deny := fa
 	if unit == null or not target is GameUnit or int(report.get("action", -1)) != AiDecision.Action.CHARGE:
 		return ["no_charge"]
 	var out: Array = CoreSlice.melee_refusals(unit, false, deny) + CoreSlice.melee_refusals(target, true, deny).map(func(r): return "target_" + r)
-	if not main._solo_is_ai_unit(target):
-		out.append("human_defender")
 	if main._solo_combined_alive(unit) >= MELEE_MAX_MODELS or main._solo_combined_alive(target) >= MELEE_MAX_MODELS:
 		out.append("size")
 	if not has_statline(target):

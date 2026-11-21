@@ -10050,14 +10050,15 @@ const SOLO_DIALOG_MIN_WIDTH := 420
 ## The defender's strike-back choice dialog. With `counter_first` the prompt explains that Counter weapons
 ## strike BEFORE the charger (GF/AoF v3.5.1 p.13); one choice covers the whole melee (Counter phase now,
 ## remaining weapons in the normal slot).
-func _solo_confirm_strike_back(defender: GameUnit, charger: GameUnit, counter_first: bool) -> bool:
+## `say` = false: the core's charge door says the answer's line itself (Plan E-24), so the prompt does not repeat it.
+func _solo_confirm_strike_back(defender: GameUnit, charger: GameUnit, counter_first: bool, say := true) -> bool:
 	var text := "%s is in melee with %s.\nStrike back?" % [defender.get_name(), charger.get_name()]
 	if counter_first:
 		text = "%s charges %s.\n%s has Counter — its Counter weapons strike FIRST.\nStrike back?" % [
 			charger.get_name(), defender.get_name(), defender.get_name()]
 	var strike: bool = await _solo_ask("Strike back?", text, "Strike back", "Hold")
 	# B3: the choice ALWAYS gets its log line — a silent "Hold" read like a swallowed input.
-	if battle_log != null:
+	if battle_log != null and say:
 		_log_rule_event(BattleLog.Category.COMBAT,
 			("%s strikes back" % defender.get_name()) if strike else
 			("%s holds — no strike back" % defender.get_name()), false)
@@ -12205,6 +12206,13 @@ func _solo_choice_local(unit: GameUnit, id: String, options: Array, wounds := 0,
 		return ""
 	if id.get_slice(":", 0) == "interference":   # CC-14b: the table's own prompt never looked at the batch flag, neither does the door's
 		return await _solo_pick_interference(options, ctx)
+	if id.get_slice(":", 0) == "strike_back":   # Plan E-25: the table's own prompt, asked whatever the batch flag (as on the table)
+		var defender := opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2))
+		var charger := opr_army_manager.get_game_unit_by_id(id.get_slice(":", 1))
+		if defender == null or charger == null:
+			return ""
+		var first: bool = _solo_has_counter(defender) and SoloController.counter_strikes_first(defender)
+		return "strike" if await _solo_confirm_strike_back(defender, charger, first, false) else "hold"
 	if _solo_batch:
 		return ""
 	if id.get_slice(":", 0) == "wound_alloc":
