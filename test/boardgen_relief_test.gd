@@ -22,13 +22,13 @@ func test_the_patterns_report_their_height_and_fade_it_with_the_pixel_footprint(
 	assert_bool(src.contains("rel = mix(0.5, sett *")).is_true()   # a sett that is too fine for the pixel is flat again (no shimmer)
 	assert_bool(src.contains("rel = mix(0.5, edge *")).is_true()
 	# the ground is bumped: cobbles, earth, boards, flagstones each set a depth
-	for needle in ["depth_in = 0.045;", "depth_in = 0.05;", "depth_in = 0.02;", "depth_in = 0.03;"]:
+	for needle in ["depth_in = 0.06;", "depth_in = 0.05;", "depth_in = 0.02;", "depth_in = 0.03;"]:
 		assert_bool(src.contains(needle)).override_failure_message("no relief depth `%s`" % needle).is_true()
 
 
-func test_roughness_follows_the_material_damp_joints_dry_crowns() -> void:
+func test_roughness_follows_the_material_worn_crowns_matt_joints() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
-	assert_bool(src.contains("rough = mix(0.55, 0.8, smoothstep(0.3, 0.7, crown));")).is_true()   # joint damp 0.55, sett crown 0.8
+	assert_bool(src.contains("rough = mix(0.85, 0.55, smoothstep(0.3, 0.7, crown));")).is_true()   # (target C, train 2) a dirty joint matt 0.85, a worn crown 0.55 (the grit map's wet makes damp joints shine)
 	assert_bool(src.contains("rough = 0.95;")).is_true()   # packed earth
 
 
@@ -141,13 +141,15 @@ func test_ruined_tops_break_only_in_the_outer_edge_strip() -> void:
 ## Lead 21.11. (readability gate): the ground the models stand on - streets, packed earth, garden plots, the decks of yards and tier floors - sits a step below the models' own values.
 func test_the_ground_the_models_stand_on_sits_below_the_models() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
-	assert_bool(src.contains("cobble(xz, seed, grit_street_tint(tint * vec3(1.15, 0.98, 0.78) * GROUND_COBBLE), run")).override_failure_message("the street keeps the warm dark road's value (plan PLAN_RUINTOWN_GRIT G2: a cold stone family at the same luminance, readability gate green)").is_true()
+	assert_bool(src.contains("cobble(xz, seed, grit_street_tint(tint * vec3(0.96, 1.0, 1.08) * GROUND_COBBLE), run")).override_failure_message("the street's road tint (target C train 2: neutral-cool; the grit map keeps only its luminance)").is_true()
 	assert_bool(src.contains("alb = tint * GROUND_EARTH * mix(0.78, 1.15, fbm(xz * 1.6 + seed));")).is_true()
 	# maintainer 21.11. "too dark": a floor under the ground (no near-black earth or road), and still a step below the models
 	for name: String in ["GROUND_COBBLE", "GROUND_EARTH"]:
 		var at := src.find("const float %s = " % name)
 		assert_int(at).is_greater(-1)
 		var v := float(src.substr(at + ("const float %s = " % name).length(), 6).get_slice(";", 0))
-		assert_float(v).override_failure_message("%s %f: the ground must sit between near-black and the models" % [name, v]).is_between(0.4, 0.6)
+		# (target C train 2: GROUND_COBBLE 0.70 - the slate setts are darker per unit and the lamp pools shrank; the street renders at luma 0.225, below the old warm road's 0.28,
+		# and the readability gate stays green. The bound guards the constant, the gate guards the picture.)
+		assert_float(v).override_failure_message("%s %f: the ground must sit between near-black and the models" % [name, v]).is_between(0.4, 0.72)
 	assert_bool(src.contains("alb = tint * 0.55 * mix(0.6, 1.25, fbm(xz * 2.4 + seed))")).override_failure_message("garden plots must stay dark").is_true()
 	assert_bool(src.contains("			alb *= 0.5;   // the decks the models stand on")).override_failure_message("the decks must stay dark").is_true()

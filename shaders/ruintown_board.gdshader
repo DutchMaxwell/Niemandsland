@@ -77,9 +77,9 @@ bool use_frame(vec2 uv, float wood, inout vec3 ratio, inout vec3 tn) {
 }
 
 // The ground's floor (silhouette round 21.11., maintainer: "too dark"): the streets and the packed earth sit below the models' own values (readability gate) but no longer near black.
-const float GROUND_COBBLE = 0.42;   // was 0.27
+const float GROUND_COBBLE = 0.7;   // was 0.42 (train 2: the lamp pools shrank, the moon carries the street now), 0.27 before
 const float GROUND_EARTH = 0.55;   // was 0.32
-const float COVER_CUT = 0.54;   // the fbm level above which the earth is overgrown (~25 % of the earth; plan TARGET C, E2)
+const float COVER_CUT = 0.58;   // the fbm level above which the earth is overgrown (~25 % of the earth; plan TARGET C, E2)
 varying vec3 wpos;
 varying vec3 wnrm;
 varying flat float kind;
@@ -194,22 +194,26 @@ vec3 cobble(vec2 xz, float seed, vec3 tint, float run, vec2 fan, out float rel, 
 	float x;
 	vec2 f;
 	if (run > 0.25 && run < 0.75) {
-		float r = length(fan);
+		float r = length(fan) + (vnoise(fan * 0.5 + seed) - 0.5) * 0.12;   // (train 2) the rings wobble
 		row = floor(r / SETT_H);
 		float n = max(floor(6.2832 * (row + 0.5) * SETT_H / SETT_W), 3.0);   // a whole number of setts in every ring: no seam
 		x = (atan(fan.y, fan.x) / 6.2832 + 0.5) * n + 0.5 * mod(row, 2.0) + h21(vec2(row, seed)) * 0.3;
 		f = vec2(fract(x), fract(r / SETT_H)) - 0.5;
 	} else {
 		vec2 q = run > 0.75 ? xz.yx : xz;
+		q.y += (vnoise(vec2(q.x * 0.35, seed)) - 0.5) * 0.14;   // (train 2) the rows bend a little
 		row = floor(q.y / SETT_H);
-		x = q.x / SETT_W + 0.5 * mod(row, 2.0) + h21(vec2(row, seed)) * 0.3;
+		x = q.x / (SETT_W * mix(0.85, 1.2, h21(vec2(row, seed + 5.0)))) + 0.5 * mod(row, 2.0) + h21(vec2(row, seed)) * 0.3;   // each row its own stone length
 		f = vec2(fract(x), fract(q.y / SETT_H)) - 0.5;
 	}
-	float sett = smoothstep(0.17, 0.10, length(max(abs(f) - vec2(0.3), 0.0)));
 	float sh = h21(vec2(floor(x), row) + seed);
-	vec3 laid = mix(vec3(0.10, 0.09, 0.09), grit_sett_tint(tint, sh) * mix(0.9, 1.1, vnoise(xz * 3.0)), sett);
+	// (train 2) every stone its own size and seat in its cell: uneven joints; one in twelve runs on over its end joint (a long stone)
+	vec2 hs = vec2(fract(sh * 9.13) > 0.92 ? 0.49 : 0.2 + 0.12 * fract(sh * 3.71), 0.2 + 0.1 * fract(sh * 5.29));
+	f -= (vec2(fract(sh * 2.17), fract(sh * 6.61)) - 0.5) * 0.08;
+	float sett = smoothstep(0.17, 0.09, length(max(abs(f) - hs, 0.0)));
+	vec3 laid = mix(vec3(0.05, 0.05, 0.045), grit_sett_tint(tint, sh) * mix(0.9, 1.1, vnoise(xz * 3.0)) * mix(0.86, 1.08, vnoise(xz * 11.0 + sh * 7.0)), sett);   // (train 2: dark dirty joints, a grain in every stone)
 	sett_out = vec4(sh, sett, f);
-	rel = mix(0.5, sett * (0.6 + 0.4 * clamp(1.0 - 1.6 * length(f), 0.0, 1.0)), keep(xz.x, SETT_W));   // a domed sett in a recessed joint
+	rel = mix(0.5, sett * (0.3 + 0.7 * clamp(1.0 - 3.2 * dot(f, f), 0.0, 1.0)), keep(xz.x, SETT_W));   // a rounded, worn sett in a recessed joint (train 2: pillowed, not a flat tile)
 	return mix(tint * 0.78, laid, keep(xz.x, SETT_W));   // setts of 0.14 in are ~3 px at the play camera: below that they average out instead of crawling
 }
 
@@ -367,12 +371,22 @@ void fragment() {
 		if (k == 1) {   // streets: cobbles
 			float crown;
 			vec4 sett;
-			alb = mix(cobble(xz, seed, grit_street_tint(tint * vec3(1.15, 0.98, 0.78) * GROUND_COBBLE), run, fan, crown, sett), vec3(0.06, 0.055, 0.05), 0.55 * gutter * (1.0 - grit_on));   // (the grit map draws the mud and the kennel instead)   // 0.27 (was 1.15): the streets sit well below the models' own values (readability gate, lead 21.11.)
+			alb = mix(cobble(xz, seed, grit_street_tint(tint * vec3(0.96, 1.0, 1.08) * GROUND_COBBLE), run, fan, crown, sett), vec3(0.06, 0.055, 0.05), 0.55 * gutter * (1.0 - grit_on));   // (the grit map draws the mud and the kennel instead)   // 0.27 (was 1.15): the streets sit well below the models' own values (readability gate, lead 21.11.)
 			rel = crown;
-			depth_in = 0.045;
-			rough = mix(0.55, 0.8, smoothstep(0.3, 0.7, crown));   // damp joints, dry crowns
-			ao = mix(0.55, 1.0, smoothstep(0.1, 0.5, crown));
+			depth_in = 0.06;   // (train 2: was 0.045)
+			rough = mix(0.85, 0.55, smoothstep(0.3, 0.7, crown));   // (train 2) worn crowns catch the light, dirty joints stay matt
+			ao = mix(0.4, 1.0, smoothstep(0.1, 0.5, crown));
 			dbg = grit_debug == 2 ? grit_map_colour(gw) : grit_street(xz, gw, sett, run, alb, rel, rough);
+			float ne = 0.0;   // (train 2, C3) the setts thin out into the earth: within 0.8 in of an earth border some are gone (earth in the hole), weeds grow in the joints
+			for (int d = 0; d < 8; d++) {
+				vec2 o = vec2(cos(float(d) * 0.785), sin(float(d) * 0.785));
+				ne = max(ne, max(float(int(ground_at(gw + o * 0.4).r * 255.0 + 0.5) == 0), 0.6 * float(int(ground_at(gw + o * 0.8).r * 255.0 + 0.5) == 0)));
+			}
+			ne *= mix(0.4, 1.2, vnoise(xz * 1.4 + 41.0));
+			float gone = step(fract(sett.x * 31.7), 0.6 * ne) * keep(xz.x, SETT_W);
+			alb = mix(alb, palette[0].rgb * GROUND_EARTH * 0.75, gone);
+			rel = mix(rel, 0.15, gone);
+			alb = mix(alb, vec3(0.07, 0.09, 0.045), 0.7 * ne * (1.0 - sett.y) * (1.0 - gone));
 			emis += grit_fill(alb);
 		} else if (k == 0) {   // earth: packed, with pebbles, weeds and broken stones
 			alb = tint * GROUND_EARTH * mix(0.78, 1.15, fbm(xz * 1.6 + seed));   // 0.32 (was 1.0): the packed earth of the deployment bands sits below the models too (readability gate)
@@ -511,7 +525,10 @@ void fragment() {
 			rough = mix(rough, 0.35, 0.6 * wood_m * fire);
 			alb = mix(alb, grit_on > 0.5 ? vec3(0.11, 0.15, 0.08) : vec3(0.15, 0.25, 0.09), 0.7 * moss * (1.0 - smoothstep(0.0, 2.2, p.y)) * smoothstep(0.4, 0.7, patchy));   // moss and algae low on the shade side (green-black with the grit map, style bible 8)
 		} else if (wnrm.y > 0.5 && k != 15) {   // a top
-			alb = mix(alb, vec3(0.15, 0.25, 0.09), 0.65 * moss * smoothstep(0.45, 0.7, patchy));   // moss on the wall tops of the shade side
+			vec2 pc = mod(p.xz, 3.0);
+			float rim = 1.0 - smoothstep(0.1, 0.7, min(min(pc.x, 3.0 - pc.x), min(pc.y, 3.0 - pc.y)));   // (train 2, V2) moss gathers toward a top's edges too
+			alb *= 0.85;   // (train 2, V2) the flat tops one value step down: they were the brightest thing on the board
+			alb = mix(alb, vec3(0.12, 0.17, 0.08), clamp(0.65 * moss + 0.3 * rim, 0.0, 0.8) * smoothstep(0.45, 0.7, patchy));   // moss on the tops of the shade side and at their edges
 			alb = mix(alb, vec3(0.04, 0.035, 0.03), 0.6 * fire * smoothstep(0.55, 0.8, patchy) * float(k != 12));   // scorched patches on a ruin's top
 		} else if (k == 15) {   // a roof face
 			float lost = smoothstep(0.62, 0.7, fbm(vec2(p.x + p.z, p.y) * 0.9 + seed * 5.0)) * mix(0.25, 1.0, fire);

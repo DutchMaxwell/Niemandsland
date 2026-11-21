@@ -40,9 +40,10 @@ vec3 grit_sett_tint(vec3 tint, float h) {
 	if (grit_on < 0.5) {
 		return tint * mix(0.7, 1.15, h);
 	}
-	float fam = fract(h * 7.31);
-	vec3 c = fam < 0.6 ? GRIT_COOL : (fam < 0.85 ? GRIT_BROWN : GRIT_OCHRE);
-	return tint / GRIT_MEAN * c * mix(0.6, 1.2, fract(h * 3.17));
+	// (plan TARGET C, train 2: one cool grey-blue stone, a narrow value spread - the blue / tan / black dice read as a bathroom mosaic; the family's luminance is kept)
+	vec3 slate = mix(vec3(dot(GRIT_COOL, LUMA)), GRIT_COOL, 0.45);   // slate grey with only a hint of blue (lead review of the macro still: the blue fill was too saturated and too bright)
+	vec3 c = slate * (dot(GRIT_MEAN, LUMA) / dot(slate, LUMA)) * mix(vec3(1.0), vec3(1.03, 1.0, 0.96), fract(h * 7.31));
+	return tint / GRIT_MEAN * c * mix(0.74, 1.0, fract(h * 3.17));
 }
 
 // MUD (style bible 2 and 7, plan G3): never noise alone - the map's WET / MUD (a distance to an earth border, a well, the fountain) times noise. It fills the joints (the joint colour from
@@ -109,6 +110,9 @@ vec3 grit_street(vec2 xz, vec2 w, vec4 sett, float run, inout vec3 alb, inout fl
 	rough -= 0.1 * walked;
 	float fill = smoothstep(0.15, 0.5, mud);
 	alb = mix(alb, mudc, 0.9 * joint * fill);   // joints full of mud
+	alb = mix(alb, mudc, 0.55 * fill * kp * smoothstep(0.12, 0.3, max(abs(sett.z), abs(sett.w))));   // and spilling over the stones' edges (train 2)
+	alb = mix(alb, vec3(0.05, 0.065, 0.04), 0.7 * joint * (1.0 - fill) * smoothstep(0.4, 0.7, vnoise(xz * 2.3 + 29.0)));   // or dark with dirt and moss (train 2)
+	rough = mix(rough, 0.3, smoothstep(0.35, 0.75, g.g) * mix(1.0, 0.5, sett.y));   // wet in the low, damp places: a sheen in the joints first (train 2)
 	rel = mix(rel, max(rel, 0.45), joint * fill);
 	float cover = min(GRIT_MUD_COVER, 0.75 * mud) * smoothstep(0.35, 0.65, vnoise(xz * 1.9 + 7.0));   // a broken film: the setts show through
 	alb = mix(alb, mudc * 1.15, cover);
@@ -118,12 +122,12 @@ vec3 grit_street(vec2 xz, vec2 w, vec4 sett, float run, inout vec3 alb, inout fl
 	alb = mix(alb, mudc * 1.25, f1 * sett.y);   // a missing sett: a hole of mud, paler than the joints round it
 	rel = mix(rel, 0.1, f1);
 	float f2 = kp * float(fate == 2);
-	alb *= mix(1.0, 0.72, f2);   // a sunken sett: lower and darker
+	alb *= mix(1.0, 0.84, f2);   // a sunken sett: lower and darker (train 2: 0.72 read as a black tile)
 	rel = mix(rel, rel * 0.45, f2);
 	float f3 = kp * float(fate == 3) * sett.y * (1.0 - smoothstep(0.03, 0.07, abs(sett.z * 0.8 - sett.w + (fract(sett.x * 5.3) - 0.5) * 0.3)));
-	alb = mix(alb, vec3(0.035, 0.033, 0.03), 0.85 * f3);   // a crack across it
+	alb = mix(alb, vec3(0.035, 0.033, 0.03), 0.15 * f3);   // a crack across it (faint: hard dark lines read as scratches, train 2)
 	float f4 = kp * float(fate == 4) * sett.y;
-	alb = mix(alb, vec3(dot(alb, LUMA)) * vec3(1.6, 1.55, 1.42), 0.7 * f4);   // an odd pale stone, a repair
+	alb = mix(alb, vec3(dot(alb, LUMA)) * vec3(1.25, 1.22, 1.15), 0.7 * f4);   // an odd pale stone, a repair (train 2: was 1.6, it popped like a white tile)
 	float ken = grit_kennel(g, run);
 	alb = mix(alb, mudc * 0.8, 0.6 * ken);   // the kennel: dark, wet, a channel
 	rel = mix(rel, 0.25, ken);

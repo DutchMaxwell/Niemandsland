@@ -36,7 +36,9 @@ const OWN_COLOUR := ["cart_toppled_load", "handcart_load", "table_overturned_loa
 ## 3 in of every connector's rise, the origin on the wall face at the connector's edge point, +z away from the wall - so the walkable / ladder data is identical (boxes of kind ladder are not solid).
 const LADDER_MODULES := ["timber_ladder_3in", "timber_ladder_top"]
 const MODULE_TINT := {"pool_kerb": Color(0.52, 0.55, 0.6), "tower_cap_burnt": Color(0.32, 0.30, 0.28), "rubble_heap_a": Color(0.5, 0.44, 0.38), "rubble_heap_b": Color(0.36, 0.32, 0.28),
-	"hay_heap": Color(0.7, 0.64, 0.52), "stall_collapsed_cloth": Color(0.76, 0.72, 0.68), "lantern_post": Color(0.17, 0.165, 0.16)}   # (21.11.: the hay and the striped cloth were the palest shapes of a scene; the lamp's base and cage read as white bars - dark iron now, only the glass glows)   # (heaps: grey-brown rubble and ash, never a white blob - lead 21.11.)   # a charred frame: the timber grain, dark
+	"hay_heap": Color(0.7, 0.64, 0.52), "stall_collapsed_cloth": Color(0.76, 0.72, 0.68), "lantern_post": Color(0.17, 0.165, 0.16),
+	"weeds_a": Color(0.62, 0.46, 0.42), "weeds_b": Color(0.62, 0.46, 0.42), "ivy_cluster_small": Color(0.62, 0.46, 0.42), "ivy_cluster_large": Color(0.62, 0.46, 0.42),
+	"ivy_strand_a": Color(0.62, 0.46, 0.42), "ivy_strand_b": Color(0.62, 0.46, 0.42)}   # (lead review of #3312: the plants were houseplant green, the most saturated thing in the frame - a dull grey-green, darker than the wall)   # (21.11.: the hay and the striped cloth were the palest shapes of a scene; the lamp's base and cage read as white bars - dark iron now, only the glass glows)   # (heaps: grey-brown rubble and ash, never a white blob - lead 21.11.)   # a charred frame: the timber grain, dark
 ## Glass of a lamp and the coals of a brazier: drawn with an emissive material, the OmniLight sits at their origin.
 const GLOW := {"lantern_glow": Color(1.0, 0.72, 0.38), "brazier_coals": Color(1.0, 0.45, 0.18)}
 
@@ -221,4 +223,4 @@ func build(layout: Dictionary) -> void:
 			mat.normal_enabled = false   # the GLB has no tangents; the course lips are the relief
 		mmi.material_override = mat
 		for i in mmi.multimesh.instance_count:
-			mmi.multimesh.set_instance_color(i, (TEXTURED_TINT if mat != null else TINT)[set_of(m)] * MODULE_TINT.get(m, Color.WHITE))
+			mmi.multimesh.set_instance_color(i, (TEXTURED_TINT if mat != null else TINT)[set_of(m)] * MODULE_TINT.get(m, Color.WHITE) * (p[m][i]["colour"] as Color))   # (the item's own colour: white for most, dry for some weeds)
