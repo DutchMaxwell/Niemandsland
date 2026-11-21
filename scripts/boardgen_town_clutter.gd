@@ -380,7 +380,10 @@ static func _weed_feet(layout: Dictionary, out: Dictionary, reserved: Dictionary
 			var along := 0.6 + 1.8 * BoardgenTownDressing._hash(i, half, 244 + side)   # the clump's 1.03 in stays inside the 3 in edge
 			var f := -d   # from the foot towards the face
 			var pos := Vector2(lo.x + along, lo.y if f.y < 0 else lo.y + cell_in) if f.x == 0 else Vector2(lo.x if f.x < 0 else lo.x + cell_in, lo.y + along)
-			_add(out, "weeds_a" if BoardgenTownDressing._hash(i, half, 248 + side) < 0.5 else "weeds_b", _item(atan2(float(-f.x), float(-f.y)), Vector3(pos.x, 0.0, pos.y)))
+			var clump := _item(atan2(float(-f.x), float(-f.y)), Vector3(pos.x, 0.0, pos.y))
+			if BoardgenTownDressing._hash(i, half, 252 + side) < 0.3:
+				clump["colour"] = Color(1.3, 1.15, 0.75)   # dry, yellowed blades (lead review of #3312: no houseplant green)
+			_add(out, "weeds_a" if BoardgenTownDressing._hash(i, half, 248 + side) < 0.5 else "weeds_b", clump)
 
 
 ## WALL pieces: ivy strands up a wall face (<= 0.12 in off it), on one face in eight of a raised cell that looks at open ground, never on a ladder's face.
