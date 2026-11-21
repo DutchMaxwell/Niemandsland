@@ -141,3 +141,78 @@ fn no_move_cuts_a_house_corner_to_corner() {
     let (open_asked, open) = crossings_on(&seeds, false, diagonals);
     assert!(!open.is_empty(), "planted: with no house class the diagonals must cut a house: 0 of {open_asked}");
 }
+
+/// L-RF1 F5: every reader agrees that an intact house is closed, on town seeds 1..=60 - per house cell: class CONTAINER,
+/// no rest (`gate::rest_forbidden`), deployment refuses it for a walker and a flier (`cell_blocked`), every border to open
+/// ground is a deployment wall (`wall_blocked`), no objective marker, no ladder touches it, sight across it is blocked.
+/// Returns the readers found OPEN as lines. Not covered here (logged in the plan): the charge reach index (its CONTAINER
+/// cost is infinite, read) and the solid landmarks (wells, crane feet: D-F2's own step).
+fn open_readers(seeds: std::ops::RangeInclusive<i64>, solid: bool) -> (usize, Vec<String>) {
+    use crate::deployment::{cell_blocked, wall_blocked};
+    let (mut cells, mut open) = (0, Vec::new());
+    for seed in seeds {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        let mut plain = to_plain(&l);
+        if !solid { plain.solid_cells.clear(); }
+        let t = Terrain::build(&plain);
+        let marks = crate::objectives::Cells::from_terrain(&t);
+        let ladders = &plain.tiers.as_ref().unwrap().ladders;
+        let half = [l.nx as f64 * 1.5, l.nz as f64 * 1.5];
+        for c in l.cells.iter().filter(|c| c.lot_kind == LotKind::Roofed) {
+            cells += 1;
+            let (x, z) = (c.x as f64 * 3.0 + 1.5, c.z as f64 * 3.0 + 1.5); // planner inch frame
+            let m = |px: f64, pz: f64| ((px - half[0]) * crate::IN2M, (pz - half[1]) * crate::IN2M);
+            let mut say = |what: &str| open.push(format!("seed {seed} cell ({},{}): {what}", c.x, c.z));
+            let w = m(x, z);
+            if t.type_at([w.0 as f32, 0.0, w.1 as f32]) != CONTAINER { say("class"); }
+            if !crate::mv::gate::rest_forbidden([x, z], 0.5, &t) { say("rest"); }
+            if !cell_blocked(&t, w, false) || !cell_blocked(&t, w, true) { say("deployment cell"); }
+            if crate::objectives::is_legal((x - half[0] - 0.5) as i64, (z - half[1] - 0.5) as i64, &[], &[], &marks) { say("marker"); }
+            let i = (c.z * l.nx + c.x) as u16;
+            if ladders.iter().any(|p| p.contains(&i)) { say("ladder"); }
+            for (dx, dz) in [(-1i64, 0i64), (1, 0), (0, -1), (0, 1)] {
+                let (nx, nz) = (c.x as i64 + dx, c.z as i64 + dz);
+                if !(0..l.nx as i64).contains(&nx) || !(0..l.nz as i64).contains(&nz) { continue; }
+                let n = l.cell(nx as usize, nz as usize);
+                if n.level != 0 || n.lot_kind == LotKind::Roofed { continue; }
+                if !wall_blocked(&t, m(x + dx as f64 * 1.5, z + dz as f64 * 1.5)) { say("border wall"); }
+                let (a, b) = (m(x + dx as f64 * 3.0, z + dz as f64 * 3.0), m(x - dx as f64 * 3.0, z - dz as f64 * 3.0));
+                let lifted = |p: (f64, f64)| [p.0 as f32, 0.02, p.1 as f32];
+                if !t.los_blocked_at(lifted(a), lifted(b), CURRENT_RULES_EPOCH) { say("sight"); }
+            }
+        }
+    }
+    (cells, open)
+}
+
+#[test]
+fn every_reader_agrees_a_house_is_closed() {
+    let (cells, open) = open_readers(1..=60, true);
+    assert!(cells > 300, "the seeds must give houses: {cells}");
+    assert!(open.is_empty(), "{} readers open over {cells} house cells:\n{}", open.len(), open.join("\n"));
+    let (_, planted) = open_readers(1..=60, false);
+    assert!(planted.iter().any(|s| s.ends_with("border wall")), "planted: without solid_cells the border walls must be open, or the check proves nothing");
+}
+
+/// L-RF1 F5: a Flying model may cross a house but never ends on it (the K1 lanes, seeds 7 / 25 / 41).
+#[test]
+fn a_flier_crosses_a_house_but_never_ends_on_it() {
+    let (mut asked, mut inside) = (0, Vec::new());
+    for seed in [7, 25, 41] {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        let t = Terrain::build(&to_plain(&l));
+        for (lx, lz, a, b) in lanes(&l).into_iter().chain(diagonals(&l)) {
+            let ((ax, az), (bx, bz)) = (centre_m(&l, a), centre_m(&l, b));
+            let mut st = state_at(ax, az);
+            std::rc::Rc::get_mut(&mut st.profiles).expect("owned").list[0].special_rules.push("Flying".into());
+            let land = (MoveRules { rules_epoch: CURRENT_RULES_EPOCH }).plain_move(&st, &t, 0, [bx as f32, 0.0, bz as f32], 24.0, false, true, crate::mv::FAST_PLANNER_GUARD).expect("a landing");
+            let end = t.to_inch(land.end[0]);
+            asked += 1;
+            if l.cell((end[0] / 3.0) as usize, (end[1] / 3.0) as usize).lot_kind == LotKind::Roofed {
+                inside.push(format!("seed {seed} house ({lx},{lz}) lane {a:?} -> {b:?} ends at {end:?}"));
+            }
+        }
+    }
+    assert!(asked >= 16);
+    assert!(inside.is_empty(), "{} of {asked} flights end on a house:\n{}", inside.len(), inside.join("\n"));
+}
