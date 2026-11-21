@@ -1054,6 +1054,8 @@ pub fn terrain_of(d: &VarDictionary) -> PlainTerrain {
         walls,
         // Heightfield plan step 1 - the generated tier board; no key = none (every header the table writes today).
         tiers: tiers_of(d),
+        // L-RF1 - the solid tier cells (intact houses); no key = none.
+        solid_cells: darr(d, "solid_cells").iter_shared().map(|v| int(&v).clamp(0, i64::from(u16::MAX)) as u16).collect(),
         cell_params: CellParams {
             table_size_feet: pair(&darr(&cp, "table_size_feet")),
             grid_rotation_degrees: dnum(&cp, "grid_rotation_degrees", 0.0),
