@@ -65,7 +65,7 @@ static func set_of(module: String) -> String:
 		return CLUTTER_SET[module]
 	if module.begins_with(("weeds")) or module.begins_with("bramble") or module.begins_with("dead_tree") or module.begins_with("ivy") or module.begins_with("lantern") or module in OWN_COLOUR or module in ["cloth_flat", "laundry_line", "sack_pile", "fountain_leaves", "stall_awning", "stall_awning_ruined", "brazier", "sign_bracket"]:
 		return "none"
-	if module in ["roof_rafters", "beam_end", "shutter", "shutter_open", "door"]:
+	if module in ["roof_rafters", "beam_end", "shutter", "shutter_open", "door"] or module.begins_with("hf_"):
 		return "timber"
 	return "roof_tiles" if module.begins_with("roof_") else "coursed_stone"
 
@@ -126,6 +126,9 @@ static func plan(layout: Dictionary) -> Dictionary:
 	var ladders := BoardgenGreybox.ladder_kit_plan(layout)
 	for key: String in ladders:
 		add_all.call("timber_" + key, ladders[key])
+	var frames := BoardgenTownFrames.plan(layout)   # (train 3) the half-timber shells
+	for m: String in frames:
+		add_all.call(m, frames[m])
 	var clutter := BoardgenTownClutter.plan(layout)
 	for m: String in clutter:
 		for item: Dictionary in clutter[m]:
