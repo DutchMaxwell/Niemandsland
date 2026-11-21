@@ -10,7 +10,6 @@ extends GdUnitTestSuite
 const ACTIVATION := "res://scripts/solo/core_activation.gd"
 const SLICE := "res://scripts/solo/core_slice.gd"
 const MAIN := "res://scripts/main.gd"
-const PARITY_SHOOT := "res://test/parity/parity_table.gd"
 const PARITY_MELEE := "res://test/parity/parity_table_melee.gd"
 
 ## name / retire = the step that removes the fact / file / header = the top-level `func` line whose body is searched
@@ -23,8 +22,6 @@ const BLOCKERS: Array[Dictionary] = [
 	{"name": "non-OPR clause of is_plain (the attacker side; the target side went with P4.D-13b)",
 		"retire": "the P4.D-13 follow-up, before P4.D-41", "file": SLICE,
 		"header": "static func refusals(", "needles": ["not gu.source_data is OPRApiClient.OPRUnit"]},
-	{"name": "parity_table.gd calls the AI volley resolver", "retire": "P4.D-38", "file": PARITY_SHOOT, "header": "",
-		"needles": ["main._solo_resolve_ai_volley("]},
 	{"name": "parity_table_melee.gd drives the melee resolver", "retire": "P4.D-49", "file": PARITY_MELEE, "header": "",
 		"needles": ["main._run_ai_melee("]},
 	{"name": "Strafing hands its volley to the AI resolver", "retire": "P4.D-37", "file": MAIN,
@@ -85,7 +82,7 @@ func test_every_deletion_blocker_still_holds() -> void:
 
 
 func test_the_list_is_not_empty_and_names_a_step_per_row() -> void:
-	assert_int(BLOCKERS.size()).is_greater_equal(11)
+	assert_int(BLOCKERS.size()).is_greater_equal(10)
 	for b in BLOCKERS:
 		assert_str(String(b["retire"])).override_failure_message("%s names no step" % b["name"]).contains("P4.D-")
 

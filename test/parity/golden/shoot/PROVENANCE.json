@@ -1,0 +1,43 @@
+{
+ "schema": "nml-parity-frozen-table-v1",
+ "what": "The table half of the shoot parity gate, recorded once from the old resolver (main._solo_resolve_ai_volley through test/parity/parity_table.gd run(), 200 seeds per scenario) before that resolver is deleted. One JSONL record per seed: {seed, epoch, def_alive, rolls[{kind,count,target,faces,owner}]}.",
+ "recorded_at_git_sha": "82c3b96580081fa0008183d9594e41108548b891",
+ "rerecorded_byte_identical_at_git_sha": "be018371071b1dc18bc40033de7d15869238f53d",
+ "seeds": 200,
+ "scenarios": {
+  "ap1": {
+   "epoch": 73,
+   "records": 200
+  },
+  "ap_piercing": {
+   "epoch": 73,
+   "records": 200
+  },
+  "crossing_strike_shred_e75": {
+   "epoch": 75,
+   "records": 200
+  },
+  "enhanced_warbound_6in": {
+   "epoch": 73,
+   "records": 200
+  },
+  "enhanced_warbound_6in_e75": {
+   "epoch": 75,
+   "records": 200
+  },
+  "plain": {
+   "epoch": 73,
+   "records": 200
+  },
+  "protection_feat_twice_e75": {
+   "epoch": 75,
+   "records": 200
+  },
+  "warbound_6in": {
+   "epoch": 73,
+   "records": 200
+  }
+ },
+ "note": "Recorded twice, byte-identical (the seven first scenarios at 82c3b9658 and re-recorded at be0183710; ap_piercing, added by P4.D-30a after the first recording, twice at be0183710). Not regenerable: the table that wrote it is going away. A new scenario needs its record before the resolver is deleted.",
+ "ap_piercing_recorded_at_git_sha": "be018371071b1dc18bc40033de7d15869238f53d"
+}

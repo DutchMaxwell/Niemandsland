@@ -3,7 +3,7 @@
   "notes": [
     "Counts come from the script, not from this file; the notes record callers a reader would not guess.",
     "tools/solo_selfplay.gd (the headless harness that drove the table directly) was deleted by P4.D-39; tools/arena_match.gd plays through the game loop and its core door.",
-    "test/parity/parity_table.gd:114 calls _solo_resolve_ai_volley directly; test/parity/parity_table_melee.gd:66 calls _run_ai_melee (P4.D-38 moves both parity harnesses).",
+    "test/parity/parity_table.gd no longer calls _solo_resolve_ai_volley (P4.D-38: the shoot parity table half is the frozen record in test/parity/golden/shoot/); test/parity/parity_table_melee.gd:66 still calls _run_ai_melee (P4.D-49).",
     "_solo_volley_outcome has no prod caller outside main.gd since P4.D-41: the sentence moved into CoreActivation.volley_outcome and this function only delegates (the core path shows it).",
     "A listed caller that disappears is fine on purpose; only an unlisted NEW prod caller turns --check red. To allow one, add 'file:function' to allowed_callers of the callee in the same diff as a plan step that says so.",
     "Whole-file entries (planner groups) are not gated and keep the counter; planner_tags tags every column-0 function of the 7 planner files; a new planner function must get a tag in the same diff.",
