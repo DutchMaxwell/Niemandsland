@@ -141,3 +141,35 @@ func test_a_variant_that_is_not_cached_draws_the_older_module() -> void:
 			drawn += (n as MultiMeshInstance3D).multimesh.instance_count
 	assert_int(drawn).is_greater(0)
 	assert_int(drawn).is_equal(BoardgenTownDressing.merlons(_town()).size())
+
+
+## Crows sit on battlements and on whole roof ridges only (no model stands there); with the A8 modules cached the crows and rats are the kit's meshes, not the stand-ins.
+func test_crows_perch_where_nobody_stands_and_the_kit_critters_replace_the_stand_ins() -> void:
+	var layout: Dictionary = ClassDB.instantiate("NmlCore").boardgen_layout_themed(7, "ruintown")
+	var merlon_tops := BoardgenTownDressing.merlons(layout).map(func(m: Dictionary) -> float: return float(m["hi"].y))
+	var ridge := 0
+	for p: Vector3 in BoardgenTownLife.crow_perches(layout):
+		if not merlon_tops.has(p.y):
+			ridge += 1
+			assert_float(p.y).is_greater(BoardgenTownDressing.BODY_IN)   # above every house's eaves line
+	assert_int(ridge).is_greater(0)
+	DirAccess.make_dir_recursive_absolute(DIR)
+	for m: String in BoardgenTownKit.MODULES + ["crow_perched", "rat_running"]:
+		var holder := MeshInstance3D.new()
+		holder.mesh = BoxMesh.new()
+		var state := GLTFState.new()
+		var doc := GLTFDocument.new()
+		doc.append_from_scene(holder, state)
+		doc.write_to_filesystem(state, "%s/%s.glb" % [DIR, m])
+		holder.free()
+	OS.set_environment("NML_RUINTOWN_KIT_DIR", ProjectSettings.globalize_path(DIR))
+	var node := _built()
+	OS.unset_environment("NML_RUINTOWN_KIT_DIR")
+	var crows := node.find_child("Crows", true, false) as MultiMeshInstance3D
+	var rats := node.find_child("Rats", true, false) as MultiMeshInstance3D
+	assert_object(crows).is_not_null()
+	assert_object(rats).is_not_null()
+	assert_bool(crows.multimesh.mesh is PrismMesh).is_false()
+	assert_bool(rats.multimesh.mesh is CapsuleMesh).is_false()
+	for f in DirAccess.get_files_at(DIR):
+		DirAccess.remove_absolute(DIR.path_join(f))
