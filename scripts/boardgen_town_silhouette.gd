@@ -6,6 +6,7 @@ extends RefCounted
 ##     corbelled course under the walk (the walk itself is the cell, exact). The cell's own greybox box keeps the collider and draws nothing.
 ##   - ruin_gables: the end faces of a ruined, walkable house (Block / Deck) carry a broken crow-stepped gable end in the 0.3 in edge strip, so a tier reads as a roofless house.
 ##   - rafters: the long faces of those houses carry charred rafter stubs leaning in from a wall plate, inside the 0.75 in edge strip.
+##   - turrets: some intact (solid, never walkable) houses get a round stair turret with a conical roof on one corner, inside the house's own cells.
 
 const REACH_IN := 0.2   # the drawn face may sit at most this far inside the collider's face (plan O3: a model touching the collider still touches the wall)
 const FOOT_IN := 0.45
@@ -16,6 +17,7 @@ const STRIP_IN := 0.75
 const LADDER_GAP_IN := 0.9   # half the gap kept free round a ladder's top
 const RAFTER_IN := Vector2(0.13, 0.78)   # section, length
 const RAFTER_PITCH := deg_to_rad(38.0)
+const TURRET_SHARE := 0.4
 const DIRS: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]   # N, E, S, W
 
 
@@ -184,7 +186,23 @@ static func rafters(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
-## All of it on the board's material, in one MultiMesh.
+## Round stair turrets on some intact houses (solid, nobody stands on them): on a corner of the drawn body, inside it by the radius, as high as the eaves plus 0.9-1.8 in, under a
+## cone 1.6-2.3 in high. [{centre (Vector2), radius, top, cone}]
+static func turrets(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for b: Dictionary in BoardgenTownDressing.house_bodies(layout):
+		var size: Vector2 = b["size"]
+		if maxf(size.x, size.y) < 5.0 or _h(b["lot"], b["half"], 250) >= TURRET_SHARE:
+			continue
+		var r := 0.55 + 0.15 * _h(b["lot"], b["half"], 251)
+		var corner := int(_h(b["lot"], b["half"], 252) * 4.0) % 4
+		var local := Vector2((size.x * 0.5 - r) * (1.0 if corner in [1, 2] else -1.0), (size.y * 0.5 - r) * (1.0 if corner >= 2 else -1.0))
+		out.append({"centre": b["centre"] + local.rotated(-float(b["yaw"])), "radius": r, "top": float(b["top"]) + 0.9 + 0.9 * _h(b["lot"], b["half"], 253),
+			"cone": 1.6 + 0.7 * _h(b["lot"], b["half"], 254), "lot": b["lot"]})
+	return out
+
+
+## All of it on the board's material: the boxes in one MultiMesh, the turret shafts and their cones in one each.
 static func build(parent: Node3D, layout: Dictionary, material: Material) -> void:
 	var m := BoardgenTownDressing.INCHES_TO_METERS
 	var kinds: Array = BoardgenTheme.TOWN_KINDS
@@ -197,6 +215,26 @@ static func build(parent: Node3D, layout: Dictionary, material: Material) -> voi
 		var basis := Basis(Vector3.UP, r["yaw"]) * Basis(Vector3.RIGHT, -float(r["pitch"])) * Basis.from_scale(size * m)
 		items.append([basis, r["centre"] * m, Color(kinds.find(r["kind"]), size.x, size.y, size.z)])
 	_multimesh(parent, "Silhouette", BoxMesh.new(), items, material)
+	var shafts: Array = []
+	var cones: Array = []
+	for t: Dictionary in turrets(layout):
+		var c: Vector2 = t["centre"]
+		var d := 2.0 * float(t["radius"])
+		shafts.append([Basis.from_scale(Vector3(d, t["top"], d) * m), Vector3(c.x, float(t["top"]) * 0.5, c.y) * m, Color(kinds.find("wall"), d, t["top"], d)])
+		cones.append([Basis.from_scale(Vector3(d + 0.3, t["cone"], d + 0.3) * m), Vector3(c.x, float(t["top"]) + float(t["cone"]) * 0.5, c.y) * m, Color(kinds.find("roof"), d + 0.3, t["cone"], d + 0.3)])
+	var shaft := CylinderMesh.new()
+	shaft.top_radius = 0.5
+	shaft.bottom_radius = 0.5
+	shaft.height = 1.0
+	shaft.radial_segments = 12
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.0
+	cone.bottom_radius = 0.5
+	cone.height = 1.0
+	cone.radial_segments = 12
+	cone.cap_bottom = true
+	_multimesh(parent, "Turrets", shaft, shafts, material)
+	_multimesh(parent, "TurretRoofs", cone, cones, material)
 
 
 static func _multimesh(parent: Node3D, name: String, mesh: Mesh, items: Array, material: Material) -> void:

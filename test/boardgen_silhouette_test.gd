@@ -112,6 +112,19 @@ func test_rafters_lean_in_from_the_edge_of_a_ruined_house_and_stay_inside_the_st
 	assert_int(total).is_greater(10)
 
 
+func test_turrets_stand_inside_their_intact_house_and_carry_a_cone() -> void:
+	var total := 0
+	for layout in _towns():
+		for t: Dictionary in BoardgenTownSilhouette.turrets(layout):
+			total += 1
+			var c: Vector2 = t["centre"]
+			for k in 8:
+				var p := c + Vector2.from_angle(TAU * k / 8.0) * float(t["radius"])
+				assert_str(str(layout["cells"][_cell_at(layout, p)]["lot_kind"])).is_equal("Roofed")   # nobody stands on a turret: it is on a solid house
+			assert_float(t["cone"]).is_greater(1.5)
+	assert_int(total).is_greater(0)
+
+
 func test_the_town_dressing_builds_the_silhouette_on_the_board_material() -> void:
 	var layout: Dictionary = _towns()[0]
 	var node: BoardgenTownDressing = auto_free(BoardgenTownDressing.new())
