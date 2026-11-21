@@ -53,3 +53,8 @@ def test_is_only():
 def test_real_tree_is_isolated():
     p = subprocess.run([sys.executable, "tools/ci_path_classes.py", "--check"], cwd=ROOT, capture_output=True, text=True)
     assert p.returncode == 0, p.stdout
+
+
+def test_a_whole_line_comment_is_not_a_reference_but_a_shader_include_is(tmp_path):
+    assert _tree(tmp_path, scripts__other_DOT_gd="## lit like BoardgenKit's board\n") == []
+    assert _tree(tmp_path, shaders__x_DOT_gdshader='#include "res://shaders/boardgen_kit.gdshaderinc"\n')
