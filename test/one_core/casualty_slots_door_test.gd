@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## PENDING_EPOCH_CASUALTY_TIES (94): WHICH models a volley kills, not only how many, through the core door. One plain AI volley
+## EPOCH_94_PARITY_BATCH (94): WHICH models a volley kills, not only how many, through the core door. One plain AI volley
 ## through `_run_ai_shooting`, seed for seed on the table path and on the core path (a board capture as the AI body takes it):
 ## the foe's surviving slots must be the same. The foe stands in a symmetric line (the shape of a rank-and-file unit in miniature),
 ## where mirror models tie by rounding only: the table measures the distance to the centroid as an f32 `Vector2.length()` and

@@ -27,7 +27,7 @@ use crate::state::State;
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
 use crate::acts::{rule_on, EPOCH_6_TABLE_RULES, EPOCH_74_CLIMB_COST, EPOCH_8_PLANNER_MENU, EPOCH_73_V36, EPOCH_77_CHARGE_CAP,
-    EPOCH_78_FLIER_CUT, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER, PENDING_EPOCH_FLYING_THROUGH};
+    EPOCH_78_FLIER_CUT, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER, EPOCH_94_PARITY_BATCH};
 
 use super::cost::{ledge_cost, trim_polyline_priced, CellSet, Grid, Ledge, Wall, Zone};
 use super::entry::plan_unit_step_call;
@@ -590,10 +590,10 @@ impl Move<'_> {
         )
     }
 
-/// `is_traversal(unit) or flies_through_units(unit)`: the route ignores the other units' spacing zones. A Flying unit does from `PENDING_EPOCH_FLYING_THROUGH`
+/// `is_traversal(unit) or flies_through_units(unit)`: the route ignores the other units' spacing zones. A Flying unit does from `EPOCH_94_PARITY_BATCH`
 /// (the table since 75); the gate's base-crossing exemption stays Traversal-only (`gate_traversal := is_traversal`).
 fn through_units(&self) -> bool {
-    self.traversal || (self.flying && rule_on(self.rules_epoch, PENDING_EPOCH_FLYING_THROUGH))
+    self.traversal || (self.flying && rule_on(self.rules_epoch, EPOCH_94_PARITY_BATCH))
 }
 
 /// `walls_and_ledges_of` for this move.
@@ -2674,7 +2674,7 @@ pub(crate) mod tests {
         assert!(old_forbidden || (old_x - x).abs() > 0.1, "77 keeps the old reading");
     }
 
-    /// Heightfield plan step 10 (`PENDING_EPOCH_HEIGHT`): a unit that advances onto a 6 in tier ends standing at 6 in, and
+    /// Heightfield plan step 10 (`EPOCH_94_PARITY_BATCH`): a unit that advances onto a 6 in tier ends standing at 6 in, and
     /// the same move one epoch below ends at 0, as before. Red before: `Landing.end` took its y from `surface_y_m`,
     /// which knew containers only, so the model stayed at 0 inside the block.
     #[test]
@@ -2688,7 +2688,7 @@ pub(crate) mod tests {
                 .expect("the port moves the unit")
                 .end[0]
         };
-        let (up, flat) = (run(crate::acts::PENDING_EPOCH_HEIGHT), run(crate::acts::PENDING_EPOCH_HEIGHT - 1));
+        let (up, flat) = (run(crate::acts::EPOCH_94_PARITY_BATCH), run(crate::acts::EPOCH_94_PARITY_BATCH - 1));
         assert!(up[0] as f64 / IN2M > 0.0, "the unit stands on the tier side, x={:.2}\"", up[0] as f64 / IN2M);
         assert_eq!(up[1], (6.0 * IN2M) as f32, "6 in up at the gate");
         assert_eq!(flat[1], 0.0, "one epoch below the gate the board plays flat");

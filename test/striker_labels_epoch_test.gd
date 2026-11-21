@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Exact striker labels from the pending epoch 94 (Plan H, lead order 20.11.; core twin `rules::is_unlisted_striker_label`, acts.rs `PENDING_EPOCH_EXACT_STRIKER_LABELS`):
+## Exact striker labels from the pending epoch 94 (Plan H, lead order 20.11.; core twin `rules::is_unlisted_striker_label`, acts.rs `EPOCH_94_PARITY_BATCH`):
 ## the table's `_solo_striker_has_bane` and the planner's `BattleSim._profiles_of` matched Bane / Lacerate / Rending / Unstoppable by PREFIX at unit level, so a unit carrying
 ## `Bane Mark`, `Rending Mark`, `Unstoppable Mark` or `Bane in Melee Buff` counted as a bearer. The army-book texts (ds/h_prefix_labels.md) hand the rule once to OTHER units. From 94 only
 ## the rule and its explicit scoped spellings count; below 94 the old reading stands byte for byte (recorded games). RED: drop the gates -> the 94 rows read as the 93 rows.
@@ -64,9 +64,9 @@ func test_the_tables_bane_read_skips_the_labels_from_the_pending_epoch() -> void
 		[["Bane in Melee Buff"], true, true, false], [["Bane in Melee Buff"], false, false, false]]
 	for row in rows:
 		var gu := _unit_with(row[0])
-		AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_EXACT_STRIKER_LABELS - 1
+		AiActRecorder.rules_epoch = AiActRecorder.EPOCH_94_PARITY_BATCH - 1
 		assert_bool(_main._solo_striker_has_bane(gu, {"rules": []}, row[1])).override_failure_message("below 94: %s melee=%s" % [row[0], row[1]]).is_equal(row[2])
-		AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_EXACT_STRIKER_LABELS
+		AiActRecorder.rules_epoch = AiActRecorder.EPOCH_94_PARITY_BATCH
 		assert_bool(_main._solo_striker_has_bane(gu, {"rules": []}, row[1])).override_failure_message("from 94: %s melee=%s" % [row[0], row[1]]).is_equal(row[3])
 
 
@@ -75,10 +75,10 @@ func test_the_planner_stamps_no_flag_for_a_label_from_the_pending_epoch() -> voi
 	for row in [[["Rending"], "rending"], [["Unstoppable"], "unstoppable"], [["Bane"], "bane"], [["Rending Mark"], "rending"], [["Unstoppable Mark"], "unstoppable"], [["Bane Mark"], "bane"]]:
 		var gu := _unit_with(row[0])
 		var is_label: bool = GameUnit.is_unlisted_striker_label(row[0][0])
-		for epoch in [AiActRecorder.PENDING_EPOCH_EXACT_STRIKER_LABELS - 1, AiActRecorder.PENDING_EPOCH_EXACT_STRIKER_LABELS]:
+		for epoch in [AiActRecorder.EPOCH_94_PARITY_BATCH - 1, AiActRecorder.EPOCH_94_PARITY_BATCH]:
 			AiActRecorder.rules_epoch = epoch
 			var profiles: Array = BattleSim._profiles_of({"unit": gu, "alive": 5}, false)
 			assert_bool(profiles.size() > 0).override_failure_message("a ranged profile exists").is_true()
 			var stamped := bool((profiles[0] as Dictionary).get(row[1], false))
-			var want: bool = not (is_label and epoch >= AiActRecorder.PENDING_EPOCH_EXACT_STRIKER_LABELS)
+			var want: bool = not (is_label and epoch >= AiActRecorder.EPOCH_94_PARITY_BATCH)
 			assert_bool(stamped).override_failure_message("%s -> %s at epoch %d" % [row[0], row[1], epoch]).is_equal(want)

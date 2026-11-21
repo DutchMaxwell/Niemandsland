@@ -24,7 +24,7 @@ use crate::combat::{
 use crate::sight;
 use crate::geom::{self, V3};
 use crate::acts::{
-    rule_on, CURRENT_RULES_EPOCH, PENDING_EPOCH_VERSATILE_MODIFIED_HIT, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES,
+    rule_on, CURRENT_RULES_EPOCH, EPOCH_94_PARITY_BATCH, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES,
     EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_8_PLANNER_MENU,
     EPOCH_9_MARK_FAMILY, EPOCH_10_CHARGE_BAND, EPOCH_12_MOVE_BUFF,
     EPOCH_13_WHO_WINS, EPOCH_14_DEADLY_LANDING, EPOCH_19_MOVE_GRANTS_FOLD,
@@ -283,10 +283,10 @@ fn granted_reach<'a>(us: &'a UnitStatic, state: &'a State, mi: usize) -> (f64, &
 /// left) is the host's unit and the table keeps the flag on that unit, so the dead host's Shaken is the hero's; every
 /// other unit reads its own flag, and below 73 every unit does.
 ///
-/// From `PENDING_EPOCH_SHAKEN_MIRROR` only the unit's OWN flag counts (lead rule call 20.11.): a dead host's flag is stale once the hero
+/// From `EPOCH_94_PARITY_BATCH` only the unit's OWN flag counts (lead rule call 20.11.): a dead host's flag is stale once the hero
 /// recovered alone, so the lone hero rolls its die; the table's `_solo_test_unit_shaken` reads the same.
 fn unit_shaken(state: &State, i: usize, seams: Seams) -> bool {
-    if rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SHAKEN_MIRROR) {
+    if rule_on(seams.rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) {
         return state.shaken[i];
     }
     let root = morale_root(state, i, seams);
@@ -2375,7 +2375,7 @@ fn tray_vs_marks(
             // the legacy once-grant stays on the bearer so older corpora
             // replay byte-exact. Rules-must-log: the placement names itself.
             let on_target = (grant == "Rapid Charge" && rule_on(seams.rules_epoch, EPOCH_71_RAPID_CHARGE_MARK))
-                || (grant == "AP(+1) in melee" && b.scope == "melee" && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_MELEE_MARK_SCOPE));
+                || (grant == "AP(+1) in melee" && b.scope == "melee" && rule_on(seams.rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH));
             if on_target {
                 trace_rule("mark", &b.name, &format!(
                     "{} marks {} — friendly units attacking it gain {} (once)",
@@ -4529,7 +4529,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // stays blind, the sighting seam's own asymmetry.
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
         c.indirect_mark = grants && mods::granted_vs(state, i, "Indirect");
-        c.indirect_own = grants && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_OWN_INDIRECT) && mods::granted_own_indirect(state, i);
+        c.indirect_own = grants && rule_on(rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) && mods::granted_own_indirect(state, i);
         c.range_mark_in = if grants && mods::granted_vs(state, i, "+6\" shooting range") {
             INCREASED_SHOOTING_RANGE_MARK_IN
         } else {
@@ -4680,11 +4680,11 @@ pub fn ctx_live_vs(
     c.furious = c.furious || mods::granted_vs(state, target, "Furious");
     c.relentless_grant = c.relentless_grant || mods::granted_vs(state, target, "Relentless");
     c.shred_grant = c.shred_grant || mods::granted_vs(state, target, "Shred");
-    if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_SLAYER_MARK_GRANT) {
+    if rule_on(rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) {
         c.slayer_grant = c.slayer_grant || mods::granted_vs(state, target, "Slayer");
     }
-    // The melee-scoped Piercing Fighting Mark waits on the marked unit for its charger (`PENDING_EPOCH_MELEE_MARK_SCOPE`); a volley never reads it.
-    if melee && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_MELEE_MARK_SCOPE) {
+    // The melee-scoped Piercing Fighting Mark waits on the marked unit for its charger (`EPOCH_94_PARITY_BATCH`); a volley never reads it.
+    if melee && rule_on(rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) {
         c.pierce_melee_grant = c.pierce_melee_grant || mods::granted_vs_exact(state, target, "AP(+1) in melee");
     }
     // G4R3 F-SURGE-GRANT (EPOCH_73_V36): a spell's once-grant of Surge to the target's attackers (the table's
@@ -6097,8 +6097,8 @@ fn sighted_profiles_of(
     // inert reading — the grant lands on the ledger but no resolver reads it.
     let epoch6 = rule_on(sc.rules_epoch, EPOCH_6_TABLE_RULES);
     let mark_indirect = epoch6 && mods::granted_vs(state, ti, "Indirect");
-    // PENDING_EPOCH_OWN_INDIRECT: an Indirect in the shooter's own store waives the sight test of every weapon (`_solo_shot_eligibility`).
-    let own_indirect = rule_on(sc.rules_epoch, crate::acts::PENDING_EPOCH_OWN_INDIRECT) && mods::granted_own_indirect(state, mi);
+    // EPOCH_94_PARITY_BATCH: an Indirect in the shooter's own store waives the sight test of every weapon (`_solo_shot_eligibility`).
+    let own_indirect = rule_on(sc.rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) && mods::granted_own_indirect(state, mi);
     let mark_range = if epoch6 && mods::granted_vs(state, ti, "+6\" shooting range") {
         INCREASED_SHOOTING_RANGE_MARK_IN
     } else {
@@ -7524,7 +7524,7 @@ pub(crate) fn tray_morale_for(
     }
     match outcome {
         Morale::Passed => {}
-        Morale::Shaken if seams.hero_attach && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SHAKEN_MIRROR) => {
+        Morale::Shaken if seams.hero_attach && rule_on(seams.rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) => {
             // The table's Shaken outcome: a unit that is not Shaken yet (the lone hero's own flag decides) gets the flag on the unit the volley
             // named (its host, a dead one for a lone hero), mirrored onto every joined hero (`_solo_mirror_shaken`); each member drops what it carries.
             let unit = morale_root(state, i, seams);
@@ -7826,11 +7826,11 @@ fn lone_hero_of(state: &State, ti: usize, seams: Seams) -> Option<usize> {
     state.attached[ti].iter().copied().find(|&h| state.alive[h] > 0)
 }
 
-/// The table's executed-move stamp (`_solo_animate_move`): the host's `moved_round`, and from `PENDING_EPOCH_HERO_MOVED_STAMP` the living
+/// The table's executed-move stamp (`_solo_animate_move`): the host's `moved_round`, and from `EPOCH_94_PARITY_BATCH` the living
 /// joined heroes' too (their models are in the move paths, the stamp goes to the unit of each model).
 pub(crate) fn stamp_moved(state: &mut State, si: usize, hero_attach: bool, rules_epoch: u32) {
     state.moved_round[si] = state.round;
-    if hero_attach && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_HERO_MOVED_STAMP) {
+    if hero_attach && rule_on(rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) {
         for h in state.attached[si].clone() {
             if state.alive[h] > 0 {
                 state.moved_round[h] = state.round;
@@ -9565,7 +9565,7 @@ fn versatile_latch(
 
 /// The once-per-activation pick's rules-must-log line: the book rule's name, who picked, which mode. The table's
 /// `_solo_log_versatile_pick`, said where the volley decides (`versatile_latch` before the dice, or the dice themselves from
-/// `PENDING_EPOCH_VERSATILE_MODIFIED_HIT`).
+/// `EPOCH_94_PARITY_BATCH`).
 pub(crate) fn say_versatile_pick(rule_name: &str, unit: &str, ap_mode: bool, side: i64, log: &mut Vec<String>, tray: Option<&mut Tray>, rules_epoch: u32) {
     let mode = if ap_mode { "AP(+1)" } else { "+1 to hit" };
     log.push(format!("{rule_name}: {unit} picks {mode} for this activation"));
@@ -10759,7 +10759,7 @@ fn resolve_with(
     // #816 PR 2 — the activation-start latch clear (main.gd:17456's erase).
     next.teleport_used[si] = false;
     next.cast_buffs.clear(); // CAST-O7: a board that already ran an activation carries no ledger into this one
-    next.casualty_f32 = rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_CASUALTY_TIES);
+    next.casualty_f32 = rule_on(seams.rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH);
     sc.rules_epoch = seams.rules_epoch; // wave-3 mark consumers read it off Scratch
 
     // --- REANIMATION (main.gd:953-957), the activation trigger BEFORE the
@@ -11134,7 +11134,7 @@ fn resolve_with(
         // One-core P3 step 61: the walked paths the tray carries become the move's landing, so the Dangerous test
         // below reads each model's route, not only its end (`dangerous_dice`'s end-only arm); a climb names its rule.
         let trails = dice.as_ref().and_then(|d| d.0.placed_trails()).filter(|t| !t.is_empty()).map(|t| t.to_vec());
-        // PENDING_EPOCH_ZERO_MOVE_STAMP: the table stamps an EXECUTED move; remember the chain's stamps and whether any model left its place.
+        // EPOCH_94_PARITY_BATCH: the table stamps an EXECUTED move; remember the chain's stamps and whether any model left its place.
         let chain: Vec<usize> = std::iter::once(si).chain(next.attached[si].iter().copied()
             .filter(|_| seams.hero_attach && p.len() == crate::activation::placed_chain_len(&next, si))).collect();
         let stamps: Vec<(usize, i64)> = chain.iter().map(|&u| (u, next.moved_round[u])).collect();
@@ -11166,7 +11166,7 @@ fn resolve_with(
                 land_cover(statics, &mut next, si, t, seams, dice.as_mut().map(|d| &mut *d.1));
             }
         }
-        if !left_place && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_ZERO_MOVE_STAMP) {
+        if !left_place && rule_on(seams.rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) {
             for (u, round) in stamps {
                 next.moved_round[u] = round;
             }
@@ -11902,7 +11902,7 @@ fn resolve_with(
                                         shoot36.iter().find(|p| p.versatile_attack)
                                     };
                                     if (prof36.is_some() || att.versatile_grant)
-                                        && rule_on(seams.rules_epoch, PENDING_EPOCH_VERSATILE_MODIFIED_HIT)
+                                        && rule_on(seams.rules_epoch, EPOCH_94_PARITY_BATCH)
                                         && next.versatile_pick_round[*mi] != next.round
                                     {
                                         // The dice decide on the number the first eligible shot rolls at; stamped after the volley below.
@@ -11944,10 +11944,10 @@ fn resolve_with(
                             // melee half above.
                             // A lone hero's hit lines call the target by its host's name, as the table does.
                             tray.aim(lone_host.map(|h| statics[next.roster.profile[h]].name.clone()));
-                            // PENDING_EPOCH_DEADLY_INLINE: a volley with a Deadly weapon beside another fires its Deadly groups onto a scratch copy of
+                            // EPOCH_94_PARITY_BATCH: a volley with a Deadly weapon beside another fires its Deadly groups onto a scratch copy of
                             // the state as the weapons go (the table's inline landing); the fold asks whether the target's chain is wiped by then.
                             // Below 94, or with nothing to land inline, no clone is made and the fold is exactly what it was.
-                            let inline_on = rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_DEADLY_INLINE)
+                            let inline_on = rule_on(seams.rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH)
                                 && rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING)
                                 && parts.iter().map(|(mi, msc, _)| msc.keep.iter().filter(|&&k| statics[next.roster.profile[*mi]].shoot[k].deadly > 0).count()).sum::<usize>() > 0
                                 && parts.iter().map(|(_, msc, _)| msc.keep.len()).sum::<usize>() > 1;
@@ -12429,7 +12429,7 @@ fn resolve_with(
     if was_shaken && kind == HOLD && shoot_key.is_empty() {
         next.shaken[si] = false;
         // The table's idle recovery mirrors the cleared flag onto the unit's joined heroes (`_solo_mirror_shaken`).
-        if seams.hero_attach && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SHAKEN_MIRROR) {
+        if seams.hero_attach && rule_on(seams.rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) {
             for h in next.attached[si].clone() {
                 next.shaken[h] = false;
             }

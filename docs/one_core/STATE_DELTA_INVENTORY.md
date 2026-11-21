@@ -84,7 +84,7 @@ same commit as the struct change.
 | `charge_probe_r` | act_recorder.gd:845 | no | no | no (capture input) |
 | `buffs` | main.gd:447 | spent once buffs (`land_delta`, C-15 / #2924); a buff the core ADDS is not carried | no | no (delta) |
 | `cast_buffs` | none (core bookkeeping) | names the buff / debuff effects this activation's casts landed: the ones its volley or next cast spent (`buffs_spent`, CAST-O7) and the ones still standing (`buffs_gained`, CC-8c; effect-less spells included) | no | no (report-only list, cleared at the activation start) |
-| `casualty_f32` | none (core bookkeeping) | `PENDING_EPOCH_CASUALTY_TIES`: the casualty order measures distance the table's way (f32); set from the seams at the activation's start | no | no (not serialised, false on a board that never ran an activation) |
+| `casualty_f32` | none (core bookkeeping) | `EPOCH_94_PARITY_BATCH`: the casualty order measures distance the table's way (f32); set from the seams at the activation's start | no | no (not serialised, false on a board that never ran an activation) |
 | `vs_mark_round` | main.gd:24332 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `hit_and_run_round` | solo_controller.gd:12793 | yes (`land_delta`, P4.0-4e) | no | no (delta) |
 | `moved_round` | main.gd:1761 | yes (`land_delta`, P4.0-4e) | X/Z only | no (delta) |

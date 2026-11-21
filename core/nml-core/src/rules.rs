@@ -227,7 +227,7 @@ pub fn rule_name_matches(candidate: &str, rule: &str) -> bool {
 }
 
 /// A rule name that only STARTS with a striker rule (Bane / Lacerate / Rending / Unstoppable) without being the rule or one of its explicit aliases: a Mark, a Buff or an Aura label
-/// (ds/h_prefix_labels.md). The unit-level striker scans skip it from `PENDING_EPOCH_EXACT_STRIKER_LABELS`; the aliases are the scoped spellings the books grant to the bearer itself.
+/// (ds/h_prefix_labels.md). The unit-level striker scans skip it from `EPOCH_94_PARITY_BATCH`; the aliases are the scoped spellings the books grant to the bearer itself.
 pub fn is_unlisted_striker_label(rule: &str) -> bool {
     const FAMILIES: [(&str, &[&str]); 4] = [
         ("Bane", &["Bane", "Bane in Melee", "Bane when Shooting"]),

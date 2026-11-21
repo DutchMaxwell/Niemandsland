@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## PLAN H / landing lane: the melee-scoped Marks (Rapid Charge, Piercing Fighting; aof books, `vs_target`, scope `melee`) a shooter places on its target. After a volley the
 ## table keeps the record on the marked unit for a later charger (`_solo_apply_vs_marks`; the volley's spend skips a melee-scoped record). The core put the Piercing Fighting Mark
-## on the attacker with the scope dropped and spent it in the volley (`PENDING_EPOCH_MELEE_MARK_SCOPE`, 94: it now stays on the target like the Rapid Charge Mark), and no
+## on the attacker with the scope dropped and spent it in the volley (`EPOCH_94_PARITY_BATCH`, 94: it now stays on the target like the Rapid Charge Mark), and no
 ## record of either ever reached the table (the delta's `marks_left` + `CoreActivation._land_marks_left` land it). One REAL AI activation per seed (`_solo_activate_one_ai`),
 ## door on against door off, two placements (a foe 14 in away: the AI advances; 7 in: it holds), the slice = the committed deny file with the Utility Buff primitive taken out
 ## of the beat group (the lift is a data PR of its own): the same dice, the same end state (the marked unit's record included), the same lines, and the door really ran the core.

@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## PLAN H, DEADLY LANDING INLINE (`PENDING_EPOCH_DEADLY_INLINE` = 94, lead decision 20.11.). The table lands a Deadly weapon's unsaved wounds right
+## PLAN H, DEADLY LANDING INLINE (`EPOCH_94_PARITY_BATCH` = 94, lead decision 20.11.). The table lands a Deadly weapon's unsaved wounds right
 ## after that weapon's saves, so a later weapon of the same volley reads the target as it stands then: a lone Hero the Deadly wounds killed no
 ## longer lends its Stealth / Changebound / Stealth Aura / Evasive to the weapons still to fire ("dead models lend nothing"). The core landed Deadly
 ## after all the dice and kept the captured target: 11 of 16 seeds of this fixture rolled a different to-hit number on the later weapon (H-10,

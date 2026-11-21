@@ -43,7 +43,7 @@ static var _core_buffs: Dictionary = {}
 static var _wiped_at_capture: Dictionary = {}
 
 
-## PENDING_EPOCH_CASUALTY_TIES: env NML_CORE_SHADOW_SLOTS=1|on (soaks only, default OFF) compares WHICH models survived, below the
+## EPOCH_94_PARITY_BATCH: env NML_CORE_SHADOW_SLOTS=1|on (soaks only, default OFF) compares WHICH models survived, below the
 ## epoch too: the core's old f64 casualty order parts mirror models of a symmetric formation the other way than the table, so a
 ## compare below 94 reads "positions" on such boards (a soak that wants the prevalence of that gap turns it on). From epoch 94 the
 ## compare is always on: the epoch claims the table's order.
@@ -54,7 +54,7 @@ static func slots_enabled() -> bool:
 	if _slots_env < 0:
 		var raw := OS.get_environment("NML_CORE_SHADOW_SLOTS").to_lower()
 		_slots_env = 1 if (raw == "1" or raw == "on") else 0
-	return _slots_env == 1 or AiActRecorder.rules_epoch >= AiActRecorder.PENDING_EPOCH_CASUALTY_TIES
+	return _slots_env == 1 or AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_94_PARITY_BATCH
 
 
 ## The flag, read once: ON only for "1" / "on".

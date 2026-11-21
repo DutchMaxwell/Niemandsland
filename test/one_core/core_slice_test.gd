@@ -792,6 +792,9 @@ func test_state_refusals_for_spell_hit_modifiers_and_vengeance_markers() -> void
 func test_a_versatile_shooter_against_a_to_hit_modifier_is_refused_as_a_pair() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
+	# From the epoch 94 batch the pair is taken (see test_the_versatile_pair_is_taken_from_the_epoch_94_batch): this test pins the refusal below it.
+	var epoch_before := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_94_PARITY_BATCH - 1
 	var vers := _unit(["Versatile Attack"], [[]])
 	vers.unit_properties["faction_folder"] = "battle_brothers"
 	var plain := _unit([], [[]])
@@ -835,6 +838,7 @@ func test_a_versatile_shooter_against_a_to_hit_modifier_is_refused_as_a_pair() -
 	SlicePin.narrow()
 	assert_array(CoreSlice.pair_refusals(vers, _unit(["Stealth"], [[]]))).override_failure_message("the allow slice has no such group").is_empty()
 	SlicePin.release()
+	AiActRecorder.rules_epoch = epoch_before
 
 
 ## A slice dict a test injects through `CoreSlice._cache_by_path` (melee_morale_lines_test.gd) predates the `lifted_names` (H-9b) and `shooter_only` (H-9a) keys: the readers
@@ -850,16 +854,16 @@ func test_a_cached_slice_dict_without_the_newer_keys_still_reads() -> void:
 
 ## Plan H, H-18: from the pending epoch 94 the core's dice pick Versatile Attack on the modified to-hit number, so the pair is taken (the door test
 ## `versatile_pick_door_test.gd` shows both halves equal there). Below it the pair stays refused, in the dice-only pin too. RED: drop the epoch clause.
-func test_the_versatile_pair_is_taken_from_the_pending_epoch() -> void:
+func test_the_versatile_pair_is_taken_from_the_epoch_94_batch() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
 	var vers := _unit(["Versatile Attack"], [[]])
 	vers.unit_properties["faction_folder"] = "battle_brothers"
 	var stealth := _unit(["Stealth"], [[]])
 	var epoch_before := AiActRecorder.rules_epoch
-	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_VERSATILE_MODIFIED_HIT - 1
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_94_PARITY_BATCH - 1
 	var below := CoreSlice.pair_refusals(vers, stealth)
-	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_VERSATILE_MODIFIED_HIT
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_94_PARITY_BATCH
 	var at_pending := CoreSlice.pair_refusals(vers, stealth)
 	AiActRecorder.rules_epoch = epoch_before
 	assert_array(below).override_failure_message("below 94 the core still latches on the plain Quality").is_equal(["versatile_pick_modified_to_hit"])

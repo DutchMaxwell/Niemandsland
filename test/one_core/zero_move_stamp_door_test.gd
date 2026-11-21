@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## PENDING_EPOCH_ZERO_MOVE_STAMP (94, soak game 23): an AI Advance the planner clamped to zero (`last_move_paths` empty) is no executed move on the table, so
+## EPOCH_94_PARITY_BATCH (94, soak game 23): an AI Advance the planner clamped to zero (`last_move_paths` empty) is no executed move on the table, so
 ## `moved_round` stays unset. The door hands the core the chain where it stands; the step API calls a placement HOLD only when it matches the HOST's models
 ## (`effective_kind`), so a unit with a joined hero kept its Advance and the core stamped it: `land_delta` splits ("table -1, core 1"; the soak's Skeleton
 ## Archers + Leader, "table 3, core 4"). One Advance volley per reading (`CoreActivation.stamp_splits`): a split at 93 (RED), none from 94; the host alone never split.
@@ -9,7 +9,7 @@ const ParityTable := preload("res://test/parity/parity_table.gd")
 const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf", "faction_folder": "dark_elf_raiders", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 5, "rules": []}
 const HERO := {"player": 2, "name": "AttHero", "models": 1, "x_in": -3.0, "z_step_in": 1.2, "game_system": "gf", "faction_folder": "dark_elf_raiders", "rules": ["Hero"]}
-const PENDING := 94   # acts.rs PENDING_EPOCH_ZERO_MOVE_STAMP
+const PENDING := 94   # acts.rs EPOCH_94_PARITY_BATCH
 
 var _runner: GdUnitSceneRunner
 var _main: Node

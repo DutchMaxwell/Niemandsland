@@ -169,7 +169,7 @@ fn unit_static_ignores_scoped_aliases_on_melee_weapons() {
 }
 
 /// Plan H (pending epoch 94, ds/h_prefix_labels.md): the UNIT-level striker scan counted `Bane Mark`, `Rending Mark`, `Unstoppable Mark` and `Bane in Melee Buff` as the rule by
-/// PREFIX. From `PENDING_EPOCH_EXACT_STRIKER_LABELS` only the rule and its explicit aliases count; below it nothing moves. The control rows (plain rules, the scoped aliases the
+/// PREFIX. From `EPOCH_94_PARITY_BATCH` only the rule and its explicit aliases count; below it nothing moves. The control rows (plain rules, the scoped aliases the
 /// books grant to the bearer itself) read the same at both epochs.
 #[test]
 fn unit_level_striker_labels_are_no_bearers_from_the_pending_epoch() {
@@ -184,7 +184,7 @@ fn unit_level_striker_labels_are_no_bearers_from_the_pending_epoch() {
     let header = read_act_header(&raw).expect("header");
     let mut reg = Registries::new(&repo_root());
     let mut build = |id: &str, epoch: u32| UnitStatic::build_for(&mut reg, header.profiles.get(id).expect("profile"), epoch);
-    let pending = crate::acts::PENDING_EPOCH_EXACT_STRIKER_LABELS;
+    let pending = crate::acts::EPOCH_94_PARITY_BATCH;
     let (below, from) = (build("labels", pending - 1), build("labels", pending));
     assert!(below.shoot[0].bane && below.shoot[0].rending && below.shoot[0].unstoppable_ev, "below the epoch the prefix read stands");
     assert!(!from.shoot[0].bane && !from.shoot[0].rending && !from.shoot[0].unstoppable_ev, "from it a Mark is no bearer");

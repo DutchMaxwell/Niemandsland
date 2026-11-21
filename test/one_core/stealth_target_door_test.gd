@@ -171,7 +171,7 @@ func test_a_joined_hero_follows_the_most_models_read_in_both_halves() -> void:
 	assert_int((few["core"] as Array)[0]).is_equal(4)
 
 
-## The one real difference, kept visible: a Deadly missile beside a rifle kills the lone Stealth Aura hero before the rifle rolls. The table's live
+## The difference below the epoch 94 batch, kept visible (from 94 the inline Deadly landing closes it): a Deadly missile beside a rifle kills the lone Stealth Aura hero before the rifle rolls. The table's live
 ## read then finds nobody with the rule (4 -> hit on 4+), the core keeps the declared board (5+). The door never sees it: the shooter is refused.
 func test_the_penalty_is_lost_only_when_an_earlier_deadly_weapon_kills_the_target() -> void:
 	var hero := _entry("Echo", 1, ["Hero", "Stealth Aura"], "robot_legions", [], 3)
@@ -181,8 +181,13 @@ func test_the_penalty_is_lost_only_when_an_earlier_deadly_weapon_kills_the_targe
 	var shooter_refusals := CoreSlice.refusals_in(CoreSlice.DENY_PATH, probe)
 	RosterSweep.free_units(_main, [probe])
 	assert_array(shooter_refusals).override_failure_message("a Deadly weapon beside another weapon keeps the shooter on the table").contains(["deadly_beside_other_weapons"])
+	var epoch_before := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_94_PARITY_BATCH - 1
 	var res := await _run(deadly, hero)
-	assert_int(int(res["bad"])).override_failure_message("the red leg: the dice differ once the target is dead").is_greater(3)
+	AiActRecorder.rules_epoch = epoch_before
+	assert_int(int(res["bad"])).override_failure_message("the red leg at 93: the dice differ once the target is dead").is_greater(3)
+	var res94 := await _run(deadly, hero)
+	assert_int(int(res94["bad"])).override_failure_message("from 94 the Deadly landing is inline and the dice are equal").is_equal(0)
 	var plain := _rifles([["Missile", 24, 4, []]])
 	var ctl := await _run(plain, hero)
 	assert_int(int(ctl["bad"])).override_failure_message("control: the same shooter without Deadly is equal").is_equal(0)
