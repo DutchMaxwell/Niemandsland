@@ -45,6 +45,7 @@ var _cam_target := Vector3.ZERO
 
 func _initialize() -> void:
 	ProjectSettings.set_setting("niemandsland/harness_mode", true)
+	BoardgenTownLife.pinned = true   # the life clock stands at t = 0: a still (and the readability gate) is reproducible
 	_run.call_deferred()
 
 
@@ -222,6 +223,7 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 	_cur_board = board
 	for _i in 60:
 		await process_frame
+	print("BOARD %s decals %d life %d" % [tag, board.find_children("*", "Decal", true, false).size(), board.find_children("*", "GPUParticles3D", true, false).size()])
 	var armies := _place_armies(board, layout)
 	if _want("overview"):
 		_pose(STILL_YAW, -45.0, ZOOM)
@@ -253,6 +255,30 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 			_pose(mg["yaw"], -30.0, 6.0 * IN, mg["target"])   # 6 in from the target at 30 deg down: the lens 3 in above the street
 			await _still(tag, "macro_ground")
 			for m: Node3D in shown:
+				m.visible = true
+	if _want("scene") and layout.get("theme", "") == "RuinTown":   # one close-up per story-scene kind (plan PLAN_RUINTOWN_GRIT S1-S3)
+		var seen := {}
+		for sc: Dictionary in BoardgenTownScenes.plan(layout)["scenes"]:
+			if seen.has(sc["kind"]):
+				continue
+			seen[sc["kind"]] = true
+			var at: Vector2 = sc["at"]
+			var into: Vector2 = sc["into"]
+			var shown_s: Array = _models.filter(func(m: Node3D) -> bool: return m.visible)
+			for m: Node3D in shown_s:
+				m.visible = false
+			var look := at + into * 0.9   # the cluster's middle, a little out from the wall
+			var yaw := _open_yaw(layout, look, 0.6, -35.0, 12.0, Rect2(look - Vector2(1.5, 1.5), Vector2(3.0, 3.0)))
+			if into != Vector2.ZERO:   # square onto the wall from the open side, turned 30 deg off the wall line; the lens 9 in out must be open ground
+				for turn: float in [30.0, -30.0, 0.0, 55.0, -55.0]:
+					var y := rad_to_deg(atan2(into.x, into.y)) + turn
+					var lens := look + Vector2(sin(deg_to_rad(y)), cos(deg_to_rad(y))) * 9.0 * cos(deg_to_rad(35.0))
+					if _open(layout, lens):
+						yaw = y
+						break
+			_pose(yaw, -35.0, 9.0 * IN, Vector3(look.x * IN, 0.4 * IN, look.y * IN))
+			await _still(tag, "scene_" + String(sc["kind"]))
+			for m: Node3D in shown_s:
 				m.visible = true
 	if _want("macro_wall"):
 		var mw := _macro_wall_pick(layout)
