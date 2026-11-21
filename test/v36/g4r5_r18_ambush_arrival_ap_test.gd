@@ -4,8 +4,9 @@ extends GdUnitTestSuite
 ## The core already folds it per shooting member (`ambush_arrival_ap`, stamp == round, shooting only); the table never
 ## did, neither in the AI's volley nor in the human's (gf_023/13: core save 6+, table save 5+). From 73 both table
 ## volleys add the +1 per shot member and the battle log names the book rule.
-## The recorded act closes only with the next re-recording; the two AI controls drive the game's own call
-## (`_run_ai_shooting`, the core door takes it); the AI legs the core cannot answer yet and the human tests drive the table's.
+## The recorded act closes only with the next re-recording; the AI legs at epoch 73 drive the game's own call
+## (`_run_ai_shooting`, the core door takes it and writes the rule line itself); the epoch-72 leg (the core folds the arrival
+## AP at no epoch, so the door cannot answer it) and the human tests drive the table's.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
@@ -111,8 +112,8 @@ func _ai_volley(epoch: int, rule: bool, arrived_round: int) -> String:
 	return text
 
 
-## The table's own volley, for the two legs the core door cannot answer yet: the epoch-72 leg (the core folds the arrival AP
-## at no epoch) and the epoch-73 leg that reads the rule-name line (the core's volley writes none). Findings, see the PR.
+## The table's own volley, for the one leg the core door cannot answer: the epoch-72 leg (the core folds the arrival AP at no
+## epoch, so below 73 the door says AP 2 where the table says AP 1). Finding, see the PR.
 func _table_ai_volley(epoch: int, rule: bool, arrived_round: int) -> String:
 	AiActRecorder.rules_epoch = epoch
 	var f := _fixture(rule, arrived_round)
@@ -148,7 +149,7 @@ func test_arrival_round_adds_no_ap_at_epoch_72(timeout := 120000) -> void:
 ## The parity act's shape, AI side: the rule plus an arrival stamp equal to the current round -> the save line reads
 ## AP 2 (Def 4+ -> 6+) and the log names the book rule.
 func test_ai_volley_adds_ap_one_in_the_arrival_round_at_epoch_73(timeout := 120000) -> void:
-	var text: String = await _table_ai_volley(AiActRecorder.EPOCH_73_V36, true, ROUND)
+	var text: String = await _ai_volley(AiActRecorder.EPOCH_73_V36, true, ROUND)
 	assert_str(text) \
 		.override_failure_message("F-AMBUSH-ARRIVAL-AP — the AI volley must shoot AP 2 in the arrival round (log: %s)" % text) \
 		.contains("saves on 6+ (Def 4+, AP 2)")
