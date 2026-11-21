@@ -44,7 +44,7 @@ const OWN_COLOUR := ["cart_toppled_load", "handcart_load", "table_overturned_loa
 const LADDER_MODULES := ["timber_ladder_3in", "timber_ladder_top"]
 const MODULE_TINT := {"pool_kerb": Color(0.52, 0.55, 0.6), "tower_cap_burnt": Color(0.32, 0.30, 0.28), "rubble_heap_a": Color(0.5, 0.44, 0.38), "rubble_heap_b": Color(0.36, 0.32, 0.28),
 	"fountain_basin": Color(0.6, 0.63, 0.58), "fountain_basin_b": Color(0.6, 0.63, 0.58), "fountain_column": Color(0.64, 0.66, 0.6),   # (train 3, lead: the basin was the palest thing in the street view - grey weathered stone like the merlons)
-	"hay_heap": Color(0.7, 0.64, 0.52), "stall_collapsed_cloth": Color(0.76, 0.72, 0.68), "lantern_post": Color(0.17, 0.165, 0.16),
+	"hay_heap": Color(0.7, 0.64, 0.52), "stall_collapsed_cloth": Color(0.76, 0.72, 0.68), "lantern_post": Color(0.17, 0.165, 0.16), "lantern_post_iron": Color(0.4, 0.4, 0.4),
 	"weeds_a": Color(0.62, 0.46, 0.42), "weeds_b": Color(0.62, 0.46, 0.42), "ivy_cluster_small": Color(0.62, 0.46, 0.42), "ivy_cluster_large": Color(0.62, 0.46, 0.42),
 	"ivy_strand_a": Color(0.62, 0.46, 0.42), "ivy_strand_b": Color(0.62, 0.46, 0.42)}   # (lead review of #3312: the plants were houseplant green, the most saturated thing in the frame - a dull grey-green, darker than the wall)   # (21.11.: the hay and the striped cloth were the palest shapes of a scene; the lamp's base and cage read as white bars - dark iron now, only the glass glows)   # (heaps: grey-brown rubble and ash, never a white blob - lead 21.11.)   # a charred frame: the timber grain, dark
 ## Glass of a lamp and the coals of a brazier: drawn with an emissive material, the OmniLight sits at their origin.
@@ -218,7 +218,7 @@ static func casts_shadow(m: String) -> bool:
 
 
 ## A7 modules that replace a K-R1 / A2 one in the same frame: while one is not cached, the board draws the older module in its place.
-const FALLBACK := {"roof_sag_low": "roof_gable_low", "roof_sag_steep": "roof_gable_steep", "merlon_v1": "merlon", "merlon_v2": "merlon", "merlon_v3": "merlon", "merlon_v4": "merlon_broken", "fountain_basin_b": "fountain_basin"}
+const FALLBACK := {"roof_sag_low": "roof_gable_low", "roof_sag_steep": "roof_gable_steep", "merlon_v1": "merlon", "merlon_v2": "merlon", "merlon_v3": "merlon", "merlon_v4": "merlon_broken", "fountain_basin_b": "fountain_basin", "lantern_post_iron": "lantern_post"}
 
 
 ## One MultiMesh per module, on its set's material (or the tinted kit material while the set is not cached).
@@ -240,7 +240,7 @@ func build(layout: Dictionary) -> void:
 			mmi.material_override = glow
 			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			continue
-		if m == "lantern_post":
+		if m.begins_with("lantern_post"):
 			mmi.layers |= BoardgenMood.LAMP_IRON_LAYER
 		if mat != null and m.begins_with("roof_") and m != "roof_rafters":   # the roofs carry UVs in tiles (courses parallel to the eaves)
 			mat.uv1_triplanar = false
@@ -248,4 +248,4 @@ func build(layout: Dictionary) -> void:
 			mat.normal_enabled = false   # the GLB has no tangents; the course lips are the relief
 		mmi.material_override = mat
 		for i in mmi.multimesh.instance_count:
-			mmi.multimesh.set_instance_color(i, (TEXTURED_TINT if mat != null else TINT)[set_of(m)] * MODULE_TINT.get(m, Color.WHITE) * (p[m][i]["colour"] as Color))   # (the item's own colour: white for most, dry for some weeds)
+			mmi.multimesh.set_instance_color(i, (TEXTURED_TINT if mat != null else TINT)[set_of(m)] * MODULE_TINT.get(src, MODULE_TINT.get(m, Color.WHITE)) * (p[m][i]["colour"] as Color))   # (a fallback module keeps its own tint)   # (the item's own colour: white for most, dry for some weeds)

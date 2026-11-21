@@ -182,6 +182,18 @@ func test_crows_perch_where_nobody_stands_and_the_kit_critters_replace_the_stand
 ## Lead 21.11.: the lamp's base and cage read as white bars, the hay and the stall's cloth were the palest shapes of a scene - the kit tints them down (dark iron; dull straw and canvas).
 func test_lamp_iron_hay_and_cloth_are_tinted_down() -> void:
 	assert_float(BoardgenTownKit.MODULE_TINT.get("lantern_post", Color.WHITE).get_luminance()).is_less(0.4)
+	assert_float(BoardgenTownKit.MODULE_TINT.get("lantern_post_iron", Color.WHITE).get_luminance()).is_less(0.5)
+
+
+## Lane townC4: the lamps draw the iron post (bracket, caged lantern); while it is not cached the kit draws the old post in its place, with the old post's dark tint,
+## and the lamp boxes are still replaced (the modules that must be cached for that stay the old pair).
+func test_the_iron_lamp_post_falls_back_to_the_old_post() -> void:
+	assert_str(BoardgenTownKit.FALLBACK.get("lantern_post_iron", "")).is_equal("lantern_post")
+	assert_array(BoardgenTownClutter.LAMP_MODULES).is_equal(["lantern_post", "lantern_glow"])
+	var plan := BoardgenTownClutter.plan(str_to_var(FileAccess.get_file_as_string("res://test/fixtures/boardgen/layout_42.txt")))
+	assert_bool(plan.has("lantern_post")).is_false()
+	assert_bool(plan.has("lantern_post_iron") or BoardgenTownDressing.lanterns(str_to_var(FileAccess.get_file_as_string("res://test/fixtures/boardgen/layout_42.txt"))).is_empty()).is_true()
+	assert_bool(FileAccess.get_file_as_string("res://scripts/boardgen_town_kit.gd").contains("MODULE_TINT.get(src, MODULE_TINT.get(m, Color.WHITE))")).override_failure_message("a fallback module must keep its own tint (the old post is dark iron)").is_true()
 	assert_float(BoardgenTownKit.MODULE_TINT.get("hay_heap", Color.WHITE).get_luminance()).is_less(0.8)
 	assert_float(BoardgenTownKit.MODULE_TINT.get("stall_collapsed_cloth", Color.WHITE).get_luminance()).is_less(0.8)
 	assert_bool(BoardgenTownKit.GLOW.has("lantern_glow")).is_true()   # only the glass glows
