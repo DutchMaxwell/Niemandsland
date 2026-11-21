@@ -165,3 +165,21 @@ func test_the_gated_ignore_rule_beside_another_group_says_its_verdict_and_rolls_
 			await _same(label + " (rolls)", _striker([], ["AP(1)"], "battle_brothers"), _ignorer(pair[1], pair[2], pair[3]), "Ranks rolls", rolls, {"distance_in": dist})
 	for dist in [14.0, 5.0]:
 		await _same("regeneration + knightborn vs bane at %d in" % int(dist), _striker(["Bane"], []), _ignorer(["Regeneration", "Knightborn"], "knight_brothers"), "Ranks:", 6, {"distance_in": dist})
+
+
+## PLAN_COVER_36 step 9c: cover from sight blockers through the door at epoch 95. A third unit of the shooter's seat, short models in a closed
+## line (20 mm bases, gaps under 1 in) 2 in in front of the target, hides its feet, not its heads: both halves say the screen line and save
+## alike (`_same` asserts the end states). A held Indirect gun at the same target lifts it and both say the lift line. Planted fault: the door
+## at 94 (table at 95) has no screen line - the row turns red, so the comparison can fail on this rule.
+func test_cover_from_sight_blockers_says_the_same_lines_through_the_door() -> void:
+	var was := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_COVER_SCREEN
+	var wall := DoorLines.entry("Wall", 9, [], [], "battle_brothers", 0)
+	(wall["unit"] as OPRApiClient.OPRUnit).base_size_round = 20
+	var opts := {"distance_in": 14.0, "blocker": wall, "blocker_in": 12.0}
+	await _same("screened by a closed unit line", DoorLines.entry("Gunners", 5, [], []), DoorLines.entry("Squad", 5, [], []), "Cover:", 6, opts)
+	await _same("held indirect lifts it", DoorLines.entry("Mortars", 3, [], ["Indirect"]), DoorLines.entry("Squad", 5, [], []), "Indirect:", 1, opts)
+	var r := await DoorLines.compare(_main, DoorLines.entry("Gunners", 5, [], []), DoorLines.entry("Squad", 5, [], []), "Cover:", 4,
+		ProjectSettings.globalize_path(DICE), opts.merged({"core_epoch": AiActRecorder.PENDING_EPOCH_COVER_SCREEN - 1}))
+	AiActRecorder.rules_epoch = was
+	assert_int((r["bad"] as Array).size()).override_failure_message("planted fault: a door at 94 must differ from the table at 95").is_equal(4)

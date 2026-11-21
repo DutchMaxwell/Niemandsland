@@ -129,3 +129,18 @@ use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
         let log = volley_log(&moved, &Ctx { indirect_mark: true, ..screened(4) }, gun, 1);
         assert_eq!((said(&log, COVER), said(&log, LIFT)), (1, 0), "no waiver, no lift: {log:?}");
     }
+
+    /// PLAN_COVER_36 step 9c: the doors write the tray's lines (#3286), so the lift line is said on the tray too.
+    /// RED before: it stood in `ShootResult.log` only.
+    #[test]
+    fn the_door_tray_says_the_sight_blocker_lift() {
+        let (held, gun) = held_gun(true);
+        let profiles = [gun];
+        let def = screened(4);
+        let shooters = [Shooter { profiles: &profiles, keep: &[0], attacks: &[6], att: &held, owner: "Att" }];
+        let seeded = resolve_volley_with_tray(&shooters, &def, "Def", 12.0, 12.0, true, true, true, true, &mut Tray::seeded(27));
+        let mut tray = Tray::supplied(seeded.rolls.iter().map(|r| r.faces.clone()).collect()); // a door's tray
+        resolve_volley_with_tray(&shooters, &def, "Def", 12.0, 12.0, true, true, true, true, &mut tray);
+        let said: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).collect();
+        assert_eq!(said.iter().filter(|l| *l == LIFT).count(), 1, "the tray says the lift once: {said:?}");
+    }

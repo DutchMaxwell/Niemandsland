@@ -11783,8 +11783,12 @@ fn resolve_with(
                                 if sc.screened {
                                     let k = sc.hidden.iter().filter(|&&h| h).count();
                                     let tail = if def.in_cover { "already in Cover terrain, one +1" } else { "+1 Defense" };
-                                    shot.log.push(format!("Cover: {} is behind a sight blocker from {} ({k} of {} models) - {tail}",
-                                        ut_g.name, statics[pi_s].name, sc.hidden.len()));
+                                    let said = format!("Cover: {} is behind a sight blocker from {} ({k} of {} models) - {tail}",
+                                        ut_g.name, statics[pi_s].name, sc.hidden.len());
+                                    shot.log.push(said.clone());
+                                    // The doors write the tray's lines (#3286): the screen says itself there too.
+                                    tray.say(|| LogLine { rule: "cover_screen", category: Category::Combat, side: next.player[g.ti],
+                                        detail: None, text: said });
                                 }
                             }
                             // rules-wave3-growthmark (epoch 6) — the volley's
