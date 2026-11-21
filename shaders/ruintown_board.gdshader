@@ -124,7 +124,7 @@ vec3 stone(vec2 uv, float seed, float course, float len, vec3 tint, out float re
 // Per-lot identity (plan R4b): four plasters (off-white, ochre, faded oxide red, grey-green) and three timbers (tarred, weathered grey, brown), picked by the lot's hash in the ground map.
 vec3 plaster_of(float lot) {
 	float k = floor(lot * 3.999);
-	return k < 0.5 ? vec3(0.86, 0.80, 0.68) : (k < 1.5 ? vec3(0.78, 0.62, 0.36) : (k < 2.5 ? vec3(0.62, 0.36, 0.28) : vec3(0.60, 0.65, 0.57)));
+	return grit_plaster(k < 0.5 ? vec3(0.86, 0.80, 0.68) : (k < 1.5 ? vec3(0.78, 0.62, 0.36) : (k < 2.5 ? vec3(0.62, 0.36, 0.28) : vec3(0.60, 0.65, 0.57))));   // (plan W2: faded with the grit map)
 }
 
 vec3 wood_of(float lot) {
@@ -162,6 +162,7 @@ vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis, out float rel, f
 	float brace = corner * step(0.4, h21(vec2(cell, seed + 1.0))) * smoothstep(0.07, 0.04, abs(y / 3.0 - t) * 1.6) * step(0.3, y) * step(y, 2.7);
 	float hb = h21(vec2(cell * 4.0 + bay, seed + 6.0));
 	vec3 infill = pl * mix(0.84, 1.1, fbm(uv * 1.7 + seed)) * mix(0.62, 1.0, smoothstep(0.0, 1.1, y));
+	infill = grit_plaster_wear(infill, uv, x, y, seed, wood);   // (plan W2)
 	float course = step(0.5, fract(y / 0.12));
 	infill = hb > 0.6 && hb < 0.75 ? mix(vec3(0.42, 0.22, 0.16), vec3(0.28, 0.14, 0.10), course) : infill;   // brick nogging
 	infill = hb >= 0.75 && hb < 0.9 ? mix(wood * 1.4, wood * 0.6, step(0.5, fract(uv.y / 0.09))) : infill;   // bare lath
@@ -320,7 +321,7 @@ void fragment() {
 				}
 			}
 		}
-		grit_city_masonry(k, p, wnrm, seed, tint, alb, rel, depth_in, tex_on, tex_ratio, tex_n, ao);   // (plan W0: the city wall's own masonry, no banded set)
+		grit_city_masonry(k, p, wnrm, seed, tint, box_in, lpos, alb, rel, depth_in, tex_on, tex_ratio, tex_n, ao);   // (plan W0: the city wall's own masonry, no banded set)
 	} else if (wnrm.y < 0.95 && k == 15) {   // a sloped roof face: rows of tiles, a tone per tile, a shadow under each row
 		tint = roof_of(ground_at(p.xz - wnrm.xz * 0.2).b, tint);   // each roof its own clay, slate or mossy clay
 		float along = abs(wnrm.x) > abs(wnrm.z) ? p.z : p.x;
@@ -330,6 +331,7 @@ void fragment() {
 		vec3 laid = base * mix(0.62, 1.0, smoothstep(0.0, 0.7, fract(p.y / TILE_H))) * mix(1.0, 0.8, smoothstep(0.55, 0.7, fbm(vec2(along, p.y) * 1.3 + seed)));
 		alb = mix(tint * 0.82, laid, keep(p.y, TILE_H));   // 0.16 x 0.13 in tiles: the mean below ~3 px
 		rel = mix(0.5, fract(p.y / TILE_H) * (0.8 + 0.2 * h21(vec2(tile, row))), keep(p.y, TILE_H));   // every row of tiles is a step: a line of shadow under each
+		alb = grit_roof(alb, tile, row, seed, ground_at(p.xz - wnrm.xz * 0.2).b, vec2(along, p.y), keep(p.y, TILE_H), rel);   // (plan W3)
 		depth_in = 0.03;
 		rough = 0.7;
 		ao = mix(0.6, 1.0, smoothstep(0.0, 0.5, rel));
@@ -460,7 +462,7 @@ void fragment() {
 		float moss = smoothstep(0.55, 0.95, shade);
 		float patchy = wnrm.y > 0.5 ? fbm(p.xz * 1.3 + seed * 3.0) : fbm(vec2(p.x + p.z, p.y) * 1.3 + seed * 3.0);   // a top has no height to vary over: its patches follow the plan
 		if (abs(wnrm.y) < 0.2) {   // a wall face
-			grit_wall(p, wnrm, k, seed, box_in.x > 0.0 ? box_in.y * 0.5 - lpos.y : 99.0, alb, rel);   // (plan W0: a wall is not one wallpaper)
+			grit_wall(p, wnrm, k, seed, box_in.x > 0.0 ? box_in.y * 0.5 - lpos.y : 99.0, float(int(ground_at(p.xz + wnrm.xz * 0.4).r * 255.0 + 0.5) == 1), alb, rel);   // (plan W0: a wall is not one wallpaper)
 			float scorch = smoothstep(0.2, 0.6, fire) * (1.0 - smoothstep(0.0, mix(1.4, 6.5, fire), p.y)) * smoothstep(0.12, 0.45, patchy);   // rising from the foot, two storeys high on the fire side
 			alb *= 1.0 - 0.4 * fire * fire;   // smoke over everything on that side
 			alb = mix(alb, vec3(0.035, 0.03, 0.028), 0.9 * scorch);
