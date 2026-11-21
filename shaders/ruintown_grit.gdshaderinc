@@ -256,7 +256,8 @@ vec3 grit_masonry(vec2 uv, float seed, out float rel) {
 	float stone = smoothstep(0.004, 0.03, edge);
 	vec3 tone = grit_stone_tone(id) * mix(0.82, 1.12, vnoise(uv * 14.0 + id * 13.0)) * mix(0.9, 1.06, vnoise(uv * 41.0 + id * 7.0));   // weathered, pitted faces
 	rel = mix(0.5, mix(0.32, 0.5 + 0.5 * smoothstep(0.0, 0.1, edge) * (0.6 + 0.4 * vnoise(uv * 23.0 + id)), stone), kp);   // a domed face over shallow mortar
-	return mix(vec3(0.93, 0.91, 0.88), mix(vec3(0.7, 0.68, 0.64), tone, stone), kp);
+	vec3 mortar = uv.y < GRIT_ASHLAR_IN ? vec3(0.3, 0.29, 0.27) : vec3(0.7, 0.68, 0.64);   // (lead 21.11.: the ashlar's long bed joints in pale mortar read as two white stripes along every wall foot)
+	return mix(vec3(0.93, 0.91, 0.88), mix(mortar, tone, stone), kp);
 }
 
 // Tower dressing (round 3, lead): on a tower's box (square-ish, 1.8-4.5 in on a side), QUOINS - long and short dressed blocks alternating up every vertical edge of a tower face (0.35 in courses, 0.65 / 0.35 in along the face) - and a
