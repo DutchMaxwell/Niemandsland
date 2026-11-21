@@ -816,6 +816,13 @@ fn land_takedown_groups(
 /// decides, the same casualty-order convention the plain wound path already
 /// uses. `x` capped at that model's remaining wounds each hit, no carry-over
 /// either way. Returns the wounds actually dealt (the table's `dealt`).
+/// `PENDING_EPOCH_VOLLEY_DEADLY_STOPS`: do a volley's finished Deadly groups, landed on a scratch copy, leave the target's chain dead?
+fn deadly_wiped(state: &State, ti: usize, r: &ShootResult, seams: Seams) -> bool {
+    let mut scratch = state.clone();
+    r.deadly_groups.iter().for_each(|&(post, dx)| { land_deadly_wounds(&mut scratch, ti, post, dx, seams); });
+    combined_alive(&scratch, ti, seams) == 0
+}
+
 pub fn land_deadly_wounds(state: &mut State, ti: usize, unsaved: i64, deadly_x: i64, seams: Seams) -> i64 {
     land_deadly_counted(state, ti, unsaved, deadly_x, seams, &mut 0)
 }
@@ -1763,6 +1770,7 @@ pub(crate) fn tray_strafing(
         &|gr: &[i64]| takedown_pick_info_after(statics, next, target, cover, def.in_cover, None, gr, seams.takedown_pick),
         &|_, _| None,
         None,
+        rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_VOLLEY_DEADLY_STOPS).then_some(&|r: &ShootResult| deadly_wiped(next, target, r, seams)),
         tray,
     );
     // The volley tail, the shoot branch's own shape: spent Limited marks,
@@ -12058,6 +12066,7 @@ fn resolve_with(
                                 &|i, pi| parts.get(i).and_then(|(mi, msc, _)| msc.sighted.get(pi)
                                     .map(|&n| (n, next.alive[*mi], msc.silent.get(pi).copied().unwrap_or("")))),
                                 if inline_on { Some(&mut inline_land) } else { None },
+                                rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_VOLLEY_DEADLY_STOPS).then_some(&|r: &ShootResult| deadly_wiped(&next, g.ti, r, seams)),
                                 tray,
                             );
                             // WAVE 3, rules-must-log — the arm lowered a

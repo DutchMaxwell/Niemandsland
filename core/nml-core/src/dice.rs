@@ -1430,7 +1430,7 @@ pub fn resolve_volley_leg(
 ) -> ShootResult {
     resolve_volley_with_pick_label(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates,
         shred_alias_dice, shred_boost_dice, deadly_per_model, takedown_exact,
-        &|gr| (takedown_cover(gr), "trooper".into()), sighted, None, tray)
+        &|gr| (takedown_cover(gr), "trooper".into()), sighted, None, None, tray)
 }
 
 /// `resolve_volley_leg` whose Takedown pick callback also answers the picked model's label (the table's `_solo_model_label`),
@@ -1444,7 +1444,10 @@ pub(crate) fn resolve_volley_with_pick_label(
     // `EPOCH_94_PARITY_BATCH`: asked after each Deadly weapon with the (unsaved, X) groups it pushed; the caller lands them on a scratch
     // copy of the state and answers how many models the target's chain has left (0 = wiped: the weapons still to fire then read `Ctx::wiped`).
     // `None` below 94.
-    inline_land: Option<InlineLand<'_>>, tray: &mut Tray,
+    inline_land: Option<InlineLand<'_>>,
+    // `PENDING_EPOCH_VOLLEY_DEADLY_STOPS`: on the finished Deadly groups, is the target's chain dead? Its Deadly wounds left then roll no
+    // ignore dice (the melee leg's `deadly_wipes`). `None` below 95.
+    deadly_wipes: Option<&dyn Fn(&ShootResult) -> bool>, tray: &mut Tray,
 ) -> ShootResult {
     let mut inline_land = inline_land;
     let mut wiped = false;
@@ -2495,7 +2498,7 @@ pub(crate) fn resolve_volley_with_pick_label(
             out.deadly_tally += w;
         } else if deadly_per_model && p.deadly > 0 {
             let first = out.deadly_groups.len();
-            push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, def_owner, tray, None);
+            push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, def_owner, tray, deadly_wipes);
             out.deadly_lines.push((p.name.clone(), w, p.deadly.max(1), out.deadly_groups.len() - first));
             out.deadly_tally += w;
         } else if ignores_regen {
