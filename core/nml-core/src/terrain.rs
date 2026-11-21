@@ -404,6 +404,12 @@ impl Terrain {
         !self.solid_cells.is_empty() && self.tier_cell(x_in, z_in).is_some_and(|(_, i)| self.solid_cells.contains(&(i as u16)))
     }
 
+    /// L-RF1 - whether the board lists any solid tier cell.
+    #[inline]
+    pub fn has_solid(&self) -> bool {
+        !self.solid_cells.is_empty()
+    }
+
     /// The tier grid and the row-major index of the cell under a point; `None` without tiers and off the grid.
     fn tier_cell(&self, x_in: f64, z_in: f64) -> Option<(&TierGrid, usize)> {
         let t = self.tiers.as_ref()?;
