@@ -98,7 +98,12 @@ func test_an_aofs_table_follows_its_system_from_setup_to_save_to_a_late_joiner()
 	assert_bool(_shelf_biomes().has("Urban Ruins")).override_failure_message("the fantasy shelf lists Urban Ruins").is_false()
 	assert_array(_main.object_manager.sandbox_catalog("urban_")).is_empty()
 	assert_str(_container_label()).is_equal("Blocker")
-	assert_array(DeploymentCatalog.style_ids(_main._deploy_board_in())).is_equal(["front_line"])
+	# the 4 x 4 table lists exactly what the catalogue defines for a 48 x 48 board (read from the JSON, not a literal)
+	var board_styles: Dictionary = (JSON.parse_string(FileAccess.get_file_as_string(DeploymentCatalog.CATALOG_PATH)) as Dictionary)["boards"]["48x48"]
+	var expected: Array = board_styles.keys()
+	expected.sort()
+	assert_array(DeploymentCatalog.style_ids(_main._deploy_board_in())).is_equal(expected)
+	assert_dict(DeploymentCatalog.get_style("front_line", _main._deploy_board_in())).is_equal(board_styles["front_line"])
 	# --- the one import door
 	await _main._on_opr_army_imported(_army("gf", "Grim List"), 1, false)
 	await E2EBoot.settle(get_tree())
