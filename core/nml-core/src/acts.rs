@@ -1021,6 +1021,11 @@ pub const CURRENT_RULES_EPOCH: u32 = 94;
 /// (and names none in `cast_buffs`). Table twin `AiActRecorder.PENDING_EPOCH_SPELL_NO_STACK` (`_solo_record_spell_mod`). Below 95 byte-identical. Every call site reads THIS
 /// constant, not the literal `95`.
 pub const PENDING_EPOCH_SPELL_NO_STACK: u32 = 95;
+/// Placeholder gate for UNPREDICTABLE NEEDS A SHOT (gate 12, Zairetia): the Unpredictable (Shooter) die is owed when the unit shoots, so a
+/// volley in which no weapon reaches the target rolls no die, and a joined hero rolls his own die only when one of his weapons reaches it.
+/// The table builds no volley there ("no target in range or sight"). Core: `dice::resolve_volley_with_pick_label`. Records stamped 94 or
+/// below replay byte-exact. Every call site reads THIS constant, not the literal `95`.
+pub const PENDING_EPOCH_UPR_NEEDS_SHOT: u32 = 95;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2343,6 +2348,12 @@ mod tests {
         EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER,
         EPOCH_94_PARITY_BATCH,
     };
+
+    #[test]
+    fn upr_needs_shot_gate_starts_at_95() {
+        assert_eq!(super::PENDING_EPOCH_UPR_NEEDS_SHOT, 95);
+        assert!(!rule_on(94, super::PENDING_EPOCH_UPR_NEEDS_SHOT), "a record at 94 keeps the die of a volley with nothing in reach");
+    }
 
     /// Heightfield plan step 7 (the placeholder became the frozen batch epoch at the 94 bump): the gate is 94, on in a fresh game, off one
     /// epoch below.

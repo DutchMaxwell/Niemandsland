@@ -60,3 +60,27 @@ use super::*;
         assert_eq!(out.rolls[0].faces, Tray::seeded(seed).roll(1),
             "the tray's first face is the HIT die — nothing came before it");
     }
+
+    /// Gate 12 (Zairetia, Duchies of Vinci, 12" Toxin Bellow at a target 14" away): the book's die is rolled when the unit
+    /// shoots, and with no weapon in reach it does not shoot. The table writes "no target in range or sight" and rolls
+    /// nothing; the core threw the die anyway. From `PENDING_EPOCH_UPR_NEEDS_SHOT` a volley with no weapon in reach rolls
+    /// no Unpredictable die (and a joined hero none for himself); below it the old die stays.
+    #[test]
+    fn an_unpredictable_shooter_with_no_weapon_in_reach_rolls_no_die() {
+        let gun = [ShootProfile { name: "Toxin Bellow".into(), attacks: 1, count: 1, range: 12, ..Default::default() }];
+        let rolls_at = |epoch: u32| {
+            let att = Ctx {
+                unpredictable_shooting: true,
+                unpredictable_ap_bonus: 1,
+                unpredictable_hit_bonus: 1,
+                unpredictable_low_roll_max: 3,
+                rules_epoch: epoch,
+                ..shooter(4)
+            };
+            let one = [Shooter { profiles: &gun, keep: &[0], attacks: &[1], att: &att, owner: "Zairetia" }];
+            resolve_volley_with_tray(&one, &defender(4, 5), "Target", 14.0, 14.0, true, true, true, true, &mut Tray::seeded(1)).rolls
+        };
+        assert!(rolls_at(crate::acts::PENDING_EPOCH_UPR_NEEDS_SHOT).is_empty(), "no weapon in reach: no volley, no die");
+        let old = rolls_at(crate::acts::PENDING_EPOCH_UPR_NEEDS_SHOT - 1);
+        assert_eq!((old.len(), old[0].count), (1, 1), "below the epoch the old die stays: {old:?}");
+    }

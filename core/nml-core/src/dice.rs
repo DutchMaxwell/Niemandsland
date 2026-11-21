@@ -1464,7 +1464,18 @@ pub(crate) fn resolve_volley_with_pick_label(
     let mut upr_hit = 0i64;
     let mut hero_upr: Vec<(usize, i64, i64)> = Vec::new(); // (shooter index, ap, hit): a joined hero's own die
     let mut versatile_made: Vec<(Option<usize>, (i64, i64))> = Vec::new(); // the picks made in this volley (`Ctx::versatile_defer`)
-    if shooters.first().is_some_and(|sh| sh.att.unpredictable_shooting) {
+    // PENDING_EPOCH_UPR_NEEDS_SHOT: the die is owed only by a shooter with a weapon in reach (the loop's own range gate below);
+    // a volley with none is no volley at the table ("no target in range or sight"), so no die. Below the epoch every shooter owes it.
+    let fires = |sh: &Shooter<'_>| {
+        !rule_on(sh.att.rules_epoch, crate::acts::PENDING_EPOCH_UPR_NEEDS_SHOT)
+            || sh.keep.iter().any(|&pi| {
+                let p = &sh.profiles[pi];
+                let printed = p.range as f64 + p.reach_bonus_in.max(sh.att.granted_reach_in);
+                let reach = if def.ranged_shrouding { shrouded_reach(printed, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in) } else { printed };
+                sh.att.strafe_volley || (p.range > 0 && reach + def.range_mark_in >= sh.att.member_gap_in.unwrap_or(dist_in).ceil())
+            })
+    };
+    if shooters.first().is_some_and(|sh| sh.att.unpredictable_shooting && shooters.iter().any(&fires)) {
         let att0 = shooters[0].att;
         tray.owner_next(att0.unit);
         let faces = tray.roll(1);
@@ -1486,7 +1497,7 @@ pub(crate) fn resolve_volley_with_pick_label(
     } else if shooters.first().is_some_and(|sh| sh.att.v36_rules) {
         // AIG-G2 R5 (EPOCH_73_V36): the host rolled none, so each joined hero who carries the rule himself rolls ONE
         // die for his OWN profiles, before any weapon fires. Table twin: `_solo_hero_unpredictable`.
-        for (i, sh) in shooters.iter().enumerate().skip(1).filter(|(_, sh)| sh.att.unpredictable_shooting) {
+        for (i, sh) in shooters.iter().enumerate().skip(1).filter(|(_, sh)| sh.att.unpredictable_shooting && fires(sh)) {
             tray.owner_next(sh.att.unit);
             let faces = tray.roll(1);
             let low = (faces[0] as i64) <= sh.att.unpredictable_low_roll_max;
