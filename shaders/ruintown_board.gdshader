@@ -329,13 +329,13 @@ void fragment() {
 		}
 		if (k == 1) {   // streets: cobbles
 			float crown;
-			alb = mix(cobble(xz, seed, tint * 1.15, run, fan, crown), vec3(0.06, 0.055, 0.05), 0.55 * gutter);
+			alb = mix(cobble(xz, seed, tint * 0.575, run, fan, crown), vec3(0.06, 0.055, 0.05), 0.55 * gutter);   // 0.575 = the old 1.15 x 0.5: figures read against a darker road (readability gate)
 			rel = crown;
 			depth_in = 0.045;
 			rough = mix(0.55, 0.8, smoothstep(0.3, 0.7, crown));   // damp joints, dry crowns
 			ao = mix(0.55, 1.0, smoothstep(0.1, 0.5, crown));
 		} else if (k == 0) {   // earth: packed, with pebbles, weeds and broken stones
-			alb = tint * mix(0.78, 1.15, fbm(xz * 1.6 + seed));
+			alb = tint * 0.7 * mix(0.78, 1.15, fbm(xz * 1.6 + seed));   // x0.7: figures read against darker packed earth (readability gate)
 			vec2 cp = xz * 3.0;   // 0.33 in cells, a pebble or a weed tuft in some of them: sparse, small, dark and irregular (rotated, stretched, off the cell centre)
 			vec2 ci = floor(cp);
 			float sp = h21(ci + seed);

@@ -216,15 +216,17 @@ func _add_lights(layout: Dictionary) -> void:
 
 ## The BLUE HOUR of the town (decision D-R4): a cool pale moon as the key, high on one side; the last warm light low on the opposite horizon (the scene's fill light, turned round) as a rim; a
 ## cool sky; the lanterns are the only strong warm source. Applied to the scene's lighting controller (a dev view, so it is not restored).
+## Readability tuning (gate_cmp.py against the plain-table baseline): a strongly blue moon washed the figures' colours and lit the ground to their level, so the key is pale (nearly neutral), strong, and the
+## ground values of the shader (cobbles x0.5, packed earth x0.7) sit lower; the blue stays in the sky, the ambient and the shadows.
 static func dusk(lighting: Object) -> void:
 	if lighting == null:
 		return
-	lighting.set_sun_color(Color(0.60, 0.70, 1.0))
-	lighting.set_sun_energy(0.75)
+	lighting.set_sun_color(Color(0.93, 0.95, 1.0))
+	lighting.set_sun_energy(2.0)
 	lighting.set_sun_angles(-55.0, 52.0)
-	lighting.set_ambient_color(Color(0.30, 0.38, 0.62))
-	lighting.set_ambient_energy(0.85)
-	lighting.set_exposure(0.95)
+	lighting.set_ambient_color(Color(0.42, 0.47, 0.62))
+	lighting.set_ambient_energy(1.2)
+	lighting.set_exposure(1.0)
 	lighting.set_fill_light_color(Color(1.0, 0.58, 0.32))
 	lighting.set_fill_light_energy(0.18)
 	var fill: Variant = lighting.get("_fill_light")   # no setter for its direction: turn it to the far horizon by hand
