@@ -133,7 +133,8 @@ func test_ruined_tops_break_only_in_the_outer_edge_strip() -> void:
 	assert_bool(src.contains("float strip = outer * (1.0 - smoothstep(0.1, 0.75, ed));")).override_failure_message("the broken floor must stay inside the 0.75 in strip").is_true()
 	assert_bool(src.contains("float outer = step(0.004, abs(ground_at(xz).b - ground_at(xz + to_edge * (ed + 0.3)).b));")).override_failure_message("an edge inside a lot must not break").is_true()
 	assert_bool(src.contains("float lost = step(1.0 - 0.7 * strip,")).override_failure_message("the loss must fade to nothing at the strip's inner line").is_true()
-	assert_bool(src.contains("float crack = smoothstep(0.02, 0.0,")).override_failure_message("no cracked flags").is_true()
+	assert_bool(src.contains("float fh = h21(fc + seed + 77.0);")).override_failure_message("no cracked flags").is_true()   # (21.11.: one straight fracture per broken flag, no curly noise isolines)
+	assert_bool(src.contains("abs(vnoise(xz * 1.6 + seed * 2.0) - 0.5)")).override_failure_message("the curly scribble cracks are back").is_false()
 
 
 ## Lead 21.11. (readability gate): the ground the models stand on - streets, packed earth, garden plots, the decks of yards and tier floors - sits a step below the models' own values.
