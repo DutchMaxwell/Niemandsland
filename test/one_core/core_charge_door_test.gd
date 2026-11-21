@@ -121,3 +121,19 @@ func test_a_ten_model_unit_stays_on_the_table() -> void:
 		assert_int(int(res["core"]["core"])).override_failure_message("the door took a %d v %d charge" % sides).is_equal(0)
 		assert_bool(bool(res["taken"])).is_false()
 		assert_array(res["refusals"]).contains(["size"])
+
+
+## A charge under a rules epoch older than 73 stays on the table: the core's result line is the 3.6 one ("took"), the table's older one says "dealt"
+## (the flip's red `g4r3_t1_target_selfwound_test` > `test_the_result_line_is_unchanged_at_epoch_72`). From 73 the door takes it. RED: drop the clause -> `[]` at 72.
+func test_a_charge_under_an_old_epoch_stays_on_the_table() -> void:
+	var before: int = AiActRecorder.rules_epoch
+	var att := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Att", "models": 5, "x_in": 0.0}, true), BLADE.merged({"count": 5}, true))
+	var foe := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Def", "models": 8, "x_in": 7.0}, true), BLADE.merged({"count": 8, "attacks": 1}, true))
+	var report := {"unit": att, "target": foe, "action": AiDecision.Action.CHARGE, "moved": true}
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36 - 1
+	assert_array(CoreActivation.charge_refusals(_main, att, report, true)).override_failure_message("epoch 72 stays on the table").is_equal(["old_epoch"])
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	assert_array(CoreActivation.charge_refusals(_main, att, report, true)).override_failure_message("epoch 73 is the door's").is_empty()
+	AiActRecorder.rules_epoch = before
+	assert_array(CoreActivation.charge_refusals(_main, att, report, true)).override_failure_message("the current epoch is the door's").is_empty()
+	RosterSweep.free_units(_main, [att, foe])

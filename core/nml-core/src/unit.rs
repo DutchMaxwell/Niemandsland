@@ -361,6 +361,10 @@ pub struct Ctx {
     /// and its dice must keep the old stacked reading byte-exact.
     pub sturdy_boost_gates_guarded: bool,
     pub in_cover: bool,
+    /// PLAN_COVER_36 (`PENDING_EPOCH_COVER_SCREEN`): the unit is mostly behind a sight blocker from this volley's shooters
+    /// (`sight::screen_of`), stamped by the played volley from 95 only. Cover against shooting, NOT "standing in terrain":
+    /// the Grounded family and the Shielded terrain alias keep reading `in_cover`.
+    pub screened: bool,
     /// `AiEv.ctx_for`'s third argument, which `BattleSim._ctx_of` never passes
     /// (battle_sim.gd:702) — always 0 in the sim, modelled for `impact_ev`.
     pub counter_models: i64,
@@ -4014,6 +4018,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         sturdy_boost_gates_guarded: rule_on(rules_epoch, EPOCH_13_WHO_WINS)
             && shielded_alias.as_ref().is_some_and(|(a, _)| a.is_sturdy_kind()),
         in_cover: false,
+        screened: false,
         // Epoch 13 records count Counter melee-weapon bearers, capped at model
         // count; epoch 65 also recognizes a unit-wide Counter primitive alias.
         // `sim::ctx_of` scales the stamped count to living models. Earlier

@@ -56,3 +56,53 @@ use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
         let old = volley_log(&Ctx { rules_epoch: EPOCH_72_PLAYTEST_RULES, ..att }, &marked, rifle(6), 1);
         assert!(old.iter().all(|l| !l.contains("cover counts")), "the pre-73 reading stays silent: {old:?}");
     }
+
+    // ------- PLAN_COVER_36 step 5: cover from sight blockers (`Ctx.screened`) in the save fold ---
+
+    fn screened(defense: i64) -> Ctx {
+        Ctx { screened: true, ..defender(defense, 5) }
+    }
+
+    fn held_gun(held: bool) -> (Ctx, ShootProfile) {
+        let att = Ctx { held, rules_epoch: crate::acts::PENDING_EPOCH_COVER_SCREEN, ..shooter(4) };
+        (att, ShootProfile { name: "Gun".into(), indirect: true, indirect_los_needs_hold: true, indirect_cover_needs_hold: true, ..rifle(6) })
+    }
+
+    const LIFT: &str = "Indirect: Gun ignores Def's cover from sight blockers";
+
+    /// Behind a blocker alone is +1; with terrain cover too it is still ONE +1 (saves on 3+ from 4, not 2+); Blast drops it.
+    /// RED before the fold: `screened` was never read, so the screened-only volley said no cover line.
+    #[test]
+    fn a_screened_save_takes_one_cover_plus_one() {
+        let att = shooter(4);
+        let alone = volley_log(&att, &screened(4), rifle(6), 1);
+        assert_eq!(said(&alone, COVER), 1, "behind a blocker: +1 Defense: {alone:?}");
+        let both = volley_log(&att, &Ctx { in_cover: true, ..screened(4) }, rifle(6), 1);
+        assert_eq!(said(&both, COVER), 1, "terrain and blocker give one +1 (3+, not 2+): {both:?}");
+        let blast = volley_log(&att, &screened(4), ShootProfile { blast: 3, ..rifle(6) }, 1);
+        assert!(blast.iter().all(|l| !l.contains("in cover")), "Blast drops it: {blast:?}");
+    }
+
+    /// A held Indirect gun lifts the sight-blocker cover (and says so once) but keeps terrain cover; an Indirect gun that moved
+    /// has no waiver and meets the blocker like any gun. RED before the fold: no lift line.
+    #[test]
+    fn a_held_indirect_lifts_only_the_sight_blocker_cover() {
+        let (held, gun) = held_gun(true);
+        let lifted = volley_log(&held, &screened(4), gun.clone(), 2);
+        assert_eq!(said(&lifted, LIFT), 1, "the lift says itself once per weapon: {lifted:?}");
+        assert!(lifted.iter().all(|l| !l.contains("in cover")), "no +1 left: {lifted:?}");
+        let kept = volley_log(&held, &Ctx { in_cover: true, ..screened(4) }, gun.clone(), 1);
+        assert_eq!(said(&kept, COVER), 1, "terrain cover stays: {kept:?}");
+        let (moved, gun) = held_gun(false);
+        let met = volley_log(&moved, &screened(4), gun, 1);
+        assert_eq!((said(&met, COVER), said(&met, LIFT)), (1, 0), "a moved Indirect needs sight and meets the blocker: {met:?}");
+    }
+
+    /// Lead call 21.11.: an Indirect gun that moved without the Hold its entry needs is not firing indirectly, so the
+    /// Indirect mark on the target does not hand it the lift either (the table's reading). RED before: the mark clause lifted.
+    #[test]
+    fn a_moved_indirect_at_a_marked_target_keeps_the_sight_blocker_cover() {
+        let (moved, gun) = held_gun(false);
+        let log = volley_log(&moved, &Ctx { indirect_mark: true, ..screened(4) }, gun, 1);
+        assert_eq!((said(&log, COVER), said(&log, LIFT)), (1, 0), "no waiver, no lift: {log:?}");
+    }

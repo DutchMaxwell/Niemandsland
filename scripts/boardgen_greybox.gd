@@ -125,6 +125,8 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 		out.append_array(BoardgenTownDressing.merlons(layout))
 		out.append_array(BoardgenTownDressing.lantern_boxes(layout))
 		out.append_array(BoardgenTownDressing.props(layout))
+		out.append_array(BoardgenTownDressing.lean_tos(layout))
+		out.append_array(BoardgenTownDressing.party_stubs(layout))
 		out.append_array(BoardgenTownDressing.breach_rubble(layout))
 		out.append_array(BoardgenTownDressing.hall_merlons(layout))
 	else:
@@ -177,6 +179,7 @@ static func _town_landmarks(layout: Dictionary, origin: Vector2) -> Array[Dictio
 					_box(Vector2(hi.x - RIM_IN, lo.y + RIM_IN), hi - Vector2(0.0, RIM_IN), top, top + RIM_IN, "rim", false)])
 		for b in boxes:
 			b["landmark"] = i
+			b["lm"] = lm["kind"]
 		out.append_array(boxes)
 		i += 1
 	return out
@@ -216,6 +219,11 @@ static func custom_data(b: Dictionary, kinds: Array = KINDS) -> Color:
 	return Color(kinds.find(b["kind"]), size.x, size.y, size.z)
 
 
+## Does a plan box draw itself? An intact house does not: BoardgenTownDressing draws its inset, yawed body, and this box only keeps the collider.
+static func draws_itself(b: Dictionary) -> bool:
+	return b["kind"] != "roofed"
+
+
 ## The whole board in ONE MultiMesh (one draw call, one shared procedural material) plus a collider per solid box.
 func build(layout: Dictionary) -> void:
 	layout_seed = int(layout.get("seed", 0))
@@ -233,7 +241,9 @@ func build(layout: Dictionary) -> void:
 	_kit = kit
 	var ladders := ladder_kit_plan(layout)
 	var kit_ladders: bool = theme["id"] == BoardgenTheme.DEEPWORKS and not ladders.is_empty() and kit.usable(ladders.keys())   # the town keeps its timber box ladders
-	var boxes := plan(layout).filter(func(b: Dictionary) -> bool: return not (kit_ladders and b["kind"] == "ladder"))
+	var town_kit: BoardgenTownKit = BoardgenTownKit.new() if theme["id"] == BoardgenTheme.RUIN_TOWN else null
+	var kit_town := town_kit != null and town_kit.active()   # the authored roofs, chimneys and merlons (else the boxes below)
+	var boxes := plan(layout).filter(func(b: Dictionary) -> bool: return not (kit_ladders and b["kind"] == "ladder") and not (kit_town and (BoardgenTownKit.replaces(b) or town_kit.replaces_clutter(b))))
 	if kit_ladders:   # the authored ladders replace the box ladders
 		for module: String in ladders:
 			BoardgenKit.add_multimesh(self, module, kit.mesh_or(module), ladders[module], false)
@@ -246,7 +256,7 @@ func build(layout: Dictionary) -> void:
 		var b: Dictionary = boxes[i]
 		var size: Vector3 = (b["hi"] - b["lo"]) * INCHES_TO_METERS
 		var centre: Vector3 = (b["hi"] + b["lo"]) * 0.5 * INCHES_TO_METERS
-		mm.set_instance_transform(i, Transform3D(Basis.from_scale(size), centre))
+		mm.set_instance_transform(i, Transform3D(Basis.from_scale(size if draws_itself(b) and not (kit_town and town_kit.draws_landmark(b)) else Vector3.ZERO), centre))   # (a solid box the kit draws keeps its collider)
 		mm.set_instance_custom_data(i, custom_data(b, theme["kinds"]))
 		if b["solid"]:
 			var shape := BoxShape3D.new()
@@ -269,8 +279,14 @@ func build(layout: Dictionary) -> void:
 	if theme["id"] == BoardgenTheme.RUIN_TOWN:
 		var town := BoardgenTownDressing.new()   # the gable roofs of the intact houses
 		town.name = "TownDressing"
-		town.build(layout, _material)
+		town.build(layout, _material, not kit_town)
 		add_child(town)
+		if kit_town:
+			town_kit.name = "TownKit"
+			town_kit.build(layout)
+			add_child(town_kit)
+		else:
+			town_kit.free()
 	if theme["id"] == BoardgenTheme.DEEPWORKS:
 		add_child(BoardgenMood.make_fill_light())   # lights the models only (render layer), shown with the finer look
 	_anchor()
@@ -427,6 +443,82 @@ func _anchor() -> void:
 		_material.set_shader_parameter("board_origin", global_position)
 
 
+## The authored surface sets of the town as shader parameters (plan R9 hook, T-R1): for coursed stone, plaster, timber and earth the albedo and normal textures when BOTH are cached, and `t_on`
+## (x stone, y plaster, z timber, w earth) = 1 for each set that is complete. A missing set stays 0 and the shader keeps its procedural surface. Pure but for the library's cache.
+static func town_sets(lib: TiefwerkLibrary) -> Dictionary:
+	var out := {"t_on": Vector4.ZERO}
+	var on := [0.0, 0.0, 0.0, 0.0]
+	var tile := [1.3, 3.0, 3.0, 3.0]
+	for i in BoardgenTheme.TOWN_SETS.size():
+		var names: Array = BoardgenTheme.TOWN_SETS[i]   # [library set, shader suffix]
+		var a := lib.set_texture(names[0], "albedo")
+		var n := lib.set_texture(names[0], "normal")
+		if a != null and n != null:
+			on[i] = 1.0
+			out["t_" + names[1]] = a
+			out["n_" + names[1]] = n
+			tile[i] = lib.tile_in(names[0])
+	out["t_on"] = Vector4(on[0], on[1], on[2], on[3])
+	out["t_tile"] = Vector4(tile[0], tile[1], tile[2], tile[3])
+	return out
+
+
+## The town's ground map, one RGBA8 texel per cell (row by row): R = the cell's surface kind (its index in `kinds`), G = how a street runs through it (0 along x, 255 along z: the
+## street is at least 3 cells long that way and at most 2 across; 128 a junction or a square: anything else), BA = where the middle of its junction is, as an offset from the
+## cell's centre (6 in = 0..255, 128 = none); on a HOUSE cell B is instead its lot's hash (1..254): the shader picks the lot's plaster and timber from it (plan R4b).
+## The shader looks the ground up through a noise-bent point, so the cobble / earth border wanders off the 3 in grid; pure data, the rules never read it.
+static func ground_map(layout: Dictionary, kinds: Array) -> PackedByteArray:
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cells: Array = layout["cells"]
+	var street := func(x: int, z: int) -> bool: return x >= 0 and z >= 0 and x < nx and z < nz and cells[z * nx + x]["street"]
+	var reach := func(x: int, z: int, dx: int, dz: int) -> int:   # street cells in a straight line from (x, z) in one direction, not counting (x, z)
+		var n := 0
+		while street.call(x + (n + 1) * dx, z + (n + 1) * dz):
+			n += 1
+		return n
+	var run_of := func(x: int, z: int) -> int:
+		if not street.call(x, z):
+			return 128
+		var h: int = 1 + reach.call(x, z, 1, 0) + reach.call(x, z, -1, 0)
+		var v: int = 1 + reach.call(x, z, 0, 1) + reach.call(x, z, 0, -1)
+		return 0 if h >= 3 and v <= 2 else (255 if v >= 3 and h <= 2 else 128)
+	var junction := func(x: int, z: int) -> bool: return street.call(x, z) and run_of.call(x, z) == 128
+	var centre := {}   # junction cell -> the mean of its 4-connected junction blob, in cells
+	for i in nx * nz:
+		if centre.has(i) or not junction.call(i % nx, i / nx):
+			continue
+		var blob: Array[int] = [i]
+		var at := 0
+		while at < blob.size():
+			var c := blob[at]
+			at += 1
+			for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var n := (c / nx + d.y) * nx + c % nx + d.x
+				if junction.call(c % nx + d.x, c / nx + d.y) and not blob.has(n):
+					blob.append(n)
+		var mean := Vector2.ZERO
+		for c in blob:
+			mean += Vector2(c % nx, c / nx)
+		for c in blob:
+			centre[c] = mean / blob.size() - Vector2(c % nx, c / nx)
+	var bytes := PackedByteArray()
+	var cell_in := float(layout["cell_in"])
+	var tiers := BoardgenTownDressing.tier_parts(layout)
+	for i in nx * nz:
+		var x := i % nx
+		var z := i / nx
+		var run: int = run_of.call(x, z)
+		if tiers["cells"].has(i):
+			run = 1 + int(float(tiers["shade"]["%d/%d" % [cells[i]["lot_id"], tiers["cells"][i]]]) * 253.0)   # a ruined tier: the tone of its part (the shader reads it on tier faces)
+		var off := (centre.get(i, Vector2.ZERO) as Vector2) * cell_in
+		var bx := clampi(roundi(off.x / 6.0 * 255.0 + 127.5), 0, 255)
+		if cells[i]["lot_id"] != 0 and not cells[i]["street"] and ["Block", "Terrace", "Deck", "Roofed"].has(cells[i]["lot_kind"]):
+			bx = 1 + int(BoardgenTownDressing._hash(int(cells[i]["lot_id"]), 1 if z >= nz / 2 else 0, 200) * 253.0)   # a house cell: its lot's hash (junction offsets are for street cells only)
+		bytes.append_array([kinds.find(_cell_kind(cells[i], true)), run, bx, clampi(roundi(off.y / 6.0 * 255.0 + 127.5), 0, 255)])
+	return bytes
+
+
 ## The theme's board shader. Deepworks: a one-texel-per-cell texture, red = height of the cell's top in inches, green = 255 for a sump, blue = the lot id
 ## (mod 256: a roof has one look per lot), alpha = 255 for the floor cell at the foot of a ladder (the board shader puts no door on the wall there).
 ## A town greybox reads its colours from the theme's palette.
@@ -436,6 +528,16 @@ func _make_material(layout: Dictionary, theme: Dictionary) -> ShaderMaterial:
 	mat.set_shader_parameter("cell_in", float(layout["cell_in"]))
 	if theme["id"] == BoardgenTheme.RUIN_TOWN:
 		mat.set_shader_parameter("palette", PackedColorArray(theme["palette"]))
+		mat.set_shader_parameter("ground_map", ImageTexture.create_from_image(Image.create_from_data(layout["nx"], layout["nz"], false, Image.FORMAT_RGBA8, ground_map(layout, theme["kinds"]))))
+		mat.set_shader_parameter("board_cells", Vector2(layout["nx"], layout["nz"]))
+		var tale := BoardgenTownDressing.story(int(layout.get("seed", 0)))
+		mat.set_shader_parameter("story", Vector4(tale.r, tale.g, tale.b, tale.a))
+		var lib := TiefwerkLibrary.new(BoardgenTheme.TOWN_LIBRARY)   # the authored T-R1 surfaces when they are cached (NML_RUINTOWN_LIB_DIR in dev); the shader keeps its procedural look otherwise
+		lib.name = "TownLibrary"
+		add_child(lib)
+		var sets := town_sets(lib)
+		for key: String in sets:
+			mat.set_shader_parameter(key, sets[key])
 		return mat
 	var bytes := PackedByteArray()
 	var feet := {}

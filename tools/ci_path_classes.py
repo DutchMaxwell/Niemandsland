@@ -15,14 +15,15 @@ import sys
 
 CLASSES = {
     "look": {
-        "globs": ["scripts/boardgen_*.gd", "scripts/tiefwerk_*.gd", "shaders/tiefwerk_*",
-                  "assets/tiefwerk_manifest.json", "test/boardgen_*_test.gd", "test/tiefwerk_*_test.gd"],
+        "globs": [g.strip() for g in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "ci_look_paths.txt"))
+                  if g.strip() and not g.startswith("#")],
+        "list": "tools/ci_look_paths.txt",
         "doors": [("scripts/main.gd", "BoardgenGreybox.attach_from_env(")],
         "env": "NML_BOARDGEN_SEED",
     },
 }
 SCAN = ("scripts/", "scenes/", "shaders/", "materials/", "assets/", "tools/", "addons/", "test/", "project.godot")
-SELF = ("tools/ci_path_classes.py", "tools/ci_path_classes_test.py")
+SELF = ("tools/ci_path_classes.py", "tools/ci_path_classes_test.py", "tools/ci_look_paths.txt")
 
 
 def in_class(path, cls):
@@ -54,10 +55,14 @@ def check(root, files, cls):
         text = _text(root, f) if f.startswith(SCAN) or f.startswith(".github/") else None
         for n, line in enumerate((text or "").splitlines(), 1):
             door = any(f == p and d in line for p, d in spec["doors"])
-            if f.startswith(SCAN) and sym.search(line) and not door:
-                errors.append(f"{f}:{n}: names {sym.search(line).group(1)} outside class '{cls}'")
+            comment = line.lstrip().startswith(("#", "//")) and not line.lstrip().startswith("#include")
+            if f.startswith(SCAN) and sym.search(line) and not door and not comment:
+                door_files = " / ".join(os.path.basename(p) for p, _ in spec["doors"])
+                errors.append(f"{f}:{n}: {cls.upper()} class reaches the game outside {door_files}'s door "
+                              f"(names {sym.search(line).group(1)}); go through the door, or if {f} is board-look work add its glob "
+                              f"to {spec['list']} in the same PR")
             if spec["env"] in line and f.startswith(("test/", ".github/")):
-                errors.append(f"{f}:{n}: sets {spec['env']} outside class '{cls}'")
+                errors.append(f"{f}:{n}: {cls.upper()} class flag {spec['env']} set outside the class (test/ or .github/)")
     return errors
 
 
