@@ -69,8 +69,9 @@ func test_strip_pieces_stand_on_a_wall_face_facing_away_from_it_and_inside_their
 			assert_int(int(layout["cells"][ac.y * 16 + ac.x]["level"])).is_equal(0)
 	var scene_strip := 0   # plus the solid pieces of the story scenes (plan PLAN_RUINTOWN_GRIT S2), which stand on wall faces by the same rule
 	var scene_items: Dictionary = BoardgenTownScenes.plan(layout)["items"]
+	var fronts := BoardgenTownClutter.front_clusters(layout, BoardgenTownScenes.plan(layout)["reserved"])   # and the lived-in fronts (lane townC4), by the same rule
 	for m: String in BoardgenTownClutter.STRIP:
-		scene_strip += (scene_items.get(m, []) as Array).size()
+		scene_strip += (scene_items.get(m, []) as Array).size() + (fronts.get(m, []) as Array).size()
 	assert_int(pieces).is_equal(props.size() + scene_strip)   # one piece per prop box
 
 
@@ -416,3 +417,32 @@ func test_weed_clumps_stand_at_open_wall_feet_inside_their_edge_and_never_on_a_l
 					lit += 1
 		assert_int(n).override_failure_message("seed %d: no green feet" % s).is_greater(0)
 	assert_int(shade).is_greater(lit)
+
+
+func test_front_clusters_stand_in_the_strip_of_open_fronts_never_on_a_ladder_a_lamp_a_scene_or_the_deployment_earth() -> void:
+	var total := 0
+	for s: int in [7, 11, 13, 17, 19, 23, 25, 29, 41, 43]:
+		var layout: Dictionary = ClassDB.instantiate("NmlCore").boardgen_layout_themed(s, "ruintown")
+		var nx: int = layout["nx"]
+		var clear := BoardgenTownClutter._kept_clear(layout)
+		var reserved: Dictionary = BoardgenTownScenes.plan(layout)["reserved"]
+		var lamps := BoardgenTownDressing.lanterns(layout)
+		var fronts := BoardgenTownClutter.front_clusters(layout, reserved)
+		for m: String in fronts:
+			for it: Dictionary in fronts[m]:
+				total += 1
+				var xf: Transform3D = it["xf"]
+				var at := Vector2(xf.origin.x, xf.origin.z) / 0.0254 + Vector2(24, 24)
+				var into := Vector2(xf.basis.z.x, xf.basis.z.z).normalized().round()
+				var wall := Vector2i((at - into * 0.3) / 3.0)
+				var foot := Vector2i((at + into * 0.3) / 3.0)
+				var behind := foot + Vector2i(into)
+				var fc: Dictionary = layout["cells"][foot.y * nx + foot.x]
+				assert_int(int(layout["cells"][wall.y * nx + wall.x]["level"])).override_failure_message("seed %d: `%s` not at a raised face" % [s, m]).is_greater(0)
+				assert_int(int(fc["level"])).is_equal(0)
+				assert_bool(clear.has(foot.y * nx + foot.x) or reserved.has(foot.y * nx + foot.x)).override_failure_message("seed %d: `%s` on a ladder end or a scene" % [s, m]).is_false()
+				assert_int(int(fc.get("deploy", 0))).override_failure_message("seed %d: `%s` on the deployment earth" % [s, m]).is_equal(0)
+				assert_int(int(layout["cells"][behind.y * nx + behind.x]["level"])).override_failure_message("seed %d: `%s` in a one-cell lane" % [s, m]).is_equal(0)
+				for l: Dictionary in lamps:
+					assert_float((l["at"] as Vector2 + Vector2(24, 24)).distance_to(at)).override_failure_message("seed %d: `%s` on a lamp's foot" % [s, m]).is_greater(BoardgenTownClutter.LAMP_FREE_IN)
+	assert_int(total).is_greater(100)

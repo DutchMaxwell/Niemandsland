@@ -90,6 +90,10 @@ static func plan(layout: Dictionary) -> Dictionary:
 	_ivy(layout, out)
 	_ivy_clusters(layout, out, scenes["reserved"])
 	_weed_feet(layout, out, scenes["reserved"])
+	var fronts := front_clusters(layout, scenes["reserved"])
+	for m: String in fronts:
+		for it: Dictionary in fronts[m]:
+			_add(out, m, it)
 	_landmarks(layout, out)
 	_hall_and_towers(layout, out)
 	_square_and_walls(layout, out)
@@ -389,6 +393,72 @@ static func _weed_feet(layout: Dictionary, out: Dictionary, reserved: Dictionary
 			if BoardgenTownDressing._hash(i, half, 252 + side) < 0.3:
 				clump["colour"] = Color(1.3, 1.15, 0.75)   # dry, yellowed blades (lead review of #3312: no houseplant green)
 			_add(out, "weeds_a" if BoardgenTownDressing._hash(i, half, 248 + side) < 0.5 else "weeds_b", clump)
+
+
+## LIVED-IN FRONTS (plan TARGET C, lane townC4): small story clusters of strip pieces along the house and ruin fronts - barrels with a bucket, a crate stack with sacks, firewood, a handcart,
+## broken staves - on ~half the faces of an intact house and ~a third of the other raised faces. Every piece stands in the 0.75 in strip (origin on the face, +z out, inside its 3 in edge); never
+## on a ladder end, a story scene's cell, a hazard, a plot, the deployment earth, a face with a strip prop, beside a lamp post, or in a lane one cell wide (the cell behind the foot is open too).
+## [module, along, lift, load].
+const FRONT_CLUSTERS := [[["barrel", 0.55, 0.0], ["barrel", 1.2, 0.0], ["bucket", 1.85, 0.0]], [["crate", 0.6, 0.0], ["crate", 0.62, 0.5], ["sack_pile", 1.75, 0.0]],
+	[["woodpile", 0.5, 0.0], ["crate", 2.2, 0.0]], [["handcart", 1.7, 0.0, "handcart_load"]]]
+## ... and at the feet of the roofless ruins: fallen stone, a fallen beam, broken staves.
+const RUIN_CLUSTERS := [[["rubble_c", 0.9, 0.0], ["barrel_broken", 1.9, 0.0]], [["hf_beam_fallen", 1.5, 0.0]], [["barrel_broken", 0.5, 0.0], ["crate_broken", 2.0, 0.0]],
+	[["rubble_a", 0.85, 0.0], ["bucket", 2.2, 0.0]], [["woodpile", 0.5, 0.0], ["crate", 2.2, 0.0]]]
+const FRONT_SPAN := {"handcart": Vector2(-1.41, 0.80), "rubble_a": Vector2(-0.69, 0.72), "rubble_c": Vector2(-0.68, 0.72), "hf_beam_fallen": Vector2(-1.37, 1.2)}
+const LAMP_FREE_IN := 0.6
+
+
+static func front_clusters(layout: Dictionary, reserved: Dictionary = {}) -> Dictionary:
+	var out := {}
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var clear := _kept_clear(layout)
+	var cells: Array = layout["cells"]
+	var taken := {}
+	for b: Dictionary in BoardgenTownDressing.props(layout):
+		if typeof(b.get("face")) == TYPE_VECTOR2I:
+			taken["%d/%d/%s" % [int(b["at"].x), int(b["at"].y), b["face"]]] = true
+	var lamps := BoardgenTownDressing.lanterns(layout)
+	var open := func(c: Vector2i) -> bool:
+		return c.x >= 0 and c.y >= 0 and c.x < nx and c.y < nz and int(cells[c.y * nx + c.x]["level"]) == 0
+	for cd: Dictionary in cells:
+		var i: int = cd["z"] * nx + cd["x"]
+		var foot := Vector2i(cd["x"], cd["z"])
+		if int(cd["level"]) != 0 or clear.has(i) or reserved.has(i) or int(cd.get("deploy", 0)) != 0 or ["Hazard", "Wall", "Rough"].has(cd["lot_kind"]):
+			continue
+		var half := 1 if int(cd["z"]) >= nz / 2 else 0
+		for side in 4:
+			var f: Vector2i = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)][side]   # from the foot towards the face
+			var w := foot + f
+			if w.x < 0 or w.y < 0 or w.x >= nx or w.y >= nz or open.call(w) or not open.call(foot - f) or taken.has("%d/%d/%s" % [foot.x, foot.y, f]):
+				continue
+			var house: bool = cells[w.y * nx + w.x]["lot_kind"] == "Roofed"
+			if BoardgenTownDressing._hash(i, half, 300 + side) > (0.75 if house else 0.5):
+				continue
+			var lo := origin + Vector2(foot) * cell_in
+			var mid := Vector2(lo.x + 1.5, lo.y if f.y < 0 else lo.y + cell_in) if f.x == 0 else Vector2(lo.x if f.x < 0 else lo.x + cell_in, lo.y + 1.5)
+			var yaw := atan2(float(-f.x), float(-f.y))   # +z away from the face, onto the foot
+			var kinds: Array = FRONT_CLUSTERS if house else RUIN_CLUSTERS
+			var cluster: Array = kinds[int(BoardgenTownDressing._hash(i, half, 310 + side) * kinds.size()) % kinds.size()]
+			var flip := BoardgenTownDressing._hash(i, half, 320 + side) < 0.5
+			for k in cluster.size():
+				var piece: Array = cluster[k]
+				var m: String = piece[0]
+				var span: Vector2 = FRONT_SPAN.get(m, STRIP.get(m, Vector2(-0.3, 0.3)))
+				var along := clampf(cell_in - float(piece[1]) if flip else float(piece[1]), 0.08 - span.x, cell_in - 0.08 - span.y)
+				var pos := Vector2(lo.x + along, mid.y) if f.x == 0 else Vector2(mid.x, lo.y + along)
+				if lamps.any(func(l: Dictionary) -> bool: return (l["at"] as Vector2).distance_to(pos) < LAMP_FREE_IN + maxf(-span.x, span.y)):
+					continue   # (the lamp's foot stays free)
+				var jitter := 0.0 if FRONT_SPAN.has(m) or m == "sack_pile" else (BoardgenTownDressing._hash(i * 4 + k, half, 330 + side) - 0.5) * 0.4
+				var it := _item(yaw + jitter, Vector3(pos.x, float(piece[2]), pos.y))
+				if m.begins_with("rubble"):
+					it["colour"] = Color(0.62, 0.56, 0.5)   # grey-brown fallen stone, never a pale blob
+				_add(out, m, it)
+				if piece.size() > 3:
+					_add(out, String(piece[3]), _item(yaw, Vector3(pos.x, 0.0, pos.y)))
+	return out
 
 
 ## WALL pieces: ivy strands up a wall face (<= 0.12 in off it), on one face in eight of a raised cell that looks at open ground, never on a ladder's face.
