@@ -287,6 +287,7 @@ func build(layout: Dictionary) -> void:
 		var town := BoardgenTownDressing.new()   # the gable roofs of the intact houses
 		town.name = "TownDressing"
 		town.build(layout, _material, not kit_town)
+		_material.set_shader_parameter("real_frames", kit_town and town_kit.kit.usable(BoardgenTownFrames.MODULES))   # (train 3) the half-timber shells as geometry: the paint keeps the infill only
 		add_child(town)
 		if kit_town:
 			town_kit.name = "TownKit"
