@@ -29,7 +29,7 @@ const vec3 GRIT_BROWN = vec3(0.208, 0.203, 0.198);
 const vec3 GRIT_OCHRE = vec3(0.226, 0.204, 0.176);
 const vec3 GRIT_MEAN = GRIT_COOL * 0.6 + GRIT_BROWN * 0.25 + GRIT_OCHRE * 0.15;
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
-const float GRIT_TONE = 0.84;
+const float GRIT_TONE = 0.80;
 
 // The street's base tint: the family's mean at the warm road's own luminance (the palette and GROUND_COBBLE keep deciding the value) with the map, the warm road without it.
 vec3 grit_street_tint(vec3 warm) {
@@ -53,7 +53,7 @@ const float GRIT_MUD_COVER = 0.4;
 // Wet dark mud: the earth's colour, darker and greyer.
 vec3 grit_mud_colour() {
 	vec3 earth = palette[0].rgb * GROUND_EARTH;
-	return mix(earth, vec3(dot(earth, LUMA)), 0.7) * 0.62;
+	return mix(earth, vec3(dot(earth, LUMA)), 0.7) * 0.78;
 }
 
 // The mud amount at a point from the map's WET / MUD, broken up by noise (0..1).
@@ -145,7 +145,7 @@ vec3 grit_street(vec2 xz, vec2 w, vec4 sett, float run, inout vec3 alb, inout fl
 
 // A FLOOR for the open ground in unlit alleys (lead rule 21.11.: no walkable street region under ~18 / 255 at the street camera): a faint moon fill as emission in proportion to the
 // ground's own albedo - it lifts the black alleys most in relative terms and a lit street barely; GRIT_TONE was lowered with it so the lit street stays at or below the old road.
-const float GRIT_FILL = 1.8;
+const float GRIT_FILL = 2.4;
 
 vec3 grit_fill(vec3 alb) {
 	return grit_on > 0.5 ? pow(alb, vec3(2.2)) * GRIT_FILL : vec3(0.0);
@@ -162,9 +162,9 @@ vec3 grit_stone_tone(float h) {
 	return c * mix(0.72, 1.12, fract(h * 3.91));
 }
 
-// Random rubble: a stretched jittered cell grid; F2 - F1 is the mortar. `id` = the stone's hash.
-float grit_rubble(vec2 uv, float seed, out float id) {
-	vec2 q = uv / vec2(0.22, 0.12);
+// One Voronoi layer of rubble: cells `size` in, F2 - F1 (the mortar distance) and the stone's hash.
+float grit_voronoi(vec2 uv, vec2 size, float seed, out float id) {
+	vec2 q = uv / size;
 	vec2 c = floor(q);
 	float f1 = 9.0;
 	float f2 = 9.0;
@@ -172,8 +172,8 @@ float grit_rubble(vec2 uv, float seed, out float id) {
 	for (int j = -1; j <= 1; j++) {
 		for (int i = -1; i <= 1; i++) {
 			vec2 g = c + vec2(float(i), float(j));
-			vec2 o = vec2(h21(g + seed + 3.1) * 0.8 + 0.1, h21(g + seed + 7.7) * 0.3 + 0.35);   // stones lie roughly in courses: little vertical jitter
-			float d = length((g + o - q) * vec2(0.22, 0.12));
+			vec2 o = vec2(h21(g + seed + 3.1) * 0.8 + 0.1, h21(g + seed + 7.7) * 0.4 + 0.3);
+			float d = length((g + o - q) * size);
 			if (d < f1) {
 				f2 = f1;
 				f1 = d;
@@ -186,17 +186,58 @@ float grit_rubble(vec2 uv, float seed, out float id) {
 	return f2 - f1;
 }
 
+// Random rubble in LIFTS (round 3, lead: "crazy paving"): the wall rises in lifts 1.0-1.8 in high, each ends in a roughly level bed; inside a lift a few LARGE stones (a coarse layer,
+// ~0.5 x 0.32 in, a third of its cells) among many small ones (~0.2 x 0.12 in). `id` = the stone's hash; returns the mortar distance.
+float grit_rubble(vec2 uv, float seed, out float id) {
+	float y0 = GRIT_ASHLAR_IN;
+	float lift = 0.0;
+	float h = 1.4;
+	for (int i = 0; i < 10; i++) {
+		h = 1.0 + 0.8 * h21(vec2(lift, seed + 91.0));
+		if (uv.y < y0 + h) {
+			break;
+		}
+		y0 += h;
+		lift += 1.0;
+	}
+	float ls = seed + lift * 13.7;
+	float big_id;
+	float big = grit_voronoi(uv, vec2(0.5, 0.32), ls + 5.0, big_id);
+	float edge;
+	if (fract(big_id * 3.3) < 0.33) {
+		edge = big;
+		id = big_id;
+	} else {
+		edge = grit_voronoi(uv, vec2(0.2, 0.12), ls, id);
+	}
+	float bed = min(uv.y - y0, y0 + h - uv.y);   // the level bed at the lift's top and foot, a little wavy
+	float broken = step(0.45, vnoise(vec2(uv.x * 0.9, lift + seed + 3.0)));   // the bed runs through in stretches, not as a ruled line
+	return mix(edge, min(edge, bed + (vnoise(vec2(uv.x * 3.0, lift + seed)) - 0.5) * 0.05), broken);
+}
+
 vec3 grit_masonry(vec2 uv, float seed, out float rel) {
 	float kp = keep(uv.y, 0.22);
 	float id;
 	float edge;
-	if (uv.y < GRIT_ASHLAR_IN) {   // ashlar: three courses of long dressed blocks
-		float row = floor(uv.y / 0.275);
+	if (uv.y < GRIT_ASHLAR_IN) {   // ashlar: three courses of dressed blocks of uneven height (0.3-0.43 in), corners chipped
+		float y0 = 0.0;
+		float row = 0.0;
+		float ch = 0.37;
+		for (int i = 0; i < 3; i++) {
+			ch = i == 2 ? GRIT_ASHLAR_IN - y0 : 0.3 + 0.13 * h21(vec2(row, seed + 31.0));
+			if (uv.y < y0 + ch) {
+				break;
+			}
+			y0 += ch;
+			row += 1.0;
+		}
 		float x = uv.x + h21(vec2(row, seed)) * 3.0;
 		float l = 0.42 + 0.3 * h21(vec2(row, floor(x / 0.6) + seed + 2.0));
 		float col = floor(x / l);
-		vec2 f = vec2(fract(x / l) * l, fract(uv.y / 0.275) * 0.275);
-		edge = min(min(f.x, l - f.x), min(f.y, 0.275 - f.y)) * 2.0;
+		vec2 f = vec2(fract(x / l) * l, uv.y - y0);
+		vec2 e = min(f, vec2(l, ch) - f);
+		float chip = 0.05 + 0.06 * h21(vec2(col, row) + seed + 17.0);
+		edge = min(min(e.x, e.y) * 2.0, (e.x + e.y - chip) * 1.2);   // a chipped corner: the mortar reaches into it
 		id = h21(vec2(col, row) + seed + 5.0);
 	} else {
 		edge = grit_rubble(uv, seed, id);
@@ -212,19 +253,45 @@ vec3 grit_masonry(vec2 uv, float seed, out float rel) {
 		edge = min(min(f.x, 0.26 - f.x), min(f.y, 0.13 - f.y)) * 2.0;
 		id = h21(vec2(floor(x / 0.26), row) + seed + 67.0) * 0.3 + 0.55;
 	}
-	float stone = smoothstep(0.006, 0.022, edge);
+	edge += (vnoise(uv * 31.0 + seed) - 0.5) * 0.014;   // rough, rounded outlines: no crisp polygon
+	float stone = smoothstep(0.004, 0.03, edge);
 	vec3 tone = grit_stone_tone(id) * mix(0.82, 1.12, vnoise(uv * 14.0 + id * 13.0)) * mix(0.9, 1.06, vnoise(uv * 41.0 + id * 7.0));   // weathered, pitted faces
-	rel = mix(0.5, mix(0.15, 0.5 + 0.5 * smoothstep(0.0, 0.12, edge) * (0.7 + 0.3 * vnoise(uv * 23.0 + id)), stone), kp);
-	return mix(vec3(0.93, 0.91, 0.88), mix(vec3(0.62, 0.6, 0.56), tone, stone), kp);
+	rel = mix(0.5, mix(0.32, 0.5 + 0.5 * smoothstep(0.0, 0.1, edge) * (0.6 + 0.4 * vnoise(uv * 23.0 + id)), stone), kp);   // a domed face over shallow mortar
+	return mix(vec3(0.93, 0.91, 0.88), mix(vec3(0.7, 0.68, 0.64), tone, stone), kp);
 }
 
-// The city wall (12) and the towers (6) take the procedural masonry instead of the authored set (with the map; the set stays without it).
-void grit_city_masonry(int k, vec3 p, vec3 n, float seed, vec3 tint, inout vec3 alb, inout float rel, inout float depth_in, inout float tex_on, inout vec3 tex_ratio, inout vec3 tex_n, inout float ao) {
+// Tower dressing (round 3, lead): on a tower's box (square-ish, 1.8-4.5 in on a side), QUOINS - long and short dressed blocks alternating up every vertical edge of a tower face (0.35 in courses, 0.65 / 0.35 in along the face) - and a
+// STRING COURSE, a pale band 0.14 in high with a shadow line under it, at every storey (3 in). `edge_d` = the distance to the face's nearest vertical edge (inches).
+vec3 grit_tower_dress(vec2 uv, float edge_d, float seed, vec3 alb, inout float rel) {
+	float row = floor(uv.y / 0.35);
+	float len = mod(row, 2.0) < 0.5 ? 0.65 : 0.35;
+	float fy = fract(uv.y / 0.35) * 0.35;
+	float q = step(edge_d, len);
+	float joint = max(1.0 - smoothstep(0.008, 0.025, min(fy, 0.35 - fy)), 1.0 - smoothstep(0.008, 0.025, abs(edge_d - len)));
+	vec3 quoin = mix(vec3(dot(alb, LUMA)) * vec3(1.22, 1.17, 1.08) * mix(0.9, 1.08, h21(vec2(row, seed + 77.0))), alb * 0.55, joint);
+	alb = mix(alb, quoin, q);
+	rel = mix(rel, mix(0.85, 0.2, joint), q);
+	float sy = mod(uv.y, 3.0);
+	float band = step(2.86, sy);
+	float shadow = (1.0 - smoothstep(0.0, 0.08, 2.86 - sy)) * step(sy, 2.86);
+	alb = mix(alb, vec3(dot(alb, LUMA)) * vec3(1.25, 1.2, 1.12), band);
+	alb *= 1.0 - 0.45 * shadow;
+	rel = mix(rel, 0.9, band);
+	return alb;
+}
+
+// The city wall (12) and the towers (6) take the procedural masonry instead of the authored set (with the map; the set stays without it). `box` / `lp` = the box's size and the point in it.
+void grit_city_masonry(int k, vec3 p, vec3 n, float seed, vec3 tint, vec3 box, vec3 lp, inout vec3 alb, inout float rel, inout float depth_in, inout float tex_on, inout vec3 tex_ratio, inout vec3 tex_n, inout float ao) {
 	if (grit_on < 0.5 || (k != 12 && k != 6)) {
 		return;
 	}
 	vec2 uv = vec2(abs(n.x) > 0.5 ? p.z : p.x, p.y);
 	alb = tint * grit_masonry(uv, seed, rel);
+	float width = abs(n.x) > 0.5 ? box.z : box.x;
+	if (box.x > 0.0 && box.y >= 2.5 && min(box.x, box.z) >= 1.8 && max(box.x, box.z) <= 4.5) {   // a tower (a wall tower or a ruined row's tower): a thick square-ish block - the thin wall runs (drawn in parts) get no quoins mid-run
+		float edge_d = width * 0.5 - abs(abs(n.x) > 0.5 ? lp.z : lp.x);
+		alb = grit_tower_dress(uv, edge_d, seed, alb, rel);
+	}
 	tex_on = 0.0;
 	tex_ratio = vec3(1.0);
 	tex_n = vec3(0.0, 0.0, 1.0);

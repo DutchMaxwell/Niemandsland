@@ -252,6 +252,6 @@ func test_the_stone_and_plaster_sets_are_read_without_their_period() -> void:
 	assert_bool(tile.contains("return vec2((fract(h * 7.13) < 0.5 ? st.x : -st.x) + h * 17.0, st.y);")).override_failure_message("a take moves across the courses").is_true()
 	assert_bool(board.contains("/ t_tile.x;")).is_true()   # the tile size (stone size) itself is the manifest's
 	assert_bool(board.contains("grit_wall(p, wnrm, k, seed, ")).is_true()
-	assert_bool(board.contains("grit_city_masonry(k, p, wnrm, seed, tint, alb, rel, depth_in, tex_on, tex_ratio, tex_n, ao);")).override_failure_message("the city wall still wears the banded set").is_true()
+	assert_bool(board.contains("grit_city_masonry(k, p, wnrm, seed, tint, box_in, lpos, alb, rel, depth_in, tex_on, tex_ratio, tex_n, ao);")).override_failure_message("the city wall still wears the banded set").is_true()
 	var grit := FileAccess.get_file_as_string("res://shaders/ruintown_grit.gdshaderinc")
 	assert_bool(grit.contains("if (grit_on < 0.5 || (k != 12 && k != 6)) {")).is_true()   # the city wall and the towers, and only with the map
