@@ -26,9 +26,10 @@ const CLUTTER_SET := {"tower_cap_burnt": "timber", "barrel": "timber", "crate": 
 	"hall_column_a": "coursed_stone", "hall_column_b": "coursed_stone", "hall_pediment": "coursed_stone", "hall_step": "coursed_stone", "tower_turret": "coursed_stone", "pool_spout": "coursed_stone",
 	"rubble_heap_a": "coursed_stone", "rubble_heap_b": "coursed_stone", "stall_frame": "timber", "stall_frame_ruined": "timber", "sign_board_loaf": "timber", "sign_board_boot": "timber", "timber_ladder_3in": "timber", "timber_ladder_top": "timber",
 	"cart_toppled": "timber", "handcart": "timber", "table_overturned": "timber", "stall_collapsed": "timber", "barricade": "timber", "woodpile_block": "timber", "trough_used": "coursed_stone",
-	"fence_wattle": "timber", "fence_wattle_gap": "timber", "fence_wattle_corner": "timber", "fence_plank": "timber", "fence_plank_gap": "timber", "fence_plank_corner": "timber"}
+	"fence_wattle": "timber", "fence_wattle_gap": "timber", "fence_wattle_corner": "timber", "fence_plank": "timber", "fence_plank_gap": "timber", "fence_plank_corner": "timber",
+	"sign_large_key": "timber", "sign_large_fish": "timber", "sign_large_mug": "timber", "sign_large_shears": "timber"}
 ## The A7 / A8 modules drawn in their own vertex colours (loads, cloth, hay: a texture set would draw wood grain on sacks and canvas).
-const OWN_COLOUR := ["cart_toppled_load", "handcart_load", "table_overturned_load", "stall_collapsed_cloth", "hay_heap"]
+const OWN_COLOUR := ["cart_toppled_load", "handcart_load", "table_overturned_load", "stall_collapsed_cloth", "hay_heap", "sign_large_iron"]
 ## A module's own instance tint on top of its set's (the vertex colour of the module is baked by the assets lane; this is the table's side of the same knob): the pool kerb's pale top read as a dashed
 ## white line round the pond from above, so its run is tinted down to a weathered stone.
 ## The kit's ladder segments (a 3 in segment and the top segment with stiles past the edge): the SAME transforms as the Deepworks kit ladders - BoardgenGreybox.ladder_kit_plan(layout), one segment per

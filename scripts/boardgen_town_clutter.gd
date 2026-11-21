@@ -90,6 +90,7 @@ static func plan(layout: Dictionary) -> Dictionary:
 	_landmarks(layout, out)
 	_hall_and_towers(layout, out)
 	_square_and_walls(layout, out)
+	_signs(layout, out)
 	_yards(layout, out)
 	return out
 
@@ -508,6 +509,53 @@ static func _square_and_walls(layout: Dictionary, out: Dictionary) -> void:
 			elif laundry < 2 and cd["level"] >= 2 and cd["lot_kind"] != "Wall" and not nb["street"] and BoardgenTownDressing._hash(i, half, 180 + side) < 0.15:
 				laundry += 1
 				_add(out, "laundry_line", _item(yaw, Vector3(pos.x, 0.0, pos.y)))
+
+
+## Large hanging SIGNS (kit batch A8) on the street fronts off the square: an iron arm at 2.45 in with a framed board (a key, a fish, a mug or shears, no lettering) on the face of a raised
+## house cell (not the wall, not an intact house) that looks at a street, everything above 1.85 in - over the heads of the models, a thin edge from above. One face in five, at most three a
+## half; never on a ladder face, an ivy cluster's face or within 1 in of a lamp post.
+const SIGN_BOARDS := ["sign_large_key", "sign_large_fish", "sign_large_mug", "sign_large_shears"]
+const SIGNS_PER_HALF := 3
+
+
+static func _signs(layout: Dictionary, out: Dictionary) -> void:
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var cells: Array = layout["cells"]
+	var clear := _kept_clear(layout)
+	var lamps := BoardgenTownDressing.lanterns(layout).map(func(l: Dictionary) -> Vector2: return l["at"])
+	var per_half := [0, 0]
+	for cd: Dictionary in cells:
+		var i: int = cd["z"] * nx + cd["x"]
+		if int(cd["level"]) < 1 or ["Wall", "Roofed"].has(cd["lot_kind"]) or clear.has(i):
+			continue
+		var half := 1 if cd["z"] >= nz / 2 else 0
+		for side in 4:
+			if per_half[half] >= SIGNS_PER_HALF:
+				break
+			var d: Vector2i = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)][side]
+			var n := Vector2i(cd["x"], cd["z"]) + d
+			if n.x < 0 or n.y < 0 or n.x >= nx or n.y >= nz:
+				continue
+			var j: int = n.y * nx + n.x
+			var nb: Dictionary = cells[j]
+			if int(nb["level"]) != 0 or not nb["street"] or clear.has(j) or (absf(n.x - 7.5) <= 2.5 and absf(n.y - 7.5) <= 3.5):
+				continue   # a street front off the square (the square has its own small signs)
+			if side % 2 == 1 and BoardgenTownDressing._hash(i, half, 220 + side) <= 0.3:
+				continue   # an ivy cluster's face
+			if BoardgenTownDressing._hash(i, half, 230 + side) > 0.2:
+				continue
+			var lo := origin + Vector2(cd["x"], cd["z"]) * cell_in
+			var along := 0.8 + 1.4 * BoardgenTownDressing._hash(i, half, 234 + side)
+			var pos := Vector2(lo.x + along, lo.y if d.y < 0 else lo.y + cell_in) if d.x == 0 else Vector2(lo.x if d.x < 0 else lo.x + cell_in, lo.y + along)
+			if lamps.any(func(l: Vector2) -> bool: return l.distance_to(pos) < 1.0):
+				continue
+			per_half[half] += 1
+			var yaw := atan2(float(d.x), float(d.y))   # +z out of the wall, over the street
+			_add(out, "sign_large_iron", _item(yaw, Vector3(pos.x, 0.0, pos.y)))
+			_add(out, SIGN_BOARDS[int(BoardgenTownDressing._hash(i, half, 238 + side) * 4.0) % 4], _item(yaw, Vector3(pos.x, 0.0, pos.y)))
 
 
 ## Rubble heaps (<= 0.57 in high, 2 in across) on the level-0 rest of a ruined house (RUINS yard): one yard cell in four.

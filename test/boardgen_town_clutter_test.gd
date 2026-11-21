@@ -339,3 +339,33 @@ func test_wall_spills_buttresses_and_ivy_clusters_stand_on_the_right_faces() -> 
 	print("WALL PIECES ", counts)
 	for m: String in counts:
 		assert_int(counts[m]).override_failure_message("no %s on ten boards" % m).is_greater(0)
+
+
+## Large hanging signs (kit batch A8): on a raised house face (not the wall, not an intact house) that looks at a street off the square, +z over the street, at most three a half.
+func test_large_signs_hang_on_street_fronts_off_the_square() -> void:
+	var total := 0
+	for s: int in [7, 11, 13, 17, 19, 23, 25, 29, 41, 43]:
+		var layout: Dictionary = ClassDB.instantiate("NmlCore").boardgen_layout_themed(s, "ruintown")
+		var nx: int = layout["nx"]
+		var plan := BoardgenTownClutter.plan(layout)
+		var irons: Array = plan.get("sign_large_iron", [])
+		var boards := 0
+		for m: String in BoardgenTownClutter.SIGN_BOARDS:
+			boards += (plan.get(m, []) as Array).size()
+		assert_int(boards).is_equal(irons.size())
+		var per_half := [0, 0]
+		for it: Dictionary in irons:
+			total += 1
+			var xf: Transform3D = it["xf"]
+			var at := Vector2(xf.origin.x, xf.origin.z) / 0.0254 + Vector2(24, 24)
+			var into := Vector2(xf.basis.z.x, xf.basis.z.z).round()
+			var house := Vector2i((at - into * 0.3) / 3.0)
+			var street := Vector2i((at + into * 0.3) / 3.0)
+			var hc: Dictionary = layout["cells"][house.y * nx + house.x]
+			var sc: Dictionary = layout["cells"][street.y * nx + street.x]
+			assert_int(int(hc["level"])).is_greater(0)
+			assert_bool(["Wall", "Roofed"].has(hc["lot_kind"])).is_false()
+			assert_bool(sc["street"] and int(sc["level"]) == 0).override_failure_message("seed %d: a sign over no street" % s).is_true()
+			per_half[1 if at.y >= 24.0 else 0] += 1
+		assert_int(per_half.max()).is_less_equal(BoardgenTownClutter.SIGNS_PER_HALF)
+	assert_int(total).is_greater(5)
