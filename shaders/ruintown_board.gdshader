@@ -124,6 +124,12 @@ vec3 wood_of(float lot) {
 	return k < 0.5 ? vec3(0.07, 0.05, 0.04) : (k < 1.5 ? vec3(0.30, 0.28, 0.25) : vec3(0.20, 0.12, 0.07));
 }
 
+// The four roofs of the town (plan R4b), picked by the lot's hash: two clays, a dark slate, a mossy clay.
+vec3 roof_of(float lot, vec3 clay) {
+	float k = floor(fract(lot * 5.0) * 3.999);
+	return k < 0.5 ? clay : (k < 1.5 ? clay * vec3(1.1, 0.86, 0.72) : (k < 2.5 ? vec3(0.27, 0.29, 0.33) : mix(clay * 0.85, vec3(0.28, 0.38, 0.20), 0.4)));
+}
+
 // Half-timber with a grammar (plan R4a), one 3 in cell wide and one 3 in storey high: a sill beam, a mid rail and a top plate; posts every 0.75 in; an opening (a window between two posts
 // with a sill and a lintel) in most cells, braces only in the CORNER bays and never across it; the infill by bay: plaster, brick nogging, bare lath or - on a ruin (`holes` > 0) - a hole.
 // The lot's hash picks the plaster and the timber; `rel` = the relief height (frame proud, opening recessed).
@@ -295,6 +301,7 @@ void fragment() {
 			}
 		}
 	} else if (wnrm.y < 0.95 && k == 15) {   // a sloped roof face: rows of tiles, a tone per tile, a shadow under each row
+		tint = roof_of(ground_at(p.xz - wnrm.xz * 0.2).b, tint);   // each roof its own clay, slate or mossy clay
 		float along = abs(wnrm.x) > abs(wnrm.z) ? p.z : p.x;
 		float row = floor(p.y / TILE_H);
 		float tile = floor(along / TILE_W + row * 0.5);
@@ -390,6 +397,9 @@ void fragment() {
 			depth_in = 0.02;
 			ao = 1.0;
 		}
+	}
+	if (wnrm.y > 0.5 && k != 15 && k != 17 && k != 2) {
+		alb *= mix(0.88, 1.12, clamp(p.y / 9.0, 0.0, 1.0));   // the value ladder (plan R4b): the 0 / 3 / 6 / 9 in tops read apart by value alone
 	}
 	// EDGES AND WEAR (plan R3): from the box size, within 0.06 in of an edge of its face a noise-broken chipped highlight (stone loses chips, plaster spalls to the stone beneath); a damp
 	// moss band 0.3 in high at the foot of every wall face; soot under the eaves of an intact house; a ragged, course-stepped dark line at the top of a ruined tier. Box faces only (a

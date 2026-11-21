@@ -94,3 +94,12 @@ func test_half_timber_has_a_grammar_braces_only_in_corner_bays_and_per_lot_tints
 	assert_bool(src.contains("float members = max(post * (1.0 - inside),")).override_failure_message("a post runs through the opening").is_true()
 	assert_bool(src.contains("step(0.9, hb) * step(0.0001, holes)")).override_failure_message("a hole is for ruins only").is_true()
 	assert_bool(src.contains("float lot_h = ground_at(p.xz - wnrm.xz * 0.2).b;")).is_true()
+
+
+## R4b (rest): four roofs by the lot's hash and a value ladder over the tops.
+func test_roofs_have_four_tints_by_lot_and_the_tops_a_value_ladder() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	assert_bool(src.contains("vec3 roof_of(float lot, vec3 clay)")).is_true()
+	assert_bool(src.contains("float k = floor(fract(lot * 5.0) * 3.999);")).override_failure_message("four roofs, two clays, a slate and a mossy clay").is_true()
+	assert_bool(src.contains("tint = roof_of(ground_at(p.xz - wnrm.xz * 0.2).b, tint);")).override_failure_message("the roof must read the lot under it").is_true()
+	assert_bool(src.contains("alb *= mix(0.88, 1.12, clamp(p.y / 9.0, 0.0, 1.0));")).override_failure_message("no value ladder on the tops").is_true()
