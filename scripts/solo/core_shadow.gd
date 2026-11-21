@@ -567,11 +567,19 @@ static func _melee_diff(main, unit: GameUnit, report: Dictionary, table_lines: A
 		var cite := OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))
 		var core_lines: Array = (r.get("lines", []) as Array).map(func(l: Dictionary) -> String:
 			return "%s|%s" % [BattleLog.Category.keys()[int(l["category"])], str(l["text"]).replace("{cite}", cite)])
-		var said: Array = table_lines.filter(func(l: String) -> bool: return not l.contains(" → "))   # the tray's roll lines are the table's
+		var said: Array = table_lines.filter(func(l: String) -> bool: return not is_roll_line(l))   # the tray's roll lines are the table's
 		if said != core_lines:
 			_detail = {"table": said, "core": core_lines}
 			diff = "lines"
 	return diff
+
+
+## A table log line that is one of the tray's DICE lines ("COMBAT|AI (Unit): 6 4 → 2 hits (4+)", "... defends: ..."): the core's lines never carry
+## those (the tray does), so the compare drops them from the table's side. A rule line that merely contains an arrow ("Blast(3): 1 hit ×3 → 3 hits") is
+## not one: the old `contains(" → ")` filter dropped it from the table's side only and read it as a core-only line (melee soak 21.11., Wardens).
+static func is_roll_line(line: String) -> bool:
+	var text: String = line.get_slice("|", 1) if line.contains("|") else line
+	return text.begins_with("AI (") and text.contains(" → ")
 
 
 ## The first unit whose living models stand elsewhere in the core (XZ, sorted, 0.01"): "" = none, else "positions". Models of
