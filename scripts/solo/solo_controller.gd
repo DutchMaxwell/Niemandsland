@@ -6544,7 +6544,10 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	last_move_paths = []
 	for i in range(mini(models.size(), trails.size())):
 		last_move_paths.append({"model": models[i], "path": trails[i],
-			"radius_m": float(radii.get(models[i], SeparationChecker.DEFAULT_BASE_RADIUS_M))})
+			"radius_m": float(radii.get(models[i], SeparationChecker.DEFAULT_BASE_RADIUS_M)),
+			# Where the placement gate left the model (the state `_apply_model_positions` just wrote): the glide ends HERE. The retraced trail may
+			# end up to OVERLAP_EPS_M (0.0005 m) short of it (`_retrace_to` keeps the trimmed route's own end inside that window).
+			"end": new_positions[i] if i < new_positions.size() else (trails[i] as Array).back()})
 	# Present the models in the SEQUENTIAL FLOW ORDER (finding 7): each glides individually, nearest-to-
 	# destination first, so the step-by-step flow the planner produced is visible (main glides them in
 	# last_move_paths order). Only reorder when the order is a valid 1:1 permutation of the built paths.

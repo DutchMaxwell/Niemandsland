@@ -1,0 +1,12 @@
+# The LOOK path class (tools/ci_path_classes.py): board-look work proven isolated from the game.
+# A boardgen lane that adds a board theme or a new look file ADDS ITS GLOB HERE in the same PR.
+# Never list a file the game or the Rust core reads (assets/model_manifest.json, ruins_manifest.json, ...).
+scripts/boardgen_*.gd
+scripts/tiefwerk_*.gd
+shaders/tiefwerk_*
+shaders/ruintown_*
+assets/tiefwerk_manifest.json
+assets/ruintown_manifest.json
+test/boardgen_*_test.gd
+test/tiefwerk_*_test.gd
+tools/boardgen/*

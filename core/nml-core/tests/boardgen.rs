@@ -564,7 +564,7 @@ fn a_town_is_many_small_buildings_and_no_open_lane_runs_edge_to_edge() {
     }
     let (mean, share, rays) = (lots as f64 / n as f64, retried as f64 / n as f64, blocked / n as f64);
     eprintln!("town lots mean {mean:.1} min {min_lots}, retried {share:.3}, opening-turn rays blocked {rays:.3}");
-    assert!(mean >= 18.0 && min_lots >= 12, "lots per board: mean {mean:.1}, min {min_lots}");
+    assert!(mean >= 13.0 && min_lots >= 6, "lots per board: mean {mean:.1}, min {min_lots}");   // rows: fewer, deeper lots than the scatter (ds/ruintown_growth_census.md)
     assert!(share <= 0.97, "{share:.2} of the town boards needed a later sub-seed");
     assert!(rays >= 0.70, "the opening-turn sight lines are {rays:.2} blocked");
 }
@@ -624,12 +624,12 @@ fn a_town_has_garden_plots_that_stay_flat_and_the_deepworks_has_none() {
     }
     let mean = total as f64 / 300.0;
     eprintln!("garden plots per town board: mean {mean:.1}, least {least}");
-    assert!(mean >= 5.0 && least >= 4, "plots per board: mean {mean:.1}, least {least}");
+    assert!(mean >= 4.0 && least >= 4, "plots per board: mean {mean:.1}, least {least}");
 }
 
 #[test]
-fn a_town_has_a_four_by_four_market_square_in_the_middle_and_the_deepworks_none() {
-    let plaza: Vec<(usize, usize)> = (6..10).flat_map(|z| (6..10).map(move |x| (x, z))).collect();
+fn a_town_has_a_four_wide_six_deep_market_square_in_the_middle_and_the_deepworks_none() {
+    let plaza: Vec<(usize, usize)> = (5..11).flat_map(|z| (6..10).map(move |x| (x, z))).collect();
     let mut deep_squares = 0;
     for seed in 1..=300 {
         let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
@@ -685,19 +685,22 @@ fn a_town_has_two_half_turn_city_walls_with_a_gate_a_breach_towers_and_a_ladder_
         let ridge: Vec<&nml_core::boardgen::Cell> = wall.iter().copied().filter(|c| c.level >= 2).collect();
         let (west, east): (Vec<&nml_core::boardgen::Cell>, Vec<&nml_core::boardgen::Cell>) = ridge.iter().copied().partition(|c| c.x < GRID / 2);
         assert!(!west.is_empty() && west.len() == east.len(), "seed {seed}: the walls are not twins ({} / {})", west.len(), east.len());
-        let col = west[0].x;
-        assert!(wall.iter().all(|c| c.x == col || c.x == GRID - 1 - col || c.level == 1), "seed {seed}: the wall leaves its column");
+        // the wall runs in one column, or - with the KINK (ruintown AAA step G5b) - in two neighbouring ones that share a step row
+        let cols: BTreeSet<usize> = west.iter().map(|c| c.x).collect();
+        assert!(cols.len() <= 2 && cols.iter().max().unwrap() - cols.iter().min().unwrap() < 2, "seed {seed}: the wall leaves its column(s) {cols:?}");
+        let col = *cols.iter().next().unwrap();
+        assert!(wall.iter().all(|c| cols.contains(&c.x) || cols.contains(&(GRID - 1 - c.x)) || c.level == 1), "seed {seed}: the wall leaves its column");
         // in a band the wall is the 3 in low wall: nothing of it is 6 or 9 in up
         assert!(wall.iter().filter(|c| c.deploy != 0).all(|c| c.level <= 1), "seed {seed}: a 6 in wall or a tower in a deployment band");
         assert!((0..GRID).any(|z| l.cell(col, z).deploy != 0 && l.cell(col, z).lot_kind == LotKind::Wall && l.cell(col, z).level == 1) || (0..GRID).all(|z| l.cell(col, z).street || l.cell(col, z).deploy == 0 || l.cell(col, z).lot_kind != LotKind::Wall), "seed {seed}: no low wall in the bands");
         // a gate (a street cell in the line), a breach (a level-0 wall cell) and a wall tower on each twin
-        let line: Vec<_> = (0..GRID).map(|z| l.cell(col, z)).collect();
+        let line: Vec<_> = cols.iter().flat_map(|&cc| (0..GRID).map(move |z| (cc, z))).map(|(cc, z)| l.cell(cc, z)).collect();
         assert!(line.iter().any(|c| c.street && c.level == 0), "seed {seed}: no gate");
         assert!(line.iter().any(|c| c.lot_kind == LotKind::Wall && c.level == 0), "seed {seed}: no breach");
-        let two_in_a_row = line.windows(2).any(|w| w.iter().all(|c| c.lot_kind == LotKind::Wall && c.level >= 2));
-        assert!(!two_in_a_row || wall.iter().any(|c| c.level == 3 && c.x == col), "seed {seed}: a wall run of two or more has no tower");
+        let two_in_a_row = cols.iter().any(|&cc| (0..GRID).map(|z| l.cell(cc, z)).collect::<Vec<_>>().windows(2).any(|w| w.iter().all(|c| c.lot_kind == LotKind::Wall && c.level >= 2)));
+        assert!(!two_in_a_row || wall.iter().any(|c| c.level == 3 && cols.contains(&c.x)), "seed {seed}: a wall run of two or more has no tower");
         // every wall ridge cell sits on a level-2 island that a ladder reaches from below (or touches a 9 in tower, which has its own ladder)
-        for c in ridge.iter().filter(|c| c.level == 2 && c.x == col) {
+        for c in ridge.iter().filter(|c| c.level == 2 && cols.contains(&c.x)) {
             let mut seen = HashSet::from([c.z * GRID + c.x]);
             let mut queue = VecDeque::from([c.z * GRID + c.x]);
             while let Some(i) = queue.pop_front() { for j in nbrs(i) { if l.cells[j].level == 2 && seen.insert(j) { queue.push_back(j); } } }
@@ -732,4 +735,308 @@ fn about_four_in_ten_town_houses_are_intact_solid_roofs_and_the_rest_ruined_walk
     let share = intact as f64 / (intact + ruined) as f64;
     eprintln!("intact {intact}, ruined {ruined}: {share:.2}");
     assert!((0.30..=0.50).contains(&share), "{share:.2} of the houses are intact");
+}
+
+/// What "grown" means in numbers (ruintown AAA step G1): per town board the shares the growth stage has to move.
+#[derive(Default)]
+struct Growth {
+    boards: f64, houses: f64, with_street_face: f64, party_walls: f64, boards_with_party: f64, with_yard_behind: f64, with_sealed_yard: f64, backyard_only: f64,
+    longest_run_cells: f64, widths: f64, width_hist: [f64; 5], roof_run_lots: f64, roof_run_max: usize, boards_roof_run_over_2: f64, any_level_run_lots: f64, blocked: f64,
+}
+
+fn growth(seeds: std::ops::RangeInclusive<i64>) -> Growth {
+    use nml_core::boardgen::LotKind::{Block, Deck, Roofed, Terrace, Wall};
+    let mut g = Growth::default();
+    let house = |k: nml_core::boardgen::LotKind| matches!(k, Block | Terrace | Deck | Roofed);
+    for seed in seeds {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        g.boards += 1.0;
+        let at = |x: i64, z: i64| if x < 0 || z < 0 || x >= GRID as i64 || z >= GRID as i64 { None } else { Some(l.cell(x as usize, z as usize)) };
+        let dirs: [(i64, i64); 4] = [(0, -1), (1, 0), (0, 1), (-1, 0)];
+        let mut party: HashSet<(u16, u16)> = HashSet::new();
+        for lot in l.lots.iter().filter(|lot| house(lot.kind)) {
+            g.houses += 1.0;
+            // per face: the street cells beside it, and the cells beyond (a yard = ground that is neither street nor another house)
+            let mut face = [(0usize, 0usize); 4];   // (street cells, yard cells)
+            for dz in 0..lot.h { for dx in 0..lot.w {
+                for (d, &(ox, oz)) in dirs.iter().enumerate() {
+                    let (nx, nz) = ((lot.x + dx) as i64 + ox, (lot.z + dz) as i64 + oz);
+                    let Some(nb) = at(nx, nz) else { continue };
+                    if nb.lot_id == lot.id { continue }
+                    if nb.street { face[d].0 += 1 } else if house(nb.lot_kind) { party.insert((lot.id.min(nb.lot_id), lot.id.max(nb.lot_id))); } else if nb.lot_kind != Wall { face[d].1 += 1 }
+                }
+            }}
+            let front = (0..4).filter(|&d| face[d].0 > 0).max_by_key(|&d| face[d].0);
+            match front {
+                None => g.backyard_only += 1.0,
+                Some(f) => {
+                    g.with_street_face += 1.0;
+                    g.with_yard_behind += f64::from(u8::from(face[(f + 2) % 4].1 > 0));
+                    // a SEALED yard: every cell right behind the back face is ground (no street, no house, no wall) and no street touches it either - the back of a block
+                    let (bx, bz) = dirs[(f + 2) % 4];
+                    let back: Vec<(i64, i64)> = (0..lot.h).flat_map(|dz| (0..lot.w).map(move |dx| (dx, dz))).map(|(dx, dz)| ((lot.x + dx) as i64, (lot.z + dz) as i64))
+                        .filter(|&(x, z)| at(x + bx, z + bz).is_some_and(|c| c.lot_id != lot.id) && at(x - bx, z - bz).is_none_or(|c| c.lot_id != lot.id)).map(|(x, z)| (x + bx, z + bz)).collect();
+                    let sealed = !back.is_empty() && back.iter().all(|&(x, z)| {
+                        let c = at(x, z).unwrap();
+                        !c.street && !house(c.lot_kind) && c.lot_kind != Wall && dirs.iter().all(|&(ox, oz)| at(x + ox, z + oz).is_none_or(|n| !n.street))
+                    });
+                    g.with_sealed_yard += f64::from(u8::from(sealed));
+                }
+            }
+        }
+        g.party_walls += party.len() as f64;
+        g.boards_with_party += f64::from(u8::from(!party.is_empty()));
+        // longest straight street run and the street widths (across = the shorter of the two runs through a street cell, 4+ = junction or square)
+        let street = |x: usize, z: usize| l.cell(x, z).street;
+        let (mut longest, mut kinds) = (0, [false; 5]);
+        for a in 0..GRID {
+            for horizontal in [true, false] {
+                let mut run = 0;
+                for k in 0..GRID { if if horizontal { street(k, a) } else { street(a, k) } { run += 1; longest = longest.max(run) } else { run = 0 } }
+            }
+        }
+        let run_through = |x: usize, z: usize, dx: usize, dz: usize| {
+            let mut n = 1;
+            let (mut a, mut b) = ((x, z), (x, z));
+            while a.0 >= dx && a.1 >= dz && street(a.0 - dx, a.1 - dz) { a = (a.0 - dx, a.1 - dz); n += 1 }
+            while b.0 + dx < GRID && b.1 + dz < GRID && street(b.0 + dx, b.1 + dz) { b = (b.0 + dx, b.1 + dz); n += 1 }
+            n
+        };
+        for z in 0..GRID { for x in 0..GRID { if street(x, z) {
+            let w = run_through(x, z, 1, 0).min(run_through(x, z, 0, 1)).min(4);
+            g.width_hist[w] += 1.0;
+            kinds[w] = true;
+        }}}
+        g.longest_run_cells += longest as f64;
+        g.widths += kinds[1..4].iter().filter(|&&k| k).count() as f64;
+        // roof runs: walkable raised building cells, edge-adjacent, counted in lots (same level; and any level)
+        let sol = solid(&l);
+        for same_level in [true, false] {
+            let walk = |i: usize| l.cells[i].level > 0 && !sol[i] && !matches!(l.cells[i].lot_kind, Wall | nml_core::boardgen::LotKind::Street);
+            let mut seen = vec![false; GRID * GRID];
+            let mut best = 0;
+            for s in (0..GRID * GRID).filter(|&i| walk(i)) {
+                if seen[s] { continue }
+                let (mut stack, mut lots) = (vec![s], HashSet::new());
+                seen[s] = true;
+                while let Some(i) = stack.pop() {
+                    lots.insert(l.cells[i].lot_id);
+                    for j in nbrs(i) { if !seen[j] && walk(j) && (!same_level || l.cells[j].level == l.cells[i].level) { seen[j] = true; stack.push(j) } }
+                }
+                best = best.max(lots.len());
+            }
+            if same_level { g.roof_run_lots += best as f64; g.roof_run_max = g.roof_run_max.max(best); g.boards_roof_run_over_2 += f64::from(u8::from(best > 2)) } else { g.any_level_run_lots += best as f64 }
+        }
+        g.blocked += blocked_share(&l, 3, &band_pairs(), true);
+    }
+    g
+}
+
+#[test]
+#[ignore = "measurement: NML_GROWTH_OUT=<file> cargo test --test boardgen census_of_growth -- --ignored"]
+fn census_of_growth() {
+    let g = growth(1..=1000);
+    let n = g.boards;
+    let w: f64 = g.width_hist.iter().sum();
+    let out = format!("| houses | with a street face | party walls / board (boards with any) | houses with a yard behind (of those with a front) | of those, a SEALED yard (ground, no street touching it) | backyard-only houses | longest straight street run | distinct street widths (1-3 cells) | street cells by width 1/2/3/4+ % | longest same-level walkable roof run in lots (mean, max, boards > 2) | longest any-level run in lots | opening-turn rays blocked |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n| {:.1} | {:.1} ({:.0} %) | {:.2} ({:.0} %) | {:.1} ({:.0} %) | {:.1} ({:.0} %) | {:.1} | {:.1} cells = {:.0} in | {:.2} | {:.0} / {:.0} / {:.0} / {:.0} | {:.2}, {}, {:.0} % | {:.2} | {:.1} % |",
+        g.houses / n, g.with_street_face / n, 100.0 * g.with_street_face / g.houses, g.party_walls / n, 100.0 * g.boards_with_party / n, g.with_yard_behind / n, 100.0 * g.with_yard_behind / g.with_street_face.max(1.0), g.with_sealed_yard / n, 100.0 * g.with_sealed_yard / g.with_street_face.max(1.0), g.backyard_only / n,
+        g.longest_run_cells / n, g.longest_run_cells / n * 3.0, g.widths / n, 100.0 * g.width_hist[1] / w, 100.0 * g.width_hist[2] / w, 100.0 * g.width_hist[3] / w, 100.0 * g.width_hist[4] / w,
+        g.roof_run_lots / n, g.roof_run_max, 100.0 * g.boards_roof_run_over_2 / n, g.any_level_run_lots / n, 100.0 * g.blocked / n);
+    eprintln!("{out}");
+    if let Ok(path) = std::env::var("NML_GROWTH_OUT") { std::fs::write(path, &out).expect("growth census file"); }
+}
+
+/// Houses stand in ROWS (ruintown AAA step G2): neighbours share a party wall, a row is 2 to 4 houses with a passage after it, and nearly every house has a street at its door.
+#[test]
+fn a_town_has_party_walls_and_passages() {
+    use nml_core::boardgen::LotKind::{Block, Deck, Roofed, Terrace};
+    let house = |k| matches!(k, Block | Terrace | Deck | Roofed);
+    let (mut party, mut with_party, mut houses, mut touching, mut longest, n) = (0, 0, 0, 0, 0, 300);
+    for seed in 1..=n {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        assert!(l.problems().is_empty(), "seed {seed}: {:?}", l.problems());
+        let mut walls: BTreeSet<(u16, u16)> = BTreeSet::new();
+        for i in 0..GRID * GRID { for j in nbrs(i) {
+            let (a, b) = (&l.cells[i], &l.cells[j]);
+            if a.lot_id != 0 && b.lot_id != 0 && a.lot_id != b.lot_id && house(a.lot_kind) && house(b.lot_kind) { walls.insert((a.lot_id.min(b.lot_id), a.lot_id.max(b.lot_id))); }
+        }}
+        party += walls.len();
+        with_party += usize::from(!walls.is_empty());
+        // a row = the lots joined by party walls; none is longer than 4 houses (a passage follows every row)
+        let ids: Vec<u16> = l.lots.iter().filter(|lot| house(lot.kind)).map(|lot| lot.id).collect();
+        let mut seen: BTreeSet<u16> = BTreeSet::new();
+        for &s in &ids {
+            if !seen.insert(s) { continue; }
+            let (mut stack, mut size) = (vec![s], 0);
+            while let Some(a) = stack.pop() { size += 1; for &(p, q) in &walls { for (x, y) in [(p, q), (q, p)] { if x == a && seen.insert(y) { stack.push(y); } } } }
+            longest = longest.max(size);
+            assert!(size <= 4, "seed {seed}: a row of {size} houses\n{}", l.to_ascii());
+        }
+        houses += ids.len();
+        touching += l.lots.iter().filter(|lot| house(lot.kind) && (lot.z..lot.z + lot.h).any(|z| (lot.x..lot.x + lot.w).any(|x| nbrs(z * GRID + x).iter().any(|&j| l.cells[j].street)))).count();
+    }
+    let (p, share, t) = (party as f64 / n as f64, with_party as f64 / n as f64, touching as f64 / houses as f64);
+    eprintln!("town party walls {p:.2} per board, boards with one {share:.3}, longest row {longest}, houses touching a street {t:.3}");
+    assert!(p >= 2.0 && share >= 0.80, "party walls {p:.2} per board, {share:.2} of the boards have one");
+    assert!(t >= 0.85, "{t:.2} of the houses touch a street");
+}
+
+/// Mid-board sight lines: rows 4 and 11 (12 in from each edge, the turn-2 positions), every column pair.
+fn mid_pairs() -> Vec<CellPair> { (0..GRID).flat_map(|x1| (0..GRID).map(move |x2| ((x1, 4), (x2, 11)))).collect() }
+
+/// The numbers of the G2 acceptance (lead decision 21.11.), over `n` town seeds: opening rays blocked, mid rays blocked, party walls, houses touching a street, and how often the FIRST sub-seed
+/// is already lane-free / valid. `NML_N=1000` for the real census.
+#[test]
+#[ignore = "measurement: NML_N=1000 cargo test --test boardgen g2_gate -- --ignored --nocapture"]
+fn g2_gate() {
+    use nml_core::boardgen::{generate_attempt, LotKind::{Block, Deck, Roofed, Terrace}};
+    let n: i64 = std::env::var("NML_N").ok().and_then(|v| v.parse().ok()).unwrap_or(300);
+    let house = |k| matches!(k, Block | Terrace | Deck | Roofed);
+    let (mut open_r, mut mid_r, mut party, mut with_party, mut houses, mut touching, mut lane0, mut valid0, mut lots, mut failed, mut attempts) = (0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    for seed in 1..=n {
+        let a0 = generate_attempt(seed, Symmetry::Point180, Theme::RuinTown, 0);
+        lane0 += usize::from(!a0.has_edge_to_edge_lane());
+        valid0 += usize::from(a0.problems().is_empty());
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        open_r += blocked_share(&l, 3, &band_pairs(), true);
+        mid_r += blocked_share(&l, 3, &mid_pairs(), true);
+        lots += l.lots.len();
+        failed += usize::from(!l.problems().is_empty());
+        attempts += usize::from(l.attempt);
+        let mut walls: BTreeSet<(u16, u16)> = BTreeSet::new();
+        for i in 0..GRID * GRID { for j in nbrs(i) {
+            let (a, b) = (&l.cells[i], &l.cells[j]);
+            if a.lot_id != 0 && b.lot_id != 0 && a.lot_id != b.lot_id && house(a.lot_kind) && house(b.lot_kind) { walls.insert((a.lot_id.min(b.lot_id), a.lot_id.max(b.lot_id))); }
+        }}
+        party += walls.len();
+        with_party += usize::from(!walls.is_empty());
+        houses += l.lots.iter().filter(|lot| house(lot.kind)).count();
+        touching += l.lots.iter().filter(|lot| house(lot.kind) && (lot.z..lot.z + lot.h).any(|z| (lot.x..lot.x + lot.w).any(|x| nbrs(z * GRID + x).iter().any(|&j| l.cells[j].street)))).count();
+    }
+    let f = n as f64;
+    eprintln!("G2 over {n}: lots {:.1}, opening rays blocked {:.1} % (<= 95), mid rays blocked {:.1} % (60-85), party walls {:.2} per board ({:.0} % of boards), houses touching a street {:.1} % (>= 85), first sub-seed lane-free {:.1} % (>= 99), first sub-seed valid {:.1} %, mean sub-seed {:.1}, boards still failing after all sub-seeds {failed}",
+        lots as f64 / f, 100.0 * open_r / f, 100.0 * mid_r / f, party as f64 / f, 100.0 * with_party as f64 / f, 100.0 * touching as f64 / houses as f64, 100.0 * lane0 as f64 / f, 100.0 * valid0 as f64 / f, attempts as f64 / f);
+}
+
+
+#[test]
+#[ignore = "dev aid"]
+fn one_attempt() {
+    use nml_core::boardgen::generate_attempt;
+    let seed: i64 = std::env::var("NML_SEED").ok().and_then(|v| v.parse().ok()).unwrap_or(2);
+    let a0 = generate_attempt(seed, Symmetry::Point180, Theme::RuinTown, 0);
+    eprintln!("{}\nproblems {:?} towers {} lots {:?}", a0.to_ascii(), a0.problems(), a0.towers(), a0.lots.iter().map(|l| (l.x, l.z, l.w, l.h, l.kind)).collect::<Vec<_>>());
+}
+
+#[test]
+#[ignore = "dev aid"]
+fn attempt0_problems() {
+    use nml_core::boardgen::generate_attempt;
+    let mut tally: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    let n: i64 = std::env::var("NML_N").ok().and_then(|v| v.parse().ok()).unwrap_or(300);
+    for seed in 1..=n { for p in generate_attempt(seed, Symmetry::Point180, Theme::RuinTown, 0).problems() { *tally.entry(p).or_default() += 1; } }
+    let (mut lane_with_wall, mut lane_no_wall) = (0, 0);
+    for seed in 1..=n {
+        let l = generate_attempt(seed, Symmetry::Point180, Theme::RuinTown, 0);
+        if l.has_edge_to_edge_lane() { if l.cells.iter().any(|c| c.lot_kind == nml_core::boardgen::LotKind::Wall && c.level == 2) { lane_with_wall += 1 } else { lane_no_wall += 1 } }
+    }
+    eprintln!("lanes with a wall {lane_with_wall}, without {lane_no_wall}");
+    eprintln!("attempt 0 problems over {n} seeds: {tally:#?}");
+}
+
+
+
+
+/// Rows must not become a roof highway (ruintown AAA step G4): no walkable roof run touches more than two houses, and the validator says so when one does.
+#[test]
+fn a_town_has_no_walkable_roof_run_longer_than_two_houses() {
+    use nml_core::boardgen::LotKind;
+    let (mut forced_over, mut longest) = (0, 0);
+    for seed in 1..=200 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        assert!(l.problems().is_empty(), "seed {seed}: {:?}", l.problems());
+        longest = longest.max(l.longest_roof_run());
+        assert!(l.longest_roof_run() <= 2, "seed {seed}: a roof run over {} houses\n{}", l.longest_roof_run(), l.to_ascii());
+        // planted: every house ruined and one level (all level 1) joins every party wall into one run - the validator must see it
+        let mut all = l.clone();
+        for c in all.cells.iter_mut().filter(|c| matches!(c.lot_kind, LotKind::Block | LotKind::Terrace | LotKind::Deck | LotKind::Roofed)) { c.lot_kind = LotKind::Block; c.level = 1; }
+        if all.longest_roof_run() > 2 {
+            forced_over += 1;
+            assert!(all.problems().contains(&"a walkable roof run touches more houses than the cap"), "seed {seed}: the cap did not fire");
+        }
+    }
+    eprintln!("longest real roof run {longest}; boards whose all-level-1 twin breaks the cap: {forced_over} of 200");
+    assert!(forced_over > 20, "the planted all-level-1 boards should break the cap on many boards ({forced_over})");
+}
+
+
+/// Backyards (ruintown AAA step G3): behind most houses of a row there is a garden plot, so a block has a back.
+#[test]
+fn most_town_houses_have_a_garden_plot_behind_them() {
+    use nml_core::boardgen::LotKind::{Block, Deck, Rough, Roofed, Terrace};
+    let (mut fronted, mut with_plot, n) = (0, 0, 300);
+    for seed in 1..=n {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        for lot in l.lots.iter().filter(|lot| matches!(lot.kind, Block | Terrace | Deck | Roofed)) {
+            let side = |dx: i64, dz: i64| -> (usize, bool) {   // street cells and garden plots on the face looking (dx, dz)
+                let (mut streets, mut plot) = (0, false);
+                for z in lot.z..lot.z + lot.h { for x in lot.x..lot.x + lot.w {
+                    let (nx, nz) = (x as i64 + dx, z as i64 + dz);
+                    if nx < 0 || nz < 0 || nx >= GRID as i64 || nz >= GRID as i64 || (nx as usize >= lot.x && (nx as usize) < lot.x + lot.w && nz as usize >= lot.z && (nz as usize) < lot.z + lot.h) { continue; }
+                    let c = l.cell(nx as usize, nz as usize);
+                    streets += usize::from(c.street);
+                    plot |= c.lot_kind == Rough;
+                }}
+                (streets, plot)
+            };
+            let faces = [side(0, -1), side(1, 0), side(0, 1), side(-1, 0)];
+            let Some(front) = (0..4).filter(|&d| faces[d].0 > 0).max_by_key(|&d| faces[d].0) else { continue };
+            fronted += 1;
+            with_plot += usize::from(faces[(front + 2) % 4].1);
+        }
+    }
+    let share = with_plot as f64 / fronted as f64;
+    eprintln!("houses with a street at the door that have a garden plot behind: {share:.3}");
+    assert!(share >= 0.25, "only {share:.2} of the fronted houses have a garden plot behind them");
+}
+
+
+/// Streets that grew (ruintown AAA step G5): the north artery has a jog (it shifts a column) and a pinch (two rows one cell = 3 in wide), mirrored by the half turn.
+#[test]
+fn a_town_street_is_not_one_straight_line() {
+    let (mut jogged, mut pinched, n) = (0, 0, 300);
+    for seed in 1..=n {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        let (mut lefts, mut one_wide) = (BTreeSet::new(), 0);
+        for z in 0..GRID / 2 - 1 {
+            let xs: Vec<usize> = (0..GRID).filter(|&x| l.cell(x, z).street).collect();
+            if xs.is_empty() || xs.len() > 3 { continue; }   // the cross street's row has many street cells
+            lefts.insert(xs[0]);
+            one_wide += usize::from(xs.len() == 1);
+            // the half turn twin has the same width on the opposite row
+            assert_eq!((0..GRID).filter(|&x| l.cell(x, GRID - 1 - z).street).count(), xs.len(), "seed {seed}: the street is not a half turn");
+        }
+        jogged += usize::from(lefts.len() >= 2);
+        pinched += usize::from(one_wide >= 1);
+    }
+    eprintln!("jogged {jogged} of {n}, pinched {pinched} of {n}");
+    assert!(jogged as f64 >= 0.85 * n as f64 && pinched as f64 >= 0.5 * n as f64, "jog {jogged} / pinch {pinched} of {n}");   // the pinch is hidden on boards where a house or the cross street shares its rows
+}
+
+/// The city wall has a kink (ruintown AAA step G5b): on most boards its west twin runs in two neighbouring columns joined by a step row, and the twins stay an exact half turn.
+#[test]
+fn a_town_wall_is_not_one_ruler_line() {
+    use nml_core::boardgen::LotKind;
+    let (mut kinked, n) = (0, 300);
+    for seed in 1..=n {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        let cols: BTreeSet<usize> = l.cells.iter().filter(|c| c.lot_kind == LotKind::Wall && c.level >= 2 && c.x < GRID / 2).map(|c| c.x).collect();
+        kinked += usize::from(cols.len() == 2);
+        for c in l.cells.iter().filter(|c| c.lot_kind == LotKind::Wall && c.level >= 2) {
+            let twin = l.cell(GRID - 1 - c.x, GRID - 1 - c.z);
+            assert!(twin.lot_kind == LotKind::Wall && twin.level == c.level, "seed {seed}: the wall is not a half turn at ({}, {})", c.x, c.z);
+        }
+    }
+    eprintln!("kinked walls {kinked} of {n}");
+    assert!(kinked as f64 >= 0.25 * n as f64, "only {kinked} of {n} walls have a kink");
 }

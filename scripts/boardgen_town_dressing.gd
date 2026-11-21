@@ -10,7 +10,37 @@ const BODY_IN := 2.5   # the intact house's body: the core's solid height
 const OVERHANG_IN := 0.3
 const CHIMNEY_IN := 0.62
 const MAX_LIGHTS := 8
-const LANTERN_COLOUR := Color(1.0, 0.62, 0.30)
+const LANTERN_COLOUR := Color(1.0, 0.74, 0.48)
+## A lantern is a down-cone (plan R7a): without a shadow the half-angle keeps the pool on the ground (height x tan) inside a 3 in cell's width - the light of a post against a wall must not reach the far side.
+const LANTERN_CONE_DEG := 48.0
+## The four lanterns that cast shadows (the square's corners) may throw a wide pool - the walls stop it; the others stay narrow.
+const LANTERN_CONE_SHADOWED_DEG := 75.0
+## A spot's energy is not an omni's: the cone, the cookie (mean ~0.4) and the 1 / d fall-off over 2.5 in of height set it; 3.5 keeps the plaster beside a post under the clip cap.
+const LANTERN_ENERGY := 3.5
+## The moons (the blue hour, D-R4, as two pale lights): the key and its half turn, equal in colour and nearly in energy, so the board looks the same from both players' sides.
+const MOON_COLOUR := Color(0.93, 0.95, 1.0)
+const MOON_AZIMUTH := -20.0
+const MOON_ELEVATION := 52.0
+const MOON_ENERGY := 2.0
+const MOON2_ENERGY := 2.0
+const MOON2_SHADOWS := true
+const MOON_SPECULAR := 0.0   # no specular from the moons: on the glossy pawns it is a white veil that washes their colours (gate, opposite player side: 0.63 -> 0.78 on seed 13)
+const SSAO_RADIUS_M := 0.06   # 2.4 in: a wall's foot, a roof's eave, a joint between two tiers
+const SSAO_INTENSITY := 1.4
+## The Ultra preset's bounce light (SDFGI 1.1, SSIL 1.0) is tuned for daylight: under a strong moon it lifts the lit walls and decks round the models and cost their contrast (the Ultra rows of the readability
+## gate: with both off the worst row went 0.62 -> 0.72). The blue hour turns them down, not off.
+const SDFGI_ENERGY := 0.45
+const SSIL_INTENSITY := 0.4
+## A weak wide fill inside every lantern's pool (lead 21.11.): an omni with no shadow map, so the cone's pool has no hard black rim; weak enough that light leaking through a wall is a glow, not a pool.
+const FILL_ENERGY := 0.05
+const FILL_RANGE_M := 0.2
+const SHADOWED_LANTERNS := 4   # the nearest the centre cast shadows
+
+
+## The cone half-angle of lantern number `i` (nearest the centre first): wide where a shadow map stops it at the walls, narrow where none does.
+static func lantern_cone_deg(i: int) -> float:
+	return LANTERN_CONE_SHADOWED_DEG if i < SHADOWED_LANTERNS else LANTERN_CONE_DEG
+const LANTERN_HEIGHT_IN := 2.55
 
 
 ## A 0..1 hash of a lot id and the half of the board it stands in (0 = north, 1 = south), stable per layout.
@@ -18,29 +48,103 @@ static func _hash(lot_id: int, half: int, salt: int) -> float:
 	return float(posmod((lot_id * 73856093) ^ (half * 19349663) ^ (salt * 83492791), 1000)) / 1000.0
 
 
-## One roof per intact lot: {lot, centre (Vector2, board inches), length, width (along / across the ridge), height, along_x, half}. Pure data.
-static func roofs(layout: Dictionary) -> Array[Dictionary]:
+## How an intact house is DRAWN differently from its collider (plan O3), per lot and half of the board: the drawn body is inset 0.06-0.14 in on every side (inward only), yawed so
+## that no corner swings out of the lot's cells (the yaw is at most 3 degrees, and at most what the inset allows, so the drawn wall is never more than 0.2 in off the collider's face),
+## its top (= its eaves) is 2.5 in +- 0.3, its stone plinth 0.3-0.6 in high. The collider and the class stay the core's 2.5 in solid; nothing here is a rule.
+static func house_look(lot_id: int, half: int, size: Vector2) -> Dictionary:
+	var inset := 0.06 + 0.08 * _hash(lot_id, half, 4)
+	var room := minf(inset, 0.2 - inset)   # how far a corner may swing out of the inset body and still stay in its cells with a gap <= 0.2 in
+	var yaw_max := minf(deg_to_rad(3.0), asin(room / (maxf(size.x, size.y) * 0.5)))
+	return {"inset": inset, "yaw": (2.0 * _hash(lot_id, half, 5) - 1.0) * yaw_max, "top": BODY_IN + (_hash(lot_id, half, 6) - 0.5) * 0.6, "plinth": 0.3 + 0.3 * _hash(lot_id, half, 7)}
+
+
+## The drawn bodies of the intact houses (ruined, walkable tiers are never touched): {lot, centre (Vector2, board inches), size (inset), yaw, top, plinth, half, front, jetty, storey}. A house
+## with a street at its door ("front", from the frontage table) may carry a JETTY (plan O5): its upper storey (above `storey`, 1.5-1.9 in) overhangs the ground storey on the front face by `jetty`
+## 0.15-0.2 in - a recess inside the house's own cells, never over ground a model could stand on. Pure data.
+static func house_bodies(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var cell_in := float(layout["cell_in"])
 	var board := Vector2(layout["nx"], layout["nz"]) * cell_in
+	var fronts := {}
+	for f: Dictionary in frontage(layout):
+		fronts[f["lot"]] = f["front"]
 	for lot: Dictionary in layout["lots"]:
 		if lot["kind"] != "Roofed":
 			continue
 		var size := Vector2(lot["w"], lot["h"]) * cell_in
 		var centre := Vector2(lot["x"], lot["z"]) * cell_in + size * 0.5 - board * 0.5
 		var half := 1 if centre.y > 0.0 else 0
-		var along_x := size.x > size.y or (size.x == size.y and _hash(lot["id"], half, 1) < 0.5)
+		var look := house_look(lot["id"], half, size)
+		var front: String = fronts.get(lot["id"], "")
+		var jetty := (0.15 + 0.05 * _hash(lot["id"], half, 13)) if front != "" and _hash(lot["id"], half, 14) < 0.6 else 0.0
+		out.append({"lot": lot["id"], "centre": centre, "size": size - Vector2.ONE * 2.0 * float(look["inset"]), "yaw": look["yaw"], "top": look["top"], "plinth": look["plinth"], "half": half,
+			"front": front, "jetty": jetty, "storey": 1.5 + 0.4 * _hash(lot["id"], half, 15)})
+	return out
+
+
+## The boxes a drawn body is made of: one, or - with a jetty - the ground storey (below `storey`, its front face pulled back by `jetty`) and the upper storey (the whole body above it).
+## {centre (Vector2, board inches, before the yaw is applied), size (Vector2), y0, y1}. Pure data.
+static func house_parts(body: Dictionary) -> Array[Dictionary]:
+	var upper := {"centre": body["centre"], "size": body["size"], "y0": 0.0, "y1": body["top"]}
+	if body["jetty"] <= 0.0:
+		return [upper]
+	var pull: Vector2 = {"N": Vector2(0, 1), "S": Vector2(0, -1), "E": Vector2(-1, 0), "W": Vector2(1, 0)}[body["front"]]   # which way the ground storey's front face moves in
+	var lower := {"centre": body["centre"] + (pull * float(body["jetty"]) * 0.5).rotated(-float(body["yaw"])), "size": body["size"] - pull.abs() * float(body["jetty"]), "y0": 0.0, "y1": body["storey"]}
+	upper["y0"] = body["storey"]
+	return [lower, upper]
+
+
+## The roofs of the intact lots (plan O4), pure data: {lot, centre (Vector2, board inches), length, width (along / across the ridge), height, along_x, half, yaw, eaves, type, back, annex}.
+## The ridge runs ALONG the street (eaves-on) or ACROSS it (gable-on) by the lot's hash, from the frontage (a lot with no street beside it keeps the long axis). The type is a gable, a
+## hip (the ends slope too) or, for an eaves-on roof only, a catslide (the back slope runs down past the eaves; `back` = which side of the ridge is the back, -1 / +1). A lot of two or
+## more cells may carry an ANNEX: its last cell at one end of the ridge gets its own, lower gable roof (`annex` true; the main roof is shorter by that cell). The yaw is the body's plus a skew
+## of at most 2 degrees. VISUAL ONLY: the body below stays the core's 2.5 in solid.
+static func roofs(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var cell_in := float(layout["cell_in"])
+	var board := Vector2(layout["nx"], layout["nz"]) * cell_in
+	var fronts := {}
+	for f: Dictionary in frontage(layout):
+		fronts[f["lot"]] = f["front"]
+	for lot: Dictionary in layout["lots"]:
+		if lot["kind"] != "Roofed":
+			continue
+		var id: int = lot["id"]
+		var size := Vector2(lot["w"], lot["h"]) * cell_in
+		var centre := Vector2(lot["x"], lot["z"]) * cell_in + size * 0.5 - board * 0.5
+		var half := 1 if centre.y > 0.0 else 0
+		var front: String = fronts.get(id, "")
+		var along_x := size.x > size.y or (size.x == size.y and _hash(id, half, 1) < 0.5)
+		if front != "" and _hash(id, half, 8) < 0.7:
+			along_x = front in ["N", "S"]   # eaves-on: the ridge parallels the street
+		elif front != "":
+			along_x = front in ["E", "W"]   # gable-on: the ridge points at it
 		var run := size.x if along_x else size.y
 		var across := size.y if along_x else size.x
-		out.append({"lot": lot["id"], "centre": centre, "length": run + 2.0 * OVERHANG_IN, "width": across + 2.0 * OVERHANG_IN,
-			"height": 1.5 + 1.2 * _hash(lot["id"], half, 2), "along_x": along_x, "half": half})
+		var look := house_look(id, half, size)
+		var pick := _hash(id, half, 9)
+		var eaves_on := front != "" and along_x == (front in ["N", "S"])
+		var type := "gable" if pick < 0.45 or (pick >= 0.75 and not eaves_on) else ("hip" if pick < 0.75 else "catslide")
+		var back := 1 if front in ["N", "W"] else -1   # the side of the ridge away from the street (+z / +x for a front on the north / west)
+		var height := 1.5 + 1.2 * _hash(id, half, 2)
+		var yaw: float = look["yaw"] + (2.0 * _hash(id, half, 10) - 1.0) * deg_to_rad(2.0)
+		var roof := {"lot": id, "centre": centre, "length": run + 2.0 * OVERHANG_IN, "width": across + 2.0 * OVERHANG_IN, "height": height, "along_x": along_x, "half": half,
+			"yaw": yaw, "eaves": look["top"], "type": type, "back": back, "annex": false}
+		if run >= 2.0 * cell_in and _hash(id, half, 11) < 0.4:
+			var end := 1.0 if _hash(id, half, 12) < 0.5 else -1.0
+			var shift := Vector2(end, 0.0) if along_x else Vector2(0.0, end)
+			var annex := roof.duplicate()
+			annex.merge({"centre": centre + shift * (run * 0.5 - cell_in * 0.5), "length": cell_in + 2.0 * OVERHANG_IN, "height": height * 0.55, "type": "gable", "annex": true}, true)
+			roof.merge({"centre": centre - shift * cell_in * 0.5, "length": run - cell_in + 2.0 * OVERHANG_IN}, true)
+			out.append(annex)
+		out.append(roof)
 	return out
 
 
 ## A brick chimney on the ridge of every roof, at the end the lot's hash picks: boxes for the greybox plan ({lo, hi, kind, solid}).
 static func chimneys(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	for r: Dictionary in roofs(layout):
+	for r: Dictionary in roofs(layout).filter(func(r: Dictionary) -> bool: return not r["annex"]):
 		var end_sign := 1.0 if _hash(r["lot"], r["half"], 3) < 0.5 else -1.0
 		var offset: float = end_sign * (float(r["length"]) * 0.5 - 0.9)
 		var centre: Vector2 = r["centre"] + (Vector2(offset, 0.0) if r["along_x"] else Vector2(0.0, offset))
@@ -122,33 +226,111 @@ static func lantern_boxes(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
-## The warm lights of the first MAX_LIGHTS lanterns (the square's four first, then the gates nearest the centre); the four nearest the centre cast shadows.
+## The lantern's projector cookie, 128 px (plan R7a, the "IES read"): a hot core, a smooth fall-off to the pool's rim and the four bars of the lantern frame as thin dark lines through the pool.
+static func lantern_projector() -> Texture2D:
+	var size := 128
+	var img := Image.create(size, size, false, Image.FORMAT_L8)
+	for y in size:
+		for x in size:
+			var d := Vector2(x + 0.5 - size * 0.5, y + 0.5 - size * 0.5) / (size * 0.5)
+			var r := d.length()
+			var v := 1.0 - smoothstep(0.7, 1.0, r)   # the pool fades at the cone's rim
+			v *= 0.55 + 0.45 * (1.0 - smoothstep(0.0, 0.35, r))   # the hot core
+			var bar := minf(absf(d.x), absf(d.y))   # the frame bars: a cross of thin shadow lines
+			v *= 1.0 - 0.7 * (1.0 - smoothstep(0.02, 0.06, bar)) * smoothstep(0.1, 0.25, r)
+			img.set_pixel(x, y, Color(v, v, v))
+	return ImageTexture.create_from_image(img)
+
+
+## The warm lights of the first MAX_LIGHTS lanterns (the square's four first, then the gates nearest the centre): SpotLight3D down-cones with the projector cookie, colour (1.0, 0.74, 0.48),
+## the four nearest the centre cast shadows.
 func _add_lights(layout: Dictionary) -> void:
 	var list := lanterns(layout)
 	list.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a["at"] as Vector2).length() < (b["at"] as Vector2).length())
+	var cookie := lantern_projector()
 	for i in mini(list.size(), MAX_LIGHTS):
 		var at: Vector2 = list[i]["at"]
-		var light := OmniLight3D.new()
+		var light := SpotLight3D.new()
 		light.name = "Lantern%d" % i
-		light.position = Vector3(at.x, 2.55, at.y) * INCHES_TO_METERS
+		light.position = Vector3(at.x, LANTERN_HEIGHT_IN, at.y) * INCHES_TO_METERS
+		light.rotation_degrees = Vector3(-90.0, 0.0, 0.0)   # straight down
 		light.light_color = LANTERN_COLOUR
-		light.light_energy = 0.5
-		light.omni_range = 0.24
-		light.omni_attenuation = 1.3
-		light.shadow_enabled = i < 4
+		light.light_energy = LANTERN_ENERGY   # measured: <= 0.2 % of pixels above 0.95 luminance in street, wall and fountain
+		light.spot_range = 0.34
+		light.spot_angle = lantern_cone_deg(i)
+		light.spot_attenuation = 1.0
+		light.light_projector = cookie
+		light.light_specular = 0.4
+		light.shadow_enabled = i < SHADOWED_LANTERNS
 		add_child(light)
+		var fill := OmniLight3D.new()
+		fill.name = "LanternFill%d" % i
+		fill.position = light.position
+		fill.light_color = LANTERN_COLOUR
+		fill.light_energy = FILL_ENERGY
+		fill.omni_range = FILL_RANGE_M
+		fill.omni_attenuation = 2.0
+		fill.light_specular = 0.0
+		fill.shadow_enabled = false
+		add_child(fill)
 
 
-## The dusk of the town: a low warm sun, a cool violet sky fill, a touch less exposure; applied to the scene's lighting controller (a dev view, so it is not restored).
+## One ReflectionProbe over the board, rendered ONCE after the build (plan R7b): the water and the wet stone mirror the sky instead of black. The box is the board plus a margin, low (the pieces stand
+## up to 9 in = 0.23 m).
+func _add_probe(layout: Dictionary) -> void:
+	var probe := ReflectionProbe.new()
+	probe.name = "BoardProbe"
+	probe.update_mode = ReflectionProbe.UPDATE_ONCE
+	probe.size = Vector3(float(layout["nx"]) * float(layout["cell_in"]) * INCHES_TO_METERS * 1.1, 0.5, float(layout["nz"]) * float(layout["cell_in"]) * INCHES_TO_METERS * 1.1)
+	probe.position = Vector3(0.0, 0.2, 0.0)
+	probe.intensity = 0.8
+	add_child(probe)
+
+
+## The decay story of a board (plan R5): the board's seed picks the way the fire came from (a unit vector) and, a quarter turn off it, the shade side where moss grows. Returned as a Color
+## (r, g = fire x, z; b, a = shade x, z) for the shader's `story` uniform. Pure: the same seed, the same story.
+static func story(seed: int) -> Color:
+	var fire := _hash(seed, 0, 210) * TAU
+	var turn := 1.0 if _hash(seed, 0, 211) < 0.5 else -1.0
+	var shade := fire + turn * PI * 0.5
+	return Color(cos(fire), sin(fire), cos(shade), sin(shade))
+
+
+## The BLUE HOUR of the town (decision D-R4): a cool pale moon as the key, high on one side; the last warm light low on the opposite horizon (the scene's fill light, turned round) as a rim; a
+## cool sky; the lanterns are the only strong warm source. Applied to the scene's lighting controller (a dev view, so it is not restored).
+## Readability tuning (tools: gate3.sh, the median of three repeats per row against the plain-table baseline; lead 21.11.): a strongly blue moon washed the figures' colours, so the key is pale (nearly
+## neutral) and strong (5.5), comes from the side of the play camera (azimuth -20 deg; at -55 deg the far models stood against lit walls) and the ambient is lower (0.9); the shader's ground values (cobbles,
+## packed earth, garden plots, the decks of yards and tiers) sit below the models' own values, and the Ultra preset's bounce light is turned down (SDFGI_ENERGY, SSIL_INTENSITY). The blue stays in the sky,
+## the ambient and the shadows. The measured moves are in PLAN_RUINTOWN_AAA.md.
 static func dusk(lighting: Object) -> void:
 	if lighting == null:
 		return
-	lighting.set_sun_color(Color(1.0, 0.66, 0.42))
-	lighting.set_sun_energy(1.0)
-	lighting.set_sun_angles(-50.0, 14.0)
-	lighting.set_ambient_color(Color(0.36, 0.40, 0.66))
-	lighting.set_ambient_energy(0.8)
-	lighting.set_exposure(0.95)
+	lighting.set_sun_color(MOON_COLOUR)
+	lighting.set_sun_energy(MOON_ENERGY)
+	lighting.set_sun_angles(MOON_AZIMUTH, MOON_ELEVATION)
+	lighting.set_ambient_color(Color(0.42, 0.47, 0.62))
+	lighting.set_ambient_energy(0.9)
+	lighting.set_exposure(1.0)
+	if lighting.has_method("set_ssao_radius"):   # board-scale occlusion (plan R7b): the presets' 0.8 - 1.2 m radius is wider than the whole 1.2 m board
+		lighting.set_ssao_radius(SSAO_RADIUS_M)
+		lighting.set_ssao_intensity(SSAO_INTENSITY)
+	if lighting.has_method("set_sdfgi_energy"):
+		lighting.set_sdfgi_energy(SDFGI_ENERGY)
+		lighting.set_ssil_intensity(SSIL_INTENSITY)
+	lighting.set_fill_light_color(MOON_COLOUR)   # the SECOND moon, the half turn of the first: the board is a half-turn mirror, so a fair light is too (the gate at the opposite player's side)
+	lighting.set_fill_light_energy(MOON2_ENERGY)
+	var key: Variant = lighting.get("_directional_light")   # the moons' specular is turned down: a strong pale light on the glossy pawns adds a white veil that washes their colours (the gate)
+	if key is DirectionalLight3D:
+		(key as DirectionalLight3D).light_specular = MOON_SPECULAR
+	var fill: Variant = lighting.get("_fill_light")   # no setter for its direction: turn it to the opposite azimuth by hand
+	if fill is DirectionalLight3D:
+		var light := fill as DirectionalLight3D
+		light.shadow_enabled = MOON2_SHADOWS
+		light.light_specular = MOON_SPECULAR
+		var h := deg_to_rad(MOON_AZIMUTH + 180.0)
+		var v := deg_to_rad(MOON_ELEVATION)
+		light.position = Vector3(cos(v) * sin(h), sin(v), cos(v) * cos(h)) * 10.0
+		light.look_at(Vector3.ZERO, Vector3.UP)
 
 
 ## Props against the house walls: crates, barrels, wood piles and sacks on bare ground, only in the 0.75 in strip beside a wall face of a raised house, an intact
@@ -196,7 +378,139 @@ static func props(layout: Dictionary) -> Array[Dictionary]:
 				box_lo = Vector2(lo.x + along, lo.y + 0.05 if d.y < 0 else lo.y + cell_in - depth - 0.05)
 			else:
 				box_lo = Vector2(lo.x + 0.05 if d.x < 0 else lo.x + cell_in - depth - 0.05, lo.y + along)
-			out.append({"lo": Vector3(box_lo.x, 0.0, box_lo.y), "hi": Vector3(box_lo.x + box_size.x, size.y, box_lo.y + box_size.y), "kind": "wood", "solid": false, "prop": true})
+			out.append({"lo": Vector3(box_lo.x, 0.0, box_lo.y), "hi": Vector3(box_lo.x + box_size.x, size.y, box_lo.y + box_size.y), "kind": "wood", "solid": false, "prop": true,
+				"face": d, "at": Vector2(cd["x"], cd["z"]), "along": along})   # the wall side and the cell: where an authored module of the strip stands instead of the box
+	return out
+
+
+## The parts a ruined, walkable tier (Block, Deck) is drawn as (plan O7): a lot two or more cells long is a row that lost its roofs - two or three houses side by side, cut at cell
+## boundaries along its long axis. {cells: {cell index: part number}, parts: {lot: number of parts}, axis_x: {lot: bool}, shade: {"lot/part": 0..1}}. Pure data; the tier's boxes and tops are
+## not touched, only the paint (stone / timber tone and the storey band) and the short party-wall stubs differ per part.
+static func tier_parts(layout: Dictionary) -> Dictionary:
+	var out := {"cells": {}, "parts": {}, "axis_x": {}, "shade": {}}
+	var nx: int = layout["nx"]
+	for lot: Dictionary in layout.get("lots", []):   # a bare layout (no lots) has no tiers
+		if not ["Block", "Deck"].has(lot["kind"]):
+			continue
+		var axis_x: bool = lot["w"] >= lot["h"]
+		var n: int = lot["w"] if axis_x else lot["h"]
+		var half := 1 if lot["z"] * 2 >= int(layout["nz"]) else 0
+		var cut_at: Array[int] = []   # the cell indices (along the axis) where a new part starts
+		if n == 2 or (n == 3 and _hash(lot["id"], half, 100) < 0.5):
+			cut_at.append(1 + int(n == 3 and _hash(lot["id"], half, 101) < 0.5))   # 2: 1 + 1; 3: 1 + 2 or 2 + 1
+		elif n == 3:
+			cut_at.append_array([1, 2])   # 1 + 1 + 1
+		out["parts"][lot["id"]] = cut_at.size() + 1
+		out["axis_x"][lot["id"]] = axis_x
+		for dz in lot["h"]:
+			for dx in lot["w"]:
+				var part := 0
+				for c in cut_at:
+					part += int((dx if axis_x else dz) >= c)
+				out["cells"][(int(lot["z"]) + dz) * nx + int(lot["x"]) + dx] = part
+				out["shade"]["%d/%d" % [lot["id"], part]] = _hash(lot["id"], half, 110 + part)
+	return out
+
+
+## The party-wall stubs: where two parts of a tier meet, a stub 0.3 in thick and 0.4 in high stands at EACH end of the boundary, 0.6 in long, inside the 0.75 in edge strip, on the tier top
+## (boxes for the greybox plan). The middle of the top stays flat; none at a ladder's top cell.
+static func party_stubs(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var tiers := tier_parts(layout)
+	var feet := {}
+	for c: Dictionary in layout["connectors"]:
+		feet[int(c["high"])] = true
+	var level_in: Array = layout["level_in"]
+	for lot: Dictionary in layout["lots"]:
+		if not tiers["parts"].has(lot["id"]) or tiers["parts"][lot["id"]] < 2:
+			continue
+		var axis_x: bool = tiers["axis_x"][lot["id"]]
+		for dz in lot["h"]:
+			for dx in lot["w"]:
+				var i: int = (int(lot["z"]) + dz) * nx + int(lot["x"]) + dx
+				var nb: int = i + (1 if axis_x else nx)   # the next cell along the axis
+				if (dx + 1 >= lot["w"] if axis_x else dz + 1 >= lot["h"]) or tiers["cells"][nb] == tiers["cells"][i]:
+					continue
+				var edge_end: bool = (dz == 0 or dz == int(lot["h"]) - 1) if axis_x else (dx == 0 or dx == int(lot["w"]) - 1)   # the boundary's end cells
+				if not edge_end or feet.has(i) or feet.has(nb):
+					continue
+				var cell := origin + Vector2(i % nx, i / nx) * cell_in
+				var top: float = level_in[layout["cells"][i]["level"]]
+				var outer_first: bool = (dz == 0) if axis_x else (dx == 0)   # the end on the lot's low-coordinate side
+				var lo := Vector2.ZERO
+				var size := Vector2.ZERO
+				if axis_x:
+					size = Vector2(0.3, 0.6)
+					lo = Vector2(cell.x + cell_in - 0.15, cell.y + (0.05 if outer_first else cell_in - 0.65))
+				else:
+					size = Vector2(0.6, 0.3)
+					lo = Vector2(cell.x + (0.05 if outer_first else cell_in - 0.65), cell.y + cell_in - 0.15)
+				out.append({"lo": Vector3(lo.x, top, lo.y), "hi": Vector3(lo.x + size.x, top + 0.4, lo.y + size.y), "kind": "stone", "solid": false, "prop": true, "party_stub": true, "lot": lot["id"]})
+	return out
+
+
+## Lean-tos and sheds at the BACK and SIDE of the houses (plan O6): boxes for the greybox plan ({lo, hi, kind, solid, prop, lean_to, lot, face}) on bare ground outside a house face, flush with the
+## collider's face, at most 0.75 in deep and 1.6 in high, never on the front (the door side), a party wall, a street cell, a ladder foot, a landmark or a pool / garden / hazard cell. A shed is a wooden
+## box with a tiled lid, a woodpile a low wooden box, a privy a narrow tall box with a lid. Only whole raised or intact houses (Block, Deck, Roofed) carry them. Pure data.
+static func lean_tos(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var cells: Array = layout["cells"]
+	var feet := {}
+	for c: Dictionary in layout["connectors"]:
+		feet[int(c["low"])] = true
+		feet[int(c["high"])] = true
+	var taken := {}
+	for lm: Dictionary in layout["landmarks"]:
+		for dz in int(lm["h"]):
+			for dx in int(lm["w"]):
+				taken[(int(lm["z"]) + dz) * nx + int(lm["x"]) + dx] = true
+	var dirs := {"N": Vector2i(0, -1), "E": Vector2i(1, 0), "S": Vector2i(0, 1), "W": Vector2i(-1, 0)}
+	var lots := {}
+	for lot: Dictionary in layout["lots"]:
+		lots[lot["id"]] = lot
+	for f: Dictionary in frontage(layout):
+		var lot: Dictionary = lots[f["lot"]]
+		if f["front"] == "" or not ["Block", "Deck", "Roofed"].has(lot["kind"]):
+			continue
+		var half := 1 if lot["z"] * 2 >= nz else 0
+		for face: String in [f["back"]] + f["sides"]:
+			if f["party"][face] or _hash(f["lot"], half, 20 + "NESW".find(face)) > (0.55 if face == f["back"] else 0.3):
+				continue
+			var d: Vector2i = dirs[face]
+			var along_x := d.x == 0   # the face runs along x (a north or south face)
+			var run: int = lot["w"] if along_x else lot["h"]
+			var idx := int(_hash(f["lot"], half, 30 + "NESW".find(face)) * run)
+			var out_cell := Vector2i(lot["x"], lot["z"]) + (Vector2i(idx, 0) if along_x else Vector2i(0, idx)) + (Vector2i(0, lot["h"]) if face == "S" else Vector2i(lot["w"], 0) if face == "E" else Vector2i.ZERO) + (d if face in ["N", "W"] else Vector2i.ZERO)
+			if out_cell.x < 0 or out_cell.y < 0 or out_cell.x >= nx or out_cell.y >= nz:
+				continue
+			var cd: Dictionary = cells[out_cell.y * nx + out_cell.x]
+			var i := out_cell.y * nx + out_cell.x
+			if cd["level"] != 0 or cd["street"] or cd["lot_id"] != 0 or cd["lot_kind"] != "Street" or feet.has(i) or taken.has(i):
+				continue
+			var pick := int(_hash(f["lot"], half, 70 + "NESW".find(face)) * 3.0)
+			var length: float = [2.0, 1.6, 0.7][pick]
+			var height: float = [1.3, 0.7, 1.6][pick]
+			var depth := 0.5 + 0.25 * _hash(f["lot"], half, 80 + "NESW".find(face))
+			var cell_lo := origin + Vector2(out_cell) * cell_in
+			var along := 0.3 + (cell_in - 0.6 - length) * _hash(f["lot"], half, 90 + "NESW".find(face))
+			var lo := Vector2.ZERO
+			var size := Vector2(length, depth) if along_x else Vector2(depth, length)
+			if along_x:
+				lo = Vector2(cell_lo.x + along, cell_lo.y + cell_in - depth if face == "N" else cell_lo.y)   # flush with the house face
+			else:
+				lo = Vector2(cell_lo.x + cell_in - depth if face == "W" else cell_lo.x, cell_lo.y + along)
+			var box := {"lo": Vector3(lo.x, 0.0, lo.y), "hi": Vector3(lo.x + size.x, height, lo.y + size.y), "kind": "wood", "solid": false, "prop": true, "lean_to": true, "lot": f["lot"], "face": face}
+			out.append(box)
+			if pick != 1:   # a shed and a privy get a tiled lid, a little proud of the box
+				out.append({"lo": Vector3(lo.x - 0.05, height, lo.y - 0.05), "hi": Vector3(lo.x + size.x + 0.05, height + 0.12, lo.y + size.y + 0.05), "kind": "roof", "solid": false, "prop": true, "lean_to": true, "lot": f["lot"], "face": face})
 	return out
 
 
@@ -247,6 +561,55 @@ static func hall_merlons(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
+## The frontage table of the building lots (plan O1, no visual change yet): for every house lot (Block, Terrace, Deck, Roofed) its FRONT face - the face with the most
+## street cells beside it, ties toward the square - its back (opposite), its sides, the faces that are party walls (a building lot of its own right beside them) and
+## whether it is a corner lot (street beside two adjacent faces). A lot with no street beside any face has front "" (a backyard house). Faces are "N" (z - 1), "E", "S", "W".
+## Pure data: [{lot, front, back, sides, party {face: bool}, corner, streets {face: count}}].
+static func frontage(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cells: Array = layout["cells"]
+	var dirs := {"N": Vector2i(0, -1), "E": Vector2i(1, 0), "S": Vector2i(0, 1), "W": Vector2i(-1, 0)}
+	var opposite := {"N": "S", "E": "W", "S": "N", "W": "E"}
+	var houses := ["Block", "Terrace", "Deck", "Roofed"]
+	for lot: Dictionary in layout["lots"]:
+		if not houses.has(lot["kind"]):
+			continue
+		var streets := {"N": 0, "E": 0, "S": 0, "W": 0}
+		var party := {"N": false, "E": false, "S": false, "W": false}
+		for dz in int(lot["h"]):
+			for dx in int(lot["w"]):
+				var x: int = int(lot["x"]) + dx
+				var z: int = int(lot["z"]) + dz
+				for face: String in dirs:
+					var at: Vector2i = Vector2i(x, z) + (dirs[face] as Vector2i)
+					if at.x < 0 or at.y < 0 or at.x >= nx or at.y >= nz or (at.x >= int(lot["x"]) and at.x < int(lot["x"]) + int(lot["w"]) and at.y >= int(lot["z"]) and at.y < int(lot["z"]) + int(lot["h"])):
+						continue
+					var nb: Dictionary = cells[at.y * nx + at.x]
+					if nb["street"]:
+						streets[face] += 1
+					elif nb["lot_id"] != 0 and nb["lot_id"] != lot["id"] and houses.has(String(nb["lot_kind"])):
+						party[face] = true
+		var centre := Vector2(float(lot["x"]) + float(lot["w"]) * 0.5 - float(nx) * 0.5, float(lot["z"]) + float(lot["h"]) * 0.5 - float(nz) * 0.5)
+		var front := ""
+		var best_key := Vector2(0.0, -INF)   # (street cells, how much the face points at the board centre)
+		for face: String in dirs:
+			if streets[face] == 0:
+				continue
+			var key := Vector2(float(streets[face]), -(Vector2(dirs[face] as Vector2i)).dot(centre))
+			if key.x > best_key.x or (key.x == best_key.x and key.y > best_key.y):
+				best_key = key
+				front = face
+		var sides: Array = []
+		for face: String in dirs:
+			if front != "" and face != front and face != opposite[front]:
+				sides.append(face)
+		out.append({"lot": lot["id"], "front": front, "back": opposite[front] if front != "" else "", "sides": sides, "party": party, "streets": streets,
+			"corner": (streets["N"] > 0 or streets["S"] > 0) and (streets["E"] > 0 or streets["W"] > 0)})
+	return out
+
+
 ## The unit gable prism: ridge along x at height 1 over z = 0, eaves at y = 0 on z = -0.5 / +0.5, x from -0.5 to 0.5.
 static func prism_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
@@ -268,26 +631,102 @@ static func prism_mesh() -> ArrayMesh:
 	return st.commit()
 
 
-## The roofs in ONE MultiMesh with the board's material (the kind "roof" in its instance data).
-func build(layout: Dictionary, material: Material) -> void:
+## A triangle added wound clockwise seen from outside (`ref` = a point inside the shape), with its flat normal.
+static func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, ref: Vector3) -> void:
+	var n := (b - a).cross(c - a)
+	var out := n.dot((a + b + c) / 3.0 - ref) > 0.0   # counter-clockwise from outside: swap to clockwise
+	for v: Vector3 in ([a, c, b] if out else [a, b, c]):
+		st.set_normal(n.normalized() if out else -n.normalized())
+		st.add_vertex(v)
+
+
+## The unit HIP roof: ridge at height 1 from x = -0.2 to 0.2 over z = 0, eaves at y = 0 on the whole rectangle (x, z in -0.5..0.5): four slopes, no gable end.
+static func hip_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var ref := Vector3(0, 0.3, 0)
+	var a := Vector3(-0.2, 1, 0)
+	var b := Vector3(0.2, 1, 0)
+	for z in [-0.5, 0.5]:
+		_tri(st, Vector3(-0.5, 0, z), Vector3(0.5, 0, z), b, ref)
+		_tri(st, Vector3(-0.5, 0, z), b, a, ref)
+	_tri(st, Vector3(0.5, 0, -0.5), Vector3(0.5, 0, 0.5), b, ref)
+	_tri(st, Vector3(-0.5, 0, 0.5), Vector3(-0.5, 0, -0.5), a, ref)
+	return st.commit()
+
+
+## The unit CATSLIDE roof: like the gable prism, but the ridge is at z = +0.15 and the slope on the -z side runs on down to y = -0.45 at the edge (the back, which the caller flips).
+static func catslide_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var ref := Vector3(0, 0.3, 0)
+	var a := Vector3(-0.5, 1, 0.15)
+	var b := Vector3(0.5, 1, 0.15)
+	_tri(st, Vector3(-0.5, 0, 0.5), Vector3(0.5, 0, 0.5), b, ref)
+	_tri(st, Vector3(-0.5, 0, 0.5), b, a, ref)
+	_tri(st, Vector3(0.5, -0.45, -0.5), Vector3(-0.5, -0.45, -0.5), a, ref)
+	_tri(st, Vector3(0.5, -0.45, -0.5), a, b, ref)
+	_tri(st, Vector3(0.5, 0, 0.5), Vector3(0.5, -0.45, -0.5), b, ref)
+	_tri(st, Vector3(-0.5, -0.45, -0.5), Vector3(-0.5, 0, 0.5), a, ref)
+	return st.commit()
+
+
+## The roofs in one MultiMesh PER TYPE (gable, hip, catslide: "Roofs", "RoofsHip", "RoofsCatslide") with the board's material (the kind "roof" in its instance data).
+func build(layout: Dictionary, material: Material, prism_roofs := true) -> void:   # prism_roofs false: BoardgenTownKit draws the gable roofs (hip and catslide have no module: they stay procedural)
 	var list := roofs(layout)
+	if not prism_roofs:
+		list = list.filter(func(r: Dictionary) -> bool: return r["type"] != "gable")
+	var meshes := {"gable": [prism_mesh(), "Roofs"], "hip": [hip_mesh(), "RoofsHip"], "catslide": [catslide_mesh(), "RoofsCatslide"]}
+	var kind := float(BoardgenTheme.TOWN_KINDS.find("roof"))
+	for type: String in meshes:
+		var of := list.filter(func(r: Dictionary) -> bool: return r["type"] == type)
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_custom_data = true
+		mm.mesh = meshes[type][0]
+		mm.instance_count = of.size()
+		for i in of.size():
+			var r: Dictionary = of[i]
+			var basis := Basis.from_scale(Vector3(r["length"], r["height"], r["width"]) * INCHES_TO_METERS)
+			if type == "catslide" and r["back"] > 0:
+				basis = Basis(Vector3.UP, PI) * basis   # the mesh's long slope is on -z: half a turn puts it on the back (a mirror would flip the faces)
+			if not r["along_x"]:
+				basis = Basis(Vector3.UP, PI * 0.5) * basis
+			basis = Basis(Vector3.UP, r["yaw"]) * basis   # the roof follows its body's yaw
+			var at: Vector2 = r["centre"]
+			mm.set_instance_transform(i, Transform3D(basis, Vector3(at.x, r["eaves"], at.y) * INCHES_TO_METERS))
+			mm.set_instance_custom_data(i, Color(kind, r["length"], r["height"], r["width"]))
+		var mmi := MultiMeshInstance3D.new()
+		mmi.name = meshes[type][1]
+		mmi.multimesh = mm
+		mmi.material_override = material
+		add_child(mmi)
+	_add_bodies(layout, material)
+	_add_lights(layout)
+	_add_probe(layout)
+
+
+## The drawn bodies of the intact houses in ONE MultiMesh with the board's material (kind "roofed"; the fraction of the kind carries the plinth height for the shader).
+## The greybox's own boxes for these cells draw nothing (zero scale) and only keep the collider.
+func _add_bodies(layout: Dictionary, material: Material) -> void:
+	var parts: Array[Dictionary] = []
+	for b: Dictionary in house_bodies(layout):
+		for part in house_parts(b):
+			parts.append(part.merged({"yaw": b["yaw"], "plinth": b["plinth"]}))
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_custom_data = true
-	mm.mesh = prism_mesh()
-	mm.instance_count = list.size()
-	var kind := float(BoardgenTheme.TOWN_KINDS.find("roof"))
-	for i in list.size():
-		var r: Dictionary = list[i]
-		var basis := Basis.from_scale(Vector3(r["length"], r["height"], r["width"]) * INCHES_TO_METERS)
-		if not r["along_x"]:
-			basis = Basis(Vector3.UP, PI * 0.5) * basis
-		var at: Vector2 = r["centre"]
-		mm.set_instance_transform(i, Transform3D(basis, Vector3(at.x, BODY_IN, at.y) * INCHES_TO_METERS))
-		mm.set_instance_custom_data(i, Color(kind, r["length"], r["height"], r["width"]))
+	mm.mesh = BoxMesh.new()
+	mm.instance_count = parts.size()
+	var kind := float(BoardgenTheme.TOWN_KINDS.find("roofed"))
+	for i in parts.size():
+		var b: Dictionary = parts[i]
+		var size := Vector3(b["size"].x, float(b["y1"]) - float(b["y0"]), b["size"].y)
+		var at: Vector2 = b["centre"]
+		mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, b["yaw"]) * Basis.from_scale(size * INCHES_TO_METERS), Vector3(at.x, (float(b["y0"]) + float(b["y1"])) * 0.5, at.y) * INCHES_TO_METERS))
+		mm.set_instance_custom_data(i, Color(kind + (float(b["plinth"]) - 0.3) / 0.75, size.x, size.y, size.z))
 	var mmi := MultiMeshInstance3D.new()
-	mmi.name = "Roofs"
+	mmi.name = "Houses"
 	mmi.multimesh = mm
 	mmi.material_override = material
 	add_child(mmi)
-	_add_lights(layout)
