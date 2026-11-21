@@ -91,7 +91,7 @@ static func is_plain_target(gu: GameUnit) -> bool:
 
 
 ## C-19: `is_plain` / `is_plain_target` for the HUMAN door (a human unit's lifecycle, move path and shot): the slice the human
-## door reads (`CoreSlice.human_path`), which C-19 did not switch to the deny-list. The AI door asks the two above.
+## door reads (`CoreSlice.human_path`, H-30: the live deny slice, the AI door's own). The AI door asks the two above.
 static func is_plain_human(gu: GameUnit) -> bool:
 	return CoreSlice.takes_human(gu)
 

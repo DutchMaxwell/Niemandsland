@@ -164,12 +164,18 @@ func test_applies_is_false_in_a_manual_room() -> void:
 	assert_bool(applies).is_false()
 
 
-func test_a_human_unit_with_a_non_movement_rule_is_lifecycle_but_not_core_nor_move_path() -> void:
+## H-30 (DS-109): the human door reads the live deny slice, so a unit with a rule the slice takes (Furious) is a core unit;
+## a unit with a rule the slice denies (Grounded Protection, `deny_names`) is lifecycle but stays off the core and the move path.
+## RED (the human door reads the allow file): the Furious unit is no core unit.
+func test_a_human_unit_with_a_rule_the_deny_slice_takes_is_a_core_unit_and_a_denied_one_is_not() -> void:
 	_main.solo_ai_slots = {2: true}
-	var u := _unit(1, "Rifles", ["Furious"])
-	assert_bool(CoreActivation.is_lifecycle_unit(_main, u)).override_failure_message("lifecycle").is_true()
-	assert_bool(CoreActivation.is_core_unit(_main, u)).override_failure_message("core").is_false()
-	assert_bool(CoreActivation.on_move_path(_main, u)).override_failure_message("move path").is_false()
+	var taken := _unit(1, "Rifles", ["Furious"])
+	assert_bool(CoreActivation.is_core_unit(_main, taken)).override_failure_message("a Furious human unit is a core unit").is_true()
+	assert_bool(CoreActivation.on_move_path(_main, taken)).override_failure_message("move path").is_true()
+	var denied := _unit(1, "Guards", ["Grounded Protection"])
+	assert_bool(CoreActivation.is_lifecycle_unit(_main, denied)).override_failure_message("lifecycle").is_true()
+	assert_bool(CoreActivation.is_core_unit(_main, denied)).override_failure_message("a denied rule keeps the unit on the table").is_false()
+	assert_bool(CoreActivation.on_move_path(_main, denied)).override_failure_message("move path").is_false()
 
 
 func test_a_plain_human_unit_is_lifecycle_core_and_move_path() -> void:
@@ -649,12 +655,16 @@ func test_the_snapshot_is_the_ledger_start_and_a_second_open_keeps_it() -> void:
 	assert_array(CoreActivation._sessions[u.unit_id]["start_rot"]).is_equal(rot_before)
 
 
-## Step 28 (O14 (1b)): a unit with a non-movement rule opens a session too, but keeps the table's bands.
-func test_a_furious_unit_opens_a_session_without_core_bands() -> void:
-	var u := _human("Berserkers", ["Furious"])
+## Step 28 (O14 (1b), H-30): a unit the deny slice refuses (Grounded Protection) opens a session too, but keeps the table's
+## bands; a Furious unit is on the slice now and gets the core's bands.
+func test_a_denied_unit_opens_a_session_without_core_bands() -> void:
+	var u := _human("Guards", ["Grounded Protection"])
 	assert_bool(CoreActivation.open_session(_main, u)).is_true()
 	assert_bool(CoreActivation.session_open(u.unit_id)).is_true()
 	assert_dict(CoreActivation.bands(_main, u)).is_empty()
+	var f := _human("Berserkers", ["Furious"])
+	assert_bool(CoreActivation.open_session(_main, f)).is_true()
+	assert_dict(CoreActivation.bands(_main, f)).is_not_empty()
 
 
 func test_no_session_opens_with_the_flag_off() -> void:
@@ -1304,19 +1314,20 @@ func _off_shown() -> bool:
 	return (_main._movement_cap_buttons[ObjectManager.MovementCap.OFF] as Button).visible
 
 
-## Step 31: selecting a plain human unit hides Off and turns an Off selector into Advance, a Rush stays Rush; a "Furious"
-## unit (a lifecycle unit off the move path, O18 (a)) shows Off and keeps an Off selector; an activated plain unit shows Off.
+## Step 31 (H-30): selecting a plain human unit hides Off and turns an Off selector into Advance, a Rush stays Rush; a
+## unit the deny slice refuses ("Grounded Protection": a lifecycle unit off the move path, O18 (a)) shows Off and keeps an Off
+## selector; an activated plain unit shows Off.
 func test_a_move_path_unit_hides_off_and_an_off_selector_becomes_advance() -> void:
 	var u := _human("Rifles")
-	var f := _human("Berserkers", ["Furious"])
+	var f := _human("Guards", ["Grounded Protection"])
 	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.OFF)
 	_pick([_node(u, 0), _node(u, 1)])
 	assert_bool(_off_shown()).override_failure_message("Off shown for a move-path unit").is_false()
 	assert_int(_cap()).override_failure_message("the selector stayed Off").is_equal(ObjectManager.MovementCap.ADVANCE)
 	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.OFF)
 	_pick([_node(f, 0), _node(f, 1)])
-	assert_bool(_off_shown()).override_failure_message("Off hidden for a Furious unit").is_true()
-	assert_int(_cap()).override_failure_message("a Furious unit's Off was changed").is_equal(ObjectManager.MovementCap.OFF)
+	assert_bool(_off_shown()).override_failure_message("Off hidden for a denied unit").is_true()
+	assert_int(_cap()).override_failure_message("a denied unit's Off was changed").is_equal(ObjectManager.MovementCap.OFF)
 	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.RUSH)
 	_pick([_node(u, 0)])
 	assert_int(_cap()).override_failure_message("Rush did not stay").is_equal(ObjectManager.MovementCap.RUSH)
@@ -1325,13 +1336,13 @@ func test_a_move_path_unit_hides_off_and_an_off_selector_becomes_advance() -> vo
 	assert_bool(_off_shown()).override_failure_message("Off hidden for an activated unit").is_true()
 
 
-## Step 31: the Start of a move-path unit sets Advance (a Furious unit's Start keeps the selector); its End shows Off again.
+## Step 31 (H-30): the Start of a move-path unit sets Advance (a denied unit's Start keeps the selector); its End shows Off again.
 func test_the_start_sets_advance_and_the_end_shows_off_again() -> void:
 	var u := _human("Rifles")
-	var f := _human("Berserkers", ["Furious"])
+	var f := _human("Guards", ["Grounded Protection"])
 	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.RUSH)
 	CoreActivation.open_session(_main, f)
-	assert_int(_cap()).override_failure_message("a Furious Start changed the selector").is_equal(ObjectManager.MovementCap.RUSH)
+	assert_int(_cap()).override_failure_message("a denied unit's Start changed the selector").is_equal(ObjectManager.MovementCap.RUSH)
 	CoreActivation.close_session(_main, f.unit_id)
 	_pick([_node(u, 0)])
 	CoreActivation.open_session(_main, u)
@@ -1923,7 +1934,7 @@ func test_a_shot_without_an_open_activation_is_refused(timeout := 120000) -> voi
 	assert_int(_toasts("Activate Rifles first.").size()).is_equal(1)
 
 
-## Not the core's: a Charge selector, a target with a special rule, the flag off - the old path runs (false).
+## Not the core's: a Charge selector, a target with a rule the deny slice refuses (H-30), the flag off - the old path runs (false).
 func test_a_charge_a_special_target_and_the_flag_off_leave_the_shot_to_the_old_path() -> void:
 	var units := _shot_units()
 	var att: GameUnit = units[0]
@@ -1931,7 +1942,7 @@ func test_a_charge_a_special_target_and_the_flag_off_leave_the_shot_to_the_old_p
 	_started(att, ObjectManager.MovementCap.CHARGE, 0.0)
 	assert_bool(await CoreActivation.human_shoot(_main, att, foe)).override_failure_message("a Charge").is_false()
 	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.ADVANCE)
-	foe.unit_properties["special_rules"] = ["Furious"]
+	foe.unit_properties["special_rules"] = ["Grounded Protection"]
 	assert_bool(await CoreActivation.human_shoot(_main, att, foe)).override_failure_message("a special target").is_false()
 	foe.unit_properties["special_rules"] = []
 	CoreActivation._env = 0

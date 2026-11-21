@@ -147,9 +147,9 @@ func test_a_human_strafe_bearer_strikes_with_its_end() -> void:
 	await _sweep("end", false)
 
 
-## P4.D-37c: every enemy the drop's legs cross must be a plain target. A crossed Regeneration unit (the slice does not list the
-## rule) hands the strike to the table at the drop, and the activation's End is the table's too: ONE strike, the table's own run
-## (survivors, RNG, lines). RED (the flag dropped from `drop_refused`): the core strikes the Regeneration unit at the End, after
-## the table's strike at the drop; or without the table's strike, a strike the table never made.
+## P4.D-37c: every enemy the drop's legs cross must be a plain target. A crossed Grounded Protection unit (the deny slice refuses
+## the name, H-30) hands the strike to the table at the drop, and the activation's End is the table's too: ONE strike, the table's
+## own run (survivors, RNG, lines). RED (the flag dropped from `drop_refused`): the core strikes the Grounded Protection unit at the
+## End, after the table's strike at the drop; or without the table's strike, a strike the table never made.
 func test_a_crossed_enemy_with_an_unsupported_rule_hands_the_strike_to_the_table() -> void:
-	await _sweep("end, crossed Regeneration", false, ["Regeneration"])
+	await _sweep("end, crossed Grounded Protection", false, ["Grounded Protection"])
