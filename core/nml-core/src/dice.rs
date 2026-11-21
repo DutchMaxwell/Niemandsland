@@ -2270,6 +2270,12 @@ pub(crate) fn resolve_volley_with_pick_label(
             out.log
                 .push(format!("{rule}: {} — {}'s cover save is skipped", sh.owner, def_owner));
         }
+        // The door writes the tray's lines, not `out.log`. The table's AI-08a line (`_solo_resolve_ai_volley`): a weapon whose cover skip
+        // is a named map-read rule says so for every shot that skips a cover the target really had (no once-per-volley latch, no
+        // Blast, no Takedown pick), in its own words (the human volley's variant is the table half the one-core delete retires).
+        if !unit_of_one && skips_cover && cov_def < base && p.blast <= 1 && !p.cover_rule.is_empty() {
+            say_rule(tray, "cover_skip", att.side, || format!("{}: {} ignores {def_owner}'s cover (save skipped)", p.cover_rule, sh.owner));
+        }
         // The table's `shot_uses_cover`: the save rolls at the covered Defense, and the cover really lowered it (a Defense already at
         // the floor, or a Pierce shot, leaves cover == base and the table says nothing).
         let uses_cover = cov_def < base && save_def == cov_def;
