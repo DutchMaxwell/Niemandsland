@@ -95,6 +95,8 @@ float keep(float coord, float size) {
 	return smoothstep(1.5, 3.5, size / max(fwidth(coord), 0.00001));
 }
 
+#include "res://shaders/ruintown_grit.gdshaderinc"
+
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wnrm = normalize(MODEL_NORMAL_MATRIX * NORMAL);
@@ -235,6 +237,8 @@ void fragment() {
 	vec3 tex_ratio = vec3(1.0);   // the authored set's detail on this face (1 = none) and its tangent-space normal
 	vec3 tex_n = vec3(0.0, 0.0, 1.0);
 	float tex_on = 0.0;
+	vec2 gw = p.xz;   // GRIT (ruintown_grit.gdshaderinc): the bent ground lookup point and the debug colour of this fragment
+	vec3 dbg = vec3(0.0);
 	bool wall_face = abs(wnrm.y) < 0.5;
 	vec3 tex_t = wall_face ? (abs(wnrm.x) > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0)) : vec3(1.0, 0.0, 0.0);   // image right and image up of the face in world space
 	vec3 tex_b = wall_face ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
@@ -332,6 +336,7 @@ void fragment() {
 		if (k <= 1) {   // the open ground (earth, street): the border between the two wanders off the grid; RUINS, FOREST and DANGEROUS ground keep their exact cell edge
 			vec2 w = xz + wander(xz);
 			vec4 g = ground_at(w);
+			gw = w;
 			if (int(g.r * 255.0 + 0.5) <= 1) {
 				k = int(g.r * 255.0 + 0.5);
 				tint = palette[k].rgb;
@@ -352,6 +357,7 @@ void fragment() {
 			depth_in = 0.045;
 			rough = mix(0.55, 0.8, smoothstep(0.3, 0.7, crown));   // damp joints, dry crowns
 			ao = mix(0.55, 1.0, smoothstep(0.1, 0.5, crown));
+			dbg = grit_debug == 2 ? grit_map_colour(gw) : grit_street(gw);
 		} else if (k == 0) {   // earth: packed, with pebbles, weeds and broken stones
 			alb = tint * GROUND_EARTH * mix(0.78, 1.15, fbm(xz * 1.6 + seed));   // 0.32 (was 1.0): the packed earth of the deployment bands sits below the models too (readability gate)
 			vec2 cp = xz * 3.0;   // 0.33 in cells, a pebble or a weed tuft in some of them: sparse, small, dark and irregular (rotated, stretched, off the cell centre)
@@ -372,6 +378,7 @@ void fragment() {
 			rel = clamp(0.2 + 0.6 * fbm(xz * 3.0 + seed) - 0.15 * path + 0.35 * pebble, 0.0, 1.0);   // packed earth: lumps, and the worn paths lie lower
 			depth_in = 0.05;
 			rough = 0.95;
+			dbg = grit_debug == 2 ? grit_map_colour(gw) : vec3(0.0);
 		} else if (k == 3 || k == 4 || k == 8) {   // floor boards of a ruined house or yard, scorched in patches
 			if (k != 8) {
 				tint *= mix(0.9, 1.1, ground_at(xz).g);   // each part of a ruined row has its own tone
@@ -513,4 +520,10 @@ void fragment() {
 	EMISSION = emis;
 	ROUGHNESS = rough;
 	SPECULAR = spec;
+	if (grit_debug > 0) {   // the grit instrument: only the class colours reach the image
+		ALBEDO = vec3(0.0);
+		EMISSION = dbg;
+		SPECULAR = 0.0;
+		ROUGHNESS = 1.0;
+	}
 }
