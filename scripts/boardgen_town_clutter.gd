@@ -387,15 +387,14 @@ static func _landmarks(layout: Dictionary, out: Dictionary) -> void:
 			"Crane":
 				for m in STATUE_MODULES:
 					_add(out, m, _item(float(lm["turn"]) * PI * 0.5, Vector3(centre.x, 0.0 if m == "statue_plinth" else 1.57, centre.y)))
-			"Sump":
-				if lm["w"] >= 2 and lm["h"] >= 2:
-					for ix in int(lm["w"]):   # north and south edges
-						_add(out, "pool_kerb", _item(0.0, Vector3(lo.x + (ix + 0.5) * cell_in, 0.0, lo.y)))
-						_add(out, "pool_kerb", _item(PI, Vector3(lo.x + (ix + 0.5) * cell_in, 0.0, lo.y + size.y)))
-					for iz in int(lm["h"]):   # west and east edges
-						_add(out, "pool_kerb", _item(PI * 0.5, Vector3(lo.x, 0.0, lo.y + (iz + 0.5) * cell_in)))
-						_add(out, "pool_kerb", _item(-PI * 0.5, Vector3(lo.x + size.x, 0.0, lo.y + (iz + 0.5) * cell_in)))
-				else:
+			"Sump":   # a stone kerb round every pool, the well's too (lead 21.11.: the water ended in a hard rectangular edge)
+				for ix in int(lm["w"]):   # north and south edges
+					_add(out, "pool_kerb", _item(0.0, Vector3(lo.x + (ix + 0.5) * cell_in, 0.0, lo.y)))
+					_add(out, "pool_kerb", _item(PI, Vector3(lo.x + (ix + 0.5) * cell_in, 0.0, lo.y + size.y)))
+				for iz in int(lm["h"]):   # west and east edges
+					_add(out, "pool_kerb", _item(PI * 0.5, Vector3(lo.x, 0.0, lo.y + (iz + 0.5) * cell_in)))
+					_add(out, "pool_kerb", _item(-PI * 0.5, Vector3(lo.x + size.x, 0.0, lo.y + (iz + 0.5) * cell_in)))
+				if lm["w"] < 2 or lm["h"] < 2:
 					for m in ["well_ring", "well_frame"]:
 						_add(out, m, _item(0.0 if lm["w"] >= lm["h"] else PI * 0.5, Vector3(centre.x, 0.0, centre.y)))
 

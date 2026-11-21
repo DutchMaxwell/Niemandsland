@@ -471,10 +471,10 @@ void fragment() {
 		}
 		if (k == 2) {   // dangerous ground: dark standing water - a teal depth, a faint sky sheen (no probe to reflect: a black mirror read as a hole in the table), small ripples
 			float swirl = fbm(xz * 0.6 + seed);
-			alb = vec3(0.03, 0.07, 0.085) * mix(0.7, 1.3, swirl);   // a deep teal body; the surface is the reflection probe's job (lead 21.11.: the sheen made it a flat teal slab)
-			emis += vec3(0.004, 0.009, 0.014) * (0.5 + fbm(xz * 1.3 + seed + 5.0));   // only a trace of sheen: no probe reflection would read as a black hole, the sheen must not win over it
-			rough = 0.05;
-			spec = 1.0;
+			alb = vec3(0.018, 0.028, 0.03) * mix(0.7, 1.3, swirl);   // dark, peaty water (lead 21.11.: still a flat teal plane - the mirror took the teal; now a duller surface over a near-black body)
+			emis += vec3(0.002, 0.004, 0.005) * (0.5 + fbm(xz * 1.3 + seed + 5.0));   // only a trace of sheen: no probe reflection would read as a black hole, the sheen must not win over it
+			rough = 0.16;
+			spec = 0.45;
 			rel = fbm(xz * 2.6 + seed);
 			depth_in = 0.05;   // ripples bend the reflection
 			ao = 1.0;

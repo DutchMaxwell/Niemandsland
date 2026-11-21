@@ -133,7 +133,7 @@ func test_the_landmark_modules_stand_inside_their_footprints() -> void:
 	var plan := BoardgenTownClutter.plan(layout)
 	for m in ["fountain_basin_b", "fountain_column", "fountain_leaves"] + BoardgenTownClutter.STATUE_MODULES + ["pool_kerb", "well_ring", "well_frame"]:
 		assert_bool(plan.has(m)).override_failure_message("no `%s` in the plan" % m).is_true()
-	assert_int((plan["pool_kerb"] as Array).size()).is_equal(8)   # 2 x 2: two runs on each of the four edges
+	assert_int((plan["pool_kerb"] as Array).size()).is_equal(14)   # 2 x 2: two runs on each of the four edges; the 1 x 2 well: six runs
 	var cell := 3.0
 	var origin := Vector2(-24.0, -24.0)
 	for item: Dictionary in plan["fountain_basin_b"]:
@@ -141,7 +141,9 @@ func test_the_landmark_modules_stand_inside_their_footprints() -> void:
 		assert_vector(p).is_equal_approx(Vector2(0.0, 0.0), Vector2.ONE * 0.001)   # the centre of the board
 	for item: Dictionary in plan["pool_kerb"]:
 		var p := Vector2(item["xf"].origin.x, item["xf"].origin.z) / 0.0254 - origin
-		assert_bool(p.x >= 9 * cell - 0.001 and p.x <= 11 * cell + 0.001 and p.y >= 11 * cell - 0.001 and p.y <= 13 * cell + 0.001).override_failure_message("a kerb run off its pool: %s" % p).is_true()
+		var pond := p.x >= 9 * cell - 0.001 and p.x <= 11 * cell + 0.001 and p.y >= 11 * cell - 0.001 and p.y <= 13 * cell + 0.001
+		var well := p.x >= 13 * cell - 0.001 and p.x <= 14 * cell + 0.001 and p.y >= 2 * cell - 0.001 and p.y <= 4 * cell + 0.001
+		assert_bool(pond or well).override_failure_message("a kerb run off its pool: %s" % p).is_true()
 	assert_float(plan["statue_stump"][0]["xf"].origin.y).is_equal_approx(1.57 * 0.0254, 0.0001)   # on top of the plinth
 
 
