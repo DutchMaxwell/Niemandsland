@@ -95,6 +95,8 @@ float keep(float coord, float size) {
 	return smoothstep(1.5, 3.5, size / max(fwidth(coord), 0.00001));
 }
 
+#include "res://shaders/ruintown_grit.gdshaderinc"
+
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wnrm = normalize(MODEL_NORMAL_MATRIX * NORMAL);
@@ -179,7 +181,8 @@ vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis, out float rel, f
 
 // Cobbles: staggered rounded setts about 0.6 x 0.4 in, a tone per sett, dark joints. They run along the street (`run` 0 = along x, 1 = along z) and fan round the
 // middle of a junction or a square (`fan` = the offset of that middle from the sample, inches).
-vec3 cobble(vec2 xz, float seed, vec3 tint, float run, vec2 fan, out float rel) {
+// `sett_out` (plan PLAN_RUINTOWN_GRIT): the sett's own hash, its mask (1 on the stone, 0 in the joint) and the point inside it (-0.5..0.5), for its tone and its fate.
+vec3 cobble(vec2 xz, float seed, vec3 tint, float run, vec2 fan, out float rel, out vec4 sett_out) {
 	float row;
 	float x;
 	vec2 f;
@@ -196,7 +199,9 @@ vec3 cobble(vec2 xz, float seed, vec3 tint, float run, vec2 fan, out float rel) 
 		f = vec2(fract(x), fract(q.y / SETT_H)) - 0.5;
 	}
 	float sett = smoothstep(0.17, 0.10, length(max(abs(f) - vec2(0.3), 0.0)));
-	vec3 laid = mix(vec3(0.10, 0.09, 0.09), tint * mix(0.7, 1.15, h21(vec2(floor(x), row) + seed)) * mix(0.9, 1.1, vnoise(xz * 3.0)), sett);
+	float sh = h21(vec2(floor(x), row) + seed);
+	vec3 laid = mix(vec3(0.10, 0.09, 0.09), grit_sett_tint(tint, sh) * mix(0.9, 1.1, vnoise(xz * 3.0)), sett);
+	sett_out = vec4(sh, sett, f);
 	rel = mix(0.5, sett * (0.6 + 0.4 * clamp(1.0 - 1.6 * length(f), 0.0, 1.0)), keep(xz.x, SETT_W));   // a domed sett in a recessed joint
 	return mix(tint * 0.78, laid, keep(xz.x, SETT_W));   // setts of 0.14 in are ~3 px at the play camera: below that they average out instead of crawling
 }
@@ -235,6 +240,8 @@ void fragment() {
 	vec3 tex_ratio = vec3(1.0);   // the authored set's detail on this face (1 = none) and its tangent-space normal
 	vec3 tex_n = vec3(0.0, 0.0, 1.0);
 	float tex_on = 0.0;
+	vec2 gw = p.xz;   // GRIT (ruintown_grit.gdshaderinc): the bent ground lookup point and the debug colour of this fragment
+	vec3 dbg = vec3(0.0);
 	bool wall_face = abs(wnrm.y) < 0.5;
 	vec3 tex_t = wall_face ? (abs(wnrm.x) > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0)) : vec3(1.0, 0.0, 0.0);   // image right and image up of the face in world space
 	vec3 tex_b = wall_face ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
@@ -332,6 +339,7 @@ void fragment() {
 		if (k <= 1) {   // the open ground (earth, street): the border between the two wanders off the grid; RUINS, FOREST and DANGEROUS ground keep their exact cell edge
 			vec2 w = xz + wander(xz);
 			vec4 g = ground_at(w);
+			gw = w;
 			if (int(g.r * 255.0 + 0.5) <= 1) {
 				k = int(g.r * 255.0 + 0.5);
 				tint = palette[k].rgb;
@@ -347,11 +355,14 @@ void fragment() {
 		}
 		if (k == 1) {   // streets: cobbles
 			float crown;
-			alb = mix(cobble(xz, seed, tint * vec3(1.15, 0.98, 0.78) * GROUND_COBBLE, run, fan, crown), vec3(0.06, 0.055, 0.05), 0.55 * gutter);   // 0.27 (was 1.15): the streets sit well below the models' own values (readability gate, lead 21.11.)
+			vec4 sett;
+			alb = mix(cobble(xz, seed, grit_street_tint(tint * vec3(1.15, 0.98, 0.78) * GROUND_COBBLE), run, fan, crown, sett), vec3(0.06, 0.055, 0.05), 0.55 * gutter * (1.0 - grit_on));   // (the grit map draws the mud and the kennel instead)   // 0.27 (was 1.15): the streets sit well below the models' own values (readability gate, lead 21.11.)
 			rel = crown;
 			depth_in = 0.045;
 			rough = mix(0.55, 0.8, smoothstep(0.3, 0.7, crown));   // damp joints, dry crowns
 			ao = mix(0.55, 1.0, smoothstep(0.1, 0.5, crown));
+			dbg = grit_debug == 2 ? grit_map_colour(gw) : grit_street(xz, gw, sett, run, alb, rel, rough);
+			emis += grit_fill(alb);
 		} else if (k == 0) {   // earth: packed, with pebbles, weeds and broken stones
 			alb = tint * GROUND_EARTH * mix(0.78, 1.15, fbm(xz * 1.6 + seed));   // 0.32 (was 1.0): the packed earth of the deployment bands sits below the models too (readability gate)
 			vec2 cp = xz * 3.0;   // 0.33 in cells, a pebble or a weed tuft in some of them: sparse, small, dark and irregular (rotated, stretched, off the cell centre)
@@ -364,7 +375,7 @@ void fragment() {
 			float tuft = step(0.915, sp) * step(sp, 0.955) * smoothstep(0.26, 0.12, length(lf));
 			alb = mix(alb, vec3(0.12, 0.15, 0.07) * mix(0.7, 1.2, h21(ci + 9.0)), 0.75 * tuft);   // a dull green-brown tuft, never a yellow coin
 			alb = mix(alb, vec3(0.13, 0.12, 0.11) * mix(0.6, 1.3, h21(ci + 4.0)), pebble);   // a dark stone
-			float path = smoothstep(0.03, 0.0, abs(vnoise(xz * 0.21 + seed) - 0.5)) * step(0.5, vnoise(xz * 0.07 + 5.0));   // a worn path: pale, meandering (a noise stand-in until the doors of R12c exist)
+			float path = smoothstep(0.03, 0.0, abs(vnoise(xz * 0.21 + seed) - 0.5)) * step(0.5, vnoise(xz * 0.07 + 5.0)) * (1.0 - grit_on);   // (gone with the grit map: it led nowhere)   // a worn path: pale, meandering (a noise stand-in until the doors of R12c exist)
 			alb = mix(alb, tint * vec3(1.4, 1.34, 1.2), 0.75 * path);
 			if (t_on.w > 0.5) {
 				tex_ratio = ratio_of(t_earth, xz / t_tile.w, MEAN_EARTH);   // real rock and soil under the pebbles, the tufts and the paths
@@ -372,6 +383,9 @@ void fragment() {
 			rel = clamp(0.2 + 0.6 * fbm(xz * 3.0 + seed) - 0.15 * path + 0.35 * pebble, 0.0, 1.0);   // packed earth: lumps, and the worn paths lie lower
 			depth_in = 0.05;
 			rough = 0.95;
+			grit_earth(gw, alb, rough);
+			emis += grit_fill(alb);
+			dbg = grit_debug == 2 ? grit_map_colour(gw) : vec3(0.0);
 		} else if (k == 3 || k == 4 || k == 8) {   // floor boards of a ruined house or yard, scorched in patches
 			if (k != 8) {
 				tint *= mix(0.9, 1.1, ground_at(xz).g);   // each part of a ruined row has its own tone
@@ -513,4 +527,10 @@ void fragment() {
 	EMISSION = emis;
 	ROUGHNESS = rough;
 	SPECULAR = spec;
+	if (grit_debug > 0) {   // the grit instrument: only the class colours reach the image
+		ALBEDO = vec3(0.0);
+		EMISSION = dbg;
+		SPECULAR = 0.0;
+		ROUGHNESS = 1.0;
+	}
 }

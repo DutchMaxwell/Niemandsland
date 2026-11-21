@@ -139,7 +139,7 @@ func test_ruined_tops_break_only_in_the_outer_edge_strip() -> void:
 ## Lead 21.11. (readability gate): the ground the models stand on - streets, packed earth, garden plots, the decks of yards and tier floors - sits a step below the models' own values.
 func test_the_ground_the_models_stand_on_sits_below_the_models() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
-	assert_bool(src.contains("cobble(xz, seed, tint * vec3(1.15, 0.98, 0.78) * GROUND_COBBLE, run")).override_failure_message("streets must stay warm: the pawns of both armies read against a warm dark road").is_true()
+	assert_bool(src.contains("cobble(xz, seed, grit_street_tint(tint * vec3(1.15, 0.98, 0.78) * GROUND_COBBLE), run")).override_failure_message("the street keeps the warm dark road's value (plan PLAN_RUINTOWN_GRIT G2: a cold stone family at the same luminance, readability gate green)").is_true()
 	assert_bool(src.contains("alb = tint * GROUND_EARTH * mix(0.78, 1.15, fbm(xz * 1.6 + seed));")).is_true()
 	# maintainer 21.11. "too dark": a floor under the ground (no near-black earth or road), and still a step below the models
 	for name: String in ["GROUND_COBBLE", "GROUND_EARTH"]:

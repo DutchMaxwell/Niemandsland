@@ -557,6 +557,7 @@ func _make_material(layout: Dictionary, theme: Dictionary) -> ShaderMaterial:
 		mat.set_shader_parameter("board_cells", Vector2(layout["nx"], layout["nz"]))
 		var tale := BoardgenTownDressing.story(int(layout.get("seed", 0)))
 		mat.set_shader_parameter("story", Vector4(tale.r, tale.g, tale.b, tale.a))
+		BoardgenTownGrit.apply(mat, layout)   # why the ground is dirty where it is (plan PLAN_RUINTOWN_GRIT)
 		var lib := TiefwerkLibrary.new(BoardgenTheme.TOWN_LIBRARY)   # the authored T-R1 surfaces when they are cached (NML_RUINTOWN_LIB_DIR in dev); the shader keeps its procedural look otherwise
 		lib.name = "TownLibrary"
 		add_child(lib)

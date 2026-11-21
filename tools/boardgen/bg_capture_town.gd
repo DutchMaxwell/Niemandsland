@@ -6,6 +6,9 @@ extends SceneTree
 ## Also writes <out>/s<seed>_plan.txt (the ASCII plan with landmarks) and <out>/manifest.json (written LAST = the result artefact).
 ## Derived from bg_capture_aaa.gd (same table clearing, armies, street pick). `perf=1`: the perf sweep. `baseline=1` (plan PLAN_RUINTOWN_AAA step R0): Medium + Ultra + Low,
 ## every camera incl. macro / gate / yard / band, perf + readability gate per seed and preset, a plain dark table under the board and a neutral backdrop.
+## `macro_ground` (plan PLAN_RUINTOWN_GRIT G0): 30 deg down, 3 in above a street cell beside an earth border, no pawn - the paving close-up. `grit_debug=1`: beside every still a
+## <still>_grit.png (`grit_debug=2`: <still>_gritmap.png, the raw map) with the board shader's `grit_debug` on (the grit classes as flat colours), every light, the ambient, fog and glow off and a linear tonemap, so the class colours
+## survive exactly (the instrument tools/boardgen/grit_metrics.py reads them). `manifest.json` gains `still_info`: per still its camera and pixels per inch at the camera's target.
 
 const IN := 0.0254
 const ZOOM := 1.25
@@ -35,7 +38,9 @@ var _model_y: Array[float] = []
 var _model_z: Array[float] = []
 var _north: Array[int] = []
 var _south: Array[int] = []
-var _manifest := {"stills": [], "plans": [], "godot": "", "gpu": ""}
+var _manifest := {"stills": [], "plans": [], "godot": "", "gpu": "", "still_info": {}}
+var _grit_debug := 0   # grit_debug=1 (classes) / 2 (the raw map): a debug still beside every still (plan PLAN_RUINTOWN_GRIT G0)
+var _cam_target := Vector3.ZERO
 
 
 func _initialize() -> void:
@@ -74,6 +79,8 @@ func _run() -> void:
 			_presets = Array(a.trim_prefix("presets=").split(",", false)).map(func(n: String) -> int: return {"medium": 2, "ultra": 4, "low": 1}[n])
 		elif a.begins_with("rounds="):
 			_rounds = int(a.trim_prefix("rounds="))
+		elif a.begins_with("grit_debug="):
+			_grit_debug = int(a.trim_prefix("grit_debug="))
 	DirAccess.make_dir_recursive_absolute(_out)
 	change_scene_to_file("res://scenes/main.tscn")
 	await process_frame
@@ -237,6 +244,16 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 			_pose(m["yaw"], -22.0, 0.075, m["target"])
 			await _still(tag, "macro")
 			stand_m.free()
+	if _want("macro_ground"):
+		var mg := _macro_ground_pick(layout)
+		if not mg.is_empty():
+			var shown: Array = _models.filter(func(m: Node3D) -> bool: return m.visible)
+			for m: Node3D in shown:
+				m.visible = false   # no pawn on the paving close-up
+			_pose(mg["yaw"], -30.0, 6.0 * IN, mg["target"])   # 6 in from the target at 30 deg down: the lens 3 in above the street
+			await _still(tag, "macro_ground")
+			for m: Node3D in shown:
+				m.visible = true
 	armies.free()
 	if _want("street"):
 		var walk := _street(layout)
@@ -257,6 +274,9 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 				for l: Dictionary in BoardgenTownDressing.lanterns(layout):
 					if (l["at"] as Vector2).distance_to(Vector2(at3.x, at3.z) / IN) < 4.0:
 						clear = false
+				var lens := Vector2(at3.x, at3.z) / IN + Vector2(sin(deg_to_rad(walk["yaw"])), cos(deg_to_rad(walk["yaw"]))) * 0.16 / IN
+				if not _open(layout, lens):
+					clear = false   # the lens itself must stand on open ground (seed 25: it stood inside a house, the still was 3 / 4 black)
 				if clear:
 					cam_t = t
 					break
@@ -659,6 +679,91 @@ func _still(tag: String, cam: String) -> void:
 	img.resize(WIDTH, int(float(WIDTH) * img.get_height() / img.get_width()), Image.INTERPOLATE_LANCZOS)
 	img.save_jpg(_out.path_join(file), 0.9)
 	_manifest["stills"].append(file)
+	var cam3 := root.get_viewport().get_camera_3d()
+	var k := float(WIDTH) / root.get_visible_rect().size.x
+	_manifest["still_info"][file] = {"cam": cam, "px_per_in": snappedf((cam3.unproject_position(_cam_target + cam3.global_transform.basis.x * IN) - cam3.unproject_position(_cam_target)).length() * k, 0.01)}
+	if _grit_debug > 0:
+		await _grit_still(file.get_basename() + ("_grit.png" if _grit_debug == 1 else "_gritmap.png"))
+
+
+## The same frame with the board shader's `grit_debug` on: every light, the ambient, sky reflections, fog and glow off, a linear tonemap at exposure 1, the models hidden, so only the
+## shader's flat class colours (emission) reach the image, unchanged. Everything is put back afterwards. Saved as PNG (no JPEG ringing on the class edges).
+func _grit_still(file: String) -> void:
+	var env: Environment = _main.world_environment.environment
+	var keys := ["background_mode", "background_color", "ambient_light_energy", "reflected_light_source", "tonemap_mode", "tonemap_exposure", "glow_enabled", "fog_enabled",
+		"volumetric_fog_enabled", "adjustment_enabled", "ssao_enabled", "ssil_enabled", "sdfgi_enabled", "ssr_enabled"]
+	var saved := {}
+	for key: String in keys:
+		saved[key] = env.get(key)
+	var lights: Array = []
+	for l in _main.get_tree().root.find_children("*", "Light3D", true, false):
+		if (l as Light3D).visible:
+			lights.append(l)
+			(l as Light3D).visible = false
+	var shown: Array = _models.filter(func(m: Node3D) -> bool: return m.visible)
+	for m: Node3D in shown:
+		m.visible = false
+	_cur_board.get("_material").set_shader_parameter("grit_debug", _grit_debug)
+	for _i in 6:
+		env.background_mode = Environment.BG_COLOR
+		env.background_color = Color.BLACK
+		env.ambient_light_energy = 0.0
+		env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
+		env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+		env.tonemap_exposure = 1.0
+		for key: String in ["glow_enabled", "fog_enabled", "volumetric_fog_enabled", "adjustment_enabled", "ssao_enabled", "ssil_enabled", "sdfgi_enabled", "ssr_enabled"]:
+			env.set(key, false)
+		await process_frame
+		_hide_scatter()
+	var img := root.get_texture().get_image()
+	img.resize(WIDTH, int(float(WIDTH) * img.get_height() / img.get_width()), Image.INTERPOLATE_NEAREST)
+	img.save_png(_out.path_join(file))
+	_cur_board.get("_material").set_shader_parameter("grit_debug", 0)
+	for key: String in keys:
+		env.set(key, saved[key])
+	for l in lights:
+		(l as Light3D).visible = true
+	for m: Node3D in shown:
+		m.visible = true
+	for _i in 4:
+		await process_frame
+
+
+## The paving close-up (plan PLAN_RUINTOWN_GRIT G0): a level-0 street cell beside a level-0 earth cell, nearest the board centre, whose camera spot 5 in out over the street is open
+## ground and has no lantern post within 2.5 in of the target or the lens. The target is 1 in onto the street from the cell border: {yaw, target (m)}.
+func _macro_ground_pick(layout: Dictionary) -> Dictionary:
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell := float(layout["cell_in"])
+	var cands: Array[Dictionary] = []
+	for cz in nz:
+		for cx in nx:
+			var cd: Dictionary = layout["cells"][cz * nx + cx]
+			if cd["level"] != 0 or not cd["street"] or cd["lot_kind"] == "Hazard":
+				continue
+			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var ox: int = cx + d.x
+				var oz: int = cz + d.y
+				if ox < 0 or oz < 0 or ox >= nx or oz >= nz:
+					continue
+				var nd: Dictionary = layout["cells"][oz * nx + ox]
+				if BoardgenGreybox._cell_kind(nd, true) != "ground":
+					continue
+				var centre := Vector2(cx + 0.5 - nx * 0.5, cz + 0.5 - nz * 0.5) * cell
+				var border := centre + Vector2(d) * cell * 0.5
+				cands.append({"at": border - Vector2(d) * 1.0, "out": -Vector2(d), "dist": centre.length()})
+	cands.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["dist"] < b["dist"])
+	var posts: Array = BoardgenTownDressing.lanterns(layout) if layout.get("theme", "") == "RuinTown" else []
+	for c: Dictionary in cands:
+		var at: Vector2 = c["at"]
+		var lens: Vector2 = at + (c["out"] as Vector2) * 5.2
+		if not _open(layout, lens):
+			continue
+		if posts.any(func(l: Dictionary) -> bool: return (l["at"] as Vector2).distance_to(at) < 2.5 or (l["at"] as Vector2).distance_to(lens) < 2.5):
+			continue
+		var o: Vector2 = c["out"]
+		return {"yaw": rad_to_deg(atan2(o.x, o.y)), "target": Vector3(at.x * IN, 0.0, at.y * IN)}
+	return {}
 
 
 func _street(layout: Dictionary) -> Dictionary:
@@ -757,3 +862,4 @@ func _pose(yaw: float, pitch := -38.0, zoom := ZOOM, target := Vector3(0, 0.02, 
 	pivot._pitch = pitch
 	pivot._current_zoom = zoom
 	pivot._apply_camera_transform()
+	_cam_target = target
