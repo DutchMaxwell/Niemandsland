@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use crate::rng::GodotRng;
 use super::graph::{Lot, SectorGraph};
-use super::{budget, Budgets, Symmetry, DEPLOY_DEPTH_CELLS, GRID};
+use super::{budget, Budgets, Symmetry, DEPLOY_DEPTH_CELLS, GRID, LEVEL_IN};
 
 /// Lot archetypes (theme-neutral; a kit table picks the look). `Block`: solid mass, walkable roof, blocks sight.
 /// `Terrace`: an L-shaped step, the rest of the lot stays ground. `Deck`: open raised platform, sight passes.
@@ -86,7 +86,7 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
             if one_piece(&cells) { break } else { (cells[a].level, cells[b].level) = (2, 2) }
         }
     }
-    if b.rows && sym == Symmetry::Point180 { cut_lanes(&mut lots, &mut cells, &mut rng); }
+    if b.rows && sym == Symmetry::Point180 { cut_lanes(&mut lots, &mut cells, &mut rng); infill_houses(&mut lots, &mut cells, &mut rng, b.infill_pairs); }
     (lots, cells)
 }
 
@@ -129,6 +129,73 @@ fn cut_lanes(lots: &mut Vec<Lot>, cells: &mut [Cell], rng: &mut GodotRng) {
         }
         if !placed { return; }
     }
+}
+
+/// Up to `pairs` half-turn pairs of small intact houses (2 x 1 / 1 x 2 / 2 x 2) on free earth between the deployment bands (roofs plan K3: fewer filler slabs, more houses).
+/// A candidate needs a street cell at its door and may not make a row (houses joined by party walls) longer than 4; the one that newly stops the fewest
+/// opening-turn sight lines comes first. A pair is kept only if the walkable board stays one piece.
+fn infill_houses(lots: &mut Vec<Lot>, cells: &mut [Cell], rng: &mut GodotRng, pairs: usize) {
+    let free = |cs: &[Cell], i: usize| cs[i].level == 0 && !cs[i].street && cs[i].lot_id == 0 && cs[i].lot_kind == LotKind::Street && cs[i].deploy == 0;
+    for _ in 0..pairs {
+        let low = open_rays_low(cells);
+        let mut cands: Vec<(u32, (usize, usize, usize, usize))> = Vec::new();
+        for &(w, h) in &[(2usize, 1usize), (1, 2), (2, 2)] { for z0 in 0..=GRID - h { for x0 in 0..=GRID - w {
+            let (mx, mz) = (GRID - x0 - w, GRID - z0 - h);
+            let cells_of = |x: usize, z: usize| (z..z + h).flat_map(move |zz| (x..x + w).map(move |xx| zz * GRID + xx));
+            let apart = x0 + w < mx || mx + w < x0 || z0 + h < mz || mz + h < z0;
+            if !apart || !cells_of(x0, z0).chain(cells_of(mx, mz)).all(|i| free(cells, i)) || !cells_of(x0, z0).any(|i| neighbours(i).any(|j| cells[j].street)) { continue; }
+            let hit = cells_of(x0, z0).chain(cells_of(mx, mz)).fold([0u64; 4], |m, i| [m[0] | low[i][0], m[1] | low[i][1], m[2] | low[i][2], m[3] | low[i][3]]);
+            cands.push((hit.iter().map(|b| b.count_ones()).sum(), (x0, z0, w, h)));
+        }}}
+        shuffle(&mut cands, rng);
+        cands.sort_by_key(|c| c.0);
+        let mut placed = false;
+        for (_, (x0, z0, w, h)) in cands {
+            let (mx, mz) = (GRID - x0 - w, GRID - z0 - h);
+            let (snap, id) = (cells.to_vec(), lots.len() as u16 + 1);
+            for (k, (x, z)) in [(x0, z0), (mx, mz)].into_iter().enumerate() {
+                for zz in z..z + h { for xx in x..x + w { let c = &mut cells[zz * GRID + xx]; (c.lot_id, c.lot_kind) = (id + k as u16, LotKind::Roofed); } }
+            }
+            if row_of(cells, id) <= 4 && row_of(cells, id + 1) <= 4 && one_piece_without(cells, LotKind::Roofed) {
+                for (k, (x, z)) in [(x0, z0), (mx, mz)].into_iter().enumerate() { lots.push(Lot { id: id + k as u16, x, z, w, h, sector: [(x + w / 2) / 4, (z + h / 2) / 4], kind: LotKind::Roofed }); }
+                placed = true;
+                break;
+            }
+            cells.clone_from_slice(&snap);
+        }
+        if !placed { return; }
+    }
+}
+
+/// Per cell, the opening-turn sight lines (row 1 against row 14, every column pair, eyes 1.25 in over their floor) that nothing stops yet and that pass
+/// that level-0 cell lower than a house (2.5 in): a house there would stop them. Integer hundredths of an inch, 99 samples per line.
+fn open_rays_low(cells: &[Cell]) -> Vec<[u64; 4]> {
+    let top = |i: usize| { let f = i64::from(LEVEL_IN[usize::from(cells[i].level)]) * 100; if cells[i].lot_kind == LotKind::Roofed { f.max(250) } else { f } };
+    let mut low = vec![[0u64; 4]; cells.len()];
+    for r in 0..GRID * GRID {
+        let ((xa, za), (xb, zb)) = (((r / GRID) as i64 * 300 + 150, 450), ((r % GRID) as i64 * 300 + 150, 14 * 300 + 150));
+        let (ya, yb) = (top(GRID + r / GRID) + 125, top(14 * GRID + r % GRID) + 125);
+        let mut hit = Vec::new();
+        let stopped = (1..100).any(|k| {
+            let (i, y) = (((za + (zb - za) * k / 100) / 300) as usize * GRID + ((xa + (xb - xa) * k / 100) / 300) as usize, ya + (yb - ya) * k / 100);
+            if cells[i].level == 0 && cells[i].lot_kind != LotKind::Roofed && y < 250 { hit.push(i); }
+            top(i) > y
+        });
+        if !stopped { for i in hit { low[i][r / 64] |= 1 << (r % 64); } }
+    }
+    low
+}
+
+/// Houses (lots of a house kind) joined to lot `id` by party walls, `id` included: the row it stands in.
+fn row_of(cells: &[Cell], id: u16) -> usize {
+    let (mut ids, mut stack) = (vec![id], vec![id]);
+    while let Some(a) = stack.pop() {
+        for i in (0..cells.len()).filter(|&i| cells[i].lot_id == a) { for j in neighbours(i) {
+            let c = &cells[j];
+            if c.lot_id != 0 && matches!(c.lot_kind, LotKind::Block | LotKind::Terrace | LotKind::Deck | LotKind::Roofed) && !ids.contains(&c.lot_id) { ids.push(c.lot_id); stack.push(c.lot_id); }
+        }}
+    }
+    ids.len()
 }
 
 /// [`one_piece`] over the cells that are not `skip` (solid houses are no ground).
