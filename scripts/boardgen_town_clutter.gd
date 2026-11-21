@@ -70,7 +70,11 @@ static func plan(layout: Dictionary) -> Dictionary:
 		var pos := Vector2(lo.x + along, lo.y if d.y < 0 else lo.y + cell_in) if d.x == 0 else Vector2(lo.x if d.x < 0 else lo.x + cell_in, lo.y + along)
 		# local +x runs along the wall; the yaw turns +z away from it, +x follows (for a north wall +x = +x of the board)
 		_add(out, m, _item(atan2(-float(d.x), -float(d.y)), Vector3(pos.x, 0.0, pos.y)))
-	_flat(layout, out)
+	var scenes := BoardgenTownScenes.plan(layout)   # story scenes (plan PLAN_RUINTOWN_GRIT S2): their cells carry no salted flat piece
+	for m: String in scenes["items"]:
+		for it: Dictionary in scenes["items"][m]:
+			_add(out, m, it)
+	_flat(layout, out, scenes["reserved"])
 	_plots(layout, out)
 	_ivy(layout, out)
 	_landmarks(layout, out)
@@ -104,7 +108,7 @@ static func _wall_span(layout: Dictionary) -> Vector2i:
 
 ## FLAT pieces (<= 0.08 in): debris, splinters, cloth, weeds on bare open ground - one cell in seven inside the walls, one in two OUTSIDE the wall and in the deployment bands (the emptiest earth
 ## of the board), never beside a wall (the strip has its own pieces), on a ladder end, a landmark, a pool, a plot or a lot.
-static func _flat(layout: Dictionary, out: Dictionary) -> void:
+static func _flat(layout: Dictionary, out: Dictionary, reserved: Dictionary = {}) -> void:
 	var nx: int = layout["nx"]
 	var nz: int = layout["nz"]
 	var cell_in := float(layout["cell_in"])
@@ -114,7 +118,7 @@ static func _flat(layout: Dictionary, out: Dictionary) -> void:
 	var cells: Array = layout["cells"]
 	for cd: Dictionary in cells:
 		var i: int = cd["z"] * nx + cd["x"]
-		if cd["level"] != 0 or clear.has(i) or ["Hazard", "Rough", "Wall", "Roofed", "Terrace", "Block", "Deck"].has(cd["lot_kind"]):
+		if cd["level"] != 0 or clear.has(i) or reserved.has(i) or ["Hazard", "Rough", "Wall", "Roofed", "Terrace", "Block", "Deck"].has(cd["lot_kind"]):
 			continue
 		var by_wall := false
 		for d: Vector2i in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:

@@ -64,7 +64,11 @@ func test_strip_pieces_stand_on_a_wall_face_facing_away_from_it_and_inside_their
 			var ahead := at + into * 0.3
 			var ac := Vector2i(ahead / cell)
 			assert_int(int(layout["cells"][ac.y * 16 + ac.x]["level"])).is_equal(0)
-	assert_int(pieces).is_equal(props.size())   # one piece per prop box
+	var scene_strip := 0   # plus the solid pieces of the story scenes (plan PLAN_RUINTOWN_GRIT S2), which stand on wall faces by the same rule
+	var scene_items: Dictionary = BoardgenTownScenes.plan(layout)["items"]
+	for m: String in BoardgenTownClutter.STRIP:
+		scene_strip += (scene_items.get(m, []) as Array).size()
+	assert_int(pieces).is_equal(props.size() + scene_strip)   # one piece per prop box
 
 
 func test_flat_pieces_are_flat_and_only_on_open_ground_and_the_outer_earth_has_more_of_them() -> void:
@@ -74,8 +78,11 @@ func test_flat_pieces_are_flat_and_only_on_open_ground_and_the_outer_earth_has_m
 	var origin := Vector2(16, 16) * cell * -0.5
 	var inner := 0
 	var outer := 0
+	var scene_items: Dictionary = BoardgenTownScenes.plan(layout)["items"]   # (a story scene's flat spill may lie in a yard: test/boardgen_town_scenes_test.gd checks it)
 	for m in BoardgenTownClutter.FLAT:
 		for item: Dictionary in plan.get(m, []):
+			if (scene_items.get(m, []) as Array).has(item):
+				continue
 			var xf: Transform3D = item["xf"]
 			assert_float(xf.origin.y).is_equal(0.0)   # on the ground; the modules themselves are <= 0.08 in high
 			var c := Vector2i((Vector2(xf.origin.x, xf.origin.z) / 0.0254 - origin) / cell)

@@ -45,6 +45,7 @@ var _cam_target := Vector3.ZERO
 
 func _initialize() -> void:
 	ProjectSettings.set_setting("niemandsland/harness_mode", true)
+	BoardgenTownLife.pinned = true   # the life clock stands at t = 0: a still (and the readability gate) is reproducible
 	_run.call_deferred()
 
 
@@ -222,6 +223,7 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 	_cur_board = board
 	for _i in 60:
 		await process_frame
+	print("BOARD %s decals %d life %d" % [tag, board.find_children("*", "Decal", true, false).size(), board.find_children("*", "GPUParticles3D", true, false).size()])
 	var armies := _place_armies(board, layout)
 	if _want("overview"):
 		_pose(STILL_YAW, -45.0, ZOOM)
@@ -253,6 +255,20 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 			_pose(mg["yaw"], -30.0, 6.0 * IN, mg["target"])   # 6 in from the target at 30 deg down: the lens 3 in above the street
 			await _still(tag, "macro_ground")
 			for m: Node3D in shown:
+				m.visible = true
+	if _want("scene") and layout.get("theme", "") == "RuinTown":   # one close-up per story-scene kind (plan PLAN_RUINTOWN_GRIT S1-S3)
+		var seen := {}
+		for sc: Dictionary in BoardgenTownScenes.plan(layout)["scenes"]:
+			if seen.has(sc["kind"]):
+				continue
+			seen[sc["kind"]] = true
+			var at: Vector2 = sc["at"]
+			var shown_s: Array = _models.filter(func(m: Node3D) -> bool: return m.visible)
+			for m: Node3D in shown_s:
+				m.visible = false
+			_pose(_open_yaw(layout, at, 0.6, -32.0, 12.0, Rect2(at - Vector2(1.5, 1.5), Vector2(3.0, 3.0))), -28.0, 6.0 * IN, Vector3(at.x * IN, 0.5 * IN, at.y * IN))
+			await _still(tag, "scene_" + String(sc["kind"]))
+			for m: Node3D in shown_s:
 				m.visible = true
 	if _want("macro_wall"):
 		var mw := _macro_wall_pick(layout)
