@@ -231,7 +231,7 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 	if action not in ["quit", "snapshot", "leave_to_menu"] and not _session_ready():
 		ok = false
 		error = "session is not ready"
-	elif action not in ["setup", "quit", "snapshot", "leave_to_menu", "close_window", "answer_start_question", "answer_rules_card"] and not _fixture_ready:
+	elif action not in ["setup", "quit", "snapshot", "leave_to_menu", "close_window", "answer_start_question", "answer_rules_card", "set_game_system"] and not _fixture_ready:
 		ok = false
 		error = "fixture is not ready"
 	elif action == "setup":
@@ -326,6 +326,14 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 		ok = card != null
 		if ok:
 			card.resolve(bool(payload.get("yes", false)))
+	elif action == "set_game_system":
+		# PLAN_GAME_SYSTEM_SWITCH steps 5 / 6: the host sets its table's system through the switch; the guest only PUSHES the key
+		# over the real door, as a hacked peer would (its own table stays as it is) - the host must ignore that push.
+		var system := str(payload.get("system", ""))
+		if _role == "host":
+			ok = _main.set_table_system(system, "the harness")   # the real switch door: sets it and pushes it
+		else:
+			_main.network_manager.broadcast_table_settings({"game_system": system})
 	elif action == "set_automatic":
 		_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
 		_main._hotseat_turn = null
@@ -824,6 +832,7 @@ func _snapshot() -> Dictionary:
 		"occupied_slots": [],
 		"round": int(_main.opr_army_manager.current_round) if _main != null else 0,
 		"rules": int(_main.opr_army_manager.rules_automation) if _main != null else -1,
+		"game_system": str(_main.opr_army_manager.table_system) if _main != null else "",
 		"turn": int(_main.call("_hotseat_side_on_turn")) \
 			if _main != null and _main.has_method("_hotseat_side_on_turn") else -1,
 		"last_refusal": _last_refusal,

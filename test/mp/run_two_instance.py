@@ -327,6 +327,7 @@ class Run:
         self.guest_answers_during_cut = False  # #1882 part 2: the answer is given while the host is away
         self.feat_marks = False  # MP1: once-per-game Feat latches reach both tables and survive a guest rejoin
         self.one_core = False  # one-core P3 step 54: the activation digest check, its mismatch and the correction
+        self.game_system = False  # game-system switch step 5: the table's system is host-owned and reaches a late joiner
         self.proxy: StallProxy | None = None
         self.proxies: dict[str, StallProxy] = {}
         self.seq = {"host": 0, "guest": 0}
@@ -571,6 +572,9 @@ class Run:
             return
         if self.one_core:
             self._one_core_scenario()
+            return
+        if self.game_system:
+            self.game_system_scenario()
             return
         self.command_both("setup")
         states = self.wait_condition(
@@ -1146,6 +1150,40 @@ class Run:
             diagnostic=lambda s: "not spent on: " + repr(self._feat_marks_missing(s)))
         self.checkpoint("feat-marks-after-guest-rejoin", states)
 
+    def game_system_scenario(self) -> None:
+        """Game-system switch step 5: the table's game system is HOST-owned. The host's value reaches the guest at
+        once, a guest pushing another system over the same door changes nothing on the host, and a guest that
+        leaves and returns is handed the host's value again (the late-joiner push)."""
+        self.command("host", "set_game_system", {"system": "aofs"})
+        self.wait_condition(
+            "the guest follows the host's game system",
+            lambda s: all(v.get("game_system") == "aofs" for v in s.values()),
+            diagnostic=lambda s: "game_system: " + repr({r: s[r].get("game_system") for r in s}),
+        )
+        self.command("guest", "set_game_system", {"system": "gff"})
+        time.sleep(3.0)
+        states = self.states()
+        if states["host"].get("game_system") != "aofs":
+            raise HarnessFailure("a guest's push changed the host-owned game system: " + repr(
+                {r: states[r].get("game_system") for r in states}))
+        room = states["host"]["room"]
+        self.command("guest", "close_window")
+        old = self.clients["guest"]
+        old.proc.wait(timeout=15)
+        for suffix in (".state.json", ".ack.json", ".command.json"):
+            (self.run_dir / f"guest{suffix}").unlink(missing_ok=True)
+        old.close_log()
+        self.seq["guest"] = 0
+        self._start_client("guest", self.relay_url, str(room))
+        self.wait_condition(
+            "the rejoined guest holds the host's game system",
+            lambda s: s["guest"].get("session_ready") and s["host"].get("occupied_slots") == [1, 2]
+            and s["guest"].get("game_system") == "aofs",
+            timeout=90,
+            diagnostic=lambda s: "game_system: " + repr({r: s[r].get("game_system") for r in s}),
+        )
+        print("[mp2] PASS game-system (host-owned, live push, late-joiner push)")
+
     def _start_question_scenario(self) -> None:
         """Bug 6c: the host is asked ONCE whether to play with rules automation when the second player
         sits down. Yes -> the guest gets the confirm card -> both Automatic; Not now -> both Manual and
@@ -1496,6 +1534,11 @@ def parse_args() -> argparse.Namespace:
         help="Also run the one-core P3 step 54 scenario (NML_ONE_CORE_ACTIVATION=1 on both peers, agreed Automatic room).",
     )
     parser.add_argument(
+        "--game-system-only",
+        action="store_true",
+        help="Run only the game-system switch step 5 scenario: the host-owned table system, a guest's push ignored.",
+    )
+    parser.add_argument(
         "--require-core",
         action="store_true",
         help="Fail the run when a peer log does not say NmlCore loaded (CI: the core library must be installed).",
@@ -1530,7 +1573,7 @@ def main() -> int:
                  silence: str = "", outage: bool = False, link_cut: bool = False,
                  rejoin_race: bool = False, guest_owed_cut: bool = False,
                  guest_answers_during_cut: bool = False, feat_marks: bool = False,
-                 one_core: bool = False) -> list[dict]:
+                 one_core: bool = False, game_system: bool = False) -> list[dict]:
         run_dir.mkdir(parents=True, exist_ok=False)
         run = Run(args, run_dir)
         run.rules_online = rules_online
@@ -1543,6 +1586,7 @@ def main() -> int:
         run.guest_answers_during_cut = guest_answers_during_cut
         run.feat_marks = feat_marks
         run.one_core = one_core
+        run.game_system = game_system
         try:
             print(f"[mp2] run {run_dir.name}: {run_dir}")
             run.start()
@@ -1572,6 +1616,10 @@ def main() -> int:
         if args.one_core_only:
             run_once(root / "one-core-01", False, None, one_core=True)
             print("[mp2] RESULT PASS: one core")
+            return 0
+        if args.game_system_only:
+            run_once(root / "game-system-01", False, None, game_system=True)
+            print("[mp2] RESULT PASS: game system")
             return 0
         if args.rejoin_race:
             run_once(root / "rejoin-race-01", False, None, rejoin_race=True)
@@ -1612,6 +1660,7 @@ def main() -> int:
             run_once(root / f"silence-{role}", False, None, silence=role)
         run_once(root / "silence-host-outage", False, None, silence="host", outage=True)
         run_once(root / "feat-marks-01", False, None, feat_marks=True)
+        run_once(root / "game-system-01", False, None, game_system=True)
         if args.include_one_core:
             run_once(root / "one-core-01", False, None, one_core=True)
         if args.include_link_cut:
