@@ -91,6 +91,28 @@ func test_a_plain_charge_that_wipes_the_defender_out() -> void:
 	await _sweep("wipe", 8, 2, 6.0)
 
 
+## Plan E step 20 (the melee C-19 flip): with the env unset the door is ON (`NML_ONE_CORE_CHARGE=0` / `off` is the way back for one release) and reads the
+## deny file: an AP charger (the allow file refuses it) is taken. RED before the flip: the switch defaulted OFF and the slice was the allow file.
+func test_an_ap_charger_is_taken_by_default_and_the_env_is_the_way_back() -> void:
+	var before := OS.get_environment("NML_ONE_CORE_CHARGE")
+	for case in [["", true], ["1", true], ["0", false], ["off", false], ["OFF", false]]:
+		OS.set_environment("NML_ONE_CORE_CHARGE", str(case[0]))
+		CoreActivation._charge_env = -1
+		assert_bool(CoreActivation.charge_door_enabled()).override_failure_message("NML_ONE_CORE_CHARGE='%s'" % case[0]).is_equal(bool(case[1]))
+	OS.set_environment("NML_ONE_CORE_CHARGE", "")
+	CoreActivation._charge_env = -1
+	var att := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Att", "models": 5, "x_in": 0.0}, true), BLADE.merged({"count": 5, "rules": ["AP(1)"]}, true))
+	var foe := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Def", "models": 8, "x_in": 7.0}, true), BLADE.merged({"count": 8, "attacks": 1}, true))
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	var report := {"unit": att, "target": foe, "action": AiDecision.Action.CHARGE, "moved": true}
+	assert_bool(CoreActivation.takes_ai_charge(_main, att, report)).override_failure_message("an AP charger is taken by default").is_true()
+	_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+	_main._solo_core_ai_h = 0
+	RosterSweep.free_units(_main, [att, foe])
+	OS.set_environment("NML_ONE_CORE_CHARGE", before)
+	CoreActivation._charge_env = -1
+
+
 ## A 10-model unit on either side stays on the table (`MELEE_MAX_MODELS`, the known consolidation difference of #3025): the
 ## door does not take it. RED: drop the size clause from `takes_ai_charge` -> the door takes it.
 func test_a_ten_model_unit_stays_on_the_table() -> void:
