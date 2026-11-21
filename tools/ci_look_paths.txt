@@ -9,3 +9,4 @@ assets/tiefwerk_manifest.json
 assets/ruintown_manifest.json
 test/boardgen_*_test.gd
 test/tiefwerk_*_test.gd
+tools/boardgen/*
