@@ -105,3 +105,48 @@ fn the_door_tray_says_the_parry_and_bloodthirsty_lines() {
     assert_eq!(said.iter().filter(|l| l.starts_with("Parry: Defender rolls ") && l.contains(" dice and cancels ")).count(), 2, "{said:?}");
     assert!(said.iter().any(|l| l.starts_with("Bloodthirsty Fighter: ") && l.contains(" blocked 1") && (l.ends_with(" extra attacks with Blade") || l.ends_with(" extra attack with Blade"))), "{said:?}");
 }
+
+/// Lines audit: the strike fold asks the Regeneration bypass once per weapon with hits and says its name on the door tray (the table's
+/// words): `<rule>: Regeneration ignored` for a registry bypass rule, `Unstoppable: Regeneration ignored` for the printed rule.
+/// RED on main: the registry line was `ShootResult.log` only and the printed Unstoppable said nothing anywhere.
+#[test]
+fn the_door_tray_says_the_regeneration_bypass_of_a_strike() {
+    let said = |rules: Vec<&str>, bypass_rule: &str| {
+        let blade = ShootProfile { name: "Blade".into(), attacks: 12, count: 1, unstoppable: rules.contains(&"Unstoppable"), bypass_regen: !bypass_rule.is_empty(),
+            rules: rules.iter().map(|r| r.to_string()).collect(), regen_bypass_rule: bypass_rule.into(), ..Default::default() };
+        let profiles = [blade];
+        let att = Ctx { quality: 4, models: 1, rules_epoch: EPOCH_73_V36, v36_rules: true, ..Default::default() };
+        let def = Ctx { models: 2, regeneration: true, regen_target: 5, ..built("defender", EPOCH_73_V36).ctx };
+        let run = |tray: &mut Tray| resolve_melee_leg(&[striker(&profiles, &[0], &[12], &att)], &def, "Defender",
+            false, true, true, false, 0.0, false, false, true, false, false, tray);
+        let seeded = run(&mut Tray::seeded(214));
+        let mut tray = Tray::supplied(seeded.rolls.iter().map(|r| r.faces.clone()).collect());
+        run(&mut tray);
+        tray.all_lines().into_iter().map(|l| l.text).collect::<Vec<_>>()
+    };
+    let named = said(vec!["Anti-Regen"], "Anti-Regen");
+    assert_eq!(named.iter().filter(|l| *l == "Anti-Regen: Regeneration ignored").count(), 1, "{named:?}");
+    let printed = said(vec!["Unstoppable"], "");
+    assert_eq!(printed.iter().filter(|l| *l == "Unstoppable: Regeneration ignored").count(), 1, "{printed:?}");
+    assert!(said(vec![], "").iter().all(|l| !l.contains("Regeneration ignored")), "a plain strike says nothing");
+}
+
+/// Lines audit: a Pierce strike names what it ignores on the door tray (the table's `_solo_resolve_saves` says it for strikes too: the
+/// weapon and the target's positive Defense parts, no Cover in melee). RED on main: the melee fold said no Pierce line anywhere.
+#[test]
+fn a_pierce_strike_names_what_it_ignores_on_the_door_tray() {
+    let said = |rules: Vec<&str>| {
+        let blade = ShootProfile { name: "Blade".into(), attacks: 12, count: 1, rules: rules.iter().map(|r| r.to_string()).collect(), ..Default::default() };
+        let profiles = [blade];
+        let att = Ctx { quality: 4, models: 1, rules_epoch: EPOCH_73_V36, ..Default::default() };
+        let def = Ctx { models: 2, shielded: true, in_cover: true, ..built("defender", EPOCH_73_V36).ctx };
+        let run = |tray: &mut Tray| resolve_melee_leg(&[striker(&profiles, &[0], &[12], &att)], &def, "Defender",
+            false, true, true, false, 0.0, false, false, true, false, false, tray);
+        let seeded = run(&mut Tray::seeded(214));
+        let mut tray = Tray::supplied(seeded.rolls.iter().map(|r| r.faces.clone()).collect());
+        run(&mut tray);
+        tray.all_lines().into_iter().map(|l| l.text).collect::<Vec<_>>()
+    };
+    assert_eq!(said(vec!["Pierce"]).iter().filter(|l| *l == "Pierce: Blade ignores Shielded +1").count(), 1, "{:?}", said(vec!["Pierce"]));
+    assert!(said(vec![]).iter().all(|l| !l.starts_with("Pierce:")), "a plain strike says nothing");
+}

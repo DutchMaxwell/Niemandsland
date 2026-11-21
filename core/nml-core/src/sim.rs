@@ -1798,7 +1798,10 @@ pub(crate) fn tray_strafing(
         land_pool_wounds(next, target, w, true, seams, &mut shot.log); // the table's order: Takedown, Deadly, then the pool
     }
     land_chain_report_inline(statics, next, tray, target, before, td_dealt);
-    if scourge_morale_trigger(next, statics, seams, ut, target, alive_before, wounds_before, phantom, &mut shot.log) {
+    let log_from = shot.log.len();
+    let trigger = scourge_morale_trigger(next, statics, seams, ut, target, alive_before, wounds_before, phantom, &mut shot.log);
+    say_scourge(tray, next.player[target], &shot.log[log_from..]);
+    if trigger {
         tray_morale(next, statics, target, false, seams, tray, shot, Some(d), None);
     }
 }
@@ -4159,6 +4162,13 @@ fn shooting_morale_line(
         .then(|| format!("{} takes wounds at half strength or less ({alive}/{total} models) — morale test ({CITE})", us.name))
 }
 
+/// The Scourge note `scourge_morale_trigger` pushed to the recorded log, on the tray (the table's `_solo_scourge_decides` words are the same).
+fn say_scourge(tray: &mut Tray, side: i64, lines: &[String]) {
+    for l in lines.iter().filter(|l| l.starts_with("Scourge:")) {
+        say_rule(tray, "scourge", side, || l.clone());
+    }
+}
+
 /// SHO-15a Scourge (`EPOCH_73_V36`): the phantom wounds count toward this trigger only, read as landed on a
 /// scratch copy (nothing is removed). Table twin: main.gd `_solo_scourge_decides`.
 #[allow(clippy::too_many_arguments)]
@@ -4179,6 +4189,7 @@ fn scourge_morale_trigger(
     land_wounds_with(&mut v, ti, phantom, seams.tray_exact);
     let tips = !real && (v.alive[ti] <= 0 || below_half(&v, statics, us, ti, seams));
     let verdict = if tips { "they decide its morale test" } else { "they do not decide its morale test" };
+    // tray twin: scourge
     log.push(format!("Scourge: {phantom} phantom wounds count against {} — {verdict}", us.name));
     real || tips
 }
@@ -4940,6 +4951,7 @@ fn vengeance_on_kill(
     dead: usize,
     killer: usize,
     shot: &mut ShootResult,
+    tray: &mut Tray,
 ) {
     let dead_host = next.attached_to[dead].unwrap_or(dead);
     let mut markers = 0i64;
@@ -4959,6 +4971,10 @@ fn vengeance_on_kill(
         statics[next.roster.profile[dead_host]].name, markers,
         statics[next.roster.profile[host]].name
     ));
+    // The table's words (`_solo_vengeance_on_destroyed`): the fallen unit and the destroyer by their own names, `Vengeance marker(s)`.
+    say_rule(tray, "vengeance", next.player[killer], || format!(
+        "Vengeance: {} falls — {markers} Vengeance marker{} on {} (its enemies get +1 to hit per marker)",
+        statics[next.roster.profile[dead]].name, if markers == 1 { "" } else { "s" }, statics[next.roster.profile[killer]].name));
 }
 
 /// rules-wave3-growthmark (epoch 6) — the defender-side facets' log lines.
@@ -7893,11 +7909,22 @@ fn tray_charge_with_self_wounds(
         for (n, unit) in [(scourge_on_defender, ti), (scourge_on_charger, si)] {
             if n > 0 {
                 let decides = loser_with == Some(unit) && loser_without != Some(unit);
+                // tray twin: melee
                 shot.log.push(format!(
                     "Scourge: {n} phantom wounds count for {} in the melee result — they {}",
                     statics[next.roster.profile[unit]].name,
                     if decides { "decide it" } else { "do not decide it" }
                 ));
+            }
+        }
+        // The table's `_solo_log_melee_result` says the notes right after the result line, the charger's side first.
+        for (n, unit) in [(scourge_on_charger, si), (scourge_on_defender, ti)] {
+            if n > 0 {
+                let decides = loser_with == Some(unit) && loser_without != Some(unit);
+                say_melee(tray, next.player[si], format!(
+                    "Scourge: {n} phantom wounds count for {} in the melee result — they {}",
+                    statics[next.roster.profile[unit]].name,
+                    if decides { "decide it" } else { "do not decide it" }));
             }
         }
     }
@@ -12231,7 +12258,7 @@ fn resolve_with(
                                 && alive_before_g > 0
                                 && next.alive[g.ti] <= 0
                             {
-                                vengeance_on_kill(statics, &mut next, g.ti, si, shot);
+                                vengeance_on_kill(statics, &mut next, g.ti, si, shot, tray);
                             }
                             // main.gd:3244 — the exchange spends its own
                             // once-mods BEFORE the post-volley morale test.
@@ -12246,14 +12273,19 @@ fn resolve_with(
                             // it undrawn is what put every later activation of
                             // a `dice="table"` game on a different stream than
                             // the recording.
-                            if scourge_morale_trigger(
+                            let log_from = shot.log.len();
+                            let trigger = scourge_morale_trigger(
                                 &next, statics, seams, ut_g, g.ti, morale_alive_g, wounds_before_g, phantom, &mut shot.log,
-                            ) {
-                                if tray.feed().is_some() {
-                                    if let Some(line) = shooting_morale_line(&next, statics, seams, ut_g, g.ti, morale_alive_g, wounds_before_g) {
-                                        say_rule(tray, "morale", next.player[g.ti], || line);
-                                    }
+                            );
+                            if tray.feed().is_some() {
+                                // The table's order (`_solo_shooting_morale`): the half-strength line, then the Scourge note (said even when the
+                                // phantom wounds do not decide), then the test.
+                                if let Some(line) = shooting_morale_line(&next, statics, seams, ut_g, g.ti, morale_alive_g, wounds_before_g) {
+                                    say_rule(tray, "morale", next.player[g.ti], || line);
                                 }
+                                say_scourge(tray, next.player[g.ti], &shot.log[log_from..]);
+                            }
+                            if trigger {
                                 tray_morale(&mut next, statics, g.ti, false, seams, tray, shot, Some(g.mod_d), None);
                             }
                         }
@@ -12401,9 +12433,9 @@ fn resolve_with(
                     // win-by-wipe only, each direction credits the wiper.
                     if rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) {
                         if next.alive[ti] <= 0 && next.alive[si] > 0 {
-                            vengeance_on_kill(statics, &mut next, ti, si, shot);
+                            vengeance_on_kill(statics, &mut next, ti, si, shot, tray);
                         } else if next.alive[si] <= 0 && next.alive[ti] > 0 {
-                            vengeance_on_kill(statics, &mut next, si, ti, shot);
+                            vengeance_on_kill(statics, &mut next, si, ti, shot, tray);
                         }
                     }
                 } else {

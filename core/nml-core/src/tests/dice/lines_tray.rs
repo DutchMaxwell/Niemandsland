@@ -62,7 +62,7 @@ fn pierce_says_nothing_when_it_ignores_nothing() {
 }
 
 fn anti_regen() -> ShootProfile {
-    ShootProfile { bypass_regen: true, regen_bypass_rule: "Anti-Regen".into(), ..rifle(6) }
+    ShootProfile { bypass_regen: true, regen_bypass_rule: "Anti-Regen".into(), rules: vec!["Anti-Regen".into()], ..rifle(6) }
 }
 
 const REGEN: &str = "Anti-Regen: Regeneration ignored";
@@ -101,4 +101,32 @@ fn a_takedown_shot_names_its_extra_attack_on_the_door_tray() {
     let gun = ShootProfile { name: "Takedown Shot".into(), extra_attack_q: 2, ap: 2, deadly: 3, takedown: true, ..rifle(1) };
     let lines = tray_lines(&shooter(4), &defender(4, 5), gun, 1);
     assert_eq!(said(&lines, "Takedown Shot: Att makes one extra attack at Quality 2+ with AP(2), Deadly(3), Takedown (once per game)"), 1, "{lines:?}");
+}
+
+fn unstoppable_gun() -> ShootProfile {
+    ShootProfile { rules: vec!["Unstoppable".into()], unstoppable: true, ..rifle(6) }
+}
+
+/// The table says a printed Unstoppable cutting through Regeneration (`_solo_ignores_regen`, the S1-06 arm): `Unstoppable: Regeneration
+/// ignored`, once per weapon with hits, only against a target that really has a Regeneration roll (from 73). A Bane weapon answers
+/// silently. RED on main: the core said nothing at all, not even in the recorded log.
+#[test]
+fn a_printed_unstoppable_names_its_regeneration_cut_on_the_door_tray() {
+    let att = Ctx { rules_epoch: EPOCH_73_V36, v36_rules: true, ..shooter(4) };
+    let regen = Ctx { regeneration: true, regen_target: 5, ..defender(4, 5) };
+    let lines = tray_lines(&att, &regen, unstoppable_gun(), 2);
+    assert_eq!(said(&lines, "Unstoppable: Regeneration ignored"), 2, "once per weapon: {lines:?}");
+    assert_eq!(said(&tray_lines(&att, &defender(4, 5), unstoppable_gun(), 1), "Unstoppable: Regeneration ignored"), 0, "nothing to skip, no line");
+    let bane = ShootProfile { rules: vec!["Bane".into()], bane: true, bypass_regen: true, ..rifle(6) };
+    assert!(tray_lines(&att, &regen, bane, 1).iter().all(|l| !l.contains("Regeneration ignored")), "Bane answers silently");
+}
+
+/// The granted Unstoppable Mark says itself on the tray in the table's words (`<mark>: <U> — Regeneration is ignored (once)`); the recorded
+/// log words it `Unstoppable: <U> — ignores <T>'s Regeneration (once)`. RED on main: `out.log` only.
+#[test]
+fn the_unstoppable_mark_names_its_regeneration_cut_on_the_door_tray() {
+    let att = Ctx { rules_epoch: EPOCH_73_V36, v36_rules: true, unstoppable_mark: true, unstoppable_grant: true, ..shooter(4) };
+    let regen = Ctx { regeneration: true, regen_target: 5, ..defender(4, 5) };
+    let lines = tray_lines(&att, &regen, rifle(6), 1);
+    assert_eq!(said(&lines, "Unstoppable Mark: Att — Regeneration is ignored (once)"), 1, "{lines:?}");
 }

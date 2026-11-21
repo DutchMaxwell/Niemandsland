@@ -15,9 +15,9 @@
 const SOURCES: [(&str, &str); 2] = [("dice.rs", include_str!("../../dice.rs")), ("sim.rs", include_str!("../../sim.rs"))];
 
 /// Tray-say spellings: a push with one of these within `BEFORE`/`AFTER` lines counts as twinned.
-const SAYS: [&str; 14] = [
+const SAYS: [&str; 17] = [
     "say_rule(", "tray.say(", ".say(|", "say_at(", "say_wounds(", "say_at_mark(", "say_melee(", "say_marks_consumed(", "say_control_test(",
-    "say_morale_bonus(", "say_versatile_pick(", "say_shaken_batteries(", "say(&mut dice", "tray_say(",
+    "say_morale_bonus(", "say_versatile_pick(", "say_shaken_batteries(", "say(&mut dice", "tray_say(", "say_regen_bypass(", "say_pierce(", "say_scourge(",
 ];
 const BEFORE: usize = 1;
 const AFTER: usize = 8;
@@ -70,7 +70,7 @@ fn untwinned() -> Vec<(String, String)> {
             let lo = i.saturating_sub(BEFORE);
             let hi = (i + AFTER).min(lines.len() - 1);
             let named = [lines[i], lines.get(i.wrapping_sub(1)).copied().unwrap_or("")].iter().any(|l| {
-                l.split("// tray twin: ").nth(1).is_some_and(|r| src.contains(&format!("say_rule(tray, \"{}\"", r.split_whitespace().next().unwrap_or("?"))))
+                l.split("// tray twin: ").nth(1).is_some_and(|r| { let k = r.split_whitespace().next().unwrap_or("?"); src.contains(&format!("say_rule(tray, \"{k}\"")) || src.contains(&format!("rule: \"{k}\"")) })
             });
             let twinned = named || lines[lo..=hi].iter().any(|l| SAYS.iter().any(|s| l.contains(s)));
             if !twinned {
