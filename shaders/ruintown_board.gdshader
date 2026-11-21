@@ -113,29 +113,54 @@ vec3 stone(vec2 uv, float seed, float course, float len, vec3 tint, out float re
 	return mix(tint * 0.8, laid, keep(uv.y, course));   // too fine for the pixel: the mean of stone and mortar
 }
 
-// Half-timber of one 3 in storey (uv.y = height in inches, a storey starts at a multiple of 3): dark posts every 1.5 in, rails at the storey
-// edges, a brace in some panels, plaster between, a small shuttered window in some panels.
-vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis, out float rel) {
+// Per-lot identity (plan R4b): four plasters (off-white, ochre, faded oxide red, grey-green) and three timbers (tarred, weathered grey, brown), picked by the lot's hash in the ground map.
+vec3 plaster_of(float lot) {
+	float k = floor(lot * 3.999);
+	return k < 0.5 ? vec3(0.86, 0.80, 0.68) : (k < 1.5 ? vec3(0.78, 0.62, 0.36) : (k < 2.5 ? vec3(0.62, 0.36, 0.28) : vec3(0.60, 0.65, 0.57)));
+}
+
+vec3 wood_of(float lot) {
+	float k = floor(fract(lot * 7.0) * 2.999);
+	return k < 0.5 ? vec3(0.07, 0.05, 0.04) : (k < 1.5 ? vec3(0.30, 0.28, 0.25) : vec3(0.20, 0.12, 0.07));
+}
+
+// Half-timber with a grammar (plan R4a), one 3 in cell wide and one 3 in storey high: a sill beam, a mid rail and a top plate; posts every 0.75 in; an opening (a window between two posts
+// with a sill and a lintel) in most cells, braces only in the CORNER bays and never across it; the infill by bay: plaster, brick nogging, bare lath or - on a ruin (`holes` > 0) - a hole.
+// The lot's hash picks the plaster and the timber; `rel` = the relief height (frame proud, opening recessed).
+vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis, out float rel, float lot, float holes) {
 	float y = mod(uv.y, 3.0);
-	float px = uv.x / 1.5;
-	float panel = floor(px);
-	float lx = fract(px);
-	float post = smoothstep(0.12, 0.08, min(lx, 1.0 - lx) * 1.5);
-	float rail = smoothstep(0.2, 0.15, min(y, 3.0 - y));
-	float flip = step(0.5, h21(vec2(panel, seed + 3.0)));
-	float brace = step(0.55, h21(vec2(panel, seed))) * smoothstep(0.1, 0.06, abs(y / 3.0 - mix(1.0 - lx, lx, flip)) * 1.5) * step(0.3, y) * step(y, 2.7);
-	vec3 wood = vec3(0.17, 0.10, 0.06) * mix(0.8, 1.2, vnoise(vec2(uv.x * 9.0, uv.y * 1.5)));
-	vec3 fill = plaster * mix(0.84, 1.1, fbm(uv * 1.7 + seed)) * mix(0.62, 1.0, smoothstep(0.0, 1.1, y));
-	vec2 w = abs(vec2((lx - 0.5) * 1.5, y - 1.7)) - vec2(0.22, 0.3);
-	float d = max(w.x, w.y);
-	float has_win = step(0.5, h21(vec2(panel, seed + 9.0)));
-	vec3 c = mix(fill, wood, max(post, max(rail, brace)));
-	rel = mix(0.35 + 0.25 * fbm(uv * 5.0 + seed), 0.95, max(post, max(rail, brace)));   // plaster with a trowel's waviness, the frame timbers proud of it
-	rel = mix(rel, 0.05, has_win * step(d, 0.07));   // a window is a recess
-	c = mix(c, wood, has_win * step(d, 0.07));
-	float lit = has_win * step(d, -0.06);
-	emis += vec3(1.0, 0.55, 0.22) * lit * step(0.8, h21(vec2(panel, seed + 5.0))) * 0.9;   // a few windows glow
-	return mix(c, vec3(0.06, 0.05, 0.05), lit);
+	float cell = floor(uv.x / 3.0);
+	float x = uv.x - cell * 3.0;
+	float bay = floor(x / 0.75);
+	float lx = fract(x / 0.75);
+	float hc = h21(vec2(cell, seed + 3.0));
+	vec3 pl = mix(plaster, plaster_of(lot), 0.7);
+	vec3 wood = wood_of(lot) * mix(0.8, 1.2, vnoise(vec2(uv.x * 9.0, uv.y * 1.5)));
+	float post = smoothstep(0.06, 0.04, min(lx, 1.0 - lx) * 0.75);
+	float beam = max(smoothstep(0.17, 0.12, y), max(smoothstep(0.17, 0.12, 3.0 - y), smoothstep(0.075, 0.05, abs(y - 1.5))));
+	float has_open = step(0.3, hc);
+	vec2 wd = abs(vec2(x - 1.5, y - 1.55)) - vec2(0.6, 0.6);
+	float d = max(wd.x, wd.y);
+	float inside = has_open * step(d, 0.0);
+	float frame = has_open * step(0.0, d) * step(d, 0.07);
+	float corner = step(bay, 0.5) + step(2.5, bay);
+	float t = bay < 1.5 ? 1.0 - lx : lx;
+	float brace = corner * step(0.4, h21(vec2(cell, seed + 1.0))) * smoothstep(0.07, 0.04, abs(y / 3.0 - t) * 1.6) * step(0.3, y) * step(y, 2.7);
+	float hb = h21(vec2(cell * 4.0 + bay, seed + 6.0));
+	vec3 infill = pl * mix(0.84, 1.1, fbm(uv * 1.7 + seed)) * mix(0.62, 1.0, smoothstep(0.0, 1.1, y));
+	float course = step(0.5, fract(y / 0.12));
+	infill = hb > 0.6 && hb < 0.75 ? mix(vec3(0.42, 0.22, 0.16), vec3(0.28, 0.14, 0.10), course) : infill;   // brick nogging
+	infill = hb >= 0.75 && hb < 0.9 ? mix(wood * 1.4, wood * 0.6, step(0.5, fract(uv.y / 0.09))) : infill;   // bare lath
+	float hole = step(0.9, hb) * step(0.0001, holes) * step(hb, 0.9 + holes);
+	float members = max(post * (1.0 - inside), max(beam, max(brace, frame)));
+	vec3 c = mix(infill, wood, members);
+	c = mix(c, vec3(0.05, 0.04, 0.04), hole * (1.0 - members));
+	rel = mix(0.35 + 0.25 * fbm(uv * 5.0 + seed), 0.95, members);   // plaster with a trowel's waviness, the frame timbers proud of it
+	rel = mix(rel, 0.05, max(inside, hole * (1.0 - members)));   // an opening and a hole are recesses
+	c = mix(c, vec3(0.06, 0.05, 0.05), inside);
+	float lit = inside * step(d, -0.08);
+	emis += vec3(1.0, 0.55, 0.22) * lit * step(0.8, h21(vec2(cell, seed + 5.0))) * 0.9;   // a few windows glow
+	return c;
 }
 
 // Cobbles: staggered rounded setts about 0.6 x 0.4 in, a tone per sett, dark joints. They run along the street (`run` 0 = along x, 1 = along z) and fan round the
@@ -197,9 +222,10 @@ void fragment() {
 	vec3 tex_t = wall_face ? (abs(wnrm.x) > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0)) : vec3(1.0, 0.0, 0.0);   // image right and image up of the face in world space
 	vec3 tex_b = wall_face ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
 	if (abs(wnrm.y) < 0.2) {   // a wall face (or a gable end)
+		float lot_h = ground_at(p.xz - wnrm.xz * 0.2).b;   // the lot's hash (ground map blue: house cells only): its plaster and timber
 		vec2 uv = vec2(abs(wnrm.x) > 0.5 ? p.z : p.x, p.y);
 		if (k == 15) {   // a gable end: plaster and a timber frame
-			alb = timber(uv, seed, palette[13].rgb, emis, rel);
+			alb = timber(uv, seed, palette[13].rgb, emis, rel, lot_h, 0.0);
 			depth_in = 0.03;
 			rough = mix(0.95, 0.8, step(0.8, rel));
 			ao = mix(0.6, 1.0, smoothstep(0.1, 0.5, rel));
@@ -219,7 +245,7 @@ void fragment() {
 					depth_in = 0.0;
 				}
 			} else {
-				alb = timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed), emis, rel);
+				alb = timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed), emis, rel, lot_h, 0.0);
 				depth_in = 0.03;
 				rough = mix(0.95, 0.8, step(0.8, rel));
 				ao = mix(0.6, 1.0, smoothstep(0.1, 0.5, rel));
@@ -258,7 +284,7 @@ void fragment() {
 					ao = 1.0;
 				}
 			} else {
-				alb = timber(uv, seed, tint * 1.02, emis, rel);
+				alb = timber(uv, seed, tint * 1.02, emis, rel, lot_h, 0.1);
 				rough = mix(0.95, 0.8, step(0.8, rel));
 				depth_in = 0.03;
 				ao = mix(0.6, 1.0, smoothstep(0.1, 0.6, rel));

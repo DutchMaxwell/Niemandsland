@@ -402,7 +402,7 @@ static func town_sets(lib: TiefwerkLibrary) -> Dictionary:
 
 ## The town's ground map, one RGBA8 texel per cell (row by row): R = the cell's surface kind (its index in `kinds`), G = how a street runs through it (0 along x, 255 along z: the
 ## street is at least 3 cells long that way and at most 2 across; 128 a junction or a square: anything else), BA = where the middle of its junction is, as an offset from the
-## cell's centre (6 in = 0..255, 128 = none).
+## cell's centre (6 in = 0..255, 128 = none); on a HOUSE cell B is instead its lot's hash (1..254): the shader picks the lot's plaster and timber from it (plan R4b).
 ## The shader looks the ground up through a noise-bent point, so the cobble / earth border wanders off the 3 in grid; pure data, the rules never read it.
 static func ground_map(layout: Dictionary, kinds: Array) -> PackedByteArray:
 	var nx: int = layout["nx"]
@@ -449,7 +449,10 @@ static func ground_map(layout: Dictionary, kinds: Array) -> PackedByteArray:
 		if tiers["cells"].has(i):
 			run = 1 + int(float(tiers["shade"]["%d/%d" % [cells[i]["lot_id"], tiers["cells"][i]]]) * 253.0)   # a ruined tier: the tone of its part (the shader reads it on tier faces)
 		var off := (centre.get(i, Vector2.ZERO) as Vector2) * cell_in
-		bytes.append_array([kinds.find(_cell_kind(cells[i], true)), run, clampi(roundi(off.x / 6.0 * 255.0 + 127.5), 0, 255), clampi(roundi(off.y / 6.0 * 255.0 + 127.5), 0, 255)])
+		var bx := clampi(roundi(off.x / 6.0 * 255.0 + 127.5), 0, 255)
+		if cells[i]["lot_id"] != 0 and not cells[i]["street"] and ["Block", "Terrace", "Deck", "Roofed"].has(cells[i]["lot_kind"]):
+			bx = 1 + int(BoardgenTownDressing._hash(int(cells[i]["lot_id"]), 1 if z >= nz / 2 else 0, 200) * 253.0)   # a house cell: its lot's hash (junction offsets are for street cells only)
+		bytes.append_array([kinds.find(_cell_kind(cells[i], true)), run, bx, clampi(roundi(off.y / 6.0 * 255.0 + 127.5), 0, 255)])
 	return bytes
 
 

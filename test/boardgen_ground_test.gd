@@ -80,3 +80,23 @@ func test_the_border_only_wanders_between_earth_and_street_and_the_open_ground_h
 	for line in src.split("\n"):
 		if line.contains("cobble(xz, seed") or line.contains("tint * mix(0.78, 1.15, fbm(xz * 1.6 + seed))"):
 			assert_bool(line.contains("* grid")).override_failure_message("no cell grid line on the open ground: " + line).is_false()
+
+
+## R4b: a house cell carries its lot's hash in the ground map's blue byte, so the shader can give every lot its own plaster and timber; two lots differ, one lot is one value.
+func test_a_house_cell_carries_its_lots_hash_and_two_lots_differ() -> void:
+	var layout := _town()
+	layout["lots"] = []   # (the recorded lots would claim these cells as tiers)
+	for c: Dictionary in layout["cells"]:
+		c["street"] = false
+		c["lot_id"] = 0
+		c["lot_kind"] = "Street"
+	for spec in [[2, 2, 5, "Block"], [3, 2, 5, "Block"], [8, 8, 6, "Roofed"], [9, 8, 7, "Roofed"]]:
+		var c: Dictionary = layout["cells"][spec[1] * 16 + spec[0]]
+		c["lot_id"] = spec[2]
+		c["lot_kind"] = spec[3]
+	var bytes := BoardgenGreybox.ground_map(layout, BoardgenTheme.TOWN_KINDS)
+	var blue := func(x: int, z: int) -> int: return bytes[(z * 16 + x) * 4 + 2]
+	assert_int(blue.call(2, 2)).is_equal(blue.call(3, 2))   # one lot, one hash
+	assert_bool(blue.call(2, 2) != blue.call(8, 8) or blue.call(8, 8) != blue.call(9, 8)).is_true()   # lots differ
+	assert_int(blue.call(2, 2)).is_between(1, 254)
+	assert_int(blue.call(0, 0)).is_between(126, 129)   # bare ground keeps the neutral byte

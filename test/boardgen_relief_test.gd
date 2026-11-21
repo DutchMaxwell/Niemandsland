@@ -37,7 +37,7 @@ func test_roughness_follows_the_material_damp_joints_dry_crowns() -> void:
 func test_walls_and_roofs_have_relief_and_the_materials_their_roughness() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
 	assert_bool(src.substr(src.find("vec3 timber("), 160).contains("out float rel")).is_true()
-	assert_bool(src.contains("rel = mix(rel, 0.05, has_win * step(d, 0.07));")).override_failure_message("a window is not a recess").is_true()
+	assert_bool(src.contains("rel = mix(rel, 0.05, max(inside, hole * (1.0 - members)));")).override_failure_message("a window is not a recess").is_true()
 	assert_bool(src.contains("rel = mix(0.5, fract(p.y / TILE_H) *")).override_failure_message("tile rows are not steps").is_true()
 	assert_bool(src.contains("rough = 0.7;")).is_true()   # tile
 	assert_bool(src.contains("rough = 0.85;")).is_true()   # stone
@@ -83,3 +83,14 @@ func test_standing_water_is_teal_with_a_sheen_and_ripples_not_a_black_mirror() -
 func test_thin_films_get_no_chipped_edge() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
 	assert_bool(src.contains("box_in.x > 0.0 && box_in.y > 0.5;")).override_failure_message("a thin box would get chips on its rim").is_true()
+
+
+## R4a / R4b: the half-timber has a grammar and each lot its own plaster and timber.
+func test_half_timber_has_a_grammar_braces_only_in_corner_bays_and_per_lot_tints() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	assert_bool(src.contains("float corner = step(bay, 0.5) + step(2.5, bay);")).override_failure_message("braces must be limited to the corner bays").is_true()
+	assert_bool(src.contains("float post = smoothstep(0.06, 0.04, min(lx, 1.0 - lx) * 0.75);")).is_true()   # a post every 0.75 in
+	assert_bool(src.contains("vec3 plaster_of(float lot)") and src.contains("vec3 wood_of(float lot)")).is_true()
+	assert_bool(src.contains("float members = max(post * (1.0 - inside),")).override_failure_message("a post runs through the opening").is_true()
+	assert_bool(src.contains("step(0.9, hb) * step(0.0001, holes)")).override_failure_message("a hole is for ruins only").is_true()
+	assert_bool(src.contains("float lot_h = ground_at(p.xz - wnrm.xz * 0.2).b;")).is_true()
