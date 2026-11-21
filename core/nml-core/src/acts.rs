@@ -1024,6 +1024,14 @@ pub const CURRENT_RULES_EPOCH: u32 = 95;
 /// table already folded the unit rule. Core: `unit::stamp_shot_modifier` / `shot_mod_notes_of`. Records stamped 95 or below replay
 /// byte-exact. Every call site reads THIS constant, not the literal `96`.
 pub const PENDING_EPOCH_UNIT_IMPRECISE: u32 = 96;
+/// Placeholder gate for UNIT BANE ALIASES (coverage ledger shoot m1, lane covfix-dice; 3.6 army books): (a) a unit that carries a
+/// CONDITIONAL Bane-family rule as its own rule (Obliterate, Reap, Fragment, Smash: a condition and / or a wider save window, an
+/// Obliterate that ignores Regeneration) reads it exactly like the same rule printed on a weapon (`stamp_weapon_bane_alias`), instead of
+/// the flat sixes re-roll with no Regeneration bypass; (b) a Bane Mark bearer marks the enemy it attacks before attacking and is itself a
+/// friendly unit attacking it, so its attacks get Bane (Regeneration ignored, Defense 6s re-rolled). Before, the 94 exact-label scan
+/// dropped the Mark entirely. Core: `unit::stamp_unit_strikers`. Records stamped 95 or below replay byte-exact. Every call site reads
+/// THIS constant, not the literal `96`.
+pub const PENDING_EPOCH_UNIT_BANE_ALIAS: u32 = 96;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2352,6 +2360,13 @@ mod tests {
         assert_eq!(super::PENDING_EPOCH_UNIT_IMPRECISE, 96);
         assert!(!rule_on(95, super::PENDING_EPOCH_UNIT_IMPRECISE), "a record at 95 keeps the unit-borne Imprecise unread");
         assert!(rule_on(96, super::PENDING_EPOCH_UNIT_IMPRECISE));
+    }
+
+    #[test]
+    fn unit_bane_alias_gate_starts_at_96() {
+        assert_eq!(super::PENDING_EPOCH_UNIT_BANE_ALIAS, 96);
+        assert!(!rule_on(95, super::PENDING_EPOCH_UNIT_BANE_ALIAS), "a record at 95 keeps the flat unit alias read");
+        assert!(rule_on(96, super::PENDING_EPOCH_UNIT_BANE_ALIAS));
     }
 
     #[test]

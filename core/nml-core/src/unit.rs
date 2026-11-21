@@ -4515,9 +4515,15 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
     let mut u_unstop_melee = false;
     let mut facets: Vec<(String, bool, bool)> = Vec::new(); // the unit-level names the re-roll line carries, with their facet
     let exact_labels = rule_on(rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH);
+    let unit_alias = rule_on(rules_epoch, crate::acts::PENDING_EPOCH_UNIT_BANE_ALIAS);
     for r in &p.special_rules {
         let rs = r.trim();
         if exact_labels && is_unlisted_striker_label(rs) {
+            // PENDING_EPOCH_UNIT_BANE_ALIAS: the Mark's bearer marks its own target before attacking and attacks it as a friendly unit.
+            if unit_alias && base_rule_name(rs) == "Bane Mark" {
+                u_bane = true;
+                u_bypass = true;
+            }
             continue; // a Mark / Buff / Aura label is no bearer of the rule it hands out (ds/h_prefix_labels.md)
         }
         if rs.starts_with("Bane") || rs.starts_with("Lacerate") {
@@ -4585,6 +4591,9 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         for hit in rules_of_primitive(reg, p, "Bane") {
             if hit.name.starts_with("Bane") || hit.name.ends_with("Aura") {
                 continue;
+            }
+            if unit_alias && conditional_bane_alias(reg, p, &hit.name) {
+                continue; // read like the weapon-borne alias, `stamp_weapon_bane_alias`
             }
             if wave3_alias(&hit.name) {
                 if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
@@ -4722,9 +4731,18 @@ fn stamp_weapon_bane_alias(reg: &mut Registries, p: &Profile, shoot: &mut [Shoot
     if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
         return;
     }
+    // PENDING_EPOCH_UNIT_BANE_ALIAS: the unit's own conditional aliases join each profile's printed rules, after them.
+    let unit_aliases: Vec<String> = if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_UNIT_BANE_ALIAS) {
+        let names: Vec<String> = p.special_rules.iter().map(|r| base_rule_name(r)).collect();
+        names.into_iter().filter(|n| conditional_bane_alias(reg, p, n)).collect()
+    } else {
+        Vec::new()
+    };
     let map = reg.rules_for(&p.game_system);
     for sp in shoot.iter_mut().filter(|sp| !sp.bane) {
-        for n in sp.rules.iter().map(|r| base_rule_name(r)).collect::<Vec<_>>() {
+        let mut names: Vec<String> = sp.rules.iter().map(|r| base_rule_name(r)).collect();
+        names.extend(unit_aliases.iter().cloned());
+        for n in names {
             let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
             let on = facet_applies(e.param_b("melee_only"), e.param_b("shooting_only"), sp.range);
             if !on || e.primitive.as_deref() != Some("Bane") || !e.param_b("reroll_save_sixes") || n.starts_with("Bane") || n.ends_with("Aura") {
@@ -4741,6 +4759,23 @@ fn stamp_weapon_bane_alias(reg: &mut Registries, p: &Profile, shoot: &mut [Shoot
             break;
         }
     }
+}
+
+/// `PENDING_EPOCH_UNIT_BANE_ALIAS`: a Bane-family alias whose entry carries a condition or ignores Regeneration (Obliterate, Reap,
+/// Fragment, Smash) and upgrades no other rule. A unit that carries one as its own rule reads it like the weapon-borne alias.
+fn conditional_bane_alias(reg: &mut Registries, p: &Profile, name: &str) -> bool {
+    if name.starts_with("Bane") || name.ends_with("Aura") {
+        return false;
+    }
+    let Some(e) = reg.rules_for(&p.game_system).lookup(&p.faction_folder, name) else { return false };
+    let upgrades = e.param_s("upgrades");
+    e.primitive.as_deref() == Some("Bane")
+        && e.param_b("reroll_save_sixes")
+        && (upgrades.is_empty() || upgrades == name)
+        && (!e.param_s("condition").is_empty() || e.param_b("bypass_regen"))
+        // Decimate's strength gate stays on the old flat read: whether it is read as declared (the volley is simultaneous) or
+        // per weapon after an earlier weapon's wounds is an open rules call (PLAN_COVERAGE_GATE Log, covfix-dice 21.11.).
+        && e.param_s("condition") != "above_half_strength"
 }
 
 /// AI-08a (`EPOCH_73_V36`): a weapon rule read through its map entry, not its 3.5 name (Anti-Cover:
