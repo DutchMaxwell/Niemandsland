@@ -29,6 +29,9 @@ pub const DANGEROUS: i32 = 4;
 
 /// `TerrainRules.CELL_IN` terrain_rules.gd:26 — one terrain cell is 3"x3".
 pub const CELL_IN: f64 = 3.0;
+/// L-RF1 - the level a solid tier cell (`PlainTerrain::solid_cells`) reads as when the edges are derived: above every tier,
+/// so each border round it is a Cliff nobody climbs. A no-climb marker, never a height (sight and boxes read `level_in`).
+pub const SOLID_TOP_IN: f64 = 1000.0;
 /// `TerrainRules.BASE_RING_SAMPLES` terrain_rules.gd:113.
 pub const BASE_RING_SAMPLES: usize = 16;
 
@@ -188,7 +191,13 @@ impl TierGrid {
     /// equal height and side is ONE edge (so a leg through a grid vertex on it still crosses). Vertical contours first
     /// (running +z), then horizontal ones (running +x), each in grid order.
     pub fn edges(&self) -> Vec<TierEdge> {
+        self.edges_with(&[])
+    }
+
+    /// L-RF1 - `edges` with every cell of `solid` read as `SOLID_TOP_IN`: a Cliff on each border round a solid run.
+    pub fn edges_with(&self, solid: &[u16]) -> Vec<TierEdge> {
         let (nx, nz) = (usize::from(self.nx), usize::from(self.nz));
+        let level = |x: usize, z: usize| if solid.contains(&((z * nx + x) as u16)) { SOLID_TOP_IN } else { self.level(x, z) };
         let ladder = |lo: usize, hi: usize| self.ladders.iter().any(|p| (usize::from(p[0]), usize::from(p[1])) == (lo, hi));
         let mut out = Vec::new();
         for vertical in [true, false] {
@@ -197,7 +206,7 @@ impl TierGrid {
                 let mut runs: Vec<(usize, usize, f64, bool, bool)> = Vec::new();
                 for p in 0..if vertical { nz } else { nx } {
                     let (before, after) = if vertical { ((line - 1, p), (line, p)) } else { ((p, line - 1), (p, line)) };
-                    let (lb, la) = (self.level(before.0, before.1), self.level(after.0, after.1));
+                    let (lb, la) = (level(before.0, before.1), level(after.0, after.1));
                     if lb == la {
                         continue;
                     }
@@ -251,6 +260,10 @@ pub struct PlainTerrain {
     /// behaviour (`None`).
     #[serde(default)]
     pub tiers: Option<TierGrid>,
+    /// L-RF1 - tier-grid cell indices nobody enters, climbs or stands on (an intact house: Impassable). Skipped when empty,
+    /// so every header and every board without one serialises as before.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub solid_cells: Vec<u16>,
     pub cell_params: CellParams,
 }
 
@@ -332,6 +345,8 @@ pub struct Terrain {
     /// Heightfield plan step 6 - the blocks and the contours of `tiers`, derived once at `build` (empty on a flat board).
     tier_boxes: Vec<TierBox>,
     tier_edges: Vec<TierEdge>,
+    /// L-RF1 - `PlainTerrain::solid_cells` as written (`solid_at` reads it).
+    solid_cells: Vec<u16>,
     /// Heightfield plan step 11b - `walls_in` plus the tier cliffs, for the readers that must keep a base off a sheer edge
     /// (`walls_in_tiered`). Filled only on a board with tier edges; a flat board answers `walls_in` itself.
     walls_tiered_in: Vec<WallSeg>,
@@ -380,13 +395,21 @@ impl Terrain {
     /// A cell is half open, so a point exactly on a border belongs to the cell on its positive side. Nothing reads this
     /// yet; `surface_y_m` (step 10) will.
     pub fn tier_in_at(&self, x_in: f64, z_in: f64) -> f64 {
-        let Some(t) = &self.tiers else { return 0.0 };
+        let Some((t, i)) = self.tier_cell(x_in, z_in) else { return 0.0 };
+        t.level_in.get(i).copied().unwrap_or(0.0)
+    }
+
+    /// L-RF1 - whether the point is over a solid tier cell (`PlainTerrain::solid_cells`); frame as `tier_in_at`.
+    pub fn solid_at(&self, x_in: f64, z_in: f64) -> bool {
+        !self.solid_cells.is_empty() && self.tier_cell(x_in, z_in).is_some_and(|(_, i)| self.solid_cells.contains(&(i as u16)))
+    }
+
+    /// The tier grid and the row-major index of the cell under a point; `None` without tiers and off the grid.
+    fn tier_cell(&self, x_in: f64, z_in: f64) -> Option<(&TierGrid, usize)> {
+        let t = self.tiers.as_ref()?;
         let (fx, fz) = ((x_in / t.cell_in) + f64::from(t.nx) / 2.0, (z_in / t.cell_in) + f64::from(t.nz) / 2.0);
         // written as "inside" so a NaN, an infinite cell edge or an empty grid all fall out as ground
-        if !(fx >= 0.0 && fz >= 0.0 && fx < f64::from(t.nx) && fz < f64::from(t.nz)) {
-            return 0.0;
-        }
-        t.level_in.get(fz as usize * usize::from(t.nx) + fx as usize).copied().unwrap_or(0.0)
+        (fx >= 0.0 && fz >= 0.0 && fx < f64::from(t.nx) && fz < f64::from(t.nz)).then(|| (t, fz as usize * usize::from(t.nx) + fx as usize))
     }
 
     /// Heightfield plan step 6 - the solid blocks of the tier board (board-centred inches). Empty on a flat board.
@@ -725,7 +748,8 @@ impl Terrain {
             blocker_boxes_m: Vec::new(),
             tiers: p.tiers.clone(),
             tier_boxes: p.tiers.as_ref().map_or_else(Vec::new, TierGrid::boxes),
-            tier_edges: p.tiers.as_ref().map_or_else(Vec::new, TierGrid::edges),
+            tier_edges: p.tiers.as_ref().map_or_else(Vec::new, |t| t.edges_with(&p.solid_cells)),
+            solid_cells: p.solid_cells.clone(),
             walls_tiered_in: Vec::new(),
             walls_tiered_world: Vec::new(),
             uid: fresh_uid(),

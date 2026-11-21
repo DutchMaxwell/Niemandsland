@@ -1060,3 +1060,4 @@ mod v36_w1_7;
 mod v36_w1_trace_b;
 mod weapon_has_exact;
 mod ledger_say_names;
+mod solid_cells;
