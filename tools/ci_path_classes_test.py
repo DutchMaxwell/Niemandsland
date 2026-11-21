@@ -65,3 +65,16 @@ def test_look_list_never_claims_a_file_the_core_reads():
     for path in ["assets/model_manifest.json", "assets/ruins_manifest.json", "assets/solo/x.json", "tools/a.py",
                  "core/x.rs", "data/x.json", "test/fixtures/x.json", "scripts/main.gd", "project.godot"]:
         assert not in_class(path, "look"), f"{path} must never be in tools/ci_look_paths.txt"
+
+
+def test_mp_workflow_ignores_exactly_docs_and_the_look_class():
+    import re
+    from ci_path_classes import CLASSES
+    wf = open(os.path.join(ROOT, ".github", "workflows", "mp-two-instance.yml"), encoding="utf-8").read()
+    items = []
+    for line in wf.split("paths-ignore:\n", 1)[1].splitlines():
+        m = re.match(r"\s*-\s*'([^']+)'\s*$", line)
+        if not m:
+            break
+        items.append(m.group(1))
+    assert items == ["docs/**"] + CLASSES["look"]["globs"], "mp-two-instance.yml paths-ignore must equal docs/** + tools/ci_look_paths.txt"
