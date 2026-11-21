@@ -9140,12 +9140,14 @@ fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, host:
     if upgraded > 0 {
         spell_say(tray, caster_side, format!("{}: {upgraded} hit{} on a 6 → AP(+{})", spell.name, if upgraded == 1 { "" } else { "s" }, facets.on6_ap));
     }
+    let draw0 = tray.feed().map_or(0, |f| f.draws());
     let mut out = crate::dice::resolve_spell_hits_with_tray(
         total_hits, upgraded, ap, facets.on6_ap, facets.deadly, facets.ignores_regen, bane, facets.shred, &spell.weapon_rules, &spell.name, &def, &ut.name, tray,
     );
     for r in &mut out.rolls {
         r.kind = if r.kind == "defense" { "spell_defense" } else { "spell_attack" };
     }
+    tray.tag_spell_regeneration(draw0); // the cast leg keeps its plain `spell_attack` for the ignore dice (the ignore groups name them `regeneration`)
     let def_incoming = out.caused > 0;
     let w = shot.absorb(out);
     let before = chain_snapshot(state, ti, tray);
@@ -9724,9 +9726,10 @@ fn versatile_latch(
         let mode = next.versatile_pick_mode[mi];
         return ((mode == 1) as i64, (mode == 2) as i64, true);
     }
-    let (ap, bane, rule_name) = match prof {
-        Some(p) => (p.ap, p.bane, if p.versatile_name.is_empty() { "Versatile Attack" } else { p.versatile_name.as_str() }),
-        None => (0, false, "Versatile Attack"),
+    let (ap, bane, rule_name, say_name) = match prof {
+        Some(p) => (p.ap, p.bane, if p.versatile_name.is_empty() { "Versatile Attack" } else { p.versatile_name.as_str() },
+            p.versatile_say_name.as_str()),
+        None => (0, false, "Versatile Attack", ""),
     };
     let (hit_mod, ap_mod) = crate::combat::versatile_best_mode(
         hit_target,
@@ -9736,18 +9739,21 @@ fn versatile_latch(
     );
     next.versatile_pick_round[mi] = next.round;
     next.versatile_pick_mode[mi] = if ap_mod > 0 { 2 } else { 1 };
-    say_versatile_pick(rule_name, &statics[next.roster.profile[mi]].name, ap_mod > 0, next.player[mi], log, tray, rules_epoch);
+    say_versatile_pick(rule_name, say_name, &statics[next.roster.profile[mi]].name, ap_mod > 0, next.player[mi], log, tray, rules_epoch);
     (hit_mod, ap_mod, true)
 }
 
 /// The once-per-activation pick's rules-must-log line: the book rule's name, who picked, which mode. The table's
 /// `_solo_log_versatile_pick`, said where the volley decides (`versatile_latch` before the dice, or the dice themselves from
-/// `EPOCH_94_PARITY_BATCH`).
-pub(crate) fn say_versatile_pick(rule_name: &str, unit: &str, ap_mode: bool, side: i64, log: &mut Vec<String>, tray: Option<&mut Tray>, rules_epoch: u32) {
+/// `EPOCH_94_PARITY_BATCH`). The recorded log names `rule_name`; the tray (a door) names `say_name` when there is one, the book rule the
+/// table's `primitive_book_name` finds (`ShootProfile::versatile_say_name`).
+#[allow(clippy::too_many_arguments)] // the two names, the unit, the mode and the three sinks of one line
+pub(crate) fn say_versatile_pick(rule_name: &str, say_name: &str, unit: &str, ap_mode: bool, side: i64, log: &mut Vec<String>, tray: Option<&mut Tray>, rules_epoch: u32) {
     let mode = if ap_mode { "AP(+1)" } else { "+1 to hit" };
     log.push(format!("{rule_name}: {unit} picks {mode} for this activation"));
     if let Some(t) = tray {
-        say_rule(t, "versatile", side, || log.last().cloned().unwrap_or_default());
+        let said = if say_name.is_empty() { rule_name } else { say_name };
+        say_rule(t, "versatile", side, || format!("{said}: {unit} picks {mode} for this activation"));
     }
     // Rules 3.6 (row W1.TRACE) — the once-per-activation pick names itself (arm `versatile-attack`).
     if rule_on(rules_epoch, EPOCH_73_V36) {
@@ -12126,6 +12132,9 @@ fn resolve_with(
                                 crate::dice::say_armor(tray, &def, ut_g.name.as_str());
                                 crate::dice::say_shielded(tray, &def, aimed);
                                 crate::dice::say_growth_defense(tray, &def, aimed, &growth_defense_parts(statics, &next, g.ti));
+                                // The table's over-9" Defense line stands here, after the Defense parts and ahead of the announce.
+                                crate::dice::say_guarded(tray, &def, &ut_g.name, g.mod_d);
+                                def.guarded_said = true;
                                 tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[si],
                                     text: format!("{} fires at {}", statics[pi_s].name, aimed), detail: None });
                             }

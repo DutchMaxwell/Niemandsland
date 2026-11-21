@@ -172,6 +172,18 @@ impl Tray {
         }
     }
 
+    /// Coverage ledger: a damage spell's wound-ignore dice stay the cast leg's plain `spell_attack` (the door maps it to the tray kind attack,
+    /// leg spell; `CAST_KINDS` has no `spell_regeneration`), so the `regeneration` name `roll_ignore_group` gave the draws taken since `from` is
+    /// taken back. Seeded trays ignore the call.
+    pub fn tag_spell_regeneration(&mut self, from: usize) {
+        let Some(feed) = self.feed.as_mut() else { return };
+        for (at, k) in &mut feed.kinds {
+            if *at >= from && *k == "regeneration" {
+                *k = "spell_attack";
+            }
+        }
+    }
+
     /// One-core P4 step 4.0-9: the unit a resolver is about to draw for, stamped for the next draw. A supplied tray keeps
     /// it for `NeedRoll`'s `owner_key` (no second resolve); a seeded tray ignores the call.
     pub fn owner_next(&mut self, unit: Option<usize>) {
@@ -721,6 +733,18 @@ fn piercing_assault_grant_cond() -> CondAp {
     CondAp { ap_bonus: 1, condition: "on_charge".into(), ..Default::default() }
 }
 
+/// The table's over-9" Defense line of the Guarded family (`_solo_resolve_ai_volley`): once per volley, before the first die, hit or miss; its
+/// "(most of its models carry it)" note needs per-model carriers. The table says it right after the armor / Shielded / growth lines and BEFORE
+/// the announce, so the door's volley says it there (`sim.rs`, `Ctx::guarded_said`); a volley with no announce (the Strafing move-through)
+/// still says it from the fold.
+pub(crate) fn say_guarded(tray: &mut Tray, def: &Ctx, def_owner: &str, mod_dist_in: f64) {
+    if def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded {
+        let saves = guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), true, def.def_floor());
+        say_rule(tray, "guarded", def.side, || format!("{def_owner} ({}): shot from over {}\" — +1 Defense (saves on {}+)",
+            def.guarded_name, LONG_RANGE_IN as i64, saves.clamp(BEST_HIT_TARGET, 6)));
+    }
+}
+
 /// The table's `_solo_log_armor` line (`<U> has Armor(X): counts as Defense X+`), said once before the volley's announce when Armor improves the
 /// target's Defense; ahead of the Shielded / growth lines, which fold on top of it.
 pub(crate) fn say_armor(tray: &mut Tray, def: &Ctx, name: &str) {
@@ -823,8 +847,10 @@ fn say_pierce(tray: &mut Tray, side: i64, weapon: &str, def: &Ctx, cover: bool) 
 
 /// The table's Regeneration-bypass naming (`_solo_ignores_regen`, asked once per weapon with hits), in its arm order: a Bane / Rending
 /// weapon answers silently; the printed Unstoppable says `Unstoppable: Regeneration ignored`; a registry bypass rule says its own name
-/// (`<rule>: Regeneration ignored`); the granted Unstoppable Mark says `Unstoppable Mark: <U> — Regeneration is ignored (once)`. From 73
-/// only a target that really has a Regeneration roll to skip is told so (`_solo_regen_bypass_named`). The aura grant answers silently.
+/// (`<rule>: Regeneration ignored`); the unit's own rules come next (`ShootProfile::regen_unit_arm`: Anti-Regen, Unstoppable when Shooting,
+/// Bane when Shooting), the granted Unstoppable Mark says `Unstoppable Mark: <U> — Regeneration is ignored (once)`, and a unit-level Rending
+/// says `Rending (granted)`. From 73 only a target that really has a Regeneration roll to skip is told so (`_solo_regen_bypass_named`). The
+/// aura grant answers silently.
 /// `asked` = the table asked for this weapon at all (a Deadly or Takedown weapon only when it dealt wounds).
 fn say_regen_bypass(tray: &mut Tray, side: i64, p: &ShootProfile, att: &Ctx, def: &Ctx, owner: &str, asked: bool) {
     if !asked || tray.feed().is_none() || (att.v36_rules && !(def.regeneration && def.regen_target > 0 && def.bypass_skips_ignore())) {
@@ -847,8 +873,23 @@ fn say_regen_bypass(tray: &mut Tray, side: i64, p: &ShootProfile, att: &Ctx, def
             return;
         }
     }
+    // The table's unit-level arms, after the weapon's own rules (`_solo_ignores_regen`): the first that applies answers - a rule name's
+    // line, or none ("Rending in Melee"). Ranged profiles only (see `ShootProfile::regen_unit_arm`).
+    if p.range > 0 {
+        if let Some(name) = &p.regen_unit_arm {
+            if !name.is_empty() {
+                say_rule(tray, "anti_regen", side, || format!("{name}: Regeneration ignored"));
+            }
+            return;
+        }
+    }
     if att.unstoppable_mark {
         say_rule(tray, "anti_regen", side, || format!("Unstoppable Mark: {owner} — Regeneration is ignored (once)"));
+    } else if att.v36_rules && p.range > 0 && p.rending {
+        // the profile's `rending` flag past the weapon's own printed Rending (which answered silently above): a unit-level Rending rule
+        // ("Rending when Shooting") - the table's flag arm names it granted. From 73, like the unit arms; the Unstoppable / Bane flag arms
+        // are not said here.
+        say_rule(tray, "anti_regen", side, || "Rending (granted): Regeneration ignored".to_string());
     }
 }
 
@@ -1664,12 +1705,8 @@ pub(crate) fn resolve_volley_with_pick_label(
         .flat_map(|sh| sh.keep.iter().enumerate().map(move |(k, &pi)| (sh, k, pi)))
         .collect();
     shots.sort_by_key(|&(sh, _, pi)| shot_rank(&sh.profiles[pi]));
-    if def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded && !shots.is_empty() {
-        // The table's line (`_solo_resolve_ai_volley`), once per volley, before the first die, hit or miss; its "(most of its models carry
-        // it)" note needs per-model carriers.
-        let saves = guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), true, def.def_floor());
-        say_rule(tray, "guarded", def.side, || format!("{def_owner} ({}): shot from over {}\" — +1 Defense (saves on {}+)",
-            def.guarded_name, LONG_RANGE_IN as i64, saves.clamp(BEST_HIT_TARGET, 6)));
+    if !def.guarded_said && !shots.is_empty() {
+        say_guarded(tray, def, def_owner, mod_dist_in);
     }
     if def.ranged_shrouding && !shots.is_empty() {
         // The table's line (`_solo_resolve_ai_volley`), once per volley whether or not a weapon was shortened.
@@ -2009,7 +2046,7 @@ pub(crate) fn resolve_volley_with_pick_label(
                     out.versatile_picks.push((mi, pick.1 > 0));
                 }
                 let rule = if p.versatile_name.is_empty() { "Versatile Attack" } else { p.versatile_name.as_str() };
-                crate::sim::say_versatile_pick(rule, sh.owner, pick.1 > 0, att.side, &mut out.log, Some(&mut *tray), att.rules_epoch);
+                crate::sim::say_versatile_pick(rule, &p.versatile_say_name, sh.owner, pick.1 > 0, att.side, &mut out.log, Some(&mut *tray), att.rules_epoch);
                 pick
             } else {
                 versatile_best_mode(
@@ -2575,12 +2612,13 @@ pub(crate) fn resolve_volley_with_pick_label(
             let td = w * p.deadly.max(1);
             out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, if bypass_flag && !ignores_regen { td } else { 0 }, def, def_owner, tray, &mut out.rolls));
             out.takedown_lines.push((p.name.clone(), td_label));
-            // Plan H (H-17 lines): beside another weapon the table lands the Takedown here - its lines go back to this mark, and a model it
-            // killed makes the next weapon say `Simultaneous fire`. Lines only: the dice keep reading the declared target.
-            if n_shots > 1 && tray.feed().is_some() {
+            // Plan H (H-17 lines): the table lands the Takedown here - its lines go back to this mark, and a model it killed makes the next
+            // weapon (if there is one) say `Simultaneous fire`. Lines only: the dice keep reading the declared target.
+            // A lone Takedown weapon lands the same way (coverage ledger): its casualty line, then its own line, right after its saves.
+            if tray.feed().is_some() {
                 out.takedown_marks.push(tray.mark());
                 let killed = takedown_pick_info(&out.takedown_groups).2;
-                if killed > 0 {
+                if n_shots > 1 && killed > 0 {
                     live_models = def.blast_models.map(|m| m - killed);
                 }
             }
@@ -2715,6 +2753,10 @@ fn roll_ignore_group(w: i64, target: i64, name: &str, def: &Ctx, def_owner: &str
         return w.max(0);
     }
     tray.owner_next(def.unit);
+    // The table asks every wound-ignore die as `regeneration` (`_solo_roll_ignore_group`: `_owner_roll(.., "regeneration", ..)`): the step names
+    // it so, and the door's volley beats no longer read it as a hit roll (a tracer, the shot counter). The roll RECORD keeps the replay gates'
+    // `attack` below (as the morale die does): the gates compare recordings that call it `attack`.
+    tray.name_next("regeneration");
     let faces = tray.roll(w as usize);
     let ignored = faces.iter().filter(|&&f| f as i64 >= target).count() as i64;
     if !name.is_empty() {

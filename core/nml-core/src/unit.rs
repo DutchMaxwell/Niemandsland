@@ -315,6 +315,9 @@ pub struct Ctx {
     /// `resolve_volley_with_tray` sets it, on its local Ctx copy; every other
     /// save path leaves it false.
     pub fortified_alias_over9: bool,
+    /// Coverage ledger (21.11.): the caller already said the over-9" Defense line (`dice::say_guarded`) where the table says it, ahead of the
+    /// volley's announce, so the volley fold must not say it again. Runtime only: false on every `ctx_of`, set on the volley's own Ctx copy.
+    pub guarded_said: bool,
     pub guarded: bool,
     /// SHO-17 (`EPOCH_73_V36`) — WHICH Guarded-family name drove `guarded` (rules-must-log),
     /// "" below the gate and when none. Stamped in `ctx_for` from the same family walk.
@@ -1012,6 +1015,11 @@ pub struct ShootProfile {
     /// every earlier replay is byte-exact. `profile_ev` reads neither this
     /// nor `CondAp::bypass_regen` — the imagination stays blind.
     pub regen_bypass_rule: String,
+    /// Coverage ledger (21.11.): which UNIT-level rule the table's `_solo_ignores_regen` names when a ranged volley skips Regeneration, for the
+    /// TRAY's line only (`dice::say_regen_bypass`): the Lacerate-primitive unit rules with a `bypass_regen` (Anti-Regen, Unstoppable when
+    /// Shooting), then "Rending in Melee" (answers without a line), then the Bane-primitive unit rules (Bane when Shooting). `None` = no unit
+    /// arm applies; `Some("")` = one answers silently; `Some(name)` = the line `<name>: Regeneration ignored`. Data only (`stamp_regen_unit_arm`).
+    pub regen_unit_arm: Option<String>,
     pub thrust: bool,
     /// The WEAPON's own "Unstoppable" rule, exact name — `_has_rule(w,
     /// "Unstoppable")` ai_shooting.gd:132, the table's DICE path (to-hit clamp
@@ -1171,6 +1179,10 @@ pub struct ShootProfile {
     /// every generic stamp (the primitive walk), so pre-wave behaviour logs
     /// nothing and every earlier epoch's replay stays byte-identical.
     pub versatile_name: String,
+    /// Coverage ledger (21.11.): the BOOK rule the table's pick line names (`primitive_book_name`: the first rule of the unit, own then
+    /// item-granted, whose registry entry is the Versatile Attack primitive and whose name is not the primitive's), for the TRAY's line
+    /// only. `versatile_name` above stays the recorded log's own, so no replay moves. Empty = no such rule: the line says "Versatile Attack".
+    pub versatile_say_name: String,
     /// The "Vinci Tech Boost" form (`pick_one: false` in the registry): the
     /// bearer gets BOTH arms (AP(+1) AND +1 to hit) instead of
     /// `versatile_best_mode`'s pick. Stamped only when the model also
@@ -3973,6 +3985,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         fortified_boost_name,
         fortified_alias_name,
         fortified_alias_over9: false,
+        guarded_said: false,
         // Guarded OR Versatile Defense — ai_ev.gd:157-158.
         // "Sturdy" (hygiene-wave follow-up): the Guarded family's DATA alias
         // (gf dwarf_guilds + aof dwarves, primitive Guarded, params
@@ -4451,6 +4464,32 @@ pub(crate) fn lacerate_only(rules: &[String]) -> bool {
         lacerate |= s.starts_with("Lacerate");
     }
     lacerate
+}
+
+/// Coverage ledger (21.11.): the table's unit-level arms of `_solo_ignores_regen` (main.gd, after the weapon's own rules), read once per
+/// ranged profile for the tray's line: the Lacerate-primitive unit rules that carry `bypass_regen` (not "Lacerate" itself), then the
+/// Rending-in-Melee rule (silent), then the Bane-primitive unit rules ("Bane in Melee" never shoots, an Aura label never fires). The first
+/// that applies answers. Ranged profiles only (the melee door's unit arms are not measured); from `EPOCH_73_V36`, the table's gate for the
+/// line. Data only: the dice read the flags stamped above, nothing here moves them.
+fn stamp_regen_unit_arm(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], rules_epoch: u32) {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return;
+    }
+    let lacerate = rules_of_primitive(reg, p, "Lacerate");
+    let rending = rules_of_primitive(reg, p, "Rending");
+    let bane = rules_of_primitive(reg, p, "Bane");
+    for sp in shoot.iter_mut().filter(|sp| sp.range > 0) {
+        let on = |h: &PrimitiveHit| facet_applies(h.melee_only, h.shooting_only, sp.range);
+        sp.regen_unit_arm = if let Some(h) = lacerate.iter().find(|h| !h.name.starts_with("Lacerate") && h.bypass_regen && on(h)) {
+            Some(h.name.clone())
+        } else if rending.iter().any(|h| h.name == "Rending in Melee" && h.bypass_regen && on(h)) {
+            Some(String::new())
+        } else {
+            bane.iter()
+                .find(|h| h.name.starts_with("Bane") && !h.name.ends_with("Aura") && !h.name.starts_with("Bane in Melee") && h.bypass_regen)
+                .map(|h| h.name.clone())
+        };
+    }
 }
 
 fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], rules_epoch: u32) {
@@ -7533,6 +7572,7 @@ impl UnitStatic {
         stamp(reg, p, &mut shoot, &mut unimplemented, rules_epoch, trace73);
         stamp_conditional_ap(reg, p, rules_epoch, &mut shoot);
         stamp_unit_strikers(reg, p, &mut shoot, rules_epoch);
+        stamp_regen_unit_arm(reg, p, &mut shoot, rules_epoch);
         stamp_shot_modifier(reg, p, &mut shoot, trace73);
 
         let mut melee = melee_profiles_at(&p.weapons, rules_epoch);
@@ -7906,6 +7946,13 @@ impl UnitStatic {
                     sp.versatile_name = vn.clone();
                     sp.versatile_both = both;
                 }
+            }
+        }
+        // The tray's pick line says what the table's `primitive_book_name` does, whatever the family spelling (Versatile Warrior, Enhanced
+        // Watchborn, ...): the recorded log keeps `versatile_name` above, so only a supplied tray (a door) says the new name.
+        if let Some(book) = rules_of_primitive(reg, p, "Versatile Attack").into_iter().map(|h| h.name).find(|n| n != "Versatile Attack") {
+            for sp in shoot.iter_mut().chain(melee.iter_mut()) {
+                sp.versatile_say_name = book.clone();
             }
         }
         for u in melee_unimpl {
