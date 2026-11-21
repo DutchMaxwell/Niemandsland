@@ -86,7 +86,60 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
             if one_piece(&cells) { break } else { (cells[a].level, cells[b].level) = (2, 2) }
         }
     }
+    if b.rows && sym == Symmetry::Point180 { cut_lanes(&mut lots, &mut cells, &mut rng); }
     (lots, cells)
+}
+
+/// The rows leave bare interior: while a full row or column is open ground (level 0, no intact house), put a small intact house (2 x 1 / 1 x 2 / 2 x 2, a half-turn pair, solid, no
+/// ladders) on free ground, the one that cuts the most open lines first, a street at its door breaking ties. A house that would cut the walkable board in two is skipped.
+fn cut_lanes(lots: &mut Vec<Lot>, cells: &mut [Cell], rng: &mut GodotRng) {
+    let open = |cs: &[Cell], i: usize| cs[i].level == 0 && cs[i].lot_kind != LotKind::Roofed;
+    let free = |cs: &[Cell], i: usize| cs[i].level == 0 && !cs[i].street && cs[i].lot_id == 0 && cs[i].lot_kind == LotKind::Street;
+    for _ in 0..8 {
+        let rows: Vec<bool> = (0..GRID).map(|z| (0..GRID).all(|x| open(cells, z * GRID + x))).collect();
+        let cols: Vec<bool> = (0..GRID).map(|x| (0..GRID).all(|z| open(cells, z * GRID + x))).collect();
+        if !rows.iter().chain(&cols).any(|&o| o) { return; }
+        let mut cands: Vec<(usize, (usize, usize, usize, usize))> = Vec::new();
+        for &(w, h) in &[(2usize, 1usize), (1, 2), (2, 2)] { for z0 in 0..=GRID - h { for x0 in 0..=GRID - w {
+            let (mx, mz) = (GRID - x0 - w, GRID - z0 - h);
+            let cells_of = |x: usize, z: usize| (z..z + h).flat_map(move |zz| (x..x + w).map(move |xx| zz * GRID + xx));
+            let apart = x0 + w < mx || mx + w < x0 || z0 + h < mz || mz + h < z0;
+            let alone = |i: usize| neighbours(i).all(|j| cells[j].lot_id == 0 || cells[j].lot_kind == LotKind::Rough);   // a lane cutter never joins a row (no party wall): it stands alone
+            if !apart || !cells_of(x0, z0).chain(cells_of(mx, mz)).all(|i| free(cells, i) && alone(i)) { continue; }
+            let cut = [(x0, z0), (mx, mz)].iter().map(|&(x, z)| (z..z + h).filter(|&zz| rows[zz]).count() + (x..x + w).filter(|&xx| cols[xx]).count()).sum::<usize>();
+            let door = cells_of(x0, z0).any(|i| neighbours(i).any(|j| cells[j].street));
+            if cut > 0 { cands.push((2 * cut + usize::from(door), (x0, z0, w, h))); }
+        }}}
+        shuffle(&mut cands, rng);
+        cands.sort_by_key(|c| usize::MAX - c.0);
+        let mut placed = false;
+        for (_, (x0, z0, w, h)) in cands {
+            let (mx, mz) = (GRID - x0 - w, GRID - z0 - h);
+            let snap = cells.to_vec();
+            let id = lots.len() as u16 + 1;
+            for (k, (x, z)) in [(x0, z0), (mx, mz)].into_iter().enumerate() {
+                for zz in z..z + h { for xx in x..x + w { let c = &mut cells[zz * GRID + xx]; (c.lot_id, c.lot_kind) = (id + k as u16, LotKind::Roofed); } }
+            }
+            if one_piece_without(cells, LotKind::Roofed) {
+                for (k, (x, z)) in [(x0, z0), (mx, mz)].into_iter().enumerate() { lots.push(Lot { id: id + k as u16, x, z, w, h, sector: [(x + w / 2) / 4, (z + h / 2) / 4], kind: LotKind::Roofed }); }
+                placed = true;
+                break;
+            }
+            cells.clone_from_slice(&snap);
+        }
+        if !placed { return; }
+    }
+}
+
+/// [`one_piece`] over the cells that are not `skip` (solid houses are no ground).
+fn one_piece_without(cells: &[Cell], skip: LotKind) -> bool {
+    let Some(start) = (0..cells.len()).find(|&i| cells[i].lot_kind != skip) else { return true };
+    let (mut seen, mut stack) = (vec![false; cells.len()], vec![start]);
+    seen[start] = true;
+    while let Some(i) = stack.pop() {
+        for j in neighbours(i) { if !seen[j] && cells[j].lot_kind != skip && cells[i].level.abs_diff(cells[j].level) <= 1 { seen[j] = true; stack.push(j); } }
+    }
+    (0..cells.len()).all(|i| seen[i] || cells[i].lot_kind == skip)
 }
 
 /// The city wall. The reserved cells rise to level 2 (lot kind `Wall`); the first and last cell of each run of two or more become level-3 wall
