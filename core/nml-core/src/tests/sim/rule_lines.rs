@@ -6,12 +6,17 @@ use super::volley_landings::volley_line;
     /// The lines one volley of `Att`'s `Rifle` (4 attacks, Quality 2+) at `Def` (two Tough(3) models, Defense 4+) says on the
     /// supplied faces; `tune` edits the fixture first. Epoch = the current one, so a wording change on an epoch turns it red.
     fn rule_lines(tune: impl FnOnce(&mut State, &mut [UnitStatic]), faces: Vec<Vec<u8>>) -> Vec<String> {
+        rule_lines_at(crate::acts::CURRENT_RULES_EPOCH, tune, faces)
+    }
+
+    /// `rule_lines` at a chosen rules epoch.
+    fn rule_lines_at(epoch: u32, tune: impl FnOnce(&mut State, &mut [UnitStatic]), faces: Vec<Vec<u8>>) -> Vec<String> {
         let (mut st, mut statics) = volley_line();
         st.player = vec![1, 1, 0, 0];
         st.profiles = Rc::new(Profiles { list: vec![st.profiles.list[0].clone(); 4], index: HashMap::new() }); // one profile per roster slot
         (statics[0].name, statics[2].name, statics[0].shoot[0].name) = ("Att".into(), "Def".into(), "Rifle".into());
         tune(&mut st, &mut statics);
-        let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact: true, ..Seams::default() };
+        let seams = Seams { rules_epoch: epoch, tray_exact: true, ..Seams::default() };
         let action = Action {
             kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None,
             patient: false, split: None, traced: None, teleport: None,
@@ -82,4 +87,23 @@ use super::volley_landings::volley_line;
         assert_eq!(lines[..2], ["Ambushing Piercing Shot: Att shoots with AP(+1) in its arrival round", "Att fires at Def"], "{lines:?}");
         let other_round = rule_lines(|st, s| { arrived(st, s); st.ambush_arrived_round[0] = st.round - 1; }, vec![vec![6, 1, 1, 1], vec![1]]);
         assert!(other_round.iter().all(|l| !l.starts_with("Ambushing")), "{other_round:?}");
+    }
+
+    /// The arrival AP is a rules 3.6 table repair (`EPOCH_73_V36`): the table's volley adds nothing below 73 (its records say AP 1), so the
+    /// core's fold waits for 73 too and the same arrival volley saves one rung worse from there. RED at 72 before the gate: AP 2 at every epoch.
+    #[test]
+    fn the_arrival_ap_folds_from_73_only() {
+        let arrived = |st: &mut State, s: &mut [UnitStatic]| {
+            st.ambush_arrived_round[0] = st.round;
+            s[0].ambush_family.deploy_round_ap = 1;
+        };
+        let save = |epoch: u32, tune: fn(&mut State, &mut [UnitStatic])| {
+            let lines = rule_lines_at(epoch, tune, vec![vec![6, 1, 1, 1], vec![1]]);
+            lines.into_iter().find(|l| l.starts_with("Def saves on")).expect("a save line")
+        };
+        let plain = save(crate::acts::EPOCH_73_V36, |_, _| {});
+        let at72 = save(crate::acts::EPOCH_72_PLAYTEST_RULES, arrived);
+        let at73 = save(crate::acts::EPOCH_73_V36, arrived);
+        assert_eq!(at72, plain, "below 73 the arrival round adds no AP (the table's record)");
+        assert_ne!(at73, plain, "from 73 the arrival round adds AP(+1): {at73} vs {plain}");
     }

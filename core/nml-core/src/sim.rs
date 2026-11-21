@@ -4698,8 +4698,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // the stamp `arrive_unit`/`_finish_reserve_arrival` writes, and `!melee`
     // is the rule's own shooting-only facet. Zero below `rules_epoch` 4 (the
     // family stamp is epoch-gated) and for every EV-only path: those never
-    // call `ctx_live`, the same buff-blindness `growth_ap_mod` keeps.
-    if !melee && state.ambush_arrived_round[i] == state.round {
+    // call `ctx_live`, the same buff-blindness `growth_ap_mod` keeps. The table folds it from `EPOCH_73_V36` only (G4R5
+    // F-AMBUSH-ARRIVAL-AP, `_solo_ambush_arrival_ap`): below 73 its records say AP 1, so the core's fold waits for 73 too.
+    if !melee && rule_on(rules_epoch, EPOCH_73_V36) && state.ambush_arrived_round[i] == state.round {
         c.ambush_arrival_ap = statics[state.roster.profile[i]].ambush_family.deploy_round_ap;
     }
     c
