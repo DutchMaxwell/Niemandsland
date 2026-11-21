@@ -182,6 +182,14 @@ static func coping(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
+## Modules that cast NO shadow (lead 21.11., the draw-call budget: a caster is drawn again in every shadow cascade): the fences, the signs, the flat debris (crows and rats have none either).
+const NO_SHADOW := ["fence_", "sign_", "splinters_flat", "debris_flat", "cloth_flat", "weeds_flat"]
+
+
+static func casts_shadow(m: String) -> bool:
+	return (m.begins_with("roof_g") or m.begins_with("chimney") or CLUTTER_SET.get(m, "") == "timber") and not NO_SHADOW.any(func(pre: String) -> bool: return m.begins_with(pre))
+
+
 ## A7 modules that replace a K-R1 / A2 one in the same frame: while one is not cached, the board draws the older module in its place.
 const FALLBACK := {"merlon_v1": "merlon", "merlon_v2": "merlon", "merlon_v3": "merlon", "merlon_v4": "merlon_broken", "fountain_basin_b": "fountain_basin"}
 
@@ -193,7 +201,7 @@ func build(layout: Dictionary) -> void:
 		var src := m if kit.usable([m]) or not FALLBACK.has(m) else String(FALLBACK[m])
 		if not kit.usable([src]):
 			continue   # a clutter module that is not cached: the procedural box (or nothing) stays
-		var mmi := BoardgenKit.add_multimesh(self, m, kit.mesh_or(src), p[m], m.begins_with("roof_g") or m.begins_with("chimney") or CLUTTER_SET.get(m, "") == "timber")
+		var mmi := BoardgenKit.add_multimesh(self, m, kit.mesh_or(src), p[m], casts_shadow(m))
 		var mat := lib.set_material(set_of(m))
 		if GLOW.has(m):
 			var glow := StandardMaterial3D.new()

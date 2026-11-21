@@ -196,3 +196,10 @@ func test_the_lantern_lights_skip_the_lamp_iron() -> void:
 	for l: Light3D in lights:
 		assert_int(l.light_cull_mask & BoardgenMood.LAMP_IRON_LAYER).is_equal(0)
 
+
+## The draw-call budget (lead 21.11.): fences, signs and flat debris cast no shadow (a caster is drawn again per cascade); the big story pieces and the roofs still do.
+func test_fences_signs_and_flat_debris_cast_no_shadow() -> void:
+	for m in ["fence_wattle", "fence_plank_corner", "fence_wattle_gap", "sign_large_key", "sign_board_loaf", "splinters_flat", "debris_flat_a", "cloth_flat", "weeds_flat"]:
+		assert_bool(BoardgenTownKit.casts_shadow(m)).override_failure_message("%s casts a shadow" % m).is_false()
+	for m in ["cart_toppled", "barricade", "roof_gable_low", "barrel"]:
+		assert_bool(BoardgenTownKit.casts_shadow(m)).is_true()
