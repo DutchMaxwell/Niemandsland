@@ -835,8 +835,10 @@ fn say_pierce(tray: &mut Tray, side: i64, weapon: &str, def: &Ctx, cover: bool) 
 
 /// The table's Regeneration-bypass naming (`_solo_ignores_regen`, asked once per weapon with hits), in its arm order: a Bane / Rending
 /// weapon answers silently; the printed Unstoppable says `Unstoppable: Regeneration ignored`; a registry bypass rule says its own name
-/// (`<rule>: Regeneration ignored`); the granted Unstoppable Mark says `Unstoppable Mark: <U> — Regeneration is ignored (once)`. From 73
-/// only a target that really has a Regeneration roll to skip is told so (`_solo_regen_bypass_named`). The aura grant answers silently.
+/// (`<rule>: Regeneration ignored`); the unit's own rules come next (`ShootProfile::regen_unit_arm`: Anti-Regen, Unstoppable when Shooting,
+/// Bane when Shooting), the granted Unstoppable Mark says `Unstoppable Mark: <U> — Regeneration is ignored (once)`, and a unit-level Rending
+/// says `Rending (granted)`. From 73 only a target that really has a Regeneration roll to skip is told so (`_solo_regen_bypass_named`). The
+/// aura grant answers silently.
 /// `asked` = the table asked for this weapon at all (a Deadly or Takedown weapon only when it dealt wounds).
 fn say_regen_bypass(tray: &mut Tray, side: i64, p: &ShootProfile, att: &Ctx, def: &Ctx, owner: &str, asked: bool) {
     if !asked || tray.feed().is_none() || (att.v36_rules && !(def.regeneration && def.regen_target > 0 && def.bypass_skips_ignore())) {
@@ -859,8 +861,23 @@ fn say_regen_bypass(tray: &mut Tray, side: i64, p: &ShootProfile, att: &Ctx, def
             return;
         }
     }
+    // The table's unit-level arms, after the weapon's own rules (`_solo_ignores_regen`): the first that applies answers - a rule name's
+    // line, or none ("Rending in Melee"). Ranged profiles only (see `ShootProfile::regen_unit_arm`).
+    if p.range > 0 {
+        if let Some(name) = &p.regen_unit_arm {
+            if !name.is_empty() {
+                say_rule(tray, "anti_regen", side, || format!("{name}: Regeneration ignored"));
+            }
+            return;
+        }
+    }
     if att.unstoppable_mark {
         say_rule(tray, "anti_regen", side, || format!("Unstoppable Mark: {owner} — Regeneration is ignored (once)"));
+    } else if att.v36_rules && p.range > 0 && p.rending {
+        // the profile's `rending` flag past the weapon's own printed Rending (which answered silently above): a unit-level Rending rule
+        // ("Rending when Shooting") - the table's flag arm names it granted. From 73, like the unit arms; the Unstoppable / Bane flag arms
+        // are not said here.
+        say_rule(tray, "anti_regen", side, || "Rending (granted): Regeneration ignored".to_string());
     }
 }
 

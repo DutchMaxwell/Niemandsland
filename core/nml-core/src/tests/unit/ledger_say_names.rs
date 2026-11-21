@@ -58,3 +58,18 @@ fn the_tray_says_the_book_rule_and_the_recorded_log_keeps_its_name() {
     assert_eq!(tray.all_lines().into_iter().map(|l| l.text).collect::<Vec<_>>(), ["Watchborn: Unit picks AP(+1) for this activation"]);
 }
 
+/// Ledger 3: the unit-level arms of the table's Regeneration-bypass naming, stamped per RANGED profile (the rifle; the blade stays `None`).
+#[test]
+fn the_unit_level_regeneration_bypass_arm_is_stamped_for_the_tray() {
+    for (system, faction, rule) in [("aof", "human_empire", "Bane when Shooting"), ("gf", "battle_brothers", "Anti-Regen"),
+        ("aof", "human_empire", "Unstoppable when Shooting")] {
+        let us = carrier(system, faction, &[rule]);
+        assert_eq!(us.shoot[0].regen_unit_arm.as_deref(), Some(rule), "{rule}");
+        assert_eq!(us.melee[0].regen_unit_arm, None, "{rule}: the melee array is not stamped");
+    }
+    // A unit-level Rending is no unit arm: its profile flag is what the table's flag arm names ("Rending (granted)").
+    let rending = carrier("gf", "battle_brothers", &["Rending when Shooting"]);
+    assert_eq!(rending.shoot[0].regen_unit_arm, None);
+    assert!(rending.shoot[0].rending);
+    assert_eq!(carrier("gf", "battle_brothers", &[]).shoot[0].regen_unit_arm, None, "no rule, no arm");
+}

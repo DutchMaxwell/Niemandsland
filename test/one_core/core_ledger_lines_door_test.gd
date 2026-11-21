@@ -106,3 +106,12 @@ func test_a_regeneration_die_carries_the_tables_kind() -> void:
 func test_the_versatile_pick_names_the_rule_the_bearer_carries() -> void:
 	for c in [["Versatile Warrior", "aof", "human_empire"], ["Enhanced Watchborn", "gf", "watch_brothers"], ["Enhanced Vinci Tech", "aof", "duchies_of_vinci"]]:
 		await _expect_equal(c[0], _leg(c[1], c[2], c[0]), "%s: Cov Shooter picks" % c[0])
+
+
+## Ledger 3 (20 cells): the Regeneration bypass names the unit-level rule that cuts through it (and "Rending (granted)" for a unit-level Rending).
+func test_a_regeneration_bypass_names_its_rule() -> void:
+	for c in [["Bane when Shooting", "aof", "human_empire", "Bane when Shooting: Regeneration ignored"],
+			["Anti-Regen", "gf", "battle_brothers", "Anti-Regen: Regeneration ignored"],
+			["Unstoppable when Shooting", "aof", "human_empire", "Unstoppable when Shooting: Regeneration ignored"],
+			["Rending when Shooting", "gf", "battle_brothers", "Rending (granted): Regeneration ignored"]]:
+		await _expect_equal(c[0], _leg(c[1], c[2], c[0], true), c[3])

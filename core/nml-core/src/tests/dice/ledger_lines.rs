@@ -1,6 +1,7 @@
 //! Coverage ledger, AI shoot door (lane covfix-lines, 21.11.): the label and line classes the ledger found between the table and the core.
 //! Lines and labels only - no die, save target or end state moves.
 use super::*;
+use crate::acts::EPOCH_73_V36;
 use crate::step::{shoot_step, Step};
 
 /// The kinds a door step asks for, in draw order: the loop a door runs (roll each `NeedRoll` from a seeded tray, feed it back).
@@ -60,3 +61,48 @@ fn a_spells_ignore_dice_keep_the_cast_legs_plain_kind() {
     assert_eq!((feed.kind_of(0), feed.kind_of(1)), (Some("regeneration"), Some("spell_attack")));
 }
 
+/// The tray lines of one volley of `n` shooters (one weapon each, six attacks) at a defender called "Def", run on a SUPPLIED tray with the
+/// dice a seeded run drew (what a door step runs on).
+fn tray_lines(att: &Ctx, def: &Ctx, weapon: ShootProfile, n: usize) -> Vec<String> {
+    let profiles = [weapon];
+    let dice = [6];
+    let run = |tray: &mut Tray| {
+        let shooters: Vec<Shooter> = ["Att", "Mate"].iter().take(n)
+            .map(|o| Shooter { profiles: &profiles, keep: &[0], attacks: &dice, att, owner: o }).collect();
+        resolve_volley_with_tray(&shooters, def, "Def", 12.0, 12.0, true, true, true, true, tray)
+    };
+    let seeded = run(&mut Tray::seeded(27));
+    let mut tray = Tray::supplied(seeded.rolls.iter().map(|r| r.faces.clone()).collect());
+    run(&mut tray);
+    tray.all_lines().into_iter().map(|l| l.text).collect()
+}
+
+fn said(lines: &[String], text: &str) -> usize {
+    lines.iter().filter(|l| l.as_str() == text).count()
+}
+
+/// Ledger 3 (20 cells): the table names the UNIT-level rule that cuts through Regeneration (`_solo_ignores_regen`'s unit arms, after the
+/// weapon's own rules): Bane when Shooting, Anti-Regen / Unstoppable when Shooting (the Lacerate primitive) by their name, a unit-level
+/// Rending as `Rending (granted)`; once per weapon with hits, only when the target has a Regeneration roll to skip. RED on main: silence.
+#[test]
+fn a_unit_level_regeneration_bypass_names_itself_on_the_door_tray() {
+    let att = Ctx { rules_epoch: EPOCH_73_V36, v36_rules: true, ..shooter(4) };
+    let regen = Ctx { regeneration: true, regen_target: 5, ..defender(4, 5) };
+    let gun = |arm: Option<&str>, rending: bool| ShootProfile { bypass_regen: true, rending, regen_unit_arm: arm.map(Into::into), ..rifle(6) };
+    for (arm, rending, want) in [
+        (Some("Bane when Shooting"), false, "Bane when Shooting: Regeneration ignored"),
+        (Some("Anti-Regen"), false, "Anti-Regen: Regeneration ignored"),
+        (Some("Unstoppable when Shooting"), false, "Unstoppable when Shooting: Regeneration ignored"),
+        (None, true, "Rending (granted): Regeneration ignored"),
+    ] {
+        let lines = tray_lines(&att, &regen, gun(arm, rending), 2);
+        assert_eq!(said(&lines, want), 2, "once per weapon: {lines:?}");
+        let bare = tray_lines(&att, &defender(4, 5), gun(arm, rending), 1);
+        assert_eq!(said(&bare, want), 0, "no Regeneration roll to skip, no line: {bare:?}");
+    }
+    let silent = tray_lines(&att, &regen, gun(Some(""), true), 1);
+    assert!(silent.iter().all(|l| !l.ends_with("Regeneration ignored")), "a unit arm that answers silently ends the walk: {silent:?}");
+    let melee = ShootProfile { range: 0, ..gun(Some("Anti-Regen"), true) };
+    let lines = tray_lines(&att, &regen, melee, 1);
+    assert!(lines.iter().all(|l| !l.ends_with("Regeneration ignored")), "ranged profiles only: {lines:?}");
+}

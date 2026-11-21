@@ -1012,6 +1012,11 @@ pub struct ShootProfile {
     /// every earlier replay is byte-exact. `profile_ev` reads neither this
     /// nor `CondAp::bypass_regen` — the imagination stays blind.
     pub regen_bypass_rule: String,
+    /// Coverage ledger (21.11.): which UNIT-level rule the table's `_solo_ignores_regen` names when a ranged volley skips Regeneration, for the
+    /// TRAY's line only (`dice::say_regen_bypass`): the Lacerate-primitive unit rules with a `bypass_regen` (Anti-Regen, Unstoppable when
+    /// Shooting), then "Rending in Melee" (answers without a line), then the Bane-primitive unit rules (Bane when Shooting). `None` = no unit
+    /// arm applies; `Some("")` = one answers silently; `Some(name)` = the line `<name>: Regeneration ignored`. Data only (`stamp_regen_unit_arm`).
+    pub regen_unit_arm: Option<String>,
     pub thrust: bool,
     /// The WEAPON's own "Unstoppable" rule, exact name — `_has_rule(w,
     /// "Unstoppable")` ai_shooting.gd:132, the table's DICE path (to-hit clamp
@@ -4457,6 +4462,32 @@ pub(crate) fn lacerate_only(rules: &[String]) -> bool {
     lacerate
 }
 
+/// Coverage ledger (21.11.): the table's unit-level arms of `_solo_ignores_regen` (main.gd, after the weapon's own rules), read once per
+/// ranged profile for the tray's line: the Lacerate-primitive unit rules that carry `bypass_regen` (not "Lacerate" itself), then the
+/// Rending-in-Melee rule (silent), then the Bane-primitive unit rules ("Bane in Melee" never shoots, an Aura label never fires). The first
+/// that applies answers. Ranged profiles only (the melee door's unit arms are not measured); from `EPOCH_73_V36`, the table's gate for the
+/// line. Data only: the dice read the flags stamped above, nothing here moves them.
+fn stamp_regen_unit_arm(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], rules_epoch: u32) {
+    if !rule_on(rules_epoch, EPOCH_73_V36) {
+        return;
+    }
+    let lacerate = rules_of_primitive(reg, p, "Lacerate");
+    let rending = rules_of_primitive(reg, p, "Rending");
+    let bane = rules_of_primitive(reg, p, "Bane");
+    for sp in shoot.iter_mut().filter(|sp| sp.range > 0) {
+        let on = |h: &PrimitiveHit| facet_applies(h.melee_only, h.shooting_only, sp.range);
+        sp.regen_unit_arm = if let Some(h) = lacerate.iter().find(|h| !h.name.starts_with("Lacerate") && h.bypass_regen && on(h)) {
+            Some(h.name.clone())
+        } else if rending.iter().any(|h| h.name == "Rending in Melee" && h.bypass_regen && on(h)) {
+            Some(String::new())
+        } else {
+            bane.iter()
+                .find(|h| h.name.starts_with("Bane") && !h.name.ends_with("Aura") && !h.name.starts_with("Bane in Melee") && h.bypass_regen)
+                .map(|h| h.name.clone())
+        };
+    }
+}
+
 fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], rules_epoch: u32) {
     let table_ladder = rule_on(rules_epoch, EPOCH_3_TABLE_RULES);
     // A1 (`EPOCH_72_PLAYTEST_RULES`, the table's #1911): Lacerate re-rolls the sixes only; it
@@ -7537,6 +7568,7 @@ impl UnitStatic {
         stamp(reg, p, &mut shoot, &mut unimplemented, rules_epoch, trace73);
         stamp_conditional_ap(reg, p, rules_epoch, &mut shoot);
         stamp_unit_strikers(reg, p, &mut shoot, rules_epoch);
+        stamp_regen_unit_arm(reg, p, &mut shoot, rules_epoch);
         stamp_shot_modifier(reg, p, &mut shoot, trace73);
 
         let mut melee = melee_profiles_at(&p.weapons, rules_epoch);
