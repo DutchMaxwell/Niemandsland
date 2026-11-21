@@ -195,3 +195,4 @@ func test_the_lantern_lights_skip_the_lamp_iron() -> void:
 	assert_int(lights.size()).is_greater(0)
 	for l: Light3D in lights:
 		assert_int(l.light_cull_mask & BoardgenMood.LAMP_IRON_LAYER).is_equal(0)
+

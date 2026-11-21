@@ -59,7 +59,9 @@ static func plan(layout: Dictionary) -> Dictionary:
 		var at: Vector2 = l["at"]
 		var yaw := BoardgenTownDressing._hash(int(at.x * 7.0), int(at.y * 7.0), 72) * TAU
 		_add(out, "lantern_post", _item(yaw, Vector3(at.x, 0.0, at.y)))
-		_add(out, "lantern_glow", _item(yaw, Vector3(at.x, BoardgenTownDressing.LANTERN_HEIGHT_IN, at.y)))   # the glass at the head, where the light is (its origin is its middle: at the foot it read as a white base)
+		var glass := _item(yaw, Vector3(at.x, BoardgenTownDressing.LANTERN_HEIGHT_IN, at.y))
+		glass["xf"] = Transform3D(glass["xf"].basis.scaled(Vector3.ONE * 0.8), glass["xf"].origin)   # a little inside the cage, so the iron bars stand in front of the glass
+		_add(out, "lantern_glow", glass)   # the glass at the head, where the light is (its origin is its middle: at the foot it read as a white base)
 	# the wall strip: every prop box of the procedural plan becomes one piece, its origin on the wall face, +z away from the wall, kept inside its cell edge
 	for b: Dictionary in BoardgenTownDressing.props(layout):
 		var m := prop_module(b)
