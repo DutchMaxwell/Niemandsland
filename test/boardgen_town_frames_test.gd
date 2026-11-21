@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## The half-timber shells (plan PLAN_RUINTOWN_TARGET_C, train 3) on real town boards from the core: the frame panels lie ON a house face (at most 0.2 in proud of the
 ## collider), the ruins' panels stay on their tier's face below its top and off every ladder face, the timber gables, corner posts and chimney stacks stay inside the
-## 0.75 in edge strip (gables no higher than the masonry gable they replace, stacks below the 9 in tower crown). Nothing here touches a level, a cell or a collider.
+## 0.75 in edge strip (gables no higher than the masonry gable they replace, stacks below the 9 in tower crown), and there is at most one burnt shell per board half. Nothing here touches a level, a cell or a collider.
 
 const SEEDS := [3, 7, 11, 13, 25, 41]
 const EPS := 0.002
@@ -162,3 +162,15 @@ func test_chimney_stacks_on_ruins_stay_in_the_strip_and_below_the_tower_crown() 
 			assert_float(to_edge - half).is_greater_equal(-EPS)
 			assert_float(at.y + xf.basis.y.length() * 3.78).is_less_equal(BoardgenTownFrames.STACK_TOP_IN + EPS)
 	assert_int(total).is_greater(0)
+
+
+func test_at_most_one_burnt_shell_per_board_half_and_its_timber_is_charred() -> void:
+	for layout in _towns():
+		var burnt := BoardgenTownFrames.burnt_lots(layout)
+		assert_int(burnt.size()).is_less_equal(2)
+		for item: Dictionary in BoardgenTownFrames.ruin_items(layout):
+			if item["module"] in ["hf_gable_burnt", "hf_beam_fallen"]:
+				assert_object(item["colour"]).is_equal(BoardgenTownFrames.CHARRED)
+		for item: Dictionary in BoardgenTownFrames.ruin_items(layout).filter(func(i: Dictionary) -> bool: return i["module"] == "hf_beam_fallen"):
+			for p: Vector3 in _corners(item):
+				assert_float(p.y).is_less_equal(0.6)   # a strip prop below a model's knee
