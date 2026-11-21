@@ -322,4 +322,105 @@ mod charge_step {
         ]);
         assert!(errs.is_empty(), "{}", errs.join("\n"));
     }
+
+    // ---- E-24: the defender's strike-back is its owner's choice ----
+
+    const BACK_ID: &str = "strike_back:p1_0_a:p2_0_b";
+
+    fn back(option: &str) -> Input {
+        Input::Choice { id: BACK_ID.into(), option: option.into() }
+    }
+
+    /// A stepped charge with `extra` inputs after the intent, rolled from seed `seed` to its end.
+    fn stepped(st: &State, statics: &[UnitStatic], seed: i64, extra: &[Input]) -> ActStep {
+        let charge = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("p2_0_b".into()) };
+        let (mut t, mut dice) = ([vec![Input::Begin, charge], extra.to_vec()].concat(), Tray::seeded(seed));
+        dice.set_zero_draws(true);
+        loop {
+            match step_activation(statics, st, "p1_0_a", &clear_board(), seams(), &t, true) {
+                ActStep::NeedRoll { faces: n, .. } => t.push(Input::Faces(dice.roll(n))),
+                other => return other,
+            }
+        }
+    }
+
+    fn done(step: ActStep) -> (State, Vec<String>) {
+        match step {
+            ActStep::Done { state, lines, .. } => (state, lines.into_iter().map(|l| l.text).collect()),
+            other => panic!("expected Done, got {other:?}"),
+        }
+    }
+
+    /// E-24: a transcript that names the strike-back choice unanswered gets `NeedChoice` (stable id, `strike` / `hold`,
+    /// owner = the defender) once the melee reaches it, with the lines said before it. RED (choice routing removed):
+    /// `Refused` "unknown choice kind".
+    #[test]
+    fn an_unanswered_strike_back_choice_is_asked_with_its_owner() {
+        let (st, statics) = scene(2, &[], 2);
+        let mut asked = 0;
+        for seed in 0..16i64 {
+            match stepped(&st, &statics, seed, &[back("")]) {
+                ActStep::NeedChoice { id, options, owner, lines, .. } => {
+                    assert_eq!((id.as_str(), owner.as_str()), (BACK_ID, "p2_0_b"), "seed {seed}");
+                    assert_eq!(options, ["strike", "hold"], "seed {seed}");
+                    assert!(lines.iter().any(|l| l.text == "p1_0_a charges p2_0_b"), "seed {seed}: {lines:?}");
+                    asked += 1;
+                }
+                ActStep::Done { state, .. } => assert!(state.alive[1] == 0, "seed {seed}: only a wiped defender is never asked"),
+                other => panic!("seed {seed}: {other:?}"),
+            }
+        }
+        assert!(asked > 0);
+    }
+
+    /// E-24: over 200 seeds the answer `strike` equals the auto-yes path (no choice named): same end state; the lines differ
+    /// only by the table's "strikes back" line. RED: `strike_back_answer` returning the answer's negation fails every seed.
+    #[test]
+    fn a_strike_answer_equals_the_auto_yes_path_over_200_seeds() {
+        let (st, statics) = scene(2, &[], 2);
+        for seed in 0..200i64 {
+            let (want, want_lines) = done(stepped(&st, &statics, seed, &[]));
+            let (got, got_lines) = done(stepped(&st, &statics, seed, &[back("strike")]));
+            assert_eq!(got, want, "seed {seed}: end state");
+            let said: Vec<String> = got_lines.iter().filter(|l| *l != "p2_0_b strikes back").cloned().collect();
+            assert_eq!(said, want_lines, "seed {seed}: lines");
+            assert!(got_lines.len() - said.len() <= 1, "seed {seed}: asked once");
+        }
+    }
+
+    /// E-24: `hold` = no strike-back: the charger loses nothing, the defender is not fatigued by the fight, the line is said.
+    /// The same fixture without the choice strikes back on some seed. A bad option and an answer for a melee that never
+    /// asks (a defender without melee weapons) are refused.
+    #[test]
+    fn a_hold_answer_skips_the_strike_back_and_says_so() {
+        let (st, statics) = scene(2, &[], 2);
+        let mut auto_back = 0;
+        for seed in 0..32i64 {
+            let (end, lines) = done(stepped(&st, &statics, seed, &[back("hold")]));
+            assert_eq!(end.alive[0], st.alive[0], "seed {seed}: nobody struck back");
+            assert!(end.alive[1] == 0 || (!end.fatigued[1] && lines.iter().any(|l| l == "p2_0_b holds — no strike back")), "seed {seed}: {lines:?}");
+            auto_back += (done(stepped(&st, &statics, seed, &[])).0.alive[0] < st.alive[0]) as usize;
+        }
+        assert!(auto_back > 0, "the fixture must strike back without the choice");
+        assert!(matches!(stepped(&st, &statics, 0, &[back("maybe")]), ActStep::Refused { index: 2, ref reason } if reason.contains("not an option")));
+        let (st0, statics0) = scene(2, &[], 0);
+        assert!(matches!(stepped(&st0, &statics0, 0, &[back("strike")]), ActStep::Refused { index: 2, ref reason } if reason.contains("no strike-back choice is open")));
+    }
+
+    /// E-24 with Counter: the one answer is asked at the Counter phase; `hold` declines to strike first (the table's line) and
+    /// also skips the later slot (the strike-back line is said once). RED: a second ask at the slot strikes back.
+    #[test]
+    fn a_counter_defender_holding_declines_to_strike_first_and_later() {
+        let (st, mut statics) = scene(2, &[], 2);
+        for m in statics[1].melee.iter_mut() {
+            m.counter = true;
+        }
+        for seed in 0..32i64 {
+            let (end, lines) = done(stepped(&st, &statics, seed, &[back("hold")]));
+            assert_eq!(end.alive[0], st.alive[0], "seed {seed}: nobody struck back");
+            assert!(lines.iter().any(|l| l == "Counter: p2_0_b declines to strike first"), "seed {seed}: {lines:?}");
+            assert_eq!(lines.iter().filter(|l| l.contains("no strike back")).count(), 1, "seed {seed}: asked once");
+            assert_eq!(done(stepped(&st, &statics, seed, &[back("strike")])).0, done(stepped(&st, &statics, seed, &[])).0, "seed {seed}");
+        }
+    }
 }

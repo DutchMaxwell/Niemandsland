@@ -413,6 +413,8 @@ const TAKEDOWN_MODEL: &str = "takedown_model:";
 const WOUND_ALLOC: &str = "wound_alloc:";
 /// CC-9b/9c: the ids of the cast-interference choice (`interference:<seq>:<caster>:<slot>`) start with this.
 const INTERFERENCE: &str = "interference:";
+/// E-24: the ids of the defender's strike-back choice (`strike_back:<charger>:<defender>`, options `strike` / `hold`) start with this.
+const STRIKE_BACK: &str = "strike_back:";
 
 /// One activation through the step API: the order rules, then the declared
 /// action (not moving = Hold) on the supplied faces and the LAST placement (`check_move` first).
@@ -458,6 +460,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let mut takedown: Option<(usize, &str, &str)> = None;
     let mut wound: Vec<(usize, String, Option<Vec<usize>>)> = Vec::new();
     let mut interference: Vec<(usize, String, Option<i64>)> = Vec::new();
+    let mut strike_back: Vec<(usize, String, Option<bool>)> = Vec::new();
     for (i, x) in t.iter().enumerate() {
         let Input::Choice { id, option } = x else { continue };
         if id.starts_with(TAKEDOWN_MODEL) {
@@ -481,10 +484,19 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             };
             interference.retain(|w| w.1 != *id);
             interference.push((i, id.clone(), count));
+        } else if id.starts_with(STRIKE_BACK) {
+            let answer = match option.as_str() {
+                "" => None,
+                "strike" => Some(true),
+                "hold" => Some(false),
+                _ => return ActStep::Refused { index: i, reason: format!("{option} is not an option of {id} (options: strike, hold)") },
+            };
+            strike_back.retain(|w| w.1 != *id);
+            strike_back.push((i, id.clone(), answer));
         } else {
             return ActStep::Refused {
                 index: i,
-                reason: format!("unknown choice kind {id} (expected {TAKEDOWN_MODEL}, {WOUND_ALLOC} or {INTERFERENCE})"),
+                reason: format!("unknown choice kind {id} (expected {TAKEDOWN_MODEL}, {WOUND_ALLOC}, {INTERFERENCE} or {STRIKE_BACK})"),
             };
         }
     }
@@ -528,6 +540,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     // The spike's non-tray seed: a plain activation never draws from it.
     let reached_wound = std::cell::RefCell::new(Vec::new());
     let reached_int = std::cell::RefCell::new(Vec::new());
+    let reached_back = std::cell::RefCell::new(Vec::new());
     let cast_refused = std::cell::RefCell::new(None);
     let run = |statics: &[UnitStatic]| {
         let resolve = |tray: &mut Tray| {
@@ -540,10 +553,14 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             for (_, id, answer) in &interference {
                 tray.offer_interference(id.clone(), *answer);
             }
+            for (_, id, answer) in &strike_back {
+                tray.offer_strike_back(id.clone(), *answer);
+            }
             tray.offer_casts(casts.clone());
             let out = resolve_stochastic_tray_on_board(statics, state, &action, terrain, seams, &mut GodotRng::new(0), tray);
             *reached_wound.borrow_mut() = tray.feed().map(|f| f.wound_choices.clone()).unwrap_or_default();
             *reached_int.borrow_mut() = tray.feed().map(|f| f.interference_choices.clone()).unwrap_or_default();
+            *reached_back.borrow_mut() = tray.feed().map(|f| f.strike_back_choices.clone()).unwrap_or_default();
             *cast_refused.borrow_mut() = tray.feed().and_then(|f| f.cast_refused.clone());
             out
         };
@@ -557,6 +574,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let at_int = |id: &str| interference.iter().find(|w| w.1 == id).map_or(0, |w| w.0);
     let wound_choices = reached_wound.take();
     let int_choices = reached_int.take();
+    let back_choices = reached_back.take();
     enum Pending {
         Refuse(usize, String),
         Ask { id: String, options: Vec<String>, owner: String, lines: Vec<LogLine>, landings: Vec<Landing> },
@@ -590,6 +608,11 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             }));
         }
     }
+    for c in back_choices.iter().filter(|c| c.answer.is_none()) {
+        let Some((at, owner)) = &c.reached else { continue };
+        let options = vec!["strike".to_string(), "hold".to_string()];
+        events.push((*at, c.order, Pending::Ask { id: c.id.clone(), options, owner: owner.clone(), lines: c.lines.clone(), landings: c.landings.clone() }));
+    }
     events.sort_by_key(|(at, order, _)| (*at, *order));
     for (at, _, ev) in events {
         if matches!(first, Step::NeedRoll { index, .. } if index < at) {
@@ -614,6 +637,9 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     if matches!(first, Step::Done(..)) {
         if let Some(c) = int_choices.iter().find(|c| c.reached.is_none() && c.answer.is_some()) {
             return ActStep::Refused { index: at_int(&c.id), reason: format!("no interference choice is open in this activation (got {})", c.id) };
+        }
+        if let Some((i, id, _)) = strike_back.iter().find(|w| w.2.is_some() && back_choices.iter().any(|c| c.id == w.1 && c.reached.is_none())) {
+            return ActStep::Refused { index: *i, reason: format!("no strike-back choice is open in this activation (got {id})") };
         }
         if let Some(c) = wound_choices.iter().find(|c| c.reached.is_none() && c.answer.is_some()) {
             return ActStep::Refused { index: at_wound(&c.id), reason: format!("no wound allocation is open in this activation (got {})", c.id) };

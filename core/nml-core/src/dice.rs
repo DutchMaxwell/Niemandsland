@@ -124,7 +124,7 @@ impl Tray {
     /// instead of drawing. Past the last group it serves 1s and records where it
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
-        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), interference_choices: Vec::new(), choice_seq: 0, casts: Vec::new(), cast_refused: None };
+        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), interference_choices: Vec::new(), strike_back_choices: Vec::new(), choice_seq: 0, casts: Vec::new(), cast_refused: None };
         Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None }
     }
 
@@ -228,6 +228,30 @@ impl Tray {
             c.landings = self.landings.iter().map(|(_, l)| l.clone()).collect();
         }
         c.answer.filter(|_| c.bad.is_none())
+    }
+
+    /// E-24: the transcript names the strike-back choice `id` (`strike_back:<charger>:<defender>`; `Some(true)` = strike,
+    /// `Some(false)` = hold, `None` = only asked). A supplied tray keeps it; a seeded tray ignores the call.
+    pub fn offer_strike_back(&mut self, id: String, answer: Option<bool>) {
+        if let Some(feed) = self.feed.as_mut() {
+            feed.strike_back_choices.push(StrikeBackChoice { id, answer, reached: None, lines: Vec::new(), landings: Vec::new(), order: 0 });
+        }
+    }
+
+    /// E-24: the melee reaches the defender's strike-back choice `id` (owner = the defender's roster key). `Some` = the
+    /// owner's answer; `None` = nothing offered or only asked (the core strikes back, the AI's rule). Captures the lines and
+    /// landings before the choice when unanswered.
+    pub fn strike_back(&mut self, id: &str, owner: &str) -> Option<bool> {
+        let feed = self.feed.as_mut()?;
+        let c = feed.strike_back_choices.iter_mut().find(|c| c.id == id)?;
+        c.reached = Some((feed.next, owner.to_string()));
+        c.order = feed.choice_seq;
+        feed.choice_seq += 1;
+        if c.answer.is_none() {
+            c.lines = self.lines.iter().map(|(_, l)| l.clone()).collect();
+            c.landings = self.landings.iter().map(|(_, l)| l.clone()).collect();
+        }
+        c.answer
     }
 
     /// CC-5a: the transcript's planned casts, in plan order. A supplied tray keeps them (the cast slot of `resolve_with` reads them
@@ -373,6 +397,8 @@ pub struct Feed {
     pub wound_choices: Vec<WoundChoice>,
     /// CC-9c: the transcript's cast-interference choices, one per id (`Tray::offer_interference`).
     pub interference_choices: Vec<InterferenceChoice>,
+    /// E-24: the transcript's strike-back choices (`Tray::offer_strike_back`).
+    pub strike_back_choices: Vec<StrikeBackChoice>,
     /// Monotonic reach ordinal across both choice families (breaks ties when two choices occur at the same draw).
     choice_seq: usize,
     /// CC-5a: the transcript's planned casts (`Tray::offer_casts`).
@@ -404,6 +430,18 @@ pub struct InterferenceChoice {
     pub answer: Option<i64>,
     pub reached: Option<(usize, i64, String)>,
     pub bad: Option<i64>,
+    pub lines: Vec<LogLine>,
+    pub landings: Vec<Landing>,
+    pub order: usize,
+}
+
+/// E-24: the step API's strike-back choice as the melee sees it. `reached` = (draws so far, owner key) once the melee came
+/// to the defender's strike-back; `lines` / `landings` = everything before that point (when `answer` is `None`).
+#[derive(Debug, Clone)]
+pub struct StrikeBackChoice {
+    pub id: String,
+    pub answer: Option<bool>,
+    pub reached: Option<(usize, String)>,
     pub lines: Vec<LogLine>,
     pub landings: Vec<Landing>,
     pub order: usize,

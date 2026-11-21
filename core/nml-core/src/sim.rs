@@ -7560,6 +7560,23 @@ pub(crate) fn tray_morale_for(
     }
 }
 
+/// E-24 (`main._solo_confirm_strike_back`): the defender's owner decides ONCE per melee whether it strikes back (the Counter
+/// phase, else the strike-back slot); `decided` keeps the answer. Only a transcript that names `strike_back:<charger>:<defender>`
+/// asks: an answer is said in the table's words, no answer (or only asked) strikes back, the AI's rule (Solo & Co-Op p.57).
+fn strike_back_answer(next: &State, si: usize, ti: usize, tname: &str, tray: &mut Tray, decided: &mut Option<bool>) -> bool {
+    if let Some(d) = *decided {
+        return d;
+    }
+    let id = format!("strike_back:{}:{}", next.key(si), next.key(ti));
+    let answer = tray.strike_back(&id, next.key(ti));
+    if let Some(yes) = answer {
+        say_melee(tray, next.player[ti], if yes { format!("{tname} strikes back") } else { format!("{tname} holds — no strike back") });
+    }
+    let d = answer.unwrap_or(true);
+    *decided = Some(d);
+    d
+}
+
 /// The whole CHARGE melee on the tray — `main._solo_resolve_ai_charge`
 /// :8039-8118 in its own order: Counter's pre-phase (flagged), Impact (:8067),
 /// the charger's strikes (:8081), the strike-back (:8100), the melee result
@@ -7652,15 +7669,20 @@ fn tray_charge_with_self_wounds(
     if impact_first && side_up(next, si, seams) && next.alive[ti] > 0 {
         by_su += impact_phase(statics, next, si, ti, tray, shot, seams.rules_epoch, charge_from_in, seams.tray_exact);
     }
+    let mut strikes_back = None;
     if counter_first && side_up(next, si, seams) && side_up(next, ti, seams) {
-        if impact_first {
-            say_melee(tray, next.player[ti], format!("Counter: {tname} strikes first, after the Impact dice ({CITE})"));
+        if !strike_back_answer(next, si, ti, &tname, tray, &mut strikes_back) {
+            say_melee(tray, next.player[ti], format!("Counter: {tname} declines to strike first"));
+        } else {
+            if impact_first {
+                say_melee(tray, next.player[ti], format!("Counter: {tname} strikes first, after the Impact dice ({CITE})"));
+            }
+            let (c, rc, h, s) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, StrikeSet::CounterOnly, cover);
+            by_tu += c;
+            by_su += rc;
+            defender_self_wounds += h;
+            scourge_on_charger += s;
         }
-        let (c, rc, h, s) = strike_phase(statics, next, ti, si, false, 0.0, seams, tray, shot, StrikeSet::CounterOnly, cover);
-        by_tu += c;
-        by_su += rc;
-        defender_self_wounds += h;
-        scourge_on_charger += s;
     }
     // main.gd:8276's alive gate — a counter phase that wiped the charger
     // closes the card, nothing left to roll.
@@ -7707,7 +7729,7 @@ fn tray_charge_with_self_wounds(
                     statics[next.roster.profile[ti]].name
                 ));
                 say_melee(tray, next.player[ti], format!("{} has no melee weapons — cannot strike back ({CITE})", statics[next.roster.profile[ti]].name));
-            } else {
+            } else if strike_back_answer(next, si, ti, &tname, tray, &mut strikes_back) {
                 // R3-C1 (`EPOCH_73_V36`, the Hero rule): the host's models are gone, a joined hero stands - it strikes back.
                 if let Some(h) = next.attached[ti].iter().copied().find(|&h| next.alive[h] > 0).filter(|_| next.alive[ti] <= 0) {
                     shot.log.push(format!("Hero: {} has no models left - {} strikes back for the unit",
