@@ -302,3 +302,40 @@ func test_fences_ring_the_garden_plots_from_inside_with_a_gap() -> void:
 			assert_int(straight + 2 * corners).override_failure_message("a plot fenced shut").is_less(edges)
 	assert_int(total).is_greater(0)
 
+
+## The feet and faces of the city wall (kit batch A7): rubble spills at the open feet of the wall cells beside a breach, buttresses on the FIELD face of long runs, ivy clusters on the shade
+## (east / west) faces - every piece with its origin on a wall face, +z out onto open level-0 ground that is no ladder end.
+func test_wall_spills_buttresses_and_ivy_clusters_stand_on_the_right_faces() -> void:
+	var counts := {"wall_rubble_spill": 0, "wall_buttress_a": 0, "wall_buttress_b": 0, "ivy_cluster_large": 0, "ivy_cluster_small": 0}
+	for s: int in [7, 11, 13, 17, 19, 23, 25, 29, 41, 43]:
+		var layout: Dictionary = ClassDB.instantiate("NmlCore").boardgen_layout_themed(s, "ruintown")
+		var nx: int = layout["nx"]
+		var clear := BoardgenTownClutter._kept_clear(layout)
+		var plan := BoardgenTownClutter.plan(layout)
+		for m: String in counts:
+			for it: Dictionary in plan.get(m, []):
+				counts[m] += 1
+				var xf: Transform3D = it["xf"]
+				var at := Vector2(xf.origin.x, xf.origin.z) / 0.0254 + Vector2(24, 24)
+				var into := Vector2(xf.basis.z.x, xf.basis.z.z).round()
+				var wall := Vector2i((at - into * 0.3) / 3.0)
+				var foot := Vector2i((at + into * 0.3) / 3.0)
+				var wc: Dictionary = layout["cells"][wall.y * nx + wall.x]
+				var fc: Dictionary = layout["cells"][foot.y * nx + foot.x]
+				assert_int(int(wc["level"])).override_failure_message("seed %d: %s not on a raised face" % [s, m]).is_greater(0)
+				assert_int(int(fc["level"])).is_equal(0)
+				assert_bool(clear.has(foot.y * nx + foot.x)).override_failure_message("seed %d: %s on a ladder face" % [s, m]).is_false()
+				if m.begins_with("wall_buttress"):
+					assert_str(wc["lot_kind"]).is_equal("Wall")
+					assert_float(into.x).is_equal(-1.0 if wall.x * 2 < nx else 1.0)   # the field side
+				if m.begins_with("ivy_cluster"):
+					assert_float(absf(into.x)).is_equal(1.0)   # a shade face
+				if m == "wall_rubble_spill":
+					var beside := false
+					for d: Vector2i in [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]:
+						var b := wall + d
+						beside = beside or (b.x >= 0 and b.y >= 0 and b.x < nx and b.y < 16 and layout["cells"][b.y * nx + b.x]["lot_kind"] == "Wall" and int(layout["cells"][b.y * nx + b.x]["level"]) == 0)
+					assert_bool(beside).override_failure_message("seed %d: a spill away from any breach" % s).is_true()
+	print("WALL PIECES ", counts)
+	for m: String in counts:
+		assert_int(counts[m]).override_failure_message("no %s on ten boards" % m).is_greater(0)

@@ -195,7 +195,8 @@ static func _run(s: Array, spot_set: Dictionary, used: Dictionary, layout: Dicti
 	return {"start": start, "along": Vector2(along_v), "span": span, "mid": start + Vector2(along_v) * span * 0.5, "cells": [i, j] if two else [i], "into": Vector2(-d.x, -d.y)}
 
 
-## The points (board inches) a scene's run must keep clear: every ladder's foot on its wall face, every lamp post, the stalls / braziers / spouts of the square and the walls.
+## The points (board inches) a scene's run must keep clear: every ladder's foot on its wall face, every lamp post, the stalls / braziers / spouts of the square and the walls, the
+## buttresses and rubble spills of the city wall.
 static func _occupied(layout: Dictionary) -> Array[Vector2]:
 	var pts: Array[Vector2] = []
 	for l: Dictionary in BoardgenTownDressing.lanterns(layout):
@@ -204,9 +205,9 @@ static func _occupied(layout: Dictionary) -> Array[Vector2]:
 	for c: Dictionary in layout["connectors"]:
 		if c.has("edge_in"):   # the ladder's foot on its wall face (as BoardgenGreybox.ladder_kit_plan puts it)
 			pts.append(Vector2(c["edge_in"][0], c["edge_in"][1]) + origin)
-	var square := {}
+	var square := BoardgenTownClutter.wall_feet(layout)   # (the wall's buttresses and rubble spills too)
 	BoardgenTownClutter._square_and_walls(layout, square)
-	for m in ["stall_frame", "stall_frame_ruined", "brazier", "pool_spout"]:
+	for m in ["stall_frame", "stall_frame_ruined", "brazier", "pool_spout", "wall_rubble_spill", "wall_buttress_a", "wall_buttress_b"]:
 		for it: Dictionary in square.get(m, []):
 			var o: Vector3 = (it["xf"] as Transform3D).origin / BoardgenTownClutter.INCHES_TO_METERS
 			pts.append(Vector2(o.x, o.z))

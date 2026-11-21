@@ -81,7 +81,12 @@ static func plan(layout: Dictionary) -> Dictionary:
 	_flat(layout, out, scenes["reserved"])
 	_plots(layout, out)
 	_fences(layout, out)
+	var feet := wall_feet(layout)
+	for m: String in feet:
+		for it: Dictionary in feet[m]:
+			_add(out, m, it)
 	_ivy(layout, out)
+	_ivy_clusters(layout, out, scenes["reserved"])
 	_landmarks(layout, out)
 	_hall_and_towers(layout, out)
 	_square_and_walls(layout, out)
@@ -237,6 +242,101 @@ static func _fences(layout: Dictionary, out: Dictionary) -> void:
 			var d := dirs[side]
 			var mid := lo + (Vector2(0.5, 0.5) + Vector2(d) * 0.5) * cell_in
 			_add(out, style[0] if f[side] == "run" else style[1], _item(atan2(-float(d.x), -float(d.y)), Vector3(mid.x, 0.0, mid.y)))   # +z into the plot
+
+
+## The feet of the city wall (kit batch A7): a graded rubble spill (2.5 in, STRIP) at every open foot of the two wall cells beside a breach - the wall came down there -, and a buttress
+## (2.6 in on a 3 in wall, 3.8 in on a higher one, 0.62 in deep, STRIP) on the FIELD face of long runs, every fourth cell counted from the board's middle row (half-turn twins), not beside
+## a breach. Never on a ladder end, a hazard or a landmark. {module: [item]}.
+static func wall_feet(layout: Dictionary) -> Dictionary:
+	var out := {}
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var clear := _kept_clear(layout)
+	var cells: Array = layout["cells"]
+	var dirs: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
+	var open_foot := func(c: Vector2i) -> bool:
+		if c.x < 0 or c.y < 0 or c.x >= nx or c.y >= nz:
+			return false
+		var cd: Dictionary = cells[c.y * nx + c.x]
+		return int(cd["level"]) == 0 and not clear.has(c.y * nx + c.x) and not ["Hazard", "Wall", "Rough"].has(cd["lot_kind"])
+	var by_breach := {}
+	for cd: Dictionary in cells:
+		if cd["lot_kind"] != "Wall" or int(cd["level"]) != 0:
+			continue
+		for d: Vector2i in dirs:
+			var w := Vector2i(cd["x"], cd["z"]) + d
+			if w.x < 0 or w.y < 0 or w.x >= nx or w.y >= nz or int(cells[w.y * nx + w.x]["level"]) == 0:
+				continue
+			by_breach[w.y * nx + w.x] = true
+			for f: Vector2i in dirs:
+				if f == -d or f == d or not open_foot.call(w - f):
+					continue   # the faces across the wall's run only (the breach cell and the next wall cell are no foot)
+				var lo := origin + Vector2(w) * cell_in
+				var along := 1.5 + 0.15 * (float(d.x) if f.x == 0 else float(d.y)) * -1.0   # a little towards the breach
+				var pos := Vector2(lo.x + along, lo.y if -f.y < 0 else lo.y + cell_in) if f.x == 0 else Vector2(lo.x if -f.x < 0 else lo.x + cell_in, lo.y + along)
+				_add(out, "wall_rubble_spill", _item(atan2(float(-f.x), float(-f.y)), Vector3(pos.x, 0.0, pos.y)))   # +z away from the wall, onto the foot
+	for cd: Dictionary in cells:
+		var i: int = cd["z"] * nx + cd["x"]
+		if cd["lot_kind"] != "Wall" or int(cd["level"]) < 1 or by_breach.has(i) or int(absf(float(cd["z"]) - 7.5)) % 4 != 1:
+			continue
+		var field := Vector2i(-1, 0) if int(cd["x"]) * 2 < nx else Vector2i(1, 0)
+		var w := Vector2i(cd["x"], cd["z"])
+		var run := 0
+		for dz in [-1, 1]:
+			var n := w + Vector2i(0, dz)
+			run += 1 if n.y >= 0 and n.y < nz and cells[n.y * nx + n.x]["lot_kind"] == "Wall" and int(cells[n.y * nx + n.x]["level"]) >= 1 else 0
+		if run < 2 or not open_foot.call(w + field):
+			continue   # a long run only: wall above and below
+		var lo := origin + Vector2(w) * cell_in
+		var pos := Vector2(lo.x if field.x < 0 else lo.x + cell_in, lo.y + 1.5)
+		_add(out, "wall_buttress_a" if int(cd["level"]) == 1 else "wall_buttress_b", _item(atan2(float(field.x), 0.0), Vector3(pos.x, 0.0, pos.y)))
+	return out
+
+
+## IVY CLUSTERS (kit batch A7, WALL, <= 0.17 in proud) on the SHADE faces - east and west, the faces both moons graze -: a large mass hanging from the top edge of a raised cell whose
+## neighbours along the face are raised too (it is 3.6 in wide), a small one climbing from the foot where no strip piece or scene stands. Never on a ladder face, never on a strand of _ivy.
+static func _ivy_clusters(layout: Dictionary, out: Dictionary, reserved: Dictionary = {}) -> void:
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var clear := _kept_clear(layout)
+	var cells: Array = layout["cells"]
+	var taken := {}
+	for b: Dictionary in BoardgenTownDressing.props(layout):
+		if typeof(b.get("face")) == TYPE_VECTOR2I:
+			taken["%d/%d/%s" % [int(b["at"].x), int(b["at"].y), b["face"]]] = true
+	for cd: Dictionary in cells:
+		var i: int = cd["z"] * nx + cd["x"]
+		if cd["level"] < 1 or cd["lot_kind"] == "Roofed" or clear.has(i):
+			continue
+		var half := 1 if cd["z"] >= nz / 2 else 0
+		for side in [1, 3]:
+			var d: Vector2i = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)][side]
+			var n := Vector2i(cd["x"], cd["z"]) + d
+			if n.x < 0 or n.y < 0 or n.x >= nx or n.y >= nz:
+				continue
+			var j: int = n.y * nx + n.x
+			var nb: Dictionary = cells[j]
+			if nb["level"] != 0 or clear.has(j) or nb["lot_kind"] == "Hazard" or (not nb["street"] and BoardgenTownDressing._hash(i, half, 84 + side) <= 0.125):
+				continue   # (the last: a strand of _ivy is there)
+			var h := BoardgenTownDressing._hash(i, half, 220 + side)
+			if h > 0.3:
+				continue
+			var lo := origin + Vector2(cd["x"], cd["z"]) * cell_in
+			var yaw := atan2(float(d.x), float(d.y))
+			var x := lo.x if d.x < 0 else lo.x + cell_in
+			var top := float(layout["level_in"][int(cd["level"])])
+			var wide := true
+			for dz in [-1, 1]:
+				var m := Vector2i(cd["x"], cd["z"] + dz)
+				wide = wide and m.y >= 0 and m.y < nz and int(cells[m.y * nx + m.x]["level"]) >= int(cd["level"])
+			if h < 0.18 and wide:
+				_add(out, "ivy_cluster_large", _item(yaw, Vector3(x, top, lo.y + 1.5)))
+			elif not reserved.has(j) and not taken.has("%d/%d/%s" % [n.x, n.y, -d]):
+				_add(out, "ivy_cluster_small", _item(yaw, Vector3(x, 0.0, lo.y + 0.8 + 1.4 * BoardgenTownDressing._hash(i, half, 224 + side))))
 
 
 ## WALL pieces: ivy strands up a wall face (<= 0.12 in off it), on one face in eight of a raised cell that looks at open ground, never on a ladder's face.
