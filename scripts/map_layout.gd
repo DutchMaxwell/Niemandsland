@@ -204,6 +204,8 @@ signal marker_pick_refused
 signal objectives_changed(objectives: Array)
 ## One-click table theme (S5, maintainer d7b: an entry right under "Auto-Generate Layout"); main lays it out.
 signal theme_requested(theme_id: String)
+## The player picked another game system in the editor's "Game system" row; Main decides (it refuses while a list is on the table).
+signal system_requested(system_id: String)
 
 # Signal to notify terrain_overlay of deployment changes
 signal deployment_type_changed(type: int)
@@ -285,6 +287,7 @@ func _ready() -> void:
 	_setup_objectives_ui()
 
 	_setup_terrain_buttons()
+	_setup_system_row()
 	_setup_modular_terrain_ui()
 	_setup_tabs()
 	_style_header_chrome()
@@ -383,6 +386,7 @@ func _setup_tabs() -> void:
 			node.reparent(tab)
 
 	# Terrain: terrain placement tools
+	into.call(gelaende, left_panel.get_node_or_null("SystemRow"))   # the game system row heads the terrain tab
 	into.call(gelaende, left_panel.get_node_or_null("TerrainLabel"))
 	into.call(gelaende, terrain_buttons)
 	into.call(gelaende, _modular_terrain_panel)
@@ -700,6 +704,32 @@ func _select_terrain_button(type: TerrainType) -> void:
 func _on_terrain_button_pressed(type: TerrainType, _button: Button) -> void:
 	selected_terrain_type = type
 	_select_terrain_button(type)
+
+
+var _system_option: OptionButton = null
+
+
+## The "Game system" row above the terrain types: free while no list is on the table, locked (with the reason) after.
+func _setup_system_row() -> void:
+	_system_option = OptionButton.new()
+	_system_option.name = "SystemOption"
+	for id in GameSystem.IDS:
+		_system_option.add_item(GameSystem.label(id))
+	_system_option.item_selected.connect(func(index: int) -> void: system_requested.emit(GameSystem.IDS[index]))
+	var row := HouseStyle.field_row("Game system", _system_option)
+	row.name = "SystemRow"
+	var left_panel := terrain_buttons.get_parent()   # not inside terrain_buttons: every child of that box is a type button
+	left_panel.add_child(row)
+	left_panel.move_child(row, terrain_buttons.get_index())
+
+
+## Main pushes the table's system and, while a list is on the table, the reason the row is locked ("" = free to change).
+func set_game_system(id: String, locked_reason: String) -> void:
+	if _system_option == null:
+		return
+	_system_option.select(maxi(0, GameSystem.IDS.find(id)))
+	_system_option.disabled = not locked_reason.is_empty()
+	_system_option.tooltip_text = locked_reason if not locked_reason.is_empty() else "The game system of this table: it sets the terrain, boards and army lists on offer. A change never removes pieces already placed."
 
 
 # ==============================================================================

@@ -2366,7 +2366,9 @@ fn tray_vs_marks(
             // `EPOCH_71_RAPID_CHARGE_MARK` the Mark lands on the TARGET; below it
             // the legacy once-grant stays on the bearer so older corpora
             // replay byte-exact. Rules-must-log: the placement names itself.
-            if grant == "Rapid Charge" && rule_on(seams.rules_epoch, EPOCH_71_RAPID_CHARGE_MARK) {
+            let on_target = (grant == "Rapid Charge" && rule_on(seams.rules_epoch, EPOCH_71_RAPID_CHARGE_MARK))
+                || (grant == "AP(+1) in melee" && b.scope == "melee" && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_MELEE_MARK_SCOPE));
+            if on_target {
                 trace_rule("mark", &b.name, &format!(
                     "{} marks {} — friendly units attacking it gain {} (once)",
                     statics[pb].name, statics[next.roster.profile[ti]].name, grant));
@@ -4519,6 +4521,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // stays blind, the sighting seam's own asymmetry.
     if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
         c.indirect_mark = grants && mods::granted_vs(state, i, "Indirect");
+        c.indirect_own = grants && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_OWN_INDIRECT) && mods::granted_own_indirect(state, i);
         c.range_mark_in = if grants && mods::granted_vs(state, i, "+6\" shooting range") {
             INCREASED_SHOOTING_RANGE_MARK_IN
         } else {
@@ -4669,6 +4672,13 @@ pub fn ctx_live_vs(
     c.furious = c.furious || mods::granted_vs(state, target, "Furious");
     c.relentless_grant = c.relentless_grant || mods::granted_vs(state, target, "Relentless");
     c.shred_grant = c.shred_grant || mods::granted_vs(state, target, "Shred");
+    if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_SLAYER_MARK_GRANT) {
+        c.slayer_grant = c.slayer_grant || mods::granted_vs(state, target, "Slayer");
+    }
+    // The melee-scoped Piercing Fighting Mark waits on the marked unit for its charger (`PENDING_EPOCH_MELEE_MARK_SCOPE`); a volley never reads it.
+    if melee && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_MELEE_MARK_SCOPE) {
+        c.pierce_melee_grant = c.pierce_melee_grant || mods::granted_vs_exact(state, target, "AP(+1) in melee");
+    }
     // G4R3 F-SURGE-GRANT (EPOCH_73_V36): a spell's once-grant of Surge to the target's attackers (the table's
     // `_solo_bridge_granted_flags`) pays like the Surge mark; the exchange spends the record.
     c.surge_mark_grant = c.surge_mark_grant
@@ -6079,6 +6089,8 @@ fn sighted_profiles_of(
     // inert reading — the grant lands on the ledger but no resolver reads it.
     let epoch6 = rule_on(sc.rules_epoch, EPOCH_6_TABLE_RULES);
     let mark_indirect = epoch6 && mods::granted_vs(state, ti, "Indirect");
+    // PENDING_EPOCH_OWN_INDIRECT: an Indirect in the shooter's own store waives the sight test of every weapon (`_solo_shot_eligibility`).
+    let own_indirect = rule_on(sc.rules_epoch, crate::acts::PENDING_EPOCH_OWN_INDIRECT) && mods::granted_own_indirect(state, mi);
     let mark_range = if epoch6 && mods::granted_vs(state, ti, "+6\" shooting range") {
         INCREASED_SHOOTING_RANGE_MARK_IN
     } else {
@@ -6104,12 +6116,12 @@ fn sighted_profiles_of(
         // goes (main.gd:4136-4138).
         let lost = p.indirect_los_needs_hold && !held; // Rules 3.6 (SHO-01a): the waiver needs Hold
         let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach,
-            (p.indirect && p.indirect_ignores_los.unwrap_or(true) && !lost) || mark_indirect,
+            (p.indirect && p.indirect_ignores_los.unwrap_or(true) && !lost) || mark_indirect || own_indirect,
             rule_on(sc.rules_epoch, EPOCH_66_DISTANCE_TRUTH), sc.rules_epoch);
         if let Some(n) = sc.sighted.get_mut(i) {
             *n = seen;
         }
-        if lost && !mark_indirect {
+        if lost && !mark_indirect && !own_indirect {
             trace_rule("volley", "Indirect",
                 &format!("{} did not Hold: {} needs line of sight", statics[state.roster.profile[mi]].name, p.name));
         }
@@ -8841,6 +8853,10 @@ fn tray_spell_effect(state: &mut State, targets: &[usize], c: &CastInput, spell:
     };
     let live = rec.to_live_mod(rules_epoch);
     for &t in targets {
+        // PENDING_EPOCH_SPELL_NO_STACK: the same spell does not stack (GF 3.6), an identical record already on the target is refreshed, none is added
+        if !effect_less && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_SPELL_NO_STACK) && state.buffs[t].contains(&live) {
+            continue;
+        }
         if !effect_less {
             state.buffs[t].push(live.clone());
         }
@@ -11101,6 +11117,12 @@ fn resolve_with(
         // One-core P3 step 61: the walked paths the tray carries become the move's landing, so the Dangerous test
         // below reads each model's route, not only its end (`dangerous_dice`'s end-only arm); a climb names its rule.
         let trails = dice.as_ref().and_then(|d| d.0.placed_trails()).filter(|t| !t.is_empty()).map(|t| t.to_vec());
+        // PENDING_EPOCH_ZERO_MOVE_STAMP: the table stamps an EXECUTED move; remember the chain's stamps and whether any model left its place.
+        let chain: Vec<usize> = std::iter::once(si).chain(next.attached[si].iter().copied()
+            .filter(|_| seams.hero_attach && p.len() == crate::activation::placed_chain_len(&next, si))).collect();
+        let stamps: Vec<(usize, i64)> = chain.iter().map(|&u| (u, next.moved_round[u])).collect();
+        let left_place = chain.iter().flat_map(|&u| next.positions[u].iter()).zip(p.iter())
+            .any(|(a, b)| geom::length(geom::sub(geom::to_f32(*a), geom::to_f32(*b))) > 0.0005);
         // S1: a placement past the host's models moves the joined heroes with it (host first, then each hero in
         // `attached` order); a host-only placement leaves them where they stood, as before.
         let host_n = next.positions[si].len();
@@ -11125,6 +11147,11 @@ fn resolve_with(
         if let Cover::Board(t) = cover {
             if t.is_valid() {
                 land_cover(statics, &mut next, si, t, seams, dice.as_mut().map(|d| &mut *d.1));
+            }
+        }
+        if !left_place && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_ZERO_MOVE_STAMP) {
+            for (u, round) in stamps {
+                next.moved_round[u] = round;
             }
         }
     }

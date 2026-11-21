@@ -9,9 +9,11 @@ use super::{budget, Budgets, Symmetry, DEPLOY_DEPTH_CELLS, GRID};
 
 /// Lot archetypes (theme-neutral; a kit table picks the look). `Block`: solid mass, walkable roof, blocks sight.
 /// `Terrace`: an L-shaped step, the rest of the lot stays ground. `Deck`: open raised platform, sight passes.
-/// `Hazard`: flat area hazard, never raised.
+/// `Hazard`: flat area hazard, never raised. `Rough`: a flat plot (garden, rubble) that is never raised and gets no piece on it. `Wall`: a cell of the
+/// city wall (its 6 in ridge, a 9 in wall tower, a 3 in buttress stair or a level-0 breach), set by the wall stage and never by a lot. `Roofed`: an intact house -
+/// level-0 solid ground (nobody stands on a roof, sight stops), the core's `CONTAINER` class; ruined houses are `Block` / `Terrace` / `Deck`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LotKind { Street, Block, Terrace, Deck, Hazard }
+pub enum LotKind { Street, Block, Terrace, Deck, Hazard, Rough, Wall, Roofed }
 
 /// One lattice cell. `level` 0/1/2/3 = 0/3/6/9 in; `deploy` 1/2 = the player whose band it is, 0 = neither.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,7 +29,10 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
     let (mut hazards, pool) = (0, b.lot_pool);
     for p in 0..lots.len() / 2 {
         let in_deploy = [2 * p, 2 * p + 1].iter().any(|&i| lots[i].z < DEPLOY_DEPTH_CELLS || lots[i].z + lots[i].h > nz - DEPLOY_DEPTH_CELLS);
-        let mut kind = match p { 0 => LotKind::Block, 1 => LotKind::Terrace, 2 => LotKind::Deck, _ => pool[rng.randi_range(0, pool.len() as i64 - 1) as usize] };
+        let garden = lots[2 * p].w * lots[2 * p].h <= b.garden_area;
+        let mut kind = match p { _ if garden => LotKind::Rough, 0 => LotKind::Block, 1 => LotKind::Terrace, 2 => LotKind::Deck, _ => pool[rng.randi_range(0, pool.len() as i64 - 1) as usize] };
+        // an intact house: a share of the building lots (never the first pair, the tower site) is roofed instead of raised
+        if b.intact_percent > 0 && p > 0 && matches!(kind, LotKind::Block | LotKind::Terrace | LotKind::Deck) && rng.randi_range(0, 99) < b.intact_percent as i64 { kind = LotKind::Roofed; }
         if kind == LotKind::Hazard && (in_deploy || hazards >= 1) { kind = LotKind::Deck } else if kind == LotKind::Hazard { hazards += 1 }
         let r1 = rng.randi_range(0, 3) as usize;
         let r2 = if sym == Symmetry::Point180 { (r1 + 2) % 4 } else { (r1 + rng.randi_range(1, 3) as usize) % 4 };
@@ -47,7 +52,7 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
     let raised = |cs: &[Cell]| cs.iter().filter(|c| c.level >= 1).count();
     // Grow a terrace next to raised ground, or shave non-block cells, until the raised share fits.
     while raised(&cells) < min_r {
-        let grow = |i: usize, cs: &[Cell]| cs[i].level == 0 && !cs[i].street && cs[i].lot_kind != LotKind::Hazard && neighbours(i).any(|j| cs[j].level >= 1);
+        let grow = |i: usize, cs: &[Cell]| cs[i].level == 0 && !cs[i].street && !matches!(cs[i].lot_kind, LotKind::Hazard | LotKind::Rough | LotKind::Roofed) && neighbours(i).any(|j| cs[j].level >= 1);
         let Some((a, b)) = paired(&cells, sym, &mut rng, grow, |_| 0).into_iter().next() else { break };
         cells[a].level = 1; cells[b].level = 1;
     }
@@ -56,12 +61,14 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
         let Some((a, b)) = paired(&cells, sym, &mut rng, shave, |c| u8::from(c.lot_kind == LotKind::Block)).into_iter().next() else { break };
         cells[a].level = 0; cells[b].level = 0;
     }
+    if b.tower_side == 2 { raise_towers_2x2(&mut cells, sym, &mut rng, b.tower_pairs); }
+    if g.wall.iter().any(|&w| w) { raise_wall(&mut cells, &g.wall, &mut rng); }
     // Level 2: raised cells outside the deployment bands. A pair is kept only if the board stays one piece when every
     // step of at most one level counts as a possible way up, so no island of level 2 is ever cut off.
-    let (min_h, max_h) = budget(b.high);
+    let (min_h, max_h) = budget(b.lift);
     let (lo, hi) = ((min_h + 1) & !1, max_h & !1);
     let target = lo + 2 * rng.randi_range(0, ((hi - lo) / 2) as i64) as usize;
-    let lift = |i: usize, cs: &[Cell]| cs[i].level == 1 && cs[i].deploy == 0;
+    let lift = |i: usize, cs: &[Cell]| cs[i].level == 1 && cs[i].deploy == 0 && cs[i].lot_kind != LotKind::Wall;
     let (mut lifted, order) = (0, paired(&cells, sym, &mut rng, lift, |c| match c.lot_kind { LotKind::Block | LotKind::Terrace => 0, LotKind::Deck => 1, _ => 2 }));
     for (a, b) in order {
         if lifted == target / 2 { break; }
@@ -71,7 +78,7 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
     // Level 3: a few level-2 cells rise once more, as mirrored pairs, each kept only if the board stays one piece (so a
     // tower is always reachable by a ladder from level 2). A pair next to an existing tower comes first (blocks, not
     // single posts), then the cell with the fewest ground neighbours (the shortest sheer wall).
-    for _ in 0..rng.randi_range(b.tower_pairs.0 as i64, b.tower_pairs.1 as i64) {
+    for _ in 0..if b.tower_side == 2 { 0 } else { rng.randi_range(b.tower_pairs.0 as i64, b.tower_pairs.1 as i64) } {
         let snap = cells.clone();
         let key = |c: &Cell| { let i = c.z * nx + c.x; if neighbours(i).any(|j| snap[j].level == 3) { 0 } else { 1 + neighbours(i).filter(|&j| snap[j].level == 0).count() as u8 } };
         for (a, b) in paired(&snap, sym, &mut rng, |i, cs| cs[i].level == 2, key) {
@@ -80,6 +87,63 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
         }
     }
     (lots, cells)
+}
+
+/// The city wall. The reserved cells rise to level 2 (lot kind `Wall`); the first and last cell of each run of two or more become level-3 wall
+/// towers; one inner cell is a breach (level 0, kind `Wall`: rubble); and a level-1 buttress stands beside every run (the way up for the ladders), all done
+/// for the west twin and mirrored, so the board stays a half turn. If the result is not one piece the wall is dropped (the validator rejects the board).
+fn raise_wall(cells: &mut [Cell], wall: &[bool], rng: &mut GodotRng) {
+    let snap = cells.to_vec();
+    let col: Vec<usize> = (0..GRID * GRID).filter(|&i| wall[i] && i % GRID < GRID / 2).collect();   // the west twin, top to bottom
+    let set = |cells: &mut [Cell], i: usize, level: u8, kind: LotKind| for j in [i, mirror(i)] { cells[j].level = level; cells[j].lot_kind = kind; };
+    // inside a deployment band the wall is a ruined low wall (3 in, cover, no towers): nobody gets plunging fire into a deployment zone from it
+    for &i in &col { set(cells, i, if cells[i].deploy == 0 { 2 } else { 1 }, LotKind::Wall); }
+    let inner: Vec<usize> = col.iter().copied().filter(|&i| cells[i].deploy == 0 && i >= GRID && col.contains(&(i - GRID)) && col.contains(&(i + GRID))).collect();
+    if !inner.is_empty() { set(cells, inner[rng.randi_range(0, inner.len() as i64 - 1) as usize], 0, LotKind::Wall); }
+    // runs of wall cells (the walkway); a run of two has a wall tower at one end, a run of three or more at both, and every run gets one buttress on free ground beside a
+    // level-2 cell, nearest the run's middle first (a tower is 9 in: a 3 in buttress cannot reach it)
+    let mut runs: Vec<Vec<usize>> = Vec::new();
+    for &i in &col { if cells[i].lot_kind == LotKind::Wall && cells[i].level == 2 { if runs.last().is_some_and(|r| r.last().is_some_and(|&l| l + GRID == i)) { runs.last_mut().expect("a run").push(i); } else { runs.push(vec![i]); } } }
+    for run in runs {
+        let towers = match run.len() { 0 | 1 => Vec::new(), 2 => vec![run[0]], n => vec![run[0], run[n - 1]] };
+        for &i in &towers { set(cells, i, 3, LotKind::Wall); }
+        let mut by_middle: Vec<usize> = run.iter().copied().filter(|i| !towers.contains(i)).collect();
+        by_middle.sort_by_key(|&i| i.abs_diff(run[run.len() / 2]));
+        let free = |cells: &[Cell], j: usize| cells[j].level == 0 && !cells[j].street && cells[j].lot_kind == LotKind::Street && !wall[j] && cells[j].deploy == 0;
+        if let Some(j) = by_middle.iter().flat_map(|&i| [i + 1, i - 1]).find(|&j| free(cells, j) && free(cells, mirror(j))) { set(cells, j, 1, LotKind::Wall); }
+    }
+    if !one_piece(cells) { cells.clone_from_slice(&snap); }
+}
+
+/// Town towers, raised before the level-2 lift: a 2 x 2 block of level-1 cells outside the bands rises to level 3, with one level-1 cell beside it
+/// lifted to level 2 (the ladder up), as mirrored pairs; the board must stay one piece. The block with the most lower neighbours goes first (the
+/// tallest sheer faces). The level-2 lift then runs on what is left.
+fn raise_towers_2x2(cells: &mut [Cell], sym: Symmetry, rng: &mut GodotRng, pairs: (usize, usize)) {
+    let block = |o: usize| [o, o + 1, o + GRID, o + GRID + 1];
+    for _ in 0..rng.randi_range(pairs.0 as i64, pairs.1 as i64) {
+        let snap = cells.to_vec();
+        let around = |o: usize| block(o).into_iter().flat_map(neighbours).filter(move |j| !block(o).contains(j)).collect::<Vec<_>>();
+        let step = |o: usize| around(o).into_iter().find(|&j| snap[j].level == 1 && snap[j].deploy == 0);   // the cell that becomes the 6 in step
+        let ok = |o: usize| o % GRID + 1 < GRID && o / GRID + 1 < GRID && block(o).iter().all(|&i| snap[i].level == 1 && snap[i].deploy == 0) && step(o).is_some();
+        let lower = |o: usize| around(o).iter().filter(|&&j| snap[j].level == 0).count();
+        let mut cand: Vec<(usize, usize)> = if sym == Symmetry::Point180 {
+            // the half-turn image of the block at `o` has its origin at 238 - o
+            (0..GRID * GRID - GRID - 1).filter_map(|o| { let t = GRID * GRID - GRID - 2 - o; (o < t && ok(o) && ok(t) && !block(o).iter().any(|i| block(t).contains(i))).then_some((o, t)) }).collect()
+        } else {
+            let (mut a, mut c): (Vec<_>, Vec<_>) = ((0..GRID * GRID).filter(|&o| o / GRID + 1 < GRID / 2 && ok(o)).collect(), (0..GRID * GRID).filter(|&o| o / GRID >= GRID / 2 && ok(o)).collect());
+            shuffle(&mut a, rng); shuffle(&mut c, rng); a.into_iter().zip(c).collect()
+        };
+        shuffle(&mut cand, rng);
+        cand.sort_by_key(|&(o, t)| usize::MAX - lower(o) - lower(t));
+        for (o, t) in cand {
+            let s1 = step(o).expect("ok() found a step");
+            let steps = [s1, if sym == Symmetry::Point180 { mirror(s1) } else { step(t).expect("ok() found a step") }];   // a half-turn twin has the half-turn step
+            if steps.iter().any(|j| block(o).contains(j) || block(t).contains(j)) { continue; }
+            for i in block(o).into_iter().chain(block(t)) { cells[i].level = 3; }
+            for &j in &steps { cells[j].level = 2; }
+            if one_piece(cells) { break } else { for i in block(o).into_iter().chain(block(t)).chain(steps) { cells[i].level = snap[i].level; } }
+        }
+    }
 }
 
 /// True if the cells that touch and differ by at most one level form a single area.

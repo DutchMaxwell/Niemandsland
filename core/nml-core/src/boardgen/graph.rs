@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 use crate::rng::GodotRng;
 use super::levels::LotKind;
-use super::{Symmetry, CELL_IN, GRID};
+use super::{Budgets, Symmetry, CELL_IN, DEPLOY_DEPTH_CELLS, GRID};
 
 /// A main street: a rectangle of cells. `width_in` is its short side in inches.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -14,9 +14,11 @@ pub struct Lot { pub id: u16, pub x: usize, pub z: usize, pub w: usize, pub h: u
 pub struct SectorGraph {
     pub nx: usize, pub nz: usize, pub symmetry: Symmetry,
     pub arteries: Vec<Artery>, pub is_street: Vec<bool>, pub lots: Vec<Lot>,
+    /// Cells reserved for the city wall (two half-turn twins; empty unless the theme has a wall).
+    pub wall: Vec<bool>,
 }
 
-pub fn build(seed: i64, sym: Symmetry) -> SectorGraph {
+pub fn build(seed: i64, sym: Symmetry, b: &Budgets) -> SectorGraph {
     let (nx, nz, mut rng) = (GRID, GRID, GodotRng::new(seed));
     let (hx, hz) = (nx / 2, nz / 2);
     let mut ax1 = rng.randi_range(1, (hx as i64 - 3).max(1)) as usize;
@@ -32,18 +34,33 @@ pub fn build(seed: i64, sym: Symmetry) -> SectorGraph {
     let cz1 = rng.randi_range(1, (hz as i64 - 2).max(1)) as usize;
     let cz2 = if sym == Symmetry::Point180 { nz - 1 - cz1 } else { rng.randi_range(hz as i64 + 1, (nz as i64 - 2).max(hz as i64 + 1)) as usize };
     for x in 0..nx { street[(if x < hx { cz1 } else { cz2 }) * nx + x] = true; }
+    // A market square: a square of street cells about the board centre, on the mid cross street (it always crosses columns 7 and 8).
+    for z in hz - b.plaza / 2..hz + b.plaza / 2 { for x in hx - b.plaza / 2..hx + b.plaza / 2 { street[z * nx + x] = true; } }
 
-    let mut g = SectorGraph { nx, nz, symmetry: sym, arteries, is_street: Vec::new(), lots: Vec::new() };
-    let (mut occ, tpls, target) = (vec![false; nx * nz], [(3usize, 2usize), (2, 3), (2, 2)], 9);
+    // A city wall: two half-turn twins running north-south over the whole board height on a column no artery runs along; where it meets a street that cell
+    // stays street (a gate). No usable column = no wall (the validator then rejects the board).
+    let mut wall = vec![false; nx * nz];
+    let cols: Vec<usize> = if b.wall { (2..=5).filter(|&x| {
+        let rows: Vec<usize> = (0..nz).filter(|&z| street[z * nx + x]).collect();
+        !rows.is_empty() && rows.windows(2).all(|w| w[1] != w[0] + 1 || w[0] == hz - 1)
+    }).collect() } else { Vec::new() };
+    if !cols.is_empty() {
+        let x = cols[rng.randi_range(0, cols.len() as i64 - 1) as usize];
+        for z in 0..nz { for i in [z * nx + x, (nz - 1 - z) * nx + nx - 1 - x] { wall[i] = !street[i]; } }
+    }
+    let mut g = SectorGraph { nx, nz, symmetry: sym, arteries, is_street: Vec::new(), lots: Vec::new(), wall: wall.clone() };
+    let (mut occ, tpls, target) = (wall, b.lot_shapes, b.lot_pairs);
     for _ in 0..220 {
         if g.lots.len() / 2 >= target { break; }
-        let (w, h) = tpls[rng.randi_range(0, 2) as usize];
+        let first = b.lot_first.get(g.lots.len() / 2).copied();   // the first pairs may have a forced shape and stay out of the bands (a tower site)
+        let (w, h) = first.unwrap_or_else(|| tpls[rng.randi_range(0, tpls.len() as i64 - 1) as usize]);
         if w <= nx && h <= hz {
-            let r = (rng.randi_range(0, (nx - w) as i64) as usize, rng.randi_range(0, (hz - h) as i64) as usize, w, h);
+            let z0 = if first.is_some() { DEPLOY_DEPTH_CELLS as i64 } else { 0 };
+            let r = (rng.randi_range(0, (nx - w) as i64) as usize, rng.randi_range(z0, (hz - h) as i64) as usize, w, h);
             try_pair(&mut g, &street, &mut occ, &mut rng, r);
         }
     }
-    for (w, h) in [(2, 2), (3, 2), (2, 3)] { for z1 in 0..=hz.saturating_sub(h) { for x1 in 0..=nx.saturating_sub(w) {
+    for &(w, h) in b.lot_fill { for z1 in 0..=hz.saturating_sub(h) { for x1 in 0..=nx.saturating_sub(w) {
         if g.lots.len() / 2 < target { try_pair(&mut g, &street, &mut occ, &mut rng, (x1, z1, w, h)); }
     }}}
     g.is_street = street;

@@ -5,7 +5,8 @@ extends GdUnitTestSuite
 const SHADER_PATH := "res://shaders/tiefwerk_board.gdshader"
 
 
-const INCLUDES := ["res://shaders/tiefwerk_noise.gdshaderinc", "res://shaders/tiefwerk_edges.gdshaderinc", "res://shaders/tiefwerk_relief.gdshaderinc"]
+const INCLUDES := ["res://shaders/tiefwerk_noise.gdshaderinc", "res://shaders/tiefwerk_edges.gdshaderinc", "res://shaders/tiefwerk_relief.gdshaderinc",
+	"res://shaders/tiefwerk_value.gdshaderinc", "res://shaders/tiefwerk_micro.gdshaderinc", "res://shaders/tiefwerk_scale.gdshaderinc"]
 
 
 ## The board shader with its includes appended (the pins below do not care which file a function lives in).
@@ -102,9 +103,9 @@ func test_the_sump_liquid_flows_ripples_and_stains_what_is_round_it() -> void:
 
 func test_the_wall_relief_is_one_height_function_whose_gradient_is_the_normal() -> void:
 	var src := _source()
-	assert_bool(src.contains("float wall_height(vec2 uv, float px)")).is_true()
-	assert_bool(src.contains("vec3 wall_relief(vec2 uv, vec3 n, float px, out float h0)")).is_true()
-	assert_str(_line_with(src, "float hu =")).contains("wall_height(uv + vec2(DE, 0.0), px)")   # finite differences of that one function
+	assert_bool(src.contains("float wall_height(vec2 uv, float px, vec3 ctx)")).is_true()
+	assert_bool(src.contains("vec3 wall_relief(vec2 uv, vec3 n, float px, vec3 ctx, out float h0)")).is_true()
+	assert_str(_line_with(src, "float hu =")).contains("wall_height(uv + vec2(DE, 0.0), px, ctx)")   # finite differences of that one function
 	assert_str(_line_with(src, "return normalize(n - hu * tu")).is_not_empty()
 	assert_str(_line_with(src, "nrel = wall_relief(")).is_not_empty()
 	assert_str(_line_with(src, "NORMAL = normalize((VIEW_MATRIX")).contains("nrel")
@@ -147,3 +148,80 @@ func test_hatches_grates_and_deck_rivets_have_relief_with_the_albedo_shapes_of_t
 	assert_str(_line_with(src, "float bar = smoothstep(0.5, 0.58, f)")).is_not_empty()   # the grate's slots, 6 per inch like the albedo
 	assert_str(_line_with(src, "rivet heads")).contains("dome(")
 	assert_str(_line_with(src, "tread ribs")).is_not_empty()
+
+
+func test_a_roof_has_one_look_per_lot_and_the_value_ladder_runs_floor_deck_roof_tower() -> void:
+	var src := _source()
+	assert_bool(src.contains("vec3 lot_hue(float lot)")).override_failure_message("the roof's colour must come from the lot id alone, never from a plate").is_true()
+	assert_str(_line_with(src, "alb = value_top(")).contains("me.z")   # the lot id of the cell texture's blue channel
+	assert_str(src.substr(src.find("alb = value_top(") - 40, 40)).contains("detail > 0.5")   # the finer look only: Low keeps main's colours
+	var gains := {}
+	for gain in ["FLOOR_GAIN", "DECK_GAIN", "ROOF_GAIN", "TOWER_GAIN"]:
+		var line := _line_with(src, "const float %s =" % gain)
+		assert_str(line).override_failure_message("%s missing" % gain).is_not_empty()
+		gains[gain] = float(line.get_slice("=", 1).get_slice(";", 0))
+	# the floor is darkened, a tower top is lifted over the roofs (the deck's own base value is lower than the roofs', so its gain may be above 1)
+	assert_bool(gains["FLOOR_GAIN"] < 1.0 and gains["FLOOR_GAIN"] < gains["DECK_GAIN"] and gains["ROOF_GAIN"] < gains["TOWER_GAIN"]).is_true()
+
+
+func test_the_micro_tier_is_sharp_chips_and_thin_streaks_that_fade_out_below_two_pixels() -> void:
+	var src := _source()
+	assert_bool(src.contains("float chips(vec2 uv, float size, float px)")).is_true()
+	assert_str(_line_with(src, "m = max(m, smoothstep(rad + w")).is_not_empty()   # a chip has a hard edge one pixel wide, not an airbrushed blob
+	assert_str(_line_with(src, "float w = px / size;")).is_not_empty()
+	assert_str(_line_with(src, "return 1.0 - smoothstep(")).contains("0.012").contains("0.025")   # gone from 0.025 in per pixel on: the play camera sees none of it
+	assert_str(_line_with(src, "float s = vnoise(vec2(uv.x * 24.0")).contains("uv.y * 2.0")   # streaks stretched 1:12 down the wall
+	assert_str(_line_with(src, "float hard = max(step(hi, t)")).contains("chips(uv, 0.045, px)")   # chips of 0.045 in (the plan's 0.02-0.05)
+
+
+func test_worn_paint_goes_through_the_chips_with_the_finer_look_and_keeps_the_soft_blend_on_low() -> void:
+	var src := _source()
+	var hazard := _line_with(src, "alb = mix(paint, alb,")
+	assert_str(hazard).contains("detail > 0.5 ? chipped_wear(").contains(": smoothstep(0.45, 0.65, n2 + 0.2 * n3)")
+	var street := _line_with(src, "alb = mix(alb, YELLOW * 0.7, step(abs(fp.x)")
+	assert_str(street).contains("detail > 0.5 ? chipped_wear(").contains(": smoothstep(")
+	assert_str(_line_with(src, "smoothstep(0.1, 0.0, ed) * (detail > 0.5")).contains("chipped_wear(n3, 0.45, 0.7, uv, px)")
+	assert_str(_line_with(src, "vec4 ew =")).contains("chips(uv, 0.05, px)")   # the edge highlight breaks up in the same chips when close
+	assert_str(_line_with(src, "dust(alb, rh, n2, mic)")).is_not_empty()   # dust in the recesses of a wall
+
+
+func test_the_wall_has_human_scale_cues_a_door_of_0_7_by_1_4_a_plinth_slit_windows_and_columns_and_panels_that_divide_three() -> void:
+	var src := _source()
+	assert_str(_line_with(src, "const float DOOR_W")).contains("0.7")
+	assert_str(_line_with(src, "const float DOOR_H")).contains("1.4")
+	assert_str(_line_with(src, "const float PLINTH_H")).contains("0.3")
+	assert_bool(src.contains("vec4 door_cell(float u, float hy, float ok)")).is_true()
+	assert_bool(src.contains("vec3 slit_cell(float u, float hy, float door_w)")).is_true()
+	assert_str(_line_with(src, "float s = floor((hy - 1.1) / STOREY")).is_not_empty()   # slit windows at 1.1 in, once per storey
+	var plate := _line_with(src, "return h < 0.25 ? 0.75")
+	assert_str(plate).contains("1.5").contains("3.0")   # 0.75 / 1.5 / 3 in: all divide the 3 in bay, so a plate never crosses a bay
+
+
+func test_a_door_never_stands_onto_a_sump_or_at_the_foot_of_a_ladder() -> void:
+	var src := _source()
+	assert_str(_line_with(src, "sctx = vec3(p.y - low_y, step(oc.y, 0.5) * step(oc.w, 0.5)")).is_not_empty()   # green = sump, alpha = ladder foot of the cell outside
+	assert_str(_line_with(src, "step(0.0, hy));")).contains("ok *")   # and never below the floor
+
+
+func test_no_function_is_defined_twice_across_the_board_shader_and_its_includes() -> void:
+	# A merge once left the relief include with its step-4 block twice; headless runs never compile a shader, so only a text check can see it.
+	var rx := RegEx.create_from_string("(?m)^(?:float|vec2|vec3|vec4|int|ivec2|bool|void)\\s+(\\w+)\\s*\\(")
+	var seen := {}
+	var twice: Array[String] = []
+	var queue: Array[String] = ["res://shaders/tiefwerk_board.gdshader"]
+	var done := {}
+	while not queue.is_empty():
+		var path: String = queue.pop_back()
+		if done.has(path):
+			continue
+		done[path] = true
+		var text := FileAccess.get_file_as_string(path)
+		for line in text.split("\n"):
+			if line.begins_with("#include"):
+				queue.append(line.split("\"")[1])
+		for m in rx.search_all(text):
+			var fn := m.get_string(1)
+			if seen.has(fn):
+				twice.append("%s (%s)" % [fn, path])
+			seen[fn] = true
+	assert_array(twice).override_failure_message("defined twice: %s" % [twice]).is_empty()

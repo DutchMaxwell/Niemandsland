@@ -311,6 +311,9 @@ const PENDING_EPOCH_HEIGHT := 94
 ## The core's `PENDING_EPOCH_CASUALTY_TIES` (acts.rs): from here the core ranks casualties by the table's own f32 distance to the
 ## centroid. Nothing in the table gates on it (the table is the reference); the shadow compares the survivors' positions from here.
 const PENDING_EPOCH_CASUALTY_TIES := 94
+## The core's `PENDING_EPOCH_SPELL_NO_STACK` (acts.rs, lead ruling 20.11.): from 95 a second identical spell record on the same unit refreshes the first and adds none
+## (`main.gd` `_solo_record_spell_mod`), GF 3.6 "Rules priority & stacking effects".
+const PENDING_EPOCH_SPELL_NO_STACK := 95
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

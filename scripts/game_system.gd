@@ -23,6 +23,7 @@ const _LABELS := {
 	"aofs": "Age of Fantasy: Skirmish",
 	"aofr": "Age of Fantasy: Regiments",
 }
+const _SHORT := {"gf": "GF", "gff": "GFF", "aof": "AoF", "aofs": "AoFS", "aofr": "AoFR"}
 const _SETTINGS := {
 	"gf": SETTING_GRIMDARK, "gff": SETTING_GRIMDARK,
 	"aof": SETTING_FANTASY, "aofs": SETTING_FANTASY, "aofr": SETTING_FANTASY,
@@ -49,6 +50,30 @@ static func is_known(id: String) -> bool:
 	return IDS.has(id.strip_edges().to_lower())
 
 
+const MENU_CFG := "user://menu.cfg"
+const PICK_KEY := "game_system"
+
+
+## The pick a fresh table-setup dialog starts on: the remembered one (the menu config), else gf. Same file and pattern as
+## RulesAutomation.default_pick; a value that is no system reads as gf.
+static func default_pick(cfg_path: String = MENU_CFG) -> String:
+	var cfg := ConfigFile.new()
+	if cfg.load(cfg_path) != OK:
+		return DEFAULT_ID
+	var id := str(cfg.get_value("menu", PICK_KEY, DEFAULT_ID)).strip_edges().to_lower()
+	return id if IDS.has(id) else DEFAULT_ID
+
+
+## Remembers the player's pick for the next table (keeps the other menu keys: biome, rules).
+static func remember_pick(id: String, cfg_path: String = MENU_CFG) -> void:
+	if not is_known(id):
+		return
+	var cfg := ConfigFile.new()
+	cfg.load(cfg_path)   # a missing file is fine
+	cfg.set_value("menu", PICK_KEY, id.strip_edges().to_lower())
+	cfg.save(cfg_path)
+
+
 ## Applies the "system" key of a pending table setup (what the setup screen picked) to the army manager and returns
 ## the battle-log line ("" when the setup has no key: harness, tutorial, scenario and old paths stay "never set").
 ## A value that is no system changes nothing and says so.
@@ -64,6 +89,22 @@ static func apply_table_setup(setup: Dictionary, manager: Object) -> String:
 
 static func label(id: String) -> String:
 	return str(_LABELS[normalize(id)])
+
+
+## Short form for a crowded list ("GF", "GFF", "AoF", "AoFS", "AoFR").
+static func short(id: String) -> String:
+	return str(_SHORT[normalize(id)])
+
+
+## The faction keys of an AI-list manifest a table of `system` is offered: exactly the lists of that system, no family
+## folding ("" = nothing names a system yet: all of them). An entry without a "system" is a gf list.
+static func manifest_keys(manifest: Dictionary, system: String) -> Array:
+	var out: Array = []
+	for fk in manifest:
+		var of_system := normalize(str((manifest[fk] as Dictionary).get("system", DEFAULT_ID)))
+		if system.is_empty() or of_system == normalize(system):
+			out.append(fk)
+	return out
 
 
 ## "grimdark" (gf, gff) or "fantasy" (aof, aofs, aofr).

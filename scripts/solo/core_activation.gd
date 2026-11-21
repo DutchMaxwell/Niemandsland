@@ -1520,6 +1520,7 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		_land_growth(main, gu, d)
 		_land_buffs(main, gu, d)
 		_land_spell_buffs(main, gu, d, done)
+		_land_marks_left(main, gu, d)
 
 
 ## HR-POS: the unit's surviving model positions after the activation (the delta's `positions`, capture slot order with the
@@ -1615,12 +1616,17 @@ static func _land_growth(main, gu: GameUnit, d: Dictionary) -> void:
 ## and after the morale die (P4.0-4b / -4c), which picked the records by role and knew no grant. From epoch 81 the core keeps a
 ## once morale buff through a Shaken unit's auto-failed test, as the table does (#2804).
 static func _land_buffs(main, gu: GameUnit, d: Dictionary) -> void:
+	# One spend for the whole delta: records of the same spell stacked on the unit (a cast that was not used up in an earlier round) are
+	# all spent by the core's exchange; the table says that once (`_solo_spend_records` dedupes the sentence), not once per record.
+	var spend: Array = []
+	var pool: Array = (main._solo_spell_mods.get(gu.get_instance_id(), []) as Array).duplicate()
 	for e in d.get("buffs_spent", []):
-		var records: Array = main._solo_spell_mods.get(gu.get_instance_id(), [])
-		var hit: Array = records.filter(func(rd: Variant) -> bool: return str((rd as Dictionary).get("spell", "")) == str(e[0]) \
+		var hit: Array = pool.filter(func(rd: Variant) -> bool: return str((rd as Dictionary).get("spell", "")) == str(e[0]) \
 			and str((rd as Dictionary).get("scope", "")) == str(e[1]) and str((rd as Dictionary).get("duration", "")) == "once")
 		if not hit.is_empty():
-			main._solo_spend_records(gu, [hit[0]])
+			spend.append(hit[0])
+			pool.erase(hit[0])   # equal records are interchangeable: the next entry takes the next one
+	main._solo_spend_records(gu, spend)
 
 
 ## Landing lane (PLAN H): the once-records the TABLE placed between the capture and the core's call are not on the board the core
@@ -1683,6 +1689,26 @@ static func land_late_once_records(main, h: int, attacker: GameUnit, targets: Ar
 					late.append(rd)
 			if not late.is_empty():
 				main._solo_spend_once_mods(uu, side[1], false, "", unit == attacker, late)
+
+
+## Landing lane (PLAN H, `PENDING_EPOCH_MELEE_MARK_SCOPE`): the melee-scoped Marks (Rapid Charge, Piercing Fighting) a core volley placed on the marked unit and left
+## standing (the delta's `marks_left`: record name, scope, granted rule). After a volley the table keeps such a record for a later charger (`_solo_apply_vs_marks` records
+## it on the target and the volley's spend skips a melee-scoped record); the door never ran that seam, so the record is landed here, with the table's own writer and
+## silently (the core already said the pick and the `... is ACTIVE` line). A record the table holds already (its own pre-attack beat placed it) is no news: only the
+## difference in count lands.
+static func _land_marks_left(main, gu: GameUnit, d: Dictionary) -> void:
+	var left := {}   # "name|scope" -> [count, grant]
+	for e in d.get("marks_left", []):
+		var key := "%s|%s" % [e[0], e[1]]
+		left[key] = [int((left.get(key, [0, ""]) as Array)[0]) + 1, str(e[2])]
+	for key in left:
+		var parts: PackedStringArray = str(key).split("|")
+		var held: int = (main._solo_spell_mods.get(gu.get_instance_id(), []) as Array).filter(func(rd: Variant) -> bool:
+			return str((rd as Dictionary).get("spell", "")) == parts[0] and str((rd as Dictionary).get("scope", "")) == parts[1] \
+				and str((rd as Dictionary).get("duration", "")) == "once").size()
+		for _i in int(left[key][0]) - held:
+			main._solo_record_spell_mod(gu, parts[0], {"grants_rule": left[key][1], "scope": parts[1], "beneficiary": "attackers",
+				"duration": "once", "no_live_grant": true, "quiet": true})
 
 
 ## CC-12a (CC-8c's `buffs_gained`): the buff / debuff effects this activation's casts landed on the unit and left standing

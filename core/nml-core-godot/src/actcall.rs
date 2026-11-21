@@ -218,6 +218,11 @@ fn delta_array(before: &State, after: &State) -> VarArray {
             gained.push(&name.as_str().to_variant());
         }
         d.set("buffs_gained", &gained);
+        let mut left = VarArray::new();
+        for (name, scope, grant) in &u.marks_left {
+            left.push(&varray![name.as_str(), scope.as_str(), grant.as_str()].to_variant());
+        }
+        d.set("marks_left", &left);
         out.push(&d.to_variant());
     }
     out

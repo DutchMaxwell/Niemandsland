@@ -297,6 +297,7 @@ var _solo_grade_logged := ""   # the grade line this game already logged ("" = n
 var _solo_opponent_brain: Dictionary = {}  # the opponent the game really runs (GameRecordCollector.opponent_brain),
                                            # set with the "opponent:" line; {} = no AI seat graded
 var _rules_chip: Label = null                # rules-automation chip beside the round button (plan 1.3)
+var _system_chip: Label = null               # read-only game-system chip beside the rules chip (PLAN_GAME_SYSTEM_SWITCH)
 var _turn_chip: Label = null                 # hotseat turn chip beside the rules chip (plan 2.T2a)
 var _rules_proposal_pending := false         # online: waiting for the other player's answer (plan 3.0)
 var _rules_agreement_mode := 0               # 0 idle, 1 proposing, 2 confirming (plan 3.0)
@@ -836,6 +837,9 @@ func _ready() -> void:
 	map_layout_editor.theme_requested.connect(func(theme_id: String) -> void:
 		if apply_table_theme(theme_id):
 			map_layout_editor._on_close_pressed())   # close the editor so the laid-out table shows
+	map_layout_editor.system_requested.connect(func(id: String) -> void:
+		set_table_system(id, "the map editor")
+		_update_system_chip())   # a refusal puts the row back on the real system
 	map_layout_editor.relic_drop_chosen.connect(_solo_relic_drop_chosen)
 	map_layout_editor.vip_spot_chosen.connect(_solo_vip_spot_chosen)
 	map_layout_editor.vip_pick_refused.connect(func() -> void:
@@ -1017,6 +1021,7 @@ func _ready() -> void:
 	var system_line := GameSystem.apply_table_setup(table_setup,opr_army_manager)
 	if system_line != "":
 		_log_rule_event(BattleLog.Category.GENERAL,system_line)
+		_update_rules_chip()   # the chip may already exist (built with the default system): show the picked one
 	var joining_client: bool = pending_internet and not ProjectSettings.get_setting("niemandsland/internet_is_host", false)
 	# Headless MP test harness (test/mp/): skip the interactive table-size chooser AND the
 	# cinematic intro and drop straight onto a live, RPC-capable table. Inert in normal play.
@@ -3966,8 +3971,15 @@ func _solo_rules_system() -> String:
 ## The table's game system: the value the table was set to, else the system of the first loaded list (lowest slot),
 ## else the default (PLAN_GAME_SYSTEM_SWITCH). Never "" - a caller can hand it straight to RulesRegistry / GameSystem.
 func _table_system() -> String:
+	var system := _table_system_or_empty()
+	return system if not system.is_empty() else RulesRegistry.DEFAULT_SYSTEM
+
+
+## "" when nothing on the table names a game system: no set value, no loaded list and no unit with a system (the next
+## list then names it, see _admit_list_system).
+func _table_system_or_empty() -> String:
 	if opr_army_manager == null:
-		return RulesRegistry.DEFAULT_SYSTEM
+		return ""
 	if not str(opr_army_manager.table_system).is_empty():
 		return RulesRegistry.normalize_system(str(opr_army_manager.table_system))
 	var slots: Array = opr_army_manager.armies.keys()
@@ -3976,7 +3988,11 @@ func _table_system() -> String:
 		var army = opr_army_manager.armies[slot]
 		if army != null:
 			return RulesRegistry.normalize_system(str(army.game_system_abbrev))
-	return RulesRegistry.DEFAULT_SYSTEM
+	for unit in opr_army_manager.game_units.values():   # a loaded save / a peer's list carries units but no OPRArmy
+		var raw := str((unit as GameUnit).unit_properties.get("game_system", ""))
+		if not raw.is_empty():
+			return RulesRegistry.normalize_system(raw)
+	return ""
 
 
 ## The picked mission's attacker points factor (> 1 only for a roles mission that grants one).
@@ -6111,6 +6127,8 @@ func _solo_place_spell_tokens(spell_name: String, targets: Array, effect: Dictio
 		var tu := t as GameUnit
 		if tu == null or tu.is_destroyed():
 			continue
+		if _solo_spell_refreshed(tu, spell_name, _solo_spell_rec(spell_name, effect)):
+			continue   # the same spell does not stack: no second token, no second record
 		if radial_menu_controller.apply_library_token(tu, spell_name):
 			# Maintainer rules check (31.07.): "once (next time the effect would apply)" spells
 			# PERSIST until they apply — there is no blanket round-end rule in the book; only
@@ -6163,10 +6181,23 @@ func _solo_log_accumulator_lends(draws: Array, caster_name: String) -> void:
 ## unit; the hit path (_solo_hit_mod_info) and the defense seam (_solo_defense_parts) read it,
 ## each application logs (rules-must-log). Cleared with the tokens at round end.
 func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary) -> void:
+	var rec := _solo_spell_rec(spell_name, effect)
+	if rec.is_empty() or _solo_spell_refreshed(tu, spell_name, rec):
+		return
+	var grants := str(rec["grants_rule"])
+	var key := tu.get_instance_id()
+	if not _solo_spell_mods.has(key):
+		_solo_spell_mods[key] = []
+	(_solo_spell_mods[key] as Array).append(rec)
+	_solo_place_spell_rec(tu, spell_name, effect, rec, grants)
+
+
+## The record a spell effect leaves on its target ({} = nothing to record: no modifier and no grant).
+func _solo_spell_rec(spell_name: String, effect: Dictionary) -> Dictionary:
 	var modifier: Dictionary = effect.get("modifier", {})
 	var grants := str(effect.get("grants_rule", ""))
 	if modifier.is_empty() and grants.is_empty():
-		return
+		return {}
 	var rec := {"spell": spell_name, "hit_mod": int(modifier.get("hit_mod", 0)),
 		"def_mod": int(modifier.get("def_mod", 0)),
 		"casting_mod": int(modifier.get("casting_mod", 0)),
@@ -6186,11 +6217,32 @@ func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary
 	if rec["hit_mod"] == 0 and rec["def_mod"] == 0 and rec["casting_mod"] == 0 \
 			and rec["morale_mod"] == 0 and rec["range_in"] == 0 and rec["advance_in"] == 0 \
 			and rec["rush_in"] == 0 and grants.is_empty():
-		return
-	var key := tu.get_instance_id()
-	if not _solo_spell_mods.has(key):
-		_solo_spell_mods[key] = []
-	(_solo_spell_mods[key] as Array).append(rec)
+		return {}
+	return rec
+
+
+## PENDING_EPOCH_SPELL_NO_STACK (GF 3.6, "Rules priority & stacking effects": the same spell does not stack; core twin `sim::tray_spell_effect`):
+## true when `tu` already carries an identical record of the spell (the live grant's `granted_to` and the Regeneration `used` flag aside).
+## The existing record stands (it is the refreshed one), nothing is added, the line says so.
+func _solo_spell_refreshed(tu: GameUnit, spell_name: String, rec: Dictionary) -> bool:
+	if rec.is_empty() or AiActRecorder.rules_epoch < AiActRecorder.PENDING_EPOCH_SPELL_NO_STACK:
+		return false
+	var sig := func(rd: Dictionary) -> String:
+		var c := rd.duplicate()
+		c.erase("granted_to")
+		c.erase("used")
+		return JSON.stringify(c, "", true)
+	var want: String = sig.call(rec)
+	for old in _solo_spell_mods.get(tu.get_instance_id(), []):
+		if sig.call(old) == want:
+			_log_rule_event(BattleLog.Category.COMBAT, "\"%s\" on %s is already active - the same spell does not stack, the effect stands" % [
+				spell_name, tu.get_name()], true)
+			return true
+	return false
+
+
+## The placement half of `_solo_record_spell_mod`: grant overlay, stamps, wire and the ACTIVE line.
+func _solo_place_spell_rec(tu: GameUnit, spell_name: String, effect: Dictionary, rec: Dictionary, grants: String) -> void:
 	# NML-006 side effects: a granted rule goes onto the LIVE special_rules overlay, speed/range
 	# deltas onto the props stamps — every existing engine read then honours them.
 	_solo_apply_grant(tu, rec)
@@ -6432,6 +6484,7 @@ func _solo_spend_records(uu: GameUnit, spent: Array) -> void:
 		return
 	var key := uu.get_instance_id()
 	var records: Array = _solo_spell_mods.get(key, [])
+	var said := {}   # equal records spent together say their sentence once
 	for rd in spent:
 		records.erase(rd)
 		_solo_revoke_grant(rd as Dictionary)
@@ -6441,7 +6494,8 @@ func _solo_spend_records(uu: GameUnit, spent: Array) -> void:
 		for e in _solo_spell_tokens_active.duplicate():
 			if (e as Dictionary).get("unit") == uu and str((e as Dictionary).get("token")) == spell:
 				_solo_spell_tokens_active.erase(e)
-		if battle_log != null:
+		if battle_log != null and not said.has(spell):
+			said[spell] = true
 			if _solo_is_regen_grant(rd as Dictionary):
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"Regeneration Buff: %s's Regeneration is spent by a wounding exchange" % uu.get_name(), true)
@@ -18271,6 +18325,95 @@ func set_rules_automation(level: int, who: String) -> bool:
 	return true
 
 
+## The switch (PLAN_GAME_SYSTEM_SWITCH): sets the table's game system. False, with one battle-log line (and a toast on
+## screen), while a list is on the table, for a guest in multiplayer (the system is host-owned) and for an id that is no
+## system; true when it was set or already was. The line is this table's own - every peer logs its own on applying it.
+func set_table_system(id: String, who: String) -> bool:
+	if opr_army_manager == null:
+		return false
+	var system := id.strip_edges().to_lower()
+	var online: bool = network_manager != null and network_manager.is_multiplayer_active()
+	if not GameSystem.is_known(system):
+		_refuse_table_system("\"%s\" is not a game system" % id)
+	elif online and not network_manager.is_host:
+		_refuse_table_system("only the host sets the game system")
+	elif _table_has_list():
+		_refuse_table_system("Game system is locked while a list is on the table")
+	else:
+		if str(opr_army_manager.table_system) != system:
+			opr_army_manager.table_system = system
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL, "Game system: %s" % GameSystem.label(system), false, "changed by %s" % who)
+			if online:
+				network_manager.broadcast_table_settings({"game_system": system})
+			_update_rules_chip()
+		return true
+	return false
+
+
+## A peer's list of another game system than this table's: the peer vetted it on its own machine, so this side never
+## refuses it (a room of mixed build versions must not desync) - one battle-log line only.
+func _note_remote_list_system(units: Array, army_name: String) -> void:
+	var table_system := _table_system_or_empty()
+	if table_system.is_empty() or units.is_empty() or battle_log == null:
+		return
+	var raw := str(((units[0] as Dictionary).get("unit_properties", {}) as Dictionary).get("game_system", ""))
+	if not raw.is_empty() and RulesRegistry.normalize_system(raw) != table_system:
+		battle_log.log_event(BattleLog.Category.GENERAL, "%s is a list for %s, this table plays %s (a peer's list, kept)" % [
+			army_name, GameSystem.label(raw), GameSystem.label(table_system)])
+
+
+## A list is on the table: an imported one, or units that came from a save or a peer's list.
+func _table_has_list() -> bool:
+	for army in opr_army_manager.armies.values():
+		if army != null:
+			return true
+	return not opr_army_manager.game_units.is_empty()
+
+
+func _refuse_table_system(reason: String, prefix: String = "Game system unchanged") -> void:
+	var text := "%s: %s" % [prefix, reason]
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, text)
+	if get_node_or_null("UI") != null:
+		_show_toast(text)
+
+
+## The import door's game-system check (PLAN_GAME_SYSTEM_SWITCH): a list of another system than the table's is refused
+## before anything is stored or spawned, with one sentence naming both (log line + toast). A table nothing has named a
+## system for yet takes the first list's system ("set by the first list"). True = import on.
+func _admit_list_system(army: OPRApiClient.OPRArmy) -> bool:
+	var list_system := RulesRegistry.normalize_system(str(army.game_system_abbrev))
+	var table_system := _table_system_or_empty()
+	if table_system.is_empty():
+		opr_army_manager.table_system = list_system
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Game system: %s" % GameSystem.label(list_system), false, "set by the first list, %s" % army.name)
+		if network_manager != null and network_manager.is_multiplayer_active() and network_manager.is_host:
+			network_manager.broadcast_table_settings({"game_system": list_system})
+		_update_rules_chip()
+		return true
+	if list_system == table_system:
+		return true
+	_refuse_table_system("%s is a list for %s, this table plays %s." % [army.name, GameSystem.label(list_system), GameSystem.label(table_system)], "Import refused")
+	return false
+
+
+func _update_system_chip() -> void:
+	if next_round_btn == null or opr_army_manager == null:
+		return
+	if _system_chip == null:
+		_system_chip = Label.new()
+		_system_chip.theme_type_variation = HouseStyle.CAPTION
+		_system_chip.mouse_filter = Control.MOUSE_FILTER_STOP   # labels ignore the mouse by default - needed for the tooltip
+		next_round_btn.add_sibling(_system_chip)
+	var system := _table_system()
+	_system_chip.text = "SYSTEM: %s" % GameSystem.short(system)
+	_system_chip.tooltip_text = "%s (%s scale). Changed in the map editor while no list is on the table." % [GameSystem.label(system), GameSystem.scale(system)]
+	if map_layout_editor != null and map_layout_editor.has_method("set_game_system"):
+		map_layout_editor.set_game_system(system, "Locked while a list is on the table" if _table_has_list() else "")
+
+
 ## The chip beside the round button; built lazily, shown only while the rules-automation UI flag is on.
 func _update_rules_chip() -> void:
 	if next_round_btn == null or opr_army_manager == null:
@@ -18283,6 +18426,7 @@ func _update_rules_chip() -> void:
 		next_round_btn.add_sibling(_rules_chip)
 	_rules_chip.visible = RulesAutomation.ui_enabled()
 	_rules_chip.text = RulesAutomation.chip_text(opr_army_manager.rules_automation, not solo_ai_slots.is_empty())
+	_update_system_chip()
 	if _turn_chip == null:
 		_turn_chip = Label.new()
 		_turn_chip.theme_type_variation = HouseStyle.CAPTION
@@ -19846,6 +19990,9 @@ func _on_table_size_chosen(size_feet: Vector2, dialog: Window = null, biome_name
 	var td := dialog as TableSizeDialog
 	if td:
 		biome_name = td.selected_biome
+		var system_line := GameSystem.apply_table_setup({"system": td.selected_system}, opr_army_manager)   # the direct-to-main chooser
+		if system_line != "":
+			_log_rule_event(BattleLog.Category.GENERAL, system_line)
 	if biome_name != "" and table.has_method("set_biome"):
 		table.set_biome(biome_name)
 		# Sync the biome to other players (host-authoritative, via the table-settings RPC).
@@ -20069,6 +20216,9 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# is not part of the serialized .nml game state, so it must be pushed separately).
 	if table != null:
 		network_manager.broadcast_table_settings({"biome": table.biome})
+	# The game system is host-owned table state and must reach the joiner before its first list does.
+	if opr_army_manager != null and not str(opr_army_manager.table_system).is_empty():
+		network_manager.broadcast_table_settings({"game_system": opr_army_manager.table_system})
 	# #194 belt-and-braces: re-push the deployment-zone type so the joiner builds the zone
 	# GEOMETRY even if the state-sync race loses — without meshes, its "Show Deployment
 	# Zones" tick was a silent no-op (visibility only flips existing meshes).
@@ -20850,6 +21000,15 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 			_adjust_camera_for_table_size(size_feet)
 			print("[Settings] Table resized to %.1fx%.1f feet" % [size_feet.x, size_feet.y])
 
+	# The host's game system (network_manager already dropped a guest's push of it).
+	if settings.has("game_system") and opr_army_manager != null:
+		var host_system := str(settings["game_system"])
+		if GameSystem.is_known(host_system) and host_system != str(opr_army_manager.table_system):
+			opr_army_manager.table_system = host_system
+			if battle_log != null:   # this table's own line - never re-broadcast (the host logged and sent its own)
+				battle_log.log_event(BattleLog.Category.GENERAL, "Game system: %s" % GameSystem.label(host_system))
+			_update_rules_chip()
+
 	if settings.has("paths"):   # a table theme's worn paths (D14)
 		TablePaths.of(table).set_paths(settings["paths"])
 	if settings.has("biome") and table.has_method("set_biome"):
@@ -21523,19 +21682,22 @@ func _open_ai_opponent_dialog() -> void:
 
 ## The AI Opponent question over an already loaded manifest. `loader(file, slot)` runs on OK
 ## (default: _load_ai_opponent_list) so the dialog can be driven without the network.
-## Only the lists of the system the human army plays are offered (an entry without "system" is "gf");
-## with no human army yet every list is offered, suffixed " (GF)" / " (AoF)" when the manifest mixes both.
+## Only the lists of the table's game system are offered, exactly (an entry without "system" is "gf"; no gff / aofs / aofr
+## folding onto the battle-size families); with no system named yet every list is offered, suffixed " (GF)" / " (AoF)" ...
+## when the manifest mixes systems.
 func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable()) -> void:
-	var human_army = opr_army_manager.armies.get(solo_controller.human_slot if solo_controller != null else 1) if opr_army_manager != null else null
-	var played := "" if human_army == null else ("aof" if RulesRegistry.normalize_system(human_army.game_system_abbrev).begins_with("aof") else "gf")
+	var played := _table_system_or_empty()   # "" = nothing names a game system yet: every AI list is on offer
 	var system_of := {}
 	for fk in manifest:
-		system_of[fk] = str((manifest[fk] as Dictionary).get("system", "gf"))
-	var fac_keys: Array = manifest.keys().filter(func(fk) -> bool: return played.is_empty() or system_of[fk] == played)
+		system_of[fk] = GameSystem.normalize(str((manifest[fk] as Dictionary).get("system", "gf")))
+	var fac_keys: Array = GameSystem.manifest_keys(manifest, played)
 	if fac_keys.is_empty():
 		_solo_show_toast("No AI lists for this game system yet — import any list with the AI checkbox instead")
 		return
-	var mixed: bool = played.is_empty() and system_of.values().has("gf") and system_of.values().has("aof")
+	var distinct := {}
+	for v in system_of.values():
+		distinct[v] = true
+	var mixed: bool = played.is_empty() and distinct.size() > 1
 	var parts := HouseStyle.overlay_sheet("AI Opponent", SOLO_DIALOG_MIN_WIDTH)
 	var layer := CanvasLayer.new()
 	layer.name = "AiOpponentLayer"
@@ -21548,7 +21710,7 @@ func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable(
 	for i in fac_keys.size():
 		var fk: String = fac_keys[i]
 		var fac_name := str((manifest[fk] as Dictionary).get("name", fk))
-		fac_opt.add_item(fac_name + ((" (AoF)" if system_of[fk] == "aof" else " (GF)") if mixed else ""), i)
+		fac_opt.add_item(fac_name + ((" (%s)" % GameSystem.short(system_of[fk])) if mixed else ""), i)
 	box.add_child(HouseStyle.field_row("Faction:", fac_opt))
 
 	var pts_opt := OptionButton.new()
@@ -21695,6 +21857,8 @@ func _load_ai_list_manifest() -> Dictionary:
 ## Handle army imported from dialog
 func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_controlled: bool = false) -> void:
 	print("Importing army '%s' for Player %d%s" % [army.name, player_id, " (AI-controlled)" if ai_controlled else ""])
+	if not _admit_list_system(army):
+		return   # a list of another game system than the table's: nothing stored, nothing spawned
 	# D5 (b), 27.10.2026: a book NEWER than the pinned rules imports WITH a visible warning — the
 	# player may play on, the refusal for online rooms and saves follows in 0.3.15. Same major.minor
 	# (3.5.3 on 3.5.1) says nothing. The rules version is the maps' own _meta.core_version, never a
@@ -21917,6 +22081,7 @@ func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> 
 	var units: Array = buf.get("units", [])
 	var object_groups: Array = buf.get("objects", [])
 	print("[ArmySync] Complete: building %d units (player_id=%d)" % [units.size(), player_id])
+	_note_remote_list_system(units, str(buf.get("army_name", "")))
 	# A remote army has no OPRArmy here, but its slot still counts: register it (null = "Army" row) and refresh
 	# the left panel, otherwise a side that imported nothing itself never gets the section / Rules automation switch.
 	if not opr_army_manager.armies.has(player_id):
@@ -22363,6 +22528,7 @@ func _on_graphics_quality_changed(index: int) -> void:
 func _on_map_layout_pressed() -> void:
 	if map_layout_editor:
 		map_layout_editor.set_table_size(table.table_size)
+		_update_system_chip()   # the editor's "Game system" row shows the table's system and whether it is locked
 		map_layout_editor.visible = true
 		map_layout_editor.editor_opened.emit()
 		$UI/HUD.visible = false  # Hide main HUD while in layout mode
