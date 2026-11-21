@@ -6432,6 +6432,7 @@ func _solo_spend_records(uu: GameUnit, spent: Array) -> void:
 		return
 	var key := uu.get_instance_id()
 	var records: Array = _solo_spell_mods.get(key, [])
+	var said := {}   # equal records spent together say their sentence once
 	for rd in spent:
 		records.erase(rd)
 		_solo_revoke_grant(rd as Dictionary)
@@ -6441,7 +6442,8 @@ func _solo_spend_records(uu: GameUnit, spent: Array) -> void:
 		for e in _solo_spell_tokens_active.duplicate():
 			if (e as Dictionary).get("unit") == uu and str((e as Dictionary).get("token")) == spell:
 				_solo_spell_tokens_active.erase(e)
-		if battle_log != null:
+		if battle_log != null and not said.has(spell):
+			said[spell] = true
 			if _solo_is_regen_grant(rd as Dictionary):
 				_log_rule_event(BattleLog.Category.COMBAT,
 					"Regeneration Buff: %s's Regeneration is spent by a wounding exchange" % uu.get_name(), true)
