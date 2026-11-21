@@ -207,7 +207,7 @@ func test_s08_seven_steps_complete(timeout := 120000) -> void:
 	assert_vector(target_pt).override_failure_message("fixture: no clickable enemy point found").is_not_equal(Vector2.INF)
 	await _click_target(target_pt)
 	assert_bool(await _wait_index(5)).is_true()   # the volley fired and logged the cover bonus
-	assert_bool(_log_text().to_lower().contains("cover")) \
+	assert_bool(_log_text().contains(" is in cover: +1 Defense (saves on ")) \
 		.override_failure_message("no cover line in the battle log:\n%s" % _log_text()) \
 		.is_true()
 

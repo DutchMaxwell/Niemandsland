@@ -57,6 +57,29 @@ use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
         assert!(old.iter().all(|l| !l.contains("cover counts")), "the pre-73 reading stays silent: {old:?}");
     }
 
+    /// The DOOR writes what the volley's tray says (`Tray::say`), not `ShootResult.log`: the same volley on a supplied tray (what a
+    /// door step runs on) says the cover line once, right before the save line, and the kept-cover line before it. RED before:
+    /// both lines were only pushed to `ShootResult.log`, so the human and AI doors wrote no cover line (Game School ch. 8).
+    #[test]
+    fn the_door_tray_says_the_cover_lines() {
+        let att = Ctx { rules_epoch: EPOCH_73_V36, ..shooter(4) };
+        let marked = Ctx { indirect_mark: true, ..covered(4) };
+        let profiles = [rifle(6)];
+        let run = |tray: &mut Tray| {
+            let shooters: Vec<Shooter> = ["Att", "Mate"].iter()
+                .map(|o| Shooter { profiles: &profiles, keep: &[0], attacks: &[6], att: &att, owner: o }).collect();
+            resolve_volley_with_tray(&shooters, &marked, "Def", 12.0, 12.0, true, true, true, true, tray)
+        };
+        let seeded = run(&mut Tray::seeded(27));
+        let mut tray = Tray::supplied(seeded.rolls.iter().map(|r| r.faces.clone()).collect());
+        assert_eq!(run(&mut tray).rolls, seeded.rolls, "the same dice either way");
+        let said: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).collect();
+        let at = |t: &str| said.iter().position(|l| l == t);
+        assert!(at(KEPT).is_some() && at(KEPT) < at(COVER), "kept-cover line, then the cover line: {said:?}");
+        assert_eq!(said.iter().filter(|l| *l == COVER).count(), 1, "once per volley: {said:?}");
+        assert!(said[at(COVER).unwrap() + 1].starts_with("Def saves on"), "the cover line stands right before the save line: {said:?}");
+    }
+
     // ------- PLAN_COVER_36 step 5: cover from sight blockers (`Ctx.screened`) in the save fold ---
 
     fn screened(defense: i64) -> Ctx {
