@@ -2,7 +2,7 @@ extends SceneTree
 ## Ruin-town M1 capture (plan PLAN_RUINTOWN, M1): the greybox stills of the town, REAL display, 1600 px JPG q90.
 ##   godot --path . -s <abs>/bg_capture_town.gd -- <out> [seeds=3,7,25] [theme=ruintown] [only=overview,top] [yaw=0] [presets=medium,ultra,low]
 ## Cameras per seed (Medium): overview45 (28 and 118 deg), top, play (game camera, both armies), halfplay (the play camera at half its distance), street (model eye height, four models
-## ahead), fountain / statue / pool / hall (one close-up per landmark kind the seed has, two models beside), tower (a 9 in cell).
+## ahead), fountain / statue / pool / hall (one close-up per landmark kind the seed has, two models beside; `fountain` also writes fountain_eye: the fountain at model eye height), tower (a 9 in cell).
 ## Also writes <out>/s<seed>_plan.txt (the ASCII plan with landmarks) and <out>/manifest.json (written LAST = the result artefact).
 ## Derived from bg_capture_aaa.gd (same table clearing, armies, street pick). `perf=1`: the perf sweep. `baseline=1` (plan PLAN_RUINTOWN_AAA step R0): Medium + Ultra + Low,
 ## every camera incl. macro / gate / yard / band, perf + readability gate per seed and preset, a plain dark table under the board and a neutral backdrop.
@@ -347,6 +347,14 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 		var stand := _stand_ins(board, spots if kind != "PumpHouse" else [])
 		_pose(yaw, float(pitches[kind]), float(zooms[kind]), Vector3(c.x * IN, ty * IN, c.y * IN))
 		await _still(tag, names[kind])
+		if kind == "TankCluster" and _want("fountain_eye"):   # the fountain at model eye height (4 deg down, 12 in out) from the clearest sight line whose lens stands on open ground
+			var base := _open_yaw(layout, c, top + 1.2, -4.0, 12.0, Rect2(c - half, half * 2.0))
+			for turn: float in [0.0, 45.0, -45.0, 90.0, -90.0, 135.0, -135.0, 180.0]:
+				var eye := base + turn
+				if _open(layout, c + Vector2(sin(deg_to_rad(eye)), cos(deg_to_rad(eye))) * 12.0):
+					_pose(eye, -4.0, 12.0 * IN, Vector3(c.x * IN, (top + 1.2) * IN, c.y * IN))
+					await _still(tag, "fountain_eye")
+					break
 		stand.free()
 	# the city wall: its middle cell, from the side with the best sight line; and the roof mix: the intact house nearest the board centre
 	if _want("wall"):
