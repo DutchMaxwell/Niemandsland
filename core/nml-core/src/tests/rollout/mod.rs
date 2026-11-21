@@ -36,6 +36,7 @@
     mod delayed_action;
     mod height_invariant;
     mod policy_memo;
+    mod roofed_house_closed;
     mod round_cycle;
     mod rush_demotion;
     mod steadfast;
