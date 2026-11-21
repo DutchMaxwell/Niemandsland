@@ -136,13 +136,20 @@ mod tests {
             let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
             let board = Terrain::build(&to_plain(&l));
             let landmark = |c: &crate::boardgen::Cell| l.landmarks.iter().find(|m| m.cells().any(|i| i == c.z * 16 + c.x)).map(|m| m.kind.terrain_class()).filter(|&k| k != NONE);
+            // organic C3: a turned house box may leave a corner of its lot open - the cell centre reads its box
+            let boxes = super::super::solids::free_solids(&l);
+            let covered = |c: &crate::boardgen::Cell| boxes.iter().any(|b| {
+                let (sn, cs) = b.yaw.sin_cos();
+                let d = [3.0 * c.x as f64 - 22.5 - b.c_in[0], 3.0 * c.z as f64 - 22.5 - b.c_in[1]];
+                (d[0] * cs - d[1] * sn).abs() <= b.he_in[0] && (d[0] * sn + d[1] * cs).abs() <= b.he_in[1]
+            });
             for c in &l.cells {
                 let want = match (landmark(c), c.lot_kind, c.level) {
                     (Some(k), _, _) => k,
                     (_, LotKind::Hazard, _) => DANGEROUS,
                     (_, LotKind::Terrace, 0) if !c.street => RUINS,
                     (_, LotKind::Rough | LotKind::Wall, 0) => FOREST,
-                    (_, LotKind::Roofed, _) => CONTAINER,
+                    (_, LotKind::Roofed, _) if covered(c) => CONTAINER,
                     _ => NONE,
                 };
                 ruins += usize::from(want == RUINS);
@@ -189,6 +196,53 @@ mod tests {
         q
     }
 
+    /// The free board with every house box widened back to its whole lot at yaw 0 (the C1 encoding).
+    fn unturned(l: &crate::boardgen::Layout, p: &PlainTerrain) -> PlainTerrain {
+        let lot = |id: u16| l.lots.iter().find(|o| o.id == id).expect("lot");
+        let boxes: Vec<_> = super::super::solids::free_solids(l).iter().map(|b| {
+            let o = lot(b.lot);
+            ([((o.x as f64 + o.w as f64 * 0.5) * 3.0 - 24.0) * crate::IN2M, ((o.z as f64 + o.h as f64 * 0.5) * 3.0 - 24.0) * crate::IN2M], [o.w as f64 * 1.5 * crate::IN2M, o.h as f64 * 1.5 * crate::IN2M])
+        }).collect();
+        PlainTerrain {
+            sandbox: boxes.iter().map(|&(c, he)| Obb { c, he, yaw: 0.0, kind: CONTAINER, slabs: Vec::new() }).collect(),
+            containers: boxes.iter().map(|&(c, he)| ContainerObb { c, he, yaw: 0.0 }).collect(),
+            ..p.clone()
+        }
+    }
+
+    #[test]
+    fn a_turned_house_blocks_exactly_its_box() {
+        use crate::sight::{has_los, zones_of_at, Cyl};
+        let (mut turned, mut planted) = (0, 0);
+        for seed in 1..=60 {
+            let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+            let p = to_plain(&l);
+            let t = Terrain::build(&p);
+            let zones = zones_of_at(&t, crate::acts::CURRENT_RULES_EPOCH);
+            let bare = zones_of_at(&Terrain::build(&PlainTerrain { containers: Vec::new(), ..p.clone() }), crate::acts::CURRENT_RULES_EPOCH);
+            let eye = |q: [f64; 2]| Cyl { c: q, r: 0.0, y0: 0.0, y1: 1.25 * crate::IN2M };
+            for s in p.sandbox.iter().filter(|s| s.yaw != 0.0) {
+                turned += 1;
+                let (sn, cs) = s.yaw.sin_cos();
+                // a point in the box's own frame (u along local +X, v along local +Z), back to the world
+                let at = |u: f64, v: f64| [s.c[0] + u * cs + v * sn, s.c[1] - u * sn + v * cs];
+                let w = |q: [f64; 2]| [q[0] as f32, 0.0, q[1] as f32];
+                for (u, v) in [(0.0, 0.0), (0.9, 0.9), (-0.9, 0.9), (0.9, -0.9), (-0.9, -0.9)] {
+                    assert_eq!(t.type_at(w(at(u * s.he[0], v * s.he[1]))), CONTAINER, "seed {seed}: inside the turned house reads open");
+                }
+                let out = 0.05 * crate::IN2M;
+                for q in [at(s.he[0] + out, 0.0), at(-s.he[0] - out, 0.0), at(0.0, s.he[1] + out), at(0.0, -s.he[1] - out)] {
+                    assert_ne!(t.type_at(w(q)), CONTAINER, "seed {seed}: just outside the turned house reads solid");
+                }
+                // an eye line across the box's middle is stopped; with the sight boxes omitted (planted) it is not
+                let (a, b) = (eye(at(-s.he[0] - 4.0 * crate::IN2M, 0.0)), eye(at(s.he[0] + 4.0 * crate::IN2M, 0.0)));
+                assert!(!has_los(&a, &b, false, &zones, &[]), "seed {seed}: an eye line through the turned house is clear");
+                planted += usize::from(has_los(&a, &b, false, &bare, &[]));
+            }
+        }
+        assert!(turned >= 100 && planted > 0, "the check proved too little: {turned} turned houses, {planted} lines the planted fault opened");
+    }
+
     /// Movement and sight disagreements between the free board `p` and the painted board `q`: `type_at` at 9 interior
     /// points per house cell, and eye rays (1.25 in) across each house cell, through it and 0.3 in beside it.
     fn disagreements(l: &crate::boardgen::Layout, p: &PlainTerrain, q: &PlainTerrain) -> usize {
@@ -224,6 +278,7 @@ mod tests {
             assert!(!p.cells.iter().any(|c| house(&c)), "seed {seed}: a house was still painted");
             houses += p.sandbox.len();
             assert_eq!(p.sandbox.len(), p.containers.len());
+            let p = unturned(&l, &p);   // the re-encoding check: each house as its whole lot at yaw 0 (C3 turns them; see a_turned_house_blocks_exactly_its_box)
             let q = painted_back(&l, &p);
             assert_eq!(disagreements(&l, &p, &q), 0, "seed {seed}: the free houses block other than their cells");
             // planted fault: the sight box omitted - the house must stop reading as a sight blocker
@@ -273,7 +328,7 @@ mod tests {
     }
 
     // re-pinned 21.11. (silhouette round): slender 2 x 1 town towers, one tower per wall run, 65 % intact houses
-    // re-pinned 21.11. (organic C1): the intact houses are free boxes (`sandbox` + `containers`), no longer painted cells
-    const PINNED_TOWN_42: &str = "b32aaecb0ffc2557";
+    // re-pinned 21.11. (organic C3): the free house boxes turn off the table axes, inscribed in their lots
+    const PINNED_TOWN_42: &str = "8d88ebacc277f1c1";
     const PINNED_SEED_42: &str = "cbcd64fada596527";
 }

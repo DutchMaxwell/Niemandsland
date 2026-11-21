@@ -183,6 +183,7 @@ impl Layout {
         if b.lane_free && self.has_edge_to_edge_lane() { p.push("a straight open lane runs from edge to edge"); }
         if connect::component_count(&self.cells, &self.connectors, &landmarks::solid_cells(&self.cells, &self.landmarks)) != 1 { p.push("board is not one connected walkable area"); }
         if connect::ascent_shortfall(&self.cells, &self.connectors) > 0 { p.push("an island has fewer ascents than it could have (max 2)"); }
+        if b.free_solids && solids::trap_gaps(self, &solids::free_solids(self)) > 0 { p.push("a gap between solids is a trap"); }
         p
     }
 }
