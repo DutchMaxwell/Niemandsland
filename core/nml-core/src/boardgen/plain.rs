@@ -53,7 +53,10 @@ pub fn to_plain(l: &Layout) -> PlainTerrain {
         table_size_feet: [f64::from(l.board_in[0]) / 12.0, f64::from(l.board_in[1]) / 12.0],
         grid_rotation_degrees: 0.0, grid_size_inches: f64::from(l.cell_in), inches_to_meters: crate::IN2M,
     };
-    PlainTerrain { cells, tiers: Some(tiers), cell_params, ..Default::default() }
+    // L-RF1: an intact house is Impassable - its cells are solid (cliffs all round, nobody on the roof). Town only; the
+    // solid landmarks (wells, crane feet, Deepworks tanks) are D-F2's own step.
+    let solid_cells = if l.theme == Theme::RuinTown { (0..l.cells.len()).filter(|&i| l.cells[i].lot_kind == LotKind::Roofed).map(|i| i as u16).collect() } else { Vec::new() };
+    PlainTerrain { cells, tiers: Some(tiers), solid_cells, cell_params, ..Default::default() }
 }
 
 /// FNV-1a 64 over the serialised JSON of the board: the identity MP peers and a save compare (no hash crate needed).
@@ -128,7 +131,10 @@ mod tests {
         let (mut ruins, mut forest, mut container) = (0, 0, 0);
         for seed in 1..=60 {
             let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
-            let board = Terrain::build(&to_plain(&l));
+            let p = to_plain(&l);
+            let roofed: Vec<u16> = l.cells.iter().filter(|c| c.lot_kind == LotKind::Roofed).map(|c| (c.z * l.nx + c.x) as u16).collect();
+            assert_eq!(p.solid_cells, roofed, "seed {seed}: every intact house cell and nothing else is solid");
+            let board = Terrain::build(&p);
             let landmark = |c: &crate::boardgen::Cell| l.landmarks.iter().find(|m| m.cells().any(|i| i == c.z * 16 + c.x)).map(|m| m.kind.terrain_class()).filter(|&k| k != NONE);
             for c in &l.cells {
                 let want = match (landmark(c), c.lot_kind, c.level) {
@@ -146,7 +152,9 @@ mod tests {
             }
             // the same cells on a Deepworks layout of the same seed never read the town classes
             let d = generate(seed, Symmetry::Point180);
-            let deep = Terrain::build(&to_plain(&d));
+            let deep_plain = to_plain(&d);
+            assert!(deep_plain.solid_cells.is_empty(), "seed {seed}: a Deepworks board writes no solid cells (D-F2 is its own step)");
+            let deep = Terrain::build(&deep_plain);
             assert!(d.cells.iter().all(|c| ![RUINS, FOREST].contains(&deep.type_at(ground(c.x, c.z)))), "seed {seed}: a Deepworks board reads a town class");
         }
         assert!(ruins > 0 && forest > 0 && container > 0, "the class mapping proved nothing: {ruins} ruins, {forest} forest, {container} container cells");
@@ -175,7 +183,8 @@ mod tests {
         assert_ne!(board_hash(&moved), board_hash(&p), "a changed class must change the hash");
     }
 
-    // re-pinned 21.11. (silhouette round): slender 2 x 1 town towers, one tower per wall run, 65 % intact houses
-    const PINNED_TOWN_42: &str = "593b1257da9d696f";
+    // re-pinned 21.11. (silhouette round): slender 2 x 1 town towers, one tower per wall run, 65 % intact houses;
+    // re-pinned 21.11. (L-RF1 F3, 593b1257da9d696f -> df767026f7ddebdd): the town writes its intact houses as solid_cells
+    const PINNED_TOWN_42: &str = "df767026f7ddebdd";
     const PINNED_SEED_42: &str = "cbcd64fada596527";
 }
