@@ -4,12 +4,23 @@ extends RefCounted
 ## every walkable top stays flat and exact at its 3 / 6 / 9 in and keeps its middle free. Pure plans (board inches, origin at the board centre) and one builder.
 ##   - wall_parts: a raised city-wall or tower cell is drawn thinner - a full-width foot, a stepped batter, the face pulled in by at most REACH_IN on every open face, and a full-width
 ##     corbelled course under the walk (the walk itself is the cell, exact). The cell's own greybox box keeps the collider and draws nothing.
+##   - ruin_gables: the end faces of a ruined, walkable house (Block / Deck) carry a broken crow-stepped gable end in the 0.3 in edge strip, so a tier reads as a roofless house.
+##   - rafters: the long faces of those houses carry charred rafter stubs leaning in from a wall plate, inside the 0.75 in edge strip.
 
 const REACH_IN := 0.2   # the drawn face may sit at most this far inside the collider's face (plan O3: a model touching the collider still touches the wall)
 const FOOT_IN := 0.45
 const BATTER_IN := 0.9
 const CORBEL_IN := 0.5
+const GABLE_T_IN := 0.3
+const STRIP_IN := 0.75
+const LADDER_GAP_IN := 0.9   # half the gap kept free round a ladder's top
+const RAFTER_IN := Vector2(0.13, 0.78)   # section, length
+const RAFTER_PITCH := deg_to_rad(38.0)
 const DIRS: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]   # N, E, S, W
+
+
+static func _h(a: int, half: int, salt: int) -> float:
+	return BoardgenTownDressing._hash(a, half, salt)
 
 
 static func _level(layout: Dictionary, x: int, z: int) -> int:
@@ -24,6 +35,17 @@ static func _ladder_tops(layout: Dictionary) -> Dictionary:
 	for c: Dictionary in layout["connectors"]:
 		var d := Vector2i(c["low_xz"][0], c["low_xz"][1]) - Vector2i(c["high_xz"][0], c["high_xz"][1])
 		(out.get_or_add(int(c["high"]), []) as Array).append(DIRS.find(d))
+	return out
+
+
+## {cell index: true} under a hall (a PumpHouse landmark): its top has its own columns and fallen pediment, no gable and no rafter.
+static func _hall_cells(layout: Dictionary) -> Dictionary:
+	var out := {}
+	for lm: Dictionary in layout["landmarks"]:
+		if lm["kind"] == "PumpHouse":
+			for dz in int(lm["h"]):
+				for dx in int(lm["w"]):
+					out[(int(lm["z"]) + dz) * int(layout["nx"]) + int(lm["x"]) + dx] = true
 	return out
 
 
@@ -61,14 +83,119 @@ static func wall_parts(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
+## Broken crow-stepped gable ends on the END faces (across the lot's long axis) of every ruined, walkable house lot (Block / Deck) whose end column is one level and drops on its whole
+## face: masonry 0.3 in thick, flush inside the face, 3-5 steps from each corner up to a 1.0-1.9 in peak, one side broken off at a step the lot's hash picks; a gable that lost its
+## middle keeps only its two corner stubs. Nothing within LADDER_GAP_IN of a ladder's top. [{lo, hi, kind, lot}]
+static func ruin_gables(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var tiers := BoardgenTownDressing.tier_parts(layout)
+	var ladders := _ladder_tops(layout)
+	var halls := _hall_cells(layout)
+	for lot: Dictionary in layout["lots"]:
+		if not tiers["axis_x"].has(lot["id"]) or tiers["cells"].keys().any(func(i: int) -> bool: return halls.has(i) and int(layout["cells"][i]["lot_id"]) == int(lot["id"])):
+			continue
+		var axis_x: bool = tiers["axis_x"][lot["id"]]
+		var half := 1 if int(lot["z"]) * 2 >= nz else 0
+		for end in 2:   # the low end, the high end along the axis
+			var side := (3 if end == 0 else 1) if axis_x else (0 if end == 0 else 2)
+			var d := DIRS[side]
+			var span: int = lot["h"] if axis_x else lot["w"]
+			var face: Array[int] = []
+			for k in span:
+				var x: int = int(lot["x"]) + (0 if end == 0 else int(lot["w"]) - 1) if axis_x else int(lot["x"]) + k
+				var z: int = int(lot["z"]) + k if axis_x else int(lot["z"]) + (0 if end == 0 else int(lot["h"]) - 1)
+				face.append(z * nx + x)
+			var level: int = layout["cells"][face[0]]["level"]
+			var ok := level >= 1
+			for i in face:
+				var cd: Dictionary = layout["cells"][i]
+				ok = ok and int(cd["level"]) == level and _level(layout, int(cd["x"]) + d.x, int(cd["z"]) + d.y) < level
+			if not ok:
+				continue
+			var top: float = layout["level_in"][level]
+			var width := float(span) * cell_in
+			var c0 := origin + Vector2(layout["cells"][face[0]]["x"], layout["cells"][face[0]]["z"]) * cell_in   # the low corner of the face's first cell
+			var plane := c0 + (Vector2(cell_in - GABLE_T_IN, 0.0) if side == 1 else Vector2(0.0, cell_in - GABLE_T_IN) if side == 2 else Vector2.ZERO)
+			var salt := int(lot["id"]) * 4 + end
+			var steps := 3 + int(_h(salt, half, 200) * 3.0)
+			var peak := 1.0 + 0.9 * _h(salt, half, 201)
+			var broken_at := int(_h(salt, half, 202) * float(2 * steps))   # the step from which on one side is gone
+			var stubs_only := _h(salt, half, 203) < 0.3
+			var gaps: Array[float] = []   # along the face: ladder tops
+			for k in span:
+				if (ladders.get(face[k], []) as Array).has(side):
+					gaps.append((float(k) + 0.5) * cell_in)
+			var w := width * 0.5 / float(steps)
+			for s in 2 * steps:   # left to right: rising, then falling
+				var rank := s if s < steps else 2 * steps - 1 - s
+				if s >= broken_at and broken_at >= steps / 2 and s > rank or (stubs_only and rank > 0):
+					continue
+				var a := float(s) * w
+				if gaps.any(func(g: float) -> bool: return a < g + LADDER_GAP_IN and a + w > g - LADDER_GAP_IN):
+					continue
+				var hgt := peak * float(rank + 1) / float(steps) * (0.75 + 0.25 * _h(salt * 16 + s, half, 204))
+				var lo := plane + (Vector2(0.0, a) if axis_x else Vector2(a, 0.0))
+				var hi := lo + (Vector2(GABLE_T_IN, w) if axis_x else Vector2(w, GABLE_T_IN))
+				out.append({"lo": Vector3(lo.x, top, lo.y), "hi": Vector3(hi.x, top + hgt, hi.y), "kind": "wall", "lot": lot["id"]})
+	return out
+
+
+## Charred rafter stubs on the LONG faces of the same houses (open drop, one level): a wall plate along the edge and rafters every 0.8 in leaning inward at 38 degrees, a third of them
+## gone; a rafter's top stays inside the 0.75 in strip. None within LADDER_GAP_IN of a ladder's top. [{centre (Vector3), size (Vector3: section, section, length), yaw, pitch, kind}]
+static func rafters(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var tiers := BoardgenTownDressing.tier_parts(layout)
+	var ladders := _ladder_tops(layout)
+	var halls := _hall_cells(layout)
+	for i: int in tiers["cells"]:
+		var cd: Dictionary = layout["cells"][i]
+		var level: int = cd["level"]
+		if level < 1 or halls.has(i):
+			continue
+		var axis_x: bool = tiers["axis_x"][int(cd["lot_id"])]
+		var half := 1 if int(cd["z"]) * 2 >= nz else 0
+		for side: int in ([0, 2] if axis_x else [1, 3]):
+			var d := DIRS[side]
+			if _level(layout, int(cd["x"]) + d.x, int(cd["z"]) + d.y) >= level or (ladders.get(i, []) as Array).has(side) or _h(i, half, 210 + side) < 0.35:
+				continue
+			var top: float = layout["level_in"][level]
+			var lo := origin + Vector2(cd["x"], cd["z"]) * cell_in
+			var edge := lo + Vector2(cell_in * 0.5, 0.0 if side == 0 else cell_in) if axis_x else lo + Vector2(0.0 if side == 3 else cell_in, cell_in * 0.5)
+			var inward := -Vector2(d)
+			var along := Vector2(1, 0) if axis_x else Vector2(0, 1)
+			var yaw := atan2(inward.x, inward.y)   # the box's local +z points inward
+			out.append({"centre": Vector3(edge.x + inward.x * 0.1, top + 0.08, edge.y + inward.y * 0.1), "size": Vector3(0.16, 0.16, cell_in - 0.1), "yaw": yaw + PI * 0.5, "pitch": 0.0, "kind": "wood"})
+			for k in 3:
+				if _h(i * 4 + k, half, 220 + side) < 0.33:
+					continue
+				var t := (float(k) - 1.0) * 0.8 + (_h(i * 4 + k, half, 230) - 0.5) * 0.2
+				var length := RAFTER_IN.y * (0.6 + 0.4 * _h(i * 4 + k, half, 240))
+				var foot := edge + along * t + inward * 0.12
+				var mid := foot + inward * cos(RAFTER_PITCH) * length * 0.5
+				out.append({"centre": Vector3(mid.x, top + 0.16 + sin(RAFTER_PITCH) * length * 0.5, mid.y), "size": Vector3(RAFTER_IN.x, RAFTER_IN.x, length), "yaw": yaw, "pitch": RAFTER_PITCH, "kind": "wood"})
+	return out
+
+
 ## All of it on the board's material, in one MultiMesh.
 static func build(parent: Node3D, layout: Dictionary, material: Material) -> void:
 	var m := BoardgenTownDressing.INCHES_TO_METERS
 	var kinds: Array = BoardgenTheme.TOWN_KINDS
 	var items: Array = []   # [basis, origin, custom]
-	for b: Dictionary in wall_parts(layout):
+	for b: Dictionary in wall_parts(layout) + ruin_gables(layout):
 		var size: Vector3 = b["hi"] - b["lo"]
 		items.append([Basis.from_scale(size * m), (b["lo"] + b["hi"]) * 0.5 * m, Color(kinds.find(b["kind"]), size.x, size.y, size.z)])
+	for r: Dictionary in rafters(layout):
+		var size: Vector3 = r["size"]
+		var basis := Basis(Vector3.UP, r["yaw"]) * Basis(Vector3.RIGHT, -float(r["pitch"])) * Basis.from_scale(size * m)
+		items.append([basis, r["centre"] * m, Color(kinds.find(r["kind"]), size.x, size.y, size.z)])
 	_multimesh(parent, "Silhouette", BoxMesh.new(), items, material)
 
 

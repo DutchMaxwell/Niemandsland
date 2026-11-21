@@ -67,12 +67,57 @@ func test_the_greybox_keeps_the_collider_of_a_wall_cell_but_draws_it_no_more() -
 			assert_float(b["hi"].x - b["lo"].x).is_equal_approx(float(layout["cell_in"]), EPS)   # one cell each, never merged into a run
 
 
+func test_gables_stand_in_the_edge_strip_of_a_ruined_house_and_keep_a_ladder_top_clear() -> void:
+	var total := 0
+	for layout in _towns():
+		var gables := BoardgenTownSilhouette.ruin_gables(layout)
+		total += gables.size()
+		var tops := []
+		for c: Dictionary in layout["connectors"]:
+			tops.append(Vector2(c["edge_in"][0], c["edge_in"][1]) + _origin(layout))
+		for b: Dictionary in gables:
+			var mid := Vector2(b["lo"].x + b["hi"].x, b["lo"].z + b["hi"].z) * 0.5
+			var i := _cell_at(layout, mid)
+			var cd: Dictionary = layout["cells"][i]
+			assert_array(["Block", "Deck"]).contains([str(cd["lot_kind"])])
+			assert_float(b["lo"].y).is_equal_approx(float(layout["level_in"][cd["level"]]), EPS)   # stands ON the top
+			assert_float(b["hi"].y - b["lo"].y).is_less_equal(1.9 + EPS)
+			assert_float(minf(b["hi"].x - b["lo"].x, b["hi"].z - b["lo"].z)).is_less_equal(BoardgenTownSilhouette.GABLE_T_IN + EPS)
+			var r := _cell_rect(layout, i)
+			var to_edge := minf(minf(b["lo"].x - r.position.x, r.end.x - b["hi"].x), minf(b["lo"].z - r.position.y, r.end.y - b["hi"].z))
+			assert_float(to_edge).override_failure_message("a gable off the edge strip").is_less(EPS)
+			for t: Vector2 in tops:
+				var d := Rect2(Vector2(b["lo"].x, b["lo"].z), Vector2(b["hi"].x - b["lo"].x, b["hi"].z - b["lo"].z)).grow(BoardgenTownSilhouette.LADDER_GAP_IN - 0.05)
+				assert_bool(d.has_point(t)).override_failure_message("a gable at a ladder top").is_false()
+	assert_int(total).is_greater(10)
+
+
+func test_rafters_lean_in_from_the_edge_of_a_ruined_house_and_stay_inside_the_strip() -> void:
+	var total := 0
+	for layout in _towns():
+		for r: Dictionary in BoardgenTownSilhouette.rafters(layout):
+			total += 1
+			var basis := Basis(Vector3.UP, r["yaw"]) * Basis(Vector3.RIGHT, -float(r["pitch"]))
+			var half_len: Vector3 = basis * Vector3(0, 0, float(r["size"].z) * 0.5)
+			var top: Vector3 = r["centre"] + half_len
+			var foot: Vector3 = r["centre"] - half_len
+			var i := _cell_at(layout, Vector2(foot.x, foot.z))
+			var cd: Dictionary = layout["cells"][i]
+			assert_array(["Block", "Deck"]).contains([str(cd["lot_kind"])])
+			assert_int(_cell_at(layout, Vector2(top.x, top.z))).is_equal(i)
+			var rect := _cell_rect(layout, i)
+			var to_edge := minf(minf(top.x - rect.position.x, rect.end.x - top.x), minf(top.z - rect.position.y, rect.end.y - top.z))
+			assert_float(to_edge).override_failure_message("a rafter reaches %f in into the top" % to_edge).is_less_equal(BoardgenTownSilhouette.STRIP_IN)
+			assert_float(top.y - float(layout["level_in"][cd["level"]])).is_less(0.9)
+	assert_int(total).is_greater(10)
+
+
 func test_the_town_dressing_builds_the_silhouette_on_the_board_material() -> void:
 	var layout: Dictionary = _towns()[0]
 	var node: BoardgenTownDressing = auto_free(BoardgenTownDressing.new())
 	var mat := ShaderMaterial.new()
 	node.build(layout, mat)
 	var mmi := node.get_node("Silhouette") as MultiMeshInstance3D
-	assert_int(mmi.multimesh.instance_count).is_equal(BoardgenTownSilhouette.wall_parts(layout).size())
+	assert_int(mmi.multimesh.instance_count).is_equal(BoardgenTownSilhouette.wall_parts(layout).size() + BoardgenTownSilhouette.ruin_gables(layout).size() + BoardgenTownSilhouette.rafters(layout).size())
 	assert_object(mmi.material_override).is_same(mat)
 	assert_int(node.find_children("*", "CollisionShape3D", true, false).size()).is_equal(0)
