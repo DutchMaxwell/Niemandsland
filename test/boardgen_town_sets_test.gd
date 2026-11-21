@@ -3,7 +3,8 @@ extends GdUnitTestSuite
 ## procedural surface otherwise. The headless run has a dummy renderer, so the shader is pinned by source and the binding by the library's own cache state.
 
 const SHADER := "res://shaders/ruintown_board.gdshader"
-const DEV_LIB := "/home/andreaskesberg/nml-mission/wave1116/ruintown_assets/lib_dev"
+## The assets lane's staged folder, when a machine has one: NML_RUINTOWN_DEV_LIB=<path to the staged surface library>. Unset: the staged-library test below returns early.
+const DEV_LIB_ENV := "NML_RUINTOWN_DEV_LIB"
 
 
 func test_no_cached_set_means_every_set_is_off_and_the_shader_keeps_its_procedural_look() -> void:
@@ -41,9 +42,10 @@ func test_the_shader_reads_the_four_sets_with_a_procedural_fallback_and_the_mean
 
 
 func test_the_staged_dev_library_binds_all_four_sets_when_the_renderer_can_load_them() -> void:
-	if not DirAccess.dir_exists_absolute(DEV_LIB):
+	var dev_lib := OS.get_environment(DEV_LIB_ENV)
+	if dev_lib == "" or not DirAccess.dir_exists_absolute(dev_lib):
 		return   # the assets lane's staged folder is not on this machine
-	OS.set_environment("NML_RUINTOWN_LIB_DIR", DEV_LIB)
+	OS.set_environment("NML_RUINTOWN_LIB_DIR", dev_lib)
 	var lib: TiefwerkLibrary = auto_free(TiefwerkLibrary.new(BoardgenTheme.TOWN_LIBRARY))
 	OS.unset_environment("NML_RUINTOWN_LIB_DIR")
 	var sets := BoardgenGreybox.town_sets(lib)
