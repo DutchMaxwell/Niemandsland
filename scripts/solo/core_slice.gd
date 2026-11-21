@@ -22,7 +22,6 @@ const DENY_PATH := "res://assets/solo/core_slice_deny.json"
 const SIMULTANEOUS_FIRE_GROUP := "door_omits_simultaneous_fire_line"
 const OWN_SHRED_GROUP := "door_own_shred_beside_alias"
 const AMBUSH_FLYING_GROUP := "ambush_flying_landing"
-const VERSATILE_PAIR_GROUP := "door_versatile_pick_modified_to_hit"
 const TAKEDOWN_LABEL_GROUP := "door_takedown_names_an_equipment_carrier"
 const FORTIFIED_LOSS_GROUP := "door_omits_fortified_aura_loss_line"
 ## The primitives whose rules move a SHOOTING to-hit number: on the target (Artillery's -1, the Stealth and Evasive families, Aircraft) and on the shooter.
@@ -210,13 +209,14 @@ static func refusals(gu: GameUnit, as_target := false, shooters_hero := false) -
 
 ## Deny mode, a PAIR (two groups). Versatile: the core latches a Versatile Attack pick on the plain Quality, the table on the MODIFIED to-hit
 ## number, so a Versatile shooter and any to-hit modifier in play (on the target, or on the shooter itself) can pick differently: a state
-## difference, kept by the dice-only pin until the core reads the modified number (epoch 94, `EPOCH_94_PARITY_BATCH`). Takedown: a line difference (the picked model's label), dropped by it.
+## difference, kept by the dice-only pin until the core reads the modified number (epoch 94, `EPOCH_94_PARITY_BATCH`; no deny group since the lift: below the epoch
+## only, a replay under an older stamp). Takedown: a line difference (the picked model's label), dropped by it.
 ## `pair_refusals_in` reads a named slice file like `refusals_in` (the shadow's census reads the deny file whatever the live slice is).
 static func pair_refusals(shooter: GameUnit, target: GameUnit) -> Array:
 	var out: Array = []
 	if shooter == null or target == null or config()["mode"] != "deny":
 		return out
-	if _has_group(VERSATILE_PAIR_GROUP) and AiActRecorder.rules_epoch < AiActRecorder.EPOCH_94_PARITY_BATCH and _chain_carries(shooter, ["Versatile Attack"]) \
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_94_PARITY_BATCH and _chain_carries(shooter, ["Versatile Attack"]) \
 			and (_chain_carries(target, TO_HIT_ON_TARGET) or _chain_carries(shooter, TO_HIT_ON_SHOOTER)):
 		out.append("versatile_pick_modified_to_hit")
 	# The table labels a Takedown pick that is no Tough and no special-weapon model by its first item (`_solo_model_label`); the core holds only an item COUNT.

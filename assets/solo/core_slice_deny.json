@@ -73,12 +73,6 @@
       "why": "An aofs / gff aura-granted Fortified (Fortified Aura, Guardian Boost Aura; Gleaming Armour carries Fortified Aura) is a Fortified-primitive entry with `lost_if_bearer_killed`: when the bearer (the unit or a joined hero) has fallen the table stands the benefit down and says `<aura>: bearer killed -> benefit lost` once, guarded across volleys. The core stands the bare Fortified down on the same dice but writes no line (probe 16 of 16, line only); for the alias walk (Guardian Boost) it keeps the benefit, so the dice differ (defense 5+ against the table's 6+, 16 of 16). Not a rule name: `CoreSlice` refuses a TARGET in that state (`fortified_aura_bearer_dead`), switched on by this group. A live bearer and the gf / aof Aura Channel spelling are equal and taken. Probed 20.11. (ds/h14_probe_fortified_aura.md).",
       "leaves_with": "the core reading the alias loss and carrying the once-guard with its line (an epoch: the alias dice change)"
     },
-    "door_versatile_pick_modified_to_hit": {
-      "primitives": [],
-      "kind": "state_difference",
-      "why": "The table latches a Versatile Attack pick (+1 to hit or AP(+1)) on the MODIFIED to-hit number of the activation's first volley; the core's latch reads the plain Quality (`sim::versatile_latch`, its `hit_target`). When a to-hit modifier is in play (Artillery, a Stealth or Evasive family rule, Aircraft on the target; Artillery, a Shot Modifier, Instinctive on the shooter) the two can pick differently and the dice and the target's wounds differ (door probe, Vinci Tech Quality 4 AP(1) at Defense 3+: 12 of 12 seeds against Stealth, Evasive and Artillery, 8 of 12 with a different end state; 3000 pts roster sweep: 6 volleys). Not a rule name: `CoreSlice.pair_refusals` refuses the PAIR, switched on by this group; a state difference, so the dice-only pin keeps it.",
-      "leaves_with": "the Versatile latch reading the volley's modified to-hit number instead of the plain Quality"
-    },
     "door_takedown_names_an_equipment_carrier": {
       "primitives": [],
       "kind": "rule_line",
