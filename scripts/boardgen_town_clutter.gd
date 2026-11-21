@@ -89,6 +89,7 @@ static func plan(layout: Dictionary) -> Dictionary:
 			_add(out, m, it)
 	_ivy(layout, out)
 	_ivy_clusters(layout, out, scenes["reserved"])
+	_weed_feet(layout, out, scenes["reserved"])
 	_landmarks(layout, out)
 	_hall_and_towers(layout, out)
 	_square_and_walls(layout, out)
@@ -340,6 +341,43 @@ static func _ivy_clusters(layout: Dictionary, out: Dictionary, reserved: Diction
 				_add(out, "ivy_cluster_large", _item(yaw, Vector3(x, top, lo.y + 1.5)))
 			elif not reserved.has(j) and not taken.has("%d/%d/%s" % [n.x, n.y, -d]):
 				_add(out, "ivy_cluster_small", _item(yaw, Vector3(x, 0.0, lo.y + 0.8 + 1.4 * BoardgenTownDressing._hash(i, half, 224 + side))))
+
+
+## GREEN FEET (plan TARGET C, train 2, V1): weed clumps (kit weeds_a / weeds_b, STRIP, 0.36 in high, 1.03 in wide) at the foot of a raised cell's face that looks at open level-0 ground -
+## the shade faces (east / west) on ~45 % of such edges, the others on ~25 % -, never on a ladder end, a landmark, a hazard, a story scene's cell or a face that already carries a strip prop.
+## Origin on the face, +z out onto the foot, kept inside its 3 in edge.
+static func _weed_feet(layout: Dictionary, out: Dictionary, reserved: Dictionary = {}) -> void:
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell_in := float(layout["cell_in"])
+	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var clear := _kept_clear(layout)
+	var cells: Array = layout["cells"]
+	var taken := {}
+	for b: Dictionary in BoardgenTownDressing.props(layout):
+		if typeof(b.get("face")) == TYPE_VECTOR2I:
+			taken["%d/%d/%s" % [int(b["at"].x), int(b["at"].y), b["face"]]] = true
+	for cd: Dictionary in cells:
+		if int(cd["level"]) < 1:
+			continue
+		var i: int = cd["z"] * nx + cd["x"]
+		var half := 1 if cd["z"] >= nz / 2 else 0
+		for side in 4:
+			var d: Vector2i = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)][side]
+			var n := Vector2i(cd["x"], cd["z"]) + d
+			if n.x < 0 or n.y < 0 or n.x >= nx or n.y >= nz:
+				continue
+			var j: int = n.y * nx + n.x
+			var nb: Dictionary = cells[j]
+			if int(nb["level"]) != 0 or clear.has(j) or reserved.has(j) or ["Hazard", "Wall"].has(nb["lot_kind"]) or taken.has("%d/%d/%s" % [n.x, n.y, -d]):
+				continue
+			if BoardgenTownDressing._hash(i, half, 240 + side) > (0.45 if d.x != 0 else 0.25):
+				continue
+			var lo := origin + Vector2(n) * cell_in
+			var along := 0.6 + 1.8 * BoardgenTownDressing._hash(i, half, 244 + side)   # the clump's 1.03 in stays inside the 3 in edge
+			var f := -d   # from the foot towards the face
+			var pos := Vector2(lo.x + along, lo.y if f.y < 0 else lo.y + cell_in) if f.x == 0 else Vector2(lo.x if f.x < 0 else lo.x + cell_in, lo.y + along)
+			_add(out, "weeds_a" if BoardgenTownDressing._hash(i, half, 248 + side) < 0.5 else "weeds_b", _item(atan2(float(-f.x), float(-f.y)), Vector3(pos.x, 0.0, pos.y)))
 
 
 ## WALL pieces: ivy strands up a wall face (<= 0.12 in off it), on one face in eight of a raised cell that looks at open ground, never on a ladder's face.

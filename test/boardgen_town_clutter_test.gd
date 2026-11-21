@@ -371,3 +371,41 @@ func test_large_signs_hang_on_street_fronts_off_the_square() -> void:
 			per_half[1 if at.y >= 24.0 else 0] += 1
 		assert_int(per_half.max()).is_less_equal(BoardgenTownClutter.SIGNS_PER_HALF)
 	assert_int(total).is_greater(5)
+
+
+## Green feet (plan TARGET C, train 2, V1): every weed clump stands with its origin on a raised face, +z out onto open level-0 ground that is no ladder end, its 1.03 in inside the
+## 3 in edge, never on a face that carries a strip prop; the shade (east / west) faces carry more of them; every board has some.
+func test_weed_clumps_stand_at_open_wall_feet_inside_their_edge_and_never_on_a_ladder_or_a_prop() -> void:
+	var shade := 0
+	var lit := 0
+	for s: int in [7, 11, 13, 17, 19, 23, 25, 29, 41, 43]:
+		var layout: Dictionary = ClassDB.instantiate("NmlCore").boardgen_layout_themed(s, "ruintown")
+		var nx: int = layout["nx"]
+		var clear := BoardgenTownClutter._kept_clear(layout)
+		var plan := BoardgenTownClutter.plan(layout)
+		var props := {}
+		for b: Dictionary in BoardgenTownDressing.props(layout):
+			if typeof(b.get("face")) == TYPE_VECTOR2I:
+				props["%d/%d" % [int(b["at"].x), int(b["at"].y)]] = b["face"]
+		var n := 0
+		for m: String in ["weeds_a", "weeds_b"]:
+			for it: Dictionary in plan.get(m, []):
+				n += 1
+				var xf: Transform3D = it["xf"]
+				var at := Vector2(xf.origin.x, xf.origin.z) / 0.0254 + Vector2(24, 24)
+				var into := Vector2(xf.basis.z.x, xf.basis.z.z).round()
+				var wall := Vector2i((at - into * 0.3) / 3.0)
+				var foot := Vector2i((at + into * 0.3) / 3.0)
+				assert_int(int(layout["cells"][wall.y * nx + wall.x]["level"])).override_failure_message("seed %d: a weed clump not at a raised face" % s).is_greater(0)
+				assert_int(int(layout["cells"][foot.y * nx + foot.x]["level"])).is_equal(0)
+				assert_bool(clear.has(foot.y * nx + foot.x)).override_failure_message("seed %d: a weed clump on a ladder end" % s).is_false()
+				var along := absf(at.x - float(foot.x) * 3.0 - 1.5) if into.x == 0.0 else absf(at.y - float(foot.y) * 3.0 - 1.5)
+				assert_float(along).override_failure_message("seed %d: a weed clump over its cell edge" % s).is_less_equal(1.5 - 0.52)
+				var key := "%d/%d" % [foot.x, foot.y]
+				assert_bool(props.has(key) and props[key] == Vector2i(-into)).override_failure_message("seed %d: a weed clump on a prop's face" % s).is_false()
+				if into.x != 0.0:
+					shade += 1
+				else:
+					lit += 1
+		assert_int(n).override_failure_message("seed %d: no green feet" % s).is_greater(0)
+	assert_int(shade).is_greater(lit)
