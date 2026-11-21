@@ -330,7 +330,11 @@ func test_a_human_buff_giver_lands_a_token_and_a_log_line_once() -> void:
 	assert_int(_mods_on(friend).size()) \
 		.override_failure_message("\"once per activation\" — two doors, one application") \
 		.is_equal(1)
-	# ROT: a new round re-opens it.
+	# ROT: a new round re-opens it. Below the epoch 95 batch (SPELL_NO_STACK) the second application stacks (two records); from 95 the identical
+	# record is refreshed (still one), so the stacking read is pinned at 94.
+	var epoch_before := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_95_PARITY_BATCH - 1
 	_main.opr_army_manager.current_round = 2
 	_main._solo_apply_utility_buffs(giver)
+	AiActRecorder.rules_epoch = epoch_before
 	assert_int(_mods_on(friend).size()).is_equal(2)

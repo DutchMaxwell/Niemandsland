@@ -914,23 +914,6 @@ pub const EPOCH_84_IGNORE_GROUPS: u32 = 84;
 /// Indirect gun fired nothing at a unit hidden behind a blocker, the table fired. Records stamped 84 or below replay byte-exact. Every
 /// call site reads THIS constant, not `85`. The recorder mirror stamps 85 with it.
 pub const EPOCH_85_INDIRECT_GATE: u32 = 85;
-/// Placeholder gate for COVER FROM SIGHT BLOCKERS (PLAN_COVER_36, rules 3.6): from 95 a unit shot at gets the Cover +1 Defense also when
-/// the majority of its models stands behind a sight blocker as seen from the shooters that see it (the foot line `sight::screen`: eye of
-/// the shooter to the target model's foot is blocked by terrain, tier blocks, containers or the bodies of other units), not only when it
-/// stands fully inside Cover terrain. `in_cover` keeps its meaning (the Grounded family reads it); the new `screened` flag feeds only the
-/// shooting save. Records stamped 94 or below replay byte-exact. Every call site reads THIS constant, not `95`.
-pub const PENDING_EPOCH_COVER_SCREEN: u32 = 95;
-/// Placeholder gate for VOLLEY DEADLY STOPS (gate 12, Eternal Artillery -> Ancient Wraith): the volley twin of the melee DEADLY_STOPS in
-/// `EPOCH_94_PARITY_BATCH`. A volley's Deadly wounds left once the target's chain is dead roll no ignore dice; the table's
-/// `_solo_land_deadly_wounds` finds no model to pick and stops. Records stamped 94 or below replay byte-exact. Every call site reads THIS
-/// constant, not the literal `95`.
-pub const PENDING_EPOCH_VOLLEY_DEADLY_STOPS: u32 = 95;
-/// Placeholder gate for VOLLEY DEFENCE AS DECLARED (Plan H, H-17, lead call reading A): a volley is fired simultaneously, so the target's
-/// Defense as declared holds for every weapon of it. After an inline Deadly landing wipes the target's chain, `Ctx::wiped` keeps the
-/// Defense value the table captured before the first roll (Guarded, Shielded: main.gd `_solo_defense_vs` ahead of the weapon loop);
-/// the to-hit penalties, Fortified and the ignore rolls still drop (the table reads those per hit). Records stamped 94 or below replay byte-exact. Every
-/// call site reads THIS constant, not the literal `95`.
-pub const PENDING_EPOCH_VOLLEY_DEFENCE_DECLARED: u32 = 95;
 /// The played volley's modifier distance (Valiant gate, over-9" modifiers) counts only the model pairs within the vertical reach (3", `melee_vertical_in`),
 /// and a unit with no pair in reach keeps the horizontal unit-centre distance: the table's `_solo_ai_volley_distance_in` over `nearest_melee_gap_in`.
 /// Before, a unit on a platform measured as close as the ground beside it (the soak's Hive Bond +1, table 4+ vs core 5+). Step path only. Records
@@ -1025,18 +1008,16 @@ pub const EPOCH_93_DANGER_RULES_RIDER: u32 = 93;
 /// - SLAYER_MARK_GRANT: the Slayer Mark's grant reaches the marked unit's attackers.
 /// - MELEE_MARK_SCOPE: a melee-scoped Piercing Fighting Mark stays on the marked unit after a volley.
 pub const EPOCH_94_PARITY_BATCH: u32 = 94;
-pub const CURRENT_RULES_EPOCH: u32 = 94;
-/// Placeholder gate for SPELL NO-STACK (lead ruling 20.11., GF 3.6 "Rules priority & stacking effects": the same spell does not stack): a second cast of a spell on a
-/// unit that already carries an identical record of it refreshes that record and adds none, so one spend and one "consumed" line (soak game 16 forced to 94 held three
-/// stacked "Triangulation Bots" on one foe; the core spent all three at once, the table one per exchange). Core: `sim::tray_spell_effect` pushes no duplicate `LiveMod`
-/// (and names none in `cast_buffs`). Table twin `AiActRecorder.PENDING_EPOCH_SPELL_NO_STACK` (`_solo_record_spell_mod`). Below 95 byte-identical. Every call site reads THIS
-/// constant, not the literal `95`.
-pub const PENDING_EPOCH_SPELL_NO_STACK: u32 = 95;
-/// Placeholder gate for UNPREDICTABLE NEEDS A SHOT (gate 12, Zairetia): the Unpredictable (Shooter) die is owed when the unit shoots, so a
-/// volley in which no weapon reaches the target rolls no die, and a joined hero rolls his own die only when one of his weapons reaches it.
-/// The table builds no volley there ("no target in range or sight"). Core: `dice::resolve_volley_with_pick_label`. Records stamped 94 or
-/// below replay byte-exact. Every call site reads THIS constant, not the literal `95`.
-pub const PENDING_EPOCH_UPR_NEEDS_SHOT: u32 = 95;
+/// The EPOCH 95 BATCH: five table-vs-core differences that sat behind `PENDING_EPOCH_*` placeholders (all 95) are now one frozen
+/// constant, and `CURRENT_RULES_EPOCH` is bumped to it in the same change. Records stamped 94 or below replay byte-exact. Every call site
+/// reads THIS constant, not the literal `95` or `CURRENT_RULES_EPOCH`. The recorder mirror (`act_recorder.gd`) stamps 95 in the same change.
+/// - COVER_SCREEN: a unit shot at gets the Cover +1 Defense also when most of its models stand behind a sight blocker (`sight::screen`).
+/// - VOLLEY_DEADLY_STOPS: a volley's Deadly wounds stop rolling ignore dice once the target's chain is dead (the volley twin of the melee one).
+/// - VOLLEY_DEFENCE_DECLARED: a volley keeps the killed target's declared Defense for the weapons still to fire (Guarded, Shielded).
+/// - SPELL_NO_STACK: the same spell does not stack; a second identical record refreshes the first.
+/// - UPR_NEEDS_SHOT: no Unpredictable Shooter die for a volley in which no weapon is in reach.
+pub const EPOCH_95_PARITY_BATCH: u32 = 95;
+pub const CURRENT_RULES_EPOCH: u32 = 95;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2357,13 +2338,13 @@ mod tests {
         EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME, EPOCH_83_LONE_HERO_TARGET, EPOCH_84_IGNORE_GROUPS, EPOCH_85_INDIRECT_GATE,
         EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_87_WALKED_DANGEROUS, EPOCH_88_SPLIT_LONE_HERO, EPOCH_89_SHARED_BEARERS,
         EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER,
-        EPOCH_94_PARITY_BATCH,
+        EPOCH_94_PARITY_BATCH, EPOCH_95_PARITY_BATCH,
     };
 
     #[test]
     fn upr_needs_shot_gate_starts_at_95() {
-        assert_eq!(super::PENDING_EPOCH_UPR_NEEDS_SHOT, 95);
-        assert!(!rule_on(94, super::PENDING_EPOCH_UPR_NEEDS_SHOT), "a record at 94 keeps the die of a volley with nothing in reach");
+        assert_eq!(super::EPOCH_95_PARITY_BATCH, 95);
+        assert!(!rule_on(94, super::EPOCH_95_PARITY_BATCH), "a record at 94 keeps the die of a volley with nothing in reach");
     }
 
     /// Heightfield plan step 7 (the placeholder became the frozen batch epoch at the 94 bump): the gate is 94, on in a fresh game, off one
@@ -2382,23 +2363,23 @@ mod tests {
     /// PLAN_COVER_36 step 1: cover from sight blockers is off for every record stamped 94 or below.
     #[test]
     fn cover_screen_gate_starts_at_95() {
-        assert_eq!(super::PENDING_EPOCH_COVER_SCREEN, 95);
-        assert!(!rule_on(94, super::PENDING_EPOCH_COVER_SCREEN), "a record at 94 replays terrain-only cover");
-        assert!(rule_on(95, super::PENDING_EPOCH_COVER_SCREEN), "a record at 95 reads cover from sight blockers");
+        assert_eq!(super::EPOCH_95_PARITY_BATCH, 95);
+        assert!(!rule_on(94, super::EPOCH_95_PARITY_BATCH), "a record at 94 replays terrain-only cover");
+        assert!(rule_on(95, super::EPOCH_95_PARITY_BATCH), "a record at 95 reads cover from sight blockers");
     }
 
     #[test]
     fn volley_deadly_stops_gate_starts_at_95() {
-        assert_eq!(super::PENDING_EPOCH_VOLLEY_DEADLY_STOPS, 95);
-        assert!(!rule_on(94, super::PENDING_EPOCH_VOLLEY_DEADLY_STOPS), "a record at 94 rolls every Deadly wound's ignore dice");
+        assert_eq!(super::EPOCH_95_PARITY_BATCH, 95);
+        assert!(!rule_on(94, super::EPOCH_95_PARITY_BATCH), "a record at 94 rolls every Deadly wound's ignore dice");
     }
 
     #[test]
     fn volley_defence_declared_gate_starts_at_95() {
-        assert_eq!(super::PENDING_EPOCH_VOLLEY_DEFENCE_DECLARED, 95);
-        assert!(!rule_on(94, super::PENDING_EPOCH_VOLLEY_DEFENCE_DECLARED), "a record at 94 drops the defence reads of a wiped target");
+        assert_eq!(super::EPOCH_95_PARITY_BATCH, 95);
+        assert!(!rule_on(94, super::EPOCH_95_PARITY_BATCH), "a record at 94 drops the defence reads of a wiped target");
         let at = |e: u32| crate::unit::Ctx { rules_epoch: e, guarded: true, shielded: true, stealth: true, ..Default::default() }.wiped();
-        let (old, new) = (at(94), at(super::PENDING_EPOCH_VOLLEY_DEFENCE_DECLARED));
+        let (old, new) = (at(94), at(super::EPOCH_95_PARITY_BATCH));
         assert!(!old.guarded && !old.shielded && !old.stealth, "94: a wiped target lends nothing");
         assert!(new.guarded && new.shielded, "95: Guarded and Shielded stay as declared");
         assert!(!new.stealth, "95: the to-hit penalty still drops");
@@ -2419,7 +2400,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 94, "the live epoch is EPOCH_94_PARITY_BATCH");
+        assert_eq!(CURRENT_RULES_EPOCH, 95, "the live epoch is EPOCH_95_PARITY_BATCH");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2429,11 +2410,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":94}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":95}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 94"
+            "a fresh play_game() now stamps the bumped epoch, 95"
         );
     }
 
@@ -2575,6 +2556,14 @@ mod tests {
         assert!(rule_on(EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_90_JOINED_ONE_RECOVERY), "a record at 90 rolls once per pair");
         assert!(rule_on(EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_89_SHARED_BEARERS), "90 keeps the shared bearers on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_90_JOINED_ONE_RECOVERY), "a fresh play_game() stamps it on");
+    }
+
+    #[test]
+    fn epoch_95_gate_is_closed_at_epoch_94_and_open_from_95() {
+        assert!(!rule_on(EPOCH_94_PARITY_BATCH, EPOCH_95_PARITY_BATCH), "a record at 94 replays every 95 placeholder read the old way");
+        assert!(rule_on(EPOCH_95_PARITY_BATCH, EPOCH_95_PARITY_BATCH), "a record at 95 plays the batch");
+        assert!(rule_on(EPOCH_95_PARITY_BATCH, EPOCH_94_PARITY_BATCH), "95 keeps the 94 batch on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_95_PARITY_BATCH), "a fresh play_game() stamps it on");
     }
 
     #[test]

@@ -87,7 +87,7 @@ use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
     }
 
     fn held_gun(held: bool) -> (Ctx, ShootProfile) {
-        let att = Ctx { held, rules_epoch: crate::acts::PENDING_EPOCH_COVER_SCREEN, ..shooter(4) };
+        let att = Ctx { held, rules_epoch: crate::acts::EPOCH_95_PARITY_BATCH, ..shooter(4) };
         (att, ShootProfile { name: "Gun".into(), indirect: true, indirect_los_needs_hold: true, indirect_cover_needs_hold: true, ..rifle(6) })
     }
 

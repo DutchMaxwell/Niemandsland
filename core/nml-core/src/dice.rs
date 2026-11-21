@@ -1543,7 +1543,7 @@ pub(crate) fn resolve_volley_with_pick_label(
     // copy of the state and answers how many models the target's chain has left (0 = wiped: the weapons still to fire then read `Ctx::wiped`).
     // `None` below 94.
     inline_land: Option<InlineLand<'_>>,
-    // `PENDING_EPOCH_VOLLEY_DEADLY_STOPS`: on the finished Deadly groups, is the target's chain dead? Its Deadly wounds left then roll no
+    // `EPOCH_95_PARITY_BATCH`: on the finished Deadly groups, is the target's chain dead? Its Deadly wounds left then roll no
     // ignore dice (the melee leg's `deadly_wipes`). `None` below 95.
     deadly_wipes: Option<&dyn Fn(&ShootResult) -> bool>, tray: &mut Tray,
 ) -> ShootResult {
@@ -1565,10 +1565,10 @@ pub(crate) fn resolve_volley_with_pick_label(
     let mut upr_hit = 0i64;
     let mut hero_upr: Vec<(usize, i64, i64)> = Vec::new(); // (shooter index, ap, hit): a joined hero's own die
     let mut versatile_made: Vec<(Option<usize>, (i64, i64))> = Vec::new(); // the picks made in this volley (`Ctx::versatile_defer`)
-    // PENDING_EPOCH_UPR_NEEDS_SHOT: the die is owed only by a shooter with a weapon in reach (the loop's own range gate below);
+    // EPOCH_95_PARITY_BATCH: the die is owed only by a shooter with a weapon in reach (the loop's own range gate below);
     // a volley with none is no volley at the table ("no target in range or sight"), so no die. Below the epoch every shooter owes it.
     let fires = |sh: &Shooter<'_>| {
-        !rule_on(sh.att.rules_epoch, crate::acts::PENDING_EPOCH_UPR_NEEDS_SHOT)
+        !rule_on(sh.att.rules_epoch, crate::acts::EPOCH_95_PARITY_BATCH)
             || sh.keep.iter().any(|&pi| {
                 let p = &sh.profiles[pi];
                 let printed = p.range as f64 + p.reach_bonus_in.max(sh.att.granted_reach_in);
@@ -2322,7 +2322,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         // EPOCH_73_V36, so older records keep their unconditional skip).
         let indirect_keeps_cover = p.indirect && p.indirect_cover_needs_hold;
         let skips_cover = p.blast > 1 || p.ignores_cover || (p.indirect && !indirect_keeps_cover);
-        // PLAN_COVER_36 (`PENDING_EPOCH_COVER_SCREEN`): cover from sight blockers (`def.screened`, stamped by the volley seam from 95
+        // PLAN_COVER_36 (`EPOCH_95_PARITY_BATCH`): cover from sight blockers (`def.screened`, stamped by the volley seam from 95
         // only) joins terrain cover as ONE +1; an Indirect whose cover waiver holds (Hold kept where the entry needs it) or the
         // Indirect mark on the target lifts it, and terrain cover stays.
         // A moved Indirect gun without the Hold its entry needs is not firing indirectly: no lift, mark or not (lead 21.11.).

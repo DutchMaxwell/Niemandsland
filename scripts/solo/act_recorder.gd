@@ -216,7 +216,7 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## endpoints and Melee Shrouding band, Counter / Destructive / Piercing Hunter in melee) are stamped 92 with EPOCH_92_MELEE_CAUSES.
 ## The AI skirting Dangerous ground (a plain move's goal read and the sideways re-plan), the 3.6 faction folders resolving their rules
 ## and the volley's spell rider switched off are stamped 93 with EPOCH_93_DANGER_RULES_RIDER.
-static var rules_epoch: int = 94
+static var rules_epoch: int = 95
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -300,12 +300,10 @@ const EPOCH_93_DANGER_RULES_RIDER := 93
 ## Versatile pick on the modified to-hit, inline Deadly, exact striker labels, heightfield reads, casualty ties in f32, joined hero moved stamp, Shaken mirror,
 ## Deadly stops, zero-move stamp, own-unit Indirect, Slayer Mark grant, melee Mark scope). Where the table has its own side of one it reads this constant.
 const EPOCH_94_PARITY_BATCH := 94
-## The core's `PENDING_EPOCH_SPELL_NO_STACK` (acts.rs, lead ruling 20.11.): from 95 a second identical spell record on the same unit refreshes the first and adds none
-## (`main.gd` `_solo_record_spell_mod`), GF 3.6 "Rules priority & stacking effects".
-const PENDING_EPOCH_SPELL_NO_STACK := 95
-## Placeholder gate (acts.rs `PENDING_EPOCH_COVER_SCREEN`, the core twin): from 95 a unit shot at also takes the Cover +1 when it stands
-## mostly behind a sight blocker from the shooters (`main._solo_volley_screen`, PLAN_COVER_36); terrain cover is read as before.
-const PENDING_EPOCH_COVER_SCREEN := 95
+## The core's frozen `EPOCH_95_PARITY_BATCH` (acts.rs): the five table-vs-core differences that sat behind `PENDING_EPOCH_*` placeholders (cover from sight blockers, a volley's
+## Deadly wounds stopping once the target is dead, the volley's declared Defense, no spell stacking, no Unpredictable die without a weapon in reach). Where the table
+## has its own side of one it reads this constant.
+const EPOCH_95_PARITY_BATCH := 95
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

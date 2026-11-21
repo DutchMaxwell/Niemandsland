@@ -1,5 +1,5 @@
 //! PLAN_COVER_36 step 6: the played volley reads cover from sight blockers (`sight::screen_of`) from
-//! `PENDING_EPOCH_COVER_SCREEN`. The buff line with the target's hero detached and standing 2" in front of the target as a
+//! `EPOCH_95_PARITY_BATCH`. The buff line with the target's hero detached and standing 2" in front of the target as a
 //! short third unit: the shooters see the target's heads over it, not its feet.
 use super::*;
 
@@ -38,7 +38,7 @@ fn volley(epoch: u32) -> ShootResult {
 /// RED before: it stood in `ShootResult.log` only.
 #[test]
 fn the_door_tray_says_the_screen_line() {
-    let (_, said) = volley_said(crate::acts::PENDING_EPOCH_COVER_SCREEN);
+    let (_, said) = volley_said(crate::acts::EPOCH_95_PARITY_BATCH);
     assert_eq!(said.iter().filter(|l| *l == SCREEN).count(), 1, "the tray says it once: {said:?}");
 }
 
@@ -49,7 +49,7 @@ const COVER: &str = "b is in cover: +1 Defense (saves on 3+)";
 /// (records stamped 94 replay byte-exact). RED before the seam: `screened` was never stamped, no line, no +1.
 #[test]
 fn a_unit_behind_another_unit_saves_one_better_from_95_only() {
-    let at95 = volley(crate::acts::PENDING_EPOCH_COVER_SCREEN);
+    let at95 = volley(crate::acts::EPOCH_95_PARITY_BATCH);
     assert!(at95.log.iter().any(|l| l == SCREEN), "the screen line: {:?}", at95.log);
     assert!(at95.log.iter().any(|l| l == COVER), "the save used the +1: {:?}", at95.log);
     let saves = |r: &ShootResult| r.rolls.iter().filter(|r| r.kind == "defense").map(|r| r.target).collect::<Vec<_>>();

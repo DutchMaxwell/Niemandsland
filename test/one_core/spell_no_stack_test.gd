@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## PENDING_EPOCH_SPELL_NO_STACK (95; lead ruling 20.11., GF 3.6 "Rules priority & stacking effects": the same spell does not stack): a second identical record of a
+## EPOCH_95_PARITY_BATCH (95; lead ruling 20.11., GF 3.6 "Rules priority & stacking effects": the same spell does not stack): a second identical record of a
 ## spell on the same unit refreshes the first and adds none, with a line and no second token. Core twin `sim::tray_spell_effect`. Three casts of an Indirect mark leave one
 ## record from 95 (the table's own exchange spend then says "consumed" once and leaves nothing), three below it. Real: the main scene, the table's token / record placement,
 ## `_solo_consume_once_mods`. Constructed: two plain units.
@@ -61,7 +61,7 @@ func _run(epoch: int, casts: int) -> Dictionary:
 ## RED before the fix: three records after three casts at 95. Green: one, said placed / ACTIVE once and refreshed twice, one spend sentence, nothing left.
 ## Below the pending epoch the old stacking replays (three records, no refresh line); a single cast is the same at both.
 func test_three_casts_of_one_spell_leave_one_record_from_the_pending_epoch() -> void:
-	var gate: int = AiActRecorder.PENDING_EPOCH_SPELL_NO_STACK
+	var gate: int = AiActRecorder.EPOCH_95_PARITY_BATCH
 	var now := await _run(gate, 3)
 	assert_dict(now).override_failure_message("at the gate: %s" % str(now)).is_equal({"records": 1, "left": 0, "consumed": 1, "refreshed": 2, "placed": 1, "active": 1})
 	var old := await _run(gate - 1, 3)

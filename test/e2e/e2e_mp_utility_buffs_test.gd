@@ -335,9 +335,13 @@ func test_the_once_per_activation_stamp_still_binds(timeout := 120000) -> void:
 		.override_failure_message("the second door put a duplicate record on the wire") \
 		.is_empty()
 
-	# ROT: a new round re-opens it, and that one does travel.
+	# ROT: a new round re-opens it, and that one does travel. Below the epoch 95 batch (SPELL_NO_STACK) the second application stacks and sends a new
+	# record; from 95 the identical record is refreshed in place (one record, no new frame), so the stacking read is pinned at 94.
+	var epoch_before := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_95_PARITY_BATCH - 1
 	_main.opr_army_manager.current_round = 2
 	_main._solo_apply_utility_buffs(gf[0])
+	AiActRecorder.rules_epoch = epoch_before
 	assert_int(_mods_on(gf[1]).size()).is_equal(2)
 	assert_int(_mod_frames(gf[1]).size()).is_greater_equal(1)
 

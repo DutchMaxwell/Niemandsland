@@ -1,9 +1,9 @@
 use super::*;
-use crate::acts::PENDING_EPOCH_SPELL_NO_STACK as GATE;
+use crate::acts::EPOCH_95_PARITY_BATCH as GATE;
 use crate::activation::CastInput;
 use crate::rules::Spell;
 
-    /// `PENDING_EPOCH_SPELL_NO_STACK` (lead ruling 20.11., GF 3.6 "Rules priority & stacking effects"): the same spell does not stack. Three casts of an
+    /// `EPOCH_95_PARITY_BATCH` (lead ruling 20.11., GF 3.6 "Rules priority & stacking effects"): the same spell does not stack. Three casts of an
     /// Indirect mark on one target leave ONE record from the pending epoch (the later casts refresh it), three below it (the old stacking replays). RED before
     /// the fix: the first assert (three records). Controls: a different target gets its own record, a different spell stacks beside it, an effect-less
     /// spell still names its landing.

@@ -6227,11 +6227,11 @@ func _solo_spell_rec(spell_name: String, effect: Dictionary) -> Dictionary:
 	return rec
 
 
-## PENDING_EPOCH_SPELL_NO_STACK (GF 3.6, "Rules priority & stacking effects": the same spell does not stack; core twin `sim::tray_spell_effect`):
+## EPOCH_95_PARITY_BATCH (GF 3.6, "Rules priority & stacking effects": the same spell does not stack; core twin `sim::tray_spell_effect`):
 ## true when `tu` already carries an identical record of the spell (the live grant's `granted_to` and the Regeneration `used` flag aside).
 ## The existing record stands (it is the refreshed one), nothing is added, the line says so.
 func _solo_spell_refreshed(tu: GameUnit, spell_name: String, rec: Dictionary) -> bool:
-	if rec.is_empty() or AiActRecorder.rules_epoch < AiActRecorder.PENDING_EPOCH_SPELL_NO_STACK:
+	if rec.is_empty() or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_95_PARITY_BATCH:
 		return false
 	var sig := func(rd: Dictionary) -> String:
 		var c := rd.duplicate()
@@ -7303,7 +7303,7 @@ func _solo_cover_defense(target: GameUnit, base_defense: int) -> int:
 ## `target`'s defense holder and says the verdict. Keyed by shooter AND target; closed where the volley's saves end.
 func _solo_screen_open(attacker: GameUnit, target: GameUnit) -> void:
 	_solo_screen = {}
-	if AiActRecorder.rules_epoch < AiActRecorder.PENDING_EPOCH_COVER_SCREEN or attacker == null or target == null:
+	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_95_PARITY_BATCH or attacker == null or target == null:
 		return
 	var holder: GameUnit = _solo_defense_holder(target)
 	holder = target if holder == null else holder

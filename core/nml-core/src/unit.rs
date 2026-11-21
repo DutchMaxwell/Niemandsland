@@ -364,7 +364,7 @@ pub struct Ctx {
     /// and its dice must keep the old stacked reading byte-exact.
     pub sturdy_boost_gates_guarded: bool,
     pub in_cover: bool,
-    /// PLAN_COVER_36 (`PENDING_EPOCH_COVER_SCREEN`): the unit is mostly behind a sight blocker from this volley's shooters
+    /// PLAN_COVER_36 (`EPOCH_95_PARITY_BATCH`): the unit is mostly behind a sight blocker from this volley's shooters
     /// (`sight::screen_of`), stamped by the played volley from 95 only. Cover against shooting, NOT "standing in terrain":
     /// the Grounded family and the Shielded terrain alias keep reading `in_cover`.
     pub screened: bool,
@@ -855,9 +855,9 @@ impl Ctx {
     /// terrain) are off. Stats, cover, the blast cap and the range gates are NOT touched: they stay as declared.
     pub fn wiped(&self) -> Ctx {
         let d = Ctx::default();
-        // PENDING_EPOCH_VOLLEY_DEFENCE_DECLARED: the volley is simultaneous, so the Defense value as declared (Guarded, Shielded) holds; below
+        // EPOCH_95_PARITY_BATCH: the volley is simultaneous, so the Defense value as declared (Guarded, Shielded) holds; below
         // it they drop too. Fortified (an AP rule) and the ignore rolls still need a living carrier, as the table reads them per hit.
-        let base = if rule_on(self.rules_epoch, crate::acts::PENDING_EPOCH_VOLLEY_DEFENCE_DECLARED) { *self } else { Ctx {
+        let base = if rule_on(self.rules_epoch, crate::acts::EPOCH_95_PARITY_BATCH) { *self } else { Ctx {
             guarded: d.guarded, guarded_name: d.guarded_name,
             shielded: d.shielded, shielded_note: d.shielded_note, shielded_alias: d.shielded_alias, shielded_rating: d.shielded_rating,
             ..*self

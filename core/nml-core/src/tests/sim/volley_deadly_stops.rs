@@ -40,6 +40,6 @@ use super::*;
     /// RED at the epoch: the core threw the second wound's three dice as well (2 rolls against the table's 1). Below it nothing moves.
     #[test]
     fn a_dead_target_gets_no_more_ignore_dice_from_a_volleys_deadly_wounds() {
-        assert_eq!(ignore_rolls(crate::acts::PENDING_EPOCH_VOLLEY_DEADLY_STOPS), 1, "95: the second wound is dropped, no dice");
-        assert_eq!(ignore_rolls(crate::acts::PENDING_EPOCH_VOLLEY_DEADLY_STOPS - 1), 2, "below the epoch the old fold rolls both wounds' dice");
+        assert_eq!(ignore_rolls(crate::acts::EPOCH_95_PARITY_BATCH), 1, "95: the second wound is dropped, no dice");
+        assert_eq!(ignore_rolls(crate::acts::EPOCH_95_PARITY_BATCH - 1), 2, "below the epoch the old fold rolls both wounds' dice");
     }

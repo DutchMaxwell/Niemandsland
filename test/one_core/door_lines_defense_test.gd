@@ -173,13 +173,13 @@ func test_the_gated_ignore_rule_beside_another_group_says_its_verdict_and_rolls_
 ## at 94 (table at 95) has no screen line - the row turns red, so the comparison can fail on this rule.
 func test_cover_from_sight_blockers_says_the_same_lines_through_the_door() -> void:
 	var was := AiActRecorder.rules_epoch
-	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_COVER_SCREEN
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_95_PARITY_BATCH
 	var wall := DoorLines.entry("Wall", 9, [], [], "battle_brothers", 0)
 	(wall["unit"] as OPRApiClient.OPRUnit).base_size_round = 20
 	var opts := {"distance_in": 14.0, "blocker": wall, "blocker_in": 12.0}
 	await _same("screened by a closed unit line", DoorLines.entry("Gunners", 5, [], []), DoorLines.entry("Squad", 5, [], []), "Cover:", 6, opts)
 	await _same("held indirect lifts it", DoorLines.entry("Mortars", 3, [], ["Indirect"]), DoorLines.entry("Squad", 5, [], []), "Indirect:", 1, opts)
 	var r := await DoorLines.compare(_main, DoorLines.entry("Gunners", 5, [], []), DoorLines.entry("Squad", 5, [], []), "Cover:", 4,
-		ProjectSettings.globalize_path(DICE), opts.merged({"core_epoch": AiActRecorder.PENDING_EPOCH_COVER_SCREEN - 1}))
+		ProjectSettings.globalize_path(DICE), opts.merged({"core_epoch": AiActRecorder.EPOCH_95_PARITY_BATCH - 1}))
 	AiActRecorder.rules_epoch = was
 	assert_int((r["bad"] as Array).size()).override_failure_message("planted fault: a door at 94 must differ from the table at 95").is_equal(4)
