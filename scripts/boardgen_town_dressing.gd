@@ -62,7 +62,9 @@ static func _hash(lot_id: int, half: int, salt: int) -> float:
 ## How an intact house is DRAWN differently from its collider (plan O3), per lot and half of the board: the drawn body is inset 0.06-0.14 in on every side (inward only), yawed so
 ## that no corner swings out of the lot's cells (the yaw is at most 3 degrees, and at most what the inset allows, so the drawn wall is never more than 0.2 in off the collider's face),
 ## its top (= its eaves) is 2.5 in +- 0.3, its stone plinth 0.3-0.6 in high. The collider and the class stay the core's 2.5 in solid; nothing here is a rule.
-static func house_look(lot_id: int, half: int, size: Vector2) -> Dictionary:
+static func house_look(lot_id: int, half: int, size: Vector2, free := false, core_yaw := 0.0) -> Dictionary:
+	if free:   # a free solid (organic K1): the drawn body IS the core box - its yaw, inset at most 0.05 in (corners within 0.1 in)
+		return {"inset": 0.02 + 0.03 * _hash(lot_id, half, 4), "yaw": core_yaw, "top": BODY_IN + (_hash(lot_id, half, 6) - 0.5) * 0.6, "plinth": 0.3 + 0.3 * _hash(lot_id, half, 7)}
 	var inset := 0.06 + 0.08 * _hash(lot_id, half, 4)
 	var room := minf(inset, 0.2 - inset)   # how far a corner may swing out of the inset body and still stay in its cells with a gap <= 0.2 in
 	var yaw_max := minf(deg_to_rad(3.0), asin(room / (maxf(size.x, size.y) * 0.5)))
@@ -74,22 +76,35 @@ static func house_look(lot_id: int, half: int, size: Vector2) -> Dictionary:
 ## 0.15-0.2 in - a recess inside the house's own cells, never over ground a model could stand on. Pure data.
 static func house_bodies(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	var cell_in := float(layout["cell_in"])
-	var board := Vector2(layout["nx"], layout["nz"]) * cell_in
 	var fronts := {}
 	for f: Dictionary in frontage(layout):
 		fronts[f["lot"]] = f["front"]
-	for lot: Dictionary in layout["lots"]:
-		if lot["kind"] != "Roofed":
-			continue
-		var size := Vector2(lot["w"], lot["h"]) * cell_in
-		var centre := Vector2(lot["x"], lot["z"]) * cell_in + size * 0.5 - board * 0.5
+	for h: Dictionary in house_frames(layout):
+		var size: Vector2 = h["size"]
+		var centre: Vector2 = h["centre"]
 		var half := 1 if centre.y > 0.0 else 0
-		var look := house_look(lot["id"], half, size)
-		var front: String = fronts.get(lot["id"], "")
-		var jetty := (0.15 + 0.05 * _hash(lot["id"], half, 13)) if front != "" and _hash(lot["id"], half, 14) < 0.6 else 0.0
-		out.append({"lot": lot["id"], "centre": centre, "size": size - Vector2.ONE * 2.0 * float(look["inset"]), "yaw": look["yaw"], "top": look["top"], "plinth": look["plinth"], "half": half,
-			"front": front, "jetty": jetty, "storey": 1.5 + 0.4 * _hash(lot["id"], half, 15)})
+		var look := house_look(h["lot"], half, size, h["free"], h["yaw"])
+		var front: String = fronts.get(h["lot"], "")
+		var jetty := (0.15 + 0.05 * _hash(h["lot"], half, 13)) if front != "" and _hash(h["lot"], half, 14) < 0.6 else 0.0
+		out.append({"lot": h["lot"], "centre": centre, "size": size - Vector2.ONE * 2.0 * float(look["inset"]), "yaw": look["yaw"], "top": look["top"], "plinth": look["plinth"], "half": half,
+			"front": front, "jetty": jetty, "storey": 1.5 + 0.4 * _hash(h["lot"], half, 15)})
+	return out
+
+
+## The intact houses as frames: {lot, centre (Vector2, board inches), size (Vector2, inches, before the yaw), yaw, free}. On a board with free solids (the layout's `solids`, organic
+## plan K1) each house IS its core box - centre, size and yaw as the core blocks movement and sight; on a cell board it is its lot rectangle at yaw 0. Pure data.
+static func house_frames(layout: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for s: Dictionary in layout.get("solids", []):
+		out.append({"lot": int(s["lot"]), "centre": Vector2(s["c_in"][0], s["c_in"][1]), "size": Vector2(s["he_in"][0], s["he_in"][1]) * 2.0, "yaw": float(s["yaw"]), "free": true})
+	if not out.is_empty():
+		return out
+	var cell_in := float(layout["cell_in"])
+	var board := Vector2(layout["nx"], layout["nz"]) * cell_in
+	for lot: Dictionary in layout["lots"]:
+		if lot["kind"] == "Roofed":
+			var size := Vector2(lot["w"], lot["h"]) * cell_in
+			out.append({"lot": lot["id"], "centre": Vector2(lot["x"], lot["z"]) * cell_in + size * 0.5 - board * 0.5, "size": size, "yaw": 0.0, "free": false})
 	return out
 
 
@@ -113,16 +128,13 @@ static func house_parts(body: Dictionary) -> Array[Dictionary]:
 static func roofs(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var cell_in := float(layout["cell_in"])
-	var board := Vector2(layout["nx"], layout["nz"]) * cell_in
 	var fronts := {}
 	for f: Dictionary in frontage(layout):
 		fronts[f["lot"]] = f["front"]
-	for lot: Dictionary in layout["lots"]:
-		if lot["kind"] != "Roofed":
-			continue
-		var id: int = lot["id"]
-		var size := Vector2(lot["w"], lot["h"]) * cell_in
-		var centre := Vector2(lot["x"], lot["z"]) * cell_in + size * 0.5 - board * 0.5
+	for h: Dictionary in house_frames(layout):
+		var id: int = h["lot"]
+		var size: Vector2 = h["size"]
+		var centre: Vector2 = h["centre"]
 		var half := 1 if centre.y > 0.0 else 0
 		var front: String = fronts.get(id, "")
 		var along_x := size.x > size.y or (size.x == size.y and _hash(id, half, 1) < 0.5)
@@ -132,7 +144,7 @@ static func roofs(layout: Dictionary) -> Array[Dictionary]:
 			along_x = front in ["E", "W"]   # gable-on: the ridge points at it
 		var run := size.x if along_x else size.y
 		var across := size.y if along_x else size.x
-		var look := house_look(id, half, size)
+		var look := house_look(id, half, size, h["free"], h["yaw"])
 		var pick := _hash(id, half, 9)
 		var eaves_on := front != "" and along_x == (front in ["N", "S"])
 		var type := "gable" if pick < 0.45 or (pick >= 0.75 and not eaves_on) else ("hip" if pick < 0.75 else "catslide")
@@ -140,10 +152,10 @@ static func roofs(layout: Dictionary) -> Array[Dictionary]:
 		var height := 1.5 + 1.2 * _hash(id, half, 2)
 		var yaw: float = look["yaw"] + (2.0 * _hash(id, half, 10) - 1.0) * deg_to_rad(2.0)
 		var roof := {"lot": id, "centre": centre, "length": run + 2.0 * OVERHANG_IN, "width": across + 2.0 * OVERHANG_IN, "height": height, "along_x": along_x, "half": half,
-			"yaw": yaw, "eaves": look["top"], "type": type, "back": back, "annex": false}
+			"yaw": yaw, "eaves": look["top"], "type": type, "back": back, "annex": false, "free": h["free"]}
 		if run >= 2.0 * cell_in and _hash(id, half, 11) < 0.4:
 			var end := 1.0 if _hash(id, half, 12) < 0.5 else -1.0
-			var shift := Vector2(end, 0.0) if along_x else Vector2(0.0, end)
+			var shift := (Vector2(end, 0.0) if along_x else Vector2(0.0, end)).rotated(-float(h["yaw"]))   # along the box's own axis (yaw 0 on a cell board)
 			var annex := roof.duplicate()
 			annex.merge({"centre": centre + shift * (run * 0.5 - cell_in * 0.5), "length": cell_in + 2.0 * OVERHANG_IN, "height": height * 0.55, "type": "gable", "annex": true}, true)
 			roof.merge({"centre": centre - shift * cell_in * 0.5, "length": run - cell_in + 2.0 * OVERHANG_IN}, true)
@@ -158,7 +170,7 @@ static func chimneys(layout: Dictionary) -> Array[Dictionary]:
 	for r: Dictionary in roofs(layout).filter(func(r: Dictionary) -> bool: return not r["annex"]):
 		var end_sign := 1.0 if _hash(r["lot"], r["half"], 3) < 0.5 else -1.0
 		var offset: float = end_sign * (float(r["length"]) * 0.5 - 0.9)
-		var centre: Vector2 = r["centre"] + (Vector2(offset, 0.0) if r["along_x"] else Vector2(0.0, offset))
+		var centre: Vector2 = r["centre"] + (Vector2(offset, 0.0) if r["along_x"] else Vector2(0.0, offset)).rotated(-float(r["yaw"]) if r.get("free", false) else 0.0)
 		out.append({"lo": Vector3(centre.x - CHIMNEY_IN * 0.5, BODY_IN, centre.y - CHIMNEY_IN * 0.5),
 			"hi": Vector3(centre.x + CHIMNEY_IN * 0.5, BODY_IN + float(r["height"]) + 0.9, centre.y + CHIMNEY_IN * 0.5), "kind": "brick", "solid": false})
 	return out

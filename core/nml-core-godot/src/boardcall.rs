@@ -25,6 +25,9 @@ pub fn layout_value_themed(seed: i64, theme: &str) -> Value {
     v["problems"] = json!(layout.problems().into_iter().chain(known.is_none().then_some("unknown theme")).collect::<Vec<_>>());
     // Each landmark also names the core terrain class of its footprint (0 = none) and whether it is solid.
     v["landmarks"] = Value::Array(layout.landmarks.iter().map(|l| { let mut o = serde_json::to_value(l).expect("landmark JSON"); o["terrain"] = json!(l.kind.terrain_class()); o["solid"] = json!(l.kind.is_solid()); o }).collect());
+    // organic K1: the free solids (intact houses as rotated boxes, board-centred inches) - exactly what the core blocks; the table draws and collides these
+    let solids = boardgen::solids::free_solids(&layout);
+    if !solids.is_empty() { v["solids"] = serde_json::to_value(solids).expect("solids JSON"); }   // absent on a cell board: a Deepworks layout stays byte-identical
     v["connectors"] = Value::Array(layout.connectors.iter().map(|c| {
         let ((lx, lz), (hx, hz)) = ((usize::from(c.low) % nx, usize::from(c.low) / nx), (usize::from(c.high) % nx, usize::from(c.high) / nx));
         let mid = |a: usize, b: usize| (a + b + 1) as f64 * f64::from(CELL_IN) / 2.0;
@@ -47,6 +50,22 @@ mod tests {
             assert_eq!(v["problems"], json!([]), "seed {seed}");
             assert!(v["cells"].as_array().unwrap().iter().all(|c| c["level"].as_u64().unwrap() <= 3));
         }
+    }
+
+    #[test]
+    fn a_town_layout_carries_its_free_solids_as_the_plain_board_has_them() {
+        for seed in [7, 41, 42] {
+            let v = layout_value_themed(seed, "ruintown");
+            let plain = boardgen::plain::to_plain(&boardgen::generate_themed(seed, Symmetry::Point180, Theme::RuinTown));
+            let solids = v["solids"].as_array().unwrap();
+            assert!(!solids.is_empty(), "seed {seed}: a town without free solids");
+            assert_eq!(solids.len(), plain.sandbox.len());
+            for (s, o) in solids.iter().zip(&plain.sandbox) {
+                let c = [s["c_in"][0].as_f64().unwrap() * nml_core::IN2M, s["c_in"][1].as_f64().unwrap() * nml_core::IN2M];
+                assert!((c[0] - o.c[0]).abs() < 1e-12 && (c[1] - o.c[1]).abs() < 1e-12 && s["yaw"].as_f64().unwrap() == o.yaw, "seed {seed}: the table box is not the core box");
+            }
+        }
+        assert!(layout_value(42).get("solids").is_none(), "a Deepworks layout has no solids key");
     }
 
     #[test]

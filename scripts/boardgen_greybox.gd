@@ -97,14 +97,15 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 	var cells: Array = layout["cells"]
 	var town := str(layout.get("theme", BoardgenTheme.DEEPWORKS)) == BoardgenTheme.RUIN_TOWN
 	var origin := Vector2(nx, nz) * cell_in * -0.5
+	var free := town and not (layout.get("solids", []) as Array).is_empty()   # organic K1: intact houses are the core's free boxes, their cells are open ground
 	var own := BoardgenTownSilhouette.drawn_cells(layout) if town else {}   # wall and tower cells the silhouette draws thinner: one collider box each, drawn by it
 	# Blocks: runs of same-kind cells along x. Level 0 is a thin skin coloured by what the cell is.
 	for z in nz:
 		var x := 0
 		while x < nx:
-			var kind := _cell_kind(cells[z * nx + x], town)
+			var kind := _cell_kind(cells[z * nx + x], town, free)
 			var run := 1
-			while not own.has(z * nx + x) and x + run < nx and not own.has(z * nx + x + run) and _cell_kind(cells[z * nx + x + run], town) == kind:
+			while not own.has(z * nx + x) and x + run < nx and not own.has(z * nx + x + run) and _cell_kind(cells[z * nx + x + run], town, free) == kind:
 				run += 1
 			var level: int = cells[z * nx + x]["level"]
 			var body := kind == "roofed"   # an intact house: level-0 solid ground, as high as the core's solid (2.5 in); its ridge is drawn below
@@ -127,6 +128,10 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 		for k in range(1, int(rise / LADDER_RUNG_GAP_IN)):
 			out.append(_slab(edge, away, side, LADDER_OFFSET_IN, LADDER_OFFSET_IN + LADDER_RAIL_IN, LADDER_WIDTH_IN,
 				base + k * LADDER_RUNG_GAP_IN, base + k * LADDER_RUNG_GAP_IN + LADDER_RAIL_IN, "ladder", false))
+	for f: Dictionary in (BoardgenTownDressing.house_frames(layout) if free else []):   # one collider per core box, at its yaw (the body is drawn by BoardgenTownDressing)
+		var c: Vector2 = f["centre"]
+		var h: Vector2 = f["size"] * 0.5
+		out.append({"lo": Vector3(c.x - h.x, 0.0, c.y - h.y), "hi": Vector3(c.x + h.x, SOLID_IN, c.y + h.y), "kind": "roofed", "solid": true, "yaw": f["yaw"], "lot": f["lot"]})
 	if town:
 		out.append_array(_town_landmarks(layout, origin))
 		out.append_array(BoardgenTownDressing.chimneys(layout))
@@ -196,9 +201,9 @@ static func _box(lo: Vector2, hi: Vector2, y0: float, y1: float, kind: String, s
 	return {"lo": Vector3(lo.x, y0, lo.y), "hi": Vector3(hi.x, y1, hi.y), "kind": kind, "solid": solid}
 
 
-static func _cell_kind(cell: Dictionary, town := false) -> String:
+static func _cell_kind(cell: Dictionary, town := false, free := false) -> String:
 	if town and cell["lot_kind"] == "Roofed":
-		return "roofed"   # an intact house
+		return "ground" if free else "roofed"   # an intact house (a free solid's cells are open ground: the house is its box)
 	if town and cell["lot_kind"] == "Wall":
 		return "wall" if cell["level"] > 0 else "rubble"   # the city wall (ridge, tower, buttress) or the rubble of its breach
 	if cell["level"] > 0:
@@ -271,6 +276,7 @@ func build(layout: Dictionary) -> void:
 			var col := CollisionShape3D.new()
 			col.shape = shape
 			col.position = centre
+			col.rotation.y = float(b.get("yaw", 0.0))   # a free solid's box turns about its centre (organic K1)
 			body.add_child(col)
 	_dress(layout, theme, ["Props", "Landmarks", "Debris", "Sumps"], kit)
 	var board := Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) * INCHES_TO_METERS
@@ -555,7 +561,7 @@ static func ground_map(layout: Dictionary, kinds: Array) -> PackedByteArray:
 		var bx := clampi(roundi(off.x / 6.0 * 255.0 + 127.5), 0, 255)
 		if cells[i]["lot_id"] != 0 and not cells[i]["street"] and ["Block", "Terrace", "Deck", "Roofed"].has(cells[i]["lot_kind"]):
 			bx = 1 + int(BoardgenTownDressing._hash(int(cells[i]["lot_id"]), 1 if z >= nz / 2 else 0, 200) * 253.0)   # a house cell: its lot's hash (junction offsets are for street cells only)
-		bytes.append_array([kinds.find(_cell_kind(cells[i], true)), run, bx, clampi(roundi(off.y / 6.0 * 255.0 + 127.5), 0, 255)])
+		bytes.append_array([kinds.find(_cell_kind(cells[i], true, not (layout.get("solids", []) as Array).is_empty())), run, bx, clampi(roundi(off.y / 6.0 * 255.0 + 127.5), 0, 255)])
 	return bytes
 
 
