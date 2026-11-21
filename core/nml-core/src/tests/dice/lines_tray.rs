@@ -93,3 +93,12 @@ fn a_surge_mark_names_its_bonus_on_the_door_tray() {
     let off = tray_lines_of(&shooter(4), &defender(4, 5), rifle(24), 1, 24);
     assert!(off.iter().all(|l| !l.starts_with("Surge Mark")), "no mark, no line: {off:?}");
 }
+
+/// The once-per-game extra attack names itself (`_solo_takedown_bonus_groups`, same words) on the tray as well as in the recorded log.
+/// RED on main: `ShootResult.log` only.
+#[test]
+fn a_takedown_shot_names_its_extra_attack_on_the_door_tray() {
+    let gun = ShootProfile { name: "Takedown Shot".into(), extra_attack_q: 2, ap: 2, deadly: 3, takedown: true, ..rifle(1) };
+    let lines = tray_lines(&shooter(4), &defender(4, 5), gun, 1);
+    assert_eq!(said(&lines, "Takedown Shot: Att makes one extra attack at Quality 2+ with AP(2), Deadly(3), Takedown (once per game)"), 1, "{lines:?}");
+}

@@ -87,3 +87,21 @@ fn no_parry_events_are_drawn_at_epoch_72() {
     assert_eq!(parry_count(&r), 0, "{:?}", r.rolls);
     assert_eq!(r.rolls.iter().filter(|x| x.kind == "attack").count(), 2, "{:?}", r.rolls);
 }
+
+/// Lines audit: the door's tray says the Parry event of the strike and of its follow-up, and the Bloodthirsty line with the weapon
+/// (the table's words); both were in `ShootResult.log` only. RED on main: no tray line.
+#[test]
+fn the_door_tray_says_the_parry_and_bloodthirsty_lines() {
+    let carrier = built("carrier", EPOCH_73_V36);
+    let seeded = strike(&carrier, EPOCH_73_V36, true);
+    let profiles = [carrier.melee[0].clone()];
+    let att = Ctx { quality: 4, models: 1, rules_epoch: EPOCH_73_V36, ..Default::default() };
+    let def = Ctx { models: 2, ..built("defender", EPOCH_73_V36).ctx };
+    let mut tray = Tray::supplied(seeded.rolls.iter().map(|r| r.faces.clone()).collect());
+    tray.set_zero_draws(true);
+    resolve_melee_leg(&[striker(&profiles, &[0], &[12], &att)], &def, "Defender",
+        false, true, true, false, 0.0, false, false, true, false, false, &mut tray);
+    let said: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).collect();
+    assert_eq!(said.iter().filter(|l| l.starts_with("Parry: Defender rolls ") && l.contains(" dice and cancels ")).count(), 2, "{said:?}");
+    assert!(said.iter().any(|l| l.starts_with("Bloodthirsty Fighter: ") && l.contains(" blocked 1") && (l.ends_with(" extra attacks with Blade") || l.ends_with(" extra attack with Blade"))), "{said:?}");
+}

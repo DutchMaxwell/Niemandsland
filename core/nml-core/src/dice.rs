@@ -2051,6 +2051,9 @@ pub(crate) fn resolve_volley_with_pick_label(
             out.log.push(format!(
                 "{}: {} makes one extra attack at Quality {}+ with AP({}), Deadly({}), Takedown (once per game)",
                 p.name, sh.owner, p.extra_attack_q, p.ap, p.deadly));
+            say_rule(tray, "takedown_bonus", att.side, || format!(
+                "{}: {} makes one extra attack at Quality {}+ with AP({}), Deadly({}), Takedown (once per game)",
+                p.name, sh.owner, p.extra_attack_q, p.ap, p.deadly));
         }
         // --- `_solo_hits` :4404-4487 ---
         let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
@@ -2922,6 +2925,7 @@ fn parry_event(def: &Ctx, def_owner: &str, hits: i64, gated: bool, tray: &mut Tr
     let k = faces.iter().filter(|&&f| f >= 6).count() as i64;
     out.rolls.push(Roll { kind: "parry", count: n, target: 6, faces, owner: def_owner.into() });
     out.log.push(format!("Parry: {def_owner} rolls {n} dice and cancels {k} strike hits"));
+    say_rule(tray, "parry", def.side, || format!("Parry: {def_owner} rolls {n} dice and cancels {k} strike hits"));
     k
 }
 
@@ -3183,6 +3187,9 @@ pub fn resolve_melee_leg_wipe(
             // main.gd:16780-16783).
             if p.extra_attack_q > 0 {
                 out.log.push(format!(
+                    "{}: {} makes one extra attack at Quality {}+ with AP({}), Deadly({}), Takedown (once per game)",
+                    p.name, sh.owner, p.extra_attack_q, p.ap, p.deadly));
+                say_rule(tray, "takedown_bonus", sh.att.side, || format!(
                     "{}: {} makes one extra attack at Quality {}+ with AP({}), Deadly({}), Takedown (once per game)",
                     p.name, sh.owner, p.extra_attack_q, p.ap, p.deadly));
             }
@@ -3503,6 +3510,11 @@ pub fn resolve_melee_leg_wipe(
                         "{}: {} blocked 1{} — {} rolls {} extra attack{}",
                         p.bloodthirsty_rule, bt_ones, if bt_ones == 1 { "" } else { "s" },
                         sh.owner, bt_extra, if bt_extra == 1 { "" } else { "s" }));
+                    // The table's line names the weapon too (`_solo_attack_groups`' Bloodthirsty leg).
+                    say_rule(tray, "bloodthirsty", sh.att.side, || format!(
+                        "{}: {} blocked 1{} — {} rolls {} extra attack{} with {}",
+                        p.bloodthirsty_rule, bt_ones, if bt_ones == 1 { "" } else { "s" },
+                        sh.owner, bt_extra, if bt_extra == 1 { "" } else { "s" }, p.name));
                     tray.owner_next(sh.att.unit);
                     let bt_faces = tray.roll(bt_extra as usize);
                     out.rolls.push(Roll {

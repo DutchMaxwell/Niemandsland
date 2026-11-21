@@ -3594,6 +3594,10 @@ pub(crate) fn tray_retreating_strike(
         shot.log.push(format!(
             "{}: {} strikes while retreating -- {} dice -> {} wound(s) on {} (no save)",
             spec.name, statics[next.roster.profile[bearer]].name, dice, w, def_owner));
+        // The table's words (`_solo_apply_retreating_strike`): an em dash, an arrow, `wound`/`wounds`.
+        say_rule(tray, "retreating_strike", next.player[bearer], || format!(
+            "{}: {} strikes while retreating — {} dice → {} wound{} on {} (no save)",
+            spec.name, statics[next.roster.profile[bearer]].name, dice, w, if w == 1 { "" } else { "s" }, def_owner));
     }
 }
 /// Returns whether the unit actually moved — the caller logs the battle-log
@@ -6583,6 +6587,7 @@ fn strike_phase(
         for &k in &sc.keep {
             if melee[k].printed_range > 0 {
                 shot.log.push(format!("Assault: {} also strikes in melee", melee[k].name));
+                say_melee(tray, next.player[*mi], format!("Assault: {} also strikes in melee", melee[k].name));
             }
         }
     }
@@ -7587,6 +7592,7 @@ pub(crate) fn tray_morale_for(
         let (with, total) = fearless_models(statics, state, i, seams);
         if with < total {
             shot.log.push(format!("Fearless: {with} of {total} models of {} have it — most do, so the whole unit counts", us.name));
+            say_rule(tray, "morale", state.player[i], || format!("Fearless: {with} of {total} models of {} have it — most do, so the whole unit counts", us.name));
         }
     }
     // EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF: an auto-failed test (no die) spends no once morale buff (table `_solo_morale_test`, #2804).
@@ -7784,8 +7790,10 @@ fn tray_charge_with_self_wounds(
     let charger_static = &statics[next.roster.profile[si]];
     if charger_last && rule_on(seams.rules_epoch, EPOCH_73_V36) {
         shot.log.push(format!("Unwieldy: {} strikes last on the charge", charger_static.name));
+        say_melee(tray, next.player[si], format!("Unwieldy: {} strikes last on the charge", charger_static.name));
     } else if charger_static.ctx.unwieldy_mixed {
         shot.log.push(format!("Unwieldy: {} has it on some weapons only - normal strike order (per-weapon order not modelled)", charger_static.name));
+        say_melee(tray, next.player[si], format!("Unwieldy: {} has it on some weapons only - normal strike order (per-weapon order not modelled)", charger_static.name));
     }
     let strike_back_set = if counter_first { StrikeSet::NonCounter } else { StrikeSet::All };
     for slot in 0..2 {
@@ -11910,6 +11918,8 @@ fn resolve_with(
                                     for p in msc.keep.iter().map(|&k| &um.shoot[k]) {
                                         if p.limited && next.limited_used[mi].iter().any(|n| n == &p.name) {
                                             shot.log.push(format!("Limited: {} is used up — once per game", p.name));
+                                            // The table's line names the member (`_solo_log_limited_spent`).
+                                            say_rule(tray, "limited_spent", next.player[si], || format!("Limited: {}'s {} is used up — once per game", um.name, p.name));
                                         }
                                     }
                                 }

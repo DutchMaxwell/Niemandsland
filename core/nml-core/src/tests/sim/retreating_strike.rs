@@ -192,3 +192,15 @@ use super::*;
             shot0.rolls.iter().map(|r| (r.kind, r.target)).collect::<Vec<_>>()
         );
     }
+
+    /// Lines audit: the strike line is said on the tray the door writes, in the table's words (an em dash, an arrow, `wound`/`wounds`):
+    /// three dice of 6 are three wounds. RED on main: only the recorded log (ASCII `--` / `wound(s)`) had it.
+    #[test]
+    fn the_door_tray_says_the_retreating_strike_line_in_the_tables_words() {
+        let (st, statics) = rs_line(7, &["Retreating Strike(3)"]);
+        let mut next = st.clone();
+        let mut tray = Tray::supplied(vec![vec![6, 6, 6]]);
+        tray_retreating_strike(&statics, &mut next, 0, Seams { rules_epoch: 7, ..Seams::default() }, &mut tray, &mut ShootResult::default());
+        let said: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).collect();
+        assert!(said.iter().any(|l| l == "Retreating Strike: a strikes while retreating — 3 dice → 3 wounds on b (no save)"), "{said:?}");
+    }
