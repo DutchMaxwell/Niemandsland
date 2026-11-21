@@ -26,6 +26,7 @@ uniform sampler2D n_earth : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform vec4 story = vec4(1.0, 0.0, 0.0, 1.0);   // the board's decay story (plan R5): xy = the way the fire came from (a unit vector), zw = the shade side (moss grows there)
 uniform vec4 t_on = vec4(0.0);   // stone, plaster, timber, earth
 uniform vec4 t_tile = vec4(1.3, 3.0, 3.0, 3.0);
+uniform bool real_frames = false;   // (train 3) the kit draws the half-timber frames of the houses and the ruins' timber storey as geometry: the paint keeps only the infill
 const vec3 MEAN_STONE = vec3(0.377, 0.244, 0.137);
 const vec3 MEAN_PLASTER = vec3(0.4065, 0.3669, 0.3513);
 const vec3 MEAN_TIMBER = vec3(0.1207, 0.0743, 0.0443);
@@ -145,7 +146,9 @@ vec3 roof_of(float lot, vec3 clay) {
 // Half-timber with a grammar (plan R4a), one 3 in cell wide and one 3 in storey high: a sill beam, a mid rail and a top plate; posts every 0.75 in; an opening (a window between two posts
 // with a sill and a lintel) in most cells, braces only in the CORNER bays and never across it; the infill by bay: plaster, brick nogging, bare lath or - on a ruin (`holes` > 0) - a hole.
 // The lot's hash picks the plaster and the timber; `rel` = the relief height (frame proud, opening recessed).
-vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis, out float rel, float lot, float holes, out float wood_mask, out float soot_mask) {
+vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis, out float rel, float lot, float holes_in, out float wood_mask, out float soot_mask) {
+	float painted = step(-0.5, holes_in);   // holes_in < 0 (= holes - 1): the frame is real geometry, paint the infill only
+	float holes = holes_in < -0.5 ? holes_in + 1.0 : holes_in;
 	float y = mod(uv.y, 3.0);
 	float cell = floor(uv.x / 3.0);
 	float x = uv.x - cell * 3.0;
@@ -155,18 +158,20 @@ vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis, out float rel, f
 	vec3 pl = mix(plaster, plaster_of(lot), 0.7);
 	vec3 wood = wood_of(lot) * mix(0.8, 1.2, vnoise(vec2(uv.x * 9.0, uv.y * 1.5)));
 	float post = smoothstep(0.06, 0.04, min(lx, 1.0 - lx) * 0.75);
-	float beam = max(smoothstep(0.17, 0.12, y), max(smoothstep(0.17, 0.12, 3.0 - y), smoothstep(0.075, 0.05, abs(y - 1.5))));
-	float has_open = step(0.3, hc);
+	post *= painted;
+	float beam = painted * max(smoothstep(0.17, 0.12, y), max(smoothstep(0.17, 0.12, 3.0 - y), smoothstep(0.075, 0.05, abs(y - 1.5))));
+	float has_open = painted * step(0.3, hc);
 	vec2 wd = abs(vec2(x - 1.5, y - 1.55)) - vec2(0.6, 0.6);
 	float d = max(wd.x, wd.y);
 	float inside = has_open * step(d, 0.0);
 	float frame = has_open * step(0.0, d) * step(d, 0.07);
 	float corner = step(bay, 0.5) + step(2.5, bay);
 	float t = bay < 1.5 ? 1.0 - lx : lx;
-	float brace = corner * step(0.4, h21(vec2(cell, seed + 1.0))) * smoothstep(0.07, 0.04, abs(y / 3.0 - t) * 1.6) * step(0.3, y) * step(y, 2.7);
+	float brace = painted * corner * step(0.4, h21(vec2(cell, seed + 1.0))) * smoothstep(0.07, 0.04, abs(y / 3.0 - t) * 1.6) * step(0.3, y) * step(y, 2.7);
 	float hb = h21(vec2(cell * 4.0 + bay, seed + 6.0));
 	vec3 infill = pl * mix(0.84, 1.1, fbm(uv * 1.7 + seed)) * mix(0.62, 1.0, smoothstep(0.0, 1.1, y));
 	infill = grit_plaster_wear(infill, uv, x, y, seed, wood);   // (plan W2)
+	infill = mix(infill, mix(infill, vec3(dot(infill, vec3(0.333))) * vec3(1.04, 1.0, 0.9), 0.45) * mix(0.55, 0.78, fbm(uv * 0.8 + seed + 3.0)) * mix(0.78, 1.0, smoothstep(0.0, 1.0, y)), 1.0 - painted);   // (train 3, lead review: between real timbers the infill is dirty cream-grey, blotchy, damp rising from the sill - not a zebra)
 	float course = step(0.5, fract(y / 0.12));
 	infill = hb > 0.6 && hb < 0.75 ? mix(vec3(0.42, 0.22, 0.16), vec3(0.28, 0.14, 0.10), course) : infill;   // brick nogging
 	infill = hb >= 0.75 && hb < 0.9 ? mix(wood * 1.4, wood * 0.6, step(0.5, fract(uv.y / 0.09))) : infill;   // bare lath
@@ -280,7 +285,7 @@ void fragment() {
 					depth_in = 0.0;
 				}
 			} else {
-				alb = timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed), emis, rel, lot_h, 0.0, wood_m, soot_m);
+				alb = timber(vec2(uv.x, uv.y + 2.5), seed, tint * mix(0.95, 1.05, half_seed), emis, rel, lot_h, real_frames ? -1.0 : 0.0, wood_m, soot_m);
 				depth_in = 0.03;
 				rough = mix(0.95, 0.8, step(0.8, rel));
 				ao = mix(0.6, 1.0, smoothstep(0.1, 0.5, rel));
@@ -319,7 +324,7 @@ void fragment() {
 					ao = 1.0;
 				}
 			} else {
-				alb = timber(uv, seed, tint * 1.02, emis, rel, lot_h, 0.1, wood_m, soot_m);
+				alb = timber(uv, seed, tint * 1.02, emis, rel, lot_h, real_frames ? -0.9 : 0.1, wood_m, soot_m);
 				rough = mix(0.95, 0.8, step(0.8, rel));
 				depth_in = 0.03;
 				ao = mix(0.6, 1.0, smoothstep(0.1, 0.6, rel));
@@ -331,7 +336,7 @@ void fragment() {
 		}
 		grit_city_masonry(k, p, wnrm, seed, tint, box_in, lpos, alb, rel, depth_in, tex_on, tex_ratio, tex_n, ao);   // (plan W0: the city wall's own masonry, no banded set)
 		float hband = k == 3 || k == 4 ? floor(uv.y / 3.0) : -1.0;   // (the storey of a ruined row: its branch has shifted uv by its part already)
-		grit_house_wall(k, p, wnrm, seed, lot_h, hband, 0.3 + 0.75 * fract(kind), hband == 0.0 ? door(uv, seed) : 0.0, int(ground_at(p.xz + wnrm.xz * 0.4).r * 255.0 + 0.5), alb, rel, depth_in, tex_on, tex_ratio, tex_n, ao);   // (plastered rubble in a timber frame over a stone plinth; rubble onto a yard)
+		grit_house_wall(k, p, wnrm, seed, lot_h, hband, 0.3 + 0.75 * fract(kind), hband == 0.0 && !real_frames ? door(uv, seed) : 0.0, int(ground_at(p.xz + wnrm.xz * 0.4).r * 255.0 + 0.5), alb, rel, depth_in, tex_on, tex_ratio, tex_n, ao);   // (plastered rubble in a timber frame over a stone plinth; rubble onto a yard)
 	} else if (wnrm.y < 0.95 && k == 15) {   // a sloped roof face: rows of tiles, a tone per tile, a shadow under each row
 		tint = roof_of(ground_at(p.xz - wnrm.xz * 0.2).b, tint);   // each roof its own clay, slate or mossy clay
 		float along = abs(wnrm.x) > abs(wnrm.z) ? p.z : p.x;
