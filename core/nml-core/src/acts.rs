@@ -1071,6 +1071,12 @@ pub const PENDING_EPOCH_CASUALTY_TIES: u32 = 94;
 /// wounds threw six dice in the core and three at the table. From the bump the melee fold asks (`deadly_wipes`) before each wound. Below it
 /// byte-identical. Every call site reads THIS constant.
 pub const PENDING_EPOCH_DEADLY_STOPS: u32 = 94;
+/// Placeholder gate for SPELL NO-STACK (lead ruling 20.11., GF 3.6 "Rules priority & stacking effects": the same spell does not stack): a second cast of a spell on a
+/// unit that already carries an identical record of it refreshes that record and adds none, so one spend and one "consumed" line (soak game 16 forced to 94 held three
+/// stacked "Triangulation Bots" on one foe; the core spent all three at once, the table one per exchange). Core: `sim::tray_spell_effect` pushes no duplicate `LiveMod`
+/// (and names none in `cast_buffs`). Table twin `AiActRecorder.PENDING_EPOCH_SPELL_NO_STACK` (`_solo_record_spell_mod`). Below 95 byte-identical. Every call site reads THIS
+/// constant, not the literal `95`.
+pub const PENDING_EPOCH_SPELL_NO_STACK: u32 = 95;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
