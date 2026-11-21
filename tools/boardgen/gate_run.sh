@@ -7,7 +7,7 @@
 #   python3 tools/boardgen/gate_rows.py OUT after base                      # the rows; exit 1 when a row is under the bar
 #
 # Environment: PROJECT (default .), GODOT (the binary, default godot; needs a real display), OUT (default ./gate_out), SEEDS (default 11,13,17,19,23,29,31,37,41,43),
-# YAWS (default "0 180": the default player's side and the opposite one), PRESETS (default medium), REPEATS (default 3). Anything else the capture needs (for example the
+# YAWS (default "0 180": the default player's side and the opposite one), PRESETS (default medium), REPEATS (default 3), EXTRA (default empty: more capture arguments, e.g. sky=town). Anything else the capture needs (for example the
 # staged texture libraries NML_RUINTOWN_LIB_DIR / NML_RUINTOWN_KIT_DIR) is inherited from the environment.
 set -u
 TAG=${TAG:?set TAG}
@@ -18,6 +18,7 @@ SEEDS=${SEEDS:-11,13,17,19,23,29,31,37,41,43}
 YAWS=${YAWS:-"0 180"}
 PRESETS=${PRESETS:-medium}
 REPEATS=${REPEATS:-3}
+EXTRA=${EXTRA:-}
 HERE=$(cd "$(dirname "$0")" && pwd)
 mkdir -p "$OUT"
 cd "$PROJECT" || exit 9
@@ -26,7 +27,7 @@ for yaw in $YAWS; do
     dir="$OUT/${TAG}_y${yaw}_r${r}"
     rm -rf "$dir"
     for attempt in 1 2 3 4 5; do   # a display that is busy or a Godot cap: try again
-      "$GODOT" --path "$PROJECT" -s "$HERE/bg_capture_town.gd" -- "$dir" baseline=1 only=play "presets=$PRESETS" "seeds=$SEEDS" "yaw=$yaw" > "$OUT/${TAG}_y${yaw}_r${r}.log" 2>&1
+      "$GODOT" --path "$PROJECT" -s "$HERE/bg_capture_town.gd" -- "$dir" baseline=1 only=play "presets=$PRESETS" "seeds=$SEEDS" "yaw=$yaw" $EXTRA > "$OUT/${TAG}_y${yaw}_r${r}.log" 2>&1
       [ -f "$dir/manifest.json" ] && break
       sleep 10
     done

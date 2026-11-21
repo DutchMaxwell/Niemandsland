@@ -37,8 +37,12 @@ const TOWN_SATURATION := 1.15
 const TOWN_EXPOSURE_GAIN := 1.4
 
 const OWNER_META := "boardgen_mood_owner"
+## The ruin town's blue-hour sky (plan PLAN_RUINTOWN_TARGET_C, S1; lead call D-C2, reversible): replaces the star field while a town board is on the table. A pure backdrop:
+## the scene's ambient light is a colour and its reflections are off, so it lights nothing; the smallest radiance map, since nothing reads it.
+const TOWN_SKY_SHADER := preload("res://shaders/ruintown_sky.gdshader")
 
 static var _grade: GradientTexture1D
+static var _town_sky: Sky
 
 
 ## The light the LightingController uses while the board look is on.
@@ -55,9 +59,22 @@ static func environment_values() -> Dictionary:
 		"tonemap_agx_contrast": 1.1}
 
 
-## The RenderState "board" layer of the ruin town: the grade only.
+## The RenderState "board" layer of the ruin town: the grade and the town sky. The table's reference layer reflects the sky; over a town the reflections are off, so the
+## sky stays a backdrop (measured 21.11.: reflected, it cooled the street setts 43.6 -> 36.2 % warm and raised the earth's saturation 0.48 -> 0.52 at seed 41).
 static func town_values() -> Dictionary:
-	return {"tonemap_agx_contrast": TOWN_AGX_CONTRAST, "adjustment_enabled": true, "adjustment_contrast": TOWN_CONTRAST, "adjustment_saturation": TOWN_SATURATION}
+	return {"tonemap_agx_contrast": TOWN_AGX_CONTRAST, "adjustment_enabled": true, "adjustment_contrast": TOWN_CONTRAST, "adjustment_saturation": TOWN_SATURATION,
+		"sky": town_sky(), "reflected_light_source": Environment.REFLECTION_SOURCE_DISABLED}
+
+
+## The town's sky (one shared instance): zenith, horizon band and the ground below by the view's elevation (shaders/ruintown_sky.gdshader).
+static func town_sky() -> Sky:
+	if _town_sky == null:
+		var mat := ShaderMaterial.new()
+		mat.shader = TOWN_SKY_SHADER
+		_town_sky = Sky.new()
+		_town_sky.sky_material = mat
+		_town_sky.radiance_size = Sky.RADIANCE_SIZE_32
+	return _town_sky
 
 
 ## The lighting controller's board look of the ruin town: only the exposure (the dusk's, raised by the gain that cancels the grade's darkening).

@@ -149,7 +149,7 @@ func after_test() -> void:
 
 func test_the_ruin_town_gets_only_the_grade_in_the_board_layer_and_no_light_look() -> void:
 	var values := BoardgenMood.town_values()
-	assert_array(values.keys()).contains_exactly_in_any_order(["tonemap_agx_contrast", "adjustment_enabled", "adjustment_contrast", "adjustment_saturation"])
+	assert_array(values.keys()).contains_exactly_in_any_order(["tonemap_agx_contrast", "adjustment_enabled", "adjustment_contrast", "adjustment_saturation", "sky", "reflected_light_source"])
 	var env := Environment.new()
 	var state := RenderState.new(env)
 	var lc := _lighting()
@@ -168,6 +168,25 @@ func test_the_ruin_town_gets_only_the_grade_in_the_board_layer_and_no_light_look
 	BoardgenMood.apply(board, false, true)
 	assert_float(env.adjustment_saturation).is_equal_approx(1.0, 0.0001)
 	assert_float(lit.tonemap_exposure).is_equal_approx(mood_exposure, 0.0001)
+
+
+func test_a_ruin_town_board_shows_the_town_sky_as_a_backdrop_only_and_gives_the_scenes_own_sky_and_reflection_back() -> void:
+	var env := Environment.new()
+	var star_field := Sky.new()   # the scene's own sky (the game's star field)
+	env.sky = star_field
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY   # what the table's reference layer sets
+	var main := _main_with(RenderState.new(env), null)
+	var board := _board_on(main)
+	BoardgenMood.apply(board, true, true)
+	assert_object(env.sky).override_failure_message("the town board did not bring its sky").is_same(BoardgenMood.town_sky())
+	assert_bool(env.sky.sky_material is ShaderMaterial and (env.sky.sky_material as ShaderMaterial).shader == BoardgenMood.TOWN_SKY_SHADER).is_true()
+	assert_int(env.ambient_light_source).override_failure_message("the town sky must not light the board").is_equal(Environment.AMBIENT_SOURCE_COLOR)
+	assert_int(env.reflected_light_source).override_failure_message("the town sky must not be reflected (it would light the ground)").is_equal(Environment.REFLECTION_SOURCE_DISABLED)
+	BoardgenMood.apply(board, false, true)
+	assert_object(env.sky).override_failure_message("the scene's own sky did not come back").is_same(star_field)
+	assert_int(env.ambient_light_source).is_equal(Environment.AMBIENT_SOURCE_COLOR)
+	assert_int(env.reflected_light_source).override_failure_message("the table's sky reflection did not come back").is_equal(Environment.REFLECTION_SOURCE_SKY)
 
 
 func test_a_ruin_town_board_puts_the_grade_on_with_the_finer_look_and_takes_it_off_on_low() -> void:

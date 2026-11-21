@@ -79,6 +79,7 @@ bool use_frame(vec2 uv, float wood, inout vec3 ratio, inout vec3 tn) {
 // The ground's floor (silhouette round 21.11., maintainer: "too dark"): the streets and the packed earth sit below the models' own values (readability gate) but no longer near black.
 const float GROUND_COBBLE = 0.42;   // was 0.27
 const float GROUND_EARTH = 0.55;   // was 0.32
+const float COVER_CUT = 0.54;   // the fbm level above which the earth is overgrown (~25 % of the earth; plan TARGET C, E2)
 varying vec3 wpos;
 varying vec3 wnrm;
 varying flat float kind;
@@ -382,13 +383,25 @@ void fragment() {
 			vec2 lf = (fract(cp) - 0.5 - (vec2(h21(ci + 7.0), h21(ci + 13.0)) - 0.5) * 0.4);
 			lf = vec2(cos(ang) * lf.x - sin(ang) * lf.y, sin(ang) * lf.x + cos(ang) * lf.y) * vec2(1.0, 1.0 + 1.4 * h21(ci + 5.0));
 			float pebble = step(0.955, sp) * smoothstep(0.2, 0.1, length(lf));
-			float tuft = step(0.915, sp) * step(sp, 0.955) * smoothstep(0.26, 0.12, length(lf));
-			alb = mix(alb, vec3(0.12, 0.15, 0.07) * mix(0.7, 1.2, h21(ci + 9.0)), 0.75 * tuft);   // a dull green-brown tuft, never a yellow coin
-			alb = mix(alb, vec3(0.13, 0.12, 0.11) * mix(0.6, 1.3, h21(ci + 4.0)), pebble);   // a dark stone
 			float path = smoothstep(0.03, 0.0, abs(vnoise(xz * 0.21 + seed) - 0.5)) * step(0.5, vnoise(xz * 0.07 + 5.0)) * (1.0 - grit_on);   // (gone with the grit map: it led nowhere)   // a worn path: pale, meandering (a noise stand-in until the doors of R12c exist)
-			alb = mix(alb, tint * vec3(1.4, 1.34, 1.2), 0.75 * path);
+			// ground cover (plan TARGET C, E2): painted only, 0 in high - patches of rank growth, thicker within 1 in of a raised lot or a plot, thinner on the worn paths
+			float near = 0.0;
+			for (int d = 0; d < 4; d++) {
+				vec2 o = vec2(d < 2 ? (d == 0 ? 1.0 : -1.0) : 0.0, d >= 2 ? (d == 2 ? 1.0 : -1.0) : 0.0);
+				near = max(near, float(int(ground_at(gw + o).r * 255.0 + 0.5) >= 2));
+			}
+			float cover = smoothstep(COVER_CUT - 0.04, COVER_CUT + 0.04, fbm(xz * 0.35 + seed * 0.37) + 0.35 * near - 0.4 * path)
+				* smoothstep(0.28, 0.48, vnoise(xz * 1.3 + seed * 1.7) + 0.3 * near);   // rough, not turf: bare earth between the clumps in the open
+			float tuft = max(step(0.915, sp) * step(sp, 0.955), cover * step(sp, 0.6)) * smoothstep(0.26, 0.12, length(lf));   // in the cover 60 % of the 0.33 in cells carry a tuft (4 % outside)
+			vec3 soil = alb;
+			alb = mix(alb, vec3(0.13, 0.16, 0.10) * mix(0.55, 1.25, fbm(xz * 3.1 + seed)), cover);   // a dull dark yellow-grey green between the tufts, mottled
+			alb = mix(alb, vec3(0.13, 0.14, 0.08) * mix(0.7, 1.2, h21(ci + 9.0)) * (1.0 + 0.9 * cover), 0.75 * tuft);   // a dull green-brown tuft, never a yellow coin
+			alb *= min(1.0, (dot(soil, LUMA) + 0.03 * tuft) / max(dot(alb, LUMA), 0.001));   // the cover is never brighter than the soil, a tuft at most 0.03 (the ground stays under the models)
+			alb = mix(alb, vec3(0.13, 0.12, 0.11) * mix(0.6, 1.3, h21(ci + 4.0)), pebble);   // a dark stone
+			alb = mix(alb, tint * vec3(1.3, 1.3, 1.28), 0.75 * path);   // (was 1.4 1.34 1.2: an orange path; plan TARGET C, E1)
 			if (t_on.w > 0.5) {
-				tex_ratio = ratio_of(t_earth, xz / t_tile.w, MEAN_EARTH);   // real rock and soil under the pebbles, the tufts and the paths
+				vec3 r = ratio_of(t_earth, xz / t_tile.w, MEAN_EARTH);   // real rock and soil under the pebbles, the tufts and the paths
+				tex_ratio = mix(vec3(dot(r, vec3(0.333))), r, 0.5);   // halfway to its own grey: the soil keeps its detail and loses its orange (plan TARGET C, E1)
 			}
 			rel = clamp(0.2 + 0.6 * fbm(xz * 3.0 + seed) - 0.15 * path + 0.35 * pebble, 0.0, 1.0);   // packed earth: lumps, and the worn paths lie lower
 			depth_in = 0.05;

@@ -27,6 +27,7 @@ var _perf_mode := false
 var _rounds := 3
 var _perf: Array = []
 var _baseline := false
+var _town_sky := false   # sky=town: the look stills keep the environment's sky (the town's blue hour) instead of the neutral backdrop; the readability pass keeps the backdrop
 var _real_table := false   # table=1: the game's own table (mesh, grass, biome dressing) stays visible under and round the board, as a player sees it
 var _suffix := ""
 var _gate: Array = []
@@ -76,6 +77,8 @@ func _run() -> void:
 			_gate_test = true
 		elif a == "baseline=1":
 			_baseline = true
+		elif a == "sky=town":
+			_town_sky = true
 		elif a == "table=1":
 			_real_table = true
 		elif a.begins_with("yaw="):
@@ -431,8 +434,11 @@ func _stage_table() -> void:
 
 
 ## A neutral backdrop instead of the star field, set AFTER a preset is applied (the render state rewrites the environment whenever a preset lands). Capture only.
-func _backdrop(_for_gate := false) -> void:
+func _backdrop(for_gate := false) -> void:
 	var env: Environment = _main.world_environment.environment
+	if _town_sky and not for_gate:
+		env.background_mode = Environment.BG_SKY
+		return
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.13, 0.13, 0.14)
 
@@ -537,7 +543,7 @@ func _mean_ring(img: Image, c: Vector2, r0: float, r1: float, skip: Array, mask:
 ## round its base: score = max(dY / 0.10, dC / 0.10); a model reads at >= 1. Per-model scores go to manifest.gate in model order (paired before / after).
 func _readability(tag: String, pname: String) -> void:
 	for _i in 40:   # (was 6) the GI of the Ultra preset (SDFGI, SSIL) settles over frames: a short wait made its rows bimodal between repeats
-		_backdrop()
+		_backdrop(true)
 		await process_frame
 		_hide_scatter()
 	var env: Environment = _main.world_environment.environment   # what the gate frames are graded with (the board's mood layer must show up here)
