@@ -733,6 +733,18 @@ fn piercing_assault_grant_cond() -> CondAp {
     CondAp { ap_bonus: 1, condition: "on_charge".into(), ..Default::default() }
 }
 
+/// The table's over-9" Defense line of the Guarded family (`_solo_resolve_ai_volley`): once per volley, before the first die, hit or miss; its
+/// "(most of its models carry it)" note needs per-model carriers. The table says it right after the armor / Shielded / growth lines and BEFORE
+/// the announce, so the door's volley says it there (`sim.rs`, `Ctx::guarded_said`); a volley with no announce (the Strafing move-through)
+/// still says it from the fold.
+pub(crate) fn say_guarded(tray: &mut Tray, def: &Ctx, def_owner: &str, mod_dist_in: f64) {
+    if def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded {
+        let saves = guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), true, def.def_floor());
+        say_rule(tray, "guarded", def.side, || format!("{def_owner} ({}): shot from over {}\" — +1 Defense (saves on {}+)",
+            def.guarded_name, LONG_RANGE_IN as i64, saves.clamp(BEST_HIT_TARGET, 6)));
+    }
+}
+
 /// The table's `_solo_log_armor` line (`<U> has Armor(X): counts as Defense X+`), said once before the volley's announce when Armor improves the
 /// target's Defense; ahead of the Shielded / growth lines, which fold on top of it.
 pub(crate) fn say_armor(tray: &mut Tray, def: &Ctx, name: &str) {
@@ -1693,12 +1705,8 @@ pub(crate) fn resolve_volley_with_pick_label(
         .flat_map(|sh| sh.keep.iter().enumerate().map(move |(k, &pi)| (sh, k, pi)))
         .collect();
     shots.sort_by_key(|&(sh, _, pi)| shot_rank(&sh.profiles[pi]));
-    if def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded && !shots.is_empty() {
-        // The table's line (`_solo_resolve_ai_volley`), once per volley, before the first die, hit or miss; its "(most of its models carry
-        // it)" note needs per-model carriers.
-        let saves = guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), true, def.def_floor());
-        say_rule(tray, "guarded", def.side, || format!("{def_owner} ({}): shot from over {}\" — +1 Defense (saves on {}+)",
-            def.guarded_name, LONG_RANGE_IN as i64, saves.clamp(BEST_HIT_TARGET, 6)));
+    if !def.guarded_said && !shots.is_empty() {
+        say_guarded(tray, def, def_owner, mod_dist_in);
     }
     if def.ranged_shrouding && !shots.is_empty() {
         // The table's line (`_solo_resolve_ai_volley`), once per volley whether or not a weapon was shortened.

@@ -115,3 +115,9 @@ func test_a_regeneration_bypass_names_its_rule() -> void:
 			["Unstoppable when Shooting", "aof", "human_empire", "Unstoppable when Shooting: Regeneration ignored"],
 			["Rending when Shooting", "gf", "battle_brothers", "Rending (granted): Regeneration ignored"]]:
 		await _expect_equal(c[0], _leg(c[1], c[2], c[0], true), c[3])
+
+
+## Ledger 4 (16 cells): the over-9" Defense line of Guarded / Sturdy / Versatile Defense stands before "<unit> fires at <target>".
+func test_the_over_nine_defense_line_stands_before_the_announce() -> void:
+	for c in [["Guarded", "aof", "deep_sea_elves"], ["Sturdy", "gf", "dwarf_guilds"], ["Versatile Defense", "aof", "change_disciples"]]:
+		await _expect_equal(c[0], _leg(c[1], c[2], c[0]), "Cov Target (%s): shot from over 9" % c[0])

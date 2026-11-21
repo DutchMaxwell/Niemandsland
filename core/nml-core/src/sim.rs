@@ -12132,6 +12132,9 @@ fn resolve_with(
                                 crate::dice::say_armor(tray, &def, ut_g.name.as_str());
                                 crate::dice::say_shielded(tray, &def, aimed);
                                 crate::dice::say_growth_defense(tray, &def, aimed, &growth_defense_parts(statics, &next, g.ti));
+                                // The table's over-9" Defense line stands here, after the Defense parts and ahead of the announce.
+                                crate::dice::say_guarded(tray, &def, &ut_g.name, g.mod_d);
+                                def.guarded_said = true;
                                 tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[si],
                                     text: format!("{} fires at {}", statics[pi_s].name, aimed), detail: None });
                             }

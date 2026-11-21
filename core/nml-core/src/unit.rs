@@ -315,6 +315,9 @@ pub struct Ctx {
     /// `resolve_volley_with_tray` sets it, on its local Ctx copy; every other
     /// save path leaves it false.
     pub fortified_alias_over9: bool,
+    /// Coverage ledger (21.11.): the caller already said the over-9" Defense line (`dice::say_guarded`) where the table says it, ahead of the
+    /// volley's announce, so the volley fold must not say it again. Runtime only: false on every `ctx_of`, set on the volley's own Ctx copy.
+    pub guarded_said: bool,
     pub guarded: bool,
     /// SHO-17 (`EPOCH_73_V36`) — WHICH Guarded-family name drove `guarded` (rules-must-log),
     /// "" below the gate and when none. Stamped in `ctx_for` from the same family walk.
@@ -3982,6 +3985,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         fortified_boost_name,
         fortified_alias_name,
         fortified_alias_over9: false,
+        guarded_said: false,
         // Guarded OR Versatile Defense — ai_ev.gd:157-158.
         // "Sturdy" (hygiene-wave follow-up): the Guarded family's DATA alias
         // (gf dwarf_guilds + aof dwarves, primitive Guarded, params
