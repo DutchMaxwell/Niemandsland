@@ -111,7 +111,7 @@ vec3 grit_street(vec2 xz, vec2 w, vec4 sett, float run, inout vec3 alb, inout fl
 	float fill = smoothstep(0.15, 0.5, mud);
 	alb = mix(alb, mudc, 0.9 * joint * fill);   // joints full of mud
 	alb = mix(alb, mudc, 0.55 * fill * kp * smoothstep(0.12, 0.3, max(abs(sett.z), abs(sett.w))));   // and spilling over the stones' edges (train 2)
-	alb = mix(alb, vec3(0.05, 0.065, 0.04), 0.7 * joint * (1.0 - fill) * smoothstep(0.4, 0.7, vnoise(xz * 2.3 + 29.0)));   // or dark with dirt and moss (train 2)
+	alb = mix(alb, vec3(0.09, 0.095, 0.07), 0.6 * joint * (1.0 - fill) * smoothstep(0.4, 0.7, vnoise(xz * 2.3 + 29.0)));   // or dark with dirt and moss (train 2)
 	rough = mix(rough, 0.3, smoothstep(0.35, 0.75, g.g) * mix(1.0, 0.5, sett.y));   // wet in the low, damp places: a sheen in the joints first (train 2)
 	rel = mix(rel, max(rel, 0.45), joint * fill);
 	float cover = min(GRIT_MUD_COVER, 0.75 * mud) * smoothstep(0.35, 0.65, vnoise(xz * 1.9 + 7.0));   // a broken film: the setts show through

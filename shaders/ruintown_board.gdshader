@@ -208,12 +208,12 @@ vec3 cobble(vec2 xz, float seed, vec3 tint, float run, vec2 fan, out float rel, 
 	}
 	float sh = h21(vec2(floor(x), row) + seed);
 	// (train 2) every stone its own size and seat in its cell: uneven joints; one in twelve runs on over its end joint (a long stone)
-	vec2 hs = vec2(fract(sh * 9.13) > 0.92 ? 0.49 : 0.2 + 0.12 * fract(sh * 3.71), 0.2 + 0.1 * fract(sh * 5.29));
+	vec2 hs = vec2(fract(sh * 9.13) > 0.92 ? 0.49 : 0.25 + 0.1 * fract(sh * 3.71), 0.25 + 0.08 * fract(sh * 5.29));   // (lead, close street still: joints a third narrower)
 	f -= (vec2(fract(sh * 2.17), fract(sh * 6.61)) - 0.5) * 0.08;
 	float sett = smoothstep(0.17, 0.09, length(max(abs(f) - hs, 0.0)));
-	vec3 laid = mix(vec3(0.05, 0.05, 0.045), grit_sett_tint(tint, sh) * mix(0.9, 1.1, vnoise(xz * 3.0)) * mix(0.86, 1.08, vnoise(xz * 11.0 + sh * 7.0)), sett);   // (train 2: dark dirty joints, a grain in every stone)
+	vec3 laid = mix(vec3(0.11, 0.10, 0.085), grit_sett_tint(tint, sh) * mix(0.9, 1.1, vnoise(xz * 3.0)) * mix(0.86, 1.08, vnoise(xz * 11.0 + sh * 7.0)), sett);   // (train 2: dark dirty joints, a grain in every stone)
 	sett_out = vec4(sh, sett, f);
-	rel = mix(0.5, sett * (0.3 + 0.7 * clamp(1.0 - 3.2 * dot(f, f), 0.0, 1.0)), keep(xz.x, SETT_W));   // a rounded, worn sett in a recessed joint (train 2: pillowed, not a flat tile)
+	rel = mix(0.5, mix(0.34, 0.36 + 0.64 * clamp(1.0 - 3.2 * dot(f, f), 0.0, 1.0), sett), keep(xz.x, SETT_W));   // (lead: the dirt bed rises to the stone's shoulder - the stones sit in it, not on it)   // a rounded, worn sett in a recessed joint (train 2: pillowed, not a flat tile)
 	return mix(tint * 0.78, laid, keep(xz.x, SETT_W));   // setts of 0.14 in are ~3 px at the play camera: below that they average out instead of crawling
 }
 
@@ -374,7 +374,7 @@ void fragment() {
 			alb = mix(cobble(xz, seed, grit_street_tint(tint * vec3(0.96, 1.0, 1.08) * GROUND_COBBLE), run, fan, crown, sett), vec3(0.06, 0.055, 0.05), 0.55 * gutter * (1.0 - grit_on));   // (the grit map draws the mud and the kennel instead)   // 0.27 (was 1.15): the streets sit well below the models' own values (readability gate, lead 21.11.)
 			rel = crown;
 			depth_in = 0.06;   // (train 2: was 0.045)
-			rough = mix(0.85, 0.55, smoothstep(0.3, 0.7, crown));   // (train 2) worn crowns catch the light, dirty joints stay matt
+			rough = mix(0.85, 0.65, smoothstep(0.3, 0.7, crown));   // (train 2) worn crowns catch the light, dirty joints stay matt
 			ao = mix(0.4, 1.0, smoothstep(0.1, 0.5, crown));
 			dbg = grit_debug == 2 ? grit_map_colour(gw) : grit_street(xz, gw, sett, run, alb, rel, rough);
 			float ne = 0.0;   // (train 2, C3) the setts thin out into the earth: within 0.8 in of an earth border some are gone (earth in the hole), weeds grow in the joints
