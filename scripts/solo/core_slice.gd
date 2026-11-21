@@ -19,7 +19,6 @@ const PATH := "res://assets/solo/core_slice_allow.json"
 const DENY_PATH := "res://assets/solo/core_slice_deny.json"
 ## DLINES2/3: the deny file's primitive-less groups that switch a refusal PREDICATE on (a refusal that is no rule name). A slice file without
 ## the group (a test's own, the dice-only pin for the line-only one) refuses nothing of the kind.
-const SIMULTANEOUS_FIRE_GROUP := "door_omits_simultaneous_fire_line"
 const OWN_SHRED_GROUP := "door_own_shred_beside_alias"
 const AMBUSH_FLYING_GROUP := "ambush_flying_landing"
 const TAKEDOWN_LABEL_GROUP := "door_takedown_names_an_equipment_carrier"
@@ -189,12 +188,6 @@ static func refusals(gu: GameUnit, as_target := false, shooters_hero := false) -
 		for r in w.special_rules:
 			if not _rule_taken(gu, rule_label(r), shot_at):
 				out.append("weapon_rule:" + rule_label(r))
-	# Deny mode, a SHOOTER: a Deadly weapon beside another ranged weapon (dlines_gap rows 18 and 1). The table lands Deadly wounds
-	# inline, so a later weapon of the same volley can see fewer models and says so ("Simultaneous fire: ...", Blast's "cap read when the
-	# volley started"); the core lands after all the dice and has no such line. Refused as a shooter only, by the weapons of the unit and
-	# its joined heroes (they fire in one volley); a single ranged weapon, or Deadly alone, stays on the core.
-	if not as_target and out.is_empty() and config()["mode"] == "deny" and _has_group(SIMULTANEOUS_FIRE_GROUP) and _deadly_beside_other_weapons(gu):
-		out.append("deadly_beside_other_weapons")
 	# Deny mode, a SHOOTER: a weapon's own Shred beside a unit-level Shred rule of ANOTHER name (Warbound, Destroyer, Infected, ...) is two
 	# rules in the table (R-1 A2: each pays its extra wounds, the alias gated by distance); the core pays the unmodified 1s once. A STATE
 	# difference (the target's wounds), not a missing line, so the dice-only pin keeps this refusal.
@@ -284,21 +277,6 @@ static func _fortified_aura_bearer_dead(gu: GameUnit) -> bool:
 
 
 ## `gu` (with its joined heroes) carries an inline-landing ranged weapon (Deadly or Takedown) beside at least one OTHER ranged weapon entry.
-static func _deadly_beside_other_weapons(gu: GameUnit) -> bool:
-	var ranged := 0
-	var deadly := false
-	for u in [gu] + gu.get_attached_heroes():
-		if not (u is GameUnit and (u as GameUnit).source_data is OPRApiClient.OPRUnit):
-			continue
-		var unit_td: bool = (u as GameUnit).get_special_rules().any(func(r) -> bool: return rule_label(r) == "Takedown when Shooting")
-		for w in ((u as GameUnit).source_data as OPRApiClient.OPRUnit).weapons:
-			if w.range_value <= 0:
-				continue
-			ranged += 1
-			deadly = deadly or unit_td or (w.special_rules as Array).any(func(r) -> bool: return rule_label(r) == "Deadly" or rule_label(r) == "Takedown")
-	return deadly and ranged >= 2
-
-
 ## One of `gu`'s units (itself, a joined hero: each stamps its own profiles) has a weapon with its own Shred and a unit-level rule of the Shred
 ## primitive whose group is not plain Shred (the table's `_solo_shred_group_key`: Enhanced / Aura / Buff / Boost / in Melee / when Shooting forms
 ## belong to their base).

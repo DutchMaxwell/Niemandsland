@@ -1,9 +1,9 @@
 extends GdUnitTestSuite
 ## Gate 12 (21.11., Zairetia): the core throws the Unpredictable (Shooter) die before any weapon fires, even when no weapon of the shooter reaches the
 ## target; the table fires nothing and rolls nothing then. Zairetia's one gun reaches 12 in, the sweep puts the target 14 in away: 16 of 16 seeds differ
-## (with or without a Versatile pick, `Unpredictable Shooter` and the generic `Unpredictable`); in reach both halves are equal. The deny group
-## `unpredictable_die_without_weapon_in_reach` refuses a die bearer as a SHOOTER by its primitives (a bearer as a target is taken).
-## RED: take the group out of the deny file -> the first test's refusal assertion fails. The difference assertion fails the day the core fixes the cause.
+## (with or without a Versatile pick, `Unpredictable Shooter` and the generic `Unpredictable`) below epoch 95; in reach both halves are equal. The deny
+## group `unpredictable_die_without_weapon_in_reach` refused a die bearer as a SHOOTER by its primitives until the epoch 95 batch (UPR_NEEDS_SHOT) fixed
+## the cause; it left the deny file at that lift, so the slice takes a bearer at every distance and the first test pins the below-95 difference only.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
@@ -89,7 +89,7 @@ func test_a_die_bearer_out_of_reach_differs_and_is_refused_as_a_shooter() -> voi
 	for row in [["Unpredictable Shooter", true], ["Unpredictable Shooter", false], ["Unpredictable", true], ["Unpredictable", false]]:
 		var r := await _compare(_bearer(row[0], row[1]), _squad(), 14.0)
 		assert_int(int(r["differing"])).override_failure_message("%s (Versatile %s): %d of %d seeds differ - the core no longer throws the die, lift the group" % [row[0], row[1], r["differing"], SEEDS]).is_equal(SEEDS)
-		assert_array(r["deny"]).override_failure_message("%s (Versatile %s): the deny slice takes a die bearer out of reach" % [row[0], row[1]]).contains(["unit_rule:" + row[0]])
+		assert_array(r["deny"]).override_failure_message("%s (Versatile %s): the deny slice takes a die bearer (the guard left the file at the epoch 95 lift)" % [row[0], row[1]]).is_empty()
 	AiActRecorder.rules_epoch = epoch_before
 	# From 95 the same out-of-reach volley is equal: no weapon in reach, no die.
 	var r95 := await _compare(_bearer("Unpredictable Shooter"), _squad(), 14.0)
