@@ -177,19 +177,23 @@ func test_a_deepworks_plan_never_uses_the_town_kinds() -> void:
 		assert_bool(BoardgenGreybox.KINDS.has(b["kind"])).override_failure_message("a Deepworks box of kind %s" % b["kind"]).is_true()
 
 
-func test_an_intact_house_gets_a_gable_roof_over_its_body_and_the_halves_vary_the_pitch() -> void:
+func test_an_intact_house_gets_a_roof_over_its_body_and_the_halves_vary_the_pitch() -> void:
 	var layout := _town_with_wall_house_and_plot()
 	var roofs := BoardgenTownDressing.roofs(layout)
-	assert_int(roofs.size()).is_equal(1)
-	var r: Dictionary = roofs[0]
-	assert_int(r["lot"]).is_equal(99)   # the lot is square: the hash of lot and half picks the ridge axis
-	assert_float(r["length"]).is_equal_approx(6.6, 0.001)   # the 6 in lot and an overhang each side
+	var mains := roofs.filter(func(r: Dictionary) -> bool: return not r["annex"])
+	assert_int(mains.size()).is_equal(1)   # one main roof per intact lot (an annex, if the lot has one, comes on top)
+	var r: Dictionary = mains[0]
+	assert_int(r["lot"]).is_equal(99)
+	assert_float(r["length"]).is_equal_approx(6.6 if roofs.size() == 1 else 3.6, 0.001)   # the 6 in lot and an overhang each side; an annex takes one 3 in cell off the main roof
 	assert_float(r["height"]).is_between(1.5, 2.7)
 	assert_int(BoardgenTownDressing.prism_mesh().surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size()).is_equal(18)   # two slopes and two gable ends
 	var node: BoardgenTownDressing = auto_free(BoardgenTownDressing.new())
 	add_child(node)
 	node.build(layout, ShaderMaterial.new())
-	assert_int((node.find_child("Roofs", false, false) as MultiMeshInstance3D).multimesh.instance_count).is_equal(1)
+	var drawn := 0
+	for n in ["Roofs", "RoofsHip", "RoofsCatslide"]:
+		drawn += (node.find_child(n, false, false) as MultiMeshInstance3D).multimesh.instance_count
+	assert_int(drawn).is_equal(roofs.size())   # every planned roof is in one of the three type meshes
 	assert_int(node.find_children("*", "CollisionShape3D", true, false).size()).is_equal(0)   # nobody stands on a roof
 	var differing := 0
 	for id in range(1, 40):
@@ -237,22 +241,54 @@ func test_the_town_has_lanterns_at_the_square_and_the_gates_inside_the_edge_stri
 	var node: BoardgenTownDressing = auto_free(BoardgenTownDressing.new())
 	add_child(node)
 	node.build(layout, ShaderMaterial.new())
-	var lights := node.find_children("*", "OmniLight3D", false, false)
+	var lights := node.find_children("*", "SpotLight3D", false, false)
 	assert_int(lights.size()).is_equal(mini(lanterns.size(), BoardgenTownDressing.MAX_LIGHTS))
 	assert_int(lights.filter(func(l: Light3D) -> bool: return l.shadow_enabled).size()).is_less_equal(4)
+	for l: SpotLight3D in lights:
+		assert_float((l.global_transform.basis * Vector3.FORWARD).y).override_failure_message("a lantern cone points down").is_less(-0.99)   # SpotLight3D shines along -Z; rotated -90 deg about x it looks down
+		assert_object(l.light_projector).is_not_null()
+		assert_float(l.light_energy).is_less_equal(5.0)   # lit plaster must not clip (measured at 3.5: <= 0.2 % of pixels above 0.95)
+	var fills := node.find_children("LanternFill*", "OmniLight3D", false, false)   # a weak wide fill inside each pool: no hard black rim
+	assert_int(fills.size()).is_equal(lights.size())
+	for f: OmniLight3D in fills:
+		assert_float(f.light_energy).is_less_equal(0.1)
+		assert_bool(f.shadow_enabled).is_false()
+		assert_float(f.light_specular).is_equal(0.0)
 	assert_int(BoardgenTheme.TOWN_PALETTE.size()).is_equal(BoardgenTheme.TOWN_KINDS.size())
 
 
-func test_dusk_sets_a_low_warm_sun_and_a_cool_sky_on_a_lighting_controller() -> void:
+func test_dusk_is_a_blue_hour_two_pale_moons_a_half_turn_apart_and_a_cool_sky() -> void:
 	var seen := {}
 	var lc := RefCounted.new()
 	lc.set_script(preload("res://test/fixtures/boardgen/lighting_stub.gd"))
+	var fill := DirectionalLight3D.new()
+	add_child(fill)
+	var keylight := DirectionalLight3D.new()
+	add_child(keylight)
+	lc._directional_light = keylight
+	lc._fill_light = fill
 	BoardgenTownDressing.dusk(lc)
-	assert_bool(lc.calls.has("set_sun_angles")).is_true()
-	assert_float((lc.calls["set_sun_color"] as Color).r).is_greater((lc.calls["set_sun_color"] as Color).b)   # warm sun
+	var sun: Color = lc.calls["set_sun_color"]
+	assert_float(sun.b).is_greater(sun.r)   # the key is a cool pale moon
+	assert_float(lc.calls["set_sun_angles"][1]).is_greater_equal(40.0)   # high
+	# the second moon (the scene's fill light): the same colour, nearly the same energy, the half turn of the key - the board is a half-turn mirror, so its light is too (gate at both players' sides)
+	assert_object(lc.calls["set_fill_light_color"]).is_equal(sun)
+	assert_float(lc.calls["set_fill_light_energy"]).is_between(0.85 * lc.calls["set_sun_energy"], 1.15 * lc.calls["set_sun_energy"])
+	var h: float = deg_to_rad(lc.calls["set_sun_angles"][0])
+	var v: float = deg_to_rad(lc.calls["set_sun_angles"][1])
+	var key := Vector3(cos(v) * sin(h), sin(v), cos(v) * cos(h))
+	var other := fill.position.normalized()
+	assert_float(Vector2(key.x, key.z).normalized().dot(Vector2(other.x, other.z).normalized())).override_failure_message("the second moon must stand opposite the first").is_less(-0.99)
+	assert_float(other.y).is_equal_approx(key.y, 0.001)   # at the same height
+	assert_float(BoardgenTownDressing.MOON_SPECULAR).override_failure_message("a strong pale light with full specular washes the glossy pawns' colours white").is_less_equal(0.3)
+	assert_float(fill.light_specular).is_less_equal(0.3)
+	assert_float(keylight.light_specular).is_less_equal(0.3)
 	assert_float((lc.calls["set_ambient_color"] as Color).b).is_greater((lc.calls["set_ambient_color"] as Color).r)   # cool sky
+	assert_float(BoardgenTownDressing.LANTERN_COLOUR.r).is_greater(BoardgenTownDressing.LANTERN_COLOUR.b)   # the lanterns are the only strong warm source
 	BoardgenTownDressing.dusk(null)   # no lighting controller (a table without one): nothing happens
 	assert_bool(seen.is_empty()).is_true()
+	fill.free()
+	keylight.free()
 
 
 func test_props_stand_in_the_strip_beside_a_wall_face_and_never_on_a_street_a_plot_or_a_ladder_foot() -> void:
@@ -292,3 +328,47 @@ func test_a_breach_is_strewn_with_flat_stones_and_the_hall_gets_merlons() -> voi
 	assert_int(merlons.size()).is_greater(8)   # 24 places round a 2 x 2 footprint, some broken
 	for b: Dictionary in merlons:
 		assert_float(b["hi"].y - b["lo"].y).is_equal_approx(0.7, 0.001)
+
+
+## R7a: the cookie is a 128 px picture with a hot core, a fall-off to the rim and thin dark frame bars across the pool.
+func test_the_lantern_cookie_has_a_hot_core_a_falloff_and_frame_bars() -> void:
+	var img := BoardgenTownDressing.lantern_projector().get_image()
+	assert_int(img.get_width()).is_equal(128)
+	var core := img.get_pixel(64, 64).r
+	var off_axis := img.get_pixel(64 + 24, 64 + 24).r   # diagonal, clear of the bars
+	var on_bar := img.get_pixel(64 + 24, 64).r   # along the x axis: a frame bar
+	var rim := img.get_pixel(127, 64).r
+	assert_float(core).is_greater(off_axis)
+	assert_float(on_bar).override_failure_message("no bar shadow: %f vs %f" % [on_bar, off_axis]).is_less(off_axis * 0.7)
+	assert_float(rim).is_less(0.05)   # the pool fades out inside the cone
+
+
+## R7a: a lantern without a shadow map must not reach the far side of a wall - its pool on the ground stays inside a 3 in cell; only the shadowed ones may throw a wide pool.
+func test_an_unshadowed_lantern_throws_no_pool_wider_than_a_cell() -> void:
+	for i in BoardgenTownDressing.MAX_LIGHTS:
+		var radius := BoardgenTownDressing.LANTERN_HEIGHT_IN * tan(deg_to_rad(BoardgenTownDressing.lantern_cone_deg(i)))
+		if i >= BoardgenTownDressing.SHADOWED_LANTERNS:
+			assert_float(radius).override_failure_message("lantern %d (no shadow) throws a %.1f in pool: light through a wall" % [i, radius]).is_less_equal(3.0)
+		else:
+			assert_float(radius).is_greater(3.0)   # the wide ones are the point of the cone
+
+
+## R7b: board-scale occlusion, one probe rendered once, and one window in eight lit.
+func test_the_blue_hour_sets_board_scale_occlusion_and_the_board_has_one_probe_rendered_once() -> void:
+	var lc := RefCounted.new()
+	lc.set_script(preload("res://test/fixtures/boardgen/lighting_stub.gd"))
+	BoardgenTownDressing.dusk(lc)
+	assert_float(lc.calls["set_ssao_radius"]).override_failure_message("the preset's SSAO radius (0.8 - 1.2 m) is wider than the whole board").is_less_equal(0.1)
+	assert_float(lc.calls["set_ssao_intensity"]).is_greater(1.0)
+	assert_float(lc.calls["set_sdfgi_energy"]).override_failure_message("the Ultra bounce light (1.1) lifted the lit walls round the models: the blue hour turns it down").is_less_equal(0.6)
+	assert_float(lc.calls["set_ssil_intensity"]).is_less_equal(0.6)
+	assert_float(lc.calls["set_sun_angles"][0]).override_failure_message("the key comes from the play camera's side (azimuth near -20)").is_between(-30.0, -10.0)
+	var node: BoardgenTownDressing = auto_free(BoardgenTownDressing.new())
+	add_child(node)
+	node.build(_town_with_wall_house_and_plot(), ShaderMaterial.new())
+	var probes := node.find_children("*", "ReflectionProbe", false, false)
+	assert_int(probes.size()).is_equal(1)
+	assert_int((probes[0] as ReflectionProbe).update_mode).is_equal(ReflectionProbe.UPDATE_ONCE)
+	assert_float((probes[0] as ReflectionProbe).size.x).is_greater(0.8)   # it covers the board
+	var src := FileAccess.get_file_as_string("res://shaders/ruintown_board.gdshader")
+	assert_bool(src.contains("float glow = step(0.875, h21(vec2(cell, seed + 5.0)));")).override_failure_message("one window in eight").is_true()
