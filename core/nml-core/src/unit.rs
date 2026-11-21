@@ -849,6 +849,13 @@ impl Ctx {
     /// terrain) are off. Stats, cover, the blast cap and the range gates are NOT touched: they stay as declared.
     pub fn wiped(&self) -> Ctx {
         let d = Ctx::default();
+        // PENDING_EPOCH_VOLLEY_DEFENCE_DECLARED: the volley is simultaneous, so the Defense value as declared (Guarded, Shielded) holds; below
+        // it they drop too. Fortified (an AP rule) and the ignore rolls still need a living carrier, as the table reads them per hit.
+        let base = if rule_on(self.rules_epoch, crate::acts::PENDING_EPOCH_VOLLEY_DEFENCE_DECLARED) { *self } else { Ctx {
+            guarded: d.guarded, guarded_name: d.guarded_name,
+            shielded: d.shielded, shielded_note: d.shielded_note, shielded_alias: d.shielded_alias, shielded_rating: d.shielded_rating,
+            ..*self
+        } };
         Ctx {
             artillery: d.artillery, artillery_target_hit_penalty: d.artillery_target_hit_penalty,
             artillery_target_hit_penalty_v36: d.artillery_target_hit_penalty_v36, artillery_target_over_in: d.artillery_target_over_in, artillery_target_most_models: d.artillery_target_most_models,
@@ -863,13 +870,11 @@ impl Ctx {
             fortified: d.fortified, fortified_boost_ap: d.fortified_boost_ap, fortified_alias_ap: d.fortified_alias_ap,
             fortified_alias_over_in: d.fortified_alias_over_in, fortified_boost_name: d.fortified_boost_name,
             fortified_alias_name: d.fortified_alias_name, fortified_alias_over9: d.fortified_alias_over9, fortified_notes: d.fortified_notes,
-            guarded: d.guarded, guarded_name: d.guarded_name,
-            shielded: d.shielded, shielded_note: d.shielded_note, shielded_alias: d.shielded_alias, shielded_rating: d.shielded_rating,
             regeneration: d.regeneration, regen_target: d.regen_target, regen_target_spell: d.regen_target_spell, regen_pending: d.regen_pending,
             regen_pending_spell: d.regen_pending_spell, regen_feat: d.regen_feat, regen_named: d.regen_named, regen_groups: d.regen_groups,
             regen_names: d.regen_names, regen_gated: d.regen_gated, regen_gate_shut: d.regen_gate_shut, regen_most_name: d.regen_most_name,
             above_half_strength: false, near_terrain: false,
-            ..*self
+            ..base
         }
     }
 
