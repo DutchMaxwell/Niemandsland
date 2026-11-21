@@ -75,3 +75,32 @@ func test_decal_textures_are_the_cell_rectangle_of_the_atlas() -> void:
 	assert_vector(Vector2(img.get_pixel(0, 0).r, img.get_pixel(15, 31).r)).is_equal(Vector2(1, 1))   # inside the cell: red, no blue edge
 	assert_float(img.get_pixel(0, 0).b).is_equal(0.0)
 	assert_dict(lib.decal_textures("unknown")).is_empty()
+
+
+func test_a_theme_dev_folder_holds_its_manifest_and_files() -> void:
+	var dir := "user://tflib_theme_test"
+	DirAccess.make_dir_recursive_absolute(dir)
+	FileAccess.open(dir.path_join("manifest.json"), FileAccess.WRITE).store_string(_manifest({"x": 0, "y": 0, "w": 8, "h": 8}))
+	for tag in ["sa", "sn", "so"]:
+		FileAccess.open("%s/%s%s.ctex" % [dir, SHA_PREFIX, tag], FileAccess.WRITE).store_string("x")
+	OS.set_environment(TiefwerkLibrary.dev_env_of("libthemetest"), ProjectSettings.globalize_path(dir))
+	var lib: TiefwerkLibrary = auto_free(TiefwerkLibrary.new("libthemetest"))
+	add_child(lib)
+	OS.unset_environment(TiefwerkLibrary.dev_env_of("libthemetest"))
+	assert_str(lib.theme_id).is_equal("libthemetest")
+	assert_bool(lib.has_set("steel")).is_true()
+	assert_bool(lib.sets_cached()).is_true()   # the files sit in the dev folder, not in a cache
+	assert_bool(_lib().has_set("steel")).is_false()   # the default theme reads its own (empty) manifest
+	assert_object(lib.set_material("nope")).is_null()   # no set, no material: the caller keeps its own
+
+
+func test_a_cached_set_becomes_a_world_triplanar_material() -> void:
+	var lib := _lib()
+	lib.apply_manifest_text(_manifest({"x": 0, "y": 0, "w": 8, "h": 8}))
+	var img := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+	for map in TiefwerkLibrary.MAPS:   # stand in for the decoded .ctex of each map
+		lib._set_textures["steel/" + map] = ImageTexture.create_from_image(img)
+	var m := lib.set_material("steel")
+	assert_object(m).is_not_null()
+	assert_bool(m.uv1_world_triplanar and m.vertex_color_use_as_albedo).is_true()
+	assert_float(m.uv1_scale.x).is_equal_approx(1.0 / (3.0 * 0.0254), 0.001)
