@@ -344,7 +344,7 @@ void fragment() {
 		}
 		if (k == 1) {   // streets: cobbles
 			float crown;
-			alb = mix(cobble(xz, seed, tint * 0.27, run, fan, crown), vec3(0.06, 0.055, 0.05), 0.55 * gutter);   // 0.27 (was 1.15): the streets sit well below the models' own values (readability gate, lead 21.11.)
+			alb = mix(cobble(xz, seed, tint * vec3(1.15, 0.98, 0.78) * 0.27, run, fan, crown), vec3(0.06, 0.055, 0.05), 0.55 * gutter);   // 0.27 (was 1.15): the streets sit well below the models' own values (readability gate, lead 21.11.)
 			rel = crown;
 			depth_in = 0.045;
 			rough = mix(0.55, 0.8, smoothstep(0.3, 0.7, crown));   // damp joints, dry crowns

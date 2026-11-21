@@ -139,7 +139,7 @@ func test_ruined_tops_break_only_in_the_outer_edge_strip() -> void:
 ## Lead 21.11. (readability gate): the ground the models stand on - streets, packed earth, garden plots, the decks of yards and tier floors - sits a step below the models' own values.
 func test_the_ground_the_models_stand_on_sits_below_the_models() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
-	assert_bool(src.contains("cobble(xz, seed, tint * 0.27, run")).override_failure_message("streets must stay dark").is_true()
+	assert_bool(src.contains("cobble(xz, seed, tint * vec3(1.15, 0.98, 0.78) * 0.27, run")).override_failure_message("streets must stay dark (and warm: the pawns of both armies read against a warm dark road)").is_true()
 	assert_bool(src.contains("alb = tint * 0.32 * mix(0.78, 1.15, fbm(xz * 1.6 + seed));")).override_failure_message("packed earth must stay dark").is_true()
 	assert_bool(src.contains("alb = tint * 0.55 * mix(0.6, 1.25, fbm(xz * 2.4 + seed))")).override_failure_message("garden plots must stay dark").is_true()
 	assert_bool(src.contains("			alb *= 0.5;   // the decks the models stand on")).override_failure_message("the decks must stay dark").is_true()

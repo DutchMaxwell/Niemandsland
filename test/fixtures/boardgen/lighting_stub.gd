@@ -2,6 +2,8 @@ extends RefCounted
 ## A lighting controller stand-in that records the setters the dusk of the ruin town calls.
 
 var calls := {}
+var _directional_light: DirectionalLight3D
+var _fill_light: DirectionalLight3D   # the scene's fill light, turned by hand by dusk()
 
 
 func set_sun_color(v: Color) -> void: calls["set_sun_color"] = v

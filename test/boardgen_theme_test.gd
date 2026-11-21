@@ -257,21 +257,38 @@ func test_the_town_has_lanterns_at_the_square_and_the_gates_inside_the_edge_stri
 	assert_int(BoardgenTheme.TOWN_PALETTE.size()).is_equal(BoardgenTheme.TOWN_KINDS.size())
 
 
-func test_dusk_is_a_blue_hour_a_cool_high_moon_a_warm_rim_low_on_the_far_side_and_a_cool_sky() -> void:
+func test_dusk_is_a_blue_hour_two_pale_moons_a_half_turn_apart_and_a_cool_sky() -> void:
 	var seen := {}
 	var lc := RefCounted.new()
 	lc.set_script(preload("res://test/fixtures/boardgen/lighting_stub.gd"))
+	var fill := DirectionalLight3D.new()
+	add_child(fill)
+	var keylight := DirectionalLight3D.new()
+	add_child(keylight)
+	lc._directional_light = keylight
+	lc._fill_light = fill
 	BoardgenTownDressing.dusk(lc)
 	var sun: Color = lc.calls["set_sun_color"]
 	assert_float(sun.b).is_greater(sun.r)   # the key is a cool pale moon
-	assert_float(lc.calls["set_sun_angles"][1]).is_greater_equal(40.0)   # high on one side
-	var rim: Color = lc.calls["set_fill_light_color"]
-	assert_float(rim.r).is_greater(rim.b)   # the last warm light ...
-	assert_float(lc.calls["set_fill_light_energy"]).is_less(lc.calls["set_sun_energy"])   # ... a rim, not a second key
+	assert_float(lc.calls["set_sun_angles"][1]).is_greater_equal(40.0)   # high
+	# the second moon (the scene's fill light): the same colour, nearly the same energy, the half turn of the key - the board is a half-turn mirror, so its light is too (gate at both players' sides)
+	assert_object(lc.calls["set_fill_light_color"]).is_equal(sun)
+	assert_float(lc.calls["set_fill_light_energy"]).is_between(0.85 * lc.calls["set_sun_energy"], 1.15 * lc.calls["set_sun_energy"])
+	var h: float = deg_to_rad(lc.calls["set_sun_angles"][0])
+	var v: float = deg_to_rad(lc.calls["set_sun_angles"][1])
+	var key := Vector3(cos(v) * sin(h), sin(v), cos(v) * cos(h))
+	var other := fill.position.normalized()
+	assert_float(Vector2(key.x, key.z).normalized().dot(Vector2(other.x, other.z).normalized())).override_failure_message("the second moon must stand opposite the first").is_less(-0.99)
+	assert_float(other.y).is_equal_approx(key.y, 0.001)   # at the same height
+	assert_float(BoardgenTownDressing.MOON_SPECULAR).override_failure_message("a strong pale light with full specular washes the glossy pawns' colours white").is_less_equal(0.3)
+	assert_float(fill.light_specular).is_less_equal(0.3)
+	assert_float(keylight.light_specular).is_less_equal(0.3)
 	assert_float((lc.calls["set_ambient_color"] as Color).b).is_greater((lc.calls["set_ambient_color"] as Color).r)   # cool sky
 	assert_float(BoardgenTownDressing.LANTERN_COLOUR.r).is_greater(BoardgenTownDressing.LANTERN_COLOUR.b)   # the lanterns are the only strong warm source
 	BoardgenTownDressing.dusk(null)   # no lighting controller (a table without one): nothing happens
 	assert_bool(seen.is_empty()).is_true()
+	fill.free()
+	keylight.free()
 
 
 func test_props_stand_in_the_strip_beside_a_wall_face_and_never_on_a_street_a_plot_or_a_ladder_foot() -> void:
