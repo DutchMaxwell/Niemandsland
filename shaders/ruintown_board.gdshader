@@ -46,6 +46,9 @@ bool use_stone(vec2 uv, inout vec3 ratio, inout vec3 tn) {
 	if (t_on.x < 0.5) {
 		return false;
 	}
+	if (grit_on > 0.5) {   // (plan PLAN_RUINTOWN_GRIT life train: with the grit map the house walls and the flag tops keep the procedural coursed stone - a stone per hash, no tile period)
+		return false;
+	}
 	vec2 tuv = vec2(uv.x, -uv.y) / t_tile.x;
 	ratio = clamp(grit_albedo(t_stone, tuv) / MEAN_STONE, vec3(0.3), vec3(2.6));   // (plan W0: without its 1.3 in period)
 	tn = grit_normal(n_stone, tuv);

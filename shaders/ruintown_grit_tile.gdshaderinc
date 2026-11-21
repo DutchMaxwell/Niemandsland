@@ -2,6 +2,7 @@
 // a wall was one wallpaper. Stochastic tiling on a triangle grid (after Heitz and Neyret's by-example blending): every grid vertex takes the set at its own random offset ALONG the
 // courses (x only: the bed joints stay level, so a blend never doubles a course line) and maybe mirrored; three samples are blended with sharpened barycentric weights. The stone
 // SIZE does not change (decision D-R2), only its period. Included by ruintown_board.gdshader before use_stone(); needs h21() (tiefwerk_noise).
+uniform float grit_on = 0.0;   // 1 with the grit map (BoardgenTownGrit.apply): declared here, the first of the grit includes
 const float GRIT_HEX = 1.15;   // triangle grid per tile: a vertex about every tile
 
 // The three grid vertices round `st` (tile units) with their weights (sharpened, sum 1).

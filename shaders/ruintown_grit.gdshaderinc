@@ -2,7 +2,6 @@
 // street's edge, G = wet / mud, B = kennel and rut offsets, A = damage). Included by ruintown_board.gdshader after ground_at(); needs its cell_in / board_cells. Own work, no third-party
 // source. `grit_on` = 0 (no map) keeps the board exactly as before.
 uniform sampler2D grit_map : filter_linear, repeat_disable;
-uniform float grit_on = 0.0;
 // The instrument (tools/boardgen/grit_metrics.py): 1 = every street pixel in the flat colour of its grit class, everything else black (emission only: the capture turns the lights off and the
 // tonemap linear); 2 = the raw map (R edge distance, G wet / mud) on the open ground. 0 = the look.
 uniform int grit_debug = 0;
