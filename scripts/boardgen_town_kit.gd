@@ -16,6 +16,9 @@ const BROKEN_ROOF_SHARE := 0.34   # (train 3, H2: one roof in three is broken, a
 ## (train 3, H2) the instance colour per roof on top of the set's tint: 60 % slate blue-grey, 40 % a dull clay (the toy red is gone).
 const ROOF_SLATE := Color(0.46, 0.74, 0.98)
 const ROOF_CLAY := Color(0.55, 0.75, 0.92)
+## (train 3) the battlements were the palest thing in the wall view: every merlon and capstone a step darker and weathered, two in five mossy.
+const MERLON_WEATHERED := Color(0.62, 0.63, 0.6)
+const MERLON_MOSSY := Color(0.5, 0.6, 0.44)
 const ROOF_UV_TILE_IN := 3.0   # the roof modules' UVs count tiles of this size (kr1_town.py roof_uv)
 const CHIMNEY_TOP_IN := 3.6   # a chimney module's cap height above its foot (the foot sinks into the house)
 const MODULES := ["roof_gable_low", "roof_gable_steep", "roof_broken_a", "roof_broken_b", "roof_rafters", "chimney_pots", "chimney_broken",
@@ -40,6 +43,7 @@ const OWN_COLOUR := ["cart_toppled_load", "handcart_load", "table_overturned_loa
 ## 3 in of every connector's rise, the origin on the wall face at the connector's edge point, +z away from the wall - so the walkable / ladder data is identical (boxes of kind ladder are not solid).
 const LADDER_MODULES := ["timber_ladder_3in", "timber_ladder_top"]
 const MODULE_TINT := {"pool_kerb": Color(0.52, 0.55, 0.6), "tower_cap_burnt": Color(0.32, 0.30, 0.28), "rubble_heap_a": Color(0.5, 0.44, 0.38), "rubble_heap_b": Color(0.36, 0.32, 0.28),
+	"fountain_basin": Color(0.6, 0.63, 0.58), "fountain_basin_b": Color(0.6, 0.63, 0.58), "fountain_column": Color(0.64, 0.66, 0.6),   # (train 3, lead: the basin was the palest thing in the street view - grey weathered stone like the merlons)
 	"hay_heap": Color(0.7, 0.64, 0.52), "stall_collapsed_cloth": Color(0.76, 0.72, 0.68), "lantern_post": Color(0.17, 0.165, 0.16),
 	"weeds_a": Color(0.62, 0.46, 0.42), "weeds_b": Color(0.62, 0.46, 0.42), "ivy_cluster_small": Color(0.62, 0.46, 0.42), "ivy_cluster_large": Color(0.62, 0.46, 0.42),
 	"ivy_strand_a": Color(0.62, 0.46, 0.42), "ivy_strand_b": Color(0.62, 0.46, 0.42)}   # (lead review of #3312: the plants were houseplant green, the most saturated thing in the frame - a dull grey-green, darker than the wall)   # (21.11.: the hay and the striped cloth were the palest shapes of a scene; the lamp's base and cage read as white bars - dark iron now, only the glass glows)   # (heaps: grey-brown rubble and ash, never a white blob - lead 21.11.)   # a charred frame: the timber grain, dark
@@ -152,8 +156,11 @@ static func plan(layout: Dictionary) -> Dictionary:
 		var centre: Vector3 = (b["lo"] + b["hi"]) * 0.5
 		var yaw := (PI * 0.5 if size.z > size.x else 0.0) + (PI if i % 2 == 1 else 0.0)
 		var whole := "merlon_v%d" % (1 + int(BoardgenTownDressing._hash(i, 2, 13) * 3.0) % 3)   # three joint patterns break the kit's tiling (kit batch A7)
-		add.call("merlon_v4" if BoardgenTownDressing._hash(i, 1, 11) < 0.2 else whole, _item(Basis(Vector3.UP, yaw), Vector3(centre.x, b["lo"].y, centre.z)))
+		var mi := _item(Basis(Vector3.UP, yaw), Vector3(centre.x, b["lo"].y, centre.z))
+		mi["colour"] = MERLON_MOSSY if BoardgenTownDressing._hash(i, 2, 17) < 0.4 else MERLON_WEATHERED
+		add.call("merlon_v4" if BoardgenTownDressing._hash(i, 1, 11) < 0.2 else whole, mi)
 	for item: Dictionary in coping(layout):
+		item["colour"] = MERLON_MOSSY if BoardgenTownDressing._hash(int(item["xf"].origin.x * 1000.0) + int(item["xf"].origin.z * 37.0), 3, 17) < 0.4 else MERLON_WEATHERED
 		add.call(item["module"], item)
 	var nx: int = layout["nx"]
 	var nz: int = layout["nz"]
