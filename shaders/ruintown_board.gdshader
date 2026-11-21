@@ -377,6 +377,24 @@ void fragment() {
 			depth_in = 0.02;
 			rough = 0.82;
 			alb = tint * mix(0.72, 1.05, h21(vec2(floor(xz.x / 2.2), floor(xz.y / BOARD_W) + seed))) * mix(0.8, 1.0, mix(1.0, seam(xz.y, BOARD_W, 0.018), keep(xz.y, BOARD_W))) * mix(0.84, 1.0, smoothstep(0.35, 0.6, fbm(xz * 0.9 + seed))) * grid;
+			if (k != 8 && box_in.x > 0.0) {   // A BROKEN FLOOR (plan R6): inside the 0.75 in edge strip of the tier, and only where the edge is the lot's outer edge, boards are missing and the joists show; the middle stays solid
+				vec2 e2 = box_in.xz * 0.5 - abs(lpos.xz);
+				bool nx = e2.x < e2.y;
+				float ed = min(e2.x, e2.y);
+				vec2 to_edge = nx ? vec2(sign(lpos.x), 0.0) : vec2(0.0, sign(lpos.z));
+				float outer = step(0.004, abs(ground_at(xz).b - ground_at(xz + to_edge * (ed + 0.3)).b));   // across the edge is another lot or open ground (a lot is one hash)
+				float strip = outer * (1.0 - smoothstep(0.1, 0.75, ed));
+				float along = nx ? xz.y : xz.x;
+				float lost = step(1.0 - 0.7 * strip, h21(vec2(floor(along / 0.45), floor(ed / 0.25) + seed + 11.0))) * step(0.0001, strip);
+				alb = mix(alb, mix(vec3(0.012), vec3(0.09, 0.055, 0.035), step(0.75, fract(along / 0.8))), lost);   // a dark gap with a joist across it
+				rel = mix(rel, 0.0, lost);
+				depth_in = mix(depth_in, 0.06, lost);
+				vec2 sc = xz / 0.55;   // a flat scatter of tile and stone bits, denser at the edge
+				vec2 sci = floor(sc);
+				float sh = h21(sci + seed + 31.0);
+				float lump = step(0.9 - 0.12 * strip, sh) * smoothstep(0.28, 0.16, length(fract(sc) - 0.5 - (vec2(h21(sci + 3.0), h21(sci + 9.0)) - 0.5) * 0.3));
+				alb = mix(alb, sh > 0.95 ? vec3(0.56, 0.28, 0.20) : vec3(0.30, 0.29, 0.27), lump * (1.0 - lost));
+			}
 		} else if (k == 6 || k == 12 || k == 9 || k == 10) {   // tower and wall tops, stone pieces: flagstones
 			alb = stone(xz, seed, 0.45, 0.6, tint, rel);   // flagstones 0.45 - 0.8 in
 			depth_in = 0.03;
@@ -386,6 +404,9 @@ void fragment() {
 				tex_on = 1.0;
 				depth_in = 0.0;
 			}
+			float crack = smoothstep(0.02, 0.0, abs(vnoise(xz * 1.6 + seed * 2.0) - 0.5));   // cracked flags (plan R6), weeds in some of the joints
+			alb = mix(alb, vec3(0.04, 0.04, 0.045), 0.7 * crack);
+			alb = mix(alb, vec3(0.14, 0.24, 0.08), 0.6 * crack * step(0.7, h21(floor(xz * 2.5) + seed)));
 		} else if (k == 11) {   // garden plot: overgrown, weeds and bare patches
 			alb = tint * mix(0.6, 1.25, fbm(xz * 2.4 + seed)) * mix(1.0, 0.7, step(0.9, h21(floor(xz * 9.0))));
 		} else if (k == 14) {   // rubble: broken stones
@@ -410,7 +431,7 @@ void fragment() {
 		float fire = clamp(0.5 + 0.65 * clamp(dot(q, story.xy) / (abs(story.x) * 24.0 + abs(story.y) * 12.0), -1.0, 1.0) + (lh - 0.5) * 0.4, 0.0, 1.0) * (k == 13 ? 0.35 : 1.0);   // the ruins on the fire side burn most, an intact house far less
 		float shade = clamp(0.5 + 0.65 * clamp(dot(q, story.zw) / (abs(story.z) * 24.0 + abs(story.w) * 12.0), -1.0, 1.0) + (lh - 0.5) * 0.3, 0.0, 1.0);
 		float moss = smoothstep(0.55, 0.95, shade);
-		float patchy = fbm(vec2(p.x + p.z, p.y) * 1.3 + seed * 3.0);
+		float patchy = wnrm.y > 0.5 ? fbm(p.xz * 1.3 + seed * 3.0) : fbm(vec2(p.x + p.z, p.y) * 1.3 + seed * 3.0);   // a top has no height to vary over: its patches follow the plan
 		if (abs(wnrm.y) < 0.2) {   // a wall face
 			float scorch = smoothstep(0.2, 0.6, fire) * (1.0 - smoothstep(0.0, mix(1.4, 6.5, fire), p.y)) * smoothstep(0.12, 0.45, patchy);   // rising from the foot, two storeys high on the fire side
 			alb *= 1.0 - 0.4 * fire * fire;   // smoke over everything on that side

@@ -121,3 +121,12 @@ func test_the_decay_story_is_a_function_of_the_seed_and_the_shader_folds_it_by_t
 	assert_bool(src.contains("vec2 q = (p.z >= 0.0 ? -p.xz : p.xz) + vec2(0.0, 12.0);")).override_failure_message("the story must fold by the half turn: one half may not burn more than the other").is_true()
 	assert_bool(src.contains("* (k == 13 ? 0.35 : 1.0);")).override_failure_message("an intact house burns less than a ruin").is_true()
 	assert_bool(src.contains("float lost = smoothstep(0.62, 0.7,")).override_failure_message("no missing tiles").is_true()
+
+
+## R6: a ruined tier's top is a broken floor in the edge strip only, and only at the lot's outer edge: the middle stays solid; stone tops are cracked with weeds in the joints.
+func test_ruined_tops_break_only_in_the_outer_edge_strip() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	assert_bool(src.contains("float strip = outer * (1.0 - smoothstep(0.1, 0.75, ed));")).override_failure_message("the broken floor must stay inside the 0.75 in strip").is_true()
+	assert_bool(src.contains("float outer = step(0.004, abs(ground_at(xz).b - ground_at(xz + to_edge * (ed + 0.3)).b));")).override_failure_message("an edge inside a lot must not break").is_true()
+	assert_bool(src.contains("float lost = step(1.0 - 0.7 * strip,")).override_failure_message("the loss must fade to nothing at the strip's inner line").is_true()
+	assert_bool(src.contains("float crack = smoothstep(0.02, 0.0,")).override_failure_message("no cracked flags").is_true()
