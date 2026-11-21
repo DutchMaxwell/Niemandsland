@@ -58,3 +58,10 @@ def test_real_tree_is_isolated():
 def test_a_whole_line_comment_is_not_a_reference_but_a_shader_include_is(tmp_path):
     assert _tree(tmp_path, scripts__other_DOT_gd="## lit like BoardgenKit's board\n") == []
     assert _tree(tmp_path, shaders__x_DOT_gdshader='#include "res://shaders/boardgen_kit.gdshaderinc"\n')
+
+
+def test_look_list_never_claims_a_file_the_core_reads():
+    from ci_path_classes import in_class
+    for path in ["assets/model_manifest.json", "assets/ruins_manifest.json", "assets/solo/x.json", "tools/a.py",
+                 "core/x.rs", "data/x.json", "test/fixtures/x.json", "scripts/main.gd", "project.godot"]:
+        assert not in_class(path, "look"), f"{path} must never be in tools/ci_look_paths.txt"
