@@ -13,8 +13,9 @@ const MAX_LIGHTS := 14   # 8 before the outer streets got their lamps (silhouett
 const LANTERN_COLOUR := Color(1.0, 0.74, 0.48)
 ## A lantern is a down-cone (plan R7a): without a shadow the half-angle keeps the pool on the ground (height x tan) inside a 3 in cell's width - the light of a post against a wall must not reach the far side.
 const LANTERN_CONE_DEG := 48.0
-## The four lanterns that cast shadows (the square's corners) may throw a wide pool - the walls stop it; the others stay narrow.
-const LANTERN_CONE_SHADOWED_DEG := 75.0
+## The four lanterns that cast shadows (the square's corners) throw a wider pool - the walls stop it; the others stay narrow. 58 (was 75: a 9.5 in pool that flooded the
+## whole square warm, 48 % of it; target C keeps warm light inside small pools, plan TARGET C train 2, C2).
+const LANTERN_CONE_SHADOWED_DEG := 58.0
 ## A spot's energy is not an omni's: the cone, the cookie (mean ~0.4) and the 1 / d fall-off over 2.5 in of height set it; 3.5 keeps the plaster beside a post under the clip cap.
 const LANTERN_ENERGY := 3.5
 ## The moons (the blue hour, D-R4, as two pale lights): the key and its half turn, equal in colour and nearly in energy, so the board looks the same from both players' sides.
@@ -37,7 +38,7 @@ const SDFGI_ENERGY := 0.45
 const SSIL_INTENSITY := 0.4
 ## A weak wide fill inside every lantern's pool (lead 21.11.): an omni with no shadow map, so the cone's pool has no hard black rim; weak enough that light leaking through a wall is a glow, not a pool.
 const FILL_ENERGY := 0.05
-const FILL_RANGE_M := 0.2
+const FILL_RANGE_M := 0.12   # (was 0.2, train 2: the warm fill stays near its post)
 const EMBER_COLOUR := Color(1.0, 0.5, 0.2)
 const EMBER_ENERGY := 0.7
 const EMBER_RANGE_M := 0.18
@@ -312,7 +313,7 @@ func _add_lights(layout: Dictionary) -> void:
 		light.rotation_degrees = Vector3(-90.0, 0.0, 0.0)   # straight down
 		light.light_color = LANTERN_COLOUR
 		light.light_energy = LANTERN_ENERGY   # measured: <= 0.2 % of pixels above 0.95 luminance in street, wall and fountain
-		light.spot_range = 0.34
+		light.spot_range = 0.2   # (was 0.34; 8 in still reaches the ground 2.55 in below at the widest cone)
 		light.spot_angle = lantern_cone_deg(i)
 		light.spot_attenuation = 1.0
 		light.light_projector = cookie
