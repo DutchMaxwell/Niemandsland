@@ -166,6 +166,19 @@ func test_the_flag_joints_are_worn_mortar_not_a_black_grid() -> void:
 	var at := src.find("alb = stone_rows(xz, seed, fr, 0.72")
 	assert_bool(src.substr(at, 400).contains("depth_in = 0.015;")).override_failure_message("the flag joint is still deeply recessed").is_true()
 
+## Texture plan step 7: a flag top weathers as a whole - a 3 - 9 in value drift, one flag in ten gone or sunk (earth-dark, lower), and in the outer
+## 0.5 in of each box top dirt, small rubble and a thicker moss (TOP_RIM_MOSS 0.6 there, TOP_MOSS 0.3 elsewhere).
+func test_the_flag_tops_weather_as_a_whole() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	assert_bool(src.contains("alb *= mix(0.85, 1.12, fbm(xz * 0.17 + seed));")).override_failure_message("no 3 - 9 in value drift on the flag tops").is_true()
+	assert_bool(src.contains("float gone = step(0.9, h21(fc + seed + 53.0))")).override_failure_message("no missing or sunken flags").is_true()
+	assert_bool(src.contains("rel = mix(rel, 0.15, gone);")).override_failure_message("a missing flag is not lower").is_true()
+	assert_bool(src.contains("top_ring = 1.0 - smoothstep(0.1, 0.5, min(e2.x, e2.y));")).override_failure_message("no rim of the box top").is_true()
+	assert_bool(src.contains("mix(TOP_MOSS, TOP_RIM_MOSS, top_ring)")).override_failure_message("the rim does not gather the thicker moss").is_true()
+	var at := src.find("const float TOP_RIM_MOSS = ")
+	assert_int(at).is_greater(-1)
+	assert_float(float(src.substr(at + 27, 6).get_slice(";", 0))).is_equal_approx(0.6, 0.001)
+
 ## Lead 21.11. (readability gate): the ground the models stand on - streets, packed earth, garden plots, the decks of yards and tier floors - sits a step below the models' own values.
 func test_the_ground_the_models_stand_on_sits_below_the_models() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
@@ -184,7 +197,7 @@ func test_the_ground_the_models_stand_on_sits_below_the_models() -> void:
 	# (lane townC4) the decks weather to silver-grey (the brown boards were the play camera's largest warm area) and stay below the models: at most a 15 % lift
 	assert_bool(src.contains("alb = mix(vec3(dot(alb, vec3(0.3, 0.55, 0.15))), alb, DECK_KEEP_HUE) * DECK_LIFT;")).override_failure_message("the decks keep only part of their warm hue").is_true()
 	# (lane townC4, lead 22.11.: the green lives on the earth, the tops keep moss only in seams and on the north side, and stay standing room under the models)
-	assert_bool(src.contains("? DECK_MOSS : TOP_MOSS));")).override_failure_message("decks and stone tops carry only a share of the shade moss").is_true()
+	assert_bool(src.contains("? DECK_MOSS : mix(TOP_MOSS, TOP_RIM_MOSS, top_ring)));")).override_failure_message("decks and stone tops carry only a share of the shade moss").is_true()
 	for name: String in ["DECK_MOSS", "TOP_MOSS", "TOP_LIFT", "BAND_COVER"]:
 		var at := src.find("const float %s = " % name)
 		assert_int(at).is_greater(-1)
