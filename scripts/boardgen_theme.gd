@@ -21,7 +21,19 @@ const TOWN_PALETTE := [Color(0.43, 0.42, 0.40), Color(0.50, 0.52, 0.56), Color(0
 ## The authored T-R1 surface sets the town shader can read (library set -> shader suffix), in the order of the shader's `t_on`: coursed stone, plaster, timber, earth. The theme key of
 ## TiefwerkLibrary / BoardgenKit for the town.
 const TOWN_LIBRARY := "ruintown"
-const TOWN_SETS := [["coursed_stone", "stone"], ["plaster", "plaster"], ["timber", "timber"], ["earth", "earth"]]
+## The street, flag-top and roof sets follow (texture plan step 16); the shader reads only the first four until it takes them as arrays (step 18).
+const TOWN_SETS := [["coursed_stone", "stone"], ["plaster", "plaster"], ["timber", "timber"], ["earth", "earth"], ["cobbles", "cobbles"],
+		["flags", "flags"], ["roof_tiles", "roof"]]
+## The scale contract of the town's sets (texture plan, decision D-TEX2): board inches one tile covers, its pixels, and the size of the feature
+## that must read from the start camera (stone, flag, plank, slate row; 0 = no pattern). 110-180 texels per inch keeps two neighbouring
+## surfaces within x2 of each other; a feature >= 0.30 in is >= 4.4 px at the start camera (14.5 px/in).
+const TOWN_SET_CONTRACT := {"coursed_stone": {"tile_in": 3.0, "px": 512, "feature_in": 0.35}, "plaster": {"tile_in": 6.0, "px": 1024, "feature_in": 0.0},
+		"timber": {"tile_in": 3.25, "px": 512, "feature_in": 0.36}, "earth": {"tile_in": 8.0, "px": 1024, "feature_in": 0.0},
+		"cobbles": {"tile_in": 3.0, "px": 512, "feature_in": 0.33}, "flags": {"tile_in": 4.0, "px": 512, "feature_in": 0.5},
+		"roof_tiles": {"tile_in": 3.3, "px": 512, "feature_in": 0.30}}
+const TOWN_TEXELS_PER_IN := Vector2(110.0, 180.0)
+const TOWN_FEATURE_MIN_IN := 0.30
+const TOWN_SETS_MAX_BYTES := 16000000
 ## The mean linear albedo of each set (measured on the staged masters): the shader multiplies its palette tone by texture / mean, so a tint survives and only the detail changes.
 const TOWN_SET_MEANS := {"stone": Vector3(0.377, 0.244, 0.137), "plaster": Vector3(0.4065, 0.3669, 0.3513), "timber": Vector3(0.1207, 0.0743, 0.0443), "earth": Vector3(0.1747, 0.1326, 0.0824)}
 const DEEPWORKS_DRESSING := ["Props", "Landmarks", "Debris", "Sumps", "Rails"]
