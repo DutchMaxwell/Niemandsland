@@ -1788,6 +1788,7 @@ mod height_settle;
 mod tier_reach;
 mod hit_and_run;
 mod hit_and_run_boost_band;
+mod hit_and_run_plain_96;
 mod grounded_reinforcement;
 mod grounded_speed;
 mod teleport;

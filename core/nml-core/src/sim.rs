@@ -3852,7 +3852,10 @@ fn tray_hit_and_run(
         Cover::Board(t) => Some(t),
         Cover::Recorded(_) => None,
     };
-    if seams.movement && !seams.move_rigid && !seams.plain_only {
+    // PENDING_EPOCH_HIT_AND_RUN_PLAIN: on a real board the step is the ported fallback below whatever `seams.movement` says
+    // (the shadow and the door run without it and took the rigid kite, which checks the board edge only).
+    let ported = (seams.movement && !seams.move_rigid) || rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_HIT_AND_RUN_PLAIN);
+    if ported && !seams.plain_only {
         if let Cover::Board(t) = cover {
             let land = nearest_enemy_of(next, si).and_then(|foe| {
                 // `_move_away` :4767 — the table's own `_nearest_enemy_of`
