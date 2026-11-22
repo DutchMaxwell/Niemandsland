@@ -80,3 +80,13 @@ def test_the_canary_really_boots_the_game_and_is_not_a_class_suite():
     assert "scene_runner(E2EBoot.MAIN_SCENE)" in text, "the canary must boot scenes/main.tscn"
     assert 'MAIN_SCENE := "res://scenes/main.tscn"' in open(os.path.join(ROOT, "test/e2e/e2e_boot.gd"), encoding="utf-8").read()
     assert CANARY not in suites(ROOT, files, "look") and CANARY in lane(ROOT, files, "look")
+
+
+def test_build_yml_wires_the_short_run_and_adds_no_skip():
+    import re
+    wf = open(os.path.join(ROOT, ".github", "workflows", "build.yml"), encoding="utf-8").read()
+    for needle in ("fetch-depth: 2", "--pr-is-only look", "&& '[0]' ||", "--lane look > look_suites.txt", "--suite-file look_suites.txt",
+                   "tools/ci_look_lane_test.py"):
+        assert needle in wf, f"build.yml lost the LOOK short run wiring: {needle}"
+    m = re.search(r"^  test:\n(?:    .*\n)*?    if: (.*)$", wf, re.M)
+    assert m and "look_only" not in m.group(1), "the test job must RUN for a LOOK-only PR (a skip would need a path reason in all_required.py)"
