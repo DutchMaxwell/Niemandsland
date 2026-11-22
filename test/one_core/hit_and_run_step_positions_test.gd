@@ -15,6 +15,7 @@ const INCH := 0.0254
 const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 	"faction_folder": "dark_elf_raiders", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
+const WITHOUT := "user://hit_and_run_step_positions_deny.json"
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -36,12 +37,23 @@ func before_test() -> void:
 	_main._autosave_controller.set_lesson_paused(true)
 	CoreActivation._env = 1
 	OS.set_environment("NML_CORE_SLICE", "deny")
+	# Lane shootfix: the live deny file refuses a Hit & Run family shooter (group `hit_and_run_landing`, the core's rigid step lands bases inside
+	# other units); this suite pins the landing write-back itself, so it reads the deny file without that group.
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.DENY_PATH))
+	(data["groups"] as Dictionary).erase("hit_and_run_landing")
+	var f := FileAccess.open(WITHOUT, FileAccess.WRITE)
+	f.store_string(JSON.stringify(data))
+	f.close()
+	CoreSlice.path_override = WITHOUT
 	CoreSlice.reset_cache()
 
 
 func after_test() -> void:
 	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.path_override = ""
 	CoreSlice.reset_cache()
+	if FileAccess.file_exists(WITHOUT):
+		DirAccess.remove_absolute(WITHOUT)
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
