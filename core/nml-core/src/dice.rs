@@ -1046,7 +1046,9 @@ fn primal_extras(p: &ShootProfile, grant: bool, v36: bool, faces: &[u8], count_t
         return hits + if grant { surge_attack_say(&primal_boost_grant_profile(), faces, count_target, owner, tray, &mut out.rolls, Some(side)) } else { 0 };
     }
     if faces.iter().any(|&f| f == 6 || (f == 5 && count_target <= 5)) {
-        out.log.push(format!("Enhanced Primal: {owner} — one extra-attack roll on unmodified 5s and 6s (the grant widens the Primal, it adds no second roll)"));
+        let line = format!("Enhanced Primal: {owner} — one extra-attack roll on unmodified 5s and 6s (the grant widens the Primal, it adds no second roll)");
+        say_rule(tray, "enhanced_primal", side, || line.clone()); // the step path's lines are the tray's
+        out.log.push(line);
     }
     surge_attack_say(&ShootProfile { surge_attack_low: p.surge_attack_low.min(5), ..p.clone() }, faces, count_target, owner, tray, &mut out.rolls, Some(side))
 }
@@ -1834,17 +1836,15 @@ pub(crate) fn resolve_volley_with_pick_label(
             continue;
         }
         if p.reach_bonus_in > 0.0 && (p.range as f64) < reach_gate && reach >= reach_gate {
-            out.log.push(format!(
-                "{}: {} gains +{:.0}\" reach on {}",
-                p.reach_bonus_rule, sh.owner, p.reach_bonus_in, def_owner
-            ));
+            let line = format!("{}: {} gains +{:.0}\" reach on {}", p.reach_bonus_rule, sh.owner, p.reach_bonus_in, def_owner);
+            say_rule(tray, "reach_bonus", att.side, || line.clone());
+            out.log.push(line);
         }
         // The Mark names itself only where it was needed: a shooter the grant already carries is not its beneficiary.
         if def.range_mark_in > 0.0 && (p.range as f64) < reach_gate && reach >= reach_gate && reach - def.range_mark_in < reach_gate {
-            out.log.push(format!(
-                "Increased Shooting Range Mark: {} gains +{:.0}\" reach on {}",
-                sh.owner, def.range_mark_in, def_owner
-            ));
+            let line = format!("Increased Shooting Range Mark: {} gains +{:.0}\" reach on {}", sh.owner, def.range_mark_in, def_owner);
+            say_rule(tray, "range_mark", att.side, || line.clone());
+            out.log.push(line);
         }
         let n = sh.attacks[k];
         if n <= 0 {

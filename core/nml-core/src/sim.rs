@@ -7649,7 +7649,9 @@ fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool,
     let gone = banner_gone(statics, state, i, seams);
     if gone > 0 {
         let root = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
-        shot.log.push(format!("Banner: {root} died with its Banner — {}'s morale test loses +{gone}", us.name));
+        let line = format!("Banner: {root} died with its Banner — {}'s morale test loses +{gone}", us.name);
+        say_rule(tray, "banner", state.player[i], || line.clone()); // the step path's lines are the tray's
+        shot.log.push(line);
     }
     ctx.morale_bonus = state.morale_bonus[i] - gone
         + mods::sum(state, i, mods::Role::Morale, melee, |r| r.morale_mod)
@@ -12294,7 +12296,9 @@ fn resolve_with(
                                 // G4R4 C-GRANTED-RANGE: a live spell grant's reach kept a weapon the static reach would drop.
                                 let (granted, granted_rule) = granted_reach(um, &next, mi);
                                 for _ in msc.keep.iter().map(|&k| &um.shoot[k]).filter(|p| granted > 0.0 && (p.range as f64) + p.reach_bonus_in < dm) {
-                                    shot.log.push(format!("{granted_rule}: {} gains +{granted:.0}\" reach on {}", um.name, ut_g.name));
+                                    let line = format!("{granted_rule}: {} gains +{granted:.0}\" reach on {}", um.name, ut_g.name);
+                                    say_rule(tray, "granted_range", next.player[si], || line.clone());
+                                    shot.log.push(line);
                                 }
                                 if rule_on(seams.rules_epoch, EPOCH_73_V36) {
                                     // Shooting Range: the target's joined hero put a weapon in reach that its host's gap alone would drop.
