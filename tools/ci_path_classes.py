@@ -6,6 +6,10 @@
                                           the class's one allowed door, or sets its env flag in test/ or .github/
   ci_path_classes.py --suites look        the *_test.gd suites that touch the class
   ci_path_classes.py --is-only look F...  exit 0 only when every F is in the class or under docs/
+  ci_path_classes.py --pr-is-only look    the same for the files this PR changes (git diff HEAD^1 HEAD of the merge ref;
+                                          any git problem or an empty diff exits 1 = not LOOK-only = the full run)
+  ci_path_classes.py --lane look          the suites of the LOOK short run: the class suites, the suites that walk a whole
+                                          source root, and CANARY
 """
 import fnmatch
 import os
@@ -22,8 +26,15 @@ CLASSES = {
         "env": "NML_BOARDGEN_SEED",
     },
 }
+# The LOOK short run also boots the real game once: a class file that does not compile or does not load breaks
+# scripts/main.gd through its one door, and only a boot of scenes/main.tscn sees that. Any suite that boots it will
+# do; tools/ci_look_lane_test.py keeps this one such a suite.
+CANARY = "test/e2e/e2e_local_table_no_implicit_ai_test.gd"
+# A suite that names a whole source root (res://scripts, res://scenes, ...) walks every file in it, so a class file can
+# trip it without naming any class symbol: it runs in the short run too.
+WALKS_A_ROOT = re.compile(r"[\"']res://(?:scripts|scenes|shaders|assets|materials)/?[\"']")
 SCAN = ("scripts/", "scenes/", "shaders/", "materials/", "assets/", "tools/", "addons/", "test/", "project.godot")
-SELF = ("tools/ci_path_classes.py", "tools/ci_path_classes_test.py", "tools/ci_look_paths.txt")
+SELF = ("tools/ci_path_classes.py", "tools/ci_path_classes_test.py", "tools/ci_look_lane_test.py", "tools/ci_look_paths.txt")
 
 
 def in_class(path, cls):
@@ -71,6 +82,19 @@ def suites(root, files, cls):
     return sorted(f for f in files if f.startswith("test/") and f.endswith("_test.gd") and sym.search(_text(root, f) or ""))
 
 
+def walkers(root, files):
+    return sorted(f for f in files if f.startswith("test/") and f.endswith("_test.gd") and WALKS_A_ROOT.search(_text(root, f) or ""))
+
+
+def lane(root, files, cls):
+    return sorted(set(suites(root, files, cls)) | set(walkers(root, files)) | {CANARY})
+
+
+def pr_files(root):
+    p = subprocess.run(["git", "diff", "-z", "--no-renames", "--name-only", "HEAD^1", "HEAD"], cwd=root, capture_output=True, text=True)
+    return [f for f in p.stdout.split("\0") if f] if p.returncode == 0 else []
+
+
 def is_only(paths, cls):
     return bool(paths) and all(in_class(p, cls) or p.startswith("docs/") for p in paths)
 
@@ -85,6 +109,13 @@ def main(argv):
     if argv[:1] == ["--suites"]:
         print("\n".join(suites(root, files, argv[1])))
         return 0
+    if argv[:1] == ["--lane"]:
+        print("\n".join(lane(root, files, argv[1])))
+        return 0
+    if argv[:1] == ["--pr-is-only"]:
+        changed = pr_files(root)
+        print(f"{len(changed)} changed file(s); LOOK-only: {is_only(changed, argv[1])}")
+        return 0 if is_only(changed, argv[1]) else 1
     if argv[:1] == ["--is-only"]:
         return 0 if is_only(argv[2:], argv[1]) else 1
     print(__doc__)
