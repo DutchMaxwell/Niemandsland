@@ -43,3 +43,15 @@ func test_every_fine_pattern_fades_to_its_mean_with_the_pixel_footprint() -> voi
 		assert_bool(body.contains("keep(")).override_failure_message("%s does not fade with the pixel footprint" % fn).is_true()
 	assert_bool(src.contains("keep(p.y, TILE_H)")).is_true()   # the roof tiles
 	assert_bool(src.contains("keep(xz.y, BOARD_W)")).is_true()   # the floor boards
+
+
+## Plan TEX step 3: the brick-nogging courses (0.12 in) and the lath (0.09 in, bare and behind lost plaster) were full-contrast stripes
+## that shimmered at the start camera (alias 11.0 on their pixels vs 4.9 without them); they fade to the mean of their two tones instead.
+func test_the_nogging_and_lath_stripes_fade_with_the_pixel_footprint_and_are_dull() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	var grit := FileAccess.get_file_as_string("res://shaders/ruintown_grit.gdshaderinc")
+	assert_bool(src.contains("keep(uv.y, 0.12)")).override_failure_message("the brick nogging courses do not fade").is_true()
+	assert_bool(src.contains("keep(uv.y, 0.09)")).override_failure_message("the bare lath does not fade").is_true()
+	assert_bool(grit.contains("keep(uv.y, 0.09)")).override_failure_message("the lath behind lost plaster does not fade").is_true()
+	assert_bool(src.contains("vec3(0.42, 0.22, 0.16)")).override_failure_message("the saturated nogging tone is back").is_false()
+	assert_bool(src.contains("wood * 1.4, wood * 0.6")).override_failure_message("the full-contrast lath tones are back").is_false()
