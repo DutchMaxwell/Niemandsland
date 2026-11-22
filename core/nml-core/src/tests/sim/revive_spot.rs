@@ -340,3 +340,65 @@ use super::*;
         };
         assert_eq!(other(95), other(E96), "an unrelated unit's activation is identical");
     }
+
+    // ------------- Step 3: the spend order (lead ruling (a) = the table's order, as a convention) -----------------------
+
+    /// A seed whose Reanimation roll at target 5 shows exactly `hits` successes (the roll is the same at 95 and 96).
+    fn seed_with(st: &State, statics: &[UnitStatic], t: &crate::terrain::Terrain, heroes: bool, dice: usize, hits: usize) -> i64 {
+        (0..500).find(|&s| rean_run(st, statics, t, 95, s, heroes).1.log.iter()
+            .any(|l| l.contains(&format!("rolls {dice} dice")) && l.contains(&format!("— {hits} success(es)"))))
+            .expect("a seed with the wanted hit count")
+    }
+
+    /// Two dead Tough(3) and 2 successes: at 96 both stand up at one wound (95: one model at 2 wounds, the pin); with 4
+    /// successes the first is topped up to 3 and the second stays at 1 - casualties first, top-ups after, in that order.
+    #[test]
+    fn casualties_stand_up_at_one_wound_before_any_top_up() {
+        let (st, mut statics) = rean_line(4, 3, &L3[..2]);
+        statics[0].reanimation = Some(crate::unit::ReanimationSpec { target: 5 });
+        let t = town_board(vec![]);
+        let two = seed_with(&st, &statics, &t, false, 6, 2);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, two, false);
+        assert_eq!((next.alive[0], next.wounds[0].clone()), (4, vec![1, 1, 3, 3]), "{:?}", shot.log);
+        let (old, _) = rean_run(&st, &statics, &t, 95, two, false);
+        assert_eq!((old.alive[0], old.wounds[0].clone()), (3, vec![2, 3, 3]), "95 pin");
+        let four = seed_with(&st, &statics, &t, false, 6, 4);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, four, false);
+        assert_eq!((next.alive[0], next.wounds[0].clone()), (4, vec![1, 3, 3, 3]), "{:?}", shot.log);
+    }
+
+    /// An entry with no legal spot EXPIRES: the host's casualty (a 100 mm base) fits nowhere in a 6 in square walled by
+    /// houses, the joined hero's (32 mm) does. 2 successes on 4 dice: the plan gives one to each casualty; the host's is
+    /// lost, so the hero stands up at ONE wound, not two.
+    #[test]
+    fn an_unplaceable_casualty_s_success_is_lost() {
+        let (mut st, mut statics) = rean_line(3, 1, &[[2.25, 3.0], [3.75, 3.0]]);
+        let mut hero = st.profiles.list[1].clone();
+        hero.unit_id = "ah".into();
+        hero.wounds_max = vec![3];
+        st.profiles = Rc::new(Profiles { list: vec![st.profiles.list[0].clone(), st.profiles.list[1].clone(), hero], index: HashMap::new() });
+        st.roster = Rc::new(Roster { keys: st.roster.keys.clone(), index: st.roster.index.clone(), profile: vec![0, 2, 1, 1] });
+        st.attached = Rc::new(vec![vec![1], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, Some(0), None, None]);
+        st.positions[1] = vec![];
+        st.wounds[1] = vec![];
+        st.alive[1] = 0;
+        Rc::make_mut(&mut st.radii)[1] = vec![];
+        statics[0].base_radius = 0.05; // the returning host model's base; the two standing ones are 32 mm
+        statics[0].reanimation = Some(crate::unit::ReanimationSpec { target: 5 });
+        statics.push(UnitStatic { name: "hero".into(), base_radius: 0.016, reanimation: Some(crate::unit::ReanimationSpec { target: 5 }), ..Default::default() });
+        let mut walls = Vec::new();
+        for x in 11..=14u16 {
+            for z in 7..=10u16 {
+                if !((12..=13).contains(&x) && (8..=9).contains(&z)) {
+                    walls.push(z * 24 + x);
+                }
+            }
+        }
+        let t = town_board(walls);
+        let s = seed_with(&st, &statics, &t, true, 4, 2);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, s, true);
+        assert_eq!(next.alive[0], 2, "the host's casualty has no spot: {:?}", shot.log);
+        assert!(refused(&shot), "{:?}", shot.log);
+        assert_eq!((next.alive[1], next.wounds[1].clone()), (1, vec![1]), "the host's success is gone: {:?}", shot.log);
+    }
