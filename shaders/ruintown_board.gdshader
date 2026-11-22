@@ -80,6 +80,12 @@ bool use_frame(vec2 uv, float wood, inout vec3 ratio, inout vec3 tn) {
 // The ground's floor (silhouette round 21.11., maintainer: "too dark"): the streets and the packed earth sit below the models' own values (readability gate) but no longer near black.
 const float GROUND_COBBLE = 0.66;   // (townC4: 0.7 -> 0.66, the street ground sat on its luma bar) was 0.42 (train 2: the lamp pools shrank, the moon carries the street now), 0.27 before
 const float GROUND_EARTH = 0.55;   // was 0.32
+const float DECK_KEEP_HUE = 0.15;   // (townC4) how much of the boards' own warm hue survives the weather
+const float DECK_LIFT = 1.12;
+const float DECK_MOSS = 0.0;   // (townC4) the shade-side moss on a deck and on a stone top: on grey boards and flags it read as a green carpet from above (top camera green band 3-6 %)
+const float TOP_LIFT = 1.15;   // (townC4) the cleaned flag tops a step paler, as C's grey stone
+const float BAND_COVER = 0.06;
+const float TOP_MOSS = 0.3;   // (lead 22.11.: C keeps moss in the seams and on the north side only - the green lives on the earth)
 const float COVER_CUT = 0.58;   // the fbm level above which the earth is overgrown (~25 % of the earth; plan TARGET C, E2)
 varying vec3 wpos;
 varying vec3 wnrm;
@@ -137,10 +143,11 @@ vec3 wood_of(float lot) {
 	return k < 0.5 ? vec3(0.07, 0.05, 0.04) : (k < 1.5 ? vec3(0.30, 0.28, 0.25) : vec3(0.20, 0.12, 0.07));
 }
 
-// The four roofs of the town (plan R4b), picked by the lot's hash: two slates, a dull clay, a mossy clay.
+// The five roofs of the town (plan R4b; roofs lane 22.11., target C: weathered slate and grey-brown shingle, at most one roof in five a dull brick-brown clay, never orange),
+// picked by the lot's hash, all in the wall stone's value range.
 vec3 roof_of(float lot, vec3 clay) {
-	float k = floor(fract(lot * 5.0) * 3.999);
-	return k < 0.5 ? vec3(0.30, 0.32, 0.36) : (k < 1.5 ? mix(clay, vec3(0.3, 0.29, 0.28), 0.5) : (k < 2.5 ? vec3(0.27, 0.29, 0.33) : mix(clay * 0.85, vec3(0.28, 0.38, 0.20), 0.4)));   // (train 3, H2: two slates, a dull clay, a mossy clay - no toy red)
+	float k = floor(fract(lot * 5.0) * 4.999);
+	return k < 0.5 ? vec3(0.26, 0.27, 0.30) : (k < 1.5 ? vec3(0.23, 0.245, 0.27) : (k < 2.5 ? vec3(0.27, 0.25, 0.23) : (k < 3.5 ? mix(vec3(0.25, 0.24, 0.22), vec3(0.22, 0.27, 0.18), 0.35) : vec3(0.30, 0.22, 0.18))));
 }
 
 // Half-timber with a grammar (plan R4a), one 3 in cell wide and one 3 in storey high: a sill beam, a mid rail and a top plate; posts every 0.75 in; an opening (a window between two posts
@@ -342,8 +349,8 @@ void fragment() {
 		float along = abs(wnrm.x) > abs(wnrm.z) ? p.z : p.x;
 		float row = floor(p.y / TILE_H);
 		float tile = floor(along / TILE_W + row * 0.5);
-		vec3 base = tint * mix(0.7, 1.15, h21(vec2(tile, row + seed)));
-		vec3 laid = base * mix(0.62, 1.0, smoothstep(0.0, 0.7, fract(p.y / TILE_H))) * mix(1.0, 0.8, smoothstep(0.55, 0.7, fbm(vec2(along, p.y) * 1.3 + seed)));
+		vec3 base = tint * mix(0.8, 1.05, h21(vec2(tile, row + seed)));   // (roofs lane 22.11.: a narrower tone per tile, no bright stripes)
+		vec3 laid = base * mix(0.7, 1.0, smoothstep(0.0, 0.7, fract(p.y / TILE_H))) * mix(1.0, 0.8, smoothstep(0.55, 0.7, fbm(vec2(along, p.y) * 1.3 + seed)));
 		alb = mix(tint * 0.82, laid, keep(p.y, TILE_H));   // 0.16 x 0.13 in tiles: the mean below ~3 px
 		rel = mix(0.5, fract(p.y / TILE_H) * (0.8 + 0.2 * h21(vec2(tile, row))), keep(p.y, TILE_H));   // every row of tiles is a step: a line of shadow under each
 		alb = grit_roof(alb, tile, row, seed, ground_at(p.xz - wnrm.xz * 0.2).b, vec2(along, p.y), keep(p.y, TILE_H), rel);   // (plan W3)
@@ -409,8 +416,9 @@ void fragment() {
 				vec2 o = vec2(d < 2 ? (d == 0 ? 1.0 : -1.0) : 0.0, d >= 2 ? (d == 2 ? 1.0 : -1.0) : 0.0);
 				near = max(near, float(int(ground_at(gw + o).r * 255.0 + 0.5) >= 2));
 			}
-			float cover = smoothstep(COVER_CUT - 0.04, COVER_CUT + 0.04, fbm(xz * 0.35 + seed * 0.37) + 0.35 * near - 0.4 * path)
-				* smoothstep(0.28, 0.48, vnoise(xz * 1.3 + seed * 1.7) + 0.3 * near);   // rough, not turf: bare earth between the clumps in the open
+			float band = smoothstep(9.0, 13.0, abs(xz.y));   // (townC4, lead 22.11.: the green lives on the earth - the deployment strips overgrow most, like C's)
+			float cover = smoothstep(COVER_CUT - 0.04, COVER_CUT + 0.04, fbm(xz * 0.35 + seed * 0.37) + 0.35 * near - 0.4 * path + BAND_COVER * band)
+				* smoothstep(0.28, 0.48, vnoise(xz * 1.3 + seed * 1.7) + 0.3 * near + 0.25 * band);   // rough, not turf: bare earth between the clumps in the open
 			float tuft = max(step(0.915, sp) * step(sp, 0.955), cover * step(sp, 0.6)) * smoothstep(0.26, 0.12, length(lf));   // in the cover 60 % of the 0.33 in cells carry a tuft (4 % outside)
 			vec3 soil = alb;
 			alb = mix(alb, vec3(0.13, 0.16, 0.10) * mix(0.55, 1.25, fbm(xz * 3.1 + seed)), cover);   // a dull dark yellow-grey green between the tufts, mottled
@@ -442,6 +450,9 @@ void fragment() {
 			rough = 0.82;
 			alb = tint * mix(0.72, 1.05, h21(vec2(floor(xz.x / 2.2), floor(xz.y / BOARD_W) + seed))) * mix(0.8, 1.0, mix(1.0, seam(xz.y, BOARD_W, 0.018), keep(xz.y, BOARD_W))) * mix(0.84, 1.0, smoothstep(0.35, 0.6, fbm(xz * 0.9 + seed))) * grid;
 			alb *= 0.5;   // the decks the models stand on (the deployment bands' yards, the tier floors) sit a step below the models' own values (readability gate)
+			// (townC4, play camera: the brown decks were the board's largest warm area, 16 % warm vs C's 5 %) weathered silver-grey boards, a little paler, dirt in the gaps
+			alb = mix(vec3(dot(alb, vec3(0.3, 0.55, 0.15))), alb, DECK_KEEP_HUE) * DECK_LIFT;
+			alb = mix(alb, vec3(0.07, 0.068, 0.06), 0.5 * (1.0 - seam(xz.y, BOARD_W, 0.018)) * keep(xz.y, BOARD_W));   // dirt in the gaps
 			if (k != 8 && box_in.x > 0.0) {   // A BROKEN FLOOR (plan R6): inside the 0.75 in edge strip of the tier, and only where the edge is the lot's outer edge, boards are missing and the joists show; the middle stays solid
 				vec2 e2 = box_in.xz * 0.5 - abs(lpos.xz);
 				bool nx = e2.x < e2.y;
@@ -477,9 +488,9 @@ void fragment() {
 			vec2 fc = vec2(floor(fx / fl_l), frow);
 			vec2 fp = vec2(fract(fx / fl_l) * fl_l, fract(xz.y / 0.45) * 0.45);   // inches inside the flag
 			vec3 tone = mix(vec3(1.0), grit_stone_tone(h21(fc + seed + 41.0)), 0.5);   // (half the wall's spread: a flag floor, not a chequerboard)
-			alb = mix(vec3(dot(alb, vec3(0.3, 0.55, 0.15))), alb, 0.55) * tone * vec3(0.55, 0.52, 0.48);
+			alb = mix(vec3(dot(alb, vec3(0.3, 0.55, 0.15))), alb, 0.35) * tone * vec3(0.53, 0.52, 0.51) * TOP_LIFT;   // (townC4: greyer - the warm tops were a third of the play camera's warm share; was 0.55 / (0.55, 0.52, 0.48))
 			float joint = 1.0 - smoothstep(0.08, 0.45, rel);
-			float mossy = step(0.72, vnoise(xz * 0.7 + seed * 3.0));
+			float mossy = step(0.8, vnoise(xz * 0.7 + seed * 3.0));
 			alb = mix(alb, mossy > 0.5 ? vec3(0.07, 0.09, 0.05) : vec3(0.07, 0.06, 0.05), 0.75 * joint * keep(xz.y, 0.45));
 			float fh = h21(fc + seed + 77.0);
 			float fl = 0.0;
@@ -533,7 +544,7 @@ void fragment() {
 			vec2 pc = mod(p.xz, 3.0);
 			float rim = 1.0 - smoothstep(0.1, 0.7, min(min(pc.x, 3.0 - pc.x), min(pc.y, 3.0 - pc.y)));   // (train 2, V2) moss gathers toward a top's edges too
 			alb *= 0.85;   // (train 2, V2) the flat tops one value step down: they were the brightest thing on the board
-			alb = mix(alb, vec3(0.12, 0.17, 0.08), clamp(0.65 * moss + 0.3 * rim, 0.0, 0.8) * smoothstep(0.45, 0.7, patchy));   // moss on the tops of the shade side and at their edges
+			alb = mix(alb, vec3(0.12, 0.17, 0.08), clamp(0.65 * moss + 0.3 * rim, 0.0, 0.8) * smoothstep(0.45, 0.7, patchy) * (k == 3 || k == 4 || k == 8 ? DECK_MOSS : TOP_MOSS));   // moss on the tops of the shade side and at their edges
 			alb = mix(alb, vec3(0.04, 0.035, 0.03), 0.6 * fire * smoothstep(0.55, 0.8, patchy) * float(k != 12));   // scorched patches on a ruin's top
 		} else if (k == 15) {   // a roof face
 			float lost = smoothstep(0.62, 0.7, fbm(vec2(p.x + p.z, p.y) * 0.9 + seed * 5.0)) * mix(0.25, 1.0, fire);

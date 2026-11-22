@@ -79,6 +79,10 @@ pub struct Budgets {
     pub rows: bool,
     /// The most houses one walkable roof run may touch (0 = no cap): rows must not become a roof highway (a plunging-fire platform across the town).
     pub roof_run_max: usize,
+    /// Half-turn pairs of small intact houses put on free earth between the bands after the lots (0 = none): more roofs, fewer filler slabs (roofs plan K3).
+    pub infill_pairs: usize,
+    /// The fewest intact (roofed) houses a board must have (0 = no demand): every town board shows a skyline (roofs plan K4).
+    pub intact_min: usize,
 }
 
 impl Theme {
@@ -88,12 +92,12 @@ impl Theme {
             Self::Deepworks => Budgets { raised: RAISED_PERMILLE, high: HIGH_PERMILLE, lift: HIGH_PERMILLE, tower_pairs: TOWER_PAIRS, landmark_pieces: LANDMARK_PIECES,
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
                 lot_pairs: 9, lot_shapes: &[(3, 2), (2, 3), (2, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[], garden_area: 0, garden_min: 0, plaza: (0, 0), wall: false,
-                landmark_kinds: &[LandmarkKind::TankCluster, LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (1, 2), centre_piece: false, small_pools: false, intact_percent: 0, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1, tower_slender: false, rows: false, roof_run_max: 0 },
-            // First town values (step 6 of the ruin-town plan re-fits them): more raised ground, one tower pair, more terraces.
-            Self::RuinTown => Budgets { raised: (230, 460), high: (60, 200), lift: (30, 70), tower_pairs: (1, 1), landmark_pieces: (7, 7),
+                landmark_kinds: &[LandmarkKind::TankCluster, LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (1, 2), centre_piece: false, small_pools: false, intact_percent: 0, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1, tower_slender: false, rows: false, roof_run_max: 0, infill_pairs: 0, intact_min: 0 },
+            // Town values: one tower pair, more terraces; the raised minimum is 15 % (roofs plan K2: fewer filler slabs grown on free earth).
+            Self::RuinTown => Budgets { raised: (150, 460), high: (60, 200), lift: (30, 70), tower_pairs: (1, 1), landmark_pieces: (7, 7),
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
                 lot_pairs: 18, lot_shapes: &[(2, 2), (2, 2), (3, 2), (2, 3), (2, 1), (1, 2), (2, 1), (1, 2), (1, 1)], lot_fill: &[(2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], lot_first: &[(2, 2)], garden_area: 1, garden_min: 4, plaza: (4, 6), wall: true,
-                landmark_kinds: &[LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (3, 3), centre_piece: true, small_pools: true, intact_percent: 65, lane_free: true, max_attempts: 64, tower_side: 2, tower_slender: true, rows: true, roof_run_max: 2 },
+                landmark_kinds: &[LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (3, 3), centre_piece: true, small_pools: true, intact_percent: 65, lane_free: true, max_attempts: 64, tower_side: 2, tower_slender: true, rows: true, roof_run_max: 2, infill_pairs: 4, intact_min: 4 },
         }
     }
     fn salt(self) -> i64 { if self.is_default() { 0 } else { TOWN_SALT } }
@@ -121,10 +125,10 @@ pub fn budget(permille: (usize, usize)) -> (usize, usize) {
 impl Layout {
     pub fn cell(&self, x: usize, z: usize) -> &Cell { &self.cells[z * self.nx + x] }
     pub fn to_json(&self) -> String { serde_json::to_string(self).expect("layout JSON") }
-    /// One char per cell: `3`/`2`/`1` raised, `~` hazard lot, `"` rough plot, `.` street, `,` other ground.
+    /// One char per cell: `T` tall tower, `3`/`2`/`1` raised, `~` hazard lot, `"` rough plot, `.` street, `,` other ground.
     pub fn to_ascii(&self) -> String {
         self.cells.chunks(self.nx).map(|row| row.iter().map(|c| match (c.level, c.lot_kind, c.street) {
-            (3, _, _) => '3', (2, _, _) => '2', (1, _, _) => '1', (_, LotKind::Hazard, _) => '~', (_, LotKind::Rough, _) => '"', (_, _, true) => '.', _ => ',',
+            (_, LotKind::Tower, _) => 'T', (3, _, _) => '3', (2, _, _) => '2', (1, _, _) => '1', (_, LotKind::Hazard, _) => '~', (_, LotKind::Rough, _) => '"', (_, _, true) => '.', _ => ',',
         }).chain(Some('\n')).collect::<String>()).collect()
     }
     pub fn raised(&self) -> usize { self.cells.iter().filter(|c| c.level >= 1).count() }
@@ -175,6 +179,7 @@ impl Layout {
         if !(b.landmark_pieces.0..=b.landmark_pieces.1).contains(&self.landmarks.len()) { p.push("landmark count outside its budget"); }
         if self.landmarks.iter().flat_map(Landmark::cells).any(|i| self.connectors.iter().any(|c| usize::from(c.low) == i || usize::from(c.high) == i)) { p.push("a landmark stands on a ladder foot"); }
         if self.lots.iter().filter(|l| l.kind == LotKind::Rough).count() < b.garden_min { p.push("too few garden plots"); }
+        if self.lots.iter().filter(|l| l.kind == LotKind::Roofed).count() < b.intact_min { p.push("too few intact houses"); }
         if b.wall && !self.cells.iter().any(|c| c.lot_kind == LotKind::Wall && c.level == 2) { p.push("no city wall"); }
         if b.roof_run_max > 0 && self.longest_roof_run() > b.roof_run_max { p.push("a walkable roof run touches more houses than the cap"); }
         if b.lane_free && self.has_edge_to_edge_lane() { p.push("a straight open lane runs from edge to edge"); }

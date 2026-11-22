@@ -210,6 +210,10 @@ fn the_checks_can_fail() {
     let tower_cells: Vec<_> = (0..256).filter(|&i| good.cells[i].level == 3).collect();
     cut_towers.connectors.retain(|c| !tower_cells.contains(&usize::from(c.high)));
     assert!(reach(&cut_towers, 1).iter().zip(&cut_towers.cells).any(|(&s, c)| !s && c.level == 3), "the test's own walk must see towers without a ladder");
+    let mut gutted = generate_themed(41, Symmetry::Point180, Theme::RuinTown);
+    assert!(gutted.problems().is_empty());
+    gutted.lots.iter_mut().filter(|l| l.kind == nml_core::boardgen::LotKind::Roofed).for_each(|l| l.kind = nml_core::boardgen::LotKind::Block);
+    assert!(gutted.problems().contains(&"too few intact houses"), "a town whose houses are all ruins misses the intact floor");
     let mut on_a_foot = good.clone();
     let foot = usize::from(good.connectors[0].low);
     on_a_foot.landmarks.push(Landmark { kind: LandmarkKind::Sump, x: foot % GRID, z: foot / GRID, w: 1, h: 1, turn: 0 });
@@ -739,7 +743,7 @@ fn a_town_wall_run_has_one_tower_at_its_end_nearer_the_middle() {
 }
 
 #[test]
-fn about_half_the_town_houses_are_intact_solid_roofs_and_the_rest_ruined_walkable_ones() {
+fn two_thirds_of_the_town_houses_are_intact_solid_roofs_and_the_rest_ruined_walkable_ones() {
     use nml_core::boardgen::LotKind;
     let (mut intact, mut ruined) = (0, 0);
     for seed in 1..=300 {
@@ -761,7 +765,7 @@ fn about_half_the_town_houses_are_intact_solid_roofs_and_the_rest_ruined_walkabl
     }
     let share = intact as f64 / (intact + ruined) as f64;
     eprintln!("intact {intact}, ruined {ruined}: {share:.2}");
-    assert!((0.40..=0.60).contains(&share), "{share:.2} of the houses are intact");   // silhouette round 21.11.: more intact gables, fewer flat platforms (was 0.30 - 0.50)
+    assert!((0.59..=0.75).contains(&share), "{share:.2} of the houses are intact");   // roofs plan K3: the infill houses lift the share to 0.67 (was 0.40 - 0.60, silhouette round 21.11.)
 }
 
 /// What "grown" means in numbers (ruintown AAA step G1): per town board the shares the growth stage has to move.
@@ -950,13 +954,67 @@ fn g2_gate() {
 }
 
 
+/// Roofs plan K3: the infill stage (the last step of `levels::stack`) puts small intact houses only between the bands, each with a street at its door, as half-turn
+/// twins, solid, never a ladder foot. The infill lots are the ones a run with `infill_pairs: 0` does not have (same graph, same seed).
+#[test]
+fn a_town_has_infill_houses_only_between_the_bands_with_a_street_at_the_door() {
+    use nml_core::boardgen::{connect, graph, levels, LotKind};
+    let (b, mut infill) = (Theme::RuinTown.budgets(), 0);
+    let b0 = nml_core::boardgen::Budgets { infill_pairs: 0, ..b };
+    for seed in 1..=300 {
+        let g = graph::build(seed * 7919, Symmetry::Point180, &b);
+        let ((lots0, _), (lots, cells)) = (levels::stack(seed, &g, &b0), levels::stack(seed, &g, &b));
+        assert_eq!(lots[..lots0.len()], lots0[..], "seed {seed}: the infill stage changed an earlier lot");
+        let new = &lots[lots0.len()..];
+        assert!(new.len() % 2 == 0 && new.len() <= 2 * b.infill_pairs, "seed {seed}: {} infill lots", new.len());
+        let feet: HashSet<usize> = connect::wire(seed, Symmetry::Point180, &cells).iter().flat_map(|c| [usize::from(c.low), usize::from(c.high)]).collect();
+        for (k, lot) in new.iter().enumerate() {
+            let idx: Vec<usize> = (lot.z..lot.z + lot.h).flat_map(|z| (lot.x..lot.x + lot.w).map(move |x| z * GRID + x)).collect();
+            assert!(lot.kind == LotKind::Roofed && idx.iter().all(|&i| cells[i].lot_kind == LotKind::Roofed && cells[i].lot_id == lot.id && cells[i].level == 0), "seed {seed}: infill lot {} is not a solid house", lot.id);
+            assert!(idx.iter().all(|&i| cells[i].deploy == 0), "seed {seed}: infill lot {} stands in a deployment band", lot.id);
+            assert!(idx.iter().any(|&i| nbrs(i).iter().any(|&j| cells[j].street)), "seed {seed}: infill lot {} has no street at its door", lot.id);
+            assert!(idx.iter().all(|i| !feet.contains(i)), "seed {seed}: a ladder foot on infill lot {}", lot.id);
+            let twin = &new[k ^ 1];
+            assert_eq!((twin.x, twin.z, twin.w, twin.h), (GRID - lot.x - lot.w, GRID - lot.z - lot.h, lot.w, lot.h), "seed {seed}: infill lot {} has no half-turn twin", lot.id);
+        }
+        infill += new.len();
+    }
+    eprintln!("infill houses per board over 300 seeds: {:.2}", infill as f64 / 300.0);
+    assert!(infill >= 300 * 4, "the infill stage placed only {infill} houses on 300 boards");
+}
+
+/// Roofs plan K4: every town board has at least four intact (roofed) houses - a skyline on every board, not only on the average one.
+#[test]
+fn every_town_has_at_least_four_intact_houses() {
+    let mut few = Vec::new();
+    for seed in 1..=1000 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        let houses = l.lots.iter().filter(|lot| lot.kind == nml_core::boardgen::LotKind::Roofed).count();
+        if houses < 4 { few.push((seed, houses)); }
+    }
+    assert!(few.is_empty(), "{} of 1000 town boards have fewer than 4 intact houses: {:?}", few.len(), &few[..few.len().min(20)]);
+}
+
+/// Roofs plan K2: the town's raised minimum is 15 %, so the generator grows few filler slabs (raised cells on free earth: no lot, not the wall).
+/// Before K2 (minimum 23 %) the mean over 200 seeds was ~38 cells per board.
+#[test]
+fn a_town_grows_few_filler_slabs() {
+    use nml_core::boardgen::LotKind;
+    let n = 200;
+    let filler: usize = (1..=n).map(|seed| generate_themed(seed, Symmetry::Point180, Theme::RuinTown).cells.iter()
+        .filter(|c| c.level >= 1 && c.lot_id == 0 && c.lot_kind != LotKind::Wall).count()).sum();
+    let mean = filler as f64 / n as f64;
+    eprintln!("filler slab cells per town board over {n} seeds: {mean:.1}");
+    assert!(mean <= 26.0, "a town grows too many filler slabs on free earth: {mean:.1} cells per board (cap 26)");
+}
+
 /// BASELINE of PLAN_RUINTOWN_ROOFS step K0: origin/main 6a2972697, town theme, Point180, seeds 1..=1000 (means per board, sq in, percent).
-/// The roofs steps K2+ move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
+/// Re-pinned by K2 (raised minimum 23 -> 15 %), K3 (infill houses) and K4 (at least 4 houses), 1000 seeds. The roofs steps K2+ move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
 const ROOFS_BASELINE: [(&str, f64); 19] = [
-    ("intact houses", 4.04), ("boards with <= 2 houses %", 35.4), ("roofed cells", 11.0), ("raised cells in house plots", 13.3), ("raised cells on free earth", 38.0), ("raised cells in the city wall", 33.8),
-    ("roof share of footprints %", 17.7), ("walkable sq in 0 in", 1385.0), ("walkable sq in 3 in", 490.0), ("walkable sq in 6 in", 208.0), ("walkable sq in 9 in", 68.0), ("ladders", 46.8),
-    ("opening rays blocked %", 94.6), ("mid rays blocked %", 79.5), ("tier-to-tier rays blocked, house 2.5 in %", 56.2), ("tier-to-tier rays blocked, ridge 4.5 in %", 59.2),
-    ("roofed cells in the bands", 7.95), ("raised cells in the bands", 37.5), ("asymmetric cells", 0.0),
+    ("intact houses", 9.18), ("boards with <= 2 houses %", 0.0), ("roofed cells", 22.07), ("raised cells in house plots", 13.73), ("raised cells on free earth", 22.35), ("raised cells in the city wall", 34.19),
+    ("roof share of footprints %", 37.95), ("walkable sq in 0 in", 1418.94), ("walkable sq in 3 in", 357.39), ("walkable sq in 6 in", 207.29), ("walkable sq in 9 in", 67.77), ("ladders", 45.43),
+    ("opening rays blocked %", 95.36), ("mid rays blocked %", 78.78), ("tier-to-tier rays blocked, house 2.5 in %", 52.53), ("tier-to-tier rays blocked, ridge 4.5 in %", 57.21),
+    ("roofed cells in the bands", 9.62), ("raised cells in the bands", 29.43), ("asymmetric cells", 0.0),
 ];
 
 /// Roofs census over `NML_N` town seeds (default 1000, the baseline's size; the baseline is asserted only at 1000, within +-0.5 on every number). `NML_ROOFS_OUT=<file>` also writes the report.
@@ -1068,15 +1126,19 @@ fn a_town_has_no_walkable_roof_run_longer_than_two_houses() {
 fn most_town_houses_have_a_garden_plot_behind_them() {
     use nml_core::boardgen::LotKind::{Block, Deck, Rough, Roofed, Terrace};
     let (mut fronted, mut with_plot, n) = (0, 0, 300);
+    let b = Theme::RuinTown.budgets();
+    let b0 = nml_core::boardgen::Budgets { infill_pairs: 0, ..b };
     for seed in 1..=n {
-        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
-        for lot in l.lots.iter().filter(|lot| matches!(lot.kind, Block | Terrace | Deck | Roofed)) {
+        // the houses of the plot stage only (roofs plan K3): the infill houses stand on bare earth by design, so the lots a run without infill has are counted, on the full board
+        let g = nml_core::boardgen::graph::build(seed * 7919, Symmetry::Point180, &b);
+        let ((lots0, _), (_, cells)) = (nml_core::boardgen::levels::stack(seed, &g, &b0), nml_core::boardgen::levels::stack(seed, &g, &b));
+        for lot in lots0.iter().filter(|lot| matches!(lot.kind, Block | Terrace | Deck | Roofed)) {
             let side = |dx: i64, dz: i64| -> (usize, bool) {   // street cells and garden plots on the face looking (dx, dz)
                 let (mut streets, mut plot) = (0, false);
                 for z in lot.z..lot.z + lot.h { for x in lot.x..lot.x + lot.w {
                     let (nx, nz) = (x as i64 + dx, z as i64 + dz);
                     if nx < 0 || nz < 0 || nx >= GRID as i64 || nz >= GRID as i64 || (nx as usize >= lot.x && (nx as usize) < lot.x + lot.w && nz as usize >= lot.z && (nz as usize) < lot.z + lot.h) { continue; }
-                    let c = l.cell(nx as usize, nz as usize);
+                    let c = &cells[nz as usize * GRID + nx as usize];
                     streets += usize::from(c.street);
                     plot |= c.lot_kind == Rough;
                 }}

@@ -22,6 +22,7 @@ pub fn layout_value_themed(seed: i64, theme: &str) -> Value {
     let mut v = serde_json::to_value(&layout).expect("layout JSON");
     let nx = layout.nx;
     v["level_in"] = json!(LEVEL_IN);
+    if layout.theme == Theme::RuinTown { v["tower_in"] = json!(boardgen::plain::TOWER_IN); }   // a tall scenery tower's height to the core (towers plan T1); a Deepworks layout stays byte-identical
     v["problems"] = json!(layout.problems().into_iter().chain(known.is_none().then_some("unknown theme")).collect::<Vec<_>>());
     // Each landmark also names the core terrain class of its footprint (0 = none) and whether it is solid.
     v["landmarks"] = Value::Array(layout.landmarks.iter().map(|l| { let mut o = serde_json::to_value(l).expect("landmark JSON"); o["terrain"] = json!(l.kind.terrain_class()); o["solid"] = json!(l.kind.is_solid()); o }).collect());

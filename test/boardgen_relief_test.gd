@@ -102,10 +102,10 @@ func test_half_timber_has_a_grammar_braces_only_in_corner_bays_and_per_lot_tints
 
 
 ## R4b (rest): four roofs by the lot's hash and a value ladder over the tops.
-func test_roofs_have_four_tints_by_lot_and_the_tops_a_value_ladder() -> void:
+func test_roofs_have_five_tints_by_lot_and_the_tops_a_value_ladder() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
 	assert_bool(src.contains("vec3 roof_of(float lot, vec3 clay)")).is_true()
-	assert_bool(src.contains("float k = floor(fract(lot * 5.0) * 3.999);")).override_failure_message("four roofs, two clays, a slate and a mossy clay").is_true()
+	assert_bool(src.contains("float k = floor(fract(lot * 5.0) * 4.999);")).override_failure_message("five roofs (roofs lane 22.11.): two slates, a dark shingle, a mossy shingle, one dull clay").is_true()
 	assert_bool(src.contains("tint = roof_of(ground_at(p.xz - wnrm.xz * 0.2).b, tint);")).override_failure_message("the roof must read the lot under it").is_true()
 	assert_bool(src.contains("alb *= mix(0.88, 1.12, clamp(p.y / 9.0, 0.0, 1.0));")).override_failure_message("no value ladder on the tops").is_true()
 
@@ -153,3 +153,17 @@ func test_the_ground_the_models_stand_on_sits_below_the_models() -> void:
 		assert_float(v).override_failure_message("%s %f: the ground must sit between near-black and the models" % [name, v]).is_between(0.4, 0.72)
 	assert_bool(src.contains("alb = tint * 0.55 * mix(0.6, 1.25, fbm(xz * 2.4 + seed))")).override_failure_message("garden plots must stay dark").is_true()
 	assert_bool(src.contains("			alb *= 0.5;   // the decks the models stand on")).override_failure_message("the decks must stay dark").is_true()
+	# (lane townC4) the decks weather to silver-grey (the brown boards were the play camera's largest warm area) and stay below the models: at most a 15 % lift
+	assert_bool(src.contains("alb = mix(vec3(dot(alb, vec3(0.3, 0.55, 0.15))), alb, DECK_KEEP_HUE) * DECK_LIFT;")).override_failure_message("the decks keep only part of their warm hue").is_true()
+	# (lane townC4, lead 22.11.: the green lives on the earth, the tops keep moss only in seams and on the north side, and stay standing room under the models)
+	assert_bool(src.contains("? DECK_MOSS : TOP_MOSS));")).override_failure_message("decks and stone tops carry only a share of the shade moss").is_true()
+	for name: String in ["DECK_MOSS", "TOP_MOSS", "TOP_LIFT", "BAND_COVER"]:
+		var at := src.find("const float %s = " % name)
+		assert_int(at).is_greater(-1)
+		var v := float(src.substr(at + ("const float %s = " % name).length(), 6).get_slice(";", 0))
+		assert_float(v).override_failure_message("%s %f" % [name, v]).is_between(0.0, 1.4 if name == "TOP_LIFT" else 0.5)
+	for name: String in ["DECK_KEEP_HUE", "DECK_LIFT"]:
+		var at := src.find("const float %s = " % name)
+		assert_int(at).is_greater(-1)
+		var v := float(src.substr(at + ("const float %s = " % name).length(), 6).get_slice(";", 0))
+		assert_float(v).override_failure_message("%s %f" % [name, v]).is_between(0.0, 0.6 if name == "DECK_KEEP_HUE" else 1.15)

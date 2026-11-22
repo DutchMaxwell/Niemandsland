@@ -9,6 +9,8 @@ use super::levels::LotKind;
 use super::{Layout, Theme, LEVEL_IN};
 
 pub const GENERATOR_VERSION: u32 = 1;
+/// Height of a tall scenery tower (`LotKind::Tower`) to the core, inches: above every eye on a board (9 in + 1.25 in), so nobody sees over it.
+pub const TOWER_IN: f64 = 12.0;
 
 /// Cells between the board edge and the edge of the terrain overlay's grid: that grid is the table diagonal in cells,
 /// rounded up to even (`Terrain::build`), so a 48 in board sits in a 24 x 24 grid and its cell (0, 0) is grid cell (4, 4).
@@ -31,7 +33,7 @@ pub fn to_plain(l: &Layout) -> PlainTerrain {
         match (c.lot_kind, c.level) {
             (LotKind::Terrace, 0) if !c.street => Some(RUINS),
             (LotKind::Rough | LotKind::Wall, 0) => Some(FOREST),
-            (LotKind::Roofed, _) => Some(CONTAINER),
+            (LotKind::Roofed | LotKind::Tower, _) => Some(CONTAINER),
             _ => None,
         }
     };
@@ -45,7 +47,7 @@ pub fn to_plain(l: &Layout) -> PlainTerrain {
     let cells = classes.into_iter().map(|((z, x), class)| [(x as i64 + m) as f64, (z as i64 + m) as f64, f64::from(class)]).collect();
     let tiers = TierGrid {
         nx: l.nx as u16, nz: l.nz as u16, cell_in: f64::from(l.cell_in),
-        level_in: l.cells.iter().map(|c| f64::from(LEVEL_IN[usize::from(c.level)])).collect(),
+        level_in: l.cells.iter().map(|c| if c.lot_kind == LotKind::Tower { TOWER_IN } else { f64::from(LEVEL_IN[usize::from(c.level)]) }).collect(),
         ladders: l.connectors.iter().map(|c| [c.low, c.high]).collect(),
         stairs: Vec::new(),
     };
@@ -55,7 +57,7 @@ pub fn to_plain(l: &Layout) -> PlainTerrain {
     };
     // L-RF1: an intact house is Impassable - its cells are solid (cliffs all round, nobody on the roof). Town only; the
     // solid landmarks (wells, crane feet, Deepworks tanks) are D-F2's own step.
-    let solid_cells = if l.theme == Theme::RuinTown { (0..l.cells.len()).filter(|&i| l.cells[i].lot_kind == LotKind::Roofed).map(|i| i as u16).collect() } else { Vec::new() };
+    let solid_cells = if l.theme == Theme::RuinTown { (0..l.cells.len()).filter(|&i| matches!(l.cells[i].lot_kind, LotKind::Roofed | LotKind::Tower)).map(|i| i as u16).collect() } else { Vec::new() };
     PlainTerrain { cells, tiers: Some(tiers), solid_cells, cell_params, ..Default::default() }
 }
 
@@ -116,6 +118,49 @@ mod tests {
         }
         assert!(with_hazard >= 4, "only {with_hazard} boards had a Hazard lot: the frame check above proved too little");
         assert!(with_landmark_class >= 20, "only {with_landmark_class} classed landmark cells: the landmark mapping proved too little");
+    }
+
+    /// Towers plan T1: a `Tower` cell is a tall solid - listed solid, `TOWER_IN` to the core, CONTAINER class, a Cliff on every face to a
+    /// non-solid cell and none between two tower cells, a block no eye on the board (at most 9 + 1.25 in) sees over, and no ladder ends on it.
+    /// Planted: the same cells at 9 in would be seen over (the sight assert can fail).
+    #[test]
+    fn a_tower_cell_is_a_tall_solid_nobody_climbs_or_sees_over() {
+        let mut l = generate_themed(41, Symmetry::Point180, Theme::RuinTown);
+        let free = |c: &crate::boardgen::Cell| c.level == 0 && !c.street && c.lot_kind == LotKind::Street;
+        let i = (0..l.cells.len() - 1).find(|&i| i % 16 < 15 && free(&l.cells[i]) && free(&l.cells[i + 1])).expect("two free ground cells");
+        let pick = [i, i + 1];
+        for &k in &pick { l.cells[k].lot_kind = LotKind::Tower; }
+        let p = to_plain(&l);
+        let tiers = p.tiers.as_ref().unwrap();
+        let board = Terrain::build(&p);
+        for &k in &pick {
+            assert!(p.solid_cells.contains(&(k as u16)), "a tower cell is solid");
+            assert_eq!(tiers.level_in[k], TOWER_IN);
+            assert_eq!(board.type_at(ground(l.cells[k].x, l.cells[k].z)), CONTAINER);
+        }
+        let solid: Vec<bool> = (0..256).map(|k| p.solid_cells.contains(&(k as u16))).collect();
+        let v = |a: usize| (a as f64 - 8.0) * 3.0;
+        let face = |a: [f64; 2], b: [f64; 2]| board.tier_edges().iter().any(|e| e.kind == crate::mv::tier::TierKind::Cliff
+            && ((e.a[0] == a[0] && e.b[0] == a[0] && a[0] == b[0] && e.a[1].min(e.b[1]) <= a[1] && e.a[1].max(e.b[1]) >= b[1])
+                || (e.a[1] == a[1] && e.b[1] == a[1] && a[1] == b[1] && e.a[0].min(e.b[0]) <= a[0] && e.a[0].max(e.b[0]) >= b[0])));
+        let (x, z) = (i % 16, i / 16);
+        assert!(!face([v(x + 1), v(z)], [v(x + 1), v(z + 1)]), "no edge between the two tower cells");
+        for (k, dx, dz) in [(i, -1i64, 0i64), (i, 0, -1), (i, 0, 1), (i + 1, 1, 0), (i + 1, 0, -1), (i + 1, 0, 1)] {
+            let (cx, cz) = ((k % 16) as i64, (k / 16) as i64);
+            let (nx, nz) = (cx + dx, cz + dz);
+            if !(0..16).contains(&nx) || !(0..16).contains(&nz) || solid[(nz * 16 + nx) as usize] { continue; }
+            let (gx, gz) = ((cx + dx.max(0)) as usize, (cz + dz.max(0)) as usize);
+            let (a, b) = if dx != 0 { ([v(gx), v(cz as usize)], [v(gx), v(cz as usize + 1)]) } else { ([v(cx as usize), v(gz)], [v(cx as usize + 1), v(gz)]) };
+            assert!(face(a, b), "cell {k}: no cliff on the face toward ({nx}, {nz})");
+        }
+        let eye = 9.0 + 1.25;
+        let top = |t: &TierGrid| t.boxes().iter().filter(|b| b.lo[0] <= v(x) && b.hi[0] >= v(x + 2) && b.lo[1] <= v(z) && b.hi[1] >= v(z + 1)).map(|b| b.top_in).fold(0.0, f64::max);
+        assert!(top(tiers) > eye, "an eye on a 9 in tower top sees over the tall tower ({} in)", top(tiers));
+        let mut planted = tiers.clone();
+        for &k in &pick { planted.level_in[k] = 9.0; }
+        assert!(top(&planted) < eye, "planted: a 9 in block must be seen over, or the assert above proves nothing");
+        let feet: Vec<usize> = crate::boardgen::connect::wire(41, Symmetry::Point180, &l.cells).iter().flat_map(|c| [usize::from(c.low), usize::from(c.high)]).collect();
+        assert!(pick.iter().all(|k| !feet.contains(k)), "a ladder ends on a tower cell");
     }
 
     #[test]
@@ -185,6 +230,8 @@ mod tests {
 
     // re-pinned 21.11. (silhouette round): slender 2 x 1 town towers, one tower per wall run, 65 % intact houses;
     // re-pinned 21.11. (L-RF1 F3, 593b1257da9d696f -> df767026f7ddebdd): the town writes its intact houses as solid_cells
-    const PINNED_TOWN_42: &str = "df767026f7ddebdd";
+    // re-pinned 22.11. (roofs plan K2, df767026f7ddebdd -> 719d45f5c81b7df2): the town raised minimum 23 -> 15 % (fewer filler slabs)
+    // re-pinned 22.11. (roofs plan K3, 719d45f5c81b7df2 -> c35f70fddda0af2c): infill houses between the bands
+    const PINNED_TOWN_42: &str = "c35f70fddda0af2c";
     const PINNED_SEED_42: &str = "cbcd64fada596527";
 }

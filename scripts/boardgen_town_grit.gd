@@ -24,7 +24,7 @@ const RUT_IN := 0.7
 ## The odds of a sett's fate (shader uniforms grit_odds_*, grit_lane_keep): missing, sunken, cracked, repair = BASE + DAMAGE x the map's damage (+ 0.08 x wet for sunken), the missing and
 ## sunken odds kept at LANE_KEEP in the walked middle. Tuned with expected_shares() to the style bible: 4-8 / 10-15 / 6-10 / 3-5 %, >= half the missing ones in the patches.
 const ODDS_BASE := Vector4(0.032, 0.125, 0.08, 0.04)
-const ODDS_DAMAGE := Vector4(0.65, 0.35, 0.12, 0.0)
+const ODDS_DAMAGE := Vector4(0.75, 0.35, 0.12, 0.0)
 const LANE_KEEP := Vector2(0.35, 0.5)   # the cart ruts lie this far either side of an artery's centre line (1.4 in apart)
 const NEIGHBOURS := [Vector2i(-1, -1), Vector2i(0, -1), Vector2i(1, -1), Vector2i(-1, 0), Vector2i(1, 0), Vector2i(-1, 1), Vector2i(0, 1), Vector2i(1, 1)]
 

@@ -62,8 +62,16 @@ func test_house_panels_lie_on_their_own_house_face_at_most_a_fifth_of_an_inch_pr
 		for item: Dictionary in BoardgenTownFrames.house_items(layout):
 			total += 1
 			var cs := _corners(item)
-			var mid := (cs[0] + cs[7]) * 0.5
-			var own: Rect2 = rects.filter(func(r: Rect2) -> bool: return _outside(r, Vector2(mid.x, mid.z)) < 0.25).front()
+			# its own house = the one it lies on (the smallest worst corner): beside a party wall or an L of two houses the first house near its middle may be the neighbour
+			var own: Rect2 = rects[0]
+			var best := INF
+			for r: Rect2 in rects:
+				var w := 0.0
+				for p: Vector3 in cs:
+					w = maxf(w, _outside(r, Vector2(p.x, p.z)))
+				if w < best:
+					best = w
+					own = r
 			for p: Vector3 in cs:
 				assert_float(_outside(own, Vector2(p.x, p.z))).override_failure_message("a house panel %.3f in off its collider face" % _outside(own, Vector2(p.x, p.z))).is_less_equal(0.2 + EPS)
 				assert_float(p.y).is_between(-EPS, 3.0)
@@ -149,7 +157,9 @@ func test_snapped_corner_posts_stand_on_a_tier_corner_inside_the_strip() -> void
 
 func test_chimney_stacks_on_ruins_stay_in_the_strip_and_below_the_tower_crown() -> void:
 	var total := 0
-	for layout in _towns():
+	var core: Object = ClassDB.instantiate("NmlCore")
+	for s in range(1, 41):   # (roofs plan K3: boards 1-40 - the six pinned seeds carry no ruin stack after K3, the town still has 32, main 23)
+		var layout: Dictionary = core.boardgen_layout_themed(s, "ruintown")
 		for item: Dictionary in BoardgenTownFrames.ruin_items(layout).filter(func(i: Dictionary) -> bool: return str(i["module"]).begins_with("chimney")):
 			total += 1
 			var xf: Transform3D = item["xf"]
@@ -157,7 +167,8 @@ func test_chimney_stacks_on_ruins_stay_in_the_strip_and_below_the_tower_crown() 
 			var half := xf.basis.x.length() * 0.38   # the corbel's half width (0.76 in), scaled
 			var q := ((Vector2(at.x, at.z) - _origin(layout)) / float(layout["cell_in"])).floor()
 			var r := Rect2(_origin(layout) + q * float(layout["cell_in"]), Vector2.ONE * float(layout["cell_in"]))
-			var to_edge := minf(minf(at.x - r.position.x, r.end.x - at.x), minf(at.z - r.position.y, r.end.y - at.z))
+			var n := xf.basis.z.normalized()   # the face it stands in: the strip is measured across that face (on a two-cell gable the stack sits on the inner cell seam, which is no edge)
+			var to_edge := minf(at.x - r.position.x, r.end.x - at.x) if absf(n.x) > 0.5 else minf(at.z - r.position.y, r.end.y - at.z)
 			assert_float(to_edge + half).override_failure_message("a stack off the edge strip").is_less_equal(0.75 + EPS)
 			assert_float(to_edge - half).is_greater_equal(-EPS)
 			assert_float(at.y + xf.basis.y.length() * 3.78).is_less_equal(BoardgenTownFrames.STACK_TOP_IN + EPS)
