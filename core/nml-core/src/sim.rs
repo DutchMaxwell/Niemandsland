@@ -1340,8 +1340,20 @@ pub(crate) fn tray_reanimation(
     } else {
         Vec::new()
     };
-    for &(u, cost) in &dead {
-        if left <= 0 {
+    // PENDING_EPOCH_REVIVE_SPOT: the table's spend (`SoloController.reanimation_plan`), fixed BEFORE placing: each casualty
+    // stands up at ONE wound, cheapest first, then the top-ups in the same order; an entry with no legal spot expires whole.
+    let mut plan: Vec<(usize, i64, i64)> = dead.iter().map(|&(u, cost)| (u, cost, 0)).collect();
+    if spot_rule {
+        plan.truncate(left.max(0) as usize);
+        left -= plan.len() as i64;
+        for e in plan.iter_mut() {
+            let top = (e.1 - 1).min(left);
+            e.2 = 1 + top;
+            left -= top;
+        }
+    }
+    for &(u, cost, planned) in &plan {
+        if !spot_rule && left <= 0 {
             break;
         }
         // PENDING_EPOCH_REVIVE_SPOT: the returning model keeps its unit's own base (metres; 0 = not set).
@@ -1382,13 +1394,13 @@ pub(crate) fn tray_reanimation(
             shot.log.push("Reanimation: 1 success but no placeable spot — coherency missing".into());
             continue;
         };
-        let back = cost.min(left).max(1);
+        let back = if spot_rule { planned } else { cost.min(left).max(1) };
         next.wounds[u].insert(0, back);
         next.positions[u].insert(0, spot);
         Rc::make_mut(&mut next.radii)[u].insert(0, r);
         next.kits_drop(u); // the revived body's kit is unknown: this unit falls back to slot order
         next.alive[u] = next.positions[u].len() as i64;
-        left -= back;
+        left -= if spot_rule { 0 } else { back };
         shot.log.push(format!("Reanimation: 1 model restored ({back} wound(s) back)"));
     }
 }
