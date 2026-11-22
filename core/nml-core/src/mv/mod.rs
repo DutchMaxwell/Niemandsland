@@ -24,6 +24,7 @@ pub mod form;
 pub mod gate;
 pub mod geom2;
 pub mod io;
+pub mod legal;
 pub mod plan;
 pub mod plain_memo;
 pub mod pull;

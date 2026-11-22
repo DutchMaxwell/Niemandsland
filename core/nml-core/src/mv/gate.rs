@@ -453,7 +453,7 @@ fn overspread(cfg: &[Disc], max_chain: f64) -> bool {
 /// component, in the table's own BFS discovery order (LIFO queue, ascending
 /// neighbour scan). The order is load-bearing: pass 4's nearest-neighbour
 /// search keeps the FIRST winner on a tie, so it reads this order.
-fn largest_component(cfg: &[Disc]) -> Vec<usize> {
+pub(crate) fn largest_component(cfg: &[Disc]) -> Vec<usize> {
     let n = cfg.len();
     let (mut best, mut seen) = (Vec::new(), vec![false; n]);
     for start in 0..n {
@@ -481,7 +481,7 @@ fn largest_component(cfg: &[Disc]) -> Vec<usize> {
 /// `_config_coherent_world` :6832 — ONE 1"-link component holding every model,
 /// spread within `max_chain`. Same graph as the component walk above, so it is
 /// asked of that walk rather than of a second BFS.
-fn config_coherent(cfg: &[Disc], max_chain: f64) -> bool {
+pub(crate) fn config_coherent(cfg: &[Disc], max_chain: f64) -> bool {
     cfg.len() <= 1 || (largest_component(cfg).len() == cfg.len() && !overspread(cfg, max_chain))
 }
 
