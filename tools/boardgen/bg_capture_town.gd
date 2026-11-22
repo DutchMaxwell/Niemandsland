@@ -831,7 +831,7 @@ func _open(layout: Dictionary, p: Vector2) -> bool:
 	if cx < 0 or cz < 0 or cx >= int(layout["nx"]) or cz >= int(layout["nz"]):
 		return false
 	var cd: Dictionary = layout["cells"][cz * int(layout["nx"]) + cx]
-	return cd["level"] == 0 and cd["lot_kind"] != "Hazard"
+	return cd["level"] == 0 and not ["Hazard", "Roofed", "Tower"].has(cd["lot_kind"])   # (roofs lane 22.11.: a house or a tall tower is level 0 but solid - no lens, no model there)
 
 
 func _split_armies() -> void:
