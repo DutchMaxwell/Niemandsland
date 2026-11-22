@@ -10525,8 +10525,8 @@ static func casualty_order(unit: GameUnit) -> Array:
 ## (arena seed 2 replay: it switched the rule off and four casualties stranded the survivors). `max_picks` = how many leading picks
 ## the caller can use (the wounds to land; 1 for a Deadly pick), the tail keeps the value order.
 ## Measured 26.09.: 5 of 8 coherency violations after an AI move were casualty removal tearing the chain.
-## No Rust twin to keep in step: the core removes in ARRAY order (sim.rs land_wounds; battle_sim.gd:1558 "casualty_order
-## parity is a later step").
+## Rust twin: `casualty::chain_casualty_order` (casualty.rs), pinned to this one by the shared fixture's `chains`
+## (core/nml-core/tests/fixtures/casualty_order.json).
 static func chain_casualty_order(unit: GameUnit, max_picks: int = -1) -> Array:
 	var order: Array = casualty_order(unit)
 	if order.size() <= 2:
