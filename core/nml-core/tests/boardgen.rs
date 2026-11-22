@@ -755,6 +755,7 @@ fn two_thirds_of_the_town_houses_are_intact_solid_roofs_and_the_rest_ruined_walk
             let cells: Vec<_> = (0..lot.h).flat_map(|dz| (0..lot.w).map(move |dx| lref.cell(lot.x + dx, lot.z + dz))).collect();
             match lot.kind {
                 LotKind::Roofed => { intact += 1; assert!(cells.iter().all(|c| c.level == 0 && !c.street), "seed {seed}: a raised or street roofed cell"); }
+                LotKind::Block if cells.iter().any(|c| c.lot_kind == LotKind::Roofed) => {}   // halfroofs H2: a half-roofed ruin is its own kind (its own test), neither intact nor a plot-stage ruin
                 LotKind::Block | LotKind::Terrace | LotKind::Deck => ruined += 1,
                 _ => {}
             }
@@ -962,6 +963,7 @@ fn g2_gate() {
 fn a_town_has_infill_houses_only_between_the_bands_with_a_street_at_the_door() {
     use nml_core::boardgen::{connect, graph, levels, LotKind};
     let (b, mut infill) = (Theme::RuinTown.budgets(), 0);
+    let b = nml_core::boardgen::Budgets { ruin_pairs: 0, ..b };   // (halfroofs H2: the ruin stage runs after the infill and has its own test)
     let b0 = nml_core::boardgen::Budgets { infill_pairs: 0, ..b };
     for seed in 1..=300 {
         let g = graph::build(seed * 7919, Symmetry::Point180, &b);
@@ -1059,6 +1061,49 @@ fn a_filler_slab_keeps_at_least_half_its_3_in_floor_under_a_half_roof() {
     assert!(seen > 300, "the half-roof stage proved nothing: {seen} cells");
 }
 
+/// Halfroofs plan H2: a ruined house (a lot of kind Block holding Roofed cells) keeps one half under its roof (level 0, solid) and the other half a 3 in floor
+/// with a ladder; a street at its door, a half-turn twin, a row of at most 4 houses. The Deepworks has none.
+#[test]
+fn a_ruined_house_keeps_one_half_roofed_and_one_half_to_stand_on() {
+    use nml_core::boardgen::LotKind;
+    let mut seen = 0;
+    for seed in 1..=300 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        let p = nml_core::boardgen::plain::to_plain(&l);
+        let feet: HashSet<usize> = l.connectors.iter().flat_map(|c| [usize::from(c.low), usize::from(c.high)]).collect();
+        for lot in l.lots.iter().filter(|lot| lot.kind == LotKind::Block && l.cells.iter().any(|c| c.lot_id == lot.id && c.lot_kind == LotKind::Roofed)) {
+            seen += 1;
+            let cells: Vec<usize> = (0..GRID * GRID).filter(|&i| l.cells[i].lot_id == lot.id).collect();
+            let (roof, floor): (Vec<usize>, Vec<usize>) = cells.iter().partition(|&&i| l.cells[i].lot_kind == LotKind::Roofed);
+            assert_eq!(roof.len() + floor.len(), lot.w * lot.h, "seed {seed}: ruin {} lost a cell", lot.id);
+            assert!(roof.len() == floor.len(), "seed {seed}: ruin {} is not half roofed\n{}", lot.id, l.to_ascii());
+            assert!(roof.iter().all(|&i| l.cells[i].level == 0 && p.solid_cells.contains(&(i as u16)) && !feet.contains(&i)), "seed {seed}: ruin {} roof is raised, open or laddered", lot.id);
+            assert!(floor.iter().all(|&i| l.cells[i].level == 1 && l.cells[i].lot_kind == LotKind::Block), "seed {seed}: ruin {} floor is not 3 in", lot.id);
+            let (mut island, mut stack) = (floor.clone(), floor.clone());   // the 3 in floor and every walkable 3 in cell it joins: one of them carries the ladder
+            while let Some(i) = stack.pop() { for j in nbrs(i) { if l.cells[j].level == 1 && !p.solid_cells.contains(&(j as u16)) && !island.contains(&j) { island.push(j); stack.push(j); } } }
+            assert!(island.iter().any(|i| feet.contains(i)), "seed {seed}: ruin {} has no ladder\n{}", lot.id, l.to_ascii());
+            assert!(cells.iter().any(|&i| nbrs(i).iter().any(|&j| l.cells[j].street)), "seed {seed}: ruin {} has no street at its door", lot.id);
+            assert!(cells.iter().all(|&i| { let t = &l.cells[GRID * GRID - 1 - i]; t.lot_kind == l.cells[i].lot_kind && t.level == l.cells[i].level }), "seed {seed}: ruin {} has no half-turn twin", lot.id);
+        }
+        assert!(!generate(seed, Symmetry::Point180).cells.iter().any(|c| c.lot_kind == LotKind::Roofed), "seed {seed}: a Deepworks roof");
+    }
+    eprintln!("ruined houses with a half roof over 300 town boards: {seen}");
+    assert!(seen > 300, "the ruin stage proved nothing: {seen} ruins");
+}
+
+/// Halfroofs plan H2: the ruins stand in the deployment bands, so every band of every board keeps at least 24 open ground cells (1000 seeds).
+#[test]
+fn every_band_keeps_24_open_cells() {
+    let mut low = usize::MAX;
+    for seed in 1..=1000 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        let sol = solid(&l);
+        for b in 1..=2 { low = low.min((0..GRID * GRID).filter(|&i| l.cells[i].deploy == b && l.cells[i].level == 0 && !sol[i]).count()); }
+    }
+    eprintln!("open ground cells in the thinnest band over 1000 town boards: {low}");
+    assert!(low >= 24, "a band keeps only {low} open cells");
+}
+
 /// Roofs plan K4: every town board has at least four intact (roofed) houses - a skyline on every board, not only on the average one.
 #[test]
 fn every_town_has_at_least_four_intact_houses() {
@@ -1107,16 +1152,16 @@ fn a_town_grows_few_filler_slabs() {
 }
 
 /// BASELINE of PLAN_RUINTOWN_ROOFS step K0: origin/main 6a2972697, town theme, Point180, seeds 1..=1000 (means per board, sq in, percent).
-/// Re-pinned by K2 (raised minimum 23 -> 15 %), K3 (infill houses), K4 (at least 4 houses) and towers T2 (a tall tower pair, read at 12 in), 1000 seeds. The roofs steps K2+ move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
+/// Re-pinned by K2 (raised minimum 23 -> 15 %), K3 (infill houses), K4 (at least 4 houses) and towers T2 (a tall tower pair, read at 12 in), halfroofs H1 (half roofs on filler slabs) and H2 (half-roofed ruins), 1000 seeds. The roofs steps K2+ move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
 const ROOFS_BASELINE: [(&str, f64); 25] = [
-    ("intact houses", 8.21), ("boards with <= 2 houses %", 0.0), ("roofed cells", 22.63), ("raised cells in house plots", 13.18), ("raised cells on free earth", 19.13), ("raised cells in the city wall", 34.09),
-    ("roof share of footprints %", 41.19), ("walkable sq in 0 in", 1376.8), ("walkable sq in 3 in", 322.16), ("walkable sq in 6 in", 205.72), ("walkable sq in 9 in", 69.73), ("ladders", 46.1),
-    ("opening rays blocked %", 98.69), ("mid rays blocked %", 83.06), ("tier-to-tier rays blocked, eaves 2.5 in (old model) %", 52.48), ("tier-to-tier rays blocked, ridge 4.5 in %", 58.95),
-    ("roofed cells in the bands", 11.46), ("raised cells in the bands", 27.88), ("asymmetric cells", 0.0),
+    ("intact houses", 8.07), ("boards with <= 2 houses %", 0.0), ("roofed cells", 27.99), ("raised cells in house plots", 18.95), ("raised cells on free earth", 19.24), ("raised cells in the city wall", 34.42),
+    ("roof share of footprints %", 42.29), ("walkable sq in 0 in", 1272.8), ("walkable sq in 3 in", 376.97), ("walkable sq in 6 in", 206.64), ("walkable sq in 9 in", 69.89), ("ladders", 48.57),
+    ("opening rays blocked %", 98.39), ("mid rays blocked %", 82.22), ("tier-to-tier rays blocked, eaves 2.5 in (old model) %", 52.15), ("tier-to-tier rays blocked, ridge 4.5 in %", 61.52),
+    ("roofed cells in the bands", 16.77), ("raised cells in the bands", 33.64), ("asymmetric cells", 0.0),
     // halfroofs plan H0 (inventory rows): solid cells outside an intact-house lot, the 3 in filler slabs, the open ground of the thinnest band, lone 3 in perches,
     // and the POCKETS shape of the gate lane (an open ground cell with a tier or a solid on two opposite sides / on three or four sides)
-    ("half-roof cells", 3.28), ("raised cells on free earth, 3 in", 10.51), ("open ground per band, min over boards", 30.0), ("single-cell 3 in perches", 2.66),
-    ("pocket cells, tall on two opposite sides", 10.74), ("pocket cells, tall on three or four sides", 6.85),
+    ("half-roof cells", 8.95), ("raised cells on free earth, 3 in", 10.54), ("open ground per band, min over boards", 25.0), ("single-cell 3 in perches", 2.59),
+    ("pocket cells, tall on two opposite sides", 13.29), ("pocket cells, tall on three or four sides", 7.63),
 ];
 
 /// Roofs census over `NML_N` town seeds (default 1000, the baseline's size; the baseline is asserted only at 1000, within +-0.5 on every number). `NML_ROOFS_OUT=<file>` also writes the report.
@@ -1253,7 +1298,7 @@ fn most_town_houses_have_a_garden_plot_behind_them() {
     use nml_core::boardgen::LotKind::{Block, Deck, Rough, Roofed, Terrace};
     let (mut fronted, mut with_plot, n) = (0, 0, 300);
     let b = Theme::RuinTown.budgets();
-    let b0 = nml_core::boardgen::Budgets { infill_pairs: 0, ..b };
+    let b0 = nml_core::boardgen::Budgets { infill_pairs: 0, ruin_pairs: 0, ..b };   // (halfroofs H2: the ruin stage runs after the infill, off with it)
     for seed in 1..=n {
         // the houses of the plot stage only (roofs plan K3): the infill houses stand on bare earth by design, so the lots a run without infill has are counted, on the full board
         let g = nml_core::boardgen::graph::build(seed * 7919, Symmetry::Point180, &b);

@@ -87,6 +87,8 @@ pub struct Budgets {
     pub tall_towers: (usize, usize),
     /// Halfroofs plan H1 (D-H1): every filler slab on free earth keeps half its 3 in floor and loses the other half under a half roof (solid, like a house).
     pub half_roofs: bool,
+    /// Halfroofs plan H2 (D-H1): half-turn pairs of ruined houses with one half roofed, on free earth, the deployment bands included.
+    pub ruin_pairs: usize,
 }
 
 impl Theme {
@@ -96,12 +98,12 @@ impl Theme {
             Self::Deepworks => Budgets { raised: RAISED_PERMILLE, high: HIGH_PERMILLE, lift: HIGH_PERMILLE, tower_pairs: TOWER_PAIRS, landmark_pieces: LANDMARK_PIECES,
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
                 lot_pairs: 9, lot_shapes: &[(3, 2), (2, 3), (2, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[], garden_area: 0, garden_min: 0, plaza: (0, 0), wall: false,
-                landmark_kinds: &[LandmarkKind::TankCluster, LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (1, 2), centre_piece: false, small_pools: false, intact_percent: 0, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1, tower_slender: false, rows: false, roof_run_max: 0, infill_pairs: 0, intact_min: 0, tall_towers: (0, 0), half_roofs: false },
+                landmark_kinds: &[LandmarkKind::TankCluster, LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (1, 2), centre_piece: false, small_pools: false, intact_percent: 0, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1, tower_slender: false, rows: false, roof_run_max: 0, infill_pairs: 0, intact_min: 0, tall_towers: (0, 0), half_roofs: false, ruin_pairs: 0 },
             // Town values: one tower pair, more terraces; the raised minimum is 15 % (roofs plan K2: fewer filler slabs grown on free earth).
             Self::RuinTown => Budgets { raised: (150, 460), high: (60, 200), lift: (30, 70), tower_pairs: (1, 1), landmark_pieces: (7, 7),
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
                 lot_pairs: 18, lot_shapes: &[(2, 2), (2, 2), (3, 2), (2, 3), (2, 1), (1, 2), (2, 1), (1, 2), (1, 1)], lot_fill: &[(2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], lot_first: &[(2, 2)], garden_area: 1, garden_min: 4, plaza: (4, 6), wall: true,
-                landmark_kinds: &[LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (3, 3), centre_piece: true, small_pools: true, intact_percent: 65, lane_free: true, max_attempts: 64, tower_side: 2, tower_slender: true, rows: true, roof_run_max: 2, infill_pairs: 4, intact_min: 4, tall_towers: (2, 2), half_roofs: true },
+                landmark_kinds: &[LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (3, 3), centre_piece: true, small_pools: true, intact_percent: 65, lane_free: true, max_attempts: 64, tower_side: 2, tower_slender: true, rows: true, roof_run_max: 2, infill_pairs: 4, intact_min: 4, tall_towers: (2, 2), half_roofs: true, ruin_pairs: 4 },
         }
     }
     fn salt(self) -> i64 { if self.is_default() { 0 } else { TOWN_SALT } }
