@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## The honesty rules of the dressing (PLAN_RUINTOWN_DRESSING step 5): the grid helpers (5a) and, from 5b, R1 / R2 / R4 on placements: a hand-made CLEAN set (house panels, tier faces, parapets, ladders, litter, a lamp post,
-## junk on terrain) on real town boards reports nothing; each planted break is reported. The numbers of the modules are the nominal K0 manifest numbers (inches); R3 and R5 follow in step 5c.
+## junk on terrain) on real town boards reports nothing; each planted break is reported. The numbers of the modules are the nominal K0 manifest numbers (inches); R3 and R5 joined in step 5c.
 
 const SEEDS := [41, 25, 3]
 const R := preload("res://scripts/boardgen_dress_rules.gd")
@@ -232,7 +232,7 @@ func test_a_panel_0_3_in_outside_its_cell_is_reported() -> void:
 	var cv: Vector3i = e[0]
 	var bad := _p("dr_ruin_face_foot_a", _face(layout, cv.x, cv.y, e[1], e[2], -0.3), "tiers")
 	var alone := R.violations(layout, [bad], _meta())
-	assert_array(_rules(alone)).contains_exactly(["R1"])   # it stands in the walkable cell (R3, the face outside the collider, joins in step 5c)
+	assert_array(_rules(alone)).contains_exactly_in_any_order(["R1", "R3"])   # it stands in the walkable cell, and the face is outside the collider
 	var board: Array = _clean(layout)
 	board.append(bad)
 	assert_int(R.violations(layout, board, _meta()).size()).is_equal(alone.size())   # and a full board shows exactly that
@@ -297,3 +297,32 @@ func test_a_ruin_gable_over_0_3_in_thick_is_reported_and_an_unknown_module_too()
 	assert_array(_rules(R.violations(layout, [_p("dr_ruin_gable_s3", thick, "tiers")], _meta()))).contains_exactly(["R4"])
 	assert_array(_rules(R.violations(layout, [_p("dr_nope", xf)], _meta()))).contains_exactly(["R0"])
 
+
+func test_a_piece_in_a_ladders_top_strip_is_reported() -> void:
+	var layout := _layout(41)
+	var c: Dictionary = layout["connectors"][0]
+	var hc := [int(c["high_xz"][0]), int(c["high_xz"][1])]
+	var away := Vector2i(int(c["low_xz"][0]) - hc[0], int(c["low_xz"][1]) - hc[1])
+	var k := R.DIRS.find(away)
+	var top := R.top_in(layout, hc[0], hc[1])
+	var stub := _p("dr_parapet_stub_a", _face(layout, hc[0], hc[1], k, top, 0.0), "tiers")   # a good parapet - but on the ladder's top edge
+	assert_array(_rules(R.violations(layout, [stub], _meta()))).contains_exactly(["R5"])
+	var plain := _p("dr_ruin_face_plain_a", _face(layout, hc[0], hc[1], k, top - 3.0, 0.12), "tiers")   # a plain face on the ladder's face is fine
+	assert_array(R.violations(layout, [plain], _meta())).is_empty()
+	var window := _p("dr_ruin_face_window", _face(layout, hc[0], hc[1], k, top - 3.0, 0.12), "tiers")   # a window is not
+	assert_array(_rules(R.violations(layout, [window], _meta()))).contains_exactly(["R5"])
+
+
+func test_a_face_set_too_deep_in_or_leaned_too_far_breaks_r3() -> void:
+	var layout := _layout(41)
+	var e := _house_edge(layout)
+	assert_array(e).is_not_empty()   # the board has a house with open ground beside it
+	if e.is_empty():
+		return
+	var cv: Vector3i = e[0]
+	var deep := _p("dr_house_tb_plain_a", _face(layout, cv.x, cv.y, e[1], 0.0, 0.3), "houses")   # a 0.3 in gap between the drawn face and the collider
+	assert_array(_rules(R.violations(layout, [deep], _meta()))).contains_exactly(["R3"])
+	var ok := _p("dr_house_tb_plain_a", _face(layout, cv.x, cv.y, e[1], 0.0, 0.2, 1.4), "houses")   # the widest inset and the widest lean
+	assert_array(R.violations(layout, [ok], _meta())).is_empty()
+	var leaning := _p("dr_house_tb_plain_a", _face(layout, cv.x, cv.y, e[1], 0.0, 0.2, 2.0), "houses")
+	assert_bool(_rules(R.violations(layout, [leaning], _meta())).has("R3")).is_true()
