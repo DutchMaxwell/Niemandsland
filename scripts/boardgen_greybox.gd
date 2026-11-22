@@ -594,3 +594,5 @@ func _make_material(layout: Dictionary, theme: Dictionary) -> ShaderMaterial:
 	mat.set_shader_parameter("cells", ImageTexture.create_from_image(Image.create_from_data(layout["nx"], layout["nz"], false, Image.FORMAT_RGBA8, bytes)))
 	mat.set_shader_parameter("board_cells", Vector2(layout["nx"], layout["nz"]))
 	return mat
+
+func ci3270_broken(:
