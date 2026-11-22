@@ -83,8 +83,8 @@ const float GROUND_EARTH = 0.55;   // was 0.32
 const float DECK_KEEP_HUE = 0.15;   // (townC4) how much of the boards' own warm hue survives the weather
 const float DECK_LIFT = 1.12;
 const float DECK_MOSS = 0.0;   // (townC4) the shade-side moss on a deck and on a stone top: on grey boards and flags it read as a green carpet from above (top camera green band 3-6 %)
-const float TOP_LIFT = 1.35;   // (townC4) the cleaned flag tops a step paler, as C's grey stone
-const float BAND_COVER = 0.12;
+const float TOP_LIFT = 1.15;   // (townC4) the cleaned flag tops a step paler, as C's grey stone
+const float BAND_COVER = 0.06;
 const float TOP_MOSS = 0.3;   // (lead 22.11.: C keeps moss in the seams and on the north side only - the green lives on the earth)
 const float COVER_CUT = 0.58;   // the fbm level above which the earth is overgrown (~25 % of the earth; plan TARGET C, E2)
 varying vec3 wpos;
