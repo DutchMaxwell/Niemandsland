@@ -398,3 +398,178 @@ use super::*;
         assert_eq!(next.alive[0], 2, "{:?}", shot.log);
         assert!(refused(&shot), "{:?}", shot.log);
     }
+
+    // ------------- Step 3: the spend order (lead ruling (a) = the table's order, as a convention) -----------------------
+
+    /// A seed whose Reanimation roll at target 5 shows exactly `hits` successes (the roll is the same at 95 and 96).
+    fn seed_with(st: &State, statics: &[UnitStatic], t: &crate::terrain::Terrain, heroes: bool, dice: usize, hits: usize) -> i64 {
+        (0..500).find(|&s| rean_run(st, statics, t, 95, s, heroes).1.log.iter()
+            .any(|l| l.contains(&format!("rolls {dice} dice")) && l.contains(&format!("— {hits} success(es)"))))
+            .expect("a seed with the wanted hit count")
+    }
+
+    /// Two dead Tough(3) and 2 successes: at 96 both stand up at one wound (95: one model at 2 wounds, the pin); with 4
+    /// successes the first is topped up to 3 and the second stays at 1 - casualties first, top-ups after, in that order.
+    #[test]
+    fn casualties_stand_up_at_one_wound_before_any_top_up() {
+        let (st, mut statics) = rean_line(4, 3, &L3[..2]);
+        statics[0].reanimation = Some(crate::unit::ReanimationSpec { target: 5 });
+        let t = town_board(vec![]);
+        let two = seed_with(&st, &statics, &t, false, 6, 2);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, two, false);
+        assert_eq!((next.alive[0], next.wounds[0].clone()), (4, vec![1, 1, 3, 3]), "{:?}", shot.log);
+        let (old, _) = rean_run(&st, &statics, &t, 95, two, false);
+        assert_eq!((old.alive[0], old.wounds[0].clone()), (3, vec![2, 3, 3]), "95 pin");
+        let four = seed_with(&st, &statics, &t, false, 6, 4);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, four, false);
+        assert_eq!((next.alive[0], next.wounds[0].clone()), (4, vec![1, 3, 3, 3]), "{:?}", shot.log);
+    }
+
+    /// An entry with no legal spot EXPIRES: the host's casualty (a 100 mm base) fits nowhere in a 6 in square walled by
+    /// houses, the joined hero's (32 mm) does. 2 successes on 4 dice: the plan gives one to each casualty; the host's is
+    /// lost, so the hero stands up at ONE wound, not two.
+    #[test]
+    fn an_unplaceable_casualty_s_success_is_lost() {
+        let (mut st, mut statics) = rean_line(3, 1, &[[2.25, 3.0], [3.75, 3.0]]);
+        let mut hero = st.profiles.list[1].clone();
+        hero.unit_id = "ah".into();
+        hero.wounds_max = vec![3];
+        st.profiles = Rc::new(Profiles { list: vec![st.profiles.list[0].clone(), st.profiles.list[1].clone(), hero], index: HashMap::new() });
+        st.roster = Rc::new(Roster { keys: st.roster.keys.clone(), index: st.roster.index.clone(), profile: vec![0, 2, 1, 1] });
+        st.attached = Rc::new(vec![vec![1], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, Some(0), None, None]);
+        st.positions[1] = vec![];
+        st.wounds[1] = vec![];
+        st.alive[1] = 0;
+        Rc::make_mut(&mut st.radii)[1] = vec![];
+        statics[0].base_radius = 0.05; // the returning host model's base; the two standing ones are 32 mm
+        statics[0].reanimation = Some(crate::unit::ReanimationSpec { target: 5 });
+        statics.push(UnitStatic { name: "hero".into(), base_radius: 0.016, reanimation: Some(crate::unit::ReanimationSpec { target: 5 }), ..Default::default() });
+        let mut walls = Vec::new();
+        for x in 11..=14u16 {
+            for z in 7..=10u16 {
+                if !((12..=13).contains(&x) && (8..=9).contains(&z)) {
+                    walls.push(z * 24 + x);
+                }
+            }
+        }
+        let t = town_board(walls);
+        let s = seed_with(&st, &statics, &t, true, 4, 2);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, s, true);
+        assert_eq!(next.alive[0], 2, "the host's casualty has no spot: {:?}", shot.log);
+        assert!(refused(&shot), "{:?}", shot.log);
+        assert_eq!((next.alive[1], next.wounds[1].clone()), (1, vec![1]), "the host's success is gone: {:?}", shot.log);
+    }
+
+    // ------------- Step 4: inert below 96 -----------------------------------------------------------------------------
+
+    /// Below 96 nothing moves: at epochs 7 (the rule's port), 73 and 95 the container board gives the old single
+    /// away-from-centre spot, the default radius and the same log at every epoch; a Tough(3) pair keeps the old spend.
+    #[test]
+    fn revive_spot_is_inert_below_96() {
+        let (st, statics) = rean_line(4, 1, &L3);
+        let t = container_board(true);
+        let old_spot = [2.0 * IN2M + 0.034, 0.0, 4.5 * IN2M];
+        let (base, base_log) = rean_run(&st, &statics, &t, 95, 1, false);
+        let p = base.positions[0][0];
+        assert!((0..3).all(|i| (p[i] - old_spot[i]).abs() < 1e-6) && base.radii[0][0] == DEFAULT_BASE_RADIUS_M, "{p:?}");
+        for e in [crate::acts::EPOCH_7_TABLE_RULES, crate::acts::EPOCH_73_V36] {
+            let (next, shot) = rean_run(&st, &statics, &t, e, 1, false);
+            assert_eq!((&next.positions, &next.radii, &next.wounds), (&base.positions, &base.radii, &base.wounds), "epoch {e}");
+            assert_eq!(shot.log, base_log.log, "epoch {e}");
+        }
+        let (st, mut statics) = rean_line(4, 3, &L3[..2]);
+        statics[0].reanimation = Some(crate::unit::ReanimationSpec { target: 1 });
+        for e in [crate::acts::EPOCH_7_TABLE_RULES, crate::acts::EPOCH_73_V36, 95] {
+            assert_eq!(rean_run(&st, &statics, &t, e, 1, false).0.wounds[0], vec![3, 3, 3, 3], "epoch {e}: 6 successes fill both");
+        }
+    }
+
+    // ------------- REVIVE-MEMBERS (lead ruling 22.11.): every model of the unit, a joined hero included, carries the rule --
+
+    /// L3 host (one dead) with a joined hero standing at (-3, 4.5) in: Tough(3) at `hero_wounds`, carrying Reanimation or not.
+    fn hero_chain(hero_rule: bool, hero_wounds: i64) -> (State, Vec<UnitStatic>) {
+        let (mut st, mut statics) = rean_line(4, 1, &L3);
+        let mut hero = st.profiles.list[1].clone();
+        hero.unit_id = "ah".into();
+        hero.wounds_max = vec![3];
+        st.profiles = Rc::new(Profiles { list: vec![st.profiles.list[0].clone(), st.profiles.list[1].clone(), hero], index: HashMap::new() });
+        st.roster = Rc::new(Roster { keys: st.roster.keys.clone(), index: st.roster.index.clone(), profile: vec![0, 2, 1, 1] });
+        st.attached = Rc::new(vec![vec![1], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, Some(0), None, None]);
+        st.positions[1] = vec![[-3.0 * IN2M, 0.0, 4.5 * IN2M]];
+        st.wounds[1] = vec![hero_wounds];
+        statics.push(UnitStatic { name: "hero".into(), reanimation: hero_rule.then_some(crate::unit::ReanimationSpec { target: 1 }), ..Default::default() });
+        (st, statics)
+    }
+
+    /// A standing joined hero WITHOUT the rule: not every model of the unit has it, so the chain does not roll at 96 and says why (at
+    /// 95 the host rolled and restored its casualty, the pin).
+    #[test]
+    fn a_joined_hero_without_the_rule_stops_the_roll() {
+        let (st, statics) = hero_chain(false, 3);
+        let t = town_board(vec![]);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, 1, true);
+        assert!(shot.rolls.is_empty(), "{:?}", shot.log);
+        assert_eq!(shot.log, vec!["Reanimation: Rean does not reanimate — a joined model lacks the rule".to_string()], "rules-must-log");
+        assert_eq!(next.alive[0], 3);
+        let (old, _) = rean_run(&st, &statics, &t, 95, 1, true);
+        assert_eq!(old.alive[0], 4, "95 pin: the host rolled");
+        let mut full = st.clone();
+        full.positions[0].push([3.0 * IN2M, 0.0, 6.0 * IN2M]);
+        full.wounds[0].push(1);
+        Rc::make_mut(&mut full.radii)[0].push(0.016);
+        assert!(rean_run(&full, &statics, &t, E96, 1, true).1.log.is_empty(), "nothing to restore: no line");
+    }
+
+    /// A joined hero WITH the rule: the chain rolls, and the hero's missing wounds are in the pool (1 casualty + 2 wounds = 3
+    /// dice), healed first (living wounded before casualties), then the casualty stands up.
+    #[test]
+    fn a_joined_hero_with_the_rule_adds_its_wounds_to_the_pool() {
+        let (st, statics) = hero_chain(true, 1);
+        let (next, shot) = rean_run(&st, &statics, &town_board(vec![]), E96, 1, true);
+        assert!(shot.log.iter().any(|l| l.contains("rolls 3 dice")), "{:?}", shot.log);
+        assert_eq!((next.wounds[1].clone(), next.alive[0]), (vec![3], 4), "{:?}", shot.log);
+    }
+
+    /// Lead ruling "Aura bearer dead": the joined hero carried "Reanimation Aura" (the fold gave the host and him Reanimation) and has
+    /// fallen - no roll at 96, the line says why, and the dead bearer does not come back. At 95 the static stamp kept rolling and the
+    /// pool held his 3 wounds. Planted: the same bearer standing - the chain rolls.
+    #[test]
+    fn a_fallen_aura_bearer_ends_the_roll() {
+        let (mut st, statics) = hero_chain(true, 3);
+        let mut list = st.profiles.list.clone();
+        list[2].special_rules = vec!["Hero".into(), "Reanimation Aura".into(), "Reanimation".into()];
+        st.profiles = Rc::new(Profiles { list, index: HashMap::new() });
+        let standing = st.clone();
+        st.positions[1] = vec![];
+        st.wounds[1] = vec![];
+        st.alive[1] = 0;
+        Rc::make_mut(&mut st.radii)[1] = vec![];
+        let t = town_board(vec![]);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, 1, true);
+        assert!(shot.rolls.is_empty(), "{:?}", shot.log);
+        assert_eq!(shot.log, vec!["Reanimation: Rean does not reanimate — the Reanimation Aura bearer has fallen".to_string()]);
+        assert_eq!((next.alive[0], next.alive[1]), (3, 0));
+        let (_, old) = rean_run(&st, &statics, &t, 95, 1, true);
+        assert!(old.log.iter().any(|l| l.contains("rolls 4 dice")), "95 pin: host 1 + the dead bearer's 3: {:?}", old.log);
+        let (_, alive) = rean_run(&standing, &statics, &t, E96, 1, true);
+        assert!(alive.log.iter().any(|l| l.contains("rolls 1 dice")), "planted: {:?}", alive.log);
+    }
+
+    /// A fallen joined hero WITHOUT the rule is not in the pool at 96 (1 die: the host's casualty) and does not come back; at 95 his 3
+    /// wounds were rolled for too (4 dice).
+    #[test]
+    fn a_fallen_hero_without_the_rule_is_not_in_the_pool() {
+        let (mut st, statics) = hero_chain(false, 3);
+        st.positions[1] = vec![];
+        st.wounds[1] = vec![];
+        st.alive[1] = 0;
+        Rc::make_mut(&mut st.radii)[1] = vec![];
+        let t = town_board(vec![]);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, 1, true);
+        assert!(shot.log.iter().any(|l| l.contains("rolls 1 dice")), "{:?}", shot.log);
+        assert_eq!((next.alive[0], next.alive[1]), (4, 0), "{:?}", shot.log);
+        let (_, old) = rean_run(&st, &statics, &t, 95, 1, true);
+        assert!(old.log.iter().any(|l| l.contains("rolls 4 dice")), "95 pin: {:?}", old.log);
+    }

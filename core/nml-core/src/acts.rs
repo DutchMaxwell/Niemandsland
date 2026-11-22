@@ -1074,7 +1074,8 @@ pub const PENDING_EPOCH_BANE_MARK: u32 = 96;
 /// once-records. Core: `sim::cut_out_of_reach`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant.
 pub const PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY: u32 = 96;
 /// Placeholder gate for REVIVE SPOT (PLAN_REVIVE_SPOT.md, lane reviveSpot; GF / AoF 3.6 army books, Reanimation: a model may only be
-/// restored where it can be placed in coherency with the models that were not restored): a model brought back by Reanimation never
+/// restored where it can be placed in coherency with the models that were not restored; the rule needs every model of the unit, a joined
+/// hero included, to carry it): a chain with a standing joined model WITHOUT the rule does not roll, and a model brought back never
 /// stands off the table, where a base may not rest (impassable terrain, a wall or a cliff), over or against an intact house, or on any
 /// standing base (its own unit's included), and it keeps its unit's own base radius. No legal spot: it is not restored. Core:
 /// `sim::tray_reanimation`, `sim::revive_spot_legal`. Records stamped 95 or below replay byte-exact. Every call site reads THIS
