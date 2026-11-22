@@ -19,6 +19,7 @@ const ROOF_CLAY := Color(0.62, 0.72, 0.8)
 ## (train 3) the battlements were the palest thing in the wall view: every merlon and capstone a step darker and weathered, two in five mossy.
 const MERLON_WEATHERED := Color(0.62, 0.63, 0.6)
 const MERLON_MOSSY := Color(0.5, 0.6, 0.44)
+const ROOF_PLAIN_VALUE := 0.5   # (ROOF-WARM) a textureless kit roof's value against TINT x instance colour
 const ROOF_UV_TILE_IN := 3.0   # the roof modules' UVs count tiles of this size (kr1_town.py roof_uv)
 const CHIMNEY_TOP_IN := 3.6   # a chimney module's cap height above its foot (the foot sinks into the house)
 const MODULES := ["roof_gable_low", "roof_gable_steep", "roof_broken_a", "roof_broken_b", "roof_rafters", "chimney_pots", "chimney_broken",
@@ -246,7 +247,7 @@ func build(layout: Dictionary) -> void:
 			mat.uv1_triplanar = false
 			mat.uv1_scale = Vector3.ONE * ROOF_UV_TILE_IN / lib.tile_in("roof_tiles")
 			mat.normal_enabled = false   # the GLB has no tangents; the course lips are the relief
-			mat.albedo_texture = null   # (ROOF-WARM, lane townC4) the clay set's own hue fell into the warm class whatever the tint: the roofs take their tone from TINT x the instance colour (slate / dull clay), the course lips and the baked AO carry the relief
+			mat.albedo_texture = null   # (x ROOF_PLAIN_VALUE: without the dark clay texture the plain tone rendered as pale tin)  # (ROOF-WARM, lane townC4) the clay set's own hue fell into the warm class whatever the tint: the roofs take their tone from TINT x the instance colour (slate / dull clay), the course lips and the baked AO carry the relief
 		mmi.material_override = mat
 		for i in mmi.multimesh.instance_count:
-			mmi.multimesh.set_instance_color(i, (TEXTURED_TINT if mat != null and mat.albedo_texture != null else TINT)[set_of(m)] * MODULE_TINT.get(src, MODULE_TINT.get(m, Color.WHITE)) * (p[m][i]["colour"] as Color))   # (a fallback module keeps its own tint)   # (the item's own colour: white for most, dry for some weeds)
+			mmi.multimesh.set_instance_color(i, (TEXTURED_TINT if mat != null and mat.albedo_texture != null else TINT)[set_of(m)] * (ROOF_PLAIN_VALUE if mat != null and mat.albedo_texture == null else 1.0) * MODULE_TINT.get(src, MODULE_TINT.get(m, Color.WHITE)) * (p[m][i]["colour"] as Color))   # (a fallback module keeps its own tint)   # (the item's own colour: white for most, dry for some weeds)
