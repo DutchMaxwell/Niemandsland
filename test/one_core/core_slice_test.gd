@@ -299,10 +299,12 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	surprise.unit_properties["faction_folder"] = "alien_hives"
 	assert_array(CoreSlice.refusals(surprise)).is_equal(["unit_rule:Surprise Attack"])
 	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
-	# HR-POS: the after-volley step comes back through the delta (`positions`), so Hit & Run goes to the core again.
+	# HR-POS brought the after-volley step back through the delta (`positions`); lane shootfix refused the shooter again (group
+	# `hit_and_run_landing`: the core's rigid step lands bases inside other units, the door has no landing check). Shot at it is taken.
 	var raider := _unit(["Hit & Run"], [["AP(1)"]])
 	raider.unit_properties["faction_folder"] = "dao_union"   # a faction whose map gives Hit & Run its primitive
-	assert_array(CoreSlice.refusals(raider)).is_empty()
+	assert_array(CoreSlice.refusals(raider)).is_equal(["unit_rule:Hit & Run"])
+	assert_array(CoreSlice.refusals(raider, true)).is_empty()
 	# An Indirect weapon (lifted after #2939/#2942/#2947) and a joined hero are taken (the lone-hero target, epoch 81).
 	assert_bool(CoreSlice.takes(_unit([], [["Indirect"]]))).is_true()   # lifted with #2939 / #2942 / #2947
 	var host := _unit(["Tough(3)"], [["AP(1)"]])
@@ -670,6 +672,27 @@ func test_deny_mode_refuses_an_activation_start_bearer_as_shooter() -> void:
 	var jumper := _unit(["Bounding"], [["AP(1)"]])
 	jumper.unit_properties["faction_folder"] = "eternal_dynasty"
 	assert_array(CoreSlice.refusals(jumper)).override_failure_message("Bounding was measured equal and stays taken").is_empty()
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+
+
+## Lane shootfix (containment): the deny group `hit_and_run_landing` keeps every SHOOTER whose rule reaches the core's Hit & Run step after a
+## volley on the table at the shoot doors (the core's rigid step lands bases inside other units; core_hit_and_run_door_test.gd). Shot at, a
+## bearer is taken (it does not step in that volley). Hit & Run Fighter steps only after melee: taken as a shooter, refused as a charger by the
+## melee file's group. RED: drop the group -> the shooters read [].
+func test_deny_mode_refuses_a_hit_and_run_family_shooter() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	for c in [["Harassing", "dark_elf_raiders"], ["Enhanced Harassing", "dark_elf_raiders"], ["Guerrilla", "rebel_guerrillas"],
+			["Hit & Run", "custodian_brothers"], ["Hit & Run Shooter", "custodian_brothers"]]:
+		var bearer := _unit([c[0]], [["AP(1)"]])
+		bearer.unit_properties["faction_folder"] = c[1]
+		assert_array(CoreSlice.refusals(bearer)).override_failure_message("%s shooter" % c[0]).is_equal(["unit_rule:%s" % c[0]])
+		assert_array(CoreSlice.refusals(bearer, true)).override_failure_message("%s target" % c[0]).is_empty()
+	var fighter := _unit(["Hit & Run Fighter"], [["AP(1)"]])
+	fighter.unit_properties["faction_folder"] = "alien_hives"
+	assert_array(CoreSlice.refusals(fighter)).override_failure_message("a Fighter-only bearer does not step after a volley").is_empty()
+	assert_array(CoreSlice.melee_refusals(fighter, false, true)).override_failure_message("Hit & Run Fighter charger").is_equal(["unit_rule:Hit & Run Fighter"])
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.reset_cache()
 
