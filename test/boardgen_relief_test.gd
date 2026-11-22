@@ -61,6 +61,14 @@ func test_the_box_size_reaches_the_fragment_and_the_edges_foot_eaves_and_top_cou
 	assert_bool(src.contains("k != 15 && k != 17")).is_true()   # the roof prism and the lantern are no boxes
 
 
+## Texture plan step 4: a ladder rail or a wooden prop is no stone box - no pale chipped edge on a 0.12 in rail (it read as a stripe), and the
+## ladder is a mid weathered wood (lead: it must still read as climbable in dusk, not a black stick), not saturated orange.
+func test_wood_has_no_chipped_stone_edge_and_the_ladder_is_dark_weathered_wood() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	assert_bool(src.contains("k != 15 && k != 17 && k != 5 && k != 18 && (fa.x")).override_failure_message("ladder / wood still get the chipped stone edge").is_true()
+	var ladder: Color = BoardgenTheme.TOWN_PALETTE[BoardgenTheme.TOWN_KINDS.find("ladder")]
+	assert_bool(ladder.is_equal_approx(Color(0.40, 0.37, 0.34))).override_failure_message("the ladder is %s, not the mid weathered wood" % ladder).is_true()
+
 ## The earth's pebbles and tufts (lead, 21.11., after R3 macro): small, dark, irregular and sparse - never yellow coins.
 func test_the_earth_has_sparse_dark_irregular_pebbles_and_no_yellow_coins() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
