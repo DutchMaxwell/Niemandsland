@@ -25,7 +25,7 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
     let mut cells: Vec<Cell> = (0..nx * nz).map(|i| {
         let (x, z) = (i % nx, i / nx);
         let deploy = if z < DEPLOY_DEPTH_CELLS { 1 } else if z >= nz - DEPLOY_DEPTH_CELLS { 2 } else { 0 };
-        Cell { x, z, deploy, street: g.is_street[i], lot_id: 0, lot_kind: LotKind::Street, level: 0 }
+        Cell { x, z, deploy, street: g.is_street[i], lot_id: 0, lot_kind: if g.tower[i] { LotKind::Tower } else { LotKind::Street }, level: 0 }
     }).collect();
     let (mut hazards, pool) = (0, b.lot_pool);
     for p in 0..lots.len() / 2 {
@@ -53,7 +53,7 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
     let raised = |cs: &[Cell]| cs.iter().filter(|c| c.level >= 1).count();
     // Grow a terrace next to raised ground, or shave non-block cells, until the raised share fits.
     while raised(&cells) < min_r {
-        let grow = |i: usize, cs: &[Cell]| cs[i].level == 0 && !cs[i].street && !matches!(cs[i].lot_kind, LotKind::Hazard | LotKind::Rough | LotKind::Roofed) && neighbours(i).any(|j| cs[j].level >= 1);
+        let grow = |i: usize, cs: &[Cell]| cs[i].level == 0 && !cs[i].street && !matches!(cs[i].lot_kind, LotKind::Hazard | LotKind::Rough | LotKind::Roofed | LotKind::Tower) && neighbours(i).any(|j| cs[j].level >= 1);
         let Some((a, b)) = paired(&cells, sym, &mut rng, grow, |_| 0).into_iter().next() else { break };
         cells[a].level = 1; cells[b].level = 1;
     }
@@ -94,7 +94,7 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
 /// The rows leave bare interior: while a full row or column is open ground (level 0, no intact house), put a small intact house (2 x 1 / 1 x 2 / 2 x 2, a half-turn pair, solid, no
 /// ladders) on free ground, the one that cuts the most open lines first, a street at its door breaking ties. A house that would cut the walkable board in two is skipped.
 fn cut_lanes(lots: &mut Vec<Lot>, cells: &mut [Cell], rng: &mut GodotRng) {
-    let open = |cs: &[Cell], i: usize| cs[i].level == 0 && cs[i].lot_kind != LotKind::Roofed;
+    let open = |cs: &[Cell], i: usize| cs[i].level == 0 && !matches!(cs[i].lot_kind, LotKind::Roofed | LotKind::Tower);
     let free = |cs: &[Cell], i: usize| cs[i].level == 0 && !cs[i].street && cs[i].lot_id == 0 && cs[i].lot_kind == LotKind::Street;
     for _ in 0..8 {
         let rows: Vec<bool> = (0..GRID).map(|z| (0..GRID).all(|x| open(cells, z * GRID + x))).collect();
@@ -171,7 +171,7 @@ fn infill_houses(lots: &mut Vec<Lot>, cells: &mut [Cell], rng: &mut GodotRng, pa
 /// Per cell, the opening-turn sight lines (row 1 against row 14, every column pair, eyes 1.25 in over their floor) that nothing stops yet and that pass
 /// that level-0 cell lower than a house (2.5 in): a house there would stop them. Integer hundredths of an inch, 99 samples per line.
 fn open_rays_low(cells: &[Cell]) -> Vec<[u64; 4]> {
-    let top = |i: usize| { let f = i64::from(LEVEL_IN[usize::from(cells[i].level)]) * 100; if cells[i].lot_kind == LotKind::Roofed { f.max(250) } else { f } };
+    let top = |i: usize| { let f = i64::from(LEVEL_IN[usize::from(cells[i].level)]) * 100; match cells[i].lot_kind { LotKind::Roofed => f.max(250), LotKind::Tower => 1200, _ => f } };
     let mut low = vec![[0u64; 4]; cells.len()];
     for r in 0..GRID * GRID {
         let ((xa, za), (xb, zb)) = (((r / GRID) as i64 * 300 + 150, 450), ((r % GRID) as i64 * 300 + 150, 14 * 300 + 150));
@@ -179,7 +179,7 @@ fn open_rays_low(cells: &[Cell]) -> Vec<[u64; 4]> {
         let mut hit = Vec::new();
         let stopped = (1..100).any(|k| {
             let (i, y) = (((za + (zb - za) * k / 100) / 300) as usize * GRID + ((xa + (xb - xa) * k / 100) / 300) as usize, ya + (yb - ya) * k / 100);
-            if cells[i].level == 0 && cells[i].lot_kind != LotKind::Roofed && y < 250 { hit.push(i); }
+            if cells[i].level == 0 && !matches!(cells[i].lot_kind, LotKind::Roofed | LotKind::Tower) && y < 250 { hit.push(i); }
             top(i) > y
         });
         if !stopped { for i in hit { low[i][r / 64] |= 1 << (r % 64); } }

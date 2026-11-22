@@ -23,7 +23,7 @@ fn solid(l: &Layout) -> Vec<bool> {
     for lm in l.landmarks.iter().filter(|lm| matches!(lm.kind, LandmarkKind::TankCluster | LandmarkKind::Crane)) {
         for z in lm.z..lm.z + lm.h { for x in lm.x..lm.x + lm.w { s[z * GRID + x] = true; } }
     }
-    for c in l.cells.iter().filter(|c| c.lot_kind == nml_core::boardgen::LotKind::Roofed) { s[c.z * GRID + c.x] = true; }   // intact houses
+    for c in l.cells.iter().filter(|c| matches!(c.lot_kind, nml_core::boardgen::LotKind::Roofed | nml_core::boardgen::LotKind::Tower)) { s[c.z * GRID + c.x] = true; }   // intact houses, tall towers
     s
 }
 
@@ -271,7 +271,7 @@ fn blocked_share_roofs(l: &Layout, cap: u8, pairs: &[CellPair], solids: bool, ro
     let h = |x: f64, z: f64| {
         let (cx, cz) = ((x / 3.0) as usize, (z / 3.0) as usize);
         let floor = f64::from(nml_core::boardgen::LEVEL_IN[usize::from(l.cell(cx, cz).level.min(cap))]);
-        let top = if l.cell(cx, cz).lot_kind == nml_core::boardgen::LotKind::Roofed { roof_in } else { nml_core::terrain::CONTAINER_HEIGHT_IN };
+        let top = match l.cell(cx, cz).lot_kind { nml_core::boardgen::LotKind::Roofed => roof_in, nml_core::boardgen::LotKind::Tower => nml_core::boardgen::plain::TOWER_IN, _ => nml_core::terrain::CONTAINER_HEIGHT_IN };
         if solids && sol[cz * GRID + cx] { floor.max(top) } else { floor }
     };
     let blocked = pairs.iter().filter(|&&((x1, z1), (x2, z2))| {
@@ -983,6 +983,34 @@ fn a_town_has_infill_houses_only_between_the_bands_with_a_street_at_the_door() {
     assert!(infill >= 300 * 4, "the infill stage placed only {infill} houses on 300 boards");
 }
 
+/// Towers plan T2: one half-turn pair of tall towers in the outer columns between the bands (rows 4-11), level 0, solid, no ladder, no street, no wall. A board
+/// tries the 2 x 2 pair for its first `max_attempts` sub-seeds, then a 1 x 2 pair, then none (lead 22.11.); the sub-seed says which. The Deepworks has none.
+#[test]
+fn a_town_has_one_half_turn_pair_of_tall_towers_outside_the_bands_and_the_wall() {
+    use nml_core::boardgen::LotKind;
+    let (b, mut shares) = (Theme::RuinTown.budgets(), [0usize; 3]);
+    for seed in 1..=300 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        let step = usize::from(l.attempt / b.max_attempts);
+        let (w, h) = [b.tall_towers, (1, 2), (0, 0)][step];
+        shares[step] += 1;
+        let t: Vec<usize> = (0..GRID * GRID).filter(|&i| l.cells[i].lot_kind == LotKind::Tower).collect();
+        assert_eq!(t.len(), 2 * w * h, "seed {seed} (sub-seed {}): {} tower cells\n{}", l.attempt, t.len(), l.to_ascii());
+        if t.is_empty() { continue; }
+        let west: Vec<usize> = t.iter().copied().filter(|&i| i % GRID < GRID / 2).collect();
+        let z0 = west[0] / GRID;
+        assert_eq!(west, (z0..z0 + h).flat_map(|z| (0..w).map(move |x| z * GRID + x)).collect::<Vec<_>>(), "seed {seed}: the west tower is no {w} x {h} block at the west edge");
+        assert!(z0 >= 4 && z0 + h <= 12, "seed {seed}: the west tower leaves rows 4-11 (row {z0})");
+        assert!(t.iter().all(|&i| t.contains(&(GRID * GRID - 1 - i))), "seed {seed}: the towers are no half turn");
+        let feet: HashSet<usize> = l.connectors.iter().flat_map(|c| [usize::from(c.low), usize::from(c.high)]).collect();
+        let sol = solid(&l);
+        for &i in &t { let c = &l.cells[i]; assert!(c.deploy == 0 && c.level == 0 && !c.street && c.lot_id == 0 && !feet.contains(&i) && sol[i], "seed {seed}: tower cell {i} is in a band, raised, street, a lot or a ladder foot"); }
+        assert!(!generate(seed, Symmetry::Point180).cells.iter().any(|c| c.lot_kind == LotKind::Tower), "seed {seed}: a Deepworks tower");
+    }
+    eprintln!("tall towers over 300 town boards: 2 x 2 {}, 1 x 2 {}, none {}", shares[0], shares[1], shares[2]);
+    assert!(shares[0] >= 285, "only {} of 300 boards carry the 2 x 2 tower pair", shares[0]);
+}
+
 /// Roofs plan K4: every town board has at least four intact (roofed) houses - a skyline on every board, not only on the average one.
 #[test]
 fn every_town_has_at_least_four_intact_houses() {
@@ -1009,12 +1037,12 @@ fn a_town_grows_few_filler_slabs() {
 }
 
 /// BASELINE of PLAN_RUINTOWN_ROOFS step K0: origin/main 6a2972697, town theme, Point180, seeds 1..=1000 (means per board, sq in, percent).
-/// Re-pinned by K2 (raised minimum 23 -> 15 %), K3 (infill houses) and K4 (at least 4 houses), 1000 seeds. The roofs steps K2+ move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
+/// Re-pinned by K2 (raised minimum 23 -> 15 %), K3 (infill houses), K4 (at least 4 houses) and towers T2 (a tall tower pair, read at 12 in), 1000 seeds. The roofs steps K2+ move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
 const ROOFS_BASELINE: [(&str, f64); 19] = [
-    ("intact houses", 9.18), ("boards with <= 2 houses %", 0.0), ("roofed cells", 22.07), ("raised cells in house plots", 13.73), ("raised cells on free earth", 22.35), ("raised cells in the city wall", 34.19),
-    ("roof share of footprints %", 37.95), ("walkable sq in 0 in", 1418.94), ("walkable sq in 3 in", 357.39), ("walkable sq in 6 in", 207.29), ("walkable sq in 9 in", 67.77), ("ladders", 45.43),
-    ("opening rays blocked %", 95.36), ("mid rays blocked %", 78.78), ("tier-to-tier rays blocked, house 2.5 in %", 52.53), ("tier-to-tier rays blocked, ridge 4.5 in %", 57.21),
-    ("roofed cells in the bands", 9.62), ("raised cells in the bands", 29.43), ("asymmetric cells", 0.0),
+    ("intact houses", 8.27), ("boards with <= 2 houses %", 0.0), ("roofed cells", 19.37), ("raised cells in house plots", 13.07), ("raised cells on free earth", 22.64), ("raised cells in the city wall", 34.25),
+    ("roof share of footprints %", 35.17), ("walkable sq in 0 in", 1374.21), ("walkable sq in 3 in", 352.48), ("walkable sq in 6 in", 207.58), ("walkable sq in 9 in", 69.53), ("ladders", 44.27),
+    ("opening rays blocked %", 95.58), ("mid rays blocked %", 78.39), ("tier-to-tier rays blocked, house 2.5 in %", 53.4), ("tier-to-tier rays blocked, ridge 4.5 in %", 58.07),
+    ("roofed cells in the bands", 8.88), ("raised cells in the bands", 30.17), ("asymmetric cells", 0.0),
 ];
 
 /// Roofs census over `NML_N` town seeds (default 1000, the baseline's size; the baseline is asserted only at 1000, within +-0.5 on every number). `NML_ROOFS_OUT=<file>` also writes the report.
@@ -1024,10 +1052,12 @@ fn census_of_roofs() {
     use nml_core::boardgen::LotKind;
     let n: i64 = std::env::var("NML_N").ok().and_then(|v| v.parse().ok()).unwrap_or(1000);
     let (mut houses, mut roofed, mut raised, mut walk, mut ladders, mut band, mut asym) = (Vec::new(), 0, [0usize; 3], [0usize; 4], 0, [0usize; 2], 0);
-    let (mut rays, mut failed) = ([0.0f64; 4], 0);
+    let (mut rays, mut failed, mut towers, mut subs) = ([0.0f64; 4], 0, [0usize; 3], 0usize);
     for seed in 1..=n {
         let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
         failed += usize::from(!l.problems().is_empty());
+        towers[usize::from(l.attempt / Theme::RuinTown.budgets().max_attempts).min(2)] += 1;
+        subs += usize::from(l.attempt) + 1;
         houses.push(l.lots.iter().filter(|lot| lot.kind == LotKind::Roofed).count());
         let sol = solid(&l);
         for (i, c) in l.cells.iter().enumerate() {
@@ -1058,7 +1088,7 @@ fn census_of_roofs() {
         walk[0] as f64 * 9.0 / f, walk[1] as f64 * 9.0 / f, walk[2] as f64 * 9.0 / f, walk[3] as f64 * 9.0 / f, ladders as f64 / f,
         100.0 * rays[0] / f, 100.0 * rays[1] / f, 100.0 * rays[2] / f, 100.0 * rays[3] / f, band[0] as f64 / f, band[1] as f64 / f, asym as f64,
     ];
-    let mut out = format!("roofs census over {n} town seeds (Point180); houses min {} p10 {} median {} max {}; boards failing {failed}\n", houses[0], houses[houses.len() / 10], houses[houses.len() / 2], houses[houses.len() - 1]);
+    let mut out = format!("roofs census over {n} town seeds (Point180); houses min {} p10 {} median {} max {}; boards failing {failed}; tall towers 2 x 2 / 1 x 2 / none {towers:?}; mean sub-seed {:.2}\n", houses[0], houses[houses.len() / 10], houses[houses.len() / 2], houses[houses.len() - 1], subs as f64 / f);
     let mut off = Vec::new();
     for (&(name, base), g) in ROOFS_BASELINE.iter().zip(got) {
         out += &format!("{name}: {g:.2} (baseline {base})\n");
