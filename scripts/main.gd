@@ -866,7 +866,9 @@ func _ready() -> void:
 	# game. Wired here: wiring it only when a Solo AI controller is built left human/MP/tutorial games blind to them.
 	terrain_overlay.sandbox_shapes_provider = _sandbox_terrain_shapes
 	# Dev view (debug build, NML_BOARDGEN_SEED=<seed>): the seeded boardgen board as a greybox on the table. Visual only.
-	BoardgenGreybox.attach_from_env(table)
+	# The switch is decided HERE, outside the board-look files (CI's LOOK short run relies on it): they cannot turn it on alone.
+	if OS.is_debug_build() and OS.get_environment("NML_BOARDGEN_SEED").strip_edges().is_valid_int():
+		BoardgenGreybox.attach_from_env(table)
 
 	# Connect object_manager signals for deployment checking
 	object_manager.drag_ended.connect(_on_unit_moved)
