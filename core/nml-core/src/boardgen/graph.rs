@@ -21,6 +21,8 @@ pub struct SectorGraph {
     pub arteries: Vec<Artery>, pub is_street: Vec<bool>, pub lots: Vec<Lot>,
     /// Cells reserved for the city wall (two half-turn twins; empty unless the theme has a wall).
     pub wall: Vec<bool>,
+    /// Cells reserved for the tall scenery towers (one half-turn pair; empty unless the theme has them).
+    pub tower: Vec<bool>,
 }
 
 pub fn build(seed: i64, sym: Symmetry, b: &Budgets) -> SectorGraph {
@@ -70,8 +72,16 @@ pub fn build(seed: i64, sym: Symmetry, b: &Budgets) -> SectorGraph {
             for col in cols_here { for i in [z * nx + col, (nz - 1 - z) * nx + nx - 1 - col] { wall[i] = !street[i]; } }
         }
     }
-    let mut g = SectorGraph { nx, nz, symmetry: sym, arteries, is_street: Vec::new(), lots: Vec::new(), wall: wall.clone() };
-    let (mut occ, tpls, target) = (wall, b.lot_shapes, b.lot_pairs);
+    // The tall tower pair (towers plan T2): a block in the two outer columns between the bands, clear of street and wall, and its half-turn twin, reserved before
+    // any lot. No site = no tower (the validator then rejects the board).
+    let (mut tower, (tw, th)) = (vec![false; nx * nz], b.tall_towers);
+    if tw > 0 && sym == Symmetry::Point180 {
+        let block = |z0: usize| (z0..z0 + th).flat_map(move |z| (0..tw).map(move |x| z * nx + x));
+        let sites: Vec<usize> = (DEPLOY_DEPTH_CELLS..=hz - th).filter(|&z0| block(z0).all(|i| [i, nx * nz - 1 - i].iter().all(|&j| !street[j] && !wall[j]))).collect();
+        if !sites.is_empty() { for i in block(sites[rng.randi_range(0, sites.len() as i64 - 1) as usize]) { (tower[i], tower[nx * nz - 1 - i]) = (true, true); } }
+    }
+    let mut g = SectorGraph { nx, nz, symmetry: sym, arteries, is_street: Vec::new(), lots: Vec::new(), wall: wall.clone(), tower: tower.clone() };
+    let (mut occ, tpls, target) = (wall.iter().zip(&tower).map(|(&w, &t)| w || t).collect::<Vec<bool>>(), b.lot_shapes, b.lot_pairs);
     let loose = if b.rows && sym == Symmetry::Point180 { b.lot_first.len() } else { target };   // a town grows rows after its forced first pairs; everyone else scatters
     let no_row = vec![false; nx * nz];
     for _ in 0..220 {

@@ -177,8 +177,8 @@ mod tests {
         for seed in 1..=60 {
             let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
             let p = to_plain(&l);
-            let roofed: Vec<u16> = l.cells.iter().filter(|c| c.lot_kind == LotKind::Roofed).map(|c| (c.z * l.nx + c.x) as u16).collect();
-            assert_eq!(p.solid_cells, roofed, "seed {seed}: every intact house cell and nothing else is solid");
+            let roofed: Vec<u16> = l.cells.iter().filter(|c| matches!(c.lot_kind, LotKind::Roofed | LotKind::Tower)).map(|c| (c.z * l.nx + c.x) as u16).collect();
+            assert_eq!(p.solid_cells, roofed, "seed {seed}: every intact house and tall tower cell and nothing else is solid");
             let board = Terrain::build(&p);
             let landmark = |c: &crate::boardgen::Cell| l.landmarks.iter().find(|m| m.cells().any(|i| i == c.z * 16 + c.x)).map(|m| m.kind.terrain_class()).filter(|&k| k != NONE);
             for c in &l.cells {
@@ -187,7 +187,7 @@ mod tests {
                     (_, LotKind::Hazard, _) => DANGEROUS,
                     (_, LotKind::Terrace, 0) if !c.street => RUINS,
                     (_, LotKind::Rough | LotKind::Wall, 0) => FOREST,
-                    (_, LotKind::Roofed, _) => CONTAINER,
+                    (_, LotKind::Roofed | LotKind::Tower, _) => CONTAINER,
                     _ => NONE,
                 };
                 ruins += usize::from(want == RUINS);
@@ -232,6 +232,7 @@ mod tests {
     // re-pinned 21.11. (L-RF1 F3, 593b1257da9d696f -> df767026f7ddebdd): the town writes its intact houses as solid_cells
     // re-pinned 22.11. (roofs plan K2, df767026f7ddebdd -> 719d45f5c81b7df2): the town raised minimum 23 -> 15 % (fewer filler slabs)
     // re-pinned 22.11. (roofs plan K3, 719d45f5c81b7df2 -> c35f70fddda0af2c): infill houses between the bands
-    const PINNED_TOWN_42: &str = "c35f70fddda0af2c";
+    // re-pinned 22.11. (towers plan T2, c35f70fddda0af2c -> e0da3e93e0e428d0): one half-turn pair of tall towers between the bands
+    const PINNED_TOWN_42: &str = "e0da3e93e0e428d0";
     const PINNED_SEED_42: &str = "cbcd64fada596527";
 }

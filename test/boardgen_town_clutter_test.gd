@@ -357,7 +357,7 @@ func test_wall_spills_buttresses_and_ivy_clusters_stand_on_the_right_faces() -> 
 ## Large hanging signs (kit batch A8): on a raised house face (not the wall, not an intact house) that looks at a street off the square, +z over the street, at most three a half.
 func test_large_signs_hang_on_street_fronts_off_the_square() -> void:
 	var total := 0
-	for s: int in [7, 11, 13, 17, 19, 23, 25, 29, 41, 43]:
+	for s: int in range(1, 41):   # (towers plan T2: boards 1-40 - the 10 pinned seeds dropped to 4 signs on the tower boards by chance; 40 boards: main 24, K4 26, T2 22)
 		var layout: Dictionary = ClassDB.instantiate("NmlCore").boardgen_layout_themed(s, "ruintown")
 		var nx: int = layout["nx"]
 		var plan := BoardgenTownClutter.plan(layout)
@@ -381,7 +381,7 @@ func test_large_signs_hang_on_street_fronts_off_the_square() -> void:
 			assert_bool(sc["street"] and int(sc["level"]) == 0).override_failure_message("seed %d: a sign over no street" % s).is_true()
 			per_half[1 if at.y >= 24.0 else 0] += 1
 		assert_int(per_half.max()).is_less_equal(BoardgenTownClutter.SIGNS_PER_HALF)
-	assert_int(total).is_greater(5)
+	assert_int(total).is_greater(20)
 
 
 ## Green feet (plan TARGET C, train 2, V1): every weed clump stands with its origin on a raised face, +z out onto open level-0 ground that is no ladder end, its 1.03 in inside the

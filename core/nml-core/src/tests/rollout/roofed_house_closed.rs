@@ -46,7 +46,7 @@ type Lane = (usize, usize, (usize, usize), (usize, usize));
 /// Every straight lane through a roofed house with bare level-0 ground on both sides.
 fn lanes(l: &Layout) -> Vec<Lane> {
     let ground = |x: i64, z: i64| (0..l.nx as i64).contains(&x) && (0..l.nz as i64).contains(&z)
-        && { let c = l.cell(x as usize, z as usize); c.level == 0 && c.lot_kind != LotKind::Roofed && c.lot_kind != LotKind::Hazard };
+        && { let c = l.cell(x as usize, z as usize); c.level == 0 && !matches!(c.lot_kind, LotKind::Roofed | LotKind::Hazard | LotKind::Tower) };
     let mut out = Vec::new();
     for lot in l.lots.iter().filter(|lot| lot.kind == LotKind::Roofed) {
         let (x0, z0, x1, z1) = (lot.x as i64, lot.z as i64, (lot.x + lot.w) as i64, (lot.z + lot.h) as i64);
@@ -60,7 +60,7 @@ fn lanes(l: &Layout) -> Vec<Lane> {
 /// Both diagonals, both ways, through every house of at least 2 x 2 cells, corner cell to corner cell (ground on both).
 fn diagonals(l: &Layout) -> Vec<Lane> {
     let ground = |x: i64, z: i64| (0..l.nx as i64).contains(&x) && (0..l.nz as i64).contains(&z)
-        && { let c = l.cell(x as usize, z as usize); c.level == 0 && c.lot_kind != LotKind::Roofed && c.lot_kind != LotKind::Hazard };
+        && { let c = l.cell(x as usize, z as usize); c.level == 0 && !matches!(c.lot_kind, LotKind::Roofed | LotKind::Hazard | LotKind::Tower) };
     let mut out = Vec::new();
     for lot in l.lots.iter().filter(|lot| lot.kind == LotKind::Roofed && lot.w >= 2 && lot.h >= 2) {
         let (x0, z0, x1, z1) = (lot.x as i64 - 1, lot.z as i64 - 1, (lot.x + lot.w) as i64, (lot.z + lot.h) as i64);
@@ -174,7 +174,7 @@ fn open_readers(seeds: std::ops::RangeInclusive<i64>, solid: bool) -> (usize, Ve
                 let (nx, nz) = (c.x as i64 + dx, c.z as i64 + dz);
                 if !(0..l.nx as i64).contains(&nx) || !(0..l.nz as i64).contains(&nz) { continue; }
                 let n = l.cell(nx as usize, nz as usize);
-                if n.level != 0 || n.lot_kind == LotKind::Roofed { continue; }
+                if n.level != 0 || matches!(n.lot_kind, LotKind::Roofed | LotKind::Tower) { continue; }   // (towers plan T2: a tall tower is no open ground either)
                 if !wall_blocked(&t, m(x + dx as f64 * 1.5, z + dz as f64 * 1.5)) { say("border wall"); }
                 let (a, b) = (m(x + dx as f64 * 3.0, z + dz as f64 * 3.0), m(x - dx as f64 * 3.0, z - dz as f64 * 3.0));
                 let lifted = |p: (f64, f64)| [p.0 as f32, 0.02, p.1 as f32];

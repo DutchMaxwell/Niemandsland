@@ -83,6 +83,8 @@ pub struct Budgets {
     pub infill_pairs: usize,
     /// The fewest intact (roofed) houses a board must have (0 = no demand): every town board shows a skyline (roofs plan K4).
     pub intact_min: usize,
+    /// Footprint (cells across, cells deep) of the one half-turn pair of tall scenery towers in the outer two columns between the bands; (0, 0) = none (towers plan T2).
+    pub tall_towers: (usize, usize),
 }
 
 impl Theme {
@@ -92,12 +94,12 @@ impl Theme {
             Self::Deepworks => Budgets { raised: RAISED_PERMILLE, high: HIGH_PERMILLE, lift: HIGH_PERMILLE, tower_pairs: TOWER_PAIRS, landmark_pieces: LANDMARK_PIECES,
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
                 lot_pairs: 9, lot_shapes: &[(3, 2), (2, 3), (2, 2)], lot_fill: &[(2, 2), (3, 2), (2, 3)], lot_first: &[], garden_area: 0, garden_min: 0, plaza: (0, 0), wall: false,
-                landmark_kinds: &[LandmarkKind::TankCluster, LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (1, 2), centre_piece: false, small_pools: false, intact_percent: 0, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1, tower_slender: false, rows: false, roof_run_max: 0, infill_pairs: 0, intact_min: 0 },
+                landmark_kinds: &[LandmarkKind::TankCluster, LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (1, 2), centre_piece: false, small_pools: false, intact_percent: 0, lane_free: false, max_attempts: MAX_ATTEMPTS, tower_side: 1, tower_slender: false, rows: false, roof_run_max: 0, infill_pairs: 0, intact_min: 0, tall_towers: (0, 0) },
             // Town values: one tower pair, more terraces; the raised minimum is 15 % (roofs plan K2: fewer filler slabs grown on free earth).
             Self::RuinTown => Budgets { raised: (150, 460), high: (60, 200), lift: (30, 70), tower_pairs: (1, 1), landmark_pieces: (7, 7),
                 lot_pool: &[LotKind::Block, LotKind::Terrace, LotKind::Terrace, LotKind::Deck, LotKind::Hazard],
                 lot_pairs: 18, lot_shapes: &[(2, 2), (2, 2), (3, 2), (2, 3), (2, 1), (1, 2), (2, 1), (1, 2), (1, 1)], lot_fill: &[(2, 2), (3, 2), (2, 3), (2, 1), (1, 2)], lot_first: &[(2, 2)], garden_area: 1, garden_min: 4, plaza: (4, 6), wall: true,
-                landmark_kinds: &[LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (3, 3), centre_piece: true, small_pools: true, intact_percent: 65, lane_free: true, max_attempts: 64, tower_side: 2, tower_slender: true, rows: true, roof_run_max: 2, infill_pairs: 4, intact_min: 4 },
+                landmark_kinds: &[LandmarkKind::PumpHouse, LandmarkKind::Sump, LandmarkKind::Crane], landmark_pairs: (3, 3), centre_piece: true, small_pools: true, intact_percent: 65, lane_free: true, max_attempts: 64, tower_side: 2, tower_slender: true, rows: true, roof_run_max: 2, infill_pairs: 4, intact_min: 4, tall_towers: (2, 2) },
         }
     }
     fn salt(self) -> i64 { if self.is_default() { 0 } else { TOWN_SALT } }
@@ -195,18 +197,26 @@ pub fn generate(seed: i64, symmetry: Symmetry) -> Layout { generate_themed(seed,
 
 /// [`generate`] for a theme: the same stages on the theme's budgets and its own seed streams.
 pub fn generate_themed(seed: i64, symmetry: Symmetry, theme: Theme) -> Layout {
-    let mut last = None;
-    for attempt in 0..theme.budgets().max_attempts {
+    let (mut last, b) = (None, theme.budgets());
+    let steps = tower_steps(&b);
+    for attempt in 0..b.max_attempts * steps.len() as u8 {
         let layout = generate_attempt(seed, symmetry, theme, attempt);
-        if layout.problems().is_empty() { return layout; }
+        let towered = steps[usize::from(attempt / b.max_attempts)].0 == 0 || layout.cells.iter().any(|c| c.lot_kind == LotKind::Tower);
+        if towered && layout.problems().is_empty() { return layout; }
         last = Some(layout);
     }
     last.expect("max_attempts > 0")
 }
 
 /// One sub-seed of [`generate_themed`], accepted or not: what `attempt` 0, 1, ... would give (the census asks how often the first one is good).
+/// The tall tower footprints a board tries in turn (towers plan T2, lead 22.11.): the theme's pair (2 x 2) for `max_attempts` sub-seeds, then a 1 x 2 pair, then
+/// none; a theme without towers has one step. Sub-seed `attempt` belongs to step `attempt / max_attempts`, so (seed, attempt) still rebuilds the board.
+fn tower_steps(b: &Budgets) -> Vec<(usize, usize)> { if b.tall_towers.0 > 0 { vec![b.tall_towers, (1, 2), (0, 0)] } else { vec![(0, 0)] } }
+
 pub fn generate_attempt(seed: i64, symmetry: Symmetry, theme: Theme, attempt: u8) -> Layout {
     let (b, salt) = (theme.budgets(), theme.salt());
+    let towers = tower_steps(&b)[usize::from(attempt / b.max_attempts).min(tower_steps(&b).len() - 1)];
+    let b = Budgets { tall_towers: towers, ..b };
     let s = seed.wrapping_add(i64::from(attempt) * SUBSEED_STEP);
     let g = graph::build(s ^ SALTS[0] ^ salt, symmetry, &b);
     let (lots, mut cells) = levels::stack(s ^ SALTS[1] ^ salt, &g, &b);
