@@ -503,17 +503,23 @@ use super::*;
         (st, statics)
     }
 
-    /// A standing joined hero WITHOUT the rule: not every model of the unit has it, so the chain does not roll at 96 (at 95 the
-    /// host rolled and restored its casualty, the pin).
+    /// A standing joined hero WITHOUT the rule: not every model of the unit has it, so the chain does not roll at 96 and says why (at
+    /// 95 the host rolled and restored its casualty, the pin).
     #[test]
     fn a_joined_hero_without_the_rule_stops_the_roll() {
         let (st, statics) = hero_chain(false, 3);
         let t = town_board(vec![]);
         let (next, shot) = rean_run(&st, &statics, &t, E96, 1, true);
-        assert!(shot.rolls.is_empty() && !shot.log.iter().any(|l| l.starts_with("Reanimation")), "{:?}", shot.log);
+        assert!(shot.rolls.is_empty(), "{:?}", shot.log);
+        assert_eq!(shot.log, vec!["Reanimation: Rean does not reanimate — a joined model lacks the rule".to_string()], "rules-must-log");
         assert_eq!(next.alive[0], 3);
         let (old, _) = rean_run(&st, &statics, &t, 95, 1, true);
         assert_eq!(old.alive[0], 4, "95 pin: the host rolled");
+        let mut full = st.clone();
+        full.positions[0].push([3.0 * IN2M, 0.0, 6.0 * IN2M]);
+        full.wounds[0].push(1);
+        Rc::make_mut(&mut full.radii)[0].push(0.016);
+        assert!(rean_run(&full, &statics, &t, E96, 1, true).1.log.is_empty(), "nothing to restore: no line");
     }
 
     /// A joined hero WITH the rule: the chain rolls, and the hero's missing wounds are in the pool (1 casualty + 2 wounds = 3
@@ -524,4 +530,46 @@ use super::*;
         let (next, shot) = rean_run(&st, &statics, &town_board(vec![]), E96, 1, true);
         assert!(shot.log.iter().any(|l| l.contains("rolls 3 dice")), "{:?}", shot.log);
         assert_eq!((next.wounds[1].clone(), next.alive[0]), (vec![3], 4), "{:?}", shot.log);
+    }
+
+    /// Lead ruling "Aura bearer dead": the joined hero carried "Reanimation Aura" (the fold gave the host and him Reanimation) and has
+    /// fallen - no roll at 96, the line says why, and the dead bearer does not come back. At 95 the static stamp kept rolling and the
+    /// pool held his 3 wounds. Planted: the same bearer standing - the chain rolls.
+    #[test]
+    fn a_fallen_aura_bearer_ends_the_roll() {
+        let (mut st, statics) = hero_chain(true, 3);
+        let mut list = st.profiles.list.clone();
+        list[2].special_rules = vec!["Hero".into(), "Reanimation Aura".into(), "Reanimation".into()];
+        st.profiles = Rc::new(Profiles { list, index: HashMap::new() });
+        let standing = st.clone();
+        st.positions[1] = vec![];
+        st.wounds[1] = vec![];
+        st.alive[1] = 0;
+        Rc::make_mut(&mut st.radii)[1] = vec![];
+        let t = town_board(vec![]);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, 1, true);
+        assert!(shot.rolls.is_empty(), "{:?}", shot.log);
+        assert_eq!(shot.log, vec!["Reanimation: Rean does not reanimate — the Reanimation Aura bearer has fallen".to_string()]);
+        assert_eq!((next.alive[0], next.alive[1]), (3, 0));
+        let (_, old) = rean_run(&st, &statics, &t, 95, 1, true);
+        assert!(old.log.iter().any(|l| l.contains("rolls 4 dice")), "95 pin: host 1 + the dead bearer's 3: {:?}", old.log);
+        let (_, alive) = rean_run(&standing, &statics, &t, E96, 1, true);
+        assert!(alive.log.iter().any(|l| l.contains("rolls 1 dice")), "planted: {:?}", alive.log);
+    }
+
+    /// A fallen joined hero WITHOUT the rule is not in the pool at 96 (1 die: the host's casualty) and does not come back; at 95 his 3
+    /// wounds were rolled for too (4 dice).
+    #[test]
+    fn a_fallen_hero_without_the_rule_is_not_in_the_pool() {
+        let (mut st, statics) = hero_chain(false, 3);
+        st.positions[1] = vec![];
+        st.wounds[1] = vec![];
+        st.alive[1] = 0;
+        Rc::make_mut(&mut st.radii)[1] = vec![];
+        let t = town_board(vec![]);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, 1, true);
+        assert!(shot.log.iter().any(|l| l.contains("rolls 1 dice")), "{:?}", shot.log);
+        assert_eq!((next.alive[0], next.alive[1]), (4, 0), "{:?}", shot.log);
+        let (_, old) = rean_run(&st, &statics, &t, 95, 1, true);
+        assert!(old.log.iter().any(|l| l.contains("rolls 4 dice")), "95 pin: {:?}", old.log);
     }

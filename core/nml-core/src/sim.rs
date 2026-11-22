@@ -1289,10 +1289,25 @@ pub(crate) fn tray_reanimation(
     if seams.hero_attach {
         members.extend(next.attached[si].iter().copied());
     }
-    // PENDING_EPOCH_REVIVE_SPOT (REVIVE-MEMBERS, lead ruling): the rule fires only for a unit where ALL models carry it, and a
-    // joined hero is part of the unit - a standing joined hero without it means no roll for the whole chain.
-    if spot_rule && members.iter().any(|&u| !next.positions[u].is_empty() && statics[next.roster.profile[u]].reanimation.is_none()) {
-        return;
+    if spot_rule {
+        // PENDING_EPOCH_REVIVE_SPOT (REVIVE-MEMBERS, lead ruling): the rule fires only for a unit where ALL models carry it, and a
+        // joined hero is part of the unit - a standing joined hero without it means no roll for the whole chain.
+        let (has, standing) = (|u: usize| statics[next.roster.profile[u]].reanimation.is_some(), |u: usize| !next.positions[u].is_empty());
+        if !members.iter().any(|&u| next.profile(u).wounds_max.iter().sum::<i64>() > next.wounds[u].iter().sum::<i64>()) {
+            return; // nothing to restore: no roll and no line, on both sides
+        }
+        if members.iter().any(|&u| standing(u) && !has(u)) {
+            shot.log.push(format!("Reanimation: {owner} does not reanimate — a joined model lacks the rule"));
+            return;
+        }
+        // Lead ruling "Aura bearer dead": the Aura gives Reanimation to "this model and its unit" - with every bearer fallen the
+        // chain no longer has it (the table's `reanimation_members` ends the Aura the same way).
+        let aura = |u: usize| next.profile(u).special_rules.iter().chain(&next.profile(u).item_grants).any(|r| r.trim() == "Reanimation Aura");
+        if members.iter().any(|&u| aura(u)) && !members.iter().any(|&u| aura(u) && standing(u)) {
+            shot.log.push(format!("Reanimation: {owner} does not reanimate — the Reanimation Aura bearer has fallen"));
+            return;
+        }
+        members.retain(|&u| has(u)); // a fallen joined hero without the rule is not in the pool
     }
     // The pool — WOUND CURRENCY, per member of the carrying chain.
     let (mut gaps, mut dead) = (Vec::new(), Vec::new());
