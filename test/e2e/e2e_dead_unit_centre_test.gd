@@ -22,6 +22,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
 	if _main != null and _main.rule_floats != null:
 		_main.rule_floats.clear()
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
@@ -94,7 +96,10 @@ func test_human_shooting_rejects_stale_target_before_any_volley(timeout := 12000
 	var target := _unit(2, "Dead Target", Vector3(0.3, 0, 0.2))
 	_kill(target)
 	var before: int = _main.battle_log.entries().size()
-	await _main._run_human_shooting(attacker, target)
+	CoreActivation._env = 1
+	assert_bool(CoreActivation.open_session(_main, attacker)).override_failure_message("no activation session for the attacker").is_true()
+	await CoreActivation.human_shoot(_main, attacker, target)   # a dead target is not a core target: not taken, nothing rolls
+	CoreActivation.close_session(_main, attacker.unit_id)
 	assert_int(_main.battle_log.entries().size()) \
 		.override_failure_message("stale target entered a shooting volley measured against Vector3.ZERO") \
 		.is_equal(before)
