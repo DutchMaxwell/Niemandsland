@@ -610,10 +610,14 @@ pub struct ShootResult {
     /// The volley fold's tray mark after each Takedown group beside another weapon: the table lands it there, so its lines go back to it.
     pub takedown_marks: Vec<(usize, usize)>,
     /// Rules 3.6 (`EPOCH_73_V36`) — Hazardous self-wounds the dice legs read off the hit roll:
-    /// `(owner, weapon, unmodified 1s, X)` with X = max(Blast, Deadly, 1). The sim lands them on the
+    /// `(owner, weapon, unmodified 1s, X, mark)` with X = max(Blast, Deadly, 1) and the tray mark right after the hit roll (a volley's
+    /// own shot only): the table wounds the firer there, ahead of the "fires" line. The sim lands them on the
     /// bearer (main.gd `_solo_hazardous_self_wounds`); below the gate they are ignored.
-    pub hazardous_self: Vec<(String, String, i64, i64)>,
+    pub hazardous_self: Vec<HazardousSelf>,
 }
+
+/// One Hazardous self-wound entry of `ShootResult::hazardous_self`: owner, weapon, unmodified 1s, X, the volley's tray mark after the hit roll.
+pub type HazardousSelf = (String, String, i64, i64, Option<(usize, usize)>);
 
 impl ShootResult {
     /// Flag a table branch this activation hit and this port does not
@@ -806,6 +810,15 @@ pub(crate) fn say_growth_defense(tray: &mut Tray, def: &Ctx, name: &str, parts: 
     }
     for (rule, bonus) in parts {
         say_rule(tray, "growth_def", def.side, || format!("{name} is {rule}: +{bonus} Defense (saves on {}+)", parts_defense(def).clamp(BEST_HIT_TARGET, 6)));
+    }
+}
+
+/// The table's last `_solo_log_defense_parts` line (C-STURDY-BOOST, from `EPOCH_73_V36`): a Boost that replaces the unit's Sturdy-family rule
+/// says so, after the Defense part lines. Only a unit that carries the base rule too (`guarded_name`) has one to replace.
+pub(crate) fn say_sturdy_replaces(tray: &mut Tray, def: &Ctx) {
+    let base = def.shielded_alias.replaced_rule();
+    if def.v36_rules && def.sturdy_boost_gates_guarded && def.guarded && !base.is_empty() && def.guarded_name == base {
+        say_rule(tray, "shielded", def.side, || format!("{}: replaces {base} — +1 Defense at any range, no extra +1 from over 9\"", def.shielded_alias.name()));
     }
 }
 
@@ -2112,6 +2125,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         // RECORDED target stays raw, which is what `dice.jsonl` carries.
         tray.owner_next(sh.att.unit);
         let faces = tray.roll(n as usize);
+        let roll_mark = tray.feed().is_some().then(|| tray.mark());
         out.rolls.push(Roll {
             kind: "attack",
             count: n,
@@ -2134,7 +2148,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         if p.hazardous {
             let ones = faces.iter().filter(|&&f| f == 1).count() as i64;
             if ones > 0 {
-                out.hazardous_self.push((sh.owner.to_string(), p.name.clone(), ones, p.blast.max(p.deadly).max(1)));
+                out.hazardous_self.push((sh.owner.to_string(), p.name.clone(), ones, p.blast.max(p.deadly).max(1), roll_mark));
             }
             out.mark("hazardous");
         }
@@ -2170,9 +2184,11 @@ pub(crate) fn resolve_volley_with_pick_label(
         let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
         if (p.relentless || att.relentless_grant) && mod_dist_in > LONG_RANGE_IN {
             hits += sixes(&faces);
-            // The table's line for the printed rule (a spell's grant adds its source, which the core does not carry).
-            if p.relentless && sixes(&faces) > 0 {
-                say_rule(tray, "relentless", att.side, || format!("Relentless: +{} hit{} (unmodified 6s)",
+            // The table's line, a Mark's grant names its source and the marked unit.
+            if sixes(&faces) > 0 {
+                let on = tray.aimed.clone().unwrap_or_else(|| def_owner.to_string());
+                let from = if att.relentless_from.is_empty() { String::new() } else { format!(" — from {} on {on}", att.relentless_from) };
+                say_rule(tray, "relentless", att.side, || format!("Relentless: +{} hit{} (unmodified 6s){from}",
                     sixes(&faces), if sixes(&faces) == 1 { "" } else { "s" }));
             }
         }
@@ -2499,6 +2515,13 @@ pub(crate) fn resolve_volley_with_pick_label(
                     say_rule(tray, "cond_ap", att.side, || format!("{}: AP(+{}) against {def_owner}", c.say_name, d));
                 }
             }
+            // The table's conditional-AP part of the Piercing Feat and its Mark line, after the weapon's own (`_solo_resolve_saves`).
+            if att.feat_ap_bonus > 0 {
+                say_rule(tray, "cond_ap", att.side, || format!("Piercing Feat: AP(+{}) against {def_owner}", att.feat_ap_bonus));
+            }
+            if att.pierce_shooting_grant {
+                say_rule(tray, "mark", att.side, || format!("Piercing Mark: friendly attackers get AP(+1) against {def_owner} (once)"));
+            }
             // Wave 2 — the Slayer mark's granted conditional (epoch-gated).
             if att.slayer_grant {
                 let mut spec = slayer_grant_cond();
@@ -2712,6 +2735,10 @@ pub(crate) fn resolve_volley_with_pick_label(
         say_rule(tray, "ignore", def.side, || line);
     }
     out.caused = regen_proof + regenable + out.deadly_tally;
+    if regenable + regen_proof <= 0 && !def.regen_note.is_empty() {
+        // the table's landing at the volley's end says the held-aside verdict even when no wound is left to ignore
+        say_rule(tray, "ignore", def.side, || format!("{def_owner} — {}", def.regen_note));
+    }
     out.wounds = ignore_batch(regenable, regen_proof, regen_joined, def, def_owner, tray, &mut out.rolls);
     out
 }
@@ -2738,6 +2765,15 @@ fn push_deadly_groups(out: &mut ShootResult, w: i64, x: i64, ignores_regen: bool
             // already-wounded Tough model first" count includes it): an x = 0 group lands nothing and only counts the forced pick.
             out.deadly_groups.push((1, post));
         }
+        return;
+    }
+    // The table's `_solo_land_deadly_wounds` asks its ignore step once per unsaved wound, over the X wounds that wound deals. Where no ignore die
+    // can come of it (a bypass weapon at one group, or no ignore rule) the legacy leg's dice stand and only the lines are the table's.
+    if def.playtest_rules && (!def.regeneration || (ignores_regen && !def.groups_valid())) {
+        for _ in 0..w {
+            ignore_batch(if ignores_regen { 0 } else { x }, if ignores_regen { x } else { 0 }, 0, def, def_owner, tray, &mut out.rolls);
+        }
+        out.deadly_groups.push((w, x));
         return;
     }
     let post = ignore_batch(if ignores_regen { 0 } else { w }, if ignores_regen { w } else { 0 }, if bypass_flag && !ignores_regen { w } else { 0 }, def, def_owner, tray, &mut out.rolls);
@@ -2807,6 +2843,9 @@ pub(crate) fn ignore_batch(
     rolls: &mut Vec<Roll>,
 ) -> i64 {
     let bypass = bypass.max(0);
+    if pool.max(0) + bypass > 0 && !def.regen_note.is_empty() {
+        say_rule(tray, "ignore", def.side, || format!("{def_owner} — {}", def.regen_note));
+    }
     if pool.max(0) + bypass > 0 && def.regeneration && !def.regen_most_name.is_empty() {
         say_rule(tray, "ignore", def.side, || format!("{def_owner} — {}: most models carry it, so a joined hero without it does not switch it off", def.regen_most_name));
     }
@@ -2816,6 +2855,8 @@ pub(crate) fn ignore_batch(
         let name = match (live.next(), live.next()) {
             (Some((_, n)), None) => n,
             _ if def.regen_named => "regeneration",
+            _ if !def.regen_note.is_empty() => def.regen_pending_notes[2], // the held-aside rule that bound this roll
+            _ if def.regen_feat > 0 && def.regen_target == def.regen_feat => def.regen_pending_notes[3],
             _ => "",
         };
         if name == "regeneration" && bypass > 0 {
@@ -3378,7 +3419,7 @@ pub fn resolve_melee_leg_wipe(
             if p.hazardous {
                 let ones = faces.iter().filter(|&&f| f == 1).count() as i64;
                 if ones > 0 {
-                    out.hazardous_self.push((sh.owner.to_string(), p.name.clone(), ones, p.blast.max(p.deadly).max(1)));
+                    out.hazardous_self.push((sh.owner.to_string(), p.name.clone(), ones, p.blast.max(p.deadly).max(1), None));
                 }
             }
             // EPOCH_73_V36 (row MEL-09) — a fatigued striker (a Shaken strike-back

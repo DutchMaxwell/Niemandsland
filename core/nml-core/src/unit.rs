@@ -100,6 +100,16 @@ impl ShieldedAlias {
     pub fn is_sturdy_kind(self) -> bool {
         matches!(self, Self::SturdyBoost | Self::SafetyGearBoost | Self::TenaciousBoost)
     }
+
+    /// The Guarded-family rule a Sturdy-kind Boost replaces ("" for every other alias): what the table's replace line names.
+    pub fn replaced_rule(self) -> &'static str {
+        match self {
+            Self::SturdyBoost => "Sturdy",
+            Self::SafetyGearBoost => "Safety Gear",
+            Self::TenaciousBoost => "Tenacious",
+            _ => "",
+        }
+    }
 }
 
 /// One active shooting `Shot Modifier` rule stamped onto `Ctx` in profile order (`""` = empty).
@@ -421,6 +431,10 @@ pub struct Ctx {
     /// The pending kind's SPELL-wound twin (the entry's `ignore_target_spell`,
     /// defaulting to its `ignore_target` like every alias fold).
     pub regen_pending_spell: i64,
+    /// The held-aside entries as the table's `_solo_regen_pick` words them: `[within N" of terrain, in the open]` verdict lines, the terrain rule's name, the once-per-game feat's name.
+    pub regen_pending_notes: [&'static str; 4],
+    /// The verdict this save moment says before its ignore roll (`sim::ctx_live`): the held-aside rule when it binds the roll or refuses it.
+    pub regen_note: &'static str,
     /// `EPOCH_75_TABLE_FIXES` (#2613) — a once-per-game Regeneration entry (`uses_per_game > 0`, Protection Feat)
     /// held ASIDE: `sim::ctx_live` folds it only while the bearer's `feats_used` latch is open. 0 = none.
     pub regen_feat: i64,
@@ -585,6 +599,8 @@ pub struct Ctx {
     /// striker's roll flags where the WEAPON's own `p.relentless` is read
     /// (dice.rs, over-9" volleys). Zero on every `ctx_of`.
     pub relentless_grant: bool,
+    /// The record that handed the target's attackers Relentless (a Mark), for the table's "— from <source> on <target>" tail; "" when none.
+    pub relentless_from: &'static str,
     /// A live `grants_rule: "Shred"` — the same bridge's shred leg, folded
     /// into the save batch the way the weapon's own `p.shred` is (dice.rs).
     /// Zero on every `ctx_of`.
@@ -880,7 +896,7 @@ impl Ctx {
             fortified_alias_over_in: d.fortified_alias_over_in, fortified_boost_name: d.fortified_boost_name,
             fortified_alias_name: d.fortified_alias_name, fortified_alias_over9: d.fortified_alias_over9, fortified_notes: d.fortified_notes,
             regeneration: d.regeneration, regen_target: d.regen_target, regen_target_spell: d.regen_target_spell, regen_pending: d.regen_pending,
-            regen_pending_spell: d.regen_pending_spell, regen_feat: d.regen_feat, regen_named: d.regen_named, regen_groups: d.regen_groups,
+            regen_pending_spell: d.regen_pending_spell, regen_pending_notes: d.regen_pending_notes, regen_note: d.regen_note, regen_feat: d.regen_feat, regen_named: d.regen_named, regen_groups: d.regen_groups,
             regen_names: d.regen_names, regen_gated: d.regen_gated, regen_gate_shut: d.regen_gate_shut, regen_most_name: d.regen_most_name,
             // PENDING_EPOCH_UNIT_BANE_ALIAS: the strength gate (Decimate) is read as declared, like the Defense above.
             above_half_strength: self.above_half_strength && rule_on(self.rules_epoch, crate::acts::PENDING_EPOCH_UNIT_BANE_ALIAS),
@@ -3230,7 +3246,7 @@ pub fn capture_reads_for_epoch(
 /// recorded flat fold replays and the tail stays zeros.
 fn regen_targets(
     reg: &mut Registries, p: &Profile, rules_epoch: u32, trace73: bool,
-) -> (i64, i64, i64, i64, f64, f64, i64, bool, RegenGroups) {
+) -> (i64, i64, i64, i64, f64, f64, i64, bool, RegenGroups, [&'static str; 4]) {
     let regen = if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
         regen_family_on(p, "Regeneration", rules_epoch)
     } else {
@@ -3253,6 +3269,7 @@ fn regen_targets(
     };
     let mut picked = (base, base, 0i64, 0i64);
     let mut feat = 0i64;
+    let mut pending_notes = ["", "", "", ""];
     // EPOCH_82_IGNORE_BY_NAME: the flat rules by NAME (the table's groups); the Self-Repair group is kept even beside Regeneration.
     let mut groups: Vec<(String, String, i64, bool)> = Vec::new(); // (group key, the rule that names the group, target, a distance-gated rule holds it)
     let put = |groups: &mut Vec<(String, String, i64, bool)>, key: String, name: &str, target: i64, gated: bool| {
@@ -3395,6 +3412,7 @@ fn regen_targets(
             if rule_on(rules_epoch, crate::acts::EPOCH_75_TABLE_FIXES) && e.param_i("uses_per_game", 0) > 0 {
                 if normal > 0 && (feat == 0 || normal < feat) {
                     feat = normal;
+                    pending_notes[3] = crate::rules::intern(&n);
                 }
                 continue;
             }
@@ -3403,6 +3421,11 @@ fn regen_targets(
             {
                 if normal > 0 && (picked.2 == 0 || normal < picked.2) {
                     picked.2 = normal;
+                    pending_notes[..3].copy_from_slice(&[
+                        crate::rules::intern(&format!("{n}: within {}\" of terrain -> Regeneration {normal}+", e.param_f("terrain_within_in", 0.0) as i64)),
+                        crate::rules::intern(&format!("{n}: in the open -> no Regeneration")),
+                        crate::rules::intern(&n),
+                    ]);
                 }
                 if spell > 0 && (picked.3 == 0 || spell < picked.3) {
                     picked.3 = spell;
@@ -3452,7 +3475,7 @@ fn regen_targets(
     if gates == (0.0, 0.0) || grouped.0.iter().filter(|&&t| t > 0).count() < 2 {
         grouped.2 = [false; 4];
     }
-    (picked.0, picked.1, picked.2, picked.3, gates.0, gates.1, feat, named, grouped)
+    (picked.0, picked.1, picked.2, picked.3, gates.0, gates.1, feat, named, grouped, pending_notes)
 }
 
 /// Table `_solo_ignore_group_key`: forms of ONE wound-ignore rule (an Enhanced / Boost / Aura / Buff form, an entry that upgrades
@@ -4093,6 +4116,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         regen_target_spell: regen_targets.1,
         regen_pending: regen_targets.2,
         regen_pending_spell: regen_targets.3,
+        regen_pending_notes: regen_targets.9,
+        regen_note: "",
         regen_feat: regen_targets.6,
         regen_gate_over_in: regen_targets.4,
         regen_gate_charge_in: regen_targets.5,
@@ -4126,6 +4151,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         rending_grant: false,
         thrust_grant: false,
         relentless_grant: false,
+        relentless_from: "",
         shred_grant: false,
         bane_grant: false,
         bane_mark_grant: false,

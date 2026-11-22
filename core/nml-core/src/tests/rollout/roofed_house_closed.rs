@@ -95,7 +95,12 @@ fn crossings_on(seeds: &[i64], classed: bool, lanes_of: fn(&Layout) -> Vec<Lane>
     for &seed in seeds {
         let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
         let mut plain = to_plain(&l);
-        if !classed { plain.cells.retain(|c| c[2] as i32 != CONTAINER); plain.solid_cells.clear(); }
+        if !classed {   // planted "no house": everything that makes a cell a house goes - its class, its solid listing and (sight plan S2) its 4.5 in height
+            plain.cells.retain(|c| c[2] as i32 != CONTAINER);
+            let tiers = plain.tiers.as_mut().expect("tiers");
+            for &i in &plain.solid_cells { tiers.level_in[usize::from(i)] = f64::from(crate::boardgen::LEVEL_IN[usize::from(l.cells[usize::from(i)].level)]); }
+            plain.solid_cells.clear();
+        }
         let t = Terrain::build(&plain);
         for (lx, lz, a, b) in lanes_of(&l) {
             let ((ax, az), (bx, bz)) = (centre_m(&l, a), centre_m(&l, b));
@@ -127,6 +132,7 @@ fn no_move_passes_through_a_roofed_house() {
 #[test]
 fn the_crossing_check_sees_a_house_when_its_terrain_class_is_removed() {
     let (asked, crossed) = crossings(false);
+    eprintln!("planted no-house twin: {} of {asked} lanes cross", crossed.len());
     assert!(asked >= 10 && !crossed.is_empty(), "with no CONTAINER class the same lanes must cross a house, or the check cannot fail: {} of {asked}", crossed.len());
 }
 
@@ -139,6 +145,7 @@ fn no_move_cuts_a_house_corner_to_corner() {
     assert!(asked >= 4, "the seeds must give 2 x 2 houses with open corners: {asked}");
     assert!(crossed.is_empty(), "{} of {asked} diagonal lanes cut a house:\n{}", crossed.len(), crossed.join("\n"));
     let (open_asked, open) = crossings_on(&seeds, false, diagonals);
+    eprintln!("planted no-house twin: {} of {open_asked} diagonals cut a house", open.len());
     assert!(!open.is_empty(), "planted: with no house class the diagonals must cut a house: 0 of {open_asked}");
 }
 
@@ -153,7 +160,11 @@ fn open_readers(seeds: std::ops::RangeInclusive<i64>, solid: bool) -> (usize, Ve
     for seed in seeds {
         let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
         let mut plain = to_plain(&l);
-        if !solid { plain.solid_cells.clear(); }
+        if !solid {   // planted: the house is no longer solid - its listing and (sight plan S2) its 4.5 in height go, the class stays
+            let tiers = plain.tiers.as_mut().expect("tiers");
+            for &i in &plain.solid_cells { tiers.level_in[usize::from(i)] = f64::from(crate::boardgen::LEVEL_IN[usize::from(l.cells[usize::from(i)].level)]); }
+            plain.solid_cells.clear();
+        }
         let t = Terrain::build(&plain);
         let marks = crate::objectives::Cells::from_terrain(&t);
         let ladders = &plain.tiers.as_ref().unwrap().ladders;

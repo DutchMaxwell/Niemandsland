@@ -172,3 +172,47 @@ fn nobody_settles_on_top_of_a_tower_or_a_house() {
         assert_eq!(models[0][1], 0.0, "the settle leaves a model on a {top} in solid cell");
     }
 }
+
+/// Sight plan S2: an intact house blocks sight to its drawn ridge (`HOUSE_TOP_IN` 4.5 in) and no higher, a tall tower to `TOWER_IN`. One row of an 8 x 8 board:
+/// the viewer stands on cell 0 on a floor of 0 / 3 / 6 / 9 in, the house is cell 1, the target stands on the ground of cell 5 (four cells beyond the house).
+/// Red before S2: a house read 2.5 in in `level_in` was not a tier block at all, so the 3 in viewer saw over it.
+#[test]
+fn a_house_blocks_sight_to_its_ridge_and_no_higher() {
+    use crate::boardgen::plain::{HOUSE_TOP_IN, TOWER_IN};
+    use crate::sight::{has_los, zones_of_at, Cyl};
+    let sees = |floor_in: f64, block_in: f64, solid: bool| {
+        let mut level_in = vec![0.0; 64];
+        level_in[8 * 3] = floor_in;   // the viewer's cell (0, 3)
+        level_in[8 * 3 + 1] = block_in;   // the house / tower cell (1, 3)
+        let mut p: PlainTerrain = serde_json::from_value(serde_json::json!({"cells": [], "sandbox": [],
+            "cell_params": {"table_size_feet": [2.0, 2.0], "grid_rotation_degrees": 0.0, "grid_size_inches": 3.0,
+                "inches_to_meters": crate::IN2M}})).unwrap();
+        p.tiers = Some(TierGrid { nx: 8, nz: 8, cell_in: 3.0, level_in, ladders: vec![], stairs: vec![] });
+        p.solid_cells = if solid { vec![8 * 3 + 1] } else { vec![] };
+        let t = Terrain::build(&p);
+        let zones = zones_of_at(&t, crate::acts::CURRENT_RULES_EPOCH);
+        let m = crate::IN2M;
+        let cyl = |x_in: f64, y_in: f64| Cyl { c: [x_in * m, -1.5 * m], r: 0.4 * m, y0: y_in * m, y1: (y_in + 1.25) * m };
+        has_los(&cyl(-10.5, floor_in), &cyl(4.5, 0.0), false, &zones, &[])
+    };
+    assert!(!sees(0.0, HOUSE_TOP_IN, true), "a ground viewer sees over a house");
+    assert!(!sees(3.0, HOUSE_TOP_IN, true), "a viewer on a 3 in floor (eye 4.25 in) sees over a 4.5 in ridge");
+    assert!(sees(6.0, HOUSE_TOP_IN, true), "a viewer on a 6 in floor must see over a house");
+    assert!(sees(9.0, HOUSE_TOP_IN, true), "a viewer on a 9 in floor must see over a house");
+    assert!(!sees(9.0, TOWER_IN, true), "a viewer on a 9 in floor sees over a tall tower");
+    assert!(sees(0.0, 0.0, false) && sees(3.0, 0.0, false), "planted: without the house every viewer sees");
+}
+
+/// Sight plan S2 (lead 22.11.): now that a house cell carries its 4.5 in height, F2 must still hold - a base whose centre is over it overlaps a block and the end cut
+/// walks it out. Planted: the same 4.5 in cell NOT listed solid is a plain tier top a model may rest on (the check can fail).
+#[test]
+fn nobody_rests_on_a_house_that_has_its_ridge_height() {
+    let mut level = vec![0.0; 16];
+    level[5] = crate::boardgen::plain::HOUSE_TOP_IN;
+    let (house, tier) = (painted(level.clone(), vec![5], true), painted(level, vec![], false));
+    let centre = [4.5, 4.5];
+    assert!(crate::mv::gate::overlaps_block(centre, 0.5, &house), "a 4.5 in house cell is a roof to rest on");
+    let cut = crate::mv::gate::rest_legal_cut(&[[4.5, 10.5], [4.5, 4.5]], 0.5, &house).expect("a legal spot on the route");
+    assert!(cut.last().unwrap()[1] >= 6.5, "the base ends outside the house: {cut:?}");
+    assert!(!crate::mv::gate::overlaps_block(centre, 0.5, &tier), "planted: an unlisted 4.5 in tier top is standing room");
+}
