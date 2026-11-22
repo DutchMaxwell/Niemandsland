@@ -115,6 +115,7 @@ const UNTWINNED: &[(&str, &str, &str)] = &[
     ("sim.rs", r#"{}: {} fails the morale test — Shaken"#, "other"),
     ("sim.rs", r#"{}: {} fails the morale test — Shaken, moved {:."#, "other"),
     ("sim.rs", r#"{}: {} is moved {:.0}\" in a straight line (away"#, "other"),
+    ("sim.rs", r#"{}: {} keeps its position - a building is impass"#, "gap"), // L-RF1 F7: the table logs its own "keeps its position" line
     ("sim.rs", r#"{}: {} repositions within {:.0}\" — landing cent"#, "other"),
     ("sim.rs", r#"{}: {} rolls a {} — enemies get AP(+1) against i"#, "other"),
     ("sim.rs", r#"{}: {} rolls {} — weapons get AP(+1) until the e"#, "other"),
