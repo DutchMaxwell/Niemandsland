@@ -1289,6 +1289,26 @@ pub(crate) fn tray_reanimation(
     if seams.hero_attach {
         members.extend(next.attached[si].iter().copied());
     }
+    if spot_rule {
+        // PENDING_EPOCH_REVIVE_SPOT (REVIVE-MEMBERS, lead ruling): the rule fires only for a unit where ALL models carry it, and a
+        // joined hero is part of the unit - a standing joined hero without it means no roll for the whole chain.
+        let (has, standing) = (|u: usize| statics[next.roster.profile[u]].reanimation.is_some(), |u: usize| !next.positions[u].is_empty());
+        if !members.iter().any(|&u| next.profile(u).wounds_max.iter().sum::<i64>() > next.wounds[u].iter().sum::<i64>()) {
+            return; // nothing to restore: no roll and no line, on both sides
+        }
+        if members.iter().any(|&u| standing(u) && !has(u)) {
+            shot.log.push(format!("Reanimation: {owner} does not reanimate — a joined model lacks the rule"));
+            return;
+        }
+        // Lead ruling "Aura bearer dead": the Aura gives Reanimation to "this model and its unit" - with every bearer fallen the
+        // chain no longer has it (the table's `reanimation_members` ends the Aura the same way).
+        let aura = |u: usize| next.profile(u).special_rules.iter().chain(&next.profile(u).item_grants).any(|r| r.trim() == "Reanimation Aura");
+        if members.iter().any(|&u| aura(u)) && !members.iter().any(|&u| aura(u) && standing(u)) {
+            shot.log.push(format!("Reanimation: {owner} does not reanimate — the Reanimation Aura bearer has fallen"));
+            return;
+        }
+        members.retain(|&u| has(u)); // a fallen joined hero without the rule is not in the pool
+    }
     // The pool — WOUND CURRENCY, per member of the carrying chain.
     let (mut gaps, mut dead) = (Vec::new(), Vec::new());
     for &u in &members {
@@ -1340,8 +1360,20 @@ pub(crate) fn tray_reanimation(
     } else {
         Vec::new()
     };
-    for &(u, cost) in &dead {
-        if left <= 0 {
+    // PENDING_EPOCH_REVIVE_SPOT: the table's spend (`SoloController.reanimation_plan`), fixed BEFORE placing: each casualty
+    // stands up at ONE wound, cheapest first, then the top-ups in the same order; an entry with no legal spot expires whole.
+    let mut plan: Vec<(usize, i64, i64)> = dead.iter().map(|&(u, cost)| (u, cost, 0)).collect();
+    if spot_rule {
+        plan.truncate(left.max(0) as usize);
+        left -= plan.len() as i64;
+        for e in plan.iter_mut() {
+            let top = (e.1 - 1).min(left);
+            e.2 = 1 + top;
+            left -= top;
+        }
+    }
+    for &(u, cost, planned) in &plan {
+        if !spot_rule && left <= 0 {
             break;
         }
         // PENDING_EPOCH_REVIVE_SPOT: the returning model keeps its unit's own base (metres; 0 = not set).
@@ -1382,13 +1414,13 @@ pub(crate) fn tray_reanimation(
             shot.log.push("Reanimation: 1 success but no placeable spot — coherency missing".into());
             continue;
         };
-        let back = cost.min(left).max(1);
+        let back = if spot_rule { planned } else { cost.min(left).max(1) };
         next.wounds[u].insert(0, back);
         next.positions[u].insert(0, spot);
         Rc::make_mut(&mut next.radii)[u].insert(0, r);
         next.kits_drop(u); // the revived body's kit is unknown: this unit falls back to slot order
         next.alive[u] = next.positions[u].len() as i64;
-        left -= back;
+        left -= if spot_rule { 0 } else { back };
         shot.log.push(format!("Reanimation: 1 model restored ({back} wound(s) back)"));
     }
 }

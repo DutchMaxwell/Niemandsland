@@ -84,6 +84,8 @@ const UNTWINNED: &[(&str, &str, &str)] = &[
     ("sim.rs", r#"Reanimation: 1 model restored ({back} wound(s) b"#, "other"),
     ("sim.rs", r#"Reanimation: 1 success but no placeable spot — c"#, "other"),
     ("sim.rs", r#"Reanimation: {owner} rolls {pool} dice ({}) — {l"#, "other"),
+    ("sim.rs", r#"Reanimation: {owner} does not reanimate — a join"#, "other"),
+    ("sim.rs", r#"Reanimation: {owner} does not reanimate — the Re"#, "other"),
     ("sim.rs", r#"Regenerative Strength: {} banks {} marker(s) for"#, "other"),
     ("sim.rs", r#"Regroup: {} starts out of coherency - its action"#, "other"),
     ("sim.rs", r#"Routed: {} is destroyed with {}"#, "silent"),
