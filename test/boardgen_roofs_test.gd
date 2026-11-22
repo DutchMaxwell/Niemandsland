@@ -59,8 +59,12 @@ func test_a_board_has_several_kinds_of_roof_and_a_catslide_hangs_towards_the_bac
 			assert_bool(r["along_x"]).is_true()   # eaves-on along this street
 			var lot: Dictionary = layout["lots"][int(r["lot"]) - 1]
 			assert_int(r["back"]).is_equal(-1 if lot["z"] < 7 else 1)   # the north side's back is the north (-z), the south side's the south (+z) ... away from the street
-	assert_int(types.size()).is_greater_equal(2)
 	assert_int(rooflines.size()).is_greater_equal(4)
+	var core: Object = ClassDB.instantiate("NmlCore")   # (L1: this street's lots are all two cells deep, so its eaves-on roofs are twin gables; the kinds are counted on real boards)
+	for s in range(1, 21):
+		for r: Dictionary in BoardgenTownDressing.roofs(core.boardgen_layout_themed(s, "ruintown")):
+			types[r["type"]] = true
+	assert_int(types.size()).is_equal(3)
 
 
 func test_the_ridge_follows_the_street_for_most_houses() -> void:
@@ -145,3 +149,47 @@ func test_the_kit_roofs_are_weathered_slate_not_terracotta() -> void:
 		assert_float(maxf(plain.r, maxf(plain.g, plain.b))).override_failure_message("kit roof tone %s too bright" % plain).is_less_equal(0.4)
 		assert_float(plain.s).override_failure_message("kit roof tone %s too saturated" % plain).is_less_equal(0.35)
 		assert_bool(tex.r < maxf(tex.g, tex.b)).override_failure_message("the textured kit roof %s still pushes the terracotta red" % tex).is_true()
+
+
+## (L1, target C: steep roofs) Over town boards 1-60 every main roof strip is at least 48 degrees steep over its own half width (a two-cell-wide house is twin gables, not one shallow
+## prism), and the drawn ridge brackets the core's 4.5 in (sight plan S4: mean eaves + height in 4.3-4.9 in, none under 3.5, none over RIDGE_MAX_IN). Red on the parent: 25-40 degrees.
+func test_every_main_roof_is_at_least_48_degrees_steep_and_its_ridge_brackets_the_rule_height() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var ridges := PackedFloat64Array()
+	var pitches := PackedFloat64Array()
+	var twins := 0
+	for s in range(1, 61):
+		for r: Dictionary in BoardgenTownDressing.roofs(core.boardgen_layout_themed(s, "ruintown")):
+			if r["annex"]:
+				continue
+			twins += int(r["ridges"] > 1)
+			ridges.append(float(r["eaves"]) + float(r["height"]))
+			for st: Dictionary in BoardgenTownDressing.ridge_strips(r):
+				pitches.append(rad_to_deg(atan2(float(st["height"]), float(st["width"]) * 0.5)))
+	var mean := 0.0
+	for x in ridges:
+		mean += x / ridges.size()
+	var lo_p: float = Array(pitches).min()
+	print("L1 PITCH %d strips, %.1f-%.1f deg; RIDGES %d roofs, mean %.2f in, %.2f-%.2f in; %d twin roofs" % [pitches.size(), lo_p, Array(pitches).max(), ridges.size(), mean, Array(ridges).min(), Array(ridges).max(), twins])
+	assert_float(lo_p).is_greater_equal(48.0)
+	assert_float(mean).is_between(4.3, 4.9)
+	assert_float(Array(ridges).min()).is_greater_equal(3.5)
+	assert_float(Array(ridges).max()).is_less_equal(BoardgenTownDressing.RIDGE_MAX_IN + 0.0001)
+	assert_int(twins).is_greater(0)
+
+
+## (L1) The strips of a twin roof lie side by side inside the roof's own width and keep its ridge line; hips only on a roof one ridge wide.
+func test_a_twin_roof_is_two_one_cell_strips_side_by_side() -> void:
+	var layout := _street_of_houses()
+	var seen := 0
+	for r: Dictionary in BoardgenTownDressing.roofs(layout):
+		var strips := BoardgenTownDressing.ridge_strips(r)
+		assert_int(strips.size()).is_equal(r["ridges"])
+		if r["ridges"] == 1:
+			continue
+		seen += 1
+		assert_str(r["type"]).is_equal("gable")
+		var gap: Vector2 = strips[1]["centre"] - strips[0]["centre"]
+		assert_float(gap.length()).is_equal_approx((float(r["width"]) - 2.0 * BoardgenTownDressing.OVERHANG_IN) / float(r["ridges"]), 0.001)
+		assert_float(float(strips[0]["width"])).is_equal_approx(3.0 + 2.0 * BoardgenTownDressing.OVERHANG_IN, 0.001)
+	assert_int(seen).is_greater(0)

@@ -9,6 +9,8 @@ const INCHES_TO_METERS := 0.0254
 const BODY_IN := 2.5   # the intact house's body: the core's solid height
 const OVERHANG_IN := 0.3
 const CHIMNEY_IN := 0.62
+const PITCH_DEG := Vector2(50.0, 58.0)   # (L1, target C: steep roofs) the pitch range of a main roof over its ridge's half width
+const RIDGE_MAX_IN := 4.9   # (L1) no drawn ridge above this: the sight plan's look guard (S4) brackets the rule height 4.5 in with 4.3-4.9
 const MAX_LIGHTS := 14   # 8 before the outer streets got their lamps (silhouette round 21.11.); only the SHADOWED_LANTERNS nearest the centre cast shadows
 const LANTERN_COLOUR := Color(1.0, 0.74, 0.48)
 ## (train 3) the four square lamps (the shadowed, widest cones - the one beside the street camera among them): a paler flame, so their pools stay warm-in-grey
@@ -109,7 +111,8 @@ static func house_parts(body: Dictionary) -> Array[Dictionary]:
 ## The ridge runs ALONG the street (eaves-on) or ACROSS it (gable-on) by the lot's hash, from the frontage (a lot with no street beside it keeps the long axis). The type is a gable, a
 ## hip (the ends slope too) or, for an eaves-on roof only, a catslide (the back slope runs down past the eaves; `back` = which side of the ridge is the back, -1 / +1). A lot of two or
 ## more cells may carry an ANNEX: its last cell at one end of the ridge gets its own, lower gable roof (`annex` true; the main roof is shorter by that cell). The yaw is the body's plus a skew
-## of at most 2 degrees. VISUAL ONLY: the body below stays the core's 2.5 in solid.
+## of at most 2 degrees. (L1) The pitch is 50-58 degrees over each ridge's half width, the ridge capped at RIDGE_MAX_IN (the core blocks sight to 4.5 in, sight plan S2 / S4: the mean
+## ridge stays in 4.3-4.9 in), so a steep roof comes from a narrow strip, not a tall one; `ridges` = how many parallel gables the roof is drawn as (`ridge_strips`). VISUAL ONLY.
 static func roofs(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var cell_in := float(layout["cell_in"])
@@ -135,12 +138,13 @@ static func roofs(layout: Dictionary) -> Array[Dictionary]:
 		var look := house_look(id, half, size)
 		var pick := _hash(id, half, 9)
 		var eaves_on := front != "" and along_x == (front in ["N", "S"])
-		var type := "gable" if pick < 0.45 or (pick >= 0.75 and not eaves_on) else ("hip" if pick < 0.75 else "catslide")
+		var ridges := maxi(1, roundi(across / cell_in))   # (L1) a house two cells across its ridge gets TWIN parallel gables, one cell wide each: steep without growing
+		var type := "gable" if ridges > 1 or pick < 0.45 or (pick >= 0.75 and not eaves_on) else ("hip" if pick < 0.75 else "catslide")   # (hips only on one-cell-wide roofs)
 		var back := 1 if front in ["N", "W"] else -1   # the side of the ridge away from the street (+z / +x for a front on the north / west)
-		var height := 1.5 + 1.2 * _hash(id, half, 2)
+		var height := minf(tan(deg_to_rad(PITCH_DEG.x + (PITCH_DEG.y - PITCH_DEG.x) * _hash(id, half, 2))) * (across / ridges * 0.5 + OVERHANG_IN), RIDGE_MAX_IN - float(look["top"]))
 		var yaw: float = look["yaw"] + (2.0 * _hash(id, half, 10) - 1.0) * deg_to_rad(2.0)
 		var roof := {"lot": id, "centre": centre, "length": run + 2.0 * OVERHANG_IN, "width": across + 2.0 * OVERHANG_IN, "height": height, "along_x": along_x, "half": half,
-			"yaw": yaw, "eaves": look["top"], "type": type, "back": back, "annex": false}
+			"yaw": yaw, "eaves": look["top"], "type": type, "back": back, "annex": false, "ridges": ridges}
 		if run >= 2.0 * cell_in and _hash(id, half, 11) < 0.4:
 			var end := 1.0 if _hash(id, half, 12) < 0.5 else -1.0
 			var shift := Vector2(end, 0.0) if along_x else Vector2(0.0, end)
@@ -152,13 +156,24 @@ static func roofs(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
+## (L1) The parallel gable strips a roof is drawn as: a copy of it per ridge (`strip` 0, 1, ...), each one cell wide plus the overhang, side by side across the ridge. Pure data.
+static func ridge_strips(r: Dictionary) -> Array[Dictionary]:
+	var n: int = r["ridges"]
+	var w := (float(r["width"]) - 2.0 * OVERHANG_IN) / n
+	var across := (Vector2(0, 1) if r["along_x"] else Vector2(1, 0)).rotated(-float(r["yaw"]))
+	var out: Array[Dictionary] = []
+	for k in n:
+		out.append(r.merged({"centre": r["centre"] + across * w * (k - (n - 1) * 0.5), "width": w + 2.0 * OVERHANG_IN, "ridges": 1, "strip": k}, true))
+	return out
+
+
 ## A brick chimney on the ridge of every roof, at the end the lot's hash picks: boxes for the greybox plan ({lo, hi, kind, solid}).
 static func chimneys(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for r: Dictionary in roofs(layout).filter(func(r: Dictionary) -> bool: return not r["annex"]):
 		var end_sign := 1.0 if _hash(r["lot"], r["half"], 3) < 0.5 else -1.0
 		var offset: float = end_sign * (float(r["length"]) * 0.5 - 0.9)
-		var centre: Vector2 = r["centre"] + (Vector2(offset, 0.0) if r["along_x"] else Vector2(0.0, offset))
+		var centre: Vector2 = ridge_strips(r)[0]["centre"] + (Vector2(offset, 0.0) if r["along_x"] else Vector2(0.0, offset))   # (on the first ridge of a twin roof, not in its valley)
 		out.append({"lo": Vector3(centre.x - CHIMNEY_IN * 0.5, BODY_IN, centre.y - CHIMNEY_IN * 0.5),
 			"hi": Vector3(centre.x + CHIMNEY_IN * 0.5, BODY_IN + float(r["height"]) + 0.9, centre.y + CHIMNEY_IN * 0.5), "kind": "brick", "solid": false})
 	return out
@@ -725,7 +740,9 @@ static func catslide_mesh() -> ArrayMesh:
 
 ## The roofs in one MultiMesh PER TYPE (gable, hip, catslide: "Roofs", "RoofsHip", "RoofsCatslide") with the board's material (the kind "roof" in its instance data).
 func build(layout: Dictionary, material: Material, prism_roofs := true, timber: Dictionary = {}) -> void:   # prism_roofs false: BoardgenTownKit draws the gable roofs (hip and catslide have no module: they stay procedural)
-	var list := roofs(layout)
+	var list: Array[Dictionary] = []
+	for r: Dictionary in roofs(layout):
+		list.append_array(ridge_strips(r))   # (L1) a twin roof is two prisms
 	if not prism_roofs:
 		list = list.filter(func(r: Dictionary) -> bool: return r["type"] != "gable")
 	var meshes := {"gable": [prism_mesh(), "Roofs"], "hip": [hip_mesh(), "RoofsHip"], "catslide": [catslide_mesh(), "RoofsCatslide"]}

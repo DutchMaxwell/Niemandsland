@@ -75,7 +75,10 @@ static func crow_perches(layout: Dictionary) -> Array[Vector3]:
 	var out: Array[Vector3] = []
 	for m: Dictionary in BoardgenTownDressing.merlons(layout):
 		out.append(Vector3((m["lo"].x + m["hi"].x) * 0.5, float(m["hi"].y), (m["lo"].z + m["hi"].z) * 0.5))
-	for r: Dictionary in BoardgenTownDressing.roofs(layout):
+	var strips: Array[Dictionary] = []
+	for whole: Dictionary in BoardgenTownDressing.roofs(layout):
+		strips.append_array(BoardgenTownDressing.ridge_strips(whole))   # (L1) each ridge of a twin roof
+	for r: Dictionary in strips:
 		if r["type"] != "gable" or BoardgenTownDressing._hash(r["lot"], r["half"], 7) < 0.25:
 			continue   # (a broken roof of the kit has no whole ridge)
 		var dir: Vector2 = (Vector2(1, 0) if r["along_x"] else Vector2(0, 1)).rotated(-float(r["yaw"]))
