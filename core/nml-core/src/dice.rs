@@ -2930,6 +2930,10 @@ pub(crate) fn ignore_batch(
     if pool.max(0) + bypass > 0 && !def.regen_note.is_empty() {
         say_rule(tray, "ignore", def.side, || format!("{def_owner} — {}", def.regen_note));
     }
+    // 29a: a once-per-game ignore rule already spent says so where it would have rolled (the table's PF-a line).
+    if pool.max(0) + bypass > 0 && !def.regen_feat_spent.is_empty() {
+        say_rule(tray, "ignore", def.side, || format!("{}: {def_owner} already used it this game — no ignore roll", def.regen_feat_spent));
+    }
     if pool.max(0) + bypass > 0 && def.regeneration && !def.regen_most_name.is_empty() {
         say_rule(tray, "ignore", def.side, || format!("{def_owner} — {}: most models carry it, so a joined hero without it does not switch it off", def.regen_most_name));
     }
@@ -2949,7 +2953,12 @@ pub(crate) fn ignore_batch(
             // a bypass weapon at a group not named Regeneration: its wounds join the pool and the group still rolls them
             say_rule(tray, "ignore", def.side, || format!("{def_owner}: {joined} wound{} ignore only Regeneration — {} still rolls", if joined == 1 { "" } else { "s" }, display_ignore_name(name)));
         }
-        return bypass + roll_ignore_group(pool, def.regen_target, name, def, def_owner, tray, rolls);
+        let landed = roll_ignore_group(pool, def.regen_target, name, def, def_owner, tray, rolls);
+        // 29a: the once-per-game rule's roll spends it - said right after its roll line, as the table does (`_solo_roll_ignore_group`).
+        if pool > 0 && def.regen_target > 0 && def.regen_feat > 0 && name == def.regen_pending_notes[3] {
+            say_rule(tray, "ignore", def.side, || format!("{name}: {def_owner} spends its once-per-game ignore roll"));
+        }
+        return bypass + landed;
     }
     let others: Vec<String> = def.regen_groups.iter().zip(def.regen_names).enumerate().filter(|(i, (t, _))| *i > 0 && **t > 0).map(|(_, (_, n))| display_ignore_name(n)).collect();
     // no group named Regeneration: the bypass wounds that already joined the pool are the ones the first group announces
