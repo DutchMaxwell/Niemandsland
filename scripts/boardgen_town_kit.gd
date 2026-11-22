@@ -14,8 +14,8 @@ const ROOF_W_IN := 3.6
 const ROOF_H_IN := {"roof_gable_low": 1.6, "roof_gable_steep": 2.6, "roof_sag_low": 1.6, "roof_sag_steep": 2.6, "roof_broken_a": 2.0, "roof_broken_b": 2.0, "roof_rafters": 2.0}
 const BROKEN_ROOF_SHARE := 0.34   # (train 3, H2: one roof in three is broken, at least one per board half)
 ## (train 3, H2) the instance colour per roof on top of the set's tint: 60 % slate blue-grey, 40 % a dull clay (the toy red is gone).
-const ROOF_SLATE := Color(0.46, 0.74, 0.98)
-const ROOF_CLAY := Color(0.55, 0.75, 0.92)
+const ROOF_SLATE := Color(0.62, 0.78, 0.92)
+const ROOF_CLAY := Color(0.62, 0.72, 0.8)
 ## (train 3) the battlements were the palest thing in the wall view: every merlon and capstone a step darker and weathered, two in five mossy.
 const MERLON_WEATHERED := Color(0.62, 0.63, 0.6)
 const MERLON_MOSSY := Color(0.5, 0.6, 0.44)
@@ -23,9 +23,9 @@ const ROOF_UV_TILE_IN := 3.0   # the roof modules' UVs count tiles of this size 
 const CHIMNEY_TOP_IN := 3.6   # a chimney module's cap height above its foot (the foot sinks into the house)
 const MODULES := ["roof_gable_low", "roof_gable_steep", "roof_broken_a", "roof_broken_b", "roof_rafters", "chimney_pots", "chimney_broken",
 	"merlon", "merlon_broken", "rubble_a", "rubble_b", "rubble_c"]
-const TINT := {"roof_tiles": Color(0.62, 0.30, 0.22), "timber": Color(0.42, 0.30, 0.20), "coursed_stone": Color(0.62, 0.58, 0.52), "none": Color.WHITE}
+const TINT := {"roof_tiles": Color(0.44, 0.38, 0.35), "timber": Color(0.42, 0.30, 0.20), "coursed_stone": Color(0.62, 0.58, 0.52), "none": Color.WHITE}
 ## The instance colour on a textured module: warms the dark clay tiles towards the town's red roofs, cools the stone towards the wall's grey.
-const TEXTURED_TINT := {"roof_tiles": Color(1.35, 0.85, 0.7), "timber": Color(1.0, 1.0, 1.0), "coursed_stone": Color(0.62, 0.68, 0.76), "none": Color.WHITE}
+const TEXTURED_TINT := {"roof_tiles": Color(0.6, 0.76, 0.92), "timber": Color(1.0, 1.0, 1.0), "coursed_stone": Color(0.62, 0.68, 0.76), "none": Color.WHITE}
 ## The authored clutter of BoardgenTownClutter (batches A2 / A2b / A6): the texture set each module is drawn with (the rest is "none": the kit's vertex colours, real colours for plants and cloth).
 const CLUTTER_SET := {"tower_cap_burnt": "timber", "barrel": "timber", "crate": "timber", "bucket": "timber", "woodpile": "timber", "barrel_broken": "timber", "crate_broken": "timber", "cart_wreck": "timber", "loose_wheel": "timber",
 	"splinters_flat": "timber", "trough": "coursed_stone", "debris_flat_a": "coursed_stone", "debris_flat_b": "coursed_stone",
@@ -127,7 +127,7 @@ static func plan(layout: Dictionary) -> Dictionary:
 		var h := BoardgenTownDressing._hash(r["lot"], r["half"], 7)
 		var broken := h < BROKEN_ROOF_SHARE or int(lowest[r["half"]]["lot"]) == int(r["lot"])
 		var m := ("roof_broken_a" if h < BROKEN_ROOF_SHARE * 0.5 else "roof_broken_b") if broken else ("roof_sag_low" if float(r["height"]) < 2.1 else "roof_sag_steep")
-		var tint := ROOF_SLATE if BoardgenTownDressing._hash(r["lot"], r["half"], 16) < 0.6 else ROOF_CLAY
+		var tint := ROOF_SLATE if BoardgenTownDressing._hash(r["lot"], r["half"], 16) < 0.8 else ROOF_CLAY   # (roofs lane 22.11.: slate four in five, a dull clay one in five)
 		var yaw := float(r["yaw"]) + (0.0 if r["along_x"] else PI * 0.5) + (PI if BoardgenTownDressing._hash(r["lot"], r["half"], 8) < 0.5 else 0.0)   # the body's yaw and skew, as the procedural roofs have it
 		var at := Vector3(r["centre"].x, r["eaves"], r["centre"].y)   # on the house's own eaves line
 		for part in ([m, "roof_rafters"] if m.begins_with("roof_broken") else [m]):
