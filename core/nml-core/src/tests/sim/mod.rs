@@ -1793,6 +1793,7 @@ mod grounded_reinforcement;
 mod grounded_speed;
 mod teleport;
 mod revive_spot;
+mod paid_input;
 mod hit_and_run_score;
 mod immobile;
 mod instinctive;

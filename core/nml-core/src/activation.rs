@@ -521,15 +521,15 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     if let Some((index, reason)) = cast_check(statics, state, t) {
         return ActStep::Refused { index, reason };
     }
-    // D-PAR3 14a: `order_check` keeps a `Paid` at index 1. The start is skipped; the other two flags wait for 14b.
-    let (paid_start, paid_rest) = match t.get(1) {
-        Some(Input::Paid { start, dangerous, beats }) => (*start, *dangerous || *beats),
-        _ => (false, false),
+    // D-PAR3 14a/14b: `order_check` keeps a `Paid` at index 1; the start and the beats ride the tray, the Dangerous test the seams.
+    let (paid_start, paid_dangerous, paid_beats) = match t.get(1) {
+        Some(Input::Paid { start, dangerous, beats }) => (*start, *dangerous, *beats),
+        _ => (false, false, false),
     };
-    if paid_rest {
-        return ActStep::Refused { index: 1, reason: "the core does not skip a paid Dangerous test or pre-attack beat yet".to_string() };
-    }
     let casts: Vec<CastInput> = t.iter().filter_map(|x| if let Input::Cast(c) = x { Some(c.clone()) } else { None }).collect();
+    if paid_beats && !casts.is_empty() {
+        return ActStep::Refused { index: 1, reason: "the table paid the pre-attack phase, so it cast already: no cast input".to_string() };
+    }
     let consolidate: Vec<ConsolidatePlan> = t.iter().filter_map(|x| if let Input::Consolidate(c) = x { Some(c.clone()) } else { None }).collect();
     // Before any resolver runs: no die is drawn and no state is resolved. A `Placed` in the
     // transcript is simply dropped (the table puts the models back).
@@ -600,6 +600,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         }
     }
     let mut seams = seams;
+    seams.no_dangerous |= paid_dangerous; // D-PAR3 14b: the table rolled this move's test (its end morale is the table's too)
     if let Some((i, id, option)) = takedown {
         let Some((want, options, owner)) = at.and_then(|si| takedown_choice(statics, state, si, shoot.as_deref())) else {
             return ActStep::Refused { index: i, reason: format!("no choice is open in this activation (got {id})") };
@@ -646,7 +647,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             if let Some((p, trails)) = placed.clone() {
                 tray.place(p, trails);
             }
-            tray.pay(paid_start, false);
+            tray.pay(paid_start, paid_beats);
             for (_, id, answer) in &wound {
                 tray.offer_wound_alloc(id.clone(), answer.clone());
             }

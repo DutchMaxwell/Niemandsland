@@ -589,6 +589,5 @@ use super::*;
         assert!(matches!(ask(&[Input::Begin, hold.clone()]), ActStep::NeedRoll { count: 1, target: 1, .. }), "unpaid: the pool first");
         let ActStep::Done { state, .. } = ask(&[Input::Begin, paid(false), hold.clone()]) else { panic!("paid: no die is asked") };
         assert_eq!((state.alive[0], state.positions[0].len()), (3, 3), "nothing restored");
-        assert!(matches!(ask(&[Input::Begin, hold.clone(), paid(false)]), ActStep::Refused { index: 2, .. }), "misplaced paid");
-        assert!(matches!(ask(&[Input::Begin, paid(true), hold]), ActStep::Refused { index: 1, .. }), "dangerous waits for 14b");
+        assert!(matches!(ask(&[Input::Begin, hold, paid(false)]), ActStep::Refused { index: 2, .. }), "misplaced paid");
     }
