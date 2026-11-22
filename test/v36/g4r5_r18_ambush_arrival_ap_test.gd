@@ -6,7 +6,7 @@ extends GdUnitTestSuite
 ## volleys add the +1 per shot member and the battle log names the book rule.
 ## The recorded act closes only with the next re-recording; the AI legs (epoch 72 and 73) drive the game's own call
 ## (`_run_ai_shooting`, the core door takes it and writes the rule line itself; the core folds the arrival AP from 73 only, as
-## the table does); the human tests drive the table's.
+## the table does); the human tests drive the human door (`CoreActivation.human_shoot`).
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
@@ -112,11 +112,21 @@ func _ai_volley(epoch: int, rule: bool, arrived_round: int) -> String:
 	return text
 
 
+## The player's own volley through the core door: the activation is opened first (the Fire! button's path), then the
+## door shoots; false from the door would mean the table is left to resolve it.
+func _door_fire(attacker: GameUnit, target: GameUnit) -> void:
+	CoreActivation._env = 1
+	assert_bool(CoreActivation.open_session(_main, attacker)).override_failure_message("no activation session for the attacker").is_true()
+	var took: bool = await CoreActivation.human_shoot(_main, attacker, target)
+	assert_bool(took).override_failure_message("the core door did not take the volley (the table would resolve it)").is_true()
+	CoreActivation.close_session(_main, attacker.unit_id)
+
+
 func _human_volley(epoch: int, rule: bool, arrived_round: int) -> String:
 	AiActRecorder.rules_epoch = epoch
 	var f := _fixture(rule, arrived_round)
 	_main.seed_tray_rng(SEED)
-	await _main._run_human_shooting(f["shooter"], f["squad"])
+	await _door_fire(f["shooter"], f["squad"])
 	var text := _log_text()
 	await E2EBoot.settle(get_tree())
 	return text
