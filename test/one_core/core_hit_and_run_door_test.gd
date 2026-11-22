@@ -120,19 +120,16 @@ func _ai_runs() -> Array:
 
 
 @warning_ignore('unused_parameter')
-func test_the_ai_door_leaves_a_harassing_shooter_on_the_table(timeout := 600000, do_skip := not ClassDB.class_exists("NmlCore"),
+func test_the_ai_door_takes_a_harassing_shooter_and_refuses_its_illegal_kite(timeout := 600000, do_skip := not ClassDB.class_exists("NmlCore"),
 		skip_reason := "no NmlCore") -> void:
+	# PLAN_FIRST_DELETION 3e: the group `hit_and_run_landing` left the live deny file - the door takes the shooter, and #3410 refuses
+	# the landing that would put the shooter inside the column (one line, `land_illegal`). The first activation of the scene advances
+	# before it shoots (its kite then ends clear of the column); every later one holds and shoots, and its rigid kite would end inside.
+	# RED: put the group back -> ai_runs 0 on every seed.
 	var live := await _ai_runs()
 	for s in live.size():
-		assert_int(int(live[s][0])).override_failure_message("seed %d: the core does not take a Harassing shooter (rows %s)" % [s, live]).is_equal(0)
-		assert_int(int(live[s][1])).override_failure_message("seed %d: no base ends inside the friendly column (rows %s)" % [s, live]).is_equal(0)
-	_without_group()
-	var control := await _ai_runs()
-	for s in control.size():
-		assert_int(int(control[s][0])).override_failure_message("control seed %d: the core took the activation (rows %s)" % [s, control]).is_equal(1)
-	# The first activation of the scene advances before it shoots (its kite then ends clear of the column); every later one holds and shoots,
-	# and its rigid kite would end inside the column: the checker refuses that landing (3c), so no base ends inside it.
-	var inside := control.filter(func(r: Array) -> bool: return int(r[1]) > 0).size()
-	assert_int(inside).override_failure_message("control: no kite is landed inside the column (rows %s)" % [control]).is_equal(0)
-	var refused := control.filter(func(r: Array) -> bool: return int(r[3]) == 1 and int(r[4]) == 1).size()
-	assert_int(refused).override_failure_message("control: the illegal kite is refused with its line (rows %s)" % [control]).is_greater_equal(SEEDS.size() - 1)
+		assert_int(int(live[s][0])).override_failure_message("seed %d: the core takes the Harassing shooter (rows %s)" % [s, live]).is_equal(1)
+	var inside := live.filter(func(r: Array) -> bool: return int(r[1]) > 0).size()
+	assert_int(inside).override_failure_message("no kite is landed inside the column (rows %s)" % [live]).is_equal(0)
+	var refused := live.filter(func(r: Array) -> bool: return int(r[3]) == 1 and int(r[4]) == 1).size()
+	assert_int(refused).override_failure_message("the illegal kite is refused with its line (rows %s)" % [live]).is_greater_equal(SEEDS.size() - 1)
