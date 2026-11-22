@@ -40,14 +40,15 @@ func _lib(cached: Array) -> FakeLib:
 	return lib
 
 
-func _check_eleven(meta: Dictionary) -> void:
+func _check_eleven(meta: Dictionary, stone_big_in: float) -> void:
 	var mats := BoardgenDressMaterials.make(meta, _lib(["flags", "plaster", "roof_tiles", "coursed_stone", "timber"]))
 	assert_int(mats.size()).is_equal(11)
 	for name: String in mats:
 		assert_str(mats[name].resource_name).is_equal(name)
 		assert_bool(mats[name] is ShaderMaterial).override_failure_message(name).is_equal(name in TEXTURED)
 	var stone: ShaderMaterial = mats["ct_stone_big"]
-	assert_float(stone.get_shader_parameter("tile_in")).is_equal_approx(5.5, 0.0001)
+	assert_float(stone.get_shader_parameter("tile_in")).is_equal_approx(stone_big_in, 0.0001)
+	assert_float((mats["ct_stone"] as ShaderMaterial).get_shader_parameter("tile_in")).is_equal_approx(3.0, 0.0001)
 	assert_bool(stone.get_shader_parameter("world_uv")).is_true()
 	assert_bool(mats["ct_roof"].get_shader_parameter("world_uv")).is_false()   # roofs keep their mesh UVs
 	assert_object(stone.get_shader_parameter("orm_tex")).is_not_null()
@@ -58,13 +59,13 @@ func _check_eleven(meta: Dictionary) -> void:
 
 
 func test_the_manifest_gives_eleven_named_materials() -> void:
-	_check_eleven(META)
+	_check_eleven(META, 5.5)   # the K0 nominal numbers of the copy above
 
 
 func test_the_bundled_manifest_gives_eleven_named_materials_once_it_is_on_main() -> void:
 	if not FileAccess.file_exists(BUNDLED):
 		return   # step 3 (lane CORE) copies it in; until then the copy above is the manifest
-	_check_eleven(JSON.parse_string(FileAccess.get_file_as_string(BUNDLED)))
+	_check_eleven(JSON.parse_string(FileAccess.get_file_as_string(BUNDLED)), 3.6)   # PINNED to the stone scale ruled 22.11. (ct_stone_big 3.6 in, ct_stone 3.0 in): a later drift of the manifest goes red here
 
 
 func test_a_set_that_is_not_cached_gives_a_flat_material_in_its_tone() -> void:
