@@ -46,6 +46,7 @@ func before_test() -> void:
 	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.PATH))
 	data["groups"]["regen_test"] = {"primitives": ["Regeneration"], "step": "P4.D-0", "golden": "x", "parity": "x"}
 	data["groups"]["shot_test"] = {"primitives": ["Shot Modifier"], "step": "P4.D-0", "golden": "x", "parity": "x"}
+	data["groups"]["takedown_test"] = {"primitives": ["Takedown"], "step": "P4.D-0", "golden": "x", "parity": "x"}
 	var f := FileAccess.open(TMP, FileAccess.WRITE)
 	f.store_string(JSON.stringify(data))
 	f.close()
@@ -190,4 +191,50 @@ func test_the_door_closes_the_shot_feat_latch_the_core_spends() -> void:
 				bad.append("seed %d: %s: table %s, core %s" % [s, k, table[k], core[k]])
 	print("SHOT_FEAT_LATCH seeds=%d spent=%d mismatches=%d" % [seeds, spent, bad.size()])
 	assert_int(spent).override_failure_message("no seed spent the shot feat: the sweep compares nothing").is_greater(0)
+	assert_array(bad).override_failure_message("core vs table:\n" + "\n".join(bad.slice(0, 10))).is_empty()
+
+
+## Two volleys through the door (else the table's own) with a one-model SHOOTER carrying Takedown Shot (gf, the once-per-game
+## extra attack at Quality 2+, AP(2), Deadly(3), Takedown; `uses_per_game`). The table closes `takedown_bonus_used_<name>`.
+func _two_takedown_volleys(s: int, core_run: bool) -> Dictionary:
+	var att := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Att", "models": 1, "x_in": 0.0,
+		"faction_folder": "human_inquisition", "rules": ["Takedown Shot"]}, true), RIFLE)
+	var foe := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Def", "models": 10, "x_in": 8.0}), RIFLE)
+	for i in foe.models.size():
+		(foe.models[i] as ModelInstance).node.global_position.z += float((i * 7) % 5) * 0.0001
+	_main.seed_tray_rng(s)
+	var runs := CoreActivation.ai_runs
+	for _v in 2:
+		var h := CoreActivation.capture(_main) if core_run else 0
+		_main._solo_core_ai_h = h
+		await _main._run_ai_shooting({"unit": att, "moved": false, "action": AiDecision.Action.HOLD})
+		_main._solo_core_ai_h = 0
+		if h != 0:
+			(_main.solo_controller as SoloController)._core_node_ready().release(h)
+	var survivors: Array = foe.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
+	survivors.sort()
+	var out := {"alive": foe.get_alive_count(), "survivors": survivors, "shaken": foe.is_shaken, "rng": _main._tray_rng.state,
+		"flag": bool(att.unit_properties.get("takedown_bonus_used_Takedown Shot", false)), "core": CoreActivation.ai_runs - runs}
+	_free([att, foe])
+	return out
+
+
+## Coverage ledger m2 (gf_811, state class): the Takedown Shot the core spends closes the table's own latch through the door, so
+## the second volley's capture sends it CLOSED and the core makes no second extra attack. RED: drop the Takedown branch from
+## `_land_feats` -> the flag stays open (and the door reports a feat no table flag closes).
+func test_the_door_closes_the_takedown_shot_latch_the_core_spends() -> void:
+	var seeds := int(OS.get_environment("NML_ONE_CORE_SEEDS")) if OS.has_environment("NML_ONE_CORE_SEEDS") else 20
+	var bad: Array = []
+	var spent := 0
+	for s in seeds:
+		var table := await _two_takedown_volleys(s, false)
+		var core := await _two_takedown_volleys(s, true)
+		spent += 1 if bool(core["flag"]) else 0
+		if int(core["core"]) != 2:
+			bad.append("seed %d: the core took %d volleys" % [s, core["core"]])
+		for k in ["alive", "survivors", "shaken", "rng", "flag"]:
+			if table[k] != core[k]:
+				bad.append("seed %d: %s: table %s, core %s" % [s, k, table[k], core[k]])
+	print("TAKEDOWN_LATCH seeds=%d spent=%d mismatches=%d" % [seeds, spent, bad.size()])
+	assert_int(spent).override_failure_message("no seed spent Takedown Shot: the sweep compares nothing").is_greater(0)
 	assert_array(bad).override_failure_message("core vs table:\n" + "\n".join(bad.slice(0, 10))).is_empty()
