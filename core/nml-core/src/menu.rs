@@ -1385,6 +1385,7 @@ pub fn candidates_tuned(
     if let Some(spec) = statics[state.roster.profile[unit]].teleport.as_ref().filter(|s| s.standalone_reposition) {
         if let Some(to) = teleport_probe(
             state, unit, crate::unit::teleport_cap_in(&spec.name, false), Some(terrain),
+            true, // the menu has no seams: a joined hero's landing is checked too (L-RF1 F7, never offers a refused one)
         ) {
             let mut c = Candidate::new(key, REPOSITION);
             c.dest = Some([to[0], state.positions[unit][0][1], to[1]]);

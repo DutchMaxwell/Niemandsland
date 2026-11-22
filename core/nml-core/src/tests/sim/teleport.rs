@@ -307,3 +307,34 @@ use super::*;
         let (open, _) = run(&board(false));
         assert!(open.teleport_used[0], "planted: no solid cell, the record lands");
     }
+
+    /// L-RF1 F7 review: the live probe never picks a landing on a house - not for the unit's own models (planted: on a
+    /// board without the solid cell it picks exactly that landing), and, with `hero_attach`, not where only a JOINED hero
+    /// would land on one (the beat moves the hero too and would refuse it, and the menu would offer it again). Red before:
+    /// the probe checked `&[si]` only, so the hero case returned the refused landing.
+    #[test]
+    fn the_probe_skips_landings_on_a_house_for_the_unit_and_its_joined_hero() {
+        let (mut st, _) = tp_line(crate::acts::CURRENT_RULES_EPOCH);
+        st.positions[1] = vec![[0.0, 0.0, 6.0 * IN2M]]; // the joined hero (four_unit_line attaches unit 1 to unit 0), 6 in south
+        st.objectives = vec![crate::state::Objective { pos: [st.positions[0][0][0] + 6.0 * IN2M, 0.0, 0.0], owner: 0 }]; // pulls 3 in east
+        let cell = |p: [f64; 2]| ((p[1] / IN2M / 3.0 + 8.0).floor() as u16) * 24 + (p[0] / IN2M / 3.0 + 12.0).floor() as u16;
+        let board = |solid: Vec<u16>| {
+            let mut p: crate::terrain::PlainTerrain = serde_json::from_value(serde_json::json!({"cells": [], "sandbox": [],
+                "cell_params": {"table_size_feet": [6.0, 4.0], "grid_rotation_degrees": 0.0, "grid_size_inches": 3.0, "inches_to_meters": IN2M}})).unwrap();
+            p.tiers = Some(crate::terrain::TierGrid { nx: 24, nz: 16, cell_in: 3.0, level_in: vec![0.0; 384], ladders: vec![], stairs: vec![] });
+            p.solid_cells = solid;
+            crate::terrain::Terrain::build(&p)
+        };
+        let probe = |t: &crate::terrain::Terrain, heroes: bool| crate::sim::teleport_probe(&st, 0, 3.0, Some(t), heroes);
+        let p0 = probe(&board(vec![]), false).expect("the open board gives a landing");
+        assert_eq!(probe(&board(vec![]), true), Some(p0), "planted: no house, the hero changes nothing");
+        // the unit's own landing on a house
+        let unit_house = board(vec![cell(p0)]);
+        assert_ne!(probe(&unit_house, false), Some(p0), "the probe skips a landing on a house");
+        // only the hero's landing on a house
+        let from = geom::centre(&st.positions[0]);
+        let hero = [st.positions[1][0][0] + p0[0] - from[0] as f64, st.positions[1][0][2] + p0[1] - from[2] as f64];
+        let hero_house = board(vec![cell(hero)]);
+        assert_eq!(probe(&hero_house, false), Some(p0), "without hero_attach the hero does not move: the landing stays");
+        assert_ne!(probe(&hero_house, true), Some(p0), "with hero_attach the probe skips a landing where only the hero hits a house");
+    }
