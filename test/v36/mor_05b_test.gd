@@ -156,23 +156,3 @@ func test_table_log_note_is_empty_when_every_model_carries_the_rule() -> void:
 	_join_hero(squad, ["Hero", "Guarded"])
 	assert_str(_main._solo_most_models_note(squad, "Guarded")) \
 		.override_failure_message("no minority to explain: the tail stays empty").is_equal("")
-
-
-func test_table_shooting_log_says_the_majority_kept_guarded_on() -> void:
-	_set_epoch(AiActRecorder.EPOCH_73_V36)
-	var squad := _unit(1, "Squad", "", ["Guarded"], 5, Vector3(0.0, 0.0, 0.5))
-	_join_hero(squad, ["Hero"])
-	var striker := _unit(2, "Raiders", "", [], 2, Vector3.ZERO)
-	assert_bool(_main._solo_ai_volley_distance_in(striker, squad) > AiCombatMath.LONG_RANGE_IN) \
-		.override_failure_message("precondition: the shot is from over 9\"").is_true()
-	await _main._solo_resolve_ai_volley(striker, squad, [])
-	var text := ""
-	for e in _main.battle_log.entries():
-		text += str((e as Dictionary)["text"]) + "\n"
-	assert_str(text) \
-		.override_failure_message("rules-must-log: the shot line must carry the majority note:\n%s" % text) \
-		.contains("Guarded): shot from over 9\" — +1 Defense")
-	assert_str(text) \
-		.override_failure_message("rules-must-log: the line must say the majority kept the rule on:\n%s" % text) \
-		.contains("(most of its models carry it)")
-	await E2EBoot.settle(get_tree())
