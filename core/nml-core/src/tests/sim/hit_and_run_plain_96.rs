@@ -134,6 +134,8 @@ use super::*;
         let old = step(&st, &statics, &t, e - 1, false, true);
         assert!(illegal(&old, &t).contains("forbidden"), "the fixture: the rigid kite rests on the block: {:?} -> {}", old.positions[0], illegal(&old, &t));
         let new = step(&st, &statics, &t, e, false, true);
+        assert_eq!(new.hit_and_run_round[0], new.round);
+        assert_ne!(new.positions[0], st.positions[0], "the ported step moved (a step that stays put is no legal kite)");
         assert_eq!(illegal(&new, &t), "", "end spots {:?}", new.positions[0]);
     }
 
