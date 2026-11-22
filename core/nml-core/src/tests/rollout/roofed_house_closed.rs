@@ -227,3 +227,53 @@ fn a_flier_crosses_a_house_but_never_ends_on_it() {
     assert!(asked >= 16);
     assert!(inside.is_empty(), "{} of {asked} flights end on a house:\n{}", inside.len(), inside.join("\n"));
 }
+
+/// Halfroofs plan H3: the new case of the half roofs - a 3 in floor directly beside a level-0 solid (H1 slabs, H2 ruins). Every straight lane from open
+/// ground across a half-roof cell to the 3 in floor on its far side (seeds 1..=60): the walker's route never enters a roofed cell and the planted twin
+/// (no house class, no solid listing) crosses; a flier along the same lanes may cross but never ends on a half roof. The readers of
+/// `every_reader_agrees_a_house_is_closed` already walk every Roofed cell (half roofs included): this test also proves that they met some.
+fn half_roof_lanes(l: &Layout) -> Vec<Lane> {
+    let house = |id: u16| l.lots.iter().any(|lot| lot.id == id && lot.kind == LotKind::Roofed);
+    let at = |x: i64, z: i64| ((0..l.nx as i64).contains(&x) && (0..l.nz as i64).contains(&z)).then(|| l.cell(x as usize, z as usize));
+    let mut out = Vec::new();
+    for c in l.cells.iter().filter(|c| c.lot_kind == LotKind::Roofed && !house(c.lot_id)) {
+        for (dx, dz) in [(-1i64, 0i64), (1, 0), (0, -1), (0, 1)] {
+            let (Some(a), Some(b)) = (at(c.x as i64 - dx, c.z as i64 - dz), at(c.x as i64 + dx, c.z as i64 + dz)) else { continue };
+            if a.level == 0 && !matches!(a.lot_kind, LotKind::Roofed | LotKind::Hazard | LotKind::Tower) && b.level == 1 && !matches!(b.lot_kind, LotKind::Roofed | LotKind::Wall) {
+                out.push((c.x, c.z, (a.x, a.z), (b.x, b.z)));
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn a_half_roof_beside_its_floor_is_closed_to_walkers_and_fliers() {
+    let seeds: Vec<i64> = (1..=60).collect();
+    let (asked, crossed) = crossings_on(&seeds, true, half_roof_lanes);
+    assert!(asked >= 30, "the seeds must give half roofs with open ground and a 3 in floor on either side: {asked}");
+    assert!(crossed.is_empty(), "{} of {asked} lanes cross a half roof:\n{}", crossed.len(), crossed.join("\n"));
+    let (open_asked, open) = crossings_on(&seeds, false, half_roof_lanes);
+    eprintln!("half-roof lanes over 60 town boards: {asked}; planted no-house twin: {} of {open_asked} cross", open.len());
+    assert!(!open.is_empty(), "planted: with no house class the half-roof lanes must cross, or the check proves nothing: 0 of {open_asked}");
+    let (mut flights, mut inside) = (0, Vec::new());
+    for &seed in &seeds[..20] {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        let t = Terrain::build(&to_plain(&l));
+        for (lx, lz, a, b) in half_roof_lanes(&l) {
+            let ((ax, az), (bx, bz)) = (centre_m(&l, a), centre_m(&l, b));
+            let mut st = state_at(ax, az);
+            std::rc::Rc::get_mut(&mut st.profiles).expect("owned").list[0].special_rules.push("Flying".into());
+            let land = (MoveRules { rules_epoch: CURRENT_RULES_EPOCH }).plain_move(&st, &t, 0, [bx as f32, 0.0, bz as f32], 24.0, false, true, crate::mv::FAST_PLANNER_GUARD).expect("a landing");
+            let end = t.to_inch(land.end[0]);
+            flights += 1;
+            if l.cell((end[0] / 3.0) as usize, (end[1] / 3.0) as usize).lot_kind == LotKind::Roofed { inside.push(format!("seed {seed} half roof ({lx},{lz}) lane {a:?} -> {b:?} ends at {end:?}")); }
+        }
+    }
+    assert!(flights >= 10, "the fliers proved nothing: {flights}");
+    assert!(inside.is_empty(), "{} of {flights} flights end on a half roof:\n{}", inside.len(), inside.join("\n"));
+    let (cells, open) = open_readers(1..=60, true);
+    let halves: usize = (1..=60).map(|s| { let l = generate_themed(s, Symmetry::Point180, Theme::RuinTown); l.cells.iter().filter(|c| c.lot_kind == LotKind::Roofed && !l.lots.iter().any(|lot| lot.id == c.lot_id && lot.kind == LotKind::Roofed)).count() }).sum();
+    eprintln!("readers walked {cells} roofed cells, {halves} of them half roofs");
+    assert!(halves >= 60 && open.is_empty(), "the readers must meet half roofs and find them closed: {halves} half-roof cells, {} open", open.len());
+}
