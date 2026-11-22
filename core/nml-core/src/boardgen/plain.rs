@@ -11,6 +11,9 @@ use super::{Layout, Theme, LEVEL_IN};
 pub const GENERATOR_VERSION: u32 = 1;
 /// Height of a tall scenery tower (`LotKind::Tower`) to the core, inches: above every eye on a board (9 in + 1.25 in), so nobody sees over it.
 pub const TOWER_IN: f64 = 12.0;
+/// Height of an intact house to the core, inches (sight plan S2, G1 of 04.08.: terrain is a volume of its real height): the drawn roof ridge. From the ground and a
+/// 3 in floor (eye 4.25 in) nobody sees over a house, from 6 in and 9 in one does. Still a solid cell: nobody stands in or on it.
+pub const HOUSE_TOP_IN: f64 = 4.5;
 
 /// Cells between the board edge and the edge of the terrain overlay's grid: that grid is the table diagonal in cells,
 /// rounded up to even (`Terrain::build`), so a 48 in board sits in a 24 x 24 grid and its cell (0, 0) is grid cell (4, 4).
@@ -47,7 +50,7 @@ pub fn to_plain(l: &Layout) -> PlainTerrain {
     let cells = classes.into_iter().map(|((z, x), class)| [(x as i64 + m) as f64, (z as i64 + m) as f64, f64::from(class)]).collect();
     let tiers = TierGrid {
         nx: l.nx as u16, nz: l.nz as u16, cell_in: f64::from(l.cell_in),
-        level_in: l.cells.iter().map(|c| if c.lot_kind == LotKind::Tower { TOWER_IN } else { f64::from(LEVEL_IN[usize::from(c.level)]) }).collect(),
+        level_in: l.cells.iter().map(|c| match c.lot_kind { LotKind::Tower => TOWER_IN, LotKind::Roofed => HOUSE_TOP_IN, _ => f64::from(LEVEL_IN[usize::from(c.level)]) }).collect(),
         ladders: l.connectors.iter().map(|c| [c.low, c.high]).collect(),
         stairs: Vec::new(),
     };
@@ -179,6 +182,7 @@ mod tests {
             let p = to_plain(&l);
             let roofed: Vec<u16> = l.cells.iter().filter(|c| matches!(c.lot_kind, LotKind::Roofed | LotKind::Tower)).map(|c| (c.z * l.nx + c.x) as u16).collect();
             assert_eq!(p.solid_cells, roofed, "seed {seed}: every intact house and tall tower cell and nothing else is solid");
+            assert!(l.cells.iter().enumerate().filter(|(_, c)| c.lot_kind == LotKind::Roofed).all(|(i, _)| p.tiers.as_ref().unwrap().level_in[i] == HOUSE_TOP_IN), "seed {seed}: a house is not its ridge high to the core (sight plan S2)");
             let board = Terrain::build(&p);
             let landmark = |c: &crate::boardgen::Cell| l.landmarks.iter().find(|m| m.cells().any(|i| i == c.z * 16 + c.x)).map(|m| m.kind.terrain_class()).filter(|&k| k != NONE);
             for c in &l.cells {
@@ -233,6 +237,7 @@ mod tests {
     // re-pinned 22.11. (roofs plan K2, df767026f7ddebdd -> 719d45f5c81b7df2): the town raised minimum 23 -> 15 % (fewer filler slabs)
     // re-pinned 22.11. (roofs plan K3, 719d45f5c81b7df2 -> c35f70fddda0af2c): infill houses between the bands
     // re-pinned 22.11. (towers plan T2, c35f70fddda0af2c -> e0da3e93e0e428d0): one half-turn pair of tall towers between the bands
-    const PINNED_TOWN_42: &str = "e0da3e93e0e428d0";
+    // re-pinned 22.11. (sight plan S2, e0da3e93e0e428d0 -> fae627164db9c408): a house is its ridge (4.5 in) high in level_in
+    const PINNED_TOWN_42: &str = "fae627164db9c408";
     const PINNED_SEED_42: &str = "cbcd64fada596527";
 }
