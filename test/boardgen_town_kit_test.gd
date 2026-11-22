@@ -39,7 +39,9 @@ func _count(plan: Dictionary, prefix: String) -> int:
 func test_every_piece_gets_one_module_where_the_procedural_one_stood() -> void:
 	var layout := _town()
 	var plan := BoardgenTownKit.plan(layout)
-	var roofs := BoardgenTownDressing.roofs(layout).filter(func(r: Dictionary) -> bool: return r["type"] == "gable").size()   # the kit draws the gable roofs; hips and catslides stay procedural
+	var roofs := 0   # the kit draws the gable roofs, one module per ridge (L1 twin gables); hips and catslides stay procedural
+	for r: Dictionary in BoardgenTownDressing.roofs(layout).filter(func(r: Dictionary) -> bool: return r["type"] == "gable"):
+		roofs += int(r["ridges"])
 	assert_int(roofs).is_greater(0)
 	assert_int(_count(plan, "roof_") - _count(plan, "roof_rafters")).is_equal(roofs)
 	assert_int(_count(plan, "roof_rafters")).is_equal(_count(plan, "roof_broken"))   # a broken roof shows its frame

@@ -130,13 +130,15 @@ static func plan(layout: Dictionary) -> Dictionary:
 		var m := ("roof_broken_a" if h < BROKEN_ROOF_SHARE * 0.5 else "roof_broken_b") if broken else ("roof_sag_low" if float(r["height"]) < 2.1 else "roof_sag_steep")
 		var tint := ROOF_SLATE if BoardgenTownDressing._hash(r["lot"], r["half"], 16) < 0.8 else ROOF_CLAY   # (roofs lane 22.11.: slate four in five, a dull clay one in five)
 		var yaw := float(r["yaw"]) + (0.0 if r["along_x"] else PI * 0.5) + (PI if BoardgenTownDressing._hash(r["lot"], r["half"], 8) < 0.5 else 0.0)   # the body's yaw and skew, as the procedural roofs have it
-		var at := Vector3(r["centre"].x, r["eaves"], r["centre"].y)   # on the house's own eaves line
-		for part in ([m, "roof_rafters"] if m.begins_with("roof_broken") else [m]):
-			var s := Vector3(float(r["length"]) / ROOF_L_IN, float(r["height"]) / ROOF_H_IN[part], float(r["width"]) / ROOF_W_IN)
-			var item := _item(Basis(Vector3.UP, yaw) * Basis.from_scale(s), at)
-			if part != "roof_rafters":
-				item["colour"] = tint
-			add.call(part, item)
+		for st: Dictionary in BoardgenTownDressing.ridge_strips(r):   # (L1) a twin roof: one module per ridge, the damage on the first
+			var at := Vector3(st["centre"].x, r["eaves"], st["centre"].y)   # on the house's own eaves line
+			var ms := m if st["strip"] == 0 else ("roof_sag_low" if float(r["height"]) < 2.1 else "roof_sag_steep")
+			for part in ([ms, "roof_rafters"] if ms.begins_with("roof_broken") else [ms]):
+				var s := Vector3(float(r["length"]) / ROOF_L_IN, float(r["height"]) / ROOF_H_IN[part], float(st["width"]) / ROOF_W_IN)
+				var item := _item(Basis(Vector3.UP, yaw) * Basis.from_scale(s), at)
+				if part != "roof_rafters":
+					item["colour"] = tint
+				add.call(part, item)
 	var chimneys := BoardgenTownDressing.chimneys(layout)
 	for i in chimneys.size():
 		var c: Dictionary = chimneys[i]
