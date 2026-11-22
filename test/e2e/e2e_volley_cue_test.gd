@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## E2E — VFX #2 rides the REAL volley (_solo_resolve_ai_volley): one tracer per firing model on exactly the
+## E2E — VFX #2 rides the REAL volley (the AI body `_run_ai_shooting`, the core door): one tracer per firing model on exactly the
 ## eye pair the per-model LOS count cleared (base spot + the unit's LOS height, the same numbers the rule
 ## used), none for a model whose sight line a third unit blocks, and none at all for Indirect fire (its LOS
 ## is waived — a line there would be drawn through whatever stands in the way).
@@ -30,6 +30,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
 	GraphicsSettings.current_preset = _preset_before
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
@@ -42,6 +44,21 @@ func _unit(pid: int, unit_name: String, positions: Array) -> GameUnit:
 	return u
 
 
+## The unit's own OPR weapon: a 24" Rifle, one gun per model, printing `rules`.
+func _arm(attacker: GameUnit, rules: Array[String]) -> void:
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "Rifle"
+	w.range_value = 24
+	w.attacks = 1
+	w.count = attacker.models.size()
+	w.special_rules = rules
+	var src := OPRApiClient.OPRUnit.new()
+	src.weapons = [w]
+	attacker.source_type = "opr"
+	attacker.source_data = src
+
+
+## The table's own call for the Indirect case: hand-built shots (see the case).
 func _shots(attacker: GameUnit, rules: Array[String]) -> Array:
 	var w := OPRApiClient.OPRWeapon.new()
 	w.name = "Rifle"
@@ -51,6 +68,33 @@ func _shots(attacker: GameUnit, rules: Array[String]) -> Array:
 	w.special_rules = rules
 	return [{"member": attacker, "quality": attacker.get_quality(), "alive": attacker.get_alive_count(),
 		"max": attacker.models.size(), "reach": 24, "profile": AiShooting.profiles_in_range([w], 0.0)[0]}]
+
+
+## The game's own call: the core door takes the volley (the board is captured first).
+func _door_volley(shooters: GameUnit) -> void:
+	_main.solo_controller.ai_slot = 1
+	_main.solo_controller.human_slot = 2
+	_main.opr_army_manager.current_round = 1
+	CoreActivation._env = 1
+	var runs := CoreActivation.ai_runs
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	await _main._run_ai_shooting(ActIntent.blank_report(shooters))
+	assert_int(CoreActivation.ai_runs).override_failure_message("the core did not take the volley (the table shot it)") \
+		.is_equal(runs + 1)
+	if _main._solo_core_ai_h != 0:
+		_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+	_main._solo_core_ai_h = 0
+
+
+## The player's own volley through the core door: the activation is opened first (the Fire! button's path), then the
+## door shoots; false from the door would mean the table is left to resolve it.
+func _door_fire(attacker: GameUnit, target: GameUnit) -> bool:
+	CoreActivation._env = 1
+	assert_bool(CoreActivation.open_session(_main, attacker)).override_failure_message("no activation session for the attacker").is_true()
+	var took: bool = await CoreActivation.human_shoot(_main, attacker, target)
+	assert_bool(took).override_failure_message("the core door did not take the volley (the table would resolve it)").is_true()
+	CoreActivation.close_session(_main, attacker.unit_id)
+	return took
 
 
 func _lines() -> Array:
@@ -64,7 +108,8 @@ func _lines() -> Array:
 func test_each_sighted_model_traces_its_rule_eye_pair(timeout := 240000) -> void:
 	var shooters := _unit(1, "Line", [Vector3(0, 0, 0), Vector3(0.06, 0, 0)])
 	var target := _unit(2, "Mark", [Vector3(0, 0, 10 * INCH)])
-	await _main._solo_resolve_ai_volley(shooters, target, _shots(shooters, []), false)
+	_arm(shooters, [])
+	await _door_volley(shooters)
 	var lines := _lines()
 	assert_int(lines.size()).is_equal(2)
 	var up_from: Vector3 = Vector3.UP * _main._solo_unit_los_height_m(shooters)
@@ -81,7 +126,8 @@ func test_a_blocked_model_draws_no_tracer(timeout := 240000) -> void:
 	var shooters := _unit(1, "Line", [Vector3(0, 0, 0), Vector3(0.12, 0, 0)])
 	var target := _unit(2, "Mark", [Vector3(0, 0, 10 * INCH)])
 	_unit(1, "Wall", [Vector3(0, 0, 5 * INCH)])   # a third unit's base right on shooter 1's sight line
-	await _main._solo_resolve_ai_volley(shooters, target, _shots(shooters, []), false)
+	_arm(shooters, [])
+	await _door_volley(shooters)
 	var lines := _lines()
 	assert_int(lines.size()).override_failure_message("only the clear model fires a tracer").is_equal(1)
 	assert_float(((lines[0] as Array)[0] as Vector3).x).is_equal_approx(0.12, 0.001)
@@ -91,6 +137,8 @@ func test_a_blocked_model_draws_no_tracer(timeout := 240000) -> void:
 func test_indirect_fire_draws_no_tracer(timeout := 240000) -> void:
 	var shooters := _unit(1, "Mortars", [Vector3(0, 0, 0)])
 	var target := _unit(2, "Mark", [Vector3(0, 0, 10 * INCH)])
+	# STAYS ON THE TABLE (UI gap of the door, listed for the resolver deletion): the core door draws one tracer for an Indirect
+	# weapon, the table draws none (its sight is waived, a line would cross whatever stands in the way).
 	await _main._solo_resolve_ai_volley(shooters, target, _shots(shooters, ["Indirect"] as Array[String]), false)
 	assert_str(_main.battle_log.entries().map(func(e): return str(e["text"])).reduce(func(a, b): return a + b, "")) \
 		.override_failure_message("fixture: the indirect weapon must fire").contains("Rifle")
@@ -110,7 +158,9 @@ func test_the_players_own_volley_traces_too(timeout := 240000) -> void:
 	shooters.source_type = "opr"
 	shooters.source_data = opr
 	var target := _unit(2, "Mark", [Vector3(0, 0, 10 * INCH)])
-	await _main._run_human_shooting(shooters, target)
+	_main.solo_ai_slots = {2: true}   # the player's own unit against the AI's: the human door
+	if not await _door_fire(shooters, target):
+		return   # the assertion above failed: nothing was shot, nothing to read
 	var lines := _lines()
 	assert_int(lines.size()).is_equal(2)
 	var up_from: Vector3 = Vector3.UP * _main._solo_unit_los_height_m(shooters)
