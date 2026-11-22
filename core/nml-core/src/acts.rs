@@ -1080,6 +1080,13 @@ pub const PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY: u32 = 96;
 /// `sim::tray_reanimation`, `sim::revive_spot_legal`. Records stamped 95 or below replay byte-exact. Every call site reads THIS
 /// constant, not the literal `96`.
 pub const PENDING_EPOCH_REVIVE_SPOT: u32 = 96;
+/// Placeholder gate for the HIT & RUN PLAIN STEP (lane shootfix, gate-12 shoot soak: 9 Harassing rows; Dark Elves 3.6 army book,
+/// Harassing: once per round the unit may move up to 3 in after shooting or melee, the book names no direction, the general
+/// movement rules apply): on a real board the core's post-attack step is the table's own fallback (`_move_away`: away from the
+/// nearest enemy by the mirror aim, the goal clamped to the board, each model through the move executor with terrain and spacing),
+/// not the rigid 3 in translation away from a not-yet-activated enemy that checked the board edge only. Core: `sim::tray_hit_and_run`.
+/// Records stamped 95 or below replay byte-exact. Every call site reads THIS constant, not the literal `96`.
+pub const PENDING_EPOCH_HIT_AND_RUN_PLAIN: u32 = 96;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
