@@ -8,6 +8,9 @@ extends GdUnitTestSuite
 ## Each case runs twice: on the LIVE slice (the core does not take the activation, no base ends inside the friendly column) and on the same
 ## deny file WITHOUT the group (the control: the core takes it and lands the shooter inside the column, so the count can fail).
 ## RED: drop the group from assets/solo/core_slice_deny.json -> the live leg reads `ai_runs` 1 and overlapping bases.
+## PLAN_FIRST_DELETION 3c (DOOR-LAND-NO-LEGALITY): the control leg's rigid kite is no longer landed - the checker names the shooter
+## (`overlap`), the shooter stays where it stood, `land_illegal` counts it and one line says so. RED on main (no checker): the control
+## leg lands 3 of 4 shooters inside the column.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -90,11 +93,17 @@ func _overlaps(a: GameUnit, b: GameUnit) -> int:
 	return n
 
 
-## One AI activation of the Harassing shooter per seed. Returns per-seed rows [ai_runs, overlapping pairs, shooter centre x in inches].
+## One AI activation of the Harassing shooter per seed. Returns per-seed rows [ai_runs, overlapping pairs, shooter centre x in inches,
+## landings refused as illegal, "stays where it is" lines].
 func _ai_runs() -> Array:
 	var rows: Array = []
 	for s in SEEDS:
 		CoreActivation.ai_runs = 0
+		CoreActivation.land_illegal = 0
+		var stays := [0]
+		var on_entry := func(e: Dictionary) -> void:
+			stays[0] += 1 if str(e["text"]).contains("stays where it is - the step would not be legal (overlap") else 0
+		_main.battle_log.entry_added.connect(on_entry)
 		var ai := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Raiders%d" % s, "models": 5, "x_in": SHOOTER_X,
 			"rules": ["Harassing"]}, true), RIFLE)
 		var block := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Column%d" % s, "models": 5, "x_in": BLOCK_X}), {})
@@ -103,7 +112,9 @@ func _ai_runs() -> Array:
 		_main.opr_army_manager.current_round = 1
 		_main.seed_tray_rng(s)
 		await _main._solo_activate_one_ai()
-		rows.append([CoreActivation.ai_runs, _overlaps(ai, block), _main.solo_controller.unit_centre(ai).x / ParityTable.INCH])
+		_main.battle_log.entry_added.disconnect(on_entry)
+		rows.append([CoreActivation.ai_runs, _overlaps(ai, block), _main.solo_controller.unit_centre(ai).x / ParityTable.INCH,
+			CoreActivation.land_illegal, stays[0]])
 		_free([ai, block, hu])
 	return rows
 
@@ -119,6 +130,9 @@ func test_the_ai_door_leaves_a_harassing_shooter_on_the_table(timeout := 600000,
 	var control := await _ai_runs()
 	for s in control.size():
 		assert_int(int(control[s][0])).override_failure_message("control seed %d: the core took the activation (rows %s)" % [s, control]).is_equal(1)
-	# The first activation of the scene advances before it shoots (its kite then lands clear of the column); every later one holds and shoots.
+	# The first activation of the scene advances before it shoots (its kite then ends clear of the column); every later one holds and shoots,
+	# and its rigid kite would end inside the column: the checker refuses that landing (3c), so no base ends inside it.
 	var inside := control.filter(func(r: Array) -> bool: return int(r[1]) > 0).size()
-	assert_int(inside).override_failure_message("control: the rigid kite lands inside the column (rows %s)" % [control]).is_greater_equal(SEEDS.size() - 1)
+	assert_int(inside).override_failure_message("control: no kite is landed inside the column (rows %s)" % [control]).is_equal(0)
+	var refused := control.filter(func(r: Array) -> bool: return int(r[3]) == 1 and int(r[4]) == 1).size()
+	assert_int(refused).override_failure_message("control: the illegal kite is refused with its line (rows %s)" % [control]).is_greater_equal(SEEDS.size() - 1)
