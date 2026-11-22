@@ -1794,8 +1794,10 @@ pub(crate) fn resolve_volley_with_pick_label(
         // G4R4 C-GRANTED-BANE (`EPOCH_73_V36`): a live "Bane when Shooting" grant makes this ranged weapon a Bane
         // weapon for the volley (the table's `_solo_striker_has_bane`); the re-roll's log line names the book rule.
         let granted_bane;
-        let p = if att.bane_grant && !p.bane {
-            granted_bane = ShootProfile { bane: true, bypass_regen: true, bane_alias: "Bane when Shooting".into(), ..p.clone() };
+        // PENDING_EPOCH_BANE_MARK: the Mark also lifts a Bane-family weapon that does not ignore Regeneration (Lacerate) to full Bane.
+        let p = if (att.bane_grant && !p.bane) || (att.bane_mark_grant && !(p.bane && p.bypass_regen)) {
+            let alias = if p.bane { p.bane_alias.clone() } else if att.bane_grant { "Bane when Shooting".into() } else { "Bane Mark".into() };
+            granted_bane = ShootProfile { bane: true, bypass_regen: true, bane_alias: alias, ..p.clone() };
             &granted_bane
         } else {
             p
@@ -3331,10 +3333,17 @@ pub fn resolve_melee_leg_wipe(
     let trace_thrust = strikers.first()
         .is_some_and(|sh| rule_on(sh.att.rules_epoch, EPOCH_73_V36))
         && crate::mv::plain_memo::trace_rules_on();
+    // PENDING_EPOCH_BANE_MARK: a striker attacking a Bane-Marked unit strikes with Bane (the volley's granted-Bane twin).
+    let marked: Vec<Vec<ShootProfile>> = strikers.iter().map(|sh| if sh.att.bane_mark_grant {
+        sh.profiles.iter().map(|p| if p.bane && p.bypass_regen { p.clone() } else {
+            ShootProfile { bane: true, bypass_regen: true, bane_alias: if p.bane { p.bane_alias.clone() } else { "Bane Mark".into() }, ..p.clone() }
+        }).collect()
+    } else { Vec::new() }).collect();
     for part in order.chunks(if hits_first { order.len().max(1) } else { 1 }) {
         let mut pending = Vec::new();
         for &(sh, k, pi) in part {
-            let p = &sh.profiles[pi];
+            let si = strikers.iter().position(|s| std::ptr::eq(s, sh)).unwrap_or(0);
+            let p = if sh.att.bane_mark_grant { &marked[si][pi] } else { &sh.profiles[pi] };
             let n = sh.attacks[k];
             if n <= 0 {
                 continue;

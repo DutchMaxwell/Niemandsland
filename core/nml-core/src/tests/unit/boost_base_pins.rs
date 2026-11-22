@@ -101,6 +101,39 @@ fn enhanced_changebound_keeps_the_base_over_nine_inch_window() {
     assert_eq!(incoming(&base, 12.0, 8).rolls[0].target, 5, "and so is the past-9\" read");
 }
 
+/// PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS (lead ruling 22.11., 3.6 army books: the Enhanced form's -1 applies at any range "instead of
+/// only" past 9"): from 96 the pair reads the Enhanced window in EITHER order (an Aura grant lands after the printed base); at 95 the
+/// first listed name still wins, so the base-first record above replays byte-exact.
+#[test]
+fn enhanced_changebound_always_wins_the_tie_from_96() {
+    let mut reg = Registries::new(&repo_root());
+    for order in [["Changebound", "Enhanced Changebound"], ["Enhanced Changebound", "Changebound"]] {
+        let p = boost_carrier("change_disciples", &order, 8);
+        let at96 = UnitStatic::build_for(&mut reg, &p, crate::acts::PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS);
+        assert_eq!(at96.ctx.stealth_alias_penalty, 1, "{order:?}: one -1, never two");
+        assert_eq!(at96.ctx.stealth_alias_over_in, 0.0, "{order:?}: the Enhanced window, at any range");
+        assert_eq!(incoming(&at96, 6.0, 8).rolls[0].target, 5, "{order:?}: inside 9 in the -1 holds at 96");
+        assert_eq!(incoming(&at96, 12.0, 8).rolls[0].target, 5, "{order:?}: past 9 in still one -1");
+    }
+    let base_first = boost_carrier("change_disciples", &["Changebound", "Enhanced Changebound"], 8);
+    let at95 = UnitStatic::build_for(&mut reg, &base_first, crate::acts::PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS - 1);
+    assert_eq!(incoming(&at95, 6.0, 8).rolls[0].target, 4, "95: the first listed base window, byte-exact");
+}
+
+/// Review of #3354: the tie-break is the base / Enhanced PAIR only. A Machine-Fog unit that also carries the terrain-gated Grounded
+/// Stealth (gf machine_cults, both -1) keeps Machine-Fog's over-9" leg at 96 in either order; an unrelated alias with no `over_in`
+/// never wins the tie (a unit off terrain would lose its -1 past 9").
+#[test]
+fn grounded_stealth_never_wins_the_tie_against_machine_fog_at_96() {
+    let mut reg = Registries::new(&repo_root());
+    for order in [["Machine-Fog", "Grounded Stealth"], ["Grounded Stealth", "Machine-Fog"]] {
+        let p = boost_carrier("machine_cults", &order, 8);
+        let us = UnitStatic::build_for(&mut reg, &p, crate::acts::PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS);
+        let first = order[0];
+        assert_eq!(us.ctx.stealth_alias_name, first, "{order:?}: the first listed alias keeps the tie, as at 95");
+    }
+}
+
 /// "Clan Warrior Boost" (gf/eternal_dynasty): the extra-ATTACK-die Surge's
 /// own Boost — the entry's `surge_low: 5` behind its `upgrades` coupling
 /// ("Clan Warrior") moves `surge_attack_low` from the unboosted 6 to 5, so

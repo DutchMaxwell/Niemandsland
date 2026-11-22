@@ -1048,6 +1048,31 @@ pub const PENDING_EPOCH_SPOTTER_ROLL_RECORD: u32 = 96;
 /// whose profile has no printed extra-attack form rolls no extras group. Before, it rolled its own group on 6s. Core:
 /// `dice::primal_grant_reaches`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant, not the literal `96`.
 pub const PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL: u32 = 96;
+/// Placeholder gate for ENHANCED ALWAYS ALIAS (coverage ledger shoot m2, lane covfix2-dice; 3.6 army books, lead ruling 22.11.: an
+/// Enhanced Stealth-family rule makes its base's -1 apply at any range "instead of only" past 9"/6"): when the defender carries the base
+/// AND its Enhanced form with the same penalty, the alias walk keeps the wider window, whatever order the rules arrive in (an Aura grant
+/// lands after the printed base). Before, the first listed name won, so a granted Enhanced Changebound lost to the printed Changebound
+/// inside 9". Core: `unit::alias_wider_on_tie`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant.
+pub const PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS: u32 = 96;
+/// Placeholder gate for ENHANCED VINCI ONE PICK (coverage ledger shoot m2, lane covfix2-dice; AoF 3.6 Duchies of Vinci, lead ruling
+/// 22.11.: Enhanced Vinci Tech gives either AP(+1) or +1 to hit "always", instead of only past 9"/6"): a Vinci Tech bearer with the
+/// Enhanced rule makes ONE pick, by the base rule's choice and with its pick line, at any range. Before, it got both arms past 9" and
+/// nothing inside 9". Core: `unit::ctx_of` (`versatile_no_gate`), the Versatile stamp (`versatile_both`). Records stamped 95 or below
+/// replay byte-exact. Every call site reads THIS constant.
+pub const PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK: u32 = 96;
+/// Placeholder gate for BANE MARK (ticket BM-1, coverage ledger shoot m1/m2, lane covfix2-dice; 3.6 army books Ghostly Undead / Saurian
+/// Starhosts: once per activation, before attacking, pick one enemy within 18" in line of sight; friendly units get Bane against it once):
+/// the Mark rides the Utility Buff path like the Shred Mark (`unit::utility_buffs_of`, placed by `sim::tray_utility_buff` in the bearer's
+/// own activation, a joined hero's Mark included), and the next friendly attack against the marked unit - shooting or melee - gets Bane
+/// (`Ctx::bane_mark_grant`), the exchange spends it. Before, the Mark did nothing on the core. Records stamped 95 or below replay
+/// byte-exact. Every call site reads THIS constant.
+pub const PENDING_EPOCH_BANE_MARK: u32 = 96;
+/// Placeholder gate for OUT OF REACH NO VOLLEY (coverage ledger shoot m2 cause 6, lane covfix2-dice): when the TARGET's own range cut
+/// (Aircraft -12", Ranged Shrouding / Darkborn / Shadowborn / Wild Veil) leaves the shooter no weapon in reach, there is no volley - the
+/// table writes "no target in range or sight" and spends nothing. Before, the core still built the group: it announced "X fires at Y",
+/// rolled nothing, and spent the once-per-game shot feats (Precision / Piercing Feat), the target's marks and markers, and the exchange's
+/// once-records. Core: `sim::cut_out_of_reach`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant.
+pub const PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY: u32 = 96;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff

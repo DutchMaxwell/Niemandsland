@@ -77,3 +77,40 @@ fn at_epoch_74_the_feat_rolls_both_times() {
     assert_eq!(feat_rolls(&volley(&us, &mut st, e)), 1);
     assert_eq!(feat_rolls(&volley(&us, &mut st, e)), 1, "epoch 74 replays the unlimited roll");
 }
+
+/// One volley of a Deadly(3) launcher (resolved first), a 24-die rifle and a 12-die pistol at the unit, the per-model Deadly landing on.
+fn three_weapon_volley(us: &UnitStatic, st: &crate::state::State, epoch: u32) -> crate::dice::ShootResult {
+    let def = crate::sim::ctx_live(crate::sim::ctx_of(us, st, 0), std::slice::from_ref(us), st, 0, false, epoch);
+    let weapon = |name: &str, attacks: i64, rules: Vec<String>| crate::state::Weapon { name: name.into(), range: 24.0, attacks, count: 1, ap: 0, rules };
+    let shooter = UnitStatic::build_for(
+        &mut Registries::new(&repo_root()),
+        &crate::state::Profile {
+            cost: 0, unit_id: "sh".into(), name: "Shooter".into(), quality: 2, defense: 4, tough: 1,
+            wounds_max: vec![1], model_count: 1, caster_value: 0, base_radius: 0.0,
+            base_shape: String::new(), base_w_mm: 0.0, base_d_mm: 0.0,
+            game_system: "gf".into(), faction_folder: "knight_brothers".into(),
+            special_rules: vec![], item_grants: vec![], attached_hero_rules: vec![], move_bands: Default::default(),
+            weapons: vec![weapon("Launcher", 12, vec!["Deadly(3)".into()]), weapon("Rifle", 24, vec![]), weapon("Pistol", 12, vec![])],
+        },
+        epoch,
+    );
+    let att = Ctx { quality: 2, models: 1, rules_epoch: epoch, ..Default::default() };
+    let strikers = [crate::dice::Shooter { profiles: &shooter.shoot, keep: &[0, 1, 2], attacks: &[12, 24, 12], att: &att, owner: "Shooter" }];
+    let mut tray = crate::dice::Tray::seeded(27);
+    crate::dice::resolve_volley_leg(&strikers, &def, "Warriors", 12.0, 12.0, false, false, false, false, true, false, &|_| false, &|_, _| None, &mut tray)
+}
+
+/// COV-D1, lead ruling 22.11. (3.6 army books: "Once per game, when this unit takes wounds ... roll one die per wound, and on a 5+ it is
+/// ignored"; GF 3.6 Shooting: all weapons fire simultaneously): the Feat covers the wounds of the WHOLE volley - every Deadly wound's
+/// group and the other weapons' pool each roll their Feat dice - at 95 and 96 alike. The table's first-group-only roll is ruled wrong.
+#[test]
+fn one_volley_rolls_the_feat_for_every_wound_group_at_95_and_96() {
+    for e in [crate::acts::CURRENT_RULES_EPOCH, crate::acts::CURRENT_RULES_EPOCH + 1] {
+        let (us, profile) = pf_unit(e);
+        let out = three_weapon_volley(&us, &pf_state(profile), e);
+        let deadly = out.deadly_groups.len();
+        assert!(deadly >= 3, "{e}: fixture: the launcher lands at least 3 Deadly wounds: {:?}", out.rolls);
+        assert!(out.caused > out.deadly_tally, "{e}: fixture: the rifle and pistol wound too");
+        assert_eq!(feat_rolls(&out), deadly + 1, "{e}: one Feat roll per Deadly wound plus the pool: {:?}", out.rolls);
+    }
+}
