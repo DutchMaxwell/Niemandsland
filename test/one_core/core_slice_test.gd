@@ -291,13 +291,14 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	changed.unit_properties["faction_folder"] = "change_disciples"   # the faction whose map entry gives it primitive Stealth
 	assert_array(CoreSlice.refusals(changed, true)).is_empty()
 	# OD-H8: Teleport / Ethereal / plain Infiltrate left the ledger group (real-activation probe, core_ledger_lift_door_test.gd); the Surprise Attack
-	# burst, an Infiltrate-primitive entry, stays refused by NAME (it rolls twice with the door on).
+	# burst, an Infiltrate-primitive entry, was refused by NAME (it rolled twice with the door on) until D-PAR3 15b: the table pays the burst and
+	# the volley goes to the core on a recapture, so the bearer is taken.
 	var teleporter := _unit(["Teleport"], [])
 	teleporter.unit_properties["faction_folder"] = "elven_jesters"   # a faction whose map gives Teleport its primitive
 	assert_array(CoreSlice.refusals(teleporter)).is_empty()
 	var surprise := _unit(["Surprise Attack"], [])
 	surprise.unit_properties["faction_folder"] = "alien_hives"
-	assert_array(CoreSlice.refusals(surprise)).is_equal(["unit_rule:Surprise Attack"])
+	assert_array(CoreSlice.refusals(surprise)).is_empty()
 	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
 	# HR-POS brought the after-volley step back through the delta (`positions`); lane shootfix refused the shooter (group
 	# `hit_and_run_landing`); PLAN_FIRST_DELETION 3e lifted it: #3410 lands no step that creates a break. Shooter and target are taken.
@@ -758,14 +759,17 @@ class _StubMain extends RefCounted:
 
 
 ## DLINES2: `SlicePin.dice_only()` is the production deny list minus its line refusals - the helper the dice parity tests read. RED: if it kept the
-## `rule_line` groups the Grounded Protection row below is refused; if it dropped every refusal Surprise Attack (a DICE difference: its burst rolls twice) would be taken.
+## `rule_line` groups the Grounded Protection row below is refused; if it dropped every refusal the own Shred beside an alias (a STATE difference: the
+## target's wounds) would be taken. (Surprise Attack, the dice example here before, left the deny file with D-PAR3 15b.)
 func test_the_dice_only_slice_drops_the_line_refusals_and_keeps_the_dice_ones() -> void:
 	var self_repair := _unit(["Grounded Protection"], [])
 	self_repair.unit_properties["faction_folder"] = "soul_snatcher_cults"
 	SlicePin.dice_only()
 	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("Grounded Protection's missing line is not a dice difference").is_true()
 	assert_bool(CoreSlice.takes(_unit(["Shred"], []), true)).override_failure_message("Shred's missing line is not a dice difference").is_true()
-	assert_bool(CoreSlice.takes(_unit(["Surprise Attack"], []), true)).override_failure_message("Surprise Attack changes the dice: still refused").is_false()
+	var both := _unit(["Warbound"], [["Shred"]])
+	both.unit_properties["faction_folder"] = "war_disciples"
+	assert_bool(CoreSlice.takes(both)).override_failure_message("an own Shred beside an alias changes the state: still refused").is_false()
 	SlicePin.release_dice_only()
 	assert_bool(CoreSlice.takes(self_repair, true)).override_failure_message("the production list refuses Grounded Protection again").is_false()
 

@@ -1300,6 +1300,7 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	# here only when the core does not take the activation, or later, in front of its own volley, when the core refuses.
 	CoreShadow.note_placed(self, unit, report)   # C-4: the shadow replay's placement, before any table die of the activation
 	var core_takes: bool = CoreActivation.takes_ai_activation(self, unit, report)
+	report["table_paid"] = not core_takes   # D-PAR3 15b: the table pays this activation's pre-volley part itself
 	var core_dangerous: bool = dangerous_dice > 0 and core_takes
 	if core_dangerous:
 		report["core_dangerous"] = dangerous_dice
@@ -5153,6 +5154,10 @@ func _solo_ai_casts(unit: GameUnit, report: Dictionary, core_takes: bool) -> voi
 ## pays an owed test first, on the table, so a refusal costs nothing but the old order.
 func _solo_ai_core_call(unit: GameUnit, report: Dictionary, target: GameUnit, shots: Array, rest: Array = []) -> bool:
 	var owed := report.has("core_dangerous") or report.has("core_through") or report.has("cast_door") or report.has("core_beats")   # CC-13a: the casts are owed too; H-5: the beats
+	if CoreActivation.recapture_due(self, unit, report, target):   # D-PAR3 15b: the board with the table's casts and beats on it
+		solo_controller._core_node_ready().release(_solo_core_ai_h)
+		_solo_core_ai_h = CoreActivation.capture(self, true, unit)
+		report["core_paid"] = true
 	if _solo_core_ai_h != 0 and (target != null or owed) \
 			and await CoreActivation.run_ai(self, unit, report, target, _solo_core_ai_h, shots, owed, rest):
 		if report.erase("core_dangerous"):

@@ -12,8 +12,7 @@
   },
   "deny_names": {
     "Grounded Protection": "door omits the table's terrain trace (Grounded Protection) or once-per-game lines (Protection Feat), dlines_gap row 3; the roll, bypass and Warding gate lines are said since dlines2/3.",
-    "Protection Feat": "door omits the table's terrain trace (Grounded Protection) or once-per-game lines (Protection Feat), dlines_gap row 3; the roll, bypass and Warding gate lines are said since dlines2/3.",
-    "Surprise Attack": "OD-H8 probe (core_ledger_lift_door_test.gd, 16 real AI activations, door on against door off): the activation-start burst rolls twice with the door on, the table's beat and then the core's own copy (16 / 16 seeds, the same shape as the pre-attack beats); refused by name until the table's beat or the core's copy steps aside. Teleport, Ethereal and plain Infiltrate read equal."
+    "Protection Feat": "door omits the table's terrain trace (Grounded Protection) or once-per-game lines (Protection Feat), dlines_gap row 3; the roll, bypass and Warding gate lines are said since dlines2/3."
   },
   "lifted_names": {
     "Regeneration Buff": "same probe (ds/h_probe_beat_names.md); the table's free regeneration for the label is fixed (exact rule names, #3156)",
@@ -38,7 +37,8 @@
     "Thrust in Melee Aura": "same probe",
     "Unstoppable when Shooting Aura": "same probe",
     "Unwieldy Debuff": "same probe",
-    "Enhanced Knightborn": "PLAN_FIRST_DELETION 3e: a label gap (which of Knightborn / Enhanced Knightborn names the roll group) is no refusal reason under the parity ruling D-PAR1; probe core_deny_lift_3e_test.gd: 16 AI volleys door against table at 14 and 6 in, dice and rule state equal, the core names the rule"
+    "Enhanced Knightborn": "PLAN_FIRST_DELETION 3e: a label gap (which of Knightborn / Enhanced Knightborn names the roll group) is no refusal reason under the parity ruling D-PAR1; probe core_deny_lift_3e_test.gd: 16 AI volleys door against table at 14 and 6 in, dice and rule state equal, the core names the rule",
+    "Surprise Attack": "D-PAR3 15b: a Surprise Attack chain is never core_takes - the table pays the start burst, the Dangerous test, the casts and the beats, and the volley goes to the core on a recapture with paid {start, dangerous, beats}; probe core_ledger_lift_door_test.gd (16 real AI activations door on against off: taken, the core ran, the burst named, no seed differs)"
   },
   "groups": {
     "pre_attack_beat_twice": {
