@@ -3841,7 +3841,14 @@ fn tray_hit_and_run(
     // 0.0 (no Boost, or an `rules_epoch: 5` record) keeps the shared base
     // 3" const, byte-exact.
     let band = if us.hit_and_run_move_in > 0.0 { us.hit_and_run_move_in } else { HIT_AND_RUN_MOVE_IN };
-    let Some(enemy) = nearest_enemy_reposition(statics, next, si) else { return false };
+    // PENDING_EPOCH_HIT_AND_RUN_PLAIN: the anchor is the table's `_nearest_enemy_of` pick (`nearest_enemy_of`: plain nearest, joined
+    // heroes skipped) for the early outs and the board-less rigid kite too, not the not-activated-first reposition pick.
+    let anchor = if rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_HIT_AND_RUN_PLAIN) {
+        nearest_enemy_of(next, si)
+    } else {
+        nearest_enemy_reposition(statics, next, si)
+    };
+    let Some(enemy) = anchor else { return false };
     let delta = geom::sub(geom::centre(&next.positions[si]), geom::centre(&next.positions[enemy]));
     let len = (delta[0] * delta[0] + delta[2] * delta[2]).sqrt();
     if len < 1e-6 {
