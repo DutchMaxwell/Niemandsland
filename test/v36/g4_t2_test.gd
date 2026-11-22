@@ -4,8 +4,8 @@ extends GdUnitTestSuite
 ## the hero's, so the save must read the HERO's Defense and sign the save as the hero. Before this
 ## row the table read the host's Defense and logged the host's label. Both live shooting paths (the
 ## AI volley and the human volley) resolve saves through the same composition, so both are driven
-## here over scenes/main.tscn. Below EPOCH_73_V36 the old host read stands: the epoch-72 control
-## must stay green (a red control means the gate is wrong, not the control).
+## here over scenes/main.tscn; the AI case runs the core door (the table's epoch-72 host read and its control left with the
+## table resolver).
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
@@ -32,6 +32,8 @@ func before_test() -> void:
 
 func after_test() -> void:
 	AiActRecorder.rules_epoch = _epoch_before
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
@@ -81,11 +83,35 @@ func _chain() -> Dictionary:
 	return {"host": host, "hero": hero}
 
 
-func _shots(shooter: GameUnit) -> Array:
-	var profiles := AiShooting.profiles_in_range([_gun()], 0.0)
-	assert_int(profiles.size()).is_equal(1)
-	return [{"member": shooter, "quality": shooter.get_quality(), "alive": shooter.get_alive_count(),
-		"max": shooter.models.size(), "reach": 24, "profile": profiles[0]}]
+## The player's own volley through the core door: the activation is opened first (the Fire! button's path), then the
+## door shoots; false from the door would mean the table is left to resolve it.
+func _door_fire(attacker: GameUnit, target: GameUnit) -> void:
+	AiActRecorder.rules_epoch = _epoch_before   # the live epoch: the core shoots a dead-host chain from EPOCH_83_LONE_HERO_TARGET on
+	CoreActivation._env = 1
+	assert_bool(CoreActivation.open_session(_main, attacker)).override_failure_message("no activation session for the attacker").is_true()
+	var took: bool = await CoreActivation.human_shoot(_main, attacker, target)
+	assert_bool(took).override_failure_message("the core door did not take the volley (the table would resolve it)").is_true()
+	CoreActivation.close_session(_main, attacker.unit_id)
+
+
+## The game's own call: the core door takes the volley (the board is captured first), as the lone-hero door suite does.
+## The epoch is the live one: the core shoots a chain whose host models are all dead from EPOCH_83_LONE_HERO_TARGET on.
+func _door_volley(shooter: GameUnit) -> void:
+	AiActRecorder.rules_epoch = _epoch_before
+	_main.solo_ai_slots = {1: true, 2: true}   # both seats AI: saves auto-resolve, no dialog
+	_main.solo_controller.ai_slot = 1
+	_main.solo_controller.human_slot = 2
+	_main.opr_army_manager.current_round = 1
+	CoreActivation._env = 1
+	_main.seed_tray_rng(7)
+	var runs := CoreActivation.ai_runs
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	await _main._run_ai_shooting(ActIntent.blank_report(shooter))
+	assert_int(CoreActivation.ai_runs).override_failure_message("the core did not take the volley (the table shot it)") \
+		.is_equal(runs + 1)
+	if _main._solo_core_ai_h != 0:
+		_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+	_main._solo_core_ai_h = 0
 
 
 # ===== the AI shooting path =====
@@ -93,8 +119,7 @@ func _shots(shooter: GameUnit) -> Array:
 func test_the_ai_volley_at_a_dead_host_saves_on_the_living_heros_defense() -> void:
 	var shooter := _shooter()
 	var chain := _chain()
-	_main.seed_tray_rng(7)
-	await _main._solo_resolve_ai_volley(shooter, chain["host"], _shots(shooter))
+	await _door_volley(shooter)
 	var text := _log_text()
 	assert_str(text) \
 		.override_failure_message("the chain's models are the hero's, so the save is on the hero's 4+ (log: %s)" % text.strip_edges()) \
@@ -111,7 +136,7 @@ func test_the_human_volley_at_a_dead_host_saves_on_the_living_heros_defense() ->
 	var shooter := _shooter()
 	var chain := _chain()
 	_main.seed_tray_rng(7)
-	await _main._run_human_shooting(shooter, chain["host"])
+	await _door_fire(shooter, chain["host"])
 	var text := _log_text()
 	assert_str(text) \
 		.override_failure_message("the human path must read the hero's 4+ too (log: %s)" % text.strip_edges()) \
@@ -119,19 +144,4 @@ func test_the_human_volley_at_a_dead_host_saves_on_the_living_heros_defense() ->
 	assert_str(text) \
 		.override_failure_message("the dead host must not sign the human volley's save (log: %s)" % text.strip_edges()) \
 		.not_contains("Host saves on")
-	await E2EBoot.settle(get_tree())
-
-
-# ===== epoch-72 control: the old host read stands =====
-
-func test_the_epoch_72_control_keeps_the_host_read() -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
-	var shooter := _shooter()
-	var chain := _chain()
-	_main.seed_tray_rng(7)
-	await _main._solo_resolve_ai_volley(shooter, chain["host"], _shots(shooter))
-	var text := _log_text()
-	assert_str(text) \
-		.override_failure_message("below 73 the recorded corpus replays the old host read (log: %s)" % text.strip_edges()) \
-		.contains("Host saves on 5+")
 	await E2EBoot.settle(get_tree())
