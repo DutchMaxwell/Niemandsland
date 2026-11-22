@@ -137,7 +137,7 @@ static func on_move_path(main, gu: GameUnit) -> bool:
 ## the landing compares against later (`land_late_once_records`). The first
 ## capture of a game sends the game header, exactly as the AI's `_core_plan` does (one header per game, shared with it),
 ## so every step runs at the game's rules epoch, not at epoch 0.
-static func capture(main, ai := false) -> int:
+static func capture(main, ai := false, at_start: GameUnit = null) -> int:
 	var sc: SoloController = main.solo_controller
 	var core: Object = sc._core_node_ready() if sc != null else null
 	if core == null:
@@ -155,6 +155,8 @@ static func capture(main, ai := false) -> int:
 	else:
 		sc._core_refresh_terrain()
 	var plain := BattleSim.state_to_plain(state)
+	if at_start != null:
+		_put_on_start_spots(main, plain, at_start)
 	AiActRecorder._stamp_gate_reads(state, plain)
 	_stamp_spent_ignore_feats(state, plain)
 	_stamp_step_ledger(state, plain, sc)
@@ -809,11 +811,42 @@ static func takes_action(unit: GameUnit, kind: int, casting := false) -> bool:
 ## with nothing to cast this activation is still taken. CC-13a: with the cast switch ON (`cast_door_enabled`) a casting activation
 ## IS taken when no member of its chain carries a table-only pre-attack beat (`cast_chain_clear`); the body then probes the casts
 ## (`probe_casts`) before it pays or resolves anything.
+## D-PAR3 15b: a capture taken after the table moved `gu` puts it and its joined heroes back on each model's route start
+## (`last_move_paths`), so the transcript's placement replays the move through the core's move check. A model without a
+## route stays. Stamps and latches stay the table's (fd_paid_brief.md (iii)).
+static func _put_on_start_spots(main, plain: Dictionary, gu: GameUnit) -> void:
+	var start := {}
+	for p in main.solo_controller.last_move_paths:
+		if not ((p as Dictionary)["path"] as Array).is_empty():
+			start[p["model"]] = (p["path"] as Array)[0]
+	for u in [gu] + gu.get_attached_heroes():
+		var key := str((u as GameUnit).unit_id)
+		if not (plain["units"] as Dictionary).has(key):
+			continue
+		var at: Array = []
+		for m in (u as GameUnit).models:
+			if m.is_alive and m.node != null:
+				at.append(start.get(m, m.node.global_position))
+		plain["units"][key]["positions"] = BattleSim._plain_vec3s(at)
+
+
+## D-PAR3 15b: a Surprise Attack bearer's burst fires after the capture (main.gd's activation body): the table pays the whole
+## pre-volley part and the volley goes through the recapture (`recapture_due`).
+static func _surprise_chain(unit: GameUnit) -> bool:
+	return ([unit] + unit.get_attached_heroes()).any(func(u) -> bool: return u is GameUnit and (u as GameUnit).has_special_rule("Surprise Attack"))
+
+
+## D-PAR3 15b: the table paid the activation's start, Dangerous test, casts and beats (`takes_ai_activation` said no) and the
+## volley may still be the core's: the body recaptures the board right before it.
+static func recapture_due(main, unit: GameUnit, report: Dictionary, target: GameUnit) -> bool:
+	return target != null and bool(report.get("table_paid", false)) and main._solo_core_ai_h != 0 and is_plain(unit)
+
+
 static func takes_ai_activation(main, unit: GameUnit, report: Dictionary) -> bool:
 	var casts: Array = report.get("casts", [])
 	var takes: bool = main._solo_core_ai_h != 0 and main.dice_roller_control != null and is_plain(unit) \
 		and takes_action(unit, int(report.get("action", -1)), not casts.is_empty()) \
-		and (casts.is_empty() or (cast_door_enabled() and cast_chain_clear(unit)))
+		and (casts.is_empty() or (cast_door_enabled() and cast_chain_clear(unit))) and not _surprise_chain(unit)
 	if takes and moves_through(unit) and not main.solo_controller.last_move_paths.is_empty() \
 			and not crossed_plain(main, unit, chords_of(main.solo_controller.last_move_paths)):
 		report["through_refused"] = true   # P4.D-37c: the decision is made once, here; `run_ai` honours it after the table struck
@@ -920,7 +953,8 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 		return false   # P4.D-37c: the body left the strike to the table (a crossed enemy is not a plain target)
 	var kind := int(report.get("action", -1))
 	var reported := int(report.get("dangerous_dice", report.get("dangerous_models", 0)))
-	var table_rolled := not owns_dangerous and reported > 0
+	var paid := bool(report.get("core_paid", false))   # D-PAR3 15b: recaptured after the table's start, test, casts and beats
+	var table_rolled := not owns_dangerous and reported > 0 and not paid
 	var parts: Array = [{"target": target, "shots": shots}] + rest
 	var aim := split_aim(parts)
 	# A unit that cast this activation: the table resolved the casts after the capture (`_solo_resolve_ai_casts`), so the
@@ -929,7 +963,7 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	# resolves the planned casts from this capture and the table does not.
 	var cast := not (report.get("casts", []) as Array).is_empty()
 	var cast_taken := cast and bool(report.get("cast_door", false))
-	if h == 0 or not takes_action(unit, kind, cast_taken) or not is_plain(unit) or table_rolled or (cast and not cast_taken) or _aim_ambiguous(aim) \
+	if h == 0 or not takes_action(unit, kind, cast_taken) or not is_plain(unit) or table_rolled or (cast and not cast_taken and not paid) or _aim_ambiguous(aim) \
 			or (target == null and not owns_dangerous) or (target != null and not is_plain_target(target)) \
 			or rest.any(func(p: Dictionary) -> bool: return not is_plain_target(p["target"])) \
 			or parts.any(func(p: Dictionary) -> bool: return not CoreSlice.pair_refusals(unit, p["target"]).is_empty()):
@@ -1126,7 +1160,8 @@ static func ai_transcript(main, unit: GameUnit, report: Dictionary, target: Game
 	if not split.is_empty():
 		intent["split"] = split
 	# D-PAR3 15a: every AI board is captured after the table's activation start (`begin_activation`): the core skips its own.
-	return [{"t": "begin"}] + ([{"t": "paid", "start": true}] if start_paid_input else []) \
+	var paid := bool(report.get("core_paid", false))   # D-PAR3 15b: the table paid the test, casts and beats too
+	return [{"t": "begin"}] + ([{"t": "paid", "start": true, "dangerous": paid, "beats": paid}] if start_paid_input else []) \
 		+ [{"t": "placed", "positions": at, "trails": trails}, intent]
 
 

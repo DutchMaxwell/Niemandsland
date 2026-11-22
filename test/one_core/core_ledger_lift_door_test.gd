@@ -148,30 +148,17 @@ func test_a_lifted_primitive_is_taken_and_reads_the_same_in_a_real_activation() 
 
 
 ## The Surprise Attack burst (an Infiltrate-primitive entry) fires at the activation start on the table, and the core rolled its own copy
-## again: with the name lifted (a COPY of the deny file) every seed differed. D-PAR3 15a: the AI transcript says the table paid the start
-## (`paid {start}`), so the core's copy of the burst is gone - the roll streams are equal on every seed. But the AI board is captured
-## BEFORE the table's burst (main.gd: the capture at the activation start, the burst after it), so the core resolves the volley on a board
-## without the burst's casualties and its delta puts them back: the end state differs (measured: seed 12, the burst's kill stands up
-## again). So the committed file keeps refusing the bearer by NAME (not a group of kind `activation_start`, which 15a lets through);
-## 15b's recapture after the burst lifts it.
-func test_the_surprise_attack_burst_rolls_once_with_the_start_paid() -> void:
+## again (16 / 16 seeds differed with the name lifted). 15a's `paid {start}` removed the core's second burst but left the volley on the
+## board captured before the burst (an end state differed). D-PAR3 15b: a Surprise Attack chain is never `core_takes` - the table pays the
+## burst and the volley goes to the core on a RECAPTURE with `paid {start, dangerous, beats}`, so the name left the deny file: taken, run
+## by the core, the burst named, and no seed differs - neither the dice nor the end state.
+func test_the_surprise_attack_burst_is_taken_and_rolls_once() -> void:
 	var committed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.DENY_PATH))
-	assert_bool((committed["deny_names"] as Dictionary).has("Surprise Attack")).override_failure_message("the name is refused").is_true()
-	var refused := await _compare("gf", "alien_hives", "Surprise Attack", 2.0, "Surprise Attack")
-	assert_int(int(refused["taken"])).override_failure_message("the committed deny file takes a Surprise Attack bearer").is_equal(0)
-	assert_int(int(refused["ran"])).override_failure_message("the core ran a refused activation").is_equal(0)
-	assert_int(int(refused["named"])).override_failure_message("the table never fired the burst").is_equal(SEEDS)
-	(committed["deny_names"] as Dictionary).erase("Surprise Attack")
-	var tmp := "user://deny_without_surprise_attack.json"
-	var f := FileAccess.open(tmp, FileAccess.WRITE)
-	f.store_string(JSON.stringify(committed))
-	f.close()
-	CoreSlice.path_override = tmp
-	CoreSlice.reset_cache()
-	var lifted := await _compare("gf", "alien_hives", "Surprise Attack", 2.0, "Surprise Attack")
-	CoreSlice.path_override = ""
-	CoreSlice.reset_cache()
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
-	assert_int(int(lifted["ran"])).override_failure_message("with the name lifted the core runs the activation").is_equal(SEEDS)
-	assert_int(int(lifted["dice_differing"])).override_failure_message("the start is paid: the core rolls no second burst (%d of %d roll streams differ)" % [lifted["dice_differing"], SEEDS]).is_equal(0)
-	assert_int(int(lifted["state_differing"])).override_failure_message("the stale board: the burst's casualties are not on the core's board, some end state must differ").is_greater(0)
+	assert_bool((committed["deny_names"] as Dictionary).has("Surprise Attack")).override_failure_message("the name left the deny file").is_false()
+	var r := await _compare("gf", "alien_hives", "Surprise Attack", 2.0, "Surprise Attack")
+	assert_int(int(r["taken"])).override_failure_message("the deny file takes a Surprise Attack bearer").is_equal(SEEDS)
+	assert_int(int(r["ran"])).override_failure_message("the core runs the volley").is_equal(SEEDS)
+	assert_int(int(r["named"])).override_failure_message("the table fired the burst").is_equal(SEEDS)
+	assert_int(int(r["dice_differing"])).override_failure_message("the burst rolls once (%d of %d roll streams differ)" % [r["dice_differing"], SEEDS]).is_equal(0)
+	assert_int(int(r["state_differing"])).override_failure_message("the recapture holds the burst's casualties (%d of %d end states differ)" % [r["state_differing"], SEEDS]).is_equal(0)
+	assert_int(int(r["differing"])).override_failure_message("no seed differs (%d of %d)" % [r["differing"], SEEDS]).is_equal(0)
