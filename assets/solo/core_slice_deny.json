@@ -65,6 +65,15 @@
       "kind": "rule_line",
       "why": "The table names the picked model of a Takedown by its label (`_solo_model_label`): Tough(X) model, the last of several weapons, else the model's FIRST ITEM (`Takedown (<w>): targets the Banner in <U>`); the core carries only an item count per model, so it writes `trooper`. Measured in a door test (Takedown at a unit with one Banner carrier: 12 of 12 seeds differ). Not a rule name: `CoreSlice.pair_refusals` refuses a Takedown shooter at a target with a living item-carrying model, switched on by this group.",
       "leaves_with": "the capture carrying the item NAMES of a model's kit"
+    },
+    "activation_start_twice": {
+      "primitives": [
+        "Reanimation"
+      ],
+      "kind": "activation_start",
+      "side": "shooter",
+      "why": "PLAN_DOOR_ACTIVATION_START step 2 (lane doorStart, 22.11.): Reanimation is an activation-START effect. The table rolls it in `begin_activation` before the door captures the board, and the core, which takes the whole activation, rolls it again from that board. Measured (8 seeds per door, door on against off, dice dump): AI door 8/8 two pool rolls (the core rolls what is left of the pool), the core's volley fired more dice than the table's living shooters on 7/8 (+1/+2), `_land_positions` errored 7/8; human door 8/8 two pool rolls (the core re-rolls the FULL pool at Fire), the volley's dice count differs on 8/8, `_land_positions` errored 8/8; the core's roll never reaches the battle log. Shooter side only: a Reanimation unit shot at does not activate. The primitive covers Reanimation Aura's grant (the import copies Reanimation onto the unit and every joined hero). Bounding was measured equal (the core refuses a bonus move, the table resolves it) and stays taken; Spawn was not measured.",
+      "leaves_with": "the door sending `start_done` after the table's start effects (PLAN_DOOR_ACTIVATION_START steps 3-5), then a 16-seed door on/off sweep of a Reanimation unit and an Aura-granted one (step 6)"
     }
   }
 }
