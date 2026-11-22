@@ -609,7 +609,8 @@ pub fn surface_y_m(t: &Terrain, p: [f64; 2], rules_epoch: u32) -> f64 {
     let roof = if covered(p) || painted { volume_height_in(terrain::CONTAINER) * IN2M } else { 0.0 };
     // Heightfield plan step 10: a generated tier board's level under the point is a surface too (`tier_in_at` is the
     // board-centred inch frame; a board without tiers answers 0). Below the gate the same header plays flat.
-    if rule_on(rules_epoch, EPOCH_94_PARITY_BATCH) {
+    // A solid tier cell (an intact house 4.5 in, a tall tower 12 in) is no floor either: its level is a sight height, not standing room (lead review 22.11.).
+    if rule_on(rules_epoch, EPOCH_94_PARITY_BATCH) && !t.solid_at(p[0] / t.in2m(), p[1] / t.in2m()) {
         roof.max(t.tier_in_at(p[0] / t.in2m(), p[1] / t.in2m()) * t.in2m())
     } else {
         roof
