@@ -29,6 +29,12 @@ const SKIN_IN := 0.04
 const SOLID_IN := 2.5
 const POOL_IN := 0.07   # a hair above the 0.04 in ground skin
 const RIM_IN := 0.3
+## The kit-off fountain (texture plan step 15; the kit's fountain_basin is 5.6 in across its flats): the wall's centre line FOUNTAIN_APOTHEM_IN
+## off the centre, 0.3 in thick, 0.6 in high, the water 0.4 in up.
+const FOUNTAIN_APOTHEM_IN := 2.4
+const FOUNTAIN_WALL_IN := 0.3
+const FOUNTAIN_RIM_IN := 0.6
+const FOUNTAIN_WATER_IN := 0.4
 const LADDER_WIDTH_IN := 1.0
 const LADDER_OFFSET_IN := 0.12   # the ladder stands this far off the wall face
 const LADDER_RAIL_IN := 0.12
@@ -172,7 +178,11 @@ static func _town_landmarks(layout: Dictionary, origin: Vector2) -> Array[Dictio
 		var hi := lo + Vector2(lm["w"], lm["h"]) * cell_in
 		var boxes: Array[Dictionary] = []
 		match lm["kind"]:
-			"TankCluster", "Crane":
+			"TankCluster":   # the core's solid stays the whole footprint (a collider only); drawn: an octagonal basin, water, a column
+				var solid := _box(lo, hi, 0.0, SOLID_IN, "stone", true)
+				solid["collider_only"] = true
+				boxes.append_array([solid] + _fountain((lo + hi) * 0.5))
+			"Crane":
 				boxes.append(_box(lo, hi, 0.0, SOLID_IN, "stone", true))
 			"Sump":
 				boxes.append(_box(lo, hi, 0.0, POOL_IN, "hazard", false))
@@ -191,6 +201,34 @@ static func _town_landmarks(layout: Dictionary, origin: Vector2) -> Array[Dictio
 		out.append_array(boxes)
 		i += 1
 	return out
+
+
+## The fountain round `c` (kit off): eight wall segments on an octagon FOUNTAIN_APOTHEM_IN out (axis-aligned boxes yawed about their centre),
+## water as four yawed strips whose union is exactly the basin's inside (each covers the two opposite sectors of one side pair; tops a
+## hair apart, no z-fight), and a column. Nothing here is solid: the collider is the footprint box.
+static func _fountain(c: Vector2) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var a := FOUNTAIN_APOTHEM_IN
+	var t := FOUNTAIN_WALL_IN
+	var side := 2.0 * (a + t * 0.5) * tan(PI / 8.0)   # the outer corners meet
+	var inner := a - t * 0.5 - 0.01
+	for i in 8:
+		var yaw := i * PI / 4.0
+		var m := c + Vector2(sin(yaw), cos(yaw)) * a
+		out.append(_yawed(m, Vector2(side, t) * 0.5, i, FOUNTAIN_RIM_IN, "wall"))
+	for i in 4:
+		out.append(_yawed(c, Vector2(inner, inner * tan(PI / 8.0) - 0.01), i, FOUNTAIN_WATER_IN - i * 0.005, "hazard"))
+	out.append(_box(c - Vector2.ONE * 0.2, c + Vector2.ONE * 0.2, 0.0, 1.3, "stone", false))
+	return out
+
+
+## A non-solid box of half size `half` (x along the turn's tangent) turned by `eighth` eighth-turns: a quarter turn swaps x and z, so lo / hi
+## stay the true extent of an unturned box and only an odd eighth carries a 45 degree `yaw`.
+static func _yawed(c: Vector2, half: Vector2, eighth: int, y1: float, kind: String) -> Dictionary:
+	var h := half if (eighth / 2) % 2 == 0 else Vector2(half.y, half.x)
+	var b := _box(c - h, c + h, 0.0, y1, kind, false)
+	b["yaw"] = (eighth % 2) * PI / 4.0
+	return b
 
 
 static func _box(lo: Vector2, hi: Vector2, y0: float, y1: float, kind: String, solid: bool) -> Dictionary:
@@ -231,7 +269,7 @@ static func custom_data(b: Dictionary, kinds: Array = KINDS) -> Color:
 
 ## Does a plan box draw itself? An intact house does not (BoardgenTownDressing draws its inset, yawed body), nor a wall or tower cell (BoardgenTownSilhouette draws it thinner): the box only keeps the collider.
 static func draws_itself(b: Dictionary) -> bool:
-	return b["kind"] != "roofed" and not b.get("hidden", false)
+	return b["kind"] != "roofed" and not b.get("hidden", false) and not b.get("collider_only", false)
 
 
 ## The whole board in ONE MultiMesh (one draw call, one shared procedural material) plus a collider per solid box.
@@ -266,7 +304,7 @@ func build(layout: Dictionary) -> void:
 		var b: Dictionary = boxes[i]
 		var size: Vector3 = (b["hi"] - b["lo"]) * INCHES_TO_METERS
 		var centre: Vector3 = (b["hi"] + b["lo"]) * 0.5 * INCHES_TO_METERS
-		mm.set_instance_transform(i, Transform3D(Basis.from_scale(size if draws_itself(b) and not (kit_town and town_kit.draws_landmark(b)) else Vector3.ZERO), centre))   # (a solid box the kit draws keeps its collider)
+		mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, b.get("yaw", 0.0)) * Basis.from_scale(size if draws_itself(b) and not (kit_town and town_kit.draws_landmark(b)) else Vector3.ZERO), centre))   # (a solid box the kit draws keeps its collider)
 		mm.set_instance_custom_data(i, custom_data(b, theme["kinds"]))
 		if b["solid"]:
 			var shape := BoxShape3D.new()
