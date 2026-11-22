@@ -70,8 +70,10 @@ the overlay `ruled`; it is not repaired on the table.
   reaches no recorded act needs no epoch; such a change proves it with the full cargo test,
   byte-identical goldens (`test/fixtures/one_core/golden_*.json`) and the Python replay-gate tests.
   Recorded corpora and goldens keep replaying byte-exact at their stamp.
-- **Freeze.** The table gets no bug fix and no line alignment; its production changes are
-  deletions or the fallback wiring of a deletion plan.
+- **Freeze.** The table gets no line alignment and no change made only to match the core. A table
+  defect that a player can see (wrong dice, wrong state, illegal result) is still fixed, with the
+  core's behaviour as the reference, and the fix names the deletion that will remove it. Otherwise
+  its production changes are deletions or the fallback wiring of a deletion plan.
 
 ## What the last parity gate (G1) reads
 
