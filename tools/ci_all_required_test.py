@@ -56,3 +56,11 @@ def test_skip_table_mirrors_the_jobs_if_lines():
     for job, cond in want.items():
         m = re.search(rf"^  {job}:\n(?:    .*\n)*?    if: \$\{{\{{ (.*) \}}\}}$", wf, re.M)
         assert m and m.group(1) == cond, f"{job}: its if: changed - update SKIP_OK in tools/ci/all_required.py and this table"
+
+
+def test_the_aggregate_needs_exactly_the_jobs_this_table_knows():
+    import re
+    wf = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".github/workflows/build.yml")).read()
+    m = re.search(r"^  all-required:\n(?:    .*\n)*?    needs: \[(.*)\]$", wf, re.M)
+    assert m and [j.strip() for j in m.group(1).split(",")] == JOBS, \
+        "all-required needs changed: add the job to JOBS and, if it can skip, to SKIP_OK (the advisory MP workflow is not a need)"

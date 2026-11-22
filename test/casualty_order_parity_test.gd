@@ -59,7 +59,7 @@ func test_the_tables_casualty_order_matches_the_shared_fixture() -> void:
 
 ## EPOCH_94_PARITY_BATCH: symmetric formations whose mirror models tie or part by rounding only. The fixture's `ties` hold
 ## the Godot board's f32 positions; the table's order on them is the reference the core's `f32_dist` reading is pinned to
-## (casualty.rs). Never more than 12 models: Godot's sort is unstable above 16, so its ties are unspecified there.
+## (casualty.rs). Exact ties in units above 16 models: the two tests below.
 func test_the_tables_casualty_order_on_symmetric_formations_matches_the_shared_fixture() -> void:
 	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(FIXTURE))
 	for spec in data["ties"]:
@@ -67,3 +67,31 @@ func test_the_tables_casualty_order_on_symmetric_formations_matches_the_shared_f
 		var want: Array = (spec["expected"] as Array).map(func(x: Variant) -> int: return int(x))
 		assert_array(got).override_failure_message("%s: table %s, fixture %s" % [
 			spec["name"], str(got), str(want)]).is_equal(want)
+
+
+## shootpos (gate 12, games 7/9/19): a 20-model unit whose mirror models share one rank EXACTLY. The core sorts stably
+## (casualty.rs `sort_by`), so a tie keeps the slot order; Godot's sort_custom is unstable from 17 elements, so the table
+## removed a different mirror model (game 7: core 0, table 19). The table must break the tie by slot index.
+## A 5 x 4 grid on 0.0625 m steps: every coordinate is exact in f32, so the four corners {0, 4, 15, 19} tie exactly.
+func test_a_twenty_model_grid_breaks_exact_rank_ties_by_slot_like_the_core() -> void:
+	var models: Array = []
+	for r in range(4):
+		for c in range(5):
+			models.append({"wounds_max": 1, "wounds": 1, "weapons": ["Rifle"], "equipment": 0,
+				"pos": [(c - 2) * 0.0625, 0.0, (r - 1.5) * 0.0625]})
+	var got: Array = SoloController.casualty_order(_unit({"name": "grid 5x4", "models": models}))
+	# the core's stable order on this grid (outermost first, ties by slot)
+	assert_array(got).is_equal([0, 4, 15, 19, 5, 9, 10, 14, 1, 3, 16, 18, 2, 17, 6, 8, 11, 13, 7, 12])
+
+
+## Twenty models with one and the same rank: the twenty integer points of a radius-25 circle, scaled to 1/64 m, so every
+## distance to the (exact, zero) centroid is 25/64 m in f32 as well. The order must be the slot order, as the core's.
+func test_twenty_equal_rank_models_keep_their_slot_order() -> void:
+	var pts: Array = [[25, 0], [-7, 24], [20, -15], [0, -25], [-24, -7], [15, 20], [7, -24], [-20, 15], [24, 7], [-15, -20],
+		[-25, 0], [7, 24], [-20, -15], [0, 25], [24, -7], [-15, 20], [-7, -24], [20, 15], [-24, 7], [15, -20]]
+	var models: Array = []
+	for p in pts:
+		models.append({"wounds_max": 1, "wounds": 1, "weapons": ["Rifle"], "equipment": 0,
+			"pos": [float(p[0]) / 64.0, 0.0, float(p[1]) / 64.0]})
+	var got: Array = SoloController.casualty_order(_unit({"name": "ring 20", "models": models}))
+	assert_array(got).is_equal(range(20))
