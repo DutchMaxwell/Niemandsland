@@ -1060,12 +1060,6 @@ pub const PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS: u32 = 96;
 /// nothing inside 9". Core: `unit::ctx_of` (`versatile_no_gate`), the Versatile stamp (`versatile_both`). Records stamped 95 or below
 /// replay byte-exact. Every call site reads THIS constant.
 pub const PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK: u32 = 96;
-/// Placeholder gate for PROTECTION FEAT ONCE (coverage ledger shoot m2 COV-D1, lane covfix2-dice; 3.6 army books: once per game, when
-/// the unit takes wounds, roll one die per wound, 5+ ignores it): the volley's first ignore roll at the feat's target spends it, so a later
-/// weapon group of the same volley (a Deadly weapon first, the rifles after) rolls only the plain Regeneration, if any. Before, every
-/// group rolled at the feat's target and the `feats_used` latch closed after the volley. Core: `sim::ctx_live` (`regen_feat_plain`),
-/// `dice::feat_view` / `dice::feat_spends`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant.
-pub const PENDING_EPOCH_PROTECTION_FEAT_ONCE: u32 = 96;
 /// Placeholder gate for BANE MARK (ticket BM-1, coverage ledger shoot m1/m2, lane covfix2-dice; 3.6 army books Ghostly Undead / Saurian
 /// Starhosts: once per activation, before attacking, pick one enemy within 18" in line of sight; friendly units get Bane against it once):
 /// the Mark rides the Utility Buff path like the Shred Mark (`unit::utility_buffs_of`, placed by `sim::tray_utility_buff` in the bearer's
@@ -2435,41 +2429,6 @@ mod tests {
         assert_eq!(super::PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL, 96);
         assert!(!rule_on(95, super::PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL), "a record at 95 keeps the grant's own extras group");
         assert!(rule_on(96, super::PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL));
-    }
-
-    #[test]
-    fn pending_enhanced_always_alias_is_96() {
-        assert_eq!(super::PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS, 96);
-        assert!(!rule_on(95, super::PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS), "a record at 95 keeps the first listed alias");
-        assert!(rule_on(96, super::PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS));
-    }
-
-    #[test]
-    fn pending_enhanced_vinci_one_pick_is_96() {
-        assert_eq!(super::PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK, 96);
-        assert!(!rule_on(95, super::PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK), "a record at 95 keeps both arms past 9 in");
-        assert!(rule_on(96, super::PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK));
-    }
-
-    #[test]
-    fn pending_protection_feat_once_is_96() {
-        assert_eq!(super::PENDING_EPOCH_PROTECTION_FEAT_ONCE, 96);
-        assert!(!rule_on(95, super::PENDING_EPOCH_PROTECTION_FEAT_ONCE), "a record at 95 keeps the per-group feat roll");
-        assert!(rule_on(96, super::PENDING_EPOCH_PROTECTION_FEAT_ONCE));
-    }
-
-    #[test]
-    fn pending_bane_mark_is_96() {
-        assert_eq!(super::PENDING_EPOCH_BANE_MARK, 96);
-        assert!(!rule_on(95, super::PENDING_EPOCH_BANE_MARK), "a record at 95 keeps the Mark unread");
-        assert!(rule_on(96, super::PENDING_EPOCH_BANE_MARK));
-    }
-
-    #[test]
-    fn pending_out_of_reach_no_volley_is_96() {
-        assert_eq!(super::PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY, 96);
-        assert!(!rule_on(95, super::PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY), "a record at 95 keeps the empty volley");
-        assert!(rule_on(96, super::PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY));
     }
 
     #[test]

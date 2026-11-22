@@ -418,3 +418,89 @@ fn an_out_of_reach_volley_spends_nothing_from_96() {
     assert!(!ctl_shot.rolls.is_empty(), "control: in reach, the volley fires at 96");
     assert!(ctl.buffs[2].is_empty(), "control: the real attack spends the Mark");
 }
+
+/// Review of #3354 (BM-1, melee): the bearer's unit charges the Marked enemy - its strikes get Bane (the target's Regeneration 5+
+/// rolls no ignore die against them) and the exchange spends the Mark; a second charge rolls the die again. Strike-back: the book's
+/// "friendly units get Bane ... when attacking against once (next time the effect would apply)" names no activation, and the core
+/// reads it that way - a Mark waiting on the enemy also arms the bearer's STRIKE-BACK when that enemy charges, once.
+#[test]
+fn bane_mark_arms_the_melee_strikes_once_and_a_strike_back_from_96() {
+    let e = crate::acts::PENDING_EPOCH_BANE_MARK;
+    let (mut st, mut statics) = mark_line("Bane Mark", "saurian_starhosts", e);
+    statics[0].melee = vec![gun("CCW", 12, 0)];
+    statics[2].melee = vec![gun("CCW", 6, 0)];
+    statics[2].ctx.regeneration = true;
+    statics[2].ctx.regen_target = 5;
+    statics[2].ctx.regen_target_spell = 5;
+    statics[2].ctx.defense = 6;
+    statics[2].wounds_max = vec![6, 6, 6];
+    st.wounds[2] = vec![6, 6, 6];
+    st.positions[2] = vec![[2.5 * IN2M, 0.0, 0.0], [2.52 * IN2M, 0.0, 0.0], [2.54 * IN2M, 0.0, 0.0]];
+    let charge = |who: &str, at: &str| Action { kind: CHARGE, unit: who.into(), dest: None, shoot: None, charge: Some(at.into()),
+        patient: false, split: None, traced: None, teleport: None };
+    let regen_owner_b = |s: &ShootResult| s.rolls.iter().filter(|x| x.kind == "attack" && x.target == 5 && x.owner == "b").count();
+    let marked = |s: &State| s.buffs[2].iter().any(|r| r.attackers && &*r.name == "Bane Mark");
+    // The bearer charges: the Mark is placed in its own activation, its strikes ignore b's Regeneration, the exchange spends it.
+    let (next1, s1) = run_marks_epoch(&st, &statics, &charge("a", "b"), 9, e);
+    assert!(s1.rolls.iter().any(|x| x.kind == "defense"), "fixture: b saves against a's strikes: {:?}", s1.rolls);
+    assert_eq!(regen_owner_b(&s1), 0, "96: Bane - no Regeneration die against the marked strikes: {:?}", s1.rolls);
+    assert!(!marked(&next1), "the exchange spends the Mark");
+    let (_, s95) = run_marks_epoch(&st, &statics, &charge("a", "b"), 9, e - 1);
+    assert!(regen_owner_b(&s95) > 0, "95: no Mark, b rolls its Regeneration: {:?}", s95.rolls);
+    // Strike-back: a Mark already waiting on b, and b charges the bearer's unit.
+    let mut st2 = st.clone();
+    st2.buffs[2].push(crate::mods::LiveMod { hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0, move_mod: 0,
+        range_in: 0, grants_rule: std::rc::Rc::from("Bane"), scope: std::rc::Rc::from(""), attackers: true, once: true,
+        name: std::rc::Rc::from("Bane Mark") });
+    let (next2, s2) = run_marks_epoch(&st2, &statics, &charge("b", "a"), 9, e);
+    eprintln!("STRIKE-BACK rolls={:?} marked_after={}", s2.rolls, marked(&next2));
+    assert_eq!(regen_owner_b(&s2), 0, "96: the strike-back is an attack against the marked unit - Bane, no Regeneration die");
+    assert!(!marked(&next2), "and it spends the Mark");
+}
+
+/// Review of #3354 (BM-1): a Bane-family weapon that does NOT ignore Regeneration (Lacerate's 3.6 form: `bane` without `bypass_regen`)
+/// attacking a Bane-Marked unit gets the Mark's full Bane - the Regeneration die stays down. Without the Mark it rolls.
+#[test]
+fn bane_mark_lifts_a_lacerate_weapon_to_full_bane() {
+    let prof = [ShootProfile { range: 24, attacks: 32, bane: true, bypass_regen: false, bane_alias: "Lacerate".into(), ..Default::default() }];
+    let defc = Ctx { defense: 6, models: 1, tough: 1, regeneration: true, regen_target: 5, regen_target_spell: 5, ..Default::default() };
+    let volley = |mark: bool| {
+        let att = Ctx { quality: 4, rules_epoch: crate::acts::PENDING_EPOCH_BANE_MARK, bane_mark_grant: mark, ..Default::default() };
+        let mut tray = Tray::seeded(9);
+        crate::dice::resolve_volley_with_tray(
+            &[crate::dice::Shooter { profiles: &prof, keep: &[0], attacks: &[32], att: &att, owner: "att" }],
+            &defc, "b", 12.0, 12.0, false, true, true, true, &mut tray,
+        )
+    };
+    let ignore_rolls = |r: &ShootResult| r.rolls.iter().filter(|x| x.kind == "attack" && x.target == 5).count();
+    assert_eq!(ignore_rolls(&volley(false)), 1, "Lacerate alone: the Regeneration die rolls");
+    assert_eq!(ignore_rolls(&volley(true)), 0, "with the Mark: Bane ignores Regeneration");
+}
+
+/// Review of #3354 (cause 6, Aircraft leg): units targeting an Aircraft get -12" range (GF / AoF 3.6). A 18" rifle at an Aircraft 12"
+/// away reaches 6": at 95 the empty group still spent the once-per-game Precision Feat; from 96 there is no volley and nothing is spent.
+/// Control: a 30" rifle (18" after the cut) fires at 96. The sighting seam is on (the Aircraft cut lives there).
+#[test]
+fn an_out_of_reach_aircraft_volley_spends_nothing_from_96() {
+    let e = crate::acts::PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY;
+    let run = |range: i64, epoch: u32| {
+        let (mut st, mut statics) = buff_line();
+        statics[0].shoot = vec![gun("Rifle", 8, range)];
+        statics[0].precision_feat_hit = 1;
+        st.aircraft[2] = true;
+        let terrain = crate::terrain::Terrain::default();
+        let mut tray = Tray::seeded(9);
+        let mut rng = crate::rng::GodotRng::new(0);
+        resolve_stochastic_tray_on_board(&statics, &st, &buff_action(Some("b")), &terrain,
+            Seams { rules_epoch: epoch, sighting: true, ..Seams::default() }, &mut rng, &mut tray).unwrap()
+    };
+    let (old, old_shot) = run(18, e - 1);
+    assert!(old_shot.rolls.iter().all(|r| r.kind != "defense"), "95: nothing reaches: {:?}", old_shot.rolls);
+    assert_eq!(old.feats_used[0], vec!["Precision Feat".to_string()], "95: the empty group spent the feat");
+    let (new, new_shot) = run(18, e);
+    assert!(new.feats_used[0].is_empty(), "96: no volley, the feat stays unspent");
+    assert!(new_shot.log.iter().any(|l| l.contains("no volley — no target in range or sight")), "{:?}", new_shot.log);
+    let (ctl, ctl_shot) = run(30, e);
+    assert!(ctl_shot.rolls.iter().any(|r| r.kind == "attack"), "control: 18\" after the cut reaches, the volley fires");
+    assert_eq!(ctl.feats_used[0], vec!["Precision Feat".to_string()], "control: the real volley spends the feat");
+}

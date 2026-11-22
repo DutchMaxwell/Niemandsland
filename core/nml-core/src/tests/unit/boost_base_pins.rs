@@ -120,6 +120,20 @@ fn enhanced_changebound_always_wins_the_tie_from_96() {
     assert_eq!(incoming(&at95, 6.0, 8).rolls[0].target, 4, "95: the first listed base window, byte-exact");
 }
 
+/// Review of #3354: the tie-break is the base / Enhanced PAIR only. A Machine-Fog unit that also carries the terrain-gated Grounded
+/// Stealth (gf machine_cults, both -1) keeps Machine-Fog's over-9" leg at 96 in either order; an unrelated alias with no `over_in`
+/// never wins the tie (a unit off terrain would lose its -1 past 9").
+#[test]
+fn grounded_stealth_never_wins_the_tie_against_machine_fog_at_96() {
+    let mut reg = Registries::new(&repo_root());
+    for order in [["Machine-Fog", "Grounded Stealth"], ["Grounded Stealth", "Machine-Fog"]] {
+        let p = boost_carrier("machine_cults", &order, 8);
+        let us = UnitStatic::build_for(&mut reg, &p, crate::acts::PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS);
+        let first = order[0];
+        assert_eq!(us.ctx.stealth_alias_name, first, "{order:?}: the first listed alias keeps the tie, as at 95");
+    }
+}
+
 /// "Clan Warrior Boost" (gf/eternal_dynasty): the extra-ATTACK-die Surge's
 /// own Boost — the entry's `surge_low: 5` behind its `upgrades` coupling
 /// ("Clan Warrior") moves `surge_attack_low` from the unboosted 6 to 5, so

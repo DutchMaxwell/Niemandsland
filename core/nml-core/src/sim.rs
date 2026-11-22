@@ -1803,6 +1803,10 @@ pub(crate) fn tray_strafing(
     for (b, keep, _, _) in &parts {
         mark_spent_limited(&statics[next.roster.profile[*b]].strafe_shoot, keep, &mut next.limited_used, *b);
     }
+    // PENDING_EPOCH_BANE_MARK: the strafe has no exchange spend, so the Bane Mark it read is spent here (once, never twice).
+    if parts.iter().any(|(_, _, _, att)| att.bane_mark_grant) {
+        mods::spend_mark_vs(next, target, "Bane Mark");
+    }
     let phantom = r.scourge_wounds;
     let w = shot.absorb(r);
     let members: Vec<usize> = parts.iter().map(|(b, _, _, _)| *b).collect();
@@ -4754,9 +4758,6 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         if state.feats_used[i].iter().any(|n| n == PROTECTION_FEAT) {
             trace_rule("protection-feat", unit, "already used it this game -> no ignore roll");
         } else {
-            if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_PROTECTION_FEAT_ONCE) {
-                c.regen_feat_plain = Some(if c.regeneration { (c.regen_target, c.regen_target_spell) } else { (0, 0) });
-            }
             c.regeneration = true;
             c.regen_target = fold_min(c.regen_target, c.regen_feat);
             c.regen_target_spell = fold_min(c.regen_target_spell, c.regen_feat);

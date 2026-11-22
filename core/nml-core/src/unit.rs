@@ -424,9 +424,6 @@ pub struct Ctx {
     /// `EPOCH_75_TABLE_FIXES` (#2613) — a once-per-game Regeneration entry (`uses_per_game > 0`, Protection Feat)
     /// held ASIDE: `sim::ctx_live` folds it only while the bearer's `feats_used` latch is open. 0 = none.
     pub regen_feat: i64,
-    /// `PENDING_EPOCH_PROTECTION_FEAT_ONCE`: the feat was folded live (`sim::ctx_live`); the (plain, spell) targets the unit keeps once
-    /// the volley's first ignore roll at the feat's target has spent it (`dice::spend_feat_in_volley`). `None` = not folded.
-    pub regen_feat_plain: Option<(i64, i64)>,
     /// MOR-17a (rules 3.6, `EPOCH_73_V36`) — Warding / Knightborn / Angelic
     /// Blessing ignore a non-spell wound on a 6+ ONLY when the unit was shot
     /// from over this many inches. 0.0 = ungated (the old entry, every unit
@@ -2129,9 +2126,11 @@ fn hit_and_run_boost_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
 /// the terrain half: the split walk now also reports the terrain-gated kind
 /// (`Ctx::stealth_alias_near_terrain`) and the def builds resolve the
 /// per-model read live; `requires_stationary` still is.
-/// `PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS`: on an equal penalty the wider window wins (an Enhanced "always" over its base's "over 9"").
-fn alias_wider_on_tie(pen: i64, best: i64, over_in: f64, best_over_in: f64, rules_epoch: u32) -> bool {
-    pen == best && pen > 0 && over_in < best_over_in && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS)
+/// `PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS`: on an equal penalty an Enhanced entry's wider window ("always") beats the base it `upgrades`
+/// (Enhanced Changebound over Changebound's "over 9""). Only that pair: an unrelated alias (a terrain-gated Grounded Stealth) never wins the tie.
+fn alias_wider_on_tie(pen: i64, best: i64, over_in: f64, best_over_in: f64, upgrades_best: bool, rules_epoch: u32) -> bool {
+    upgrades_best && pen == best && pen > 0 && over_in < best_over_in
+        && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS)
 }
 
 fn stealth_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, f64, bool, &'static str) {
@@ -2168,7 +2167,7 @@ fn stealth_alias_of_excluding(
         }
         let pen = if legacy_stealth_buff { 1 } else { e.param_i("hit_penalty", 0) };
         let over_in = if legacy_stealth_buff { 9.0 } else { e.param_f("over_in", 0.0) };
-        if pen > best_penalty || alias_wider_on_tie(pen, best_penalty, over_in, best_over_in, rules_epoch) {
+        if pen > best_penalty || alias_wider_on_tie(pen, best_penalty, over_in, best_over_in, e.param_s("upgrades") == best_name, rules_epoch) {
             best_penalty = pen;
             best_over_in = over_in;
             best_applies_charged = e.param_b_or("applies_charged", false);
@@ -2301,7 +2300,7 @@ fn stealth_alias_split_walk(
         }
         let pen = if legacy_stealth_buff { 1 } else { e.param_i("hit_penalty", 0) };
         let over_in = if legacy_stealth_buff { 9.0 } else { e.param_f("over_in", 0.0) };
-        if pen > best_penalty || alias_wider_on_tie(pen, best_penalty, over_in, best_over_in, rules_epoch) {
+        if pen > best_penalty || alias_wider_on_tie(pen, best_penalty, over_in, best_over_in, e.param_s("upgrades") == best_name, rules_epoch) {
             best_penalty = pen;
             best_over_in = over_in;
             best_applies_charged = e.param_b_or("applies_charged", false);
@@ -4095,7 +4094,6 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         regen_pending: regen_targets.2,
         regen_pending_spell: regen_targets.3,
         regen_feat: regen_targets.6,
-        regen_feat_plain: None,
         regen_gate_over_in: regen_targets.4,
         regen_gate_charge_in: regen_targets.5,
         regen_named: regen_targets.7,

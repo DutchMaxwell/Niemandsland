@@ -1560,7 +1560,6 @@ pub(crate) fn resolve_volley_with_pick_label(
     let (mut regenable, mut regen_proof) = (0i64, 0i64);
     // the wounds of bypass weapons that JOINED the pool (the target has no group named Regeneration): the table's `ignore only Regeneration` line counts them
     let mut regen_joined = 0i64;
-    let mut feat_spent = false; // PENDING_EPOCH_PROTECTION_FEAT_ONCE: a group of this volley already rolled the feat (`feat_spends`)
     // PORTED — Unpredictable's SHOOTING leg :3096-3110: ONE die for the whole
     // volley, before any weapon fires, off the FIRST shooter's context. A face
     // at or under `low_roll_max` is +ap_bonus on every profile of this volley
@@ -1782,9 +1781,10 @@ pub(crate) fn resolve_volley_with_pick_label(
         // G4R4 C-GRANTED-BANE (`EPOCH_73_V36`): a live "Bane when Shooting" grant makes this ranged weapon a Bane
         // weapon for the volley (the table's `_solo_striker_has_bane`); the re-roll's log line names the book rule.
         let granted_bane;
-        let p = if (att.bane_grant || att.bane_mark_grant) && !p.bane {
-            let alias = if att.bane_grant { "Bane when Shooting" } else { "Bane Mark" }; // PENDING_EPOCH_BANE_MARK
-            granted_bane = ShootProfile { bane: true, bypass_regen: true, bane_alias: alias.into(), ..p.clone() };
+        // PENDING_EPOCH_BANE_MARK: the Mark also lifts a Bane-family weapon that does not ignore Regeneration (Lacerate) to full Bane.
+        let p = if (att.bane_grant && !p.bane) || (att.bane_mark_grant && !(p.bane && p.bypass_regen)) {
+            let alias = if p.bane { p.bane_alias.clone() } else if att.bane_grant { "Bane when Shooting".into() } else { "Bane Mark".into() };
+            granted_bane = ShootProfile { bane: true, bypass_regen: true, bane_alias: alias, ..p.clone() };
             &granted_bane
         } else {
             p
@@ -2618,9 +2618,7 @@ pub(crate) fn resolve_volley_with_pick_label(
             // Tray-exact S7 — the table's Takedown landing: w x max(Deadly, 1) BEFORE the
             // picked model's own Regeneration roll, all of it for that one model (the drain).
             let td = w * p.deadly.max(1);
-            let (feat_d, before) = (feat_view(def, feat_spent), out.rolls.len());
-            out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, if bypass_flag && !ignores_regen { td } else { 0 }, &feat_d, def_owner, tray, &mut out.rolls));
-            feat_spent |= feat_spends(&feat_d, out.rolls.len() > before);
+            out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, if bypass_flag && !ignores_regen { td } else { 0 }, def, def_owner, tray, &mut out.rolls));
             out.takedown_lines.push((p.name.clone(), td_label));
             // Plan H (H-17 lines): the table lands the Takedown here - its lines go back to this mark, and a model it killed makes the next
             // weapon (if there is one) say `Simultaneous fire`. Lines only: the dice keep reading the declared target.
@@ -2635,7 +2633,7 @@ pub(crate) fn resolve_volley_with_pick_label(
             out.deadly_tally += w;
         } else if deadly_per_model && p.deadly > 0 {
             let first = out.deadly_groups.len();
-            push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, &mut feat_spent, def_owner, tray, deadly_wipes);
+            push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, def_owner, tray, deadly_wipes);
             out.deadly_lines.push((p.name.clone(), w, p.deadly.max(1), out.deadly_groups.len() - first));
             // Inline mode only: the table lands this weapon right here, so its landing lines go back to this mark (the melee fold's twin).
             if inline_land.is_some() {
@@ -2714,7 +2712,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         say_rule(tray, "ignore", def.side, || line);
     }
     out.caused = regen_proof + regenable + out.deadly_tally;
-    out.wounds = ignore_batch(regenable, regen_proof, regen_joined, &feat_view(def, feat_spent), def_owner, tray, &mut out.rolls);
+    out.wounds = ignore_batch(regenable, regen_proof, regen_joined, def, def_owner, tray, &mut out.rolls);
     out
 }
 
@@ -2728,43 +2726,22 @@ pub(crate) fn resolve_volley_with_pick_label(
 /// landing group per wound, a wound whose X are all ignored lands nothing. Below 72 (or with nothing
 /// to roll) the legacy leg: one roll on the RAW unsaved count, then ×X per model.
 #[allow(clippy::too_many_arguments)] // the two bypass flags and the landing context
-fn push_deadly_groups(out: &mut ShootResult, w: i64, x: i64, ignores_regen: bool, bypass_flag: bool, def: &Ctx, feat_spent: &mut bool, def_owner: &str, tray: &mut Tray, wiped: Option<&dyn Fn(&ShootResult) -> bool>) {
+fn push_deadly_groups(out: &mut ShootResult, w: i64, x: i64, ignores_regen: bool, bypass_flag: bool, def: &Ctx, def_owner: &str, tray: &mut Tray, wiped: Option<&dyn Fn(&ShootResult) -> bool>) {
     if def.playtest_rules && !ignores_regen && def.regeneration && def.regen_target > 0 {
         for _ in 0..w {
             // The table drops the wounds left once the chain is dead: no pick, no ignore dice (`wiped`, melee only, from the pending epoch).
             if wiped.is_some_and(|f| f(out)) {
                 break;
             }
-            let (d, before) = (feat_view(def, *feat_spent), out.rolls.len());
-            let post = regen_batch(x, if bypass_flag { x } else { 0 }, &d, def_owner, tray, &mut out.rolls);
-            *feat_spent |= feat_spends(&d, out.rolls.len() > before);
+            let post = regen_batch(x, if bypass_flag { x } else { 0 }, def, def_owner, tray, &mut out.rolls);
             // A wound whose X are all ignored still takes its pick (the table's `deadly_pick` runs before the ignore roll, so the "finish the
             // already-wounded Tough model first" count includes it): an x = 0 group lands nothing and only counts the forced pick.
             out.deadly_groups.push((1, post));
         }
         return;
     }
-    let (d, before) = (feat_view(def, *feat_spent), out.rolls.len());
-    let post = ignore_batch(if ignores_regen { 0 } else { w }, if ignores_regen { w } else { 0 }, if bypass_flag && !ignores_regen { w } else { 0 }, &d, def_owner, tray, &mut out.rolls);
-    *feat_spent |= feat_spends(&d, out.rolls.len() > before);
+    let post = ignore_batch(if ignores_regen { 0 } else { w }, if ignores_regen { w } else { 0 }, if bypass_flag && !ignores_regen { w } else { 0 }, def, def_owner, tray, &mut out.rolls);
     out.deadly_groups.push((post, x));
-}
-
-/// `PENDING_EPOCH_PROTECTION_FEAT_ONCE` (3.6 army books: Protection Feat is used once per game, when the unit takes wounds): the first
-/// ignore roll at the feat's target spends it, so a later weapon group of the SAME volley rolls only the unit's plain Regeneration, if any.
-/// Before, every group of the volley rolled at the feat's target and the latch closed after the volley.
-fn feat_spends(def: &Ctx, rolled: bool) -> bool {
-    rolled && def.regen_feat_plain.is_some() && def.regeneration && def.regen_target == def.regen_feat
-}
-
-/// The defender a group rolls against once the volley spent the feat (`feat_spends`): the plain targets, or no roll at all.
-fn feat_view(def: &Ctx, spent: bool) -> Ctx {
-    match def.regen_feat_plain {
-        Some((plain, spell)) if spent && def.regeneration && def.regen_target == def.regen_feat => Ctx {
-            regeneration: plain > 0, regen_target: plain, regen_target_spell: spell, regen_feat_plain: None, ..*def
-        },
-        _ => *def,
-    }
 }
 
 pub(crate) fn regen_batch(
@@ -3218,7 +3195,6 @@ pub fn resolve_melee_leg_wipe(
     let gate_on = def.gate_in_force();
     let def = &if gate_on && def.regen_gate_charge_in > 0.0 && charge_from_in <= def.regen_gate_charge_in { def.gate_shut() } else { *def };
     let mut out = ShootResult::default();
-    let mut feat_spent = false; // PENDING_EPOCH_PROTECTION_FEAT_ONCE: the volley's twin
     // Wave 3 — the Shielded-family alias's rules-must-log flag, the volley
     // fold's melee twin (Shielded is the whole melee Defense ladder here).
     let mut shielded_alias_fired = false;
@@ -3318,7 +3294,9 @@ pub fn resolve_melee_leg_wipe(
         && crate::mv::plain_memo::trace_rules_on();
     // PENDING_EPOCH_BANE_MARK: a striker attacking a Bane-Marked unit strikes with Bane (the volley's granted-Bane twin).
     let marked: Vec<Vec<ShootProfile>> = strikers.iter().map(|sh| if sh.att.bane_mark_grant {
-        sh.profiles.iter().map(|p| if p.bane { p.clone() } else { ShootProfile { bane: true, bypass_regen: true, bane_alias: "Bane Mark".into(), ..p.clone() } }).collect()
+        sh.profiles.iter().map(|p| if p.bane && p.bypass_regen { p.clone() } else {
+            ShootProfile { bane: true, bypass_regen: true, bane_alias: if p.bane { p.bane_alias.clone() } else { "Bane Mark".into() }, ..p.clone() }
+        }).collect()
     } else { Vec::new() }).collect();
     for part in order.chunks(if hits_first { order.len().max(1) } else { 1 }) {
         let mut pending = Vec::new();
@@ -3756,14 +3734,12 @@ pub fn resolve_melee_leg_wipe(
                 // Tray-exact S9 — the melee twin of S7 (Takedown Strike included, main.gd:7275-7283):
                 // w x max(Deadly, 1) through the pick's Regeneration, one model, overkill lost.
                 let td = w * p.deadly.max(1);
-                let (feat_d, before) = (feat_view(def, feat_spent), out.rolls.len());
-                out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, if bypass_flag && !ignores_regen { td } else { 0 }, &feat_d, def_owner, tray, &mut out.rolls));
-                feat_spent |= feat_spends(&feat_d, out.rolls.len() > before);
+                out.takedown_groups.push(ignore_batch(if ignores_regen { 0 } else { td }, if ignores_regen { td } else { 0 }, if bypass_flag && !ignores_regen { td } else { 0 }, def, def_owner, tray, &mut out.rolls));
                 out.deadly_tally += w;
             } else if deadly_per_model && p.deadly > 0 {
                 let first = out.deadly_groups.len();
                 let stops = deadly_wipes.filter(|_| rule_on(sh.att.rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH));
-                push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, &mut feat_spent, def_owner, tray, stops);
+                push_deadly_groups(&mut out, w, p.deadly.max(1), ignores_regen, bypass_flag, def, def_owner, tray, stops);
                 out.deadly_lines.push((p.name.clone(), w, p.deadly.max(1), out.deadly_groups.len() - first));
                 out.deadly_marks.push(tray.mark());
                 out.deadly_tally += w;
@@ -3815,7 +3791,7 @@ pub fn resolve_melee_leg_wipe(
     if pool_lands_on_dead {
         out.log.push(format!("Regeneration: {def_owner} is already destroyed by the Deadly wounds - no ignore roll for the other wounds"));
     }
-    out.wounds += if pool_lands_on_dead { regen_proof + regenable } else { ignore_batch(regenable, regen_proof, regen_joined, &feat_view(def, feat_spent), def_owner, tray, &mut out.rolls) };
+    out.wounds += if pool_lands_on_dead { regen_proof + regenable } else { ignore_batch(regenable, regen_proof, regen_joined, def, def_owner, tray, &mut out.rolls) };
     // MEL-10r — a wound Regeneration cancels is not TAKEN: the 73 tally counts what landed.
     out.taken = if tally_post_regen { out.wounds + out.deadly_tally } else { out.caused };
     out
@@ -4125,7 +4101,7 @@ pub fn resolve_spell_hits_with_tray(
     out.caused = w;
     if deadly > 0 {
         let first = out.deadly_groups.len();
-        push_deadly_groups(&mut out, w, deadly.max(1), bypass, ignores_regen, &spell_def, &mut false, def_owner, tray, None);
+        push_deadly_groups(&mut out, w, deadly.max(1), bypass, ignores_regen, &spell_def, def_owner, tray, None);
         out.deadly_lines.push((spell_name.into(), w, deadly.max(1), out.deadly_groups.len() - first));
         out.deadly_tally = w;
     } else {
