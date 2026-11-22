@@ -169,3 +169,4 @@ static func with_lods(mesh: ArrayMesh) -> ImporterMesh:
 		im.add_surface(Mesh.PRIMITIVE_TRIANGLES, mesh.surface_get_arrays(s), [], {}, material())
 	im.generate_lods(25.0, 60.0, [])
 	return im
+# ci3270 plant ctl: comment only
