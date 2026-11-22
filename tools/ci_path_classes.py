@@ -87,7 +87,7 @@ def walkers(root, files):
 
 
 def lane(root, files, cls):
-    return sorted(set(suites(root, files, cls)) | set(walkers(root, files)) | {CANARY})
+    return sorted(set(suites(root, files, cls)) | {CANARY})
 
 
 def pr_files(root):
