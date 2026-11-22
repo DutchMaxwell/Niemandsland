@@ -214,7 +214,7 @@ static func ruin_items(layout: Dictionary) -> Array[Dictionary]:
 			Vector3(mid.x, f["top"], mid.y), CHARRED if b else _timber(int(f["lot"]) * 4 + int(f["side"]))))
 	var stacked := {}
 	for f: Dictionary in faces:   # a chimney stack standing in the gable (ruined lots, ladder-free gable faces, one per lot): the skyline of a town that lost its roofs
-		if not f["free"] or stacked.has(f["lot"]) or _rnd(int(f["lot"]), 0, 350) >= STACK_SHARE:
+		if not f["free"] or stacked.has(f["lot"]) or _rnd(int(f["lot"]), 0, 350) >= STACK_SHARE or STACK_TOP_IN - float(f["top"]) < 1.0:   # no stack on a 9 in top: no room under the crown
 			continue
 		stacked[f["lot"]] = true
 		var d := DIRS[f["side"]]
