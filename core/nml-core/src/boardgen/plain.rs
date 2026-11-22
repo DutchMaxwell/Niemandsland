@@ -185,6 +185,7 @@ mod tests {
 
     // re-pinned 21.11. (silhouette round): slender 2 x 1 town towers, one tower per wall run, 65 % intact houses;
     // re-pinned 21.11. (L-RF1 F3, 593b1257da9d696f -> df767026f7ddebdd): the town writes its intact houses as solid_cells
-    const PINNED_TOWN_42: &str = "df767026f7ddebdd";
+    // re-pinned 22.11. (roofs plan K2, df767026f7ddebdd -> 719d45f5c81b7df2): the town raised minimum 23 -> 15 % (fewer filler slabs)
+    const PINNED_TOWN_42: &str = "719d45f5c81b7df2";
     const PINNED_SEED_42: &str = "cbcd64fada596527";
 }

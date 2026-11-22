@@ -950,13 +950,26 @@ fn g2_gate() {
 }
 
 
+/// Roofs plan K2: the town's raised minimum is 15 %, so the generator grows few filler slabs (raised cells on free earth: no lot, not the wall).
+/// Before K2 (minimum 23 %) the mean over 200 seeds was ~38 cells per board.
+#[test]
+fn a_town_grows_few_filler_slabs() {
+    use nml_core::boardgen::LotKind;
+    let n = 200;
+    let filler: usize = (1..=n).map(|seed| generate_themed(seed, Symmetry::Point180, Theme::RuinTown).cells.iter()
+        .filter(|c| c.level >= 1 && c.lot_id == 0 && c.lot_kind != LotKind::Wall).count()).sum();
+    let mean = filler as f64 / n as f64;
+    eprintln!("filler slab cells per town board over {n} seeds: {mean:.1}");
+    assert!(mean <= 26.0, "a town grows too many filler slabs on free earth: {mean:.1} cells per board (cap 26)");
+}
+
 /// BASELINE of PLAN_RUINTOWN_ROOFS step K0: origin/main 6a2972697, town theme, Point180, seeds 1..=1000 (means per board, sq in, percent).
-/// The roofs steps K2+ move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
+/// Re-pinned by K2 (raised minimum 23 -> 15 %, 1000 seeds). The roofs steps K2+ move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
 const ROOFS_BASELINE: [(&str, f64); 19] = [
-    ("intact houses", 4.04), ("boards with <= 2 houses %", 35.4), ("roofed cells", 11.0), ("raised cells in house plots", 13.3), ("raised cells on free earth", 38.0), ("raised cells in the city wall", 33.8),
-    ("roof share of footprints %", 17.7), ("walkable sq in 0 in", 1385.0), ("walkable sq in 3 in", 490.0), ("walkable sq in 6 in", 208.0), ("walkable sq in 9 in", 68.0), ("ladders", 46.8),
-    ("opening rays blocked %", 94.6), ("mid rays blocked %", 79.5), ("tier-to-tier rays blocked, house 2.5 in %", 56.2), ("tier-to-tier rays blocked, ridge 4.5 in %", 59.2),
-    ("roofed cells in the bands", 7.95), ("raised cells in the bands", 37.5), ("asymmetric cells", 0.0),
+    ("intact houses", 4.96), ("boards with <= 2 houses %", 22.6), ("roofed cells", 13.48), ("raised cells in house plots", 13.71), ("raised cells on free earth", 22.75), ("raised cells in the city wall", 34.11),
+    ("roof share of footprints %", 27.0), ("walkable sq in 0 in", 1493.6), ("walkable sq in 3 in", 364.77), ("walkable sq in 6 in", 203.72), ("walkable sq in 9 in", 66.56), ("ladders", 46.18),
+    ("opening rays blocked %", 94.93), ("mid rays blocked %", 79.54), ("tier-to-tier rays blocked, house 2.5 in %", 52.99), ("tier-to-tier rays blocked, ridge 4.5 in %", 56.34),
+    ("roofed cells in the bands", 9.21), ("raised cells in the bands", 29.39), ("asymmetric cells", 0.0),
 ];
 
 /// Roofs census over `NML_N` town seeds (default 1000, the baseline's size; the baseline is asserted only at 1000, within +-0.5 on every number). `NML_ROOFS_OUT=<file>` also writes the report.
