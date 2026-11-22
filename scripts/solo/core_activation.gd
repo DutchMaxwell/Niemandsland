@@ -749,6 +749,8 @@ static func _cast_leg_end(main, cx: Dictionary) -> void:
 
 ## Step 43: the AI volleys the core resolved and the ones it refused (the AI smoke resets and reads them).
 static var ai_runs := 0
+## Test seam (D-PAR3 15a): false leaves `paid{start}` out of the AI transcript - the control that shows the double pool roll it prevents.
+static var start_paid_input := true
 static var ai_refusals := 0
 
 ## The success target the tray stamps on a Dangerous test's roll (`sim.rs` DANGEROUS_TARGET): a 1 wounds, never a 6.
@@ -1112,7 +1114,9 @@ static func ai_transcript(main, unit: GameUnit, report: Dictionary, target: Game
 		intent["shoot"] = target.unit_id
 	if not split.is_empty():
 		intent["split"] = split
-	return [{"t": "begin"}, {"t": "placed", "positions": at, "trails": trails}, intent]
+	# D-PAR3 15a: every AI board is captured after the table's activation start (`begin_activation`): the core skips its own.
+	return [{"t": "begin"}] + ([{"t": "paid", "start": true}] if start_paid_input else []) \
+		+ [{"t": "placed", "positions": at, "trails": trails}, intent]
 
 
 ## CC-13a: the switch `NML_ONE_CORE_CAST` (default OFF; "1" / "on" turns it on): the core resolves a casting AI activation's casts

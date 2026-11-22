@@ -9,6 +9,10 @@ extends GdUnitTestSuite
 ## Each case runs twice: on the LIVE slice (one pool roll, the core does not take the activation, no landing error) and on the same deny file
 ## WITHOUT the group (the control: two pool rolls, so the count can fail).
 ## RED: drop the group from assets/solo/core_slice_deny.json -> the live leg reads two pool rolls, `ai_runs` 1 and the landing error.
+## D-PAR3 15a: the AI door now TAKES the shooter - its transcript says the table paid the start (`paid{start}`), so the core rolls
+## no second pool: live AI leg = one pool roll, `ai_runs` 1, no landing error. Its control leaves `paid` out (the seam
+## `CoreActivation.start_paid_input`): two pool rolls on every seed - the double-roll class is gone, not hidden. The human leg is
+## unchanged (its capture is before the start; the group still keeps the shooter on the table there).
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -64,6 +68,7 @@ func before_test() -> void:
 
 func after_test() -> void:
 	OS.remove_logger(_log)
+	CoreActivation.start_paid_input = true
 	CoreSlice.path_override = ""
 	CoreSlice.reset_cache()
 	if FileAccess.file_exists(WITHOUT):
@@ -175,11 +180,18 @@ func _assert_control_fails(rows: Array, door: String) -> void:
 
 
 @warning_ignore('unused_parameter')
-func test_the_ai_door_leaves_a_reanimation_shooter_on_the_table(timeout := 600000, do_skip := not ClassDB.class_exists("NmlCore"),
+func test_the_ai_door_takes_a_reanimation_shooter_and_rolls_the_pool_once(timeout := 600000, do_skip := not ClassDB.class_exists("NmlCore"),
 		skip_reason := "no NmlCore") -> void:
-	_assert_once(await _ai_runs(), "AI")
-	_without_group()
+	var live := await _ai_runs()
+	for s in live.size():
+		var row: Array = live[s]
+		assert_int(int(row[0])).override_failure_message("AI door seed %d: the pool is rolled once (rows %s)" % [s, live]).is_equal(1)
+		assert_int(int(row[1])).override_failure_message("AI door seed %d: the core takes the Reanimation shooter (rows %s)" % [s, live]).is_equal(1)
+		assert_int(int(row[2])).override_failure_message("AI door seed %d: no landing error" % s).is_equal(0)
+		assert_int(int(row[3])).override_failure_message("AI door seed %d: the volley's dice are the table's living shooters" % s).is_equal(int(row[4]))
+	CoreActivation.start_paid_input = false   # the control: the same activation without `paid{start}`
 	var control := await _ai_runs()
+	CoreActivation.start_paid_input = true
 	_assert_control_fails(control, "AI")
 	assert_int(control.filter(func(r: Array) -> bool: return int(r[1]) == 1).size()).override_failure_message(
 		"AI door control: the core took the activation (rows %s)" % [control]).is_equal(SEEDS)
