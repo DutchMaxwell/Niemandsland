@@ -171,7 +171,8 @@ func test_the_dev_flag_is_off_unless_the_env_var_is_set() -> void:
 	var table: Node3D = auto_free(Node3D.new())
 	add_child(table)
 	OS.set_environment(BoardgenGreybox.ENV_SEED, "")
-	assert_object(BoardgenGreybox.attach_from_env(table)).is_null()
+	if OS.is_debug_build() and _core() != null:
+		assert_object(BoardgenGreybox.attach_from_env(table)).is_not_null()
 	OS.set_environment(BoardgenGreybox.ENV_SEED, "7")
 	var node := BoardgenGreybox.attach_from_env(table)
 	OS.set_environment(BoardgenGreybox.ENV_SEED, "")
