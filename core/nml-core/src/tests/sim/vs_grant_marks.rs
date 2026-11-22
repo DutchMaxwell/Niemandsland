@@ -332,3 +332,53 @@ fn unpredictable_fighter_mark_rolls_the_phase_die_against_the_marked_target_once
         s2.rolls
     );
 }
+
+/// BM-1, PENDING_EPOCH_BANE_MARK (3.6 army books, gf Saurian Starhosts: once per activation, before attacking, one enemy within 18" in
+/// line of sight; friendly units get Bane against it once): from 96 the Mark rides the Shred Mark's utility pick - the record lands on
+/// the enemy's attackers side, the attacker's volley against it bypasses Regeneration (Bane), the exchange spends it. At 95 the Mark
+/// reads nothing: no pick, no record, the Regeneration die rolls.
+#[test]
+fn bane_mark_lands_on_the_enemy_and_the_volley_against_it_ignores_regeneration_from_96() {
+    let e = crate::acts::PENDING_EPOCH_BANE_MARK;
+    let stamp = mark_carrier("Bane Mark", "saurian_starhosts", e);
+    assert_eq!(stamp.utility_buffs.len(), 1, "96: the Mark reads as the utility pick");
+    let b = &stamp.utility_buffs[0];
+    assert_eq!((b.grants_rule.as_str(), b.target.as_str(), b.beneficiary.as_str()), ("Bane", "enemy", "attackers"));
+    assert!(b.needs_los && b.once && b.range_in == 18.0 && !b.vs_target, "18 in, line of sight, once, the pick kind");
+    assert!(mark_carrier("Bane Mark", "saurian_starhosts", e - 1).utility_buffs.is_empty(), "95: the Mark stays unread");
+
+    let place = |epoch: u32| {
+        let (st, mut statics) = buff_line();
+        let mut a = UnitStatic { model_count: 2, wounds_max: vec![1, 1], ..mark_carrier("Bane Mark", "saurian_starhosts", epoch) };
+        a.shoot = vec![gun("Rifle", 8, 24)];
+        statics[0] = a;
+        let (next, _) = run_marks_epoch(&st, &statics, &buff_action(None), 9, epoch);
+        (st, statics, next)
+    };
+    let (st, statics, next) = place(e);
+    assert!(next.buffs[2].iter().any(|r| r.attackers && &*r.name == "Bane Mark"), "96: the pick lands on the marked enemy");
+    let marked = ctx_live_vs(ctx_of(&statics[next.roster.profile[0]], &next, 0), &statics, &next, 0, 2, false, e);
+    assert!(marked.bane_mark_grant, "96: the attack against the marked unit gets Bane");
+    let (_, statics95, next95) = place(e - 1);
+    assert!(next95.buffs[2].is_empty(), "95: no record");
+    let plain = ctx_live_vs(ctx_of(&statics95[next95.roster.profile[0]], &next95, 0), &statics95, &next95, 0, 2, false, e - 1);
+    assert!(!plain.bane_mark_grant);
+
+    // The number: a Regeneration 5+ target. The plain volley rolls the ignore die, the marked one does not.
+    let prof = [ShootProfile { range: 24, attacks: 32, ..Default::default() }];
+    let defc = Ctx { defense: 6, models: 1, tough: 1, regeneration: true, regen_target: 5, regen_target_spell: 5, ..Default::default() };
+    let volley = |att: &Ctx| {
+        let mut tray = Tray::seeded(9);
+        crate::dice::resolve_volley_with_tray(
+            &[crate::dice::Shooter { profiles: &prof, keep: &[0], attacks: &[32], att, owner: "att" }],
+            &defc, "b", 12.0, 12.0, false, true, true, true, &mut tray,
+        )
+    };
+    let ignore_rolls = |r: &ShootResult| r.rolls.iter().filter(|x| x.kind == "attack" && x.target == 5).count();
+    assert_eq!(ignore_rolls(&volley(&plain)), 1, "95: the Regeneration die rolls");
+    assert_eq!(ignore_rolls(&volley(&marked)), 0, "96: Bane ignores Regeneration");
+
+    // The real seam spends the once-record with the exchange.
+    let (next1, _) = run_marks_epoch(&st, &statics, &buff_action(Some("b")), 9, e);
+    assert!(!next1.buffs[2].iter().any(|r| &*r.name == "Bane Mark"), "the exchange spends the Mark");
+}

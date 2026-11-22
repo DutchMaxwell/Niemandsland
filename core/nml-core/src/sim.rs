@@ -4826,6 +4826,7 @@ pub fn ctx_live_vs(
     c.furious = c.furious || mods::granted_vs(state, target, "Furious");
     c.relentless_grant = c.relentless_grant || mods::granted_vs(state, target, "Relentless");
     c.shred_grant = c.shred_grant || mods::granted_vs(state, target, "Shred");
+    c.bane_mark_grant = rule_on(rules_epoch, crate::acts::PENDING_EPOCH_BANE_MARK) && mods::marked_vs(state, target, "Bane Mark");
     if rule_on(rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) {
         c.slayer_grant = c.slayer_grant || mods::granted_vs(state, target, "Slayer");
     }

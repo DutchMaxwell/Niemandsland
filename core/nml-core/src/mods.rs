@@ -323,6 +323,15 @@ fn chain_grant_where(
     })
 }
 
+/// `PENDING_EPOCH_BANE_MARK`: an attackers-side record on the TARGET's joined chain that a mark of exactly this NAME placed (its
+/// `grants_rule` "Bane" is shared with the spell grants, which this read leaves alone).
+pub fn marked_vs(state: &State, target: usize, mark: &str) -> bool {
+    let mut who: Vec<usize> = vec![target];
+    who.extend(state.attached_to[target]);
+    who.extend(state.attached[target].iter().copied());
+    who.iter().any(|&u| state.buffs[u].iter().any(|r| r.attackers && &*r.name == mark))
+}
+
 fn chain_grant(state: &State, i: usize, rule: &str, attackers: bool) -> bool {
     chain_grant_where(state, i, rule, attackers, |_| true)
 }

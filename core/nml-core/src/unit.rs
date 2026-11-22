@@ -595,6 +595,8 @@ pub struct Ctx {
     /// G4R4 C-GRANTED-BANE (`EPOCH_73_V36`): a live `grants_rule: "Bane when Shooting"` — every ranged weapon of the
     /// member is a Bane weapon for the volley (dice.rs). Zero on every `ctx_of`.
     pub bane_grant: bool,
+    /// `PENDING_EPOCH_BANE_MARK`: a live Bane Mark on the TARGET's chain (`mods::marked_vs`) — this attack's weapons get Bane, once.
+    pub bane_mark_grant: bool,
     // --- Wave 2 "Utility Buff" family (gated `acts::rule_on(.., EPOCH_5_TABLE_RULES)`). ---
     /// A live `grants_rule: "Slayer"` — AP(+2) vs Tough 3+, charge or over 9".
     pub slayer_grant: bool,
@@ -4128,6 +4130,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         relentless_grant: false,
         shred_grant: false,
         bane_grant: false,
+        bane_mark_grant: false,
         slayer_grant: false,
         surge_grant: false,
         versatile_grant: false,
@@ -5837,7 +5840,10 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         }
         seen.push(n.clone());
         let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
-        if e.primitive.as_deref() != Some("Utility Buff") {
+        // PENDING_EPOCH_BANE_MARK: the 3.6 text is a Mark (once per activation, before attacking, one enemy within 18" in line of sight;
+        // friendly attacks against it get Bane once), so the Bane-primitive entry rides this path with the Shred Mark's knobs.
+        let bane_mark = n == "Bane Mark" && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_BANE_MARK);
+        if e.primitive.as_deref() != Some("Utility Buff") && !bane_mark {
             continue;
         }
         // WAVE 2 GATE (`acts::rule_on`, `EPOCH_5_TABLE_RULES`): these twelve names
@@ -5885,6 +5891,7 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         }
         let vs_target = e.param_b("vs_target");
         let target = match e.param_s("target") {
+            _ if bane_mark => "enemy",
             "" => "friendly",
             s => s,
         };
@@ -5922,9 +5929,9 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
             name: n,
             vs_target,
             reposition_in: e.param_f("reposition_in", 0.0),
-            range_in: e.param_f("range_in", if vs_target { 18.0 } else { 12.0 }),
+            range_in: e.param_f("range_in", if vs_target || bane_mark { 18.0 } else { 12.0 }),
             target: target.to_string(),
-            needs_los: e.param_b_or("needs_los", vs_target),
+            needs_los: e.param_b_or("needs_los", vs_target || bane_mark),
             max_targets: e.param_i("max_targets", 1).max(1),
             hit_mod: e.param_i("hit_mod", 0),
             casting_mod: e.param_i("casting_mod", 0),
@@ -5948,13 +5955,15 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
             // seam's band read — below 12 it stays 0 so the row keeps being
             // dropped and an old corpus's stamps are unchanged.
             move_mod: if rule_on(rules_epoch, EPOCH_12_MOVE_BUFF) { e.param_i("move_mod", 0) } else { 0 },
-            grants_rule: e.param_s("grants_rule").to_string(),
+            grants_rule: if bane_mark { "Bane".to_string() } else { e.param_s("grants_rule").to_string() },
             scope: e.param_s("scope").to_string(),
             // EPOCH 15 MARK BENEFICIARY — see `mark_beneficiary_new` above.
             beneficiary: if mark_beneficiary_new
                 && !rule_on(rules_epoch, EPOCH_15_MARK_BENEFICIARY)
             {
                 String::new()
+            } else if bane_mark {
+                "attackers".to_string()
             } else {
                 e.param_s("beneficiary").to_string()
             },

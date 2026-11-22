@@ -1066,6 +1066,13 @@ pub const PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK: u32 = 96;
 /// group rolled at the feat's target and the `feats_used` latch closed after the volley. Core: `sim::ctx_live` (`regen_feat_plain`),
 /// `dice::feat_view` / `dice::feat_spends`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant.
 pub const PENDING_EPOCH_PROTECTION_FEAT_ONCE: u32 = 96;
+/// Placeholder gate for BANE MARK (ticket BM-1, coverage ledger shoot m1/m2, lane covfix2-dice; 3.6 army books Ghostly Undead / Saurian
+/// Starhosts: once per activation, before attacking, pick one enemy within 18" in line of sight; friendly units get Bane against it once):
+/// the Mark rides the Utility Buff path like the Shred Mark (`unit::utility_buffs_of`, placed by `sim::tray_utility_buff` in the bearer's
+/// own activation, a joined hero's Mark included), and the next friendly attack against the marked unit - shooting or melee - gets Bane
+/// (`Ctx::bane_mark_grant`), the exchange spends it. Before, the Mark did nothing on the core. Records stamped 95 or below replay
+/// byte-exact. Every call site reads THIS constant.
+pub const PENDING_EPOCH_BANE_MARK: u32 = 96;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2443,6 +2450,13 @@ mod tests {
         assert_eq!(super::PENDING_EPOCH_PROTECTION_FEAT_ONCE, 96);
         assert!(!rule_on(95, super::PENDING_EPOCH_PROTECTION_FEAT_ONCE), "a record at 95 keeps the per-group feat roll");
         assert!(rule_on(96, super::PENDING_EPOCH_PROTECTION_FEAT_ONCE));
+    }
+
+    #[test]
+    fn pending_bane_mark_is_96() {
+        assert_eq!(super::PENDING_EPOCH_BANE_MARK, 96);
+        assert!(!rule_on(95, super::PENDING_EPOCH_BANE_MARK), "a record at 95 keeps the Mark unread");
+        assert!(rule_on(96, super::PENDING_EPOCH_BANE_MARK));
     }
 
     #[test]
