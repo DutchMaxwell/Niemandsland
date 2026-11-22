@@ -330,7 +330,7 @@ func test_wall_spills_buttresses_and_ivy_clusters_stand_on_the_right_faces() -> 
 				var foot := Vector2i((at + into * 0.3) / 3.0)
 				var wc: Dictionary = layout["cells"][wall.y * nx + wall.x]
 				var fc: Dictionary = layout["cells"][foot.y * nx + foot.x]
-				assert_bool(int(wc["level"]) > 0 or (m == "ivy_cluster_small" and wc["lot_kind"] == "Roofed")).override_failure_message("seed %d: %s not on a raised face" % [s, m]).is_true()   # (townC4: or a house, which is solid at level 0)
+				assert_bool(int(wc["level"]) > 0 or wc["lot_kind"] == "Tower" or (m == "ivy_cluster_small" and wc["lot_kind"] == "Roofed")).override_failure_message("seed %d: %s not on a raised face, a tall tower or a house" % [s, m]).is_true()   # (townC4: or a house, which is solid at level 0; towers plan L1: or a tall tower)
 				assert_int(int(fc["level"])).is_equal(0)
 				assert_bool(clear.has(foot.y * nx + foot.x)).override_failure_message("seed %d: %s on a ladder face" % [s, m]).is_false()
 				if m.begins_with("wall_buttress"):
