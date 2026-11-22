@@ -1073,6 +1073,12 @@ pub const PENDING_EPOCH_PROTECTION_FEAT_ONCE: u32 = 96;
 /// (`Ctx::bane_mark_grant`), the exchange spends it. Before, the Mark did nothing on the core. Records stamped 95 or below replay
 /// byte-exact. Every call site reads THIS constant.
 pub const PENDING_EPOCH_BANE_MARK: u32 = 96;
+/// Placeholder gate for OUT OF REACH NO VOLLEY (coverage ledger shoot m2 cause 6, lane covfix2-dice): when the TARGET's own range cut
+/// (Aircraft -12", Ranged Shrouding / Darkborn / Shadowborn / Wild Veil) leaves the shooter no weapon in reach, there is no volley - the
+/// table writes "no target in range or sight" and spends nothing. Before, the core still built the group: it announced "X fires at Y",
+/// rolled nothing, and spent the once-per-game shot feats (Precision / Piercing Feat), the target's marks and markers, and the exchange's
+/// once-records. Core: `sim::cut_out_of_reach`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant.
+pub const PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY: u32 = 96;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2457,6 +2463,13 @@ mod tests {
         assert_eq!(super::PENDING_EPOCH_BANE_MARK, 96);
         assert!(!rule_on(95, super::PENDING_EPOCH_BANE_MARK), "a record at 95 keeps the Mark unread");
         assert!(rule_on(96, super::PENDING_EPOCH_BANE_MARK));
+    }
+
+    #[test]
+    fn pending_out_of_reach_no_volley_is_96() {
+        assert_eq!(super::PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY, 96);
+        assert!(!rule_on(95, super::PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY), "a record at 95 keeps the empty volley");
+        assert!(rule_on(96, super::PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY));
     }
 
     #[test]

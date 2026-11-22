@@ -382,3 +382,39 @@ fn bane_mark_lands_on_the_enemy_and_the_volley_against_it_ignores_regeneration_f
     let (next1, _) = run_marks_epoch(&st, &statics, &buff_action(Some("b")), 9, e);
     assert!(!next1.buffs[2].iter().any(|r| &*r.name == "Bane Mark"), "the exchange spends the Mark");
 }
+
+/// Coverage ledger m2, cause 6 (out-of-reach volleys), PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY: a TARGET-side range cut (Ranged
+/// Shrouding, the Darkborn / Shadowborn / Wild Veil family: -8" here) puts the shooter's 18" rifle out of reach of a target 12" away.
+/// The dice fire nothing either way. At 95 the core still built the group and spent the shooter's once-per-game Precision Feat and the
+/// Shred Mark waiting on the target; from 96 there is no volley (the table's "no target in range or sight"): nothing is spent. Control:
+/// without the cut the same volley fires at 96.
+#[test]
+fn an_out_of_reach_volley_spends_nothing_from_96() {
+    let e = crate::acts::PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY;
+    let fixture = |shrouded: bool| {
+        let (mut st, mut statics) = buff_line();
+        statics[0].shoot = vec![gun("Rifle", 8, 18)];
+        statics[0].precision_feat_hit = 1;
+        statics[2].ctx.ranged_shrouding = shrouded;
+        statics[2].ctx.ranged_shroud_penalty_in = 8.0;
+        statics[2].ctx.ranged_shroud_floor_in = 6.0;
+        st.buffs[2].push(crate::mods::LiveMod { hit_mod: 0, casting_mod: 0, morale_mod: 0, ap_mod: 0, def_mod: 0, defense_mod: 0,
+            move_mod: 0, range_in: 0, grants_rule: std::rc::Rc::from("Shred"), scope: std::rc::Rc::from(""), attackers: true, once: true,
+            name: std::rc::Rc::from("Shred Mark") });
+        (st, statics)
+    };
+    let (st, statics) = fixture(true);
+    let (old, old_shot) = run_marks_epoch(&st, &statics, &buff_action(Some("b")), 9, e - 1);
+    assert!(old_shot.rolls.is_empty(), "95: no die either");
+    assert_eq!(old.feats_used[0], vec!["Precision Feat".to_string()], "95: the empty volley spent the once-per-game feat");
+    assert!(old.buffs[2].is_empty(), "95: the empty volley consumed the Mark");
+    let (new, new_shot) = run_marks_epoch(&st, &statics, &buff_action(Some("b")), 9, e);
+    assert!(new_shot.rolls.is_empty(), "96: no die");
+    assert!(new.feats_used[0].is_empty(), "96: no volley, the feat stays unspent");
+    assert_eq!(new.buffs[2].len(), 1, "96: the Mark waits for a real attack");
+    assert!(new_shot.log.iter().any(|l| l.contains("no volley — no target in range or sight")), "rules-must-log: {:?}", new_shot.log);
+    let (st, statics) = fixture(false);
+    let (ctl, ctl_shot) = run_marks_epoch(&st, &statics, &buff_action(Some("b")), 9, e);
+    assert!(!ctl_shot.rolls.is_empty(), "control: in reach, the volley fires at 96");
+    assert!(ctl.buffs[2].is_empty(), "control: the real attack spends the Mark");
+}
