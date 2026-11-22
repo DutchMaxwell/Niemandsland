@@ -38,7 +38,7 @@ func test_every_fine_pattern_fades_to_its_mean_with_the_pixel_footprint() -> voi
 	var src := FileAccess.get_file_as_string(SHADER)
 	assert_bool(src.contains("float keep(float coord, float size)")).is_true()
 	assert_bool(src.contains("fwidth(coord)")).is_true()
-	for fn in ["vec3 stone(", "vec3 cobble("]:
+	for fn in ["vec3 stone_rows(", "vec3 cobble("]:   # (texture plan step 6: stone() lays its fixed course through stone_rows())
 		var body := src.substr(src.find(fn), 1800)
 		assert_bool(body.contains("keep(")).override_failure_message("%s does not fade with the pixel footprint" % fn).is_true()
 	assert_bool(src.contains("keep(p.y, TILE_H)")).is_true()   # the roof tiles

@@ -61,6 +61,14 @@ func test_the_box_size_reaches_the_fragment_and_the_edges_foot_eaves_and_top_cou
 	assert_bool(src.contains("k != 15 && k != 17")).is_true()   # the roof prism and the lantern are no boxes
 
 
+## Texture plan step 4: a ladder rail or a wooden prop is no stone box - no pale chipped edge on a 0.12 in rail (it read as a stripe), and the
+## ladder is a mid weathered wood (lead: it must still read as climbable in dusk, not a black stick), not saturated orange.
+func test_wood_has_no_chipped_stone_edge_and_the_ladder_is_dark_weathered_wood() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	assert_bool(src.contains("k != 15 && k != 17 && k != 5 && k != 18 && (fa.x")).override_failure_message("ladder / wood still get the chipped stone edge").is_true()
+	var ladder: Color = BoardgenTheme.TOWN_PALETTE[BoardgenTheme.TOWN_KINDS.find("ladder")]
+	assert_bool(ladder.is_equal_approx(Color(0.40, 0.37, 0.34))).override_failure_message("the ladder is %s, not the mid weathered wood" % ladder).is_true()
+
 ## The earth's pebbles and tufts (lead, 21.11., after R3 macro): small, dark, irregular and sparse - never yellow coins.
 func test_the_earth_has_sparse_dark_irregular_pebbles_and_no_yellow_coins() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
@@ -137,6 +145,16 @@ func test_ruined_tops_break_only_in_the_outer_edge_strip() -> void:
 	assert_bool(src.contains("float fh = h21(fc + seed + 77.0);")).override_failure_message("no cracked flags").is_true()   # (21.11.: one straight fracture per broken flag, no curly noise isolines)
 	assert_bool(src.contains("abs(vnoise(xz * 1.6 + seed * 2.0) - 0.5)")).override_failure_message("the curly scribble cracks are back").is_false()
 
+
+## Texture plan step 6 (the "car park"): the flag tops are irregular - courses of 0.45 / 0.6 / 0.75 in in an order hashed per band of three, flags 0.5 - 1.1 in
+## long, 0.85 of the wall stone's tone spread - and their joints are mid-dark (the flag's own tone x 0.55 at 0.6), never near black.
+func test_the_flag_tops_are_irregular_flags_with_mid_dark_joints() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	assert_bool(src.contains("alb = stone_rows(xz, seed, fr, 0.72, tint, rel);")).override_failure_message("the flags are still one 0.45 in course").is_true()
+	assert_bool(src.contains("float c0 = 0.45 + 0.15 * mod(o, 3.0);")).is_true()
+	assert_bool(src.contains("grit_stone_tone(h21(fc + seed + 41.0)), 0.85);")).override_failure_message("the flag tone spread is not 0.85").is_true()
+	assert_bool(src.contains("alb * 0.55, 0.6 * joint * keep(xz.y, fr.z));")).override_failure_message("the flag joint is not mid-dark").is_true()
+	assert_bool(src.contains("vec3(0.07, 0.06, 0.05), 0.75 * joint")).override_failure_message("the near-black flag joint is back").is_false()
 
 ## Lead 21.11. (readability gate): the ground the models stand on - streets, packed earth, garden plots, the decks of yards and tier floors - sits a step below the models' own values.
 func test_the_ground_the_models_stand_on_sits_below_the_models() -> void:
