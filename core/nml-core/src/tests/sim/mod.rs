@@ -1920,6 +1920,7 @@ mod v36_w1_5b;
 mod v36_w1_trace;
 mod v36_g4r4_granted_bane;
 mod consolidate_plan;
+mod legal_rest;
 mod versatile_reach;
 mod watchborn_latch;
 mod weapons;
