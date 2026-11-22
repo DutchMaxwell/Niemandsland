@@ -1505,7 +1505,12 @@ pub(crate) fn pile_in_state(self, state: &mut State, t: &Terrain, si: usize, ti:
     let to_slot = |i: usize| slots.get(i).map_or(f64::INFINITY, |s| g2::distance_to(mpos[i], *s));
     let mut order: Vec<usize> = (0..dm.len()).collect();
     order.sort_by(|&a, &b| if (to_slot(a) - to_slot(b)).abs() > 0.0001 { to_slot(a).total_cmp(&to_slot(b)) } else { a.cmp(&b) });
-    let walls: &[[[f32; 2]; 2]] = if state.profile(ti).special_rules.iter().any(|r| r == "Flying") { &[] } else { t.walls_world_m() };
+    let flying = state.profile(ti).special_rules.iter().any(|r| r == "Flying");
+    // L-RF1 F6: a house (solid tier cell) is a wall to a walker; a flier crosses it but may not end over it
+    let houses = t.solid_walls_world_m();
+    let walls: Vec<[[f32; 2]; 2]> = if flying { Vec::new() } else { t.walls_world_m().iter().copied().chain(houses.iter().copied()).collect() };
+    let on_house = |c: V3, r: f64| t.solid_at(f64::from(c[0]) / t.in2m(), f64::from(c[2]) / t.in2m())
+        || houses.iter().any(|w| g2::point_seg_distance([c[0], c[2]], w[0], w[1]) < r + 0.001);
     let chain = state.book(ti).chain_in;
     let mut moved = 0;
     for i in order {
@@ -1525,7 +1530,7 @@ pub(crate) fn pile_in_state(self, state: &mut State, t: &Terrain, si: usize, ti:
                 !(u == m.unit && k == m.model) && (c[0] - state.positions[u][k][0] as f32).hypot(c[2] - state.positions[u][k][2] as f32) as f64
                     - r - radius_of(state, Mover { unit: u, model: k }) < -0.0005
             }));
-            if blocked || overlaps { continue; }
+            if blocked || overlaps || on_house(c, r) { continue; }
             legal.get_or_insert(c);
             let cfg: Vec<V2> = dm.iter().map(|d| if d.unit == m.unit && d.model == m.model { inch(c) } else { inch(pos_of(state, *d)) }).collect();
             if dm.len() <= 1 || (super::components_r(&cfg, &radii).len() == 1 && super::max_edge_spread_r(&cfg, &radii) <= chain) {
@@ -3092,5 +3097,30 @@ pub(crate) mod tests {
         let (gf, gff) = (stepped("gf"), stepped("gff"));
         assert!(gf > 0.0 && gf < 1.5, "gf takes a short coherent step: {gf:.2} in");
         assert!((gff - 3.0).abs() < 0.05, "gff takes the full 3 in step: {gff:.2} in");
+    }
+
+    /// L-RF1 F6: a defender west of a house (tier cell 5 of a 1 ft board, x -3..0 in) piles in toward a charger east of it.
+    /// Red before: the pile-in read only the ruin walls, so its 3 in step ended at x -1.5 in, inside the house. A walker
+    /// stops short of the house wall; a flier may not end over it either. Without `solid_cells` it still walks in (planted).
+    #[test]
+    fn a_pile_in_never_ends_in_a_house() {
+        let piled = |solid: Vec<u16>, flying: bool| {
+            let s = IN2M as f32;
+            let mut st = units_state(vec![vec![[2.0 * s, 0.0, -1.5 * s]], vec![[-4.5 * s, 0.0, -1.5 * s]]], vec![vec![IN2M], vec![IN2M]], vec![vec![]; 2]);
+            if flying {
+                let mut p = st.profiles.list[0].clone();
+                p.special_rules.push("Flying".into());
+                st.profiles = Rc::new(Profiles { list: vec![p], index: HashMap::new() });
+            }
+            let mut p = PlainTerrain { cells: vec![], sandbox: vec![], cell_params: CellParams { table_size_feet: [1.0, 1.0], grid_rotation_degrees: 0.0,
+                grid_size_inches: 3.0, inches_to_meters: IN2M }, ..Default::default() };
+            p.tiers = Some(crate::terrain::TierGrid { nx: 4, nz: 4, cell_in: 3.0, level_in: vec![0.0; 16], ladders: vec![], stairs: vec![] });
+            p.solid_cells = solid;
+            MoveRules { rules_epoch: EPOCH_73_V36 }.pile_in_state(&mut st, &Terrain::build(&p), 0, 1, true);
+            st.positions[1][0][0] / IN2M
+        };
+        assert!(piled(vec![5], false) <= -4.0 + 1e-6, "a walker stops a base radius short of the house: {}", piled(vec![5], false));
+        assert!(piled(vec![5], true) <= -4.0 + 1e-6, "a flier may not end over the house: {}", piled(vec![5], true));
+        assert!(piled(vec![], false) > -3.0, "planted: no solid cell, the step walks in: {}", piled(vec![], false));
     }
 }

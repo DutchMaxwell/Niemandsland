@@ -472,6 +472,16 @@ impl Terrain {
         cliffs.map(|e| self.tier_seg_in(e)).collect()
     }
 
+    /// L-RF1 F6 - the outline of the solid cells only (every border between a `solid_cells` cell and one that is not),
+    /// WORLD METRES: what a pile-in may not cross or end over. Read from the list on a level-0 copy of the grid, so it does
+    /// not depend on any tier height. Empty on every board without `solid_cells`.
+    pub fn solid_walls_world_m(&self) -> Vec<WallSeg> {
+        let (Some(t), false) = (&self.tiers, self.solid_cells.is_empty()) else { return Vec::new() };
+        let flat = TierGrid { level_in: vec![0.0; t.level_in.len()], ladders: Vec::new(), stairs: Vec::new(), ..t.clone() };
+        let m = self.in2m;
+        flat.edges_with(&self.solid_cells).iter().map(|e| [[(e.a[0] * m) as f32, (e.a[1] * m) as f32], [(e.b[0] * m) as f32, (e.b[1] * m) as f32]]).collect()
+    }
+
     /// Heightfield plan step 11b - the walls a base may not rest against or be pushed through: `walls_in` plus the cliffs
     /// of a tier board (R10: a base never ends partly over a sheer edge). A ladder is no wall. On a board with no tier
     /// edges this IS `walls_in`, so every flat board and corpus reads exactly what it read.
