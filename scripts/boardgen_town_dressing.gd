@@ -189,19 +189,21 @@ static func merlons(layout: Dictionary) -> Array[Dictionary]:
 			if level == 2 and side != (3 if int(cd["x"]) * 2 < nx else 1):
 				continue   # a wall ridge has its parapet on the FIELD side only: the town side of the walk is open (a thin wall with a walk, not a crenellated block)
 			for i in 3:
-				if _hash(cd["x"] * 16 + cd["z"], half, 10 + side * 3 + i) < (0.28 if half == 1 else 0.10):
+				if _hash(cd["x"] * 16 + cd["z"], half, 10 + side * 3 + i) < (0.22 if tall else (0.28 if half == 1 else 0.10)):   # (a tall tower's crown: about one in five broken away)
 					continue
 				var lo := origin + Vector2(cd["x"], cd["z"]) * cell_in
 				var t := 0.5 + float(i)
-				var box_lo := Vector2(lo.x + t - 0.35, lo.y) if d.x == 0 else Vector2(lo.x, lo.y + t - 0.35)
-				var box_hi := box_lo + (Vector2(0.7, 0.4) if d.x == 0 else Vector2(0.4, 0.7))
+				var mw := 0.9 if tall else 0.7   # (towers plan, second pass: a tall tower's merlons are heavier - 0.9 x 0.55 x 0.9 in; nobody walks there)
+				var md := 0.55 if tall else 0.4
+				var box_lo := Vector2(lo.x + t - mw * 0.5, lo.y) if d.x == 0 else Vector2(lo.x, lo.y + t - mw * 0.5)
+				var box_hi := box_lo + (Vector2(mw, md) if d.x == 0 else Vector2(md, mw))
 				if d.y == 1:
-					box_lo.y += cell_in - 0.4
-					box_hi.y += cell_in - 0.4
+					box_lo.y += cell_in - md
+					box_hi.y += cell_in - md
 				if d.x == 1:
-					box_lo.x += cell_in - 0.4
-					box_hi.x += cell_in - 0.4
-				out.append({"lo": Vector3(box_lo.x, top, box_lo.y), "hi": Vector3(box_hi.x, top + 0.7, box_hi.y), "kind": "wall", "solid": false, "merlon": true})
+					box_lo.x += cell_in - md
+					box_hi.x += cell_in - md
+				out.append({"lo": Vector3(box_lo.x, top, box_lo.y), "hi": Vector3(box_hi.x, top + (0.9 if tall else 0.7), box_hi.y), "kind": "wall", "solid": false, "merlon": true})
 	return out
 
 
