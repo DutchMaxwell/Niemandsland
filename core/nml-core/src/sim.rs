@@ -11746,10 +11746,13 @@ fn resolve_with(
     // the activation. The cast sub-phase is the pre-melee source the core
     // tracks itself, so the wound delta across it is the honest counter; the
     // charge move's own self-wounds ride `charger_self_wounds` separately.
+    // D-PAR3 14b: `Input::Paid { beats }` - the table resolved the pre-attack phase before its capture (its casts, every beat below,
+    // the move-through attacks), so none of it runs again here.
+    let beats = !dice.as_ref().is_some_and(|(tray, _)| tray.paid_beats());
     let cast_wounds_before_su = wounds_left(&next, si);
     let cast_wounds_before_tu = ci.map_or(0, |t| wounds_left(&next, t));
     // CC-5a: casts offered on a supplied tray are the tray path's own (`tray_cast`); the expectation model never runs beside them.
-    if seams.cast && dice.as_ref().is_none_or(|(tray, _)| tray.casts().is_empty()) {
+    if seams.cast && beats && dice.as_ref().is_none_or(|(tray, _)| tray.casts().is_empty()) {
         let row: Vec<bool> = match cast_los {
             Some(r) => r.to_vec(),
             None => (0..next.units()).map(|j| los_clear(&next, si, j)).collect(),
@@ -11787,21 +11790,21 @@ fn resolve_with(
 
     // --- MEND (main.gd:1056-1058), the pre-attack slot — every action kind,
     // tray path only. See `tray_mend`; no bearer, no patient, no draw.
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_mend(statics, &mut next, si, seams, tray, shot);
     }
 
     // --- BREATH ATTACK (main.gd:1059), right after Mend in the table's own
     // pre-attack slot order — every action kind, tray path only. See
     // `tray_breath_attack`; no bearer, no target, no draw.
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_breath_attack(statics, &mut next, si, seams, tray, shot);
     }
 
     // --- Utility Buff / Re-Position Artillery (main.gd:1062, right after
     // Mend + Breath Attack), tray path only — see `tray_utility_buff`.
     // Dice-free: no tray draw either way.
-    if dice.is_some() {
+    if dice.is_some() && beats {
         tray_utility_buff(statics, &mut next, si, seams, cover);
     }
 
@@ -11809,7 +11812,7 @@ fn resolve_with(
     // between Utility Buffs and Piercing Tag) — tray path only, the fatigue
     // arm (`tray_fatigue_debuff`) and the displacement arm
     // (`tray_mind_control`).
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_fatigue_debuff(statics, &mut next, si, seams, tray, shot);
         tray_mind_control(statics, &mut next, si, seams, tray, shot, cover);
     }
@@ -11819,7 +11822,7 @@ fn resolve_with(
     // `tray_piercing_tag`. From EPOCH_67_MARKERS_BURSTS a `place_roll` entry
     // (Piercing Spotter) draws its 4+; every other name is still dice-free
     // (the marker count comes off the rule's rating).
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_piercing_tag(statics, &mut next, si, seams, tray, shot);
     }
 
@@ -11828,7 +11831,7 @@ fn resolve_with(
     // `tray_precision_markers`. The Tag draws nothing (the count is the
     // rating); the Spotter does NOT run here — its beat is the activation's
     // END (main.gd:1127).
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_precision_markers(statics, &mut next, si, seams, tray, shot, false);
         // Rules 3.6: the Spotter rolls BEFORE the bearer's own attacks.
         if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
@@ -11839,32 +11842,34 @@ fn resolve_with(
     // --- RECKLESS PIERCING (main.gd:1072, the table's own slot between the
     // Piercing Tag and the Storm Attack) — tray path only, see
     // `tray_reckless_piercing`.
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_reckless_piercing(statics, &mut next, si, seams, tray, shot);
     }
 
     // --- STORM ATTACK (main.gd:1073, after Utility Buff in the table's own
     // pre-attack slot order), every action kind, tray path only. See
     // `tray_storm_attack`; no enemy in reach does not spend the burst.
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_storm_attack(statics, &mut next, si, seams, tray, shot);
     }
 
     // --- TELEPORT / ETHEREAL (main.gd:1075, right after Surprise; #816 PR 2)
-    teleport_beat(statics, &mut next, si, action, seams, dice.as_mut(), cover);
+    if beats {
+        teleport_beat(statics, &mut next, si, action, seams, dice.as_mut(), cover);
+    }
 
     // --- STRAFING (main.gd:1096, right after Teleport and BEFORE the Crossing
     // Attack in the table's own pre-attack slot order), every action kind with
     // a tray — see `tray_strafing`; no move trail, no carrier, no crossed
     // enemy rolls nothing.
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_strafing(statics, state, &mut next, si, seams, tray, shot, cover);
     }
 
     // --- CROSSING ATTACK (main.gd:1081, right after Storm in the table's own
     // pre-attack order), every action kind with a tray — see
     // `tray_crossing_attack`; no crossed enemy rolls nothing.
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_crossing_attack(statics, state, &mut next, si, seams, tray, shot);
     }
 
