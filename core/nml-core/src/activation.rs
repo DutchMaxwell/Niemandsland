@@ -44,6 +44,10 @@ pub enum Input {
     /// meleefix: one melee unit's consolidation inputs from the table's AI round planner (`ConsolidatePlan`); read from
     /// `PENDING_EPOCH_CONSOLIDATE_PLAN` on, ignored below it. Absent = the core's own goal.
     Consolidate(ConsolidatePlan),
+    /// D-PAR3 14a: what the table already resolved this activation before it captured the core's board, so the core does
+    /// not resolve it again: `start` = the activation-start triggers (Reanimation, Surprise Attack), `dangerous` = the move's
+    /// Dangerous terrain test, `beats` = the pre-attack phase. Only directly after `Begin`.
+    Paid { start: bool, dangerous: bool, beats: bool },
 }
 
 /// meleefix: what the table's goal for a melee winner's "may move up to 3 in" reads besides the board
@@ -122,6 +126,7 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
         let why = match x {
             _ if i == 0 && *x != Input::Begin => Some("the activation was not started".to_string()),
             Input::Begin if i > 0 => Some("the activation is already started".to_string()),
+            Input::Paid { .. } if i != 1 => Some("what the table paid is said right after the start".to_string()),
             _ if over => Some("the activation is over".to_string()),
             Input::Cancel if rolled => Some("cancel is not possible after the first die".to_string()),
             Input::Faces(_) if !declared => Some("faces before the action was declared".to_string()),
@@ -516,6 +521,14 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     if let Some((index, reason)) = cast_check(statics, state, t) {
         return ActStep::Refused { index, reason };
     }
+    // D-PAR3 14a: `order_check` keeps a `Paid` at index 1. The start is skipped; the other two flags wait for 14b.
+    let (paid_start, paid_rest) = match t.get(1) {
+        Some(Input::Paid { start, dangerous, beats }) => (*start, *dangerous || *beats),
+        _ => (false, false),
+    };
+    if paid_rest {
+        return ActStep::Refused { index: 1, reason: "the core does not skip a paid Dangerous test or pre-attack beat yet".to_string() };
+    }
     let casts: Vec<CastInput> = t.iter().filter_map(|x| if let Input::Cast(c) = x { Some(c.clone()) } else { None }).collect();
     let consolidate: Vec<ConsolidatePlan> = t.iter().filter_map(|x| if let Input::Consolidate(c) = x { Some(c.clone()) } else { None }).collect();
     // Before any resolver runs: no die is drawn and no state is resolved. A `Placed` in the
@@ -633,6 +646,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             if let Some((p, trails)) = placed.clone() {
                 tray.place(p, trails);
             }
+            tray.pay(paid_start, false);
             for (_, id, answer) in &wound {
                 tray.offer_wound_alloc(id.clone(), answer.clone());
             }

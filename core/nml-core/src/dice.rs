@@ -126,7 +126,7 @@ impl Tray {
     /// instead of drawing. Past the last group it serves 1s and records where it
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
-        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), interference_choices: Vec::new(), strike_back_choices: Vec::new(), choice_seq: 0, casts: Vec::new(), cast_refused: None };
+        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), interference_choices: Vec::new(), strike_back_choices: Vec::new(), choice_seq: 0, casts: Vec::new(), cast_refused: None, paid: (false, false) };
         Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None, consolidate: Vec::new() }
     }
 
@@ -143,6 +143,24 @@ impl Tray {
             feed.placed = Some(p);
             feed.placed_trails = Some(trails);
         }
+    }
+
+    /// D-PAR3 14a: the table already resolved this activation's start triggers / its pre-attack phase (`Input::Paid`). Only a
+    /// supplied tray keeps them; a seeded tray ignores the call.
+    pub fn pay(&mut self, start: bool, beats: bool) {
+        if let Some(feed) = self.feed.as_mut() {
+            feed.paid = (start, beats);
+        }
+    }
+
+    /// D-PAR3 14a: whether the table already resolved the start triggers (`false` on every seeded tray).
+    pub fn paid_start(&self) -> bool {
+        self.feed.as_ref().is_some_and(|f| f.paid.0)
+    }
+
+    /// D-PAR3 14b: whether the table already resolved the pre-attack phase (`false` on every seeded tray).
+    pub fn paid_beats(&self) -> bool {
+        self.feed.as_ref().is_some_and(|f| f.paid.1)
     }
 
     /// The supplied placement's walked paths, if any (`None` on every seeded tray).
@@ -430,6 +448,8 @@ pub struct Feed {
     casts: Vec<CastInput>,
     /// CC-5c/8b: the first offered cast refused during resolution `(draw, seq, reason)` (`Tray::note_cast_refused`).
     pub cast_refused: Option<(usize, i64, String)>,
+    /// D-PAR3 14a: (start, beats) the table already paid (`Tray::pay`).
+    paid: (bool, bool),
 }
 
 /// One-core P4.D-20: the step API's wound-allocation choice as the volley's landing sees it. `answer` = the
