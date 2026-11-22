@@ -126,7 +126,7 @@ impl Tray {
     /// instead of drawing. Past the last group it serves 1s and records where it
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
-        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), interference_choices: Vec::new(), strike_back_choices: Vec::new(), choice_seq: 0, casts: Vec::new(), cast_refused: None, paid: (false, false) };
+        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), interference_choices: Vec::new(), strike_back_choices: Vec::new(), choice_seq: 0, casts: Vec::new(), cast_refused: None, paid: (false, false), no_step: false };
         Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None, consolidate: Vec::new() }
     }
 
@@ -151,6 +151,19 @@ impl Tray {
         if let Some(feed) = self.feed.as_mut() {
             feed.paid = (start, beats);
         }
+    }
+
+    /// Step 20: the intent's `no_step` - the core takes no Hit & Run step after the attack (a human player drags it). Only a supplied
+    /// tray keeps it; a seeded tray ignores the call.
+    pub fn hold_step(&mut self, no_step: bool) {
+        if let Some(feed) = self.feed.as_mut() {
+            feed.no_step = no_step;
+        }
+    }
+
+    /// Step 20: whether the intent asked for no Hit & Run step (`false` on every seeded tray).
+    pub fn no_step(&self) -> bool {
+        self.feed.as_ref().is_some_and(|f| f.no_step)
     }
 
     /// D-PAR3 14a: whether the table already resolved the start triggers (`false` on every seeded tray).
@@ -450,6 +463,8 @@ pub struct Feed {
     pub cast_refused: Option<(usize, i64, String)>,
     /// D-PAR3 14a: (start, beats) the table already paid (`Tray::pay`).
     paid: (bool, bool),
+    /// Step 20: the intent's `no_step` (`Tray::hold_step`).
+    no_step: bool,
 }
 
 /// One-core P4.D-20: the step API's wound-allocation choice as the volley's landing sees it. `answer` = the

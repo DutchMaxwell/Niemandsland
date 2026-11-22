@@ -12938,6 +12938,8 @@ fn resolve_with(
         let shot_leg = !shoot_key.is_empty()
             && (kind == HOLD || kind == ADVANCE || (kind == RUSH && quick_shot_active));
         let hnr_attacked = shot_leg || kind == CHARGE;
+        // Step 20: a human bearer's step is the player's drag (`Input::Intent { no_step }`): the core takes none.
+        let hnr_attacked = hnr_attacked && !dice.as_ref().is_some_and(|(tray, _)| tray.no_step());
         if hnr_attacked && tray_hit_and_run(statics, &mut next, si, seams, cover, shot_leg) {
             // The table's own battle-log line, main.gd:1089 — the rules-must-
             // log twin of `record_decision`'s "hit-and-run" entry. Wave 4

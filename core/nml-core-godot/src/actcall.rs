@@ -119,6 +119,8 @@ fn input_of(v: &Variant) -> Option<Input> {
             split: Some(split_of(field("split"))?).filter(|l| !l.is_empty()),
             // P4.D-48: a CHARGE names its target by roster key (`charge`); absent or "" = none (the core refuses a charge without one).
             charge: field("charge").map(|s| plain::text(&s)).filter(|s| !s.is_empty()),
+            // Step 20: `"no_step": true` = no core Hit & Run step (the player drags it); absent = false.
+            no_step: field("no_step").is_some_and(|v| plain::flag(&v)),
         },
         "faces" => Input::Faces(plain::any_array(&field("faces")?).iter_shared().map(|f| plain::int(&f).clamp(0, 6) as u8).collect()),
         // P4.0-5: `{"t": "choice", "id": ..., "option": ...}`; an empty/absent `option` asks the core.

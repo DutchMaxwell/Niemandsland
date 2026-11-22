@@ -27,7 +27,8 @@ pub enum Input {
     /// The declared action (`sim::HOLD` ..); `shoot` is `Some` when it shoots. `split` is split fire's aim,
     /// per (member, weapon) the target key it fires at; `None` (or empty) = the one `shoot` target.
     /// P4.D-46: `charge` is a `sim::CHARGE`'s target key (the core lands the charge with `charge_move`, then strikes).
-    Intent { kind: i64, shoot: Option<String>, split: Option<Vec<SplitShot>>, charge: Option<String> },
+    /// Step 20: `no_step` = the core takes no Hit & Run step after the attack (a human bearer's player drags it).
+    Intent { kind: i64, shoot: Option<String>, split: Option<Vec<SplitShot>>, charge: Option<String>, no_step: bool },
     /// One thrown face group, in the order the core asked for them.
     Faces(Vec<u8>),
     /// The unit's model positions after a drag (`at`) and each model's walked path this
@@ -539,10 +540,10 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         return ActStep::Cancelled { lines: vec![LogLine { rule: "activation_cancel", category: Category::Movement, side, text, detail: None }] };
     }
     let declared = t.iter().enumerate().find_map(|(i, x)| match x {
-        Input::Intent { kind, shoot, split, charge } => Some((i, *kind, shoot.clone(), split.clone(), charge.clone())),
+        Input::Intent { kind, shoot, split, charge, no_step } => Some((i, *kind, shoot.clone(), split.clone(), charge.clone(), *no_step)),
         _ => None,
     });
-    let Some((at_intent, declared, shoot, split, charge)) = declared else {
+    let Some((at_intent, declared, shoot, split, charge, no_step)) = declared else {
         return ActStep::Open;
     };
     let placed = t.iter().rev().find_map(|x| match x {
@@ -648,6 +649,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
                 tray.place(p, trails);
             }
             tray.pay(paid_start, paid_beats);
+            tray.hold_step(no_step);
             for (_, id, answer) in &wound {
                 tray.offer_wound_alloc(id.clone(), answer.clone());
             }
@@ -1015,7 +1017,7 @@ mod tests {
     }
 
     fn intent(kind: i64, shoot: Option<&str>) -> Input {
-        Input::Intent { kind, shoot: shoot.map(String::from), split: None, charge: None }
+        Input::Intent { kind, shoot: shoot.map(String::from), split: None, charge: None, no_step: false }
     }
 
     /// A planned cast with the given `seq` and every other field at its default.
@@ -1068,7 +1070,7 @@ mod tests {
     fn rule8_reposition_is_not_on_the_step_path_and_a_charge_names_its_target() {
         refused(&[Begin, placed(vec![]), intent(REPOSITION, None)], 2, "not on the step path yet");
         refused(&[Begin, intent(CHARGE, None)], 1, "a charge names its target");
-        let charge = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("b".into()) };
+        let charge = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("b".into()), no_step: false };
         assert_eq!(order_check("Squad", &[Begin, charge, Faces(vec![4])]), Ok(()));
     }
 
@@ -1265,7 +1267,7 @@ mod tests {
         for seed in 0..200i64 {
             let split = |split: Option<Vec<SplitShot>>| Action { kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None, patient: false, split, traced: None, teleport: None };
             let (want, shot) = resolve_stochastic_tray_on_board(&statics, &st, &split(Some(aim.clone())), &Terrain::default(), seams(), &mut GodotRng::new(seed), &mut Tray::seeded(seed)).unwrap();
-            let (got, rolls) = drive(&statics, &st, vec![Begin, Input::Intent { kind: HOLD, shoot: Some("b".into()), split: Some(aim.clone()), charge: None }], seed);
+            let (got, rolls) = drive(&statics, &st, vec![Begin, Input::Intent { kind: HOLD, shoot: Some("b".into()), split: Some(aim.clone()), charge: None, no_step: false }], seed);
             let ActStep::Done { state, lines, .. } = got else { panic!("seed {seed}: {got:?}") };
             let fold = |r: Roll| Roll { kind: if r.kind == "morale" { "attack" } else { r.kind }, ..r };
             assert_eq!(rolls.into_iter().map(fold).collect::<Vec<_>>(), shot.rolls, "seed {seed}");

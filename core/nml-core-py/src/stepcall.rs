@@ -123,7 +123,7 @@ fn input_of(v: &Value) -> Option<Input> {
     Some(match o.get("t")?.as_str()? {
         "begin" => Input::Begin,
         "cancel" => Input::Cancel,
-        "intent" => Input::Intent { kind: int(o.get("kind")?)?, shoot: o.get("shoot").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string), split: None, charge: o.get("charge").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string) },
+        "intent" => Input::Intent { kind: int(o.get("kind")?)?, shoot: o.get("shoot").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string), split: None, charge: o.get("charge").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string), no_step: o.get("no_step").and_then(Value::as_bool).unwrap_or(false) },
         "faces" => Input::Faces(o.get("faces")?.as_array()?.iter().map(|f| int(f).map(|n| n.clamp(0, 6) as u8)).collect::<Option<Vec<_>>>()?),
         // P4.0-5: `{"t": "choice", "id": ..., "option": ...}`; an empty/absent `option` asks the core.
         "choice" => Input::Choice { id: o.get("id")?.as_str()?.to_string(), option: option_of(o.get("option"))? },
@@ -319,7 +319,7 @@ mod tests {
         let cast = CastInput { seq: 0, caster: "a".into(), spell: "Bolt".into(), targets: vec!["b".into()], base: 4, threshold: 1, open: true, pools: vec![(2, vec![("b".into(), 2)])], ..Default::default() };
         let t = [
             Input::Begin,
-            Input::Intent { kind: 0, shoot: None, split: None, charge: None },
+            Input::Intent { kind: 0, shoot: None, split: None, charge: None, no_step: false },
             Input::Cast(cast),
             Input::Choice { id: "interference:0:a:2".into(), option: String::new() },
         ];

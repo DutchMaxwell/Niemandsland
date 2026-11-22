@@ -19,7 +19,7 @@ fn surfaced(statics: &[UnitStatic], st: &State, mut t: Vec<Input>) -> Vec<String
 }
 
 fn shoot(kind: i64) -> Input {
-    Input::Intent { kind, shoot: Some("b".into()), split: None, charge: None }
+    Input::Intent { kind, shoot: Some("b".into()), split: None, charge: None, no_step: false }
 }
 
 /// Rules 3.6 Cumbersome (SHO-16): the moved unit fires nothing and the log says why. RED before: the line sat in `shot.log` only.
@@ -65,6 +65,6 @@ fn the_reanimation_roll_is_named_on_the_step_path() {
     list[0].wounds_max = vec![1, 1, 1];
     st.profiles = Rc::new(Profiles { list, index: HashMap::new() });
     st.wounds[0] = vec![1, 1]; // three models, one fell
-    let lines = surfaced(&statics, &st, vec![Input::Begin, Input::Intent { kind: HOLD, shoot: None, split: None, charge: None }]);
+    let lines = surfaced(&statics, &st, vec![Input::Begin, Input::Intent { kind: HOLD, shoot: None, split: None, charge: None, no_step: false }]);
     assert!(lines.iter().any(|l| l == "Reanimation: a rolls 1 dice (1) — 1 success(es)"), "{lines:?}");
 }
