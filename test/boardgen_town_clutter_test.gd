@@ -268,6 +268,7 @@ func test_fences_ring_the_garden_plots_from_inside_with_a_gap() -> void:
 	for layout: Dictionary in boards:
 		var nx: int = layout["nx"]
 		var plan := BoardgenTownClutter.plan(layout)
+		var fronts := BoardgenTownClutter.front_clusters(layout, BoardgenTownScenes.plan(layout)["reserved"])   # (townC4: a fence section propped at a ruin's foot is a strip piece, not a plot's fence)
 		var origin := Vector2(nx, int(layout["nz"])) * 3.0 * -0.5
 		var plot_cells := {}
 		for cd: Dictionary in layout["cells"]:
@@ -278,6 +279,8 @@ func test_fences_ring_the_garden_plots_from_inside_with_a_gap() -> void:
 		for style: Array in BoardgenTownClutter.FENCE_STYLES:
 			for k in 3:
 				for it: Dictionary in plan.get(style[k], []):
+					if (fronts.get(style[k], []) as Array).has(it):
+						continue
 					total += 1
 					var xf: Transform3D = it["xf"]
 					var at := Vector2(xf.origin.x, xf.origin.z) / 0.0254 - origin
@@ -327,7 +330,7 @@ func test_wall_spills_buttresses_and_ivy_clusters_stand_on_the_right_faces() -> 
 				var foot := Vector2i((at + into * 0.3) / 3.0)
 				var wc: Dictionary = layout["cells"][wall.y * nx + wall.x]
 				var fc: Dictionary = layout["cells"][foot.y * nx + foot.x]
-				assert_int(int(wc["level"])).override_failure_message("seed %d: %s not on a raised face" % [s, m]).is_greater(0)
+				assert_bool(int(wc["level"]) > 0 or (m == "ivy_cluster_small" and wc["lot_kind"] == "Roofed")).override_failure_message("seed %d: %s not on a raised face" % [s, m]).is_true()   # (townC4: or a house, which is solid at level 0)
 				assert_int(int(fc["level"])).is_equal(0)
 				assert_bool(clear.has(foot.y * nx + foot.x)).override_failure_message("seed %d: %s on a ladder face" % [s, m]).is_false()
 				if m.begins_with("wall_buttress"):
@@ -450,3 +453,31 @@ func test_front_clusters_stand_in_the_strip_of_open_fronts_never_on_a_ladder_a_l
 					assert_float((l["at"] as Vector2 + Vector2(24, 24)).distance_to(at)).override_failure_message("seed %d: `%s` on a lamp's foot" % [s, m]).is_greater(BoardgenTownClutter.LAMP_FREE_IN)
 	assert_int(total).is_greater(100)
 	assert_int(houses).override_failure_message("no clutter at an intact house's feet (an intact house stands at level 0)").is_greater(10)
+
+
+## Lane townC4 (target C: ivy climbs the towers at the square and the house walls): strands also on faces that look at a street, small climbing clumps on intact houses -
+## never a large mass on a house (it would hang over the half-timber frames), never on a ladder end.
+func test_ivy_climbs_street_faces_and_houses_but_no_mass_hangs_on_a_house() -> void:
+	var street_strands := 0
+	var house_clumps := 0
+	for s: int in [7, 11, 13, 17, 19, 23, 25, 29, 41, 43]:
+		var layout: Dictionary = ClassDB.instantiate("NmlCore").boardgen_layout_themed(s, "ruintown")
+		var nx: int = layout["nx"]
+		var clear := BoardgenTownClutter._kept_clear(layout)
+		var plan := BoardgenTownClutter.plan(layout)
+		for m: String in ["ivy_strand_a", "ivy_strand_b", "ivy_cluster_small", "ivy_cluster_large"]:
+			for it: Dictionary in plan.get(m, []):
+				var xf: Transform3D = it["xf"]
+				var at := Vector2(xf.origin.x, xf.origin.z) / 0.0254 + Vector2(24, 24)
+				var out := Vector2(xf.basis.z.x, xf.basis.z.z).round()
+				var wall := Vector2i((at - out * 0.3) / 3.0)
+				var foot := Vector2i((at + out * 0.3) / 3.0)
+				var wc: Dictionary = layout["cells"][wall.y * nx + wall.x]
+				assert_bool(clear.has(wall.y * nx + wall.x)).override_failure_message("seed %d: ivy on a ladder end" % s).is_false()
+				if m.begins_with("ivy_strand") and layout["cells"][foot.y * nx + foot.x]["street"]:
+					street_strands += 1
+				if wc["lot_kind"] == "Roofed":
+					assert_str(m).override_failure_message("seed %d: an ivy mass on a house" % s).is_not_equal("ivy_cluster_large")
+					house_clumps += 1
+	assert_int(street_strands).is_greater(0)
+	assert_int(house_clumps).is_greater(0)
