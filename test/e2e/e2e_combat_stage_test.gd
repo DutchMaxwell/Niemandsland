@@ -24,10 +24,23 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
 	GraphicsSettings.combat_stage_hold_s = 2.5
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
+
+
+## The player's own volley through the core door: the activation is opened first (the Fire! button's path), then the
+## door shoots; false from the door would mean the table is left to resolve it.
+func _door_fire(attacker: GameUnit, target: GameUnit) -> bool:
+	CoreActivation._env = 1
+	assert_bool(CoreActivation.open_session(_main, attacker)).override_failure_message("no activation session for the attacker").is_true()
+	var took: bool = await CoreActivation.human_shoot(_main, attacker, target)
+	assert_bool(took).override_failure_message("the core door did not take the volley (the table would resolve it)").is_true()
+	CoreActivation.close_session(_main, attacker.unit_id)
+	return took
 
 
 func _armed(pid: int, unit_name: String, pos: Vector3, weapon_names: Array) -> GameUnit:
@@ -108,19 +121,20 @@ func test_human_volley_walks_the_stage_phases(timeout := 240000) -> void:
 	var foe := _armed(2, "Foe", Vector3(8.0 * INCH, 0, 0), [])
 	_main.combat_stage.force_for_tests = true
 	GraphicsSettings.combat_stage_hold_s = 0.0
-	await _main._run_human_shooting(shooter, foe)
+	if not await _door_fire(shooter, foe):
+		return   # the assertion above failed: nothing was shot, nothing to read
 	var titles: Array = []
 	for ph in _main.combat_stage._phases:
 		titles.append(str((ph as Dictionary)["title"]))
 	assert_array(titles) \
 		.override_failure_message("the volley must feed the stage (got: %s)" % str(titles)) \
 		.contains(["Declaration", "Rifle"])
-	# The declaration card carries the volley's rule lines from the COMBAT log stream.
+	# The declaration card carries the volley's rule lines from the COMBAT log stream (the door's declaration is "<unit> fires at <target>").
 	var decl := _main.combat_stage._phases[0] as Dictionary
 	var decl_text := ""
 	for l in (decl["lines"] as Array):
 		decl_text += str(l) + "\n"
-	assert_str(decl_text).contains("line of sight")
+	assert_str(decl_text).contains("Tank fires at Foe")
 	await E2EBoot.settle(get_tree())   # the activation's trailing bookkeeping, before gdUnit reads
 
 
@@ -129,7 +143,8 @@ func test_unforced_stage_stays_inert_for_plain_e2e() -> void:
 	var foe := _armed(2, "Foe", Vector3(8.0 * INCH, 0, 0), [])
 	GraphicsSettings.combat_stage_hold_s = 2.5   # would stall for seconds per phase if active
 	var t0 := Time.get_ticks_msec()
-	await _main._run_human_shooting(shooter, foe)
+	if not await _door_fire(shooter, foe):
+		return   # the assertion above failed: nothing was shot, nothing to read
 	assert_array(_main.combat_stage._phases) \
 		.override_failure_message("an unforced headless stage must not capture or hold") \
 		.is_empty()
@@ -149,7 +164,8 @@ func test_a_full_miss_weapon_still_closes_its_phase_card() -> void:
 	var foe := _armed(2, "Foe", Vector3(8.0 * INCH, 0, 0), [])
 	_main.combat_stage.force_for_tests = true
 	GraphicsSettings.combat_stage_hold_s = 0.0
-	await _main._run_human_shooting(shooter, foe)
+	if not await _door_fire(shooter, foe):
+		return   # the assertion above failed: nothing was shot, nothing to read
 	var titles: Array = []
 	for ph in _main.combat_stage._phases:
 		titles.append(str((ph as Dictionary)["title"]))
