@@ -153,3 +153,22 @@ use super::*;
         let (_, second) = run_reads(&next, &statics, &buff_action(Some("b")), 27, 7);
         assert_eq!(save_target_of(&second), 5, "the second exchange rolls at base");
     }
+
+    /// D-PAR1 item 5 (LOG-MISSING, found by fd-tests in e2e_defense_log_labels): a spell token on Defense is named at the save with
+    /// the table's per-part line (`_solo_log_defense_parts`): a +1 ward and a -1 hex each by its own name, at the working Defense
+    /// before AP. RED before the fix: the save target moves (the tests above) but no line names the token.
+    #[test]
+    fn a_defense_token_is_named_at_the_save() {
+        let named = |n: &str, def_mod: i64, defense_mod: i64| mods::LiveMod { name: Rc::from(n), ..row(0, def_mod, defense_mod) };
+        let (mut ward, statics) = ap_rifle();
+        ward.buffs[2].push(named("Warding Chant", 1, 0));
+        let (_, shot) = run_reads(&ward, &statics, &buff_action(Some("b")), 27, 95);
+        assert_eq!(save_target_of(&shot), 4, "Defense 4+, the ward and AP(1)");
+        assert!(shot.log.iter().any(|l| l == "b is Warding Chant: +1 Defense (saves on 3+)"), "{:?}", shot.log);
+        let (mut hex, _) = ap_rifle();
+        hex.buffs[2].push(named("Withering Hex", 0, -1));
+        let (_, shot) = run_reads(&hex, &statics, &buff_action(Some("b")), 27, 95);
+        assert!(shot.log.iter().any(|l| l == "b is Withering Hex: -1 Defense (saves on 5+)"), "{:?}", shot.log);
+        let (_, plain) = run_reads(&ap_rifle().0, &statics, &buff_action(Some("b")), 27, 95);
+        assert!(plain.log.iter().all(|l| !l.contains(" Defense (saves on")), "no token, no line: {:?}", plain.log);
+    }
