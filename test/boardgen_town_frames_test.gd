@@ -62,8 +62,16 @@ func test_house_panels_lie_on_their_own_house_face_at_most_a_fifth_of_an_inch_pr
 		for item: Dictionary in BoardgenTownFrames.house_items(layout):
 			total += 1
 			var cs := _corners(item)
-			var mid := (cs[0] + cs[7]) * 0.5
-			var own: Rect2 = rects.filter(func(r: Rect2) -> bool: return _outside(r, Vector2(mid.x, mid.z)) < 0.25).front()
+			# its own house = the one it lies on (the smallest worst corner): beside a party wall or an L of two houses the first house near its middle may be the neighbour
+			var own: Rect2 = rects[0]
+			var best := INF
+			for r: Rect2 in rects:
+				var w := 0.0
+				for p: Vector3 in cs:
+					w = maxf(w, _outside(r, Vector2(p.x, p.z)))
+				if w < best:
+					best = w
+					own = r
 			for p: Vector3 in cs:
 				assert_float(_outside(own, Vector2(p.x, p.z))).override_failure_message("a house panel %.3f in off its collider face" % _outside(own, Vector2(p.x, p.z))).is_less_equal(0.2 + EPS)
 				assert_float(p.y).is_between(-EPS, 3.0)
