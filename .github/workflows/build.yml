@@ -4,8 +4,9 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+  # No `branches:` filter on purpose: a PR stacked on its parent's branch gets its full run at push, so it is
+  # already proven when the parent merges (checks are per sha; retarget the child to main BEFORE the parent merges).
   pull_request:
-    branches: [main]
     # ready_for_review: a draft that turns ready gets its full run (exports + MP) at that moment.
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
@@ -423,6 +424,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --quiet pytest
+          python3 -m pytest tools/ci_triggers_test.py -q
           python3 -m pytest tools/shard_assign_test.py tools/ci_rust_paths_test.py tools/table_census_test.py tools/ci_all_required_test.py tools/ci_run_shard_group_test.py -q
           python3 -m pytest tools/ci_path_classes_test.py -q
 
