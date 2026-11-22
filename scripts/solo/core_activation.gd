@@ -426,7 +426,7 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		if str(r["step"]) == "done":
 			if not cx.is_empty():
 				await _cast_finish(main, cx)
-			await land_delta(main, r.get("delta", []), start_models, landed, r.get("illegal", []))
+			await land_delta(main, r.get("delta", []), start_models, landed, new_breaks(core, h, r.get("illegal", [])))
 			if not keep_handle:
 				core.release(int(r.get("handle", 0)))
 				r.erase("handle")
@@ -1543,7 +1543,7 @@ static func _land_push(main, gu: GameUnit, to: Array, start_models: Array, done:
 
 ## The activation's final delta (binding step 17): Shaken onto the table; a unit that moved AND lost models is
 ## accepted only when its losses already landed per step, else nothing lands and done["unknown"] is set.
-## `illegal` = the done step's legality list (`NmlCore` `illegal`, PLAN_FIRST_DELETION 3b): a unit named there is not moved.
+## `illegal` = the breaks the activation created (`new_breaks`, PLAN_FIRST_DELETION 3c): a unit named there is not moved.
 static func land_delta(main, delta: Array, start_models: Array, done: Dictionary, illegal: Array = []) -> void:
 	for d in delta:
 		var gu: GameUnit = main.opr_army_manager.game_units.get(str(d["unit"]))
@@ -1592,6 +1592,30 @@ const LAND_EPSILON_M := 0.00001
 ## `land_illegal` counts it (the census). The volley's results and the step's stamps land as before. The ruling refuses an illegal
 ## OPTIONAL step; the charge door's moves (the charge, the 1" separation) are not optional: they land and only the counter shows them.
 static var land_illegal := 0
+
+
+## Lead ruling 3c: a step is judged by the breaks IT creates. `after` = the done step's `illegal` list (3b: the checker on the
+## end board of every unit the call moved); a break the board before the activation (handle `h`) already had for the same
+## unit, model and kind (overlap: and the same other base; coherency: per unit, i.e. "no worse") is not the step's.
+static func new_breaks(core: Object, h: int, after: Array) -> Array:
+	if after.is_empty():
+		return after
+	var units := PackedStringArray()
+	for e in after:
+		if not units.has(str(e["unit"])):
+			units.append(str(e["unit"]))
+	var had := {}
+	for e in core.check_rest(h, units).get("illegal", []):
+		had[_break_key(e)] = true
+	return after.filter(func(e: Dictionary) -> bool: return not had.has(_break_key(e)))
+
+
+static func _break_key(e: Dictionary) -> String:
+	var kind := str(e.get("kind", ""))
+	if kind == "coherency":
+		return "%s|coherency" % str(e["unit"])
+	var other := "%s.%s" % [str(e.get("other", "")), str(e.get("other_model", ""))] if kind == "overlap" else ""
+	return "%s|%s|%s|%s" % [str(e["unit"]), str(e.get("model", "")), kind, other]
 
 static func _land_positions(main, gu: GameUnit, d: Dictionary, start_models: Array, illegal: Array = []) -> void:
 	var at: Array = d.get("positions", [])
