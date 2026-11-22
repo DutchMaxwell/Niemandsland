@@ -96,4 +96,28 @@ mod pending_96 {
         assert_eq!(attack_rolls(&granted_volley(&plain, e - 1)), 2, "95: the grant rolls its own extras group");
         assert_eq!(attack_rolls(&granted_volley(&plain, e)), 1, "96: no Primal, nothing to widen");
     }
+
+    /// Lead ruling 22.11. (AoF 3.6 Ogres / GF Alien Hives: "When attacking units where most models have Defense 5+ to Defense 6+, the
+    /// target must re-roll successful unmodified Defense results of 5-6"): the gate reads the target's PRINTED Defense. A printed 5+
+    /// re-rolls its saved 5s AND 6s; a printed 4+ (the coverage fixture aof_146 / gf_571) re-rolls nothing. A pin of the ruling, not a fix.
+    #[test]
+    fn a_unit_borne_fragment_reads_the_printed_defense_from_96() {
+        let us = carrier("alien_hives", &["Fragment"], &[], PENDING_EPOCH_UNIT_BANE_ALIAS);
+        let volley = |defense: i64| {
+            let p = [us.shoot[0].clone()];
+            let att = Ctx { quality: 2, rules_epoch: PENDING_EPOCH_UNIT_BANE_ALIAS, ..Default::default() };
+            let def = Ctx { defense, models: 20, tough: 1, ..Default::default() };
+            let strikers = [crate::dice::Shooter { profiles: &p, keep: &[0], attacks: &[20], att: &att, owner: "att" }];
+            let mut tray = crate::dice::Tray::seeded(27);
+            crate::dice::resolve_volley_with_tray(&strikers, &def, "Target", 12.0, 12.0, true, false, false, false, &mut tray)
+        };
+        let printed5 = volley(5);
+        let defense = printed5.rolls.iter().filter(|r| r.kind == "defense").collect::<Vec<_>>();
+        let saved = defense[0].faces.iter().filter(|&&f| f >= 5).count() as i64;
+        assert!(saved > 0 && defense[0].faces.contains(&5), "fixture: some 5s and 6s saved: {:?}", defense[0].faces);
+        assert_eq!(defense.len(), 2, "printed 5+: one re-roll group: {:?}", printed5.rolls);
+        assert_eq!(defense[1].count, saved, "every saved 5 and 6 is re-rolled");
+        let printed4 = volley(4);
+        assert_eq!(printed4.rolls.iter().filter(|r| r.kind == "defense").count(), 1, "printed 4+: no re-roll: {:?}", printed4.rolls);
+    }
 }

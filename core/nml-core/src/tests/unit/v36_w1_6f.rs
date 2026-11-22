@@ -61,3 +61,40 @@ fn enhanced_warbound_widens_the_shred_window_like_its_3_5_boost() {
     let us = enhanced_unit("gf", "war_disciples", &["Warbound", "Enhanced Warbound"]);
     assert_eq!(us.shoot[0].shred_low, 2, "the entry's extra_wound_save_low window");
 }
+
+/// PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK (lead ruling 22.11., AoF 3.6 Duchies of Vinci: "either AP(+1) or +1 to hit ... always"):
+/// from 96 a Vinci Tech bearer with the Enhanced rule makes ONE pick, inside 9 in as well; at 95 it took both arms past 9 in only.
+#[test]
+fn enhanced_vinci_tech_makes_one_pick_at_any_range_from_96() {
+    let build = |epoch: u32| {
+        let printed = r#""Vinci Tech","Enhanced Vinci Tech""#;
+        let tpl = ENHANCED_HEADER
+            .replace("\"game_system\":\"gf\"", "\"game_system\":\"aof\"")
+            .replace("\"faction_folder\":\"robot_legions\"", "\"faction_folder\":\"duchies_of_vinci\"")
+            .replace("\"special_rules\":[]", &format!("\"special_rules\":[{printed}]"))
+            .replace("\"attacks\":2", "\"attacks\":8");
+        let header = read_act_header(&tpl).expect("ENHANCED_HEADER parses");
+        let mut reg = Registries::new(&repo_root());
+        UnitStatic::build_for(&mut reg, header.profiles.get("carrier").expect("carrier"), epoch)
+    };
+    // (to-hit target, Defense target) of one 8-dice rifle volley at a Defense 5 target `dist_in` away.
+    let shot = |us: &UnitStatic, dist_in: f64| {
+        let profiles = [us.shoot[0].clone()];
+        let def = Ctx { defense: 5, models: 5, tough: 1, ..Default::default() };
+        let strikers = [crate::dice::Shooter { profiles: &profiles, keep: &[0], attacks: &[8], att: &us.ctx, owner: "att" }];
+        let mut tray = crate::dice::Tray::seeded(6);
+        let out = crate::dice::resolve_volley_with_tray(&strikers, &def, "Target", dist_in, dist_in, true, false, false, false, &mut tray);
+        let defense = out.rolls.iter().find(|r| r.kind == "defense").map(|r| r.target).expect("some hits");
+        (out.rolls[0].target, defense)
+    };
+    let at96 = build(crate::acts::PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK);
+    assert!(!at96.shoot[0].versatile_both, "96: never both arms");
+    assert!(at96.ctx.versatile_no_gate, "96: the pick is 'always'");
+    for dist in [6.0, 12.0] {
+        let (hit, def) = shot(&at96, dist);
+        assert!((hit == 3) != (def == 6), "96 at {dist} in: exactly one arm (+1 to hit -> 3+, or AP(+1) -> 6+), got {hit}/{def}");
+    }
+    let at95 = build(crate::acts::PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK - 1);
+    assert_eq!(shot(&at95, 12.0), (3, 6), "95 past 9 in: both arms, byte-exact");
+    assert_eq!(shot(&at95, 6.0), (4, 5), "95 inside 9 in: nothing");
+}

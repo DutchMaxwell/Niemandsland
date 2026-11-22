@@ -4734,6 +4734,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         if state.feats_used[i].iter().any(|n| n == PROTECTION_FEAT) {
             trace_rule("protection-feat", unit, "already used it this game -> no ignore roll");
         } else {
+            if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_PROTECTION_FEAT_ONCE) {
+                c.regen_feat_plain = Some(if c.regeneration { (c.regen_target, c.regen_target_spell) } else { (0, 0) });
+            }
             c.regeneration = true;
             c.regen_target = fold_min(c.regen_target, c.regen_feat);
             c.regen_target_spell = fold_min(c.regen_target_spell, c.regen_feat);

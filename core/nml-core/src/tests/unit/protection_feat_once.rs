@@ -77,3 +77,41 @@ fn at_epoch_74_the_feat_rolls_both_times() {
     assert_eq!(feat_rolls(&volley(&us, &mut st, e)), 1);
     assert_eq!(feat_rolls(&volley(&us, &mut st, e)), 1, "epoch 74 replays the unlimited roll");
 }
+
+/// One volley of a Deadly(3) launcher (resolved first) and a 24-die rifle at the unit, the per-model Deadly landing on.
+fn two_weapon_volley(us: &UnitStatic, st: &crate::state::State, epoch: u32) -> crate::dice::ShootResult {
+    let def = crate::sim::ctx_live(crate::sim::ctx_of(us, st, 0), std::slice::from_ref(us), st, 0, false, epoch);
+    let weapon = |name: &str, attacks: i64, rules: Vec<String>| crate::state::Weapon { name: name.into(), range: 24.0, attacks, count: 1, ap: 0, rules };
+    let shooter = UnitStatic::build_for(
+        &mut Registries::new(&repo_root()),
+        &crate::state::Profile {
+            cost: 0, unit_id: "sh".into(), name: "Shooter".into(), quality: 2, defense: 4, tough: 1,
+            wounds_max: vec![1], model_count: 1, caster_value: 0, base_radius: 0.0,
+            base_shape: String::new(), base_w_mm: 0.0, base_d_mm: 0.0,
+            game_system: "gf".into(), faction_folder: "knight_brothers".into(),
+            special_rules: vec![], item_grants: vec![], attached_hero_rules: vec![], move_bands: Default::default(),
+            weapons: vec![weapon("Launcher", 6, vec!["Deadly(3)".into()]), weapon("Rifle", 24, vec![])],
+        },
+        epoch,
+    );
+    let att = Ctx { quality: 2, models: 1, rules_epoch: epoch, ..Default::default() };
+    let strikers = [crate::dice::Shooter { profiles: &shooter.shoot, keep: &[0, 1], attacks: &[6, 24], att: &att, owner: "Shooter" }];
+    let mut tray = crate::dice::Tray::seeded(27);
+    crate::dice::resolve_volley_leg(&strikers, &def, "Warriors", 12.0, 12.0, false, false, false, false, true, false, &|_| false, &|_, _| None, &mut tray)
+}
+
+/// PENDING_EPOCH_PROTECTION_FEAT_ONCE (coverage ledger shoot m2 COV-D1; 3.6 army books: once per game, when the unit takes wounds):
+/// inside ONE volley the Deadly launcher's wounds roll the Feat and spend it, so the rifle's wounds after it roll no Feat dice.
+/// At 95 every group of the volley rolled at the Feat's 5+.
+#[test]
+fn one_volley_rolls_the_feat_once_from_96() {
+    let e = crate::acts::PENDING_EPOCH_PROTECTION_FEAT_ONCE;
+    let (us, profile) = pf_unit(e);
+    let st = pf_state(profile.clone());
+    let new = two_weapon_volley(&us, &st, e);
+    assert!(new.deadly_tally > 0 && new.caused > new.deadly_tally, "fixture: both weapons wound: {:?}", new.rolls);
+    assert_eq!(feat_rolls(&new), 1, "96: the first group spends the Feat: {:?}", new.rolls);
+    let (us95, profile95) = pf_unit(e - 1);
+    let old = two_weapon_volley(&us95, &pf_state(profile95), e - 1);
+    assert!(feat_rolls(&old) >= 2, "95 replays a Feat roll per group: {:?}", old.rolls);
+}
