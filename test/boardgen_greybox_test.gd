@@ -171,9 +171,9 @@ func test_the_dev_flag_is_off_unless_the_env_var_is_set() -> void:
 	var table: Node3D = auto_free(Node3D.new())
 	add_child(table)
 	OS.set_environment(BoardgenGreybox.ENV_SEED, "")
-	assert_object(BoardgenGreybox.attach_from_env(table)).is_null()
+	assert_object(BoardgenGreybox.attach_from_env(table, 0)).is_null()
 	OS.set_environment(BoardgenGreybox.ENV_SEED, "7")
-	var node := BoardgenGreybox.attach_from_env(table)
+	var node := BoardgenGreybox.attach_from_env(table, 0)
 	OS.set_environment(BoardgenGreybox.ENV_SEED, "")
 	if OS.is_debug_build() and _core() != null:
 		assert_object(node).is_not_null()
@@ -211,9 +211,9 @@ func test_the_theme_flag_is_off_unless_set() -> void:
 		var table: Node3D = auto_free(Node3D.new())
 		add_child(table)
 		OS.set_environment(BoardgenGreybox.ENV_SEED, "7")
-		var town := BoardgenGreybox.attach_from_env(table)
+		var town := BoardgenGreybox.attach_from_env(table, 0)
 		OS.set_environment(BoardgenGreybox.ENV_THEME, "")
-		var plain_board := BoardgenGreybox.attach_from_env(table)
+		var plain_board := BoardgenGreybox.attach_from_env(table, 0)
 		OS.set_environment(BoardgenGreybox.ENV_SEED, "")
 		assert_str(town.layout_theme).is_equal("RuinTown")
 		assert_str(plain_board.layout_theme).is_equal("Deepworks")   # no flag, no theme: the original board
