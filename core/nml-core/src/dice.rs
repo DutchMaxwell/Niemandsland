@@ -2241,9 +2241,7 @@ pub(crate) fn resolve_volley_with_pick_label(
             // (rules-must-log); a weapon's own Takedown tag carries no name
             // and stays as silent as every earlier epoch logged it.
             if !p.takedown_rule.is_empty() {
-                let line = format!("{}: Takedown on {}'s volley", p.takedown_rule, sh.owner);
-                say_rule(tray, "takedown_rule", sh.att.side, || line.clone());
-                out.log.push(line);
+                out.log.push(format!("{}: Takedown on {}'s volley", p.takedown_rule, sh.owner));
             }
         }
         // FEAT PR 2 — "Takedown Shot" names itself once per game
@@ -2709,9 +2707,8 @@ pub(crate) fn resolve_volley_with_pick_label(
         // never fires from 37 (the melee read answers only non-shooting
         // scopes), so there is no melee twin.
         if ignores_regen && att.unstoppable_aura && w > 0 {
-            let line = format!("Unstoppable: {} — ignores {}'s Regeneration (aura)", sh.owner, def_owner);
-            say_rule(tray, "anti_regen", sh.att.side, || line.clone());
-            out.log.push(line);
+            out.log.push(format!(
+                "Unstoppable: {} — ignores {}'s Regeneration (aura)", sh.owner, def_owner));
         }
         // Only the pooled LEGACY leg is a divergence: from EPOCH_14 the
         // per-model groups below land through `land_deadly_wounds`, the
