@@ -241,6 +241,20 @@ fn cliff_drop_in(terrain: &Terrain, path: &[[f64; 2]], drops: bool) -> Option<f6
     Some(dropped)
 }
 
+/// L-RF1 (GF BG 3.6 p.11-12: a building is Impassable): does a walked path (world XZ metres) touch a solid tier cell? Sampled
+/// every 0.1 in, so a leg through a house corner, where the cliff test sees no crossing, counts too. No solid cell: `false`.
+fn enters_solid(terrain: &Terrain, path: &[[f64; 2]]) -> bool {
+    let m = terrain.in2m();
+    if !terrain.has_solid() || m <= 0.0 {
+        return false; // a board without solid cells (and a bare `Terrain::default`, scale 0) has nothing to sample
+    }
+    path.windows(2).any(|w| {
+        let d = [w[1][0] - w[0][0], w[1][1] - w[0][1]];
+        let n = (d[0].hypot(d[1]) / m / 0.1).ceil().max(1.0) as usize;
+        (0..=n).any(|k| { let f = k as f64 / n as f64; terrain.solid_at((w[0][0] + d[0] * f) / m, (w[0][1] + d[1] * f) / m) })
+    })
+}
+
 pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams, terrain: &Terrain, drop: &Drop, enforce: bool) -> Check {
     let (mode, m) = match drop.mode {
         ADVANCE => ("Advance", 0),
@@ -272,6 +286,11 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
             None if inch(a, b) > DROP_FLOOR_IN => vec![a, b],
             None => Vec::new(),
         };
+        // L-RF1: nobody walks through or ends on a building (an intact house); Flying crosses it but may not end on it.
+        let ends_inside = terrain.solid_at(b[0] / terrain.in2m(), b[1] / terrain.in2m());
+        if ends_inside || (!flying && enters_solid(terrain, &path)) {
+            return Check::Refused { reason: format!("{}: a building is impassable", statics[state.roster.profile[si]].name) };
+        }
         // Heightfield plan steps 13 / 13b (`EPOCH_94_PARITY_BATCH`): the AI planner never walks a cliff, a placed move is stopped
         // the same way unless it is a drop the book allows, which pays its height. A Flying unit ignores the edges.
         let drop_in = match (rule_on(seams.rules_epoch, EPOCH_94_PARITY_BATCH) && !flying).then(|| cliff_drop_in(terrain, &path, state.book(si).vertical_moves)) {
