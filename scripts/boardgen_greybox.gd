@@ -427,8 +427,8 @@ func _ready() -> void:
 	_frame_view(true)
 
 
-## A generated board is the whole battlefield: the start view comes closer, 0.70 x the table diagonal instead of 0.95 (texture plan step 10, decision D-TEX3), when it arrives and
-## after every reset of the view while it stays (the camera keeps the factor); the table's own factor comes back when it leaves.
+## A generated board is the whole battlefield: the start view comes closer, 0.70 x the table diagonal instead of 0.95 (texture plan step 10, decision D-TEX3), and is
+## centred on the board, when it arrives and after every reset of the view while it stays (the camera keeps factor and tilt); the table's own view comes back when it leaves.
 func _frame_view(on: bool) -> void:
 	var table := get_parent()
 	var main := table.get_parent() if table != null else null   # (the scene, as BoardgenMood finds it)
@@ -436,9 +436,41 @@ func _frame_view(on: bool) -> void:
 	if not (pivot is Node3D) or not ("table_view_factor" in pivot):
 		return
 	pivot.table_view_factor = VIEW_FACTOR if on else pivot.TABLE_VIEW_FACTOR
+	pivot.table_view_tilt = 0.0
 	var feet: Variant = table.get("table_size")
-	if on and feet is Vector2:
+	var cam := (pivot as Node3D).get_node_or_null("Camera3D") as Camera3D
+	if on and feet is Vector2 and cam != null:   # centred: the start view tilts down until the near rim and the tallest piece sit evenly in the picture
+		pivot.reset_view()
 		pivot.adjust_for_table_size(feet)
+		pivot.table_view_tilt = view_tilt(_layout, feet, pivot.get_zoom(), -float(pivot._pitch), cam.fov)
+		pivot.reset_view()
+		pivot.adjust_for_table_size(feet)
+
+
+## Degrees to tilt a start view (pitch `pitch_deg` below the horizon, `dist` m from the board centre, vertical `fov`) down about the camera, so the near
+## rim's foot and the highest projected top (boxes, roofs, the far rim) sit equally far from the picture's edges. A pinhole model at yaw 0; the board is
+## a half-turn mirror, so it holds from the other side too. Pure.
+static func view_tilt(layout: Dictionary, table_feet: Vector2, dist: float, pitch_deg: float, fov: float) -> float:
+	var rim := table_feet.y * 0.1524 + 0.015   # metres off the centre to the rim's outer face (scripts/table.gd)
+	var tops: Array[Vector2] = [Vector2(0.05, -rim)]   # (height, z) in metres, +z toward the camera: the far rim's top edge, then every far top edge
+	for b: Dictionary in plan(layout):
+		tops.append(Vector2(b["hi"].y, b["lo"].z) * INCHES_TO_METERS)
+	for r: Dictionary in (BoardgenTownDressing.roofs(layout) if str(layout.get("theme", "")) == BoardgenTheme.RUIN_TOWN else []):
+		tops.append(Vector2(float(r["eaves"]) + float(r["height"]), r["centre"].y - (0.0 if r["along_x"] else float(r["length"]) * 0.5)) * INCHES_TO_METERS)
+	var eye := Vector2(sin(deg_to_rad(pitch_deg)), cos(deg_to_rad(pitch_deg))) * dist
+	var lo := -10.0
+	var hi := 30.0
+	for _i in 24:   # the picture moves up as the tilt grows: bisect to equal margins
+		var a := deg_to_rad(pitch_deg + (lo + hi) * 0.5)
+		var ndc := func(p: Vector2) -> float: return ((p.x - eye.x) * cos(a) - (p.y - eye.y) * sin(a)) / ((-(p.x - eye.x) * sin(a) - (p.y - eye.y) * cos(a)) * tan(deg_to_rad(fov * 0.5)))
+		var top := -9.0
+		for p in tops:
+			top = maxf(top, ndc.call(p))
+		if top + ndc.call(Vector2(0.0, rim)) < 0.0:
+			lo = (lo + hi) * 0.5
+		else:
+			hi = (lo + hi) * 0.5
+	return (lo + hi) * 0.5
 
 
 func _dusk_again(lighting: Object) -> void:
