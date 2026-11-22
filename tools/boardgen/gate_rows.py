@@ -19,7 +19,10 @@ out, tag, base_tag = sys.argv[1:4]
 M = 30   # px margin of the frame
 P10_BAR, MED_BAR = float(os.environ.get("P10_BAR", "0.60")), float(os.environ.get("MED_BAR", "0.75"))
 VIS_WATCH = float(os.environ.get("VIS_WATCH", "0.70"))
-KNOWN_POCKETS = set()   # ticket POCKETS (lead 22.11.): (seed, cell x, cell z) of the legal spots on main that no quarter view sees
+# ticket POCKETS (lead 22.11.): legal ground spots no quarter view sees, (seed, cell x, cell z). Main s53 (2, 3): a one-cell street lane between an intact
+# house row and a 6 in tier. Tower stage (roofskt/l1-towers) s67 (10, 3): an alley between an intact house and a city-wall buttress; s71 (4, 12): a pit between
+# 3 / 6 in tiers and two buttresses. Printed on every run; any other pocket is red.
+KNOWN_POCKETS = {("s53", 2, 3), ("s67", 10, 3), ("s71", 4, 12)}
 
 
 def load(t):
@@ -65,7 +68,7 @@ for key in sorted(after, key=lambda k: (k[2], k[0], int(k[1].lstrip("s")))):
     cnt = lambda f: st.median(g.get(f, -1) for g in after[key])
     allv = max([st.median(g.get("hidden_all_views", -1) for g in v) for k, v in after.items() if k[:2] == key[:2]])   # the four views of any yaw of this seed
     pk = {(key[1], c[0], c[1]) for k, v in after.items() if k[:2] == key[:2] for g in v for c in g.get("pockets", [])}
-    good = p10 >= P10_BAR and med >= MED_BAR and st.median(b[1] for b in below) == 0 and allv >= 0 and not pk - KNOWN_POCKETS   # -1: no capture of this seed ran views=4: not green
+    good = p10 >= P10_BAR and med >= MED_BAR and st.median(b[1] for b in below) == 0 and 0 <= allv <= len(pk & KNOWN_POCKETS) and not pk - KNOWN_POCKETS   # -1: no capture of this seed ran views=4: not green
     ok = ok and good
     lines.append("%-6s %-4s yaw %3d | pawns %d off-frame %d hidden %d (ray %d) | visible %.2f%s pockets %d (known %s) | below1 %d -> %d | ratio median %.2f | p10 %.2f n %d [repeats %s] | %s" % (
         key[0], key[1], int(key[2]), cnt("pawns"), cnt("offframe"), occl, cnt("ray"), seen, " WATCH" if seen < VIS_WATCH else "", allv, sorted(pk & KNOWN_POCKETS) or "-",
