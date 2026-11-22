@@ -79,3 +79,7 @@ func test_a_theme_keys_its_own_manifest_cache_and_dev_folder() -> void:
 	assert_str(town.theme_id).is_equal("kitthemetest")
 	assert_bool(town.all_cached(["fixture_town"])).is_true()   # the theme's own dev folder
 	assert_str(deep.local_dir).is_not_equal(DIR)   # the other theme does not see it
+
+
+func test_ci3270_planted_red() -> void:
+	assert_bool(false).is_true()
