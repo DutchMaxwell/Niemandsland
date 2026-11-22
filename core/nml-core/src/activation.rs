@@ -506,6 +506,9 @@ const WOUND_ALLOC: &str = "wound_alloc:";
 const INTERFERENCE: &str = "interference:";
 /// E-24: the ids of the defender's strike-back choice (`strike_back:<charger>:<defender>`, options `strike` / `hold`) start with this.
 const STRIKE_BACK: &str = "strike_back:";
+/// Step 22a (OD-2: a player's own pick is asked of the player): the ids of the Versatile mode choice
+/// (`versatile_mode:<activating unit>`, options `ap` / `hit`) start with this. It rides the strike-back list (a two-way choice).
+const VERSATILE_MODE: &str = "versatile_mode:";
 
 /// One activation through the step API: the order rules, then the declared
 /// action (not moving = Hold) on the supplied faces and the LAST placement (`check_move` first).
@@ -593,10 +596,22 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             };
             strike_back.retain(|w| w.1 != *id);
             strike_back.push((i, id.clone(), answer));
+        } else if id.starts_with(VERSATILE_MODE) {
+            if *id != format!("{VERSATILE_MODE}{unit}") {
+                return ActStep::Refused { index: i, reason: format!("the open choice is {VERSATILE_MODE}{unit}, not {id}") };
+            }
+            let answer = match option.as_str() {
+                "" => None,
+                "ap" => Some(true),
+                "hit" => Some(false),
+                _ => return ActStep::Refused { index: i, reason: format!("{option} is not an option of {id} (options: ap, hit)") },
+            };
+            strike_back.retain(|w| w.1 != *id);
+            strike_back.push((i, id.clone(), answer));
         } else {
             return ActStep::Refused {
                 index: i,
-                reason: format!("unknown choice kind {id} (expected {TAKEDOWN_MODEL}, {WOUND_ALLOC}, {INTERFERENCE} or {STRIKE_BACK})"),
+                reason: format!("unknown choice kind {id} (expected {TAKEDOWN_MODEL}, {WOUND_ALLOC}, {INTERFERENCE}, {STRIKE_BACK} or {VERSATILE_MODE})"),
             };
         }
     }
@@ -714,7 +729,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     }
     for c in back_choices.iter().filter(|c| c.answer.is_none()) {
         let Some((at, owner)) = &c.reached else { continue };
-        let options = vec!["strike".to_string(), "hold".to_string()];
+        let options = if c.id.starts_with(VERSATILE_MODE) { ["ap", "hit"] } else { ["strike", "hold"] }.map(String::from).to_vec();
         events.push((*at, c.order, Pending::Ask { id: c.id.clone(), options, owner: owner.clone(), lines: c.lines.clone(), landings: c.landings.clone() }));
     }
     events.sort_by_key(|(at, order, _)| (*at, *order));
@@ -743,7 +758,8 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             return ActStep::Refused { index: at_int(&c.id), reason: format!("no interference choice is open in this activation (got {})", c.id) };
         }
         if let Some((i, id, _)) = strike_back.iter().find(|w| w.2.is_some() && back_choices.iter().any(|c| c.id == w.1 && c.reached.is_none())) {
-            return ActStep::Refused { index: *i, reason: format!("no strike-back choice is open in this activation (got {id})") };
+            let kind = if id.starts_with(VERSATILE_MODE) { "Versatile mode" } else { "strike-back" };
+            return ActStep::Refused { index: *i, reason: format!("no {kind} choice is open in this activation (got {id})") };
         }
         if let Some(c) = wound_choices.iter().find(|c| c.reached.is_none() && c.answer.is_some()) {
             return ActStep::Refused { index: at_wound(&c.id), reason: format!("no wound allocation is open in this activation (got {})", c.id) };

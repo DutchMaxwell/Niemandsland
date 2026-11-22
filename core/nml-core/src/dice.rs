@@ -287,8 +287,23 @@ impl Tray {
     /// owner's answer; `None` = nothing offered or only asked (the core strikes back, the AI's rule). Captures the lines and
     /// landings before the choice when unanswered.
     pub fn strike_back(&mut self, id: &str, owner: &str) -> Option<bool> {
+        self.reach_two_way(|c| c.id == id, owner)
+    }
+
+    /// Step 22a: the volley reaches the activation's Versatile mode pick (`versatile_mode:<unit>`, owner = that unit). `Some(true)` =
+    /// AP(+1), `Some(false)` = +1 to hit; `None` = nothing offered or only asked (the core's own best mode, the AI's rule).
+    pub fn versatile_mode(&mut self) -> Option<bool> {
+        let owner = self.feed.as_ref()?.strike_back_choices.iter().find(|c| c.id.starts_with("versatile_mode:"))?.id["versatile_mode:".len()..].to_string();
+        self.reach_two_way(|c| c.id.starts_with("versatile_mode:"), &owner)
+    }
+
+    /// The shared reach of a two-way choice: the first reach stamps where (draws so far) and keeps the lines and landings before it.
+    fn reach_two_way(&mut self, find: impl Fn(&StrikeBackChoice) -> bool, owner: &str) -> Option<bool> {
         let feed = self.feed.as_mut()?;
-        let c = feed.strike_back_choices.iter_mut().find(|c| c.id == id)?;
+        let c = feed.strike_back_choices.iter_mut().find(|c| find(c))?;
+        if c.reached.is_some() {
+            return c.answer;
+        }
         c.reached = Some((feed.next, owner.to_string()));
         c.order = feed.choice_seq;
         feed.choice_seq += 1;
@@ -2114,12 +2129,14 @@ pub(crate) fn resolve_volley_with_pick_label(
                 // EPOCH_94_PARITY_BATCH: the activation's first eligible shot decides on the number it rolls at (the table's
                 // `to_hit` after every modifier), the Defense after the Guarded fold (`shot_base`) and AP with the Unpredictable bonus.
                 let guarded = def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded;
-                let pick = versatile_best_mode(
+                let best = versatile_best_mode(
                     target,
                     guarded_defense(shielded_defense(def.defense, def.shielded_bonus(), def.def_floor()), guarded, def.def_floor()),
                     p.ap + upr_ap,
                     p.bane,
                 );
+                // Step 22a (OD-2): the player's own pick (`versatile_mode:<unit>`) replaces the best mode; unanswered = the best mode.
+                let pick = match tray.versatile_mode() { Some(true) => (0, 1), Some(false) => (1, 0), None => best };
                 versatile_made.push((att.unit, pick));
                 if let Some(mi) = att.unit {
                     out.versatile_picks.push((mi, pick.1 > 0));
