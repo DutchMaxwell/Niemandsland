@@ -648,7 +648,9 @@ func test_deny_mode_takes_an_unmapped_upgrade_label() -> void:
 ## at the charge door (the table rolls the pool at the activation start, the core rolled it again; core_start_once_door_test.gd). The
 ## primitive reaches a unit that gets the rule from a joined hero's Reanimation Aura (the import copies it onto the host and the hero).
 ## Shot at, a bearer is taken (it does not activate in the shooter's volley); a Bounding bearer stays taken (measured equal: the core refuses
-## a bonus move and the table resolves it). RED: drop the group -> the bearers read [] as shooters.
+## a bonus move and the table resolves it). D-PAR3 15a: the AI shoot door's transcript says the table paid the start (`paid{start}`), so
+## `refusals` (the AI door) takes the shooter; `refusals_human` and the charge door keep refusing it. RED: drop the group -> the human
+## door's shooters read [].
 func test_deny_mode_refuses_an_activation_start_bearer_as_shooter() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
@@ -656,7 +658,8 @@ func test_deny_mode_refuses_an_activation_start_bearer_as_shooter() -> void:
 		var bearer := _unit(["Reanimation", "Tough(3)"], [["AP(1)"]])
 		bearer.unit_properties["game_system"] = c[0]
 		bearer.unit_properties["faction_folder"] = c[1]
-		assert_array(CoreSlice.refusals(bearer)).override_failure_message("%s/%s Reanimation shooter" % c).is_equal(["unit_rule:Reanimation"])
+		assert_array(CoreSlice.refusals(bearer)).override_failure_message("%s/%s Reanimation shooter at the AI door (15a: paid)" % c).is_empty()
+		assert_array(CoreSlice.refusals_human(bearer)).override_failure_message("%s/%s Reanimation shooter at the human door" % c).is_equal(["unit_rule:Reanimation"])
 		assert_array(CoreSlice.refusals(bearer, true)).override_failure_message("%s/%s Reanimation target" % c).is_empty()
 		assert_array(CoreSlice.melee_refusals(bearer, false, true)).override_failure_message("%s/%s Reanimation charger" % c).is_equal(["unit_rule:Reanimation"])
 	# A host without the rule, joined by a hero with Reanimation Aura: the import's aura pass gives both Reanimation.
@@ -667,7 +670,8 @@ func test_deny_mode_refuses_an_activation_start_bearer_as_shooter() -> void:
 	EquipmentDistributor.attach_hero_to_unit(hero, host)
 	assert_array(CoreSlice.refusals(host)).override_failure_message("before the aura pass nothing names Reanimation").is_empty()
 	OPRArmyManager.expand_auras_of([host.source_data], {host.source_data: host})
-	assert_array(CoreSlice.refusals(host)).override_failure_message("an Aura-granted host is refused").contains(["unit_rule:Reanimation"])
+	assert_array(CoreSlice.refusals_human(host)).override_failure_message("an Aura-granted host is refused at the human door").contains(["unit_rule:Reanimation"])
+	assert_array(CoreSlice.refusals(host)).override_failure_message("an Aura-granted host is taken at the AI door (15a)").is_empty()
 	assert_array(CoreSlice.refusals(host, true)).override_failure_message("the same host shot at is taken").is_empty()
 	var jumper := _unit(["Bounding"], [["AP(1)"]])
 	jumper.unit_properties["faction_folder"] = "eternal_dynasty"

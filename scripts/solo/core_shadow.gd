@@ -103,7 +103,7 @@ static func note_roll(kind: String, count: int, target: int, faces: Array, owner
 ## C-4: the activation's placement for the replay (main.gd's AI body calls it after the move, before any die).
 static func note_placed(main, unit: GameUnit, report: Dictionary) -> void:
 	if int(main._solo_core_shadow_h) != 0:
-		placed = CoreActivation.ai_transcript(main, unit, report, null).slice(0, 2)
+		placed = CoreActivation.ai_transcript(main, unit, report, null).slice(0, 3)
 		# CC-10c: a cast-only activation waits for the body's `flush` (no volley code holds a compare then).
 		if cast_enabled():
 			_buffs_before = _token_names(main)   # CC-10d: the board at the activation's start, cast or no cast
@@ -147,7 +147,7 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 	var target: GameUnit = groups[order[0]]["target"] if not order.is_empty() else null
 	var t := CoreActivation.ai_transcript(main, unit, report, target, split)
 	if not placed.is_empty():
-		t = placed + t.slice(2)
+		t = placed + t.slice(3)
 	var damage: Array = _damage_spells(report)
 	var keys_of: Dictionary = {}
 	if cast_enabled():

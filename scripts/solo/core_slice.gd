@@ -52,6 +52,11 @@ static func reset_cache() -> void:
 
 ## The mode, the listed primitives and whether attachments are listed. A missing or malformed file is the EMPTY allow slice
 ## (the table shoots everything with a rule) and says so once: refusing is the safe direction, never silent.
+## D-PAR3 15a: the AI shoot door's transcript says the table paid the activation start (`paid{start}`), so a deny group of kind
+## `activation_start` does not refuse there; the human door (`refusals_human`) and the melee files keep it.
+static var _start_paid := true
+
+
 static func config() -> Dictionary:
 	if not _loaded.is_empty():
 		return _loaded
@@ -66,9 +71,13 @@ static func config() -> Dictionary:
 		push_error("CoreSlice: %s is missing or not a %s file for the %s door - the slice is empty" % [path, SCHEMA, door])
 		return _loaded
 	_loaded["mode"] = str(data.get("mode", "allow"))
+	_loaded["door"] = door
+	_loaded["start_kind"] = {}
 	for g in data.get("groups", {}):
 		for p in data["groups"][g].get("primitives", []):
 			_loaded["primitives"][str(p)] = str(g)
+			if str(data["groups"][g].get("kind", "")) == "activation_start":
+				_loaded["start_kind"][str(p)] = true
 			# H-9a: a group with "side": "shooter" refuses its primitives on the SHOOTING unit only (a pre-attack beat is the bearer's own act).
 			if str(data["groups"][g].get("side", "")) == "shooter":
 				_loaded["shooter_only"][str(p)] = true
@@ -142,6 +151,8 @@ static func _rule_taken(gu: GameUnit, label: String, as_target := false) -> bool
 	var p: Variant = entry.get("primitive")
 	if as_target and not allow and p is String and (c.get("shooter_only", {}) as Dictionary).has(p):
 		return true   # H-9a: a target's beat rule never acts in the volley it is shot by
+	if _start_paid and p is String and str(c.get("door", "")) == "shoot" and (c.get("start_kind", {}) as Dictionary).has(p):
+		return true   # D-PAR3 15a: the AI shoot door's transcript says the table paid the activation start
 	return p is String and prims.has(p) == allow
 
 
@@ -333,7 +344,10 @@ static func takes(gu: GameUnit, as_target := false) -> bool:
 
 ## C-19: `refusals` / `takes` for the HUMAN door. H-30: its slice is the live one (`human_path` == `live_path`), so these ask `refusals`.
 static func refusals_human(gu: GameUnit, as_target := false) -> Array:
-	return refusals(gu, as_target)
+	_start_paid = false   # D-PAR3 15a: the human door's capture is not after a paid start (step 16)
+	var out := refusals(gu, as_target)
+	_start_paid = true
+	return out
 
 
 static func takes_human(gu: GameUnit, as_target := false) -> bool:
