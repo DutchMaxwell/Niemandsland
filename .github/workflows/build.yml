@@ -90,7 +90,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
         run: |
-          if [ "$EVENT" = "pull_request" ] && [ "$BASE_REF" = "ci3270/proof-base" ] && python3 tools/ci_path_classes.py --pr-is-only look; then
+          if [ "$EVENT" = "pull_request" ] && [ "$BASE_REF" = "ci3270/proof-base-gate" ] && python3 tools/ci_path_classes.py --pr-is-only look; then
             echo "look_only=true" >> "$GITHUB_OUTPUT"
           else
             echo "look_only=false" >> "$GITHUB_OUTPUT"
