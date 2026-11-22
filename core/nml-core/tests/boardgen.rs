@@ -1028,6 +1028,37 @@ fn the_mid_board_bar_separates_the_true_model_from_any_height() {
     assert!(any > 0.87, "the any-height reading must break the bar, or the bar proves nothing: {:.2} %", 100.0 * any);
 }
 
+/// Halfroofs plan H1: a filler slab keeps at least half its 3 in floor under a half roof - every half-roof cell (Roofed, no lot) is level 0, solid to the
+/// core (`to_plain` lists it), has a walkable 3 in neighbour of free earth, is no ladder foot or head, and has a half-turn twin; the Deepworks has none.
+#[test]
+fn a_filler_slab_keeps_at_least_half_its_3_in_floor_under_a_half_roof() {
+    use nml_core::boardgen::LotKind;
+    let (mut seen, mut perches) = (0, 0);
+    for seed in 1..=300 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        let p = nml_core::boardgen::plain::to_plain(&l);
+        let feet: HashSet<usize> = l.connectors.iter().flat_map(|c| [usize::from(c.low), usize::from(c.high)]).collect();
+        for i in (0..GRID * GRID).filter(|&i| l.cells[i].lot_kind == LotKind::Roofed && l.cells[i].lot_id == 0) {
+            seen += 1;
+            let c = &l.cells[i];
+            assert!(c.level == 0 && p.solid_cells.contains(&(i as u16)), "seed {seed}: half roof {i} is raised or not solid");
+            assert!(nbrs(i).iter().any(|&j| l.cells[j].level == 1 && l.cells[j].lot_id == 0 && l.cells[j].lot_kind == LotKind::Street), "seed {seed}: half roof {i} has no 3 in floor of its slab beside it\n{}", l.to_ascii());
+            assert!(!feet.contains(&i), "seed {seed}: a ladder ends on half roof {i}");
+            let t = &l.cells[GRID * GRID - 1 - i];
+            assert!(t.lot_kind == LotKind::Roofed && t.lot_id == 0 && t.level == 0, "seed {seed}: half roof {i} has no half-turn twin");
+        }
+        assert!(!generate(seed, Symmetry::Point180).cells.iter().any(|c| c.lot_kind == LotKind::Roofed), "seed {seed}: a Deepworks half roof");
+        // a lone 3 in perch (no walkable 3 in neighbour) is a sniper nest only with its own ladder - never a cell nobody reaches
+        let sol = solid(&l);
+        for i in (0..GRID * GRID).filter(|&i| l.cells[i].level == 1 && !sol[i] && l.cells[i].lot_kind != LotKind::Wall && nbrs(i).iter().all(|&j| l.cells[j].level != 1 || sol[j])) {
+            perches += 1;
+            assert!(feet.contains(&i), "seed {seed}: lone 3 in perch {i} has no ladder\n{}", l.to_ascii());
+        }
+    }
+    eprintln!("half-roof cells over 300 town boards: {seen}, lone 3 in perches {perches} (each with a ladder)");
+    assert!(seen > 300, "the half-roof stage proved nothing: {seen} cells");
+}
+
 /// Roofs plan K4: every town board has at least four intact (roofed) houses - a skyline on every board, not only on the average one.
 #[test]
 fn every_town_has_at_least_four_intact_houses() {
@@ -1078,14 +1109,14 @@ fn a_town_grows_few_filler_slabs() {
 /// BASELINE of PLAN_RUINTOWN_ROOFS step K0: origin/main 6a2972697, town theme, Point180, seeds 1..=1000 (means per board, sq in, percent).
 /// Re-pinned by K2 (raised minimum 23 -> 15 %), K3 (infill houses), K4 (at least 4 houses) and towers T2 (a tall tower pair, read at 12 in), 1000 seeds. The roofs steps K2+ move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
 const ROOFS_BASELINE: [(&str, f64); 25] = [
-    ("intact houses", 8.27), ("boards with <= 2 houses %", 0.0), ("roofed cells", 19.37), ("raised cells in house plots", 13.07), ("raised cells on free earth", 22.64), ("raised cells in the city wall", 34.25),
-    ("roof share of footprints %", 35.17), ("walkable sq in 0 in", 1374.21), ("walkable sq in 3 in", 352.48), ("walkable sq in 6 in", 207.58), ("walkable sq in 9 in", 69.53), ("ladders", 44.27),
-    ("opening rays blocked %", 98.5), ("mid rays blocked %", 83.73), ("tier-to-tier rays blocked, eaves 2.5 in (old model) %", 53.4), ("tier-to-tier rays blocked, ridge 4.5 in %", 58.07),
-    ("roofed cells in the bands", 8.88), ("raised cells in the bands", 30.17), ("asymmetric cells", 0.0),
+    ("intact houses", 8.21), ("boards with <= 2 houses %", 0.0), ("roofed cells", 22.63), ("raised cells in house plots", 13.18), ("raised cells on free earth", 19.13), ("raised cells in the city wall", 34.09),
+    ("roof share of footprints %", 41.19), ("walkable sq in 0 in", 1376.8), ("walkable sq in 3 in", 322.16), ("walkable sq in 6 in", 205.72), ("walkable sq in 9 in", 69.73), ("ladders", 46.1),
+    ("opening rays blocked %", 98.69), ("mid rays blocked %", 83.06), ("tier-to-tier rays blocked, eaves 2.5 in (old model) %", 52.48), ("tier-to-tier rays blocked, ridge 4.5 in %", 58.95),
+    ("roofed cells in the bands", 11.46), ("raised cells in the bands", 27.88), ("asymmetric cells", 0.0),
     // halfroofs plan H0 (inventory rows): solid cells outside an intact-house lot, the 3 in filler slabs, the open ground of the thinnest band, lone 3 in perches,
     // and the POCKETS shape of the gate lane (an open ground cell with a tier or a solid on two opposite sides / on three or four sides)
-    ("half-roof cells", 0.0), ("raised cells on free earth, 3 in", 13.82), ("open ground per band, min over boards", 30.0), ("single-cell 3 in perches", 1.39),
-    ("pocket cells, tall on two opposite sides", 10.83), ("pocket cells, tall on three or four sides", 6.96),
+    ("half-roof cells", 3.28), ("raised cells on free earth, 3 in", 10.51), ("open ground per band, min over boards", 30.0), ("single-cell 3 in perches", 2.66),
+    ("pocket cells, tall on two opposite sides", 10.74), ("pocket cells, tall on three or four sides", 6.85),
 ];
 
 /// Roofs census over `NML_N` town seeds (default 1000, the baseline's size; the baseline is asserted only at 1000, within +-0.5 on every number). `NML_ROOFS_OUT=<file>` also writes the report.
