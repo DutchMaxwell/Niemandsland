@@ -1793,6 +1793,7 @@ mod grounded_reinforcement;
 mod grounded_speed;
 mod teleport;
 mod revive_spot;
+mod spot_markers_choice;
 mod versatile_choice;
 mod no_step;
 mod paid_input;

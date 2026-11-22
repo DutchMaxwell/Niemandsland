@@ -3404,6 +3404,7 @@ fn nearest_precision_target(
 /// clause. GATED on the FROZEN constant; below it both pools read empty.
 fn precision_markers_spend(
     next: &mut State,
+    si: usize,
     ti: usize,
     rules_epoch: u32,
     log: &mut Vec<String>,
@@ -3413,12 +3414,17 @@ fn precision_markers_spend(
     if !rule_on(rules_epoch, EPOCH_61_PRECISION_MARKERS) {
         return (0, 0);
     }
-    let spot = next.spot_markers[ti].max(0);
+    let pool = next.spot_markers[ti].max(0);
+    // The attacker's own count (`spot_markers:<shooter>:<target>`, 0..=pool, the table's offer `_solo_offer_spot_markers`); no answer
+    // takes all of them, the AI's rule (an interference-shaped count choice on the step path).
+    let id = format!("spot_markers:{}:{}", next.key(si), next.key(ti));
+    let spot = if pool > 0 { tray.interference(&id, pool, next.key(si)).unwrap_or(pool) } else { 0 };
     if spot > 0 {
-        next.spot_markers[ti] = 0;
+        next.spot_markers[ti] = pool - spot;
+        let left = pool - spot;
         log.push(format!(
-            "Precision Spotter: {spot} marker{} removed — +{spot} to hit this volley",
-            if spot == 1 { "" } else { "s" }));
+            "Precision Spotter: {spot} marker{} removed — +{spot} to hit this volley{}",
+            if spot == 1 { "" } else { "s" }, if left > 0 { format!(" ({left} remain{})", if left == 1 { "s" } else { "" }) } else { String::new() }));
         // The table's line (`_solo_consume_spot_markers`, the AI takes them all): the same words on the tray.
         say_rule(tray, "marker_spend", side, || log.last().cloned().unwrap_or_default());
     }
@@ -12217,7 +12223,7 @@ fn resolve_with(
                             // target's pools spend EVERY marker on THIS
                             // volley (+1 to hit per marker), once per group.
                             let side_now = next.player[si];
-                            let (spot_hit, tag_hit) = precision_markers_spend(&mut next, g.ti, seams.rules_epoch, &mut shot.log, tray, side_now);
+                            let (spot_hit, tag_hit) = precision_markers_spend(&mut next, si, g.ti, seams.rules_epoch, &mut shot.log, tray, side_now);
                             let precision_hit = spot_hit + tag_hit;
                             let ut_g = &statics[next.roster.profile[g.ti]];
                             let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch), statics, &next, g.ti, seams), seams.rules_epoch);
