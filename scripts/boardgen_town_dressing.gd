@@ -109,7 +109,7 @@ static func house_parts(body: Dictionary) -> Array[Dictionary]:
 ## The ridge runs ALONG the street (eaves-on) or ACROSS it (gable-on) by the lot's hash, from the frontage (a lot with no street beside it keeps the long axis). The type is a gable, a
 ## hip (the ends slope too) or, for an eaves-on roof only, a catslide (the back slope runs down past the eaves; `back` = which side of the ridge is the back, -1 / +1). A lot of two or
 ## more cells may carry an ANNEX: its last cell at one end of the ridge gets its own, lower gable roof (`annex` true; the main roof is shorter by that cell). The yaw is the body's plus a skew
-## of at most 2 degrees. VISUAL ONLY: the body below stays the core's 2.5 in solid.
+## of at most 2 degrees. VISUAL ONLY as geometry; the core blocks sight to 4.5 in (plain.rs HOUSE_TOP_IN), the mean ridge (sight plan S4).
 static func roofs(layout: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var cell_in := float(layout["cell_in"])
