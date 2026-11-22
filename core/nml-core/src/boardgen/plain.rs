@@ -239,6 +239,7 @@ mod tests {
     // re-pinned 22.11. (towers plan T2, c35f70fddda0af2c -> e0da3e93e0e428d0): one half-turn pair of tall towers between the bands
     // re-pinned 22.11. (sight plan S2, e0da3e93e0e428d0 -> fae627164db9c408): a house is its ridge (4.5 in) high in level_in
     // re-pinned 22.11. (halfroofs plan H1, fae627164db9c408 -> 7e07bff2db71c931): filler slabs keep half their 3 in floor under a half roof
-    const PINNED_TOWN_42: &str = "7e07bff2db71c931";
+    // re-pinned 22.11. (halfroofs plan H2, 7e07bff2db71c931 -> fcc5e1aa614526c3): half-turn pairs of ruined houses with one half roofed
+    const PINNED_TOWN_42: &str = "fcc5e1aa614526c3";
     const PINNED_SEED_42: &str = "cbcd64fada596527";
 }
