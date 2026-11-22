@@ -58,7 +58,7 @@ static func applies(main) -> bool:
 ## (or "off") is the way back until the switch and the #172 guard are deleted. Tests set the entry per kind. CC-14a: `interference`
 ## (a foe's token spend against an AI cast, `interference:<seq>:<caster>:<slot>`) starts OFF like the Takedown pick.
 const CHOICE_KINDS := ["takedown_model", "wound_alloc", "interference", "strike_back"]
-const CHOICE_DEFAULT_ON := ["wound_alloc", "strike_back"]
+const CHOICE_DEFAULT_ON := ["wound_alloc", "strike_back", "versatile_mode"]
 static var _choice_on: Dictionary = {}
 
 
@@ -286,6 +286,10 @@ static func pending_choices(main, unit: GameUnit, transcript: Array) -> Array:
 			ids.append("takedown_model:%s:%s" % [unit.unit_id, (target as GameUnit).unit_id])
 		if choice_enabled("wound_alloc"):
 			ids.append("wound_alloc:%s:%s:0" % [unit.unit_id, (target as GameUnit).unit_id])
+		# Step 22b (OD-2: a player's pick is asked through the core): a human Versatile Attack shooter picks the mode (22a).
+		if choice_enabled("versatile_mode") and not main._solo_is_ai_unit(unit) \
+				and not RulesRegistry.unit_rules_of_primitive(unit, "Versatile Attack").is_empty():
+			ids.append("versatile_mode:%s" % unit.unit_id)
 		return ids
 	return ids
 
@@ -324,6 +328,19 @@ static func _takedown_weapon(unit: GameUnit) -> bool:
 	return false
 
 
+## Step 22b: what the owner's Versatile prompt shows - the weapon and the mode the AI's own EV would pick (the recommended button), as the
+## table's `_solo_prompt_versatile` did; {} for any other choice.
+static func _versatile_context(main, unit: GameUnit, transcript: Array, id: String) -> Dictionary:
+	if not id.begins_with("versatile_mode:"):
+		return {}
+	var src := unit.source_data as OPRApiClient.OPRUnit
+	var w: OPRApiClient.OPRWeapon = src.weapons[0] if src != null and not src.weapons.is_empty() else null
+	var target = main.opr_army_manager.game_units.get(str((transcript.filter(func(e: Dictionary) -> bool: return str(e.get("t", "")) == "intent").back() as Dictionary).get("shoot", "")))
+	var defense := int((target as GameUnit).get_defense()) if target is GameUnit else 4
+	return {"weapon": w.name if w != null else "Weapon",
+		"recommended": AiEv.versatile_best_mode(unit.get_quality(), defense, 0, false)}
+
+
 ## The sentence the fallback line and the owner's request use for a choice id.
 static func choice_purpose(id: String, transcript: Array = []) -> String:
 	match id.get_slice(":", 0):
@@ -333,6 +350,8 @@ static func choice_purpose(id: String, transcript: Array = []) -> String:
 			return "wound allocation"
 		"strike_back":
 			return "strike-back choice"
+		"versatile_mode":
+			return "Versatile Attack mode"
 		"interference":
 			return _cast_spell_of(transcript, id.get_slice(":", 2)) if not transcript.is_empty() else "interference"   # the table's request names the spell
 	return "choice"
@@ -417,7 +436,7 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 			if interference and not cx.is_empty():
 				await _cast_throw(main, cx)   # CC-14a: the table shows the cast (markers, seal, "Cast" card) BEFORE the foe is asked
 			var option: String = await main._owner_choice(owner, id, options, choice_purpose(id, transcript), wounds,
-				_interference_context(main, cx) if interference else {})
+				_interference_context(main, cx) if interference else _versatile_context(main, unit, transcript, id))
 			probes.erase(id)   # asked once: the answer follows, or the core's automatic pick stands
 			if answer_fits(id, options, option):
 				transcript.append({"t": "choice", "id": id, "option": option})
