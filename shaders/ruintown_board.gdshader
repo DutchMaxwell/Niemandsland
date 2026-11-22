@@ -179,9 +179,12 @@ vec3 timber(vec2 uv, float seed, vec3 plaster, inout vec3 emis, out float rel, f
 	vec3 infill = pl * mix(0.84, 1.1, fbm(uv * 1.7 + seed)) * mix(0.62, 1.0, smoothstep(0.0, 1.1, y));
 	infill = grit_plaster_wear(infill, uv, x, y, seed, wood);   // (plan W2)
 	infill = mix(infill, mix(infill, vec3(dot(infill, vec3(0.333))) * vec3(1.04, 1.0, 0.9), 0.45) * mix(0.55, 0.78, fbm(uv * 0.8 + seed + 3.0)) * mix(0.78, 1.0, smoothstep(0.0, 1.0, y)), 1.0 - painted);   // (train 3, lead review: between real timbers the infill is dirty cream-grey, blotchy, damp rising from the sill - not a zebra)
-	float course = step(0.5, fract(y / 0.12));
-	infill = hb > 0.6 && hb < 0.75 ? mix(vec3(0.42, 0.22, 0.16), vec3(0.28, 0.14, 0.10), course) : infill;   // brick nogging
-	infill = hb >= 0.75 && hb < 0.9 ? mix(wood * 1.4, wood * 0.6, step(0.5, fract(uv.y / 0.09))) : infill;   // bare lath
+	// Brick nogging and bare lath (plan TEX 3): one dull tone with a thin dark joint, not two alternating tones (a light / dark zebra
+	// that shimmered at the start camera). The fade is keyed on the joint, the narrowest feature: below ~3.5 px it mixes to the mean.
+	float mortar = mix(0.2, step(fract(y / 0.12), 0.2), keep(uv.y, 0.024));   // 0.024 in joint every 0.12 in course
+	float lath = mix(0.25, step(fract(uv.y / 0.09), 0.25), keep(uv.y, 0.0225));   // 0.0225 in gap every 0.09 in lath
+	infill = hb > 0.6 && hb < 0.75 ? mix(vec3(0.28, 0.19, 0.15), vec3(0.22, 0.15, 0.12), mortar) : infill;   // brick nogging, dull weathered brick
+	infill = hb >= 0.75 && hb < 0.9 ? mix(wood * 1.05, wood * 0.8, lath) : infill;   // bare lath
 	float hole = step(0.9, hb) * step(0.0001, holes) * step(hb, 0.9 + holes);
 	float members = max(post * (1.0 - inside), max(beam, max(brace, frame)));
 	vec3 c = mix(infill, wood, members);

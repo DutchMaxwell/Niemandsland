@@ -43,3 +43,15 @@ func test_every_fine_pattern_fades_to_its_mean_with_the_pixel_footprint() -> voi
 		assert_bool(body.contains("keep(")).override_failure_message("%s does not fade with the pixel footprint" % fn).is_true()
 	assert_bool(src.contains("keep(p.y, TILE_H)")).is_true()   # the roof tiles
 	assert_bool(src.contains("keep(xz.y, BOARD_W)")).is_true()   # the floor boards
+
+
+## Plan TEX step 3: the brick-nogging courses (0.12 in) and the lath (0.09 in, bare and behind lost plaster) were full-contrast two-tone
+## stripes (a zebra that shimmered at the start camera); now one dull tone with a thin joint whose fade is keyed on the joint width.
+func test_the_nogging_and_lath_are_one_dull_tone_with_a_thin_joint_that_fades_on_its_own_width() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	var grit := FileAccess.get_file_as_string("res://shaders/ruintown_grit.gdshaderinc")
+	assert_bool(src.contains("keep(uv.y, 0.024)")).override_failure_message("the nogging joint does not fade on its width").is_true()
+	assert_bool(src.contains("keep(uv.y, 0.0225)")).override_failure_message("the bare lath gap does not fade on its width").is_true()
+	assert_bool(grit.contains("keep(uv.y, 0.0225)")).override_failure_message("the lath behind lost plaster does not fade").is_true()
+	for pin: String in ["step(0.5, fract(y / 0.12))", "step(0.5, fract(uv.y / 0.09))", "vec3(0.42, 0.22, 0.16)", "wood * 1.4, wood * 0.6", "wood * 1.3, wood * 0.55"]:
+		assert_bool((src + grit).contains(pin)).override_failure_message("the half-and-half zebra is back: " + pin).is_false()
