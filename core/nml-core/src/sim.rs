@@ -1277,9 +1277,10 @@ pub(crate) fn tray_breath_attack(
 /// heroes. Gate: FROZEN `EPOCH_7_TABLE_RULES`.
 pub(crate) fn tray_reanimation(
     statics: &[UnitStatic], next: &mut State, si: usize, seams: Seams,
-    tray: &mut Tray, shot: &mut ShootResult,
+    tray: &mut Tray, shot: &mut ShootResult, board: Option<&Terrain>,
 ) {
     let Some(spec) = statics[next.roster.profile[si]].reanimation.clone() else { return };
+    let spot_rule = rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_REVIVE_SPOT);
     if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) || next.shaken[si] {
         return; // below-7 replays byte-exact; the Shaken activation stays idle (main.gd:4731)
     }
@@ -1352,14 +1353,21 @@ pub(crate) fn tray_reanimation(
         let (dx, dz) = (a[0] - cx, a[2] - cz);
         let n = (dx * dx + dz * dz).sqrt();
         let (ux, uz) = if n <= f64::EPSILON { (0.0, 0.0) } else { (dx / n, dz / n) };
-        let dist = a_r + DEFAULT_BASE_RADIUS_M + 0.002;
+        // PENDING_EPOCH_REVIVE_SPOT: the returning model keeps its unit's own base (metres; 0 = not set).
+        let own_r = statics[next.roster.profile[u]].base_radius;
+        let r = if spot_rule && own_r > 0.0 { own_r } else { DEFAULT_BASE_RADIUS_M };
+        let dist = a_r + r + 0.002;
         let spot = [a[0] + ux * dist, a[1], a[2] + uz * dist];
-        let clear = (0..next.units()).all(|ti| {
-            members.contains(&ti)
-                || next.positions[ti].iter().all(|p| {
-                    (p[0] - spot[0]).hypot(p[2] - spot[2]) > DEFAULT_BASE_RADIUS_M * 2.0 + 0.002
-                })
-        });
+        let clear = if spot_rule {
+            revive_spot_legal(board, next, [spot[0], spot[2]], r)
+        } else {
+            (0..next.units()).all(|ti| {
+                members.contains(&ti)
+                    || next.positions[ti].iter().all(|p| {
+                        (p[0] - spot[0]).hypot(p[2] - spot[2]) > DEFAULT_BASE_RADIUS_M * 2.0 + 0.002
+                    })
+            })
+        };
         if !clear {
             shot.log.push("Reanimation: 1 success but no placeable spot — coherency missing".into());
             continue;
@@ -1367,12 +1375,36 @@ pub(crate) fn tray_reanimation(
         let back = cost.min(left).max(1);
         next.wounds[u].insert(0, back);
         next.positions[u].insert(0, spot);
-        Rc::make_mut(&mut next.radii)[u].insert(0, DEFAULT_BASE_RADIUS_M);
+        Rc::make_mut(&mut next.radii)[u].insert(0, r);
         next.kits_drop(u); // the revived body's kit is unknown: this unit falls back to slot order
         next.alive[u] = next.positions[u].len() as i64;
         left -= back;
         shot.log.push(format!("Reanimation: 1 model restored ({back} wound(s) back)"));
     }
+}
+
+/// REVIVE SPOT (`PENDING_EPOCH_REVIVE_SPOT`): may a restored model of base radius `r` (metres) stand at world `c` (x, z metres)?
+/// The whole base on the table, no rest where `mv::gate::rest_forbidden` refuses one (impassable terrain, a wall or cliff within
+/// r + 2 mm), not over an intact house nor within r + 1 mm of its wall (`lands_in_house`), and clear (r + r_other + 1 mm) of every
+/// standing base, its own unit's included. The terrain clauses run only on a real board (`board` is `Some`).
+fn revive_spot_legal(board: Option<&Terrain>, next: &State, c: [f64; 2], r: f64) -> bool {
+    if let Some(t) = board {
+        let half = [t.board_in()[0] * t.in2m() * 0.5, t.board_in()[1] * t.in2m() * 0.5];
+        if half[0] > 0.0 && (c[0].abs() + r > half[0] || c[1].abs() + r > half[1]) {
+            return false;
+        }
+        let p = t.to_inch([c[0] as f32, 0.0, c[1] as f32]);
+        let w = [c[0] as f32, c[1] as f32];
+        if crate::mv::gate::rest_forbidden([f64::from(p[0]), f64::from(p[1])], r / IN2M, t)
+            || t.solid_at(c[0] / t.in2m(), c[1] / t.in2m())
+            || t.solid_walls_world_m().iter().any(|s| crate::mv::geom2::point_seg_distance(w, s[0], s[1]) < r + 0.001)
+        {
+            return false;
+        }
+    }
+    (0..next.units()).all(|u| next.positions[u].iter().enumerate().all(|(k, p)| {
+        (p[0] - c[0]).hypot(p[2] - c[1]) >= r + next.radii[u].get(k).copied().unwrap_or(DEFAULT_BASE_RADIUS_M) + 0.001
+    }))
 }
 
 /// "The first time this unit is activated, pick one enemy unit within 6\" in
@@ -11017,7 +11049,8 @@ fn resolve_with(
     // action — every action kind with a tray. See `tray_reanimation`; a
     // full-strength or Shaken carrier rolls nothing.
     if let Some((tray, shot)) = dice.as_mut() {
-        tray_reanimation(statics, &mut next, si, seams, tray, shot);
+        let board = match cover { Cover::Board(t) if t.is_valid() => Some(t), _ => None };
+        tray_reanimation(statics, &mut next, si, seams, tray, shot, board);
         // Surprise Attack (wave-5) — the same activation-trigger slot, the
         // book's own "first time this unit is activated" beat; see above.
         tray_surprise_attack(statics, state, &mut next, si, seams, tray, shot);
