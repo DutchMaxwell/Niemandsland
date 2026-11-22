@@ -386,6 +386,8 @@ void grit_house_wall(int k, vec3 p, vec3 n, float seed, float lot, float band, f
 		pl *= mix(0.72, 1.05, fbm(uv * 1.7 + seed)) * mix(0.62, 1.0, smoothstep(0.8, 2.2, local_y)) * mix(0.85, 1.0, smoothstep(0.3, 0.6, fbm(uv * 0.6 + seed + 9.0)));   // patchy, damp and dirtier low
 		float streak = smoothstep(0.55, 0.75, vnoise(vec2(uv.x * 5.0, uv.y * 0.4) + seed)) * (1.0 - smoothstep(0.0, 1.6, 2.85 - local_y));   // grime running down from the top plate
 		pl *= 1.0 - 0.3 * streak;
+		float crack = (1.0 - smoothstep(0.005, 0.022, abs(fbm(uv * vec2(1.1, 0.65) + seed * 5.0 + lot * 3.0) - 0.5))) * smoothstep(0.5, 0.68, vnoise(uv * 0.45 + seed + lot * 7.0 + 3.0));
+		pl *= 1.0 - 0.6 * crack;   // (townC4, target C: hairline cracks wander through the plaster in patches)
 		pl = real_frames ? mix(pl, vec3(dot(pl, vec3(0.333))) * vec3(1.04, 1.0, 0.9), 0.35) * 0.9 : pl;   // (train 3, lead review: dirty cream-grey infill between weathered timbers)
 		float lossz = mix(0.58, 0.5, 1.0 - smoothstep(0.8, 2.0, local_y)) - (band == 2.0 ? 0.04 : 0.0);
 		float loss = smoothstep(lossz, lossz + 0.02, fbm(uv * vec2(0.55, 0.8) + seed + lot * 17.0) + (vnoise(uv * 6.0 + lot) - 0.5) * 0.08);   // ragged, irregular losses, not round dots

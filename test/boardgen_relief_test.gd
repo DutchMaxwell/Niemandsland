@@ -167,3 +167,6 @@ func test_the_ground_the_models_stand_on_sits_below_the_models() -> void:
 		assert_int(at).is_greater(-1)
 		var v := float(src.substr(at + ("const float %s = " % name).length(), 6).get_slice(";", 0))
 		assert_float(v).override_failure_message("%s %f" % [name, v]).is_between(0.0, 0.6 if name == "DECK_KEEP_HUE" else 1.15)
+	# (lane townC4, target C) hairline cracks in the ruins' plaster: darkening only, never brighter than the plaster
+	var grit := FileAccess.get_file_as_string("res://shaders/ruintown_grit.gdshaderinc")
+	assert_bool(grit.contains("pl *= 1.0 - 0.6 * crack;")).override_failure_message("the plaster carries its cracks").is_true()
