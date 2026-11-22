@@ -93,12 +93,24 @@ func _shadow(s: int, models: int, foe_models: int, gap_in: float, foe_rules := [
 
 func _sweep_shadow(models: int, foe_models: int, gap_in: float) -> void:
 	var bad: Array = []
+	var separate := 0
 	for s in 8:
 		var rec := await _shadow(s, models, foe_models, gap_in)
-		if not rec["taken"] or not rec["equal"]:
+		# Ticket SEPARATE-1IN (lead ruling 22.11., docs/one_core/PARITY_RULING.md item 4): the charger's 1" step back ends short of
+		# 1" from the defender on BOTH sides - illegal by the book, so the honest reading is `core_illegal` (enemy_within_1in only),
+		# not equal. It is counted, not hidden; any other difference or illegal kind still fails. Fixed after the shoot deletion.
+		var sep := _separate_1in(rec)
+		separate += 1 if sep else 0
+		if not rec["taken"] or not (bool(rec["equal"]) or sep):
 			bad.append("seed %d: %s" % [s, rec])
-	print("MELEE_SHADOW %dv%d seeds=8 unequal=%d" % [models, foe_models, bad.size()])
+	print("MELEE_SHADOW %dv%d seeds=8 unequal=%d separate_1in=%d" % [models, foe_models, bad.size(), separate])
 	assert_array(bad).override_failure_message("\n".join(bad.slice(0, 4))).is_empty()
+
+
+## Ticket SEPARATE-1IN: the record's only difference is an illegal core end of kind `enemy_within_1in` (the 1" step back short).
+func _separate_1in(rec: Dictionary) -> bool:
+	return str(rec.get("first_diff", "")) == "core_illegal" and not (rec.get("core_illegal", []) as Array).is_empty() \
+		and (rec["core_illegal"] as Array).all(func(i: Dictionary) -> bool: return str(i["kind"]) == "enemy_within_1in")
 
 
 ## Taken and equal: both sides standing (5 v 8) and the defender wiped out (8 v 2), 8 seeds each.
@@ -117,12 +129,14 @@ func test_a_charge_the_slice_refuses_is_recorded_not_replayed() -> void:
 	assert_str(str(big["first_diff"])).is_empty()
 
 
-## RED (planted on the table's board after the fight): a charger model nudged 1" -> "positions"; a model of the defender
-## healed back -> a state field; the compare can fail.
+## RED (planted on the table's board after the fight): a charger model nudged 1" -> reported as `free_position` (PLAN_FIRST_DELETION
+## 3d: where a model stands is a free choice under docs/one_core/PARITY_RULING.md, not a mismatch); a defender's Shaken flipped -> a
+## state field; the compare can fail.
 func test_the_compare_sees_a_planted_difference() -> void:
 	var nudge := func(att: GameUnit, _foe: GameUnit) -> void: (att.get_alive_models()[0] as ModelInstance).node.global_position.x += 0.0254
 	var moved := await _shadow(0, 5, 8, 7.0, [], nudge)
-	assert_str(str(moved["first_diff"])).is_equal("positions")
+	assert_bool((moved.get("free_position", {}) as Dictionary).is_empty()).override_failure_message("the nudge went unreported: %s" % [moved]).is_false()
+	assert_array(["", "core_illegal"]).override_failure_message("a free position read as a mismatch: %s" % [moved]).contains([str(moved["first_diff"])])
 	var shaken := func(_att: GameUnit, foe: GameUnit) -> void: foe.is_shaken = not foe.is_shaken
 	var flipped := await _shadow(0, 5, 8, 7.0, [], shaken)
 	assert_str(str(flipped["first_diff"])).is_equal("shaken")
@@ -154,7 +168,8 @@ func test_deny_view_compares_an_ap_charger_and_leaves_the_door_untouched() -> vo
 		assert_bool(rec.get("taken", false)).override_failure_message("seed %d: AP charger refused in deny view: %s" % [s, rec]).is_true()
 		assert_array(rec.get("why", ["missing"])).is_empty()
 		assert_array(rec.get("deny", ["missing"])).is_empty()
-		assert_bool(rec.get("equal", false)).override_failure_message("seed %d: %s" % [s, rec]).is_true()
+		# equal, or only the known SEPARATE-1IN reading (see `_sweep_shadow`)
+		assert_bool(bool(rec.get("equal", false)) or _separate_1in(rec)).override_failure_message("seed %d: %s" % [s, rec]).is_true()
 		assert_str(str(rec.get("charger", ""))).is_equal("Att")
 		assert_str(str(rec.get("target", ""))).is_equal("Def")
 		assert_dict(rec.get("rules", {})).contains_key_value("charger", ["AP"]).contains_key_value("target", [])
@@ -169,8 +184,9 @@ func test_deny_view_compares_an_ap_charger_and_leaves_the_door_untouched() -> vo
 	var nudge := func(att: GameUnit, _foe: GameUnit) -> void: (att.get_alive_models()[0] as ModelInstance).node.global_position.x += 0.0254
 	var bad := await _shadow(0, 5, 8, 7.0, [], nudge, [], ["AP(1)"])
 	assert_bool(bad.get("taken", false)).is_true()
-	assert_bool(bad.get("equal", true)).is_false()
-	assert_str(str(bad.get("first_diff", ""))).is_equal("positions")
+	# PLAN_FIRST_DELETION 3d: a position difference is a free choice - reported in `free_position`, not a mismatch.
+	assert_bool((bad.get("free_position", {}) as Dictionary).is_empty()).override_failure_message("the nudge went unreported: %s" % [bad]).is_false()
+	assert_array(["", "core_illegal"]).contains([str(bad.get("first_diff", ""))])
 	assert_int((bad.get("core_rolls", []) as Array).size()).is_greater_equal(2)
 
 	# Door untouched: even with the charge door on and shadow in deny view, takes_ai_charge still reads the allow file.
