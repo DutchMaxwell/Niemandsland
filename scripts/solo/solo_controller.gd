@@ -10508,7 +10508,12 @@ static func casualty_order(unit: GameUnit) -> Array:
 			d = Vector2(node.global_position.x - cx, node.global_position.z - cz).length()
 		# lowest rank dies first: already-wounded Tough bodies, then plain models, outermost of them first
 		return v * 1000.0 - d - float(taken) * 1000000.0
-	alive.sort_custom(func(a, b) -> bool: return float(rank.call(a)) < float(rank.call(b)))
+	# Equal ranks (mirror models of a symmetric grid) fall back to the slot index: Godot's sort_custom is unstable from 17
+	# elements, the core's sort is stable (casualty.rs), so without the index a 20-model unit lost a different body (shootpos).
+	var ranks := {}
+	for i in alive:
+		ranks[i] = float(rank.call(i))
+	alive.sort_custom(func(a, b) -> bool: return ranks[a] < ranks[b] or (ranks[a] == ranks[b] and int(a) < int(b)))
 	return alive
 
 
