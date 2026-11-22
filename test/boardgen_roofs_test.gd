@@ -113,3 +113,23 @@ func test_a_jetty_is_a_recess_of_at_most_a_fifth_of_an_inch_on_the_front_face_on
 	for b in BoardgenTownDressing.house_bodies(layout):
 		fronts[b["front"]] = true
 	assert_bool(fronts.has("N") and fronts.has("S")).is_true()   # the houses on both sides of the street face it
+
+
+## Roofs lane 22.11. (lead, K4 sheets: the tile roofs were the hottest thing on the board): every roof tone the town shader picks is a weathered slate / shingle / dull clay in the
+## wall stone's value range - no channel above 0.32, saturation (max - min) / max at most 0.45 - and none is derived from the hot clay instance tint; the chimney brick is a dull
+## brick-brown. Red before: roof_of mixed the clay tint (0.72, 0.36, 0.26) and the brick was (0.62, 0.34, 0.26).
+func test_the_roof_tones_stay_in_the_wall_stones_range_and_never_orange() -> void:
+	var src := FileAccess.get_file_as_string("res://shaders/ruintown_board.gdshader")
+	var at := src.find("vec3 roof_of(")
+	var body := src.substr(at, src.find("\n}", at) - at)
+	assert_bool(body.contains("clay *") or body.contains("mix(clay")).override_failure_message("a roof tone is derived from the hot clay tint").is_false()
+	var tones := RegEx.create_from_string("vec3\\(([0-9.]+), ([0-9.]+), ([0-9.]+)\\)").search_all(body)
+	assert_int(tones.size()).is_greater_equal(5)
+	for m in tones:
+		var c := Vector3(float(m.get_string(1)), float(m.get_string(2)), float(m.get_string(3)))
+		var hi := maxf(c.x, maxf(c.y, c.z))
+		assert_float(hi).override_failure_message("roof tone %s too bright" % c).is_less_equal(0.32)
+		assert_float((hi - minf(c.x, minf(c.y, c.z))) / hi).override_failure_message("roof tone %s too saturated" % c).is_less_equal(0.45)
+	var brick: Color = BoardgenTheme.TOWN_PALETTE[BoardgenTheme.TOWN_KINDS.find("brick")]
+	assert_float(brick.s).override_failure_message("chimney brick %s too saturated" % brick).is_less_equal(0.45)
+	assert_float(brick.v).is_less_equal(0.5)
