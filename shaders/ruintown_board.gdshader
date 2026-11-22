@@ -85,6 +85,7 @@ const float DECK_LIFT = 1.12;
 const float DECK_MOSS = 0.0;   // (townC4) the shade-side moss on a deck and on a stone top: on grey boards and flags it read as a green carpet from above (top camera green band 3-6 %)
 const float TOP_LIFT = 1.15;   // (townC4) the cleaned flag tops a step paler, as C's grey stone
 const float BAND_COVER = 0.06;
+const float TOP_RIM_MOSS = 0.6;   // (texture plan step 7) in the outer 0.5 in of a stone top the moss gathers twice as thick
 const float TOP_MOSS = 0.3;   // (lead 22.11.: C keeps moss in the seams and on the north side only - the green lives on the earth)
 const float COVER_CUT = 0.58;   // the fbm level above which the earth is overgrown (~25 % of the earth; plan TARGET C, E2)
 varying vec3 wpos;
@@ -281,6 +282,7 @@ void fragment() {
 	float spec = 0.5;   // the specular level (the default of a dielectric); water takes 1.0 so the probe's reflection shows
 	float depth_in = 0.0;   // how deep that relief is, in inches (0 = none)
 	float ao = 1.0;
+	float top_ring = 0.0;   // (texture plan step 7) 1 in the outer 0.5 in of a flag top, where rubble and moss gather
 	vec3 tex_ratio = vec3(1.0);   // the authored set's detail on this face (1 = none) and its tangent-space normal
 	vec3 tex_n = vec3(0.0, 0.0, 1.0);
 	float tex_on = 0.0;
@@ -525,6 +527,22 @@ void fragment() {
 				fl = smoothstep(0.012, 0.0, abs(dot(rp, vec2(-dir.y, dir.x)))) * inside * keep(xz.y, 0.2);
 			}
 			alb = mix(alb, vec3(0.03, 0.03, 0.03), 0.8 * fl);
+			// (texture plan step 7) the top weathers as a whole: a 3 - 9 in value drift, one flag in ten gone or sunk (earth-dark, lower), rubble at the rim
+			alb *= mix(0.85, 1.12, fbm(xz * 0.17 + seed));
+			float gone = step(0.9, h21(fc + seed + 53.0)) * keep(xz.y, fr.z);
+			alb = mix(alb, alb * vec3(0.66, 0.6, 0.5) * mix(0.85, 1.1, vnoise(xz * 3.0 + seed)), gone);   // dirt in the hole: a step darker and browner than its flag (the earth colour itself rendered as a black hole)
+			rel = mix(rel, 0.15, gone);
+			depth_in = mix(depth_in, 0.03, gone);
+			if (box_in.x > 0.0) {   // the outer 0.5 in of the box top (as the deck strip): dirt, small rubble and the thicker moss
+				vec2 e2 = box_in.xz * 0.5 - abs(lpos.xz);
+				top_ring = 1.0 - smoothstep(0.1, 0.5, min(e2.x, e2.y));
+				alb *= mix(1.0, 0.85, top_ring);
+				vec2 sci = floor(xz / 0.3);
+				float sh = h21(sci + seed + 61.0);
+				float lump = step(1.0 - 0.45 * top_ring, sh) * smoothstep(0.3, 0.15, length(fract(xz / 0.3) - 0.5)) * keep(xz.x, 0.3);
+				alb = mix(alb, alb * mix(0.55, 0.8, fract(sh * 13.0)), 0.85 * lump);   // a darker chip of stone (pale lumps with a lit crown read as white coins)
+				rel = mix(rel, 0.65, lump);
+			}
 		} else if (k == 11) {   // garden plot: overgrown, weeds and bare patches
 			alb = tint * 0.55 * mix(0.6, 1.25, fbm(xz * 2.4 + seed)) * mix(1.0, 0.7, step(0.9, h21(floor(xz * 9.0))));   // x0.55: the plots in the deployment bands sit below the models' own values (readability gate)
 			vec2 pf = fract(xz / cell_in) * cell_in;
@@ -566,7 +584,7 @@ void fragment() {
 			vec2 pc = mod(p.xz, 3.0);
 			float rim = 1.0 - smoothstep(0.1, 0.7, min(min(pc.x, 3.0 - pc.x), min(pc.y, 3.0 - pc.y)));   // (train 2, V2) moss gathers toward a top's edges too
 			alb *= 0.85;   // (train 2, V2) the flat tops one value step down: they were the brightest thing on the board
-			alb = mix(alb, vec3(0.12, 0.17, 0.08), clamp(0.65 * moss + 0.3 * rim, 0.0, 0.8) * smoothstep(0.45, 0.7, patchy) * (k == 3 || k == 4 || k == 8 ? DECK_MOSS : TOP_MOSS));   // moss on the tops of the shade side and at their edges
+			alb = mix(alb, vec3(0.12, 0.17, 0.08), clamp(0.65 * moss + 0.3 * rim, 0.0, 0.8) * smoothstep(0.45, 0.7, patchy) * (k == 3 || k == 4 || k == 8 ? DECK_MOSS : mix(TOP_MOSS, TOP_RIM_MOSS, top_ring)));   // moss on the tops of the shade side and at their edges
 			alb = mix(alb, vec3(0.04, 0.035, 0.03), 0.6 * fire * smoothstep(0.55, 0.8, patchy) * float(k != 12));   // scorched patches on a ruin's top
 		} else if (k == 15) {   // a roof face
 			float lost = smoothstep(0.62, 0.7, fbm(vec2(p.x + p.z, p.y) * 0.9 + seed * 5.0)) * mix(0.25, 1.0, fire);
