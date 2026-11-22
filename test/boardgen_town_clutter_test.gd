@@ -268,6 +268,7 @@ func test_fences_ring_the_garden_plots_from_inside_with_a_gap() -> void:
 	for layout: Dictionary in boards:
 		var nx: int = layout["nx"]
 		var plan := BoardgenTownClutter.plan(layout)
+		var fronts := BoardgenTownClutter.front_clusters(layout, BoardgenTownScenes.plan(layout)["reserved"])   # (townC4: a fence section propped at a ruin's foot is a strip piece, not a plot's fence)
 		var origin := Vector2(nx, int(layout["nz"])) * 3.0 * -0.5
 		var plot_cells := {}
 		for cd: Dictionary in layout["cells"]:
@@ -278,6 +279,8 @@ func test_fences_ring_the_garden_plots_from_inside_with_a_gap() -> void:
 		for style: Array in BoardgenTownClutter.FENCE_STYLES:
 			for k in 3:
 				for it: Dictionary in plan.get(style[k], []):
+					if (fronts.get(style[k], []) as Array).has(it):
+						continue
 					total += 1
 					var xf: Transform3D = it["xf"]
 					var at := Vector2(xf.origin.x, xf.origin.z) / 0.0254 - origin

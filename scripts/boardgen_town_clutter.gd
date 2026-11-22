@@ -404,8 +404,8 @@ const FRONT_CLUSTERS := [[["barrel", 0.55, 0.0], ["barrel", 1.2, 0.0], ["bucket"
 	[["woodpile", 0.5, 0.0], ["crate", 2.2, 0.0]], [["handcart", 1.7, 0.0, "handcart_load"]]]
 ## ... and at the feet of the roofless ruins: fallen stone, a fallen beam, broken staves.
 const RUIN_CLUSTERS := [[["rubble_c", 0.9, 0.0], ["barrel_broken", 1.9, 0.0]], [["hf_beam_fallen", 1.5, 0.0]], [["barrel_broken", 0.5, 0.0], ["crate_broken", 2.0, 0.0]],
-	[["rubble_a", 0.85, 0.0], ["bucket", 2.2, 0.0]], [["woodpile", 0.5, 0.0], ["crate", 2.2, 0.0]]]
-const FRONT_SPAN := {"handcart": Vector2(-1.41, 0.80), "rubble_a": Vector2(-0.69, 0.72), "rubble_c": Vector2(-0.68, 0.72), "hf_beam_fallen": Vector2(-1.37, 1.2)}
+	[["rubble_a", 0.85, 0.0], ["bucket", 2.2, 0.0]], [["woodpile", 0.5, 0.0], ["crate", 2.2, 0.0]], [["fence_wattle", 1.5, 0.0]], [["fence_plank", 1.5, 0.0], ["bucket", 2.75, 0.0]]]   # (+ a hurdle or a fence section propped against the foot)
+const FRONT_SPAN := {"handcart": Vector2(-1.41, 0.80), "rubble_a": Vector2(-0.69, 0.72), "rubble_c": Vector2(-0.68, 0.72), "hf_beam_fallen": Vector2(-1.37, 1.2), "fence_wattle": Vector2(-1.45, 1.45), "fence_plank": Vector2(-1.46, 1.46)}
 const LAMP_FREE_IN := 0.6
 
 
