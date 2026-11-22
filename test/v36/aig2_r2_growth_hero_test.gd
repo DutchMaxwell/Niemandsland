@@ -35,6 +35,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
 	AiActRecorder.rules_epoch = _epoch_before
 	RulesRegistry.reset_cache()
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
@@ -73,6 +75,21 @@ func _markers(u: GameUnit, key: String) -> int:
 
 
 # ===== controls (green before and after the fix) =====
+
+## The game's own call: the core door takes the AI's volley (the board is captured first), as the lone-hero door suite does.
+## The epoch is the live one: the table's epoch-73 gates are the core's from its own epochs on.
+func _door_ai(report: Dictionary) -> void:
+	AiActRecorder.rules_epoch = _epoch_before
+	CoreActivation._env = 1
+	var runs := CoreActivation.ai_runs
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	await _main._run_ai_shooting(report)
+	assert_int(CoreActivation.ai_runs).override_failure_message("the core did not take the volley (the table shot it)") \
+		.is_equal(runs + 1)
+	if _main._solo_core_ai_h != 0:
+		_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+	_main._solo_core_ai_h = 0
+
 
 ## A standalone carrier ticks and the line names the book rule: the long-standing behaviour.
 func test_a_standalone_carrier_gains_its_round_marker() -> void:
@@ -163,8 +180,7 @@ func test_a_joined_heros_piercing_growth_reaches_the_ai_volley_at_73() -> void:
 	var tgt := RosterSweep.spawn(_main, _opr_entry("DS-PG Target", 10, [], ""), RosterSweep.SEAT_TARGET, 9.0)
 	RosterSweep.arm(_main, ProjectSettings.globalize_path(PG_DICE))
 	_main.seed_tray_rng(0)
-	_main._solo_core_ai_h = 0
-	await _main._run_ai_shooting({"unit": host, "moved": false, "action": AiDecision.Action.HOLD})
+	await _door_ai({"unit": host, "moved": false, "action": AiDecision.Action.HOLD})
 	AiDiceRecorder.close()
 	var rolls: Array = ParityTable._read_dice(ProjectSettings.globalize_path(PG_DICE))
 	var saves: Array = rolls.filter(func(x: Dictionary) -> bool: return str(x["kind"]) == "defense").map(
