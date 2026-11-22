@@ -138,6 +138,16 @@ func test_ruined_tops_break_only_in_the_outer_edge_strip() -> void:
 	assert_bool(src.contains("abs(vnoise(xz * 1.6 + seed * 2.0) - 0.5)")).override_failure_message("the curly scribble cracks are back").is_false()
 
 
+## Texture plan step 6 (the "car park"): the flag tops are irregular - courses of 0.45 / 0.6 / 0.75 in in an order hashed per band of three, flags 0.5 - 1.1 in
+## long, 0.85 of the wall stone's tone spread - and their joints are mid-dark (the flag's own tone x 0.55 at 0.6), never near black.
+func test_the_flag_tops_are_irregular_flags_with_mid_dark_joints() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	assert_bool(src.contains("alb = stone_rows(xz, seed, fr, 0.72, tint, rel);")).override_failure_message("the flags are still one 0.45 in course").is_true()
+	assert_bool(src.contains("float c0 = 0.45 + 0.15 * mod(o, 3.0);")).is_true()
+	assert_bool(src.contains("grit_stone_tone(h21(fc + seed + 41.0)), 0.85);")).override_failure_message("the flag tone spread is not 0.85").is_true()
+	assert_bool(src.contains("alb * 0.55, 0.6 * joint * keep(xz.y, fr.z));")).override_failure_message("the flag joint is not mid-dark").is_true()
+	assert_bool(src.contains("vec3(0.07, 0.06, 0.05), 0.75 * joint")).override_failure_message("the near-black flag joint is back").is_false()
+
 ## Lead 21.11. (readability gate): the ground the models stand on - streets, packed earth, garden plots, the decks of yards and tier floors - sits a step below the models' own values.
 func test_the_ground_the_models_stand_on_sits_below_the_models() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
