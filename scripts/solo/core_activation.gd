@@ -228,6 +228,15 @@ static func shot_feats_of(gu: GameUnit) -> Array:
 	return out
 
 
+## The once-per-game Takedown bonus attacks `gu` carries (Takedown-primitive entries with `uses_per_game`), by their raw names.
+static func takedown_feats_of(gu: GameUnit) -> Array:
+	var out: Array = []
+	for e in RulesRegistry.unit_rules_of_primitive(gu, "Takedown"):
+		if int(((e as Dictionary).get("params", {}) as Dictionary).get("uses_per_game", 0)) > 0:
+			out.append(str((e as Dictionary)["name"]))
+	return out
+
+
 static func _ignore_flag(rule_name: String) -> String:
 	return "ignore_feat_used_%s" % rule_name.to_snake_case()
 
@@ -1793,6 +1802,11 @@ static func _land_feats(main, gu: GameUnit, d: Dictionary) -> void:
 				continue
 			main._sync_unit_property(gu, flag, true)
 			main._log_rule_event(BattleLog.Category.COMBAT, "%s: %s spends its once-per-game feat on this attack" % [name, gu.get_name()], true)
+			continue
+		# Coverage ledger m2 (gf_811): the once-per-game Takedown bonus attack (Takedown Shot / Strike) closes the table's own latch
+		# (main.gd `_solo_takedown_bonus_groups`, raw rule name); the core's volley already named the extra attack, so no second line.
+		if takedown_feats_of(gu).has(str(name)):
+			main._sync_unit_property(gu, "takedown_bonus_used_%s" % str(name), true)
 			continue
 		push_error("CoreActivation.land_delta: %s spent the feat %s, which no table flag closes yet" % [gu.get_name(), name])
 
