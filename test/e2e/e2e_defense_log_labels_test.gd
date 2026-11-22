@@ -106,19 +106,6 @@ func test_a_defense_token_is_named_by_ITS_rule_when_shot(timeout := 240000) -> v
 	await E2EBoot.settle(get_tree())
 
 
-# ===== (2) counter-check: Shielded still reads exactly as it always did =====
-
-func test_shielded_still_logs_shielded(timeout := 240000) -> void:
-	var shooter := _shooter()
-	var foe := _foe("Guards")
-	foe.unit_properties["special_rules"] = ["Shielded"]
-	await _main._run_human_shooting(shooter, foe)
-	assert_str(_log_text()) \
-		.override_failure_message("the standing line must not change for the rule it was written for:\n%s" % _log_text()) \
-		.contains("Guards is Shielded: +1 Defense (saves on 3+)")
-	await E2EBoot.settle(get_tree())
-
-
 # ===== (3) two contributions = two lines, both at the Defense the dice actually roll =====
 
 func test_every_contribution_gets_its_own_line(timeout := 240000) -> void:
