@@ -90,7 +90,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
         run: |
-          if [ "$EVENT" = "pull_request" ] && [ "$BASE_REF" = "ci3270/proof-base" ] && python3 tools/ci_path_classes.py --pr-is-only look; then
+          if [ "$EVENT" = "pull_request" ] && [ "$BASE_REF" = "ci3270/proof-base-gate" ] && python3 tools/ci_path_classes.py --pr-is-only look; then
             echo "look_only=true" >> "$GITHUB_OUTPUT"
           else
             echo "look_only=false" >> "$GITHUB_OUTPUT"
@@ -456,7 +456,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --quiet pytest
-          python3 -m pytest tools/ci_triggers_test.py -q
+          python3 -m pytest tools/ci_triggers_test.py tools/ci_dev_view_gate_test.py -q
           python3 -m pytest tools/shard_assign_test.py tools/ci_rust_paths_test.py tools/table_census_test.py tools/ci_all_required_test.py tools/ci_run_shard_group_test.py -q
           python3 -m pytest tools/ci_path_classes_test.py tools/ci_look_lane_test.py -q
 
