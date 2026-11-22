@@ -18,6 +18,8 @@ const TABLE_OVERLAY_GROUP := "table_overlay"
 ## The table's ground scatter (tufts, leaves, straw) is off on the board AND round it, whatever the table size: no biome dressing
 ## while a generated board is on the table (a board is the whole playing surface; the rest of the table is its frame).
 const SCATTER_OFF_M := 3.0
+## The start view over a generated board, as a share of the table diagonal (the table alone: 0.95; decision D-TEX3).
+const VIEW_FACTOR := 0.70
 ## The table's ground relief (mounds, 7 mm ridges along terrain walls) is lifted flat under the board plus this margin (two cells of the relief mesh): the board's skin is 1 mm thick.
 const RELIEF_MARGIN_M := 0.03
 const INCHES_TO_METERS := 0.0254
@@ -378,6 +380,21 @@ func _ready() -> void:
 		graphics.settings_applied.connect(_on_settings_applied)
 	_apply_detail()
 	_attach_surfaces()
+	_frame_view(true)
+
+
+## A generated board is the whole battlefield: the start view comes closer, 0.70 x the table diagonal instead of 0.95 (texture plan step 10, decision D-TEX3), when it arrives and
+## after every reset of the view while it stays (the camera keeps the factor); the table's own factor comes back when it leaves.
+func _frame_view(on: bool) -> void:
+	var table := get_parent()
+	var main := table.get_parent() if table != null else null   # (the scene, as BoardgenMood finds it)
+	var pivot: Variant = main.get("camera_pivot") if main != null else null
+	if not (pivot is Node3D) or not ("table_view_factor" in pivot):
+		return
+	pivot.table_view_factor = VIEW_FACTOR if on else pivot.TABLE_VIEW_FACTOR
+	var feet: Variant = table.get("table_size")
+	if on and feet is Vector2:
+		pivot.adjust_for_table_size(feet)
 
 
 func _dusk_again(lighting: Object) -> void:
@@ -387,6 +404,7 @@ func _dusk_again(lighting: Object) -> void:
 
 func _exit_tree() -> void:
 	_scatter_off(Rect2())
+	_frame_view(false)
 	if _atmosphere != null and is_instance_valid(_atmosphere):
 		for c: Dictionary in _atmosphere.atmosphere_changed.get_connections():
 			if (c["callable"] as Callable).get_object() == self:

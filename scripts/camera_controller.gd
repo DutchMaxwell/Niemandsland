@@ -18,6 +18,10 @@ var _current_zoom: float = 10.0  # Default zoom distance
 var _pitch: float = -45.0  # degrees
 var _yaw: float = 0.0  # degrees
 var _target_position: Vector3 = Vector3.ZERO
+## The start view's distance as a share of the table diagonal (adjust_for_table_size). A generated board sets its own while it is on the table (BoardgenGreybox,
+## texture plan step 10 / D-TEX3), so every reset of the view keeps it.
+const TABLE_VIEW_FACTOR := 0.95
+var table_view_factor := TABLE_VIEW_FACTOR
 var _is_rotating: bool = false
 var _is_panning: bool = false
 var _last_mouse_pos: Vector2 = Vector2.ZERO
@@ -335,8 +339,9 @@ func get_zoom() -> float:
 
 ## Adjust camera for table size
 ## @param table_size_feet: Table dimensions in feet
-func adjust_for_table_size(table_size_feet: Vector2) -> void:
+## @param factor: the start distance as a share of the table diagonal; <= 0 = `table_view_factor` (0.95, or a generated board's while it is on the table)
+func adjust_for_table_size(table_size_feet: Vector2, factor := -1.0) -> void:
 	var table_diagonal_feet = table_size_feet.length()
 	var table_diagonal_meters = table_diagonal_feet * 0.3048
-	var target_zoom = table_diagonal_meters * 0.95
+	var target_zoom = table_diagonal_meters * (factor if factor > 0.0 else table_view_factor)
 	set_zoom(target_zoom)
