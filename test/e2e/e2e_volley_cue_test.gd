@@ -58,18 +58,6 @@ func _arm(attacker: GameUnit, rules: Array[String]) -> void:
 	attacker.source_data = src
 
 
-## The table's own call for the Indirect case: hand-built shots (see the case).
-func _shots(attacker: GameUnit, rules: Array[String]) -> Array:
-	var w := OPRApiClient.OPRWeapon.new()
-	w.name = "Rifle"
-	w.range_value = 24
-	w.attacks = 1
-	w.count = attacker.models.size()
-	w.special_rules = rules
-	return [{"member": attacker, "quality": attacker.get_quality(), "alive": attacker.get_alive_count(),
-		"max": attacker.models.size(), "reach": 24, "profile": AiShooting.profiles_in_range([w], 0.0)[0]}]
-
-
 ## The game's own call: the core door takes the volley (the board is captured first).
 func _door_volley(shooters: GameUnit) -> void:
 	_main.solo_controller.ai_slot = 1
@@ -137,9 +125,8 @@ func test_a_blocked_model_draws_no_tracer(timeout := 240000) -> void:
 func test_indirect_fire_draws_no_tracer(timeout := 240000) -> void:
 	var shooters := _unit(1, "Mortars", [Vector3(0, 0, 0)])
 	var target := _unit(2, "Mark", [Vector3(0, 0, 10 * INCH)])
-	# STAYS ON THE TABLE (UI gap of the door, listed for the resolver deletion): the core door draws one tracer for an Indirect
-	# weapon, the table draws none (its sight is waived, a line would cross whatever stands in the way).
-	await _main._solo_resolve_ai_volley(shooters, target, _shots(shooters, ["Indirect"] as Array[String]), false)
+	_arm(shooters, ["Indirect"] as Array[String])
+	await _door_volley(shooters)
 	assert_str(_main.battle_log.entries().map(func(e): return str(e["text"])).reduce(func(a, b): return a + b, "")) \
 		.override_failure_message("fixture: the indirect weapon must fire").contains("Rifle")
 	assert_int(_main.volley_cue.get_child_count()).is_equal(0)
