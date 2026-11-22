@@ -170,74 +170,166 @@ use super::*;
         shot.log.iter().any(|l| l == "Reanimation: 1 success but no placeable spot — coherency missing")
     }
 
-    /// The covfix2-dice container: at 95 the model stands inside it (`pin95_a_revive_lands_in_a_container` is the
-    /// red), at 96 it is not restored and the line says so. Planted: the open board restores at 96 too.
+    /// The restored model `k` (slot order) on `t`: whole base on the table, no rest refusal, not over or against a house,
+    /// clear of every other standing base, and within 1 in (edge to edge) of one of `originals` (world inches, 32 mm bases).
+    fn legal_and_coherent(t: &crate::terrain::Terrain, next: &State, k: usize, originals: &[[f64; 2]]) -> bool {
+        let (p, r) = (next.positions[0][k], next.radii[0][k]);
+        let on_table = p[0].abs() + r <= 36.0 * IN2M && p[2].abs() + r <= 24.0 * IN2M;
+        let clear = (0..next.units()).all(|u| next.positions[u].iter().enumerate().all(|(j, q)| {
+            (u == 0 && j == k) || (q[0] - p[0]).hypot(q[2] - p[2]) >= r + next.radii[u][j] + 0.0009
+        }));
+        let coherent = originals.iter().any(|o| (o[0] * IN2M - p[0]).hypot(o[1] * IN2M - p[2]) - r - 0.016 <= IN2M + 1e-9);
+        on_table && clear && coherent && !rest_bad(t, p, r) && !t.solid_at(p[0] / IN2M, p[2] / IN2M)
+    }
+
+    /// The covfix2-dice container: at 95 the model stands inside it (`pin95_a_revive_lands_in_a_container` is the red),
+    /// at 96 the ring finds a legal spot outside it.
     #[test]
     fn a_revive_never_lands_in_a_container() {
         let (st, statics) = rean_line(4, 1, &L3);
-        let (next, shot) = rean_run(&st, &statics, &container_board(true), E96, 1, false);
-        assert_eq!(next.alive[0], 3, "{:?}", shot.log);
-        assert!(refused(&shot), "rules-must-log: {:?}", shot.log);
-        let (open, shot) = rean_run(&st, &statics, &container_board(false), E96, 1, false);
-        assert_eq!(open.alive[0], 4, "planted: {:?}", shot.log);
+        let t = container_board(true);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, 1, false);
+        assert_eq!(next.alive[0], 4, "{:?}", shot.log);
+        assert!(legal_and_coherent(&t, &next, 0, &L3), "{:?}", next.positions[0][0]);
     }
 
-    /// The town house: at 96 no revive over a solid cell; planted: the same board without it restores.
+    /// The town house (`pin95_a_revive_lands_in_a_house` is the red): at 96 the spot is off the solid cell.
     #[test]
     fn a_revive_never_lands_in_a_house() {
         let (st, statics) = rean_line(4, 1, &L3);
-        let (next, shot) = rean_run(&st, &statics, &town_board(vec![cell_at(3.34, 4.5)]), E96, 1, false);
-        assert_eq!(next.alive[0], 3, "{:?}", shot.log);
-        assert!(refused(&shot), "rules-must-log: {:?}", shot.log);
-        let (open, _) = rean_run(&st, &statics, &town_board(vec![]), E96, 1, false);
-        assert_eq!(open.alive[0], 4, "planted");
+        let t = town_board(vec![cell_at(3.34, 4.5)]);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, 1, false);
+        assert_eq!(next.alive[0], 4, "{:?}", shot.log);
+        assert!(legal_and_coherent(&t, &next, 0, &L3), "{:?}", next.positions[0][0]);
+        let w = t.solid_walls_world_m();
+        let p = next.positions[0][0];
+        assert!(w.iter().all(|s| crate::mv::geom2::point_seg_distance([p[0] as f32, p[2] as f32], s[0], s[1]) >= 0.016 + 0.001), "clear of the house walls");
     }
 
-    /// The whole base stays on the table: at 95 the one spot hangs over the east edge, at 96 it is refused.
+    /// The whole base stays on the table: at 95 the one spot hangs over the east edge, at 96 the ring stays on.
     #[test]
     fn a_revive_never_leaves_the_table() {
-        let edge = [[33.5, 3.5], [33.5, 5.5], [34.5, 4.5]]; // the one spot is at 35.84 in, its base reaches 36.47 > 36
+        let edge = [[33.5, 3.5], [33.5, 5.5], [34.5, 4.5]]; // the 95 spot is at 35.84 in, its base reaches 36.47 > 36
         let (st, statics) = rean_line(4, 1, &edge);
         let (old, _) = rean_run(&st, &statics, &town_board(vec![]), 95, 1, false);
-        assert_eq!(old.alive[0], 4, "red: at 95 the base hangs over the table edge");
-        let (next, shot) = rean_run(&st, &statics, &town_board(vec![]), E96, 1, false);
-        assert_eq!(next.alive[0], 3, "{:?}", shot.log);
-        assert!(refused(&shot), "{:?}", shot.log);
+        assert!(old.positions[0][0][0] + 0.016 > 36.0 * IN2M, "red: at 95 the base hangs over the table edge");
+        let t = town_board(vec![]);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, 1, false);
+        assert_eq!(next.alive[0], 4, "{:?}", shot.log);
+        assert!(legal_and_coherent(&t, &next, 0, &edge), "{:?}", next.positions[0][0]);
     }
 
-    /// Own bases count at 96: the candidate on a unit mate is refused (at 95 they stack, see the fact pin).
+    /// Own bases count at 96 (at 95 they stack, `pin95_a_revive_can_stack_on_its_own_unit`).
     #[test]
     fn a_revive_never_stacks_on_its_own_unit() {
         let own = [[1.0, 3.5], [1.0, 5.5], [2.0, 4.5], [2.0 + 0.034 / IN2M, 4.5]];
         let (st, statics) = rean_line(5, 1, &own);
-        let (next, shot) = rean_run(&st, &statics, &town_board(vec![]), E96, 1, false);
-        assert_eq!(next.alive[0], 4, "{:?}", shot.log);
-        assert!(refused(&shot), "{:?}", shot.log);
+        let t = town_board(vec![]);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, 1, false);
+        assert_eq!(next.alive[0], 5, "{:?}", shot.log);
+        assert!(legal_and_coherent(&t, &next, 0, &own), "{:?}", next.positions[0][0]);
     }
 
     /// Difference 5: at 96 the returning model keeps its unit's own base radius; at 95 the default is pinned.
     #[test]
     fn a_restored_model_keeps_its_own_base() {
-        let (mut st, mut statics) = rean_line(4, 1, &L3);
+        let (mut st, mut statics) = rean_line(4, 1, &[[0.0, 0.0], [-2.0, 0.0], [-4.0, 0.0]]);
         st.radii = Rc::new(vec![vec![0.025; 3], vec![0.016], vec![0.016], vec![0.016]]);
         statics[0].base_radius = 0.025;
         let (next, _) = rean_run(&st, &statics, &town_board(vec![]), E96, 1, false);
         assert_eq!(next.alive[0], 4);
         assert_eq!(next.radii[0][0], 0.025);
-        let b = next.positions[0][0];
-        assert!(((b[0] - 2.0 * IN2M) - (0.025 + 0.025 + 0.002)).abs() < 1e-9, "the spot uses the real radius: {b:?}");
+        assert_eq!(next.positions[0][0], [0.025 + 0.025 + 0.002, 0.0, 0.0], "anchor 0, gap 2 mm, +X, with the real radius");
         let (old, _) = rean_run(&st, &statics, &town_board(vec![]), 95, 1, false);
         assert_eq!(old.radii[0][0], DEFAULT_BASE_RADIUS_M, "95 pin");
     }
 
-    /// The guard draws no die: the same state at 95 and 96 on the open board ends in the same state, log and roll faces,
-    /// and an unrelated unit's whole activation is untouched (its digest is identical at both epochs).
+    // ------------- Step 2: the ring search ---------------------------------------------------------------------------
+
+    /// Plain board: anchor 0, gap 2 mm, heading +X. A small foe base that blocks only that spot: heading k = 1.
     #[test]
-    fn revive_spot_changes_nothing_on_an_open_board_and_draws_no_die() {
+    fn the_ring_takes_the_first_free_heading() {
+        let line = [[0.0, 0.0], [-1.5, 0.0]];
+        let (st, statics) = rean_line(3, 1, &line);
+        let d = 0.016 + 0.016 + 0.002;
+        let (next, _) = rean_run(&st, &statics, &town_board(vec![]), E96, 1, false);
+        assert_eq!(next.positions[0][0], [d, 0.0, 0.0]);
+        let mut foe = st.clone();
+        foe.positions[2] = vec![[d + 0.012, 0.0, -0.004]]; // 12.6 mm from k = 0, 22.4 mm from k = 1
+        Rc::make_mut(&mut foe.radii)[2] = vec![0.001];
+        let (next, _) = rean_run(&foe, &statics, &town_board(vec![]), E96, 1, false);
+        let a = std::f64::consts::TAU / 16.0;
+        let p = next.positions[0][0];
+        assert!((p[0] - a.cos() * d).abs() < 1e-12 && (p[2] - a.sin() * d).abs() < 1e-12, "{p:?}");
+    }
+
+    /// Two successes: the second model never anchors on the first - both stand within 1 in of an ORIGINAL model, and
+    /// the second takes anchor 0's next free heading (k = 3), not a spot beside the first.
+    #[test]
+    fn a_restored_model_is_no_anchor() {
+        let line = [[0.0, 0.0], [-1.5, 0.0]];
+        let (st, statics) = rean_line(4, 1, &line);
+        let t = town_board(vec![]);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, 1, false);
+        assert_eq!(next.alive[0], 4, "{:?}", shot.log);
+        assert!(legal_and_coherent(&t, &next, 0, &line) && legal_and_coherent(&t, &next, 1, &line));
+        let (d, a) = (0.034, 3.0 * std::f64::consts::TAU / 16.0);
+        let p = next.positions[0][0];
+        assert!((p[0] - a.cos() * d).abs() < 1e-12 && (p[2] - a.sin() * d).abs() < 1e-12, "{p:?}");
+    }
+
+    /// Nowhere legal: the lone anchor's 32 ring spots are all taken by foe bases - nobody returns, the line is logged.
+    /// Planted: the same board without the ring of foes restores.
+    #[test]
+    fn no_legal_spot_restores_nobody() {
+        let (mut st, statics) = rean_line(2, 1, &[[0.0, 0.0]]);
+        let mut ring = Vec::new();
+        for gap in [0.002, 0.5 * IN2M + 0.002] {
+            for k in 0..16 {
+                let a = std::f64::consts::TAU * f64::from(k) / 16.0;
+                ring.push([a.cos() * (0.032 + gap), 0.0, a.sin() * (0.032 + gap)]);
+            }
+        }
+        let planted = st.clone();
+        st.positions[2] = ring.clone();
+        st.wounds[2] = vec![1; ring.len()];
+        Rc::make_mut(&mut st.radii)[2] = vec![0.001; ring.len()];
+        let (next, shot) = rean_run(&st, &statics, &town_board(vec![]), E96, 1, false);
+        assert_eq!(next.alive[0], 1, "{:?}", shot.log);
+        assert!(refused(&shot), "rules-must-log: {:?}", shot.log);
+        assert_eq!(rean_run(&planted, &statics, &town_board(vec![]), E96, 1, false).0.alive[0], 2, "planted");
+    }
+
+    /// Ruling 4a: a host with no standing model and a standing joined hero that carries the rule (the Aura reaches
+    /// "this model and its unit") - the hero anchors, the host's casualties come back (at 95: none, see the pin).
+    /// Plain Reanimation on the host only and a hero WITHOUT it: the hero is not a Reanimation member, so it anchors
+    /// nobody and nothing returns - the table's `reanimation_members`.
+    #[test]
+    fn a_standing_joined_hero_with_the_rule_anchors_the_host() {
+        let (mut st, mut statics) = rean_line(2, 1, &[]);
+        st.attached = Rc::new(vec![vec![1], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, Some(0), None, None]);
+        st.positions[1] = vec![[0.0, 0.0, 0.0]];
+        let mut hero_profile = st.profiles.list[1].clone();
+        hero_profile.unit_id = "ah".into();
+        st.profiles = Rc::new(Profiles { list: vec![st.profiles.list[0].clone(), st.profiles.list[1].clone(), hero_profile], index: HashMap::new() });
+        st.roster = Rc::new(Roster { keys: st.roster.keys.clone(), index: st.roster.index.clone(), profile: vec![0, 2, 1, 1] });
+        statics.push(UnitStatic { name: "hero".into(), reanimation: Some(crate::unit::ReanimationSpec { target: 1 }), ..Default::default() });
+        let (next, shot) = rean_run(&st, &statics, &town_board(vec![]), E96, 1, true);
+        assert_eq!(next.alive[0], 2, "{:?}", shot.log);
+        assert_eq!(next.positions[0][1], [0.034, 0.0, 0.0], "the first one at the hero, gap 2 mm, +X");
+        statics[2].reanimation = None;
+        let (next, shot) = rean_run(&st, &statics, &town_board(vec![]), E96, 1, true);
+        assert_eq!(next.alive[0], 0, "a hero without the rule anchors nobody: {:?}", shot.log);
+    }
+
+    /// The ring draws no die and leaves everything else alone: the Reanimation roll's faces are the same at 95 and 96,
+    /// and an unrelated unit's whole activation is identical at both epochs.
+    #[test]
+    fn revive_spot_draws_no_die_and_leaves_other_units_alone() {
         let (st, statics) = rean_line(4, 1, &L3);
-        let (a, sa) = rean_run(&st, &statics, &town_board(vec![]), 95, 1, false);
-        let (b, sb) = rean_run(&st, &statics, &town_board(vec![]), E96, 1, false);
-        assert_eq!((a.positions.clone(), a.wounds.clone(), sa.log.clone()), (b.positions.clone(), b.wounds.clone(), sb.log.clone()));
+        let (_, sa) = rean_run(&st, &statics, &town_board(vec![]), 95, 1, false);
+        let (_, sb) = rean_run(&st, &statics, &town_board(vec![]), E96, 1, false);
         assert_eq!(sa.rolls.iter().map(|r| r.faces.clone()).collect::<Vec<_>>(), sb.rolls.iter().map(|r| r.faces.clone()).collect::<Vec<_>>());
         let other = |e: u32| {
             let act = Action { kind: HOLD, unit: "b".into(), dest: None, shoot: None, charge: None, patient: false, split: None,
