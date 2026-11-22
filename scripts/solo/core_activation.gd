@@ -1030,8 +1030,12 @@ const MELEE_MAX_MODELS := 10
 
 
 static func takes_ai_charge(main, unit: GameUnit, report: Dictionary) -> bool:
-	return charge_door_enabled() and main._solo_core_ai_h != 0 and main.dice_roller_control != null \
-		and charge_refusals(main, unit, report).is_empty()
+	if not (charge_door_enabled() and main._solo_core_ai_h != 0 and main.dice_roller_control != null):
+		return false
+	var why := charge_refusals(main, unit, report)
+	if why.has("plan_uncached"):
+		print("CoreActivation: %s's charge stays on the table - a melee side's round plan is not built yet, so the door has no consolidation inputs" % unit.get_name())
+	return why.is_empty()
 
 
 ## Plan E (melee shadow): why the charge door's slice refuses this AI charge, by reason ([] = it takes it); the door's own
@@ -1054,6 +1058,10 @@ static func charge_refusals(main, unit: GameUnit, report: Dictionary, deny := fa
 	# "dealt" where the core says "took"): a charge under an older stamp (a replay, a pinned test) stays on the table, as a pre-83 lone hero does for a volley.
 	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
 		out.append("old_epoch")
+	# meleefix (lead call 22.11.): a planned side without this round's plan would get it built on the table's post-fight board, which
+	# the door cannot send before the fight; the charge stays on the table instead of the core guessing (from the plan's epoch on).
+	if AiActRecorder.rules_epoch >= AiActRecorder.PENDING_EPOCH_CONSOLIDATE_PLAN and not main.solo_controller.consolidation_plans_cached([unit, target]):
+		out.append("plan_uncached")
 	return out
 
 
@@ -1067,6 +1075,10 @@ static func run_ai_charge(main, unit: GameUnit, report: Dictionary) -> bool:
 	# No placement: the core's charge move is the landing (lead decision), so the planner's drop is neither checked nor used
 	# (its routes may end where a later separation nudge moved a model, which the core's trail check refuses).
 	var t: Array = [{"t": "begin"}, {"t": "intent", "kind": int(report.get("action", -1)), "charge": target.unit_id}]
+	# meleefix: the winner's 3 in consolidation aims where the table's round planner aims it (core PENDING_EPOCH_CONSOLIDATE_PLAN).
+	t.append(main.solo_controller.consolidation_input(unit))
+	t.append(main.solo_controller.consolidation_input(target))
+	AiActRecorder.consolidate(main.solo_controller.move_act_seq(), t.slice(2))
 	var wounds := [main._solo_unit_wounds_now(unit), main._solo_unit_wounds_now(target), main._solo_combined_alive(target)]
 	main._solo_stage_begin("%s charges %s" % [unit.get_name(), target.get_name()])
 	_charge_landing = true

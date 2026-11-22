@@ -376,6 +376,17 @@ impl NmlCore {
         out
     }
 
+    /// meleefix drift guard: the goal the core's consolidation aims at for `unit` on handle `h` from the planner inputs `plan`
+    /// (`SoloController.consolidation_input`), world metres; `null` = no goal (the unit holds). The table's twin is
+    /// `SoloController.consolidation_goal_of`; a test feeds both the same board.
+    #[func]
+    fn consolidation_goal(&mut self, h: i64, unit: GString, plan: VarDictionary) -> Variant {
+        let (Some(i), Some(plan)) = (self.index(h), actcall::consolidate_of(&plan)) else { return Variant::nil() };
+        let st = &self.slab[i].as_ref().unwrap().cap.state;
+        let Some(&k) = st.roster.index.get(&unit.to_string()) else { return Variant::nil() };
+        nml_core::sim::planned_consolidation_goal(st, k, &plan).map_or(Variant::nil(), |g| Vector3::new(g[0], g[1], g[2]).to_variant())
+    }
+
     /// One-core P3: `unit`'s move allowance on handle `h` at its activation start, `{"advance", "rush", "charge"}` in
     /// inches and `"widened_by"` (the rules that add to the printed band). Empty, with `last_error()` set, for an
     /// unknown handle or unit. A `done` step_activation answer also carries `"delta"` (what changed, per unit).

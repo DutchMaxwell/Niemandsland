@@ -505,7 +505,8 @@ static func melee_begin(main, unit: GameUnit, report: Dictionary) -> void:
 	var deny: Array = CoreActivation.charge_refusals(main, unit, report, true)
 	var why: Array = deny.duplicate() if melee_deny_view() else CoreActivation.charge_refusals(main, unit, report, false)
 	_melee = {"why": why, "deny": deny, "charger": unit.get_name() if unit != null else "", "target": target.get_name() if target != null else "",
-		"rules": {"charger": _rule_labels(unit), "target": _rule_labels(target)}, "lines": []}
+		"rules": {"charger": _rule_labels(unit), "target": _rule_labels(target)}, "lines": [],
+		"consolidate": [unit, target].filter(func(u: GameUnit) -> bool: return u != null).map(main.solo_controller.consolidation_input)}
 	var lines: Array = _melee["lines"]
 	_line_fn = func(e: Dictionary) -> void: lines.append("%s|%s" % [BattleLog.Category.keys()[int(e["category"])], str(e["text"])])
 	main.battle_log.entry_added.connect(_line_fn)
@@ -528,17 +529,18 @@ static func melee_compare(main, unit: GameUnit, report: Dictionary) -> void:
 	var rec := {"charger": m["charger"], "target": m["target"], "taken": (m["why"] as Array).is_empty(),
 		"why": m["why"], "deny": m["deny"], "rules": m["rules"], "equal": false, "first_diff": "", "detail": {}, "core_rolls": []}
 	if rec["taken"]:
-		rec["first_diff"] = _melee_diff(main, unit, report, m["lines"])
+		rec["first_diff"] = _melee_diff(main, unit, report, m["lines"], m["consolidate"])
 		rec["equal"] = rec["first_diff"] == ""
 		rec["detail"] = _detail
 		rec["core_rolls"] = _core_rolls
 	melee_records.append(rec)
 
 
-static func _melee_diff(main, unit: GameUnit, report: Dictionary, table_lines: Array) -> String:
+static func _melee_diff(main, unit: GameUnit, report: Dictionary, table_lines: Array, consolidate: Array = []) -> String:
 	var core: Object = main.solo_controller._core_node_ready()
 	var h := int(main._solo_core_shadow_h)
 	var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.CHARGE, "charge": (report["target"] as GameUnit).unit_id}]
+	t.append_array(consolidate)   # meleefix: the planner inputs taken before the table fought (`melee_begin`)
 	var rolls: Array = tap.filter(func(r: Dictionary) -> bool: return not ["cast", "spell"].has(str(r["leg"])))
 	var r: Dictionary = core.step_activation(h, unit.unit_id, t, false)
 	_detail = {}

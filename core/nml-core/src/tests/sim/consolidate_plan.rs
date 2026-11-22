@@ -209,3 +209,18 @@ fn the_order_check_takes_the_inputs_once_per_unit_between_the_intent_and_the_fir
     assert!(order_check("a", &[Input::Begin, intent.clone(), Input::Faces(vec![4]), c.clone()]).is_err(), "after the first die");
     assert!(order_check("a", &[Input::Begin, intent, c.clone(), c]).is_err(), "twice for one unit");
 }
+
+#[test]
+fn a_holder_in_reserve_an_aircraft_or_a_wiped_unit_holds_nothing() {
+    for (what, set) in [
+        ("in reserve", (|st: &mut State| st.dormant[1] = true) as fn(&mut State)),
+        ("an Aircraft", |st: &mut State| st.aircraft[1] = true),
+        ("wiped", |st: &mut State| { st.alive[1] = 0; }),
+    ] {
+        let mut st = board4();
+        at(&mut st, 1, 0.0, 6.5); // the friend on A
+        assert!(near(goal_in(&st, task("", -1)), [0.0, 0.0, -9.0]), "a live friend holds A: B");
+        set(&mut st);
+        assert!(near(goal_in(&st, task("", -1)), [0.0, 0.0, 6.0]), "a friend {what} holds nothing: A");
+    }
+}
