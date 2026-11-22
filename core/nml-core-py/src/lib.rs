@@ -691,6 +691,15 @@ impl PyTray {
         self.inner.roll(count).into_iter().map(i64::from).collect()
     }
 
+    /// meleefix: the record's `consolidate` line (`plans`, a JSON list of the planner's inputs per melee unit) offered to the
+    /// next resolve, so a replay aims the winner's consolidation where the table did. A malformed list is a ValueError.
+    fn offer_consolidation(&mut self, plans_json: &str) -> PyResult<()> {
+        let v: serde_json::Value = serde_json::from_str(plans_json).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let plans = v.as_array().and_then(|a| a.iter().map(|p| crate::stepcall::consolidate_of(p.as_object()?)).collect::<Option<Vec<_>>>());
+        self.inner.offer_consolidation(plans.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("not a consolidate plan list"))?);
+        Ok(())
+    }
+
     /// `rng.state` of the tray's own generator — the replay checkpoint.
     #[getter]
     fn state(&self) -> i64 {

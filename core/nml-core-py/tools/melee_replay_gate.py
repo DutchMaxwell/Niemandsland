@@ -164,6 +164,33 @@ def consol_marker(plain: dict, action: dict, nxt: dict | None) -> dict:
     return dict(plain, objectives=list(plain["objectives"]) + [{"owner": 0, "pos": [c[0], 0.0, c[1]]}])
 
 
+def read_consolidate(d: Path) -> dict[int, list]:
+    """{activation ordinal: [planner inputs per melee unit]} from the `kind:"consolidate"` lines of acts.jsonl (meleefix, epoch 96+),
+    keyed by THIS gate's ordinal (`read_game`: the interleaved position of the act / auto lines) of the activation the line was written
+    in - the last act / auto line before it. The line's own `act` is the recorder's ordinal, which an arena record can number one
+    apart from the interleaved position (lane meleefix, 22.11.), so it is not used for the join."""
+    out: dict[int, list] = {}
+    pos = 0
+    for x in (d / "acts.jsonl").read_text().splitlines()[1:]:
+        r = json.loads(x) if x.strip() else {}
+        if r.get("kind") in ("act", "auto"):
+            pos += 1
+        elif r.get("kind") == "consolidate":
+            out[pos] = r["plans"]
+    return out
+
+
+def consol_same(got: dict, want: dict | None, keys: list[str]) -> bool | None:
+    """The winner's centroid on the replayed state against the recorded next act (0.01 in) when one melee unit was wiped and the
+    other survived on both sides; None = no such act."""
+    gu, wu = got.get("units") or {}, (want or {}).get("units") or {}
+    alive = [k for k in keys if int((gu.get(k) or {}).get("alive", 0)) > 0]
+    if len(keys) != 2 or len(alive) != 1 or int((wu.get(alive[0]) or {}).get("alive", 0)) <= 0:
+        return None
+    c = [[sum(p[i] for p in x["positions"]) / len(x["positions"]) for i in (0, 2)] for x in (gu[alive[0]], wu[alive[0]])]
+    return abs(c[0][0] - c[1][0]) < 0.01 * IN2M and abs(c[0][1] - c[1][1]) < 0.01 * IN2M
+
+
 def legged(got: list[tuple], want: list[tuple]) -> list[tuple]:
     """`got` where a roll that is the SAME die as the table's carries the table's recorded `leg` (the core's rolls have none)."""
     return [g + want[i][5:] if i < len(want) and g == want[i][:5] else g for i, g in enumerate(got)]
@@ -207,8 +234,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
               "both_silent", "table_silent", "port_silent", "shape", "faces", "declined",
               "rolls", "rolls_equal", "hits", "hits_equal", "next_checked", "next_equal",
               "equal_over_2", "equal_dice_max", "morale_equal", "morale_table_only",
-              "morale_port_only", "morale_other", "morale_none")}
+              "morale_port_only", "morale_other", "morale_none", "consol_equal", "consol_differ")}
     unported: dict[str, int] = {}
+    consol_lines = 0
     reasons: dict[str, int] = {}
     firsts: list[str] = []
     warns: list[str] = []
@@ -220,6 +248,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         head, lines, dice, seed = read_game(d)
         burn = burn_prefix(dice)
         pres = read_pre(d)
+        consols = read_consolidate(d)
+        consol_lines += len(consols)
         core = nml_core.load(repo)
         # D5-2: the charge move routes around the board's WALLS, and the act
         # corpus carried none before rung D5-2a. Without them the port would
@@ -271,9 +301,12 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
             # AI-G4 H1b: the table's cast/spell legs are cut, their dice burned, the state patched (see shoot_replay_gate).
             rolls_k = [r for r in dice[i0:] if int(r["act"]) == k]
             rolls_cut, pre_burn, plain = cut_pre_legs(rolls_k, act["state"], pres.get(k))
-            if consol_on:  # G4R6 R21: the core consolidates where the table's consolidation landed
-                plain = consol_marker(plain, action, lines[pos + 1]["state"] if pos + 1 < len(lines) else None)
+            nxt_rec = lines[pos + 1]["state"] if pos + 1 < len(lines) else None
+            if consol_on and k not in consols:  # G4R6 R21: the core consolidates where the table's consolidation landed
+                plain = consol_marker(plain, action, nxt_rec)
             tray = nml_core.Tray(seed + 1 if mode == "misseed" else seed)
+            if k in consols:  # meleefix (96): the recorded planner inputs, so the core aims where the table aimed
+                tray.offer_consolidation(json.dumps(consols[k]))
             if burn[i0] + pre_burn:
                 tray.roll(burn[i0] + pre_burn)
             dang_off = cut_dangerous(rolls_k, rolls_cut)
@@ -292,6 +325,10 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
             finally:
                 if dang_off:
                     core.set_header(header)
+            if k in consols:
+                same = consol_same(nxt.plain(), nxt_rec, [str(action["unit"]), str(action["charge"])])
+                if same is not None:
+                    tally["consol_equal" if same else "consol_differ"] += 1
             for name in report["unported"]:
                 unported[name] = unported.get(name, 0) + 1
             got = [(r["kind"], r["count"], r["target"], r["faces"], "AI (%s)" % r["owner"])
@@ -434,6 +471,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
           "%d other, %d neither"
           % (tally["morale_equal"], tally["morale_table_only"], tally["morale_port_only"],
              tally["morale_other"], tally["morale_none"]))
+    print("  consol: %d equal, %d differ (winner end centroid vs the next act, 0.01\", acts with a recorded consolidate line)"
+          % (tally["consol_equal"], tally["consol_differ"]))
     print("  parted: %d shape, %d faces, %d declined" % (tally["shape"], tally["faces"],
                                                          tally["declined"]))
     print("  first field to part: %s"
@@ -470,6 +509,10 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
     # Both sides drawing NOTHING is agreement, not a missing verdict.
     ok = (tally["acts"] > 0
           and tally["full_equal"] + tally["both_silent"] == tally["acts"])
+    if consol_lines and tally["consol_equal"] + tally["consol_differ"] == 0:
+        # meleefix: recorded consolidation inputs that no compared act used - the join or the bar is broken, never a pass.
+        print("  FAIL — %d recorded consolidate line(s), none compared (consol 0/0)" % consol_lines)
+        return 1
     # AI-G4 F-PRINT: the printed number leaves the both-silent acts out, like the pass formula does.
     short = tally["acts"] - tally["full_equal"] - tally["both_silent"]
     if report_only:
