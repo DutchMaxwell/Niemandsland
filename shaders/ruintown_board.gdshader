@@ -80,6 +80,8 @@ bool use_frame(vec2 uv, float wood, inout vec3 ratio, inout vec3 tn) {
 // The ground's floor (silhouette round 21.11., maintainer: "too dark"): the streets and the packed earth sit below the models' own values (readability gate) but no longer near black.
 const float GROUND_COBBLE = 0.66;   // (townC4: 0.7 -> 0.66, the street ground sat on its luma bar) was 0.42 (train 2: the lamp pools shrank, the moon carries the street now), 0.27 before
 const float GROUND_EARTH = 0.55;   // was 0.32
+const float DECK_KEEP_HUE = 0.15;   // (townC4) how much of the boards' own warm hue survives the weather
+const float DECK_LIFT = 1.12;
 const float COVER_CUT = 0.58;   // the fbm level above which the earth is overgrown (~25 % of the earth; plan TARGET C, E2)
 varying vec3 wpos;
 varying vec3 wnrm;
@@ -442,6 +444,9 @@ void fragment() {
 			rough = 0.82;
 			alb = tint * mix(0.72, 1.05, h21(vec2(floor(xz.x / 2.2), floor(xz.y / BOARD_W) + seed))) * mix(0.8, 1.0, mix(1.0, seam(xz.y, BOARD_W, 0.018), keep(xz.y, BOARD_W))) * mix(0.84, 1.0, smoothstep(0.35, 0.6, fbm(xz * 0.9 + seed))) * grid;
 			alb *= 0.5;   // the decks the models stand on (the deployment bands' yards, the tier floors) sit a step below the models' own values (readability gate)
+			// (townC4, play camera: the brown decks were the board's largest warm area, 16 % warm vs C's 5 %) weathered silver-grey boards, a little paler, dirt in the gaps
+			alb = mix(vec3(dot(alb, vec3(0.3, 0.55, 0.15))), alb, DECK_KEEP_HUE) * DECK_LIFT;
+			alb = mix(alb, vec3(0.07, 0.068, 0.06), 0.5 * (1.0 - seam(xz.y, BOARD_W, 0.018)) * keep(xz.y, BOARD_W));   // dirt in the gaps
 			if (k != 8 && box_in.x > 0.0) {   // A BROKEN FLOOR (plan R6): inside the 0.75 in edge strip of the tier, and only where the edge is the lot's outer edge, boards are missing and the joists show; the middle stays solid
 				vec2 e2 = box_in.xz * 0.5 - abs(lpos.xz);
 				bool nx = e2.x < e2.y;
@@ -477,7 +482,7 @@ void fragment() {
 			vec2 fc = vec2(floor(fx / fl_l), frow);
 			vec2 fp = vec2(fract(fx / fl_l) * fl_l, fract(xz.y / 0.45) * 0.45);   // inches inside the flag
 			vec3 tone = mix(vec3(1.0), grit_stone_tone(h21(fc + seed + 41.0)), 0.5);   // (half the wall's spread: a flag floor, not a chequerboard)
-			alb = mix(vec3(dot(alb, vec3(0.3, 0.55, 0.15))), alb, 0.55) * tone * vec3(0.55, 0.52, 0.48);
+			alb = mix(vec3(dot(alb, vec3(0.3, 0.55, 0.15))), alb, 0.35) * tone * vec3(0.53, 0.52, 0.51);   // (townC4: greyer - the warm tops were a third of the play camera's warm share; was 0.55 / (0.55, 0.52, 0.48))
 			float joint = 1.0 - smoothstep(0.08, 0.45, rel);
 			float mossy = step(0.72, vnoise(xz * 0.7 + seed * 3.0));
 			alb = mix(alb, mossy > 0.5 ? vec3(0.07, 0.09, 0.05) : vec3(0.07, 0.06, 0.05), 0.75 * joint * keep(xz.y, 0.45));
