@@ -3,7 +3,7 @@
 # (tools/boardgen/bg_capture_town.gd, `baseline=1`), REPEATS times, for every yaw and preset. Rows are summarised by tools/boardgen/gate_rows.py.
 #
 #   TAG=after PROJECT=/path/to/worktree tools/boardgen/gate_run.sh          # the town under test
-#   TAG=base  PROJECT=/path/to/worktree-of-the-plain-table-commit tools/boardgen/gate_run.sh      # the baseline (same instrument, same seeds)
+#   TAG=base  PROJECT=/path/to/worktree EXTRA=board=none tools/boardgen/gate_run.sh   # the baseline: the same spots on the bare table (gate change 22.11.)
 #   python3 tools/boardgen/gate_rows.py OUT after base                      # the rows; exit 1 when a row is under the bar
 #
 # Environment: PROJECT (default .), GODOT (the binary, default godot; needs a real display), OUT (default ./gate_out), SEEDS (default 11,13,17,19,23,29,31,37,41,43),
@@ -27,7 +27,7 @@ for yaw in $YAWS; do
     dir="$OUT/${TAG}_y${yaw}_r${r}"
     rm -rf "$dir"
     for attempt in 1 2 3 4 5; do   # a display that is busy or a Godot cap: try again
-      "$GODOT" --path "$PROJECT" -s "$HERE/bg_capture_town.gd" -- "$dir" baseline=1 only=play "presets=$PRESETS" "seeds=$SEEDS" "yaw=$yaw" $EXTRA > "$OUT/${TAG}_y${yaw}_r${r}.log" 2>&1
+      "$GODOT" --path "$PROJECT" -s "$HERE/bg_capture_town.gd" -- "$dir" baseline=1 only=play $([ "$yaw" = "${YAWS%% *}" ] && echo views=4) "presets=$PRESETS" "seeds=$SEEDS" "yaw=$yaw" $EXTRA > "$OUT/${TAG}_y${yaw}_r${r}.log" 2>&1
       [ -f "$dir/manifest.json" ] && break
       sleep 10
     done

@@ -34,6 +34,9 @@ var _gate: Array = []
 var _cur_layout: Dictionary = {}
 var _cur_board: Node3D = null
 var _only: Array = []
+var _kit := ""   # kit=on|off (gate change 22.11.): on = the staged town kit from NML_RUINTOWN_KIT_DIR / _LIB_DIR (the look lanes' sheets), off = those unset (what players get today)
+var _views4 := false   # views=4 (lead 22.11.): also the best visible share over the four quarter turns of the game camera - hidden from every view is a defect
+var _no_board := false   # board=none: the plain base of the gate - the pawns on the bare capture table (same spots, at table height), the board hidden
 var _play_yaw := 0.0   # yaw= : the play camera's yaw in degrees (0 = the default player's side, 180 = the opposite player's side)
 var _presets: Array = [2, 4, 1]   # presets=medium,ultra,low : the baseline mode's quality presets
 var _models: Array[Node3D] = []
@@ -81,6 +84,12 @@ func _run() -> void:
 			_town_sky = true
 		elif a == "table=1":
 			_real_table = true
+		elif a.begins_with("kit="):
+			_kit = a.trim_prefix("kit=")
+		elif a == "views=4":
+			_views4 = true
+		elif a == "board=none":
+			_no_board = true
 		elif a.begins_with("yaw="):
 			_play_yaw = float(a.trim_prefix("yaw="))
 		elif a.begins_with("presets="):
@@ -90,6 +99,12 @@ func _run() -> void:
 		elif a.begins_with("grit_debug="):
 			_grit_debug = int(a.trim_prefix("grit_debug="))
 	DirAccess.make_dir_recursive_absolute(_out)
+	if _kit == "off":
+		OS.unset_environment("NML_RUINTOWN_KIT_DIR")
+		OS.unset_environment("NML_RUINTOWN_LIB_DIR")
+	elif _kit == "on" and OS.get_environment("NML_RUINTOWN_KIT_DIR").is_empty():
+		_fail("kit=on needs NML_RUINTOWN_KIT_DIR and NML_RUINTOWN_LIB_DIR")
+		return
 	change_scene_to_file("res://scenes/main.tscn")
 	await process_frame
 	await process_frame
@@ -230,8 +245,10 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 	_cur_board = board
 	for _i in 60:
 		await process_frame
-	print("BOARD %s decals %d life %d" % [tag, board.find_children("*", "Decal", true, false).size(), board.find_children("*", "GPUParticles3D", true, false).size()])
+	_manifest["kit_drawn"] = board.get_node_or_null("TownKit") != null   # the town kit's modules on this board (else the procedural fallback)
+	print("BOARD %s decals %d life %d kit %s" % [tag, board.find_children("*", "Decal", true, false).size(), board.find_children("*", "GPUParticles3D", true, false).size(), _manifest["kit_drawn"]])
 	var armies := _place_armies(board, layout)
+	board.visible = not _no_board
 	if _want("overview"):
 		_pose(STILL_YAW, -45.0, ZOOM)
 		await _still(tag, "overview45")
@@ -244,6 +261,7 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 		_pose(_play_yaw, PLAY_PITCH, PLAY_ZOOM)
 		await _still(tag, "play")
 		if _baseline:
+			_game_pose()
 			await _readability(tag, _suffix)
 			if _gate_test:
 				await _gate_self_test()
@@ -600,8 +618,21 @@ func _readability(tag: String, pname: String) -> void:
 	for sc: float in scores:
 		low += 1 if sc < 1.0 else 0
 	var n_hidden := shares.size() - scores.size()
+	var best := {}
+	for turn in ([90.0, 180.0, 270.0] if _views4 else []):
+		var pivot: Node = _main.get_node("CameraPivot")
+		pivot._yaw = _play_yaw + turn
+		pivot._apply_camera_transform()
+		var v2 := await _visibility(shown, await _gate_frame())
+		for m: Node3D in shown:
+			best[m] = maxf(best.get(m, vis["share"][m]), v2["share"][m])
+	var pockets: Array = []   # [cell x, cell z] of every pawn hidden from all four views (gate_rows: ticket POCKETS)
+	for m: Node3D in (shown if _views4 else []):
+		var at := (m.global_position - _cur_board.global_position) / IN
+		if best[m] < VIS_MIN:
+			pockets.append([floori(at.x / 3.0 + 8.0), floori(at.z / 3.0 + 8.0)])
 	_gate.append({"seed": tag, "yaw": _play_yaw, "preset": "medium" if pname == "" else pname.trim_prefix("_"), "pawns": shown.size(), "models": scores.size(), "hidden": n_hidden, "occluded": n_hidden,
-		"offframe": offframe, "ray": ray, "below_1": low, "vis": shares,
+		"offframe": offframe, "ray": ray, "hidden_all_views": pockets.size() if _views4 else -1, "pockets": pockets, "below_1": low, "vis": shares,
 		"min": snappedf(sorted[0] if not sorted.is_empty() else 0.0, 0.01), "median": snappedf(sorted[sorted.size() / 2] if not sorted.is_empty() else 0.0, 0.01), "scores": rows})
 	print("GATE ", tag, pname, " pawns ", shown.size(), " offframe ", offframe, " hidden ", n_hidden, " scored ", scores.size(), " below1 ", low, " (old collider ray: ", ray, ")")
 
@@ -860,19 +891,45 @@ func _place_armies(board: Node3D, layout: Dictionary) -> Node3D:
 			for _try in 400:
 				var z_in := rng.randf_range(-0.5, -0.26) if side == 0 else rng.randf_range(0.26, 0.5)
 				var p := Vector2(rng.randf_range(-0.46, 0.46) * nx * cell, z_in * nz * cell)
-				var cx := clampi(floori(p.x / cell + nx * 0.5), 0, nx - 1)
-				var cz := clampi(floori(p.y / cell + nz * 0.5), 0, nz - 1)
-				var cd: Dictionary = layout["cells"][cz * nx + cx]
-				if cd["level"] > 0 or cd["lot_kind"] == "Hazard" or used.any(func(o: Vector2) -> bool: return o.distance_to(p) < 2.4):
+				var top := legal_spot(layout, p)
+				if top < 0.0 or used.any(func(o: Vector2) -> bool: return o.distance_to(p) < 2.4):
 					continue
 				used.append(p)
-				_models[idx].global_position = Vector3(p.x * IN, _model_y[idx], p.y * IN)
+				_models[idx].global_position = Vector3(p.x * IN, _model_y[idx] + (0.0 if _no_board else top * IN), p.y * IN)
 				_models[idx].visible = true
 				break
 	handle.tree_exiting.connect(func() -> void:
 		for m in _models:
 			m.visible = false)
 	return handle
+
+
+## Gate change 22.11.: where the gate may stand a pawn (board inches, origin = board centre) - the height of its standing room in inches, -1 when the rules
+## would refuse it. The WHOLE 1 in base (centre and four rim points) must be on cells of ONE level (never half over a tier edge), none of them an intact house
+## (Roofed: the core's solid cell, terrain.rs is_forbidden_rest), a wall or tower cell above ground (the silhouette draws it thinner than its cell), a Hazard lot
+## or a landmark's footprint. Tiers (3 / 6 / 9 in tops) are standing room like the street.
+static func legal_spot(layout: Dictionary, p: Vector2) -> float:
+	var nx: int = layout["nx"]
+	var nz: int = layout["nz"]
+	var cell := float(layout["cell_in"])
+	var c0 := Vector2i(floori(p.x / cell + nx * 0.5), floori(p.y / cell + nz * 0.5))
+	var level := -1
+	for k in 9:   # the pawn's cell first, then every neighbour the 0.5 in base circle reaches (exact: its distance to the cell's square)
+		var cx: int = c0.x + [0, -1, 0, 1, -1, 1, -1, 0, 1][k]
+		var cz: int = c0.y + [0, -1, -1, -1, 0, 0, 1, 1, 1][k]
+		var lo := (Vector2(cx, cz) - Vector2(nx, nz) * 0.5) * cell
+		if k > 0 and p.distance_to(p.clamp(lo, lo + Vector2(cell, cell))) >= 0.5:
+			continue
+		if cx < 0 or cz < 0 or cx >= nx or cz >= nz:
+			return -1.0
+		var cd: Dictionary = layout["cells"][cz * nx + cx]
+		if cd["lot_kind"] in ["Roofed", "Hazard"] or (cd["lot_kind"] == "Wall" and cd["level"] > 0) or (level >= 0 and cd["level"] != level):
+			return -1.0
+		for lm: Dictionary in layout["landmarks"]:
+			if cx >= int(lm["x"]) and cx < int(lm["x"]) + int(lm["w"]) and cz >= int(lm["z"]) and cz < int(lm["z"]) + int(lm["h"]):
+				return -1.0
+		level = cd["level"]
+	return float(layout["level_in"][level])
 
 
 func _stand_ins(board: Node3D, spots: Array) -> Node3D:
@@ -1109,6 +1166,17 @@ func _hide_by_name(node: Node) -> void:
 			(c as Node3D).visible = false
 		else:
 			_hide_by_name(c)
+
+
+## Gate change 22.11.: the GAME's start view (CameraPivot.reset_view + adjust_for_table_size on the capture's 4 x 4 ft table, as main.gd sets it), turned to the
+## gate's yaw (180 = the second player's side).
+func _game_pose() -> void:
+	var pivot: Node = _main.get_node("CameraPivot")
+	pivot.reset_view()
+	pivot.adjust_for_table_size(Vector2(4, 4))
+	pivot._yaw = _play_yaw
+	pivot._apply_camera_transform()
+	_manifest["gate_camera"] = {"pitch": pivot._pitch, "zoom": pivot._current_zoom, "yaw": pivot._yaw}
 
 
 func _pose(yaw: float, pitch := -38.0, zoom := ZOOM, target := Vector3(0, 0.02, 0)) -> void:
