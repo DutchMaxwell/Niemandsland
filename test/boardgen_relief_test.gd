@@ -155,6 +155,13 @@ func test_the_ground_the_models_stand_on_sits_below_the_models() -> void:
 	assert_bool(src.contains("			alb *= 0.5;   // the decks the models stand on")).override_failure_message("the decks must stay dark").is_true()
 	# (lane townC4) the decks weather to silver-grey (the brown boards were the play camera's largest warm area) and stay below the models: at most a 15 % lift
 	assert_bool(src.contains("alb = mix(vec3(dot(alb, vec3(0.3, 0.55, 0.15))), alb, DECK_KEEP_HUE) * DECK_LIFT;")).override_failure_message("the decks keep only part of their warm hue").is_true()
+	# (lane townC4, lead 22.11.: the green lives on the earth, the tops keep moss only in seams and on the north side, and stay standing room under the models)
+	assert_bool(src.contains("? DECK_MOSS : TOP_MOSS));")).override_failure_message("decks and stone tops carry only a share of the shade moss").is_true()
+	for name: String in ["DECK_MOSS", "TOP_MOSS", "TOP_LIFT", "BAND_COVER"]:
+		var at := src.find("const float %s = " % name)
+		assert_int(at).is_greater(-1)
+		var v := float(src.substr(at + ("const float %s = " % name).length(), 6).get_slice(";", 0))
+		assert_float(v).override_failure_message("%s %f" % [name, v]).is_between(0.0, 1.4 if name == "TOP_LIFT" else 0.5)
 	for name: String in ["DECK_KEEP_HUE", "DECK_LIFT"]:
 		var at := src.find("const float %s = " % name)
 		assert_int(at).is_greater(-1)
