@@ -40,7 +40,9 @@ def test_the_python_step_activation_matches_the_recorded_binding_answer():
 
     for i, call in enumerate(calls):
         answer = core.step_activation(state, record["unit"], call["transcript"], record["enforce"])
-        plain = {k: v for k, v in answer.items() if k != "state"}
+        # PLAN_FIRST_DELETION 3b: a `done` answer also carries the door-only `illegal` list (nobody moved here: empty).
+        assert answer.get("illegal", []) == [], answer.get("illegal")
+        plain = {k: v for k, v in answer.items() if k not in ("state", "illegal")}
         assert plain == call["answer"], f"call {i} ({call['answer']['step']}) differs from the record"
 
     # The `done` answer's new state is the volley's: "Hive Swarms" lost model slot 0.
@@ -119,3 +121,30 @@ def test_a_cast_input_is_understood_and_refused_by_the_core_until_it_resolves_ca
         answer = core.step_activation(state, unit, start + [{**cast, **bad}], False)
         assert answer == {"step": "refused", "index": 2, "reason": "input 2 is not understood"}, bad
     assert core.step_activation(state, unit, start + [{k: v for k, v in cast.items() if k != "spell"}], False)["reason"] == "input 2 is not understood"
+
+
+def test_check_rest_reads_the_recorded_board_clean_and_a_planted_overlap_illegal():
+    """PLAN_FIRST_DELETION 3b: `Core.check_rest` - the legality checker over named unit keys, the Godot binding's shape.
+
+    The recorded volley's shooter and target stand legally; the shooter's first model put onto the target's first
+    model reads `overlap` naming that base. An unknown key is an error, never an empty (legal-looking) answer."""
+    import nml_core
+    import pytest
+
+    source = json.loads(SOURCE.read_text())
+    record = json.loads(RECORD.read_text())
+    unit, target = record["unit"], record["target"]
+    core = nml_core.load(str(REPO))
+    core.set_header(source["header"])
+    done = core.step_activation(core.state_of(source["state"]), unit, record["calls"][-1]["transcript"], record["enforce"])
+    assert done["step"] == "done" and done["illegal"] == []
+    assert core.check_rest(core.state_of(source["state"]), [unit, target]) == {"ok": True, "illegal": []}
+
+    units = source["state"]["units"]
+    units[unit]["positions"][0] = list(units[target]["positions"][0])
+    planted = core.check_rest(core.state_of(source["state"]), [unit])
+    assert planted["ok"] is False
+    overlap = [i for i in planted["illegal"] if i["kind"] == "overlap"]
+    assert overlap and overlap[0]["unit"] == unit and overlap[0]["model"] == 0 and overlap[0]["other"] == target, planted
+    with pytest.raises(Exception, match="unknown unit"):
+        core.check_rest(core.state_of(source["state"]), ["no such unit"])

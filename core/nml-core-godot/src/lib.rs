@@ -411,6 +411,17 @@ impl NmlCore {
         actcall::check_of(&slot.statics, &slot.cap.state, &unit.to_string(), terrain, seams, &drop, enforce)
     }
 
+    /// PLAN_FIRST_DELETION 3b: may the models of the units `unit_ids` (roster keys) REST where they stand on handle `h`?
+    /// `{"ok": bool, "illegal": [{"unit", "model", "kind", "other", "other_model", "by_in"}]}` (`nml_core::mv::legal`), or
+    /// `{"ok": false, "reason"}` for an unknown handle or key. Reads only; a `done` step carries the same list as `"illegal"`.
+    #[func]
+    fn check_rest(&mut self, h: i64, unit_ids: PackedStringArray) -> VarDictionary {
+        let Some(i) = self.index(h) else { return actcall::not_ok("unknown handle") };
+        let absent = Terrain::absent();
+        let terrain = self.header.as_ref().map(|hd| &hd.terrain).unwrap_or(&absent);
+        actcall::rest_of(&self.slab[i].as_ref().unwrap().cap.state, terrain, &unit_ids)
+    }
+
     /// One-core P3 (O5) + Firefight step 7: may a unit begin its activation? `open_name` = the unit whose
     /// activation is open ("" = nobody); also refuses a loaded header that mixes game systems.
     /// `{"ok": true}` or `{"ok": false, "reason", "lines"}`.

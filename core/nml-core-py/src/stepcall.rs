@@ -8,6 +8,7 @@ use nmlcore::acts::Knobs;
 use nmlcore::io::Seams;
 use nmlcore::landing::Landing;
 use nmlcore::logline::LogLine;
+use nmlcore::mv::legal;
 use nmlcore::state::State;
 use nmlcore::terrain::Terrain;
 use nmlcore::unit::UnitStatic;
@@ -184,12 +185,21 @@ pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain,
         ActStep::Refused { index, reason } => refused(index, &reason),
         ActStep::Cancelled { lines } => json!({"step": "cancelled", "lines": lines_of(&lines)}),
         ActStep::Done { state: s, lines, landings, .. } => {
-            let answer = json!({"step": "done", "lines": lines_of(&lines), "landings": landings_of(state, &landings), "delta": delta_array(state, &s)});
+            let answer = json!({"step": "done", "lines": lines_of(&lines), "landings": landings_of(state, &landings), "delta": delta_array(state, &s),
+                "illegal": legal::illegal_json(&s, &legal::landing_illegal(state, &s, terrain))});
             next = Some(s);
             answer
         }
     };
     (out, next)
+}
+
+/// `Core.check_rest`'s body (PLAN_FIRST_DELETION 3b): `{"ok", "illegal"}` over the named unit keys, the Godot binding's shape.
+pub(crate) fn rest(core: &Core, py: Python<'_>, state: &PyState, unit_ids: &[String]) -> PyResult<Py<PyAny>> {
+    let units = unit_ids.iter().map(|k| state.inner.roster.index.get(k).copied()
+        .ok_or_else(|| Unsupported::new_err(format!("unknown unit {k}")))).collect::<PyResult<Vec<usize>>>()?;
+    let found = legal::rest_illegal(&state.inner, &core.terrain, &units);
+    to_py(py, &json!({"ok": found.is_empty(), "illegal": legal::illegal_json(&state.inner, &found)}))
 }
 
 /// `Core.step_activation`'s body: parse, run one step on the table's seams, hand the answer back. On `done`

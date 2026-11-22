@@ -1766,6 +1766,11 @@ impl Core {
         stepcall::answer(self, py, &state, unit, transcript, enforce)
     }
 
+    /// PLAN_FIRST_DELETION 3b: may the named units' models rest where they stand (`stepcall::rest`)?
+    fn check_rest(&self, py: Python<'_>, state: PyRef<'_, PyState>, unit_ids: Vec<String>) -> PyResult<Py<PyAny>> {
+        stepcall::rest(self, py, &state, unit_ids.as_slice())
+    }
+
     /// `AiMissionEval.score` with the reply threat — the RICH leaf
     /// (`AiPlanner._policy_step` ai_planner.gd:508-510).
     fn score(&mut self, state: PyRef<'_, PyState>, player: i64) -> PyResult<f64> {
