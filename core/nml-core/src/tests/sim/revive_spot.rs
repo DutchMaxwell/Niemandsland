@@ -460,3 +460,27 @@ use super::*;
         assert!(refused(&shot), "{:?}", shot.log);
         assert_eq!((next.alive[1], next.wounds[1].clone()), (1, vec![1]), "the host's success is gone: {:?}", shot.log);
     }
+
+    // ------------- Step 4: inert below 96 -----------------------------------------------------------------------------
+
+    /// Below 96 nothing moves: at epochs 7 (the rule's port), 73 and 95 the container board gives the old single
+    /// away-from-centre spot, the default radius and the same log at every epoch; a Tough(3) pair keeps the old spend.
+    #[test]
+    fn revive_spot_is_inert_below_96() {
+        let (st, statics) = rean_line(4, 1, &L3);
+        let t = container_board(true);
+        let old_spot = [2.0 * IN2M + 0.034, 0.0, 4.5 * IN2M];
+        let (base, base_log) = rean_run(&st, &statics, &t, 95, 1, false);
+        let p = base.positions[0][0];
+        assert!((0..3).all(|i| (p[i] - old_spot[i]).abs() < 1e-6) && base.radii[0][0] == DEFAULT_BASE_RADIUS_M, "{p:?}");
+        for e in [crate::acts::EPOCH_7_TABLE_RULES, crate::acts::EPOCH_73_V36] {
+            let (next, shot) = rean_run(&st, &statics, &t, e, 1, false);
+            assert_eq!((&next.positions, &next.radii, &next.wounds), (&base.positions, &base.radii, &base.wounds), "epoch {e}");
+            assert_eq!(shot.log, base_log.log, "epoch {e}");
+        }
+        let (st, mut statics) = rean_line(4, 3, &L3[..2]);
+        statics[0].reanimation = Some(crate::unit::ReanimationSpec { target: 1 });
+        for e in [crate::acts::EPOCH_7_TABLE_RULES, crate::acts::EPOCH_73_V36, 95] {
+            assert_eq!(rean_run(&st, &statics, &t, e, 1, false).0.wounds[0], vec![3, 3, 3, 3], "epoch {e}: 6 successes fill both");
+        }
+    }
