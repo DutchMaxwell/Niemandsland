@@ -426,7 +426,7 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		if str(r["step"]) == "done":
 			if not cx.is_empty():
 				await _cast_finish(main, cx)
-			await land_delta(main, r.get("delta", []), start_models, landed)
+			await land_delta(main, r.get("delta", []), start_models, landed, new_breaks(core, h, r.get("illegal", [])))
 			if not keep_handle:
 				core.release(int(r.get("handle", 0)))
 				r.erase("handle")
@@ -880,7 +880,7 @@ static func dump_legacy() -> void:
 	var path := OS.get_environment("NML_TABLE_CENSUS")
 	var f := FileAccess.open(path, FileAccess.WRITE) if path != "" else null
 	if f != null:
-		var out := {"legacy": legacy, "legacy_sets": legacy_sets, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals,
+		var out := {"legacy": legacy, "legacy_sets": legacy_sets, "core_ai_runs": ai_runs, "core_ai_refusals": ai_refusals, "land_illegal": land_illegal,
 			"cast_door": {"seen": cast_seen, "taken": cast_taken, "fallbacks": cast_fallbacks, "probe_refusals": cast_probe_refusals,
 			"reasons": cast_probe_reasons.slice(0, 40), "not_asked": cast_not_asked}}
 		if not CoreShadow.records.is_empty():
@@ -1543,7 +1543,8 @@ static func _land_push(main, gu: GameUnit, to: Array, start_models: Array, done:
 
 ## The activation's final delta (binding step 17): Shaken onto the table; a unit that moved AND lost models is
 ## accepted only when its losses already landed per step, else nothing lands and done["unknown"] is set.
-static func land_delta(main, delta: Array, start_models: Array, done: Dictionary) -> void:
+## `illegal` = the breaks the activation created (`new_breaks`, PLAN_FIRST_DELETION 3c): a unit named there is not moved.
+static func land_delta(main, delta: Array, start_models: Array, done: Dictionary, illegal: Array = []) -> void:
 	for d in delta:
 		var gu: GameUnit = main.opr_army_manager.game_units.get(str(d["unit"]))
 		if gu == null:
@@ -1560,7 +1561,7 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 		if bool(d["shaken"]) != gu.is_shaken:
 			main.radial_menu_controller.card_toggle_shaken(gu)
 			main._solo_mirror_shaken(gu)
-		_land_positions(main, gu, d, start_models)
+		_land_positions(main, gu, d, start_models, illegal)
 		_land_ledger(main, gu, d)
 		_land_versatile_mode(main, gu, d)   # before the stamps: it reads the table's own `versatile_pick_round`
 		_land_stamps(main, gu, d)
@@ -1586,7 +1587,37 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 ## agrees with the core to ~3e-6 m), below anything a rule measures.
 const LAND_EPSILON_M := 0.00001
 
-static func _land_positions(main, gu: GameUnit, d: Dictionary, start_models: Array) -> void:
+## DOOR-LAND-NO-LEGALITY (PLAN_FIRST_DELETION 3c): a unit the core's checker names in `illegal` (overlap, forbidden ground,
+## off the board, coherency, an enemy within 1") is not moved: it stays where the table holds it, one line says why, and
+## `land_illegal` counts it (the census). The volley's results and the step's stamps land as before. The ruling refuses an illegal
+## OPTIONAL step; the charge door's moves (the charge, the 1" separation) are not optional: they land and only the counter shows them.
+static var land_illegal := 0
+
+
+## Lead ruling 3c: a step is judged by the breaks IT creates. `after` = the done step's `illegal` list (3b: the checker on the
+## end board of every unit the call moved); a break the board before the activation (handle `h`) already had for the same
+## unit, model and kind (overlap: and the same other base; coherency: per unit, i.e. "no worse") is not the step's.
+static func new_breaks(core: Object, h: int, after: Array) -> Array:
+	if after.is_empty():
+		return after
+	var units := PackedStringArray()
+	for e in after:
+		if not units.has(str(e["unit"])):
+			units.append(str(e["unit"]))
+	var had := {}
+	for e in core.check_rest(h, units).get("illegal", []):
+		had[_break_key(e)] = true
+	return after.filter(func(e: Dictionary) -> bool: return not had.has(_break_key(e)))
+
+
+static func _break_key(e: Dictionary) -> String:
+	var kind := str(e.get("kind", ""))
+	if kind == "coherency":
+		return "%s|coherency" % str(e["unit"])
+	var other := "%s.%s" % [str(e.get("other", "")), str(e.get("other_model", ""))] if kind == "overlap" else ""
+	return "%s|%s|%s|%s" % [str(e["unit"]), str(e.get("model", "")), kind, other]
+
+static func _land_positions(main, gu: GameUnit, d: Dictionary, start_models: Array, illegal: Array = []) -> void:
 	var at: Array = d.get("positions", [])
 	if at.is_empty():
 		return
@@ -1611,7 +1642,16 @@ static func _land_positions(main, gu: GameUnit, d: Dictionary, start_models: Arr
 		to.append(p)
 	if models.is_empty():
 		return
-	main.solo_controller._apply_model_positions(models, to)
+	var why := PackedStringArray()
+	for e in illegal:
+		if str(e.get("unit", "")) == str(d["unit"]) and not why.has(str(e.get("kind", ""))):
+			why.append(str(e.get("kind", "")))
+	if why.is_empty() or _charge_landing:
+		main.solo_controller._apply_model_positions(models, to)
+	land_illegal += 0 if why.is_empty() else 1
+	if not why.is_empty() and not _charge_landing:
+		main._log_rule_event(BattleLog.Category.MOVEMENT, "%s stays where it is - the step would not be legal (%s)" % [
+			gu.get_name(), ", ".join(why)], main._solo_is_ai_unit(gu))
 	# The landed step IS the table's Hit & Run step (the table's tail never runs it on this path), so the two stamps that step
 	# writes on the table (`hit_and_run_move`: `hit_and_run_round` and, since #3002, `moved_round`) are written here with
 	# the same writers; `_land_stamps` then finds the table agreeing instead of reporting a split.
