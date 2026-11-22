@@ -43,7 +43,7 @@ pub enum Input {
     /// CC-3: one planned cast, in plan order, after the `Intent` and before the first `Faces`. The core does not resolve it yet.
     Cast(CastInput),
     /// meleefix: one melee unit's consolidation inputs from the table's AI round planner (`ConsolidatePlan`); read from
-    /// `PENDING_EPOCH_CONSOLIDATE_PLAN` on, ignored below it. Absent = the core's own goal.
+    /// `EPOCH_96_PARITY_BATCH` on, ignored below it. Absent = the core's own goal.
     Consolidate(ConsolidatePlan),
     /// D-PAR3 14a: what the table already resolved this activation before it captured the core's board, so the core does
     /// not resolve it again: `start` = the activation-start triggers (Reanimation, Surprise Attack), `dangerous` = the move's

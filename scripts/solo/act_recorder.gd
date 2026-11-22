@@ -216,7 +216,7 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## endpoints and Melee Shrouding band, Counter / Destructive / Piercing Hunter in melee) are stamped 92 with EPOCH_92_MELEE_CAUSES.
 ## The AI skirting Dangerous ground (a plain move's goal read and the sideways re-plan), the 3.6 faction folders resolving their rules
 ## and the volley's spell rider switched off are stamped 93 with EPOCH_93_DANGER_RULES_RIDER.
-static var rules_epoch: int = 95
+static var rules_epoch: int = 96
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -304,6 +304,10 @@ const EPOCH_94_PARITY_BATCH := 94
 ## Deadly wounds stopping once the target is dead, the volley's declared Defense, no spell stacking, no Unpredictable die without a weapon in reach). Where the table
 ## has its own side of one it reads this constant.
 const EPOCH_95_PARITY_BATCH := 95
+## The core's frozen `EPOCH_96_PARITY_BATCH` (acts.rs): the twelve table-vs-core differences that sat behind `PENDING_EPOCH_*` placeholders (unit Imprecise, unit
+## Bane aliases, Takedown Shot per model, the spotter's roll record, Enhanced Primal needing Primal, the Enhanced always-alias, Enhanced Vinci one pick, Bane Mark,
+## no volley out of reach, the Reanimation spot, the planned consolidation, the plain Hit & Run step). Where the table has its own side of one it reads this constant.
+const EPOCH_96_PARITY_BATCH := 96
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

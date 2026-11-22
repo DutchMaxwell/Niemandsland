@@ -333,13 +333,13 @@ fn unpredictable_fighter_mark_rolls_the_phase_die_against_the_marked_target_once
     );
 }
 
-/// BM-1, PENDING_EPOCH_BANE_MARK (3.6 army books, gf Saurian Starhosts: once per activation, before attacking, one enemy within 18" in
+/// BM-1, EPOCH_96_PARITY_BATCH (3.6 army books, gf Saurian Starhosts: once per activation, before attacking, one enemy within 18" in
 /// line of sight; friendly units get Bane against it once): from 96 the Mark rides the Shred Mark's utility pick - the record lands on
 /// the enemy's attackers side, the attacker's volley against it bypasses Regeneration (Bane), the exchange spends it. At 95 the Mark
 /// reads nothing: no pick, no record, the Regeneration die rolls.
 #[test]
 fn bane_mark_lands_on_the_enemy_and_the_volley_against_it_ignores_regeneration_from_96() {
-    let e = crate::acts::PENDING_EPOCH_BANE_MARK;
+    let e = crate::acts::EPOCH_96_PARITY_BATCH;
     let stamp = mark_carrier("Bane Mark", "saurian_starhosts", e);
     assert_eq!(stamp.utility_buffs.len(), 1, "96: the Mark reads as the utility pick");
     let b = &stamp.utility_buffs[0];
@@ -383,14 +383,14 @@ fn bane_mark_lands_on_the_enemy_and_the_volley_against_it_ignores_regeneration_f
     assert!(!next1.buffs[2].iter().any(|r| &*r.name == "Bane Mark"), "the exchange spends the Mark");
 }
 
-/// Coverage ledger m2, cause 6 (out-of-reach volleys), PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY: a TARGET-side range cut (Ranged
+/// Coverage ledger m2, cause 6 (out-of-reach volleys), EPOCH_96_PARITY_BATCH: a TARGET-side range cut (Ranged
 /// Shrouding, the Darkborn / Shadowborn / Wild Veil family: -8" here) puts the shooter's 18" rifle out of reach of a target 12" away.
 /// The dice fire nothing either way. At 95 the core still built the group and spent the shooter's once-per-game Precision Feat and the
 /// Shred Mark waiting on the target; from 96 there is no volley (the table's "no target in range or sight"): nothing is spent. Control:
 /// without the cut the same volley fires at 96.
 #[test]
 fn an_out_of_reach_volley_spends_nothing_from_96() {
-    let e = crate::acts::PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY;
+    let e = crate::acts::EPOCH_96_PARITY_BATCH;
     let fixture = |shrouded: bool| {
         let (mut st, mut statics) = buff_line();
         statics[0].shoot = vec![gun("Rifle", 8, 18)];
@@ -425,7 +425,7 @@ fn an_out_of_reach_volley_spends_nothing_from_96() {
 /// reads it that way - a Mark waiting on the enemy also arms the bearer's STRIKE-BACK when that enemy charges, once.
 #[test]
 fn bane_mark_arms_the_melee_strikes_once_and_a_strike_back_from_96() {
-    let e = crate::acts::PENDING_EPOCH_BANE_MARK;
+    let e = crate::acts::EPOCH_96_PARITY_BATCH;
     let (mut st, mut statics) = mark_line("Bane Mark", "saurian_starhosts", e);
     statics[0].melee = vec![gun("CCW", 12, 0)];
     statics[2].melee = vec![gun("CCW", 6, 0)];
@@ -465,7 +465,7 @@ fn bane_mark_lifts_a_lacerate_weapon_to_full_bane() {
     let prof = [ShootProfile { range: 24, attacks: 32, bane: true, bypass_regen: false, bane_alias: "Lacerate".into(), ..Default::default() }];
     let defc = Ctx { defense: 6, models: 1, tough: 1, regeneration: true, regen_target: 5, regen_target_spell: 5, ..Default::default() };
     let volley = |mark: bool| {
-        let att = Ctx { quality: 4, rules_epoch: crate::acts::PENDING_EPOCH_BANE_MARK, bane_mark_grant: mark, ..Default::default() };
+        let att = Ctx { quality: 4, rules_epoch: crate::acts::EPOCH_96_PARITY_BATCH, bane_mark_grant: mark, ..Default::default() };
         let mut tray = Tray::seeded(9);
         crate::dice::resolve_volley_with_tray(
             &[crate::dice::Shooter { profiles: &prof, keep: &[0], attacks: &[32], att: &att, owner: "att" }],
@@ -482,7 +482,7 @@ fn bane_mark_lifts_a_lacerate_weapon_to_full_bane() {
 /// Control: a 30" rifle (18" after the cut) fires at 96. The sighting seam is on (the Aircraft cut lives there).
 #[test]
 fn an_out_of_reach_aircraft_volley_spends_nothing_from_96() {
-    let e = crate::acts::PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY;
+    let e = crate::acts::EPOCH_96_PARITY_BATCH;
     let run = |range: i64, epoch: u32| {
         let (mut st, mut statics) = buff_line();
         statics[0].shoot = vec![gun("Rifle", 8, range)];

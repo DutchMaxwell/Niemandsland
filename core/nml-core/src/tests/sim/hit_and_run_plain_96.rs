@@ -1,6 +1,6 @@
 use super::*;
 
-    // ------------------- PENDING_EPOCH_HIT_AND_RUN_PLAIN: the ported step without the movement seam ---
+    // ------------------- EPOCH_96_PARITY_BATCH: the ported step without the movement seam ---
 
     /// Runs unit 0's shot + Hit & Run on `board` at `epoch` with the shadow's and the door's seams (`movement` OFF).
     fn kite(st: &State, statics: &[UnitStatic], board: &crate::terrain::Terrain, epoch: u32, movement: bool) -> State {
@@ -25,7 +25,7 @@ use super::*;
         statics[0].hit_and_run_active = true;
         statics[1].hit_and_run_active = true;   // from 3.6 every model of the formation carries it (its joined hero "ah")
         let t = kiting_forest_board();
-        let e = crate::acts::PENDING_EPOCH_HIT_AND_RUN_PLAIN;
+        let e = crate::acts::EPOCH_96_PARITY_BATCH;
         let rigid = kite(&st, &statics, &t, e - 1, false);
         let seam = kite(&st, &statics, &t, e, true);
         let plain = kite(&st, &statics, &t, e, false);
@@ -56,7 +56,7 @@ use super::*;
         st.positions[3] = vec![[-12.0 * IN2M, 0.0, 0.0]];
         st.activated[2] = true;
         let board = small_board();
-        let e = crate::acts::PENDING_EPOCH_HIT_AND_RUN_PLAIN;
+        let e = crate::acts::EPOCH_96_PARITY_BATCH;
         let old = kite(&st, &statics, &board, e - 1, false);
         let new = kite(&st, &statics, &board, e, false);
         assert!((old.positions[0][0][0] - (st.positions[0][0][0] + 3.0 * IN2M)).abs() < 1e-6, "old {:?}", old.positions[0]);
@@ -110,7 +110,7 @@ use super::*;
         let (mut st, statics) = lone_kiter(false);
         st.positions[1] = vec![[-3.0 * IN2M, 0.0, 0.0]];   // the rigid landing of model 0
         let board = small_board();
-        let e = crate::acts::PENDING_EPOCH_HIT_AND_RUN_PLAIN;
+        let e = crate::acts::EPOCH_96_PARITY_BATCH;
         let old = step(&st, &statics, &board, e - 1, false, true);
         assert!(illegal(&old, &board).contains("inside u1"), "the fixture: the rigid kite lands on the friendly: {:?}", old.positions[0]);
         let new = step(&st, &statics, &board, e, false, true);
@@ -130,7 +130,7 @@ use super::*;
             cell_params: crate::terrain::CellParams { table_size_feet: [6.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: IN2M },
             ..Default::default()
         });
-        let e = crate::acts::PENDING_EPOCH_HIT_AND_RUN_PLAIN;
+        let e = crate::acts::EPOCH_96_PARITY_BATCH;
         let old = step(&st, &statics, &t, e - 1, false, true);
         assert!(illegal(&old, &t).contains("forbidden"), "the fixture: the rigid kite rests on the block: {:?} -> {}", old.positions[0], illegal(&old, &t));
         let new = step(&st, &statics, &t, e, false, true);
@@ -145,7 +145,7 @@ use super::*;
     fn without_a_board_the_pending_step_stays_rigid() {
         let (st, statics) = lone_kiter(false);
         let none = crate::terrain::Terrain::default();
-        let new = step(&st, &statics, &none, crate::acts::PENDING_EPOCH_HIT_AND_RUN_PLAIN, false, true);
+        let new = step(&st, &statics, &none, crate::acts::EPOCH_96_PARITY_BATCH, false, true);
         for (got, before) in new.positions[0].iter().zip(st.positions[0].iter()) {
             assert!((got[0] - (before[0] - 3.0 * IN2M)).abs() < 1e-6 && (got[2] - before[2]).abs() < 1e-9, "rigid {got:?}");
         }
@@ -158,7 +158,7 @@ use super::*;
     fn the_after_melee_step_takes_the_ported_move_from_the_pending_epoch() {
         let (st, statics) = lone_kiter(true);
         let t = kiting_forest_board();
-        let e = crate::acts::PENDING_EPOCH_HIT_AND_RUN_PLAIN;
+        let e = crate::acts::EPOCH_96_PARITY_BATCH;
         let seam = step(&st, &statics, &t, e, true, false);
         let plain = step(&st, &statics, &t, e, false, false);
         let rigid = step(&st, &statics, &t, e - 1, false, false);
@@ -178,7 +178,7 @@ use super::*;
         st.radii = Rc::new(vec![vec![IN2M; 2], vec![IN2M], vec![IN2M; 3], vec![IN2M]]);
         st.activated[2] = true;
         let none = crate::terrain::Terrain::default();
-        let e = crate::acts::PENDING_EPOCH_HIT_AND_RUN_PLAIN;
+        let e = crate::acts::EPOCH_96_PARITY_BATCH;
         let old = step(&st, &statics, &none, e - 1, false, true);
         let new = step(&st, &statics, &none, e, false, true);
         assert!((old.positions[0][0][0] - 3.0 * IN2M).abs() < 1e-6, "old {:?}", old.positions[0]);

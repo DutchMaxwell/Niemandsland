@@ -162,9 +162,9 @@ use super::*;
         assert_eq!(next.radii[0][0], DEFAULT_BASE_RADIUS_M);
     }
 
-    // ------------- Step 1: the placement guard at PENDING_EPOCH_REVIVE_SPOT ------------------------------------------
+    // ------------- Step 1: the placement guard at EPOCH_96_PARITY_BATCH ------------------------------------------
 
-    const E96: u32 = crate::acts::PENDING_EPOCH_REVIVE_SPOT;
+    const E96: u32 = crate::acts::EPOCH_96_PARITY_BATCH;
 
     fn refused(shot: &ShootResult) -> bool {
         shot.log.iter().any(|l| l == "Reanimation: 1 success but no placeable spot — coherency missing")
