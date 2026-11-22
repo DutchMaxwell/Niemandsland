@@ -299,10 +299,12 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	surprise.unit_properties["faction_folder"] = "alien_hives"
 	assert_array(CoreSlice.refusals(surprise)).is_equal(["unit_rule:Surprise Attack"])
 	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
-	# HR-POS: the after-volley step comes back through the delta (`positions`), so Hit & Run goes to the core again.
+	# HR-POS brought the after-volley step back through the delta (`positions`); lane shootfix refused the shooter again (group
+	# `hit_and_run_landing`: the core's rigid step lands bases inside other units, the door has no landing check). Shot at it is taken.
 	var raider := _unit(["Hit & Run"], [["AP(1)"]])
 	raider.unit_properties["faction_folder"] = "dao_union"   # a faction whose map gives Hit & Run its primitive
-	assert_array(CoreSlice.refusals(raider)).is_empty()
+	assert_array(CoreSlice.refusals(raider)).is_equal(["unit_rule:Hit & Run"])
+	assert_array(CoreSlice.refusals(raider, true)).is_empty()
 	# An Indirect weapon (lifted after #2939/#2942/#2947) and a joined hero are taken (the lone-hero target, epoch 81).
 	assert_bool(CoreSlice.takes(_unit([], [["Indirect"]]))).is_true()   # lifted with #2939 / #2942 / #2947
 	var host := _unit(["Tough(3)"], [["AP(1)"]])
@@ -642,6 +644,59 @@ func test_deny_mode_takes_an_unmapped_upgrade_label() -> void:
 	CoreSlice.reset_cache()
 
 
+## PLAN_DOOR_ACTIVATION_START step 2: the deny group `activation_start_twice` keeps a Reanimation SHOOTER on the table at both shoot doors and
+## at the charge door (the table rolls the pool at the activation start, the core rolled it again; core_start_once_door_test.gd). The
+## primitive reaches a unit that gets the rule from a joined hero's Reanimation Aura (the import copies it onto the host and the hero).
+## Shot at, a bearer is taken (it does not activate in the shooter's volley); a Bounding bearer stays taken (measured equal: the core refuses
+## a bonus move and the table resolves it). RED: drop the group -> the bearers read [] as shooters.
+func test_deny_mode_refuses_an_activation_start_bearer_as_shooter() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	for c in [["gf", "robot_legions"], ["aof", "vampiric_undead"]]:
+		var bearer := _unit(["Reanimation", "Tough(3)"], [["AP(1)"]])
+		bearer.unit_properties["game_system"] = c[0]
+		bearer.unit_properties["faction_folder"] = c[1]
+		assert_array(CoreSlice.refusals(bearer)).override_failure_message("%s/%s Reanimation shooter" % c).is_equal(["unit_rule:Reanimation"])
+		assert_array(CoreSlice.refusals(bearer, true)).override_failure_message("%s/%s Reanimation target" % c).is_empty()
+		assert_array(CoreSlice.melee_refusals(bearer, false, true)).override_failure_message("%s/%s Reanimation charger" % c).is_equal(["unit_rule:Reanimation"])
+	# A host without the rule, joined by a hero with Reanimation Aura: the import's aura pass gives both Reanimation.
+	var host := _unit(["Tough(3)"], [["AP(1)"]])
+	var hero := _unit(["Hero", "Reanimation Aura"], [])
+	for u in [host, hero]:
+		u.unit_properties["faction_folder"] = "robot_legions"
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	assert_array(CoreSlice.refusals(host)).override_failure_message("before the aura pass nothing names Reanimation").is_empty()
+	OPRArmyManager.expand_auras_of([host.source_data], {host.source_data: host})
+	assert_array(CoreSlice.refusals(host)).override_failure_message("an Aura-granted host is refused").contains(["unit_rule:Reanimation"])
+	assert_array(CoreSlice.refusals(host, true)).override_failure_message("the same host shot at is taken").is_empty()
+	var jumper := _unit(["Bounding"], [["AP(1)"]])
+	jumper.unit_properties["faction_folder"] = "eternal_dynasty"
+	assert_array(CoreSlice.refusals(jumper)).override_failure_message("Bounding was measured equal and stays taken").is_empty()
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+
+
+## Lane shootfix (containment): the deny group `hit_and_run_landing` keeps every SHOOTER whose rule reaches the core's Hit & Run step after a
+## volley on the table at the shoot doors (the core's rigid step lands bases inside other units; core_hit_and_run_door_test.gd). Shot at, a
+## bearer is taken (it does not step in that volley). Hit & Run Fighter steps only after melee: taken as a shooter, refused as a charger by the
+## melee file's group. RED: drop the group -> the shooters read [].
+func test_deny_mode_refuses_a_hit_and_run_family_shooter() -> void:
+	OS.set_environment("NML_CORE_SLICE", "deny")
+	CoreSlice.reset_cache()
+	for c in [["Harassing", "dark_elf_raiders"], ["Enhanced Harassing", "dark_elf_raiders"], ["Guerrilla", "rebel_guerrillas"],
+			["Hit & Run", "custodian_brothers"], ["Hit & Run Shooter", "custodian_brothers"]]:
+		var bearer := _unit([c[0]], [["AP(1)"]])
+		bearer.unit_properties["faction_folder"] = c[1]
+		assert_array(CoreSlice.refusals(bearer)).override_failure_message("%s shooter" % c[0]).is_equal(["unit_rule:%s" % c[0]])
+		assert_array(CoreSlice.refusals(bearer, true)).override_failure_message("%s target" % c[0]).is_empty()
+	var fighter := _unit(["Hit & Run Fighter"], [["AP(1)"]])
+	fighter.unit_properties["faction_folder"] = "alien_hives"
+	assert_array(CoreSlice.refusals(fighter)).override_failure_message("a Fighter-only bearer does not step after a volley").is_empty()
+	assert_array(CoreSlice.melee_refusals(fighter, false, true)).override_failure_message("Hit & Run Fighter charger").is_equal(["unit_rule:Hit & Run Fighter"])
+	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.reset_cache()
+
+
 ## Plan E step 2: the melee deny slice (`MELEE_DENY_PATH`, mode "deny", door "melee") sits beside the allow file.
 ## A unit with AP(1) is refused by the allow file (`deny = false`, default) and taken by the deny file (`deny = true`),
 ## as charger and as target; inert names and unmapped upgrade labels pass in deny mode; joined heroes stay refused
@@ -659,7 +714,7 @@ func test_the_melee_deny_slice_takes_ap_and_refuses_attachments() -> void:
 	assert_array((data.get("inert", {}) as Dictionary).keys()).contains(["Unique", "Army Standard Bearer", "Courage"])
 	assert_array((data.get("deny_names", {}) as Dictionary).keys()).is_equal(["Angelic Blessing", "Unmovable", "Power Shrooms", "Cleric", "Furious Buff", "Precision Attacks Buff", "Hold the Line", "Destroyer"])
 	assert_array((data.get("groups", {}) as Dictionary).keys()).is_equal(["attached_heroes", "unpredictable_fighter_die", "strafing_not_in_melee", "evasive_to_hit_line",
-		"breath_attack_dice_in_melee", "ravage_line", "armor_line", "hit_and_run_landing", "ambush_flying_landing"])
+		"breath_attack_dice_in_melee", "ravage_line", "armor_line", "hit_and_run_landing", "ambush_flying_landing", "activation_start_twice"])
 	for g in (data["groups"] as Dictionary):
 		assert_str(str(data["groups"][g].get("why", ""))).override_failure_message("group %s names its measurement" % g).is_not_empty()
 		assert_str(str(data["groups"][g].get("leaves_with", ""))).override_failure_message("group %s names what lifts it" % g).is_not_empty()

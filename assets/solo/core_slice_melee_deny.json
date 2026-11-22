@@ -77,7 +77,8 @@
     },
     "hit_and_run_landing": {
       "primitives": [
-        "Hit & Run"
+        "Hit & Run",
+        "Hit & Run Fighter"
       ],
       "kind": "measured",
       "why": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 34 of 112 (Harassing and the other aliases): the charger ends 1 to 5 in from the table's end, the dice are equal.",
@@ -88,6 +89,15 @@
       "kind": "measured",
       "why": "Melee soak 20.11. (24 games, shadow deny view, forced rules epoch 94): 1 of 6 taken charges unequal, Blood Guard Brothers (Ambush, Flying) at an Organ Tank: the charger's five models end 5.7 in from where the table puts them. The flat-board sweep takes the same two rules equal (Grunt Veteran, 10 of 12), so the cause is a real-board landing that was not probed. Refused by predicate (`CoreSlice`: a charger with both rules), switched on by this group.",
       "leaves_with": "a probe of the Flying charge on a real board and its fix, then a 16/16 re-probe"
+    },
+    "activation_start_twice": {
+      "primitives": [
+        "Reanimation"
+      ],
+      "kind": "activation_start",
+      "side": "shooter",
+      "why": "PLAN_DOOR_ACTIVATION_START step 2 (lane doorStart, 22.11.): Reanimation is an activation-START effect. The table rolls it in `begin_activation` before the door captures the board, and the core, which takes the whole activation, rolls it again from that board. Measured (8 seeds per door, door on against off, dice dump): AI door 8/8 two pool rolls (the core rolls what is left of the pool), the core's volley fired more dice than the table's living shooters on 7/8 (+1/+2), `_land_positions` errored 7/8; human door 8/8 two pool rolls (the core re-rolls the FULL pool at Fire), the volley's dice count differs on 8/8, `_land_positions` errored 8/8; the core's roll never reaches the battle log. Shooter side only: a Reanimation unit shot at does not activate. The primitive covers Reanimation Aura's grant (the import copies Reanimation onto the unit and every joined hero). Bounding was measured equal (the core refuses a bonus move, the table resolves it) and stays taken; Spawn was not measured.",
+      "leaves_with": "the door sending `start_done` after the table's start effects (PLAN_DOOR_ACTIVATION_START steps 3-5), then a 16-seed door on/off sweep of a Reanimation unit and an Aura-granted one (step 6)"
     }
   }
 }

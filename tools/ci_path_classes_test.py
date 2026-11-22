@@ -65,3 +65,35 @@ def test_look_list_never_claims_a_file_the_core_reads():
     for path in ["assets/model_manifest.json", "assets/ruins_manifest.json", "assets/solo/x.json", "tools/a.py",
                  "core/x.rs", "data/x.json", "test/fixtures/x.json", "scripts/main.gd", "project.godot"]:
         assert not in_class(path, "look"), f"{path} must never be in tools/ci_look_paths.txt"
+
+
+def _mp_ignored_globs():
+    import re
+    wf = open(os.path.join(ROOT, ".github", "workflows", "mp-two-instance.yml"), encoding="utf-8").read()
+    items = []
+    for line in wf.split("paths-ignore:\n", 1)[1].splitlines():
+        m = re.match(r"\s*-\s*'([^']+)'\s*$", line)
+        if not m:
+            break
+        items.append(m.group(1))
+    return items
+
+
+def test_mp_workflow_ignores_exactly_docs_and_the_look_class():
+    from ci_path_classes import CLASSES
+    assert _mp_ignored_globs() == ["docs/**"] + CLASSES["look"]["globs"], \
+        "mp-two-instance.yml paths-ignore must equal docs/** + tools/ci_look_paths.txt: add the same glob to both in one PR"
+
+
+def test_mp_run_is_skipped_only_when_every_changed_file_is_docs_or_look():
+    import re
+    # GitHub path filters: ** crosses '/', * does not. A PR skips the workflow only if EVERY changed file matches.
+    rx = [re.compile(re.escape(g).replace(r"\*\*", ".*").replace(r"\*", "[^/]*") + r"\Z") for g in _mp_ignored_globs()]
+    skipped = lambda files: all(any(r.match(f) for r in rx) for f in files)  # noqa: E731
+    look = ["scripts/boardgen_kit.gd", "shaders/tiefwerk_relief.gdshaderinc", "assets/ruintown_manifest.json",
+            "test/tiefwerk_library_test.gd", "tools/boardgen/capture.py", "docs/a/b.md"]
+    assert skipped(look) and is_only(look, "look")  # LOOK + docs only: no MP run
+    for files in (look + ["scripts/network_manager.gd"], ["core/nml-core/src/lib.rs"], ["scripts/main.gd"], ["project.godot"],
+                  look + ["tools/ci_look_paths.txt"], ["tools/boardgen/sub/x.py"]):
+        assert not skipped(files), f"MP must run for {files}"  # the last one: the filter is stricter than the classifier, never looser
+        assert not (skipped(files) and not is_only(files, "look"))

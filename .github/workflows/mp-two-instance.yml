@@ -10,6 +10,20 @@ on:
   # No `branches:` filter on purpose (see build.yml): a stacked PR gets its run too.
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    # A PR that touches only docs or the LOOK path class (tools/ci_look_paths.txt, proven isolated from the
+    # game) skips this advisory run. The list must equal docs/** + that file (tools/ci_path_classes_test.py), so a
+    # PR that adds a glob to tools/ci_look_paths.txt adds the same line here.
+    paths-ignore:
+      - 'docs/**'
+      - 'scripts/boardgen_*.gd'
+      - 'scripts/tiefwerk_*.gd'
+      - 'shaders/tiefwerk_*'
+      - 'shaders/ruintown_*'
+      - 'assets/tiefwerk_manifest.json'
+      - 'assets/ruintown_manifest.json'
+      - 'test/boardgen_*_test.gd'
+      - 'test/tiefwerk_*_test.gd'
+      - 'tools/boardgen/*'
   workflow_dispatch:
 
 concurrency:
