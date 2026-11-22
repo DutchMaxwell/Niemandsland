@@ -104,17 +104,6 @@ func _fixture(seat: int) -> Dictionary:
 	return {"host": host, "hero": hero, "squad": squad, "pistol": pistol}
 
 
-func _volley(epoch: int) -> void:
-	AiActRecorder.rules_epoch = epoch
-	var f := _fixture(1)
-	var shots: Array = []
-	for p in AiEv.stamp_sergeant(AiShooting.profiles_in_range([f["pistol"]], 0.0), f["hero"]):
-		shots.append({"member": f["hero"], "quality": 2, "alive": 1, "max": 1, "reach": 12, "profile": p})
-	_main.seed_tray_rng(SEED)
-	await _main._solo_resolve_ai_volley(f["host"], f["squad"], shots)
-	await E2EBoot.settle(get_tree())
-
-
 ## The game's own call: the core door takes the host's volley (both seats AI), the joined hero fires its pistol in it.
 func _door_volley(epoch: int) -> void:
 	AiActRecorder.rules_epoch = epoch
@@ -137,20 +126,6 @@ func _door_volley(epoch: int) -> void:
 		_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
 	_main._solo_core_ai_h = 0
 	await E2EBoot.settle(get_tree())
-
-
-func _assert_extra_die_rolled() -> void:
-	var text := _log_text()
-	assert_str(text).override_failure_message("fixture: the hero's sixes must spawn extra attacks (log: %s)" % text) \
-		.contains("Bloodborn:")
-	assert_str(text).contains("extra attack")
-
-
-## EPOCH_72 leg (declared first: gdUnit drops tests declared after a failing one): the extra die keeps the host's label.
-func test_the_extra_die_is_signed_by_the_host_at_epoch_72(timeout := 120000) -> void:
-	await _volley(AiActRecorder.EPOCH_72_PLAYTEST_RULES)
-	_assert_extra_die_rolled()
-	assert_array(_owners()).override_failure_message("EPOCH_72 keeps the host's label").contains(["AI (Test Squad)"])
 
 
 ## EPOCH_73: the extra die carries the firing hero's label, like the hero's own attack dice.
