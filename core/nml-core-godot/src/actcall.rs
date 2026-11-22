@@ -7,6 +7,7 @@ use nml_core::activation::{allowance, begin_check, check_move, delta_of, step_ac
 use nml_core::io::{Seams, SplitShot};
 use nml_core::landing::Landing;
 use nml_core::logline::LogLine;
+use nml_core::mv::legal;
 use nml_core::state::State;
 use nml_core::terrain::Terrain;
 use nml_core::unit::UnitStatic;
@@ -268,6 +269,21 @@ pub fn allowance_of(statics: &[UnitStatic], state: &State, unit: &str, terrain: 
 }
 
 /// `{"ok": false, "reason"}`: a refusal that is not the core's own (unknown handle or unit, a drop that is not understood).
+/// `check_rest`'s answer: `{"ok", "illegal": [..]}` by `legal::rest_illegal` over the named unit keys, or `not_ok` naming an
+/// unknown key.
+pub fn rest_of(state: &State, terrain: &Terrain, keys: &PackedStringArray) -> VarDictionary {
+    let mut units = Vec::new();
+    for k in keys.as_slice() {
+        let Some(&u) = state.roster.index.get(&k.to_string()) else { return not_ok(&format!("unknown unit {k}")) };
+        units.push(u);
+    }
+    let found = legal::rest_illegal(state, terrain, &units);
+    let mut d = VarDictionary::new();
+    d.set("ok", found.is_empty());
+    d.set("illegal", &plain::variant_of(&legal::illegal_json(state, &found)));
+    d
+}
+
 pub fn not_ok(reason: &str) -> VarDictionary {
     let mut d = VarDictionary::new();
     d.set("ok", false);
@@ -369,6 +385,7 @@ pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain,
             out.set("unported", &marks);
             out.set("landings", &landings_of(state, &landings));
             out.set("delta", &delta_array(state, &s));
+            out.set("illegal", &plain::variant_of(&legal::illegal_json(&s, &legal::landing_illegal(state, &s, terrain))));
             next = Some(s);
         }
     }

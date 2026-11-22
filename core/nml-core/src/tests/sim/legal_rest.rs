@@ -144,3 +144,18 @@ use crate::mv::legal::{beyond_allowance, rest_illegal, Illegal};
         }
     }
 
+    /// 3b: the `done` step's `illegal` list reads only the units whose surviving models moved. A unit that only lost a
+    /// model is not listed even when the loss broke its chain (the checker itself does read it); a moved unit is.
+    #[test]
+    fn the_landing_list_reads_the_moved_units_only() {
+        let before = placed(&[(0, 1.0, &OWN), (0, 1.0, &[[-6.0, 6.0], [-6.0, 8.2], [-6.0, 10.4]]), (1, 1.0, &FOE)]);
+        let mut after = before.clone();
+        after.positions[1].remove(1);
+        after.alive[1] = 2;
+        assert_eq!(kinds(&rest_illegal(&after, &small_board(), &[1])), vec!["coherency"], "the fixture: the loss broke the chain");
+        assert_eq!(crate::mv::legal::landing_illegal(&before, &after, &small_board()), vec![], "a casualty alone moves nobody");
+        after.positions[0][0] = [5.0 * IN2M, 0.0, -1.1 * IN2M];
+        let found = crate::mv::legal::landing_illegal(&before, &after, &small_board());
+        assert!(!found.is_empty() && found.iter().all(|i| i.unit == 0), "{found:?}");
+        assert!(found.iter().any(|i| i.kind == "overlap" && i.other == Some((2, 0))), "{found:?}");
+    }

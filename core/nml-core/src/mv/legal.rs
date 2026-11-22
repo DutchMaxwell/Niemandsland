@@ -92,3 +92,20 @@ pub fn beyond_allowance(st: &State, u: usize, from: &[[f64; 3]], allowance_in: f
         (d > ENEMY_EPS_IN).then_some(Illegal { unit: u, model: k, kind: "distance", other: None, by_in: d })
     }).collect()
 }
+
+/// The door-only `illegal` field of a `done` step: `rest_illegal` over every unit whose surviving models `after` moved
+/// against `before` (a casualty alone moves nobody; a returned model counts as moved).
+pub fn landing_illegal(before: &State, after: &State, t: &Terrain) -> Vec<Illegal> {
+    let moved: Vec<usize> = (0..after.units()).filter(|&u| {
+        let mut was = before.positions[u].iter();
+        !after.positions[u].iter().all(|p| was.any(|q| q == p))
+    }).collect();
+    rest_illegal(after, t, &moved)
+}
+
+/// The bindings' shape of one list: `[{unit, model, kind, other, other_model, by_in}]`, units by roster key
+/// (`other` "" and `other_model` -1 when no other base is involved).
+pub fn illegal_json(st: &State, found: &[Illegal]) -> serde_json::Value {
+    serde_json::Value::Array(found.iter().map(|i| serde_json::json!({"unit": st.key(i.unit), "model": i.model, "kind": i.kind,
+        "other": i.other.map_or("", |o| st.key(o.0)), "other_model": i.other.map_or(-1, |o| o.1 as i64), "by_in": i.by_in})).collect())
+}
