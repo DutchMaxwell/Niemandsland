@@ -1077,11 +1077,15 @@ fn a_town_grows_few_filler_slabs() {
 
 /// BASELINE of PLAN_RUINTOWN_ROOFS step K0: origin/main 6a2972697, town theme, Point180, seeds 1..=1000 (means per board, sq in, percent).
 /// Re-pinned by K2 (raised minimum 23 -> 15 %), K3 (infill houses), K4 (at least 4 houses) and towers T2 (a tall tower pair, read at 12 in), 1000 seeds. The roofs steps K2+ move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
-const ROOFS_BASELINE: [(&str, f64); 19] = [
+const ROOFS_BASELINE: [(&str, f64); 25] = [
     ("intact houses", 8.27), ("boards with <= 2 houses %", 0.0), ("roofed cells", 19.37), ("raised cells in house plots", 13.07), ("raised cells on free earth", 22.64), ("raised cells in the city wall", 34.25),
     ("roof share of footprints %", 35.17), ("walkable sq in 0 in", 1374.21), ("walkable sq in 3 in", 352.48), ("walkable sq in 6 in", 207.58), ("walkable sq in 9 in", 69.53), ("ladders", 44.27),
     ("opening rays blocked %", 98.5), ("mid rays blocked %", 83.73), ("tier-to-tier rays blocked, eaves 2.5 in (old model) %", 53.4), ("tier-to-tier rays blocked, ridge 4.5 in %", 58.07),
     ("roofed cells in the bands", 8.88), ("raised cells in the bands", 30.17), ("asymmetric cells", 0.0),
+    // halfroofs plan H0 (inventory rows): solid cells outside an intact-house lot, the 3 in filler slabs, the open ground of the thinnest band, lone 3 in perches,
+    // and the POCKETS shape of the gate lane (an open ground cell with a tier or a solid on two opposite sides / on three or four sides)
+    ("half-roof cells", 0.0), ("raised cells on free earth, 3 in", 13.82), ("open ground per band, min over boards", 30.0), ("single-cell 3 in perches", 1.39),
+    ("pocket cells, tall on two opposite sides", 10.83), ("pocket cells, tall on three or four sides", 6.96),
 ];
 
 /// Roofs census over `NML_N` town seeds (default 1000, the baseline's size; the baseline is asserted only at 1000, within +-0.5 on every number). `NML_ROOFS_OUT=<file>` also writes the report.
@@ -1092,6 +1096,7 @@ fn census_of_roofs() {
     let n: i64 = std::env::var("NML_N").ok().and_then(|v| v.parse().ok()).unwrap_or(1000);
     let (mut houses, mut roofed, mut raised, mut walk, mut ladders, mut band, mut asym) = (Vec::new(), 0, [0usize; 3], [0usize; 4], 0, [0usize; 2], 0);
     let (mut rays, mut failed, mut towers, mut subs) = ([0.0f64; 4], 0, [0usize; 3], 0usize);
+    let (mut hr, mut band_min) = ([0usize; 5], usize::MAX);   // half-roof cells, 3 in filler, lone perches, pockets opposite, pockets 3+
     for seed in 1..=n {
         let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
         failed += usize::from(!l.problems().is_empty());
@@ -1108,10 +1113,22 @@ fn census_of_roofs() {
                 band[1] += usize::from(c.deploy != 0);
             }
             walk[usize::from(c.level)] += usize::from(!sol[i]);
+            hr[0] += usize::from(is_roof && (c.lot_id == 0 || l.lots.iter().any(|lot| lot.id == c.lot_id && lot.kind != LotKind::Roofed)));
+            hr[1] += usize::from(c.level == 1 && c.lot_id == 0 && c.lot_kind != LotKind::Wall && !sol[i]);
+            let tall = |dx: i64, dz: i64| { let (x, z) = (c.x as i64 + dx, c.z as i64 + dz); x >= 0 && z >= 0 && x < GRID as i64 && z < GRID as i64 && { let j = z as usize * GRID + x as usize; l.cells[j].level >= 1 || sol[j] } };
+            let flat1 = |dx: i64, dz: i64| { let (x, z) = (c.x as i64 + dx, c.z as i64 + dz); x < 0 || z < 0 || x >= GRID as i64 || z >= GRID as i64 || { let j = z as usize * GRID + x as usize; l.cells[j].level != 1 || sol[j] } };
+            hr[2] += usize::from(c.level == 1 && !sol[i] && c.lot_kind != LotKind::Wall && [(1, 0), (-1, 0), (0, 1), (0, -1)].iter().all(|&(dx, dz)| flat1(dx, dz)));
+            if c.level == 0 && !sol[i] {
+                let (w, e, nn, ss) = (tall(-1, 0), tall(1, 0), tall(0, -1), tall(0, 1));
+                let cnt = usize::from(w) + usize::from(e) + usize::from(nn) + usize::from(ss);
+                hr[3] += usize::from(cnt == 2 && ((w && e) || (nn && ss)));
+                hr[4] += usize::from(cnt >= 3);
+            }
             let twin = &l.cells[GRID * GRID - 1 - i];
             asym += usize::from((twin.level, twin.lot_kind) != (c.level, c.lot_kind));
         }
         ladders += l.connectors.len();
+        band_min = band_min.min((1..=2).map(|b| (0..GRID * GRID).filter(|&i| l.cells[i].deploy == b && l.cells[i].level == 0 && !sol[i]).count()).min().unwrap_or(0));
         let tiers: Vec<(usize, usize)> = l.cells.iter().filter(|c| c.level >= 1 && c.lot_kind != LotKind::Roofed).map(|c| (c.x, c.z)).collect();
         let duels: Vec<CellPair> = tiers.iter().enumerate().flat_map(|(i, &a)| tiers[i + 1..].iter().map(move |&b| (a, b))).collect();
         rays[0] += blocked_share(&l, 3, &band_pairs(), true);
@@ -1126,6 +1143,7 @@ fn census_of_roofs() {
         raised[0] as f64 / f, raised[1] as f64 / f, raised[2] as f64 / f, 100.0 * roofed as f64 / (roofed + raised[0] + raised[1]) as f64,
         walk[0] as f64 * 9.0 / f, walk[1] as f64 * 9.0 / f, walk[2] as f64 * 9.0 / f, walk[3] as f64 * 9.0 / f, ladders as f64 / f,
         100.0 * rays[0] / f, 100.0 * rays[1] / f, 100.0 * rays[2] / f, 100.0 * rays[3] / f, band[0] as f64 / f, band[1] as f64 / f, asym as f64,
+        hr[0] as f64 / f, hr[1] as f64 / f, band_min as f64, hr[2] as f64 / f, hr[3] as f64 / f, hr[4] as f64 / f,
     ];
     let mut out = format!("roofs census over {n} town seeds (Point180); houses min {} p10 {} median {} max {}; boards failing {failed}; tall towers 2 x 2 / 1 x 2 / none {towers:?}; mean sub-seed {:.2}\n", houses[0], houses[houses.len() / 10], houses[houses.len() / 2], houses[houses.len() - 1], subs as f64 / f);
     let mut off = Vec::new();

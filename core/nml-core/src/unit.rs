@@ -608,6 +608,8 @@ pub struct Ctx {
     /// G4R4 C-GRANTED-BANE (`EPOCH_73_V36`): a live `grants_rule: "Bane when Shooting"` — every ranged weapon of the
     /// member is a Bane weapon for the volley (dice.rs). Zero on every `ctx_of`.
     pub bane_grant: bool,
+    /// `PENDING_EPOCH_BANE_MARK`: a live Bane Mark on the TARGET's chain (`mods::marked_vs`) — this attack's weapons get Bane, once.
+    pub bane_mark_grant: bool,
     // --- Wave 2 "Utility Buff" family (gated `acts::rule_on(.., EPOCH_5_TABLE_RULES)`). ---
     /// A live `grants_rule: "Slayer"` — AP(+2) vs Tough 3+, charge or over 9".
     pub slayer_grant: bool,
@@ -2140,6 +2142,13 @@ fn hit_and_run_boost_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
 /// the terrain half: the split walk now also reports the terrain-gated kind
 /// (`Ctx::stealth_alias_near_terrain`) and the def builds resolve the
 /// per-model read live; `requires_stationary` still is.
+/// `PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS`: on an equal penalty an Enhanced entry's wider window ("always") beats the base it `upgrades`
+/// (Enhanced Changebound over Changebound's "over 9""). Only that pair: an unrelated alias (a terrain-gated Grounded Stealth) never wins the tie.
+fn alias_wider_on_tie(pen: i64, best: i64, over_in: f64, best_over_in: f64, upgrades_best: bool, rules_epoch: u32) -> bool {
+    upgrades_best && pen == best && pen > 0 && over_in < best_over_in
+        && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS)
+}
+
 fn stealth_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, f64, bool, &'static str) {
     stealth_alias_of_excluding(reg, p, "", rules_epoch)
 }
@@ -2173,9 +2182,10 @@ fn stealth_alias_of_excluding(
             continue;
         }
         let pen = if legacy_stealth_buff { 1 } else { e.param_i("hit_penalty", 0) };
-        if pen > best_penalty {
+        let over_in = if legacy_stealth_buff { 9.0 } else { e.param_f("over_in", 0.0) };
+        if pen > best_penalty || alias_wider_on_tie(pen, best_penalty, over_in, best_over_in, e.param_s("upgrades") == best_name, rules_epoch) {
             best_penalty = pen;
-            best_over_in = if legacy_stealth_buff { 9.0 } else { e.param_f("over_in", 0.0) };
+            best_over_in = over_in;
             best_applies_charged = e.param_b_or("applies_charged", false);
             best_name = crate::rules::intern(&name);
         }
@@ -2305,9 +2315,10 @@ fn stealth_alias_split_walk(
             continue;
         }
         let pen = if legacy_stealth_buff { 1 } else { e.param_i("hit_penalty", 0) };
-        if pen > best_penalty {
+        let over_in = if legacy_stealth_buff { 9.0 } else { e.param_f("over_in", 0.0) };
+        if pen > best_penalty || alias_wider_on_tie(pen, best_penalty, over_in, best_over_in, e.param_s("upgrades") == best_name, rules_epoch) {
             best_penalty = pen;
-            best_over_in = if legacy_stealth_buff { 9.0 } else { e.param_f("over_in", 0.0) };
+            best_over_in = over_in;
             best_applies_charged = e.param_b_or("applies_charged", false);
             best_terrain_gated = e.param_f("terrain_within_in", 0.0) > 0.0;
             best_name = crate::rules::intern(&name);
@@ -3914,6 +3925,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
                 && map.lookup(&p.faction_folder, &n).is_some_and(|e| e.param_b("no_gate_v36"))
         })
     };
+    // PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK: Enhanced Vinci Tech on a Vinci Tech bearer makes the one pick "always".
+    let versatile_no_gate = versatile_no_gate || (rule_on(rules_epoch, crate::acts::PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK)
+        && unit_rule_active(reg, p, "Enhanced Vinci Tech") && unit_rule_active(reg, p, "Vinci Tech"));
     let evasive_on = most_models_family_on(p, "Evasive", rules_epoch) || !evasive_boost.is_empty();
     trace_stamp(trace73 && evasive_on, "evasive-stamp",
         if evasive_boost.is_empty() { "Evasive" } else { evasive_boost },
@@ -4140,6 +4154,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         relentless_from: "",
         shred_grant: false,
         bane_grant: false,
+        bane_mark_grant: false,
         slayer_grant: false,
         surge_grant: false,
         versatile_grant: false,
@@ -5849,7 +5864,10 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         }
         seen.push(n.clone());
         let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
-        if e.primitive.as_deref() != Some("Utility Buff") {
+        // PENDING_EPOCH_BANE_MARK: the 3.6 text is a Mark (once per activation, before attacking, one enemy within 18" in line of sight;
+        // friendly attacks against it get Bane once), so the Bane-primitive entry rides this path with the Shred Mark's knobs.
+        let bane_mark = n == "Bane Mark" && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_BANE_MARK);
+        if e.primitive.as_deref() != Some("Utility Buff") && !bane_mark {
             continue;
         }
         // WAVE 2 GATE (`acts::rule_on`, `EPOCH_5_TABLE_RULES`): these twelve names
@@ -5897,6 +5915,7 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         }
         let vs_target = e.param_b("vs_target");
         let target = match e.param_s("target") {
+            _ if bane_mark => "enemy",
             "" => "friendly",
             s => s,
         };
@@ -5934,9 +5953,9 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
             name: n,
             vs_target,
             reposition_in: e.param_f("reposition_in", 0.0),
-            range_in: e.param_f("range_in", if vs_target { 18.0 } else { 12.0 }),
+            range_in: e.param_f("range_in", if vs_target || bane_mark { 18.0 } else { 12.0 }),
             target: target.to_string(),
-            needs_los: e.param_b_or("needs_los", vs_target),
+            needs_los: e.param_b_or("needs_los", vs_target || bane_mark),
             max_targets: e.param_i("max_targets", 1).max(1),
             hit_mod: e.param_i("hit_mod", 0),
             casting_mod: e.param_i("casting_mod", 0),
@@ -5960,13 +5979,15 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
             // seam's band read — below 12 it stays 0 so the row keeps being
             // dropped and an old corpus's stamps are unchanged.
             move_mod: if rule_on(rules_epoch, EPOCH_12_MOVE_BUFF) { e.param_i("move_mod", 0) } else { 0 },
-            grants_rule: e.param_s("grants_rule").to_string(),
+            grants_rule: if bane_mark { "Bane".to_string() } else { e.param_s("grants_rule").to_string() },
             scope: e.param_s("scope").to_string(),
             // EPOCH 15 MARK BENEFICIARY — see `mark_beneficiary_new` above.
             beneficiary: if mark_beneficiary_new
                 && !rule_on(rules_epoch, EPOCH_15_MARK_BENEFICIARY)
             {
                 String::new()
+            } else if bane_mark {
+                "attackers".to_string()
             } else {
                 e.param_s("beneficiary").to_string()
             },
@@ -8017,7 +8038,8 @@ impl UnitStatic {
             }
             if boost && has_vinci {
                 name = Some("Enhanced Vinci Tech".to_string());
-                both = true;
+                // PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK: one pick at any range (the gate opens in `ctx_of`), never both arms.
+                both = !rule_on(rules_epoch, crate::acts::PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK);
             }
             if let Some(vn) = name {
                 for sp in shoot.iter_mut().chain(melee.iter_mut()) {

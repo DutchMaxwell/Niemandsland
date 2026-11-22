@@ -1803,6 +1803,10 @@ pub(crate) fn tray_strafing(
     for (b, keep, _, _) in &parts {
         mark_spent_limited(&statics[next.roster.profile[*b]].strafe_shoot, keep, &mut next.limited_used, *b);
     }
+    // PENDING_EPOCH_BANE_MARK: the strafe has no exchange spend, so the Bane Mark it read is spent here (once, never twice).
+    if parts.iter().any(|(_, _, _, att)| att.bane_mark_grant) {
+        mods::spend_mark_vs(next, target, "Bane Mark");
+    }
     let phantom = r.scourge_wounds;
     let w = shot.absorb(r);
     let members: Vec<usize> = parts.iter().map(|(b, _, _, _)| *b).collect();
@@ -3438,6 +3442,26 @@ fn indirect_waives_gate(statics: &[UnitStatic], state: &State, si: usize, ti: us
     })
 }
 
+/// `PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY`: the target's own range cut (Aircraft -12", the Ranged Shrouding family) leaves no living
+/// chain member a weapon whose cut reach (plus a live +6" Mark) covers the gap its weapons are gated by (`gap`, the volley's own `dm`);
+/// the Mark adds after the cut (the larger of the two reads), so a volley the dice would fire is never dropped. The Aircraft cut counts
+/// only where the volley reads it (the sighting seam); a Strafing run is its own volley (`tray_strafing`) and never reaches this.
+fn cut_out_of_reach(statics: &[UnitStatic], state: &State, si: usize, ti: usize, seams: Seams, gap: impl Fn(usize) -> f64) -> bool {
+    let def = &statics[state.roster.profile[ti]].ctx;
+    let air = state.aircraft[ti] && seams.sighting;
+    if !(air || def.ranged_shrouding) {
+        return false;
+    }
+    let mark = if mods::granted_vs(state, ti, "+6\" shooting range") { INCREASED_SHOOTING_RANGE_MARK_IN } else { 0.0 };
+    let chain = std::iter::once(si).chain(state.attached[si].iter().copied().filter(|_| seams.hero_attach));
+    !chain.filter(|&m| state.alive[m] > 0).any(|m| {
+        let um = &statics[state.roster.profile[m]];
+        let gap = gap(m);
+        um.shoot.iter().any(|p| p.range > 0
+            && sight_reach_in(p.range as f64 + p.reach_bonus_in.max(granted_reach(um, state, m).0), air, def) + mark >= gap)
+    })
+}
+
 /// `SoloController.nearest_human_unit` :1183-1210 — the primary key only
 /// (not-yet-activated first, then nearest centre-to-centre); a melee-only
 /// bearer (no ranged profile) skips Aircraft, same as the table. A genuine
@@ -4861,6 +4885,7 @@ pub fn ctx_live_vs(
         c.relentless_from = mods::grant_source(state, i, target, "Relentless");
     }
     c.shred_grant = c.shred_grant || mods::granted_vs(state, target, "Shred");
+    c.bane_mark_grant = rule_on(rules_epoch, crate::acts::PENDING_EPOCH_BANE_MARK) && mods::marked_vs(state, target, "Bane Mark");
     if rule_on(rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) {
         c.slayer_grant = c.slayer_grant || mods::granted_vs(state, target, "Slayer");
     }
@@ -11911,6 +11936,21 @@ fn resolve_with(
                                 tray.say(|| LogLine { rule: "hero", category: Category::Combat, side: next.player[si], detail: None,
                                     text: format!("Hero: {} is the unit now — shots from {} at {} are measured and saved as the hero",
                                         statics[next.roster.profile[g.ti]].name, statics[pi_s].name, statics[next.roster.profile[host]].name) });
+                            }
+                            // PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY: a target-side range cut leaves no weapon in reach, so there is no volley
+                            // (the table's "no target in range or sight"): nothing is marked, spent or announced.
+                            // Each member's gap is the one its weapons are gated by below (`dm`): the host's `g.d`, a joined hero's own.
+                            let member_gap = |m: usize| if m == si || !rule_on(seams.rules_epoch, EPOCH_73_V36) { g.d } else {
+                                chain_gap_in(&next, g.ti, seams, |t| if seams.range_by_base_edge || plan.is_some() {
+                                    range_gap_in(&next, &next.positions[m], m, t) } else { geom::dist_in(&next.positions[m], &next.positions[t]) })
+                            };
+                            if rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY)
+                                && cut_out_of_reach(statics, &next, si, g.ti, seams, member_gap)
+                            {
+                                let said = format!("{}: no volley — no target in range or sight — the unit holds", statics[pi_s].name);
+                                shot.log.push(said.clone());
+                                tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[si], detail: None, text: said });
+                                continue;
                             }
                             // main.gd:3042 — the Mark is picked and recorded
                             // BEFORE this group's profiles and contexts are
