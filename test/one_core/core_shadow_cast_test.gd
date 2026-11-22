@@ -255,7 +255,7 @@ func test_a_once_grant_cast_at_the_volleys_target_is_spent_by_it_and_reads_equal
 ## kills five: the table's casualty order leaves slot 3 standing, the core's f64 distance left slot 2 (cast door probe, 20.11.);
 ## the shadow compared counts and a sorted wounds multiset, so it read this equal. RED on a core without the epoch's reading: first_diff
 ## "positions" at 94; below the epoch the old reading stays (the same cases read "positions" at 93 once NML_CORE_SHADOW_SLOTS asks
-## for the compare, and "" without it), so the gate is pinned too.
+## for the compare, and "" without it), so the gate is pinned too. Since 3d the "positions" reading is the record's `free_position`.
 func test_a_spell_that_kills_five_of_six_leaves_the_same_model_standing() -> void:
 	var seen_kill := 0
 	for epoch in [94, 93, -93]:   # -93: epoch 93 with the compare switched on
@@ -267,8 +267,11 @@ func test_a_spell_that_kills_five_of_six_leaves_the_same_model_standing() -> voi
 			var foe := ParityTable._make_unit(_main, FOE.merged({"models": 6}, true), {})
 			var rec := await _shadow_cast(caster, PSYCHIC_BLAST, [foe], seed)
 			seen_kill += 1 if foe.get_alive_count() == 1 else 0
-			assert_dict(rec).override_failure_message("epoch %d seed %d: %s" % [epoch, seed, rec]) \
-				.contains_key_value("first_diff", "positions" if epoch == -93 else "")
+			# PLAN_FIRST_DELETION 3d: which equal model the defender loses is a free pick under docs/one_core/PARITY_RULING.md -
+			# the difference is reported as `free_position`, no longer a mismatch.
+			assert_dict(rec).override_failure_message("epoch %d seed %d: %s" % [epoch, seed, rec]).contains_key_value("first_diff", "")
+			assert_bool((rec["free_position"] as Dictionary).is_empty()).override_failure_message("epoch %d seed %d: %s" % [epoch, seed, rec]) \
+				.is_equal(epoch != -93)
 			Harness._free_units(_main, [caster, foe])
 			await _main.get_tree().process_frame
 	CoreShadow._slots_env = -1
