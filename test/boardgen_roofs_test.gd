@@ -133,3 +133,15 @@ func test_the_roof_tones_stay_in_the_wall_stones_range_and_never_orange() -> voi
 	var brick: Color = BoardgenTheme.TOWN_PALETTE[BoardgenTheme.TOWN_KINDS.find("brick")]
 	assert_float(brick.s).override_failure_message("chimney brick %s too saturated" % brick).is_less_equal(0.45)
 	assert_float(brick.v).is_less_equal(0.5)
+
+
+## Roofs lane 22.11. (lead: on main WITH the staged kit the roofs still read rust - play board rust 6.4 % on seed 41): the kit's roof modules take the same weathered range as
+## the shader's roofs. Untextured (TINT x instance colour) and textured (TEXTURED_TINT x instance colour, the factor on a warm terracotta texture) both lean cool: red never the
+## strongest channel, and the untextured tone stays in the wall stone's range (no channel above 0.4). Red before: TINT roof_tiles (0.62, 0.30, 0.22), TEXTURED_TINT (1.35, 0.85, 0.7).
+func test_the_kit_roofs_are_weathered_slate_not_terracotta() -> void:
+	for inst: Color in [BoardgenTownKit.ROOF_SLATE, BoardgenTownKit.ROOF_CLAY]:
+		var plain: Color = BoardgenTownKit.TINT["roof_tiles"] * inst
+		var tex: Color = BoardgenTownKit.TEXTURED_TINT["roof_tiles"] * inst
+		assert_float(maxf(plain.r, maxf(plain.g, plain.b))).override_failure_message("kit roof tone %s too bright" % plain).is_less_equal(0.4)
+		assert_float(plain.s).override_failure_message("kit roof tone %s too saturated" % plain).is_less_equal(0.35)
+		assert_bool(tex.r < maxf(tex.g, tex.b)).override_failure_message("the textured kit roof %s still pushes the terracotta red" % tex).is_true()
