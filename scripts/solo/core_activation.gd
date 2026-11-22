@@ -122,10 +122,11 @@ static func is_lifecycle_unit(main, gu: GameUnit) -> bool:
 		and main.opr_army_manager.game_phase == OPRArmyManager.GamePhase.PLAYING
 
 
-## (2) A lifecycle unit whose shot, End and digest resolve in the core. H-30: a Hit & Run bearer stays on the table too - the core
-## takes its after-shot step itself (and spends the round's use), where a human steps by dragging (fab_a6_test).
+## (2) A lifecycle unit whose shot, End and digest resolve in the core. PLAN_FIRST_DELETION step 21: a Hit & Run bearer is taken - its
+## intent says `no_step` (step 20), so the core takes no step and keeps the round's use open for the player's drag (fab_a6_test).
+## A Crossing Attack carrier stays on the table (none in the bundled lists; it takes the fallback).
 static func is_core_unit(main, gu: GameUnit) -> bool:
-	return is_lifecycle_unit(main, gu) and is_plain_human(gu) and not CoreSlice.carries(gu, ["Crossing Attack", "Hit & Run", "Hit & Run Shooter"])
+	return is_lifecycle_unit(main, gu) and is_plain_human(gu) and not CoreSlice.carries(gu, ["Crossing Attack"])
 
 
 ## (3) Equal to (2) for now; step 82 widens it by movement rule.
@@ -2300,7 +2301,7 @@ static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Ca
 		push_error("human_shoot: %s has no session after the door let it through" % attacker.get_name())
 		return true
 	var t: Array = (s["transcript"] as Array).duplicate()
-	t.append({"t": "intent", "kind": mode, "shoot": target.unit_id})
+	t.append({"t": "intent", "kind": mode, "shoot": target.unit_id, "no_step": true})   # step 21: the player drags a Hit & Run step
 	# Step 38b: the table's presentation of a human volley (_present_human); its stage opens before the core's first line.
 	var shots := _human_shots(main, attacker, target)
 	var st := {"n": 0, "open": false, "result": false}
@@ -2355,7 +2356,7 @@ static func human_shoot_split(main, attacker: GameUnit, target_a: GameUnit, targ
 			attacker.get_name(), chooser[0]["target"].get_name()], true)
 		return false
 	var t: Array = (s["transcript"] as Array).duplicate()
-	t.append({"t": "intent", "kind": mode, "shoot": target_a.unit_id, "split": aim})
+	t.append({"t": "intent", "kind": mode, "shoot": target_a.unit_id, "split": aim, "no_step": true})
 	var sts: Array = parts.map(func(p: Dictionary) -> Dictionary: return {"n": 0, "open": false, "result": false})
 	var at := [0]
 	var beat := func(ev: String, a: Dictionary, faces: Array) -> void:
