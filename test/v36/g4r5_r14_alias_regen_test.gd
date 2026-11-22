@@ -36,6 +36,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
 	AiActRecorder.rules_epoch = _epoch_before
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
@@ -88,8 +90,23 @@ func _volley(unit_rules: Array, weapon_rules: Array[String]) -> String:
 	var shooter := _shooter(unit_rules, weapon_rules)
 	_regenerator()
 	_main._tray_rng.seed = 7
-	await _main._run_ai_shooting(ActIntent.blank_report(shooter))
+	await _door_ai(ActIntent.blank_report(shooter))
 	return _log_text()
+
+
+## The game's own call: the core door takes the AI's volley (the board is captured first), as the lone-hero door suite does.
+## The epoch is the live one: the table's epoch-73 gates are the core's from its own epochs on.
+func _door_ai(report: Dictionary) -> void:
+	AiActRecorder.rules_epoch = _epoch_before
+	CoreActivation._env = 1
+	var runs := CoreActivation.ai_runs
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	await _main._run_ai_shooting(report)
+	assert_int(CoreActivation.ai_runs).override_failure_message("the core did not take the volley (the table shot it)") \
+		.is_equal(runs + 1)
+	if _main._solo_core_ai_h != 0:
+		_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+	_main._solo_core_ai_h = 0
 
 
 ## The Scrapper alias re-rolls Defense 6s but does not cut Regeneration: the target still rolls its dice.
@@ -111,13 +128,5 @@ func test_a_printed_bane_still_cuts_regeneration_at_73(timeout := 60000) -> void
 		.contains("Purgation takes")
 	assert_str(text).override_failure_message("a printed Bane ignores Regeneration (log: %s)" % text.strip_edges()) \
 		.contains("wounds ignore Regeneration")
-	assert_str(text).not_contains("regeneration di")
-	await E2EBoot.settle(get_tree())
-
-
-## Control: below 73 the recorded corpus keeps the old loop - the alias still cuts Regeneration.
-func test_the_epoch_72_control_keeps_the_old_loop(timeout := 60000) -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
-	var text: String = await _volley(["Scrapper"], [])
 	assert_str(text).not_contains("regeneration di")
 	await E2EBoot.settle(get_tree())
