@@ -83,6 +83,12 @@ static func attach(table: Node, layout: Dictionary) -> BoardgenGreybox:
 	node.name = "BoardgenGreybox"
 	node.add_to_group(TABLE_OVERLAY_GROUP)
 	node.build(layout)
+	if node.layout_theme == BoardgenTheme.RUIN_TOWN:   # the gaming table round the town instead of the void (texture plan step 8)
+		var feet: Variant = table.get("table_size")
+		var surround := BoardgenSurround.make(layout, feet if feet is Vector2 else Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) / 12.0)
+		node.add_child(surround)
+		if table.has_signal("table_resized"):
+			table.connect("table_resized", surround.fit_table)
 	table.add_child(node)
 	return node
 
