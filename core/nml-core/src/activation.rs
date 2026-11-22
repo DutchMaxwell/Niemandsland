@@ -41,6 +41,25 @@ pub enum Input {
     Choice { id: String, option: String },
     /// CC-3: one planned cast, in plan order, after the `Intent` and before the first `Faces`. The core does not resolve it yet.
     Cast(CastInput),
+    /// meleefix: one melee unit's consolidation inputs from the table's AI round planner (`ConsolidatePlan`); read from
+    /// `PENDING_EPOCH_CONSOLIDATE_PLAN` on, ignored below it. Absent = the core's own goal.
+    Consolidate(ConsolidatePlan),
+}
+
+/// meleefix: what the table's goal for a melee winner's "may move up to 3 in" reads besides the board
+/// (`SoloController.consolidate_after_melee_win` -> `_nearest_uncontrolled_objective`): whether the unit's side runs the
+/// round planner (NML-210), the unit's task this round (`seize` with its marker index and lane spread, `fight`, or none) and
+/// the greedy's inputs (the endgame spread switch and each objective's runner count, in objective order). The core reads the
+/// board itself after the fight, so the goal is the table's for the state the winner really stands in.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ConsolidatePlan {
+    pub unit: String,
+    pub planner: bool,
+    pub task: String,
+    pub marker: i64,
+    pub lane: bool,
+    pub spread: bool,
+    pub runners: Vec<i64>,
 }
 
 /// One planned cast: the planner's picks (spell, targets, boost and interference with their payers, the conduit, the
@@ -98,6 +117,7 @@ pub enum ActStep {
 pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
     let (mut declared, mut shot, mut rolled, mut over) = (false, false, false, false);
     let mut last_seq: Option<i64> = None;
+    let mut consolidated: Vec<&str> = Vec::new();
     for (i, x) in t.iter().enumerate() {
         let why = match x {
             _ if i == 0 && *x != Input::Begin => Some("the activation was not started".to_string()),
@@ -108,6 +128,11 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
             Input::Choice { .. } if !declared => Some("the choice was answered before the action was declared".to_string()),
             Input::Cast(_) if !declared => Some("a cast before the action was declared".to_string()),
             Input::Cast(_) if rolled => Some("a cast after the first die".to_string()),
+            // meleefix: the planner's consolidation inputs ride with the declared action, before the first die, once per unit, so a
+            // growing transcript cannot change a goal between two steps.
+            Input::Consolidate(_) if !declared => Some("consolidation inputs before the action was declared".to_string()),
+            Input::Consolidate(_) if rolled => Some("consolidation inputs after the first die".to_string()),
+            Input::Consolidate(c) if consolidated.contains(&c.unit.as_str()) => Some(format!("consolidation inputs for {} twice", c.unit)),
             Input::Cast(c) if c.seq < last_seq.map_or(0, |p| p + 1) => Some(format!("cast seq {} is too low: seq is 0 or more and higher than the cast before", c.seq)),
             Input::Intent { .. } if declared => Some("one action per activation".to_string()),
             Input::Placed { .. } if shot => Some(format!("{name} has already shot this round — it cannot move now")),
@@ -123,6 +148,7 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
             Input::Faces(_) => rolled = true,
             Input::Cancel => over = true,
             Input::Cast(c) => last_seq = Some(c.seq),
+            Input::Consolidate(c) => consolidated.push(c.unit.as_str()),
             _ => {}
         }
     }
@@ -491,6 +517,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         return ActStep::Refused { index, reason };
     }
     let casts: Vec<CastInput> = t.iter().filter_map(|x| if let Input::Cast(c) = x { Some(c.clone()) } else { None }).collect();
+    let consolidate: Vec<ConsolidatePlan> = t.iter().filter_map(|x| if let Input::Consolidate(c) = x { Some(c.clone()) } else { None }).collect();
     // Before any resolver runs: no die is drawn and no state is resolved. A `Placed` in the
     // transcript is simply dropped (the table puts the models back).
     if t.last() == Some(&Input::Cancel) {
@@ -616,6 +643,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
                 tray.offer_strike_back(id.clone(), *answer);
             }
             tray.offer_casts(casts.clone());
+            tray.offer_consolidation(consolidate.clone());
             let out = resolve_stochastic_tray_on_board(statics, state, &action, terrain, seams, &mut GodotRng::new(0), tray);
             *reached_wound.borrow_mut() = tray.feed().map(|f| f.wound_choices.clone()).unwrap_or_default();
             *reached_int.borrow_mut() = tray.feed().map(|f| f.interference_choices.clone()).unwrap_or_default();

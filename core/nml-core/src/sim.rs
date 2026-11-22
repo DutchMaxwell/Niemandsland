@@ -45,7 +45,7 @@ use crate::dice::{say_rule, Morale, ShootResult, Tray};
 use crate::mods;
 use crate::mission::{drop_carried, sync_carried_positions};
 use crate::rng::GodotRng;
-use crate::activation::CastInput;
+use crate::activation::{CastInput, ConsolidatePlan};
 use crate::rules::Spell;
 use crate::spell::{
     boost_value_of, cast_success_chance_vs, official_pick_order, plan_boost, plan_interference,
@@ -10782,6 +10782,84 @@ fn consolidation_goal(next: &State, winner: usize) -> Option<V3> {
     })
 }
 
+/// meleefix: `MoveIntent.distance_inches(a, b)` with the table's arithmetic: the XZ difference in f32 (`Vector3`), its f32 length
+/// (`geom::length`), widened and divided by 0.0254 in f64 (GDScript float). Positions are f32 values held in f64, so the narrowing is exact.
+fn table_inches(a: V3, b: V3) -> f64 {
+    geom::length([b[0] - a[0], 0.0, b[2] - a[2]]) as f64 / crate::IN2M
+}
+
+/// meleefix (`PENDING_EPOCH_CONSOLIDATE_PLAN`): `SoloController._units_controlling` - the units of the winner's side (`own`) or the
+/// other side that hold `o`: alive, not Shaken, not in reserve, not a joined hero, not Aircraft, a model centre within 3 in (+0.001).
+fn holders_at(next: &State, winner: usize, o: V3, own: bool, skip: Option<usize>) -> usize {
+    let pid = next.player[winner];
+    let near = |p: &[f64; 3]| table_inches(geom::to_f32(*p), o) <= crate::OBJECTIVE_CONTROL_IN + 0.001;
+    (0..next.units()).filter(|&k| Some(k) != skip && (next.player[k] == pid) == own && next.alive[k] > 0 && !next.shaken[k] && !next.dormant[k]
+        && next.attached_to[k].is_none() && !next.aircraft[k] && next.positions[k].iter().any(near)).count()
+}
+
+/// meleefix (`PENDING_EPOCH_CONSOLIDATE_PLAN`): the table's goal for a melee winner's 3 in move (`consolidate_after_melee_win` ->
+/// `_nearest_uncontrolled_objective`, NML-210), read on the state after the fight from the planner inputs the door sent: a `seize`
+/// task's marker (none once the side holds it by a live majority; 2.5 in to the side on a laned pair), a `fight` task's garrison
+/// (the marker within 3 in only this unit holds), else the tiered greedy (holdable before contested, unclaimed before claimed when
+/// the spread is on, nearer first), else the nearest enemy's centre. Same f32 / f64 arithmetic as the table, step for step.
+pub fn planned_consolidation_goal(next: &State, winner: usize, plan: &ConsolidatePlan) -> Option<V3> {
+    let centre = geom::centre(&next.positions[winner]);
+    let marker = |i: i64| next.objectives.get(usize::try_from(i).ok()?).map(|o| geom::to_f32(o.pos));
+    let objective = match (plan.planner, plan.task.as_str(), marker(plan.marker)) {
+        (true, "seize", Some(m)) if holders_at(next, winner, m, true, Some(winner)) > holders_at(next, winner, m, false, None) => None,
+        (true, "seize", Some(m)) if plan.lane => {
+            // `dirv = mpos - from; dirv.y = 0; perp = Vector3(-dirv.z, 0, dirv.x).normalized(); mpos + perp * (2.5 * 0.0254)`
+            let d = geom::sub(m, centre);
+            Some(geom::add(m, geom::mul(geom::normalized([-d[2], 0.0, d[0]]), 2.5 * crate::IN2M)))
+        }
+        (true, "seize", Some(m)) => Some(m),
+        (true, "fight", _) => garrison_marker(next, winner),
+        _ => greedy_objective(next, winner, centre, plan),
+    };
+    objective.or_else(|| nearest_enemy_of(next, winner).map(|e| geom::centre(&next.positions[e])))
+}
+
+/// meleefix: `SoloController._garrisoned_marker` - the nearest marker within 3 in (+0.001) of a model of the unit that no other unit of
+/// its side holds; none for a Shaken or Aircraft unit.
+fn garrison_marker(next: &State, winner: usize) -> Option<V3> {
+    if next.shaken[winner] || next.aircraft[winner] {
+        return None;
+    }
+    let mut best: Option<(f64, V3)> = None;
+    for o in &next.objectives {
+        let pos = geom::to_f32(o.pos);
+        let gap = next.positions[winner].iter().map(|p| table_inches(geom::to_f32(*p), pos)).fold(f64::INFINITY, f64::min);
+        if gap > crate::OBJECTIVE_CONTROL_IN + 0.001 || holders_at(next, winner, pos, true, Some(winner)) > 0 {
+            continue;
+        }
+        if best.is_none_or(|(bd, _)| gap < bd) {
+            best = Some((gap, pos));
+        }
+    }
+    best.map(|(_, p)| p)
+}
+
+/// meleefix: the greedy tail of `_nearest_uncontrolled_objective` - skip a marker the side owns (owner 0 is neutral, never a side's)
+/// or holds by a live majority; tier = holdable (no enemy holds it) x2 + unclaimed (spread off, or no runner booked) x1; the higher
+/// tier, then the nearer marker wins.
+fn greedy_objective(next: &State, winner: usize, centre: V3, plan: &ConsolidatePlan) -> Option<V3> {
+    let mut best: Option<(i32, f64, V3)> = None;
+    for (i, o) in next.objectives.iter().enumerate() {
+        let pos = geom::to_f32(o.pos);
+        let enemy_near = holders_at(next, winner, pos, false, None);
+        if (o.owner != 0 && o.owner == next.player[winner]) || holders_at(next, winner, pos, true, Some(winner)) > enemy_near {
+            continue;
+        }
+        let unclaimed = !plan.spread || plan.runners.get(i).copied().unwrap_or(0) == 0;
+        let tier = if enemy_near == 0 { 2 } else { 0 } + i32::from(unclaimed);
+        let d = table_inches(centre, pos);
+        if best.is_none_or(|(bt, bd, _)| tier > bt || (tier == bt && d < bd)) {
+            best = Some((tier, d, pos));
+        }
+    }
+    best.map(|(_, _, p)| p)
+}
+
 /// P4.D-48: the placeholder a melee line carries where the table cites its rules book; the charge door fills it in
 /// (`CoreActivation.drive`), since the core holds no book version.
 pub const CITE: &str = "{cite}";
@@ -10821,7 +10899,11 @@ fn consolidate_after_melee(next: &mut State, statics: &[UnitStatic], cover: Cove
         let (c, d) = (geom::centre(&next.positions[si]), geom::centre(&next.positions[ti]));
         (geom::sub(geom::mul(c, 2.0), d), 1.0, "moves back 1\" (the charger separates)")
     } else {
-        let Some(goal) = consolidation_goal(next, winner) else { return say(&mut dice, holds) };
+        // meleefix: the table's planner goal when the transcript carries its inputs (from PENDING_EPOCH_CONSOLIDATE_PLAN), else the old greedy.
+        let key = next.roster.keys[winner].clone();
+        let plan = dice.as_ref().and_then(|(tray, _)| tray.consolidation_of(&key)).filter(|_| rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_CONSOLIDATE_PLAN)).cloned();
+        let goal = match &plan { Some(p) => planned_consolidation_goal(next, winner, p), None => consolidation_goal(next, winner) };
+        let Some(goal) = goal else { return say(&mut dice, holds) };
         (goal, CONSOLIDATE_WIN_IN, "consolidates up to 3\" (enemy destroyed)")
     };
     let land = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).plain_move(

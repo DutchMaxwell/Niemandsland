@@ -1081,6 +1081,12 @@ pub const PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY: u32 = 96;
 /// `sim::tray_reanimation`, `sim::revive_spot_legal`. Records stamped 95 or below replay byte-exact. Every call site reads THIS
 /// constant, not the literal `96`.
 pub const PENDING_EPOCH_REVIVE_SPOT: u32 = 96;
+/// Placeholder gate for CONSOLIDATE PLAN (lane meleefix, lead call 22.11. option b): a melee winner's "may move up to 3 in" aims where
+/// the table's AI round planner aims it (the seize task's marker with its lane spread, a fight task's garrison, the tiered greedy that
+/// skips a marker its side holds by a live majority) when the door's transcript carries the planner inputs (`Input::Consolidate`); the
+/// core reads them on the state after the fight (`sim::planned_consolidation_goal`). Without the inputs the old greedy stands. Records
+/// stamped 95 or below replay byte-exact. Every call site reads THIS constant.
+pub const PENDING_EPOCH_CONSOLIDATE_PLAN: u32 = 96;
 /// Placeholder gate for the HIT & RUN PLAIN STEP (lane shootfix, gate-12 shoot soak: 9 Harassing rows; Dark Elves 3.6 army book,
 /// Harassing: once per round the unit may move up to 3 in after shooting or melee, the book names no direction, the general
 /// movement rules apply): on a real board the core's post-attack step is the table's own fallback (`_move_away`: away from the
@@ -2450,6 +2456,14 @@ mod tests {
     fn upr_needs_shot_gate_starts_at_95() {
         assert_eq!(super::EPOCH_95_PARITY_BATCH, 95);
         assert!(!rule_on(94, super::EPOCH_95_PARITY_BATCH), "a record at 94 keeps the die of a volley with nothing in reach");
+    }
+
+    /// meleefix: the consolidation plan is read from 96 on; a record at 95 keeps the old greedy goal.
+    #[test]
+    fn consolidate_plan_gate_starts_at_96() {
+        assert_eq!(super::PENDING_EPOCH_CONSOLIDATE_PLAN, 96);
+        assert!(!rule_on(95, super::PENDING_EPOCH_CONSOLIDATE_PLAN), "a record at 95 keeps the old greedy consolidation goal");
+        assert!(rule_on(96, super::PENDING_EPOCH_CONSOLIDATE_PLAN));
     }
 
     /// Heightfield plan step 7 (the placeholder became the frozen batch epoch at the 94 bump): the gate is 94, on in a fresh game, off one
