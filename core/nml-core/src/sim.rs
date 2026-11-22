@@ -11237,7 +11237,8 @@ fn resolve_with(
     // --- REANIMATION (main.gd:953-957), the activation trigger BEFORE the
     // action — every action kind with a tray. See `tray_reanimation`; a
     // full-strength or Shaken carrier rolls nothing.
-    if let Some((tray, shot)) = dice.as_mut() {
+    // D-PAR3 14a: skipped when the table's capture already holds the start it paid (`Input::Paid { start }`).
+    if let Some((tray, shot)) = dice.as_mut().filter(|(tray, _)| !tray.paid_start()) {
         let board = match cover { Cover::Board(t) if t.is_valid() => Some(t), _ => None };
         tray_reanimation(statics, &mut next, si, seams, tray, shot, board);
         // Surprise Attack (wave-5) — the same activation-trigger slot, the

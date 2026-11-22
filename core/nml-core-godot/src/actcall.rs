@@ -134,6 +134,11 @@ fn input_of(v: &Variant) -> Option<Input> {
         "cast" => Input::Cast(cast_of(&d)?),
         // meleefix: `{"t": "consolidate", "unit", "planner", "task", "marker", "lane", "spread", "runners"}`; `unit` is required.
         "consolidate" => Input::Consolidate(consolidate_of(&d)?),
+        // D-PAR3 14a: `{"t": "paid", "start", "dangerous", "beats"}`, each absent = false.
+        "paid" => {
+            let on = |k: &str| field(k).is_some_and(|v| plain::flag(&v));
+            Input::Paid { start: on("start"), dangerous: on("dangerous"), beats: on("beats") }
+        }
         _ => return None,
     })
 }

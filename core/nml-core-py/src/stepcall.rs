@@ -138,6 +138,11 @@ fn input_of(v: &Value) -> Option<Input> {
         "cast" => Input::Cast(cast_of(o)?),
         // meleefix: the Godot seam's `consolidate` entry, field for field; `unit` is required.
         "consolidate" => Input::Consolidate(consolidate_of(o)?),
+        // D-PAR3 14a: the Godot seam's `paid` entry; each flag absent = false.
+        "paid" => {
+            let on = |k: &str| o.get(k).and_then(Value::as_bool).unwrap_or(false);
+            Input::Paid { start: on("start"), dangerous: on("dangerous"), beats: on("beats") }
+        }
         _ => return None,
     })
 }
