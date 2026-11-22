@@ -16017,8 +16017,8 @@ func _solo_log_reach_shrink(attacker: GameUnit, target: GameUnit) -> void:
 			"%s is an Aircraft: weapon ranges count -12\" against it (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
 	if shrouded:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"%s has %s: weapon ranges -%s\" (min %s\") against it" % [target.get_name(),
-				shroud["name"], str(shroud["range_penalty_in"]), str(shroud["floor_in"])], true)
+			"%s: %s — weapon ranges against it %s\" shorter (min %s\")" % [shroud["name"], target.get_name(),
+				str(float(shroud["range_penalty_in"])).trim_suffix(".0"), str(float(shroud["floor_in"])).trim_suffix(".0")], true)
 	if not (aircraft or shrouded):
 		return
 	var locked: PackedStringArray = []
@@ -16260,7 +16260,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 			upr_ap = int(upr_eff["ap"])
 			upr_hit = int(upr_eff["hit"])
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s rolls %d → %s" % [
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s's volley rolls %d → %s" % [
 					upr_name, attacker.get_name(), int(upr_face[0]), ("AP(+1)" if upr_ap > 0 else "+1 to hit")], true)
 	# Resolver wave A — Takedown Shot: your once-per-game extra attack joins the volley too.
 	var h_groups: Array = _solo_attack_groups(attacker, dist, false, target)
@@ -16407,7 +16407,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 					and int(profile.get("blast", 0)) <= 1 \
 					and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 \
 					and not str(profile.get("cover_rule", "")).is_empty():
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s — %s's cover save is skipped" % [
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s ignores %s's cover (save skipped)" % [
 					str(profile["cover_rule"]), str(group.get("name", "?")), target.get_name()], true)
 			# B5 (test game 2): the HUMAN volley now mirrors the AI's per-model landing — Takedown
 			# wounds go to the model the PLAYER picks (click), Deadly lands ×X on one model with no
