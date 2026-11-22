@@ -7778,6 +7778,11 @@ func _solo_try_reanimation(unit: GameUnit) -> void:
 		return
 	if not _solo_reanimation_mapped(unit):
 		return
+	if SoloController.reanimation_member_lacks_rule(unit):
+		if SoloController.reanimation_chain_missing(unit):   # nothing to restore: no line (the core is quiet too)
+			_log_rule_event(BattleLog.Category.COMBAT, "Reanimation: %s does not reanimate — a joined model lacks the rule" \
+				% unit.get_name(), _solo_is_ai_unit(unit))
+		return
 	if SoloController.reanimation_members(unit).is_empty():
 		_solo_reanimation_aura_end(unit)
 		return
@@ -8313,9 +8318,26 @@ func _solo_reanimation_spot(model: ModelInstance, anchors: Array, taken: Array) 
 			for k in 16:
 				var ang: float = TAU * float(k) / 16.0
 				var cand := Vector3(a_pos.x + cos(ang) * dist, a_pos.y, a_pos.z + sin(ang) * dist)
-				if _solo_reanimation_spot_ok(cand, r, model, anchors, taken):
-					return cand
+				if not _solo_reanimation_line_blocked(a_pos, cand) and _solo_reanimation_spot_ok(cand, r, model, anchors, taken):
+					return _solo_reanimation_on_surface(cand)
 	return Vector3.INF
+
+
+## REVIVE-SPOT (the core's `revive_line_blocked`): the line from the anchor to a ring candidate crosses a ruin / container
+## wall, or ends on another level - the model would come back behind a thin wall or across a tier step.
+func _solo_reanimation_line_blocked(a: Vector3, c: Vector3) -> bool:
+	if solo_controller == null:
+		return false
+	if MovementPlanner.path_crosses_wall(Vector2(a.x, a.z), Vector2(c.x, c.z), solo_controller._rest_walls()):
+		return true
+	var sy: Callable = solo_controller.surface_y_provider
+	return sy.is_valid() and absf(float(sy.call(Vector2(a.x, a.z))) - float(sy.call(Vector2(c.x, c.z)))) > 0.001
+
+
+## REVIVE-SPOT: a restored model stands ON the surface under its spot (the core settles it; the anchor's height could float).
+func _solo_reanimation_on_surface(p: Vector3) -> Vector3:
+	var sy: Callable = solo_controller.surface_y_provider if solo_controller != null else Callable()
+	return Vector3(p.x, float(sy.call(Vector2(p.x, p.z))), p.z) if sy.is_valid() else p
 
 
 ## Spot test: the whole base on the table, a legal rest (REVIVE-SPOT: no impassable terrain, no wall or

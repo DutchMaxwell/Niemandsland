@@ -120,9 +120,36 @@ func test_a_joined_hero_without_the_rule_stops_the_roll() -> void:
 	await _main._solo_try_reanimation(host)
 	assert_int(_rolls()).override_failure_message("rolled for a unit whose joined hero lacks the rule:\n%s" % _log_text()) \
 		.is_equal(0)
+	assert_str(_log_text()).override_failure_message("every applied rule logs").contains(
+		"Reanimation: Bots does not reanimate — a joined model lacks the rule")
 
 
 func test_a_joined_hero_with_the_rule_lets_the_chain_roll() -> void:
 	var host := _host_and_hero(["Hero", "Reanimation"])
 	await _main._solo_try_reanimation(host)
 	assert_int(_rolls()).override_failure_message("planted: the chain must roll:\n%s" % _log_text()).is_equal(1)
+
+
+
+## Review of #3385: no ring candidate beyond a wall or on another level (the core's `revive_line_blocked`).
+func test_a_ring_line_through_a_wall_or_onto_another_level_is_blocked() -> void:
+	var solo = _main.solo_controller
+	solo.walls_provider = func() -> Array: return [[Vector2(0.028, -0.05), Vector2(0.028, 0.05)]]
+	await _runner.simulate_frames(1)   # `_rest_walls` caches per frame
+	assert_bool(_main._solo_reanimation_line_blocked(Vector3.ZERO, Vector3(0.0467, 0, 0))).override_failure_message("through the wall").is_true()
+	assert_bool(_main._solo_reanimation_line_blocked(Vector3.ZERO, Vector3(-0.0467, 0, 0))).override_failure_message("away from it").is_false()
+	solo.walls_provider = func() -> Array: return []
+	solo.surface_y_provider = func(p: Vector2) -> float: return 0.0762 if p.x > 0.02 else 0.0
+	await _runner.simulate_frames(1)
+	assert_bool(_main._solo_reanimation_line_blocked(Vector3.ZERO, Vector3(0.034, 0, 0))).override_failure_message("onto the raised tier").is_true()
+	assert_bool(_main._solo_reanimation_line_blocked(Vector3.ZERO, Vector3(-0.034, 0, 0))).override_failure_message("same level").is_false()
+
+
+## Review of #3385: the restored model stands ON the surface under its spot (the core settles it), not at the anchor's height.
+func test_a_restored_model_stands_on_the_surface() -> void:
+	_main.solo_controller.surface_y_provider = func(_p: Vector2) -> float: return 0.01
+	var u := _pair(Vector2.ZERO, Vector2(0.3, 0.0))
+	await _main._solo_resolve_reanimation(u, 1, 5, 1)
+	assert_bool((u.models[1] as ModelInstance).is_alive).is_true()
+	assert_float((u.models[1] as ModelInstance).node.global_position.y) \
+		.override_failure_message("floating at the anchor's height").is_equal_approx(0.01, 0.0001)
