@@ -354,9 +354,12 @@ func test_wall_spills_buttresses_and_ivy_clusters_stand_on_the_right_faces() -> 
 	assert_int(lit_ivy).override_failure_message("ivy on the lit faces too (train 2)").is_greater(0)
 
 
-## Large hanging signs (kit batch A8): on a raised house face (not the wall, not an intact house) that looks at a street off the square, +z over the street, at most three a half.
+## Large hanging signs (kit batch A8): on a raised house face (not the wall), a half roof's street front or a tall-eaved intact house (halfroofs plan H1), that looks at a street off the
+## square, +z over the street, at most three a half.
 func test_large_signs_hang_on_street_fronts_off_the_square() -> void:
 	var total := 0
+	var half_roofs := 0
+	var houses := 0
 	for s: int in range(1, 41):   # (towers plan T2: boards 1-40 - the 10 pinned seeds dropped to 4 signs on the tower boards by chance; 40 boards: main 24, K4 26, T2 22)
 		var layout: Dictionary = ClassDB.instantiate("NmlCore").boardgen_layout_themed(s, "ruintown")
 		var nx: int = layout["nx"]
@@ -376,11 +379,18 @@ func test_large_signs_hang_on_street_fronts_off_the_square() -> void:
 			var street := Vector2i((at + into * 0.3) / 3.0)
 			var hc: Dictionary = layout["cells"][house.y * nx + house.x]
 			var sc: Dictionary = layout["cells"][street.y * nx + street.x]
-			assert_int(int(hc["level"])).is_greater(0)
-			assert_bool(["Wall", "Roofed"].has(hc["lot_kind"])).is_false()
+			if hc["lot_kind"] == "Roofed":   # halfroofs plan H1: a half roof's street front, or an intact house with its eaves high enough for the arm
+				half_roofs += 1 if not BoardgenTownClutter._house_lot(layout, int(hc["lot_id"])) else 0
+				houses += 1 if BoardgenTownClutter._house_lot(layout, int(hc["lot_id"])) else 0
+				var tops := BoardgenTownDressing.house_bodies(layout).filter(func(b: Dictionary) -> bool: return int(b["lot"]) == int(hc["lot_id"]))
+				assert_bool(tops.is_empty() or float(tops[0]["top"]) >= BoardgenTownClutter.SIGN_EAVES_IN).override_failure_message("seed %d: a sign arm above its eaves" % s).is_true()
+			else:
+				assert_int(int(hc["level"])).is_greater(0)
+				assert_bool(hc["lot_kind"] == "Wall").is_false()
 			assert_bool(sc["street"] and int(sc["level"]) == 0).override_failure_message("seed %d: a sign over no street" % s).is_true()
 			per_half[1 if at.y >= 24.0 else 0] += 1
 		assert_int(per_half.max()).is_less_equal(BoardgenTownClutter.SIGNS_PER_HALF)
+	print("LARGE SIGNS %d over 40 boards: %d on a half roof, %d on an intact house" % [total, half_roofs, houses])
 	assert_int(total).is_greater(20)
 
 
