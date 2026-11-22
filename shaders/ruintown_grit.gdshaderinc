@@ -323,8 +323,8 @@ vec3 grit_plaster_wear(vec3 infill, vec2 uv, float x, float y, float seed, vec3 
 	infill *= 1.0 - 0.3 * under * mix(0.5, 1.0, vnoise(vec2(uv.x * 9.0, uv.y * 1.5) + seed));
 	float zone = max(1.0 - smoothstep(0.6, 1.1, y), 1.0 - smoothstep(0.25, 0.6, min(x, 3.0 - x)));   // low on the panel and at the corners
 	float loss = smoothstep(0.6, 0.64, vnoise(uv * 2.1 + seed + 41.0) * (0.75 + 0.35 * zone));
-	float lath = mix(0.5, step(0.5, fract(uv.y / 0.09)), keep(uv.y, 0.09));   // the lath fades like the bare lath panel (plan TEX 3)
-	vec3 behind = fract(h21(floor(uv / 3.0) + seed) * 3.0) < 0.5 ? mix(wood * 1.3, wood * 0.55, lath) : vec3(0.36, 0.33, 0.29) * mix(0.75, 1.1, h21(floor(uv / vec2(0.3, 0.15)) + seed));
+	float lath = mix(0.25, step(fract(uv.y / 0.09), 0.25), keep(uv.y, 0.0225));   // the lath as the bare lath panel: thin gaps, faded on the gap width (plan TEX 3)
+	vec3 behind = fract(h21(floor(uv / 3.0) + seed) * 3.0) < 0.5 ? mix(wood * 1.05, wood * 0.8, lath) : vec3(0.36, 0.33, 0.29) * mix(0.75, 1.1, h21(floor(uv / vec2(0.3, 0.15)) + seed));
 	return mix(infill, behind, loss);
 }
 
