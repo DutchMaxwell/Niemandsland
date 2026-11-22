@@ -1580,8 +1580,12 @@ static func land_delta(main, delta: Array, start_models: Array, done: Dictionary
 ## self-wound in the volley) and then stepped carries its survivors: they map onto the start models still alive, in order
 ## (the per-step landings already removed the same dead). The core's own steps move models the table never placed (the Hit & Run
 ## sidestep after a volley, `sim.rs` `tray_hit_and_run`, whose line the core already logged): each model that does not stand
-## where the core left it (XZ, within half a millimetre) is put there with the table's own writer (`_apply_model_positions`:
+## where the core left it (XZ, within `LAND_EPSILON_M`) is put there with the table's own writer (`_apply_model_positions`:
 ## MP move batch, surface height). A model the table already placed there (a walked move) is no news.
+## meleefix: the landing tolerance of `_land_positions`, 0.01 mm: above the float32 noise of a spot both sides computed (the walked move
+## agrees with the core to ~3e-6 m), below anything a rule measures.
+const LAND_EPSILON_M := 0.00001
+
 static func _land_positions(main, gu: GameUnit, d: Dictionary, start_models: Array) -> void:
 	var at: Array = d.get("positions", [])
 	if at.is_empty():
@@ -1598,9 +1602,10 @@ static func _land_positions(main, gu: GameUnit, d: Dictionary, start_models: Arr
 		if m.node == null or not is_instance_valid(m.node):
 			continue
 		var now: Vector3 = m.node.global_position
-		# The table's own smallest move is 0.0005 m (`_execute_move`'s "nothing moved", pile-in's last step): a core step of half a millimetre to a
-		# millimetre, the defender's last pile-in step for one, is a move. The old millimetre tolerance left the table 0.02 in off the core's end state.
-		if Vector2(now.x, now.z).distance_to(Vector2(p.x, p.z)) < 0.0005:
+		# Any core end spot above float noise is landed: a 1 in separation can end a model 0.36 mm from the spot the board holds (its landing
+		# spot), and the old 0.0005 m dead zone left it 0.014 in off the core's end state. A spot the table already walked to is skipped, so
+		# an equal move still sends no MP batch.
+		if Vector2(now.x, now.z).distance_to(Vector2(p.x, p.z)) < LAND_EPSILON_M:
 			continue
 		models.append(m)
 		to.append(p)
