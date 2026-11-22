@@ -11,9 +11,10 @@ use super::{budget, Budgets, Symmetry, DEPLOY_DEPTH_CELLS, GRID, LEVEL_IN};
 /// `Terrace`: an L-shaped step, the rest of the lot stays ground. `Deck`: open raised platform, sight passes.
 /// `Hazard`: flat area hazard, never raised. `Rough`: a flat plot (garden, rubble) that is never raised and gets no piece on it. `Wall`: a cell of the
 /// city wall (its 6 in ridge, a 9 in wall tower, a 3 in buttress stair or a level-0 breach), set by the wall stage and never by a lot. `Roofed`: an intact house -
-/// level-0 solid ground (nobody stands on a roof, sight stops), the core's `CONTAINER` class; ruined houses are `Block` / `Terrace` / `Deck`.
+/// level-0 solid ground (nobody stands on a roof, sight stops), the core's `CONTAINER` class; ruined houses are `Block` / `Terrace` / `Deck`. `Tower`: a tall scenery tower (towers plan
+/// T1) - level 0 in the layout, solid like a house and `TOWER_IN` high to the core: nobody stands in or on it, no ladder touches it, sight stops at it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LotKind { Street, Block, Terrace, Deck, Hazard, Rough, Wall, Roofed }
+pub enum LotKind { Street, Block, Terrace, Deck, Hazard, Rough, Wall, Roofed, Tower }
 
 /// One lattice cell. `level` 0/1/2/3 = 0/3/6/9 in; `deploy` 1/2 = the player whose band it is, 0 = neither.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -46,7 +46,7 @@ pub fn solid_mask(landmarks: &[Landmark]) -> Vec<bool> {
 /// The cells no walker may enter: every solid landmark and every intact (roofed) house.
 pub fn solid_cells(cells: &[Cell], landmarks: &[Landmark]) -> Vec<bool> {
     let mut solid = solid_mask(landmarks);
-    for (i, c) in cells.iter().enumerate() { solid[i] |= c.lot_kind == LotKind::Roofed; }
+    for (i, c) in cells.iter().enumerate() { solid[i] |= matches!(c.lot_kind, LotKind::Roofed | LotKind::Tower); }
     solid
 }
 
@@ -99,7 +99,7 @@ fn rects(kind: LandmarkKind, top: bool, small_pools: bool, rng: &mut GodotRng) -
 fn fits(l: &Landmark, cells: &[Cell], taken: &[bool], conns: &[Connector]) -> bool {
     let level = cells[l.z * GRID + l.x].level;
     l.cells().all(|i| { let c = &cells[i]; !taken[i] && c.deploy == 0 && !conns.iter().any(|k| usize::from(k.low) == i || usize::from(k.high) == i)
-        && if l.kind == LandmarkKind::PumpHouse { (1..=2).contains(&level) && c.level == level } else { c.level == 0 && !c.street && c.lot_kind != LotKind::Hazard && (c.lot_kind != LotKind::Rough || l.kind == LandmarkKind::Sump) && !matches!(c.lot_kind, LotKind::Wall | LotKind::Roofed) } })
+        && if l.kind == LandmarkKind::PumpHouse { (1..=2).contains(&level) && c.level == level } else { c.level == 0 && !c.street && c.lot_kind != LotKind::Hazard && (c.lot_kind != LotKind::Rough || l.kind == LandmarkKind::Sump) && !matches!(c.lot_kind, LotKind::Wall | LotKind::Roofed | LotKind::Tower) } })
 }
 
 /// Keep later pieces a cell away; a sump turns its ground into hazard ground.
