@@ -88,7 +88,7 @@ def test_the_canary_really_boots_the_game_and_is_not_a_class_suite():
 def test_build_yml_wires_the_short_run_and_adds_no_skip():
     import re
     wf = open(os.path.join(ROOT, ".github", "workflows", "build.yml"), encoding="utf-8").read()
-    for needle in ("fetch-depth: 2", '[ "$BASE_REF" = "main" ]', "--pr-is-only look", "&& '[0]' ||", "--lane look > look_suites.txt", "--suite-file look_suites.txt",
+    for needle in ("fetch-depth: 2", '[ "$BASE_REF" = "ci3270/proof-base" ]', "--pr-is-only look", "&& '[0]' ||", "--lane look > look_suites.txt", "--suite-file look_suites.txt",
                    "tools/ci_look_lane_test.py"):
         assert needle in wf, f"build.yml lost the LOOK short run wiring: {needle}"
     m = re.search(r"^  test:\n(?:    .*\n)*?    if: (.*)$", wf, re.M)
@@ -113,7 +113,7 @@ def test_the_short_run_is_for_a_pr_against_main_only(tmp_path):
         subprocess.run(["bash", "-c", script], cwd=tmp_path, env=env, check=True, capture_output=True)
         return out.read_text().strip()
 
-    assert look_only("pull_request", "main") == "look_only=true"
+    assert look_only("pull_request", "ci3270/proof-base") == "look_only=true"
     assert look_only("pull_request", "roofsf/f1") == "look_only=false"  # stacked child of a parent that may change core/
     assert look_only("pull_request", "") == "look_only=false"
     assert look_only("push", "main") == "look_only=false"
