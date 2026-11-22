@@ -299,11 +299,11 @@ func test_the_deny_switch_reads_the_measured_deny_list() -> void:
 	surprise.unit_properties["faction_folder"] = "alien_hives"
 	assert_array(CoreSlice.refusals(surprise)).is_equal(["unit_rule:Surprise Attack"])
 	assert_bool(CoreSlice.takes(_unit(["Tough(3)"], [["AP(1)"]]))).is_true()
-	# HR-POS brought the after-volley step back through the delta (`positions`); lane shootfix refused the shooter again (group
-	# `hit_and_run_landing`: the core's rigid step lands bases inside other units, the door has no landing check). Shot at it is taken.
+	# HR-POS brought the after-volley step back through the delta (`positions`); lane shootfix refused the shooter (group
+	# `hit_and_run_landing`); PLAN_FIRST_DELETION 3e lifted it: #3410 lands no step that creates a break. Shooter and target are taken.
 	var raider := _unit(["Hit & Run"], [["AP(1)"]])
 	raider.unit_properties["faction_folder"] = "dao_union"   # a faction whose map gives Hit & Run its primitive
-	assert_array(CoreSlice.refusals(raider)).is_equal(["unit_rule:Hit & Run"])
+	assert_array(CoreSlice.refusals(raider)).is_empty()
 	assert_array(CoreSlice.refusals(raider, true)).is_empty()
 	# An Indirect weapon (lifted after #2939/#2942/#2947) and a joined hero are taken (the lone-hero target, epoch 81).
 	assert_bool(CoreSlice.takes(_unit([], [["Indirect"]]))).is_true()   # lifted with #2939 / #2942 / #2947
@@ -676,18 +676,18 @@ func test_deny_mode_refuses_an_activation_start_bearer_as_shooter() -> void:
 	CoreSlice.reset_cache()
 
 
-## Lane shootfix (containment): the deny group `hit_and_run_landing` keeps every SHOOTER whose rule reaches the core's Hit & Run step after a
-## volley on the table at the shoot doors (the core's rigid step lands bases inside other units; core_hit_and_run_door_test.gd). Shot at, a
-## bearer is taken (it does not step in that volley). Hit & Run Fighter steps only after melee: taken as a shooter, refused as a charger by the
-## melee file's group. RED: drop the group -> the shooters read [].
-func test_deny_mode_refuses_a_hit_and_run_family_shooter() -> void:
+## Lane shootfix (containment) kept every Hit & Run family SHOOTER on the table (group `hit_and_run_landing`: the core's rigid step landed bases
+## inside other units). PLAN_FIRST_DELETION 3e lifted the shoot file's group: #3410 refuses a landing that creates a break (core_hit_and_run_door_test.gd).
+## Shooter and target are taken now. Hit & Run Fighter steps only after melee: refused as a charger by the MELEE file's group, which stays.
+## RED: put the group back into the shoot deny file -> the shooters read their rule.
+func test_deny_mode_takes_a_hit_and_run_family_shooter() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
 	for c in [["Harassing", "dark_elf_raiders"], ["Enhanced Harassing", "dark_elf_raiders"], ["Guerrilla", "rebel_guerrillas"],
 			["Hit & Run", "custodian_brothers"], ["Hit & Run Shooter", "custodian_brothers"]]:
 		var bearer := _unit([c[0]], [["AP(1)"]])
 		bearer.unit_properties["faction_folder"] = c[1]
-		assert_array(CoreSlice.refusals(bearer)).override_failure_message("%s shooter" % c[0]).is_equal(["unit_rule:%s" % c[0]])
+		assert_array(CoreSlice.refusals(bearer)).override_failure_message("%s shooter" % c[0]).is_empty()
 		assert_array(CoreSlice.refusals(bearer, true)).override_failure_message("%s target" % c[0]).is_empty()
 	var fighter := _unit(["Hit & Run Fighter"], [["AP(1)"]])
 	fighter.unit_properties["faction_folder"] = "alien_hives"

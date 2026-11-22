@@ -12,7 +12,6 @@
   },
   "deny_names": {
     "Grounded Protection": "door omits the table's terrain trace (Grounded Protection) or once-per-game lines (Protection Feat), dlines_gap row 3; the roll, bypass and Warding gate lines are said since dlines2/3.",
-    "Enhanced Knightborn": "the table names the roll group by whichever of Knightborn / Enhanced Knightborn is live at the shot's distance (the gated Knightborn folds nothing within 9in); the core's group name is static, dlines_gap row 3.",
     "Protection Feat": "door omits the table's terrain trace (Grounded Protection) or once-per-game lines (Protection Feat), dlines_gap row 3; the roll, bypass and Warding gate lines are said since dlines2/3.",
     "Surprise Attack": "OD-H8 probe (core_ledger_lift_door_test.gd, 16 real AI activations, door on against door off): the activation-start burst rolls twice with the door on, the table's beat and then the core's own copy (16 / 16 seeds, the same shape as the pre-attack beats); refused by name until the table's beat or the core's copy steps aside. Teleport, Ethereal and plain Infiltrate read equal."
   },
@@ -38,7 +37,8 @@
     "Speed Debuff": "same probe",
     "Thrust in Melee Aura": "same probe",
     "Unstoppable when Shooting Aura": "same probe",
-    "Unwieldy Debuff": "same probe"
+    "Unwieldy Debuff": "same probe",
+    "Enhanced Knightborn": "PLAN_FIRST_DELETION 3e: a label gap (which of Knightborn / Enhanced Knightborn names the roll group) is no refusal reason under the parity ruling D-PAR1; probe core_deny_lift_3e_test.gd: 16 AI volleys door against table at 14 and 6 in, dice and rule state equal, the core names the rule"
   },
   "groups": {
     "pre_attack_beat_twice": {
@@ -74,16 +74,6 @@
       "side": "shooter",
       "why": "PLAN_DOOR_ACTIVATION_START step 2 (lane doorStart, 22.11.): Reanimation is an activation-START effect. The table rolls it in `begin_activation` before the door captures the board, and the core, which takes the whole activation, rolls it again from that board. Measured (8 seeds per door, door on against off, dice dump): AI door 8/8 two pool rolls (the core rolls what is left of the pool), the core's volley fired more dice than the table's living shooters on 7/8 (+1/+2), `_land_positions` errored 7/8; human door 8/8 two pool rolls (the core re-rolls the FULL pool at Fire), the volley's dice count differs on 8/8, `_land_positions` errored 8/8; the core's roll never reaches the battle log. Shooter side only: a Reanimation unit shot at does not activate. The primitive covers Reanimation Aura's grant (the import copies Reanimation onto the unit and every joined hero). Bounding was measured equal (the core refuses a bonus move, the table resolves it) and stays taken; Spawn was not measured.",
       "leaves_with": "the door sending `start_done` after the table's start effects (PLAN_DOOR_ACTIVATION_START steps 3-5), then a 16-seed door on/off sweep of a Reanimation unit and an Aura-granted one (step 6)"
-    },
-    "hit_and_run_landing": {
-      "primitives": [
-        "Hit & Run",
-        "Hit & Run Shooter"
-      ],
-      "kind": "landing",
-      "side": "shooter",
-      "why": "Lane shootfix (22.11., gate-12 shoot soak, 24 games): the core's Hit & Run step after a volley runs the RIGID branch at both doors (no movement seam): a 3 in translation of the whole unit away from an enemy that has not activated yet, checked against the board edge only. Probed over every Harassing step the core replayed (game 3, the only soak game with the family, 17 distinct steps): 3 ended illegal - 2 inside another unit's bases (Dark Shooters 6 of 7 models up to 0.75 in deep; Corsairs 0.27 in), 1 base on ground where no base may rest. The door writes the core's end spots back with no landing check (`CoreActivation._land_positions`), so the spot reaches the live table. The table's own step (`_move_away` through the move executor) keeps spacing and terrain; the 9 soak rows of the family all differ from it. Shooter side only: a unit shot at does not step in that volley. The two primitives cover every rule the core's step reads after a volley (Hit & Run, Harassing, Guerrilla and their Boost / Enhanced spellings, Hit & Run Shooter and its Aura's grant); Hit & Run Fighter steps only after melee.",
-      "leaves_with": "PENDING_EPOCH_HIT_AND_RUN_PLAIN going live at 96 (the core takes its port of the table's `_move_away` on a real board: game 3 at forced 96 reads 22 of 22 volleys equal), then a re-probe of the family's steps"
     }
   }
 }
