@@ -31,6 +31,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
 	GraphicsSettings.current_preset = _preset_before
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
@@ -46,15 +48,34 @@ func _unit(pid: int, unit_name: String, n: int, z: float) -> GameUnit:
 	return u
 
 
-func _shots(attacker: GameUnit) -> Array:
+## The unit's own OPR weapon: an Assault Rifle, 5 guns of 2 attacks, AP(1).
+func _arm_rifle(attacker: GameUnit) -> void:
 	var w := OPRApiClient.OPRWeapon.new()
 	w.name = "Assault Rifle"
 	w.range_value = 24
 	w.attacks = 2
 	w.count = 5
 	w.special_rules = ["AP(1)"] as Array[String]
-	return [{"member": attacker, "quality": attacker.get_quality(), "alive": attacker.get_alive_count(),
-		"max": attacker.models.size(), "reach": 24, "profile": AiShooting.profiles_in_range([w], 0.0)[0]}]
+	var src := OPRApiClient.OPRUnit.new()
+	src.weapons = [w]
+	attacker.source_type = "opr"
+	attacker.source_data = src
+
+
+## The game's own call: the core door takes the volley (the board is captured first); the unit's weapons are its own OPR data.
+func _door_volley(shooters: GameUnit) -> void:
+	_main.solo_controller.ai_slot = 1
+	_main.solo_controller.human_slot = 2
+	_main.opr_army_manager.current_round = 1
+	CoreActivation._env = 1
+	var runs := CoreActivation.ai_runs
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	await _main._run_ai_shooting(ActIntent.blank_report(shooters))
+	assert_int(CoreActivation.ai_runs).override_failure_message("the core did not take the volley (the table shot it)") \
+		.is_equal(runs + 1)
+	if _main._solo_core_ai_h != 0:
+		_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+	_main._solo_core_ai_h = 0
 
 
 ## One seeded volley + one seeded damage cast; returns everything the rules decided.
@@ -67,10 +88,11 @@ func _arm(effects_on: bool) -> Dictionary:
 	var count_round := func(_family: int, _moment: String, _at: Vector3) -> void: rounds[0] += 1
 	_main.shot_show.sound_cue.connect(count_round)
 	var shooters := _unit(1, "Rifles", 5, 0.0)
+	_arm_rifle(shooters)
 	var target := _unit(2, "Grunts", 8, 10.0 * INCH)
 	seed(SEED)
 	_main.seed_tray_rng(SEED)
-	await _main._solo_resolve_ai_volley(shooters, target, _shots(shooters), false)
+	await _door_volley(shooters)
 	await _main._solo_resolve_one_cast({"caster": shooters, "caster_unit": shooters, "name": "Spark",
 		"spell": {"range_in": 18, "effect": {"kind": "damage", "hits": 3, "ap": 1}}, "targets": [target],
 		"boost": 0, "interference": 1, "base_target": 2, "threshold": 1})
