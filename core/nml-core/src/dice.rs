@@ -1046,7 +1046,9 @@ fn primal_extras(p: &ShootProfile, grant: bool, v36: bool, faces: &[u8], count_t
         return hits + if grant { surge_attack_say(&primal_boost_grant_profile(), faces, count_target, owner, tray, &mut out.rolls, Some(side)) } else { 0 };
     }
     if faces.iter().any(|&f| f == 6 || (f == 5 && count_target <= 5)) {
-        out.log.push(format!("Enhanced Primal: {owner} — one extra-attack roll on unmodified 5s and 6s (the grant widens the Primal, it adds no second roll)"));
+        let line = format!("Enhanced Primal: {owner} — one extra-attack roll on unmodified 5s and 6s (the grant widens the Primal, it adds no second roll)");
+        say_rule(tray, "enhanced_primal", side, || line.clone()); // the step path's lines are the tray's
+        out.log.push(line);
     }
     surge_attack_say(&ShootProfile { surge_attack_low: p.surge_attack_low.min(5), ..p.clone() }, faces, count_target, owner, tray, &mut out.rolls, Some(side))
 }
@@ -1834,17 +1836,15 @@ pub(crate) fn resolve_volley_with_pick_label(
             continue;
         }
         if p.reach_bonus_in > 0.0 && (p.range as f64) < reach_gate && reach >= reach_gate {
-            out.log.push(format!(
-                "{}: {} gains +{:.0}\" reach on {}",
-                p.reach_bonus_rule, sh.owner, p.reach_bonus_in, def_owner
-            ));
+            let line = format!("{}: {} gains +{:.0}\" reach on {}", p.reach_bonus_rule, sh.owner, p.reach_bonus_in, def_owner);
+            say_rule(tray, "reach_bonus", att.side, || line.clone());
+            out.log.push(line);
         }
         // The Mark names itself only where it was needed: a shooter the grant already carries is not its beneficiary.
         if def.range_mark_in > 0.0 && (p.range as f64) < reach_gate && reach >= reach_gate && reach - def.range_mark_in < reach_gate {
-            out.log.push(format!(
-                "Increased Shooting Range Mark: {} gains +{:.0}\" reach on {}",
-                sh.owner, def.range_mark_in, def_owner
-            ));
+            let line = format!("Increased Shooting Range Mark: {} gains +{:.0}\" reach on {}", sh.owner, def.range_mark_in, def_owner);
+            say_rule(tray, "range_mark", att.side, || line.clone());
+            out.log.push(line);
         }
         let n = sh.attacks[k];
         if n <= 0 {
@@ -2241,7 +2241,9 @@ pub(crate) fn resolve_volley_with_pick_label(
             // (rules-must-log); a weapon's own Takedown tag carries no name
             // and stays as silent as every earlier epoch logged it.
             if !p.takedown_rule.is_empty() {
-                out.log.push(format!("{}: Takedown on {}'s volley", p.takedown_rule, sh.owner));
+                let line = format!("{}: Takedown on {}'s volley", p.takedown_rule, sh.owner);
+                say_rule(tray, "takedown_rule", sh.att.side, || line.clone());
+                out.log.push(line);
             }
         }
         // FEAT PR 2 — "Takedown Shot" names itself once per game
@@ -2707,8 +2709,9 @@ pub(crate) fn resolve_volley_with_pick_label(
         // never fires from 37 (the melee read answers only non-shooting
         // scopes), so there is no melee twin.
         if ignores_regen && att.unstoppable_aura && w > 0 {
-            out.log.push(format!(
-                "Unstoppable: {} — ignores {}'s Regeneration (aura)", sh.owner, def_owner));
+            let line = format!("Unstoppable: {} — ignores {}'s Regeneration (aura)", sh.owner, def_owner);
+            say_rule(tray, "anti_regen", sh.att.side, || line.clone());
+            out.log.push(line);
         }
         // Only the pooled LEGACY leg is a divergence: from EPOCH_14 the
         // per-model groups below land through `land_deadly_wounds`, the
