@@ -17,7 +17,7 @@ const PLAY_PITCH := -50.0
 const PLAY_ZOOM := 1.1
 const WIDTH := 1600
 const MEDIUM := 2
-const VIS_MIN := 0.4   # gate: a model with less than this share of its own silhouette visible (inside its disc) is `occluded`, not scored (gate change 21.11.)
+const VIS_MIN := 0.4   # gate: a pawn with less than this share of its whole silhouette visible is `hidden`, not scored (gate change 21.11.; 22.11.: every pawn, whole silhouette)
 
 var _out := ""
 var _gate_test := false   # gate_test=1: the sampler's own red / green on three test pawns (_gate_self_test)
@@ -539,8 +539,11 @@ func _mean_ring(img: Image, c: Vector2, r0: float, r1: float, skip: Array, mask:
 	return Color(sum.r / maxf(n, 1.0), sum.g / maxf(n, 1.0), sum.b / maxf(n, 1.0), float(n))
 
 
-## READABILITY GATE (port of bg_capture_aaa2.gd): at the PLAY camera with both armies, the contrast of every model's body disc against the ring of board
-## round its base: score = max(dY / 0.10, dC / 0.10); a model reads at >= 1. Per-model scores go to manifest.gate in model order (paired before / after).
+## READABILITY GATE (port of bg_capture_aaa2.gd): at the PLAY camera with both armies, the contrast of every pawn's visible body against the ring of board
+## round its base: score = max(dY / 0.10, dC / 0.10); a pawn reads at >= 1. Per-pawn scores go to manifest.gate in model order (paired before / after).
+## Gate change 22.11.: EVERY pawn gets its visible share from the pixel masks (_visibility); the collider ray of 21.11. is only counted (`ray`), it no longer
+## drops a pawn - it hid 11-31 of 54 pawns per row that the player sees. Per row: `pawns`, `offframe`, `vis` ([model, share] of every in-frame pawn), `hidden`
+## (in frame, share < VIS_MIN: not scored) and the scores of the rest.
 func _readability(tag: String, pname: String) -> void:
 	for _i in 40:   # (was 6) the GI of the Ultra preset (SDFGI, SSIL) settles over frames: a short wait made its rows bimodal between repeats
 		_backdrop(true)
@@ -551,11 +554,16 @@ func _readability(tag: String, pname: String) -> void:
 		"contrast": env.adjustment_contrast, "saturation": env.adjustment_saturation, "curve": env.adjustment_color_correction != null}
 	var cam := root.get_viewport().get_camera_3d()
 	var img := root.get_texture().get_image()
-	var masks := await _model_masks(_models)
+	var shown: Array[Node3D] = []
+	for m in _models:
+		if m.visible:
+			shown.append(m)
+	var vis := await _visibility(shown, img)
 	var k := float(img.get_width()) / root.get_visible_rect().size.x
 	var discs: Array[Dictionary] = []
-	var occluded := 0
 	var offframe := 0
+	var ray := 0
+	var shares: Array = []
 	for i in _models.size():
 		var m := _models[i]
 		if not m.visible:
@@ -568,22 +576,18 @@ func _readability(tag: String, pname: String) -> void:
 		query.collision_mask = 0xFFFFFFFF
 		var hit := root.world_3d.direct_space_state.intersect_ray(query)
 		var hidden: bool = not hit.is_empty() and (hit["collider"] as Node).name == "Colliders" and from.distance_to(hit["position"]) < from.distance_to(p + Vector3.UP * 0.008) - 0.02
-		if hidden:
-			occluded += 1
-			continue
+		ray += 1 if hidden else 0   # the collider ray of 21.11., counted only: its boxes are whole plan cells (gate change 22.11.)
 		if c.x < 1.9 * maxf(r, 2.5) or c.y < 1.9 * maxf(r, 2.5) or c.x > img.get_width() - 1.9 * maxf(r, 2.5) or c.y > img.get_height() - 1.9 * maxf(r, 2.5):
 			offframe += 1   # the disc and its ring are not wholly in the frame: the ring would read clamped border pixels (lead 21.11.: an instrument fault found in the 4 bottom models of seed 3)
 			continue
-		discs.append({"i": i, "c": c, "r": maxf(r, 2.5)})
+		shares.append([i, snappedf(vis["share"][m], 0.01)])
+		if vis["share"][m] >= VIS_MIN:
+			discs.append({"i": i, "c": c, "r": maxf(r, 2.5), "body": vis["body"][m]})
 	var scores: Array[float] = []
 	var rows: Array = []
-	var hidden_px := 0
 	for d: Dictionary in discs:
 		var others := discs.filter(func(o: Dictionary) -> bool: return o["i"] != d["i"])
-		var score := _score(img, masks, d["c"], d["r"], others)
-		if score < 0.0:
-			hidden_px += 1   # something of the board stands in front of the model: its disc would read that, not the model
-			continue
+		var score := _contrast(d["body"], _mean_ring(img, d["c"], d["r"] * 1.3, d["r"] * 1.9, others, vis["mask"], false))
 		scores.append(score)
 		var at := ((_models[int(d["i"])].global_position - _cur_board.global_position) / IN) if _cur_board != null else Vector3.ZERO
 		var cx := clampi(int(floorf(at.x / 3.0 + 8.0)), 0, 15)
@@ -595,27 +599,37 @@ func _readability(tag: String, pname: String) -> void:
 	var low := 0
 	for sc: float in scores:
 		low += 1 if sc < 1.0 else 0
-	_gate.append({"seed": tag, "yaw": _play_yaw, "preset": "medium" if pname == "" else pname.trim_prefix("_"), "models": scores.size(), "occluded": occluded + hidden_px, "occluded_mask": hidden_px, "offframe": offframe, "below_1": low,
+	var n_hidden := shares.size() - scores.size()
+	_gate.append({"seed": tag, "yaw": _play_yaw, "preset": "medium" if pname == "" else pname.trim_prefix("_"), "pawns": shown.size(), "models": scores.size(), "hidden": n_hidden, "occluded": n_hidden,
+		"offframe": offframe, "ray": ray, "below_1": low, "vis": shares,
 		"min": snappedf(sorted[0] if not sorted.is_empty() else 0.0, 0.01), "median": snappedf(sorted[sorted.size() / 2] if not sorted.is_empty() else 0.0, 0.01), "scores": rows})
-	print("GATE ", tag, pname, " models ", scores.size(), " below1 ", low, " occluded ", occluded + hidden_px)
+	print("GATE ", tag, pname, " pawns ", shown.size(), " offframe ", offframe, " hidden ", n_hidden, " scored ", scores.size(), " below1 ", low, " (old collider ray: ", ray, ")")
 
 
-## The score of one model (gate change 21.11.): its VISIBLE body pixels against the ring of board round its base without any model pixel, score = max(dY / 0.10, dC / 0.10);
-## -1 (occluded) when less than VIS_MIN of its whole silhouette inside the disc is visible.
-func _score(img: Image, masks: Array[Image], c: Vector2, r: float, others: Array) -> float:
-	var whole := _mean_ring(masks[1], c, 0.0, r * 0.9, [], masks[1], true).a
-	var body := _mean_ring(img, c, 0.0, r * 0.9, [], masks[0], true)
-	if whole < 1.0 or body.a / whole < VIS_MIN:
-		return -1.0
-	var ring := _mean_ring(img, c, r * 1.3, r * 1.9, others, masks[0], false)
+## Contrast of a body colour against a ring colour: max(dY / 0.10, dC / 0.10).
+func _contrast(body: Color, ring: Color) -> float:
 	var cb := Vector2(body.r - body.g, body.b - (body.r + body.g) * 0.5)
 	var cr := Vector2(ring.r - ring.g, ring.b - (ring.r + ring.g) * 0.5)
 	return maxf(absf(_luma(body) - _luma(ring)) / 0.10, cb.distance_to(cr) / 0.10)
 
 
-## The gate's model masks: every model drawn flat magenta (unshaded), once with the board as it stands (what is in front of a model hides it) and once with every other
-## piece of the board hidden (the model's whole silhouette). Returns [visible, whole]; everything is put back.
-func _model_masks(models: Array) -> Array[Image]:
+## Every pawn's VISIBLE SHARE (gate change 22.11.): the pawns are drawn flat magenta (unshaded) in groups whose screen boxes do not overlap, each group once with the
+## board as it stands and once with every other piece of the board hidden; share = its magenta pixels with the board / without. Only the board hides a pawn (the pawns
+## outside the group are not drawn). Returns {share: {pawn: float}, body: {pawn: mean colour of its visible pixels in `img`}, mask: every pawn's visible pixels}.
+func _visibility(models: Array[Node3D], img: Image) -> Dictionary:
+	var cam := root.get_viewport().get_camera_3d()
+	var k := float(img.get_width()) / root.get_visible_rect().size.x
+	var frame := Rect2i(Vector2i.ZERO, img.get_size())
+	var boxes := {}
+	var groups: Array = []
+	for m: Node3D in models:
+		var box := _screen_box(m, cam, k).intersection(frame)
+		boxes[m] = box
+		var free: Array = groups.filter(func(g: Array) -> bool: return not g.any(func(o: Node3D) -> bool: return (boxes[o] as Rect2i).grow(2).intersects(box)))
+		if free.is_empty():
+			groups.append([m])
+		else:
+			(free[0] as Array).append(m)
 	var mark := StandardMaterial3D.new()
 	mark.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mark.albedo_color = Color(0.6, 0.0, 0.6)
@@ -624,18 +638,50 @@ func _model_masks(models: Array) -> Array[Image]:
 		for g: GeometryInstance3D in m.find_children("*", "GeometryInstance3D", true, false):
 			saved[g] = g.material_override
 			g.material_override = mark
-	var out: Array[Image] = [await _gate_frame()]
-	var hidden: Array[Node3D] = []
-	for ch: Node in _cur_board.get_children():
-		if ch is Node3D and (ch as Node3D).visible and not models.any(func(m: Node3D) -> bool: return ch == m or ch.is_ancestor_of(m)):
-			(ch as Node3D).visible = false
-			hidden.append(ch)
-	out.append(await _gate_frame())
-	for ch: Node3D in hidden:
-		ch.visible = true
+	var out := {"share": {}, "body": {}, "mask": Image.create(img.get_width(), img.get_height(), false, Image.FORMAT_RGBA8)}
+	for g: Array in groups:
+		for m: Node3D in models:
+			m.visible = g.has(m)
+		var seen := await _gate_frame()
+		var hidden: Array[Node3D] = []
+		for ch: Node in _cur_board.get_children():
+			if ch is Node3D and (ch as Node3D).visible and not models.any(func(m: Node3D) -> bool: return ch == m or ch.is_ancestor_of(m)):
+				(ch as Node3D).visible = false
+				hidden.append(ch)
+		var whole := await _gate_frame()
+		for ch: Node3D in hidden:
+			ch.visible = true
+		for m: Node3D in g:
+			var box: Rect2i = boxes[m]
+			var n_seen := 0
+			var n_whole := 0
+			var n_body := 0
+			var sum := Color(0, 0, 0, 0)
+			for y in range(box.position.y, box.end.y):
+				for x in range(box.position.x, box.end.x):
+					n_whole += 1 if _is_mark(whole.get_pixel(x, y)) else 0
+					if _is_mark(seen.get_pixel(x, y)):
+						n_seen += 1
+						out["mask"].set_pixel(x, y, Color.MAGENTA)
+						if _is_mark(seen.get_pixel(mini(x + 1, box.end.x - 1), y)) and _is_mark(seen.get_pixel(x, mini(y + 1, box.end.y - 1))) and _is_mark(seen.get_pixel(maxi(x - 1, 0), y)) and _is_mark(seen.get_pixel(x, maxi(y - 1, 0))):
+							n_body += 1   # the body colour from inner pixels only: an edge pixel is blended with what is behind the pawn
+							sum += img.get_pixel(x, y)
+			out["share"][m] = minf(float(n_seen) / n_whole, 1.0) if n_whole > 0 else 0.0
+			out["body"][m] = Color(sum.r / maxf(n_body, 1.0), sum.g / maxf(n_body, 1.0), sum.b / maxf(n_body, 1.0))
+	for m: Node3D in models:
+		m.visible = true
 	for g: GeometryInstance3D in saved:
 		g.material_override = saved[g]
 	return out
+
+
+## The pawn's screen box (px of the captured image): the projected corners of its meshes' boxes, 2 px wider.
+func _screen_box(m: Node3D, cam: Camera3D, k: float) -> Rect2i:
+	var box := Rect2(cam.unproject_position(m.global_position) * k, Vector2.ZERO)
+	for g: GeometryInstance3D in m.find_children("*", "GeometryInstance3D", true, false):
+		for e in 8:
+			box = box.expand(cam.unproject_position((g.global_transform * g.get_aabb()).get_endpoint(e)) * k)
+	return Rect2i(box.position.floor(), box.size.ceil()).grow(2)
 
 
 func _gate_frame() -> Image:
@@ -650,52 +696,70 @@ func _is_mark(c: Color) -> bool:
 	return c.r - c.g > 0.2 and c.b - c.g > 0.2 and absf(c.r - c.b) < 0.25
 
 
-## gate_test=1 (red / green of the sampler): three copies of the first model float 12 in above the board's middle, where nothing of the board can stand in front of them.
-## One behind a 2 in box must read `occluded`; one painted flat pale on a plate of the same flat pale must read below 1 (visible, but no contrast); the same pale pawn on a
-## black plate must read 1 or more.
+## gate_test=1 (red / green of the sampler): four copies of the first model float 12 in above the board's middle, where nothing of the board can stand in front of them.
+## One behind a 2 in box must be hidden (share < VIS_MIN); one painted flat pale on a plate of the same flat pale must read below 1 (visible, but no contrast); the same pale
+## pawn on a black plate must read 1 or more; one with a wall in front of its lower half (a merlon) must keep a share between VIS_MIN and 0.75 (scored, part hidden).
 func _gate_self_test() -> void:
 	var cam := root.get_viewport().get_camera_3d()
-	var tests: Array = []
+	var tests: Array[Node3D] = []
 	var props: Array[Node3D] = []
 	var pale := StandardMaterial3D.new()
 	pale.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	pale.albedo_color = Color(0.8, 0.8, 0.78)
 	var dark := pale.duplicate() as StandardMaterial3D
 	dark.albedo_color = Color.BLACK
-	for t in 3:
+	for t in 4:
 		var pawn := _models[0].duplicate() as Node3D
 		_cur_board.add_child(pawn)
-		pawn.global_position = _cur_board.global_position + Vector3((t - 1) * 6.0, 12.0, 0.0) * IN
+		pawn.global_position = _cur_board.global_position + Vector3((t - 1.5) * 6.0, 12.0, 0.0) * IN
 		tests.append(pawn)
-		if t > 0:
+		if t == 1 or t == 2:
 			for g: GeometryInstance3D in pawn.find_children("*", "GeometryInstance3D", true, false):
 				g.material_override = pale
 		var prop := MeshInstance3D.new()
+		_cur_board.add_child(prop)
 		if t == 0:
 			prop.mesh = BoxMesh.new()
 			(prop.mesh as BoxMesh).size = Vector3.ONE * 2.0 * IN
-			_cur_board.add_child(prop)
 			prop.global_position = pawn.global_position + (cam.global_position - pawn.global_position).normalized() * 2.0 * IN
+		elif t == 3:   # the merlon: a 3 in wide wall 1 in toward the camera whose top edge lies on the sight line to 0.15 of the pawn's height (about half its area: the base is the wide part)
+			var h := _screen_height_m(pawn)
+			var mid := pawn.global_position + Vector3.UP * h * 0.15
+			var to_cam := cam.global_position - mid
+			var top := mid + to_cam / Vector2(to_cam.x, to_cam.z).length() * IN
+			prop.mesh = BoxMesh.new()
+			(prop.mesh as BoxMesh).size = Vector3(3.0, 3.0, 0.2) * IN
+			prop.global_position = top - Vector3.UP * 1.5 * IN
+			prop.rotation.y = atan2(to_cam.x, to_cam.z)
 		else:
 			prop.mesh = PlaneMesh.new()
-			(prop.mesh as PlaneMesh).size = Vector2.ONE * 3.0 * IN
+			(prop.mesh as PlaneMesh).size = Vector2.ONE * 5.0 * IN   # wider than the ring round the base at 50 deg down
 			prop.material_override = pale if t == 1 else dark
-			_cur_board.add_child(prop)
 			prop.global_position = pawn.global_position - Vector3.UP * 0.0005
 		props.append(prop)
 	var img := await _gate_frame()
-	var masks := await _model_masks(tests)
+	var vis := await _visibility(tests, img)
 	var k := float(img.get_width()) / root.get_visible_rect().size.x
 	var got: Array[float] = []
 	for pawn: Node3D in tests:
 		var p := pawn.global_position + Vector3.UP * 0.004
 		var c := cam.unproject_position(p) * k
-		got.append(_score(img, masks, c, maxf((cam.unproject_position(p + cam.global_transform.basis.x * 0.016) * k - c).length(), 2.5), []))
-	var ok := got[0] < 0.0 and got[1] >= 0.0 and got[1] < 1.0 and got[2] >= 1.0
-	_manifest["gate_test"] = {"behind_box": got[0], "pale_on_pale": got[1], "on_black": got[2], "pass": ok}
-	print("GATE_TEST behind_box %.2f (occluded = -1) pale_on_pale %.2f (< 1) on_black %.2f (>= 1) -> %s" % [got[0], got[1], got[2], "PASS" if ok else "FAIL"])
+		var r := maxf((cam.unproject_position(p + cam.global_transform.basis.x * 0.016) * k - c).length(), 2.5)
+		got.append(_contrast(vis["body"][pawn], _mean_ring(img, c, r * 1.3, r * 1.9, [], vis["mask"], false)))
+	var sh: Array = tests.map(func(p: Node3D) -> float: return vis["share"][p])
+	var ok: bool = sh[0] < VIS_MIN and sh[1] >= VIS_MIN and got[1] < 1.0 and sh[2] >= VIS_MIN and got[2] >= 1.0 and sh[3] >= VIS_MIN and sh[3] <= 0.75
+	_manifest["gate_test"] = {"behind_box_share": sh[0], "pale_on_pale": got[1], "on_black": got[2], "merlon_share": sh[3], "pass": ok}
+	print("GATE_TEST behind_box share %.2f (< %.2f) pale_on_pale %.2f (< 1) on_black %.2f (>= 1) half_behind_merlon share %.2f (%.2f..0.75, scored) -> %s" % [sh[0], VIS_MIN, got[1], got[2], sh[3], VIS_MIN, "PASS" if ok else "FAIL"])
 	for n: Node3D in tests + props:
 		n.free()
+
+
+## A pawn's height (m) from its meshes' boxes.
+func _screen_height_m(m: Node3D) -> float:
+	var top := m.global_position.y
+	for g: GeometryInstance3D in m.find_children("*", "GeometryInstance3D", true, false):
+		top = maxf(top, (g.global_transform * g.get_aabb()).end.y)
+	return top - m.global_position.y
 
 
 ## The ASCII plan: 3 / 2 / 1 raised, ~ hazard lot, y yard (level-0 rest of a Terrace), " garden plot, R intact house, w breach / b buttress / W wall ridge / T wall tower, . street, , ground; landmarks overlaid: F fountain,

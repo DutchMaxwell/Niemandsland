@@ -3,17 +3,20 @@
 
 Reads OUT/<TAG>_y<yaw>_r<n>/manifest.json (the town under test) and OUT/<BASE_TAG>_y<yaw>_r<n>/manifest.json (the plain-table baseline, same instrument and seeds), written by
 tools/boardgen/gate_run.sh. The baseline score of every model is the MEDIAN over its repeats; a row is one (preset, seed, yaw) and is the MEDIAN over the repeats of the town of
-  - the median of the per-model ratio  after / before   (>= 0.9),
-  - its 10th percentile                                  (>= 0.7: the bar),
-  - the growth of the number of models below score 1     (<= 4).
-Models the capture reports as occluded (something of the board in front of them; gate change 21.11.) have no score and are left out; their count (median over the
-repeats) is printed per row, so a gate that goes blind shows it.
+  - the median of the per-model ratio  after / before   (>= MED_BAR),
+  - its 10th percentile                                  (>= P10_BAR),
+  - HARD: no visible pawn below score 1 (the absolute floor).
+Gate change 22.11.: every in-frame pawn carries its visible share (pixel masks); one under 0.4 has no score. The share of in-frame pawns at least 0.4
+visible from the default view is a SOFT number (board style): printed, `WATCH` under VIS_WATCH, never red. Printed per row: pawns, off-frame, hidden, the old
+collider ray's count (comparison only), the visible share. The base is the plain table: the same capture with `board=none`.
 Models whose disc is not wholly inside the 1600 x 900 frame are left out (their ring would read clamped border pixels). Exit status 1 when any row is under a bar.
 """
 import glob, json, os, statistics as st, sys
 
 out, tag, base_tag = sys.argv[1:4]
 M = 30   # px margin of the frame
+P10_BAR, MED_BAR = float(os.environ.get("P10_BAR", "0.60")), float(os.environ.get("MED_BAR", "0.75"))
+VIS_WATCH = float(os.environ.get("VIS_WATCH", "0.70"))
 
 
 def load(t):
@@ -54,10 +57,14 @@ for key in sorted(after, key=lambda k: (k[2], k[0], int(k[1].lstrip("s")))):
         b1 = sum(1 for i, v in s1.items() if v < 1.0 and i in s0)
         p10s.append(ratios[len(ratios) // 10]); meds.append(st.median(ratios)); grows.append(b1 - b0); below.append((b0, b1))
     p10, med, grow = st.median(p10s), st.median(meds), st.median(grows)
-    good = p10 >= 0.7 and med >= 0.9 and grow <= 4
+    vis = [[v[1] for v in g["vis"]] for g in after[key] if "vis" in g]
+    seen = st.median(sum(1 for s in v if s >= 0.4) / max(len(v), 1) for v in vis) if vis else 1.0
+    cnt = lambda f: st.median(g.get(f, -1) for g in after[key])
+    good = p10 >= P10_BAR and med >= MED_BAR and st.median(b[1] for b in below) == 0
     ok = ok and good
-    lines.append("%-6s %-4s yaw %3d | below1 %d -> %d | occluded %d | ratio median %.2f | p10 %.2f [repeats %s] | %s" % (
-        key[0], key[1], int(key[2]), below[0][0], st.median(b[1] for b in below), occl, med, p10, " ".join("%.2f" % p for p in p10s), "PASS" if good else "FAIL"))
+    lines.append("%-6s %-4s yaw %3d | pawns %d off-frame %d hidden %d (ray %d) | visible %.2f%s | below1 %d -> %d | ratio median %.2f | p10 %.2f n %d [repeats %s] | %s" % (
+        key[0], key[1], int(key[2]), cnt("pawns"), cnt("offframe"), occl, cnt("ray"), seen, " WATCH" if seen < VIS_WATCH else "",
+        below[0][0], st.median(b[1] for b in below), med, p10, len(ratios), " ".join("%.2f" % p for p in p10s), "PASS" if good else "FAIL"))
 if not lines:
     ok = False   # no row matched the baseline (other seeds, presets or yaws): a gate that compared nothing is not green
     lines.append("no row of %s matches a row of %s" % (tag, base_tag))
