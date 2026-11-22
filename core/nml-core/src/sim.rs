@@ -4749,11 +4749,16 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     if rule_on(rules_epoch, EPOCH_56_GROUNDED_PROTECTION) && c.regen_pending > 0 {
         let unit = &statics[state.roster.profile[i]].name;
         if c.in_cover {
+            // the table says the verdict only when the held-aside rule is the best ignore (strictly below every other target)
+            if c.regen_target == 0 || c.regen_pending < c.regen_target {
+                c.regen_note = c.regen_pending_notes[0];
+            }
             c.regeneration = true;
             c.regen_target = fold_min(c.regen_target, c.regen_pending);
             c.regen_target_spell = fold_min(c.regen_target_spell, c.regen_pending_spell);
             trace_rule("grounded-protection", unit, "within 1\" of terrain -> Regeneration (the held-aside fold resolves)");
         } else {
+            c.regen_note = c.regen_pending_notes[1];
             trace_rule("grounded-protection", unit, "in the open -> no Regeneration (the fold holds)");
         }
     }
@@ -4852,6 +4857,9 @@ pub fn ctx_live_vs(
     c.rending_grant = c.rending_grant || mods::granted_vs(state, target, "Rending");
     c.furious = c.furious || mods::granted_vs(state, target, "Furious");
     c.relentless_grant = c.relentless_grant || mods::granted_vs(state, target, "Relentless");
+    if c.relentless_grant {
+        c.relentless_from = mods::grant_source(state, i, target, "Relentless");
+    }
     c.shred_grant = c.shred_grant || mods::granted_vs(state, target, "Shred");
     if rule_on(rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) {
         c.slayer_grant = c.slayer_grant || mods::granted_vs(state, target, "Slayer");
@@ -5619,6 +5627,8 @@ pub struct Scratch {
     /// Step 42d: per profile index (with `sighted`), why a weapon its models see would fire nothing - the table's
     /// silent line (`scaled_attacks_report`'s "no living bearers" / "no attacks").
     pub silent: Vec<&'static str>,
+    /// A moved shooter lost its Indirect sight waiver (SHO-01a): the table's "did not Hold" note, said once before the activation's volley.
+    pub indirect_lost: bool,
 }
 
 /// `BattleSim._profiles_of(su, false, d)` battle_sim.gd:714-749 fused with the
@@ -5785,7 +5795,7 @@ fn hazardous_bearer(state: &State, unit: usize, weapon: &str) -> Option<usize> {
 #[allow(clippy::too_many_arguments)]
 fn hazardous_self_wounds(
     statics: &[UnitStatic], state: &mut State, unit: usize,
-    weapon: &str, ones: i64, x: i64, seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
+    weapon: &str, ones: i64, x: i64, seams: Seams, tray: &mut Tray, shot: &mut ShootResult, mark: &mut Option<(usize, usize)>,
 ) -> i64 {
     if ones <= 0 { return 0; }
     let name = statics[state.roster.profile[unit]].name.clone();
@@ -5806,13 +5816,10 @@ fn hazardous_self_wounds(
                 shot.log.push(format!(
                     "Hazardous: {} model {} takes {} wound{} ({})",
                     name, i + 1, take, if take == 1 { "" } else { "s" }, weapon));
-                tray.say(|| {
-                    let bd = if x > 1 { format!("Blast/Deadly {x}, ") } else { String::new() };
-                    LogLine {
-                        rule: "hazardous", category: Category::Combat, side: state.player[unit], detail: None,
-                        text: format!("Hazardous: {name} model {} takes {take} wound{} ({bd}{weapon})",
-                            slot + 1, if take == 1 { "" } else { "s" }),
-                    }
+                let bd = if x > 1 { format!("Blast/Deadly {x}, ") } else { String::new() };
+                say_hazard(tray, mark, shot, LogLine {
+                    rule: "hazardous", category: Category::Combat, side: state.player[unit], detail: None,
+                    text: format!("Hazardous: {name} model {} takes {take} wound{} ({bd}{weapon})", slot + 1, if take == 1 { "" } else { "s" }),
                 });
                 if killed {
                     if state.positions[unit].len() == 1 { drop_carried(state, unit); }
@@ -5828,9 +5835,8 @@ fn hazardous_self_wounds(
                     } else {
                         format!("{name} loses a model ({alive}/{total})")
                     };
-                    tray.say_wounds(|| LogLine {
-                        rule: "hazardous", category: Category::Combat, side: state.player[unit], text: loss, detail: None,
-                    });
+                    let line = LogLine { rule: "hazardous", category: Category::Combat, side: state.player[unit], text: loss, detail: None };
+                    if mark.is_some() { say_hazard(tray, mark, shot, line); } else { tray.say_wounds(|| line); }
                 }
                 tray.land(|| Landing {
                     unit,
@@ -5856,6 +5862,16 @@ fn hazardous_self_wounds(
     ones * x
 }
 
+/// One Hazardous line at the weapon's mark (the table wounds the firer right after the hit roll, ahead of the "fires" line), else at the end.
+/// The marks behind it (the later weapons' Hazardous and the inline Takedown / Deadly landings) move down by the line.
+fn say_hazard(tray: &mut Tray, at: &mut Option<(usize, usize)>, shot: &mut ShootResult, line: LogLine) {
+    let Some(a) = at.as_mut() else { return tray.say(|| line) };
+    tray.say_at(*a, || line);
+    let later = shot.hazardous_self.iter_mut().filter_map(|e| e.4.as_mut()).chain(shot.takedown_marks.iter_mut()).chain(shot.deadly_marks.iter_mut());
+    later.filter(|m| m.0 >= a.0).for_each(|m| m.0 += 1);
+    a.0 += 1;
+}
+
 /// Land a result's Hazardous entries on the member that rolled them (matched by its name, the
 /// dice `Roll::owner`) and drop the `hazardous` divergence flag: from `EPOCH_73_V36` the branch
 /// IS ported, so the tray tree must no longer decline the activation for it.
@@ -5865,11 +5881,13 @@ fn land_hazardous_self(
 ) -> i64 {
     if !rule_on(seams.rules_epoch, EPOCH_73_V36) { return 0; }
     let mut tally = 0;
-    for (owner, weapon, ones, x) in std::mem::take(&mut shot.hazardous_self) {
+    for i in 0..shot.hazardous_self.len() {
+        let (owner, weapon, ones, x, mut at) = shot.hazardous_self[i].clone();
         if let Some(&unit) = members.iter().find(|&&m| statics[state.roster.profile[m]].name == owner) {
-            tally += hazardous_self_wounds(statics, state, unit, &weapon, ones, x, seams, tray, shot);
+            tally += hazardous_self_wounds(statics, state, unit, &weapon, ones, x, seams, tray, shot, &mut at);
         }
     }
+    shot.hazardous_self.clear();
     shot.unported.retain(|u| *u != "hazardous");
     tally
 }
@@ -6318,6 +6336,7 @@ fn sighted_profiles_of(
             *n = seen;
         }
         if lost && !mark_indirect && !own_indirect {
+            sc.indirect_lost |= !p.indirect_alias; // the table's note asks the weapons' own Indirect, not the unit-level rule's stamp
             trace_rule("volley", "Indirect",
                 &format!("{} did not Hold: {} needs line of sight", statics[state.roster.profile[mi]].name, p.name));
         }
@@ -6773,6 +6792,7 @@ fn strike_phase(
     // The table's `_solo_log_defense_parts` lines, the first thing `_solo_melee_strike_phase` says: the Shielded family, then the growth ladder.
     crate::dice::say_shielded(tray, &def, &ut.name);
     crate::dice::say_growth_defense(tray, &def, &ut.name, &growth_defense_parts(statics, next, ti));
+    crate::dice::say_sturdy_replaces(tray, &def);
     // The Guarded family's line, the next one the table says (`_solo_melee_strike_phase`): a charge from over the gate gives the defender +1 Defense.
     let gate = if def.guarded_charge_over_in > 0.0 { def.guarded_charge_over_in } else { crate::combat::LONG_RANGE_IN };
     if charging && def.guarded && charge_from_in > gate && !def.sturdy_boost_gates_guarded && (seams.tray_exact || def.guarded_charge_over_in > 0.0) {
@@ -12174,12 +12194,24 @@ fn resolve_with(
                             }
                             // One-core P3 step 24: the table's announce (`_solo_show_attack_announce`, main.gd:11752), said
                             // before the volley's first die; a group with no weapon in range never reaches it (main.gd:4693).
+                            if gi == 0 && tray.feed().is_some() && parts.iter().any(|(_, m, _)| m.indirect_lost) {
+                                tray.say(|| LogLine { rule: "indirect", category: Category::Combat, side: next.player[si], detail: None,
+                                    text: format!("Indirect: {} did not Hold — its Indirect weapons need line of sight", statics[pi_s].name) });
+                            }
+                            // A unit with no ready ranged weapon at all (Strafing only, or every Limited one spent) says the table's `_solo_log_no_volley` line
+                            // instead of the announce (the activation's only group; the out-of-reach case is the pending epoch's).
+                            let ready = parts.iter().any(|(mi, _, _)| statics[next.roster.profile[*mi]].shoot.iter().any(|p| !(p.limited && next.limited_used[*mi].contains(&p.name))));
+                            if tray.feed().is_some() && !ready && gs.len() == 1 {
+                                tray.say(|| LogLine { rule: "shoot", category: Category::Combat, side: next.player[si], detail: None,
+                                    text: format!("{}: no volley — no ready ranged weapon{}", statics[pi_s].name, if kind == HOLD { " — the unit holds" } else { "" }) });
+                            }
                             if tray.feed().is_some() && parts.iter().any(|(_, m, _)| !m.keep.is_empty()) {
                                 // The table names the target it was aimed at: a lone hero's host, not the hero (see above).
                                 let aimed = lone_host.map_or(ut_g.name.as_str(), |h| statics[next.roster.profile[h]].name.as_str());
                                 crate::dice::say_armor(tray, &def, ut_g.name.as_str());
                                 crate::dice::say_shielded(tray, &def, aimed);
                                 crate::dice::say_growth_defense(tray, &def, aimed, &growth_defense_parts(statics, &next, g.ti));
+                                crate::dice::say_sturdy_replaces(tray, &def);
                                 // The table's over-9" Defense line stands here, after the Defense parts and ahead of the announce.
                                 crate::dice::say_guarded(tray, &def, &ut_g.name, g.mod_d);
                                 def.guarded_said = true;
@@ -12367,7 +12399,6 @@ fn resolve_with(
                             // once-mods BEFORE the post-volley morale test.
     let att_wounded = att_incoming > 0;
                             spend_exchange_wounded(&mut next, si, g.ti, false, att_wounded, def_incoming, seams.rules_epoch);
-                            say_marks_consumed(statics, &next, tray, shot);
                             spend_protection_feat(statics, &mut next, g.ti, def_incoming, seams.rules_epoch);
                             // D1-B5b: the volley's morale test is the NEXT
                             // thing on the table's tray (main.gd:8248-8251),
@@ -12391,6 +12422,8 @@ fn resolve_with(
                             if trigger {
                                 tray_morale(&mut next, statics, g.ti, false, seams, tray, shot, Some(g.mod_d), None);
                             }
+                            // the table says the Mark's consumption after the volley's morale test (state spent above, ahead of it)
+                            say_marks_consumed(statics, &next, tray, shot);
                         }
                     }
                     None => {

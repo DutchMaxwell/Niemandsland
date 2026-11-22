@@ -229,6 +229,15 @@ pub fn granted_vs(state: &State, target: usize, rule: &str) -> bool {
     chain_grant(state, target, rule, true)
 }
 
+/// The name of the record behind a grant to `i`'s attacks (the table's `AiSpell.attacker_grant_source`): the target's attackers-side record, or the
+/// Mark the core placed on the shooter itself (the legacy placement of a Mark); "" when there is none.
+pub fn grant_source(state: &State, i: usize, target: usize, rule: &str) -> &'static str {
+    let chain = std::iter::once(target).chain(state.attached_to[target]).chain(state.attached[target].iter().copied());
+    let on_target = chain.into_iter().find_map(|u| state.buffs[u].iter().find(|r| r.attackers && !r.grants_rule.is_empty() && base_rule_is(&r.grants_rule, rule)));
+    let own = || state.buffs[i].iter().find(|r| r.once && !r.attackers && r.name.ends_with(" Mark") && base_rule_is(&r.grants_rule, rule));
+    on_target.or_else(own).map_or("", |r| crate::rules::intern(&r.name))
+}
+
 /// `SoloController.granted_indirect_of` (`EPOCH_94_PARITY_BATCH`): an Indirect handed to the shooter's OWN unit. Only the unit's own records
 /// count (not the joined chain's), never an attackers-side mark (that one rides the target) and never a melee-scoped one; a `... when ...`
 /// qualifier is cut off the name, as the table does.

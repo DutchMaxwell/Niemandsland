@@ -15,9 +15,9 @@
 const SOURCES: [(&str, &str); 2] = [("dice.rs", include_str!("../../dice.rs")), ("sim.rs", include_str!("../../sim.rs"))];
 
 /// Tray-say spellings: a push with one of these within `BEFORE`/`AFTER` lines counts as twinned.
-const SAYS: [&str; 17] = [
+const SAYS: [&str; 18] = [
     "say_rule(", "tray.say(", ".say(|", "say_at(", "say_wounds(", "say_at_mark(", "say_melee(", "say_marks_consumed(", "say_control_test(",
-    "say_morale_bonus(", "say_versatile_pick(", "say_shaken_batteries(", "say(&mut dice", "tray_say(", "say_regen_bypass(", "say_pierce(", "say_scourge(",
+    "say_morale_bonus(", "say_versatile_pick(", "say_shaken_batteries(", "say(&mut dice", "tray_say(", "say_regen_bypass(", "say_pierce(", "say_scourge(", "say_hazard(",
 ];
 const BEFORE: usize = 1;
 const AFTER: usize = 8;

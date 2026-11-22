@@ -175,3 +175,27 @@ fn the_open_unit_takes_every_wound_at_56_and_below_55_still_pools() {
         old_open.rolls
     );
 }
+
+/// Ledger 5 / COV-L1 (6 cells): the table's `_solo_regen_pick` trace is a battle-log line before the ignore step - "<unit> — <rule>: within N" of
+/// terrain -> Regeneration T+" over the in-cover verdict, "<rule>: in the open -> no Regeneration" over the open one. RED on main: neither was said.
+#[test]
+fn the_save_moment_verdict_is_said_before_the_ignore_roll() {
+    let us = gp_unit(crate::acts::EPOCH_56_GROUNDED_PROTECTION);
+    let said = |in_cover: bool| -> Vec<String> {
+        let st = state_of(in_cover);
+        let def = crate::sim::ctx_live(crate::sim::ctx_of(&us, &st, 0), std::slice::from_ref(&us), &st, 0, false, crate::acts::EPOCH_56_GROUNDED_PROTECTION);
+        let mut tray = crate::dice::Tray::supplied(vec![vec![1; 6]]);
+        crate::dice::ignore_batch(3, 0, 0, &def, "Hammer Guard", &mut tray, &mut Vec::new());
+        tray.all_lines().into_iter().map(|l| l.text).collect()
+    };
+    assert_eq!(said(true), ["Hammer Guard — Grounded Protection: within 1\" of terrain -> Regeneration 5+", "Hammer Guard rolls 3 Grounded Protection dice (5+) — 0 wounds ignored"]);
+    assert_eq!(said(false), ["Hammer Guard — Grounded Protection: in the open -> no Regeneration"]);
+    // a volley with no wound left still says the verdict once, where the table's landing does
+    let (shooter, st) = (shooter_unit(), state_of(false));
+    let def = crate::sim::ctx_live(crate::sim::ctx_of(&us, &st, 0), std::slice::from_ref(&us), &st, 0, false, crate::acts::EPOCH_56_GROUNDED_PROTECTION);
+    let mut tray = crate::dice::Tray::supplied(vec![vec![1; 24]]);
+    crate::dice::resolve_shooting_with_tray(&shooter.shoot, &[0], &[24], &Ctx { quality: 2, models: 1, ..Default::default() }, &def, 12.0, &mut tray);
+    let lines: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).filter(|t| t.contains("Grounded")).collect();
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(lines[0].ends_with("— Grounded Protection: in the open -> no Regeneration"), "{lines:?}");
+}
