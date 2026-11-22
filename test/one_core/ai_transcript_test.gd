@@ -1,8 +1,8 @@
 extends GdUnitTestSuite
 ## C-2: `CoreActivation.ai_transcript` - the AI activation's transcript before its first die, shared by `run_ai` and the
-## shadow replay. Without a split aim it is exactly the three entries `run_ai` always sent (no "split" key, so the
+## shadow replay. Without a split aim it is exactly the entries `run_ai` always sent (no "split" key, so the
 ## core's answer is unchanged); with one, the intent carries it. RED: drop the empty-split guard and the first case
-## gains a "split" key.
+## gains a "split" key. D-PAR3 15a: the table paid the activation start, so `paid {start}` follows `begin` (index 1).
 ## Constructed: a stub main (only `solo_controller.last_move_paths` is read), two bare units in the tree.
 
 const IN2M := 0.0254
@@ -32,16 +32,21 @@ func _unit(uid: String, positions: Array) -> GameUnit:
 	return u
 
 
-func test_the_transcript_is_begin_placed_intent_with_the_walked_routes() -> void:
+func test_the_transcript_is_begin_paid_placed_intent_with_the_walked_routes() -> void:
 	var a := _unit("a", [Vector3(1.0 * IN2M, 0, 2.0 * IN2M), Vector3(3.0 * IN2M, 0, 0)])
 	var b := _unit("b", [Vector3(20.0 * IN2M, 0, 0)])
 	var main := StubMain.new()
 	main.solo_controller.last_move_paths = [{"model": a.models[0], "path": [Vector3(0, 0, 0), Vector3(1.0 * IN2M, 0, 2.0 * IN2M)]}]
 	var t := CoreActivation.ai_transcript(main, a, {"action": AiDecision.Action.ADVANCE}, b)
-	assert_array(t).is_equal([{"t": "begin"},
+	assert_array(t).is_equal([{"t": "begin"}, {"t": "paid", "start": true},
 		{"t": "placed", "positions": [a.models[0].node.global_position, a.models[1].node.global_position],
 			"trails": [[Vector2(0, 0), Vector2(1.0 * IN2M, 2.0 * IN2M)], []]},
 		{"t": "intent", "kind": AiDecision.Action.ADVANCE, "shoot": "b"}])
+	# The seam `start_paid_input = false` (the control of core_start_once_door_test) gives the old shape: begin, placed, intent.
+	CoreActivation.start_paid_input = false
+	var old := CoreActivation.ai_transcript(main, a, {"action": AiDecision.Action.ADVANCE}, b)
+	CoreActivation.start_paid_input = true
+	assert_array(old.map(func(e: Dictionary) -> String: return str(e["t"]))).is_equal(["begin", "placed", "intent"])
 
 
 func test_a_split_aim_rides_the_intent_and_no_target_sends_no_shoot() -> void:
@@ -49,8 +54,8 @@ func test_a_split_aim_rides_the_intent_and_no_target_sends_no_shoot() -> void:
 	var b := _unit("b", [Vector3(20.0 * IN2M, 0, 0)])
 	var aim := [{"member": "a", "weapon": "Rifle", "target": "b"}]
 	var t := CoreActivation.ai_transcript(StubMain.new(), a, {"action": AiDecision.Action.HOLD}, b, aim)
-	assert_dict(t[2]).is_equal({"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": "b", "split": aim})
-	assert_dict(CoreActivation.ai_transcript(StubMain.new(), a, {"action": AiDecision.Action.HOLD}, null)[2]) \
+	assert_dict(t[3]).is_equal({"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": "b", "split": aim})
+	assert_dict(CoreActivation.ai_transcript(StubMain.new(), a, {"action": AiDecision.Action.HOLD}, null)[3]) \
 		.is_equal({"t": "intent", "kind": AiDecision.Action.HOLD})
 
 

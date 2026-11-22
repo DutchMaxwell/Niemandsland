@@ -104,6 +104,8 @@ func _activation(sys: String, faction: String, rule: String, seed: int, gap_x: f
 ## line containing `needle`, "taken": seeds the door was allowed to take, "ran": seeds where the core really ran the activation}.
 func _compare(sys: String, faction: String, rule: String, gap_x: float, needle: String) -> Dictionary:
 	var differing := 0
+	var dice_differing := 0   # D-PAR3 15a: the seeds whose roll streams differ (a second burst) ...
+	var state_differing := 0   # ... and those whose end state differs (a volley on a stale board)
 	var named := 0
 	var taken := 0
 	var ran := 0
@@ -115,13 +117,15 @@ func _compare(sys: String, faction: String, rule: String, gap_x: float, needle: 
 		named += 0 if l_off.is_empty() else 1
 		taken += 1 if bool(on["takes"]) else 0
 		ran += 1 if int(on["ran"]) > 0 else 0
+		dice_differing += 1 if on["rolls"] != off["rolls"] else 0
+		state_differing += 1 if JSON.stringify(on["digest"]) != JSON.stringify(off["digest"]) else 0
 		if on["rolls"] != off["rolls"] or JSON.stringify(on["digest"]) != JSON.stringify(off["digest"]) or l_on != l_off:
 			differing += 1
 			print("LEDGER_LIFT_DIFF ", JSON.stringify({"rule": rule, "seed": s, "rolls_on": on["rolls"], "rolls_off": off["rolls"],
 				"dig_on": on["digest"], "dig_off": off["digest"], "l_on": l_on, "l_off": l_off}).substr(0, 1500))
 	print("LEDGER_LIFT ", JSON.stringify({"rule": rule, "seeds": SEEDS, "taken": taken, "ran": ran, "named": named, "differing": differing}))
 	CoreActivation._env = 1
-	return {"differing": differing, "named": named, "taken": taken, "ran": ran}
+	return {"differing": differing, "named": named, "taken": taken, "ran": ran, "dice_differing": dice_differing, "state_differing": state_differing}
 
 
 ## [label, system, faction folder, rule, gap in inches, a needle that proves the rule acted ("" = equality alone)]
@@ -143,9 +147,14 @@ func test_a_lifted_primitive_is_taken_and_reads_the_same_in_a_real_activation() 
 		assert_int(int(r["differing"])).override_failure_message("%s: %d of %d seeds differ" % [c[0], r["differing"], SEEDS]).is_equal(0)
 
 
-## The Surprise Attack burst (an Infiltrate-primitive entry) fires at the activation start on the table AND from the core's own copy: with the
-## name lifted (a COPY of the deny file) every seed differs, the committed file refuses the bearer.
-func test_the_surprise_attack_burst_stays_refused_because_it_would_roll_twice() -> void:
+## The Surprise Attack burst (an Infiltrate-primitive entry) fires at the activation start on the table, and the core rolled its own copy
+## again: with the name lifted (a COPY of the deny file) every seed differed. D-PAR3 15a: the AI transcript says the table paid the start
+## (`paid {start}`), so the core's copy of the burst is gone - the roll streams are equal on every seed. But the AI board is captured
+## BEFORE the table's burst (main.gd: the capture at the activation start, the burst after it), so the core resolves the volley on a board
+## without the burst's casualties and its delta puts them back: the end state differs (measured: seed 12, the burst's kill stands up
+## again). So the committed file keeps refusing the bearer by NAME (not a group of kind `activation_start`, which 15a lets through);
+## 15b's recapture after the burst lifts it.
+func test_the_surprise_attack_burst_rolls_once_with_the_start_paid() -> void:
 	var committed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.DENY_PATH))
 	assert_bool((committed["deny_names"] as Dictionary).has("Surprise Attack")).override_failure_message("the name is refused").is_true()
 	var refused := await _compare("gf", "alien_hives", "Surprise Attack", 2.0, "Surprise Attack")
@@ -164,4 +173,5 @@ func test_the_surprise_attack_burst_stays_refused_because_it_would_roll_twice() 
 	CoreSlice.reset_cache()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
 	assert_int(int(lifted["ran"])).override_failure_message("with the name lifted the core runs the activation").is_equal(SEEDS)
-	assert_int(int(lifted["differing"])).override_failure_message("the burst rolls twice: every seed must differ").is_equal(SEEDS)
+	assert_int(int(lifted["dice_differing"])).override_failure_message("the start is paid: the core rolls no second burst (%d of %d roll streams differ)" % [lifted["dice_differing"], SEEDS]).is_equal(0)
+	assert_int(int(lifted["state_differing"])).override_failure_message("the stale board: the burst's casualties are not on the core's board, some end state must differ").is_greater(0)
