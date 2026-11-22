@@ -153,3 +153,22 @@ mod human_drop {
         assert_eq!(check_move(&statics, &st, 0, seams, &t, &drop, true), refused());
     }
 }
+
+/// Lead review 22.11.: the floor under a solid tier cell is the ground, not its height - `surface_y_m` (the end-of-activation settle of
+/// models and moved markers) skips the tier term on a solid cell, for a tall tower (12 in) and a house at its ridge (4.5 in). Planted:
+/// the same cells unlisted are tier tops at their height. Red before: the settle put a model 12 in up, on top of a tower.
+#[test]
+fn nobody_settles_on_top_of_a_tower_or_a_house() {
+    let epoch = crate::acts::CURRENT_RULES_EPOCH;
+    let w = [-1.5 * crate::IN2M, -1.5 * crate::IN2M]; // the centre of tier cell 5 (world, board-centred)
+    for top in [crate::boardgen::plain::TOWER_IN, 4.5] {
+        let mut level = vec![0.0; 16];
+        level[5] = top;
+        let (solid, open) = (board(level.clone(), vec![5]), board(level, vec![]));
+        assert_eq!(crate::sight::surface_y_m(&solid, w, epoch), 0.0, "a model settles on top of a {top} in solid cell");
+        assert!((crate::sight::surface_y_m(&open, w, epoch) - top * crate::IN2M).abs() < 1e-9, "planted: an unlisted {top} in cell is a floor at its height");
+        let mut models = vec![[w[0], 1.0, w[1]]];
+        crate::sim::settle_models(&solid, &mut models, epoch);
+        assert_eq!(models[0][1], 0.0, "the settle leaves a model on a {top} in solid cell");
+    }
+}
