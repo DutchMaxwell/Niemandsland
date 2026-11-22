@@ -1285,6 +1285,12 @@ pub(crate) fn tray_reanimation(
         return; // below-7 replays byte-exact; the Shaken activation stays idle (main.gd:4731)
     }
     let owner = statics[next.roster.profile[si]].name.clone();
+    let side = next.player[si];
+    // The step path's lines are the tray's: every Reanimation sentence is said there too, in the same words.
+    let say = |tray: &mut Tray, shot: &mut ShootResult, line: String| {
+        say_rule(tray, "reanimation", side, || line.clone());
+        shot.log.push(line);
+    };
     let mut members: Vec<usize> = vec![si];
     if seams.hero_attach {
         members.extend(next.attached[si].iter().copied());
@@ -1297,14 +1303,14 @@ pub(crate) fn tray_reanimation(
             return; // nothing to restore: no roll and no line, on both sides
         }
         if members.iter().any(|&u| standing(u) && !has(u)) {
-            shot.log.push(format!("Reanimation: {owner} does not reanimate — a joined model lacks the rule"));
+            say(tray, shot, format!("Reanimation: {owner} does not reanimate — a joined model lacks the rule"));
             return;
         }
         // Lead ruling "Aura bearer dead": the Aura gives Reanimation to "this model and its unit" - with every bearer fallen the
         // chain no longer has it (the table's `reanimation_members` ends the Aura the same way).
         let aura = |u: usize| next.profile(u).special_rules.iter().chain(&next.profile(u).item_grants).any(|r| r.trim() == "Reanimation Aura");
         if members.iter().any(|&u| aura(u)) && !members.iter().any(|&u| aura(u) && standing(u)) {
-            shot.log.push(format!("Reanimation: {owner} does not reanimate — the Reanimation Aura bearer has fallen"));
+            say(tray, shot, format!("Reanimation: {owner} does not reanimate — the Reanimation Aura bearer has fallen"));
             return;
         }
         members.retain(|&u| has(u)); // a fallen joined hero without the rule is not in the pool
@@ -1332,7 +1338,7 @@ pub(crate) fn tray_reanimation(
         faces: faces.clone(), owner: owner.clone(),
     });
     let mut left = faces.iter().filter(|&&f| f as i64 >= spec.target).count() as i64;
-    shot.log.push(format!("Reanimation: {owner} rolls {pool} dice ({}) — {left} success(es)", spec.target));
+    say(tray, shot, format!("Reanimation: {owner} rolls {pool} dice ({}) — {left} success(es)", spec.target));
     // Phase A — living wounded: heroes first, biggest gap, index tie-break.
     gaps.sort_by(|a, b| {
         let h = |u: usize| statics[next.roster.profile[u]].is_hero as i8;
@@ -1411,7 +1417,7 @@ pub(crate) fn tray_reanimation(
             clear.then_some(spot)
         };
         let Some(spot) = spot else {
-            shot.log.push("Reanimation: 1 success but no placeable spot — coherency missing".into());
+            say(tray, shot, "Reanimation: 1 success but no placeable spot — coherency missing".into());
             continue;
         };
         let back = if spot_rule { planned } else { cost.min(left).max(1) };
@@ -1421,7 +1427,7 @@ pub(crate) fn tray_reanimation(
         next.kits_drop(u); // the revived body's kit is unknown: this unit falls back to slot order
         next.alive[u] = next.positions[u].len() as i64;
         left -= if spot_rule { 0 } else { back };
-        shot.log.push(format!("Reanimation: 1 model restored ({back} wound(s) back)"));
+        say(tray, shot, format!("Reanimation: 1 model restored ({back} wound(s) back)"));
     }
 }
 
@@ -4629,6 +4635,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         let un = &statics[state.roster.profile[i]].name;
         c.ap_mod = mods::sum_logged(state, i, mods::Role::Ap, melee, un, "AP", |r| r.ap_mod);
         c.defense_mod = -mods::sum_logged(state, i, mods::Role::Defense, melee, un, "defense", |r| r.def_mod + r.defense_mod);
+        c.defense_mod_parts = defense_mod_parts_of(state, i, melee);
     }
     c.unstoppable_grant = grants && mods::granted(state, i, "Unstoppable");
     // EPOCH 34 UNSTOPPABLE MARK — the mark's CLAMP half rides the SAME
@@ -5056,6 +5063,21 @@ fn growth_defense_parts(statics: &[UnitStatic], state: &State, i: usize) -> Vec<
 /// Door lines: the growth ladder's Defense parts as the table's Pierce line lists what it ignores (`<rule> +<bonus>`, ", "-joined).
 fn growth_def_parts_of(statics: &[UnitStatic], state: &State, i: usize) -> &'static str {
     crate::rules::intern(&growth_defense_parts(statics, state, i).iter().map(|(n, b)| format!("{n} +{b}")).collect::<Vec<_>>().join(", "))
+}
+
+/// Door lines: the records behind `defense_mod`, in `mods::sum_logged`'s order, as `<name>\t<signed X>` per line (a +1 ward reads
+/// `+1`, a hex `-1`). Interned, so `Ctx` stays `Copy`.
+fn defense_mod_parts_of(state: &State, i: usize, melee: bool) -> &'static str {
+    let mut parts = Vec::new();
+    for u in [Some(i), state.attached_to[i]].into_iter().flatten() {
+        for r in state.buffs[u].iter().filter(|r| mods::matches(r, mods::Role::Defense, melee)) {
+            let v = r.def_mod + r.defense_mod;
+            if v != 0 {
+                parts.push(format!("{}\t{v:+}", r.name));
+            }
+        }
+    }
+    crate::rules::intern(&parts.join("\n"))
 }
 
 /// Door lines: the Fortified Growth rule's name (the first `enemy_ap_per_two` rule the unit carries).
@@ -11900,8 +11922,10 @@ fn resolve_with(
         && statics[pi_s].cumbersome
         && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
     {
-        if let Some((_, shot)) = dice.as_mut() {
-            shot.log.push(format!("Cumbersome: {} moved, so it cannot shoot this activation", statics[pi_s].name));
+        if let Some((tray, shot)) = dice.as_mut() {
+            let line = format!("Cumbersome: {} moved, so it cannot shoot this activation", statics[pi_s].name);
+            say_rule(tray, "cumbersome", next.player[si], || line.clone()); // the step path's lines are the tray's
+            shot.log.push(line);
         }
         String::new()
     } else {
@@ -12262,7 +12286,9 @@ fn resolve_with(
                                     // Rules-must-log: the hero's own gap kept a weapon the host's gap would have dropped.
                                     let mark = if mods::granted_vs(&next, g.ti, "+6\" shooting range") { INCREASED_SHOOTING_RANGE_MARK_IN } else { 0.0 };
                                     for p in msc.keep.iter().map(|&k| &um.shoot[k]).filter(|p| p.range as f64 + p.reach_bonus_in + mark < g.d) {
-                                        shot.log.push(format!("Shooting Range: {} fires {} from its own base, {dm:.1}\" away", um.name, p.name));
+                                        let line = format!("Shooting Range: {} fires {} from its own base, {dm:.1}\" away", um.name, p.name);
+                                        say_rule(tray, "shooting_range", next.player[si], || line.clone());
+                                        shot.log.push(line);
                                     }
                                 }
                                 // G4R4 C-GRANTED-RANGE: a live spell grant's reach kept a weapon the static reach would drop.
@@ -12277,7 +12303,9 @@ fn resolve_with(
                                         let printed = p.range as f64 + p.reach_bonus_in.max(granted_reach(um, &next, mi).0);
                                         let shrunk = if def.ranged_shrouding { shrouded_reach(printed, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in) } else { printed };
                                         if (dm..host_gap).contains(&(shrunk + def.range_mark_in)) {
-                                            shot.log.push(format!("Shooting Range: {} fires {} - range is measured to the nearest model of {} ({dm:.1}\" away)", um.name, p.name, ut_g.name));
+                                            let line = format!("Shooting Range: {} fires {} - range is measured to the nearest model of {} ({dm:.1}\" away)", um.name, p.name, ut_g.name);
+                                            say_rule(tray, "shooting_range", next.player[si], || line.clone());
+                                            shot.log.push(line);
                                         }
                                     }
                                     // Limited: the log names the book rule for each spent weapon the volley leaves out.
