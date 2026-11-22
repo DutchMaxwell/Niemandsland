@@ -1285,6 +1285,12 @@ pub(crate) fn tray_reanimation(
         return; // below-7 replays byte-exact; the Shaken activation stays idle (main.gd:4731)
     }
     let owner = statics[next.roster.profile[si]].name.clone();
+    let side = next.player[si];
+    // The step path's lines are the tray's: every Reanimation sentence is said there too, in the same words.
+    let say = |tray: &mut Tray, shot: &mut ShootResult, line: String| {
+        say_rule(tray, "reanimation", side, || line.clone());
+        shot.log.push(line);
+    };
     let mut members: Vec<usize> = vec![si];
     if seams.hero_attach {
         members.extend(next.attached[si].iter().copied());
@@ -1297,14 +1303,14 @@ pub(crate) fn tray_reanimation(
             return; // nothing to restore: no roll and no line, on both sides
         }
         if members.iter().any(|&u| standing(u) && !has(u)) {
-            shot.log.push(format!("Reanimation: {owner} does not reanimate — a joined model lacks the rule"));
+            say(tray, shot, format!("Reanimation: {owner} does not reanimate — a joined model lacks the rule"));
             return;
         }
         // Lead ruling "Aura bearer dead": the Aura gives Reanimation to "this model and its unit" - with every bearer fallen the
         // chain no longer has it (the table's `reanimation_members` ends the Aura the same way).
         let aura = |u: usize| next.profile(u).special_rules.iter().chain(&next.profile(u).item_grants).any(|r| r.trim() == "Reanimation Aura");
         if members.iter().any(|&u| aura(u)) && !members.iter().any(|&u| aura(u) && standing(u)) {
-            shot.log.push(format!("Reanimation: {owner} does not reanimate — the Reanimation Aura bearer has fallen"));
+            say(tray, shot, format!("Reanimation: {owner} does not reanimate — the Reanimation Aura bearer has fallen"));
             return;
         }
         members.retain(|&u| has(u)); // a fallen joined hero without the rule is not in the pool
@@ -1332,7 +1338,7 @@ pub(crate) fn tray_reanimation(
         faces: faces.clone(), owner: owner.clone(),
     });
     let mut left = faces.iter().filter(|&&f| f as i64 >= spec.target).count() as i64;
-    shot.log.push(format!("Reanimation: {owner} rolls {pool} dice ({}) — {left} success(es)", spec.target));
+    say(tray, shot, format!("Reanimation: {owner} rolls {pool} dice ({}) — {left} success(es)", spec.target));
     // Phase A — living wounded: heroes first, biggest gap, index tie-break.
     gaps.sort_by(|a, b| {
         let h = |u: usize| statics[next.roster.profile[u]].is_hero as i8;
@@ -1411,7 +1417,7 @@ pub(crate) fn tray_reanimation(
             clear.then_some(spot)
         };
         let Some(spot) = spot else {
-            shot.log.push("Reanimation: 1 success but no placeable spot — coherency missing".into());
+            say(tray, shot, "Reanimation: 1 success but no placeable spot — coherency missing".into());
             continue;
         };
         let back = if spot_rule { planned } else { cost.min(left).max(1) };
@@ -1421,7 +1427,7 @@ pub(crate) fn tray_reanimation(
         next.kits_drop(u); // the revived body's kit is unknown: this unit falls back to slot order
         next.alive[u] = next.positions[u].len() as i64;
         left -= if spot_rule { 0 } else { back };
-        shot.log.push(format!("Reanimation: 1 model restored ({back} wound(s) back)"));
+        say(tray, shot, format!("Reanimation: 1 model restored ({back} wound(s) back)"));
     }
 }
 
@@ -4629,6 +4635,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         let un = &statics[state.roster.profile[i]].name;
         c.ap_mod = mods::sum_logged(state, i, mods::Role::Ap, melee, un, "AP", |r| r.ap_mod);
         c.defense_mod = -mods::sum_logged(state, i, mods::Role::Defense, melee, un, "defense", |r| r.def_mod + r.defense_mod);
+        c.defense_mod_parts = defense_mod_parts_of(state, i, melee);
     }
     c.unstoppable_grant = grants && mods::granted(state, i, "Unstoppable");
     // EPOCH 34 UNSTOPPABLE MARK — the mark's CLAMP half rides the SAME
@@ -5056,6 +5063,21 @@ fn growth_defense_parts(statics: &[UnitStatic], state: &State, i: usize) -> Vec<
 /// Door lines: the growth ladder's Defense parts as the table's Pierce line lists what it ignores (`<rule> +<bonus>`, ", "-joined).
 fn growth_def_parts_of(statics: &[UnitStatic], state: &State, i: usize) -> &'static str {
     crate::rules::intern(&growth_defense_parts(statics, state, i).iter().map(|(n, b)| format!("{n} +{b}")).collect::<Vec<_>>().join(", "))
+}
+
+/// Door lines: the records behind `defense_mod`, in `mods::sum_logged`'s order, as `<name>\t<signed X>` per line (a +1 ward reads
+/// `+1`, a hex `-1`). Interned, so `Ctx` stays `Copy`.
+fn defense_mod_parts_of(state: &State, i: usize, melee: bool) -> &'static str {
+    let mut parts = Vec::new();
+    for u in [Some(i), state.attached_to[i]].into_iter().flatten() {
+        for r in state.buffs[u].iter().filter(|r| mods::matches(r, mods::Role::Defense, melee)) {
+            let v = r.def_mod + r.defense_mod;
+            if v != 0 {
+                parts.push(format!("{}\t{v:+}", r.name));
+            }
+        }
+    }
+    crate::rules::intern(&parts.join("\n"))
 }
 
 /// Door lines: the Fortified Growth rule's name (the first `enemy_ap_per_two` rule the unit carries).
@@ -11237,7 +11259,8 @@ fn resolve_with(
     // --- REANIMATION (main.gd:953-957), the activation trigger BEFORE the
     // action — every action kind with a tray. See `tray_reanimation`; a
     // full-strength or Shaken carrier rolls nothing.
-    if let Some((tray, shot)) = dice.as_mut() {
+    // D-PAR3 14a: skipped when the table's capture already holds the start it paid (`Input::Paid { start }`).
+    if let Some((tray, shot)) = dice.as_mut().filter(|(tray, _)| !tray.paid_start()) {
         let board = match cover { Cover::Board(t) if t.is_valid() => Some(t), _ => None };
         tray_reanimation(statics, &mut next, si, seams, tray, shot, board);
         // Surprise Attack (wave-5) — the same activation-trigger slot, the
@@ -11745,10 +11768,13 @@ fn resolve_with(
     // the activation. The cast sub-phase is the pre-melee source the core
     // tracks itself, so the wound delta across it is the honest counter; the
     // charge move's own self-wounds ride `charger_self_wounds` separately.
+    // D-PAR3 14b: `Input::Paid { beats }` - the table resolved the pre-attack phase before its capture (its casts, every beat below,
+    // the move-through attacks), so none of it runs again here.
+    let beats = !dice.as_ref().is_some_and(|(tray, _)| tray.paid_beats());
     let cast_wounds_before_su = wounds_left(&next, si);
     let cast_wounds_before_tu = ci.map_or(0, |t| wounds_left(&next, t));
     // CC-5a: casts offered on a supplied tray are the tray path's own (`tray_cast`); the expectation model never runs beside them.
-    if seams.cast && dice.as_ref().is_none_or(|(tray, _)| tray.casts().is_empty()) {
+    if seams.cast && beats && dice.as_ref().is_none_or(|(tray, _)| tray.casts().is_empty()) {
         let row: Vec<bool> = match cast_los {
             Some(r) => r.to_vec(),
             None => (0..next.units()).map(|j| los_clear(&next, si, j)).collect(),
@@ -11786,21 +11812,21 @@ fn resolve_with(
 
     // --- MEND (main.gd:1056-1058), the pre-attack slot — every action kind,
     // tray path only. See `tray_mend`; no bearer, no patient, no draw.
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_mend(statics, &mut next, si, seams, tray, shot);
     }
 
     // --- BREATH ATTACK (main.gd:1059), right after Mend in the table's own
     // pre-attack slot order — every action kind, tray path only. See
     // `tray_breath_attack`; no bearer, no target, no draw.
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_breath_attack(statics, &mut next, si, seams, tray, shot);
     }
 
     // --- Utility Buff / Re-Position Artillery (main.gd:1062, right after
     // Mend + Breath Attack), tray path only — see `tray_utility_buff`.
     // Dice-free: no tray draw either way.
-    if dice.is_some() {
+    if dice.is_some() && beats {
         tray_utility_buff(statics, &mut next, si, seams, cover);
     }
 
@@ -11808,7 +11834,7 @@ fn resolve_with(
     // between Utility Buffs and Piercing Tag) — tray path only, the fatigue
     // arm (`tray_fatigue_debuff`) and the displacement arm
     // (`tray_mind_control`).
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_fatigue_debuff(statics, &mut next, si, seams, tray, shot);
         tray_mind_control(statics, &mut next, si, seams, tray, shot, cover);
     }
@@ -11818,7 +11844,7 @@ fn resolve_with(
     // `tray_piercing_tag`. From EPOCH_67_MARKERS_BURSTS a `place_roll` entry
     // (Piercing Spotter) draws its 4+; every other name is still dice-free
     // (the marker count comes off the rule's rating).
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_piercing_tag(statics, &mut next, si, seams, tray, shot);
     }
 
@@ -11827,7 +11853,7 @@ fn resolve_with(
     // `tray_precision_markers`. The Tag draws nothing (the count is the
     // rating); the Spotter does NOT run here — its beat is the activation's
     // END (main.gd:1127).
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_precision_markers(statics, &mut next, si, seams, tray, shot, false);
         // Rules 3.6: the Spotter rolls BEFORE the bearer's own attacks.
         if rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {
@@ -11838,32 +11864,34 @@ fn resolve_with(
     // --- RECKLESS PIERCING (main.gd:1072, the table's own slot between the
     // Piercing Tag and the Storm Attack) — tray path only, see
     // `tray_reckless_piercing`.
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_reckless_piercing(statics, &mut next, si, seams, tray, shot);
     }
 
     // --- STORM ATTACK (main.gd:1073, after Utility Buff in the table's own
     // pre-attack slot order), every action kind, tray path only. See
     // `tray_storm_attack`; no enemy in reach does not spend the burst.
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_storm_attack(statics, &mut next, si, seams, tray, shot);
     }
 
     // --- TELEPORT / ETHEREAL (main.gd:1075, right after Surprise; #816 PR 2)
-    teleport_beat(statics, &mut next, si, action, seams, dice.as_mut(), cover);
+    if beats {
+        teleport_beat(statics, &mut next, si, action, seams, dice.as_mut(), cover);
+    }
 
     // --- STRAFING (main.gd:1096, right after Teleport and BEFORE the Crossing
     // Attack in the table's own pre-attack slot order), every action kind with
     // a tray — see `tray_strafing`; no move trail, no carrier, no crossed
     // enemy rolls nothing.
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_strafing(statics, state, &mut next, si, seams, tray, shot, cover);
     }
 
     // --- CROSSING ATTACK (main.gd:1081, right after Storm in the table's own
     // pre-attack order), every action kind with a tray — see
     // `tray_crossing_attack`; no crossed enemy rolls nothing.
-    if let Some((tray, shot)) = dice.as_mut() {
+    if let (true, Some((tray, shot))) = (beats, dice.as_mut()) {
         tray_crossing_attack(statics, state, &mut next, si, seams, tray, shot);
     }
 
@@ -11894,8 +11922,10 @@ fn resolve_with(
         && statics[pi_s].cumbersome
         && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
     {
-        if let Some((_, shot)) = dice.as_mut() {
-            shot.log.push(format!("Cumbersome: {} moved, so it cannot shoot this activation", statics[pi_s].name));
+        if let Some((tray, shot)) = dice.as_mut() {
+            let line = format!("Cumbersome: {} moved, so it cannot shoot this activation", statics[pi_s].name);
+            say_rule(tray, "cumbersome", next.player[si], || line.clone()); // the step path's lines are the tray's
+            shot.log.push(line);
         }
         String::new()
     } else {
@@ -12256,7 +12286,9 @@ fn resolve_with(
                                     // Rules-must-log: the hero's own gap kept a weapon the host's gap would have dropped.
                                     let mark = if mods::granted_vs(&next, g.ti, "+6\" shooting range") { INCREASED_SHOOTING_RANGE_MARK_IN } else { 0.0 };
                                     for p in msc.keep.iter().map(|&k| &um.shoot[k]).filter(|p| p.range as f64 + p.reach_bonus_in + mark < g.d) {
-                                        shot.log.push(format!("Shooting Range: {} fires {} from its own base, {dm:.1}\" away", um.name, p.name));
+                                        let line = format!("Shooting Range: {} fires {} from its own base, {dm:.1}\" away", um.name, p.name);
+                                        say_rule(tray, "shooting_range", next.player[si], || line.clone());
+                                        shot.log.push(line);
                                     }
                                 }
                                 // G4R4 C-GRANTED-RANGE: a live spell grant's reach kept a weapon the static reach would drop.
@@ -12271,7 +12303,9 @@ fn resolve_with(
                                         let printed = p.range as f64 + p.reach_bonus_in.max(granted_reach(um, &next, mi).0);
                                         let shrunk = if def.ranged_shrouding { shrouded_reach(printed, def.ranged_shroud_penalty_in, def.ranged_shroud_floor_in) } else { printed };
                                         if (dm..host_gap).contains(&(shrunk + def.range_mark_in)) {
-                                            shot.log.push(format!("Shooting Range: {} fires {} - range is measured to the nearest model of {} ({dm:.1}\" away)", um.name, p.name, ut_g.name));
+                                            let line = format!("Shooting Range: {} fires {} - range is measured to the nearest model of {} ({dm:.1}\" away)", um.name, p.name, ut_g.name);
+                                            say_rule(tray, "shooting_range", next.player[si], || line.clone());
+                                            shot.log.push(line);
                                         }
                                     }
                                     // Limited: the log names the book rule for each spent weapon the volley leaves out.
@@ -12904,6 +12938,8 @@ fn resolve_with(
         let shot_leg = !shoot_key.is_empty()
             && (kind == HOLD || kind == ADVANCE || (kind == RUSH && quick_shot_active));
         let hnr_attacked = shot_leg || kind == CHARGE;
+        // Step 20: a human bearer's step is the player's drag (`Input::Intent { no_step }`): the core takes none.
+        let hnr_attacked = hnr_attacked && !dice.as_ref().is_some_and(|(tray, _)| tray.no_step());
         if hnr_attacked && tray_hit_and_run(statics, &mut next, si, seams, cover, shot_leg) {
             // The table's own battle-log line, main.gd:1089 — the rules-must-
             // log twin of `record_decision`'s "hit-and-run" entry. Wave 4

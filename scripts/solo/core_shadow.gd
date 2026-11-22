@@ -103,7 +103,7 @@ static func note_roll(kind: String, count: int, target: int, faces: Array, owner
 ## C-4: the activation's placement for the replay (main.gd's AI body calls it after the move, before any die).
 static func note_placed(main, unit: GameUnit, report: Dictionary) -> void:
 	if int(main._solo_core_shadow_h) != 0:
-		placed = CoreActivation.ai_transcript(main, unit, report, null).slice(0, 2)
+		placed = CoreActivation.ai_transcript(main, unit, report, null).slice(0, 3)
 		# CC-10c: a cast-only activation waits for the body's `flush` (no volley code holds a compare then).
 		if cast_enabled():
 			_buffs_before = _token_names(main)   # CC-10d: the board at the activation's start, cast or no cast
@@ -147,7 +147,7 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 	var target: GameUnit = groups[order[0]]["target"] if not order.is_empty() else null
 	var t := CoreActivation.ai_transcript(main, unit, report, target, split)
 	if not placed.is_empty():
-		t = placed + t.slice(2)
+		t = placed + t.slice(3)
 	var damage: Array = _damage_spells(report)
 	var keys_of: Dictionary = {}
 	if cast_enabled():
@@ -198,6 +198,7 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 		if diff == "" and slots_enabled():
 			diff = _positions_diff(main, plain)   # WHICH models stand, not only how many (the casualty order)
 		core.release(int(r["handle"]))
+	diff = _legality(main, r, diff, [unit] + order.map(func(id) -> GameUnit: return groups[id]["target"]))
 	var labels: Array = CoreActivation.why_not(main, unit, null)
 	for id in order:
 		for w in CoreActivation.why_not(main, null, groups[id]["target"]):
@@ -213,7 +214,7 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 	if not (report.get("casts", []) as Array).is_empty() and not cast_enabled():
 		deny.append("cast")   # the door keeps a volley after this activation's casts on the table (`run_ai`)
 	records.append({"deny": deny, "equal": diff == "", "first_diff": diff, "labels": labels, "unported": r.get("unported", []),
-		"detail": _detail, "shooter": unit.get_name(), "targets": order.map(func(id) -> String: return groups[id]["target"].get_name())})
+		"detail": _detail, "shooter": unit.get_name(), "targets": order.map(func(id) -> String: return groups[id]["target"].get_name())}.merged(_legal))
 
 
 ## Two gate keys are one roll: equal, or equal but for a core owner that is a joined hero of the table's owner.
@@ -532,6 +533,7 @@ static func melee_compare(main, unit: GameUnit, report: Dictionary) -> void:
 		rec["equal"] = rec["first_diff"] == ""
 		rec["detail"] = _detail
 		rec["core_rolls"] = _core_rolls
+		rec.merge(_legal)
 	melee_records.append(rec)
 
 
@@ -563,6 +565,7 @@ static func _melee_diff(main, unit: GameUnit, report: Dictionary, table_lines: A
 	var diff := _state_diff(main, plain)
 	if diff == "":
 		diff = _positions_diff(main, plain)
+	diff = _legality(main, r, diff, [unit, report["target"]])
 	if diff == "":
 		var cite := OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))
 		var core_lines: Array = (r.get("lines", []) as Array).map(func(l: Dictionary) -> String:
@@ -580,6 +583,37 @@ static func _melee_diff(main, unit: GameUnit, report: Dictionary, table_lines: A
 static func is_roll_line(line: String) -> bool:
 	var text: String = line.get_slice("|", 1) if line.contains("|") else line
 	return text.begins_with("AI (") and text.contains(" → ")
+
+
+## PLAN_FIRST_DELETION 3d (docs/one_core/PARITY_RULING.md, item 4): the legality of both ends, read by the core's one checker.
+## `_legal` = {"core_illegal": the done step's own list (the units the core moved), "table_illegal": the checker on the TABLE's
+## board now for `units`, "free_position": a `positions` difference}. Where the models stand is a free choice: a `positions` diff
+## is reported there and is no mismatch; an illegal core end is ("core_illegal"); the table's is reported, not a mismatch.
+static var _legal := {}
+
+static func _legality(main, r: Dictionary, diff: String, units: Array) -> String:
+	_legal = {"core_illegal": r.get("illegal", []), "table_illegal": table_illegal(main, units), "free_position": {}}
+	if diff == "positions":
+		_legal["free_position"] = _detail
+		_detail = {}
+		diff = ""
+	if diff == "" and not (_legal["core_illegal"] as Array).is_empty():
+		_detail = {"illegal": _legal["core_illegal"]}
+		diff = "core_illegal"
+	return diff
+
+
+## The checker over `units` on the board as the table holds it now. A board that cannot be captured reads one "unchecked" entry,
+## never an empty (legal-looking) list. Also read by the roster sweep's table half.
+static func table_illegal(main, units: Array) -> Array:
+	var core: Object = main.solo_controller._core_node_ready()
+	var h := CoreActivation.capture(main) if core != null else 0
+	if h == 0:
+		return [{"kind": "unchecked"}]
+	var keys := PackedStringArray(units.map(func(u: GameUnit) -> String: return u.unit_id))
+	var out: Array = core.check_rest(h, keys).get("illegal", [{"kind": "unchecked"}])
+	core.release(h)
+	return out
 
 
 ## The first unit whose living models stand elsewhere in the core (XZ, sorted, 0.01"): "" = none, else "positions". Models of

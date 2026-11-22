@@ -126,7 +126,7 @@ impl Tray {
     /// instead of drawing. Past the last group it serves 1s and records where it
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
-        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), interference_choices: Vec::new(), strike_back_choices: Vec::new(), choice_seq: 0, casts: Vec::new(), cast_refused: None };
+        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), interference_choices: Vec::new(), strike_back_choices: Vec::new(), choice_seq: 0, casts: Vec::new(), cast_refused: None, paid: (false, false), no_step: false };
         Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None, consolidate: Vec::new() }
     }
 
@@ -143,6 +143,37 @@ impl Tray {
             feed.placed = Some(p);
             feed.placed_trails = Some(trails);
         }
+    }
+
+    /// D-PAR3 14a: the table already resolved this activation's start triggers / its pre-attack phase (`Input::Paid`). Only a
+    /// supplied tray keeps them; a seeded tray ignores the call.
+    pub fn pay(&mut self, start: bool, beats: bool) {
+        if let Some(feed) = self.feed.as_mut() {
+            feed.paid = (start, beats);
+        }
+    }
+
+    /// Step 20: the intent's `no_step` - the core takes no Hit & Run step after the attack (a human player drags it). Only a supplied
+    /// tray keeps it; a seeded tray ignores the call.
+    pub fn hold_step(&mut self, no_step: bool) {
+        if let Some(feed) = self.feed.as_mut() {
+            feed.no_step = no_step;
+        }
+    }
+
+    /// Step 20: whether the intent asked for no Hit & Run step (`false` on every seeded tray).
+    pub fn no_step(&self) -> bool {
+        self.feed.as_ref().is_some_and(|f| f.no_step)
+    }
+
+    /// D-PAR3 14a: whether the table already resolved the start triggers (`false` on every seeded tray).
+    pub fn paid_start(&self) -> bool {
+        self.feed.as_ref().is_some_and(|f| f.paid.0)
+    }
+
+    /// D-PAR3 14b: whether the table already resolved the pre-attack phase (`false` on every seeded tray).
+    pub fn paid_beats(&self) -> bool {
+        self.feed.as_ref().is_some_and(|f| f.paid.1)
     }
 
     /// The supplied placement's walked paths, if any (`None` on every seeded tray).
@@ -430,6 +461,10 @@ pub struct Feed {
     casts: Vec<CastInput>,
     /// CC-5c/8b: the first offered cast refused during resolution `(draw, seq, reason)` (`Tray::note_cast_refused`).
     pub cast_refused: Option<(usize, i64, String)>,
+    /// D-PAR3 14a: (start, beats) the table already paid (`Tray::pay`).
+    paid: (bool, bool),
+    /// Step 20: the intent's `no_step` (`Tray::hold_step`).
+    no_step: bool,
 }
 
 /// One-core P4.D-20: the step API's wound-allocation choice as the volley's landing sees it. `answer` = the
@@ -721,6 +756,15 @@ fn shielded_alias_line(def: &Ctx, def_owner: &str) -> String {
         def.shielded_alias.name(),
         shielded_defense(def.defense, def.shielded_bonus(), def.def_floor())
     )
+}
+
+/// The table's per-part Defense line (`_solo_log_defense_parts`, NML-932) for each record behind `def.defense_mod`: its own name, its
+/// signed shift and the working Defense before AP, cover and the over-9" family (Shielded, the growth ladder and every token folded,
+/// the table's 2..6 window).
+fn defense_token_lines(def: &Ctx, def_owner: &str) -> Vec<String> {
+    let rung = (def.defense - def.shielded_bonus() - def.growth_def_mod + def.defense_mod).clamp(2, 6);
+    def.defense_mod_parts.lines().filter_map(|l| l.split_once('\t'))
+        .map(|(name, x)| format!("{def_owner} is {name}: {x} Defense (saves on {rung}+)")).collect()
 }
 
 /// Block B6 — the extra-ATTACK-DIE form of the "unmodified 6 to hit" family
@@ -1703,6 +1747,7 @@ pub(crate) fn resolve_volley_with_pick_label(
     // rode a family DATA alias rather than the literal name, one line per
     // volley below (`ShootResult.log` precedent).
     let mut shielded_alias_fired = false;
+    let mut defense_token_fired = false;
     // WAVE 3 — the aliases' over-9" SAVE gate (main.gd:3090/6415), ONCE per
     // volley on this local copy; non-volley paths leave it false — the
     // table's own reading (melee `dist_in: -1.0`, :6119). Stamp-gated.
@@ -2352,6 +2397,12 @@ pub(crate) fn resolve_volley_with_pick_label(
         let guarded_applies = def.guarded && mod_dist_in > LONG_RANGE_IN && !def.sturdy_boost_gates_guarded;
         base = guarded_defense(base, guarded_applies && !pierce, def.def_floor());
         shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
+        if !defense_token_fired {
+            for l in defense_token_lines(def, def_owner) {
+                say_rule(tray, "defense_part", def.side, || l);
+            }
+        }
+        defense_token_fired = true;
         // Rules 3.6 (FAB-A3): an Indirect shot lifts cover granted by sight blockers only, so terrain cover
         // (`in_cover`) stays for it, held or not; the sight-blocker half (`screened`, from 95) is lifted per
         // weapon by `lifts_screen` below. Blast and Ignores Cover
@@ -2734,6 +2785,9 @@ pub(crate) fn resolve_volley_with_pick_label(
     }
     if shielded_alias_fired {
         out.log.push(shielded_alias_line(def, def_owner));
+    }
+    if defense_token_fired {
+        out.log.extend(defense_token_lines(def, def_owner));
     }
     // MOR-17a — rules-must-log, once per volley: the gate's verdict, under the
     // rule's name (Warding, Knightborn and Angelic Blessing are one rule).
@@ -3252,6 +3306,7 @@ pub fn resolve_melee_leg_wipe(
     // Wave 3 — the Shielded-family alias's rules-must-log flag, the volley
     // fold's melee twin (Shielded is the whole melee Defense ladder here).
     let mut shielded_alias_fired = false;
+    let mut defense_token_fired = false;
     // (1) Unpredictable :5957 — ONE die for the whole phase, before anything
     //     else: 1-3 is AP(+1) on every melee weapon, 4-6 is +1 to hit
     //     (`unpredictable_fighter_effect` ai_combat_math.gd:387-388).
@@ -3576,6 +3631,12 @@ pub fn resolve_melee_leg_wipe(
                 shielded_defense(def.defense, if pierce { 0 } else { def.shielded_bonus() }, def.def_floor()),
                 applies && !pierce, def.def_floor());
             shielded_alias_fired |= def.shielded && def.shielded_alias != ShieldedAlias::None;
+            if !defense_token_fired {
+                for l in defense_token_lines(def, def_owner) {
+                    say_rule(tray, "defense_part", def.side, || l);
+                }
+            }
+            defense_token_fired = true;
             // Block B7 — Piercing Growth's AP delta, melee half (see the
             // shooting site's own note above).
             let mut ap = p.ap + uf_ap + versatile_ap + sh.att.growth_ap_mod
@@ -3828,6 +3889,9 @@ pub fn resolve_melee_leg_wipe(
     }
     if shielded_alias_fired {
         out.log.push(shielded_alias_line(def, def_owner));
+    }
+    if defense_token_fired {
+        out.log.extend(defense_token_lines(def, def_owner));
     }
     // MOR-17a — rules-must-log, once per fight: the gate's verdict, the volley
     // fold's melee twin (same rule name).

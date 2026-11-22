@@ -189,6 +189,7 @@ static func volley(main: Node, entry_a: Dictionary, entry_b: Dictionary, seed_n:
 	var on_entry := func(e: Dictionary) -> void:
 		lines.append("%s|%s" % [BattleLog.Category.keys()[int(e["category"])], str(e["text"])])
 	main.battle_log.entry_added.connect(on_entry)
+	var illegal: Array = []   # 3d: the core's done list (core half), the checker on the table's end board (table half)
 	if core:
 		CoreActivation.reset_all(main)   # a new game per volley: the header carries the profiles of THESE two units
 		var h := CoreActivation.capture(main)
@@ -197,6 +198,7 @@ static func volley(main: Node, entry_a: Dictionary, entry_b: Dictionary, seed_n:
 		var t: Array = [{"t": "begin"}, {"t": "placed", "positions": at, "trails": trails},
 			{"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": tgt.unit_id}]
 		var r: Dictionary = await CoreActivation.drive(main, h, att, t, true)
+		illegal = r.get("illegal", [])
 		if str(r["step"]) != "done":
 			push_warning("roster sweep: the core answered %s (%s) for %s" % [r["step"], r.get("reason", ""), att.get_name()])
 			if h != 0:
@@ -207,6 +209,7 @@ static func volley(main: Node, entry_a: Dictionary, entry_b: Dictionary, seed_n:
 		main._solo_core_ai_h = 0
 		await main._run_ai_shooting({"unit": att, "moved": false, "action": AiDecision.Action.HOLD})
 		main.solo_controller.hit_and_run_move(att, true)   # DS-HR1: the body's post-shot tail (main.gd:1347-1349)
+		illegal = CoreShadow.table_illegal(main, [att, tgt])
 	main.battle_log.entry_added.disconnect(on_entry)
 	AiActRecorder.rules_epoch = epoch_was
 	AiDiceRecorder.close()
@@ -215,7 +218,7 @@ static func volley(main: Node, entry_a: Dictionary, entry_b: Dictionary, seed_n:
 		var faces: Array = rolls[int(opts["core_swap_face"])]["faces"]
 		if not faces.is_empty():
 			faces[0] = int(faces[0]) % 6 + 1
-	var out := {"rolls": rolls, "state": state_of(att, tgt), "lines": lines,
+	var out := {"rolls": rolls, "state": state_of(att, tgt), "lines": lines, "illegal": illegal,
 		"labels": {"att": labels_of(att), "tgt": labels_of(tgt)}, "names": [att.get_name(), tgt.get_name()],
 		# What the deny-mode slice (NML_CORE_SLICE=deny) would refuse here, as the shadow record says it: [] = taken.
 		"deny": CoreSlice.refusals_in(CoreSlice.DENY_PATH, att) \
@@ -354,10 +357,13 @@ static func verdicts(rows: Array, mismatching_ids: Array) -> Array:
 	for r in rows:
 		var melee: bool = r.has("charge_first_diff")
 		var first := "rolls" if mismatching_ids.has(r["id"]) else (str(r["charge_first_diff"]) if melee else first_state_diff(r["table"]["state"], r["core"]["state"]))
+		if first == "" and not (r["core"].get("illegal", []) as Array).is_empty():
+			first = "core_illegal"   # PLAN_FIRST_DELETION 3d: an illegal core end is a mismatch; the table's is reported
 		var deny: Array = r.get("deny", r["table"].get("deny", []))
 		var row := {"id": r["id"], "pair": r["pair"], "att": r["att"], "tgt": r["tgt"], "seed": r["seed"], "first_diff": first,
 			"fired": not (r["table"]["rolls"] as Array).is_empty() or not (r["core"]["rolls"] as Array).is_empty(),
-			"labels": r["table"]["labels"], "deny": deny}
+			"labels": r["table"]["labels"], "deny": deny, "table_illegal": r["table"].get("illegal", []),
+			"free_position": r.get("free_position", [])}
 		if melee:
 			row["taken"] = deny.is_empty()
 			row["equal"] = first == ""
@@ -512,6 +518,8 @@ static func _charge_half(main: Node, att_spec: Variant, foe_spec: Variant, seed_
 		await main._run_ai_melee(report)
 	if core_run and opts.has("core_fault"):
 		(opts["core_fault"] as Callable).call(att, foe)
+	if not core_run and opts.has("table_fault"):
+		(opts["table_fault"] as Callable).call(att, foe)
 	main._solo_core_ai_h = 0
 	if h != 0:
 		sc._core_node_ready().release(h)
@@ -528,25 +536,30 @@ static func _charge_half(main: Node, att_spec: Variant, foe_spec: Variant, seed_
 	var out := {"att": _pos(att), "foe": _pos(foe), "wounds": [main._solo_unit_wounds_now(att), main._solo_unit_wounds_now(foe)],
 		"alive": [att.get_alive_count(), foe.get_alive_count()], "shaken": [att.is_shaken, foe.is_shaken],
 		"fatigued": [att.is_fatigued, foe.is_fatigued], "rng": main._tray_rng.state, "lines": lines, "rolls": rolls,
-		"core": CoreActivation.ai_charges - charges, "refusals": refusals, "deny": deny, "labels": labels, "names": names}
+		"core": CoreActivation.ai_charges - charges, "refusals": refusals, "deny": deny, "labels": labels, "names": names,
+		"illegal": CoreShadow.table_illegal(main, [att, foe])}
 	free_units(main, [att, foe])
 	await main.get_tree().process_frame
 	return out
 
 
-## Compares a `table` and a `core` half from `_charge_half`: positions (0.01"), wounds, alive, Shaken, Fatigue, RNG, lines.
+## Compares a `table` and a `core` half from `_charge_half`: wounds, alive, Shaken, Fatigue, RNG, lines. 3d: positions (0.01") are a free
+## choice under the parity ruling - a difference is reported in `free`, not a mismatch; an illegal core end (the checker on the core
+## half's board) is one, after any dice or state difference; the table half's is reported (`table.illegal`).
 static func compare_charge(table: Dictionary, core: Dictionary) -> Dictionary:
 	var diffs: Array = []
 	var first := ""
+	var free: Array = []
 	for k in ["att", "foe"]:
 		if not positions_near(table[k], core[k]):
-			first = k if first == "" else first
-			diffs.append("%s positions: table %s, core %s" % [k, table[k], core[k]])
+			free.append("%s positions: table %s, core %s" % [k, table[k], core[k]])
 	for k in ["wounds", "alive", "shaken", "fatigued", "rng", "lines"]:
 		if table[k] != core[k]:
 			first = k if first == "" else first
 			diffs.append("%s: table %s, core %s" % [k, table[k], core[k]])
-	return {"first_diff": first, "diffs": diffs}
+	if first == "" and not (core.get("illegal", []) as Array).is_empty():
+		first = "core_illegal"
+	return {"first_diff": first, "diffs": diffs, "free": free}
 
 
 ## Plan E (step 4a): one AI charge compared door-vs-table (`table` = `_run_ai_melee`, `core` = capture before the move + door).
@@ -556,7 +569,7 @@ static func charge(main: Node, att: Variant, foe: Variant, seed_n: int, opts := 
 	var cmp := compare_charge(table, core)
 	return {"table": table, "core": core, "taken": int(core["core"]) == 1 and int(table["core"]) == 0,
 		"refusals": table["refusals"], "deny": table["deny"], "labels": table["labels"], "names": table["names"],
-		"equal": (cmp["diffs"] as Array).is_empty(), "first_diff": cmp["first_diff"], "diffs": cmp["diffs"]}
+		"equal": cmp["first_diff"] == "", "first_diff": cmp["first_diff"], "diffs": cmp["diffs"], "free_position": cmp["free"]}
 
 
 ## Plan E (step 4b): whether a `load_list` entry carries at least one melee weapon (`range_value <= 0`, `attacks > 0`).
@@ -585,6 +598,6 @@ static func sweep_melee_pair(main: Node, a: Dictionary, b: Dictionary, seeds: in
 					var r: Dictionary = await charge(main, att, foe, s, call_opts)
 					rows.append({"id": id, "pair": "%s | %s" % [a["name"], b["name"]], "dir": dir, "seed": s,
 						"att": (r["names"] as Array)[0], "tgt": (r["names"] as Array)[1], "table": r["table"], "core": r["core"],
-						"deny": r["deny"], "charge_first_diff": r["first_diff"], "diffs": r["diffs"]})
+						"deny": r["deny"], "charge_first_diff": r["first_diff"], "diffs": r["diffs"], "free_position": r["free_position"]})
 					id += 1
 	return rows

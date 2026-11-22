@@ -147,14 +147,37 @@ func test_ruined_tops_break_only_in_the_outer_edge_strip() -> void:
 
 
 ## Texture plan step 6 (the "car park"): the flag tops are irregular - courses of 0.45 / 0.6 / 0.75 in in an order hashed per band of three, flags 0.5 - 1.1 in
-## long, 0.85 of the wall stone's tone spread - and their joints are mid-dark (the flag's own tone x 0.55 at 0.6), never near black.
+## long, 0.85 of the wall stone's tone spread - and their joints are never near black (fix-up 6b below sets their tone).
 func test_the_flag_tops_are_irregular_flags_with_mid_dark_joints() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
-	assert_bool(src.contains("alb = stone_rows(xz, seed, fr, 0.72, tint, rel);")).override_failure_message("the flags are still one 0.45 in course").is_true()
+	assert_bool(src.contains("alb = stone_rows(xz, seed, fr, 0.72, tint, ")).override_failure_message("the flags are still one 0.45 in course").is_true()
 	assert_bool(src.contains("float c0 = 0.45 + 0.15 * mod(o, 3.0);")).is_true()
 	assert_bool(src.contains("grit_stone_tone(h21(fc + seed + 41.0)), 0.85);")).override_failure_message("the flag tone spread is not 0.85").is_true()
-	assert_bool(src.contains("alb * 0.55, 0.6 * joint * keep(xz.y, fr.z));")).override_failure_message("the flag joint is not mid-dark").is_true()
 	assert_bool(src.contains("vec3(0.07, 0.06, 0.05), 0.75 * joint")).override_failure_message("the near-black flag joint is back").is_false()
+
+## Texture plan fix-up 6b: the flag joints read as worn, slightly recessed mortar in the flags' own value range - the dark mortar base of the wall stone, its deep
+## relief and a near-black moss tint drew a black grid at play zoom and eye level.
+func test_the_flag_joints_are_worn_mortar_not_a_black_grid() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	assert_bool(src.contains("alb = stone_rows(xz, seed, fr, 0.72, tint, tint * 0.8, rel);")).override_failure_message("the flag mortar is not taken from the flag's own tint").is_true()
+	assert_bool(src.contains("vec3 laid = mix(mortar, tint")).override_failure_message("stone_rows() still lays a fixed dark mortar").is_true()
+	assert_bool(src.contains("course), len, tint, vec3(0.15, 0.14, 0.13), rel);")).override_failure_message("the wall stone must keep its dark mortar").is_true()
+	assert_bool(src.contains("alb * vec3(0.7, 0.85, 0.6) : alb * 0.8, 0.6 * joint * keep(xz.y, fr.z));")).override_failure_message("the flag joint tint is still dark").is_true()
+	var at := src.find("alb = stone_rows(xz, seed, fr, 0.72")
+	assert_bool(src.substr(at, 400).contains("depth_in = 0.015;")).override_failure_message("the flag joint is still deeply recessed").is_true()
+
+## Texture plan step 7: a flag top weathers as a whole - a 3 - 9 in value drift, one flag in ten gone or sunk (earth-dark, lower), and in the outer
+## 0.5 in of each box top dirt, small rubble and a thicker moss (TOP_RIM_MOSS 0.6 there, TOP_MOSS 0.3 elsewhere).
+func test_the_flag_tops_weather_as_a_whole() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	assert_bool(src.contains("alb *= mix(0.85, 1.12, fbm(xz * 0.17 + seed));")).override_failure_message("no 3 - 9 in value drift on the flag tops").is_true()
+	assert_bool(src.contains("float gone = step(0.9, h21(fc + seed + 53.0))")).override_failure_message("no missing or sunken flags").is_true()
+	assert_bool(src.contains("rel = mix(rel, 0.15, gone);")).override_failure_message("a missing flag is not lower").is_true()
+	assert_bool(src.contains("top_ring = 1.0 - smoothstep(0.1, 0.5, min(e2.x, e2.y));")).override_failure_message("no rim of the box top").is_true()
+	assert_bool(src.contains("mix(TOP_MOSS, TOP_RIM_MOSS, top_ring)")).override_failure_message("the rim does not gather the thicker moss").is_true()
+	var at := src.find("const float TOP_RIM_MOSS = ")
+	assert_int(at).is_greater(-1)
+	assert_float(float(src.substr(at + 27, 6).get_slice(";", 0))).is_equal_approx(0.6, 0.001)
 
 ## Lead 21.11. (readability gate): the ground the models stand on - streets, packed earth, garden plots, the decks of yards and tier floors - sits a step below the models' own values.
 func test_the_ground_the_models_stand_on_sits_below_the_models() -> void:
@@ -174,7 +197,7 @@ func test_the_ground_the_models_stand_on_sits_below_the_models() -> void:
 	# (lane townC4) the decks weather to silver-grey (the brown boards were the play camera's largest warm area) and stay below the models: at most a 15 % lift
 	assert_bool(src.contains("alb = mix(vec3(dot(alb, vec3(0.3, 0.55, 0.15))), alb, DECK_KEEP_HUE) * DECK_LIFT;")).override_failure_message("the decks keep only part of their warm hue").is_true()
 	# (lane townC4, lead 22.11.: the green lives on the earth, the tops keep moss only in seams and on the north side, and stay standing room under the models)
-	assert_bool(src.contains("? DECK_MOSS : TOP_MOSS));")).override_failure_message("decks and stone tops carry only a share of the shade moss").is_true()
+	assert_bool(src.contains("? DECK_MOSS : mix(TOP_MOSS, TOP_RIM_MOSS, top_ring)));")).override_failure_message("decks and stone tops carry only a share of the shade moss").is_true()
 	for name: String in ["DECK_MOSS", "TOP_MOSS", "TOP_LIFT", "BAND_COVER"]:
 		var at := src.find("const float %s = " % name)
 		assert_int(at).is_greater(-1)

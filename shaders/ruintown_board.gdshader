@@ -85,6 +85,7 @@ const float DECK_LIFT = 1.12;
 const float DECK_MOSS = 0.0;   // (townC4) the shade-side moss on a deck and on a stone top: on grey boards and flags it read as a green carpet from above (top camera green band 3-6 %)
 const float TOP_LIFT = 1.15;   // (townC4) the cleaned flag tops a step paler, as C's grey stone
 const float BAND_COVER = 0.06;
+const float TOP_RIM_MOSS = 0.6;   // (texture plan step 7) in the outer 0.5 in of a stone top the moss gathers twice as thick
 const float TOP_MOSS = 0.3;   // (lead 22.11.: C keeps moss in the seams and on the north side only - the green lives on the earth)
 const float COVER_CUT = 0.58;   // the fbm level above which the earth is overgrown (~25 % of the earth; plan TARGET C, E2)
 varying vec3 wpos;
@@ -119,8 +120,8 @@ void vertex() {
 }
 
 // Coursed stone: courses `course` in high, stones about `len` in long, offset per course, dark mortar, a tone per stone.
-// `fr` = (row id, inches up inside the row, the row's course height), from `flag_row` or a fixed course in stone().
-vec3 stone_rows(vec2 uv, float seed, vec3 fr, float len, vec3 tint, out float rel) {
+// `fr` = (row id, inches up inside the row, the row's course height), from `flag_row` or a fixed course in stone(). `mortar` = the joint's colour.
+vec3 stone_rows(vec2 uv, float seed, vec3 fr, float len, vec3 tint, vec3 mortar, out float rel) {
 	float row = fr.x;
 	float course = fr.z;
 	float l = len * (0.7 + 0.8 * h21(vec2(row, seed + 7.0)));
@@ -129,13 +130,13 @@ vec3 stone_rows(vec2 uv, float seed, vec3 fr, float len, vec3 tint, out float re
 	vec2 f = vec2(fract(x / l) * l, fr.y);
 	float edge = smoothstep(0.0, course * 0.11, min(min(f.x, l - f.x), min(f.y, course - f.y)));
 	float tone = h21(vec2(col, row) + seed);
-	vec3 laid = mix(vec3(0.15, 0.14, 0.13), tint * mix(0.72, 1.12, tone) * mix(0.9, 1.1, vnoise(uv * 4.0)), edge);
+	vec3 laid = mix(mortar, tint * mix(0.72, 1.12, tone) * mix(0.9, 1.1, vnoise(uv * 4.0)), edge);
 	rel = mix(0.5, edge * (0.8 + 0.2 * tone), keep(uv.y, course));   // the mortar is recessed, a stone stands a little proud
 	return mix(tint * 0.8, laid, keep(uv.y, course));   // too fine for the pixel: the mean of stone and mortar
 }
 
 vec3 stone(vec2 uv, float seed, float course, float len, vec3 tint, out float rel) {
-	return stone_rows(uv, seed, vec3(floor(uv.y / course), fract(uv.y / course) * course, course), len, tint, rel);
+	return stone_rows(uv, seed, vec3(floor(uv.y / course), fract(uv.y / course) * course, course), len, tint, vec3(0.15, 0.14, 0.13), rel);
 }
 
 // (texture plan step 6) Irregular flag courses: bands of three rows 0.45 / 0.6 / 0.75 in, their order rotated by a hash of the band -> (row id, y inside the row, course).
@@ -281,6 +282,7 @@ void fragment() {
 	float spec = 0.5;   // the specular level (the default of a dielectric); water takes 1.0 so the probe's reflection shows
 	float depth_in = 0.0;   // how deep that relief is, in inches (0 = none)
 	float ao = 1.0;
+	float top_ring = 0.0;   // (texture plan step 7) 1 in the outer 0.5 in of a flag top, where rubble and moss gather
 	vec3 tex_ratio = vec3(1.0);   // the authored set's detail on this face (1 = none) and its tangent-space normal
 	vec3 tex_n = vec3(0.0, 0.0, 1.0);
 	float tex_on = 0.0;
@@ -494,8 +496,8 @@ void fragment() {
 			}
 		} else if (k == 6 || k == 12 || k == 9 || k == 10) {   // tower and wall tops, stone pieces: flagstones
 			vec3 fr = flag_row(xz.y, seed);
-			alb = stone_rows(xz, seed, fr, 0.72, tint, rel);   // (texture plan step 6) flagstones 0.45 / 0.6 / 0.75 in courses, 0.5 - 1.1 in long
-			depth_in = 0.03;
+			alb = stone_rows(xz, seed, fr, 0.72, tint, tint * 0.8, rel);   // (texture plan step 6) flagstones 0.45 / 0.6 / 0.75 in courses, 0.5 - 1.1 in long; (6b) worn mortar in the flags' own value range
+			depth_in = 0.015;   // (6b) a slightly recessed joint: at 0.03 in its shaded wall drew a dark grid
 			rough = 0.85;
 			if (use_stone(xz, tex_ratio, tex_n)) {
 				alb = tint;
@@ -513,7 +515,7 @@ void fragment() {
 			alb = mix(vec3(dot(alb, vec3(0.3, 0.55, 0.15))), alb, 0.35) * tone * vec3(0.53, 0.52, 0.51) * TOP_LIFT;   // (townC4: greyer - the warm tops were a third of the play camera's warm share; was 0.55 / (0.55, 0.52, 0.48))
 			float joint = 1.0 - smoothstep(0.08, 0.45, rel);
 			float mossy = step(0.8, vnoise(xz * 0.7 + seed * 3.0));
-			alb = mix(alb, mossy > 0.5 ? vec3(0.07, 0.09, 0.05) : alb * 0.55, 0.6 * joint * keep(xz.y, fr.z));   // (step 6) a mid-dark joint, never near black
+			alb = mix(alb, mossy > 0.5 ? alb * vec3(0.7, 0.85, 0.6) : alb * 0.8, 0.6 * joint * keep(xz.y, fr.z));   // (6b) worn mortar a little darker than its flag, moss a green tint of it - never a black line
 			float fh = h21(fc + seed + 77.0);
 			float fl = 0.0;
 			if (fh > 0.82) {   // a fracture: one straight line through the flag at its own angle, fading out before the joints
@@ -525,6 +527,22 @@ void fragment() {
 				fl = smoothstep(0.012, 0.0, abs(dot(rp, vec2(-dir.y, dir.x)))) * inside * keep(xz.y, 0.2);
 			}
 			alb = mix(alb, vec3(0.03, 0.03, 0.03), 0.8 * fl);
+			// (texture plan step 7) the top weathers as a whole: a 3 - 9 in value drift, one flag in ten gone or sunk (earth-dark, lower), rubble at the rim
+			alb *= mix(0.85, 1.12, fbm(xz * 0.17 + seed));
+			float gone = step(0.9, h21(fc + seed + 53.0)) * keep(xz.y, fr.z);
+			alb = mix(alb, alb * vec3(0.66, 0.6, 0.5) * mix(0.85, 1.1, vnoise(xz * 3.0 + seed)), gone);   // dirt in the hole: a step darker and browner than its flag (the earth colour itself rendered as a black hole)
+			rel = mix(rel, 0.15, gone);
+			depth_in = mix(depth_in, 0.03, gone);
+			if (box_in.x > 0.0) {   // the outer 0.5 in of the box top (as the deck strip): dirt, small rubble and the thicker moss
+				vec2 e2 = box_in.xz * 0.5 - abs(lpos.xz);
+				top_ring = 1.0 - smoothstep(0.1, 0.5, min(e2.x, e2.y));
+				alb *= mix(1.0, 0.85, top_ring);
+				vec2 sci = floor(xz / 0.3);
+				float sh = h21(sci + seed + 61.0);
+				float lump = step(1.0 - 0.45 * top_ring, sh) * smoothstep(0.3, 0.15, length(fract(xz / 0.3) - 0.5)) * keep(xz.x, 0.3);
+				alb = mix(alb, alb * mix(0.55, 0.8, fract(sh * 13.0)), 0.85 * lump);   // a darker chip of stone (pale lumps with a lit crown read as white coins)
+				rel = mix(rel, 0.65, lump);
+			}
 		} else if (k == 11) {   // garden plot: overgrown, weeds and bare patches
 			alb = tint * 0.55 * mix(0.6, 1.25, fbm(xz * 2.4 + seed)) * mix(1.0, 0.7, step(0.9, h21(floor(xz * 9.0))));   // x0.55: the plots in the deployment bands sit below the models' own values (readability gate)
 			vec2 pf = fract(xz / cell_in) * cell_in;
@@ -566,7 +584,7 @@ void fragment() {
 			vec2 pc = mod(p.xz, 3.0);
 			float rim = 1.0 - smoothstep(0.1, 0.7, min(min(pc.x, 3.0 - pc.x), min(pc.y, 3.0 - pc.y)));   // (train 2, V2) moss gathers toward a top's edges too
 			alb *= 0.85;   // (train 2, V2) the flat tops one value step down: they were the brightest thing on the board
-			alb = mix(alb, vec3(0.12, 0.17, 0.08), clamp(0.65 * moss + 0.3 * rim, 0.0, 0.8) * smoothstep(0.45, 0.7, patchy) * (k == 3 || k == 4 || k == 8 ? DECK_MOSS : TOP_MOSS));   // moss on the tops of the shade side and at their edges
+			alb = mix(alb, vec3(0.12, 0.17, 0.08), clamp(0.65 * moss + 0.3 * rim, 0.0, 0.8) * smoothstep(0.45, 0.7, patchy) * (k == 3 || k == 4 || k == 8 ? DECK_MOSS : mix(TOP_MOSS, TOP_RIM_MOSS, top_ring)));   // moss on the tops of the shade side and at their edges
 			alb = mix(alb, vec3(0.04, 0.035, 0.03), 0.6 * fire * smoothstep(0.55, 0.8, patchy) * float(k != 12));   // scorched patches on a ruin's top
 		} else if (k == 15) {   // a roof face
 			float lost = smoothstep(0.62, 0.7, fbm(vec2(p.x + p.z, p.y) * 0.9 + seed * 5.0)) * mix(0.25, 1.0, fire);

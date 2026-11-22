@@ -31,6 +31,9 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
+	CoreActivation._hotseat_env = -1
 	SoloController.mission_scoring = _saved[0]
 	SoloController.mission_vp = _saved[1]
 	SoloController.mission_markers = _saved[2]
@@ -63,6 +66,17 @@ func _armed(unit_name: String, range_in: int) -> GameUnit:
 	u.source_type = "opr"
 	u.source_data = opr
 	return u
+
+
+## The player's own volley through the core door: the activation is opened first (the Fire! button's path), then the
+## door shoots; false from the door would mean the table is left to resolve it.
+func _door_fire(attacker: GameUnit, target: GameUnit) -> void:
+	CoreActivation._env = 1
+	CoreActivation._hotseat_env = 1   # this table has no AI seat: the human door applies to a local hotseat table behind its switch
+	assert_bool(CoreActivation.open_session(_main, attacker)).override_failure_message("no activation session for the attacker").is_true()
+	var took: bool = await CoreActivation.human_shoot(_main, attacker, target)
+	assert_bool(took).override_failure_message("the core door did not take the volley (the table would resolve it)").is_true()
+	CoreActivation.close_session(_main, attacker.unit_id)
 
 
 func _log_from(start: int) -> String:
@@ -104,7 +118,7 @@ func _assert_morale_by_name(melee: bool) -> void:
 	if melee:
 		await _main._run_human_melee(attacker, foe, true)
 	else:
-		await _main._run_human_shooting(attacker, foe)
+		await _door_fire(attacker, foe)
 	var text := _log_from(start)
 	assert_bool(text.contains("Raiders passes morale") or text.contains("Raiders fails morale")) \
 		.override_failure_message("fixture: no morale result:\n%s" % text).is_true()

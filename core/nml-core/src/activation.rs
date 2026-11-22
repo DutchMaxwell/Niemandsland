@@ -27,7 +27,8 @@ pub enum Input {
     /// The declared action (`sim::HOLD` ..); `shoot` is `Some` when it shoots. `split` is split fire's aim,
     /// per (member, weapon) the target key it fires at; `None` (or empty) = the one `shoot` target.
     /// P4.D-46: `charge` is a `sim::CHARGE`'s target key (the core lands the charge with `charge_move`, then strikes).
-    Intent { kind: i64, shoot: Option<String>, split: Option<Vec<SplitShot>>, charge: Option<String> },
+    /// Step 20: `no_step` = the core takes no Hit & Run step after the attack (a human bearer's player drags it).
+    Intent { kind: i64, shoot: Option<String>, split: Option<Vec<SplitShot>>, charge: Option<String>, no_step: bool },
     /// One thrown face group, in the order the core asked for them.
     Faces(Vec<u8>),
     /// The unit's model positions after a drag (`at`) and each model's walked path this
@@ -44,6 +45,10 @@ pub enum Input {
     /// meleefix: one melee unit's consolidation inputs from the table's AI round planner (`ConsolidatePlan`); read from
     /// `PENDING_EPOCH_CONSOLIDATE_PLAN` on, ignored below it. Absent = the core's own goal.
     Consolidate(ConsolidatePlan),
+    /// D-PAR3 14a: what the table already resolved this activation before it captured the core's board, so the core does
+    /// not resolve it again: `start` = the activation-start triggers (Reanimation, Surprise Attack), `dangerous` = the move's
+    /// Dangerous terrain test, `beats` = the pre-attack phase. Only directly after `Begin`.
+    Paid { start: bool, dangerous: bool, beats: bool },
 }
 
 /// meleefix: what the table's goal for a melee winner's "may move up to 3 in" reads besides the board
@@ -122,6 +127,7 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
         let why = match x {
             _ if i == 0 && *x != Input::Begin => Some("the activation was not started".to_string()),
             Input::Begin if i > 0 => Some("the activation is already started".to_string()),
+            Input::Paid { .. } if i != 1 => Some("what the table paid is said right after the start".to_string()),
             _ if over => Some("the activation is over".to_string()),
             Input::Cancel if rolled => Some("cancel is not possible after the first die".to_string()),
             Input::Faces(_) if !declared => Some("faces before the action was declared".to_string()),
@@ -516,7 +522,15 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     if let Some((index, reason)) = cast_check(statics, state, t) {
         return ActStep::Refused { index, reason };
     }
+    // D-PAR3 14a/14b: `order_check` keeps a `Paid` at index 1; the start and the beats ride the tray, the Dangerous test the seams.
+    let (paid_start, paid_dangerous, paid_beats) = match t.get(1) {
+        Some(Input::Paid { start, dangerous, beats }) => (*start, *dangerous, *beats),
+        _ => (false, false, false),
+    };
     let casts: Vec<CastInput> = t.iter().filter_map(|x| if let Input::Cast(c) = x { Some(c.clone()) } else { None }).collect();
+    if paid_beats && !casts.is_empty() {
+        return ActStep::Refused { index: 1, reason: "the table paid the pre-attack phase, so it cast already: no cast input".to_string() };
+    }
     let consolidate: Vec<ConsolidatePlan> = t.iter().filter_map(|x| if let Input::Consolidate(c) = x { Some(c.clone()) } else { None }).collect();
     // Before any resolver runs: no die is drawn and no state is resolved. A `Placed` in the
     // transcript is simply dropped (the table puts the models back).
@@ -526,10 +540,10 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         return ActStep::Cancelled { lines: vec![LogLine { rule: "activation_cancel", category: Category::Movement, side, text, detail: None }] };
     }
     let declared = t.iter().enumerate().find_map(|(i, x)| match x {
-        Input::Intent { kind, shoot, split, charge } => Some((i, *kind, shoot.clone(), split.clone(), charge.clone())),
+        Input::Intent { kind, shoot, split, charge, no_step } => Some((i, *kind, shoot.clone(), split.clone(), charge.clone(), *no_step)),
         _ => None,
     });
-    let Some((at_intent, declared, shoot, split, charge)) = declared else {
+    let Some((at_intent, declared, shoot, split, charge, no_step)) = declared else {
         return ActStep::Open;
     };
     let placed = t.iter().rev().find_map(|x| match x {
@@ -587,6 +601,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         }
     }
     let mut seams = seams;
+    seams.no_dangerous |= paid_dangerous; // D-PAR3 14b: the table rolled this move's test (its end morale is the table's too)
     if let Some((i, id, option)) = takedown {
         let Some((want, options, owner)) = at.and_then(|si| takedown_choice(statics, state, si, shoot.as_deref())) else {
             return ActStep::Refused { index: i, reason: format!("no choice is open in this activation (got {id})") };
@@ -633,6 +648,8 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             if let Some((p, trails)) = placed.clone() {
                 tray.place(p, trails);
             }
+            tray.pay(paid_start, paid_beats);
+            tray.hold_step(no_step);
             for (_, id, answer) in &wound {
                 tray.offer_wound_alloc(id.clone(), answer.clone());
             }
@@ -1000,7 +1017,7 @@ mod tests {
     }
 
     fn intent(kind: i64, shoot: Option<&str>) -> Input {
-        Input::Intent { kind, shoot: shoot.map(String::from), split: None, charge: None }
+        Input::Intent { kind, shoot: shoot.map(String::from), split: None, charge: None, no_step: false }
     }
 
     /// A planned cast with the given `seq` and every other field at its default.
@@ -1053,7 +1070,7 @@ mod tests {
     fn rule8_reposition_is_not_on_the_step_path_and_a_charge_names_its_target() {
         refused(&[Begin, placed(vec![]), intent(REPOSITION, None)], 2, "not on the step path yet");
         refused(&[Begin, intent(CHARGE, None)], 1, "a charge names its target");
-        let charge = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("b".into()) };
+        let charge = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("b".into()), no_step: false };
         assert_eq!(order_check("Squad", &[Begin, charge, Faces(vec![4])]), Ok(()));
     }
 
@@ -1250,7 +1267,7 @@ mod tests {
         for seed in 0..200i64 {
             let split = |split: Option<Vec<SplitShot>>| Action { kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None, patient: false, split, traced: None, teleport: None };
             let (want, shot) = resolve_stochastic_tray_on_board(&statics, &st, &split(Some(aim.clone())), &Terrain::default(), seams(), &mut GodotRng::new(seed), &mut Tray::seeded(seed)).unwrap();
-            let (got, rolls) = drive(&statics, &st, vec![Begin, Input::Intent { kind: HOLD, shoot: Some("b".into()), split: Some(aim.clone()), charge: None }], seed);
+            let (got, rolls) = drive(&statics, &st, vec![Begin, Input::Intent { kind: HOLD, shoot: Some("b".into()), split: Some(aim.clone()), charge: None, no_step: false }], seed);
             let ActStep::Done { state, lines, .. } = got else { panic!("seed {seed}: {got:?}") };
             let fold = |r: Roll| Roll { kind: if r.kind == "morale" { "attack" } else { r.kind }, ..r };
             assert_eq!(rolls.into_iter().map(fold).collect::<Vec<_>>(), shot.rolls, "seed {seed}");

@@ -5,6 +5,8 @@ extends GdUnitTestSuite
 ##     the weapon-rule arm of the same reader already names its rule.
 ##   * Piercing Growth folds its marker AP into the attack profile; the save batch now names the
 ##     rule that supplied it instead of landing one AP better out of nowhere.
+## (The Piercing Growth AP line was asserted on the table's human volley; that case left with the resolver, its ledger cells
+## read equal / FREE-CHOICE.)
 ## Log-only: no die, no target and no number moves. The controls are declared first, because
 ## gdUnit drops the cases declared after a failing one on a scene suite.
 
@@ -56,19 +58,6 @@ func _unit(pid: int, unit_name: String, pos: Vector3, rules: Array, system: Stri
 	return u
 
 
-## A 24" gun on the unit's own OPR data — the profile _solo_attack_groups builds for a volley.
-func _arm(u: GameUnit) -> void:
-	var w := OPRApiClient.OPRWeapon.new()
-	w.name = "Test Gun"
-	w.range_value = 24
-	w.attacks = 60
-	w.count = 1
-	var src := OPRApiClient.OPRUnit.new()
-	src.weapons = [w]
-	u.source_type = "opr"
-	u.source_data = src
-
-
 func _markers(u: GameUnit, rule: String) -> int:
 	return int(u.unit_properties.get("growth_%s" % rule.to_snake_case(), 0))
 
@@ -93,16 +82,6 @@ func test_control_a_plain_carrier_keeps_the_bypass_silent() -> void:
 	assert_str(_log_text()).not_contains("Regeneration ignored")
 
 
-func test_control_piercing_growth_without_markers_adds_no_ap_line() -> void:
-	var shooter := _unit(1, "Gunners", Vector3.ZERO, ["Piercing Growth"], "gf", "alien_hives")
-	_arm(shooter)
-	var foe := _unit(2, "Foemen", Vector3(0.20, 0, 0), [], "gf", "alien_hives")
-	assert_int(_markers(shooter, "Piercing Growth")).is_equal(0)
-	await _main._run_human_shooting(shooter, foe)
-	assert_str(_log_text()).not_contains("from its growth markers")
-	await E2EBoot.settle(get_tree())
-
-
 # ===== the two named lines =====
 
 func test_the_scoped_unstoppable_names_its_model_level_bypass() -> void:
@@ -113,22 +92,6 @@ func test_the_scoped_unstoppable_names_its_model_level_bypass() -> void:
 	assert_str(_log_text()) \
 		.override_failure_message("rules-must-log: the bypass names the scoped rule (log: %s)" % _log_text().strip_edges()) \
 		.contains("Unstoppable when Shooting: Regeneration ignored")
-
-
-func test_piercing_growth_names_the_ap_it_adds() -> void:
-	var shooter := _unit(1, "Gunners", Vector3.ZERO, ["Piercing Growth"], "gf", "alien_hives")
-	_arm(shooter)
-	var foe := _unit(2, "Foemen", Vector3(0.20, 0, 0), [], "gf", "alien_hives")
-	_main._solo_growth_round_start()
-	_main._solo_growth_round_start()
-	assert_int(_markers(shooter, "Piercing Growth")) \
-		.override_failure_message("fixture broken: the round ticks earned no marker").is_equal(2)
-	await _main._run_human_shooting(shooter, foe)
-	var text := _log_text()
-	await E2EBoot.settle(get_tree())
-	assert_str(text) \
-		.override_failure_message("rules-must-log: the marker AP names Piercing Growth (log: %s)" % text.strip_edges()) \
-		.contains("Piercing Growth: Gunners adds AP(+1) from its growth markers")
 
 
 # ===== Growth markers: applied and named on aof as well (verification, no new line) =====

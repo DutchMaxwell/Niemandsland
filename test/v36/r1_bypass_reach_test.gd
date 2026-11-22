@@ -2,10 +2,9 @@ extends GdUnitTestSuite
 ## R-1 step 7: the bypass reaches the two places the roll split left behind.
 ##   (a) A spell wound that bypasses Regeneration still meets the other wound-ignore rules - and must meet
 ##       them at the SPELL threshold (a unit with Resistance rolls 2+ against spell wounds, not 6+).
-##   (b) An attacker-side "<rule>: Regeneration ignored" line is written only when the target really carries
-##       a rule named Regeneration (own, aura/buff-granted, medic item); against Self-Repair it claims nothing.
-## Both ride the real table paths over main.tscn. The control is declared first: gdUnit drops the cases
-## declared after a failing one on a scene suite.
+##   (b) (the human volley's "<rule>: Regeneration ignored" line, only against a real Regeneration; Self-Repair gets none)
+##       left with the table's human resolver: the Anti-Regen, Regeneration and Self-Repair cells read equal in the shoot ledger.
+## (a) rides the real table path over main.tscn.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
@@ -83,60 +82,6 @@ func _spell(weapon_rules: Array, foe: GameUnit) -> String:
 	return text
 
 
-func _gun(rule: String) -> OPRApiClient.OPRWeapon:
-	var w := OPRApiClient.OPRWeapon.new()
-	w.name = "Test Gun"
-	w.range_value = 24
-	w.attacks = 60
-	w.count = 1
-	var rs: Array[String] = [rule]
-	w.special_rules = rs
-	return w
-
-
-## A gf shooter 6" east of `at`, with a 24" gun printing `rule`.
-func _shooter(at: Vector3, rule: String) -> GameUnit:
-	var u := E2EBoot.make_unit(_main, 1, "Gunners", [at + Vector3(6.0 * INCH, 0, 0)])
-	u.unit_properties["game_system"] = "gf"
-	u.unit_properties["faction_folder"] = "alien_hives"
-	u.unit_properties["special_rules"] = []
-	var src := OPRApiClient.OPRUnit.new()
-	src.weapons = [_gun(rule)]
-	u.source_type = "opr"
-	u.source_data = src
-	_main.opr_army_manager.game_units[u.unit_id] = u
-	return u
-
-
-func _foe(at: Vector3, rules: Array, faction: String) -> GameUnit:
-	var u := E2EBoot.make_unit(_main, 2, "Foemen", [at])
-	u.unit_properties["game_system"] = "gf"
-	u.unit_properties["faction_folder"] = faction
-	u.unit_properties["special_rules"] = rules
-	_main.opr_army_manager.game_units[u.unit_id] = u
-	return u
-
-
-## The human volley of an Anti-Regen gun into a unit with `rules`; returns the battle log it wrote.
-func _anti_regen_volley(rules: Array, faction: String) -> String:
-	var foe := _foe(Vector3(0.20, 0.0, 0.0), rules, faction)
-	var shooter := _shooter(Vector3(0.20, 0.0, 0.0), "Anti-Regen")
-	_main.seed_tray_rng(7)
-	await _main._run_human_shooting(shooter, foe)
-	var text := _log_text()
-	await E2EBoot.settle(get_tree())
-	return text
-
-
-# ===== control (b): a real Regeneration target keeps the bypass line =====
-
-func test_a_regeneration_bypass_still_names_itself_against_a_regenerator(timeout := 120000) -> void:
-	var text: String = await _anti_regen_volley(["Regeneration"], "alien_hives")
-	assert_str(text).override_failure_message(
-		"rules-must-log: an Anti-Regen weapon vs a Regeneration unit must name the rule:\n%s" % text) \
-		.contains("Anti-Regen: Regeneration ignored")
-
-
 # ===== (a): the bypassed spell wound rolls at the spell threshold =====
 
 func test_a_bypassed_spell_wound_rolls_resistance_at_the_spell_threshold(timeout := 120000) -> void:
@@ -147,15 +92,3 @@ func test_a_bypassed_spell_wound_rolls_resistance_at_the_spell_threshold(timeout
 	assert_str(text).override_failure_message(
 		"a bypassed SPELL wound must roll Resistance at the spell threshold, 2+ (log: %s)" % text.strip_edges()) \
 		.contains("(2+)")
-
-
-# ===== (b): a bypass against Self-Repair names no Regeneration =====
-
-func test_a_bypass_against_self_repair_claims_no_regeneration_skip(timeout := 120000) -> void:
-	var text: String = await _anti_regen_volley(["Self-Repair"], "robot_legions")
-	assert_str(text).override_failure_message(
-		"rules-must-log: no Regeneration on the target means no bypass line (log: %s)" % text.strip_edges()) \
-		.not_contains("Anti-Regen: Regeneration ignored")
-	assert_str(text).override_failure_message(
-		"the bypassed wounds must still meet Self-Repair (log: %s)" % text.strip_edges()) \
-		.contains("self-repair di")

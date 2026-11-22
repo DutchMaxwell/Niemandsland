@@ -33,6 +33,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
 	AiActRecorder.rules_epoch = _epoch_before
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
@@ -88,10 +90,25 @@ func _chain(host_gap_in: float, hero_gap_in: float, host_gun: int, hero_gun: int
 
 func _activate(shooter: GameUnit) -> void:
 	_main.seed_tray_rng(7)
-	await _main._run_ai_shooting({"unit": shooter, "moved": false, "action": AiDecision.Action.HOLD})
+	await _door_ai({"unit": shooter, "moved": false, "action": AiDecision.Action.HOLD})
 
 
 # ===== fixture control (green on main) =====
+
+## The game's own call: the core door takes the AI's volley (the board is captured first), as the lone-hero door suite does.
+## The epoch is the live one: the table's epoch-73 gates are the core's from its own epochs on.
+func _door_ai(report: Dictionary) -> void:
+	AiActRecorder.rules_epoch = _epoch_before
+	CoreActivation._env = 1
+	var runs := CoreActivation.ai_runs
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	await _main._run_ai_shooting(report)
+	assert_int(CoreActivation.ai_runs).override_failure_message("the core did not take the volley (the table shot it)") \
+		.is_equal(runs + 1)
+	if _main._solo_core_ai_h != 0:
+		_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+	_main._solo_core_ai_h = 0
+
 
 func test_control_the_fixture_is_18_2_inches_for_the_host_and_inside_18_for_the_chain() -> void:
 	var c := _chain(18.2, 16.9, 18, 12)
@@ -149,19 +166,5 @@ func test_the_joined_heros_own_gun_still_fires_from_the_heros_own_gap(timeout :=
 		.contains("Hounds saves on")
 	assert_str(text) \
 		.override_failure_message("the hero's own shot is not refused (log: %s)" % text.strip_edges()) \
-		.not_contains(RULE_LINE)
-	await E2EBoot.settle(get_tree())
-
-
-func test_the_epoch_72_control_keeps_the_old_fold(timeout := 60000) -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
-	var c := _chain(18.2, 16.9, 18, 12)
-	await _activate(c["host"])
-	var text := _log_text()
-	assert_str(text) \
-		.override_failure_message("below 73 the recorded corpus replays the host+hero fold (log: %s)" % text.strip_edges()) \
-		.contains("Hounds saves on")
-	assert_str(text) \
-		.override_failure_message("below 73 the rule line never appears (log: %s)" % text.strip_edges()) \
 		.not_contains(RULE_LINE)
 	await E2EBoot.settle(get_tree())

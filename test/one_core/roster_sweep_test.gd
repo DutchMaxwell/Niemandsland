@@ -220,12 +220,27 @@ func test_charge_helper_compares_door_against_table_and_catches_planted_faults()
 		return u
 	var ctrl := await RosterSweep.charge(_main, att_fn, foe_fn, 0)
 	assert_bool(bool(ctrl["taken"])).override_failure_message("control charge was not taken by the door").is_true()
-	assert_bool(bool(ctrl["equal"])).override_failure_message("control charge differed: %s" % [ctrl["diffs"]]).is_true()
-	assert_str(str(ctrl["first_diff"])).is_empty()
-	var nudge := func(_a: GameUnit, f: GameUnit) -> void: (f.get_alive_models()[0] as ModelInstance).node.global_position.x += RosterSweep.INCH
-	var moved := await RosterSweep.charge(_main, att_fn, foe_fn, 0, {"core_fault": nudge})
-	assert_bool(bool(moved["equal"])).override_failure_message("a 1 in position fault went unseen").is_false()
-	assert_str(str(moved["first_diff"])).is_equal("foe")
+	# Dice, state and lines are equal; both 1" back-steps end short of 1" from the defenders (ticket SEPARATE-1IN, ds/meleepos.md):
+	# the checker reads `enemy_within_1in` on both halves, the core's is the row's `core_illegal`.
+	assert_array(ctrl["diffs"]).override_failure_message("control charge differed: %s" % [ctrl["diffs"]]).is_empty()
+	assert_str(str(ctrl["first_diff"])).is_equal("core_illegal")
+	for half in ["table", "core"]:
+		var kinds: Array = (ctrl[half]["illegal"] as Array).map(func(i: Dictionary) -> String: return str(i["kind"]))
+		assert_bool(not kinds.is_empty() and kinds.all(func(k: String) -> bool: return k == "enemy_within_1in")) \
+			.override_failure_message("SEPARATE-1IN on the %s half: %s" % [half, ctrl[half]["illegal"]]).is_true()
+	# PLAN_FIRST_DELETION 3d: where the models stand is a free choice when both ends are legal - a 3 in shift of the whole defender is
+	# reported (`free_position`), not a mismatch; a planted overlap on the TABLE half is reported by the checker (`table_illegal`).
+	var shift := func(_a: GameUnit, f: GameUnit) -> void:
+		for m in f.get_alive_models():
+			(m as ModelInstance).node.global_position.x += 3.0 * RosterSweep.INCH
+	var moved := await RosterSweep.charge(_main, att_fn, foe_fn, 0, {"core_fault": shift})
+	assert_bool(bool(moved["equal"])).override_failure_message("a legal 3 in difference read as a mismatch: %s" % [moved["diffs"]]).is_true()
+	assert_array(moved["free_position"]).override_failure_message("the 3 in difference went unreported").is_not_empty()
+	var stack := func(_a: GameUnit, f: GameUnit) -> void:
+		(f.get_alive_models()[1] as ModelInstance).node.global_position = (f.get_alive_models()[0] as ModelInstance).node.global_position
+	var stacked := await RosterSweep.charge(_main, att_fn, foe_fn, 0, {"table_fault": stack})
+	assert_array((stacked["table"]["illegal"] as Array).map(func(i: Dictionary) -> String: return str(i["kind"]))) \
+		.override_failure_message("a planted overlap on the table half went unseen: %s" % [stacked["table"]]).contains(["overlap"])
 	var flip := func(_a: GameUnit, f: GameUnit) -> void: f.is_shaken = not f.is_shaken
 	var shaken := await RosterSweep.charge(_main, att_fn, foe_fn, 0, {"core_fault": flip})
 	assert_bool(bool(shaken["equal"])).override_failure_message("a Shaken fault went unseen").is_false()

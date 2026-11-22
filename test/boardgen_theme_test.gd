@@ -106,6 +106,8 @@ func test_a_town_draws_each_landmark_as_plain_boxes_inside_its_footprint() -> vo
 			assert_bool(b["lo"].x >= lo.x - 0.001 and b["lo"].z >= lo.y - 0.001 and b["hi"].x <= hi.x + 0.001 and b["hi"].z <= hi.y + 0.001).override_failure_message("%s draws outside its footprint" % lm["kind"]).is_true()
 			match lm["kind"]:
 				"TankCluster", "Crane":
+					if not b["solid"]:
+						continue   # the fountain's drawn basin (test below)
 					assert_array([b["kind"], b["solid"], b["hi"].y]).is_equal(["stone", true, 2.5])
 					assert_vector(b["hi"] - b["lo"]).is_equal_approx(Vector3(lm["w"] * 3.0, 2.5, lm["h"] * 3.0), Vector3.ONE * 0.001)   # the whole footprint, no taller than the core's container
 				"Sump":
@@ -119,6 +121,30 @@ func test_a_town_draws_each_landmark_as_plain_boxes_inside_its_footprint() -> vo
 	for b: Dictionary in by_landmark[3]:
 		rim_area += (b["hi"].x - b["lo"].x) * (b["hi"].z - b["lo"].z)
 	assert_float(rim_area).is_equal_approx(6.0 * 6.0 - 5.4 * 5.4, 0.001)   # a 0.3 in line round the 6 x 6 in footprint, no overlap, no gap
+
+
+## Texture plan step 15: kit off, the fountain is an octagonal basin (8 wall segments 0.6 in high), water inside, a column - not a 2.5 in
+## white cube. The core's solid stays: ONE collider box over the whole footprint, drawn by nothing.
+func test_the_town_fountain_is_an_octagonal_basin_over_one_undrawn_footprint_collider() -> void:
+	var parts := BoardgenGreybox.plan(_town_with_every_landmark()).filter(func(b: Dictionary) -> bool: return b.get("lm", "") == "TankCluster")
+	var solids := parts.filter(func(b: Dictionary) -> bool: return b["solid"])
+	assert_int(solids.size()).is_equal(1)
+	for b: Dictionary in solids:
+		assert_vector(b["hi"] - b["lo"]).is_equal_approx(Vector3(6.0, 2.5, 6.0), Vector3.ONE * 0.001)
+		assert_bool(BoardgenGreybox.draws_itself(b)).override_failure_message("the 2.5 in fountain cube is still drawn").is_false()
+	var rim := parts.filter(func(b: Dictionary) -> bool: return b["kind"] == "wall")
+	assert_int(rim.size()).is_equal(8)
+	var bearings := {}
+	var centre := Vector2(-15.0, -3.0)   # the middle of the 2 x 2 fountain at cell (2, 6) on the 48 in board
+	for b: Dictionary in rim:
+		var size: Vector3 = b["hi"] - b["lo"]
+		assert_array([snappedf(size.y, 0.001), snappedf(minf(size.x, size.z), 0.001)]).is_equal([0.6, 0.3])
+		var at := Vector2(b["hi"].x + b["lo"].x, b["hi"].z + b["lo"].z) * 0.5 - centre
+		assert_float(at.length()).is_equal_approx(2.4, 0.001)
+		bearings[roundi(rad_to_deg(at.angle()))] = true
+	assert_int(bearings.size()).is_equal(8)   # one side per eighth turn: an octagon
+	assert_bool(parts.any(func(b: Dictionary) -> bool: return b["kind"] == "hazard")).is_true()
+	assert_bool(parts.any(func(b: Dictionary) -> bool: return b["kind"] == "stone" and not b["solid"] and is_equal_approx(b["hi"].y, 1.3))).is_true()
 
 
 func test_a_deepworks_plan_has_no_landmark_boxes_and_the_town_gets_the_solid_ones_a_collider() -> void:
@@ -163,7 +189,7 @@ func test_a_town_draws_its_wall_its_plots_and_its_intact_houses_with_kinds_of_th
 	assert_int(chimneys.size()).is_equal(1)   # one chimney on lot 99's roof
 	for b: Dictionary in chimneys:
 		assert_array([b["solid"], b["lo"].y, b["hi"].y > 2.5]).is_equal([false, 2.5, true])   # it rises from the body, visual only
-	var wall_tops: Array = of.call("wall").filter(func(b: Dictionary) -> bool: return not b.has("merlon")).map(func(b: Dictionary) -> float: return b["hi"].y)
+	var wall_tops: Array = of.call("wall").filter(func(b: Dictionary) -> bool: return not b.has("merlon") and not b.has("lm")).map(func(b: Dictionary) -> float: return b["hi"].y)
 	wall_tops.sort()
 	assert_array(wall_tops).is_equal([3.0, 6.0, 9.0])
 	assert_int(of.call("rubble").filter(func(b: Dictionary) -> bool: return not b.has("prop")).size()).is_equal(1)   # the breach cell itself (its stones are props)

@@ -573,3 +573,21 @@ use super::*;
         let (_, old) = rean_run(&st, &statics, &t, 95, 1, true);
         assert!(old.log.iter().any(|l| l.contains("rolls 4 dice")), "95 pin: {:?}", old.log);
     }
+
+    /// D-PAR3 14a: the table's capture is taken after its own Reanimation roll and the transcript says so (`Input::Paid { start }`):
+    /// the core rolls no pool and restores nothing; its first die is the next section's (here none: a Hold with no shot is Done).
+    /// RED: the same transcript without the paid input asks for the pool first (1 die at the rule's 1+).
+    #[test]
+    fn paid_start_skips_the_reanimation_pool() {
+        use crate::activation::{step_activation, ActStep, Input};
+        let (st, statics) = rean_line(4, 1, &L3);
+        let t = town_board(vec![]);
+        let seams = Seams { rules_epoch: 95, ..Seams::default() };
+        let hold = Input::Intent { kind: HOLD, shoot: None, split: None, charge: None, no_step: false };
+        let paid = |dangerous: bool| Input::Paid { start: true, dangerous, beats: false };
+        let ask = |tr: &[Input]| step_activation(&statics, &st, "a", &t, seams, tr, true);
+        assert!(matches!(ask(&[Input::Begin, hold.clone()]), ActStep::NeedRoll { count: 1, target: 1, .. }), "unpaid: the pool first");
+        let ActStep::Done { state, .. } = ask(&[Input::Begin, paid(false), hold.clone()]) else { panic!("paid: no die is asked") };
+        assert_eq!((state.alive[0], state.positions[0].len()), (3, 3), "nothing restored");
+        assert!(matches!(ask(&[Input::Begin, hold, paid(false)]), ActStep::Refused { index: 2, .. }), "misplaced paid");
+    }

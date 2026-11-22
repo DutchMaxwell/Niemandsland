@@ -62,7 +62,9 @@ func after_test() -> void:
 
 
 func _pair() -> Array:
-	var att := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Att", "models": 10, "x_in": 0.0,
+	# A legal formation (PLAN_FIRST_DELETION 3c): 8 models of 32 mm in a 1.3" column (edge gap 0.04", spread 7.8"); the old 10 models
+	# at 1.2" overlapped each other and spread 9.8", beyond coherency, before any step.
+	var att := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Att", "models": 8, "x_in": 0.0, "z_step_in": 1.3,
 		"rules": ["Harassing"]}, true), RIFLE)
 	var foe := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Def", "models": 20, "x_in": 12.0,
 		"defense": 2}, true), {})
@@ -222,11 +224,11 @@ func test_a_unit_that_lost_a_model_still_lands_its_step() -> void:
 	dead.apply_damage(dead.wounds_current)
 	var step := Vector3(-3.0 * INCH, 0.0, 0.0)
 	var to: Array = att.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position + step)
-	var row := {"unit": att.unit_id, "removed": [], "shaken": false, "alive": 9, "moved": true, "unknown": true,
+	var row := {"unit": att.unit_id, "removed": [], "shaken": false, "alive": 7, "moved": true, "unknown": true,
 		"positions": to, "stamps": {}}
 	await CoreActivation.land_delta(_main, [row], start, {"0:%s:0" % att.unit_id: dead})
 	var got: Array = att.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
-	assert_int(got.size()).is_equal(9)
+	assert_int(got.size()).is_equal(7)
 	for i in got.size():
 		assert_float(Vector2((got[i] as Vector3).x, (got[i] as Vector3).z).distance_to(
 			Vector2((to[i] as Vector3).x, (to[i] as Vector3).z))).override_failure_message(
