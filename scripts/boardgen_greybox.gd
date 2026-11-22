@@ -58,6 +58,8 @@ var _atmosphere: Object = null   # the town re-applies its dusk after every mood
 ## The board of NML_BOARDGEN_SEED on `table`, or null when the flag is off (release build, unset or not an integer).
 static func attach_from_env(table: Node) -> BoardgenGreybox:
 	var raw := OS.get_environment(ENV_SEED).strip_edges()
+	if raw.is_empty():
+		raw = "7"
 	if not OS.is_debug_build() or not raw.is_valid_int() or not ClassDB.class_exists("NmlCore"):
 		return null
 	var core: Object = ClassDB.instantiate("NmlCore")
