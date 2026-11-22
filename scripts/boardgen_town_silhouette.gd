@@ -115,7 +115,7 @@ static func ruin_gables(layout: Dictionary, timber: Dictionary = {}, faces: Arra
 				var z: int = int(lot["z"]) + k if axis_x else int(lot["z"]) + (0 if end == 0 else int(lot["h"]) - 1)
 				face.append(z * nx + x)
 			var level: int = layout["cells"][face[0]]["level"]
-			var ok := level >= 1
+			var ok := level >= 1 and level < 3   # (towers plan T2 sweep: a gable on a 9 in top would rise into the tower crown)
 			for i in face:
 				var cd: Dictionary = layout["cells"][i]
 				ok = ok and int(cd["level"]) == level and _level(layout, int(cd["x"]) + d.x, int(cd["z"]) + d.y) < level

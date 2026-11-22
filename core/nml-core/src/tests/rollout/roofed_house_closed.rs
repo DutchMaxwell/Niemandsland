@@ -174,7 +174,7 @@ fn open_readers(seeds: std::ops::RangeInclusive<i64>, solid: bool) -> (usize, Ve
                 let (nx, nz) = (c.x as i64 + dx, c.z as i64 + dz);
                 if !(0..l.nx as i64).contains(&nx) || !(0..l.nz as i64).contains(&nz) { continue; }
                 let n = l.cell(nx as usize, nz as usize);
-                if n.level != 0 || n.lot_kind == LotKind::Roofed { continue; }
+                if n.level != 0 || matches!(n.lot_kind, LotKind::Roofed | LotKind::Tower) { continue; }   // (towers plan T2: a tall tower is no open ground either)
                 if !wall_blocked(&t, m(x + dx as f64 * 1.5, z + dz as f64 * 1.5)) { say("border wall"); }
                 let (a, b) = (m(x + dx as f64 * 3.0, z + dz as f64 * 3.0), m(x - dx as f64 * 3.0, z - dz as f64 * 3.0));
                 let lifted = |p: (f64, f64)| [p.0 as f32, 0.02, p.1 as f32];
