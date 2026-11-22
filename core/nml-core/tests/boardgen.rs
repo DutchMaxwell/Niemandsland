@@ -274,12 +274,14 @@ fn blocked_share_roofs(l: &Layout, cap: u8, pairs: &[CellPair], solids: bool, ro
         let top = match l.cell(cx, cz).lot_kind { nml_core::boardgen::LotKind::Roofed => roof_in, nml_core::boardgen::LotKind::Tower => nml_core::boardgen::plain::TOWER_IN, _ => nml_core::terrain::CONTAINER_HEIGHT_IN };
         if solids && sol[cz * GRID + cx] { floor.max(top) } else { floor }
     };
-    let blocked = pairs.iter().filter(|&&((x1, z1), (x2, z2))| {
+    // (sight plan S1) nobody stands in a solid cell (L-RF1): a pair with an end in a house, a tower, a tank or a crane foot is no sight line and is left out
+    let kept: Vec<CellPair> = pairs.iter().copied().filter(|&((x1, z1), (x2, z2))| !sol[z1 * GRID + x1] && !sol[z2 * GRID + x2]).collect();
+    let blocked = kept.iter().filter(|&&((x1, z1), (x2, z2))| {
         let (a, b) = ((x1 as f64 * 3.0 + 1.5, z1 as f64 * 3.0 + 1.5), (x2 as f64 * 3.0 + 1.5, z2 as f64 * 3.0 + 1.5));
         let (ya, yb) = (h(a.0, a.1) + 1.25, h(b.0, b.1) + 1.25);
         (1..100).any(|k| { let t = f64::from(k) / 100.0; h(a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t) > ya + (yb - ya) * t })
     }).count();
-    blocked as f64 / pairs.len().max(1) as f64
+    blocked as f64 / kept.len().max(1) as f64
 }
 
 /// Band 1 row 1 against band 2 row 14, every column pair: the sight lines of the opening turn.
@@ -1023,6 +1025,28 @@ fn every_town_has_at_least_four_intact_houses() {
     assert!(few.is_empty(), "{} of 1000 town boards have fewer than 4 intact houses: {:?}", few.len(), &few[..few.len().min(20)]);
 }
 
+/// Sight plan S1: the census puts no eye inside a house - on town boards 1-60 the opening and mid sight lines with an end on a solid cell are left out, and
+/// there are such lines to leave out (planted: without the filter none would be dropped and the count below is 0).
+#[test]
+fn the_census_puts_no_eye_inside_a_house() {
+    let mut dropped = 0;
+    for seed in 1..=60 {
+        let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
+        let sol = solid(&l);
+        for &((x1, z1), (x2, z2)) in band_pairs().iter().chain(mid_pairs().iter()) {
+            dropped += usize::from(sol[z1 * GRID + x1] || sol[z2 * GRID + x2]);
+        }
+        let all: Vec<CellPair> = band_pairs().into_iter().chain(mid_pairs()).collect();
+        let kept: Vec<CellPair> = all.iter().copied().filter(|&((x1, z1), (x2, z2))| !sol[z1 * GRID + x1] && !sol[z2 * GRID + x2]).collect();
+        // the share over the kept pairs equals blocked_share over all pairs: the instrument leaves the solid ends out itself
+        let mine = blocked_share(&l, 3, &kept, true);
+        assert!((mine - blocked_share(&l, 3, &all, true)).abs() < 1e-12, "seed {seed}: blocked_share still counts a line from inside a house");
+    }
+    eprintln!("sight lines with an end inside a solid cell over 60 town boards: {dropped}");
+    // the equality above is the proof; this only keeps it from being vacuous (with no solid end point it would hold on any instrument)
+    assert!(dropped > 0, "no line ends in a solid cell on these boards: the equality above would hold trivially");
+}
+
 /// Roofs plan K2: the town's raised minimum is 15 %, so the generator grows few filler slabs (raised cells on free earth: no lot, not the wall).
 /// Before K2 (minimum 23 %) the mean over 200 seeds was ~38 cells per board.
 #[test]
@@ -1041,7 +1065,7 @@ fn a_town_grows_few_filler_slabs() {
 const ROOFS_BASELINE: [(&str, f64); 19] = [
     ("intact houses", 8.27), ("boards with <= 2 houses %", 0.0), ("roofed cells", 19.37), ("raised cells in house plots", 13.07), ("raised cells on free earth", 22.64), ("raised cells in the city wall", 34.25),
     ("roof share of footprints %", 35.17), ("walkable sq in 0 in", 1374.21), ("walkable sq in 3 in", 352.48), ("walkable sq in 6 in", 207.58), ("walkable sq in 9 in", 69.53), ("ladders", 44.27),
-    ("opening rays blocked %", 95.58), ("mid rays blocked %", 78.39), ("tier-to-tier rays blocked, house 2.5 in %", 53.4), ("tier-to-tier rays blocked, ridge 4.5 in %", 58.07),
+    ("opening rays blocked %", 96.61), ("mid rays blocked %", 82.44), ("tier-to-tier rays blocked, house 2.5 in %", 53.4), ("tier-to-tier rays blocked, ridge 4.5 in %", 58.07),
     ("roofed cells in the bands", 8.88), ("raised cells in the bands", 30.17), ("asymmetric cells", 0.0),
 ];
 
