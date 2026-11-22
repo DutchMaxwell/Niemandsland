@@ -3410,12 +3410,12 @@ fn indirect_waives_gate(statics: &[UnitStatic], state: &State, si: usize, ti: us
 
 /// `PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY`: the target's own range cut (Aircraft -12", the Ranged Shrouding family) leaves no living
 /// chain member a weapon whose cut reach (plus a live +6" Mark) covers the gap its weapons are gated by (`gap`, the volley's own `dm`);
-/// the Mark adds after the cut (the larger of the two reads), so a volley the dice would fire is never dropped. A shooting Aircraft
-/// (Strafing) keeps the old read, and the Aircraft cut counts only where the volley reads it (the sighting seam).
+/// the Mark adds after the cut (the larger of the two reads), so a volley the dice would fire is never dropped. The Aircraft cut counts
+/// only where the volley reads it (the sighting seam); a Strafing run is its own volley (`tray_strafing`) and never reaches this.
 fn cut_out_of_reach(statics: &[UnitStatic], state: &State, si: usize, ti: usize, seams: Seams, gap: impl Fn(usize) -> f64) -> bool {
     let def = &statics[state.roster.profile[ti]].ctx;
     let air = state.aircraft[ti] && seams.sighting;
-    if !(air || def.ranged_shrouding) || state.aircraft[si] {
+    if !(air || def.ranged_shrouding) {
         return false;
     }
     let mark = if mods::granted_vs(state, ti, "+6\" shooting range") { INCREASED_SHOOTING_RANGE_MARK_IN } else { 0.0 };
