@@ -80,3 +80,40 @@ def test_the_canary_really_boots_the_game_and_is_not_a_class_suite():
     assert "scene_runner(E2EBoot.MAIN_SCENE)" in text, "the canary must boot scenes/main.tscn"
     assert 'MAIN_SCENE := "res://scenes/main.tscn"' in open(os.path.join(ROOT, "test/e2e/e2e_boot.gd"), encoding="utf-8").read()
     assert CANARY not in suites(ROOT, files, "look") and CANARY in lane(ROOT, files, "look")
+    # and it asserts what no class suite can: no board-look node, no collider in table_overlay, the ground is the bare table
+    for needle in ('find_children("Boardgen*"', '"table_overlay"', "CollisionObject3D", "_surface_y_under"):
+        assert needle in text, f"the canary lost its check: {needle}"
+
+
+def test_build_yml_wires_the_short_run_and_adds_no_skip():
+    import re
+    wf = open(os.path.join(ROOT, ".github", "workflows", "build.yml"), encoding="utf-8").read()
+    for needle in ("fetch-depth: 2", '[ "$BASE_REF" = "main" ]', "--pr-is-only look", "&& '[0]' ||", "--lane look > look_suites.txt", "--suite-file look_suites.txt",
+                   "tools/ci_look_lane_test.py"):
+        assert needle in wf, f"build.yml lost the LOOK short run wiring: {needle}"
+    m = re.search(r"^  test:\n(?:    .*\n)*?    if: (.*)$", wf, re.M)
+    assert m and "look_only" not in m.group(1), "the test job must RUN for a LOOK-only PR (a skip would need a path reason in all_required.py)"
+
+
+def test_the_short_run_is_for_a_pr_against_main_only(tmp_path):
+    """A stacked child is diffed against its parent branch: LOOK-only there says nothing about the parent's own files."""
+    import re
+    import textwrap
+    wf = open(os.path.join(ROOT, ".github", "workflows", "build.yml"), encoding="utf-8").read()
+    m = re.search(r"      - name: LOOK-only PR\?\n(?:        .*\n)*?        run: \|\n((?:          .*\n)+)", wf)
+    assert m, "the LOOK-only step moved: update this test"
+    script = textwrap.dedent(m.group(1))
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "ci_path_classes.py").write_text("import sys\nsys.exit(0)\n")  # the diff says: LOOK-only
+
+    def look_only(event, base):
+        out = tmp_path / "out"
+        out.write_text("")
+        env = dict(os.environ, EVENT=event, BASE_REF=base, GITHUB_OUTPUT=str(out))
+        subprocess.run(["bash", "-c", script], cwd=tmp_path, env=env, check=True, capture_output=True)
+        return out.read_text().strip()
+
+    assert look_only("pull_request", "main") == "look_only=true"
+    assert look_only("pull_request", "roofsf/f1") == "look_only=false"  # stacked child of a parent that may change core/
+    assert look_only("pull_request", "") == "look_only=false"
+    assert look_only("push", "main") == "look_only=false"
