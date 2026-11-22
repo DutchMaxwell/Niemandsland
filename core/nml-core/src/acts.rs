@@ -1073,6 +1073,13 @@ pub const PENDING_EPOCH_BANE_MARK: u32 = 96;
 /// rolled nothing, and spent the once-per-game shot feats (Precision / Piercing Feat), the target's marks and markers, and the exchange's
 /// once-records. Core: `sim::cut_out_of_reach`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant.
 pub const PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY: u32 = 96;
+/// Placeholder gate for REVIVE SPOT (PLAN_REVIVE_SPOT.md, lane reviveSpot; GF / AoF 3.6 army books, Reanimation: a model may only be
+/// restored where it can be placed in coherency with the models that were not restored): a model brought back by Reanimation never
+/// stands off the table, where a base may not rest (impassable terrain, a wall or a cliff), over or against an intact house, or on any
+/// standing base (its own unit's included), and it keeps its unit's own base radius. No legal spot: it is not restored. Core:
+/// `sim::tray_reanimation`, `sim::revive_spot_legal`. Records stamped 95 or below replay byte-exact. Every call site reads THIS
+/// constant, not the literal `96`.
+pub const PENDING_EPOCH_REVIVE_SPOT: u32 = 96;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff

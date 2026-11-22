@@ -1791,6 +1791,7 @@ mod hit_and_run_boost_band;
 mod grounded_reinforcement;
 mod grounded_speed;
 mod teleport;
+mod revive_spot;
 mod hit_and_run_score;
 mod immobile;
 mod instinctive;
