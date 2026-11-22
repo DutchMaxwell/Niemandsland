@@ -175,7 +175,7 @@ fn a_stepped_charge_reads_the_consolidation_inputs_at_96_and_not_at_95() {
     let board = small_board();
     let run = |epoch: u32, seed: i64| {
         let seams = Seams { movement: true, rules_epoch: epoch, tray_exact: true, ..Seams::default() };
-        let mut t = vec![Input::Begin, Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("b".into()) },
+        let mut t = vec![Input::Begin, Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("b".into()), no_step: false },
             Input::Consolidate(seize_b(false))];
         let mut dice = Tray::seeded(seed);
         loop {
@@ -202,7 +202,7 @@ fn a_stepped_charge_reads_the_consolidation_inputs_at_96_and_not_at_95() {
 #[test]
 fn the_order_check_takes_the_inputs_once_per_unit_between_the_intent_and_the_first_die() {
     use crate::activation::{order_check, Input};
-    let intent = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("b".into()) };
+    let intent = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("b".into()), no_step: false };
     let c = Input::Consolidate(seize_b(false));
     assert_eq!(order_check("a", &[Input::Begin, intent.clone(), c.clone(), Input::Faces(vec![4])]), Ok(()));
     assert!(order_check("a", &[Input::Begin, c.clone(), intent.clone()]).is_err(), "before the intent");

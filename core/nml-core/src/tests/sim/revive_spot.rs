@@ -583,7 +583,7 @@ use super::*;
         let (st, statics) = rean_line(4, 1, &L3);
         let t = town_board(vec![]);
         let seams = Seams { rules_epoch: 95, ..Seams::default() };
-        let hold = Input::Intent { kind: HOLD, shoot: None, split: None, charge: None };
+        let hold = Input::Intent { kind: HOLD, shoot: None, split: None, charge: None, no_step: false };
         let paid = |dangerous: bool| Input::Paid { start: true, dangerous, beats: false };
         let ask = |tr: &[Input]| step_activation(&statics, &st, "a", &t, seams, tr, true);
         assert!(matches!(ask(&[Input::Begin, hold.clone()]), ActStep::NeedRoll { count: 1, target: 1, .. }), "unpaid: the pool first");

@@ -194,7 +194,7 @@ fn step_path(st: &State, statics: &[UnitStatic]) -> (Vec<usize>, Vec<crate::logl
     use crate::activation::{step_activation, ActStep, Input};
     let seams = Seams { rules_epoch: EPOCH_73_V36, casualties_bearers_last: true, sighting: true, ..Seams::default() };
     let terrain = crate::terrain::Terrain::default();
-    let mut t = vec![Input::Begin, Input::Intent { kind: HOLD, shoot: Some("b".into()), split: None, charge: None }];
+    let mut t = vec![Input::Begin, Input::Intent { kind: HOLD, shoot: Some("b".into()), split: None, charge: None, no_step: false }];
     let mut attack_dice = Vec::new();
     loop {
         match step_activation(statics, st, "a", &terrain, seams, &t, true) {

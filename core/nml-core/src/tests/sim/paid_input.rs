@@ -24,7 +24,7 @@ fn paid_dangerous_skips_the_test() {
     st.positions[0] = vec![[4.0 * IN2M, 0.0, 0.0], [4.02 * IN2M, 0.0, 0.0]];
     let board = dangerous_bar_board();
     let seams = Seams { rules_epoch: 95, ..Seams::default() };
-    let hold = Input::Intent { kind: HOLD, shoot: Some("b".into()), split: None, charge: None };
+    let hold = Input::Intent { kind: HOLD, shoot: Some("b".into()), split: None, charge: None, no_step: false };
     let ask = |t: &[Input]| first_roll(step_activation(&statics, &st, "a", &board, seams, t, true));
     assert_eq!(ask(&[Input::Begin, hold.clone()]), Some((2, DANGEROUS_TARGET, "a".to_string())), "unpaid: the test first");
     let volley = ask(&[Input::Begin, hold.clone(), Input::Faces(vec![6, 6])]).expect("the volley's die after the test");
@@ -37,7 +37,7 @@ fn paid_beats_skip_the_storm() {
     let (st, statics) = storm_line("Storm of Change", "wormhole_daemons_of_change", 95);
     let board = crate::terrain::Terrain::default();
     let seams = Seams { rules_epoch: 95, ..Seams::default() };
-    let hold = Input::Intent { kind: HOLD, shoot: None, split: None, charge: None };
+    let hold = Input::Intent { kind: HOLD, shoot: None, split: None, charge: None, no_step: false };
     let step = |t: &[Input]| step_activation(&statics, &st, "a", &board, seams, t, true);
     assert!(first_roll(step(&[Input::Begin, hold.clone()])).is_some(), "unpaid: the burst rolls");
     assert!(matches!(step(&[Input::Begin, paid(false, true), hold]), ActStep::Done { .. }), "paid: no die");

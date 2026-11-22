@@ -70,7 +70,7 @@ mod charge_step {
         let (mut hit, mut struck_back, mut impact) = (0, 0, 0);
         for seed in 0..200i64 {
             let (want, shot) = resolve_stochastic_tray_on_board(statics, st, &action, &board, seams(), &mut GodotRng::new(seed), &mut Tray::seeded(seed)).unwrap();
-            let charge = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("p2_0_b".into()) };
+            let charge = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("p2_0_b".into()), no_step: false };
             let (mut t, mut dice, mut rolls, mut faces) = (vec![Input::Begin, charge], Tray::seeded(seed), Vec::new(), Vec::new());
             dice.set_zero_draws(true);
             let (state, lines, landings) = loop {
@@ -108,7 +108,7 @@ mod charge_step {
     fn a_stepped_charge_moves_with_the_header_movement_seam_off() {
         let (st, statics) = scene(2, &[], 2);
         let board = clear_board();
-        let charge = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("p2_0_b".into()) };
+        let charge = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("p2_0_b".into()), no_step: false };
         let off = Seams { movement: false, plain_only: true, ..seams() };
         for seed in 0..16i64 {
             let run = |s: Seams| {
@@ -196,7 +196,7 @@ mod charge_step {
     }
 
     fn run_stepped_charge(st: &State, statics: &[UnitStatic], board: &crate::terrain::Terrain, s: Seams, seed: i64) -> (State, usize) {
-        let charge = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("p2_0_b".into()) };
+        let charge = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("p2_0_b".into()), no_step: false };
         let (mut t, mut dice, mut rolls) = (vec![Input::Begin, charge], Tray::seeded(seed), 0usize);
         dice.set_zero_draws(true);
         loop {
@@ -333,7 +333,7 @@ mod charge_step {
 
     /// A stepped charge with `extra` inputs after the intent, rolled from seed `seed` to its end.
     fn stepped(st: &State, statics: &[UnitStatic], seed: i64, extra: &[Input]) -> ActStep {
-        let charge = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("p2_0_b".into()) };
+        let charge = Input::Intent { kind: CHARGE, shoot: None, split: None, charge: Some("p2_0_b".into()), no_step: false };
         let (mut t, mut dice) = ([vec![Input::Begin, charge], extra.to_vec()].concat(), Tray::seeded(seed));
         dice.set_zero_draws(true);
         loop {
