@@ -1,55 +1,21 @@
 extends GdUnitTestSuite
-## One core P3 step 23: pins, byte for byte, the battle-log lines the TABLE writes for one plain volley, so steps 24-26
-## can make the Rust core print the same sentences. Layout = test/parity/scenarios/shoot/plain.json (10 Att models with
-## a Rifle 24" A1 vs 10 Def models 8" away, no rules). The volley runs through main's real _solo_resolve_ai_volley the
-## way the parity gate drives it (test/parity/parity_table.gd): the target holds the AI seat, so its saves roll without
-## a prompt. The rules epoch is the live one (AiActRecorder.rules_epoch), so a wording change that rides an epoch bump
-## turns this red too. Pinned per seed: every entry the volley adds, in order, as "<CATEGORY>|<text>".
-## Not pinned: the `ai` flag, the `detail` text, the prompt path of a human-seat target, a volley with no hit (seed
-## 225 stops after the hit line) and the singular "1 block".
-## P4.D-41 adds the outcome toast as a last entry ("TOAST|<text>"): the sentence lives in CoreActivation now, and no
-## battle-log line carries it, so without this the wording pin would be blind to it. RED: any word changed there.
+## The outcome toast of one plain AI volley, per seed, through the core door (`_run_ai_shooting` with the board captured): the
+## sentence the player reads after a volley ("<target>: N hits -> M wounds land - <target> loses K models", singular forms
+## included). It is UI, not parity text: the table and the door build it from the same `CoreActivation.volley_outcome`, and the
+## three pins below are the sentences the table's own volley wrote for these seeds (step 23, epoch 75), so the door must reproduce
+## them. Layout = test/parity/scenarios/shoot/plain.json (10 Att models with a Rifle 24" A1 vs 10 Def models 8" away, no rules);
+## the target holds the AI seat, so its saves roll without a prompt. The battle-log wording is no longer pinned: under the parity
+## ruling (D-PAR1) wording, order and labels are not compared. RED: any word changed in `volley_outcome`, or the door switched off.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const SCENARIO := "res://test/parity/scenarios/shoot/plain.json"
 
-## seed -> the volley's battle-log lines, "<CATEGORY>|<text>", in log order (found over seeds 0-399 at epoch 75).
+## seed -> the outcome toast (found over seeds 0-399 at epoch 75).
 const PINNED := {
-	0: [   # plural counts, half strength, the morale test fails
-		"COMBAT|Att fires at Def",
-		"COMBAT|AI (Att): 6 6 6 6 6 4 4 3 1 1 → 7 hits (4+)",
-		"COMBAT|Att fires Rifle at Def — 7 hits",
-		"COMBAT|Def saves on 4+",
-		"COMBAT|AI (Def) defends: 5 4 2 2 2 2 1 → 2 blocks (4+)",
-		"COMBAT|Def takes 5 wounds (5/10)",
-		"COMBAT|Def loses 5 models (5/10)",
-		"COMBAT|AI (Def): 3 → failed (4+)",
-		"COMBAT|Def fails morale — Shaken",
-		"TOAST|Def: 7 hits → 5 wounds land — Def loses 5 models",
-	],
-	57: [   # no save holds, the morale test passes
-		"COMBAT|Att fires at Def",
-		"COMBAT|AI (Att): 6 6 5 5 5 5 4 3 2 1 → 7 hits (4+)",
-		"COMBAT|Att fires Rifle at Def — 7 hits",
-		"COMBAT|Def saves on 4+",
-		"COMBAT|AI (Def) defends: 3 2 2 2 1 1 1 → 0 blocks (4+)",
-		"COMBAT|Def takes 7 wounds (3/10)",
-		"COMBAT|Def loses 7 models (3/10)",
-		"COMBAT|AI (Def): 6 → passed (4+)",
-		"COMBAT|Def passes morale",
-		"TOAST|Def: 7 hits → 7 wounds land — Def loses 7 models",
-	],
-	49: [   # the singular forms: one hit, one wound, a model
-		"COMBAT|Att fires at Def",
-		"COMBAT|AI (Att): 5 3 3 3 2 2 2 1 1 1 → 1 hit (4+)",
-		"COMBAT|Att fires Rifle at Def — 1 hit",
-		"COMBAT|Def saves on 4+",
-		"COMBAT|AI (Def) defends: 1 → 0 blocks (4+)",
-		"COMBAT|Def takes 1 wound (9/10)",
-		"COMBAT|Def loses a model (9/10)",
-		"TOAST|Def: 1 hit → 1 wound land — Def loses 1 model",
-	],
+	0: "Def: 7 hits → 5 wounds land — Def loses 5 models",   # plural counts, half strength, the morale test fails
+	57: "Def: 7 hits → 7 wounds land — Def loses 7 models",   # no save holds, the morale test passes
+	49: "Def: 1 hit → 1 wound land — Def loses 1 model",   # the singular forms: one hit, one wound, a model
 }
 
 var _runner: GdUnitSceneRunner
@@ -71,33 +37,32 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
 
 
-## One seeded volley of the scenario (ParityTable.run's plain path); returns the entries it added to the battle log.
-func _volley_lines(sc: Dictionary, seed_value: int) -> Array:
+## One seeded volley of the scenario through the core door (the board is captured first); returns the outcome toast it showed.
+func _door_toast(sc: Dictionary, seed_value: int) -> String:
 	var weapon: Dictionary = sc["weapon"]
 	var att: GameUnit = ParityTable._make_unit(_main, sc["attacker"], weapon)
 	var dfn: GameUnit = ParityTable._make_unit(_main, sc["defender"], {})
 	_main.seed_tray_rng(seed_value)
-	var dist_in := float(sc["defender"]["x_in"]) - float(sc["attacker"]["x_in"])   # same z steps: the closest pair
-	var wobj: OPRApiClient.OPRWeapon = (att.source_data as OPRApiClient.OPRUnit).weapons[0]
-	var plist: Array = AiShooting.profiles_in_range([wobj], dist_in)
-	for p in plist:
-		_main._solo_stamp_unit_shred(p, att, int(weapon["range_in"]))
-	var shots: Array = []
-	for p in AiEv.stamp_sergeant(plist, att):
-		shots.append({"member": att, "quality": int(sc["attacker"]["quality"]), "alive": att.get_alive_count(),
-			"max": att.models.size(), "reach": float(weapon["range_in"]), "profile": p})
-	var got: Array = []
-	var on_entry := func(e: Dictionary) -> void:
-		got.append("%s|%s" % [BattleLog.Category.keys()[int(e["category"])], str(e["text"])])
-	_main.battle_log.entry_added.connect(on_entry)
-	await _main._solo_resolve_ai_volley(att, dfn, shots)
-	_main.battle_log.entry_added.disconnect(on_entry)
-	got.append("TOAST|%s" % _main._solo_toast.text)
+	_main.solo_ai_slots = {1: true, 2: true}   # both seats AI: the saves roll without a prompt
+	_main.solo_controller.ai_slot = int(sc["attacker"]["player"])
+	_main.solo_controller.human_slot = int(sc["defender"]["player"])
+	CoreActivation._env = 1
+	var runs := CoreActivation.ai_runs
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	await _main._run_ai_shooting(ActIntent.blank_report(att))
+	assert_int(CoreActivation.ai_runs).override_failure_message("seed %d: the core did not take the volley (the table shot it)" % seed_value) \
+		.is_equal(runs + 1)
+	if _main._solo_core_ai_h != 0:
+		_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+	_main._solo_core_ai_h = 0
+	var got: String = _main._solo_toast.text
 	for u in [att, dfn]:
 		_main.opr_army_manager.game_units.erase((u as GameUnit).unit_id)
 		for m in (u as GameUnit).models:
@@ -108,11 +73,8 @@ func _volley_lines(sc: Dictionary, seed_value: int) -> Array:
 	return got
 
 
-func test_a_plain_volley_writes_the_pinned_lines() -> void:
+func test_a_plain_volley_shows_the_pinned_toast() -> void:
 	var sc := JSON.parse_string(FileAccess.get_file_as_string(SCENARIO)) as Dictionary
 	for s in PINNED:
-		print("PLAIN_VOLLEY_WORDING seed=%d epoch=%d start" % [s, AiActRecorder.rules_epoch])
-		var got := await _volley_lines(sc, int(s))
-		print("PLAIN_VOLLEY_WORDING seed=%d lines=%s" % [s, JSON.stringify(got)])
-		assert_array(got).override_failure_message("seed %d: the table's plain-volley wording changed\n got %s\nwant %s" % [
-			s, JSON.stringify(got), JSON.stringify(PINNED[s])]).is_equal(PINNED[s])
+		var got := await _door_toast(sc, int(s))
+		assert_str(got).override_failure_message("seed %d: the outcome toast changed\n got %s\nwant %s" % [s, got, PINNED[s]]).is_equal(PINNED[s])
