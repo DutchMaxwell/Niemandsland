@@ -41,6 +41,17 @@
     0.3
    ]
   },
+  "mud": {
+   "height_in": 0.06,
+   "mirror": true,
+   "set": "mud",
+   "tile_in": 2.2,
+   "tone": [
+    0.36,
+    0.33,
+    0.3
+   ]
+  },
   "plot": {
    "set": "earth",
    "tile_in": 8.0,
@@ -208,21 +219,21 @@
   },
   "ct_stone": {
    "anti_tile": 0.0,
-   "course_in": 0.25,
+   "course_in": 0.5,
    "joint": [
-    0.35,
+    0.3,
     0.62,
     [
      0.07,
      0.08,
      0.04
     ],
-    0.28
+    0.18
    ],
    "macro": 0.9,
    "set": "coursed_stone",
-   "stone_in": 0.3,
-   "tile_in": 1.5,
+   "stone_in": 0.6,
+   "tile_in": 3.0,
    "tone": [
     0.42,
     0.45,
@@ -234,14 +245,14 @@
    "anti_tile": 0.0,
    "course_in": 0.6,
    "joint": [
-    0.35,
+    0.3,
     0.62,
     [
      0.07,
      0.08,
      0.04
     ],
-    0.32
+    0.2
    ],
    "macro": 0.9,
    "set": "coursed_stone",
@@ -390,11 +401,12 @@
     ],
     [
      3.0,
-     0.0,
-     0.2
+     -0.012,
+     0.18
     ]
    ],
    "batch": "K2",
+   "bytes": 13740,
    "family": "deck_edge",
    "height_in": 0.3,
    "len_in": 3.0,
@@ -405,31 +417,31 @@
    "openings": [],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.2,
+    "high": 0.18,
     "low": 0.0
    },
    "role": "deck_edge",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       -0.3,
-      -0.25
+      -0.28
      ],
      [
-      2.95,
-      -0.05,
-      0.0
+      2.98,
+      -0.062,
+      0.16
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "top_edge",
     "tiles"
    ],
    "tri_cap": 120,
-   "tris": 120
+   "tris": 118
   },
   "dr_deck_edge_b": {
    "aabb_in": [
@@ -440,11 +452,12 @@
     ],
     [
      3.0,
-     0.0,
-     0.2
+     -0.012,
+     0.129
     ]
    ],
    "batch": "K2",
+   "bytes": 12512,
    "family": "deck_edge",
    "height_in": 0.3,
    "len_in": 3.0,
@@ -455,31 +468,31 @@
    "openings": [],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.2,
+    "high": 0.129,
     "low": 0.0
    },
    "role": "deck_edge",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       -0.3,
-      -0.25
+      -0.28
      ],
      [
-      2.95,
-      -0.05,
-      0.0
+      2.98,
+      -0.062,
+      0.109
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "top_edge",
     "tiles"
    ],
    "tri_cap": 120,
-   "tris": 120
+   "tris": 106
   },
   "dr_fountain": {
    "aabb_in": [
@@ -960,7 +973,7 @@
     ]
    ],
    "batch": "K1",
-   "bytes": 31640,
+   "bytes": 17964,
    "family": "house_panel",
    "height_in": 2.5,
    "len_in": 3.0,
@@ -1004,7 +1017,7 @@
     "stone"
    ],
    "tri_cap": 350,
-   "tris": 280
+   "tris": 146
   },
   "dr_house_st_plain_a": {
    "aabb_in": [
@@ -1020,7 +1033,7 @@
     ]
    ],
    "batch": "K1",
-   "bytes": 17812,
+   "bytes": 9236,
    "family": "house_panel",
    "height_in": 2.5,
    "len_in": 3.0,
@@ -1056,7 +1069,7 @@
     "stone"
    ],
    "tri_cap": 350,
-   "tris": 158
+   "tris": 74
   },
   "dr_house_st_plain_b": {
    "aabb_in": [
@@ -1072,7 +1085,7 @@
     ]
    ],
    "batch": "K1",
-   "bytes": 23320,
+   "bytes": 12912,
    "family": "house_panel",
    "height_in": 2.5,
    "len_in": 3.0,
@@ -1083,7 +1096,7 @@
    "openings": [],
    "proud_in": {
     "flat": 0.04,
-    "high": 0.01,
+    "high": 0.024,
     "low": 0.05
    },
    "role": "plain_b",
@@ -1108,7 +1121,7 @@
     "stone"
    ],
    "tri_cap": 350,
-   "tris": 212
+   "tris": 110
   },
   "dr_house_st_quoin": {
    "aabb_in": [
@@ -1174,7 +1187,7 @@
     ]
    ],
    "batch": "K1",
-   "bytes": 28516,
+   "bytes": 14420,
    "family": "house_panel",
    "height_in": 2.5,
    "len_in": 3.0,
@@ -1219,7 +1232,7 @@
     "stone"
    ],
    "tri_cap": 350,
-   "tris": 236
+   "tris": 98
   },
   "dr_house_tb_blank": {
    "aabb_in": [
@@ -1235,7 +1248,7 @@
     ]
    ],
    "batch": "K1",
-   "bytes": 19592,
+   "bytes": 17948,
    "family": "house_panel",
    "height_in": 2.5,
    "len_in": 3.0,
@@ -1273,7 +1286,7 @@
     "timber_frame"
    ],
    "tri_cap": 350,
-   "tris": 162
+   "tris": 146
   },
   "dr_house_tb_door": {
    "aabb_in": [
@@ -1289,7 +1302,7 @@
     ]
    ],
    "batch": "K1",
-   "bytes": 31344,
+   "bytes": 29712,
    "family": "house_panel",
    "height_in": 2.5,
    "len_in": 3.0,
@@ -1334,7 +1347,7 @@
     "timber_frame"
    ],
    "tri_cap": 350,
-   "tris": 278
+   "tris": 262
   },
   "dr_house_tb_plain_a": {
    "aabb_in": [
@@ -1350,7 +1363,7 @@
     ]
    ],
    "batch": "K1",
-   "bytes": 24496,
+   "bytes": 22852,
    "family": "house_panel",
    "height_in": 2.5,
    "len_in": 3.0,
@@ -1388,7 +1401,7 @@
     "timber_frame"
    ],
    "tri_cap": 350,
-   "tris": 210
+   "tris": 194
   },
   "dr_house_tb_plain_b": {
    "aabb_in": [
@@ -1404,7 +1417,7 @@
     ]
    ],
    "batch": "K1",
-   "bytes": 27516,
+   "bytes": 25876,
    "family": "house_panel",
    "height_in": 2.5,
    "len_in": 3.0,
@@ -1442,7 +1455,7 @@
     "timber_frame"
    ],
    "tri_cap": 350,
-   "tris": 234
+   "tris": 218
   },
   "dr_house_tb_post": {
    "aabb_in": [
@@ -1509,7 +1522,7 @@
     ]
    ],
    "batch": "K1",
-   "bytes": 34700,
+   "bytes": 33060,
    "family": "house_panel",
    "height_in": 2.5,
    "len_in": 3.0,
@@ -1555,7 +1568,7 @@
     "timber_frame"
    ],
    "tri_cap": 350,
-   "tris": 306
+   "tris": 290
   },
   "dr_house_tb_window_lit": {
    "aabb_in": [
@@ -1571,7 +1584,7 @@
     ]
    ],
    "batch": "K1",
-   "bytes": 33784,
+   "bytes": 32140,
    "family": "house_panel",
    "height_in": 2.5,
    "len_in": 3.0,
@@ -1617,7 +1630,7 @@
     "timber_frame"
    ],
    "tri_cap": 350,
-   "tris": 294
+   "tris": 278
   },
   "dr_junk_barrels": {
    "aabb_in": [
@@ -1940,17 +1953,18 @@
   "dr_ladder_3in": {
    "aabb_in": [
     [
-     -0.5,
+     -0.47,
      0.0,
-     0.0
+     0.12
     ],
     [
-     0.5,
+     0.47,
      3.0,
-     0.3
+     0.22
     ]
    ],
    "batch": "K2",
+   "bytes": 11080,
    "family": "ladder",
    "height_in": 3.0,
    "len_in": 1.0,
@@ -1960,9 +1974,9 @@
    "mount_in": 0.0,
    "openings": [],
    "proud_in": {
-    "flat": 0.3,
-    "high": 0.3,
-    "low": 0.3
+    "flat": 0.22,
+    "high": 0.22,
+    "low": 0.2
    },
    "role": "ladder",
    "shadow": [
@@ -1970,37 +1984,38 @@
      [
       -0.45,
       0.0,
-      0.05
+      0.14
      ],
      [
       0.45,
       2.95,
-      0.0
+      0.2
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "ladder",
     "R1_exception"
    ],
    "tri_cap": 120,
-   "tris": 120
+   "tris": 92
   },
   "dr_ladder_top": {
    "aabb_in": [
     [
-     -0.5,
+     -0.47,
      0.0,
-     -0.3
+     0.12
     ],
     [
-     0.5,
+     0.47,
      3.5,
-     0.3
+     0.22
     ]
    ],
    "batch": "K2",
+   "bytes": 11080,
    "family": "ladder",
    "height_in": 3.5,
    "len_in": 1.0,
@@ -2010,9 +2025,9 @@
    "mount_in": 0.0,
    "openings": [],
    "proud_in": {
-    "flat": 0.3,
-    "high": 0.3,
-    "low": 0.3
+    "flat": 0.22,
+    "high": 0.22,
+    "low": 0.2
    },
    "role": "ladder_top",
    "shadow": [
@@ -2020,22 +2035,22 @@
      [
       -0.45,
       0.0,
-      -0.25
+      0.14
      ],
      [
       0.45,
       3.45,
-      0.0
+      0.2
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "ladder",
     "R1_exception"
    ],
    "tri_cap": 120,
-   "tris": 120
+   "tris": 92
   },
   "dr_lamp_bracket": {
    "aabb_in": [
@@ -2552,17 +2567,18 @@
   "dr_merlon_run_a": {
    "aabb_in": [
     [
+     0.005,
      0.0,
-     0.0,
-     -0.4
+     -0.38
     ],
     [
-     3.0,
+     2.995,
      0.7,
-     0.0
+     -0.03
     ]
    ],
    "batch": "K3",
+   "bytes": 9440,
    "family": "merlon_run",
    "height_in": 0.7,
    "len_in": 3.0,
@@ -2580,39 +2596,40 @@
    "shadow": [
     [
      [
-      0.05,
+      0.025,
       0.0,
-      -0.35000000000000003
+      -0.36
      ],
      [
-      2.95,
-      0.6499999999999999,
-      0.0
+      2.975,
+      0.65,
+      -0.05
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "top_edge",
     "R4_strip"
    ],
    "tri_cap": 150,
-   "tris": 150
+   "tris": 76
   },
   "dr_merlon_run_b": {
    "aabb_in": [
     [
+     0.005,
      0.0,
-     0.0,
-     -0.4
+     -0.38
     ],
     [
-     3.0,
+     2.995,
      0.7,
-     0.0
+     -0.03
     ]
    ],
    "batch": "K3",
+   "bytes": 8216,
    "family": "merlon_run",
    "height_in": 0.7,
    "len_in": 3.0,
@@ -2630,39 +2647,40 @@
    "shadow": [
     [
      [
-      0.05,
+      0.025,
       0.0,
-      -0.35000000000000003
+      -0.36
      ],
      [
-      2.95,
-      0.6499999999999999,
-      0.0
+      2.975,
+      0.65,
+      -0.05
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "top_edge",
     "R4_strip"
    ],
    "tri_cap": 150,
-   "tris": 150
+   "tris": 64
   },
   "dr_merlon_run_broken": {
    "aabb_in": [
     [
+     0.005,
      0.0,
-     0.0,
-     -0.4
+     -0.38
     ],
     [
-     3.0,
-     0.7,
-     0.0
+     2.995,
+     0.471,
+     -0.03
     ]
    ],
    "batch": "K3",
+   "bytes": 7204,
    "family": "merlon_run",
    "height_in": 0.7,
    "len_in": 3.0,
@@ -2680,39 +2698,40 @@
    "shadow": [
     [
      [
-      0.05,
+      0.025,
       0.0,
-      -0.35000000000000003
+      -0.36
      ],
      [
-      2.95,
-      0.6499999999999999,
-      0.0
+      2.975,
+      0.421,
+      -0.05
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "top_edge",
     "R4_strip"
    ],
    "tri_cap": 150,
-   "tris": 150
+   "tris": 54
   },
   "dr_parapet_stub_a": {
    "aabb_in": [
     [
+     0.15,
      0.0,
-     0.0,
-     -0.4
+     -0.38
     ],
     [
-     3.0,
+     2.85,
      0.7,
-     0.0
+     -0.04
     ]
    ],
    "batch": "K2",
+   "bytes": 4752,
    "family": "parapet",
    "height_in": 0.7,
    "len_in": 3.0,
@@ -2730,39 +2749,40 @@
    "shadow": [
     [
      [
-      0.05,
+      0.17,
       0.0,
-      -0.35000000000000003
+      -0.36
      ],
      [
-      2.95,
-      0.6499999999999999,
-      0.0
+      2.83,
+      0.65,
+      -0.06
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "top_edge",
     "R4_strip"
    ],
    "tri_cap": 150,
-   "tris": 150
+   "tris": 30
   },
   "dr_parapet_stub_b": {
    "aabb_in": [
     [
+     0.1,
      0.0,
-     0.0,
-     -0.4
+     -0.38
     ],
     [
-     3.0,
+     2.8,
      0.7,
-     0.0
+     -0.04
     ]
    ],
    "batch": "K2",
+   "bytes": 6800,
    "family": "parapet",
    "height_in": 0.7,
    "len_in": 3.0,
@@ -2780,39 +2800,40 @@
    "shadow": [
     [
      [
-      0.05,
+      0.12,
       0.0,
-      -0.35000000000000003
+      -0.36
      ],
      [
-      2.95,
-      0.6499999999999999,
-      0.0
+      2.78,
+      0.65,
+      -0.06
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "top_edge",
     "R4_strip"
    ],
    "tri_cap": 150,
-   "tris": 150
+   "tris": 50
   },
   "dr_parapet_stub_c": {
    "aabb_in": [
     [
+     0.2,
      0.0,
-     0.0,
-     -0.4
+     -0.38
     ],
     [
-     3.0,
-     0.7,
-     0.0
+     2.8,
+     0.35,
+     -0.04
     ]
    ],
    "batch": "K2",
+   "bytes": 6800,
    "family": "parapet",
    "height_in": 0.7,
    "len_in": 3.0,
@@ -2830,24 +2851,24 @@
    "shadow": [
     [
      [
-      0.05,
+      0.22,
       0.0,
-      -0.35000000000000003
+      -0.36
      ],
      [
-      2.95,
-      0.6499999999999999,
-      0.0
+      2.78,
+      0.3,
+      -0.06
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "top_edge",
     "R4_strip"
    ],
    "tri_cap": 150,
-   "tris": 150
+   "tris": 50
   },
   "dr_plot_deadbush": {
    "aabb_in": [
@@ -3806,11 +3827,12 @@
     ],
     [
      3.0,
-     3.0,
-     0.08
+     2.99,
+     0.04
     ]
    ],
    "batch": "K2",
+   "bytes": 20584,
    "family": "ruin_face",
    "height_in": 3.0,
    "len_in": 3.0,
@@ -3824,37 +3846,37 @@
      1.0,
      2.0,
      0.0,
-     2.1
+     2.0
     ]
    ],
    "proud_in": {
-    "flat": 0.0,
-    "high": 0.08,
-    "low": 0.08
+    "flat": 0.04,
+    "high": 0.04,
+    "low": 0.04
    },
    "role": "doorway",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      0.02
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "foot",
     "tiles",
     "closed_by_rubble"
    ],
    "tri_cap": 350,
-   "tris": 350
+   "tris": 172
   },
   "dr_ruin_face_foot_a": {
    "aabb_in": [
@@ -3865,11 +3887,12 @@
     ],
     [
      3.0,
-     3.0,
-     0.12
+     2.99,
+     0.05
     ]
    ],
    "batch": "K2",
+   "bytes": 9644,
    "family": "ruin_face",
    "height_in": 3.0,
    "len_in": 3.0,
@@ -3879,32 +3902,32 @@
    "mount_in": 0.0,
    "openings": [],
    "proud_in": {
-    "flat": 0.12,
-    "high": 0.08,
-    "low": 0.08
+    "flat": 0.04,
+    "high": 0.05,
+    "low": 0.05
    },
    "role": "foot",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      0.03
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "foot",
     "tiles"
    ],
    "tri_cap": 120,
-   "tris": 120
+   "tris": 78
   },
   "dr_ruin_face_foot_b": {
    "aabb_in": [
@@ -3915,11 +3938,12 @@
     ],
     [
      3.0,
-     3.0,
-     0.12
+     2.99,
+     0.05
     ]
    ],
    "batch": "K2",
+   "bytes": 9644,
    "family": "ruin_face",
    "height_in": 3.0,
    "len_in": 3.0,
@@ -3929,32 +3953,32 @@
    "mount_in": 0.0,
    "openings": [],
    "proud_in": {
-    "flat": 0.12,
-    "high": 0.08,
-    "low": 0.08
+    "flat": 0.04,
+    "high": 0.024,
+    "low": 0.05
    },
    "role": "foot",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      0.03
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "foot",
     "tiles"
    ],
    "tri_cap": 120,
-   "tris": 120
+   "tris": 78
   },
   "dr_ruin_face_plain_a": {
    "aabb_in": [
@@ -3965,11 +3989,12 @@
     ],
     [
      3.0,
-     3.0,
-     0.08
+     2.99,
+     0.04
     ]
    ],
    "batch": "K2",
+   "bytes": 19856,
    "family": "ruin_face",
    "height_in": 3.0,
    "len_in": 3.0,
@@ -3980,31 +4005,31 @@
    "openings": [],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.08,
-    "low": 0.08
+    "high": 0.04,
+    "low": 0.0
    },
    "role": "plain",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      0.02
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "upper_band",
     "tiles"
    ],
-   "tri_cap": 120,
-   "tris": 120
+   "tri_cap": 350,
+   "tris": 178
   },
   "dr_ruin_face_plain_b": {
    "aabb_in": [
@@ -4015,11 +4040,12 @@
     ],
     [
      3.0,
-     3.0,
-     0.08
+     2.99,
+     0.2
     ]
    ],
    "batch": "K2",
+   "bytes": 11276,
    "family": "ruin_face",
    "height_in": 3.0,
    "len_in": 3.0,
@@ -4030,31 +4056,31 @@
    "openings": [],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.08,
-    "low": 0.08
+    "high": 0.2,
+    "low": 0.0
    },
    "role": "plain",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      0.18
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "upper_band",
     "tiles"
    ],
-   "tri_cap": 120,
-   "tris": 120
+   "tri_cap": 350,
+   "tris": 94
   },
   "dr_ruin_face_plain_c": {
    "aabb_in": [
@@ -4065,11 +4091,12 @@
     ],
     [
      3.0,
-     3.0,
-     0.08
+     2.99,
+     0.05
     ]
    ],
    "batch": "K2",
+   "bytes": 22304,
    "family": "ruin_face",
    "height_in": 3.0,
    "len_in": 3.0,
@@ -4080,31 +4107,31 @@
    "openings": [],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.08,
-    "low": 0.08
+    "high": 0.05,
+    "low": 0.0
    },
    "role": "plain",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      0.03
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "upper_band",
     "tiles"
    ],
-   "tri_cap": 120,
-   "tris": 120
+   "tri_cap": 350,
+   "tris": 202
   },
   "dr_ruin_face_window": {
    "aabb_in": [
@@ -4115,69 +4142,70 @@
     ],
     [
      3.0,
-     3.0,
-     0.08
+     2.99,
+     0.06
     ]
    ],
    "batch": "K2",
+   "bytes": 12296,
    "family": "ruin_face",
    "height_in": 3.0,
    "len_in": 3.0,
    "materials": [
-    "ct_stone",
-    "ct_glass_dark"
+    "ct_stone"
    ],
    "mount_in": 3.0,
    "openings": [
     [
      1.05,
      1.95,
-     0.9,
-     2.2
+     1.0,
+     2.0
     ]
    ],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.08,
-    "low": 0.08
+    "high": 0.06,
+    "low": 0.0
    },
    "role": "window",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      0.04
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "upper_band",
     "tiles"
    ],
    "tri_cap": 350,
-   "tris": 350
+   "tris": 104
   },
   "dr_ruin_gable_s3": {
    "aabb_in": [
     [
-     0.0,
+     0.3,
      0.0,
      -0.3
     ],
     [
      3.0,
-     2.6,
-     0.0
+     1.5,
+     -0.0
     ]
    ],
    "batch": "K2",
+   "bytes": 9028,
    "family": "ruin_gable",
    "height_in": 2.6,
    "len_in": 3.0,
@@ -4195,39 +4223,40 @@
    "shadow": [
     [
      [
-      0.05,
+      0.32,
       0.0,
-      -0.25
+      -0.28
      ],
      [
-      2.95,
-      2.5500000000000003,
-      0.0
+      2.98,
+      1.45,
+      -0.02
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "end_face",
     "R4_gable"
    ],
    "tri_cap": 300,
-   "tris": 300
+   "tris": 72
   },
   "dr_ruin_gable_s6": {
    "aabb_in": [
     [
-     0.0,
+     0.3,
      0.0,
      -0.3
     ],
     [
-     6.0,
-     2.6,
-     0.0
+     5.4,
+     2.0,
+     -0.0
     ]
    ],
    "batch": "K2",
+   "bytes": 15560,
    "family": "ruin_gable",
    "height_in": 2.6,
    "len_in": 6.0,
@@ -4245,39 +4274,40 @@
    "shadow": [
     [
      [
-      0.05,
+      0.32,
       0.0,
-      -0.25
+      -0.28
      ],
      [
-      5.95,
-      2.5500000000000003,
-      0.0
+      5.38,
+      1.95,
+      -0.02
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "end_face",
     "R4_gable"
    ],
    "tri_cap": 300,
-   "tris": 300
+   "tris": 136
   },
   "dr_ruin_quoin": {
    "aabb_in": [
     [
-     -0.06,
+     -0.05,
      0.0,
-     -0.5
+     -0.6
     ],
     [
-     0.5,
-     3.0,
-     0.06
+     0.6,
+     2.99,
+     0.05
     ]
    ],
    "batch": "K2",
+   "bytes": 7204,
    "family": "quoin",
    "height_in": 3.0,
    "len_in": 0.5,
@@ -4287,31 +4317,31 @@
    "mount_in": 0.0,
    "openings": [],
    "proud_in": {
-    "flat": 0.06,
-    "high": 0.06,
-    "low": 0.06
+    "flat": 0.05,
+    "high": 0.05,
+    "low": 0.05
    },
    "role": "corner",
    "shadow": [
     [
      [
-      -0.009999999999999995,
+      -0.03,
       0.0,
-      -0.45
+      -0.58
      ],
      [
-      0.45,
-      2.95,
-      0.0
+      0.58,
+      2.94,
+      0.03
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "on_corner"
    ],
    "tri_cap": 60,
-   "tris": 60
+   "tris": 54
   },
   "dr_statue_plinth": {
    "aabb_in": [
@@ -4367,107 +4397,111 @@
   "dr_tower_cap_burnt": {
    "aabb_in": [
     [
-     0.0,
-     -2.0,
-     -6.3
+     0.005,
+     -1.7,
+     -5.995
     ],
     [
-     6.0,
-     0.0,
-     0.3
+     5.995,
+     -0.0,
+     -0.005
     ]
    ],
    "batch": "K3",
+   "bytes": 46048,
    "family": "tower_cap",
    "height_in": 2.0,
    "len_in": 6.0,
    "materials": [
-    "ct_timber",
+    "ct_stone_big",
     "ct_glass_dark",
-    "ct_stone_big"
+    "ct_timber",
+    "ct_roof"
    ],
    "mount_in": 12.0,
    "openings": [],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.3,
+    "high": 0.0,
     "low": 0.0
    },
    "role": "cap",
    "shadow": [
     [
      [
-      0.05,
-      -2.0,
-      -6.25
+      0.025,
+      -1.7,
+      -5.975
      ],
      [
-      5.95,
+      5.975,
       -0.05,
-      0.0
+      -0.025
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
-    "inside_top_band",
     "never_above_12in",
-    "R6_cap"
+    "R6_cap",
+    "inside_top_band"
    ],
    "tri_cap": 600,
-   "tris": 600
+   "tris": 394
   },
   "dr_tower_cap_slate": {
    "aabb_in": [
     [
-     0.0,
-     -2.0,
+     -0.299,
+     -3.0,
      -6.3
     ],
     [
-     6.0,
+     6.3,
      0.0,
-     0.3
+     0.299
     ]
    ],
    "batch": "K3",
+   "bytes": 63220,
    "family": "tower_cap",
-   "height_in": 2.0,
+   "height_in": 3.0,
    "len_in": 6.0,
    "materials": [
-    "ct_roof",
-    "ct_timber"
+    "ct_stone_big",
+    "ct_glass_dark",
+    "ct_roof"
    ],
    "mount_in": 12.0,
    "openings": [],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.3,
+    "high": 0.299,
     "low": 0.0
    },
    "role": "cap",
    "shadow": [
     [
      [
-      0.05,
-      -2.0,
-      -6.25
+      -0.279,
+      -3.0,
+      -6.28
      ],
      [
-      5.95,
+      6.28,
       -0.05,
-      0.0
+      0.279
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
-    "inside_top_band",
     "never_above_12in",
-    "R6_cap"
+    "R6_cap",
+    "is_top_band"
    ],
    "tri_cap": 600,
-   "tris": 600
+   "tris": 576
   },
   "dr_tower_face_a": {
    "aabb_in": [
@@ -4478,11 +4512,12 @@
     ],
     [
      3.0,
-     3.0,
-     0.06
+     2.99,
+     0.05
     ]
    ],
    "batch": "K3",
+   "bytes": 7784,
    "family": "tower_face",
    "height_in": 3.0,
    "len_in": 3.0,
@@ -4493,31 +4528,31 @@
    "openings": [],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.06,
-    "low": 0.06
+    "high": 0.05,
+    "low": 0.0
    },
    "role": "plain",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      0.03
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "upper_band",
     "tiles"
    ],
    "tri_cap": 120,
-   "tris": 120
+   "tris": 60
   },
   "dr_tower_face_b": {
    "aabb_in": [
@@ -4528,11 +4563,12 @@
     ],
     [
      3.0,
-     3.0,
-     0.06
+     2.99,
+     0.05
     ]
    ],
    "batch": "K3",
+   "bytes": 11256,
    "family": "tower_face",
    "height_in": 3.0,
    "len_in": 3.0,
@@ -4543,31 +4579,31 @@
    "openings": [],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.06,
-    "low": 0.06
+    "high": 0.05,
+    "low": 0.0
    },
    "role": "plain",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      0.03
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "upper_band",
     "tiles"
    ],
    "tri_cap": 120,
-   "tris": 120
+   "tris": 94
   },
   "dr_tower_foot": {
    "aabb_in": [
@@ -4578,11 +4614,12 @@
     ],
     [
      3.0,
-     3.0,
-     0.0
+     2.99,
+     -0.0
     ]
    ],
    "batch": "K3",
+   "bytes": 12456,
    "family": "tower_face",
    "height_in": 3.0,
    "len_in": 3.0,
@@ -4600,39 +4637,40 @@
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      -0.02
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "foot",
     "tiles"
    ],
    "tri_cap": 120,
-   "tris": 120
+   "tris": 106
   },
   "dr_tower_quoin": {
    "aabb_in": [
     [
-     -0.06,
+     -0.05,
      0.0,
-     -0.6
+     -0.7
     ],
     [
-     0.6,
-     3.0,
-     0.06
+     0.7,
+     2.99,
+     0.05
     ]
    ],
    "batch": "K3",
+   "bytes": 6368,
    "family": "quoin",
    "height_in": 3.0,
    "len_in": 0.6,
@@ -4642,31 +4680,31 @@
    "mount_in": 0.0,
    "openings": [],
    "proud_in": {
-    "flat": 0.06,
-    "high": 0.06,
-    "low": 0.06
+    "flat": 0.05,
+    "high": 0.05,
+    "low": 0.05
    },
    "role": "corner",
    "shadow": [
     [
      [
-      -0.009999999999999995,
+      -0.03,
       0.0,
-      -0.5499999999999999
+      -0.68
      ],
      [
-      0.5499999999999999,
-      2.95,
-      0.0
+      0.68,
+      2.94,
+      0.03
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "on_corner"
    ],
    "tri_cap": 60,
-   "tris": 60
+   "tris": 46
   },
   "dr_tower_slit": {
    "aabb_in": [
@@ -4677,11 +4715,12 @@
     ],
     [
      3.0,
-     3.0,
-     0.06
+     2.99,
+     0.05
     ]
    ],
    "batch": "K3",
+   "bytes": 9960,
    "family": "tower_face",
    "height_in": 3.0,
    "len_in": 3.0,
@@ -4694,37 +4733,37 @@
     [
      1.35,
      1.65,
-     0.8,
+     0.6,
      2.4
     ]
    ],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.06,
-    "low": 0.06
+    "high": 0.05,
+    "low": 0.0
    },
    "role": "slit",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      0.03
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "upper_band",
     "tiles"
    ],
    "tri_cap": 350,
-   "tris": 350
+   "tris": 68
   },
   "dr_twall_corbel": {
    "aabb_in": [
@@ -4735,11 +4774,12 @@
     ],
     [
      3.0,
-     3.0,
-     0.35
+     2.99,
+     0.3
     ]
    ],
    "batch": "K3",
+   "bytes": 14728,
    "family": "twall_face",
    "height_in": 3.0,
    "len_in": 3.0,
@@ -4750,32 +4790,32 @@
    "openings": [],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.35,
-    "low": 0.06
+    "high": 0.3,
+    "low": 0.0
    },
    "role": "corbel",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      0.28
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "upper_band",
     "string_course",
     "tiles"
    ],
    "tri_cap": 350,
-   "tris": 350
+   "tris": 128
   },
   "dr_twall_face_a": {
    "aabb_in": [
@@ -4786,11 +4826,12 @@
     ],
     [
      3.0,
-     3.0,
-     0.06
+     2.99,
+     0.024
     ]
    ],
    "batch": "K3",
+   "bytes": 6556,
    "family": "twall_face",
    "height_in": 3.0,
    "len_in": 3.0,
@@ -4801,31 +4842,31 @@
    "openings": [],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.06,
-    "low": 0.06
+    "high": 0.024,
+    "low": 0.0
    },
    "role": "plain",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      0.004
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "upper_band",
     "tiles"
    ],
    "tri_cap": 120,
-   "tris": 120
+   "tris": 48
   },
   "dr_twall_face_b": {
    "aabb_in": [
@@ -4836,11 +4877,12 @@
     ],
     [
      3.0,
-     3.0,
-     0.06
+     2.99,
+     0.05
     ]
    ],
    "batch": "K3",
+   "bytes": 12480,
    "family": "twall_face",
    "height_in": 3.0,
    "len_in": 3.0,
@@ -4851,31 +4893,31 @@
    "openings": [],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.06,
-    "low": 0.06
+    "high": 0.05,
+    "low": 0.0
    },
    "role": "plain",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      0.03
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "upper_band",
     "tiles"
    ],
    "tri_cap": 120,
-   "tris": 120
+   "tris": 106
   },
   "dr_twall_foot": {
    "aabb_in": [
@@ -4886,11 +4928,12 @@
     ],
     [
      3.0,
-     3.0,
-     0.0
+     2.99,
+     -0.0
     ]
    ],
    "batch": "K3",
+   "bytes": 12252,
    "family": "twall_face",
    "height_in": 3.0,
    "len_in": 3.0,
@@ -4908,40 +4951,41 @@
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      -0.02
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "foot",
     "batter_inside",
     "tiles"
    ],
    "tri_cap": 120,
-   "tris": 120
+   "tris": 104
   },
   "dr_twall_quoin": {
    "aabb_in": [
     [
-     -0.06,
+     -0.05,
      0.0,
-     -0.6
+     -0.7
     ],
     [
-     0.6,
-     3.0,
-     0.06
+     0.7,
+     2.99,
+     0.05
     ]
    ],
    "batch": "K3",
+   "bytes": 6368,
    "family": "quoin",
    "height_in": 3.0,
    "len_in": 0.6,
@@ -4951,31 +4995,31 @@
    "mount_in": 0.0,
    "openings": [],
    "proud_in": {
-    "flat": 0.06,
-    "high": 0.06,
-    "low": 0.06
+    "flat": 0.05,
+    "high": 0.05,
+    "low": 0.05
    },
    "role": "corner",
    "shadow": [
     [
      [
-      -0.009999999999999995,
+      -0.03,
       0.0,
-      -0.5499999999999999
+      -0.68
      ],
      [
-      0.5499999999999999,
-      2.95,
-      0.0
+      0.68,
+      2.94,
+      0.03
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "on_corner"
    ],
    "tri_cap": 60,
-   "tris": 60
+   "tris": 46
   },
   "dr_twall_ragged": {
    "aabb_in": [
@@ -4986,11 +5030,12 @@
     ],
     [
      3.0,
-     3.0,
-     0.0
+     2.99,
+     0.05
     ]
    ],
    "batch": "K3",
+   "bytes": 19424,
    "family": "twall_face",
    "height_in": 3.0,
    "len_in": 3.0,
@@ -5001,32 +5046,32 @@
    "openings": [],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.0,
+    "high": 0.05,
     "low": 0.0
    },
    "role": "ragged",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      0.03
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "upper_band",
     "faces_breach",
     "tiles"
    ],
    "tri_cap": 350,
-   "tris": 350
+   "tris": 174
   },
   "dr_twall_slit": {
    "aabb_in": [
@@ -5037,11 +5082,12 @@
     ],
     [
      3.0,
-     3.0,
-     0.06
+     2.99,
+     0.05
     ]
    ],
    "batch": "K3",
+   "bytes": 9960,
    "family": "twall_face",
    "height_in": 3.0,
    "len_in": 3.0,
@@ -5054,37 +5100,37 @@
     [
      1.35,
      1.65,
-     0.8,
+     0.6,
      2.4
     ]
    ],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.06,
-    "low": 0.06
+    "high": 0.05,
+    "low": 0.0
    },
    "role": "slit",
    "shadow": [
     [
      [
-      0.05,
+      0.02,
       0.0,
-      -0.35000000000000003
+      -0.38
      ],
      [
-      2.95,
-      2.95,
-      0.0
+      2.98,
+      2.94,
+      0.03
      ]
     ]
    ],
-   "stub": true,
+   "stub": false,
    "tags": [
     "upper_band",
     "tiles"
    ],
    "tri_cap": 350,
-   "tris": 350
+   "tris": 68
   },
   "dr_yard_beam": {
    "aabb_in": [
@@ -5323,6 +5369,16 @@
    },
    "licence": "CC0-1.0",
    "source": "https://polyhaven.com/a/monastery_stone_floor"
+  },
+  "mud": {
+   "height": {
+    "licence": "CC0-1.0",
+    "size": 156764,
+    "source": "https://polyhaven.com/a/brown_mud_03 (displacement, 512 px, 8-bit)",
+    "url": "b2f01ef2484409769b1dea84c957c4d47542c2dc1eef2b3a8511f3976f6d0ef7.ctex"
+   },
+   "licence": "CC0-1.0",
+   "source": "https://polyhaven.com/a/brown_mud_03"
   },
   "plaster": {
    "licence": "CC0-1.0",
