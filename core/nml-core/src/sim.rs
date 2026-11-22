@@ -1285,6 +1285,12 @@ pub(crate) fn tray_reanimation(
         return; // below-7 replays byte-exact; the Shaken activation stays idle (main.gd:4731)
     }
     let owner = statics[next.roster.profile[si]].name.clone();
+    let side = next.player[si];
+    // The step path's lines are the tray's: every Reanimation sentence is said there too, in the same words.
+    let say = |tray: &mut Tray, shot: &mut ShootResult, line: String| {
+        say_rule(tray, "reanimation", side, || line.clone());
+        shot.log.push(line);
+    };
     let mut members: Vec<usize> = vec![si];
     if seams.hero_attach {
         members.extend(next.attached[si].iter().copied());
@@ -1297,14 +1303,14 @@ pub(crate) fn tray_reanimation(
             return; // nothing to restore: no roll and no line, on both sides
         }
         if members.iter().any(|&u| standing(u) && !has(u)) {
-            shot.log.push(format!("Reanimation: {owner} does not reanimate — a joined model lacks the rule"));
+            say(tray, shot, format!("Reanimation: {owner} does not reanimate — a joined model lacks the rule"));
             return;
         }
         // Lead ruling "Aura bearer dead": the Aura gives Reanimation to "this model and its unit" - with every bearer fallen the
         // chain no longer has it (the table's `reanimation_members` ends the Aura the same way).
         let aura = |u: usize| next.profile(u).special_rules.iter().chain(&next.profile(u).item_grants).any(|r| r.trim() == "Reanimation Aura");
         if members.iter().any(|&u| aura(u)) && !members.iter().any(|&u| aura(u) && standing(u)) {
-            shot.log.push(format!("Reanimation: {owner} does not reanimate — the Reanimation Aura bearer has fallen"));
+            say(tray, shot, format!("Reanimation: {owner} does not reanimate — the Reanimation Aura bearer has fallen"));
             return;
         }
         members.retain(|&u| has(u)); // a fallen joined hero without the rule is not in the pool
@@ -1332,7 +1338,7 @@ pub(crate) fn tray_reanimation(
         faces: faces.clone(), owner: owner.clone(),
     });
     let mut left = faces.iter().filter(|&&f| f as i64 >= spec.target).count() as i64;
-    shot.log.push(format!("Reanimation: {owner} rolls {pool} dice ({}) — {left} success(es)", spec.target));
+    say(tray, shot, format!("Reanimation: {owner} rolls {pool} dice ({}) — {left} success(es)", spec.target));
     // Phase A — living wounded: heroes first, biggest gap, index tie-break.
     gaps.sort_by(|a, b| {
         let h = |u: usize| statics[next.roster.profile[u]].is_hero as i8;
@@ -1411,7 +1417,7 @@ pub(crate) fn tray_reanimation(
             clear.then_some(spot)
         };
         let Some(spot) = spot else {
-            shot.log.push("Reanimation: 1 success but no placeable spot — coherency missing".into());
+            say(tray, shot, "Reanimation: 1 success but no placeable spot — coherency missing".into());
             continue;
         };
         let back = if spot_rule { planned } else { cost.min(left).max(1) };
@@ -1421,7 +1427,7 @@ pub(crate) fn tray_reanimation(
         next.kits_drop(u); // the revived body's kit is unknown: this unit falls back to slot order
         next.alive[u] = next.positions[u].len() as i64;
         left -= if spot_rule { 0 } else { back };
-        shot.log.push(format!("Reanimation: 1 model restored ({back} wound(s) back)"));
+        say(tray, shot, format!("Reanimation: 1 model restored ({back} wound(s) back)"));
     }
 }
 

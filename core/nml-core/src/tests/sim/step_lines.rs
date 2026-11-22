@@ -53,3 +53,18 @@ fn a_defense_token_is_named_on_the_step_path() {
     let lines = surfaced(&statics, &buff_line().0, vec![Input::Begin, shoot(HOLD)]);
     assert!(lines.iter().all(|l| !l.contains(" Defense (saves on")), "no token, no line: {lines:?}");
 }
+
+/// Reanimation (fd-door, the G1' start_twice counter): the pool roll and each restore are said on the step path. RED before: the
+/// core rolled the pool (no `paid`) and the door saw no line.
+#[test]
+fn the_reanimation_roll_is_named_on_the_step_path() {
+    let (mut st, mut statics) = buff_line();
+    statics[0].reanimation = Some(crate::unit::ReanimationSpec { target: 1 });
+    statics[0].wounds_max = vec![1, 1, 1];
+    let mut list = st.profiles.list.clone();
+    list[0].wounds_max = vec![1, 1, 1];
+    st.profiles = Rc::new(Profiles { list, index: HashMap::new() });
+    st.wounds[0] = vec![1, 1]; // three models, one fell
+    let lines = surfaced(&statics, &st, vec![Input::Begin, Input::Intent { kind: HOLD, shoot: None, split: None, charge: None }]);
+    assert!(lines.iter().any(|l| l == "Reanimation: a rolls 1 dice (1) — 1 success(es)"), "{lines:?}");
+}
