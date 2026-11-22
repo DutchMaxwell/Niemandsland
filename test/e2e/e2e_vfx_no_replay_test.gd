@@ -50,6 +50,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
@@ -68,9 +70,24 @@ func _volley_then_clear() -> int:
 	w.range_value = 24
 	w.attacks = 3
 	w.count = 2
+	var src := OPRApiClient.OPRUnit.new()
+	src.weapons = [w]
+	shooters.source_type = "opr"
+	shooters.source_data = src
 	_main.seed_tray_rng(77)
-	await _main._solo_resolve_ai_volley(shooters, target, [{"member": shooters, "quality": 4, "alive": 2,
-		"max": 2, "reach": 24, "profile": AiShooting.profiles_in_range([w], 0.0)[0]}], false)
+	# The game's own call: the core door takes the volley (the board is captured first).
+	_main.solo_controller.ai_slot = 1
+	_main.solo_controller.human_slot = 2
+	_main.opr_army_manager.current_round = 1
+	CoreActivation._env = 1
+	var runs := CoreActivation.ai_runs
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
+	await _main._run_ai_shooting(ActIntent.blank_report(shooters))
+	assert_int(CoreActivation.ai_runs).override_failure_message("the core did not take the volley (the table shot it)") \
+		.is_equal(runs + 1)
+	if _main._solo_core_ai_h != 0:
+		_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+	_main._solo_core_ai_h = 0
 	var drawn: int = (_main._vfx_seen as Dictionary).size()
 	assert_int(drawn).override_failure_message("fixture: the volley must draw cues").is_greater(0)
 	# the shot show lands its rounds late (chaos window + burst + flight, under 1.7 s): let THIS cue finish first
