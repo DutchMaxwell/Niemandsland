@@ -123,7 +123,8 @@ func _landing_errors(e0: int) -> int:
 	return Array(_log.errs.slice(e0)).filter(func(t: String) -> bool: return t.contains("models in the core")).size()
 
 
-## One AI activation of the bearer per seed. Returns per-seed rows [pool rolls, ai_runs, landing errors, volley dice, table alive].
+## One AI activation of the bearer per seed. Returns per-seed rows [pool rolls, ai_runs, landing errors, volley dice, table alive,
+## the census' `start_twice` count of this activation].
 func _ai_runs() -> Array:
 	var rows: Array = []
 	for s in SEEDS:
@@ -132,11 +133,13 @@ func _ai_runs() -> Array:
 		var hu := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Humans%d" % s, "models": 10, "x_in": 8.0}), RIFLE)
 		var k0: int = (_main.solo_controller.decision_log as Array).size()
 		var e0 := _log.errs.size()
+		var t0 := int((CoreActivation.legacy.get("start", {}) as Dictionary).get("twice", 0))
 		_main.opr_army_manager.current_round = 1
 		_main.seed_tray_rng(s)
 		await _main._solo_activate_one_ai()
 		var r := _rolls(k0)
-		rows.append([r["pool"], CoreActivation.ai_runs, _landing_errors(e0), r["volley"], ai.get_alive_count()])
+		rows.append([r["pool"], CoreActivation.ai_runs, _landing_errors(e0), r["volley"], ai.get_alive_count(),
+			int((CoreActivation.legacy.get("start", {}) as Dictionary).get("twice", 0)) - t0])
 		_free([ai, hu])
 	return rows
 
@@ -189,12 +192,15 @@ func test_the_ai_door_takes_a_reanimation_shooter_and_rolls_the_pool_once(timeou
 		assert_int(int(row[1])).override_failure_message("AI door seed %d: the core takes the Reanimation shooter (rows %s)" % [s, live]).is_equal(1)
 		assert_int(int(row[2])).override_failure_message("AI door seed %d: no landing error" % s).is_equal(0)
 		assert_int(int(row[3])).override_failure_message("AI door seed %d: the volley's dice are the table's living shooters" % s).is_equal(int(row[4]))
+		assert_int(int(row[5])).override_failure_message("AI door seed %d: start_twice reads 0 with paid (rows %s)" % [s, live]).is_equal(0)
 	CoreActivation.start_paid_input = false   # the control: the same activation without `paid{start}`
 	var control := await _ai_runs()
 	CoreActivation.start_paid_input = true
 	_assert_control_fails(control, "AI")
 	assert_int(control.filter(func(r: Array) -> bool: return int(r[1]) == 1).size()).override_failure_message(
 		"AI door control: the core took the activation (rows %s)" % [control]).is_equal(SEEDS)
+	assert_int(control.filter(func(r: Array) -> bool: return int(r[5]) == 1).size()).override_failure_message(
+		"AI door control: start_twice counts the core's second pool roll (rows %s)" % [control]).is_equal(SEEDS)
 
 
 @warning_ignore('unused_parameter')

@@ -18,6 +18,14 @@ var _current_zoom: float = 10.0  # Default zoom distance
 var _pitch: float = -45.0  # degrees
 var _yaw: float = 0.0  # degrees
 var _target_position: Vector3 = Vector3.ZERO
+## The start view's distance as a share of the table diagonal (adjust_for_table_size). A generated board sets its own while it is on the table (BoardgenGreybox,
+## texture plan step 10 / D-TEX3), so every reset of the view keeps it.
+const TABLE_VIEW_FACTOR := 0.95
+var table_view_factor := TABLE_VIEW_FACTOR
+## Degrees the start view tilts down about the camera's own position, so a board's near rim and its tallest piece frame the picture evenly (set by the board).
+## The pivot then sits on the table's centre axis below the top - the framing holds at every yaw - and is lifted onto the table along the view ray at the first move.
+var table_view_tilt := 0.0
+var _tilt_pending := false
 var _is_rotating: bool = false
 var _is_panning: bool = false
 var _last_mouse_pos: Vector2 = Vector2.ZERO
@@ -112,6 +120,12 @@ func _process(delta: float) -> void:
 
 ## Mark transform as needing update (call instead of direct _update_camera_transform)
 func _mark_dirty() -> void:
+	if _tilt_pending and _target_position.y < 0.0:   # the first move after a tilted start view: the camera stays put, the pivot moves up its view ray onto the table
+		var to_camera := Vector3(0.0, -sin(deg_to_rad(_pitch)), cos(deg_to_rad(_pitch))).rotated(Vector3.UP, deg_to_rad(_yaw))
+		var t := -_target_position.y / to_camera.y
+		_target_position += to_camera * t
+		_current_zoom -= t
+	_tilt_pending = false
 	_transform_dirty = true
 
 
@@ -335,8 +349,16 @@ func get_zoom() -> float:
 
 ## Adjust camera for table size
 ## @param table_size_feet: Table dimensions in feet
-func adjust_for_table_size(table_size_feet: Vector2) -> void:
+## @param factor: the start distance as a share of the table diagonal; <= 0 = `table_view_factor` (0.95, or a generated board's while it is on the table)
+func adjust_for_table_size(table_size_feet: Vector2, factor := -1.0) -> void:
 	var table_diagonal_feet = table_size_feet.length()
 	var table_diagonal_meters = table_diagonal_feet * 0.3048
-	var target_zoom = table_diagonal_meters * 0.95
+	var target_zoom = table_diagonal_meters * (factor if factor > 0.0 else table_view_factor)
 	set_zoom(target_zoom)
+	if table_view_tilt != 0.0:   # the same camera position, aimed lower: a steeper pitch, the pivot on the centre axis below the table, the zoom out to it
+		var p := deg_to_rad(-_pitch)
+		var tilted := p + deg_to_rad(table_view_tilt)
+		_target_position.y -= _current_zoom * (cos(p) * tan(tilted) - sin(p))
+		_current_zoom = _current_zoom * cos(p) / cos(tilted)
+		_pitch = -rad_to_deg(tilted)
+		_tilt_pending = true
