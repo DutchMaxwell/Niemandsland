@@ -530,7 +530,7 @@ static func town_sets(lib: TiefwerkLibrary) -> Dictionary:
 	var out := {"t_on": Vector4.ZERO}
 	var on := [0.0, 0.0, 0.0, 0.0]
 	var tile := [1.3, 3.0, 3.0, 3.0]
-	for i in BoardgenTheme.TOWN_SETS.size():
+	for i in 4:   # the four sets the shader samples today (t_on); the rest of TOWN_SETS waits for the shader's set arrays
 		var names: Array = BoardgenTheme.TOWN_SETS[i]   # [library set, shader suffix]
 		var a := lib.set_texture(names[0], "albedo")
 		var n := lib.set_texture(names[0], "normal")
