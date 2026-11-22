@@ -119,8 +119,8 @@ void vertex() {
 }
 
 // Coursed stone: courses `course` in high, stones about `len` in long, offset per course, dark mortar, a tone per stone.
-// `fr` = (row id, inches up inside the row, the row's course height), from `flag_row` or a fixed course in stone().
-vec3 stone_rows(vec2 uv, float seed, vec3 fr, float len, vec3 tint, out float rel) {
+// `fr` = (row id, inches up inside the row, the row's course height), from `flag_row` or a fixed course in stone(). `mortar` = the joint's colour.
+vec3 stone_rows(vec2 uv, float seed, vec3 fr, float len, vec3 tint, vec3 mortar, out float rel) {
 	float row = fr.x;
 	float course = fr.z;
 	float l = len * (0.7 + 0.8 * h21(vec2(row, seed + 7.0)));
@@ -129,13 +129,13 @@ vec3 stone_rows(vec2 uv, float seed, vec3 fr, float len, vec3 tint, out float re
 	vec2 f = vec2(fract(x / l) * l, fr.y);
 	float edge = smoothstep(0.0, course * 0.11, min(min(f.x, l - f.x), min(f.y, course - f.y)));
 	float tone = h21(vec2(col, row) + seed);
-	vec3 laid = mix(vec3(0.15, 0.14, 0.13), tint * mix(0.72, 1.12, tone) * mix(0.9, 1.1, vnoise(uv * 4.0)), edge);
+	vec3 laid = mix(mortar, tint * mix(0.72, 1.12, tone) * mix(0.9, 1.1, vnoise(uv * 4.0)), edge);
 	rel = mix(0.5, edge * (0.8 + 0.2 * tone), keep(uv.y, course));   // the mortar is recessed, a stone stands a little proud
 	return mix(tint * 0.8, laid, keep(uv.y, course));   // too fine for the pixel: the mean of stone and mortar
 }
 
 vec3 stone(vec2 uv, float seed, float course, float len, vec3 tint, out float rel) {
-	return stone_rows(uv, seed, vec3(floor(uv.y / course), fract(uv.y / course) * course, course), len, tint, rel);
+	return stone_rows(uv, seed, vec3(floor(uv.y / course), fract(uv.y / course) * course, course), len, tint, vec3(0.15, 0.14, 0.13), rel);
 }
 
 // (texture plan step 6) Irregular flag courses: bands of three rows 0.45 / 0.6 / 0.75 in, their order rotated by a hash of the band -> (row id, y inside the row, course).
@@ -494,8 +494,8 @@ void fragment() {
 			}
 		} else if (k == 6 || k == 12 || k == 9 || k == 10) {   // tower and wall tops, stone pieces: flagstones
 			vec3 fr = flag_row(xz.y, seed);
-			alb = stone_rows(xz, seed, fr, 0.72, tint, rel);   // (texture plan step 6) flagstones 0.45 / 0.6 / 0.75 in courses, 0.5 - 1.1 in long
-			depth_in = 0.03;
+			alb = stone_rows(xz, seed, fr, 0.72, tint, tint * 0.8, rel);   // (texture plan step 6) flagstones 0.45 / 0.6 / 0.75 in courses, 0.5 - 1.1 in long; (6b) worn mortar in the flags' own value range
+			depth_in = 0.015;   // (6b) a slightly recessed joint: at 0.03 in its shaded wall drew a dark grid
 			rough = 0.85;
 			if (use_stone(xz, tex_ratio, tex_n)) {
 				alb = tint;
@@ -513,7 +513,7 @@ void fragment() {
 			alb = mix(vec3(dot(alb, vec3(0.3, 0.55, 0.15))), alb, 0.35) * tone * vec3(0.53, 0.52, 0.51) * TOP_LIFT;   // (townC4: greyer - the warm tops were a third of the play camera's warm share; was 0.55 / (0.55, 0.52, 0.48))
 			float joint = 1.0 - smoothstep(0.08, 0.45, rel);
 			float mossy = step(0.8, vnoise(xz * 0.7 + seed * 3.0));
-			alb = mix(alb, mossy > 0.5 ? vec3(0.07, 0.09, 0.05) : alb * 0.55, 0.6 * joint * keep(xz.y, fr.z));   // (step 6) a mid-dark joint, never near black
+			alb = mix(alb, mossy > 0.5 ? alb * vec3(0.7, 0.85, 0.6) : alb * 0.8, 0.6 * joint * keep(xz.y, fr.z));   // (6b) worn mortar a little darker than its flag, moss a green tint of it - never a black line
 			float fh = h21(fc + seed + 77.0);
 			float fl = 0.0;
 			if (fh > 0.82) {   // a fracture: one straight line through the flag at its own angle, fading out before the joints
