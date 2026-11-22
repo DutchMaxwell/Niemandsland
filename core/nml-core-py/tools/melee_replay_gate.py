@@ -164,20 +164,43 @@ def consol_marker(plain: dict, action: dict, nxt: dict | None) -> dict:
     return dict(plain, objectives=list(plain["objectives"]) + [{"owner": 0, "pos": [c[0], 0.0, c[1]]}])
 
 
-def read_consolidate(d: Path) -> dict[int, list]:
-    """{activation ordinal: [planner inputs per melee unit]} from the `kind:"consolidate"` lines of acts.jsonl (meleefix, epoch 96+),
-    keyed by THIS gate's ordinal (`read_game`: the interleaved position of the act / auto lines) of the activation the line was written
-    in - the last act / auto line before it. The line's own `act` is the recorder's ordinal, which an arena record can number one
-    apart from the interleaved position (lane meleefix, 22.11.), so it is not used for the join."""
+def read_consolidate(d: Path) -> tuple[dict[int, list], list[int]]:
+    """({activation ordinal: [planner inputs per melee unit]}, [ordinals of mis-joined lines]) from the `kind:"consolidate"` lines of
+    acts.jsonl (meleefix, epoch 96+), keyed by THIS gate's ordinal (`read_game`: the interleaved position of the act / auto lines) of
+    the activation the line was written in - the last act / auto line before it. That rests on the WRITE ORDER: an activation's act
+    line (`AiActRecorder.finish`, at the pick) or auto line (end of `SoloController.activate_next_ai_unit`) is written before its
+    melee runs, and both consolidate writers (the door's `run_ai_charge`, the table's `consolidate_after_melee_win`) run inside the
+    melee. The line's own `act` is the recorder's ordinal and is not used for the join.
+
+    A line is only keyed when that activation is a CHARGE (an act line whose pick is CHARGE_KIND with a target, or an auto line whose
+    action is CHARGE_KIND - recorded, never replayed); a line after any other activation, or before the first one, is mis-joined
+    and `run` fails the gate on it."""
     out: dict[int, list] = {}
-    pos = 0
+    bad: list[int] = []
+    pos, charge = 0, False
     for x in (d / "acts.jsonl").read_text().splitlines()[1:]:
         r = json.loads(x) if x.strip() else {}
-        if r.get("kind") in ("act", "auto"):
+        if r.get("kind") == "act":
             pos += 1
+            a = (r.get("pick") or {}).get("action") or {}
+            charge = int(a.get("kind", -1)) == CHARGE_KIND and bool(a.get("charge"))
+        elif r.get("kind") == "auto":
+            pos += 1
+            charge = int(r.get("action", -1)) == CHARGE_KIND
         elif r.get("kind") == "consolidate":
-            out[pos] = r["plans"]
-    return out
+            if charge:
+                out[pos] = r["plans"]
+            else:
+                bad.append(pos)
+    return out, bad
+
+
+def wiped(nxt: dict | None, keys: list[str]) -> bool:
+    """The recorded next state shows exactly one of the two melee units alive (a wipe: the survivor consolidates up to 3 in). The next
+    act line can follow other activations (auto lines carry no state), so this reads a wipe those caused too; `run` only uses it to
+    tell whether the bar had anything to compare at all."""
+    units = (nxt or {}).get("units") or {}
+    return len(keys) == 2 and sum(int((units.get(k) or {}).get("alive", 0)) > 0 for k in keys) == 1
 
 
 def consol_same(got: dict, want: dict | None, keys: list[str]) -> bool | None:
@@ -234,9 +257,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
               "both_silent", "table_silent", "port_silent", "shape", "faces", "declined",
               "rolls", "rolls_equal", "hits", "hits_equal", "next_checked", "next_equal",
               "equal_over_2", "equal_dice_max", "morale_equal", "morale_table_only",
-              "morale_port_only", "morale_other", "morale_none", "consol_equal", "consol_differ")}
+              "morale_port_only", "morale_other", "morale_none", "consol_equal", "consol_differ",
+              "consol_misjoined", "consol_wiped")}
     unported: dict[str, int] = {}
-    consol_lines = 0
     reasons: dict[str, int] = {}
     firsts: list[str] = []
     warns: list[str] = []
@@ -248,8 +271,10 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         head, lines, dice, seed = read_game(d)
         burn = burn_prefix(dice)
         pres = read_pre(d)
-        consols = read_consolidate(d)
-        consol_lines += len(consols)
+        consols, misjoined = read_consolidate(d)
+        tally["consol_misjoined"] += len(misjoined)
+        for k in misjoined[:max(0, 3 - len(firsts))]:
+            firsts.append("%s act %d — a consolidate line keyed to an activation that is not a charge (mis-joined)" % (d.name, k))
         core = nml_core.load(repo)
         # D5-2: the charge move routes around the board's WALLS, and the act
         # corpus carried none before rung D5-2a. Without them the port would
@@ -326,7 +351,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
                 if dang_off:
                     core.set_header(header)
             if k in consols:
-                same = consol_same(nxt.plain(), nxt_rec, [str(action["unit"]), str(action["charge"])])
+                keys = [str(action["unit"]), str(action["charge"])]
+                same = consol_same(nxt.plain(), nxt_rec, keys)
+                tally["consol_wiped"] += wiped(nxt_rec, keys)
                 if same is not None:
                     tally["consol_equal" if same else "consol_differ"] += 1
             for name in report["unported"]:
@@ -471,8 +498,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
           "%d other, %d neither"
           % (tally["morale_equal"], tally["morale_table_only"], tally["morale_port_only"],
              tally["morale_other"], tally["morale_none"]))
-    print("  consol: %d equal, %d differ (winner end centroid vs the next act, 0.01\", acts with a recorded consolidate line)"
-          % (tally["consol_equal"], tally["consol_differ"]))
+    print("  consol: %d equal, %d differ of %d wiped, %d mis-joined (winner end centroid vs the next act, 0.01\", charges "
+          "with a recorded consolidate line; a differ or a mis-joined line FAILS, so do wiped charges with none compared)"
+          % (tally["consol_equal"], tally["consol_differ"], tally["consol_wiped"], tally["consol_misjoined"]))
     print("  parted: %d shape, %d faces, %d declined" % (tally["shape"], tally["faces"],
                                                          tally["declined"]))
     print("  first field to part: %s"
@@ -509,19 +537,25 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
     # Both sides drawing NOTHING is agreement, not a missing verdict.
     ok = (tally["acts"] > 0
           and tally["full_equal"] + tally["both_silent"] == tally["acts"])
-    if consol_lines and tally["consol_equal"] + tally["consol_differ"] == 0:
-        # meleefix: recorded consolidation inputs that no compared act used - the join or the bar is broken, never a pass.
-        print("  FAIL — %d recorded consolidate line(s), none compared (consol 0/0)" % consol_lines)
+    consol_none = tally["consol_wiped"] > 0 and tally["consol_equal"] + tally["consol_differ"] == 0
+    if tally["consol_misjoined"] or consol_none:
+        # meleefix: a consolidate line on a non-charge activation is a broken join; wiped charges with a recorded line of which the
+        # bar compared none (0/0) are a broken bar. Neither is a parity verdict, so neither is a pass, report-only or not. A run
+        # without a wipe compares nothing by design and passes this check.
+        print("  FAIL — consol: %d mis-joined line(s); %d wiped charge(s), %d compared"
+              % (tally["consol_misjoined"], tally["consol_wiped"], tally["consol_equal"] + tally["consol_differ"]))
         return 1
+    # meleefix: a consolidation that lands elsewhere than the table's is a parity failure like a parted die.
+    ok = ok and tally["consol_differ"] == 0
     # AI-G4 F-PRINT: the printed number leaves the both-silent acts out, like the pass formula does.
     short = tally["acts"] - tally["full_equal"] - tally["both_silent"]
     if report_only:
-        print("  REPORT ONLY — %d/%d acts short of full equality, exit 0 by request"
-              % (short, tally["acts"]))
+        print("  REPORT ONLY — %d/%d acts short of full equality, %d consolidation(s) differ, exit 0 by request"
+              % (short, tally["acts"], tally["consol_differ"]))
         return 0
     print("  %s" % ("PASS" if ok else
-                    "FAIL — %d of %d charge acts are not FULL-equal (see the buckets above)"
-                    % (short, tally["acts"])))
+                    "FAIL — %d of %d charge acts are not FULL-equal, %d consolidation(s) differ (see the buckets above)"
+                    % (short, tally["acts"], tally["consol_differ"])))
     return 0 if ok else 1
 
 
