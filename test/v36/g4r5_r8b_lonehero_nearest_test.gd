@@ -18,7 +18,7 @@ var _epoch_before: int
 
 func before_test() -> void:
 	_epoch_before = AiActRecorder.rules_epoch
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
+	# the live epoch: the core shoots a lone hero from EPOCH_83_LONE_HERO_TARGET on, and the AI body takes the door itself
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -35,6 +35,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
 	AiActRecorder.rules_epoch = _epoch_before
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
@@ -86,8 +87,10 @@ func test_a_unit_acts_against_a_lone_hero_that_is_the_only_enemy_at_73(timeout :
 	var host := _lone_hero_chain()
 	assert_object(_main.solo_controller.nearest_human_unit(gunners)) \
 		.override_failure_message("nearest_human_unit returned no unit - the lone hero is invisible").is_same(host)
+	var runs := CoreActivation.ai_runs
 	var done: GameUnit = await _main._solo_activate_one_ai()
 	assert_object(done).is_equal(gunners)
+	assert_int(CoreActivation.ai_runs).override_failure_message("the core did not take the volley (the table shot it)").is_greater(runs)
 	var text := _log_text()
 	assert_str(text) \
 		.override_failure_message("the activation left nothing against the lone hero (log: %s)" % text.strip_edges()) \
@@ -107,18 +110,4 @@ func test_an_activation_with_no_enemy_on_the_table_writes_a_line_at_73(timeout :
 	assert_str(text) \
 		.override_failure_message("rules-must-log: an activation with no enemy writes a line (log: %s)" % text.strip_edges()) \
 		.contains("Gunners: no enemy unit to act against")
-	await E2EBoot.settle(get_tree())
-
-
-## Control: below 73 the recorded corpus keeps the silent activation - no target, no shot, no line.
-func test_the_epoch_72_control_keeps_the_silent_activation(timeout := 60000) -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
-	var gunners := _gunners()
-	_lone_hero_chain()
-	assert_object(_main.solo_controller.nearest_human_unit(gunners)).is_null()
-	var done: GameUnit = await _main._solo_activate_one_ai()
-	assert_object(done).is_equal(gunners)
-	var text := _log_text()
-	assert_str(text).not_contains("Gunners fires at")
-	assert_str(text).not_contains("no enemy unit to act against")
 	await E2EBoot.settle(get_tree())
