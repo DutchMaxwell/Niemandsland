@@ -13,6 +13,8 @@ extends GdUnitTestSuite
 ## the tier order (greedy_contested), the garrison's friend check (garrison_shared), and the Shaken (shaken_holder), reserve
 ## (reserve_holder), joined-hero (joined_holder) and Aircraft (aircraft_holder) filters of `_units_controlling`. Its `is_destroyed`
 ## filter cannot be planted: a wiped unit has no alive positions, so it holds nothing either way (dead_holder / dead_contester).
+## RED 22.11. (review): the spread switch off on BOTH copies fails all 8 greedy_spread rows (the booked marker keeps its tier);
+## a joined hero moved to its host fails all 8 joined_holder rows (the board could no longer read the filter).
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -90,6 +92,7 @@ func _board(kind: String, rng: RandomNumberGenerator) -> String:
 		["Aircraft"] if kind == "aircraft_holder" else [])
 	var units: Array = [win, enemy_a, enemy_b, friend]
 	var m: Vector3 = _markers[mi]
+	var unfit := ""   # a board that cannot prove its kind (set below), reported after the units are freed
 	# The holder kinds: a unit that does NOT count stands on marker `mi`, the winner 4.5 in south of it, so `mi` is the nearest
 	# marker and wins exactly when the filter drops the holder. `dead_contester`: a wiped ENEMY on `mi` contests nothing;
 	# `greedy_contested`: a live enemy on `mi` makes it contested, so a farther holdable marker wins.
@@ -110,11 +113,20 @@ func _board(kind: String, rng: RandomNumberGenerator) -> String:
 				var host := _unit(side, "Host", -30.0, -30.0)
 				units.append(host)
 				EquipmentDistributor.attach_hero_to_unit(holder, host)
+				# Review 22.11.: if attaching moved the hero to its host, the row would pass whatever the joined-hero filter does.
+				var c: Vector3 = sc.unit_centre(holder)
+				if Vector2(c.x - m.x, c.z - m.z).length() > 3.0 * INCH:
+					unfit = "joined_holder: the attached hero left the marker (now %s) - the row cannot read the filter" % c
 	if kind in ["seize_held", "garrison", "garrison_shared"]:
 		_owners[mi] = 0
 		var on: Array = {"seize_held": [friend], "garrison": [win], "garrison_shared": [win, friend]}[kind]
 		for k in on.size():
 			_place(on[k], m + Vector3((0.3 + 0.4 * k) * INCH, 0.0, 0.5 * INCH))
+	# greedy_spread: no marker owned or contested, the winner 4.5 in south of `mi` (its nearest), `mi` booked below: the spread term
+	# drops `mi` one tier, so the goal is another marker; without the term (on both copies) it would be `mi` (review 22.11.).
+	if kind == "greedy_spread":
+		_owners = [0, 0, 0]
+		_place(win, m + Vector3(0.0, 0.0, -4.5 * INCH))
 	if kind == "fight":
 		_place(win, Vector3(rng.randf_range(-6.0, 6.0) * INCH, 0.0, 9.0 * INCH))   # no marker within 3 in: no garrison
 	sc._round_plans = {}
@@ -143,6 +155,8 @@ func _board(kind: String, rng: RandomNumberGenerator) -> String:
 	var enemies: Array = [enemy_a, enemy_b].filter(func(u: GameUnit) -> bool: return not u.is_destroyed()).map(sc.unit_centre)
 	RosterSweep.free_units(_main, units)
 	var tag := "%s (marker %d, plan %s)" % [kind, mi, plan]
+	if unfit != "":
+		return unfit
 	if table == SoloController.NO_OBJECTIVE or core == null:
 		return "%s: no goal (table %s, core %s) - a row must have one" % [tag, table, core]
 	if not (core is Vector3) or (core as Vector3) != table:
@@ -163,9 +177,9 @@ func _expect(kind: String, goal: Vector3, m: Vector3, enemies: Array) -> String:
 			return "" if absf(off - 2.5 * INCH) < 1e-6 else "not 2.5 in beside the marker (%f m)" % off
 		"seize_held", "garrison_shared", "fight":
 			return "" if is_enemy else "not an enemy centre"
-		"greedy_contested":
-			return "" if is_marker and goal != m else "the contested marker or no marker"
-		"greedy", "greedy_spread", "no_planner":
+		"greedy_contested", "greedy_spread":
+			return "" if is_marker and goal != m else "the marker the kind rules out (contested / booked), or no marker"
+		"greedy", "no_planner":
 			return "" if is_marker or is_enemy else "neither a marker nor an enemy"
 	return "unknown kind"
 
