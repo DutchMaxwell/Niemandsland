@@ -15,6 +15,7 @@ const INCH := 0.0254
 const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 	"faction_folder": "dark_elf_raiders", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
+const WITHOUT := "user://hit_and_run_step_positions_deny.json"
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -36,12 +37,23 @@ func before_test() -> void:
 	_main._autosave_controller.set_lesson_paused(true)
 	CoreActivation._env = 1
 	OS.set_environment("NML_CORE_SLICE", "deny")
+	# Lane shootfix: the live deny file refuses a Hit & Run family shooter (group `hit_and_run_landing`, the core's rigid step lands bases inside
+	# other units); this suite pins the landing write-back itself, so it reads the deny file without that group.
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.DENY_PATH))
+	(data["groups"] as Dictionary).erase("hit_and_run_landing")
+	var f := FileAccess.open(WITHOUT, FileAccess.WRITE)
+	f.store_string(JSON.stringify(data))
+	f.close()
+	CoreSlice.path_override = WITHOUT
 	CoreSlice.reset_cache()
 
 
 func after_test() -> void:
 	OS.unset_environment("NML_CORE_SLICE")
+	CoreSlice.path_override = ""
 	CoreSlice.reset_cache()
+	if FileAccess.file_exists(WITHOUT):
+		DirAccess.remove_absolute(WITHOUT)
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
@@ -237,4 +249,23 @@ func test_a_core_step_of_under_a_millimetre_is_still_landed() -> void:
 	var now: Vector3 = (att.get_alive_models()[0] as ModelInstance).node.global_position
 	assert_float(Vector2(now.x, now.z).distance_to(Vector2((to[0] as Vector3).x, (to[0] as Vector3).z))).override_failure_message(
 		"the 0.7 mm step landed: %s vs %s" % [now, to[0]]).is_less(0.0001)
+	_free(units)
+
+
+## meleefix: the 1 in separation can end a model 0.36 mm from the spot the board holds (sweep row Snipers -> Steam-Suits, seed 2: landed,
+## snapped, stepped back to just short of its landing spot). Any step above float noise is landed. RED with the 0.0005 m dead zone: the
+## model stays 0.014 in off the core's own end state.
+func test_a_core_step_of_a_third_of_a_millimetre_is_still_landed() -> void:
+	CoreActivation.reset_all(_main)
+	var units := _pair()
+	var att: GameUnit = units[0]
+	var start := CoreActivation._start_models(_main)
+	var to: Array = att.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
+	to[0] = (to[0] as Vector3) + Vector3(0.00036, 0.0, 0.0)
+	var row := {"unit": att.unit_id, "removed": [], "shaken": false, "alive": to.size(), "moved": true, "unknown": true,
+		"positions": to, "stamps": {}}
+	await CoreActivation.land_delta(_main, [row], start, {})
+	var now: Vector3 = (att.get_alive_models()[0] as ModelInstance).node.global_position
+	assert_float(Vector2(now.x, now.z).distance_to(Vector2((to[0] as Vector3).x, (to[0] as Vector3).z))).override_failure_message(
+		"the 0.36 mm step landed: %s vs %s" % [now, to[0]]).is_less(0.00002)
 	_free(units)

@@ -1289,6 +1289,26 @@ pub(crate) fn tray_reanimation(
     if seams.hero_attach {
         members.extend(next.attached[si].iter().copied());
     }
+    if spot_rule {
+        // PENDING_EPOCH_REVIVE_SPOT (REVIVE-MEMBERS, lead ruling): the rule fires only for a unit where ALL models carry it, and a
+        // joined hero is part of the unit - a standing joined hero without it means no roll for the whole chain.
+        let (has, standing) = (|u: usize| statics[next.roster.profile[u]].reanimation.is_some(), |u: usize| !next.positions[u].is_empty());
+        if !members.iter().any(|&u| next.profile(u).wounds_max.iter().sum::<i64>() > next.wounds[u].iter().sum::<i64>()) {
+            return; // nothing to restore: no roll and no line, on both sides
+        }
+        if members.iter().any(|&u| standing(u) && !has(u)) {
+            shot.log.push(format!("Reanimation: {owner} does not reanimate — a joined model lacks the rule"));
+            return;
+        }
+        // Lead ruling "Aura bearer dead": the Aura gives Reanimation to "this model and its unit" - with every bearer fallen the
+        // chain no longer has it (the table's `reanimation_members` ends the Aura the same way).
+        let aura = |u: usize| next.profile(u).special_rules.iter().chain(&next.profile(u).item_grants).any(|r| r.trim() == "Reanimation Aura");
+        if members.iter().any(|&u| aura(u)) && !members.iter().any(|&u| aura(u) && standing(u)) {
+            shot.log.push(format!("Reanimation: {owner} does not reanimate — the Reanimation Aura bearer has fallen"));
+            return;
+        }
+        members.retain(|&u| has(u)); // a fallen joined hero without the rule is not in the pool
+    }
     // The pool — WOUND CURRENCY, per member of the carrying chain.
     let (mut gaps, mut dead) = (Vec::new(), Vec::new());
     for &u in &members {
@@ -1331,56 +1351,108 @@ pub(crate) fn tray_reanimation(
     // touching the nearest standing model, away from the unit centre, clear
     // of every other unit's bases.
     dead.sort_by(|a, b| a.1.cmp(&b.1).then(a.0.cmp(&b.0)));
-    for &(u, cost) in &dead {
-        if left <= 0 {
+    // PENDING_EPOCH_REVIVE_SPOT: the anchors are the chain's models standing BEFORE the first restore (host slot order, then
+    // the joined heroes that carry the rule themselves - `SoloController.reanimation_members`), captured once - a model
+    // restored a moment ago is no anchor.
+    let anchors: Vec<([f64; 3], f64)> = if spot_rule {
+        members.iter().filter(|&&u| statics[next.roster.profile[u]].reanimation.is_some()).flat_map(|&u| next.positions[u].iter().enumerate()
+            .map(|(k, p)| (*p, next.radii[u].get(k).copied().unwrap_or(DEFAULT_BASE_RADIUS_M))).collect::<Vec<_>>()).collect()
+    } else {
+        Vec::new()
+    };
+    // PENDING_EPOCH_REVIVE_SPOT: the table's spend (`SoloController.reanimation_plan`), fixed BEFORE placing: each casualty
+    // stands up at ONE wound, cheapest first, then the top-ups in the same order; an entry with no legal spot expires whole.
+    let mut plan: Vec<(usize, i64, i64)> = dead.iter().map(|&(u, cost)| (u, cost, 0)).collect();
+    if spot_rule {
+        plan.truncate(left.max(0) as usize);
+        left -= plan.len() as i64;
+        for e in plan.iter_mut() {
+            let top = (e.1 - 1).min(left);
+            e.2 = 1 + top;
+            left -= top;
+        }
+    }
+    for &(u, cost, planned) in &plan {
+        if !spot_rule && left <= 0 {
             break;
         }
-        if next.positions[u].is_empty() {
-            continue; // nothing stands to anchor a revive
-        }
-        let c = geom::centre(&next.positions[u]);
-        let (cx, cz) = (c[0] as f64, c[2] as f64);
-        let (mut ai, mut best) = (0usize, f64::INFINITY);
-        for (i, p) in next.positions[u].iter().enumerate() {
-            let d = (p[0] - cx).hypot(p[2] - cz);
-            if d < best {
-                best = d;
-                ai = i;
-            }
-        }
-        let a = next.positions[u][ai];
-        let a_r = next.radii[u].get(ai).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
-        let (dx, dz) = (a[0] - cx, a[2] - cz);
-        let n = (dx * dx + dz * dz).sqrt();
-        let (ux, uz) = if n <= f64::EPSILON { (0.0, 0.0) } else { (dx / n, dz / n) };
         // PENDING_EPOCH_REVIVE_SPOT: the returning model keeps its unit's own base (metres; 0 = not set).
         let own_r = statics[next.roster.profile[u]].base_radius;
         let r = if spot_rule && own_r > 0.0 { own_r } else { DEFAULT_BASE_RADIUS_M };
-        let dist = a_r + r + 0.002;
-        let spot = [a[0] + ux * dist, a[1], a[2] + uz * dist];
-        let clear = if spot_rule {
-            revive_spot_legal(board, next, [spot[0], spot[2]], r)
+        let spot = if spot_rule {
+            revive_ring(board, next, &anchors, r)
         } else {
-            (0..next.units()).all(|ti| {
+            if next.positions[u].is_empty() {
+                continue; // nothing stands to anchor a revive
+            }
+            let c = geom::centre(&next.positions[u]);
+            let (cx, cz) = (c[0] as f64, c[2] as f64);
+            let (mut ai, mut best) = (0usize, f64::INFINITY);
+            for (i, p) in next.positions[u].iter().enumerate() {
+                let d = (p[0] - cx).hypot(p[2] - cz);
+                if d < best {
+                    best = d;
+                    ai = i;
+                }
+            }
+            let a = next.positions[u][ai];
+            let a_r = next.radii[u].get(ai).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
+            let (dx, dz) = (a[0] - cx, a[2] - cz);
+            let n = (dx * dx + dz * dz).sqrt();
+            let (ux, uz) = if n <= f64::EPSILON { (0.0, 0.0) } else { (dx / n, dz / n) };
+            let dist = a_r + r + 0.002;
+            let spot = [a[0] + ux * dist, a[1], a[2] + uz * dist];
+            let clear = (0..next.units()).all(|ti| {
                 members.contains(&ti)
                     || next.positions[ti].iter().all(|p| {
                         (p[0] - spot[0]).hypot(p[2] - spot[2]) > DEFAULT_BASE_RADIUS_M * 2.0 + 0.002
                     })
-            })
+            });
+            clear.then_some(spot)
         };
-        if !clear {
+        let Some(spot) = spot else {
             shot.log.push("Reanimation: 1 success but no placeable spot — coherency missing".into());
             continue;
-        }
-        let back = cost.min(left).max(1);
+        };
+        let back = if spot_rule { planned } else { cost.min(left).max(1) };
         next.wounds[u].insert(0, back);
         next.positions[u].insert(0, spot);
         Rc::make_mut(&mut next.radii)[u].insert(0, r);
         next.kits_drop(u); // the revived body's kit is unknown: this unit falls back to slot order
         next.alive[u] = next.positions[u].len() as i64;
-        left -= back;
+        left -= if spot_rule { 0 } else { back };
         shot.log.push(format!("Reanimation: 1 model restored ({back} wound(s) back)"));
     }
+}
+
+/// REVIVE SPOT (`PENDING_EPOCH_REVIVE_SPOT`), the table's ring (`_solo_reanimation_spot` without the "where it fell" spot): per
+/// anchor in chain order, the base gap 2 mm then 0.5 in + 2 mm (both inside the 1 in coherency), 16 headings each from +X toward
+/// +Z; the first legal spot wins, at the anchor's height. `None`: nowhere legal, the model is not restored. Draws no die.
+fn revive_ring(board: Option<&Terrain>, next: &State, anchors: &[([f64; 3], f64)], r: f64) -> Option<[f64; 3]> {
+    for &(a, a_r) in anchors {
+        for gap in [0.002, 0.5 * IN2M + 0.002] {
+            for k in 0..16 {
+                let (sin, cos) = (std::f64::consts::TAU * f64::from(k) / 16.0).sin_cos();
+                let c = [a[0] + cos * (a_r + r + gap), a[1], a[2] + sin * (a_r + r + gap)];
+                if !revive_line_blocked(board, a, c) && revive_spot_legal(board, next, [c[0], c[2]], r) {
+                    return Some(c);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// REVIVE SPOT (`PENDING_EPOCH_REVIVE_SPOT`): does the straight line from the anchor to a ring candidate cross a ruin / container wall,
+/// a cliff or a house wall, or end on another tier level? Then the model would come back behind a thin wall or across a tier step
+/// (the outer ring reaches past the wall band `rest_forbidden` keeps clear). Always `false` without a board.
+fn revive_line_blocked(board: Option<&Terrain>, a: [f64; 3], c: [f64; 3]) -> bool {
+    let Some(t) = board else { return false };
+    let (ia, ic) = (t.to_inch([a[0] as f32, 0.0, a[2] as f32]), t.to_inch([c[0] as f32, 0.0, c[2] as f32]));
+    let level = |p: [f64; 3]| t.tier_in_at(p[0] / t.in2m(), p[2] / t.in2m());
+    crate::mv::geom2::path_crosses_wall(ia, ic, t.walls_in_tiered())
+        || crate::mv::geom2::path_crosses_wall([a[0] as f32, a[2] as f32], [c[0] as f32, c[2] as f32], &t.solid_walls_world_m())
+        || level(a) != level(c)
 }
 
 /// REVIVE SPOT (`PENDING_EPOCH_REVIVE_SPOT`): may a restored model of base radius `r` (metres) stand at world `c` (x, z metres)?

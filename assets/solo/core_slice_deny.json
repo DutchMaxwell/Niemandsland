@@ -74,6 +74,16 @@
       "side": "shooter",
       "why": "PLAN_DOOR_ACTIVATION_START step 2 (lane doorStart, 22.11.): Reanimation is an activation-START effect. The table rolls it in `begin_activation` before the door captures the board, and the core, which takes the whole activation, rolls it again from that board. Measured (8 seeds per door, door on against off, dice dump): AI door 8/8 two pool rolls (the core rolls what is left of the pool), the core's volley fired more dice than the table's living shooters on 7/8 (+1/+2), `_land_positions` errored 7/8; human door 8/8 two pool rolls (the core re-rolls the FULL pool at Fire), the volley's dice count differs on 8/8, `_land_positions` errored 8/8; the core's roll never reaches the battle log. Shooter side only: a Reanimation unit shot at does not activate. The primitive covers Reanimation Aura's grant (the import copies Reanimation onto the unit and every joined hero). Bounding was measured equal (the core refuses a bonus move, the table resolves it) and stays taken; Spawn was not measured.",
       "leaves_with": "the door sending `start_done` after the table's start effects (PLAN_DOOR_ACTIVATION_START steps 3-5), then a 16-seed door on/off sweep of a Reanimation unit and an Aura-granted one (step 6)"
+    },
+    "hit_and_run_landing": {
+      "primitives": [
+        "Hit & Run",
+        "Hit & Run Shooter"
+      ],
+      "kind": "landing",
+      "side": "shooter",
+      "why": "Lane shootfix (22.11., gate-12 shoot soak, 24 games): the core's Hit & Run step after a volley runs the RIGID branch at both doors (no movement seam): a 3 in translation of the whole unit away from an enemy that has not activated yet, checked against the board edge only. Probed over every Harassing step the core replayed (game 3, the only soak game with the family, 17 distinct steps): 3 ended illegal - 2 inside another unit's bases (Dark Shooters 6 of 7 models up to 0.75 in deep; Corsairs 0.27 in), 1 base on ground where no base may rest. The door writes the core's end spots back with no landing check (`CoreActivation._land_positions`), so the spot reaches the live table. The table's own step (`_move_away` through the move executor) keeps spacing and terrain; the 9 soak rows of the family all differ from it. Shooter side only: a unit shot at does not step in that volley. The two primitives cover every rule the core's step reads after a volley (Hit & Run, Harassing, Guerrilla and their Boost / Enhanced spellings, Hit & Run Shooter and its Aura's grant); Hit & Run Fighter steps only after melee.",
+      "leaves_with": "PENDING_EPOCH_HIT_AND_RUN_PLAIN going live at 96 (the core takes its port of the table's `_move_away` on a real board: game 3 at forced 96 reads 22 of 22 volleys equal), then a re-probe of the family's steps"
     }
   }
 }

@@ -77,7 +77,8 @@
     },
     "hit_and_run_landing": {
       "primitives": [
-        "Hit & Run"
+        "Hit & Run",
+        "Hit & Run Fighter"
       ],
       "kind": "measured",
       "why": "Melee roster sweep 20.11. at forced rules epoch 94 (46 ring pairs of the 1000 pt lists, melee deny view, 1681 taken charges, door vs table): 34 of 112 (Harassing and the other aliases): the charger ends 1 to 5 in from the table's end, the dice are equal.",
