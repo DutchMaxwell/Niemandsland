@@ -3123,4 +3123,26 @@ pub(crate) mod tests {
         assert!(piled(vec![5], true) <= -4.0 + 1e-6, "a flier may not end over the house: {}", piled(vec![5], true));
         assert!(piled(vec![], false) > -3.0, "planted: no solid cell, the step walks in: {}", piled(vec![], false));
     }
+
+    /// L-RF1 F7 review: a walker's pile-in STEP may not clip a house corner even when its end is clear. The defender at
+    /// (-4.5, 0.3) in piles toward a charger north-east of the house (tier cell 5, x -3..0, z -3..0): the full 3 in step
+    /// ends 1.5 in north of the house, clear, but its 1 in base sweeps within 0.87 in of the corner (-3, 0). The step must
+    /// stay a base radius off the corner. Red: with the house outline left out of the step walls (end check only) the full
+    /// step is taken.
+    #[test]
+    fn a_pile_in_step_never_clips_a_house_corner() {
+        let s = IN2M as f32;
+        let start = [-4.5f32, 0.3];
+        let mut st = units_state(vec![vec![[1.5 * s, 0.0, 2.9 * s]], vec![[start[0] * s, 0.0, start[1] * s]]], vec![vec![IN2M], vec![IN2M]], vec![vec![]; 2]);
+        let mut p = PlainTerrain { cells: vec![], sandbox: vec![], cell_params: CellParams { table_size_feet: [1.0, 1.0], grid_rotation_degrees: 0.0,
+            grid_size_inches: 3.0, inches_to_meters: IN2M }, ..Default::default() };
+        p.tiers = Some(crate::terrain::TierGrid { nx: 4, nz: 4, cell_in: 3.0, level_in: vec![0.0; 16], ladders: vec![], stairs: vec![] });
+        p.solid_cells = vec![5];
+        MoveRules { rules_epoch: EPOCH_73_V36 }.pile_in_state(&mut st, &Terrain::build(&p), 0, 1, true);
+        let end = [st.positions[1][0][0] as f32 / s, st.positions[1][0][2] as f32 / s];
+        assert!(end != start, "the defender still piles in (a shorter step): {end:?}");
+        let clip = g2::point_seg_distance([-3.0, 0.0], start, end);
+        assert!(clip >= 1.0, "the step sweeps {clip:.2} in from the house corner (base radius 1 in): {end:?}");
+    }
 }
+
