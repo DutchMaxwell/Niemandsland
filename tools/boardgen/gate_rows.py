@@ -5,10 +5,12 @@ Reads OUT/<TAG>_y<yaw>_r<n>/manifest.json (the town under test) and OUT/<BASE_TA
 tools/boardgen/gate_run.sh. The baseline score of every model is the MEDIAN over its repeats; a row is one (preset, seed, yaw) and is the MEDIAN over the repeats of the town of
   - the median of the per-model ratio  after / before   (>= MED_BAR),
   - its 10th percentile                                  (>= P10_BAR),
-  - HARD: no visible pawn below score 1 (the absolute floor).
+  - HARD: no visible pawn below score 1 (the absolute floor),
+  - HARD: no pawn hidden from all four quarter-turn views (a "pocket"; captures with views=4) but the KNOWN_POCKETS of ticket POCKETS,
+    which are printed on every run: a NEW pocket is red.
 Gate change 22.11.: every in-frame pawn carries its visible share (pixel masks); one under 0.4 has no score. The share of in-frame pawns at least 0.4
 visible from the default view is a SOFT number (board style): printed, `WATCH` under VIS_WATCH, never red. Printed per row: pawns, off-frame, hidden, the old
-collider ray's count (comparison only), the visible share. The base is the plain table: the same capture with `board=none`.
+collider ray's count (comparison only), the visible share, hidden from all views. The base is the plain table: the same capture with `board=none`.
 Models whose disc is not wholly inside the 1600 x 900 frame are left out (their ring would read clamped border pixels). Exit status 1 when any row is under a bar.
 """
 import glob, json, os, statistics as st, sys
@@ -17,6 +19,7 @@ out, tag, base_tag = sys.argv[1:4]
 M = 30   # px margin of the frame
 P10_BAR, MED_BAR = float(os.environ.get("P10_BAR", "0.60")), float(os.environ.get("MED_BAR", "0.75"))
 VIS_WATCH = float(os.environ.get("VIS_WATCH", "0.70"))
+KNOWN_POCKETS = set()   # ticket POCKETS (lead 22.11.): (seed, cell x, cell z) of the legal spots on main that no quarter view sees
 
 
 def load(t):
@@ -60,10 +63,12 @@ for key in sorted(after, key=lambda k: (k[2], k[0], int(k[1].lstrip("s")))):
     vis = [[v[1] for v in g["vis"]] for g in after[key] if "vis" in g]
     seen = st.median(sum(1 for s in v if s >= 0.4) / max(len(v), 1) for v in vis) if vis else 1.0
     cnt = lambda f: st.median(g.get(f, -1) for g in after[key])
-    good = p10 >= P10_BAR and med >= MED_BAR and st.median(b[1] for b in below) == 0
+    allv = max([st.median(g.get("hidden_all_views", -1) for g in v) for k, v in after.items() if k[:2] == key[:2]])   # the four views of any yaw of this seed
+    pk = {(key[1], c[0], c[1]) for k, v in after.items() if k[:2] == key[:2] for g in v for c in g.get("pockets", [])}
+    good = p10 >= P10_BAR and med >= MED_BAR and st.median(b[1] for b in below) == 0 and allv >= 0 and not pk - KNOWN_POCKETS   # -1: no capture of this seed ran views=4: not green
     ok = ok and good
-    lines.append("%-6s %-4s yaw %3d | pawns %d off-frame %d hidden %d (ray %d) | visible %.2f%s | below1 %d -> %d | ratio median %.2f | p10 %.2f n %d [repeats %s] | %s" % (
-        key[0], key[1], int(key[2]), cnt("pawns"), cnt("offframe"), occl, cnt("ray"), seen, " WATCH" if seen < VIS_WATCH else "",
+    lines.append("%-6s %-4s yaw %3d | pawns %d off-frame %d hidden %d (ray %d) | visible %.2f%s pockets %d (known %s) | below1 %d -> %d | ratio median %.2f | p10 %.2f n %d [repeats %s] | %s" % (
+        key[0], key[1], int(key[2]), cnt("pawns"), cnt("offframe"), occl, cnt("ray"), seen, " WATCH" if seen < VIS_WATCH else "", allv, sorted(pk & KNOWN_POCKETS) or "-",
         below[0][0], st.median(b[1] for b in below), med, p10, len(ratios), " ".join("%.2f" % p for p in p10s), "PASS" if good else "FAIL"))
 if not lines:
     ok = False   # no row matched the baseline (other seeds, presets or yaws): a gate that compared nothing is not green
