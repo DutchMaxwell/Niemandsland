@@ -41,6 +41,8 @@ const SDFGI_ENERGY := 0.45
 const SSIL_INTENSITY := 0.4
 ## A weak wide fill inside every lantern's pool (lead 21.11.): an omni with no shadow map, so the cone's pool has no hard black rim; weak enough that light leaking through a wall is a glow, not a pool.
 const FILL_ENERGY := 0.05
+const BESIDE_ROOF_IN := 1.5   # a lamp this close to an intact house or a tall tower stands at its eaves
+const DIM_BESIDE_ROOF := 0.3   # ... and burns at this share, without its warm fill
 const FILL_RANGE_M := 0.12   # (was 0.2, train 2: the warm fill stays near its post)
 const EMBER_COLOUR := Color(1.0, 0.5, 0.2)
 const EMBER_ENERGY := 0.7
@@ -306,6 +308,17 @@ static func lantern_projector() -> Texture2D:
 
 ## The warm lights of the first MAX_LIGHTS lanterns (the square's four first, then the gates nearest the centre): SpotLight3D down-cones with the projector cookie, colour (1.0, 0.74, 0.48),
 ## the four nearest the centre cast shadows.
+## Does a lamp post at `at` (board inches) stand within BESIDE_ROOF_IN of an intact house or a tall tower? Its head (2.55 in) is at the eaves there.
+static func beside_a_roof(layout: Dictionary, at: Vector2) -> bool:
+	var nx: int = layout["nx"]
+	var cell := float(layout["cell_in"])
+	for d: Vector2 in [Vector2.ZERO, Vector2(BESIDE_ROOF_IN, 0), Vector2(-BESIDE_ROOF_IN, 0), Vector2(0, BESIDE_ROOF_IN), Vector2(0, -BESIDE_ROOF_IN)]:
+		var q := ((at + d) / cell + Vector2(nx, int(layout["nz"])) * 0.5).floor()
+		if q.x >= 0 and q.y >= 0 and q.x < nx and q.y < int(layout["nz"]) and ["Roofed", "Tower"].has(layout["cells"][int(q.y) * nx + int(q.x)]["lot_kind"]):
+			return true
+	return false
+
+
 func _add_lights(layout: Dictionary) -> void:
 	var list := lanterns(layout)
 	list.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a["at"] as Vector2).length() < (b["at"] as Vector2).length())
@@ -317,7 +330,8 @@ func _add_lights(layout: Dictionary) -> void:
 		light.position = Vector3(at.x, LANTERN_HEIGHT_IN, at.y) * INCHES_TO_METERS
 		light.rotation_degrees = Vector3(-90.0, 0.0, 0.0)   # straight down
 		light.light_color = LANTERN_SQUARE_COLOUR if i < SHADOWED_LANTERNS else LANTERN_COLOUR
-		light.light_energy = LANTERN_ENERGY   # measured: <= 0.2 % of pixels above 0.95 luminance in street, wall and fountain
+		var dim := beside_a_roof(layout, at)   # (lead 22.11.: a lamp at the eaves of a house lit its roof like a furnace) - a lamp beside a house or a tall tower burns low, no fill
+		light.light_energy = LANTERN_ENERGY * (DIM_BESIDE_ROOF if dim else 1.0)   # measured: <= 0.2 % of pixels above 0.95 luminance in street, wall and fountain
 		light.spot_range = 0.2   # (was 0.34; 8 in still reaches the ground 2.55 in below at the widest cone)
 		light.spot_angle = lantern_cone_deg(i)
 		light.spot_attenuation = 1.0
@@ -330,7 +344,7 @@ func _add_lights(layout: Dictionary) -> void:
 		fill.name = "LanternFill%d" % i
 		fill.position = light.position
 		fill.light_color = LANTERN_COLOUR
-		fill.light_energy = FILL_ENERGY
+		fill.light_energy = 0.0 if dim else FILL_ENERGY
 		fill.omni_range = FILL_RANGE_M
 		fill.omni_attenuation = 2.0
 		fill.light_specular = 0.0

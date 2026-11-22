@@ -145,3 +145,22 @@ func test_the_kit_roofs_are_weathered_slate_not_terracotta() -> void:
 		assert_float(maxf(plain.r, maxf(plain.g, plain.b))).override_failure_message("kit roof tone %s too bright" % plain).is_less_equal(0.4)
 		assert_float(plain.s).override_failure_message("kit roof tone %s too saturated" % plain).is_less_equal(0.35)
 		assert_bool(tex.r < maxf(tex.g, tex.b)).override_failure_message("the textured kit roof %s still pushes the terracotta red" % tex).is_true()
+## Lead 22.11. (tower-stage play sheet): a square lamp at the eaves of an infill house lit its roof like a furnace. A lamp post within BESIDE_ROOF_IN of an intact house or a tall
+## tower is found by beside_a_roof (it then burns at DIM_BESIDE_ROOF and has no fill); over town boards 1-40 some are, and a post in the open street is not.
+func test_a_lamp_at_the_eaves_of_a_house_is_found_and_burns_low() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var beside := 0
+	var lamps := 0
+	for s in range(1, 41):
+		var layout: Dictionary = core.boardgen_layout_themed(s, "ruintown")
+		for lamp: Dictionary in BoardgenTownDressing.lanterns(layout):
+			lamps += 1
+			beside += 1 if BoardgenTownDressing.beside_a_roof(layout, lamp["at"]) else 0
+	print("LAMPS beside a roof %d of %d" % [beside, lamps])
+	assert_int(beside).is_greater(0)
+	assert_int(beside).is_less(lamps)
+	var open: Dictionary = core.boardgen_layout_themed(41, "ruintown").duplicate(true)
+	for c: Dictionary in open["cells"]:
+		c["lot_kind"] = "Street" if ["Roofed", "Tower"].has(c["lot_kind"]) else c["lot_kind"]
+	assert_bool(BoardgenTownDressing.beside_a_roof(open, Vector2(5.5, 5.5))).override_failure_message("planted: no house on the board, no lamp beside one").is_false()
+	assert_float(BoardgenTownDressing.DIM_BESIDE_ROOF).is_less(0.5)
