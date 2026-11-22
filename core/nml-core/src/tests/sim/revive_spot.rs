@@ -426,3 +426,44 @@ use super::*;
             assert_eq!(rean_run(&st, &statics, &t, e, 1, false).0.wounds[0], vec![3, 3, 3, 3], "epoch {e}: 6 successes fill both");
         }
     }
+
+    // ------------- REVIVE-MEMBERS (lead ruling 22.11.): every model of the unit, a joined hero included, carries the rule --
+
+    /// L3 host (one dead) with a joined hero standing at (-3, 4.5) in: Tough(3) at `hero_wounds`, carrying Reanimation or not.
+    fn hero_chain(hero_rule: bool, hero_wounds: i64) -> (State, Vec<UnitStatic>) {
+        let (mut st, mut statics) = rean_line(4, 1, &L3);
+        let mut hero = st.profiles.list[1].clone();
+        hero.unit_id = "ah".into();
+        hero.wounds_max = vec![3];
+        st.profiles = Rc::new(Profiles { list: vec![st.profiles.list[0].clone(), st.profiles.list[1].clone(), hero], index: HashMap::new() });
+        st.roster = Rc::new(Roster { keys: st.roster.keys.clone(), index: st.roster.index.clone(), profile: vec![0, 2, 1, 1] });
+        st.attached = Rc::new(vec![vec![1], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, Some(0), None, None]);
+        st.positions[1] = vec![[-3.0 * IN2M, 0.0, 4.5 * IN2M]];
+        st.wounds[1] = vec![hero_wounds];
+        statics.push(UnitStatic { name: "hero".into(), reanimation: hero_rule.then_some(crate::unit::ReanimationSpec { target: 1 }), ..Default::default() });
+        (st, statics)
+    }
+
+    /// A standing joined hero WITHOUT the rule: not every model of the unit has it, so the chain does not roll at 96 (at 95 the
+    /// host rolled and restored its casualty, the pin).
+    #[test]
+    fn a_joined_hero_without_the_rule_stops_the_roll() {
+        let (st, statics) = hero_chain(false, 3);
+        let t = town_board(vec![]);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, 1, true);
+        assert!(shot.rolls.is_empty() && !shot.log.iter().any(|l| l.starts_with("Reanimation")), "{:?}", shot.log);
+        assert_eq!(next.alive[0], 3);
+        let (old, _) = rean_run(&st, &statics, &t, 95, 1, true);
+        assert_eq!(old.alive[0], 4, "95 pin: the host rolled");
+    }
+
+    /// A joined hero WITH the rule: the chain rolls, and the hero's missing wounds are in the pool (1 casualty + 2 wounds = 3
+    /// dice), healed first (living wounded before casualties), then the casualty stands up.
+    #[test]
+    fn a_joined_hero_with_the_rule_adds_its_wounds_to_the_pool() {
+        let (st, statics) = hero_chain(true, 1);
+        let (next, shot) = rean_run(&st, &statics, &town_board(vec![]), E96, 1, true);
+        assert!(shot.log.iter().any(|l| l.contains("rolls 3 dice")), "{:?}", shot.log);
+        assert_eq!((next.wounds[1].clone(), next.alive[0]), (vec![3], 4), "{:?}", shot.log);
+    }

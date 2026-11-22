@@ -1289,6 +1289,11 @@ pub(crate) fn tray_reanimation(
     if seams.hero_attach {
         members.extend(next.attached[si].iter().copied());
     }
+    // PENDING_EPOCH_REVIVE_SPOT (REVIVE-MEMBERS, lead ruling): the rule fires only for a unit where ALL models carry it, and a
+    // joined hero is part of the unit - a standing joined hero without it means no roll for the whole chain.
+    if spot_rule && members.iter().any(|&u| !next.positions[u].is_empty() && statics[next.roster.profile[u]].reanimation.is_none()) {
+        return;
+    }
     // The pool — WOUND CURRENCY, per member of the carrying chain.
     let (mut gaps, mut dead) = (Vec::new(), Vec::new());
     for &u in &members {
