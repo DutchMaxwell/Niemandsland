@@ -173,3 +173,4 @@ fn statics_of(profiles: &Profiles, repo_root: &str, rules_epoch: u32) -> Vec<Uni
     let mut reg = Registries::new(repo_root);
     profiles.list.iter().map(|p| UnitStatic::build_for(&mut reg, p, rules_epoch)).collect()
 }
+// ci3270 plant E: comment only
