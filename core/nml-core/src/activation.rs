@@ -117,6 +117,7 @@ pub enum ActStep {
 pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
     let (mut declared, mut shot, mut rolled, mut over) = (false, false, false, false);
     let mut last_seq: Option<i64> = None;
+    let mut consolidated: Vec<&str> = Vec::new();
     for (i, x) in t.iter().enumerate() {
         let why = match x {
             _ if i == 0 && *x != Input::Begin => Some("the activation was not started".to_string()),
@@ -127,6 +128,11 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
             Input::Choice { .. } if !declared => Some("the choice was answered before the action was declared".to_string()),
             Input::Cast(_) if !declared => Some("a cast before the action was declared".to_string()),
             Input::Cast(_) if rolled => Some("a cast after the first die".to_string()),
+            // meleefix: the planner's consolidation inputs ride with the declared action, before the first die, once per unit, so a
+            // growing transcript cannot change a goal between two steps.
+            Input::Consolidate(_) if !declared => Some("consolidation inputs before the action was declared".to_string()),
+            Input::Consolidate(_) if rolled => Some("consolidation inputs after the first die".to_string()),
+            Input::Consolidate(c) if consolidated.contains(&c.unit.as_str()) => Some(format!("consolidation inputs for {} twice", c.unit)),
             Input::Cast(c) if c.seq < last_seq.map_or(0, |p| p + 1) => Some(format!("cast seq {} is too low: seq is 0 or more and higher than the cast before", c.seq)),
             Input::Intent { .. } if declared => Some("one action per activation".to_string()),
             Input::Placed { .. } if shot => Some(format!("{name} has already shot this round — it cannot move now")),
@@ -142,6 +148,7 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
             Input::Faces(_) => rolled = true,
             Input::Cancel => over = true,
             Input::Cast(c) => last_seq = Some(c.seq),
+            Input::Consolidate(c) => consolidated.push(c.unit.as_str()),
             _ => {}
         }
     }
