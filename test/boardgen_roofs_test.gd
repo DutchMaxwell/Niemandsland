@@ -145,3 +145,21 @@ func test_the_kit_roofs_are_weathered_slate_not_terracotta() -> void:
 		assert_float(maxf(plain.r, maxf(plain.g, plain.b))).override_failure_message("kit roof tone %s too bright" % plain).is_less_equal(0.4)
 		assert_float(plain.s).override_failure_message("kit roof tone %s too saturated" % plain).is_less_equal(0.35)
 		assert_bool(tex.r < maxf(tex.g, tex.b)).override_failure_message("the textured kit roof %s still pushes the terracotta red" % tex).is_true()
+## Sight plan S4: the core blocks sight at a house's ridge, 4.5 in (plain.rs HOUSE_TOP_IN). The drawn main roofs must bracket that height: over town boards 1-60 the mean
+## of eaves + height lies in 4.3-4.9 in and no ridge is under 3.5 in (a lower roof would let the eye see what the rules hide).
+func test_the_drawn_ridge_brackets_the_rule_height() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var sum := 0.0
+	var n := 0
+	var lowest := INF
+	for s in range(1, 61):
+		for r: Dictionary in BoardgenTownDressing.roofs(core.boardgen_layout_themed(s, "ruintown")):
+			if r["annex"]:
+				continue
+			var ridge := float(r["eaves"]) + float(r["height"])
+			sum += ridge
+			n += 1
+			lowest = minf(lowest, ridge)
+	print("RIDGES %d roofs, mean %.2f in, lowest %.2f in" % [n, sum / n, lowest])
+	assert_float(sum / n).is_between(4.3, 4.9)
+	assert_float(lowest).is_greater_equal(3.5)
