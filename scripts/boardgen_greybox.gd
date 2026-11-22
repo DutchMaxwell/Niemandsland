@@ -18,6 +18,8 @@ const TABLE_OVERLAY_GROUP := "table_overlay"
 ## The table's ground scatter (tufts, leaves, straw) is off on the board AND round it, whatever the table size: no biome dressing
 ## while a generated board is on the table (a board is the whole playing surface; the rest of the table is its frame).
 const SCATTER_OFF_M := 3.0
+## The start view over a generated board, as a share of the table diagonal (the table alone: 0.95; decision D-TEX3).
+const VIEW_FACTOR := 0.70
 ## The table's ground relief (mounds, 7 mm ridges along terrain walls) is lifted flat under the board plus this margin (two cells of the relief mesh): the board's skin is 1 mm thick.
 const RELIEF_MARGIN_M := 0.03
 const INCHES_TO_METERS := 0.0254
@@ -422,6 +424,53 @@ func _ready() -> void:
 		graphics.settings_applied.connect(_on_settings_applied)
 	_apply_detail()
 	_attach_surfaces()
+	_frame_view(true)
+
+
+## A generated board is the whole battlefield: the start view comes closer, 0.70 x the table diagonal instead of 0.95 (texture plan step 10, decision D-TEX3), and is
+## centred on the board, when it arrives and after every reset of the view while it stays (the camera keeps factor and tilt); the table's own view comes back when it leaves.
+func _frame_view(on: bool) -> void:
+	var table := get_parent()
+	var main := table.get_parent() if table != null else null   # (the scene, as BoardgenMood finds it)
+	var pivot: Variant = main.get("camera_pivot") if main != null else null
+	if not (pivot is Node3D) or not ("table_view_factor" in pivot):
+		return
+	pivot.table_view_factor = VIEW_FACTOR if on else pivot.TABLE_VIEW_FACTOR
+	pivot.table_view_tilt = 0.0
+	var feet: Variant = table.get("table_size")
+	var cam := (pivot as Node3D).get_node_or_null("Camera3D") as Camera3D
+	if on and feet is Vector2 and cam != null:   # centred: the start view tilts down until the near rim and the tallest piece sit evenly in the picture
+		pivot.reset_view()
+		pivot.adjust_for_table_size(feet)
+		pivot.table_view_tilt = view_tilt(_layout, feet, pivot.get_zoom(), -float(pivot._pitch), cam.fov)
+		pivot.reset_view()
+		pivot.adjust_for_table_size(feet)
+
+
+## Degrees to tilt a start view (pitch `pitch_deg` below the horizon, `dist` m from the board centre, vertical `fov`) down about the camera, so the near
+## rim's foot and the highest projected top (boxes, roofs, the far rim) sit equally far from the picture's edges. A pinhole model at yaw 0; the board is
+## a half-turn mirror, so it holds from the other side too. Pure.
+static func view_tilt(layout: Dictionary, table_feet: Vector2, dist: float, pitch_deg: float, fov: float) -> float:
+	var rim := table_feet.y * 0.1524 + 0.015   # metres off the centre to the rim's outer face (scripts/table.gd)
+	var tops: Array[Vector2] = [Vector2(0.05, -rim)]   # (height, z) in metres, +z toward the camera: the far rim's top edge, then every far top edge
+	for b: Dictionary in plan(layout):
+		tops.append(Vector2(b["hi"].y, b["lo"].z) * INCHES_TO_METERS)
+	for r: Dictionary in (BoardgenTownDressing.roofs(layout) if str(layout.get("theme", "")) == BoardgenTheme.RUIN_TOWN else []):
+		tops.append(Vector2(float(r["eaves"]) + float(r["height"]), r["centre"].y - (0.0 if r["along_x"] else float(r["length"]) * 0.5)) * INCHES_TO_METERS)
+	var eye := Vector2(sin(deg_to_rad(pitch_deg)), cos(deg_to_rad(pitch_deg))) * dist
+	var lo := -10.0
+	var hi := 30.0
+	for _i in 24:   # the picture moves up as the tilt grows: bisect to equal margins
+		var a := deg_to_rad(pitch_deg + (lo + hi) * 0.5)
+		var ndc := func(p: Vector2) -> float: return ((p.x - eye.x) * cos(a) - (p.y - eye.y) * sin(a)) / ((-(p.x - eye.x) * sin(a) - (p.y - eye.y) * cos(a)) * tan(deg_to_rad(fov * 0.5)))
+		var top := -9.0
+		for p in tops:
+			top = maxf(top, ndc.call(p))
+		if top + ndc.call(Vector2(0.0, rim)) < 0.0:
+			lo = (lo + hi) * 0.5
+		else:
+			hi = (lo + hi) * 0.5
+	return (lo + hi) * 0.5
 
 
 func _dusk_again(lighting: Object) -> void:
@@ -431,6 +480,7 @@ func _dusk_again(lighting: Object) -> void:
 
 func _exit_tree() -> void:
 	_scatter_off(Rect2())
+	_frame_view(false)
 	if _atmosphere != null and is_instance_valid(_atmosphere):
 		for c: Dictionary in _atmosphere.atmosphere_changed.get_connections():
 			if (c["callable"] as Callable).get_object() == self:
