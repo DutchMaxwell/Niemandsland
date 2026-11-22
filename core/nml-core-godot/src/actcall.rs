@@ -3,7 +3,7 @@
 //! rules; the answer comes out as a plain dictionary (lines and landings included).
 use crate::plain;
 use godot::prelude::*;
-use nml_core::activation::{allowance, begin_check, check_move, delta_of, step_activation, ActStep, CastInput, Check, Drop, Input};
+use nml_core::activation::{allowance, begin_check, check_move, delta_of, step_activation, ActStep, CastInput, Check, ConsolidatePlan, Drop, Input};
 use nml_core::io::{Seams, SplitShot};
 use nml_core::landing::Landing;
 use nml_core::logline::LogLine;
@@ -91,6 +91,21 @@ fn cast_of(d: &VarDictionary) -> Option<CastInput> {
     })
 }
 
+/// meleefix: `{"t": "consolidate", "unit", "planner", "task", "marker", "lane", "spread", "runners"}`, one melee unit's planner
+/// inputs (`SoloController.consolidation_input`); `unit` is required, the rest default to none.
+pub(crate) fn consolidate_of(d: &VarDictionary) -> Option<ConsolidatePlan> {
+    let flag = |k: &str| d.get(k).is_some_and(|v| plain::flag(&v));
+    Some(ConsolidatePlan {
+        unit: plain::text(&d.get("unit")?),
+        planner: flag("planner"),
+        task: d.get("task").map_or(String::new(), |v| plain::text(&v)),
+        marker: d.get("marker").map_or(-1, |v| plain::int(&v)),
+        lane: flag("lane"),
+        spread: flag("spread"),
+        runners: d.get("runners").map_or(Vec::new(), |v| plain::any_array(&v).iter_shared().map(|n| plain::int(&n)).collect()),
+    })
+}
+
 fn input_of(v: &Variant) -> Option<Input> {
     let d = v.try_to::<VarDictionary>().ok()?;
     let field = |k: &str| d.get(k);
@@ -116,6 +131,8 @@ fn input_of(v: &Variant) -> Option<Input> {
             },
         },
         "cast" => Input::Cast(cast_of(&d)?),
+        // meleefix: `{"t": "consolidate", "unit", "planner", "task", "marker", "lane", "spread", "runners"}`; `unit` is required.
+        "consolidate" => Input::Consolidate(consolidate_of(&d)?),
         _ => return None,
     })
 }

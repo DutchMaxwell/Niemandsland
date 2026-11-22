@@ -25,7 +25,7 @@
 //! `RandomPCG` twin (GATE R, 6003/6003), and a tray face is one
 //! `randi_range(1, 6)` on it.
 
-use crate::activation::CastInput;
+use crate::activation::{CastInput, ConsolidatePlan};
 #[cfg(test)]
 use crate::combat::modified_hit_target;
 use crate::acts::{rule_on, EPOCH_73_V36};
@@ -70,6 +70,8 @@ pub struct Tray {
     /// The name the table calls the volley's target by when it is not the unit the dice resolve against: a lone hero's host
     /// ("X fires W at <host>"). Set by the volley around its resolve, `None` otherwise.
     aimed: Option<String>,
+    /// meleefix: the planner's consolidation inputs (`Tray::offer_consolidation`); empty = the core's own goal.
+    consolidate: Vec<ConsolidatePlan>,
 }
 
 impl Tray {
@@ -84,13 +86,13 @@ impl Tray {
     /// engine and what `GodotRng::new` mirrors; a negative seed must land on
     /// the same stream on both sides.
     pub fn seeded(seed: i64) -> Tray {
-        Tray { rng: GodotRng::new(seed), feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None }
+        Tray { rng: GodotRng::new(seed), feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None, consolidate: Vec::new() }
     }
 
     /// A tray that continues a generator already in flight — how a replay
     /// reaches a recorded position in the stream.
     pub fn from_rng(rng: GodotRng) -> Tray {
-        Tray { rng, feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None }
+        Tray { rng, feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None, consolidate: Vec::new() }
     }
 
     /// Re-seeds in place, as a second `seed_tray_rng` call would.
@@ -125,7 +127,7 @@ impl Tray {
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
         let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), interference_choices: Vec::new(), strike_back_choices: Vec::new(), choice_seq: 0, casts: Vec::new(), cast_refused: None };
-        Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None }
+        Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None, consolidate: Vec::new() }
     }
 
     /// The supplied feed, if this tray has one.
@@ -272,6 +274,17 @@ impl Tray {
         if let Some(feed) = self.feed.as_mut() {
             feed.casts = casts;
         }
+    }
+
+    /// meleefix: the planner's consolidation inputs, one per melee unit: the step path's `Input::Consolidate`, or a replay that
+    /// read them off the record's `consolidate` line. Nobody else offers any, so every other path keeps the core's own goal.
+    pub fn offer_consolidation(&mut self, plans: Vec<ConsolidatePlan>) {
+        self.consolidate = plans;
+    }
+
+    /// meleefix: the consolidation inputs offered for the unit keyed `key`; `None` when none was offered.
+    pub fn consolidation_of(&self, key: &str) -> Option<&ConsolidatePlan> {
+        self.consolidate.iter().find(|c| c.unit == key)
     }
 
     /// CC-5c/8b: the cast `seq` could not be resolved at this point (unhandled spell kind, or CC-6a hazard 2: an earlier

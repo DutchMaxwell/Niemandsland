@@ -3,7 +3,7 @@
 //! `activation::step_activation` rules; the answer comes out as a plain dict (lines and landings included).
 //! The seams are the Godot binding's `seams_for_step`; positions cross the seam through f32, as a Godot
 //! `Vector3` does, so the same transcript gives the same answer on both seams.
-use nmlcore::activation::{delta_of, step_activation, ActStep, CastInput, Input};
+use nmlcore::activation::{delta_of, step_activation, ActStep, CastInput, ConsolidatePlan, Input};
 use nmlcore::acts::Knobs;
 use nmlcore::io::Seams;
 use nmlcore::landing::Landing;
@@ -104,6 +104,19 @@ fn cast_of(o: &serde_json::Map<String, Value>) -> Option<CastInput> {
     })
 }
 
+/// meleefix: the Godot seam's `consolidate` entry, field for field (`unit` required); also the record's `consolidate` line plans.
+pub(crate) fn consolidate_of(o: &serde_json::Map<String, Value>) -> Option<ConsolidatePlan> {
+    Some(ConsolidatePlan {
+        unit: o.get("unit")?.as_str()?.to_string(),
+        planner: o.get("planner").and_then(Value::as_bool).unwrap_or(false),
+        task: o.get("task").and_then(Value::as_str).unwrap_or("").to_string(),
+        marker: o.get("marker").and_then(int).unwrap_or(-1),
+        lane: o.get("lane").and_then(Value::as_bool).unwrap_or(false),
+        spread: o.get("spread").and_then(Value::as_bool).unwrap_or(false),
+        runners: o.get("runners").and_then(Value::as_array).map_or(Some(Vec::new()), |a| a.iter().map(int).collect())?,
+    })
+}
+
 fn input_of(v: &Value) -> Option<Input> {
     let o = v.as_object()?;
     Some(match o.get("t")?.as_str()? {
@@ -122,6 +135,8 @@ fn input_of(v: &Value) -> Option<Input> {
             Input::Placed { at, trails }
         }
         "cast" => Input::Cast(cast_of(o)?),
+        // meleefix: the Godot seam's `consolidate` entry, field for field; `unit` is required.
+        "consolidate" => Input::Consolidate(consolidate_of(o)?),
         _ => return None,
     })
 }
