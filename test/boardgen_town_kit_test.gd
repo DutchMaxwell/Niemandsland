@@ -45,6 +45,9 @@ func test_every_piece_gets_one_module_where_the_procedural_one_stood() -> void:
 	assert_int(roofs).is_greater(0)
 	assert_int(_count(plan, "roof_") - _count(plan, "roof_rafters")).is_equal(roofs)
 	assert_int(_count(plan, "roof_rafters")).is_equal(_count(plan, "roof_broken"))   # a broken roof shows its frame
+	var broken := BoardgenTownDressing.roofs(layout).filter(func(r: Dictionary) -> bool: return r.get("damage", "whole") in ["holed", "collapsed"])
+	assert_int(_count(plan, "roof_broken")).is_equal(broken.size())   # (L2) the kit breaks exactly the roofs of the shared damage list (no hash of its own)
+	assert_int(_count(plan, "roof_broken_a")).is_equal(1)   # the collapsed one
 	assert_int(_count(plan, "chimney")).is_equal(BoardgenTownDressing.chimneys(layout).size())
 	assert_int(_count(plan, "merlon")).is_equal(BoardgenTownDressing.merlons(layout).size())
 	for m: String in plan:

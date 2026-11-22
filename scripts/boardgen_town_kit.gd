@@ -119,15 +119,8 @@ static func plan(layout: Dictionary) -> Dictionary:
 		for item: Dictionary in items:
 			add.call(m, item)
 	var gables := BoardgenTownDressing.roofs(layout).filter(func(r: Dictionary) -> bool: return r["type"] == "gable")   # hips and catslides have no module: the procedural meshes stay
-	var lowest := {}   # per half: the gable with the lowest hash breaks if none does by its own hash
 	for r: Dictionary in gables:
-		var h := BoardgenTownDressing._hash(r["lot"], r["half"], 7)
-		if not lowest.has(r["half"]) or h < BoardgenTownDressing._hash(lowest[r["half"]]["lot"], r["half"], 7):
-			lowest[r["half"]] = r
-	for r: Dictionary in gables:
-		var h := BoardgenTownDressing._hash(r["lot"], r["half"], 7)
-		var broken := h < BROKEN_ROOF_SHARE or int(lowest[r["half"]]["lot"]) == int(r["lot"])
-		var m := ("roof_broken_a" if h < BROKEN_ROOF_SHARE * 0.5 else "roof_broken_b") if broken else ("roof_sag_low" if float(r["height"]) < 2.1 else "roof_sag_steep")
+		var m: String = {"holed": "roof_broken_b", "collapsed": "roof_broken_a"}.get(r.get("damage", "whole"), "roof_sag_low" if float(r["height"]) < 2.1 else "roof_sag_steep")   # (L2) the broken roofs of the shared list
 		var tint := ROOF_SLATE if BoardgenTownDressing._hash(r["lot"], r["half"], 16) < 0.8 else ROOF_CLAY   # (roofs lane 22.11.: slate four in five, a dull clay one in five)
 		var yaw := float(r["yaw"]) + (0.0 if r["along_x"] else PI * 0.5) + (PI if BoardgenTownDressing._hash(r["lot"], r["half"], 8) < 0.5 else 0.0)   # the body's yaw and skew, as the procedural roofs have it
 		for st: Dictionary in BoardgenTownDressing.ridge_strips(r):   # (L1) a twin roof: one module per ridge, the damage on the first
