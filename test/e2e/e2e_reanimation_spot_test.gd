@@ -92,3 +92,37 @@ func test_a_revive_never_leaves_the_table() -> void:
 	assert_float(absf(_xz(u.models[1]).x) + r) \
 		.override_failure_message("the base hangs over the table edge at %s" % str(_xz(u.models[1]))) \
 		.is_less_equal(half.x)
+
+
+## REVIVE-MEMBERS (lead ruling): the army-book entry fires for a unit where all models have the rule, and a joined Hero
+## counts as part of the unit (Beginner's Guide 3.6). A host with plain Reanimation and a standing joined hero WITHOUT it:
+## no roll. The same hero WITH the rule: the chain rolls.
+func _host_and_hero(hero_rules: Array) -> GameUnit:
+	var host := _pair(Vector2.ZERO, Vector2(0.3, 0.0))
+	var hero := E2EBoot.make_unit(_main, 2, "Hero", [Vector3(-0.05, 0, 0)])
+	_main.opr_army_manager.game_units[hero.unit_id] = hero
+	hero.unit_properties["special_rules"] = hero_rules
+	hero.unit_properties["faction_folder"] = "robot_legions"
+	host.unit_properties["attached_heroes"] = [hero]
+	return host
+
+
+func _rolls() -> int:
+	var n := 0
+	for e in _main.battle_log.entries():
+		if str((e as Dictionary)["text"]).begins_with("Reanimation: Bots rolls"):
+			n += 1
+	return n
+
+
+func test_a_joined_hero_without_the_rule_stops_the_roll() -> void:
+	var host := _host_and_hero(["Hero"])
+	await _main._solo_try_reanimation(host)
+	assert_int(_rolls()).override_failure_message("rolled for a unit whose joined hero lacks the rule:\n%s" % _log_text()) \
+		.is_equal(0)
+
+
+func test_a_joined_hero_with_the_rule_lets_the_chain_roll() -> void:
+	var host := _host_and_hero(["Hero", "Reanimation"])
+	await _main._solo_try_reanimation(host)
+	assert_int(_rolls()).override_failure_message("planted: the chain must roll:\n%s" % _log_text()).is_equal(1)

@@ -7476,7 +7476,9 @@ static func rule_is_aura_granted(unit: GameUnit, rule_name: String) -> bool:
 ## The chain (unit + attached heroes) whose models Reanimation may restore RIGHT NOW.
 ## A LIVING aura carrier projects the rule over the whole chain ("this model and its unit"); without
 ## one, only members that own the base rule themselves qualify — so a fallen Re-Animator takes the
-## rule with him even though the import stamped "Reanimation" onto the unit. Empty = no reanimation.
+## rule with him even though the import stamped "Reanimation" onto the unit. REVIVE-MEMBERS (lead
+## ruling): the rule needs EVERY model of the unit to carry it, a joined hero included — a standing
+## member without its own rule means no reanimation for the chain. Empty = no reanimation.
 static func reanimation_members(unit: GameUnit) -> Array:
 	if unit == null:
 		return []
@@ -7495,6 +7497,8 @@ static func reanimation_members(unit: GameUnit) -> Array:
 		if member != null and has_exact_rule(member, REANIMATION_RULE) \
 				and not rule_is_aura_granted(member, REANIMATION_RULE):
 			out.append(member)
+		elif member != null and member.get_alive_count() > 0:
+			return []
 	return out
 
 
