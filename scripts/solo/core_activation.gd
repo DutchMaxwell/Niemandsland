@@ -1322,10 +1322,14 @@ static func _present(main, unit: GameUnit, target: GameUnit, shots: Array, st: D
 		elif st["open"]:
 			await main._solo_stage_phase(prev)
 		var shot: Dictionary = shots[mini(n, shots.size() - 1)]
-		var d: Dictionary = main._solo_shot_eligibility(shot["member"], shot["profile"], shot, target, false, st["moved"])
+		# The table's own reading (`_solo_resolve_ai_volley`): Indirect fire, own or granted, tests no sight line, so its cue
+		# draws no chalk tracer (deletion blocker before PLAN_FIRST_DELETION step 35).
+		var granted: bool = SoloController.granted_indirect_of(unit)
+		var d: Dictionary = main._solo_shot_eligibility(shot["member"], shot["profile"], shot, target, granted, st["moved"])
 		var pairs: Array = d["pairs"]
 		main._vfx_volley(shot["member"], target, shot["profile"],
-			pairs.slice(0, int(d["bearers"]) if int(d["bearers"]) >= 0 else pairs.size()), false)
+			pairs.slice(0, int(d["bearers"]) if int(d["bearers"]) >= 0 else pairs.size()),
+			bool((shot["profile"] as Dictionary).get("indirect", false)) or granted)
 		st.merge({"n": n + 1, "open": true}, true)
 	elif ev == "thrown" and kind == "defense":
 		var saves := AiCombatMath.count_blocks(faces, int(a["target"]), 0)
