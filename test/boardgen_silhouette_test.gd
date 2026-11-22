@@ -48,7 +48,7 @@ func test_a_wall_or_tower_cell_is_drawn_inside_its_cell_at_most_reach_in_thinner
 			assert_bool(lo.x >= r.position.x - EPS and lo.y >= r.position.y - EPS and hi.x <= r.end.x + EPS and hi.y <= r.end.y + EPS).override_failure_message("a wall piece leaves its cell").is_true()
 			var gap := maxf(maxf(lo.x - r.position.x, lo.y - r.position.y), maxf(r.end.x - hi.x, r.end.y - hi.y))
 			assert_float(gap).override_failure_message("a wall face %f in inside its collider" % gap).is_less_equal(BoardgenTownSilhouette.REACH_IN + EPS)
-			var top: float = layout["level_in"][layout["cells"][b["cell"]]["level"]]
+			var top: float = float(layout.get("tower_in", 12.0)) if layout["cells"][b["cell"]]["lot_kind"] == "Tower" else float(layout["level_in"][layout["cells"][b["cell"]]["level"]])   # (towers plan L1: a tall tower walks nobody, its top is tower_in)
 			if is_equal_approx(b["hi"].y, top):
 				assert_float(gap).is_less(EPS)   # the walk: the whole cell, at its exact height
 				caps[b["cell"]] = true
