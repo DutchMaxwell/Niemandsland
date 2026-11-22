@@ -550,7 +550,8 @@ void fragment() {
 			float lost = smoothstep(0.62, 0.7, fbm(vec2(p.x + p.z, p.y) * 0.9 + seed * 5.0)) * mix(0.25, 1.0, fire);
 			alb = mix(alb, vec3(0.045, 0.04, 0.036), 0.7 * smoothstep(0.5, 0.85, fire) * smoothstep(0.3, 0.6, patchy));   // a burnt roof is black in patches   // tile slip and missing patches showing the battens
 			alb = mix(alb, vec3(0.16, 0.11, 0.07) * (0.55 + 0.45 * step(0.5, fract(p.y / 0.35))), lost);
-			alb = mix(alb, vec3(0.20, 0.30, 0.11), 0.5 * moss * smoothstep(0.4, 0.7, patchy));
+			float north = smoothstep(0.2, 0.7, p.z >= 0.0 ? wnrm.z : -wnrm.z);   // (roofsLook L4) the slope facing its half's own board edge - north in the north half, folded like the story
+			alb = mix(alb, vec3(0.20, 0.30, 0.11), 0.5 * max(moss, 0.7 * north) * smoothstep(0.4, 0.7, patchy));   // moss on the shade side and on the north slopes (target C)
 		}
 	}
 	if (wnrm.y > 0.5 && k != 15 && k != 17 && k != 2) {

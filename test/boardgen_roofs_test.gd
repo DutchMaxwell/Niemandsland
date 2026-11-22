@@ -60,8 +60,8 @@ func test_a_board_has_several_kinds_of_roof_and_a_catslide_hangs_towards_the_bac
 			var lot: Dictionary = layout["lots"][int(r["lot"]) - 1]
 			assert_int(r["back"]).is_equal(-1 if lot["z"] < 7 else 1)   # the north side's back is the north (-z), the south side's the south (+z) ... away from the street
 	assert_int(rooflines.size()).is_greater_equal(4)
-	var core: Object = ClassDB.instantiate("NmlCore")   # (L1: this street's lots are all two cells deep, so its eaves-on roofs are twin gables; the kinds are counted on real boards)
-	for s in range(1, 21):
+	var core: Object = ClassDB.instantiate("NmlCore")   # (L1: this street's lots are all two cells deep, so its eaves-on roofs are twin gables; the kinds are counted on real boards:
+	for s in range(1, 61):   # catslides need a roof one cell wide AND eaves-on: 8 of 518 main roofs on boards 1-60)
 		for r: Dictionary in BoardgenTownDressing.roofs(core.boardgen_layout_themed(s, "ruintown")):
 			types[r["type"]] = true
 	assert_int(types.size()).is_equal(3)
@@ -193,3 +193,74 @@ func test_a_twin_roof_is_two_one_cell_strips_side_by_side() -> void:
 		assert_float(gap.length()).is_equal_approx((float(r["width"]) - 2.0 * BoardgenTownDressing.OVERHANG_IN) / float(r["ridges"]), 0.001)
 		assert_float(float(strips[0]["width"])).is_equal_approx(3.0 + 2.0 * BoardgenTownDressing.OVERHANG_IN, 0.001)
 	assert_int(seen).is_greater(0)
+
+
+## The 8 corners of a damage box (board inches), with the same basis the build gives it.
+func _corners(b: Dictionary) -> Array[Vector3]:
+	var basis := Basis(Vector3.UP, b["yaw"]) * Basis(Vector3.RIGHT, -float(b["pitch"]))
+	var out: Array[Vector3] = []
+	for i in 8:
+		out.append(b["centre"] + basis * ((Vector3(i & 1, (i >> 1) & 1, (i >> 2) & 1) - Vector3.ONE * 0.5) * b["size"]))
+	return out
+
+
+## (L2, target C: 9 of 17 roofs broken) Over town boards 1-40: a third to a half of the main roofs are broken per board on average (each board 20-67 %: at most half, bar the two every board has), every board half has
+## one, exactly one per board is collapsed to its rafters, and no two roofs whose lots touch show the same damage (holed / sagged / collapsed). Deterministic. Red on the parent: no damage.
+func test_broken_roofs_one_in_two_to_three_one_collapsed_never_the_same_beside_each_other() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var shares := PackedFloat64Array()
+	for s in range(1, 41):
+		var layout: Dictionary = core.boardgen_layout_themed(s, "ruintown")
+		var mains := BoardgenTownDressing.roofs(layout).filter(func(r: Dictionary) -> bool: return not r["annex"])
+		var broken := mains.filter(func(r: Dictionary) -> bool: return r.get("damage", "whole") != "whole")
+		shares.append(float(broken.size()) / mains.size())
+		assert_float(shares[-1]).override_failure_message("seed %d: %d of %d roofs broken" % [s, broken.size(), mains.size()]).is_between(0.2, 0.67)
+		assert_int(mains.filter(func(r: Dictionary) -> bool: return r["damage"] == "collapsed").size()).is_equal(1)
+		for half in 2:
+			assert_bool(broken.any(func(r: Dictionary) -> bool: return r["half"] == half)).override_failure_message("seed %d half %d: no broken roof" % [s, half]).is_true()
+		for r: Dictionary in broken:
+			assert_str(r["type"]).is_equal("gable")
+			for q: Dictionary in broken:
+				if q != r and (q["rect"] as Rect2i).grow(1).intersects(r["rect"]):
+					assert_str(q["damage"]).override_failure_message("seed %d: lots %d and %d touch and are both %s" % [s, r["lot"], q["lot"], r["damage"]]).is_not_equal(r["damage"])
+		assert_array(BoardgenTownDressing.roofs(layout)).is_equal(BoardgenTownDressing.roofs(layout))
+	var mean := 0.0
+	for x in shares:
+		mean += x / shares.size()
+	print("L2 BROKEN share mean %.3f, boards %.2f-%.2f" % [mean, Array(shares).min(), Array(shares).max()])
+	assert_float(mean).is_between(0.33, 0.5)
+
+
+## (L2, D-R3) Nothing of a broken roof is over standing room: every timber box (rafter, ridge beam, batten) lies with all 8 corners over a cell of its own lot, an intact house
+## (Roofed = solid, nobody stands in or on it); every tile piece lies within the roof's own overhang. A holed roof shows 3+ rafters, a sagged one two pieces. Town boards 1-40.
+func test_no_part_of_a_broken_roof_leaves_the_solid_cells_of_its_house() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var counts := {}
+	for s in range(1, 41):
+		var layout: Dictionary = core.boardgen_layout_themed(s, "ruintown")
+		var nx: int = layout["nx"]
+		var cell_in := float(layout["cell_in"])
+		var half_board := Vector2(nx, layout["nz"]) * cell_in * 0.5
+		for r: Dictionary in BoardgenTownDressing.roofs(layout):
+			for st: Dictionary in BoardgenTownDressing.ridge_strips(r):
+				var parts := BoardgenTownDressing.roof_parts(st)
+				var state: String = st.get("damage", "whole") if st["strip"] == 0 else "whole"
+				counts[state] = int(counts.get(state, 0)) + 1
+				var rect := Rect2(Vector2(r["rect"].position) * cell_in - half_board, Vector2(r["rect"].size) * cell_in)
+				for b: Dictionary in parts[1]:
+					for c: Vector3 in _corners(b):
+						var at := Vector2(c.x, c.z)
+						if b["kind"] == "roof":
+							assert_bool(rect.grow(BoardgenTownDressing.OVERHANG_IN + 0.45).has_point(at)).override_failure_message("seed %d lot %d: a tile piece at %s" % [s, r["lot"], at]).is_true()
+							continue
+						var cell := Vector2i(((at + half_board) / cell_in).floor())
+						var cd: Dictionary = layout["cells"][cell.y * nx + cell.x]
+						assert_bool(cd["lot_id"] == r["lot"] and cd["lot_kind"] == "Roofed" and rect.grow(-0.2).has_point(at)).override_failure_message("seed %d lot %d: %s box corner %s over cell %s (%s)" % [s, r["lot"], state, at, cell, cd["lot_kind"]]).is_true()
+				if state in ["holed", "collapsed"]:
+					assert_int(parts[1].filter(func(b: Dictionary) -> bool: return b["kind"] == "wood").size()).is_greater_equal(3 + 1 + 2)
+				elif state == "sagged":
+					assert_int(parts[0].size()).is_equal(2)
+				else:
+					assert_array(parts[0]).is_equal([st])
+	print("L2 STRIPS %s" % counts)
+	assert_int(counts.get("collapsed", 0)).is_equal(40)

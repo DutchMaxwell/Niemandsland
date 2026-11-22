@@ -193,10 +193,14 @@ func test_an_intact_house_gets_a_roof_over_its_body_and_the_halves_vary_the_pitc
 	var drawn := 0
 	for n in ["Roofs", "RoofsHip", "RoofsCatslide"]:
 		drawn += (node.find_child(n, false, false) as MultiMeshInstance3D).multimesh.instance_count
-	var pieces := 0   # (L1) every planned roof is in one of the three type meshes: one prism per ridge strip
+	var pieces := 0   # (L1 / L2) every planned roof is in one of the three type meshes: one prism per ridge strip, a broken strip as its pieces
+	var boxes := 0
 	for rf: Dictionary in roofs:
-		pieces += BoardgenTownDressing.ridge_strips(rf).size()
+		for st: Dictionary in BoardgenTownDressing.ridge_strips(rf):
+			pieces += BoardgenTownDressing.roof_parts(st)[0].size()
+			boxes += BoardgenTownDressing.roof_parts(st)[1].size()
 	assert_int(drawn).is_equal(pieces)
+	assert_int((node.find_child("RoofDamage", false, false) as MultiMeshInstance3D).multimesh.instance_count).is_equal(boxes)
 	assert_int(node.find_children("*", "CollisionShape3D", true, false).size()).is_equal(0)   # nobody stands on a roof
 	var differing := 0
 	for id in range(1, 40):

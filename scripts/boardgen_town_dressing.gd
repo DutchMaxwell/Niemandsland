@@ -10,6 +10,7 @@ const BODY_IN := 2.5   # the intact house's body: the core's solid height
 const OVERHANG_IN := 0.3
 const CHIMNEY_IN := 0.62
 const PITCH_DEG := Vector2(50.0, 58.0)   # (L1, target C: steep roofs) the pitch range of a main roof over its ridge's half width
+const SAG_DEG := 2.5   # (L2) a sagged roof: each half dips this much towards the middle of its ridge
 const RIDGE_MAX_IN := 4.9   # (L1) no drawn ridge above this: the sight plan's look guard (S4) brackets the rule height 4.5 in with 4.3-4.9
 const MAX_LIGHTS := 14   # 8 before the outer streets got their lamps (silhouette round 21.11.); only the SHADOWED_LANTERNS nearest the centre cast shadows
 const LANTERN_COLOUR := Color(1.0, 0.74, 0.48)
@@ -144,7 +145,7 @@ static func roofs(layout: Dictionary) -> Array[Dictionary]:
 		var height := minf(tan(deg_to_rad(PITCH_DEG.x + (PITCH_DEG.y - PITCH_DEG.x) * _hash(id, half, 2))) * (across / ridges * 0.5 + OVERHANG_IN), RIDGE_MAX_IN - float(look["top"]))
 		var yaw: float = look["yaw"] + (2.0 * _hash(id, half, 10) - 1.0) * deg_to_rad(2.0)
 		var roof := {"lot": id, "centre": centre, "length": run + 2.0 * OVERHANG_IN, "width": across + 2.0 * OVERHANG_IN, "height": height, "along_x": along_x, "half": half,
-			"yaw": yaw, "eaves": look["top"], "type": type, "back": back, "annex": false, "ridges": ridges}
+			"yaw": yaw, "eaves": look["top"], "type": type, "back": back, "annex": false, "ridges": ridges, "rect": Rect2i(lot["x"], lot["z"], lot["w"], lot["h"])}
 		if run >= 2.0 * cell_in and _hash(id, half, 11) < 0.4:
 			var end := 1.0 if _hash(id, half, 12) < 0.5 else -1.0
 			var shift := Vector2(end, 0.0) if along_x else Vector2(0.0, end)
@@ -153,7 +154,85 @@ static func roofs(layout: Dictionary) -> Array[Dictionary]:
 			roof.merge({"centre": centre - shift * cell_in * 0.5, "length": run - cell_in + 2.0 * OVERHANG_IN}, true)
 			out.append(annex)
 		out.append(roof)
+	_damage(out)
 	return out
+
+
+## (L2) Which main roofs are BROKEN, one list the kit and the procedural path both read: by the lot's hash a quarter holed and an eighth sagged; the first roof of each board half
+## (lowest hash) at least holed, the board's lowest COLLAPSED to its rafters on one slope; a roof never shows the damage of a roof whose lot touches its own (holed <-> sagged, else
+## whole), and never more than half of them (bar those two). A broken roof is a gable. `end` / `side` = the end of the ridge and the slope the hole takes, `frac` = how much of the ridge. Annexes stay whole.
+static func _damage(out: Array[Dictionary]) -> void:
+	var mains := out.filter(func(r: Dictionary) -> bool: return not r["annex"])
+	mains.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return _hash(a["lot"], a["half"], 7) < _hash(b["lot"], b["half"], 7))
+	var first := {}
+	var broken := 0
+	var done: Array[Dictionary] = []
+	for i in mains.size():
+		var r: Dictionary = mains[i]
+		var h := _hash(r["lot"], r["half"], 7)
+		var forced := i == 0 or not first.has(r["half"])
+		var state := "collapsed" if i == 0 else ("holed" if forced or h < 0.25 else ("sagged" if h < 0.375 else "whole"))
+		if not forced and broken >= mains.size() * 0.5:
+			state = "whole"   # never more than half of a board's roofs (bar the two every board has)
+		first[r["half"]] = true
+		var near := done.filter(func(d: Dictionary) -> bool: return (d["rect"] as Rect2i).grow(1).intersects(r["rect"])).map(func(d: Dictionary) -> String: return d["damage"])
+		if state != "whole" and near.has(state):
+			state = "sagged" if state != "sagged" and not near.has("sagged") else ("holed" if not near.has("holed") else "whole")
+		r.merge({"damage": state, "end": signf(_hash(r["lot"], r["half"], 17) - 0.5), "side": signf(_hash(r["lot"], r["half"], 18) - 0.5),
+			"frac": 0.9 if state == "collapsed" else 0.3 + 0.2 * _hash(r["lot"], r["half"], 19), "type": "gable" if state != "whole" else r["type"]}, true)
+		broken += int(state != "whole")
+		done.append(r)
+
+
+## (L2) What one ridge strip is drawn as: [prism pieces (roof dicts; `tilt` = a roll about the cross axis), boxes {centre (Vector3, board inches), size, yaw, pitch, kind}]. Whole: itself.
+## HOLED (COLLAPSED: over 90 % of the ridge): the prism stays over the rest; over the hole one slope keeps its tiles, the other shows three tile courses stepping back raggedly from the
+## prism, the ridge beam, a rafter every ~0.6 in at the pitch and two battens. SAGGED: two prism halves dipping SAG_DEG to the middle and two slipped tile patches. Every timber box
+## stays 0.45 in inside the lot's own (solid) cells, tile pieces inside the roof's overhang: nothing over standing room. Only a roof's first strip breaks. Pure data.
+static func roof_parts(r: Dictionary) -> Array:
+	var state: String = r.get("damage", "whole") if int(r.get("strip", 0)) == 0 else "whole"
+	var pieces: Array[Dictionary] = [r]
+	var boxes: Array[Dictionary] = []
+	if state == "whole":
+		return [pieces, boxes]
+	var a := float(r["yaw"]) + (0.0 if r["along_x"] else PI * 0.5)
+	var l := float(r["length"])
+	var w := float(r["width"]) * 0.5
+	var h := float(r["height"])
+	var e := float(r["eaves"])
+	var th := atan2(h, w)
+	var side := float(r["side"])
+	var o := Vector3(r["centre"].x, 0.0, r["centre"].y)
+	var box := func(u: float, y: float, v: float, size: Vector3, pitch: float, kind: String) -> Dictionary:
+		return {"centre": o + Vector3(u, y, v).rotated(Vector3.UP, a), "size": size, "yaw": a, "pitch": pitch, "kind": kind}
+	if state == "sagged":
+		var sag := deg_to_rad(SAG_DEG)
+		pieces = []
+		for s: float in [-1.0, 1.0]:
+			pieces.append(r.merged({"centre": r["centre"] + Vector2(s * l * 0.25, 0.0).rotated(-a), "length": l * 0.5, "tilt": s * sag, "eaves": e - sin(sag) * l * 0.25}, true))
+			boxes.append(box.call((0.5 - _hash(r["lot"], r["half"], 20 + int(s))) * l * 0.6, e + h * 0.5 - 0.03, s * w * 0.5, Vector3(0.6, 0.05, 0.45), -s * th, "roof"))   # a slipped patch
+		return [pieces, boxes]
+	var end := float(r["end"])
+	var lh := l * float(r["frac"])
+	var ub := end * (l * 0.5 - lh)   # where the prism stops and the hole begins
+	pieces = [r.merged({"centre": r["centre"] - Vector2(end * lh * 0.5, 0.0).rotated(-a), "length": l - lh}, true)]
+	var slope := sqrt(h * h + w * w)
+	boxes.append(box.call(ub + end * lh * 0.5, e + h * 0.5, -side * w * 0.5, Vector3(lh, 0.06, slope), side * th, "roof"))   # the slope that kept its tiles
+	for k in 3:   # the ragged edge: three courses, the lowest reaching furthest into the hole
+		var p: float = lh * [0.5, 0.3, 0.12][k] * (0.6 + 0.8 * _hash(r["lot"], r["half"], 21 + k)) * (0.4 if state == "collapsed" else 1.0)
+		var t := (k + 0.5) / 3.0
+		boxes.append(box.call(ub + end * p * 0.5, e + h * t, side * w * (1.0 - t), Vector3(p, 0.06, slope / 3.0), -side * th, "roof"))
+	var u0 := end * maxf(l * 0.5 - lh + 0.15, OVERHANG_IN + 0.45 - l * 0.5)   # the timber starts just past the prism, never nearer the far end than its inset
+	var u1 := end * (l * 0.5 - OVERHANG_IN - 0.45)
+	var span := absf(u1 - u0)
+	var reach := w - OVERHANG_IN - 0.45   # how far a rafter runs down from the ridge: inside the house's cells
+	var n := clampi(int(span / 0.6) + 1, 3, 9)
+	for i in n:
+		boxes.append(box.call(lerpf(u0, u1, float(i) / (n - 1)), e + h * (1.0 - reach * 0.5 / w) - 0.08, side * reach * 0.5, Vector3(0.13, 0.13, reach / cos(th)), -side * th, "wood"))
+	boxes.append(box.call((u0 + u1) * 0.5, e + h - 0.08, 0.0, Vector3(span, 0.12, 0.12), 0.0, "wood"))   # the bare ridge beam
+	for t: float in [0.45, 0.75]:
+		var bl := span * (0.55 + 0.45 * _hash(r["lot"], r["half"], int(t * 100.0)))
+		boxes.append(box.call(u0 + end * bl * 0.5, e + h * t, side * w * (1.0 - t), Vector3(bl, 0.05, 0.09), 0.0, "wood"))   # battens across the hole
+	return [pieces, boxes]
 
 
 ## (L1) The parallel gable strips a roof is drawn as: a copy of it per ridge (`strip` 0, 1, ...), each one cell wide plus the overhang, side by side across the ridge. Pure data.
@@ -741,10 +820,15 @@ static func catslide_mesh() -> ArrayMesh:
 ## The roofs in one MultiMesh PER TYPE (gable, hip, catslide: "Roofs", "RoofsHip", "RoofsCatslide") with the board's material (the kind "roof" in its instance data).
 func build(layout: Dictionary, material: Material, prism_roofs := true, timber: Dictionary = {}) -> void:   # prism_roofs false: BoardgenTownKit draws the gable roofs (hip and catslide have no module: they stay procedural)
 	var list: Array[Dictionary] = []
+	var damage: Array = []
 	for r: Dictionary in roofs(layout):
-		list.append_array(ridge_strips(r))   # (L1) a twin roof is two prisms
-	if not prism_roofs:
-		list = list.filter(func(r: Dictionary) -> bool: return r["type"] != "gable")
+		for st: Dictionary in ridge_strips(r):   # (L1) a twin roof is two prisms; (L2) a broken one its pieces and its timber
+			if prism_roofs or st["type"] != "gable":
+				var parts := roof_parts(st)
+				list.append_array(parts[0])
+				for b: Dictionary in parts[1]:
+					damage.append([Basis(Vector3.UP, b["yaw"]) * Basis(Vector3.RIGHT, -float(b["pitch"])) * Basis.from_scale(b["size"] * INCHES_TO_METERS), b["centre"] * INCHES_TO_METERS,
+						Color(BoardgenTheme.TOWN_KINDS.find(b["kind"]), b["size"].x, b["size"].y, b["size"].z)])
 	var meshes := {"gable": [prism_mesh(), "Roofs"], "hip": [hip_mesh(), "RoofsHip"], "catslide": [catslide_mesh(), "RoofsCatslide"]}
 	var kind := float(BoardgenTheme.TOWN_KINDS.find("roof"))
 	for type: String in meshes:
@@ -756,7 +840,7 @@ func build(layout: Dictionary, material: Material, prism_roofs := true, timber: 
 		mm.instance_count = of.size()
 		for i in of.size():
 			var r: Dictionary = of[i]
-			var basis := Basis.from_scale(Vector3(r["length"], r["height"], r["width"]) * INCHES_TO_METERS)
+			var basis := Basis(Vector3.BACK, float(r.get("tilt", 0.0))) * Basis.from_scale(Vector3(r["length"], r["height"], r["width"]) * INCHES_TO_METERS)
 			if type == "catslide" and r["back"] > 0:
 				basis = Basis(Vector3.UP, PI) * basis   # the mesh's long slope is on -z: half a turn puts it on the back (a mirror would flip the faces)
 			if not r["along_x"]:
@@ -770,6 +854,7 @@ func build(layout: Dictionary, material: Material, prism_roofs := true, timber: 
 		mmi.multimesh = mm
 		mmi.material_override = material
 		add_child(mmi)
+	BoardgenTownSilhouette._multimesh(self, "RoofDamage", BoxMesh.new(), damage, material)   # (L2) one more draw: tile courses and timber of the broken roofs
 	_add_bodies(layout, material)
 	BoardgenTownSilhouette.build(self, layout, material, timber)   # (timber: the ruined lots whose gables the kit draws in timber, BoardgenTownFrames)
 	_add_lights(layout)
