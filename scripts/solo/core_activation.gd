@@ -400,6 +400,7 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 			# P4.D-48: a melee line carries "{cite}" where the table cites its rules book (the core holds no book version).
 			main._log_rule_event(int(line["category"]), str(line["text"]).replace("{cite}",
 				OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))), ai, str(line["detail"]))
+			_note_start_twice(main, unit, str(line["text"]))
 		printed = maxi(printed, lines.size())
 		await land_step(main, unit, r.get("landings", []), start_models, landed)
 		if not cx.is_empty() and bool(cx["pre_due"]):
@@ -749,6 +750,16 @@ static func _cast_leg_end(main, cx: Dictionary) -> void:
 
 ## Step 43: the AI volleys the core resolved and the ones it refused (the AI smoke resets and reads them).
 static var ai_runs := 0
+
+
+## G1' gate `start_twice` (D-PAR3): the core rolled a Reanimation pool for a unit the table already reanimated this round
+## (`reanimated_round`, main.gd `_solo_try_reanimation`). Counted in the census as legacy["start"]["twice"].
+static func _note_start_twice(main, unit: GameUnit, text: String) -> void:
+	if text.begins_with("Reanimation: ") and text.contains(" rolls ") \
+			and int(unit.unit_properties.get("reanimated_round", -1)) == int(main.opr_army_manager.current_round):
+		var d: Dictionary = legacy.get("start", {})
+		d["twice"] = int(d.get("twice", 0)) + 1
+		legacy["start"] = d
 ## Test seam (D-PAR3 15a): false leaves `paid{start}` out of the AI transcript - the control that shows the double pool roll it prevents.
 static var start_paid_input := true
 static var ai_refusals := 0
