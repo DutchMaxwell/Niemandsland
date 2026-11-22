@@ -26308,3 +26308,4 @@ func _solo_split_from_last_model(unit: GameUnit, anchor: ModelInstance) -> void:
 		var member := rules[rule] as GameUnit
 		var reach := float(RulesRegistry.unit_param(member, "Split", "place_in", 0))
 		await _solo_create_rule_unit(member, anchor, rule, reach, "split")
+# ci3270 plant C: comment only
