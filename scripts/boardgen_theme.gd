@@ -17,7 +17,7 @@ const TOWN_KINDS := ["ground", "street", "hazard", "tier1", "tier2", "ladder", "
 const TOWN_PALETTE := [Color(0.43, 0.42, 0.40), Color(0.50, 0.52, 0.56), Color(0.13, 0.20, 0.30), Color(0.66, 0.60, 0.48),
 		Color(0.84, 0.78, 0.64), Color(0.38, 0.22, 0.10), Color(0.60, 0.61, 0.64), Color(0.40, 0.40, 0.40), Color(0.58, 0.44, 0.30),
 		Color(0.88, 0.88, 0.86), Color(0.66, 0.64, 0.58), Color(0.30, 0.46, 0.22), Color(0.64, 0.64, 0.60), Color(0.88, 0.82, 0.70),
-		Color(0.55, 0.50, 0.45), Color(0.72, 0.36, 0.26), Color(0.62, 0.34, 0.26), Color(1.0, 0.72, 0.36), Color(0.52, 0.36, 0.20)]
+		Color(0.55, 0.50, 0.45), Color(0.72, 0.36, 0.26), Color(0.44, 0.31, 0.26), Color(1.0, 0.72, 0.36), Color(0.52, 0.36, 0.20)]
 ## The authored T-R1 surface sets the town shader can read (library set -> shader suffix), in the order of the shader's `t_on`: coursed stone, plaster, timber, earth. The theme key of
 ## TiefwerkLibrary / BoardgenKit for the town.
 const TOWN_LIBRARY := "ruintown"

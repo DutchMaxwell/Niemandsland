@@ -139,10 +139,11 @@ vec3 wood_of(float lot) {
 	return k < 0.5 ? vec3(0.07, 0.05, 0.04) : (k < 1.5 ? vec3(0.30, 0.28, 0.25) : vec3(0.20, 0.12, 0.07));
 }
 
-// The four roofs of the town (plan R4b), picked by the lot's hash: two slates, a dull clay, a mossy clay.
+// The five roofs of the town (plan R4b; roofs lane 22.11., target C: weathered slate and grey-brown shingle, at most one roof in five a dull brick-brown clay, never orange),
+// picked by the lot's hash, all in the wall stone's value range.
 vec3 roof_of(float lot, vec3 clay) {
-	float k = floor(fract(lot * 5.0) * 3.999);
-	return k < 0.5 ? vec3(0.30, 0.32, 0.36) : (k < 1.5 ? mix(clay, vec3(0.3, 0.29, 0.28), 0.5) : (k < 2.5 ? vec3(0.27, 0.29, 0.33) : mix(clay * 0.85, vec3(0.28, 0.38, 0.20), 0.4)));   // (train 3, H2: two slates, a dull clay, a mossy clay - no toy red)
+	float k = floor(fract(lot * 5.0) * 4.999);
+	return k < 0.5 ? vec3(0.26, 0.27, 0.30) : (k < 1.5 ? vec3(0.23, 0.245, 0.27) : (k < 2.5 ? vec3(0.27, 0.25, 0.23) : (k < 3.5 ? mix(vec3(0.25, 0.24, 0.22), vec3(0.22, 0.27, 0.18), 0.35) : vec3(0.30, 0.22, 0.18))));
 }
 
 // Half-timber with a grammar (plan R4a), one 3 in cell wide and one 3 in storey high: a sill beam, a mid rail and a top plate; posts every 0.75 in; an opening (a window between two posts
@@ -344,8 +345,8 @@ void fragment() {
 		float along = abs(wnrm.x) > abs(wnrm.z) ? p.z : p.x;
 		float row = floor(p.y / TILE_H);
 		float tile = floor(along / TILE_W + row * 0.5);
-		vec3 base = tint * mix(0.7, 1.15, h21(vec2(tile, row + seed)));
-		vec3 laid = base * mix(0.62, 1.0, smoothstep(0.0, 0.7, fract(p.y / TILE_H))) * mix(1.0, 0.8, smoothstep(0.55, 0.7, fbm(vec2(along, p.y) * 1.3 + seed)));
+		vec3 base = tint * mix(0.8, 1.05, h21(vec2(tile, row + seed)));   // (roofs lane 22.11.: a narrower tone per tile, no bright stripes)
+		vec3 laid = base * mix(0.7, 1.0, smoothstep(0.0, 0.7, fract(p.y / TILE_H))) * mix(1.0, 0.8, smoothstep(0.55, 0.7, fbm(vec2(along, p.y) * 1.3 + seed)));
 		alb = mix(tint * 0.82, laid, keep(p.y, TILE_H));   // 0.16 x 0.13 in tiles: the mean below ~3 px
 		rel = mix(0.5, fract(p.y / TILE_H) * (0.8 + 0.2 * h21(vec2(tile, row))), keep(p.y, TILE_H));   // every row of tiles is a step: a line of shadow under each
 		alb = grit_roof(alb, tile, row, seed, ground_at(p.xz - wnrm.xz * 0.2).b, vec2(along, p.y), keep(p.y, TILE_H), rel);   // (plan W3)
