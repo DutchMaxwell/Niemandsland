@@ -19,7 +19,7 @@ const PLOT_BRAMBLES := ["bramble_a", "bramble_b"]
 const TURRET_YAW := [0.0, -PI * 0.5, PI, PI * 0.5]
 ## The share of towers that carry a heavy charred cap frame (lead 21.11.: fewer - the thin frames read as scaffolding when a third of the towers had one).
 const BURNT_CAP_SHARE := 0.12
-const LAMP_MODULES := ["lantern_post", "lantern_glow"]
+const LAMP_MODULES := ["lantern_post", "lantern_glow"]   # (the modules that must be cached to replace the lamp boxes; the plan draws lantern_post_iron - lane townC4: an iron post with a bracket and a caged lantern - and the kit falls back to lantern_post while it is not cached)
 ## The fences of a garden plot (kit batch A7, PLOT-EDGE): a straight 3 in run, a run with a 1 in gap (the hurdle lying in the bed), a corner of two arms. One style per plot.
 const FENCE_STYLES := [["fence_wattle", "fence_wattle_gap", "fence_wattle_corner"], ["fence_plank", "fence_plank_gap", "fence_plank_corner"]]
 ## The corner piece's yaw for two fenced sides that meet (side, side + 1; sides N, E, S, W): its arms run along local +x and +z from the plot corner.
@@ -58,7 +58,7 @@ static func plan(layout: Dictionary) -> Dictionary:
 	for l: Dictionary in BoardgenTownDressing.lanterns(layout):
 		var at: Vector2 = l["at"]
 		var yaw := BoardgenTownDressing._hash(int(at.x * 7.0), int(at.y * 7.0), 72) * TAU
-		_add(out, "lantern_post", _item(yaw, Vector3(at.x, 0.0, at.y)))
+		_add(out, "lantern_post_iron", _item(yaw, Vector3(at.x, 0.0, at.y)))
 		var glass := _item(yaw, Vector3(at.x, BoardgenTownDressing.LANTERN_HEIGHT_IN, at.y))
 		glass["xf"] = Transform3D(glass["xf"].basis.scaled(Vector3.ONE * 0.8), glass["xf"].origin)   # a little inside the cage, so the iron bars stand in front of the glass
 		_add(out, "lantern_glow", glass)   # the glass at the head, where the light is (its origin is its middle: at the foot it read as a white base)
