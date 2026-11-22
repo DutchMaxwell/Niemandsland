@@ -219,3 +219,15 @@ func test_fences_signs_and_flat_debris_cast_no_shadow() -> void:
 		assert_bool(BoardgenTownKit.casts_shadow(m)).override_failure_message("%s casts a shadow" % m).is_false()
 	for m in ["cart_toppled", "barricade", "roof_gable_low", "barrel"]:
 		assert_bool(BoardgenTownKit.casts_shadow(m)).is_true()
+
+
+## ROOF-WARM (lane townC4, 22.11.): with the staged kit the clay set's own hue fell into the warm class whatever the tint (seed 41 play board warm 10.6 %). The kit roofs draw
+## no albedo texture - their tone is TINT x the instance colour (slate / dull clay) - and the textured timber is tinted toward weathered grey, never warmer than the set.
+func test_kit_roofs_draw_no_clay_texture_and_timber_leans_grey() -> void:
+	var src := FileAccess.get_file_as_string("res://scripts/boardgen_town_kit.gd")
+	assert_bool(src.contains("mat.albedo_texture = null")).override_failure_message("the kit roofs still draw the terracotta texture").is_true()
+	assert_bool(src.contains("(TEXTURED_TINT if mat != null and mat.albedo_texture != null else TINT)")).override_failure_message("a textureless roof must take the plain TINT").is_true()
+	var t: Color = BoardgenTownKit.TEXTURED_TINT["timber"]
+	assert_bool(t.r < t.b).override_failure_message("the textured timber tint %s pushes the brown" % t).is_true()
+	for inst: Color in [BoardgenTownKit.ROOF_SLATE, BoardgenTownKit.ROOF_CLAY]:
+		assert_float((BoardgenTownKit.TINT["roof_tiles"] * inst).s).is_less_equal(0.35)

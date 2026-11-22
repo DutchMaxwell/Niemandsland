@@ -25,7 +25,7 @@ const MODULES := ["roof_gable_low", "roof_gable_steep", "roof_broken_a", "roof_b
 	"merlon", "merlon_broken", "rubble_a", "rubble_b", "rubble_c"]
 const TINT := {"roof_tiles": Color(0.44, 0.38, 0.35), "timber": Color(0.42, 0.30, 0.20), "coursed_stone": Color(0.62, 0.58, 0.52), "none": Color.WHITE}
 ## The instance colour on a textured module: warms the dark clay tiles towards the town's red roofs, cools the stone towards the wall's grey.
-const TEXTURED_TINT := {"roof_tiles": Color(0.6, 0.76, 0.92), "timber": Color(1.0, 1.0, 1.0), "coursed_stone": Color(0.62, 0.68, 0.76), "none": Color.WHITE}
+const TEXTURED_TINT := {"roof_tiles": Color(0.6, 0.76, 0.92), "timber": Color(0.84, 0.9, 1.0), "coursed_stone": Color(0.62, 0.68, 0.76), "none": Color.WHITE}
 ## The authored clutter of BoardgenTownClutter (batches A2 / A2b / A6): the texture set each module is drawn with (the rest is "none": the kit's vertex colours, real colours for plants and cloth).
 const CLUTTER_SET := {"tower_cap_burnt": "timber", "barrel": "timber", "crate": "timber", "bucket": "timber", "woodpile": "timber", "barrel_broken": "timber", "crate_broken": "timber", "cart_wreck": "timber", "loose_wheel": "timber",
 	"splinters_flat": "timber", "trough": "coursed_stone", "debris_flat_a": "coursed_stone", "debris_flat_b": "coursed_stone",
@@ -246,6 +246,7 @@ func build(layout: Dictionary) -> void:
 			mat.uv1_triplanar = false
 			mat.uv1_scale = Vector3.ONE * ROOF_UV_TILE_IN / lib.tile_in("roof_tiles")
 			mat.normal_enabled = false   # the GLB has no tangents; the course lips are the relief
+			mat.albedo_texture = null   # (ROOF-WARM, lane townC4) the clay set's own hue fell into the warm class whatever the tint: the roofs take their tone from TINT x the instance colour (slate / dull clay), the course lips and the baked AO carry the relief
 		mmi.material_override = mat
 		for i in mmi.multimesh.instance_count:
-			mmi.multimesh.set_instance_color(i, (TEXTURED_TINT if mat != null else TINT)[set_of(m)] * MODULE_TINT.get(src, MODULE_TINT.get(m, Color.WHITE)) * (p[m][i]["colour"] as Color))   # (a fallback module keeps its own tint)   # (the item's own colour: white for most, dry for some weeds)
+			mmi.multimesh.set_instance_color(i, (TEXTURED_TINT if mat != null and mat.albedo_texture != null else TINT)[set_of(m)] * MODULE_TINT.get(src, MODULE_TINT.get(m, Color.WHITE)) * (p[m][i]["colour"] as Color))   # (a fallback module keeps its own tint)   # (the item's own colour: white for most, dry for some weeds)
