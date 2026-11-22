@@ -37,6 +37,7 @@ func before_test() -> void:
 	src.source_code = "extends \"res://scripts/network_manager.gd\"\nvar sent: Array = []\n" \
 		+ "func is_multiplayer_active() -> bool:\n\treturn true\n" \
 		+ "func get_my_player_slot() -> int:\n\treturn 2\n" \
+		+ "func _validate_rpc_ready(_context: String = \"\") -> bool:\n\treturn true\n" \
 		+ "func send_command(type: String, payload: Variant = {}, target_peer: int = 0) -> bool:\n" \
 		+ "\tsent.append([type, payload, target_peer])\n\treturn true\n"
 	assert_int(src.reload()).is_equal(OK)
@@ -51,6 +52,10 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	if _main != null:
+		CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
+	CoreActivation._hotseat_env = -1
 	if _main != null:
 		_main.network_manager = _real_net
 	if _net != null:
@@ -109,8 +114,20 @@ func _log_text() -> String:
 	return text
 
 
+## The player's own volley through the core door: the activation is opened first (the Fire! button's path), then the
+## door shoots; false from the door would mean the table is left to resolve it.
+func _door_fire(attacker: GameUnit, target: GameUnit) -> bool:
+	CoreActivation._env = 1
+	CoreActivation._hotseat_env = 1   # the hotseat cases: a local table with two human sides is the door's behind its switch
+	assert_bool(CoreActivation.open_session(_main, attacker)).override_failure_message("no activation session for the attacker").is_true()
+	var took: bool = await CoreActivation.human_shoot(_main, attacker, target)
+	assert_bool(took).override_failure_message("the core door did not take the volley (the table would resolve it)").is_true()
+	CoreActivation.close_session(_main, attacker.unit_id)
+	return took
+
+
 func _drive_volley(shooter: GameUnit, target: GameUnit) -> void:
-	await _main._run_human_shooting(shooter, target)
+	await _door_fire(shooter, target)
 	_flow_done = true
 
 
@@ -135,7 +152,7 @@ func test_a_volley_at_the_other_humans_unit_asks_its_owner_to_roll(timeout := 12
 		"the saves of the host's unit never went to its owner (requests: %s)" % str(seen)).is_equal(1)
 	assert_str(_log_text()).override_failure_message("the guest rolled the host's saves on its own tray") \
 		.not_contains(" defends: ")
-	assert_str(_log_text()).contains("rolled their defense saves")
+	assert_str(_log_text()).contains("Host rolled their defense")
 
 
 ## Control: the same guest striking the host's unit in MELEE already routes the saves to the owner.
@@ -197,7 +214,7 @@ func test_a_hotseat_volley_prompts_the_defending_side_for_its_saves(timeout := 1
 	_offline({}, false)
 	var shooter := _armed(1, "Raiders", 0.0, 12)
 	var target := _armed(2, "Wardens", -10.0, 12)
-	await _main._run_human_shooting(shooter, target)
+	await _door_fire(shooter, target)
 	assert_int(_prompts.size()).override_failure_message(
 		"the defending hotseat side got no save prompt (as melee gives it)").is_equal(1)
 
@@ -206,7 +223,7 @@ func test_a_hotseat_volley_with_auto_saves_rolls_without_a_prompt(timeout := 120
 	_offline({}, true)
 	var shooter := _armed(1, "Raiders", 0.0, 12)
 	var target := _armed(2, "Wardens", -10.0, 12)
-	await _main._run_human_shooting(shooter, target)
+	await _door_fire(shooter, target)
 	assert_int(_prompts.size()).is_equal(0)
 	assert_str(_log_text()).contains("Wardens saves on")
 
@@ -215,6 +232,6 @@ func test_a_solo_volley_at_an_ai_unit_still_auto_rolls(timeout := 120000) -> voi
 	_offline({2: true}, false)
 	var shooter := _armed(1, "Raiders", 0.0, 12)
 	var target := _armed(2, "Wardens", -10.0, 12)
-	await _main._run_human_shooting(shooter, target)
+	await _door_fire(shooter, target)
 	assert_int(_prompts.size()).override_failure_message("an AI unit's saves opened a prompt").is_equal(0)
 	assert_str(_log_text()).contains("AI (Wardens) defends: ")
