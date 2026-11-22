@@ -5,7 +5,7 @@ shader_type spatial;
 #include "res://shaders/tiefwerk_noise.gdshaderinc"
 #include "res://shaders/ruintown_sky.gdshaderinc"
 
-uniform vec3 wood : source_color = vec3(0.17, 0.12, 0.085);
+uniform vec3 wood : source_color = vec3(0.07, 0.052, 0.038);   // a dark oiled walnut: under the dusk it must stay below the street (first try 0.17, 0.12, 0.085 rendered luma ~95 vs cobbles ~71)
 uniform vec2 table_half = vec2(0.625);   // metres: the table's half size out to its rim (scripts/table.gd)
 uniform vec2 plane_half = vec2(1.524);   // metres: this plane's half size
 const float IN = 0.0254;
