@@ -1402,13 +1402,25 @@ fn revive_ring(board: Option<&Terrain>, next: &State, anchors: &[([f64; 3], f64)
             for k in 0..16 {
                 let (sin, cos) = (std::f64::consts::TAU * f64::from(k) / 16.0).sin_cos();
                 let c = [a[0] + cos * (a_r + r + gap), a[1], a[2] + sin * (a_r + r + gap)];
-                if revive_spot_legal(board, next, [c[0], c[2]], r) {
+                if !revive_line_blocked(board, a, c) && revive_spot_legal(board, next, [c[0], c[2]], r) {
                     return Some(c);
                 }
             }
         }
     }
     None
+}
+
+/// REVIVE SPOT (`PENDING_EPOCH_REVIVE_SPOT`): does the straight line from the anchor to a ring candidate cross a ruin / container wall,
+/// a cliff or a house wall, or end on another tier level? Then the model would come back behind a thin wall or across a tier step
+/// (the outer ring reaches past the wall band `rest_forbidden` keeps clear). Always `false` without a board.
+fn revive_line_blocked(board: Option<&Terrain>, a: [f64; 3], c: [f64; 3]) -> bool {
+    let Some(t) = board else { return false };
+    let (ia, ic) = (t.to_inch([a[0] as f32, 0.0, a[2] as f32]), t.to_inch([c[0] as f32, 0.0, c[2] as f32]));
+    let level = |p: [f64; 3]| t.tier_in_at(p[0] / t.in2m(), p[2] / t.in2m());
+    crate::mv::geom2::path_crosses_wall(ia, ic, t.walls_in_tiered())
+        || crate::mv::geom2::path_crosses_wall([a[0] as f32, a[2] as f32], [c[0] as f32, c[2] as f32], &t.solid_walls_world_m())
+        || level(a) != level(c)
 }
 
 /// REVIVE SPOT (`PENDING_EPOCH_REVIVE_SPOT`): may a restored model of base radius `r` (metres) stand at world `c` (x, z metres)?

@@ -340,3 +340,61 @@ use super::*;
         };
         assert_eq!(other(95), other(E96), "an unrelated unit's activation is identical");
     }
+
+    // ------------- Review of #3383: no candidate beyond a wall or a tier step; the roof pin ----------------------------
+
+    /// A board with one thin wall (world metres) and nothing else.
+    fn wall_board(walls: serde_json::Value) -> crate::terrain::Terrain {
+        crate::terrain::Terrain::build(&serde_json::from_value(serde_json::json!({"cell_params": {"grid_rotation_degrees": 0,
+            "grid_size_inches": 3, "inches_to_meters": IN2M, "table_size_feet": [6, 4]}, "cells": [], "sandbox": [], "walls": walls})).unwrap())
+    }
+
+    /// A lone anchor at the origin, a thin wall 28 mm east of it (x = 0.028 m, z -0.05..0.05). The wall band refuses the inner ring's
+    /// east headings (k = -3..3), 1 mm foe bases fill its other headings (and so block the outer ring there too); outer k = +-1..3
+    /// sit in the wall band. The one rest-legal candidate left is the outer ring's +X spot (46.7 mm, 18.7 mm past the wall) - BEHIND
+    /// the wall. Red before the rule: restored there. Planted: the same board without the wall restores (not behind anything).
+    #[test]
+    fn a_revive_never_comes_back_behind_a_wall() {
+        let (mut st, statics) = rean_line(2, 1, &[[0.0, 0.0]]);
+        let foes: Vec<[f64; 3]> = (4..13).map(|k| {
+            let a = std::f64::consts::TAU * f64::from(k) / 16.0;
+            [a.cos() * 0.034, 0.0, a.sin() * 0.034]
+        }).collect();
+        st.positions[2] = foes.clone();
+        st.wounds[2] = vec![1; foes.len()];
+        Rc::make_mut(&mut st.radii)[2] = vec![0.001; foes.len()];
+        let t = wall_board(serde_json::json!([[[0.028, -0.05], [0.028, 0.05]]]));
+        let (next, shot) = rean_run(&st, &statics, &t, E96, 1, false);
+        assert_eq!(next.alive[0], 1, "nothing on this side of the wall is free: {:?} {:?}", next.positions[0], shot.log);
+        assert!(refused(&shot), "{:?}", shot.log);
+        let (open, _) = rean_run(&st, &statics, &wall_board(serde_json::json!([])), E96, 1, false);
+        assert_eq!(open.alive[0], 2, "planted");
+    }
+
+    /// A 3 in raised tier cell east of the anchor (world x 0..3 in, z 0..3 in): the inner ring's +X spot is 18.8 mm past the cliff,
+    /// outside its wall band - red before the rule: the model came back ON the raised cell. Now the spot is on the anchor's level.
+    #[test]
+    fn a_revive_never_comes_back_across_a_tier_step() {
+        let (st, statics) = rean_line(2, 1, &[[-0.6, 1.5]]);
+        let mut p: crate::terrain::PlainTerrain = serde_json::from_value(serde_json::json!({"cells": [], "sandbox": [],
+            "cell_params": {"table_size_feet": [6.0, 4.0], "grid_rotation_degrees": 0.0, "grid_size_inches": 3.0, "inches_to_meters": IN2M}})).unwrap();
+        let mut level = vec![0.0; 384];
+        level[8 * 24 + 12] = 3.0;
+        p.tiers = Some(crate::terrain::TierGrid { nx: 24, nz: 16, cell_in: 3.0, level_in: level, ladders: vec![], stairs: vec![] });
+        let t = crate::terrain::Terrain::build(&p);
+        let (next, shot) = rean_run(&st, &statics, &t, E96, 1, false);
+        assert_eq!(next.alive[0], 2, "{:?}", shot.log);
+        let b = next.positions[0][0];
+        assert_eq!(t.tier_in_at(b[0] / IN2M, b[2] / IN2M), 0.0, "on the anchor's level: {b:?}");
+    }
+
+    /// TICKET REVIVE-ROOF (pinned, not fixed): a unit standing on a container ROOF gets nobody back - every ring spot near it is
+    /// `rest_forbidden` (the container class refuses a rest from the ground's point of view). The pin breaks when the ticket lands.
+    #[test]
+    fn pin_a_unit_on_a_container_roof_gets_nobody_back() {
+        let roof = [[5.0, 4.5], [7.0, 4.5]];
+        let (st, statics) = rean_line(3, 1, &roof);
+        let (next, shot) = rean_run(&st, &statics, &container_board(true), E96, 1, false);
+        assert_eq!(next.alive[0], 2, "{:?}", shot.log);
+        assert!(refused(&shot), "{:?}", shot.log);
+    }
