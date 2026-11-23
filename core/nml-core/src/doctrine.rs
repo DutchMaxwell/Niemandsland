@@ -327,7 +327,7 @@ struct SearchCtx<'x> {
 /// starvation (no candidate passes) = the K ranked candidates compete
 /// unguarded, still doctrine-placed, never swept (step 3's reading).
 fn search_node(ctx: &SearchCtx, ply: usize, last: usize, placed: &[(i64, i64)]) -> ([i64; 2], Vec<(i64, i64)>) {
-    let label = if ply % 2 == 0 { ctx.lab_a } else { ctx.lab_b };
+    let label = if ply.is_multiple_of(2) { ctx.lab_a } else { ctx.lab_b };
     let mut cands: Vec<(i64, i64)> = Vec::new();
     for x in (-ctx.hx..=ctx.hx).step_by(GRID_STEP_IN as usize) {
         for z in (-ctx.hz..=ctx.hz).step_by(GRID_STEP_IN as usize) {

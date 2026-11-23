@@ -285,9 +285,8 @@ mod tests {
         // Both are legal plans; what matters is that the flag REACHES the search
         // rather than being dropped on the way in.
         assert_eq!(fast.planned.len(), slow.planned.len());
-        assert_eq!(
-            ThetaCfg::of(false, 320).fast_planner,
-            false,
+        assert!(
+            !ThetaCfg::of(false, 320).fast_planner,
             "the cfg the seam builds is the cfg the search gets"
         );
     }

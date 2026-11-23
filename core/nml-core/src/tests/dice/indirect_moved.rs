@@ -88,7 +88,7 @@ use crate::acts::EPOCH_72_PLAYTEST_RULES;
     fn below_epoch_7_nothing_changes() {
         for (id, epoch) in [("indirect_shooter", 6u32), ("quick_readj", 6)] {
             let us = im_static(id, epoch);
-            assert_eq!(us.shoot[0].indirect, true, "the Indirect facet predates this wave (epoch 6)");
+            assert!(us.shoot[0].indirect, "the Indirect facet predates this wave (epoch 6)");
             let moved = Ctx { moved_this_round: true, ..us.ctx };
             let mut t = Tray::seeded(27);
             let out = resolve_shooting_with_tray(

@@ -2830,7 +2830,7 @@ pub(crate) fn teleport_beat(
         }
     }
     next.teleport_used[si] = true;
-    if let Some(shot) = shot.as_deref_mut() {
+    if let Some(shot) = shot {
         shot.log.push(format!(
             "{}: {} repositions within {:.0}\" — landing centroid ({:.2}, {:.2}) m",
             spec.name, statics[next.roster.profile[si]].name, cap_in, to[0], to[1]));
@@ -12903,7 +12903,7 @@ fn resolve_with(
                                 );
                                 (ev, phantom)
                             };
-                            apply_expected_wounds(&mut next, si, ev_back, rng.as_deref_mut());
+                            apply_expected_wounds(&mut next, si, ev_back, rng);
                             set_melee_fatigue(&mut next, ti, seams);
                             phantom_on_su = phantom;
                         }
