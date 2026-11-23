@@ -13,7 +13,6 @@ uniform float tile_in = 3.0;   // inches of board one texture tile covers
 uniform bool world_uv = false;
 uniform vec4 tone : source_color = vec4(1.0);
 uniform float normal_depth = 1.0;
-uniform sampler2D height_tex : hint_default_black, filter_linear_mipmap, repeat_enable;   // reserved for the ground sets' parallax, unused in v1
 
 varying vec2 dress_uv;
 

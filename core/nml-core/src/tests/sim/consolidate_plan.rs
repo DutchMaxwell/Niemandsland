@@ -1,4 +1,4 @@
-//! meleefix (PENDING_EPOCH_CONSOLIDATE_PLAN = 96, lead call 22.11. option b): a melee winner's "may move up to 3 in" aims where the
+//! meleefix (EPOCH_96_PARITY_BATCH = 96, lead call 22.11. option b): a melee winner's "may move up to 3 in" aims where the
 //! table's AI round planner aims it when the door's transcript carries the planner inputs (`Input::Consolidate`, offered on the
 //! tray). The fixture: the charger "a" wiped "b" next to it at the origin; marker A lies 6 in north (+z), marker B 9 in south.
 //! The old greedy picks the nearer A; a seize task on B sends the unit south. RED without the port: the plan is ignored, the unit

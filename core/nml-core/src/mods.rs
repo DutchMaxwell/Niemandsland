@@ -332,7 +332,7 @@ fn chain_grant_where(
     })
 }
 
-/// `PENDING_EPOCH_BANE_MARK`: an attackers-side record on the TARGET's joined chain that a mark of exactly this NAME placed (its
+/// `EPOCH_96_PARITY_BATCH`: an attackers-side record on the TARGET's joined chain that a mark of exactly this NAME placed (its
 /// `grants_rule` "Bane" is shared with the spell grants, which this read leaves alone).
 pub fn marked_vs(state: &State, target: usize, mark: &str) -> bool {
     let mut who: Vec<usize> = vec![target];
@@ -341,7 +341,7 @@ pub fn marked_vs(state: &State, target: usize, mark: &str) -> bool {
     who.iter().any(|&u| state.buffs[u].iter().any(|r| r.attackers && &*r.name == mark))
 }
 
-/// `PENDING_EPOCH_BANE_MARK`: spends ONE such mark record on the target's joined chain (a seam with no exchange spend: the strafe).
+/// `EPOCH_96_PARITY_BATCH`: spends ONE such mark record on the target's joined chain (a seam with no exchange spend: the strafe).
 pub fn spend_mark_vs(state: &mut State, target: usize, mark: &str) {
     let mut who: Vec<usize> = vec![target];
     who.extend(state.attached_to[target]);

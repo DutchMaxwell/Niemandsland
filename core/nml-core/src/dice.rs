@@ -1029,10 +1029,10 @@ fn surge_attack_say(
     hits
 }
 
-/// `PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL`: the "Enhanced Primal" grant only widens a printed extra-attack form; a profile
+/// `EPOCH_96_PARITY_BATCH`: the "Enhanced Primal" grant only widens a printed extra-attack form; a profile
 /// without one gains nothing from it. Below the gate every grant reaches (byte-exact).
 fn primal_grant_reaches(p: &ShootProfile, rules_epoch: u32) -> bool {
-    p.surge_attack || !rule_on(rules_epoch, crate::acts::PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL)
+    p.surge_attack || !rule_on(rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH)
 }
 
 /// G4R5 F-PRIMAL-GRANT-ONCE (`EPOCH_73_V36`): ONE live "Enhanced Primal" grant is carried in two channels (the overlay rule on
@@ -1867,7 +1867,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         // G4R4 C-GRANTED-BANE (`EPOCH_73_V36`): a live "Bane when Shooting" grant makes this ranged weapon a Bane
         // weapon for the volley (the table's `_solo_striker_has_bane`); the re-roll's log line names the book rule.
         let granted_bane;
-        // PENDING_EPOCH_BANE_MARK: the Mark also lifts a Bane-family weapon that does not ignore Regeneration (Lacerate) to full Bane.
+        // EPOCH_96_PARITY_BATCH: the Mark also lifts a Bane-family weapon that does not ignore Regeneration (Lacerate) to full Bane.
         let p = if (att.bane_grant && !p.bane) || (att.bane_mark_grant && !(p.bane && p.bypass_regen)) {
             let alias = if p.bane { p.bane_alias.clone() } else if att.bane_grant { "Bane when Shooting".into() } else { "Bane Mark".into() };
             granted_bane = ShootProfile { bane: true, bypass_regen: true, bane_alias: alias, ..p.clone() };
@@ -3422,7 +3422,7 @@ pub fn resolve_melee_leg_wipe(
     let trace_thrust = strikers.first()
         .is_some_and(|sh| rule_on(sh.att.rules_epoch, EPOCH_73_V36))
         && crate::mv::plain_memo::trace_rules_on();
-    // PENDING_EPOCH_BANE_MARK: a striker attacking a Bane-Marked unit strikes with Bane (the volley's granted-Bane twin).
+    // EPOCH_96_PARITY_BATCH: a striker attacking a Bane-Marked unit strikes with Bane (the volley's granted-Bane twin).
     let marked: Vec<Vec<ShootProfile>> = strikers.iter().map(|sh| if sh.att.bane_mark_grant {
         sh.profiles.iter().map(|p| if p.bane && p.bypass_regen { p.clone() } else {
             ShootProfile { bane: true, bypass_regen: true, bane_alias: if p.bane { p.bane_alias.clone() } else { "Bane Mark".into() }, ..p.clone() }

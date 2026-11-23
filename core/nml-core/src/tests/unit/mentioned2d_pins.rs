@@ -228,12 +228,13 @@ use super::*;
     /// BOTH-arms form): beside its base the bearer gets the hit arm TOO —
     /// attack 3+ AND save 5+ — and names itself on the log. The Boost alone
     /// never engages (the rule's own printed condition): the generic pick's
-    /// AP arm stays, no hit arm, no log.
+    /// AP arm stays, no hit arm, no log. Pinned at 95: from 96 (`EPOCH_96_PARITY_BATCH`, ENHANCED_VINCI_ONE_PICK) the Enhanced form
+    /// makes ONE pick at any range (`v36_w1_6f::enhanced_vinci_tech_makes_one_pick_at_any_range_from_96`).
     #[test]
-    fn enhanced_vinci_tech_gets_both_arms_beside_its_base_at_the_current_epoch() {
+    fn enhanced_vinci_tech_gets_both_arms_beside_its_base_at_95() {
         let on = volley(
             &pin_unit("aof", "duchies_of_vinci",
-                &["Vinci Tech", "Enhanced Vinci Tech"], crate::acts::CURRENT_RULES_EPOCH),
+                &["Vinci Tech", "Enhanced Vinci Tech"], crate::acts::EPOCH_95_PARITY_BATCH),
             "vinci",
         );
         assert_eq!(on.rolls[0].target, 3, "the hit arm fires TOO (both, not pick)");
@@ -245,7 +246,7 @@ use super::*;
         );
         let lone = volley(
             &pin_unit("aof", "duchies_of_vinci", &["Enhanced Vinci Tech"],
-                crate::acts::CURRENT_RULES_EPOCH),
+                crate::acts::EPOCH_95_PARITY_BATCH),
             "vinci",
         );
         assert_eq!(lone.rolls[0].target, 4, "the `pick_one` coupling: no hit arm alone");
@@ -260,10 +261,10 @@ use super::*;
     /// "Vinci Tech Boost Aura" (aof/duchies_of_vinci — the Aura-Channel
     /// entry grants "Vinci Tech Boost"): beside the base the grant reaches
     /// the BOTH-arms form (attack 3+ AND save 5+); at epoch 5 the aura gate
-    /// is OFF and the pick stays byte-exact.
+    /// is OFF and the pick stays byte-exact. Pinned at 95: from 96 the granted Enhanced form makes one pick too.
     #[test]
-    fn an_enhanced_vinci_tech_aura_reaches_both_arms_through_the_grant_at_the_current_epoch() {
-        let epoch = crate::acts::CURRENT_RULES_EPOCH;
+    fn an_enhanced_vinci_tech_aura_reaches_both_arms_through_the_grant_at_95() {
+        let epoch = crate::acts::EPOCH_95_PARITY_BATCH;
         let via_aura = volley(
             &pin_unit("aof", "duchies_of_vinci",
                 &["Vinci Tech", "Enhanced Vinci Tech Aura"], epoch),

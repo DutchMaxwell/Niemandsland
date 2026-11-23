@@ -197,12 +197,12 @@ use super::*;
         assert_eq!(next2.tag_markers[2], 0);
     }
 
-    /// covfix-dice (`PENDING_EPOCH_SPOTTER_ROLL_RECORD`): from 96 the spotter's placement die is a recorded roll, so the step driver
+    /// covfix-dice (`EPOCH_96_PARITY_BATCH`): from 96 the spotter's placement die is a recorded roll, so the step driver
     /// answers the act on the recorded faces. At 95 the draw has no record and the driver refuses the whole act.
     #[test]
     fn the_spotter_die_is_a_recorded_roll_from_96() {
         let (st, statics) = spotter_line();
-        let e = crate::acts::PENDING_EPOCH_SPOTTER_ROLL_RECORD;
+        let e = crate::acts::EPOCH_96_PARITY_BATCH;
         let step = |epoch: u32| {
             let terrain = crate::terrain::Terrain::default();
             let seams = Seams { rules_epoch: epoch, ..Seams::default() };

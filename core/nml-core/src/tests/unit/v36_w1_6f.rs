@@ -62,7 +62,7 @@ fn enhanced_warbound_widens_the_shred_window_like_its_3_5_boost() {
     assert_eq!(us.shoot[0].shred_low, 2, "the entry's extra_wound_save_low window");
 }
 
-/// PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK (lead ruling 22.11., AoF 3.6 Duchies of Vinci: "either AP(+1) or +1 to hit ... always"):
+/// EPOCH_96_PARITY_BATCH (lead ruling 22.11., AoF 3.6 Duchies of Vinci: "either AP(+1) or +1 to hit ... always"):
 /// from 96 a Vinci Tech bearer with the Enhanced rule makes ONE pick, inside 9 in as well; at 95 it took both arms past 9 in only.
 #[test]
 fn enhanced_vinci_tech_makes_one_pick_at_any_range_from_96() {
@@ -87,14 +87,14 @@ fn enhanced_vinci_tech_makes_one_pick_at_any_range_from_96() {
         let defense = out.rolls.iter().find(|r| r.kind == "defense").map(|r| r.target).expect("some hits");
         (out.rolls[0].target, defense)
     };
-    let at96 = build(crate::acts::PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK);
+    let at96 = build(crate::acts::EPOCH_96_PARITY_BATCH);
     assert!(!at96.shoot[0].versatile_both, "96: never both arms");
     assert!(at96.ctx.versatile_no_gate, "96: the pick is 'always'");
     for dist in [6.0, 12.0] {
         let (hit, def) = shot(&at96, dist);
         assert!((hit == 3) != (def == 6), "96 at {dist} in: exactly one arm (+1 to hit -> 3+, or AP(+1) -> 6+), got {hit}/{def}");
     }
-    let at95 = build(crate::acts::PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK - 1);
+    let at95 = build(crate::acts::EPOCH_96_PARITY_BATCH - 1);
     assert_eq!(shot(&at95, 12.0), (3, 6), "95 past 9 in: both arms, byte-exact");
     assert_eq!(shot(&at95, 6.0), (4, 5), "95 inside 9 in: nothing");
 }
