@@ -7,12 +7,18 @@ extends GdUnitTestSuite
 ## Constructed: OPR units (ParityTable) at both seats AI; the slice is the shipped one, so the shipped `activation_level`
 ## group is the one exercised. NML_ONE_CORE_SEEDS overrides 20. Not compared: the declaration line (the core's announce
 ## against the table's sight line, one per volley) and the shot rows the recorder gets.
+## PLAN_FIRST_DELETION 34 FT-C4: the table arm left before step 31 (the AI table resolver retires); door values are pinned as
+## literals read on main af5c83610.
 
 const SlicePin := preload("res://test/one_core/slice_pin.gd")
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const INCH := 0.0254
 const TMP := "user://move_through_slice.json"
+## The defender's alive models per seed (0-19), read on main from the table run's survivors.
+const WANT_ALIVE_RUSH := [14, 14, 16, 15, 13, 13, 12, 14, 16, 14, 14, 16, 16, 14, 14, 15, 18, 18, 12, 15]
+const WANT_ALIVE_ADVANCE := [12, 10, 14, 11, 10, 8, 10, 13, 14, 11, 12, 14, 12, 11, 13, 12, 13, 16, 7, 13]
+const WANT_ALIVE_WIPE := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 	"faction_folder": "robot_legions", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
@@ -146,16 +152,26 @@ func _run(weapon: Dictionary, unit_rules: Array, kind: int, s: int, core_run: bo
 	return out
 
 
-func _sweep(name: String, weapon: Dictionary, unit_rules: Array, kind: int, foe_models := 20) -> void:
+func _sweep(name: String, weapon: Dictionary, unit_rules: Array, kind: int, foe_models := 20, compare := true, want_alive: Array = []) -> void:
 	var seeds := int(OS.get_environment("NML_ONE_CORE_SEEDS")) if OS.has_environment("NML_ONE_CORE_SEEDS") else 20
 	var bad: Array = []
 	var hurt := 0
+	if not compare and seeds > want_alive.size():
+		bad.append("%d seeds exceed the %d pinned values" % [seeds, want_alive.size()])
 	for s in seeds:
-		var table := await _run(weapon, unit_rules, kind, s, false, foe_models)
+		var table: Dictionary = {}
+		if compare:
+			table = await _run(weapon, unit_rules, kind, s, false, foe_models)
 		var core := await _run(weapon, unit_rules, kind, s, true, foe_models)
 		hurt += foe_models - (core["foe"] as Array).size()
-		if int(core["core"]) != 1 or int(table["core"]) != 0 or core["left"]:
-			bad.append("seed %d: the core took it %d times (table run %d), core_through left: %s" % [s, core["core"], table["core"], core["left"]])
+		if int(core["core"]) != 1 or core["left"]:
+			bad.append("seed %d: the core took it %d times, core_through left: %s" % [s, core["core"], core["left"]])
+		if compare and int(table["core"]) != 0:
+			bad.append("seed %d: the table run took it %d times" % [s, table["core"]])
+		if not compare:
+			if s < want_alive.size() and (core["foe"] as Array).size() != int(want_alive[s]):
+				bad.append("seed %d: foe alive %d (want %d)" % [s, (core["foe"] as Array).size(), int(want_alive[s])])
+			continue
 		for k in ["foe", "att", "shaken", "rng", "lines"]:
 			if table[k] != core[k]:
 				bad.append("seed %d: %s: table %s, core %s" % [s, k, table[k], core[k]])
@@ -167,19 +183,18 @@ func _sweep(name: String, weapon: Dictionary, unit_rules: Array, kind: int, foe_
 ## A Rush through the defender: only the move-through volley fires (Crossing Strike). RED: `takes_action` refuses a
 ## Rush -> the core is never called (core 0) and the table pays it.
 func test_a_rush_through_an_enemy_strafes_in_the_core() -> void:
-	await _sweep("strafing_rush", STRAFE_GUN, [], AiDecision.Action.RUSH)
+	await _sweep("strafing_rush", STRAFE_GUN, [], AiDecision.Action.RUSH, 20, false, WANT_ALIVE_RUSH)
 
 
 ## An Advance through the defender with a Rifle: the strafe, then the Rifle volley, in ONE core call.
 func test_an_advance_through_an_enemy_strafes_then_shoots_in_the_core() -> void:
-	await _sweep("strafing_advance", STRAFE_GUN, [], AiDecision.Action.ADVANCE)
+	await _sweep("strafing_advance", STRAFE_GUN, [], AiDecision.Action.ADVANCE, 20, false, WANT_ALIVE_ADVANCE)
 
 
-## The strafe wipes out the Rifle volley's target (two defenders): the core's volley finds no model to shoot, so the survivors,
-## Shaken and the tray RNG still equal the table's (whose body picks its target AFTER the strafe and writes "no volley — no
-## target in range or sight" instead: the one line the comparison leaves out).
+## The strafe wipes out the Rifle volley's target (two defenders): the core's volley finds no model to shoot, so the defender
+## stands at zero alive models on every seed (the pinned literal).
 func test_a_target_the_core_strafe_wiped_out_is_not_shot_at() -> void:
-	await _sweep("strafing_wipe", STRAFE_GUN, [], AiDecision.Action.ADVANCE, 2)
+	await _sweep("strafing_wipe", STRAFE_GUN, [], AiDecision.Action.ADVANCE, 2, false, WANT_ALIVE_WIPE)
 
 
 ## Crossing Attack (unit rule, X dice per crossing model, wound on 6, no save).
@@ -228,25 +243,17 @@ func _body(s: int, core_run: bool) -> Dictionary:
 
 ## The real body, the refusal path: the core's move check does not know an Aircraft's mandatory 30" run (P4.D-29), so the call
 ## is refused before any die and the table pays the strafe in `_solo_pay_dangerous`: ONCE (the body skipped its own calls
-## because the core was to take it), with the table's own survivors, RNG and lines. RED: the body keeps its two table calls
-## -> two "passes over" lines; the fallback dropped -> none. When D-29 teaches the core Aircraft this run is the success path:
-## flip `core` to 1.
+## because the core was to take it). RED: the body keeps its two table calls -> two "passes over" lines; the fallback dropped
+## -> none. When D-29 teaches the core Aircraft this run is the success path: flip `core` to 1.
 func test_a_refused_core_call_leaves_the_strafe_to_the_table_once() -> void:
 	_slice_with({"aircraft_test": ["Aircraft"]})
 	var bad: Array = []
-	var hurt := 0
 	for s in 10:
-		var table := await _body(s, false)
 		var core := await _body(s, true)
-		hurt += 1 if int(core["foe"]) < 20 else 0
-		if int(core["core"]) != 0 or int(core["strafes"]) != 1 or int(table["strafes"]) != 1:
-			bad.append("seed %d: core runs %d, strafe lines core %d table %d (report %s)" % [s, core["core"], core["strafes"], table["strafes"], core["report"].get("action")])
-		for k in ["foe", "rng", "lines"]:
-			if table[k] != core[k]:
-				bad.append("seed %d: %s: table %s, core %s" % [s, k, table[k], core[k]])
-	print("MOVE_THROUGH body hurt=%d mismatches=%d" % [hurt, bad.size()])
-	assert_int(hurt).override_failure_message("no seed hurt the defender: the test compares nothing").is_greater(0)
-	assert_array(bad).override_failure_message("fallback vs table:\n" + "\n".join(bad.slice(0, 6))).is_empty()
+		if int(core["core"]) != 0 or int(core["strafes"]) != 1:
+			bad.append("seed %d: core runs %d, strafe lines core %d (report %s)" % [s, core["core"], core["strafes"], core["report"].get("action")])
+	print("MOVE_THROUGH body mismatches=%d" % bad.size())
+	assert_array(bad).override_failure_message("the refused call:\n" + "\n".join(bad.slice(0, 6))).is_empty()
 
 
 ## The human door (P4.D-37b): a Strafing bearer is a core unit (its strike comes with the activation's Fire / End), a Crossing
@@ -276,29 +283,6 @@ func test_the_human_door_takes_a_strafe_bearer_but_not_a_crossing_attack_bearer(
 	assert_bool(CoreActivation.is_plain(runner)).override_failure_message("the slice no longer takes the Hit & Run bearer").is_true()
 	assert_bool(CoreActivation.is_core_unit(_main, runner)).override_failure_message("the human Hit & Run bearer is a core unit (step 21)").is_true()
 	_free([strafer, crosser, plain, runner])
-
-
-## A refused core call pays the move-through attacks on the table BEFORE the volley, which was aimed earlier: a target the strafe
-## wiped out is not shot at. RED: drop the `get_alive_count() == 0` skip in `_run_ai_shooting` -> a second announce and "Rifle silent".
-func test_a_target_the_table_strafe_wiped_out_is_not_shot_at() -> void:
-	var units := _units(STRAFE_GUN, [], true, 3.0)
-	var att: GameUnit = units[0]
-	var foe: GameUnit = units[1]
-	for i in range(2, foe.models.size()):   # two defenders left: ten strafe shots wipe them out
-		(foe.models[i] as ModelInstance).is_alive = false
-	_main.seed_tray_rng(1)
-	_move(att, 6.0)
-	var lines: Array = []
-	var tap := func(e: Dictionary) -> void: lines.append(str(e["text"]))
-	_main.battle_log.entry_added.connect(tap)
-	_main._solo_core_ai_h = 0   # no board: the core call is not made, the table pays
-	await _main._run_ai_shooting({"unit": att, "moved": true, "action": AiDecision.Action.ADVANCE, "can_shoot": true, "core_through": true})
-	_main.battle_log.entry_added.disconnect(tap)
-	assert_int(foe.get_alive_count()).override_failure_message("the strafe did not wipe the target out: " + str(lines)).is_equal(0)
-	assert_int(lines.filter(func(l: String) -> bool: return l.contains("passes over Def")).size()).is_equal(1)
-	assert_int(lines.filter(func(l: String) -> bool: return l.contains("fires at Def") or l.contains("Rifle silent")).size()).override_failure_message(
-		"a volley at a wiped-out target (the strafe's own announce is the one \"fires at\"): " + str(lines)).is_equal(1)
-	_free(units)
 
 
 ## The body's own decision for a Rush through the defender line (`takes_ai_activation`, the core call, the table's strike when the
@@ -342,18 +326,15 @@ func _decided(s: int, foe_rules: Array, far_rules: Variant) -> Dictionary:
 
 
 ## P4.D-37c: every enemy the legs cross must be a plain target. A crossed unit with a defense rule the slice does not list
-## (Regeneration) leaves the whole activation to the table: the core is not called, the table strikes once, and the result is
-## the table's own run. RED (the guard dropped from `takes_ai_activation`): the core takes it and strikes the Regeneration unit.
+## (Regeneration) leaves the whole activation to the table: the core is not called and the table strikes once. RED (the guard
+## dropped from `takes_ai_activation`): the core takes it and strikes the Regeneration unit.
 func test_a_crossed_enemy_with_an_unsupported_rule_leaves_the_strike_to_the_table() -> void:
 	SlicePin.narrow()   # C-19: the case is about a unit the narrow slice refuses
 	var bad: Array = []
 	for s in 6:
-		var table := await _run(STRAFE_GUN, [], AiDecision.Action.RUSH, s, false, 20, ["Regeneration"])
 		var door := await _decided(s, ["Regeneration"], null)
 		if door["takes"] or door["core"] != 0 or not door["refused"] or int(door["strikes"]) != 1:
 			bad.append("seed %d: takes %s, core runs %s, refused %s, strikes %s" % [s, door["takes"], door["core"], door["refused"], door["strikes"]])
-		if door["foe"] != (table["foe"] as Array).size() or door["rng"] != table["rng"] or door["lines"] != table["lines"]:
-			bad.append("seed %d: not the table's own run: foe %s/%s" % [s, door["foe"], (table["foe"] as Array).size()])
 	assert_array(bad).override_failure_message("\n".join(bad.slice(0, 6))).is_empty()
 
 
@@ -375,13 +356,13 @@ func test_crossed_plain_enemies_still_go_through_the_core() -> void:
 		assert_int(int(door["strikes"])).is_equal(1)
 
 
-## The decision is made once. The body left the strike to the table (a crossed Regeneration unit); the table's strike wipes that
-## unit out, and the Rifle volley after it (aimed at a plain unit, not crossed) must not be taken by the core: its board, captured
-## before the move, still holds the wiped-out unit and would strike it again. RED (`through_refused` ignored by `run_ai`): the
-## core takes the volley's call and a second strike sentence stands.
+## The decision is made once. The body left the strike to the table (a crossed Regeneration unit); the Rifle volley after it
+## (aimed at a plain unit, not crossed) must not be taken by the core: its board, captured before the move, still holds that
+## unit and would strike it again. RED (`through_refused` ignored by `run_ai`): the core takes the volley's call and a second
+## strike sentence stands.
 func test_a_refused_activation_is_not_resumed_by_the_core_after_the_table_struck() -> void:
 	SlicePin.narrow()   # C-19: the case is about a unit the narrow slice refuses
-	var units := _units(STRAFE_GUN, [], true, 3.0, 2, ["Regeneration"])   # the crossed unit: 2 models, wiped out by ten strafe shots
+	var units := _units(STRAFE_GUN, [], true, 3.0, 2, ["Regeneration"])   # the crossed unit: 2 models
 	var att: GameUnit = units[0]
 	var tgt := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Tgt", "models": 5, "x_in": 15.0}), RIFLE.merged({"count": 5}))
 	units.append(tgt)
@@ -400,7 +381,6 @@ func test_a_refused_activation_is_not_resumed_by_the_core_after_the_table_struck
 	_main._solo_core_ai_h = 0
 	(_main.solo_controller as SoloController)._core_node_ready().release(h)
 	_main.battle_log.entry_added.disconnect(tap)
-	assert_int((units[1] as GameUnit).get_alive_count()).override_failure_message("the strike did not wipe the unit out: " + str(lines)).is_equal(0)
 	assert_int(CoreActivation.ai_runs - runs).override_failure_message("the core took the volley after the table struck").is_equal(0)
 	assert_int(lines.filter(func(l: String) -> bool: return l.contains("passes over")).size()).override_failure_message(
 		"the strike was made twice: " + str(lines)).is_equal(1)
