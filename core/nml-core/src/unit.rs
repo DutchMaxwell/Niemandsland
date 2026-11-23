@@ -5018,10 +5018,10 @@ fn boost_aura_base_of(aura: &str) -> Option<&str> {
 
 /// The wave-3 Boost-aura expansion read — the loader's `_aura_granted_rules`
 /// + `_expand_auras` member loop over what one profile can see: every carried
-/// aura entry of the fifteen hands its base to the unit (`special_rules`) and
-/// to each attached hero (`attached_hero_rules`, the `rule_on_all_models`
-/// members ai_ev.gd:79-83 reads). Additive and deduped, the loader's own
-/// exact-match test; the aura entry itself is never removed.
+///   aura entry of the fifteen hands its base to the unit (`special_rules`) and
+///   to each attached hero (`attached_hero_rules`, the `rule_on_all_models`
+///   members ai_ev.gd:79-83 reads). Additive and deduped, the loader's own
+///   exact-match test; the aura entry itself is never removed.
 pub(crate) fn expand_boost_aura(p: &Profile, rules_epoch: u32) -> Cow<'_, Profile> {
     if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
         // The gate is OFF on every recorded corpus (epochs <= 5): the profile
@@ -6535,8 +6535,8 @@ fn stamp_conditional_ap(
 ///     entry's own over_in, on both arrays (the epoch-6 Havocbound arm's
 ///     mechanism, born at 7 for this spelling). No Boost couples to it:
 ///     "Havocbound Boost" `upgrades` the name "Havocbound" exactly.
-/// The dice folds log the named forms; the unnamed generic specs stay
-/// silent, so every earlier epoch's replay is byte-identical.
+///     The dice folds log the named forms; the unnamed generic specs stay
+///     silent, so every earlier epoch's replay is byte-identical.
 fn stamp_conditional_ap_named(
     reg: &mut Registries,
     p: &Profile,

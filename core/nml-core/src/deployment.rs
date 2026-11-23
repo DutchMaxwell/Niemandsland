@@ -461,11 +461,11 @@ pub fn cell_blocked(board: &Terrain, p: (f64, f64), flying: bool) -> bool {
 /// `AiDeployment._blocked_at` (ai_deployment.gd:174-195): the per-spot TERRAIN
 /// test. The centre first; then, with a model grid, EVERY model's base (centre
 /// + dense disc samples, edges computed once and NOT zero-filtered — the model
-/// centre itself is a sample) with sample points added in f32 like the table's
-/// `p + off + e`; else the dense disc of `probe_radius` (regiment trays, centre
-/// already tested). Each sample runs the three layers: props (the banked
-/// probe stand-in), walls, cells — the table's order is probe → walls → cells
-/// (ai_deployment.gd:317-330); OR is order-free.
+///   centre itself is a sample) with sample points added in f32 like the table's
+///   `p + off + e`; else the dense disc of `probe_radius` (regiment trays, centre
+///   already tested). Each sample runs the three layers: props (the banked
+///   probe stand-in), walls, cells — the table's order is probe → walls → cells
+///   (ai_deployment.gd:317-330); OR is order-free.
 pub fn spot_blocked(
     board: &Terrain,
     p: (f64, f64),
@@ -2910,12 +2910,12 @@ fn anchor_of(pts: &[[f32; 2]]) -> [f32; 2] {
 /// alive model's node XZ (:9360-9364), and models still standing on the army
 /// trays (|x| >= 1.0244 m on the 6'x4' arena — opr_army_manager.gd:1182-1212
 /// + the row packer) veto ring candidates near the lateral zone edges exactly
-/// like placed ones. ONLY the moving model itself is excluded
-/// (`mi == moving`, :9362) — the straggler's own unit's other models DO
-/// block. The Vector2 gap length is f32, the radii sum f64
-/// (`model_base_radius_m` = the shape's bounding radius), narrowed at the
-/// comparison (:9364-9365); the 0.002 m is the wall-rest clearance constant
-/// reused inline (:9365, :6775).
+///   like placed ones. ONLY the moving model itself is excluded
+///   (`mi == moving`, :9362) — the straggler's own unit's other models DO
+///   block. The Vector2 gap length is f32, the radii sum f64
+///   (`model_base_radius_m` = the shape's bounding radius), narrowed at the
+///   comparison (:9364-9365); the 0.002 m is the wall-rest clearance constant
+///   reused inline (:9365, :6775).
 fn deploy_spot_free(cand: (f32, f32), r: f64, moving: usize, all: &[([f32; 2], f64)]) -> bool {
     for (k, (pos, r_m)) in all.iter().enumerate() {
         if k == moving {

@@ -92,8 +92,8 @@ use super::*;
     ///    never engages at long range (18 > 6).
     ///  - R=9, shrouded, UNMARKED -> 6" (max(9-6,6)=6) — a regression pin
     ///    confirming the shroud's own floor, independent of the mark.
-    /// Margins (not the exact reach-value distances) stay clear of the
-    /// inch<->metre round-trip epsilon on `dist_in.ceil()`.
+    ///    Margins (not the exact reach-value distances) stay clear of the
+    ///    inch<->metre round-trip epsilon on `dist_in.ceil()`.
     #[test]
     fn ranged_shrouding_and_the_increased_shooting_range_mark_compose_clamp_then_add() {
         let (mut st, mut statics) = buff_line();

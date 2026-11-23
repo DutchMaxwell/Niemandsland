@@ -3689,7 +3689,7 @@ pub const RETREATING_STRIKE_REACH_IN: f64 = 3.0;
 /// `_nearest_enemy_of` pick :9669 — `plain_move` clamps it to the board
 /// itself, its `clamp_to_bounds` being the ported `_clamp_to_bounds`), handed
 /// to `plain_move` with the 3" band; the solver routes the formation around
-/// difficult/dangerous terrain and spends the band per model.
+///   difficult/dangerous terrain and spends the band per model.
 ///
 /// `None` (the port declines) or `movement=rigid`/`--red-move-rigid`: the
 /// pre-S11 rigid translation below, byte-identical —

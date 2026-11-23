@@ -100,7 +100,6 @@
     /// `DiceRules.is_success` in full: the natural 6 beats an impossible
     /// target, the natural 1 fails an automatic one, and `TARGET_NONE` counts
     /// nothing.
-
     fn blade(attacks: i64) -> ShootProfile {
         ShootProfile { name: "Blade".into(), attacks, count: 1, range: 0, ..Default::default() }
     }

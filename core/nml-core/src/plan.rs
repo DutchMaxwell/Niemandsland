@@ -16,10 +16,10 @@
 //!      There are 277 tied rows in the 25-activation corpus, so this is not a
 //!      theoretical worry;
 //!   3. POOL — four guarantees, IN ORDER, deduped by candidate IDENTITY:
-//!        a. per-unit coverage: every unit's best candidate is rolled out,
-//!        b. the global top-K slice,
-//!        c. every unit's first PATIENT candidate (R8),
-//!        d. every second-wave candidate (D23).
+//!      a. per-unit coverage: every unit's best candidate is rolled out,
+//!      b. the global top-K slice,
+//!      c. every unit's first PATIENT candidate (R8),
+//!      d. every second-wave candidate (D23).
 //!      b/c/d rank low 1-ply by construction, which is exactly why they need a
 //!      guarantee rather than a cut;
 //!   4. ROLLOUT — exactly ONE round rollout per pool candidate, in pool order,
