@@ -40,9 +40,9 @@ func _lib(cached: Array) -> FakeLib:
 	return lib
 
 
-func _check_eleven(meta: Dictionary, stone_big_in: float) -> void:
+func _check_eleven(meta: Dictionary, stone_big_in: float, count := 11) -> void:
 	var mats := BoardgenDressMaterials.make(meta, _lib(["flags", "plaster", "roof_tiles", "coursed_stone", "timber"]))
-	assert_int(mats.size()).is_equal(11)
+	assert_int(mats.size()).is_equal(count)
 	for name: String in mats:
 		assert_str(mats[name].resource_name).is_equal(name)
 		assert_bool(mats[name] is ShaderMaterial).override_failure_message(name).is_equal(name in TEXTURED)
@@ -62,10 +62,10 @@ func test_the_manifest_gives_eleven_named_materials() -> void:
 	_check_eleven(META, 5.5)   # the K0 nominal numbers of the copy above
 
 
-func test_the_bundled_manifest_gives_eleven_named_materials_once_it_is_on_main() -> void:
+func test_the_bundled_manifest_gives_twelve_named_materials_once_it_is_on_main() -> void:
 	if not FileAccess.file_exists(BUNDLED):
 		return   # step 3 (lane CORE) copies it in; until then the copy above is the manifest
-	_check_eleven(JSON.parse_string(FileAccess.get_file_as_string(BUNDLED)), 3.6)   # PINNED to the stone scale ruled 22.11. (ct_stone_big 3.6 in, ct_stone 3.0 in): a later drift of the manifest goes red here
+	_check_eleven(JSON.parse_string(FileAccess.get_file_as_string(BUNDLED)), 3.6, 12)   # the twelfth is ct_veg (vegetation, a flat placeholder until step 14b)   # PINNED to the stone scale ruled 22.11. (ct_stone_big 3.6 in, ct_stone 3.0 in): a later drift of the manifest goes red here
 
 
 func test_a_set_that_is_not_cached_gives_a_flat_material_in_its_tone() -> void:
