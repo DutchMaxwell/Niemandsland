@@ -1,5 +1,5 @@
 // ruintown_dress_veg.gdshaderinc - what the two vegetation shaders of the ruin-town dressing share (material ct_veg,
-// docs/adr/0004-dressing-materials.md): the light uniforms, the dry share, the thinness varying and light().
+// docs/adr/0004-dressing-materials-and-kit-manifest.md): the light uniforms, the dry share, the thinness varying and light().
 // Vertex data of the kit: COLOR rgb = linear albedo / albedo_scale x 0.5 (cards: 0.5 white), COLOR.a = ambient occlusion,
 // UV = blade (u across, v along) or the card's atlas rectangle, UV2.x = a random number per blade,
 // UV2.y = thinness (1 blade, 0.8 leaf, 0.4 stalk, 0 moss; cards 0.5 / 0).
