@@ -124,9 +124,10 @@ static func is_lifecycle_unit(main, gu: GameUnit) -> bool:
 
 ## (2) A lifecycle unit whose shot, End and digest resolve in the core. PLAN_FIRST_DELETION step 21: a Hit & Run bearer is taken - its
 ## intent says `no_step` (step 20), so the core takes no step and keeps the round's use open for the player's drag (fab_a6_test).
-## A Crossing Attack carrier stays on the table (none in the bundled lists; it takes the fallback).
+## A Crossing Attack carrier is one too: the core rolls the mandatory attack from the trails the session holds (the table never
+## rolled it for a player's unit).
 static func is_core_unit(main, gu: GameUnit) -> bool:
-	return is_lifecycle_unit(main, gu) and is_plain_human(gu) and not CoreSlice.carries(gu, ["Crossing Attack"])
+	return is_lifecycle_unit(main, gu) and is_plain_human(gu)
 
 
 ## (3) Equal to (2) for now; step 82 widens it by movement rule.
@@ -803,9 +804,8 @@ static func _dangerous_mismatch(unit: GameUnit, dice: int, why: String) -> void:
 
 ## P4.D-37: the activation_level group (core_slice_allow.json): a unit whose rules fire when it moves through an enemy
 ## (a Strafing weapon, Crossing Attack). The core's activation resolves them from the trails it is handed, in its
-## pre-attack slots. The AI door takes both. The human door takes a Strafing bearer (P4.D-37b: its strike moves from the drop to
-## the activation's Fire / End, `_solo_human_strafing` leaves it to the core); a Crossing Attack bearer stays on the table there,
-## which never rolled that rule for a human unit (the core would).
+## pre-attack slots. Both doors take both: a player's bearer strikes with the activation's Fire / End (`_solo_human_strafing`
+## leaves a Strafing strike to the core; the table never rolled Crossing Attack for a player's unit).
 const MOVE_THROUGH := ["Strafing", "Crossing Attack"]
 
 
