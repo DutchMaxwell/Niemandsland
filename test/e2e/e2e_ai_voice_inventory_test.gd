@@ -232,10 +232,10 @@ func test_the_plain_toast_fades_out_and_leaves(timeout := 120000) -> void:
 ## Centred spinner + words while the AI computes; it breathes, lets every click through, and a batch
 ## sweep never shows it.
 func test_the_dream_overlay_breathes_centred_and_lets_clicks_through(timeout := 120000) -> void:
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_main._show_dream_overlay()
 	assert_object(_main._solo_dream_overlay).override_failure_message("a batch sweep showed the overlay").is_null()
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	_main._show_dream_overlay()
 	await _runner.simulate_frames(3)
 	var overlay: Control = _main._solo_dream_overlay
@@ -367,7 +367,7 @@ func test_every_status_line_is_a_centred_house_plate(timeout := 120000) -> void:
 
 ## The dream overlay: a house sheet, the words in the AI's gold voice, the spinner in the same gold.
 func test_the_dream_overlay_wears_the_house_sheet(timeout := 120000) -> void:
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	_main._show_dream_overlay()
 	await _runner.simulate_frames(3)
 	var overlay: Control = _main._solo_dream_overlay

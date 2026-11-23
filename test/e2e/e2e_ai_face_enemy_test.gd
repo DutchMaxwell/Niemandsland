@@ -43,10 +43,9 @@ func _yaws(u: GameUnit) -> Array:
 
 ## Solo, player 2 = NACHTMAHR, deployed facing +Z (away from the human): the battle start turns it to -Z.
 func test_the_ai_seat_faces_the_enemy_at_the_battle_start(timeout := 120000) -> void:
-	_main.solo_ai_slots = {2: true}
 	var human := _register(1, "Wachtturm", Vector3(0.0, 0.0, -0.4))
 	var ai := _register(2, "Raider", Vector3(0.0, 0.0, 0.4))
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	_main.opr_army_manager.start_game()
 	for y in _yaws(ai):
 		var off := absf(rad_to_deg(angle_difference(float(y), PI)))

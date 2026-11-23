@@ -25,7 +25,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_real_net = _main.network_manager
 
@@ -122,7 +122,7 @@ func test_a_guests_cast_is_boosted_by_the_guests_own_casters(timeout := 120000) 
 	var acolyte := _reg(2, "Acolyte", -6.0, 2)
 	var oracle := _reg(1, "Oracle", 4.0, 2)
 	var brutes := _reg(AI_SLOT, "Brutes", 10.0)
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [AI_SLOT])
 	assert_object(_main.solo_controller).override_failure_message("fixture: no AI controller").is_not_null()
 	var sides: Dictionary = _main._solo_cast_sides(seer)
 	assert_int(int(sides["own"])).override_failure_message("the guest's cast is booked under slot %d's side" % int(sides["own"])) \
@@ -147,7 +147,7 @@ func test_a_hosts_cast_is_boosted_by_the_hosts_own_casters(timeout := 120000) ->
 	var oracle := _reg(1, "Oracle", -6.0, 2)
 	var acolyte := _reg(2, "Acolyte", 4.0, 2)
 	var brutes := _reg(AI_SLOT, "Brutes", 10.0)
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [AI_SLOT])
 	var text := await _cast_with_one_boost(seer, brutes)
 	assert_int(oracle.casts_current).override_failure_message("the host's own Oracle did not pay:\n%s" % text).is_equal(1)
 	assert_int(acolyte.casts_current).override_failure_message("the guest's Acolyte paid the host's boost:\n%s" % text) \
@@ -162,7 +162,7 @@ func test_solo_cast_is_boosted_by_the_players_casters(timeout := 120000) -> void
 	var seer := _reg(1, "Seer", 0.0, 1)
 	var oracle := _reg(1, "Oracle", -6.0, 2)
 	var brutes := _reg(2, "Brutes", 10.0)
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	var text := await _cast_with_one_boost(seer, brutes)
 	assert_int(oracle.casts_current).override_failure_message("the player's Oracle did not pay:\n%s" % text).is_equal(1)
 	assert_str(text).contains("needs 3+ (1 token, +1 boost)")

@@ -19,10 +19,9 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_fast = true   # shrink pacing holds — real dice, no reason to sit through the beats
+	SoloHarness.fast(_main)   # shrink pacing holds — real dice, no reason to sit through the beats
 	_arm_pump()   # the attacker's own defending saves against the AI's strike-back need a click
 
 
