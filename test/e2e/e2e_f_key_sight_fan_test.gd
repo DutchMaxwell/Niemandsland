@@ -22,7 +22,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main._solo_batch = false   # the fan is skipped headless-batch (see _solo_show_fan_for_unit)
+	SoloHarness.instant(_main, false)   # the fan is skipped headless-batch (see _solo_show_fan_for_unit)
 
 
 func after_test() -> void:

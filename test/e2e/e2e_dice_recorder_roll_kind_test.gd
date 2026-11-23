@@ -31,13 +31,12 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
 	# Batch dice: _solo_tray_roll draws faces from the RNG instead of awaiting the physics tray,
 	# which headless would never settle.
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	# AiDiceRecorder's env check + open stream are cached STATIC state (dice_recorder.gd) — reset
 	# per test so two test_ functions in this suite do not share one stream (ai_shot_recorder_test.gd's
 	# idiom for its AiShotRecorder sibling).

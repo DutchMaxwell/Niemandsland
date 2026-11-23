@@ -47,11 +47,10 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}          # player 2 = NACHTMAHR
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)                  # player 2 = NACHTMAHR
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true                 # no dialogs, no per-unit frame yield in a headless sweep
+	SoloHarness.instant(_main)                 # no dialogs, no per-unit frame yield in a headless sweep
 	_ai_acted = PackedStringArray()
 	_main.solo_controller.ai_unit_activated.connect(func(gu: GameUnit) -> void:
 		_ai_acted.append(gu.get_name()))
