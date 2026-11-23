@@ -4948,9 +4948,9 @@ func _solo_apply_strafing(unit: GameUnit, human_trails: Array = []) -> void:
 	var target := crossed[0] as GameUnit
 	if human_move:
 		unit.unit_properties["strafe_round"] = opr_army_manager.current_round
-	# PLAN_FIRST_DELETION step 31 (lead ruling, option A): the rules core did not take this activation, and the table no longer resolves
-	# volleys - the strike is HELD with one line naming the unit, the rule and the reason (census `held_strike`). The book makes the strike
-	# mandatory: a known rules gap until ticket STRIKE-ON-RECAPTURE (the core striking at move time).
+	# The rules core did not take this activation and the GDScript table no longer resolves volleys, so the strike is held with one
+	# battle-log line naming the unit, the rule and the reason (census key `held_strike`); see docs/adr/0001-rulebook-parity.md.
+	# The book makes the strike mandatory: this is a known rules gap until the core strikes at move time.
 	var reasons := CoreActivation.why_not(self, unit, target)
 	var why := ", ".join(PackedStringArray(reasons)) if not reasons.is_empty() else "the table paid this activation's moves and beats"
 	_log_rule_event(BattleLog.Category.COMBAT, "%s: %s passes over %s — the rules core cannot resolve this attack (%s), it is held" % [
@@ -5087,13 +5087,18 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		why.append("no_handle")
 	if order.size() > 1:
 		why.append("split")
-	# PLAN_FIRST_DELETION step 31 (LD-4): a volley the rules core cannot resolve is HELD with one line and the census key `held` -
-	# the table no longer resolves volleys.
+	# The GDScript table no longer resolves volleys: a volley the rules core cannot resolve is held with one battle-log line naming
+	# the reasons (census key `held`); see docs/adr/0001-rulebook-parity.md.
 	var targets: Array = order.map(func(id) -> GameUnit: return groups[id]["target"])
 	CoreActivation.note_legacy(self, "held", unit, targets, ",".join(why))
 	var reasons: Array = Array(why)
-	for t in [null] + targets:
-		for r in CoreActivation.why_not(self, unit if t == null else null, t):
+	# Why the core refuses the shooter itself (its own rules and weapons).
+	for r in CoreActivation.why_not(self, unit, null):
+		if not reasons.has(r):
+			reasons.append(r)
+	# Why the core refuses each target (the target's rules).
+	for t in targets:
+		for r in CoreActivation.why_not(self, null, t):
 			if not reasons.has(r):
 				reasons.append(r)
 	_solo_log_no_volley(unit, report, "the rules core cannot resolve this volley (%s)" % (", ".join(PackedStringArray(reasons)) if not reasons.is_empty() else "refused"))

@@ -21,7 +21,7 @@ extends GdUnitTestSuite
 ## Constructed: bare units (E2EBoot.make_unit, ParityTable._make_unit), the OPR profile of the armed ones.
 ## NML_ONE_CORE_SEEDS overrides the 20 seeds per defense (200 for the sweep run).
 ##
-## PLAN_FIRST_DELETION 34 FT-C5: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main af5c83610.
+## The table arm left when the AI table resolver retired; door values are pinned as literals read on main af5c83610.
 
 const SlicePin := preload("res://test/one_core/slice_pin.gd")
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -372,7 +372,7 @@ func test_a_target_with_no_statline_is_not_shot_and_says_why_on_the_ai_door() ->
 	_free([att, ghost])
 
 
-## ... with the kill switch on the volley is HELD since PLAN_FIRST_DELETION step 31: one held line, no statline line, no die.
+## ... with the kill switch on the volley is held (the GDScript table no longer resolves volleys): one held line, no statline line, no die.
 func test_the_kill_switch_leaves_a_target_with_no_statline_to_the_table() -> void:
 	CoreActivation._env = 0
 	var att := _unit(2, "Att", 0.0, 10, true)

@@ -149,7 +149,7 @@ func test_counting_draws_no_dice_and_writes_no_line() -> void:
 	assert_array(lines).override_failure_message("the counter wrote a battle-log line").is_empty()
 
 
-## PLAN_FIRST_DELETION step 31: the volley the core refuses is HELD - census key `held`, no die.
+## The GDScript table no longer resolves volleys: the volley the core refuses is held - census key `held`, no die.
 func test_the_ai_volley_door_counts_a_volley_the_table_held() -> void:
 	await _boot()
 	var rifle := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 5, "rules": ["Blast(3)"]}
@@ -190,7 +190,7 @@ func test_the_human_shoot_door_counts_a_table_volley() -> void:
 	await E2EBoot.settle(get_tree())
 
 
-## PLAN_FIRST_DELETION step 31: the strike is HELD - census key `held_strike`, no die.
+## The GDScript table no longer resolves volleys: the strike is held - census key `held_strike`, no die.
 func test_the_strafe_door_counts_a_held_strike() -> void:
 	await _boot()
 	var epoch_before := AiActRecorder.rules_epoch

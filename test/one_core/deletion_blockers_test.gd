@@ -78,7 +78,7 @@ func test_every_deletion_blocker_still_holds() -> void:
 
 
 func test_the_list_is_not_empty_and_names_a_step_per_row() -> void:
-	assert_int(BLOCKERS.size()).is_greater_equal(8)   # 9 until PLAN_FIRST_DELETION step 31 retired the Strafing row
+	assert_int(BLOCKERS.size()).is_greater_equal(8)   # 9 until the Strafing row retired with the AI table resolver
 	for b in BLOCKERS:
 		assert_str(String(b["retire"])).override_failure_message("%s names no step" % b["name"]).contains("P4.D-")
 
@@ -146,7 +146,7 @@ func test_the_human_door_reads_the_live_slice() -> void:
 			"the human door reads the allow file, not the live slice")
 
 
-## PLAN_FIRST_DELETION step 31 retired the row "Strafing hands its volley to the AI resolver": no production line of main.gd awaits the
+## The AI table resolver's retirement removed the row "Strafing hands its volley to the AI resolver": no production line of main.gd awaits the
 ## AI resolver any more - the AI volley the core refuses and the move-through strike are HELD with a line (`held`, `held_strike`).
 ## RED: put either `await _solo_resolve_ai_volley(` call back.
 func test_no_production_line_calls_the_ai_resolver() -> void:

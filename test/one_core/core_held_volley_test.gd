@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## PLAN_FIRST_DELETION step 31 (LD-4): the AI volley the rules core cannot resolve is HELD - one battle-log line names the reason and the
+## The AI volley the rules core cannot resolve is HELD - one battle-log line names the reason and the
 ## census counts it (`legacy["held"]`); the table no longer resolves it (`_solo_resolve_ai_volley` has no production caller).
 ## Real: the main scene, NmlCore, the AI body's `_run_ai_shooting` with a board captured before the activation, the live deny file.
 ## Constructed: a 3-model rifle unit and a target carrying a deny-listed rule (Grounded Protection), 10" apart.
