@@ -115,6 +115,10 @@ func _cases() -> Array:
 		["Re-Position Artillery target", rifles, DoorLines.entry("Squad", 10, ["Re-Position Artillery"], [], "battle_brothers", 0), ""],
 		["Mend target", rifles, DoorLines.entry("Squad", 10, ["Mend"], [], "battle_brothers", 0), ""],
 		["Regeneration Buff target", rifles, DoorLines.entry("Squad", 10, ["Regeneration Buff"], [], "dark_elf_raiders", 0), ""],
+		# A vs-target Mark on the SHOOTER: the bearer marks the target, its own volley gets Rending against it once,
+		# the pick / record / spend lines name the Mark (#3190).
+		["Rending Mark gf shooter", DoorLines.entry("Markers", 5, ["Rending Mark"], [], "orc_marauders", 5), plain, "Rending Mark"],
+		["Rending Mark aof shooter", _aof(DoorLines.entry("Markers", 5, ["Rending Mark"], [], "orcs", 5)), plain_aof, "Rending Mark"],
 	]
 
 
@@ -151,7 +155,8 @@ func _unit_with(unit_rules: Array, weapon_rules: Array, faction: String) -> Game
 
 func test_putting_the_name_back_into_the_deny_list_refuses_the_unit() -> void:
 	for row in [["Hazardous", [], ["Hazardous"], "ratmen_clans", "weapon_rule:Hazardous"],
-			["Relentless Aura", ["Relentless Aura"], [], "robot_legions", "unit_rule:Relentless Aura"]]:
+			["Relentless Aura", ["Relentless Aura"], [], "robot_legions", "unit_rule:Relentless Aura"],
+			["Rending Mark", ["Rending Mark"], [], "orc_marauders", "unit_rule:Rending Mark"]]:
 		var bearer := _unit_with(row[1], row[2], row[3])
 		var committed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.DENY_PATH))
 		assert_array(CoreSlice.refusals_in(CoreSlice.DENY_PATH, bearer)).override_failure_message("the committed deny file refuses %s" % row[0]).is_empty()
