@@ -342,6 +342,28 @@ gdUnit4 suites live in `test/`; the relay has its own pytest suite in `relay/`. 
 merge, **the import must be parse-error-free and the full suite green**. See
 [`DEVELOPMENT.md`](DEVELOPMENT.md) for the headless commands.
 
+### 6.4 Test behaviour through the public interface
+
+A test drives a module through what its callers use and checks what they can observe: the
+returned value, the state a caller can read, the battle-log line. A test that calls a private
+function (`_name`) or asserts an internal detail breaks on every refactor without finding a bug;
+write it against the public interface, or add a small public seam for it. A literal expected value
+that only records today's output is a snapshot pin and is labelled as one (ADR 0005).
+
+### 6.5 Automated checks
+
+A rule that a tool can enforce is enforced by the tool, not only written here. The checks that
+gate a pull request:
+
+| Check | Command | Scope |
+| --- | --- | --- |
+| Godot import (parse errors) | `godot --headless --editor --quit --path .` | every script |
+| gdUnit4 suites | see `AGENTS.md`, "Godot table" | `test/` |
+| GDScript format and lint | `bash tools/format_gate.sh` | files listed in `tools/gdformat_clean.txt` / `tools/gdlint_clean.txt` (the lists only grow) |
+| Rust tests | see `AGENTS.md`, "Rust core" | `core/` |
+| clippy | `tools/clippy_gate.sh` | fails when a lint count rises; `tools/clippy_baseline.txt` only shrinks |
+| rustfmt | TODO: not gated yet (most files in `core/` still differ) | - |
+
 ---
 
 ## 7. Git conventions
@@ -410,6 +432,17 @@ OPRApiClient        (fetch the army from Army Forge)
     -> GameUnit / ModelInstance   (unit + per-model state)
     -> NetworkManager (sync to peers)  ·  SaveManager (.nml)
 ```
+
+### 9.3 Deep modules and locality
+
+Prefer a few modules with a narrow public interface that hide a lot of work over many thin
+helpers that each expose their internals. Keep logic that changes together in one place: a change
+to one rule or one feature should touch as few files as possible. Use the words of
+[`glossary.md`](glossary.md) for names; a new concept gets a glossary entry, not a new synonym.
+
+Large changes start as a short specification in `docs/specs/<name>.md` (goal, out of scope, terms,
+module structure, acceptance criteria and tests, risks) that ends in a list of small, independent
+pull requests.
 
 ---
 
