@@ -23,9 +23,8 @@ func before_test() -> void:
 		"deploy_phases": [["defender", "half", "centre_disc_12"], ["attacker", "all", "edge_band_12"],
 			["defender", "rest", "anywhere"]],
 		"markers": {"count": 1, "placement": "table_centre"}}
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
-	_main._solo_batch = true
+	SoloHarness.start(_main)
+	SoloHarness.instant(_main)
 
 
 func after_test() -> void:

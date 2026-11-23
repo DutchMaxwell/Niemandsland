@@ -73,10 +73,9 @@ func test_piercing_fighter_aura_reaches_ev_and_named_dice_parts() -> void:
 
 
 func test_piercing_fighter_save_step_logs_one_named_ap_bonus() -> void:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	var u := _carrier("Piercing Fighter", "gf", "orc_marauders")
 	var foe := _unit([], "gf", "orc_marauders")
 	await _main._solo_resolve_saves(u, foe, "Blade", [4], 1, 4,
@@ -122,10 +121,9 @@ func test_piercing_shooter_aura_reaches_ev_and_named_dice_parts() -> void:
 
 
 func test_piercing_shooter_save_step_logs_one_named_ap_bonus() -> void:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	var u := _carrier("Piercing Shooter", "gf", "wormhole_daemons_of_war")
 	var foe := _unit([], "gf", "wormhole_daemons_of_war")
 	await _main._solo_resolve_saves(u, foe, "Rifle", [4], 1, 4,

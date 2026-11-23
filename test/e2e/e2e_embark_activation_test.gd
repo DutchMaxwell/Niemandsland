@@ -30,8 +30,7 @@ func after_test() -> void:
 
 
 func _solo_playing_on() -> void:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 
 
@@ -156,8 +155,7 @@ func test_sandbox_embark_stays_free(timeout := 120000) -> void:
 
 func test_deployment_reserve_loading_stays_free(timeout := 120000) -> void:
 	# #160 reserve loading happens DURING deployment — no activation economy there.
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.DEPLOYMENT
 	var tc := _truck_and_cargo()
 	_main.radial_menu_controller._embark_unit({"game_unit": tc[1], "embark_target": tc[0]})
@@ -275,7 +273,7 @@ func test_the_ai_cargo_actually_takes_the_dangerous_test(timeout := 120000) -> v
 	# gives you. For NACHTMAHR's cargo there is no hand — nobody rolled, so the rule's first
 	# consequence never applied to the AI side at all.
 	_solo_playing_on()
-	_main._solo_batch = true   # tray faces without the physics settle
+	SoloHarness.instant(_main)   # tray faces without the physics settle
 	var truck := E2EBoot.make_unit(_main, 2, "AI Truck", [Vector3.ZERO])
 	truck.unit_properties["special_rules"] = ["Transport(6)"]
 	var grunts := E2EBoot.make_unit(_main, 2, "AI Grunts", [Vector3(0.04, 0, 0)])

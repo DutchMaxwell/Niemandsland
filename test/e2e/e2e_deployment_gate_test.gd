@@ -144,7 +144,7 @@ func test_first_solo_activation_refuses_and_does_not_spend_the_unit(timeout := 1
 # ===== Door 3 — the guided deployment FSM completing =====
 
 func test_deployment_fsm_reopens_the_human_turn_instead_of_completing(timeout := 120000) -> void:
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	_register(1, "Wachtturm", ON_TABLE)
 	_register(1, "Vergessene", ON_TRAY)
 	# "No units left" / "✓ Done" is the player ASSERTING he is finished — nothing was verified.
@@ -202,7 +202,7 @@ func test_f11_ai_turn_proceeds_once_the_table_is_clear(timeout := 120000) -> voi
 ## still saw them standing at their tray coordinates, which is the charge the maintainer watched.
 func test_ambush_units_may_stay_on_the_tray_and_are_formally_set_aside(timeout := 120000) -> void:
 	# _set_aside_offtable_ambush is a no-op without a controller — build it, or this passes vacuously.
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	_register(1, "Wachtturm", ON_TABLE)
 	var amb := _register(1, "Hinterhalt", ON_TRAY)
 	amb.unit_properties["special_rules"] = ["Ambush"]

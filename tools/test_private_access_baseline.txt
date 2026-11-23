@@ -31,7 +31,7 @@ _dice_result_label 1
 _do_clear_all 4
 _do_next_round 6
 _engine_enemy 7
-_ensure_solo_controller 338
+_ensure_solo_controller 312
 _fps_low_since_ms 1
 _game_phase_status_label 2
 _get_player_color 3
@@ -144,7 +144,7 @@ _rules_start_asked 2
 _rules_start_question_due 8
 _run_ai_dangerous 5
 _run_ai_melee 22
-_run_ai_shooting 52
+_run_ai_shooting 50
 _run_human_attack 27
 _run_human_attack_split 5
 _run_human_cast 15
@@ -211,7 +211,7 @@ _solo_auto_point_click 2
 _solo_auto_point_dwell 1
 _solo_auto_saves 50
 _solo_auto_seize 9
-_solo_batch 310
+_solo_batch 283
 _solo_begin_rapid_ambush_round_one 1
 _solo_below_half_strength 2
 _solo_board_prompt 3
@@ -239,7 +239,7 @@ _solo_coordinate_click 1
 _solo_coordinate_decline 1
 _solo_coordinate_hold_active 2
 _solo_coordinate_pick 2
-_solo_core_ai_h 180
+_solo_core_ai_h 175
 _solo_core_round_begin 3
 _solo_core_round_end 4
 _solo_core_shadow_h 19
@@ -271,7 +271,7 @@ _solo_end_targeting 20
 _solo_ensure_playing_phase 6
 _solo_erlkoenig_missing 2
 _solo_expire_spell_tokens 6
-_solo_fast 42
+_solo_fast 38
 _solo_finish_human_activation 2
 _solo_flush_dev 2
 _solo_game_finished 20
