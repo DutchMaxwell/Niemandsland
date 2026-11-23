@@ -31,7 +31,7 @@ _dice_result_label 1
 _do_clear_all 4
 _do_next_round 6
 _engine_enemy 7
-_ensure_solo_controller 337
+_ensure_solo_controller 338
 _fps_low_since_ms 1
 _game_phase_status_label 2
 _get_player_color 3
@@ -144,7 +144,7 @@ _rules_start_asked 2
 _rules_start_question_due 8
 _run_ai_dangerous 5
 _run_ai_melee 22
-_run_ai_shooting 51
+_run_ai_shooting 52
 _run_human_attack 27
 _run_human_attack_split 5
 _run_human_cast 15
@@ -197,7 +197,7 @@ _solo_apply_reanimation 1
 _solo_apply_reckless_piercing 2
 _solo_apply_regeneration 6
 _solo_apply_storm_attack 2
-_solo_apply_strafing 4
+_solo_apply_strafing 6
 _solo_apply_surprise_attack 4
 _solo_apply_teleport 3
 _solo_apply_utility_buffs 35
@@ -239,7 +239,7 @@ _solo_coordinate_click 1
 _solo_coordinate_decline 1
 _solo_coordinate_hold_active 2
 _solo_coordinate_pick 2
-_solo_core_ai_h 176
+_solo_core_ai_h 180
 _solo_core_round_begin 3
 _solo_core_round_end 4
 _solo_core_shadow_h 19
@@ -468,7 +468,7 @@ _terrain_mode_btn 1
 _toggle_settings_panel 1
 _tool_rail 4
 _top_bar 2
-_tray_rng 47
+_tray_rng 53
 _tutorial_board_pending 1
 _tutorial_director 5
 _tutorial_mode 3

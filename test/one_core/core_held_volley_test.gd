@@ -28,7 +28,7 @@ func before_test() -> void:
 	_main._ensure_solo_controller()
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	CoreActivation._env = 1
 	CoreSlice.path_override = ""
 	CoreSlice.reset_cache()
