@@ -3,7 +3,7 @@ extends RefCounted
 ## One module of the ruin-town kit manifest (assets/ruintown_dress.json), built ONCE by
 ## BoardgenDressKit and read-only by convention. Lengths are inches in module space, the unit the
 ## manifest states; the shadow hulls are already resolved. `errors` lists what was missing or
-## malformed (collected here, never pushed; the kit reports them).
+## malformed (collected here, never pushed; callers read them).
 
 ## A module without a hull list casts the shadow of its aabb shrunk by this much.
 const SHRINK_IN := 0.05
