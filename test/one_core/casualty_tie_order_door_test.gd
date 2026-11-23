@@ -1,14 +1,15 @@
 extends GdUnitTestSuite
 ## Lane shootfix (#3394 follow-up): the table breaks an EXACT casualty-rank tie by the model's index in `unit.models`, the core by its slot
 ## (a stable sort). That is one order only while the core lists the LIVING models in the table's model order. Three foes of 20 models on a
-## 5 x 4 grid of 0.0625 m steps (exact in f32, so the four corners tie exactly), each shot by the same plain AI volley on the table path and
-## through the core door, seed for seed, the foe's slots compared:
+## 5 x 4 grid of 0.0625 m steps (exact in f32, so the four corners tie exactly), each shot by the same plain AI volley through the
+## core door, seed for seed, the foe's slots pinned to the values read on main:
 ##   grid    - all 20 alive (the soak's case);
 ##   revived - the four corners dead, then 0 and 19 brought back as Reanimation does it (`is_alive` and wounds restored in place, the index
 ##             kept): 18 living with gaps in the list, the two revived corners tying exactly (the formation stays point-symmetric);
 ##   joined  - a hero joined to the grid (its own unit; the volley's casualties land on the host's bodies first).
 ## RED (before #3394): the grid and the joined case differ on 6 of 8 seeds, the revived case on 3 of 8.
 ## Real: the main scene, NmlCore, the table's volley, the capture and the door's landing. Constructed: plain units.
+## PLAN_FIRST_DELETION 34 FT-C1: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main af5c83610.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -17,6 +18,37 @@ const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_s
 	"faction_folder": "robot_legions", "rules": []}
 const STEP_M := 0.0625
 const SEEDS := 8
+## The door's slots per seed, read on main (where the table still shoots and equals the door). One entry per seed; the "joined"
+## entries carry the host's slots and the hero's.
+const WANT_SLOTS_GRID := [
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, false, 0]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, true, 1], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]]],
+	[[[0, true, 1], [1, true, 1], [2, true, 1], [3, true, 1], [4, true, 1], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, true, 1], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, true, 1], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, true, 1], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, true, 1], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]]]]
+const WANT_SLOTS_REVIVED := [
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0], [6, true, 1], [7, true, 1], [8, true, 1], [9, false, 0], [10, false, 0], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, false, 0]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, false, 0]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, false, 0]]],
+	[[[0, true, 1], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, false, 0]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, false, 0]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, false, 0]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, false, 0]]]]
+const WANT_SLOTS_JOINED := [
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, false, 0]], [[0, true, 1]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]], [[0, true, 1]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, true, 1], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]], [[0, true, 1]]],
+	[[[0, true, 1], [1, true, 1], [2, true, 1], [3, true, 1], [4, true, 1], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, true, 1], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]], [[0, true, 1]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, true, 1], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]], [[0, true, 1]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, true, 1], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]], [[0, true, 1]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, true, 1], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]], [[0, true, 1]]],
+	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]], [[0, true, 1]]]]
+## Seeds that removed at least one model, per kind, read on main.
+const WANT_PICKS := {"grid": 7, "revived": 7, "joined": 7}
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -86,32 +118,31 @@ func _volley(s: int, core: bool, kind: String) -> Array:
 	return slots
 
 
-func _case(kind: String) -> void:
+func _case(kind: String, want: Array) -> void:
 	var bad: Array = []
 	var picks := 0
 	var took := 0
 	for s in SEEDS:
 		var runs := CoreActivation.ai_runs
-		var table := await _volley(s, false, kind)
 		var door := await _volley(s, true, kind)
 		took += CoreActivation.ai_runs - runs
-		var dead := (table[0] as Array).filter(func(e: Array) -> bool: return not bool(e[1])).size() - (2 if kind == "revived" else 0)   # 4 and 15 stood dead before the volley
+		var dead := (door[0] as Array).filter(func(e: Array) -> bool: return not bool(e[1])).size() - (2 if kind == "revived" else 0)   # 4 and 15 stood dead before the volley
 		picks += 1 if dead > 0 else 0
-		if table != door:
-			bad.append("%s seed %d\n table %s\n door  %s" % [kind, s, str(table), str(door)])
-	print("CASUALTY_TIE_ORDER %s seeds=%d took=%d seeds_with_casualties=%d differ=%d" % [kind, SEEDS, took, picks, bad.size()])
+		if door != want[s]:
+			bad.append("%s seed %d\n want %s\n door %s" % [kind, s, str(want[s]), str(door)])
+	print("CASUALTY_TIE_ORDER %s seeds=%d took=%d seeds_with_casualties=%d" % [kind, SEEDS, took, picks])
 	assert_int(took).override_failure_message("%s: the door took no volley - nothing compared" % kind).is_equal(SEEDS)
-	assert_int(picks).override_failure_message("%s: no seed removed a model - the tie was never reached" % kind).is_greater(0)
+	assert_int(picks).override_failure_message("%s: the door removed no model - the tie was never reached" % kind).is_equal(int(WANT_PICKS[kind]))
 	assert_array(bad).override_failure_message("\n".join(bad.slice(0, 2))).is_empty()
 
 
 func test_a_full_twenty_model_grid_loses_the_same_models_through_the_door(timeout := 600000) -> void:
-	await _case("grid")
+	await _case("grid", WANT_SLOTS_GRID)
 
 
 func test_a_grid_with_a_revived_model_loses_the_same_models_through_the_door(timeout := 600000) -> void:
-	await _case("revived")
+	await _case("revived", WANT_SLOTS_REVIVED)
 
 
 func test_a_grid_with_a_joined_hero_loses_the_same_models_through_the_door(timeout := 600000) -> void:
-	await _case("joined")
+	await _case("joined", WANT_SLOTS_JOINED)
