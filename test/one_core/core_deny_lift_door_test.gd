@@ -33,6 +33,8 @@ const WANT_LINES := {
 	"Re-Position Artillery target": 16,
 	"Mend target": 16,
 	"Regeneration Buff target": 16,
+	"Rending Mark gf shooter": 16,
+	"Rending Mark aof shooter": 16,
 }
 
 var _runner: GdUnitSceneRunner
