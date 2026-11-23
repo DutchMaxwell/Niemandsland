@@ -47,3 +47,20 @@ jobs:
           # 14.09.2026: the four imprint/privacy files carry the responsible person's name by decision; everything else stays pattern-free.
           HITS=$(grep -rIliE "$FORBIDDEN" . --exclude-dir=.git --exclude-dir=.github --exclude=README.md --exclude=PRIVACY_DATA_SHARING.md --exclude=privacy_menu.gd --exclude=startup_menu.gd | wc -l)
           if [ "$HITS" -gt 0 ]; then echo "::error::$HITS file(s) match private forbidden patterns (names withheld)"; exit 1; fi
+  format:
+    # Format and lint of the files that are already clean (tools/gdformat_clean.txt and
+    # tools/gdlint_clean.txt). An allowlist, not "changed files": a legacy file would be
+    # reformatted as a whole on its first touch. rustfmt is still deferred inside the script -
+    # core/ needs 606 files formatted first (see the script header).
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install gdtoolkit
+        run: pip install gdtoolkit==4.5.0
+      - name: Format and lint gate
+        run: bash tools/format_gate.sh
