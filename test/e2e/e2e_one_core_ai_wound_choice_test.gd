@@ -1,11 +1,11 @@
 extends GdUnitTestSuite
-## #172 with the one-core door on: the human owner of a shot-at unit still allocates their own wounds. The core lands its
-## own casualty order, so `CoreActivation.run_ai` leaves a volley at a human unit with a wound-allocation choice (mixed
-## loadouts among the alive models, or a Tough model) to the table, which asks "allocate N wounds - CLICK a model".
+## #172 with the one-core door on: the human owner of a shot-at unit allocates their own wounds. With the wound_alloc
+## switch on (the default) the core resolves the volley and asks the owner in collect mode (mixed loadouts among the
+## alive models, or a Tough model): "allocate N wounds - CLICK a model".
 ## Real: the main scene, NmlCore, the AI activation (`_solo_activate_one_ai`), the table's volley and allocation prompt.
 ## Constructed: plain AI units (10 Rifles) and human units on the right (10 models; mixed = 8 Rifle + 2 Machinegun),
 ## the human's saves rolling without the save card, the owner answered by right-click (auto-allocate the rest).
-## Red-green: on a build without the guard the mixed case shows 0 prompts and the core resolves every volley.
+## The table arm left with the AI table resolver; door values are snapshot pins read on main df2284f (docs/adr/0005-snapshot-pins.md).
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -134,19 +134,6 @@ func _play(mixed: bool) -> int:
 		lost += alive0
 		_clear(units)
 	return lost
-
-
-@warning_ignore('unused_parameter')
-func test_ai_volley_at_a_unit_with_mixed_weapons_asks_the_owner(timeout := 600000,
-		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "NmlCore extension not loaded") -> void:
-	CoreActivation._choice_on = {"wound_alloc": false}   # the guard is the behaviour of the switch OFF (P4.D-26)
-	var lost := await _play(true)
-	assert_int(lost).override_failure_message("the volleys killed nothing: the test shows no allocation").is_greater(0)
-	assert_int(_prompts).override_failure_message("the owner was never asked to allocate (core volleys %d)" \
-		% CoreActivation.ai_runs).is_greater(0)
-	assert_int(_guard_lines).override_failure_message("the guard wrote no log line").is_greater(0)
-	assert_int(CoreActivation.ai_runs).override_failure_message("the core resolved a volley at a unit with a choice").is_equal(0)
-	assert_int(CoreActivation.ai_refusals).override_failure_message("the core refused (a defect, not the guard)").is_equal(0)
 
 
 ## The other side of the guard: no choice (one loadout, no Tough model) = no prompt, the core still resolves the volley.
