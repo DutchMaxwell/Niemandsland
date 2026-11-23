@@ -233,6 +233,29 @@ mod mor_17a {
         assert!((spell_damage_ev(10, &old.ctx, &f) - spell_damage_ev(10, &plain.ctx, &f)).abs() < 1e-9);
     }
 
+    /// Enhanced Knightborn beside Knightborn is one group and one roll. From within 9" the table refuses the plain name, so the roll
+    /// is said under "Enhanced Knightborn" (the fd-gate ledger cells gf_520); from over 9" the plain name, carried first, holds it.
+    /// The dice are the same either way. RED without `Ctx::open_named`: the near line said "Knightborn dice".
+    #[test]
+    fn enhanced_knightborn_beside_knightborn_names_the_rule_that_rolls() {
+        let said = |rules: &str, d: f64| {
+            let us = knight_squad(rules, "[]", crate::acts::CURRENT_RULES_EPOCH); // the ignore groups (and their names) are on from 84
+            let profiles = [rifle(64)];
+            let att = shooter(2);
+            let squad = [Shooter { profiles: &profiles, keep: &[0], attacks: &[64], att: &att, owner: "Archers" }];
+            let mut tray = Tray::supplied(vec![vec![6; 64], vec![1; 64], vec![6; 64]]); // a supplied tray keeps the lines
+            let out = resolve_volley_with_tray(&squad, &us.ctx, "Knightborn Squad", d, d, true, true, true, true, &mut tray);
+            let roll = tray.all_lines().into_iter().map(|l| l.text).find(|l| l.contains(" dice (6+)")).unwrap_or_else(|| format!("{:?}", tray.all_lines()));
+            (out.rolls, out.wounds, roll)
+        };
+        let both = r#"["Knightborn","Enhanced Knightborn"]"#;
+        let (near, far) = (said(both, 5.0), said(both, 12.0));
+        assert!(near.2.starts_with("Knightborn Squad rolls ") && near.2.contains(" Enhanced Knightborn dice (6+)"), "{near:?}");
+        assert!(far.2.contains(" Knightborn dice (6+)") && !far.2.contains("Enhanced"), "{far:?}");
+        let alone = said(r#"["Enhanced Knightborn"]"#, 5.0);
+        assert_eq!((near.0, near.1), (alone.0, alone.1), "same dice, same wounds: the name is the only change");
+    }
+
     /// CONTROL — a plain Regeneration unit (5+, no gate) is untouched by the row at either distance.
     #[test]
     fn plain_regeneration_is_unchanged_at_both_distances() {
