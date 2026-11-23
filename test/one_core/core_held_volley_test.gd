@@ -24,8 +24,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {1: true, 2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [1, 2], 2)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
 	SoloHarness.instant(_main)
@@ -89,9 +88,7 @@ func _legs(from_in: float, to_in: float) -> Array:
 func test_an_ai_strike_the_core_did_not_take_is_held_with_its_reason(timeout := 300000, do_skip := not ClassDB.class_exists("NmlCore"),
 		skip_reason := "no NmlCore") -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
-	_main.solo_ai_slots = {2: true}
-	_main.solo_controller.ai_slot = 2
-	_main.solo_controller.human_slot = 1
+	SoloHarness.start(_main, [2], 1)
 	var bird := _bearer(2, "Zeppelins", 11.0)
 	var foe := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Warriors", "models": 5, "x_in": 6.0}, true), {})
 	_main.solo_controller.last_move_paths = _legs(0.0, 11.0)
@@ -111,9 +108,7 @@ func test_an_ai_strike_the_core_did_not_take_is_held_with_its_reason(timeout := 
 func test_a_players_bearer_moved_over_an_enemy_still_attacks(timeout := 300000, do_skip := not ClassDB.class_exists("NmlCore"),
 		skip_reason := "no NmlCore") -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
-	_main.solo_ai_slots = {2: true}
-	_main.solo_controller.ai_slot = 2
-	_main.solo_controller.human_slot = 1
+	SoloHarness.start(_main, [2], 1)
 	var bird := _bearer(1, "Zeppelins", 11.0)
 	ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Warriors", "models": 5, "x_in": 6.0}, true), {})
 	var from: int = _main.battle_log.entries().size()
