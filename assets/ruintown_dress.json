@@ -265,6 +265,30 @@
    ],
    "uv": "world"
   },
+  "ct_stone_fine": {
+   "anti_tile": 0.0,
+   "course_in": 0.375,
+   "joint": [
+    0.3,
+    0.62,
+    [
+     0.07,
+     0.08,
+     0.04
+    ],
+    0.18
+   ],
+   "macro": 0.9,
+   "set": "coursed_stone",
+   "stone_in": 0.45,
+   "tile_in": 2.25,
+   "tone": [
+    0.42,
+    0.45,
+    0.52
+   ],
+   "uv": "world"
+  },
   "ct_timber": {
    "anti_tile": 0.0,
    "course_in": 0.3611,
@@ -335,12 +359,12 @@
     ]
    ],
    "batch": "K1",
-   "bytes": 12064,
+   "bytes": 12068,
    "family": "chimney",
    "height_in": 2.9,
    "len_in": 0.62,
    "materials": [
-    "ct_stone",
+    "ct_stone_fine",
     "ct_clay"
    ],
    "mount_in": 2.5,
@@ -599,23 +623,23 @@
     [
      3.0,
      1.7,
-     0.05
+     0.03
     ]
    ],
    "batch": "K1",
-   "bytes": 6444,
+   "bytes": 5224,
    "family": "gable",
    "height_in": 2.0,
    "len_in": 3.0,
    "materials": [
-    "ct_stone",
+    "ct_stone_fine",
     "ct_glass_dark"
    ],
    "mount_in": 2.5,
    "openings": [],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.05,
+    "high": 0.03,
     "low": 0.0
    },
    "role": "gable",
@@ -650,7 +674,7 @@
     "span_3"
    ],
    "tri_cap": 300,
-   "tris": 33
+   "tris": 21
   },
   "dr_gable_st_s6": {
    "aabb_in": [
@@ -662,23 +686,23 @@
     [
      6.0,
      1.7,
-     0.05
+     0.03
     ]
    ],
    "batch": "K1",
-   "bytes": 7672,
+   "bytes": 5224,
    "family": "gable",
    "height_in": 2.0,
    "len_in": 6.0,
    "materials": [
-    "ct_stone",
+    "ct_stone_fine",
     "ct_glass_dark"
    ],
    "mount_in": 2.5,
    "openings": [],
    "proud_in": {
     "flat": 0.0,
-    "high": 0.05,
+    "high": 0.03,
     "low": 0.0
    },
    "role": "gable",
@@ -713,7 +737,7 @@
     "span_6"
    ],
    "tri_cap": 300,
-   "tris": 45
+   "tris": 21
   },
   "dr_gable_tb_s3": {
    "aabb_in": [
@@ -1017,12 +1041,12 @@
     ]
    ],
    "batch": "K1",
-   "bytes": 17964,
+   "bytes": 10604,
    "family": "house_panel",
    "height_in": 2.5,
    "len_in": 3.0,
    "materials": [
-    "ct_stone",
+    "ct_stone_fine",
     "ct_timber"
    ],
    "mount_in": 0.0,
@@ -1031,13 +1055,13 @@
      1.1,
      1.9,
      0.0,
-     2.0
+     1.875
     ]
    ],
    "proud_in": {
     "flat": 0.2,
-    "high": 0.05,
-    "low": 0.05
+    "high": 0.035,
+    "low": 0.035
    },
    "role": "door",
    "shadow": [
@@ -1061,7 +1085,7 @@
     "stone"
    ],
    "tri_cap": 350,
-   "tris": 146
+   "tris": 74
   },
   "dr_house_st_plain_a": {
    "aabb_in": [
@@ -1073,23 +1097,23 @@
     [
      3.0,
      2.5,
-     0.05
+     -0.0
     ]
    ],
    "batch": "K1",
-   "bytes": 9236,
+   "bytes": 2048,
    "family": "house_panel",
    "height_in": 2.5,
    "len_in": 3.0,
    "materials": [
-    "ct_stone"
+    "ct_stone_fine"
    ],
    "mount_in": 0.0,
    "openings": [],
    "proud_in": {
-    "flat": 0.04,
-    "high": 0.05,
-    "low": 0.05
+    "flat": 0.0,
+    "high": 0.0,
+    "low": 0.0
    },
    "role": "plain_a",
    "shadow": [
@@ -1113,7 +1137,7 @@
     "stone"
    ],
    "tri_cap": 350,
-   "tris": 74
+   "tris": 4
   },
   "dr_house_st_plain_b": {
    "aabb_in": [
@@ -1125,23 +1149,23 @@
     [
      3.0,
      2.5,
-     0.05
+     -0.0
     ]
    ],
    "batch": "K1",
-   "bytes": 12912,
+   "bytes": 2048,
    "family": "house_panel",
    "height_in": 2.5,
    "len_in": 3.0,
    "materials": [
-    "ct_stone"
+    "ct_stone_fine"
    ],
    "mount_in": 0.0,
    "openings": [],
    "proud_in": {
-    "flat": 0.04,
-    "high": 0.024,
-    "low": 0.05
+    "flat": 0.0,
+    "high": 0.0,
+    "low": 0.0
    },
    "role": "plain_b",
    "shadow": [
@@ -1165,7 +1189,7 @@
     "stone"
    ],
    "tri_cap": 350,
-   "tris": 110
+   "tris": 4
   },
   "dr_house_st_quoin": {
    "aabb_in": [
@@ -1181,12 +1205,12 @@
     ]
    ],
    "batch": "K1",
-   "bytes": 7840,
+   "bytes": 6616,
    "family": "quoin",
    "height_in": 2.5,
    "len_in": 0.5,
    "materials": [
-    "ct_stone"
+    "ct_stone_fine"
    ],
    "mount_in": 0.0,
    "openings": [],
@@ -1215,7 +1239,7 @@
     "on_corner"
    ],
    "tri_cap": 60,
-   "tris": 60
+   "tris": 48
   },
   "dr_house_st_window": {
    "aabb_in": [
@@ -1231,12 +1255,12 @@
     ]
    ],
    "batch": "K1",
-   "bytes": 14420,
+   "bytes": 12180,
    "family": "house_panel",
    "height_in": 2.5,
    "len_in": 3.0,
    "materials": [
-    "ct_stone",
+    "ct_stone_fine",
     "ct_glass_dark",
     "ct_timber"
    ],
@@ -1245,12 +1269,12 @@
     [
      1.0,
      2.0,
-     1.0,
-     2.0
+     0.75,
+     1.875
     ]
    ],
    "proud_in": {
-    "flat": 0.04,
+    "flat": 0.0,
     "high": 0.035,
     "low": 0.08
    },
@@ -1276,7 +1300,7 @@
     "stone"
    ],
    "tri_cap": 350,
-   "tris": 98
+   "tris": 76
   },
   "dr_house_tb_blank": {
    "aabb_in": [
