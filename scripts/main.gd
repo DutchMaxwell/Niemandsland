@@ -4948,13 +4948,25 @@ func _solo_apply_strafing(unit: GameUnit, human_trails: Array = []) -> void:
 	var target := crossed[0] as GameUnit
 	if human_move:
 		unit.unit_properties["strafe_round"] = opr_army_manager.current_round
-	# The rules core did not take this activation and the GDScript table no longer resolves volleys, so the strike is held with one
-	# battle-log line naming the unit, the rule and the reason (census key `held_strike`); see docs/adr/0001-rulebook-parity.md.
-	# The book makes the strike mandatory: this is a known rules gap until the core strikes at move time.
+	var rule_name := AiShooting.strafing_rule_name(shots.map(func(s): return s["profile"]))
+	if not _solo_is_ai_unit(unit):
+		# A player's bearer keeps the GDScript table's strike until the human side moves to the rules core: the player's own
+		# mandatory attack must never vanish.
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				"%s: %s passes over %s — attacks it as if shooting (once per activation)" % [
+				rule_name, unit.get_name(), target.get_name()], true)
+		CoreActivation.note_legacy(self, "ai_strafe", unit, [target], "move_through")
+		await _solo_resolve_ai_volley(unit, target, shots, true)
+		return
+	# The rules core did not take this AI activation and the GDScript table no longer resolves AI volleys, so the strike is held
+	# with one battle-log line naming the unit, the rule and the reason (census key `held_strike`); see
+	# docs/adr/0001-rulebook-parity.md. The book makes the strike mandatory: a known rules gap until the core strikes at move time.
 	var reasons := CoreActivation.why_not(self, unit, target)
-	var why := ", ".join(PackedStringArray(reasons)) if not reasons.is_empty() else "the table paid this activation's moves and beats"
+	# No rule of the pair is refused: the core declined the activation itself (a refused call, or a start the table paid).
+	var why := ", ".join(PackedStringArray(reasons)) if not reasons.is_empty() else "the rules core did not take this activation"
 	_log_rule_event(BattleLog.Category.COMBAT, "%s: %s passes over %s — the rules core cannot resolve this attack (%s), it is held" % [
-		AiShooting.strafing_rule_name(shots.map(func(s): return s["profile"])), unit.get_name(), target.get_name(), why], true)
+		rule_name, unit.get_name(), target.get_name(), why], true)
 	CoreActivation.note_legacy(self, "held_strike", unit, [target], "move_through")
 
 

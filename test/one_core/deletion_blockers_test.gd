@@ -24,6 +24,8 @@ const BLOCKERS: Array[Dictionary] = [
 		"header": "static func refusals(", "needles": ["not gu.source_data is OPRApiClient.OPRUnit"]},
 	{"name": "parity_table_melee.gd drives the melee resolver", "retire": "P4.D-49", "file": PARITY_MELEE, "header": "",
 		"needles": ["main._run_ai_melee("]},
+	{"name": "a player's Strafing bearer hands its strike to the AI resolver", "retire": "P4.D-37", "file": MAIN,
+		"header": "func _solo_apply_strafing(", "needles": ["await _solo_resolve_ai_volley(unit, target, shots, true)"]},
 	# PLAN H (H-4): the facts the table-remains plan retires.
 	{"name": "the AI body runs the pre-attack beats itself (Breath Attack before the volley)", "retire": "P4.D-41 / H-5..H-9", "file": MAIN,
 		"header": "func _solo_activate_one_ai_body(", "needles": ["await _solo_apply_breath_attack(unit)"]},
@@ -78,7 +80,7 @@ func test_every_deletion_blocker_still_holds() -> void:
 
 
 func test_the_list_is_not_empty_and_names_a_step_per_row() -> void:
-	assert_int(BLOCKERS.size()).is_greater_equal(8)   # 9 until the Strafing row retired with the AI table resolver
+	assert_int(BLOCKERS.size()).is_greater_equal(9)
 	for b in BLOCKERS:
 		assert_str(String(b["retire"])).override_failure_message("%s names no step" % b["name"]).contains("P4.D-")
 
@@ -146,10 +148,18 @@ func test_the_human_door_reads_the_live_slice() -> void:
 			"the human door reads the allow file, not the live slice")
 
 
-## The AI table resolver's retirement removed the row "Strafing hands its volley to the AI resolver": no production line of main.gd awaits the
-## AI resolver any more - the AI volley the core refuses and the move-through strike are HELD with a line (`held`, `held_strike`).
-## RED: put either `await _solo_resolve_ai_volley(` call back.
-func test_no_production_line_calls_the_ai_resolver() -> void:
+## The AI table resolver has one production caller left: a player's own Strafing / Crossing Strike bearer, whose mandatory strike
+## stays on the GDScript table until the human side moves to the rules core. The AI volley the core refuses and the AI's
+## move-through strike are HELD with a line (`held`, `held_strike`).
+## RED: put the AI volley's `await _solo_resolve_ai_volley(` call back in `_run_ai_shooting`.
+func test_only_the_players_strike_calls_the_ai_resolver() -> void:
 	var src := _source(MAIN)
-	var calls: int = Array(src.split("\n")).filter(func(l: String) -> bool: return l.contains("_solo_resolve_ai_volley(") and not l.begins_with("func ")).size()
-	assert_int(calls).override_failure_message("main.gd still calls the AI resolver %d time(s)" % calls).is_equal(0)
+	var lines: Array = Array(src.split("\n"))
+	var calls: Array = []
+	var fn := ""
+	for l in lines:
+		if l.begins_with("func "):
+			fn = l.get_slice("(", 0).trim_prefix("func ")
+		elif l.contains("_solo_resolve_ai_volley("):
+			calls.append(fn)
+	assert_array(calls).override_failure_message("main.gd calls the AI resolver from %s" % [calls]).is_equal(["_solo_apply_strafing"])
