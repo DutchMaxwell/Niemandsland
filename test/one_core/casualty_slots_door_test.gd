@@ -1,18 +1,36 @@
 extends GdUnitTestSuite
 ## EPOCH_94_PARITY_BATCH (94): WHICH models a volley kills, not only how many, through the core door. One plain AI volley
-## through `_run_ai_shooting`, seed for seed on the table path and on the core path (a board capture as the AI body takes it):
-## the foe's surviving slots must be the same. The foe stands in a symmetric line (the shape of a rank-and-file unit in miniature),
+## through `_run_ai_shooting`, seed for seed through the core path (a board capture as the AI body takes it): the foe's
+## surviving slots are pinned to the values read on main. The foe stands in a symmetric line (the shape of a rank-and-file unit in miniature),
 ## where mirror models tie by rounding only: the table measures the distance to the centroid as an f32 `Vector2.length()` and
 ## sorts stably, the core's old f64 hypot parted the pairs the other way, so the door left another model standing when a volley
 ## killed all but one or two (cast door probe, 20.11.: a spell, then this volley case). The shadow and the soaks compared counts
 ## and a wounds multiset, so they never saw it. The gate: the epoch is a header knob (`AiActRecorder.rules_epoch`).
 ## Real: the main scene, NmlCore, the table's volley and landing code. Constructed: plain units (14 rifles vs a line of six).
+## PLAN_FIRST_DELETION 34 FT-C1: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main af5c83610.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const Harness := preload("res://test/one_core/golden_witness_harness.gd")
 const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 	"faction_folder": "robot_legions", "rules": []}
+## The door's slots per seed at epoch 94, read on main (where the table still shoots and equals the door).
+const WANT_SLOTS_94 := [[[0, false, 0], [1, false, 0], [2, false, 0], [3, false, 0], [4, false, 0], [5, false, 0]],
+	[[0, false, 0], [1, false, 0], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0]],
+	[[0, false, 0], [1, false, 0], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0]],
+	[[0, false, 0], [1, false, 0], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0]],
+	[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, true, 1], [5, false, 0]],
+	[[0, false, 0], [1, false, 0], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0]],
+	[[0, false, 0], [1, false, 0], [2, false, 0], [3, false, 0], [4, false, 0], [5, false, 0]],
+	[[0, false, 0], [1, false, 0], [2, false, 0], [3, true, 1], [4, false, 0], [5, false, 0]],
+	[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, true, 1], [5, true, 1]],
+	[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, true, 1], [5, false, 0]],
+	[[0, false, 0], [1, false, 0], [2, true, 1], [3, true, 1], [4, true, 1], [5, false, 0]],
+	[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, true, 1], [5, false, 0]],
+	[[0, false, 0], [1, false, 0], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0]],
+	[[0, false, 0], [1, false, 0], [2, false, 0], [3, true, 1], [4, false, 0], [5, false, 0]],
+	[[0, false, 0], [1, false, 0], [2, false, 0], [3, false, 0], [4, false, 0], [5, false, 0]],
+	[[0, false, 0], [1, false, 0], [2, false, 0], [3, true, 1], [4, false, 0], [5, false, 0]]]
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -66,22 +84,16 @@ func _volley(s: int, core: bool, epoch: int) -> Array:
 	return slots
 
 
-## The volley's casualties stand in the same slots on both paths at 94; the same seeds are measured below the epoch (printed: the
-## number of seeds whose survivors differ there, the door-wide gap the epoch closes). `kills` = seeds that left 1 or 2 of six standing
+## The volley's casualties stand in the same slots through the door at 94. `kills` = seeds that left 1 or 2 of six standing
 ## (casualty orders beyond the first picks), so the grid is shown to reach the tie.
 func test_a_volley_kills_the_same_models_through_the_door(timeout := 600000) -> void:
-	var differ := {92: 0, 94: 0}
 	var deep := 0
 	var bad: Array = []
-	for epoch in [92, 94]:
-		for s in 16:
-			var table := await _volley(s, false, epoch)
-			var door := await _volley(s, true, epoch)
-			if table != door:
-				differ[epoch] += 1
-				if epoch == 94:
-					bad.append("seed %d epoch %d\n table %s\n door  %s" % [s, epoch, str(table), str(door)])
-			deep += 1 if epoch == 94 and table.filter(func(e: Array) -> bool: return bool(e[1])).size() <= 2 else 0
-	print("CASUALTY_SLOTS seeds=16 differ_at_92=%d differ_at_94=%d deep_kills=%d" % [differ[92], differ[94], deep])
-	assert_int(deep).override_failure_message("no seed killed four or five of six: the test proved nothing").is_greater(0)
+	for s in 16:
+		var door := await _volley(s, true, 94)
+		deep += 1 if door.filter(func(e: Array) -> bool: return bool(e[1])).size() <= 2 else 0
+		if door != WANT_SLOTS_94[s]:
+			bad.append("seed %d\n want %s\n door %s" % [s, str(WANT_SLOTS_94[s]), str(door)])
+	print("CASUALTY_SLOTS seeds=16 deep_kills=%d" % deep)
+	assert_int(deep).override_failure_message("no seed killed four or five of six: the test proved nothing").is_equal(11)
 	assert_array(bad).override_failure_message("\n".join(bad.slice(0, 3))).is_empty()

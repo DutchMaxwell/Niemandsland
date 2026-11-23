@@ -7,6 +7,7 @@ extends GdUnitTestSuite
 ## What is compared here is the LANDING: the units' once-records and the `"X" on U is consumed (applies once)` lines. The rest of the volley (dice faces and the other lines) is the
 ## lift's own test; the Slayer Mark's AP and the moved-Indirect to-hit note are core gaps of their own (PLAN H log), so the end state is not compared whole.
 ## RED: `CoreActivation.land_late_once = false` (the second test) -> the records stay on the table and the consumed line is missing.
+## PLAN_FIRST_DELETION 34 FT-C3: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main af5c83610.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const Harness := preload("res://test/one_core/golden_witness_harness.gd")
@@ -20,6 +21,17 @@ const NAMES := [["Furious Buff", "gf", "alien_hives"], ["Shred Mark", "gf", "cus
 	["Indirect Mark", "gf", "robot_legions"], ["Quick Shot Mark", "gf", "daemons_of_lust"], ["Increased Shooting Range Mark", "gf", "eternal_dynasty"]]
 ## [half gap, friend distance] in inches: a foe 14 in away (the AI advances and shoots) and a foe 7 in away (the AI holds and shoots), the friend close behind.
 const PLACEMENTS := [[7.0, 3.0], [3.5, 1.5]]
+## The once-record the door's landing spends, per rule (one spend line, the table's own wording).
+const WANT_CONSUMED := {
+	"Furious Buff": ["COMBAT|\"Furious Buff\" on Att is consumed (applies once)"],
+	"Shred Mark": ["COMBAT|\"Shred Mark\" on Def is consumed (applies once)"],
+	"Slayer Mark": ["COMBAT|\"Slayer Mark\" on Def is consumed (applies once)"],
+	"Indirect Mark": ["COMBAT|\"Indirect Mark\" on Def is consumed (applies once)"],
+	"Quick Shot Mark": ["COMBAT|\"Quick Shot Mark\" on Def is consumed (applies once)"],
+	"Increased Shooting Range Mark": ["COMBAT|\"Increased Shooting Range Mark\" on Def is consumed (applies once)"],
+}
+## No once-record is left behind on any unit after the landing spent it.
+const WANT_MODS := {"Att": [], "Def": [], "Friend": []}
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -145,16 +157,15 @@ func test_the_table_records_a_beat_placed_are_spent_through_the_door() -> void:
 		for placement in PLACEMENTS:
 			for s in SEEDS:
 				var on := await _probe(row[1], row[2], row[0], s, placement[0], ["Caster(2)"], placement[1], true)
-				var off := await _probe(row[1], row[2], row[0], s, placement[0], ["Caster(2)"], placement[1], false)
 				ran += int(on["ran"])
 				if not bool(on["takes"]):
 					unequal.append("seed %d at %s: the slice refuses the bearer" % [s, placement])
-				elif _mods(on) != _mods(off):
-					unequal.append("seed %d at %s: records on %s, off %s" % [s, placement, _mods(on), _mods(off)])
-				elif _consumed(on) != _consumed(off):
-					unequal.append("seed %d at %s: consumed lines on %s, off %s" % [s, placement, _consumed(on), _consumed(off)])
-				elif _consumed(off).is_empty():
-					unequal.append("seed %d at %s: the table spent nothing, nothing was compared" % [s, placement])
+				elif _consumed(on).is_empty():
+					unequal.append("seed %d at %s: the door spent nothing, nothing was compared" % [s, placement])
+				elif _consumed(on) != WANT_CONSUMED[row[0]]:
+					unequal.append("seed %d at %s: consumed lines on %s, want %s" % [s, placement, _consumed(on), WANT_CONSUMED[row[0]]])
+				elif _mods(on) != WANT_MODS:
+					unequal.append("seed %d at %s: records on %s, want %s" % [s, placement, _mods(on), WANT_MODS])
 		assert_array(unequal).override_failure_message("%s: %d unequal, e.g. %s" % [row[0], unequal.size(), unequal.slice(0, 2)]).is_empty()
 		assert_int(ran).override_failure_message("%s: the door must run the core in every seed" % row[0]).is_equal(SEEDS * PLACEMENTS.size())
 
@@ -163,19 +174,15 @@ func test_the_table_records_a_beat_placed_are_spent_through_the_door() -> void:
 func test_without_the_landing_the_record_goes_stale() -> void:
 	CoreActivation.land_late_once = false
 	var on := await _probe("gf", "custodian_brothers", "Shred Mark", 0, 7.0, ["Caster(2)"], 3.0, true)
-	var off := await _probe("gf", "custodian_brothers", "Shred Mark", 0, 7.0, ["Caster(2)"], 3.0, false)
 	assert_int(int(on["ran"])).is_equal(1)
 	assert_array(_mods(on)["Def"]).is_equal(["Shred Mark//once"])
-	assert_array(_mods(off)["Def"]).is_empty()
 	assert_array(_consumed(on)).is_empty()
-	assert_int(_consumed(off).size()).is_equal(1)
 
 
 ## The shadow (`NML_CORE_SHADOW=1`) captures the same moment a second time through `CoreActivation.capture`: its board must not replace the AI activation's snapshot.
 func test_the_landing_holds_with_the_shadow_capture_on() -> void:
 	CoreShadow._env = 1
 	var on := await _probe("gf", "custodian_brothers", "Shred Mark", 0, 7.0, ["Caster(2)"], 3.0, true)
-	var off := await _probe("gf", "custodian_brothers", "Shred Mark", 0, 7.0, ["Caster(2)"], 3.0, false)
 	assert_int(int(on["ran"])).is_equal(1)
-	assert_dict(_mods(on)).is_equal(_mods(off))
+	assert_dict(_mods(on)).is_equal(WANT_MODS)
 	assert_int(_consumed(on).size()).is_equal(1)

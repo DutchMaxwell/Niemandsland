@@ -217,21 +217,24 @@ static func turrets(layout: Dictionary) -> Array[Dictionary]:
 
 
 ## All of it on the board's material: the boxes in one MultiMesh, the turret shafts and their cones in one each.
-static func build(parent: Node3D, layout: Dictionary, material: Material, timber: Dictionary = {}) -> void:
+static func build(parent: Node3D, layout: Dictionary, material: Material, timber: Dictionary = {}, skip := {}) -> void:
 	var m := BoardgenTownDressing.INCHES_TO_METERS
 	var kinds: Array = BoardgenTheme.TOWN_KINDS
 	var items: Array = []   # [basis, origin, custom]
-	for b: Dictionary in wall_parts(layout) + ruin_gables(layout, timber):
+	var parts: Array = wall_parts(layout).filter(func(p: Dictionary) -> bool: return not skip.has(_part_class(layout, p)))   # a class the dressing draws is skipped
+	if not skip.has("tiers"):
+		parts.append_array(ruin_gables(layout, timber))
+	for b: Dictionary in parts:
 		var size: Vector3 = b["hi"] - b["lo"]
 		items.append([Basis.from_scale(size * m), (b["lo"] + b["hi"]) * 0.5 * m, Color(kinds.find(b["kind"]), size.x, size.y, size.z)])
-	for r: Dictionary in rafters(layout):
+	for r: Dictionary in ([] if skip.has("tiers") else rafters(layout)):
 		var size: Vector3 = r["size"]
 		var basis := Basis(Vector3.UP, r["yaw"]) * Basis(Vector3.RIGHT, -float(r["pitch"])) * Basis.from_scale(size * m)
 		items.append([basis, r["centre"] * m, Color(kinds.find(r["kind"]), size.x, size.y, size.z)])
 	_multimesh(parent, "Silhouette", BoxMesh.new(), items, material)
 	var shafts: Array = []
 	var cones: Array = []
-	for t: Dictionary in turrets(layout):
+	for t: Dictionary in ([] if skip.has("houses") else turrets(layout)):
 		var c: Vector2 = t["centre"]
 		var d := 2.0 * float(t["radius"])
 		shafts.append([Basis.from_scale(Vector3(d, t["top"], d) * m), Vector3(c.x, float(t["top"]) * 0.5, c.y) * m, Color(kinds.find("wall"), d, t["top"], d)])
@@ -247,8 +250,15 @@ static func build(parent: Node3D, layout: Dictionary, material: Material, timber
 	cone.height = 1.0
 	cone.radial_segments = 12
 	cone.cap_bottom = true
-	_multimesh(parent, "Turrets", shaft, shafts, material)
-	_multimesh(parent, "TurretRoofs", cone, cones, material)
+	if not skip.has("houses"):
+		_multimesh(parent, "Turrets", shaft, shafts, material)
+		_multimesh(parent, "TurretRoofs", cone, cones, material)
+
+
+## Which dressing class draws a wall_parts piece: the wall, a tall tower, else a raised tier.
+static func _part_class(layout: Dictionary, part: Dictionary) -> String:
+	var kind: String = layout["cells"][int(part["cell"])]["lot_kind"]
+	return "walls" if kind == "Wall" else "towers" if kind == "Tower" else "tiers"
 
 
 static func _multimesh(parent: Node3D, name: String, mesh: Mesh, items: Array, material: Material) -> void:

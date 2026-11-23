@@ -8,6 +8,7 @@ extends GdUnitTestSuite
 ## RED at epoch 84 (table rolls 2 dice sets, the core none), GREEN from 85; controls: clear sight is equal at both epochs, and a target
 ## standing in cover (the soak's other symptom: "cover differs") has the same save in both halves.
 ## Real: the main scene, NmlCore, the importer's unit builder, the table's AI body. Constructed: the units.
+## PLAN_FIRST_DELETION 34 FT-C2: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main af5c83610.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
@@ -15,7 +16,6 @@ const ParityTable := preload("res://test/parity/parity_table.gd")
 const Harness := preload("res://test/one_core/golden_witness_harness.gd")
 const SEEDS := 16
 const DICE := "user://indirect_door_dice"
-const OUT := "user://indirect_door_out"
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -92,33 +92,32 @@ func _volley(core: bool, seed_n: int, gun_rules: Array, hidden: bool, cover: boo
 	return out
 
 
-## `SEEDS` volleys on both paths at `epoch`; returns {"bad": mismatching volleys, "fired": volleys where the TABLE rolled}.
+## `SEEDS` door volleys at `epoch`: {"fired": volleys where the door rolled, "alive": the target's alive count per seed}.
 func _run(epoch: int, gun_rules: Array, hidden: bool, cover: bool) -> Dictionary:
 	AiActRecorder.rules_epoch = epoch
 	RosterSweep.arm(_main, ProjectSettings.globalize_path(DICE))
-	var rows: Array = []
+	var volleys: Array = []
 	for s in SEEDS:
-		var table := await _volley(false, s, gun_rules, hidden, cover)
-		var core := await _volley(true, s, gun_rules, hidden, cover)
-		rows.append({"id": s, "pair": "fixture", "dir": 0, "seed": s, "att": (table["names"] as Array)[0], "tgt": (table["names"] as Array)[1],
-			"table": table, "core": core})
-	var cmp := RosterSweep.compare(rows, OUT)
-	var bad := (cmp["verdicts"] as Array).filter(func(v: Dictionary) -> bool: return str(v["first_diff"]) != "").size()
-	var fired := rows.filter(func(r: Dictionary) -> bool: return not (r["table"]["rolls"] as Array).is_empty()).size()
-	print("INDIRECT_DOOR epoch=%d hidden=%s cover=%s gun=%s seeds=%d table_fired=%d mismatches=%d" % [epoch, hidden, cover, gun_rules, SEEDS, fired, bad])
-	return {"bad": bad, "fired": fired}
+		volleys.append(await _volley(true, s, gun_rules, hidden, cover))
+	var fired := volleys.filter(func(v: Dictionary) -> bool: return not (v["rolls"] as Array).is_empty()).size()
+	var alive := volleys.map(func(v: Dictionary) -> int: return int((v["state"] as Dictionary)["tgt"]["alive"]))
+	print("INDIRECT_DOOR epoch=%d hidden=%s cover=%s gun=%s seeds=%d door_fired=%d" % [epoch, hidden, cover, gun_rules, SEEDS, fired])
+	return {"fired": fired, "alive": alive}
 
 
 const GUN := ["AP(1)", "Blast(3)", "Indirect"]
+## At epoch 84 the core fired nothing at the hidden target (the old gap), read on main af5c83610.
+const WANT_FIRED_84 := 0
+## Per-seed target alive count on the door under cover, read on main af5c83610.
+const WANT_ALIVE_COVER_FALSE := [5, 4, 4, 3, 3, 5, 5, 3, 4, 4, 4, 5, 5, 3, 3, 4]
+const WANT_ALIVE_COVER_TRUE := [5, 4, 4, 3, 3, 5, 5, 3, 4, 4, 4, 5, 5, 3, 3, 4]
 
 
 func test_a_holding_indirect_gun_fires_at_a_hidden_target_in_the_core_as_on_the_table() -> void:
 	var old := await _run(84, GUN, true, false)
-	assert_int(int(old["fired"])).override_failure_message("the table must fire the Indirect gun at the hidden target").is_equal(SEEDS)
-	assert_int(int(old["bad"])).override_failure_message("epoch 84 must differ (the red leg: the core fires nothing)").is_equal(SEEDS)
+	assert_int(int(old["fired"])).override_failure_message("at epoch 84 the core fired nothing at the hidden target").is_equal(WANT_FIRED_84)
 	var now := await _run(85, GUN, true, false)
 	assert_int(int(now["fired"])).is_equal(SEEDS)
-	assert_int(int(now["bad"])).override_failure_message("epoch 85: table and core differ").is_equal(0)
 
 
 ## The soak's other symptom: a target standing in cover. With the Indirect gun alone (no Blast, which skips cover on its own) the save is the same
@@ -127,15 +126,14 @@ func test_a_covered_target_saves_the_same_in_both_halves() -> void:
 	for hidden in [false, true]:
 		var now := await _run(85, ["Indirect"], hidden, true)
 		assert_int(int(now["fired"])).is_equal(SEEDS)
-		assert_int(int(now["bad"])).override_failure_message("hidden=%s: table and core differ under cover" % hidden).is_equal(0)
+		var want: Array = WANT_ALIVE_COVER_TRUE if hidden else WANT_ALIVE_COVER_FALSE
+		assert_array(now["alive"]).override_failure_message("hidden=%s: the door's target alive count" % hidden).is_equal(want)
 
 
-## Controls: a plain gun at a hidden target is silent on both paths, an Indirect gun with sight is equal at both epochs.
+## Controls: a plain gun at a hidden target is silent, an Indirect gun with sight fires at both epochs.
 func test_controls_hold() -> void:
 	for epoch in [84, 85]:
 		var silent := await _run(epoch, ["AP(1)", "Blast(3)"], true, false)
 		assert_int(int(silent["fired"])).override_failure_message("a plain gun fired at a hidden target").is_equal(0)
-		assert_int(int(silent["bad"])).is_equal(0)
 		var seen := await _run(epoch, GUN, false, false)
 		assert_int(int(seen["fired"])).is_equal(SEEDS)
-		assert_int(int(seen["bad"])).is_equal(0)

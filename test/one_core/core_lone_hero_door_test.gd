@@ -5,10 +5,23 @@ extends GdUnitTestSuite
 ## wounds (a/b)"), the half-strength trigger, "Hero X tests on behalf of <host>" and "<host> fails morale". The same seed through the table and
 ## through the core must write the SAME lines, in the same order, and roll the same dice; below 83 the core would shoot the dead host, so
 ## `CoreSlice` keeps such a target on the table.
+## PLAN_FIRST_DELETION 34 FT-C3: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main af5c83610.
 ## Real: the main scene, NmlCore, the AI body's volley call (`_run_ai_shooting`) on a captured board.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
+## The dice lines of the one-seed volley (read on main from the table arm).
+const WANT_DICE := ["6 6 6 6 6 5 5 5 5 4 3 3 3 3 3 3 3 3 3 3 2 2 2 2 1 1 1 1 1 1 → 24 hits (2+)",
+	"6 6 6 6 6 6 5 5 5 5 4 4 4 4 3 3 3 3 2 2 2 2 1 1 → 6 blocks (6+)", "2 → failed (4+)"]
+## The whole battle log of the one-seed volley (read on main from the table arm).
+const WANT_LINES := ["Hero: Champion is the unit now — shots from Gunners at Cultists are measured and saved as the hero",
+	"Gunners fires at Cultists",
+	"AI (Gunners): 6 6 6 6 6 5 5 5 5 4 3 3 3 3 3 3 3 3 3 3 2 2 2 2 1 1 1 1 1 1 → 24 hits (2+)",
+	"Gunners fires Rifle at Cultists — 24 hits", "Champion saves on 6+",
+	"AI (Cultists) defends: 6 6 6 6 6 6 5 5 5 5 4 4 4 4 3 3 3 3 2 2 2 2 1 1 → 6 blocks (6+)",
+	"Cultists takes 18 wounds (1/2)",
+	"Cultists takes wounds at half strength or less (1/2 models) — morale test (GF 3.6)",
+	"Hero Champion tests on behalf of Cultists (Q4+)", "AI (Cultists): 2 → failed (4+)", "Cultists fails morale — Shaken"]
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -103,13 +116,11 @@ func _dice(lines: Array) -> Array:
 ## RED (on #3062 alone): the core names the hero in "fires <weapon> at" and the labels, counts the hero's wounds in the wound line and lacks
 ## the half-strength trigger and the Hero who tests on behalf; without the epoch gate in CoreSlice (second test) the 82 case would be taken by the core.
 func test_the_core_writes_the_tables_lines_for_a_lone_hero(timeout := 120000) -> void:
-	var table := await _volley(false)
-	var table_dice := _dice(table)
 	var core := await _volley(true)
 	assert_int(CoreActivation.ai_runs).override_failure_message("the core did not take the volley (the table shot): %s" % [core]).is_equal(1)
 	assert_str(core[0]).starts_with("Hero: Champion is the unit now")
-	assert_array(_dice(core)).override_failure_message("the same seed rolls the same dice: table %s core %s" % [table_dice, _dice(core)]).is_equal(table_dice)
-	assert_array(core).override_failure_message("the core's lines differ from the table's:\ntable %s\ncore  %s" % [table, core]).is_equal(table)
+	assert_array(_dice(core)).override_failure_message("the same seed rolls the same dice: core %s" % [_dice(core)]).is_equal(WANT_DICE)
+	assert_array(core).override_failure_message("the core's lines differ from the literal:\ncore  %s" % [core]).is_equal(WANT_LINES)
 
 
 ## Below 83 the core would shoot the dead host: the same volley under a replay stamp stays on the table, which still says the line.

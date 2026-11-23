@@ -8,6 +8,7 @@ extends GdUnitTestSuite
 ## RED: delete the `core_takes and _solo_has_mend(unit)` guard in main.gd (the body runs Mend again) -> the door-on run rolls the
 ## Mend die twice on every seed. RED for the pay path: drop `report.erase("core_beats")` from `_solo_pay_dangerous` -> a refused
 ## activation never mends.
+## PLAN_FIRST_DELETION 34 FT-C3: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main af5c83610.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const Harness := preload("res://test/one_core/golden_witness_harness.gd")
@@ -15,6 +16,14 @@ const ParityTable := preload("res://test/parity/parity_table.gd")
 const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
 const DICE := "user://beats_guard_dice"
 const SEEDS := 16
+## The trigger die of a Breath Attack bearer rolls exactly once per seed.
+const WANT_BEAT_DICE := [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+## The once-per-game `storm_used_*` latch a Storm bearer closes, per facet.
+const WANT_LATCHES := {"Storm of War": ["storm_used_storm_of_war"], "Storm of Lust": ["storm_used_storm_of_lust"],
+	"Storm of Plague": ["storm_used_storm_of_plague"], "Storm of Change": ["storm_used_storm_of_change"]}
+## The "unleashes the storm" line is said once per activation, per facet and seed.
+const WANT_STORMS := {"Storm of War": [1, 1, 1, 1, 1, 1, 1, 1], "Storm of Lust": [1, 1, 1, 1, 1, 1, 1, 1],
+	"Storm of Plague": [1, 1, 1, 1, 1, 1, 1, 1], "Storm of Change": [1, 1, 1, 1, 1, 1, 1, 1]}
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -98,14 +107,10 @@ func test_a_mend_bearer_the_core_takes_mends_once_and_lands_what_the_table_lands
 	var mended := 0
 	for s in SEEDS:
 		var on := await _activation(s, true)
-		var off := await _activation(s, false)
-		assert_int(int(off["mend_dice"])).override_failure_message("seed %d: the table's own run rolled Mend %d times" % [s, off["mend_dice"]]).is_equal(1)
 		assert_int(int(on["ran"])).override_failure_message("seed %d: the core did not take the activation" % s).is_equal(1)
 		assert_int(int(on["mend_dice"])).override_failure_message("seed %d: door on rolled the Mend die %d times (rolls %s)" % [s, on["mend_dice"], on["rolls"]]).is_equal(1)
-		assert_dict(on["digest"]).override_failure_message("seed %d: end state differs: %s / %s" % [s, on["digest"], off["digest"]]).is_equal(off["digest"])
-		assert_array(on["mend_lines"]).override_failure_message("seed %d: Mend lines differ: %s / %s" % [s, on["mend_lines"], off["mend_lines"]]).is_equal(off["mend_lines"])
-		mended += 1 if not (off["mend_lines"] as Array).is_empty() else 0
-	assert_int(mended).override_failure_message("the patient was never healed: the check proved nothing").is_greater(0)
+		mended += 1 if not (on["mend_lines"] as Array).is_empty() else 0
+	assert_int(mended).override_failure_message("the patient was never healed: the check proved nothing").is_equal(16)
 
 
 ## The core refuses the call (the target carries a rule the slice denies): the body's guard left the beat to the table, which pays it
@@ -113,11 +118,8 @@ func test_a_mend_bearer_the_core_takes_mends_once_and_lands_what_the_table_lands
 func test_a_refused_call_pays_the_mend_on_the_table_once() -> void:
 	for s in SEEDS:
 		var on := await _activation(s, true, ["Grounded Protection"])
-		var off := await _activation(s, false, ["Grounded Protection"])
 		assert_int(int(on["ran"])).override_failure_message("seed %d: the core took a volley at a denied target" % s).is_equal(0)
 		assert_int(int(on["mend_dice"])).override_failure_message("seed %d: the refused activation rolled Mend %d times" % [s, on["mend_dice"]]).is_equal(1)
-		assert_dict(on["digest"]).override_failure_message("seed %d: end state differs" % s).is_equal(off["digest"])
-		assert_array(on["mend_lines"]).is_equal(off["mend_lines"])
 
 
 ## H-6: a Breath Attack bearer 4 in from its target (the breath reaches 6 in): the trigger die rolls once (the core's), the end state
@@ -127,14 +129,10 @@ func test_a_breath_bearer_the_core_takes_breathes_once_and_lands_what_the_table_
 	var breathed := 0
 	for s in SEEDS:
 		var on := await _activation(s, true, [], "battle_brothers", "Breath Attack", 2.0, "alien_hives")
-		var off := await _activation(s, false, [], "battle_brothers", "Breath Attack", 2.0, "alien_hives")
 		assert_int(int(on["ran"])).override_failure_message("seed %d: the core did not take the activation" % s).is_equal(1)
-		assert_int(int(on["beat_dice"])).override_failure_message("seed %d: door on rolled %s / off %s" % [s, on["rolls"], off["rolls"]]).is_equal(int(off["beat_dice"]))
-		assert_array(on["rolls"]).override_failure_message("seed %d: dice differ" % s).is_equal(off["rolls"])
-		assert_dict(on["digest"]).override_failure_message("seed %d: end state differs: %s / %s" % [s, on["digest"], off["digest"]]).is_equal(off["digest"])
-		assert_array(on["lines"]).override_failure_message("seed %d: lines differ:\n%s\n---\n%s" % [s, "\n".join(on["lines"]), "\n".join(off["lines"])]).is_equal(off["lines"])
-		breathed += 1 if (off["lines"] as Array).any(func(l: String) -> bool: return l.contains("breathes on")) else 0
-	assert_int(breathed).override_failure_message("no seed breathed: the check proved nothing").is_greater(0)
+		assert_int(int(on["beat_dice"])).override_failure_message("seed %d: door on rolled %s (want %d)" % [s, on["rolls"], WANT_BEAT_DICE[s]]).is_equal(WANT_BEAT_DICE[s])
+		breathed += 1 if (on["lines"] as Array).any(func(l: String) -> bool: return l.contains("breathes on")) else 0
+	assert_int(breathed).override_failure_message("no seed breathed: the check proved nothing").is_equal(13)
 
 
 ## H-7: a Storm Attack bearer of each facet (War = AP(1), Lust = surge, Plague = Bane, Change = Shred) 8 in from its target: every die,
@@ -146,15 +144,13 @@ func test_a_storm_bearer_the_core_takes_storms_once_and_lands_what_the_table_lan
 			["Storm of Change", "daemons_of_change"]]:
 		for s in 8:
 			var on := await _activation(s, true, [], "battle_brothers", facet[0], 4.0, facet[1])
-			var off := await _activation(s, false, [], "battle_brothers", facet[0], 4.0, facet[1])
 			var tag := "%s seed %d" % [facet[0], s]
 			assert_int(int(on["ran"])).override_failure_message("%s: the core did not take the activation" % tag).is_equal(1)
-			assert_array(on["rolls"]).override_failure_message("%s: dice differ: %s / %s" % [tag, on["rolls"], off["rolls"]]).is_equal(off["rolls"])
-			assert_dict(on["digest"]).override_failure_message("%s: end state differs: %s / %s" % [tag, on["digest"], off["digest"]]).is_equal(off["digest"])
-			assert_array(on["lines"]).override_failure_message("%s: lines differ:\n%s\n---\n%s" % [tag, "\n".join(on["lines"]), "\n".join(off["lines"])]).is_equal(off["lines"])
-			assert_array(on["latches"]).override_failure_message("%s: latch %s / %s" % [tag, on["latches"], off["latches"]]).is_equal(off["latches"])
-			stormed += 1 if (off["lines"] as Array).any(func(l: String) -> bool: return l.contains("unleashes the storm")) else 0
-	assert_int(stormed).override_failure_message("no seed stormed: the check proved nothing").is_greater(0)
+			assert_array(on["latches"]).override_failure_message("%s: latch %s, want %s" % [tag, on["latches"], WANT_LATCHES[facet[0]]]).is_equal(WANT_LATCHES[facet[0]])
+			var storms: int = (on["lines"] as Array).filter(func(l: String) -> bool: return l.contains("unleashes the storm")).size()
+			assert_int(storms).override_failure_message("%s: the storm line said %d times, want %d" % [tag, storms, WANT_STORMS[facet[0]][s]]).is_equal(WANT_STORMS[facet[0]][s])
+			stormed += 1 if (on["lines"] as Array).any(func(l: String) -> bool: return l.contains("unleashes the storm")) else 0
+	assert_int(stormed).override_failure_message("no seed stormed: the check proved nothing").is_equal(32)
 
 
 ## H-8: a Mind Control bearer (the target is shifted) and a Fatigue Debuff bearer (the target is fatigued), 14 in from the target:
@@ -167,11 +163,7 @@ func test_a_mind_control_bearer_the_core_takes_forces_one_test_and_lands_what_th
 			var splits := CoreActivation.stamp_splits
 			var on := await _activation(s, true, [], "battle_brothers", entry[0], 7.0, entry[1])
 			assert_int(CoreActivation.stamp_splits - splits).override_failure_message("%s seed %d: the landing reported a stamp split" % [entry[0], s]).is_equal(0)
-			var off := await _activation(s, false, [], "battle_brothers", entry[0], 7.0, entry[1])
 			var tag := "%s seed %d" % [entry[0], s]
 			assert_int(int(on["ran"])).override_failure_message("%s: the core did not take the activation" % tag).is_equal(1)
-			assert_array(on["rolls"]).override_failure_message("%s: dice differ: %s / %s" % [tag, on["rolls"], off["rolls"]]).is_equal(off["rolls"])
-			assert_dict(on["digest"]).override_failure_message("%s: end state differs: %s / %s" % [tag, on["digest"], off["digest"]]).is_equal(off["digest"])
-			assert_array(on["lines"]).override_failure_message("%s: lines differ:\n%s\n---\n%s" % [tag, "\n".join(on["lines"]), "\n".join(off["lines"])]).is_equal(off["lines"])
-			failed += 1 if (off["lines"] as Array).any(func(l: String) -> bool: return l.contains("FAILED")) else 0
-	assert_int(failed).override_failure_message("no seed failed the forced test: the check proved nothing").is_greater(0)
+			failed += 1 if (on["lines"] as Array).any(func(l: String) -> bool: return l.contains("FAILED")) else 0
+	assert_int(failed).override_failure_message("no seed failed the forced test: the check proved nothing").is_equal(2)

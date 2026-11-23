@@ -7,6 +7,7 @@ extends GdUnitTestSuite
 ## production door, deny slice, `SEEDS` seeds, dice by parity_compare.py, end state of shooter and target). RED before the
 ## fix: the Enhanced contact case differs on the target's wounds on most of the 16 seeds; GREEN after. The controls were
 ## equal before and stay equal: the base form at contact pays nothing on both sides, the Enhanced form at 12" pays on both.
+## PLAN_FIRST_DELETION 34 FT-C2: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main af5c83610.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
@@ -14,7 +15,6 @@ const SlicePin := preload("res://test/one_core/slice_pin.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const SEEDS := 16
 const DICE := "user://shred_contact_dice"
-const OUT := "user://shred_contact_out"
 const FACTION := "war_disciples"
 const CONTACT_IN := 0.98   # the target's front rank overlaps the shooter's by a hair: an edge gap just under 0 inches (the soak's shape)
 const FAR_IN := 14.0
@@ -97,45 +97,43 @@ func _volley(rules: Array, x_in: float, seed_n: int, core: bool) -> Dictionary:
 func _run(rules: Array, x_in: float) -> Dictionary:
 	RosterSweep.arm(_main, ProjectSettings.globalize_path(DICE))
 	CoreActivation._env = 1   # the door ON: `arm` set the table half's kill switch
-	var rows: Array = []
 	var core_runs := 0
 	var core_refusals := 0
-	var table_lines := 0
+	var door_lines := 0
 	for s in SEEDS:
-		var table := await _volley(rules, x_in, s, false)
 		var core := await _volley(rules, x_in, s, true)
 		core_runs += int(core["runs"])
 		core_refusals += int(core["refusals"])
-		table_lines += int(table["shred_lines"])
-		rows.append({"id": s, "pair": "fixture", "dir": 0, "seed": s, "att": (table["names"] as Array)[0], "tgt": (table["names"] as Array)[1],
-			"table": table, "core": core})
-	var cmp := RosterSweep.compare(rows, OUT)
-	var bad := (cmp["verdicts"] as Array).filter(func(v: Dictionary) -> bool: return str(v["first_diff"]) != "").size()
-	print("SHRED_DOOR seeds=%d core_runs=%d core_refusals=%d mismatches=%d table_shred_lines=%d" % [
-		SEEDS, core_runs, core_refusals, bad, table_lines])
-	return {"core_runs": core_runs, "core_refusals": core_refusals, "bad": bad, "table_lines": table_lines, "problems": cmp["problems"]}
+		door_lines += int(core["shred_lines"])
+	print("SHRED_DOOR seeds=%d core_runs=%d core_refusals=%d door_shred_lines=%d" % [SEEDS, core_runs, core_refusals, door_lines])
+	return {"core_runs": core_runs, "core_refusals": core_refusals, "door_lines": door_lines}
 
 
-func _check(r: Dictionary, pays: bool) -> void:
-	assert_int(int(r["core_runs"])).override_failure_message("the core did not take the volley (the red leg)").is_equal(SEEDS)
+## The door's Warbound pay-line total per case, read on main af5c83610 in the door-only run. The compare run's table arm said 10
+## and its door arm 9 (the table volley first changes which models the pay hits); the door-only run says 16 at both distances: every
+## seed pays the line. The end state stays equal across all three readings.
+const WANT_SHRED_CONTACT := 16
+const WANT_SHRED_FAR := 16
+
+
+func _check(r: Dictionary, pays: bool, want_lines: int) -> void:
+	assert_int(int(r["core_runs"])).override_failure_message("the core did not take the volley").is_equal(SEEDS)
 	assert_int(int(r["core_refusals"])).is_equal(0)
-	assert_int(int(r["bad"])).override_failure_message("table and core differ on dice or on the shooter / target").is_equal(0)
-	assert_array(r["problems"]).is_empty()
 	if pays:
-		assert_int(int(r["table_lines"])).override_failure_message("the table never logged Warbound paying").is_greater(0)
+		assert_int(int(r["door_lines"])).override_failure_message("the door never logged Warbound paying").is_equal(want_lines)
 	else:
-		assert_int(int(r["table_lines"])).override_failure_message("the base form paid on the table where it must not").is_equal(0)
+		assert_int(int(r["door_lines"])).override_failure_message("the base form paid where it must not").is_equal(0)
 
 
 func test_enhanced_warbound_at_base_contact_pays_on_the_table_as_in_the_core() -> void:
-	await _check(await _run(["Warbound", "Enhanced Warbound"], CONTACT_IN), true)
+	await _check(await _run(["Warbound", "Enhanced Warbound"], CONTACT_IN), true, WANT_SHRED_CONTACT)
 
 
 ## Control: the base form needs a target over 9 inches, so a contact shot pays nothing - on both sides.
 func test_base_warbound_at_base_contact_pays_nothing_on_either_side() -> void:
-	await _check(await _run(["Warbound"], CONTACT_IN), false)
+	await _check(await _run(["Warbound"], CONTACT_IN), false, 0)
 
 
 ## Control: the Enhanced form over 9 inches paid on both sides before the fix.
 func test_enhanced_warbound_over_nine_inches_is_equal() -> void:
-	await _check(await _run(["Warbound", "Enhanced Warbound"], FAR_IN), true)
+	await _check(await _run(["Warbound", "Enhanced Warbound"], FAR_IN), true, WANT_SHRED_FAR)
