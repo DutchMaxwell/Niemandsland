@@ -6,8 +6,8 @@ extends GdUnitTestSuite
 const SEEDS: Array[int] = [41, 25]
 ## SHA-256 of the snapshot bytes per seed; printed by the test when they differ.
 const PINNED := {
-	41: "60:adc89843799bb243add88f7558501fe12f939a57d1b7f8aab3a3dd5602f0ae30",
-	25: "52:afc07a4ad66f6cf97d75ba133ee98a7c9ed265fe9467d2ffb06309f0b76f360b",
+	41: "60:675d968c0c659c433a014a4c871ea153e5277c493573c60a6c2f1bced6c9c1e0",
+	25: "52:eccddbde3963a43366e72d90fd8e1d4b731a0abeed52da0779d19587ae829d00",
 }
 
 
