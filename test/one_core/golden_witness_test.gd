@@ -8,6 +8,10 @@ extends GdUnitTestSuite
 ##
 ## Regenerate the fixture ONLY after an intended, owned table change: --capture (see the CLI header), then review
 ## the diff line by line. A red here means the table's volley result moved without its replacement being recorded.
+##
+## PLAN_FIRST_DELETION 34 FT-C6: the AI-volley families (shoot, Dangerous, mixed kit, move-through, the AI split)
+## are no longer captured from the table (its AI resolver retires at step 31); their fixtures stay as the core's
+## goldens; the human_split witness stays until step 36.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const Harness := preload("res://test/one_core/golden_witness_harness.gd")
@@ -41,30 +45,6 @@ func after_test() -> void:
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
-
-
-func test_the_committed_fixture_matches_the_old_table_path() -> void:
-	assert_bool(CoreActivation.enabled()).override_failure_message(
-		"the kill switch is on: this suite must run the old table path").is_false()
-	var want := Harness.load_fixture()
-	assert_bool(want.is_empty()).override_failure_message(
-		"fixture missing: %s — capture it with test/one_core/golden_witness.gd" % Harness.FIXTURE_PATH).is_false()
-	var got: Dictionary = await Harness.capture(_main)
-	var problems := Harness.compare(want, got)
-	assert_array(problems).override_failure_message(
-		"the old table path no longer matches its golden witness (%s):\n%s" % [
-			Harness.describe_provenance(want, got), "\n".join(problems)]).is_empty()
-
-
-func test_a_planted_fixture_change_is_reported() -> void:
-	var want := Harness.load_fixture()
-	assert_bool(want.is_empty()).override_failure_message("fixture missing").is_false()
-	var got: Dictionary = await Harness.capture(_main)
-	want["cases"][0]["lines"][0] = "%s (planted)" % str(want["cases"][0]["lines"][0])
-	var problems := Harness.compare(want, got)
-	assert_int(problems.size()).override_failure_message(
-		"a changed fixture line went unnoticed — the witness cannot fail").is_equal(1)
-	assert_str(str(problems[0])).contains("planted")
 
 
 func test_v2_keys_are_compared_and_a_v1_fixture_ignores_them() -> void:
@@ -182,12 +162,25 @@ func test_the_partial_range_guard_errors_when_every_model_fires() -> void:
 	assert_str(str(rec.get("error", ""))).contains("not partial")
 
 
+## The human_split witness only: the AI split was a table capture and leaves with the table resolver at step 31.
+func _human_split(want_or_got: Dictionary) -> Dictionary:
+	var out: Dictionary = want_or_got.duplicate(true)
+	var cases: Array = []
+	for c in out.get("cases", []):
+		if str((c as Dictionary).get("scenario", "")) == "human_split":
+			cases.append(c)
+	out["cases"] = cases
+	return out
+
+
 func test_the_split_fixture_matches_the_old_table_path() -> void:
 	var path := Harness.fixture_path(Harness.SPLIT_FAMILY)
-	var want := Harness.load_fixture(path)
-	assert_bool(want.is_empty()).override_failure_message(
+	var raw := Harness.load_fixture(path)
+	assert_bool(raw.is_empty()).override_failure_message(
 		"fixture missing: %s — capture it with --family split" % path).is_false()
-	var got: Dictionary = await Harness.capture(_main, Harness.SPLIT_FAMILY)
+	var want := _human_split(raw)
+	var scs := Harness.split_scenarios().filter(func(sc: Dictionary) -> bool: return str(sc["name"]) == "human_split")
+	var got: Dictionary = await Harness.capture_grid(_main, Harness.SPLIT_FAMILY, scs)
 	var problems := Harness.compare(want, got)
 	assert_array(problems).override_failure_message(
 		"the old table path no longer matches its split-fire golden witness (%s):\n%s" % [
@@ -195,16 +188,18 @@ func test_the_split_fixture_matches_the_old_table_path() -> void:
 
 
 func test_a_planted_split_fixture_line_and_extra_are_reported() -> void:
-	var want := Harness.load_fixture(Harness.fixture_path(Harness.SPLIT_FAMILY))
-	assert_bool(want.is_empty()).override_failure_message("split fixture missing").is_false()
-	var got: Dictionary = await Harness.capture(_main, Harness.SPLIT_FAMILY)
+	var raw := Harness.load_fixture(Harness.fixture_path(Harness.SPLIT_FAMILY))
+	assert_bool(raw.is_empty()).override_failure_message("split fixture missing").is_false()
+	var scs := Harness.split_scenarios().filter(func(sc: Dictionary) -> bool: return str(sc["name"]) == "human_split")
+	var got: Dictionary = await Harness.capture_grid(_main, Harness.SPLIT_FAMILY, scs)
+	var want := _human_split(raw)
 	want["cases"][0]["lines"][0] = "%s (planted)" % str(want["cases"][0]["lines"][0])
 	var problems := Harness.compare(want, got)
 	assert_int(problems.size()).override_failure_message(
 		"a changed split fixture line went unnoticed — the witness cannot fail").is_equal(1)
 	assert_str("\n".join(problems)).contains("planted")
 	# the human split's shot_round stamp is part of the record
-	var human_case: Dictionary = want["cases"][8]
+	var human_case: Dictionary = want["cases"][0]
 	assert_str(str(human_case["scenario"])).is_equal("human_split")
 	want["cases"][0]["lines"][0] = got["cases"][0]["lines"][0]
 	human_case["extra"]["shot_round"] = "9"
@@ -215,115 +210,13 @@ func test_a_planted_split_fixture_line_and_extra_are_reported() -> void:
 
 
 func test_a_split_case_errors_when_only_one_target_is_fired_at() -> void:
-	for sc in Harness.split_scenarios():
+	var scs := Harness.split_scenarios().filter(func(sc: Dictionary) -> bool: return str(sc["name"]) == "human_split")
+	for sc in scs:
 		var one: Dictionary = (sc as Dictionary).duplicate(true)
 		one["def_b"]["x_in"] = 30.0   # planted fault: B is beyond both weapons' reach
 		var rec: Dictionary = await Harness._run_case(_main, one, 0)
 		assert_str(str(rec.get("error", ""))).override_failure_message(
 			"%s: one target only must fail the case, got %s" % [str(one["name"]), str(rec.keys())]).contains("no split")
-
-
-func test_the_dangerous_fixture_matches_the_old_table_path() -> void:
-	var path := Harness.fixture_path(Harness.DANGEROUS_FAMILY)
-	var want := Harness.load_fixture(path)
-	assert_bool(want.is_empty()).override_failure_message(
-		"fixture missing: %s — capture it with --family dangerous" % path).is_false()
-	var got: Dictionary = await Harness.capture(_main, Harness.DANGEROUS_FAMILY)
-	var problems := Harness.compare(want, got)
-	assert_array(problems).override_failure_message(
-		"the old table path no longer matches its Dangerous golden witness (%s):\n%s" % [
-			Harness.describe_provenance(want, got), "\n".join(problems)]).is_empty()
-
-
-func test_a_planted_dangerous_fixture_line_is_reported() -> void:
-	var want := Harness.load_fixture(Harness.fixture_path(Harness.DANGEROUS_FAMILY))
-	assert_bool(want.is_empty()).override_failure_message("Dangerous fixture missing").is_false()
-	var got: Dictionary = await Harness.capture(_main, Harness.DANGEROUS_FAMILY)
-	want["cases"][0]["lines"][0] = "%s (planted)" % str(want["cases"][0]["lines"][0])
-	var problems := Harness.compare(want, got)
-	assert_int(problems.size()).override_failure_message(
-		"a changed Dangerous fixture line went unnoticed — the witness cannot fail").is_equal(1)
-	assert_str("\n".join(problems)).contains("planted")
-
-
-func test_a_dangerous_case_errors_when_the_roll_never_happened() -> void:
-	var sc: Dictionary = (Harness.dangerous_scenarios()[0] as Dictionary).duplicate(true)
-	sc["dice"] = 0   # planted fault: no dice, so the table logs no Dangerous line at all
-	var rec: Dictionary = await Harness._run_case(_main, sc, 0)
-	assert_str(str(rec.get("error", ""))).contains("no Dangerous line")
-
-
-func test_the_mixed_kit_fixture_matches_the_old_table_path() -> void:
-	var path := Harness.fixture_path(Harness.MIXED_FAMILY)
-	var want := Harness.load_fixture(path)
-	assert_bool(want.is_empty()).override_failure_message(
-		"fixture missing: %s — capture it with --family mixed_kit" % path).is_false()
-	var got: Dictionary = await Harness.capture(_main, Harness.MIXED_FAMILY)
-	var problems := Harness.compare(want, got)
-	assert_array(problems).override_failure_message(
-		"the old table path no longer matches its wound-prompt golden witness (%s):\n%s" % [
-			Harness.describe_provenance(want, got), "\n".join(problems)]).is_empty()
-
-
-func test_a_planted_mixed_kit_fixture_line_is_reported() -> void:
-	var want := Harness.load_fixture(Harness.fixture_path(Harness.MIXED_FAMILY))
-	assert_bool(want.is_empty()).override_failure_message("mixed-kit fixture missing").is_false()
-	var got: Dictionary = await Harness.capture(_main, Harness.MIXED_FAMILY)
-	want["cases"][0]["lines"][0] = "%s (planted)" % str(want["cases"][0]["lines"][0])
-	var problems := Harness.compare(want, got)
-	assert_int(problems.size()).override_failure_message(
-		"a changed mixed-kit fixture line went unnoticed — the witness cannot fail").is_equal(1)
-	assert_str("\n".join(problems)).contains("planted")
-
-
-## The prompt really decided something: for every seed and shape the clicked run ends on other model slots than
-## the auto run (the table's own pick takes the edge models, the clicks went to the middle). A bypassed prompt would
-## make the two runs equal.
-func test_a_clicked_run_ends_on_other_slots_than_the_auto_run() -> void:
-	var got: Dictionary = await Harness.capture(_main, Harness.MIXED_FAMILY)
-	var by := {}
-	for c in got["cases"]:
-		by["%s:%d" % [str(c["scenario"]), int(c["seed"])]] = c
-		if (c as Dictionary).has("error"):
-			fail("a prompt case errored: %s" % str(c))
-			return
-	for shape in ["mixed", "tough"]:
-		for seed in Harness.PROMPT_SEEDS:
-			var auto: Dictionary = by["%s_auto:%d" % [shape, seed]]
-			var click: Dictionary = by["%s_click:%d" % [shape, seed]]
-			assert_bool(JSON.stringify(auto["final"][1]["slots"]) != JSON.stringify(click["final"][1]["slots"])) \
-				.override_failure_message("%s seed %d: the clicked run equals the auto run - the prompt did not decide" % [
-					shape, seed]).is_true()
-
-
-func test_a_mixed_kit_case_errors_when_no_prompt_opens() -> void:
-	var sc: Dictionary = (Harness.mixed_scenarios()[1] as Dictionary).duplicate(true)
-	sc["shape"] = "tough"   # planted fault: one shared loadout and Tough 1 - nothing to choose, no prompt
-	var rec: Dictionary = await Harness._run_case(_main, sc, 0)
-	assert_str(str(rec.get("error", ""))).contains("never opened")
-
-
-func test_the_move_through_fixture_matches_the_old_table_path() -> void:
-	var path := Harness.fixture_path(Harness.MOVE_THROUGH_FAMILY)
-	var want := Harness.load_fixture(path)
-	assert_bool(want.is_empty()).override_failure_message(
-		"fixture missing: %s - capture it with --family move_through" % path).is_false()
-	var got: Dictionary = await Harness.capture(_main, Harness.MOVE_THROUGH_FAMILY)
-	var problems := Harness.compare(want, got)
-	assert_array(problems).override_failure_message(
-		"the old table path no longer matches its move-through golden witness (%s):\n%s" % [
-			Harness.describe_provenance(want, got), "\n".join(problems)]).is_empty()
-
-
-func test_a_planted_move_through_fixture_line_is_reported() -> void:
-	var want := Harness.load_fixture(Harness.fixture_path(Harness.MOVE_THROUGH_FAMILY))
-	assert_bool(want.is_empty()).override_failure_message("move-through fixture missing").is_false()
-	var got: Dictionary = await Harness.capture(_main, Harness.MOVE_THROUGH_FAMILY)
-	want["cases"][0]["lines"][0] = "%s (planted)" % str(want["cases"][0]["lines"][0])
-	var problems := Harness.compare(want, got)
-	assert_int(problems.size()).override_failure_message(
-		"a changed move-through fixture line went unnoticed - the witness cannot fail").is_equal(1)
-	assert_str("\n".join(problems)).contains("planted")
 
 
 func test_the_melee_shapes_fixture_matches_the_old_table_path() -> void:
