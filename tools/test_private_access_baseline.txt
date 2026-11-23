@@ -8,7 +8,7 @@ _add_rules_toggle 1
 _adopt_saved_ai_slots 2
 _apply_rules_automatic_agreed 1
 _apply_turn_token 6
-_autosave_controller 23
+_autosave_controller 24
 _broadcast_presence 1
 _broadcast_restored_position 1
 _cache_progress_bar 9
@@ -31,7 +31,7 @@ _dice_result_label 1
 _do_clear_all 4
 _do_next_round 6
 _engine_enemy 7
-_ensure_solo_controller 367
+_ensure_solo_controller 369
 _fps_low_since_ms 1
 _game_phase_status_label 2
 _get_player_color 3
@@ -209,9 +209,9 @@ _solo_attack_groups 10
 _solo_auto_click 2
 _solo_auto_point_click 2
 _solo_auto_point_dwell 1
-_solo_auto_saves 49
+_solo_auto_saves 50
 _solo_auto_seize 9
-_solo_batch 331
+_solo_batch 332
 _solo_begin_rapid_ambush_round_one 1
 _solo_below_half_strength 2
 _solo_board_prompt 3
@@ -271,7 +271,7 @@ _solo_end_targeting 20
 _solo_ensure_playing_phase 6
 _solo_erlkoenig_missing 2
 _solo_expire_spell_tokens 6
-_solo_fast 47
+_solo_fast 48
 _solo_finish_human_activation 2
 _solo_flush_dev 2
 _solo_game_finished 20
@@ -290,7 +290,7 @@ _solo_hits 8
 _solo_hotseat_automatic 2
 _solo_hover_enemy 2
 _solo_hover_sighted_count 4
-_solo_human_strafing 1
+_solo_human_strafing 2
 _solo_ignore_group_key 1
 _solo_ignores_regen 49
 _solo_ignore_wounds 2
@@ -468,7 +468,7 @@ _terrain_mode_btn 1
 _toggle_settings_panel 1
 _tool_rail 4
 _top_bar 2
-_tray_rng 45
+_tray_rng 47
 _tutorial_board_pending 1
 _tutorial_director 5
 _tutorial_mode 3
