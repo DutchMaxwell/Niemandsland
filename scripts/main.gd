@@ -12222,6 +12222,11 @@ func _solo_choice_local(unit: GameUnit, id: String, options: Array, wounds := 0,
 	if id.get_slice(":", 0) == "versatile_mode":   # step 22b: the table's own Versatile prompt, the answer as the core's option
 		var vm: Dictionary = await _solo_prompt_versatile(str(ctx.get("weapon", "Weapon")), ctx.get("recommended", {"ap": 1, "hit_mod": 0}))
 		return "ap" if int(vm.get("ap", 0)) > 0 else "hit"
+	if id.get_slice(":", 0) == "spot_markers":   # the table's own marker dialog; the count is one of the core's options "0".."N"
+		var marked := opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2))
+		if marked == null or options.is_empty():
+			return ""
+		return str(await _solo_ask_spot_markers(unit, marked, options.size() - 1))
 	if id.get_slice(":", 0) != "takedown_model":
 		return ""
 	var target := opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2))
@@ -15831,10 +15836,14 @@ func _solo_offer_spot_markers(attacker: GameUnit, target: GameUnit) -> int:
 		return 0
 	if _solo_batch or DisplayServer.get_name() == "headless":
 		return _solo_consume_spot_markers(target)
+	return _solo_consume_spot_markers(target, await _solo_ask_spot_markers(attacker, target, sm))
+
+
+## The attacker's marker dialog (+/- stepper): how many of the target's `sm` markers to remove.
+func _solo_ask_spot_markers(attacker: GameUnit, target: GameUnit, sm: int) -> int:
 	var dlg := InterferenceDialog.new()
 	add_child(dlg)
-	var n: int = await dlg.ask(attacker.get_name(), "", target.get_name(), 0, 0, sm, "spot")
-	return _solo_consume_spot_markers(target, n)
+	return await dlg.ask(attacker.get_name(), "", target.get_name(), 0, 0, sm, "spot")
 
 
 ## Spotter UX (maintainer 31.07.): Precision Spotter is a RADIAL action with the player's

@@ -75,7 +75,7 @@ pub fn run(input: &VarDictionary, fast: bool, guard: i64) -> Result<VarDictionar
     let mut model_ids = VarArray::new();
     if let Some(ref land) = landing {
         for (m, p) in land.movers.iter().zip(&land.end) {
-            points.push(&Vector3::new(p[0] as f32, p[1] as f32, p[2] as f32).to_variant());
+            points.push(&Vector3::new(p[0], p[1], p[2]).to_variant());
             model_ids
                 .push(&GString::from(&format!("{}:{}", state.key(m.unit), m.model)).to_variant());
         }

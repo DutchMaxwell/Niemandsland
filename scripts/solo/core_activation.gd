@@ -58,7 +58,7 @@ static func applies(main) -> bool:
 ## (or "off") is the way back until the switch and the #172 guard are deleted. Tests set the entry per kind. CC-14a: `interference`
 ## (a foe's token spend against an AI cast, `interference:<seq>:<caster>:<slot>`) starts OFF like the Takedown pick.
 const CHOICE_KINDS := ["takedown_model", "wound_alloc", "interference", "strike_back"]
-const CHOICE_DEFAULT_ON := ["wound_alloc", "strike_back", "versatile_mode"]
+const CHOICE_DEFAULT_ON := ["wound_alloc", "strike_back", "versatile_mode", "spot_markers"]
 static var _choice_on: Dictionary = {}
 
 
@@ -291,6 +291,11 @@ static func pending_choices(main, unit: GameUnit, transcript: Array) -> Array:
 		if choice_enabled("versatile_mode") and not main._solo_is_ai_unit(unit) \
 				and not RulesRegistry.unit_rules_of_primitive(unit, "Versatile Attack").is_empty():
 			ids.append("versatile_mode:%s" % unit.unit_id)
+		# A human attacker picks how many Precision Spotter markers to remove from the target (the core asks where the volley
+		# spends them; no answer takes them all, as the AI does).
+		if choice_enabled("spot_markers") and not main._solo_is_ai_unit(unit) \
+				and int((target as GameUnit).unit_properties.get("spot_markers", 0)) > 0:
+			ids.append("spot_markers:%s:%s" % [unit.unit_id, (target as GameUnit).unit_id])
 		return ids
 	return ids
 
@@ -353,6 +358,8 @@ static func choice_purpose(id: String, transcript: Array = []) -> String:
 			return "strike-back choice"
 		"versatile_mode":
 			return "Versatile Attack mode"
+		"spot_markers":
+			return "Precision Spotter markers"
 		"interference":
 			return _cast_spell_of(transcript, id.get_slice(":", 2)) if not transcript.is_empty() else "interference"   # the table's request names the spell
 	return "choice"
