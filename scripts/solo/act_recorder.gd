@@ -304,6 +304,8 @@ const EPOCH_94_PARITY_BATCH := 94
 ## Deadly wounds stopping once the target is dead, the volley's declared Defense, no spell stacking, no Unpredictable die without a weapon in reach). Where the table
 ## has its own side of one it reads this constant.
 const EPOCH_95_PARITY_BATCH := 95
+## The core's `PENDING_EPOCH_CONSOLIDATE_PLAN` (acts.rs, meleefix): from it the recorder writes the planner's consolidation inputs.
+const PENDING_EPOCH_CONSOLIDATE_PLAN := 96
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
@@ -431,6 +433,18 @@ static func pre(act: int, units: Dictionary) -> void:
 	if f == null or _count >= _max or not _header_written or rules_epoch < EPOCH_73_V36:
 		return
 	f.store_line(JSON.stringify({"kind": "pre", "act": act, "units": units}, "", true, true))
+	f.flush()   # a same-process reader (the unit test) must see the line without a close()
+	_count += 1
+
+
+## meleefix (`PENDING_EPOCH_CONSOLIDATE_PLAN`): the planner inputs a melee winner's consolidation aimed by (`SoloController.consolidation_input`,
+## one per unit), as a line of its own joined by `act`, so a replay can hand the core the goal the table used. No-op below the gate,
+## when NML_ACT_DUMP is unset, before the header exists, or at the line cap.
+static func consolidate(act: int, plans: Array) -> void:
+	var f := _dump_stream()
+	if f == null or _count >= _max or not _header_written or rules_epoch < PENDING_EPOCH_CONSOLIDATE_PLAN:
+		return
+	f.store_line(JSON.stringify({"kind": "consolidate", "act": act, "plans": plans}, "", true, true))
 	f.flush()   # a same-process reader (the unit test) must see the line without a close()
 	_count += 1
 

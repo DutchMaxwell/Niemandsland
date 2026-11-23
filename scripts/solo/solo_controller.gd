@@ -5928,19 +5928,16 @@ func consolidate_after_melee_win(unit: GameUnit) -> int:
 	if own_pid != ai_slot:
 		ai_slot = own_pid
 		human_slot = prev_ai
-	var centre := unit_centre(unit)
-	var goal := _nearest_uncontrolled_objective(centre, unit)
-	var why := "toward objective"
+	var pick := _consolidation_goal(unit)
+	var goal: Vector3 = pick[0]
+	var why: String = pick[1]
 	if goal == NO_OBJECTIVE:
-		var enemy := _nearest_enemy_of(unit)
-		if enemy == null:
-			ai_slot = prev_ai
-			human_slot = prev_human
-			last_move_paths = []
-			return 0
-		goal = unit_centre(enemy)
-		why = "toward next target"
+		ai_slot = prev_ai
+		human_slot = prev_human
+		last_move_paths = []
+		return 0
 	var before := chain_positions(unit)
+	AiActRecorder.consolidate(_move_act_seq, [consolidation_input(unit)])   # meleefix: the inputs this goal came from
 	var dang := _move_toward(unit, goal, CONSOLIDATION_WIN_IN, false)
 	ai_slot = prev_ai
 	human_slot = prev_human
@@ -9195,6 +9192,56 @@ func _nearest_uncontrolled_objective(from: Vector3, activating_unit: GameUnit = 
 			best_tier = tier
 			best_d = d
 	return best
+
+
+## The winner consolidation's goal and its label, with the slots already turned to the unit's side: the planner's objective, else the
+## nearest enemy's centre; NO_OBJECTIVE = none. TWIN of the core's `sim::planned_consolidation_goal` (meleefix) until the table's melee
+## path is deleted; `consolidation_goal_drift_test.gd` feeds both the same boards.
+func _consolidation_goal(unit: GameUnit) -> Array:
+	var goal := _nearest_uncontrolled_objective(unit_centre(unit), unit)
+	if goal != NO_OBJECTIVE:
+		return [goal, "toward objective"]
+	var enemy := _nearest_enemy_of(unit)
+	return [NO_OBJECTIVE if enemy == null else unit_centre(enemy), "toward next target"]
+
+
+## meleefix: whether every planned side among `units` has this round's plan cached (`_plan_for_round` would build a missing one on the
+## board it is called on). A side without a grade has no plan to build.
+func consolidation_plans_cached(units: Array) -> bool:
+	for u in units:
+		var pid: int = int((u as GameUnit).unit_properties.get("player_id", ai_slot))
+		if difficulty_by_slot.get(pid, null) != null and int((_round_plans.get(pid, {}) as Dictionary).get("round", -1)) != _current_round():
+			return false
+	return true
+
+
+## meleefix drift guard: `_consolidation_goal` with the same side flip `consolidate_after_melee_win` makes.
+func consolidation_goal_of(unit: GameUnit) -> Vector3:
+	var prev := [ai_slot, human_slot]
+	var own_pid: int = int(unit.unit_properties.get("player_id", ai_slot))
+	if own_pid != ai_slot:
+		ai_slot = own_pid
+		human_slot = prev[0]
+	var goal: Vector3 = _consolidation_goal(unit)[0]
+	ai_slot = prev[0]
+	human_slot = prev[1]
+	return goal
+
+
+## meleefix (core `PENDING_EPOCH_CONSOLIDATE_PLAN`): the inputs `consolidate_after_melee_win` reads besides the board, for the core's
+## charge transcript (`{"t": "consolidate"}`, one per melee unit, taken BEFORE the fight; the core reads the board after it). Same side
+## flip as the consolidation: the unit's own grade, its own side's cached round plan (never built here: an unbuilt plan sends no
+## task), the endgame spread switch and each marker's runner count in objective order.
+func consolidation_input(unit: GameUnit) -> Dictionary:
+	var own_pid: int = int(unit.unit_properties.get("player_id", ai_slot))
+	var diff: SoloDifficulty = difficulty_by_slot.get(own_pid, null)
+	var cached: Dictionary = _round_plans.get(own_pid, {})
+	var task: Dictionary = (cached.get("tasks", {}) as Dictionary).get(unit.unit_id, {}) if int(cached.get("round", -1)) == _current_round() else {}
+	var objs: Variant = objectives_provider.call() if objectives_provider.is_valid() else []
+	var runners: Array = (objs as Array).map(func(o: Vector3) -> int: return runners_on(o)) if objs is Array else []
+	return {"t": "consolidate", "unit": unit.unit_id, "planner": diff != null, "task": str(task.get("kind", "")),
+		"marker": int(task.get("marker", -1)), "lane": int(task.get("lane", 0)) > 0, "spread": diff != null and diff.converges_endgame(),
+		"runners": runners}
 
 
 ## NML-210 — per-(round, side) plan cache: the global assignment is built ONCE per round per acting
