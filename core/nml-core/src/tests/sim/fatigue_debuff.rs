@@ -127,7 +127,7 @@ use super::*;
         // test is never blind to a tray change.
         let seed = (0..200)
             .find(|&s| Tray::seeded(s).roll(1)[0] >= 4)
-            .expect("some seed passes") as i64;
+            .expect("some seed passes");
         let (next, shot) = run_fatigue(&st, &statics, seed, 7);
         let mc = shot
             .rolls

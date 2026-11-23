@@ -38,7 +38,7 @@ use super::*;
             "rules_epoch 4 is Gen-2b's stamping-gap window (acts::EPOCH_5_TABLE_RULES), RED before the fix"
         );
         let (statics, st) = fold_legs("Unpredictable Shooter");
-        assert!(!ctx_live(statics[0].ctx.clone(), &statics, &st, 2, false, 5).unpredictable_shooting,
+        assert!(!ctx_live(statics[0].ctx, &statics, &st, 2, false, 5).unpredictable_shooting,
             "the leg rides the GRANT, not the bare bearer");
     }
 
@@ -53,7 +53,7 @@ use super::*;
             "rules_epoch 4 (Gen-2b's stamping-gap window) replays the Gen-0 set, RED before the fix"
         );
         let (statics, st) = fold_legs("Enhanced Self-Repair");
-        let regen6 = Ctx { regeneration: true, regen_target: 6, regen_target_spell: 6, ..statics[0].ctx.clone() };
+        let regen6 = Ctx { regeneration: true, regen_target: 6, regen_target_spell: 6, ..statics[0].ctx };
         let mixed = ctx_live(regen6, &statics, &st, 0, false, 5);
         assert_eq!(mixed.regen_target, 5, "the running MIN picks the granted 5+");
         assert_eq!(mixed.regen_target_spell, 5);

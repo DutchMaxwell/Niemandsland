@@ -103,7 +103,7 @@ use super::*;
             [14.0 * IN2M, 0.0, 0.0],
             [0.0, 0.0, 0.0],
         ];
-        let (next, shot) = run_gs(&st, &statics, &t, 7, st.positions[0][0][0] / IN2M as f64 + 8.0);
+        let (next, shot) = run_gs(&st, &statics, &t, 7, st.positions[0][0][0] / IN2M + 8.0);
         assert!(
             shot.log.iter().any(|l| l.contains("Grounded Speed")),
             "rules-must-log: {:?}",
@@ -111,7 +111,7 @@ use super::*;
         );
         let adv = next.positions[0][0][0] - st.positions[0][0][0];
         assert!(
-            (adv - (6.0 + 2.0) * IN2M as f64).abs() < 1e-6,
+            (adv - (6.0 + 2.0) * IN2M).abs() < 1e-6,
             "the +2\" advance band, got {adv}\""
         );
     }
@@ -123,7 +123,7 @@ use super::*;
         let (st, statics) = gs_line(7);
         let (next, shot) = run_gs(&st, &statics, &t, 7, 8.0);
         let adv = next.positions[0][0][0] - st.positions[0][0][0];
-        assert!((adv - 6.0 * IN2M as f64).abs() < 1e-6, "got {adv}\"");
+        assert!((adv - 6.0 * IN2M).abs() < 1e-6, "got {adv}\"");
         assert!(!shot.log.iter().any(|l| l.contains("Grounded Speed")), "{:?}", shot.log);
     }
 
@@ -141,9 +141,9 @@ use super::*;
             [14.0 * IN2M, 0.0, 0.0],
             [0.0, 0.0, 0.0],
         ];
-        let (next, shot) = run_gs(&st, &statics, &t, 6, st.positions[0][0][0] / IN2M as f64 + 8.0);
+        let (next, shot) = run_gs(&st, &statics, &t, 6, st.positions[0][0][0] / IN2M + 8.0);
         let adv = next.positions[0][0][0] - st.positions[0][0][0];
-        assert!((adv - 6.0 * IN2M as f64).abs() < 1e-6, "got {adv}\"");
+        assert!((adv - 6.0 * IN2M).abs() < 1e-6, "got {adv}\"");
         assert!(!shot.log.iter().any(|l| l.contains("Grounded Speed")), "{:?}", shot.log);
     }
 
@@ -164,10 +164,10 @@ use super::*;
             [0.0, 0.0, 0.0],
         ];
         // Advance 20" along +x: the landing is far from every ruin cell.
-        let (next, _) = run_gs(&st, &statics, &t, 7, st.positions[0][0][0] / IN2M as f64 + 20.0);
+        let (next, _) = run_gs(&st, &statics, &t, 7, st.positions[0][0][0] / IN2M + 20.0);
         let adv = next.positions[0][0][0] - st.positions[0][0][0];
         assert!(
-            (adv - (6.0 + 2.0) * IN2M as f64).abs() < 1e-6,
+            (adv - (6.0 + 2.0) * IN2M).abs() < 1e-6,
             "activation-start read, got {adv}\""
         );
     }

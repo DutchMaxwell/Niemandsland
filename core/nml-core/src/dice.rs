@@ -1306,7 +1306,7 @@ fn save_batch(
         // epoch). The firing names itself (rules-must-log) only when the
         // read actually rode along — every pre-epoch-6 corpus stays silent.
         let bonus = p.shred_ones_wound_bonus.max(1);
-        let shreds = shred_faces(&faces, &reroll, shred_low.max(1), target as i64);
+        let shreds = shred_faces(&faces, &reroll, shred_low.max(1), target);
         let wound = shreds * bonus;
         if shreds > 0 {
             // The table's line (`_solo_save_batch`): the widened window names its Boost, the plain one the rule that pays the 1s.

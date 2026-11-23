@@ -498,7 +498,6 @@ pub(crate) fn coherent_placement(planned: &[V2], radii_in: &[f64], flags: GateFl
         c: [p[0] as f64, p[1] as f64],
         r: radii_in.get(i).copied().unwrap_or(0.0),
         shape: flags.shapes.get(i).copied().unwrap_or_default(),
-        ..Default::default()
     }).collect();
     config_coherent(&cfg, chain)
 }
@@ -974,7 +973,7 @@ mod shape_tests {
                 shape: if u["base_shape"] == "oval" {
                     BaseShape::Oval { w_mm: u["base_w_mm"].as_f64().unwrap(),
                         d_mm: u["base_d_mm"].as_f64().unwrap(), yaw: 0.0 }
-                } else { BaseShape::Round }, ..Default::default() }
+                } else { BaseShape::Round } }
         }).collect();
         let got = edge(&discs[0], &discs[1]);
         let expected = pin["edge_in"].as_f64().unwrap();
@@ -1111,7 +1110,6 @@ mod shorten_tests {
                 BaseShape::Oval { w_mm: n(&v["semi_x"]) * 2000.0,
                     d_mm: n(&v["semi_z"]) * 2000.0, yaw: n(&v["yaw"]) as f32 }
             } else { BaseShape::Round },
-            ..Default::default()
         };
         let cfg: Vec<Disc> = pin["moving"].as_array().unwrap().iter().enumerate()
             .map(|(i, v)| body(v, [n(&pin["planned_world"][i][0]), n(&pin["planned_world"][i][2])])).collect();
