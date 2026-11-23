@@ -11,6 +11,10 @@
 scripts/ambience_library.gd
 scripts/ambience_synth.gd
 scripts/biome_library.gd
+scripts/boardgen_dress.gd
+scripts/boardgen_dress_materials.gd
+scripts/boardgen_dress_mesh.gd
+scripts/boardgen_dress_story.gd
 scripts/containers_library.gd
 scripts/floating_rule_text.gd
 scripts/hud/hud_frame.gd
@@ -43,6 +47,7 @@ scripts/tutorial_progress.gd
 scripts/two_human_turn.gd
 scripts/ui_feedback.gd
 scripts/ui_polish.gd
+scripts/units.gd
 scripts/visual/grassland_reference_launcher.gd
 scripts/visual/reference_biomes.gd
 scripts/visual/reference_jungle_motion.gd
@@ -166,6 +171,8 @@ test/sort_table_sync_test.gd
 test/spell_foresight_relentless_test.gd
 test/spell_granted_indirect_targeting_test.gd
 test/spielschule_menu_test.gd
+test/support/solo_harness.gd
+test/support/solo_harness_test.gd
 test/surface_placement_test.gd
 test/surge_bonus_param_test.gd
 test/surprise_attack_test.gd
