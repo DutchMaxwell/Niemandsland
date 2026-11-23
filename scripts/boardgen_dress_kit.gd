@@ -33,28 +33,33 @@ func usable(names: Array) -> bool:
 
 
 ## The module's mesh in metres, one surface per material named by it; null when its GLB is not cached (or does not parse). Under force_stub a box of the module's aabb with one surface named by its first material.
-## A vegetation CARD module (`veg.card`) names its ct_veg surface `ct_veg_card`: cards and modelled plants are two variants of one shader and cannot share a surface.
+## A module with a `variant` (the vegetation cards: "card") names its surfaces of a material that lists that variant `<material>_<variant>`:
+## the variants of a material are drawn with different shaders and cannot share a surface.
 func mesh(name: String) -> ArrayMesh:
 	var m := module(name)
 	if m.is_empty():
 		return null
-	var card := bool((m.get("veg", {}) as Dictionary).get("card", false))
+	var variant := str(m.get("variant", ""))
+	var materials: Dictionary = meta.get("materials", {})
 	if _force_stub:
-		return _box(m, card)
+		return _box(m, variant, materials)
 	var path := _kit.cached_path(name)
 	if path.is_empty():
 		return null
-	var key := path + ("#card" if card else "")
+	var key := path + ("#" + variant if variant != "" else "")
 	if not _meshes.has(key):
-		_meshes[key] = _parse(path, card)
+		_meshes[key] = _parse(path, variant, materials)
 	return _meshes[key]
 
 
-static func surface_name(material: String, card: bool) -> String:
-	return material + "_card" if card and material == "ct_veg" else material
+## The surface (and material) name of `material` drawn by a module of `variant`: `<material>_<variant>` when the material's
+## manifest entry lists that variant under `variants`, else the material itself. `materials` = the manifest's materials block.
+static func surface_name(material: String, variant: String, materials: Dictionary) -> String:
+	var variants: Dictionary = (materials.get(material, {}) as Dictionary).get("variants", {})
+	return material + "_" + variant if variant != "" and variants.has(variant) else material
 
 
-static func _box(m: Dictionary, card := false) -> ArrayMesh:
+static func _box(m: Dictionary, variant: String, materials: Dictionary) -> ArrayMesh:
 	var lo := Vector3(m["aabb_in"][0][0], m["aabb_in"][0][1], m["aabb_in"][0][2]) * IN_M
 	var hi := Vector3(m["aabb_in"][1][0], m["aabb_in"][1][1], m["aabb_in"][1][2]) * IN_M
 	var box := BoxMesh.new()
@@ -69,11 +74,11 @@ static func _box(m: Dictionary, card := false) -> ArrayMesh:
 	arrays[Mesh.ARRAY_COLOR] = colours
 	var out := ArrayMesh.new()
 	out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	out.surface_set_name(0, surface_name(m["materials"][0], card))
+	out.surface_set_name(0, surface_name(m["materials"][0], variant, materials))
 	return out
 
 
-static func _parse(path: String, card := false) -> ArrayMesh:
+static func _parse(path: String, variant: String, materials: Dictionary) -> ArrayMesh:
 	var doc := GLTFDocument.new()
 	var state := GLTFState.new()
 	if doc.append_from_file(path, state) != OK:
@@ -90,6 +95,6 @@ static func _parse(path: String, card := false) -> ArrayMesh:
 		for s in src.get_surface_count():
 			out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, src.surface_get_arrays(s))
 			var mat := src.surface_get_material(s)
-			out.surface_set_name(s, surface_name(mat.resource_name if mat != null else "", card))
+			out.surface_set_name(s, surface_name(mat.resource_name if mat != null else "", variant, materials))
 	root.free()
 	return out

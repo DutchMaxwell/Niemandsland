@@ -126,8 +126,7 @@ assets/miniatures/**/*_preprocessed*
 _internal/
 /MODEL_FORGE_EXTRACTION.md
 
-# internal working docs — never commit
-AGENTS.md
+# internal working docs — never commit (AGENTS.md at the root is the public contributor guide)
 CLAUDE.md
 HANDOFF_*.md
 HANDOVER*.md
