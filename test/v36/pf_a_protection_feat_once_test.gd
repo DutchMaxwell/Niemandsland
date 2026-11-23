@@ -4,8 +4,9 @@ extends GdUnitTestSuite
 ## each 5+ ignores it. The registry entry carries `uses_per_game: 1`; the ignore-wounds path now reads it from
 ## EPOCH_73_V36 (the spent flag lives on the bearer's props, like the Precision Feat's latch). Every use and every
 ## refusal writes a battle log line; epoch 72 replays the unlimited roll.
-## The once-per-game case is resolved through the rules core (one-core door, which ports the latch at
-## EPOCH_75_TABLE_FIXES); the epoch-72 unlimited control stays on the table, where the Feat still rolls.
+## The once-per-game case and the epoch-72 unlimited control both run through the rules core (one-core door, whose
+## latch is gated at EPOCH_75_TABLE_FIXES): the table no longer resolves an AI volley, so both arms of the epoch pair
+## are the core's.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
@@ -145,10 +146,11 @@ func test_pf_a_protection_feat_rolls_at_most_once_per_game(timeout := 90000) -> 
 	await E2EBoot.settle(get_tree())
 
 
-## Epoch 72 replays the unlimited Feat: both volleys roll it, and nothing is logged as spent or refused.
+## Epoch 72 replays the unlimited Feat through the rules core: below EPOCH_75_TABLE_FIXES the entry folds as a plain
+## ignore roll (the core's unnamed 5+ ignore line), so both volleys roll it and nothing is logged as spent or refused.
 func test_pf_a_epoch_72_keeps_the_unlimited_feat(timeout := 90000) -> void:
-	var logs := await _two_volleys(AiActRecorder.EPOCH_72_PLAYTEST_RULES)
-	assert_int(_feat_rolls(logs[0] + logs[1])).override_failure_message("epoch 72 changed the Feat (log: %s)" % logs[1]) \
-		.is_equal(2)
+	var logs := await _two_volleys(AiActRecorder.EPOCH_72_PLAYTEST_RULES, true)
+	var ignore_rolls: int = (logs[0] + logs[1]).count("(5+)")
+	assert_int(ignore_rolls).override_failure_message("epoch 72 lost the ignore roll (log: %s)" % logs[1]).is_equal(2)
 	assert_str(logs[0] + logs[1]).not_contains(FEAT_SPENT).not_contains(FEAT_REFUSED)
 	await E2EBoot.settle(get_tree())

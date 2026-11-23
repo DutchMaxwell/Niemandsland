@@ -1,14 +1,11 @@
 extends GdUnitTestSuite
-## One-core P3 steps 22 + 22b (the spike gate #2647, reworked): one AI activation of a plain unit - Hold + shoot, or
-## Advance 4" + shoot on an open or a terrain board - resolved by the core through CoreActivation.drive on the table's
-## own tray equals the table's own AI path (_run_ai_shooting) seed for seed: the attacks (the table's scaled count vs
-## the core's hit dice), the surviving models, Shaken, the tray RNG after. In the core run the dead leave right after the
-## saves (O4 b, read at the morale throw) and the removals the steps landed equal the binding's delta. Step 27: both
-## runs add the same battle-log lines, (category, text) in the same order.
-## Step 22c adds the terrain board once more with its free forest as a real 3D sandbox piece (ObjectManager, rotated).
-## Real: the main scene, NmlCore, the table's volley, move and sight code. Constructed: plain shooters vs 5 at 12" (the
-## seed picks the shooters' shape, SHAPES: weapon copies vs models, the dead, a per-model loadout or none, step 42d),
-## both seats AI (no save prompt waits). NML_ONE_CORE_SEEDS overrides the 200 seeds (1000 locally).
+## One-core P3 step 22c: the game header - the board the core reads - goes out with the first capture, and every later
+## capture refreshes it, so a free piece the player rotates, deletes or adds after that first capture reaches the core's
+## board (the header's `sandbox` list). Step 22c also guards the AI's own plan (`_core_plan`) refreshing the board.
+## Real: the main scene, NmlCore, the table's capture. Constructed: plain shooters vs 5 at 12" (the seed picks the
+## shooters' shape, SHAPES, step 42d), both seats AI (no save prompt waits).
+## The table-vs-core equality cases this suite used to hold were retired with the AI flip: the table no longer resolves
+## an AI volley, so its arm of a compare case is silent and the compare proves nothing.
 
 const INCH := 0.0254
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -43,19 +40,6 @@ func after_test() -> void:
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
-
-
-## Review item B2: one terrain board - a painted forest cell, a painted ruin cell (see-through from rules 3.6), a
-## map-layout container (its exact box and the painted cells it covers) and a free shelf forest piece - each in the
-## sight lines of its own shooters after the Advance (eye lines clear of every edge by >= 0.3"). `_run` shifts the
-## units into the board's lanes.
-func _terrain_board() -> void:
-	_painted_board()
-	var o = _main.terrain_overlay
-	var shelf := {"type": int(o.TerrainType.FOREST), "c": Vector2(5.5, 3.5) * INCH, "he": Vector2(0.5, 1.5) * INCH,
-		"yaw": 0.0}
-	o.sandbox_shapes_provider = func() -> Array: return [shelf]
-	o._los_volumes_dirty = true
 
 
 ## The painted part of the board: a forest cell, a ruin cell and the map-layout container with its two painted cells.
@@ -197,60 +181,8 @@ func _run(s: int, advance: bool, board: bool, core_run: bool) -> Dictionary:
 	return out
 
 
-func _gate(advance: bool, board: bool, label := "", fewer := 0) -> void:
-	var seeds := int(OS.get_environment("NML_ONE_CORE_SEEDS")) if OS.has_environment("NML_ONE_CORE_SEEDS") else 200
-	seeds = mini(seeds, fewer) if fewer > 0 else seeds
-	var bad: Array = []
-	var line_diffs: Array = []
-	var steps := 0
-	var core_us := 0
-	var max_us := 0
-	for s in seeds:
-		var table := await _run(s, advance, board, false)
-		var core := await _run(s, advance, board, true)
-		steps += int(core.get("steps", 0))
-		core_us += int(core.get("core_us", 0))
-		max_us = maxi(max_us, int(core.get("max_us", 0)))
-		for k in ["survivors", "shaken", "rng"]:
-			if table[k] != core[k]:
-				core["bad"].append("%s: table %s, core %s" % [k, table[k], core[k]])
-		for b in core["bad"]:
-			bad.append("seed %d: %s" % [s, b])
-		if table["lines"] != core["lines"]:
-			line_diffs.append("seed %d\n table %s\n core  %s" % [s, "\n       ".join(table["lines"]),
-				"\n       ".join(core["lines"])])
-	var case_name := label if not label.is_empty() else "terrain" if board else "advance" if advance else "hold"
-	print("ONE_CORE_ACTIVATION case=%s seeds=%d mismatches=%d line_diffs=%d mean_us=%.1f max_us=%d handles=%d" % [
-		case_name, seeds, bad.size(), line_diffs.size(), float(core_us) / maxi(steps, 1), max_us,
-		int((_main.solo_controller as SoloController)._core_node_ready().live_handles())])
-	if not line_diffs.is_empty():
-		print("ONE_CORE_ACTIVATION first line diff: ", line_diffs[0])
-	assert_array(bad).override_failure_message("core vs table:\n" + "\n".join(bad.slice(0, 10))).is_empty()
-	assert_array(line_diffs).override_failure_message("battle-log lines differ in %d seeds, first:\n%s" % [
-		line_diffs.size(), "" if line_diffs.is_empty() else line_diffs[0]]).is_empty()
-
-
-func test_hold_and_shoot_equals_the_table(timeout := 900000) -> void:
-	await _gate(false, false)
-
-
-func test_advance_and_shoot_equals_the_table(timeout := 900000) -> void:
-	await _gate(true, false)
-
-
-func test_advance_on_a_terrain_board_equals_the_table(timeout := 900000) -> void:
-	_terrain_board()
-	await _gate(true, true)
-
-
-func test_advance_on_a_board_with_a_3d_sandbox_piece_equals_the_table(timeout := 900000) -> void:
-	await _sandbox_board()
-	await _gate(true, true, "sandbox")
-
-
-## Step 22c (1): the game header - the board the core reads - goes out with the first capture; the table reads its
-## pieces live. Seed 0's core run is that first capture, then the player changes the table. 28 seeds = 4 of each shape.
-func _header_sent() -> void:
+## One core run: its capture sends the game header the first time and refreshes the core's board every later time.
+func _capture() -> void:
 	await _run(0, true, true, true)
 
 
@@ -259,30 +191,33 @@ func _held_pieces() -> int:
 	return int(((_main.solo_controller as SoloController)._core_node_ready().header_digest())["sandbox_pieces"])
 
 
-func test_a_piece_rotated_after_the_first_capture_equals_the_table(timeout := 900000) -> void:
+## Step 22c (1): the game header - the board the core reads - goes out with the first capture; the table reads its
+## pieces live. The first capture is seed 0's core run, then the player changes the table and the next capture
+## refreshes the core's board.
+func test_a_piece_rotated_after_the_first_capture_reaches_the_core(timeout := 900000) -> void:
 	var piece := await _sandbox_board()
-	await _header_sent()
+	await _capture()
 	piece.rotation.y = deg_to_rad(-SANDBOX_YAW)   # the pose that blinds shooter 0 instead of shooter 1
 	await _runner.simulate_frames(2)
-	await _gate(true, true, "sandbox_rotated", 28)
+	await _capture()
 	assert_int(_held_pieces()).is_equal(1)
 
 
-func test_a_piece_deleted_after_the_first_capture_equals_the_table(timeout := 900000) -> void:
+func test_a_piece_deleted_after_the_first_capture_reaches_the_core(timeout := 900000) -> void:
 	var piece := await _sandbox_board()
-	await _header_sent()
+	await _capture()
 	piece.set_meta("deleted", true)   # what Delete does: hidden and undoable, no longer a rule
 	piece.visible = false
 	await _runner.simulate_frames(2)
-	await _gate(true, true, "sandbox_deleted", 28)
+	await _capture()
 	assert_int(_held_pieces()).is_equal(0)
 
 
-func test_a_piece_added_after_the_first_capture_equals_the_table(timeout := 900000) -> void:
+func test_a_piece_added_after_the_first_capture_reaches_the_core(timeout := 900000) -> void:
 	_painted_board()
-	await _header_sent()
+	await _capture()
 	await _spawn_piece()
-	await _gate(true, true, "sandbox_added", 28)
+	await _capture()
 	assert_int(_held_pieces()).is_equal(1)
 
 
@@ -290,7 +225,7 @@ func test_a_piece_added_after_the_first_capture_equals_the_table(timeout := 9000
 ## (nothing is planned from it): the call reaches the refresh before it plans.
 func test_the_ai_plan_refreshes_the_board_too() -> void:
 	var piece := await _sandbox_board()
-	await _header_sent()
+	await _capture()
 	piece.set_meta("deleted", true)
 	piece.visible = false
 	await _runner.simulate_frames(2)
@@ -307,49 +242,3 @@ func test_the_ai_plan_refreshes_the_board_too() -> void:
 		_main.opr_army_manager.game_units.erase((u as GameUnit).unit_id)
 		for m in (u as GameUnit).models:
 			(m as ModelInstance).node.free()
-
-
-## Step 22c (3): free pieces of other kinds, spawned as a player's drag leaves them. The core takes the placed positions
-## as given (its y included), so these cases guard the path where the TABLE settles a moved model on the surface it ends
-## on (`surface_y_at`: a roof) and the core reads the same height; `_run` settles the shooters so.
-func _spawn(prop_id: String, kind: int, at_in: Vector2, yaw_deg: float) -> Node3D:
-	var piece: Node3D = _main.object_manager.spawn_sandbox_terrain(prop_id, kind, Vector3(at_in.x, 0.0, at_in.y) * INCH,
-		false, 7400 + kind)
-	piece.rotation.y = deg_to_rad(yaw_deg)
-	await _runner.simulate_frames(2)
-	return piece
-
-
-## The standing height the table gives the shooters' end spot (x 4", z 2.8"), in inches.
-func _stand_in(z_in := 2.8) -> float:
-	return float(_main.terrain_overlay.surface_y_at(Vector2(4.0, z_in) * INCH)) / INCH
-
-
-## A free blocker on the ground: sight past it equals the table (the pose blinds shooter 0).
-func test_advance_on_a_board_with_a_free_blocker_equals_the_table() -> void:
-	_painted_board()
-	await _spawn("blocker_6x3", ObjectManager.SandboxPropKind.BLOCKER, Vector2(8.0, -1.0), 15.0)
-	assert_int(int(_main.terrain_overlay._sandbox_shapes()[0]["type"])).is_equal(TerrainRules.TerrainType.CONTAINER)
-	await _gate(true, true, "free_blocker", 28)
-
-
-## Shooters 1 and 2 end their Advance (x 4", z 1.6" and 2.8") on the roof of a free blocker (x 1..7", z 0.7..3.7").
-func test_advance_onto_the_roof_of_a_free_blocker_equals_the_table() -> void:
-	_painted_board()
-	await _spawn("blocker_6x3", ObjectManager.SandboxPropKind.BLOCKER, Vector2(4.0, 2.2), 0.0)
-	assert_float(_stand_in()).is_equal_approx(2.5, 0.01)   # the roof: the shooters really are lifted
-	await _gate(true, true, "free_roof", 28)
-
-
-## Shooters 2 and 3 end their Advance (x 4", z 2.8" and 4.0") on the third floor (6") of a free three-storey ruin: from
-## 6" up they see over the painted forest, from 3" or the ground they do not.
-func test_advance_onto_the_floor_of_a_free_ruin_equals_the_table() -> void:
-	_painted_board()
-	var ruin := await _spawn("ruin_large_3f", ObjectManager.SandboxPropKind.RUIN, Vector2(0.0, 0.0), 0.0)
-	var slabs: Array = ruin.call("floor_slabs_world")
-	var slab: Dictionary = slabs[3]   # the third floor's arm along the ruin's z axis
-	ruin.global_position += Vector3(4.0 * INCH - (slab["c"] as Vector2).x, 0.0, 3.4 * INCH - (slab["c"] as Vector2).y)
-	await _runner.simulate_frames(2)
-	assert_float(_stand_in(2.8)).is_equal_approx(6.0, 0.01)   # the floor slab: the shooters really are lifted
-	assert_float(_stand_in(4.0)).is_equal_approx(6.0, 0.01)
-	await _gate(true, true, "free_floor", 28)

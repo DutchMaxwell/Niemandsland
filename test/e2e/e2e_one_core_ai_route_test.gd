@@ -1,11 +1,13 @@
 extends GdUnitTestSuite
-## One-core P3 step 42c: the AI's placement carries its walked routes, and the core path writes the table's shot row.
+## One-core P3 step 42c: the AI's placement carries its walked routes, and the core path writes the shot rows.
 ## (1) A one-model AI unit Advances 5" past the corner of a container (x 3..6", z 0..3", walled): its route around the
 ## corner walks 5.0" and is accepted; the same drop with no route is checked on its chord, which climbs the corner, and
-## is refused (Enforce Movement Limit on). (2) With the env-gated shot dump open, one plain AI volley writes the same row
-## on the core path as on the table path.
-## Real: the main scene, NmlCore, the game header's terrain, the table's volley and its shot recorder. Constructed:
+## is refused (Enforce Movement Limit on). (2) With the env-gated shot dump open, one plain AI volley writes its rows
+## on the core path, and a weapon that fires nothing still writes its own row.
+## Real: the main scene, NmlCore, the game header's terrain, the core's volley and the shot recorder. Constructed:
 ## plain units, the header's board (a school world), the planner's route (`last_move_paths`), both seats AI.
+## The table-vs-core row-equality cases were retired with the AI flip: the table no longer resolves an AI volley, so
+## its arm of a compare case is silent.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -86,32 +88,6 @@ func test_a_route_around_a_container_is_accepted_and_its_chord_refused() -> void
 	assert_array(chord).override_failure_message("the chord over the corner: %s" % [chord]).is_equal([false, 1])
 
 
-## RED: the core path without its `_solo_record_shot` call -> one row, the table's only.
-func test_the_core_path_writes_the_tables_shot_row() -> void:
-	var path := OS.get_user_data_dir().path_join("one_core_42c_shots.jsonl")
-	AiShotRecorder._checked = true
-	AiShotRecorder._stream = FileAccess.open(path, FileAccess.WRITE)
-	for core in [false, true]:
-		var att := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Att", "models": 5, "x_in": 0.0}),
-			RIFLE.merged({"count": 5}, true))
-		var def := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Def", "models": 5, "x_in": 12.0}),
-			RIFLE.merged({"count": 5}, true))
-		_main.seed_tray_rng(3)
-		_main._solo_core_ai_h = CoreActivation.capture(_main) if core else 0
-		await _main._run_ai_shooting({"unit": att, "moved": false, "action": AiDecision.Action.HOLD})
-		CoreActivation.reset_all(_main)   # releases the capture (step 42c)
-		for u in [att, def]:
-			_main.opr_army_manager.game_units.erase((u as GameUnit).unit_id)
-			for m in (u as GameUnit).models:
-				(m as ModelInstance).node.free()
-	AiShotRecorder.close()
-	var rows: Array = FileAccess.get_file_as_string(path).split("\n", false)
-	DirAccess.remove_absolute(path)
-	assert_int(rows.size()).override_failure_message("rows: %s" % [rows]).is_equal(2)
-	if rows.size() == 2:
-		assert_str(rows[1]).override_failure_message("table %s\ncore  %s" % rows).is_equal(rows[0])
-
-
 ## Five Rifles plus a Sniper (listed first or second) whose single bearer is dead: the Sniper fires nothing. [att, def].
 func _sniper_squads(sniper_first: bool) -> Array:
 	var att := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Att", "models": 5, "x_in": 0.0}),
@@ -138,8 +114,8 @@ func _free_units(units: Array) -> void:
 			(m as ModelInstance).node.free()
 
 
-## The rows one AI volley writes (env-gated shot dump), in the order written: the table writes the Sniper's row (attacks 0)
-## before it moves on.
+## The rows one AI volley writes (env-gated shot dump), in the order written: a silent weapon's row (attacks 0) comes
+## before the weapons that roll.
 func _volley_rows(core: bool, sniper_first: bool) -> Array:
 	var path := OS.get_user_data_dir().path_join("one_core_42c2_shots.jsonl")
 	AiShotRecorder._checked = true
@@ -164,13 +140,15 @@ func _volley_rows(core: bool, sniper_first: bool) -> Array:
 ## its own weapon, whichever weapon comes first. RED: the core path records inside the attack throw, so the silent
 ## Sniper writes no row (Sniper second), or the first throw (the Rifle's) records the Sniper's row (Sniper first).
 ## RED too: a row only for the shots that roll -> the Sniper's row is missing.
+## Retargeted to the door: the table no longer resolves an AI volley, so the rows are read from the core path alone.
 func test_the_core_path_writes_a_row_for_a_weapon_that_fires_nothing() -> void:
 	for sniper_first in [false, true]:
-		var table := await _volley_rows(false, sniper_first)
-		var core := await _volley_rows(true, sniper_first)
-		assert_int(table.size()).override_failure_message("table rows: %s" % [table]).is_equal(2)
-		assert_array(core).override_failure_message("sniper_first=%s\ntable %s\ncore  %s" % [sniper_first, table, core]) \
-			.is_equal(table)
+		var rows := await _volley_rows(true, sniper_first)
+		assert_int(rows.size()).override_failure_message("sniper_first=%s rows: %s" % [sniper_first, rows]).is_equal(2)
+		var names: Array = rows.map(func(r: String) -> String:
+			return str((JSON.parse_string(r) as Dictionary).get("weapon", "")))
+		assert_array(names).override_failure_message("sniper_first=%s rows: %s" % [sniper_first, rows]) \
+			.is_equal(["Sniper", "Rifle"] if sniper_first else ["Rifle", "Sniper"])
 
 
 ## The hit rolls (tracer, hit strip, phase title) follow the weapons that roll: a silent weapon is not one of them, so the
