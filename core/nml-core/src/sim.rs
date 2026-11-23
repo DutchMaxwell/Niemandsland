@@ -2609,7 +2609,7 @@ fn control_morale_passed(
     seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
 ) -> bool {
     if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) {
-        let quality = statics[next.roster.profile[ti]].ctx.quality as i64;
+        let quality = statics[next.roster.profile[ti]].ctx.quality;
         let faces = tray.roll(1);
         shot.rolls.push(crate::dice::Roll {
             kind: "attack", count: 1, target: quality, faces: faces.clone(), owner: source.owner.into(),
@@ -2872,15 +2872,15 @@ pub(crate) fn teleport_probe(
     // Self-carried EV: objective pull, threat escape, cover (the table's
     // `AiPosition._evaluate` is not ported).
     let ev_at = |p: V3| -> f64 {
-        let obj = obj_at(p).map(|o| -(geom::length(geom::sub(o, p)) as f64) / IN2M as f64).unwrap_or(0.0);
+        let obj = obj_at(p).map(|o| -(geom::length(geom::sub(o, p)) as f64) / IN2M).unwrap_or(0.0);
         let thr = nearest_enemy(next, si)
-            .map(|t| geom::length(geom::sub(geom::centre(&next.positions[t]), p)) as f64 / IN2M as f64)
+            .map(|t| geom::length(geom::sub(geom::centre(&next.positions[t]), p)) as f64 / IN2M)
             .map(|d| if d < 6.0 { -(6.0 - d) * 2.0 } else { 0.0 }).unwrap_or(0.0);
         obj + thr + terrain.map(|t| gives_cover(t.type_at(p)) as i64 as f64 * 2.0).unwrap_or(0.0)
     };
     let stay = ev_at(from);
     probes.iter().copied()
-        .filter(|&p| p != from && geom::length(geom::sub(p, from)) as f64 / IN2M as f64 <= cap_in + 1e-3)
+        .filter(|&p| p != from && geom::length(geom::sub(p, from)) as f64 / IN2M <= cap_in + 1e-3)
         .filter(|&p| !terrain.is_some_and(|t| lands_in_house(t, next, &chain, [p[0] - from[0], p[2] - from[2]])))
         .map(|p| (ev_at(p), p))
         .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))

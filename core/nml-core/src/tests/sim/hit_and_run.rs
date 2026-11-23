@@ -29,7 +29,7 @@ use super::*;
         assert_eq!(tray.state_i64(), base_tray.state_i64(), "Hit & Run draws no die");
         assert_eq!(next.hit_and_run_round[0], next.round);
         for (got, before) in next.positions[0].iter().zip(st.positions[0].iter()) {
-            assert!((got[0] - (before[0] - 3.0 * IN2M as f64)).abs() < 1e-9, "got {got:?}");
+            assert!((got[0] - (before[0] - 3.0 * IN2M)).abs() < 1e-9, "got {got:?}");
             assert_eq!(got[2], before[2]);
         }
         // hero_attach is OFF by default: the attached "ah" is left behind.
@@ -50,7 +50,7 @@ use super::*;
             &statics, &st, &buff_action(Some("b")), &terrain, on, &mut rng, &mut tray,
         )
         .unwrap();
-        assert!((next.positions[1][0][0] - (st.positions[1][0][0] - 3.0 * IN2M as f64)).abs() < 1e-9);
+        assert!((next.positions[1][0][0] - (st.positions[1][0][0] - 3.0 * IN2M)).abs() < 1e-9);
     }
 
     /// A DECLARED charge that falls short of contact (`buff_line`'s "b" stays
@@ -73,6 +73,6 @@ use super::*;
         )
         .unwrap();
         assert!(shot.rolls.is_empty(), "the charge fell short — no melee, no dice at all");
-        assert!((next.positions[0][0][0] - (st.positions[0][0][0] - 3.0 * IN2M as f64)).abs() < 1e-9);
+        assert!((next.positions[0][0][0] - (st.positions[0][0][0] - 3.0 * IN2M)).abs() < 1e-9);
         assert_eq!(next.hit_and_run_round[0], next.round);
     }

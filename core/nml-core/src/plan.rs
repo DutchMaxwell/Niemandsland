@@ -889,7 +889,6 @@ impl<'a> Search<'a> {
         // PHASE 5 — the stochastic arbitration (ai_planner.gd:231-265).
         let mut bi = bi;
         let mut brs = brs;
-        let mut runner = runner;
         let mut arbitration = None;
         if self.act.playout_search {
             if let Some((ri, r)) = runner {

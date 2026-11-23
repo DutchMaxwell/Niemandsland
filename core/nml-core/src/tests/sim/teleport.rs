@@ -83,7 +83,7 @@ use super::*;
         let (st, statics) = tp_line(8);
         let from = geom::centre(&st.positions[0]);
         // 2" along +x — inside the 3" Advance cap. Metres on the wire.
-        let to: [f64; 2] = [((from[0] + 2.0 * IN2M as f32)) as f64, from[2] as f64];
+        let to: [f64; 2] = [(from[0] + 2.0 * IN2M as f32) as f64, from[2] as f64];
         let (next, shot) = run_tp(&st, &statics, 8, Some(to));
         let centre = geom::centre(&next.positions[0]);
         assert!(
@@ -171,14 +171,12 @@ use super::*;
     fn the_latch_is_once_per_activation_and_the_fold_carries_it() {
         let (st, statics) = tp_line(8);
         let from = geom::centre(&st.positions[0]);
-        let to: [f64; 2] = [((from[0] + 2.0 * IN2M as f32)) as f64, from[2] as f64];
+        let to: [f64; 2] = [(from[0] + 2.0 * IN2M as f32) as f64, from[2] as f64];
         let (next, _) = run_tp(&st, &statics, 8, Some(to));
         assert!(next.teleport_used[0], "taken this activation");
         // And the io fold: a record whose ledger carries the block folds the
         // latch in (the wire form the recorder writes: a Vector2 string).
-        let plain = format!(
-            r#"{{"round":0,"rounds_total":1,"units":{{"a":{{"player":1,"alive":1,"activated":false,"shaken":false,"fatigued":false,"in_cover":false,"aircraft":false,"dormant":false,"dormant_models":0,"dormant_wounds":[],"casts":0,"morale_bonus":0,"ambush_arrived_round":-1,"earliest_arrival_round":-1,"wound_frac":1.0,"positions":[[0.0,0.0,0.0]],"wounds":[1],"radii":[0.0254],"mods":{{}},"mods_base":{{}},"attached":[],"attached_to":"","ledger":{{"teleport":{{"used":true,"to":"(0.42, -0.17)"}}}}}}}}}}"#
-        );
+        let plain = r#"{"round":0,"rounds_total":1,"units":{"a":{"player":1,"alive":1,"activated":false,"shaken":false,"fatigued":false,"in_cover":false,"aircraft":false,"dormant":false,"dormant_models":0,"dormant_wounds":[],"casts":0,"morale_bonus":0,"ambush_arrived_round":-1,"earliest_arrival_round":-1,"wound_frac":1.0,"positions":[[0.0,0.0,0.0]],"wounds":[1],"radii":[0.0254],"mods":{},"mods_base":{},"attached":[],"attached_to":"","ledger":{"teleport":{"used":true,"to":"(0.42, -0.17)"}}}}}"#.to_string();
         let profile = crate::state::Profile {
             cost: 0,
             unit_id: "a".into(), name: "a".into(), quality: 4, defense: 4, tough: 1,
@@ -207,7 +205,7 @@ use super::*;
         // recorded block must move nothing.
         let act = crate::io::Action { kind: ADVANCE, unit: "b".into(), dest: None,
             shoot: None, charge: None, patient: false, split: None, traced: None,
-            teleport: Some([((from[0] + 2.0 * IN2M as f32)) as f64, from[2] as f64]) };
+            teleport: Some([(from[0] + 2.0 * IN2M as f32) as f64, from[2] as f64]) };
         let mut tray = Tray::seeded(5);
         let mut rng = crate::rng::GodotRng::new(0);
         let (next, _) = resolve_stochastic_tray_on_board(
@@ -227,7 +225,7 @@ use super::*;
     fn an_epoch_6_record_is_byte_identical() {
         let (st, statics) = tp_line(6);
         let from = geom::centre(&st.positions[0]);
-        let (next, shot) = run_tp(&st, &statics, 6, Some([((from[0] + 2.0 * IN2M as f32)) as f64, from[2] as f64]));
+        let (next, shot) = run_tp(&st, &statics, 6, Some([(from[0] + 2.0 * IN2M as f32) as f64, from[2] as f64]));
         assert_eq!(next.positions[0], st.positions[0], "no shift below epoch 7");
         assert!(!next.teleport_used[0], "no latch below epoch 7");
         assert!(!shot.log.iter().any(|l| l.contains("Teleport")), "{:?}", shot.log);

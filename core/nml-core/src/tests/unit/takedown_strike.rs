@@ -48,7 +48,7 @@ use super::*;
     /// One strike phase with EVERY melee profile of `us` against `def`.
     fn strike(us: &UnitStatic, def: &Ctx) -> crate::dice::ShootResult {
         let n = us.melee.len();
-        let profiles: Vec<_> = us.melee.iter().cloned().collect();
+        let profiles: Vec<_> = us.melee.to_vec();
         let att = Ctx { quality: 4, ..Default::default() };
         let strikers = [crate::dice::Shooter {
             profiles: &profiles,
