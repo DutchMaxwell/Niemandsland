@@ -47,8 +47,7 @@ func after_test() -> void:
 
 func test_lesson_pins_daemmerung_without_writing_the_saved_grade(timeout := 60000) -> void:
 	assert_str(_main._solo_interactive_grade).is_equal("daemmerung")
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main.opr_army_manager.set_game_phase(OPRArmyManager.GamePhase.PLAYING)
 	_main._solo_log_grade()
 	var text := ""
