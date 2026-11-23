@@ -20,12 +20,16 @@ const SHOT_SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "g
 	"faction_folder": "ghostly_undead", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
 ## The defender's survivors after the two volleys, per seed (read on main from the table arm).
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_FEAT := [3, 4, 6, 9, 3, 6, 9, 4, 6, 7, 6, 8, 6, 7, 5, 5, 5, 9, 7, 8]
 ## One "spends its once-per-game ignore roll" sentence per seed.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_SPENDS_FEAT := [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 ## The defender's survivors after the two shot-feat volleys, per seed.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_SHOT := [1, 5, 4, 8, 4, 8, 4, 7, 3, 6, 4, 7, 3, 5, 3, 3, 3, 9, 6, 5]
 ## The defender's survivors after the two Takedown Shot volleys, per seed.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_TAKEDOWN := [1, 2, 4, 5, 6, 4, 7, 2, 3, 7, 5, 7, 6, 6, 3, 3, 4, 4, 6, 5]
 
 var _runner: GdUnitSceneRunner
@@ -140,6 +144,7 @@ func test_the_door_closes_the_feat_latch_the_table_closes() -> void:
 		if int(core["spends"]) != WANT_SPENDS_FEAT[s]:
 			bad.append("seed %d: spends %d, want %d" % [s, core["spends"], WANT_SPENDS_FEAT[s]])
 	print("FEAT_LATCH seeds=%d spent=%d mismatches=%d" % [seeds, spent, bad.size()])
+	# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 	assert_int(spent).override_failure_message("no seed spent the Feat: the sweep compares nothing").is_equal(20)
 	assert_array(bad).override_failure_message("door vs literals:\n" + "\n".join(bad.slice(0, 10))).is_empty()
 
@@ -201,6 +206,7 @@ func test_the_door_closes_the_shot_feat_latch_the_core_spends() -> void:
 		if int(core["alive"]) != WANT_ALIVE_SHOT[s]:
 			bad.append("seed %d: alive %d, want %d" % [s, core["alive"], WANT_ALIVE_SHOT[s]])
 	print("SHOT_FEAT_LATCH seeds=%d spent=%d mismatches=%d" % [seeds, spent, bad.size()])
+	# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 	assert_int(spent).override_failure_message("no seed spent the shot feat: the sweep compares nothing").is_equal(20)
 	assert_array(bad).override_failure_message("door vs literals:\n" + "\n".join(bad.slice(0, 10))).is_empty()
 
@@ -247,5 +253,6 @@ func test_the_door_closes_the_takedown_shot_latch_the_core_spends() -> void:
 		if int(core["alive"]) != WANT_ALIVE_TAKEDOWN[s]:
 			bad.append("seed %d: alive %d, want %d" % [s, core["alive"], WANT_ALIVE_TAKEDOWN[s]])
 	print("TAKEDOWN_LATCH seeds=%d spent=%d mismatches=%d" % [seeds, spent, bad.size()])
+	# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 	assert_int(spent).override_failure_message("no seed spent Takedown Shot: the sweep compares nothing").is_equal(20)
 	assert_array(bad).override_failure_message("door vs literals:\n" + "\n".join(bad.slice(0, 10))).is_empty()

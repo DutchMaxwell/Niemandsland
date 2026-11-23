@@ -16,6 +16,7 @@ const ParityTable := preload("res://test/parity/parity_table.gd")
 const SEEDS := 12
 const UNSTOPPABLE_LINE := "Unstoppable: negative to-hit modifiers ignored"
 ## The fold line once per seed's volley, read on main af5c83610 (the table said it 12 times).
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_UNSTOPPABLE_LINES := 12
 const DICE := "user://stealth_target_dice"
 
@@ -133,6 +134,7 @@ func test_a_changebound_unit_shot_from_over_9_in_is_hit_one_worse_in_both_halves
 	var tgt := _entry("Shifters", 5, ["Changebound"], "change_disciples", [])
 	var far := await _run(_rifles(), tgt)
 	assert_array(far["deny"]).override_failure_message("the door must take a Changebound target").is_empty()
+	# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 	assert_int((far["core"] as Array)[0]).override_failure_message("14 in: Q4 + 1 is a 5+ on the door").is_equal(5)
 	var near := await _run(_rifles(), tgt, {}, 8.0)
 	assert_int((near["core"] as Array)[0]).override_failure_message("8 in: no penalty on the door").is_equal(4)
@@ -142,6 +144,7 @@ func test_a_stealth_aura_hero_is_hit_one_worse_in_both_halves() -> void:
 	var hero := _entry("Echo", 1, ["Hero", "Stealth Aura"], "robot_legions", [], 3)
 	var far := await _run(_rifles(), hero)
 	assert_array(far["deny"]).override_failure_message("the door must take a Stealth Aura target").is_empty()
+	# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 	assert_int((far["core"] as Array)[0]).is_equal(5)
 
 
@@ -151,6 +154,7 @@ func test_a_joined_hero_follows_the_most_models_read_in_both_halves() -> void:
 	var plain_hero := _entry("Captain", 1, ["Hero"], "change_disciples", [], 3)
 	var most := await _run(_rifles(), host, plain_hero)
 	assert_array(most["deny"]).is_empty()
+	# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 	assert_int((most["core"] as Array)[0]).override_failure_message("most models carry it").is_equal(5)
 	var plain_host := _entry("Troopers", 5, [], "change_disciples", [])
 	var bound_hero := _entry("Seer", 1, ["Hero", "Changebound"], "change_disciples", [], 3)

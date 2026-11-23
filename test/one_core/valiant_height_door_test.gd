@@ -106,10 +106,15 @@ func _run(epoch: int, raise_in: float) -> Dictionary:
 
 
 ## Per-seed morale-roll target on the door, read on main af5c83610.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_MORALE_86 := 12
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_TARGETS_85 := [5, 5, 5, 5, 5, 5, -1, 5, 5, -1, -1, 5, -1, 5, 5, 5]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_TARGETS_86 := [4, 4, 4, 4, 4, 4, -1, 4, 4, -1, -1, 4, -1, 4, 4, 4]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_TARGETS_LEVEL_85 := [5, 5, 5, 5, 5, 5, -1, 5, 5, -1, -1, 5, -1, 5, 5, 5]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_TARGETS_LEVEL_86 := [5, 5, 5, 5, 5, 5, -1, 5, 5, -1, -1, 5, -1, 5, 5, 5]
 
 

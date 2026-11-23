@@ -16,8 +16,10 @@ const SEEDS := 6
 const NAMES := [["Casting Buff", "gf", "eternal_dynasty"], ["Courage Buff", "gf", "blessed_sisters"], ["Speed Debuff", "gf", "dwarf_guilds"],
 	["Precision Fighter Buff", "gf", "blessed_sisters"], ["Unstoppable when Shooting Aura", "gf", "robot_legions"], ["Defense Buff", "aof", "human_empire"]]
 ## Per seed: how many door battle-log lines contain the rule name, and how many dice records the door wrote (read on main).
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_NAMED := {"Casting Buff": [2, 2, 2, 2, 2, 2], "Courage Buff": [2, 2, 2, 2, 2, 2], "Speed Debuff": [1, 1, 1, 1, 1, 1],
 	"Precision Fighter Buff": [2, 2, 2, 2, 2, 2], "Unstoppable when Shooting Aura": [2, 2, 2, 2, 2, 2], "Defense Buff": [2, 2, 2, 2, 2, 2]}
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ROLLS := {"Casting Buff": [2, 2, 2, 2, 2, 2], "Courage Buff": [2, 2, 2, 2, 2, 2], "Speed Debuff": [2, 2, 2, 2, 2, 2],
 	"Precision Fighter Buff": [2, 2, 2, 2, 2, 2], "Unstoppable when Shooting Aura": [2, 2, 2, 2, 2, 2], "Defense Buff": [2, 2, 2, 2, 2, 2]}
 

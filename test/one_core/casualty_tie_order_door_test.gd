@@ -20,6 +20,7 @@ const STEP_M := 0.0625
 const SEEDS := 8
 ## The door's slots per seed, read on main (where the table still shoots and equals the door). One entry per seed; the "joined"
 ## entries carry the host's slots and the hero's.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_SLOTS_GRID := [
 	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, false, 0]]],
 	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]]],
@@ -29,6 +30,7 @@ const WANT_SLOTS_GRID := [
 	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, true, 1], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]]],
 	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, true, 1], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]]],
 	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]]]]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_SLOTS_REVIVED := [
 	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0], [6, true, 1], [7, true, 1], [8, true, 1], [9, false, 0], [10, false, 0], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, false, 0]]],
 	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, false, 0]]],
@@ -38,6 +40,7 @@ const WANT_SLOTS_REVIVED := [
 	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, false, 0]]],
 	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, false, 0]]],
 	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, false, 0]]]]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_SLOTS_JOINED := [
 	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, false, 0]], [[0, true, 1]]],
 	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]], [[0, true, 1]]],
@@ -48,6 +51,7 @@ const WANT_SLOTS_JOINED := [
 	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, true, 1], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]], [[0, true, 1]]],
 	[[[0, false, 0], [1, true, 1], [2, true, 1], [3, true, 1], [4, false, 0], [5, true, 1], [6, true, 1], [7, true, 1], [8, true, 1], [9, true, 1], [10, true, 1], [11, true, 1], [12, true, 1], [13, true, 1], [14, true, 1], [15, false, 0], [16, true, 1], [17, true, 1], [18, true, 1], [19, true, 1]], [[0, true, 1]]]]
 ## Seeds that removed at least one model, per kind, read on main.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_PICKS := {"grid": 7, "revived": 7, "joined": 7}
 
 var _runner: GdUnitSceneRunner

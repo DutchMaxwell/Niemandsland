@@ -132,6 +132,7 @@ func _differs(placement: Array, seed: int) -> Dictionary:
 
 
 ## Per placement and seed the door's Slayer line, read on main af5c83610 (the table said it there).
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_SLAYER_LINES := [
 	[["COMBAT|Slayer: no AP, Att moved"], ["COMBAT|Slayer: no AP, Att moved"], ["COMBAT|Slayer: no AP, Att moved"], ["COMBAT|Slayer: no AP, Att moved"],
 		["COMBAT|Slayer: no AP, Att moved"], ["COMBAT|Slayer: no AP, Att moved"], ["COMBAT|Slayer: no AP, Att moved"], ["COMBAT|Slayer: no AP, Att moved"]],

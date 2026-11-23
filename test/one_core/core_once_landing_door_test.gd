@@ -22,6 +22,7 @@ const NAMES := [["Furious Buff", "gf", "alien_hives"], ["Shred Mark", "gf", "cus
 ## [half gap, friend distance] in inches: a foe 14 in away (the AI advances and shoots) and a foe 7 in away (the AI holds and shoots), the friend close behind.
 const PLACEMENTS := [[7.0, 3.0], [3.5, 1.5]]
 ## The once-record the door's landing spends, per rule (one spend line, the table's own wording).
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_CONSUMED := {
 	"Furious Buff": ["COMBAT|\"Furious Buff\" on Att is consumed (applies once)"],
 	"Shred Mark": ["COMBAT|\"Shred Mark\" on Def is consumed (applies once)"],
@@ -31,6 +32,7 @@ const WANT_CONSUMED := {
 	"Increased Shooting Range Mark": ["COMBAT|\"Increased Shooting Range Mark\" on Def is consumed (applies once)"],
 }
 ## No once-record is left behind on any unit after the landing spent it.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_MODS := {"Att": [], "Def": [], "Friend": []}
 
 var _runner: GdUnitSceneRunner

@@ -19,10 +19,12 @@ const NAMES := [["Furious Buff", "gf", "alien_hives"], ["Shred Mark", "gf", "cus
 ## [half gap, friend distance] in inches.
 const PLACEMENTS := [[7.0, 3.0], [3.5, 1.5]]
 ## Per rule, per placement, per seed: door battle-log lines containing the rule name, and door dice records (read on main).
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_NAMED := {"Furious Buff": [[3, 3, 3, 3, 3, 3, 3, 3], [3, 3, 3, 3, 3, 3, 3, 3]],
 	"Shred Mark": [[3, 3, 3, 3, 3, 3, 3, 3], [3, 3, 3, 3, 3, 3, 3, 3]],
 	"Quick Shot Mark": [[3, 3, 3, 3, 3, 3, 3, 3], [3, 3, 3, 3, 3, 3, 3, 3]],
 	"Increased Shooting Range Mark": [[3, 3, 3, 3, 3, 3, 3, 3], [3, 3, 3, 3, 3, 3, 3, 3]]}
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ROLLS := {"Furious Buff": [[2, 2, 2, 2, 2, 2, 2, 2], [2, 2, 2, 2, 2, 2, 2, 2]],
 	"Shred Mark": [[2, 2, 2, 2, 2, 2, 2, 2], [2, 2, 2, 2, 2, 2, 2, 2]],
 	"Quick Shot Mark": [[2, 2, 2, 2, 2, 2, 2, 2], [2, 2, 2, 2, 2, 2, 2, 2]],
