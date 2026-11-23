@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## The table half of the legality read (`CoreShadow.table_illegal`) names the joined heroes of the units it is given, as the core's own
-## `illegal` list does (it names every unit that moved, a joined hero included). fd-gate G1' soak g18: a hero's forbidden rest stood on
-## both boards but read as core-only, because the table half checked the host and the target only.
+## `illegal` list does (it names every unit that moved, a joined hero included). A joined hero's forbidden rest stood on both boards
+## but read as core-only, because the table half checked only the host and the target.
 ## Planted: a joined hero's model on top of a model of a third, unnamed unit. RED on main: the table half lists nothing for the hero.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")

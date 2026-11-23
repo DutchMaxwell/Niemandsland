@@ -605,7 +605,8 @@ static func _legality(main, r: Dictionary, diff: String, units: Array) -> String
 
 ## The checker over `units` on the board as the table holds it now. A board that cannot be captured reads one "unchecked" entry,
 ## never an empty (legal-looking) list. Also read by the roster sweep's table half. A named unit's joined heroes are read with it: the
-## core's own list names every unit that moved, a joined hero included (fd-gate soak g18: a hero's forbidden rest read as core-only).
+## core's own list names every unit that moved, a joined hero included (a joined hero's forbidden rest stood on both boards but read as
+## core-only, because the table half checked only the host and the target).
 static func table_illegal(main, units: Array) -> Array:
 	var core: Object = main.solo_controller._core_node_ready()
 	var h := CoreActivation.capture(main) if core != null else 0
