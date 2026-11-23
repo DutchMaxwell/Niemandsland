@@ -19,15 +19,14 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	# Pin the movement-planner statics AFTER _ensure_solo_controller (which flips fast_planner to
 	# true) — the precise planner keeps the kite/advance geometry this suite measures deterministic
 	# (solo_controller_test.gd's own lesson about this process-wide static leaking between suites).
 	MovementPlanner.fast_planner = false
 	MovementPlanner.fast_planner_guard = MovementPlanner.FAST_PLANNER_GUARD
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_fast = true
+	SoloHarness.fast(_main)
 
 
 func after_test() -> void:

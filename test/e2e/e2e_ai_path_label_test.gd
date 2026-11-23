@@ -45,10 +45,9 @@ func after_test() -> void:
 ## Batch + fast: the choreography's fixed 2 s attention beats collapse to nothing and the glide runs at
 ## 1/PACE_FAST_SCALE speed, so a real activation animation costs a fraction of a second in CI.
 func _arm_fast_solo() -> void:
-	_main._solo_batch = true
-	_main._solo_fast = true
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.instant(_main)
+	SoloHarness.fast(_main)
+	SoloHarness.start(_main)
 
 
 ## One model with a straight 3-point route; the shape _solo_animate_move consumes.

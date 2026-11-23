@@ -19,12 +19,11 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	MovementPlanner.fast_planner = false   # deterministic precise planner (as e2e_auto_advance_test.gd)
 	MovementPlanner.fast_planner_guard = MovementPlanner.FAST_PLANNER_GUARD
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_fast = true
+	SoloHarness.fast(_main)
 
 
 func after_test() -> void:
@@ -394,7 +393,7 @@ func test_reanimated_models_are_named_in_the_log(timeout := 60000) -> void:
 	_main.opr_army_manager.set_loose_model_dead(fallen.node, 1, true, bots.unit_id)
 	var foe := _pickable(2, "Foe", 24.0)
 	foe.is_activated = true
-	_main._solo_batch = true   # tray faces from the seeded tray RNG, no allocation prompt
+	SoloHarness.instant(_main)   # tray faces from the seeded tray RNG, no allocation prompt
 	_main.seed_tray_rng(_seed_rolling(SoloController.REANIMATION_TARGET))
 	var shot := await _hover_then_click_point(bots, AiDecision.Action.ADVANCE, Vector3(10.0 * INCH, 0, 0))
 	assert_int((shot["landing"] as Array).size()).is_equal(2)
