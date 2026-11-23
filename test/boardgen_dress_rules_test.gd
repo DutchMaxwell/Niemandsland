@@ -27,7 +27,8 @@ func _meta() -> Dictionary:
 		"dr_litter_straw": _mod("litter", "litter", 2.0, [-1, 0, -1], [1, 0.03, 1], [0.0, 0.0, 0.0], ["flat"]),
 		"dr_lamp_post": _mod("prop", "lamp", 0.2, [-0.1, 0, -0.1], [0.1, 2.9, 0.1], [0.1, 0.1, 0.1], ["cell_corner", "R1_exception"]),
 		"dr_gable_tb_s3": _mod("gable", "gable", 3.0, [-0.15, -0.12, -0.3], [3.15, 2.0, 0.32], [0.0, 0.0, 0.32], ["span_3"]),
-		"dr_ruin_gable_s3": _mod("ruin_gable", "gable", 3.0, [0, 0, -0.3], [3, 2.6, 0], [0.0, 0.0, 0.0], ["end_face", "R4_gable"])}}
+		"dr_ruin_gable_s3": _mod("ruin_gable", "gable", 3.0, [0, 0, -0.3], [3, 2.6, 0], [0.0, 0.0, 0.0], ["end_face", "R4_gable"]),
+		"dr_veg_tuft": _mod("veg", "veg", 0.5, [-0.25, 0, -0.25], [0.25, 0.35, 0.25], [0.0, 0.0, 0.0], ["centred", "veg", "soft_veg", "no_collider", "no_shadow"])}}
 
 
 ## The transform of face `k` (N E S W) of cell (cx, cz) with its origin at height `y`.
@@ -326,3 +327,30 @@ func test_a_face_set_too_deep_in_or_leaned_too_far_breaks_r3() -> void:
 	assert_array(R.violations(layout, [ok], _meta())).is_empty()
 	var leaning := _p("dr_house_tb_plain_a", _face(layout, cv.x, cv.y, e[1], 0.0, 0.2, 2.0), "houses")
 	assert_bool(_rules(R.violations(layout, [leaning], _meta())).has("R3")).is_true()
+
+
+func test_soft_vegetation_up_to_0_4_in_passes_on_the_ground_but_not_taller_not_on_a_ladder_strip_and_not_on_a_tier() -> void:
+	var layout := _layout(41)
+	var st := _street(layout)
+	var tuft := _p("dr_veg_tuft", _centre(layout, st.x, st.y, 0.04), "clutter")   # 0.35 in high on a street: no obstacle
+	assert_array(R.violations(layout, [tuft], _meta())).is_empty()
+	var tall := Transform3D(_centre(layout, st.x, st.y, 0.04).basis * Basis.from_scale(Vector3(1.0, 0.45 / 0.35, 1.0)), _centre(layout, st.x, st.y, 0.04).origin)   # 0.45 in: too high
+	assert_array(_rules(R.violations(layout, [_p("dr_veg_tuft", tall, "clutter")], _meta()))).contains_exactly(["R1"])
+	var c: Dictionary = layout["connectors"][0]
+	var away := Vector2(int(c["low_xz"][0]) - int(c["high_xz"][0]), int(c["low_xz"][1]) - int(c["high_xz"][1]))
+	var org := Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) * -0.5
+	var edge := Vector2(c["edge_in"][0], c["edge_in"][1]) + org
+	var foot := edge + away * 0.8   # 0.8 in from the wall at the ladder's foot: inside its strip
+	var on_ladder := _p("dr_veg_tuft", Transform3D(Basis(), Vector3(foot.x, 0.04, foot.y) * R.IN_M), "clutter")
+	assert_bool(_rules(R.violations(layout, [on_ladder], _meta())).has("R5")).is_true()
+	var far := edge + away * 2.6   # still in the ladder's low cell (kept clear), outside the strip
+	var in_cell := _p("dr_veg_tuft", Transform3D(Basis(), Vector3(far.x, 0.04, far.y) * R.IN_M), "clutter")
+	assert_array(_rules(R.violations(layout, [in_cell], _meta()))).contains_exactly(["R1"])   # kept-clear cell
+	var e := _tier_edge(layout)
+	assert_array(e).is_not_empty()
+	if e.is_empty():
+		return
+	var cv: Vector3i = e[0]
+	var on_tier := _p("dr_veg_tuft", _centre(layout, cv.x, cv.y, R.top_in(layout, cv.x, cv.y)), "clutter")   # the exception is for the ground: a tier top keeps R4
+	assert_bool(_rules(R.violations(layout, [on_tier], _meta())).has("R4")).is_true()
+

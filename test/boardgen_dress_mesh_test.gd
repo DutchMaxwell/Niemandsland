@@ -132,3 +132,15 @@ func test_a_module_with_an_empty_shadow_list_casts_nothing() -> void:
 	assert_int(none.get_surface_count()).is_equal(0)
 	var mixed := BoardgenDressMesh.shadow([{"module": "dr_litter_straw", "xf": Transform3D(), "cls": "test"}, {"module": "dr_house_tb_plain_a", "xf": Transform3D(), "cls": "test"}], dress)
 	assert_int(_tris(mixed)).is_equal((dress.module("dr_house_tb_plain_a")["shadow"] as Array).size() * 12)   # only the house panel's hulls
+
+
+func test_card_and_modelled_vegetation_merge_into_two_surfaces() -> void:
+	var dress := _dress()
+	var placements := [{"module": "dr_veg_card_a", "xf": Transform3D(), "cls": "test"}, {"module": "dr_veg_grass_tuft", "xf": Transform3D(), "cls": "test"}, {"module": "dr_veg_plot_a", "xf": Transform3D(), "cls": "test"}, {"module": "dr_veg_moss_mat", "xf": Transform3D(), "cls": "test"}]
+	var merged := BoardgenDressMesh.merge(placements, dress)
+	assert_int(merged.get_surface_count()).is_equal(2)
+	assert_str(merged.surface_get_name(0)).is_equal("ct_veg")
+	assert_str(merged.surface_get_name(1)).is_equal("ct_veg_card")
+	assert_int(_tris(merged)).is_equal(4 * 12)
+	assert_int(BoardgenDressMesh.shadow(placements, dress).get_surface_count()).is_equal(0)   # soft vegetation casts no shadow proxy
+

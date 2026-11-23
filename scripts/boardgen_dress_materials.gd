@@ -6,8 +6,11 @@ extends RefCounted
 ## (`colour`) is a StandardMaterial3D with colour / roughness / metallic / emission. The merged mesh binds them by surface name.
 
 const SHADER: Shader = preload("res://shaders/ruintown_dress.gdshader")
+const VEG_SHADER: Shader = preload("res://shaders/ruintown_dress_veg.gdshader")   # ct_veg: ONE shader, two variants (modelled plants, cards)
 ## Shader uniform -> map name of a TiefwerkLibrary set.
 const MAPS := {"albedo_tex": "albedo", "normal_tex": "normal", "orm_tex": "orm"}
+## The vegetation entry's float keys that are shader uniforms of the same name, with their defaults.
+const VEG_DEFAULTS := {"albedo_scale": 0.14, "wrap": 0.4, "backlight": 0.7, "roughness": 0.9}
 
 
 ## name -> Material for every entry of meta["materials"]. `lib` may be null (then every textured entry is flat).
@@ -16,12 +19,37 @@ static func make(meta: Dictionary, lib: TiefwerkLibrary) -> Dictionary:
 	var entries: Dictionary = meta.get("materials", {})
 	for name: String in entries:
 		var e: Dictionary = entries[name]
+		if e.get("shader", "") == "veg":   # vegetation: ct_veg (modelled blades, moss) and ct_veg_card (the card tufts) of one entry
+			out[name] = _veg(e, lib, false)
+			out[name + "_card"] = _veg(e, lib, true)
+			out[name].resource_name = name
+			out[name + "_card"].resource_name = name + "_card"
+			continue
 		var m: Material = _textured(e, lib) if e.has("set") else null
 		if m == null:
 			m = _plain(e)
 		m.resource_name = name
 		out[name] = m
 	return out
+
+
+## The vegetation material: never null and never flat (it needs no texture); cards need the `grass_cards` atlas - while that set is not cached the atlas is fully transparent and the cards draw nothing.
+static func _veg(e: Dictionary, lib: TiefwerkLibrary, cards: bool) -> ShaderMaterial:
+	var sm := ShaderMaterial.new()
+	sm.shader = VEG_SHADER
+	for key: String in VEG_DEFAULTS:
+		sm.set_shader_parameter(key, float(e.get(key, VEG_DEFAULTS[key])))
+	var card: Dictionary = e.get("card", {})
+	var tone := _colour(card.get("tone", [0.15, 0.15, 0.15]))
+	sm.set_shader_parameter("use_cards", 1.0 if cards else 0.0)
+	sm.set_shader_parameter("alpha_scissor", float(card.get("alpha_scissor", 0.4)))
+	sm.set_shader_parameter("card_tone", Vector3(tone.r, tone.g, tone.b))
+	var set_name := str(card.get("set", ""))
+	var atlas: Texture2D = lib.set_texture(set_name, "albedo") if lib != null else null
+	var dry: Texture2D = lib.set_texture(set_name, "dry") if atlas != null else null
+	sm.set_shader_parameter("atlas", atlas if atlas != null else ImageTexture.create_from_image(Image.create_empty(1, 1, false, Image.FORMAT_RGBA8)))
+	sm.set_shader_parameter("atlas_dry", dry if dry != null else sm.get_shader_parameter("atlas"))
+	return sm
 
 
 static func _textured(e: Dictionary, lib: TiefwerkLibrary) -> ShaderMaterial:

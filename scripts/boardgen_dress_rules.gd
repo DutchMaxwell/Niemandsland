@@ -13,6 +13,7 @@ const OVERHANG := 0.35
 const REACH := 0.2
 const EDGE := 0.4
 const PARAPET := 0.7
+const SOFT_VEG := 0.4   # soft vegetation (tag soft_veg) up to this high is no obstacle on the ground (R1 exception)
 const LADDER_GAP := 0.9
 const LEAN_MAX := 1.5
 const TOL := 0.02   # how far a piece may poke over a limit before it counts
@@ -64,6 +65,7 @@ static func violations(layout: Dictionary, placements: Array, meta: Dictionary) 
 	var cell := float(layout["cell_in"])
 	var org := Vector2(nx, int(layout["nz"])) * cell * -0.5
 	var zones := _ladder_zones(layout)
+	var kept := kept_clear(layout)
 	for p: Dictionary in placements:
 		var m: Dictionary = meta["modules"].get(p["module"], {})
 		var xf: Transform3D = p["xf"]
@@ -95,6 +97,8 @@ static func violations(layout: Dictionary, placements: Array, meta: Dictionary) 
 				found.append("R3 sits %.2f in inside the collider face" % inset)
 		for cz in range(maxi(floori((all.position.y - org.y) / cell), 0), mini(floori((all.end.y - org.y) / cell), int(layout["nz"]) - 1) + 1):
 			for cx in range(maxi(floori((all.position.x - org.x) / cell), 0), mini(floori((all.end.x - org.x) / cell), nx - 1) + 1):
+				if (m["tags"] as Array).has("soft_veg") and kept.has(cz * nx + cx) and all.intersection(Rect2(org + Vector2(cx, cz) * cell, Vector2(cell, cell))).size.x > TOL:
+					found.append("R1 soft vegetation in a kept-clear cell (ladder or landmark)")
 				if walkable(layout, cz * nx + cx):
 					found.append(_air(layout, m, xf, cx, cz))
 		for f in found:
@@ -115,6 +119,8 @@ static func _air(layout: Dictionary, m: Dictionary, xf: Transform3D, cx: int, cz
 	var top := top_in(layout, cx, cz)
 	var oy := xf.origin.y / IN_M
 	var sy := maxf(xf.basis.y.y, 0.01)
+	if tags.has("soft_veg") and top <= 0.0:   # no collider, no cover: on the ground a tuft is no obstacle up to SOFT_VEG (a tier top keeps R4)
+		return "" if oy + hi.y * sy - top <= SOFT_VEG + TOL else "R1: soft vegetation higher than %.1f in" % SOFT_VEG
 	if tags.has("R1_exception") or ((tags.has("bulky_ok") or tags.has("terrain_or_solid_only")) and _terrain(layout, cz * int(layout["nx"]) + cx)):
 		return ""
 	if tags.has("R4_gable") and top > 0.0:

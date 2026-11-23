@@ -5202,7 +5202,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.187,
@@ -5211,7 +5210,7 @@
    },
    "role": "veg",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "centred",
     "veg",
@@ -5252,7 +5251,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.123,
@@ -5261,7 +5259,7 @@
    },
    "role": "veg",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "centred",
     "veg",
@@ -5302,7 +5300,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.058,
@@ -5311,7 +5308,7 @@
    },
    "role": "veg",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "centred",
     "veg",
@@ -5352,7 +5349,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.371,
@@ -5361,7 +5357,7 @@
    },
    "role": "veg",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "centred",
     "veg",
@@ -5402,7 +5398,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.267,
@@ -5411,7 +5406,7 @@
    },
    "role": "wall_foot",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "veg",
     "soft_veg",
@@ -5452,7 +5447,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.561,
@@ -5461,7 +5455,7 @@
    },
    "role": "wall_foot",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "veg",
     "soft_veg",
@@ -5502,7 +5496,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.05,
@@ -5511,7 +5504,7 @@
    },
    "role": "veg",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "centred",
     "veg",
@@ -5552,7 +5545,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.15,
@@ -5561,7 +5553,7 @@
    },
    "role": "veg",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "centred",
     "veg",
@@ -5602,7 +5594,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.132,
@@ -5611,7 +5602,7 @@
    },
    "role": "veg",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "centred",
     "veg",
@@ -5652,7 +5643,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.154,
@@ -5661,7 +5651,7 @@
    },
    "role": "veg",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "centred",
     "veg",
@@ -5702,7 +5692,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.138,
@@ -5711,7 +5700,7 @@
    },
    "role": "veg",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "centred",
     "veg",
@@ -5752,7 +5741,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.115,
@@ -5761,7 +5749,7 @@
    },
    "role": "veg",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "centred",
     "veg",
@@ -5802,7 +5790,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.248,
@@ -5811,7 +5798,7 @@
    },
    "role": "veg",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "centred",
     "veg",
@@ -5852,7 +5839,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.055,
@@ -5861,7 +5847,7 @@
    },
    "role": "veg",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "centred",
     "veg",
@@ -5902,7 +5888,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.048,
@@ -5911,7 +5896,7 @@
    },
    "role": "veg",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "centred",
     "veg",
@@ -5952,7 +5937,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.0,
@@ -5961,7 +5945,7 @@
    },
    "role": "plot",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "terrain_cell",
     "bulky_ok",
@@ -6003,7 +5987,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.0,
@@ -6012,7 +5995,7 @@
    },
    "role": "plot",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "terrain_cell",
     "bulky_ok",
@@ -6054,7 +6037,6 @@
     "ct_veg"
    ],
    "mount_in": 0.0,
-   "needs_material": "ct_veg (NOTES.md 'ct_veg contract'); clear `stub` when the game has it",
    "openings": [],
    "proud_in": {
     "flat": 0.518,
@@ -6063,7 +6045,7 @@
    },
    "role": "puddle_rim",
    "shadow": [],
-   "stub": true,
+   "stub": false,
    "tags": [
     "centred",
     "veg",
