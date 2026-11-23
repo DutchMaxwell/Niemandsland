@@ -14,10 +14,13 @@ var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
 var _epoch0: int
+var _enforce0: bool
 
 
 func before_test() -> void:
 	_epoch0 = AiActRecorder.rules_epoch
+	_enforce0 = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = false   # the aircraft's mandatory 30" flight is no drag cap
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -27,10 +30,13 @@ func before_test() -> void:
 	_main._ensure_solo_controller()
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main._solo_batch = true
+	CoreActivation._env = 1
 
 
 func after_test() -> void:
 	AiActRecorder.rules_epoch = _epoch0   # statics leak across gdUnit tests
+	CoreActivation._env = -1
+	GraphicsSettings.enforce_movement_limit = _enforce0
 	GraphicsSettings.combat_stage_hold_s = 2.5
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
@@ -64,7 +70,8 @@ func _log_text() -> String:
 
 
 ## The bomber at -28", the enemy ON its lane at -10"; the lane is flown by the real mover (`ai_lane` false:
-## a forced 30" run along +x) or picked by the AI's own heading logic (`ai_lane` true), then the trigger runs.
+## a forced 30" run along +x) or picked by the AI's own heading logic (`ai_lane` true), then the rules core
+## resolves the move-through strike from the captured board and the flown trails.
 func _fly(epoch: int, range_in: int, ai_lane: bool) -> void:
 	AiActRecorder.rules_epoch = epoch
 	var sc: SoloController = _main.solo_controller
@@ -72,11 +79,20 @@ func _fly(epoch: int, range_in: int, ai_lane: bool) -> void:
 	var bird := _unit(2, "Zeppelins", -28.0, "Drop Bombs", ["Crossing Strike"], range_in)
 	_unit(1, "Warriors", -10.0, "Spear", [], 0)
 	_main.seed_tray_rng(7)
+	var h := CoreActivation.capture(_main)
+	_main._solo_core_ai_h = h
 	if ai_lane:
 		sc._act_aircraft(bird, {})
 	else:
 		sc._aircraft_move(bird, Vector2(1, 0), 30.0)
-	await _main._solo_apply_strafing(bird)
+	var report := {"unit": bird, "moved": true, "action": AiDecision.Action.ADVANCE, "can_shoot": false, "core_through": true}
+	bird.unit_properties["moved_round"] = 1   # the planner's apply stamps the move the core sees
+	var runs := CoreActivation.ai_runs
+	await _main._solo_ai_core_call(bird, report, null, [])
+	_main._solo_core_ai_h = 0
+	if h != 0:
+		sc._core_node_ready().release(h)
+	assert_int(CoreActivation.ai_runs - runs).override_failure_message("the rules core did not resolve the strike").is_greater(0)
 
 
 func test_a_range_zero_crossing_strike_weapon_rolls_on_a_forced_lane_at_epoch_73(timeout := 90000) -> void:
@@ -95,11 +111,13 @@ func test_a_range_zero_crossing_strike_weapon_rolls_on_the_ais_own_lane_at_epoch
 	await E2EBoot.settle(get_tree())
 
 
-## Epoch 72 replays today's silence: the trigger fires, the volley rolls nothing.
+## Epoch 72 replays today's silence: the trigger fires, the volley rolls nothing. The core writes no shot line
+## for the weapon it leaves out (the table's "Drop Bombs silent" line is not the door's).
 func test_a_range_zero_crossing_strike_weapon_stays_silent_at_epoch_72(timeout := 90000) -> void:
 	await _fly(AiActRecorder.EPOCH_72_PLAYTEST_RULES, 0, false)
 	assert_str(_log_text()).contains(LINE)
-	assert_str(_log_text()).contains("Drop Bombs silent")
+	assert_str(_log_text()).override_failure_message("the range-0 move-through volley fired at epoch 72") \
+		.not_contains("Zeppelins fires Drop Bombs")
 	await E2EBoot.settle(get_tree())
 
 
