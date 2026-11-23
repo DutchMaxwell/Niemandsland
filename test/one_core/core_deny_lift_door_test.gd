@@ -115,7 +115,7 @@ func _cases() -> Array:
 		["Re-Position Artillery target", rifles, DoorLines.entry("Squad", 10, ["Re-Position Artillery"], [], "battle_brothers", 0), ""],
 		["Mend target", rifles, DoorLines.entry("Squad", 10, ["Mend"], [], "battle_brothers", 0), ""],
 		["Regeneration Buff target", rifles, DoorLines.entry("Squad", 10, ["Regeneration Buff"], [], "dark_elf_raiders", 0), ""],
-		# A vs-target Mark on the SHOOTER (the sweep's held Sludge Beast volleys): the bearer marks the target, its own volley gets Rending against it once,
+		# A vs-target Mark on the SHOOTER: the bearer marks the target, its own volley gets Rending against it once,
 		# the pick / record / spend lines name the Mark (#3190).
 		["Rending Mark gf shooter", DoorLines.entry("Markers", 5, ["Rending Mark"], [], "orc_marauders", 5), plain, "Rending Mark"],
 		["Rending Mark aof shooter", _aof(DoorLines.entry("Markers", 5, ["Rending Mark"], [], "orcs", 5)), plain_aof, "Rending Mark"],
