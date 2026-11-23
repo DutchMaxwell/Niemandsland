@@ -137,12 +137,15 @@ func test_the_vegetation_modules_are_built_soft_and_name_their_variant_surface()
 			assert_bool(m["tags"].has(tag)).override_failure_message("%s lacks %s" % [name, tag]).is_true()
 		assert_int(m["shadow"].size()).is_equal(0)
 		assert_bool(float(m["aabb_in"][1][1]) <= 0.4).override_failure_message(name + " is taller than the soft vegetation limit").is_true()
-		var card: bool = m["veg"]["card"]
+		var card: bool = m.get("variant", "") == "card"
 		assert_str(dress.mesh(name).surface_get_name(0)).is_equal("ct_veg_card" if card else "ct_veg")
 		cards += 1 if card else 0
 		modelled += 0 if card else 1
 	assert_bool(cards > 0 and modelled > 0).is_true()   # both variants exist
-	assert_str(BoardgenDressKit.surface_name("ct_stone", true)).is_equal("ct_stone")   # only ct_veg has a card variant
+	var materials: Dictionary = dress.meta["materials"]
+	assert_str(BoardgenDressKit.surface_name("ct_veg", "card", materials)).is_equal("ct_veg_card")
+	assert_str(BoardgenDressKit.surface_name("ct_stone", "card", materials)).is_equal("ct_stone")   # only a material that lists the variant gets it
+	assert_str(BoardgenDressKit.surface_name("ct_veg", "", materials)).is_equal("ct_veg")
 
 
 func test_a_glb_of_a_card_module_gets_the_card_surface_name_and_a_modelled_one_does_not() -> void:

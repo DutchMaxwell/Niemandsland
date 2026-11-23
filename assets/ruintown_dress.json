@@ -310,8 +310,13 @@
    "cull": "disabled",
    "metallic": 0.0,
    "roughness": 0.9,
-   "shader": "veg",
+   "shader": "veg_solid",
    "undo_backface_normal_flip": true,
+   "variants": {
+    "card": {
+     "shader": "veg_card"
+    }
+   },
    "wrap": 0.4
   }
  },
@@ -5220,9 +5225,9 @@
    ],
    "tri_cap": 120,
    "tris": 10,
+   "variant": "card",
    "veg": {
     "albedo_scale": 1.0,
-    "card": true,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "atlas 0..1",
@@ -5269,9 +5274,9 @@
    ],
    "tri_cap": 120,
    "tris": 10,
+   "variant": "card",
    "veg": {
     "albedo_scale": 1.0,
-    "card": true,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "atlas 0..1",
@@ -5318,9 +5323,9 @@
    ],
    "tri_cap": 120,
    "tris": 10,
+   "variant": "card",
    "veg": {
     "albedo_scale": 1.0,
-    "card": true,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "atlas 0..1",
@@ -5369,7 +5374,6 @@
    "tris": 61,
    "veg": {
     "albedo_scale": 0.14,
-    "card": false,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "u across, v along the blade",
@@ -5418,7 +5422,6 @@
    "tris": 270,
    "veg": {
     "albedo_scale": 0.14,
-    "card": false,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "u across, v along the blade",
@@ -5467,7 +5470,6 @@
    "tris": 273,
    "veg": {
     "albedo_scale": 0.14,
-    "card": false,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "u across, v along the blade",
@@ -5516,7 +5518,6 @@
    "tris": 42,
    "veg": {
     "albedo_scale": 0.14,
-    "card": false,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "u across, v along the blade",
@@ -5565,7 +5566,6 @@
    "tris": 67,
    "veg": {
     "albedo_scale": 0.14,
-    "card": false,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "u across, v along the blade",
@@ -5614,7 +5614,6 @@
    "tris": 90,
    "veg": {
     "albedo_scale": 0.14,
-    "card": false,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "u across, v along the blade",
@@ -5663,7 +5662,6 @@
    "tris": 104,
    "veg": {
     "albedo_scale": 0.14,
-    "card": false,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "u across, v along the blade",
@@ -5712,7 +5710,6 @@
    "tris": 81,
    "veg": {
     "albedo_scale": 0.14,
-    "card": false,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "u across, v along the blade",
@@ -5761,7 +5758,6 @@
    "tris": 27,
    "veg": {
     "albedo_scale": 0.14,
-    "card": false,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "u across, v along the blade",
@@ -5810,7 +5806,6 @@
    "tris": 27,
    "veg": {
     "albedo_scale": 0.14,
-    "card": false,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "u across, v along the blade",
@@ -5859,7 +5854,6 @@
    "tris": 54,
    "veg": {
     "albedo_scale": 0.14,
-    "card": false,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "u across, v along the blade",
@@ -5908,7 +5902,6 @@
    "tris": 64,
    "veg": {
     "albedo_scale": 0.14,
-    "card": false,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "u across, v along the blade",
@@ -5956,9 +5949,9 @@
    ],
    "tri_cap": 400,
    "tris": 380,
+   "variant": "card",
    "veg": {
     "albedo_scale": 1.0,
-    "card": true,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "atlas 0..1",
@@ -6008,7 +6001,6 @@
    "tris": 337,
    "veg": {
     "albedo_scale": 0.14,
-    "card": false,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "u across, v along the blade",
@@ -6058,7 +6050,6 @@
    "tris": 344,
    "veg": {
     "albedo_scale": 0.14,
-    "card": false,
     "color_a": "ambient occlusion",
     "normals": "bent, smooth",
     "uv": "u across, v along the blade",
