@@ -31,10 +31,9 @@ static func start(main: Node, ai_slots: Array[int] = [2], human_slot := 1) -> So
 	return controller
 
 
-## Instant dice and no pacing holds (headless sweeps); implies fast.
+## Instant dice and no pacing holds (headless sweeps).
 static func instant(main: Node, on := true) -> void:
 	main._solo_batch = on
-	main._solo_fast = on
 
 
 ## Shorter pacing holds and no move animation.
