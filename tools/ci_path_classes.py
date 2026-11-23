@@ -34,7 +34,7 @@ CANARY = "test/e2e/e2e_local_table_no_implicit_ai_test.gd"
 # trip it without naming any class symbol: it runs in the short run too.
 WALKS_A_ROOT = re.compile(r"[\"']res://(?:scripts|scenes|shaders|assets|materials)/?[\"']")
 SCAN = ("scripts/", "scenes/", "shaders/", "materials/", "assets/", "tools/", "addons/", "test/", "project.godot")
-SELF = ("tools/ci_path_classes.py", "tools/ci_path_classes_test.py", "tools/ci_look_lane_test.py", "tools/ci_dev_view_gate_test.py", "tools/ci_look_paths.txt")
+SELF = ("tools/ci_path_classes.py", "tools/ci_path_classes_test.py", "tools/ci_look_lane_test.py", "tools/ci_dev_view_gate_test.py", "tools/ci_look_paths.txt", "tools/gdformat_clean.txt", "tools/gdlint_clean.txt")
 
 
 def in_class(path, cls):
