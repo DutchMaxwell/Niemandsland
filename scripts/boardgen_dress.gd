@@ -25,21 +25,21 @@ static func planner(name: String) -> Script:
 
 
 ## Which class draws a plan box today (BoardgenGreybox.plan): "" for a box that draws nothing (a roofed house, a hidden or collider-only box).
-static func box_class(b: Dictionary) -> String:
-	var kind: String = b["kind"]
-	if b.has("lean_to") or kind == "brick":
+static func box_class(box: Dictionary) -> String:
+	var kind: String = box["kind"]
+	if box.has("lean_to") or kind == "brick":
 		return "houses"
-	if b.has("merlon") or (kind == "rubble" and b.has("prop")):
+	if box.has("merlon") or (kind == "rubble" and box.has("prop")):
 		return "walls"
-	if b.has("party_stub") or ["tier1", "tier2", "tier3"].has(kind):
+	if box.has("party_stub") or ["tier1", "tier2", "tier3"].has(kind):
 		return "tiers"
-	if kind == "ladder" and not b.has("lantern"):
+	if kind == "ladder" and not box.has("lantern"):
 		return "ladders"
-	if b.get("lm", "") == "Sump":
+	if box.get("lm", "") == "Sump":
 		return "ground"
-	if b.has("lantern") or b.has("lm"):
+	if box.has("lantern") or box.has("lm"):
 		return "props"
-	if b.has("prop"):
+	if box.has("prop"):
 		return "clutter"
 	return "ground" if ["ground", "street", "yard", "rough", "hazard", "rubble"].has(kind) else ""
 
@@ -87,9 +87,10 @@ func build(layout: Dictionary) -> void:
 		lib.name = "TownLibrary"
 		add_child(lib)
 	var materials := BoardgenDressMaterials.make(kit.meta, lib)
-	for s in mesh.mesh.get_surface_count():
-		if materials.has(mesh.mesh.surface_get_name(s)):
-			mesh.mesh.surface_set_material(s, materials[mesh.mesh.surface_get_name(s)])
+	for surface in mesh.mesh.get_surface_count():
+		var material_name: String = mesh.mesh.surface_get_name(surface)
+		if materials.has(material_name):
+			mesh.mesh.surface_set_material(surface, materials[material_name])
 	add_child(mesh)
 	var shadow := MeshInstance3D.new()
 	shadow.name = "DressShadow"

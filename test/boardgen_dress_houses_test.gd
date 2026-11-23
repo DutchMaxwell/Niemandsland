@@ -38,7 +38,7 @@ func _family(meta: Dictionary, module: String) -> String:
 ## The cell a face placement belongs to: the midpoint at half the module's length, not the corner origin.
 func _mid_cell(layout: Dictionary, p: Dictionary, meta: Dictionary) -> Vector2i:
 	var m: Dictionary = meta["modules"][p["module"]]
-	var mid := ((p["xf"] as Transform3D) * (Vector3(float(m["len_in"]) * 0.5, 0.0, 0.0) * R.IN_M)) / R.IN_M
+	var mid := ((p["xf"] as Transform3D) * (Vector3(float(m["len_in"]) * 0.5, 0.0, 0.0) * Units.INCHES_TO_METERS)) / Units.INCHES_TO_METERS
 	return _cell(layout, mid)
 
 
@@ -49,7 +49,7 @@ func _cell(layout: Dictionary, p_in: Vector3) -> Vector2i:
 
 
 func _origin_cell(layout: Dictionary, p: Dictionary) -> Vector2i:
-	return _cell(layout, (p["xf"] as Transform3D).origin / R.IN_M)
+	return _cell(layout, (p["xf"] as Transform3D).origin / Units.INCHES_TO_METERS)
 
 
 ## The face index N E S W a placement looks out of.
@@ -170,10 +170,10 @@ func test_every_roofed_cell_lies_under_exactly_one_roof_segment() -> void:
 		for cd: Dictionary in layout["cells"]:
 			if cd["lot_kind"] != "Roofed":
 				continue
-			var centre := Vector3((int(cd["x"]) + 0.5 - int(layout["nx"]) * 0.5) * c, 3.0, (int(cd["z"]) + 0.5 - int(layout["nz"]) * 0.5) * c) * R.IN_M
+			var centre := Vector3((int(cd["x"]) + 0.5 - int(layout["nx"]) * 0.5) * c, 3.0, (int(cd["z"]) + 0.5 - int(layout["nz"]) * 0.5) * c) * Units.INCHES_TO_METERS
 			var n := 0
 			for p: Dictionary in segs:
-				var q := ((p["xf"] as Transform3D).affine_inverse() * centre) / R.IN_M
+				var q := ((p["xf"] as Transform3D).affine_inverse() * centre) / Units.INCHES_TO_METERS
 				n += 1 if q.x > 0.0 and q.x < 3.0 and q.z < 0.0 and q.z > -_span(p["module"]) else 0
 			assert_int(n).override_failure_message("seed %d cell (%d, %d): under %d roof segments" % [seed, cd["x"], cd["z"], n]).is_equal(1)
 
@@ -185,8 +185,8 @@ func test_roofs_sit_on_the_eaves_with_the_ridge_in_band() -> void:
 		var ctx := _ctx(layout, kit)
 		for p: Dictionary in H.plan(layout, ctx).filter(func(p: Dictionary) -> bool: return ["roof", "gable"].has(_family(ctx["meta"], p["module"]))):
 			var xf: Transform3D = p["xf"]
-			var ridge := xf.origin.y / R.IN_M + 2.0 * xf.basis.y.y
-			assert_float(xf.origin.y / R.IN_M).override_failure_message("seed %d %s: eaves at %.2f" % [seed, p["module"], xf.origin.y / R.IN_M]).is_equal_approx(2.5, R.TOL)
+			var ridge := xf.origin.y / Units.INCHES_TO_METERS + 2.0 * xf.basis.y.y
+			assert_float(xf.origin.y / Units.INCHES_TO_METERS).override_failure_message("seed %d %s: eaves at %.2f" % [seed, p["module"], xf.origin.y / Units.INCHES_TO_METERS]).is_equal_approx(2.5, R.TOL)
 			assert_bool(ridge >= 4.2 - R.TOL and ridge <= 4.8 + R.TOL).override_failure_message("seed %d %s: ridge at %.2f" % [seed, p["module"], ridge]).is_true()
 
 
@@ -205,7 +205,7 @@ func test_nothing_of_a_roof_hangs_low_or_far() -> void:
 		for p: Dictionary in H.plan(layout, ctx).filter(func(p: Dictionary) -> bool: return ["roof", "gable", "chimney"].has(_family(meta, p["module"]))):
 			var aabb: Array = meta["modules"][p["module"]]["aabb_in"]
 			for i in 8:
-				var q := ((p["xf"] as Transform3D) * (Vector3(aabb[i & 1][0], aabb[(i >> 1) & 1][1], aabb[(i >> 2) & 1][2]) * R.IN_M)) / R.IN_M
+				var q := ((p["xf"] as Transform3D) * (Vector3(aabb[i & 1][0], aabb[(i >> 1) & 1][1], aabb[(i >> 2) & 1][2]) * Units.INCHES_TO_METERS)) / Units.INCHES_TO_METERS
 				var reach := INF
 				for r: Rect2 in roofed:
 					reach = minf(reach, maxf(maxf(r.position.x - q.x, q.x - r.end.x), maxf(r.position.y - q.z, q.z - r.end.y)))
