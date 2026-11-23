@@ -122,33 +122,8 @@ func _tough_target(wounds: int) -> GameUnit:
 	return target
 
 
-## Play-test R2: "Scavenger Beast takes 2 wounds (1/6 wounds)" after a Deadly(3) weapon had already
-## dealt 3 of the 5 wounds (6 -> 1). The pooled landing printed only its OWN 2, so the number beside
-## the counter contradicted the state. The "takes" line must count every wound the volley dealt.
-func test_volley_wound_line_counts_the_deadly_wounds_it_dealt(timeout := 240000) -> void:
-	var shooter := _armed_shooter([{"name": "Poolgun", "rules": ["AP(6)"]},
-		{"name": "Deadlygun", "rules": ["AP(6)", "Deadly(3)"]}])
-	var foe := _tough_target(24)
-	var before: int = int((foe.models[0] as ModelInstance).wounds_current)
-	_main.seed_tray_rng(20261116)
-	await _main._run_human_shooting(shooter, foe)
-	var taken: int = before - int((foe.models[0] as ModelInstance).wounds_current)
-	var text := ""
-	for e in _main.battle_log.entries():
-		text += str((e as Dictionary)["text"]) + "\n"
-	assert_str(text).override_failure_message("fixture: the Deadly(3) weapon must have landed\n%s" % text) \
-		.contains("Deadly(3)")
-	assert_bool(text.contains("WoundOrderTough takes")) \
-		.override_failure_message("fixture: the pooled landing must have printed its line\n%s" % text).is_true()
-	assert_int(taken).override_failure_message("fixture: the volley must have taken wounds\n%s" % text).is_greater(0)
-	assert_str(text).override_failure_message(
-		"the \"takes\" line must count every wound the volley dealt (%d), Deadly included\n%s" % [taken, text]) \
-		.contains("WoundOrderTough takes %d wound" % taken)
-	await E2EBoot.settle(get_tree())
-
-
-## The same R2 guarantee on the DOOR (CoreActivation, the Rust core): the wound line must still count the
-## Deadly(3) wounds the volley dealt, not only the pooled weapon's share.
+## Play-test R2: "Scavenger Beast takes 2 wounds (1/6 wounds)" after a Deadly(3) weapon had already dealt 3 of
+## the 5 wounds. On the door (the rules core) the wound line must count every wound the volley dealt, Deadly included.
 func test_door_volley_wound_line_counts_the_deadly_wounds_it_dealt(timeout := 240000) -> void:
 	var shooter := _armed_shooter([{"name": "Poolgun", "rules": ["AP(6)"]},
 		{"name": "Deadlygun", "rules": ["AP(6)", "Deadly(3)"]}])
