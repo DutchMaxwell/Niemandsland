@@ -9,8 +9,13 @@
 #   git ls-files '*.gd' | xargs gdformat --check 2>&1 | sed -n 's/^would reformat //p' | sort -u
 # Every file NOT in that scan passes. A bare `path.gd:` line in the scan (no "would reformat") is a
 # parse error: gdtoolkit cannot read that file, so it can never be listed until the tool catches up.
+scripts/boardgen_dress.gd
+scripts/boardgen_dress_materials.gd
+scripts/boardgen_dress_mesh.gd
+scripts/boardgen_dress_story.gd
 scripts/core_load_notice.gd
 scripts/deleted_state.gd
+scripts/dress_module_spec.gd
 scripts/landing_preview.gd
 scripts/net_dialog.gd
 scripts/player_identity.gd
@@ -23,8 +28,10 @@ scripts/theme_manager.gd
 scripts/token_library.gd
 scripts/two_human_turn.gd
 scripts/ui_feedback.gd
+scripts/units.gd
 test/act_intent_test.gd
 test/battle_sim_core_wanted_test.gd
+test/boardgen_dress_module_spec_test.gd
 test/card_wounds_tough_gate_test.gd
 test/cinematic_intro_test.gd
 test/die_face_icon_test.gd
@@ -66,6 +73,8 @@ test/solo_deploy_side_test.gd
 test/solo_move_seam_wanted_test.gd
 test/solo_owner_saves_test.gd
 test/sort_table_sync_test.gd
+test/support/solo_harness.gd
+test/support/solo_harness_test.gd
 test/surprise_attack_test.gd
 test/two_human_turn_test.gd
 test/undo_manager_test.gd

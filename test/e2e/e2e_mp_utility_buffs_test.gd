@@ -55,11 +55,10 @@ func before_test() -> void:
 	await _runner.simulate_frames(4)
 	# Slot 2 is NACHTMAHR's, slot 1 is the human's — the configuration the guard was written for:
 	# a live session that ALSO has an AI army (co-op / an AI-held slot in a room).
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_fake = auto_free(FakeNet.new())
 	_main.network_manager = _fake
 

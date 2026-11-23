@@ -49,11 +49,10 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true   # no dialogs, no physics tray, no floating text in a headless sweep
+	SoloHarness.instant(_main)   # no dialogs, no physics tray, no floating text in a headless sweep
 	_real_net = _main.network_manager   # kept for the receive-side proof (its handler is call_remote)
 	_fake = auto_free(WireNet.new())
 	_main.network_manager = _fake
@@ -211,10 +210,7 @@ func test_surprise_attack_latch_rides_the_wire_and_holds_on_the_other_table(time
 func test_storm_attack_latch_rides_the_wire_and_holds_on_the_other_table(timeout := 120000) -> void:
 	# Both seats are AI here only so the storm's hits do not stop on a human's save prompt (a headless run has no
 	# clicker): the latch under test is the bearer's, whoever the target is.
-	_main.solo_ai_slots = {1: true, 2: true}
-	_main._ensure_solo_controller()
-	_main.solo_controller.ai_slot = 2
-	_main.solo_controller.human_slot = 1
+	SoloHarness.start(_main, [1, 2], 1)
 	# The faction the existing hotseat storm suite uses: the rule lives only in the daemon sections of the map.
 	var stormer := _bearer("Stormer", "Storm of War", "daemons_of_war")
 	stormer.unit_properties.erase("game_system")
@@ -263,7 +259,7 @@ func test_a_landing_preview_sends_no_latch_frame(timeout := 120000) -> void:
 	var guard0: Variant = MovementPlanner.fast_planner_guard
 	MovementPlanner.fast_planner = false   # deterministic precise planner (as e2e_auto_preview_test.gd)
 	MovementPlanner.fast_planner_guard = MovementPlanner.FAST_PLANNER_GUARD
-	_main._solo_fast = true
+	SoloHarness.fast(_main)
 	_bearer("Marksman", "Piercing Tag(2)", "alien_hives", Vector3(-30.0 * INCH, 0, 4.0 * INCH))
 	_bearer("Sniper", "Precision Tag(2)", "jackals", Vector3(-30.0 * INCH, 0, 8.0 * INCH))
 	_bearer("Spotter", "Precision Target", "blessed_sisters", Vector3(-30.0 * INCH, 0, 12.0 * INCH))

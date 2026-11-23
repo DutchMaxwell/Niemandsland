@@ -160,7 +160,7 @@ func test_guest_verb_runs_on_the_guest_and_replicates(timeout := 60000) -> void:
 	var radial_net: Node = _main.radial_menu_controller.network_manager
 	_main.radial_menu_controller.network_manager = _net   # the activation sync goes out through the radial (same object in play)
 	_main._owner_roll_timeout_s = 0.3
-	_main._solo_fast = true
+	SoloHarness.fast(_main)
 	_main._hotseat_turn = TwoHumanTurn.new()   # the online turn token (3.3a): it is the guest's turn
 	_main._hotseat_turn.side_on_turn = 2
 	var start: Vector3 = mine.models[0].node.global_position

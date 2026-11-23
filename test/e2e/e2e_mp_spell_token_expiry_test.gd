@@ -51,7 +51,7 @@ func before_test() -> void:
 	# today (the utility-buffs suite uses {2: true} for co-op; that is NOT this room).
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_fake = auto_free(FakeNet.new())
 	_main.network_manager = _fake
 

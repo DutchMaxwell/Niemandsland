@@ -45,7 +45,7 @@ func before_test() -> void:
 	_main._ensure_solo_controller()
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_fake = auto_free(FakeNet.new())
 	_main.network_manager = _fake
 
@@ -180,7 +180,7 @@ func test_the_line_stays_hidden_over_a_same_player_id_unit(timeout := 120000) ->
 ## the original check's result is preserved as one disjunct of the OR.
 func test_the_solo_ai_path_is_unchanged(timeout := 120000) -> void:
 	_fake.active = false
-	_main.solo_ai_slots = {2: true}
+	SoloHarness.start(_main, [2])
 	var pair := await _place_pair(1, 2)
 	var attacker: GameUnit = pair[0]
 	assert_bool(attacker != null) \

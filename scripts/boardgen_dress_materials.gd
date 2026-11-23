@@ -1,22 +1,28 @@
 class_name BoardgenDressMaterials
 extends RefCounted
 ## The shared materials of the ruin-town dressing, made from the kit manifest's `materials` block
-## (docs/adr/0004-dressing-materials-and-kit-manifest.md). A textured entry (`set`) becomes one ShaderMaterial of ruintown_dress.gdshader with the set's maps from the
-## TiefwerkLibrary; while that set is not cached it is a flat StandardMaterial3D in the entry's tone (never null). A plain entry
-## (`colour`) is a StandardMaterial3D with colour / roughness / metallic / emission. The merged mesh binds them by surface name.
+## (docs/adr/0004-dressing-materials-and-kit-manifest.md). A textured entry (`set`) becomes one
+## ShaderMaterial of ruintown_dress.gdshader with the set's maps from the TiefwerkLibrary; while
+## that set is not cached it is a flat StandardMaterial3D in the entry's tone (never null). A plain
+## entry (`colour`) is a StandardMaterial3D with colour / roughness / metallic / emission. The
+## merged mesh binds them by surface name.
 
 const SHADER: Shader = preload("res://shaders/ruintown_dress.gdshader")
-const VEG_SOLID_SHADER: Shader = preload("res://shaders/ruintown_dress_veg_solid.gdshader")   # shader key "veg_solid": modelled plants
-const VEG_CARD_SHADER: Shader = preload("res://shaders/ruintown_dress_veg_card.gdshader")   # shader key "veg_card": card tufts
+# shader key "veg_solid": modelled plants
+const VEG_SOLID_SHADER: Shader = preload("res://shaders/ruintown_dress_veg_solid.gdshader")
+# shader key "veg_card": card tufts
+const VEG_CARD_SHADER: Shader = preload("res://shaders/ruintown_dress_veg_card.gdshader")
 ## Shader uniform -> map name of a TiefwerkLibrary set.
 const MAPS := {"albedo_tex": "albedo", "normal_tex": "normal", "orm_tex": "orm"}
-## The vegetation entry's float keys that both vegetation shaders take as uniforms of the same name, with their defaults.
+## The vegetation entry's float keys that both vegetation shaders take as uniforms of the same name,
+## with their defaults.
 const VEG_LIGHT_DEFAULTS := {"wrap": 0.4, "backlight": 0.7, "roughness": 0.9}
 const VEG_ALBEDO_SCALE := 0.14
 
 
-## name -> Material for every entry of meta["materials"], plus one `<name>_<variant>` material for every entry of its
-## `variants` block (the entry with the variant's keys laid over it). `lib` may be null (then every textured entry is flat).
+## name -> Material for every entry of meta["materials"], plus one `<name>_<variant>` material for
+## every entry of its `variants` block (the entry with the variant's keys laid over it). `lib` may
+## be null (then every textured entry is flat).
 static func make(meta: Dictionary, lib: TiefwerkLibrary) -> Dictionary:
 	var out := {}
 	var entries: Dictionary = meta.get("materials", {})
@@ -35,7 +41,8 @@ static func make(meta: Dictionary, lib: TiefwerkLibrary) -> Dictionary:
 	return out
 
 
-## One material of an entry: by its `shader` key, else the set shader for a textured entry that is cached, else plain.
+## One material of an entry: by its `shader` key, else the set shader for a textured entry that is
+## cached, else plain.
 static func _material(entry: Dictionary, lib: TiefwerkLibrary) -> Material:
 	match str(entry.get("shader", "")):
 		"veg_solid":
@@ -53,7 +60,8 @@ static func _veg_solid(entry: Dictionary) -> ShaderMaterial:
 	return sm
 
 
-## The card tufts: they need the `card.set` atlas - while that set is not cached the atlas is fully transparent and the cards draw nothing.
+## The card tufts: they need the `card.set` atlas - while that set is not cached the atlas is fully
+## transparent and the cards draw nothing.
 static func _veg_card(entry: Dictionary, lib: TiefwerkLibrary) -> ShaderMaterial:
 	var sm := _veg_base(entry, VEG_CARD_SHADER)
 	var card: Dictionary = entry.get("card", {})
@@ -63,7 +71,14 @@ static func _veg_card(entry: Dictionary, lib: TiefwerkLibrary) -> ShaderMaterial
 	var set_name := str(card.get("set", ""))
 	var atlas: Texture2D = lib.set_texture(set_name, "albedo") if lib != null else null
 	var dry: Texture2D = lib.set_texture(set_name, "dry") if atlas != null else null
-	sm.set_shader_parameter("atlas", atlas if atlas != null else ImageTexture.create_from_image(Image.create_empty(1, 1, false, Image.FORMAT_RGBA8)))
+	sm.set_shader_parameter(
+		"atlas",
+		(
+			atlas
+			if atlas != null
+			else ImageTexture.create_from_image(Image.create_empty(1, 1, false, Image.FORMAT_RGBA8))
+		)
+	)
 	sm.set_shader_parameter("atlas_dry", dry if dry != null else sm.get_shader_parameter("atlas"))
 	return sm
 
@@ -79,7 +94,7 @@ static func _veg_base(entry: Dictionary, shader: Shader) -> ShaderMaterial:
 static func _textured(e: Dictionary, lib: TiefwerkLibrary) -> ShaderMaterial:
 	var set_name := str(e["set"])
 	if lib == null or lib.set_texture(set_name, "albedo") == null:
-		return null   # not cached: the caller makes the flat tone
+		return null  # not cached: the caller makes the flat tone
 	var sm := ShaderMaterial.new()
 	sm.shader = SHADER
 	for uniform: String in MAPS:
