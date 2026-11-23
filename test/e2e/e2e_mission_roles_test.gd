@@ -23,8 +23,7 @@ func before_test() -> void:
 		"markers": {"count": 1, "placement": "table_centre"}}
 	cat["no_bonus_fixture"] = (cat["roles_fixture"] as Dictionary).duplicate()
 	cat["no_bonus_fixture"]["attacker_points_factor"] = 1.0
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 
 
 func after_test() -> void:

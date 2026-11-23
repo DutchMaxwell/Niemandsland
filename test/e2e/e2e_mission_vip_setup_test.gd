@@ -21,8 +21,7 @@ func before_test() -> void:
 	cat["vip_fixture"] = {"name": "VIP Fixture", "family": "attack_defend", "rounds": 6, "scoring": "escort",
 		"deployment": "front_line", "roles": true,
 		"markers": {"count": 1, "placement": "vip_edge", "mobile": true}}
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main._solo_mission_id = "vip_fixture"
 
 
@@ -63,7 +62,7 @@ func test_the_shipped_entry_drives_the_same_setup() -> void:
 	_main._solo_apply_mission_if_chosen()
 	assert_int(_main.solo_controller.game_rounds).is_equal(6)
 	assert_str(SoloController.mission_scoring).is_equal("escort")
-	_main._solo_batch = true   # no pick UI for the human defender: the AI rule starts the VIP
+	SoloHarness.instant(_main)   # no pick UI for the human defender: the AI rule starts the VIP
 	_main._solo_roles_set(2, "attacker")   # P2 attacks, so P1 defends
 	assert_int(int(SoloController.mission_markers[0]["deploy_edge"])).is_equal(-1)
 	assert_float((_main.terrain_overlay.get_objectives()[0] as Vector3).z / 0.0254).is_equal_approx(-21.0, 0.001)
@@ -81,8 +80,8 @@ func test_a_mission_without_a_mobile_marker_is_left_alone() -> void:
 func _human_defender_opens_the_pick() -> Control:
 	_main._solo_mission_id = "vip_escort"
 	_main._solo_apply_mission_if_chosen()
-	_main._solo_batch = false
-	_main.solo_controller.human_slot = 1
+	SoloHarness.instant(_main, false)
+	SoloHarness.start(_main, [2], 1)
 	_main._solo_roles_set(2, "attacker")   # NACHTMAHR attacks, the human defends
 	return _main.map_layout_editor
 

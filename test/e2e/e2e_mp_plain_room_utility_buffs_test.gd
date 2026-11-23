@@ -234,8 +234,7 @@ func test_both_doors_buy_it_once(timeout := 120000) -> void:
 ## Nothing of this touches a room that HAS an AI seat: the controller is built there as before and the
 ## buff still lands through it (the e2e_mp_utility_buffs_test fixture, one assertion).
 func test_a_room_with_an_ai_slot_still_buffs_through_its_controller(timeout := 120000) -> void:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	assert_object(_main.solo_controller).override_failure_message("fixture: an AI-slot room builds its controller").is_not_null()
 	var gf := _giver_and_friend()
 

@@ -18,10 +18,9 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}   # plan 2.2: no implicit NACHTMAHR — this table designates player 2 explicitly
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])   # plan 2.2: no implicit NACHTMAHR — this table designates player 2 explicitly
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_main.terrain_overlay.update_objectives([Vector3.ZERO])
 	SoloController.mission_roles = {"attacker": 1, "defender": 2}
 
@@ -100,9 +99,8 @@ func test_a_marker_the_defender_holds_stays_hidden() -> void:
 ## D12a-2: a HUMAN defender hides trap and relic with two clicks on the Map Tool (the C3 flow).
 func _human_defender_with_three_markers() -> Control:
 	SoloController.mission_roles = {"attacker": 2, "defender": 1}
-	_main.solo_ai_slots = {2: true}
-	_main.solo_controller.human_slot = 1
-	_main._solo_batch = false
+	SoloHarness.start(_main, [2], 1)
+	SoloHarness.instant(_main, false)
 	_main.terrain_overlay.update_objectives([Vector3.ZERO, Vector3(30 * 0.0254, 0, 0), Vector3(-34 * 0.0254, 0, 0)])
 	SoloController.mission_markers = [{"secret": "", "revealed": false}, {"secret": "", "revealed": false},
 		{"secret": "", "revealed": false}]

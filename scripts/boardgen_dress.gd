@@ -1,22 +1,30 @@
 class_name BoardgenDress
 extends Node3D
-## The orchestrator of the ruin-town dressing (docs/adr/0003-generated-board-dressing.md): the grid stays the gameplay truth, authored modules become the look. It asks every planner (one script per class of the board, so each class can be
-## added on its own) for placements {module, xf (metres, board space), cls}, checks them against the honesty rules in a debug build, merges them into ONE mesh with one surface per shared material (DressMesh) plus
-## the low-poly shadow proxy (DressShadow), and lets a planner add what is not a module (build_extra). A class switches from the old look to the dressing only when its planner exists AND its modules are
-## usable (kit cached, Medium and up); `classes()` names those classes so the old builders skip them. Without a kit nothing here is active.
-## A planner script has `const MODULES: Array[String]`, `static func plan(layout, ctx) -> Array[Dictionary]` and optionally `static func build_extra(layout, parent: Node3D, ctx)`.
+## The orchestrator of the ruin-town dressing (docs/adr/0003-generated-board-dressing.md): the grid
+## stays the gameplay truth, authored modules become the look. It asks every planner (one script per
+## class of the board, so each class can be added on its own) for placements {module, xf (metres,
+## board space), cls}, checks them against the honesty rules in a debug build, merges them into ONE
+## mesh with one surface per shared material (DressMesh) plus the low-poly shadow proxy
+## (DressShadow), and lets a planner add what is not a module (build_extra). A class switches from
+## the old look to the dressing only when its planner exists AND its modules are usable (kit cached,
+## Medium and up); `classes()` names those classes so the old builders skip them. Without a kit
+## nothing here is active. A planner script has `const MODULES: Array[String]`, `static func
+## plan(layout, ctx) -> Array[Dictionary]` and optionally `static func build_extra(layout, parent:
+## Node3D, ctx)`.
 
 const PLANNERS := ["houses", "tiers", "ladders", "walls", "towers", "ground", "props", "clutter"]
-## Test switches: "off" = never dress, "stub" = force the stub kit (a box per module); `test_planners` = {class: Script} used instead of the files.
+## Test switches: "off" = never dress, "stub" = force the stub kit (a box per module);
+## `test_planners` = {class: Script} used instead of the files.
 static var test_mode := ""
 static var test_planners := {}
 
 var kit: BoardgenDressKit
 var story: Dictionary = {}
-var _classes := {}   # class -> planner Script, the classes this board draws as modules
+var _classes := {}  # class -> planner Script, the classes this board draws as modules
 
 
-## The planner script of a class: a test double, else scripts/boardgen_dress_<name>.gd when it exists, else null.
+## The planner script of a class: a test double, else scripts/boardgen_dress_<name>.gd when it
+## exists, else null.
 static func planner(name: String) -> Script:
 	if test_planners.has(name):
 		return test_planners[name]
@@ -24,7 +32,8 @@ static func planner(name: String) -> Script:
 	return load(path) if ResourceLoader.exists(path) else null
 
 
-## Which class draws a plan box today (BoardgenGreybox.plan): "" for a box that draws nothing (a roofed house, a hidden or collider-only box).
+## Which class draws a plan box today (BoardgenGreybox.plan): "" for a box that draws nothing (a
+## roofed house, a hidden or collider-only box).
 static func box_class(box: Dictionary) -> String:
 	var kind: String = box["kind"]
 	if box.has("lean_to") or kind == "brick":
@@ -44,7 +53,8 @@ static func box_class(box: Dictionary) -> String:
 	return "ground" if ["ground", "street", "yard", "rough", "hazard", "rubble"].has(kind) else ""
 
 
-## Prepares the dressing for a layout: true when this board is a town, the dressing is not switched off and at least one class has a planner with usable modules.
+## Prepares the dressing for a layout: true when this board is a town, the dressing is not switched
+## off and at least one class has a planner with usable modules.
 func setup(layout: Dictionary) -> bool:
 	if test_mode == "off" or str(layout.get("theme", "")) != BoardgenTheme.RUIN_TOWN:
 		return false
@@ -55,7 +65,10 @@ func setup(layout: Dictionary) -> bool:
 	story = BoardgenDressStory.of(layout)
 	for name: String in PLANNERS:
 		var script := planner(name)
-		if script != null and kit.usable((script.get_script_constant_map() as Dictionary).get("MODULES", [])):
+		if (
+			script != null
+			and kit.usable((script.get_script_constant_map() as Dictionary).get("MODULES", []))
+		):
 			_classes[name] = script
 	return not _classes.is_empty()
 
@@ -68,7 +81,8 @@ func classes() -> Dictionary:
 	return out
 
 
-## The dressed board: every usable planner's placements, merged into DressMesh (no shadows of its own) and DressShadow (shadows only), then each planner's own extras.
+## The dressed board: every usable planner's placements, merged into DressMesh (no shadows of its
+## own) and DressShadow (shadows only), then each planner's own extras.
 func build(layout: Dictionary) -> void:
 	var ctx := {"kit": kit, "story": story, "meta": kit.meta, "seed": int(layout.get("seed", 0))}
 	var placements: Array[Dictionary] = []

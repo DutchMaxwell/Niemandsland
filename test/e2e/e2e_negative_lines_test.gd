@@ -128,8 +128,7 @@ func test_spot_markers_are_consumed_for_bonus_hits(timeout := 120000) -> void:
 func test_a_shooting_scoped_utility_buff_stays_out_of_melee() -> void:
 	# Wave 4 recon find: _solo_apply_utility_buffs hard-coded scope "" into the record,
 	# so Precision Shooter Buff's +1 ("when shooting") silently applied in melee too.
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	var giver := E2EBoot.make_unit(_main, 2, "Sister", [Vector3.ZERO])
 	giver.unit_properties["faction_folder"] = "blessed_sisters"
