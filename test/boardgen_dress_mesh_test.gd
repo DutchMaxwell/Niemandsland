@@ -110,14 +110,25 @@ func test_the_shadow_proxy_is_one_surface_of_boxes_from_the_hulls() -> void:
 	for p: Dictionary in placements:
 		boxes += (dress.module(p["module"])["shadow"] as Array).size()
 	assert_int(_tris(proxy)).is_equal(boxes * 12)
+	assert_int(boxes).is_greater(0)
 	assert_int(BoardgenDressMesh.shadow([], dress).get_surface_count()).is_equal(0)
-	# a module without a hull list casts its aabb shrunk by 0.05 in
+	# a module WITHOUT the key casts its aabb shrunk by 0.05 in; flat pieces keep their thickness
 	dress.meta = dress.meta.duplicate(true)
-	dress.meta["modules"]["dr_litter_straw"]["shadow"] = []
-	var one := BoardgenDressMesh.shadow([{"module": "dr_litter_straw", "xf": Transform3D(), "cls": "test"}], dress)
-	var a: Array = dress.module("dr_litter_straw")["aabb_in"]
+	dress.meta["modules"]["dr_junk_barrels"].erase("shadow")
+	var one := BoardgenDressMesh.shadow([{"module": "dr_junk_barrels", "xf": Transform3D(), "cls": "test"}], dress)
+	var a: Array = dress.module("dr_junk_barrels")["aabb_in"]
 	var want := Vector3.ZERO
 	for k in 3:
 		var ext := float(a[1][k]) - float(a[0][k])
 		want[k] = (ext - 0.1 if ext > 0.1 else ext) * 0.0254   # shrunk 0.05 in per side, a flat piece keeps its thickness
 	assert_vector(one.get_aabb().size).is_equal_approx(want, Vector3(0.0001, 0.0001, 0.0001))
+
+
+func test_a_module_with_an_empty_shadow_list_casts_nothing() -> void:
+	var dress := _dress()
+	dress.meta = dress.meta.duplicate(true)
+	dress.meta["modules"]["dr_litter_straw"]["shadow"] = []   # flat litter and soft vegetation: no proxy
+	var none := BoardgenDressMesh.shadow([{"module": "dr_litter_straw", "xf": Transform3D(), "cls": "test"}, {"module": "dr_litter_straw", "xf": Transform3D(), "cls": "test"}], dress)
+	assert_int(none.get_surface_count()).is_equal(0)
+	var mixed := BoardgenDressMesh.shadow([{"module": "dr_litter_straw", "xf": Transform3D(), "cls": "test"}, {"module": "dr_house_tb_plain_a", "xf": Transform3D(), "cls": "test"}], dress)
+	assert_int(_tris(mixed)).is_equal((dress.module("dr_house_tb_plain_a")["shadow"] as Array).size() * 12)   # only the house panel's hulls

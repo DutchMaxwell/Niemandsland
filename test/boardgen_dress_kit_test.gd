@@ -3,7 +3,7 @@ extends GdUnitTestSuite
 ## surface per material and its UV, COLOR and TANGENT. No network, no kit folder.
 
 const DIR := "user://boardgen_dress_kit_test"
-const MATERIALS := ["ct_stone", "ct_stone_big", "ct_plaster", "ct_timber", "ct_roof", "ct_flags", "ct_iron", "ct_clay", "ct_glass_lit", "ct_glass_dark", "ct_matte"]
+const MATERIALS := ["ct_stone", "ct_stone_big", "ct_plaster", "ct_timber", "ct_roof", "ct_flags", "ct_iron", "ct_clay", "ct_glass_lit", "ct_glass_dark", "ct_matte", "ct_veg"]
 const KEYS := ["family", "role", "len_in", "height_in", "tris", "materials", "aabb_in", "proud_in", "openings", "shadow", "tags", "stub"]   # the contract's keys; the forge adds more (batch, tri_cap, mount_in, bytes ...) and the test tolerates them
 const K1 := ["dr_house_tb_plain_a", "dr_house_tb_door", "dr_gable_tb_s3", "dr_gable_st_s6", "dr_roof_s3_mid_a", "dr_roof_s6_verge", "dr_chimney_a", "dr_house_st_quoin"]
 
@@ -47,7 +47,7 @@ func test_the_bundled_manifest_has_the_contract_shape() -> void:
 	for k in ["version", "materials", "ground", "sets", "licence", "modules"]:
 		assert_bool(meta.has(k)).is_true()
 	var modules: Dictionary = meta["modules"]
-	assert_int(modules.size()).is_equal(93)
+	assert_int(modules.size()).is_equal(114)   # PINNED to the kit manifest of 23.11. (93 + 18 dr_veg_* + 3 dr_litter_drift_*): a change of the module list goes red here and is re-pinned on purpose
 	for name: String in modules:
 		var m: Dictionary = modules[name]
 		for k in KEYS:
@@ -58,7 +58,7 @@ func test_the_bundled_manifest_has_the_contract_shape() -> void:
 			assert_bool(MATERIALS.has(mat) and meta["materials"].has(mat)).is_true()
 		assert_int(m["aabb_in"].size()).is_equal(2)
 		assert_bool(m["proud_in"].has("flat") and m["proud_in"].has("low") and m["proud_in"].has("high")).is_true()
-		assert_bool(m["shadow"].size() >= 1 and m["shadow"].size() <= 3).is_true()
+		assert_bool(m["shadow"].size() <= 3 and (m["shadow"].size() >= 1 or m["tags"].has("flat") or m["tags"].has("no_shadow") or m["family"] == "plot")).is_true()   # 1-3 hull boxes; none only for flat litter, soft vegetation and plot pieces
 	for n in K1:
 		assert_bool(modules.has(n)).is_true()
 	assert_int(meta["materials"].size()).is_equal(MATERIALS.size())
