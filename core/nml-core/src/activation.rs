@@ -504,6 +504,9 @@ const TAKEDOWN_MODEL: &str = "takedown_model:";
 const WOUND_ALLOC: &str = "wound_alloc:";
 /// CC-9b/9c: the ids of the cast-interference choice (`interference:<seq>:<caster>:<slot>`) start with this.
 const INTERFERENCE: &str = "interference:";
+/// The player's spot-marker offer (`spot_markers:<shooter>:<target>`, options "0".."N", the attacker's count of the target's Precision
+/// Spotter markers to remove): an interference-shaped count choice; no answer takes all of them (the AI's rule).
+const SPOT_MARKERS: &str = "spot_markers:";
 /// E-24: the ids of the defender's strike-back choice (`strike_back:<charger>:<defender>`, options `strike` / `hold`) start with this.
 const STRIKE_BACK: &str = "strike_back:";
 /// Step 22a (OD-2: a player's own pick is asked of the player): the ids of the Versatile mode choice
@@ -575,7 +578,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             }
             wound.retain(|w| w.1 != *id);
             wound.push((i, id.clone(), slots.filter(|_| !option.is_empty())));
-        } else if id.starts_with(INTERFERENCE) {
+        } else if id.starts_with(INTERFERENCE) || id.starts_with(SPOT_MARKERS) {
             let count = if option.is_empty() {
                 None
             } else {
@@ -611,7 +614,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         } else {
             return ActStep::Refused {
                 index: i,
-                reason: format!("unknown choice kind {id} (expected {TAKEDOWN_MODEL}, {WOUND_ALLOC}, {INTERFERENCE}, {STRIKE_BACK} or {VERSATILE_MODE})"),
+                reason: format!("unknown choice kind {id} (expected {TAKEDOWN_MODEL}, {WOUND_ALLOC}, {INTERFERENCE}, {SPOT_MARKERS}, {STRIKE_BACK} or {VERSATILE_MODE})"),
             };
         }
     }
@@ -632,7 +635,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         };
         seams = Seams { takedown_pick: Some(slot), ..seams };
     }
-    if let Some((i, id, _)) = interference.iter().find(|c| c.2.is_some() && casts.is_empty()) {
+    if let Some((i, id, _)) = interference.iter().find(|c| c.2.is_some() && casts.is_empty() && c.1.starts_with(INTERFERENCE)) {
         return ActStep::Refused { index: *i, reason: format!("no interference choice is open in this activation (got {id})") };
     }
     // P4.D-48: a charge on the step path is the TABLE's charge (the move, the snap, the pile-in), whatever the header's
@@ -755,7 +758,8 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     }
     if matches!(first, Step::Done(..)) {
         if let Some(c) = int_choices.iter().find(|c| c.reached.is_none() && c.answer.is_some()) {
-            return ActStep::Refused { index: at_int(&c.id), reason: format!("no interference choice is open in this activation (got {})", c.id) };
+            let kind = if c.id.starts_with(SPOT_MARKERS) { "spot-marker offer" } else { "interference choice" };
+            return ActStep::Refused { index: at_int(&c.id), reason: format!("no {kind} is open in this activation (got {})", c.id) };
         }
         if let Some((i, id, _)) = strike_back.iter().find(|w| w.2.is_some() && back_choices.iter().any(|c| c.id == w.1 && c.reached.is_none())) {
             let kind = if id.starts_with(VERSATILE_MODE) { "Versatile mode" } else { "strike-back" };
