@@ -3,7 +3,7 @@ extends RefCounted
 ## One module of the ruin-town kit manifest (assets/ruintown_dress.json), built ONCE by
 ## BoardgenDressKit and read-only by convention. Lengths are inches in module space, the unit the
 ## manifest states; the shadow hulls are already resolved. `errors` lists what was missing or
-## malformed (collected here, never pushed: H11 turns them into a loud report in the kit).
+## malformed (collected here, never pushed; the kit reports them).
 
 ## A module without a hull list casts the shadow of its aabb shrunk by this much.
 const SHRINK_IN := 0.05
@@ -110,7 +110,7 @@ func _corner(value: Variant) -> Variant:
 
 
 ## The module's `shadow` list, or else its aabb shrunk by SHRINK_IN on every axis thicker than twice
-## that (a flat piece keeps its thickness) - the arithmetic BoardgenDressMesh used before H10b.
+## that (a flat piece keeps its thickness) - the same arithmetic BoardgenDressMesh uses.
 func _hulls(entry: Dictionary) -> Array:
 	if not entry.has("shadow"):
 		var lo := aabb_lo
