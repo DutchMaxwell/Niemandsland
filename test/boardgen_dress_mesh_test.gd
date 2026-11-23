@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## BoardgenDressMesh (PLAN_RUINTOWN_DRESSING step 4): the merge of placements into one mesh with one surface per material (sorted, named), the vertex data kept as authored, and the shadow proxy.
+## BoardgenDressMesh: the merge of placements into one mesh with one surface per material (sorted, named), the vertex data kept as authored, and the shadow proxy.
 ## Runs on the stub kit (every module a box of its aabb), so no GLB is needed.
 
 const NAMES := ["dr_house_tb_plain_a", "dr_house_st_plain_a", "dr_roof_s3_mid_a", "dr_ladder_3in", "dr_junk_barrels", "dr_litter_straw", "dr_lamp_post", "dr_chimney_a"]

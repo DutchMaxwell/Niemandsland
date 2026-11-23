@@ -1,6 +1,6 @@
 class_name BoardgenDressStory
 extends RefCounted
-## The decay story of one ruin-town board (PLAN_RUINTOWN_DRESSING): the seed picks the way the fire came from and the shade side (BoardgenTownDressing.story), the wall breaches are where the
+## The decay story of one ruin-town board (docs/adr/0003-generated-board-dressing.md): the seed picks the way the fire came from and the shade side (BoardgenTownDressing.story), the wall breaches are where the
 ## town fell first. Together they give a damage field D(p) in 0..1 and a shade field S, which the planners read through the KNOBS to decide where the grid breaks (roof variant, lean, missing
 ## merlons, litter, moss) - bounded and with a cause, never jitter. Pure data: nothing here touches a collider, a cell or a node. Positions are board inches, origin at the board centre.
 

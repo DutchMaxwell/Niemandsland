@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## The board story of the dressing (PLAN_RUINTOWN_DRESSING step 6): one seeded decay story per town board - a fire direction, a shade side and the wall breaches - gives a damage field D(p)
+## The board story of the dressing: one seeded decay story per town board - a fire direction, a shade side and the wall breaches - gives a damage field D(p)
 ## in 0..1 and a shade field S, plus a well-mixed pick and one accent per lot. Pure data: no node, no mesh, no collider is touched.
 
 const SEEDS_50 := 50

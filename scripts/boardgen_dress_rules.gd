@@ -1,10 +1,10 @@
 class_name BoardgenDressRules
 extends RefCounted
-## The honesty rules of the ruin-town dressing (PLAN_RUINTOWN_DRESSING, R1-R5 as plain arithmetic): the dressing never hides a walkable cell, never suggests a surface that is not there. The grid is the truth;
+## The honesty rules of the ruin-town dressing (docs/adr/0003-generated-board-dressing.md, R1-R5 as plain arithmetic): the dressing never hides a walkable cell, never suggests a surface that is not there. The grid is the truth;
 ## a placement {module, xf (Transform3D, metres, board space), cls} is checked against it with the numbers its manifest module declares (aabb_in, proud_in per height band, tags, family, role). Pure data, headless.
 ## Everything is in board inches, origin at the board centre. A model standing on a walkable cell needs the column above its top free: FLAT (0.08) of anything, then nothing up to CLEAR (2.0), except the
 ## edge strip of an edge that drops (R4); above CLEAR only an overhang (R2). R3 = the drawn face sits 0..0.2 inside the collider face. R5 = the ladder zones carry only ladders and plain faces.
-## This file grew in three steps: 5a the grid helpers and the constants, 5b violations() for R1 / R2 / R4, 5c R3 (the face sits 0..0.2 in inside the collider face, lean <= 1.5 degrees) and R5 (the ladder zones).
+## Layout of this file: the grid helpers and the constants first, then violations() for R1 / R2 / R4, then R3 (the face sits 0..0.2 in inside the collider face, lean <= 1.5 degrees) and R5 (the ladder zones).
 
 const IN_M := 0.0254
 const FLAT := 0.08

@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## The house planner (PLAN_RUINTOWN_DRESSING step 11) on the stub kit: seeds 41, 25 and 1-20. Every Roofed lot gets exactly one door, on the frontage's front face when it has one and on a free edge
+## The house planner on the stub kit: seeds 41, 25 and 1-20. Every Roofed lot gets exactly one door, on the frontage's front face when it has one and on a free edge
 ## otherwise; every free cell edge (neighbour top below 2.5 in) carries exactly one panel and no other edge does; every lot gets four corner pieces; the honesty rules report nothing.
 
 const H := preload("res://scripts/boardgen_dress_houses.gd")
