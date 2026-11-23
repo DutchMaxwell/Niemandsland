@@ -275,9 +275,10 @@ static func custom_data(b: Dictionary, kinds: Array = KINDS) -> Color:
 	return Color(kinds.find(b["kind"]), size.x, size.y, size.z)
 
 
-## Does a plan box draw itself? An intact house does not (BoardgenTownDressing draws its inset, yawed body), nor a wall or tower cell (BoardgenTownSilhouette draws it thinner): the box only keeps the collider.
-static func draws_itself(b: Dictionary) -> bool:
-	return b["kind"] != "roofed" and not b.get("hidden", false) and not b.get("collider_only", false)
+## Does a plan box draw itself? An intact house does not (BoardgenTownDressing draws its inset, yawed body), nor a wall or tower cell (BoardgenTownSilhouette draws it thinner), nor a box of a class the dressing
+## draws (`skip`, BoardgenDress.classes()): the box only keeps the collider.
+static func draws_itself(b: Dictionary, skip := {}) -> bool:
+	return b["kind"] != "roofed" and not b.get("hidden", false) and not b.get("collider_only", false) and not skip.has(BoardgenDress.box_class(b))
 
 
 ## The whole board in ONE MultiMesh (one draw call, one shared procedural material) plus a collider per solid box.
@@ -299,6 +300,8 @@ func build(layout: Dictionary) -> void:
 	var kit_ladders: bool = theme["id"] == BoardgenTheme.DEEPWORKS and not ladders.is_empty() and kit.usable(ladders.keys())   # the town keeps its timber box ladders
 	var town_kit: BoardgenTownKit = BoardgenTownKit.new() if theme["id"] == BoardgenTheme.RUIN_TOWN else null
 	var kit_town := town_kit != null and town_kit.active()   # the authored roofs, chimneys and merlons (else the boxes below)
+	var dress: BoardgenDress = BoardgenDress.new() if theme["id"] == BoardgenTheme.RUIN_TOWN else null   # the dressing (PLAN_RUINTOWN_DRESSING): the classes it draws as modules skip the old look
+	var skip := dress.classes() if dress != null and dress.setup(layout) else {}
 	var boxes := plan(layout).filter(func(b: Dictionary) -> bool: return not (kit_ladders and b["kind"] == "ladder") and not (kit_town and (BoardgenTownKit.replaces(b) or town_kit.replaces_clutter(b))))
 	if kit_ladders:   # the authored ladders replace the box ladders
 		for module: String in ladders:
@@ -312,7 +315,7 @@ func build(layout: Dictionary) -> void:
 		var b: Dictionary = boxes[i]
 		var size: Vector3 = (b["hi"] - b["lo"]) * INCHES_TO_METERS
 		var centre: Vector3 = (b["hi"] + b["lo"]) * 0.5 * INCHES_TO_METERS
-		mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, b.get("yaw", 0.0)) * Basis.from_scale(size if draws_itself(b) and not (kit_town and town_kit.draws_landmark(b)) else Vector3.ZERO), centre))   # (a solid box the kit draws keeps its collider)
+		mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, b.get("yaw", 0.0)) * Basis.from_scale(size if draws_itself(b, skip) and not (kit_town and town_kit.draws_landmark(b)) else Vector3.ZERO), centre))   # (a solid box the kit draws keeps its collider)
 		mm.set_instance_custom_data(i, custom_data(b, theme["kinds"]))
 		if b["solid"]:
 			var shape := BoxShape3D.new()
@@ -336,9 +339,15 @@ func build(layout: Dictionary) -> void:
 		var town := BoardgenTownDressing.new()   # the gable roofs of the intact houses
 		town.name = "TownDressing"
 		var frames: bool = kit_town and town_kit.kit.usable(BoardgenTownFrames.MODULES)   # (train 3) the half-timber shells as geometry: the paint keeps the infill only
-		town.build(layout, _material, not kit_town, BoardgenTownFrames.timber_lots(layout) if frames else {})
+		town.build(layout, _material, not kit_town and not skip.has("houses"), BoardgenTownFrames.timber_lots(layout) if frames else {}, skip)
 		_material.set_shader_parameter("real_frames", frames)
 		add_child(town)
+		if skip.is_empty():
+			dress.free()
+		else:
+			dress.name = "Dress"
+			dress.build(layout)
+			add_child(dress)
 		if kit_town:
 			town_kit.name = "TownKit"
 			town_kit.build(layout)

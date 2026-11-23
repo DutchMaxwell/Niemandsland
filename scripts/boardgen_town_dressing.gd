@@ -738,12 +738,14 @@ static func catslide_mesh() -> ArrayMesh:
 
 
 ## The roofs in one MultiMesh PER TYPE (gable, hip, catslide: "Roofs", "RoofsHip", "RoofsCatslide") with the board's material (the kind "roof" in its instance data).
-func build(layout: Dictionary, material: Material, prism_roofs := true, timber: Dictionary = {}) -> void:   # prism_roofs false: BoardgenTownKit draws the gable roofs (hip and catslide have no module: they stay procedural)
+func build(layout: Dictionary, material: Material, prism_roofs := true, timber: Dictionary = {}, skip := {}) -> void:   # prism_roofs false: BoardgenTownKit draws the gable roofs (hip and catslide have no module: they stay procedural)
 	var list := roofs(layout)
 	if not prism_roofs:
 		list = list.filter(func(r: Dictionary) -> bool: return r["type"] != "gable")
 	var meshes := {"gable": [prism_mesh(), "Roofs"], "hip": [hip_mesh(), "RoofsHip"], "catslide": [catslide_mesh(), "RoofsCatslide"]}
 	var kind := float(BoardgenTheme.TOWN_KINDS.find("roof"))
+	if skip.has("houses"):
+		meshes = {}   # the dressing draws the roofs and the bodies of the houses
 	for type: String in meshes:
 		var of := list.filter(func(r: Dictionary) -> bool: return r["type"] == type)
 		var mm := MultiMesh.new()
@@ -767,8 +769,9 @@ func build(layout: Dictionary, material: Material, prism_roofs := true, timber: 
 		mmi.multimesh = mm
 		mmi.material_override = material
 		add_child(mmi)
-	_add_bodies(layout, material)
-	BoardgenTownSilhouette.build(self, layout, material, timber)   # (timber: the ruined lots whose gables the kit draws in timber, BoardgenTownFrames)
+	if not skip.has("houses"):
+		_add_bodies(layout, material)
+	BoardgenTownSilhouette.build(self, layout, material, timber, skip)   # (timber: the ruined lots whose gables the kit draws in timber, BoardgenTownFrames)
 	_add_lights(layout)
 	_add_embers(layout)
 	_add_probe(layout)
