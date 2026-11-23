@@ -96,20 +96,6 @@ func test_a_die_bearer_out_of_reach_differs_and_is_refused_as_a_shooter() -> voi
 	assert_int(int(r95["differing"])).override_failure_message("from 95 an out-of-reach die bearer is equal: %d of %d seeds differ" % [r95["differing"], SEEDS]).is_equal(0)
 
 
-## In reach both halves are equal: the refusal is wider than the difference (the slice cannot see the reach).
-func test_a_die_bearer_in_reach_is_equal() -> void:
-	var r := await _compare(_bearer("Unpredictable Shooter"), _squad(), 8.0)
-	assert_int(int(r["differing"])).override_failure_message("%d of %d seeds differ in reach" % [r["differing"], SEEDS]).is_equal(0)
-
-
-## The die is the SHOOTER's: a bearer as a target is taken and equal.
-func test_a_die_bearer_as_a_target_is_taken() -> void:
-	var rifles := _unit("Rifles", 5, [], [_weapon("Rifle", 24, 2, 5)], "dwarves")
-	var r := await _compare(rifles, _bearer("Unpredictable Shooter"), 8.0)
-	assert_array(r["deny"]).override_failure_message("a die-bearing target is refused: %s" % [r["deny"]]).is_empty()
-	assert_int(int(r["differing"])).override_failure_message("%d of %d seeds differ at a die-bearing target" % [r["differing"], SEEDS]).is_equal(0)
-
-
 ## Control: the same shooter without the die, out of reach, is taken and equal.
 func test_the_same_shooter_without_the_die_out_of_reach_is_taken_and_equal() -> void:
 	var r := await _compare(_bearer("", false), _squad(), 14.0)

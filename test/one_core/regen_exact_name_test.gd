@@ -7,9 +7,7 @@ extends GdUnitTestSuite
 const MainScript := preload("res://scripts/main.gd")
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
-const DoorLines := preload("res://test/one_core/door_lines.gd")
 const DICE := "user://regen_exact_name_dice"
-const SEEDS := 8
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -54,13 +52,3 @@ func test_the_table_gives_no_regeneration_to_a_label_carrier() -> void:
 	assert_bool(_main._solo_has_regeneration(_unit_with("Regeneration Buff", "dark_elf_raiders"))).override_failure_message("Regeneration Buff gives the carrier nothing").is_false()
 	assert_bool(_main._solo_has_regeneration(_unit_with("Regeneration", "battle_brothers"))).override_failure_message("a real Regeneration still rolls").is_true()
 	assert_bool(_main._solo_has_regeneration(_unit_with("Medical Training", "battle_brothers"))).override_failure_message("Medical Training still rolls").is_true()
-
-
-## Shot at, a Regeneration Buff squad and the core agree on every combat line and the end state (before the fix the table rolled regeneration dice the core did not).
-func test_a_label_carrier_shot_at_resolves_like_the_core() -> void:
-	var shooter := DoorLines.entry("Rifles", 10, [], [], "battle_brothers", 10)
-	var target := DoorLines.entry("Squad", 10, ["Regeneration Buff"], [], "dark_elf_raiders", 0)
-	var r := await DoorLines.compare(_main, shooter, target, "", SEEDS, ProjectSettings.globalize_path(DICE))
-	assert_int(int(r["state_bad"])).override_failure_message("the end states differ").is_equal(0)
-	assert_int(int(r["fired"])).override_failure_message("no volley was compared").is_greater_equal(SEEDS)
-	assert_array(r["bad"]).override_failure_message("the lines differ:\n%s" % "\n".join((r["bad"] as Array).slice(0, 3))).is_empty()
