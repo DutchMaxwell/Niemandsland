@@ -42,7 +42,7 @@ func _lib(cached: Array) -> FakeLib:
 	return lib
 
 
-func _check_eleven(meta: Dictionary, stone_big_in: float, count := 11, textured := TEXTURED) -> void:
+func _check_eleven(meta: Dictionary, stone_big_in: float, count := 11, textured := TEXTURED, stone_fine_in := 0.0) -> void:
 	var mats := BoardgenDressMaterials.make(meta, _lib(["flags", "plaster", "roof_tiles", "coursed_stone", "timber"]))
 	assert_int(mats.size()).is_equal(count)
 	for name: String in mats:
@@ -51,6 +51,8 @@ func _check_eleven(meta: Dictionary, stone_big_in: float, count := 11, textured 
 	var stone: ShaderMaterial = mats["ct_stone_big"]
 	assert_float(stone.get_shader_parameter("tile_in")).is_equal_approx(stone_big_in, 0.0001)
 	assert_float((mats["ct_stone"] as ShaderMaterial).get_shader_parameter("tile_in")).is_equal_approx(3.0, 0.0001)
+	if stone_fine_in > 0.0:
+		assert_float((mats["ct_stone_fine"] as ShaderMaterial).get_shader_parameter("tile_in")).is_equal_approx(stone_fine_in, 0.0001)
 	assert_bool(stone.get_shader_parameter("world_uv")).is_true()
 	assert_bool(mats["ct_roof"].get_shader_parameter("world_uv")).is_false()   # roofs keep their mesh UVs
 	assert_object(stone.get_shader_parameter("orm_tex")).is_not_null()
@@ -64,12 +66,12 @@ func test_the_manifest_gives_eleven_named_materials() -> void:
 	_check_eleven(META, 5.5)   # the nominal numbers of the frozen copy above
 
 
-func test_the_bundled_manifest_gives_twelve_named_materials_once_it_is_on_main() -> void:
+func test_the_bundled_manifest_gives_thirteen_named_materials_once_it_is_on_main() -> void:
 	if not FileAccess.file_exists(BUNDLED):
 		return   # a checkout without the bundled manifest still runs the frozen copy above
-	# twelve manifest materials make THIRTEEN surface materials: ct_veg is one entry with a card variant (ct_veg on the solid vegetation shader, ct_veg_card on the card one).
-	# PINNED to the current stone scale (ct_stone_big 3.6 in, ct_stone 3.0 in): a later drift of the manifest goes red here.
-	_check_eleven(JSON.parse_string(FileAccess.get_file_as_string(BUNDLED)), 3.6, 13, TEXTURED + ["ct_veg", "ct_veg_card"])
+	# thirteen manifest materials make FOURTEEN surface materials: ct_veg is one entry with a card variant (ct_veg on the solid vegetation shader, ct_veg_card on the card one).
+	# PINNED to the current stone scale (ct_stone_big 3.6 in, ct_stone 3.0 in, ct_stone_fine 2.25 in): a later drift of the manifest goes red here.
+	_check_eleven(JSON.parse_string(FileAccess.get_file_as_string(BUNDLED)), 3.6, 14, TEXTURED + ["ct_stone_fine", "ct_veg", "ct_veg_card"], 2.25)
 
 
 func test_a_set_that_is_not_cached_gives_a_flat_material_in_its_tone() -> void:

@@ -3,7 +3,7 @@ extends GdUnitTestSuite
 ## surface per material and its UV, COLOR and TANGENT. No network, no kit folder.
 
 const DIR := "user://boardgen_dress_kit_test"
-const MATERIALS := ["ct_stone", "ct_stone_big", "ct_plaster", "ct_timber", "ct_roof", "ct_flags", "ct_iron", "ct_clay", "ct_glass_lit", "ct_glass_dark", "ct_matte", "ct_veg"]
+const MATERIALS := ["ct_stone", "ct_stone_big", "ct_stone_fine", "ct_plaster", "ct_timber", "ct_roof", "ct_flags", "ct_iron", "ct_clay", "ct_glass_lit", "ct_glass_dark", "ct_matte", "ct_veg"]
 const KEYS := ["family", "role", "len_in", "height_in", "tris", "materials", "aabb_in", "proud_in", "openings", "shadow", "tags", "stub"]   # the contract's keys; the forge adds more (batch, tri_cap, mount_in, bytes ...) and the test tolerates them
 const K1 := ["dr_house_tb_plain_a", "dr_house_tb_door", "dr_gable_tb_s3", "dr_gable_st_s6", "dr_roof_s3_mid_a", "dr_roof_s6_verge", "dr_chimney_a", "dr_house_st_quoin"]
 
@@ -64,6 +64,16 @@ func test_the_bundled_manifest_has_the_contract_shape() -> void:
 	assert_int(meta["materials"].size()).is_equal(MATERIALS.size())
 	for g in ["cobbles", "earth", "yard_flags", "deck_flags", "deck_boards", "walk_flags", "rubble", "plot"]:
 		assert_bool(meta["ground"].has(g)).is_true()
+
+
+func test_only_the_stone_houses_use_the_finer_stone() -> void:
+	# The stone houses read finer than the ruins, so their plain, window, door and quoin panels, both gables and the chimney
+	# share ct_stone_fine; no other module may pick it up.
+	var modules: Dictionary = _dress().meta["modules"]
+	for name: String in modules:
+		var is_stone_house: bool = name.begins_with("dr_house_st_") or name.begins_with("dr_gable_st_") or name == "dr_chimney_a"
+		var uses_fine: bool = "ct_stone_fine" in modules[name]["materials"]
+		assert_bool(uses_fine).override_failure_message("%s and ct_stone_fine disagree" % name).is_equal(is_stone_house)
 
 
 func test_an_unknown_module_has_no_entry_no_mesh_and_is_never_usable() -> void:
