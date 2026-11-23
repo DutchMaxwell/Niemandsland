@@ -6,7 +6,7 @@ vegetation) that `scripts/boardgen_dress*.gd` draws over the board layout. The g
 the layout grid; these modules only dress it. The contract between the two sides is
 `assets/ruintown_dress.json` (one entry per module with its numbers, plus the `materials`,
 `ground`, `sets` and `licence` blocks), described in
-[ADR 0004](../../docs/adr/) (dressing materials and the manifest) describes it.
+[ADR 0004](../../docs/adr/0004-dressing-materials-and-kit-manifest.md).
 
 Nothing here runs in the game. The scripts are a tool that runs at build time: they generate the module GLBs
 and the manifest, and they check both against the kit's honesty rules.
