@@ -2704,7 +2704,7 @@ fn rules_of_primitive(reg: &mut Registries, p: &Profile, primitive: &str) -> Vec
     let mut seen: Vec<String> = Vec::new();
     for raw in raws {
         let n = base_rule_name(raw);
-        if n.is_empty() || seen.iter().any(|s| *s == n) {
+        if n.is_empty() || seen.contains(&n) {
             continue;
         }
         seen.push(n.clone());
@@ -2767,7 +2767,7 @@ fn aura_channel_hits(reg: &mut Registries, p: &Profile) -> Vec<(String, String)>
     let mut seen: Vec<String> = Vec::new();
     for raw in raws {
         let aura = base_rule_name(raw);
-        if aura.is_empty() || seen.iter().any(|s| *s == aura) {
+        if aura.is_empty() || seen.contains(&aura) {
             continue;
         }
         seen.push(aura.clone());
@@ -2877,7 +2877,7 @@ fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String], rules_ep
     let mut seen: Vec<String> = Vec::new();
     for raw in rules {
         let n = base_rule_name(raw);
-        if n.is_empty() || n == "Banner" || seen.iter().any(|s| *s == n) {
+        if n.is_empty() || n == "Banner" || seen.contains(&n) {
             continue;
         }
         if n == "Valiant" && rule_on(rules_epoch, EPOCH_73_V36) && !valiant_ok {
@@ -3370,7 +3370,7 @@ fn regen_targets(
         for raw in raws {
             let n = base_rule_name(raw);
             if n.is_empty()
-                || seen.iter().any(|s| *s == n)
+                || seen.contains(&n)
                 || n == "Regeneration"
                 || n == "Medical Training"
                 || n == "Self-Repair"
@@ -5904,7 +5904,7 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
     let mut seen: Vec<String> = Vec::new();
     for raw in raws {
         let n = base_rule_name(raw);
-        if n.is_empty() || seen.iter().any(|s| *s == n) {
+        if n.is_empty() || seen.contains(&n) {
             continue;
         }
         seen.push(n.clone());
@@ -6307,7 +6307,7 @@ fn piercing_tags_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<
     let mut seen: Vec<String> = Vec::new();
     for raw in raws {
         let n = base_rule_name(raw);
-        if n.is_empty() || seen.iter().any(|s| *s == n) {
+        if n.is_empty() || seen.contains(&n) {
             continue;
         }
         seen.push(n.clone());
@@ -6387,7 +6387,7 @@ fn growth_of_epoch(
     let mut seen: Vec<String> = Vec::new();
     for raw in raws {
         let n = base_rule_name(raw);
-        if n.is_empty() || seen.iter().any(|s| *s == n) {
+        if n.is_empty() || seen.contains(&n) {
             continue;
         }
         seen.push(n.clone());
@@ -6585,7 +6585,7 @@ fn stamp_conditional_ap_named(
     let mut seen: Vec<String> = Vec::new();
     for raw in &p.special_rules {
         let n = base_rule_name(raw);
-        if n.is_empty() || seen.iter().any(|s| *s == n) {
+        if n.is_empty() || seen.contains(&n) {
             continue;
         }
         seen.push(n.clone());
@@ -7865,7 +7865,7 @@ impl UnitStatic {
             let havoc_boosted = p.special_rules.iter().any(|r| base_rule_name(r) == "Enhanced Havocbound");
             for raw in &p.special_rules {
                 let n = base_rule_name(raw);
-                if n.is_empty() || seen.iter().any(|s| *s == n) {
+                if n.is_empty() || seen.contains(&n) {
                     continue;
                 }
                 seen.push(n.clone());
@@ -8060,7 +8060,7 @@ impl UnitStatic {
             let (mut boost, mut has_vinci, mut both) = (false, false, false);
             for raw in &p.special_rules {
                 let n = base_rule_name(raw);
-                if n.is_empty() || seen.iter().any(|s| *s == n) {
+                if n.is_empty() || seen.contains(&n) {
                     continue;
                 }
                 seen.push(n.clone());

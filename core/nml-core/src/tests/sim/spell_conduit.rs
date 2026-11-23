@@ -136,7 +136,7 @@ use crate::spell::cast_success_chance;
 
     /// Rules-must-log: some cast_events line names `needle`.
     fn logged(s: &State, needle: &str) -> bool {
-        s.cast_events.iter().any(|e| e["log"].as_str().map_or(false, |l| l.contains(needle)))
+        s.cast_events.iter().any(|e| e["log"].as_str().is_some_and(|l| l.contains(needle)))
     }
 
     /// (a) A target reachable ONLY from the conduit is legal WITH a conduit
