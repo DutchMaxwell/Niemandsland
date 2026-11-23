@@ -234,7 +234,7 @@ mod mor_17a {
     }
 
     /// Enhanced Knightborn beside Knightborn is one group and one roll. From within 9" the table refuses the plain name, so the roll
-    /// is said under "Enhanced Knightborn" (the fd-gate ledger cells gf_520); from over 9" the plain name, carried first, holds it.
+    /// is said under "Enhanced Knightborn"; from over 9" the plain name, carried first, holds it.
     /// The dice are the same either way. RED without `Ctx::open_named`: the near line said "Knightborn dice".
     #[test]
     fn enhanced_knightborn_beside_knightborn_names_the_rule_that_rolls() {
