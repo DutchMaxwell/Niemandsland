@@ -1,4 +1,4 @@
-// ruintown_dress_veg.gdshader - the vegetation material ct_veg of the ruin-town dressing kit (vertex contract below and in docs/adr/0004-dressing-materials.md).
+// ruintown_dress_veg.gdshader - the vegetation material ct_veg of the ruin-town dressing kit (vertex contract below and in docs/adr/0004-dressing-materials-and-kit-manifest.md).
 // ONE shader, two variants chosen per MODULE: use_cards = 0 for modelled blades and moss (surface `ct_veg`), 1 for the card tufts incl. dr_veg_plot_a (surface `ct_veg_card`; BoardgenDressKit names it).
 // LIT by the scene, no emission, no shadow casting (the MeshInstance has cast_shadow off). Two-sided with ONE normal: the engine flips the normal of back faces, that flip is undone, so both sides of a blade
 // shade by the kit's bent normal (up + out of the clump) and a clump reads as one soft mass. light(): wrapped diffuse plus light passing THROUGH thin blades when the eye looks towards the light.

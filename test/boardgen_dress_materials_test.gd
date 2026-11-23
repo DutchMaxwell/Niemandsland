@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## BoardgenDressMaterials (docs/adr/0004-dressing-materials.md): the kit manifest's eleven materials become six set materials of
+## BoardgenDressMaterials (docs/adr/0004-dressing-materials-and-kit-manifest.md): the kit manifest's eleven materials become six set materials of
 ## ruintown_dress.gdshader and five plain ones; a set that is not cached gives a flat material in its tone, never null. The
 ## headless run has a dummy renderer, so the shader is pinned by source (it compiles on the real renderer: the PR's display check).
 

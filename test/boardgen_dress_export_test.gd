@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## The ruin-town dressing's manifest has to be IN the export (PLAN_RUINTOWN_DRESSING): a non-resource file only ships when an include_filter of every export preset matches it, and the kit loader reads
+## The ruin-town dressing's manifest has to be IN the export (docs/adr/0004-dressing-materials-and-kit-manifest.md): a non-resource file only ships when an include_filter of every export preset matches it, and the kit loader reads
 ## res://assets/ruintown_dress.json at runtime. No exclude_filter may match it either.
 
 const MANIFEST := "res://assets/ruintown_dress.json"

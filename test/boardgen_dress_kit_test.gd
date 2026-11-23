@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## BoardgenDressKit (docs/adr/0004-dressing-materials.md): the bundled manifest has the contract's shape, a stub module is a box of its aabb, and a GLB written at run time comes back with one named
+## BoardgenDressKit (docs/adr/0004-dressing-materials-and-kit-manifest.md): the bundled manifest has the contract's shape, a stub module is a box of its aabb, and a GLB written at run time comes back with one named
 ## surface per material and its UV, COLOR and TANGENT. No network, no kit folder.
 
 const DIR := "user://boardgen_dress_kit_test"

@@ -1,4 +1,4 @@
-// ruintown_dress.gdshader - the shared material of the ruin-town dressing kit (docs/adr/0004-dressing-materials.md).
+// ruintown_dress.gdshader - the shared material of the ruin-town dressing kit (docs/adr/0004-dressing-materials-and-kit-manifest.md).
 // One ShaderMaterial per textured kit material (BoardgenDressMaterials). The merged dress mesh is in board space, so with
 // world_uv the set is projected from the vertex position in inches along the normal's dominant axis and runs on across
 // neighbouring modules; without it the mesh UV (authored in inches) is used. ONE continuous lookup per set, no per-fragment
