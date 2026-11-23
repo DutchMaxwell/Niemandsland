@@ -122,8 +122,9 @@ cd relay && pip install -r requirements-dev.txt && python -m pytest -q
 
 ## Coding standards (summary)
 
-The full standard is [`docs/CODING_STANDARDS.md`](docs/CODING_STANDARDS.md). The points most
-often missed:
+The full standard is [`docs/CODING_STANDARDS.md`](docs/CODING_STANDARDS.md); the shared vocabulary is
+[`docs/glossary.md`](docs/glossary.md), and large changes start as a spec in `docs/specs/`. The points
+most often missed:
 
 - **English** everywhere: identifiers, comments, commit messages, docs.
 - **Units.** Rules and the API are in **inches** on the table; the Godot world is in **metres**
@@ -150,6 +151,28 @@ often missed:
   [ADR 0003](docs/adr/0003-generated-board-dressing.md) and
   [ADR 0004](docs/adr/0004-dressing-materials-and-kit-manifest.md).
 
+## How to work on a change
+
+- **Shared language first.** Before a larger change read the relevant parts of
+  [`docs/glossary.md`](docs/glossary.md), [`docs/CODING_STANDARDS.md`](docs/CODING_STANDARDS.md) and
+  [`docs/adr/`](docs/adr/). Use the glossary's words; do not invent synonyms, and propose a new
+  term for the glossary when a change needs one.
+- **No silent assumptions.** When a request is unclear or large, do not start with code: read the
+  affected code, then ask targeted questions about scope, edge cases and wanted behaviour until
+  they are settled.
+- **Small tasks** go straight to a pull request once they are clear. **Large tasks** start as a
+  short spec in `docs/specs/<name>.md` (goal and non-goals, terms, module structure, acceptance
+  criteria and tests, risks) that ends in a numbered list of small, independent pull requests,
+  with their dependencies and which of them can be built in parallel.
+- **Strategic, not only tactical.** Every change should leave the code easier to change: deep
+  modules with a narrow public interface, logic that changes together kept together, strict types,
+  and a tool check (lint, type, test, CI gate) instead of a written rule wherever a tool can
+  enforce it.
+- **Prove it.** Before finishing, run the checks of `docs/CODING_STANDARDS.md` section 6.5 that
+  cover the change and verify it for real (a test run, an output, a still from the game).
+- **Retro.** When a review correction or a problem recurs, propose the deterministic check that
+  would have caught it and the line for the standards, the glossary or an ADR that prevents it.
+
 ## Pull requests
 
 - **One concern per PR**, small diffs. A refactor does not ride along with a fix.
@@ -162,6 +185,10 @@ often missed:
   no secrets, no OnePageRules content. The `Repo Hygiene` workflow checks part of this; the rest
   is on the author.
 - CI must be green. A PR touching `.github/workflows/` needs a maintainer to merge it.
+- **The PR description** says, in glossary terms: what changed; the verification evidence (checks
+  run, tests, a log or a still); and the merge risk - *two-way door* (easily reversed) or
+  *one-way door* (data loss, a migration, an effect outside the repo, hard to reverse) - with the
+  blast radius (small / medium / large).
 
 ### Commit convention
 
