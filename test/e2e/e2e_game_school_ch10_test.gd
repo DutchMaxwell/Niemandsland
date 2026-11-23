@@ -30,8 +30,8 @@ func before_test() -> void:
 	_main._lesson_progress_path = TEST_CFG
 	await _main.save_manager.load_completed
 	_lesson = _main.get_node("LessonRunner") as LessonRunner
-	_main._solo_fast = true
-	_main._solo_batch = true
+	SoloHarness.fast(_main)
+	SoloHarness.instant(_main)
 
 
 func after_test() -> void:

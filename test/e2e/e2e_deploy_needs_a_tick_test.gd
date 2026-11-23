@@ -20,7 +20,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main._solo_batch = true   # zero pacing holds if a (wrong) AI deployment runs
+	SoloHarness.instant(_main)   # zero pacing holds if a (wrong) AI deployment runs
 
 
 func after_test() -> void:
@@ -80,7 +80,7 @@ func test_automatic_table_without_a_tick_never_deploys_for_nachtmahr(timeout := 
 func test_a_removed_tick_leaves_no_ai_deployment_behind(timeout := 120000) -> void:
 	var units := _two_armies()
 	_main._on_solo_ai_toggled(true, 2)   # a ticked game earlier in the session builds its controller…
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	assert_object(_main.solo_controller).override_failure_message("fixture: the ticked game's controller").is_not_null()
 	_main._on_solo_ai_toggled(false, 2)  # …then the tick comes off (a re-import without it does the same)
 	assert_bool(_main.solo_ai_slots.is_empty()).override_failure_message("fixture: the tick is off").is_true()

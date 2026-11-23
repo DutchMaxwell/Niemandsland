@@ -64,8 +64,7 @@ func _recorded_actions(kind: String) -> Array:
 ## (main._solo_apply_difficulty): NACHTMAHR is Erlkönig when the core and its packed net are up,
 ## else the classic tree — never the old hardcoded "classic"/"classic". A tree grade names itself.
 func test_record_names_the_opponent_the_game_really_ran(timeout := 120000) -> void:
-	_main._ensure_solo_controller()
-	_main.solo_ai_slots = {2: true}
+	SoloHarness.start(_main)
 	_main._solo_interactive_grade = "nachtmahr"
 	_main._solo_apply_difficulty()
 	var brain: Dictionary = _main.game_record_collector.build_record()["brain"]

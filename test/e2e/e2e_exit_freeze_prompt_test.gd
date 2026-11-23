@@ -39,10 +39,9 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_batch = false   # _solo_board_prompt answers 0 immediately in batch mode
+	SoloHarness.instant(_main, false)   # _solo_board_prompt answers 0 immediately in batch mode
 
 
 func after_test() -> void:
