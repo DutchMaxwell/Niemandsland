@@ -17,7 +17,7 @@ func _dress(force_stub := false, dir := "") -> BoardgenDressKit:
 
 
 ## A two-surface module (one quad each) with UV, COLOR and TANGENT, the surfaces on materials named like the manifest's, written to DIR/<name>.glb.
-func _fixture(name: String) -> void:
+func _fixture(name: String, materials := ["ct_stone", "ct_timber"]) -> void:
 	DirAccess.make_dir_recursive_absolute(DIR)
 	var mesh := ArrayMesh.new()
 	for s in 2:
@@ -31,7 +31,7 @@ func _fixture(name: String) -> void:
 		arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2, 0, 2, 3])
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 		var mat := StandardMaterial3D.new()
-		mat.resource_name = ["ct_stone", "ct_timber"][s]
+		mat.resource_name = materials[s]
 		mesh.surface_set_material(s, mat)
 	var holder := MeshInstance3D.new()
 	holder.mesh = mesh
@@ -121,3 +121,34 @@ func test_a_glb_comes_back_with_its_surface_names_and_vertex_data() -> void:
 		assert_bool(arrays[Mesh.ARRAY_TANGENT] != null and (arrays[Mesh.ARRAY_TANGENT] as PackedFloat32Array).size() == 16).is_true()
 	assert_object(dress.mesh("dr_chimney_a")).is_same(mesh)   # parsed once, then shared
 	assert_object(_dress(false, DIR).mesh("dr_litter_straw")).is_null()   # in the manifest, not cached: no mesh
+
+
+func test_the_vegetation_modules_are_built_soft_and_name_their_variant_surface() -> void:
+	var dress := _dress(true)
+	var cards := 0
+	var modelled := 0
+	for name: String in dress.meta["modules"]:
+		if not name.begins_with("dr_veg_"):
+			continue
+		var m := dress.module(name)
+		assert_bool(m["stub"]).override_failure_message(name + " is still a stub").is_false()
+		assert_bool(m.has("needs_material")).override_failure_message(name + " still needs a material").is_false()
+		for tag in ["veg", "soft_veg", "no_collider", "no_shadow"]:
+			assert_bool(m["tags"].has(tag)).override_failure_message("%s lacks %s" % [name, tag]).is_true()
+		assert_int(m["shadow"].size()).is_equal(0)
+		assert_bool(float(m["aabb_in"][1][1]) <= 0.4).override_failure_message(name + " is taller than the soft vegetation limit").is_true()
+		var card: bool = m["veg"]["card"]
+		assert_str(dress.mesh(name).surface_get_name(0)).is_equal("ct_veg_card" if card else "ct_veg")
+		cards += 1 if card else 0
+		modelled += 0 if card else 1
+	assert_bool(cards > 0 and modelled > 0).is_true()   # both variants exist
+	assert_str(BoardgenDressKit.surface_name("ct_stone", true)).is_equal("ct_stone")   # only ct_veg has a card variant
+
+
+func test_a_glb_of_a_card_module_gets_the_card_surface_name_and_a_modelled_one_does_not() -> void:
+	_fixture("dr_veg_card_a", ["ct_veg", "ct_stone"])   # (a mesh names every surface once: two surfaces of one name would be renamed by the engine)
+	_fixture("dr_veg_grass_tuft", ["ct_veg", "ct_stone"])
+	var dress := _dress(false, DIR)
+	assert_str(dress.mesh("dr_veg_card_a").surface_get_name(0)).is_equal("ct_veg_card")
+	assert_str(dress.mesh("dr_veg_card_a").surface_get_name(1)).is_equal("ct_stone")   # only ct_veg has a card variant
+	assert_str(dress.mesh("dr_veg_grass_tuft").surface_get_name(0)).is_equal("ct_veg")
