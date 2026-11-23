@@ -31,12 +31,14 @@ static func merge(placements: Array, kit: BoardgenDressKit) -> ArrayMesh:
 	return out
 
 
-## The shadow proxy: one surface of boxes, the hulls (aabb_in pairs, inches, module space) of every placed module moved by its transform.
+## The shadow proxy: one surface of boxes, the hulls (aabb_in pairs, inches, module space) of every placed module moved by its transform. A module with an EMPTY `shadow` list casts nothing (flat litter, soft
+## vegetation); only a module without the key gets its aabb shrunk by SHRINK_IN.
 static func shadow(placements: Array, kit: BoardgenDressKit) -> ArrayMesh:
 	var unit := BoxMesh.new()
 	unit.size = Vector3.ONE
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var boxes := 0
 	for p: Dictionary in placements:
 		var m := kit.module(p["module"])
 		if m.is_empty():
@@ -45,21 +47,21 @@ static func shadow(placements: Array, kit: BoardgenDressKit) -> ArrayMesh:
 			var lo := Vector3(hull[0][0], hull[0][1], hull[0][2])
 			var hi := Vector3(hull[1][0], hull[1][1], hull[1][2])
 			st.append_from(unit, 0, (p["xf"] as Transform3D) * Transform3D(Basis.from_scale((hi - lo) * IN_M), (lo + hi) * 0.5 * IN_M))
+			boxes += 1
 	var out := ArrayMesh.new()
-	if not placements.is_empty():
+	if boxes > 0:
 		st.commit(out)
 	return out
 
 
 static func _hulls(m: Dictionary) -> Array:
-	var hulls: Array = m.get("shadow", [])
-	if not hulls.is_empty():
-		return hulls
+	if m.has("shadow"):
+		return m["shadow"]
 	var a: Array = m["aabb_in"]
 	var lo := Vector3(a[0][0], a[0][1], a[0][2])
 	var hi := Vector3(a[1][0], a[1][1], a[1][2])
 	for k in 3:
-		if hi[k] - lo[k] > 2.0 * SHRINK_IN:   # a flat piece (litter) keeps its thickness
+		if hi[k] - lo[k] > 2.0 * SHRINK_IN:   # a flat piece keeps its thickness
 			lo[k] += SHRINK_IN
 			hi[k] -= SHRINK_IN
 	return [[[lo.x, lo.y, lo.z], [hi.x, hi.y, hi.z]]]

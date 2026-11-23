@@ -101,7 +101,7 @@ func test_setup_is_false_when_the_dressing_is_off_on_a_deepworks_board_or_withou
 
 
 func test_a_build_with_a_fake_planner_has_both_nodes_the_expected_triangles_and_the_extras() -> void:
-	_only(_fake(["dr_litter_straw"], "dr_litter_straw", 7))
+	_only(_fake(["dr_house_tb_plain_a"], "dr_house_tb_plain_a", 7))   # a module with one shadow hull (flat litter has none)
 	BoardgenDress.test_mode = "stub"
 	var dress: BoardgenDress = auto_free(BoardgenDress.new())
 	var layout := _layout(41)
