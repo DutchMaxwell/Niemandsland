@@ -34,8 +34,8 @@ func before_test() -> void:
 	_main._lesson_progress_path = TEST_CFG
 	await _main.save_manager.load_completed
 	_lesson = _main.get_node("LessonRunner") as LessonRunner
-	_main._solo_fast = true
-	_main._solo_batch = true   # headless melee: instant fair dice + the consolidation board prompt auto-answered
+	SoloHarness.fast(_main)
+	SoloHarness.instant(_main)   # headless melee: instant fair dice + the consolidation board prompt auto-answered
 	_arm_save_pump()
 
 

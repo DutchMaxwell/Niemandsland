@@ -27,7 +27,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_real_net = _main.network_manager
 
@@ -121,7 +121,7 @@ func test_the_host_resolves_an_ai_cast_and_the_guest_is_asked_at_its_machine(tim
 	var shaman := _reg(AI_SLOT, "Shaman", 0.0, 2)
 	var squad := _reg(1, "Squad", 10.0)
 	var witch := _reg(2, "Witch", -6.0, 2)
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [AI_SLOT])
 	assert_object(_main.solo_controller).override_failure_message("fixture: no AI controller").is_not_null()
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
@@ -173,7 +173,7 @@ func test_the_guest_resolves_an_ai_cast_and_the_host_is_asked_at_its_machine(tim
 	var shaman := _reg(AI_SLOT, "Shaman", 0.0, 2)
 	var raiders := _reg(2, "Raiders", 10.0)
 	var seer := _reg(1, "Seer", -6.0, 2)
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [AI_SLOT])
 	assert_object(_main.solo_controller).override_failure_message("fixture: no AI controller").is_not_null()
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
@@ -204,7 +204,7 @@ func test_the_resolving_players_own_caster_is_asked_locally(timeout := 120000) -
 	var shaman := _reg(AI_SLOT, "Shaman", 0.0, 2)
 	var squad := _reg(1, "Squad", 10.0)
 	var seer := _reg(1, "Seer", -6.0, 2)
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [AI_SLOT])
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
 	_ai_cast(shaman, squad, done)

@@ -132,7 +132,7 @@ func test_a_friendly_attack_on_the_target_spends_the_record() -> void:
 func test_the_piercing_mark_grant_still_reaches_the_friendly_attacker() -> void:
 	var foe := _unit(2, "Grunts", Vector3.ZERO)
 	var friend := _unit(1, "Hunters", Vector3(2.0 * INCH, 0, 0))
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_main._solo_record_spell_mod(foe, "Piercing Fighting Mark", {"grants_rule": "AP(+1) in melee",
 		"beneficiary": "attackers", "duration": "once", "scope": "melee", "no_live_grant": true})
 	await _main._solo_resolve_saves(friend, foe, "Blade", [], 4, 4,
@@ -189,9 +189,8 @@ func _armed(pid: int, unit_name: String, x: float, attacks: int, quality: int) -
 func _blood_dome_charge(epoch: int) -> String:
 	var epoch0: int = AiActRecorder.rules_epoch
 	AiActRecorder.rules_epoch = epoch
-	_main.solo_ai_slots = {1: true, 2: true}   # both seats AI: the strike-back auto-resolves, no dialog
-	_main._ensure_solo_controller()
-	_main._solo_batch = true
+	SoloHarness.start(_main, [1, 2], 2)   # both seats AI: the strike-back auto-resolves, no dialog
+	SoloHarness.instant(_main)
 	var charger := _armed(2, "Pathfinders", 0.0, 2, 4)
 	var sisters := _armed(1, "Sisters", 1.0, 12, 3)   # quality 3: hits on 3+, on 4+ against an Evasive unit
 	_main._solo_record_spell_mod(charger, "Blood Dome", {"grants_rule": "Evasive",

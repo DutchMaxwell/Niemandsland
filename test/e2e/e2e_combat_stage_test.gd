@@ -18,8 +18,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 
 
@@ -195,7 +194,7 @@ func test_a_full_miss_weapon_still_closes_its_phase_card() -> void:
 ## so the defender always loses the comparison, and 2 attacks can never kill 3 models, so it
 ## always survives to test morale.
 func test_human_charge_walks_the_melee_stage_phases(timeout := 240000) -> void:
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	var charger := _melee_unit(1, "Tank", Vector3.ZERO, 1, "Chainblade", 2)
 	charger.unit_properties["special_rules"] = ["Fear(1)"]
 	var foe := _melee_unit(2, "Foe", Vector3(1.0 * INCH, 0, 0), 3, "", 0)
@@ -221,7 +220,7 @@ func test_human_charge_walks_the_melee_stage_phases(timeout := 240000) -> void:
 
 
 func test_a_cast_walks_the_stage_phases(timeout := 240000) -> void:
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	var caster := _armed(1, "Mystic", Vector3.ZERO, [])
 	var ally := _armed(1, "Ward", Vector3(2.0 * INCH, 0, 0), [])
 	_main.combat_stage.force_for_tests = true
@@ -257,7 +256,7 @@ func test_a_cast_walks_the_stage_phases(timeout := 240000) -> void:
 ## gone returns before any die — and must still close its card, or the fizzle line bleeds into
 ## whatever activation comes next. No dice involved, so this one is exact.
 func test_a_fizzled_cast_still_closes_its_card(timeout := 240000) -> void:
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	var caster := _armed(1, "Mystic", Vector3.ZERO, [])
 	_main.combat_stage.force_for_tests = true
 	GraphicsSettings.combat_stage_hold_s = 0.0
@@ -275,7 +274,7 @@ func test_a_fizzled_cast_still_closes_its_card(timeout := 240000) -> void:
 ## stage, so nothing is captured and nothing holds (the headless-without-force half is covered
 ## by the volley test above).
 func test_a_batch_melee_never_pays_for_the_stage(timeout := 240000) -> void:
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	var charger := _melee_unit(1, "Tank", Vector3.ZERO, 1, "Chainblade", 2)
 	var foe := _melee_unit(2, "Foe", Vector3(1.0 * INCH, 0, 0), 3, "", 0)
 	GraphicsSettings.combat_stage_hold_s = 2.5   # would stall per phase if the stage were live

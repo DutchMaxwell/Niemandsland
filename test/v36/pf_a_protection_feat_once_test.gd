@@ -4,7 +4,8 @@ extends GdUnitTestSuite
 ## each 5+ ignores it. The registry entry carries `uses_per_game: 1`; the ignore-wounds path now reads it from
 ## EPOCH_73_V36 (the spent flag lives on the bearer's props, like the Precision Feat's latch). Every use and every
 ## refusal writes a battle log line; epoch 72 replays the unlimited roll.
-## Driven through the real AI volley (_run_ai_shooting) over main.tscn, twice at the same Protection Feat unit.
+## The once-per-game case is resolved through the rules core (one-core door, which ports the latch at
+## EPOCH_75_TABLE_FIXES); the epoch-72 unlimited control stays on the table, where the Feat still rolls.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
@@ -33,11 +34,13 @@ func before_test() -> void:
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
 	_main._solo_batch = true
+	CoreActivation._env = 1
 	RulesRegistry.reset_cache()
 
 
 func after_test() -> void:
 	AiActRecorder.rules_epoch = _epoch_before
+	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
@@ -90,24 +93,37 @@ func _feat_rolls(text: String) -> int:
 	return text.count(FEAT_ROLL)
 
 
-## Two wounding volleys at the Feat unit; returns [first volley log, second volley log].
-func _two_volleys(epoch: int) -> Array:
+## Two wounding volleys at the Feat unit; returns [first volley log, second volley log]. `core`: resolve each
+## volley through the rules core (a fresh capture per activation); otherwise the table resolves it.
+func _two_volleys(epoch: int, core := false) -> Array:
 	AiActRecorder.rules_epoch = epoch
 	var gunners := _gunners()
 	_feat_squad()
 	_main._tray_rng.seed = 11
-	await _main._run_ai_shooting(ActIntent.blank_report(gunners))
+	await _volley(gunners, core)
 	var first := _log_text()
 	_main.opr_army_manager.current_round = 2
 	_main._tray_rng.seed = 12
-	await _main._run_ai_shooting(ActIntent.blank_report(gunners))
+	await _volley(gunners, core)
 	return [first, _log_text().substr(first.length())]
+
+
+func _volley(gunners: GameUnit, core: bool) -> void:
+	var runs := CoreActivation.ai_runs
+	if core:
+		_main._solo_core_ai_h = CoreActivation.capture(_main, true)
+	await _main._run_ai_shooting(ActIntent.blank_report(gunners))
+	if _main._solo_core_ai_h != 0:
+		_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+		_main._solo_core_ai_h = 0
+	if core:
+		assert_int(CoreActivation.ai_runs - runs).override_failure_message("the rules core did not resolve the volley").is_greater(0)
 
 
 ## PF-a: the first wounding volley uses the Feat (one roll at 5+, and says it is spent); a second wounding volley
 ## later in the same game finds it spent - at most ONE Protection Feat roll over the whole game - and says so.
 func test_pf_a_protection_feat_rolls_at_most_once_per_game(timeout := 90000) -> void:
-	var logs := await _two_volleys(AiActRecorder.EPOCH_73_V36)
+	var logs := await _two_volleys(AiActRecorder.EPOCH_75_TABLE_FIXES, true)
 	var first: String = logs[0]
 	var second: String = logs[1]
 	assert_int(_feat_rolls(first)) \

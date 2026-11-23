@@ -18,8 +18,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}   # plan 2.2: no implicit NACHTMAHR — this table designates player 2 explicitly
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)   # plan 2.2: no implicit NACHTMAHR — this table designates player 2 explicitly
 
 
 func after_test() -> void:
@@ -32,7 +31,7 @@ func test_interactive_activation_ticks_at_least_one_frame() -> void:
 	# No armies imported: the activation returns null immediately — which is exactly the
 	# HOLD/idle-shaped case that used to tick ZERO frames. The message-pump guarantee must
 	# hold even for it.
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	var before: int = Engine.get_process_frames()
 	await _main._solo_activate_one_ai()
 	assert_int(Engine.get_process_frames() - before).is_greater_equal(1)
@@ -42,7 +41,7 @@ func test_interactive_activation_ticks_at_least_one_frame() -> void:
 func test_batch_activation_stays_frame_free() -> void:
 	# The headless A/B harnesses run _solo_batch=true and must stay byte-identical — the
 	# yield is guarded out, so a batch activation still ticks no frame at all.
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	var before: int = Engine.get_process_frames()
 	await _main._solo_activate_one_ai()
 	assert_int(Engine.get_process_frames() - before).is_equal(0)   # measured BEFORE settle() pumps any

@@ -18,10 +18,8 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
-	_main.solo_controller.human_slot = 1
-	_main._solo_batch = true   # no pick UI: the AI rule hides trap and relic
+	SoloHarness.start(_main, [2], 1)
+	SoloHarness.instant(_main)   # no pick UI: the AI rule hides trap and relic
 	_main._solo_mission_id = "smash_and_grab"
 	_main._solo_apply_mission_if_chosen()
 	_main.terrain_overlay.update_objectives([Vector3(5 * 0.0254, 0, 5 * 0.0254), Vector3(-5 * 0.0254, 0, 7 * 0.0254)])

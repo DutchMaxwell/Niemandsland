@@ -31,7 +31,7 @@ func before_test() -> void:
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
 	_main._solo_game_finished = false
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_ai_acted = PackedStringArray()
 	_ai_rounds = []
 
@@ -45,8 +45,7 @@ func after_test() -> void:
 
 ## Solo: player 2 is the AI (NACHTMAHR), player 1 the human.
 func _solo_on() -> void:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	_main.solo_controller.ai_unit_activated.connect(func(gu: GameUnit) -> void:
 		_ai_acted.append(gu.get_name())
 		_ai_rounds.append(_main.opr_army_manager.current_round))

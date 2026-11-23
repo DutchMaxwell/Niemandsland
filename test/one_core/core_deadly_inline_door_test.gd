@@ -5,15 +5,177 @@ extends GdUnitTestSuite
 ## after all the dice and kept the captured target: 11 of 16 seeds of this fixture rolled a different to-hit number on the later weapon (H-10,
 ## ds/h_probe_stealth_family.md). From 94 the core's volley fold lands each Deadly weapon's groups on a scratch copy of the state and reads
 ## `Ctx::wiped` for the weapons still to fire; below 94 it is byte-identical.
-## RED: against the library without the change, the 94 leg differs on 11 of 16 seeds per rule (and the 92 leg of this suite shows the fixture
-## differs where the epoch does not apply). Dice and end state are compared, and the two lines the inline landing adds: the table's `Simultaneous fire:`
-## (casualties since the declaration did not shrink this shot) and the ` (cap read when the volley started)` note of a Blast line.
+## The table arm left with the AI table resolver; door values are snapshot pins read on main df2284f38 (docs/adr/0005-snapshot-pins.md).
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
 const DICE := "user://deadly_inline_dice"
 const SEEDS := 16
 const PENDING_EPOCH := 94
+
+## The door's lines and target survivors per seed, read on main (where the table still shoots and equals the door).
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_INLINE_TWO_DEADLY := [
+	["COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher)","COMBAT|Ranks loses a model (5/6)","COMBAT|Simultaneous fire: Multi fires Deadly Launcher B as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher B)","COMBAT|Ranks loses a model (4/6)","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 4 wounds (2/6)","COMBAT|Ranks loses 2 models (2/6)","COMBAT|Ranks passes morale"],
+	["COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher)","COMBAT|Ranks loses a model (5/6)","COMBAT|Simultaneous fire: Multi fires Deadly Launcher B as declared (10 models in range and sight before the first roll)","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 2 wounds (4/6)","COMBAT|Ranks loses a model (4/6)"],
+	["COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher)","COMBAT|Ranks loses a model (5/6)","COMBAT|Simultaneous fire: Multi fires Deadly Launcher B as declared (10 models in range and sight before the first roll)","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 4 wounds (2/6)","COMBAT|Ranks loses 3 models (2/6)","COMBAT|Ranks fails morale — Shaken"],
+	["COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 2 wounds (4/6)","COMBAT|Ranks loses 2 models (4/6)"],
+	["COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher)","COMBAT|Ranks loses a model (5/6)","COMBAT|Simultaneous fire: Multi fires Deadly Launcher B as declared (10 models in range and sight before the first roll)","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+"],
+	["COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher)","COMBAT|Ranks loses a model (5/6)","COMBAT|Simultaneous fire: Multi fires Deadly Launcher B as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher B)","COMBAT|Ranks loses a model (4/6)","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 4 wounds (2/6)","COMBAT|Ranks loses 2 models (2/6)","COMBAT|Ranks passes morale"],
+	["COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher)","COMBAT|Ranks loses a model (5/6)","COMBAT|Simultaneous fire: Multi fires Deadly Launcher B as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 2 wounds (4/6)","COMBAT|Ranks loses a model (4/6)"],
+	["COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher)","COMBAT|Ranks loses a model (5/6)","COMBAT|Simultaneous fire: Multi fires Deadly Launcher B as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 2 wounds (4/6)","COMBAT|Ranks loses a model (4/6)"],
+	["COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher)","COMBAT|Ranks loses a model (5/6)","COMBAT|Simultaneous fire: Multi fires Deadly Launcher B as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher B)","COMBAT|Ranks loses a model (4/6)","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 4 wounds (2/6)","COMBAT|Ranks loses 2 models (2/6)","COMBAT|Ranks passes morale"],
+	["COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher B)","COMBAT|Ranks loses a model (5/6)","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 2 wounds (4/6)","COMBAT|Ranks loses a model (4/6)"],
+	["COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher)","COMBAT|Ranks loses a model (5/6)","COMBAT|Simultaneous fire: Multi fires Deadly Launcher B as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher B)","COMBAT|Ranks loses a model (4/6)","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 4 wounds (2/6)","COMBAT|Ranks loses 2 models (2/6)","COMBAT|Ranks passes morale"],
+	["COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher B)","COMBAT|Ranks loses a model (5/6)","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 2 wounds (4/6)","COMBAT|Ranks loses a model (4/6)"],
+	["COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher)","COMBAT|Ranks loses a model (5/6)","COMBAT|Simultaneous fire: Multi fires Deadly Launcher B as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher B)","COMBAT|Ranks loses a model (4/6)","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 3 wounds (3/6)","COMBAT|Ranks loses a model (3/6)","COMBAT|Ranks fails morale — Shaken"],
+	["COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher)","COMBAT|Ranks loses a model (5/6)","COMBAT|Simultaneous fire: Multi fires Deadly Launcher B as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 2 wounds (4/6)","COMBAT|Ranks loses a model (4/6)"],
+	["COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher)","COMBAT|Ranks loses a model (5/6)","COMBAT|Simultaneous fire: Multi fires Deadly Launcher B as declared (10 models in range and sight before the first roll)","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 5 wounds (1/6)","COMBAT|Ranks loses 4 models (1/6)","COMBAT|Ranks passes morale"],
+	["COMBAT|Ranks saves on 6+ (Def 4+, AP 2)","COMBAT|Deadly(3): 1 unsaved ×3, no carry-over → 1 wound dealt (Deadly Launcher B)","COMBAT|Ranks loses a model (5/6)","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 4 wounds (2/6)","COMBAT|Ranks loses 3 models (2/6)","COMBAT|Ranks fails morale — Shaken"]]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_INLINE_TAKEDOWN := [
+	["COMBAT|Takedown (Takedown Rifle): targets the trooper in Ranks — resolved as a unit of [1]","COMBAT|Takedown (Takedown Rifle) vs the trooper of Ranks — unit of [1]: hits on 3+, no cover of its own, saves on 4+","COMBAT|Ranks saves on 4+","COMBAT|Ranks saves on 4+"],
+	["COMBAT|Takedown (Takedown Rifle): targets the trooper in Ranks — resolved as a unit of [1]","COMBAT|Takedown (Takedown Rifle) vs the trooper of Ranks — unit of [1]: hits on 3+, no cover of its own, saves on 4+","COMBAT|Ranks saves on 4+","COMBAT|Ranks loses a model (5/6)","COMBAT|Takedown (Takedown Rifle): the trooper of Ranks is killed","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+"],
+	["COMBAT|Takedown (Takedown Rifle): targets the trooper in Ranks — resolved as a unit of [1]","COMBAT|Takedown (Takedown Rifle) vs the trooper of Ranks — unit of [1]: hits on 3+, no cover of its own, saves on 4+","COMBAT|Ranks saves on 4+","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 2 wounds (4/6)","COMBAT|Ranks loses 2 models (4/6)"],
+	["COMBAT|Takedown (Takedown Rifle): targets the trooper in Ranks — resolved as a unit of [1]","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 3 wounds (3/6)","COMBAT|Ranks loses 3 models (3/6)","COMBAT|Ranks passes morale"],
+	["COMBAT|Takedown (Takedown Rifle): targets the trooper in Ranks — resolved as a unit of [1]","COMBAT|Takedown (Takedown Rifle) vs the trooper of Ranks — unit of [1]: hits on 3+, no cover of its own, saves on 4+","COMBAT|Ranks saves on 4+","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 1 wound (5/6)","COMBAT|Ranks loses a model (5/6)"],
+	["COMBAT|Takedown (Takedown Rifle): targets the trooper in Ranks — resolved as a unit of [1]","COMBAT|Takedown (Takedown Rifle) vs the trooper of Ranks — unit of [1]: hits on 3+, no cover of its own, saves on 4+","COMBAT|Ranks saves on 4+","COMBAT|Ranks loses a model (5/6)","COMBAT|Takedown (Takedown Rifle): the trooper of Ranks is killed","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 2 wounds (4/6)","COMBAT|Ranks loses a model (4/6)"],
+	["COMBAT|Takedown (Takedown Rifle): targets the trooper in Ranks — resolved as a unit of [1]","COMBAT|Takedown (Takedown Rifle) vs the trooper of Ranks — unit of [1]: hits on 3+, no cover of its own, saves on 4+","COMBAT|Ranks saves on 4+","COMBAT|Ranks loses a model (5/6)","COMBAT|Takedown (Takedown Rifle): the trooper of Ranks is killed","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 3 wounds (3/6)","COMBAT|Ranks loses 2 models (3/6)","COMBAT|Ranks passes morale"],
+	["COMBAT|Takedown (Takedown Rifle): targets the trooper in Ranks — resolved as a unit of [1]","COMBAT|Takedown (Takedown Rifle) vs the trooper of Ranks — unit of [1]: hits on 3+, no cover of its own, saves on 4+","COMBAT|Ranks saves on 4+","COMBAT|Ranks loses a model (5/6)","COMBAT|Takedown (Takedown Rifle): the trooper of Ranks is killed","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 2 wounds (4/6)","COMBAT|Ranks loses a model (4/6)"],
+	["COMBAT|Takedown (Takedown Rifle): targets the trooper in Ranks — resolved as a unit of [1]","COMBAT|Takedown (Takedown Rifle) vs the trooper of Ranks — unit of [1]: hits on 3+, no cover of its own, saves on 4+","COMBAT|Ranks saves on 4+","COMBAT|Ranks loses a model (5/6)","COMBAT|Takedown (Takedown Rifle): the trooper of Ranks is killed","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 3 wounds (3/6)","COMBAT|Ranks loses 2 models (3/6)","COMBAT|Ranks fails morale — Shaken"],
+	["COMBAT|Takedown (Takedown Rifle): targets the trooper in Ranks — resolved as a unit of [1]","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 1 wound (5/6)","COMBAT|Ranks loses a model (5/6)"],
+	["COMBAT|Takedown (Takedown Rifle): targets the trooper in Ranks — resolved as a unit of [1]","COMBAT|Takedown (Takedown Rifle) vs the trooper of Ranks — unit of [1]: hits on 3+, no cover of its own, saves on 4+","COMBAT|Ranks saves on 4+","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 3 wounds (3/6)","COMBAT|Ranks loses 3 models (3/6)","COMBAT|Ranks fails morale — Shaken"],
+	["COMBAT|Takedown (Takedown Rifle): targets the trooper in Ranks — resolved as a unit of [1]","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 3 wounds (3/6)","COMBAT|Ranks loses 3 models (3/6)","COMBAT|Ranks passes morale"],
+	["COMBAT|Takedown (Takedown Rifle): targets the trooper in Ranks — resolved as a unit of [1]","COMBAT|Takedown (Takedown Rifle) vs the trooper of Ranks — unit of [1]: hits on 3+, no cover of its own, saves on 4+","COMBAT|Ranks saves on 4+","COMBAT|Ranks loses a model (5/6)","COMBAT|Takedown (Takedown Rifle): the trooper of Ranks is killed","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 4 wounds (2/6)","COMBAT|Ranks loses 3 models (2/6)","COMBAT|Ranks passes morale"],
+	["COMBAT|Takedown (Takedown Rifle): targets the trooper in Ranks — resolved as a unit of [1]","COMBAT|Takedown (Takedown Rifle) vs the trooper of Ranks — unit of [1]: hits on 3+, no cover of its own, saves on 4+","COMBAT|Ranks saves on 4+","COMBAT|Ranks loses a model (5/6)","COMBAT|Takedown (Takedown Rifle): the trooper of Ranks is killed","COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 4 wounds (2/6)","COMBAT|Ranks loses 3 models (2/6)","COMBAT|Ranks passes morale"],
+	["COMBAT|Takedown (Takedown Rifle): targets the trooper in Ranks — resolved as a unit of [1]","COMBAT|Takedown (Takedown Rifle) vs the trooper of Ranks — unit of [1]: hits on 3+, no cover of its own, saves on 4+","COMBAT|Ranks saves on 4+","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 2 wounds (4/6)","COMBAT|Ranks loses 2 models (4/6)"],
+	["COMBAT|Takedown (Takedown Rifle): targets the trooper in Ranks — resolved as a unit of [1]","COMBAT|Ranks saves on 4+","COMBAT|Ranks takes 3 wounds (3/6)","COMBAT|Ranks loses 3 models (3/6)","COMBAT|Ranks passes morale"]]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_HERO_STEALTH := [
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	[],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	[],
+	[],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	[],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	[]]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_HERO_CHANGEBOUND := [
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	[],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	[],
+	[],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	[],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	[]]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_HERO_STEALTH_AURA := [
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	[],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	[],
+	[],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	[],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	[]]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_HERO_EVASIVE := [
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	[],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	[],
+	[],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	[],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	["COMBAT|Simultaneous fire: Multi fires Plain Rifle as declared (10 models in range and sight before the first roll)"],
+	[]]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_BLAST := [
+	["COMBAT|Simultaneous fire: Blasters fires Blast Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Blast(3): 3 hits ×3 → 9 hits (cap read when the volley started)"],
+	["COMBAT|Simultaneous fire: Blasters fires Blast Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Blast(3): 3 hits ×3 → 9 hits (cap read when the volley started)"],
+	["COMBAT|Simultaneous fire: Blasters fires Blast Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Blast(3): 3 hits ×3 → 9 hits (cap read when the volley started)"],
+	["COMBAT|Blast(3): 4 hits ×3 → 12 hits"],
+	["COMBAT|Simultaneous fire: Blasters fires Blast Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Blast(3): 2 hits ×3 → 6 hits (cap read when the volley started)"],
+	["COMBAT|Simultaneous fire: Blasters fires Blast Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Blast(3): 4 hits ×3 → 12 hits (cap read when the volley started)"],
+	["COMBAT|Simultaneous fire: Blasters fires Blast Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Blast(3): 5 hits ×3 → 15 hits (cap read when the volley started)"],
+	["COMBAT|Simultaneous fire: Blasters fires Blast Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Blast(3): 4 hits ×3 → 12 hits (cap read when the volley started)"],
+	["COMBAT|Simultaneous fire: Blasters fires Blast Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Blast(3): 5 hits ×3 → 15 hits (cap read when the volley started)"],
+	["COMBAT|Blast(3): 3 hits ×3 → 9 hits"],
+	["COMBAT|Simultaneous fire: Blasters fires Blast Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Blast(3): 4 hits ×3 → 12 hits (cap read when the volley started)"],
+	["COMBAT|Blast(3): 4 hits ×3 → 12 hits"],
+	["COMBAT|Simultaneous fire: Blasters fires Blast Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Blast(3): 5 hits ×3 → 15 hits (cap read when the volley started)"],
+	["COMBAT|Simultaneous fire: Blasters fires Blast Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Blast(3): 4 hits ×3 → 12 hits (cap read when the volley started)"],
+	["COMBAT|Simultaneous fire: Blasters fires Blast Rifle as declared (10 models in range and sight before the first roll)","COMBAT|Blast(3): 4 hits ×3 → 12 hits (cap read when the volley started)"],
+	["COMBAT|Blast(3): 4 hits ×3 → 12 hits"]]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_GUARDED_SURVIVORS := [
+	[0,[]],
+	[0,[]],
+	[0,[]],
+	[1,[1]],
+	[0,[]],
+	[0,[]],
+	[0,[]],
+	[0,[]],
+	[0,[]],
+	[1,[2]],
+	[1,[1]],
+	[1,[1]],
+	[0,[]],
+	[0,[]],
+	[1,[1]],
+	[1,[1]]]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_SHIELDED_SURVIVORS := [
+	[0,[]],
+	[0,[]],
+	[0,[]],
+	[1,[1]],
+	[0,[]],
+	[0,[]],
+	[0,[]],
+	[0,[]],
+	[0,[]],
+	[1,[2]],
+	[1,[1]],
+	[1,[1]],
+	[0,[]],
+	[0,[]],
+	[1,[1]],
+	[1,[1]]]
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -82,23 +244,20 @@ func _named(lines: Array, prefixes: Array) -> Array:
 	return lines.filter(func(l: String) -> bool: return prefixes.any(func(p: String) -> bool: return l.begins_with("COMBAT|" + p)))
 
 
-## Seeds (of 16) whose dice, end state or `prefixes` lines differ between the table and the core at `epoch`; `said` counts the seeds where the
-## table said such a line (so a check on lines proves something).
-func _differing(target: Dictionary, epoch: int, shooter := {}, prefixes := []) -> Dictionary:
+## The door's `prefixes` lines at `epoch`, per seed, in order, against the pinned values.
+func _door_lines(target: Dictionary, epoch: int, shooter: Dictionary, prefixes: Array, want: Array) -> void:
 	AiActRecorder.rules_epoch = epoch
 	var dice := ProjectSettings.globalize_path(DICE)
-	var bad := 0
-	var said := 0
+	var got: Array = []
+	var fired := 0
 	for s in SEEDS:
 		var sh := shooter if not shooter.is_empty() else _shooter()
-		var t := await RosterSweep.volley(_main, sh, target, s, false, dice)
-		var c := await RosterSweep.volley(_main, sh, target, s, true, dice)
-		var tl := _named(t["lines"], prefixes)
-		said += 1 if not tl.is_empty() else 0
-		if _faces(t["rolls"]) != _faces(c["rolls"]) or RosterSweep.first_state_diff(t["state"], c["state"]) != "" \
-				or tl != _named(c["lines"], prefixes):
-			bad += 1
-	return {"bad": bad, "said": said}
+		var door := await RosterSweep.volley(_main, sh, target, s, true, dice)
+		var lines := _named(door["lines"], prefixes)
+		got.append(lines)
+		fired += 1 if not lines.is_empty() else 0
+	assert_int(fired).override_failure_message("the door never said the lines, nothing is pinned").is_greater(0)
+	assert_array(got).override_failure_message("the door's lines moved from the pinned values").is_equal(want)
 
 
 ## A shooter of ten with `weapons` ([name, copies, rules]) and a plain unit of six: the inline-landing lines fixtures.
@@ -123,32 +282,18 @@ func test_inline_landings_say_their_lines_where_the_table_does() -> void:
 	ranks["unit"].special_rules.assign([])
 	var cases := [["two Deadly", _armed([["Deadly Launcher", 1, ["Deadly(3)", "AP(2)"]], ["Deadly Launcher B", 1, ["Deadly(3)", "AP(2)"]],
 		["Plain Rifle", 5, []]])], ["Takedown", _armed([["Takedown Rifle", 1, ["Takedown"]], ["Plain Rifle", 5, []]])]]
-	for c in cases:
-		var r: Dictionary = await _differing(ranks, PENDING_EPOCH, c[1], ["Simultaneous fire", "Deadly(", "Takedown (", "Ranks "])
-		assert_int(int(r["said"])).override_failure_message("%s: the table said none of the lines, the check proved nothing" % c[0]).is_greater(0)
-		assert_int(int(r["bad"])).override_failure_message("%s: %d of 16 seeds say other lines or another order" % [c[0], r["bad"]]).is_equal(0)
+	var want := [WANT_INLINE_TWO_DEADLY, WANT_INLINE_TAKEDOWN]
+	for i in cases.size():
+		await _door_lines(ranks, PENDING_EPOCH, cases[i][1], ["Simultaneous fire", "Deadly(", "Takedown (", "Ranks "], want[i])
 
 
 
 func test_a_hero_the_deadly_weapon_killed_lends_no_rule_to_the_later_weapon_from_94() -> void:
 	var cases := [["Stealth", _hero(["Stealth"], "alien_hives")], ["Changebound", _hero(["Changebound"], "change_disciples")],
 		["Stealth Aura", _hero(["Stealth Aura"], "robot_legions")], ["Evasive", _hero(["Evasive"], "battle_brothers")]]
-	for c in cases:
-		var at_92: Dictionary = await _differing(c[1], 92)
-		assert_int(int(at_92["bad"])).override_failure_message("%s: the fixture reads equal below 94, the check cannot fail" % c[0]).is_greater(0)
-		var at_94: Dictionary = await _differing(c[1], PENDING_EPOCH, {}, ["Simultaneous fire"])
-		assert_int(int(at_94["said"])).override_failure_message("%s: the table never said `Simultaneous fire`, the line check proved nothing" % c[0]).is_greater(0)
-		assert_int(int(at_94["bad"])).override_failure_message("%s: %d of 16 seeds still differ at 94" % [c[0], at_94["bad"]]).is_equal(0)
-
-
-## Controls: no such rule on the Hero, and a Stealth unit of ten (nobody dies): equal at both epochs.
-func test_the_controls_are_equal_at_both_epochs() -> void:
-	var ranks := _hero(["Stealth"], "alien_hives")
-	(ranks["unit"] as OPRApiClient.OPRUnit).size = 10
-	for target in [_hero([], "battle_brothers"), ranks]:
-		for epoch in [92, PENDING_EPOCH]:
-			var r: Dictionary = await _differing(target, epoch)
-			assert_int(int(r["bad"])).override_failure_message("a control differs on %d of 16 seeds at %d" % [r["bad"], epoch]).is_equal(0)
+	var want := [WANT_HERO_STEALTH, WANT_HERO_CHANGEBOUND, WANT_HERO_STEALTH_AURA, WANT_HERO_EVASIVE]
+	for i in cases.size():
+		await _door_lines(cases[i][1], PENDING_EPOCH, {}, ["Simultaneous fire"], want[i])
 
 
 ## A Blast weapon fired after the Deadly one at a unit of four Tough(1) models: the Deadly launcher kills one, the cap of the Blast line was read when the
@@ -170,32 +315,26 @@ func test_a_blast_line_after_a_deadly_kill_carries_the_cap_note() -> void:
 	tgt_unit.defense = 4
 	tgt_unit.game_system = "gf"
 	var target := {"unit": tgt_unit, "faction": "battle_brothers", "system": "gf"}
-	var r: Dictionary = await _differing(target, PENDING_EPOCH, shooter, ["Simultaneous fire", "Blast("])
-	assert_int(int(r["said"])).override_failure_message("no Blast / Simultaneous line on the table").is_greater(0)
-	assert_int(int(r["bad"])).override_failure_message("%d of 16 seeds differ in dice, state or the two lines" % r["bad"]).is_equal(0)
+	await _door_lines(target, PENDING_EPOCH, shooter, ["Simultaneous fire", "Blast("], WANT_BLAST)
 
 
 
 ## Seeds (of 16) whose save targets (every roll's kind, faces AND target) or end state differ between the table and the core at `epoch`.
-func _targets_differ(target: Dictionary, epoch: int) -> int:
+## The door's target survivors ([alive, wounds]) at `epoch`, per seed, against the pinned values.
+func _door_survivors(target: Dictionary, epoch: int, want: Array) -> void:
 	AiActRecorder.rules_epoch = epoch
 	var dice := ProjectSettings.globalize_path(DICE)
-	var at := func(rolls: Array) -> Array: return rolls.map(func(r: Dictionary) -> String: return "%s:%s@%d" % [r["kind"], r["faces"], int(r["target"])])
-	var bad := 0
+	var got: Array = []
 	for s in SEEDS:
-		var t := await RosterSweep.volley(_main, _shooter(), target, s, false, dice)
-		var c := await RosterSweep.volley(_main, _shooter(), target, s, true, dice)
-		if at.call(t["rolls"]) != at.call(c["rolls"]) or RosterSweep.first_state_diff(t["state"], c["state"]) != "":
-			bad += 1
-	return bad
+		var door := await RosterSweep.volley(_main, _shooter(), target, s, true, dice)
+		got.append([int(door["state"]["tgt"]["alive"]), door["state"]["tgt"]["wounds"]])
+	assert_array(got).override_failure_message("the door's survivors moved from the pinned values").is_equal(want)
 
 
 ## H-17 (`EPOCH_95_PARITY_BATCH` = 95, lead call 21.11.): the volley is fired simultaneously, so a Guarded / Shielded Hero the
 ## Deadly weapon killed keeps its declared Defense for the later weapon's saves, as the table does; at 94 the core drops it (save one worse).
 func test_a_killed_hero_keeps_its_declared_defense_from_95() -> void:
-	for rule in ["Guarded", "Shielded"]:
-		var target := _hero([rule], "battle_brothers")
-		var at_94: int = await _targets_differ(target, PENDING_EPOCH)
-		assert_int(at_94).override_failure_message("%s: equal at 94, the check cannot fail" % rule).is_greater(0)
-		var at_95: int = await _targets_differ(target, PENDING_EPOCH + 1)
-		assert_int(at_95).override_failure_message("%s: %d of 16 seeds still differ at 95" % [rule, at_95]).is_equal(0)
+	var rules := ["Guarded", "Shielded"]
+	var want := [WANT_GUARDED_SURVIVORS, WANT_SHIELDED_SURVIVORS]
+	for i in rules.size():
+		await _door_survivors(_hero([rules[i]], "battle_brothers"), PENDING_EPOCH + 1, want[i])

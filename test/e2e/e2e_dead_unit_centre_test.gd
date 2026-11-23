@@ -15,10 +15,9 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 
 
 func after_test() -> void:
@@ -48,7 +47,7 @@ func test_deadly_kill_does_not_float_at_world_origin(timeout := 120000) -> void:
 	(target.models[0] as ModelInstance).wounds_max = 3
 	(target.models[0] as ModelInstance).wounds_current = 3
 	_main.rule_floats.force_for_tests = true
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	var dealt: int = await _main._solo_land_deadly_wounds(target, "Hammer", 3, 0, 1)
 	assert_int(dealt).is_equal(3)
 	assert_int(SoloController.combined_alive(target)).is_equal(0)
