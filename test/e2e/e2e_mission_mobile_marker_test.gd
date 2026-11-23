@@ -17,8 +17,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}   # plan 2.2: no implicit NACHTMAHR — this table designates player 2 explicitly
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])   # plan 2.2: no implicit NACHTMAHR — this table designates player 2 explicitly
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.terrain_overlay.update_objectives([Vector3.ZERO], [2])
 	SoloController.mission_markers = [{"mobile": true, "deploy_edge": 1}]
@@ -51,8 +50,7 @@ func test_vip_walk_point_is_twelve_inches_then_stops_six_from_the_edge() -> void
 
 
 func test_ai_defender_walks_the_marker_and_logs_it() -> void:
-	_main.solo_ai_slots = {2: true}
-	_main.solo_controller.human_slot = 1
+	SoloHarness.start(_main, [2], 1)
 	_main._solo_mobile_marker_round_start()
 	assert_float(_z_in()).is_equal_approx(-12.0, 0.01)
 	assert_str(str(_main.battle_log.entries().back().get("text", ""))).contains("moves the marker")
@@ -60,7 +58,7 @@ func test_ai_defender_walks_the_marker_and_logs_it() -> void:
 
 func test_a_marker_the_attacker_holds_stays_put() -> void:
 	_main.terrain_overlay.update_objectives([Vector3.ZERO], [1])
-	_main.solo_ai_slots = {2: true}
+	SoloHarness.start(_main, [2])
 	_main._solo_mobile_marker_round_start()
 	assert_float(_z_in()).is_equal_approx(0.0, 0.01)
 
@@ -68,8 +66,7 @@ func test_a_marker_the_attacker_holds_stays_put() -> void:
 func test_human_defender_click_beyond_twelve_inches_is_refused() -> void:
 	SoloController.mission_roles = {"attacker": 2, "defender": 1}
 	_main.terrain_overlay.update_objectives([Vector3.ZERO], [1])
-	_main.solo_ai_slots = {2: true}
-	_main.solo_controller.human_slot = 1
+	SoloHarness.start(_main, [2], 1)
 	_main._solo_mobile_marker_round_start()
 	await _runner.simulate_frames(2)
 	var editor: Control = _main.map_layout_editor

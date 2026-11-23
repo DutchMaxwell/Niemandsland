@@ -21,12 +21,11 @@ func before_test() -> void:
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
 	_real_net = _main.network_manager
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	MovementPlanner.fast_planner = false
 	MovementPlanner.fast_planner_guard = MovementPlanner.FAST_PLANNER_GUARD
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_fast = true
+	SoloHarness.fast(_main)
 
 
 func after_test() -> void:
@@ -80,7 +79,7 @@ func _run(actor_pid: int) -> void:
 
 func test_guest_intent_leaves_host_save_prompt_alone(timeout := 60000) -> void:
 	_fake_session(1)
-	_main._solo_auto_saves = false
+	SoloHarness.auto_saves(_main, false)
 	await _run(2)
 	assert_bool(_main._solo_auto_saves) \
 		.override_failure_message("3.4 - a guest's unit executed on the host must not flip the host's save-prompt switch") \
@@ -90,13 +89,13 @@ func test_guest_intent_leaves_host_save_prompt_alone(timeout := 60000) -> void:
 
 func test_host_own_intent_still_flips_save_prompt(timeout := 60000) -> void:
 	_fake_session(1)
-	_main._solo_auto_saves = false
+	SoloHarness.auto_saves(_main, false)
 	await _run(1)
 	assert_bool(_main._solo_auto_saves).is_true()
 	_end_session()
 
 
 func test_solo_intent_still_flips_save_prompt(timeout := 60000) -> void:
-	_main._solo_auto_saves = false
+	SoloHarness.auto_saves(_main, false)
 	await _run(1)
 	assert_bool(_main._solo_auto_saves).is_true()

@@ -60,10 +60,9 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_batch = true   # no dialogs, no physics tray in a headless sweep
+	SoloHarness.instant(_main)   # no dialogs, no physics tray in a headless sweep
 	_real_net = _main.network_manager   # the REAL NetworkManager node, kept for the wire replay
 	_fake = auto_free(FakeNet.new())
 	_main.network_manager = _fake

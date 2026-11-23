@@ -27,7 +27,7 @@ func before_test() -> void:
 	_main._ensure_solo_controller()
 	_main.solo_controller.human_slot = 1
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 
 
 func after_test() -> void:
