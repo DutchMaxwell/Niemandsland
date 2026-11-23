@@ -4,7 +4,7 @@ extends RefCounted
 ## a placement {module, xf (Transform3D, metres, board space), cls} is checked against it with the numbers its manifest module declares (aabb_in, proud_in per height band, tags, family, role). Pure data, headless.
 ## Everything is in board inches, origin at the board centre. A model standing on a walkable cell needs the column above its top free: FLAT (0.08) of anything, then nothing up to CLEAR (2.0), except the
 ## edge strip of an edge that drops (R4); above CLEAR only an overhang (R2). R3 = the drawn face sits 0..0.2 inside the collider face. R5 = the ladder zones carry only ladders and plain faces.
-## This file grows in three steps: 5a the grid helpers and the constants (here), 5b violations() for R1 / R2 / R4, 5c R3 and R5.
+## This file grew in three steps: 5a the grid helpers and the constants, 5b violations() for R1 / R2 / R4, 5c R3 (the face sits 0..0.2 in inside the collider face, lean <= 1.5 degrees) and R5 (the ladder zones).
 
 const IN_M := 0.0254
 const FLAT := 0.08
@@ -16,6 +16,7 @@ const PARAPET := 0.7
 const LADDER_GAP := 0.9
 const LEAN_MAX := 1.5
 const TOL := 0.02   # how far a piece may poke over a limit before it counts
+const FACES := ["house_panel", "ruin_face", "twall_face", "tower_face"]
 const DIRS: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]   # N, E, S, W
 
 
@@ -56,12 +57,13 @@ static func face_xf(start_in: Vector3, along: Vector3, out: Vector3, inset_in: f
 	return Transform3D(Basis(along, Vector3.UP, out) * Basis(Vector3.RIGHT, deg_to_rad(lean_deg)), (start_in - out * inset_in) * IN_M)
 
 
-## The R1 / R2 / R4 breaks of a set of placements on a layout, one line per rule and placement ("R1 <cls> <module> at (x, z): ..."); empty = honest. (R3 and R5 follow in step 5c.)
+## The R1-R5 breaks of a set of placements on a layout, one line per rule and placement ("R1 <cls> <module> at (x, z): ..."); empty = honest.
 static func violations(layout: Dictionary, placements: Array, meta: Dictionary) -> PackedStringArray:
 	var out := PackedStringArray()
 	var nx := int(layout["nx"])
 	var cell := float(layout["cell_in"])
 	var org := Vector2(nx, int(layout["nz"])) * cell * -0.5
+	var zones := _ladder_zones(layout)
 	for p: Dictionary in placements:
 		var m: Dictionary = meta["modules"].get(p["module"], {})
 		var xf: Transform3D = p["xf"]
@@ -74,6 +76,23 @@ static func violations(layout: Dictionary, placements: Array, meta: Dictionary) 
 		var all := _rect(xf, lo, hi, lo.y, hi.y, hi.z)
 		var seen := {}
 		var found: Array[String] = []
+		if not (m["tags"] as Array).has("ladder") and not (FACES.has(m["family"]) and ["plain", "foot"].has(m["role"])):
+			for zr: Rect2 in zones:
+				var ov := zr.intersection(all)
+				if ov.size.x > TOL and ov.size.y > TOL:
+					found.append("R5 in a ladder's strip")
+		var lean := rad_to_deg(xf.basis.y.normalized().angle_to(Vector3.UP))
+		if lean > LEAN_MAX + 0.05:
+			found.append("R3 leans %.2f degrees" % lean)
+		if FACES.has(m["family"]):
+			var o := Vector2(xf.basis.z.x, xf.basis.z.z).normalized()
+			var mid3 := xf * (Vector3(float(m["len_in"]) * 0.5, 0.0, 0.0) * IN_M) / IN_M
+			var mid := Vector2(mid3.x, mid3.z)
+			var axis := 0 if absf(o.x) > absf(o.y) else 1
+			var inside := floori((mid[axis] - o[axis] * 0.5 - org[axis]) / cell)   # the cell the face belongs to, along its axis
+			var inset := (org[axis] + (inside + (1 if o[axis] > 0.0 else 0)) * cell - mid[axis]) * signf(o[axis])
+			if inset < -TOL or inset > REACH + TOL:
+				found.append("R3 sits %.2f in inside the collider face" % inset)
 		for cz in range(maxi(floori((all.position.y - org.y) / cell), 0), mini(floori((all.end.y - org.y) / cell), int(layout["nz"]) - 1) + 1):
 			for cx in range(maxi(floori((all.position.x - org.x) / cell), 0), mini(floori((all.end.x - org.x) / cell), nx - 1) + 1):
 				if walkable(layout, cz * nx + cx):
@@ -130,6 +149,18 @@ static func _air(layout: Dictionary, m: Dictionary, xf: Transform3D, cx: int, cz
 static func _terrain(layout: Dictionary, i: int) -> bool:
 	var c: Dictionary = layout["cells"][i]
 	return c["lot_kind"] == "Rough" or (c["lot_kind"] == "Terrace" and int(c["level"]) == 0 and not c["street"])
+
+
+## The strip every ladder keeps: LADDER_GAP beyond the ladder's half width to each side, from the top edge's EDGE strip over the wall face to the foot. [Rect2], board inches.
+static func _ladder_zones(layout: Dictionary) -> Array[Rect2]:
+	var out: Array[Rect2] = []
+	var org := Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) * -0.5
+	for c: Dictionary in layout["connectors"]:
+		var e := Vector2(c["edge_in"][0], c["edge_in"][1]) + org
+		var away := Vector2(Vector2i(c["low_xz"][0], c["low_xz"][1]) - Vector2i(c["high_xz"][0], c["high_xz"][1]))
+		var side := Vector2(away.y, away.x)
+		out.append(Rect2(e - away * EDGE - side * (0.5 + LADDER_GAP), Vector2.ZERO).expand(e + away * (0.5 + LADDER_GAP) + side * (0.5 + LADDER_GAP)))
+	return out
 
 
 static func _v(a: Array, k: int) -> Vector3:
