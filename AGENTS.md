@@ -122,8 +122,9 @@ cd relay && pip install -r requirements-dev.txt && python -m pytest -q
 
 ## Coding standards (summary)
 
-The full standard is [`docs/CODING_STANDARDS.md`](docs/CODING_STANDARDS.md). The points most
-often missed:
+The full standard is [`docs/CODING_STANDARDS.md`](docs/CODING_STANDARDS.md); the shared vocabulary is
+[`docs/glossary.md`](docs/glossary.md), and large changes start as a spec in `docs/specs/`. The points
+most often missed:
 
 - **English** everywhere: identifiers, comments, commit messages, docs.
 - **Units.** Rules and the API are in **inches** on the table; the Godot world is in **metres**
