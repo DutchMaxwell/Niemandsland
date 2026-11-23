@@ -4,10 +4,8 @@ clippy::approx_constant 2
 clippy::bool_assert_comparison 2
 clippy::clone_on_copy 3
 clippy::collapsible_match 2
-clippy::doc_lazy_continuation 167
-clippy::doc_overindented_list_items 8
+clippy::doc_lazy_continuation 4
 clippy::double_parens 4
-clippy::empty_line_after_doc_comments 1
 clippy::erasing_op 1
 clippy::field_reassign_with_default 6
 clippy::identity_op 1
@@ -20,7 +18,7 @@ clippy::manual_repeat_n 4
 clippy::missing_const_for_thread_local 1
 clippy::needless_borrow 8
 clippy::needless_option_as_deref 4
-clippy::needless_range_loop 24
+clippy::needless_range_loop 23
 clippy::needless_update 6
 clippy::neg_cmp_op_on_partial_ord 2
 clippy::obfuscated_if_else 2

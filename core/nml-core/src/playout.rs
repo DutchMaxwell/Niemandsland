@@ -97,8 +97,8 @@ impl<'a> Policy<'a> {
 ///      objective, in distance order, stable on ties by `state.objectives`);
     ///   3. CHARGE on `_best_charge`;
     ///   4. the patient `_safe_advance`.
-    /// A SHAKEN unit gets its recovery hold and nothing else — the same rule
-    /// `plan()` applies (:132-133).
+    ///      A SHAKEN unit gets its recovery hold and nothing else — the same rule
+    ///      `plan()` applies (:132-133).
     pub fn policy_candidates(
         &self,
         state: &State,

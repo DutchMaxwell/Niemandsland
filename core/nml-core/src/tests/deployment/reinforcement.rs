@@ -108,13 +108,13 @@ use super::*;
     }
 
     /// 1. THE WITHDRAW, and the one place it disagrees with its own inverse.
-    /// `arrive_unit` brings a unit back with the strength it PARKED
-    /// (deployment.rs, Ambush Re-Deployment withdraws a DAMAGED unit);
-    /// Reinforcement removes the unit "as destroyed" and places "a new COPY of
-    /// it", which the table rebuilds at full starting size from the original's
-    /// own army-list entry (main.gd:10303-10307). RED before the port:
-    /// `withdraw_as_destroyed` does not exist — the only non-test write to
-    /// `State.dormant` in the whole core wrote `false`.
+    ///    `arrive_unit` brings a unit back with the strength it PARKED
+    ///    (deployment.rs, Ambush Re-Deployment withdraws a DAMAGED unit);
+    ///    Reinforcement removes the unit "as destroyed" and places "a new COPY of
+    ///    it", which the table rebuilds at full starting size from the original's
+    ///    own army-list entry (main.gd:10303-10307). RED before the port:
+    ///    `withdraw_as_destroyed` does not exist — the only non-test write to
+    ///    `State.dormant` in the whole core wrote `false`.
     #[test]
     fn a_shaken_carrier_withdraws_as_destroyed_and_parks_a_fresh_copy() {
         let (mut st, _) = line(CURRENT_RULES_EPOCH);
@@ -147,9 +147,9 @@ use super::*;
     }
 
     /// 2. THE READ, and its epoch gate. `within_in` and `once` come off the
-    /// shipped registry entry through the production path; below
-    /// `EPOCH_7_TABLE_RULES` the carrier reads as no carrier at all, which is
-    /// what keeps every pre-wave replay byte-identical.
+    ///    shipped registry entry through the production path; below
+    ///    `EPOCH_7_TABLE_RULES` the carrier reads as no carrier at all, which is
+    ///    what keeps every pre-wave replay byte-identical.
     #[test]
     fn the_registry_read_is_gated_on_the_frozen_epoch() {
         let (st, now) = line(CURRENT_RULES_EPOCH);
@@ -167,11 +167,11 @@ use super::*;
     }
 
     /// 3. THE LEDGER. A corpus where the TABLE already spent the promise must
-    /// replay with it spent (`AiActRecorder._ledger_of` exports
-    /// `reinforcement_spent` beside the ledgers it already writes). RED: drop
-    /// the fold and a replayed act reads the rule as unspent, which is how a
-    /// core would withdraw a unit the table has already brought back — the
-    /// #493/#498 divergence shape.
+    ///    replay with it spent (`AiActRecorder._ledger_of` exports
+    ///    `reinforcement_spent` beside the ledgers it already writes). RED: drop
+    ///    the fold and a replayed act reads the rule as unspent, which is how a
+    ///    core would withdraw a unit the table has already brought back — the
+    ///    #493/#498 divergence shape.
     #[test]
     fn the_ledger_restores_a_reinforcement_already_spent_on_the_table() {
         let (spent, _) = line_with(CURRENT_RULES_EPOCH, r#"{"reinforcement_used":true}"#);
@@ -214,9 +214,9 @@ use super::*;
     }
 
     /// 4. THE ARRIVAL. The promised copy comes back, at full starting size,
-    /// on its owner's own edge, with EVERY model base inside the 12" band.
-    /// RED before the driver: nothing in the core ever brought a unit back —
-    /// `arrive_one`'s only caller in the whole repo was a test.
+    ///    on its owner's own edge, with EVERY model base inside the 12" band.
+    ///    RED before the driver: nothing in the core ever brought a unit back —
+    ///    `arrive_one`'s only caller in the whole repo was a test.
     ///
     /// WHAT THIS TEST DOES NOT PIN, measured rather than assumed. Swapping the
     /// band for a plain rectangle leaves it GREEN, and that is a property of
@@ -270,10 +270,10 @@ use super::*;
     }
 
     /// 5. THE RIDER, through its own consumer. "Units that deploy via
-    /// Reinforcement can't seize or contest objectives on the round they
-    /// deploy" — the SAME `ambush_arrived_round` stamp `score::can_hold_marker`
-    /// already reads, so the clause ports for free and is asserted through
-    /// that reader rather than through the raw field.
+    ///    Reinforcement can't seize or contest objectives on the round they
+    ///    deploy" — the SAME `ambush_arrived_round` stamp `score::can_hold_marker`
+    ///    already reads, so the clause ports for free and is asserted through
+    ///    that reader rather than through the raw field.
     #[test]
     fn the_copy_cannot_seize_on_the_round_it_arrives() {
         let (mut st, statics) = line(CURRENT_RULES_EPOCH);
@@ -287,10 +287,10 @@ use super::*;
     }
 
     /// 6. ONCE PER GAME. "This rule doesn't apply to the new copy of the unit"
-    /// — on the table the copy is a different GameUnit built from a rules list
-    /// with the name stripped; the core has ONE roster index for both, so
-    /// `reinforcement_used` is what carries the clause. RED: drop the flag and
-    /// a carrier that is Shaken again reinforces forever.
+    ///    — on the table the copy is a different GameUnit built from a rules list
+    ///    with the name stripped; the core has ONE roster index for both, so
+    ///    `reinforcement_used` is what carries the clause. RED: drop the flag and
+    ///    a carrier that is Shaken again reinforces forever.
     #[test]
     fn the_copy_does_not_reinforce_a_second_time() {
         let (mut st, statics) = line(CURRENT_RULES_EPOCH);
@@ -306,9 +306,9 @@ use super::*;
     }
 
     /// 7. THE EPOCH GATE, on the DRIVER rather than on the read. A record
-    /// stamped below `EPOCH_7_TABLE_RULES` crosses its rounds exactly as it
-    /// was recorded — the frozen-constant rule, and the line that keeps every
-    /// pre-wave corpus replaying byte-identically.
+    ///    stamped below `EPOCH_7_TABLE_RULES` crosses its rounds exactly as it
+    ///    was recorded — the frozen-constant rule, and the line that keeps every
+    ///    pre-wave corpus replaying byte-identically.
     ///
     /// The statics are deliberately built at the CURRENT epoch and only the
     /// seams say 6. Building both at 6 would prove nothing about this gate:
@@ -330,12 +330,12 @@ use super::*;
     }
 
     /// 8. THE WIRING, not the rule: the beat has to run at the core's REAL
-    /// round boundary, not only where a test calls it. The carrier is FULLY
-    /// DESTROYED rather than Shaken — the rule's other trigger, and the one a
-    /// playout cannot undo (a Shaken unit that idles is no longer Shaken by
-    /// the time the round ends, which is the AI recovering, not a broken
-    /// fixture). RED: leave `reinforcement_round_start` out of
-    /// `rollout_traced` and this is the only test that notices.
+    ///    round boundary, not only where a test calls it. The carrier is FULLY
+    ///    DESTROYED rather than Shaken — the rule's other trigger, and the one a
+    ///    playout cannot undo (a Shaken unit that idles is no longer Shaken by
+    ///    the time the round ends, which is the AI recovering, not a broken
+    ///    fixture). RED: leave `reinforcement_round_start` out of
+    ///    `rollout_traced` and this is the only test that notices.
     #[test]
     fn the_round_boundary_runs_the_beat() {
         let (mut st, statics) = line(CURRENT_RULES_EPOCH);

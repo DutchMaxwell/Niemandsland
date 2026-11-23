@@ -490,9 +490,9 @@ pub fn versatile_best_mode(hit_target: i64, defense: i64, ap: i64, bane: bool) -
 ///   * `ranged_over`  Piercing Hunter — shooting from beyond `over_in`
 ///   * `ranged_within` Point-Blank Piercing — shooting from `within_in` or
 ///     closer (wave 4; fires only on a spec whose `within_in` is set)
-/// `charge_only` is an extra gate on top of the condition (Melee Slayer), and the
-/// `ranged_over_or_charge` GATE (Slayer) adds "charging OR shot from over 9 in".
-/// `dist_in < 0` means the caller has no range context: the ranged legs stay shut.
+///     `charge_only` is an extra gate on top of the condition (Melee Slayer), and the
+///     `ranged_over_or_charge` GATE (Slayer) adds "charging OR shot from over 9 in".
+///     `dist_in < 0` means the caller has no range context: the ranged legs stay shut.
 ///
 /// Rules 3.6 hook (no 3.5 entry spells these, so no epoch gate):
 ///   * `over_half_range` — shooting from beyond half the weapon's range

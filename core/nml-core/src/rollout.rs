@@ -157,8 +157,8 @@ pub(crate) fn delayed_action_passer(
 ///     measured BASE EDGE to base edge like `nearest_melee_gap_in` (:818-830),
 ///     never centre to centre — a 12\" reading off a vehicle oval's centre is
 ///     simply wrong.
-/// Reserves are invisible to it (`dormant`), the same exclusion the table's
-/// `is_eligible` already owns.
+///     Reserves are invisible to it (`dormant`), the same exclusion the table's
+///     `is_eligible` already owns.
 ///
 /// ONE DECLARED SIMPLIFICATION, in the `second_wind_candidate` manner (never
 /// silent): WHICH friend. The table picks the highest `activation_payoff`

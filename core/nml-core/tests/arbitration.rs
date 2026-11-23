@@ -16,8 +16,8 @@
 //!   * `sum_b`   — the best branch's summed signed marker delta;
 //!   * `sum_r`   — the runner-up's;
 //!   * `swapped` — whether the runner-up took the pick.
-//! Plus the 12 pick/trace fields G4 compares, because a correct arbitration that
-//! swapped the wrong pair of candidates is still a wrong answer.
+//!     Plus the 12 pick/trace fields G4 compares, because a correct arbitration that
+//!     swapped the wrong pair of candidates is still a wrong answer.
 //!
 //! `sig` is an INPUT. `AiPlanner._playout_sig` hashes Godot's own text rendering
 //! of the whole board; the recorder writes the value it used, and this gate

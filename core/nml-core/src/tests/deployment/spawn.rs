@@ -157,11 +157,11 @@ use std::rc::Rc;
     }
 
     /// 1. THE READ, and its epoch gates. `place_in` and `once_per_game` come
-    /// off the shipped registry entry through the production path; below
-    /// `EPOCH_7_TABLE_RULES` the carrier reads as no carrier at all. The
-    /// NAMED target (`raw`/`name`/`count`, parsed off the raw rule string) is
-    /// `EPOCH_8_PLANNER_MENU`'s read: an epoch-7 record parses no target, so
-    /// nothing ever looks up a template it cannot have.
+    ///    off the shipped registry entry through the production path; below
+    ///    `EPOCH_7_TABLE_RULES` the carrier reads as no carrier at all. The
+    ///    NAMED target (`raw`/`name`/`count`, parsed off the raw rule string) is
+    ///    `EPOCH_8_PLANNER_MENU`'s read: an epoch-7 record parses no target, so
+    ///    nothing ever looks up a template it cannot have.
     #[test]
     fn the_registry_read_is_gated_on_the_frozen_epoch() {
         let (st, now) = line(CURRENT_RULES_EPOCH);
@@ -183,10 +183,10 @@ use std::rc::Rc;
     }
 
     /// 2. THE LOAD ERROR. An epoch-8 record whose standing Spawn carrier has
-    /// no matching `spawn:` template is REFUSED AT LOAD — the loader's twin
-    /// of `roster_of`'s unknown-key error. RED while the loader ignored the
-    /// map: the same bytes loaded fine and left the beat to fall back to the
-    /// carrier's own profile — the exact #823 break, now loud instead.
+    ///    no matching `spawn:` template is REFUSED AT LOAD — the loader's twin
+    ///    of `roster_of`'s unknown-key error. RED while the loader ignored the
+    ///    map: the same bytes loaded fine and left the beat to fall back to the
+    ///    carrier's own profile — the exact #823 break, now loud instead.
     #[test]
     fn an_epoch_8_record_without_the_template_is_refused_at_load() {
         let corpus = corpus(8, false);
@@ -199,9 +199,9 @@ use std::rc::Rc;
     }
 
     /// 3. THE MAP INDEXES. The same record WITH the map loads, and the
-    /// template lands in the profile table under its `spawn:` key — the beat
-    /// resolves it from there. The copy earns no roster slot: no unit key in
-    /// the state names it.
+    ///    template lands in the profile table under its `spawn:` key — the beat
+    ///    resolves it from there. The copy earns no roster slot: no unit key in
+    ///    the state names it.
     #[test]
     fn the_header_map_indexes_into_the_profile_table() {
         let corpus = corpus(8, true);
@@ -217,8 +217,8 @@ use std::rc::Rc;
     }
 
     /// 4. BELOW THE GATE THE MAP IS NOT READ. An epoch-7 header carrying the
-    /// map still loads, and the map never reaches the profile table — the
-    /// byte-identity every pre-epoch-8 corpus leans on.
+    ///    map still loads, and the map never reaches the profile table — the
+    ///    byte-identity every pre-epoch-8 corpus leans on.
     #[test]
     fn an_epoch_7_header_ignores_the_map() {
         let corpus = corpus(7, true);
@@ -230,10 +230,10 @@ use std::rc::Rc;
     }
 
     /// 5. THE FROZEN RECORD. An epoch-7 record WITHOUT the map loads exactly
-    /// as it always did: the profile table carries exactly the roster's own
-    /// keys, nothing synthesised, and the node state replays — the byte
-    /// -identity every pre-epoch-8 record leans on (SPAWN_DESIGN_2026-09-08
-    /// §6, the epoch gate's whole point).
+    ///    as it always did: the profile table carries exactly the roster's own
+    ///    keys, nothing synthesised, and the node state replays — the byte
+    ///    -identity every pre-epoch-8 record leans on (SPAWN_DESIGN_2026-09-08
+    ///    §6, the epoch gate's whole point).
     #[test]
     fn an_epoch_7_record_without_the_map_loads_byte_identically() {
         let corpus = corpus(7, false);
@@ -270,13 +270,13 @@ use std::rc::Rc;
     }
 
     /// 6. THE CIRCLE GEOMETRY — the pin the STUB must FAIL (the
-    /// coordinator's RED discipline, the 2a precedent). The objective sits
-    /// OUTSIDE the reach circle, at the bounding square's diagonal corner:
-    /// the stub's admit-everything arm walks the scan straight to that
-    /// corner and this assertion FALLS; the table's own predicate
-    /// (`circle_zone`, §3.5) refuses every spot whose base pokes out of the
-    /// circle, so the real zone answers the nearest point INSIDE it. A pin
-    /// that passes on the stub proves nothing — this one cannot.
+    ///    coordinator's RED discipline, the 2a precedent). The objective sits
+    ///    OUTSIDE the reach circle, at the bounding square's diagonal corner:
+    ///    the stub's admit-everything arm walks the scan straight to that
+    ///    corner and this assertion FALLS; the table's own predicate
+    ///    (`circle_zone`, §3.5) refuses every spot whose base pokes out of the
+    ///    circle, so the real zone answers the nearest point INSIDE it. A pin
+    ///    that passes on the stub proves nothing — this one cannot.
     #[test]
     fn the_circle_zone_places_inside_the_circle_not_its_corner() {
         let board = empty_board();
@@ -300,13 +300,13 @@ use std::rc::Rc;
     }
 
     /// 7. THE CIRCLE REFUSES WHAT THE SQUARE ADMITS, blocker edition (the
-    /// #803 f1f1b15d pattern, §4 PR 1's own RED): the objective in the
-    /// bounding square's corner, one wide friendly base (0.22 m) parked on
-    /// the inner diagonal — its CENTRE inside the circle, its RIM pokes out
-    /// and crowds the corner approach. The stub's admit-everything arm is
-    /// pushed OFF the diagonal into the square's far half, OUTSIDE the reach
-    /// circle, and this assertion FALLS on the stub; the real zone keeps the
-    /// copy on the circle's far side, INSIDE the reach.
+    ///    #803 f1f1b15d pattern, §4 PR 1's own RED): the objective in the
+    ///    bounding square's corner, one wide friendly base (0.22 m) parked on
+    ///    the inner diagonal — its CENTRE inside the circle, its RIM pokes out
+    ///    and crowds the corner approach. The stub's admit-everything arm is
+    ///    pushed OFF the diagonal into the square's far half, OUTSIDE the reach
+    ///    circle, and this assertion FALLS on the stub; the real zone keeps the
+    ///    copy on the circle's far side, INSIDE the reach.
     #[test]
     fn a_base_outside_the_circle_blocks_only_where_it_pokes_out() {
         let board = empty_board();
@@ -338,10 +338,10 @@ use std::rc::Rc;
     }
 
     /// 8. THE MINT READS THE STATICS THE CALLER HANDS IN. `arrive_unit`'s
-    /// explicit parameter decides the footprint: a copy parked with the
-    /// TEMPLATE's base radius (0.03) comes back ON 0.03 bases even though
-    /// the SLOT's own profile still answers the carrier's 0.02 — exactly the
-    /// power the beat needs, and the pin the test caller owes the param.
+    ///    explicit parameter decides the footprint: a copy parked with the
+    ///    TEMPLATE's base radius (0.03) comes back ON 0.03 bases even though
+    ///    the SLOT's own profile still answers the carrier's 0.02 — exactly the
+    ///    power the beat needs, and the pin the test caller owes the param.
     #[test]
     fn arrive_unit_mints_at_the_statics_base_radius_not_the_profiles() {
         const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
@@ -384,10 +384,10 @@ use std::rc::Rc;
     // rollout and does NOT touch the arrival — it parks a dormant slot.
 
     /// 9. THE MINT. A brand-new State slot with the TEMPLATE's stats: the
-    /// roster grows by one key (the `spawn:` map key), the slot's profile IS
-    /// the template's, full starting wounds and size parked on the tray,
-    /// `dormant` from birth (the beat's `arrive_unit` takes it back off the
-    /// tray books in 2b-2b). RED while the stub mints nothing.
+    ///    roster grows by one key (the `spawn:` map key), the slot's profile IS
+    ///    the template's, full starting wounds and size parked on the tray,
+    ///    `dormant` from birth (the beat's `arrive_unit` takes it back off the
+    ///    tray books in 2b-2b). RED while the stub mints nothing.
     #[test]
     fn the_mint_mints_a_brand_new_slot_with_the_templates_stats() {
         let (mut st, statics) = line(CURRENT_RULES_EPOCH);
@@ -501,9 +501,9 @@ use std::rc::Rc;
     // from the carrier's, so no bearer-copy fallback can hide.
 
     /// 9. THE NAMED COPY. The beat mints the TEMPLATE's unit, not the
-    /// carrier's and not a rebuild of the carrier's statics: full starting
-    /// size, wounds and base radius off the `spawn:` profile the record
-    /// header shipped. RED while no beat exists at all.
+    ///    carrier's and not a rebuild of the carrier's statics: full starting
+    ///    size, wounds and base radius off the `spawn:` profile the record
+    ///    header shipped. RED while no beat exists at all.
     #[test]
     fn the_beat_mints_the_templates_unit_and_the_carrier_stands() {
         let (mut st, statics) = line(CURRENT_RULES_EPOCH);
@@ -534,11 +534,11 @@ use std::rc::Rc;
     }
 
     /// 10. THE ZONE BINDS — the f1f1b15d pattern. The 6" circle around the
-    /// anchor is crowded edge to edge with wide friendly bases, so
-    /// `best_spot`'s lattice has no free point left inside it. A plain
-    /// table-wide rectangle would find the open midfield at once and this
-    /// test FALLS; the real zone refuses it and the summon is simply not
-    /// made — a summon is never half-made, and the latch is not spent.
+    ///     anchor is crowded edge to edge with wide friendly bases, so
+    ///     `best_spot`'s lattice has no free point left inside it. A plain
+    ///     table-wide rectangle would find the open midfield at once and this
+    ///     test FALLS; the real zone refuses it and the summon is simply not
+    ///     made — a summon is never half-made, and the latch is not spent.
     #[test]
     fn no_summon_when_the_six_inch_circle_is_crowded() {
         let (mut st, statics) = line_crowded(CURRENT_RULES_EPOCH);
@@ -560,8 +560,8 @@ use std::rc::Rc;
     }
 
     /// 11. ONCE PER GAME. The registry entry's `once_per_game` is the clause —
-    /// a second boundary does not mint a second copy. RED: drop the latch and
-    /// every boundary duplicates the carrier.
+    ///     a second boundary does not mint a second copy. RED: drop the latch and
+    ///     every boundary duplicates the carrier.
     #[test]
     fn the_second_summon_is_refused() {
         let (mut st, statics) = line(CURRENT_RULES_EPOCH);
@@ -574,11 +574,11 @@ use std::rc::Rc;
     }
 
     /// 12. THE EPOCH-7 GATE. The named-template seam is `EPOCH_8_PLANNER_MENU`'s
-    /// (a new unit in the rollout changes later menus), not #823's epoch-7: a
-    /// record stamped 7 crosses the boundary exactly as it was recorded — no
-    /// beat, no template lookup, byte-identical. The statics are built at the
-    /// CURRENT epoch (target parsed) and only the seams say 7, so this pins
-    /// the GATE, not a statics accident.
+    ///     (a new unit in the rollout changes later menus), not #823's epoch-7: a
+    ///     record stamped 7 crosses the boundary exactly as it was recorded — no
+    ///     beat, no template lookup, byte-identical. The statics are built at the
+    ///     CURRENT epoch (target parsed) and only the seams say 7, so this pins
+    ///     the GATE, not a statics accident.
     #[test]
     fn an_epoch_7_record_never_spawns() {
         let (mut st, statics) = line(CURRENT_RULES_EPOCH);
@@ -593,9 +593,9 @@ use std::rc::Rc;
     }
 
     /// 13. NO NAME, NO SUMMON. A unit without the name is not the template's
-    /// reader: the beat never reads a latch on it, never mints under ITS key.
-    /// (The carrier in the same fixture legitimately spawns — that is pin
-    /// 9's business; this pins the PLAIN unit's columns.)
+    ///     reader: the beat never reads a latch on it, never mints under ITS key.
+    ///     (The carrier in the same fixture legitimately spawns — that is pin
+    ///     9's business; this pins the PLAIN unit's columns.)
     #[test]
     fn a_unit_without_the_name_spawns_nothing() {
         let (mut st, statics) = line(CURRENT_RULES_EPOCH);
@@ -666,9 +666,9 @@ use std::rc::Rc;
     }
 
     /// 14. THE WIRING, not the rule: the beat has to run at the core's REAL
-    /// round boundary, not only where a test calls it. RED: leave
-    /// `spawn_round_start` out of `rollout_traced` and this is the only test
-    /// that notices.
+    ///     round boundary, not only where a test calls it. RED: leave
+    ///     `spawn_round_start` out of `rollout_traced` and this is the only test
+    ///     that notices.
     #[test]
     fn the_round_boundary_runs_the_beat() {
         let (st, statics) = line(CURRENT_RULES_EPOCH);
