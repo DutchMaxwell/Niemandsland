@@ -44,7 +44,7 @@ func _face(layout: Dictionary, cx: int, cz: int, k: int, y: float, inset: float,
 
 func _centre(layout: Dictionary, cx: int, cz: int, y: float) -> Transform3D:
 	var c := float(layout["cell_in"])
-	return Transform3D(Basis(), Vector3((cx + 0.5 - int(layout["nx"]) * 0.5) * c, y, (cz + 0.5 - int(layout["nz"]) * 0.5) * c) * R.IN_M)
+	return Transform3D(Basis(), Vector3((cx + 0.5 - int(layout["nx"]) * 0.5) * c, y, (cz + 0.5 - int(layout["nz"]) * 0.5) * c) * R.INCHES_TO_METERS)
 
 
 func _p(module: String, xf: Transform3D, cls := "test") -> Dictionary:
@@ -89,8 +89,8 @@ func _clean(layout: Dictionary) -> Array[Dictionary]:
 			elif c["lot_kind"] == "Rough":
 				out.append(_p("dr_junk_barrels", _centre(layout, cv.x, cv.y, 0.0), "clutter"))
 	var st := _street(layout)
-	var corner := (_centre(layout, st.x, st.y, 0.0).origin / R.IN_M) - Vector3(float(layout["cell_in"]) * 0.5, 0.0, float(layout["cell_in"]) * 0.5)
-	out.append(_p("dr_lamp_post", Transform3D(Basis(), corner * R.IN_M), "props"))   # a lamp post at a cell corner: the one R1 exception
+	var corner := (_centre(layout, st.x, st.y, 0.0).origin / R.INCHES_TO_METERS) - Vector3(float(layout["cell_in"]) * 0.5, 0.0, float(layout["cell_in"]) * 0.5)
+	out.append(_p("dr_lamp_post", Transform3D(Basis(), corner * R.INCHES_TO_METERS), "props"))   # a lamp post at a cell corner: the one R1 exception
 	var plan := BoardgenGreybox.ladder_kit_plan(layout)
 	for name: String in plan:
 		for item: Dictionary in plan[name]:
@@ -201,14 +201,14 @@ func test_face_xf_puts_x_along_z_out_and_the_inset_into_the_mass() -> void:
 	var xf := R.face_xf(Vector3(4, 0, -6), Vector3(-1, 0, 0), Vector3(0, 0, -1), 0.1, 0.0)   # the N face of a cell whose corner is (4, -6)
 	assert_vector(xf.basis.x).is_equal_approx(Vector3(-1, 0, 0), Vector3(0.0001, 0.0001, 0.0001))
 	assert_vector(xf.basis.z).is_equal_approx(Vector3(0, 0, -1), Vector3(0.0001, 0.0001, 0.0001))
-	var p := xf * (Vector3(1.0, 2.0, 0.5) * R.IN_M) / R.IN_M   # 1 along, 2 up, 0.5 out of the mounting plane
+	var p := xf * (Vector3(1.0, 2.0, 0.5) * R.INCHES_TO_METERS) / R.INCHES_TO_METERS   # 1 along, 2 up, 0.5 out of the mounting plane
 	assert_vector(p).is_equal_approx(Vector3(3, 2, -6.4), Vector3(0.001, 0.001, 0.001))   # 0.5 out minus the 0.1 inset
 	var leaned := R.face_xf(Vector3(4, 0, -6), Vector3(-1, 0, 0), Vector3(0, 0, -1), 0.0, 10.0)
-	var top := leaned * (Vector3(0, 1, 0) * R.IN_M) / R.IN_M
+	var top := leaned * (Vector3(0, 1, 0) * R.INCHES_TO_METERS) / R.INCHES_TO_METERS
 	assert_float(top.z).is_equal_approx(-6.0 - sin(deg_to_rad(10.0)), 0.001)   # a positive lean tips the top OUT
 	assert_float(top.y).is_equal_approx(cos(deg_to_rad(10.0)), 0.001)
 	var inward := R.face_xf(Vector3(4, 0, -6), Vector3(-1, 0, 0), Vector3(0, 0, -1), 0.0, -10.0)
-	assert_float((inward * (Vector3(0, 1, 0) * R.IN_M) / R.IN_M).z).is_equal_approx(-6.0 + sin(deg_to_rad(10.0)), 0.001)   # a negative lean tips it in
+	assert_float((inward * (Vector3(0, 1, 0) * R.INCHES_TO_METERS) / R.INCHES_TO_METERS).z).is_equal_approx(-6.0 + sin(deg_to_rad(10.0)), 0.001)   # a negative lean tips it in
 
 
 func test_the_constants_are_the_plans_numbers() -> void:
@@ -268,7 +268,7 @@ func test_a_parapet_1_in_high_is_reported_and_a_0_7_in_one_is_not() -> void:
 	var tall := Transform3D(xf.basis * Basis.from_scale(Vector3(1.0, 1.0 / 0.7, 1.0)), xf.origin)
 	assert_array(_rules(R.violations(layout, [_p("dr_parapet_stub_a", tall, "tiers")], _meta()))).contains_exactly(["R4"])
 	var inward := _face(layout, cv.x, cv.y, e[1], top, -0.0)
-	inward.origin -= xf.basis.z * 0.5 * R.IN_M   # 0.5 in in from the edge: outside the 0.4 in strip
+	inward.origin -= xf.basis.z * 0.5 * R.INCHES_TO_METERS   # 0.5 in in from the edge: outside the 0.4 in strip
 	assert_array(_rules(R.violations(layout, [_p("dr_parapet_stub_a", inward, "tiers")], _meta()))).contains_exactly(["R4"])
 
 
@@ -341,10 +341,10 @@ func test_soft_vegetation_up_to_0_4_in_passes_on_the_ground_but_not_taller_not_o
 	var org := Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) * -0.5
 	var edge := Vector2(c["edge_in"][0], c["edge_in"][1]) + org
 	var foot := edge + away * 0.8   # 0.8 in from the wall at the ladder's foot: inside its strip
-	var on_ladder := _p("dr_veg_tuft", Transform3D(Basis(), Vector3(foot.x, 0.04, foot.y) * R.IN_M), "clutter")
+	var on_ladder := _p("dr_veg_tuft", Transform3D(Basis(), Vector3(foot.x, 0.04, foot.y) * R.INCHES_TO_METERS), "clutter")
 	assert_bool(_rules(R.violations(layout, [on_ladder], _meta())).has("R5")).is_true()
 	var far := edge + away * 2.6   # still in the ladder's low cell (kept clear), outside the strip
-	var in_cell := _p("dr_veg_tuft", Transform3D(Basis(), Vector3(far.x, 0.04, far.y) * R.IN_M), "clutter")
+	var in_cell := _p("dr_veg_tuft", Transform3D(Basis(), Vector3(far.x, 0.04, far.y) * R.INCHES_TO_METERS), "clutter")
 	assert_array(_rules(R.violations(layout, [in_cell], _meta()))).contains_exactly(["R1"])   # kept-clear cell
 	var e := _tier_edge(layout)
 	assert_array(e).is_not_empty()
