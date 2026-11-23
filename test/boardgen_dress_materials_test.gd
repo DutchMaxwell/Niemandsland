@@ -4,10 +4,10 @@ extends GdUnitTestSuite
 ## headless run has a dummy renderer, so the shader is pinned by source (it compiles on the real renderer: the PR's display check).
 
 const SHADER := "res://shaders/ruintown_dress.gdshader"
-const VEG_SHADER := "res://shaders/ruintown_dress_veg.gdshader"
-const VEG_SET := ["albedo_scale", "wrap", "backlight", "roughness", "use_cards", "alpha_scissor", "card_tone", "atlas", "atlas_dry"]
-## Declared with a default in the shader, not set by the script (wind is off in stills, the dead share is board-wide, the normal atlas is reserved).
-const VEG_RESERVED := ["wind", "dead_share", "atlas_normal", "dry_tint"]
+const VEG_SOLID_SHADER := "res://shaders/ruintown_dress_veg_solid.gdshader"
+const VEG_CARD_SHADER := "res://shaders/ruintown_dress_veg_card.gdshader"
+const VEG_SOLID_SET := ["wrap", "backlight", "roughness", "albedo_scale"]
+const VEG_CARD_SET := ["wrap", "backlight", "roughness", "alpha_scissor", "card_tone", "atlas", "atlas_dry"]
 ## The bundled manifest of step 3; checked as well once it is on main.
 const BUNDLED := "res://assets/ruintown_dress.json"
 ## The `materials` block of the kit manifest (dress_kit K0, 22.11.), without the step-14 keys.
@@ -25,8 +25,6 @@ const META := {"materials": {
 	"ct_timber": {"set": "timber", "tile_in": 3.25, "tone": [0.7, 0.66, 0.62], "uv": "mesh"}}}
 const TEXTURED := ["ct_flags", "ct_plaster", "ct_roof", "ct_stone", "ct_stone_big", "ct_timber"]
 const SET_UNIFORMS := ["albedo_tex", "normal_tex", "orm_tex", "tile_in", "world_uv", "tone", "normal_depth"]
-## Declared for a later step and not set in v1 (the ground sets' parallax).
-const RESERVED := ["height_tex"]
 
 
 ## A library that answers a texture for the sets it is told are cached.
@@ -69,7 +67,7 @@ func test_the_manifest_gives_eleven_named_materials() -> void:
 func test_the_bundled_manifest_gives_twelve_named_materials_once_it_is_on_main() -> void:
 	if not FileAccess.file_exists(BUNDLED):
 		return   # step 3 (lane CORE) copies it in; until then the copy above is the manifest
-	# twelve manifest materials make THIRTEEN surface materials: ct_veg is one entry with two variants (ct_veg, ct_veg_card), both shader materials of the vegetation shader.
+	# twelve manifest materials make THIRTEEN surface materials: ct_veg is one entry with a card variant (ct_veg on the solid vegetation shader, ct_veg_card on the card one).
 	# PINNED to the stone scale ruled 22.11. (ct_stone_big 3.6 in, ct_stone 3.0 in): a later drift of the manifest goes red here.
 	_check_eleven(JSON.parse_string(FileAccess.get_file_as_string(BUNDLED)), 3.6, 13, TEXTURED + ["ct_veg", "ct_veg_card"])
 
@@ -98,7 +96,7 @@ func test_the_shader_declares_every_uniform_the_script_sets() -> void:
 		assert_bool(u in declared).override_failure_message("the shader lacks `%s`" % u).is_true()
 		assert_bool(sm.get_shader_parameter(u) != null).override_failure_message("the script never sets `%s`" % u).is_true()
 	for u: String in declared:
-		assert_bool(u in SET_UNIFORMS or u in RESERVED).override_failure_message("`%s` is declared but not set" % u).is_true()
+		assert_bool(u in SET_UNIFORMS).override_failure_message("`%s` is declared but not set" % u).is_true()
 	assert_object(sm.shader).is_equal(load(SHADER))
 	assert_bool(src.contains("NORMAL_MAP_DEPTH = normal_depth;")).is_true()
 	assert_int(src.count("texture(albedo_tex")).override_failure_message("one continuous lookup per set").is_equal(1)
@@ -108,7 +106,7 @@ func _veg_meta() -> Dictionary:
 	return JSON.parse_string(FileAccess.get_file_as_string(BUNDLED))
 
 
-func test_ct_veg_is_one_shader_with_a_modelled_and_a_card_variant() -> void:
+func test_ct_veg_is_a_solid_material_with_a_card_variant() -> void:
 	var meta := _veg_meta()
 	for lib: Variant in [_lib(["grass_cards"]), _lib([]), null]:
 		var mats := BoardgenDressMaterials.make(meta, lib)
@@ -116,14 +114,24 @@ func test_ct_veg_is_one_shader_with_a_modelled_and_a_card_variant() -> void:
 			var sm := mats[name] as ShaderMaterial
 			assert_object(sm).is_not_null()   # never null and never flat, with or without the atlas
 			assert_str(sm.resource_name).is_equal(name)
-			assert_object(sm.shader).is_equal(load(VEG_SHADER))
-			assert_float(sm.get_shader_parameter("albedo_scale")).is_equal_approx(0.14, 0.0001)
 			assert_float(sm.get_shader_parameter("wrap")).is_equal_approx(0.4, 0.0001)
 			assert_float(sm.get_shader_parameter("backlight")).is_equal_approx(0.7, 0.0001)
-			assert_float(sm.get_shader_parameter("alpha_scissor")).is_equal_approx(0.4, 0.0001)
-			assert_vector(sm.get_shader_parameter("card_tone")).is_equal_approx(Vector3(0.15, 0.15, 0.15), Vector3(0.0001, 0.0001, 0.0001))
-		assert_float((mats["ct_veg"] as ShaderMaterial).get_shader_parameter("use_cards")).is_equal(0.0)
-		assert_float((mats["ct_veg_card"] as ShaderMaterial).get_shader_parameter("use_cards")).is_equal(1.0)
+		var solid := mats["ct_veg"] as ShaderMaterial
+		var card := mats["ct_veg_card"] as ShaderMaterial
+		assert_object(solid.shader).is_equal(load(VEG_SOLID_SHADER))
+		assert_object(card.shader).is_equal(load(VEG_CARD_SHADER))
+		assert_float(solid.get_shader_parameter("albedo_scale")).is_equal_approx(0.14, 0.0001)
+		assert_float(card.get_shader_parameter("alpha_scissor")).is_equal_approx(0.4, 0.0001)
+		assert_vector(card.get_shader_parameter("card_tone")).is_equal_approx(Vector3(0.15, 0.15, 0.15), Vector3(0.0001, 0.0001, 0.0001))
+
+
+func test_a_variant_of_any_material_is_the_entry_with_the_variant_keys_laid_over_it() -> void:
+	var meta := {"materials": {"ct_x": {"colour": [0.5, 0.5, 0.5], "roughness": 0.3, "variants": {"dark": {"colour": [0.1, 0.1, 0.1]}}}}}
+	var mats := BoardgenDressMaterials.make(meta, null)
+	assert_array(mats.keys()).contains_exactly_in_any_order(["ct_x", "ct_x_dark"])
+	assert_object((mats["ct_x_dark"] as StandardMaterial3D).albedo_color).is_equal(Color(0.1, 0.1, 0.1))
+	assert_float((mats["ct_x_dark"] as StandardMaterial3D).roughness).is_equal_approx(0.3, 0.0001)
+	assert_str(mats["ct_x_dark"].resource_name).is_equal("ct_x_dark")
 
 
 func test_the_card_atlas_is_the_set_when_cached_else_transparent_so_nothing_is_drawn() -> void:
@@ -138,19 +146,34 @@ func test_the_card_atlas_is_the_set_when_cached_else_transparent_so_nothing_is_d
 		assert_object(missing.get_shader_parameter("atlas_dry")).is_same(missing.get_shader_parameter("atlas"))
 
 
-func test_the_veg_shader_declares_every_uniform_the_script_sets_and_keeps_its_contract() -> void:
-	var src := FileAccess.get_file_as_string(VEG_SHADER)
+## A shader's source with its #include files appended.
+func _source(path: String) -> String:
+	var src := FileAccess.get_file_as_string(path)
+	var rx := RegEx.new()
+	rx.compile("(?m)^#include \"([^\"]+)\"")
+	for m in rx.search_all(src):
+		src += "\n" + FileAccess.get_file_as_string(m.get_string(1))
+	return src
+
+
+func test_each_veg_shader_declares_exactly_the_uniforms_the_script_sets_and_keeps_its_contract() -> void:
+	var mats := BoardgenDressMaterials.make(_veg_meta(), _lib(["grass_cards"]))
 	var rx := RegEx.new()
 	rx.compile("(?m)^uniform \\w+ (\\w+)")
-	var declared: Array = []
-	for m in rx.search_all(src):
-		declared.append(m.get_string(1))
-	var sm := BoardgenDressMaterials.make(_veg_meta(), _lib(["grass_cards"]))["ct_veg_card"] as ShaderMaterial
-	for u: String in VEG_SET:
-		assert_bool(u in declared).override_failure_message("the veg shader lacks `%s`" % u).is_true()
-		assert_bool(sm.get_shader_parameter(u) != null).override_failure_message("the script never sets `%s`" % u).is_true()
-	for u: String in declared:
-		assert_bool(u in VEG_SET or u in VEG_RESERVED).override_failure_message("`%s` is declared but not set" % u).is_true()
-	for line in ["NORMAL = FRONT_FACING ? NORMAL : -NORMAL;", "render_mode cull_disabled", "discard;", "DIFFUSE_LIGHT +="]:
-		assert_bool(src.contains(line)).override_failure_message("the veg shader lost `%s`" % line).is_true()   # two-sided with one normal, alpha scissor, wrapped + backlit light
-
+	for spec: Array in [["ct_veg", VEG_SOLID_SHADER, VEG_SOLID_SET], ["ct_veg_card", VEG_CARD_SHADER, VEG_CARD_SET]]:
+		var src := _source(spec[1])
+		var expected: Array = spec[2]
+		var declared: Array = []
+		for m in rx.search_all(src):
+			declared.append(m.get_string(1))
+		var sm := mats[spec[0]] as ShaderMaterial
+		for u: String in expected:
+			assert_bool(u in declared).override_failure_message("%s lacks `%s`" % [spec[1], u]).is_true()
+			assert_bool(sm.get_shader_parameter(u) != null).override_failure_message("the script never sets `%s`" % u).is_true()
+		for u: String in declared:
+			assert_bool(u in expected).override_failure_message("`%s` is declared in %s but not set" % [u, spec[1]]).is_true()
+		for line in ["NORMAL = FRONT_FACING ? NORMAL : -NORMAL;", "render_mode cull_disabled", "DIFFUSE_LIGHT +="]:
+			assert_bool(src.contains(line)).override_failure_message("%s lost `%s`" % [spec[1], line]).is_true()   # two-sided with one normal, wrapped + backlit light
+	var solid := FileAccess.get_file_as_string(VEG_SOLID_SHADER)
+	assert_bool(solid.contains("discard;") or solid.contains("texture(") or solid.contains("ALPHA")).override_failure_message("the solid shader must keep early depth: no discard, no texture, no alpha").is_false()
+	assert_bool(FileAccess.get_file_as_string(VEG_CARD_SHADER).contains("ALPHA_SCISSOR_THRESHOLD = alpha_scissor;")).is_true()
