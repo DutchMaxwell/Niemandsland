@@ -1,7 +1,7 @@
 class_name BoardgenDress
 extends Node3D
-## The orchestrator of the ruin-town dressing (PLAN_RUINTOWN_DRESSING): the grid stays the gameplay truth, authored modules become the look. It asks every planner (one script per class of the board, written by
-## the lanes) for placements {module, xf (metres, board space), cls}, checks them against the honesty rules in a debug build, merges them into ONE mesh with one surface per shared material (DressMesh) plus
+## The orchestrator of the ruin-town dressing (docs/adr/0003-generated-board-dressing.md): the grid stays the gameplay truth, authored modules become the look. It asks every planner (one script per class of the board, so each class can be
+## added on its own) for placements {module, xf (metres, board space), cls}, checks them against the honesty rules in a debug build, merges them into ONE mesh with one surface per shared material (DressMesh) plus
 ## the low-poly shadow proxy (DressShadow), and lets a planner add what is not a module (build_extra). A class switches from the old look to the dressing only when its planner exists AND its modules are
 ## usable (kit cached, Medium and up); `classes()` names those classes so the old builders skip them. Without a kit nothing here is active.
 ## A planner script has `const MODULES: Array[String]`, `static func plan(layout, ctx) -> Array[Dictionary]` and optionally `static func build_extra(layout, parent: Node3D, ctx)`.

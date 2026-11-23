@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## BoardgenDress (PLAN_RUINTOWN_DRESSING step 8): which class draws which plan box, the planner interface with fake planners on the stub kit, the two nodes of a build, and the off switch.
+## BoardgenDress (docs/adr/0003-generated-board-dressing.md): which class draws which plan box, the planner interface with fake planners on the stub kit, the two nodes of a build, and the off switch.
 ## The switches are static: every test puts them back.
 
 const CLASSES := ["houses", "tiers", "ladders", "walls", "towers", "ground", "props", "clutter"]
@@ -22,7 +22,7 @@ func _fake(modules: Array, module: String, count: int) -> GDScript:
 	return s
 
 
-## Every class empty (null = no planner) so the files that other lanes add later do not change these tests.
+## Every class empty (null = no planner) so planner files added later do not change these tests.
 func _only(houses: GDScript) -> void:
 	BoardgenDress.test_planners = {}
 	for c in CLASSES:

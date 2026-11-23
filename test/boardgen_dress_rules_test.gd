@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
-## The honesty rules of the dressing (PLAN_RUINTOWN_DRESSING step 5): the grid helpers (5a) and, from 5b, R1 / R2 / R4 on placements: a hand-made CLEAN set (house panels, tier faces, parapets, ladders, litter, a lamp post,
-## junk on terrain) on real town boards reports nothing; each planted break is reported. The numbers of the modules are the nominal K0 manifest numbers (inches); R3 and R5 joined in step 5c.
+## The honesty rules of the dressing (docs/adr/0003-generated-board-dressing.md): the grid helpers and R1 / R2 / R4 on placements: a hand-made CLEAN set (house panels, tier faces, parapets, ladders, litter, a lamp post,
+## junk on terrain) on real town boards reports nothing; each planted break is reported. The numbers of the modules are the nominal numbers of the first kit manifest (inches); R3 and R5 have their own tests below.
 
 const SEEDS := [41, 25, 3]
 const R := preload("res://scripts/boardgen_dress_rules.gd")

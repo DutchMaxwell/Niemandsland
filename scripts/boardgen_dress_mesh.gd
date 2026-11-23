@@ -1,6 +1,6 @@
 class_name BoardgenDressMesh
 extends RefCounted
-## The merge of the ruin-town dressing (PLAN_RUINTOWN_DRESSING): every placement {module, xf (metres, board space), cls} of the planners becomes geometry of ONE mesh with one surface per shared material
+## The merge of the ruin-town dressing (docs/adr/0003-generated-board-dressing.md): every placement {module, xf (metres, board space), cls} of the planners becomes geometry of ONE mesh with one surface per shared material
 ## (sorted by name, each surface named by its material), so the whole board is a handful of draw calls. The vertex data of the modules is kept as authored - tangents come with the GLBs, nothing is
 ## generated here (generate_tangents on a merged mesh costs over a second). `shadow` is the low-poly proxy that casts the shadows: one surface of boxes from the modules' hull lists.
 

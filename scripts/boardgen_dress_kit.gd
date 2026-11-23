@@ -1,6 +1,6 @@
 class_name BoardgenDressKit
 extends RefCounted
-## The module kit of the ruin-town dressing (PLAN_RUINTOWN_DRESSING): the manifest (assets/ruintown_dress.json: one entry per module with its numbers, plus the materials / ground / sets blocks) and the
+## The module kit of the ruin-town dressing (docs/adr/0004-dressing-materials-and-kit-manifest.md): the manifest (assets/ruintown_dress.json: one entry per module with its numbers, plus the materials / ground / sets blocks) and the
 ## module meshes. A module's GLB comes from the town's BoardgenKit (cached_path: the dev folder NML_RUINTOWN_KIT_DIR or the delivery cache); every surface keeps its own name = the shared material it is drawn
 ## with (the GLB's material name), so the merge can put all modules of one material into one surface. `force_stub` (tests) draws every module as a box of its aabb: no GLB needed. Meshes are in metres.
 

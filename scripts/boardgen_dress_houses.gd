@@ -1,6 +1,6 @@
 class_name BoardgenDressHouses
 extends RefCounted
-## The house planner of the ruin-town dressing (PLAN_RUINTOWN_DRESSING step 11): walls, corners and doors of every Roofed lot. Gables, roofs and chimneys arrive in step 12.
+## The house planner of the ruin-town dressing (docs/adr/0003-generated-board-dressing.md): walls, corners and doors of every Roofed lot. Gables, roofs and chimneys are not dressed yet.
 ## Pure data, board inches: one panel per free cell edge (neighbour top below the house's 2.5 in), the middle edge of the lot's frontage carries the one door, the four lot corners carry a post /
 ## quoin flush inside the lot. Style, picks and damage come from BoardgenDressStory; every transform comes from BoardgenDressRules.face_xf. Panels lean IN by the KNOBS angle (out would poke over R1).
 
