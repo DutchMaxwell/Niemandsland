@@ -19,8 +19,7 @@ func before_test() -> void:
 	MissionCatalog._catalog()["six_round_fixture"] = {
 		"name": "Six Round Fixture", "family": "face_off", "rounds": 6, "scoring": "end",
 		"deployment": "front_line", "markers": {"count": 3, "placement": "table_centre"}}
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 
 
 func after_test() -> void:

@@ -25,9 +25,8 @@ func before_test() -> void:
 		"reserves": {"who": "both", "arrive_on": 4, "from_round": 2, "zone": "edge_band_12",
 			"gates": {"min_from_enemy_in": 12, "min_from_marker_in": 12}},
 		"markers": {"count": 1, "placement": "table_centre"}}
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
-	_main._solo_batch = true
+	SoloHarness.start(_main, [2])
+	SoloHarness.instant(_main)
 
 
 func after_test() -> void:

@@ -55,11 +55,10 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_real_net = _main.network_manager   # kept for the receive side (its handler is call_remote)
 	_fake = auto_free(WireNet.new())
 	_main.network_manager = _fake
@@ -291,7 +290,7 @@ func test_a_landing_preview_sends_no_pass_or_reinforcement_frame(timeout := 1200
 	var guard0: Variant = MovementPlanner.fast_planner_guard
 	MovementPlanner.fast_planner = false   # deterministic precise planner (as e2e_auto_preview_test.gd)
 	MovementPlanner.fast_planner_guard = MovementPlanner.FAST_PLANNER_GUARD
-	_main._solo_fast = true
+	SoloHarness.fast(_main)
 	_ai_pass_table()
 	var shaken_ai := _carrier("Clan Rats", 3, 2)
 	shaken_ai.is_shaken = true

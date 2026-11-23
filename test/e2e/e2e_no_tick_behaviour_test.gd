@@ -22,7 +22,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 
 
 func after_test() -> void:
@@ -45,7 +45,7 @@ func _reg(pid: int, unit_name: String, at: Vector3, rules: Array = [], models: i
 
 func _automatic() -> void:
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
-	_main._solo_batch = false   # the deployment gate (and its set-aside) skips unattended runs
+	SoloHarness.instant(_main, false)   # the deployment gate (and its set-aside) skips unattended runs
 	_main._ensure_solo_controller()   # (a) the geometry controller
 	assert_bool(_main.solo_ai_slots.is_empty()).override_failure_message("fixture: no tick").is_true()
 
@@ -80,7 +80,7 @@ func test_a_removed_tick_leaves_no_ai_queue_behind(timeout := 120000) -> void:
 	assert_int(_main.solo_controller.deploy_begin(zone, [], Callable(), Callable(), 7)) \
 		.override_failure_message("fixture: the ticked game's queue").is_greater(0)
 	_main._on_solo_ai_toggled(false, 2)
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	var before: Vector3 = (raiders.models[0] as ModelInstance).node.global_position
 	var start: int = _main.battle_log.entries().size()
 	await _activate(rifles)
