@@ -438,6 +438,9 @@ pub struct Ctx {
     /// `EPOCH_75_TABLE_FIXES` (#2613) — a once-per-game Regeneration entry (`uses_per_game > 0`, Protection Feat)
     /// held ASIDE: `sim::ctx_live` folds it only while the bearer's `feats_used` latch is open. 0 = none.
     pub regen_feat: i64,
+    /// 29a: the once-per-game ignore rule whose latch is already closed (`sim::ctx_live`): the save says "already used it this game"
+    /// where it would have rolled ("" = none, or still open).
+    pub regen_feat_spent: &'static str,
     /// MOR-17a (rules 3.6, `EPOCH_73_V36`) — Warding / Knightborn / Angelic
     /// Blessing ignore a non-spell wound on a 6+ ONLY when the unit was shot
     /// from over this many inches. 0.0 = ungated (the old entry, every unit
@@ -4122,6 +4125,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         regen_pending_notes: regen_targets.9,
         regen_note: "",
         regen_feat: regen_targets.6,
+        regen_feat_spent: "",
         regen_gate_over_in: regen_targets.4,
         regen_gate_charge_in: regen_targets.5,
         regen_named: regen_targets.7,
