@@ -4913,6 +4913,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         let unit = &statics[state.roster.profile[i]].name;
         if state.feats_used[i].iter().any(|n| n == PROTECTION_FEAT) {
             trace_rule("protection-feat", unit, "already used it this game -> no ignore roll");
+            c.regen_feat_spent = if c.regen_pending_notes[3].is_empty() { PROTECTION_FEAT } else { c.regen_pending_notes[3] };
         } else {
             c.regeneration = true;
             c.regen_target = fold_min(c.regen_target, c.regen_feat);

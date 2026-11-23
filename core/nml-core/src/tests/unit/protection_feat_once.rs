@@ -114,3 +114,16 @@ fn one_volley_rolls_the_feat_for_every_wound_group_at_95_and_96() {
         assert_eq!(feat_rolls(&out), deadly + 1, "{e}: one Feat roll per Deadly wound plus the pool: {:?}", out.rolls);
     }
 }
+
+/// 29a: once the real aof/saurians Protection Feat is spent, the save moment's context names it as spent (`regen_feat_spent`), so the
+/// ignore step can say "already used it this game"; while the latch is open it names nothing. RED before 29a: the field did not exist.
+#[test]
+fn a_spent_feat_is_named_on_the_next_save_moment() {
+    let e = crate::acts::EPOCH_75_TABLE_FIXES;
+    let (us, profile) = pf_unit(e);
+    let mut st = pf_state(profile);
+    let live = |st: &crate::state::State| crate::sim::ctx_live(crate::sim::ctx_of(&us, st, 0), std::slice::from_ref(&us), st, 0, false, e);
+    assert_eq!(live(&st).regen_feat_spent, "", "open latch: nothing spent yet");
+    assert!(volley(&us, &mut st, e).caused > 0, "fixture seed no longer wounds");
+    assert_eq!(live(&st).regen_feat_spent, "Protection Feat");
+}

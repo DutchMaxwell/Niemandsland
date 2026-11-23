@@ -2930,6 +2930,10 @@ pub(crate) fn ignore_batch(
     if pool.max(0) + bypass > 0 && !def.regen_note.is_empty() {
         say_rule(tray, "ignore", def.side, || format!("{def_owner} — {}", def.regen_note));
     }
+    // 29a: a once-per-game ignore rule already spent says so where it would have rolled (the table's PF-a line).
+    if pool.max(0) + bypass > 0 && !def.regen_feat_spent.is_empty() {
+        say_rule(tray, "ignore", def.side, || format!("{}: {def_owner} already used it this game — no ignore roll", def.regen_feat_spent));
+    }
     if pool.max(0) + bypass > 0 && def.regeneration && !def.regen_most_name.is_empty() {
         say_rule(tray, "ignore", def.side, || format!("{def_owner} — {}: most models carry it, so a joined hero without it does not switch it off", def.regen_most_name));
     }
