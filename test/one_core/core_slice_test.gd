@@ -327,8 +327,13 @@ func test_deny_mode_refuses_the_rules_whose_table_line_the_door_omits() -> void:
 	OS.set_environment("NML_CORE_SLICE", "deny")
 	CoreSlice.reset_cache()
 	var rep: Array = [
-		["Grounded Protection", "soul_snatcher_cults"], ["Protection Feat", "alien_hives"],
+		["Grounded Protection", "soul_snatcher_cults"],
 	]
+	# Protection Feat left the names after 29a: its already-used line is the core's tray line, the spend line the door's `_land_feats` (core_protection_feat_lift_test).
+	var feat := _unit(["Protection Feat"], [[]])
+	feat.unit_properties["faction_folder"] = "alien_hives"
+	assert_array(CoreSlice.refusals(feat)).override_failure_message("Protection Feat as a unit rule is taken").is_empty()
+	assert_array(CoreSlice.refusals(feat, true)).override_failure_message("Protection Feat on a target is taken").is_empty()
 	for row in rep:
 		var as_unit := _unit([row[0]], [[]])
 		if row[1] != "":

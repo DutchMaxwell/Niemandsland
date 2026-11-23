@@ -12219,9 +12219,6 @@ func _solo_choice_local(unit: GameUnit, id: String, options: Array, wounds := 0,
 		return ""
 	if id.get_slice(":", 0) == "wound_alloc":
 		return await _solo_pick_wound_slots(opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2)), options, wounds)
-	if id.get_slice(":", 0) == "versatile_mode":   # step 22b: the table's own Versatile prompt, the answer as the core's option
-		var vm: Dictionary = await _solo_prompt_versatile(str(ctx.get("weapon", "Weapon")), ctx.get("recommended", {"ap": 1, "hit_mod": 0}))
-		return "ap" if int(vm.get("ap", 0)) > 0 else "hit"
 	if id.get_slice(":", 0) != "takedown_model":
 		return ""
 	var target := opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2))
