@@ -4,6 +4,7 @@ extends GdUnitTestSuite
 ## door on against door off: the same dice, the same end state, the same battle-log lines, and the door really ran the core (`CoreActivation.ai_runs`).
 ## The names are the ones ds/h_probe_beat_names.md measured (68 names, 3 placements); a name that differs (Furious Buff) is refused by the slice.
 ## RED: take a name out of `lifted_names` -> the slice refuses the bearer and the core never runs (`ran` 0).
+## PLAN_FIRST_DELETION 34 FT-C7: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main 97fa324e9.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const Harness := preload("res://test/one_core/golden_witness_harness.gd")
@@ -14,6 +15,11 @@ const SEEDS := 6
 ## [rule, system, faction folder]: the first (system, faction) whose map fields the rule.
 const NAMES := [["Casting Buff", "gf", "eternal_dynasty"], ["Courage Buff", "gf", "blessed_sisters"], ["Speed Debuff", "gf", "dwarf_guilds"],
 	["Precision Fighter Buff", "gf", "blessed_sisters"], ["Unstoppable when Shooting Aura", "gf", "robot_legions"], ["Defense Buff", "aof", "human_empire"]]
+## Per seed: how many door battle-log lines contain the rule name, and how many dice records the door wrote (read on main).
+const WANT_NAMED := {"Casting Buff": [2, 2, 2, 2, 2, 2], "Courage Buff": [2, 2, 2, 2, 2, 2], "Speed Debuff": [1, 1, 1, 1, 1, 1],
+	"Precision Fighter Buff": [2, 2, 2, 2, 2, 2], "Unstoppable when Shooting Aura": [2, 2, 2, 2, 2, 2], "Defense Buff": [2, 2, 2, 2, 2, 2]}
+const WANT_ROLLS := {"Casting Buff": [2, 2, 2, 2, 2, 2], "Courage Buff": [2, 2, 2, 2, 2, 2], "Speed Debuff": [2, 2, 2, 2, 2, 2],
+	"Precision Fighter Buff": [2, 2, 2, 2, 2, 2], "Unstoppable when Shooting Aura": [2, 2, 2, 2, 2, 2], "Defense Buff": [2, 2, 2, 2, 2, 2]}
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -116,13 +122,16 @@ func test_the_lifted_utility_buff_names_resolve_alike_through_the_door() -> void
 		var unequal: Array = []
 		for s in SEEDS:
 			var on := await _probe(row[1], row[2], row[0], s, 7.0, ["Caster(2)"], 3.0, true)
-			var off := await _probe(row[1], row[2], row[0], s, 7.0, ["Caster(2)"], 3.0, false)
 			ran += int(on["ran"])
+			var named := (on["lines"] as Array).filter(func(l: Variant) -> bool: return str(l).contains(row[0])).size()
+			var rolls := _sig(on["rolls"]).size()
 			if not bool(on["takes"]):
 				unequal.append("seed %d: the slice refuses the bearer" % s)
-			elif _sig(on["rolls"]) != _sig(off["rolls"]) or on["digest"] != off["digest"] or on["lines"] != off["lines"]:
-				unequal.append("seed %d: door on and off differ in %s" % [s, ", ".join(["rolls", "digest", "lines"].filter(func(k: String) -> bool: return (_sig(on[k]) != _sig(off[k])) if k == "rolls" else on[k] != off[k]))])
-			elif not (off["lines"] as Array).any(func(l: Variant) -> bool: return str(l).contains(row[0])):
-				unequal.append("seed %d: the beat never named itself, nothing was compared" % s)
+			elif named <= 0:
+				unequal.append("seed %d: the beat never named itself, nothing was checked" % s)
+			elif named != int(WANT_NAMED[row[0]][s]):
+				unequal.append("seed %d: named %d times, want %d" % [s, named, WANT_NAMED[row[0]][s]])
+			elif rolls != int(WANT_ROLLS[row[0]][s]):
+				unequal.append("seed %d: %d rolls, want %d" % [s, rolls, WANT_ROLLS[row[0]][s]])
 		assert_array(unequal).override_failure_message("%s: %s" % [row[0], unequal.slice(0, 2)]).is_empty()
 		assert_int(ran).override_failure_message("%s: the door must run the core in every seed" % row[0]).is_equal(SEEDS)

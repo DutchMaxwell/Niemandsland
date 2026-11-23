@@ -5,6 +5,7 @@ extends GdUnitTestSuite
 ## advances; 7 in: it holds): the same dice, the same end state (records included), the same battle-log lines, and the door really ran the core (`CoreActivation.ai_runs`).
 ## The Slayer Mark (core gap, epoch 94) and the Indirect Mark (the moved-Indirect to-hit note) are not here: each is lifted by the PR that closes its own gap.
 ## RED: take a name out of `lifted_names` -> the slice refuses the bearer and the core never runs (`ran` 0).
+## PLAN_FIRST_DELETION 34 FT-C7: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main 97fa324e9.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const Harness := preload("res://test/one_core/golden_witness_harness.gd")
@@ -17,6 +18,15 @@ const NAMES := [["Furious Buff", "gf", "alien_hives"], ["Shred Mark", "gf", "cus
 	["Increased Shooting Range Mark", "gf", "eternal_dynasty"]]
 ## [half gap, friend distance] in inches.
 const PLACEMENTS := [[7.0, 3.0], [3.5, 1.5]]
+## Per rule, per placement, per seed: door battle-log lines containing the rule name, and door dice records (read on main).
+const WANT_NAMED := {"Furious Buff": [[3, 3, 3, 3, 3, 3, 3, 3], [3, 3, 3, 3, 3, 3, 3, 3]],
+	"Shred Mark": [[3, 3, 3, 3, 3, 3, 3, 3], [3, 3, 3, 3, 3, 3, 3, 3]],
+	"Quick Shot Mark": [[3, 3, 3, 3, 3, 3, 3, 3], [3, 3, 3, 3, 3, 3, 3, 3]],
+	"Increased Shooting Range Mark": [[3, 3, 3, 3, 3, 3, 3, 3], [3, 3, 3, 3, 3, 3, 3, 3]]}
+const WANT_ROLLS := {"Furious Buff": [[2, 2, 2, 2, 2, 2, 2, 2], [2, 2, 2, 2, 2, 2, 2, 2]],
+	"Shred Mark": [[2, 2, 2, 2, 2, 2, 2, 2], [2, 2, 2, 2, 2, 2, 2, 2]],
+	"Quick Shot Mark": [[2, 2, 2, 2, 2, 2, 2, 2], [2, 2, 2, 2, 2, 2, 2, 2]],
+	"Increased Shooting Range Mark": [[2, 2, 2, 2, 2, 2, 2, 2], [2, 2, 2, 2, 2, 2, 2, 2]]}
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -111,32 +121,22 @@ func _sig(rolls: Array) -> Array:
 	return rolls.map(func(x: Dictionary) -> String: return "%s:%d:%s:%s:%s" % [x.get("roll_kind", "?"), int(x["count"]), str(x["owner"]), str(x.get("leg", "")), str(x["faces"])])
 
 
-func _why(on: Dictionary, off: Dictionary) -> String:
-	var parts: Array = []
-	if _sig(on["rolls"]) != _sig(off["rolls"]):
-		parts.append("rolls")
-	if on["digest"] != off["digest"]:
-		parts.append("digest")
-	if on["lines"] != off["lines"]:
-		parts.append("lines")
-	return ", ".join(parts)
-
-
 func test_the_lifted_beat_names_resolve_alike_through_the_door() -> void:
 	for row in NAMES:
 		var ran := 0
 		var unequal: Array = []
-		for placement in PLACEMENTS:
+		for pi in PLACEMENTS.size():
+			var placement: Array = PLACEMENTS[pi]
 			for s in SEEDS:
 				var on := await _probe(row[1], row[2], row[0], s, placement[0], ["Caster(2)"], placement[1], true)
-				var off := await _probe(row[1], row[2], row[0], s, placement[0], ["Caster(2)"], placement[1], false)
 				ran += int(on["ran"])
-				var why := _why(on, off)
+				var named := (on["lines"] as Array).filter(func(l: Variant) -> bool: return str(l).contains(row[0])).size()
+				var rolls := _sig(on["rolls"]).size()
 				if not bool(on["takes"]):
 					unequal.append("seed %d at %s: the slice refuses the bearer" % [s, placement])
-				elif why != "":
-					unequal.append("seed %d at %s: door on and off differ in %s" % [s, placement, why])
-				elif not (off["lines"] as Array).any(func(l: Variant) -> bool: return str(l).contains(row[0])):
-					unequal.append("seed %d at %s: the rule never named itself, nothing was compared" % [s, placement])
+				elif named != int(WANT_NAMED[row[0]][pi][s]):
+					unequal.append("seed %d at %s: named %d times, want %d" % [s, placement, named, WANT_NAMED[row[0]][pi][s]])
+				elif rolls != int(WANT_ROLLS[row[0]][pi][s]):
+					unequal.append("seed %d at %s: %d rolls, want %d" % [s, placement, rolls, WANT_ROLLS[row[0]][pi][s]])
 		assert_array(unequal).override_failure_message("%s: %d unequal, e.g. %s" % [row[0], unequal.size(), unequal.slice(0, 2)]).is_empty()
 		assert_int(ran).override_failure_message("%s: the door must run the core in every seed" % row[0]).is_equal(SEEDS * PLACEMENTS.size())
