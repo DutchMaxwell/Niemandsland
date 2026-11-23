@@ -1,6 +1,7 @@
 class_name Units
 extends RefCounted
-## Unit conversions shared by the game: board measures are in inches, the 3D world is in metres, base sizes in millimetres.
+## Unit conversions shared by the game: board measures are in inches, the 3D world is in metres,
+## base sizes in millimetres.
 
 ## Inches to metres: value_in * INCHES_TO_METERS.
 const INCHES_TO_METERS := 0.0254
