@@ -1,0 +1,5 @@
+# gdlint configuration (gdtoolkit 4.5.0), kept minimal: every key not listed keeps the tool default.
+# docs/CODING_STANDARDS.md sets no explicit width, so this pins the gdtoolkit default of 100 - the
+# width tools/gdlint_clean.txt was measured with. Lint problems are reported per file; the CI gate
+# (tools/format_gate.sh) covers the allowlisted files.
+max-line-length: 100
