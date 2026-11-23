@@ -6,12 +6,19 @@ extends GdUnitTestSuite
 ## RNG after, and the battle-log lines (as a multiset: the core's declaration line stands where the table's sight line does).
 ## Real: the main scene, NmlCore, both doors (`_run_ai_shooting`, `_run_human_attack`), the table's volley and spend.
 ## Constructed: plain units (ParityTable), the pool written onto the target's properties. NML_ONE_CORE_SEEDS overrides 20.
+## PLAN_FIRST_DELETION 34 FT-C4: the table arm left before step 31 (the AI table resolver retires); door values are pinned as
+## literals read on main af5c83610.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 	"faction_folder": "robot_legions", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
+## The target's alive models per seed (0-4), read on main from the table volley.
+const WANT_ALIVE_SPEND := [0, 0, 3, 3, 1, 2, 2, 2, 3, 4, 2, 5, 4, 3, 0, 3, 1, 3, 2, 2]
+const WANT_ALIVE_STANDING := [0, 0, 3, 3, 1, 2, 2, 2, 3, 4, 2, 5, 4, 3, 0, 3, 1, 3, 2, 2]
+const WANT_ALIVE_NO_POOL := [0, 2, 3, 5, 3, 3, 3, 2, 4, 4, 2, 5, 5, 4, 1, 3, 1, 4, 3, 2]
+const WANT_ALIVE_BELOW_73 := [0, 0, 1, 2, 0, 0, 0, 0, 2, 4, 2, 4, 3, 3, 0, 2, 1, 3, 2, 0]
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -110,29 +117,40 @@ func _volley(door: String, s: int, markers: int, source: String, core_run: bool)
 	return out
 
 
-func _sweep(door: String, markers: int, source: String, want_pool: int, want_spent: int) -> void:
+func _sweep(door: String, markers: int, source: String, want_pool: int, want_spent: int, want_alive: Array = []) -> void:
 	var seeds := int(OS.get_environment("NML_ONE_CORE_SEEDS")) if OS.has_environment("NML_ONE_CORE_SEEDS") else 20
+	var compare := door == "human"
 	var bad: Array = []
 	var hurt := 0
+	if not compare and seeds > want_alive.size():
+		bad.append("%d seeds exceed the %d pinned values" % [seeds, want_alive.size()])
 	for s in seeds:
-		var table := await _volley(door, s, markers, source, false)
+		var table: Dictionary = {}
+		if compare:
+			table = await _volley(door, s, markers, source, false)
 		var core := await _volley(door, s, markers, source, true)
 		hurt += 5 - (core["survivors"] as Array).size()
-		if not core["core"] or table["core"]:
-			bad.append("seed %d: the core door took it: %s (core run), %s (table run)" % [s, core["core"], table["core"]])
-		for k in ["survivors" if AiActRecorder.rules_epoch >= 73 else "alive", "shaken", "rng", "pool", "lines"]:   # below 73 the table and the core pick different casualties
-			if table[k] != core[k]:
-				bad.append("seed %d: %s: table %s, core %s" % [s, k, table[k], core[k]])
+		if not core["core"]:
+			bad.append("seed %d: the core door did not take the volley" % s)
+		if compare and table["core"]:
+			bad.append("seed %d: the table run took the volley too" % s)
+		if compare:
+			for k in ["survivors" if AiActRecorder.rules_epoch >= 73 else "alive", "shaken", "rng", "pool", "lines"]:   # below 73 the table and the core pick different casualties
+				if table[k] != core[k]:
+					bad.append("seed %d: %s: table %s, core %s" % [s, k, table[k], core[k]])
+		else:
+			if s < want_alive.size() and int(core["alive"]) != int(want_alive[s]):
+				bad.append("seed %d: alive %d (want %d)" % [s, core["alive"], int(want_alive[s])])
 		if int(core["pool"]) != want_pool or (core["spent"] as Array).size() != want_spent:
 			bad.append("seed %d: pool %d (want %d), spend lines %s (want %d)" % [s, core["pool"], want_pool, core["spent"], want_spent])
 	print("PIERCING_TAG door=%s markers=%d %s seeds=%d hurt=%d mismatches=%d" % [door, markers, source, seeds, hurt, bad.size()])
 	assert_int(hurt).override_failure_message("no seed hurt the target: the sweep compares nothing").is_greater(0)
-	assert_array(bad).override_failure_message("core vs table:\n" + "\n".join(bad.slice(0, 10))).is_empty()
+	assert_array(bad).override_failure_message("the door run:\n" + "\n".join(bad.slice(0, 10))).is_empty()
 
 
 ## The 3.6 rule (epoch 73+): one token per volley, +1 AP. RED: remove the `_spend_tag` calls -> the pool stays 2 and no line.
 func test_the_ai_door_spends_one_token(timeout := 600000) -> void:
-	await _sweep("ai", 2, "", 1, 1)
+	await _sweep("ai", 2, "", 1, 1, WANT_ALIVE_SPEND)
 
 
 func test_the_human_door_spends_one_token(timeout := 600000) -> void:
@@ -141,15 +159,15 @@ func test_the_human_door_spends_one_token(timeout := 600000) -> void:
 
 ## "Piercing Target" stands while its bearer lives: the pool is read, never spent; the line says so.
 func test_a_standing_piercing_target_is_not_spent(timeout := 600000) -> void:
-	await _sweep("ai", 2, "Piercing Target", 2, 1)
+	await _sweep("ai", 2, "Piercing Target", 2, 1, WANT_ALIVE_STANDING)
 
 
 ## No pool: no line, nothing written.
 func test_no_pool_no_line(timeout := 600000) -> void:
-	await _sweep("ai", 0, "", 0, 0)
+	await _sweep("ai", 0, "", 0, 0, WANT_ALIVE_NO_POOL)
 
 
 ## Before the 3.6 epoch the whole pool is spent at once (+AP per marker).
 func test_below_epoch_73_the_whole_pool_is_spent(timeout := 600000) -> void:
 	AiActRecorder.rules_epoch = 72
-	await _sweep("ai", 2, "", 0, 1)
+	await _sweep("ai", 2, "", 0, 1, WANT_ALIVE_BELOW_73)
