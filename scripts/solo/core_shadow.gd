@@ -604,13 +604,20 @@ static func _legality(main, r: Dictionary, diff: String, units: Array) -> String
 
 
 ## The checker over `units` on the board as the table holds it now. A board that cannot be captured reads one "unchecked" entry,
-## never an empty (legal-looking) list. Also read by the roster sweep's table half.
+## never an empty (legal-looking) list. Also read by the roster sweep's table half. A named unit's joined heroes are read with it: the
+## core's own list names every unit that moved, a joined hero included (a joined hero's forbidden rest stood on both boards but read as
+## core-only, because the table half checked only the host and the target).
 static func table_illegal(main, units: Array) -> Array:
 	var core: Object = main.solo_controller._core_node_ready()
 	var h := CoreActivation.capture(main) if core != null else 0
 	if h == 0:
 		return [{"kind": "unchecked"}]
-	var keys := PackedStringArray(units.map(func(u: GameUnit) -> String: return u.unit_id))
+	var named: Array = []
+	for u in units:
+		for w in [u] + (u as GameUnit).get_attached_heroes():
+			if not named.has(w):
+				named.append(w)
+	var keys := PackedStringArray(named.map(func(u: GameUnit) -> String: return u.unit_id))
 	var out: Array = core.check_rest(h, keys).get("illegal", [{"kind": "unchecked"}])
 	core.release(h)
 	return out
