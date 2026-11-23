@@ -125,9 +125,11 @@ func test_the_core_writes_the_tables_lines_for_a_lone_hero(timeout := 120000) ->
 	assert_array(core).override_failure_message("the core's lines differ from the literal:\ncore  %s" % [core]).is_equal(WANT_LINES)
 
 
-## Below 83 the core would shoot the dead host: the same volley under a replay stamp stays on the table, which still says the line.
+## Below 83 the core would shoot the dead host: the core refuses the volley under a replay stamp, and since PLAN_FIRST_DELETION step 31
+## the table holds it with its line (it no longer resolves volleys).
 func test_an_older_stamp_stays_on_the_table(timeout := 120000) -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_83_LONE_HERO_TARGET - 1
 	var lines := await _volley(true)
 	assert_int(CoreActivation.ai_runs).override_failure_message("the core took a lone-hero volley below 83").is_equal(0)
-	assert_str("\n".join(lines)).contains("Hero: Champion is the unit now")
+	assert_str("\n".join(lines)).contains("Gunners: no volley — the rules core cannot resolve this volley")
+	assert_str("\n".join(lines)).not_contains("Hero: Champion is the unit now")

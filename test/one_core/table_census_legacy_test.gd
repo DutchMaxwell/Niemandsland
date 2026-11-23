@@ -149,7 +149,8 @@ func test_counting_draws_no_dice_and_writes_no_line() -> void:
 	assert_array(lines).override_failure_message("the counter wrote a battle-log line").is_empty()
 
 
-func test_the_ai_volley_door_counts_a_volley_the_table_resolved() -> void:
+## PLAN_FIRST_DELETION step 31: the volley the core refuses is HELD - census key `held`, no die.
+func test_the_ai_volley_door_counts_a_volley_the_table_held() -> void:
 	await _boot()
 	var rifle := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 5, "rules": ["Blast(3)"]}
 	var att := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Att", "models": 5, "x_in": -10.0}), rifle)
@@ -157,11 +158,12 @@ func test_the_ai_volley_door_counts_a_volley_the_table_resolved() -> void:
 	_main.seed_tray_rng(5)
 	var rng_before: int = _main._tray_rng.state
 	await _main._run_ai_shooting({"unit": att, "moved": false})
-	var d: Dictionary = CoreActivation.legacy.get("ai_volley", {})
-	assert_int(d.get("_all", 0)).override_failure_message("the table volley was not counted: %s" % [d]).is_equal(1)
+	assert_bool(CoreActivation.legacy.has("ai_volley")).override_failure_message("the retired key ai_volley was written").is_false()
+	var d: Dictionary = CoreActivation.legacy.get("held", {})
+	assert_int(d.get("_all", 0)).override_failure_message("the held volley was not counted: %s" % [CoreActivation.legacy]).is_equal(1)
 	assert_int(d.get("weapon_rule:Blast", 0)).is_equal(1)
 	assert_int(d.get("no_handle", 0)).is_equal(1)   # a direct call has no AI-body capture
-	assert_int(_main._tray_rng.state).override_failure_message("fixture broken: no die was thrown").is_not_equal(rng_before)
+	assert_int(_main._tray_rng.state).override_failure_message("a die was thrown for a held volley").is_equal(rng_before)
 	assert_int(foe.models.size()).is_equal(5)
 	await E2EBoot.settle(get_tree())
 
@@ -188,7 +190,8 @@ func test_the_human_shoot_door_counts_a_table_volley() -> void:
 	await E2EBoot.settle(get_tree())
 
 
-func test_the_strafe_door_counts_a_table_volley() -> void:
+## PLAN_FIRST_DELETION step 31: the strike is HELD - census key `held_strike`, no die.
+func test_the_strafe_door_counts_a_held_strike() -> void:
 	await _boot()
 	var epoch_before := AiActRecorder.rules_epoch
 	AiActRecorder.rules_epoch = 75   # the strafing volley exists from the v3.6 rules epochs on
@@ -203,8 +206,9 @@ func test_the_strafe_door_counts_a_table_volley() -> void:
 	_main.solo_controller.human_slot = 1
 	await _main._solo_apply_strafing(att)
 	AiActRecorder.rules_epoch = epoch_before
-	var d: Dictionary = CoreActivation.legacy.get("ai_strafe", {})
-	assert_int(d.get("_all", 0)).override_failure_message("the strafe volley was not counted: %s" % [CoreActivation.legacy]).is_equal(1)
+	assert_bool(CoreActivation.legacy.has("ai_strafe")).override_failure_message("the retired key ai_strafe was written").is_false()
+	var d: Dictionary = CoreActivation.legacy.get("held_strike", {})
+	assert_int(d.get("_all", 0)).override_failure_message("the held strike was not counted: %s" % [CoreActivation.legacy]).is_equal(1)
 	# P4.D-37: Strafing is in the slice (activation_level), so the weapon is no reason; the strike the table makes anyway is named.
 	assert_int(d.get("move_through", 0)).is_equal(1)
 	assert_int(d.get("weapon_rule:Crossing Strike", 0)).is_equal(0)

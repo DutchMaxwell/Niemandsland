@@ -24,8 +24,6 @@ const BLOCKERS: Array[Dictionary] = [
 		"header": "static func refusals(", "needles": ["not gu.source_data is OPRApiClient.OPRUnit"]},
 	{"name": "parity_table_melee.gd drives the melee resolver", "retire": "P4.D-49", "file": PARITY_MELEE, "header": "",
 		"needles": ["main._run_ai_melee("]},
-	{"name": "Strafing hands its volley to the AI resolver", "retire": "P4.D-37", "file": MAIN,
-		"header": "func _solo_apply_strafing(", "needles": ["await _solo_resolve_ai_volley(unit, target, shots, true)"]},
 	# PLAN H (H-4): the facts the table-remains plan retires.
 	{"name": "the AI body runs the pre-attack beats itself (Breath Attack before the volley)", "retire": "P4.D-41 / H-5..H-9", "file": MAIN,
 		"header": "func _solo_activate_one_ai_body(", "needles": ["await _solo_apply_breath_attack(unit)"]},
@@ -80,7 +78,7 @@ func test_every_deletion_blocker_still_holds() -> void:
 
 
 func test_the_list_is_not_empty_and_names_a_step_per_row() -> void:
-	assert_int(BLOCKERS.size()).is_greater_equal(9)
+	assert_int(BLOCKERS.size()).is_greater_equal(8)   # 9 until PLAN_FIRST_DELETION step 31 retired the Strafing row
 	for b in BLOCKERS:
 		assert_str(String(b["retire"])).override_failure_message("%s names no step" % b["name"]).contains("P4.D-")
 
@@ -146,3 +144,12 @@ func test_the_human_door_reads_the_live_slice() -> void:
 	for b in BLOCKERS:
 		assert_str(String(b["name"])).override_failure_message("the retired row is still in BLOCKERS").is_not_equal(
 			"the human door reads the allow file, not the live slice")
+
+
+## PLAN_FIRST_DELETION step 31 retired the row "Strafing hands its volley to the AI resolver": no production line of main.gd awaits the
+## AI resolver any more - the AI volley the core refuses and the move-through strike are HELD with a line (`held`, `held_strike`).
+## RED: put either `await _solo_resolve_ai_volley(` call back.
+func test_no_production_line_calls_the_ai_resolver() -> void:
+	var src := _source(MAIN)
+	var calls: int = Array(src.split("\n")).filter(func(l: String) -> bool: return l.contains("_solo_resolve_ai_volley(") and not l.begins_with("func ")).size()
+	assert_int(calls).override_failure_message("main.gd still calls the AI resolver %d time(s)" % calls).is_equal(0)

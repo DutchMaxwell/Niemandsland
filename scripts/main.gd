@@ -4948,13 +4948,14 @@ func _solo_apply_strafing(unit: GameUnit, human_trails: Array = []) -> void:
 	var target := crossed[0] as GameUnit
 	if human_move:
 		unit.unit_properties["strafe_round"] = opr_army_manager.current_round
-	if battle_log != null:
-		var rule_name := AiShooting.strafing_rule_name(shots.map(func(s): return s["profile"]))
-		battle_log.log_event(BattleLog.Category.COMBAT,
-			"%s: %s passes over %s — attacks it as if shooting (once per activation)" % [
-			rule_name, unit.get_name(), target.get_name()], true)
-	CoreActivation.note_legacy(self, "ai_strafe", unit, [target], "move_through")   # P4.D-37: the slice takes the bearer now; this is the table's own strike (human drop, refused call)
-	await _solo_resolve_ai_volley(unit, target, shots, true)
+	# PLAN_FIRST_DELETION step 31 (lead ruling, option A): the rules core did not take this activation, and the table no longer resolves
+	# volleys - the strike is HELD with one line naming the unit, the rule and the reason (census `held_strike`). The book makes the strike
+	# mandatory: a known rules gap until ticket STRIKE-ON-RECAPTURE (the core striking at move time).
+	var reasons := CoreActivation.why_not(self, unit, target)
+	var why := ", ".join(PackedStringArray(reasons)) if not reasons.is_empty() else "the table paid this activation's moves and beats"
+	_log_rule_event(BattleLog.Category.COMBAT, "%s: %s passes over %s — the rules core cannot resolve this attack (%s), it is held" % [
+		AiShooting.strafing_rule_name(shots.map(func(s): return s["profile"])), unit.get_name(), target.get_name(), why], true)
+	CoreActivation.note_legacy(self, "held_strike", unit, [target], "move_through")
 
 
 ## AIG-G2 R3 (EPOCH_73_V36): the same move-through trigger after the PLAYER's own drop in a solo game — each
@@ -5073,9 +5074,6 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			_solo_log_no_volley(unit, report, "no target in range or sight")
 		await _solo_ai_core_call(unit, report, null, [])   # P4.D-19: ditto
 		return
-	# Indirect (wave 5): "-1 to hit rolls when shooting after moving" — the activation's action says
-	# whether this unit moved before firing (HOLD = it did not).
-	var moved: bool = bool(report.get("moved", false))
 	# One-core P3 step 42 (flag on): the volley at the table's pick resolves in the core when the units are plain; split fire (P4.D-14)
 	# rides along as the further groups, each its own target. P4.D-19: that one call also takes the activation's Dangerous test when
 	# the body left it to the core; a refused call pays it here, so the test still comes first.
@@ -5089,12 +5087,16 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		why.append("no_handle")
 	if order.size() > 1:
 		why.append("split")
-	CoreActivation.note_legacy(self, "ai_volley", unit, order.map(func(id) -> GameUnit: return groups[id]["target"]), ",".join(why))
-	for id in order:
-		var g := groups[id] as Dictionary
-		if _solo_combined_alive(g["target"]) == 0:   # combined: a host with no model left still stands while its joined hero lives
-			continue   # P4.D-37: the move-through attacks the table paid just now (a refused core call) took its last model
-		await _solo_resolve_ai_volley(unit, g["target"], g["shots"], moved)
+	# PLAN_FIRST_DELETION step 31 (LD-4): a volley the rules core cannot resolve is HELD with one line and the census key `held` -
+	# the table no longer resolves volleys.
+	var targets: Array = order.map(func(id) -> GameUnit: return groups[id]["target"])
+	CoreActivation.note_legacy(self, "held", unit, targets, ",".join(why))
+	var reasons: Array = Array(why)
+	for t in [null] + targets:
+		for r in CoreActivation.why_not(self, unit if t == null else null, t):
+			if not reasons.has(r):
+				reasons.append(r)
+	_solo_log_no_volley(unit, report, "the rules core cannot resolve this volley (%s)" % (", ".join(PackedStringArray(reasons)) if not reasons.is_empty() else "refused"))
 	CoreShadow.hold(self, unit, report, groups, order)   # C-4: NML_CORE_SHADOW=1 only; compared once the body's end morale is thrown
 
 
