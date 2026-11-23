@@ -24,6 +24,7 @@
     "Increased Shooting Range Buff": "same probe",
     "Furious Buff": "the table's pre-attack beat records the once-record after the capture and the door's landing spends it with the table's own spend (CoreActivation.land_late_once_records, #3201): real AI activations, door on against off, 2 placements x 8 seeds, dice, end state (records included) and every battle-log line equal, the core ran every activation (test/one_core/core_once_lift_door_test.gd)",
     "Shred Mark": "same landing",
+    "Rending Mark": "the core places, grants and spends a vs-target Mark and says its three lines (#3190); probe core_deny_lift_door_test.gd, 16 AI volleys door against table per system (gf, aof): dice, end state of both units and the Mark lines equal",
     "Quick Shot Mark": "same landing",
     "Increased Shooting Range Mark": "same landing",
     "Melee Evasion Buff": "same probe",

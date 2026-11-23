@@ -47,6 +47,16 @@ jobs:
           # 14.09.2026: the four imprint/privacy files carry the responsible person's name by decision; everything else stays pattern-free.
           HITS=$(grep -rIliE "$FORBIDDEN" . --exclude-dir=.git --exclude-dir=.github --exclude=README.md --exclude=PRIVACY_DATA_SHARING.md --exclude=privacy_menu.gd --exclude=startup_menu.gd | wc -l)
           if [ "$HITS" -gt 0 ]; then echo "::error::$HITS file(s) match private forbidden patterns (names withheld)"; exit 1; fi
+  private-access:
+    # tools/test_private_access_gate.sh: test accesses to main.gd private members may
+    # fall, never rise. Baseline: tools/test_private_access_baseline.txt (--record).
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+      - name: Test accesses to main.gd privates did not rise
+        run: bash tools/test_private_access_gate.sh
   format:
     # Format and lint of the files that are already clean (tools/gdformat_clean.txt and
     # tools/gdlint_clean.txt). An allowlist, not "changed files": a legacy file would be
