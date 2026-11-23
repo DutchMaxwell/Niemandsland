@@ -1017,83 +1017,24 @@ pub const EPOCH_94_PARITY_BATCH: u32 = 94;
 /// - SPELL_NO_STACK: the same spell does not stack; a second identical record refreshes the first.
 /// - UPR_NEEDS_SHOT: no Unpredictable Shooter die for a volley in which no weapon is in reach.
 pub const EPOCH_95_PARITY_BATCH: u32 = 95;
-pub const CURRENT_RULES_EPOCH: u32 = 95;
-/// Placeholder gate for UNIT IMPRECISE (coverage ledger shoot m1, lane covfix-dice; GF/AoF 3.6 army books: Imprecise = the bearer gets -1
-/// to hit when attacking): a unit that carries Imprecise as its OWN rule (not on a weapon) folds the -1 into its shooting to-hit like the
-/// other flat Shot Modifier names, and names it in the to-hit note. Before, only a weapon-borne Imprecise was read (`EPOCH_73_V36`); the
-/// table already folded the unit rule. Core: `unit::stamp_shot_modifier` / `shot_mod_notes_of`. Records stamped 95 or below replay
-/// byte-exact. Every call site reads THIS constant, not the literal `96`.
-pub const PENDING_EPOCH_UNIT_IMPRECISE: u32 = 96;
-/// Placeholder gate for UNIT BANE ALIASES (coverage ledger shoot m1, lane covfix-dice; 3.6 army books): a unit that carries a
-/// CONDITIONAL Bane-family rule as its own rule (Obliterate, Reap, Decimate, Fragment, Smash: a condition and / or a wider save window,
-/// an Obliterate that ignores Regeneration) reads it exactly like the same rule printed on a weapon (`stamp_weapon_bane_alias`), instead
-/// of the flat sixes re-roll with no Regeneration bypass. Decimate's strength gate is read as the volley was declared (lead ruling 21.11.,
-/// the H-17 line: all weapons fire simultaneously), so `Ctx::wiped` keeps `above_half_strength`. Bane Mark is NOT read here: it is a runtime
-/// mark (once, 18", line of sight, before attacking), open for the Utility Buff path. Core: `unit::stamp_unit_strikers`,
-/// `unit::Ctx::wiped`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant, not the literal `96`.
-pub const PENDING_EPOCH_UNIT_BANE_ALIAS: u32 = 96;
-/// Placeholder gate for TAKEDOWN SHOT PER MODEL (coverage ledger shoot m1, lane covfix-dice; GF 3.6 army books: the rule is a MODEL's
-/// rule, each model that shoots makes its own extra attack once per game): the bonus group rolls one attack per living model of the
-/// bearer, not one for the whole unit (`sim::takedown_shot_gate`). A one-model Hero (every carrier in the shipped lists) is unchanged.
-/// Records stamped 95 or below replay byte-exact. Every call site reads THIS constant, not the literal `96`.
-pub const PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL: u32 = 96;
-/// Placeholder gate for SPOTTER ROLL RECORD (coverage ledger shoot m1, lane covfix-dice): the Precision Spotter / Piercing Spotter
-/// placement die (3.6 army books: before attacking, roll, a 4+ places a token) is a real tray draw, and from 96 it pushes its roll
-/// record (kind "attack", the table's `_solo_tray_roll` kind, target = the printed 4+). Before, the draw had no record, so the step
-/// driver refused the whole exchange ("a resolver drew dice without a roll record"). Core: `sim::tray_precision_markers`,
-/// `sim::tray_piercing_tag`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant, not the literal `96`.
-pub const PENDING_EPOCH_SPOTTER_ROLL_RECORD: u32 = 96;
-/// Placeholder gate for ENHANCED PRIMAL NEEDS PRIMAL (coverage ledger shoot m1, lane covfix-dice; 3.6 army books: Enhanced Primal widens
-/// the bearer's OWN Primal to 5-6, a model without Primal gains nothing): an "Enhanced Primal" grant (Enhanced Primal Buff) on a member
-/// whose profile has no printed extra-attack form rolls no extras group. Before, it rolled its own group on 6s. Core:
-/// `dice::primal_grant_reaches`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant, not the literal `96`.
-pub const PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL: u32 = 96;
-/// Placeholder gate for ENHANCED ALWAYS ALIAS (coverage ledger shoot m2, lane covfix2-dice; 3.6 army books, lead ruling 22.11.: an
-/// Enhanced Stealth-family rule makes its base's -1 apply at any range "instead of only" past 9"/6"): when the defender carries the base
-/// AND its Enhanced form with the same penalty, the alias walk keeps the wider window, whatever order the rules arrive in (an Aura grant
-/// lands after the printed base). Before, the first listed name won, so a granted Enhanced Changebound lost to the printed Changebound
-/// inside 9". Core: `unit::alias_wider_on_tie`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant.
-pub const PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS: u32 = 96;
-/// Placeholder gate for ENHANCED VINCI ONE PICK (coverage ledger shoot m2, lane covfix2-dice; AoF 3.6 Duchies of Vinci, lead ruling
-/// 22.11.: Enhanced Vinci Tech gives either AP(+1) or +1 to hit "always", instead of only past 9"/6"): a Vinci Tech bearer with the
-/// Enhanced rule makes ONE pick, by the base rule's choice and with its pick line, at any range. Before, it got both arms past 9" and
-/// nothing inside 9". Core: `unit::ctx_of` (`versatile_no_gate`), the Versatile stamp (`versatile_both`). Records stamped 95 or below
-/// replay byte-exact. Every call site reads THIS constant.
-pub const PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK: u32 = 96;
-/// Placeholder gate for BANE MARK (ticket BM-1, coverage ledger shoot m1/m2, lane covfix2-dice; 3.6 army books Ghostly Undead / Saurian
-/// Starhosts: once per activation, before attacking, pick one enemy within 18" in line of sight; friendly units get Bane against it once):
-/// the Mark rides the Utility Buff path like the Shred Mark (`unit::utility_buffs_of`, placed by `sim::tray_utility_buff` in the bearer's
-/// own activation, a joined hero's Mark included), and the next friendly attack against the marked unit - shooting or melee - gets Bane
-/// (`Ctx::bane_mark_grant`), the exchange spends it. Before, the Mark did nothing on the core. Records stamped 95 or below replay
-/// byte-exact. Every call site reads THIS constant.
-pub const PENDING_EPOCH_BANE_MARK: u32 = 96;
-/// Placeholder gate for OUT OF REACH NO VOLLEY (coverage ledger shoot m2 cause 6, lane covfix2-dice): when the TARGET's own range cut
-/// (Aircraft -12", Ranged Shrouding / Darkborn / Shadowborn / Wild Veil) leaves the shooter no weapon in reach, there is no volley - the
-/// table writes "no target in range or sight" and spends nothing. Before, the core still built the group: it announced "X fires at Y",
-/// rolled nothing, and spent the once-per-game shot feats (Precision / Piercing Feat), the target's marks and markers, and the exchange's
-/// once-records. Core: `sim::cut_out_of_reach`. Records stamped 95 or below replay byte-exact. Every call site reads THIS constant.
-pub const PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY: u32 = 96;
-/// Placeholder gate for REVIVE SPOT (PLAN_REVIVE_SPOT.md, lane reviveSpot; GF / AoF 3.6 army books, Reanimation: a model may only be
-/// restored where it can be placed in coherency with the models that were not restored; the rule needs every model of the unit, a joined
-/// hero included, to carry it): a chain with a standing joined model WITHOUT the rule does not roll, and a model brought back never
-/// stands off the table, where a base may not rest (impassable terrain, a wall or a cliff), over or against an intact house, or on any
-/// standing base (its own unit's included), and it keeps its unit's own base radius. No legal spot: it is not restored. Core:
-/// `sim::tray_reanimation`, `sim::revive_spot_legal`. Records stamped 95 or below replay byte-exact. Every call site reads THIS
-/// constant, not the literal `96`.
-pub const PENDING_EPOCH_REVIVE_SPOT: u32 = 96;
-/// Placeholder gate for CONSOLIDATE PLAN (lane meleefix, lead call 22.11. option b): a melee winner's "may move up to 3 in" aims where
-/// the table's AI round planner aims it (the seize task's marker with its lane spread, a fight task's garrison, the tiered greedy that
-/// skips a marker its side holds by a live majority) when the door's transcript carries the planner inputs (`Input::Consolidate`); the
-/// core reads them on the state after the fight (`sim::planned_consolidation_goal`). Without the inputs the old greedy stands. Records
-/// stamped 95 or below replay byte-exact. Every call site reads THIS constant.
-pub const PENDING_EPOCH_CONSOLIDATE_PLAN: u32 = 96;
-/// Placeholder gate for the HIT & RUN PLAIN STEP (lane shootfix, gate-12 shoot soak: 9 Harassing rows; Dark Elves 3.6 army book,
-/// Harassing: once per round the unit may move up to 3 in after shooting or melee, the book names no direction, the general
-/// movement rules apply): on a real board the core's post-attack step is the table's own fallback (`_move_away`: away from the
-/// nearest enemy by the mirror aim, the goal clamped to the board, each model through the move executor with terrain and spacing),
-/// not the rigid 3 in translation away from a not-yet-activated enemy that checked the board edge only. Core: `sim::tray_hit_and_run`.
-/// Records stamped 95 or below replay byte-exact. Every call site reads THIS constant, not the literal `96`.
-pub const PENDING_EPOCH_HIT_AND_RUN_PLAIN: u32 = 96;
+/// The EPOCH 96 BATCH (lead decision 22.11., before the gate G1'): twelve table-vs-core differences that sat behind `PENDING_EPOCH_*`
+/// placeholders (all 96) are now one frozen constant, and `CURRENT_RULES_EPOCH` is bumped to it in the same change. Records stamped 95 or
+/// below replay byte-exact. Every call site reads THIS constant, not the literal `96` or `CURRENT_RULES_EPOCH`. The recorder mirror
+/// (`act_recorder.gd`) stamps 96 in the same change.
+/// - UNIT_IMPRECISE: a unit's own Imprecise folds its -1 into the shooting to-hit and names it (`unit::stamp_shot_modifier`).
+/// - UNIT_BANE_ALIAS: a unit-level conditional Bane-family rule (Obliterate, Reap, Decimate, Fragment, Smash) reads like the weapon form.
+/// - TAKEDOWN_SHOT_PER_MODEL: Takedown Shot's bonus group rolls one attack per living model of the bearer (`sim::takedown_shot_gate`).
+/// - SPOTTER_ROLL_RECORD: the Precision / Piercing Spotter placement die pushes its roll record (the step driver no longer refuses it).
+/// - ENHANCED_PRIMAL_NEEDS_PRIMAL: an Enhanced Primal grant on a member with no printed extra-attack form rolls no extras group.
+/// - ENHANCED_ALWAYS_ALIAS: with a Stealth-family base and its Enhanced form both carried, the wider (any-range) window wins.
+/// - ENHANCED_VINCI_ONE_PICK: Enhanced Vinci Tech makes ONE pick at any range instead of both arms past 9" and nothing inside.
+/// - BANE_MARK: the Bane Mark rides the Utility Buff path; the next friendly attack on the marked unit gets Bane once.
+/// - OUT_OF_REACH_NO_VOLLEY: a target-side range cut that leaves no weapon in reach builds no volley and spends nothing (`sim::cut_out_of_reach`).
+/// - REVIVE_SPOT: Reanimation needs the rule on every standing chain model and places a restored model only on a legal spot.
+/// - CONSOLIDATE_PLAN: a melee winner's consolidation aims where the table's round planner aims it when the transcript carries the inputs.
+/// - HIT_AND_RUN_PLAIN: on a real board the Hit & Run step is the table's own fallback move away from the nearest enemy (`sim::tray_hit_and_run`).
+pub const EPOCH_96_PARITY_BATCH: u32 = 96;
+pub const CURRENT_RULES_EPOCH: u32 = 96;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2414,42 +2355,42 @@ mod tests {
         EPOCH_81_SHAKEN_KEEPS_MORALE_BUFF, EPOCH_82_IGNORE_BY_NAME, EPOCH_83_LONE_HERO_TARGET, EPOCH_84_IGNORE_GROUPS, EPOCH_85_INDIRECT_GATE,
         EPOCH_86_VOLLEY_HEIGHT_REACH, EPOCH_87_WALKED_DANGEROUS, EPOCH_88_SPLIT_LONE_HERO, EPOCH_89_SHARED_BEARERS,
         EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_91_JOINED_HERO_FATIGUE, EPOCH_92_MELEE_CAUSES, EPOCH_93_DANGER_RULES_RIDER,
-        EPOCH_94_PARITY_BATCH, EPOCH_95_PARITY_BATCH,
+        EPOCH_94_PARITY_BATCH, EPOCH_95_PARITY_BATCH, EPOCH_96_PARITY_BATCH,
     };
 
     #[test]
     fn unit_imprecise_gate_starts_at_96() {
-        assert_eq!(super::PENDING_EPOCH_UNIT_IMPRECISE, 96);
-        assert!(!rule_on(95, super::PENDING_EPOCH_UNIT_IMPRECISE), "a record at 95 keeps the unit-borne Imprecise unread");
-        assert!(rule_on(96, super::PENDING_EPOCH_UNIT_IMPRECISE));
+        assert_eq!(super::EPOCH_96_PARITY_BATCH, 96);
+        assert!(!rule_on(95, super::EPOCH_96_PARITY_BATCH), "a record at 95 keeps the unit-borne Imprecise unread");
+        assert!(rule_on(96, super::EPOCH_96_PARITY_BATCH));
     }
 
     #[test]
     fn unit_bane_alias_gate_starts_at_96() {
-        assert_eq!(super::PENDING_EPOCH_UNIT_BANE_ALIAS, 96);
-        assert!(!rule_on(95, super::PENDING_EPOCH_UNIT_BANE_ALIAS), "a record at 95 keeps the flat unit alias read");
-        assert!(rule_on(96, super::PENDING_EPOCH_UNIT_BANE_ALIAS));
+        assert_eq!(super::EPOCH_96_PARITY_BATCH, 96);
+        assert!(!rule_on(95, super::EPOCH_96_PARITY_BATCH), "a record at 95 keeps the flat unit alias read");
+        assert!(rule_on(96, super::EPOCH_96_PARITY_BATCH));
     }
 
     #[test]
     fn takedown_shot_per_model_gate_starts_at_96() {
-        assert_eq!(super::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL, 96);
-        assert!(!rule_on(95, super::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL), "a record at 95 keeps the single bonus die");
-        assert!(rule_on(96, super::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL));
+        assert_eq!(super::EPOCH_96_PARITY_BATCH, 96);
+        assert!(!rule_on(95, super::EPOCH_96_PARITY_BATCH), "a record at 95 keeps the single bonus die");
+        assert!(rule_on(96, super::EPOCH_96_PARITY_BATCH));
     }
 
     #[test]
     fn spotter_roll_record_gate_starts_at_96() {
-        assert_eq!(super::PENDING_EPOCH_SPOTTER_ROLL_RECORD, 96);
-        assert!(!rule_on(95, super::PENDING_EPOCH_SPOTTER_ROLL_RECORD), "a record at 95 keeps the silent spotter draw");
-        assert!(rule_on(96, super::PENDING_EPOCH_SPOTTER_ROLL_RECORD));
+        assert_eq!(super::EPOCH_96_PARITY_BATCH, 96);
+        assert!(!rule_on(95, super::EPOCH_96_PARITY_BATCH), "a record at 95 keeps the silent spotter draw");
+        assert!(rule_on(96, super::EPOCH_96_PARITY_BATCH));
     }
 
     #[test]
     fn enhanced_primal_needs_primal_gate_starts_at_96() {
-        assert_eq!(super::PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL, 96);
-        assert!(!rule_on(95, super::PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL), "a record at 95 keeps the grant's own extras group");
-        assert!(rule_on(96, super::PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL));
+        assert_eq!(super::EPOCH_96_PARITY_BATCH, 96);
+        assert!(!rule_on(95, super::EPOCH_96_PARITY_BATCH), "a record at 95 keeps the grant's own extras group");
+        assert!(rule_on(96, super::EPOCH_96_PARITY_BATCH));
     }
 
     #[test]
@@ -2461,9 +2402,9 @@ mod tests {
     /// meleefix: the consolidation plan is read from 96 on; a record at 95 keeps the old greedy goal.
     #[test]
     fn consolidate_plan_gate_starts_at_96() {
-        assert_eq!(super::PENDING_EPOCH_CONSOLIDATE_PLAN, 96);
-        assert!(!rule_on(95, super::PENDING_EPOCH_CONSOLIDATE_PLAN), "a record at 95 keeps the old greedy consolidation goal");
-        assert!(rule_on(96, super::PENDING_EPOCH_CONSOLIDATE_PLAN));
+        assert_eq!(super::EPOCH_96_PARITY_BATCH, 96);
+        assert!(!rule_on(95, super::EPOCH_96_PARITY_BATCH), "a record at 95 keeps the old greedy consolidation goal");
+        assert!(rule_on(96, super::EPOCH_96_PARITY_BATCH));
     }
 
     /// Heightfield plan step 7 (the placeholder became the frozen batch epoch at the 94 bump): the gate is 94, on in a fresh game, off one
@@ -2519,7 +2460,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 95, "the live epoch is EPOCH_95_PARITY_BATCH");
+        assert_eq!(CURRENT_RULES_EPOCH, 96, "the live epoch is EPOCH_96_PARITY_BATCH");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2529,11 +2470,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":95}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":96}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 95"
+            "a fresh play_game() now stamps the bumped epoch, 96"
         );
     }
 
@@ -2675,6 +2616,14 @@ mod tests {
         assert!(rule_on(EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_90_JOINED_ONE_RECOVERY), "a record at 90 rolls once per pair");
         assert!(rule_on(EPOCH_90_JOINED_ONE_RECOVERY, EPOCH_89_SHARED_BEARERS), "90 keeps the shared bearers on");
         assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_90_JOINED_ONE_RECOVERY), "a fresh play_game() stamps it on");
+    }
+
+    #[test]
+    fn epoch_96_gate_is_closed_at_epoch_95_and_open_from_96() {
+        assert!(!rule_on(EPOCH_95_PARITY_BATCH, EPOCH_96_PARITY_BATCH), "a record at 95 replays every 96 placeholder read the old way");
+        assert!(rule_on(EPOCH_96_PARITY_BATCH, EPOCH_96_PARITY_BATCH), "a record at 96 plays the batch");
+        assert!(rule_on(EPOCH_96_PARITY_BATCH, EPOCH_95_PARITY_BATCH), "96 keeps the 95 batch on");
+        assert!(rule_on(CURRENT_RULES_EPOCH, EPOCH_96_PARITY_BATCH), "a fresh play_game() stamps it on");
     }
 
     #[test]

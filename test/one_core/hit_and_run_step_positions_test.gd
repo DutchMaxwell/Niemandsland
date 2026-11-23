@@ -20,9 +20,11 @@ const WITHOUT := "user://hit_and_run_step_positions_deny.json"
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
+var _epoch_was: int
 
 
 func before_test() -> void:
+	_epoch_was = AiActRecorder.rules_epoch
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -49,6 +51,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch_was
 	OS.unset_environment("NML_CORE_SLICE")
 	CoreSlice.path_override = ""
 	CoreSlice.reset_cache()
@@ -192,14 +195,37 @@ func _core(s: int) -> Dictionary:
 
 
 ## HR-POS: 8 seeds. The core takes every volley, the table's models end on the core's spots (moved by the core's distance,
-## about 3"), the landed stamp holds the table's tail back (false, nothing moves a second time).
+## about 3"), the landed stamp holds the table's tail back (false, nothing moves a second time). Pinned below the epoch 96 batch
+## (HIT_AND_RUN_PLAIN): there the core's step is the rigid 3" kite; from 96 it is the table's own move (the next test).
 func test_the_core_hit_and_run_step_lands_on_the_table() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_96_PARITY_BATCH - 1
 	for s in 8:
 		var door := await _door(s)
 		var core := await _core(s)
 		var why := "seed %d: door %s | core %s" % [s, str(door), str(core)]
 		assert_int(int(door["took"])).override_failure_message("the door takes the volley: " + why).is_equal(1)
 		assert_float(float(core["centre_in"])).override_failure_message("the core steps the unit: " + why).is_greater(2.5)
+		assert_bool(_same_spots(door["landed"], core["after"])).override_failure_message(
+			"the table's models stand where the core left them: " + why).is_true()
+		assert_float(absf(float(door["centre_in"]) - float(core["centre_in"]))).override_failure_message(
+			"moved by the core's distance: " + why).is_less(0.05)
+		assert_int(int(door["hnr"])).override_failure_message("the once-per-round stamp landed: " + why).is_equal(1)
+		assert_int(int(door["splits"])).override_failure_message(
+			"the landed step leaves no stamp split (land_delta reports none): " + why).is_equal(0)
+		assert_bool(bool(door["tail"])).override_failure_message("the table's own step does not run again: " + why).is_false()
+		assert_bool(_same_spots(door["after_tail"], door["landed"])).override_failure_message("no second step: " + why).is_true()
+
+## EPOCH_96_PARITY_BATCH (HIT_AND_RUN_PLAIN): the core's step is the table's own fallback move away from the nearest enemy (up to 3",
+## through the move executor with terrain and spacing, so not always the full 3"); the landing write-back holds the same way: the
+## table's models end on the core's spots, the landed stamp holds the table's own tail back.
+func test_from_96_the_plain_step_lands_on_the_table() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_96_PARITY_BATCH
+	for s in 8:
+		var door := await _door(s)
+		var core := await _core(s)
+		var why := "seed %d: door %s | core %s" % [s, str(door), str(core)]
+		assert_int(int(door["took"])).override_failure_message("the door takes the volley: " + why).is_equal(1)
+		assert_float(float(core["centre_in"])).override_failure_message("the core steps the unit: " + why).is_greater(0.5)
 		assert_bool(_same_spots(door["landed"], core["after"])).override_failure_message(
 			"the table's models stand where the core left them: " + why).is_true()
 		assert_float(absf(float(door["centre_in"]) - float(core["centre_in"]))).override_failure_message(

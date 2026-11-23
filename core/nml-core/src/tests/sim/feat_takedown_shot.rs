@@ -207,11 +207,11 @@ use super::*;
         assert_eq!(atk[0].target, 2, "the entry's own Quality, not the bearer's {}: {:?}", statics[0].ctx.quality, shot.rolls);
     }
 
-    /// covfix-dice (`PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL`): Takedown Shot is each model's rule, so a three-model bearer makes three
+    /// covfix-dice (`EPOCH_96_PARITY_BATCH`): Takedown Shot is each model's rule, so a three-model bearer makes three
     /// extra attacks from 96. At 95 the whole unit made one (the replay).
     #[test]
     fn a_three_model_bearer_makes_one_extra_attack_per_model_from_96() {
-        let e = crate::acts::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL;
+        let e = crate::acts::EPOCH_96_PARITY_BATCH;
         let counts = |epoch: u32| {
             let (mut st, mut statics) = ts_line(epoch);
             st.alive[0] = 3;
