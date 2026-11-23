@@ -138,7 +138,7 @@ use super::*;
         // test is never blind to a tray change.
         let seed = (0..200)
             .find(|&s| Tray::seeded(s).roll(1)[0] >= 4)
-            .expect("some seed passes") as i64;
+            .expect("some seed passes");
         let (next, shot) = run_mc(&st, &statics, seed, 7);
         let mc = shot
             .rolls
@@ -168,7 +168,7 @@ use super::*;
         // Seed scan: the FIRST tray face must FAIL Quality 4.
         let seed = (0..200)
             .find(|&s| Tray::seeded(s).roll(1)[0] < 4)
-            .expect("some seed fails") as i64;
+            .expect("some seed fails");
         let (next, _) = run_mc(&st, &statics, seed, 7);
         let dz = next.positions[2][0][2] - st.positions[2][0][2];
         let dx = next.positions[2][0][0] - st.positions[2][0][0];

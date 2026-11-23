@@ -106,7 +106,7 @@ use super::*;
         let gap_in = solved.positions[0]
             .iter()
             .zip(rigid.positions[0].iter())
-            .map(|(a, b)| ((a[0] - b[0]).powi(2) + (a[2] - b[2]).powi(2)).sqrt() / IN2M as f64)
+            .map(|(a, b)| ((a[0] - b[0]).powi(2) + (a[2] - b[2]).powi(2)).sqrt() / IN2M)
             .fold(0.0f64, f64::max);
         assert!(gap_in > 0.5, "the solver landed on the rigid answer, gap {gap_in}\"");
     }
@@ -196,7 +196,7 @@ use super::*;
     fn route_root_routes_the_root_move_and_keeps_the_playouts_rigid() {
         let (st, statics) = buff_line();
         let t = forest_bar_board();
-        let adv = crate::menu::Candidate { unit: "a".into(), kind: ADVANCE, dest: Some([8.0 * IN2M as f64, 0.0, 0.0]),
+        let adv = crate::menu::Candidate { unit: "a".into(), kind: ADVANCE, dest: Some([8.0 * IN2M, 0.0, 0.0]),
             shoot: None, charge: None, patient: false, wave: None };
         let rigid = resolve_on_board(&statics, &st, &adv.action(), &t, Seams::default()).unwrap();
         let routed = resolve_on_board(&statics, &st, &adv.action(), &t, Seams { movement: true, ..Seams::default() })
@@ -237,7 +237,7 @@ use super::*;
             &statics, &st, &traced_advance, &terrain, Seams::default(), &mut rng, &mut tray,
         )
         .unwrap();
-        assert!((next.positions[0][0][0] - (st.positions[0][0][0] + 9.0 * IN2M as f64)).abs() < 1e-6);
+        assert!((next.positions[0][0][0] - (st.positions[0][0][0] + 9.0 * IN2M)).abs() < 1e-6);
         assert!(shot.log.iter().any(|l| l.contains("Bounding") && l.contains("+3")), "{:?}", shot.log);
 
         // No trace on the act: the plain 6" band, no log line — every pre-B14 corpus's own reading.
@@ -247,7 +247,7 @@ use super::*;
             &statics, &st, &advance_to(20.0), &terrain, Seams::default(), &mut rng2, &mut tray2,
         )
         .unwrap();
-        assert!((plain_next.positions[0][0][0] - (st.positions[0][0][0] + 6.0 * IN2M as f64)).abs() < 1e-6);
+        assert!((plain_next.positions[0][0][0] - (st.positions[0][0][0] + 6.0 * IN2M)).abs() < 1e-6);
         assert!(plain_shot.log.is_empty());
     }
 
@@ -269,7 +269,7 @@ use super::*;
             resolve_stochastic_tray_on_board(&statics, &st, &rush, &t, seams, &mut rng, &mut tray).unwrap()
         };
         let (next, shot) = run(true);
-        assert!(next.positions[0].iter().all(|p| p[0] > 10.0 * IN2M as f64), "fixture: past the bar {:?}", next.positions[0]);
+        assert!(next.positions[0].iter().all(|p| p[0] > 10.0 * IN2M), "fixture: past the bar {:?}", next.positions[0]);
         let a_rolls: Vec<&crate::dice::Roll> = shot.rolls.iter().filter(|r| r.owner == "a").collect();
         assert_eq!(a_rolls.first().map(|r| r.count), Some(4), "{:?}", shot.rolls);
         assert!(!shot.unported.contains(&"dangerous_rigid_end_only"), "{:?}", shot.unported);

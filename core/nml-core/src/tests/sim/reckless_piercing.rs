@@ -96,7 +96,7 @@ use super::*;
     #[test]
     fn a_passing_roll_stamps_the_chain_ap_until_round_end() {
         let (st, statics) = rp_line(7, &["Reckless Piercing"]);
-        let seed = (0..200).find(|&s| Tray::seeded(s).roll(1)[0] >= 2).expect("some seed passes") as i64;
+        let seed = (0..200).find(|&s| Tray::seeded(s).roll(1)[0] >= 2).expect("some seed passes");
         let (next, shot) = run_rp(&st, &statics, seed, 7);
         let die = shot.rolls.iter().find(|r| r.owner == "a" && r.count == 1).expect("one tray die");
         assert!(die.faces[0] >= 2, "this seed must PASS: {die:?}");
@@ -119,7 +119,7 @@ use super::*;
     #[test]
     fn a_failing_roll_stamps_the_backfire() {
         let (st, statics) = rp_line(7, &["Reckless Piercing"]);
-        let seed = (0..200).find(|&s| Tray::seeded(s).roll(1)[0] < 2).expect("some seed fails") as i64;
+        let seed = (0..200).find(|&s| Tray::seeded(s).roll(1)[0] < 2).expect("some seed fails");
         let (next, shot) = run_rp(&st, &statics, seed, 7);
         let die = shot.rolls.iter().find(|r| r.owner == "a" && r.count == 1).expect("one tray die");
         assert!(die.faces[0] < 2, "this seed must FAIL: {die:?}");

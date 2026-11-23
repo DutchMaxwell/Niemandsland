@@ -108,7 +108,7 @@ use super::*;
             kind: RUSH, unit: "a".into(), dest: Some(st.positions[1][0]), shoot: None,
             charge: Some("b".into()), patient: false, split: None, traced: None, teleport: None, };
         let next = vr_resolve(&st, &statics, &rush);
-        let moved = (next.positions[0][0][0] - st.positions[0][0][0]).abs() / IN2M as f64;
+        let moved = (next.positions[0][0][0] - st.positions[0][0][0]).abs() / IN2M;
         assert!(
             (moved - 12.0).abs() < 1e-6,
             "the plain rush band, nothing more: moved {:.3}\"",

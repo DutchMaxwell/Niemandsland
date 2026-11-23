@@ -1,19 +1,21 @@
 extends GdUnitTestSuite
-## One core C-7: the roster sweep harness (test/one_core/roster_sweep.gd) on the bundled real lists. The instrument is checked here
-## (it covers every unit on both paths, the parity files and the compare work, the coverage and gate mechanics can fail); the
-## sweep over a fleet's per-faction lists is the CLI (roster_sweep_cli.gd). The control pairing below is equal on both paths today:
-## a rule or capture change that makes the table and the core diverge on a real roster turns it red with the first difference.
-## Real: the main scene, NmlCore, the importer and `EquipmentDistributor` on real list JSON, the table's AI body, the live capture
-## and the step driver, tools/parity/parity_compare.py. Constructed: only the unit placement (two blocks, 14" apart).
+## The roster sweep harness (test/one_core/roster_sweep.gd) on the bundled real lists. The instrument is checked here
+## (the coverage and gate mechanics can fail, the ring pairing and the deny-mode share are exact); the sweep over a fleet's
+## per-faction lists is the CLI (roster_sweep_cli.gd).
+## Real: the main scene, NmlCore, the importer and `EquipmentDistributor` on real list JSON, the step driver,
+## tools/parity/parity_compare.py. Constructed: only the unit placement (two blocks, 14" apart).
+## The table arm left with the AI table resolver; door values are snapshot pins read on main ab595da20 (docs/adr/0005-snapshot-pins.md).
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
-const DoorLines := preload("res://test/one_core/door_lines.gd")
 const LISTS := ["res://assets/arena_lists/p1_2000.json", "res://assets/arena_lists/p2_2000.json"]
 const WOLF := "res://test/fixtures/wolf_brothers_3000.json"
 const DICE := "user://roster_sweep_dice"
 const OUT := "user://roster_sweep_out"
+## The door's attack rolls for the 12 in flamer across the 11.7 in base edge (read on main from the table arm).
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_ATTACKS := 1
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -38,40 +40,6 @@ func after_test() -> void:
 
 func _lists() -> Array:
 	return LISTS.map(func(p: String) -> Dictionary: return RosterSweep.load_list(p))
-
-
-func test_the_sweep_fires_every_unit_and_targets_every_unit_on_both_paths() -> void:
-	var lists := _lists()
-	var pairs := RosterSweep.ring(lists)
-	assert_int(pairs.size()).is_equal(1)
-	RosterSweep.arm(_main, ProjectSettings.globalize_path(DICE))
-	var seeds := 2
-	var rows: Array = await RosterSweep.sweep_pair(_main, lists[0], lists[1], seeds, ProjectSettings.globalize_path(DICE))
-	var units: Array = (lists[0]["units"] as Array) + (lists[1]["units"] as Array)
-	var n := maxi((lists[0]["units"] as Array).size(), (lists[1]["units"] as Array).size())
-	assert_int(rows.size()).override_failure_message("2 directions x the longer list x seeds").is_equal(2 * n * seeds)
-	var shot := {}
-	var hit := {}
-	for r in rows:
-		shot[r["att"]] = true
-		hit[r["tgt"]] = true
-	for e in units:
-		var nm := str((e["unit"] as OPRApiClient.OPRUnit).name)
-		assert_bool(shot.has(nm)).override_failure_message("%s never shot" % nm).is_true()
-		assert_bool(hit.has(nm)).override_failure_message("%s was never a target" % nm).is_true()
-	var cmp := RosterSweep.compare(rows, OUT)
-	assert_array(cmp["problems"]).override_failure_message("the compare's own problems: %s" % [cmp["problems"]]).is_empty()
-	var fired := (cmp["verdicts"] as Array).filter(func(v: Dictionary) -> bool: return bool(v["fired"])).size()
-	var verdict := RosterSweep.gate(cmp["verdicts"], {})
-	print("ROSTER_SWEEP volleys=%d fired=%d roll_mismatches=%d state_mismatches=%d" % [rows.size(), fired, cmp["roll_mismatches"], verdict["mismatches"] - int(cmp["roll_mismatches"])])
-	assert_int(fired).override_failure_message("only %d of %d volleys threw a die: the sweep compares nothing" % [fired, rows.size()]).is_greater(rows.size() / 4)
-	assert_array(verdict["unexplained"]).override_failure_message("table and core differ on a real roster: %s" % [(verdict["unexplained"] as Array).slice(0, 3)]).is_empty()
-	for half in ["table", "core"]:
-		var lines := FileAccess.get_file_as_string(OUT.path_join("sweep_%s.jsonl" % half)).split("\n", false)
-		assert_int(lines.size()).override_failure_message("one parity row per volley (%s)" % half).is_equal(rows.size())
-	assert_bool((cmp["verdicts"] as Array).all(func(x: Dictionary) -> bool: return x.has("deny"))).override_failure_message("every verdict says what deny mode would refuse").is_true()
-	var cov := RosterSweep.coverage(cmp["verdicts"])
-	assert_bool(cov.has("AP") and int(cov["AP"]["att"]) > 0 and int(cov["AP"]["tgt"]) > 0).override_failure_message("coverage: %s" % [cov.keys()]).is_true()
 
 
 func test_an_uncovered_rule_name_is_listed() -> void:
@@ -152,9 +120,9 @@ func test_the_ring_puts_every_list_in_two_pairings() -> void:
 
 
 ## DS-RG: a 12 in weapon at the sweep's 14 in centre distance. The nearest bases are 11.7 in apart, inside the weapon, so the
-## table fires; the core reads the same measure only when the header carries the shipped preset's table-fidelity switch
+## door fires; the core reads that measure only when the header carries the shipped preset's table-fidelity switch
 ## (`range_by_base_edge`, AiPlanner.table_fidelity_stamp), which `arm()` must stamp or every such volley is a false G1.
-## RED before the stamp: the core half records no roll at all.
+## RED before the stamp: the door records no roll at all.
 func test_a_twelve_inch_weapon_fires_across_the_base_edge_on_both_paths() -> void:
 	var l := RosterSweep.load_list(WOLF)
 	var att := {}
@@ -167,46 +135,16 @@ func test_a_twelve_inch_weapon_fires_across_the_base_edge_on_both_paths() -> voi
 			tgt = e
 	RosterSweep.arm(_main, ProjectSettings.globalize_path(DICE))
 	var dice := ProjectSettings.globalize_path(DICE)
-	var t := await RosterSweep.volley(_main, att, tgt, 0, false, dice)
 	var c := await RosterSweep.volley(_main, att, tgt, 0, true, dice)
-	var table_attacks := _attacks(t["rolls"])
-	assert_int(table_attacks).override_failure_message("the table never fired the 12 in flamer: %s" % [t["rolls"]]).is_greater(0)
-	assert_int(_attacks(c["rolls"])).override_failure_message("the core fired nothing at 11.7 in base edge: %s" % [c["rolls"]]).is_equal(table_attacks)
-
-
-## Plan H (H-10): the sweep harness runs the import's aura pass (`OPRArmyManager.expand_auras_of`). A shooter with Relentless Aura (gf robot_legions:
-## "this model and its unit get Relentless") gets one extra hit per unmodified 6 from over 9 in: the core reads the aura through its registry, the table only
-## through the base rule the import's pass adds. RED (the first leg): switch the pass off and 16 seeds show the dice differing on the extra hits;
-## GREEN: with it the two halves' dice are equal on all 16.
-func test_the_aura_pass_makes_an_aura_shooter_equal_on_both_paths() -> void:
-	RosterSweep.arm(_main, ProjectSettings.globalize_path(DICE))
-	var dice := ProjectSettings.globalize_path(DICE)
-	var shooter := DoorLines.entry("Auras", 10, ["Relentless Aura"], [], "robot_legions", 5)
-	var target := DoorLines.entry("Plain", 10, [], [], "battle_brothers", 0)
-	for pass_on in [false, true]:
-		RosterSweep.aura_pass = pass_on
-		var differing := 0
-		for seed_n in 16:
-			var t := await RosterSweep.volley(_main, shooter, target, seed_n, false, dice)
-			var c := await RosterSweep.volley(_main, shooter, target, seed_n, true, dice)
-			if _faces(t["rolls"]) != _faces(c["rolls"]):
-				differing += 1
-		if pass_on:
-			assert_int(differing).override_failure_message("with the aura pass the halves still differ on %d of 16 seeds" % differing).is_equal(0)
-		else:
-			assert_int(differing).override_failure_message("without the pass the check saw no difference: it cannot fail").is_greater(0)
-
-
-func _faces(rolls: Array) -> Array:
-	return rolls.map(func(r: Dictionary) -> String: return "%s:%d:%s" % [r["kind"], int(r["count"]), r["faces"]])
+	assert_int(_attacks(c["rolls"])).override_failure_message("the door fired nothing at 11.7 in base edge: %s" % [c["rolls"]]).is_equal(WANT_ATTACKS)
 
 
 func _attacks(rolls: Array) -> int:
 	return rolls.filter(func(r: Dictionary) -> bool: return str(r["kind"]) == "attack").size()
 
 
-## Plan E (step 4a): `RosterSweep.charge` runs the door-vs-table pair (control EQUAL, planted fault UNEQUAL) and accepts real
-## `load_list` entries with `bypass_slice` for step 4b's melee sweep. RED: stub `compare_charge` -> planted faults read equal.
+## `RosterSweep.charge` runs the door-vs-table pair (control EQUAL, planted fault UNEQUAL) and accepts real
+## `load_list` entries with `bypass_slice` for the melee sweep. RED: stub `compare_charge` -> planted faults read equal.
 func test_charge_helper_compares_door_against_table_and_catches_planted_faults() -> void:
 	RosterSweep.arm(_main, ProjectSettings.globalize_path(DICE))
 	CoreActivation._charge_env = 1
@@ -228,7 +166,7 @@ func test_charge_helper_compares_door_against_table_and_catches_planted_faults()
 		var kinds: Array = (ctrl[half]["illegal"] as Array).map(func(i: Dictionary) -> String: return str(i["kind"]))
 		assert_bool(not kinds.is_empty() and kinds.all(func(k: String) -> bool: return k == "enemy_within_1in")) \
 			.override_failure_message("SEPARATE-1IN on the %s half: %s" % [half, ctrl[half]["illegal"]]).is_true()
-	# PLAN_FIRST_DELETION 3d: where the models stand is a free choice when both ends are legal - a 3 in shift of the whole defender is
+	# Where the models stand is a free choice when both ends are legal - a 3 in shift of the whole defender is
 	# reported (`free_position`), not a mismatch; a planted overlap on the TABLE half is reported by the checker (`table_illegal`).
 	var shift := func(_a: GameUnit, f: GameUnit) -> void:
 		for m in f.get_alive_models():
@@ -261,7 +199,7 @@ func _melee_entry(nm: String, size: int, rng: int, w_rules: Array[String] = []) 
 	return {"unit": ou, "faction": "robot_legions", "system": "gf"}
 
 
-## Plan E (step 4b): melee sweep (`--door melee`) sweeps ring pairs x melee units x enemy units x seeds, emits JSON verdict rows
+## Melee sweep (`--door melee`) sweeps ring pairs x melee units x enemy units x seeds, emits JSON verdict rows
 ## with `taken`, `deny`, `equal`, `first_diff` like the shoot sweep, and marks planted fault rows UNEQUAL.
 ## RED: stub `verdicts()` melee `first_diff` to "" -> planted fault rows read equal.
 func test_melee_sweep_pair_emits_verdict_rows_and_catches_planted_fault() -> void:

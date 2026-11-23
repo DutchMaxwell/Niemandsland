@@ -1,0 +1,75 @@
+# Files that already pass `gdformat --check` (gdtoolkit 4.5.0) on the commit that added this list.
+#
+# The format gate (tools/format_gate.sh) checks exactly these files, so touching one of them must
+# not reformat the whole file. The list only grows: add a file once it is formatted, never remove one
+# to make the gate pass. Vendored third-party code (addons/) is deliberately not listed - it is
+# upgraded wholesale and is not ours to reformat.
+#
+# Regenerate after a gdtoolkit upgrade:
+#   git ls-files '*.gd' | xargs gdformat --check 2>&1 | sed -n 's/^would reformat //p' | sort -u
+# Every file NOT in that scan passes. A bare `path.gd:` line in the scan (no "would reformat") is a
+# parse error: gdtoolkit cannot read that file, so it can never be listed until the tool catches up.
+scripts/core_load_notice.gd
+scripts/deleted_state.gd
+scripts/landing_preview.gd
+scripts/net_dialog.gd
+scripts/player_identity.gd
+scripts/player_palette.gd
+scripts/privacy/shared_record_builder.gd
+scripts/remote_cursor.gd
+scripts/selectable_object.gd
+scripts/solo/model_kits_export.gd
+scripts/theme_manager.gd
+scripts/token_library.gd
+scripts/two_human_turn.gd
+scripts/ui_feedback.gd
+test/act_intent_test.gd
+test/battle_sim_core_wanted_test.gd
+test/card_wounds_tough_gate_test.gd
+test/cinematic_intro_test.gd
+test/die_face_icon_test.gd
+test/e2e/e2e_autosave_toast_test.gd
+test/e2e/e2e_fearless_all_models_test.gd
+test/e2e/e2e_hero_morale_quality_test.gd
+test/e2e/e2e_melee_wipe_no_morale_test.gd
+test/e2e/e2e_versatile_strike_back_test.gd
+test/e2e/recording_net.gd
+test/hover_glow_test.gd
+test/hud_components_test.gd
+test/internet_lobby_test.gd
+test/landing_preview_test.gd
+test/manual/calm_mode_capture.gd
+test/marker_token_test.gd
+test/melee_height_test.gd
+test/model_instance_marker_test.gd
+test/model_kits_export_test.gd
+test/mp_command_test.gd
+test/network_id_namespace_test.gd
+test/network_version_handshake_test.gd
+test/next_round_label_test.gd
+test/one_core/core_activation_object_manager_parity_test.gd
+test/one_core/slice_pin.gd
+test/opr_round_test.gd
+test/player_palette_test.gd
+test/policy_order_twin_test.gd
+test/reference_movable_forest_test.gd
+test/regiment_casualty_test.gd
+test/regiment_formation_test.gd
+test/regiment_frontage_cycle_test.gd
+test/regiment_save_test.gd
+test/regiment_tray_network_id_test.gd
+test/regiment_tray_test.gd
+test/regiment_wound_counter_test.gd
+test/rule_description_sync_test.gd
+test/solo_ai_slot_sync_test.gd
+test/solo_deploy_side_test.gd
+test/solo_move_seam_wanted_test.gd
+test/solo_owner_saves_test.gd
+test/sort_table_sync_test.gd
+test/surprise_attack_test.gd
+test/two_human_turn_test.gd
+test/undo_manager_test.gd
+test/undo_peer_filter_test.gd
+tools/rng_fixture.gd
+tools/rng_range_fixture.gd
+tools/tutorial_text_strip.gd

@@ -1306,7 +1306,7 @@ fn save_batch(
         // epoch). The firing names itself (rules-must-log) only when the
         // read actually rode along — every pre-epoch-6 corpus stays silent.
         let bonus = p.shred_ones_wound_bonus.max(1);
-        let shreds = shred_faces(&faces, &reroll, shred_low.max(1), target as i64);
+        let shreds = shred_faces(&faces, &reroll, shred_low.max(1), target);
         let wound = shreds * bonus;
         if shreds > 0 {
             // The table's line (`_solo_save_batch`): the widened window names its Boost, the plain one the rule that pays the 1s.
@@ -1779,7 +1779,7 @@ pub(crate) fn resolve_volley_with_pick_label(
                 && mod_dist_in > def.fortified_alias_over_in,
             ..*def
         };
-        if gate_shut { c.gate_shut() } else { c }
+        if gate_shut { c.gate_shut() } else { c.open_named(mod_dist_in, false) }
     };
     let def_live: &Ctx = def;
     let def_wiped: Ctx = if inline_land.is_some() { def_live.wiped() } else { *def_live };
@@ -3322,7 +3322,7 @@ pub fn resolve_melee_leg_wipe(
     // MOR-17a (rules 3.6): Warding's 6+ needs a charge from OVER its gate. A
     // strike-back rides 0.0 — it did the charging, so the 6+ never rolls.
     let gate_on = def.gate_in_force();
-    let def = &if gate_on && def.regen_gate_charge_in > 0.0 && charge_from_in <= def.regen_gate_charge_in { def.gate_shut() } else { *def };
+    let def = &if gate_on && def.regen_gate_charge_in > 0.0 && charge_from_in <= def.regen_gate_charge_in { def.gate_shut() } else { def.open_named(charge_from_in, true) };
     let mut out = ShootResult::default();
     // Wave 3 — the Shielded-family alias's rules-must-log flag, the volley
     // fold's melee twin (Shielded is the whole melee Defense ladder here).
@@ -4149,6 +4149,7 @@ pub fn impact_saves_with_tray(
     // `_solo_land_wounds` gate, mirrored here. `None` keeps the old blanket read.
     let regen_def = &match charge {
         Some((gap_in, _)) if def.gate_in_force() && def.regen_gate_charge_in > 0.0 && gap_in <= def.regen_gate_charge_in => def.gate_shut(),
+        Some((gap_in, _)) => def.open_named(gap_in, true),
         _ => *def,
     };
     out.wounds = regen_batch(w, 0, regen_def, def_owner, tray, &mut out.rolls);

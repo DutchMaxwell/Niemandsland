@@ -2,9 +2,9 @@ extends GdUnitTestSuite
 ## G4R5 R9 (PARITY_DIAG_1105_R4 2.9, lead ruling D1, gf_1000_net_035 act 16): a joined hero whose host models are all dead
 ## IS the unit now, so its own ignore-wounds Feat (Protection Feat) counts: "most models carry it" is decided over the
 ## LIVING chain models, which is the hero alone. The core rolled the hero's Feat; the table read the rule list of the
-## dead host, found no Feat and rolled nothing. From EPOCH_73_V36 the table reads the rule off the living hero.
-## Driven through the real AI volley (`_run_ai_shooting`) over main.tscn: a real rifle profile fired at a lone hero
-## built the way the game builds it (faction book, rule list, dead host). Below 73 the old silence stands.
+## dead host, found no Feat and rolled nothing. Resolved through the rules core (one-core door), which ports the
+## lone-hero target at EPOCH_83_LONE_HERO_TARGET; below 73 the old silence stands on the table.
+## A real rifle profile fired at a lone hero built the way the game builds it (faction book, rule list, dead host).
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
@@ -31,11 +31,13 @@ func before_test() -> void:
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
 	_main._solo_batch = true
+	CoreActivation._env = 1
 	RulesRegistry.reset_cache()
 
 
 func after_test() -> void:
 	AiActRecorder.rules_epoch = _epoch_before
+	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
@@ -86,11 +88,18 @@ func _lone_hero_chain() -> void:
 	hero.unit_properties["attached_to"] = host
 
 
-func test_a_lone_heros_own_protection_feat_rolls_at_73(timeout := 60000) -> void:
+func test_a_lone_heros_own_protection_feat_rolls_at_83(timeout := 60000) -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_83_LONE_HERO_TARGET
 	var gunners := _gunners()
 	_lone_hero_chain()
 	_main._tray_rng.seed = 11
+	_main._solo_core_ai_h = CoreActivation.capture(_main, true)
+	var runs := CoreActivation.ai_runs
 	await _main._run_ai_shooting(ActIntent.blank_report(gunners))
+	if _main._solo_core_ai_h != 0:
+		_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
+		_main._solo_core_ai_h = 0
+	assert_int(CoreActivation.ai_runs - runs).override_failure_message("the rules core did not resolve the volley").is_greater(0)
 	var text := _log_text()
 	assert_str(text).override_failure_message("the volley must wound the hero for the test to bite (log: %s)" % text.strip_edges()) \
 		.contains("Hero: Champion is the unit now")
