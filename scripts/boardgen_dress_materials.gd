@@ -1,6 +1,6 @@
 class_name BoardgenDressMaterials
 extends RefCounted
-## The eleven shared materials of the ruin-town dressing, made from the kit manifest's `materials` block
+## The shared materials of the ruin-town dressing, made from the kit manifest's `materials` block
 ## (docs/adr/0004-dressing-materials-and-kit-manifest.md). A textured entry (`set`) becomes one ShaderMaterial of ruintown_dress.gdshader with the set's maps from the
 ## TiefwerkLibrary; while that set is not cached it is a flat StandardMaterial3D in the entry's tone (never null). A plain entry
 ## (`colour`) is a StandardMaterial3D with colour / roughness / metallic / emission. The merged mesh binds them by surface name.

@@ -848,7 +848,7 @@ impl Core {
         // `mission` stays unread here — the Python seam replays SEARCHES, not
         // grading; `ActHeader::mission_id` is the reader's door (acts.rs).
         let ActHeader { profiles, terrain, knobs, .. } = nmlcore::read_act_header(&text)
-            .map_err(|e| Unsupported::new_err(e))?;
+            .map_err(Unsupported::new_err)?;
         // Validate the requested vocabulary before replacing any active
         // header state. A rejected header must leave the previous core usable.
         let vocab = if self.rows.vocab.version != knobs.rule_vocab_version || !self.rows.vocab.loaded {
@@ -1379,7 +1379,7 @@ impl Core {
         let profiles = self.profiles.as_mut().ok_or_else(Core::no_header)?;
         let mut cache = self.roster.take();
         let st = io::state_from_json_with_epoch(&text, profiles, &mut cache, self.knobs.rules_epoch)
-            .map_err(|e| Unsupported::new_err(e))?;
+            .map_err(Unsupported::new_err)?;
         self.roster = cache;
         // The `prof` blocks are kept as they came, not re-derived — see the
         // note on `PyState::prof`.
@@ -3168,14 +3168,14 @@ fn deploy_finish(
         t1.iter().copied().chain(t2.iter().copied()).collect()
     };
     if first_slot == 2 {
-        finish(&specs2, &mut sd2, &zone2, &tray_first);
+        finish(specs2, &mut sd2, &zone2, &tray_first);
     } else {
-        finish(&specs1, &mut sd1, &zone1, &tray_first);
+        finish(specs1, &mut sd1, &zone1, &tray_first);
     }
     // SECOND finish: BOTH rosters, slot-1 roster then slot-2 (the table's
     // get_all_game_units order; tests/deployment.rs:1354-1372).
-    let st1 = deployment::settle_units_at(&specs1, &sd1, &zone1, rules_epoch);
-    let st2 = deployment::settle_units_at(&specs2, &sd2, &zone2, rules_epoch);
+    let st1 = deployment::settle_units_at(specs1, &sd1, &zone1, rules_epoch);
+    let st2 = deployment::settle_units_at(specs2, &sd2, &zone2, rules_epoch);
     let mut all: Vec<SettleUnit> = st1.iter().map(|p| p.1.clone()).collect();
     let n1 = all.len();
     all.extend(st2.iter().map(|p| p.1.clone()));

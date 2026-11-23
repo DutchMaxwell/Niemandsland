@@ -21,7 +21,7 @@ use super::*;
         assert_eq!(next.hit_and_run_round[0], next.round, "the Boost carrier still hit-and-runs");
         for (got, before) in next.positions[0].iter().zip(st.positions[0].iter()) {
             assert!(
-                (got[0] - (before[0] - 6.0 * IN2M as f64)).abs() < 1e-6,
+                (got[0] - (before[0] - 6.0 * IN2M)).abs() < 1e-6,
                 "the Boost band is 6\", got {got:?}"
             );
         }
@@ -40,7 +40,7 @@ use super::*;
         )
         .unwrap();
         for (got, before) in next5.positions[0].iter().zip(st5.positions[0].iter()) {
-            assert!((got[0] - (before[0] - 3.0 * IN2M as f64)).abs() < 1e-6, "got {got:?}");
+            assert!((got[0] - (before[0] - 3.0 * IN2M)).abs() < 1e-6, "got {got:?}");
         }
         assert!(
             shot5.log.iter().any(|l| l.contains("Hit & Run: a steps up to 3\"")),
@@ -65,7 +65,7 @@ use super::*;
         assert_eq!(next.hit_and_run_round[0], next.round, "the Boost carrier still hit-and-runs");
         for (got, before) in next.positions[0].iter().zip(st.positions[0].iter()) {
             assert!(
-                (got[0] - (before[0] - 6.0 * IN2M as f64)).abs() < 1e-6,
+                (got[0] - (before[0] - 6.0 * IN2M)).abs() < 1e-6,
                 "the Boost band is 6\", got {got:?}"
             );
         }
@@ -83,7 +83,7 @@ use super::*;
         )
         .unwrap();
         for (got, before) in nextb.positions[0].iter().zip(stb.positions[0].iter()) {
-            assert!((got[0] - (before[0] - 3.0 * IN2M as f64)).abs() < 1e-6, "got {got:?}");
+            assert!((got[0] - (before[0] - 3.0 * IN2M)).abs() < 1e-6, "got {got:?}");
         }
         assert!(
             shotb.log.iter().any(|l| l.contains("Hit & Run: a steps up to 3\"")),
@@ -195,7 +195,7 @@ use super::*;
         let gap_in = solved.positions[0]
             .iter()
             .zip(rigid.positions[0].iter())
-            .map(|(a, b)| ((a[0] - b[0]).powi(2) + (a[2] - b[2]).powi(2)).sqrt() / IN2M as f64)
+            .map(|(a, b)| ((a[0] - b[0]).powi(2) + (a[2] - b[2]).powi(2)).sqrt() / IN2M)
             .fold(0.0f64, f64::max);
         assert!(gap_in > 0.5, "the solver landed on the rigid answer, gap {gap_in}\"");
     }
@@ -257,9 +257,9 @@ use super::*;
         .unwrap();
         // Rigid: away from the un-activated "bh" at -12" -> +3" along +x.
         // Solved: away from the plain-nearest "b" at +6" -> 3" along -x.
-        assert!((rigid.positions[0][0][0] - (st.positions[0][0][0] + 3.0 * IN2M as f64)).abs()
+        assert!((rigid.positions[0][0][0] - (st.positions[0][0][0] + 3.0 * IN2M)).abs()
             < 1e-6, "rigid {:?}", rigid.positions[0]);
-        assert!((solved.positions[0][0][0] - (st.positions[0][0][0] - 3.0 * IN2M as f64)).abs()
+        assert!((solved.positions[0][0][0] - (st.positions[0][0][0] - 3.0 * IN2M)).abs()
             < 1e-6, "solved {:?}", solved.positions[0]);
         assert_eq!(solved.hit_and_run_round[0], solved.round);
     }

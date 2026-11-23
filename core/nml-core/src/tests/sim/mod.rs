@@ -921,7 +921,7 @@
 
     fn fold_leg(rule: &str, epoch: u32) -> Ctx {
         let (statics, st) = fold_legs(rule);
-        ctx_live(statics[0].ctx.clone(), &statics, &st, 0, false, epoch)
+        ctx_live(statics[0].ctx, &statics, &st, 0, false, epoch)
     }
 
 
@@ -1099,7 +1099,7 @@
         Action {
             kind: ADVANCE,
             unit: "a".into(),
-            dest: Some([x_in * IN2M as f64, 0.0, 0.0]),
+            dest: Some([x_in * IN2M, 0.0, 0.0]),
             shoot: None,
             charge: None,
             patient: false,

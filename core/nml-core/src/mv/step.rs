@@ -861,7 +861,6 @@ fn external_discs(&self) -> Vec<super::gate::Disc> {
                 c: [c[0] as f64, c[1] as f64],
                 r: radius_of(state, mv) / IN2M,
                 shape: state.base_shape(gu),
-                ..Default::default()
             });
         }
     }
@@ -1080,7 +1079,7 @@ fn execute_from(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64],
     let walked = planned
         .iter()
         .enumerate()
-        .any(|(i, p)| g2::distance_to(*p, starts[i]) as f64 * IN2M > OVERLAP_EPS_M);
+        .any(|(i, p)| g2::distance_to(*p, starts[i]) * IN2M > OVERLAP_EPS_M);
     // G4-C7b (Regroup, `EPOCH_73_V36`): `_act_regroup` hands `_finalize_placement` the UNMOVED positions, so a unit
     // that starts torn still runs the gate when its centre goes nowhere. It never enters `_execute_move`, so it
     // spends no sidestep attempt either (the boxed escape below is skipped).
