@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## BoardgenDressKit (PLAN_RUINTOWN_DRESSING step 3): the bundled manifest has the contract's shape, a stub module is a box of its aabb, and a GLB written at run time comes back with one named
+## BoardgenDressKit (docs/adr/0004-dressing-materials.md): the bundled manifest has the contract's shape, a stub module is a box of its aabb, and a GLB written at run time comes back with one named
 ## surface per material and its UV, COLOR and TANGENT. No network, no kit folder.
 
 const DIR := "user://boardgen_dress_kit_test"
@@ -47,7 +47,7 @@ func test_the_bundled_manifest_has_the_contract_shape() -> void:
 	for k in ["version", "materials", "ground", "sets", "licence", "modules"]:
 		assert_bool(meta.has(k)).is_true()
 	var modules: Dictionary = meta["modules"]
-	assert_int(modules.size()).is_equal(114)   # PINNED to the kit manifest of 23.11. (93 + 18 dr_veg_* + 3 dr_litter_drift_*): a change of the module list goes red here and is re-pinned on purpose
+	assert_int(modules.size()).is_equal(114)   # PINNED to the current kit manifest (93 + 18 dr_veg_* + 3 dr_litter_drift_*): a change of the module list goes red here and is re-pinned on purpose
 	for name: String in modules:
 		var m: Dictionary = modules[name]
 		for k in KEYS:

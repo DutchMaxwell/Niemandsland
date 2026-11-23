@@ -1,8 +1,8 @@
-// ruintown_dress.gdshader - the shared material of the ruin-town dressing kit (plan RUINTOWN_DRESSING step 7, v1).
+// ruintown_dress.gdshader - the shared material of the ruin-town dressing kit (docs/adr/0004-dressing-materials.md).
 // One ShaderMaterial per textured kit material (BoardgenDressMaterials). The merged dress mesh is in board space, so with
 // world_uv the set is projected from the vertex position in inches along the normal's dominant axis and runs on across
 // neighbouring modules; without it the mesh UV (authored in inches) is used. ONE continuous lookup per set, no per-fragment
-// offsets (maintainer 22.11.: the two-lookup blend made coursed masonry look patched, not built). Macro and grime come in step 14.
+// offsets (a two-lookup blend made coursed masonry look patched, not built). Macro variation and grime are not part of this shader yet.
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx;
 

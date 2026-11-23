@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## BoardgenDressMaterials (plan RUINTOWN_DRESSING step 7): the kit manifest's eleven materials become six set materials of
+## BoardgenDressMaterials (docs/adr/0004-dressing-materials.md): the kit manifest's eleven materials become six set materials of
 ## ruintown_dress.gdshader and five plain ones; a set that is not cached gives a flat material in its tone, never null. The
 ## headless run has a dummy renderer, so the shader is pinned by source (it compiles on the real renderer: the PR's display check).
 
@@ -8,9 +8,9 @@ const VEG_SHADER := "res://shaders/ruintown_dress_veg.gdshader"
 const VEG_SET := ["albedo_scale", "wrap", "backlight", "roughness", "use_cards", "alpha_scissor", "card_tone", "atlas", "atlas_dry"]
 ## Declared with a default in the shader, not set by the script (wind is off in stills, the dead share is board-wide, the normal atlas is reserved).
 const VEG_RESERVED := ["wind", "dead_share", "atlas_normal", "dry_tint"]
-## The bundled manifest of step 3; checked as well once it is on main.
+## The bundled manifest; checked as well when present.
 const BUNDLED := "res://assets/ruintown_dress.json"
-## The `materials` block of the kit manifest (dress_kit K0, 22.11.), without the step-14 keys.
+## The `materials` block of the first kit manifest, without the later vegetation and fine-stone keys: a frozen copy so the builder is tested independent of manifest edits.
 const META := {"materials": {
 	"ct_clay": {"colour": [0.28, 0.12, 0.07], "metallic": 0.0, "roughness": 0.85},
 	"ct_flags": {"set": "flags", "tile_in": 1.8, "tone": [0.45, 0.45, 0.47], "uv": "world"},
@@ -25,7 +25,7 @@ const META := {"materials": {
 	"ct_timber": {"set": "timber", "tile_in": 3.25, "tone": [0.7, 0.66, 0.62], "uv": "mesh"}}}
 const TEXTURED := ["ct_flags", "ct_plaster", "ct_roof", "ct_stone", "ct_stone_big", "ct_timber"]
 const SET_UNIFORMS := ["albedo_tex", "normal_tex", "orm_tex", "tile_in", "world_uv", "tone", "normal_depth"]
-## Declared for a later step and not set in v1 (the ground sets' parallax).
+## Declared but not set by the script yet (reserved for the ground sets' parallax).
 const RESERVED := ["height_tex"]
 
 
@@ -63,14 +63,14 @@ func _check_eleven(meta: Dictionary, stone_big_in: float, count := 11, textured 
 
 
 func test_the_manifest_gives_eleven_named_materials() -> void:
-	_check_eleven(META, 5.5)   # the K0 nominal numbers of the copy above
+	_check_eleven(META, 5.5)   # the nominal numbers of the frozen copy above
 
 
 func test_the_bundled_manifest_gives_twelve_named_materials_once_it_is_on_main() -> void:
 	if not FileAccess.file_exists(BUNDLED):
-		return   # step 3 (lane CORE) copies it in; until then the copy above is the manifest
+		return   # a checkout without the bundled manifest still runs the frozen copy above
 	# twelve manifest materials make THIRTEEN surface materials: ct_veg is one entry with two variants (ct_veg, ct_veg_card), both shader materials of the vegetation shader.
-	# PINNED to the stone scale ruled 22.11. (ct_stone_big 3.6 in, ct_stone 3.0 in): a later drift of the manifest goes red here.
+	# PINNED to the current stone scale (ct_stone_big 3.6 in, ct_stone 3.0 in): a later drift of the manifest goes red here.
 	_check_eleven(JSON.parse_string(FileAccess.get_file_as_string(BUNDLED)), 3.6, 13, TEXTURED + ["ct_veg", "ct_veg_card"])
 
 

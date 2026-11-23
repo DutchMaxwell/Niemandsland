@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## The dressing's hook into the board build (PLAN_RUINTOWN_DRESSING step 9): with no usable class the board is built exactly as before (same nodes, same colliders as a build with the dressing switched off); with the
+## The dressing's hook into the board build (docs/adr/0003-generated-board-dressing.md): with no usable class the board is built exactly as before (same nodes, same colliders as a build with the dressing switched off); with the
 ## houses dressed (a fake planner on the stub kit) the old house look is absent (Houses, Roofs, RoofsHip, RoofsCatslide, Turrets, TurretRoofs), a Dress node exists, the colliders are IDENTICAL, and
 ## BoardgenGreybox.draws_itself(box, skip) - the zero scale of the instance loop - is false for exactly the house-class boxes (chimneys, lean-tos). A MultiMesh cannot be read back on the headless dummy renderer
 ## (its transforms come back as the identity), so the scale itself is judged on the BEFORE / AFTER stills. The static switches are put back after every test.
