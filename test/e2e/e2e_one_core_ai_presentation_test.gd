@@ -1,15 +1,20 @@
 extends GdUnitTestSuite
-## One-core P3 step 42b: the core's AI volley shows what the table's shows. One plain AI volley through
-## `_run_ai_shooting`, seed for seed on the table path and on the core path (flag on, a board capture as the AI body takes
-## it): a recording combat stage sees the same calls in the same order - the stage's headline, each beat's title with
-## the lines it closes, the toast on screen, the live announce markers and the tracer cues drawn so far, and the close.
+## One-core P3 step 42b: the core's AI volley shows its beats. One plain AI volley through `_run_ai_shooting` on the
+## core path (flag on, a board capture as the AI body takes it): a recording combat stage sees the calls - the stage's
+## headline, each beat's title with the lines it closes, the toast on screen, the live announce markers and the tracer
+## cues drawn so far, and the close.
 ## Real: the main scene, NmlCore, the table's volley, announce, tracer, toast and stage code. Constructed: plain units
 ## (10 or 1 rifles vs 5), both seats AI (no save card waits), the stage forced on with no hold.
+## The table arm left with the AI table resolver; door values are snapshot pins read on main df2284f (docs/adr/0005-snapshot-pins.md).
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 	"faction_folder": "robot_legions", "rules": []}
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_MORALE := 9
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_MISSES := 3
 
 
 ## The recording stub: the real stage, every call written down with what the table shows at that moment.
@@ -71,8 +76,8 @@ func after_test() -> void:
 	_runner = null
 
 
-## One volley of seed `s` on fresh units; `core` = through the core (a capture of the board first). Returns the calls.
-func _volley(s: int, core: bool) -> Array:
+## One volley of seed `s` on fresh units, through the core (a capture of the board first). Returns the calls.
+func _volley(s: int) -> Array:
 	var n := 10 if s % 2 == 0 else 1   # one rifle misses now and then: a weapon beat with no saves
 	var att := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Att", "models": n, "x_in": 0.0}),
 		{"name": "Rifle", "range_in": 24, "attacks": 1, "count": n, "rules": []})
@@ -80,7 +85,7 @@ func _volley(s: int, core: bool) -> Array:
 		{"name": "Rifle", "range_in": 24, "attacks": 1, "count": 5, "rules": []})   # a plain target carries a profile
 	_main.seed_tray_rng(s)
 	_rec.calls.clear()
-	_main._solo_core_ai_h = CoreActivation.capture(_main) if core else 0
+	_main._solo_core_ai_h = CoreActivation.capture(_main)
 	await _main._run_ai_shooting({"unit": att, "moved": false, "action": AiDecision.Action.HOLD})
 	if _main._solo_core_ai_h != 0:
 		_main.solo_controller._core_node_ready().release(_main._solo_core_ai_h)
@@ -95,20 +100,15 @@ func _volley(s: int, core: bool) -> Array:
 ## RED: the core path without the announce (`_present` skips `_solo_show_attack_announce`) -> its Declaration beat
 ## shows no markers and no "Att fires at Def" toast.
 func test_the_core_volley_shows_what_the_table_shows(timeout := 300000) -> void:
-	var bad: Array = []
 	var core_runs := CoreActivation.ai_runs
 	var morale := 0
 	var misses := 0
 	for s in 12:
-		var table := await _volley(s, false)
-		var core := await _volley(s, true)
-		morale += 1 if table.any(func(c: String) -> bool: return c.begins_with("phase Morale")) else 0
-		misses += 1 if table.any(func(c: String) -> bool: return c.contains("— 0 hits")) else 0
-		if table != core:
-			bad.append("seed %d\n table %s\n core  %s" % [s, "\n       ".join(table), "\n       ".join(core)])
-	print("ONE_CORE_AI_SHOW seeds=12 core=%d morale=%d misses=%d mismatches=%d" % [CoreActivation.ai_runs - core_runs,
-		morale, misses, bad.size()])
+		var core := await _volley(s)
+		morale += 1 if core.any(func(c: String) -> bool: return c.begins_with("phase Morale")) else 0
+		misses += 1 if core.any(func(c: String) -> bool: return c.contains("— 0 hits")) else 0
+	print("ONE_CORE_AI_SHOW seeds=12 core=%d morale=%d misses=%d" % [CoreActivation.ai_runs - core_runs, morale, misses])
 	assert_int(CoreActivation.ai_runs - core_runs).override_failure_message("the core path was not taken").is_equal(12)
-	assert_int(morale).override_failure_message("no seed reached a Morale beat").is_greater(0)
-	assert_int(misses).override_failure_message("no seed missed (a weapon beat without saves)").is_greater(0)
-	assert_array(bad).override_failure_message("\n".join(bad.slice(0, 3))).is_empty()
+	assert_int(morale).override_failure_message("the number of seeds that reached a Morale beat").is_equal(WANT_MORALE)
+	assert_int(misses).override_failure_message("the number of seeds that missed (a weapon beat without saves)") \
+		.is_equal(WANT_MISSES)

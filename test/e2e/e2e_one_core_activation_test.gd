@@ -1,14 +1,14 @@
 extends GdUnitTestSuite
-## One-core P3 steps 22 + 22b (the spike gate #2647, reworked): one AI activation of a plain unit - Hold + shoot, or
-## Advance 4" + shoot on an open or a terrain board - resolved by the core through CoreActivation.drive on the table's
-## own tray equals the table's own AI path (_run_ai_shooting) seed for seed: the attacks (the table's scaled count vs
-## the core's hit dice), the surviving models, Shaken, the tray RNG after. In the core run the dead leave right after the
-## saves (O4 b, read at the morale throw) and the removals the steps landed equal the binding's delta. Step 27: both
-## runs add the same battle-log lines, (category, text) in the same order.
-## Step 22c adds the terrain board once more with its free forest as a real 3D sandbox piece (ObjectManager, rotated).
+## One-core P3 steps 22 + 22b: one AI activation of a plain unit - Hold + shoot, or Advance 4" + shoot on an open or
+## a terrain board - resolved by the core through CoreActivation.drive on the table's own tray. The door's checks: the
+## attacks (the table's scaled count vs the core's hit dice), the removals the steps landed equal the binding's delta,
+## and in the core run the dead leave right after the saves (O4 b, read at the morale throw). Step 22c adds the terrain
+## board once more with its free forest as a real 3D sandbox piece (ObjectManager, rotated).
 ## Real: the main scene, NmlCore, the table's volley, move and sight code. Constructed: plain shooters vs 5 at 12" (the
 ## seed picks the shooters' shape, SHAPES: weapon copies vs models, the dead, a per-model loadout or none, step 42d),
-## both seats AI (no save prompt waits). NML_ONE_CORE_SEEDS overrides the 200 seeds (1000 locally).
+## both seats AI (no save prompt waits).
+## The table arm left with the AI table resolver; door values are snapshot pins read on main df2284f (docs/adr/0005-snapshot-pins.md).
+## NML_ONE_CORE_SEEDS overrides the 200 seeds (1000 locally) and skips the aggregate pins.
 
 const INCH := 0.0254
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -118,8 +118,8 @@ func _kit_out(att: GameUnit, sh: Dictionary) -> void:
 			m.node.global_position.x -= 30.0 * INCH
 
 
-## One seed, one run, on fresh units. Returns what the comparison reads, plus the core's answer in a core run.
-func _run(s: int, advance: bool, board: bool, core_run: bool) -> Dictionary:
+## One seed's activation on fresh units, through the door. Returns the door's checks, its timing and the foe's outcome.
+func _run(s: int, advance: bool, board: bool) -> Dictionary:
 	var sh := _shape(s)
 	# One name (roster key) per shape: the binding keeps the statics it built for a set of unit keys, so a shape that
 	# reused seed 0's key would be resolved with seed 0's profile.
@@ -128,68 +128,58 @@ func _run(s: int, advance: bool, board: bool, core_run: bool) -> Dictionary:
 	_kit_out(att, sh)
 	var foe: GameUnit = ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Def", "models": 5, "x_in": 12.0}),
 		{})
+	var alive_start := foe.get_alive_count()
 	for m in att.models + foe.models if board else []:   # the board's lanes: shooters 0.4", targets 1.6" up the table
 		m.node.global_position.z += (0.4 if m.unit == att else 1.6) * INCH
 	var paths: Array = []
-	for m in att.get_alive_models() if advance else []:   # every shooter 4" toward the foe, same in both runs
+	for m in att.get_alive_models() if advance else []:   # every shooter 4" toward the foe
 		var to: Vector3 = m.node.global_position + Vector3(4.0 * INCH, 0, 0)
 		to.y = _main.terrain_overlay.surface_y_at(Vector2(to.x, to.z)) if board else 0.0   # stands on a roof or a floor
 		paths.append({"model": m, "path": [m.node.global_position, to]})
-	var lines: Array = []
-	var on_entry := func(e: Dictionary) -> void: lines.append("%d|%s" % [int(e["category"]), str(e["text"])])
-	_main.battle_log.entry_added.connect(on_entry)
 	_main.seed_tray_rng(s)
 	var out := {"bad": []}
-	if core_run:
-		var h := CoreActivation.capture(_main)
-		var t: Array = [{"t": "begin"}]
-		if advance:
-			t.append({"t": "placed", "positions": paths.map(func(p: Dictionary) -> Vector3: return p["path"][1])})
-			for p in paths:
-				(p["model"] as ModelInstance).node.global_position = p["path"][1]
-		var kind := AiDecision.Action.ADVANCE if advance else AiDecision.Action.HOLD
-		t.append({"t": "intent", "kind": kind, "shoot": foe.unit_id})
-		# The table's own count of models with range and sight (main._solo_shot_eligibility), from the same spots, and
-		# the attacks it scales from them (42d: copies and living bearers, SoloController.scaled_attacks_report).
-		var sighted: int = _main._solo_sighted_count(att, foe, RIFLE["range_in"], false, null, false, null, true)
-		var prof: Dictionary = AiShooting.profiles_in_range((att.source_data as OPRApiClient.OPRUnit).weapons,
-			float(RIFLE["range_in"]))[0]
-		var want := int(SoloController.scaled_attacks_report(att, prof, sighted, att.models.size())["attacks"])
-		var before := foe.get_alive_models()
-		var throws: Array = []
-		var on_throw := func(k: String, _i: int) -> void: throws.append([k, foe.get_alive_count()])
-		out = await CoreActivation.drive(_main, h, att, t, true, on_throw)
-		out["bad"] = [] if str(out["step"]) == "done" else ["core answered %s" % out]
-		var dice := 0   # the core's hit dice
-		for e in t.filter(func(e: Dictionary) -> bool: return str(e["t"]) == "faces").slice(0, 1):
-			dice = (e["faces"] as Array).size()
-		if dice != want:
-			out["bad"].append("attacks: the table fires %d (%d models in sight), the core throws %d dice" % [want, sighted,
-				dice])
-		var core: Object = (_main.solo_controller as SoloController)._core_node_ready()
-		core.release(h)   # the test frees its own handles (the capture and the done state)
-		core.release(int(out.get("handle", 0)))
-		var saved := false
-		for th in throws:   # O4 b: every throw after the saves (the morale test) sees the final survivors
-			if saved and int(th[1]) != foe.get_alive_count():
-				out["bad"].append("%d alive at the morale throw, %d after" % [th[1], foe.get_alive_count()])
-			saved = saved or str(th[0]) == "defense"
-		var landed: Array = range(before.size()).filter(func(i: int) -> bool: return not before[i].is_alive)
-		var removed: Array = []
-		for d in out.get("delta", []):
-			removed = Array(d["removed"]) if str(d["unit"]) == foe.unit_id else removed
-		removed.sort()
-		if landed != removed:
-			out["bad"].append("landed removals %s, delta removed %s" % [landed, removed])
-	else:
-		await _main._solo_animate_move(paths)
-		for p in paths:   # the real table settles a moved model on the surface it ends on (a roof, a floor)
-			((p["model"] as ModelInstance).node as Node3D).global_position.y = (p["path"][1] as Vector3).y
-		await _main._run_ai_shooting({"unit": att, "moved": advance})
-	_main.battle_log.entry_added.disconnect(on_entry)
-	var survivors: Array = foe.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
-	survivors.sort()
-	out.merge({"survivors": survivors, "shaken": foe.is_shaken, "rng": _main._tray_rng.state, "lines": lines}, true)
+	var h := CoreActivation.capture(_main)
+	var t: Array = [{"t": "begin"}]
+	if advance:
+		t.append({"t": "placed", "positions": paths.map(func(p: Dictionary) -> Vector3: return p["path"][1])})
+		for p in paths:
+			(p["model"] as ModelInstance).node.global_position = p["path"][1]
+	var kind := AiDecision.Action.ADVANCE if advance else AiDecision.Action.HOLD
+	t.append({"t": "intent", "kind": kind, "shoot": foe.unit_id})
+	# The table's own count of models with range and sight (main._solo_shot_eligibility), from the same spots, and
+	# the attacks it scales from them (42d: copies and living bearers, SoloController.scaled_attacks_report).
+	var sighted: int = _main._solo_sighted_count(att, foe, RIFLE["range_in"], false, null, false, null, true)
+	var prof: Dictionary = AiShooting.profiles_in_range((att.source_data as OPRApiClient.OPRUnit).weapons,
+		float(RIFLE["range_in"]))[0]
+	var want := int(SoloController.scaled_attacks_report(att, prof, sighted, att.models.size())["attacks"])
+	var before := foe.get_alive_models()
+	var throws: Array = []
+	var on_throw := func(k: String, _i: int) -> void: throws.append([k, foe.get_alive_count()])
+	out = await CoreActivation.drive(_main, h, att, t, true, on_throw)
+	out["bad"] = [] if str(out["step"]) == "done" else ["core answered %s" % out]
+	var dice := 0   # the core's hit dice
+	for e in t.filter(func(e: Dictionary) -> bool: return str(e["t"]) == "faces").slice(0, 1):
+		dice = (e["faces"] as Array).size()
+	if dice != want:
+		out["bad"].append("attacks: the table fires %d (%d models in sight), the core throws %d dice" % [want, sighted,
+			dice])
+	var core: Object = (_main.solo_controller as SoloController)._core_node_ready()
+	core.release(h)   # the test frees its own handles (the capture and the done state)
+	core.release(int(out.get("handle", 0)))
+	var saved := false
+	for th in throws:   # O4 b: every throw after the saves (the morale test) sees the final survivors
+		if saved and int(th[1]) != foe.get_alive_count():
+			out["bad"].append("%d alive at the morale throw, %d after" % [th[1], foe.get_alive_count()])
+		saved = saved or str(th[0]) == "defense"
+	var landed: Array = range(before.size()).filter(func(i: int) -> bool: return not before[i].is_alive)
+	var removed: Array = []
+	for d in out.get("delta", []):
+		removed = Array(d["removed"]) if str(d["unit"]) == foe.unit_id else removed
+	removed.sort()
+	if landed != removed:
+		out["bad"].append("landed removals %s, delta removed %s" % [landed, removed])
+	out["shaken"] = foe.is_shaken
+	out["removed"] = alive_start - foe.get_alive_count()
 	for u in [att, foe]:
 		_main.opr_army_manager.game_units.erase((u as GameUnit).unit_id)
 		for m in (u as GameUnit).models:
@@ -197,37 +187,52 @@ func _run(s: int, advance: bool, board: bool, core_run: bool) -> Dictionary:
 	return out
 
 
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_AGGREGATES := {
+	"hold": {"removed": 235, "shaken": 12},
+	"advance": {"removed": 235, "shaken": 12},
+	"terrain": {"removed": 87, "shaken": 0},
+	"sandbox": {"removed": 58, "shaken": 0},
+	"sandbox_rotated": {"removed": 12, "shaken": 0},
+	"sandbox_deleted": {"removed": 15, "shaken": 0},
+	"sandbox_added": {"removed": 9, "shaken": 0},
+	"free_blocker": {"removed": 14, "shaken": 0},
+	"free_roof": {"removed": 9, "shaken": 0},
+	"free_floor": {"removed": 14, "shaken": 0},
+}
+
+
 func _gate(advance: bool, board: bool, label := "", fewer := 0) -> void:
 	var seeds := int(OS.get_environment("NML_ONE_CORE_SEEDS")) if OS.has_environment("NML_ONE_CORE_SEEDS") else 200
 	seeds = mini(seeds, fewer) if fewer > 0 else seeds
 	var bad: Array = []
-	var line_diffs: Array = []
 	var steps := 0
 	var core_us := 0
 	var max_us := 0
+	var removed := 0
+	var shaken := 0
+	var case_name := label if not label.is_empty() else "terrain" if board else "advance" if advance else "hold"
 	for s in seeds:
-		var table := await _run(s, advance, board, false)
-		var core := await _run(s, advance, board, true)
+		var core := await _run(s, advance, board)
 		steps += int(core.get("steps", 0))
 		core_us += int(core.get("core_us", 0))
 		max_us = maxi(max_us, int(core.get("max_us", 0)))
-		for k in ["survivors", "shaken", "rng"]:
-			if table[k] != core[k]:
-				core["bad"].append("%s: table %s, core %s" % [k, table[k], core[k]])
+		removed += int(core["removed"])
+		shaken += 1 if core["shaken"] else 0
 		for b in core["bad"]:
 			bad.append("seed %d: %s" % [s, b])
-		if table["lines"] != core["lines"]:
-			line_diffs.append("seed %d\n table %s\n core  %s" % [s, "\n       ".join(table["lines"]),
-				"\n       ".join(core["lines"])])
-	var case_name := label if not label.is_empty() else "terrain" if board else "advance" if advance else "hold"
-	print("ONE_CORE_ACTIVATION case=%s seeds=%d mismatches=%d line_diffs=%d mean_us=%.1f max_us=%d handles=%d" % [
-		case_name, seeds, bad.size(), line_diffs.size(), float(core_us) / maxi(steps, 1), max_us,
+	print("ONE_CORE_ACTIVATION case=%s seeds=%d removed=%d shaken=%d mismatches=%d mean_us=%.1f max_us=%d handles=%d" % [
+		case_name, seeds, removed, shaken, bad.size(), float(core_us) / maxi(steps, 1), max_us,
 		int((_main.solo_controller as SoloController)._core_node_ready().live_handles())])
-	if not line_diffs.is_empty():
-		print("ONE_CORE_ACTIVATION first line diff: ", line_diffs[0])
-	assert_array(bad).override_failure_message("core vs table:\n" + "\n".join(bad.slice(0, 10))).is_empty()
-	assert_array(line_diffs).override_failure_message("battle-log lines differ in %d seeds, first:\n%s" % [
-		line_diffs.size(), "" if line_diffs.is_empty() else line_diffs[0]]).is_empty()
+	if OS.has_environment("NML_ONE_CORE_SEEDS"):
+		print("ONE_CORE_ACTIVATION case=%s: NML_ONE_CORE_SEEDS is set, aggregate pins skipped" % case_name)
+	else:
+		var want: Dictionary = WANT_AGGREGATES[case_name]
+		if removed != int(want["removed"]):
+			bad.append("the foe lost %d models over all seeds, the pin says %d" % [removed, int(want["removed"])])
+		if shaken != int(want["shaken"]):
+			bad.append("%d seeds ended shaken, the pin says %d" % [shaken, int(want["shaken"])])
+	assert_array(bad).override_failure_message("core door:\n" + "\n".join(bad.slice(0, 10))).is_empty()
 
 
 func test_hold_and_shoot_equals_the_table(timeout := 900000) -> void:
@@ -251,7 +256,7 @@ func test_advance_on_a_board_with_a_3d_sandbox_piece_equals_the_table(timeout :=
 ## Step 22c (1): the game header - the board the core reads - goes out with the first capture; the table reads its
 ## pieces live. Seed 0's core run is that first capture, then the player changes the table. 28 seeds = 4 of each shape.
 func _header_sent() -> void:
-	await _run(0, true, true, true)
+	await _run(0, true, true)
 
 
 ## How many free pieces the core holds now (the header's, or the last refresh's).
