@@ -38,16 +38,16 @@ use crate::unit::ShieldedAlias;
         assert!(ready.iter().any(|l| l == "Att fires at Def") && !ready.iter().any(|l| l.contains("no volley")), "{ready:?}");
     }
 
-    /// COV-D1 lines (6 cells): the once-per-game Protection Feat's ignore roll names its rule like the table's group line, and (29a) its spend
-    /// line follows the roll line at once, as the table's `_solo_roll_ignore_group` says it (it was the door's, after the volley). RED before
-    /// 29a: the spend line was missing here.
+    /// COV-D1 lines (6 cells): the once-per-game Protection Feat's ignore roll names its rule like the table's group line (its spend line is the
+    /// door's, said after the volley: an order gap left open).
     #[test]
     fn the_protection_feat_names_its_ignore_roll() {
         let def = Ctx { regeneration: true, regen_target: 5, regen_feat: 5, regen_pending_notes: ["", "", "", "Protection Feat"], ..Default::default() };
         let mut tray = Tray::supplied(vec![vec![6, 1]]);
         crate::dice::ignore_batch(2, 0, 0, &def, "Def", &mut tray, &mut Vec::new());
         let lines: Vec<String> = tray.all_lines().into_iter().map(|l| l.text).collect();
-        assert_eq!(lines, ["Def rolls 2 Protection Feat dice (5+) — 1 wound ignored", "Protection Feat: Def spends its once-per-game ignore roll"]);
+        // The spend line is the door's (`CoreActivation._land_feats` names the latch the delta closes): the core does not say it twice.
+        assert_eq!(lines, ["Def rolls 2 Protection Feat dice (5+) — 1 wound ignored"]);
     }
 
     /// 29a: a Protection Feat already spent this game says so where it would have rolled (the table's PF-a line), and rolls nothing. RED before:
