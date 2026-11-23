@@ -17,9 +17,9 @@ scripts/boardgen_dress_mesh.gd
 scripts/boardgen_dress_rules.gd
 scripts/boardgen_dress_story.gd
 scripts/containers_library.gd
-scripts/dress_context.gd
+scripts/boardgen_dress_context.gd
 scripts/dress_module_spec.gd
-scripts/dress_placement.gd
+scripts/boardgen_dress_placement.gd
 scripts/floating_rule_text.gd
 scripts/hud/hud_frame.gd
 scripts/import_await_guard.gd

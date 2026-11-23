@@ -16,9 +16,9 @@ scripts/boardgen_dress_rules.gd
 scripts/boardgen_dress_story.gd
 scripts/core_load_notice.gd
 scripts/deleted_state.gd
-scripts/dress_context.gd
+scripts/boardgen_dress_context.gd
 scripts/dress_module_spec.gd
-scripts/dress_placement.gd
+scripts/boardgen_dress_placement.gd
 scripts/landing_preview.gd
 scripts/net_dialog.gd
 scripts/player_identity.gd
