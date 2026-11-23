@@ -168,7 +168,9 @@ often missed:
 Write commit subjects and PR titles as `type(scope): subject`, with `type` one of `feat`, `fix`,
 `refactor`, `test`, `docs`, `chore`, and an optional scope such as `core`, `solo`, `boardgen`,
 `mp`. Example: `fix(core): a volley keeps the declared Defense of a killed target`.
-The version-prefix convention seen in older history (`[0.3.x] subject`) is under review.
+The version is not part of the title: every pull request carries the release it ships in as its
+GitHub milestone (for example `0.3.16`), and the release notes are collected by milestone. Older
+history uses a `[0.3.x] subject` prefix instead.
 
 ## Known structure debt
 
