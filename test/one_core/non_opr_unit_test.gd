@@ -31,9 +31,13 @@ const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_s
 	"faction_folder": "robot_legions", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
 ## Per-seed alive count of the 5-model target after the AI door volley, read on main af5c83610 (identical at defense 2, 4 and 6).
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_D2 := [0, 2, 3, 5, 3, 3, 3, 2, 4, 4, 2, 5, 5, 4, 1, 3, 1, 4, 3, 2]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_D4 := [0, 2, 3, 5, 3, 3, 3, 2, 4, 4, 2, 5, 5, 4, 1, 3, 1, 4, 3, 2]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_D6 := [0, 2, 3, 5, 3, 3, 3, 2, 4, 4, 2, 5, 5, 4, 1, 3, 1, 4, 3, 2]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_HURT := 123
 
 var _runner: GdUnitSceneRunner

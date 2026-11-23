@@ -15,9 +15,13 @@ const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_s
 	"faction_folder": "robot_legions", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
 ## The target's alive models per seed (0-4), read on main from the table volley.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_SPEND := [0, 0, 3, 3, 1, 2, 2, 2, 3, 4, 2, 5, 4, 3, 0, 3, 1, 3, 2, 2]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_STANDING := [0, 0, 3, 3, 1, 2, 2, 2, 3, 4, 2, 5, 4, 3, 0, 3, 1, 3, 2, 2]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_NO_POOL := [0, 2, 3, 5, 3, 3, 3, 2, 4, 4, 2, 5, 5, 4, 1, 3, 1, 4, 3, 2]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_BELOW_73 := [0, 0, 1, 2, 0, 0, 0, 0, 2, 4, 2, 4, 3, 3, 0, 2, 1, 3, 2, 0]
 
 var _runner: GdUnitSceneRunner

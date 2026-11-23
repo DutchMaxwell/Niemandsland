@@ -19,10 +19,14 @@ const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_s
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
 const STRAFE_GUN := {"name": "Strafe Gun", "range_in": 24, "attacks": 2, "count": 10, "rules": ["Crossing Strike"]}
 ## The defender's alive models per seed (0-19), read on main from the table run's survivors.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_FIRE := [12, 10, 14, 11, 10, 8, 10, 13, 14, 11, 12, 14, 12, 11, 13, 12, 13, 16, 7, 13]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_END := [14, 14, 16, 15, 13, 13, 12, 14, 16, 14, 14, 16, 16, 14, 14, 15, 18, 18, 12, 15]
 ## The wounded models in all, from the `HUMAN_STRAFE ... hurt=` line read on main.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_HURT_FIRE := 164
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_HURT_END := 107
 
 var _runner: GdUnitSceneRunner

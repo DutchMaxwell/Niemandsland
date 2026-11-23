@@ -112,7 +112,9 @@ func _run(rules: Array, x_in: float) -> Dictionary:
 ## The door's Warbound pay-line total per case, read on main af5c83610 in the door-only run. The compare run's table arm said 10
 ## and its door arm 9 (the table volley first changes which models the pay hits); the door-only run says 16 at both distances: every
 ## seed pays the line. The end state stays equal across all three readings.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_SHRED_CONTACT := 16
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_SHRED_FAR := 16
 
 
@@ -122,6 +124,7 @@ func _check(r: Dictionary, pays: bool, want_lines: int) -> void:
 	if pays:
 		assert_int(int(r["door_lines"])).override_failure_message("the door never logged Warbound paying").is_equal(want_lines)
 	else:
+		# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 		assert_int(int(r["door_lines"])).override_failure_message("the base form paid where it must not").is_equal(0)
 
 

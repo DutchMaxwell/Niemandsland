@@ -15,6 +15,7 @@ const Harness := preload("res://test/one_core/golden_witness_harness.gd")
 const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 	"faction_folder": "robot_legions", "rules": []}
 ## The door's slots per seed at epoch 94, read on main (where the table still shoots and equals the door).
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_SLOTS_94 := [[[0, false, 0], [1, false, 0], [2, false, 0], [3, false, 0], [4, false, 0], [5, false, 0]],
 	[[0, false, 0], [1, false, 0], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0]],
 	[[0, false, 0], [1, false, 0], [2, true, 1], [3, true, 1], [4, false, 0], [5, false, 0]],
@@ -95,5 +96,6 @@ func test_a_volley_kills_the_same_models_through_the_door(timeout := 600000) -> 
 		if door != WANT_SLOTS_94[s]:
 			bad.append("seed %d\n want %s\n door %s" % [s, str(WANT_SLOTS_94[s]), str(door)])
 	print("CASUALTY_SLOTS seeds=16 deep_kills=%d" % deep)
+	# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 	assert_int(deep).override_failure_message("no seed killed four or five of six: the test proved nothing").is_equal(11)
 	assert_array(bad).override_failure_message("\n".join(bad.slice(0, 3))).is_empty()

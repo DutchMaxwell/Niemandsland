@@ -17,11 +17,14 @@ const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
 const DICE := "user://beats_guard_dice"
 const SEEDS := 16
 ## The trigger die of a Breath Attack bearer rolls exactly once per seed.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_BEAT_DICE := [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 ## The once-per-game `storm_used_*` latch a Storm bearer closes, per facet.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_LATCHES := {"Storm of War": ["storm_used_storm_of_war"], "Storm of Lust": ["storm_used_storm_of_lust"],
 	"Storm of Plague": ["storm_used_storm_of_plague"], "Storm of Change": ["storm_used_storm_of_change"]}
 ## The "unleashes the storm" line is said once per activation, per facet and seed.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_STORMS := {"Storm of War": [1, 1, 1, 1, 1, 1, 1, 1], "Storm of Lust": [1, 1, 1, 1, 1, 1, 1, 1],
 	"Storm of Plague": [1, 1, 1, 1, 1, 1, 1, 1], "Storm of Change": [1, 1, 1, 1, 1, 1, 1, 1]}
 
@@ -110,6 +113,7 @@ func test_a_mend_bearer_the_core_takes_mends_once_and_lands_what_the_table_lands
 		assert_int(int(on["ran"])).override_failure_message("seed %d: the core did not take the activation" % s).is_equal(1)
 		assert_int(int(on["mend_dice"])).override_failure_message("seed %d: door on rolled the Mend die %d times (rolls %s)" % [s, on["mend_dice"], on["rolls"]]).is_equal(1)
 		mended += 1 if not (on["mend_lines"] as Array).is_empty() else 0
+	# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 	assert_int(mended).override_failure_message("the patient was never healed: the check proved nothing").is_equal(16)
 
 
@@ -132,6 +136,7 @@ func test_a_breath_bearer_the_core_takes_breathes_once_and_lands_what_the_table_
 		assert_int(int(on["ran"])).override_failure_message("seed %d: the core did not take the activation" % s).is_equal(1)
 		assert_int(int(on["beat_dice"])).override_failure_message("seed %d: door on rolled %s (want %d)" % [s, on["rolls"], WANT_BEAT_DICE[s]]).is_equal(WANT_BEAT_DICE[s])
 		breathed += 1 if (on["lines"] as Array).any(func(l: String) -> bool: return l.contains("breathes on")) else 0
+	# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 	assert_int(breathed).override_failure_message("no seed breathed: the check proved nothing").is_equal(13)
 
 
@@ -150,6 +155,7 @@ func test_a_storm_bearer_the_core_takes_storms_once_and_lands_what_the_table_lan
 			var storms: int = (on["lines"] as Array).filter(func(l: String) -> bool: return l.contains("unleashes the storm")).size()
 			assert_int(storms).override_failure_message("%s: the storm line said %d times, want %d" % [tag, storms, WANT_STORMS[facet[0]][s]]).is_equal(WANT_STORMS[facet[0]][s])
 			stormed += 1 if (on["lines"] as Array).any(func(l: String) -> bool: return l.contains("unleashes the storm")) else 0
+	# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 	assert_int(stormed).override_failure_message("no seed stormed: the check proved nothing").is_equal(32)
 
 
@@ -166,4 +172,5 @@ func test_a_mind_control_bearer_the_core_takes_forces_one_test_and_lands_what_th
 			var tag := "%s seed %d" % [entry[0], s]
 			assert_int(int(on["ran"])).override_failure_message("%s: the core did not take the activation" % tag).is_equal(1)
 			failed += 1 if (on["lines"] as Array).any(func(l: String) -> bool: return l.contains("FAILED")) else 0
+	# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 	assert_int(failed).override_failure_message("no seed failed the forced test: the check proved nothing").is_equal(2)

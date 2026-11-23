@@ -45,3 +45,4 @@ checks enforce it.
 | [0002](0002-rules-epochs.md) | Rules epochs: recorded games replay byte-identically | Accepted |
 | [0003](0003-generated-board-dressing.md) | Generated-board dressing: the grid is the truth, modules are the look | Accepted |
 | [0004](0004-dressing-materials-and-kit-manifest.md) | Dressing materials and the kit manifest | Accepted |
+| [0005](0005-snapshot-pins.md) | Compare-cleanup literals are snapshot pins | Accepted |

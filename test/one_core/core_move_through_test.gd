@@ -16,8 +16,11 @@ const ParityTable := preload("res://test/parity/parity_table.gd")
 const INCH := 0.0254
 const TMP := "user://move_through_slice.json"
 ## The defender's alive models per seed (0-19), read on main from the table run's survivors.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_RUSH := [14, 14, 16, 15, 13, 13, 12, 14, 16, 14, 14, 16, 16, 14, 14, 15, 18, 18, 12, 15]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_ADVANCE := [12, 10, 14, 11, 10, 8, 10, 13, 14, 11, 12, 14, 12, 11, 13, 12, 13, 16, 7, 13]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_WIPE := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 	"faction_folder": "robot_legions", "rules": []}

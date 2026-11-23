@@ -11,9 +11,11 @@ extends GdUnitTestSuite
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
 ## The dice lines of the one-seed volley (read on main from the table arm).
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_DICE := ["6 6 6 6 6 5 5 5 5 4 3 3 3 3 3 3 3 3 3 3 2 2 2 2 1 1 1 1 1 1 → 24 hits (2+)",
 	"6 6 6 6 6 6 5 5 5 5 4 4 4 4 3 3 3 3 2 2 2 2 1 1 → 6 blocks (6+)", "2 → failed (4+)"]
 ## The whole battle log of the one-seed volley (read on main from the table arm).
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_LINES := ["Hero: Champion is the unit now — shots from Gunners at Cultists are measured and saved as the hero",
 	"Gunners fires at Cultists",
 	"AI (Gunners): 6 6 6 6 6 5 5 5 5 4 3 3 3 3 3 3 3 3 3 3 2 2 2 2 1 1 1 1 1 1 → 24 hits (2+)",

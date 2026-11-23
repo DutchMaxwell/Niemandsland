@@ -242,6 +242,7 @@ func test_a_unit_wiped_by_its_own_test_fires_nothing() -> void:
 		var core := await _lone_case(seed, true)
 		gone += 1 if bool(core["gone"]) else 0
 		stands += 0 if bool(core["gone"]) else 1
+	# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 	assert_bool(gone == 10 and stands == 30).override_failure_message("gone %d, stands %d" % [gone, stands]).is_true()
 
 

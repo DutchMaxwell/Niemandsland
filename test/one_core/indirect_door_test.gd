@@ -107,9 +107,12 @@ func _run(epoch: int, gun_rules: Array, hidden: bool, cover: bool) -> Dictionary
 
 const GUN := ["AP(1)", "Blast(3)", "Indirect"]
 ## At epoch 84 the core fired nothing at the hidden target (the old gap), read on main af5c83610.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_FIRED_84 := 0
 ## Per-seed target alive count on the door under cover, read on main af5c83610.
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_COVER_FALSE := [5, 4, 4, 3, 3, 5, 5, 3, 4, 4, 4, 5, 5, 3, 3, 4]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
 const WANT_ALIVE_COVER_TRUE := [5, 4, 4, 3, 3, 5, 5, 3, 4, 4, 4, 5, 5, 3, 3, 4]
 
 
