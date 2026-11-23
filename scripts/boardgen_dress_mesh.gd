@@ -4,7 +4,6 @@ extends RefCounted
 ## (sorted by name, each surface named by its material), so the whole board is a handful of draw calls. The vertex data of the modules is kept as authored - tangents come with the GLBs, nothing is
 ## generated here (generate_tangents on a merged mesh costs over a second). `shadow` is the low-poly proxy that casts the shadows: one surface of boxes from the modules' hull lists.
 
-const INCHES_TO_METERS := BoardgenGreybox.INCHES_TO_METERS
 const SHRINK_IN := 0.05   # a module without a hull list casts the shadow of its aabb shrunk by this much
 
 
@@ -46,7 +45,7 @@ static func shadow(placements: Array, kit: BoardgenDressKit) -> ArrayMesh:
 		for hull: Array in _hulls(module):
 			var lo := Vector3(hull[0][0], hull[0][1], hull[0][2])
 			var hi := Vector3(hull[1][0], hull[1][1], hull[1][2])
-			var box := Transform3D(Basis.from_scale((hi - lo) * INCHES_TO_METERS), (lo + hi) * 0.5 * INCHES_TO_METERS)
+			var box := Transform3D(Basis.from_scale((hi - lo) * Units.INCHES_TO_METERS), (lo + hi) * 0.5 * Units.INCHES_TO_METERS)
 			tool.append_from(unit, 0, (placement["xf"] as Transform3D) * box)
 			boxes += 1
 	var out := ArrayMesh.new()

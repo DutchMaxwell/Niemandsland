@@ -6,7 +6,6 @@ extends RefCounted
 ## edge strip of an edge that drops (R4); above CLEAR only an overhang (R2). R3 = the drawn face sits 0..0.2 inside the collider face. R5 = the ladder zones carry only ladders and plain faces.
 ## Layout of this file: the grid helpers and the constants first, then violations() for R1 / R2 / R4, then R3 (the face sits 0..0.2 in inside the collider face, lean <= 1.5 degrees) and R5 (the ladder zones).
 
-const INCHES_TO_METERS := BoardgenGreybox.INCHES_TO_METERS
 const FLAT := 0.08   # inches: what may lie on a walkable top (decals, flat litter) without counting as an obstacle
 const CLEAR := 2.0   # inches: the column above a walkable top that a standing model needs free
 const OVERHANG := 0.35   # inches: how far a piece above CLEAR may reach over a walkable cell from a taller footprint (R2)
@@ -71,7 +70,7 @@ static func kept_clear(layout: Dictionary) -> Dictionary:
 ## The transform of a face module: its origin on the face's start point moved `inset_in` INTO the mass (against `out`), x along the face, y up, z out; `lean_deg` tips the top outward (negative: inward).
 static func face_xf(start_in: Vector3, along: Vector3, out: Vector3, inset_in: float, lean_deg: float) -> Transform3D:
 	var basis := Basis(along, Vector3.UP, out) * Basis(Vector3.RIGHT, deg_to_rad(lean_deg))
-	return Transform3D(basis, (start_in - out * inset_in) * INCHES_TO_METERS)
+	return Transform3D(basis, (start_in - out * inset_in) * Units.INCHES_TO_METERS)
 
 
 ## The R1-R5 breaks of a set of placements on a layout, one line per rule and placement ("R1 <cls> <module> at (x, z): ..."); empty = honest.
@@ -86,7 +85,7 @@ static func violations(layout: Dictionary, placements: Array, meta: Dictionary) 
 	for placement: Dictionary in placements:
 		var module: Dictionary = meta["modules"].get(placement["module"], {})
 		var xf: Transform3D = placement["xf"]
-		var at := "%s %s at (%.1f, %.1f)" % [placement.get("cls", ""), placement["module"], xf.origin.x / INCHES_TO_METERS, xf.origin.z / INCHES_TO_METERS]
+		var at := "%s %s at (%.1f, %.1f)" % [placement.get("cls", ""), placement["module"], xf.origin.x / Units.INCHES_TO_METERS, xf.origin.z / Units.INCHES_TO_METERS]
 		if module.is_empty():
 			out.append("R0 unknown module " + at)
 			continue
@@ -107,7 +106,7 @@ static func violations(layout: Dictionary, placements: Array, meta: Dictionary) 
 			found.append("R3 leans %.2f degrees" % lean)
 		if FACES.has(module["family"]):
 			var outward := Vector2(xf.basis.z.x, xf.basis.z.z).normalized()
-			var mid3 := xf * (Vector3(float(module["len_in"]) * 0.5, 0.0, 0.0) * INCHES_TO_METERS) / INCHES_TO_METERS
+			var mid3 := xf * (Vector3(float(module["len_in"]) * 0.5, 0.0, 0.0) * Units.INCHES_TO_METERS) / Units.INCHES_TO_METERS
 			var mid := Vector2(mid3.x, mid3.z)
 			var axis := 0 if absf(outward.x) > absf(outward.y) else 1
 			var inside := floori((mid[axis] - outward[axis] * 0.5 - origin[axis]) / cell)   # the cell the face belongs to, along its axis
@@ -146,7 +145,7 @@ static func _air(layout: Dictionary, module: Dictionary, xf: Transform3D, cx: in
 	var origin := Vector2(layout["nx"], layout["nz"]) * cell * -0.5
 	var cell_rect := Rect2(origin + Vector2(cx, cz) * cell, Vector2(cell, cell))
 	var top := top_in(layout, cx, cz)
-	var origin_y := xf.origin.y / INCHES_TO_METERS
+	var origin_y := xf.origin.y / Units.INCHES_TO_METERS
 	var up_scale := maxf(xf.basis.y.y, MIN_UP_SCALE)
 	if tags.has("soft_veg") and top <= 0.0:   # no collider, no cover: on the ground a tuft is no obstacle up to SOFT_VEG (a tier top keeps R4)
 		return "" if origin_y + hi.y * up_scale - top <= SOFT_VEG + TOL else "R1: soft vegetation higher than %.1f in" % SOFT_VEG
@@ -223,6 +222,6 @@ static func _rect(xf: Transform3D, lo: Vector3, hi: Vector3, y0: float, y1: floa
 	var out := Rect2()
 	for corner in 8:   # bit 0 = x, bit 1 = y, bit 2 = z of the box corner
 		var local := Vector3(hi.x if corner & 1 else lo.x, y1 if corner & 2 else y0, reach if corner & 4 else lo.z)
-		var point := xf * (local * INCHES_TO_METERS) / INCHES_TO_METERS
+		var point := xf * (local * Units.INCHES_TO_METERS) / Units.INCHES_TO_METERS
 		out = Rect2(point.x, point.z, 0.0, 0.0) if corner == 0 else out.expand(Vector2(point.x, point.z))
 	return out

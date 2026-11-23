@@ -36,7 +36,7 @@ func _family(meta: Dictionary, module: String) -> String:
 ## The cell a face placement belongs to: the midpoint at half the module's length, not the corner origin.
 func _mid_cell(layout: Dictionary, p: Dictionary, meta: Dictionary) -> Vector2i:
 	var m: Dictionary = meta["modules"][p["module"]]
-	var mid := ((p["xf"] as Transform3D) * (Vector3(float(m["len_in"]) * 0.5, 0.0, 0.0) * R.INCHES_TO_METERS)) / R.INCHES_TO_METERS
+	var mid := ((p["xf"] as Transform3D) * (Vector3(float(m["len_in"]) * 0.5, 0.0, 0.0) * Units.INCHES_TO_METERS)) / Units.INCHES_TO_METERS
 	return _cell(layout, mid)
 
 
@@ -47,7 +47,7 @@ func _cell(layout: Dictionary, p_in: Vector3) -> Vector2i:
 
 
 func _origin_cell(layout: Dictionary, p: Dictionary) -> Vector2i:
-	return _cell(layout, (p["xf"] as Transform3D).origin / R.INCHES_TO_METERS)
+	return _cell(layout, (p["xf"] as Transform3D).origin / Units.INCHES_TO_METERS)
 
 
 ## The face index N E S W a placement looks out of.

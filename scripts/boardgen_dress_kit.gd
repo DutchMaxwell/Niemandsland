@@ -5,7 +5,6 @@ extends RefCounted
 ## with (the GLB's material name), so the merge can put all modules of one material into one surface. `force_stub` (tests) draws every module as a box of its aabb: no GLB needed. Meshes are in metres.
 
 const MANIFEST_PATH := "res://assets/ruintown_dress.json"
-const INCHES_TO_METERS := BoardgenGreybox.INCHES_TO_METERS
 
 var meta: Dictionary = {}   # the parsed manifest
 var _kit: BoardgenKit
@@ -60,8 +59,8 @@ static func surface_name(material: String, variant: String, materials: Dictionar
 
 
 static func _box(m: Dictionary, variant: String, materials: Dictionary) -> ArrayMesh:
-	var lo := Vector3(m["aabb_in"][0][0], m["aabb_in"][0][1], m["aabb_in"][0][2]) * INCHES_TO_METERS
-	var hi := Vector3(m["aabb_in"][1][0], m["aabb_in"][1][1], m["aabb_in"][1][2]) * INCHES_TO_METERS
+	var lo := Vector3(m["aabb_in"][0][0], m["aabb_in"][0][1], m["aabb_in"][0][2]) * Units.INCHES_TO_METERS
+	var hi := Vector3(m["aabb_in"][1][0], m["aabb_in"][1][1], m["aabb_in"][1][2]) * Units.INCHES_TO_METERS
 	var box := BoxMesh.new()
 	box.size = hi - lo
 	var arrays := box.get_mesh_arrays()
