@@ -54,3 +54,92 @@ static func kept_clear(layout: Dictionary) -> Dictionary:
 ## The transform of a face module: its origin on the face's start point moved `inset_in` INTO the mass (against `out`), x along the face, y up, z out; `lean_deg` tips the top outward (negative: inward).
 static func face_xf(start_in: Vector3, along: Vector3, out: Vector3, inset_in: float, lean_deg: float) -> Transform3D:
 	return Transform3D(Basis(along, Vector3.UP, out) * Basis(Vector3.RIGHT, deg_to_rad(lean_deg)), (start_in - out * inset_in) * IN_M)
+
+
+## The R1 / R2 / R4 breaks of a set of placements on a layout, one line per rule and placement ("R1 <cls> <module> at (x, z): ..."); empty = honest. (R3 and R5 follow in step 5c.)
+static func violations(layout: Dictionary, placements: Array, meta: Dictionary) -> PackedStringArray:
+	var out := PackedStringArray()
+	var nx := int(layout["nx"])
+	var cell := float(layout["cell_in"])
+	var org := Vector2(nx, int(layout["nz"])) * cell * -0.5
+	for p: Dictionary in placements:
+		var m: Dictionary = meta["modules"].get(p["module"], {})
+		var xf: Transform3D = p["xf"]
+		var at := "%s %s at (%.1f, %.1f)" % [p.get("cls", ""), p["module"], xf.origin.x / IN_M, xf.origin.z / IN_M]
+		if m.is_empty():
+			out.append("R0 unknown module " + at)
+			continue
+		var lo := _v(m["aabb_in"], 0)
+		var hi := _v(m["aabb_in"], 1)
+		var all := _rect(xf, lo, hi, lo.y, hi.y, hi.z)
+		var seen := {}
+		var found: Array[String] = []
+		for cz in range(maxi(floori((all.position.y - org.y) / cell), 0), mini(floori((all.end.y - org.y) / cell), int(layout["nz"]) - 1) + 1):
+			for cx in range(maxi(floori((all.position.x - org.x) / cell), 0), mini(floori((all.end.x - org.x) / cell), nx - 1) + 1):
+				if walkable(layout, cz * nx + cx):
+					found.append(_air(layout, m, xf, cx, cz))
+		for f in found:
+			if f != "" and not seen.has(f.substr(0, 2)):
+				seen[f.substr(0, 2)] = true
+				out.append("%s %s" % [f.substr(0, 2), at + f.substr(2)])
+	return out
+
+
+## R1 / R2 / R4 for one placement over one walkable cell: the first break as "Rn: why", or "".
+static func _air(layout: Dictionary, m: Dictionary, xf: Transform3D, cx: int, cz: int) -> String:
+	var tags: Array = m["tags"]
+	var lo := _v(m["aabb_in"], 0)
+	var hi := _v(m["aabb_in"], 1)
+	var cell := float(layout["cell_in"])
+	var org := Vector2(layout["nx"], layout["nz"]) * cell * -0.5
+	var cr := Rect2(org + Vector2(cx, cz) * cell, Vector2(cell, cell))
+	var top := top_in(layout, cx, cz)
+	var oy := xf.origin.y / IN_M
+	var sy := maxf(xf.basis.y.y, 0.01)
+	if tags.has("R1_exception") or ((tags.has("bulky_ok") or tags.has("terrain_or_solid_only")) and _terrain(layout, cz * int(layout["nx"]) + cx)):
+		return ""
+	if tags.has("R4_gable") and top > 0.0:
+		return "" if -lo.z * xf.basis.z.length() <= 0.3 + TOL and hi.y * sy <= 2.6 + TOL else "R4: a ruin gable over 0.3 in thick or 2.6 in high"
+	for zone in 2:
+		var y0 := maxf(lo.y, (top + (FLAT if zone == 0 else CLEAR) - oy) / sy)
+		var y1 := minf(hi.y, (top + CLEAR - oy) / sy if zone == 0 else INF)
+		if y1 - y0 < 0.001:
+			continue
+		var r := _rect(xf, lo, hi, y0, y1, float(m["proud_in"]["low" if zone == 0 else "high"])).intersection(cr)
+		if r.size.x <= TOL or r.size.y <= TOL:
+			continue
+		var ok := false   # the part over this cell lies within OVERHANG of a taller footprint (above CLEAR) or within EDGE of a lower neighbour (the edge strip)
+		for k in 9:
+			var nb := Vector2i(cx + k % 3 - 1, cz + floori(k / 3.0) - 1)
+			var nt := top_in(layout, nb.x, nb.y)
+			var inside := nb.x >= 0 and nb.y >= 0 and nb.x < int(layout["nx"]) and nb.y < int(layout["nz"])
+			var rises := inside and (nt > top or not walkable(layout, nb.y * int(layout["nx"]) + nb.x))
+			if nb != Vector2i(cx, cz) and (rises if zone == 1 else nt < top) and Rect2(org + Vector2(nb) * cell, Vector2(cell, cell)).grow((OVERHANG if zone == 1 else EDGE) + TOL).encloses(r):
+				ok = true
+				break
+		if zone == 1 and not ok:
+			return "R2: reaches over walkable cell (%d, %d) further than %.2f in from a taller footprint" % [cx, cz, OVERHANG]
+		if zone == 0 and top <= 0.0:
+			return "R1: stands in walkable cell (%d, %d) between %.2f and %.0f in" % [cx, cz, FLAT, CLEAR]
+		if zone == 0 and (not ok or oy + hi.y * sy - top > PARAPET + TOL):
+			return "R4: over walkable tier cell (%d, %d) outside the %.1f in edge strip or above %.1f in" % [cx, cz, EDGE, PARAPET]
+	return ""
+
+
+## Cells that are terrain in the rules (garden plots, ruin yards) - bulky pieces may stand there.
+static func _terrain(layout: Dictionary, i: int) -> bool:
+	var c: Dictionary = layout["cells"][i]
+	return c["lot_kind"] == "Rough" or (c["lot_kind"] == "Terrace" and int(c["level"]) == 0 and not c["street"])
+
+
+static func _v(a: Array, k: int) -> Vector3:
+	return Vector3(float(a[k][0]), float(a[k][1]), float(a[k][2]))
+
+
+## The XZ rect (board inches) of a module's part between local heights y0 and y1, cut at `reach` along its local +z.
+static func _rect(xf: Transform3D, lo: Vector3, hi: Vector3, y0: float, y1: float, reach: float) -> Rect2:
+	var r := Rect2()
+	for k in 8:
+		var q := xf * (Vector3(hi.x if k & 1 else lo.x, y1 if k & 2 else y0, reach if k & 4 else lo.z) * IN_M) / IN_M
+		r = Rect2(q.x, q.z, 0.0, 0.0) if k == 0 else r.expand(Vector2(q.x, q.z))
+	return r
