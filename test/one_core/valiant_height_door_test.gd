@@ -7,13 +7,13 @@ extends GdUnitTestSuite
 ## 8", unit centres 11" apart), the target raised 5", `SEEDS` seeds, table (AI body) vs core door (live capture + step driver); the morale roll's
 ## target is what differs. RED at epoch 85, GREEN from 86; the control without the platform is equal at both epochs.
 ## Real: the main scene, NmlCore, the importer's unit builder, the table's AI body. Constructed: the two units.
+## PLAN_FIRST_DELETION 34 FT-C2: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main af5c83610.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const SEEDS := 16
 const DICE := "user://valiant_height_dice"
-const OUT := "user://valiant_height_out"
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -84,30 +84,42 @@ func _volley(core: bool, seed_n: int, raise_in: float) -> Dictionary:
 	return out
 
 
-## `SEEDS` volleys on both paths at `epoch`: {"bad": mismatching volleys, "morale": volleys where the TABLE rolled a morale die}.
+func _morale_target(rolls: Array) -> int:
+	for x in rolls:
+		if str(x["kind"]) == "morale":
+			return int(x["target"])
+	return -1
+
+
+## `SEEDS` door volleys at `epoch`: {"morale": volleys where the door rolled a morale die, "targets": the morale roll target per seed}.
 func _run(epoch: int, raise_in: float) -> Dictionary:
 	AiActRecorder.rules_epoch = epoch
 	RosterSweep.arm(_main, ProjectSettings.globalize_path(DICE))
-	var rows: Array = []
+	var volleys: Array = []
 	for s in SEEDS:
-		var table := await _volley(false, s, raise_in)
-		var core := await _volley(true, s, raise_in)
-		rows.append({"id": s, "pair": "fixture", "dir": 0, "seed": s, "att": (table["names"] as Array)[0], "tgt": (table["names"] as Array)[1],
-			"table": table, "core": core})
-	var cmp := RosterSweep.compare(rows, OUT)
-	var bad := (cmp["verdicts"] as Array).filter(func(v: Dictionary) -> bool: return str(v["first_diff"]) != "").size()
-	var morale := rows.filter(func(r: Dictionary) -> bool: return (r["table"]["rolls"] as Array).any(
+		volleys.append(await _volley(true, s, raise_in))
+	var morale := volleys.filter(func(v: Dictionary) -> bool: return (v["rolls"] as Array).any(
 		func(x: Dictionary) -> bool: return str(x["kind"]) == "morale")).size()
-	print("VALIANT_HEIGHT epoch=%d raise=%s seeds=%d table_morale=%d mismatches=%d" % [epoch, raise_in, SEEDS, morale, bad])
-	return {"bad": bad, "morale": morale}
+	var targets := volleys.map(func(v: Dictionary) -> int: return _morale_target(v["rolls"]))
+	print("VALIANT_HEIGHT epoch=%d raise=%s seeds=%d door_morale=%d" % [epoch, raise_in, SEEDS, morale])
+	return {"morale": morale, "targets": targets}
+
+
+## Per-seed morale-roll target on the door, read on main af5c83610.
+const WANT_MORALE_86 := 12
+const WANT_TARGETS_85 := [5, 5, 5, 5, 5, 5, -1, 5, 5, -1, -1, 5, -1, 5, 5, 5]
+const WANT_TARGETS_86 := [4, 4, 4, 4, 4, 4, -1, 4, 4, -1, -1, 4, -1, 4, 4, 4]
+const WANT_TARGETS_LEVEL_85 := [5, 5, 5, 5, 5, 5, -1, 5, 5, -1, -1, 5, -1, 5, 5, 5]
+const WANT_TARGETS_LEVEL_86 := [5, 5, 5, 5, 5, 5, -1, 5, 5, -1, -1, 5, -1, 5, 5, 5]
 
 
 func test_a_target_on_a_platform_gets_its_valiant_bonus_in_both_halves() -> void:
 	var old := await _run(85, 5.0)
 	assert_int(int(old["morale"])).override_failure_message("the fixture must reach the morale roll").is_greater(3)
-	assert_int(int(old["bad"])).override_failure_message("epoch 85 must differ (the red leg: core 5+, table 4+)").is_equal(int(old["morale"]))
+	assert_array(old["targets"]).override_failure_message("epoch 85: the door's morale target (the old core gap: 5+)").is_equal(WANT_TARGETS_85)
 	var now := await _run(86, 5.0)
-	assert_int(int(now["bad"])).override_failure_message("epoch 86: table and core differ").is_equal(0)
+	assert_int(int(now["morale"])).override_failure_message("the fixture must reach the morale roll").is_equal(WANT_MORALE_86)
+	assert_array(now["targets"]).override_failure_message("epoch 86: the door's morale target (4+)").is_equal(WANT_TARGETS_86)
 
 
 ## Control: on level ground the base gap (8") is inside 9" for both, so both drop the Valiant share (5+), at both epochs.
@@ -115,4 +127,5 @@ func test_level_ground_is_equal_at_both_epochs() -> void:
 	for epoch in [85, 86]:
 		var level := await _run(epoch, 0.0)
 		assert_int(int(level["morale"])).is_greater(3)
-		assert_int(int(level["bad"])).override_failure_message("epoch %d, level ground" % epoch).is_equal(0)
+		var want: Array = WANT_TARGETS_LEVEL_85 if epoch == 85 else WANT_TARGETS_LEVEL_86
+		assert_array(level["targets"]).override_failure_message("epoch %d, level ground" % epoch).is_equal(want)
