@@ -26,7 +26,7 @@ func before_test() -> void:
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
 	_flow_done = false   # one suite instance serves every test
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_real_net = _main.network_manager
 	var src := GDScript.new()
 	src.source_code = "extends \"res://scripts/network_manager.gd\"\nvar sent: Array = []\n" \

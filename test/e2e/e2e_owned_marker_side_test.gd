@@ -40,8 +40,7 @@ func _log_text() -> String:
 
 
 func test_sabotage_swap_gives_each_side_its_own_edge_marker(timeout := 120000) -> void:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main._solo_mission_id = "sabotage"
 	_main._solo_apply_mission_if_chosen()
 	var positions: Array = _main.terrain_overlay.get_objectives()
@@ -54,8 +53,7 @@ func test_sabotage_swap_gives_each_side_its_own_edge_marker(timeout := 120000) -
 
 
 func test_demolition_human_in_slot_two_owns_negative_edge(timeout := 120000) -> void:
-	_main.solo_ai_slots = {1: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [1], 2)
 	_main._solo_mission_id = "demolition"
 	_main._solo_apply_mission_if_chosen()
 	await _main._solo_deploy_begin_side(false)   # AI/P1 takes +Z; human/P2 takes -Z
