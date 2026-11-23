@@ -9,6 +9,7 @@
 #   git ls-files '*.gd' | xargs gdformat --check 2>&1 | sed -n 's/^would reformat //p' | sort -u
 # Every file NOT in that scan passes. A bare `path.gd:` line in the scan (no "would reformat") is a
 # parse error: gdtoolkit cannot read that file, so it can never be listed until the tool catches up.
+scripts/boardgen_dress_rules.gd
 scripts/core_load_notice.gd
 scripts/deleted_state.gd
 scripts/landing_preview.gd

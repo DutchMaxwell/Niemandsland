@@ -11,6 +11,7 @@
 scripts/ambience_library.gd
 scripts/ambience_synth.gd
 scripts/biome_library.gd
+scripts/boardgen_dress_rules.gd
 scripts/containers_library.gd
 scripts/floating_rule_text.gd
 scripts/hud/hud_frame.gd
