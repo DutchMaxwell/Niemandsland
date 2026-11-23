@@ -22,7 +22,7 @@ func before_test() -> void:
 	_main.opr_army_manager.current_round = 1
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
 	_main._solo_game_finished = false
-	_main._solo_batch = true   # instant, non-physics dice (the harness dice seam)
+	SoloHarness.instant(_main)   # instant, non-physics dice (the harness dice seam)
 
 
 func after_test() -> void:

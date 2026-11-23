@@ -19,7 +19,7 @@ func before_test() -> void:
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.DEPLOYMENT
 	_main.opr_army_manager.current_round = 1
 	_main._solo_game_finished = false
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 
 
 func after_test() -> void:

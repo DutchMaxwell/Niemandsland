@@ -25,8 +25,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 
 
 func after_test() -> void:
@@ -71,7 +70,7 @@ static func _off_deg(yaw: float, want: float) -> float:
 ## An L-shaped route (+X, then +Z): on each leg, past its first inch (the turn), the model faces the leg.
 ## After the glide it is back at the yaw the move left it, to the bit, standing on the route's end.
 func test_a_gliding_model_faces_each_leg_then_its_end_facing(timeout := 120000) -> void:
-	_main._solo_batch = true    # no attention beats; the glide itself runs at the normal pace
+	SoloHarness.instant(_main)    # no attention beats; the glide itself runs at the normal pace
 	var a := Vector3(-0.3, 0.0, -0.2)
 	var b := Vector3(-0.1, 0.0, -0.2)
 	var c := Vector3(-0.1, 0.0, 0.0)
@@ -124,8 +123,8 @@ func _snapshot(units: Array, oval: GameUnit, foe: GameUnit) -> Dictionary:
 ## observable exactly as the executor left it — an oval's yaw IS its footprint, so a leftover turn
 ## would change base contact, coherency and ranges.
 func test_the_glide_turn_changes_no_rule_outcome(timeout := 180000) -> void:
-	_main._solo_batch = false
-	_main._solo_fast = true
+	SoloHarness.instant(_main, false)
+	SoloHarness.fast(_main)
 	var foe := _register(1, "Wall", [Vector3(0.0, 0.0, -0.5)])
 	var raider := _register(2, "Raider", [Vector3(-0.3, 0.0, 0.45), Vector3(-0.26, 0.0, 0.45)])
 	var oval := _register(2, "Crawler", [Vector3(0.3, 0.0, 0.45)], PI / 2.0)
@@ -164,8 +163,8 @@ func test_the_glide_turn_changes_no_rule_outcome(timeout := 180000) -> void:
 
 ## Control: a regiment tray's facing is an AoF: Regiments rule (a pivot) — it never turns while it glides.
 func test_a_regiment_keeps_its_facing_while_it_glides(timeout := 120000) -> void:
-	_main._solo_batch = true
-	_main._solo_fast = true
+	SoloHarness.instant(_main)
+	SoloHarness.fast(_main)
 	var a := Vector3(-0.3, 0.0, -0.2)
 	var b := Vector3(-0.1, 0.0, -0.2)
 	var u := _register(2, "Block", [a], 0.7)
