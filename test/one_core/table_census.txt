@@ -36,8 +36,8 @@ planner scripts/solo/battle_sim.gd 2605 22
 planner scripts/solo/solo_sim.gd 1234 3
 planner TOTAL 6662 37
 planner_shared scripts/solo/ai_combat_math.gd 652 9
-planner_shared scripts/solo/ai_ev.gd 1331 10
-planner_shared TOTAL 1983 19
+planner_shared scripts/solo/ai_ev.gd 1331 11
+planner_shared TOTAL 1983 20
 planner_tag erlkoenig 54 674
 planner_tag gd_search 87 2238
 planner_tag live_helper 16 184
