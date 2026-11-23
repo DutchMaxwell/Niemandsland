@@ -438,6 +438,9 @@ pub struct Ctx {
     /// `EPOCH_75_TABLE_FIXES` (#2613) — a once-per-game Regeneration entry (`uses_per_game > 0`, Protection Feat)
     /// held ASIDE: `sim::ctx_live` folds it only while the bearer's `feats_used` latch is open. 0 = none.
     pub regen_feat: i64,
+    /// 29a: the once-per-game ignore rule whose latch is already closed (`sim::ctx_live`): the save says "already used it this game"
+    /// where it would have rolled ("" = none, or still open).
+    pub regen_feat_spent: &'static str,
     /// MOR-17a (rules 3.6, `EPOCH_73_V36`) — Warding / Knightborn / Angelic
     /// Blessing ignore a non-spell wound on a 6+ ONLY when the unit was shot
     /// from over this many inches. 0.0 = ungated (the old entry, every unit
@@ -608,7 +611,7 @@ pub struct Ctx {
     /// G4R4 C-GRANTED-BANE (`EPOCH_73_V36`): a live `grants_rule: "Bane when Shooting"` — every ranged weapon of the
     /// member is a Bane weapon for the volley (dice.rs). Zero on every `ctx_of`.
     pub bane_grant: bool,
-    /// `PENDING_EPOCH_BANE_MARK`: a live Bane Mark on the TARGET's chain (`mods::marked_vs`) — this attack's weapons get Bane, once.
+    /// `EPOCH_96_PARITY_BATCH`: a live Bane Mark on the TARGET's chain (`mods::marked_vs`) — this attack's weapons get Bane, once.
     pub bane_mark_grant: bool,
     // --- Wave 2 "Utility Buff" family (gated `acts::rule_on(.., EPOCH_5_TABLE_RULES)`). ---
     /// A live `grants_rule: "Slayer"` — AP(+2) vs Tough 3+, charge or over 9".
@@ -901,8 +904,8 @@ impl Ctx {
             regeneration: d.regeneration, regen_target: d.regen_target, regen_target_spell: d.regen_target_spell, regen_pending: d.regen_pending,
             regen_pending_spell: d.regen_pending_spell, regen_pending_notes: d.regen_pending_notes, regen_note: d.regen_note, regen_feat: d.regen_feat, regen_named: d.regen_named, regen_groups: d.regen_groups,
             regen_names: d.regen_names, regen_gated: d.regen_gated, regen_gate_shut: d.regen_gate_shut, regen_most_name: d.regen_most_name,
-            // PENDING_EPOCH_UNIT_BANE_ALIAS: the strength gate (Decimate) is read as declared, like the Defense above.
-            above_half_strength: self.above_half_strength && rule_on(self.rules_epoch, crate::acts::PENDING_EPOCH_UNIT_BANE_ALIAS),
+            // EPOCH_96_PARITY_BATCH: the strength gate (Decimate) is read as declared, like the Defense above.
+            above_half_strength: self.above_half_strength && rule_on(self.rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH),
             near_terrain: false,
             ..base
         }
@@ -2145,11 +2148,11 @@ fn hit_and_run_boost_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> 
 /// the terrain half: the split walk now also reports the terrain-gated kind
 /// (`Ctx::stealth_alias_near_terrain`) and the def builds resolve the
 /// per-model read live; `requires_stationary` still is.
-/// `PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS`: on an equal penalty an Enhanced entry's wider window ("always") beats the base it `upgrades`
+/// `EPOCH_96_PARITY_BATCH`: on an equal penalty an Enhanced entry's wider window ("always") beats the base it `upgrades`
 /// (Enhanced Changebound over Changebound's "over 9""). Only that pair: an unrelated alias (a terrain-gated Grounded Stealth) never wins the tie.
 fn alias_wider_on_tie(pen: i64, best: i64, over_in: f64, best_over_in: f64, upgrades_best: bool, rules_epoch: u32) -> bool {
     upgrades_best && pen == best && pen > 0 && over_in < best_over_in
-        && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_ENHANCED_ALWAYS_ALIAS)
+        && rule_on(rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH)
 }
 
 fn stealth_alias_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, f64, bool, &'static str) {
@@ -3928,8 +3931,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
                 && map.lookup(&p.faction_folder, &n).is_some_and(|e| e.param_b("no_gate_v36"))
         })
     };
-    // PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK: Enhanced Vinci Tech on a Vinci Tech bearer makes the one pick "always".
-    let versatile_no_gate = versatile_no_gate || (rule_on(rules_epoch, crate::acts::PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK)
+    // EPOCH_96_PARITY_BATCH: Enhanced Vinci Tech on a Vinci Tech bearer makes the one pick "always".
+    let versatile_no_gate = versatile_no_gate || (rule_on(rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH)
         && unit_rule_active(reg, p, "Enhanced Vinci Tech") && unit_rule_active(reg, p, "Vinci Tech"));
     let evasive_on = most_models_family_on(p, "Evasive", rules_epoch) || !evasive_boost.is_empty();
     trace_stamp(trace73 && evasive_on, "evasive-stamp",
@@ -4122,6 +4125,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         regen_pending_notes: regen_targets.9,
         regen_note: "",
         regen_feat: regen_targets.6,
+        regen_feat_spent: "",
         regen_gate_over_in: regen_targets.4,
         regen_gate_charge_in: regen_targets.5,
         regen_named: regen_targets.7,
@@ -4562,7 +4566,7 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
     let mut u_unstop_melee = false;
     let mut facets: Vec<(String, bool, bool)> = Vec::new(); // the unit-level names the re-roll line carries, with their facet
     let exact_labels = rule_on(rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH);
-    let unit_alias = rule_on(rules_epoch, crate::acts::PENDING_EPOCH_UNIT_BANE_ALIAS);
+    let unit_alias = rule_on(rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH);
     for r in &p.special_rules {
         let rs = r.trim();
         if exact_labels && is_unlisted_striker_label(rs) {
@@ -4773,8 +4777,8 @@ fn stamp_weapon_bane_alias(reg: &mut Registries, p: &Profile, shoot: &mut [Shoot
     if !rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
         return;
     }
-    // PENDING_EPOCH_UNIT_BANE_ALIAS: the unit's own conditional aliases join each profile's printed rules, after them.
-    let unit_aliases: Vec<String> = if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_UNIT_BANE_ALIAS) {
+    // EPOCH_96_PARITY_BATCH: the unit's own conditional aliases join each profile's printed rules, after them.
+    let unit_aliases: Vec<String> = if rule_on(rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH) {
         let names: Vec<String> = p.special_rules.iter().map(|r| base_rule_name(r)).collect();
         names.into_iter().filter(|n| conditional_bane_alias(reg, p, n)).collect()
     } else {
@@ -4803,7 +4807,7 @@ fn stamp_weapon_bane_alias(reg: &mut Registries, p: &Profile, shoot: &mut [Shoot
     }
 }
 
-/// `PENDING_EPOCH_UNIT_BANE_ALIAS`: a Bane-family alias whose entry carries a condition or ignores Regeneration (Obliterate, Reap,
+/// `EPOCH_96_PARITY_BATCH`: a Bane-family alias whose entry carries a condition or ignores Regeneration (Obliterate, Reap,
 /// Decimate, Fragment, Smash) and upgrades no other rule. A unit that carries one as its own rule reads it like the weapon-borne alias.
 fn conditional_bane_alias(reg: &mut Registries, p: &Profile, name: &str) -> bool {
     if name.starts_with("Bane") || name.ends_with("Aura") {
@@ -5150,13 +5154,13 @@ fn stamp_shot_modifier(
     }
 }
 
-/// `PENDING_EPOCH_UNIT_IMPRECISE`: the unit-borne Imprecise joins the flat shooting Shot Modifier names (3.6 army books: the bearer gets
+/// `EPOCH_96_PARITY_BATCH`: the unit-borne Imprecise joins the flat shooting Shot Modifier names (3.6 army books: the bearer gets
 /// -1 to hit when attacking). Below the gate it stays unread, byte-exact.
 fn unit_imprecise_name(rules_epoch: u32) -> Option<&'static str> {
-    rule_on(rules_epoch, crate::acts::PENDING_EPOCH_UNIT_IMPRECISE).then_some("Imprecise")
+    rule_on(rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH).then_some("Imprecise")
 }
 
-/// `PENDING_EPOCH_UNIT_IMPRECISE`, melee leg: the unit carries Imprecise and its faction map names it a to-hit Shot Modifier.
+/// `EPOCH_96_PARITY_BATCH`, melee leg: the unit carries Imprecise and its faction map names it a to-hit Shot Modifier.
 fn unit_imprecise_carried(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> bool {
     unit_imprecise_name(rules_epoch).is_some()
         && unit_rule_active(reg, p, "Imprecise")
@@ -5868,9 +5872,9 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         }
         seen.push(n.clone());
         let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
-        // PENDING_EPOCH_BANE_MARK: the 3.6 text is a Mark (once per activation, before attacking, one enemy within 18" in line of sight;
+        // EPOCH_96_PARITY_BATCH: the 3.6 text is a Mark (once per activation, before attacking, one enemy within 18" in line of sight;
         // friendly attacks against it get Bane once), so the Bane-primitive entry rides this path with the Shred Mark's knobs.
-        let bane_mark = n == "Bane Mark" && rule_on(rules_epoch, crate::acts::PENDING_EPOCH_BANE_MARK);
+        let bane_mark = n == "Bane Mark" && rule_on(rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH);
         if e.primitive.as_deref() != Some("Utility Buff") && !bane_mark {
             continue;
         }
@@ -7675,7 +7679,7 @@ impl UnitStatic {
         stamp_shot_modifier(reg, p, &mut shoot, trace73, rules_epoch);
 
         let mut melee = melee_profiles_at(&p.weapons, rules_epoch);
-        // PENDING_EPOCH_UNIT_IMPRECISE: the unit's own Imprecise reaches its strikes as the weapon-borne flag does (one -1, never two).
+        // EPOCH_96_PARITY_BATCH: the unit's own Imprecise reaches its strikes as the weapon-borne flag does (one -1, never two).
         if unit_imprecise_carried(reg, p, rules_epoch) {
             melee.iter_mut().for_each(|sp| sp.imprecise = true);
         }
@@ -8042,8 +8046,8 @@ impl UnitStatic {
             }
             if boost && has_vinci {
                 name = Some("Enhanced Vinci Tech".to_string());
-                // PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK: one pick at any range (the gate opens in `ctx_of`), never both arms.
-                both = !rule_on(rules_epoch, crate::acts::PENDING_EPOCH_ENHANCED_VINCI_ONE_PICK);
+                // EPOCH_96_PARITY_BATCH: one pick at any range (the gate opens in `ctx_of`), never both arms.
+                both = !rule_on(rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH);
             }
             if let Some(vn) = name {
                 for sp in shoot.iter_mut().chain(melee.iter_mut()) {

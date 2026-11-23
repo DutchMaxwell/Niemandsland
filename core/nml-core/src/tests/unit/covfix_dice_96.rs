@@ -3,7 +3,7 @@
 
 mod pending_96 {
     use super::super::*;
-    use crate::acts::{PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL, PENDING_EPOCH_UNIT_BANE_ALIAS, PENDING_EPOCH_UNIT_IMPRECISE};
+    use crate::acts::EPOCH_96_PARITY_BATCH;
 
     const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
       "carrier":{"unit_id":"carrier","name":"Carrier","quality":4,
@@ -28,7 +28,7 @@ mod pending_96 {
 
     #[test]
     fn a_unit_borne_imprecise_costs_its_shooting_one_to_hit_from_96() {
-        let e = PENDING_EPOCH_UNIT_IMPRECISE;
+        let e = EPOCH_96_PARITY_BATCH;
         assert_eq!(carrier("alien_hives", &["Imprecise"], &[], e - 1).shoot[0].hit_bonus, 0, "95 replays the unread rule");
         assert_eq!(carrier("alien_hives", &["Imprecise"], &[], e).shoot[0].hit_bonus, -1, "96: the bearer gets -1 to hit");
         let both = carrier("alien_hives", &["Imprecise"], &["Imprecise"], e);
@@ -37,7 +37,7 @@ mod pending_96 {
 
     #[test]
     fn a_unit_borne_obliterate_reads_like_the_weapon_from_96() {
-        let e = PENDING_EPOCH_UNIT_BANE_ALIAS;
+        let e = EPOCH_96_PARITY_BATCH;
         let old = &carrier("daemons_of_lust", &["Obliterate"], &[], e - 1).shoot[0];
         assert!(old.bane && !old.bypass_regen, "95: the flat sixes re-roll, Regeneration kept");
         let new = &carrier("daemons_of_lust", &["Obliterate"], &[], e).shoot[0];
@@ -47,14 +47,14 @@ mod pending_96 {
 
     #[test]
     fn a_unit_borne_reap_keeps_its_condition_from_96() {
-        let e = PENDING_EPOCH_UNIT_BANE_ALIAS;
+        let e = EPOCH_96_PARITY_BATCH;
         assert_eq!(carrier("rebel_guerrillas", &["Reap"], &[], e - 1).shoot[0].bane_condition, "", "95: no condition read");
         assert_eq!(carrier("rebel_guerrillas", &["Reap"], &[], e).shoot[0].bane_condition, "shaken_or_fatigued", "96: only vs Shaken / Fatigued");
     }
 
     #[test]
     fn a_unit_borne_imprecise_reaches_the_strikes_once_from_96() {
-        let e = PENDING_EPOCH_UNIT_IMPRECISE;
+        let e = EPOCH_96_PARITY_BATCH;
         assert!(!carrier("alien_hives", &["Imprecise"], &[], e - 1).melee[0].imprecise, "95: the strikes keep the unread rule");
         assert!(carrier("alien_hives", &["Imprecise"], &[], e).melee[0].imprecise, "96: the bearer strikes at -1");
         let both = carrier("alien_hives", &["Imprecise"], &["Imprecise"], e);
@@ -63,7 +63,7 @@ mod pending_96 {
 
     #[test]
     fn a_unit_borne_decimate_reads_its_strength_gate_as_declared_from_96() {
-        let e = PENDING_EPOCH_UNIT_BANE_ALIAS;
+        let e = EPOCH_96_PARITY_BATCH;
         assert_eq!(carrier("plague_disciples", &["Decimate"], &[], e - 1).shoot[0].bane_condition, "", "95: the flat sixes re-roll");
         assert_eq!(carrier("plague_disciples", &["Decimate"], &[], e).shoot[0].bane_condition, "above_half_strength", "96: gated");
         let declared = |epoch: u32| Ctx { rules_epoch: epoch, above_half_strength: true, ..Default::default() }.wiped().above_half_strength;
@@ -73,7 +73,7 @@ mod pending_96 {
 
     #[test]
     fn a_bane_mark_gives_its_bearer_no_standing_bane_at_96() {
-        let us = carrier("saurian_starhosts", &["Bane Mark"], &[], PENDING_EPOCH_UNIT_BANE_ALIAS);
+        let us = carrier("saurian_starhosts", &["Bane Mark"], &[], EPOCH_96_PARITY_BATCH);
         assert!(!us.shoot[0].bane && !us.melee[0].bane, "96: the Mark is a runtime mark, never a standing Bane on the bearer");
     }
 
@@ -89,7 +89,7 @@ mod pending_96 {
 
     #[test]
     fn an_enhanced_primal_grant_without_primal_rolls_nothing_from_96() {
-        let e = PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL;
+        let e = EPOCH_96_PARITY_BATCH;
         let plain = carrier("battle_brothers", &[], &[], e);
         assert!(!plain.shoot[0].surge_attack, "the carrier prints no extra-attack form");
         let attack_rolls = |r: &crate::dice::ShootResult| r.rolls.iter().filter(|x| x.kind == "attack").count();
@@ -102,10 +102,10 @@ mod pending_96 {
     /// re-rolls its saved 5s AND 6s; a printed 4+ (the coverage fixture aof_146 / gf_571) re-rolls nothing. A pin of the ruling, not a fix.
     #[test]
     fn a_unit_borne_fragment_reads_the_printed_defense_from_96() {
-        let us = carrier("alien_hives", &["Fragment"], &[], PENDING_EPOCH_UNIT_BANE_ALIAS);
+        let us = carrier("alien_hives", &["Fragment"], &[], EPOCH_96_PARITY_BATCH);
         let volley = |defense: i64| {
             let p = [us.shoot[0].clone()];
-            let att = Ctx { quality: 2, rules_epoch: PENDING_EPOCH_UNIT_BANE_ALIAS, ..Default::default() };
+            let att = Ctx { quality: 2, rules_epoch: EPOCH_96_PARITY_BATCH, ..Default::default() };
             let def = Ctx { defense, models: 20, tough: 1, ..Default::default() };
             let strikers = [crate::dice::Shooter { profiles: &p, keep: &[0], attacks: &[20], att: &att, owner: "att" }];
             let mut tray = crate::dice::Tray::seeded(27);

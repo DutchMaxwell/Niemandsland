@@ -27,9 +27,11 @@ const BLOCK_X := SHOOTER_X - 3.0
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
+var _epoch_was: int
 
 
 func before_test() -> void:
+	_epoch_was = AiActRecorder.rules_epoch
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -49,6 +51,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch_was
 	CoreSlice.path_override = ""
 	CoreSlice.reset_cache()
 	if FileAccess.file_exists(WITHOUT):
@@ -126,6 +129,9 @@ func test_the_ai_door_takes_a_harassing_shooter_and_refuses_its_illegal_kite(tim
 	# the landing that would put the shooter inside the column (one line, `land_illegal`). The first activation of the scene advances
 	# before it shoots (its kite then ends clear of the column); every later one holds and shoots, and its rigid kite would end inside.
 	# RED: put the group back -> ai_runs 0 on every seed.
+	# Pinned below the epoch 96 batch (HIT_AND_RUN_PLAIN): only the old rigid kite ends inside the column; from 96 the core's step is
+	# the table's own move (the test below).
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_96_PARITY_BATCH - 1
 	var live := await _ai_runs()
 	for s in live.size():
 		assert_int(int(live[s][0])).override_failure_message("seed %d: the core takes the Harassing shooter (rows %s)" % [s, live]).is_equal(1)
@@ -133,3 +139,19 @@ func test_the_ai_door_takes_a_harassing_shooter_and_refuses_its_illegal_kite(tim
 	assert_int(inside).override_failure_message("no kite is landed inside the column (rows %s)" % [live]).is_equal(0)
 	var refused := live.filter(func(r: Array) -> bool: return int(r[3]) == 1 and int(r[4]) == 1).size()
 	assert_int(refused).override_failure_message("the illegal kite is refused with its line (rows %s)" % [live]).is_greater_equal(SEEDS.size() - 1)
+
+
+## EPOCH_96_PARITY_BATCH (HIT_AND_RUN_PLAIN): at the live epoch the core's Hit & Run step is the table's own fallback move away from
+## the nearest enemy, through the move executor with terrain and spacing, so the same scene lands clear of the column: the door takes
+## the shooter, no base ends inside the column and no landing needs refusing. RED: pin the epoch to 95 here -> the rigid kite is refused.
+@warning_ignore('unused_parameter')
+func test_from_96_the_plain_step_lands_clear_of_the_column(timeout := 600000, do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "no NmlCore") -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_96_PARITY_BATCH
+	var live := await _ai_runs()
+	for s in live.size():
+		assert_int(int(live[s][0])).override_failure_message("seed %d: the core takes the Harassing shooter (rows %s)" % [s, live]).is_equal(1)
+	assert_int(live.filter(func(r: Array) -> bool: return int(r[1]) > 0).size()) \
+		.override_failure_message("no base ends inside the column (rows %s)" % [live]).is_equal(0)
+	assert_int(live.filter(func(r: Array) -> bool: return int(r[3]) > 0).size()) \
+		.override_failure_message("no landing needs refusing at 96 (rows %s)" % [live]).is_equal(0)

@@ -7,14 +7,17 @@ extends GdUnitTestSuite
 ## its LIVE most-models read finds no model with Stealth; the core lands after the dice (lead ruling O1, all weapons fire together) and keeps
 ## it. That shooter shape is refused by `deadly_beside_other_weapons` since dlines2, so the names are redundant for it.
 ## Real: the main scene, NmlCore, the importer's unit builder, the table's AI body. Constructed: the units.
+##
+## PLAN_FIRST_DELETION 34 FT-C5: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main af5c83610.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const SEEDS := 12
 const UNSTOPPABLE_LINE := "Unstoppable: negative to-hit modifiers ignored"
+## The fold line once per seed's volley, read on main af5c83610 (the table said it 12 times).
+const WANT_UNSTOPPABLE_LINES := 12
 const DICE := "user://stealth_target_dice"
-const OUT := "user://stealth_target_out"
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -110,25 +113,19 @@ func _arm() -> void:
 		_armed = true
 
 
-## `SEEDS` volleys on both paths: {"bad": mismatching volleys, "table": first volley's hit targets, "core": same, "deny": refusals of the first volley}.
+## `SEEDS` door volleys: {"core": the first volley's hit targets, "deny": its refusals, "core_said": the fold-line count over all seeds}.
 func _run(att_e: Dictionary, tgt_e: Dictionary, hero_e := {}, dist_in := 14.0) -> Dictionary:
 	_arm()
 	var rows: Array = []
 	for s in SEEDS:
-		var table := await _volley(false, s, att_e, tgt_e, hero_e, dist_in)
 		var core := await _volley(true, s, att_e, tgt_e, hero_e, dist_in)
-		rows.append({"id": s, "pair": "fixture", "dir": 0, "seed": s, "att": (table["names"] as Array)[0], "tgt": (table["names"] as Array)[1],
-			"table": table, "core": core})
-	var cmp := RosterSweep.compare(rows, OUT)
-	var bad := (cmp["verdicts"] as Array).filter(func(v: Dictionary) -> bool: return str(v["first_diff"]) != "").size()
-	var first_t := _hit_targets((rows[0]["table"] as Dictionary)["rolls"])
-	var first_c := _hit_targets((rows[0]["core"] as Dictionary)["rolls"])
+		rows.append(core)
+	var first_c := _hit_targets((rows[0] as Dictionary)["rolls"])
 	var said := func(r: Dictionary) -> int:
 		return (r["lines"] as Array).filter(func(l: String) -> bool: return l == UNSTOPPABLE_LINE).size()
-	var t_said: int = rows.map(func(r: Dictionary) -> int: return said.call(r["table"])).reduce(func(a: int, b: int) -> int: return a + b, 0)
-	var c_said: int = rows.map(func(r: Dictionary) -> int: return said.call(r["core"])).reduce(func(a: int, b: int) -> int: return a + b, 0)
-	print("STEALTH_TARGET %s dist=%s seeds=%d mismatches=%d table=%s core=%s deny=%s" % [(rows[0]["tgt"] as String), dist_in, SEEDS, bad, first_t, first_c, (rows[0]["table"] as Dictionary)["deny"]])
-	return {"bad": bad, "table": first_t, "core": first_c, "deny": (rows[0]["table"] as Dictionary)["deny"], "table_said": t_said, "core_said": c_said}
+	var c_said: int = rows.map(func(r: Dictionary) -> int: return said.call(r)).reduce(func(a: int, b: int) -> int: return a + b, 0)
+	print("STEALTH_TARGET %s dist=%s seeds=%d core=%s deny=%s" % [((rows[0] as Dictionary)["names"] as Array)[1], dist_in, SEEDS, first_c, (rows[0] as Dictionary)["deny"]])
+	return {"core": first_c, "deny": (rows[0] as Dictionary)["deny"], "core_said": c_said}
 
 
 ## RED on main decf711aa: the target is refused by name ("unit_rule:Changebound"). The dice themselves are equal and the penalty is on both sides.
@@ -136,21 +133,15 @@ func test_a_changebound_unit_shot_from_over_9_in_is_hit_one_worse_in_both_halves
 	var tgt := _entry("Shifters", 5, ["Changebound"], "change_disciples", [])
 	var far := await _run(_rifles(), tgt)
 	assert_array(far["deny"]).override_failure_message("the door must take a Changebound target").is_empty()
-	assert_int(int(far["bad"])).is_equal(0)
-	assert_int((far["table"] as Array)[0]).override_failure_message("14 in: Q4 + 1 is a 5+ on the table").is_equal(5)
-	assert_int((far["core"] as Array)[0]).is_equal(5)
+	assert_int((far["core"] as Array)[0]).override_failure_message("14 in: Q4 + 1 is a 5+ on the door").is_equal(5)
 	var near := await _run(_rifles(), tgt, {}, 8.0)
-	assert_int(int(near["bad"])).is_equal(0)
-	assert_int((near["table"] as Array)[0]).override_failure_message("8 in: no penalty on either side").is_equal(4)
-	assert_int((near["core"] as Array)[0]).is_equal(4)
+	assert_int((near["core"] as Array)[0]).override_failure_message("8 in: no penalty on the door").is_equal(4)
 
 
 func test_a_stealth_aura_hero_is_hit_one_worse_in_both_halves() -> void:
 	var hero := _entry("Echo", 1, ["Hero", "Stealth Aura"], "robot_legions", [], 3)
 	var far := await _run(_rifles(), hero)
 	assert_array(far["deny"]).override_failure_message("the door must take a Stealth Aura target").is_empty()
-	assert_int(int(far["bad"])).is_equal(0)
-	assert_int((far["table"] as Array)[0]).is_equal(5)
 	assert_int((far["core"] as Array)[0]).is_equal(5)
 
 
@@ -160,37 +151,11 @@ func test_a_joined_hero_follows_the_most_models_read_in_both_halves() -> void:
 	var plain_hero := _entry("Captain", 1, ["Hero"], "change_disciples", [], 3)
 	var most := await _run(_rifles(), host, plain_hero)
 	assert_array(most["deny"]).is_empty()
-	assert_int(int(most["bad"])).is_equal(0)
-	assert_int((most["table"] as Array)[0]).override_failure_message("most models carry it").is_equal(5)
-	assert_int((most["core"] as Array)[0]).is_equal(5)
+	assert_int((most["core"] as Array)[0]).override_failure_message("most models carry it").is_equal(5)
 	var plain_host := _entry("Troopers", 5, [], "change_disciples", [])
 	var bound_hero := _entry("Seer", 1, ["Hero", "Changebound"], "change_disciples", [], 3)
 	var few := await _run(_rifles(), plain_host, bound_hero)
-	assert_int(int(few["bad"])).is_equal(0)
-	assert_int((few["table"] as Array)[0]).override_failure_message("one model of six is not most").is_equal(4)
-	assert_int((few["core"] as Array)[0]).is_equal(4)
-
-
-## The difference below the epoch 94 batch, kept visible (from 94 the inline Deadly landing closes it): a Deadly missile beside a rifle kills the lone Stealth Aura hero before the rifle rolls. The table's live
-## read then finds nobody with the rule (4 -> hit on 4+), the core keeps the declared board (5+). The door never sees it: the shooter is refused.
-func test_the_penalty_is_lost_only_when_an_earlier_deadly_weapon_kills_the_target() -> void:
-	var hero := _entry("Echo", 1, ["Hero", "Stealth Aura"], "robot_legions", [], 3)
-	var deadly := _rifles([["Missile", 24, 4, ["Deadly(3)"]]])
-	_arm()
-	var probe := RosterSweep.spawn(_main, deadly, RosterSweep.SEAT_SHOOTER, 0.0)
-	var shooter_refusals := CoreSlice.refusals_in(CoreSlice.DENY_PATH, probe)
-	RosterSweep.free_units(_main, [probe])
-	assert_array(shooter_refusals).override_failure_message("since the epoch 95 lift a Deadly weapon beside another weapon is taken").is_empty()
-	var epoch_before := AiActRecorder.rules_epoch
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_94_PARITY_BATCH - 1
-	var res := await _run(deadly, hero)
-	AiActRecorder.rules_epoch = epoch_before
-	assert_int(int(res["bad"])).override_failure_message("the red leg at 93: the dice differ once the target is dead").is_greater(3)
-	var res94 := await _run(deadly, hero)
-	assert_int(int(res94["bad"])).override_failure_message("from 94 the Deadly landing is inline and the dice are equal").is_equal(0)
-	var plain := _rifles([["Missile", 24, 4, []]])
-	var ctl := await _run(plain, hero)
-	assert_int(int(ctl["bad"])).override_failure_message("control: the same shooter without Deadly is equal").is_equal(0)
+	assert_int((few["core"] as Array)[0]).override_failure_message("one model of six is not most").is_equal(4)
 
 
 ## The line the lift exposed (#3134) and the core now says (#3145): an Unstoppable weapon swallows the Stealth -1 (hit on 4+ instead of 5+), the
@@ -198,7 +163,6 @@ func test_the_penalty_is_lost_only_when_an_earlier_deadly_weapon_kills_the_targe
 func test_an_unstoppable_weapon_against_a_changebound_unit_says_the_same_line_on_both_paths() -> void:
 	var tgt := _entry("Shifters", 5, ["Changebound"], "change_disciples", [])
 	var res := await _run(_rifles([["Cannon", 24, 4, ["Unstoppable"]]]), tgt)
-	assert_int(int(res["bad"])).override_failure_message("the dice are equal").is_equal(0)
-	assert_int(int(res["table_said"])).override_failure_message("the table says the fold line").is_greater(0)
-	assert_int(int(res["core_said"])).override_failure_message("the core says it as often as the table").is_equal(int(res["table_said"]))
+	assert_int(int(res["core_said"])).override_failure_message("the door says the fold line").is_greater(0)
+	assert_int(int(res["core_said"])).override_failure_message("the door says it once per volley, every seed").is_equal(WANT_UNSTOPPABLE_LINES)
 	assert_array(res["deny"]).override_failure_message("the pair is taken").is_empty()

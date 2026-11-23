@@ -30,9 +30,11 @@ const UNSENT_STAMPS := {"reckless_rolled_round": "reckless_rolled_round", "reckl
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
+var _epoch_was: int
 
 
 func before_test() -> void:
+	_epoch_was = AiActRecorder.rules_epoch
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -48,6 +50,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch_was
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
@@ -402,10 +405,24 @@ func test_the_wire_keys_of_the_fields_a_volley_does_not_exercise() -> void:
 
 
 ## Surprise: a Precision Spotter's placement die has no roll record, so the step API REFUSES the whole activation: the spotter's markers
-## cannot come out of a core volley at all until that is fixed. This case turns red with the fix: update it then.
+## cannot come out of a core volley at all. Pinned below the epoch 96 batch (SPOTTER_ROLL_RECORD), which fixes it (the next case).
 func test_a_precision_spotter_volley_is_refused_by_the_step_api() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_96_PARITY_BATCH - 1
 	var u := _pair({"faction_folder": "dao_union", "rules": ["Precision Spotter"]})
 	var v := await _volley(u[0], u[1])
 	_end([v])
 	assert_str(v["step"]).override_failure_message("answer: %s" % [v]).is_equal("refused")
 	assert_str(v["reason"]).contains("without a roll record")
+
+
+## EPOCH_96_PARITY_BATCH (SPOTTER_ROLL_RECORD): the placement die is a recorded roll, so the activation runs to its end: the spotter's die
+## (one per model, at the rule's 4+) is the first throw asked, before the volley's. RED: pin the epoch to 95 here -> refused.
+func test_from_96_a_precision_spotter_volley_runs_through_the_step_api() -> void:
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_96_PARITY_BATCH
+	var u := _pair({"faction_folder": "dao_union", "rules": ["Precision Spotter"]})
+	var v := await _volley(u[0], u[1])
+	_end([v])
+	assert_str(v["step"]).override_failure_message("answer: %s" % [v]).is_equal("done")
+	assert_str(str((v["asks"] as Array)[0])).override_failure_message("answer: %s" % [v]).is_equal("attack x10 @4")
+	# (the sixes place ten markers; the volley spends them all, so its own die then hits on 2+)
+	assert_str(str((v["asks"] as Array)[1])).override_failure_message("answer: %s" % [v]).is_equal("attack x10 @2")

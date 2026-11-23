@@ -6,6 +6,8 @@ extends GdUnitTestSuite
 ## already cast. Now `takes_ai_activation` answers false for an activation whose report has casts, so the activation stays whole on the
 ## table in the old order (Dangerous -> casts -> beats -> volley); a caster that casts nothing is still taken.
 ## RED: `takes_ai_activation` without the cast clause -> the dice log shows a `dangerous` leg AFTER a `cast` / `spell` leg.
+## D-PAR3 15b: the table still pays the whole pre-volley part in that order (Dangerous -> casts), and the VOLLEY then goes to the core on
+## a recapture with `paid {start, dangerous, beats}`: the door runs once, the Dangerous test is rolled once, the volley comes after the casts.
 ## Real: the main scene, NmlCore, the deny slice file, the AI's decision, the cast plan and the body (`_solo_activate_one_ai`), the
 ## tray and the dice tap (`dice.jsonl`, the `leg` field). Constructed: the units, the painted Dangerous block under the caster, a token
 ## count on the caster (2 with a spell book to cast from, 0 for the non-casting case), both seats AI.
@@ -117,7 +119,9 @@ func test_a_casting_caster_pays_its_dangerous_test_before_the_cast() -> void:
 			continue
 		cast_seeds += 1
 		assert_bool(d < c).override_failure_message("the Dangerous test came AFTER the cast: " + why).is_true()
-		assert_int(int(r["ran"])).override_failure_message("a casting activation must stay on the table: " + why).is_equal(0)
+		assert_int(int(r["ran"])).override_failure_message("the casting activation's volley goes to the core on a recapture (15b): " + why).is_equal(1)
+		assert_int(legs.filter(func(l: Variant) -> bool: return str(l) == "dangerous").size()).override_failure_message("the Dangerous test is rolled once: " + why).is_equal(1)
+		assert_bool(_first(legs, ["main"]) > c).override_failure_message("the volley comes after the casts: " + why).is_true()
 	assert_int(cast_seeds).override_failure_message("fixture: no seed's caster cast").is_greater(0)
 
 

@@ -1280,7 +1280,7 @@ pub(crate) fn tray_reanimation(
     tray: &mut Tray, shot: &mut ShootResult, board: Option<&Terrain>,
 ) {
     let Some(spec) = statics[next.roster.profile[si]].reanimation.clone() else { return };
-    let spot_rule = rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_REVIVE_SPOT);
+    let spot_rule = rule_on(seams.rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH);
     if !rule_on(seams.rules_epoch, EPOCH_7_TABLE_RULES) || next.shaken[si] {
         return; // below-7 replays byte-exact; the Shaken activation stays idle (main.gd:4731)
     }
@@ -1296,7 +1296,7 @@ pub(crate) fn tray_reanimation(
         members.extend(next.attached[si].iter().copied());
     }
     if spot_rule {
-        // PENDING_EPOCH_REVIVE_SPOT (REVIVE-MEMBERS, lead ruling): the rule fires only for a unit where ALL models carry it, and a
+        // EPOCH_96_PARITY_BATCH (REVIVE-MEMBERS, lead ruling): the rule fires only for a unit where ALL models carry it, and a
         // joined hero is part of the unit - a standing joined hero without it means no roll for the whole chain.
         let (has, standing) = (|u: usize| statics[next.roster.profile[u]].reanimation.is_some(), |u: usize| !next.positions[u].is_empty());
         if !members.iter().any(|&u| next.profile(u).wounds_max.iter().sum::<i64>() > next.wounds[u].iter().sum::<i64>()) {
@@ -1357,7 +1357,7 @@ pub(crate) fn tray_reanimation(
     // touching the nearest standing model, away from the unit centre, clear
     // of every other unit's bases.
     dead.sort_by(|a, b| a.1.cmp(&b.1).then(a.0.cmp(&b.0)));
-    // PENDING_EPOCH_REVIVE_SPOT: the anchors are the chain's models standing BEFORE the first restore (host slot order, then
+    // EPOCH_96_PARITY_BATCH: the anchors are the chain's models standing BEFORE the first restore (host slot order, then
     // the joined heroes that carry the rule themselves - `SoloController.reanimation_members`), captured once - a model
     // restored a moment ago is no anchor.
     let anchors: Vec<([f64; 3], f64)> = if spot_rule {
@@ -1366,7 +1366,7 @@ pub(crate) fn tray_reanimation(
     } else {
         Vec::new()
     };
-    // PENDING_EPOCH_REVIVE_SPOT: the table's spend (`SoloController.reanimation_plan`), fixed BEFORE placing: each casualty
+    // EPOCH_96_PARITY_BATCH: the table's spend (`SoloController.reanimation_plan`), fixed BEFORE placing: each casualty
     // stands up at ONE wound, cheapest first, then the top-ups in the same order; an entry with no legal spot expires whole.
     let mut plan: Vec<(usize, i64, i64)> = dead.iter().map(|&(u, cost)| (u, cost, 0)).collect();
     if spot_rule {
@@ -1382,7 +1382,7 @@ pub(crate) fn tray_reanimation(
         if !spot_rule && left <= 0 {
             break;
         }
-        // PENDING_EPOCH_REVIVE_SPOT: the returning model keeps its unit's own base (metres; 0 = not set).
+        // EPOCH_96_PARITY_BATCH: the returning model keeps its unit's own base (metres; 0 = not set).
         let own_r = statics[next.roster.profile[u]].base_radius;
         let r = if spot_rule && own_r > 0.0 { own_r } else { DEFAULT_BASE_RADIUS_M };
         let spot = if spot_rule {
@@ -1431,7 +1431,7 @@ pub(crate) fn tray_reanimation(
     }
 }
 
-/// REVIVE SPOT (`PENDING_EPOCH_REVIVE_SPOT`), the table's ring (`_solo_reanimation_spot` without the "where it fell" spot): per
+/// REVIVE SPOT (`EPOCH_96_PARITY_BATCH`), the table's ring (`_solo_reanimation_spot` without the "where it fell" spot): per
 /// anchor in chain order, the base gap 2 mm then 0.5 in + 2 mm (both inside the 1 in coherency), 16 headings each from +X toward
 /// +Z; the first legal spot wins, at the anchor's height. `None`: nowhere legal, the model is not restored. Draws no die.
 fn revive_ring(board: Option<&Terrain>, next: &State, anchors: &[([f64; 3], f64)], r: f64) -> Option<[f64; 3]> {
@@ -1449,7 +1449,7 @@ fn revive_ring(board: Option<&Terrain>, next: &State, anchors: &[([f64; 3], f64)
     None
 }
 
-/// REVIVE SPOT (`PENDING_EPOCH_REVIVE_SPOT`): does the straight line from the anchor to a ring candidate cross a ruin / container wall,
+/// REVIVE SPOT (`EPOCH_96_PARITY_BATCH`): does the straight line from the anchor to a ring candidate cross a ruin / container wall,
 /// a cliff or a house wall, or end on another tier level? Then the model would come back behind a thin wall or across a tier step
 /// (the outer ring reaches past the wall band `rest_forbidden` keeps clear). Always `false` without a board.
 fn revive_line_blocked(board: Option<&Terrain>, a: [f64; 3], c: [f64; 3]) -> bool {
@@ -1461,7 +1461,7 @@ fn revive_line_blocked(board: Option<&Terrain>, a: [f64; 3], c: [f64; 3]) -> boo
         || level(a) != level(c)
 }
 
-/// REVIVE SPOT (`PENDING_EPOCH_REVIVE_SPOT`): may a restored model of base radius `r` (metres) stand at world `c` (x, z metres)?
+/// REVIVE SPOT (`EPOCH_96_PARITY_BATCH`): may a restored model of base radius `r` (metres) stand at world `c` (x, z metres)?
 /// The whole base on the table, no rest where `mv::gate::rest_forbidden` refuses one (impassable terrain, a wall or cliff within
 /// r + 2 mm), not over an intact house nor within r + 1 mm of its wall (`lands_in_house`), and clear (r + r_other + 1 mm) of every
 /// standing base, its own unit's included. The terrain clauses run only on a real board (`board` is `Some`).
@@ -1913,7 +1913,7 @@ pub(crate) fn tray_strafing(
     for (b, keep, _, _) in &parts {
         mark_spent_limited(&statics[next.roster.profile[*b]].strafe_shoot, keep, &mut next.limited_used, *b);
     }
-    // PENDING_EPOCH_BANE_MARK: the strafe has no exchange spend, so the Bane Mark it read is spent here (once, never twice).
+    // EPOCH_96_PARITY_BATCH: the strafe has no exchange spend, so the Bane Mark it read is spent here (once, never twice).
     if parts.iter().any(|(_, _, _, att)| att.bane_mark_grant) {
         mods::spend_mark_vs(next, target, "Bane Mark");
     }
@@ -3067,7 +3067,7 @@ fn tray_piercing_tag(
             };
             if spotter {
                 next.piercing_spot_round[bearer] = next.round;
-                let record = rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SPOTTER_ROLL_RECORD);
+                let record = rule_on(seams.rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH);
                 if record {
                     tray.owner_next(Some(bearer));
                 }
@@ -3275,11 +3275,11 @@ fn tray_precision_markers(
                 } else {
                     1
                 };
-                if rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SPOTTER_ROLL_RECORD) {
+                if rule_on(seams.rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH) {
                     tray.owner_next(Some(bearer));
                 }
                 let faces = tray.roll(dice);
-                if rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SPOTTER_ROLL_RECORD) {
+                if rule_on(seams.rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH) {
                     shot.rolls.push(crate::dice::Roll { kind: "attack", count: dice as i64, target: b.place_roll, faces: faces.clone(), owner: owner.clone() });
                 }
                 let hits = faces.iter().filter(|&&f| f as i64 >= b.place_roll).count() as i64;
@@ -3404,6 +3404,7 @@ fn nearest_precision_target(
 /// clause. GATED on the FROZEN constant; below it both pools read empty.
 fn precision_markers_spend(
     next: &mut State,
+    si: usize,
     ti: usize,
     rules_epoch: u32,
     log: &mut Vec<String>,
@@ -3413,12 +3414,17 @@ fn precision_markers_spend(
     if !rule_on(rules_epoch, EPOCH_61_PRECISION_MARKERS) {
         return (0, 0);
     }
-    let spot = next.spot_markers[ti].max(0);
+    let pool = next.spot_markers[ti].max(0);
+    // The attacker's own count (`spot_markers:<shooter>:<target>`, 0..=pool, the table's offer `_solo_offer_spot_markers`); no answer
+    // takes all of them, the AI's rule (an interference-shaped count choice on the step path).
+    let id = format!("spot_markers:{}:{}", next.key(si), next.key(ti));
+    let spot = if pool > 0 { tray.interference(&id, pool, next.key(si)).unwrap_or(pool) } else { 0 };
     if spot > 0 {
-        next.spot_markers[ti] = 0;
+        next.spot_markers[ti] = pool - spot;
+        let left = pool - spot;
         log.push(format!(
-            "Precision Spotter: {spot} marker{} removed — +{spot} to hit this volley",
-            if spot == 1 { "" } else { "s" }));
+            "Precision Spotter: {spot} marker{} removed — +{spot} to hit this volley{}",
+            if spot == 1 { "" } else { "s" }, if left > 0 { format!(" ({left} remain{})", if left == 1 { "s" } else { "" }) } else { String::new() }));
         // The table's line (`_solo_consume_spot_markers`, the AI takes them all): the same words on the tray.
         say_rule(tray, "marker_spend", side, || log.last().cloned().unwrap_or_default());
     }
@@ -3552,7 +3558,7 @@ fn indirect_waives_gate(statics: &[UnitStatic], state: &State, si: usize, ti: us
     })
 }
 
-/// `PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY`: the target's own range cut (Aircraft -12", the Ranged Shrouding family) leaves no living
+/// `EPOCH_96_PARITY_BATCH`: the target's own range cut (Aircraft -12", the Ranged Shrouding family) leaves no living
 /// chain member a weapon whose cut reach (plus a live +6" Mark) covers the gap its weapons are gated by (`gap`, the volley's own `dm`);
 /// the Mark adds after the cut (the larger of the two reads), so a volley the dice would fire is never dropped. The Aircraft cut counts
 /// only where the volley reads it (the sighting seam); a Strafing run is its own volley (`tray_strafing`) and never reaches this.
@@ -3847,9 +3853,9 @@ fn tray_hit_and_run(
     // 0.0 (no Boost, or an `rules_epoch: 5` record) keeps the shared base
     // 3" const, byte-exact.
     let band = if us.hit_and_run_move_in > 0.0 { us.hit_and_run_move_in } else { HIT_AND_RUN_MOVE_IN };
-    // PENDING_EPOCH_HIT_AND_RUN_PLAIN: the anchor is the table's `_nearest_enemy_of` pick (`nearest_enemy_of`: plain nearest, joined
+    // EPOCH_96_PARITY_BATCH: the anchor is the table's `_nearest_enemy_of` pick (`nearest_enemy_of`: plain nearest, joined
     // heroes skipped) for the early outs and the board-less rigid kite too, not the not-activated-first reposition pick.
-    let anchor = if rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_HIT_AND_RUN_PLAIN) {
+    let anchor = if rule_on(seams.rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH) {
         nearest_enemy_of(next, si)
     } else {
         nearest_enemy_reposition(statics, next, si)
@@ -3865,9 +3871,9 @@ fn tray_hit_and_run(
         Cover::Board(t) => Some(t),
         Cover::Recorded(_) => None,
     };
-    // PENDING_EPOCH_HIT_AND_RUN_PLAIN: on a real board the step is the ported fallback below whatever `seams.movement` says
+    // EPOCH_96_PARITY_BATCH: on a real board the step is the ported fallback below whatever `seams.movement` says
     // (the shadow and the door run without it and took the rigid kite, which checks the board edge only).
-    let ported = (seams.movement && !seams.move_rigid) || rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_HIT_AND_RUN_PLAIN);
+    let ported = (seams.movement && !seams.move_rigid) || rule_on(seams.rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH);
     if ported && !seams.plain_only {
         if let Cover::Board(t) = cover {
             let land = nearest_enemy_of(next, si).and_then(|foe| {
@@ -4913,6 +4919,7 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
         let unit = &statics[state.roster.profile[i]].name;
         if state.feats_used[i].iter().any(|n| n == PROTECTION_FEAT) {
             trace_rule("protection-feat", unit, "already used it this game -> no ignore roll");
+            c.regen_feat_spent = if c.regen_pending_notes[3].is_empty() { PROTECTION_FEAT } else { c.regen_pending_notes[3] };
         } else {
             c.regeneration = true;
             c.regen_target = fold_min(c.regen_target, c.regen_feat);
@@ -5006,7 +5013,7 @@ pub fn ctx_live_vs(
         c.relentless_from = mods::grant_source(state, i, target, "Relentless");
     }
     c.shred_grant = c.shred_grant || mods::granted_vs(state, target, "Shred");
-    c.bane_mark_grant = rule_on(rules_epoch, crate::acts::PENDING_EPOCH_BANE_MARK) && mods::marked_vs(state, target, "Bane Mark");
+    c.bane_mark_grant = rule_on(rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH) && mods::marked_vs(state, target, "Bane Mark");
     if rule_on(rules_epoch, crate::acts::EPOCH_94_PARITY_BATCH) {
         c.slayer_grant = c.slayer_grant || mods::granted_vs(state, target, "Slayer");
     }
@@ -6184,8 +6191,8 @@ fn takedown_shot_gate(
         msc.keep.remove(k);
         msc.attacks.remove(k);
     } else {
-        // PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL: each living model of the bearer makes its own extra attack.
-        if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_TAKEDOWN_SHOT_PER_MODEL) {
+        // EPOCH_96_PARITY_BATCH: each living model of the bearer makes its own extra attack.
+        if rule_on(rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH) {
             msc.attacks[k] = shoot[pi].attacks * state.alive[mi].max(1);
         }
         spent.push(mi);
@@ -7649,7 +7656,9 @@ fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool,
     let gone = banner_gone(statics, state, i, seams);
     if gone > 0 {
         let root = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
-        shot.log.push(format!("Banner: {root} died with its Banner — {}'s morale test loses +{gone}", us.name));
+        let line = format!("Banner: {root} died with its Banner — {}'s morale test loses +{gone}", us.name);
+        say_rule(tray, "banner", state.player[i], || line.clone()); // the step path's lines are the tray's
+        shot.log.push(line);
     }
     ctx.morale_bonus = state.morale_bonus[i] - gone
         + mods::sum(state, i, mods::Role::Morale, melee, |r| r.morale_mod)
@@ -10810,7 +10819,7 @@ fn table_inches(a: V3, b: V3) -> f64 {
     geom::length([b[0] - a[0], 0.0, b[2] - a[2]]) as f64 / crate::IN2M
 }
 
-/// meleefix (`PENDING_EPOCH_CONSOLIDATE_PLAN`): `SoloController._units_controlling` - the units of the winner's side (`own`) or the
+/// meleefix (`EPOCH_96_PARITY_BATCH`): `SoloController._units_controlling` - the units of the winner's side (`own`) or the
 /// other side that hold `o`: alive, not Shaken, not in reserve, not a joined hero, not Aircraft, a model centre within 3 in (+0.001).
 fn holders_at(next: &State, winner: usize, o: V3, own: bool, skip: Option<usize>) -> usize {
     let pid = next.player[winner];
@@ -10819,7 +10828,7 @@ fn holders_at(next: &State, winner: usize, o: V3, own: bool, skip: Option<usize>
         && next.attached_to[k].is_none() && !next.aircraft[k] && next.positions[k].iter().any(near)).count()
 }
 
-/// meleefix (`PENDING_EPOCH_CONSOLIDATE_PLAN`): the table's goal for a melee winner's 3 in move (`consolidate_after_melee_win` ->
+/// meleefix (`EPOCH_96_PARITY_BATCH`): the table's goal for a melee winner's 3 in move (`consolidate_after_melee_win` ->
 /// `_nearest_uncontrolled_objective`, NML-210), read on the state after the fight from the planner inputs the door sent: a `seize`
 /// task's marker (none once the side holds it by a live majority; 2.5 in to the side on a laned pair), a `fight` task's garrison
 /// (the marker within 3 in only this unit holds), else the tiered greedy (holdable before contested, unclaimed before claimed when
@@ -10921,9 +10930,9 @@ fn consolidate_after_melee(next: &mut State, statics: &[UnitStatic], cover: Cove
         let (c, d) = (geom::centre(&next.positions[si]), geom::centre(&next.positions[ti]));
         (geom::sub(geom::mul(c, 2.0), d), 1.0, "moves back 1\" (the charger separates)")
     } else {
-        // meleefix: the table's planner goal when the transcript carries its inputs (from PENDING_EPOCH_CONSOLIDATE_PLAN), else the old greedy.
+        // meleefix: the table's planner goal when the transcript carries its inputs (from EPOCH_96_PARITY_BATCH), else the old greedy.
         let key = next.roster.keys[winner].clone();
-        let plan = dice.as_ref().and_then(|(tray, _)| tray.consolidation_of(&key)).filter(|_| rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_CONSOLIDATE_PLAN)).cloned();
+        let plan = dice.as_ref().and_then(|(tray, _)| tray.consolidation_of(&key)).filter(|_| rule_on(seams.rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH)).cloned();
         let goal = match &plan { Some(p) => planned_consolidation_goal(next, winner, p), None => consolidation_goal(next, winner) };
         let Some(goal) = goal else { return say(&mut dice, holds) };
         (goal, CONSOLIDATE_WIN_IN, "consolidates up to 3\" (enemy destroyed)")
@@ -12164,14 +12173,14 @@ fn resolve_with(
                                     text: format!("Hero: {} is the unit now — shots from {} at {} are measured and saved as the hero",
                                         statics[next.roster.profile[g.ti]].name, statics[pi_s].name, statics[next.roster.profile[host]].name) });
                             }
-                            // PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY: a target-side range cut leaves no weapon in reach, so there is no volley
+                            // EPOCH_96_PARITY_BATCH: a target-side range cut leaves no weapon in reach, so there is no volley
                             // (the table's "no target in range or sight"): nothing is marked, spent or announced.
                             // Each member's gap is the one its weapons are gated by below (`dm`): the host's `g.d`, a joined hero's own.
                             let member_gap = |m: usize| if m == si || !rule_on(seams.rules_epoch, EPOCH_73_V36) { g.d } else {
                                 chain_gap_in(&next, g.ti, seams, |t| if seams.range_by_base_edge || plan.is_some() {
                                     range_gap_in(&next, &next.positions[m], m, t) } else { geom::dist_in(&next.positions[m], &next.positions[t]) })
                             };
-                            if rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_OUT_OF_REACH_NO_VOLLEY)
+                            if rule_on(seams.rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH)
                                 && cut_out_of_reach(statics, &next, si, g.ti, seams, member_gap)
                             {
                                 let said = format!("{}: no volley — no target in range or sight — the unit holds", statics[pi_s].name);
@@ -12214,7 +12223,7 @@ fn resolve_with(
                             // target's pools spend EVERY marker on THIS
                             // volley (+1 to hit per marker), once per group.
                             let side_now = next.player[si];
-                            let (spot_hit, tag_hit) = precision_markers_spend(&mut next, g.ti, seams.rules_epoch, &mut shot.log, tray, side_now);
+                            let (spot_hit, tag_hit) = precision_markers_spend(&mut next, si, g.ti, seams.rules_epoch, &mut shot.log, tray, side_now);
                             let precision_hit = spot_hit + tag_hit;
                             let ut_g = &statics[next.roster.profile[g.ti]];
                             let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch), statics, &next, g.ti, seams), seams.rules_epoch);
@@ -12294,7 +12303,9 @@ fn resolve_with(
                                 // G4R4 C-GRANTED-RANGE: a live spell grant's reach kept a weapon the static reach would drop.
                                 let (granted, granted_rule) = granted_reach(um, &next, mi);
                                 for _ in msc.keep.iter().map(|&k| &um.shoot[k]).filter(|p| granted > 0.0 && (p.range as f64) + p.reach_bonus_in < dm) {
-                                    shot.log.push(format!("{granted_rule}: {} gains +{granted:.0}\" reach on {}", um.name, ut_g.name));
+                                    let line = format!("{granted_rule}: {} gains +{granted:.0}\" reach on {}", um.name, ut_g.name);
+                                    say_rule(tray, "granted_range", next.player[si], || line.clone());
+                                    shot.log.push(line);
                                 }
                                 if rule_on(seams.rules_epoch, EPOCH_73_V36) {
                                     // Shooting Range: the target's joined hero put a weapon in reach that its host's gap alone would drop.

@@ -9,6 +9,7 @@ extends GdUnitTestSuite
 ## activation in 16 / 16), plain Infiltrate 0 differing, Surprise Attack 16 / 16 differing (the burst rolls twice), so that NAME stays refused.
 ## RED: put the group back into the deny file -> `CoreSlice.takes` refuses the bearer and the first assertion of each case fails. The comparison
 ## can fail: lifting the Surprise Attack name makes every seed unequal (the last test).
+## PLAN_FIRST_DELETION 34 FT-C7: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main 97fa324e9.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const Harness := preload("res://test/one_core/golden_witness_harness.gd")
@@ -16,6 +17,14 @@ const ParityTable := preload("res://test/parity/parity_table.gd")
 const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
 const DICE := "user://ledger_lift_dice"
 const SEEDS := 16
+## Per seed: door battle-log lines containing the rule name (Teleport, Ethereal), and door dice records per label (read on main).
+const WANT_NAMED := {"Teleport": [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+	"Ethereal": [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]}
+const WANT_ROLLS := {"Teleport": [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2],
+	"Ethereal": [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2],
+	"Infiltrate": [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2]}
+const WANT_BURST_LINES := [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+const WANT_ROLLS_SURPRISE := [4, 4, 4, 3, 4, 4, 4, 4, 4, 3, 4, 3, 4, 4, 4, 3]
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -100,32 +109,25 @@ func _activation(sys: String, faction: String, rule: String, seed: int, gap_x: f
 	return out
 
 
-## `SEEDS` activations on both paths: {"differing": seeds whose dice, end state or `needle` lines differ, "named": seeds where the table said a
-## line containing `needle`, "taken": seeds the door was allowed to take, "ran": seeds where the core really ran the activation}.
+## `SEEDS` activations through the door: {"named": seeds whose door lines contain `needle`, "taken": seeds the door was allowed to
+## take, "ran": seeds where the core really ran the activation, "named_counts"/"rolls_counts": the per-seed door counts}.
 func _compare(sys: String, faction: String, rule: String, gap_x: float, needle: String) -> Dictionary:
-	var differing := 0
-	var dice_differing := 0   # D-PAR3 15a: the seeds whose roll streams differ (a second burst) ...
-	var state_differing := 0   # ... and those whose end state differs (a volley on a stale board)
 	var named := 0
 	var taken := 0
 	var ran := 0
+	var named_counts: Array = []
+	var rolls_counts: Array = []
 	for s in SEEDS:
 		var on := await _activation(sys, faction, rule, s, gap_x, true)
-		var off := await _activation(sys, faction, rule, s, gap_x, false)
 		var l_on: Array = (on["lines"] as Array).filter(func(l: String) -> bool: return l.contains(needle))
-		var l_off: Array = (off["lines"] as Array).filter(func(l: String) -> bool: return l.contains(needle))
-		named += 0 if l_off.is_empty() else 1
+		named += 0 if l_on.is_empty() else 1
 		taken += 1 if bool(on["takes"]) else 0
 		ran += 1 if int(on["ran"]) > 0 else 0
-		dice_differing += 1 if on["rolls"] != off["rolls"] else 0
-		state_differing += 1 if JSON.stringify(on["digest"]) != JSON.stringify(off["digest"]) else 0
-		if on["rolls"] != off["rolls"] or JSON.stringify(on["digest"]) != JSON.stringify(off["digest"]) or l_on != l_off:
-			differing += 1
-			print("LEDGER_LIFT_DIFF ", JSON.stringify({"rule": rule, "seed": s, "rolls_on": on["rolls"], "rolls_off": off["rolls"],
-				"dig_on": on["digest"], "dig_off": off["digest"], "l_on": l_on, "l_off": l_off}).substr(0, 1500))
-	print("LEDGER_LIFT ", JSON.stringify({"rule": rule, "seeds": SEEDS, "taken": taken, "ran": ran, "named": named, "differing": differing}))
+		named_counts.append(l_on.size())
+		rolls_counts.append((on["rolls"] as Array).size())
+	print("LEDGER_LIFT ", JSON.stringify({"rule": rule, "seeds": SEEDS, "taken": taken, "ran": ran, "named": named}))
 	CoreActivation._env = 1
-	return {"differing": differing, "named": named, "taken": taken, "ran": ran, "dice_differing": dice_differing, "state_differing": state_differing}
+	return {"named": named, "taken": taken, "ran": ran, "named_counts": named_counts, "rolls_counts": rolls_counts}
 
 
 ## [label, system, faction folder, rule, gap in inches, a needle that proves the rule acted ("" = equality alone)]
@@ -144,34 +146,21 @@ func test_a_lifted_primitive_is_taken_and_reads_the_same_in_a_real_activation() 
 		assert_int(int(r["ran"])).override_failure_message("%s: the core never ran the activation, the check proved nothing" % c[0]).is_equal(SEEDS)
 		if c[5] != "":
 			assert_int(int(r["named"])).override_failure_message("%s: the rule never acted, the check proved nothing" % c[0]).is_equal(SEEDS)
-		assert_int(int(r["differing"])).override_failure_message("%s: %d of %d seeds differ" % [c[0], r["differing"], SEEDS]).is_equal(0)
+			assert_array(r["named_counts"]).override_failure_message("%s: the rule's line count per seed" % c[0]).is_equal(WANT_NAMED[c[0]])
+		assert_array(r["rolls_counts"]).override_failure_message("%s: the door's roll count per seed" % c[0]).is_equal(WANT_ROLLS[c[0]])
 
 
 ## The Surprise Attack burst (an Infiltrate-primitive entry) fires at the activation start on the table, and the core rolled its own copy
-## again: with the name lifted (a COPY of the deny file) every seed differed. D-PAR3 15a: the AI transcript says the table paid the start
-## (`paid {start}`), so the core's copy of the burst is gone - the roll streams are equal on every seed. But the AI board is captured
-## BEFORE the table's burst (main.gd: the capture at the activation start, the burst after it), so the core resolves the volley on a board
-## without the burst's casualties and its delta puts them back: the end state differs (measured: seed 12, the burst's kill stands up
-## again). So the committed file keeps refusing the bearer by NAME (not a group of kind `activation_start`, which 15a lets through);
-## 15b's recapture after the burst lifts it.
-func test_the_surprise_attack_burst_rolls_once_with_the_start_paid() -> void:
+## again (16 / 16 seeds differed with the name lifted). 15a's `paid {start}` removed the core's second burst but left the volley on the
+## board captured before the burst (an end state differed). D-PAR3 15b: a Surprise Attack chain is never `core_takes` - the table pays the
+## burst and the volley goes to the core on a RECAPTURE with `paid {start, dangerous, beats}`, so the name left the deny file: taken, run
+## by the core, the burst named, and no seed differs - neither the dice nor the end state.
+func test_the_surprise_attack_burst_is_taken_and_rolls_once() -> void:
 	var committed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.DENY_PATH))
-	assert_bool((committed["deny_names"] as Dictionary).has("Surprise Attack")).override_failure_message("the name is refused").is_true()
-	var refused := await _compare("gf", "alien_hives", "Surprise Attack", 2.0, "Surprise Attack")
-	assert_int(int(refused["taken"])).override_failure_message("the committed deny file takes a Surprise Attack bearer").is_equal(0)
-	assert_int(int(refused["ran"])).override_failure_message("the core ran a refused activation").is_equal(0)
-	assert_int(int(refused["named"])).override_failure_message("the table never fired the burst").is_equal(SEEDS)
-	(committed["deny_names"] as Dictionary).erase("Surprise Attack")
-	var tmp := "user://deny_without_surprise_attack.json"
-	var f := FileAccess.open(tmp, FileAccess.WRITE)
-	f.store_string(JSON.stringify(committed))
-	f.close()
-	CoreSlice.path_override = tmp
-	CoreSlice.reset_cache()
-	var lifted := await _compare("gf", "alien_hives", "Surprise Attack", 2.0, "Surprise Attack")
-	CoreSlice.path_override = ""
-	CoreSlice.reset_cache()
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
-	assert_int(int(lifted["ran"])).override_failure_message("with the name lifted the core runs the activation").is_equal(SEEDS)
-	assert_int(int(lifted["dice_differing"])).override_failure_message("the start is paid: the core rolls no second burst (%d of %d roll streams differ)" % [lifted["dice_differing"], SEEDS]).is_equal(0)
-	assert_int(int(lifted["state_differing"])).override_failure_message("the stale board: the burst's casualties are not on the core's board, some end state must differ").is_greater(0)
+	assert_bool((committed["deny_names"] as Dictionary).has("Surprise Attack")).override_failure_message("the name left the deny file").is_false()
+	var r := await _compare("gf", "alien_hives", "Surprise Attack", 2.0, "Surprise Attack")
+	assert_int(int(r["taken"])).override_failure_message("the deny file takes a Surprise Attack bearer").is_equal(SEEDS)
+	assert_int(int(r["ran"])).override_failure_message("the core runs the volley").is_equal(SEEDS)
+	assert_int(int(r["named"])).override_failure_message("the table fired the burst").is_equal(SEEDS)
+	assert_array(r["named_counts"]).override_failure_message("the burst is named once per seed").is_equal(WANT_BURST_LINES)
+	assert_array(r["rolls_counts"]).override_failure_message("the burst rolls once (%s)" % [r["rolls_counts"]]).is_equal(WANT_ROLLS_SURPRISE)

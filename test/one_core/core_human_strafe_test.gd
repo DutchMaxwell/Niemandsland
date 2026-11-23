@@ -8,6 +8,8 @@ extends GdUnitTestSuite
 ## Constructed: a Strafing bearer of seat 1 (human) against 20 defenders of seat 2 (AI), the Rifle volley after an Advance; the
 ## shipped slice. Not compared: the table's models-in-sight line and the core's announce line (the Q17 pair).
 ## NML_ONE_CORE_SEEDS overrides 20.
+## PLAN_FIRST_DELETION 34 FT-C4: the table arm left before step 31 (the AI table resolver retires); door values are pinned as
+## literals read on main af5c83610.
 
 const INCH := 0.0254
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -16,6 +18,12 @@ const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_s
 	"faction_folder": "robot_legions", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
 const STRAFE_GUN := {"name": "Strafe Gun", "range_in": 24, "attacks": 2, "count": 10, "rules": ["Crossing Strike"]}
+## The defender's alive models per seed (0-19), read on main from the table run's survivors.
+const WANT_ALIVE_FIRE := [12, 10, 14, 11, 10, 8, 10, 13, 14, 11, 12, 14, 12, 11, 13, 12, 13, 16, 7, 13]
+const WANT_ALIVE_END := [14, 14, 16, 15, 13, 13, 12, 14, 16, 14, 14, 16, 16, 14, 14, 15, 18, 18, 12, 15]
+## The wounded models in all, from the `HUMAN_STRAFE ... hurt=` line read on main.
+const WANT_HURT_FIRE := 164
+const WANT_HURT_END := 107
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -110,46 +118,53 @@ func _run(s: int, rifle: bool, core_run: bool, foe_rules := []) -> Dictionary:
 	return out
 
 
-func _sweep(name: String, rifle: bool, foe_rules := []) -> void:
+func _sweep(name: String, rifle: bool, foe_rules := [], want_alive: Array = [], want_hurt := -1) -> void:
 	var seeds := int(OS.get_environment("NML_ONE_CORE_SEEDS")) if OS.has_environment("NML_ONE_CORE_SEEDS") else 20
 	var table_strikes: bool = not foe_rules.is_empty()   # a crossed enemy that is no plain target: the drop hands the strike to the table
-	await _run(0, rifle, false, foe_rules)   # warm-up: the AI's first turn of a game says its opening line once, in whichever run is first
 	var bad: Array = []
 	var hurt := 0
+	if not table_strikes and seeds > want_alive.size():
+		bad.append("%d seeds exceed the %d pinned values" % [seeds, want_alive.size()])
 	for s in seeds:
-		var table := await _run(s, rifle, false, foe_rules)
 		var core := await _run(s, rifle, true, foe_rules)
 		hurt += 20 - (core["survivors"] as Array).size()
-		if not core["core_unit"] or table["core_unit"]:
-			bad.append("seed %d: core unit: core run %s, table run %s" % [s, core["core_unit"], table["core_unit"]])
-		# The strike moved from the drop to the Fire / End: none at the drop in the core run, one in all in both.
-		if int(table["at_drop"]) != 1 or int(core["at_drop"]) != (1 if table_strikes else 0) or int(table["strikes"]) != 1 or int(core["strikes"]) != 1:
-			bad.append("seed %d: strikes at the drop / in all: table %d/%d, core %d/%d" % [s, table["at_drop"], table["strikes"], core["at_drop"], core["strikes"]])
+		if not core["core_unit"]:
+			bad.append("seed %d: the bearer is no core unit in the door run" % s)
+		# The strike moved from the drop to the Fire / End: none at the drop (one when the drop hands it to the table), one in all.
+		if int(core["at_drop"]) != (1 if table_strikes else 0) or int(core["strikes"]) != 1:
+			bad.append("seed %d: strikes at the drop / in all: core %d/%d" % [s, core["at_drop"], core["strikes"]])
 		if core["table_struck"] != table_strikes:
 			bad.append("seed %d: the drop handed the strike to the table: %s (want %s)" % [s, core["table_struck"], table_strikes])
-		for k in ["survivors", "shaken", "rng", "lines"]:
-			if table[k] != core[k]:
-				bad.append("seed %d: %s: table %s, core %s" % [s, k, table[k], core[k]])
+		if not table_strikes:
+			if s < want_alive.size() and (core["survivors"] as Array).size() != int(want_alive[s]):
+				bad.append("seed %d: survivors %d (want %d)" % [s, (core["survivors"] as Array).size(), int(want_alive[s])])
 	print("HUMAN_STRAFE %s seeds=%d hurt=%d mismatches=%d" % [name, seeds, hurt, bad.size()])
-	assert_int(hurt).override_failure_message("no seed hurt the defender: the sweep compares nothing").is_greater(0)
-	assert_array(bad).override_failure_message("core vs table:\n" + "\n".join(bad.slice(0, 10))).is_empty()
+	if not table_strikes:
+		# Nothing about hurt in the crossed case: the strike the drop hands to the table is held at step 31.
+		var want := want_hurt
+		if seeds != want_alive.size():
+			want = 0
+			for alive in want_alive.slice(0, seeds):
+				want += 20 - int(alive)
+		assert_int(hurt).override_failure_message("the defender's losses moved: want %d" % want).is_equal(want)
+	assert_array(bad).override_failure_message("the door run:\n" + "\n".join(bad.slice(0, 10))).is_empty()
 
 
 ## Advance through the defender, then Fire with a Rifle: the strike and the volley in the core's one call. RED: put `not
 ## moves_through` back into `is_core_unit` (the bearer is no core unit) -> `core_unit` false and the strike stays at the drop.
 func test_a_human_strafe_bearer_strikes_with_its_fire() -> void:
-	await _sweep("fire", true)
+	await _sweep("fire", true, [], WANT_ALIVE_FIRE, WANT_HURT_FIRE)
 
 
 ## No shot: the End door's call carries the strike. RED: drop the `continue` in `_solo_human_strafing` -> the table strikes at
 ## the drop AND the core at the End (two strike sentences).
 func test_a_human_strafe_bearer_strikes_with_its_end() -> void:
-	await _sweep("end", false)
+	await _sweep("end", false, [], WANT_ALIVE_END, WANT_HURT_END)
 
 
 ## P4.D-37c: every enemy the drop's legs cross must be a plain target. A crossed Grounded Protection unit (the deny slice refuses
-## the name, H-30) hands the strike to the table at the drop, and the activation's End is the table's too: ONE strike, the table's
-## own run (survivors, RNG, lines). RED (the flag dropped from `drop_refused`): the core strikes the Grounded Protection unit at the
-## End, after the table's strike at the drop; or without the table's strike, a strike the table never made.
+## the name, H-30) hands the strike to the table at the drop, and the activation's End is the table's too: ONE strike, at the
+## drop. RED (the flag dropped from `drop_refused`): the core strikes the Grounded Protection unit at the End, after the table's
+## strike at the drop; or without the table's strike, a strike the table never made.
 func test_a_crossed_enemy_with_an_unsupported_rule_hands_the_strike_to_the_table() -> void:
 	await _sweep("end, crossed Grounded Protection", false, ["Grounded Protection"])

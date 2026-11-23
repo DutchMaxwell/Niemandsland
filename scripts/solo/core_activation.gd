@@ -58,7 +58,7 @@ static func applies(main) -> bool:
 ## (or "off") is the way back until the switch and the #172 guard are deleted. Tests set the entry per kind. CC-14a: `interference`
 ## (a foe's token spend against an AI cast, `interference:<seq>:<caster>:<slot>`) starts OFF like the Takedown pick.
 const CHOICE_KINDS := ["takedown_model", "wound_alloc", "interference", "strike_back"]
-const CHOICE_DEFAULT_ON := ["wound_alloc", "strike_back"]
+const CHOICE_DEFAULT_ON := ["wound_alloc", "strike_back", "versatile_mode"]
 static var _choice_on: Dictionary = {}
 
 
@@ -122,10 +122,11 @@ static func is_lifecycle_unit(main, gu: GameUnit) -> bool:
 		and main.opr_army_manager.game_phase == OPRArmyManager.GamePhase.PLAYING
 
 
-## (2) A lifecycle unit whose shot, End and digest resolve in the core. H-30: a Hit & Run bearer stays on the table too - the core
-## takes its after-shot step itself (and spends the round's use), where a human steps by dragging (fab_a6_test).
+## (2) A lifecycle unit whose shot, End and digest resolve in the core. PLAN_FIRST_DELETION step 21: a Hit & Run bearer is taken - its
+## intent says `no_step` (step 20), so the core takes no step and keeps the round's use open for the player's drag (fab_a6_test).
+## A Crossing Attack carrier stays on the table (none in the bundled lists; it takes the fallback).
 static func is_core_unit(main, gu: GameUnit) -> bool:
-	return is_lifecycle_unit(main, gu) and is_plain_human(gu) and not CoreSlice.carries(gu, ["Crossing Attack", "Hit & Run", "Hit & Run Shooter"])
+	return is_lifecycle_unit(main, gu) and is_plain_human(gu) and not CoreSlice.carries(gu, ["Crossing Attack"])
 
 
 ## (3) Equal to (2) for now; step 82 widens it by movement rule.
@@ -137,7 +138,7 @@ static func on_move_path(main, gu: GameUnit) -> bool:
 ## the landing compares against later (`land_late_once_records`). The first
 ## capture of a game sends the game header, exactly as the AI's `_core_plan` does (one header per game, shared with it),
 ## so every step runs at the game's rules epoch, not at epoch 0.
-static func capture(main, ai := false) -> int:
+static func capture(main, ai := false, at_start: GameUnit = null) -> int:
 	var sc: SoloController = main.solo_controller
 	var core: Object = sc._core_node_ready() if sc != null else null
 	if core == null:
@@ -155,6 +156,8 @@ static func capture(main, ai := false) -> int:
 	else:
 		sc._core_refresh_terrain()
 	var plain := BattleSim.state_to_plain(state)
+	if at_start != null:
+		_put_on_start_spots(main, plain, at_start)
 	AiActRecorder._stamp_gate_reads(state, plain)
 	_stamp_spent_ignore_feats(state, plain)
 	_stamp_step_ledger(state, plain, sc)
@@ -284,6 +287,10 @@ static func pending_choices(main, unit: GameUnit, transcript: Array) -> Array:
 			ids.append("takedown_model:%s:%s" % [unit.unit_id, (target as GameUnit).unit_id])
 		if choice_enabled("wound_alloc"):
 			ids.append("wound_alloc:%s:%s:0" % [unit.unit_id, (target as GameUnit).unit_id])
+		# Step 22b (OD-2: a player's pick is asked through the core): a human Versatile Attack shooter picks the mode (22a).
+		if choice_enabled("versatile_mode") and not main._solo_is_ai_unit(unit) \
+				and not RulesRegistry.unit_rules_of_primitive(unit, "Versatile Attack").is_empty():
+			ids.append("versatile_mode:%s" % unit.unit_id)
 		return ids
 	return ids
 
@@ -322,6 +329,19 @@ static func _takedown_weapon(unit: GameUnit) -> bool:
 	return false
 
 
+## Step 22b: what the owner's Versatile prompt shows - the weapon and the mode the AI's own EV would pick (the recommended button), as the
+## table's `_solo_prompt_versatile` did; {} for any other choice.
+static func _versatile_context(main, unit: GameUnit, transcript: Array, id: String) -> Dictionary:
+	if not id.begins_with("versatile_mode:"):
+		return {}
+	var src := unit.source_data as OPRApiClient.OPRUnit
+	var w: OPRApiClient.OPRWeapon = src.weapons[0] if src != null and not src.weapons.is_empty() else null
+	var target = main.opr_army_manager.game_units.get(str((transcript.filter(func(e: Dictionary) -> bool: return str(e.get("t", "")) == "intent").back() as Dictionary).get("shoot", "")))
+	var defense := int((target as GameUnit).get_defense()) if target is GameUnit else 4
+	return {"weapon": w.name if w != null else "Weapon",
+		"recommended": AiEv.versatile_best_mode(unit.get_quality(), defense, 0, false)}
+
+
 ## The sentence the fallback line and the owner's request use for a choice id.
 static func choice_purpose(id: String, transcript: Array = []) -> String:
 	match id.get_slice(":", 0):
@@ -331,6 +351,8 @@ static func choice_purpose(id: String, transcript: Array = []) -> String:
 			return "wound allocation"
 		"strike_back":
 			return "strike-back choice"
+		"versatile_mode":
+			return "Versatile Attack mode"
 		"interference":
 			return _cast_spell_of(transcript, id.get_slice(":", 2)) if not transcript.is_empty() else "interference"   # the table's request names the spell
 	return "choice"
@@ -415,7 +437,7 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 			if interference and not cx.is_empty():
 				await _cast_throw(main, cx)   # CC-14a: the table shows the cast (markers, seal, "Cast" card) BEFORE the foe is asked
 			var option: String = await main._owner_choice(owner, id, options, choice_purpose(id, transcript), wounds,
-				_interference_context(main, cx) if interference else {})
+				_interference_context(main, cx) if interference else _versatile_context(main, unit, transcript, id))
 			probes.erase(id)   # asked once: the answer follows, or the core's automatic pick stands
 			if answer_fits(id, options, option):
 				transcript.append({"t": "choice", "id": id, "option": option})
@@ -809,11 +831,42 @@ static func takes_action(unit: GameUnit, kind: int, casting := false) -> bool:
 ## with nothing to cast this activation is still taken. CC-13a: with the cast switch ON (`cast_door_enabled`) a casting activation
 ## IS taken when no member of its chain carries a table-only pre-attack beat (`cast_chain_clear`); the body then probes the casts
 ## (`probe_casts`) before it pays or resolves anything.
+## D-PAR3 15b: a capture taken after the table moved `gu` puts it and its joined heroes back on each model's route start
+## (`last_move_paths`), so the transcript's placement replays the move through the core's move check. A model without a
+## route stays. Stamps and latches stay the table's (fd_paid_brief.md (iii)).
+static func _put_on_start_spots(main, plain: Dictionary, gu: GameUnit) -> void:
+	var start := {}
+	for p in main.solo_controller.last_move_paths:
+		if not ((p as Dictionary)["path"] as Array).is_empty():
+			start[p["model"]] = (p["path"] as Array)[0]
+	for u in [gu] + gu.get_attached_heroes():
+		var key := str((u as GameUnit).unit_id)
+		if not (plain["units"] as Dictionary).has(key):
+			continue
+		var at: Array = []
+		for m in (u as GameUnit).models:
+			if m.is_alive and m.node != null:
+				at.append(start.get(m, m.node.global_position))
+		plain["units"][key]["positions"] = BattleSim._plain_vec3s(at)
+
+
+## D-PAR3 15b: a Surprise Attack bearer's burst fires after the capture (main.gd's activation body): the table pays the whole
+## pre-volley part and the volley goes through the recapture (`recapture_due`).
+static func _surprise_chain(unit: GameUnit) -> bool:
+	return ([unit] + unit.get_attached_heroes()).any(func(u) -> bool: return u is GameUnit and (u as GameUnit).has_special_rule("Surprise Attack"))
+
+
+## D-PAR3 15b: the table paid the activation's start, Dangerous test, casts and beats (`takes_ai_activation` said no) and the
+## volley may still be the core's: the body recaptures the board right before it.
+static func recapture_due(main, unit: GameUnit, report: Dictionary, target: GameUnit) -> bool:
+	return target != null and bool(report.get("table_paid", false)) and main._solo_core_ai_h != 0 and is_plain(unit)
+
+
 static func takes_ai_activation(main, unit: GameUnit, report: Dictionary) -> bool:
 	var casts: Array = report.get("casts", [])
 	var takes: bool = main._solo_core_ai_h != 0 and main.dice_roller_control != null and is_plain(unit) \
 		and takes_action(unit, int(report.get("action", -1)), not casts.is_empty()) \
-		and (casts.is_empty() or (cast_door_enabled() and cast_chain_clear(unit)))
+		and (casts.is_empty() or (cast_door_enabled() and cast_chain_clear(unit))) and not _surprise_chain(unit)
 	if takes and moves_through(unit) and not main.solo_controller.last_move_paths.is_empty() \
 			and not crossed_plain(main, unit, chords_of(main.solo_controller.last_move_paths)):
 		report["through_refused"] = true   # P4.D-37c: the decision is made once, here; `run_ai` honours it after the table struck
@@ -920,7 +973,8 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 		return false   # P4.D-37c: the body left the strike to the table (a crossed enemy is not a plain target)
 	var kind := int(report.get("action", -1))
 	var reported := int(report.get("dangerous_dice", report.get("dangerous_models", 0)))
-	var table_rolled := not owns_dangerous and reported > 0
+	var paid := bool(report.get("core_paid", false))   # D-PAR3 15b: recaptured after the table's start, test, casts and beats
+	var table_rolled := not owns_dangerous and reported > 0 and not paid
 	var parts: Array = [{"target": target, "shots": shots}] + rest
 	var aim := split_aim(parts)
 	# A unit that cast this activation: the table resolved the casts after the capture (`_solo_resolve_ai_casts`), so the
@@ -929,7 +983,7 @@ static func run_ai(main, unit: GameUnit, report: Dictionary, target: GameUnit, h
 	# resolves the planned casts from this capture and the table does not.
 	var cast := not (report.get("casts", []) as Array).is_empty()
 	var cast_taken := cast and bool(report.get("cast_door", false))
-	if h == 0 or not takes_action(unit, kind, cast_taken) or not is_plain(unit) or table_rolled or (cast and not cast_taken) or _aim_ambiguous(aim) \
+	if h == 0 or not takes_action(unit, kind, cast_taken) or not is_plain(unit) or table_rolled or (cast and not cast_taken and not paid) or _aim_ambiguous(aim) \
 			or (target == null and not owns_dangerous) or (target != null and not is_plain_target(target)) \
 			or rest.any(func(p: Dictionary) -> bool: return not is_plain_target(p["target"])) \
 			or parts.any(func(p: Dictionary) -> bool: return not CoreSlice.pair_refusals(unit, p["target"]).is_empty()):
@@ -1126,7 +1180,8 @@ static func ai_transcript(main, unit: GameUnit, report: Dictionary, target: Game
 	if not split.is_empty():
 		intent["split"] = split
 	# D-PAR3 15a: every AI board is captured after the table's activation start (`begin_activation`): the core skips its own.
-	return [{"t": "begin"}] + ([{"t": "paid", "start": true}] if start_paid_input else []) \
+	var paid := bool(report.get("core_paid", false))   # D-PAR3 15b: the table paid the test, casts and beats too
+	return [{"t": "begin"}] + ([{"t": "paid", "start": true, "dangerous": paid, "beats": paid}] if start_paid_input else []) \
 		+ [{"t": "placed", "positions": at, "trails": trails}, intent]
 
 
@@ -2265,7 +2320,7 @@ static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Ca
 		push_error("human_shoot: %s has no session after the door let it through" % attacker.get_name())
 		return true
 	var t: Array = (s["transcript"] as Array).duplicate()
-	t.append({"t": "intent", "kind": mode, "shoot": target.unit_id})
+	t.append({"t": "intent", "kind": mode, "shoot": target.unit_id, "no_step": true})   # step 21: the player drags a Hit & Run step
 	# Step 38b: the table's presentation of a human volley (_present_human); its stage opens before the core's first line.
 	var shots := _human_shots(main, attacker, target)
 	var st := {"n": 0, "open": false, "result": false}
@@ -2320,7 +2375,7 @@ static func human_shoot_split(main, attacker: GameUnit, target_a: GameUnit, targ
 			attacker.get_name(), chooser[0]["target"].get_name()], true)
 		return false
 	var t: Array = (s["transcript"] as Array).duplicate()
-	t.append({"t": "intent", "kind": mode, "shoot": target_a.unit_id, "split": aim})
+	t.append({"t": "intent", "kind": mode, "shoot": target_a.unit_id, "split": aim, "no_step": true})
 	var sts: Array = parts.map(func(p: Dictionary) -> Dictionary: return {"n": 0, "open": false, "result": false})
 	var at := [0]
 	var beat := func(ev: String, a: Dictionary, faces: Array) -> void:

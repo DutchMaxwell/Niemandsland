@@ -32,6 +32,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
+	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
@@ -42,6 +44,16 @@ func _log_text() -> String:
 	for e in _main.battle_log.entries():
 		text += str((e as Dictionary)["text"]) + "\n"
 	return text
+
+
+## The player's own volley through the core door: the activation is opened first (the Fire! button's path), then the
+## door shoots; false from the door would mean the table is left to resolve it.
+func _door_fire(attacker: GameUnit, target: GameUnit) -> void:
+	CoreActivation._env = 1
+	assert_bool(CoreActivation.open_session(_main, attacker)).override_failure_message("no activation session for the attacker").is_true()
+	var took: bool = await CoreActivation.human_shoot(_main, attacker, target)
+	assert_bool(took).override_failure_message("the core door did not take the volley (the table would resolve it)").is_true()
+	CoreActivation.close_session(_main, attacker.unit_id)
 
 
 ## A registered unit — the fixture has to live in opr_army_manager.game_units, or the AI-ownership,
@@ -164,7 +176,7 @@ func test_the_same_token_still_works_against_shooting(timeout := 240000) -> void
 	_main._solo_place_spell_tokens("Warding Chant", [foe], {"kind": "buff", "modifier": {"def_mod": 1}})
 	assert_int(_main._solo_defense_vs(foe, AiCombatMath.HIT_SOURCE_SHOOTING)).is_equal(3)
 	assert_int(_main._solo_defense_vs(foe, AiCombatMath.HIT_SOURCE_MELEE)).is_equal(3)
-	await _main._run_human_shooting(shooter, foe)
+	await _door_fire(shooter, foe)
 	var text := _log_text()
 	assert_str(text) \
 		.override_failure_message("the token must keep working on the shooting path, untouched by NML-104 (log: %s)" % text.strip_edges()) \

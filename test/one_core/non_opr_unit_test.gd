@@ -20,6 +20,8 @@ extends GdUnitTestSuite
 ## Real: the main scene, NmlCore, both doors (`_run_ai_shooting`, `_run_human_attack`), the table's volley.
 ## Constructed: bare units (E2EBoot.make_unit, ParityTable._make_unit), the OPR profile of the armed ones.
 ## NML_ONE_CORE_SEEDS overrides the 20 seeds per defense (200 for the sweep run).
+##
+## PLAN_FIRST_DELETION 34 FT-C5: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main af5c83610.
 
 const SlicePin := preload("res://test/one_core/slice_pin.gd")
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -28,6 +30,11 @@ const INCH := 0.0254
 const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 	"faction_folder": "robot_legions", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
+## Per-seed alive count of the 5-model target after the AI door volley, read on main af5c83610 (identical at defense 2, 4 and 6).
+const WANT_ALIVE_D2 := [0, 2, 3, 5, 3, 3, 3, 2, 4, 4, 2, 5, 5, 4, 1, 3, 1, 4, 3, 2]
+const WANT_ALIVE_D4 := [0, 2, 3, 5, 3, 3, 3, 2, 4, 4, 2, 5, 5, 4, 1, 3, 1, 4, 3, 2]
+const WANT_ALIVE_D6 := [0, 2, 3, 5, 3, 3, 3, 2, 4, 4, 2, 5, 5, 4, 1, 3, 1, 4, 3, 2]
+const WANT_HURT := 123
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -236,25 +243,27 @@ func test_a_non_opr_target_is_shot_by_the_core_on_the_ai_door() -> void:
 	assert_int(core["alive"]).override_failure_message("the volley hurt nobody (seed 1 wounds)").is_less(5)
 
 
-## ... and it is the table's volley seed for seed: the survivors, Shaken and the tray RNG after, at defense 2, 4 and 6
-## (the ends of the statline range). A planted fault in the core's target profile reddens it.
+## The AI door shoots a loaded profile-less target and ends on the same alive count the table left on main, at defense 2, 4 and 6
+## (the ends of the statline range), seed for seed. A planted fault in the core's target profile reddens it.
 func test_the_core_shoots_a_non_opr_target_like_the_table_on_the_ai_door(timeout := 900000) -> void:
 	var seeds := int(OS.get_environment("NML_ONE_CORE_SEEDS")) if OS.has_environment("NML_ONE_CORE_SEEDS") else 20
+	var want := {2: WANT_ALIVE_D2, 4: WANT_ALIVE_D4, 6: WANT_ALIVE_D6}
 	var bad: Array = []
 	var hurt := 0
 	for defense in [2, 4, 6]:
+		var pins: Array = want[defense]
+		assert_array(pins.slice(0, seeds)).override_failure_message(
+			"defense %d: the literal holds %d seeds, the sweep wants %d" % [defense, pins.size(), seeds]).has_size(seeds)
 		for s in seeds:
-			var table := await _ai_volley(s, defense, false)
 			var core := await _ai_volley(s, defense, true)
 			hurt += 5 - int(core["alive"])
-			if int(core["core"]) != 1 or int(table["core"]) != 0:
-				bad.append("defense %d seed %d: the door took %d (core run), %d (table run)" % [defense, s, core["core"], table["core"]])
-			for k in ["survivors", "shaken", "rng"]:
-				if table[k] != core[k]:
-					bad.append("defense %d seed %d: %s: table %s, core %s" % [defense, s, k, table[k], core[k]])
+			if int(core["core"]) != 1:
+				bad.append("defense %d seed %d: the door took %d (core run)" % [defense, s, core["core"]])
+			if s < pins.size() and int(core["alive"]) != int(pins[s]):
+				bad.append("defense %d seed %d: alive %d, pinned %d" % [defense, s, core["alive"], pins[s]])
 	print("NON_OPR_TARGET door=ai seeds=%d defenses=3 hurt=%d mismatches=%d" % [seeds, hurt, bad.size()])
-	assert_int(hurt).override_failure_message("no seed hurt the target: the sweep compares nothing").is_greater(0)
-	assert_array(bad).override_failure_message("core vs table:\n" + "\n".join(bad.slice(0, 10))).is_empty()
+	assert_int(hurt).override_failure_message("the volley's damage moved off the pinned sum").is_equal(WANT_HURT)
+	assert_array(bad).override_failure_message("door vs pinned literal:\n" + "\n".join(bad.slice(0, 10))).is_empty()
 
 
 ## (3) The human door agrees: a non-OPR attacker's volley throws no die, the table says so in ONE line.

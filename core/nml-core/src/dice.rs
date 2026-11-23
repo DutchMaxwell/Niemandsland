@@ -1029,10 +1029,10 @@ fn surge_attack_say(
     hits
 }
 
-/// `PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL`: the "Enhanced Primal" grant only widens a printed extra-attack form; a profile
+/// `EPOCH_96_PARITY_BATCH`: the "Enhanced Primal" grant only widens a printed extra-attack form; a profile
 /// without one gains nothing from it. Below the gate every grant reaches (byte-exact).
 fn primal_grant_reaches(p: &ShootProfile, rules_epoch: u32) -> bool {
-    p.surge_attack || !rule_on(rules_epoch, crate::acts::PENDING_EPOCH_ENHANCED_PRIMAL_NEEDS_PRIMAL)
+    p.surge_attack || !rule_on(rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH)
 }
 
 /// G4R5 F-PRIMAL-GRANT-ONCE (`EPOCH_73_V36`): ONE live "Enhanced Primal" grant is carried in two channels (the overlay rule on
@@ -1046,7 +1046,9 @@ fn primal_extras(p: &ShootProfile, grant: bool, v36: bool, faces: &[u8], count_t
         return hits + if grant { surge_attack_say(&primal_boost_grant_profile(), faces, count_target, owner, tray, &mut out.rolls, Some(side)) } else { 0 };
     }
     if faces.iter().any(|&f| f == 6 || (f == 5 && count_target <= 5)) {
-        out.log.push(format!("Enhanced Primal: {owner} — one extra-attack roll on unmodified 5s and 6s (the grant widens the Primal, it adds no second roll)"));
+        let line = format!("Enhanced Primal: {owner} — one extra-attack roll on unmodified 5s and 6s (the grant widens the Primal, it adds no second roll)");
+        say_rule(tray, "enhanced_primal", side, || line.clone()); // the step path's lines are the tray's
+        out.log.push(line);
     }
     surge_attack_say(&ShootProfile { surge_attack_low: p.surge_attack_low.min(5), ..p.clone() }, faces, count_target, owner, tray, &mut out.rolls, Some(side))
 }
@@ -1834,17 +1836,15 @@ pub(crate) fn resolve_volley_with_pick_label(
             continue;
         }
         if p.reach_bonus_in > 0.0 && (p.range as f64) < reach_gate && reach >= reach_gate {
-            out.log.push(format!(
-                "{}: {} gains +{:.0}\" reach on {}",
-                p.reach_bonus_rule, sh.owner, p.reach_bonus_in, def_owner
-            ));
+            let line = format!("{}: {} gains +{:.0}\" reach on {}", p.reach_bonus_rule, sh.owner, p.reach_bonus_in, def_owner);
+            say_rule(tray, "reach_bonus", att.side, || line.clone());
+            out.log.push(line);
         }
         // The Mark names itself only where it was needed: a shooter the grant already carries is not its beneficiary.
         if def.range_mark_in > 0.0 && (p.range as f64) < reach_gate && reach >= reach_gate && reach - def.range_mark_in < reach_gate {
-            out.log.push(format!(
-                "Increased Shooting Range Mark: {} gains +{:.0}\" reach on {}",
-                sh.owner, def.range_mark_in, def_owner
-            ));
+            let line = format!("Increased Shooting Range Mark: {} gains +{:.0}\" reach on {}", sh.owner, def.range_mark_in, def_owner);
+            say_rule(tray, "range_mark", att.side, || line.clone());
+            out.log.push(line);
         }
         let n = sh.attacks[k];
         if n <= 0 {
@@ -1867,7 +1867,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         // G4R4 C-GRANTED-BANE (`EPOCH_73_V36`): a live "Bane when Shooting" grant makes this ranged weapon a Bane
         // weapon for the volley (the table's `_solo_striker_has_bane`); the re-roll's log line names the book rule.
         let granted_bane;
-        // PENDING_EPOCH_BANE_MARK: the Mark also lifts a Bane-family weapon that does not ignore Regeneration (Lacerate) to full Bane.
+        // EPOCH_96_PARITY_BATCH: the Mark also lifts a Bane-family weapon that does not ignore Regeneration (Lacerate) to full Bane.
         let p = if (att.bane_grant && !p.bane) || (att.bane_mark_grant && !(p.bane && p.bypass_regen)) {
             let alias = if p.bane { p.bane_alias.clone() } else if att.bane_grant { "Bane when Shooting".into() } else { "Bane Mark".into() };
             granted_bane = ShootProfile { bane: true, bypass_regen: true, bane_alias: alias, ..p.clone() };
@@ -2930,6 +2930,10 @@ pub(crate) fn ignore_batch(
     if pool.max(0) + bypass > 0 && !def.regen_note.is_empty() {
         say_rule(tray, "ignore", def.side, || format!("{def_owner} — {}", def.regen_note));
     }
+    // 29a: a once-per-game ignore rule already spent says so where it would have rolled (the table's PF-a line).
+    if pool.max(0) + bypass > 0 && !def.regen_feat_spent.is_empty() {
+        say_rule(tray, "ignore", def.side, || format!("{}: {def_owner} already used it this game — no ignore roll", def.regen_feat_spent));
+    }
     if pool.max(0) + bypass > 0 && def.regeneration && !def.regen_most_name.is_empty() {
         say_rule(tray, "ignore", def.side, || format!("{def_owner} — {}: most models carry it, so a joined hero without it does not switch it off", def.regen_most_name));
     }
@@ -3418,7 +3422,7 @@ pub fn resolve_melee_leg_wipe(
     let trace_thrust = strikers.first()
         .is_some_and(|sh| rule_on(sh.att.rules_epoch, EPOCH_73_V36))
         && crate::mv::plain_memo::trace_rules_on();
-    // PENDING_EPOCH_BANE_MARK: a striker attacking a Bane-Marked unit strikes with Bane (the volley's granted-Bane twin).
+    // EPOCH_96_PARITY_BATCH: a striker attacking a Bane-Marked unit strikes with Bane (the volley's granted-Bane twin).
     let marked: Vec<Vec<ShootProfile>> = strikers.iter().map(|sh| if sh.att.bane_mark_grant {
         sh.profiles.iter().map(|p| if p.bane && p.bypass_regen { p.clone() } else {
             ShootProfile { bane: true, bypass_regen: true, bane_alias: if p.bane { p.bane_alias.clone() } else { "Bane Mark".into() }, ..p.clone() }
