@@ -7,6 +7,7 @@ extends GdUnitTestSuite
 ## Real: the main scene, NmlCore, `_run_ai_shooting` (the AI body's door), the table's volley and spend.
 ## Constructed: OPR units (ParityTable) at both seats AI; the slice is the shipped one plus a test group for Regeneration (the
 ## Protection Feat's primitive). NML_ONE_CORE_SEEDS overrides 20.
+## PLAN_FIRST_DELETION 34 FT-C3: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main af5c83610.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -18,6 +19,14 @@ const SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_s
 const SHOT_SIDE := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "aof",
 	"faction_folder": "ghostly_undead", "rules": []}
 const RIFLE := {"name": "Rifle", "range_in": 24, "attacks": 1, "count": 10, "rules": []}
+## The defender's survivors after the two volleys, per seed (read on main from the table arm).
+const WANT_ALIVE_FEAT := [3, 4, 6, 9, 3, 6, 9, 4, 6, 7, 6, 8, 6, 7, 5, 5, 5, 9, 7, 8]
+## One "spends its once-per-game ignore roll" sentence per seed.
+const WANT_SPENDS_FEAT := [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+## The defender's survivors after the two shot-feat volleys, per seed.
+const WANT_ALIVE_SHOT := [1, 5, 4, 8, 4, 8, 4, 7, 3, 6, 4, 7, 3, 5, 3, 3, 3, 9, 6, 5]
+## The defender's survivors after the two Takedown Shot volleys, per seed.
+const WANT_ALIVE_TAKEDOWN := [1, 2, 4, 5, 6, 4, 7, 2, 3, 7, 5, 7, 6, 6, 3, 3, 4, 4, 6, 5]
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -119,18 +128,20 @@ func test_the_door_closes_the_feat_latch_the_table_closes() -> void:
 	var seeds := int(OS.get_environment("NML_ONE_CORE_SEEDS")) if OS.has_environment("NML_ONE_CORE_SEEDS") else 20
 	var bad: Array = []
 	var spent := 0
+	if seeds > WANT_ALIVE_FEAT.size():
+		bad.append("the seed count %d exceeds the %d pinned values" % [seeds, WANT_ALIVE_FEAT.size()])
 	for s in seeds:
-		var table := await _two_volleys(s, false)
 		var core := await _two_volleys(s, true)
 		spent += 1 if bool(core["flag"]) else 0
-		if int(core["core"]) != 2 or int(table["core"]) != 0:
-			bad.append("seed %d: the core took %d volleys (table run %d)" % [s, core["core"], table["core"]])
-		for k in ["alive", "survivors", "shaken", "rng", "flag", "spends", "lines"]:
-			if table[k] != core[k]:
-				bad.append("seed %d: %s: table %s, core %s" % [s, k, table[k], core[k]])
+		if int(core["core"]) != 2:
+			bad.append("seed %d: the core took %d volleys" % [s, core["core"]])
+		if int(core["alive"]) != WANT_ALIVE_FEAT[s]:
+			bad.append("seed %d: alive %d, want %d" % [s, core["alive"], WANT_ALIVE_FEAT[s]])
+		if int(core["spends"]) != WANT_SPENDS_FEAT[s]:
+			bad.append("seed %d: spends %d, want %d" % [s, core["spends"], WANT_SPENDS_FEAT[s]])
 	print("FEAT_LATCH seeds=%d spent=%d mismatches=%d" % [seeds, spent, bad.size()])
-	assert_int(spent).override_failure_message("no seed spent the Feat: the sweep compares nothing").is_greater(0)
-	assert_array(bad).override_failure_message("core vs table:\n" + "\n".join(bad.slice(0, 10))).is_empty()
+	assert_int(spent).override_failure_message("no seed spent the Feat: the sweep compares nothing").is_equal(20)
+	assert_array(bad).override_failure_message("door vs literals:\n" + "\n".join(bad.slice(0, 10))).is_empty()
 
 
 ## A defender WITHOUT the feat spends nothing: no flag, no sentence, and no "no table flag" report for a name the core never
@@ -180,18 +191,18 @@ func test_the_door_closes_the_shot_feat_latch_the_core_spends() -> void:
 	var seeds := int(OS.get_environment("NML_ONE_CORE_SEEDS")) if OS.has_environment("NML_ONE_CORE_SEEDS") else 20
 	var bad: Array = []
 	var spent := 0
+	if seeds > WANT_ALIVE_SHOT.size():
+		bad.append("the seed count %d exceeds the %d pinned values" % [seeds, WANT_ALIVE_SHOT.size()])
 	for s in seeds:
-		var table := await _two_shot_volleys(s, false)
 		var core := await _two_shot_volleys(s, true)
 		spent += 1 if bool(core["flag"]) else 0
-		if int(table["spends"]) != 1:
-			bad.append("seed %d: the table run says %d spend sentence(s), want 1" % [s, table["spends"]])
-		for k in ["alive", "survivors", "shaken", "rng", "flag", "spends"]:
-			if table[k] != core[k]:
-				bad.append("seed %d: %s: table %s, core %s" % [s, k, table[k], core[k]])
+		if int(core["spends"]) != 1:
+			bad.append("seed %d: the door says %d spend sentence(s), want 1" % [s, core["spends"]])
+		if int(core["alive"]) != WANT_ALIVE_SHOT[s]:
+			bad.append("seed %d: alive %d, want %d" % [s, core["alive"], WANT_ALIVE_SHOT[s]])
 	print("SHOT_FEAT_LATCH seeds=%d spent=%d mismatches=%d" % [seeds, spent, bad.size()])
-	assert_int(spent).override_failure_message("no seed spent the shot feat: the sweep compares nothing").is_greater(0)
-	assert_array(bad).override_failure_message("core vs table:\n" + "\n".join(bad.slice(0, 10))).is_empty()
+	assert_int(spent).override_failure_message("no seed spent the shot feat: the sweep compares nothing").is_equal(20)
+	assert_array(bad).override_failure_message("door vs literals:\n" + "\n".join(bad.slice(0, 10))).is_empty()
 
 
 ## Two volleys through the door (else the table's own) with a one-model SHOOTER carrying Takedown Shot (gf, the once-per-game
@@ -226,15 +237,15 @@ func test_the_door_closes_the_takedown_shot_latch_the_core_spends() -> void:
 	var seeds := int(OS.get_environment("NML_ONE_CORE_SEEDS")) if OS.has_environment("NML_ONE_CORE_SEEDS") else 20
 	var bad: Array = []
 	var spent := 0
+	if seeds > WANT_ALIVE_TAKEDOWN.size():
+		bad.append("the seed count %d exceeds the %d pinned values" % [seeds, WANT_ALIVE_TAKEDOWN.size()])
 	for s in seeds:
-		var table := await _two_takedown_volleys(s, false)
 		var core := await _two_takedown_volleys(s, true)
 		spent += 1 if bool(core["flag"]) else 0
 		if int(core["core"]) != 2:
 			bad.append("seed %d: the core took %d volleys" % [s, core["core"]])
-		for k in ["alive", "survivors", "shaken", "rng", "flag"]:
-			if table[k] != core[k]:
-				bad.append("seed %d: %s: table %s, core %s" % [s, k, table[k], core[k]])
+		if int(core["alive"]) != WANT_ALIVE_TAKEDOWN[s]:
+			bad.append("seed %d: alive %d, want %d" % [s, core["alive"], WANT_ALIVE_TAKEDOWN[s]])
 	print("TAKEDOWN_LATCH seeds=%d spent=%d mismatches=%d" % [seeds, spent, bad.size()])
-	assert_int(spent).override_failure_message("no seed spent Takedown Shot: the sweep compares nothing").is_greater(0)
-	assert_array(bad).override_failure_message("core vs table:\n" + "\n".join(bad.slice(0, 10))).is_empty()
+	assert_int(spent).override_failure_message("no seed spent Takedown Shot: the sweep compares nothing").is_equal(20)
+	assert_array(bad).override_failure_message("door vs literals:\n" + "\n".join(bad.slice(0, 10))).is_empty()

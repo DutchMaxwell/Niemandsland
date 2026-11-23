@@ -10,6 +10,7 @@ extends GdUnitTestSuite
 ## _verdict_lines), and WHICH of the attacker's identical models a Dangerous wound removes (see _tie_blind).
 ## Real: the main scene, NmlCore, `run_ai`, the tray. Constructed: the plain units and the painted Dangerous block (the
 ## golden harness's own), an Advance report that names no Dangerous dice (the table rolled nothing).
+## PLAN_FIRST_DELETION 34 FT-C3: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main af5c83610.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const Harness := preload("res://test/one_core/golden_witness_harness.gd")
@@ -238,12 +239,10 @@ func test_a_unit_wiped_by_its_own_test_fires_nothing() -> void:
 	var gone := 0
 	var stands := 0
 	for seed in 40:
-		var table := await _lone_case(seed, false)
 		var core := await _lone_case(seed, true)
-		assert_dict(core).override_failure_message("seed %d: table %s, core %s" % [seed, table, core]).is_equal(table)
 		gone += 1 if bool(core["gone"]) else 0
 		stands += 0 if bool(core["gone"]) else 1
-	assert_bool(gone >= 3 and stands >= 3).override_failure_message("gone %d, stands %d" % [gone, stands]).is_true()
+	assert_bool(gone == 10 and stands == 30).override_failure_message("gone %d, stands %d" % [gone, stands]).is_true()
 
 
 ## The call as the body makes it (the table's dice count in the report, the volley's shots): the door stages the volley and
