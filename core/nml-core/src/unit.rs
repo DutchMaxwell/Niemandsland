@@ -472,6 +472,9 @@ pub struct Ctx {
     /// The best ignore rule (the lowest target, the first on a tie) is carried by most, not all, models (a joined hero without it): the table says
     /// so before the roll ("<U> — Regeneration: most models carry it, so a joined hero without it does not switch it off"). "" = not the case.
     pub regen_most_name: &'static str,
+    /// Lines only: Enhanced Knightborn beside a plain gated name it pins open. (shot gate, charge gate, the gated name that names the
+    /// group, the form named from within the gate, where the table refuses the plain name). Same target, same dice; ("", "") = none.
+    pub regen_open_name: OpenName,
     /// The DYNAMIC melee flag `BattleSim._ctx_of(su, true)` writes over the
     /// template (battle_sim.gd:705-707): a fatigued striker hits only on 6s.
     pub fatigued: bool,
@@ -873,6 +876,18 @@ impl Ctx {
         c
     }
 
+    /// Lines only (`regen_open_name`): from within the gate (`gap_in`, the shot or with `charge` the charge distance) the group the plain
+    /// gated name won is said under the form left in it, the table's `_solo_regen_pick` refusing the plain name. Target and dice unchanged.
+    pub fn open_named(&self, gap_in: f64, charge: bool) -> Ctx {
+        let (over, over_charge, plain, open) = self.regen_open_name;
+        let gate = if charge { over_charge } else { over };
+        let mut c = *self;
+        if !open.is_empty() && gate > 0.0 && (0.0..=gate).contains(&gap_in) {
+            c.regen_names.iter_mut().filter(|n| **n == plain).for_each(|n| *n = open);
+        }
+        c
+    }
+
     /// Plan H (`EPOCH_94_PARITY_BATCH`): the target as the table reads it once every model of its chain is dead: the rules that
     /// need a living carrier (the unit-trigger "all / most models" forms: the Stealth, Evasive, Artillery and Aircraft to-hit penalties,
     /// Fortified, Guarded, Shielded, the Regeneration family) answer false, and the state reads of a dead unit (above half strength,
@@ -904,6 +919,7 @@ impl Ctx {
             regeneration: d.regeneration, regen_target: d.regen_target, regen_target_spell: d.regen_target_spell, regen_pending: d.regen_pending,
             regen_pending_spell: d.regen_pending_spell, regen_pending_notes: d.regen_pending_notes, regen_note: d.regen_note, regen_feat: d.regen_feat, regen_named: d.regen_named, regen_groups: d.regen_groups,
             regen_names: d.regen_names, regen_gated: d.regen_gated, regen_gate_shut: d.regen_gate_shut, regen_most_name: d.regen_most_name,
+            regen_open_name: d.regen_open_name,
             // EPOCH_96_PARITY_BATCH: the strength gate (Decimate) is read as declared, like the Defense above.
             above_half_strength: self.above_half_strength && rule_on(self.rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH),
             near_terrain: false,
@@ -3252,7 +3268,7 @@ pub fn capture_reads_for_epoch(
 /// recorded flat fold replays and the tail stays zeros.
 fn regen_targets(
     reg: &mut Registries, p: &Profile, rules_epoch: u32, trace73: bool,
-) -> (i64, i64, i64, i64, f64, f64, i64, bool, RegenGroups, [&'static str; 4]) {
+) -> RegenStamp {
     let regen = if rule_on(rules_epoch, crate::acts::EPOCH_73_V36) {
         regen_family_on(p, "Regeneration", rules_epoch)
     } else {
@@ -3306,6 +3322,7 @@ fn regen_targets(
     let mut other_min = base;
     let mut warding: Option<(i64, f64, f64)> = None;
     let mut no_gate = false;
+    let (mut open, mut refused) = (Vec::new(), Vec::new()); // the groups the table forms from within the gate, the plain gated names
     // MOR-07 (rules 3.6): "Spell Resistance" reaches the same primitive; from
     // `EPOCH_73_V36` both names need only a strict majority (D-MOST). Below 73
     // only the 3.5 name exists and keeps the every-model read.
@@ -3448,6 +3465,11 @@ fn regen_targets(
             // the table names the Regeneration group "regeneration" for every form of it (the rule, its Aura / Buff forms)
             let key = ignore_group_key(&n, e.param_s("upgrades"));
             put(&mut groups, key.clone(), if key == "Regeneration" { "regeneration" } else { &n }, normal, gated);
+            if gated && !(rule_on(rules_epoch, EPOCH_73_V36) && e.param_b("no_gate_v36")) {
+                refused.push((key.clone(), n.clone(), e.param_f("ignore_over_in", 9.0), e.param_f("ignore_over_in_charge", 6.0)));
+            } else {
+                put(&mut open, key.clone(), &n, normal, false);
+            }
             if gated {
                 if normal > 0 {
                     warding = Some((
@@ -3476,12 +3498,22 @@ fn regen_targets(
             }
         }
     }
+    // lines only: a pinned-open group a plain gated name won keeps its target; from within the gate the table names the form left in it
+    let mut open_name = (0.0, 0.0, "", "");
+    for (key, name, over, charge) in refused.iter().filter(|_| no_gate) {
+        let won = groups.iter().find(|g| g.0 == *key && g.1 == *name);
+        if let (Some(g), Some(o)) = (won, open.iter().find(|o: &&(String, String, i64, bool)| o.0 == *key)) {
+            if o.2 == g.2 && o.1 != g.1 {
+                open_name = (*over, *charge, crate::rules::intern(name), crate::rules::intern(&o.1));
+            }
+        }
+    }
     let mut grouped = if groups_on { lay_out_groups(groups) } else { ([0; 4], [""; 4], [false; 4]) };
     // the flags only where they mean something: a gate is stamped and another group rolls beside the gated one
     if gates == (0.0, 0.0) || grouped.0.iter().filter(|&&t| t > 0).count() < 2 {
         grouped.2 = [false; 4];
     }
-    (picked.0, picked.1, picked.2, picked.3, gates.0, gates.1, feat, named, grouped, pending_notes)
+    (picked.0, picked.1, picked.2, picked.3, gates.0, gates.1, feat, named, grouped, pending_notes, open_name)
 }
 
 /// Table `_solo_ignore_group_key`: forms of ONE wound-ignore rule (an Enhanced / Boost / Aura / Buff form, an entry that upgrades
@@ -3523,6 +3555,10 @@ fn regen_most_name(p: &Profile, groups: &RegenGroups, rules_epoch: u32) -> &'sta
 
 /// The ignore groups' targets and the rule names that supply them, as `Ctx::regen_groups` / `Ctx::regen_names` carry them.
 type RegenGroups = ([i64; 4], [&'static str; 4], [bool; 4]);
+/// `Ctx::regen_open_name`: (shot gate, charge gate, the plain gated name, the form named from within the gate).
+pub type OpenName = (f64, f64, &'static str, &'static str);
+/// `regen_targets`' answer, in `ctx_for`'s field order (targets, pending, gates, feat, named, groups, notes, open name).
+type RegenStamp = (i64, i64, i64, i64, f64, f64, i64, bool, RegenGroups, [&'static str; 4], OpenName);
 
 /// Does this rule belong to the group named Regeneration?
 pub(crate) fn regeneration_group(name: &str, upgrades: &str) -> bool {
@@ -4134,6 +4170,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         regen_gated: regen_targets.8 .2,
         regen_gate_shut: false,
         regen_most_name: regen_most_name(p, &regen_targets.8, rules_epoch),
+        regen_open_name: regen_targets.10,
         fatigued: false,
         retaliate_hits_per_wound: retaliate_hits_per_wound(reg, p),
         death_hits_per_kill: death_hits_per_kill(reg, p),
