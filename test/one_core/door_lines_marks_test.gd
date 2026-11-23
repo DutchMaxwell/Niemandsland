@@ -2,8 +2,8 @@ extends GdUnitTestSuite
 ## PLAN H, the shooter-side Mark beats (`vs_target` Utility Buffs: "once per activation, before attacking, pick one enemy unit ... which friendly
 ## units get <Rule> against once"). The table says three lines (`_solo_apply_vs_marks`: the pick; `_solo_record_spell_mod`: `... is ACTIVE`;
 ## `_solo_spend_records`: `... is consumed`); the core placed and spent the Mark without saying them. Per Mark name: 16 seeds of a unit carrying
-## it at a plain unit on both halves, compared on the dice faces, the end state of both units and every line that names the Mark.
-## RED: with a library from before the core's lines the compare reads UNEQUAL on every name below.
+## it at a plain unit: the door's lines that name the Mark, per seed, pinned as literals.
+## The table arm left with the AI table resolver; door values are snapshot pins read on main df2284f38 (docs/adr/0005-snapshot-pins.md).
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const RosterSweep := preload("res://test/one_core/roster_sweep.gd")
@@ -16,6 +16,116 @@ const SEEDS := 16
 ## (the table never placed the Mark in this fixture, so nothing was compared).
 const MARKS := [["Furious Mark", "gf", "rebel_guerrillas"], ["Rending Mark", "gf", "orc_marauders"], ["Unstoppable Mark", "gf", "battle_brothers"],
 	["Piercing Shooting Mark", "gf", "dao_union"], ["Unpredictable Shooter Mark", "gf", "goblin_reclaimers"], ["Unpredictable Fighter Mark", "gf", "alien_hives"]]
+
+## The door's Mark lines per seed, read on main (where the table still shoots and equals the door).
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_FURIOUS_MARK := [
+	["COMBAT|Furious Mark: Att marks Def — friendly units attacking it gain Furious (once)","COMBAT|Furious Mark on Def is ACTIVE: grants Furious — applies ONCE","COMBAT|\"Furious Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Furious Mark: Att marks Def — friendly units attacking it gain Furious (once)","COMBAT|Furious Mark on Def is ACTIVE: grants Furious — applies ONCE","COMBAT|\"Furious Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Furious Mark: Att marks Def — friendly units attacking it gain Furious (once)","COMBAT|Furious Mark on Def is ACTIVE: grants Furious — applies ONCE","COMBAT|\"Furious Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Furious Mark: Att marks Def — friendly units attacking it gain Furious (once)","COMBAT|Furious Mark on Def is ACTIVE: grants Furious — applies ONCE","COMBAT|\"Furious Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Furious Mark: Att marks Def — friendly units attacking it gain Furious (once)","COMBAT|Furious Mark on Def is ACTIVE: grants Furious — applies ONCE","COMBAT|\"Furious Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Furious Mark: Att marks Def — friendly units attacking it gain Furious (once)","COMBAT|Furious Mark on Def is ACTIVE: grants Furious — applies ONCE","COMBAT|\"Furious Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Furious Mark: Att marks Def — friendly units attacking it gain Furious (once)","COMBAT|Furious Mark on Def is ACTIVE: grants Furious — applies ONCE","COMBAT|\"Furious Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Furious Mark: Att marks Def — friendly units attacking it gain Furious (once)","COMBAT|Furious Mark on Def is ACTIVE: grants Furious — applies ONCE","COMBAT|\"Furious Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Furious Mark: Att marks Def — friendly units attacking it gain Furious (once)","COMBAT|Furious Mark on Def is ACTIVE: grants Furious — applies ONCE","COMBAT|\"Furious Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Furious Mark: Att marks Def — friendly units attacking it gain Furious (once)","COMBAT|Furious Mark on Def is ACTIVE: grants Furious — applies ONCE","COMBAT|\"Furious Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Furious Mark: Att marks Def — friendly units attacking it gain Furious (once)","COMBAT|Furious Mark on Def is ACTIVE: grants Furious — applies ONCE","COMBAT|\"Furious Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Furious Mark: Att marks Def — friendly units attacking it gain Furious (once)","COMBAT|Furious Mark on Def is ACTIVE: grants Furious — applies ONCE","COMBAT|\"Furious Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Furious Mark: Att marks Def — friendly units attacking it gain Furious (once)","COMBAT|Furious Mark on Def is ACTIVE: grants Furious — applies ONCE","COMBAT|\"Furious Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Furious Mark: Att marks Def — friendly units attacking it gain Furious (once)","COMBAT|Furious Mark on Def is ACTIVE: grants Furious — applies ONCE","COMBAT|\"Furious Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Furious Mark: Att marks Def — friendly units attacking it gain Furious (once)","COMBAT|Furious Mark on Def is ACTIVE: grants Furious — applies ONCE","COMBAT|\"Furious Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Furious Mark: Att marks Def — friendly units attacking it gain Furious (once)","COMBAT|Furious Mark on Def is ACTIVE: grants Furious — applies ONCE","COMBAT|\"Furious Mark\" on Def is consumed (applies once)"]]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_RENDING_MARK := [
+	["COMBAT|Rending Mark: Att marks Def — friendly units attacking it gain Rending (once)","COMBAT|Rending Mark on Def is ACTIVE: grants Rending — applies ONCE","COMBAT|\"Rending Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Rending Mark: Att marks Def — friendly units attacking it gain Rending (once)","COMBAT|Rending Mark on Def is ACTIVE: grants Rending — applies ONCE","COMBAT|\"Rending Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Rending Mark: Att marks Def — friendly units attacking it gain Rending (once)","COMBAT|Rending Mark on Def is ACTIVE: grants Rending — applies ONCE","COMBAT|\"Rending Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Rending Mark: Att marks Def — friendly units attacking it gain Rending (once)","COMBAT|Rending Mark on Def is ACTIVE: grants Rending — applies ONCE","COMBAT|\"Rending Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Rending Mark: Att marks Def — friendly units attacking it gain Rending (once)","COMBAT|Rending Mark on Def is ACTIVE: grants Rending — applies ONCE","COMBAT|\"Rending Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Rending Mark: Att marks Def — friendly units attacking it gain Rending (once)","COMBAT|Rending Mark on Def is ACTIVE: grants Rending — applies ONCE","COMBAT|\"Rending Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Rending Mark: Att marks Def — friendly units attacking it gain Rending (once)","COMBAT|Rending Mark on Def is ACTIVE: grants Rending — applies ONCE","COMBAT|\"Rending Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Rending Mark: Att marks Def — friendly units attacking it gain Rending (once)","COMBAT|Rending Mark on Def is ACTIVE: grants Rending — applies ONCE","COMBAT|\"Rending Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Rending Mark: Att marks Def — friendly units attacking it gain Rending (once)","COMBAT|Rending Mark on Def is ACTIVE: grants Rending — applies ONCE","COMBAT|\"Rending Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Rending Mark: Att marks Def — friendly units attacking it gain Rending (once)","COMBAT|Rending Mark on Def is ACTIVE: grants Rending — applies ONCE","COMBAT|\"Rending Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Rending Mark: Att marks Def — friendly units attacking it gain Rending (once)","COMBAT|Rending Mark on Def is ACTIVE: grants Rending — applies ONCE","COMBAT|\"Rending Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Rending Mark: Att marks Def — friendly units attacking it gain Rending (once)","COMBAT|Rending Mark on Def is ACTIVE: grants Rending — applies ONCE","COMBAT|\"Rending Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Rending Mark: Att marks Def — friendly units attacking it gain Rending (once)","COMBAT|Rending Mark on Def is ACTIVE: grants Rending — applies ONCE","COMBAT|\"Rending Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Rending Mark: Att marks Def — friendly units attacking it gain Rending (once)","COMBAT|Rending Mark on Def is ACTIVE: grants Rending — applies ONCE","COMBAT|\"Rending Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Rending Mark: Att marks Def — friendly units attacking it gain Rending (once)","COMBAT|Rending Mark on Def is ACTIVE: grants Rending — applies ONCE","COMBAT|\"Rending Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Rending Mark: Att marks Def — friendly units attacking it gain Rending (once)","COMBAT|Rending Mark on Def is ACTIVE: grants Rending — applies ONCE","COMBAT|\"Rending Mark\" on Def is consumed (applies once)"]]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_UNSTOPPABLE_MARK := [
+	["COMBAT|Unstoppable Mark: Att marks Def — friendly units attacking it gain Unstoppable (once)","COMBAT|Unstoppable Mark on Def is ACTIVE: grants Unstoppable — applies ONCE","COMBAT|\"Unstoppable Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unstoppable Mark: Att marks Def — friendly units attacking it gain Unstoppable (once)","COMBAT|Unstoppable Mark on Def is ACTIVE: grants Unstoppable — applies ONCE","COMBAT|\"Unstoppable Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unstoppable Mark: Att marks Def — friendly units attacking it gain Unstoppable (once)","COMBAT|Unstoppable Mark on Def is ACTIVE: grants Unstoppable — applies ONCE","COMBAT|\"Unstoppable Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unstoppable Mark: Att marks Def — friendly units attacking it gain Unstoppable (once)","COMBAT|Unstoppable Mark on Def is ACTIVE: grants Unstoppable — applies ONCE","COMBAT|\"Unstoppable Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unstoppable Mark: Att marks Def — friendly units attacking it gain Unstoppable (once)","COMBAT|Unstoppable Mark on Def is ACTIVE: grants Unstoppable — applies ONCE","COMBAT|\"Unstoppable Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unstoppable Mark: Att marks Def — friendly units attacking it gain Unstoppable (once)","COMBAT|Unstoppable Mark on Def is ACTIVE: grants Unstoppable — applies ONCE","COMBAT|\"Unstoppable Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unstoppable Mark: Att marks Def — friendly units attacking it gain Unstoppable (once)","COMBAT|Unstoppable Mark on Def is ACTIVE: grants Unstoppable — applies ONCE","COMBAT|\"Unstoppable Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unstoppable Mark: Att marks Def — friendly units attacking it gain Unstoppable (once)","COMBAT|Unstoppable Mark on Def is ACTIVE: grants Unstoppable — applies ONCE","COMBAT|\"Unstoppable Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unstoppable Mark: Att marks Def — friendly units attacking it gain Unstoppable (once)","COMBAT|Unstoppable Mark on Def is ACTIVE: grants Unstoppable — applies ONCE","COMBAT|\"Unstoppable Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unstoppable Mark: Att marks Def — friendly units attacking it gain Unstoppable (once)","COMBAT|Unstoppable Mark on Def is ACTIVE: grants Unstoppable — applies ONCE","COMBAT|\"Unstoppable Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unstoppable Mark: Att marks Def — friendly units attacking it gain Unstoppable (once)","COMBAT|Unstoppable Mark on Def is ACTIVE: grants Unstoppable — applies ONCE","COMBAT|\"Unstoppable Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unstoppable Mark: Att marks Def — friendly units attacking it gain Unstoppable (once)","COMBAT|Unstoppable Mark on Def is ACTIVE: grants Unstoppable — applies ONCE","COMBAT|\"Unstoppable Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unstoppable Mark: Att marks Def — friendly units attacking it gain Unstoppable (once)","COMBAT|Unstoppable Mark on Def is ACTIVE: grants Unstoppable — applies ONCE","COMBAT|\"Unstoppable Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unstoppable Mark: Att marks Def — friendly units attacking it gain Unstoppable (once)","COMBAT|Unstoppable Mark on Def is ACTIVE: grants Unstoppable — applies ONCE","COMBAT|\"Unstoppable Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unstoppable Mark: Att marks Def — friendly units attacking it gain Unstoppable (once)","COMBAT|Unstoppable Mark on Def is ACTIVE: grants Unstoppable — applies ONCE","COMBAT|\"Unstoppable Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unstoppable Mark: Att marks Def — friendly units attacking it gain Unstoppable (once)","COMBAT|Unstoppable Mark on Def is ACTIVE: grants Unstoppable — applies ONCE","COMBAT|\"Unstoppable Mark\" on Def is consumed (applies once)"]]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_PIERCING_SHOOTING_MARK := [
+	["COMBAT|Piercing Shooting Mark: Att marks Def — friendly units attacking it gain AP(+1) when shooting (once)","COMBAT|Piercing Shooting Mark on Def is ACTIVE: grants AP(+1) when shooting (shooting only) — applies ONCE","COMBAT|\"Piercing Shooting Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Piercing Shooting Mark: Att marks Def — friendly units attacking it gain AP(+1) when shooting (once)","COMBAT|Piercing Shooting Mark on Def is ACTIVE: grants AP(+1) when shooting (shooting only) — applies ONCE","COMBAT|\"Piercing Shooting Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Piercing Shooting Mark: Att marks Def — friendly units attacking it gain AP(+1) when shooting (once)","COMBAT|Piercing Shooting Mark on Def is ACTIVE: grants AP(+1) when shooting (shooting only) — applies ONCE","COMBAT|\"Piercing Shooting Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Piercing Shooting Mark: Att marks Def — friendly units attacking it gain AP(+1) when shooting (once)","COMBAT|Piercing Shooting Mark on Def is ACTIVE: grants AP(+1) when shooting (shooting only) — applies ONCE","COMBAT|\"Piercing Shooting Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Piercing Shooting Mark: Att marks Def — friendly units attacking it gain AP(+1) when shooting (once)","COMBAT|Piercing Shooting Mark on Def is ACTIVE: grants AP(+1) when shooting (shooting only) — applies ONCE","COMBAT|\"Piercing Shooting Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Piercing Shooting Mark: Att marks Def — friendly units attacking it gain AP(+1) when shooting (once)","COMBAT|Piercing Shooting Mark on Def is ACTIVE: grants AP(+1) when shooting (shooting only) — applies ONCE","COMBAT|\"Piercing Shooting Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Piercing Shooting Mark: Att marks Def — friendly units attacking it gain AP(+1) when shooting (once)","COMBAT|Piercing Shooting Mark on Def is ACTIVE: grants AP(+1) when shooting (shooting only) — applies ONCE","COMBAT|\"Piercing Shooting Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Piercing Shooting Mark: Att marks Def — friendly units attacking it gain AP(+1) when shooting (once)","COMBAT|Piercing Shooting Mark on Def is ACTIVE: grants AP(+1) when shooting (shooting only) — applies ONCE","COMBAT|\"Piercing Shooting Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Piercing Shooting Mark: Att marks Def — friendly units attacking it gain AP(+1) when shooting (once)","COMBAT|Piercing Shooting Mark on Def is ACTIVE: grants AP(+1) when shooting (shooting only) — applies ONCE","COMBAT|\"Piercing Shooting Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Piercing Shooting Mark: Att marks Def — friendly units attacking it gain AP(+1) when shooting (once)","COMBAT|Piercing Shooting Mark on Def is ACTIVE: grants AP(+1) when shooting (shooting only) — applies ONCE","COMBAT|\"Piercing Shooting Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Piercing Shooting Mark: Att marks Def — friendly units attacking it gain AP(+1) when shooting (once)","COMBAT|Piercing Shooting Mark on Def is ACTIVE: grants AP(+1) when shooting (shooting only) — applies ONCE","COMBAT|\"Piercing Shooting Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Piercing Shooting Mark: Att marks Def — friendly units attacking it gain AP(+1) when shooting (once)","COMBAT|Piercing Shooting Mark on Def is ACTIVE: grants AP(+1) when shooting (shooting only) — applies ONCE","COMBAT|\"Piercing Shooting Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Piercing Shooting Mark: Att marks Def — friendly units attacking it gain AP(+1) when shooting (once)","COMBAT|Piercing Shooting Mark on Def is ACTIVE: grants AP(+1) when shooting (shooting only) — applies ONCE","COMBAT|\"Piercing Shooting Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Piercing Shooting Mark: Att marks Def — friendly units attacking it gain AP(+1) when shooting (once)","COMBAT|Piercing Shooting Mark on Def is ACTIVE: grants AP(+1) when shooting (shooting only) — applies ONCE","COMBAT|\"Piercing Shooting Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Piercing Shooting Mark: Att marks Def — friendly units attacking it gain AP(+1) when shooting (once)","COMBAT|Piercing Shooting Mark on Def is ACTIVE: grants AP(+1) when shooting (shooting only) — applies ONCE","COMBAT|\"Piercing Shooting Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Piercing Shooting Mark: Att marks Def — friendly units attacking it gain AP(+1) when shooting (once)","COMBAT|Piercing Shooting Mark on Def is ACTIVE: grants AP(+1) when shooting (shooting only) — applies ONCE","COMBAT|\"Piercing Shooting Mark\" on Def is consumed (applies once)"]]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_UNPREDICTABLE_SHOOTER_MARK := [
+	["COMBAT|Unpredictable Shooter Mark: Att marks Def — friendly units attacking it gain Unpredictable Shooter (once)","COMBAT|Unpredictable Shooter Mark on Def is ACTIVE: grants Unpredictable Shooter (shooting only) — applies ONCE","COMBAT|\"Unpredictable Shooter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Shooter Mark: Att marks Def — friendly units attacking it gain Unpredictable Shooter (once)","COMBAT|Unpredictable Shooter Mark on Def is ACTIVE: grants Unpredictable Shooter (shooting only) — applies ONCE","COMBAT|\"Unpredictable Shooter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Shooter Mark: Att marks Def — friendly units attacking it gain Unpredictable Shooter (once)","COMBAT|Unpredictable Shooter Mark on Def is ACTIVE: grants Unpredictable Shooter (shooting only) — applies ONCE","COMBAT|\"Unpredictable Shooter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Shooter Mark: Att marks Def — friendly units attacking it gain Unpredictable Shooter (once)","COMBAT|Unpredictable Shooter Mark on Def is ACTIVE: grants Unpredictable Shooter (shooting only) — applies ONCE","COMBAT|\"Unpredictable Shooter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Shooter Mark: Att marks Def — friendly units attacking it gain Unpredictable Shooter (once)","COMBAT|Unpredictable Shooter Mark on Def is ACTIVE: grants Unpredictable Shooter (shooting only) — applies ONCE","COMBAT|\"Unpredictable Shooter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Shooter Mark: Att marks Def — friendly units attacking it gain Unpredictable Shooter (once)","COMBAT|Unpredictable Shooter Mark on Def is ACTIVE: grants Unpredictable Shooter (shooting only) — applies ONCE","COMBAT|\"Unpredictable Shooter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Shooter Mark: Att marks Def — friendly units attacking it gain Unpredictable Shooter (once)","COMBAT|Unpredictable Shooter Mark on Def is ACTIVE: grants Unpredictable Shooter (shooting only) — applies ONCE","COMBAT|\"Unpredictable Shooter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Shooter Mark: Att marks Def — friendly units attacking it gain Unpredictable Shooter (once)","COMBAT|Unpredictable Shooter Mark on Def is ACTIVE: grants Unpredictable Shooter (shooting only) — applies ONCE","COMBAT|\"Unpredictable Shooter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Shooter Mark: Att marks Def — friendly units attacking it gain Unpredictable Shooter (once)","COMBAT|Unpredictable Shooter Mark on Def is ACTIVE: grants Unpredictable Shooter (shooting only) — applies ONCE","COMBAT|\"Unpredictable Shooter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Shooter Mark: Att marks Def — friendly units attacking it gain Unpredictable Shooter (once)","COMBAT|Unpredictable Shooter Mark on Def is ACTIVE: grants Unpredictable Shooter (shooting only) — applies ONCE","COMBAT|\"Unpredictable Shooter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Shooter Mark: Att marks Def — friendly units attacking it gain Unpredictable Shooter (once)","COMBAT|Unpredictable Shooter Mark on Def is ACTIVE: grants Unpredictable Shooter (shooting only) — applies ONCE","COMBAT|\"Unpredictable Shooter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Shooter Mark: Att marks Def — friendly units attacking it gain Unpredictable Shooter (once)","COMBAT|Unpredictable Shooter Mark on Def is ACTIVE: grants Unpredictable Shooter (shooting only) — applies ONCE","COMBAT|\"Unpredictable Shooter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Shooter Mark: Att marks Def — friendly units attacking it gain Unpredictable Shooter (once)","COMBAT|Unpredictable Shooter Mark on Def is ACTIVE: grants Unpredictable Shooter (shooting only) — applies ONCE","COMBAT|\"Unpredictable Shooter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Shooter Mark: Att marks Def — friendly units attacking it gain Unpredictable Shooter (once)","COMBAT|Unpredictable Shooter Mark on Def is ACTIVE: grants Unpredictable Shooter (shooting only) — applies ONCE","COMBAT|\"Unpredictable Shooter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Shooter Mark: Att marks Def — friendly units attacking it gain Unpredictable Shooter (once)","COMBAT|Unpredictable Shooter Mark on Def is ACTIVE: grants Unpredictable Shooter (shooting only) — applies ONCE","COMBAT|\"Unpredictable Shooter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Shooter Mark: Att marks Def — friendly units attacking it gain Unpredictable Shooter (once)","COMBAT|Unpredictable Shooter Mark on Def is ACTIVE: grants Unpredictable Shooter (shooting only) — applies ONCE","COMBAT|\"Unpredictable Shooter Mark\" on Def is consumed (applies once)"]]
+# Snapshot pin: read from the rules core on main, not derived from the rulebook (docs/adr/0005-snapshot-pins.md).
+const WANT_UNPREDICTABLE_FIGHTER_MARK := [
+	["COMBAT|Unpredictable Fighter Mark: Att marks Def — friendly units attacking it gain Unpredictable Fighter (once)","COMBAT|Unpredictable Fighter Mark on Def is ACTIVE: grants Unpredictable Fighter — applies ONCE","COMBAT|\"Unpredictable Fighter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Fighter Mark: Att marks Def — friendly units attacking it gain Unpredictable Fighter (once)","COMBAT|Unpredictable Fighter Mark on Def is ACTIVE: grants Unpredictable Fighter — applies ONCE","COMBAT|\"Unpredictable Fighter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Fighter Mark: Att marks Def — friendly units attacking it gain Unpredictable Fighter (once)","COMBAT|Unpredictable Fighter Mark on Def is ACTIVE: grants Unpredictable Fighter — applies ONCE","COMBAT|\"Unpredictable Fighter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Fighter Mark: Att marks Def — friendly units attacking it gain Unpredictable Fighter (once)","COMBAT|Unpredictable Fighter Mark on Def is ACTIVE: grants Unpredictable Fighter — applies ONCE","COMBAT|\"Unpredictable Fighter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Fighter Mark: Att marks Def — friendly units attacking it gain Unpredictable Fighter (once)","COMBAT|Unpredictable Fighter Mark on Def is ACTIVE: grants Unpredictable Fighter — applies ONCE","COMBAT|\"Unpredictable Fighter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Fighter Mark: Att marks Def — friendly units attacking it gain Unpredictable Fighter (once)","COMBAT|Unpredictable Fighter Mark on Def is ACTIVE: grants Unpredictable Fighter — applies ONCE","COMBAT|\"Unpredictable Fighter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Fighter Mark: Att marks Def — friendly units attacking it gain Unpredictable Fighter (once)","COMBAT|Unpredictable Fighter Mark on Def is ACTIVE: grants Unpredictable Fighter — applies ONCE","COMBAT|\"Unpredictable Fighter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Fighter Mark: Att marks Def — friendly units attacking it gain Unpredictable Fighter (once)","COMBAT|Unpredictable Fighter Mark on Def is ACTIVE: grants Unpredictable Fighter — applies ONCE","COMBAT|\"Unpredictable Fighter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Fighter Mark: Att marks Def — friendly units attacking it gain Unpredictable Fighter (once)","COMBAT|Unpredictable Fighter Mark on Def is ACTIVE: grants Unpredictable Fighter — applies ONCE","COMBAT|\"Unpredictable Fighter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Fighter Mark: Att marks Def — friendly units attacking it gain Unpredictable Fighter (once)","COMBAT|Unpredictable Fighter Mark on Def is ACTIVE: grants Unpredictable Fighter — applies ONCE","COMBAT|\"Unpredictable Fighter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Fighter Mark: Att marks Def — friendly units attacking it gain Unpredictable Fighter (once)","COMBAT|Unpredictable Fighter Mark on Def is ACTIVE: grants Unpredictable Fighter — applies ONCE","COMBAT|\"Unpredictable Fighter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Fighter Mark: Att marks Def — friendly units attacking it gain Unpredictable Fighter (once)","COMBAT|Unpredictable Fighter Mark on Def is ACTIVE: grants Unpredictable Fighter — applies ONCE","COMBAT|\"Unpredictable Fighter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Fighter Mark: Att marks Def — friendly units attacking it gain Unpredictable Fighter (once)","COMBAT|Unpredictable Fighter Mark on Def is ACTIVE: grants Unpredictable Fighter — applies ONCE","COMBAT|\"Unpredictable Fighter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Fighter Mark: Att marks Def — friendly units attacking it gain Unpredictable Fighter (once)","COMBAT|Unpredictable Fighter Mark on Def is ACTIVE: grants Unpredictable Fighter — applies ONCE","COMBAT|\"Unpredictable Fighter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Fighter Mark: Att marks Def — friendly units attacking it gain Unpredictable Fighter (once)","COMBAT|Unpredictable Fighter Mark on Def is ACTIVE: grants Unpredictable Fighter — applies ONCE","COMBAT|\"Unpredictable Fighter Mark\" on Def is consumed (applies once)"],
+	["COMBAT|Unpredictable Fighter Mark: Att marks Def — friendly units attacking it gain Unpredictable Fighter (once)","COMBAT|Unpredictable Fighter Mark on Def is ACTIVE: grants Unpredictable Fighter — applies ONCE","COMBAT|\"Unpredictable Fighter Mark\" on Def is consumed (applies once)"]]
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -63,27 +173,23 @@ func _named(lines: Array, mark: String) -> Array:
 	return lines.filter(func(l: String) -> bool: return l.begins_with("COMBAT|") and l.contains(mark))
 
 
-## 16 seeds of a carrier of `mark` at a plain unit: {"differing": seeds whose dice, end state or Mark lines differ, "said": seeds where the table said a Mark line}.
-func _compare(mark: Array) -> Dictionary:
+## 16 seeds of a carrier of `mark` at a plain unit: the door's lines that name the Mark, per seed.
+func _compare(mark: Array) -> Array:
 	var dice := ProjectSettings.globalize_path(DICE)
 	var shooter := _entry("Att", [mark[0]], mark[1], mark[2])
 	var target := _entry("Def", [], mark[1], mark[2])
-	var differing := 0
-	var said := 0
-	var first := ""
+	var got: Array = []
 	for s in SEEDS:
-		var t := await RosterSweep.volley(_main, shooter, target, s, false, dice)
-		var c := await RosterSweep.volley(_main, shooter, target, s, true, dice)
-		var tl := _named(t["lines"], mark[0])
-		said += 1 if not tl.is_empty() else 0
-		if _faces(t["rolls"]) != _faces(c["rolls"]) or RosterSweep.first_state_diff(t["state"], c["state"]) != "" or tl != _named(c["lines"], mark[0]):
-			differing += 1
-			first = first if first != "" else "seed %d table %s core %s" % [s, JSON.stringify(tl), JSON.stringify(_named(c["lines"], mark[0]))]
-	return {"differing": differing, "said": said, "first": first}
+		var door := await RosterSweep.volley(_main, shooter, target, s, true, dice)
+		got.append(_named(door["lines"], mark[0]))
+	return got
 
 
 func test_a_mark_says_the_pick_the_record_and_the_spend_on_both_halves() -> void:
-	for mark in MARKS:
-		var r: Dictionary = await _compare(mark)
-		assert_int(int(r["said"])).override_failure_message("%s: the table never said a Mark line, the compare proved nothing" % mark[0]).is_equal(SEEDS)
-		assert_int(int(r["differing"])).override_failure_message("%s: %d of %d seeds differ: %s" % [mark[0], r["differing"], SEEDS, str(r["first"]).left(600)]).is_equal(0)
+	var want := [WANT_FURIOUS_MARK, WANT_RENDING_MARK, WANT_UNSTOPPABLE_MARK, WANT_PIERCING_SHOOTING_MARK,
+		WANT_UNPREDICTABLE_SHOOTER_MARK, WANT_UNPREDICTABLE_FIGHTER_MARK]
+	for i in MARKS.size():
+		var got: Array = await _compare(MARKS[i])
+		var fired := got.filter(func(l: Array) -> bool: return not l.is_empty()).size()
+		assert_int(fired).override_failure_message("%s: the door never said a Mark line, nothing is pinned" % MARKS[i][0]).is_equal(SEEDS)
+		assert_array(got).override_failure_message("%s: the door's Mark lines moved from the pinned values" % MARKS[i][0]).is_equal(want[i])
