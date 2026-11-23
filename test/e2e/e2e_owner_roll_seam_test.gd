@@ -27,7 +27,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main._solo_batch = true   # instant tray faces (the headless sweep path), same faces contract
+	SoloHarness.instant(_main)   # instant tray faces (the headless sweep path), same faces contract
 	_real_net = _main.network_manager
 
 
@@ -371,7 +371,7 @@ func test_a_replayed_request_replays_the_stored_answer(timeout := 120000) -> voi
 	if not _seam_exists():
 		return
 	_fake_session({1: 1, GUEST_PEER: 2}, {GUEST_PEER: "Host"})
-	_main._solo_auto_saves = true
+	SoloHarness.auto_saves(_main)
 	var unit := _unit(1, "Rifles")
 	var rq := _save_request(77, unit)
 	_main._rpc_request_roll(rq, GUEST_PEER)
@@ -406,7 +406,7 @@ func test_a_new_host_session_with_a_reused_id_rolls_fresh(timeout := 120000) -> 
 	if not _seam_exists():
 		return
 	_fake_session({1: 1, GUEST_PEER: 2}, {GUEST_PEER: "Host"})
-	_main._solo_auto_saves = true
+	SoloHarness.auto_saves(_main)
 	var unit := _unit(1, "Rifles")
 	var old_rq := _save_request(77, unit)
 	old_rq["rs"] = "a"
@@ -434,7 +434,7 @@ func test_a_duplicate_request_keeps_one_open_card(timeout := 120000) -> void:
 	if not _seam_exists():
 		return
 	_fake_session({1: 1, GUEST_PEER: 2}, {GUEST_PEER: "Host"})
-	_main._solo_auto_saves = false
+	SoloHarness.auto_saves(_main, false)
 	var rq := _save_request(88, _unit(1, "Rifles"))
 	_main._rpc_request_roll(rq, GUEST_PEER)
 	for _i in 4:
@@ -471,8 +471,7 @@ func _run_interference(caster: GameUnit) -> void:
 
 ## Geometry for the caster auras: a solo controller plus a Caster(1) on the foe slot within reach.
 func _seed_interference_foe() -> GameUnit:
-	_main.solo_ai_slots = {3: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [3])
 	var caster := _unit(1, "Spell Guard")
 	var foe_caster := E2EBoot.make_unit(_main, 2, "Foe Witch", [Vector3(0.05, 0.0, 0.0)])
 	foe_caster.unit_properties["special_rules"] = ["Caster(1)"]
