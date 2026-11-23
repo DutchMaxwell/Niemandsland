@@ -251,8 +251,8 @@ func test_a_refused_core_call_leaves_the_strafe_to_the_table_once() -> void:
 
 ## The human door (P4.D-37b): a Strafing bearer is a core unit (its strike comes with the activation's Fire / End), a Crossing
 ## Attack bearer stays on the table (the table never rolled that rule for a human unit; the core would). The slice takes both
-## (`is_plain`). RED: drop the Crossing Attack clause from `is_core_unit` -> the human Crossing Attack bearer is a core unit; drop
-## "Hit & Run Shooter" from it -> the human Hit & Run bearer is one.
+## (`is_plain`). RED: drop the Crossing Attack clause from `is_core_unit` -> the human Crossing Attack bearer is a core unit.
+## PLAN_FIRST_DELETION step 21: the human Hit & Run bearer IS a core unit now (its intent says `no_step`, the player drags the step).
 func test_the_human_door_takes_a_strafe_bearer_but_not_a_crossing_attack_bearer() -> void:
 	_main.solo_ai_slots = {2: true}
 	var strafer := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Strafer", "models": 2, "x_in": 0.0}), STRAFE_GUN)
@@ -262,9 +262,9 @@ func test_the_human_door_takes_a_strafe_bearer_but_not_a_crossing_attack_bearer(
 	assert_bool(CoreActivation.is_core_unit(_main, plain)).override_failure_message("a plain human unit is not a core unit").is_true()
 	assert_bool(CoreActivation.is_core_unit(_main, strafer)).override_failure_message("the human Strafing bearer is no core unit").is_true()
 	assert_bool(CoreActivation.is_core_unit(_main, crosser)).override_failure_message("the human Crossing Attack bearer is a core unit").is_false()
-	# H-30: a Hit & Run bearer stays on the table too (the core steps for it and spends the round's use; a human drags the step). Pinned on the
-	# deny file WITHOUT lane shootfix's `hit_and_run_landing` group (which refuses the bearer in the slice already), so `is_core_unit`'s own
-	# clause stays the one under test.
+	# H-30 kept a Hit & Run bearer on the table (the core stepped for it and spent the round's use; a human drags the step). Step 21: the
+	# door sends `no_step` (step 20), so the bearer is a core unit. Pinned on the deny file WITHOUT the `hit_and_run_landing` group (gone
+	# from the live file since 3e), so `is_core_unit`'s own clause stays the one under test.
 	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CoreSlice.live_path()))
 	(data["groups"] as Dictionary).erase("hit_and_run_landing")
 	var f := FileAccess.open(TMP, FileAccess.WRITE)
@@ -274,7 +274,7 @@ func test_the_human_door_takes_a_strafe_bearer_but_not_a_crossing_attack_bearer(
 	CoreSlice.reset_cache()
 	var runner := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Runner", "models": 2, "x_in": 30.0, "faction_folder": "custodian_brothers", "rules": ["Hit & Run Shooter"]}, true), RIFLE)
 	assert_bool(CoreActivation.is_plain(runner)).override_failure_message("the slice no longer takes the Hit & Run bearer").is_true()
-	assert_bool(CoreActivation.is_core_unit(_main, runner)).override_failure_message("the human Hit & Run bearer is a core unit").is_false()
+	assert_bool(CoreActivation.is_core_unit(_main, runner)).override_failure_message("the human Hit & Run bearer is a core unit (step 21)").is_true()
 	_free([strafer, crosser, plain, runner])
 
 
