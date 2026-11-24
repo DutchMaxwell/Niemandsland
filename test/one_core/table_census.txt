@@ -1,5 +1,5 @@
-ai_volley scripts/main.gd:_solo_resolve_ai_volley 357 2
-ai_volley TOTAL 357 2
+ai_volley scripts/main.gd:_solo_resolve_ai_volley 357 1
+ai_volley TOTAL 357 1
 cast scripts/main.gd:_solo_resolve_ai_casts 20 2
 cast scripts/main.gd:_solo_resolve_one_cast 128 2
 cast scripts/main.gd:_solo_resolve_spell_damage 122 1

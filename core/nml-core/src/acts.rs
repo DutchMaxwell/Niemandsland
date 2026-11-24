@@ -1035,6 +1035,12 @@ pub const EPOCH_95_PARITY_BATCH: u32 = 95;
 /// - HIT_AND_RUN_PLAIN: on a real board the Hit & Run step is the table's own fallback move away from the nearest enemy (`sim::tray_hit_and_run`).
 pub const EPOCH_96_PARITY_BATCH: u32 = 96;
 pub const CURRENT_RULES_EPOCH: u32 = 96;
+/// Placeholder gate for WIPED TO-HIT DECLARED (OPR shooting: a unit's weapons fire together, casualties come off after the
+/// whole volley; the target's to-hit rules are unit-wide): when a Deadly weapon of a volley kills the target's last model, the
+/// weapons still to fire keep the target's to-hit penalties as declared (Stealth family, Evasive family, Aircraft, the Artillery
+/// target). Before, `Ctx::wiped` dropped them, so the second weapon group rolled one better. Records stamped 96 or below replay
+/// byte-exact. Every call site reads THIS constant, not the literal `97`.
+pub const PENDING_EPOCH_WIPED_TO_HIT_DECLARED: u32 = 97;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2443,6 +2449,17 @@ mod tests {
         assert!(!old.guarded && !old.shielded && !old.stealth, "94: a wiped target lends nothing");
         assert!(new.guarded && new.shielded, "95: Guarded and Shielded stay as declared");
         assert!(!new.stealth, "95: the to-hit penalty still drops");
+    }
+
+    #[test]
+    fn wiped_to_hit_declared_gate_is_pending_97() {
+        assert_eq!(super::PENDING_EPOCH_WIPED_TO_HIT_DECLARED, 97);
+        assert!(!rule_on(CURRENT_RULES_EPOCH, super::PENDING_EPOCH_WIPED_TO_HIT_DECLARED), "a record at 96 replays as recorded");
+        let at = |e: u32| crate::unit::Ctx { rules_epoch: e, stealth: true, evasive: true, aircraft_hit_penalty: 1, ..Default::default() }.wiped();
+        let (old, new) = (at(96), at(super::PENDING_EPOCH_WIPED_TO_HIT_DECLARED));
+        assert!(!old.stealth && !old.evasive && old.aircraft_hit_penalty == 0, "96: a wiped target drops its to-hit penalties");
+        assert!(new.stealth && new.evasive && new.aircraft_hit_penalty == 1, "97: they hold for the weapons still to fire");
+        assert!(!new.fortified && !new.regeneration, "97: the per-hit carrier reads still drop");
     }
 
     #[test]
