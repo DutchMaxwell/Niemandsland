@@ -103,6 +103,7 @@ fly deploy
 | `relay_server.py` | The relay (asyncio + `websockets`) — routing, rooms, `Stats`, `/stats` |
 | `relay_stats.py` | CLI: query a relay's aggregate stats over WebSocket and print them |
 | `stats_digest.py` | Parse captured `STATS` log lines into a weekly usage digest |
+| `games_digest.py` | Summarise the anonymous per-game log (`games.jsonl`, see `PRIVACY.md`) by day, version, system and faction |
 | `requirements.txt` | `websockets>=16.0,<17` (the major the suite runs against) |
 | `Dockerfile` | `python:3.11-slim`, runs `relay_server.py --port 8765` |
 | `fly.toml` | Fly.io deployment config |

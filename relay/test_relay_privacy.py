@@ -155,6 +155,32 @@ class TestRetentionBound:
         assert not any("ip" in key.lower() or "address" in key.lower()
                        for key in _all_keys(saved))
 
+class TestGameLogPrivacy:
+    """The per-game log holds no IP, room code, peer id or token, and is not served publicly."""
+
+    async def test_game_log_never_contains_ip_room_code_or_token(self, relay, tmp_path):
+        from test_relay_game_log import LINE_KEYS, send_and_settle
+
+        server, url = relay
+        path = tmp_path / "games.jsonl"
+        server.games_path = str(path)
+        host_ws = await websockets.connect(url)
+        await host_ws.send(json.dumps({"type": "create_room", "token": "privacy-host-token"}))
+        code = json.loads(await host_ws.recv())["code"]
+        guest_ws, _guest_id = await join_room(url, code)
+        await send_and_settle(host_ws, {"type": "game_meta", "system": "aof", "factions": ["dwarves"],
+                                        "players": 2, "version": "0.3.16.0"})
+
+        text = path.read_text(encoding="utf-8")
+        assert text.count("\n") == 1
+        for forbidden in (code, "privacy-host-token", *FORBIDDEN_IP_STRINGS):
+            assert forbidden not in text, f"{forbidden!r} leaked into the game log"
+        assert set(json.loads(text)) == LINE_KEYS
+        assert "games" not in json.dumps(server._stats_payload()).replace("games_played", "")
+        await host_ws.close()
+        await guest_ws.close()
+
+
 class TestTrustModel:
     """The README states what game clients rely on the relay for."""
 
