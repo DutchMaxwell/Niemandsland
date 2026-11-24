@@ -31,7 +31,7 @@ _dice_result_label 1
 _do_clear_all 4
 _do_next_round 6
 _engine_enemy 7
-_ensure_solo_controller 86
+_ensure_solo_controller 47
 _fps_low_since_ms 1
 _game_phase_status_label 2
 _get_player_color 3
@@ -211,7 +211,7 @@ _solo_auto_point_click 2
 _solo_auto_point_dwell 1
 _solo_auto_saves 4
 _solo_auto_seize 9
-_solo_batch 36
+_solo_batch 3
 _solo_begin_rapid_ambush_round_one 1
 _solo_below_half_strength 2
 _solo_board_prompt 3
