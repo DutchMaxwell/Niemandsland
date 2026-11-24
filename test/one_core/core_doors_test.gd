@@ -183,7 +183,7 @@ func test_the_resolving_doors_refuse_without_a_start() -> void:
 	var foe := _unit("Raiders", Vector3(12.0 * INCH, 0, 0), [], 2)
 	var foe2 := _unit("Scouts", Vector3(14.0 * INCH, 0, 0), [], 2)
 	_main._run_human_attack(u, foe, false)
-	_main._run_human_attack_split(u, foe, foe2, [])
+	SoloHarness.split_fire(_main, u, foe, foe2, [])
 	_main._run_player_intent(u, AiDecision.Action.ADVANCE, null, Vector3(0.1, 0, 0))
 	_main._run_human_cast(u, u, {"name": "Bolt", "threshold": 1}, [foe])
 	assert_int(_lines("Activate Marshal first.")).is_equal(4)

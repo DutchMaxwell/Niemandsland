@@ -70,3 +70,12 @@ static func auto_verb(main: Node, unit: GameUnit, verb: int, target: GameUnit) -
 ## Resolve a human unit's spell through the table's own cast path (it marks the core session).
 static func cast(main: Node, caster: GameUnit, entry: Dictionary, targets: Array) -> void:
 	await main._run_human_cast(caster, caster, entry, targets)
+
+
+## A player's declared split, as the Fire! button of the split prompt runs it: `att` fires
+## the `b_names` weapons at `b` and the rest at `a`.
+static func split_fire(main: Node, att: GameUnit, a: GameUnit, b: GameUnit, b_names: Array) -> void:
+	main._solo_target_mode = {
+		"unit": att, "split_first": a, "split_second": b, "split_b_names": b_names
+	}
+	await main._solo_split_commit()

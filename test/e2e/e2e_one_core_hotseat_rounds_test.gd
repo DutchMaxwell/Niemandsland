@@ -1,16 +1,12 @@
 extends GdUnitTestSuite
-## P4.D-43d: the gate for turning the hotseat switch on. A three-round hotseat Automatic game (two local human sides,
-## no AI seat) ends in the SAME rules state with NML_ONE_CORE_HOTSEAT on and off: the core resolves the two sides'
-## moves and volleys, the table resolved them before, and the state digest must not notice the difference.
-##
-## Driven through the doors a player uses on each side of the switch: with the switch on a unit's Start opens the core
-## session, the drag is its move, the volley is its intent and ends the activation; with it off the drag is free and the
-## volley ends the activation on the table. Both sides' activations pass the turn, both sides spent ends the round, three
-## rounds end the game. The digest is SoloController.state_digest (the same fingerprint the arena compares).
+## P4.D-43d: a three-round hotseat Automatic game (two local human sides, no AI seat) with NML_ONE_CORE_HOTSEAT on runs on the
+## core to its end: every Start opens a core session, the drag is its move, the volley is its intent and ends the
+## activation, and no volley falls back to the table. Both sides' activations pass the turn, both sides spent ends the
+## round, three rounds end the game. The digest is SoloController.state_digest (the same fingerprint the arena compares).
 ## Real: the main scene, NmlCore, the drag machine, the radial doors, the battle log, the hotseat round end.
 ## Constructed: four plain units per table (two per side), their kit and their spots.
 ##
-## RED (planted fault, `_nudge`): one model moved on the core path after the last activation - the digests must differ.
+## RED (planted fault, `_nudge`): one model moved on the core path after the last activation - the digest changes.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -135,10 +131,7 @@ func _activate(att: GameUnit, target: GameUnit) -> void:
 	await _drag(att, dx)
 	if target != null and target.get_alive_count() > 0 and _main._solo_volley_sighted(att, target) > 0:
 		_volleys += 1
-		if CoreActivation.hotseat_enabled():
-			await _main._run_human_attack(att, target, false)
-		else:   # the switch off: the table's own volley (the window door now hands a refused shot to the free roll)
-			await TableHumanVolley.shoot(_main, att, target)
+		await _main._run_human_attack(att, target, false)
 	elif not att.is_activated:
 		await _main.radial_menu_controller.card_end_activation(att)
 	await E2EBoot.settle(get_tree())
@@ -211,35 +204,32 @@ func _run(seed: int, switch_on: bool, fault := false) -> Dictionary:
 		"legacy": int((CoreActivation.legacy.get("human_shoot", {}) as Dictionary).get("_all", 0)) - legacy_before}
 
 
-## The gate: the same three-round game, the switch on and off, the same end state for every seed. The switch-on run is
-## proven to be the core's: every Start opened a session and no volley fell back to the table.
-func test_three_hotseat_rounds_end_in_the_same_state_digest(timeout := 900000) -> void:
+## The three-round game runs on the core to the last round: every Start opened a session and no volley fell back to the
+## table. (The switch-off arm that compared the end state with the table's own volley left with the table's player volley.)
+func test_three_hotseat_rounds_run_on_the_core(timeout := 900000) -> void:
 	var bad: Array = []
 	var volleys: Array = []
 	for seed in SEEDS:
-		var table := await _run(int(seed), false)
 		var core := await _run(int(seed), true)
 		volleys.append(int(core["volleys"]))
-		if table["digest"] != core["digest"]:
-			bad.append("seed %d: %s" % [int(seed), _first_diff(table["fields"], core["fields"])])
-		if table["round"] != ROUNDS or core["round"] != ROUNDS:
-			bad.append("seed %d: rounds %s / %s" % [int(seed), table["round"], core["round"]])
-		if int(table["volleys"]) < 1 or int(core["volleys"]) != int(table["volleys"]):
-			bad.append("seed %d: volleys %s / %s" % [int(seed), table["volleys"], core["volleys"]])
+		if core["round"] != ROUNDS:
+			bad.append("seed %d: rounds %s" % [int(seed), core["round"]])
+		if int(core["volleys"]) < 1:
+			bad.append("seed %d: no volley" % int(seed))
 		if int(core["sessions"]) < 1 or int(core["sessions"]) < int(core["volleys"]):
 			bad.append("seed %d: only %d core sessions for %d volleys" % [int(seed), core["sessions"], core["volleys"]])
 		if int(core["legacy"]) != 0:
 			bad.append("seed %d: %d volleys fell back to the table" % [int(seed), int(core["legacy"])])
-	print("hotseat rounds gate: %d of %d seeds differ; volleys %s" % [bad.size(), SEEDS.size(), volleys])
+	print("hotseat rounds: %d of %d seeds bad; volleys %s" % [bad.size(), SEEDS.size(), volleys])
 	assert_array(bad).is_empty()
 
 
-## The gate is not blind: a model one inch off after the last activation turns it red.
-func test_one_model_moved_after_the_last_activation_turns_the_gate_red(timeout := 600000) -> void:
-	var table := await _run(int(SEEDS[0]), false)
+## The digest is not blind: a model one inch off after the last activation changes it.
+func test_one_model_moved_after_the_last_activation_changes_the_digest(timeout := 600000) -> void:
+	var clean := await _run(int(SEEDS[0]), true)
 	var faulted := await _run(int(SEEDS[0]), true, true)
 	assert_str(str(faulted["digest"])).override_failure_message(
-		"the gate did not see a model moved after the last activation").is_not_equal(str(table["digest"]))
+		"the digest did not see a model moved after the last activation").is_not_equal(str(clean["digest"]))
 
 
 ## state_digest hashes exactly this field list, rebuilt here only to NAME the first differing field when the gate is
@@ -271,14 +261,3 @@ func _fields() -> Array[String]:
 				var owner: int = int(sc.objective_owner_of.call(i)) if sc.objective_owner_of.is_valid() else 0
 				parts.append("o:%d|ow=%d" % [i, owner])
 	return parts
-
-
-## The first field line the two runs disagree on, plus the counts (the digest alone is a hash).
-func _first_diff(a: Array[String], b: Array[String]) -> String:
-	for i in range(mini(a.size(), b.size())):
-		if a[i] != b[i]:
-			return "first differing field (line %d):\n  table %s\n  core  %s" % [i, a[i], b[i]]
-	if a.size() != b.size():
-		return "field counts differ: table %d, core %d" % [a.size(), b.size()]
-	return "the digests differ but no field line does"
-

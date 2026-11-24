@@ -4,21 +4,19 @@ cast scripts/main.gd:_solo_resolve_one_cast 128 2
 cast scripts/main.gd:_solo_resolve_spell_damage 122 1
 cast TOTAL 270 5
 dangerous_morale scripts/main.gd:_run_ai_dangerous 24 7
-dangerous_morale scripts/main.gd:_solo_shooting_morale 43 7
-dangerous_morale TOTAL 67 14
-hit_save_shared scripts/main.gd:_solo_apply_vs_marks 56 3
-hit_save_shared scripts/main.gd:_solo_hazardous_self_wounds 28 2
-hit_save_shared scripts/main.gd:_solo_hits 139 3
-hit_save_shared scripts/main.gd:_solo_land_deadly_wounds 79 5
-hit_save_shared scripts/main.gd:_solo_land_takedown_wounds 35 4
-hit_save_shared scripts/main.gd:_solo_land_wounds 18 19
-hit_save_shared scripts/main.gd:_solo_resolve_saves 122 9
+dangerous_morale scripts/main.gd:_solo_shooting_morale 43 6
+dangerous_morale TOTAL 67 13
+hit_save_shared scripts/main.gd:_solo_apply_vs_marks 56 2
+hit_save_shared scripts/main.gd:_solo_hazardous_self_wounds 28 1
+hit_save_shared scripts/main.gd:_solo_hits 139 2
+hit_save_shared scripts/main.gd:_solo_land_deadly_wounds 79 3
+hit_save_shared scripts/main.gd:_solo_land_takedown_wounds 35 2
+hit_save_shared scripts/main.gd:_solo_land_wounds 18 18
+hit_save_shared scripts/main.gd:_solo_resolve_saves 122 8
 hit_save_shared scripts/main.gd:_solo_save_batch 233 7
-hit_save_shared scripts/main.gd:_solo_takedown_pick 34 2
-hit_save_shared TOTAL 744 54
-human_shoot scripts/main.gd:_run_human_attack_split 38 0
-human_shoot scripts/main.gd:_run_human_shooting 291 2
-human_shoot TOTAL 329 2
+hit_save_shared scripts/main.gd:_solo_takedown_pick 34 1
+hit_save_shared TOTAL 744 44
+human_shoot TOTAL 0 0
 melee_charge scripts/main.gd:_run_ai_melee 190 1
 melee_charge scripts/main.gd:_run_human_melee 106 1
 melee_charge scripts/main.gd:_solo_charge_impact 82 4
@@ -49,15 +47,13 @@ planner_tag TOTAL 345 5986
 owner dangerous_morale breath 1 H-38
 owner dangerous_morale dangerous_ai_activation 5 H-44
 owner dangerous_morale dangerous_player_auto 1 H-32
-owner dangerous_morale human_volley 1 P4.D-43/H-34
 owner dangerous_morale melee 2 P4.D-49/E-32
 owner dangerous_morale other_rule_hits 2 H-38
 owner dangerous_morale spells 1 H-45
 owner dangerous_morale transport_spill 1 H-41
-owner dangerous_morale TOTAL 14 -
+owner dangerous_morale TOTAL 13 -
 owner hit_save_shared breath 2 H-38
 owner hit_save_shared deathstrike 2 P4.D-49/H-35
-owner hit_save_shared human_volley 10 P4.D-43/H-34
 owner hit_save_shared jump_fall 1 H-43
 owner hit_save_shared melee 20 P4.D-49/E-32
 owner hit_save_shared melee_exception 1 H-39
@@ -66,5 +62,5 @@ owner hit_save_shared self_destruct 2 P4.D-49/H-35
 owner hit_save_shared spells 5 H-45
 owner hit_save_shared table_internal 3 H-46
 owner hit_save_shared trap 2 H-42
-owner hit_save_shared TOTAL 54 -
-TABLE LINES LEFT: 11063
+owner hit_save_shared TOTAL 44 -
+TABLE LINES LEFT: 10734

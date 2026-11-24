@@ -34,12 +34,12 @@ const MELEE_FAMILY := "melee"
 const MELEE_FIXTURE_PATH := "res://test/fixtures/one_core/golden_melee.json"
 const MORALE_FAMILY := "morale"
 const MORALE_FIXTURE_PATH := "res://test/fixtures/one_core/golden_morale.json"
-## The human shooting door: the player's own volley through main._run_human_shooting (runner "human_volley").
+## The human shooting door (runner "human_volley"): the table's player volley, deleted (the human_shoot fixture is frozen).
 const HUMAN_FAMILY := "human_shoot"
 const HUMAN_FIXTURE_PATH := "res://test/fixtures/one_core/golden_human_shoot.json"
 const RUNNER_HUMAN_VOLLEY := "human_volley"
 ## Split fire: one activation, two targets. The AI's own body (runner "ai_shooting" = main._run_ai_shooting) and the
-## player's declared split (runner "human_split" = main._run_human_attack_split) share one fixture.
+## player's declared split (runner "human_split" = the split prompt's Fire!, main._solo_split_commit) share one fixture.
 const SPLIT_FAMILY := "split"
 const SPLIT_FIXTURE_PATH := "res://test/fixtures/one_core/golden_split.json"
 const RUNNER_AI_SHOOTING := "ai_shooting"
@@ -518,8 +518,6 @@ static func provenance() -> Dictionary:
 static func _run_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
 	var runner := str(sc.get("runner", RUNNER_AI_VOLLEY))
 	match runner:
-		RUNNER_HUMAN_VOLLEY:
-			return await _run_human_volley_case(main, sc, seed)
 		RUNNER_AI_SHOOTING, RUNNER_HUMAN_SPLIT:
 			return await _run_split_case(main, sc, seed)
 		RUNNER_AI_DANGEROUS:
@@ -534,30 +532,6 @@ static func _run_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
 		RUNNER_AI_CHARGE:
 			return await _run_melee_shape_case(main, sc, seed)
 	return {"scenario": str(sc["name"]), "seed": seed, "error": "unknown runner %s" % runner}
-
-
-## One human-door scenario x seed: the player's attacker fires one volley at the AI defender through
-## main._run_human_shooting (the door the human's Fire! button reaches), with the real tray seeded.
-static func _run_human_volley_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
-	var weapon: Dictionary = (sc["weapon"] as Dictionary).duplicate(true)
-	var att := ParityTable._make_unit(main, sc["attacker"], weapon)
-	var dfn := ParityTable._make_unit(main, sc["defender"], {})
-	_stand_back(att, sc["attacker"])
-	main.seed_tray_rng(seed)
-	var lines: Array = []
-	var tap := _line_tap(lines)
-	main.battle_log.entry_added.connect(tap)
-	await main._run_human_shooting(att, dfn)
-	main.battle_log.entry_added.disconnect(tap)
-	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
-		"lines": lines, "final": _final([att, dfn]), "rng": _rng_state(main)}
-	if bool(sc.get("partial", false)):
-		var fired := _models_in_range(lines)
-		if fired.size() != 2 or fired[0] <= 0 or fired[0] >= fired[1]:
-			rec = {"scenario": str(sc["name"]), "seed": seed, "error": "the volley is not partial (%s)" % str(fired)}
-	_free_units(main, [att, dfn])
-	await main.get_tree().process_frame
-	return rec
 
 
 ## One split scenario x seed: a two-weapon attacker and two targets, then the runner's door. Records the three units'
@@ -581,8 +555,8 @@ static func _run_split_case(main: Node, sc: Dictionary, seed: int) -> Dictionary
 		main.solo_ai_slots = {1: true, 2: true}
 		await main._run_ai_shooting({"unit": att, "moved": false})
 		main.solo_ai_slots = seats
-	else:
-		await main._run_human_attack_split(att, a, b, sc["b_names"])
+	else:   # the player's declared split through the production Fire! button (the rules core, or a free roll)
+		await SoloHarness.split_fire(main, att, a, b, sc["b_names"])
 	main.battle_log.entry_added.disconnect(tap)
 	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
 		"lines": lines, "final": _final([att, a, b]), "rng": _rng_state(main),
@@ -941,16 +915,6 @@ static func _stand_back(unit: GameUnit, spec: Dictionary) -> void:
 		var nd := (unit.models[i] as ModelInstance).node as Node3D
 		nd.global_position.x -= step * i * 0.0254
 		nd.global_position.z += z_off * 0.0254
-
-
-## The "<unit>: N/M models with line of sight + range" line of a volley as [N, M] ([] when absent).
-static func _models_in_range(lines: Array) -> Array:
-	var rx := RegEx.create_from_string("(\\d+)/(\\d+) models? with line of sight \\+ range")
-	for l in lines:
-		var m := rx.search(str(l))
-		if m != null:
-			return [int(m.get_string(1)), int(m.get_string(2))]
-	return []
 
 
 static func _line_tap(lines: Array) -> Callable:

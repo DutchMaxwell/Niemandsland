@@ -10,7 +10,7 @@
   ],
   "groups": {
     "ai_volley": [],
-    "human_shoot": ["scripts/main.gd:_run_human_shooting", "scripts/main.gd:_run_human_attack_split"],
+    "human_shoot": [],
     "melee_charge": ["scripts/main.gd:_run_ai_melee", "scripts/main.gd:_solo_melee_strike_phase", "scripts/main.gd:_run_human_melee", "scripts/main.gd:_solo_charge_impact", "scripts/main.gd:_solo_consolidate_melee", "scripts/main.gd:_solo_log_melee_result", "scripts/main.gd:_solo_parry_strike", "scripts/main.gd:_solo_retreating_strike"],
     "hit_save_shared": ["scripts/main.gd:_solo_hits", "scripts/main.gd:_solo_resolve_saves", "scripts/main.gd:_solo_save_batch", "scripts/main.gd:_solo_land_wounds", "scripts/main.gd:_solo_land_deadly_wounds", "scripts/main.gd:_solo_land_takedown_wounds", "scripts/main.gd:_solo_takedown_pick", "scripts/main.gd:_solo_hazardous_self_wounds", "scripts/main.gd:_solo_apply_vs_marks"],
     "dangerous_morale": ["scripts/main.gd:_run_ai_dangerous", "scripts/main.gd:_solo_shooting_morale"],
@@ -21,9 +21,7 @@
   "allowed_callers": {
     "scripts/main.gd:_run_ai_dangerous": ["scripts/main.gd:_on_transport_spill_dangerous", "scripts/main.gd:_run_player_intent", "scripts/main.gd:_solo_activate_one_ai_body", "scripts/main.gd:_solo_pay_dangerous", "@melee_charge"],
     "scripts/main.gd:_run_ai_melee": ["scripts/main.gd:_solo_activate_one_ai_body"],
-    "scripts/main.gd:_run_human_attack_split": ["scripts/main.gd:_solo_split_commit"],
     "scripts/main.gd:_run_human_melee": ["scripts/main.gd:_run_human_attack"],
-    "scripts/main.gd:_run_human_shooting": ["scripts/main.gd:_run_human_attack", "@human_shoot"],
     "scripts/main.gd:_solo_apply_vs_marks": ["@melee_charge", "@human_shoot", "@ai_volley"],
     "scripts/main.gd:_solo_charge_impact": ["@melee_charge"],
     "scripts/main.gd:_solo_consolidate_melee": ["@melee_charge"],
@@ -64,7 +62,6 @@
       "table_internal": "H-46"
     },
     "functions": {
-      "scripts/main.gd:_run_human_shooting": "human_volley",
       "scripts/main.gd:_solo_melee_strike_phase": "melee",
       "scripts/main.gd:_solo_charge_impact": "melee",
       "scripts/main.gd:_run_ai_melee": "melee",

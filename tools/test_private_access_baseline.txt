@@ -110,7 +110,7 @@ _on_start_game_pressed 6
 _on_success_target_pressed 2
 _on_trails_dropped 1
 _on_transport_spill_dangerous 1
-_on_units_dropped 7
+_on_units_dropped 6
 _open_ai_opponent_dialog 1
 _owner_request 2
 _owner_roll 5
@@ -144,11 +144,9 @@ _rules_start_question_due 8
 _run_ai_dangerous 5
 _run_ai_melee 22
 _run_ai_shooting 51
-_run_human_attack 28
-_run_human_attack_split 5
+_run_human_attack 27
 _run_human_cast 15
 _run_human_melee 9
-_run_human_shooting 9
 _run_player_intent 10
 _run_solo_ai_turn 3
 _sandbox_shelf 7
@@ -170,7 +168,7 @@ _solo_activation_self_wounds 2
 _solo_activation_wounds_start 1
 _solo_after_activation 2
 _solo_ai_banner 5
-_solo_ai_busy 18
+_solo_ai_busy 14
 _solo_ai_casts 4
 _solo_ai_core_call 7
 _solo_ai_delayed_action_pass 3
@@ -465,7 +463,7 @@ _terrain_mode_btn 1
 _toggle_settings_panel 1
 _tool_rail 4
 _top_bar 2
-_tray_rng 54
+_tray_rng 53
 _tutorial_board_pending 1
 _tutorial_director 5
 _tutorial_mode 3
