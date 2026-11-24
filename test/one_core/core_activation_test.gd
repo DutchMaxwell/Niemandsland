@@ -480,6 +480,26 @@ func test_a_core_volley_delta_carries_the_ledger() -> void:
 	assert_int(int(foe.unit_properties.get("tag_markers", -99))).is_equal(1)
 
 
+## A human cast pays its spell tokens on the table AFTER the activation's capture (the Start comes first), so the core
+## never sees that spend and its row still carries the captured count. The landing must keep the table's spent count:
+## the rule spends the tokens to TRY the cast, whatever the roll. RED when the core's untouched count lands: the caster
+## gets its 3 tokens back (the live game showed "casts differ (table 0, core 3)" at the End of a cast that failed).
+func test_tokens_spent_on_the_table_after_the_capture_stay_spent() -> void:
+	var units := _volley_units()
+	var att: GameUnit = units[0]
+	att.set_caster_points(3)
+	_main.seed_tray_rng(7)
+	var h: int = CoreActivation.capture(_main)
+	att.set_caster_points(0)   # the human cast's spend, as `_run_human_cast` pays it inside the open activation
+	var at: Array = att.get_alive_models() \
+		.map(func(m: ModelInstance) -> Vector3: return m.node.global_position + Vector3(2.0 * 0.0254, 0.0, 0.0))
+	var t: Array = [{"t": "begin"}, {"t": "placed", "positions": at},
+		{"t": "intent", "kind": AiDecision.Action.ADVANCE, "shoot": ""}]
+	var r: Dictionary = await CoreActivation.drive(_main, h, att, t, true)
+	assert_str(str(r["step"])).is_equal("done")
+	assert_int(att.casts_current).override_failure_message("the spent tokens came back at the landing").is_equal(0)
+
+
 ## P4.0-4e: the delta's round stamps land under the table's own property names (`spot_round` is the table's
 ## `spotted_round`), and a split is reported. RED when the landing is dropped or the unmapped name is written.
 func test_land_delta_lands_the_round_stamps_under_the_tables_names() -> void:
