@@ -1991,3 +1991,86 @@ func test_a_refused_shot_leaves_the_sessions_transcript_as_it_was(timeout := 120
 	CoreActivation.close_session(_main, att.unit_id)
 	_clear(units)
 	GraphicsSettings.enforce_movement_limit = was
+
+
+## ---- ticket 12 (DRAG-BAND-DIFFICULT): the drag band asks the core's Difficult test ----
+
+## Paints FOREST (Difficult) on the cells x 3..6", z -6..6"; returns what it overwrote.
+func _paint_forest_strip() -> Dictionary:
+	var o: Node3D = _main.terrain_overlay
+	var saved := {}
+	for xi in range(7):
+		for zi in range(25):
+			var key: Vector2i = o.world_to_cell(Vector3((3.25 + 0.4 * xi) * 0.0254, 0.0, (-6.0 + 0.5 * zi) * 0.0254))
+			if not saved.has(key):
+				saved[key] = {"had": o.grid_cells.has(key), "value": int(o.grid_cells.get(key, 0))}
+			o.grid_cells[key] = o.TerrainType.FOREST
+	return saved
+
+
+func _unpaint(saved: Dictionary) -> void:
+	var o: Node3D = _main.terrain_overlay
+	for key in saved:
+		if bool(saved[key]["had"]):
+			o.grid_cells[key] = int(saved[key]["value"])
+		else:
+			o.grid_cells.erase(key)
+
+
+## A real drag of the one model `n`, `inches` along `dir` in half-inch cursor steps, then dropped and landed. Returns
+## [the strict band (inches) the drag ended on, how far the model got before the drop].
+func _drag_model(n: Node3D, dir: Vector2, inches: float) -> Array:
+	var om: Node3D = _main.object_manager
+	n.add_to_group("miniature")   # as a spawned model is: the strict band reads its anchor from the group
+	_pick([n])
+	var from := _xz(n.global_position)
+	om._start_dragging(_screen(from.x, from.y))
+	for i in range(1, int(inches * 2.0) + 1):
+		var p := from + dir * (0.5 * float(i) * 0.0254)
+		om._update_drag(_screen(p.x, p.y))
+	await _runner.simulate_frames(1)
+	var got := [float(om._strict_cap_meters) / 0.0254, _xz(n.global_position).distance_to(from) / 0.0254]
+	om._stop_dragging()
+	await _runner.simulate_frames(3)
+	await get_tree().create_timer(0.3).timeout
+	return got
+
+
+## GF v3.5.1 p.11 (any model in or through Difficult terrain holds the whole unit's move to 6"): Rush declared, Enforce on.
+## Model 1 walks 4" into the forest (accepted); model 2 then drags 10" across open ground - its band is 6", where the
+## core's drop check caps it, not 12" (it used to show 12" and the drop was refused).
+func test_a_unit_mate_in_difficult_terrain_shrinks_the_drag_band_to_six_inches() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var saved := _paint_forest_strip()
+	var u := _human("Rifles")
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.RUSH)
+	var first: Array = await _drag_model(_node(u, 0), Vector2(1, 0), 4.0)
+	assert_float(float(first[1])).override_failure_message("into the forest: %s" % [first]).is_equal_approx(4.0, 0.05)
+	assert_int(_placed(u).size()).override_failure_message("the 4\" drop into the forest was refused").is_equal(1)
+	var second: Array = await _drag_model(_node(u, 1), Vector2(-1, 0), 10.0)
+	assert_float(float(second[0])).override_failure_message("band after a unit-mate entered Difficult: %s" % [second]) \
+		.is_equal_approx(6.0, 0.01)
+	assert_float(float(second[1])).override_failure_message("open-ground drag: %s" % [second]).is_equal_approx(6.0, 0.05)
+	assert_float(_xz(_node(u, 1).global_position).x / 0.0254).override_failure_message("the 6\" drop was refused") \
+		.is_equal_approx(-6.0, 0.05)
+	_unpaint(saved)
+	GraphicsSettings.enforce_movement_limit = was
+
+
+## The same Rush in open ground (the forest strip far behind): the band stays 12" and a 10" drag lands.
+func test_a_rush_in_open_ground_keeps_the_twelve_inch_band() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var saved := _paint_forest_strip()
+	var u := _human("Rifles")
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.RUSH)
+	var got: Array = await _drag_model(_node(u, 1), Vector2(-1, 0), 10.0)
+	assert_float(float(got[0])).override_failure_message("open-ground band: %s" % [got]).is_equal_approx(12.0, 0.01)
+	assert_float(float(got[1])).override_failure_message("open-ground drag: %s" % [got]).is_equal_approx(10.0, 0.05)
+	assert_float(_xz(_node(u, 1).global_position).x / 0.0254).override_failure_message("the 10\" drop was refused") \
+		.is_equal_approx(-10.0, 0.05)
+	_unpaint(saved)
+	GraphicsSettings.enforce_movement_limit = was

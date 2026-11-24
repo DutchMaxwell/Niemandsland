@@ -411,6 +411,18 @@ impl NmlCore {
         actcall::check_of(&slot.statics, &slot.cap.state, &unit.to_string(), terrain, seams, &drop, enforce)
     }
 
+    /// Does the move check hold this drop of `unit` on handle `h` to the 6" Difficult cap? `drop` as `check_move` takes it
+    /// (the mode is not read). `{"ok": true, "difficult": bool}` or `{"ok": false, "reason"}`. Reads only: the table's
+    /// drag band asks it, so band and drop check never disagree.
+    #[func]
+    fn move_difficult(&mut self, h: i64, unit: GString, drop: VarDictionary) -> VarDictionary {
+        let Some(i) = self.index(h) else { return actcall::not_ok("unknown handle") };
+        let absent = Terrain::absent();
+        let terrain = self.header.as_ref().map(|hd| &hd.terrain).unwrap_or(&absent);
+        let slot = self.slab[i].as_ref().unwrap();
+        actcall::difficult_of(&slot.statics, &slot.cap.state, &unit.to_string(), terrain, &drop)
+    }
+
     /// May the models of the units `unit_ids` (roster keys) REST where they stand on handle `h`?
     /// `{"ok": bool, "illegal": [{"unit", "model", "kind", "other", "other_model", "by_in"}]}` (`nml_core::mv::legal`), or
     /// `{"ok": false, "reason"}` for an unknown handle or key. Reads only; a `done` step carries the same list as `"illegal"`.
