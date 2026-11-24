@@ -27,16 +27,16 @@ static func engine_offered() -> bool:
 	return ClassDB.class_exists("NmlCore")
 
 
-## P4.D-43c: the hotseat switch, read once (the master flag's pattern). OFF unless `NML_ONE_CORE_HOTSEAT` is "1" or "on":
-## a local Automatic table with no AI seat then resolves its two human sides through the core like a solo or an agreed
-## online room. Manual rooms never enter the core door.
+## P4.D-43c: the hotseat switch, read once (the master flag's pattern). ON by default; `NML_ONE_CORE_HOTSEAT=0` (or
+## "off") is the way back: a local Automatic table with no AI seat then resolves its two human sides through the core
+## like a solo or an agreed online room. Manual rooms never enter the core door.
 static var _hotseat_env := -1
 
 
 static func hotseat_enabled() -> bool:
 	if _hotseat_env < 0:
 		var raw := OS.get_environment("NML_ONE_CORE_HOTSEAT").to_lower()
-		_hotseat_env = 1 if (raw == "1" or raw == "on") else 0
+		_hotseat_env = 0 if (raw == "0" or raw == "off") else 1
 	return _hotseat_env == 1
 
 
@@ -2077,7 +2077,7 @@ static func open_session(main, gu: GameUnit) -> bool:
 			start_rot.append(m.node.rotation.y)
 			start_own.append(m)
 	var s := {"handle": h, "transcript": [{"t": "begin"}], "start_models": _start_models(main), "start_pos": start_pos,
-		"start_rot": start_rot, "start_own": start_own, "dice": false,
+		"start_rot": start_rot, "start_own": start_own, "dice": false, "cast": false,
 		"journal": _journal_records(main).merged({"props": _journal_props(main)}), "moved_before": {},
 		"ledger_mark": main.move_trails.ledger.entries.size() if main.move_trails != null else 0}
 	if gu.unit_properties.has("moved_round"):
@@ -2311,6 +2311,28 @@ static func declared_mode(main) -> int:
 static var auto_refused := ""
 
 
+## True when this activation already resolved a spell: the core's capture is from the Start, before the table's cast,
+## so its board holds no spell effect: the door refuses the volley and the player rolls it freely.
+static func cast_this_activation(gu: GameUnit) -> bool:
+	return gu != null and bool((_sessions.get(gu.unit_id, {}) as Dictionary).get("cast", false))
+
+
+## Records that `gu`'s activation resolved a spell; called by the human cast path once the spell is over. A unit
+## without an open session has nothing to mark.
+static func note_cast(gu: GameUnit) -> void:
+	if gu != null and _sessions.has(gu.unit_id):
+		(_sessions[gu.unit_id] as Dictionary)["cast"] = true
+
+
+## One line that names why a volley of this activation is a free roll after a cast; true = the door refuses it.
+static func refuses_after_cast(main, attacker: GameUnit) -> bool:
+	if not cast_this_activation(attacker):
+		return false
+	main._log_rule_event(BattleLog.Category.COMBAT,
+		"%s already cast a spell this activation - its volley is a free roll (cast_this_activation)" % attacker.get_name())
+	return true
+
+
 ## Step 38 (O15 (1)): the human attack door. False = not taken, the old path runs: `attacker` is not a core unit, the
 ## target is not plain (`is_plain_target`) or the table already struck. True =
 ## taken. No open activation: "Activate <Unit> first.", nothing rolls. A Charge selector (a melee action) and no
@@ -2332,6 +2354,8 @@ static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Ca
 	if refuses_statlineless(main, attacker, target):
 		return true   # nothing was shot: `last_target` is not the target, the caller returns and the activation stays open
 	if not is_core_unit(main, attacker) or not is_plain_target_human(target) or table_struck(attacker):
+		return false
+	if refuses_after_cast(main, attacker):
 		return false
 	if main.core_door_refused(attacker):
 		return true
@@ -2387,6 +2411,8 @@ static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Ca
 static func human_shoot_split(main, attacker: GameUnit, target_a: GameUnit, target_b: GameUnit, b_names: Array) -> bool:
 	if not is_core_unit(main, attacker) or not is_plain_target_human(target_a) or not is_plain_target_human(target_b) \
 			or int(main.object_manager._movement_cap) == CAP_CHARGE or table_struck(attacker):
+		return false
+	if refuses_after_cast(main, attacker):
 		return false
 	if main.core_door_refused(attacker):
 		return true

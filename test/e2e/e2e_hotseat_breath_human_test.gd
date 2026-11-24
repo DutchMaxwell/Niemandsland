@@ -69,6 +69,9 @@ func _seed_with_trigger_success() -> int:
 func _activate(unit: GameUnit) -> void:
 	await _main.radial_menu_controller._toggle_activation({"game_unit": unit})
 	await _runner.simulate_frames(8)
+	if not unit.is_activated and CoreActivation.session_open(unit.unit_id):
+		await _main.radial_menu_controller._toggle_activation({"game_unit": unit})   # a core activation is Start then End
+		await _runner.simulate_frames(8)
 	await E2EBoot.settle(get_tree())
 
 

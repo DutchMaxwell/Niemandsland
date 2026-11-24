@@ -65,3 +65,8 @@ static func auto_saves(main: Node, on := true) -> void:
 ## `target`, as the lit click runs it.
 static func auto_verb(main: Node, unit: GameUnit, verb: int, target: GameUnit) -> void:
 	await main._run_player_intent(unit, verb, target)
+
+
+## Resolve a human unit's spell through the table's own cast path (it marks the core session).
+static func cast(main: Node, caster: GameUnit, entry: Dictionary, targets: Array) -> void:
+	await main._run_human_cast(caster, caster, entry, targets)

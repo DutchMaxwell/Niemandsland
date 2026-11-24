@@ -29,8 +29,8 @@ const BLOCKERS: Array[Dictionary] = [
 		"header": "func _solo_activate_one_ai_body(", "needles": ["await _solo_apply_breath_attack(unit)"]},
 	{"name": "human_shoot hands an Auto verb's volley back to the table", "retire": "P4.D-43 / H-32", "file": ACTIVATION,
 		"header": "static func human_shoot(", "needles": ["if auto:"]},
-	{"name": "hotseat Automatic is OFF unless NML_ONE_CORE_HOTSEAT is set", "retire": "P4.D-43c / H-31", "file": ACTIVATION,
-		"header": "static func hotseat_enabled() -> bool:", "needles": ["_hotseat_env = 1 if (raw == \"1\" or raw == \"on\") else 0"]},
+	{"name": "hotseat Automatic is ON by default and NML_ONE_CORE_HOTSEAT=0 is the way back", "retire": "P4.D-43c / H-31", "file": ACTIVATION,
+		"header": "static func hotseat_enabled() -> bool:", "needles": ["_hotseat_env = 0 if (raw == \"0\" or raw == \"off\") else 1"]},
 	{"name": "the AI door takes a Rush only for a move-through bearer or a caster", "retire": "P4.D-41 / H-23", "file": ACTIVATION,
 		"header": "static func takes_action(", "needles": ["kind == AiDecision.Action.RUSH and (casting or moves_through(unit))"]},
 ]
