@@ -811,3 +811,29 @@ def test_loader_alias_flips_transport_through_census(mini):
     # literals changed nothing else - Furious still cites its rust token
     assert rows["Furious"]["per_system"]["gf"]["core_note"] == (
         "name token 'furious' at core/nml-core/src/arm.rs:1")
+
+
+def test_skirmish_systems_opt_in_and_list_a_planted_unknown_name(mini, capsys):
+    """`--systems` opts the skirmish books in: a gff book's unknown name lands in the gff MISSING
+    list; the default run (gf + aof) never reads the gff folder, so its report is unchanged."""
+    root, books = mini
+    (books / "gff").mkdir()
+    (books / "gff" / "book_s.json").write_text(json.dumps({
+        "name": "Skirmish Faction", "gameSystem": "gff",
+        "specialRules": [{"name": "Furious(1)"}, {"name": "Planted Skirmish Rule"}],
+    }))
+    default = census.census(books, root)
+    assert "Planted Skirmish Rule" not in default["rows"]
+    assert default["meta"]["books_by_system"] == {"gf": 1, "aof": 0}
+
+    res = census.census(books, root, systems=("gf", "aof", "gff"))
+    missing = [e["name"] for e in res["ranked"]["gff"]["MISSING"]]
+    assert "Planted Skirmish Rule" in missing
+    assert res["rows"]["Furious"]["per_system"]["gff"]["core"] == "PORTED"
+    assert res["meta"]["books_by_system"]["gff"] == 1
+    assert "1 GF, 0 AoF, 1 GFF" in census.markdown_report(res)
+    assert any(line.startswith("RULES-COVERAGE") and "gff" in line.lower()
+               for line in census.summary_lines(res))
+
+    assert census.main(["--books", str(books), "--repo", str(root), "--systems", "gf,xyz"]) == 2
+    assert "unknown system" in capsys.readouterr().err
