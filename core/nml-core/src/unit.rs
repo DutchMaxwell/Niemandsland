@@ -901,7 +901,7 @@ impl Ctx {
             shielded: d.shielded, shielded_note: d.shielded_note, shielded_alias: d.shielded_alias, shielded_rating: d.shielded_rating,
             ..*self
         } };
-        Ctx {
+        let mut w = Ctx {
             // The 3.6 Artillery target keeps its rule and gate, so the note says "most models lack it" as the table does; no penalty applies.
             artillery: self.artillery && self.artillery_target_over_in > 0.0, artillery_target_hit_penalty: d.artillery_target_hit_penalty,
             artillery_target_most_models: d.artillery_target_most_models,
@@ -924,7 +924,31 @@ impl Ctx {
             above_half_strength: self.above_half_strength && rule_on(self.rules_epoch, crate::acts::EPOCH_96_PARITY_BATCH),
             near_terrain: false,
             ..base
+        };
+        // PENDING_EPOCH_WIPED_TO_HIT_DECLARED: the volley is simultaneous, so the target's to-hit penalties (Stealth family, Evasive
+        // family, Aircraft, the Artillery target) hold for every weapon still to fire, as declared before the first roll.
+        if rule_on(self.rules_epoch, crate::acts::PENDING_EPOCH_WIPED_TO_HIT_DECLARED) {
+            w.keep_to_hit_of(self);
         }
+        w
+    }
+
+    /// The target-side to-hit fields of `declared`, copied onto a wiped read (`wiped`).
+    fn keep_to_hit_of(&mut self, declared: &Ctx) {
+        let d = declared;
+        self.artillery = d.artillery;
+        self.artillery_target_hit_penalty = d.artillery_target_hit_penalty;
+        self.artillery_target_most_models = d.artillery_target_most_models;
+        (self.stealth, self.stealth_most_models, self.stealth_grant) = (d.stealth, d.stealth_most_models, d.stealth_grant);
+        (self.stealth_alias_penalty, self.stealth_alias_over_in, self.stealth_alias_name) =
+            (d.stealth_alias_penalty, d.stealth_alias_over_in, d.stealth_alias_name);
+        (self.stealth_alias_applies_charged, self.stealth_alias_near_terrain) =
+            (d.stealth_alias_applies_charged, d.stealth_alias_near_terrain);
+        (self.stationary_alias_penalty, self.stationary_alias_over_in, self.stationary_alias_name) =
+            (d.stationary_alias_penalty, d.stationary_alias_over_in, d.stationary_alias_name);
+        (self.evasive, self.evasive_alias, self.evasive_alias_name) = (d.evasive, d.evasive_alias, d.evasive_alias_name);
+        self.evasive_stand_down_name = d.evasive_stand_down_name;
+        (self.aircraft_hit_penalty, self.aircraft_hit_name) = (d.aircraft_hit_penalty, d.aircraft_hit_name);
     }
 
     pub fn bypass_skips_ignore(&self) -> bool {
@@ -5847,7 +5871,7 @@ fn retreating_strikes_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) ->
         .filter_map(|(raw, n)| map.lookup(&p.faction_folder, &n)
             .filter(|e| e.primitive.as_deref() == Some("Ravage")).map(|e| (raw, e)))
         .filter(|(_, e)| e.param_s("trigger") == "post_melee_move")
-        .map(|(raw, e)| RetreatingStrikeSpec {
+        .map(|(raw, _e)| RetreatingStrikeSpec {
             name: base_rule_name(&raw),
             rating: rule_rating(&raw, 0),
             trigger: "post_melee_move".to_string(),
@@ -8205,9 +8229,11 @@ impl UnitStatic {
 
         // WAVE 3 — the family's own registry names for the rules-must-log
         // line, stamped behind the same frozen `EPOCH_6_TABLE_RULES` gate.
-    let fa = rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
-        .then(|| fortified_alias_of(reg, p, rules_epoch))
-        .unwrap_or_default();
+    let fa = if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        fortified_alias_of(reg, p, rules_epoch)
+    } else {
+        Default::default()
+    };
     // Wave 4 (`rules-wave4-boostbases`) — the Hit & Run Boost band, stamped
     // behind the same FROZEN `EPOCH_6_TABLE_RULES` gate (the sim fold reads
     // the field, the rules-must-log line reads the name).

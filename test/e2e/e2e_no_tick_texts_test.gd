@@ -100,7 +100,7 @@ func _activate(unit: GameUnit) -> void:
 
 func _untick_after_a_ticked_game() -> void:
 	_main._on_solo_ai_toggled(true, 2)   # a ticked game earlier in the session builds its controller…
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	_main._on_solo_ai_toggled(false, 2)  # …then the tick comes off
 
 
@@ -113,7 +113,7 @@ func _assert_morale_by_name(melee: bool) -> void:
 	foe.unit_properties["defense"] = 6
 	for i in range(11, 20):
 		(foe.models[i] as ModelInstance).is_alive = false   # the far end of the line
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	var start: int = _main.battle_log.entries().size()
 	if melee:
 		await _main._run_human_melee(attacker, foe, true)
@@ -150,7 +150,7 @@ func test_a_two_human_cast_asks_the_opponent_never_nachtmahr(timeout := 120000) 
 	var foe := _reg(2, "Raiders", 10.0)
 	var witch := _reg(2, "Witch", -6.0, 1, ["Caster(2)"])   # behind the seer: nothing blocks its sight
 	witch.casts_current = 2
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
 	(func() -> void:
@@ -190,7 +190,7 @@ func test_a_p2_cast_offers_targets_from_its_own_sides(timeout := 120000) -> void
 	shaman.casts_current = 2
 	_reg(2, "Boyz", -6.0, 3)
 	_reg(1, "Rifles", 6.0, 3)
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	_main._hotseat_turn = TwoHumanTurn.new()
 	_main._hotseat_turn.side_on_turn = 2   # P2 is on turn
 	var start: int = _main.battle_log.entries().size()

@@ -2298,8 +2298,10 @@ static func declared_mode(main) -> int:
 
 
 ## Step 38 (O15 (1)): the human attack door. False = not taken, the old path runs: `attacker` is not a core unit, the
-## target is not plain (`is_plain_target`), the selector says Charge (a melee action) or is no declaration (declared_mode reports it). True =
-## taken. No open activation: "Activate <Unit> first.", nothing rolls. Else the declared intent (the selector's mode,
+## target is not plain (`is_plain_target`) or the table already struck. True =
+## taken. No open activation: "Activate <Unit> first.", nothing rolls. A Charge selector (a melee action) and no
+## declaration (declared_mode still reports the defect) are refused: one toast says why, nothing was shot, the session
+## stays open (the caller returns). Else the declared intent (the selector's mode,
 ## never the distance; the core turns it into Hold when nothing moved) and the shot go through the core with the
 ## session's transcript; the session's own transcript is not touched, so a refusal can be tried again. `done`: the steps
 ## have landed and `last_target` is noted for step 50; the session stays open until the door ENDS the activation (the
@@ -2314,15 +2316,18 @@ static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Ca
 		return true   # nothing was shot: `last_target` is not the target, the caller returns and the activation stays open
 	if auto:
 		return false   # an Auto verb moved the unit through the engine, not through the session's drop: the core would shoot from the start
-	if not is_core_unit(main, attacker) or not is_plain_target_human(target) \
-			or int(main.object_manager._movement_cap) == CAP_CHARGE or table_struck(attacker):
+	if not is_core_unit(main, attacker) or not is_plain_target_human(target) or table_struck(attacker):
 		return false
 	if main.core_door_refused(attacker):
 		return true
+	if int(main.object_manager._movement_cap) == CAP_CHARGE:
+		main._show_toast("Charge is a melee action - pick Advance or Hold to shoot.")
+		return true   # nothing was shot: the caller returns and the activation stays open
 	var mode := declared_mode(main)
 	var s: Dictionary = _sessions.get(attacker.unit_id, {})
 	if mode == 0:
-		return false   # declared_mode reported the defect
+		main._show_toast("Pick a movement mode before shooting.")
+		return true   # declared_mode reported the defect; nothing was shot, the caller returns
 	if s.is_empty():
 		push_error("human_shoot: %s has no session after the door let it through" % attacker.get_name())
 		return true
@@ -2347,8 +2352,10 @@ static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Ca
 
 
 ## P4.D-43a: the human's declared split through the core. `b_names` = the weapons the player sent at `target_b`; the
-## table's `_run_human_attack_split` fires the rest at `target_a`. False = not taken, the table resolves the split (a
-## group with nothing to fire, an aim the core would pool, a target whose owner has a wound-allocation choice). True =
+## table's `_run_human_attack_split` fires the rest at `target_a`. False = not taken, the table resolves the split (an
+## aim the core would pool, a target whose owner has a wound-allocation choice, or BOTH groups with nothing to fire). One
+## group with nothing to fire is no split: the other group fires alone through `human_shoot` at its target and its answer
+## is this door's. True =
 ## the core took it: `last_target` is `target_a` when the split resolved (a refusal leaves it null and the session open,
 ## the caller returns). The caller does the table's side effects (the declared line, `shot_round`,
 ## `human_attack_resolved`, `_solo_complete_human_attack`) and closes the session.
@@ -2370,8 +2377,11 @@ static func human_shoot_split(main, attacker: GameUnit, target_a: GameUnit, targ
 			func(sh: Dictionary) -> bool: return not b_names.has(str((sh["profile"] as Dictionary).get("name", ""))))},
 		{"target": target_b, "shots": _human_shots(main, attacker, target_b).filter(
 			func(sh: Dictionary) -> bool: return b_names.has(str((sh["profile"] as Dictionary).get("name", ""))))}]
+	if (parts[0]["shots"] as Array).is_empty() and (parts[1]["shots"] as Array).is_empty():
+		return false   # both groups have nothing to fire: the table's own "no volley" line
 	if (parts[0]["shots"] as Array).is_empty() or (parts[1]["shots"] as Array).is_empty():
-		return false   # a group with nothing to fire is the table's (its own "no volley" line)
+		var alone: Dictionary = parts[1] if (parts[0]["shots"] as Array).is_empty() else parts[0]
+		return await human_shoot(main, attacker, alone["target"] as GameUnit)
 	var aim := split_aim(parts)
 	if aim.is_empty() or _aim_ambiguous(aim):
 		return false

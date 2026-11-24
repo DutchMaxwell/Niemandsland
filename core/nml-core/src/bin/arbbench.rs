@@ -31,7 +31,7 @@ fn pct(sorted: &[f64], p: f64) -> f64 {
     sorted[((sorted.len() as f64 - 1.0) * p).round() as usize]
 }
 
-fn report(name: &str, us: &mut Vec<f64>) {
+fn report(name: &str, us: &mut [f64]) {
     let n = us.len() as f64;
     let mean = us.iter().sum::<f64>() / n;
     us.sort_by(|a, b| a.partial_cmp(b).unwrap());

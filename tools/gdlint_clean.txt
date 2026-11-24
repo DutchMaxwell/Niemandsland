@@ -14,9 +14,14 @@ scripts/biome_library.gd
 scripts/boardgen_dress.gd
 scripts/boardgen_dress_materials.gd
 scripts/boardgen_dress_mesh.gd
+scripts/boardgen_dress_rules.gd
 scripts/boardgen_dress_story.gd
 scripts/containers_library.gd
+scripts/boardgen_dress_context.gd
+scripts/boardgen_dress_houses.gd
 scripts/dress_module_spec.gd
+scripts/dress_planner.gd
+scripts/boardgen_dress_placement.gd
 scripts/floating_rule_text.gd
 scripts/hud/hud_frame.gd
 scripts/import_await_guard.gd
@@ -74,6 +79,12 @@ test/battle_sim_spacing_test.gd
 test/battlefield_stains_test.gd
 test/biome_library_test.gd
 test/boardgen_dress_module_spec_test.gd
+test/boardgen_dress_houses_test.gd
+test/boardgen_dress_mesh_test.gd
+test/boardgen_dress_kit_errors_test.gd
+test/boardgen_dress_placement_test.gd
+test/boardgen_dress_rules_test.gd
+test/boardgen_dress_snapshot_test.gd
 test/bone_texture_idle_test.gd
 test/cinematic_intro_test.gd
 test/combat_log_text_test.gd
@@ -233,3 +244,5 @@ tools/policy_dump.gd
 tools/rng_fixture.gd
 tools/rng_range_fixture.gd
 tools/shipped_base_dump.gd
+scripts/boardgen_dress_grid_index.gd
+test/boardgen_dress_grid_index_test.gd

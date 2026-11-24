@@ -8,6 +8,7 @@ shaders/tiefwerk_*
 shaders/ruintown_*
 assets/tiefwerk_manifest.json
 assets/ruintown_manifest.json
+assets/ruintown_dress.json
 test/boardgen_*_test.gd
 test/tiefwerk_*_test.gd
 tools/boardgen/*

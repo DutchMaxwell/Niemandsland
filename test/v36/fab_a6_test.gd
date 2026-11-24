@@ -29,7 +29,7 @@ func before_test() -> void:
 	await _runner.simulate_frames(4)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true   # fair faces, drawn instantly
+	SoloHarness.instant(_main)   # fair faces, drawn instantly
 
 
 func after_test() -> void:
@@ -68,8 +68,7 @@ func _foe(pos: Vector3) -> GameUnit:
 ## reply pinned shut: the doubt is about the human's own post-shot drag, so the fixture must not roll
 ## the table into the AI's turn after the shot.
 func _controller_without_reply() -> void:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2], 1)
 	_main._solo_ai_busy = true   # `_solo_pump` early-returns: the owed reply never runs
 
 

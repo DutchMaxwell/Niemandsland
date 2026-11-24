@@ -60,11 +60,10 @@ func _reload(units: Array) -> Array:
 
 
 func _arm() -> SoloController:
-	_main.solo_ai_slots = {2: true}
 	_main._solo_difficulty_grades = {}
-	_main._ensure_solo_controller()
+	var controller := SoloHarness.start(_main, [2], 1)
 	_main._solo_apply_difficulty()
-	return _main.solo_controller
+	return controller
 
 
 ## e2e_dev_brain_test.gd:65-71 — one real planner activation (drives _core_plan when the core is on).
@@ -96,7 +95,7 @@ func test_reload_rebuilds_the_core_node_and_header(timeout := 120000) -> void:
 	# The explicit grade takes _solo_apply_difficulty's early return (main.gd:1847-1851): nothing asks
 	# shipped_brain_ready(), so the fresh controller still has no node, no header, and must build both.
 	_main._solo_difficulty_grades = {2: "nachtmahr"}
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	sc = _main.solo_controller
 	assert_bool(sc._core_node == null).is_true()
 	assert_bool(sc._core_header_done).is_false()

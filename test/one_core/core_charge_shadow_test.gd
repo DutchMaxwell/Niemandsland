@@ -24,15 +24,12 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {1: true, 2: true}
-	_main._ensure_solo_controller()
-	_main.solo_controller.ai_slot = 2
-	_main.solo_controller.human_slot = 1
+	SoloHarness.start(_main, [1, 2], 1)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true
-	_main._solo_auto_saves = true
-	_main._solo_fast = true
+	SoloHarness.instant(_main)
+	SoloHarness.auto_saves(_main)
+	SoloHarness.fast(_main)
 	_main._autosave_controller.set_lesson_paused(true)
 	CoreActivation._env = 1
 	CoreActivation._charge_env = 0

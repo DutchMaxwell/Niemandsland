@@ -19,8 +19,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
 	CoreActivation._env = 1   # the flag ON; the flag-off case resets it itself
@@ -200,7 +199,7 @@ const SPEED_FLAG := "speed_feat_used_speed_feat"
 
 ## A human Delayed Action carrier, a second human unit and three AI units: the pass is legal (3 > 2).
 func _pass_board() -> Array:
-	_main._solo_batch = true   # no dialogs in a headless pump
+	SoloHarness.instant(_main)   # no dialogs in a headless pump
 	var carrier := _unit("Wachtturm", Vector3(-0.3, 0, 0.2), ["Delayed Action"])
 	var other := _unit("Alpha", Vector3(-0.3, 0, 0.4))
 	for i in 3:
@@ -351,7 +350,7 @@ func _card_buttons() -> Array:
 ## The Reinforcement sacrifice has no undo, so it closes Cancel for the unit (its card keeps only "End activation"); with
 ## ANOTHER unit's activation open it is refused with the O5 sentence and nothing dies.
 func test_the_reinforcement_sacrifice_commits_the_activation_and_waits_for_a_free_table() -> void:
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	var rats := _unit("Rats", Vector3.ZERO, ["Reinforcement"])
 	rats.is_shaken = true
 	var alpha := _unit("Alpha", Vector3(1.0, 0, 0))

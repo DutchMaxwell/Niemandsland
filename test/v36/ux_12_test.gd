@@ -99,9 +99,8 @@ func test_scout_deployment_is_named_once_when_the_battle_starts(timeout := 12000
 	var runner: GdUnitSceneRunner = scene_runner(E2EBoot.MAIN_SCENE)
 	var main: Node = runner.scene()
 	await runner.simulate_frames(4)
-	main.solo_ai_slots = {2: true}
-	main._ensure_solo_controller()
-	main._solo_batch = true
+	SoloHarness.start(main, [2], 1)
+	SoloHarness.instant(main)
 	var human_scout := E2EBoot.make_unit(main, 1, "Pathfinders", [Vector3(0, 0, 0.5)])
 	human_scout.unit_properties["special_rules"] = ["Scout"]
 	main.opr_army_manager.game_units[human_scout.unit_id] = human_scout

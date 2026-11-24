@@ -22,7 +22,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
 
@@ -134,7 +134,7 @@ func test_an_all_ignored_exchange_spends_the_grant_at_73() -> void:
 	var attacker := _unit(1, "Attacker", Vector3(2.0 * 0.0254, 0, 0))
 	_grant_regen(holder)
 	_main.solo_ai_slots = {2: true}
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_main.seed_tray_rng(_all_ignored_seed(3))
 	var landed: int = await _main._solo_land_wounds(holder, 3, 0)
 	assert_int(landed) \
@@ -160,7 +160,7 @@ func test_an_all_ignored_landing_adds_no_mark_at_72() -> void:
 	var holder := _unit(2, "Holder", Vector3.ZERO)
 	_grant_regen(holder)
 	_main.solo_ai_slots = {2: true}
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_main.seed_tray_rng(_all_ignored_seed(3))
 	var landed: int = await _main._solo_land_wounds(holder, 3, 0)
 	assert_int(landed) \

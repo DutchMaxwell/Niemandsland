@@ -42,7 +42,7 @@ func before_test() -> void:
 	# A PLAIN human-vs-human room: NO solo AI slot is designated — the configuration in which the
 	# gate was dead, because every unit on the table belongs to a human player.
 	_main.solo_ai_slots = {}
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
 	SoloHarness.instant(_main)
@@ -218,7 +218,7 @@ func test_hover_does_not_crash_with_a_null_solo_controller_in_a_human_vs_human_r
 		_main.solo_controller.queue_free()
 		_main.solo_controller = null
 	_main.network_manager = _fake   # already active + solo_ai_slots empty: the real gate now bails
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	assert_object(_main.solo_controller) \
 		.override_failure_message("fixture check: solo_controller must be null for this scenario") \
 		.is_null()

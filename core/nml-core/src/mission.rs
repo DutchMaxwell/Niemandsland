@@ -236,9 +236,7 @@ pub fn vp_score_round(
                     enemy_seq = mk.destroyed_seq;
                 }
             }
-            if own_alive {
-                vp[(side - 1) as usize] += 1;
-            } else if enemy_destroyed && own_seq < enemy_seq {
+            if own_alive || (enemy_destroyed && own_seq < enemy_seq) {
                 vp[(side - 1) as usize] += 1;
             }
         }

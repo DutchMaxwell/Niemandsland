@@ -233,7 +233,7 @@ fn dist(a: [f64; 2], b: [f64; 2]) -> f64 {
 // DIAGNOSTIC (test builds only): a per-thread gate trace, switched on by the
 // test that wants it, printed to the process's stderr past the harness capture.
 #[cfg(test)]
-thread_local! { pub(crate) static TRACE: std::cell::Cell<bool> = std::cell::Cell::new(false); }
+thread_local! { pub(crate) static TRACE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
 #[cfg(test)]
 fn tr(s: String) {
     use std::io::Write;

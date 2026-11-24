@@ -44,6 +44,20 @@ func test_start_gives_a_controller_on_the_requested_seats() -> void:
 	assert_bool(_main.solo_ai_slots.has(2)).is_true()
 
 
+## `controller` builds the controller without touching the table's seats: a hotseat table that keeps
+## its own slot set gets a controller and the set comes back exactly as it was.
+func test_controller_leaves_the_slots_untouched() -> void:
+	_main.solo_ai_slots = {1: true}
+	var before: Dictionary = _main.solo_ai_slots.duplicate()
+	var controller := SoloHarness.controller(_main)
+	assert_object(controller).is_not_null()
+	(
+		assert_dict(_main.solo_ai_slots)
+		. override_failure_message("controller() rewrote solo_ai_slots")
+		. is_equal(before)
+	)
+
+
 ## `instant` removes the pacing holds: an announce hold returns in the same frame (batch means no
 ## timer). The off run first proves the measurement sees a real hold, so the on run cannot pass
 ## vacuously.

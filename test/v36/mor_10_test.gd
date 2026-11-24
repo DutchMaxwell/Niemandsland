@@ -149,7 +149,7 @@ func test_the_ai_unit_takes_the_hero_quality_without_a_choice() -> void:
 ## the same way it does for a joined Hero.
 func test_batch_answers_the_hero_choice_for_a_unit_near_an_aura_hero() -> void:
 	var t := _table(5.0)
-	t["main"]._solo_batch = true
+	SoloHarness.instant(t["main"])
 	await t["main"]._solo_ask_hero_morale_once(t["squad"])
 	assert_bool((t["squad"] as GameUnit).unit_properties.has("hero_tests_morale")).is_true()
 
@@ -157,7 +157,7 @@ func test_batch_answers_the_hero_choice_for_a_unit_near_an_aura_hero() -> void:
 ## Control: no Hero near, no choice to make.
 func test_no_hero_choice_is_recorded_for_a_unit_far_from_the_aura_hero() -> void:
 	var t := _table(7.0)
-	t["main"]._solo_batch = true
+	SoloHarness.instant(t["main"])
 	await t["main"]._solo_ask_hero_morale_once(t["squad"])
 	assert_bool((t["squad"] as GameUnit).unit_properties.has("hero_tests_morale")).is_false()
 

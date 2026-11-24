@@ -26,10 +26,10 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {1: true, 2: true}   # both seats AI, so the defender auto-rolls its saves (no dialog)
-	_main._ensure_solo_controller()
+	# both seats AI, so the defender auto-rolls its saves (no dialog)
+	SoloHarness.start(_main, [1, 2], 2)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 
 
 func after_test() -> void:

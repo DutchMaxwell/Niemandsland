@@ -73,7 +73,7 @@ func test_an_explicit_designation_on_the_tutorial_table_still_gets_nachtmahr(tim
 	_main.solo_ai_slots = {2: true}
 	assert_bool(_main._solo_is_ai_unit(pair[1])).is_true()
 	assert_bool(_main.solo_combat_available(pair[0])).is_true()
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	assert_object(_main.solo_controller).is_not_null()
 
 
@@ -92,5 +92,5 @@ func test_a_solo_game_after_the_tutorial_still_gets_nachtmahr(timeout := 120000)
 	main2.solo_ai_slots = {2: true}   # what the Solo quick start's AI-list import writes
 	assert_bool(main2._solo_is_ai_unit(q2)).is_true()
 	assert_bool(main2.solo_combat_available(q1)).is_true()
-	main2._ensure_solo_controller()
+	SoloHarness.controller(main2)
 	assert_object(main2.solo_controller).override_failure_message("the solo game after the tutorial got no NACHTMAHR").is_not_null()

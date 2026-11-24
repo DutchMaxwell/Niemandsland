@@ -899,7 +899,7 @@ fn reinforcement_withdrawals(statics: &[UnitStatic], st: &mut State) {
 /// (the spot, the #803 stamp) is `arrive_unit`'s move, the beat's (2b-2b),
 /// never the mint's.
 pub fn mint_template_slot(
-    statics: &[UnitStatic],
+    _statics: &[UnitStatic],
     st: &mut State,
     carrier: usize,
     ti: usize,
