@@ -46,3 +46,11 @@ use super::*;
         assert_eq!(rifles_target_after_a_deadly_wipe(Ctx { stealth: true, ..lone_hero(e) }), 3);
         assert_eq!(rifles_target_after_a_deadly_wipe(lone_hero(crate::acts::EPOCH_97_WIPED_TO_HIT_DECLARED)), 3, "no rule, no penalty");
     }
+
+    /// A game recorded at epoch 96 (the live epoch before this fix) replays unchanged: the wiped read still drops
+    /// Stealth / Evasive there, so the rifles roll 3+.
+    #[test]
+    fn a_record_at_epoch_96_replays_the_dropped_penalty() {
+        assert_eq!(rifles_target_after_a_deadly_wipe(Ctx { stealth: true, ..lone_hero(96) }), 3, "Stealth dropped at 96");
+        assert_eq!(rifles_target_after_a_deadly_wipe(Ctx { evasive: true, ..lone_hero(96) }), 3, "Evasive dropped at 96");
+    }
