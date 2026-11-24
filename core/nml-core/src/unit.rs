@@ -7906,16 +7906,14 @@ impl UnitStatic {
                             ..Default::default()
                         });
                     }
-                    "Enhanced Havocbound" => {
+                    "Enhanced Havocbound" if has_exact_rule(&p.special_rules, e.param_s("upgrades")) => {
                         // Wave 4 — the always leg, the entry's own `upgrades`
                         // coupling ("If this model has Havocbound"); the
                         // volley's and the strike's named cond_ap lines log.
-                        if has_exact_rule(&p.special_rules, e.param_s("upgrades")) {
-                            live.push(CondAp {
-                                ap_bonus: ap, condition: "always".into(), name: n.clone(),
-                                ..Default::default()
-                            });
-                        }
+                        live.push(CondAp {
+                            ap_bonus: ap, condition: "always".into(), name: n.clone(),
+                            ..Default::default()
+                        });
                     }
                     _ => {}
                 }
