@@ -48,7 +48,7 @@ func after_test() -> void:
 
 
 func test_v2_keys_are_compared_and_a_v1_fixture_ignores_them() -> void:
-	var got: Dictionary = await Harness.capture(_main)
+	var got: Dictionary = await Harness.capture(_main, Harness.MELEE_FAMILY)   # the AI volley family has no runner left
 	var want: Dictionary = got.duplicate(true)
 	want["schema"] = Harness.SCHEMA
 	assert_array(Harness.compare(want, got)).override_failure_message(
