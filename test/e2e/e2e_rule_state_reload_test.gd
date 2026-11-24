@@ -90,11 +90,10 @@ func test_the_round_opener_survives_a_reload(timeout := 120000) -> void:
 # a reload can never find the mark again by anything that only knows the unit_id (the one thing
 # that DOES survive a reload). Proving the key is wrong is proving the persistence is impossible.
 func test_the_alternation_debt_survives_a_reload(timeout := 120000) -> void:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true   # no dialogs, no per-unit frame yield in a headless run
+	SoloHarness.instant(_main)   # no dialogs, no per-unit frame yield in a headless run
 
 	var u1 := E2EBoot.make_unit(_main, 1, "Wachtturm", [Vector3(-0.2, 0, 0.2)])
 	var u2 := E2EBoot.make_unit(_main, 1, "Reserve", [Vector3(-0.2, 0, 0.3)])

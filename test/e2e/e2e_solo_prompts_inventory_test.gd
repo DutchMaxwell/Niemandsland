@@ -28,8 +28,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 
 
@@ -244,8 +243,8 @@ func _click(b: Button) -> void:
 func test_incoming_fire_rolls_the_saves_it_names(timeout := 120000) -> void:
 	var shooter := _unit(2, "Raiders", [Vector3(0.5, 0, 0)])
 	var target := _unit(1, "Guards", [Vector3.ZERO, Vector3(0.05, 0, 0)])
-	_main._solo_auto_saves = false
-	_main._solo_batch = true   # the tray draws its faces at once (no physics settle headless)
+	SoloHarness.auto_saves(_main, false)
+	SoloHarness.instant(_main)   # the tray draws its faces at once (no physics settle headless)
 	var n := _log_count()
 	var out: Array = []
 	(func() -> void: out.append(await _main._solo_prompt_saves(shooter, target, "Rifle", 3, 4, 1))).call()
@@ -556,8 +555,8 @@ func test_enter_and_esc_answer_like_the_old_dialogs(timeout := 120000) -> void:
 	got = await _answer(out)
 	assert_bool(got).is_false()
 
-	_main._solo_auto_saves = false
-	_main._solo_batch = true
+	SoloHarness.auto_saves(_main, false)
+	SoloHarness.instant(_main)
 	out = []
 	(func() -> void: out.append(await _main._solo_prompt_saves(charger, defender, "Rifle", 2, 4, 0))).call()
 	await _await_prompt("Incoming fire!")

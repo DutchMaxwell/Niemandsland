@@ -32,12 +32,11 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_fast = true
-	_main._solo_batch = true   # no player at the board: every board-side question takes its first option
+	SoloHarness.fast(_main)
+	SoloHarness.instant(_main)   # no player at the board: every board-side question takes its first option
 	_resolved = []
 	_main.human_attack_resolved.connect(func(attacker: GameUnit, melee: bool) -> void:
 		_resolved.append({"attacker": attacker, "melee": melee}))
@@ -296,7 +295,7 @@ func _open_coordinate_offer() -> GameUnit:
 	bearer.unit_properties["faction_folder"] = "human_defense_force"
 	bearer.unit_properties["special_rules"] = ["Coordinate"]
 	assert_bool(receiver.is_activated).is_false()
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	_main._solo_ai_busy = true
 	_main._solo_pending_replies = 0
 	await E2EBoot.start_activation(_main, bearer)   # the explicit activation a player opens first ...
