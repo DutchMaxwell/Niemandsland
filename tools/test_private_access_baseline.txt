@@ -299,6 +299,7 @@ _solo_land_wounds 3
 _solo_live_announce 1
 _solo_live_announce_human 3
 _solo_log_ambush_variant_lines 1
+_solo_log_dangerous_test 1
 _solo_log_ebr_spell_exclusion 1
 _solo_log_grade 1
 _solo_log_melee_result 2
