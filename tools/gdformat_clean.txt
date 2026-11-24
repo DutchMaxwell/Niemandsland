@@ -12,6 +12,7 @@
 scripts/boardgen_dress.gd
 scripts/boardgen_dress_materials.gd
 scripts/boardgen_dress_mesh.gd
+scripts/boardgen_dress_rules.gd
 scripts/boardgen_dress_story.gd
 scripts/core_load_notice.gd
 scripts/deleted_state.gd

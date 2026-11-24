@@ -14,6 +14,7 @@ scripts/biome_library.gd
 scripts/boardgen_dress.gd
 scripts/boardgen_dress_materials.gd
 scripts/boardgen_dress_mesh.gd
+scripts/boardgen_dress_rules.gd
 scripts/boardgen_dress_story.gd
 scripts/containers_library.gd
 scripts/dress_module_spec.gd
