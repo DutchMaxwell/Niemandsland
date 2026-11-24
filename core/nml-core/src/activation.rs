@@ -357,7 +357,9 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
     if x <= y + 0.01 {
         return Check::Ok { lines: drop_line.into_iter().collect() };
     }
-    let text = format!("{}: a model moved {x:.1}\" - the {mode} allowance is {y:.1}\".", statics[state.roster.profile[si]].name);
+    // The Difficult cap names itself: "the Rush allowance is 6.0"" alone read as a wrong Rush band to the player.
+    let why = if capped { " in Difficult terrain" } else { "" };
+    let text = format!("{}: a model moved {x:.1}\" - the {mode} allowance is {y:.1}\"{why}.", statics[state.roster.profile[si]].name);
     if enforce {
         return Check::Refused { reason: text };
     }
@@ -4169,7 +4171,7 @@ mod tests {
             let trails = vec![trail(&[[0.0, 0.0], [a, 0.0]]), trail(&[[0.0, 6.0], [b, 6.0]])];
             check_move(&statics, st, 0, seams(), &t, &Drop { mode: RUSH, placed, trails }, enforce)
         };
-        let over = "Squad: a model moved 8.0\" - the Rush allowance is 6.0\".";
+        let over = "Squad: a model moved 8.0\" - the Rush allowance is 6.0\" in Difficult terrain.";
         assert_eq!(go(&st, 5.0, 8.0, true), refusal(over));
         assert_eq!(go(&st, 5.9, 5.9, true), OK);
         assert_eq!(go(&st, 1.5, 8.0, true), OK, "A stops short of the forest: no cap");
@@ -4278,7 +4280,7 @@ mod tests {
         let climb = refusal("Squad: a model moved 6.5\" - the Advance allowance is 6.0\".");
         assert_eq!(go(&container_board(), ADVANCE, east(4.0), vec![]), climb);
         assert_eq!(go(&container_board(), ADVANCE, east(4.0), vec![trail(&[[0.0, 0.0]])]), climb, "one point is no trail");
-        assert_eq!(go(&forest_bar_board(), RUSH, east(8.0), vec![]), refusal("Squad: a model moved 8.0\" - the Rush allowance is 6.0\"."));
+        assert_eq!(go(&forest_bar_board(), RUSH, east(8.0), vec![]), refusal("Squad: a model moved 8.0\" - the Rush allowance is 6.0\" in Difficult terrain."));
         assert_eq!(go(&Terrain::default(), ADVANCE, east(5.9), vec![]), OK, "open ground: the straight line");
         assert_eq!(go(&forest_bar_board(), RUSH, east(0.05), vec![]), OK, "a model that stayed crosses nothing");
     }

@@ -103,6 +103,13 @@ func _input(event: InputEvent) -> void:
 			resolve(cancel_value)
 
 
+## A third answer between the way out and the OK button (split fire: "All at <target>").
+func add_action(text: String, value: Variant) -> Button:
+	var b := _action(cancel_button.get_parent() as HBoxContainer, text, HouseStyle.BUTTON, func() -> void: resolve(value))
+	b.get_parent().move_child(b, cancel_button.get_index() + 1)
+	return b
+
+
 func _press(b: Button) -> void:
 	if b != null and b.is_visible_in_tree() and not b.disabled:
 		b.pressed.emit()
