@@ -54,7 +54,7 @@ fn a_defense_token_is_named_on_the_step_path() {
     assert!(lines.iter().all(|l| !l.contains(" Defense (saves on")), "no token, no line: {lines:?}");
 }
 
-/// Reanimation (fd-door, the G1' start_twice counter): the pool roll and each restore are said on the step path. RED before: the
+/// Reanimation: the pool roll and each restore are said on the step path. RED before: the
 /// core rolled the pool (no `paid`) and the door saw no line.
 #[test]
 fn the_reanimation_roll_is_named_on_the_step_path() {

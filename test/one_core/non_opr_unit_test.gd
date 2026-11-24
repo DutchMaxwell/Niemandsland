@@ -21,7 +21,7 @@ extends GdUnitTestSuite
 ## Constructed: bare units (E2EBoot.make_unit, ParityTable._make_unit), the OPR profile of the armed ones.
 ## NML_ONE_CORE_SEEDS overrides the 20 seeds per defense (200 for the sweep run).
 ##
-## PLAN_FIRST_DELETION 34 FT-C5: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main af5c83610.
+## The table arm left when the AI table resolver retired; door values are pinned as literals read on main af5c83610.
 
 const SlicePin := preload("res://test/one_core/slice_pin.gd")
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -372,16 +372,19 @@ func test_a_target_with_no_statline_is_not_shot_and_says_why_on_the_ai_door() ->
 	_free([att, ghost])
 
 
-## ... with the kill switch on the table shoots it as it always did (no line).
+## ... with the kill switch on the volley is held (the GDScript table no longer resolves volleys): one held line, no statline line, no die.
 func test_the_kill_switch_leaves_a_target_with_no_statline_to_the_table() -> void:
 	CoreActivation._env = 0
 	var att := _unit(2, "Att", 0.0, 10, true)
 	var ghost := _unit(1, "Ghost", 8.0, 10, false)
 	ghost.unit_properties.erase("quality")
 	ghost.unit_properties.erase("defense")
+	var rng_before: int = _main._tray_rng.state
 	await _main._run_ai_shooting({"unit": att, "moved": false, "action": AiDecision.Action.HOLD})
 	assert_array(_lines_containing("it has no Quality or Defense")).is_empty()
-	assert_array(_lines_containing("Att fires at Ghost")).override_failure_message("log: %s" % [_log_texts()]).has_size(1)
+	assert_array(_lines_containing("Att: no volley — the rules core cannot resolve this volley")).override_failure_message("log: %s" % [_log_texts()]).has_size(1)
+	assert_array(_lines_containing(" fires ")).override_failure_message("a die was thrown: %s" % [_log_texts()]).is_empty()
+	assert_int(_main._tray_rng.state).override_failure_message("a die was rolled").is_equal(rng_before)
 	_free([att, ghost])
 
 

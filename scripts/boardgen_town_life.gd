@@ -1,6 +1,6 @@
 class_name BoardgenTownLife
 extends Node3D
-## SOMETHING STILL MOVES, QUIETLY (plan PLAN_RUINTOWN_GRIT L1-L3, style bible 14): the lanterns and embers flicker +-6 % (smooth noise 2-7 Hz, a phase per light from the board seed), thin
+## SOMETHING STILL MOVES, QUIETLY (style bible 14): the lanterns and embers flicker +-6 % (smooth noise 2-7 Hz, a phase per light from the board seed), thin
 ## smoke rises from the chimneys of the intact houses and from the burnt yards (one GPUParticles3D per emitter, at most MAX_SMOKE, alpha <= 0.25, no shadow, above the roofs), a few crows sit
 ## on the merlons and rats run along the wall feet (tiny, dull, no collider, no shadow, never on standing room the core gives as cover: a crow sits on a merlon, a rat in the 0.75 in strip).
 ## Nothing here blocks or occludes a model. Off on Low and below; under the reduce-motion setting it stands still. `pinned` (the capture and the gate set it) freezes the clock at t = 0, so a

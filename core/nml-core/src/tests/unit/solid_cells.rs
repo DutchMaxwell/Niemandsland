@@ -1,4 +1,4 @@
-//! L-RF1 (PLAN_RUINTOWN_ROOFS) - a solid tier cell (an intact house) is closed by Cliff edges on every border, so every
+//! A solid tier cell (an intact house) is closed by Cliff edges on every border, so every
 //! reader of the tier edges (planner walls, rest clearance, deployment, `check_move`) sees a wall round it.
 use crate::mv::tier::{HighSide, TierEdge, TierKind};
 use crate::terrain::{PlainTerrain, Terrain, TierGrid, SOLID_TOP_IN};

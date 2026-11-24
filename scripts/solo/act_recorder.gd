@@ -148,7 +148,7 @@ const EPOCH_61_PRECISION_MARKERS := 61
 ## Advanced Rules v3.5.1 p.9 "Who Can Strike"): a melee pair must be within 4" vertically,
 ## not just 2" horizontally. The table applies this rule UNCONDITIONALLY (table truth, not
 ## a corpus-gated behaviour) and every recorded corpus has y = 0 (no replay changes), so
-## `rules_epoch` stayed at 61 in that PR (L1, `PLAN_heights_2026-09-27.md`).
+## `rules_epoch` stayed at 61 in that PR.
 ## This constant is kept for reference only. The core's own gate reads the frozen
 ## `EPOCH_63_MELEE_HEIGHT` (acts.rs).
 const EPOCH_63_MELEE_HEIGHT := 63
@@ -464,7 +464,7 @@ static func played(act: int) -> void:
 	_count += 1
 
 
-## F-HOLD-ADV (rules 3.6, EPOCH_73_V36, lead ruling D7): the verb the table EXECUTED when its own gates turned the
+## The verb the table EXECUTED when its own gates turned the
 ## planner's pick into another one (a planned Hold that walks into range as an Advance), as a line of its own joined
 ## by `act` - the act line carries the pick and was flushed before the activation ran. The replay gates play `verb`.
 ## No-op below epoch 73, when NML_ACT_DUMP is unset, before the header exists, or when the line cap is hit.

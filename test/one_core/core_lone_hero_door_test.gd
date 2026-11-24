@@ -5,7 +5,7 @@ extends GdUnitTestSuite
 ## wounds (a/b)"), the half-strength trigger, "Hero X tests on behalf of <host>" and "<host> fails morale". The same seed through the table and
 ## through the core must write the SAME lines, in the same order, and roll the same dice; below 83 the core would shoot the dead host, so
 ## `CoreSlice` keeps such a target on the table.
-## PLAN_FIRST_DELETION 34 FT-C3: the table arm left before step 31 (the AI table resolver retires); door values are pinned as literals read on main af5c83610.
+## The table arm left when the AI table resolver retired; door values are pinned as literals read on main af5c83610.
 ## Real: the main scene, NmlCore, the AI body's volley call (`_run_ai_shooting`) on a captured board.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -125,9 +125,11 @@ func test_the_core_writes_the_tables_lines_for_a_lone_hero(timeout := 120000) ->
 	assert_array(core).override_failure_message("the core's lines differ from the literal:\ncore  %s" % [core]).is_equal(WANT_LINES)
 
 
-## Below 83 the core would shoot the dead host: the same volley under a replay stamp stays on the table, which still says the line.
+## Below 83 the core would shoot the dead host: the core refuses the volley under a replay stamp, and the GDScript
+## table holds it with one line (it no longer resolves volleys).
 func test_an_older_stamp_stays_on_the_table(timeout := 120000) -> void:
 	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_83_LONE_HERO_TARGET - 1
 	var lines := await _volley(true)
 	assert_int(CoreActivation.ai_runs).override_failure_message("the core took a lone-hero volley below 83").is_equal(0)
-	assert_str("\n".join(lines)).contains("Hero: Champion is the unit now")
+	assert_str("\n".join(lines)).contains("Gunners: no volley — the rules core cannot resolve this volley")
+	assert_str("\n".join(lines)).not_contains("Hero: Champion is the unit now")

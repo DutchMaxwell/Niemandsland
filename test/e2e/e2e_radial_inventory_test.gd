@@ -83,8 +83,7 @@ func _solo_playing_on(system := "") -> void:
 	var raiders := _unit(2, "Raiders", [Vector3(1.2, 0, 0.8)])
 	if system != "":
 		raiders.unit_properties["game_system"] = system
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 
 

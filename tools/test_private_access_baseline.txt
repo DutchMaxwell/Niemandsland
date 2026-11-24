@@ -31,7 +31,7 @@ _dice_result_label 1
 _do_clear_all 4
 _do_next_round 6
 _engine_enemy 7
-_ensure_solo_controller 271
+_ensure_solo_controller 193
 _fps_low_since_ms 1
 _game_phase_status_label 2
 _get_player_color 3
@@ -182,7 +182,7 @@ _solo_alternation_active 7
 _solo_ambush_arrival_text 2
 _solo_ambush_human_turn 4
 _solo_ambush_redeploy_execute 5
-_solo_animate_move 6
+_solo_animate_move 5
 _solo_announce_spell_effect 2
 _solo_apply_breath_attack 1
 _solo_apply_crossing_attack 2
@@ -197,7 +197,7 @@ _solo_apply_reanimation 1
 _solo_apply_reckless_piercing 2
 _solo_apply_regeneration 6
 _solo_apply_storm_attack 2
-_solo_apply_strafing 4
+_solo_apply_strafing 6
 _solo_apply_surprise_attack 4
 _solo_apply_teleport 3
 _solo_apply_utility_buffs 35
@@ -209,9 +209,9 @@ _solo_attack_groups 10
 _solo_auto_click 2
 _solo_auto_point_click 2
 _solo_auto_point_dwell 1
-_solo_auto_saves 47
+_solo_auto_saves 30
 _solo_auto_seize 9
-_solo_batch 233
+_solo_batch 147
 _solo_begin_rapid_ambush_round_one 1
 _solo_below_half_strength 2
 _solo_board_prompt 3
@@ -239,7 +239,7 @@ _solo_coordinate_click 1
 _solo_coordinate_decline 1
 _solo_coordinate_hold_active 2
 _solo_coordinate_pick 2
-_solo_core_ai_h 176
+_solo_core_ai_h 180
 _solo_core_round_begin 3
 _solo_core_round_end 4
 _solo_core_shadow_h 19
@@ -271,7 +271,7 @@ _solo_end_targeting 20
 _solo_ensure_playing_phase 6
 _solo_erlkoenig_missing 2
 _solo_expire_spell_tokens 6
-_solo_fast 26
+_solo_fast 17
 _solo_finish_human_activation 2
 _solo_flush_dev 2
 _solo_game_finished 20
@@ -468,7 +468,7 @@ _terrain_mode_btn 1
 _toggle_settings_panel 1
 _tool_rail 4
 _top_bar 2
-_tray_rng 47
+_tray_rng 52
 _tutorial_board_pending 1
 _tutorial_director 5
 _tutorial_mode 3

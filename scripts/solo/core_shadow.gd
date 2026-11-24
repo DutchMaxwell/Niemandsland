@@ -441,7 +441,7 @@ static func release(main) -> void:
 	tapping = false
 
 
-## Plan E (melee shadow, P4.D-48): env NML_CORE_SHADOW_MELEE=1|on|deny (soaks only, default OFF). With the charge door off
+## The melee shadow: env NML_CORE_SHADOW_MELEE=1|on|deny (soaks only, default OFF). With the charge door off
 ## the table fights every AI charge; for each one the active view's slice WOULD take (`1`/`on`: live allow file; `deny`:
 ## the melee deny file) the shadow board replays it through the core's step path with the table's own faces and compares
 ## rolls, end state, positions (XZ, within 0.01") and lines. Counting only; the charge door is untouched.
@@ -585,7 +585,7 @@ static func is_roll_line(line: String) -> bool:
 	return text.begins_with("AI (") and text.contains(" → ")
 
 
-## PLAN_FIRST_DELETION 3d (docs/one_core/PARITY_RULING.md, item 4): the legality of both ends, read by the core's one checker.
+## PARITY_RULING (docs/one_core/PARITY_RULING.md, item 4): the legality of both ends, read by the core's one checker.
 ## `_legal` = {"core_illegal": the done step's own list (the units the core moved), "table_illegal": the checker on the TABLE's
 ## board now for `units`, "free_position": a `positions` difference}. Where the models stand is a free choice: a `positions` diff
 ## is reported there and is no mismatch; an illegal core end is ("core_illegal"); the table's is reported, not a mismatch.

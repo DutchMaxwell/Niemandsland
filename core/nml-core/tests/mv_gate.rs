@@ -268,9 +268,9 @@ fn coherent(cfg: &[V2], radii: &[f64]) -> bool {
     let (mut seen, mut queue, mut count) = (vec![false; n], vec![0usize], 1usize);
     seen[0] = true;
     while let Some(cur) = queue.pop() {
-        for o in 0..n {
-            if !seen[o] && edge(cur, o) <= COH_LINK_IN {
-                seen[o] = true;
+        for (o, seen_o) in seen.iter_mut().enumerate() {
+            if !*seen_o && edge(cur, o) <= COH_LINK_IN {
+                *seen_o = true;
                 count += 1;
                 queue.push(o);
             }

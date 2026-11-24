@@ -30,8 +30,8 @@ func before_test() -> void:
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
 	_flow_done = false
-	_main._solo_batch = true   # tray faces without the physics settle
-	_main._solo_auto_saves = true   # the guest's OWN saves (melee strike-back) roll without the prompt
+	SoloHarness.instant(_main)   # tray faces without the physics settle
+	SoloHarness.auto_saves(_main)   # the guest's OWN saves (melee strike-back) roll without the prompt
 	_real_net = _main.network_manager
 	var src := GDScript.new()
 	src.source_code = "extends \"res://scripts/network_manager.gd\"\nvar sent: Array = []\n" \
@@ -206,7 +206,7 @@ func _arm_save_pump() -> void:
 func _offline(ai_slots: Dictionary, auto_saves: bool) -> void:
 	_main.network_manager = _real_net
 	_main.solo_ai_slots = ai_slots
-	_main._solo_auto_saves = auto_saves
+	SoloHarness.auto_saves(_main, auto_saves)
 	_arm_save_pump()
 
 

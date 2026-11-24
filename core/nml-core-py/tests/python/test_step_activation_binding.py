@@ -40,7 +40,7 @@ def test_the_python_step_activation_matches_the_recorded_binding_answer():
 
     for i, call in enumerate(calls):
         answer = core.step_activation(state, record["unit"], call["transcript"], record["enforce"])
-        # PLAN_FIRST_DELETION 3b: a `done` answer also carries the door-only `illegal` list (nobody moved here: empty).
+        # A `done` answer also carries the door-only `illegal` list (nobody moved here: empty).
         assert answer.get("illegal", []) == [], answer.get("illegal")
         plain = {k: v for k, v in answer.items() if k not in ("state", "illegal")}
         assert plain == call["answer"], f"call {i} ({call['answer']['step']}) differs from the record"
@@ -124,7 +124,7 @@ def test_a_cast_input_is_understood_and_refused_by_the_core_until_it_resolves_ca
 
 
 def test_check_rest_reads_the_recorded_board_clean_and_a_planted_overlap_illegal():
-    """PLAN_FIRST_DELETION 3b: `Core.check_rest` - the legality checker over named unit keys, the Godot binding's shape.
+    """`Core.check_rest` - the legality checker over named unit keys, the Godot binding's shape.
 
     The recorded volley's shooter and target stand legally; the shooter's first model put onto the target's first
     model reads `overlap` naming that base. An unknown key is an error, never an empty (legal-looking) answer."""

@@ -112,8 +112,8 @@ fn g5_the_whole_pipeline_reproduces_every_recorded_call() {
     let t = replay(&c, PlanBend::default());
     assert!(t.calls > 0, "the fixture carries no call");
     let names = ["solve sweeps", "charge slots", "planned", "trails", "flow order"];
-    for k in 0..5 {
-        assert_eq!(t.bad[k], 0, "{} diverges on {} of {} calls", names[k], t.bad[k], t.calls);
+    for (k, name) in names.iter().enumerate() {
+        assert_eq!(t.bad[k], 0, "{} diverges on {} of {} calls", name, t.bad[k], t.calls);
     }
     // Guard against a vacuous gate: the fixture must actually run the solver
     // (more than one sweep) and actually fire the difficult cap.

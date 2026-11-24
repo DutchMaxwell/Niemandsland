@@ -1,5 +1,5 @@
 """A pull request gets its CI run whatever its base branch is: a PR stacked on its parent's branch is
-already proven when the parent merges (PLAN_MERGE_QUEUE step 3). Re-adding `branches:` to a pull_request
+already proven when the parent merges. Re-adding `branches:` to a pull_request
 trigger turns this red."""
 import os
 import re
