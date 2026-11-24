@@ -1,6 +1,6 @@
 class_name GameSystem
 extends RefCounted
-## The five game systems a table can play (PLAN_GAME_SYSTEM_SWITCH, step 1): ids, display labels, setting
+## The five game systems a table can play: ids, display labels, setting
 ## (grimdark / fantasy), scale (battle / skirmish) and the board size a system starts on. Pure data and lookups -
 ## nothing here changes a rule. The ids ARE RulesRegistry.SYSTEMS (and rules.rs SYSTEMS); the board sizes are
 ## rules.rs `Book.default_board_in` in feet, both pinned by test/game_system_test.gd.
@@ -162,7 +162,7 @@ static func offers(kind: String, id: String, system: String) -> bool:
 	return true
 
 
-## The generated boards a table of `system` is offered in its table chooser (PLAN_HEIGHTFIELD step 23 calls this): the
+## The generated boards a table of `system` is offered in its table chooser (the board chooser calls this): the
 ## "generated_board" rows that are available and fit the system's setting and scale. Tiefwerk = gff only; the ruined town is
 ## aofs only and has no entry until its row is flipped to available. The developer flag (NML_BOARDGEN_SEED) stays system-blind.
 static func generated_boards(system: String) -> Array:

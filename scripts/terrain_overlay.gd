@@ -3230,7 +3230,7 @@ func _fetch_container_panels() -> void:
 
 
 ## A fantasy table has no shipping containers: its grid blocker is drawn as the plain stone solid a free blocker is
-## (PLAN_GAME_SYSTEM_SWITCH step 13, assets/terrain_systems.json container_look). Look only: the type, the box and the rules are
+## (assets/terrain_systems.json container_look). Look only: the type, the box and the rules are
 ## the container's. Read when the objects are built, so a layout drawn before a system change keeps its look until it is redrawn.
 func _stone_blockers() -> bool:
 	return not GameSystem.offers("container_look", "container_red", _table_system())
@@ -3247,7 +3247,7 @@ func _table_setting() -> String:
 	return GameSystem.setting(system) if not system.is_empty() else ""
 
 
-## A fantasy hazard prop (thorn field / sinkhole / stone circle, PLAN_GAME_SYSTEM_SWITCH step 14): the GLB fit to its footprint once
+## A fantasy hazard prop (thorn field / sinkhole / stone circle): the GLB fit to its footprint once
 ## cached, else TerrainGroupBase's low procedural patch - never a mine. Facing seeded from the object's identity.
 func _create_fantasy_hazard(obj: Dictionary, model_name: String) -> Node3D:
 	var root := Node3D.new()

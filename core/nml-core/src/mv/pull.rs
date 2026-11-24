@@ -153,9 +153,9 @@ pub fn walk_offset_bent(
             spent + d <= allowance + EPS
         }
     };
-    for i in 1..taut.len() {
+    for &t in taut.iter().skip(1) {
         let a = *out.last().unwrap();
-        let b = board_clamp(add(taut[i], offset), board);
+        let b = board_clamp(add(t, offset), board);
         let leg = distance_to(a, b);
         if leg < EPS {
             continue;

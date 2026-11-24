@@ -199,7 +199,7 @@ pub fn run(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain,
     (out, next)
 }
 
-/// `Core.check_rest`'s body (PLAN_FIRST_DELETION 3b): `{"ok", "illegal"}` over the named unit keys, the Godot binding's shape.
+/// `Core.check_rest`'s body: `{"ok", "illegal"}` over the named unit keys, the Godot binding's shape.
 pub(crate) fn rest(core: &Core, py: Python<'_>, state: &PyState, unit_ids: &[String]) -> PyResult<Py<PyAny>> {
     let units = unit_ids.iter().map(|k| state.inner.roster.index.get(k).copied()
         .ok_or_else(|| Unsupported::new_err(format!("unknown unit {k}")))).collect::<PyResult<Vec<usize>>>()?;

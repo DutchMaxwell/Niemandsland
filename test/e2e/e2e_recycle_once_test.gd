@@ -21,10 +21,9 @@ func before_test() -> void:
 		"scoring": "end", "deployment": "front_line", "roles": true,
 		"reserves": {"who": "attacker", "recycle": true, "arrive_on": 6, "from_round": 2, "zone": "edge_band_12", "gates": {}},
 		"markers": {"count": 1, "placement": "table_centre"}}
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	SoloController.mission_roles = {"attacker": 2, "defender": 1}   # the AI attacks
 	_main._solo_mission_id = "stand_fixture"
 

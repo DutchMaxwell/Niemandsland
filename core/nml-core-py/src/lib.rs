@@ -1766,7 +1766,7 @@ impl Core {
         stepcall::answer(self, py, &state, unit, transcript, enforce)
     }
 
-    /// PLAN_FIRST_DELETION 3b: may the named units' models rest where they stand (`stepcall::rest`)?
+    /// May the named units' models rest where they stand (`stepcall::rest`)?
     fn check_rest(&self, py: Python<'_>, state: PyRef<'_, PyState>, unit_ids: Vec<String>) -> PyResult<Py<PyAny>> {
         stepcall::rest(self, py, &state, unit_ids.as_slice())
     }

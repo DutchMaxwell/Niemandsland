@@ -27,7 +27,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC   # the room agreed (3.0)
 	_real_net = _main.network_manager

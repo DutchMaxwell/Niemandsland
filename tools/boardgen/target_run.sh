@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Acceptance sheets of the ruin town against a look target (plan PLAN_RUINTOWN_TARGET_C, T2): captures the six acceptance cameras of the town under test on a REAL display
+# Acceptance sheets of the ruin town against a look target: captures the six acceptance cameras of the town under test on a REAL display
 # (tools/boardgen/bg_capture_town.gd, `baseline=1 presets=medium`, yaw 0: seed 41 overview / top / play / street / fountain_eye, seed 25 wall), then composes them beside the
 # target images with tools/boardgen/target_sheet.py. The target images live OUTSIDE the repo; their folder is an argument.
 #

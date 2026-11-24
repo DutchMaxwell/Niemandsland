@@ -95,9 +95,9 @@ static func core_enabled() -> bool:
 	return _core_env == 1
 
 
-## The switch as a pure function (ship path 22.09., P4.D-68): every build wants the core
+## The switch as a pure function (ship path 22.09.): every build wants the core
 ## unless NML_CORE=0 says otherwise - release builds since 22.09., debug builds and the
-## test binary since P4.D-68, so the tests play the path the player's game plays. "1" asks
+## test binary as well, so the tests play the path the player's game plays. "1" asks
 ## explicitly; any other value is not a switch. `debug_build` stays in the signature for the callers.
 static func core_wanted(env: String, _debug_build: bool) -> bool:
 	return env.is_empty() or env == "1"

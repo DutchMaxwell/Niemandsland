@@ -251,15 +251,15 @@ pub fn placement_order(specs: &[UnitSpec], rng: &mut GodotRng) -> Vec<usize> {
 pub fn transport_fill(capacities: &[i64], rng: &mut GodotRng) -> Vec<(usize, usize)> {
     let mut fills: Vec<(usize, usize)> = Vec::new();
     let mut pool: Vec<usize> = (0..capacities.len()).filter(|&i| capacities[i] <= 0).collect();
-    for tr in 0..capacities.len() {
-        if capacities[tr] <= 0 {
+    for (tr, &cap) in capacities.iter().enumerate() {
+        if cap <= 0 {
             continue;
         }
         let mut tries = pool.clone();
         let mut loaded = 0usize;
         while !tries.is_empty() {
             let pick = tries.remove(rng.randi_range(0, tries.len() as i64 - 1) as usize);
-            if loaded < capacities[tr] as usize {
+            if loaded < cap as usize {
                 loaded += 1;
                 let at = pool.iter().position(|&p| p == pick).expect("pick in pool");
                 pool.remove(at);

@@ -1075,8 +1075,8 @@ fn a_town_grows_few_filler_slabs() {
     assert!(mean <= 26.0, "a town grows too many filler slabs on free earth: {mean:.1} cells per board (cap 26)");
 }
 
-/// BASELINE of PLAN_RUINTOWN_ROOFS step K0: origin/main 6a2972697, town theme, Point180, seeds 1..=1000 (means per board, sq in, percent).
-/// Re-pinned by K2 (raised minimum 23 -> 15 %), K3 (infill houses), K4 (at least 4 houses) and towers T2 (a tall tower pair, read at 12 in), 1000 seeds. The roofs steps K2+ move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
+/// BASELINE: origin/main 6a2972697, town theme, Point180, seeds 1..=1000 (means per board, sq in, percent).
+/// Re-pinned as the town generator grew (a raised minimum, infill houses, at least 4 houses, a tall tower pair read at 12 in), 1000 seeds. Later steps move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
 const ROOFS_BASELINE: [(&str, f64); 25] = [
     ("intact houses", 8.27), ("boards with <= 2 houses %", 0.0), ("roofed cells", 19.37), ("raised cells in house plots", 13.07), ("raised cells on free earth", 22.64), ("raised cells in the city wall", 34.25),
     ("roof share of footprints %", 35.17), ("walkable sq in 0 in", 1374.21), ("walkable sq in 3 in", 352.48), ("walkable sq in 6 in", 207.58), ("walkable sq in 9 in", 69.53), ("ladders", 44.27),

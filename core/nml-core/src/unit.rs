@@ -374,7 +374,7 @@ pub struct Ctx {
     /// and its dice must keep the old stacked reading byte-exact.
     pub sturdy_boost_gates_guarded: bool,
     pub in_cover: bool,
-    /// PLAN_COVER_36 (`EPOCH_95_PARITY_BATCH`): the unit is mostly behind a sight blocker from this volley's shooters
+    /// (`EPOCH_95_PARITY_BATCH`): the unit is mostly behind a sight blocker from this volley's shooters
     /// (`sight::screen_of`), stamped by the played volley from 95 only. Cover against shooting, NOT "standing in terrain":
     /// the Grounded family and the Shielded terrain alias keep reading `in_cover`.
     pub screened: bool,
@@ -2704,7 +2704,7 @@ fn rules_of_primitive(reg: &mut Registries, p: &Profile, primitive: &str) -> Vec
     let mut seen: Vec<String> = Vec::new();
     for raw in raws {
         let n = base_rule_name(raw);
-        if n.is_empty() || seen.iter().any(|s| *s == n) {
+        if n.is_empty() || seen.contains(&n) {
             continue;
         }
         seen.push(n.clone());
@@ -2767,7 +2767,7 @@ fn aura_channel_hits(reg: &mut Registries, p: &Profile) -> Vec<(String, String)>
     let mut seen: Vec<String> = Vec::new();
     for raw in raws {
         let aura = base_rule_name(raw);
-        if aura.is_empty() || seen.iter().any(|s| *s == aura) {
+        if aura.is_empty() || seen.contains(&aura) {
             continue;
         }
         seen.push(aura.clone());
@@ -2877,7 +2877,7 @@ fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String], rules_ep
     let mut seen: Vec<String> = Vec::new();
     for raw in rules {
         let n = base_rule_name(raw);
-        if n.is_empty() || n == "Banner" || seen.iter().any(|s| *s == n) {
+        if n.is_empty() || n == "Banner" || seen.contains(&n) {
             continue;
         }
         if n == "Valiant" && rule_on(rules_epoch, EPOCH_73_V36) && !valiant_ok {
@@ -3370,7 +3370,7 @@ fn regen_targets(
         for raw in raws {
             let n = base_rule_name(raw);
             if n.is_empty()
-                || seen.iter().any(|s| *s == n)
+                || seen.contains(&n)
                 || n == "Regeneration"
                 || n == "Medical Training"
                 || n == "Self-Repair"
@@ -5904,7 +5904,7 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
     let mut seen: Vec<String> = Vec::new();
     for raw in raws {
         let n = base_rule_name(raw);
-        if n.is_empty() || seen.iter().any(|s| *s == n) {
+        if n.is_empty() || seen.contains(&n) {
             continue;
         }
         seen.push(n.clone());
@@ -6307,7 +6307,7 @@ fn piercing_tags_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Vec<
     let mut seen: Vec<String> = Vec::new();
     for raw in raws {
         let n = base_rule_name(raw);
-        if n.is_empty() || seen.iter().any(|s| *s == n) {
+        if n.is_empty() || seen.contains(&n) {
             continue;
         }
         seen.push(n.clone());
@@ -6387,7 +6387,7 @@ fn growth_of_epoch(
     let mut seen: Vec<String> = Vec::new();
     for raw in raws {
         let n = base_rule_name(raw);
-        if n.is_empty() || seen.iter().any(|s| *s == n) {
+        if n.is_empty() || seen.contains(&n) {
             continue;
         }
         seen.push(n.clone());
@@ -6585,7 +6585,7 @@ fn stamp_conditional_ap_named(
     let mut seen: Vec<String> = Vec::new();
     for raw in &p.special_rules {
         let n = base_rule_name(raw);
-        if n.is_empty() || seen.iter().any(|s| *s == n) {
+        if n.is_empty() || seen.contains(&n) {
             continue;
         }
         seen.push(n.clone());
@@ -7865,7 +7865,7 @@ impl UnitStatic {
             let havoc_boosted = p.special_rules.iter().any(|r| base_rule_name(r) == "Enhanced Havocbound");
             for raw in &p.special_rules {
                 let n = base_rule_name(raw);
-                if n.is_empty() || seen.iter().any(|s| *s == n) {
+                if n.is_empty() || seen.contains(&n) {
                     continue;
                 }
                 seen.push(n.clone());
@@ -7906,16 +7906,14 @@ impl UnitStatic {
                             ..Default::default()
                         });
                     }
-                    "Enhanced Havocbound" => {
+                    "Enhanced Havocbound" if has_exact_rule(&p.special_rules, e.param_s("upgrades")) => {
                         // Wave 4 — the always leg, the entry's own `upgrades`
                         // coupling ("If this model has Havocbound"); the
                         // volley's and the strike's named cond_ap lines log.
-                        if has_exact_rule(&p.special_rules, e.param_s("upgrades")) {
-                            live.push(CondAp {
-                                ap_bonus: ap, condition: "always".into(), name: n.clone(),
-                                ..Default::default()
-                            });
-                        }
+                        live.push(CondAp {
+                            ap_bonus: ap, condition: "always".into(), name: n.clone(),
+                            ..Default::default()
+                        });
                     }
                     _ => {}
                 }
@@ -8060,7 +8058,7 @@ impl UnitStatic {
             let (mut boost, mut has_vinci, mut both) = (false, false, false);
             for raw in &p.special_rules {
                 let n = base_rule_name(raw);
-                if n.is_empty() || seen.iter().any(|s| *s == n) {
+                if n.is_empty() || seen.contains(&n) {
                     continue;
                 }
                 seen.push(n.clone());

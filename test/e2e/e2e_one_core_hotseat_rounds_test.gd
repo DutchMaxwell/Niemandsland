@@ -40,9 +40,9 @@ func before_test() -> void:
 	_main.solo_ai_slots = {}   # two local human sides: no AI seat
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_batch = true
-	_main._solo_fast = true
-	_main._solo_auto_saves = true
+	SoloHarness.instant(_main)
+	SoloHarness.fast(_main)
+	SoloHarness.auto_saves(_main)
 	_main._autosave_controller.set_lesson_paused(true)
 	_main._ensure_solo_controller()
 	_main.solo_controller.game_rounds = ROUNDS

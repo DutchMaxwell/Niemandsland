@@ -1,4 +1,4 @@
-//! `covbench [acts.jsonl] [rounds] [epoch]` — PLAN_COVER_36 step 10: what one `sight::screen_of` (cover from sight blockers)
+//! `covbench [acts.jsonl] [rounds] [epoch]` — what one `sight::screen_of` (cover from sight blockers)
 //! costs. For every act state of the corpus and every ordered pair of living, deployed units of different seats, one call
 //! on the corpus board's sight volumes (free shelf pieces included). The played volley pays one call per target group, so
 //! the per-call numbers are the per-volley numbers. Also prints the share of pairs that come out `screened`.

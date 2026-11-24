@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""grit_metrics.py STILLS [MASKS] [--out FILE]: the ground instrument of the ruin town (plan PLAN_RUINTOWN_GRIT, G0).
+"""grit_metrics.py STILLS [MASKS] [--out FILE]: the ground instrument of the ruin town.
 
 STILLS is a capture folder of tools/boardgen/bg_capture_town.gd (manifest.json + <still>.jpg). MASKS (default STILLS) holds the debug stills <still>_grit.png of a
 `grit_debug=1` capture of the SAME cameras: the board shader paints every street pixel in the flat colour of its grit class (emission only, linear tonemap, every light off), so

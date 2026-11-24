@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""target_sheet.py OUT TARGETS [--also LABEL=DIR ...]: the acceptance sheets of the ruin town (plan PLAN_RUINTOWN_TARGET_C, T2).
+"""target_sheet.py OUT TARGETS [--also LABEL=DIR ...]: the acceptance sheets of the ruin town.
 
 OUT holds the stills of tools/boardgen/target_run.sh (any sub-folder, e.g. OUT/cap_s41/s41_street.jpg) and OUT/sha.txt. TARGETS is the folder of the target images (outside the
 repo). For each of the six acceptance cameras it writes OUT/sheet_<camera>.jpg: the town under test on the left, the target on the right, same height, a caption bar with the

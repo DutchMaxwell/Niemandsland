@@ -80,7 +80,7 @@ use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
         assert!(said[at(COVER).unwrap() + 1].starts_with("Def saves on"), "the cover line stands right before the save line: {said:?}");
     }
 
-    // ------- PLAN_COVER_36 step 5: cover from sight blockers (`Ctx.screened`) in the save fold ---
+    // ------- cover from sight blockers (`Ctx.screened`) in the save fold ---
 
     fn screened(defense: i64) -> Ctx {
         Ctx { screened: true, ..defender(defense, 5) }
@@ -130,7 +130,7 @@ use crate::acts::{EPOCH_72_PLAYTEST_RULES, EPOCH_73_V36};
         assert_eq!((said(&log, COVER), said(&log, LIFT)), (1, 0), "no waiver, no lift: {log:?}");
     }
 
-    /// PLAN_COVER_36 step 9c: the doors write the tray's lines (#3286), so the lift line is said on the tray too.
+    /// The doors write the tray's lines (#3286), so the lift line is said on the tray too.
     /// RED before: it stood in `ShootResult.log` only.
     #[test]
     fn the_door_tray_says_the_sight_blocker_lift() {

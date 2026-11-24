@@ -119,7 +119,7 @@ pub(crate) fn delayed_action_passer(
             own += 1;
             if statics[state.roster.profile[i]].delayed_action_active
                 && state.delayed_action_round[i] != state.round
-                && best.map_or(true, |(_, v)| state.alive[i] > v)
+                && best.is_none_or(|(_, v)| state.alive[i] > v)
             {
                 best = Some((i, state.alive[i]));
             }
@@ -194,7 +194,7 @@ fn coordinate_receiver(
         if i == bearer || state.dormant[i] || !state.can_activate(i, player, seams.hero_attach) {
             continue;
         }
-        if best.map_or(false, |(_, v)| state.alive[i] <= v) {
+        if best.is_some_and(|(_, v)| state.alive[i] <= v) {
             continue; // cheaper than the gap, so it goes first
         }
         let gap = geom::edge_gap_shaped_in(

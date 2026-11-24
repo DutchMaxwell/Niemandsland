@@ -56,13 +56,17 @@ use super::*;
             index: st.roster.index.clone(),
             profile: vec![0, 1, 0, 0],
         });
-        let mut caster = UnitStatic::default();
-        caster.is_caster = true;
-        caster.spells = vec![spell()];
-        caster.casts_per_round = 2;
-        let mut battery = UnitStatic::default();
-        battery.spell_accumulator = true;
-        battery.casts_per_round = 2;
+        let caster = UnitStatic {
+            is_caster: true,
+            spells: vec![spell()],
+            casts_per_round: 2,
+            ..Default::default()
+        };
+        let battery = UnitStatic {
+            spell_accumulator: true,
+            casts_per_round: 2,
+            ..Default::default()
+        };
         (st, vec![caster, battery, UnitStatic::default(), UnitStatic::default()])
     }
 

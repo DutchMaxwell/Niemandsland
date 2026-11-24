@@ -137,8 +137,8 @@ fn g4_the_flow_reproduces_every_recorded_stage() {
     let t = replay(&c, FlowBend::default());
     assert!(t.calls > 0, "the fixture carries no traced call");
     let names = ["flow order", "attempt/pull", "untangle swaps", "endpoints", "pop lists"];
-    for k in 0..5 {
-        assert_eq!(t.bad[k], 0, "{} diverges on {} of {} calls", names[k], t.bad[k], t.calls);
+    for (k, name) in names.iter().enumerate() {
+        assert_eq!(t.bad[k], 0, "{} diverges on {} of {} calls", name, t.bad[k], t.calls);
     }
     // Guard against a vacuous gate: the fixture must actually exercise the
     // deferral rule, the untangle re-routes and a real search population.

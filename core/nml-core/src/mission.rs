@@ -467,7 +467,7 @@ pub fn apply_reveal_step(
                 continue;
             }
             let gap = control_gap_in(state, k, obj);
-            if best.map_or(true, |(_, g)| gap < g) {
+            if best.is_none_or(|(_, g)| gap < g) {
                 best = Some((k, gap));
             }
         }

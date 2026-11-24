@@ -1,4 +1,4 @@
-//! P4.D-46: a CHARGE through the step API (`activation::step_activation`) is the whole-activation charge
+//! A CHARGE through the step API (`activation::step_activation`) is the whole-activation charge
 //! (`resolve_stochastic_tray_on_board`, same `Action`, same faces): the landing via `charge_move`, then the strike phase
 //! with every face asked for in draw order. Real units from the production loaders on a clear board, no epoch.
 
@@ -101,7 +101,7 @@ mod charge_step {
         (hit, struck_back, impact)
     }
 
-    /// P4.D-48: the header's search seams may carry `movement` OFF (the table's step seams come from them); a stepped charge
+    /// The header's search seams may carry `movement` OFF (the table's step seams come from them); a stepped charge
     /// still moves, snaps and fights exactly as with it ON. RED: drop the CHARGE override in `step_activation` -> a fightless
     /// `Done` with the charger where it stood.
     #[test]
