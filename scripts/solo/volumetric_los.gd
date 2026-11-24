@@ -164,37 +164,6 @@ static func has_los(from_cyl: Dictionary, to_cyl: Dictionary, volumes: Array = [
 	return true
 
 
-## Twin of core `sight::screen`: one volley's cover from sight blockers. `groups` holds one entry per
-## shooter-chain member: {"pos": its alive model positions, "eye": Callable(sp, tp) -> bool (the sight test), "foot": the
-## same test to the target model's foot cylinder}. A shooter model joins the sighting set when it sees a model of `targets`
-## or `also_seen` (the holder's joined heroes); target model t is hidden when a strict majority of that set misses its eye or
-## its foot; the unit is screened on a strict majority of `targets`. A one-model unit follows its model (1 * 2 > 1).
-static func screen(groups: Array, targets: Array, also_seen: Array) -> Dictionary:
-	var seen_any: Array = targets + also_seen
-	var sighting: Array = []   # [position, group]
-	for g: Dictionary in groups:
-		for sp: Vector3 in g["pos"]:
-			for tp: Vector3 in seen_any:
-				if (g["eye"] as Callable).call(sp, tp):
-					sighting.append([sp, g])
-					break
-	var n := sighting.size()
-	var hidden: Array = []
-	for tp: Vector3 in targets:
-		var behind := 0
-		var open := 0
-		for s: Array in sighting:
-			var g: Dictionary = s[1]
-			if not (g["eye"] as Callable).call(s[0], tp) or not (g["foot"] as Callable).call(s[0], tp):
-				behind += 1
-			else:
-				open += 1
-			if behind * 2 > n or open * 2 >= n:
-				break   # this model's majority is decided
-		hidden.append(behind * 2 > n)
-	return {"sighting": n, "hidden": hidden, "screened": hidden.count(true) * 2 > hidden.size()}
-
-
 ## The unit key of the first model standing in the sight line (0 = the lane is clear), so a rules-correct
 ## refusal can name the blocker. Blockers are model cylinders plus "unit_key" and "is_aircraft"; a unit
 ## never blocks its own sight line (`exclude` carries the shooter's and the target's key). Geometry alone
