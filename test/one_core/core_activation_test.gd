@@ -1929,14 +1929,13 @@ func test_a_shot_without_an_open_activation_is_refused(timeout := 120000) -> voi
 	assert_int(_toasts("Activate Rifles first.").size()).is_equal(1)
 
 
-## Not the core's: a Charge selector, a target with a rule the deny slice refuses (H-30), the flag off - the old path runs (false).
-func test_a_charge_a_special_target_and_the_flag_off_leave_the_shot_to_the_old_path() -> void:
+## Not the core's: a target with a rule the deny slice refuses (H-30), the flag off - the old path runs (false). A Charge
+## selector is refused now (see core_human_small_clauses_test).
+func test_a_special_target_and_the_flag_off_leave_the_shot_to_the_old_path() -> void:
 	var units := _shot_units()
 	var att: GameUnit = units[0]
 	var foe: GameUnit = units[1]
-	_started(att, ObjectManager.MovementCap.CHARGE, 0.0)
-	assert_bool(await CoreActivation.human_shoot(_main, att, foe)).override_failure_message("a Charge").is_false()
-	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.ADVANCE)
+	_started(att, ObjectManager.MovementCap.ADVANCE, 0.0)
 	foe.unit_properties["special_rules"] = ["Grounded Protection"]
 	assert_bool(await CoreActivation.human_shoot(_main, att, foe)).override_failure_message("a special target").is_false()
 	foe.unit_properties["special_rules"] = []
