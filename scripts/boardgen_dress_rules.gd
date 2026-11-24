@@ -2,15 +2,15 @@ class_name BoardgenDressRules
 extends RefCounted
 ## The honesty rules of the ruin-town dressing (docs/adr/0003-generated-board-dressing.md, R1-R5 as
 ## plain arithmetic): the dressing never hides a walkable cell, never suggests a surface that is not
-## there. The grid is the truth; a placement {module, xf (Transform3D, metres, board space), cls} is
-## checked against it with the numbers its manifest module declares (aabb_in, proud_in per height
-## band, tags, family, role). Pure data, headless. Everything is in board inches, origin at the
-## board centre. A model standing on a walkable cell needs the column above its top free: FLAT
-## (0.08) of anything, then nothing up to CLEAR (2.0), except the edge strip of an edge that drops
-## (R4); above CLEAR only an overhang (R2). R3 = the drawn face sits 0..0.2 inside the collider
-## face. R5 = the ladder zones carry only ladders and plain faces. Layout of this file: the grid
-## helpers and the constants first, then violations() for R1 / R2 / R4, then R3 (the face sits
-## 0..0.2 in inside the collider face, lean <= 1.5 degrees) and R5 (the ladder zones).
+## there. The grid is the truth; a DressPlacement is checked against it with the numbers its
+## DressModuleSpec declares (aabb_lo / aabb_hi, proud per height band, tags, family, role). Pure
+## data, headless. Everything is in board inches, origin at the board centre. A model standing on a
+## walkable cell needs the column above its top free: FLAT (0.08) of anything, then nothing up to
+## CLEAR (2.0), except the edge strip of an edge that drops (R4); above CLEAR only an overhang (R2).
+## R3 = the drawn face sits 0..0.2 inside the collider face. R5 = the ladder zones carry only
+## ladders and plain faces. Layout of this file: the grid helpers and the constants first, then
+## violations() for R1 / R2 / R4, then R3 (the face sits 0..0.2 in inside the collider face, lean <=
+## 1.5 degrees) and R5 (the ladder zones).
 
 # inches: what may lie on a walkable top (decals, flat litter) without counting as an obstacle
 const FLAT := 0.08
@@ -94,38 +94,36 @@ static func face_xf(
 
 ## The R1-R5 breaks of a set of placements on a layout, one line per rule and placement ("R1 <cls>
 ## <module> at (x, z): ..."); empty = honest.
-static func violations(
-	layout: Dictionary, placements: Array, meta: Dictionary
-) -> PackedStringArray:
+static func violations(context: DressContext, placements: Array) -> PackedStringArray:
 	var out := PackedStringArray()
-	var nx := int(layout["nx"])
-	var nz := int(layout["nz"])
-	var cell := float(layout["cell_in"])
-	var origin := Vector2(nx, nz) * cell * -0.5
-	var zones := _ladder_zones(layout)
-	var kept := kept_clear(layout)
-	for placement: Dictionary in placements:
-		var module: Dictionary = meta["modules"].get(placement["module"], {})
-		var xf: Transform3D = placement["xf"]
+	var nx := context.nx
+	var nz := context.nz
+	var cell := context.cell_in
+	var origin := context.origin_in
+	var zones := _ladder_zones(context.layout)
+	var kept := context.kept_clear()
+	for placement: DressPlacement in placements:
+		var spec := context.spec(placement.module)
+		var xf := placement.transform
 		var at := (
 			"%s %s at (%.1f, %.1f)"
 			% [
-				placement.get("cls", ""),
-				placement["module"],
+				placement.cls,
+				placement.module,
 				xf.origin.x / Units.INCHES_TO_METERS,
 				xf.origin.z / Units.INCHES_TO_METERS
 			]
 		)
-		if module.is_empty():
+		if spec == null:
 			out.append("R0 unknown module " + at)
 			continue
-		var tags: Array = module["tags"]
-		var lo := _aabb_corner(module["aabb_in"], 0)
-		var hi := _aabb_corner(module["aabb_in"], 1)
+		var tags := spec.tags
+		var lo := spec.aabb_lo
+		var hi := spec.aabb_hi
 		var footprint := _rect(xf, lo, hi, lo.y, hi.y, hi.z)
 		var seen := {}
 		var found: Array[String] = []
-		var plain_face: bool = FACES.has(module["family"]) and ["plain", "foot"].has(module["role"])
+		var plain_face: bool = FACES.has(spec.family) and ["plain", "foot"].has(spec.role)
 		if not tags.has("ladder") and not plain_face:
 			for zone: Rect2 in zones:
 				var overlap := zone.intersection(footprint)
@@ -134,11 +132,11 @@ static func violations(
 		var lean := rad_to_deg(xf.basis.y.normalized().angle_to(Vector3.UP))
 		if lean > LEAN_MAX + LEAN_SLACK_DEG:
 			found.append("R3 leans %.2f degrees" % lean)
-		if FACES.has(module["family"]):
+		if FACES.has(spec.family):
 			var outward := Vector2(xf.basis.z.x, xf.basis.z.z).normalized()
 			var mid3 := (
 				xf
-				* (Vector3(float(module["len_in"]) * 0.5, 0.0, 0.0) * Units.INCHES_TO_METERS)
+				* (Vector3(spec.len_in * 0.5, 0.0, 0.0) * Units.INCHES_TO_METERS)
 				/ Units.INCHES_TO_METERS
 			)
 			var mid := Vector2(mid3.x, mid3.z)
@@ -159,8 +157,8 @@ static func violations(
 					var cell_rect := Rect2(origin + Vector2(cx, cz) * cell, Vector2(cell, cell))
 					if footprint.intersection(cell_rect).size.x > TOL:
 						found.append("R1 soft vegetation in a kept-clear cell (ladder or landmark)")
-				if walkable(layout, cz * nx + cx):
-					found.append(_air(layout, module, xf, cx, cz))
+				if context.walkable(cz * nx + cx):
+					found.append(_air(context, spec, xf, cx, cz))
 		for finding in found:
 			var rule := finding.substr(0, 2)
 			if finding != "" and not seen.has(rule):
@@ -171,17 +169,18 @@ static func violations(
 
 ## R1 / R2 / R4 for one placement over one walkable cell: the first break as "Rn: why", or "".
 static func _air(
-	layout: Dictionary, module: Dictionary, xf: Transform3D, cx: int, cz: int
+	context: DressContext, spec: DressModuleSpec, xf: Transform3D, cx: int, cz: int
 ) -> String:
-	var tags: Array = module["tags"]
-	var lo := _aabb_corner(module["aabb_in"], 0)
-	var hi := _aabb_corner(module["aabb_in"], 1)
-	var nx := int(layout["nx"])
-	var nz := int(layout["nz"])
-	var cell := float(layout["cell_in"])
-	var origin := Vector2(layout["nx"], layout["nz"]) * cell * -0.5
+	var tags := spec.tags
+	var lo := spec.aabb_lo
+	var hi := spec.aabb_hi
+	var layout := context.layout
+	var nx := context.nx
+	var nz := context.nz
+	var cell := context.cell_in
+	var origin := context.origin_in
 	var cell_rect := Rect2(origin + Vector2(cx, cz) * cell, Vector2(cell, cell))
-	var top := top_in(layout, cx, cz)
+	var top := context.top_in(cx, cz)
 	var origin_y := xf.origin.y / Units.INCHES_TO_METERS
 	var up_scale := maxf(xf.basis.y.y, MIN_UP_SCALE)
 	# no collider, no cover: on the ground a tuft is no obstacle up to SOFT_VEG (a tier top keeps R4)
@@ -214,7 +213,7 @@ static func _air(
 		var y1 := minf(hi.y, (top + CLEAR - origin_y) / up_scale if zone == 0 else INF)
 		if y1 - y0 < MIN_BAND_IN:
 			continue
-		var proud := float(module["proud_in"]["low" if zone == 0 else "high"])
+		var proud := spec.proud_low if zone == 0 else spec.proud_high
 		var part := _rect(xf, lo, hi, y0, y1, proud).intersection(cell_rect)
 		if part.size.x <= TOL or part.size.y <= TOL:
 			continue
@@ -225,13 +224,13 @@ static func _air(
 			var neighbour := Vector2i(cx + k % 3 - 1, cz + floori(k / 3.0) - 1)
 			if neighbour == Vector2i(cx, cz):
 				continue
-			var neighbour_top := top_in(layout, neighbour.x, neighbour.y)
+			var neighbour_top := context.top_in(neighbour.x, neighbour.y)
 			var on_board := (
 				neighbour.x >= 0 and neighbour.y >= 0 and neighbour.x < nx and neighbour.y < nz
 			)
 			var rises := (
 				on_board
-				and (neighbour_top > top or not walkable(layout, neighbour.y * nx + neighbour.x))
+				and (neighbour_top > top or not context.walkable(neighbour.y * nx + neighbour.x))
 			)
 			if not (rises if zone == 1 else neighbour_top < top):
 				continue
@@ -286,11 +285,6 @@ static func _ladder_zones(layout: Dictionary) -> Array[Rect2]:
 		var far_corner := edge + away * reach + side * reach
 		out.append(Rect2(near_corner, Vector2.ZERO).expand(far_corner))
 	return out
-
-
-## Corner `k` (0 = min, 1 = max) of an aabb_in pair as a Vector3, inches.
-static func _aabb_corner(aabb_in: Array, k: int) -> Vector3:
-	return Vector3(float(aabb_in[k][0]), float(aabb_in[k][1]), float(aabb_in[k][2]))
 
 
 ## The XZ rect (board inches) of a module's part between local heights y0 and y1, cut at `reach`

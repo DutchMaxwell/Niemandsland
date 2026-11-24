@@ -51,13 +51,10 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {1: true, 2: true}   # both seats AI: the saves of the shot unit roll without a prompt
-	_main._ensure_solo_controller()
-	_main.solo_controller.ai_slot = 2
-	_main.solo_controller.human_slot = 1
+	SoloHarness.start(_main, [1, 2], 1)   # both seats AI: the saves of the shot unit roll without a prompt
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	CoreActivation._env = 1
 	CoreActivation.ai_runs = 0
 	CoreActivation.ai_refusals = 0
@@ -286,8 +283,8 @@ func test_a_non_opr_attacker_fires_nothing_on_the_human_door() -> void:
 ## started. Returns what the comparison reads, and whether the core's declaration line ("<Att> fires at <Target>") is in.
 func _human_volley(s: int, defense: int, core_run: bool, auto := false) -> Dictionary:
 	_main.solo_ai_slots = {2: true}   # seat 1 is the human: the shooter is a lifecycle unit
-	_main._solo_auto_saves = true
-	_main._solo_fast = true
+	SoloHarness.auto_saves(_main)
+	SoloHarness.fast(_main)
 	_main._autosave_controller.set_lesson_paused(true)   # a periodic autosave would add its own log line
 	var att := ParityTable._make_unit(_main, SIDE.merged({"player": 1, "name": "Att", "models": 10, "x_in": 0.0}), RIFLE)
 	var foe := ParityTable._make_unit(_main, SIDE.merged({"player": 2, "name": "Bare%d" % defense, "models": 5, "x_in": 12.0,
