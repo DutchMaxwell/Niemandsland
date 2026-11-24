@@ -43,7 +43,7 @@ func _mixed_unit(pid: int, unit_name: String) -> GameUnit:
 
 
 func test_choice_matters_exactly_when_it_can_matter() -> void:
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	var mixed := _mixed_unit(1, "Mixed")
 	assert_bool(_main._solo_wound_choice_matters(mixed, 2)).is_true()
 	# Overkill wipe (pool = 1+1+3): nothing to choose.
@@ -52,9 +52,9 @@ func test_choice_matters_exactly_when_it_can_matter() -> void:
 	var ai := _mixed_unit(2, "AiMixed")
 	assert_bool(_main._solo_wound_choice_matters(ai, 2)).is_false()
 	# Batch/harness never prompts (headless would deadlock on a click).
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	assert_bool(_main._solo_wound_choice_matters(mixed, 2)).is_false()
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	# Uniform non-Tough unit: allocation cannot change anything — stays automatic.
 	var uniform := E2EBoot.make_unit(_main, 1, "Uniform", [Vector3.ZERO, Vector3(0.05, 0, 0)])
 	for i in range(uniform.models.size()):
@@ -66,7 +66,7 @@ func test_clicked_model_takes_the_wound_and_rmb_hands_back_the_rest() -> void:
 	# Godot 4.6 gotcha: an async function must be awaited DIRECTLY (capturing the
 	# coroutine breaks into the debugger under -d and hangs headless). The picks are
 	# therefore scheduled on timers BEFORE the await and fire while the prompt runs.
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	var u := _mixed_unit(1, "Alloc")
 	# t1: the owner clicks the TOUGH model — the wound must land THERE, not on the
 	# casualty_order edge pick the auto path would have taken.
@@ -111,7 +111,7 @@ func _joined_hero(host: GameUnit, hero_name: String, tough: int) -> GameUnit:
 ## #590 RED 1/3: while the host's own model still stands, a click on the attached hero must be
 ## refused — the same feedback an invalid pick gets, and no wound spent.
 func test_hero_click_refused_while_host_alive() -> void:
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	var host := E2EBoot.make_unit(_main, 1, "Host590a", [Vector3.ZERO])
 	(host.models[0] as ModelInstance).model_index = 0
 	var hero := _joined_hero(host, "Hero590a", 1)
@@ -135,7 +135,7 @@ func test_hero_click_refused_while_host_alive() -> void:
 ## #590 boundary: eligibility is re-checked on EVERY click, never cached across the prompt — the
 ## instant the host's last model falls, the SAME hero click that was just refused must be accepted.
 func test_hero_eligible_the_instant_the_host_is_destroyed() -> void:
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	var host := E2EBoot.make_unit(_main, 1, "Host590b", [Vector3.ZERO])
 	(host.models[0] as ModelInstance).model_index = 0
 	var hero := _joined_hero(host, "Hero590b", 1)
@@ -157,7 +157,7 @@ func test_hero_eligible_the_instant_the_host_is_destroyed() -> void:
 ## not waive the host-before-hero order. Two host models must BOTH fall before the hero (Tough(3),
 ## already carrying one earlier wound) is eligible for its second.
 func test_already_wounded_tough_hero_stays_protected_until_host_dies() -> void:
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	var host := E2EBoot.make_unit(_main, 1, "Host590c", [Vector3.ZERO, Vector3(0.05, 0, 0)])
 	for i in range(host.models.size()):
 		(host.models[i] as ModelInstance).model_index = i
@@ -200,14 +200,14 @@ func test_already_wounded_tough_hero_stays_protected_until_host_dies() -> void:
 ## (host models first, hero last) must land on the identical casualty state — the interactive gate
 ## may never legalise an order the automatic path forbids.
 func test_auto_and_interactive_paths_agree_on_the_final_casualty_state() -> void:
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	var host_auto := E2EBoot.make_unit(_main, 2, "HostAuto590", [Vector3.ZERO, Vector3(0.05, 0, 0)])
 	for i in range(host_auto.models.size()):
 		(host_auto.models[i] as ModelInstance).model_index = i
 	var hero_auto := _joined_hero(host_auto, "HeroAuto590", 3)
 	await _main._solo_apply_wounds(host_auto, 3)   # AI-owned unit → the automatic path only, no prompt
 
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	var host_click := E2EBoot.make_unit(_main, 1, "HostClick590", [Vector3.ZERO, Vector3(0.05, 0, 0)])
 	for i in range(host_click.models.size()):
 		(host_click.models[i] as ModelInstance).model_index = i
