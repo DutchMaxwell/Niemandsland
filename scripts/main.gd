@@ -3622,6 +3622,8 @@ func core_drag_blocked(gu: GameUnit, for_drag := false) -> bool:
 	if not CoreActivation.is_lifecycle_unit(self, gu) or CoreActivation.session_open(gu.unit_id) \
 			or CoreActivation.session_open(_solo_combat_unit(gu).unit_id):
 		return false
+	if for_drag and hotseat_turn_refusal(unit_owner_slot(gu.unit_properties)) != "":
+		return false   # step 2.T2b (Q7): the turn guard owns an off-turn drag; it snaps back on release
 	return not (for_drag and gu.is_activated and not GraphicsSettings.enforce_movement_limit)
 
 
