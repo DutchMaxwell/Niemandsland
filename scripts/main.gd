@@ -13097,6 +13097,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"Consolidation: move %s back 1\" (the charger separates — %s)" % [charger.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger))], true)
+			CoreActivation.begin_post_melee_move(self, charger, 1.0, "Pull-back")   # its own move: the charge does not count
 			await _solo_board_prompt(
 				"Pull back 1\": drag %s back from the melee (%s) — the game waits." % [charger.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger))],
 				"✓ Pulled back")
@@ -13151,6 +13152,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Consolidation: %s may move up to 3\" (enemy destroyed — %s)" % [survivor.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(survivor))], false)
+	CoreActivation.begin_post_melee_move(self, survivor, 3.0, "Consolidation")   # its own move: the charge does not count
 	await _solo_board_prompt(
 		"Consolidate: %s destroyed the enemy — you may drag it up to 3\" (%s)." % [survivor.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(survivor))],
 		"✓ Done consolidating")

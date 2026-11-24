@@ -1991,3 +1991,61 @@ func test_a_refused_shot_leaves_the_sessions_transcript_as_it_was(timeout := 120
 	CoreActivation.close_session(_main, att.unit_id)
 	_clear(units)
 	GraphicsSettings.enforce_movement_limit = was
+
+
+## ---- the move after a melee is a movement of its own (Consolidation Moves, GF / AoF Advanced Rules v3.5.1) ----
+
+## A plain enemy unit `x_in` east (the melee's other side; the consolidation reads only whether it still stands).
+func _enemy(x_in: float) -> GameUnit:
+	return ParityTable._make_unit(_main, {"player": 2, "name": "Foes", "models": 2, "x_in": x_in, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 1, "game_system": "gf", "faction_folder": "robot_legions", "rules": []}, {})
+
+
+func _allowance_lines() -> Array:
+	return _main.battle_log.entries().map(func(e: Dictionary) -> String: return str(e["text"])) \
+		.filter(func(t: String) -> bool: return t.contains("allowance is"))
+
+
+## An 11.5" Charge, then the melee ends with both units standing: the charger's 1" pull-back is accepted (the charge does
+## not count against it) and a second 1" pull-back is refused against the 1" allowance. RED before the fix: the pull-back
+## was summed with the charge and refused ("a model moved 12.5\" - the Charge allowance is 12.0\".").
+func test_the_pull_back_after_a_charge_has_its_own_1_inch_allowance() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var u := _human("Rifles")
+	var foe := _enemy(40.0)
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	_pick([_node(u, 0), _node(u, 1)])
+	await _switch(ObjectManager.MovementCap.CHARGE, "")
+	await _drag_unit(u, 11.5)
+	assert_array(_allowance_lines()).override_failure_message("the 11.5\" charge drag was refused").is_empty()
+	_main._solo_consolidate_melee(u, foe)   # not awaited: it waits on the board prompt
+	await _runner.simulate_frames(2)
+	var at := _poses(u)
+	await _drag_unit(u, -1.0)
+	assert_array(_allowance_lines()).override_failure_message("the 1\" pull-back was refused").is_empty()
+	assert_array(_poses(u)).override_failure_message("the pull-back did not move").is_not_equal(at)
+	await _drag_unit(u, -1.0)
+	assert_array(_allowance_lines()).is_equal(["Rifles: a model moved 2.0\" - the Pull-back allowance is 1.0\"."])
+	GraphicsSettings.enforce_movement_limit = was
+
+
+## The same 11.5" Charge destroys the enemy: the survivor's 3" consolidation is accepted, one more inch is refused.
+func test_the_consolidation_after_a_charge_has_its_own_3_inch_allowance() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var u := _human("Rifles")
+	var foe := _enemy(40.0)
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	_pick([_node(u, 0), _node(u, 1)])
+	await _switch(ObjectManager.MovementCap.CHARGE, "")
+	await _drag_unit(u, 11.5)
+	for m in foe.models:
+		(m as ModelInstance).is_alive = false
+	_main._solo_consolidate_melee(u, foe)   # not awaited: it waits on the board prompt
+	await _runner.simulate_frames(2)
+	await _drag_unit(u, 3.0)
+	assert_array(_allowance_lines()).override_failure_message("the 3\" consolidation was refused").is_empty()
+	await _drag_unit(u, 1.0)
+	assert_array(_allowance_lines()).is_equal(["Rifles: a model moved 4.0\" - the Consolidation allowance is 3.0\"."])
+	GraphicsSettings.enforce_movement_limit = was
