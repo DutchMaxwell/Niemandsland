@@ -432,6 +432,11 @@ var _wall_cells: Dictionary = {}
 var _grid_dims: Vector2i = Vector2i.ZERO
 var _cell_size_m: float = 0.0
 
+## Terrain label plaque size: ~5 mm per line, wrapped at 5" so the plaque's turning circle (half its diagonal,
+## about 2.6") stays on a 9" x 6" piece and on the table.
+const TERRAIN_LABEL_PIXEL_SIZE := 0.0003
+const TERRAIN_LABEL_WRAP_M := 5.0 * INCHES_TO_METERS
+const TERRAIN_LABEL_REACH_M := 2.6 * INCHES_TO_METERS
 ## Neighbour offset per edge_side (0=N, 1=E, 2=S, 3=W).
 const _EDGE_DELTA: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 
@@ -1359,7 +1364,7 @@ func _cell_to_world(cell_x: float, cell_y: float, grid_dims: Vector2i, cell_size
 
 
 ## (Re)build one always-visible effect label per terrain zone — small, lying FLAT on the
-## terrain, in a wall-free edge cell of the zone so it stays readable. Uses cached grid
+## terrain, at the centre of the zone's on-table part (see _label_anchor) so it stays readable. Uses cached grid
 ## geometry + _wall_cells, so it can run from update_overlay() and again from
 ## update_wall_models() once walls are known. Pure-derived; no save/network sync needed.
 func _rebuild_terrain_labels() -> void:
@@ -1368,17 +1373,29 @@ func _rebuild_terrain_labels() -> void:
 	if grid_cells.is_empty() or _cell_size_m <= 0.0:
 		return
 	var rotation_rad := deg_to_rad(grid_rotation_degrees)
+	var table_w := table_size_feet.x * 12.0 * INCHES_TO_METERS
+	var table_d := table_size_feet.y * 12.0 * INCHES_TO_METERS
+	var reach := TERRAIN_LABEL_REACH_M
 	for zone in _terrain_zones(grid_cells):
 		var ttype: int = zone["type"]
 		var text := _terrain_effect_label(ttype)
 		if text.is_empty():
 			continue
-		var cells: Array = zone["cells"]
+		# Only the part of the piece that lies on the table counts: a piece hanging off a rotated grid
+		# keeps its label on the board, and a piece wholly off the table gets none.
+		var cells: Array = []
+		for c: Vector2i in zone["cells"]:
+			if _is_cell_visible(c, _grid_dims, _cell_size_m, rotation_rad, table_w, table_d):
+				cells.append(c)
+		if cells.is_empty():
+			continue
 		var zone_set := {}
 		for c in cells:
 			zone_set[c] = true
-		var cell := _pick_label_cell(cells, zone_set)
-		var pos := _cell_to_world(float(cell.x), float(cell.y), _grid_dims, _cell_size_m, rotation_rad)
+		var pos := _label_anchor(cells, zone_set, rotation_rad)
+		# The plaque turns toward the camera around its centre, so keep its whole turning circle on the table.
+		pos.x = clampf(pos.x, minf(0.0, -table_w / 2.0 + reach), maxf(0.0, table_w / 2.0 - reach))
+		pos.z = clampf(pos.z, minf(0.0, -table_d / 2.0 + reach), maxf(0.0, table_d / 2.0 - reach))
 		var lbl := Label3D.new()
 		lbl.name = "TerrainLabel"
 		lbl.text = text
@@ -1389,7 +1406,11 @@ func _rebuild_terrain_labels() -> void:
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		lbl.modulate = Color.WHITE
 		lbl.outline_modulate = Color(0.03, 0.03, 0.03, 0.95)
-		lbl.pixel_size = 0.0003  # small (~5 mm per line)
+		lbl.pixel_size = TERRAIN_LABEL_PIXEL_SIZE  # small (~5 mm per line)
+		# Wrap the long rule line (the ruins' Unstable text alone is ~19 cm on one line) into a compact plaque
+		# that fits on a piece even while it turns toward the camera.
+		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		lbl.width = TERRAIN_LABEL_WRAP_M / TERRAIN_LABEL_PIXEL_SIZE
 		lbl.rotation_degrees = Vector3(-90.0, rad_to_deg(rotation_rad), 0.0)  # flat, grid-aligned
 		lbl.position = Vector3(pos.x, LABEL_Y, pos.z)
 		add_child(lbl)
@@ -1412,6 +1433,19 @@ func _process(_delta: float) -> void:
 		var to_cam := cam_pos - lbl.global_position
 		# Stay flat (-90° about X) and yaw around the table normal to face the camera horizontally.
 		lbl.rotation = Vector3(-PI / 2.0, atan2(to_cam.x, to_cam.z), 0.0)
+
+
+## Where a zone's label lies: the centre of the piece's on-table cells, so the turning plaque stays on the piece.
+## When a wall stands on that centre (an odd ruin shape), fall back to the wall-free cell pick below.
+func _label_anchor(cells: Array, zone_set: Dictionary, rotation_rad: float) -> Vector3:
+	var sum := Vector2.ZERO
+	for c: Vector2i in cells:
+		sum += Vector2(c)
+	var centre := sum / cells.size()
+	if not _wall_cells.has(_central_cell(cells)):
+		return _cell_to_world(centre.x, centre.y, _grid_dims, _cell_size_m, rotation_rad)
+	var cell := _pick_label_cell(cells, zone_set)
+	return _cell_to_world(float(cell.x), float(cell.y), _grid_dims, _cell_size_m, rotation_rad)
 
 
 ## Pick a zone cell for the effect label: prefer a wall-free EDGE cell (a Randfeld), then
