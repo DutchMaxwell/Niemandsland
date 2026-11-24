@@ -2019,7 +2019,7 @@ func test_the_pull_back_after_a_charge_has_its_own_1_inch_allowance() -> void:
 	await _switch(ObjectManager.MovementCap.CHARGE, "")
 	await _drag_unit(u, 11.5)
 	assert_array(_allowance_lines()).override_failure_message("the 11.5\" charge drag was refused").is_empty()
-	_main._solo_consolidate_melee(u, foe)   # not awaited: it waits on the board prompt
+	SoloHarness.consolidate(_main, u, foe)   # not awaited: it waits on the board prompt
 	await _runner.simulate_frames(2)
 	var at := _poses(u)
 	await _drag_unit(u, -1.0)
@@ -2042,7 +2042,7 @@ func test_the_consolidation_after_a_charge_has_its_own_3_inch_allowance() -> voi
 	await _drag_unit(u, 11.5)
 	for m in foe.models:
 		(m as ModelInstance).is_alive = false
-	_main._solo_consolidate_melee(u, foe)   # not awaited: it waits on the board prompt
+	SoloHarness.consolidate(_main, u, foe)   # not awaited: it waits on the board prompt
 	await _runner.simulate_frames(2)
 	await _drag_unit(u, 3.0)
 	assert_array(_allowance_lines()).override_failure_message("the 3\" consolidation was refused").is_empty()
