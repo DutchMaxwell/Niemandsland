@@ -86,11 +86,11 @@ static func theme_from_env() -> String:
 	return OS.get_environment(ENV_THEME).strip_edges().to_lower()
 
 
-static func attach(table: Node, layout: Dictionary) -> BoardgenGreybox:
+static func attach(table: Node, layout: Dictionary, dress: BoardgenDress = null) -> BoardgenGreybox:
 	var node := BoardgenGreybox.new()
 	node.name = "BoardgenGreybox"
 	node.add_to_group(TABLE_OVERLAY_GROUP)
-	node.build(layout)
+	node.build(layout, dress)
 	if node.layout_theme == BoardgenTheme.RUIN_TOWN:   # the gaming table round the town instead of the void (texture plan step 8)
 		var feet: Variant = table.get("table_size")
 		var surround := BoardgenSurround.make(layout, feet if feet is Vector2 else Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) / 12.0)
@@ -282,7 +282,7 @@ static func draws_itself(b: Dictionary, skip := {}) -> bool:
 
 
 ## The whole board in ONE MultiMesh (one draw call, one shared procedural material) plus a collider per solid box.
-func build(layout: Dictionary) -> void:
+func build(layout: Dictionary, dress: BoardgenDress = null) -> void:
 	layout_seed = int(layout.get("seed", 0))
 	layout_theme = str(layout.get("theme", "Deepworks"))
 	_layout = layout
@@ -300,7 +300,8 @@ func build(layout: Dictionary) -> void:
 	var kit_ladders: bool = theme["id"] == BoardgenTheme.DEEPWORKS and not ladders.is_empty() and kit.usable(ladders.keys())   # the town keeps its timber box ladders
 	var town_kit: BoardgenTownKit = BoardgenTownKit.new() if theme["id"] == BoardgenTheme.RUIN_TOWN else null
 	var kit_town := town_kit != null and town_kit.active()   # the authored roofs, chimneys and merlons (else the boxes below)
-	var dress: BoardgenDress = BoardgenDress.new() if theme["id"] == BoardgenTheme.RUIN_TOWN else null   # the dressing: the classes it draws as modules skip the old look
+	if dress == null and theme["id"] == BoardgenTheme.RUIN_TOWN:
+		dress = BoardgenDress.new()   # the dressing: the classes it draws as modules skip the old look
 	var skip := dress.classes() if dress != null and dress.setup(layout) else {}
 	var boxes := plan(layout).filter(func(b: Dictionary) -> bool: return not (kit_ladders and b["kind"] == "ladder") and not (kit_town and (BoardgenTownKit.replaces(b) or town_kit.replaces_clutter(b))))
 	if kit_ladders:   # the authored ladders replace the box ladders

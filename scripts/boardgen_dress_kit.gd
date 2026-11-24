@@ -56,6 +56,11 @@ func errors() -> PackedStringArray:
 	return _errors.duplicate()
 
 
+## True when the kit draws every module as a box of its aabb (tests): no GLB is needed.
+func force_stub() -> bool:
+	return _force_stub
+
+
 ## The number of specs the manifest gave (zero when the manifest or its modules block is broken).
 func spec_count() -> int:
 	return _specs.size()
