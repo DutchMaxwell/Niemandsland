@@ -17,10 +17,6 @@ static var records: Array = []
 static var placed: Array = []
 ## The first difference in words (which roll, which unit), for the report's diagnosis; set by `compare`/`_state_diff`.
 static var _detail := {}
-## C-19 s2: the volley's compare, held until the activation's last table die (`flush`). The core's one call also rolls
-## the end-of-activation morale from Dangerous wounds, which the table throws only after the volley code returned
-## (main.gd's AI body); comparing at the volley's end read that die as "core_rolls_more". [unit, report, groups, order].
-static var _held: Array = []
 ## The replay gates' reading (tools/parity/parity_compare.py): these kinds fold to "attack", a defense target clamps to 2..6.
 const FOLD := ["morale", "fearless", "no_retreat", "regeneration", "ravage", "battleborn", "dangerous"]
 ## CC-10c: the core's cast legs as the door names them on the tray: [kind, leg] (`CoreActivation.CAST_KINDS`, one map for both).
@@ -111,41 +107,25 @@ static func note_placed(main, unit: GameUnit, report: Dictionary) -> void:
 				_cast_pending = [unit, report]
 
 
-## C-19 s2: the volley code's hand-off: the compare waits for `flush` (the AI body, after its end-of-activation morale).
-static func hold(main, unit: GameUnit, report: Dictionary, groups: Dictionary, order: Array) -> void:
-	if (enabled() or cast_enabled()) and int(main._solo_core_shadow_h) != 0 and not order.is_empty():
-		_held = [unit, report, groups, order]
-
-
-## C-19 s2: the held compare, now that the table has thrown every die of the activation it shares with the core's one
-## call (the AI body calls it before Ambush re-deployment and Coordinate, and its wrapper on every early exit). CC-10c: a
-## cast-only activation (no volley held a compare) is replayed here, with no aim and no targets.
+## The activation's cast compare, now that the table has thrown every die of the activation (the AI body calls it before
+## Ambush re-deployment and Coordinate, and its wrapper on every early exit). Casts only: a volley the rules core cannot
+## resolve is held and throws no table die, so there is no volley to compare.
 static func flush(main) -> void:
-	if _held.is_empty():
-		if not _cast_pending.is_empty() and int(main._solo_core_shadow_h) != 0:
-			var p: Array = _cast_pending
-			_cast_pending = []
-			compare(main, p[0], p[1], {}, [])
-		return
-	var h: Array = _held
-	_held = []
-	_cast_pending = []   # the held compare carries this activation's casts: no second, cast-only compare of the same tap
-	compare(main, h[0], h[1], h[2], h[3])
+	if not _cast_pending.is_empty() and int(main._solo_core_shadow_h) != 0:
+		var p: Array = _cast_pending
+		_cast_pending = []
+		compare(main, p[0], p[1])
 
 
-## C-4: after the table resolved this AI activation's volley(s) at `order` (`groups`: target id -> {target, shots}),
-## replay the activation in the core on the shadow board with the table's own faces (the cast and spell legs left out,
-## as the replay gates do), then compare the roll stream by gate reading and each unit's end state (alive, the living
-## models' wounds as a multiset, shaken, fatigued). No landing, no line, no die: the core's answer is only read.
-## CC-10c: with NML_CORE_SHADOW_CAST=1 the cast inputs ride after the intent, the cast/spell legs stay in the stream, and
-## an empty `order` (a cast-only activation) is a compare of the casts alone.
-static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary, order: Array) -> void:
-	if int(main._solo_core_shadow_h) == 0 or (order.is_empty() and not cast_enabled()):
+## CC-10c (NML_CORE_SHADOW_CAST=1): replay this AI activation's casts in the core on the shadow board with the table's own
+## faces (the cast inputs ride after the intent, the cast/spell legs stay in the stream), then compare the roll stream by
+## gate reading and each unit's end state (alive, the living models' wounds as a multiset, shaken, fatigued). No landing,
+## no line, no die: the core's answer is only read.
+static func compare(main, unit: GameUnit, report: Dictionary) -> void:
+	if int(main._solo_core_shadow_h) == 0 or not cast_enabled():
 		return
 	var core: Object = main.solo_controller._core_node_ready()
-	var split: Array = CoreActivation.split_aim(order.map(func(id) -> Dictionary: return groups[id]))   # the door's own aim
-	var target: GameUnit = groups[order[0]]["target"] if not order.is_empty() else null
-	var t := CoreActivation.ai_transcript(main, unit, report, target, split)
+	var t := CoreActivation.ai_transcript(main, unit, report, null, CoreActivation.split_aim([]))
 	if not placed.is_empty():
 		t = placed + t.slice(3)
 	var damage: Array = _damage_spells(report)
@@ -165,7 +145,7 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 	# hero" but the tray still reads "AI (<unit>)"); the core names the hero. One unit, one roller: a hero's name also
 	# matches its host's.
 	var host_of := {}
-	for gu in [unit] + order.map(func(id) -> GameUnit: return groups[id]["target"]):
+	for gu in [unit]:
 		for hero in (gu as GameUnit).get_attached_heroes():
 			host_of[(hero as GameUnit).get_name()] = (gu as GameUnit).get_name()
 	while str(r["step"]) == "need_roll" and diff == "":
@@ -198,23 +178,14 @@ static func compare(main, unit: GameUnit, report: Dictionary, groups: Dictionary
 		if diff == "" and slots_enabled():
 			diff = _positions_diff(main, plain)   # WHICH models stand, not only how many (the casualty order)
 		core.release(int(r["handle"]))
-	diff = _legality(main, r, diff, [unit] + order.map(func(id) -> GameUnit: return groups[id]["target"]))
+	diff = _legality(main, r, diff, [unit])
 	var labels: Array = CoreActivation.why_not(main, unit, null)
-	for id in order:
-		for w in CoreActivation.why_not(main, null, groups[id]["target"]):
-			if not labels.has(w):
-				labels.append(w)
-	if order.size() > 1:
-		labels.append("split")
 	# C-18: what the deny-mode slice (NML_CORE_SLICE=deny) would refuse here: [] = the core door would take this volley.
 	var deny: Array = CoreSlice.refusals_in(CoreSlice.DENY_PATH, unit)
-	for id in order:
-		deny.append_array(CoreSlice.refusals_in(CoreSlice.DENY_PATH, groups[id]["target"], true).map(func(x): return "target_" + x))
-		deny.append_array(CoreSlice.pair_refusals_in(CoreSlice.DENY_PATH, unit, groups[id]["target"]))
 	if not (report.get("casts", []) as Array).is_empty() and not cast_enabled():
 		deny.append("cast")   # the door keeps a volley after this activation's casts on the table (`run_ai`)
 	records.append({"deny": deny, "equal": diff == "", "first_diff": diff, "labels": labels, "unported": r.get("unported", []),
-		"detail": _detail, "shooter": unit.get_name(), "targets": order.map(func(id) -> String: return groups[id]["target"].get_name())}.merged(_legal))
+		"detail": _detail, "shooter": unit.get_name(), "targets": []}.merged(_legal))
 
 
 ## Two gate keys are one roll: equal, or equal but for a core owner that is a joined hero of the table's owner.
@@ -432,7 +403,6 @@ static func release(main) -> void:
 	melee_end(main)
 	_melee = {}
 	_core_rolls = []
-	_held = []
 	placed = []
 	_cast_pending = []
 	_buffs_before = {}
