@@ -766,7 +766,7 @@ fn starts_torn(&self, starts: &[V2], radii_m: &[f64]) -> bool {
     let radii_in: Vec<f64> = radii_m.iter().map(|r| r / IN2M).collect();
     let shapes: Vec<_> = self.movers.iter().map(|m| self.state.base_shape(m.unit)).collect();
     let chain = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) {
-        self.state.book(self.si).chain_in
+        self.state.book(self.si).chain_in_at(self.rules_epoch)
     } else {
         super::MAX_CHAIN_IN
     };
@@ -1105,7 +1105,7 @@ fn execute_from(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64],
         // unit, read by both gate arms (:6491, :6503) and by the ladder's own
         // coherency predicates (:4846, :4941, :4966).
         let chain = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) {
-            state.book(self.si).chain_in
+            state.book(self.si).chain_in_at(self.rules_epoch)
         } else {
             super::MAX_CHAIN_IN
         };
@@ -1510,7 +1510,7 @@ pub(crate) fn pile_in_state(self, state: &mut State, t: &Terrain, si: usize, ti:
     let walls: Vec<[[f32; 2]; 2]> = if flying { Vec::new() } else { t.walls_world_m().iter().copied().chain(houses.iter().copied()).collect() };
     let on_house = |c: V3, r: f64| t.solid_at(f64::from(c[0]) / t.in2m(), f64::from(c[2]) / t.in2m())
         || houses.iter().any(|w| g2::point_seg_distance([c[0], c[2]], w[0], w[1]) < r + 0.001);
-    let chain = state.book(ti).chain_in;
+    let chain = state.book(ti).chain_in_at(self.rules_epoch);
     let mut moved = 0;
     for i in order {
         let (m, p, r) = (dm[i], pos_of(state, dm[i]), radius_of(state, dm[i]));
@@ -1584,7 +1584,7 @@ pub fn unit_coherent_now(self, state: &State, t: &Terrain, si: usize, hero_attac
     let radii_in: Vec<f64> = movers.iter().map(|m| radius_of(state, *m) / IN2M).collect();
     let shapes: Vec<_> = movers.iter().map(|m| state.base_shape(m.unit)).collect();
     let chain = if rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) {
-        state.book(si).chain_in
+        state.book(si).chain_in_at(self.rules_epoch)
     } else {
         super::MAX_CHAIN_IN
     };
@@ -3096,6 +3096,20 @@ pub(crate) mod tests {
         let (gf, gff) = (stepped("gf"), stepped("gff"));
         assert!(gf > 0.0 && gf < 1.5, "gf takes a short coherent step: {gf:.2} in");
         assert!((gff - 3.0).abs() < 0.05, "gff takes the full 3 in step: {gff:.2} in");
+    }
+
+    /// From `PENDING_EPOCH_FIREFIGHT_CHAIN` a gff unit chains at 9 in; one epoch below it keeps the recorded 6 in. gf
+    /// reads 9 in and aofs 6 in on both sides. Five in a row spread 8 in: torn under 6 in, whole under 9 in.
+    #[test]
+    fn firefight_chain_is_nine_inches_from_its_epoch() {
+        let e = crate::acts::PENDING_EPOCH_FIREFIGHT_CHAIN;
+        let whole = |sys: &str, epoch: u32| {
+            MoveRules { rules_epoch: epoch }.unit_coherent_now(&five_in_a_row(sys, vec![]), &board(vec![]), 0, true)
+        };
+        assert!(!whole("gff", e - 1), "one epoch below: torn under the recorded 6 in");
+        assert!(whole("gff", e), "from the epoch: whole under 9 in");
+        assert!(whole("gf", e - 1) && whole("gf", e), "gf: 9 in on both sides");
+        assert!(!whole("aofs", e - 1) && !whole("aofs", e), "aofs: 6 in on both sides");
     }
 
     /// L-RF1 F6: a defender west of a house (tier cell 5 of a 1 ft board, x -3..0 in) piles in toward a charger east of it.

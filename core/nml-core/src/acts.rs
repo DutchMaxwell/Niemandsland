@@ -1042,6 +1042,11 @@ pub const EPOCH_96_PARITY_BATCH: u32 = 96;
 ///   (Fortified, the Regeneration family) still drop (`Ctx::wiped` -> `keep_to_hit_of`).
 pub const EPOCH_97_WIPED_TO_HIT_DECLARED: u32 = 97;
 pub const CURRENT_RULES_EPOCH: u32 = 97;
+/// PENDING (the 3.6 Firefight book): a `gff` unit's coherency chain is 9 in, not 6 in; AoF: Skirmish keeps 6 in. A
+/// placeholder one past `CURRENT_RULES_EPOCH`: no record plays it until the next batch freezes it into an `EPOCH_<n>_*`
+/// constant and bumps `CURRENT_RULES_EPOCH`. Records stamped 97 or below replay byte-exact. Read only through
+/// `rules::Book::chain_in_at`.
+pub const PENDING_EPOCH_FIREFIGHT_CHAIN: u32 = 98;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
