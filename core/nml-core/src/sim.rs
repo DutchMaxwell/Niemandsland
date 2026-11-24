@@ -1113,7 +1113,7 @@ fn side_up(state: &State, i: usize, seams: Seams) -> bool {
 /// `blast_spread_in` split across neighbouring units separately (Phase 2); while `None`, the cap is
 /// the target unit alone, byte-identical to `_solo_combined_alive(target)`.
 fn blast_cap_models(state: &State, ti: usize, seams: Seams, book: &crate::rules::Book) -> i64 {
-    if book.hero_aura.joins {
+    if book.hero_aura_at(seams.rules_epoch).joins {
         combined_alive(state, ti, seams)
     } else {
         state.alive[ti]
@@ -7603,7 +7603,7 @@ fn hero_aura_quality_for_book(
 }
 
 fn hero_aura_quality(statics: &[UnitStatic], state: &State, i: usize, own: i64, seams: Seams) -> Option<(usize, i64)> {
-    hero_aura_quality_for_book(statics, state, i, own, seams, state.book(i).hero_aura)
+    hero_aura_quality_for_book(statics, state, i, own, seams, state.book(i).hero_aura_at(seams.rules_epoch))
 }
 
 /// G4R4 C-BANNER-DEAD-HOST (`EPOCH_73_V36`): the part of unit `i`'s recorded Banner bonus that left with its carrier. The
