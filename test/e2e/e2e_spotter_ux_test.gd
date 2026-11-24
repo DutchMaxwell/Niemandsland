@@ -20,8 +20,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 
 
@@ -172,7 +171,7 @@ func test_human_to_hit_line_names_the_spent_spot_bonus(timeout := 120000) -> voi
 	var target := _reg(E2EBoot.make_unit(_main, 2, "Marked", [Vector3(10.0 * INCH, 0, 0)]))
 	_main._solo_place_spot_marker(spotter, target)
 	_main._solo_place_spot_marker(spotter, target)
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	await _main._run_human_shooting(attacker, target)
 	assert_str(_log_text()) \
 		.override_failure_message("NML-970 — the volley consumed 2 markers but the To-hit line never named the bonus:\n%s" % _log_text()) \
@@ -192,7 +191,7 @@ func test_ai_to_hit_line_names_the_spot_bonus_too(timeout := 120000) -> void:
 	var target := _reg(E2EBoot.make_unit(_main, 1, "Marked", [Vector3(10.0 * INCH, 0, -1.0 * INCH),
 		Vector3(10.0 * INCH, 0, 0), Vector3(10.0 * INCH, 0, 1.0 * INCH), Vector3(10.0 * INCH, 0, 2.0 * INCH)]))
 	_main._solo_place_spot_marker(eyes, target)
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_arm_save_pump()
 	await _main._solo_resolve_ai_volley(ai, target, _shots(ai, "Autogun", 2, 24), false)
 	assert_str(_log_text()) \
