@@ -411,7 +411,7 @@ impl NmlCore {
         actcall::check_of(&slot.statics, &slot.cap.state, &unit.to_string(), terrain, seams, &drop, enforce)
     }
 
-    /// PLAN_FIRST_DELETION 3b: may the models of the units `unit_ids` (roster keys) REST where they stand on handle `h`?
+    /// May the models of the units `unit_ids` (roster keys) REST where they stand on handle `h`?
     /// `{"ok": bool, "illegal": [{"unit", "model", "kind", "other", "other_model", "by_in"}]}` (`nml_core::mv::legal`), or
     /// `{"ok": false, "reason"}` for an unknown handle or key. Reads only; a `done` step carries the same list as `"illegal"`.
     #[func]

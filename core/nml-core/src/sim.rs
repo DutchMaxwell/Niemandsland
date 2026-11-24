@@ -536,7 +536,7 @@ fn land_wounds_in_order(state: &mut State, ti: usize, mut left: i64, mut order: 
     left
 }
 
-/// One-core P4.D-20/21 — the owner's answer to a target group's wound-allocation choice, as the group's landings consume
+/// The owner's answer to a target group's wound-allocation choice, as the group's landings consume
 /// it: ordered capture slots, first the Deadly wounds' picks, then the pool's. `at` = the models' positions when the
 /// choice opened (a landing never moves a survivor), so a slot's model is found again after any inline landing.
 struct AllocPicks {
@@ -558,7 +558,7 @@ impl AllocPicks {
     }
 }
 
-/// One-core P4.D-20/21 — group `gi`'s wound-allocation choice (`_solo_wound_choice_matters`, main.gd:16939, over the host's
+/// Group `gi`'s wound-allocation choice (`_solo_wound_choice_matters`, main.gd:16939, over the host's
 /// own models), opened where the group's landing starts: `deadly` Deadly wounds and `w` pool wounds land on `ti`, which has 2+
 /// living models and a mixed loadout or a Tough model, and either a Deadly wound or a pool smaller than its wounds is
 /// there to place. `None` = automatic: no choice named by the transcript (every seeded tray), or nothing to choose.
@@ -567,7 +567,7 @@ fn open_alloc(state: &State, si: usize, ti: usize, gi: usize, counts: (i64, i64)
     open_alloc_id(state, ti, &format!("wound_alloc:{}:{}:{gi}", state.key(si), state.key(ti)), counts, tray)
 }
 
-/// P4.D-20/21 + CC-6b: wound-allocation choice for an explicit `id` (volley group or cast `seq`).
+/// Wound-allocation choice for an explicit `id` (volley group or cast `seq`).
 fn open_alloc_id(state: &State, ti: usize, id: &str, (w, deadly): (i64, i64), tray: &mut Tray) -> Option<AllocPicks> {
     tray.feed()?;
     let kits = state.kits.get(ti).filter(|k| k.len() == state.wounds[ti].len())?;
@@ -582,7 +582,7 @@ fn open_alloc_id(state: &State, ti: usize, id: &str, (w, deadly): (i64, i64), tr
     Some(AllocPicks { picks: picks.into_iter(), slots, at: state.positions[ti].clone(), used: 0 })
 }
 
-/// P4.D-21 — `land_deadly_wounds` for the wounds the owner places (`SoloController.deadly_pick`, main.gd:10661, D17): a
+/// `land_deadly_wounds` for the wounds the owner places (`SoloController.deadly_pick`, main.gd:10661): a
 /// wound goes to the next pick and deals X capped at that model; a wound the auto pick FORCES onto an already-wounded Tough
 /// model, or one with no pick left, lands by `land_deadly_wounds`. Returns the wounds dealt.
 fn land_deadly_picked(state: &mut State, ti: usize, unsaved: i64, x: i64, seams: Seams, alloc: &mut AllocPicks, forced_n: &mut i64) -> i64 {
@@ -619,7 +619,7 @@ fn land_deadly_group(state: &mut State, ti: usize, unsaved: i64, x: i64, seams: 
     }
 }
 
-/// P4.D-20 — the pool's `w` wounds, one per remaining pick (landed first); the caller lands the rest by `casualty_order`
+/// The pool's `w` wounds, one per remaining pick (landed first); the caller lands the rest by `casualty_order`
 /// and gets the count left. Says the group's one allocation line.
 fn land_pool_picked(state: &mut State, ti: usize, w: i64, alloc: &mut AllocPicks, tray: &mut Tray) -> i64 {
     let mut left = w;
@@ -702,7 +702,7 @@ fn takedown_pick_cover_after(state: &State, ti: usize, cover: Cover, unit_flag: 
 /// and the model's label. The table picks per profile (main.gd:4171), after the earlier Takedown groups of the volley landed
 /// inline, so this replays `land_takedown_groups` on a scratch copy of the target's slots: a killed pick is gone, a wounded
 /// one ranks first for removal and so never last for the sniper. A recorded node carries no board, so it keeps the unit's flag.
-/// PLAN_COVER_36: `hidden` (the volley's `sight::Screen::hidden`, from 95 only) is the target's models behind a sight blocker,
+/// `hidden` (the volley's `sight::Screen::hidden`, from 95 only) is the target's models behind a sight blocker,
 /// in slot order; the pick is in cover when its square gives cover OR it is hidden.
 #[allow(clippy::too_many_arguments)]
 fn takedown_pick_info_after(
@@ -1634,7 +1634,7 @@ fn crossing_models_against(next: &State, legs: &[([f64; 2], [f64; 2])], ti: usiz
 /// A chain's members before a landing: (unit, positions, wounds).
 type ChainBefore = Vec<(usize, Vec<[f64; 3]>, Vec<i64>)>;
 
-/// One-core P4.D-37: `ti`'s chain (host, then its joined heroes) before a landing. Only a supplied tray takes it (a seeded
+/// `ti`'s chain (host, then its joined heroes) before a landing. Only a supplied tray takes it (a seeded
 /// one clones nothing); `land_chain_report` reads it after the landing.
 fn chain_snapshot(next: &State, ti: usize, tray: &Tray) -> Option<ChainBefore> {
     tray.feed().is_some().then(|| std::iter::once(ti).chain(next.attached[ti].iter().copied())
@@ -1776,12 +1776,12 @@ pub(crate) fn tray_crossing_attack(
         shot.log.push(format!(
             "Crossing Attack: {owner} crosses {tname} — {wounds} of {n} dice wound"
         ));
-        // P4.D-37: the step API shows the table's own sentence (`_solo_apply_crossing_attack`).
+        // The step API shows the table's own sentence (`_solo_apply_crossing_attack`).
         tray.say(|| LogLine { rule: "crossing_attack", category: Category::Combat, side: next.player[b], detail: None,
             text: format!("Crossing Attack: {crossing_models} model{} of {owner} cross {tname} — {wounds} of {n} dice wound (no save)",
                 if crossing_models == 1 { "" } else { "s" }) });
         if wounds > 0 {
-            let before = chain_snapshot(next, target, tray);   // P4.D-37: the landing the step API hands the table
+            let before = chain_snapshot(next, target, tray);   // the landing the step API hands the table
             land_wounds_with(next, target, wounds, seams.tray_exact);
             land_chain_report(statics, next, tray, target, before);
         }
@@ -1847,7 +1847,7 @@ pub(crate) fn tray_strafing(
     let said = format!("{rule}: {} passes over {tname} — attacks it as if shooting (once per activation)",
         statics[next.roster.profile[si]].name);
     shot.log.push(said.clone());
-    tray.say(|| LogLine { rule: "strafing", category: Category::Combat, side: next.player[si], text: said, detail: None });   // P4.D-37: the step API shows it
+    tray.say(|| LogLine { rule: "strafing", category: Category::Combat, side: next.player[si], text: said, detail: None });   // the step API shows it
     // ONE shooting exchange, ONLY the Strafing profiles, through the shared
     // volley resolver — main.gd:3007's `_solo_resolve_ai_volley(unit, target,
     // shots, true)`: the activation's modifier distance, the
@@ -1921,7 +1921,7 @@ pub(crate) fn tray_strafing(
     let w = shot.absorb(r);
     let members: Vec<usize> = parts.iter().map(|(b, _, _, _)| *b).collect();
     land_hazardous_self(statics, next, &members, seams, tray, shot);
-    let before = chain_snapshot(next, target, tray);   // P4.D-37: the landing the step API hands the table
+    let before = chain_snapshot(next, target, tray);   // the landing the step API hands the table
     if !seams.tray_exact {
         land_pool_wounds(next, target, w, false, seams, &mut shot.log);
     }
@@ -7175,7 +7175,7 @@ fn strike_phase(
     // BEFORE the landing like the table's `pools_before` (:6146) — overkill
     // wounds past the last model are lost and lash nothing back.
     let pool_before = wounds_left(next, ti);
-    // P4.D-48: a supplied tray (the step path) keeps the phase's landing and says the table's wound and loss lines
+    // A supplied tray (the step path) keeps the phase's landing and says the table's wound and loss lines
     // (`land_chain_report`, shared with the volley); a seeded tray snapshots nothing, so no draw or outcome moves.
     let landed = chain_snapshot(next, ti, tray);
     if !seams.tray_exact {
@@ -8002,7 +8002,7 @@ fn tray_charge_with_self_wounds(
     let mut charger_self_wounds = charger_self_wounds;
     let mut defender_self_wounds = 0;
     let regen_ignored_before = shot.regen_ignored;
-    // P4.D-48: the table's announce line (`_solo_show_attack_announce`), after the pile-in and before any strike.
+    // The table's announce line (`_solo_show_attack_announce`), after the pile-in and before any strike.
     let (sname, tname) = (statics[next.roster.profile[si]].name.clone(), statics[next.roster.profile[ti]].name.clone());
     say_melee(tray, next.player[si], format!("{sname} charges {tname}"));
     let strikes_first =
@@ -8145,7 +8145,7 @@ fn tray_charge_with_self_wounds(
         b += scourge_on_charger;
         let loser_without = melee_loser(next, si, ti, a_base, b_base, seams);
         let loser_with = melee_loser(next, si, ti, a, b, seams);
-        // P4.D-48: the table's result line (`_solo_log_melee_result`): what each side TOOK = the enemy's score, with the Fear
+        // The table's result line (`_solo_log_melee_result`): what each side TOOK = the enemy's score, with the Fear
         // and self-inflicted parts named. The Regeneration note is said; the Scourge notes are not (that rule stays off the door).
         let tally = |struck: i64, taken: i64, fear: i64| {
             let mut extra = Vec::new();
@@ -10891,11 +10891,11 @@ fn greedy_objective(next: &State, winner: usize, centre: V3, plan: &ConsolidateP
     best.map(|(_, _, p)| p)
 }
 
-/// P4.D-48: the placeholder a melee line carries where the table cites its rules book; the charge door fills it in
+/// The placeholder a melee line carries where the table cites its rules book; the charge door fills it in
 /// (`CoreActivation.drive`), since the core holds no book version.
 pub const CITE: &str = "{cite}";
 
-/// P4.D-48: one table melee line on a supplied tray (a seeded tray says nothing).
+/// One table melee line on a supplied tray (a seeded tray says nothing).
 fn say_melee(tray: &mut Tray, side: i64, text: String) {
     tray.say(|| LogLine { rule: "melee", category: Category::Combat, side, text, detail: None });
 }
@@ -10921,7 +10921,7 @@ fn consolidate_after_melee(next: &mut State, statics: &[UnitStatic], cover: Cove
     if next.alive[winner] <= 0 || (sep && next.alive[ti] <= 0) {
         return;
     }
-    // P4.D-48: the table's consolidation lines (`_solo_consolidate_melee`): the separation always, a win's move or its hold.
+    // The table's consolidation lines (`_solo_consolidate_melee`): the separation always, a win's move or its hold.
     let wname = statics[next.roster.profile[winner]].name.clone();
     let side = next.player[winner];
     let say = |dice: &mut Option<(&mut Tray, &mut ShootResult)>, text: String| if let (true, Some((tray, _))) = (v36, dice.as_mut()) { say_melee(tray, side, text) };
@@ -12232,7 +12232,7 @@ fn resolve_with(
                             // applies only while the TARGET stands within 1" of
                             // terrain (per model, the majority fold).
                             stealth_alias_terrain_gate(statics, &next, g.ti, cover, &mut def);
-                            // PLAN_COVER_36: cover from sight blockers, one verdict per target group for every weapon (the save fold
+                            // Cover from sight blockers, one verdict per target group for every weapon (the save fold
                             // lifts it per weapon for a held Indirect). Placeholder gate, no outcome below 95.
                             let mut td_hidden: Option<Vec<bool>> = None; // step 8: the Takedown pick's own screen
                             if seams.sighting && rule_on(seams.rules_epoch, crate::acts::EPOCH_95_PARITY_BATCH) {
@@ -12589,7 +12589,7 @@ fn resolve_with(
                             if !seams.tray_exact {
                                 land_pool_wounds(&mut next, g.ti, w, false, seams, &mut shot.log);
                             }
-                            // P4.D-21: the owner's allocation opens before any inline landing of this group moves the slots.
+                            // The owner's allocation opens before any inline landing of this group moves the slots.
                             let deadly: i64 = shot.deadly_groups.iter().map(|d| d.0).sum();
                             let mut alloc = if seams.tray_exact { open_alloc(&next, si, g.ti, gi, (w, deadly), tray) } else { None };
                             // Tray-exact S7: the table lands Takedown and Deadly INLINE per weapon
@@ -12762,7 +12762,7 @@ fn resolve_with(
             if engage_gap_in <= MELEE_ENGAGE_IN && per_model.as_ref().map_or(engage_gap_in <= BASE_CONTACT_EPSILON_IN
                     || engage_gap_in <= charge_remaining_in + BASE_CONTACT_EPSILON_IN, |t| t.0.is_some())
             {
-                // P4.D-48: the snap the table narrates (`_run_ai_melee`): its size and the models left at their band.
+                // The snap the table narrates (`_run_ai_melee`): its size and the models left at their band.
                 let mut said_snap = (0.0, 0);
                 if let Some((Some((snapped, s)), _)) = per_model {
                     next = snapped;
@@ -12824,7 +12824,7 @@ fn resolve_with(
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.
                         if !rule_on(seams.rules_epoch, EPOCH_65_MELEE_TRUTH) || morale_side_alive(&next, li, seams) {
-                            // P4.D-48: a rout removes the loser; the step path lands it with the table's lines.
+                            // A rout removes the loser; the step path lands it with the table's lines.
                             let routed = chain_snapshot(&next, li, tray);
                             // MOR-09b: the loser's own charge keeps Banner but drops the
                             // Valiant share; only a unit that WAS charged keeps the band.
@@ -12923,7 +12923,7 @@ fn resolve_with(
                     consolidate_after_melee(&mut next, statics, cover, seams, si, ti, dice.as_mut().map(|d| (&mut *d.0, &mut *d.1)));
                 }
             } else if let Some((tray, _)) = dice.as_mut() {
-                // P4.D-48: the table's falls-short lines (`_run_ai_melee`): out of the engage reach, or the snap's budget spent.
+                // The table's falls-short lines (`_run_ai_melee`): out of the engage reach, or the snap's budget spent.
                 let sname = &statics[pi_s].name;
                 say_melee(tray, next.player[si], if engage_gap_in > MELEE_ENGAGE_IN {
                     format!("{sname}'s charge falls short ({engage_gap_in:.1}\")")

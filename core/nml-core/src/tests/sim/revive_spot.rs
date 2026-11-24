@@ -1,6 +1,6 @@
 use super::*;
 
-    // ------------- REVIVE-SPOT (PLAN_REVIVE_SPOT.md): where a Reanimation brings a model back -----------------
+    // ------------- where a Reanimation brings a model back -----------------
 
     /// The plan's facts first: what the core does TODAY (rules epoch 95), measured, not read. Unit 0 is the
     /// Reanimation carrier: `n` models of Tough(`tough`), the first `standing.len()` of them standing at `standing`
