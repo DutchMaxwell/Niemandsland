@@ -242,3 +242,5 @@ tools/policy_dump.gd
 tools/rng_fixture.gd
 tools/rng_range_fixture.gd
 tools/shipped_base_dump.gd
+scripts/boardgen_dress_grid_index.gd
+test/boardgen_dress_grid_index_test.gd
