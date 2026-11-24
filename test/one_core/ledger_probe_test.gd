@@ -42,10 +42,9 @@ func before_test() -> void:
 	await _runner.simulate_frames(4)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
-	_main._solo_batch = true
-	_main._solo_auto_saves = true
+	SoloHarness.start(_main, [2])
+	SoloHarness.instant(_main)
+	SoloHarness.auto_saves(_main)
 	CoreActivation._env = 1
 
 

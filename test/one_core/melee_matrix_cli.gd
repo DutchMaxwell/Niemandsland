@@ -94,15 +94,12 @@ static func load_cells(path: String) -> Array:
 
 
 static func arm(main: Node) -> void:
-	main.solo_ai_slots = {1: true, 2: true}
-	main._ensure_solo_controller()
-	main.solo_controller.ai_slot = 2
-	main.solo_controller.human_slot = 1
+	SoloHarness.start(main, [1, 2], 1)
 	main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	main.opr_army_manager.current_round = 1
-	main._solo_batch = true
-	main._solo_auto_saves = true
-	main._solo_fast = true
+	SoloHarness.instant(main)
+	SoloHarness.auto_saves(main)
+	SoloHarness.fast(main)
 	main._autosave_controller.set_lesson_paused(true)
 	CoreActivation._env = 1
 	CoreActivation._charge_env = 1

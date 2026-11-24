@@ -57,11 +57,13 @@ func _boot(slots: Dictionary = {1: true, 2: true}) -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = slots   # default both seats AI: no save prompt waits
-	_main._ensure_solo_controller()
+	var ai_slots: Array[int] = []
+	for slot in slots:
+		ai_slots.append(int(slot))
+	SoloHarness.start(_main, ai_slots, 2 if ai_slots[0] == 1 else 1)   # default both seats AI: no save prompt waits
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 
 
 func test_a_plain_shooter_and_target_have_no_unit_reasons() -> void:
