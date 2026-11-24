@@ -67,6 +67,18 @@ func _rounds(show: Node3D) -> Array:
 	return show.get_children().filter(func(c: Node) -> bool: return not (c is FxBurst) and not (c is OmniLight3D))
 
 
+func _beam_meshes(show: Node3D) -> Array:
+	return show.get_children().filter(func(c: Node) -> bool: return c is MeshInstance3D)
+
+
+## Waits by process frames, never by wall time, until the beam mesh is gone: gone is terminal, so this cannot race
+## a slow frame the way a fixed sleep against the beam's short life does.
+func _await_no_beam(show: Node3D, timeout := 2000) -> void:
+	var deadline := Time.get_ticks_msec() + timeout
+	while not _beam_meshes(show).is_empty() and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+
+
 func test_an_arrow_flies_on_an_arc_and_a_gout_has_no_round(timeout := 5000) -> void:
 	var show := _show()
 	var a := Vector3(0, 0.03, 0)
@@ -75,7 +87,11 @@ func test_an_arrow_flies_on_an_arc_and_a_gout_has_no_round(timeout := 5000) -> v
 	show._fire(a, b, VolleyCue.Family.FLAME, 8, 2)
 	assert_int(_rounds(show).size()).override_failure_message("one arrow, no flame round").is_equal(1)
 	await get_tree().create_timer(ShotScript.SHOTS[VolleyCue.Family.BOW][0] * 0.5).timeout
-	var arrow := _rounds(show)[0] as Node3D
+	var flying := _rounds(show)
+	assert_int(flying.size()).override_failure_message("one arrow still in flight").is_equal(1)
+	if flying.is_empty():
+		return
+	var arrow := flying[0] as Node3D
 	assert_float(arrow.global_position.x).is_between(0.05, 0.25)
 	assert_float(arrow.global_position.y).override_failure_message("above the rule line").is_greater(0.03 + 0.01)
 	await get_tree().create_timer(ShotScript.SHOTS[VolleyCue.Family.BOW][0] * 0.6 + 0.1).timeout
@@ -88,6 +104,20 @@ class FireSpy extends "res://scripts/vfx/shot_show.gd":
 			ground_drop := 0.0) -> void:
 		fired += 1
 		super._fire(a, b, family, s, p, muzzle_k, echo, blast, ground_drop)
+
+
+## Reads the beam the moment its tween builds it, so the length check cannot race a slow frame: a loaded runner
+## can step a whole short beam life inside one frame, and a poll would never see it.
+class BeamSpy extends "res://scripts/vfx/shot_show.gd":
+	var beams_made := 0
+	var beam_len := -1.0
+	func _beam(a: Vector3, b: Vector3, shot: Array, p: int) -> void:
+		super._beam(a, b, shot, p)
+		var meshes := get_children().filter(func(c: Node) -> bool: return c is MeshInstance3D)
+		if meshes.is_empty():
+			return
+		beams_made += 1
+		beam_len = (meshes[meshes.size() - 1] as Node3D).global_transform.basis.y.length()
 
 
 func test_no_two_families_look_the_same() -> void:
@@ -111,16 +141,22 @@ func test_a_machine_gun_fires_a_burst_per_model(timeout := 5000) -> void:
 
 
 func test_a_beam_stands_from_muzzle_to_target_and_fades(timeout := 5000) -> void:
-	var show := _show()
+	var spy := auto_free(BeamSpy.new()) as BeamSpy
+	spy.force_for_tests = true
+	add_child(spy)
+	spy.enabled = true
 	var a := Vector3(0, 0.03, 0)
 	var b := Vector3(0.3, 0.03, 0)
-	show._fire(a, b, VolleyCue.Family.BEAM, 9, 2)
-	await get_tree().create_timer(0.08).timeout
-	var beams := show.get_children().filter(func(c: Node) -> bool: return c is MeshInstance3D)
-	assert_int(beams.size()).is_equal(1)
-	assert_float((beams[0] as Node3D).global_transform.basis.y.length()).is_equal_approx(a.distance_to(b) - 0.012, 0.002)
-	await get_tree().create_timer(0.4).timeout
-	assert_int(show.get_children().filter(func(c: Node) -> bool: return c is MeshInstance3D).size()).is_equal(0)
+	spy._fire(a, b, VolleyCue.Family.BEAM, 9, 2)
+	var deadline := Time.get_ticks_msec() + 2000
+	while spy.beams_made == 0 and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	assert_int(spy.beams_made).override_failure_message("the beam stands from muzzle to target").is_equal(1)
+	if spy.beams_made == 0:
+		return
+	assert_float(spy.beam_len).is_equal_approx(a.distance_to(b) - 0.012, 0.002)
+	await _await_no_beam(spy)
+	assert_int(_beam_meshes(spy).size()).override_failure_message("gone after its fade").is_equal(0)
 
 
 func test_every_round_tells_the_sound_hook_and_blast_adds_a_ring(timeout := 10000) -> void:
@@ -159,4 +195,6 @@ func test_a_blast_draws_a_ring_on_the_ground() -> void:
 	show._impact(Vector3(0.3, 0.05, 0.1), Vector3.LEFT, VolleyCue.Family.BALLISTIC, 2, 2, 0, 0.04)
 	var rings := show.get_children().filter(func(c: Node) -> bool: return c is MeshInstance3D and (c as MeshInstance3D).mesh is PlaneMesh)
 	assert_int(rings.size()).override_failure_message("one ring, for the Blast impact only").is_equal(1)
+	if rings.is_empty():
+		return
 	assert_float((rings[0] as Node3D).global_position.y).override_failure_message("on the ground").is_less(0.02)

@@ -553,7 +553,7 @@ pub fn deploy_footprint_offsets(model_count: usize, base_r: f64, skirmish: bool)
     } else {
         ((n as f64).sqrt().ceil()) as usize
     };
-    let rows = (n + cols - 1) / cols;
+    let rows = n.div_ceil(cols);
     let chain_cap_in = if skirmish { 6.0 } else { 9.0 };
     let span_cap = (chain_cap_in - 0.5) * 0.0254;
     let grid_diag = (((cols - 1) as f64).powi(2) + ((rows - 1) as f64).powi(2)).sqrt();
@@ -2262,14 +2262,6 @@ impl SettleShapeGeom {
         (self.semi_x * self.semi_x + self.semi_z * self.semi_z).sqrt()
     }
 
-    /// `SeparationChecker._min_extent` (:331-334) — the concentric fallback.
-    fn min_extent(&self) -> f64 {
-        if !self.oval {
-            return self.radius;
-        }
-        self.semi_x.min(self.semi_z)
-    }
-
     fn settle_shape(&self, center: [f32; 2]) -> SettleShape {
         SettleShape {
             center,
@@ -2538,6 +2530,8 @@ fn escape_to_clear(item: &mut [SettleShape], obstacles: &[SettleShape]) -> [f32;
             best_dir = u;
         }
     }
+    // also true for NaN: a NaN travel is no travel
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
     if !(best_travel > 0.0) || best_travel == f64::INFINITY {
         return [0.0, 0.0];
     }
@@ -2957,7 +2951,7 @@ fn deploy_ring_spot(
     comp: &[usize],
     idx: usize,
     board: &Terrain,
-    walls: &[WallSeg],
+    _walls: &[WallSeg],
     flying: bool,
     all: &[([f32; 2], f64)],
     moving: usize,
