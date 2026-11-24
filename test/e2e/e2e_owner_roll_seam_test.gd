@@ -10,6 +10,7 @@ extends GdUnitTestSuite
 ## an active session with this client on slot 1 and records every send_command instead of sending it.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
+const OwnerResendHarness := preload("res://test/support/owner_resend_harness.gd")
 const GUEST_PEER := 42
 
 var _runner: GdUnitSceneRunner
@@ -17,6 +18,7 @@ var _main: Node
 var _root_before: Array
 var _real_net: Node
 var _net: Node
+var _rejoin: RefCounted
 var _seam_result: Array = []
 var _seam_done := false
 
@@ -26,6 +28,7 @@ func before_test() -> void:
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
+	_rejoin = OwnerResendHarness.new(_main)
 	await _runner.simulate_frames(4)
 	SoloHarness.instant(_main)   # instant tray faces (the headless sweep path), same faces contract
 	_real_net = _main.network_manager
@@ -50,7 +53,11 @@ func _fake_session(peer_to_slot: Dictionary, names: Dictionary) -> void:
 		+ "func send_command(type: String, payload: Variant = {}, target_peer: int = 0) -> bool:\n" \
 		+ "\tsent.append([type, payload, target_peer])\n\treturn true\n" \
 		+ "func broadcast_log_event(_category: int, _text: String, _ai: bool = false, _detail: String = \"\") -> void:\n" \
-		+ "\tpass\n"
+		+ "\tpass\n" \
+		+ "func push_roster_to_peer(_peer_id: int) -> void:\n\tpass\n" \
+		+ "func push_slot_table_to_peer(_peer_id: int) -> void:\n\tpass\n" \
+		+ "func push_busy_state_to_peer(_peer_id: int) -> void:\n\tpass\n" \
+		+ "func sync_rulers_to_peer(_peer_id: int) -> void:\n\tpass\n"
 	assert_int(src.reload()).is_equal(OK)
 	_net = src.new()
 	_net.peer_to_slot = peer_to_slot
@@ -534,4 +541,146 @@ func test_interference_waits_for_a_returning_owner(timeout := 120000) -> void:
 	assert_int(_interf_result).override_failure_message("the owner's one token").is_equal(1)
 	assert_str(_log_text()).override_failure_message(
 		"a returning owner is not an empty seat").not_contains("seat is empty")
+	_end_session()
+
+
+## #1882 part 2: a pending owner request is sent again when its owner rejoins. `resend()` had no
+## test — a bare `return` at its top kept every suite green. These cases drive the real rejoin path
+## (main._on_peer_version_validated, the host's peer-joined handler) with a request still pending
+## and the owner returning on the SAME slot under a NEW peer id. The drop is the host's view of the
+## outage: the old socket is gone, but no leave event reached the host, so the request is still
+## pending (exactly the window resend() exists for).
+const REJOIN_PEER := 77
+const OTHER_PEER := 55
+
+
+func _fire_request(peer: int) -> void:
+	_rejoin.fire_request(peer)
+
+
+## Start one real pending owner request and return its request id (0 if it never landed).
+func _start_pending(peer: int) -> int:
+	var before: Array = _rejoin.pending_ids()
+	_fire_request(peer)
+	for _i in 20:
+		await get_tree().process_frame
+		for req in _rejoin.pending_ids():
+			if not before.has(req):
+				return int(req)
+	return 0
+
+
+## The host's view of a rejoin: the old socket is gone (no leave event reached the host, so the
+## request stays pending) and the returning peer takes `slot` under the new peer id.
+func _rejoin_into_slot(new_peer: int, slot: int) -> void:
+	var table: Dictionary = (_net.peer_to_slot as Dictionary).duplicate()
+	for peer in table:
+		if int(table[peer]) == slot:
+			table.erase(peer)
+	table[new_peer] = slot
+	_net.peer_to_slot = table
+	_net.connected_peers = Array([new_peer], TYPE_INT, "", null)
+	_rejoin.peer_joined(new_peer)
+	for _i in 6:
+		await get_tree().process_frame
+
+
+## The request ids on the wire addressed to one peer.
+func _request_ids_to(peer: int) -> Array:
+	var out: Array = []
+	for s in _requests():
+		if int((s as Array)[2]) == peer:
+			out.append(int(((s as Array)[1] as Dictionary).get("req", 0)))
+	return out
+
+
+## Let every pending request finish before the scene goes (no coroutine outlives the test).
+func _settle_requests(seconds: float = 1.5) -> void:
+	for _i in int(seconds / 0.1):
+		if _rejoin.pending_ids().is_empty():
+			return
+		await get_tree().create_timer(0.1).timeout
+
+
+func test_a_rejoining_owner_gets_the_pending_request_again(timeout := 120000) -> void:
+	assert_bool(_seam_exists()).is_true()
+	if not _seam_exists():
+		return
+	_fake_session({1: 1, GUEST_PEER: 2}, {GUEST_PEER: "Guest"})
+	_rejoin.set_timeout(5.0)
+	var req := await _start_pending(GUEST_PEER)
+	var asked_once := _requests().size()
+	await _rejoin_into_slot(REJOIN_PEER, 2)
+	var after := _requests().duplicate()
+	_rejoin.answer(req, [4], GUEST_PEER)
+	await _settle_requests()
+	assert_int(req).override_failure_message("the request is pending").is_greater(0)
+	assert_int(asked_once).override_failure_message("the owner was asked once first").is_equal(1)
+	assert_int(after.size()).override_failure_message(
+		"the pending request is re-sent once after the rejoin").is_equal(2)
+	if after.size() >= 2:
+		var resent: Array = after[after.size() - 1]
+		assert_str(str(resent[0])).is_equal("request_roll")
+		assert_int(int(resent[2])).override_failure_message(
+			"re-sent to the returning peer id").is_equal(REJOIN_PEER)
+		assert_int(int((resent[1] as Dictionary).get("req", 0))).override_failure_message(
+			"the SAME request id, so the owner replays its stored answer").is_equal(req)
+	assert_str(_log_text()).contains("Roll request sent again after the rejoin")
+	_end_session()
+
+
+func test_a_rejoin_resends_only_the_returning_owners_request(timeout := 120000) -> void:
+	assert_bool(_seam_exists()).is_true()
+	if not _seam_exists():
+		return
+	_fake_session({1: 1, GUEST_PEER: 2, OTHER_PEER: 3},
+		{GUEST_PEER: "Guest", OTHER_PEER: "Other"})
+	_rejoin.set_timeout(5.0)
+	var own_req := await _start_pending(GUEST_PEER)
+	var other_req := await _start_pending(OTHER_PEER)
+	var asked := _requests().size()
+	await _rejoin_into_slot(REJOIN_PEER, 2)
+	var to_returning := _request_ids_to(REJOIN_PEER)
+	var to_other := _request_ids_to(OTHER_PEER)
+	var total := _requests().size()
+	_rejoin.answer(own_req, [4], REJOIN_PEER)
+	_rejoin.answer(other_req, [5], OTHER_PEER)
+	await _settle_requests()
+	assert_int(own_req).is_greater(0)
+	assert_int(other_req).is_greater(0)
+	assert_int(asked).override_failure_message("both owners were asked once").is_equal(2)
+	assert_array(to_returning).override_failure_message(
+		"exactly the returning owner's pending request is re-sent").is_equal([own_req])
+	assert_array(to_other).override_failure_message(
+		"a request for a different owner is not re-sent").is_equal([other_req])
+	assert_int(total).override_failure_message("one re-send only").is_equal(3)
+	_end_session()
+
+
+func test_an_answered_request_is_not_resent_on_a_rejoin(timeout := 120000) -> void:
+	assert_bool(_seam_exists()).is_true()
+	if not _seam_exists():
+		return
+	_fake_session({1: 1, GUEST_PEER: 2}, {GUEST_PEER: "Guest"})
+	_rejoin.set_timeout(5.0)
+	var answered := await _start_pending(GUEST_PEER)
+	_rejoin.answer(answered, [6], GUEST_PEER)
+	for _i in 20:
+		if not _rejoin.is_pending(answered):
+			break
+		await get_tree().create_timer(0.1).timeout
+	var still_pending: bool = _rejoin.is_pending(answered)
+	var still_open := await _start_pending(GUEST_PEER)
+	await _rejoin_into_slot(REJOIN_PEER, 2)
+	var resent := _request_ids_to(REJOIN_PEER)
+	_rejoin.answer(still_open, [3], REJOIN_PEER)
+	await _settle_requests()
+	assert_int(answered).is_greater(0)
+	assert_bool(still_pending).override_failure_message(
+		"an answered request is no longer pending").is_false()
+	assert_int(still_open).is_greater(0)
+	assert_array(resent).override_failure_message(
+		"only the still-open request is re-sent; an answered one never is").is_equal([still_open])
+	assert_bool(resent.has(answered)).override_failure_message(
+		"an answered request must not come back").is_false()
 	_end_session()
