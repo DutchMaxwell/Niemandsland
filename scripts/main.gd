@@ -3591,6 +3591,12 @@ func core_bands(gu: GameUnit) -> Dictionary:
 	return CoreActivation.bands(self, gu)
 
 
+## Ticket 12: the core's Difficult-cap answer for the drag in flight (`now`: ObjectManager.drag_paths; -1 = not on the
+## core move path).
+func core_drag_difficult(gu: GameUnit, now: Dictionary) -> int:
+	return CoreActivation.drag_difficult(self, gu, now)
+
+
 ## One-core P3 step 29 (O9, O14 (1b)): "Activate" STARTS the activation of a lifecycle unit - the lock first (O5), then
 ## the session, then the one line that is the start's multiplayer sync (O15 (2); no "open" state exists on the wire).
 ## The unit stays NOT activated and begin_activation does not run (D23: the first committed door still fires it).

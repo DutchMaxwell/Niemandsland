@@ -2115,6 +2115,29 @@ static func bands(main, gu: GameUnit) -> Dictionary:
 	return {"advance": a["advance"], "rush": a["rush"], "charge": a["charge"]}
 
 
+## Ticket 12 (DRAG-BAND-DIFFICULT): does the core's drop check hold `gu`'s move to the 6" Difficult cap, for the walked
+## trails (`now`: the drag in flight, ObjectManager.drag_paths(); a model in it stands at its path's end, every other one
+## where it stands now)? The core's own test
+## (`move_difficult`), so the drag band and the drop's refusal never disagree. -1 = not on the core move path: the caller's
+## own check applies; 0 / 1 = the core's answer.
+static func drag_difficult(main, gu: GameUnit, now: Dictionary) -> int:
+	if gu == null or not _sessions.has(gu.unit_id) or not on_move_path(main, gu):
+		return -1
+	var sc: SoloController = main.solo_controller
+	var core: Object = sc._core_node_ready() if sc != null else null
+	if core == null:
+		return -1
+	var at: Array = gu.get_alive_models().map(func(m: ModelInstance) -> Vector3:
+		var p: Variant = now.get(int(m.node.get_meta("network_id", 0)))
+		return Vector3(p[-1].x, 0.0, p[-1].y) if p != null else main.object_manager.resting_position(m.node))
+	var r: Dictionary = core.move_difficult(int(_sessions[gu.unit_id]["handle"]), gu.unit_id,
+		{"positions": PackedVector3Array(at), "trails": session_trails(main, gu, now)})
+	if not bool(r.get("ok", false)):
+		push_error("drag_difficult: the core answered %s for %s" % [r, gu.get_name()])
+		return -1
+	return 1 if bool(r["difficult"]) else 0
+
+
 ## Whether `unit_id`'s activation is open (Started and not yet ended or cancelled).
 static func session_open(unit_id: String) -> bool:
 	return _sessions.has(unit_id)
@@ -2338,7 +2361,8 @@ static func session_trails(main, gu: GameUnit, now: Dictionary) -> Array:
 		var paths: Array = walked.get(id, [])
 		if now.has(id):
 			paths.append(now[id])
-		out.append(_unbroken(paths, begun.get(m, Vector2.INF), Vector2(m.node.global_position.x, m.node.global_position.z)))
+		var end: Vector2 = (now[id] as PackedVector2Array)[-1] if now.has(id) else Vector2(m.node.global_position.x, m.node.global_position.z)
+		out.append(_unbroken(paths, begun.get(m, Vector2.INF), end))   # a drag path ends where its model stands (ticket 12: or will)
 	return out
 
 

@@ -3,7 +3,7 @@
 //! rules; the answer comes out as a plain dictionary (lines and landings included).
 use crate::plain;
 use godot::prelude::*;
-use nml_core::activation::{allowance, begin_check, check_move, delta_of, step_activation, ActStep, CastInput, Check, ConsolidatePlan, Drop, Input};
+use nml_core::activation::{allowance, begin_check, check_move, delta_of, drop_difficult, step_activation, ActStep, CastInput, Check, ConsolidatePlan, Drop, Input};
 use nml_core::io::{Seams, SplitShot};
 use nml_core::landing::Landing;
 use nml_core::logline::LogLine;
@@ -327,6 +327,21 @@ pub fn check_of(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Ter
             d
         }
         Check::Refused { reason } => not_ok(&reason),
+    }
+}
+
+/// `NmlCore.move_difficult`: `{"ok": true, "difficult": bool}` (does `check_move` hold this drop to the 6" Difficult cap?)
+/// or `{"ok": false, "reason"}`. `drop` as `check_move` takes it; its mode is not read.
+pub fn difficult_of(statics: &[UnitStatic], state: &State, unit: &str, terrain: &Terrain, drop: &VarDictionary) -> VarDictionary {
+    let Some(&si) = state.roster.index.get(unit) else { return not_ok("unknown unit") };
+    match drop_of(drop) {
+        Ok(d) => {
+            let mut out = VarDictionary::new();
+            out.set("ok", true);
+            out.set("difficult", drop_difficult(statics, state, si, terrain, &d));
+            out
+        }
+        Err(why) => not_ok(why),
     }
 }
 
