@@ -58,3 +58,8 @@ static func fast(main: Node, on := true) -> void:
 ## Saves roll straight to the tray without the save dialog.
 static func auto_saves(main: Node, on := true) -> void:
 	main._solo_auto_saves = on
+
+
+## Resolve a human unit's spell through the table's own cast path (it marks the core session).
+static func cast(main: Node, caster: GameUnit, entry: Dictionary, targets: Array) -> void:
+	await main._run_human_cast(caster, caster, entry, targets)

@@ -71,7 +71,7 @@ func _started(att: GameUnit) -> void:
 func _cast(att: GameUnit, foe: GameUnit) -> void:
 	att.casts_current = 1
 	var before := att.casts_current
-	await _main._run_human_cast(att, att, {"name": "Bolt", "threshold": 1}, [foe])
+	await SoloHarness.cast(_main, att, {"name": "Bolt", "threshold": 1}, [foe])
 	assert_int(att.casts_current).override_failure_message("the cast spent no token").is_equal(before - 1)
 
 
