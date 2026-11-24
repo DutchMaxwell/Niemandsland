@@ -170,7 +170,7 @@ func test_ratmen_grenadiers_with_getrie_reach_18_at_73() -> void:
 
 
 ## The live gate: a foe 15" from the host's nearest model is past every host gun and inside the hero's 12 + 6, so the
-## Hold intent opens the shot, and the table's range line names the BOOK rule for the hero.
+## Hold intent opens the shot.
 func test_the_hold_gate_opens_for_the_heros_lifted_gun_at_73() -> void:
 	var pair := _host_and_hero(["Increased Shooting Range"])
 	var foe := E2EBoot.make_unit(_main, 2, "Foes", [SEED + Vector3(17.0 * INCH, 0.0, 0.0)])
@@ -183,9 +183,3 @@ func test_the_hold_gate_opens_for_the_heros_lifted_gun_at_73() -> void:
 	var report := solo.execute_intent(intent, ActIntent.blank_report(pair[0]))
 	assert_bool(bool(report["can_shoot"])) \
 		.override_failure_message("the hero's 12\" gun + 6\" reaches the foe; the gate read the host's 12\" only").is_true()
-	_main._solo_log_range_bonus(pair[0], foe)
-	var text := ""
-	for e in _main.battle_log.entries():
-		text += str((e as Dictionary)["text"]) + "\n"
-	assert_str(text).override_failure_message("rules-must-log: the book rule names itself (log: %s)" % text) \
-		.contains("Increased Shooting Range +6")

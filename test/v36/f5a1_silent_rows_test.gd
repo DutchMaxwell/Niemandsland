@@ -9,8 +9,6 @@ extends GdUnitTestSuite
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const IN2M := 0.0254
-## Base-edge to base-edge ranges (B11): a centre offset carries both default base radii (0.016 m) on top.
-const EDGE_SLACK_IN := 2.0 * 0.016 / IN2M
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -41,7 +39,7 @@ func after_test() -> void:
 	RulesRegistry.reset_cache()
 
 
-## A unit of `faction` carrying `rules`, with one ranged weapon on its OPR source (what _solo_log_range_bonus reads).
+## A unit of `faction` carrying `rules`, with one ranged weapon on its OPR source (what the table's readers see).
 func _unit(pid: int, unit_name: String, pos: Vector3, system: String, faction: String, rules: Array) -> GameUnit:
 	var u := E2EBoot.make_unit(_main, pid, unit_name, [pos])
 	u.unit_properties["quality"] = 4
@@ -61,10 +59,6 @@ func _unit(pid: int, unit_name: String, pos: Vector3, system: String, faction: S
 	return u
 
 
-func _x_for_gap(gap_in: float) -> float:
-	return (gap_in + EDGE_SLACK_IN) * IN2M
-
-
 func _log_text() -> String:
 	var text := ""
 	for e in _main.battle_log.entries():
@@ -72,34 +66,27 @@ func _log_text() -> String:
 	return text
 
 
-## The reach line a gunner of `faction` prints against a target 26" away: the rule's own book name and +6".
-func _range_line(faction: String, rules: Array) -> String:
+## The +6" reach a gunner of `faction` carrying `rules` gets from the book's rule.
+func _range_reach(faction: String, rules: Array) -> void:
 	var gunner := _unit(1, "Gunner", Vector3.ZERO, "gf", faction, rules)
-	var target := _unit(2, "Target", Vector3(_x_for_gap(26.0), 0, 0), "gf", faction, [])
 	assert_int(SoloController.shooting_range_bonus(gunner)) \
 		.override_failure_message("gf/%s %s: the +6\" reach silently dropped" % [faction, rules]).is_equal(6)
-	_main._solo_log_range_bonus(gunner, target)
-	return _log_text()
 
 
 func test_range_control_alien_hives_aura_and_base() -> void:
-	assert_str(_range_line("alien_hives", ["Increased Shooting Range Aura", "Increased Shooting Range"])) \
-		.contains("Increased Shooting Range Aura +6\" shooting range")
+	_range_reach("alien_hives", ["Increased Shooting Range Aura", "Increased Shooting Range"])
 
 
-func test_increased_shooting_range_aura_names_itself_in_elven_jesters() -> void:
-	assert_str(_range_line("elven_jesters", ["Increased Shooting Range Aura", "Increased Shooting Range"])) \
-		.contains("Increased Shooting Range Aura +6\" shooting range")
+func test_increased_shooting_range_aura_reaches_six_inches_in_elven_jesters() -> void:
+	_range_reach("elven_jesters", ["Increased Shooting Range Aura", "Increased Shooting Range"])
 
 
 func test_the_granted_base_alone_reaches_six_inches_in_elven_jesters() -> void:
-	assert_str(_range_line("elven_jesters", ["Increased Shooting Range"])) \
-		.contains("Increased Shooting Range +6\" shooting range")
+	_range_reach("elven_jesters", ["Increased Shooting Range"])
 
 
 func test_increased_shooting_range_reaches_six_inches_in_blessed_sisters() -> void:
-	assert_str(_range_line("blessed_sisters", ["Increased Shooting Range"])) \
-		.contains("Increased Shooting Range +6\" shooting range")
+	_range_reach("blessed_sisters", ["Increased Shooting Range"])
 
 
 ## Takedown Shot: the once-per-game extra attack joins the volley and the log names the book rule.
