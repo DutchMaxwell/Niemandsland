@@ -209,9 +209,8 @@ _solo_attack_groups 10
 _solo_auto_click 2
 _solo_auto_point_click 2
 _solo_auto_point_dwell 1
-_solo_auto_saves 4
+_solo_auto_saves 3
 _solo_auto_seize 9
-_solo_batch 3
 _solo_begin_rapid_ambush_round_one 1
 _solo_below_half_strength 2
 _solo_board_prompt 3

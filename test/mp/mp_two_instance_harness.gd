@@ -407,7 +407,7 @@ func _setup_fixture() -> bool:
 	_main.seed_tray_rng(int(_args.get("seed", "240904")))
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	var specs := [
 		[SPELL_UNIT, 1, "Spell Guard", Vector3(-0.35, 0.0, -0.25)],
 		[FATIGUE_UNIT, 1, "Fatigue Guard", Vector3(-0.15, 0.0, -0.25)],
@@ -766,12 +766,12 @@ func _setup_wound_alloc() -> bool:
 		_main.opr_army_manager.game_units[unit.unit_id] = unit
 		_main.radial_menu_controller.initialize_status_markers_for_unit(unit)
 	if _role == "guest":
-		_main._solo_auto_saves = true
+		SoloHarness.auto_saves(_main)
 		_wa_armed = true
 		_main.dice_roller_control.roll_finnished.connect(func(_total: int) -> void:
 			if _wa_armed:
 				_wa_armed = false
-				_main._solo_batch = false)
+				SoloHarness.instant(_main, false))
 	return true
 
 
@@ -806,7 +806,7 @@ func _feed_wound_clicks(clicks: Array) -> void:
 			var i := int(queue.pop_front())
 			outcome.append({} if i < 0 else {"unit": wall, "index": i})
 			_wa_prompt["clicks"] = int(_wa_prompt["clicks"]) + 1
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 
 
 func opr_round() -> int:
