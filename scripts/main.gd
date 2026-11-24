@@ -5237,16 +5237,6 @@ func _solo_log_limited_spent(member: GameUnit, prof: Dictionary) -> void:
 			member.get_name(), str(prof.get("name", "?"))], true)
 
 
-## The played AI volley's over-9" modifier measure is the same nearest live
-## base gap used for the target's range gate. Keep the centre fallback for a
-## degenerate unit with no reachable model pair.
-func _solo_ai_volley_distance_in(attacker: GameUnit, target: GameUnit) -> float:
-	var gap: float = solo_controller.nearest_melee_gap_in(attacker, target)
-	if gap != INF:
-		return gap
-	return MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
-
-
 ## SHO-PAR-F6: one AI shot's eligibility — the member's models with range + sight to the target (and the
 ## pairs they cleared), the bearer-gated attack report (NML-1025) and the living bearers. From EPOCH_73_V36
 ## the volley reads it ONCE per shot before the first die (all weapons fire together); before, per shot.
@@ -15597,51 +15587,6 @@ func _solo_versatile_latch_write(unit: GameUnit, vm: Dictionary) -> void:
 		return
 	unit.unit_properties["versatile_pick_round"] = opr_army_manager.current_round
 	unit.unit_properties["versatile_pick"] = vm
-
-
-## #231 (rules-must-log) — the TARGET-SIDE reach shrinks of a volley, named on the log: Aircraft
-## (-12", GF v3.5.1) and Ranged Shrouding (-6" min 6"). The rule lines alone are not enough — a
-## weapon that quietly stops rolling dice reads as a bug (transparency wave #224), so the weapons
-## the shrink LOCKS OUT are named too. The reach source and the base-edge distance are the same
-## ones the per-weapon gate in _solo_attack_groups uses, so the line can never claim otherwise.
-func _solo_log_reach_shrink(attacker: GameUnit, target: GameUnit) -> void:
-	if battle_log == null or attacker == null or target == null:
-		return
-	var aircraft: bool = SoloController.target_range_penalty_in(target) > 0.0
-	var shroud := SoloController.ranged_shroud_spec(target)
-	var shrouded := not shroud.is_empty()
-	if aircraft:
-		battle_log.log_event(BattleLog.Category.COMBAT,
-			"%s is an Aircraft: weapon ranges count -12\" against it (%s)" % [target.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target))], true)
-	if shrouded:
-		battle_log.log_event(BattleLog.Category.COMBAT,
-			"%s: %s — weapon ranges against it %s\" shorter (min %s\")" % [shroud["name"], target.get_name(),
-				str(float(shroud["range_penalty_in"])).trim_suffix(".0"), str(float(shroud["floor_in"])).trim_suffix(".0")], true)
-	if not (aircraft or shrouded):
-		return
-	var locked: PackedStringArray = []
-	var members: Array = [attacker]
-	if attacker.has_method("get_attached_heroes"):
-		members = members + attacker.get_attached_heroes()
-	for mm in members:
-		var member := mm as GameUnit
-		if member == null or member.get_alive_count() == 0 or member.source_type != "opr" \
-				or not (member.source_data is OPRApiClient.OPRUnit):
-			continue
-		# Profiles that WOULD reach at the printed range — the ones the shrink then takes away.
-		var gap: float = _solo_shoot_gap_in(member, target, INF)
-		for p in AiShooting.profiles_in_range((member.source_data as OPRApiClient.OPRUnit).weapons, gap):
-			var printed := float((p as Dictionary).get("range", 0))
-			if SoloController.effective_shoot_reach_in(printed, target) >= gap:
-				continue
-			var pname := str((p as Dictionary).get("name", "?"))
-			if not locked.has(pname):
-				locked.append(pname)
-	if locked.is_empty():
-		return
-	_log_rule_event(BattleLog.Category.COMBAT, "%s: %s out of reach against %s — %s not fired" % [
-		attacker.get_name(), ("Aircraft -12\"" if aircraft else str(shroud.get("name", "Ranged Shrouding"))),
-		target.get_name(), ", ".join(locked)], true)
 
 
 ## Automodus step 2.3b (OD 7): the enemy units a manual drag of `unit` may draw a shooting line to (no sight

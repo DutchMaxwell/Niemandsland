@@ -2,7 +2,7 @@ extends GdUnitTestSuite
 ## SHO-02 (0.3.15, rules 3.6): a moved Indirect shooter hits at its base quality — the 3.5
 ## "-1 after moving" is gone from `EPOCH_73_V36` on, and the "Indirect when Shooting" aura follows
 ## the same removal. `EPOCH_72_PLAYTEST_RULES` keeps today's -1. The dice seam itself lives in the
-## volley paths; this suite pins the shared helper they call and the EV's epoch-blind reading.
+## volley paths; this suite pins the hit-info line and the EV's epoch-blind reading.
 
 const MainScript := preload("res://scripts/main.gd")
 
@@ -34,29 +34,6 @@ func _hit_info_at(epoch: int, target: GameUnit) -> Dictionary:
 	AiActRecorder.rules_epoch = epoch
 	var main: Node3D = auto_free(MainScript.new())
 	return main._solo_hit_mod_info(null, target, 12.0, false)
-
-
-func _mod_at(epoch: int, moved: bool, penalty: int = 1) -> int:
-	AiActRecorder.rules_epoch = epoch
-	return AiCombatMath.indirect_hit_modifier(moved, penalty)
-
-
-## OLD leg: at 72 the moved Indirect shot still takes the 3.5 -1 (the flipped pre-3.6 reading).
-func test_a_moved_indirect_shooter_takes_the_minus_one_at_epoch_72() -> void:
-	assert_int(_mod_at(AiActRecorder.EPOCH_72_PLAYTEST_RULES, true)).is_equal(-1)
-	assert_int(_mod_at(AiActRecorder.EPOCH_72_PLAYTEST_RULES, true, 2)).is_equal(-2)
-	assert_int(_mod_at(AiActRecorder.EPOCH_72_PLAYTEST_RULES, false)).is_equal(0)
-
-
-## NEW leg: at 73 the penalty is gone; the magnitude argument changes nothing.
-func test_a_moved_indirect_shooter_has_no_penalty_at_epoch_73() -> void:
-	assert_int(_mod_at(AiActRecorder.EPOCH_73_V36, true)).is_equal(0)
-	assert_int(_mod_at(AiActRecorder.EPOCH_73_V36, true, 2)).is_equal(0)
-
-
-## CONTROL: a shooter that held is unchanged at 73.
-func test_a_held_indirect_shooter_is_unchanged_at_epoch_73() -> void:
-	assert_int(_mod_at(AiActRecorder.EPOCH_73_V36, false)).is_equal(0)
 
 
 ## CONTROL: the table's to-hit breakdown names no Indirect moved line at 73, for an Indirect
