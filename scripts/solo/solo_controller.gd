@@ -9577,36 +9577,6 @@ static func indirect_needs_hold(unit: GameUnit, key: String) -> bool:
 	return true
 
 
-## Rules 3.6 (SHO-03): the Indirect-family rule whose entry lifts the `key` Hold need (Quick Throw
-## for the sight half), the name the volley log prints when that rule is the reason. Empty at
-## epochs before 73, on a plain entry, or when no carried rule prints the key false.
-## Core twin: unit.rs build_for's EPOCH_73_V36 stamp.
-static func indirect_lift_rule(unit: GameUnit, key: String) -> String:
-	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or unit == null:
-		return ""
-	for e in RulesRegistry.unit_rules_of_primitive(unit, "Indirect"):
-		if ((e as Dictionary).get("params", {}) as Dictionary).get(key, true) == false:
-			return str((e as Dictionary).get("name", ""))
-	return ""
-
-
-## Rules 3.6 (FAB-A3): the Indirect entry lifts cover granted by sight blockers only, and the table
-## grants Cover terrain only — so a 3.6 entry answers false here and the Hold no longer matters.
-## `_held` stays for the call sites; the `cover_needs_hold` read is the epoch trigger.
-## Core twin: unit.rs build_for's EPOCH_73_V36 stamp and dice.rs's save fold.
-static func indirect_ignores_cover(unit: GameUnit, _held: bool = true) -> bool:
-	return not indirect_needs_hold(unit, "cover_needs_hold")
-
-
-## The volley's cover decision (main.gd's AI and human save paths): Blast and Ignores Cover always
-## drop the target's cover; at rules 3.6 an Indirect weapon keeps terrain cover (`_held` unused).
-## Core twin: dice.rs resolve_volley_leg's save fold.
-static func shot_ignores_cover(profile: Dictionary, unit: GameUnit, held: bool = true) -> bool:
-	if int(profile.get("blast", 0)) > 1 or bool(profile.get("ignores_cover", false)):
-		return true
-	return bool(profile.get("indirect", false)) and indirect_ignores_cover(unit, held)
-
-
 ## The Counter strike-first half (core `strikes_first.unwrap_or(true)`): the entry can opt a
 ## Counter weapon OUT of the strike-first slot (default true = strikes first when charged).
 ## Rules 3.6 (`EPOCH_73_V36`): the AI Counters only when the unit will strike back at all, and
