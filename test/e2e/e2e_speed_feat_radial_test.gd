@@ -181,7 +181,7 @@ func test_the_kill_switch_brings_the_old_sentence_back() -> void:
 	assert_str(await _wheel_tooltip(_bearer())).override_failure_message("with the flag off nothing can be undone").ends_with(CANNOT_UNDO)
 
 
-func test_a_table_without_the_explicit_activation_keeps_the_old_sentence() -> void:
-	_main.solo_ai_slots = {}   # hotseat on Automatic: the flag is on but no Cancel exists
+func test_a_hotseat_automatic_table_has_the_explicit_activation() -> void:
+	_main.solo_ai_slots = {}   # hotseat on Automatic: the default door is on, so the unit has a Cancel
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
-	assert_str(await _wheel_tooltip(_bearer())).override_failure_message("hotseat has no Cancel").ends_with(CANNOT_UNDO)
+	assert_str(await _wheel_tooltip(_bearer())).override_failure_message("hotseat has a Cancel").ends_with(CAN_UNDO)

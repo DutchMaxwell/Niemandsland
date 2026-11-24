@@ -61,6 +61,9 @@ func _recover(host_passes: bool) -> Array:
 	for u in [host, enemy]:   # both spent -> round 2 begins; the round-start recovery runs
 		await _main.radial_menu_controller._toggle_activation({"game_unit": u})
 		await _runner.simulate_frames(4)
+		if not u.is_activated and CoreActivation.session_open(u.unit_id):
+			await _main.radial_menu_controller._toggle_activation({"game_unit": u})   # a core activation is Start then End
+			await _runner.simulate_frames(4)
 		await E2EBoot.settle(get_tree())
 	assert_int(_main.opr_army_manager.current_round) \
 		.override_failure_message("the round did not advance — the recovery never ran").is_equal(2)
