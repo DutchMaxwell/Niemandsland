@@ -27,13 +27,13 @@ use super::*;
     /// RED on main: the wiped read dropped Stealth, so the rifles rolled 3+ instead of 4+.
     #[test]
     fn a_deadly_wipe_keeps_the_stealth_penalty_for_the_second_weapon_group() {
-        let e = crate::acts::PENDING_EPOCH_WIPED_TO_HIT_DECLARED;
+        let e = crate::acts::EPOCH_97_WIPED_TO_HIT_DECLARED;
         assert_eq!(rifles_target_after_a_deadly_wipe(Ctx { stealth: true, ..lone_hero(e) }), 4, "Stealth -1 holds: 3+ becomes 4+");
     }
 
     #[test]
     fn a_deadly_wipe_keeps_the_evasive_and_aircraft_penalties_for_the_second_weapon_group() {
-        let e = crate::acts::PENDING_EPOCH_WIPED_TO_HIT_DECLARED;
+        let e = crate::acts::EPOCH_97_WIPED_TO_HIT_DECLARED;
         assert_eq!(rifles_target_after_a_deadly_wipe(Ctx { evasive: true, ..lone_hero(e) }), 4, "Evasive -1 holds");
         let air = Ctx { aircraft_hit_penalty: 1, aircraft_hit_name: "Aircraft", ..lone_hero(e) };
         assert_eq!(rifles_target_after_a_deadly_wipe(air), 4, "Aircraft -1 holds");
@@ -42,7 +42,7 @@ use super::*;
     /// Records stamped below the gate replay as recorded: the old wiped read drops the penalty.
     #[test]
     fn below_the_gate_a_deadly_wipe_still_drops_the_penalty() {
-        let e = crate::acts::PENDING_EPOCH_WIPED_TO_HIT_DECLARED - 1;
+        let e = crate::acts::EPOCH_97_WIPED_TO_HIT_DECLARED - 1;
         assert_eq!(rifles_target_after_a_deadly_wipe(Ctx { stealth: true, ..lone_hero(e) }), 3);
-        assert_eq!(rifles_target_after_a_deadly_wipe(lone_hero(crate::acts::PENDING_EPOCH_WIPED_TO_HIT_DECLARED)), 3, "no rule, no penalty");
+        assert_eq!(rifles_target_after_a_deadly_wipe(lone_hero(crate::acts::EPOCH_97_WIPED_TO_HIT_DECLARED)), 3, "no rule, no penalty");
     }
