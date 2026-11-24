@@ -24,7 +24,7 @@ const BLOCKERS: Array[Dictionary] = [
 		"header": "static func refusals(", "needles": ["not gu.source_data is OPRApiClient.OPRUnit"]},
 	{"name": "parity_table_melee.gd drives the melee resolver", "retire": "P4.D-49", "file": PARITY_MELEE, "header": "",
 		"needles": ["main._run_ai_melee("]},
-	{"name": "Strafing hands its volley to the AI resolver", "retire": "P4.D-37", "file": MAIN,
+	{"name": "a player's Strafing bearer hands its strike to the AI resolver", "retire": "P4.D-37", "file": MAIN,
 		"header": "func _solo_apply_strafing(", "needles": ["await _solo_resolve_ai_volley(unit, target, shots, true)"]},
 	# PLAN H (H-4): the facts the table-remains plan retires.
 	{"name": "the AI body runs the pre-attack beats itself (Breath Attack before the volley)", "retire": "P4.D-41 / H-5..H-9", "file": MAIN,
@@ -146,3 +146,20 @@ func test_the_human_door_reads_the_live_slice() -> void:
 	for b in BLOCKERS:
 		assert_str(String(b["name"])).override_failure_message("the retired row is still in BLOCKERS").is_not_equal(
 			"the human door reads the allow file, not the live slice")
+
+
+## The AI table resolver has one production caller left: a player's own Strafing / Crossing Strike bearer, whose mandatory strike
+## stays on the GDScript table until the human side moves to the rules core. The AI volley the core refuses and the AI's
+## move-through strike are HELD with a line (`held`, `held_strike`).
+## RED: put the AI volley's `await _solo_resolve_ai_volley(` call back in `_run_ai_shooting`.
+func test_only_the_players_strike_calls_the_ai_resolver() -> void:
+	var src := _source(MAIN)
+	var lines: Array = Array(src.split("\n"))
+	var calls: Array = []
+	var fn := ""
+	for l in lines:
+		if l.begins_with("func "):
+			fn = l.get_slice("(", 0).trim_prefix("func ")
+		elif l.contains("_solo_resolve_ai_volley("):
+			calls.append(fn)
+	assert_array(calls).override_failure_message("main.gd calls the AI resolver from %s" % [calls]).is_equal(["_solo_apply_strafing"])
