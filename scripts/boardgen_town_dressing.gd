@@ -397,7 +397,7 @@ static func story(seed: int) -> Color:
 ## Readability tuning (tools: gate3.sh, the median of three repeats per row against the plain-table baseline; lead 21.11.): a strongly blue moon washed the figures' colours, so the key is pale (nearly
 ## neutral) and strong (5.5), comes from the side of the play camera (azimuth -20 deg; at -55 deg the far models stood against lit walls) and the ambient is lower (0.9); the shader's ground values (cobbles,
 ## packed earth, garden plots, the decks of yards and tiers) sit below the models' own values, and the Ultra preset's bounce light is turned down (SDFGI_ENERGY, SSIL_INTENSITY). The blue stays in the sky,
-## the ambient and the shadows. The measured moves are in PLAN_RUINTOWN_AAA.md.
+## the ambient and the shadows.
 static func dusk(lighting: Object) -> void:
 	if lighting == null:
 		return

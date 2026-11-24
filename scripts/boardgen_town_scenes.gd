@@ -1,6 +1,6 @@
 class_name BoardgenTownScenes
 extends RefCounted
-## STORY SCENES of the ruin town (plan PLAN_RUINTOWN_GRIT S1, maintainer: "where is the life?"): 5-7 scenes per board, each answering "what happened here on the last day?", built from
+## STORY SCENES of the ruin town (maintainer: "where is the life?"): 5-7 scenes per board, each answering "what happened here on the last day?", built from
 ## the EXISTING kit modules as a readable CLUSTER of 6-12 pieces round one hero piece, sized to read at the play camera (a 6 in run of wall strip where two cells allow, else 3 in): a toppled
 ## cart with its wheel, sacks and barrels spilled along the street edge; an abandoned market stall with its crates; the remains of a barricade (a cart, crates and barrels pushed into the
 ## strip); a cooper's store; and per half one yard scene - a midden or a burnt house's yard with its beams. Pure data: plan(layout) = {items: {module: [{xf, colour}]}, reserved: {cell index:

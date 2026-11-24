@@ -92,8 +92,8 @@ const BIOME_HAZARD_MODEL_BY_PREFIX: Dictionary = {
 	"volcanic_": "lava_crater",
 	"jungle_": "carnivore_plant",
 }
-## A fantasy table (aof / aofs / aofr) has no minefield and no warning signs: each biome draws its own hazard prop (PLAN_GAME_SYSTEM_SWITCH
-## step 14, decision M-5; assets/terrain_systems.json hazard_look). Volcanic keeps the lava crater; the rest fall back to the thorn field.
+## A fantasy table (aof / aofs / aofr) has no minefield and no warning signs: each biome draws its own hazard prop
+## (assets/terrain_systems.json hazard_look). Volcanic keeps the lava crater; the rest fall back to the thorn field.
 const FANTASY_HAZARD_MODEL_BY_PREFIX: Dictionary = {
 	"": "thorn_field",
 	"desert_": "sinkhole",

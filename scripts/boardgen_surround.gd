@@ -1,6 +1,6 @@
 class_name BoardgenSurround
 extends MeshInstance3D
-## The table round the ruin town (plan PLAN_RUINTOWN_TEXTURES step 8, decision D-TEX4 (a)): one plane of board size + 36 in on every side, 2 mm under the table top,
+## The table round the ruin town: one plane of board size + 36 in on every side, 2 mm under the table top,
 ## dark oiled planks fading into the town's dusk sky (shaders/ruintown_surround.gdshader), instead of the navy void that filled three quarters of the start view.
 ## Honest and not playable: it is the gaming table, never more board. No collider, casts no shadow; the board's child, so it leaves with the board. Visual only.
 

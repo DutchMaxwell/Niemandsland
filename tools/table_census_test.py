@@ -500,7 +500,7 @@ def test_the_real_manifest_lists_the_cast_resolvers_as_group_cast():
     assert sum(ln.startswith("cast scripts/main.gd:") for ln in committed_rows) == 3   # lines + prod callers only
 
 
-OWNERS = {"groups": ["grp"], "retire": {"door": "P4.D-1/H-1", "rest": "H-2"},
+OWNERS = {"groups": ["grp"], "retire": {"door": "step-1/H-1", "rest": "H-2"},
           "functions": {"scripts/a.gd:door": "door", "scripts/a.gd:old_b": "rest"}}
 
 
@@ -521,7 +521,7 @@ def owned_repo(tmp_path, sneak=False, owner_row=False):
 def test_owner_rows_count_the_call_sites_per_owner_and_the_committed_report_keeps_them_whole(tmp_path):
     root = owned_repo(tmp_path)
     txt = committed(root).read_text().splitlines()
-    assert "owner grp door 1 P4.D-1/H-1" in txt and "owner grp rest 1 H-2" in txt and "owner grp TOTAL 2 -" in txt
+    assert "owner grp door 1 step-1/H-1" in txt and "owner grp rest 1 H-2" in txt and "owner grp TOTAL 2 -" in txt
     assert run(root, "--check").returncode == 0
 
 

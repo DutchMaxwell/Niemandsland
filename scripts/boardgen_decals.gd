@@ -76,7 +76,7 @@ static func plan(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
-## THE RUIN TOWN'S DECALS (plan PLAN_RUINTOWN_GRIT D1, the T-R2 atlas): each kind where its cause is - cart ruts at the ends of the arteries along the run, a drain on a lane's kennel,
+## THE RUIN TOWN'S DECALS (the T-R2 atlas): each kind where its cause is - cart ruts at the ends of the arteries along the run, a drain on a lane's kennel,
 ## a puddle rim on every grit puddle, leaves and straw in the lee corners of the open ground, droppings at the foot of the city wall, cracks on the tower tops, plaster loss and a repair patch
 ## on the street faces of the ruined rows, soot / scorch on the fire side's faces. Capped per kind (TOWN_CAPS, <= MAX_DECALS together). Nothing on a ladder foot, a dangerous cell or a
 ## landmark; ground decals are flat (they never stand on open ground), the board shader's surfaces receive them, the models never.
