@@ -37,6 +37,8 @@ pub struct HeroAura {
 pub struct Book {
     pub system: &'static str,
     pub chain_in: f64,
+    /// A later chain length and the epoch it starts at (`chain_in_at`); `None` = `chain_in` at every epoch.
+    pub chain_in_from: Option<(u32, f64)>,
     pub hero_aura: HeroAura,
     pub blast_spread_in: Option<f64>,
     pub vertical_moves: bool,
@@ -52,19 +54,21 @@ const DEFAULT_HERO_AURA: HeroAura = HeroAura {
 const BOOK_GF: Book = Book {
     system: "gf",
     chain_in: crate::mv::MAX_CHAIN_IN,
+    chain_in_from: None,
     hero_aura: DEFAULT_HERO_AURA,
     blast_spread_in: None,
     vertical_moves: false,
     default_board_in: [72.0, 48.0],
 };
 
-// The 3.6 Firefight book prints a 9 in chain (beginner's guide p.7); today's 6 in stays until the epoch-gated
-// Firefight rules flip it, because a different chain changes how a `gff` game plays.
+// The 3.6 Firefight book prints a 9 in chain (p.7); the recorded 6 in stays below `PENDING_EPOCH_FIREFIGHT_CHAIN`,
+// because a different chain changes how a `gff` game plays.
 // The Firefight and Skirmish books print jumps and drops (beginner's guide p.15): `vertical_moves` is true for these two
 // only. Read by the heightfield drop rule behind `EPOCH_94_PARITY_BATCH` (`activation::check_move`) and nothing else yet.
 const BOOK_GFF: Book = Book {
     system: "gff",
     chain_in: crate::mv::SKIRMISH_CHAIN_IN,
+    chain_in_from: Some((crate::acts::PENDING_EPOCH_FIREFIGHT_CHAIN, crate::mv::MAX_CHAIN_IN)),
     hero_aura: DEFAULT_HERO_AURA,
     blast_spread_in: None,
     vertical_moves: true,
@@ -74,6 +78,7 @@ const BOOK_GFF: Book = Book {
 const BOOK_AOF: Book = Book {
     system: "aof",
     chain_in: crate::mv::MAX_CHAIN_IN,
+    chain_in_from: None,
     hero_aura: DEFAULT_HERO_AURA,
     blast_spread_in: None,
     vertical_moves: false,
@@ -84,6 +89,7 @@ const BOOK_AOF: Book = Book {
 const BOOK_AOFS: Book = Book {
     system: "aofs",
     chain_in: crate::mv::SKIRMISH_CHAIN_IN,
+    chain_in_from: None,
     hero_aura: DEFAULT_HERO_AURA,
     blast_spread_in: None,
     vertical_moves: true,
@@ -93,11 +99,22 @@ const BOOK_AOFS: Book = Book {
 const BOOK_AOFR: Book = Book {
     system: "aofr",
     chain_in: crate::mv::MAX_CHAIN_IN,
+    chain_in_from: None,
     hero_aura: DEFAULT_HERO_AURA,
     blast_spread_in: None,
     vertical_moves: false,
     default_board_in: [72.0, 48.0],
 };
+
+impl Book {
+    /// The coherency chain a game at `rules_epoch` plays: `chain_in`, or the later length from its starting epoch on.
+    pub fn chain_in_at(&self, rules_epoch: u32) -> f64 {
+        match self.chain_in_from {
+            Some((since, chain)) if crate::acts::rule_on(rules_epoch, since) => chain,
+            _ => self.chain_in,
+        }
+    }
+}
 
 /// Return the static `Book` header for `system` (case/whitespace tolerant; empty or unknown folds to `"gf"`).
 pub fn book(system: &str) -> &'static Book {
@@ -978,6 +995,20 @@ mod tests {
         assert_eq!(book("GFF").chain_in, crate::mv::SKIRMISH_CHAIN_IN);
         assert_eq!(book("").system, "gf");
         assert_eq!(book("unknown-system").system, "gf");
+    }
+
+    /// The Firefight 9 in chain waits for its pending epoch: the current epoch and every other book play as recorded.
+    #[test]
+    fn firefight_chain_waits_for_its_pending_epoch() {
+        let e = crate::acts::PENDING_EPOCH_FIREFIGHT_CHAIN;
+        assert_eq!(e, crate::acts::CURRENT_RULES_EPOCH + 1);
+        assert!(!crate::acts::rule_on(crate::acts::CURRENT_RULES_EPOCH, e), "a record at the current epoch plays 6 in");
+        assert_eq!(book("gff").chain_in_at(e - 1), crate::mv::SKIRMISH_CHAIN_IN);
+        assert_eq!(book("gff").chain_in_at(e), 9.0);
+        for sys in SYSTEMS.iter().filter(|s| **s != "gff") {
+            assert_eq!(book(sys).chain_in_from, None, "{sys} has one chain");
+            assert_eq!(book(sys).chain_in_at(e), book(sys).chain_in, "{sys} at the epoch");
+        }
     }
 }
 

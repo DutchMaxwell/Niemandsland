@@ -99,6 +99,8 @@ pub fn chain_casualty_order(state: &State, u: usize, max_picks: Option<usize>) -
         group.extend((0..state.positions[h].len()).map(|m| (h, m)));
     }
     let n = group.len();
+    // The recorded chain: this order carries no rules epoch yet, so the later Firefight chain (`Book::chain_in_at`)
+    // does not reach it (it changes no game while that epoch is pending).
     let max_chain = state.book(host).chain_in;
     let (slack, mut gap, mut linked) = (0.01, vec![0.0; n * n], vec![false; n * n]);
     for i in 0..n {
