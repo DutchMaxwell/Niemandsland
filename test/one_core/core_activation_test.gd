@@ -934,7 +934,7 @@ func test_activate_while_another_activation_is_open_names_it() -> void:
 func test_activate_off_turn_in_an_agreed_room_starts_nothing() -> void:
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
 	_recording_net()
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	var u := _unit(1, "Rifles", ["Furious"])
 	assert_bool(CoreActivation.is_lifecycle_unit(_main, u)).override_failure_message("precondition").is_true()
 	_main._apply_turn_token(2)
@@ -1046,7 +1046,7 @@ func _recording_session() -> void:
 func _roll_requests(att_name: String, def_name: String, rename: String) -> Array:
 	_recording_session()
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC   # an agreed Automatic online room (O10)
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	SoloHarness.instant(_main)
 	_main._owner_roll_timeout_s = 0.2   # the guest never answers: each request is auto-rolled after this
 	var side := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",

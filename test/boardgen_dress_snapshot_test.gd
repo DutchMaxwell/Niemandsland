@@ -21,11 +21,8 @@ func _snapshot(seed: int) -> String:
 	auto_free(town_kit)
 	var kit := BoardgenDressKit.new(town_kit, true)
 	var story := BoardgenDressStory.of(layout)
-	var ctx := {"kit": kit, "story": story, "meta": kit.meta, "seed": seed}
-	var placements: Array[DressPlacement] = []
-	for p: Dictionary in BoardgenDressHouses.plan(layout, ctx):
-		placements.append(DressPlacement.from_dict(p))
 	var context := DressContext.new(layout, kit, story, seed)
+	var placements: Array[DressPlacement] = BoardgenDressHouses.new().plan(context)
 	var hashing := HashingContext.new()
 	hashing.start(HashingContext.HASH_SHA256)
 	for p: DressPlacement in placements:

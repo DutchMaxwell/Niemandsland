@@ -68,8 +68,7 @@ func _foe(pos: Vector3) -> GameUnit:
 ## reply pinned shut: the doubt is about the human's own post-shot drag, so the fixture must not roll
 ## the table into the AI's turn after the shot.
 func _controller_without_reply() -> void:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2], 1)
 	_main._solo_ai_busy = true   # `_solo_pump` early-returns: the owed reply never runs
 
 

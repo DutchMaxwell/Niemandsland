@@ -100,7 +100,7 @@ func test_a_game_started_before_nachtmahr_sits_down_logs_it_on_arrival(timeout :
 	_main.opr_army_manager.start_game()
 	await E2EBoot.settle(get_tree())
 	assert_array(_grade_lines()).is_empty()
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	assert_array(_grade_lines()).contains_exactly(["NACHTMAHR — Finsternis (decision tree)"])
 
 
@@ -182,7 +182,7 @@ func test_a_picked_grade_plays_logs_and_survives_a_restart(timeout := 180000) ->
 	opt.item_selected.emit(1)   # the player picks Zwielicht
 	# "Start Deployment" seats NACHTMAHR first (main.gd _on_solo_deploy_pressed -> _ensure_solo_controller);
 	# the end of the deployment flips the game to PLAYING.
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	var d: SoloDifficulty = _main.solo_controller.difficulty_by_slot.get(2, null)
 	assert_str(d.grade_name if d != null else "none").is_equal("zwielicht")
 	_main.opr_army_manager.start_game()

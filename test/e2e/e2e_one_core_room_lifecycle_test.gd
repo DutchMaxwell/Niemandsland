@@ -79,7 +79,7 @@ func before_test() -> void:
 	_main.network_manager = _net
 	_main.radial_menu_controller.network_manager = _net   # the activation fact goes out through the radial's own handle
 	_main.object_manager._network_manager = _net   # the drag machine's own broadcasts
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	_main._apply_turn_token(1)
 
 

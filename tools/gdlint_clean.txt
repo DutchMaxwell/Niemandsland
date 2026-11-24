@@ -18,7 +18,9 @@ scripts/boardgen_dress_rules.gd
 scripts/boardgen_dress_story.gd
 scripts/containers_library.gd
 scripts/boardgen_dress_context.gd
+scripts/boardgen_dress_houses.gd
 scripts/dress_module_spec.gd
+scripts/dress_planner.gd
 scripts/boardgen_dress_placement.gd
 scripts/floating_rule_text.gd
 scripts/hud/hud_frame.gd

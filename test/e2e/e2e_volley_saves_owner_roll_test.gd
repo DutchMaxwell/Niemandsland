@@ -48,7 +48,7 @@ func before_test() -> void:
 	_main.solo_ai_slots = {}
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._ensure_solo_controller()   # an agreed Automatic room builds the engine controller (3.1)
+	SoloHarness.controller(_main)   # an agreed Automatic room builds the engine controller (3.1)
 
 
 func after_test() -> void:

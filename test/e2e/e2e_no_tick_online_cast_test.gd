@@ -110,7 +110,7 @@ func _cast_setup() -> Array:
 	var foe := _reg(2, "Raiders", 10.0)
 	var witch := _reg(2, "Witch", -6.0, ["Caster(2)"])
 	witch.casts_current = 2
-	_main._ensure_solo_controller()   # an agreed Automatic room borrows the controller for geometry (3.1)
+	SoloHarness.controller(_main)   # an agreed Automatic room borrows the controller for geometry (3.1)
 	assert_object(_main.solo_controller).override_failure_message("fixture: no engine controller").is_not_null()
 	return [seer, foe, witch]
 
@@ -256,7 +256,7 @@ func test_control_a_lone_caster_without_tokens_logs_no_boost_line(timeout := 120
 	var seer := _reg(1, "Seer", 0.0, ["Caster(2)"])
 	seer.casts_current = 2
 	var foe := _reg(2, "Raiders", 10.0)
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
 	(func() -> void:
@@ -284,7 +284,7 @@ func test_a_cast_with_the_friendly_caster_out_of_sight_logs_why_nobody_boosts_at
 	# Second P1 caster WITH tokens but 20" away — beyond 18" aura range
 	var witch := _reg(1, "Witch", -20.0, ["Caster(2)"])
 	witch.casts_current = 2
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	assert_object(_main.solo_controller).override_failure_message("fixture: no engine controller").is_not_null()
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
@@ -311,7 +311,7 @@ func test_the_no_boost_line_names_the_reach_without_sight_at_epoch_73(timeout :=
 	var foe := _reg(2, "Raiders", 10.0)
 	var witch := _reg(1, "Witch", -20.0, ["Caster(2)"])
 	witch.casts_current = 2
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
 	(func() -> void:

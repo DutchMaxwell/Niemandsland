@@ -39,7 +39,7 @@ func after_test() -> void:
 func _seat(with_ai: bool) -> void:
 	_main.solo_ai_slots = {2: true} if with_ai else {}
 	if with_ai:
-		_main._ensure_solo_controller()
+		SoloHarness.controller(_main)
 
 
 ## A human unit carrying a Great Musician +1" once-record (as the Utility Buff writes it) and a

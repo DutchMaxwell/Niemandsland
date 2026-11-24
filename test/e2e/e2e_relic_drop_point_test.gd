@@ -14,7 +14,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	_main.terrain_overlay.update_objectives([Vector3.ZERO])
 	SoloController.mission_markers = [{"carry": true, "carried_by": "carrier"}]
 

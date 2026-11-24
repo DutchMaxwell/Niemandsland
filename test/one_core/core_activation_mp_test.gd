@@ -72,7 +72,7 @@ func _room(room := true, level := RulesAutomation.Level.AUTOMATIC, seats := {}) 
 	_net.army_manager = _main.opr_army_manager
 	_main.network_manager = _net
 	_main.radial_menu_controller.network_manager = _net   # the activation fact goes out through the radial's own handle
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	_main._apply_turn_token(1)
 
 
