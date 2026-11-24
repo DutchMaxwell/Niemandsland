@@ -29,7 +29,7 @@ func before_test() -> void:
 	await _runner.simulate_frames(4)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true   # fair faces, drawn instantly
+	SoloHarness.instant(_main)   # fair faces, drawn instantly
 
 
 func after_test() -> void:
