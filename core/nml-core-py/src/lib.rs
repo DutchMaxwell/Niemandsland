@@ -2411,6 +2411,12 @@ fn hero_join_refusal(system: &str, rules_epoch: u32) -> Option<&'static str> {
     nmlcore::rules::hero_join_refusal(system, rules_epoch)
 }
 
+/// `rules::command_limit`: `None` when the list's command upgrades are legal in `system`, else the refusal.
+#[pyfunction]
+fn command_limit(system: &str, units: Vec<(String, Vec<String>)>) -> Option<String> {
+    nmlcore::rules::command_limit(system, &units).err()
+}
+
 #[pyfunction]
 fn rule_vocab_version() -> i64 {
     nmlcore::RULE_VOCAB_VERSION
@@ -3230,6 +3236,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(vocab_version_of_header, m)?)?;
     m.add_function(wrap_pyfunction!(rule_vocab_version, m)?)?;
     m.add_function(wrap_pyfunction!(hero_join_refusal, m)?)?;
+    m.add_function(wrap_pyfunction!(command_limit, m)?)?;
     m.add("RULE_VOCAB_VERSION", nmlcore::RULE_VOCAB_VERSION)?;
     m.add("LEGACY_VOCAB_VERSION", nmlcore::LEGACY_VOCAB_VERSION)?;
     // The CLASS FIX (external review 03.09. item 3 / F9): the epoch a fresh
