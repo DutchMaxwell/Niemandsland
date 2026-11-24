@@ -24,18 +24,15 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
-	_main.solo_controller.ai_slot = 2
-	_main.solo_controller.human_slot = 1
+	SoloHarness.start(_main, [2], 1)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	CoreActivation._env = 1
 
 
 func after_test() -> void:
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
@@ -64,7 +61,7 @@ func test_the_door_probes_the_mode_of_a_human_versatile_shooter_only() -> void:
 ## The owner's answer: the table's card, its recommended button first; either button is one of the core's options.
 func test_the_owner_answers_the_mode_with_the_tables_prompt() -> void:
 	var att: GameUnit = _pair(1)[0]
-	_main._solo_batch = false   # the card is asked as on the table (the headless batch keeps the core's pick)
+	SoloHarness.instant(_main, false)   # the card is asked as on the table (the headless batch keeps the core's pick)
 	for take_recommended in [true, false]:
 		var out := {}
 		var ask := func() -> void: out["option"] = await _main._solo_choice_local(att, "versatile_mode:%s" % att.unit_id, ["ap", "hit"], 0,
