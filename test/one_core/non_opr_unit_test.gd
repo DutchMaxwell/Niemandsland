@@ -322,13 +322,13 @@ func test_a_non_opr_target_is_shot_by_the_core_on_the_human_door() -> void:
 	assert_int(core["alive"]).override_failure_message("the volley hurt nobody (seed 1 wounds)").is_less(5)
 
 
-## The Auto verbs move the unit through the engine, outside the session's drop, so the core would shoot from the START spot
-## (the two-instance harness's Advance & Shoot saw `done` with no roll once its target became takeable). Their shot stays
-## on the table. RED: drop the `auto` clause from `human_shoot` -> the core's declaration line is there and nothing hurt it.
-func test_an_auto_verbs_shot_stays_on_the_table() -> void:
+## The Auto verbs' shot goes through the core like any Fire!: the unit's positions reach the core as the placement
+## first (here nothing moved, so it shoots from where it stands). RED: put the `auto` refusal back into `human_shoot` -> the
+## core's declaration line is missing.
+func test_an_auto_verbs_shot_goes_through_the_core() -> void:
 	var out := await _human_volley(1, 4, true, true)
-	assert_bool(out["core"]).override_failure_message("the core took an auto verb's shot: %s" % [_log_texts()]).is_false()
-	assert_int(out["alive"]).override_failure_message("the table's volley hurt nobody (seed 1 wounds)").is_less(5)
+	assert_bool(out["core"]).override_failure_message("the core did not take an auto verb's shot: %s" % [_log_texts()]).is_true()
+	assert_int(out["alive"]).override_failure_message("the core's volley hurt nobody (seed 1 wounds)").is_less(5)
 
 
 func test_the_core_shoots_a_non_opr_target_like_the_table_on_the_human_door(timeout := 900000) -> void:

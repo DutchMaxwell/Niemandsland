@@ -1306,20 +1306,18 @@ class Run:
         )
         self.checkpoint("rules-online-round-end", states)
 
-        # Plan 3.5 (OD 9): P2 opens round 2 with Advance & Shoot. The guest previews it, clicks and runs it;
-        # the host only replicates, and rolls its own saves against the volley (3.6).
+        # P2 opens round 2 with Advance & Shoot. The guest previews it, clicks and runs it; the host only replicates.
+        # The shot goes through the rules core like any Fire!, so the host's defense dice are the core's owner roll on
+        # the host's own tray (no save dialog), and the guest waits for them.
         self.command("guest", "auto_verb")
-        self.wait_condition("the host is asked for its saves", lambda s: s["host"].get("save_prompt_visible") is True,
-                            diagnostic=lambda s: "host_tail=%r" % s["host"].get("battle_log_tail"))
-        self.command("host", "confirm_save")
-        save = "Defense save vs Harness Rifle"
+        save = "MP2-host rolls ("
         states = self.wait_condition(
             "the guest's verb replicated, the host rolled its saves, the guest's tray none",
             lambda s: s["guest"].get("auto_verb_done") is True
             and self.require_unit_value(s, "mp2_p2a", "activated", True)
-            and s["host"].get("tray_rolls", []).count("local: " + save) == 1
-            and "local: " + save not in s["guest"].get("tray_rolls", [])
-            and "MP2-host rolled their defense saves vs Harness Rifle" in s["guest"].get("rolled_lines", []),
+            and sum(r.startswith("local: " + save) for r in s["host"].get("tray_rolls", [])) == 1
+            and not any(r.startswith("local: " + save) for r in s["guest"].get("tray_rolls", []))
+            and "MP2-host rolled their defense dice" in s["guest"].get("rolled_lines", []),
             diagnostic=lambda s: "tray_rolls=%r rolled=%r" % (
                 {r: s[r].get("tray_rolls") for r in s}, s["guest"].get("rolled_lines")),
         )

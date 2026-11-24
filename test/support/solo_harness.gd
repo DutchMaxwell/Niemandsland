@@ -7,9 +7,10 @@ class_name SoloHarness
 ## from main.gd then breaks those tests although no behaviour changes. With this one facade, moving
 ## that code touches one file.
 ##
-## These five functions are the whole interface: `controller` builds the controller without touching
+## These six functions are the whole interface: `controller` builds the controller without touching
 ## the table's seats, `start` builds it on given seats, `instant`/`fast` pick the pacing,
-## `auto_saves` skips the save dialog. A test that needs more keeps that one line after `start`.
+## `auto_saves` skips the save dialog, `auto_verb` runs a player's Auto verb. A test that needs more
+## keeps that one line after `start`.
 
 
 ## Build the solo controller for the current table and touch nothing else: no slot set, no seat.
@@ -58,6 +59,12 @@ static func fast(main: Node, on := true) -> void:
 ## Saves roll straight to the tray without the save dialog.
 static func auto_saves(main: Node, on := true) -> void:
 	main._solo_auto_saves = on
+
+
+## A player's Auto verb (Charge / Advance & Shoot / Rush, AiDecision.Action) of `unit` at
+## `target`, as the lit click runs it.
+static func auto_verb(main: Node, unit: GameUnit, verb: int, target: GameUnit) -> void:
+	await main._run_player_intent(unit, verb, target)
 
 
 ## Resolve a human unit's spell through the table's own cast path (it marks the core session).
