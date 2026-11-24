@@ -12,10 +12,13 @@
 scripts/boardgen_dress.gd
 scripts/boardgen_dress_materials.gd
 scripts/boardgen_dress_mesh.gd
+scripts/boardgen_dress_rules.gd
 scripts/boardgen_dress_story.gd
 scripts/core_load_notice.gd
 scripts/deleted_state.gd
+scripts/boardgen_dress_context.gd
 scripts/dress_module_spec.gd
+scripts/boardgen_dress_placement.gd
 scripts/landing_preview.gd
 scripts/net_dialog.gd
 scripts/player_identity.gd
@@ -32,6 +35,11 @@ scripts/units.gd
 test/act_intent_test.gd
 test/battle_sim_core_wanted_test.gd
 test/boardgen_dress_module_spec_test.gd
+test/boardgen_dress_houses_test.gd
+test/boardgen_dress_mesh_test.gd
+test/boardgen_dress_placement_test.gd
+test/boardgen_dress_rules_test.gd
+test/boardgen_dress_snapshot_test.gd
 test/card_wounds_tough_gate_test.gd
 test/cinematic_intro_test.gd
 test/die_face_icon_test.gd
