@@ -14648,6 +14648,7 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 		"name": spell_name, "targets": targets, "boost": boost, "interference": interference,
 		"base_target": AiSpell.CAST_BASE_TARGET, "threshold": threshold,
 		"owner_label": _roller_label(member), "human_cast": true})
+	CoreActivation.note_cast(unit)
 	human_cast_resolved.emit(unit)
 
 
