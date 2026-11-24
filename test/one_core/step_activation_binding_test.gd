@@ -514,7 +514,7 @@ func test_a_drop_without_trails_pays_the_terrain_on_its_straight_line() -> void:
 	var forest := _board(TerrainRules.TerrainType.FOREST, [14, 15])
 	var rush := _trailless_check(forest, 2, 8.0)
 	assert_str(str(rush.get("reason", ""))).override_failure_message("forest Rush: %s" % rush) \
-		.is_equal("a: a model moved 8.0\" - the Rush allowance is 6.0\".")
+		.is_equal("a: a model moved 8.0\" - the Rush allowance is 6.0\" in Difficult terrain.")
 	var box := _board(TerrainRules.TerrainType.CONTAINER, range(9, 21), [[3, -18, 6, -18], [6, -18, 6, 18], [6, 18, 3, 18], [3, 18, 3, -18]])
 	var climb := _trailless_check(box, 1, 4.0)
 	assert_str(str(climb.get("reason", ""))).override_failure_message("container Advance: %s" % climb) \

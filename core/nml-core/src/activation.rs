@@ -287,6 +287,39 @@ fn enters_solid(terrain: &Terrain, path: &[[f64; 2]]) -> bool {
     })
 }
 
+/// A model's walked path for the move check (world XZ metres): its trail when it has 2+ points, else (R3: no chord bypass)
+/// the straight segment [start, end] once it moved past the drop floor; a model that stayed has none.
+fn walked_path(a: [f64; 2], b: [f64; 2], trail: Option<&Vec<[f64; 2]>>) -> Vec<[f64; 2]> {
+    match trail {
+        Some(t) => t.clone(),
+        None if (a[0] - b[0]).hypot(a[1] - b[1]) / INCHES_TO_METERS > DROP_FLOOR_IN => vec![a, b],
+        None => Vec::new(),
+    }
+}
+
+/// GF p.11: Difficult terrain caps the WHOLE unit once any model's path crosses it (or the unit carries the Difficult
+/// debuff); Flying and Strider ignore it (read as `mv::step` reads them). `paths` = per model, world XZ metres.
+fn difficult_caps(statics: &[UnitStatic], state: &State, si: usize, terrain: &Terrain, paths: &[Vec<[f64; 2]>]) -> bool {
+    let rules = &state.profile(si).special_rules;
+    if rules.iter().any(|r| r == "Flying" || r == "Strider") {
+        return false;
+    }
+    let crosses = |t: &Vec<[f64; 2]>, r: &f64| {
+        let leg: Vec<[f32; 2]> = t.iter().map(|p| terrain.to_inch([p[0] as f32, 0.0, p[1] as f32])).collect();
+        leg_crosses(&leg, *r, terrain, is_difficult)
+    };
+    paths.iter().zip(&state.radii[si]).any(|(t, r)| crosses(t, r)) || terrain_debuff_folds(statics, state, si).0
+}
+
+/// Does `check_move` hold this drop to the 6" Difficult cap? The same paths and the same test, read without the
+/// refusals, so the table's drag band shrinks exactly where the drop check would cap it (a display question only).
+pub fn drop_difficult(statics: &[UnitStatic], state: &State, si: usize, terrain: &Terrain, drop: &Drop) -> bool {
+    let paths: Vec<Vec<[f64; 2]>> = state.positions[si].iter().zip(&drop.placed).enumerate()
+        .map(|(i, (a, b))| walked_path([a[0], a[2]], [b[0], b[2]], drop.trails.get(i).filter(|t| t.len() >= 2)))
+        .collect();
+    difficult_caps(statics, state, si, terrain, &paths)
+}
+
 pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams, terrain: &Terrain, drop: &Drop, enforce: bool) -> Check {
     let (mode, m) = match drop.mode {
         ADVANCE => ("Advance", 0),
@@ -315,14 +348,11 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
     let mut paths: Vec<Vec<[f64; 2]>> = Vec::with_capacity(start.len());
     for (i, (a, b)) in start.iter().zip(&drop.placed).enumerate() {
         let (a, b) = ([a[0], a[2]], [b[0], b[2]]);
-        let path = match drop.trails.get(i).filter(|t| t.len() >= 2) {
-            Some(t) if inch(t[0], a) > 0.01 || inch(t[t.len() - 1], b) > hop_in.unwrap_or(0.0) + 0.01 => {
-                return Check::Refused { reason: "trail does not match the placed model".to_string() };
-            }
-            Some(t) => t.clone(),
-            None if inch(a, b) > DROP_FLOOR_IN => vec![a, b],
-            None => Vec::new(),
-        };
+        let trail = drop.trails.get(i).filter(|t| t.len() >= 2);
+        if trail.is_some_and(|t| inch(t[0], a) > 0.01 || inch(t[t.len() - 1], b) > hop_in.unwrap_or(0.0) + 0.01) {
+            return Check::Refused { reason: "trail does not match the placed model".to_string() };
+        }
+        let path = walked_path(a, b, trail);
         // L-RF1: nobody walks through or ends on a building (an intact house); Flying crosses it but may not end on it.
         let ends_inside = terrain.solid_at(b[0] / terrain.in2m(), b[1] / terrain.in2m());
         if ends_inside || (!flying && enters_solid(terrain, &path)) {
@@ -339,14 +369,7 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
         x = x.max(drop_in + if path.is_empty() { inch(a, b) } else { crate::mv::step::trail_walk_in(&path, &ledges).0 });
         paths.push(path);
     }
-    // GF p.11: Difficult terrain caps the WHOLE unit; Flying and Strider ignore it (read as `mv::step` reads them).
-    let strider = state.profile(si).special_rules.iter().any(|r| r == "Strider");
-    let crosses = |t: &Vec<[f64; 2]>, r: &f64| {
-        let leg: Vec<[f32; 2]> = t.iter().map(|p| terrain.to_inch([p[0] as f32, 0.0, p[1] as f32])).collect();
-        leg_crosses(&leg, *r, terrain, is_difficult)
-    };
-    let difficult = !(flying || strider)
-        && (paths.iter().zip(&state.radii[si]).any(|(t, r)| crosses(t, r)) || terrain_debuff_folds(statics, state, si).0);
+    let difficult = difficult_caps(statics, state, si, terrain, &paths);
     let a = allowance(statics, state, si, seams, terrain);
     let full = [a.advance, a.rush, a.charge][m];
     let capped = difficult && full > DIFFICULT_MOVE_CAP_IN;
@@ -357,7 +380,9 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
     if x <= y + 0.01 {
         return Check::Ok { lines: drop_line.into_iter().collect() };
     }
-    let text = format!("{}: a model moved {x:.1}\" - the {mode} allowance is {y:.1}\".", statics[state.roster.profile[si]].name);
+    // The Difficult cap names itself: "the Rush allowance is 6.0"" alone read as a wrong Rush band to the player.
+    let why = if capped { " in Difficult terrain" } else { "" };
+    let text = format!("{}: a model moved {x:.1}\" - the {mode} allowance is {y:.1}\"{why}.", statics[state.roster.profile[si]].name);
     if enforce {
         return Check::Refused { reason: text };
     }
@@ -4169,7 +4194,7 @@ mod tests {
             let trails = vec![trail(&[[0.0, 0.0], [a, 0.0]]), trail(&[[0.0, 6.0], [b, 6.0]])];
             check_move(&statics, st, 0, seams(), &t, &Drop { mode: RUSH, placed, trails }, enforce)
         };
-        let over = "Squad: a model moved 8.0\" - the Rush allowance is 6.0\".";
+        let over = "Squad: a model moved 8.0\" - the Rush allowance is 6.0\" in Difficult terrain.";
         assert_eq!(go(&st, 5.0, 8.0, true), refusal(over));
         assert_eq!(go(&st, 5.9, 5.9, true), OK);
         assert_eq!(go(&st, 1.5, 8.0, true), OK, "A stops short of the forest: no cap");
@@ -4278,7 +4303,7 @@ mod tests {
         let climb = refusal("Squad: a model moved 6.5\" - the Advance allowance is 6.0\".");
         assert_eq!(go(&container_board(), ADVANCE, east(4.0), vec![]), climb);
         assert_eq!(go(&container_board(), ADVANCE, east(4.0), vec![trail(&[[0.0, 0.0]])]), climb, "one point is no trail");
-        assert_eq!(go(&forest_bar_board(), RUSH, east(8.0), vec![]), refusal("Squad: a model moved 8.0\" - the Rush allowance is 6.0\"."));
+        assert_eq!(go(&forest_bar_board(), RUSH, east(8.0), vec![]), refusal("Squad: a model moved 8.0\" - the Rush allowance is 6.0\" in Difficult terrain."));
         assert_eq!(go(&Terrain::default(), ADVANCE, east(5.9), vec![]), OK, "open ground: the straight line");
         assert_eq!(go(&forest_bar_board(), RUSH, east(0.05), vec![]), OK, "a model that stayed crosses nothing");
     }

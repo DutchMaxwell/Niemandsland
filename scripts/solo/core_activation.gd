@@ -2106,10 +2106,36 @@ static func bands(main, gu: GameUnit) -> Dictionary:
 		return {}
 	var sc: SoloController = main.solo_controller
 	var core: Object = sc._core_node_ready() if sc != null else null
+	var pm: Dictionary = (_sessions[gu.unit_id] as Dictionary).get("post_melee", {})
+	if not pm.is_empty():   # the move after a melee drags on its own allowance (begin_post_melee_move)
+		return {"advance": int(pm["in"]), "rush": int(pm["in"]), "charge": int(pm["in"])}
 	var a: Dictionary = core.move_allowance(int(_sessions[gu.unit_id]["handle"]), gu.unit_id) if core != null else {}
 	if a.is_empty():
 		return {}
 	return {"advance": a["advance"], "rush": a["rush"], "charge": a["charge"]}
+
+
+## Ticket 12 (DRAG-BAND-DIFFICULT): does the core's drop check hold `gu`'s move to the 6" Difficult cap, for the walked
+## trails (`now`: the drag in flight, ObjectManager.drag_paths(); a model in it stands at its path's end, every other one
+## where it stands now)? The core's own test
+## (`move_difficult`), so the drag band and the drop's refusal never disagree. -1 = not on the core move path: the caller's
+## own check applies; 0 / 1 = the core's answer.
+static func drag_difficult(main, gu: GameUnit, now: Dictionary) -> int:
+	if gu == null or not _sessions.has(gu.unit_id) or not on_move_path(main, gu):
+		return -1
+	var sc: SoloController = main.solo_controller
+	var core: Object = sc._core_node_ready() if sc != null else null
+	if core == null:
+		return -1
+	var at: Array = gu.get_alive_models().map(func(m: ModelInstance) -> Vector3:
+		var p: Variant = now.get(int(m.node.get_meta("network_id", 0)))
+		return Vector3(p[-1].x, 0.0, p[-1].y) if p != null else main.object_manager.resting_position(m.node))
+	var r: Dictionary = core.move_difficult(int(_sessions[gu.unit_id]["handle"]), gu.unit_id,
+		{"positions": PackedVector3Array(at), "trails": session_trails(main, gu, now)})
+	if not bool(r.get("ok", false)):
+		push_error("drag_difficult: the core answered %s for %s" % [r, gu.get_name()])
+		return -1
+	return 1 if bool(r["difficult"]) else 0
 
 
 ## Whether `unit_id`'s activation is open (Started and not yet ended or cancelled).
@@ -2222,6 +2248,9 @@ static func cancel(main, gu: GameUnit) -> void:
 ## Two defects are reported with push_error and the drop STANDS unchecked (a refusal would trap the unit with no way to
 ## move it): a selector that is not Advance, Rush or Charge (declared_mode), and an open session without its core.
 static func drop_refused(main, gu: GameUnit) -> bool:
+	var pm: Dictionary = (_sessions.get(gu.unit_id, {}) as Dictionary).get("post_melee", {})
+	if not pm.is_empty():
+		return _post_melee_refused(main, gu, pm)
 	var mode := declared_mode(main)
 	if mode == 0:
 		return false   # declared_mode reported the defect
@@ -2230,6 +2259,55 @@ static func drop_refused(main, gu: GameUnit) -> bool:
 		return false
 	main._log_rule_event(BattleLog.Category.MOVEMENT, str(r.get("reason", "")))
 	main._show_toast(str(r.get("reason", "")))
+	return true
+
+
+## The move after a melee (Consolidation Moves, GF / AoF Advanced Rules v3.5.1): when neither unit was destroyed the
+## charger moves back 1", when the enemy was destroyed the survivor may move up to 3". It is a movement of its own, so the
+## charge's distance does not count against it: from here on the drops of `gu`'s open activation are checked against
+## `allowance_in` from where its models stand now, and its drag band is that allowance. `label` names it in the refusal.
+## A unit without an open activation (a defender) has nothing to check: a no-op.
+static func begin_post_melee_move(main, gu: GameUnit, allowance_in: float, label: String) -> void:
+	if gu == null or not _sessions.has(gu.unit_id):
+		return
+	var from := {}   # model id -> where it stood when the melee ended (XZ)
+	for m in gu.get_alive_models():
+		from[int(m.node.get_meta("network_id", 0))] = Vector2(m.node.global_position.x, m.node.global_position.z)
+	_sessions[gu.unit_id]["post_melee"] = {"in": allowance_in, "label": label, "from": from,
+		"mark": main.move_trails.ledger.entries.size() if main.move_trails != null else 0}
+
+
+## The drop check of a post-melee move (`begin_post_melee_move`): each model's walk since the melee ended (its drops in the
+## ledger plus the drag in flight; a model with no recorded walk counts its straight distance) against the allowance. Over
+## it: the line is logged; with Enforce Movement Limit on it is toasted and the drop refused (true), off it stands.
+static func _post_melee_refused(main, gu: GameUnit, pm: Dictionary) -> bool:
+	var length_in := func(p: PackedVector2Array) -> float:
+		var d := 0.0
+		for i in range(1, p.size()):
+			d += p[i - 1].distance_to(p[i])
+		return d * METERS_TO_INCHES
+	var walked := {}   # model id -> inches walked since the melee ended
+	var entries: Array = main.move_trails.ledger.entries if main.move_trails != null else []
+	for i in range(mini(int(pm["mark"]), entries.size()), entries.size()):
+		if str(entries[i]["unit"]) == gu.unit_id:
+			var id := int(entries[i]["model"])
+			walked[id] = float(walked.get(id, 0.0)) + float(length_in.call(entries[i]["points"]))
+	var now: Dictionary = main.object_manager.drag_paths()
+	var x := 0.0
+	for m in gu.get_alive_models():
+		var id := int(m.node.get_meta("network_id", 0))
+		var w: float = float(walked.get(id, 0.0)) + (float(length_in.call(now[id])) if now.has(id) else 0.0)
+		if w == 0.0 and (pm["from"] as Dictionary).has(id):
+			w = (pm["from"][id] as Vector2).distance_to(Vector2(m.node.global_position.x, m.node.global_position.z)) * METERS_TO_INCHES
+		x = maxf(x, w)
+	var y := float(pm["in"])
+	if x <= y + 0.01:
+		return false
+	var text := "%s: a model moved %.1f\" - the %s allowance is %.1f\"." % [gu.get_name(), x, str(pm["label"]), y]
+	main._log_rule_event(BattleLog.Category.MOVEMENT, text)
+	if not main.object_manager._strict_movement_enforced():
+		return false   # the escape hatch: the overrun is named, the drop stands
+	main._show_toast(text)
 	return true
 
 
@@ -2283,7 +2361,8 @@ static func session_trails(main, gu: GameUnit, now: Dictionary) -> Array:
 		var paths: Array = walked.get(id, [])
 		if now.has(id):
 			paths.append(now[id])
-		out.append(_unbroken(paths, begun.get(m, Vector2.INF), Vector2(m.node.global_position.x, m.node.global_position.z)))
+		var end: Vector2 = (now[id] as PackedVector2Array)[-1] if now.has(id) else Vector2(m.node.global_position.x, m.node.global_position.z)
+		out.append(_unbroken(paths, begun.get(m, Vector2.INF), end))   # a drag path ends where its model stands (ticket 12: or will)
 	return out
 
 

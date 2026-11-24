@@ -67,6 +67,12 @@ static func auto_verb(main: Node, unit: GameUnit, verb: int, target: GameUnit) -
 	await main._run_player_intent(unit, verb, target)
 
 
+## The table's consolidation after a melee of `charger` against `defender`
+## (it waits on the board prompt for a player's unit).
+static func consolidate(main: Node, charger: GameUnit, defender: GameUnit) -> void:
+	await main._solo_consolidate_melee(charger, defender)
+
+
 ## Resolve a human unit's spell through the table's own cast path (it marks the core session).
 static func cast(main: Node, caster: GameUnit, entry: Dictionary, targets: Array) -> void:
 	await main._run_human_cast(caster, caster, entry, targets)

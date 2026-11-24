@@ -3591,6 +3591,12 @@ func core_bands(gu: GameUnit) -> Dictionary:
 	return CoreActivation.bands(self, gu)
 
 
+## Ticket 12: the core's Difficult-cap answer for the drag in flight (`now`: ObjectManager.drag_paths; -1 = not on the
+## core move path).
+func core_drag_difficult(gu: GameUnit, now: Dictionary) -> int:
+	return CoreActivation.drag_difficult(self, gu, now)
+
+
 ## One-core P3 step 29 (O9, O14 (1b)): "Activate" STARTS the activation of a lifecycle unit - the lock first (O5), then
 ## the session, then the one line that is the start's multiplayer sync (O15 (2); no "open" state exists on the wire).
 ## The unit stays NOT activated and begin_activation does not run (D23: the first committed door still fires it).
@@ -13098,6 +13104,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"Consolidation: move %s back 1\" (the charger separates — %s)" % [charger.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger))], true)
+			CoreActivation.begin_post_melee_move(self, charger, 1.0, "Pull-back")   # its own move: the charge does not count
 			await _solo_board_prompt(
 				"Pull back 1\": drag %s back from the melee (%s) — the game waits." % [charger.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger))],
 				"✓ Pulled back")
@@ -13152,6 +13159,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Consolidation: %s may move up to 3\" (enemy destroyed — %s)" % [survivor.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(survivor))], false)
+	CoreActivation.begin_post_melee_move(self, survivor, 3.0, "Consolidation")   # its own move: the charge does not count
 	await _solo_board_prompt(
 		"Consolidate: %s destroyed the enemy — you may drag it up to 3\" (%s)." % [survivor.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(survivor))],
 		"✓ Done consolidating")
