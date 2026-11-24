@@ -102,8 +102,9 @@ func test_an_ai_strike_the_core_did_not_take_is_held_with_its_reason(timeout := 
 	assert_int(foe.get_alive_count()).is_equal(5)
 
 
-## A PLAYER's bearer moved over an enemy still attacks: the player's own mandatory strike stays on the table until the human side
-## moves to the rules core. RED: hold the strike for every bearer (no `_solo_is_ai_unit` check).
+## A PLAYER's bearer moved over an enemy still attacks: the player's own mandatory strike the rules core did not take becomes a free
+## dice roll (one line with the reason, the tray left to the player, no die rolled by the table). RED: hold the strike for every
+## bearer (no `_solo_is_ai_unit` check), or hand it back to the table resolver (a die is rolled).
 @warning_ignore('unused_parameter')
 func test_a_players_bearer_moved_over_an_enemy_still_attacks(timeout := 300000, do_skip := not ClassDB.class_exists("NmlCore"),
 		skip_reason := "no NmlCore") -> void:
@@ -119,4 +120,6 @@ func test_a_players_bearer_moved_over_an_enemy_still_attacks(timeout := 300000, 
 	var text := "\n".join(_main.battle_log.entries().slice(from).map(func(e: Dictionary) -> String: return str(e["text"])))
 	assert_str(text).override_failure_message(text).contains("Crossing Strike: Zeppelins passes over Warriors — attacks it as if shooting")
 	assert_str(text).not_contains("it is held")
-	assert_int(_main._tray_rng.state).override_failure_message("the player's strike rolled no die:\n%s" % text).is_not_equal(rng0)
+	assert_str(text).override_failure_message(text).contains("Zeppelins fires at Warriors: the rules core cannot resolve this shot (") \
+		.contains("free roll: roll it in the dice tray and apply the wounds by hand")
+	assert_int(_main._tray_rng.state).override_failure_message("the table rolled a die for the player's strike:\n%s" % text).is_equal(rng0)

@@ -24,12 +24,10 @@ const BLOCKERS: Array[Dictionary] = [
 		"header": "static func refusals(", "needles": ["not gu.source_data is OPRApiClient.OPRUnit"]},
 	{"name": "parity_table_melee.gd drives the melee resolver", "retire": "P4.D-49", "file": PARITY_MELEE, "header": "",
 		"needles": ["main._run_ai_melee("]},
-	{"name": "a player's Strafing bearer hands its strike to the AI resolver", "retire": "P4.D-37", "file": MAIN,
-		"header": "func _solo_apply_strafing(", "needles": ["await _solo_resolve_ai_volley(unit, target, shots, true)"]},
 	# PLAN H (H-4): the facts the table-remains plan retires.
 	{"name": "the AI body runs the pre-attack beats itself (Breath Attack before the volley)", "retire": "P4.D-41 / H-5..H-9", "file": MAIN,
 		"header": "func _solo_activate_one_ai_body(", "needles": ["await _solo_apply_breath_attack(unit)"]},
-	{"name": "human_shoot hands an Auto verb's volley back to the table", "retire": "P4.D-43 / H-32", "file": ACTIVATION,
+	{"name": "human_shoot hands an Auto verb's volley to the free roll", "retire": "P4.D-43 / H-32", "file": ACTIVATION,
 		"header": "static func human_shoot(", "needles": ["if auto:"]},
 	{"name": "hotseat Automatic is OFF unless NML_ONE_CORE_HOTSEAT is set", "retire": "P4.D-43c / H-31", "file": ACTIVATION,
 		"header": "static func hotseat_enabled() -> bool:", "needles": ["_hotseat_env = 1 if (raw == \"1\" or raw == \"on\") else 0"]},
@@ -80,7 +78,7 @@ func test_every_deletion_blocker_still_holds() -> void:
 
 
 func test_the_list_is_not_empty_and_names_a_step_per_row() -> void:
-	assert_int(BLOCKERS.size()).is_greater_equal(9)
+	assert_int(BLOCKERS.size()).is_greater_equal(8)
 	for b in BLOCKERS:
 		assert_str(String(b["retire"])).override_failure_message("%s names no step" % b["name"]).contains("P4.D-")
 
@@ -148,18 +146,22 @@ func test_the_human_door_reads_the_live_slice() -> void:
 			"the human door reads the allow file, not the live slice")
 
 
-## The AI table resolver has one production caller left: a player's own Strafing / Crossing Strike bearer, whose mandatory strike
-## stays on the GDScript table until the human side moves to the rules core. The AI volley the core refuses and the AI's
-## move-through strike are HELD with a line (`held`, `held_strike`).
-## RED: put the AI volley's `await _solo_resolve_ai_volley(` call back in `_run_ai_shooting`.
-func test_only_the_players_strike_calls_the_ai_resolver() -> void:
-	var src := _source(MAIN)
-	var lines: Array = Array(src.split("\n"))
+## The table resolvers have no production caller left: the AI volley and move-through strike the core refuses are HELD with a
+## line (`held`, `held_strike`); a player's shot, split or strike the core refuses is a free dice roll. A call from inside another
+## table resolver (the split calling the volley) is not a production caller: nothing calls the outer one.
+## RED: put `await _run_human_shooting(attacker, target)` back into `_run_human_attack`, or the AI resolver into `_solo_apply_strafing`.
+func test_no_production_caller_reaches_a_table_resolver() -> void:
+	var resolvers := ["_solo_resolve_ai_volley", "_run_human_shooting", "_run_human_attack_split"]
 	var calls: Array = []
 	var fn := ""
-	for l in lines:
+	for l in Array(_source(MAIN).split("\n")):
 		if l.begins_with("func "):
 			fn = l.get_slice("(", 0).trim_prefix("func ")
-		elif l.contains("_solo_resolve_ai_volley("):
-			calls.append(fn)
-	assert_array(calls).override_failure_message("main.gd calls the AI resolver from %s" % [calls]).is_equal(["_solo_apply_strafing"])
+		elif not resolvers.has(fn) and not l.strip_edges().begins_with("#"):
+			for r in resolvers:
+				if l.contains(r + "("):
+					calls.append("%s -> %s" % [fn, r])
+	assert_array(calls).override_failure_message("main.gd calls a table resolver: %s" % [calls]).is_empty()
+	for b in BLOCKERS:
+		assert_str(String(b["name"])).override_failure_message("the retired row is still in BLOCKERS").is_not_equal(
+			"a player's Strafing bearer hands its strike to the AI resolver")

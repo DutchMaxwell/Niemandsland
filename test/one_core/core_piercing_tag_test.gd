@@ -99,7 +99,10 @@ func _volley(door: String, s: int, markers: int, source: String, core_run: bool)
 		CoreActivation._env = 1 if core_run else 0
 		if core_run:
 			assert_bool(_main.core_activation_start(att)).override_failure_message("seed %d: no Start" % s).is_true()
-		await _main._run_human_attack(att, foe, false)
+		if core_run:
+			await _main._run_human_attack(att, foe, false)
+		else:   # the table arm: its own volley (the window door now hands a refused shot to the free roll)
+			await TableHumanVolley.shoot(_main, att, foe)
 		CoreActivation.close_session(_main, att.unit_id)
 		CoreActivation._env = 1
 	_main.battle_log.entry_added.disconnect(tap)

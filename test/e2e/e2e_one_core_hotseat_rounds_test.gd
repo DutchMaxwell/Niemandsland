@@ -135,7 +135,10 @@ func _activate(att: GameUnit, target: GameUnit) -> void:
 	await _drag(att, dx)
 	if target != null and target.get_alive_count() > 0 and _main._solo_volley_sighted(att, target) > 0:
 		_volleys += 1
-		await _main._run_human_attack(att, target, false)
+		if CoreActivation.hotseat_enabled():
+			await _main._run_human_attack(att, target, false)
+		else:   # the switch off: the table's own volley (the window door now hands a refused shot to the free roll)
+			await TableHumanVolley.shoot(_main, att, target)
 	elif not att.is_activated:
 		await _main.radial_menu_controller.card_end_activation(att)
 	await E2EBoot.settle(get_tree())

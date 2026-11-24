@@ -267,14 +267,15 @@ func test_the_core_shoots_a_non_opr_target_like_the_table_on_the_ai_door(timeout
 	assert_array(bad).override_failure_message("door vs pinned literal:\n" + "\n".join(bad.slice(0, 10))).is_empty()
 
 
-## (3) The human door agrees: a non-OPR attacker's volley throws no die, the table says so in ONE line.
-func test_a_non_opr_attacker_fires_nothing_on_the_human_door() -> void:
+## (3) The human door agrees: a non-OPR attacker's volley throws no die; the core cannot resolve it, so ONE line hands it to the
+## player as a free dice roll and names the reason.
+func test_a_non_opr_attacker_is_a_free_roll_on_the_human_door() -> void:
 	var bare := _unit(1, "Bare", 0.0, 5, false)
 	var foe := _unit(2, "Foe", 8.0, 5, true)
 	await _main._run_human_attack(bare, foe, false)
-	assert_array(_lines_containing("Bare has no weapon in range of Foe — no shots")).override_failure_message(
+	assert_array(_lines_containing("Bare fires at Foe: the rules core cannot resolve this shot (non opr) - free roll")).override_failure_message(
 		"log: %s" % [_log_texts()]).has_size(1)
-	assert_array(_lines_containing("Bare fires")).override_failure_message("a die was thrown: %s" % [_log_texts()]).is_empty()
+	assert_array(_lines_containing("Bare fires")).override_failure_message("a die was thrown: %s" % [_log_texts()]).has_size(1)   # the free-roll line only
 	_free([bare, foe])
 
 
@@ -299,7 +300,10 @@ func _human_volley(s: int, defense: int, core_run: bool, auto := false) -> Dicti
 	var on_entry := func(e: Dictionary) -> void: lines.append(str(e["text"]))
 	_main.battle_log.entry_added.connect(on_entry)
 	_main.seed_tray_rng(s)
-	await _main._run_human_attack(att, foe, false, auto)
+	if core_run:
+		await _main._run_human_attack(att, foe, false, auto)
+	else:   # the table arm: its own volley (the window door now hands a refused shot to the free roll)
+		await TableHumanVolley.shoot(_main, att, foe)
 	_main.battle_log.entry_added.disconnect(on_entry)
 	var survivors: Array = foe.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
 	survivors.sort()
@@ -319,12 +323,14 @@ func test_a_non_opr_target_is_shot_by_the_core_on_the_human_door() -> void:
 
 
 ## The Auto verbs move the unit through the engine, outside the session's drop, so the core would shoot from the START spot
-## (the two-instance harness's Advance & Shoot saw `done` with no roll once its target became takeable). Their shot stays
-## on the table. RED: drop the `auto` clause from `human_shoot` -> the core's declaration line is there and nothing hurt it.
-func test_an_auto_verbs_shot_stays_on_the_table() -> void:
+## (the two-instance harness's Advance & Shoot saw `done` with no roll once its target became takeable). Their shot goes
+## to the free dice roll. RED: drop the `auto` clause from `human_shoot` -> the core's declaration line is there.
+func test_an_auto_verbs_shot_is_a_free_roll() -> void:
 	var out := await _human_volley(1, 4, true, true)
 	assert_bool(out["core"]).override_failure_message("the core took an auto verb's shot: %s" % [_log_texts()]).is_false()
-	assert_int(out["alive"]).override_failure_message("the table's volley hurt nobody (seed 1 wounds)").is_less(5)
+	assert_array(_lines_containing("Att fires at Bare4: the rules core cannot resolve this shot (an Auto order")).override_failure_message(
+		"log: %s" % [_log_texts()]).has_size(1)
+	assert_int(out["alive"]).override_failure_message("the engine resolved the free roll").is_equal(5)
 
 
 func test_the_core_shoots_a_non_opr_target_like_the_table_on_the_human_door(timeout := 900000) -> void:
