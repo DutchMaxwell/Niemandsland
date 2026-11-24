@@ -1034,13 +1034,14 @@ pub const EPOCH_95_PARITY_BATCH: u32 = 95;
 /// - CONSOLIDATE_PLAN: a melee winner's consolidation aims where the table's round planner aims it when the transcript carries the inputs.
 /// - HIT_AND_RUN_PLAIN: on a real board the Hit & Run step is the table's own fallback move away from the nearest enemy (`sim::tray_hit_and_run`).
 pub const EPOCH_96_PARITY_BATCH: u32 = 96;
-pub const CURRENT_RULES_EPOCH: u32 = 96;
-/// Placeholder gate for WIPED TO-HIT DECLARED (OPR shooting: a unit's weapons fire together, casualties come off after the
-/// whole volley; the target's to-hit rules are unit-wide): when a Deadly weapon of a volley kills the target's last model, the
-/// weapons still to fire keep the target's to-hit penalties as declared (Stealth family, Evasive family, Aircraft, the Artillery
-/// target). Before, `Ctx::wiped` dropped them, so the second weapon group rolled one better. Records stamped 96 or below replay
-/// byte-exact. Every call site reads THIS constant, not the literal `97`.
-pub const PENDING_EPOCH_WIPED_TO_HIT_DECLARED: u32 = 97;
+/// The EPOCH 97 BATCH: one table-vs-core difference that sat behind the `PENDING_EPOCH_WIPED_TO_HIT_DECLARED` placeholder (97) is now one
+/// frozen constant, and `CURRENT_RULES_EPOCH` is bumped to it in the same change. Records stamped 96 or below replay byte-exact. Every call
+/// site reads THIS constant, not the literal `97` or `CURRENT_RULES_EPOCH`. The recorder mirror (`act_recorder.gd`) stamps 97 in the same change.
+/// - WIPED_TO_HIT_DECLARED: when a Deadly weapon of a volley kills the target's last model, the weapons still to fire keep the target's
+///   to-hit penalties as declared (Stealth family, Evasive family, Aircraft, the Artillery target); the per-hit carrier reads
+///   (Fortified, the Regeneration family) still drop (`Ctx::wiped` -> `keep_to_hit_of`).
+pub const EPOCH_97_WIPED_TO_HIT_DECLARED: u32 = 97;
+pub const CURRENT_RULES_EPOCH: u32 = 97;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2452,11 +2453,12 @@ mod tests {
     }
 
     #[test]
-    fn wiped_to_hit_declared_gate_is_pending_97() {
-        assert_eq!(super::PENDING_EPOCH_WIPED_TO_HIT_DECLARED, 97);
-        assert!(!rule_on(CURRENT_RULES_EPOCH, super::PENDING_EPOCH_WIPED_TO_HIT_DECLARED), "a record at 96 replays as recorded");
+    fn wiped_to_hit_declared_gate_starts_at_97() {
+        assert_eq!(super::EPOCH_97_WIPED_TO_HIT_DECLARED, 97);
+        assert!(!rule_on(96, super::EPOCH_97_WIPED_TO_HIT_DECLARED), "a record at 96 replays as recorded");
+        assert!(rule_on(CURRENT_RULES_EPOCH, super::EPOCH_97_WIPED_TO_HIT_DECLARED), "a fresh play_game() stamps it on");
         let at = |e: u32| crate::unit::Ctx { rules_epoch: e, stealth: true, evasive: true, aircraft_hit_penalty: 1, ..Default::default() }.wiped();
-        let (old, new) = (at(96), at(super::PENDING_EPOCH_WIPED_TO_HIT_DECLARED));
+        let (old, new) = (at(96), at(super::EPOCH_97_WIPED_TO_HIT_DECLARED));
         assert!(!old.stealth && !old.evasive && old.aircraft_hit_penalty == 0, "96: a wiped target drops its to-hit penalties");
         assert!(new.stealth && new.evasive && new.aircraft_hit_penalty == 1, "97: they hold for the weapons still to fire");
         assert!(!new.fortified && !new.regeneration, "97: the per-hit carrier reads still drop");
@@ -2477,7 +2479,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 96, "the live epoch is EPOCH_96_PARITY_BATCH");
+        assert_eq!(CURRENT_RULES_EPOCH, 97, "the live epoch is EPOCH_97_WIPED_TO_HIT_DECLARED");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2487,11 +2489,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":96}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":97}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 96"
+            "a fresh play_game() now stamps the bumped epoch, 97"
         );
     }
 

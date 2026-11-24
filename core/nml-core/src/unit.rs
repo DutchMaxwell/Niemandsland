@@ -925,9 +925,9 @@ impl Ctx {
             near_terrain: false,
             ..base
         };
-        // PENDING_EPOCH_WIPED_TO_HIT_DECLARED: the volley is simultaneous, so the target's to-hit penalties (Stealth family, Evasive
+        // EPOCH_97_WIPED_TO_HIT_DECLARED: the volley is simultaneous, so the target's to-hit penalties (Stealth family, Evasive
         // family, Aircraft, the Artillery target) hold for every weapon still to fire, as declared before the first roll.
-        if rule_on(self.rules_epoch, crate::acts::PENDING_EPOCH_WIPED_TO_HIT_DECLARED) {
+        if rule_on(self.rules_epoch, crate::acts::EPOCH_97_WIPED_TO_HIT_DECLARED) {
             w.keep_to_hit_of(self);
         }
         w
