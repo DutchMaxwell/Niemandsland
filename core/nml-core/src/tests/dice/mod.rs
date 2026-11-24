@@ -408,6 +408,7 @@
 // family adds ONE line to this ALPHABETICAL list plus its own file; the
 // fixtures every family shares stay here, in the module root.
     mod clan_warrior;
+mod deadly_wipe_to_hit;
 mod entrenched;
 mod modifier_sum;
     mod fortified;
