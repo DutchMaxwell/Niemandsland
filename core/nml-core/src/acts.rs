@@ -1017,7 +1017,7 @@ pub const EPOCH_94_PARITY_BATCH: u32 = 94;
 /// - SPELL_NO_STACK: the same spell does not stack; a second identical record refreshes the first.
 /// - UPR_NEEDS_SHOT: no Unpredictable Shooter die for a volley in which no weapon is in reach.
 pub const EPOCH_95_PARITY_BATCH: u32 = 95;
-/// The EPOCH 96 BATCH (lead decision 22.11., before the gate G1'): twelve table-vs-core differences that sat behind `PENDING_EPOCH_*`
+/// The EPOCH 96 BATCH: twelve table-vs-core differences that sat behind `PENDING_EPOCH_*`
 /// placeholders (all 96) are now one frozen constant, and `CURRENT_RULES_EPOCH` is bumped to it in the same change. Records stamped 95 or
 /// below replay byte-exact. Every call site reads THIS constant, not the literal `96` or `CURRENT_RULES_EPOCH`. The recorder mirror
 /// (`act_recorder.gd`) stamps 96 in the same change.
@@ -2420,7 +2420,7 @@ mod tests {
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
     /// `rule_on` is a plain `>=`, tested at its own boundary — `since_epoch`
     /// itself turns a rule on, one below it does not, and above it stays on.
-    /// PLAN_COVER_36 step 1: cover from sight blockers is off for every record stamped 94 or below.
+    /// Cover from sight blockers is off for every record stamped 94 or below.
     #[test]
     fn cover_screen_gate_starts_at_95() {
         assert_eq!(super::EPOCH_95_PARITY_BATCH, 95);

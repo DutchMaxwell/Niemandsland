@@ -225,7 +225,7 @@ impl Tray {
         }
     }
 
-    /// One-core P4.D-20: the transcript names a wound-allocation choice `id` (answered when `answer` is `Some`); one per
+    /// The transcript names a wound-allocation choice `id` (answered when `answer` is `Some`); one per
     /// target group. A supplied tray keeps it; a seeded tray ignores the call, so every seeded path lands automatically as before.
     pub fn offer_wound_alloc(&mut self, id: String, answer: Option<Vec<usize>>) {
         if let Some(feed) = self.feed.as_mut() {
@@ -233,7 +233,7 @@ impl Tray {
         }
     }
 
-    /// One-core P4.D-20: a group's pool landing reaches choice `id` with the target's living capture slots `options`.
+    /// A group's pool landing reaches choice `id` with the target's living capture slots `options`.
     /// `Some(slots)` = the owner's valid answer, to land first; `None` = automatic (nothing offered for this id, an
     /// unanswered ask, or an answer with a slot outside `options`, kept as `bad`). The step API reads `reached`.
     pub fn wound_alloc(&mut self, id: &str, options: Vec<usize>, owner: &str) -> Option<Vec<usize>> {
@@ -464,7 +464,7 @@ pub struct Feed {
     kinds: Vec<(usize, &'static str)>,
     /// One-core P4 step 4.0-9: (draw, the drawing unit) from `Tray::owner_next`.
     owners: Vec<(usize, Option<usize>)>,
-    /// One-core P4.D-20/21: the transcript's wound-allocation choices, one per id (`Tray::offer_wound_alloc`).
+    /// The transcript's wound-allocation choices, one per id (`Tray::offer_wound_alloc`).
     pub wound_choices: Vec<WoundChoice>,
     /// CC-9c: the transcript's cast-interference choices, one per id (`Tray::offer_interference`).
     pub interference_choices: Vec<InterferenceChoice>,
@@ -482,7 +482,7 @@ pub struct Feed {
     no_step: bool,
 }
 
-/// One-core P4.D-20: the step API's wound-allocation choice as the volley's landing sees it. `answer` = the
+/// The step API's wound-allocation choice as the volley's landing sees it. `answer` = the
 /// owner's ordered capture slots (`None` = only asked). `reached` = (draws so far, options, owner) once a group's
 /// landing came to it; `bad` = the first answered slot that is no option. CC-9a: `lines` and `landings` hold
 /// everything said/landed on this tray BEFORE this choice was reached (when `answer` is `None`).
@@ -1720,7 +1720,7 @@ pub(crate) fn resolve_volley_with_pick_label(
     let mut cover_logged = false;
     // Rules 3.6 (SHO-14) — the Pierce line's once-per-volley flag.
     let mut pierce_logged = false;
-    // PLAN_COVER_36 — the weapons whose Indirect already said it lifts the sight-blocker cover (one line per weapon).
+    // The weapons whose Indirect already said it lifts the sight-blocker cover (one line per weapon).
     let mut screen_lift_logged: Vec<String> = Vec::new();
     // Wave 3 — the Shot Modifier family's two runtime-gated members name
     // themselves once per volley per firing member (rules-must-log): the
@@ -2427,7 +2427,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         // EPOCH_73_V36, so older records keep their unconditional skip).
         let indirect_keeps_cover = p.indirect && p.indirect_cover_needs_hold;
         let skips_cover = p.blast > 1 || p.ignores_cover || (p.indirect && !indirect_keeps_cover);
-        // PLAN_COVER_36 (`EPOCH_95_PARITY_BATCH`): cover from sight blockers (`def.screened`, stamped by the volley seam from 95
+        // (`EPOCH_95_PARITY_BATCH`): cover from sight blockers (`def.screened`, stamped by the volley seam from 95
         // only) joins terrain cover as ONE +1; an Indirect whose cover waiver holds (Hold kept where the entry needs it) or the
         // Indirect mark on the target lifts it, and terrain cover stays.
         // A moved Indirect gun without the Hold its entry needs is not firing indirectly: no lift, mark or not (lead 21.11.).
@@ -3610,7 +3610,7 @@ pub fn resolve_melee_leg_wipe(
                 say_rule(tray, "blast", sh.att.side, || blast_log(p.blast, hits, boosted, cap, false)); // the table says it always (#169), melee too
                 hits = boosted;
             }
-            // P4.D-48: the table's line after each melee hit roll (`_solo_melee_strike_phase`), a miss included.
+            // The table's line after each melee hit roll (`_solo_melee_strike_phase`), a miss included.
             tray.say(|| LogLine { rule: "melee", category: Category::Combat, side: sh.att.side,
                 text: format!("{} strikes with {} at {def_owner} — {hits} hit{}", sh.owner, p.name, if hits == 1 { "" } else { "s" }),
                 detail: None });

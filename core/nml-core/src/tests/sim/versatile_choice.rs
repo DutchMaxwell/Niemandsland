@@ -1,4 +1,4 @@
-//! Step 22a (PLAN_FIRST_DELETION, OD-2): the Versatile mode of a human shooter's volley is the player's pick, asked through the
+//! The Versatile mode of a human shooter's volley is the player's pick, asked through the
 //! core as a `NeedChoice` (`versatile_mode:<unit>`, options `ap` / `hit`), where the volley decides it (the first eligible shot).
 
 use super::*;
