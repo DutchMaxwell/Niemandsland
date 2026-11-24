@@ -5221,17 +5221,6 @@ func _solo_log_limited_spent(member: GameUnit, prof: Dictionary) -> void:
 			member.get_name(), str(prof.get("name", "?"))], true)
 
 
-## Resolve-first priority of a shot (GF v3.5.1 p.14): Takedown before Deadly before the rest. sort_custom
-## is not guaranteed stable, but equal-priority shots (same tier) are interchangeable for the rule.
-func _solo_shot_priority(shot: Dictionary) -> int:
-	var p := shot.get("profile", {}) as Dictionary
-	if bool(p.get("takedown", false)):
-		return 2
-	if int(p.get("deadly", 0)) > 0:
-		return 1
-	return 0
-
-
 ## The played AI volley's over-9" modifier measure is the same nearest live
 ## base gap used for the target's range gate. Keep the centre fallback for a
 ## degenerate unit with no reachable model pair.
@@ -5240,14 +5229,6 @@ func _solo_ai_volley_distance_in(attacker: GameUnit, target: GameUnit) -> float:
 	if gap != INF:
 		return gap
 	return MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
-
-
-## T-DUP-WEAPON-BEARERS: the key under which two entries of one weapon share their living bearers — the firing
-## member, the weapon's name and its attacks per copy (the same match alive_bearers_of counts bearers by).
-func _solo_bearer_key(shot: Dictionary) -> String:
-	var p: Dictionary = shot["profile"]
-	return "%d|%s|%d" % [(shot["member"] as GameUnit).get_instance_id(), str(p.get("name", "")),
-		maxi(int(p.get("attacks", 0)) / maxi(int(p.get("count", 1)), 1), 0)]
 
 
 ## SHO-PAR-F6: one AI shot's eligibility — the member's models with range + sight to the target (and the
@@ -8270,32 +8251,6 @@ func _solo_unpredictable_rule(striker: GameUnit, melee: bool, target: GameUnit =
 	return ""
 
 
-## AIG-G2 R5 (EPOCH_73_V36): a joined hero who carries Unpredictable (Shooter) himself rolls ONE die for his own guns when
-## his host rolled none (`host_rule` empty): the line names the book rule and the hero. A host that rolled keeps covering the
-## whole unit (one die per volley). Returns {hero instance id: {"ap", "hit"}} for the members that rolled.
-func _solo_hero_unpredictable(attacker: GameUnit, host_rule: String, members: Array, target: GameUnit, ai: bool) -> Dictionary:
-	var out := {}
-	if not host_rule.is_empty() or AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36:
-		return out
-	for m in members:
-		var hero := m as GameUnit
-		if hero == null or hero == attacker or out.has(hero.get_instance_id()):
-			continue
-		var rule := _solo_unpredictable_rule(hero, false, target)
-		if rule.is_empty():
-			continue
-		var face: Array = await _solo_tray_roll(1, AiCombatMath.BEST_HIT_TARGET,
-			("AI (%s)" % hero.get_name()) if ai else _roller_label(hero))
-		if face.is_empty():
-			continue
-		var eff: Dictionary = AiCombatMath.unpredictable_fighter_effect(int(face[0]))
-		out[hero.get_instance_id()] = {"ap": int(eff["ap"]), "hit": int(eff["hit"])}
-		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, ("%s: %s's volley rolls %d → %s" if ai else "%s: %s rolls %d → %s") % [
-				rule, hero.get_name(), int(face[0]), ("AP(+1)" if int(eff["ap"]) > 0 else "+1 to hit")], true)
-	return out
-
-
 ## The groups of _solo_defense_parts, folded in this order (one sum, clamped once at the save).
 const DEF_PART_SHIELDED := "shielded"
 const DEF_PART_MARKER := "marker"
@@ -8839,18 +8794,6 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		mod += int(inst2["mod"])
 		notes.append(str(inst2.get("note", "")))
 	return {"mod": mod + int(sm.get("mod", 0)) + int(vt.get("mod", 0)), "own": own, "note": ", ".join(notes)}
-
-
-## SHO-08, EPOCH_73_V36: Unstoppable ignores only the minus from OTHER sources, the bearer's own rules'
-## modifiers (`own`; 0 below 73 = one clamp over the whole sum) still apply. Returns [mod, log line or ""].
-func _solo_unstoppable_fold(mod: int, own: int) -> Array:
-	own = own if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else 0
-	var rest := mod - own
-	if own >= 0:
-		return [own, "Unstoppable: negative to-hit modifiers ignored"] if rest < 0 else [mod, ""]
-	if rest >= 0:
-		return [mod, "Unstoppable: own rules' %d to hit kept" % own]
-	return [own, "Unstoppable: %d to hit from other sources ignored, own rules' %d kept" % [rest, own]]
 
 
 ## Vengeance (resolver wave A — "friendly units get +X to hit rolls when attacking that unit,
@@ -24636,21 +24579,6 @@ func _solo_reckless_ap(attacker: GameUnit, target: GameUnit) -> int:
 				bonus += 1
 				break
 	return bonus
-
-
-## G4R5 F-AMBUSH-ARRIVAL-AP (EPOCH_73_V36): "Ambushing Piercing Shot" — the SHOOTING member's weapons get AP(+1) in the
-## round it arrived from Ambush (the core's `ctx_live` `ambush_arrival_ap`: the member's own rule, its own arrival stamp
-## == this round). Melee never calls this. `logged` names the book rule once per member per volley.
-func _solo_ambush_arrival_ap(member: GameUnit, logged: Dictionary) -> int:
-	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36 or opr_army_manager == null or member == null:
-		return 0
-	if int(member.unit_properties.get("ambush_arrived_round", -1)) != opr_army_manager.current_round \
-			or not SoloController.unit_carries_rule(member, "Ambushing Piercing Shot"):
-		return 0
-	if battle_log != null and not logged.has(member):
-		battle_log.log_event(BattleLog.Category.COMBAT, "Ambushing Piercing Shot: %s shoots with AP(+1) in its arrival round" % member.get_name(), true)
-	logged[member] = true
-	return 1
 
 
 ## Mind Control ("pick one enemy within 18\" in LOS, it takes a morale test; if failed you may move
