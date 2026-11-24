@@ -135,6 +135,14 @@ impl Book {
     }
 }
 
+/// Why a list's joined Hero is refused in a game system whose Heroes never join units.
+pub const HERO_JOIN_REFUSED: &str = "Heroes may not join units in this game system";
+
+/// `Some(reason)` when a Hero may not join a unit in `system` at `rules_epoch`; `None` when it may.
+pub fn hero_join_refusal(system: &str, rules_epoch: u32) -> Option<&'static str> {
+    (!book(system).hero_aura_at(rules_epoch).joins).then_some(HERO_JOIN_REFUSED)
+}
+
 /// Return the static `Book` header for `system` (case/whitespace tolerant; empty or unknown folds to `"gf"`).
 pub fn book(system: &str) -> &'static Book {
     match system.trim() {
@@ -1031,6 +1039,17 @@ mod tests {
                 b.hero_aura
             };
             assert_eq!(b.hero_aura_at(e), want, "{sys} at the epoch");
+        }
+    }
+
+    /// A joined Hero is refused in gff and aofs from the skirmish hero epoch on; gf and aof keep joining.
+    #[test]
+    fn skirmish_heroes_are_refused_a_join_from_their_pending_epoch() {
+        let e = crate::acts::PENDING_EPOCH_SKIRMISH_HERO;
+        for sys in SYSTEMS {
+            assert_eq!(hero_join_refusal(sys, e - 1), None, "{sys} one epoch below still joins");
+            let want = if sys == "gff" || sys == "aofs" { Some(HERO_JOIN_REFUSED) } else { None };
+            assert_eq!(hero_join_refusal(sys, e), want, "{sys} at the epoch");
         }
     }
 

@@ -1240,7 +1240,7 @@ def _apply_manifest_base_overrides(built: list[dict[str, Any]], faction: str) ->
 
 
 def deploy_base_groups(
-    data: dict[str, Any], faction: str, player: int
+    data: dict[str, Any], faction: str, player: int, rules_epoch: int | None = None
 ) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
     """NML-1152 step 6c — the twin's production base-shape derivation for the
     deployment law: `(units, heroes_of)`. `units` are `_units_from_list`'s
@@ -1251,7 +1251,7 @@ def deploy_base_groups(
     (solo_controller.gd:_deploy_models :10239-10245) — the fold the settle's
     per-model shapes and `_deploy_base_radius` (:10263-10267) read. Per-unit
     shape inputs: `u["base"]` + `u["model_tough"]`."""
-    built = _units_from_list(data, player)
+    built = _units_from_list(data, player, rules_epoch)
     _apply_manifest_base_overrides(built, faction)
     heroes_of: dict[str, list[dict[str, Any]]] = {}
     for u in built:
@@ -1390,7 +1390,7 @@ def _transport_capacity_of_rules(rules: list[str]) -> int:
 
 
 def deploy_unit_specs(
-    data: dict[str, Any], faction: str, player: int
+    data: dict[str, Any], faction: str, player: int, rules_epoch: int | None = None
 ) -> tuple[list[dict[str, Any]], dict[str, tuple[str, int, int]]]:
     """NML-1152 step 8 — the arena deployment roster for one list:
     `(specs, hero_fold)`.
@@ -1406,7 +1406,7 @@ def deploy_unit_specs(
 
     NOT ported (corpus-absent, named loudly): regiments deploy from their tray
     (`_is_regiment` -> empty offsets) and a dangling hero-of-hero chain."""
-    built, heroes_of = deploy_base_groups(data, faction, player)
+    built, heroes_of = deploy_base_groups(data, faction, player, rules_epoch)
     # _units_from_list's own system reading (:1190) — the registry lookups below
     # are keyed (system, faction, name) exactly like the table's.
     game_system = str(data.get("gameSystem", "gf"))
@@ -1471,7 +1471,7 @@ def deploy_unit_specs(
 
 
 def _units_from_list(
-    data: dict[str, Any], player: int
+    data: dict[str, Any], player: int, rules_epoch: int | None = None
 ) -> list[dict[str, Any]]:
     """core_selfplay.gd:_units_from_list + _append_selection — two passes
     over data["units"]: pass 1 builds one internal unit per selection that
@@ -1568,7 +1568,24 @@ def _units_from_list(
                 host["item_grants"].setdefault(item_name, granted)
         # else: dropped, mirroring core_selfplay.gd's printerr-only WARN
 
+    _refuse_hero_joins([units[k] for k in order], game_system, rules_epoch)
     return [units[k] for k in order]
+
+
+def _refuse_hero_joins(built: list[dict[str, Any]], game_system: str, rules_epoch: int | None) -> None:
+    """A system whose Heroes never join units (the core's `rules::hero_join_refusal`) clears every
+    remaining `join_to_unit` - combined halves are folded away above, so what is left joining is a
+    Hero - and the Hero deploys and plays as its own unit. One warning per refused Hero. `None` = the
+    live epoch."""
+    import nml_core
+    epoch = nml_core.CURRENT_RULES_EPOCH if rules_epoch is None else int(rules_epoch)
+    reason = nml_core.hero_join_refusal(game_system, epoch)
+    if reason is None:
+        return
+    for u in built:
+        if u["join_to_unit"]:
+            warnings.warn("list_to_profile: %s plays alone - %s." % (u["name"], reason), UserWarning, stacklevel=3)
+            u["join_to_unit"] = ""
 
 
 def _unit_profile(u: dict[str, Any], faction: str, game_system: str,
@@ -1634,7 +1651,7 @@ def profiles_from_army_forge_json(
     dict per unit key, keyed exactly like battle_sim.gd's header (unit_id).
     """
     game_system = str(data.get("gameSystem", "gf"))
-    built = _units_from_list(data, player)
+    built = _units_from_list(data, player, rules_epoch)
     # NML-1152 step 6c — the manifest base override rides the table's spawn
     # order (opr_army_manager.gd:296): after the parse, before any shape read
     # (`base_radius` below). Inert while the bundled manifest carries no
@@ -1649,7 +1666,7 @@ def profiles_from_army_forge_json(
 
 
 def selections_from_army_forge_json(
-    data: dict[str, Any], player: int
+    data: dict[str, Any], player: int, rules_epoch: int | None = None
 ) -> dict[str, tuple[str, str]]:
     """The `(selection_id, join_to_unit)` pair per unit key — what
     `battle_sim.gd:1352-1369` reads off each `GameUnit`'s
@@ -1662,7 +1679,7 @@ def selections_from_army_forge_json(
     exactly as `OPRArmyManager` gives it no `GameUnit`."""
     return {
         u["unit_id"]: (u["selection_id"], u["join_to_unit"])
-        for u in _units_from_list(data, player)
+        for u in _units_from_list(data, player, rules_epoch)
     }
 
 

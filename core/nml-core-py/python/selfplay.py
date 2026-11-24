@@ -178,12 +178,13 @@ def load_army(path: str | Path, player: int,
     return list(profiles.values())
 
 
-def load_selections(path: str | Path, player: int) -> dict[str, tuple[str, str]]:
+def load_selections(path: str | Path, player: int,
+                    rules_epoch: int | None = None) -> dict[str, tuple[str, str]]:
     """The same list's `(selection_id, join_to_unit)` per unit key — the input
     `derive_attachment` needs and the profile deliberately does not carry."""
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
-    return selections_from_army_forge_json(data, player)
+    return selections_from_army_forge_json(data, player, rules_epoch)
 
 
 # -------------------------------------------------------------- deployment ---
@@ -433,7 +434,7 @@ def _deploy_arena(
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
         roster[slot], fold = deploy_unit_specs(
-            data, _faction_from_path(path, str(data.get("gameSystem", ""))), int(slot)
+            data, _faction_from_path(path, str(data.get("gameSystem", ""))), int(slot), rules_epoch
         )
         _gate_transport_fill(roster[slot], rules_epoch)
         hero_fold.update(fold)
@@ -2912,8 +2913,8 @@ def play_game(
     attached = attached_to = None
     eff_hero_attach = resolve_hero_attach(hero_attach)
     if hero_join(hero_attach):
-        selections = dict(load_selections(list_p1, 1))
-        selections.update(load_selections(list_p2, 2))
+        selections = dict(load_selections(list_p1, 1, rules_epoch))
+        selections.update(load_selections(list_p2, 2, rules_epoch))
         attached, attached_to = derive_attachment(units, selections)
         for u in units:
             u["attached_hero_rules"] = [
