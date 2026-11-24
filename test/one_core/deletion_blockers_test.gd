@@ -148,7 +148,7 @@ func test_the_human_door_reads_the_live_slice() -> void:
 
 ## The table resolvers have no production caller left: the AI volley and move-through strike the core refuses are HELD with a
 ## line (`held`, `held_strike`); a player's Fire! shot, split or strike the core refuses is a free dice roll. A call from inside another
-## table resolver (the split calling the volley) is not a production caller: nothing calls the outer one. Step 16a: the Auto
+## table resolver (the split calling the volley) is not a production caller: nothing calls the outer one. The Auto
 ## verbs' shot goes through the core too (its move reaches the core as the placement), so no caller is left.
 ## RED: call `_run_human_shooting` for the Auto shot in `_run_human_attack`, or the AI resolver from `_solo_apply_strafing`.
 func test_no_production_caller_reaches_a_table_resolver() -> void:

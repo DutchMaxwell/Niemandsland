@@ -6,7 +6,7 @@ extends GdUnitTestSuite
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
-## The rules core is off here (before_test), so a player's shot is the free dice roll (step 16a: the Auto shot too); the shot
+## The rules core is off here (before_test), so a player's shot is the free dice roll (the Auto shot too); the shot
 ## through the core is test/one_core/core_auto_shot_door_test.gd.
 const FREE_ROLL := "fires at Near: the rules core cannot resolve this shot (the rules core is off"
 
@@ -90,7 +90,7 @@ func test_preview_shows_landing_and_shooters(timeout := 60000) -> void:
 			return (l["pos"] as Vector3).is_equal_approx(line["from"]))).is_true()
 	await _main._run_player_intent(shooter, AiDecision.Action.ADVANCE, enemy)
 	await E2EBoot.settle(get_tree())
-	# Step 16a: with the rules core off the shot is a free roll, so the sight from the landing is read, not the table's line.
+	# With the rules core off the shot is a free roll, so the sight from the landing is read, not the table's line.
 	assert_int(lines.size()).is_equal(sighted.call())
 
 

@@ -149,7 +149,7 @@ func _rifle_unit(pid: int, unit_name: String, x_m: float) -> GameUnit:
 ## Automodus 3.2 (OD 9): the ACTING player runs its own verb, like every online action today. The guest's
 ## click moves the guest's models on the guest; the host only receives the move batch (the landing) and the
 ## activation sync, never a request to run the intent (the host has no such handler). The rules core is off here, so the
-## guest's shot is the free dice roll on the guest (step 16a; nothing rolls by itself, nothing is asked of the host).
+## guest's shot is the free dice roll on the guest (nothing rolls by itself, nothing is asked of the host).
 func test_guest_verb_runs_on_the_guest_and_replicates(timeout := 60000) -> void:
 	_level(RulesAutomation.Level.AUTOMATIC)
 	var inch := 0.0254

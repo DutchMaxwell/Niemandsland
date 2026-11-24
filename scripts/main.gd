@@ -14365,7 +14365,7 @@ func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Vari
 	solo_controller._move_extra = {}
 	var report: Dictionary = solo_controller.execute_intent(intent, ActIntent.blank_report(unit))
 	if object_manager != null and verb in [AiDecision.Action.ADVANCE, AiDecision.Action.RUSH] and CoreActivation.session_open(unit.unit_id):
-		# Step 16a: the verb is the unit's declared movement, so the rules core checks the Auto move and its shot at it.
+		# The Auto verb is the unit's declared movement, so the rules core checks the Auto move and its shot at it.
 		object_manager.set_movement_cap(ObjectManager.MovementCap.ADVANCE if verb == AiDecision.Action.ADVANCE else ObjectManager.MovementCap.RUSH)
 		_update_movement_cap_display()
 	if undo_manager != null:
@@ -15749,7 +15749,7 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 	elif not await CoreActivation.human_shoot(self, attacker, target, Callable(), auto):   # step 38 (O15 (1)): a core unit's volley
 		CoreActivation.note_legacy(self, "human_shoot", attacker, [target])
 		var why: String = CoreActivation.auto_refused if not CoreActivation.auto_refused.is_empty() \
-			else _solo_free_roll_why(attacker, [target])   # step 16a: an Auto move the core refused names the core's reason
+			else _solo_free_roll_why(attacker, [target])   # an Auto move the core refused names the core's reason
 		CoreActivation.auto_refused = ""
 		_solo_human_free_roll(attacker, target, why)
 	elif CoreActivation.last_target != target:

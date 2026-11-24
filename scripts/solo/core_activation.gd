@@ -2227,7 +2227,7 @@ static func drop_refused(main, gu: GameUnit) -> bool:
 	return true
 
 
-## Step 34's check of `gu`'s placement (an open session): every alive model where it stands now, at `mode`, with the walked
+## The core's drop check of `gu`'s placement (an open session): every alive model where it stands now, at `mode`, with the walked
 ## trails (`now`: the drag in flight, ObjectManager.drag_paths()). The core's answer: ok = the placement replaces the
 ## session's one and its lines are written; not ok = nothing changes (the caller says why). {} = no core: reported, unchecked.
 static func place(main, gu: GameUnit, mode: int, now: Dictionary) -> Dictionary:
@@ -2307,7 +2307,7 @@ static func declared_mode(main) -> int:
 	return 0
 
 
-## Step 16a: why the core refused the last Auto shot's placement ("" = it did not, or the reason is the door's own).
+## Why the core refused the last Auto shot's placement ("" = it did not, or the reason is the door's own).
 static var auto_refused := ""
 
 
@@ -2322,7 +2322,7 @@ static var auto_refused := ""
 ## toggle that completes a shot ends it only while the session is open - with none, "Activate" would start a new one),
 ## and the door closes it after. `refused` below the transcript's size (an order rule, the O3 Rush sentence): logged and
 ## toasted, nothing was shot, the session stays open (the caller returns then). `refused` at the transcript's size is the
-## core's own defect: reported, nothing toasted, the session stays open. `auto` (step 16a: the Auto verbs' shot after the
+## core's own defect: reported, nothing toasted, the session stays open. `auto` (the Auto verbs' shot after the
 ## engine's own move): the unit's end positions reach the core first through `place`, the same check a dropped drag gets,
 ## and the transcript says the engine paid the move's Dangerous test; a placement the core refuses is not taken, its
 ## reason in `auto_refused` (the caller's free roll names it). P4.D-13c: a target with no statline is no valid

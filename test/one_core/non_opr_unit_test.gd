@@ -322,7 +322,7 @@ func test_a_non_opr_target_is_shot_by_the_core_on_the_human_door() -> void:
 	assert_int(core["alive"]).override_failure_message("the volley hurt nobody (seed 1 wounds)").is_less(5)
 
 
-## Step 16a: the Auto verbs' shot goes through the core like any Fire!: the unit's positions reach the core as the placement
+## The Auto verbs' shot goes through the core like any Fire!: the unit's positions reach the core as the placement
 ## first (here nothing moved, so it shoots from where it stands). RED: put the `auto` refusal back into `human_shoot` -> the
 ## core's declaration line is missing.
 func test_an_auto_verbs_shot_goes_through_the_core() -> void:
