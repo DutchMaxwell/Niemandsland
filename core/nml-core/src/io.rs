@@ -412,9 +412,11 @@ pub struct PlainLedger {
 }
 
 /// The `teleport` block; `to` is a `[x, y]` pair or a `"(x, y)"` string.
+#[allow(dead_code)] // deserialize-only: serde fills these, no reader needs them
 #[derive(Deserialize)]
 pub(crate) struct PlainTeleport { #[serde(default)] used: bool, to: Vec2Wire }
 
+#[allow(dead_code)] // deserialize-only: the variants only exist so serde can parse the block
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 enum Vec2Wire { Pair([f64; 2]), Str(String) }

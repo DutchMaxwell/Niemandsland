@@ -14,7 +14,7 @@ use super::*;
     fn indirect_mark_lets_the_volley_fire_at_a_blocked_target_from_epoch_6() {
         let (mut st, statics) = buff_line();
         let mut dark = vec![true; 16];
-        dark[0 * 4 + 2] = false; // los_pairs[0 * 4 + 2] — a does not see b
+        dark[2] = false; // los_pairs[2] — a does not see b
         st.los_pairs = Some(Rc::new(dark));
         let on = run_marked(&st, &statics, 6, &[(2, &mark("Indirect"))]);
         assert_eq!(on.rolls[0].count, 1, "epoch 6: the mark waives the blocked sight");

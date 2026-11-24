@@ -1053,12 +1053,6 @@ fn primal_extras(p: &ShootProfile, grant: bool, v36: bool, faces: &[u8], count_t
     surge_attack_say(&ShootProfile { surge_attack_low: p.surge_attack_low.min(5), ..p.clone() }, faces, count_target, owner, tray, &mut out.rolls, Some(side))
 }
 
-/// `AiCombatMath.blocks_with_bane` :354-363 — each unmodified Defense 6 is
-/// replaced by the next re-roll face, in order; a re-rolled 6 still blocks.
-fn blocks_with_bane(faces: &[u8], reroll: &[u8], target: i64) -> i64 {
-    blocks_with_bane_from(faces, reroll, target, 6)
-}
-
 /// The widened window (wave 4, "Mischievous Boost"'s `reroll_save_low: 5`):
 /// every SUCCESSFUL unmodified save at or above `from` re-rolls too, not
 /// just 6s (`from` 6 = the base leg, byte-exact). A face below the save

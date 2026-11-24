@@ -1132,6 +1132,9 @@ fn dump_quant_gd(v: f64) -> f64 {
     (v / 1e-4 + 0.5).floor() * 1e-4
 }
 
+/// One worst-case spot row: (error, seed, unit, slot, twin spot, table spot).
+type WorstSpotRow = (f64, i64, String, String, (f64, f64), (f64, f64));
+
 #[test]
 fn spot_search_replays_every_fixture_unit() {
     use nml_core::objectives::{self, Cells};
@@ -1176,7 +1179,7 @@ fn spot_search_replays_every_fixture_unit() {
     }));
     let (mut n, mut exact, mut within, mut mismatch) = (0usize, 0usize, 0usize, 0usize);
     let (mut degenerate, mut crowded) = (0usize, 0usize);
-    let mut worst: Vec<(f64, i64, String, String, (f64, f64), (f64, f64))> = Vec::new();
+    let mut worst: Vec<WorstSpotRow> = Vec::new();
     let mut side_mismatch: HashMap<(i64, &str), usize> = HashMap::new();
     let mut rung_of_mismatch: [usize; 4] = [0; 4];
     let mut same_section_mismatch = 0usize;
