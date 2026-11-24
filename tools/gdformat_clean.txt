@@ -18,6 +18,7 @@ scripts/core_load_notice.gd
 scripts/deleted_state.gd
 scripts/boardgen_dress_context.gd
 scripts/dress_module_spec.gd
+scripts/dress_planner.gd
 scripts/boardgen_dress_placement.gd
 scripts/boardgen_dress_houses.gd
 scripts/boardgen_dress_kit.gd

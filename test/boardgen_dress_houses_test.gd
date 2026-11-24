@@ -30,14 +30,13 @@ func _kit() -> BoardgenKit:
 	return kit
 
 
-func _ctx(layout: Dictionary, kit: BoardgenKit) -> Dictionary:
+func _ctx(layout: Dictionary, kit: BoardgenKit) -> DressContext:
 	var dress := BoardgenDressKit.new(kit, true)
-	return {
-		"kit": dress,
-		"story": BoardgenDressStory.of(layout),
-		"meta": dress.meta,
-		"seed": int(layout["seed"])
-	}
+	return DressContext.new(layout, dress, BoardgenDressStory.of(layout), int(layout["seed"]))
+
+
+func _plan(ctx: DressContext) -> Array[DressPlacement]:
+	return BoardgenDressHouses.new().plan(ctx)
 
 
 func _family(meta: Dictionary, module: String) -> String:
@@ -46,13 +45,10 @@ func _family(meta: Dictionary, module: String) -> String:
 
 ## The cell a face placement belongs to: the midpoint at half the module's length, not the corner
 ## origin.
-func _mid_cell(layout: Dictionary, p: Dictionary, meta: Dictionary) -> Vector2i:
-	var m: Dictionary = meta["modules"][p["module"]]
+func _mid_cell(layout: Dictionary, p: DressPlacement, meta: Dictionary) -> Vector2i:
+	var m: Dictionary = meta["modules"][p.module]
 	var mid := (
-		(
-			(p["xf"] as Transform3D)
-			* (Vector3(float(m["len_in"]) * 0.5, 0.0, 0.0) * Units.INCHES_TO_METERS)
-		)
+		(p.transform * (Vector3(float(m["len_in"]) * 0.5, 0.0, 0.0) * Units.INCHES_TO_METERS))
 		/ Units.INCHES_TO_METERS
 	)
 	return _cell(layout, mid)
@@ -66,15 +62,13 @@ func _cell(layout: Dictionary, p_in: Vector3) -> Vector2i:
 	)
 
 
-func _origin_cell(layout: Dictionary, p: Dictionary) -> Vector2i:
-	return _cell(layout, (p["xf"] as Transform3D).origin / Units.INCHES_TO_METERS)
+func _origin_cell(layout: Dictionary, p: DressPlacement) -> Vector2i:
+	return _cell(layout, p.transform.origin / Units.INCHES_TO_METERS)
 
 
 ## The face index N E S W a placement looks out of.
-func _k_of(p: Dictionary) -> int:
-	var o := (
-		Vector2((p["xf"] as Transform3D).basis.z.x, (p["xf"] as Transform3D).basis.z.z).normalized()
-	)
+func _k_of(p: DressPlacement) -> int:
+	var o := Vector2(p.transform.basis.z.x, p.transform.basis.z.z).normalized()
 	var best := 0
 	var best_dot := -2.0
 	for k in 4:
@@ -111,20 +105,20 @@ func test_every_roofed_lot_has_exactly_one_door_on_its_front_face() -> void:
 	for seed in _seeds():
 		var layout := _layout(seed)
 		var ctx := _ctx(layout, kit)
-		var meta: Dictionary = ctx["meta"]
-		var plan: Array = H.plan(layout, ctx)
+		var meta: Dictionary = ctx.kit.meta
+		var plan := _plan(ctx)
 		var fronts := {}
 		for f: Dictionary in BoardgenTownDressing.frontage(layout):
 			if String(f["front"]) != "":
 				fronts[int(f["lot"])] = String(f["front"])
 		var doors: Array = plan.filter(
-			func(p: Dictionary) -> bool: return String(p["module"]).ends_with("_door")
+			func(p: DressPlacement) -> bool: return p.module.ends_with("_door")
 		)
 		for lot: Dictionary in layout["lots"]:
 			if lot["kind"] != "Roofed":
 				continue
 			var mine: Array = doors.filter(
-				func(p: Dictionary) -> bool: return _in_lot(lot, _mid_cell(layout, p, meta))
+				func(p: DressPlacement) -> bool: return _in_lot(lot, _mid_cell(layout, p, meta))
 			)
 			(
 				assert_int(mine.size())
@@ -152,10 +146,10 @@ func test_every_free_edge_carries_one_panel_and_no_walled_edge_does() -> void:
 	for seed in _seeds():
 		var layout := _layout(seed)
 		var ctx := _ctx(layout, kit)
-		var meta: Dictionary = ctx["meta"]
-		var plan: Array = H.plan(layout, ctx)
+		var meta: Dictionary = ctx.kit.meta
+		var plan := _plan(ctx)
 		var panels: Array = plan.filter(
-			func(p: Dictionary) -> bool: return _family(meta, p["module"]) == "house_panel"
+			func(p: DressPlacement) -> bool: return _family(meta, p.module) == "house_panel"
 		)
 		var free := 0
 		for lot: Dictionary in layout["lots"]:
@@ -168,7 +162,7 @@ func test_every_free_edge_carries_one_panel_and_no_walled_edge_does() -> void:
 			)
 			. is_equal(free)
 		)
-		for p: Dictionary in panels:
+		for p: DressPlacement in panels:
 			var k := _k_of(p)
 			var nb := _mid_cell(layout, p, meta) + R.DIRS[k]
 			(
@@ -176,7 +170,7 @@ func test_every_free_edge_carries_one_panel_and_no_walled_edge_does() -> void:
 				. override_failure_message(
 					(
 						"seed %d: %s faces a neighbour top of %.2f in"
-						% [seed, p["module"], R.top_in(layout, nb.x, nb.y)]
+						% [seed, p.module, R.top_in(layout, nb.x, nb.y)]
 					)
 				)
 				. is_true()
@@ -188,16 +182,16 @@ func test_every_roofed_lot_gets_four_corner_pieces() -> void:
 	for seed in _seeds():
 		var layout := _layout(seed)
 		var ctx := _ctx(layout, kit)
-		var meta: Dictionary = ctx["meta"]
-		var plan: Array = H.plan(layout, ctx)
+		var meta: Dictionary = ctx.kit.meta
+		var plan := _plan(ctx)
 		var corners: Array = plan.filter(
-			func(p: Dictionary) -> bool: return _family(meta, p["module"]) == "quoin"
+			func(p: DressPlacement) -> bool: return _family(meta, p.module) == "quoin"
 		)
 		for lot: Dictionary in layout["lots"]:
 			if lot["kind"] != "Roofed":
 				continue
 			var mine: Array = corners.filter(
-				func(p: Dictionary) -> bool: return _in_lot(lot, _origin_cell(layout, p))
+				func(p: DressPlacement) -> bool: return _in_lot(lot, _origin_cell(layout, p))
 			)
 			(
 				assert_int(mine.size())
@@ -213,17 +207,13 @@ func test_the_house_plan_is_honest_on_every_seed() -> void:
 	for seed in _seeds():
 		var layout := _layout(seed)
 		var ctx := _ctx(layout, kit)
-		var plan: Array = H.plan(layout, ctx)
+		var plan := _plan(ctx)
 		(
 			assert_bool(plan.size() > 0)
 			. override_failure_message("seed %d: no placements" % seed)
 			. is_true()
 		)
-		var typed: Array[DressPlacement] = []
-		for p: Dictionary in plan:
-			typed.append(DressPlacement.from_dict(p))
-		var context := DressContext.new(layout, ctx["kit"], ctx["story"], int(layout["seed"]))
-		var lines := R.violations(context, typed)
+		var lines := R.violations(ctx, plan)
 		(
 			assert_array(lines)
 			. override_failure_message("seed %d: %s" % [seed, ", ".join(lines)])
@@ -236,10 +226,10 @@ func _role(meta: Dictionary, module: String) -> String:
 
 
 ## The roof segments of a plan (family roof, not a verge).
-func _segments(plan: Array, meta: Dictionary) -> Array:
+func _segments(plan: Array[DressPlacement], meta: Dictionary) -> Array[DressPlacement]:
 	return plan.filter(
-		func(p: Dictionary) -> bool:
-			return _family(meta, p["module"]) == "roof" and _role(meta, p["module"]) != "verge"
+		func(p: DressPlacement) -> bool:
+			return _family(meta, p.module) == "roof" and _role(meta, p.module) != "verge"
 	)
 
 
@@ -252,7 +242,7 @@ func test_every_roofed_cell_lies_under_exactly_one_roof_segment() -> void:
 	for seed in _seeds():
 		var layout := _layout(seed)
 		var ctx := _ctx(layout, kit)
-		var segs := _segments(H.plan(layout, ctx), ctx["meta"])
+		var segs := _segments(_plan(ctx), ctx.kit.meta)
 		var c := float(layout["cell_in"])
 		for cd: Dictionary in layout["cells"]:
 			if cd["lot_kind"] != "Roofed":
@@ -266,11 +256,9 @@ func test_every_roofed_cell_lies_under_exactly_one_roof_segment() -> void:
 				* Units.INCHES_TO_METERS
 			)
 			var n := 0
-			for p: Dictionary in segs:
-				var q := (
-					((p["xf"] as Transform3D).affine_inverse() * centre) / Units.INCHES_TO_METERS
-				)
-				n += 1 if q.x > 0.0 and q.x < 3.0 and q.z < 0.0 and q.z > -_span(p["module"]) else 0
+			for p: DressPlacement in segs:
+				var q := (p.transform.affine_inverse() * centre) / Units.INCHES_TO_METERS
+				n += 1 if q.x > 0.0 and q.x < 3.0 and q.z < 0.0 and q.z > -_span(p.module) else 0
 			(
 				assert_int(n)
 				. override_failure_message(
@@ -285,25 +273,25 @@ func test_roofs_sit_on_the_eaves_with_the_ridge_in_band() -> void:
 	for seed in _seeds():
 		var layout := _layout(seed)
 		var ctx := _ctx(layout, kit)
-		for p: Dictionary in H.plan(layout, ctx).filter(
-			func(p: Dictionary) -> bool:
-				return ["roof", "gable"].has(_family(ctx["meta"], p["module"]))
+		for p: DressPlacement in _plan(ctx).filter(
+			func(p: DressPlacement) -> bool:
+				return ["roof", "gable"].has(_family(ctx.kit.meta, p.module))
 		):
-			var xf: Transform3D = p["xf"]
+			var xf: Transform3D = p.transform
 			var ridge := xf.origin.y / Units.INCHES_TO_METERS + 2.0 * xf.basis.y.y
 			(
 				assert_float(xf.origin.y / Units.INCHES_TO_METERS)
 				. override_failure_message(
 					(
 						"seed %d %s: eaves at %.2f"
-						% [seed, p["module"], xf.origin.y / Units.INCHES_TO_METERS]
+						% [seed, p.module, xf.origin.y / Units.INCHES_TO_METERS]
 					)
 				)
 				. is_equal_approx(2.5, R.TOL)
 			)
 			(
 				assert_bool(ridge >= 4.2 - R.TOL and ridge <= 4.8 + R.TOL)
-				. override_failure_message("seed %d %s: ridge at %.2f" % [seed, p["module"], ridge])
+				. override_failure_message("seed %d %s: ridge at %.2f" % [seed, p.module, ridge])
 				. is_true()
 			)
 
@@ -313,22 +301,22 @@ func test_nothing_of_a_roof_hangs_low_or_far() -> void:
 	for seed in _seeds():
 		var layout := _layout(seed)
 		var ctx := _ctx(layout, kit)
-		var meta: Dictionary = ctx["meta"]
+		var meta: Dictionary = ctx.kit.meta
 		var c := float(layout["cell_in"])
 		var org := Vector2(int(layout["nx"]), int(layout["nz"])) * c * -0.5
 		var roofed: Array[Rect2] = []
 		for cd: Dictionary in layout["cells"]:
 			if cd["lot_kind"] == "Roofed":
 				roofed.append(Rect2(org + Vector2(int(cd["x"]), int(cd["z"])) * c, Vector2(c, c)))
-		for p: Dictionary in H.plan(layout, ctx).filter(
-			func(p: Dictionary) -> bool:
-				return ["roof", "gable", "chimney"].has(_family(meta, p["module"]))
+		for p: DressPlacement in _plan(ctx).filter(
+			func(p: DressPlacement) -> bool:
+				return ["roof", "gable", "chimney"].has(_family(meta, p.module))
 		):
-			var aabb: Array = meta["modules"][p["module"]]["aabb_in"]
+			var aabb: Array = meta["modules"][p.module]["aabb_in"]
 			for i in 8:
 				var q := (
 					(
-						(p["xf"] as Transform3D)
+						p.transform
 						* (
 							Vector3(aabb[i & 1][0], aabb[(i >> 1) & 1][1], aabb[(i >> 2) & 1][2])
 							* Units.INCHES_TO_METERS
@@ -348,7 +336,7 @@ func test_nothing_of_a_roof_hangs_low_or_far() -> void:
 				(
 					assert_bool(q.y >= 2.0 - R.TOL and reach <= R.OVERHANG + R.TOL)
 					. override_failure_message(
-						"seed %d %s: corner %s, reach %.2f" % [seed, p["module"], q, reach]
+						"seed %d %s: corner %s, reach %.2f" % [seed, p.module, q, reach]
 					)
 					. is_true()
 				)
@@ -362,25 +350,23 @@ func test_the_ridge_follows_roofs_unless_the_span_rule_flips_it() -> void:
 		var roofs := {}
 		for r: Dictionary in BoardgenTownDressing.roofs(layout):
 			roofs[int(r["lot"])] = r
-		for p: Dictionary in _segments(H.plan(layout, ctx), ctx["meta"]):
-			var r: Dictionary = roofs[int(p["lot"])]
-			var along_x := absf((p["xf"] as Transform3D).basis.x.x) > 0.5
+		for p: DressPlacement in _segments(_plan(ctx), ctx.kit.meta):
+			var r: Dictionary = roofs[int(p.lot)]
+			var along_x := absf(p.transform.basis.x.x) > 0.5
 			var wide := float(r["width"]) - 2.0 * BoardgenTownDressing.OVERHANG_IN > 6.0 + R.TOL
 			(
 				assert_bool(along_x == bool(r["along_x"]) or wide)
 				. override_failure_message(
 					(
 						"seed %d lot %d: ridge along_x %s, roofs() says %s"
-						% [seed, p["lot"], along_x, r["along_x"]]
+						% [seed, p.lot, along_x, r["along_x"]]
 					)
 				)
 				. is_true()
 			)
 			(
-				assert_bool(_span(p["module"]) <= 6.0 and (along_x == bool(r["along_x"])) != wide)
-				. override_failure_message(
-					"seed %d lot %d: span rule not applied" % [seed, p["lot"]]
-				)
+				assert_bool(_span(p.module) <= 6.0 and (along_x == bool(r["along_x"])) != wide)
+				. override_failure_message("seed %d lot %d: span rule not applied" % [seed, p.lot])
 				. is_true()
 			)
 
@@ -394,8 +380,8 @@ func test_at_least_sixty_percent_of_the_roofs_per_half_are_whole() -> void:
 		for r: Dictionary in BoardgenTownDressing.roofs(layout):
 			half[int(r["lot"])] = int(r["half"])
 		var variant := {}
-		for p: Dictionary in _segments(H.plan(layout, ctx), ctx["meta"]):
-			variant[int(p["lot"])] = String(p["variant"])
+		for p: DressPlacement in _segments(_plan(ctx), ctx.kit.meta):
+			variant[int(p.lot)] = p.look
 		for h in 2:
 			var lots: Array = half.keys().filter(func(id: int) -> bool: return half[id] == h)
 			var whole := (

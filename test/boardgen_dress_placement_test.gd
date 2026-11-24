@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
-## DressPlacement and DressContext: the temporary dictionary bridge of the planners, and the grid
-## lookups a planner reads (tops, walkability, the kept-clear cells, the module specs).
+## DressPlacement and DressContext: the typed placement's fields, and the grid lookups a planner
+## reads (tops, walkability, the kept-clear cells, the module specs).
 
 const R := preload("res://scripts/boardgen_dress_rules.gd")
 const SEED := 41
@@ -21,28 +21,15 @@ func _context(layout: Dictionary) -> DressContext:
 	return DressContext.new(layout, _kit(), {}, SEED)
 
 
-func test_from_dict_reads_the_planner_fields_and_defaults() -> void:
+func test_a_placement_holds_its_fields_and_defaults() -> void:
 	var xf := Transform3D(Basis(Vector3.UP, 0.5), Vector3(1.0, 2.0, 3.0))
-	var p := (
-		DressPlacement
-		. from_dict(
-			{
-				"module": "dr_house_tb_plain_a",
-				"xf": xf,
-				"cls": "houses",
-				"lot": 7,
-				"variant": "holed",
-			}
-		)
-	)
+	var p := DressPlacement.new("dr_house_tb_plain_a", xf, "houses", 7, "holed")
 	assert_str(p.module).is_equal("dr_house_tb_plain_a")
 	assert_bool(p.transform == xf).is_true()
 	assert_str(p.cls).is_equal("houses")
 	assert_int(p.lot).is_equal(7)
 	assert_str(p.look).is_equal("holed")
-	var bare := DressPlacement.from_dict(
-		{"module": "dr_litter_straw", "xf": Transform3D(), "cls": "clutter"}
-	)
+	var bare := DressPlacement.new("dr_litter_straw", Transform3D(), "clutter")
 	assert_int(bare.lot).is_equal(-1)
 	assert_str(bare.look).is_empty()
 

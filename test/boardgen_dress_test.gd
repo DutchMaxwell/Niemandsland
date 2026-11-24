@@ -25,10 +25,10 @@ func _planners(houses: Variant) -> Array:
 	return out
 
 
-## A planner script made at run time: `count` placements of `module`, and a build_extra that adds a node.
+## A planner subclass made at run time: `count` placements of `module`, and a build_extra that adds a node.
 func _fake(modules: Array, module: String, count: int) -> GDScript:
 	var s := GDScript.new()
-	s.source_code = "extends RefCounted\nconst MODULES: Array[String] = %s\nstatic func plan(_layout: Dictionary, _ctx: Dictionary) -> Array[Dictionary]:\n\tvar out: Array[Dictionary] = []\n\tfor i in %d:\n\t\tout.append({\"module\": \"%s\", \"xf\": Transform3D(Basis(), Vector3(i * 0.05, 0.0, 0.0)), \"cls\": \"houses\"})\n\treturn out\nstatic func build_extra(_layout: Dictionary, parent: Node3D, _ctx: Dictionary) -> void:\n\tvar n := Node3D.new()\n\tn.name = \"Extra\"\n\tparent.add_child(n)\n" % [str(modules), count, module]
+	s.source_code = "extends DressPlanner\nconst MODULES: Array[String] = %s\nfunc plan(_context: DressContext) -> Array[DressPlacement]:\n\tvar out: Array[DressPlacement] = []\n\tfor i in %d:\n\t\tout.append(DressPlacement.new(\"%s\", Transform3D(Basis(), Vector3(i * 0.05, 0.0, 0.0)), \"houses\"))\n\treturn out\nfunc build_extra(_context: DressContext, parent: Node3D) -> void:\n\tvar n := Node3D.new()\n\tn.name = \"Extra\"\n\tparent.add_child(n)\n" % [str(modules), count, module]
 	s.reload()
 	return s
 
@@ -102,6 +102,18 @@ func test_setup_is_false_on_a_deepworks_board_or_without_a_planner() -> void:
 	var none: BoardgenDress = auto_free(BoardgenDress.new(null, [["houses", null]]))
 	assert_bool(none.setup(_layout(41))).is_false()   # no class is usable
 	assert_dict(none.classes()).is_empty()
+
+
+func test_a_dress_planner_subclass_placements_are_what_the_pass_draws() -> void:
+	var fake := _fake(["dr_house_tb_plain_a"], "dr_house_tb_plain_a", 2)
+	var dress: BoardgenDress = auto_free(BoardgenDress.new(_stub_kit(), _only(fake)))
+	var layout := _layout(41)
+	assert_bool(dress.setup(layout)).is_true()
+	dress.build(layout)
+	for node in ["DressMesh", "DressShadow"]:
+		var mesh := dress.get_node(node) as MeshInstance3D
+		var indices: PackedInt32Array = mesh.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX]
+		assert_int(indices.size()).override_failure_message(node).is_equal(2 * 36)   # the subclass's two boxes
 
 
 func test_a_build_with_a_supplied_planner_has_both_nodes_the_expected_triangles_and_the_extras() -> void:

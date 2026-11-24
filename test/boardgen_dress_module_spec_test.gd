@@ -66,6 +66,8 @@ func test_every_bundled_module_parses_without_errors() -> void:
 		assert_str(spec.variant).is_equal(str(entry.get("variant", "")))
 		assert_vector(spec.aabb_lo).is_equal(_vec(entry["aabb_in"][0]))
 		assert_vector(spec.aabb_hi).is_equal(_vec(entry["aabb_in"][1]))
+		assert_array(spec.aabb_lo_in).is_equal(entry["aabb_in"][0])
+		assert_array(spec.aabb_hi_in).is_equal(entry["aabb_in"][1])
 		assert_int(spec.shadow_hulls.size()).is_equal(entry["shadow"].size())
 		for i in entry["shadow"].size():
 			assert_vector(spec.shadow_hulls[i][0]).is_equal(_vec(entry["shadow"][i][0]))
