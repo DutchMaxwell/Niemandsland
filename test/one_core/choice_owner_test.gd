@@ -73,7 +73,7 @@ func before_test() -> void:
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
 	_main.solo_ai_slots = {}
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	CoreActivation._env = 1
 	CoreActivation._choice_on = {"takedown_model": false, "wound_alloc": false}
 

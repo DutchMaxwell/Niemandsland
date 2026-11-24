@@ -216,16 +216,15 @@ func test_capture_returns_a_live_core_handle_and_zero_without_a_controller() -> 
 	_unit(2, "Drones")
 	_main.solo_controller = null
 	assert_int(CoreActivation.capture(_main)).override_failure_message("no controller").is_equal(0)
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	assert_int(CoreActivation.capture(_main)).override_failure_message("with a controller").is_not_equal(0)
 
 
 ## Step 20 fixture: 10 AI riflemen (Rifle 24", A1) vs 5 human models 12" away; batch tray, so no save prompt.
 func _volley_units() -> Array:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
-	_main._solo_batch = true
-	_main._solo_auto_saves = true   # step 42 (O21): the human's saves roll without the card, so no case waits for a click
+	SoloHarness.start(_main, [2])
+	SoloHarness.instant(_main)
+	SoloHarness.auto_saves(_main)   # step 42 (O21): the human's saves roll without the card, so no case waits for a click
 	var side := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 		"faction_folder": "robot_legions", "rules": []}
 	var att := ParityTable._make_unit(_main, side.merged({"player": 2, "name": "Att", "models": 10, "x_in": 0.0}),
@@ -250,8 +249,7 @@ func test_drive_runs_a_plain_hold_and_shoot_activation_to_done() -> void:
 ## the game's rules epoch. Probe rule (step_activation_binding_test's): Speed Feat (epoch 7) gives its bearer an 8"
 ## Advance in the last round; at epoch 0 (no header) the core reads the printed 6".
 func test_capture_sends_the_game_header_so_the_core_reads_the_game_epoch() -> void:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	var sc: SoloController = _main.solo_controller
 	sc.game_rounds = 4
 	_main.opr_army_manager.current_round = 4
@@ -536,7 +534,7 @@ func test_a_core_versatile_activation_lands_the_pick_the_old_path_reads() -> voi
 ## card in the driver: the volley runs through, no card.
 func test_a_local_defender_sees_the_incoming_fire_card_before_its_saves(timeout := 60000) -> void:
 	var units := _volley_units()
-	_main._solo_auto_saves = false
+	SoloHarness.auto_saves(_main, false)
 	_main.seed_tray_rng(7)
 	var t: Array = [{"t": "begin"}, {"t": "intent", "kind": AiDecision.Action.HOLD, "shoot": units[1].unit_id}]
 	var out := {}
@@ -592,8 +590,7 @@ func test_the_funnel_says_only_the_losses_the_core_did_not_say() -> void:
 ## Step 28 fixture: a human unit of two models on an AI-seat table; each node carries its network id and its
 ## ModelInstance, as spawned models do (the move ledger keys its models by the id, the trail radius reads the model).
 func _human(uname: String, rules: Array = []) -> GameUnit:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	var u := ParityTable._make_unit(_main, {"player": 1, "name": uname, "models": 2, "x_in": 0.0, "z_step_in": 1.2,
 		"quality": 4, "defense": 4, "tough": 1, "game_system": "gf", "faction_folder": "robot_legions", "rules": rules},
 		{"name": "Rifle", "range_in": 24, "attacks": 1, "count": 2, "rules": []})
@@ -778,8 +775,7 @@ func test_a_container_changed_in_place_comes_back_as_it_was() -> void:
 
 ## Step 67: an AoF orc unit of this table (O14 (1b)) at `x_in`; a friendly buff picks the unit with the most models.
 func _orc(uname: String, models: int, x_in: float, rules: Array) -> GameUnit:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	return ParityTable._make_unit(_main, {"player": 1, "name": uname, "models": models, "x_in": x_in, "z_step_in": 1.2,
 		"quality": 4, "defense": 4, "tough": 1, "game_system": "aof", "faction_folder": "orcs", "rules": rules},
 		{"name": "Bow", "range_in": 24, "attacks": 1, "count": models, "rules": []})
@@ -1051,7 +1047,7 @@ func _roll_requests(att_name: String, def_name: String, rename: String) -> Array
 	_recording_session()
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC   # an agreed Automatic online room (O10)
 	_main._ensure_solo_controller()
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_main._owner_roll_timeout_s = 0.2   # the guest never answers: each request is auto-rolled after this
 	var side := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 		"faction_folder": "robot_legions", "rules": []}
@@ -1712,7 +1708,7 @@ func test_the_first_die_takes_the_cancel_away_but_a_remote_roll_does_not() -> vo
 	_main.dice_roller_control.roll_started.emit()
 	_main._is_showing_remote_roll = false
 	assert_bool(CoreActivation.can_cancel(u.unit_id)).override_failure_message("a remote roll took the Cancel away").is_true()
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	_main._is_showing_remote_roll = true   # the other table's dice are still on the tray: the hook in roll_started skips
 	await _main._solo_tray_roll(1, 4, "You")
 	assert_bool(CoreActivation.can_cancel(u.unit_id)).override_failure_message("a tray roll left the Cancel").is_false()
@@ -1833,10 +1829,9 @@ func test_a_path_that_breaks_from_the_capture_is_checked_by_its_chord() -> void:
 
 ## Slot 1's "Rifles" (10 models, Rifle 24" A1, a human's) and slot 2's "Def" (5 models, the AI's) 12" away; batch tray.
 func _shot_units() -> Array:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
-	_main._solo_batch = true
-	_main._solo_auto_saves = true
+	SoloHarness.start(_main, [2])
+	SoloHarness.instant(_main)
+	SoloHarness.auto_saves(_main)
 	var side := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 		"faction_folder": "robot_legions", "rules": []}
 	var att := ParityTable._make_unit(_main, side.merged({"player": 1, "name": "Rifles", "models": 10, "x_in": 0.0}),

@@ -45,7 +45,7 @@ func before_test() -> void:
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
 	_main.solo_ai_slots = {}
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	CoreActivation._env = 1
 
 
@@ -235,7 +235,7 @@ func test_the_target_joins_the_check_and_is_cleared_at_end_start_and_reset() -> 
 func test_an_ai_volley_through_the_core_announces_one_check_in_a_room_and_none_in_solo() -> void:
 	for room in [true, false]:
 		_room(room, RulesAutomation.Level.AUTOMATIC, {2: true})
-		_main._solo_auto_saves = true
+		SoloHarness.auto_saves(_main)
 		var ai := _plain(2, "Bots%s" % room, 0.0)
 		var foe := _plain(1, "Rifles%s" % room, 10.0)
 		_main.seed_tray_rng(7)
@@ -286,7 +286,7 @@ func test_cast_touched_is_the_targets_then_the_payers_each_once() -> void:
 ## the cast units in the check: the foe is not in it and the planted difference is invisible), an equal table stays silent.
 func test_a_core_cast_announces_its_target_and_payer_and_a_planted_target_difference_is_seen() -> void:
 	_room(true, RulesAutomation.Level.AUTOMATIC, {2: true})
-	_main._solo_auto_saves = true
+	SoloHarness.auto_saves(_main)
 	var caster := ParityTable._make_unit(_main, MYSTIC, STAFF)
 	var helper := ParityTable._make_unit(_main, HELPER, STAFF)
 	var foe := ParityTable._make_unit(_main, FOE, {})
