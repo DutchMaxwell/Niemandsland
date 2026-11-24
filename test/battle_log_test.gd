@@ -42,7 +42,7 @@ func test_defense_roll_line_agrees_with_its_roller() -> void:
 	log_node.on_dice_rolled(2, 1, 3, "You", [4, 1], "defense")
 	assert_str(str(log_node.entries()[0]["text"])).is_equal("You defend: 4 1 → 1 block (3+)")
 	log_node.on_dice_rolled(2, 0, 7, "Alice", [2, 1], "defense")
-	assert_str(str(log_node.entries()[1]["text"])).is_equal("Alice defends: 2 1 → 0 blocks (7+)")
+	assert_str(str(log_node.entries()[1]["text"])).is_equal("Alice defends: 2 1 → 0 blocks (6+)")   # a natural 6 always saves
 	log_node.on_dice_rolled(2, 1, 3, "You", [4, 1])
 	assert_str(str(log_node.entries()[2]["text"])).is_equal("You: 4 1 → 1 hit (3+)")
 

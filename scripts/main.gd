@@ -3636,15 +3636,24 @@ func core_drag_blocked(gu: GameUnit, for_drag := false) -> bool:
 
 ## Step 30: why `gu` did not move - another unit's open activation (the core's O5 sentence) or its own missing Start
 ## (O15 (1)), or (40b, maintainer answer 14.11.) its activation already spent; a toast and a log line, which reaches the
-## other table.
-func core_drag_refused(gu: GameUnit) -> void:
+## other table. `from_drag` (live test 24.11.: every plain click on a unit that was not started is a drag attempt, so the log
+## filled with the same sentence): the toast shows every time, the log line once per sentence and round.
+func core_drag_refused(gu: GameUnit, from_drag := false) -> void:
 	var text := "%s has already been activated this round." % gu.get_name()   # step 40b: it cannot start again, so no "Activate first"
 	if not gu.is_activated:
 		var core: Object = solo_controller._core_node_ready() if solo_controller != null else null
 		var verdict: Dictionary = core.check_begin(CoreActivation.open_unit_name(self, gu)) if core != null else {}
 		text = str(verdict["reason"]) if not bool(verdict.get("ok", true)) else "Activate %s first." % gu.get_name()
-	_log_rule_event(BattleLog.Category.MOVEMENT, text)
+	var round_now: int = opr_army_manager.current_round if opr_army_manager != null else 0
+	if not from_drag or int(_drag_refusal_logged.get(text, -1)) != round_now:
+		_log_rule_event(BattleLog.Category.MOVEMENT, text)
+	if from_drag:
+		_drag_refusal_logged[text] = round_now
 	_show_toast(text)
+
+
+## core_drag_refused: refusal sentence -> the round its drag refusal was last logged in.
+var _drag_refusal_logged := {}
 
 
 ## One-core P3 step 62 (O14 (1b)): a door that runs inside an activation (the transport doors here) is refused, with step
@@ -14079,8 +14088,13 @@ func solo_begin_cast(unit: GameUnit) -> void:
 	if range_ring_controller != null and range_ring_controller.has_method("show_spell_preview"):
 		range_ring_controller.show_spell_preview(_solo_unit_nodes(unit), float(entry.get("range_in", 0)))
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL, "%s: pick a %s target for %s (%d marked in range) — right-click cancels" % [
-			unit.get_name(), side, str(entry.get("name", "?")), cands.size()])
+		battle_log.log_event(BattleLog.Category.GENERAL, cast_pick_prompt(unit.get_name(), side, str(entry.get("name", "?")), cands.size()))
+
+
+## The cast's target prompt. The article follows the side word ("an enemy", "a friendly"); static + pure for the unit test.
+static func cast_pick_prompt(unit_name: String, side: String, spell: String, marked: int) -> String:
+	var article := "an" if side.substr(0, 1).to_lower() in ["a", "e", "i", "o", "u"] else "a"
+	return "%s: pick %s %s target for %s (%d marked in range) — right-click cancels" % [unit_name, article, side, spell, marked]
 
 
 ## #1719: a cast's sides. With an AI seat the foe is NACHTMAHR and the own side is the CASTER's slot (co-op
@@ -22730,6 +22744,7 @@ func _on_game_phase_changed(phase: int) -> void:
 	_sync_move_trails_deployment()
 	_update_game_phase_ui()
 	if phase == OPRArmyManager.GamePhase.PLAYING:
+		_drag_refusal_logged.clear()   # a new game logs its first drag refusals again
 		_log_aura_grants()   # AIG-G2: the import expansion's silent grants surface at battle start
 	_solo_grade_logged = ""   # every phase change opens a new game's grade line
 	_solo_log_grade()
@@ -22744,10 +22759,12 @@ func _on_game_phase_changed(phase: int) -> void:
 			and (network_manager == null or not network_manager.is_multiplayer_active()):
 		_hotseat_rapid_ambush_round_one()
 
-## AIG-G2: one battle-log line per granted aura effect, in deployment order.
+## AIG-G2: one battle-log line per granted aura effect, in deployment order. Several units of the same name with the same
+## grant (a list with four identical Heroes) share ONE line with their count, so the log never repeats a line word for word.
 func _log_aura_grants() -> void:
 	if battle_log == null or opr_army_manager == null: return
 	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36: return
+	var counts := {}   # line -> number of grants that read the same (insertion order = deployment order)
 	var pids: Array = opr_army_manager.armies.keys()
 	pids.sort()
 	for pid in pids:
@@ -22761,8 +22778,11 @@ func _log_aura_grants() -> void:
 				var aura := str(r).strip_edges()
 				var effect := AiEv.aura_granted_rule(gu, aura)
 				if not effect.is_empty() and to.has_special_rule(effect):
-					battle_log.log_event(BattleLog.Category.GENERAL,
-						"%s: %s grants %s to %s" % [aura, gu.get_name(), effect, to.get_name()])
+					var line := "%s: %s grants %s to %s" % [aura, gu.get_name(), effect, to.get_name()]
+					counts[line] = int(counts.get(line, 0)) + 1
+	for line: String in counts:
+		var n: int = counts[line]
+		battle_log.log_event(BattleLog.Category.GENERAL, line if n == 1 else "%s (%d units)" % [line, n])
 
 
 ## #1719: the round-1 Rapid Ambush step on a local table without an AI seat ("may be deployed at the
