@@ -146,6 +146,7 @@ var _dice_count_value_label: Label = null
 var _current_roll_column: VBoxContainer = null
 var _movement_cap_buttons: Dictionary = {}  # MovementCap mode -> Button (the "Movement" cap row)
 var _refreshing_cap_row := false   # one-core P3 step 31: the row refresh is not re-entrant
+var _movement_cap_picked_for := ""   # the one selected unit the player last pressed a movement mode for ("" = none or several)
 
 # Success evaluation + rerolls (display-only aids; the rules live in DiceRules).
 var _success_target: int = DiceRules.TARGET_NONE
@@ -18235,6 +18236,9 @@ func _on_movement_cap_pressed(mode: int) -> void:
 			ObjectManager.MovementCap.CHARGE: "Charge"}[mode]])
 	if object_manager and object_manager.has_method("set_movement_cap"):
 		object_manager.set_movement_cap(mode)
+		# A Rush or Charge pressed before the unit's Start is the player's declaration: the Start keeps it (CoreActivation.open_session).
+		var picked := UnitUtils.get_unique_units(object_manager.get_selected_objects())
+		_movement_cap_picked_for = (picked[0] as GameUnit).unit_id if picked.size() == 1 else ""
 	_update_movement_cap_display()
 	dice_controls_changed.emit(&"movecap", mode)
 
