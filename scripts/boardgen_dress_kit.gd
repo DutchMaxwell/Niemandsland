@@ -106,6 +106,12 @@ func mesh(name: String) -> ArrayMesh:
 	return _meshes[key]
 
 
+## Empties the shared mesh cache, so the next `mesh()` parses its GLB again (tests: a GLB rewritten
+## at the same path must not be served from the cache of an earlier test).
+static func clear_cache() -> void:
+	_meshes.clear()
+
+
 ## The surface (and material) name of `material` drawn by a module of `variant`: `<material>_<variant>` when the material's
 ## manifest entry lists that variant under `variants`, else the material itself. `materials` = the manifest's materials block.
 static func surface_name(material: String, variant: String, materials: Dictionary) -> String:
