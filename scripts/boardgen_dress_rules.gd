@@ -101,7 +101,6 @@ static func violations(context: DressContext, placements: Array) -> PackedString
 	var cell := context.cell_in
 	var origin := context.origin_in
 	var zones := _ladder_zones(context.layout)
-	var kept := context.kept_clear()
 	for placement: DressPlacement in placements:
 		var spec := context.spec(placement.module)
 		var xf := placement.transform
@@ -153,7 +152,7 @@ static func violations(context: DressContext, placements: Array) -> PackedString
 		var cx_last := mini(floori((footprint.end.x - origin.x) / cell), nx - 1)
 		for cz in range(cz_first, cz_last + 1):
 			for cx in range(cx_first, cx_last + 1):
-				if tags.has("soft_veg") and kept.has(cz * nx + cx):
+				if tags.has("soft_veg") and context.kept_clear_cell(cz * nx + cx):
 					var cell_rect := Rect2(origin + Vector2(cx, cz) * cell, Vector2(cell, cell))
 					if footprint.intersection(cell_rect).size.x > TOL:
 						found.append("R1 soft vegetation in a kept-clear cell (ladder or landmark)")
