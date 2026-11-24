@@ -79,6 +79,7 @@ test/biome_library_test.gd
 test/boardgen_dress_module_spec_test.gd
 test/boardgen_dress_houses_test.gd
 test/boardgen_dress_mesh_test.gd
+test/boardgen_dress_kit_errors_test.gd
 test/boardgen_dress_placement_test.gd
 test/boardgen_dress_rules_test.gd
 test/boardgen_dress_snapshot_test.gd
