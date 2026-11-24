@@ -9,6 +9,7 @@ const MANIFEST_PATH := "res://assets/ruintown_dress.json"
 var meta: Dictionary = {}   # the parsed manifest
 var _kit: BoardgenKit
 var _force_stub := false
+var _specs: Dictionary = {}   # module name -> DressModuleSpec, built once here
 static var _meshes: Dictionary = {}   # GLB path -> parsed ArrayMesh, shared by every board
 
 
@@ -17,6 +18,15 @@ func _init(kit: BoardgenKit, force_stub := false) -> void:
 	_force_stub = force_stub
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(MANIFEST_PATH))
 	meta = data if typeof(data) == TYPE_DICTIONARY else {}
+	var modules: Dictionary = meta.get("modules", {})
+	var materials: Dictionary = meta.get("materials", {})
+	for name: String in modules:
+		_specs[name] = DressModuleSpec.from_manifest(name, modules[name], materials)
+
+
+## The typed spec of a module (null when the manifest does not know it).
+func spec(name: String) -> DressModuleSpec:
+	return _specs.get(name)
 
 
 ## The manifest entry of a module ({} when the manifest does not know it).

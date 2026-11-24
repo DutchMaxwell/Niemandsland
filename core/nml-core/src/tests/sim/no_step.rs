@@ -1,4 +1,4 @@
-//! Step 20 (PLAN_FIRST_DELETION): `Input::Intent { no_step }` - a human Hit & Run bearer's post-attack step is the player's own
+//! `Input::Intent { no_step }` - a human Hit & Run bearer's post-attack step is the player's own
 //! drag, so the core's step path takes none; without the flag the core steps as before.
 
 use super::*;

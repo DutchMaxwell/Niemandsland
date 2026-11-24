@@ -45,13 +45,10 @@ func before_test() -> void:
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
 	_real_net = _main.network_manager
-	_main.solo_ai_slots = {1: true, 2: true}
-	_main._ensure_solo_controller()
-	_main.solo_controller.ai_slot = 2
-	_main.solo_controller.human_slot = 1
+	SoloHarness.start(_main, [1, 2], 1)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	CoreActivation._env = 1
 	CoreActivation.ai_runs = 0
 	CoreActivation.ai_refusals = 0
@@ -123,8 +120,8 @@ func test_each_core_ai_activation_in_a_room_sends_one_check(timeout := 300000) -
 	net.is_host = true
 	net.army_manager = _main.opr_army_manager
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
-	_main.solo_ai_slots = {2: true}
-	_main._solo_auto_saves = true   # seat 1's units are this table's: their saves roll without the card
+	SoloHarness.start(_main, [2], 1)
+	SoloHarness.auto_saves(_main)   # seat 1's units are this table's: their saves roll without the card
 	_main.network_manager = net
 	_main.radial_menu_controller.network_manager = net
 	var bad: Array = []

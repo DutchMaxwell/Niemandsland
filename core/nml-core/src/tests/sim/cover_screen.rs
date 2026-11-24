@@ -1,4 +1,4 @@
-//! PLAN_COVER_36 step 6: the played volley reads cover from sight blockers (`sight::screen_of`) from
+//! The played volley reads cover from sight blockers (`sight::screen_of`) from
 //! `EPOCH_95_PARITY_BATCH`. The buff line with the target's hero detached and standing 2" in front of the target as a
 //! short third unit: the shooters see the target's heads over it, not its feet.
 use super::*;
@@ -34,7 +34,7 @@ fn volley(epoch: u32) -> ShootResult {
     volley_said(epoch).0
 }
 
-/// PLAN_COVER_36 step 9c: the doors write the tray's lines (#3286), so the screen line is said there too, once.
+/// The doors write the tray's lines (#3286), so the screen line is said there too, once.
 /// RED before: it stood in `ShootResult.log` only.
 #[test]
 fn the_door_tray_says_the_screen_line() {
@@ -59,7 +59,7 @@ fn a_unit_behind_another_unit_saves_one_better_from_95_only() {
     assert!(!saves(&at94).is_empty() && saves(&at94).iter().all(|&t| t == 4), "no +1 at 94: {:?}", at94.rolls);
 }
 
-/// PLAN_COVER_36 step 8: the Takedown pick (resolved as a unit of one) is in cover when the volley's screen hides THAT model,
+/// The Takedown pick (resolved as a unit of one) is in cover when the volley's screen hides THAT model,
 /// in slot order after the earlier groups landed; no screen (below 95) leaves the unit flag. Three models: the launcher
 /// (Tough 2, picked first) hidden behind a wall, two in the open. RED before: `hidden` was not read, the pick had no cover.
 #[test]

@@ -376,8 +376,7 @@ fn g5_the_rust_arbitration_reproduces_every_recorded_verdict() {
 #[test]
 fn red_proof_decide_margin_is_load_bearing() {
     let c = corpus();
-    let mut bend = PlanBend::default();
-    bend.arb = ArbBend { decide_margin: 0.4, ..ArbBend::default() };
+    let bend = PlanBend { arb: ArbBend { decide_margin: 0.4, ..ArbBend::default() }, ..PlanBend::default() };
     let r = sweep(&c, bend);
     println!(
         "RED PROOF decide_margin 0.5 -> 0.4: {}/{} acts still clean; \
@@ -401,8 +400,7 @@ fn red_proof_decide_margin_is_load_bearing() {
 #[test]
 fn red_proof_stochastic_wound_rounding_is_load_bearing() {
     let c = corpus();
-    let mut bend = PlanBend::default();
-    bend.arb = ArbBend { stochastic_wounds: false, ..ArbBend::default() };
+    let bend = PlanBend { arb: ArbBend { stochastic_wounds: false, ..ArbBend::default() }, ..PlanBend::default() };
     let r = sweep(&c, bend);
     println!(
         "RED PROOF stochastic wounds off: {}/{} acts still clean; \

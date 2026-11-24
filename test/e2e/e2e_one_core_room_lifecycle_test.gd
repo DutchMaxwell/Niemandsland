@@ -65,8 +65,8 @@ func before_test() -> void:
 	_real_om_net = _main.object_manager._network_manager
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true
-	_main._solo_fast = true
+	SoloHarness.instant(_main)
+	SoloHarness.fast(_main)
 	_main._autosave_controller.set_lesson_paused(true)
 	CoreActivation._env = 1
 	# The room as the agreement leaves it: Automatic, no AI seat, the host's token on seat 1; a guest peer sits on seat 2.

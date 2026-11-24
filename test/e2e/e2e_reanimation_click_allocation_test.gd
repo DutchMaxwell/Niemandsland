@@ -28,10 +28,9 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_batch = false   # the click prompt is an INTERACTIVE-only path
+	SoloHarness.instant(_main, false)   # the click prompt is an INTERACTIVE-only path
 
 
 func after_test() -> void:
@@ -101,11 +100,11 @@ func test_the_prompt_opens_only_where_a_choice_exists(timeout := 120000) -> void
 		.override_failure_message("the AI's own restore must stay automatic") \
 		.is_false()
 	# Batch/harness: headless would deadlock on a click that never comes (the self-play runs).
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	assert_bool(_main._solo_reanimation_choice_matters(mine, 2)) \
 		.override_failure_message("batch mode must never open an interactive prompt") \
 		.is_false()
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	# One candidate = nothing to weigh up.
 	var single := E2EBoot.make_unit(_main, 1, "Pair", [Vector3.ZERO, Vector3(0.6 * INCH, 0, 0)])
 	_main.opr_army_manager.game_units[single.unit_id] = single
@@ -224,7 +223,7 @@ func test_a_candidate_ring_resolves_the_fallen_model_under_the_cursor(timeout :=
 # ===== (6) batch/headless stays automatic — the self-play harness depends on it =====
 
 func test_batch_mode_allocates_without_ever_asking(timeout := 120000) -> void:
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	var u := _legion()
 	var tough := u.models[0] as ModelInstance
 	await _main._solo_resolve_reanimation(u, 3, 5, 2)

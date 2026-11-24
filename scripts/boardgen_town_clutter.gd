@@ -1,6 +1,6 @@
 class_name BoardgenTownClutter
 extends RefCounted
-## Where the authored clutter modules of the ruin town stand (plans A2 / A2b / A6 of PLAN_RUINTOWN_AAA, the assets lane's batches): lamp posts with their glass, the pieces of the wall strip
+## Where the authored clutter modules of the ruin town stand (the assets batches): lamp posts with their glass, the pieces of the wall strip
 ## (barrels, crates, sacks, a woodpile, a cart wreck ...), flat debris and weeds on open ground, brambles and dead trees on garden plots, ivy on wall faces. Pure data: `plan(layout)` is
 ## {module: [{xf, colour}]} in metres off the board centre, consumed by BoardgenTownKit. The look must not lie: FLAT pieces (<= 0.08 in) on open ground only, STRIP pieces (<= 0.75 in deep) with
 ## their origin on a wall face, PLOT pieces on FOREST plots (garden plots) and RUINS yards, WALL pieces (ivy) on faces without a ladder - never on standing room that would read as cover.
@@ -76,7 +76,7 @@ static func plan(layout: Dictionary) -> Dictionary:
 		var pos := Vector2(lo.x + along, lo.y if d.y < 0 else lo.y + cell_in) if d.x == 0 else Vector2(lo.x if d.x < 0 else lo.x + cell_in, lo.y + along)
 		# local +x runs along the wall; the yaw turns +z away from it, +x follows (for a north wall +x = +x of the board)
 		_add(out, m, _item(atan2(-float(d.x), -float(d.y)), Vector3(pos.x, 0.0, pos.y)))
-	var scenes := BoardgenTownScenes.plan(layout)   # story scenes (plan PLAN_RUINTOWN_GRIT S2): their cells carry no salted flat piece
+	var scenes := BoardgenTownScenes.plan(layout)   # story scenes: their cells carry no salted flat piece
 	for m: String in scenes["items"]:
 		for it: Dictionary in scenes["items"][m]:
 			_add(out, m, it)

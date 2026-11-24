@@ -12,10 +12,9 @@ func before_test() -> void:
 	_runner = scene_runner(Boot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2], 1)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 
 
 func after_test() -> void:

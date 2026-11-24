@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# P4.D-4: soak the runtime table census (CoreActivation.note_legacy, P4.D-3).
+# Soak the runtime table census (CoreActivation.note_legacy).
 # Plays N headless both-AI games (tools/arena_match.gd) over two AI-list directories, each game writing
 # NML_TABLE_CENSUS=<OUT>/game_<i>.json, then sums them into <OUT>/census.json: per door and reason the table volley
 # count, plus the share of ALL AI volleys (table + core). It ORDERS the allowlist widenings (plan section C).

@@ -300,7 +300,7 @@ func build(layout: Dictionary) -> void:
 	var kit_ladders: bool = theme["id"] == BoardgenTheme.DEEPWORKS and not ladders.is_empty() and kit.usable(ladders.keys())   # the town keeps its timber box ladders
 	var town_kit: BoardgenTownKit = BoardgenTownKit.new() if theme["id"] == BoardgenTheme.RUIN_TOWN else null
 	var kit_town := town_kit != null and town_kit.active()   # the authored roofs, chimneys and merlons (else the boxes below)
-	var dress: BoardgenDress = BoardgenDress.new() if theme["id"] == BoardgenTheme.RUIN_TOWN else null   # the dressing (PLAN_RUINTOWN_DRESSING): the classes it draws as modules skip the old look
+	var dress: BoardgenDress = BoardgenDress.new() if theme["id"] == BoardgenTheme.RUIN_TOWN else null   # the dressing: the classes it draws as modules skip the old look
 	var skip := dress.classes() if dress != null and dress.setup(layout) else {}
 	var boxes := plan(layout).filter(func(b: Dictionary) -> bool: return not (kit_ladders and b["kind"] == "ladder") and not (kit_town and (BoardgenTownKit.replaces(b) or town_kit.replaces_clutter(b))))
 	if kit_ladders:   # the authored ladders replace the box ladders
@@ -354,13 +354,13 @@ func build(layout: Dictionary) -> void:
 			add_child(town_kit)
 		else:
 			town_kit.free()
-		var town_lib := get_node_or_null("TownLibrary") as TiefwerkLibrary   # the town's decals (plan PLAN_RUINTOWN_GRIT D1) when the T-R2 atlas is cached
+		var town_lib := get_node_or_null("TownLibrary") as TiefwerkLibrary   # the town's decals when the T-R2 atlas is cached
 		if town_lib != null and town_lib.decals_cached():
 			_decals = BoardgenDecals.new()
 			_decals.name = "Decals"
 			_decals.build(layout, town_lib)
 			add_child(_decals)
-		_life = BoardgenTownLife.new()   # flicker, smoke, crows, rats (plan PLAN_RUINTOWN_GRIT L1-L3)
+		_life = BoardgenTownLife.new()   # flicker, smoke, crows, rats
 		_life.name = "Life"
 		add_child(_life)
 		_life.build(layout, self)
@@ -679,7 +679,7 @@ func _make_material(layout: Dictionary, theme: Dictionary) -> ShaderMaterial:
 		mat.set_shader_parameter("board_cells", Vector2(layout["nx"], layout["nz"]))
 		var tale := BoardgenTownDressing.story(int(layout.get("seed", 0)))
 		mat.set_shader_parameter("story", Vector4(tale.r, tale.g, tale.b, tale.a))
-		BoardgenTownGrit.apply(mat, layout)   # why the ground is dirty where it is (plan PLAN_RUINTOWN_GRIT)
+		BoardgenTownGrit.apply(mat, layout)   # why the ground is dirty where it is
 		var lib := TiefwerkLibrary.new(BoardgenTheme.TOWN_LIBRARY)   # the authored T-R1 surfaces when they are cached (NML_RUINTOWN_LIB_DIR in dev); the shader keeps its procedural look otherwise
 		lib.name = "TownLibrary"
 		add_child(lib)

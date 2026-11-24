@@ -32,8 +32,7 @@ func after_test() -> void:
 
 
 func _solo_playing_on() -> void:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 
 

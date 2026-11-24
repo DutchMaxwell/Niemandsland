@@ -1,7 +1,7 @@
 use super::*;
 use crate::mv::legal::{beyond_allowance, rest_illegal, Illegal};
 
-    // ------------------- PLAN_FIRST_DELETION step 3a: the legality checker, one planted fixture per rule ---
+    // ------------------- the legality checker, one planted fixture per rule ---
 
     /// Up to four units on `buff_line`'s roster, each `(player, base radius in, model centres in)`; the rest stay off the table.
     fn placed(units: &[(i64, f64, &[[f64; 2]])]) -> State {

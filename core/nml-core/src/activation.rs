@@ -26,7 +26,7 @@ pub enum Input {
     Begin,
     /// The declared action (`sim::HOLD` ..); `shoot` is `Some` when it shoots. `split` is split fire's aim,
     /// per (member, weapon) the target key it fires at; `None` (or empty) = the one `shoot` target.
-    /// P4.D-46: `charge` is a `sim::CHARGE`'s target key (the core lands the charge with `charge_move`, then strikes).
+    /// `charge` is a `sim::CHARGE`'s target key (the core lands the charge with `charge_move`, then strikes).
     /// Step 20: `no_step` = the core takes no Hit & Run step after the attack (a human bearer's player drags it).
     Intent { kind: i64, shoot: Option<String>, split: Option<Vec<SplitShot>>, charge: Option<String>, no_step: bool },
     /// One thrown face group, in the order the core asked for them.
@@ -500,7 +500,7 @@ fn cast_check(statics: &[UnitStatic], state: &State, t: &[Input]) -> Option<(usi
 
 /// P4.0-5: the ids of the Takedown model-pick choice (`takedown_model:<shooter>:<target>`) start with this.
 const TAKEDOWN_MODEL: &str = "takedown_model:";
-/// P4.D-20: the ids of the wound-allocation choice (`wound_alloc:<shooter>:<target>:<group>`) start with this.
+/// The ids of the wound-allocation choice (`wound_alloc:<shooter>:<target>:<group>`) start with this.
 const WOUND_ALLOC: &str = "wound_alloc:";
 /// CC-9b/9c: the ids of the cast-interference choice (`interference:<seq>:<caster>:<slot>`) start with this.
 const INTERFERENCE: &str = "interference:";
@@ -638,7 +638,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     if let Some((i, id, _)) = interference.iter().find(|c| c.2.is_some() && casts.is_empty() && c.1.starts_with(INTERFERENCE)) {
         return ActStep::Refused { index: *i, reason: format!("no interference choice is open in this activation (got {id})") };
     }
-    // P4.D-48: a charge on the step path is the TABLE's charge (the move, the snap, the pile-in), whatever the header's
+    // A charge on the step path is the TABLE's charge (the move, the snap, the pile-in), whatever the header's
     // search knobs say: the ported movement is ON and the plain-only imagination OFF. Without it the resolver skips the move,
     // finds no contact and answers a fightless `Done` (measured at the Godot door: empty lines, empty delta).
     if kind == CHARGE {
@@ -689,7 +689,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         step_with(&faces, resolve, |r| r.as_ref().map_or(&[][..], |(_, s)| s.rolls.as_slice()))
     };
     let first = run(statics);
-    // P4.D-20/21 + CC-9a/9c: every reached choice (interference and wound_alloc) in (draw, reach) order, before the first
+    // Every reached choice (interference and wound_alloc) in (draw, reach) order, before the first
     // starved roll and before any cast refusal that came after it: a bad option is refused, an unanswered ask is NeedChoice
     // with the lines and landings before that choice point. Unreached answered choices are refused on Done.
     let at_wound = |id: &str| wound.iter().find(|w| w.1 == id).map_or(0, |w| w.0);
@@ -838,7 +838,7 @@ pub struct UnitDelta {
     /// P4.0-4g: the latched Versatile pick AFTER (inventory class (a)): 0 = none, 1 = +1 to hit,
     /// 2 = AP(+1). `land_delta` maps it onto the table's `versatile_pick` Dictionary.
     pub versatile_pick_mode: i64,
-    /// P4.D-38a: the once-per-game feat latches this activation SPENT (inventory class (a)): the names `State::feats_used`
+    /// The once-per-game feat latches this activation SPENT (inventory class (a)): the names `State::feats_used`
     /// gained, in the order they were spent. `land_delta` closes the table's flag for each, so the next capture sends it back.
     pub feats_used: Vec<String>,
     /// C-11: the once-per-game name lists this activation SPENT (inventory class (a)), the `feats_used` shape: the names
@@ -1371,7 +1371,7 @@ mod tests {
         }
     }
 
-    // ---- P4.D-20: the wound-allocation choice ----
+    // ---- the wound-allocation choice ----
 
     use crate::state::Kit;
     const ALLOC_ID: &str = "wound_alloc:a:b:0";
@@ -1460,7 +1460,7 @@ mod tests {
         }
     }
 
-    /// P4.D-21: the owner places a Deadly(2) volley's wounds too (D17): a wound goes to the next pick and deals X there; a wound
+    /// The owner places a Deadly(2) volley's wounds too: a wound goes to the next pick and deals X there; a wound
     /// the auto pick FORCES onto the already-wounded Tough model takes no pick. Two unsaved wounds, pick slot 1: slot 1 takes
     /// 2 of its 3, then the forced second wound finishes it - slot 0 stands; the automatic landing spares the other model.
     /// With no pool wound the ask still opens. RED: land Deadly by the automatic pick -> both runs equal.
@@ -1483,7 +1483,7 @@ mod tests {
         assert!(lines.iter().any(|l| l.text == "b: the owner allocates 1 wound"), "the forced wound took no pick: {lines:?}");
     }
 
-    /// P4.D-21: a split volley has one choice per target group, the group's place in the plan in its id. Two mixed-kit
+    /// A split volley has one choice per target group, the group's place in the plan in its id. Two mixed-kit
     /// targets, the rifle aimed at "b" (group 0) and the pistol at "bh" (group 1): each answer lands on its own target, and an
     /// answer under the wrong group index is no answer (RED: id every group `:0` -> the "bh" answer is never read).
     #[test]
@@ -3756,7 +3756,7 @@ mod tests {
         assert!(delta_of(&st, &state).iter().all(|x| x.pools.len() == 4), "a core row carries the pools");
     }
 
-    /// P4.D-38a: a unit whose only change is a spent feat gets a row naming the feat; a latch already spent in `before` is no news.
+    /// A unit whose only change is a spent feat gets a row naming the feat; a latch already spent in `before` is no news.
     /// RED: drop the `feats_used` term from the change test -> no row; drop the field from the push -> an empty list.
     #[test]
     fn the_delta_carries_the_spent_feats() {

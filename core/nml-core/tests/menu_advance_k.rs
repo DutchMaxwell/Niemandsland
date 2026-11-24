@@ -190,10 +190,10 @@ fn green_k3_offers_the_top_three_safe_advances() {
                             note(format!("act {ai} unit {key}: candidate {k} moved: {why}"));
                         }
                     }
-                    for k in e3..g3.len() {
+                    for (k, cand) in g3.iter().enumerate().skip(e3) {
                         let j = k - (m - 1);
                         if j < g1.len() {
-                            if let Err(why) = same(&g3[k], &g1[j]) {
+                            if let Err(why) = same(cand, &g1[j]) {
                                 note(format!("act {ai} unit {key}: candidate {j} moved: {why}"));
                             }
                         }

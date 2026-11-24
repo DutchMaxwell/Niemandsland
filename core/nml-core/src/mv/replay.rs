@@ -265,12 +265,12 @@ pub fn searches(call_idx: usize, call: &MoveCall, header: &MoveHeader) -> Vec<Re
         // settled spot, the rest at their start.
         let mut zones = base.clone();
         if have_r {
-            for j in 0..n {
+            for (j, &rj) in result.iter().enumerate() {
                 if j == idx {
                     continue;
                 }
                 zones.push(Zone {
-                    c: result[j],
+                    c: rj,
                     r: (call.opts.radii[j] + call.opts.radii[idx] - CONTACT_SLIDE_EPS_IN).max(0.0),
                 });
             }

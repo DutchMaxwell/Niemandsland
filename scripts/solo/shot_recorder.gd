@@ -4,7 +4,7 @@ extends RefCounted
 ## AI volley to <dir>/shots.jsonl — the per-shot counterpart to AiDiceRecorder's per-roll
 ## dump (scripts/solo/dice_recorder.gd): a sharded gate for per-model sighting (D6a) and
 ## per-copy bearer scaling needs the table's own sighted/bearers/reach facts, not an inferred
-## residue (PLAN_fast_rules_core.md "D6a DESIGN DRAFT" §3/§5 B6). Same shape as AiDiceRecorder:
+## residue (the D6a design, §3/§5 B6). Same shape as AiDiceRecorder:
 ## a static FileAccess stream opened once and kept open, one JSON line per call via
 ## JSON.stringify, an env line cap (NML_SHOT_DUMP_MAX), flush per line, close() at game end.
 ## Unset (default) never touches disk: main.gd's tap calls record() unconditionally, but

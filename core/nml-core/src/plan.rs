@@ -1533,7 +1533,7 @@ pub fn build_pool(
             covered.push(key.to_string());
             coverage.push(i);
         }
-        if scored[i].cand.patient && !patient_units.iter().any(|k| *k == key) {
+        if scored[i].cand.patient && !patient_units.contains(&key) {
             patient_units.push(key);
             patient_of.push(i);
         }

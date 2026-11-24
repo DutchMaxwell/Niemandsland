@@ -53,8 +53,7 @@ func _grade_lines() -> Array:
 
 
 func _seat_ai() -> SoloDifficulty:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	return _main.solo_controller.difficulty_by_slot.get(2, null)
 
 

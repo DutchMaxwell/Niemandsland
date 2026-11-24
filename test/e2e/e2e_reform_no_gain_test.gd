@@ -45,8 +45,7 @@ func _gap_to_foe(node: Node3D, foe: GameUnit) -> float:
 
 
 func test_solo_reform_never_gains_ground(timeout := 120000) -> void:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	var uf := _spread_unit_vs_foe()
 	var rear := ((uf[0] as GameUnit).models[0] as ModelInstance).node as Node3D
