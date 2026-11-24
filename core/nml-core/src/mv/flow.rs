@@ -476,11 +476,11 @@ pub fn plan_sequential_flow(
         )
     {
         let uoi = ThetaOpts { step: ustep, reach_closest: false };
-        for i in 0..n {
-            let t_end = *out.trails[i].last().unwrap_or(&model_pos[i]);
+        for (i, &mp) in model_pos.iter().enumerate() {
+            let t_end = *out.trails[i].last().unwrap_or(&mp);
             if distance_to(t_end, out.result[i]) > EPS {
                 let (rroute, pops) = theta_star_traced_bent(
-                    model_pos[i], out.result[i], walls, grid, board, &uoi, cfg, bend.theta,
+                    mp, out.result[i], walls, grid, board, &uoi, cfg, bend.theta,
                 );
                 if !pops.is_empty() {
                     out.searches.push(pops);

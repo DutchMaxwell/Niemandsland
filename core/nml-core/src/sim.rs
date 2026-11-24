@@ -11527,15 +11527,14 @@ fn resolve_with(
                 land_cover(statics, &mut next, si, t, seams, dice.as_mut().map(|d| &mut *d.1));
             }
         }
-    } else if placed.is_none() && band_in > 0.0
+    } else if let Some(dest_raw) = action.dest.filter(|_| placed.is_none() && band_in > 0.0
         && !hold
         && !flew
-        && action.dest.is_some()
-        && !next.positions[si].is_empty()
+        && !next.positions[si].is_empty())
     {
         moved = true;
         stamp_moved(&mut next, si, seams.hero_attach, seams.rules_epoch);
-        let dest = geom::to_f32(action.dest.unwrap());
+        let dest = geom::to_f32(dest_raw);
         let centre = geom::centre(&next.positions[si]);
         let mut delta = geom::sub(dest, centre);
         let reach_m = band_in * IN2M;
@@ -12269,10 +12268,12 @@ fn resolve_with(
                                     continue;
                                 }
                                 let um = &statics[next.roster.profile[mi]];
-                                let mut msc = Scratch::default();
-                                msc.rules_epoch = seams.rules_epoch;
-                                msc.bearers_last = seams.casualties_bearers_last;
-                                msc.say_sight = tray.feed().is_some(); // step 27: the hit line's sight part
+                                let mut msc = Scratch {
+                                    rules_epoch: seams.rules_epoch,
+                                    bearers_last: seams.casualties_bearers_last,
+                                    say_sight: tray.feed().is_some(), // step 27: the hit line's sight part
+                                    ..Default::default()
+                                };
                                 // G4R3 F-HERO-RANGE (EPOCH_73_V36): range is per MODEL — a joined hero's weapons
                                 // are gated by the hero's own nearest gap (the host's `g.d` below 73 and for the host).
                                 let hero_own_gap = mi != si && rule_on(seams.rules_epoch, EPOCH_73_V36);
@@ -12963,8 +12964,9 @@ fn resolve_with(
             } else {
                 (us.hit_and_run_rule.clone(), us.hit_and_run_move_in.to_string())
             };
-            let (_, shot) = dice.as_mut().unwrap();
-            shot.log.push(format!("{rule}: {} steps up to {band}\" after its attack", us.name));
+            if let Some((_, shot)) = dice.as_mut() {
+                shot.log.push(format!("{rule}: {} steps up to {band}\" after its attack", us.name));
+            }
             // Rules 3.6 (row W1.TRACE) — the melee leg's post-attack step
             // names itself once (arm `hit-and-run`).
             if !shot_leg && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36) {

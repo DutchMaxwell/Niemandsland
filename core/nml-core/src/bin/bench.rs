@@ -117,8 +117,8 @@ fn main() {
     }
     // Nodes this port cannot resolve are excluded on BOTH sides.
     let mut n_rust_err = 0usize;
-    for i in 0..n_all {
-        if excluded[i] {
+    for (i, ex) in excluded.iter_mut().enumerate() {
+        if *ex {
             continue;
         }
         let node = &corpus.nodes[i];
@@ -132,7 +132,7 @@ fn main() {
         )
         .is_err()
         {
-            excluded[i] = true;
+            *ex = true;
             n_rust_err += 1;
         }
     }

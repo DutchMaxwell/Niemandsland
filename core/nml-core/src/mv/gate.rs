@@ -886,7 +886,7 @@ pub fn finalize_placement(
     #[cfg(test)] {
         tr(format!("gate n={n} charge={charge} capped={capped} ext={} chain={max_chain} flying={} board={board_in:?}", external.len(), flags.flying));
         for (i, e) in external.iter().enumerate() { tr(format!("ext {i} c={:?} r={} shape={:?}", e.c, e.r, e.shape)); }
-        for i in 0..n { tr(format!("gate in {i} c={:?} r={} r_m={:?} shape={:?} start={:?} cap={:?}", cfg[i].c, cfg[i].r, flags.radii_m.get(i), cfg[i].shape, flags.start_world.get(i), caps_in.get(i))); }
+        for (i, c) in cfg.iter().enumerate() { tr(format!("gate in {i} c={:?} r={} r_m={:?} shape={:?} start={:?} cap={:?}", c.c, c.r, flags.radii_m.get(i), c.shape, flags.start_world.get(i), caps_in.get(i))); }
         if let Some(t) = flags.charge_targets { for (p, r) in t { tr(format!("target {p:?} r={r}")); } }
     }
     // (terrain) :6402-6412 — project every model out of forbidden rest ground
@@ -918,7 +918,7 @@ pub fn finalize_placement(
     // neighbour's obstacle set, so the crowd walks around it), and each push is
     // truncated to the cap circle. Residual overlap between two capped models is
     // deliberately LEFT for the caller's ladder to settle at a shorter reach.
-    #[cfg(test)] { for i in 0..n { tr(format!("gate proj {i} c={:?} capped={}", cfg[i].c, rep.capped[i])); } }
+    #[cfg(test)] { for (i, c) in cfg.iter().enumerate() { tr(format!("gate proj {i} c={:?} capped={}", c.c, rep.capped[i])); } }
     let _w = overlap_pass(&mut cfg, &goal, caps_in, capped, external, flags.radii_m, board_in, &mut rep);
     #[cfg(test)] {
         for i in 0..n { tr(format!("gate push {i} w={:?} c={:?}", _w[i].c, cfg[i].c)); }
@@ -943,7 +943,7 @@ pub fn finalize_placement(
         rep.coherent = config_coherent(&cfg, max_chain);
     }
     clamp_gate_walls(&mut cfg, &goal, external, flags, terrain, &mut rep);
-    #[cfg(test)] { for i in 0..n { tr(format!("gate out {i} c={:?} reverted={}", cfg[i].c, rep.reverted[i])); } }
+    #[cfg(test)] { for (i, c) in cfg.iter().enumerate() { tr(format!("gate out {i} c={:?} reverted={}", c.c, rep.reverted[i])); } }
     let out = (0..n)
         .map(|i| {
             rep.disp_in[i] = dist(cfg[i].c, goal[i]);

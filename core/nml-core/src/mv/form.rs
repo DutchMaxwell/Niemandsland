@@ -305,8 +305,8 @@ pub fn project_out_of_zones(
     if zones.is_empty() {
         return;
     }
-    for i in 0..out.len() {
-        let mut p = out[i];
+    for slot in out.iter_mut() {
+        let mut p = *slot;
         for z in zones {
             let d = distance_to(p, z.c);
             if d >= z.r - EPS {
@@ -319,7 +319,7 @@ pub fn project_out_of_zones(
                 p = cand;
             }
         }
-        out[i] = p;
+        *slot = p;
     }
 }
 
@@ -428,8 +428,8 @@ pub fn project_coherency(
         let c = super::flow::centroid(out);
         let mut far: i64 = -1;
         let mut fd = -1.0f64;
-        for i in 0..n {
-            let d = distance_to(out[i], c);
+        for (i, &q) in out.iter().enumerate() {
+            let d = distance_to(q, c);
             if d > fd {
                 fd = d;
                 far = i as i64;
@@ -461,12 +461,12 @@ pub fn project_out_of_terrain(
     if forbid.is_empty() {
         return;
     }
-    for i in 0..out.len() {
-        let p = out[i];
+    for slot in out.iter_mut() {
+        let p = *slot;
         if !forbid.contains(&cell_of(p, PLAN_CELL_IN)) {
             continue;
         }
-        out[i] = nearest_clear_of_terrain(p, forbid, walls, clearance, opt_zones, board);
+        *slot = nearest_clear_of_terrain(p, forbid, walls, clearance, opt_zones, board);
     }
 }
 
