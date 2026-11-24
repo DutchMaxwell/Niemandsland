@@ -148,8 +148,8 @@ func _rifle_unit(pid: int, unit_name: String, x_m: float) -> GameUnit:
 
 ## Automodus 3.2 (OD 9): the ACTING player runs its own verb, like every online action today. The guest's
 ## click moves the guest's models on the guest; the host only receives the move batch (the landing) and the
-## activation sync, never a request to run the intent (the host has no such handler), and the attack dice
-## roll on the guest's tray through the existing volley path (sync_dice_roll).
+## activation sync, never a request to run the intent (the host has no such handler). The rules core is off here, so the
+## guest's shot is the free dice roll on the guest (step 16a; nothing rolls by itself, nothing is asked of the host).
 func test_guest_verb_runs_on_the_guest_and_replicates(timeout := 60000) -> void:
 	_level(RulesAutomation.Level.AUTOMATIC)
 	var inch := 0.0254
@@ -200,7 +200,10 @@ func test_guest_verb_runs_on_the_guest_and_replicates(timeout := 60000) -> void:
 		assert_vector(Vector3(batch[at + 1], batch[at + 2], batch[at + 3])).is_equal_approx(end, Vector3.ONE * 1e-4)
 	assert_int(activations.size()).override_failure_message("no activation sync for the guest's unit").is_greater(0)
 	assert_bool(mine.is_activated).is_true()
-	assert_int(dice).override_failure_message("the guest's attack dice never synced out").is_greater(0)
+	var shot_text := "\n".join(_main.battle_log.entries().map(func(e: Dictionary) -> String: return str(e["text"])))
+	assert_str(shot_text).override_failure_message("the guest's shot is no free roll:\n%s" % shot_text) \
+		.contains("Raiders fires at Guards: the rules core cannot resolve this shot (")
+	assert_int(dice).override_failure_message("the table rolled the guest's attack dice").is_equal(0)
 	assert_int(cmds.size()).override_failure_message("the guest asked the host for more than its roll: %s" % str(cmds)) \
 		.is_equal(cmds.count("request_roll"))
 	_main.radial_menu_controller.network_manager = radial_net

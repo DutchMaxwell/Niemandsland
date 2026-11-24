@@ -14364,6 +14364,10 @@ func _run_player_intent(unit: GameUnit, verb: int, target: GameUnit, point: Vari
 	solo_controller.board_clamp_notes = []
 	solo_controller._move_extra = {}
 	var report: Dictionary = solo_controller.execute_intent(intent, ActIntent.blank_report(unit))
+	if object_manager != null and verb in [AiDecision.Action.ADVANCE, AiDecision.Action.RUSH] and CoreActivation.session_open(unit.unit_id):
+		# Step 16a: the verb is the unit's declared movement, so the rules core checks the Auto move and its shot at it.
+		object_manager.set_movement_cap(ObjectManager.MovementCap.ADVANCE if verb == AiDecision.Action.ADVANCE else ObjectManager.MovementCap.RUSH)
+		_update_movement_cap_display()
 	if undo_manager != null:
 		undo_manager.expire_move_takebacks()
 	_solo_present_move_start(solo_controller.last_move_paths)
@@ -15744,10 +15748,10 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 			battle_log.log_event(BattleLog.Category.MOVEMENT, solo_controller.last_hit_and_run_note, true)
 	elif not await CoreActivation.human_shoot(self, attacker, target, Callable(), auto):   # step 38 (O15 (1)): a core unit's volley
 		CoreActivation.note_legacy(self, "human_shoot", attacker, [target])
-		if auto:   # the Auto verbs move outside the rules core's session; their shot moves to the core with the Auto-verb step, then this caller goes
-			await _run_human_shooting(attacker, target)
-		else:
-			_solo_human_free_roll(attacker, target, _solo_free_roll_why(attacker, [target]))
+		var why: String = CoreActivation.auto_refused if not CoreActivation.auto_refused.is_empty() \
+			else _solo_free_roll_why(attacker, [target])   # step 16a: an Auto move the core refused names the core's reason
+		CoreActivation.auto_refused = ""
+		_solo_human_free_roll(attacker, target, why)
 	elif CoreActivation.last_target != target:
 		return   # the core refused the shot (it notes the target of a shot it resolved): nothing was shot, the activation stays open
 	# X1 (test game 2, double-shoot exploit): a resolved attack IS the unit's activation — it completes

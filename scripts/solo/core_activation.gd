@@ -2219,20 +2219,30 @@ static func drop_refused(main, gu: GameUnit) -> bool:
 	var mode := declared_mode(main)
 	if mode == 0:
 		return false   # declared_mode reported the defect
+	var r := place(main, gu, mode, main.object_manager.drag_paths())
+	if r.is_empty() or bool(r.get("ok", false)):
+		return false
+	main._log_rule_event(BattleLog.Category.MOVEMENT, str(r.get("reason", "")))
+	main._show_toast(str(r.get("reason", "")))
+	return true
+
+
+## Step 34's check of `gu`'s placement (an open session): every alive model where it stands now, at `mode`, with the walked
+## trails (`now`: the drag in flight, ObjectManager.drag_paths()). The core's answer: ok = the placement replaces the
+## session's one and its lines are written; not ok = nothing changes (the caller says why). {} = no core: reported, unchecked.
+static func place(main, gu: GameUnit, mode: int, now: Dictionary) -> Dictionary:
 	var sc: SoloController = main.solo_controller
 	var core: Object = sc._core_node_ready() if sc != null else null
 	if core == null:
-		push_error("drop_refused: no core for %s's open activation - the drop is not checked" % gu.get_name())
-		return false
+		push_error("place: no core for %s's open activation - the placement is not checked" % gu.get_name())
+		return {}
 	var s: Dictionary = _sessions[gu.unit_id]
 	var at: Array = gu.get_alive_models().map(func(m: ModelInstance) -> Vector3: return main.object_manager.resting_position(m.node))   # step 69b: no drag lift
-	var trails := session_trails(main, gu, main.object_manager.drag_paths())   # step 66 (MOVE_GAPS 5)
+	var trails := session_trails(main, gu, now)   # step 66 (MOVE_GAPS 5)
 	var r: Dictionary = core.check_move(int(s["handle"]), gu.unit_id,
 		{"mode": mode, "positions": PackedVector3Array(at), "trails": trails}, main.object_manager._strict_movement_enforced())
 	if not bool(r.get("ok", false)):
-		main._log_rule_event(BattleLog.Category.MOVEMENT, str(r.get("reason", "")))
-		main._show_toast(str(r.get("reason", "")))
-		return true
+		return r
 	s["transcript"] = (s["transcript"] as Array).filter(func(e: Dictionary) -> bool: return str(e["t"]) != "placed") \
 		+ [{"t": "placed", "positions": at, "trails": trails}]
 	if CoreSlice.carries(gu, ["Strafing"]) and not table_struck(gu):   # P4.D-37c: sticky for the activation (one strike, one resolver)
@@ -2243,7 +2253,7 @@ static func drop_refused(main, gu: GameUnit) -> bool:
 		s["table_strike"] = not crossed_plain(main, gu, range(at.size()).map(func(i: int) -> Array: return [from.get(alive[i], at[i]), at[i]]), true)
 	for line in r.get("lines", []):
 		main._log_rule_event(BattleLog.Category.MOVEMENT, str(line["text"]), false, str(line["detail"]))
-	return false
+	return r
 
 
 ## Step 66 (MOVE_GAPS 5): per alive model of `gu` (get_alive_models() order) the path it walked this activation, as the
@@ -2297,6 +2307,10 @@ static func declared_mode(main) -> int:
 	return 0
 
 
+## Step 16a: why the core refused the last Auto shot's placement ("" = it did not, or the reason is the door's own).
+static var auto_refused := ""
+
+
 ## Step 38 (O15 (1)): the human attack door. False = not taken, the old path runs: `attacker` is not a core unit, the
 ## target is not plain (`is_plain_target`) or the table already struck. True =
 ## taken. No open activation: "Activate <Unit> first.", nothing rolls. A Charge selector (a melee action) and no
@@ -2308,14 +2322,15 @@ static func declared_mode(main) -> int:
 ## toggle that completes a shot ends it only while the session is open - with none, "Activate" would start a new one),
 ## and the door closes it after. `refused` below the transcript's size (an order rule, the O3 Rush sentence): logged and
 ## toasted, nothing was shot, the session stays open (the caller returns then). `refused` at the transcript's size is the
-## core's own defect: reported, nothing toasted, the session stays open. `auto` (the Auto verbs' shot after the engine's own
-## move): not taken. P4.D-13c: a target with no statline is no valid
+## core's own defect: reported, nothing toasted, the session stays open. `auto` (step 16a: the Auto verbs' shot after the
+## engine's own move): the unit's end positions reach the core first through `place`, the same check a dropped drag gets,
+## and the transcript says the engine paid the move's Dangerous test; a placement the core refuses is not taken, its
+## reason in `auto_refused` (the caller's free roll names it). P4.D-13c: a target with no statline is no valid
 ## target: one line, nothing shot, the session stays open (the caller returns).
 static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Callable = Callable(), auto := false) -> bool:
+	auto_refused = ""
 	if refuses_statlineless(main, attacker, target):
 		return true   # nothing was shot: `last_target` is not the target, the caller returns and the activation stays open
-	if auto:
-		return false   # an Auto verb moved the unit through the engine, not through the session's drop: the core would shoot from the start
 	if not is_core_unit(main, attacker) or not is_plain_target_human(target) or table_struck(attacker):
 		return false
 	if main.core_door_refused(attacker):
@@ -2331,7 +2346,14 @@ static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Ca
 	if s.is_empty():
 		push_error("human_shoot: %s has no session after the door let it through" % attacker.get_name())
 		return true
+	if auto:
+		var p := place(main, attacker, mode, {})
+		if not bool(p.get("ok", false)) or table_struck(attacker):
+			auto_refused = str(p.get("reason", "")) if not p.is_empty() and not bool(p.get("ok", false)) else ""
+			return false   # the core cannot take the Auto move: the caller's free roll says why
 	var t: Array = (s["transcript"] as Array).duplicate()
+	if auto:   # the engine rolled the Auto move's Dangerous test (`_run_player_intent`), so the core does not roll it again
+		t.insert(1, {"t": "paid", "start": false, "dangerous": true, "beats": false})
 	t.append({"t": "intent", "kind": mode, "shoot": target.unit_id, "no_step": true})   # step 21: the player drags a Hit & Run step
 	# Step 38b: the table's presentation of a human volley (_present_human); its stage opens before the core's first line.
 	var shots := _human_shots(main, attacker, target)

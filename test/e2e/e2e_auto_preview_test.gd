@@ -6,6 +6,9 @@ extends GdUnitTestSuite
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
+## The rules core is off here (before_test), so a player's shot is the free dice roll (step 16a: the Auto shot too); the shot
+## through the core is test/one_core/core_auto_shot_door_test.gd.
+const FREE_ROLL := "fires at Near: the rules core cannot resolve this shot (the rules core is off"
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -73,7 +76,8 @@ func test_preview_shows_landing_and_shooters(timeout := 60000) -> void:
 	var shooter := _shooter(1, "Riflemen", 0.0, 3)
 	var enemy := _shooter(2, "Foe", 16.0)   # out of the 12" reach now, inside it after a 6" Advance
 	enemy.is_activated = true
-	assert_int(_main._solo_volley_sighted(shooter, enemy)).is_equal(0)
+	var sighted := func() -> int: return _main._solo_volley_sighted(shooter, enemy)
+	assert_int(sighted.call()).is_equal(0)
 	var board_before := _board()
 	var preview: Dictionary = _main._solo_preview_for(shooter, AiDecision.Action.ADVANCE, enemy)
 	assert_array(_board()).is_equal(board_before)
@@ -86,7 +90,8 @@ func test_preview_shows_landing_and_shooters(timeout := 60000) -> void:
 			return (l["pos"] as Vector3).is_equal_approx(line["from"]))).is_true()
 	await _main._run_player_intent(shooter, AiDecision.Action.ADVANCE, enemy)
 	await E2EBoot.settle(get_tree())
-	assert_int(lines.size()).is_equal(_logged_sighted("Riflemen"))
+	# Step 16a: with the rules core off the shot is a free roll, so the sight from the landing is read, not the table's line.
+	assert_int(lines.size()).is_equal(sighted.call())
 
 
 func test_charge_preview_has_no_lines(timeout := 60000) -> void:
@@ -550,8 +555,7 @@ func test_quick_shot_unit_may_shoot_after_a_point_rush(timeout := 60000) -> void
 	await E2EBoot.settle(get_tree())
 	var text := _log_text()
 	assert_str(text).contains("Quick Shot: shoots after its Rush action")
-	assert_int(_logged_sighted("Skirmishers")).override_failure_message("no volley after the lit click").is_equal(1)
-	assert_str(text).contains("fires Rifle at Near")
+	assert_str(text).override_failure_message("no shot after the lit click").contains("Skirmishers " + FREE_ROLL)
 	assert_bool(runner.is_activated).is_true()
 	assert_bool(_main._solo_target_mode.is_empty()).is_true()
 	assert_int(_main._solo_pending_replies).override_failure_message("the AI's reply was never booked/resolved").is_equal(0)
@@ -677,8 +681,7 @@ func test_advance_previews_goes_to_a_free_point_then_shoots(timeout := 60000) ->
 	await _click(near_pt)
 	await E2EBoot.settle(get_tree())
 	text = _log_text()
-	assert_int(_logged_sighted("Riflemen")).override_failure_message("no volley after the lit click").is_greater(0)
-	assert_str(text).contains("fires Rifle at Near")
+	assert_str(text).override_failure_message("no shot after the lit click").contains("Riflemen " + FREE_ROLL)
 	assert_str(text).not_contains("Quick Shot")
 	assert_bool(shooter.is_activated).is_true()
 	assert_bool(_main._solo_target_mode.is_empty()).is_true()
@@ -696,7 +699,7 @@ func test_enter_after_a_point_advance_shoots_the_suggestion(timeout := 60000) ->
 	enter.pressed = true
 	await _main._solo_targeting_input(enter)
 	await E2EBoot.settle(get_tree())
-	assert_str(_log_text()).contains("fires Rifle at Near")
+	assert_str(_log_text()).contains("Riflemen " + FREE_ROLL)
 	assert_bool(shooter.is_activated).override_failure_message("Enter did not end the activation").is_true()
 	assert_bool(_main._solo_target_mode.is_empty()).is_true()
 	assert_int(_main._solo_pending_replies).is_equal(0)
