@@ -1371,7 +1371,7 @@ class TestAggregateStats:
             "rooms_open", "peers_connected", "rooms_created", "peer_connections",
             "server_starts", "games_played", "peak_concurrent_peers", "peak_concurrent_rooms",
             "join_failures", "room_lifetime_buckets", "peers_per_room", "first_seen", "last_updated",
-            "machine", "region",
+            "machine", "region", "game_meta_rejected",
         }
         assert set(data) <= safe_keys
         await host_ws.close()

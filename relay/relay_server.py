@@ -20,13 +20,14 @@ import http
 import json
 import logging
 import os
+import re
 import secrets
 import signal
 import ssl
 import struct
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import websockets
@@ -87,6 +88,15 @@ JOIN_FAILURE_REASONS = (
 # Room-lifetime histogram buckets (minutes): a short-lived room is a mis-click or a failed connect;
 # a long one is a real game. Aggregate-only — a duration, never a start/end timestamp of any player.
 ROOM_LIFETIME_BUCKETS = ("lt_10min", "10_45min", "45_120min", "gt_120min")
+
+# The anonymous per-game log (PRIVACY.md): the host sends one `game_meta` at game start and the
+# relay appends one JSON line (UTC minute, system, faction ids, player count, game version) to
+# RELAY_GAMES_PATH. Only these keys pass; ids are short [A-Za-z0-9_.+-] tokens, so no free text
+# (a name, a list) can ride along. Never an IP, room code, peer id, token or game outcome.
+GAME_META_KEYS = frozenset({"type", "system", "factions", "players", "version"})
+GAME_META_MAX_FACTIONS = 8
+GAME_LOG_RETENTION_DAYS = 365
+_GAME_META_ID = re.compile(r"[A-Za-z0-9_.+-]{1,48}")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("relay")
@@ -158,6 +168,7 @@ class Room:
     # whether it has already been counted as a "game" (reached >=2 peers). Both feed Stats at close.
     peak_peers: int = 1
     counted_as_game: bool = False
+    game_logged: bool = False  # its one anonymous game-log line is written (see _handle_game_meta)
     # Guards the lifetime + peers-per-room histograms against a double count: set the one time this
     # room is folded into them, so a shutdown flush racing an in-flight disconnect/timeout close (or
     # any two end paths) can never record the same room twice.
@@ -166,6 +177,51 @@ class Room:
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _game_meta_record(msg: dict) -> Optional[dict]:
+    """The validated game-log fields of a `game_meta` message, or None when anything is off."""
+    if set(msg) != GAME_META_KEYS:
+        return None
+    system, factions, players, version = (msg["system"], msg["factions"], msg["players"],
+                                          msg["version"])
+    ids = [system, version] + (factions if isinstance(factions, list) else [None])
+    if not all(isinstance(v, str) and _GAME_META_ID.fullmatch(v) for v in ids):
+        return None
+    if len(factions) > GAME_META_MAX_FACTIONS or isinstance(players, bool) \
+            or not isinstance(players, int) or not 1 <= players <= MAX_PEERS_PER_ROOM:
+        return None
+    return {"system": system, "factions": sorted(factions), "players": players, "version": version}
+
+
+def append_game_line(path: str, record: dict, now: Optional[datetime] = None) -> None:
+    """Append one game line (UTC, to the minute) to the JSON-lines log at `path` and drop lines
+    older than GAME_LOG_RETENTION_DAYS. Atomic rewrite; an empty path keeps nothing; never raises."""
+    if not path:
+        return
+    now = (now or datetime.now(timezone.utc)).replace(second=0, microsecond=0)
+    cutoff = now - timedelta(days=GAME_LOG_RETENTION_DAYS)
+    kept = []
+    try:
+        with open(path) as f:
+            for line in f:
+                try:
+                    if datetime.fromisoformat(json.loads(line)["ts"]) >= cutoff:
+                        kept.append(line.rstrip("\n"))
+                except (ValueError, TypeError, KeyError):
+                    continue  # an unreadable line carries nothing worth keeping
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        logger.warning("game log unreadable (%r): this game is not recorded", exc)
+        return
+    kept.append(json.dumps({"ts": now.isoformat(timespec="minutes"), **record}))
+    try:
+        with open(path + ".tmp", "w") as f:
+            f.write("\n".join(kept) + "\n")
+        os.replace(path + ".tmp", path)
+    except OSError as exc:
+        logger.warning("game log unavailable (%r): this game is not recorded", exc)
 
 
 class Stats:
@@ -178,7 +234,7 @@ class Stats:
 
     # Scalar running totals / peaks.
     SCALAR_FIELDS = ("rooms_created", "peer_connections", "server_starts", "games_played",
-                     "peak_concurrent_peers", "peak_concurrent_rooms")
+                     "peak_concurrent_peers", "peak_concurrent_rooms", "game_meta_rejected")
     # Bucketed histograms (dict of fixed, non-identifying keys -> count).
     DICT_FIELDS = ("join_failures", "room_lifetime_buckets", "peers_per_room")
 
@@ -188,6 +244,7 @@ class Stats:
         self.peer_connections = 0
         self.server_starts = 0
         self.games_played = 0  # rooms that reached >=2 peers (someone actually played)
+        self.game_meta_rejected = 0  # game_meta messages dropped (invalid, not the host, repeated)
         self.peak_concurrent_peers = 0
         self.peak_concurrent_rooms = 0
         self.join_failures = {reason: 0 for reason in JOIN_FAILURE_REASONS}
@@ -275,6 +332,10 @@ class Stats:
         self.games_played += 1
         self._save()
 
+    def meta_rejected(self) -> None:
+        self.game_meta_rejected += 1
+        self._save()
+
     def join_failed(self, reason: str) -> None:
         """Count a create/join rejection by reason (see JOIN_FAILURE_REASONS). Unknown reasons are
         ignored rather than trusted into the dict, so no caller can smuggle a free-form string in."""
@@ -304,7 +365,11 @@ class RelayServer:
     def __init__(self):
         self.rooms: dict[str, Room] = {}
         self.connections: dict[ServerConnection, Peer] = {}
-        self.stats = Stats(os.environ.get("RELAY_STATS_PATH", ""))
+        stats_path = os.environ.get("RELAY_STATS_PATH", "")
+        self.stats = Stats(stats_path)
+        # The game log sits next to the stats file (/data/games.jsonl on Fly); none without one.
+        self.games_path = os.environ.get("RELAY_GAMES_PATH", os.path.join(
+            os.path.dirname(stats_path), "games.jsonl") if stats_path else "")
         self._closing: set = set()  # background closes of taken-over sockets (held so they are not GC'd)
         # Every accepted, still-open socket. The per-IP admission check counts these by their transport
         # address; a socket holds its slot until it closes.
@@ -429,6 +494,8 @@ class RelayServer:
                 if existing_peer.ip_address == ip:
                     existing_peer.ip_address = ""
             await websocket.send(json.dumps({"type": "data_deleted"}))
+        elif msg_type == "game_meta":
+            self._handle_game_meta(peer, msg)
         elif msg_type == "heartbeat":
             if peer:
                 peer.last_heartbeat = time.monotonic()
@@ -671,6 +738,18 @@ class RelayServer:
             "peers_connected": len(self.connections),
             **self.stats.snapshot(),
         }
+
+    def _handle_game_meta(self, peer: Optional[Peer], msg: dict) -> None:
+        """Log one anonymous line for a played game: only from the host of a room that reached 2+
+        peers, once per room, and only when every field validates. Anything else is counted, dropped."""
+        room = self.rooms.get(peer.room_code) if peer else None
+        record = _game_meta_record(msg)
+        if record is None or room is None or peer.peer_id != 1 or not room.counted_as_game \
+                or room.game_logged:
+            self.stats.meta_rejected()
+            return
+        room.game_logged = True
+        append_game_line(self.games_path, record)
 
     def _note_room_membership(self, room: Room) -> None:
         """Track a room's peak concurrent peers and count it as a 'game' the first time it reaches
