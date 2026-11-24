@@ -5847,7 +5847,7 @@ fn retreating_strikes_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) ->
         .filter_map(|(raw, n)| map.lookup(&p.faction_folder, &n)
             .filter(|e| e.primitive.as_deref() == Some("Ravage")).map(|e| (raw, e)))
         .filter(|(_, e)| e.param_s("trigger") == "post_melee_move")
-        .map(|(raw, e)| RetreatingStrikeSpec {
+        .map(|(raw, _e)| RetreatingStrikeSpec {
             name: base_rule_name(&raw),
             rating: rule_rating(&raw, 0),
             trigger: "post_melee_move".to_string(),
@@ -8205,9 +8205,11 @@ impl UnitStatic {
 
         // WAVE 3 — the family's own registry names for the rules-must-log
         // line, stamped behind the same frozen `EPOCH_6_TABLE_RULES` gate.
-    let fa = rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
-        .then(|| fortified_alias_of(reg, p, rules_epoch))
-        .unwrap_or_default();
+    let fa = if rule_on(rules_epoch, EPOCH_6_TABLE_RULES) {
+        fortified_alias_of(reg, p, rules_epoch)
+    } else {
+        Default::default()
+    };
     // Wave 4 (`rules-wave4-boostbases`) — the Hit & Run Boost band, stamped
     // behind the same FROZEN `EPOCH_6_TABLE_RULES` gate (the sim fold reads
     // the field, the rules-must-log line reads the name).

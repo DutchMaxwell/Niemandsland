@@ -2,16 +2,4 @@
 #   tools/clippy_gate.sh --record
 clippy::approx_constant 2
 clippy::doc_lazy_continuation 4
-clippy::erasing_op 1
-clippy::identity_op 1
-clippy::if_same_then_else 2
-clippy::manual_div_ceil 2
-clippy::missing_const_for_thread_local 1
-clippy::neg_cmp_op_on_partial_ord 2
-clippy::obfuscated_if_else 2
-clippy::ptr_arg 2
-clippy::rc_clone_in_vec_init 2
 clippy::too_many_arguments 34
-clippy::type_complexity 1
-dead_code 10
-unused_variables 6
