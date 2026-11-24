@@ -153,3 +153,20 @@ func test_below_epoch_73_the_battle_start_stays_silent() -> void:
 	assert_array(_non_aura_lines()).override_failure_message(
 		"the rest of the battle log changed below epoch 73 (log: %s)" % str(_texts())) \
 		.contains_exactly(["Battle started"])
+
+
+## Live test 24.11. (LOG-DUP): a list with four Veteran Master Custodians wrote the same aura line four times, word for
+## word. Units of the same name with the same grant now share ONE line that names their count.
+func test_same_named_units_with_the_same_grant_share_one_line() -> void:
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(CUSTODIAN))
+	var units: Array = data.get("units", [])
+	for u: Dictionary in units.duplicate():
+		if str(u.get("name", "")) == "Custodian Brothers":
+			for i in 2:
+				var twin: Dictionary = u.duplicate(true)
+				twin["selectionId"] = "%s-twin%d" % [str(u.get("selectionId", "")), i]
+				units.append(twin)
+	_import(CUSTODIAN, data, 2)
+	await _start()
+	assert_array(_aura_lines()).override_failure_message("one line for three equal grants (log: %s)" % str(_texts())) \
+		.contains_exactly(["Steadfast Aura: Custodian Brothers grants Steadfast to Custodian Brothers (3 units)"])

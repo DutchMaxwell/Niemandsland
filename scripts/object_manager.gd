@@ -1358,7 +1358,7 @@ func _start_dragging(screen_pos: Vector2) -> void:
 	# Only OWN (or unowned) objects are draggable; another player's models stay selected
 	# (for inspection / rings) but never move.
 	var movable := _movable_selection()
-	movable = _drag_gate(movable)   # one-core P3 step 30: nothing is lifted for a unit whose activation is not open
+	movable = _drag_gate(movable, true)   # one-core P3 step 30: nothing is lifted for a unit whose activation is not open
 	if movable.is_empty():
 		return
 
@@ -1549,7 +1549,8 @@ func _stop_dragging() -> void:
 ## One-core P3 step 30 (O9, O14 (1b)): `objs` without the models of every unit main reports blocked (a lifecycle unit
 ## whose activation is not open); terrain, props and every other unit pass. When that leaves nothing, main says why for the
 ## first blocked unit (toast and log line); nothing was lifted, so nothing is restored or broadcast. Step 65 reuses it.
-func _drag_gate(objs: Array[Node3D]) -> Array[Node3D]:
+## `from_click`: the gate of a press on a model (every plain click is a drag attempt) - its log line comes once a round.
+func _drag_gate(objs: Array[Node3D], from_click := false) -> Array[Node3D]:
 	var main := get_node_or_null("/root/Main")
 	if main == null or not main.has_method("core_drag_blocked"):
 		return objs
@@ -1564,7 +1565,7 @@ func _drag_gate(objs: Array[Node3D]) -> Array[Node3D]:
 		else:
 			out.append(obj)
 	if out.is_empty() and refused != null:
-		main.call("core_drag_refused", refused)
+		main.call("core_drag_refused", refused, from_click)
 	return out
 
 

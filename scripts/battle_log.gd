@@ -211,7 +211,9 @@ func on_dice_rolled(count: int, hits: int, target: int, player: String = "", fac
 				"" if wounds == 1 else "s"])
 		elif target > 0:
 			var plural := "" if hits == 1 else "s"
-			log_event(Category.COMBAT, "%s%s → %d %s%s (%d+)" % [prefix, faces_str, hits, noun, plural, target])
+			# A natural 6 always saves (the "saves on 6 only" line above it), so a save past 6 reads 6+, never "7+" / "9+".
+			var shown := mini(target, 6) if defense else target
+			log_event(Category.COMBAT, "%s%s → %d %s%s (%d+)" % [prefix, faces_str, hits, noun, plural, shown])
 		elif prefix.is_empty():
 			log_event(Category.COMBAT, "%d dice: %s" % [count, faces_str])
 		else:
@@ -221,7 +223,7 @@ func on_dice_rolled(count: int, hits: int, target: int, player: String = "", fac
 		log_event(Category.COMBAT, "%s%d dice rolled" % [prefix, count])
 		return
 	var plural2 := "" if hits == 1 else "s"
-	log_event(Category.COMBAT, "%s%d dice → %d %s%s (%d+)" % [prefix, count, hits, noun, plural2, target])
+	log_event(Category.COMBAT, "%s%d dice → %d %s%s (%d+)" % [prefix, count, hits, noun, plural2, mini(target, 6) if defense else target])
 
 
 ## `in_wounds` (NML-1091) switches the counter's UNIT: a unit whose whole strength is one Tough model

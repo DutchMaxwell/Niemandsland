@@ -177,6 +177,16 @@ func test_a_unit_that_was_not_started_moves_only_after_activate() -> void:
 	assert_int(_lines("Activate Rifles first.")).override_failure_message("a second refusal").is_equal(1)
 
 
+## Live test 24.11. (LOG-SPAM): every click on a unit that was not started is a drag attempt, and each one wrote the same
+## "Activate <Unit> first." line (ten in a row in round 1). The toast answers every attempt; the log says it once a round.
+func test_repeated_clicks_on_a_unit_that_was_not_started_log_the_refusal_once() -> void:
+	var at := _poses(_a)
+	for i in 3:
+		await _drag(_a, 4.0)
+	assert_array(_poses(_a)).override_failure_message("an un-activated unit moved").is_equal(at)
+	assert_int(_lines("Activate Rifles first.")).override_failure_message("lines: %s" % [_main.battle_log.entries().slice(-4)]).is_equal(1)
+
+
 ## (b) The lock: while A's activation is open B can be neither dragged nor started - the O5 sentence each time, B has no
 ## session. When A's activation ended (a volley) B starts and moves.
 func test_one_open_activation_locks_the_others_until_it_ends() -> void:
