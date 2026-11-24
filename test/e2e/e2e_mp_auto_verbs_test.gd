@@ -14,7 +14,9 @@ var _net: Node
 
 
 func before_test() -> void:
-	CoreActivation._env = 0   # the engine verbs are hidden from players (main.PLAYER_AUTO_VERBS_ENABLED = false): the Automodus rework must define their Activate door
+	CoreActivation._env = 1   # the rules core on: the Auto verbs run inside the unit's open activation and shoot through the core
+	CoreSlice.path_override = ""
+	CoreSlice.reset_cache()
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -26,6 +28,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
 	_end_session()
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
@@ -117,6 +120,8 @@ func test_preview_stays_local() -> void:
 	var u := _pair()
 	_level(RulesAutomation.Level.AUTOMATIC)
 	_fake_session(1, true)
+	assert_bool(_main.core_activation_start(u[0])).override_failure_message("no Start").is_true()
+	_net.sent.clear()   # the Start's own line went out; the preview below must add nothing
 	await _main.solo_begin_auto(u[0], AiDecision.Action.CHARGE)
 	await _runner.simulate_frames(2)
 	_main._solo_end_targeting()
@@ -148,8 +153,9 @@ func _rifle_unit(pid: int, unit_name: String, x_m: float) -> GameUnit:
 
 ## Automodus 3.2 (OD 9): the ACTING player runs its own verb, like every online action today. The guest's
 ## click moves the guest's models on the guest; the host only receives the move batch (the landing) and the
-## activation sync, never a request to run the intent (the host has no such handler). The rules core is off here, so the
-## guest's shot is the free dice roll on the guest (nothing rolls by itself, nothing is asked of the host).
+## activation sync, never a request to run the intent (the host has no such handler). The shot goes through the rules
+## core on the guest: its attack dice roll on the guest's tray and sync out (sync_dice_roll), the host's saves are the
+## core's owner request, and the core's result reaches the host as the activation's digest check.
 func test_guest_verb_runs_on_the_guest_and_replicates(timeout := 60000) -> void:
 	_level(RulesAutomation.Level.AUTOMATIC)
 	var inch := 0.0254
@@ -164,6 +170,7 @@ func test_guest_verb_runs_on_the_guest_and_replicates(timeout := 60000) -> void:
 	_main._hotseat_turn = TwoHumanTurn.new()   # the online turn token (3.3a): it is the guest's turn
 	_main._hotseat_turn.side_on_turn = 2
 	var start: Vector3 = mine.models[0].node.global_position
+	assert_bool(_main.core_activation_start(mine)).override_failure_message("no Start for the guest's unit").is_true()
 	await _main.solo_begin_auto(mine, AiDecision.Action.ADVANCE)
 	# 1.8f: the guest clicks a table point 10" toward the host's unit (the 6" Advance ends 10" away), then its shot.
 	if _main._solo_target_mode.has("auto_point"):   # a closed mode must fail below, not crash the run
@@ -201,10 +208,16 @@ func test_guest_verb_runs_on_the_guest_and_replicates(timeout := 60000) -> void:
 	assert_int(activations.size()).override_failure_message("no activation sync for the guest's unit").is_greater(0)
 	assert_bool(mine.is_activated).is_true()
 	var shot_text := "\n".join(_main.battle_log.entries().map(func(e: Dictionary) -> String: return str(e["text"])))
-	assert_str(shot_text).override_failure_message("the guest's shot is no free roll:\n%s" % shot_text) \
-		.contains("Raiders fires at Guards: the rules core cannot resolve this shot (")
-	assert_int(dice).override_failure_message("the table rolled the guest's attack dice").is_equal(0)
-	assert_int(cmds.size()).override_failure_message("the guest asked the host for more than its roll: %s" % str(cmds)) \
-		.is_equal(cmds.count("request_roll"))
+	assert_str(shot_text).override_failure_message("no core volley:\n%s" % shot_text).contains("Raiders fires Rifle at Guards — ")
+	assert_str(shot_text).override_failure_message("the shot was a free roll:\n%s" % shot_text).not_contains("free roll")
+	assert_str(shot_text).override_failure_message("the table resolved the shot:\n%s" % shot_text) \
+		.not_contains("models with line of sight + range")
+	assert_int(dice).override_failure_message("the guest's attack dice never synced out").is_greater(0)
+	assert_int(cmds.count("request_roll")).override_failure_message("the host was not asked for its saves: %s" % str(cmds)) \
+		.is_greater(0)
+	assert_int(cmds.count("activation_check")).override_failure_message("the core's result never reached the host: %s" % str(cmds)) \
+		.is_equal(1)
+	assert_int(cmds.size()).override_failure_message("the guest asked the host for more than its roll and check: %s" % str(cmds)) \
+		.is_equal(cmds.count("request_roll") + cmds.count("activation_check"))
 	_main.radial_menu_controller.network_manager = radial_net
 	_end_session()

@@ -6,8 +6,7 @@ extends GdUnitTestSuite
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
-## The rules core is off here (before_test), so a player's shot is the free dice roll (the Auto shot too); the shot
-## through the core is test/one_core/core_auto_shot_door_test.gd.
+## With the rules core off (one case below) a player's shot is the free dice roll, the Auto shot too.
 const FREE_ROLL := "fires at Near: the rules core cannot resolve this shot (the rules core is off"
 
 var _runner: GdUnitSceneRunner
@@ -16,7 +15,9 @@ var _root_before: Array
 
 
 func before_test() -> void:
-	CoreActivation._env = 0   # the engine verbs are hidden from players (main.PLAYER_AUTO_VERBS_ENABLED = false): the Automodus rework must define their Activate door
+	CoreActivation._env = 1   # the rules core on: the Auto verbs run inside the unit's open activation and shoot through the core
+	CoreSlice.path_override = ""
+	CoreSlice.reset_cache()
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -30,10 +31,36 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
+
+
+## The card's Activate for `unit` (its activation opens once), then the Auto verb's window, as a player opens it.
+func _begin_auto(unit: GameUnit, verb: int) -> void:
+	_activate(unit)
+	await _main.solo_begin_auto(unit, verb)
+
+
+## `unit`'s Auto verb run directly (the lit click's executor), inside its open activation.
+func _intent(unit: GameUnit, verb: int, target: GameUnit, point: Variant = null) -> void:
+	_activate(unit)
+	await _main._run_player_intent(unit, verb, target, point)
+
+
+func _activate(unit: GameUnit) -> void:
+	if not CoreActivation.session_open(unit.unit_id):
+		_main.core_activation_start(unit)
+
+
+## The Auto shot went through the rules core: its volley line is there, the table's sight line and the free roll are not.
+func _assert_core_shot(text: String, unit_name: String, target: String) -> void:
+	assert_str(text).override_failure_message("no core volley at %s:\n%s" % [target, text]) \
+		.contains("%s fires Rifle at %s — " % [unit_name, target])
+	assert_str(text).override_failure_message("the shot was a free roll:\n%s" % text).not_contains("free roll")
+	assert_int(_logged_sighted(unit_name)).override_failure_message("the table resolved the shot:\n%s" % text).is_equal(-1)
 
 
 ## `models` models in a line across the firing lane (1.5" apart), each with one 12" rifle.
@@ -88,10 +115,11 @@ func test_preview_shows_landing_and_shooters(timeout := 60000) -> void:
 	for line in lines:   # every line starts at a landing ghost, never at the model's current spot
 		assert_bool(landing.any(func(l: Dictionary) -> bool:
 			return (l["pos"] as Vector3).is_equal_approx(line["from"]))).is_true()
-	await _main._run_player_intent(shooter, AiDecision.Action.ADVANCE, enemy)
+	await _intent(shooter, AiDecision.Action.ADVANCE, enemy)
 	await E2EBoot.settle(get_tree())
-	# With the rules core off the shot is a free roll, so the sight from the landing is read, not the table's line.
+	# The core resolves the shot, so the sight from the landing is read here, not from the table's sight line.
 	assert_int(lines.size()).is_equal(sighted.call())
+	_assert_core_shot(_log_text(), "Riflemen", "Foe")
 
 
 func test_charge_preview_has_no_lines(timeout := 60000) -> void:
@@ -155,7 +183,7 @@ func test_hover_shows_and_clears_the_preview(timeout := 60000) -> void:
 	await _runner.simulate_frames(1)   # the pick is a raycast: let physics register the fresh body
 	var pt := _pick_point(foe)
 	assert_bool(pt.is_finite()).override_failure_message("fixture: the pick ray never hits Foe").is_true()
-	await _main.solo_begin_auto(shooter, AiDecision.Action.CHARGE)
+	await _begin_auto(shooter, AiDecision.Action.CHARGE)
 	var ghosts: LandingPreview = _main.landing_preview
 	await _hover(pt)
 	var previews: Dictionary = _main._solo_target_mode.get("auto_previews", {})
@@ -186,7 +214,7 @@ func test_hover_shows_and_clears_the_preview(timeout := 60000) -> void:
 func test_esc_clears_the_hover_preview(timeout := 60000) -> void:
 	var shooter := _shooter(1, "Riflemen", 0.0, 3)
 	var foe := _shooter(2, "Foe", 8.0)
-	await _main.solo_begin_auto(shooter, AiDecision.Action.CHARGE)
+	await _begin_auto(shooter, AiDecision.Action.CHARGE)
 	_main._solo_show_auto_preview(foe)
 	assert_int(_main.landing_preview.ghost_count()).is_equal(3)
 	var esc := InputEventKey.new()
@@ -200,7 +228,7 @@ func test_esc_clears_the_hover_preview(timeout := 60000) -> void:
 func test_a_refused_hover_shows_nothing_and_says_why_once(timeout := 60000) -> void:
 	var shooter := _shooter(1, "Riflemen", 0.0, 3)
 	var foe := _shooter(2, "Foe", 8.0)
-	await _main.solo_begin_auto(shooter, AiDecision.Action.CHARGE)
+	await _begin_auto(shooter, AiDecision.Action.CHARGE)
 	shooter.is_shaken = true   # lit at entry, refused by the time it is hovered
 	var board_before := _board()
 	for t in [foe, null, foe]:
@@ -246,7 +274,7 @@ func _hover_then_click(unit: GameUnit, foe: GameUnit, verb: int) -> Array:
 	await _runner.simulate_frames(1)   # the pick is a raycast: let physics register the fresh body
 	var pt := _pick_point(foe)
 	assert_bool(pt.is_finite()).override_failure_message("fixture: the pick ray never hits the foe").is_true()
-	await _main.solo_begin_auto(unit, verb)
+	await _begin_auto(unit, verb)
 	await _hover(pt)
 	var previews: Dictionary = _main._solo_target_mode.get("auto_previews", {})
 	var landing: Array = (previews.get(foe.get_instance_id(), {}) as Dictionary).get("landing", [])
@@ -274,7 +302,7 @@ func test_own_base_click_no_longer_executes(timeout := 60000) -> void:
 	await _runner.simulate_frames(1)
 	var pt := _pick_point(shooter)
 	assert_bool(pt.is_finite()).override_failure_message("fixture: the pick ray never hits Riflemen").is_true()
-	await _main.solo_begin_auto(shooter, AiDecision.Action.CHARGE)
+	await _begin_auto(shooter, AiDecision.Action.CHARGE)
 	var board_before := _board()
 	await _click(pt)
 	await E2EBoot.settle(get_tree())
@@ -292,7 +320,7 @@ func test_an_unlit_click_moves_nothing_and_says_why(timeout := 60000) -> void:
 	await _runner.simulate_frames(1)
 	var pt := _pick_point(far)
 	assert_bool(pt.is_finite()).override_failure_message("fixture: the pick ray never hits Far").is_true()
-	await _main.solo_begin_auto(charger, AiDecision.Action.CHARGE)
+	await _begin_auto(charger, AiDecision.Action.CHARGE)
 	assert_bool((_main._solo_target_mode.get("auto_valid", []) as Array).has(far)).is_false()
 	var board_before := _board()
 	await _click(pt)
@@ -312,7 +340,7 @@ func test_rush_previews_and_goes_to_a_free_point(timeout := 60000) -> void:
 	foe.is_activated = true
 	var start: Vector3 = _main.solo_controller.unit_centre(runners)
 	var pt: Vector2 = _main.get_viewport().get_camera_3d().unproject_position(start + Vector3(30.0 * INCH, 0, 0))
-	await _main.solo_begin_auto(runners, AiDecision.Action.RUSH)
+	await _begin_auto(runners, AiDecision.Action.RUSH)
 	assert_array(_main._solo_target_mode.get("cast_rings", ["no mode"])).override_failure_message("Rush lit an enemy").is_empty()
 	_clock(0)
 	await _hover(pt)   # 30" away, beyond the 12" Rush reach
@@ -359,7 +387,7 @@ func test_the_suggested_target_wears_the_one_highlighted_ring(timeout := 60000) 
 	var plain_radius: float = (plain.mesh as TorusMesh).outer_radius
 	plain.free()
 	for verb in [AiDecision.Action.CHARGE]:   # Rush and Advance light no target (1.8b, 1.8f; the shot pick: 1.8f test)
-		await _main.solo_begin_auto(unit, verb)
+		await _begin_auto(unit, verb)
 		var valid: Array = _main._solo_target_mode.get("auto_valid", [])
 		var rings: Array = _main._solo_target_mode.get("cast_rings", [])
 		var highlighted: Array = []
@@ -414,7 +442,7 @@ func test_charge_dims_unreachable_enemies(timeout := 60000) -> void:
 	var charger := _shooter(1, "Chargers", 0.0)
 	var near := _shooter(2, "Near", 8.0)
 	var far := _shooter(2, "Far", 20.0)
-	await _main.solo_begin_auto(charger, AiDecision.Action.CHARGE)
+	await _begin_auto(charger, AiDecision.Action.CHARGE)
 	assert_array(_main._solo_target_mode.get("auto_valid", [])).contains_exactly([near])
 	var dimmed: Dictionary = _main._solo_target_mode.get("auto_dimmed", {})
 	assert_array(dimmed.keys()).override_failure_message("auto_dimmed missing or wrong: %s" % str(dimmed)) \
@@ -453,7 +481,7 @@ func test_a_suggestion_that_is_not_lit_is_not_named(timeout := 60000) -> void:
 	var hero := _shooter(2, "Hero", 6.0)
 	var host := _shooter(2, "Host", 10.0)
 	EquipmentDistributor.attach_hero_to_unit(hero, host)
-	await _main.solo_begin_auto(charger, AiDecision.Action.CHARGE)
+	await _begin_auto(charger, AiDecision.Action.CHARGE)
 	var suggested: GameUnit = _main.solo_controller.suggest_target(charger, AiDecision.Action.CHARGE)
 	assert_object(suggested).override_failure_message("fixture: the suggestion is %s, not the joined hero" % (
 		suggested.get_name() if suggested != null else "null")).is_same(hero)
@@ -478,7 +506,7 @@ func test_a_sweep_plans_nothing_a_rest_plans_once(timeout := 60000) -> void:
 	var runners := _shooter(1, "Runners", 0.0, 3)
 	var start: Vector3 = _main.solo_controller.unit_centre(runners)
 	var cam := _main.get_viewport().get_camera_3d()
-	await _main.solo_begin_auto(runners, AiDecision.Action.RUSH)
+	await _begin_auto(runners, AiDecision.Action.RUSH)
 	_clock(1000)
 	for i in 10:
 		await _hover(cam.unproject_position(start + Vector3((8.0 + i) * INCH, 0, 0)))
@@ -499,7 +527,7 @@ func test_an_own_spot_click_keeps_the_rush_open(timeout := 60000) -> void:
 	_bystanders()
 	var runners := _shooter(1, "Runners", 0.0, 3)
 	var before := _board()
-	await _main.solo_begin_auto(runners, AiDecision.Action.RUSH)
+	await _begin_auto(runners, AiDecision.Action.RUSH)
 	await _click(_main.get_viewport().get_camera_3d().unproject_position(SoloController.alive_positions(runners)[1]))
 	await E2EBoot.settle(get_tree())
 	assert_bool(runners.is_activated).override_failure_message("the own-spot click spent the activation").is_false()
@@ -528,7 +556,7 @@ func _rush_past(runner: GameUnit, near_x := 20.0) -> Array:
 	near.is_activated = true
 	far.is_activated = true
 	var goal: Vector3 = _main.solo_controller.unit_centre(runner) + Vector3(12.0 * INCH, 0, 0)
-	await _main._run_player_intent(runner, AiDecision.Action.RUSH, null, goal)
+	await _intent(runner, AiDecision.Action.RUSH, null, goal)
 	await _runner.simulate_frames(1)   # the pick is a raycast: let physics register the fresh bodies
 	return [near, far]
 
@@ -555,7 +583,11 @@ func test_quick_shot_unit_may_shoot_after_a_point_rush(timeout := 60000) -> void
 	await E2EBoot.settle(get_tree())
 	var text := _log_text()
 	assert_str(text).contains("Quick Shot: shoots after its Rush action")
-	assert_str(text).override_failure_message("no shot after the lit click").contains("Skirmishers " + FREE_ROLL)
+	# The rules core does not let a player's Quick Shot fire after a Rush yet (its human door refuses every shot after a
+	# Rush), so the Auto verb's shot is the free roll naming the core's reason; the activation still completes.
+	assert_str(text).override_failure_message("no free roll with the core's reason:\n%s" % text) \
+		.contains("Skirmishers fires at Near: the rules core cannot resolve this shot (Skirmishers rushed this activation")
+	assert_int(_logged_sighted("Skirmishers")).override_failure_message("the table resolved the shot").is_equal(-1)
 	assert_bool(runner.is_activated).is_true()
 	assert_bool(_main._solo_target_mode.is_empty()).is_true()
 	assert_int(_main._solo_pending_replies).override_failure_message("the AI's reply was never booked/resolved").is_equal(0)
@@ -608,7 +640,7 @@ func test_a_point_rush_without_quick_shot_completes_as_before(timeout := 60000) 
 func _hover_then_click_point(unit: GameUnit, verb: int, offset: Vector3) -> Dictionary:
 	var at: Vector3 = _main.solo_controller.unit_centre(unit) + offset
 	var pt: Vector2 = _main.get_viewport().get_camera_3d().unproject_position(at)
-	await _main.solo_begin_auto(unit, verb)
+	await _begin_auto(unit, verb)
 	var entry := {"point_mode": _main._solo_target_mode.has("auto_point"),
 		"lit_at_entry": (_main._solo_target_mode.get("cast_rings", []) as Array).size()}
 	_clock(0)
@@ -681,15 +713,17 @@ func test_advance_previews_goes_to_a_free_point_then_shoots(timeout := 60000) ->
 	await _click(near_pt)
 	await E2EBoot.settle(get_tree())
 	text = _log_text()
-	assert_str(text).override_failure_message("no shot after the lit click").contains("Riflemen " + FREE_ROLL)
+	_assert_core_shot(text, "Riflemen", "Near")
 	assert_str(text).not_contains("Quick Shot")
 	assert_bool(shooter.is_activated).is_true()
 	assert_bool(_main._solo_target_mode.is_empty()).is_true()
 	assert_int(_main._solo_pending_replies).override_failure_message("the AI's reply was never booked/resolved").is_equal(0)
 
 
-## Enter takes the pre-marked suggestion: the volley fires at it and the activation ends.
+## Enter takes the pre-marked suggestion: the shot goes at it and the activation ends. The one case with the rules core
+## OFF: a player's shot is then the free dice roll, and it says so.
 func test_enter_after_a_point_advance_shoots_the_suggestion(timeout := 60000) -> void:
+	CoreActivation._env = 0
 	var shooter := _shooter(1, "Riflemen", 0.0, 3)
 	var foes: Array = await _advance_past(shooter)
 	assert_object(_main._solo_target_mode.get("auto_suggested")) \

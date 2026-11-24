@@ -2324,8 +2324,8 @@ static var auto_refused := ""
 ## toasted, nothing was shot, the session stays open (the caller returns then). `refused` at the transcript's size is the
 ## core's own defect: reported, nothing toasted, the session stays open. `auto` (the Auto verbs' shot after the
 ## engine's own move): the unit's end positions reach the core first through `place`, the same check a dropped drag gets,
-## and the transcript says the engine paid the move's Dangerous test; a placement the core refuses is not taken, its
-## reason in `auto_refused` (the caller's free roll names it). P4.D-13c: a target with no statline is no valid
+## and the transcript says the engine paid the move's Dangerous test; a placement or a shot the core refuses is not taken,
+## its reason in `auto_refused` (the caller's free roll names it). P4.D-13c: a target with no statline is no valid
 ## target: one line, nothing shot, the session stays open (the caller returns).
 static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Callable = Callable(), auto := false) -> bool:
 	auto_refused = ""
@@ -2365,6 +2365,9 @@ static func human_shoot(main, attacker: GameUnit, target: GameUnit, on_throw: Ca
 	var r: Dictionary = await drive(main, int(s["handle"]), attacker, t, false, on_throw, false, Callable() if shots.is_empty() else beat)
 	if str(r["step"]) == "done":
 		last_target = target
+	elif str(r["step"]) == "refused" and int(r["index"]) < t.size() and auto:
+		auto_refused = str(r["reason"])   # the engine already ran the Auto verb, so its refused shot is the free roll, never a stuck activation
+		return false
 	elif str(r["step"]) == "refused" and int(r["index"]) < t.size():
 		main._log_rule_event(BattleLog.Category.MOVEMENT, str(r["reason"]))
 		main._show_toast(str(r["reason"]))
