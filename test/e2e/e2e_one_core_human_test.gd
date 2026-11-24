@@ -76,7 +76,10 @@ func _run(s: int, moved: bool, core_run: bool) -> Dictionary:
 	var on_entry := func(e: Dictionary) -> void: lines.append("%d|%s" % [int(e["category"]), str(e["text"])])
 	_main.battle_log.entry_added.connect(on_entry)
 	_main.seed_tray_rng(s)
-	await _main._run_human_attack(att, foe, false)
+	if core_run:
+		await _main._run_human_attack(att, foe, false)
+	else:   # the table arm: its own volley (the window door now hands a refused shot to the free roll)
+		await TableHumanVolley.shoot(_main, att, foe)
 	_main.battle_log.entry_added.disconnect(on_entry)
 	var survivors: Array = foe.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
 	survivors.sort()

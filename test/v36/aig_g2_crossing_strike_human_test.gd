@@ -2,8 +2,8 @@ extends GdUnitTestSuite
 ## Rules 3.6 wave, AI gate AIG-G2 row R3 (human side): the move-through trigger of a Crossing Strike weapon
 ## had one caller, the AI activation, so a PLAYER's bearer never fired it (and from EPOCH_73_V36 its weapon no
 ## longer strikes in melee either). After the player's own drop, a solo-game bearer whose executed paths
-## crossed an enemy unit now fires the weapon at the nearest crossed one, once per round, and the log names
-## the book rule. The drop is the real handler (_on_units_dropped) fed the shape object_manager emits.
+## crossed an enemy unit now attacks the nearest crossed one, once per round, and the log names the book rule
+## (a strike the rules core does not take is the player's free dice roll). The drop is the real handler (_on_units_dropped) fed the shape object_manager emits.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const INCH := 0.0254
@@ -80,12 +80,14 @@ func _setup(epoch: int, weapon_rules: Array) -> GameUnit:
 	return bird
 
 
-func test_a_players_bearer_moved_over_an_enemy_fires_its_weapon_at_epoch_73(timeout := 90000) -> void:
+## The strike the rules core did not take is the player's free dice roll: one line with the reason, no die rolled by the table.
+func test_a_players_bearer_moved_over_an_enemy_attacks_with_a_free_roll_at_epoch_73(timeout := 90000) -> void:
 	var bird := _setup(AiActRecorder.EPOCH_73_V36, ["Crossing Strike"])
 	await _drop(bird, -28.0, 2.0)
 	assert_str(_log_text()).contains(LINE)
-	assert_str(_log_text()).override_failure_message("the volley stayed silent").not_contains("Drop Bombs silent")
-	assert_str(_log_text()).contains("Zeppelins fires Drop Bombs at Warriors")
+	assert_str(_log_text()).contains("Zeppelins fires at Warriors: the rules core cannot resolve this shot (") \
+		.contains("free roll: roll it in the dice tray and apply the wounds by hand")
+	assert_str(_log_text()).override_failure_message("the table rolled the strike").not_contains("Zeppelins fires Drop Bombs at Warriors")
 	await E2EBoot.settle(get_tree())
 
 

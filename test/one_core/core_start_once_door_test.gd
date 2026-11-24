@@ -12,7 +12,8 @@ extends GdUnitTestSuite
 ## D-PAR3 15a: the AI door now TAKES the shooter - its transcript says the table paid the start (`paid{start}`), so the core rolls
 ## no second pool: live AI leg = one pool roll, `ai_runs` 1, no landing error. Its control leaves `paid` out (the seam
 ## `CoreActivation.start_paid_input`): two pool rolls on every seed - the double-roll class is gone, not hidden. The human leg is
-## unchanged (its capture is before the start; the group still keeps the shooter on the table there).
+## unchanged (its capture is before the start; the group still refuses the shooter there), and the refused shot is a free dice roll:
+## the pool is rolled once and no volley die.
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
@@ -171,7 +172,9 @@ func _assert_once(rows: Array, door: String) -> void:
 		assert_int(int(row[0])).override_failure_message("%s door seed %d: the pool is rolled once (rows %s)" % [door, s, rows]).is_equal(1)
 		assert_int(int(row[1])).override_failure_message("%s door seed %d: the core does not take a Reanimation shooter" % [door, s]).is_equal(0)
 		assert_int(int(row[2])).override_failure_message("%s door seed %d: no landing error" % [door, s]).is_equal(0)
-		assert_int(int(row[3])).override_failure_message("%s door seed %d: the volley's dice are the table's living shooters" % [door, s]).is_equal(int(row[4]))
+		# The human door hands the refused shooter to the free roll: no volley roll for the player (-1 = none).
+		var want := -1 if door == "human" else int(row[4])
+		assert_int(int(row[3])).override_failure_message("%s door seed %d: the volley's dice (%d wanted)" % [door, s, want]).is_equal(want)
 
 
 func _assert_control_fails(rows: Array, door: String) -> void:
@@ -201,7 +204,7 @@ func test_the_ai_door_takes_a_reanimation_shooter_and_rolls_the_pool_once(timeou
 
 
 @warning_ignore('unused_parameter')
-func test_the_human_door_leaves_a_reanimation_shooter_on_the_table(timeout := 600000, do_skip := not ClassDB.class_exists("NmlCore"),
+func test_the_human_door_hands_a_reanimation_shooter_to_the_free_roll(timeout := 600000, do_skip := not ClassDB.class_exists("NmlCore"),
 		skip_reason := "no NmlCore") -> void:
 	_assert_once(await _human_runs(), "human")
 	_without_group()
