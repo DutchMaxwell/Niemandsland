@@ -30,12 +30,11 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {1: true, 2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [1, 2], 2)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main._solo_batch = true   # tray faces from the seeded tray RNG, no physics settle
-	_main._solo_fast = true    # the Advance glide at fast pace
+	SoloHarness.instant(_main)   # tray faces from the seeded tray RNG, no physics settle
+	SoloHarness.fast(_main)      # the Advance glide at fast pace
 	_main._autosave_controller.set_lesson_paused(true)   # a long run's periodic autosave would add its own log line
 
 
