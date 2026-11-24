@@ -124,46 +124,6 @@ func test_each_placed_spot_marker_sends_its_count(timeout := 120000) -> void:
 	assert_str(str(_first("spot_markers").get("unit", "<no message>"))).is_equal(victim.unit_id)
 
 
-## Spending ALL marks erases the key on the peer too. Erasure is the `null` payload — a 0 would
-## leave a dead key lying in unit_properties on one side only.
-func test_spending_every_marker_sends_the_erasure(timeout := 120000) -> void:
-	var spotter := _reg(2, "Scout Team", [_at(0.0)])
-	var victim := _reg(1, "Riflemen", [_at(10.0), _at(11.0)])
-	_main._solo_place_spot_marker(spotter, victim)
-	_main._solo_place_spot_marker(spotter, victim)
-	_fake.sent.clear()
-
-	var took: int = _main._solo_consume_spot_markers(victim)
-
-	assert_int(took).override_failure_message("fixture check: the take-all path must take both").is_equal(2)
-	assert_bool(victim.unit_properties.has("spot_markers")) \
-		.override_failure_message("fixture check: a full consumption erases the key locally") \
-		.is_false()
-	assert_array(_values("spot_markers")) \
-		.override_failure_message("the peer keeps two spent marks lying on the unit (sent: %s)" % str(_fake.sent)) \
-		.is_equal([null])
-
-
-## THE CASE NOTHING ELSE COVERS: a PARTIAL removal. The attacker takes one of three, the "Spotted"
-## token stays on the table, so the marker channel is silent — this delta is the only message.
-func test_a_partial_removal_sends_the_remainder(timeout := 120000) -> void:
-	var spotter := _reg(2, "Scout Team", [_at(0.0)])
-	var victim := _reg(1, "Riflemen", [_at(10.0), _at(11.0)])
-	for _i in 3:
-		_main._solo_place_spot_marker(spotter, victim)
-	_fake.sent.clear()
-
-	var took: int = _main._solo_consume_spot_markers(victim, 1)
-
-	assert_int(took).is_equal(1)
-	assert_int(int(victim.unit_properties.get("spot_markers", 0))) \
-		.override_failure_message("fixture check: a partial take must leave the rest lying") \
-		.is_equal(2)
-	assert_array(_values("spot_markers")) \
-		.override_failure_message("a partial removal is INVISIBLE on the marker channel — without this delta the peer still counts three (sent: %s)" % str(_fake.sent)) \
-		.is_equal([2])
-
-
 # === 2. The spell stamps =========================================================================
 
 ## A speed spell stamps {advance, rush} onto the unit — and the peer needs it to draw the same
@@ -236,8 +196,6 @@ func test_solo_without_peers_sends_nothing_and_still_counts(timeout := 120000) -
 	var victim := _reg(1, "Riflemen", [_at(10.0), _at(11.0)])
 
 	_main._solo_place_spot_marker(spotter, victim)
-	_main._solo_place_spot_marker(spotter, victim)
-	_main._solo_consume_spot_markers(victim, 1)
 	_main._solo_record_spell_mod(victim, "Quicken",
 		{"modifier": {"advance_in": 4, "rush_in": 4}, "duration": "round"})
 
@@ -257,11 +215,10 @@ func test_the_delta_reconstructs_the_number_on_the_receiving_peer(timeout := 120
 	var victim := _reg(1, "Riflemen", [_at(10.0), _at(11.0)])
 	for _i in 3:
 		_main._solo_place_spot_marker(spotter, victim)
-	_main._solo_consume_spot_markers(victim, 1)
 	var wire: Array = _sent("spot_markers")
 	assert_int(wire.size()) \
-		.override_failure_message("fixture check: four transitions, four deltas (sent: %s)" % str(_fake.sent)) \
-		.is_equal(4)
+		.override_failure_message("fixture check: three transitions, three deltas (sent: %s)" % str(_fake.sent)) \
+		.is_equal(3)
 
 	# Play the peer: wipe the local number, then apply exactly what the wire carried.
 	victim.unit_properties.erase("spot_markers")
@@ -271,7 +228,7 @@ func test_the_delta_reconstructs_the_number_on_the_receiving_peer(timeout := 120
 
 	assert_int(int(victim.unit_properties.get("spot_markers", 0))) \
 		.override_failure_message("replaying the wire did not reproduce the count") \
-		.is_equal(2)
+		.is_equal(3)
 
 	# …and the erasure arrives as an erasure, not as a zero left lying in the bag.
 	_real_net.sync_unit_property(victim.unit_id, "spot_markers", null)

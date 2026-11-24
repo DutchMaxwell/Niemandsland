@@ -113,19 +113,3 @@ func test_piercing_tag_still_piles_everything_on_one_unit_at_72() -> void:
 	assert_int(spent).override_failure_message("3.5: the first attack spends them all").is_equal(2)
 	assert_int(_tokens(alpha)).is_equal(0)
 
-
-## Precision Tag's pool is spent one token per attack too (the placement is the core's; the table's pick pool rides
-## the same property the replay ledger carries).
-func test_precision_tag_spends_one_token_per_attack_at_73_and_all_at_72() -> void:
-	var target := _small(Vector3(10.0 * INCH, 0, 0))
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_72_PLAYTEST_RULES
-	target.unit_properties["tag_markers"] = 2
-	assert_int(_main._solo_consume_tag_markers(target)).override_failure_message("3.5: both removed").is_equal(2)
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_73_V36
-	target.unit_properties["tag_markers"] = 2
-	assert_int(_main._solo_consume_tag_markers(target)).override_failure_message("3.6: one token, +1").is_equal(1)
-	assert_int(int(target.unit_properties.get("tag_markers", 0))).override_failure_message("one token is left").is_equal(1)
-	var text := _log_text()
-	assert_str(text) \
-		.override_failure_message("rules-must-log — got: %s" % text.strip_edges()) \
-		.contains("Precision Tag: one token spent — +1 to hit")

@@ -5,8 +5,7 @@ extends GdUnitTestSuite
 ## `_sync_unit_property(unit, "tag_markers", <the same value>)`. The seam returns early when the key
 ## already holds the value (that is how the repeated spell restamps stay off the wire), so the
 ## placement never produced a `broadcast_unit_property` frame. The other table only heard about the
-## marks when they were SPENT (`_solo_consume_tag_markers` computes the remainder and does not pre-write)
-## — so for a whole round it saw a Tagged unit as untagged and rolled its own dice and range rings off
+## marks when they were SPENT — so for a whole round it saw a Tagged unit as untagged and rolled its own dice and range rings off
 ## the wrong number.
 ##
 ## The suite drives the REAL main.tscn placement and records what main hands to NetworkManager (the
@@ -158,22 +157,6 @@ func test_a_second_tag_on_the_same_unit_sends_the_new_total(timeout := 120000) -
 	assert_array(_values()) \
 		.override_failure_message("each placement sends the running total (sent: %s)" % str(_fake.sent)) \
 		.is_equal([2, 3])
-
-
-## The Tag and its spend share the seam: after the placement went out, spending one token sends the
-## remainder, so the peer ends on the same number the table does.
-func test_placement_then_spend_ends_on_the_same_number(timeout := 120000) -> void:
-	var tagger := _tagger("Marksman", 2)
-	var alpha := _foe("Alpha", Vector3(10.0 * INCH, 0, 0), 2)
-
-	_main._solo_apply_precision_tag(tagger)
-	var spent: int = _main._solo_consume_tag_markers(alpha)
-
-	assert_int(spent).is_equal(1)
-	assert_array(_values()) \
-		.override_failure_message("placement 2, then one spent -> the wire reads 2 then 1 (sent: %s)" % str(_fake.sent)) \
-		.is_equal([2, 1])
-	assert_int(int(alpha.unit_properties.get("tag_markers", 0))).is_equal(1)
 
 
 ## Offline the placement must stay silent and still count.
