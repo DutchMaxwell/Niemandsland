@@ -415,7 +415,7 @@ func test_split_fire_returns_the_checked_weapons(timeout := 120000) -> void:
 	(func() -> void: out.append(await _main._solo_ask_split_fire(raiders, names))).call()
 	var p := await _await_prompt("Split fire?")
 	assert_str(_text_of(p)).contains("Up to two targets (%s). Checked weapons fire at a SECOND target:" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(raiders)))
-	_assert_controls(p, ["Rifle", "Pistol", "Grenade", "Pick 2nd target", "All at Raiders"])
+	_assert_controls(p, ["Rifle", "Pistol", "Grenade", "Cancel attack", "All at Raiders", "Pick 2nd target"])
 	await _click(_button(p, "Pistol"))
 	assert_bool(_button(p, "Pistol").button_pressed).is_true()
 	await _click(_button(p, "Pick 2nd target"))
