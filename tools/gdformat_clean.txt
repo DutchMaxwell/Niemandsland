@@ -24,6 +24,7 @@ scripts/boardgen_dress_houses.gd
 scripts/boardgen_dress_kit.gd
 scripts/landing_preview.gd
 scripts/net_dialog.gd
+scripts/owner_requests.gd
 scripts/player_identity.gd
 scripts/player_palette.gd
 scripts/privacy/shared_record_builder.gd

@@ -28,6 +28,7 @@ scripts/import_await_guard.gd
 scripts/internet_lobby.gd
 scripts/landing_preview.gd
 scripts/mp_command.gd
+scripts/owner_requests.gd
 scripts/pinned_ruler.gd
 scripts/pinned_rulers.gd
 scripts/player_identity.gd

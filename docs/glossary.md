@@ -15,6 +15,7 @@ same pull request; do not invent a synonym for a term that already exists.
 | held volley | A volley the rules core cannot resolve and the table no longer resolves: it is not fired, and one battle-log line names the unit and the reason. | "skipped shot", "dropped volley" |
 | rules epoch | The integer `CURRENT_RULES_EPOCH`: every change of a rule outcome is gated behind the epoch it ships in, so old replays and recordings stay reproducible. See ADR 0002. | "rules version" |
 | battle log | The in-game list of rule events a player reads; every applied special rule writes a line to it. | "console", "game log" |
+| owner request | The table asks the human who owns a unit for its dice or a choice over the network; no answer in time = a visible automatic roll or the core's automatic pick. The wire lives in `scripts/owner_requests.gd`. | "roll prompt", "remote roll" |
 | snapshot pin | A literal expected value in a test that records what the rules core produced on `main`, not a value derived from the rulebook. See ADR 0005. | "golden value" without saying it is a snapshot |
 | digest | A hash over a seeded run of the rules core; identical digests before and after a change prove the change did not alter any outcome. | "checksum" |
 | generated board | A board built from a seed by `boardgen` (layout, levels, walls, ladders); its grid is the gameplay truth for movement, cover and sight. | "map", "level" |
