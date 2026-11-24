@@ -2530,7 +2530,9 @@ fn escape_to_clear(item: &mut [SettleShape], obstacles: &[SettleShape]) -> [f32;
             best_dir = u;
         }
     }
-    if best_travel <= 0.0 || best_travel == f64::INFINITY {
+    // also true for NaN: a NaN travel is no travel
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
+    if !(best_travel > 0.0) || best_travel == f64::INFINITY {
         return [0.0, 0.0];
     }
     let step = [best_dir[0] * best_travel as f32, best_dir[1] * best_travel as f32];
