@@ -36,7 +36,7 @@ func _dress(entries: Dictionary = {}) -> BoardgenDress:
 ## A planner that dresses the houses with one stub box each (no GLB needed).
 func _houses() -> GDScript:
 	var s := GDScript.new()
-	s.source_code = "extends RefCounted\nconst MODULES: Array[String] = [\"dr_litter_straw\"]\nstatic func plan(layout: Dictionary, _ctx: Dictionary) -> Array[Dictionary]:\n\tvar out: Array[Dictionary] = []\n\tfor lot: Dictionary in layout[\"lots\"]:\n\t\tif lot[\"kind\"] == \"Roofed\":\n\t\t\tout.append({\"module\": \"dr_litter_straw\", \"xf\": Transform3D(), \"cls\": \"houses\"})\n\treturn out\n"
+	s.source_code = "extends DressPlanner\nconst MODULES: Array[String] = [\"dr_litter_straw\"]\nfunc plan(context: DressContext) -> Array[DressPlacement]:\n\tvar out: Array[DressPlacement] = []\n\tfor lot: Dictionary in context.layout[\"lots\"]:\n\t\tif lot[\"kind\"] == \"Roofed\":\n\t\t\tout.append(DressPlacement.new(\"dr_litter_straw\", Transform3D(), \"houses\"))\n\treturn out\n"
 	s.reload()
 	return s
 
@@ -44,7 +44,7 @@ func _houses() -> GDScript:
 ## A planner for a class that places nothing (it only says "this class is dressed").
 func _silent() -> GDScript:
 	var s := GDScript.new()
-	s.source_code = "extends RefCounted\nconst MODULES: Array[String] = [\"dr_litter_straw\"]\nstatic func plan(_layout: Dictionary, _ctx: Dictionary) -> Array[Dictionary]:\n\treturn []\n"
+	s.source_code = "extends DressPlanner\nconst MODULES: Array[String] = [\"dr_litter_straw\"]\nfunc plan(_context: DressContext) -> Array[DressPlacement]:\n\treturn []\n"
 	s.reload()
 	return s
 

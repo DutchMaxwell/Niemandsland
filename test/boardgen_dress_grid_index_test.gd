@@ -23,12 +23,8 @@ func _kit() -> BoardgenDressKit:
 
 ## The houses planner's placements on a board, the same set the snapshot test pins.
 func _placements(layout: Dictionary, kit: BoardgenDressKit, seed: int) -> Array[DressPlacement]:
-	var story := BoardgenDressStory.of(layout)
-	var ctx := {"kit": kit, "story": story, "meta": kit.meta, "seed": seed}
-	var out: Array[DressPlacement] = []
-	for p: Dictionary in BoardgenDressHouses.plan(layout, ctx):
-		out.append(DressPlacement.from_dict(p))
-	return out
+	var context := DressContext.new(layout, kit, BoardgenDressStory.of(layout), seed)
+	return BoardgenDressHouses.new().plan(context)
 
 
 ## The best of `RUNS` single-call timings in milliseconds, each run on a fresh context so every run

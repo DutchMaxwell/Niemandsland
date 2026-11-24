@@ -19,15 +19,3 @@ func _init(
 	cls = p_cls
 	lot = p_lot
 	look = p_look
-
-
-## A placement from a planner's plain dictionary {module, xf, cls, lot?, look? or variant?} - the
-## temporary bridge while the planners still return dictionaries.
-static func from_dict(d: Dictionary) -> DressPlacement:
-	return DressPlacement.new(
-		str(d.get("module", "")),
-		d.get("xf", Transform3D()),
-		str(d.get("cls", "")),
-		int(d.get("lot", -1)),
-		str(d.get("look", d.get("variant", "")))
-	)

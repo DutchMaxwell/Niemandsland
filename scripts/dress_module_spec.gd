@@ -15,6 +15,10 @@ var tags: PackedStringArray = PackedStringArray()
 var materials: PackedStringArray = PackedStringArray()
 var aabb_lo := Vector3.ZERO
 var aabb_hi := Vector3.ZERO
+## The manifest's aabb corners as doubles, for arithmetic whose last bit must not move; a Vector3
+## stores float32 and would change it.
+var aabb_lo_in: Array[float] = []
+var aabb_hi_in: Array[float] = []
 var len_in: float = 0.0
 var height_in: float = 0.0
 var mount_in: float = 0.0
@@ -83,13 +87,18 @@ func _strings(entry: Dictionary, key: String) -> PackedStringArray:
 
 
 func _read_aabb(entry: Dictionary) -> void:
-	var pair := _pair(_value(entry, "aabb_in", []))
+	var raw: Variant = _value(entry, "aabb_in", [])
+	var pair := _pair(raw)
 	aabb_lo = pair[0] if pair.size() == 2 else Vector3.ZERO
 	aabb_hi = pair[1] if pair.size() == 2 else Vector3.ZERO
 	if pair.is_empty():
 		errors.append("malformed aabb_in")
 	elif aabb_lo.x > aabb_hi.x or aabb_lo.y > aabb_hi.y or aabb_lo.z > aabb_hi.z:
 		errors.append("aabb_in lo above hi")
+	if pair.size() == 2:
+		for i in 3:
+			aabb_lo_in.append(float((raw as Array)[0][i]))
+			aabb_hi_in.append(float((raw as Array)[1][i]))
 
 
 ## [lo: Vector3, hi: Vector3] of an aabb or hull pair of three numbers each, or [] when malformed.

@@ -2,14 +2,14 @@ class_name BoardgenDress
 extends Node3D
 ## The orchestrator of the ruin-town dressing (docs/adr/0003-generated-board-dressing.md): the grid
 ## stays the gameplay truth, authored modules become the look. It asks every planner (one script per
-## class of the board, so each class can be added on its own) for placements, wraps them as
-## DressPlacement, checks them against the honesty rules in a debug build, merges them into ONE mesh
-## with one surface per shared material (DressMesh) plus the low-poly shadow proxy (DressShadow),
-## and lets a planner add what is not a module (build_extra). A class switches from the old look to
-## the dressing only when its planner exists AND its modules are usable (kit cached, Medium and up);
-## `classes()` names those classes so the old builders skip them. Without a kit nothing here is
-## active. A planner script has `const MODULES: Array[String]`, `static func plan(layout, ctx) ->
-## Array[Dictionary]` and optionally `static func build_extra(layout, parent: Node3D, ctx)`.
+## class of the board, so each class can be added on its own) for placements, checks them against
+## the honesty rules in a debug build, merges them into ONE mesh with one surface per shared
+## material (DressMesh) plus the low-poly shadow proxy (DressShadow), and lets a planner add what is
+## not a module (build_extra). A class switches from the old look to the dressing only when its
+## planner exists AND its modules are usable (kit cached, Medium and up); `classes()` names those
+## classes so the old builders skip them. Without a kit nothing here is active. A planner script
+## extends DressPlanner, has `const MODULES: Array[String]`, `func plan(ctx: DressContext) ->
+## Array[DressPlacement]` and optionally `func build_extra(ctx: DressContext, parent: Node3D)`.
 
 const PLANNERS := ["houses", "tiers", "ladders", "walls", "towers", "ground", "props", "clutter"]
 
@@ -100,11 +100,13 @@ func classes() -> Dictionary:
 ## own) and DressShadow (shadows only), then each planner's own extras.
 func build(layout: Dictionary) -> void:
 	var context := DressContext.new(layout, kit, story, int(layout.get("seed", 0)))
-	var ctx := {"kit": kit, "story": story, "meta": kit.meta, "seed": int(layout.get("seed", 0))}
-	var placements: Array[DressPlacement] = []
+	var planners := {}
 	for name: String in _classes:
-		for p: Dictionary in (_classes[name] as Script).call("plan", layout, ctx):
-			placements.append(DressPlacement.from_dict(p))
+		planners[name] = (_classes[name] as Script).new()
+	var placements: Array[DressPlacement] = []
+	for name: String in planners:
+		var planner: DressPlanner = planners[name]
+		placements.append_array(planner.plan(context))
 	if OS.is_debug_build():
 		for line in BoardgenDressRules.violations(context, placements):
 			push_warning("BoardgenDress: " + line)
@@ -128,6 +130,7 @@ func build(layout: Dictionary) -> void:
 	shadow.mesh = BoardgenDressMesh.shadow(placements, kit)
 	shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 	add_child(shadow)
-	for name: String in _classes:
-		if (_classes[name] as Script).has_method("build_extra"):
-			(_classes[name] as Script).call("build_extra", layout, self, ctx)
+	for name: String in planners:
+		var planner: DressPlanner = planners[name]
+		if planner.has_method("build_extra"):
+			planner.call("build_extra", context, self)
