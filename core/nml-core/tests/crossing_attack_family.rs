@@ -80,7 +80,7 @@ fn crossing_attack_rolls_through_crossed_enemies_at_epoch_7() {
     );
 }
 
-/// One-core P4.D-37: on a SUPPLIED tray (the step API's) the crossing wounds reach the table as a landing, as the
+/// On a SUPPLIED tray (the step API's) the crossing wounds reach the table as a landing, as the
 /// volley's own two casualty lines, and as the table's own rule sentence; a SEEDED tray (training) keeps none and says none. RED: drop the
 /// `land_chain_report` call after the crossing wounds -> no landing, no line.
 #[test]

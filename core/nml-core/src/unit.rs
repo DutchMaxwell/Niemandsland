@@ -374,7 +374,7 @@ pub struct Ctx {
     /// and its dice must keep the old stacked reading byte-exact.
     pub sturdy_boost_gates_guarded: bool,
     pub in_cover: bool,
-    /// PLAN_COVER_36 (`EPOCH_95_PARITY_BATCH`): the unit is mostly behind a sight blocker from this volley's shooters
+    /// (`EPOCH_95_PARITY_BATCH`): the unit is mostly behind a sight blocker from this volley's shooters
     /// (`sight::screen_of`), stamped by the played volley from 95 only. Cover against shooting, NOT "standing in terrain":
     /// the Grounded family and the Shielded terrain alias keep reading `in_cover`.
     pub screened: bool,

@@ -72,13 +72,12 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2], 1)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
 	# Batch dice: _solo_tray_roll draws faces from the RNG instead of awaiting the physics tray,
 	# which headless would never settle.
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	CoreActivation._env = 1   # the core door ON, whatever the environment says
 	_rolls = 0
 	_flip_batch_on = 0
@@ -143,7 +142,7 @@ func _on_pump() -> void:
 	if _picks_fed == 1:
 		# The click gate (_solo_wound_choice_matters) is behind us; the morale die that follows the
 		# landing needs the batch tray again, and the pacing holds must stay inert.
-		_main._solo_batch = true
+		SoloHarness.instant(_main)
 
 
 ## The AI volley makes the HUMAN roll their own saves — press OK for the absent player.
@@ -159,7 +158,7 @@ func _on_roll_finished(_total: int) -> void:
 	if _flip_batch_on > 0 and _rolls == _flip_batch_on:
 		# Emitted from INSIDE show_faces(), i.e. after this roll's faces are already drawn — the flag
 		# only reaches the wound landing that follows.
-		_main._solo_batch = false
+		SoloHarness.instant(_main, false)
 
 
 # === fixture helpers ==========================================================================
@@ -274,11 +273,11 @@ func test_hero_click_allocation_volley_triggers_half_strength_morale(timeout := 
 	assert_int(SoloController.combined_total(squad)) \
 		.override_failure_message("fixture: the joined chain must count 2 models (trooper + hero)") \
 		.is_equal(2)
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	assert_bool(_main._solo_wound_choice_matters(squad, 3)) \
 		.override_failure_message("fixture: the Tough hero in the chain must open the click prompt") \
 		.is_true()
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 
 	seed(VOLLEY_SEED)
 	_main.seed_tray_rng(VOLLEY_SEED)   # NML-1076: the batch tray reads its own RNG, not the global one
@@ -327,11 +326,11 @@ func test_deadly_only_volley_triggers_half_strength_morale(timeout := 120000) ->
 		Vector3(0.15, 0.0, 0.03), Vector3(0.15, 0.0, 0.06)])
 	# Same click-gate precondition as the control case: no Tough model, one shared (empty) loadout —
 	# structurally automatic allocation, so a clicked pick can never confound this fixture either.
-	_main._solo_batch = false
+	SoloHarness.instant(_main, false)
 	assert_bool(_main._solo_wound_choice_matters(squad, 2)) \
 		.override_failure_message("fixture: a uniform non-Tough squad must allocate automatically") \
 		.is_false()
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 
 	seed(DEADLY_SEED)
 	_main.seed_tray_rng(DEADLY_SEED)   # NML-1076: the batch tray reads its own RNG, not the global one

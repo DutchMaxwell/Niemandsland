@@ -423,10 +423,10 @@ pub fn has_los(
     true
 }
 
-/// PLAN_COVER_36: the far end of the FOOT line sits this high above where the target model stands (L-8).
+/// The far end of the FOOT line sits this high above where the target model stands.
 pub const FOOT_LIFT_M: f64 = 0.001;
 
-/// One volley's cover from sight blockers (PLAN_COVER_36 rule lines 1-5): `sighting` = the shooter models that see at least
+/// One volley's cover from sight blockers: `sighting` = the shooter models that see at least
 /// one model of the target chain, `hidden[t]` = target model `t` is behind a blocker for a strict majority of them, `screened` = the unit is.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Screen {
@@ -741,7 +741,7 @@ pub fn sighted_count(
     })
 }
 
-/// `screen` for one volley in a game (PLAN_COVER_36 step 4): each shooter-chain member's models with its own unit radius and
+/// `screen` for one volley in a game: each shooter-chain member's models with its own unit radius and
 /// height, the defense holder's models (and, for the sighting set only, its joined heroes') with the holder's, as
 /// `sighted_count` builds them; `blockers_of` keeps both chains and dormant units out. A unit built with one model is `single`.
 pub fn screen_of(state: &State, zones: &[Zone], shooter: usize, target: usize, rules_epoch: u32) -> Screen {
@@ -904,7 +904,7 @@ mod tests {
         assert!(has_los(&cyl_on(1.0, 6.0, 32.0), &cyl_on(-8.0, 0.0, 32.0), false, &zones, &[]), "from the rim it sees the far ground");
     }
 
-    /// PLAN_COVER_36 step 3: the shared case file (`test/fixtures/one_core/cover_screen_cases.json`, also read by the
+    /// The shared case file (`test/fixtures/one_core/cover_screen_cases.json`, also read by the
     /// gdUnit twin) through `screen`, every case.
     #[test]
     fn cover_screen_matches_the_shared_cases() {
@@ -940,7 +940,7 @@ mod tests {
         assert!(bad.is_empty(), "{}", bad.join("\n"));
     }
 
-    /// PLAN_COVER_36 step 4: a third unit of short models between shooter 0 and target 2 hides the target's feet, not its
+    /// A third unit of short models between shooter 0 and target 2 hides the target's feet, not its
     /// head; the same unit still in reserve (dormant) hides nothing.
     #[test]
     fn a_third_unit_between_screens_the_target_unless_it_is_dormant() {

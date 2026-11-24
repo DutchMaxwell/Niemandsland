@@ -154,7 +154,7 @@ use super::*;
         assert_eq!(save_target_of(&second), 5, "the second exchange rolls at base");
     }
 
-    /// D-PAR1 item 5 (LOG-MISSING, found by fd-tests in e2e_defense_log_labels): a spell token on Defense is named at the save with
+    /// A spell token on Defense is named at the save with
     /// the table's per-part line (`_solo_log_defense_parts`): a +1 ward and a -1 hex each by its own name, at the working Defense
     /// before AP. RED before the fix: the save target moves (the tests above) but no line names the token.
     #[test]
