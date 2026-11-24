@@ -95,6 +95,9 @@ func _assert_no_ai(text: String, what: String) -> void:
 func _activate(unit: GameUnit) -> void:
 	await _main.radial_menu_controller._toggle_activation({"game_unit": unit})
 	await _runner.simulate_frames(4)
+	if not unit.is_activated and CoreActivation.session_open(unit.unit_id):
+		await _main.radial_menu_controller._toggle_activation({"game_unit": unit})   # a core activation is Start then End
+		await _runner.simulate_frames(4)
 	await E2EBoot.settle(get_tree())
 
 
@@ -151,6 +154,7 @@ func test_a_two_human_cast_asks_the_opponent_never_nachtmahr(timeout := 120000) 
 	var witch := _reg(2, "Witch", -6.0, 1, ["Caster(2)"])   # behind the seer: nothing blocks its sight
 	witch.casts_current = 2
 	SoloHarness.controller(_main)
+	assert_bool(CoreActivation.open_session(_main, seer)).override_failure_message("no activation session for the caster").is_true()
 	var start: int = _main.battle_log.entries().size()
 	var done := [false]
 	(func() -> void:
@@ -171,6 +175,7 @@ func test_a_two_human_cast_asks_the_opponent_never_nachtmahr(timeout := 120000) 
 		await get_tree().process_frame
 	var text := _log_from(start)
 	_assert_no_ai(text, "the two-human cast")
+	CoreActivation.close_session(_main, seer.unit_id)
 	assert_int(witch.casts_current).override_failure_message("P2's tokens were not spent by P2's choice:\n%s" % text).is_equal(1)
 	await E2EBoot.settle(get_tree())
 
@@ -191,6 +196,7 @@ func test_a_p2_cast_offers_targets_from_its_own_sides(timeout := 120000) -> void
 	_reg(2, "Boyz", -6.0, 3)
 	_reg(1, "Rifles", 6.0, 3)
 	SoloHarness.controller(_main)
+	assert_bool(CoreActivation.open_session(_main, shaman)).override_failure_message("no activation session for the caster").is_true()
 	_main._hotseat_turn = TwoHumanTurn.new()
 	_main._hotseat_turn.side_on_turn = 2   # P2 is on turn
 	var start: int = _main.battle_log.entries().size()

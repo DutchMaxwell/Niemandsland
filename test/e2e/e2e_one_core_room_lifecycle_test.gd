@@ -252,16 +252,20 @@ func test_a_start_off_turn_is_refused_and_sends_nothing() -> void:
 	assert_array(_names()).override_failure_message("frames: %s" % [_names()]).is_empty()
 
 
-## P4.D-43c: a LOCAL hotseat Automatic table (two human sides, no AI seat, no peer) is a core room once the hotseat
-## switch is on: both sides' plain units are lifecycle units, Start opens the core session, its bands come from the
-## core, and the End that closes it is the core's. The switch off (the default) and a Manual room stay on the table.
+## P4.D-43c: a LOCAL hotseat Automatic table (two human sides, no AI seat, no peer) is a core room by default: both
+## sides' plain units are lifecycle units, Start opens the core session, its bands come from the core, and the End that
+## closes it is the core's. `NML_ONE_CORE_HOTSEAT=0` (the way back) and a Manual room stay on the table.
 func test_a_hotseat_automatic_room_with_the_switch_on_goes_through_the_core_door() -> void:
 	var p1 := _plain(1, "Rifles", 0.0)
 	var p2 := _plain(2, "Guards", 18.0)
 	_net.online = false   # no peer, no client: the table plays itself, both sides human
 	assert_bool(_main._solo_hotseat_automatic()).override_failure_message("fixture: not a hotseat table").is_true()
-	CoreActivation._hotseat_env = 0   # NML_ONE_CORE_HOTSEAT unset: OFF is the default
-	assert_bool(CoreActivation.applies(_main)).override_failure_message("the door opened with the switch off").is_false()
+	OS.unset_environment("NML_ONE_CORE_HOTSEAT")
+	CoreActivation._hotseat_env = -1   # NML_ONE_CORE_HOTSEAT unset: ON is the default
+	assert_bool(CoreActivation.applies(_main)).override_failure_message("the default did not open the door").is_true()
+	assert_bool(CoreActivation.is_core_unit(_main, p1)).is_true()
+	CoreActivation._hotseat_env = 0   # NML_ONE_CORE_HOTSEAT=0: the way back
+	assert_bool(CoreActivation.applies(_main)).override_failure_message("the way back did not close the door").is_false()
 	assert_bool(CoreActivation.is_core_unit(_main, p1)).is_false()
 	CoreActivation._hotseat_env = 1   # NML_ONE_CORE_HOTSEAT=1
 	assert_bool(CoreActivation.applies(_main)).override_failure_message("the switch did not open the door").is_true()

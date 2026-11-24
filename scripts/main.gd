@@ -14180,6 +14180,9 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 			battle_log.log_event(BattleLog.Category.GENERAL,
 				"%s has already activated this round — one activation per unit (%s)" % [unit.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))])
 		return
+	_ensure_solo_controller()
+	if _hotseat_verb_refused(unit):   # the turn is the real refusal: an off-turn side may not shoot, cast or fight
+		return
 	if core_door_refused(unit):   # one-core P3 step 63: before any spend of the window (Utility Buff, Precision Tag)
 		return
 	# No activation door here (D23): opening the window commits nothing — _run_human_attack begins it.
@@ -14190,9 +14193,6 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 	# attack stays available afterwards (click Shoot/Fight again).
 	if await _solo_confirm_cast_first(unit):
 		solo_begin_cast(unit)
-		return
-	_ensure_solo_controller()
-	if _hotseat_verb_refused(unit):
 		return
 	# Wave 4 side fix: the Utility-Buff family is "once per activation, BEFORE attacking" — for the
 	# human that moment is declaring the attack. Round-stamped inside, so the second door

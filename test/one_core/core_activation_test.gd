@@ -138,9 +138,9 @@ func test_applies_is_false_with_the_flag_off() -> void:
 	assert_bool(CoreActivation.applies(_main)).is_false()
 
 
-func test_applies_is_false_without_an_ai_seat_and_without_a_room() -> void:
+func test_applies_is_true_on_a_hotseat_automatic_table() -> void:
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
-	assert_bool(CoreActivation.applies(_main)).is_false()
+	assert_bool(CoreActivation.applies(_main)).is_true()
 
 
 func test_applies_is_true_with_an_ai_seat() -> void:

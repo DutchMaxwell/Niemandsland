@@ -27,16 +27,16 @@ static func engine_offered() -> bool:
 	return ClassDB.class_exists("NmlCore")
 
 
-## P4.D-43c: the hotseat switch, read once (the master flag's pattern). OFF unless `NML_ONE_CORE_HOTSEAT` is "1" or "on":
-## a local Automatic table with no AI seat then resolves its two human sides through the core like a solo or an agreed
-## online room. Manual rooms never enter the core door.
+## P4.D-43c: the hotseat switch, read once (the master flag's pattern). ON by default; `NML_ONE_CORE_HOTSEAT=0` (or
+## "off") is the way back: a local Automatic table with no AI seat then resolves its two human sides through the core
+## like a solo or an agreed online room. Manual rooms never enter the core door.
 static var _hotseat_env := -1
 
 
 static func hotseat_enabled() -> bool:
 	if _hotseat_env < 0:
 		var raw := OS.get_environment("NML_ONE_CORE_HOTSEAT").to_lower()
-		_hotseat_env = 1 if (raw == "1" or raw == "on") else 0
+		_hotseat_env = 0 if (raw == "0" or raw == "off") else 1
 	return _hotseat_env == 1
 
 
