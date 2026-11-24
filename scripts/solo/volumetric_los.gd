@@ -25,7 +25,7 @@ const CLOSED_GAP_INCHES := 1.0
 ## ones, so "the eye is exactly as high as this volume's top" — the everyday case of two equally tall
 ## models on flat ground — must not flip on rounding noise. 1e-6 m is 0.00004": invisible to the rules.
 const Y_EPS_M := 1e-6
-## PLAN_COVER_36: the far end of the FOOT line sits this high above where a target model stands (core `sight::FOOT_LIFT_M`).
+## The far end of the FOOT line sits this high above where a target model stands (core `sight::FOOT_LIFT_M`).
 const FOOT_LIFT_M := 0.001
 
 ## Official volumetric model heights as Vector2(base size in mm, model height in inches). Sizes between
@@ -164,7 +164,7 @@ static func has_los(from_cyl: Dictionary, to_cyl: Dictionary, volumes: Array = [
 	return true
 
 
-## PLAN_COVER_36 (twin of core `sight::screen`): one volley's cover from sight blockers. `groups` holds one entry per
+## Twin of core `sight::screen`: one volley's cover from sight blockers. `groups` holds one entry per
 ## shooter-chain member: {"pos": its alive model positions, "eye": Callable(sp, tp) -> bool (the sight test), "foot": the
 ## same test to the target model's foot cylinder}. A shooter model joins the sighting set when it sees a model of `targets`
 ## or `also_seen` (the holder's joined heroes); target model t is hidden when a strict majority of that set misses its eye or

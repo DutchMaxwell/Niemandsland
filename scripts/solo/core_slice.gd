@@ -1,6 +1,6 @@
 class_name CoreSlice
 extends RefCounted
-## One core P4.D-6: WHICH units the core door takes at the shooting door. The slice is DATA (assets/solo/core_slice_allow.json):
+## The shooting slice: WHICH units the core door takes at the shooting door. The slice is DATA (assets/solo/core_slice_allow.json):
 ## a MODE and a set of GROUPS, so the predicate reads either way. Every unit rule and every weapon rule is resolved through
 ## `RulesRegistry.lookup(system, faction, name)` to a primitive; the groups LIST primitives (and the group "attached_heroes"
 ## lists attachments):
@@ -12,7 +12,7 @@ extends RefCounted
 ## with one group, the move-through rules), the way back for one release. The HUMAN door (`*_human` below) is not switched
 ## by C-19 (the gate measured the AI door): it reads PATH until DS-109, or the live slice when the env or a test seam names one.
 ## Melee is not part of it: the human door's Charge selector stays refused in `human_shoot`.
-## Each group is `{"primitives": [...], "step": "P4.D-n", "golden": "<fixture>", "parity": "<scenario>"}`.
+## Each group is `{"primitives": [...], "step": "<step id>", "golden": "<fixture>", "parity": "<scenario>"}`.
 
 const PATH := "res://assets/solo/core_slice_allow.json"
 ## C-19: the measured deny-list (mode "deny"), the AI door's slice unless env NML_CORE_SLICE=allow|plain picks PATH (the way back).
@@ -35,9 +35,9 @@ static func _has_group(group: String) -> bool:
 	return (config().get("group_names", []) as Array).has(group)
 const SCHEMA := "nml-core-slice-v1"
 const MODES := ["allow", "deny"]
-## P4.D-48: the AI charge door's own slice (door "melee"), read through `refusals_in`. Allow mode, no group = no rule at all.
+## The AI charge door's own slice (door "melee"), read through `refusals_in`. Allow mode, no group = no rule at all.
 const MELEE_PATH := "res://assets/solo/core_slice_melee.json"
-## Plan E: the melee deny slice (door "melee", mode "deny"), read beside MELEE_PATH by the shadow until step 20 flips the default.
+## The melee deny slice (door "melee", mode "deny"), read beside MELEE_PATH by the shadow until step 20 flips the default.
 const MELEE_DENY_PATH := "res://assets/solo/core_slice_melee_deny.json"
 
 ## TEST SEAM (the RulesRegistry.map_path_override pattern): a path that replaces PATH. Empty in production, always.
@@ -158,8 +158,8 @@ static func _rule_taken(gu: GameUnit, label: String, as_target := false) -> bool
 
 
 
-## Why the slice refuses `gu` - the labels the P4.D-3 census counts ("unit_rule:<name>", "attached", "non_opr",
-## "weapon_rule:<name>"); [] = the core door takes it. `as_target`: a target needs no OPR profile (P4.D-13b).
+## Why the slice refuses `gu` - the labels the legacy census counts ("unit_rule:<name>", "attached", "non_opr",
+## "weapon_rule:<name>"); [] = the core door takes it. `as_target`: a target needs no OPR profile.
 static func refusals(gu: GameUnit, as_target := false, shooters_hero := false) -> Array:
 	var out: Array = []
 	# H-9a: `shooters_hero` = the recursion below reads a SHOOTER's joined hero (as a target for the profile rules, but its beats are the shooter's own).
@@ -354,13 +354,13 @@ static func takes_human(gu: GameUnit, as_target := false) -> bool:
 	return refusals_human(gu, as_target).is_empty()
 
 
-## P4.D-48 / Plan E: why the charge door refuses `gu` (charger, or the charged `as_target`), the same labels as `refusals`.
+## Why the charge door refuses `gu` (charger, or the charged `as_target`), the same labels as `refusals`.
 ## `deny` reads `MELEE_DENY_PATH` beside the live allow file (shadow / probes until step 20 flips the melee default).
 static func melee_refusals(gu: GameUnit, as_target := false, deny := false) -> Array:
 	return refusals_in(MELEE_DENY_PATH if deny else MELEE_PATH, gu, as_target)
 
 
-## P4.D-37: `gu` carries a unit or weapon rule whose registry primitive is one of `primitives` (the slice's own lookup).
+## `gu` carries a unit or weapon rule whose registry primitive is one of `primitives` (the slice's own lookup).
 static func carries(gu: GameUnit, primitives: Array) -> bool:
 	var labels: Array = gu.get_special_rules().map(rule_label)
 	if gu.source_data is OPRApiClient.OPRUnit:

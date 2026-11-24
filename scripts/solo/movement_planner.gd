@@ -23,8 +23,7 @@ extends RefCounted
 ##   • Ledges (GF p.11, heights B2): opts["ledges"] edges are climbed, not walled — a leg crossing one pays its
 ##     dy_in (up and down alike), a model never ends mid-climb, ledges over 3" stay walls. The plan is 2D and
 ##     coherency stays 1" in XZ even across a ledge: that is STRICTER than the book's 3" allowance on elevation
-##     (GF p.11), which is legal — the table never applies a rule more loosely than the book. Decision of record:
-##     PLAN_heights step 22; no code follows from it.
+##     (GF p.11), which is legal — the table never applies a rule more loosely than the book.
 
 const EPS := 0.0001
 const LEDGE_CLIMB_MAX_IN := 3.0             # GF p.11: pieces over 3" tall are impassable — such ledges stay walls

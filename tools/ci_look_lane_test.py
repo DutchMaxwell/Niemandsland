@@ -1,4 +1,4 @@
-"""The LOOK short run (PLAN_CI_THROUGHPUT step 7): which PRs get it, and what runs in it."""
+"""The LOOK short run: which PRs get it, and what runs in it."""
 import os
 import subprocess
 import sys

@@ -37,7 +37,7 @@ const TOWN_SATURATION := 1.15
 const TOWN_EXPOSURE_GAIN := 1.4
 
 const OWNER_META := "boardgen_mood_owner"
-## The ruin town's blue-hour sky (plan PLAN_RUINTOWN_TARGET_C, S1; lead call D-C2, reversible): replaces the star field while a town board is on the table. A pure backdrop:
+## The ruin town's blue-hour sky (reversible): replaces the star field while a town board is on the table. A pure backdrop:
 ## the scene's ambient light is a colour and its reflections are off, so it lights nothing; the smallest radiance map, since nothing reads it.
 const TOWN_SKY_SHADER := preload("res://shaders/ruintown_sky.gdshader")
 

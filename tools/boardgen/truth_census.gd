@@ -1,5 +1,5 @@
 extends SceneTree
-## Ruin-town TRUTH CENSUS (plan PLAN_RUINTOWN_DRESSING, step 1): the digests that pin "the dressing changes no gameplay".
+## Ruin-town TRUTH CENSUS: the digests that pin "the dressing changes no gameplay".
 ##   godot --headless --path . -s res://tools/boardgen/truth_census.gd -- [seeds=41,25] [theme=ruintown]
 ## Prints per seed `TRUTH <seed> layout=<sha256> solids=<n> colliders=<sha256>` and ends with `TRUTH_DONE`.
 ## layout = the core's layout dictionary as JSON; colliders = the sorted solid boxes of BoardgenGreybox.plan (one per collider).

@@ -1,12 +1,12 @@
 extends SceneTree
-## Ruin-town M1 capture (plan PLAN_RUINTOWN, M1): the greybox stills of the town, REAL display, 1600 px JPG q90.
+## Ruin-town capture: the greybox stills of the town, REAL display, 1600 px JPG q90.
 ##   godot --path . -s <abs>/bg_capture_town.gd -- <out> [seeds=3,7,25] [theme=ruintown] [only=overview,top] [yaw=0] [presets=medium,ultra,low]
 ## Cameras per seed (Medium): overview45 (28 and 118 deg), top, play (game camera, both armies), halfplay (the play camera at half its distance), street (model eye height, four models
 ## ahead), fountain / statue / pool / hall (one close-up per landmark kind the seed has, two models beside; `fountain` also writes fountain_eye: the fountain at model eye height), tower (a 9 in cell).
 ## Also writes <out>/s<seed>_plan.txt (the ASCII plan with landmarks) and <out>/manifest.json (written LAST = the result artefact).
-## Derived from bg_capture_aaa.gd (same table clearing, armies, street pick). `perf=1`: the perf sweep. `baseline=1` (plan PLAN_RUINTOWN_AAA step R0): Medium + Ultra + Low,
+## Derived from bg_capture_aaa.gd (same table clearing, armies, street pick). `perf=1`: the perf sweep. `baseline=1`: Medium + Ultra + Low,
 ## every camera incl. macro / gate / yard / band, perf + readability gate per seed and preset, a plain dark table under the board and a neutral backdrop.
-## `macro_ground` (plan PLAN_RUINTOWN_GRIT G0): 30 deg down, 3 in above a street cell beside an earth border, no pawn - the paving close-up. `grit_debug=1`: beside every still a
+## `macro_ground`: 30 deg down, 3 in above a street cell beside an earth border, no pawn - the paving close-up. `grit_debug=1`: beside every still a
 ## <still>_grit.png (`grit_debug=2`: <still>_gritmap.png, the raw map) with the board shader's `grit_debug` on (the grit classes as flat colours), every light, the ambient, fog and glow off and a linear tonemap, so the class colours
 ## survive exactly (the instrument tools/boardgen/grit_metrics.py reads them). `manifest.json` gains `still_info`: per still its camera and pixels per inch at the camera's target.
 
@@ -45,7 +45,7 @@ var _model_z: Array[float] = []
 var _north: Array[int] = []
 var _south: Array[int] = []
 var _manifest := {"stills": [], "plans": [], "godot": "", "gpu": "", "still_info": {}}
-var _grit_debug := 0   # grit_debug=1 (classes) / 2 (the raw map): a debug still beside every still (plan PLAN_RUINTOWN_GRIT G0)
+var _grit_debug := 0   # grit_debug=1 (classes) / 2 (the raw map): a debug still beside every still
 var _cam_target := Vector3.ZERO
 
 
@@ -286,7 +286,7 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 			await _still(tag, "macro_ground")
 			for m: Node3D in shown:
 				m.visible = true
-	if _want("scene") and layout.get("theme", "") == "RuinTown":   # one close-up per story-scene kind (plan PLAN_RUINTOWN_GRIT S1-S3)
+	if _want("scene") and layout.get("theme", "") == "RuinTown":   # one close-up per story-scene kind
 		var seen := {}
 		for sc: Dictionary in BoardgenTownScenes.plan(layout)["scenes"]:
 			if seen.has(sc["kind"]):
@@ -1007,7 +1007,7 @@ func _grit_still(file: String) -> void:
 		await process_frame
 
 
-## The city wall close-up (plan PLAN_RUINTOWN_GRIT W0): the longest run of standing wall cells (level 1+) in one column whose face has open level-0 ground in front of at least half of it
+## The city wall close-up: the longest run of standing wall cells (level 1+) in one column whose face has open level-0 ground in front of at least half of it
 ## and whose lens spot 6 in out is open ground or off the board; square on, the target half way up the run's lowest cell on the cell edge at the run's middle: {yaw, target (m)}.
 func _macro_wall_pick(layout: Dictionary) -> Dictionary:
 	var nx: int = layout["nx"]
@@ -1042,7 +1042,7 @@ func _macro_wall_pick(layout: Dictionary) -> Dictionary:
 	return {"yaw": best["yaw"], "target": best["target"]}
 
 
-## The paving close-up (plan PLAN_RUINTOWN_GRIT G0): a level-0 street cell beside a level-0 earth cell, nearest the board centre, whose camera spot 5 in out over the street is open
+## The paving close-up: a level-0 street cell beside a level-0 earth cell, nearest the board centre, whose camera spot 5 in out over the street is open
 ## ground and has no lantern post within 2.5 in of the target or the lens. The target is 1 in onto the street from the cell border: {yaw, target (m)}.
 func _macro_ground_pick(layout: Dictionary) -> Dictionary:
 	var nx: int = layout["nx"]

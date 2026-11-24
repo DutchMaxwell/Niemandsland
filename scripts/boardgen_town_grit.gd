@@ -1,6 +1,6 @@
 class_name BoardgenTownGrit
 extends RefCounted
-## Why the ground of the ruin town is dirty where it is (plan PLAN_RUINTOWN_GRIT, the GRIT MAP): the board's layout rasterised ONCE on the CPU into a small RGBA8 texture that the board
+## Why the ground of the ruin town is dirty where it is (the GRIT MAP): the board's layout rasterised ONCE on the CPU into a small RGBA8 texture that the board
 ## shader (shaders/ruintown_grit.gdshaderinc) only looks up, so every dirt term has a cause - a wall, an earth border, a well - instead of a noise seed. Pure data, the rules never read it.
 ## TEXELS_PER_CELL texels per 3 in cell (0.19 in; ~14 ms per board: per-neighbour distance tables, not a
 ## per-texel search), texel centres symmetric about the board centre, so a half-turned layout gives the half-turned map for the data channels:
