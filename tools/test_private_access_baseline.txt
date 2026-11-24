@@ -239,7 +239,7 @@ _solo_core_ai_h 180
 _solo_core_round_begin 3
 _solo_core_round_end 4
 _solo_core_shadow_h 8
-_solo_cover_defense 7
+_solo_cover_defense 3
 _solo_defense_parts 2
 _solo_defense_vs 15
 _solo_deploy_begin_side 6
@@ -381,9 +381,6 @@ _solo_round_start_recovery_rule 2
 _solo_rule_float 2
 _solo_run_both_ai_round 5
 _solo_save_batch 9
-_solo_screen 5
-_solo_screened 2
-_solo_screen_open 4
 _solo_secret_markers_assign 2
 _solo_secret_trap_hits 1
 _solo_self_destruct_post_melee 2

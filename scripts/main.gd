@@ -332,7 +332,7 @@ var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, ou
 # _solo_apply_regeneration and _solo_ignore_wounds — so no await can ever observe it. Never widen a window across an await:
 # every attack in the game shares those functions, and a leaked flag would rewrite an unrelated save.
 var _solo_takedown_solo: Dictionary = {}     # {unit, index, model} or {}
-var _solo_screen: Dictionary = {}   # PLAN_COVER_36: the open volley's cover from sight blockers (_solo_screen_open), or {}
+var _solo_screen: Dictionary = {}   # PLAN_COVER_36: the open volley's cover from sight blockers, or {}; nothing opens it since the table volley resolvers were removed
 var _solo_alias_charge_in: float = 0.0       # SHO-18: the melee charge gap for the alias gate
 ## Sweep F row `Fortified Aura` (epoch 55) — the loss line's once-guard: the
 ## demotion is a STATE, logged on the first save batch it bites, cleared
@@ -6586,26 +6586,6 @@ func _solo_true_los_callable(shooter: GameUnit, target: GameUnit, shared_blocker
 			volumes, blockers, exclude)
 
 
-## PLAN_COVER_36 (twin of core `sight::screen_of`): cover from sight blockers for a volley of `shooter`'s chain at `target`
-## (the defense holder) - per chain member its own sight callable and its foot twin; the holder's joined heroes only widen
-## the sighting set. {sighting, hidden (per alive model of `target`), screened}. No caller yet (step 9b).
-func _solo_volley_screen(shooter: GameUnit, target: GameUnit) -> Dictionary:
-	var groups: Array = []
-	var members: Array = [shooter]
-	if shooter.has_method("get_attached_heroes"):
-		members.append_array(shooter.get_attached_heroes())
-	for m in members:
-		if m != null:
-			groups.append({"pos": SoloController.alive_positions(m), "eye": _solo_true_los_callable(m, target),
-				"foot": _solo_true_los_callable(m, target, null, true)})
-	var also: Array = []
-	if target.has_method("get_attached_heroes"):
-		for h in target.get_attached_heroes():
-			if h != null:
-				also.append_array(SoloController.alive_positions(h))
-	return VolumetricLos.screen(groups, SoloController.alive_positions(target), also)
-
-
 ## Every OTHER unit's alive models as VolumetricLos blocker cylinders: the base circle where the model
 ## really stands, its own height off the base table, a per-unit key for the <1" gap-closure and the
 ## Aircraft flag (an Aircraft flies high — its base blocks no line of sight, GF v3.5.1 p.13). The shooter's
@@ -6949,26 +6929,6 @@ func _solo_cover_defense(target: GameUnit, base_defense: int) -> int:
 	return AiCombatMath.covered_defense(base_defense, _solo_majority_in_cover(target) or _solo_screened(target))
 
 
-## PLAN_COVER_36 (core twin: sim.rs resolve_with's def build, from 95): opens the volley's latch of cover from sight blockers for
-## `target`'s defense holder and says the verdict. Keyed by shooter AND target; closed where the volley's saves end.
-func _solo_screen_open(attacker: GameUnit, target: GameUnit) -> void:
-	_solo_screen = {}
-	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_95_PARITY_BATCH or attacker == null or target == null:
-		return
-	var holder: GameUnit = _solo_defense_holder(target)
-	holder = target if holder == null else holder
-	var sc := _solo_volley_screen(attacker, holder)
-	var models: Array = holder.get_alive_models().filter(func(m: Variant) -> bool:
-		return (m as ModelInstance).node != null and is_instance_valid((m as ModelInstance).node))
-	_solo_screen = {"shooter": attacker, "named": target, "target": holder, "screened": bool(sc["screened"]),
-		"hidden": sc["hidden"], "models": models, "lift_said": []}
-	if bool(sc["screened"]) and battle_log != null:
-		var hid: Array = sc["hidden"]
-		battle_log.log_event(BattleLog.Category.COMBAT, "Cover: %s is behind a sight blocker from %s (%d of %d models) - %s" % [
-			holder.get_name(), attacker.get_name(), hid.count(true), hid.size(),
-			"already in Cover terrain, one +1" if _solo_majority_in_cover(holder) else "+1 Defense"], true)
-
-
 ## PLAN_COVER_36: the open volley's cover from sight blockers for `unit` (the named target or its holder). Inside the Takedown
 ## window the pick's own model answers with its `hidden` flag, as the terrain half reads the pick's own square.
 func _solo_screened(unit: GameUnit) -> bool:
@@ -6978,23 +6938,6 @@ func _solo_screened(unit: GameUnit) -> bool:
 		var i: int = (_solo_screen["models"] as Array).find(_solo_takedown_solo.get("model"))
 		return i >= 0 and i < (_solo_screen["hidden"] as Array).size() and bool(_solo_screen["hidden"][i])
 	return bool(_solo_screen["screened"])
-
-
-## PLAN_COVER_36 (core twin: dice.rs `lifts_screen`): an Indirect weapon whose cover waiver holds (Hold kept where the entry
-## needs it) ignores the cover a sight blocker gives, terrain cover stays; said once per weapon and volley.
-func _solo_screen_lift(profile: Dictionary, attacker: GameUnit, target: GameUnit, shot_base: int, save_def: int) -> int:
-	var held := _solo_unit_held(attacker)
-	if not _solo_screened(target) or not bool(profile.get("indirect", false)) or bool(profile.get("takedown", false)) \
-			or SoloController.shot_ignores_cover(profile, attacker, held) \
-			or (SoloController.indirect_needs_hold(attacker, "cover_needs_hold") and not held):
-		return save_def
-	var wname := str(profile.get("name", "?"))
-	if not (_solo_screen["lift_said"] as Array).has(wname):
-		(_solo_screen["lift_said"] as Array).append(wname)
-		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "Indirect: %s ignores %s's cover from sight blockers" % [
-				wname, (_solo_screen["target"] as GameUnit).get_name()], true)
-	return AiCombatMath.covered_defense(shot_base, _solo_majority_in_cover(target))
 
 
 ## Hits from a to-hit roll, plus the "on an unmodified 6" bonus-hit rules and Blast. Relentless (>9"
