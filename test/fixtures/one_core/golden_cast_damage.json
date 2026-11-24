@@ -1479,7 +1479,7 @@
     "COMBAT|AI (Mystic): 6 → 1 hit (2+)",
     "COMBAT|Test Bolt: cast roll 6 vs 2+ — SUCCESS",
     "COMBAT|Foe saves on 6 only (Def 4+, AP 4 — a natural 6 always saves)",
-    "COMBAT|AI (Foe) defends: 6 6 6 6 4 4 4 3 2 2 1 1 → 4 blocks (8+)",
+    "COMBAT|AI (Foe) defends: 6 6 6 6 4 4 4 3 2 2 1 1 → 4 blocks (6+)",
     "COMBAT|Foe takes 3 wounds (0/3)",
     "COMBAT|Foe destroyed"
    ],
@@ -1551,7 +1551,7 @@
     "COMBAT|AI (Mystic): 4 → 1 hit (2+)",
     "COMBAT|Test Bolt: cast roll 4 vs 2+ — SUCCESS",
     "COMBAT|Foe saves on 6 only (Def 4+, AP 4 — a natural 6 always saves)",
-    "COMBAT|AI (Foe) defends: 6 6 6 5 5 4 4 3 2 2 2 1 → 3 blocks (8+)",
+    "COMBAT|AI (Foe) defends: 6 6 6 5 5 4 4 3 2 2 2 1 → 3 blocks (6+)",
     "COMBAT|Foe takes 3 wounds (0/3)",
     "COMBAT|Foe destroyed"
    ],
@@ -1623,7 +1623,7 @@
     "COMBAT|AI (Mystic): 5 → 1 hit (2+)",
     "COMBAT|Test Bolt: cast roll 5 vs 2+ — SUCCESS",
     "COMBAT|Foe saves on 6 only (Def 4+, AP 4 — a natural 6 always saves)",
-    "COMBAT|AI (Foe) defends: 6 5 5 5 4 3 2 1 1 1 1 1 → 1 block (8+)",
+    "COMBAT|AI (Foe) defends: 6 5 5 5 4 3 2 1 1 1 1 1 → 1 block (6+)",
     "COMBAT|Foe takes 3 wounds (0/3)",
     "COMBAT|Foe destroyed"
    ],
@@ -1762,7 +1762,7 @@
     "COMBAT|AI (Mystic): 4 → 1 hit (2+)",
     "COMBAT|Test Bolt: cast roll 4 vs 2+ — SUCCESS",
     "COMBAT|Foe saves on 6 only (Def 4+, AP 4 — a natural 6 always saves)",
-    "COMBAT|AI (Foe) defends: 6 5 4 4 4 3 3 2 2 2 1 1 → 1 block (8+)",
+    "COMBAT|AI (Foe) defends: 6 5 4 4 4 3 3 2 2 2 1 1 → 1 block (6+)",
     "COMBAT|Foe takes 3 wounds (0/3)",
     "COMBAT|Foe destroyed"
    ],
@@ -1834,7 +1834,7 @@
     "COMBAT|AI (Mystic): 6 → 1 hit (2+)",
     "COMBAT|Test Bolt: cast roll 6 vs 2+ — SUCCESS",
     "COMBAT|Foe saves on 6 only (Def 4+, AP 4 — a natural 6 always saves)",
-    "COMBAT|AI (Foe) defends: 6 6 6 6 5 5 4 4 2 2 1 1 → 4 blocks (8+)",
+    "COMBAT|AI (Foe) defends: 6 6 6 6 5 5 4 4 2 2 1 1 → 4 blocks (6+)",
     "COMBAT|Foe takes 3 wounds (0/3)",
     "COMBAT|Foe destroyed"
    ],
@@ -1906,7 +1906,7 @@
     "COMBAT|AI (Mystic): 5 → 1 hit (2+)",
     "COMBAT|Test Bolt: cast roll 5 vs 2+ — SUCCESS",
     "COMBAT|Foe saves on 6 only (Def 4+, AP 4 — a natural 6 always saves)",
-    "COMBAT|AI (Foe) defends: 6 6 6 5 5 4 4 3 3 3 3 1 → 3 blocks (8+)",
+    "COMBAT|AI (Foe) defends: 6 6 6 5 5 4 4 3 3 3 3 1 → 3 blocks (6+)",
     "COMBAT|Foe takes 3 wounds (0/3)",
     "COMBAT|Foe destroyed"
    ],
@@ -1978,7 +1978,7 @@
     "COMBAT|AI (Mystic): 6 → 1 hit (2+)",
     "COMBAT|Test Bolt: cast roll 6 vs 2+ — SUCCESS",
     "COMBAT|Foe saves on 6 only (Def 4+, AP 4 — a natural 6 always saves)",
-    "COMBAT|AI (Foe) defends: 6 6 6 5 5 4 4 2 2 2 2 1 → 3 blocks (8+)",
+    "COMBAT|AI (Foe) defends: 6 6 6 5 5 4 4 2 2 2 2 1 → 3 blocks (6+)",
     "COMBAT|Foe takes 3 wounds (0/3)",
     "COMBAT|Foe destroyed"
    ],

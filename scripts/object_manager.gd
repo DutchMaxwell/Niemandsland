@@ -1358,7 +1358,7 @@ func _start_dragging(screen_pos: Vector2) -> void:
 	# Only OWN (or unowned) objects are draggable; another player's models stay selected
 	# (for inspection / rings) but never move.
 	var movable := _movable_selection()
-	movable = _drag_gate(movable)   # one-core P3 step 30: nothing is lifted for a unit whose activation is not open
+	movable = _drag_gate(movable, true)   # one-core P3 step 30: nothing is lifted for a unit whose activation is not open
 	if movable.is_empty():
 		return
 
@@ -1549,7 +1549,8 @@ func _stop_dragging() -> void:
 ## One-core P3 step 30 (O9, O14 (1b)): `objs` without the models of every unit main reports blocked (a lifecycle unit
 ## whose activation is not open); terrain, props and every other unit pass. When that leaves nothing, main says why for the
 ## first blocked unit (toast and log line); nothing was lifted, so nothing is restored or broadcast. Step 65 reuses it.
-func _drag_gate(objs: Array[Node3D]) -> Array[Node3D]:
+## `from_click`: the gate of a press on a model (every plain click is a drag attempt) - its log line comes once a round.
+func _drag_gate(objs: Array[Node3D], from_click := false) -> Array[Node3D]:
 	var main := get_node_or_null("/root/Main")
 	if main == null or not main.has_method("core_drag_blocked"):
 		return objs
@@ -1564,7 +1565,7 @@ func _drag_gate(objs: Array[Node3D]) -> Array[Node3D]:
 		else:
 			out.append(obj)
 	if out.is_empty() and refused != null:
-		main.call("core_drag_refused", refused)
+		main.call("core_drag_refused", refused, from_click)
 	return out
 
 
@@ -1614,17 +1615,20 @@ func _snapback_off_turn_drag() -> bool:
 ## One-core P3 step 66: the drag in flight, per dragged model (network id) that moved more than the 0.1" floor, the path
 ## its drop will record: the anchor's simplified path shifted to the model's base, its position now appended.
 ## `_stop_dragging` builds the same `moves` entries after the drop door has run; a refused drop never records them.
-func drag_paths() -> Dictionary:
+## Ticket 12: with a `head` (the anchor's candidate tip this frame, `committed` its path so far) each path is the one the
+## drag WILL have once the models follow that head, not the one they stand at.
+func drag_paths(head := Vector2.INF, committed := PackedVector2Array()) -> Dictionary:
 	var out := {}
-	var base_path: PackedVector2Array = MoveLedger.simplify(_drag_path_points)
+	var ahead := head.is_finite()
+	var base_path: PackedVector2Array = MoveLedger.simplify(MoveLedger.with_final(committed, head) if ahead else _drag_path_points)
 	for obj in _selected_objects:
 		if not is_instance_valid(obj) or not _drag_start_positions.has(obj) or not obj.has_meta("network_id"):
 			continue
 		var start: Vector3 = _drag_start_positions[obj]
-		if Vector2(obj.global_position.x - start.x, obj.global_position.z - start.z).length() * METERS_TO_INCHES > 0.1:
-			var offset := Vector2(start.x - _drag_anchor_position.x, start.z - _drag_anchor_position.z)
-			out[int(obj.get_meta("network_id"))] = MoveLedger.with_final(MoveLedger.translated(base_path, offset),
-					Vector2(obj.global_position.x, obj.global_position.z))
+		var offset := Vector2(start.x - _drag_anchor_position.x, start.z - _drag_anchor_position.z)
+		var at := head + offset if ahead else Vector2(obj.global_position.x, obj.global_position.z)
+		if at.distance_to(Vector2(start.x, start.z)) * METERS_TO_INCHES > 0.1:
+			out[int(obj.get_meta("network_id"))] = MoveLedger.with_final(MoveLedger.translated(base_path, offset), at)
 	return out
 
 
@@ -2701,10 +2705,11 @@ func _update_drag(screen_pos: Vector2) -> void:
 					head = from_pt
 				# MOVE_GAPS D2: the first touch of Difficult terrain shrinks the cap to 6" for the
 				# rest of the drag. Only this frame's new leg is tested: every older leg was tested
-				# when it was painted, and retrace only erases.
+				# when it was painted, and retrace only erases. Ticket 12: an open core activation
+				# asks the core instead (the whole unit, every drop of this move, the debuff).
 				var difficult_m := DIFFICULT_CAP_IN / METERS_TO_INCHES
 				if not _drag_hit_difficult and _strict_cap_meters > difficult_m:
-					_drag_hit_difficult = _leg_touches_difficult(from_pt, head)
+					_drag_hit_difficult = _drag_touches_difficult(committed, from_pt, head)
 				if _drag_hit_difficult and _strict_cap_meters > difficult_m:
 					_strict_cap_meters = difficult_m
 					committed = MoveLedger.truncate_to_length(MoveLedger.with_final(committed, head), difficult_m)
@@ -2798,6 +2803,17 @@ func _update_drag(screen_pos: Vector2) -> void:
 			if move_trails != null and have_path:
 				move_trails.update_live(_drag_path_points, head)
 			_show_landing_ghosts()
+
+
+## Ticket 12 (DRAG-BAND-DIFFICULT): the core's drop check decides for a unit whose activation is open on the core move
+## path - its answer for the models where this frame's head (`b`, after `committed`) puts them, the same test that refuses
+## the drop (any model, any drop of this move, the Difficult debuff). Every other drag keeps the table's leg test below.
+func _drag_touches_difficult(committed: PackedVector2Array, a: Vector2, b: Vector2) -> bool:
+	var main := get_node_or_null("/root/Main")
+	var core := -1
+	if main != null and main.has_method("core_drag_difficult"):
+		core = int(main.call("core_drag_difficult", _drag_unit_of(_cap_anchor_model_node()), drag_paths(b, committed)))
+	return core == 1 if core >= 0 else _leg_touches_difficult(a, b)
 
 
 ## MOVE_GAPS D2: does a dragged piece's base touch Difficult terrain on the anchor's leg a -> b,

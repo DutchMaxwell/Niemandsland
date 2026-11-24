@@ -146,6 +146,7 @@ var _dice_count_value_label: Label = null
 var _current_roll_column: VBoxContainer = null
 var _movement_cap_buttons: Dictionary = {}  # MovementCap mode -> Button (the "Movement" cap row)
 var _refreshing_cap_row := false   # one-core P3 step 31: the row refresh is not re-entrant
+var _movement_cap_picked_for := ""   # the one selected unit the player last pressed a movement mode for ("" = none or several)
 
 # Success evaluation + rerolls (display-only aids; the rules live in DiceRules).
 var _success_target: int = DiceRules.TARGET_NONE
@@ -3590,6 +3591,12 @@ func core_bands(gu: GameUnit) -> Dictionary:
 	return CoreActivation.bands(self, gu)
 
 
+## Ticket 12: the core's Difficult-cap answer for the drag in flight (`now`: ObjectManager.drag_paths; -1 = not on the
+## core move path).
+func core_drag_difficult(gu: GameUnit, now: Dictionary) -> int:
+	return CoreActivation.drag_difficult(self, gu, now)
+
+
 ## One-core P3 step 29 (O9, O14 (1b)): "Activate" STARTS the activation of a lifecycle unit - the lock first (O5), then
 ## the session, then the one line that is the start's multiplayer sync (O15 (2); no "open" state exists on the wire).
 ## The unit stays NOT activated and begin_activation does not run (D23: the first committed door still fires it).
@@ -3629,15 +3636,24 @@ func core_drag_blocked(gu: GameUnit, for_drag := false) -> bool:
 
 ## Step 30: why `gu` did not move - another unit's open activation (the core's O5 sentence) or its own missing Start
 ## (O15 (1)), or (40b, maintainer answer 14.11.) its activation already spent; a toast and a log line, which reaches the
-## other table.
-func core_drag_refused(gu: GameUnit) -> void:
+## other table. `from_drag` (live test 24.11.: every plain click on a unit that was not started is a drag attempt, so the log
+## filled with the same sentence): the toast shows every time, the log line once per sentence and round.
+func core_drag_refused(gu: GameUnit, from_drag := false) -> void:
 	var text := "%s has already been activated this round." % gu.get_name()   # step 40b: it cannot start again, so no "Activate first"
 	if not gu.is_activated:
 		var core: Object = solo_controller._core_node_ready() if solo_controller != null else null
 		var verdict: Dictionary = core.check_begin(CoreActivation.open_unit_name(self, gu)) if core != null else {}
 		text = str(verdict["reason"]) if not bool(verdict.get("ok", true)) else "Activate %s first." % gu.get_name()
-	_log_rule_event(BattleLog.Category.MOVEMENT, text)
+	var round_now: int = opr_army_manager.current_round if opr_army_manager != null else 0
+	if not from_drag or int(_drag_refusal_logged.get(text, -1)) != round_now:
+		_log_rule_event(BattleLog.Category.MOVEMENT, text)
+	if from_drag:
+		_drag_refusal_logged[text] = round_now
 	_show_toast(text)
+
+
+## core_drag_refused: refusal sentence -> the round its drag refusal was last logged in.
+var _drag_refusal_logged := {}
 
 
 ## One-core P3 step 62 (O14 (1b)): a door that runs inside an activation (the transport doors here) is refused, with step
@@ -11419,11 +11435,15 @@ func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 ## The sentence that opens a Dangerous terrain test. One writer for the table's roll and for the core door's (P4.D-19:
 ## the core prints no sentence for the test).
 func _solo_log_dangerous_test(unit: GameUnit, dice: int) -> void:
+	# Rules 3.6 Unstable: when only a ruin made the move Dangerous (over 6" into or through it), the line names that cause.
+	var unstable: bool = solo_controller != null and solo_controller.take_unstable_cause(unit)
 	if battle_log == null:
 		return
 	# UX-20 (EPOCH_73_V36, rules 3.6): the dice are ONE test of the whole joined unit.
 	var line: String = "%s takes one Dangerous terrain test for the whole unit (%d dice)" \
 		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else "%s takes %d Dangerous terrain test dice"
+	if unstable:
+		line = "%s moved over 6\" through Unstable ruins: one Dangerous terrain test for the whole unit (%d dice)"
 	_log_rule_event(BattleLog.Category.COMBAT, line % [unit.get_name(), dice], true)
 
 
@@ -13097,6 +13117,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"Consolidation: move %s back 1\" (the charger separates — %s)" % [charger.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger))], true)
+			CoreActivation.begin_post_melee_move(self, charger, 1.0, "Pull-back")   # its own move: the charge does not count
 			await _solo_board_prompt(
 				"Pull back 1\": drag %s back from the melee (%s) — the game waits." % [charger.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(charger))],
 				"✓ Pulled back")
@@ -13151,6 +13172,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit, auto: bool =
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Consolidation: %s may move up to 3\" (enemy destroyed — %s)" % [survivor.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(survivor))], false)
+	CoreActivation.begin_post_melee_move(self, survivor, 3.0, "Consolidation")   # its own move: the charge does not count
 	await _solo_board_prompt(
 		"Consolidate: %s destroyed the enemy — you may drag it up to 3\" (%s)." % [survivor.get_name(), OPRApiClient.rules_cite(RulesRegistry.system_of_unit(survivor))],
 		"✓ Done consolidating")
@@ -14066,8 +14088,13 @@ func solo_begin_cast(unit: GameUnit) -> void:
 	if range_ring_controller != null and range_ring_controller.has_method("show_spell_preview"):
 		range_ring_controller.show_spell_preview(_solo_unit_nodes(unit), float(entry.get("range_in", 0)))
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL, "%s: pick a %s target for %s (%d marked in range) — right-click cancels" % [
-			unit.get_name(), side, str(entry.get("name", "?")), cands.size()])
+		battle_log.log_event(BattleLog.Category.GENERAL, cast_pick_prompt(unit.get_name(), side, str(entry.get("name", "?")), cands.size()))
+
+
+## The cast's target prompt. The article follows the side word ("an enemy", "a friendly"); static + pure for the unit test.
+static func cast_pick_prompt(unit_name: String, side: String, spell: String, marked: int) -> String:
+	var article := "an" if side.substr(0, 1).to_lower() in ["a", "e", "i", "o", "u"] else "a"
+	return "%s: pick %s %s target for %s (%d marked in range) — right-click cancels" % [unit_name, article, side, spell, marked]
 
 
 ## #1719: a cast's sides. With an AI seat the foe is NACHTMAHR and the own side is the CASTER's slot (co-op
@@ -14223,16 +14250,10 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 			if _solo_target_mode.has("split_second"):
 				_solo_split_abort()
 				return true
-			# Release-pass find (#226): stranding in the second-pick phase killed the whole
-			# attack — right-click now falls back to "everything at the first target".
+			# Right-click / Esc while picking the second target cancels the whole attack, as the prompt says:
+			# nothing is rolled and the unit is still free to act (it used to fire everything at the first target).
 			if _solo_target_mode.has("split_first"):
-				var fb_attacker: GameUnit = _solo_target_mode.get("unit")
-				var fb_target: GameUnit = _solo_target_mode.get("split_first")
-				_solo_end_targeting()
-				if battle_log != null:
-					battle_log.log_event(BattleLog.Category.GENERAL,
-						"Split fire abandoned — everything fires at %s" % fb_target.get_name())
-				_run_human_attack(fb_attacker, fb_target, false)
+				_solo_split_abort()
 				return true
 			# #227: with picks pending, right-click means "cast with these" (early finish).
 			if _solo_target_mode.has("cast_entry") \
@@ -15112,8 +15133,18 @@ func _solo_hover_sighted_count(attacker: GameUnit, hovered: GameUnit) -> int:
 ## up to two targets, per weapon group, declared before rolling). Melee never splits
 ## (Assault actions may not split fire). Fire-and-forget async — the input handler stays sync.
 func _solo_split_or_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> void:
+	var choice: Dictionary = {} if melee else await _solo_offer_split_fire(attacker, target)
+	await _solo_attack_after_split_choice(attacker, target, melee, choice)
+
+
+## The attack after the split-fire answer: cancelled = no shot at all (nothing rolled, the activation stays open),
+## a split = the second-target pick, else the one attack.
+func _solo_attack_after_split_choice(attacker: GameUnit, target: GameUnit, melee: bool, choice: Dictionary) -> void:
+	if bool(choice.get("cancel", false)):
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Shot cancelled — %s has not acted" % attacker.get_name())
+		return
 	if not melee:
-		var choice: Dictionary = await _solo_offer_split_fire(attacker, target)
 		if bool(choice.get("split", false)):
 			var names: Array = choice.get("names", [])
 			var rest: Array = choice.get("rest", [])
@@ -15182,7 +15213,16 @@ func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionar
 	var names: Array = _solo_split_fire_offer_names(attacker, target_a)
 	if names.size() < 2:
 		return {"split": false}
-	var picked: Array = await _solo_ask_split_fire(target_a, names)
+	return await _solo_split_fire_choice(target_a, names)
+
+
+## The split-fire answer for `names`: {"cancel": true} when the player backs out (Cancel attack, × or Esc),
+## {"split": false} for one target, else the split with the checked and the staying weapon names.
+func _solo_split_fire_choice(target_a: GameUnit, names: Array) -> Dictionary:
+	var answer: Variant = await _solo_ask_split_fire(target_a, names)
+	if answer == null:
+		return {"cancel": true}
+	var picked: Array = answer
 	if picked.is_empty() or picked.size() >= names.size():
 		return {"split": false}   # nothing checked, or everything — both mean one target
 	var rest: Array = []
@@ -15193,11 +15233,14 @@ func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionar
 
 
 ## The split-fire question itself (#226): one check box per weapon group; returns the checked names
-## ([] = "All at <target>"). Apart from the guards above so the prompt is drivable headless.
-func _solo_ask_split_fire(target_a: GameUnit, names: Array) -> Array:
+## ([] = "All at <target>"), or null when the player cancels the attack (its button, × or Esc).
+## Apart from the guards above so the prompt is drivable headless.
+func _solo_ask_split_fire(target_a: GameUnit, names: Array) -> Variant:
 	var card := PromptCard.new("Split fire?",
 		"Up to two targets (%s). Checked weapons fire at a SECOND target:" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target_a)),
-		"Pick 2nd target", "All at %s" % target_a.get_name())
+		"Pick 2nd target", "Cancel attack")
+	card.cancel_value = null   # the way out (button, × and Esc) cancels the shot; it is not "All at"
+	card.add_action("All at %s" % target_a.get_name(), "all")
 	var checks: Array = []
 	for n in names:
 		var cb := CheckBox.new()
@@ -15206,8 +15249,11 @@ func _solo_ask_split_fire(target_a: GameUnit, names: Array) -> Array:
 		checks.append(cb)
 	GameMenu.section(card.rows)   # the check boxes as house lines, as in the game menu
 	add_child(card)
+	var answer: Variant = await card.answer(null)
+	if answer == null:
+		return null
 	var picked: Array = []
-	if bool(await card.answer()):
+	if answer is bool and answer:
 		for i in checks.size():
 			if (checks[i] as CheckBox).button_pressed:
 				picked.append(names[i])
@@ -18235,6 +18281,9 @@ func _on_movement_cap_pressed(mode: int) -> void:
 			ObjectManager.MovementCap.CHARGE: "Charge"}[mode]])
 	if object_manager and object_manager.has_method("set_movement_cap"):
 		object_manager.set_movement_cap(mode)
+		# A Rush or Charge pressed before the unit's Start is the player's declaration: the Start keeps it (CoreActivation.open_session).
+		var picked := UnitUtils.get_unique_units(object_manager.get_selected_objects())
+		_movement_cap_picked_for = (picked[0] as GameUnit).unit_id if picked.size() == 1 else ""
 	_update_movement_cap_display()
 	dice_controls_changed.emit(&"movecap", mode)
 
@@ -18246,6 +18295,12 @@ func core_activation_end(gu: GameUnit) -> bool:
 
 ## One-core P3 step 35: the Cancel of `gu`'s open activation (the card's button, step 36).
 func core_activation_cancel(gu: GameUnit) -> void:
+	# A target pick of the cancelled unit closes with it: left open, the next click (or right-click at a split's
+	# second pick) started a fresh activation and fired.
+	if gu != null and _solo_target_mode.get("unit") == gu:
+		if _solo_target_mode.has("split_second"):
+			_solo_deploy_ui_hide()
+		_solo_end_targeting()
 	CoreActivation.cancel(self, gu)
 
 
@@ -22689,6 +22744,7 @@ func _on_game_phase_changed(phase: int) -> void:
 	_sync_move_trails_deployment()
 	_update_game_phase_ui()
 	if phase == OPRArmyManager.GamePhase.PLAYING:
+		_drag_refusal_logged.clear()   # a new game logs its first drag refusals again
 		_log_aura_grants()   # AIG-G2: the import expansion's silent grants surface at battle start
 	_solo_grade_logged = ""   # every phase change opens a new game's grade line
 	_solo_log_grade()
@@ -22703,10 +22759,12 @@ func _on_game_phase_changed(phase: int) -> void:
 			and (network_manager == null or not network_manager.is_multiplayer_active()):
 		_hotseat_rapid_ambush_round_one()
 
-## AIG-G2: one battle-log line per granted aura effect, in deployment order.
+## AIG-G2: one battle-log line per granted aura effect, in deployment order. Several units of the same name with the same
+## grant (a list with four identical Heroes) share ONE line with their count, so the log never repeats a line word for word.
 func _log_aura_grants() -> void:
 	if battle_log == null or opr_army_manager == null: return
 	if AiActRecorder.rules_epoch < AiActRecorder.EPOCH_73_V36: return
+	var counts := {}   # line -> number of grants that read the same (insertion order = deployment order)
 	var pids: Array = opr_army_manager.armies.keys()
 	pids.sort()
 	for pid in pids:
@@ -22720,8 +22778,11 @@ func _log_aura_grants() -> void:
 				var aura := str(r).strip_edges()
 				var effect := AiEv.aura_granted_rule(gu, aura)
 				if not effect.is_empty() and to.has_special_rule(effect):
-					battle_log.log_event(BattleLog.Category.GENERAL,
-						"%s: %s grants %s to %s" % [aura, gu.get_name(), effect, to.get_name()])
+					var line := "%s: %s grants %s to %s" % [aura, gu.get_name(), effect, to.get_name()]
+					counts[line] = int(counts.get(line, 0)) + 1
+	for line: String in counts:
+		var n: int = counts[line]
+		battle_log.log_event(BattleLog.Category.GENERAL, line if n == 1 else "%s (%d units)" % [line, n])
 
 
 ## #1719: the round-1 Rapid Ambush step on a local table without an AI seat ("may be deployed at the

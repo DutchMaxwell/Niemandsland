@@ -2011,3 +2011,181 @@ func test_a_refused_shot_leaves_the_sessions_transcript_as_it_was(timeout := 120
 	CoreActivation.close_session(_main, att.unit_id)
 	_clear(units)
 	GraphicsSettings.enforce_movement_limit = was
+
+
+## ---- the move after a melee is a movement of its own (Consolidation Moves, GF / AoF Advanced Rules v3.5.1) ----
+
+## A plain enemy unit `x_in` east (the melee's other side; the consolidation reads only whether it still stands).
+func _enemy(x_in: float) -> GameUnit:
+	return ParityTable._make_unit(_main, {"player": 2, "name": "Foes", "models": 2, "x_in": x_in, "z_step_in": 1.2,
+		"quality": 4, "defense": 4, "tough": 1, "game_system": "gf", "faction_folder": "robot_legions", "rules": []}, {})
+
+
+func _allowance_lines() -> Array:
+	return _main.battle_log.entries().map(func(e: Dictionary) -> String: return str(e["text"])) \
+		.filter(func(t: String) -> bool: return t.contains("allowance is"))
+
+
+## An 11.5" Charge, then the melee ends with both units standing: the charger's 1" pull-back is accepted (the charge does
+## not count against it) and a second 1" pull-back is refused against the 1" allowance. RED before the fix: the pull-back
+## was summed with the charge and refused ("a model moved 12.5\" - the Charge allowance is 12.0\".").
+func test_the_pull_back_after_a_charge_has_its_own_1_inch_allowance() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var u := _human("Rifles")
+	var foe := _enemy(40.0)
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	_pick([_node(u, 0), _node(u, 1)])
+	await _switch(ObjectManager.MovementCap.CHARGE, "")
+	await _drag_unit(u, 11.5)
+	assert_array(_allowance_lines()).override_failure_message("the 11.5\" charge drag was refused").is_empty()
+	SoloHarness.consolidate(_main, u, foe)   # not awaited: it waits on the board prompt
+	await _runner.simulate_frames(2)
+	var at := _poses(u)
+	await _drag_unit(u, -1.0)
+	assert_array(_allowance_lines()).override_failure_message("the 1\" pull-back was refused").is_empty()
+	assert_array(_poses(u)).override_failure_message("the pull-back did not move").is_not_equal(at)
+	await _drag_unit(u, -1.0)
+	assert_array(_allowance_lines()).is_equal(["Rifles: a model moved 2.0\" - the Pull-back allowance is 1.0\"."])
+	GraphicsSettings.enforce_movement_limit = was
+
+
+## The same 11.5" Charge destroys the enemy: the survivor's 3" consolidation is accepted, one more inch is refused.
+func test_the_consolidation_after_a_charge_has_its_own_3_inch_allowance() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var u := _human("Rifles")
+	var foe := _enemy(40.0)
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	_pick([_node(u, 0), _node(u, 1)])
+	await _switch(ObjectManager.MovementCap.CHARGE, "")
+	await _drag_unit(u, 11.5)
+	for m in foe.models:
+		(m as ModelInstance).is_alive = false
+	SoloHarness.consolidate(_main, u, foe)   # not awaited: it waits on the board prompt
+	await _runner.simulate_frames(2)
+	await _drag_unit(u, 3.0)
+	assert_array(_allowance_lines()).override_failure_message("the 3\" consolidation was refused").is_empty()
+	await _drag_unit(u, 1.0)
+	assert_array(_allowance_lines()).is_equal(["Rifles: a model moved 4.0\" - the Consolidation allowance is 3.0\"."])
+	GraphicsSettings.enforce_movement_limit = was
+
+
+## A Rush pressed on the selector BEFORE the unit's Start is the player's declaration: the Start keeps it and a 10" drag
+## is accepted. RED before the fix: the Start reset the selector to Advance and the core refused the drag in the
+## Advance allowance's words ("a model moved 10.0\" - the Advance allowance is 6.0\".").
+func test_a_rush_picked_before_the_start_stays_and_a_10_inch_drag_is_accepted() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var u := _human("Rifles")
+	var at := _poses(u)
+	_pick([_node(u, 0), _node(u, 1)])
+	assert_int(_cap()).override_failure_message("the selector does not start on Advance").is_equal(ObjectManager.MovementCap.ADVANCE)
+	assert_bool(await _switch(ObjectManager.MovementCap.RUSH, "")).override_failure_message("a card before the Start").is_false()
+	assert_bool(_main.core_activation_start(u)).override_failure_message("no Start").is_true()
+	assert_int(_cap()).override_failure_message("the Start reset the player's Rush").is_equal(ObjectManager.MovementCap.RUSH)
+	await _drag_unit(u, 10.0)
+	var refused: Array = _main.battle_log.entries().filter(func(e: Dictionary) -> bool: return str(e["text"]).contains("allowance is"))
+	assert_array(refused).override_failure_message("the 10\" Rush drag was refused: %s" % [refused]).is_empty()
+	assert_array(_poses(u)).override_failure_message("the 10\" Rush drag did not move").is_not_equal(at)
+	GraphicsSettings.enforce_movement_limit = was
+
+
+## A Rush pressed for ANOTHER unit is not this unit's declaration: its Start still sets Advance (step 31), and so does the
+## next activation of the unit the Rush was pressed for.
+func test_a_rush_picked_for_another_unit_or_an_ended_activation_does_not_carry() -> void:
+	var u := _human("Rifles")
+	var v := _human("Guards")
+	_pick([_node(v, 0), _node(v, 1)])
+	await _switch(ObjectManager.MovementCap.RUSH, "")
+	_pick([_node(u, 0), _node(u, 1)])
+	assert_bool(_main.core_activation_start(u)).is_true()
+	assert_int(_cap()).override_failure_message("another unit's Rush carried over").is_equal(ObjectManager.MovementCap.ADVANCE)
+	await _switch(ObjectManager.MovementCap.RUSH, "")
+	CoreActivation.close_session(_main, u.unit_id)
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.RUSH)   # the selector as the ended activation left it
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	assert_int(_cap()).override_failure_message("the ended activation's Rush carried over").is_equal(ObjectManager.MovementCap.ADVANCE)
+
+
+## ---- ticket 12 (DRAG-BAND-DIFFICULT): the drag band asks the core's Difficult test ----
+
+## Paints FOREST (Difficult) on the cells x 3..6", z -6..6"; returns what it overwrote.
+func _paint_forest_strip() -> Dictionary:
+	var o: Node3D = _main.terrain_overlay
+	var saved := {}
+	for xi in range(7):
+		for zi in range(25):
+			var key: Vector2i = o.world_to_cell(Vector3((3.25 + 0.4 * xi) * 0.0254, 0.0, (-6.0 + 0.5 * zi) * 0.0254))
+			if not saved.has(key):
+				saved[key] = {"had": o.grid_cells.has(key), "value": int(o.grid_cells.get(key, 0))}
+			o.grid_cells[key] = o.TerrainType.FOREST
+	return saved
+
+
+func _unpaint(saved: Dictionary) -> void:
+	var o: Node3D = _main.terrain_overlay
+	for key in saved:
+		if bool(saved[key]["had"]):
+			o.grid_cells[key] = int(saved[key]["value"])
+		else:
+			o.grid_cells.erase(key)
+
+
+## A real drag of the one model `n`, `inches` along `dir` in half-inch cursor steps, then dropped and landed. Returns
+## [the strict band (inches) the drag ended on, how far the model got before the drop].
+func _drag_model(n: Node3D, dir: Vector2, inches: float) -> Array:
+	var om: Node3D = _main.object_manager
+	n.add_to_group("miniature")   # as a spawned model is: the strict band reads its anchor from the group
+	_pick([n])
+	var from := _xz(n.global_position)
+	om._start_dragging(_screen(from.x, from.y))
+	for i in range(1, int(inches * 2.0) + 1):
+		var p := from + dir * (0.5 * float(i) * 0.0254)
+		om._update_drag(_screen(p.x, p.y))
+	await _runner.simulate_frames(1)
+	var got := [float(om._strict_cap_meters) / 0.0254, _xz(n.global_position).distance_to(from) / 0.0254]
+	om._stop_dragging()
+	await _runner.simulate_frames(3)
+	await get_tree().create_timer(0.3).timeout
+	return got
+
+
+## GF v3.5.1 p.11 (any model in or through Difficult terrain holds the whole unit's move to 6"): Rush declared, Enforce on.
+## Model 1 walks 4" into the forest (accepted); model 2 then drags 10" across open ground - its band is 6", where the
+## core's drop check caps it, not 12" (it used to show 12" and the drop was refused).
+func test_a_unit_mate_in_difficult_terrain_shrinks_the_drag_band_to_six_inches() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var saved := _paint_forest_strip()
+	var u := _human("Rifles")
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.RUSH)
+	var first: Array = await _drag_model(_node(u, 0), Vector2(1, 0), 4.0)
+	assert_float(float(first[1])).override_failure_message("into the forest: %s" % [first]).is_equal_approx(4.0, 0.05)
+	assert_int(_placed(u).size()).override_failure_message("the 4\" drop into the forest was refused").is_equal(1)
+	var second: Array = await _drag_model(_node(u, 1), Vector2(-1, 0), 10.0)
+	assert_float(float(second[0])).override_failure_message("band after a unit-mate entered Difficult: %s" % [second]) \
+		.is_equal_approx(6.0, 0.01)
+	assert_float(float(second[1])).override_failure_message("open-ground drag: %s" % [second]).is_equal_approx(6.0, 0.05)
+	assert_float(_xz(_node(u, 1).global_position).x / 0.0254).override_failure_message("the 6\" drop was refused") \
+		.is_equal_approx(-6.0, 0.05)
+	_unpaint(saved)
+	GraphicsSettings.enforce_movement_limit = was
+
+
+## The same Rush in open ground (the forest strip far behind): the band stays 12" and a 10" drag lands.
+func test_a_rush_in_open_ground_keeps_the_twelve_inch_band() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var saved := _paint_forest_strip()
+	var u := _human("Rifles")
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.RUSH)
+	var got: Array = await _drag_model(_node(u, 1), Vector2(-1, 0), 10.0)
+	assert_float(float(got[0])).override_failure_message("open-ground band: %s" % [got]).is_equal_approx(12.0, 0.01)
+	assert_float(float(got[1])).override_failure_message("open-ground drag: %s" % [got]).is_equal_approx(10.0, 0.05)
+	assert_float(_xz(_node(u, 1).global_position).x / 0.0254).override_failure_message("the 10\" drop was refused") \
+		.is_equal_approx(-10.0, 0.05)
+	_unpaint(saved)
+	GraphicsSettings.enforce_movement_limit = was

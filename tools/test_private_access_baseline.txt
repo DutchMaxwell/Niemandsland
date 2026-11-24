@@ -201,7 +201,8 @@ _solo_apply_utility_buffs 35
 _solo_apply_vs_marks 20
 _solo_apply_wounds 30
 _solo_ask_hero_morale_once 2
-_solo_ask_split_fire 2
+_solo_ask_split_fire 4
+_solo_attack_after_split_choice 1
 _solo_attack_groups 10
 _solo_auto_click 2
 _solo_auto_point_click 2
@@ -298,6 +299,7 @@ _solo_land_wounds 3
 _solo_live_announce 1
 _solo_live_announce_human 3
 _solo_log_ambush_variant_lines 1
+_solo_log_dangerous_test 1
 _solo_log_ebr_spell_exclusion 1
 _solo_log_grade 1
 _solo_log_melee_result 2
@@ -416,8 +418,8 @@ _solo_striker_has_bane 8
 _solo_takedown_bonus_groups 7
 _solo_takedown_pick 1
 _solo_target_grants_indirect 1
-_solo_targeting_input 12
-_solo_target_mode 109
+_solo_targeting_input 13
+_solo_target_mode 113
 _solo_toast 19
 _solo_toast_sticky 7
 _solo_total_rounds 4
