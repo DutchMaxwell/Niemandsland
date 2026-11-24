@@ -92,3 +92,5 @@ test/undo_peer_filter_test.gd
 tools/rng_fixture.gd
 tools/rng_range_fixture.gd
 tools/tutorial_text_strip.gd
+scripts/boardgen_dress_grid_index.gd
+test/boardgen_dress_grid_index_test.gd
