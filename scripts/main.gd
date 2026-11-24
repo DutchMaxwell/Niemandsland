@@ -11420,11 +11420,15 @@ func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 ## The sentence that opens a Dangerous terrain test. One writer for the table's roll and for the core door's (P4.D-19:
 ## the core prints no sentence for the test).
 func _solo_log_dangerous_test(unit: GameUnit, dice: int) -> void:
+	# Rules 3.6 Unstable: when only a ruin made the move Dangerous (over 6" into or through it), the line names that cause.
+	var unstable: bool = solo_controller != null and solo_controller.take_unstable_cause(unit)
 	if battle_log == null:
 		return
 	# UX-20 (EPOCH_73_V36, rules 3.6): the dice are ONE test of the whole joined unit.
 	var line: String = "%s takes one Dangerous terrain test for the whole unit (%d dice)" \
 		if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36 else "%s takes %d Dangerous terrain test dice"
+	if unstable:
+		line = "%s moved over 6\" through Unstable ruins: one Dangerous terrain test for the whole unit (%d dice)"
 	_log_rule_event(BattleLog.Category.COMBAT, line % [unit.get_name(), dice], true)
 
 
