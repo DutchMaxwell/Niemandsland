@@ -7,27 +7,48 @@ extends RefCounted
 ## D, at least 60 % whole per half) draws as mid_b until the kit has modules for them: a variant outside MODULES falls back. Roof segments carry `lot` and `variant` for the tests.
 
 const MODULES: Array[String] = [
-	"dr_house_tb_blank", "dr_house_tb_door", "dr_house_tb_plain_a", "dr_house_tb_plain_b", "dr_house_tb_post",
-	"dr_house_tb_window", "dr_house_tb_window_lit",
-	"dr_house_st_door", "dr_house_st_plain_a", "dr_house_st_plain_b", "dr_house_st_quoin", "dr_house_st_window",
-	"dr_roof_s3_mid_a", "dr_roof_s3_mid_b", "dr_roof_s3_verge", "dr_roof_s6_mid_a", "dr_roof_s6_mid_b", "dr_roof_s6_verge", "dr_gable_tb_s3", "dr_gable_tb_s3_b",
-	"dr_gable_tb_s6", "dr_gable_tb_s6_b", "dr_gable_st_s3", "dr_gable_st_s6", "dr_chimney_a"]
+	"dr_house_tb_blank",
+	"dr_house_tb_door",
+	"dr_house_tb_plain_a",
+	"dr_house_tb_plain_b",
+	"dr_house_tb_post",
+	"dr_house_tb_window",
+	"dr_house_tb_window_lit",
+	"dr_house_st_door",
+	"dr_house_st_plain_a",
+	"dr_house_st_plain_b",
+	"dr_house_st_quoin",
+	"dr_house_st_window",
+	"dr_roof_s3_mid_a",
+	"dr_roof_s3_mid_b",
+	"dr_roof_s3_verge",
+	"dr_roof_s6_mid_a",
+	"dr_roof_s6_mid_b",
+	"dr_roof_s6_verge",
+	"dr_gable_tb_s3",
+	"dr_gable_tb_s3_b",
+	"dr_gable_tb_s6",
+	"dr_gable_tb_s6_b",
+	"dr_gable_st_s3",
+	"dr_gable_st_s6",
+	"dr_chimney_a"
+]
 const CLS := "houses"
 const DIRS: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 const FACE_NAMES := ["N", "E", "S", "W"]
 const CORNER_FACE := [3, 0, 1, 2]
 ## Salts of BoardgenDressStory.pick. Every choice of a lot draws with its own salt so the choices do not correlate (a low
 ## style pick must not also mean a lit window); the per-face salts add the face index 0..3 so the four faces of a lot differ.
-const SALT_STYLE := 0x71   # timber or stone house
-const SALT_PANEL := 0x33   # + face: where the panel sequence of a face starts
-const SALT_LIT_WINDOW := 0x5A   # + face: whether a timber window on this face is the lot's one lit window
-const SALT_INSET := 0x1F   # + face: how deep a panel sits in the wall
-const TIMBER_IN_TEN := 6   # 6 of 10 houses are timber, the rest stone
-const LIT_WINDOW_IN_TEN := 4   # 4 of 10 timber windows may be the lot's lit one
-const PANEL_VARIANTS := 3   # plain_a, plain_b, window
-const FALLEN_PLASTER_DAMAGE := 0.5   # above this damage a first-variant panel shows fallen plaster instead
-const INSET_MIN_IN := 0.06   # the shallowest panel inset, also the default proud depth of a module without one
-const INSET_SPREAD_IN := 0.08   # how much deeper the inset pick may go
+const SALT_STYLE := 0x71  # timber or stone house
+const SALT_PANEL := 0x33  # + face: where the panel sequence of a face starts
+const SALT_LIT_WINDOW := 0x5A  # + face: whether a timber window on this face is the lot's one lit window
+const SALT_INSET := 0x1F  # + face: how deep a panel sits in the wall
+const TIMBER_IN_TEN := 6  # 6 of 10 houses are timber, the rest stone
+const LIT_WINDOW_IN_TEN := 4  # 4 of 10 timber windows may be the lot's lit one
+const PANEL_VARIANTS := 3  # plain_a, plain_b, window
+const FALLEN_PLASTER_DAMAGE := 0.5  # above this damage a first-variant panel shows fallen plaster instead
+const INSET_MIN_IN := 0.06  # the shallowest panel inset, also the default proud depth of a module without one
+const INSET_SPREAD_IN := 0.08  # how much deeper the inset pick may go
 const INSET_STEPS := 16
 const EAVES_IN := 2.5
 const VARIANT_ROLE := {"holed": "broken", "rafters": "rafters"}
@@ -48,7 +69,10 @@ static func plan(layout: Dictionary, ctx: Dictionary) -> Array[Dictionary]:
 	for r: Dictionary in BoardgenTownDressing.roofs(layout):
 		roofs[int(r["lot"])] = roofs.get(int(r["lot"]), []) + [r]
 	var variants := _variants(roofs, story)
-	var ladders: Array = (layout["connectors"] as Array).reduce(func(acc: Array, cn: Dictionary) -> Array: return acc + [int(cn["low"]), int(cn["high"])], [])
+	var ladders: Array = (layout["connectors"] as Array).reduce(
+		func(acc: Array, cn: Dictionary) -> Array: return acc + [int(cn["low"]), int(cn["high"])],
+		[]
+	)
 	for lot: Dictionary in layout["lots"]:
 		if lot["kind"] != "Roofed":
 			continue
@@ -58,56 +82,100 @@ static func plan(layout: Dictionary, ctx: Dictionary) -> Array[Dictionary]:
 		var x1 := x0 + int(lot["w"])
 		var z1 := z0 + int(lot["h"])
 		var style := "tb" if BoardgenDressStory.pick(id, SALT_STYLE, 10) < TIMBER_IN_TEN else "st"
-		var free: Array[Dictionary] = []   # every cell edge a panel goes on: {cx, cz, k = face}
+		var free: Array[Dictionary] = []  # every cell edge a panel goes on: {cx, cz, k = face}
 		for cz in range(z0, z1):
 			for cx in range(x0, x1):
 				for face in 4:
 					var neighbour: Vector2i = Vector2i(cx, cz) + DIRS[face]
-					if BoardgenDressRules.top_in(layout, neighbour.x, neighbour.y) < BoardgenGreybox.SOLID_IN:
+					if (
+						BoardgenDressRules.top_in(layout, neighbour.x, neighbour.y)
+						< BoardgenGreybox.SOLID_IN
+					):
 						free.append({"cx": cx, "cz": cz, "k": face})
 		var front := String(fronts.get(id, _longest_face(free)))
 		var door := _middle_edge(free, FACE_NAMES.find(front))
-		var previous := {}   # face -> the panel name placed last on it, so two neighbours differ
+		var previous := {}  # face -> the panel name placed last on it, so two neighbours differ
 		var lit := false
 		var door_done := false
 		for edge: Dictionary in free:
 			var cx: int = edge["cx"]
 			var cz: int = edge["cz"]
 			var face: int = edge["k"]
-			var centre_in := Vector2(cx + 0.5 - int(layout["nx"]) * 0.5, cz + 0.5 - int(layout["nz"]) * 0.5) * float(layout["cell_in"])
+			var centre_in := (
+				Vector2(cx + 0.5 - int(layout["nx"]) * 0.5, cz + 0.5 - int(layout["nz"]) * 0.5)
+				* float(layout["cell_in"])
+			)
 			var damage := BoardgenDressStory.damage(story, centre_in)
-			var lean := -(float(BoardgenDressStory.KNOBS["lean_base_deg"]) + float(BoardgenDressStory.KNOBS["lean_gain_deg"]) * damage)
+			var lean := -(
+				float(BoardgenDressStory.KNOBS["lean_base_deg"])
+				+ float(BoardgenDressStory.KNOBS["lean_gain_deg"]) * damage
+			)
 			var module := "dr_house_%s_door" % style
 			if door == edge and not door_done:
 				door_done = true
 			else:
 				var along := cx if face % 2 == 0 else cz
-				var variant := (BoardgenDressStory.pick(id, SALT_PANEL + face, PANEL_VARIANTS) + along) % PANEL_VARIANTS
+				var variant := (
+					(BoardgenDressStory.pick(id, SALT_PANEL + face, PANEL_VARIANTS) + along)
+					% PANEL_VARIANTS
+				)
 				if damage > FALLEN_PLASTER_DAMAGE and variant == 0:
-					variant = 1   # fallen plaster
+					variant = 1  # fallen plaster
 				var name := _panel(variant)
 				if name == String(previous.get(face, "")):
 					name = _panel(variant + 1)
 				var may_light := name == "window" and style == "tb" and not lit
-				if may_light and BoardgenDressStory.pick(id, SALT_LIT_WINDOW + face, 10) < LIT_WINDOW_IN_TEN:
+				if (
+					may_light
+					and BoardgenDressStory.pick(id, SALT_LIT_WINDOW + face, 10) < LIT_WINDOW_IN_TEN
+				):
 					name = "window_lit"
 					lit = true
 				previous[face] = name
 				module = "dr_house_%s_%s" % [style, name]
 			var module_meta: Dictionary = meta["modules"].get(module, {})
-			var proud := float((module_meta.get("proud_in", {}) as Dictionary).get("low", INSET_MIN_IN))
+			var proud := float(
+				(module_meta.get("proud_in", {}) as Dictionary).get("low", INSET_MIN_IN)
+			)
 			var inset_pick := float(BoardgenDressStory.pick(id, face + SALT_INSET, INSET_STEPS))
-			var inset := maxf(proud, INSET_MIN_IN + INSET_SPREAD_IN * inset_pick / float(INSET_STEPS - 1))
-			out.append({"module": module, "xf": _place(layout, cx, cz, face, inset, 0.0, lean), "cls": CLS})
+			var inset := maxf(
+				proud, INSET_MIN_IN + INSET_SPREAD_IN * inset_pick / float(INSET_STEPS - 1)
+			)
+			out.append(
+				{"module": module, "xf": _place(layout, cx, cz, face, inset, 0.0, lean), "cls": CLS}
+			)
 		var corner := "dr_house_tb_post" if style == "tb" else "dr_house_st_quoin"
-		var cells := [Vector2i(x0, z0), Vector2i(x1 - 1, z0), Vector2i(x1 - 1, z1 - 1), Vector2i(x0, z1 - 1)]
+		var cells := [
+			Vector2i(x0, z0), Vector2i(x1 - 1, z0), Vector2i(x1 - 1, z1 - 1), Vector2i(x0, z1 - 1)
+		]
 		for i in 4:
-			out.append({"module": corner, "xf": _corner(layout, cells[i], CORNER_FACE[i], meta["modules"][corner]), "cls": CLS})
+			out.append(
+				{
+					"module": corner,
+					"xf": _corner(layout, cells[i], CORNER_FACE[i], meta["modules"][corner]),
+					"cls": CLS
+				}
+			)
 		for r: Dictionary in roofs.get(id, []):
-			out.append_array(_roof(layout, r, style, String(variants.get(id, "whole")), meta, ladders))
+			out.append_array(
+				_roof(layout, r, style, String(variants.get(id, "whole")), meta, ladders)
+			)
 	for b: Dictionary in BoardgenTownDressing.chimneys(layout):
-		var box := AABB(b["lo"], b["hi"] - b["lo"])   # the chimney's Y follows the box (the smoke emitter's) height: (roof height + 0.9) / 2.9
-		out.append({"module": "dr_chimney_a", "xf": Transform3D(Basis.from_scale(Vector3(1.0, box.size.y / 2.9, 1.0)), (box.get_center() - Vector3(0.0, box.size.y * 0.5, 0.0)) * Units.INCHES_TO_METERS), "cls": CLS})
+		var box := AABB(b["lo"], b["hi"] - b["lo"])  # the chimney's Y follows the box (the smoke emitter's) height: (roof height + 0.9) / 2.9
+		out.append(
+			{
+				"module": "dr_chimney_a",
+				"xf":
+				Transform3D(
+					Basis.from_scale(Vector3(1.0, box.size.y / 2.9, 1.0)),
+					(
+						(box.get_center() - Vector3(0.0, box.size.y * 0.5, 0.0))
+						* Units.INCHES_TO_METERS
+					)
+				),
+				"cls": CLS
+			}
+		)
 	return out
 
 
@@ -119,28 +187,48 @@ static func _variants(roofs: Dictionary, story: Dictionary) -> Dictionary:
 	for id: int in roofs:
 		for r: Dictionary in roofs[id]:
 			if not r["annex"]:
-				halves[int(r["half"])].append({"lot": id, "d": BoardgenDressStory.damage(story, r["centre"])})
+				halves[int(r["half"])].append(
+					{"lot": id, "d": BoardgenDressStory.damage(story, r["centre"])}
+				)
 	var out := {}
 	for half: Array in halves:
-		half.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["d"]) < float(b["d"]))
+		half.sort_custom(
+			func(a: Dictionary, b: Dictionary) -> bool: return float(a["d"]) < float(b["d"])
+		)
 		var whole := ceili(float(k["roof_whole_share"]) * half.size() - 0.001)
 		for i in half.size():
 			var d := float(half[i]["d"])
-			out[half[i]["lot"]] = "whole" if i < whole or d <= float(k["roof_holed_from"]) else ("rafters" if d > float(k["roof_rafters_from"]) else "holed")
+			out[half[i]["lot"]] = (
+				"whole"
+				if i < whole or d <= float(k["roof_holed_from"])
+				else ("rafters" if d > float(k["roof_rafters_from"]) else "holed")
+			)
 	return out
 
 
 ## One roof of roofs(): segments per 3 in of ridge on the front eaves plane, a verge at both ends (the start one turned 180 deg, on the back plane), a gable on both end faces; all at
 ## the eaves, Y scaled to the rise (an annex at the lowest, 1.7). A TIGHT side (a walkable tier or a ladder cell beside it, diagonals included) gets no overhang: eaves and gable jetties are
 ## squeezed to the wall plane and the verge moves inside the end, because the honesty rules (R4, R5) allow nothing of a roof over a tier top or in a ladder strip.
-static func _roof(layout: Dictionary, r: Dictionary, style: String, variant: String, meta: Dictionary, ladders: Array) -> Array[Dictionary]:
+static func _roof(
+	layout: Dictionary,
+	r: Dictionary,
+	style: String,
+	variant: String,
+	meta: Dictionary,
+	ladders: Array
+) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var c := float(layout["cell_in"])
 	var id := int(r["lot"])
-	var size := Vector2(float(r["length"]), float(r["width"])) - Vector2.ONE * 2.0 * BoardgenTownDressing.OVERHANG_IN   # run along, extent across the ridge
+	var size := (
+		Vector2(float(r["length"]), float(r["width"]))
+		- Vector2.ONE * 2.0 * BoardgenTownDressing.OVERHANG_IN
+	)  # run along, extent across the ridge
 	var ext := size if r["along_x"] else Vector2(size.y, size.x)
-	var ax: bool = r["along_x"] != (size.y > 6.0 + BoardgenDressRules.TOL)   # the span rule
-	var lo: Vector2 = (r["centre"] - ext * 0.5) / c + Vector2(int(layout["nx"]), int(layout["nz"])) * 0.5
+	var ax: bool = r["along_x"] != (size.y > 6.0 + BoardgenDressRules.TOL)  # the span rule
+	var lo: Vector2 = (
+		(r["centre"] - ext * 0.5) / c + Vector2(int(layout["nx"]), int(layout["nz"])) * 0.5
+	)
 	var a := Vector2i(roundi(lo.x), roundi(lo.y))
 	var b := a + Vector2i(roundi(ext.x / c), roundi(ext.y / c))
 	var span := roundi(ext.y if ax else ext.x)
@@ -149,26 +237,109 @@ static func _roof(layout: Dictionary, r: Dictionary, style: String, variant: Str
 	var tight := [false, false, false, false]
 	for cz in range(a.y - 1, b.y + 1):
 		for cx in range(a.x - 1, b.x + 1):
-			var near := (cx < a.x or cx >= b.x or cz < a.y or cz >= b.y) and cx >= 0 and cz >= 0 and cx < int(layout["nx"]) and cz < int(layout["nz"])
-			if near and (ladders.has(cz * int(layout["nx"]) + cx) or (BoardgenDressRules.walkable(layout, cz * int(layout["nx"]) + cx) and BoardgenDressRules.top_in(layout, cx, cz) > BoardgenDressRules.FLAT)):
+			var near := (
+				(cx < a.x or cx >= b.x or cz < a.y or cz >= b.y)
+				and cx >= 0
+				and cz >= 0
+				and cx < int(layout["nx"])
+				and cz < int(layout["nz"])
+			)
+			if (
+				near
+				and (
+					ladders.has(cz * int(layout["nx"]) + cx)
+					or (
+						BoardgenDressRules.walkable(layout, cz * int(layout["nx"]) + cx)
+						and BoardgenDressRules.top_in(layout, cx, cz) > BoardgenDressRules.FLAT
+					)
+				)
+			):
 				for k in 4:
 					tight[k] = tight[k] or [cz < a.y, cx >= b.x, cz >= b.y, cx < a.x][k]
 	var kf := 2 if ax else 1
 	var role := String(VARIANT_ROLE.get(variant, ""))
-	var cells := [Vector2i(b.x - 1, a.y), Vector2i(b.x - 1, b.y - 1), Vector2i(a.x, b.y - 1), a]   # the start cell of each face of the rectangle
+	var cells := [Vector2i(b.x - 1, a.y), Vector2i(b.x - 1, b.y - 1), Vector2i(a.x, b.y - 1), a]  # the start cell of each face of the rectangle
 	for i in roundi(length / c):
-		var name := "dr_roof_s%d_%s" % [span, role if role != "" else ["mid_a", "mid_b"][(BoardgenDressStory.pick(id, 0x41, 2) + i) % 2]]
-		name = name if MODULES.has(name) else "dr_roof_s%d_mid_b" % span   # damaged variants the kit lacks fall back to the whole roof
+		var name := (
+			"dr_roof_s%d_%s"
+			% [
+				span,
+				(
+					role
+					if role != ""
+					else ["mid_a", "mid_b"][(BoardgenDressStory.pick(id, 0x41, 2) + i) % 2]
+				)
+			]
+		)
+		name = name if MODULES.has(name) else "dr_roof_s%d_mid_b" % span  # damaged variants the kit lacks fall back to the whole roof
 		var xf := _place(layout, cells[kf].x, cells[kf].y, kf, 0.0, i * c, 0.0)
-		out.append({"module": name, "xf": _fit(xf, meta["modules"][name], s, Vector2(-INF, INF), Vector2(-span if tight[kf ^ 2] else -INF, 0.0 if tight[kf] else INF)), "cls": CLS, "lot": id, "variant": variant})
+		out.append(
+			{
+				"module": name,
+				"xf":
+				_fit(
+					xf,
+					meta["modules"][name],
+					s,
+					Vector2(-INF, INF),
+					Vector2(-span if tight[kf ^ 2] else -INF, 0.0 if tight[kf] else INF)
+				),
+				"cls": CLS,
+				"lot": id,
+				"variant": variant
+			}
+		)
 	for k: int in [kf, kf ^ 2]:
 		var verge := "dr_roof_s%d_verge" % span
-		var xf := _place(layout, cells[k].x, cells[k].y, k, 0.0, length - (0.32 if tight[(k + 3) % 4] else 0.0), 0.0)
-		out.append({"module": verge, "xf": _fit(xf, meta["modules"][verge], s, Vector2(-INF, INF), Vector2(-span if tight[k ^ 2] else -INF, 0.0 if tight[k] else INF)), "cls": CLS})
-	for k: int in ([1, 3] if ax else [0, 2]):
-		var gable := "dr_gable_%s_s%d%s" % [style, span, "_b" if style == "tb" and BoardgenDressStory.pick(id, 0x47 + k, 2) == 1 else ""]
+		var xf := _place(
+			layout,
+			cells[k].x,
+			cells[k].y,
+			k,
+			0.0,
+			length - (0.32 if tight[(k + 3) % 4] else 0.0),
+			0.0
+		)
+		out.append(
+			{
+				"module": verge,
+				"xf":
+				_fit(
+					xf,
+					meta["modules"][verge],
+					s,
+					Vector2(-INF, INF),
+					Vector2(-span if tight[k ^ 2] else -INF, 0.0 if tight[k] else INF)
+				),
+				"cls": CLS
+			}
+		)
+	for k: int in [1, 3] if ax else [0, 2]:
+		var gable := (
+			"dr_gable_%s_s%d%s"
+			% [
+				style,
+				span,
+				"_b" if style == "tb" and BoardgenDressStory.pick(id, 0x47 + k, 2) == 1 else ""
+			]
+		)
 		var xf := _place(layout, cells[k].x, cells[k].y, k, 0.0, 0.0, 0.0)
-		out.append({"module": gable, "xf": _fit(xf, meta["modules"][gable], s, Vector2(0.0 if tight[(k + 1) % 4] else -INF, span if tight[(k + 3) % 4] else INF), Vector2(-INF, 0.0 if tight[k] else INF)), "cls": CLS})
+		out.append(
+			{
+				"module": gable,
+				"xf":
+				_fit(
+					xf,
+					meta["modules"][gable],
+					s,
+					Vector2(
+						0.0 if tight[(k + 1) % 4] else -INF, span if tight[(k + 3) % 4] else INF
+					),
+					Vector2(-INF, 0.0 if tight[k] else INF)
+				),
+				"cls": CLS
+			}
+		)
 	return out
 
 
@@ -189,20 +360,29 @@ static func _fit(xf: Transform3D, m: Dictionary, s: float, lx: Vector2, lz: Vect
 
 
 ## A face module's transform: left foot at the face's start point (optionally shifted along it), moved `inset` into the mass, tipped out by `lean` degrees.
-static func _place(layout: Dictionary, cx: int, cz: int, k: int, inset: float, shift: float, lean: float) -> Transform3D:
+static func _place(
+	layout: Dictionary, cx: int, cz: int, k: int, inset: float, shift: float, lean: float
+) -> Transform3D:
 	var cell_in := float(layout["cell_in"])
-	var cell_corner := Vector3((cx - int(layout["nx"]) * 0.5) * cell_in, 0.0, (cz - int(layout["nz"]) * 0.5) * cell_in)
+	var cell_corner := Vector3(
+		(cx - int(layout["nx"]) * 0.5) * cell_in, 0.0, (cz - int(layout["nz"]) * 0.5) * cell_in
+	)
 	var along: Vector3 = [Vector3(-1, 0, 0), Vector3(0, 0, -1), Vector3(1, 0, 0), Vector3(0, 0, 1)][k]
 	var away: Vector3 = [Vector3(0, 0, -1), Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(-1, 0, 0)][k]
 	var starts := [
-		cell_corner + Vector3(cell_in, 0, 0), cell_corner + Vector3(cell_in, 0, cell_in),
-		cell_corner + Vector3(0, 0, cell_in), cell_corner]
+		cell_corner + Vector3(cell_in, 0, 0),
+		cell_corner + Vector3(cell_in, 0, cell_in),
+		cell_corner + Vector3(0, 0, cell_in),
+		cell_corner
+	]
 	var start: Vector3 = starts[k]
 	return BoardgenDressRules.face_xf(start + along * shift, along, away, inset, lean)
 
 
 ## A corner piece flush inside the lot: shifted by its left overhang, inset by its mounting depth, so no part pokes into the neighbour cell.
-static func _corner(layout: Dictionary, cell: Vector2i, k: int, module_meta: Dictionary) -> Transform3D:
+static func _corner(
+	layout: Dictionary, cell: Vector2i, k: int, module_meta: Dictionary
+) -> Transform3D:
 	var aabb: Array = module_meta["aabb_in"]
 	var lo := Vector3(float(aabb[0][0]), float(aabb[0][1]), float(aabb[0][2]))
 	var hi := Vector3(float(aabb[1][0]), float(aabb[1][1]), float(aabb[1][2]))
@@ -219,8 +399,13 @@ static func _middle_edge(free: Array[Dictionary], k: int) -> Dictionary:
 	var edges := free.filter(func(edge: Dictionary) -> bool: return int(edge["k"]) == k)
 	if edges.is_empty():
 		return {}
-	edges.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return (int(a["cx"]) if k % 2 == 0 else int(a["cz"])) < (int(b["cx"]) if k % 2 == 0 else int(b["cz"])))
+	edges.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			return (
+				(int(a["cx"]) if k % 2 == 0 else int(a["cz"]))
+				< (int(b["cx"]) if k % 2 == 0 else int(b["cz"]))
+			)
+	)
 	return edges[edges.size() / 2]
 
 

@@ -19,6 +19,7 @@ scripts/deleted_state.gd
 scripts/boardgen_dress_context.gd
 scripts/dress_module_spec.gd
 scripts/boardgen_dress_placement.gd
+scripts/boardgen_dress_houses.gd
 scripts/boardgen_dress_kit.gd
 scripts/landing_preview.gd
 scripts/net_dialog.gd
