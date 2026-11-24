@@ -2234,7 +2234,7 @@ static func place(main, gu: GameUnit, mode: int, now: Dictionary) -> Dictionary:
 	var sc: SoloController = main.solo_controller
 	var core: Object = sc._core_node_ready() if sc != null else null
 	if core == null:
-		push_error("place: no core for %s's open activation - the placement is not checked" % gu.get_name())
+		push_error("drop_refused: no core for %s's open activation - the drop is not checked" % gu.get_name())
 		return {}
 	var s: Dictionary = _sessions[gu.unit_id]
 	var at: Array = gu.get_alive_models().map(func(m: ModelInstance) -> Vector3: return main.object_manager.resting_position(m.node))   # step 69b: no drag lift
