@@ -61,7 +61,7 @@ func test_a_hotseat_table_turns_no_model(timeout := 120000) -> void:
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
 	var p1 := _register(1, "Wachtturm", Vector3(0.0, 0.0, -0.4))
 	var p2 := _register(2, "Raider", Vector3(0.0, 0.0, 0.4))
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	assert_object(_main.solo_controller).override_failure_message("premise: the geometry controller exists").is_not_null()
 	assert_int(int(_main.solo_controller.ai_slot)).override_failure_message("premise: ai_slot points at a human side").is_equal(2)
 	_main.opr_army_manager.start_game()

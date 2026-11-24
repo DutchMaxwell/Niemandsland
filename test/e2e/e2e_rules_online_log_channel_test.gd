@@ -101,7 +101,7 @@ func test_a_resolver_rule_line_reaches_the_peer_in_an_agreed_automatic_room() ->
 	_clear_controller()
 	_main.solo_ai_slots = {}
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	assert_object(_main.solo_controller) \
 		.override_failure_message("3.2 setup — the agreed online Automatic room builds the engine (3.1)") \
 		.is_not_null()

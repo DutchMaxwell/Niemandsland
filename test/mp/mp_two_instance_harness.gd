@@ -641,7 +641,7 @@ func _run_protect_roll(unit: GameUnit, wounds: int) -> void:
 
 ## #1882: host resolves a cast whose interference belongs to the GUEST (a "spell" owner request).
 func _run_remote_interference() -> void:
-	_main._ensure_solo_controller()   # geometry for the caster auras (no AI seat is designated)
+	SoloHarness.controller(_main)   # geometry for the caster auras (no AI seat is designated)
 	var caster: GameUnit = _unit(SPELL_UNIT)
 	var target: GameUnit = _unit(SAVE_DEFENDER_UNIT)
 	_interference_spent = await _main._solo_remote_interference(caster, caster, INTERFERENCE_SPELL, 0,

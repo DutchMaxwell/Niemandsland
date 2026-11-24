@@ -84,7 +84,7 @@ func test_human_peer_slot_is_never_the_ai(timeout := 120000) -> void:
 func test_no_controller_summoned_in_a_human_room(timeout := 120000) -> void:
 	_go_multiplayer({1: 1, GUEST_PEER: 2})
 	_main.solo_ai_slots = {}
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	assert_object(_main.solo_controller) \
 		.override_failure_message("#196 — a cast/targeting click in a human-vs-human room summoned NACHTMAHR (the controller's existence arms the alternation pump)") \
 		.is_null()
@@ -154,8 +154,7 @@ func test_join_release_tears_down_a_surviving_controller(timeout := 120000) -> v
 	# The solo-session-rolls-into-hosting sequence: the controller is built OFFLINE (solo
 	# match), then a human joins its slot. The designation strip alone is not enough — the
 	# alternation pump drives by controller.ai_slot, not by the designation.
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2], 1)
 	assert_object(_main.solo_controller).is_not_null()
 	_go_multiplayer({1: 1, GUEST_PEER: 2})
 	_main._solo_release_slot_to_human(2)

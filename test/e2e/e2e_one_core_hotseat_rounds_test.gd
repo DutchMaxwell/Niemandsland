@@ -44,7 +44,7 @@ func before_test() -> void:
 	SoloHarness.fast(_main)
 	SoloHarness.auto_saves(_main)
 	_main._autosave_controller.set_lesson_paused(true)
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	_main.solo_controller.game_rounds = ROUNDS
 	CoreActivation._env = 1
 
@@ -83,7 +83,7 @@ func _reset(seed: int, switch_on: bool) -> void:
 	_main._solo_game_finished = false
 	_main.opr_army_manager.current_round = 1
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	_main.solo_controller.game_rounds = ROUNDS
 	_main.solo_controller._rng.seed = seed
 	_main.seed_tray_rng(seed)

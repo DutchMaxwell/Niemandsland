@@ -24,7 +24,7 @@ func before_test() -> void:
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
 	_main.solo_ai_slots = {1: true, 2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	_main.solo_controller.human_slot = 1
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	SoloHarness.instant(_main)
