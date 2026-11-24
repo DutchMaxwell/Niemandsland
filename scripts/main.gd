@@ -23538,10 +23538,28 @@ func _on_remote_game_phase_changed(phase: int) -> void:
 		var auto_mp: bool = _solo_engine_automatic()
 		_show_toast("Round 1 — rules automation is on: the game applies the rules it models" if auto_mp
 			else "Round 1 — multiplayer is manual: take turns like at a real table")
+		if network_manager.is_host:
+			network_manager.send_game_meta(_table_system(), _game_meta_factions())
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
 				"Multiplayer is Automatic play — the game rolls and applies the rules it models" if auto_mp
 				else "Multiplayer is manual play — no automation drives the turns; alternate activations like at a real table", true)
+
+
+## The distinct faction ids on the table (lists and loose units), sorted, for the relay's game log;
+## reduced to [a-z0-9_] so no free text rides along.
+func _game_meta_factions() -> Array:
+	var keep := RegEx.create_from_string("[^a-z0-9_]")
+	var found: Dictionary = {}
+	for army in opr_army_manager.armies.values():
+		if army != null:
+			found[keep.sub(str(army.faction_folder).to_lower(), "", true)] = true
+	for unit in opr_army_manager.game_units.values():
+		found[keep.sub(RulesRegistry.faction_of_unit(unit as GameUnit).to_lower(), "", true)] = true
+	found.erase("")
+	var factions: Array = found.keys()
+	factions.sort()
+	return factions.slice(0, 8)
 
 
 ## Host-side ready tally changed (a player readied/un-readied). Refresh the waiting readout.

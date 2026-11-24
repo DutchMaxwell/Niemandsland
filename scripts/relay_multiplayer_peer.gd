@@ -106,6 +106,7 @@ var _fast_reconnect_ms: int = 0  # when the current early rejoin started (0 = no
 var _last_fast_ms: int = 0       # when the last early rejoin started (cooldown)
 var _next_connect_retry_ms: int = 0  # an early rejoin re-opens a failed socket no sooner than this
 var _room_code: String = ""
+var _game_meta_sent: bool = false  # this session's one game_meta went to the relay (see send_game_meta)
 var _ws_connected: bool = false
 var _pending_action: String = ""  # "create", "join" or "list"
 var _pending_code: String = ""
@@ -171,6 +172,17 @@ func get_room_code() -> String:
 ## Whether this peer is the room host (relay peer id 1).
 func is_host_peer() -> bool:
 	return _is_server_relay()
+
+
+## Host only, once per game with 2+ players: the relay's anonymous game-log record (relay/PRIVACY.md).
+## It carries the system id, faction ids, player count and game version: no names, lists or units.
+func send_game_meta(system: String, factions: Array, players: int, version: String) -> bool:
+	if not is_host_peer() or _game_meta_sent or players < 2:
+		return false
+	_game_meta_sent = true
+	_send_json({"type": "game_meta", "system": system, "factions": factions, "players": players,
+		"version": version})
+	return true
 
 
 ## Called when the link dies unexpectedly (socket closed or heartbeat-ack timeout).
@@ -506,6 +518,7 @@ func _close() -> void:
 	_ws_connected = false
 	_pending_action = ""
 	_pending_code = ""
+	_game_meta_sent = false
 
 
 func _set_transfer_channel(p_channel: int) -> void:

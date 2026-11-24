@@ -2037,6 +2037,14 @@ func start_game_networked() -> void:
 	remote_game_phase_changed.emit(OPRArmyManager.GamePhase.PLAYING)  # host applies locally
 
 
+## Host-only, at the deployment->playing flip of a relay game: hand the relay its one anonymous
+## game_meta (system id, faction ids, seated players, version). A LAN game has no relay and sends none.
+func send_game_meta(system: String, factions: Array) -> void:
+	var mp: MultiplayerPeer = multiplayer.multiplayer_peer if multiplayer != null else null
+	if is_host and mp is RelayMultiplayerPeer:
+		(mp as RelayMultiplayerPeer).send_game_meta(system, factions, seated_slots().size(), get_game_version())
+
+
 ## RPC (host -> guests): apply the authoritative game phase. Guests obey; they never originate it.
 @rpc("authority", "call_remote", "reliable")
 func _rpc_set_game_phase(phase: int) -> void:
