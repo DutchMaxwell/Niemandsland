@@ -103,3 +103,27 @@ func test_an_auto_shot_the_core_refuses_is_a_free_roll(timeout := 300000,
 	assert_str(text).override_failure_message("a hit die was rolled for the player:\n%s" % text).not_contains(" hits (3+)")
 	assert_int(foe.get_alive_count()).is_equal(5)
 	assert_str(text).override_failure_message("the activation did not complete:\n%s" % text).contains("Gunners activated (you)")
+
+
+## The Auto Rush verb moves its full Rush distance: the core reads the verb as the declared mode, so no Advance refusal
+## and the activation completes with the selector on Rush.
+@warning_ignore('unused_parameter')
+func test_an_auto_rush_moves_past_the_advance_allowance_without_a_refusal(timeout := 300000,
+		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "no NmlCore") -> void:
+	var att := _shooter()
+	var foe := _foe(40.0)
+	var start: Vector3 = _main.solo_controller.unit_centre(att)
+	assert_bool(_main.core_activation_start(att)).override_failure_message("no Start").is_true()
+	var lines: Array = []
+	var tap := func(e: Dictionary) -> void: lines.append(str(e["text"]))
+	_main.battle_log.entry_added.connect(tap)
+	await SoloHarness.auto_verb(_main, att, AiDecision.Action.RUSH, foe)
+	await E2EBoot.settle(get_tree())
+	_main.battle_log.entry_added.disconnect(tap)
+	var text := "\n".join(lines)
+	var moved_in: float = (_main.solo_controller.unit_centre(att).x - start.x) / 0.0254
+	assert_float(moved_in).override_failure_message("the Auto Rush moved %.1f\":\n%s" % [moved_in, text]).is_greater(6.5)
+	assert_str(text).override_failure_message("the Auto Rush was refused:\n%s" % text).not_contains("allowance is")
+	assert_int(_main.object_manager._movement_cap).is_equal(ObjectManager.MovementCap.RUSH)
+	assert_str(text).override_failure_message("the activation did not complete:\n%s" % text).contains("Gunners activated (you)")
+
