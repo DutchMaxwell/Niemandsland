@@ -400,6 +400,9 @@ func move_act_seq() -> int:
 ## entered difficult terrain) — the denominator of the corridor's distance label.
 var last_move_budget_in: float = 0.0
 var last_dangerous_dice: int = 0   # Bug 23: Tough-weighted dice for the move's dangerous tests (p.12)
+## The unit whose last move took the Dangerous test ONLY through Unstable ruins (rules 3.6: over 6" into or through a
+## ruin), null otherwise. Read once by the battle-log line of the test (take_unstable_cause), so it names its cause.
+var last_dangerous_unstable_unit: GameUnit = null
 var last_move_toll_note: String = ""   # stall-escalation crossing verdict of the last move ("" = none), logged by execute_intent
 ## > 0 while preview_intent runs the executor in a sandbox: no broadcast, no recorded decision, no move record.
 var _preview_depth := 0
@@ -2817,7 +2820,7 @@ func execute_intent(intent: Dictionary, report: Dictionary) -> Dictionary:
 
 
 ## Automodus step 1.2: the executor scratch fields a preview_intent run may touch, restored afterwards.
-const PREVIEW_STATE := ["last_move_paths", "last_flow_order", "last_move_budget_in", "last_dangerous_dice",
+const PREVIEW_STATE := ["last_move_paths", "last_flow_order", "last_move_budget_in", "last_dangerous_dice", "last_dangerous_unstable_unit",
 	"last_move_toll_note", "last_move_climb_in", "board_clamp_notes", "_gate_clamped_models", "_rest_walls_cache",
 	"_rest_walls_frame", "_core_move_warned", "_core_move_checks", "_core_move_diffs", "_move_extra", "_sidestep_budget"]
 
@@ -6173,6 +6176,7 @@ func _unit_wounds_now(models: Array) -> int:
 func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: bool,
 		charge_target: GameUnit = null) -> int:
 	last_dangerous_dice = 0
+	last_dangerous_unstable_unit = null
 	last_move_toll_note = ""
 	var models := _moving_models(unit)
 	var positions := _positions_of(models)
@@ -6229,10 +6233,12 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		new_positions = _plan_move(unit, models, positions, goal, reach, allow_contact, false, avoid_dangerous, trails, charge_target)
 	# #3090 (EPOCH_93_DANGER_RULES_RIDER, core twin `Move::execute`): a plan that still crosses Dangerous ground first tries
 	# a sideways goal shift, then stopping short (`_danger_detour`). A player's order is never re-aimed.
-	if danger_avoid and avoid_dangerous and not flying and not _player_move \
-			and _dangerous_trail_flags(trails, trail_radii_m).has(true):
+	var route_kinds: Array = _dangerous_trail_kinds(trails, trail_radii_m) \
+		if danger_avoid and avoid_dangerous and not flying and not _player_move else []
+	if route_kinds.any(func(k: int) -> bool: return k != TRAIL_CLEAR):
 		var det := _danger_detour(unit, models, positions, goal, delta0, reach, avoid and not capped,
-			not ignores_difficult and not capped, trail_radii_m, charge_target)
+			not ignores_difficult and not capped, trail_radii_m, charge_target,
+			"Dangerous ground" if route_kinds.has(TRAIL_DANGEROUS) else "Unstable ruins")
 		if not det.is_empty():
 			goal = det["goal"]
 			reach = float(det["reach"])
@@ -6486,7 +6492,7 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# (the retraced trails), because a gate that holds a model back at a container or wall cancels the crossing.
 	var counted := {"models": 0, "dice": 0, "stood": 0}
 	if not flying:
-		counted = _dangerous_count(unit, models, positions, _dangerous_trail_flags(trails, trail_radii_m), dangerous_debuff)
+		counted = _dangerous_count(unit, models, positions, _dangerous_trail_kinds(trails, trail_radii_m), dangerous_debuff)
 	# The decision-log / label arc is the PLANNED within-budget move (pre-gate route), so the move-band audit
 	# and the "X / Y" label stay truthful; the gate's physical un-stack nudge is not counted as extra distance.
 	var longest_arc_m := 0.0
@@ -6531,11 +6537,12 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			board_clamp_notes.append("%s: %d model%s stop short of a container or wall (Terrain height: a base may not end its move on a container or its wall; Unit Coherency waits)"
 				% [unit.get_name(), container_cut, "" if container_cut == 1 else "s"])
 	if not flying and not _is_regiment(unit) and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_87_WALKED_DANGEROUS:
-		counted = _dangerous_count(unit, models, positions, _dangerous_trail_flags(trails, trail_radii_m), dangerous_debuff)
+		counted = _dangerous_count(unit, models, positions, _dangerous_trail_kinds(trails, trail_radii_m), dangerous_debuff)
 	var dang := int(counted["models"])
 	var dang_dice := int(counted["dice"])
 	var stood_n := int(counted["stood"])   # models counted only because they stood in/at the field at activation start
 	last_dangerous_dice = dang_dice
+	last_dangerous_unstable_unit = unit if dang > 0 and bool(counted.get("unstable", false)) else null
 	_apply_model_positions(models, new_positions)
 	# Publish the per-model routes + base radii for the presentation layer (glide + swept corridor +
 	# distance label) — the STATE is already final (applied + broadcast above); the replay is local.
@@ -6722,8 +6729,10 @@ func _rigid_sweep_dangerous(positions: Array, g: Vector3, r_in: float, radii_m: 
 ## C: else stop at the farthest clear rigid reach (DANGER_STOP_STEP_IN steps) when the expected toll (whole unit, one die
 ## per wound left, 1/6 each) times DANGER_INCHES_PER_WOUND is at least the distance given up. A plan is clean when it
 ## crosses no Dangerous ground and, on an uncapped move (`difficult_check`), no difficult ground. {} = keep today's plan.
+## `ground` names what the planned route crossed in the notes ("Unstable ruins" when only a ruin made it Dangerous).
 func _danger_detour(unit: GameUnit, models: Array, positions: Array, goal: Vector3, delta0: Vector3, reach: float,
-		avoid_difficult: bool, difficult_check: bool, radii_m: Array, charge_target: GameUnit) -> Dictionary:
+		avoid_difficult: bool, difficult_check: bool, radii_m: Array, charge_target: GameUnit,
+		ground := "Dangerous ground") -> Dictionary:
 	var side := Vector2(-delta0.z, delta0.x).normalized()
 	var ranked: Array[int] = []   # crossers * 1000 + list index: fewest crossers first, ties in list order
 	for i in range(DANGER_SIDESTEP_IN.size() if side != Vector2.ZERO else 0):
@@ -6736,7 +6745,7 @@ func _danger_detour(unit: GameUnit, models: Array, positions: Array, goal: Vecto
 		var t5: Array = []
 		var p5 := _plan_move(unit, models, positions, g5, reach, false, avoid_difficult, true, t5, charge_target)
 		if not _dangerous_trail_flags(t5, radii_m).has(true) and not (difficult_check and _trails_cross_difficult(t5, radii_m)):
-			board_clamp_notes.append("%s sidesteps Dangerous ground (%.1f\" %s)" % [unit.get_name(), absf(k), "right" if k > 0.0 else "left"])
+			board_clamp_notes.append("%s sidesteps %s (%.1f\" %s)" % [unit.get_name(), ground, absf(k), "right" if k > 0.0 else "left"])
 			return {"goal": g5, "reach": reach, "positions": p5, "trails": t5}
 	var dice := 0
 	for m in models:
@@ -6752,8 +6761,8 @@ func _danger_detour(unit: GameUnit, models: Array, positions: Array, goal: Vecto
 	var p6 := _plan_move(unit, models, positions, goal, r_free, false, avoid_difficult, true, t6, charge_target)
 	if _dangerous_trail_flags(t6, radii_m).has(true) or (difficult_check and _trails_cross_difficult(t6, radii_m)):
 		return {}
-	board_clamp_notes.append("%s stops short of Dangerous ground (%.1f\" of %.1f\", expected toll %.1f wounds)"
-		% [unit.get_name(), r_free, reach, float(dice) / 6.0])
+	board_clamp_notes.append("%s stops short of %s (%.1f\" of %.1f\", expected toll %.1f wounds)"
+		% [unit.get_name(), ground, r_free, reach, float(dice) / 6.0])
 	return {"goal": goal, "reach": r_free, "positions": p6, "trails": t6}
 
 
@@ -8969,15 +8978,19 @@ func _count_dangerous_trails(trails: Array) -> int:
 ## per-MODEL identity, not just a count — trail order matches the moving-models order).
 ## One move's Dangerous count (Bug 23, UX-20): per model its route flag (`flags`) OR standing in the field at activation start, one test per
 ## model; the dice are the Tough dice of the models counted, or the whole unit's from EPOCH_73_V36 (one test for the joined unit).
-## Returns {models, dice, stood}: `stood` = models counted only because they stood in/at the field.
+## Returns {models, dice, stood, unstable}: `stood` = models counted only because they stood in/at the field; `unstable` =
+## every counted model was counted only for an Unstable ruin (`flags` from _dangerous_trail_kinds; plain bools never are).
 func _dangerous_count(unit: GameUnit, models: Array, positions: Array, flags: Array, debuffed: bool) -> Dictionary:
 	var dang := 0
 	var dice := 0
 	var stood_n := 0
+	var other := debuffed   # a counted model with a cause other than an Unstable ruin
 	for i in range(models.size()):
 		# EPOCH_27_TERRAIN_DEBUFF: the carried rule is a hazard the cells never are —
 		# the debuffed unit counts as being in Dangerous Terrain whatever it walks.
 		var affected: bool = debuffed or (i < flags.size() and bool(flags[i]))
+		if i < flags.size() and bool(flags[i]) and not (flags[i] is int and int(flags[i]) == TRAIL_UNSTABLE):
+			other = true
 		if terrain_type_at.is_valid():
 			var p0: Vector3 = positions[i]
 			# Edge-aware (2026-07-22): standing with the base EDGE in the minefield counts.
@@ -8985,6 +8998,7 @@ func _dangerous_count(unit: GameUnit, models: Array, positions: Array, flags: Ar
 				terrain_type_at, TerrainRules.is_dangerous)
 			if stood:
 				stood_n += 1
+				other = true
 			affected = affected or stood
 		if affected:
 			dang += 1
@@ -8992,29 +9006,47 @@ func _dangerous_count(unit: GameUnit, models: Array, positions: Array, flags: Ar
 	# UX-20 (EPOCH_73_V36, rules 3.6): one affected model is enough - the whole joined unit takes ONE test.
 	if dang > 0 and AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 		dice = OPRArmyManager.dangerous_dice_for(unit)
-	return {"models": dang, "dice": dice, "stood": stood_n}
+	return {"models": dang, "dice": dice, "stood": stood_n, "unstable": dang > 0 and not other}
 
 
+## The log line of a Dangerous test asks once whether `unit`'s last move took it only for Unstable ruins (and forgets it).
+func take_unstable_cause(unit: GameUnit) -> bool:
+	var hit := unit != null and last_dangerous_unstable_unit == unit
+	last_dangerous_unstable_unit = null
+	return hit
+
+
+## Per-trail Dangerous flags: true when the route takes the test (p.12), for either cause.
 func _dangerous_trail_flags(trails: Array, radii_m: Array = []) -> Array:
+	return _dangerous_trail_kinds(trails, radii_m).map(func(k: int) -> bool: return k != TRAIL_CLEAR)
+
+
+const TRAIL_CLEAR := 0       # the route takes no Dangerous test
+const TRAIL_DANGEROUS := 1   # it crosses Dangerous terrain
+const TRAIL_UNSTABLE := 2    # it takes the test only for an Unstable ruin (rules 3.6: over 6" into or through it)
+
+
+## Per-trail cause of the Dangerous test (TRAIL_*), so the battle log can name it.
+func _dangerous_trail_kinds(trails: Array, radii_m: Array = []) -> Array:
 	var flags: Array = []
 	var unstable_epoch: bool = AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36
 	for ti in range(trails.size()):
 		var leg := trails[ti] as Array
 		var r: float = float(radii_m[ti]) if ti < radii_m.size() else 0.0
-		var hit := false
+		var hit := TRAIL_CLEAR
 		for i in range(1, leg.size()):
 			if _path_crosses_terrain(leg[i - 1], leg[i], TerrainRules.PathCheck.DANGEROUS, r):
-				hit = true
+				hit = TRAIL_DANGEROUS
 				break
 		# Rules 3.6 (EPOCH_73_V36): Unstable ruins — a model whose OWN move is over 6 inches and whose
 		# route goes into or through a ruin takes the same unit-level test. Flying is filtered upstream.
 		# The slack keeps a 6" Advance (float32 Vector3 geometry, summed over a bent route) on the safe side; it is the
 		# core's own (`mv::step` UNSTABLE_SLACK_IN). C-19 s3: 1e-6 m read a 6.00005" Advance as over 6".
-		if not hit and unstable_epoch and MovementPlanner.polyline_length(leg) \
+		if hit == TRAIL_CLEAR and unstable_epoch and MovementPlanner.polyline_length(leg) \
 				> (MovementPlanner.UNSTABLE_MOVE_IN + MovementPlanner.UNSTABLE_SLACK_IN) * INCHES_TO_METERS:
 			for i in range(1, leg.size()):
 				if _path_crosses_terrain(leg[i - 1], leg[i], TerrainRules.PathCheck.UNSTABLE, r):
-					hit = true
+					hit = TRAIL_UNSTABLE
 					break
 		flags.append(hit)
 	return flags
