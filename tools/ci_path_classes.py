@@ -51,7 +51,8 @@ def _text(root, path):
 
 
 def symbols(root, files, cls):
-    own = [f for f in files if in_class(f, cls) and not f.endswith("_test.gd")]
+    # A Markdown file is never loaded by the game: its name (README, LICENSES, ...) is no symbol another file can reach.
+    own = [f for f in files if in_class(f, cls) and not f.endswith("_test.gd") and not f.endswith(".md")]
     names = {os.path.splitext(os.path.basename(f))[0] for f in own}
     for f in own:
         names.update(re.findall(r"^class_name\s+(\w+)", _text(root, f) or "", re.M))

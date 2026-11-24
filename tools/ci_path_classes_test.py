@@ -32,6 +32,11 @@ def test_outside_script_naming_a_class_fails(tmp_path):
     assert _tree(tmp_path, scripts__other_DOT_gd="var k := BoardgenKit.new()\n")
 
 
+
+def test_a_look_markdown_file_lends_no_name_but_a_look_script_still_does(tmp_path):
+    assert _tree(tmp_path, tools__boardgen__README_DOT_md="see BoardgenKit\n", scripts__other_DOT_gd="# README\nvar readme := 1\nvar README := 2\n") == []
+    assert _tree(tmp_path, tools__boardgen__README_DOT_md="x\n", scripts__other_DOT_gd="var k := BoardgenKit.new()\n")
+
 def test_outside_script_loading_a_class_file_by_path_fails(tmp_path):
     assert _tree(tmp_path, scripts__other_DOT_gd='load("res://scripts/boardgen_kit.gd")\n')
 
