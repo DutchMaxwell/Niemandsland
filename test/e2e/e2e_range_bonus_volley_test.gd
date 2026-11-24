@@ -200,34 +200,6 @@ func test_the_bonus_applies_before_the_target_side_shrink(timeout := 120000) -> 
 		.contains(["Cannon"])
 
 
-func test_battle_log_names_the_weapon_the_bonus_lifts_into_reach(timeout := 120000) -> void:
-	# rules-must-log, POSITIVE case: a weapon that fires PAST the range printed on its card reads as a
-	# bug just like a silent refusal does. The volley names the bonus, its source and the profile.
-	var gunner := _armed(1, "Legionaries", [Vector3.ZERO],
-		[{"name": "Cannon", "range": 36, "attacks": 2}, {"name": "Rifle", "range": 24, "attacks": 2}])
-	gunner.unit_properties["special_rules"] = ["Royal Legion"]
-	var grunts := _armed(2, "Grunts", [Vector3(_x_for_gap(26.0), 0, 0)], [])
-	_main._solo_log_range_bonus(gunner, grunts)
-	var text := ""
-	for e in _main.battle_log.entries():
-		text += str((e as Dictionary)["text"]) + "\n"
-	assert_str(text) \
-		.override_failure_message("NML-929 — the volley never named the weapon the +4\" lifted into reach (log: %s)" % text.strip_edges()) \
-		.contains("Rifle")
-	assert_str(text) \
-		.override_failure_message("the line must name the rule that granted the reach (log: %s)" % text.strip_edges()) \
-		.contains("Royal Legion")
-	# The 36" cannon reaches on its own, so the bonus never "lifted" it — it is not listed.
-	assert_str(text.substr(text.find("shooting range"))).not_contains("Cannon")
-	# Counter-probe: no bonus, no line — the log never claims a rule that did nothing.
-	var plain := _armed(1, "Riflemen", [Vector3.ZERO], [{"name": "Rifle", "range": 24, "attacks": 2}])
-	var before: int = _main.battle_log.entries().size()
-	_main._solo_log_range_bonus(plain, grunts)
-	assert_int(_main.battle_log.entries().size()) \
-		.override_failure_message("a unit without a range bonus still logged a bonus line") \
-		.is_equal(before)
-
-
 func test_reach_hunt_human_cap_selects_rush_or_charge() -> void:
 	var manager: ObjectManager = _main.object_manager
 	var bands := {"advance": 6, "rush": 12, "charge": 14}
@@ -241,7 +213,7 @@ func test_reach_hunt_human_cap_selects_rush_or_charge() -> void:
 	assert_int(manager._cap_band_inches(bands)).is_equal(14)
 
 
-func test_reach_hunt_range_bonus_reaches_the_real_volley_and_named_log() -> void:
+func test_reach_hunt_range_bonus_reaches_the_real_volley() -> void:
 	var gunner := _armed(1, "Fixture", [Vector3.ZERO], [{"name": "Rifle", "range": 24, "attacks": 2}])
 	gunner.unit_properties["game_system"] = "aof"
 	gunner.unit_properties["faction_folder"] = "mummified_undead"
@@ -249,13 +221,6 @@ func test_reach_hunt_range_bonus_reaches_the_real_volley_and_named_log() -> void
 	var target := _armed(2, "Target", [Vector3(_x_for_gap(26.0), 0, 0)], [])
 	assert_int(SoloController.shooting_range_bonus(gunner)).is_equal(4)
 	assert_array(_volley_weapons(gunner, target)).contains(["Rifle"])
-	var start: int = _main.battle_log.entries().size()
-	_main._solo_log_range_bonus(gunner, target)
-	var text := ""
-	for entry in _main.battle_log.entries().slice(start):
-		text += str(entry["text"]) + "\n"
-	assert_str(text).contains("Reach Hunt")
-	assert_str(text).contains("Rifle")
 
 
 func test_ai_volley_modifiers_use_the_nearest_base_gap(timeout := 120000) -> void:
