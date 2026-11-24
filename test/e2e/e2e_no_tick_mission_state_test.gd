@@ -22,8 +22,8 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main._solo_batch = true
-	_main._solo_auto_saves = true
+	SoloHarness.instant(_main)
+	SoloHarness.auto_saves(_main)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
 

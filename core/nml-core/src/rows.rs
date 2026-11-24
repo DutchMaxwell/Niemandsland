@@ -463,7 +463,7 @@ impl RowEncoder {
                 Cell::F(snappedf(o.pos[2] / IN2M, 0.1)),
                 Cell::I(o.owner),
             ];
-            row.extend(std::iter::repeat(Cell::I(0)).take(17));
+            row.extend(std::iter::repeat_n(Cell::I(0), 17));
             rows.push(row);
         }
         // NML-1012 input v1 — the GAME-STATE row (type 4).
@@ -506,7 +506,7 @@ impl RowEncoder {
             Cell::I(mj_code),
             Cell::I(first_seize as i64),
         ];
-        row.extend(std::iter::repeat(Cell::I(0)).take(13));
+        row.extend(std::iter::repeat_n(Cell::I(0), 13));
         rows.push(row);
         rows
     }
