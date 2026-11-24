@@ -2088,7 +2088,11 @@ static func open_session(main, gu: GameUnit) -> bool:
 	if main.save_manager != null:
 		main.save_manager.note_activation_start(gu.get_name())   # P4.0-7 (D5): what a mid-step save stores
 	last_target = null   # step 50: a new activation never inherits the target of a cancelled one
-	if on_move_path(main, gu):   # step 31 (O1/O2): every activation of a move-path unit starts on Advance
+	# Step 31 (O1/O2): every activation of a move-path unit starts on Advance - unless the player pressed Rush or Charge
+	# for this very unit before its Start: that press is the declaration, and resetting it refused a Rush drag at 6".
+	var picked: bool = str(main.get("_movement_cap_picked_for")) == gu.unit_id \
+		and int(main.object_manager._movement_cap) in [CAP_RUSH, CAP_CHARGE]
+	if on_move_path(main, gu) and not picked:
 		main.object_manager.set_movement_cap(CAP_ADVANCE)
 	main._update_movement_cap_display()
 	_refresh_card(main)
@@ -2132,6 +2136,8 @@ static func close_session(main, unit_id: String) -> void:
 	if core != null:
 		core.release(int(_sessions[unit_id]["handle"]))
 	_sessions.erase(unit_id)
+	if main != null and str(main.get("_movement_cap_picked_for")) == unit_id:
+		main.set("_movement_cap_picked_for", "")   # a mode pressed in this activation is not the next one's declaration
 	if main != null and main.save_manager != null:
 		main.save_manager.note_activation_end()   # P4.0-7 (D5): an ended activation saves as the table stands
 	if main != null:
