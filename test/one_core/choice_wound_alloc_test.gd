@@ -57,6 +57,10 @@ class FakeCore extends RefCounted:
 	func release(_h: int) -> void:
 		pass
 
+	## No captured board: the driver then lands the delta's token count as the row gives it.
+	func plain_of(_h: int) -> Dictionary:
+		return {}
+
 
 class FakeSolo extends "res://scripts/solo/solo_controller.gd":
 	var fake_core: Object
