@@ -57,7 +57,7 @@ func test_the_opener_side_is_prompted_first(timeout := 120000) -> void:
 	_reserve_unit(1, "P1Reserve", Vector3(-2.0, 0.0, 0.0))
 	_reserve_unit(2, "P2Reserve", Vector3(-2.0, 0.0, 0.3))
 	_hotseat_automatic()
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	# P2 opens the round (P1 took the last activation). The arrival step asks P2 first, then P1.
 	_main._hotseat_ambush_arrivals(2, 2)
 	await _runner.simulate_frames(4)
@@ -80,7 +80,7 @@ func test_the_opener_side_is_prompted_first(timeout := 120000) -> void:
 func test_a_side_without_reserves_is_not_prompted(timeout := 120000) -> void:
 	_reserve_unit(2, "P2Reserve", Vector3(-2.0, 0.0, 0.3))
 	_hotseat_automatic()
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	_main._hotseat_ambush_arrivals(2, 2)
 	await _runner.simulate_frames(4)
 	# Only P2 has a reserve; after P2's prompt there is no P1 prompt to dismiss.

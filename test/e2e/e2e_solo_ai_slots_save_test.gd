@@ -62,7 +62,7 @@ func test_the_restored_slot_is_graded_and_drives_the_unit_check() -> void:
 	_main.solo_ai_slots = {}
 
 	await _main.save_manager.load_game(path)
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 
 	assert_bool(_main.solo_controller != null and _main.solo_controller.difficulty_by_slot.has(1)) \
 		.override_failure_message("the controller of a loaded Solo game carries no difficulty grade for the AI slot") \

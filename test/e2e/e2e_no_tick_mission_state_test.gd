@@ -61,7 +61,7 @@ func _activate(unit: GameUnit) -> void:
 ## applies it, and some VP booked.
 func _ticked_mission_game() -> void:
 	_main._on_solo_ai_toggled(true, 2)
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	_main._solo_mission_id = "domination"   # round VP, four markers
 	_main._solo_apply_mission_if_chosen()
 	SoloController.mission_vp = [3, 1]

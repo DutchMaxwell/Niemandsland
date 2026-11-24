@@ -79,7 +79,7 @@ func test_an_agreed_automatic_room_builds_the_engine_controller() -> void:
 	_clear_controller()
 	_main.solo_ai_slots = {}
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	assert_object(_main.solo_controller) \
 		.override_failure_message("3.1 — an agreed online automatic room must build the engine controller") \
 		.is_not_null()
@@ -91,7 +91,7 @@ func test_a_manual_room_builds_no_engine_controller() -> void:
 	_clear_controller()
 	_main.solo_ai_slots = {}
 	_main.opr_army_manager.rules_automation = RulesAutomation.Level.MANUAL
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	assert_object(_main.solo_controller).is_null()
 	_end_session()
 

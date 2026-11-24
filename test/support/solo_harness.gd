@@ -7,9 +7,19 @@ class_name SoloHarness
 ## from main.gd then breaks those tests although no behaviour changes. With this one facade, moving
 ## that code touches one file.
 ##
-## These four functions are the whole interface: `start` builds the controller, `instant`/`fast`
-## pick the pacing, `auto_saves` skips the save dialog. A test that needs more keeps that one line
-## after `start`.
+## These five functions are the whole interface: `controller` builds the controller without touching
+## the table's seats, `start` builds it on given seats, `instant`/`fast` pick the pacing,
+## `auto_saves` skips the save dialog. A test that needs more keeps that one line after `start`.
+
+
+## Build the solo controller for the current table and touch nothing else: no slot set, no seat.
+## Use this instead of `start` on hotseat tables (and agreed online rooms / geometry-only fixtures)
+## that keep their own seats and would lose them to `start`'s slot and seat writes. Returns the
+## controller `_ensure_solo_controller()` left behind — null when the table has no AI seat and is
+## not engine-Automatic.
+static func controller(main: Node) -> SoloController:
+	main._ensure_solo_controller()
+	return main.solo_controller
 
 
 ## Start a solo game on a loaded main scene: AI slots, the human slot, the controller ready.

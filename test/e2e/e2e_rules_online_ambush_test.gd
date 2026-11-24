@@ -65,7 +65,7 @@ func _agreed_automatic_room() -> void:
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 2
 	_main._hotseat_turn = null
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 
 
 func _unit(pid: int, unit_name: String) -> GameUnit:

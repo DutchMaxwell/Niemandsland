@@ -58,7 +58,7 @@ func test_pump_never_plays_an_ai_turn_without_an_ai_seat(timeout := 120000) -> v
 	var p1 := _register(1, "Rifles", Vector3(-0.3, 0.0, 0.0))
 	var p2 := _register(2, "Raiders", Vector3(0.3, 0.0, 0.0))
 	_hotseat_automatic()
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	assert_object(_main.solo_controller) \
 		.override_failure_message("step 2.4 — _ensure_solo_controller bailed on a hotseat Automatic table") \
 		.is_not_null()
@@ -87,7 +87,7 @@ func test_the_next_round_button_stays_on_the_hotseat_branch(timeout := 120000) -
 	_register(1, "Rifles", Vector3(-0.3, 0.0, 0.0))
 	_register(2, "Raiders", Vector3(0.3, 0.0, 0.0))
 	_hotseat_automatic()
-	_main._ensure_solo_controller()
+	SoloHarness.controller(_main)
 	var before: int = _main.opr_army_manager.current_round
 	await _main._do_next_round()
 	assert_int(_main.opr_army_manager.current_round).is_equal(before + 1)
