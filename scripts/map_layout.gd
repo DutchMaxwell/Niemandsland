@@ -33,7 +33,7 @@ const TERRAIN_NAMES := {
 	TerrainType.DANGEROUS: "Dangerous"
 }
 
-## The label a terrain type carries on the table's game system (PLAN_GAME_SYSTEM_SWITCH step 12): the CONTAINER type
+## The label a terrain type carries on the table's game system: the CONTAINER type
 ## (Impassable + Sight Blocking) is a "Container" on a grimdark table and a "Blocker" on a fantasy one. The type id, the
 ## button name and the rules text stay the same; only the label differs.
 static func terrain_label(type: int, system: String) -> String:

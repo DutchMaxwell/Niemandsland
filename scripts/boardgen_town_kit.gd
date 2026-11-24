@@ -1,6 +1,6 @@
 class_name BoardgenTownKit
 extends Node3D
-## The authored K-R1 modules of a ruin-town board (PLAN_RUINTOWN phase B): tiled gable roofs (two pitches; a quarter broken over a
+## The authored K-R1 modules of a ruin-town board: tiled gable roofs (two pitches; a quarter broken over a
 ## rafter frame), chimneys, merlons (wall, towers, hall) and rubble heaps against both ends of every wall breach. VISUAL ONLY, in the
 ## same places as the procedural pieces they replace (nobody stands on a roof; a heap stays inside the 0.75 in wall strip).
 ## Each module is drawn with the world-triplanar material of ONE texture set (TiefwerkLibrary keyed "ruintown") when the set is cached,

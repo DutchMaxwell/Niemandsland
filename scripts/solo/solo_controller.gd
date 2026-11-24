@@ -1290,7 +1290,7 @@ func _select_ai_unit(eligible: Array) -> GameUnit:
 	# NML-1073 M5 (EXPERIMENT, default off): with the knob OFF this is the shipped shortcut, byte for
 	# byte — a one-unit pool returns here, above everything. With it ON the unit falls through to the
 	# planner block: no choice of UNIT is left, but there is still a choice of ACTION, and with the knob OFF
-	# the decision tree makes it (the 1-ply plan() that used to answer in _solve_planner is gone, P4.D-93).
+	# the decision tree makes it (the 1-ply plan() that used to answer in _solve_planner is gone).
 	var one_left := pool.size() == 1
 	if one_left and not _pool1_rollout_active():
 		return pool[0]
@@ -2376,7 +2376,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	# tree's section draw, because that is all the imitation corpus ever taught.
 	# No policy loaded => {} => byte-identical tree.
 	var planner_used := false
-	var planned_verb := -1   # F-HOLD-ADV: the verb the adopted plan picked (-1: no plan)
+	var planned_verb := -1   # the verb the adopted plan picked (-1: no plan)
 	var pl := {}
 	var _ph_plan := 0
 	if act_wall_enabled():
@@ -2641,7 +2641,7 @@ func _act(unit: GameUnit) -> Dictionary:
 		else (advance if action == AiDecision.Action.ADVANCE else 0.0))
 	var charge_band_in := melee_shroud_charge_in(charge_reach, target_unit)
 	if planned_verb >= 0 and action != planned_verb:
-		AiActRecorder.executed_verb(_move_act_seq, action, planned_verb)   # F-HOLD-ADV (D7): the verb that RAN
+		AiActRecorder.executed_verb(_move_act_seq, action, planned_verb)   # the verb that RAN
 	var intent := ActIntent.make(unit, action, target_unit, goal, band_in, do_shoot, {
 		"charge_band_in": charge_band_in, "shoot_range_in": shoot_range, "quick_shot": quick_shot,
 		"enemy_dist_in": enemy_dist, "to_objective": to_obj, "to_flank": to_flank,
@@ -3927,7 +3927,7 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 		"target": (state["units"][victim_key] as Dictionary)["unit"] \
 			if victim_key != "" and state["units"].has(victim_key) else null,
 		"why": str(pick["intent"]), "expectation": pick["expectation"]}
-	# P4.D-65 (gate G2): the feature vector is computed only for a consumer (see _pick_features_wanted).
+	# the position-feature vector is computed only for a consumer (see _pick_features_wanted).
 	var want_features := _pick_features_wanted()
 	var pick_features: Dictionary = AiMissionEval.features(_with_reserves(state), me,
 		BattleSim.reply_threat(state, me), true) if want_features else {}
@@ -4599,7 +4599,7 @@ func _move_v2_same(a: Vector2, b: Vector2) -> bool:
 
 ## One line per REASON per game — a decline is normal (the core declines what it
 ## has not ported), a decline STORM is a finding, and 200 identical lines hide it.
-## P4.D-61 (inert): who still reaches the GDScript search, counted into CoreActivation.legacy["plan_decline"] (the
+## Who still reaches the GDScript search (inert), counted into CoreActivation.legacy["plan_decline"] (the
 ## NML_TABLE_CENSUS dump). "core:used" = `_core_plan` answered; "core:<reason>" = it declined; "rollout:used|unused" =
 ## what AiPlanner.plan_with_rollout then answered (with NML_CORE=1 every rollout follows a decline). The 1-ply
 ## "plan1:*" key of the soak (0 of 13 used) went with the fallback it counted. Counting only: no RNG, no log line, no game state.
@@ -4617,7 +4617,7 @@ func _core_warn_once(reason: String) -> void:
 		% reason + "the GDScript search decides it (NML-1073 R1).")
 
 
-## P4.D-65 (gate G2): the per-pick position features (AiMissionEval.features + BattleSim.reply_threat) feed only the
+## The per-pick position features (AiMissionEval.features + BattleSim.reply_threat) feed only the
 ## harness capture (`decision_sink`: the arena's position rows). The player's log strips them
 ## (render_decision_for_player) and the shipped game attaches no sink, so it never computes them.
 func _pick_features_wanted() -> bool:
@@ -5036,7 +5036,7 @@ func _solve_planner(unit: GameUnit) -> Dictionary:
 				cout["target"] = tgt
 			return cout
 	# No cached rollout intent for this unit: the search declined it (or none was asked), so the decision tree plays the
-	# activation. The GDScript 1-ply AiPlanner.plan that used to answer here said `used:false` in 13 of 13 soak cases (P4.D-62).
+	# activation. The GDScript 1-ply AiPlanner.plan that used to answer here said `used:false` in 13 of 13 soak cases.
 	_planner_intent = {}
 	return {}
 
@@ -9773,7 +9773,7 @@ func _digest_unit_key(u: GameUnit) -> String:
 
 ## M0-3 (NML-1073): a pure text fingerprint of the state the RULES care about — unit/model flags,
 ## wounds, markers, positions, round, activation index, objective owners. Rotation and visibility are
-## presentation and excluded on purpose (Design calls, PLAN_fast_rules_core.md). Deterministic field
+## presentation and excluded on purpose (design calls). Deterministic field
 ## order (units sorted by _digest_unit_key — get_all_game_units() iterates a Dictionary — models kept
 ## in their stored array order, markers sorted) so two runs of the same seeds never diverge on
 ## hash-map ordering alone, only on actual rules state. Positions are model.node.global_position

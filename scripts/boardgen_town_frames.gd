@@ -1,5 +1,5 @@
 class_name BoardgenTownFrames
-## Half-timber shells as real geometry (plan PLAN_RUINTOWN_TARGET_C, train 3): the kit's frame panels (posts, rails, braces 0.07 in proud of the face, dark openings with
+## Half-timber shells as real geometry: the kit's frame panels (posts, rails, braces 0.07 in proud of the face, dark openings with
 ## depth, shutters, boards, lath where the plaster fell) on the drawn faces of the intact houses and on the faces of the ruined tiers; timber gable ends, snapped corner
 ## posts and chimney stacks on the ruined lots; one burnt shell per board half. VISUAL ONLY: every piece lies on a face (<= 0.2 in proud of the collider) or on a tier top
 ## inside the 0.75 in edge strip; nothing changes a collider, a level or a cell. While a module is not cached the shader's painted frame stays.

@@ -2,8 +2,8 @@
   "schema": "nml-table-census-v1",
   "notes": [
     "Counts come from the script, not from this file; the notes record callers a reader would not guess.",
-    "tools/solo_selfplay.gd (the headless harness that drove the table directly) was deleted by P4.D-39; tools/arena_match.gd plays through the game loop and its core door.",
-    "test/parity/parity_table.gd no longer calls _solo_resolve_ai_volley (P4.D-38: the shoot parity table half is the frozen record in test/parity/golden/shoot/); test/parity/parity_table_melee.gd:66 still calls _run_ai_melee (P4.D-49).",
+    "tools/solo_selfplay.gd (the headless harness that drove the table directly) was deleted; tools/arena_match.gd plays through the game loop and its core door.",
+    "test/parity/parity_table.gd no longer calls _solo_resolve_ai_volley (the shoot parity table half is the frozen record in test/parity/golden/shoot/); test/parity/parity_table_melee.gd:66 still calls _run_ai_melee.",
     "A listed caller that disappears is fine on purpose; only an unlisted NEW prod caller turns --check red. To allow one, add 'file:function' to allowed_callers of the callee in the same diff as a plan step that says so.",
     "Whole-file entries (planner groups) are not gated and keep the counter; planner_tags tags every column-0 function of the 7 planner files; a new planner function must get a tag in the same diff.",
     "Tags: erlkoenig = needed by the Rust search hand-off (_core_plan: capture, state_to_plain, AiPlanner statics, act recorder); live_helper = live game logic that is not search (mission scoring); table_live = still called by a main.gd function that survives the table deletion; tree = decision tree / AiPosition; gd_search = the GDScript search (reached on a core decline or in debug/test defaults; includes its profiling marks); table_dead = dies with the table deletion (a function that gd_search also calls dies with the later of the table deletion and the search deletion); tools_only / test_only = no prod caller; dead = no caller."
