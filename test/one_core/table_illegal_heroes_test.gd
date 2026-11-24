@@ -19,8 +19,7 @@ func before_test() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {1: true, 2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [1, 2], 2)
 	CoreActivation._env = 1
 
 

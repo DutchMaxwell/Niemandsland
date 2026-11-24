@@ -42,8 +42,7 @@ func before_test() -> void:
 	_real_net = _main.network_manager
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	_main.opr_army_manager.current_round = 1
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2])
 	CoreActivation._env = 1
 
 

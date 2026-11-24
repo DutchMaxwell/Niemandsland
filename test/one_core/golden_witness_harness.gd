@@ -429,11 +429,10 @@ static func configure(main: Node) -> bool:
 	CoreActivation._env = -1
 	if CoreActivation.enabled():
 		return false
-	main.solo_ai_slots = {2: true}
-	main._ensure_solo_controller()
+	SoloHarness.start(main, [2])
 	main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	main.opr_army_manager.current_round = 1
-	main._solo_batch = true
+	SoloHarness.instant(main)
 	return true
 
 
@@ -481,7 +480,7 @@ static func capture_grid(main: Node, family: String, scs: Array) -> Dictionary:
 static func capture_melee(main: Node) -> Dictionary:
 	var fast: bool = main.get("_solo_fast")
 	var slots: Dictionary = (main.solo_ai_slots as Dictionary).duplicate()
-	main.set("_solo_fast", true)   # the parity gate's fast-forward: no glide tweens
+	SoloHarness.fast(main)   # the parity gate's fast-forward: no glide tweens
 	# Both seats AI, like the parity gate: a human seat would wait for a save click on the strike-back.
 	main.solo_ai_slots = {1: true, 2: true}
 	var out := {"schema": SCHEMA, "family": MELEE_FAMILY, "provenance": provenance(), "cases": []}
@@ -489,7 +488,7 @@ static func capture_melee(main: Node) -> Dictionary:
 		for seed in SEEDS:
 			out["cases"].append(await _run_melee_case(main, sc, seed))
 	main.solo_ai_slots = slots
-	main.set("_solo_fast", fast)
+	SoloHarness.fast(main, fast)
 	return out
 
 
@@ -734,7 +733,7 @@ static func _run_melee_shape_case(main: Node, sc: Dictionary, seed: int) -> Dict
 	var seats: Dictionary = (main.solo_ai_slots as Dictionary).duplicate()
 	main.solo_ai_slots = {2: true} if runner == RUNNER_HUMAN_CHARGE else {1: true, 2: true}
 	if runner == RUNNER_HUMAN_CHARGE:
-		main._solo_auto_saves = true   # the human charger's saves against the strike-back roll on the tray, no card
+		SoloHarness.auto_saves(main)   # the human charger's saves against the strike-back roll on the tray, no card
 	main.seed_tray_rng(seed)
 	var lines: Array = []
 	var tap := _line_tap(lines)
@@ -753,7 +752,7 @@ static func _run_melee_shape_case(main: Node, sc: Dictionary, seed: int) -> Dict
 		RUNNER_AI_CHARGE:
 			await main._run_ai_melee({"unit": att, "target": dfn, "charge_from_in": ParityMelee._charge_from_in(sc)})
 	main.battle_log.entry_added.disconnect(tap)
-	main._solo_auto_saves = false   # only this runner raises it (unset is the game default: the card is asked)
+	SoloHarness.auto_saves(main, false)   # only this runner raises it (unset is the game default: the card is asked)
 	main.solo_ai_slots = seats
 	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
 		"lines": lines, "final": _final(chain), "rng": _rng_state(main)}
@@ -886,7 +885,7 @@ static func _run_into_human_case(main: Node, sc: Dictionary, seed: int) -> Dicti
 	var on_roll := func(_total: int) -> void:
 		st["rolls"] += 1
 		if st["rolls"] == ROLLS_BEFORE_WOUNDS:
-			main._solo_batch = false
+			SoloHarness.instant(main, false)
 	var pump := Timer.new()
 	pump.wait_time = 0.02
 	var on_tick := func() -> void:
@@ -908,7 +907,7 @@ static func _run_into_human_case(main: Node, sc: Dictionary, seed: int) -> Dicti
 			outcome.append({"unit": dfn, "index": int((st["clicks"] as Array).pop_front())})
 		st["fed"] += 1
 		if int(st["fed"]) == 1:
-			main._solo_batch = true   # the morale die after the landing needs the batch tray again
+			SoloHarness.instant(main)   # the morale die after the landing needs the batch tray again
 	pump.timeout.connect(on_tick)
 	main.add_child(pump)
 	pump.start()
@@ -924,7 +923,7 @@ static func _run_into_human_case(main: Node, sc: Dictionary, seed: int) -> Dicti
 	main.battle_log.entry_added.disconnect(tap)
 	main.dice_roller_control.roll_finnished.disconnect(on_roll)
 	pump.queue_free()
-	main._solo_batch = true
+	SoloHarness.instant(main)
 	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
 		"lines": lines, "final": _final([att, dfn]), "rng": _rng_state(main),
 		"extra": {"prompt_opened": str(st["opened"]), "picks_fed": str(st["fed"])}}

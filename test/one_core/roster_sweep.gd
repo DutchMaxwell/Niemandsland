@@ -235,8 +235,7 @@ static var _fidelity_was := false
 
 ## The AI seats, the batch tray and the dice tap, exactly as the parity gate and the soak set them.
 static func arm(main: Node, dump_dir: String) -> void:
-	main.solo_ai_slots = {1: true, 2: true}
-	main._ensure_solo_controller()
+	SoloHarness.start(main, [1, 2], SEAT_TARGET)
 	# DS-RG: the shipped presets (planner_v0/V0S/V0_pool1) all carry `table_fidelity`, and _apply_aifix —
 	# which _ensure_solo_controller runs — stamps AiPlanner.table_fidelity from it, so the header carries
 	# `range_by_base_edge` and the six sibling fidelity knobs the LIVE core reads. The sweep arms no preset,
@@ -245,13 +244,11 @@ static func arm(main: Node, dump_dir: String) -> void:
 	# the difficulty application overwrites the static.
 	_fidelity_was = AiPlanner.table_fidelity
 	AiPlanner.table_fidelity = true
-	main.solo_controller.ai_slot = SEAT_SHOOTER
-	main.solo_controller.human_slot = SEAT_TARGET
 	main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
 	main.opr_army_manager.current_round = 1
-	main._solo_batch = true
-	main._solo_auto_saves = true
-	main._solo_fast = true
+	SoloHarness.instant(main)
+	SoloHarness.auto_saves(main)
+	SoloHarness.fast(main)
 	main._autosave_controller.set_lesson_paused(true)
 	DirAccess.make_dir_recursive_absolute(dump_dir)
 	OS.set_environment("NML_DICE_DUMP", dump_dir)
