@@ -111,10 +111,9 @@ func test_the_ai_does_not_counter_a_defender_that_cannot_strike_back_at_epoch_73
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {1: true, 2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [1, 2], 2)
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
-	_main._solo_batch = true
+	SoloHarness.instant(_main)
 	var charger := _e2e_unit(2, "Charger", 0.0, [])
 	var defender := _e2e_unit(1, "Defender", 1.0, ["Counter", "Limited"])
 	_main.solo_controller.mark_limited_used(defender,
