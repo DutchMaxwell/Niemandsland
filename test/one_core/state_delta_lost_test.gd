@@ -40,10 +40,9 @@ func after_test() -> void:
 
 ## The fixture of core_activation_test.gd: one plain 10-model shooter and one plain 5-model target.
 func _volley_units() -> Array:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
-	_main._solo_batch = true
-	_main._solo_auto_saves = true
+	SoloHarness.start(_main, [2])
+	SoloHarness.instant(_main)
+	SoloHarness.auto_saves(_main)
 	var side := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 		"faction_folder": "robot_legions", "rules": []}
 	var att := ParityTable._make_unit(_main, side.merged({"player": 2, "name": "Att", "models": 10, "x_in": 0.0}),
@@ -163,10 +162,9 @@ func test_a_shaken_target_keeps_its_once_morale_buff() -> void:
 
 ## A Surprise Attack bearer (gf `alien_hives`, the rule's own registry entry) and a plain target `foe_x` inches east.
 func _surprise_units(foe_x: float) -> Array:
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
-	_main._solo_batch = true
-	_main._solo_auto_saves = true
+	SoloHarness.start(_main, [2])
+	SoloHarness.instant(_main)
+	SoloHarness.auto_saves(_main)
 	var side := {"quality": 4, "defense": 4, "tough": 1, "z_step_in": 1.2, "game_system": "gf",
 		"faction_folder": "alien_hives", "rules": ["Surprise Attack(2)"]}
 	var att := ParityTable._make_unit(_main, side.merged({"player": 2, "name": "Att", "models": 10, "x_in": 0.0}, true),
