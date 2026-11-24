@@ -2049,3 +2049,40 @@ func test_the_consolidation_after_a_charge_has_its_own_3_inch_allowance() -> voi
 	await _drag_unit(u, 1.0)
 	assert_array(_allowance_lines()).is_equal(["Rifles: a model moved 4.0\" - the Consolidation allowance is 3.0\"."])
 	GraphicsSettings.enforce_movement_limit = was
+
+
+## A Rush pressed on the selector BEFORE the unit's Start is the player's declaration: the Start keeps it and a 10" drag
+## is accepted. RED before the fix: the Start reset the selector to Advance and the core refused the drag in the
+## Advance allowance's words ("a model moved 10.0\" - the Advance allowance is 6.0\".").
+func test_a_rush_picked_before_the_start_stays_and_a_10_inch_drag_is_accepted() -> void:
+	var was: bool = GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var u := _human("Rifles")
+	var at := _poses(u)
+	_pick([_node(u, 0), _node(u, 1)])
+	assert_int(_cap()).override_failure_message("the selector does not start on Advance").is_equal(ObjectManager.MovementCap.ADVANCE)
+	assert_bool(await _switch(ObjectManager.MovementCap.RUSH, "")).override_failure_message("a card before the Start").is_false()
+	assert_bool(_main.core_activation_start(u)).override_failure_message("no Start").is_true()
+	assert_int(_cap()).override_failure_message("the Start reset the player's Rush").is_equal(ObjectManager.MovementCap.RUSH)
+	await _drag_unit(u, 10.0)
+	var refused: Array = _main.battle_log.entries().filter(func(e: Dictionary) -> bool: return str(e["text"]).contains("allowance is"))
+	assert_array(refused).override_failure_message("the 10\" Rush drag was refused: %s" % [refused]).is_empty()
+	assert_array(_poses(u)).override_failure_message("the 10\" Rush drag did not move").is_not_equal(at)
+	GraphicsSettings.enforce_movement_limit = was
+
+
+## A Rush pressed for ANOTHER unit is not this unit's declaration: its Start still sets Advance (step 31), and so does the
+## next activation of the unit the Rush was pressed for.
+func test_a_rush_picked_for_another_unit_or_an_ended_activation_does_not_carry() -> void:
+	var u := _human("Rifles")
+	var v := _human("Guards")
+	_pick([_node(v, 0), _node(v, 1)])
+	await _switch(ObjectManager.MovementCap.RUSH, "")
+	_pick([_node(u, 0), _node(u, 1)])
+	assert_bool(_main.core_activation_start(u)).is_true()
+	assert_int(_cap()).override_failure_message("another unit's Rush carried over").is_equal(ObjectManager.MovementCap.ADVANCE)
+	await _switch(ObjectManager.MovementCap.RUSH, "")
+	CoreActivation.close_session(_main, u.unit_id)
+	_main.object_manager.set_movement_cap(ObjectManager.MovementCap.RUSH)   # the selector as the ended activation left it
+	assert_bool(CoreActivation.open_session(_main, u)).is_true()
+	assert_int(_cap()).override_failure_message("the ended activation's Rush carried over").is_equal(ObjectManager.MovementCap.ADVANCE)

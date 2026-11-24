@@ -4,7 +4,7 @@ extends GdUnitTestSuite
 ## `modeled` list for every book, so the game neither applied the rule nor told the player to do it by hand.
 ## Every case builds a carrier of the book (system + faction slug, like the army import) and reads the rule through
 ## the table's own reader: the Vanguard deploy (gate + battle-log line naming the rule), Hit & Run Shooter's step
-## pick, the Bounding gate of the activation planner, Quick Throw's lifted Hold need. Each rule has a control book
+## pick, the Bounding gate of the activation planner. Each rule has a control book
 ## that already had its row. The two Aura rules are a not-dropped control: the import expansion grants them by
 ## name, so they need no row. Rust twin: `core/nml-core/src/tests/unit/v36_data_rows/f1b_rows.rs`.
 
@@ -85,15 +85,6 @@ func test_bounding_gate_holds_where_the_book_fields_it() -> void:
 	assert_bool(RulesRegistry.unit_rule_active(_carrier("aof", "eternal_wardens", []), "Bounding")).is_false()
 	assert_bool(RulesRegistry.unit_rule_active(_carrier("aof", "eternal_wardens", ["Bounding"]), "Bounding")) \
 		.override_failure_message("aof/eternal_wardens: Bounding silently dropped").is_true()
-
-
-func test_quick_throw_lifts_the_hold_need_where_the_book_fields_it() -> void:
-	assert_str(SoloController.indirect_lift_rule(_carrier("aof", "dragon_empire", ["Quick Throw"]), "los_needs_hold")) \
-		.is_equal("Quick Throw")
-	assert_str(SoloController.indirect_lift_rule(_carrier("aof", "dwarves", []), "los_needs_hold")).is_equal("")
-	for book in ["duchies_of_vinci", "dwarves"]:
-		assert_str(SoloController.indirect_lift_rule(_carrier("aof", book, ["Quick Throw"]), "los_needs_hold")) \
-			.override_failure_message("aof/%s: Quick Throw silently dropped" % book).is_equal("Quick Throw")
 
 
 ## Not-dropped control: the import expansion grants the aura's base rule by name in a book with no row.

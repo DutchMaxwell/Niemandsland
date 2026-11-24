@@ -146,6 +146,7 @@ var _dice_count_value_label: Label = null
 var _current_roll_column: VBoxContainer = null
 var _movement_cap_buttons: Dictionary = {}  # MovementCap mode -> Button (the "Movement" cap row)
 var _refreshing_cap_row := false   # one-core P3 step 31: the row refresh is not re-entrant
+var _movement_cap_picked_for := ""   # the one selected unit the player last pressed a movement mode for ("" = none or several)
 
 # Success evaluation + rerolls (display-only aids; the rules live in DiceRules).
 var _success_target: int = DiceRules.TARGET_NONE
@@ -14225,16 +14226,10 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 			if _solo_target_mode.has("split_second"):
 				_solo_split_abort()
 				return true
-			# Release-pass find (#226): stranding in the second-pick phase killed the whole
-			# attack — right-click now falls back to "everything at the first target".
+			# Right-click / Esc while picking the second target cancels the whole attack, as the prompt says:
+			# nothing is rolled and the unit is still free to act (it used to fire everything at the first target).
 			if _solo_target_mode.has("split_first"):
-				var fb_attacker: GameUnit = _solo_target_mode.get("unit")
-				var fb_target: GameUnit = _solo_target_mode.get("split_first")
-				_solo_end_targeting()
-				if battle_log != null:
-					battle_log.log_event(BattleLog.Category.GENERAL,
-						"Split fire abandoned — everything fires at %s" % fb_target.get_name())
-				_run_human_attack(fb_attacker, fb_target, false)
+				_solo_split_abort()
 				return true
 			# #227: with picks pending, right-click means "cast with these" (early finish).
 			if _solo_target_mode.has("cast_entry") \
@@ -15114,8 +15109,18 @@ func _solo_hover_sighted_count(attacker: GameUnit, hovered: GameUnit) -> int:
 ## up to two targets, per weapon group, declared before rolling). Melee never splits
 ## (Assault actions may not split fire). Fire-and-forget async — the input handler stays sync.
 func _solo_split_or_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> void:
+	var choice: Dictionary = {} if melee else await _solo_offer_split_fire(attacker, target)
+	await _solo_attack_after_split_choice(attacker, target, melee, choice)
+
+
+## The attack after the split-fire answer: cancelled = no shot at all (nothing rolled, the activation stays open),
+## a split = the second-target pick, else the one attack.
+func _solo_attack_after_split_choice(attacker: GameUnit, target: GameUnit, melee: bool, choice: Dictionary) -> void:
+	if bool(choice.get("cancel", false)):
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Shot cancelled — %s has not acted" % attacker.get_name())
+		return
 	if not melee:
-		var choice: Dictionary = await _solo_offer_split_fire(attacker, target)
 		if bool(choice.get("split", false)):
 			var names: Array = choice.get("names", [])
 			var rest: Array = choice.get("rest", [])
@@ -15184,7 +15189,16 @@ func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionar
 	var names: Array = _solo_split_fire_offer_names(attacker, target_a)
 	if names.size() < 2:
 		return {"split": false}
-	var picked: Array = await _solo_ask_split_fire(target_a, names)
+	return await _solo_split_fire_choice(target_a, names)
+
+
+## The split-fire answer for `names`: {"cancel": true} when the player backs out (Cancel attack, × or Esc),
+## {"split": false} for one target, else the split with the checked and the staying weapon names.
+func _solo_split_fire_choice(target_a: GameUnit, names: Array) -> Dictionary:
+	var answer: Variant = await _solo_ask_split_fire(target_a, names)
+	if answer == null:
+		return {"cancel": true}
+	var picked: Array = answer
 	if picked.is_empty() or picked.size() >= names.size():
 		return {"split": false}   # nothing checked, or everything — both mean one target
 	var rest: Array = []
@@ -15195,11 +15209,14 @@ func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionar
 
 
 ## The split-fire question itself (#226): one check box per weapon group; returns the checked names
-## ([] = "All at <target>"). Apart from the guards above so the prompt is drivable headless.
-func _solo_ask_split_fire(target_a: GameUnit, names: Array) -> Array:
+## ([] = "All at <target>"), or null when the player cancels the attack (its button, × or Esc).
+## Apart from the guards above so the prompt is drivable headless.
+func _solo_ask_split_fire(target_a: GameUnit, names: Array) -> Variant:
 	var card := PromptCard.new("Split fire?",
 		"Up to two targets (%s). Checked weapons fire at a SECOND target:" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(target_a)),
-		"Pick 2nd target", "All at %s" % target_a.get_name())
+		"Pick 2nd target", "Cancel attack")
+	card.cancel_value = null   # the way out (button, × and Esc) cancels the shot; it is not "All at"
+	card.add_action("All at %s" % target_a.get_name(), "all")
 	var checks: Array = []
 	for n in names:
 		var cb := CheckBox.new()
@@ -15208,8 +15225,11 @@ func _solo_ask_split_fire(target_a: GameUnit, names: Array) -> Array:
 		checks.append(cb)
 	GameMenu.section(card.rows)   # the check boxes as house lines, as in the game menu
 	add_child(card)
+	var answer: Variant = await card.answer(null)
+	if answer == null:
+		return null
 	var picked: Array = []
-	if bool(await card.answer()):
+	if answer is bool and answer:
 		for i in checks.size():
 			if (checks[i] as CheckBox).button_pressed:
 				picked.append(names[i])
@@ -18237,6 +18257,9 @@ func _on_movement_cap_pressed(mode: int) -> void:
 			ObjectManager.MovementCap.CHARGE: "Charge"}[mode]])
 	if object_manager and object_manager.has_method("set_movement_cap"):
 		object_manager.set_movement_cap(mode)
+		# A Rush or Charge pressed before the unit's Start is the player's declaration: the Start keeps it (CoreActivation.open_session).
+		var picked := UnitUtils.get_unique_units(object_manager.get_selected_objects())
+		_movement_cap_picked_for = (picked[0] as GameUnit).unit_id if picked.size() == 1 else ""
 	_update_movement_cap_display()
 	dice_controls_changed.emit(&"movecap", mode)
 
@@ -18248,6 +18271,12 @@ func core_activation_end(gu: GameUnit) -> bool:
 
 ## One-core P3 step 35: the Cancel of `gu`'s open activation (the card's button, step 36).
 func core_activation_cancel(gu: GameUnit) -> void:
+	# A target pick of the cancelled unit closes with it: left open, the next click (or right-click at a split's
+	# second pick) started a fresh activation and fired.
+	if gu != null and _solo_target_mode.get("unit") == gu:
+		if _solo_target_mode.has("split_second"):
+			_solo_deploy_ui_hide()
+		_solo_end_targeting()
 	CoreActivation.cancel(self, gu)
 
 
