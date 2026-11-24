@@ -115,10 +115,16 @@ func test_preview_shows_landing_and_shooters(timeout := 60000) -> void:
 	for line in lines:   # every line starts at a landing ghost, never at the model's current spot
 		assert_bool(landing.any(func(l: Dictionary) -> bool:
 			return (l["pos"] as Vector3).is_equal_approx(line["from"]))).is_true()
+	# The core resolves the shot, so the sight from the landing is read at its first hit line (moved, nobody hurt yet).
+	var at_shot := [-1]
+	var tap := func(e: Dictionary) -> void:
+		if at_shot[0] < 0 and str(e["text"]).contains("fires Rifle at Foe"):
+			at_shot[0] = sighted.call()
+	_main.battle_log.entry_added.connect(tap)
 	await _intent(shooter, AiDecision.Action.ADVANCE, enemy)
 	await E2EBoot.settle(get_tree())
-	# The core resolves the shot, so the sight from the landing is read here, not from the table's sight line.
-	assert_int(lines.size()).is_equal(sighted.call())
+	_main.battle_log.entry_added.disconnect(tap)
+	assert_int(lines.size()).is_equal(at_shot[0])
 	_assert_core_shot(_log_text(), "Riflemen", "Foe")
 
 
