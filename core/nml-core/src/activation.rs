@@ -305,13 +305,18 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
     let flying = state.profile(si).special_rules.iter().any(|r| r == "Flying");
     let ledges = crate::mv::step::world_ledges_of(terrain, flying, seams.rules_epoch);
     let (mut x, mut dropped) = (0.0f64, 0.0f64);
+    // Teleport / Ethereal (army book): once per activation, before attacking, the unit is PLACED within the rule's reach of
+    // where it stands - a placement, not a walk. The table pays it before the core call (`teleport_used`), so a trail ends
+    // where the walk ended and the hop on to the placed model is held to the reach, never to the move allowance.
+    let hop_in = statics[state.roster.profile[si]].teleport.as_ref().filter(|_| state.teleport_used[si])
+        .map(|s| crate::unit::teleport_cap_in(&s.name, drop.mode == RUSH));
     // Each model's path: its trail, else (R3: no chord bypass) the straight segment [start, end] once it moved past the
     // drop floor, so its climbs and its Difficult crossing count all the same; a model that stayed has none.
     let mut paths: Vec<Vec<[f64; 2]>> = Vec::with_capacity(start.len());
     for (i, (a, b)) in start.iter().zip(&drop.placed).enumerate() {
         let (a, b) = ([a[0], a[2]], [b[0], b[2]]);
         let path = match drop.trails.get(i).filter(|t| t.len() >= 2) {
-            Some(t) if inch(t[0], a) > 0.01 || inch(t[t.len() - 1], b) > 0.01 => {
+            Some(t) if inch(t[0], a) > 0.01 || inch(t[t.len() - 1], b) > hop_in.unwrap_or(0.0) + 0.01 => {
                 return Check::Refused { reason: "trail does not match the placed model".to_string() };
             }
             Some(t) => t.clone(),
@@ -4081,6 +4086,29 @@ mod tests {
         let mismatch = refusal("trail does not match the placed model");
         assert_eq!(go(east(5.0), vec![trail(&[[0.0, 1.0], [5.0, 0.0]])]), mismatch, "starts 1\" off the start");
         assert_eq!(go(east(5.0), vec![trail(&[[0.0, 0.0], [4.0, 0.0]])]), mismatch, "ends 1\" short of the placement");
+    }
+
+    /// An Ethereal unit the table already placed this activation (`teleport_used`): its trail ends where the walk ended and
+    /// the model stands up to 6" further on; the walk is measured, the hop is held to the reach (RED on the old check: the
+    /// hop reads "trail does not match the placed model" and the AI's volley is held). Without the latch, past the reach,
+    /// or for a plain Teleport off an Advance past its 3" reach, the mismatch still refuses.
+    #[test]
+    fn a_teleported_model_stands_off_its_trail_end() {
+        let (mut st, mut statics) = squad_line();
+        let go = |st: &State, statics: &[UnitStatic], mode, placed: Vec<[f64; 3]>| {
+            let trails = vec![trail(&[[0.0, 0.0], [4.0, 0.0]])];
+            check_move(statics, st, 0, seams(), &Terrain::default(), &Drop { mode, placed, trails }, true)
+        };
+        let mismatch = refusal("trail does not match the placed model");
+        statics[0].teleport = Some(crate::unit::TeleportSpec { name: "Ethereal".into(), standalone_reposition: true });
+        assert_eq!(go(&st, &statics, ADVANCE, east(9.0)), mismatch, "no latch: the table did not place it");
+        st.teleport_used[0] = true;
+        assert_eq!(go(&st, &statics, ADVANCE, east(9.0)), OK, "4\" walked, placed 5\" on");
+        assert_eq!(go(&st, &statics, ADVANCE, vec![[4.0 * INCHES_TO_METERS, 0.0, 6.0 * INCHES_TO_METERS]]), OK, "6\" sideways");
+        assert_eq!(go(&st, &statics, ADVANCE, east(10.2)), mismatch, "6.2\" past the walk's end");
+        statics[0].teleport = Some(crate::unit::TeleportSpec { name: "Teleport".into(), standalone_reposition: false });
+        assert_eq!(go(&st, &statics, ADVANCE, east(9.0)), mismatch, "Teleport reaches 3\" off an Advance");
+        assert_eq!(go(&st, &statics, RUSH, east(9.0)), OK, "and 6\" off a Rush");
     }
 
     /// `mv::step`'s climb board: one long container, x 3..6", z -18..18", on a 6x4 ft table; its two
