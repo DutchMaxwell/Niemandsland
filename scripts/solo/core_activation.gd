@@ -457,7 +457,8 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		if str(r["step"]) == "done":
 			if not cx.is_empty():
 				await _cast_finish(main, cx)
-			await land_delta(main, r.get("delta", []), start_models, landed, new_breaks(core, h, r.get("illegal", [])))
+			await land_delta(main, _tokens_the_core_changed(core, h, r.get("delta", [])), start_models, landed,
+				new_breaks(core, h, r.get("illegal", [])))
 			if not keep_handle:
 				core.release(int(r.get("handle", 0)))
 				r.erase("handle")
@@ -2023,6 +2024,23 @@ static func _land_surprise(main, gu: GameUnit, d: Dictionary) -> void:
 	if not bool(d.get("surprise_attack_used", false)) or bool(gu.unit_properties.get("surprise_attack_used", false)):
 		return
 	main._sync_unit_property(gu, "surprise_attack_used", true)
+
+
+## The delta's rows without a spell-token count the core did not change. The table owns the tokens: a human cast pays
+## them on the table after the activation's capture (the Start comes first), so the core's row still carries the
+## captured count, and landing it handed a paid cast's tokens back at the End (cast or failed alike). A count the core
+## changed itself (its own casts) still lands. The rows are copied, never edited: the caller's answer stays as given.
+static func _tokens_the_core_changed(core: Object, h: int, delta: Array) -> Array:
+	var before: Dictionary = core.plain_of(h).get("units", {}) if h != 0 else {}
+	var out: Array = []
+	for d in delta:
+		var row: Dictionary = d
+		var was: Variant = (before.get(str(row.get("unit", "")), {}) as Dictionary).get("casts")
+		if row.has("casts") and was != null and int(was) == int(row["casts"]):
+			row = row.duplicate()
+			row.erase("casts")
+		out.append(row)
+	return out
 
 
 ## P4.0-4d: the table-owned per-activation ledger the delta now carries (inventory class (a)): the fatigue flag and the
