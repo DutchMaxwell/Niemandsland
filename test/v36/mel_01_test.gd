@@ -81,8 +81,7 @@ func _boot() -> void:
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
-	_main.solo_ai_slots = {2: true}
-	_main._ensure_solo_controller()
+	SoloHarness.start(_main, [2], 1)
 
 
 ## A one-model unit armed only with the Assault pistol, and a foe in base contact.
