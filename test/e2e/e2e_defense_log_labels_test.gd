@@ -88,13 +88,24 @@ func _buff(unit_name: String, target: GameUnit, def_mod: int) -> void:
 		{"kind": ("buff" if def_mod > 0 else "debuff"), "modifier": {"def_mod": def_mod}})
 
 
+## The player's volley through the rules core: the activation is opened first (the Fire! button's path), then the door
+## shoots; false from the door would mean nothing resolved it.
+func _door_fire(attacker: GameUnit, target: GameUnit) -> void:
+	CoreActivation._env = 1
+	assert_bool(CoreActivation.open_session(_main, attacker)).override_failure_message("no activation session for the attacker").is_true()
+	var took: bool = await CoreActivation.human_shoot(_main, attacker, target)
+	CoreActivation.close_session(_main, attacker.unit_id)
+	CoreActivation._env = -1
+	assert_bool(took).override_failure_message("the core door did not take the volley").is_true()
+
+
 # ===== (1) the ROT case: a token bonus announced under a rule the unit does not have =====
 
 func test_a_defense_token_is_named_by_ITS_rule_when_shot(timeout := 240000) -> void:
 	var shooter := _shooter()
 	var foe := _foe("Grunts")   # Defense 4+ (E2EBoot fixture), no Shielded anywhere
 	_buff("Warding Chant", foe, 1)
-	await _main._run_human_shooting(shooter, foe)
+	await _door_fire(shooter, foe)
 	var text := _log_text()
 	assert_str(text) \
 		.override_failure_message("the contribution must carry its OWN rule's name (log: %s)" % text.strip_edges()) \
@@ -115,11 +126,13 @@ func test_every_contribution_gets_its_own_line(timeout := 240000) -> void:
 	assert_int(_main._solo_defense_vs(foe, AiCombatMath.HIT_SOURCE_SHOOTING)) \
 		.override_failure_message("fixture check: both contributions must actually fold into the save") \
 		.is_equal(2)
-	await _main._run_human_shooting(shooter, foe)
+	await _door_fire(shooter, foe)
 	var text := _log_text()
 	assert_str(text) \
 		.override_failure_message("the rule half of the composite lost its line (log: %s)" % text.strip_edges()) \
-		.contains("Guards is Shielded: +1 Defense (saves on 2+)")
+		.contains("Guards is Shielded: +1 Defense")
+	assert_str(text).override_failure_message("both halves fold into the save (log: %s)" % text.strip_edges()) \
+		.contains("Guards saves on 2+")
 	assert_str(text) \
 		.override_failure_message("the token half of the composite lost its line (log: %s)" % text.strip_edges()) \
 		.contains("Guards is Warding Chant: +1 Defense (saves on 2+)")
@@ -137,7 +150,7 @@ func test_two_contributions_on_defense_3_sum_to_1_and_log_2_plus(timeout := 2400
 	assert_int(_main._solo_defense_vs(foe, AiCombatMath.HIT_SOURCE_SHOOTING)) \
 		.override_failure_message("3 - 1 - 1 = 1 stays unclamped until the save target clamps the sum") \
 		.is_equal(1)
-	await _main._run_human_shooting(shooter, foe)
+	await _door_fire(shooter, foe)
 	var text := _log_text()
 	assert_str(text) \
 		.override_failure_message("the log must show the clamped 2+, never 1+ (log: %s)" % text.strip_edges()) \
@@ -155,11 +168,13 @@ func test_a_cancelling_hex_no_longer_silences_both_rules(timeout := 240000) -> v
 	assert_int(_main._solo_defense_vs(foe, AiCombatMath.HIT_SOURCE_SHOOTING)) \
 		.override_failure_message("fixture check: the two contributions must cancel out to the printed Defense") \
 		.is_equal(4)
-	await _main._run_human_shooting(shooter, foe)
+	await _door_fire(shooter, foe)
 	var text := _log_text()
 	assert_str(text) \
 		.override_failure_message("#224: the bonus that DID apply must be named even when the net number is unchanged (log: %s)" % text.strip_edges()) \
-		.contains("Guards is Shielded: +1 Defense (saves on 4+)")
+		.contains("Guards is Shielded: +1 Defense")
+	assert_str(text).override_failure_message("the two cancel out at the save (log: %s)" % text.strip_edges()) \
+		.contains("Guards saves on 4+")
 	assert_str(text) \
 		.override_failure_message("the hex the player can see on the unit must say what it did (log: %s)" % text.strip_edges()) \
 		.contains("Guards is Withering Hex: -1 Defense (saves on 4+)")

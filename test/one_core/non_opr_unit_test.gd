@@ -300,10 +300,7 @@ func _human_volley(s: int, defense: int, core_run: bool, auto := false) -> Dicti
 	var on_entry := func(e: Dictionary) -> void: lines.append(str(e["text"]))
 	_main.battle_log.entry_added.connect(on_entry)
 	_main.seed_tray_rng(s)
-	if core_run:
-		await _main._run_human_attack(att, foe, false, auto)
-	else:   # the table arm: its own volley (the window door now hands a refused shot to the free roll)
-		await TableHumanVolley.shoot(_main, att, foe)
+	await _main._run_human_attack(att, foe, false, auto)
 	_main.battle_log.entry_added.disconnect(on_entry)
 	var survivors: Array = foe.get_alive_models().map(func(m: ModelInstance) -> Vector3: return m.node.global_position)
 	survivors.sort()
@@ -329,25 +326,6 @@ func test_an_auto_verbs_shot_goes_through_the_core() -> void:
 	var out := await _human_volley(1, 4, true, true)
 	assert_bool(out["core"]).override_failure_message("the core did not take an auto verb's shot: %s" % [_log_texts()]).is_true()
 	assert_int(out["alive"]).override_failure_message("the core's volley hurt nobody (seed 1 wounds)").is_less(5)
-
-
-func test_the_core_shoots_a_non_opr_target_like_the_table_on_the_human_door(timeout := 900000) -> void:
-	var seeds := int(OS.get_environment("NML_ONE_CORE_SEEDS")) if OS.has_environment("NML_ONE_CORE_SEEDS") else 20
-	var bad: Array = []
-	var hurt := 0
-	for defense in [2, 4, 6]:
-		for s in seeds:
-			var table := await _human_volley(s, defense, false)
-			var core := await _human_volley(s, defense, true)
-			hurt += 5 - int(core["alive"])
-			if not core["core"] or table["core"]:
-				bad.append("defense %d seed %d: the core door took it: %s (core run), %s (table run)" % [defense, s, core["core"], table["core"]])
-			for k in ["survivors", "shaken", "rng"]:
-				if table[k] != core[k]:
-					bad.append("defense %d seed %d: %s: table %s, core %s" % [defense, s, k, table[k], core[k]])
-	print("NON_OPR_TARGET door=human seeds=%d defenses=3 hurt=%d mismatches=%d" % [seeds, hurt, bad.size()])
-	assert_int(hurt).override_failure_message("no seed hurt the target: the sweep compares nothing").is_greater(0)
-	assert_array(bad).override_failure_message("core vs table:\n" + "\n".join(bad.slice(0, 10))).is_empty()
 
 
 ## P4.D-13c: a target with NO statline (quality and defense 0: a hand-written foreign save) is not a valid target at a core

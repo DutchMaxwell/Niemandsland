@@ -3,7 +3,7 @@ extends GdUnitTestSuite
 ## unit may only Hold or Advance and never shoots after it moved; below it (72) it plays as before.
 ## The map carries the rule for both systems (so the inventory stops listing it "by hand"), and the
 ## player's engine verbs refuse Rush and Charge for it and keep the shot pick shut after an Advance.
-## The manual table (free drag, then Shoot) reads the drop's moved_round stamp: a unit that moved fires nothing.
+## Through the rules core the drop after Start is the activation's move: a unit that moved fires nothing.
 
 const MainScript := preload("res://scripts/main.gd")
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -122,9 +122,17 @@ func _boot_table(epoch: int) -> Array:
 	return [gunner, foe]
 
 
-## The gunner's drop of `inches` on the table: the free drag the manual table stamps moved_round from.
-func _drop(unit: GameUnit, inches: float) -> void:
-	await _main._on_units_dropped([{"node": (unit.models[0] as ModelInstance).node, "inches": inches}])
+## The player's activation through the rules core: Start, the gunner's drop of `moved_in` inches (its move, read by the
+## core), then Shoot.
+func _door_fire(attacker: GameUnit, target: GameUnit, moved_in := 0.0) -> void:
+	CoreActivation._env = 1
+	assert_bool(_main.core_activation_start(attacker)).override_failure_message("no Start").is_true()
+	if moved_in > 0.0:
+		(attacker.models[0] as ModelInstance).node.global_position.x += moved_in * INCH
+		assert_bool(_main.attacked_unit_drag_refused(attacker, moved_in)).override_failure_message("the drop was refused").is_false()
+	await CoreActivation.human_shoot(_main, attacker, target)
+	CoreActivation.close_session(_main, attacker.unit_id)
+	CoreActivation._env = -1
 
 
 func _log_text() -> String:
@@ -136,35 +144,33 @@ func _log_text() -> String:
 
 func test_a_moved_cumbersome_human_unit_fires_no_volley_at_epoch_73(timeout := 240000) -> void:
 	var t: Array = await _boot_table(AiActRecorder.EPOCH_73_V36)
-	await _drop(t[0], 0.11)   # a hair over the 0.1" the table counts as a move
-	await _main._run_human_shooting(t[0], t[1])
+	await _door_fire(t[0], t[1], 0.11)   # a hair over the 0.1" the table counts as a move
 	var text := _log_text()
 	assert_str(text) \
 		.override_failure_message("rules 3.6: the moved unit names the rule (log: %s)" % text.strip_edges()) \
 		.contains("Cumbersome: Walker moved, so it cannot shoot this activation")
 	assert_str(text) \
 		.override_failure_message("rules 3.6: no volley is declared (log: %s)" % text.strip_edges()) \
-		.not_contains("line of sight")
+		.not_contains("Walker fires at Foe")
 	await E2EBoot.settle(get_tree())
 
 
 func test_a_cumbersome_human_unit_that_did_not_move_shoots_at_epoch_73(timeout := 240000) -> void:
 	var t: Array = await _boot_table(AiActRecorder.EPOCH_73_V36)
-	await _main._run_human_shooting(t[0], t[1])
+	await _door_fire(t[0], t[1])
 	var text := _log_text()
 	assert_str(text).override_failure_message("standing still keeps the shot (log: %s)" % text.strip_edges()) \
-		.contains("line of sight")
+		.contains("Walker fires at Foe")
 	assert_str(text).not_contains("Cumbersome")
 	await E2EBoot.settle(get_tree())
 
 
 func test_a_moved_cumbersome_human_unit_still_shoots_at_epoch_72(timeout := 240000) -> void:
 	var t: Array = await _boot_table(AiActRecorder.EPOCH_72_PLAYTEST_RULES)
-	await _drop(t[0], 0.11)
-	await _main._run_human_shooting(t[0], t[1])
+	await _door_fire(t[0], t[1], 0.11)
 	var text := _log_text()
 	assert_str(text).override_failure_message("rules 3.5: the shot stands (log: %s)" % text.strip_edges()) \
-		.contains("line of sight")
+		.contains("Walker fires at Foe")
 	assert_str(text).not_contains("Cumbersome")
 	await E2EBoot.settle(get_tree())
 

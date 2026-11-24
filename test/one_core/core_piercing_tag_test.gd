@@ -99,10 +99,7 @@ func _volley(door: String, s: int, markers: int, source: String, core_run: bool)
 		CoreActivation._env = 1 if core_run else 0
 		if core_run:
 			assert_bool(_main.core_activation_start(att)).override_failure_message("seed %d: no Start" % s).is_true()
-		if core_run:
-			await _main._run_human_attack(att, foe, false)
-		else:   # the table arm: its own volley (the window door now hands a refused shot to the free roll)
-			await TableHumanVolley.shoot(_main, att, foe)
+		await _main._run_human_attack(att, foe, false)
 		CoreActivation.close_session(_main, att.unit_id)
 		CoreActivation._env = 1
 	_main.battle_log.entry_added.disconnect(tap)
@@ -123,28 +120,17 @@ func _volley(door: String, s: int, markers: int, source: String, core_run: bool)
 
 func _sweep(door: String, markers: int, source: String, want_pool: int, want_spent: int, want_alive: Array = []) -> void:
 	var seeds := int(OS.get_environment("NML_ONE_CORE_SEEDS")) if OS.has_environment("NML_ONE_CORE_SEEDS") else 20
-	var compare := door == "human"
 	var bad: Array = []
 	var hurt := 0
-	if not compare and seeds > want_alive.size():
+	if not want_alive.is_empty() and seeds > want_alive.size():
 		bad.append("%d seeds exceed the %d pinned values" % [seeds, want_alive.size()])
 	for s in seeds:
-		var table: Dictionary = {}
-		if compare:
-			table = await _volley(door, s, markers, source, false)
 		var core := await _volley(door, s, markers, source, true)
 		hurt += 5 - (core["survivors"] as Array).size()
 		if not core["core"]:
 			bad.append("seed %d: the core door did not take the volley" % s)
-		if compare and table["core"]:
-			bad.append("seed %d: the table run took the volley too" % s)
-		if compare:
-			for k in ["survivors" if AiActRecorder.rules_epoch >= 73 else "alive", "shaken", "rng", "pool", "lines"]:   # below 73 the table and the core pick different casualties
-				if table[k] != core[k]:
-					bad.append("seed %d: %s: table %s, core %s" % [s, k, table[k], core[k]])
-		else:
-			if s < want_alive.size() and int(core["alive"]) != int(want_alive[s]):
-				bad.append("seed %d: alive %d (want %d)" % [s, core["alive"], int(want_alive[s])])
+		if s < want_alive.size() and int(core["alive"]) != int(want_alive[s]):
+			bad.append("seed %d: alive %d (want %d)" % [s, core["alive"], int(want_alive[s])])
 		if int(core["pool"]) != want_pool or (core["spent"] as Array).size() != want_spent:
 			bad.append("seed %d: pool %d (want %d), spend lines %s (want %d)" % [s, core["pool"], want_pool, core["spent"], want_spent])
 	print("PIERCING_TAG door=%s markers=%d %s seeds=%d hurt=%d mismatches=%d" % [door, markers, source, seeds, hurt, bad.size()])

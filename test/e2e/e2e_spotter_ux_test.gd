@@ -172,7 +172,13 @@ func test_human_to_hit_line_names_the_spent_spot_bonus(timeout := 120000) -> voi
 	_main._solo_place_spot_marker(spotter, target)
 	_main._solo_place_spot_marker(spotter, target)
 	SoloHarness.instant(_main)
-	await _main._run_human_shooting(attacker, target)
+	# The player's volley through the rules core: the activation is opened first (the Fire! button's path).
+	CoreActivation._env = 1
+	assert_bool(CoreActivation.open_session(_main, attacker)).override_failure_message("no activation session").is_true()
+	var took: bool = await CoreActivation.human_shoot(_main, attacker, target)
+	CoreActivation.close_session(_main, attacker.unit_id)
+	CoreActivation._env = -1
+	assert_bool(took).override_failure_message("the core door did not take the volley").is_true()
 	assert_str(_log_text()) \
 		.override_failure_message("NML-970 — the volley consumed 2 markers but the To-hit line never named the bonus:\n%s" % _log_text()) \
 		.contains("Spotted +2")
