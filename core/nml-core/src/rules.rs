@@ -45,6 +45,8 @@ pub struct Book {
     pub blast_spread_in: Option<f64>,
     pub vertical_moves: bool,
     pub default_board_in: [f64; 2],
+    /// At most one model per ARMY with each command upgrade (`COMMAND_UPGRADES`); `command_limit` checks a list.
+    pub one_command_upgrade_each: bool,
 }
 
 const DEFAULT_HERO_AURA: HeroAura = HeroAura {
@@ -66,6 +68,7 @@ const BOOK_GF: Book = Book {
     blast_spread_in: None,
     vertical_moves: false,
     default_board_in: [72.0, 48.0],
+    one_command_upgrade_each: false,
 };
 
 // The 3.6 Firefight book prints a 9 in chain (p.7); the recorded 6 in stays below `PENDING_EPOCH_FIREFIGHT_CHAIN`,
@@ -81,6 +84,7 @@ const BOOK_GFF: Book = Book {
     blast_spread_in: None,
     vertical_moves: true,
     default_board_in: [48.0, 48.0],
+    one_command_upgrade_each: false,
 };
 
 const BOOK_AOF: Book = Book {
@@ -92,6 +96,7 @@ const BOOK_AOF: Book = Book {
     blast_spread_in: None,
     vertical_moves: false,
     default_board_in: [72.0, 48.0],
+    one_command_upgrade_each: false,
 };
 
 // The 3.6 Skirmish book prints 6 in (beginner's guide p.7), the same as today.
@@ -104,6 +109,7 @@ const BOOK_AOFS: Book = Book {
     blast_spread_in: None,
     vertical_moves: true,
     default_board_in: [48.0, 48.0],
+    one_command_upgrade_each: true,
 };
 
 const BOOK_AOFR: Book = Book {
@@ -115,6 +121,7 @@ const BOOK_AOFR: Book = Book {
     blast_spread_in: None,
     vertical_moves: false,
     default_board_in: [72.0, 48.0],
+    one_command_upgrade_each: false,
 };
 
 impl Book {
@@ -137,6 +144,28 @@ impl Book {
 
 /// Why a list's joined Hero is refused in a game system whose Heroes never join units.
 pub const HERO_JOIN_REFUSED: &str = "Heroes may not join units in this game system";
+
+/// The command upgrades a Skirmish army may field once each (AS36 p.13, maintainer ruling 24.11.).
+pub const COMMAND_UPGRADES: [&str; 3] = ["Sergeant", "Musician", "Banner"];
+
+/// A list's command upgrades checked against `system`'s book: `units` holds each unit's name and its picked upgrade
+/// labels, in list order. Where the book allows one model per army with each command upgrade, the second pick of one
+/// is refused, naming that unit and the upgrade; every other book accepts any list.
+pub fn command_limit(system: &str, units: &[(String, Vec<String>)]) -> Result<(), String> {
+    if !book(system).one_command_upgrade_each {
+        return Ok(());
+    }
+    let mut seen: Vec<&str> = Vec::new();
+    for (name, upgrades) in units {
+        for up in upgrades.iter().map(|u| u.trim()).filter(|u| COMMAND_UPGRADES.contains(u)) {
+            if seen.contains(&up) {
+                return Err(format!("{name}: only one {up} per army in this game system"));
+            }
+            seen.push(up);
+        }
+    }
+    Ok(())
+}
 
 /// `Some(reason)` when a Hero may not join a unit in `system` at `rules_epoch`; `None` when it may.
 pub fn hero_join_refusal(system: &str, rules_epoch: u32) -> Option<&'static str> {
@@ -1039,6 +1068,20 @@ mod tests {
                 b.hero_aura
             };
             assert_eq!(b.hero_aura_at(e), want, "{sys} at the epoch");
+        }
+    }
+
+    /// AoF: Skirmish fields one Sergeant, one Musician and one Banner per army; a second of any one is refused by
+    /// name. Every other book (aof: one per unit, checked elsewhere) accepts the same list.
+    #[test]
+    fn skirmish_armies_field_one_of_each_command_upgrade() {
+        let u = |n: &str, ups: &[&str]| (n.to_string(), ups.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        let one_each = [u("Guard", &["Banner"]), u("Spears", &["Musician"]), u("Archers", &["Sergeant", "Shields"])];
+        let two_banners = [u("Guard", &["Banner"]), u("Spears", &["Banner"])];
+        assert_eq!(command_limit("aofs", &one_each), Ok(()));
+        assert_eq!(command_limit("aofs", &two_banners), Err("Spears: only one Banner per army in this game system".into()));
+        for sys in SYSTEMS.iter().filter(|s| **s != "aofs") {
+            assert_eq!(command_limit(sys, &two_banners), Ok(()), "{sys} has no army-wide limit");
         }
     }
 

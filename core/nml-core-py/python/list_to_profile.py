@@ -1572,6 +1572,20 @@ def _units_from_list(
     return [units[k] for k in order]
 
 
+def _check_command_limit(data: dict[str, Any], game_system: str) -> None:
+    """The core's `rules::command_limit` over the list's picked upgrade labels, in list order: a book that allows one
+    model per army with each command upgrade (AoF: Skirmish) refuses the list on the second pick of one, naming it."""
+    import nml_core
+    units = [
+        (str(ud.get("name", "Unit")),
+         [str((su.get("option") or {}).get("label", "")) for su in ud.get("selectedUpgrades", []) or []])
+        for ud in data.get("units", [])
+    ]
+    reason = nml_core.command_limit(game_system, units)
+    if reason is not None:
+        raise ValueError("list_to_profile: %s" % reason)
+
+
 def _refuse_hero_joins(built: list[dict[str, Any]], game_system: str, rules_epoch: int | None) -> None:
     """A system whose Heroes never join units (the core's `rules::hero_join_refusal`) clears every
     remaining `join_to_unit` - combined halves are folded away above, so what is left joining is a
@@ -1651,6 +1665,7 @@ def profiles_from_army_forge_json(
     dict per unit key, keyed exactly like battle_sim.gd's header (unit_id).
     """
     game_system = str(data.get("gameSystem", "gf"))
+    _check_command_limit(data, game_system)
     built = _units_from_list(data, player, rules_epoch)
     # NML-1152 step 6c — the manifest base override rides the table's spawn
     # order (opr_army_manager.gd:296): after the parse, before any shape read
