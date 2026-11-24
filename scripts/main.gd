@@ -4957,7 +4957,7 @@ func _solo_apply_strafing(unit: GameUnit, human_trails: Array = []) -> void:
 				"%s: %s passes over %s — attacks it as if shooting (once per activation)" % [
 				rule_name, unit.get_name(), target.get_name()], true)
 		CoreActivation.note_legacy(self, "ai_strafe", unit, [target], "move_through")
-		_solo_human_free_roll(unit, target, _solo_free_roll_why(unit, [target], false))
+		_solo_human_free_roll(unit, target, _solo_free_roll_why(unit, [target]))
 		return
 	# The rules core did not take this AI activation and the GDScript table no longer resolves AI volleys, so the strike is held
 	# with one battle-log line naming the unit, the rule and the reason (census key `held_strike`); see
@@ -15018,7 +15018,7 @@ func _solo_split_commit() -> void:
 	# The declared split through the rules core; a split the core cannot resolve becomes one free dice roll.
 	if not await CoreActivation.human_shoot_split(self, attacker, a, b, sb):
 		CoreActivation.note_legacy(self, "human_split", attacker, [a, b])
-		_solo_human_free_roll(attacker, a, _solo_free_roll_why(attacker, [a, b], false))
+		_solo_human_free_roll(attacker, a, _solo_free_roll_why(attacker, [a, b]))
 	elif CoreActivation.last_target == null:
 		return   # the core refused the split: nothing was shot, the activation stays open
 	attacker.unit_properties["shot_round"] = opr_army_manager.current_round
@@ -15038,9 +15038,7 @@ func _solo_human_free_roll(attacker: GameUnit, target: GameUnit, why: String) ->
 
 
 ## Why the rules core did not take a player's shot at `targets`, in plain words for the free-roll line.
-func _solo_free_roll_why(attacker: GameUnit, targets: Array, auto: bool) -> String:
-	if auto:
-		return "an Auto order moved the unit outside the rules core"
+func _solo_free_roll_why(attacker: GameUnit, targets: Array) -> String:
 	if CoreActivation.table_struck(attacker):
 		return "this move crossed an enemy the rules core cannot take"
 	var codes: Array = CoreActivation.why_not(self, attacker, null, true)
@@ -15746,7 +15744,10 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool, auto: 
 			battle_log.log_event(BattleLog.Category.MOVEMENT, solo_controller.last_hit_and_run_note, true)
 	elif not await CoreActivation.human_shoot(self, attacker, target, Callable(), auto):   # step 38 (O15 (1)): a core unit's volley
 		CoreActivation.note_legacy(self, "human_shoot", attacker, [target])
-		_solo_human_free_roll(attacker, target, _solo_free_roll_why(attacker, [target], auto))
+		if auto:   # the Auto verbs move outside the rules core's session; their shot moves to the core with the Auto-verb step, then this caller goes
+			await _run_human_shooting(attacker, target)
+		else:
+			_solo_human_free_roll(attacker, target, _solo_free_roll_why(attacker, [target]))
 	elif CoreActivation.last_target != target:
 		return   # the core refused the shot (it notes the target of a shot it resolved): nothing was shot, the activation stays open
 	# X1 (test game 2, double-shoot exploit): a resolved attack IS the unit's activation — it completes

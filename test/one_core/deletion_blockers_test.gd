@@ -27,7 +27,7 @@ const BLOCKERS: Array[Dictionary] = [
 	# PLAN H (H-4): the facts the table-remains plan retires.
 	{"name": "the AI body runs the pre-attack beats itself (Breath Attack before the volley)", "retire": "P4.D-41 / H-5..H-9", "file": MAIN,
 		"header": "func _solo_activate_one_ai_body(", "needles": ["await _solo_apply_breath_attack(unit)"]},
-	{"name": "human_shoot hands an Auto verb's volley to the free roll", "retire": "P4.D-43 / H-32", "file": ACTIVATION,
+	{"name": "human_shoot hands an Auto verb's volley back to the table", "retire": "P4.D-43 / H-32", "file": ACTIVATION,
 		"header": "static func human_shoot(", "needles": ["if auto:"]},
 	{"name": "hotseat Automatic is OFF unless NML_ONE_CORE_HOTSEAT is set", "retire": "P4.D-43c / H-31", "file": ACTIVATION,
 		"header": "static func hotseat_enabled() -> bool:", "needles": ["_hotseat_env = 1 if (raw == \"1\" or raw == \"on\") else 0"]},
@@ -147,9 +147,10 @@ func test_the_human_door_reads_the_live_slice() -> void:
 
 
 ## The table resolvers have no production caller left: the AI volley and move-through strike the core refuses are HELD with a
-## line (`held`, `held_strike`); a player's shot, split or strike the core refuses is a free dice roll. A call from inside another
-## table resolver (the split calling the volley) is not a production caller: nothing calls the outer one.
-## RED: put `await _run_human_shooting(attacker, target)` back into `_run_human_attack`, or the AI resolver into `_solo_apply_strafing`.
+## line (`held`, `held_strike`); a player's Fire! shot, split or strike the core refuses is a free dice roll. A call from inside another
+## table resolver (the split calling the volley) is not a production caller: nothing calls the outer one. The one caller left is
+## the Auto verbs' shot in `_run_human_attack` (they move outside the core's session), until the Auto-verb step.
+## RED: call `_run_human_shooting` for every refused shot in `_run_human_attack`, or the AI resolver from `_solo_apply_strafing`.
 func test_no_production_caller_reaches_a_table_resolver() -> void:
 	var resolvers := ["_solo_resolve_ai_volley", "_run_human_shooting", "_run_human_attack_split"]
 	var calls: Array = []
@@ -161,7 +162,10 @@ func test_no_production_caller_reaches_a_table_resolver() -> void:
 			for r in resolvers:
 				if l.contains(r + "("):
 					calls.append("%s -> %s" % [fn, r])
-	assert_array(calls).override_failure_message("main.gd calls a table resolver: %s" % [calls]).is_empty()
+	assert_array(calls).override_failure_message("main.gd calls a table resolver: %s" % [calls]).is_equal(["_run_human_attack -> _run_human_shooting"])
+	var body := _span(_source(MAIN), "func _run_human_attack(")
+	assert_bool(body.contains("if auto:   # the Auto verbs move outside the rules core's session")).override_failure_message(
+		"the remaining table call is not the Auto verbs' shot").is_true()
 	for b in BLOCKERS:
 		assert_str(String(b["name"])).override_failure_message("the retired row is still in BLOCKERS").is_not_equal(
 			"a player's Strafing bearer hands its strike to the AI resolver")

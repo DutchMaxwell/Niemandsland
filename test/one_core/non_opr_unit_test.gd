@@ -323,14 +323,12 @@ func test_a_non_opr_target_is_shot_by_the_core_on_the_human_door() -> void:
 
 
 ## The Auto verbs move the unit through the engine, outside the session's drop, so the core would shoot from the START spot
-## (the two-instance harness's Advance & Shoot saw `done` with no roll once its target became takeable). Their shot goes
-## to the free dice roll. RED: drop the `auto` clause from `human_shoot` -> the core's declaration line is there.
-func test_an_auto_verbs_shot_is_a_free_roll() -> void:
+## (the two-instance harness's Advance & Shoot saw `done` with no roll once its target became takeable). Their shot stays
+## on the table. RED: drop the `auto` clause from `human_shoot` -> the core's declaration line is there and nothing hurt it.
+func test_an_auto_verbs_shot_stays_on_the_table() -> void:
 	var out := await _human_volley(1, 4, true, true)
 	assert_bool(out["core"]).override_failure_message("the core took an auto verb's shot: %s" % [_log_texts()]).is_false()
-	assert_array(_lines_containing("Att fires at Bare4: the rules core cannot resolve this shot (an Auto order")).override_failure_message(
-		"log: %s" % [_log_texts()]).has_size(1)
-	assert_int(out["alive"]).override_failure_message("the engine resolved the free roll").is_equal(5)
+	assert_int(out["alive"]).override_failure_message("the table's volley hurt nobody (seed 1 wounds)").is_less(5)
 
 
 func test_the_core_shoots_a_non_opr_target_like_the_table_on_the_human_door(timeout := 900000) -> void:

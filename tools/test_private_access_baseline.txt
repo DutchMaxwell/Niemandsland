@@ -144,7 +144,7 @@ _rules_start_question_due 8
 _run_ai_dangerous 5
 _run_ai_melee 22
 _run_ai_shooting 51
-_run_human_attack 29
+_run_human_attack 28
 _run_human_attack_split 5
 _run_human_cast 15
 _run_human_melee 9

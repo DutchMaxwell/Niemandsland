@@ -1,8 +1,8 @@
 extends GdUnitTestSuite
 ## A player's shot the rules core cannot resolve becomes a free dice roll: one battle-log line names the reason, nothing is
 ## rolled for the player (the dice tray is theirs), nobody is hurt by the engine, and the activation completes as after any
-## attack. The GDScript table resolver no longer runs for a player's shot.
-## Real: the main scene, NmlCore, the human session ("Activate"), `_run_human_attack` (Fire!, and the Auto verbs' shot) and
+## attack. The GDScript table resolver no longer runs for a player's shot (the Auto verbs' shot keeps it until the Auto-verb step).
+## Real: the main scene, NmlCore, the human session ("Activate"), `_run_human_attack` (Fire!) and
 ## `_solo_split_commit` (the declared split's Fire!), the live deny slice.
 ## Constructed: a 3-model rifle unit and a target carrying Grounded Protection (the shoot slice refuses it) 10" away (a second one 14" away for the split).
 ## RED (on main): the table resolves the volley - the tray rolls dice, no free-roll line.
@@ -89,17 +89,6 @@ func test_a_shot_the_core_refuses_is_a_free_roll_with_its_reason(timeout := 3000
 	assert_bool(_main.core_activation_start(att)).override_failure_message("no Start").is_true()
 	var r := await _run(func() -> void: await _main._run_human_attack(att, foe, false))
 	_assert_free_roll(r, att, [foe], "the target's " + REFUSED)
-
-
-## The Auto verbs' shot (the engine moved the unit) is never taken by the core: a free roll that says so.
-@warning_ignore('unused_parameter')
-func test_an_auto_verbs_shot_is_a_free_roll(timeout := 300000,
-		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "no NmlCore") -> void:
-	var att := _shooter()
-	var foe := _foe("Marked", 10.0)
-	assert_bool(_main.core_activation_start(att)).override_failure_message("no Start").is_true()
-	var r := await _run(func() -> void: await _main._run_human_attack(att, foe, false, true))
-	_assert_free_roll(r, att, [foe], "an Auto order moved the unit outside the rules core")
 
 
 ## The declared split's Fire! at two targets the core refuses: one free roll, then the activation completes once.

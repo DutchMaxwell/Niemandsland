@@ -18,8 +18,8 @@ hit_save_shared scripts/main.gd:_solo_save_batch 233 7
 hit_save_shared scripts/main.gd:_solo_takedown_pick 34 3
 hit_save_shared TOTAL 744 64
 human_shoot scripts/main.gd:_run_human_attack_split 38 0
-human_shoot scripts/main.gd:_run_human_shooting 291 2
-human_shoot TOTAL 329 2
+human_shoot scripts/main.gd:_run_human_shooting 291 3
+human_shoot TOTAL 329 3
 melee_charge scripts/main.gd:_run_ai_melee 190 1
 melee_charge scripts/main.gd:_run_human_melee 106 1
 melee_charge scripts/main.gd:_solo_charge_impact 82 4
