@@ -40,6 +40,8 @@ pub struct Book {
     /// A later chain length and the epoch it starts at (`chain_in_at`); `None` = `chain_in` at every epoch.
     pub chain_in_from: Option<(u32, f64)>,
     pub hero_aura: HeroAura,
+    /// A later hero aura and the epoch it starts at (`hero_aura_at`); `None` = `hero_aura` at every epoch.
+    pub hero_aura_from: Option<(u32, HeroAura)>,
     pub blast_spread_in: Option<f64>,
     pub vertical_moves: bool,
     pub default_board_in: [f64; 2],
@@ -51,11 +53,16 @@ const DEFAULT_HERO_AURA: HeroAura = HeroAura {
     joins: true,
 };
 
+/// The 3.6 Firefight and AoF: Skirmish Hero (p.14): any friendly Hero within 6 in, no Tough minimum, never joined.
+const SKIRMISH_HERO_AURA: HeroAura = HeroAura { reach_in: crate::sim::HERO_AURA_REACH_IN, min_tough: 0, joins: false };
+const SKIRMISH_HERO_FROM: Option<(u32, HeroAura)> = Some((crate::acts::PENDING_EPOCH_SKIRMISH_HERO, SKIRMISH_HERO_AURA));
+
 const BOOK_GF: Book = Book {
     system: "gf",
     chain_in: crate::mv::MAX_CHAIN_IN,
     chain_in_from: None,
     hero_aura: DEFAULT_HERO_AURA,
+    hero_aura_from: None,
     blast_spread_in: None,
     vertical_moves: false,
     default_board_in: [72.0, 48.0],
@@ -70,6 +77,7 @@ const BOOK_GFF: Book = Book {
     chain_in: crate::mv::SKIRMISH_CHAIN_IN,
     chain_in_from: Some((crate::acts::PENDING_EPOCH_FIREFIGHT_CHAIN, crate::mv::MAX_CHAIN_IN)),
     hero_aura: DEFAULT_HERO_AURA,
+    hero_aura_from: SKIRMISH_HERO_FROM,
     blast_spread_in: None,
     vertical_moves: true,
     default_board_in: [48.0, 48.0],
@@ -80,6 +88,7 @@ const BOOK_AOF: Book = Book {
     chain_in: crate::mv::MAX_CHAIN_IN,
     chain_in_from: None,
     hero_aura: DEFAULT_HERO_AURA,
+    hero_aura_from: None,
     blast_spread_in: None,
     vertical_moves: false,
     default_board_in: [72.0, 48.0],
@@ -91,6 +100,7 @@ const BOOK_AOFS: Book = Book {
     chain_in: crate::mv::SKIRMISH_CHAIN_IN,
     chain_in_from: None,
     hero_aura: DEFAULT_HERO_AURA,
+    hero_aura_from: SKIRMISH_HERO_FROM,
     blast_spread_in: None,
     vertical_moves: true,
     default_board_in: [48.0, 48.0],
@@ -101,6 +111,7 @@ const BOOK_AOFR: Book = Book {
     chain_in: crate::mv::MAX_CHAIN_IN,
     chain_in_from: None,
     hero_aura: DEFAULT_HERO_AURA,
+    hero_aura_from: None,
     blast_spread_in: None,
     vertical_moves: false,
     default_board_in: [72.0, 48.0],
@@ -112,6 +123,14 @@ impl Book {
         match self.chain_in_from {
             Some((since, chain)) if crate::acts::rule_on(rules_epoch, since) => chain,
             _ => self.chain_in,
+        }
+    }
+
+    /// The hero aura a game at `rules_epoch` plays: `hero_aura`, or the later one from its starting epoch on.
+    pub fn hero_aura_at(&self, rules_epoch: u32) -> HeroAura {
+        match self.hero_aura_from {
+            Some((since, aura)) if crate::acts::rule_on(rules_epoch, since) => aura,
+            _ => self.hero_aura,
         }
     }
 }
@@ -995,6 +1014,24 @@ mod tests {
         assert_eq!(book("GFF").chain_in, crate::mv::SKIRMISH_CHAIN_IN);
         assert_eq!(book("").system, "gf");
         assert_eq!(book("unknown-system").system, "gf");
+    }
+
+    /// The skirmish hero aura waits for its pending epoch: gff and aofs only, every Hero, 6 in, never joined.
+    #[test]
+    fn skirmish_hero_aura_waits_for_its_pending_epoch() {
+        let e = crate::acts::PENDING_EPOCH_SKIRMISH_HERO;
+        assert_eq!(e, crate::acts::CURRENT_RULES_EPOCH + 1);
+        assert!(!crate::acts::rule_on(crate::acts::CURRENT_RULES_EPOCH, e), "a record at the current epoch plays the old aura");
+        for sys in SYSTEMS {
+            let b = book(sys);
+            assert_eq!(b.hero_aura_at(e - 1), b.hero_aura, "{sys} one epoch below");
+            let want = if sys == "gff" || sys == "aofs" {
+                HeroAura { reach_in: crate::sim::HERO_AURA_REACH_IN, min_tough: 0, joins: false }
+            } else {
+                b.hero_aura
+            };
+            assert_eq!(b.hero_aura_at(e), want, "{sys} at the epoch");
+        }
     }
 
     /// The Firefight 9 in chain waits for its pending epoch: the current epoch and every other book play as recorded.

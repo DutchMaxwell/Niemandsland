@@ -1748,6 +1748,7 @@ mod charge_destroyed_target;
 mod charge_step_path;
 mod courage_buff;
 mod skirmish_b4_chain;
+mod skirmish_e1_hero;
 mod utility_buff_family;
 mod utility_spells;
 mod counter_first;

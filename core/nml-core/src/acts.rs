@@ -1047,6 +1047,11 @@ pub const CURRENT_RULES_EPOCH: u32 = 97;
 /// constant and bumps `CURRENT_RULES_EPOCH`. Records stamped 97 or below replay byte-exact. Read only through
 /// `rules::Book::chain_in_at`.
 pub const PENDING_EPOCH_FIREFIGHT_CHAIN: u32 = 98;
+/// PENDING (the 3.6 Firefight and AoF: Skirmish books): every friendly Hero within 6 in lends its Quality to a morale test,
+/// with no Tough minimum, and Heroes never join units, so the Blast cap counts the target unit alone. A placeholder one past
+/// `CURRENT_RULES_EPOCH`, like the one above. Records stamped 97 or below replay byte-exact. Read only through
+/// `rules::Book::hero_aura_at`.
+pub const PENDING_EPOCH_SKIRMISH_HERO: u32 = 98;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
