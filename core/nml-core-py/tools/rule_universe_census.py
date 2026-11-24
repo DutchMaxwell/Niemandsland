@@ -2,7 +2,8 @@
 every layer that must know it.
 
 Walks the private army-book snapshot (`--books <dir>` with `gf/` and `aof/`
-subdirectories; never committed, never embedded) and cross-references each
+subdirectories, plus `gff/` / `aofs/` / `aofr/` when `--systems` names them;
+never committed, never embedded) and cross-references each
 distinct rule name against the four layers that must know it:
 
   1. registry  - the table registry's data (scripts/solo/rules_registry.gd):
@@ -98,6 +99,9 @@ from typing import NamedTuple
 
 REPO = Path(__file__).resolve().parents[3]
 SYSTEMS = ("gf", "aof")
+# Every system `--systems` may name (the skirmish books opt in; the default report stays gf + aof).
+KNOWN_SYSTEMS = ("gf", "aof", "gff", "aofs", "aofr")
+SYSTEM_LABELS = {"gf": "GF", "aof": "AoF", "gff": "GFF", "aofs": "AoFS", "aofr": "AoFR"}
 
 STATUS_RANK = {"PORTED": 3, "STAMPED": 2, "PARTIAL": 1, "MISSING": 0,
                "GRANT-MISSING": 0, "N/A": -1}
@@ -504,12 +508,12 @@ def walk_rule_names(node, out: list) -> None:
             walk_rule_names(item, out)
 
 
-def load_books(books_dir: Path) -> list[dict]:
+def load_books(books_dir: Path, systems: tuple = SYSTEMS) -> list[dict]:
     """Each book: {faction, system, names[]}. A `_common`-style shared file
     (no `specialRules`) now contributes its `rules[]` core glossary instead
     of nothing."""
     books = []
-    for system in SYSTEMS:
+    for system in systems:
         for path in sorted((books_dir / system).glob("*.json")):
             try:
                 data = json.loads(path.read_text())
@@ -1031,11 +1035,11 @@ def core_status_for(name: str, mech: dict, tokens: dict, bands: set, hide: str |
     return "MISSING", ""
 
 
-def build_universe(books: list[dict]) -> dict:
+def build_universe(books: list[dict], systems: tuple = SYSTEMS) -> dict:
     universe: dict = {}
     for book in books:
         s = book["system"]
-        if s not in SYSTEMS:
+        if s not in systems:
             continue
         for name in book["names"]:
             u = universe.setdefault(
@@ -1276,7 +1280,7 @@ def best_core(row: dict) -> str:
     )
 
 
-def summarize(rows: dict) -> dict:
+def summarize(rows: dict, systems: tuple = SYSTEMS) -> dict:
     def count(pred) -> int:
         return sum(1 for r in rows.values() if pred(r))
 
@@ -1325,7 +1329,7 @@ def summarize(rows: dict) -> dict:
     # still-unported.
     summary["core_ported_denominator"] = summary["total"] - summary["core_na"]
     by_system = {}
-    for s in SYSTEMS:
+    for s in systems:
         sub = [(n, r) for n, r in rows.items() if s in r["per_system"]]
         by_system[s] = {
             "names": len(sub),
@@ -1346,11 +1350,11 @@ def summarize(rows: dict) -> dict:
     return summary
 
 
-def ranked_lists(rows: dict) -> dict:
+def ranked_lists(rows: dict, systems: tuple = SYSTEMS) -> dict:
     """Core-MISSING and core-PARTIAL names per system, ranked by occurrences
     in that system (the BLOCK B port order)."""
     out = {}
-    for s in SYSTEMS:
+    for s in systems:
         buckets = {"MISSING": [], "PARTIAL": []}
         for name, r in rows.items():
             ps = r["per_system"].get(s)
@@ -1373,12 +1377,12 @@ def ranked_lists(rows: dict) -> dict:
     return out
 
 
-def compute_offenders(books: list[dict], rows: dict) -> list:
+def compute_offenders(books: list[dict], rows: dict, systems: tuple = SYSTEMS) -> list:
     """Factions ranked by unported occurrences (core != PORTED), worst rules
     attached - the BLOCK B per-faction port list."""
     out = []
     for book in books:
-        if book["system"] not in SYSTEMS:
+        if book["system"] not in systems:
             continue
         per_name: dict = {}
         for name in book["names"]:
@@ -1480,22 +1484,22 @@ def git_head(repo: Path) -> str:
 
 
 def census(books_dir: Path, repo: Path, hide: str | None = None,
-           audit_path: Path | None = None) -> dict:
-    books = load_books(books_dir)
+           audit_path: Path | None = None, systems: tuple = SYSTEMS) -> dict:
+    books = load_books(books_dir, systems)
     if not books:
-        raise SystemExit(f"no books found under {books_dir}/gf|aof")
-    mechanics = {s: load_mechanics(repo, s) for s in SYSTEMS}
+        raise SystemExit(f"no books found under {books_dir}/{'|'.join(systems)}")
+    mechanics = {s: load_mechanics(repo, s) for s in systems}
     tokens, name_tokens, comments = scan_rust(repo)
     loader = loader_tokens(repo)
     mentions = comment_index(comments)
     bands = move_primitives(repo)
     vocab = load_vocab(repo)
     consumed_grants = consumed_grant_names(repo)
-    universe = build_universe(books)
+    universe = build_universe(books, systems)
     rows = build_rows(universe, mechanics, tokens, bands, vocab, mentions,
                       consumed_grants=consumed_grants, name_tokens=name_tokens,
                       loader_tokens=loader)
-    summary = summarize(rows)
+    summary = summarize(rows, systems)
     result = {
         "meta": {
             "generated": datetime.datetime.now().isoformat(timespec="seconds"),
@@ -1503,8 +1507,9 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
             "head": git_head(repo),
             "books": len(books),
             "books_by_system": {
-                s: sum(1 for b in books if b["system"] == s) for s in SYSTEMS
+                s: sum(1 for b in books if b["system"] == s) for s in systems
             },
+            "systems": list(systems),
             "books_dir": str(books_dir),
             "hide": hide,
             "audit": str(audit_path) if audit_path else "",
@@ -1525,8 +1530,8 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
         },
         "summary": summary,
         "rows": rows,
-        "ranked": ranked_lists(rows),
-        "offenders": compute_offenders(books, rows),
+        "ranked": ranked_lists(rows, systems),
+        "offenders": compute_offenders(books, rows, systems),
         "audit_rows": parse_audit(audit_path),
         "audit_reconciliation": reconcile_audit(parse_audit(audit_path), rows, tokens),
         "red": None,
@@ -1566,7 +1571,7 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
             for n in rows:
                 if n in aliased:
                     continue
-                for s in SYSTEMS:
+                for s in systems:
                     m = mechanics[s].get(n)
                     if m and any(g in aliased for g in (m.get("grants_values") or ())):
                         aliased.add(n)
@@ -1586,7 +1591,7 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
             for n in rows:
                 if n in aliased:
                     continue
-                for s in SYSTEMS:
+                for s in systems:
                     m = mechanics[s].get(n)
                     if m and any(g in aliased for g in (m.get("grants_values") or ())):
                         aliased.add(n)
@@ -1644,7 +1649,7 @@ def summary_lines(res: dict) -> list[str]:
         f"  (base PORTED, live through the import expansion;"
         f" NOT counted as core-ported)",
     ]
-    for system in SYSTEMS:
+    for system in res["meta"].get("systems", SYSTEMS):
         b = s["by_system"][system]
         n = b["names"]
         lines.append(
@@ -1672,12 +1677,14 @@ def markdown_report(res: dict) -> str:
     s = res["summary"]
     t = s["total"]
     meta = res["meta"]
+    systems = meta.get("systems", SYSTEMS)
+    by_system_label = ", ".join(
+        f"{meta['books_by_system'].get(x, 0)} {SYSTEM_LABELS[x]}" for x in systems)
     out = [
         "# RULE COVERAGE 2026-08-31 - the rule universe vs every layer (PLAN A1)",
         "",
         f"Generated {meta['generated']} from {meta['repo']} @ {meta['head']};"
-        f" {meta['books']} books ({meta['books_by_system'].get('gf', 0)} GF,"
-        f" {meta['books_by_system'].get('aof', 0)} AoF) at `{meta['books_dir']}`"
+        f" {meta['books']} books ({by_system_label}) at `{meta['books_dir']}`"
         " (private snapshot, read at runtime only).",
         "",
         "## Summary",
@@ -1743,7 +1750,7 @@ def markdown_report(res: dict) -> str:
             "",
         ]
 
-    for system in SYSTEMS:
+    for system in systems:
         rows = res["ranked"][system]["MISSING"]
         out += [
             f"## Core-MISSING - {system.upper()}, ranked by occurrences ({len(rows)} names)",
@@ -1760,7 +1767,7 @@ def markdown_report(res: dict) -> str:
         out.append("")
 
     partial = sorted(
-        (e for system in SYSTEMS for e in res["ranked"][system]["PARTIAL"]),
+        (e for system in systems for e in res["ranked"][system]["PARTIAL"]),
         key=lambda e: -e["occ"],
     )
     out += [
@@ -1770,7 +1777,7 @@ def markdown_report(res: dict) -> str:
         "| --- | --- | --- | --- | --- | --- | --- |",
     ]
     for i, e in enumerate(partial[:40], 1):
-        system = "gf" if e in res["ranked"]["gf"]["PARTIAL"] else "aof"
+        system = next(x for x in systems if e in res["ranked"][x]["PARTIAL"])
         out.append(
             f"| {i} | {e['name']} | {system} | {e['occ']} | {_cell(e['primitive'])} |"
             f" {_cell(e['note'])} | {'yes' if e['encoder_slot'] else 'no'} |"
@@ -1847,7 +1854,11 @@ def main(argv=None) -> int:
         " registry, fast core and encoder vocab."
     )
     ap.add_argument("--books", required=True,
-                    help="directory with gf/ and aof/ book JSONs (private; read-only)")
+                    help="directory with one sub-folder per system (gf/, aof/, ...) of book JSONs"
+                    " (private; read-only)")
+    ap.add_argument("--systems", default=",".join(SYSTEMS),
+                    help="comma list of systems to census (default gf,aof; the skirmish"
+                    f" books opt in, e.g. gf,aof,gff,aofs); known: {','.join(KNOWN_SYSTEMS)}")
     ap.add_argument("--repo", default=str(REPO),
                     help="openTTS checkout providing assets/, data/, core/ (default: this repo)")
     ap.add_argument("--hide", default=None, metavar="PRIMITIVE",
@@ -1857,10 +1868,16 @@ def main(argv=None) -> int:
     ap.add_argument("--out-json", default=None, help="write the full census JSON here")
     ap.add_argument("--out-md", default=None, help="write the markdown report here")
     args = ap.parse_args(argv)
+    systems = tuple(x.strip() for x in args.systems.split(",") if x.strip())
+    unknown = [x for x in systems if x not in KNOWN_SYSTEMS]
+    if unknown or not systems:
+        print(f"unknown system(s) {unknown or args.systems!r}; known: {','.join(KNOWN_SYSTEMS)}",
+              file=sys.stderr)
+        return 2
     try:
         res = census(
             Path(args.books), Path(args.repo), args.hide,
-            Path(args.audit) if args.audit else None,
+            Path(args.audit) if args.audit else None, systems,
         )
     except SystemExit as exc:
         print(exc, file=sys.stderr)
