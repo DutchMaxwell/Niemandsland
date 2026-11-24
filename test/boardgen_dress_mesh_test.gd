@@ -196,6 +196,20 @@ func test_a_module_with_an_empty_shadow_list_casts_nothing() -> void:
 	assert_int(_tris(mixed)).is_equal(dress.spec("dr_house_tb_plain_a").shadow_hulls.size() * 12)
 
 
+func test_an_empty_placement_list_yields_an_empty_shadow_mesh_not_a_null() -> void:
+	var dress := _dress()
+	var empty := BoardgenDressMesh.shadow([], dress)
+	assert_object(empty).is_not_null()  # an empty proxy is still a mesh the caller can assign
+	assert_int(empty.get_surface_count()).is_equal(0)
+	# a list whose modules all carry no hulls is empty in the same way
+	dress.spec("dr_litter_straw").shadow_hulls = []
+	var soft := BoardgenDressMesh.shadow(
+		[DressPlacement.new("dr_litter_straw", Transform3D(), "test")], dress
+	)
+	assert_object(soft).is_not_null()
+	assert_int(soft.get_surface_count()).is_equal(0)
+
+
 func test_card_and_modelled_vegetation_merge_into_two_surfaces() -> void:
 	var dress := _dress()
 	var placements := [

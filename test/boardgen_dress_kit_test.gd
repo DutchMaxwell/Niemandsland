@@ -42,6 +42,20 @@ func _fixture(name: String, materials := ["ct_stone", "ct_timber"]) -> void:
 	holder.free()
 
 
+func after_test() -> void:
+	BoardgenDressKit.clear_cache()   # the parsed meshes are shared across tests: never leak between suites
+
+
+func test_clear_cache_forgets_the_parsed_meshes() -> void:
+	_fixture("dr_chimney_a")
+	var dress := _dress(false, DIR)
+	var first := dress.mesh("dr_chimney_a")
+	assert_object(first).is_not_null()
+	BoardgenDressKit.clear_cache()
+	var again := dress.mesh("dr_chimney_a")
+	assert_object(again).is_not_same(first)   # an empty cache parses the GLB again instead of sharing it
+
+
 func test_the_bundled_manifest_has_the_contract_shape() -> void:
 	var meta := _dress().meta
 	for k in ["version", "materials", "ground", "sets", "licence", "modules"]:
