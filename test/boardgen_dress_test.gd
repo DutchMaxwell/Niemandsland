@@ -1,17 +1,28 @@
 extends GdUnitTestSuite
-## BoardgenDress (docs/adr/0003-generated-board-dressing.md): which class draws which plan box, the planner interface with fake planners on the stub kit, the two nodes of a build, and the off switch.
-## The switches are static: every test puts them back.
+## BoardgenDress (docs/adr/0003-generated-board-dressing.md): which class draws which plan box, the planner interface with supplied planners on the stub kit, the two nodes of a build, and a board that stays undressed.
 
 const CLASSES := ["houses", "tiers", "ladders", "walls", "towers", "ground", "props", "clutter"]
 
 
-func after_test() -> void:
-	BoardgenDress.test_mode = ""
-	BoardgenDress.test_planners = {}
-
-
 func _layout(seed: int, theme := "ruintown") -> Dictionary:
 	return (ClassDB.instantiate("NmlCore") as Object).boardgen_layout_themed(seed, theme)
+
+
+## A stub dressing kit: a box per module, no GLB needed.
+func _stub_kit() -> BoardgenDressKit:
+	var kit := BoardgenKit.new(BoardgenTheme.TOWN_LIBRARY)
+	add_child(kit)
+	auto_free(kit)
+	return BoardgenDressKit.new(kit, true)
+
+
+## The planner list the constructor takes: one [class, Script] pair per class, null draws nothing.
+func _planners(houses: Variant) -> Array:
+	var out: Array = [["houses", houses]]
+	for c in CLASSES:
+		if c != "houses":
+			out.append([c, null])
+	return out
 
 
 ## A planner script made at run time: `count` placements of `module`, and a build_extra that adds a node.
@@ -23,11 +34,8 @@ func _fake(modules: Array, module: String, count: int) -> GDScript:
 
 
 ## Every class empty (null = no planner) so planner files added later do not change these tests.
-func _only(houses: GDScript) -> void:
-	BoardgenDress.test_planners = {}
-	for c in CLASSES:
-		BoardgenDress.test_planners[c] = null
-	BoardgenDress.test_planners["houses"] = houses
+func _only(houses: Variant) -> Array:
+	return _planners(houses)
 
 
 func test_every_box_that_draws_itself_has_a_class() -> void:
@@ -75,35 +83,30 @@ func test_the_rules_of_the_mapping_on_hand_made_boxes() -> void:
 	assert_str(BoardgenDress.box_class({"kind": "roofed"})).is_empty()
 
 
-func test_the_planner_is_the_test_double_when_one_is_set_else_the_file_or_null() -> void:
+func test_a_supplied_list_replaces_the_planner_files_and_a_class_outside_it_draws_nothing() -> void:
 	var fake := _fake(["dr_litter_straw"], "dr_litter_straw", 1)
-	BoardgenDress.test_planners = {"houses": fake, "tiers": null}
-	assert_object(BoardgenDress.planner("houses")).is_same(fake)
-	assert_object(BoardgenDress.planner("tiers")).is_null()
-	BoardgenDress.test_planners = {}
-	assert_object(BoardgenDress.planner("no_such_class")).is_null()
+	var dress: BoardgenDress = auto_free(BoardgenDress.new(_stub_kit(), _only(fake)))
+	assert_bool(dress.setup(_layout(41))).is_true()
+	assert_dict(dress.classes()).is_equal({"houses": true})   # the supplied list is the whole truth
+	var none: BoardgenDress = auto_free(BoardgenDress.new(_stub_kit(), [["tiers", null]]))
+	assert_bool(none.setup(_layout(41))).is_false()   # a class it does not name, and this one, draw nothing
+	assert_dict(none.classes()).is_empty()
 
 
-func test_setup_is_false_when_the_dressing_is_off_on_a_deepworks_board_or_without_a_planner() -> void:
-	_only(_fake([], "dr_litter_straw", 1))   # no modules needed: usable without the stub kit, so only the switches decide
-	var on: BoardgenDress = auto_free(BoardgenDress.new())
-	assert_bool(on.setup(_layout(41))).is_true()   # the control: a town, not switched off, a usable class
-	BoardgenDress.test_mode = "off"
-	var off: BoardgenDress = auto_free(BoardgenDress.new())
-	assert_bool(off.setup(_layout(41))).is_false()
-	BoardgenDress.test_mode = ""
-	var deep: BoardgenDress = auto_free(BoardgenDress.new())
+func test_setup_is_false_on_a_deepworks_board_or_without_a_planner() -> void:
+	var fake := _fake([], "dr_litter_straw", 1)   # no modules needed: a usable class even without the stub kit
+	var on: BoardgenDress = auto_free(BoardgenDress.new(null, _only(fake)))
+	assert_bool(on.setup(_layout(41))).is_true()   # the control: a town with a usable class
+	var deep: BoardgenDress = auto_free(BoardgenDress.new(null, _only(fake)))
 	assert_bool(deep.setup(_layout(41, "deepworks"))).is_false()   # a Deepworks board never creates a dressing
-	_only(null)
-	var none: BoardgenDress = auto_free(BoardgenDress.new())
+	var none: BoardgenDress = auto_free(BoardgenDress.new(null, [["houses", null]]))
 	assert_bool(none.setup(_layout(41))).is_false()   # no class is usable
 	assert_dict(none.classes()).is_empty()
 
 
-func test_a_build_with_a_fake_planner_has_both_nodes_the_expected_triangles_and_the_extras() -> void:
-	_only(_fake(["dr_house_tb_plain_a"], "dr_house_tb_plain_a", 7))   # a module with one shadow hull (flat litter has none)
-	BoardgenDress.test_mode = "stub"
-	var dress: BoardgenDress = auto_free(BoardgenDress.new())
+func test_a_build_with_a_supplied_planner_has_both_nodes_the_expected_triangles_and_the_extras() -> void:
+	var fake := _fake(["dr_house_tb_plain_a"], "dr_house_tb_plain_a", 7)   # a module with one shadow hull (flat litter has none)
+	var dress: BoardgenDress = auto_free(BoardgenDress.new(_stub_kit(), _only(fake)))
 	var layout := _layout(41)
 	assert_bool(dress.setup(layout)).is_true()
 	assert_dict(dress.classes()).is_equal({"houses": true})
@@ -115,7 +118,7 @@ func test_a_build_with_a_fake_planner_has_both_nodes_the_expected_triangles_and_
 	assert_int(mesh.cast_shadow).is_equal(GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	assert_int(shadow.cast_shadow).is_equal(GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
 	assert_int(mesh.mesh.get_surface_count()).is_equal(1)
-	assert_int((mesh.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX] as PackedInt32Array).size()).is_equal(7 * 36)   # 7 boxes x 12 triangles
+	assert_int((mesh.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX] as PackedInt32Array).size()).is_equal(7 * 36)   # the supplied 7 boxes, not the house file's many
 	assert_str(mesh.mesh.surface_get_material(0).resource_name).is_equal(mesh.mesh.surface_get_name(0))   # bound by name
 	assert_int((shadow.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX] as PackedInt32Array).size()).is_equal(7 * 36)
 	assert_object(dress.get_node_or_null("Extra")).is_not_null()   # build_extra ran

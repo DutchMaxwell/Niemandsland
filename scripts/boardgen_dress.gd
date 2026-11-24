@@ -12,21 +12,36 @@ extends Node3D
 ## Array[Dictionary]` and optionally `static func build_extra(layout, parent: Node3D, ctx)`.
 
 const PLANNERS := ["houses", "tiers", "ladders", "walls", "towers", "ground", "props", "clutter"]
-## Test switches: "off" = never dress, "stub" = force the stub kit (a box per module);
-## `test_planners` = {class: Script} used instead of the files.
-static var test_mode := ""
-static var test_planners := {}
 
 var kit: BoardgenDressKit
 var story: Dictionary = {}
 var _classes := {}  # class -> planner Script, the classes this board draws as modules
+var _given_kit := false
+var _planners_given := false
+var _given_planners := {}  # class -> planner Script or null, when the caller supplied a list
 
 
-## The planner script of a class: a test double, else scripts/boardgen_dress_<name>.gd when it
-## exists, else null.
-static func planner(name: String) -> Script:
-	if test_planners.has(name):
-		return test_planners[name]
+## The dressing of one board. `kit` is the module kit; `planners` is a list of [class, Script]
+## pairs. A null kit and an empty list mean the bundled defaults: the town kit built here and the
+## planner scripts next to this one. A class absent from a supplied list draws nothing.
+func _init(kit: BoardgenDressKit = null, planners: Array = []) -> void:
+	self.kit = kit
+	_given_kit = kit != null
+	if not planners.is_empty():
+		_planners_given = true
+		for entry: Variant in planners:
+			if typeof(entry) != TYPE_ARRAY or (entry as Array).size() != 2:
+				push_error("BoardgenDress: a planner entry is not a [class, Script] pair")
+				continue
+			var pair: Array = entry
+			_given_planners[str(pair[0])] = pair[1]
+
+
+## The planner script of a class: from the supplied list when the caller gave one, else
+## scripts/boardgen_dress_<name>.gd when it exists, else null.
+func _planner(name: String) -> Script:
+	if _planners_given:
+		return _given_planners.get(name)
 	var path := "res://scripts/boardgen_dress_%s.gd" % name
 	return load(path) if ResourceLoader.exists(path) else null
 
@@ -52,18 +67,19 @@ static func box_class(box: Dictionary) -> String:
 	return "ground" if ["ground", "street", "yard", "rough", "hazard", "rubble"].has(kind) else ""
 
 
-## Prepares the dressing for a layout: true when this board is a town, the dressing is not switched
-## off and at least one class has a planner with usable modules.
+## Prepares the dressing for a layout: true when this board is a town and at least one class has a
+## planner with usable modules.
 func setup(layout: Dictionary) -> bool:
-	if test_mode == "off" or str(layout.get("theme", "")) != BoardgenTheme.RUIN_TOWN:
+	if str(layout.get("theme", "")) != BoardgenTheme.RUIN_TOWN:
 		return false
-	var town_kit := BoardgenKit.new(BoardgenTheme.TOWN_LIBRARY)
-	town_kit.name = "Kit"
-	add_child(town_kit)
-	kit = BoardgenDressKit.new(town_kit, test_mode == "stub")
+	if not _given_kit:
+		var town_kit := BoardgenKit.new(BoardgenTheme.TOWN_LIBRARY)
+		town_kit.name = "Kit"
+		add_child(town_kit)
+		kit = BoardgenDressKit.new(town_kit)
 	story = BoardgenDressStory.of(layout)
 	for name: String in PLANNERS:
-		var script := planner(name)
+		var script := _planner(name)
 		if (
 			script != null
 			and kit.usable((script.get_script_constant_map() as Dictionary).get("MODULES", []))
@@ -97,7 +113,7 @@ func build(layout: Dictionary) -> void:
 	mesh.mesh = BoardgenDressMesh.merge(placements, kit)
 	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var lib: TiefwerkLibrary = null
-	if test_mode != "stub":
+	if not kit.force_stub():
 		lib = TiefwerkLibrary.new(BoardgenTheme.TOWN_LIBRARY)
 		lib.name = "TownLibrary"
 		add_child(lib)
