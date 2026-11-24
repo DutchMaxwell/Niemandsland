@@ -3,9 +3,9 @@ extends GdUnitTestSuite
 ## at the activation start holds no spell effect). Now the table pays the whole pre-volley part (`takes_ai_activation` said no ->
 ## `report["table_paid"]`), and the volley goes to the core on a RECAPTURE taken right before it (the casts on the board, the
 ## shooter put back on its move's start spots) with `paid {start, dangerous, beats}` (14a/14b): no die twice.
-## Per seed the same activation twice on fresh units and the same tray seed: "table" = the table's resolvers (casts, volley);
-## "body" = the AI body's seams (`takes_ai_activation`, `_solo_ai_casts`, `_solo_ai_core_call`), as cast_door_test.gd drives them.
-## Real: the main scene, NmlCore, the table's cast and volley resolvers, the door. Constructed: a one-model caster with a rifle
+## Per seed the activation runs through the AI body's seams (`takes_ai_activation`, `_solo_ai_casts`, `_solo_ai_core_call`), as
+## cast_door_test.gd drives them. (The table-side compare left with the table's AI volley.)
+## Real: the main scene, NmlCore, the table's cast resolver, the door. Constructed: a one-model caster with a rifle
 ## (Psychic Blast at a six-model foe), HOLD.
 ## RED (main without 15b): the door refuses the volley (core runs 0) and the table shoots.
 
@@ -88,9 +88,6 @@ func _run(seed: int, body: bool) -> Dictionary:
 		if int(_main._solo_core_ai_h) != 0:
 			_main.solo_controller._core_node_ready().release(int(_main._solo_core_ai_h))
 		_main._solo_core_ai_h = 0
-	else:
-		await _main._solo_resolve_ai_casts(report)
-		await _main._solo_resolve_ai_volley(caster, foe, shots)
 	CoreShadow.tapping = false
 	var rolls: Array = CoreShadow.tap.map(func(r: Dictionary) -> String: return "%s|%dx%d+|%s" % [
 		str(r["kind"]), int(r["count"]), int(r["target"]), ",".join((r["faces"] as Array).map(func(f: Variant) -> String: return str(int(f))))])
@@ -108,16 +105,9 @@ func _run(seed: int, body: bool) -> Dictionary:
 @warning_ignore('unused_parameter')
 func test_a_casting_shooters_volley_goes_to_the_core_on_a_recapture(timeout := 900000,
 		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "no NmlCore") -> void:
-	var bad: Array = []
 	var taken := 0
 	for s in SEEDS:
-		var table := await _run(s, false)
 		var door := await _run(s, true)
 		taken += 1 if int(door["core_ran"]) == 1 and bool(door["paid"]) else 0
-		if door["rolls"] != table["rolls"]:
-			bad.append("seed %d rolls: door %s | table %s" % [s, door["rolls"], table["rolls"]])
-		elif door["final"] != table["final"]:
-			bad.append("seed %d state: door %s | table %s" % [s, door["final"], table["final"]])
-	print("PAID_RECAPTURE seeds=%d taken=%d bad=%d" % [SEEDS, taken, bad.size()])
+	print("PAID_RECAPTURE seeds=%d taken=%d" % [SEEDS, taken])
 	assert_int(taken).override_failure_message("the door takes the casting shooter's volley on a recapture (taken %d of %d)" % [taken, SEEDS]).is_equal(SEEDS)
-	assert_array(bad).override_failure_message("door against table:\n%s" % "\n".join(bad.slice(0, 3))).is_empty()

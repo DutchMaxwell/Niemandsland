@@ -10,7 +10,7 @@ extends RefCounted
 ## result before its replacement is in place turns the companion suite red.
 ##
 ## It runs the TABLE path only: the caller clears NML_ONE_CORE_ACTIVATION, and nothing here opens a core session;
-## the volley goes through main._solo_resolve_ai_volley, the melee through main._run_ai_melee and the morale test
+## the melee goes through main._run_ai_melee and the morale test
 ## through main._solo_morale_test exactly as the game drives them. No gameplay code is touched — this file and its
 ## CLI/ suite are test/tool code.
 ##
@@ -26,7 +26,7 @@ const ParityMelee := preload("res://test/parity/parity_table_melee.gd")
 const SCHEMA_V1 := "nml-golden-witness-v1"
 const SCHEMA := "nml-golden-witness-v2"
 const SCHEMAS := [SCHEMA_V1, SCHEMA]
-## The runner a scenario without a "runner" key uses: one AI volley through main._solo_resolve_ai_volley.
+## The runner a scenario without a "runner" key named: the table's AI volley, deleted (the shooting_volley fixture is frozen).
 const RUNNER_AI_VOLLEY := "ai_volley"
 const FAMILY := "shooting_volley"
 const FIXTURE_PATH := "res://test/fixtures/one_core/golden_shoot_volley.json"
@@ -512,14 +512,12 @@ static func provenance() -> Dictionary:
 		"registry_sha256": str(reg.get("sha256", ""))}
 
 
-## One scenario x seed: build the two neutral units, optionally paint cover, seed the real tray, run one AI volley
-## through main._solo_resolve_ai_volley, and record what it did. The units are removed again so the next case
-## starts from the same table.
+## One scenario x seed through the scenario's runner, recording what it did. The units are removed again so the next
+## case starts from the same table. The default runner (the table's AI volley) is gone: such a scenario records the
+## "unknown runner" error, and its committed fixture stays as the frozen record.
 static func _run_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
 	var runner := str(sc.get("runner", RUNNER_AI_VOLLEY))
 	match runner:
-		RUNNER_AI_VOLLEY:
-			return await _run_ai_volley_case(main, sc, seed)
 		RUNNER_HUMAN_VOLLEY:
 			return await _run_human_volley_case(main, sc, seed)
 		RUNNER_AI_SHOOTING, RUNNER_HUMAN_SPLIT:
@@ -536,42 +534,6 @@ static func _run_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
 		RUNNER_AI_CHARGE:
 			return await _run_melee_shape_case(main, sc, seed)
 	return {"scenario": str(sc["name"]), "seed": seed, "error": "unknown runner %s" % runner}
-
-
-static func _run_ai_volley_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
-	var weapon: Dictionary = (sc["weapon"] as Dictionary).duplicate(true)
-	var att := ParityTable._make_unit(main, sc["attacker"], weapon)
-	var dfn := ParityTable._make_unit(main, sc["defender"], {})
-	var painted := {}
-	if bool(sc.get("cover", false)):
-		painted = _paint_cover(main, dfn)
-		if not main._solo_majority_in_cover(dfn):
-			_unpaint_cover(main, painted)
-			_free_units(main, [att, dfn])
-			return {"scenario": str(sc["name"]), "seed": seed, "error": "the cover setup is not cover"}
-	main.seed_tray_rng(seed)
-	var dist_in := float((sc["defender"] as Dictionary)["x_in"]) - float((sc["attacker"] as Dictionary)["x_in"])
-	var wobj: OPRApiClient.OPRWeapon = (att.source_data as OPRApiClient.OPRUnit).weapons[0]
-	var plist: Array = AiShooting.profiles_in_range([wobj], dist_in)
-	for p in plist:
-		main._solo_stamp_unit_shred(p, att, int(weapon["range_in"]))
-	var shots: Array = []
-	for p in AiEv.stamp_sergeant(plist, att):
-		shots.append({"member": att, "quality": int((sc["attacker"] as Dictionary)["quality"]),
-			"alive": att.get_alive_count(), "max": att.models.size(), "reach": float(weapon["range_in"]),
-			"profile": p})
-	var lines: Array = []
-	var tap := func(e: Dictionary) -> void:
-		lines.append("%s|%s" % [BattleLog.Category.keys()[int(e["category"])], str(e["text"])])
-	main.battle_log.entry_added.connect(tap)
-	await main._solo_resolve_ai_volley(att, dfn, shots)
-	main.battle_log.entry_added.disconnect(tap)
-	var rec := {"scenario": str(sc["name"]), "seed": seed, "epoch": AiActRecorder.rules_epoch,
-		"lines": lines, "final": _final([att, dfn]), "rng": _rng_state(main)}
-	_unpaint_cover(main, painted)
-	_free_units(main, [att, dfn])
-	await main.get_tree().process_frame
-	return rec
 
 
 ## One human-door scenario x seed: the player's attacker fires one volley at the AI defender through
@@ -861,7 +823,7 @@ static func _positions_in(units: Array) -> Array:
 	return out
 
 
-## One prompt scenario x seed: the AI attacker's volley through main._solo_resolve_ai_volley at the human defender, with
+## One prompt scenario x seed: the AI attacker's volley through the core door at the human defender, with
 ## a Timer pump standing in for the player: it presses OK on the "Incoming fire!" save card and answers the wound-
 ## allocation prompt (clicks first, then a right-click for the rest). The case errors if the prompt never opened.
 static func _run_into_human_case(main: Node, sc: Dictionary, seed: int) -> Dictionary:
@@ -915,11 +877,9 @@ static func _run_into_human_case(main: Node, sc: Dictionary, seed: int) -> Dicti
 	var lines: Array = []
 	var tap := _line_tap(lines)
 	main.battle_log.entry_added.connect(tap)
-	if str(sc.get("door", "table")) == "core":   # P4.D-26: the same volley through the core door (the AI body's `run_ai`)
-		var ran: bool = await CoreActivation.run_ai(main, att, {"action": AiDecision.Action.HOLD}, dfn, CoreActivation.capture(main), shots)
-		st["core"] = "1" if ran else "0"
-	else:
-		await main._solo_resolve_ai_volley(att, dfn, shots)
+	# P4.D-26: the volley goes through the core door (the AI body's `run_ai`); the table's AI volley is gone.
+	var ran: bool = await CoreActivation.run_ai(main, att, {"action": AiDecision.Action.HOLD}, dfn, CoreActivation.capture(main), shots)
+	st["core"] = "1" if ran else "0"
 	main.battle_log.entry_added.disconnect(tap)
 	main.dice_roller_control.roll_finnished.disconnect(on_roll)
 	pump.queue_free()

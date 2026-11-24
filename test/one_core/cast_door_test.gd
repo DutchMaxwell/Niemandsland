@@ -186,8 +186,6 @@ func _run(spell: Dictionary, seed: int, mode: String, opts := {}) -> Dictionary:
 		if dangerous > 0:
 			await _main._run_ai_dangerous(caster, dangerous)
 		await _main._solo_resolve_ai_casts(report)
-		if shoot:
-			await _main._solo_resolve_ai_volley(caster, foe, shots)
 	CoreShadow.tapping = false
 	_main.battle_log.entry_added.disconnect(tap)
 	(AiActRecorder._stream as FileAccess).close()
@@ -245,15 +243,14 @@ func _grid(spell: Dictionary, opts := {}, mode := "run_ai") -> Array:
 	return bad
 
 
-## 12a + 12b + 12c: a buff on the caster itself, a debuff on the foe, a damage spell, a fizzle, a cast then a volley (the
-## once-debuff on the volley's own target is spent by it, lead ruling O7), each over seeds that pass and fail the 4+ die.
+## 12a + 12b + 12c: a buff on the caster itself, a debuff on the foe, a damage spell, a fizzle, each over seeds that pass and
+## fail the 4+ die. (The cast-then-volley case left with the table's AI volley: the table side has no volley to compare.)
 func test_a_cast_through_the_door_is_the_table_cast(timeout := 600000) -> void:
 	var bad: Array = []
 	bad.append_array(await _grid(TERROR_SEEKER))
 	bad.append_array(await _grid(BLOODTHIRST))
 	bad.append_array(await _grid(PSYCHIC_BLAST, {"foe_models": 10}))
 	bad.append_array(await _grid(BLOODTHIRST, {"fizzle": true}))
-	bad.append_array(await _grid(BLOODTHIRST, {"shoot": true}))
 	assert_array(bad).override_failure_message("\n".join(bad.slice(0, 2))).is_empty()
 
 
@@ -297,7 +294,6 @@ func test_the_body_takes_a_cast_through_the_switch(timeout := 600000) -> void:
 	bad.append_array(await _grid(BLOODTHIRST, {}, "body"))
 	bad.append_array(await _grid(PSYCHIC_BLAST, {"foe_models": 10}, "body"))
 	bad.append_array(await _grid(BLOODTHIRST, {"fizzle": true}, "body"))
-	bad.append_array(await _grid(BLOODTHIRST, {"shoot": true}, "body"))
 	# seed 3's Dangerous die is a 1 that destroys the one-model caster: the door's destroyed-unit lines differ from the table's there
 	# (the volley door's own, `e2e_one_core_ai_dangerous_test`), not a cast matter
 	bad.append_array(await _grid(TERROR_SEEKER, {"dangerous": true, "seeds": [0, 1, 2, 8, 11]}, "body"))

@@ -146,10 +146,10 @@ _run_ai_melee 22
 _run_ai_shooting 51
 _run_human_attack 28
 _run_human_attack_split 5
-_run_human_cast 16
+_run_human_cast 15
 _run_human_melee 9
 _run_human_shooting 9
-_run_player_intent 11
+_run_player_intent 10
 _run_solo_ai_turn 3
 _sandbox_shelf 7
 _set_chat_visible 6
@@ -240,7 +240,7 @@ _solo_coordinate_pick 2
 _solo_core_ai_h 180
 _solo_core_round_begin 3
 _solo_core_round_end 4
-_solo_core_shadow_h 19
+_solo_core_shadow_h 8
 _solo_cover_defense 7
 _solo_defense_parts 2
 _solo_defense_vs 15
@@ -369,8 +369,7 @@ _solo_replied_ids 5
 _solo_reserve_cfg 3
 _solo_reserve_slots 2
 _solo_reserve_table_presence 3
-_solo_resolve_ai_casts 17
-_solo_resolve_ai_volley 8
+_solo_resolve_ai_casts 14
 _solo_resolve_one_cast 10
 _solo_resolve_reanimation 12
 _solo_resolve_saves 19
@@ -404,7 +403,7 @@ _solo_sighted_count 14
 _solo_spawn_pulse_ring 2
 _solo_spell_hit_mod 2
 _solo_spell_mods 48
-_solo_spell_tokens_active 25
+_solo_spell_tokens_active 23
 _solo_spend_once_kind 1
 _solo_spend_once_mods 1
 _solo_spend_piercing_tag 18

@@ -68,6 +68,16 @@ def test_check_is_red_on_a_stale_counter(tmp_path):
     assert run(root, "--write").returncode == 0 and run(root, "--check").returncode == 0
 
 
+def test_a_group_whose_functions_are_all_deleted_prints_total_0_and_check_is_red_if_one_comes_back(tmp_path):
+    root = repo(tmp_path)
+    (root / "tools/table_census.json").write_text(json.dumps({**MANIFEST, "groups": {**MANIFEST["groups"], "gone": []}}))
+    txt = committed(root).read_text().splitlines()
+    assert "gone TOTAL 0 0" in txt and "gone TOTAL 0 0 0" in run(root).stdout.splitlines()
+    (root / "tools/table_census.json").write_text(json.dumps({**MANIFEST, "groups": {**MANIFEST["groups"], "gone": ["scripts/a.gd:door"]}}))
+    res = run(root, "--check")   # the function is back in the group: its lines grow above the committed 0
+    assert res.returncode == 1 and "counter is stale" in res.stdout
+
+
 def test_the_committed_report_has_no_test_caller_column(tmp_path):
     root = repo(tmp_path)
     txt = committed(root).read_text().splitlines()
@@ -538,8 +548,8 @@ def test_check_is_red_on_a_call_site_whose_function_has_no_owner_row_and_green_o
 def test_the_real_manifest_owner_rows_equal_the_d50_counts():
     rows = [ln.split() for ln in run(REPO).stdout.splitlines() if ln.startswith("owner ")]
     by = {(r[1], r[2]): int(r[3]) for r in rows}
-    assert by[("hit_save_shared", "TOTAL")] == 64 and by[("dangerous_morale", "TOTAL")] == 15   # 14 + the idle Shaken branch's end morale (gaps3)
+    assert by[("hit_save_shared", "TOTAL")] == 54 and by[("dangerous_morale", "TOTAL")] == 14   # 14 + the idle Shaken branch's end morale (gaps3), less the deleted AI volley's 10 + 1
     sites = lambda *owners: sum(n for (_, o), n in by.items() if o in owners)
-    assert (sites("ai_volley"), sites("human_volley"), sites("melee")) == (11, 11, 22)
+    assert (sites("ai_volley"), sites("human_volley"), sites("melee")) == (0, 11, 22)
     assert sites("deathstrike", "self_destruct") == 4
     assert sum(int(r[3]) for r in rows if r[2] != "TOTAL" and not r[4].startswith("P4.D-")) == 31   # no door step of its own

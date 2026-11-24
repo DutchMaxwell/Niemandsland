@@ -193,7 +193,11 @@ func test_ai_to_hit_line_names_the_spot_bonus_too(timeout := 120000) -> void:
 	_main._solo_place_spot_marker(eyes, target)
 	SoloHarness.instant(_main)
 	_arm_save_pump()
-	await _main._solo_resolve_ai_volley(ai, target, _shots(ai, "Autogun", 2, 24), false)
+	# The core door takes the AI's volley (the AI body's `run_ai`, as the golden witness's prompt cases drive it).
+	var h := CoreActivation.capture(_main)
+	var ran: bool = await CoreActivation.run_ai(_main, ai, {"action": AiDecision.Action.HOLD}, target, h, _shots(ai, "Autogun", 2, 24))
+	_main.solo_controller._core_node_ready().release(h)
+	assert_bool(ran).override_failure_message("the core did not take the volley").is_true()
 	assert_str(_log_text()) \
 		.override_failure_message("NML-970 — the AI volley consumed a marker but its To-hit line never named the bonus:\n%s" % _log_text()) \
 		.contains("Spotted +1")

@@ -9,7 +9,7 @@
     "Tags: erlkoenig = needed by the Rust search hand-off (_core_plan: capture, state_to_plain, AiPlanner statics, act recorder); live_helper = live game logic that is not search (mission scoring); table_live = still called by a main.gd function that survives the table deletion; tree = decision tree / AiPosition; gd_search = the GDScript search (reached on a core decline or in debug/test defaults; includes its profiling marks); table_dead = dies with the table deletion (a function that gd_search also calls dies with the later of the table deletion and the search deletion); tools_only / test_only = no prod caller; dead = no caller."
   ],
   "groups": {
-    "ai_volley": ["scripts/main.gd:_solo_resolve_ai_volley"],
+    "ai_volley": [],
     "human_shoot": ["scripts/main.gd:_run_human_shooting", "scripts/main.gd:_run_human_attack_split"],
     "melee_charge": ["scripts/main.gd:_run_ai_melee", "scripts/main.gd:_solo_melee_strike_phase", "scripts/main.gd:_run_human_melee", "scripts/main.gd:_solo_charge_impact", "scripts/main.gd:_solo_consolidate_melee", "scripts/main.gd:_solo_log_melee_result", "scripts/main.gd:_solo_parry_strike", "scripts/main.gd:_solo_retreating_strike"],
     "hit_save_shared": ["scripts/main.gd:_solo_hits", "scripts/main.gd:_solo_resolve_saves", "scripts/main.gd:_solo_save_batch", "scripts/main.gd:_solo_land_wounds", "scripts/main.gd:_solo_land_deadly_wounds", "scripts/main.gd:_solo_land_takedown_wounds", "scripts/main.gd:_solo_takedown_pick", "scripts/main.gd:_solo_hazardous_self_wounds", "scripts/main.gd:_solo_apply_vs_marks"],
@@ -36,7 +36,6 @@
     "scripts/main.gd:_solo_melee_strike_phase": ["@melee_charge"],
     "scripts/main.gd:_solo_parry_strike": ["@melee_charge"],
     "scripts/main.gd:_solo_resolve_ai_casts": ["scripts/main.gd:_solo_ai_casts", "scripts/main.gd:_solo_ai_core_call"],
-    "scripts/main.gd:_solo_resolve_ai_volley": ["scripts/main.gd:_run_ai_shooting", "scripts/main.gd:_solo_apply_strafing"],
     "scripts/main.gd:_solo_resolve_one_cast": ["scripts/main.gd:_run_human_cast", "scripts/main.gd:_solo_resolve_ai_casts"],
     "scripts/main.gd:_solo_resolve_saves": ["@human_shoot", "scripts/main.gd:_solo_apply_breath_attack", "@melee_charge", "scripts/main.gd:_solo_deathstrike_hits", "@ai_volley", "scripts/main.gd:_solo_secret_trap_hits", "scripts/main.gd:_solo_self_destruct_post_melee"],
     "scripts/main.gd:_solo_resolve_spell_damage": ["scripts/main.gd:_solo_resolve_one_cast"],
@@ -65,7 +64,6 @@
       "table_internal": "H-46"
     },
     "functions": {
-      "scripts/main.gd:_solo_resolve_ai_volley": "ai_volley",
       "scripts/main.gd:_run_human_shooting": "human_volley",
       "scripts/main.gd:_solo_melee_strike_phase": "melee",
       "scripts/main.gd:_solo_charge_impact": "melee",

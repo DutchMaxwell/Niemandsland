@@ -233,9 +233,11 @@ def tool_callers(root, manifest, files):
     return rows, hits
 
 
-def render(rows, tags=None, callers=None, owners=None):
+def render(rows, tags=None, callers=None, owners=None, groups=()):
+    """`groups`: the manifest's group names; a group whose functions are all deleted (an empty list) still prints its
+    `TOTAL 0` row, so the report shows the retired group."""
     out, total = [], 0
-    for group in sorted({r[0] for r in rows}):
+    for group in sorted({r[0] for r in rows} | set(groups)):
         mine = [r for r in rows if r[0] == group]
         out += [" ".join(map(str, r)) for r in mine]
         out.append(f"{group} TOTAL " + " ".join(str(sum(r[k] for r in mine)) for k in (2, 3, 4)))
@@ -464,7 +466,7 @@ def main(argv=None):
     gate = hits.get(args.gate_tag, []) if args.gate_tag else []
     for ident in gate:
         print(f"::error::test caller of {args.gate_tag}: {ident}")
-    text = render(rows, tags, callers, owners)
+    text = render(rows, tags, callers, owners, manifest["groups"])
     for problem in untagged:
         print(f"::error::{problem}")
     for callee, caller in unowned:
