@@ -239,7 +239,7 @@ def test_the_arena_placement_runs_at_the_records_own_epoch(monkeypatch, tmp_path
 
     monkeypatch.setattr(sp.nml_core, "deploy_side", spy)
     monkeypatch.setattr(sp.nml_core, "deploy_interleaved", spy)
-    monkeypatch.setattr(sp, "deploy_unit_specs", lambda _data, _faction, _slot: ([], {}))
+    monkeypatch.setattr(sp, "deploy_unit_specs", lambda _data, _faction, _slot, _epoch=None: ([], {}))
     army = tmp_path / "robot_legions_1000.json"
     army.write_text("{}", encoding="utf-8")
     for interleave in (False, True):

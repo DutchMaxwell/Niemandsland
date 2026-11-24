@@ -2405,6 +2405,12 @@ fn vocab_version_of_header(header: &Bound<'_, PyAny>) -> PyResult<i64> {
 
 /// NML-1134 — the vocabulary version THIS build reads, i.e. the one a FRESH
 /// game (and a freshly recorded corpus) is slotted with.
+/// `rules::hero_join_refusal`: the reason a list's joined Hero is refused in `system` at `rules_epoch`, or `None`.
+#[pyfunction]
+fn hero_join_refusal(system: &str, rules_epoch: u32) -> Option<&'static str> {
+    nmlcore::rules::hero_join_refusal(system, rules_epoch)
+}
+
 #[pyfunction]
 fn rule_vocab_version() -> i64 {
     nmlcore::RULE_VOCAB_VERSION
@@ -3223,6 +3229,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // NML-1134: the rule vocabulary's version — this build's, and one corpus's.
     m.add_function(wrap_pyfunction!(vocab_version_of_header, m)?)?;
     m.add_function(wrap_pyfunction!(rule_vocab_version, m)?)?;
+    m.add_function(wrap_pyfunction!(hero_join_refusal, m)?)?;
     m.add("RULE_VOCAB_VERSION", nmlcore::RULE_VOCAB_VERSION)?;
     m.add("LEGACY_VOCAB_VERSION", nmlcore::LEGACY_VOCAB_VERSION)?;
     // The CLASS FIX (external review 03.09. item 3 / F9): the epoch a fresh
@@ -3244,6 +3251,8 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("EPOCH_7_TABLE_RULES", nmlcore::EPOCH_7_TABLE_RULES)?;
     // B8: the arena hero fold's py-side gate (`selfplay._deploy_arena`), same reason.
     m.add("EPOCH_69_HERO_FOLD", nmlcore::acts::EPOCH_69_HERO_FOLD)?;
+    // The skirmish hero placeholder: py tests pin the list loader's join refusal on both sides of it.
+    m.add("PENDING_EPOCH_SKIRMISH_HERO", nmlcore::acts::PENDING_EPOCH_SKIRMISH_HERO)?;
     m.add("BUILD_COMMIT", BUILD_COMMIT)?;
     m.add("BUILD_DIRTY", env!("NML_BUILD_DIRTY") == "true")?;
     m.add("BUILD_INFO", to_py(m.py(), &build_info())?)?;
