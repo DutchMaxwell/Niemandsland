@@ -24,3 +24,17 @@ func test_the_town_sky_has_stars_clouds_and_haze_and_never_reads_the_clock() -> 
 	assert_str(src).contains("!AT_CUBEMAP_PASS")
 	var msg := "the town sky reads TIME: its radiance re-renders every frame"
 	assert_bool(src.contains("TIME")).override_failure_message(msg).is_false()
+
+
+## Tiefwerk's vault (an undercity has no open sky): near black overhead, haze at the
+## horizon, far work lights and dark structures. Inert until a board look names it.
+func test_the_tiefwerk_vault_sky_loads_and_never_reads_the_clock() -> void:
+	var path := "res://shaders/tiefwerk_sky.gdshader"
+	assert_bool(ResourceLoader.exists(path)).override_failure_message("no vault sky").is_true()
+	assert_object(load(path)).is_not_null()
+	var src := _code(path)
+	assert_str(src).contains("shader_type sky;")
+	assert_str(src).contains("!AT_CUBEMAP_PASS")
+	var msg := "the vault sky reads TIME: its radiance re-renders every frame"
+	assert_bool(src.contains("TIME")).override_failure_message(msg).is_false()
+	assert_bool(src.contains("LIGHT0_DIRECTION")).override_failure_message("a disc").is_false()
