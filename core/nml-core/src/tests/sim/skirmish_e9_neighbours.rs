@@ -63,6 +63,11 @@ fn a_spilled_hit_rolls_the_neighbours_save_and_lands() {
 /// End to end in `sys` at `epoch`: unit "a" (player 0) holds and fires a Blast(3) gun (3 attacks, Quality 2) at "b" (one
 /// model, 12 in east); "bh" (two models) stands 1.5 in behind "b", on b's side; every save is a 6+.
 fn blast_game(sys: &str, epoch: u32, seed: i64) -> (State, ShootResult) {
+    blast_game_in(sys, epoch, seed, false)
+}
+
+/// `blast_game` with the neighbour "bh" in cover (`cover`).
+fn blast_game_in(sys: &str, epoch: u32, seed: i64, cover: bool) -> (State, ShootResult) {
     let mut st = four_unit_line();
     let keys = st.roster.keys.clone();
     st.roster = Rc::new(Roster { index: keys.iter().cloned().zip(0..).collect(), keys, profile: vec![0, 1, 2, 3] });
@@ -75,6 +80,7 @@ fn blast_game(sys: &str, epoch: u32, seed: i64) -> (State, ShootResult) {
     st.radii = Rc::new(vec![vec![r], vec![r], vec![r], vec![r, r]]);
     st.wounds = vec![vec![1], vec![1], vec![1], vec![1, 1]];
     st.alive = vec![1, 1, 1, 2];
+    st.in_cover[3] = cover;
     let gun = ShootProfile { name: "Mortar".into(), attacks: 3, count: 1, range: 24, blast: 3, ..Default::default() };
     let unit = |name: &str, n: i64, shoot: Vec<ShootProfile>| UnitStatic {
         name: name.into(), shoot, model_count: n, wounds_max: vec![1; n as usize],
@@ -114,4 +120,17 @@ fn a_neighbour_at_half_strength_tests_morale() {
     let own: Vec<&crate::dice::Roll> = shot.rolls.iter().filter(|r| r.owner == "Neighbours").collect();
     assert!(own.iter().any(|r| r.kind != "defense" && r.count == 1), "a morale die for the neighbour: {:?}", shot.rolls);
     assert_eq!(st.alive[3], 1);
+}
+
+/// Blast ignores cover, and so do the hits it spills: a neighbour in cover saves at its plain Defense (6+, not 5+), and
+/// the skip is said once, naming Blast.
+#[test]
+fn a_spilled_blast_hit_ignores_the_neighbours_cover() {
+    let e = crate::acts::PENDING_EPOCH_SKIRMISH_BLAST;
+    let (_, shot) = (0..200).map(|s| blast_game_in("gff", e, s, true))
+        .find(|(_, shot)| shot.log.iter().any(|l| l.starts_with("Blast: Neighbours takes")))
+        .expect("a seed where the Mortar hits and spills");
+    let saves: Vec<i64> = shot.rolls.iter().filter(|r| r.kind == "defense" && r.owner == "Neighbours").map(|r| r.target).collect();
+    assert!(!saves.is_empty() && saves.iter().all(|&t| t == 6), "the neighbour saves at 6+, cover skipped: {:?}", shot.rolls);
+    assert!(shot.log.iter().any(|l| l.starts_with("Blast: ") && l.contains("cover save is skipped")), "{:?}", shot.log);
 }
