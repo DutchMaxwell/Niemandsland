@@ -1120,6 +1120,22 @@ fn blast_cap_models(state: &State, ti: usize, seams: Seams, book: &crate::rules:
     }
 }
 
+/// The skirmish Blast(X) spread's neighbours (`dice::blast_split`): every other unit of the target's side on the table
+/// with a model whose base edge is within `spread_in` of a target model's base edge, as `(unit, living models)` in unit
+/// order. Not wired yet.
+pub fn blast_neighbours(state: &State, ti: usize, spread_in: f64) -> Vec<(usize, i64)> {
+    let gap_in = |u: usize, k: usize, v: usize, j: usize| {
+        let (p, q) = (state.positions[u][k], state.positions[v][j]);
+        geom::pair_gap_m([p[0] as f32, p[1] as f32, p[2] as f32], state.radii[u][k], state.base_shape(u),
+            [q[0] as f32, q[1] as f32, q[2] as f32], state.radii[v][j], state.base_shape(v)) / IN2M
+    };
+    (0..state.units())
+        .filter(|&v| v != ti && state.player[v] == state.player[ti] && state.alive[v] > 0 && !state.positions[v].is_empty())
+        .filter(|&v| (0..state.positions[ti].len()).any(|k| (0..state.positions[v].len()).any(|j| gap_in(ti, k, v, j) <= spread_in)))
+        .map(|v| (v, state.alive[v]))
+        .collect()
+}
+
 /// Rules 3.6 (`EPOCH_73_V36`) — Blast(X) caps by the table's `_solo_combined_alive(target)`: the host's living
 /// models PLUS every living joined hero. Stamped beside `models`, which stays the host's own count.
 fn stamp_blast_models(def: &mut Ctx, state: &State, ti: usize, seams: Seams) {
