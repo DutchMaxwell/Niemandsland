@@ -1323,6 +1323,10 @@ pub struct ShootProfile {
     /// the fold hard-coded before this read; every shipped row prints 1, so
     /// every recorded replay is unchanged.
     pub bonus_hits_per_six: i64,
+    /// The skirmish Blast spread's neighbour leg: these hits are already scored, so the volley rolls no attack die (and no
+    /// face-read extra - Surge, Relentless, Rending, Sergeant, Hazardous - fires on them) and sends exactly this many
+    /// hits down the save, wound, Deadly and Regeneration path. `None` = a normal weapon.
+    pub fixed_hits: Option<i64>,
 }
 
 impl ShootProfile {

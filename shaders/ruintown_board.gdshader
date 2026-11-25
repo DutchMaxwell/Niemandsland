@@ -139,16 +139,16 @@ vec3 stone(vec2 uv, float seed, float course, float len, vec3 tint, out float re
 	return stone_rows(uv, seed, vec3(floor(uv.y / course), fract(uv.y / course) * course, course), len, tint, vec3(0.15, 0.14, 0.13), rel);
 }
 
-// (texture plan step 6) Irregular flag courses: bands of three rows 0.45 / 0.6 / 0.75 in, their order rotated by a hash of the band -> (row id, y inside the row, course).
+// (texture plan step 6) Irregular flag courses: bands of three rows 0.27 / 0.36 / 0.45 in (look review R1: was 0.45 / 0.6 / 0.75, too coarse), their order rotated by a hash of the band -> (row id, y inside the row, course).
 vec3 flag_row(float y, float seed) {
-	float band = floor(y / 1.8);
+	float band = floor(y / 1.08);
 	float o = floor(h21(vec2(band, seed + 13.0)) * 2.999);
-	float c0 = 0.45 + 0.15 * mod(o, 3.0);
-	float c1 = 0.45 + 0.15 * mod(o + 1.0, 3.0);
-	float y0 = y - band * 1.8;
+	float c0 = 0.27 + 0.09 * mod(o, 3.0);
+	float c1 = 0.27 + 0.09 * mod(o + 1.0, 3.0);
+	float y0 = y - band * 1.08;
 	float i = y0 < c0 ? 0.0 : (y0 < c0 + c1 ? 1.0 : 2.0);
 	float start = i < 0.5 ? 0.0 : (i < 1.5 ? c0 : c0 + c1);
-	return vec3(band * 3.0 + i, y0 - start, i < 0.5 ? c0 : (i < 1.5 ? c1 : 1.8 - c0 - c1));
+	return vec3(band * 3.0 + i, y0 - start, i < 0.5 ? c0 : (i < 1.5 ? c1 : 1.08 - c0 - c1));
 }
 
 // Per-lot identity (plan R4b): four plasters (off-white, ochre, faded oxide red, grey-green) and three timbers (tarred, weathered grey, brown), picked by the lot's hash in the ground map.
@@ -496,7 +496,7 @@ void fragment() {
 			}
 		} else if (k == 6 || k == 12 || k == 9 || k == 10) {   // tower and wall tops, stone pieces: flagstones
 			vec3 fr = flag_row(xz.y, seed);
-			alb = stone_rows(xz, seed, fr, 0.72, tint, tint * 0.8, rel);   // (texture plan step 6) flagstones 0.45 / 0.6 / 0.75 in courses, 0.5 - 1.1 in long; (6b) worn mortar in the flags' own value range
+			alb = stone_rows(xz, seed, fr, 0.43, tint, tint * 0.8, rel);   // (texture plan step 6, look review R1) flagstones 0.27 / 0.36 / 0.45 in courses, 0.3 - 0.65 in long; (6b) worn mortar in the flags' own value range
 			depth_in = 0.015;   // (6b) a slightly recessed joint: at 0.03 in its shaded wall drew a dark grid
 			rough = 0.85;
 			if (use_stone(xz, tex_ratio, tex_n)) {
@@ -507,7 +507,7 @@ void fragment() {
 			// weathered flags in the wall's stone family (lead 21.11.: the pale slabs with curly scribbles read as a tile puzzle and were the brightest thing on the board - and the tops are
 			// standing room, so they sit a step below the models): darker and greyer, dirt and moss in the joints, a few flags broken by ONE short straight fracture from joint to joint
 			float frow = fr.x;   // the flag this point lies on (as stone_rows() lays them)
-			float fl_l = 0.72 * (0.7 + 0.8 * h21(vec2(frow, seed + 7.0)));
+			float fl_l = 0.43 * (0.7 + 0.8 * h21(vec2(frow, seed + 7.0)));
 			float fx = xz.x + h21(vec2(frow, seed)) * 4.0;
 			vec2 fc = vec2(floor(fx / fl_l), frow);
 			vec2 fp = vec2(fract(fx / fl_l) * fl_l, fr.y);   // inches inside the flag
@@ -524,7 +524,7 @@ void fragment() {
 				vec2 dir = vec2(cos(a), sin(a));
 				vec2 rp = fp - fo;
 				float inside = smoothstep(0.0, 0.05, min(min(fp.x, fl_l - fp.x), min(fp.y, fr.z - fp.y)));
-				fl = smoothstep(0.012, 0.0, abs(dot(rp, vec2(-dir.y, dir.x)))) * inside * keep(xz.y, 0.2);
+				fl = smoothstep(0.012, 0.0, abs(dot(rp, vec2(-dir.y, dir.x)))) * inside * keep(xz.y, 0.12);
 			}
 			alb = mix(alb, vec3(0.03, 0.03, 0.03), 0.8 * fl);
 			// (texture plan step 7) the top weathers as a whole: a 3 - 9 in value drift, one flag in ten gone or sunk (earth-dark, lower), rubble at the rim
@@ -537,9 +537,9 @@ void fragment() {
 				vec2 e2 = box_in.xz * 0.5 - abs(lpos.xz);
 				top_ring = 1.0 - smoothstep(0.1, 0.5, min(e2.x, e2.y));
 				alb *= mix(1.0, 0.85, top_ring);
-				vec2 sci = floor(xz / 0.3);
+				vec2 sci = floor(xz / 0.2);
 				float sh = h21(sci + seed + 61.0);
-				float lump = step(1.0 - 0.45 * top_ring, sh) * smoothstep(0.3, 0.15, length(fract(xz / 0.3) - 0.5)) * keep(xz.x, 0.3);
+				float lump = step(1.0 - 0.45 * top_ring, sh) * smoothstep(0.3, 0.15, length(fract(xz / 0.2) - 0.5)) * keep(xz.x, 0.2);
 				alb = mix(alb, alb * mix(0.55, 0.8, fract(sh * 13.0)), 0.85 * lump);   // a darker chip of stone (pale lumps with a lit crown read as white coins)
 				rel = mix(rel, 0.65, lump);
 			}

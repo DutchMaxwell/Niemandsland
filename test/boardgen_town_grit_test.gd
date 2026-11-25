@@ -297,3 +297,30 @@ func test_the_town_decal_plan_has_its_causes_and_its_caps() -> void:
 			assert_int(kinds[k]).is_less_equal(int(BoardgenDecals.TOWN_CAPS.get(k, 0)))
 		print("TOWN_DECALS seed %d %s" % [s, kinds])
 		assert_int(kinds.size()).is_greater_equal(6)
+
+
+## THE LOOK MUST NOT LIE (look review 25.11., R6): the lantern's specular drew a bright wavy streak along a smooth kennel in its pool. The kennel and the cart
+## ruts stay matte (roughness >= 0.85; measured at 0.9 the saturated share of the streak fell 0.235 -> 0.033), so a lamp's highlight spreads instead of tracing the
+## channel; the puddles keep their gloss (water).
+func test_the_kennel_and_the_ruts_are_matte_under_a_lamp() -> void:
+	var grit := FileAccess.get_file_as_string("res://shaders/ruintown_grit.gdshaderinc")
+	for mask: String in ["ken", "rut"]:
+		var m := RegEx.create_from_string("rough = mix\\(rough, ([0-9.]+), %s\\);" % mask).search(grit)
+		assert_object(m).override_failure_message("no roughness line for %s" % mask).is_not_null()
+		assert_float(float(m.get_string(1))).override_failure_message("%s roughness %s" % [mask, m.get_string(1)]).is_greater_equal(0.85)
+
+
+## THE LOOK MUST NOT LIE (look review 25.11., R8): a putlog hole is a darker share of the wall it sits in, never a constant near-black square (it read as a
+## black rectangle, a hole in the board, on the tower crowns). The share is >= 0.5: the tonemapper's toe crushed alb * 0.35 to luma 2 (measured; alb * 0.6 -> 17).
+func test_a_putlog_hole_is_a_share_of_the_wall_not_a_black_square() -> void:
+	var grit := FileAccess.get_file_as_string("res://shaders/ruintown_grit.gdshaderinc")
+	var m := RegEx.create_from_string("alb = mix\\(alb, ([^;]+), 0\\.9 \\* hole\\);").search(grit)
+	assert_object(m).is_not_null()
+	var colour := m.get_string(1)
+	assert_str(colour).override_failure_message("putlog hole colour %s" % colour).contains("alb *")
+	var share := RegEx.create_from_string("alb \\* ([0-9.]+)").search(colour)
+	assert_object(share).is_not_null()
+	assert_float(float(share.get_string(1))).override_failure_message("putlog hole share %s" % share.get_string(1)).is_greater_equal(0.5)
+	for v in RegEx.create_from_string("vec3\\(([^)]*)\\)").search_all(colour):
+		for ch: String in v.get_string(1).split(","):
+			assert_float(float(ch)).override_failure_message("putlog hole channel %s" % ch).is_greater_equal(0.06)

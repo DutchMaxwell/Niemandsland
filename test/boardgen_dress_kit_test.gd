@@ -80,6 +80,15 @@ func test_the_bundled_manifest_has_the_contract_shape() -> void:
 		assert_bool(meta["ground"].has(g)).is_true()
 
 
+func test_the_ladder_and_the_street_lamp_are_the_fine_k7_models() -> void:
+	# Look review 25.11.: the box ladder (92 tris) and the six-sided lamp (184 tris) read as
+	# crude; the K7 rebuilds carry bevelled stiles, round rungs and lashings, a plinth, shaft
+	# rings and a framed lantern. A manifest that falls back to the old modules goes red here.
+	var modules: Dictionary = _dress().meta["modules"]
+	assert_int(int(modules["dr_ladder_3in"]["tris"])).is_greater(200)
+	assert_int(int(modules["dr_lamp_post"]["tris"])).is_greater(500)
+
+
 func test_only_the_stone_houses_use_the_finer_stone() -> void:
 	# The stone houses read finer than the ruins, so their plain, window, door and quoin panels, both gables and the chimney
 	# share ct_stone_fine; no other module may pick it up.
@@ -179,3 +188,15 @@ func test_a_glb_of_a_card_module_gets_the_card_surface_name_and_a_modelled_one_d
 	assert_str(dress.mesh("dr_veg_card_a").surface_get_name(0)).is_equal("ct_veg_card")
 	assert_str(dress.mesh("dr_veg_card_a").surface_get_name(1)).is_equal("ct_stone")   # only ct_veg has a card variant
 	assert_str(dress.mesh("dr_veg_grass_tuft").surface_get_name(0)).is_equal("ct_veg")
+
+
+## Look review 25.11. (R1): the flags of the new ground must not repeat the old tops' coarse stone - every ground entry on the "flags" set is tiled at
+## <= 1.1 in (1.8 in laid the flags 1.5 - 2.5 x the accepted fine house stone).
+func test_the_ground_flags_are_tiled_fine() -> void:
+	var ground: Dictionary = _dress().meta["ground"]
+	var seen := 0
+	for g: String in ground:
+		if str(ground[g]["set"]) == "flags":
+			seen += 1
+			assert_float(float(ground[g]["tile_in"])).override_failure_message("%s tile %s in" % [g, ground[g]["tile_in"]]).is_less_equal(1.1)
+	assert_int(seen).is_greater_equal(3)

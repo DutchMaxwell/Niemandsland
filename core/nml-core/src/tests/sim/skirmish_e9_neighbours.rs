@@ -38,3 +38,24 @@ fn a_dead_or_reserved_unit_is_no_neighbour() {
     st.positions[2].clear();
     assert_eq!(blast_neighbours(&st, 0, 3.2), vec![(1, 1)]);
 }
+
+/// One spilled hit on a one-model neighbour: a failed save (1) kills it and names it as wounded; a passed save (6) leaves
+/// it standing. The hit rolls only the save (fixed hits) and says one line.
+#[test]
+fn a_spilled_hit_rolls_the_neighbours_save_and_lands() {
+    let gun = ShootProfile { name: "Mortar".into(), attacks: 1, count: 1, range: 24, blast: 3, ..Default::default() };
+    let statics = vec![UnitStatic { name: "Squad".into(), shoot: vec![gun], ctx: Ctx { quality: 4, defense: 4, models: 1, ..Default::default() }, ..Default::default() }];
+    let parts = vec![(0usize, Scratch::default(), Ctx { quality: 4, ..Default::default() })];
+    let spill = [crate::dice::BlastSpill { shooter: 0, profile: 0, hits: vec![1] }];
+    let seams = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact: true, ..Default::default() };
+    for (face, dies) in [(1u8, true), (6, false)] {
+        let mut st = four_unit_line();
+        let mut shot = ShootResult::default();
+        let mut tray = Tray::supplied(vec![vec![face]]);
+        let hit = land_blast_spill(&statics, &mut st, &parts, &spill, &[3], (12.0, 12.0), seams, &mut tray, &mut shot);
+        assert_eq!(st.alive[3] == 0, dies, "face {face}");
+        assert_eq!(hit, if dies { vec![3] } else { vec![] }, "face {face}");
+        assert_eq!(shot.rolls.len(), 1, "only the save: {:?}", shot.rolls);
+        assert!(shot.log.iter().any(|l| l.starts_with("Blast: Squad takes 1 hit from Squad's Mortar")), "{:?}", shot.log);
+    }
+}
