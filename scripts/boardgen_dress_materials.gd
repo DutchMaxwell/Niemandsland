@@ -113,7 +113,8 @@ static func _plain(e: Dictionary) -> StandardMaterial3D:
 	m.albedo_color = _colour(e.get("colour", e.get("tone", [1.0, 1.0, 1.0])))
 	m.roughness = float(e.get("roughness", 0.9))
 	m.metallic = float(e.get("metallic", 0.0))
-	# the modules paint their own tones as vertex colours (straw, rags, sacks): the material only shades them
+	# the modules paint their own tones as vertex colours (straw, rags, sacks):
+	# the material only shades them
 	m.vertex_color_use_as_albedo = bool(e.get("vertex_colour", false))
 	if e.has("emission"):
 		m.emission_enabled = true
