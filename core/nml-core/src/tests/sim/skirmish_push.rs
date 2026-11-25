@@ -7,6 +7,11 @@ use crate::activation::PushInput;
 /// model usually fails its morale test. `shaken_before` marks "b" Shaken at the start. A push of b's first model 1 in east
 /// is offered for `target`.
 fn push_game(sys: &str, epoch: u32, seed: i64, target: &str, shaken_before: bool) -> ShootResult {
+    push_game_at(sys, epoch, seed, target, shaken_before).1
+}
+
+/// `push_game` with the state after it.
+fn push_game_at(sys: &str, epoch: u32, seed: i64, target: &str, shaken_before: bool) -> (State, ShootResult) {
     let mut st = four_unit_line();
     let keys = st.roster.keys.clone();
     st.roster = Rc::new(Roster { index: keys.iter().cloned().zip(0..).collect(), keys, profile: vec![0, 1, 2, 3] });
@@ -29,7 +34,7 @@ fn push_game(sys: &str, epoch: u32, seed: i64, target: &str, shaken_before: bool
     let seams = Seams { rules_epoch: epoch, tray_exact: true, ..Seams::default() };
     let mut tray = Tray::seeded(seed);
     tray.offer_push(Some(PushInput { target: target.into(), model: 0, to: at(13.0, 0.0) }));
-    resolve_stochastic_tray_on_board(&statics, &st, &action, &crate::terrain::Terrain::default(), seams, &mut GodotRng::new(0), &mut tray).unwrap().1
+    resolve_stochastic_tray_on_board(&statics, &st, &action, &crate::terrain::Terrain::default(), seams, &mut GodotRng::new(0), &mut tray).unwrap()
 }
 
 fn push_line(shot: &ShootResult) -> Option<&String> {
@@ -42,9 +47,9 @@ fn push_line(shot: &ShootResult) -> Option<&String> {
 fn a_push_holds_only_against_the_target_this_attack_shook() {
     let e = crate::acts::PENDING_EPOCH_SKIRMISH_PUSH;
     assert!(e > crate::acts::CURRENT_RULES_EPOCH, "a placeholder no record has played");
-    let shook = (0..200).find(|&s| push_line(&push_game("gff", e, s, "b", false)).is_some_and(|l| l.contains("may push")))
+    let shook = (0..200).find(|&s| push_line(&push_game("gff", e, s, "b", false)).is_some_and(|l| l.starts_with("Push: Gunners rolls")))
         .expect("a seed where the volley shakes b");
-    assert_eq!(push_line(&push_game("aofs", e, shook, "b", false)).map(String::as_str), Some("Push: Gunners may push Target (Shaken by this attack)"));
+    assert!(push_line(&push_game("aofs", e, shook, "b", false)).is_some_and(|l| l.starts_with("Push: Gunners rolls")), "aofs holds too");
     let steady = (0..200).find(|&s| push_line(&push_game("gff", e, s, "b", false)).is_some_and(|l| l.contains("no push")))
         .expect("a seed where b holds");
     assert_eq!(push_line(&push_game("gff", e, steady, "b", false)).map(String::as_str), Some("Push: no push - Target is not Shaken by this attack"));
@@ -70,4 +75,83 @@ fn push_holds_reads_enemy_hit_newly_shaken_and_standing() {
     assert!(!push_holds(&shaken_before, &now, 0, 2, &hit), "Shaken before the attack");
     now.alive[2] = 0;
     assert!(!push_holds(&before, &now, 0, 2, &hit), "gone");
+}
+
+/// GFF/AOFS-E10-01 / -02: a holding push rolls one die for the attacker; 4+ moves the named model to its spot (1 in east
+/// here), 1-3 moves nothing.
+#[test]
+fn e10_01_02_a_push_moves_the_model_on_4_plus_only() {
+    let e = crate::acts::PENDING_EPOCH_SKIRMISH_PUSH;
+    let face = |shot: &ShootResult| shot.rolls.iter().find(|r| r.kind == "push").map(|r| (r.owner.clone(), r.target, r.faces.clone()));
+    let runs: Vec<(State, ShootResult)> = (0..400).map(|s| push_game_at("gff", e, s, "b", false)).filter(|(_, shot)| face(shot).is_some()).collect();
+    let (st, shot) = runs.iter().find(|(_, shot)| face(shot).is_some_and(|f| f.2[0] >= 4)).expect("a seed where the push rolls 4+");
+    assert_eq!(face(shot).map(|f| (f.0, f.1)), Some(("Gunners".to_string(), 4)));
+    assert_eq!(st.positions[2][0], [13.0 * IN2M, 0.0, 0.0], "pushed 1 in east: {:?}", shot.log);
+    assert!(shot.log.iter().any(|l| l.contains("rolls") && l.contains("pushes Target model 1")), "{:?}", shot.log);
+    let (st, shot) = runs.iter().find(|(_, shot)| face(shot).is_some_and(|f| f.2[0] < 4)).expect("a seed where the push rolls 1-3");
+    assert!(st.positions[2].iter().all(|q| *q != [13.0 * IN2M, 0.0, 0.0]), "nobody moved to the push spot: {:?}", st.positions[2]);
+    assert!(shot.log.iter().any(|l| l.ends_with("no push on 1-3")), "{:?}", shot.log);
+}
+
+/// `push_spot`: up to 2 in, on the ground it stood on or lower by under 2 in, never up a ledge, a push off 2 in or more
+/// held back until the fall is wired, never into a building or another model.
+#[test]
+fn push_spot_takes_a_free_spot_within_2_in_on_the_same_ground() {
+    let mut st = four_unit_line();
+    let at = |x: f64, y: f64, z: f64| [x * IN2M, y * IN2M, z * IN2M];
+    st.positions[2] = vec![at(-1.5, 3.0, 1.5)];
+    st.positions[3] = vec![at(-1.5, 3.0, -1.0)];
+    for u in [0, 1] {
+        st.alive[u] = 0;
+    }
+    // columns of 3 in cells from x -6: -6..-3 at 4 in, -3..0 (where the model stands) at 3 in, 0..6 at 1 in
+    let lv = |c: usize| match c { 0 => 4.0, 1 => 3.0, _ => 1.0 };
+    let t = crate::terrain::tier_board_for_test(4, 4, (0..16).map(|i| lv(i % 4)).collect(), Vec::new());
+    let go = |to: [f64; 3]| push_spot(&st, 2, &crate::activation::PushInput { target: "b".into(), model: 0, to }, Cover::Board(&t));
+    assert!(go(at(-2.5, 3.0, 1.5)).is_ok_and(|d| (d - 1.0).abs() < 1e-9), "1 in along the strip");
+    assert_eq!(go(at(-1.5, 3.0, 4.0)), Err("2.5 in is over the 2 in".to_string()));
+    assert_eq!(go(at(-3.2, 4.0, 1.5)), Err("a push never goes up a ledge".to_string()));
+    assert_eq!(go(at(0.3, 1.0, 1.5)), Err("a push off 2 in falls, which the core does not play yet".to_string()));
+    assert_eq!(go(at(-1.5, 3.0, 0.5)), Err("another model stands there".to_string()));
+    let mut gone = st.clone();
+    gone.positions[2].clear();
+    assert!(push_spot(&gone, 2, &crate::activation::PushInput { target: "b".into(), model: 0, to: at(-1.0, 3.0, 1.0) }, Cover::Board(&t)).is_err());
+}
+
+/// Ruling D15, spells: a damage spell whose hits leave its target Shaken attacked it, so the caster may push it.
+#[test]
+fn a_target_shaken_by_a_damage_spell_may_be_pushed() {
+    let e = crate::acts::PENDING_EPOCH_SKIRMISH_PUSH;
+    let game = |cast_lands: bool| {
+        let mut st = four_unit_line();
+        let keys = st.roster.keys.clone();
+        st.roster = Rc::new(Roster { index: keys.iter().cloned().zip(0..).collect(), keys, profile: vec![0, 1, 2, 3] });
+        let mut p = st.profiles.list[0].clone();
+        p.game_system = "gff".into();
+        st.profiles = Rc::new(Profiles { list: vec![p; 4], index: HashMap::new() });
+        let at = |x: f64, z: f64| [x * IN2M, 0.0, z * IN2M];
+        st.positions = vec![vec![at(0.0, 0.0)], vec![at(-30.0, 0.0)], vec![at(12.0, 0.0), at(12.0, 1.5)], vec![at(30.0, 20.0)]];
+        st.radii = Rc::new(vec![vec![0.5 * IN2M], vec![0.5 * IN2M], vec![0.5 * IN2M; 2], vec![0.5 * IN2M]]);
+        st.wounds = vec![vec![1], vec![1], vec![1, 1], vec![1]];
+        st.alive = vec![1, 1, 2, 1];
+        st.casts = vec![2, 0, 0, 0];
+        let unit = |name: &str, n: i64, q: i64| UnitStatic {
+            name: name.into(), model_count: n, wounds_max: vec![1; n as usize],
+            ctx: Ctx { quality: q, defense: 6, models: n, ..Default::default() }, ..Default::default()
+        };
+        let bolt = crate::rules::Spell { name: "Bolt".into(), status: "modeled".into(), range_in: 18.0, target_count: 1,
+            effect_kind: "damage".into(), effect_hits: 3, ..Default::default() };
+        let statics = vec![UnitStatic { is_caster: true, spells: vec![bolt], casts_per_round: 2, ..unit("Mystic", 1, 4) }, unit("Spare", 1, 4), unit("Target", 2, 6), unit("Far", 1, 4)];
+        let action = Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None };
+        // cast 6, saves [1, 6, 6] (one model down: half strength), morale 1 (Shaken), push 5
+        let mut tray = Tray::supplied(if cast_lands { vec![vec![6], vec![1, 6, 6], vec![1], vec![5]] } else { vec![vec![1]] });
+        tray.offer_casts(vec![crate::activation::CastInput { seq: 0, caster: "a".into(), spell: "Bolt".into(), targets: vec!["b".into()], base: 2, threshold: 1, ..Default::default() }]);
+        tray.offer_push(Some(PushInput { target: "b".into(), model: 0, to: at(13.0, 0.0) }));
+        resolve_stochastic_tray_on_board(&statics, &st, &action, &crate::terrain::Terrain::default(), Seams { rules_epoch: e, tray_exact: true, ..Seams::default() }, &mut GodotRng::new(0), &mut tray).unwrap()
+    };
+    let (st, shot) = game(true);
+    assert_eq!((st.alive[2], st.shaken[2]), (1, true), "the spell shook the target: {:?}", shot.log);
+    assert!(shot.log.iter().any(|l| l.starts_with("Push: Mystic rolls 5 and pushes Target model 1")), "the push holds, rolls and moves: {:?}", shot.log);
+    let (_, shot) = game(false);
+    assert!(shot.log.iter().any(|l| l == "Push: no push - Target is not Shaken by this attack"), "a failed cast hits nothing: {:?}", shot.log);
 }

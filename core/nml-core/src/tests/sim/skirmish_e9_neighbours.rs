@@ -274,7 +274,7 @@ fn a_blast_bystander_shaken_by_the_spill_may_be_pushed() {
         resolve_stochastic_tray_on_board(&statics, &st, &action, &crate::terrain::Terrain::default(), Seams { rules_epoch: e, tray_exact: true, ..Seams::default() }, &mut GodotRng::new(0), &mut tray).unwrap()
     };
     let (st, shot) = (0..400).map(game).find(|(st, _)| st.shaken[3] && st.alive[3] > 0).expect("a seed where the spill shakes the neighbours");
-    assert!(shot.log.iter().any(|l| l == "Push: Gunners may push Neighbours (Shaken by this attack)"), "{:?} {:?}", st.shaken, shot.log);
+    assert!(shot.log.iter().any(|l| l.starts_with("Push: Gunners rolls") && l.contains("Neighbours")), "the push holds and rolls: {:?} {:?}", st.shaken, shot.log);
 }
 
 /// Ruling D15, melee: the charged target that loses the fight and turns Shaken was attacked; the push holds.
@@ -295,5 +295,5 @@ fn a_charged_target_shaken_by_the_melee_may_be_pushed() {
         resolve_stochastic_tray_on_board(&statics, &st, &action, &crate::terrain::Terrain::default(), Seams { rules_epoch: e, tray_exact: true, ..Seams::default() }, &mut GodotRng::new(0), &mut tray).unwrap()
     };
     let (_, shot) = (0..400).map(game).find(|(st, _)| st.shaken[2] && st.alive[2] > 0).expect("a seed where the charge shakes the target");
-    assert!(shot.log.iter().any(|l| l == "Push: Gunners may push Target (Shaken by this attack)"), "{:?}", shot.log);
+    assert!(shot.log.iter().any(|l| l.starts_with("Push: Gunners rolls") && l.contains("Target")), "the push holds and rolls: {:?}", shot.log);
 }

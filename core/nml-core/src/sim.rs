@@ -1136,6 +1136,37 @@ fn push_holds(before: &State, now: &State, si: usize, ti: usize, attacked: &[usi
     now.player[ti] != now.player[si] && attacked.contains(&ti) && !before.shaken[ti] && now.shaken[ti] && now.alive[ti] > 0
 }
 
+/// The pushed model's new spot (3.6 p.15: "move one model from the target by up to 2 in in any direction"): `Ok` with the
+/// inches it moves, or why not - no such model, over 2 in, not on the ground it stood on (up a ledge never; down 2 in or
+/// more falls, step 19, held back until then), inside a building, or overlapping another model.
+fn push_spot(state: &State, ti: usize, p: &crate::activation::PushInput, cover: Cover) -> Result<f64, String> {
+    let Some(from) = state.positions[ti].get(p.model).copied() else { return Err(format!("model {} is no model of it", p.model + 1)) };
+    let moved_in = (p.to[0] - from[0]).hypot(p.to[2] - from[2]) / IN2M;
+    if moved_in > 2.0 + 1e-6 {
+        return Err(format!("{moved_in:.1} in is over the 2 in"));
+    }
+    if let Cover::Board(t) = cover {
+        let lvl = |q: [f64; 3]| t.tier_in_at(q[0] / IN2M, q[2] / IN2M);
+        let drop = lvl(from) - lvl(p.to);
+        if drop < -1e-6 {
+            return Err("a push never goes up a ledge".to_string());
+        }
+        if drop >= 2.0 - 1e-6 {
+            return Err(format!("a push off {drop:.0} in falls, which the core does not play yet"));
+        }
+        if t.solid_at(p.to[0] / IN2M, p.to[2] / IN2M) {
+            return Err("a building is in the way".to_string());
+        }
+    }
+    let r = state.radii[ti].get(p.model).copied().unwrap_or(0.0);
+    let overlaps = (0..state.positions.len()).filter(|&u| state.alive[u] > 0).any(|u| state.positions[u].iter().zip(state.radii[u].iter())
+        .enumerate().any(|(k, (q, &rq))| !(u == ti && k == p.model) && (p.to[0] - q[0]).hypot(p.to[2] - q[2]) < r + rq - 1e-6));
+    if overlaps {
+        return Err("another model stands there".to_string());
+    }
+    Ok(moved_in)
+}
+
 /// The skirmish Blast spread's morale: each neighbour `land_blast_spill` wounded tests like a shot target - the same
 /// half-strength trigger and line, then the test.
 fn blast_spill_morale(
@@ -13162,9 +13193,27 @@ fn resolve_with(
     // attacker's offer (`Input::Push`), see `push_holds`.
     if let Some((tray, shot)) = dice.as_mut() {
         if let (Some(p), true) = (tray.push().cloned(), next.book(si).vertical_moves && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SKIRMISH_PUSH)) {
+            let name = statics[pi_s].name.clone();
             let line = match next.roster.index.get(&p.target).copied() {
-                Some(ti) if push_holds(state, &next, si, ti, &shot.attacked) =>
-                    format!("Push: {} may push {} (Shaken by this attack)", statics[pi_s].name, statics[next.roster.profile[ti]].name),
+                Some(ti) if push_holds(state, &next, si, ti, &shot.attacked) => {
+                    // One die, 4+: the attacker may move one model of the target up to 2 in (3.6 p.15).
+                    let tname = &statics[next.roster.profile[ti]].name;
+                    tray.owner_next(Some(si));
+                    let faces = tray.roll(1);
+                    let face = faces.first().copied().unwrap_or(0);
+                    shot.rolls.push(crate::dice::Roll { kind: "push", count: 1, target: 4, faces, owner: name.clone() });
+                    if face < 4 {
+                        format!("Push: {name} rolls {face} to push {tname} - no push on 1-3")
+                    } else {
+                        match push_spot(&next, ti, &p, cover) {
+                            Ok(moved_in) => {
+                                next.positions[ti][p.model] = p.to;
+                                format!("Push: {name} rolls {face} and pushes {tname} model {} {moved_in:.1} in", p.model + 1)
+                            }
+                            Err(why) => format!("Push: {name} rolls {face}, but {why} - nothing moves"),
+                        }
+                    }
+                }
                 Some(ti) => format!("Push: no push - {} is not Shaken by this attack", statics[next.roster.profile[ti]].name),
                 None => format!("Push: no push - {} is no unit of this game", p.target),
             };
