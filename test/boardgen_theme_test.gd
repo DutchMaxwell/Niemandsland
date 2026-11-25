@@ -293,10 +293,12 @@ func test_dusk_is_a_blue_hour_two_pale_moons_a_half_turn_apart_and_a_cool_sky() 
 	BoardgenTownDressing.dusk(lc)
 	var sun: Color = lc.calls["set_sun_color"]
 	assert_float(sun.b).is_greater(sun.r)   # the key is a cool pale moon
-	assert_float(lc.calls["set_sun_angles"][1]).is_greater_equal(40.0)   # high
-	# the second moon (the scene's fill light): the same colour, nearly the same energy, the half turn of the key - the board is a half-turn mirror, so its light is too (gate at both players' sides)
-	assert_object(lc.calls["set_fill_light_color"]).is_equal(sun)
-	assert_float(lc.calls["set_fill_light_energy"]).is_between(0.85 * lc.calls["set_sun_energy"], 1.15 * lc.calls["set_sun_energy"])
+	assert_float(lc.calls["set_sun_angles"][1]).is_greater_equal(25.0)   # up off the horizon (look review 3: 35, low enough to throw relief)
+	# look review 3: ONE moon - the fill is a weak cool light, not a second moon (two equal moons cancelled sideways = light from straight above), and the key stands
+	# across the axis between the deployment zones (azimuth +-90: both players see it from the side) at 25 - 40 deg
+	assert_float(lc.calls["set_fill_light_energy"]).override_failure_message("a second moon: the relief cancels").is_less_equal(0.3 * lc.calls["set_sun_energy"])
+	assert_float(absf(sin(deg_to_rad(lc.calls["set_sun_angles"][0])))).override_failure_message("the moon stands on one player's side").is_greater(0.99)
+	assert_float(lc.calls["set_sun_angles"][1]).is_between(25.0, 40.0)
 	var h: float = deg_to_rad(lc.calls["set_sun_angles"][0])
 	var v: float = deg_to_rad(lc.calls["set_sun_angles"][1])
 	var key := Vector3(cos(v) * sin(h), sin(v), cos(v) * cos(h))
@@ -380,7 +382,8 @@ func test_the_blue_hour_sets_board_scale_occlusion_and_the_board_has_one_probe_r
 	assert_float(lc.calls["set_ssao_intensity"]).is_greater(1.0)
 	assert_float(lc.calls["set_sdfgi_energy"]).override_failure_message("the Ultra bounce light (1.1) lifted the lit walls round the models: the blue hour turns it down").is_less_equal(0.6)
 	assert_float(lc.calls["set_ssil_intensity"]).is_less_equal(0.6)
-	assert_float(lc.calls["set_sun_angles"][0]).override_failure_message("the key comes from the play camera's side (azimuth near -20)").is_between(-30.0, -10.0)
+	# (look review 3, lead: was azimuth -20 from the play camera's side, one of two equal moons) the key stands across the deployment axis; readability is GATE-R's
+	assert_float(absf(sin(deg_to_rad(lc.calls["set_sun_angles"][0])))).is_greater(0.99)
 	var node: BoardgenTownDressing = auto_free(BoardgenTownDressing.new())
 	add_child(node)
 	node.build(_town_with_wall_house_and_plot(), ShaderMaterial.new())
@@ -415,3 +418,19 @@ func test_a_wooden_prop_stands_flush_against_its_wall_in_a_weathered_wood_colour
 	var wood: Color = BoardgenTheme.TOWN_PALETTE[BoardgenTheme.TOWN_KINDS.find("wood")]
 	assert_float(wood.s).override_failure_message("the prop wood is a saturated orange (s %.2f)" % wood.s).is_less_equal(0.4)
 	assert_float(wood.v).override_failure_message("the prop wood is near black").is_greater_equal(0.4)
+
+
+## Look review 3: under the one side moon the models get their own fill from straight above (model layer only, no shadow): both player sides alike, and the
+## readability gate holds (measured: ratio median 0.88 -> 0.89-0.91, pockets unchanged).
+func test_the_town_lights_its_models_with_a_top_fill_on_the_model_layer() -> void:
+	var table: Node3D = auto_free(Node3D.new())
+	add_child(table)
+	var board := BoardgenGreybox.attach(table, _town())
+	var fill := board.find_child("ModelFill", false, false) as DirectionalLight3D
+	assert_object(fill).override_failure_message("the town has no model fill").is_not_null()
+	if fill != null:
+		assert_int(fill.light_cull_mask).is_equal(BoardgenMood.MODEL_LAYER)
+		assert_bool(fill.shadow_enabled).is_false()
+		assert_float((fill.global_transform.basis * Vector3.FORWARD).y).override_failure_message("the model fill is not from above").is_less(-0.99)
+		assert_float(fill.light_energy).is_equal_approx(float((BoardgenTownDressing as Script).get_script_constant_map().get("MODEL_FILL_ENERGY", -1.0)), 0.0001)
+	board.free()

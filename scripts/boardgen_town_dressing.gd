@@ -22,13 +22,17 @@ const LANTERN_CONE_DEG := 48.0
 const LANTERN_CONE_SHADOWED_DEG := 58.0
 ## A spot's energy is not an omni's: the cone, its soft edge and the 1 / d fall-off over 2.5 in of height set it; 3.5 keeps the plaster beside a post under the clip cap.
 const LANTERN_ENERGY := 3.5
-## The moons (the blue hour, D-R4, as two pale lights): the key and its half turn, equal in colour and nearly in energy, so the board looks the same from both players' sides.
+## The moon (the blue hour, D-R4): ONE pale key, 35 deg up, its azimuth across the axis between the two deployment zones (look review 3: two equal moons from
+## opposite azimuths cancelled sideways and lit the board from straight above). Each player sees the moon from the side - one from the right, the other from the
+## left - so both see the same board: play-view luma and relief within 3 % (measured). A weak cool fill from the opposite side keeps the shade side from going black.
 const MOON_COLOUR := Color(0.93, 0.95, 1.0)
-const MOON_AZIMUTH := -20.0
-const MOON_ELEVATION := 52.0
-const MOON_ENERGY := 2.0
-const MOON2_ENERGY := 2.0
-const MOON2_SHADOWS := true
+const MOON_AZIMUTH := 90.0
+const MOON_ELEVATION := 35.0
+const MOON_ENERGY := 5.0
+const MOON2_ENERGY := 0.6
+const MOON2_COLOUR := Color(0.62, 0.7, 0.95)
+const MOON2_SHADOWS := false
+const MODEL_FILL_ENERGY := 1.2   # the models' own top fill (model layer only; the readability gate)
 ## Maintainer 21.11. "too dark": the whole board one step brighter, evenly (exposure, a paler and stronger sky fill); was exposure 1.0, ambient 0.9 at (0.42, 0.47, 0.62).
 const EXPOSURE := 1.6
 const AMBIENT_ENERGY := 1.5
@@ -394,7 +398,7 @@ static func dusk(lighting: Object) -> void:
 	if lighting.has_method("set_sdfgi_energy"):
 		lighting.set_sdfgi_energy(SDFGI_ENERGY)
 		lighting.set_ssil_intensity(SSIL_INTENSITY)
-	lighting.set_fill_light_color(MOON_COLOUR)   # the SECOND moon, the half turn of the first: the board is a half-turn mirror, so a fair light is too (the gate at the opposite player's side)
+	lighting.set_fill_light_color(MOON2_COLOUR)   # a weak cool fill from the opposite side (look review 3: not a second moon)
 	lighting.set_fill_light_energy(MOON2_ENERGY)
 	var key: Variant = lighting.get("_directional_light")   # the moons' specular is turned down: a strong pale light on the glossy pawns adds a white veil that washes their colours (the gate)
 	if key is DirectionalLight3D:

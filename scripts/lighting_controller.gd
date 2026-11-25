@@ -90,7 +90,7 @@ const PRESETS = {
 		"name": "Night (Full Moon)",
 		"sun_energy": 1.6,  # the sun doubles as a strong, cool full-moon key
 		"sun_color": Color(0.6, 0.72, 1.0),
-		"sun_angle_h": 120.0,
+		"sun_angle_h": 90.0,   # across the axis between the deployment zones: both players see the moon from the side (look review 3; at 120 the two sides differed by 18 % in mean luma)
 		"sun_angle_v": 24.0,  # low enough that the moon is in the sky at play camera angles
 		"ambient_energy": 0.3,  # blue sky-fill so shadows stay readable, not black
 		"ambient_color": Color(0.24, 0.32, 0.58),
