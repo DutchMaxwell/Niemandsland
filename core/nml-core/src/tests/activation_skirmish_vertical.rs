@@ -230,3 +230,33 @@ fn a_fall_ends_the_activation_and_tests_morale_at_its_end() {
     assert!(!shot.log.iter().any(|l| l == ends), "{:?}", shot.log);
     assert!(shot.falls.is_empty());
 }
+
+/// A three-model Tough squad on the 4 in ledge (models at z -4.5, 1.5, 4.5 in, 1 in east of the edge, wounds `wounds`);
+/// the models in `jumpers` are placed 1.5 in below the edge, the others stay. Landed with the supplied dice.
+fn tough_fall(wounds: Vec<i64>, jumpers: &[usize], dice: Vec<Vec<u8>>) -> (State, crate::dice::ShootResult) {
+    let (mut st, mut statics, t) = ledge(4.0, "gff", &[]);
+    let zs = [-4.5, 1.5, 4.5];
+    st.positions[0] = zs.iter().map(|z| [INCHES_TO_METERS, 4.0 * INCHES_TO_METERS, z * INCHES_TO_METERS]).collect();
+    Rc::make_mut(&mut st.radii)[0] = vec![INCHES_TO_METERS; 3];
+    st.wounds[0] = wounds;
+    st.alive = vec![3, 0, 0, 0];
+    (statics[0].model_count, statics[0].wounds_max, statics[0].ctx.models, statics[0].ctx.tough) = (3, vec![3; 3], 3, 3);
+    let placed: Vec<[f64; 3]> = (0..3).map(|i| if jumpers.contains(&i) { [-1.5 * INCHES_TO_METERS, 0.0, zs[i] * INCHES_TO_METERS] } else { st.positions[0][i] }).collect();
+    let seams = Seams { rules_epoch: PENDING_EPOCH_SKIRMISH_JUMP, tray_exact: true, ..Seams::default() };
+    let mut tray = Tray::supplied(dice);
+    tray.place(placed, Vec::new());
+    let action = Action { kind: ADVANCE, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None };
+    crate::sim::resolve_stochastic_tray_on_board(&statics, &st, &action, &t, seams, &mut crate::rng::GodotRng::new(0), &mut tray).unwrap()
+}
+
+/// 3.6 p.15: "the model falls ... and takes one wound" - the wounds go on the model that fell, not down the unit's casualty
+/// order. Model 3 of a Tough(3) squad falls for two wounds and keeps its last one; models 1 and 2 are untouched. With two
+/// jumpers whose first fall kills its model, the second fall still finds its own model one slot further up.
+#[test]
+fn a_falls_wounds_land_on_the_model_that_fell() {
+    let (after, shot) = tough_fall(vec![3, 3, 3], &[2], vec![vec![1, 2, 2, 2], vec![1, 3, 4, 6]]);
+    assert_eq!(after.wounds[0], vec![3, 3, 1], "{:?}", shot.log);
+    let (after, shot) = tough_fall(vec![1, 3, 3], &[0, 2], vec![vec![1, 2, 2, 2], vec![1, 3, 6, 6], vec![1, 2, 2, 2], vec![1, 6, 6, 6]]);
+    assert_eq!(after.wounds[0], vec![3, 2], "the first faller died, the second took its one wound: {:?}", shot.log);
+    assert_eq!(after.alive[0], 2);
+}
