@@ -1,6 +1,6 @@
 //! The skirmish vertical rules (3.6 Firefight / AoF: Skirmish p.15): Jumping. `super::*` is activation's own items.
 use super::*;
-use crate::acts::{EPOCH_94_PARITY_BATCH, PENDING_EPOCH_SKIRMISH_JUMP};
+use crate::acts::{EPOCH_94_PARITY_BATCH, EPOCH_100_SKIRMISH_JUMP};
 use crate::state::Roster;
 use std::rc::Rc;
 
@@ -44,8 +44,10 @@ fn ok(c: &Check) -> bool {
 /// one epoch below it is the cliff it always was.
 #[test]
 fn e11_02_a_4_in_drop_is_a_4_dice_jump() {
-    let e = PENDING_EPOCH_SKIRMISH_JUMP;
-    assert!(e > crate::acts::CURRENT_RULES_EPOCH, "a placeholder no record has played");
+    let e = EPOCH_100_SKIRMISH_JUMP;
+    assert_eq!(e, 100);
+    assert!(!crate::acts::rule_on(99, e), "a record at 99 replays as recorded");
+    assert!(crate::acts::rule_on(crate::acts::CURRENT_RULES_EPOCH, e), "a fresh play_game() stamps it on");
     for sys in ["gff", "aofs"] {
         let (c, jumps) = drop_off(4.0, sys, &[], e);
         assert!(ok(&c), "{sys}: {c:?}");
@@ -57,10 +59,20 @@ fn e11_02_a_4_in_drop_is_a_4_dice_jump() {
     assert_eq!(drop_off(4.0, "gf", &[], e), (cliff(), vec![]), "gf has no drops");
 }
 
+/// A game recorded at epoch 99 (the live epoch before the bump) replays unchanged: a gff 4 in drop is the cliff it always was -
+/// refused, no jump dice - while at 100 the same drop is a 4-dice jump.
+#[test]
+fn a_record_at_epoch_99_keeps_a_4_in_drop_a_cliff() {
+    assert_eq!(drop_off(4.0, "gff", &[], 99), (cliff(), vec![]), "99: the cliff, no dice");
+    let (c, jumps) = drop_off(4.0, "gff", &[], 100);
+    assert!(ok(&c), "100: {c:?}");
+    assert_eq!(jumps, vec![(0, 4, 4.0)], "100: one model, 4 dice, 4 in");
+}
+
 /// The jump's height is not counted: 6 in down a ledge plus a 2 in walk fits a 6 in Advance only because the drop is free.
 #[test]
 fn a_jump_does_not_count_toward_the_move() {
-    let (c, jumps) = drop_off(6.0, "gff", &[], PENDING_EPOCH_SKIRMISH_JUMP);
+    let (c, jumps) = drop_off(6.0, "gff", &[], EPOCH_100_SKIRMISH_JUMP);
     assert!(ok(&c), "{c:?}");
     assert_eq!(jumps, vec![(0, 6, 6.0)]);
 }
@@ -68,7 +80,7 @@ fn a_jump_does_not_count_toward_the_move() {
 /// GFF/AOFS-E14-01: Strider halves the jump dice, rounding up: 5 in -> 3 dice.
 #[test]
 fn e14_01_strider_halves_jump_dice() {
-    let (c, jumps) = drop_off(5.0, "gff", &["Strider"], PENDING_EPOCH_SKIRMISH_JUMP);
+    let (c, jumps) = drop_off(5.0, "gff", &["Strider"], EPOCH_100_SKIRMISH_JUMP);
     assert!(ok(&c), "{c:?}");
     assert_eq!(jumps, vec![(0, 3, 5.0)]);
 }
@@ -77,7 +89,7 @@ fn e14_01_strider_halves_jump_dice() {
 /// unit goes over a 5 in edge without dice.
 #[test]
 fn e11_01_e11_04_e13_01_guards() {
-    let e = PENDING_EPOCH_SKIRMISH_JUMP;
+    let e = EPOCH_100_SKIRMISH_JUMP;
     for epoch in [EPOCH_94_PARITY_BATCH, e] {
         let (c, jumps) = drop_off(3.0, "gff", &[], epoch);
         assert!(ok(&c) && jumps.is_empty(), "3 in at {epoch}: {c:?} {jumps:?}");
@@ -101,7 +113,7 @@ fn land_jump(sys: &str, epoch: u32, faces: Vec<u8>) -> crate::dice::ShootResult 
 /// falls and leaves the fall marker (unit, model, inches) for the fall. One epoch below, and in gf, nothing is rolled.
 #[test]
 fn a_placed_jump_rolls_its_dice_and_a_miss_falls() {
-    let e = PENDING_EPOCH_SKIRMISH_JUMP;
+    let e = EPOCH_100_SKIRMISH_JUMP;
     let jump = |shot: &crate::dice::ShootResult| shot.rolls.iter().filter(|r| r.kind == "jump").map(|r| (r.count, r.faces.clone())).collect::<Vec<_>>();
     let lands = land_jump("gff", e, vec![2, 3, 5, 6]);
     assert_eq!(jump(&lands), vec![(4, vec![2, 3, 5, 6])]);
@@ -128,7 +140,7 @@ fn ledge_with_blocker(at_in: [f64; 2], r_in: f64) -> (State, Vec<UnitStatic>, Te
 }
 
 fn foot_of(st: &State, statics: &[UnitStatic], t: &Terrain) -> (Check, Vec<[f64; 3]>) {
-    let seams = Seams { rules_epoch: PENDING_EPOCH_SKIRMISH_JUMP, tray_exact: true, ..Seams::default() };
+    let seams = Seams { rules_epoch: EPOCH_100_SKIRMISH_JUMP, tray_exact: true, ..Seams::default() };
     let drop = Drop { mode: ADVANCE, placed: vec![[-INCHES_TO_METERS, 0.0, 1.5 * INCHES_TO_METERS]], ..Default::default() };
     (check_move(statics, st, 0, seams, t, &drop, true), jump_dice_of(st, 0, seams, t, &drop).into_iter().map(|j| j.3).collect())
 }
@@ -165,7 +177,7 @@ fn a_jumps_foot_is_the_first_free_spot_below_the_edge() {
 fn e11_03_a_failed_jump_falls_takes_its_wounds_and_lands_at_the_foot() {
     let (mut st, statics, t) = ledge(4.0, "gff", &[]);
     st.wounds[0] = vec![3];
-    let seams = Seams { rules_epoch: PENDING_EPOCH_SKIRMISH_JUMP, tray_exact: true, ..Seams::default() };
+    let seams = Seams { rules_epoch: EPOCH_100_SKIRMISH_JUMP, tray_exact: true, ..Seams::default() };
     let drop = Drop { mode: ADVANCE, placed: vec![[-INCHES_TO_METERS, 0.0, 1.5 * INCHES_TO_METERS]], ..Default::default() };
     let foot = jump_dice_of(&st, 0, seams, &t, &drop)[0].3;
     let mut tray = Tray::supplied(vec![vec![2, 1, 4, 5], vec![1, 3, 4, 6]]);
@@ -199,7 +211,7 @@ fn squad_jump(dice: Vec<Vec<u8>>) -> (State, crate::dice::ShootResult) {
     statics[0].model_count = 2;
     statics[0].wounds_max = vec![1, 1];
     statics[0].ctx.models = 2;
-    let seams = Seams { rules_epoch: PENDING_EPOCH_SKIRMISH_JUMP, tray_exact: true, moved_shoot: true, ..Seams::default() };
+    let seams = Seams { rules_epoch: EPOCH_100_SKIRMISH_JUMP, tray_exact: true, moved_shoot: true, ..Seams::default() };
     let mut tray = Tray::supplied(dice);
     tray.place(vec![[-INCHES_TO_METERS, 0.0, 1.5 * INCHES_TO_METERS], top], Vec::new());
     // a damage spell offered for this activation: cast only when the activation goes on
@@ -253,7 +265,7 @@ fn gap_move(sys: &str, epoch: u32, (low, h, far_up): (&[usize], f64, f64), (from
 /// higher is no gap and stays refused, as does every gap in gf and one epoch below.
 #[test]
 fn e11_05_a_gap_between_equal_tiers_is_a_jump_across() {
-    let e = PENDING_EPOCH_SKIRMISH_JUMP;
+    let e = EPOCH_100_SKIRMISH_JUMP;
     let (c, jumps) = gap_move("gff", e, (&[2], 2.0, 0.0), (-4.5, 1.5), ADVANCE);
     assert!(ok(&c), "{c:?}");
     assert_eq!(jumps, vec![(0, 3, 2.0)], "3 dice, a fall would be the gap's 2 in depth");
@@ -278,7 +290,7 @@ fn tough_fall(wounds: Vec<i64>, jumpers: &[usize], dice: Vec<Vec<u8>>) -> (State
     st.alive = vec![3, 0, 0, 0];
     (statics[0].model_count, statics[0].wounds_max, statics[0].ctx.models, statics[0].ctx.tough) = (3, vec![3; 3], 3, 3);
     let placed: Vec<[f64; 3]> = (0..3).map(|i| if jumpers.contains(&i) { [-1.5 * INCHES_TO_METERS, 0.0, zs[i] * INCHES_TO_METERS] } else { st.positions[0][i] }).collect();
-    let seams = Seams { rules_epoch: PENDING_EPOCH_SKIRMISH_JUMP, tray_exact: true, ..Seams::default() };
+    let seams = Seams { rules_epoch: EPOCH_100_SKIRMISH_JUMP, tray_exact: true, ..Seams::default() };
     let mut tray = Tray::supplied(dice);
     tray.place(placed, Vec::new());
     let action = Action { kind: ADVANCE, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None };

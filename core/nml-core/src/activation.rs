@@ -346,7 +346,7 @@ fn jump_dice_for(state: &State, si: usize, jumps: &[Jump]) -> u32 {
 
 /// Whether the skirmish Jumping rule holds for unit `si` at this epoch (the books that print drops).
 fn jumps_on(state: &State, si: usize, seams: Seams) -> bool {
-    state.book(si).vertical_moves && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SKIRMISH_JUMP)
+    state.book(si).vertical_moves && rule_on(seams.rules_epoch, crate::acts::EPOCH_100_SKIRMISH_JUMP)
 }
 
 /// The jumps a drop that `check_move` accepts asks of unit `si`: per host model (`state.positions` order) that jumps, its
