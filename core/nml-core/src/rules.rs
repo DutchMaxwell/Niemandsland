@@ -62,6 +62,9 @@ const DEFAULT_HERO_AURA: HeroAura = HeroAura {
 const SKIRMISH_HERO_AURA: HeroAura = HeroAura { reach_in: crate::sim::HERO_AURA_REACH_IN, min_tough: 0, joins: false };
 const SKIRMISH_HERO_FROM: Option<(u32, HeroAura)> = Some((crate::acts::EPOCH_98_SKIRMISH_HERO, SKIRMISH_HERO_AURA));
 
+/// The 3.6 Firefight and AoF: Skirmish Blast (p.13): the hits spread over units within 3 in of the target.
+const SKIRMISH_BLAST_FROM: Option<(u32, f64)> = Some((crate::acts::PENDING_EPOCH_SKIRMISH_BLAST, 3.0));
+
 const BOOK_GF: Book = Book {
     system: "gf",
     chain_in: crate::mv::MAX_CHAIN_IN,
@@ -86,7 +89,7 @@ const BOOK_GFF: Book = Book {
     hero_aura: DEFAULT_HERO_AURA,
     hero_aura_from: SKIRMISH_HERO_FROM,
     blast_spread_in: None,
-    blast_spread_from: None,
+    blast_spread_from: SKIRMISH_BLAST_FROM,
     vertical_moves: true,
     default_board_in: [48.0, 48.0],
     one_command_upgrade_each: false,
@@ -113,7 +116,7 @@ const BOOK_AOFS: Book = Book {
     hero_aura: DEFAULT_HERO_AURA,
     hero_aura_from: SKIRMISH_HERO_FROM,
     blast_spread_in: None,
-    blast_spread_from: None,
+    blast_spread_from: SKIRMISH_BLAST_FROM,
     vertical_moves: true,
     default_board_in: [48.0, 48.0],
     one_command_upgrade_each: true,
@@ -1103,13 +1106,16 @@ mod tests {
         }
     }
 
-    /// No book spreads Blast yet at any epoch: the shooting leg's spread wiring is byte-identical until a book turns it on.
+    /// The skirmish Blast spread waits for its pending epoch: gff and aofs spread over 3 in from it on, every other book
+    /// never; one epoch below, no book spreads (the recorded single-unit Blast).
     #[test]
-    fn no_book_spreads_blast_yet() {
+    fn skirmish_blast_spreads_from_its_pending_epoch() {
+        let e = crate::acts::PENDING_EPOCH_SKIRMISH_BLAST;
+        assert_eq!(e, crate::acts::CURRENT_RULES_EPOCH + 1);
         for sys in SYSTEMS {
-            for e in [0, crate::acts::CURRENT_RULES_EPOCH, crate::acts::CURRENT_RULES_EPOCH + 1, u32::MAX] {
-                assert_eq!(book(sys).blast_spread_in_at(e), None, "{sys} at {e}");
-            }
+            assert_eq!(book(sys).blast_spread_in_at(e - 1), None, "{sys} one epoch below");
+            let want = if sys == "gff" || sys == "aofs" { Some(3.0) } else { None };
+            assert_eq!(book(sys).blast_spread_in_at(e), want, "{sys} at the epoch");
         }
     }
 

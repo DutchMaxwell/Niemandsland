@@ -11,7 +11,9 @@ extends Node3D
 ## extends DressPlanner, has `const MODULES: Array[String]`, `func plan(ctx: DressContext) ->
 ## Array[DressPlacement]` and optionally `func build_extra(ctx: DressContext, parent: Node3D)`.
 
-const PLANNERS := ["houses", "tiers", "ladders", "walls", "towers", "ground", "props", "clutter"]
+const PLANNERS := [
+	"houses", "tiers", "ladders", "walls", "towers", "ground", "props", "clutter", "vegetation"
+]
 
 var kit: BoardgenDressKit
 var story: Dictionary = {}

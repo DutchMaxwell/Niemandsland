@@ -1057,6 +1057,11 @@ pub const EPOCH_98_SKIRMISH_HERO: u32 = 98;
 ///   only by the Python list loader (`list_to_profile._units_from_list`).
 pub const EPOCH_98_COMMAND_GAINS: u32 = 98;
 pub const CURRENT_RULES_EPOCH: u32 = 98;
+/// PENDING (the 3.6 Firefight and AoF: Skirmish books): a Blast's hits spread over the target's side's units within 3 in,
+/// each capped at its models; the neighbours roll their own saves, take wounds and test morale. A placeholder one past
+/// `CURRENT_RULES_EPOCH`. Records stamped 98 or below replay byte-exact. Read only through
+/// `rules::Book::blast_spread_in_at`.
+pub const PENDING_EPOCH_SKIRMISH_BLAST: u32 = 99;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
