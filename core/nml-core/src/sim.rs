@@ -1137,23 +1137,22 @@ fn push_holds(before: &State, now: &State, si: usize, ti: usize, attacked: &[usi
 }
 
 /// The pushed model's new spot (3.6 p.15: "move one model from the target by up to 2 in in any direction"): `Ok` with the
-/// inches it moves, or why not - no such model, over 2 in, not on the ground it stood on (up a ledge never; down 2 in or
-/// more falls, step 19, held back until then), inside a building, or overlapping another model.
-fn push_spot(state: &State, ti: usize, p: &crate::activation::PushInput, cover: Cover) -> Result<f64, String> {
+/// inches it moves and, when the spot lies 2 in or more below it, the inches it falls ("pushed off an elevated position at
+/// least 2 in tall"); or why not - no such model, over 2 in, up a ledge, inside a building, or overlapping another model.
+fn push_spot(state: &State, ti: usize, p: &crate::activation::PushInput, cover: Cover) -> Result<(f64, Option<f64>), String> {
     let Some(from) = state.positions[ti].get(p.model).copied() else { return Err(format!("model {} is no model of it", p.model + 1)) };
     let moved_in = (p.to[0] - from[0]).hypot(p.to[2] - from[2]) / IN2M;
     if moved_in > 2.0 + 1e-6 {
         return Err(format!("{moved_in:.1} in is over the 2 in"));
     }
+    let mut fall = None;
     if let Cover::Board(t) = cover {
         let lvl = |q: [f64; 3]| t.tier_in_at(q[0] / IN2M, q[2] / IN2M);
         let drop = lvl(from) - lvl(p.to);
         if drop < -1e-6 {
             return Err("a push never goes up a ledge".to_string());
         }
-        if drop >= 2.0 - 1e-6 {
-            return Err(format!("a push off {drop:.0} in falls, which the core does not play yet"));
-        }
+        fall = (drop >= 2.0 - 1e-6).then_some(drop);
         if t.solid_at(p.to[0] / IN2M, p.to[2] / IN2M) {
             return Err("a building is in the way".to_string());
         }
@@ -1164,7 +1163,7 @@ fn push_spot(state: &State, ti: usize, p: &crate::activation::PushInput, cover: 
     if overlaps {
         return Err("another model stands there".to_string());
     }
-    Ok(moved_in)
+    Ok((moved_in, fall))
 }
 
 /// Ruling D14: after a push the pushed unit's other models stand within 1 in of the moved model `m` (base edge to base edge;
@@ -13247,10 +13246,22 @@ fn resolve_with(
                         format!("Push: {name} rolls {face} to push {tname} - no push on 1-3")
                     } else {
                         match push_spot(&next, ti, &p, cover) {
-                            Ok(moved_in) => {
+                            Ok((moved_in, fall)) => {
                                 next.positions[ti][p.model] = p.to;
-                                let rest = push_regroup(&mut next, ti, p.model, cover);
-                                format!("Push: {name} rolls {face} and pushes {tname} model {} {moved_in:.1} in{rest}", p.model + 1)
+                                // Falling (3.6 p.15): pushed off 2 in or more, the model rolls one die per inch, each 1-3 a wound on
+                                // it. The pushed unit is not the active one, so no activation ends (ruling D10).
+                                let fell = fall.map(|h| {
+                                    tray.owner_next(Some(ti));
+                                    let faces = tray.roll((h - 1e-6).ceil().max(0.0) as usize);
+                                    let w = faces.iter().filter(|&&f| f <= 3).count() as i64;
+                                    shot.rolls.push(crate::dice::Roll { kind: "fall", count: faces.len() as i64, target: 4, faces: faces.clone(), owner: tname.clone() });
+                                    let take = w.min(next.wounds[ti].get(p.model).copied().unwrap_or(0));
+                                    land_wounds_in_order(&mut next, ti, take, vec![p.model]);
+                                    format!(" off a {h:.0} in drop - it falls, {faces:?}, {w} wound{} on 1-3", if w == 1 { "" } else { "s" })
+                                }).unwrap_or_default();
+                                let alive = next.positions[ti].get(p.model).is_some_and(|q| *q == p.to);
+                                let rest = if alive { push_regroup(&mut next, ti, p.model, cover) } else { String::new() };
+                                format!("Push: {name} rolls {face} and pushes {tname} model {} {moved_in:.1} in{fell}{rest}", p.model + 1)
                             }
                             Err(why) => format!("Push: {name} rolls {face}, but {why} - nothing moves"),
                         }
