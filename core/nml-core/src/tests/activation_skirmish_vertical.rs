@@ -231,6 +231,42 @@ fn a_fall_ends_the_activation_and_tests_morale_at_its_end() {
     assert!(shot.falls.is_empty());
 }
 
+/// A 6 x 2 board of 3 in cells (x -9..9 in): columns whose index is in `low` stand at 0, the others at `h`; the far side
+/// (columns >= 3) adds `far_up`. Unit "a" (`sys`) stands on top at `from_in`; it moves straight east to `to_in` with `mode`.
+fn gap_move(sys: &str, epoch: u32, (low, h, far_up): (&[usize], f64, f64), (from_in, to_in): (f64, f64), mode: i64) -> (Check, Vec<(usize, u32, f64)>) {
+    let (mut st, statics) = squad_line();
+    let level = |c: usize| if low.contains(&c) { 0.0 } else if c >= 3 { h + far_up } else { h };
+    st.positions[0] = vec![[from_in * INCHES_TO_METERS, level(((from_in + 9.0) / 3.0) as usize) * INCHES_TO_METERS, 1.5 * INCHES_TO_METERS]];
+    Rc::get_mut(&mut st.profiles).expect("owned").list[0].game_system = sys.into();
+    for u in 1..4 {
+        st.alive[u] = 0;
+    }
+    let t = crate::terrain::tier_board_for_test(6, 2, (0..12).map(|i| level(i % 6)).collect(), Vec::new());
+    let seams = Seams { rules_epoch: epoch, tray_exact: true, ..Seams::default() };
+    let to = [to_in * INCHES_TO_METERS, level(((to_in + 9.0) / 3.0) as usize) * INCHES_TO_METERS, 1.5 * INCHES_TO_METERS];
+    let drop = Drop { mode, placed: vec![to], ..Default::default() };
+    (check_move(&statics, &st, 0, seams, &t, &drop, true), jump_dice_of(&st, 0, seams, &t, &drop).into_iter().map(|j| (j.0, j.1, j.2)).collect())
+}
+
+/// GFF/AOFS-E11-05 on the 3 in grid (the boards have no narrower gap): two equal 2 in tiers with a 3 in gap between is a
+/// 3-dice jump across whose depth is not walked (6 in fits an Advance); a 6 in gap is 6 dice (a Rush). A far side 1 in
+/// higher is no gap and stays refused, as does every gap in gf and one epoch below.
+#[test]
+fn e11_05_a_gap_between_equal_tiers_is_a_jump_across() {
+    let e = PENDING_EPOCH_SKIRMISH_JUMP;
+    let (c, jumps) = gap_move("gff", e, (&[2], 2.0, 0.0), (-4.5, 1.5), ADVANCE);
+    assert!(ok(&c), "{c:?}");
+    assert_eq!(jumps, vec![(0, 3, 2.0)], "3 dice, a fall would be the gap's 2 in depth");
+    let Check::Ok { lines } = c else { unreachable!() };
+    assert!(lines.iter().any(|l| l.text == "Squad: model 1 jumps a 3 in gap - 3 dice at 2+, the jump does not count toward the move"), "{lines:?}");
+    let (c, jumps) = gap_move("aofs", e, (&[1, 2], 2.0, 0.0), (-7.5, 1.5), RUSH);
+    assert!(ok(&c), "{c:?}");
+    assert_eq!(jumps, vec![(0, 6, 2.0)]);
+    assert_eq!(gap_move("gff", e, (&[2], 2.0, 1.0), (-4.5, 1.5), ADVANCE).0, cliff(), "the far side is higher: a climb");
+    assert_eq!(gap_move("gff", e - 1, (&[2], 2.0, 0.0), (-4.5, 1.5), ADVANCE), (cliff(), vec![]), "one epoch below");
+    assert_eq!(gap_move("gf", e, (&[2], 2.0, 0.0), (-4.5, 1.5), ADVANCE), (cliff(), vec![]), "gf");
+}
+
 /// A three-model Tough squad on the 4 in ledge (models at z -4.5, 1.5, 4.5 in, 1 in east of the edge, wounds `wounds`);
 /// the models in `jumpers` are placed 1.5 in below the edge, the others stay. Landed with the supplied dice.
 fn tough_fall(wounds: Vec<i64>, jumpers: &[usize], dice: Vec<Vec<u8>>) -> (State, crate::dice::ShootResult) {
