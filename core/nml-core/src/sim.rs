@@ -1129,16 +1129,34 @@ fn blast_spread_units(state: &State, ti: usize, seams: Seams) -> Vec<(usize, i64
     }
 }
 
+/// The skirmish Blast spread's morale: each neighbour `land_blast_spill` wounded tests like a shot target - the same
+/// half-strength trigger and line, then the test.
+fn blast_spill_morale(
+    statics: &[UnitStatic], next: &mut State, spilled: &[(usize, i64, i64)], mod_d: f64, seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
+) {
+    for &(nj, alive_before, wounds_before) in spilled {
+        let un = &statics[next.roster.profile[nj]];
+        if !shooting_morale_trigger(next, statics, seams, un, nj, alive_before, wounds_before) {
+            continue;
+        }
+        if let Some(line) = shooting_morale_line(next, statics, seams, un, nj, alive_before, wounds_before) {
+            say_rule(tray, "morale", next.player[nj], || line);
+        }
+        tray_morale(next, statics, nj, false, seams, tray, shot, Some(mod_d), None);
+    }
+}
+
 /// The skirmish Blast spread's neighbour leg: each weapon's spilled hits on each neighbour resolve as a fixed-hits copy of
 /// that weapon (no Blast, Takedown, Hazardous or extra attack) against the neighbour's live context, through the same
-/// volley resolver, then land - the pool, then the Deadly groups. One line per neighbour and weapon. Returns the
-/// neighbours that took wounds, once each, in order.
+/// volley resolver, then land - the pool, then the Deadly groups. One line per neighbour and weapon. Returns each
+/// neighbour that took wounds, once, in order, with its living models and wounds left BEFORE its first landing (the
+/// shooting morale trigger's inputs).
 #[allow(clippy::too_many_arguments)]
 fn land_blast_spill(
     statics: &[UnitStatic], next: &mut State, parts: &[(usize, Scratch, Ctx)], spill: &[crate::dice::BlastSpill],
     neighbours: &[usize], (d, mod_d): (f64, f64), seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
-) -> Vec<usize> {
-    let mut hit: Vec<usize> = Vec::new();
+) -> Vec<(usize, i64, i64)> {
+    let mut hit: Vec<(usize, i64, i64)> = Vec::new();
     for (j, &nj) in neighbours.iter().enumerate() {
         for s in spill {
             let h = s.hits.get(j).copied().unwrap_or(0);
@@ -1175,8 +1193,8 @@ fn land_blast_spill(
             say_rule(tray, "blast", att.side, || line);
             shot.rolls.extend(r.rolls);
             shot.log.extend(r.log);
-            if took && !hit.contains(&nj) {
-                hit.push(nj);
+            if took && !hit.iter().any(|h| h.0 == nj) {
+                hit.push((nj, before.0, before.1));
             }
         }
     }
@@ -12740,7 +12758,7 @@ fn resolve_with(
                             let inline_said = ((inline_lines || td_marked) && deadly_dealt + takedown_dealt > 0).then_some(InlineSaid { said: ia.said, pool: w });
                             land_chain_report_said(statics, &next, tray, rep, chain_before, deadly_dealt + takedown_dealt, inline_said.as_ref());
                             let neighbours: Vec<usize> = spread.iter().map(|&(u, _)| u).collect();
-                            land_blast_spill(statics, &mut next, &parts, &spill, &neighbours, (g.d, g.mod_d), seams, tray, shot);
+                            let spilled = land_blast_spill(statics, &mut next, &parts, &spill, &neighbours, (g.d, g.mod_d), seams, tray, shot);
                             // rules-wave3-growthmark (epoch 6) — the
                             // ignore-wound marker AFTER the landing.
                             if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
@@ -12790,6 +12808,8 @@ fn resolve_with(
                             if trigger {
                                 tray_morale(&mut next, statics, g.ti, false, seams, tray, shot, Some(g.mod_d), None);
                             }
+                            // The skirmish Blast spread: every neighbour that took wounds tests morale like the target, in order.
+                            blast_spill_morale(statics, &mut next, &spilled, g.mod_d, seams, tray, shot);
                             // the table says the Mark's consumption after the volley's morale test (state spent above, ahead of it)
                             say_marks_consumed(statics, &next, tray, shot);
                         }
