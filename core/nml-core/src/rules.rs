@@ -1124,6 +1124,23 @@ mod tests {
         }
     }
 
+    /// A game recorded at epoch 97 (the live epoch before the bump) replays unchanged: a gff unit still chains at 6 in.
+    #[test]
+    fn a_record_at_epoch_97_keeps_the_firefight_chain_at_6_in() {
+        assert_eq!(book("gff").chain_in_at(97), 6.0, "97: the recorded 6 in chain");
+        assert_eq!(book("gff").chain_in_at(98), 9.0, "98: the book's 9 in chain");
+    }
+
+    /// A game recorded at epoch 97 replays unchanged: gff and aofs keep the big-game aura (6 in, Tough 9+) and heroes still join.
+    #[test]
+    fn a_record_at_epoch_97_keeps_the_big_game_hero_aura_and_the_join() {
+        for sys in ["gff", "aofs"] {
+            assert_eq!(book(sys).hero_aura_at(97), HeroAura { reach_in: 6.0, min_tough: 9, joins: true }, "{sys} at 97");
+            assert_eq!(hero_join_refusal(sys, 97), None, "{sys}: a hero still joins at 97");
+            assert_eq!(book(sys).hero_aura_at(98), HeroAura { reach_in: 6.0, min_tough: 0, joins: false }, "{sys} at 98");
+        }
+    }
+
     /// The Firefight 9 in chain starts at epoch 98: a record at 97 and every other book play as recorded.
     #[test]
     fn firefight_chain_starts_at_98() {

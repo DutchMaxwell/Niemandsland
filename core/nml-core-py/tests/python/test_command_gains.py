@@ -44,6 +44,12 @@ def test_the_epoch_is_live_from_98():
     assert E == 98 == nml_core.CURRENT_RULES_EPOCH
 
 
+def test_a_record_at_epoch_97_builds_no_banner():
+    """A game recorded at 97 (the live epoch before the bump) replays unchanged: no Banner from the list."""
+    assert "Banner" not in _rules(97)[0]
+    assert _rules(98)[0].count("Banner") == 1
+
+
 def test_a_banner_reaches_its_unit_from_the_epoch_on():
     assert "Banner" not in _rules(E - 1)[0]
     assert _rules(E)[0].count("Banner") == 1

@@ -2370,6 +2370,14 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
 
 #[cfg(test)]
 mod tests {
+    /// A game recorded at epoch 97 builds its units without the gains pass (the Python list loader reads this gate; the
+    /// by-value Banner check at 97 is `test_command_gains.py::test_a_record_at_epoch_97_builds_no_banner`).
+    #[test]
+    fn a_record_at_epoch_97_builds_without_the_command_gains() {
+        assert!(!rule_on(97, super::EPOCH_98_COMMAND_GAINS), "97: no gains pass");
+        assert!(rule_on(98, super::EPOCH_98_COMMAND_GAINS), "98: the gains pass");
+    }
+
     /// The command-upgrade gains pass starts at 98: a record at 97 builds its units without it, a fresh one with it.
     #[test]
     fn command_gains_start_at_98() {
