@@ -3260,6 +3260,8 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("EPOCH_69_HERO_FOLD", nmlcore::acts::EPOCH_69_HERO_FOLD)?;
     // The skirmish hero placeholder: py tests pin the list loader's join refusal on both sides of it.
     m.add("PENDING_EPOCH_SKIRMISH_HERO", nmlcore::acts::PENDING_EPOCH_SKIRMISH_HERO)?;
+    // The list loader's gains pass reads option `gains` from this placeholder on.
+    m.add("PENDING_EPOCH_COMMAND_GAINS", nmlcore::acts::PENDING_EPOCH_COMMAND_GAINS)?;
     m.add("BUILD_COMMIT", BUILD_COMMIT)?;
     m.add("BUILD_DIRTY", env!("NML_BUILD_DIRTY") == "true")?;
     m.add("BUILD_INFO", to_py(m.py(), &build_info())?)?;

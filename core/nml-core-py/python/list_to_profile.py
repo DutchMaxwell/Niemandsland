@@ -336,7 +336,7 @@ def _granted_weapon_names_of_item(item: dict[str, Any]) -> list[str]:
     return out
 
 
-def _selection_rules(ud: dict[str, Any]) -> tuple[list[str], dict[str, list[str]]]:
+def _selection_rules(ud: dict[str, Any], gains: bool = False) -> tuple[list[str], dict[str, list[str]]]:
     """opr_api_client.gd:_parse_tts_unit's rule assembly for ONE selection ->
     `(special_rules, item_grants)`, in the table's own order: the "rules" field
     first, then each non-weapon LOADOUT entry — its own name onto the rule line,
@@ -386,7 +386,26 @@ def _selection_rules(ud: dict[str, Any]) -> tuple[list[str], dict[str, list[str]
                 continue
             if g not in rules:
                 rules.append(g)
+    if gains:
+        _selected_upgrade_rules(ud, rules)
     return rules, grants
+
+
+def _selected_upgrade_rules(ud: dict[str, Any], rules: list[str]) -> None:
+    """opr_api_client.gd:_apply_selected_upgrade_rules (:1187) - a rule-only upgrade (Banner, Musician, Sergeant, ...)
+    grants its ArmyBookRule on the selected option's `gains`, not in the loadout; each one joins the rule line once.
+    The table's per-model `equipment_items` entry for a subset bearer only marks the base ring (the kits sidecar
+    carries bearers here), so it is not ported. Read from `PENDING_EPOCH_COMMAND_GAINS` on (`_units_from_list`)."""
+    for su in ud.get("selectedUpgrades", []) or []:
+        option = su.get("option") if isinstance(su, dict) else None
+        if not isinstance(option, dict):
+            continue
+        for gain in option.get("gains") or []:
+            if not isinstance(gain, dict) or gain.get("type", "") != "ArmyBookRule":
+                continue
+            full = _rule_to_string(gain).strip()
+            if full and full not in rules:
+                rules.append(full)
 
 
 def _aura_granted_rules(members: list[dict[str, Any]]) -> list[str]:
@@ -1480,6 +1499,8 @@ def _units_from_list(
     internal (pre-profile) unit dicts in host-creation order."""
     raw: list[dict] = data.get("units", [])
     game_system = str(data.get("gameSystem", "gf"))
+    import nml_core
+    gains = (nml_core.CURRENT_RULES_EPOCH if rules_epoch is None else int(rules_epoch)) >= nml_core.PENDING_EPOCH_COMMAND_GAINS
     units: dict[str, dict] = {}
     by_sel: dict[str, dict] = {}
     order: list[str] = []
@@ -1516,7 +1537,7 @@ def _units_from_list(
     for ud in raw:
         if ud.get("joinToUnit") and bool(ud.get("combined", False)):
             continue  # folded into its partner in the second pass
-        rules, grants = _selection_rules(ud)
+        rules, grants = _selection_rules(ud, gains)
         unit_id = "p%d_%d_%s" % (player, uidx, str(ud.get("id", uidx)))
         uidx += 1
         u = {
@@ -1560,7 +1581,7 @@ def _units_from_list(
             # `_merge_combined_units` (opr_api_client.gd:1400-1407): the partner
             # half's rule lines are appended to the anchor if absent, and an
             # item name the anchor already grants under is NOT overwritten.
-            prules, pgrants = _selection_rules(ud)
+            prules, pgrants = _selection_rules(ud, gains)
             for r in prules:
                 if r not in host["special_rules"]:
                     host["special_rules"].append(r)

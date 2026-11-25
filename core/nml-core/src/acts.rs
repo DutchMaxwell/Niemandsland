@@ -1052,6 +1052,11 @@ pub const PENDING_EPOCH_FIREFIGHT_CHAIN: u32 = 98;
 /// `CURRENT_RULES_EPOCH`, like the one above. Records stamped 97 or below replay byte-exact. Read only through
 /// `rules::Book::hero_aura_at`.
 pub const PENDING_EPOCH_SKIRMISH_HERO: u32 = 98;
+/// PENDING (table realism, every system): a rule-only upgrade (Banner, Musician, Sergeant, Great Banner) reaches its unit
+/// from the selected option's `gains`, the way the table's `_apply_selected_upgrade_rules` reads a real Army Forge export.
+/// A placeholder one past `CURRENT_RULES_EPOCH`, like the two above. Read only by the Python list loader
+/// (`list_to_profile._units_from_list`); records stamped 97 or below build their units without it.
+pub const PENDING_EPOCH_COMMAND_GAINS: u32 = 98;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2365,6 +2370,14 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
 
 #[cfg(test)]
 mod tests {
+    /// The command-upgrade gains pass waits for its placeholder: a record at the current epoch builds its units without it.
+    #[test]
+    fn command_gains_wait_for_their_pending_epoch() {
+        assert_eq!(super::PENDING_EPOCH_COMMAND_GAINS, CURRENT_RULES_EPOCH + 1);
+        assert!(!rule_on(CURRENT_RULES_EPOCH, super::PENDING_EPOCH_COMMAND_GAINS));
+        assert!(rule_on(super::PENDING_EPOCH_COMMAND_GAINS, super::PENDING_EPOCH_COMMAND_GAINS));
+    }
+
     use super::{
         read_act_header, record_rules_epoch, rule_on, MeleeReach, SearchMode, TreeDice, TreeLeaf, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
         EPOCH_4_TABLE_RULES, EPOCH_5_TABLE_RULES, EPOCH_6_TABLE_RULES, EPOCH_7_TABLE_RULES, EPOCH_73_V36,
