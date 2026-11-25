@@ -65,3 +65,26 @@ func test_fourteen_lamps_are_capped_at_twelve() -> void:
 	assert_int(BoardgenGroundFog.MAX_LAMPS).is_equal(12)
 	fog.set_lamps(PackedVector3Array([Vector3.ZERO]))
 	assert_int(fog.lamp_count()).is_equal(1)
+
+
+## The veil stays off the models: a shown model clears the fog round its base, fading
+## out by 1.7 in; a hidden one does not (the readability gate reads the ring round a base).
+func test_a_shown_model_clears_the_fog_round_its_base() -> void:
+	var board: Node3D = auto_free(Node3D.new())
+	add_child(board)
+	var fog := BoardgenGroundFog.new()
+	fog.build({"nx": 8, "nz": 8, "cell_in": 3.0})
+	board.add_child(fog)
+	var model := Node3D.new()
+	model.add_to_group(BoardgenGroundFog.MODEL_GROUP)
+	board.add_child(model)
+	model.position = Vector3(5.0, 0.0, 3.0) * BoardgenGroundFog.INCHES_TO_METERS
+	fog.update_clearing(board)
+	assert_float(fog.clearing_at(Vector2(5.0, 3.0))).is_greater(0.9)
+	assert_float(fog.clearing_at(Vector2(5.0 + 1.9, 3.0))).is_equal(0.0)
+	assert_float(fog.clearing_at(Vector2(-6.0, -6.0))).is_equal(0.0)
+	model.visible = false
+	fog.update_clearing(board)
+	assert_float(fog.clearing_at(Vector2(5.0, 3.0))).is_equal(0.0)
+	var src := FileAccess.get_file_as_string("res://shaders/ruintown_groundfog.gdshader")
+	assert_str(src).contains("uniform sampler2D clear_tex")
