@@ -272,14 +272,11 @@ func test_the_town_has_lanterns_at_the_square_and_the_gates_inside_the_edge_stri
 	assert_int(lights.filter(func(l: Light3D) -> bool: return l.shadow_enabled).size()).is_less_equal(4)
 	for l: SpotLight3D in lights:
 		assert_float((l.global_transform.basis * Vector3.FORWARD).y).override_failure_message("a lantern cone points down").is_less(-0.99)   # SpotLight3D shines along -Z; rotated -90 deg about x it looks down
-		assert_object(l.light_projector).is_not_null()
+		assert_object(l.light_projector).override_failure_message("a projector cookie: frame-bar bands and no pool on a fresh board (look review 2)").is_null()
+		assert_float(l.spot_angle_attenuation).override_failure_message("the cone's edge must fade, not cut").is_greater_equal(2.0)
 		assert_float(l.light_energy).is_less_equal(5.0)   # lit plaster must not clip (measured at 3.5: <= 0.2 % of pixels above 0.95)
-	var fills := node.find_children("LanternFill*", "OmniLight3D", false, false)   # a weak wide fill inside each pool: no hard black rim
-	assert_int(fills.size()).is_equal(lights.size())
-	for f: OmniLight3D in fills:
-		assert_float(f.light_energy).is_less_equal(0.1)
-		assert_bool(f.shadow_enabled).is_false()
-		assert_float(f.light_specular).is_equal(0.0)
+	# no warm omni beside a lamp (look review 2): with no shadow it washed the walls beside the post orange and lit every stone edge from below (the orange seams)
+	assert_int(node.find_children("*", "OmniLight3D", false, false).filter(func(o: Node) -> bool: return str(o.name).begins_with("Lantern")).size()).is_equal(0)
 	assert_int(BoardgenTheme.TOWN_PALETTE.size()).is_equal(BoardgenTheme.TOWN_KINDS.size())
 
 
@@ -362,19 +359,6 @@ func test_a_wall_ridge_has_merlons_on_its_field_side_only() -> void:
 	for b: Dictionary in merlons:
 		var x: float = (b["lo"].x + b["hi"].x) * 0.5
 		assert_bool(x < -24.0 + 4.0 * 3.0 + 0.5 or x > -24.0 + 12.0 * 3.0 - 0.5).override_failure_message("a merlon on the town side at x = %f" % x).is_true()
-
-
-## R7a: the cookie is a 128 px picture with a hot core, a fall-off to the rim and thin dark frame bars across the pool.
-func test_the_lantern_cookie_has_a_hot_core_a_falloff_and_frame_bars() -> void:
-	var img := BoardgenTownDressing.lantern_projector().get_image()
-	assert_int(img.get_width()).is_equal(128)
-	var core := img.get_pixel(64, 64).r
-	var off_axis := img.get_pixel(64 + 24, 64 + 24).r   # diagonal, clear of the bars
-	var on_bar := img.get_pixel(64 + 24, 64).r   # along the x axis: a frame bar
-	var rim := img.get_pixel(127, 64).r
-	assert_float(core).is_greater(off_axis)
-	assert_float(on_bar).override_failure_message("no bar shadow: %f vs %f" % [on_bar, off_axis]).is_less(off_axis * 0.7)
-	assert_float(rim).is_less(0.05)   # the pool fades out inside the cone
 
 
 ## R7a: a lantern without a shadow map must not reach the far side of a wall - its pool on the ground stays inside a 3 in cell; only the shadowed ones may throw a wide pool.
