@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## One core C-21 (EPOCH_86_VOLLEY_HEIGHT_REACH, lane S1's soak, 17.11.): Battle Tank -> Hive Swarms, the Hive Bond +1 to the morale roll: table
 ## 4+ (passes on 4+), core 5+. Valiant-family rules (Valiant, Hold the Line, Hive Bond) count only when the volley came from over 9". The table
-## measures that distance with `_solo_ai_volley_distance_in` over `nearest_melee_gap_in`: model pairs more than the vertical reach apart do not
+## measures that distance with `nearest_melee_gap_in`: model pairs more than the vertical reach apart do not
 ## count, and a unit with no pair in reach keeps the horizontal unit-centre distance. The core measured the plain base gap, so a target on a platform
 ## was "inside 9"" there and "beyond" on the table. The fixture: a block of rifles 9" from a ten-model unit that carries Hive Bond (nearest base gap
 ## 8", unit centres 11" apart), the target raised 5", `SEEDS` seeds, table (AI body) vs core door (live capture + step driver); the morale roll's
