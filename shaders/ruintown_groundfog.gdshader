@@ -19,6 +19,9 @@ uniform int lamp_n = 0;
 uniform vec4 lamp_col : source_color = vec4(1.0, 0.72, 0.45, 1.0);
 uniform float lamp_r = 0.07;       // the pool's radius in the air (m): lamp height 2.55 in x tan(48 deg)
 uniform float lamp_gain = 0.45;   // the fog's albedo inside a pool = lamp colour x this
+uniform sampler2D clear_tex : filter_linear, repeat_disable;   // 1 = no fog: round every model's base (BoardgenGroundFog)
+uniform vec2 board_center = vec2(0.0);   // world xz of the board's centre (m)
+uniform vec2 board_size = vec2(1.0);     // the board's size (m): clear_tex covers it
 
 void fragment() {
 	float d = texture(depth_tex, SCREEN_UV).r;
@@ -63,5 +66,7 @@ void fragment() {
 		glow += k * k;
 	}
 	ALBEDO = mix(fog_col.rgb, lamp_col.rgb * lamp_gain, min(glow, 1.0));   // inside a pool the fog takes the lamp's colour, outside it keeps the sky's
+	// the veil stays off the models: no fog where the ray ends on a model or on the ground round its base (the gate reads that ring)
+	alpha *= 1.0 - texture(clear_tex, (b.xz - board_center) / board_size + 0.5).r;
 	ALPHA = clamp(alpha, 0.0, 0.97);
 }
