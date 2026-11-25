@@ -99,11 +99,6 @@ const HIT_SOURCE_SPELL: String = "spell"
 ## both fails the save AND deals the extra wound. Sibling of UNMODIFIED_SIX.
 const UNMODIFIED_ONE: int = 1
 
-## Indirect moved-shooting penalty (wave 5, OPR core v3.5.1 weapon rule: -1 to hit when shooting after
-## moving; the LOS/cover-ignore facets are handled at the targeting/save sites). Data-derived at the
-## call sites via RulesRegistry ("Indirect".moved_hit_penalty); this constant is the fallback seam.
-const INDIRECT_MOVED_HIT_PENALTY: int = 1
-
 ## Banner morale-test bonus (wave 5, OPR core v3.5.1: +1 to morale test rolls; the GFF/AoFS variant
 ## scopes it to the bearer + up to 3 picked friendly units — the bearer facet is automated, the pick is
 ## manual). Fallback for the RulesRegistry "Banner".morale_bonus param.
@@ -278,13 +273,6 @@ static func shielded_defense(defense: int, is_shielded: bool) -> int:
 ## dice resolution (main._solo_cover_defense) and the EV metric (AiEv) share.
 static func covered_defense(defense: int, in_cover: bool) -> int:
 	return defense - 1 if in_cover else defense
-
-
-## True when a shot's save ACTUALLY used Cover: the covered value is the one rolled AND it is better
-## than the uncovered base. Blast, Indirect and Ignores-Cover profiles roll the base, so the caller
-## must not claim the +1 for them (I4 cover-log honesty).
-static func shot_uses_cover(save_def: int, shot_cover: int, shot_base: int) -> bool:
-	return shot_cover < shot_base and save_def == shot_cover
 
 
 ## Fortified (army-book: "units where all models have this rule take hits that count as having AP(-1),
@@ -599,17 +587,6 @@ static func armored_defense(defense: int, armor_x: int) -> int:
 ## GF/AoF v3.5.1 p.1 "Modifiers"). With bonus 0 this is the plain quality target.
 static func morale_target(quality: int, morale_bonus: int) -> int:
 	return clampi(quality - morale_bonus, BEST_HIT_TARGET, UNMODIFIED_SIX)
-
-
-## Indirect's to-hit ROLL modifier for a shooting attack (wave 5, core v3.5.1: "-1 to hit rolls when
-## shooting after moving"). 0 when the shooter held, and 0 from EPOCH_73_V36 on (rules 3.6, SHO-02).
-## `penalty` is the data-derived knob (RulesRegistry "Indirect".moved_hit_penalty; fallback
-## INDIRECT_MOVED_HIT_PENALTY).
-static func indirect_hit_modifier(moved: bool, penalty: int = INDIRECT_MOVED_HIT_PENALTY) -> int:
-	# Rules 3.6 (SHO-02): from EPOCH_73_V36 a moved Indirect shooter hits at base quality.
-	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
-		return 0
-	return -maxi(penalty, 0) if moved else 0
 
 
 ## A unit is "at or below half" when its alive count has dropped to <= half its starting size (the OPR
