@@ -99,6 +99,8 @@ const float IN = 0.0254;
 // Tabletop scale (plan D-R2: true 1:56 x ~1.4, so the texture survives at arm's length): feature sizes in inches. A pawn base (~1 in) covers about seven setts and a wall course is a fifth of a pawn.
 const float SETT_W = 0.14;
 const float SETT_H = 0.11;
+const float SETT_DEPTH_IN = 0.09;   // the setts' relief depth (look review R5: the relief read only under a lamp)
+const float SETT_CAVITY = 0.45;   // light-independent: the joints a share darker, the crowns a little lighter (the mean stays), so the setts read under the moon too
 const float COURSE = 0.24;   // wall stone: courses 0.24 in high, stones 0.3 - 0.8 in long (len 0.5 x 0.7 .. 1.5)
 const float TILE_W = 0.16;
 const float TILE_H = 0.13;
@@ -408,10 +410,11 @@ void fragment() {
 			vec4 sett;
 			alb = mix(cobble(xz, seed, grit_street_tint(tint * vec3(0.96, 1.0, 1.08) * GROUND_COBBLE), run, fan, crown, sett), vec3(0.06, 0.055, 0.05), 0.55 * gutter * (1.0 - grit_on));   // (the grit map draws the mud and the kennel instead)   // 0.27 (was 1.15): the streets sit well below the models' own values (readability gate, lead 21.11.)
 			rel = crown;
-			depth_in = 0.06;   // (train 2: was 0.045)
+			depth_in = SETT_DEPTH_IN;   // (train 2: was 0.045; look review R5: 0.06 -> 0.09)
 			rough = mix(0.85, 0.65, smoothstep(0.3, 0.7, crown));   // (train 2) worn crowns catch the light, dirty joints stay matt
 			ao = mix(0.4, 1.0, smoothstep(0.1, 0.5, crown));
 			dbg = grit_debug == 2 ? grit_map_colour(gw) : grit_street(xz, gw, sett, run, alb, rel, rough);
+			alb *= mix(1.0, mix(1.0 - SETT_CAVITY, 1.0 + 0.35 * SETT_CAVITY, smoothstep(0.1, 0.6, crown)), keep(xz.x, SETT_W));   // (look review R5) the cavity term
 			float ne = 0.0;   // (train 2, C3) the setts thin out into the earth: within 0.8 in of an earth border some are gone (earth in the hole), weeds grow in the joints
 			for (int d = 0; d < 8; d++) {
 				vec2 o = vec2(cos(float(d) * 0.785), sin(float(d) * 0.785));
