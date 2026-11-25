@@ -5132,7 +5132,6 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			if not reasons.has(r):
 				reasons.append(r)
 	_solo_log_no_volley(unit, report, "the rules core cannot resolve this volley (%s)" % (", ".join(PackedStringArray(reasons)) if not reasons.is_empty() else "refused"))
-	CoreShadow.hold(self, unit, report, groups, order)   # C-4: NML_CORE_SHADOW=1 only; compared once the body's end morale is thrown
 
 
 ## NML-1035: a shooting activation that resolves NO volley still writes one COMBAT
