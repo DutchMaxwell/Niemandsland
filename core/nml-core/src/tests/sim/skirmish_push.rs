@@ -155,3 +155,67 @@ fn a_target_shaken_by_a_damage_spell_may_be_pushed() {
     let (_, shot) = game(false);
     assert!(shot.log.iter().any(|l| l == "Push: no push - Target is not Shaken by this attack"), "a failed cast hits nothing: {:?}", shot.log);
 }
+
+/// Ruling D14: after the push the unit's other models stand within 1 in of the moved one - a model already that close
+/// stays; a far one goes to the spot 1 in from its base on the straight line toward where it stood; with no room it stays
+/// and the line says so. (1 in bases: the far model lands 3 in from the moved model's centre.)
+#[test]
+fn push_regroup_puts_the_rest_within_1_in() {
+    let mut st = four_unit_line();
+    let at = |x: f64, z: f64| [x * IN2M, 0.0, z * IN2M];
+    st.positions[2] = vec![at(0.0, 0.0), at(0.0, 2.5), at(8.0, 0.0)];
+    Rc::make_mut(&mut st.radii)[2] = vec![IN2M; 3];
+    st.alive = vec![0, 0, 3, 0];
+    let tail = push_regroup(&mut st, 2, 0, Cover::Recorded(None));
+    assert_eq!(st.positions[2][1], at(0.0, 2.5), "within 1 in already: stays");
+    assert!((st.positions[2][2][0] - 3.0 * IN2M).abs() < 1e-9 && st.positions[2][2][2].abs() < 1e-9, "1 in from the base, straight toward where it stood: {:?}", st.positions[2]);
+    assert_eq!(tail, "; model 3 placed within 1 in of it");
+    // a 10 in model of another unit fills every spot 1 in around: the far model stays and the line says so
+    let mut boxed = four_unit_line();
+    boxed.positions[2] = vec![at(0.0, 0.0), at(8.0, 0.0)];
+    Rc::make_mut(&mut boxed.radii)[2] = vec![IN2M; 2];
+    boxed.positions[3] = vec![at(0.0, 0.0)];
+    Rc::make_mut(&mut boxed.radii)[3] = vec![10.0 * IN2M];
+    boxed.alive = vec![0, 0, 2, 1];
+    assert_eq!(push_regroup(&mut boxed, 2, 0, Cover::Recorded(None)), "; model 2 found no room within 1 in and stays");
+    assert_eq!(boxed.positions[2][1], at(8.0, 0.0));
+}
+
+/// Ruling D14 end to end: a push that lands pulls the pushed unit's far model within 1 in of the moved one, and says so.
+/// Four Target models, a spell drops two, the morale fails, the push (5) moves model 1 2 in east.
+#[test]
+fn a_landed_push_regroups_the_rest_of_the_unit() {
+    let e = crate::acts::PENDING_EPOCH_SKIRMISH_PUSH;
+    let game4 = || {
+        let mut st = four_unit_line();
+        let keys = st.roster.keys.clone();
+        st.roster = Rc::new(Roster { index: keys.iter().cloned().zip(0..).collect(), keys, profile: vec![0, 1, 2, 3] });
+        let mut p = st.profiles.list[0].clone();
+        p.game_system = "gff".into();
+        st.profiles = Rc::new(Profiles { list: vec![p; 4], index: HashMap::new() });
+        let at = |x: f64, z: f64| [x * IN2M, 0.0, z * IN2M];
+        st.positions = vec![vec![at(0.0, 0.0)], vec![at(-30.0, 0.0)], vec![at(12.0, 0.0), at(12.0, 1.5), at(12.0, 3.0), at(12.0, 4.5)], vec![at(30.0, 20.0)]];
+        st.radii = Rc::new(vec![vec![0.5 * IN2M], vec![0.5 * IN2M], vec![0.5 * IN2M; 4], vec![0.5 * IN2M]]);
+        st.wounds = vec![vec![1], vec![1], vec![1; 4], vec![1]];
+        st.alive = vec![1, 1, 4, 1];
+        st.casts = vec![2, 0, 0, 0];
+        let unit = |name: &str, n: i64, q: i64| UnitStatic {
+            name: name.into(), model_count: n, wounds_max: vec![1; n as usize],
+            ctx: Ctx { quality: q, defense: 6, models: n, ..Default::default() }, ..Default::default()
+        };
+        let bolt = crate::rules::Spell { name: "Bolt".into(), status: "modeled".into(), range_in: 18.0, target_count: 1,
+            effect_kind: "damage".into(), effect_hits: 3, ..Default::default() };
+        let statics = vec![UnitStatic { is_caster: true, spells: vec![bolt], casts_per_round: 2, ..unit("Mystic", 1, 4) }, unit("Spare", 1, 4), unit("Target", 4, 6), unit("Far", 1, 4)];
+        let action = Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None };
+        // cast 6, saves [1, 1, 6] (two of four down: half strength), morale 1 (Shaken), push 5
+        let mut tray = Tray::supplied(vec![vec![6], vec![1, 1, 6], vec![1], vec![5]]);
+        tray.offer_casts(vec![crate::activation::CastInput { seq: 0, caster: "a".into(), spell: "Bolt".into(), targets: vec!["b".into()], base: 2, threshold: 1, ..Default::default() }]);
+        tray.offer_push(Some(PushInput { target: "b".into(), model: 0, to: at(14.0, 3.0) }));
+        resolve_stochastic_tray_on_board(&statics, &st, &action, &crate::terrain::Terrain::default(), Seams { rules_epoch: e, tray_exact: true, ..Seams::default() }, &mut GodotRng::new(0), &mut tray).unwrap()
+    };
+    let (st, shot) = game4();
+    assert_eq!((st.alive[2], st.shaken[2]), (2, true), "{:?}", shot.log);
+    let (m, others) = (st.positions[2][0], &st.positions[2][1..]);
+    assert!(others.iter().all(|q| (q[0] - m[0]).hypot(q[2] - m[2]) - IN2M <= IN2M + 1e-9), "the rest within 1 in: {:?}", st.positions[2]);
+    assert!(shot.log.iter().any(|l| l.starts_with("Push: Mystic rolls 5 and pushes Target model 1") && l.ends_with("placed within 1 in of it")), "{:?}", shot.log);
+}
