@@ -86,3 +86,31 @@ fn e11_01_e11_04_e13_01_guards() {
         assert!(ok(&c) && jumps.is_empty(), "Flying at {epoch}: {c:?} {jumps:?}");
     }
 }
+
+/// The placed drop off the 4 in ledge, landed through the core's move with the supplied dice `faces`.
+fn land_jump(sys: &str, epoch: u32, faces: Vec<u8>) -> crate::dice::ShootResult {
+    let (st, statics, t) = ledge(4.0, sys, &[]);
+    let seams = Seams { rules_epoch: epoch, tray_exact: true, ..Seams::default() };
+    let mut tray = Tray::supplied(vec![faces]);
+    tray.place(vec![[-INCHES_TO_METERS, 0.0, 1.5 * INCHES_TO_METERS]], Vec::new());
+    let action = Action { kind: ADVANCE, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None };
+    crate::sim::resolve_stochastic_tray_on_board(&statics, &st, &action, &t, seams, &mut crate::rng::GodotRng::new(0), &mut tray).unwrap().1
+}
+
+/// GFF/AOFS-E11-02 / -03, the roll: a 4 in jump rolls 4 dice at 2+ on the move's tray. [2, 3, 5, 6] lands; [2, 1, 4, 5]
+/// falls and leaves the fall marker (unit, model, inches) for the fall. One epoch below, and in gf, nothing is rolled.
+#[test]
+fn a_placed_jump_rolls_its_dice_and_a_miss_falls() {
+    let e = PENDING_EPOCH_SKIRMISH_JUMP;
+    let jump = |shot: &crate::dice::ShootResult| shot.rolls.iter().filter(|r| r.kind == "jump").map(|r| (r.count, r.faces.clone())).collect::<Vec<_>>();
+    let lands = land_jump("gff", e, vec![2, 3, 5, 6]);
+    assert_eq!(jump(&lands), vec![(4, vec![2, 3, 5, 6])]);
+    assert!(lands.falls.is_empty() && lands.log.iter().any(|l| l == "Jump: Squad model 1 jumps down 4 in - [2, 3, 5, 6] at 2+ - it lands"), "{:?}", lands.log);
+    let falls = land_jump("aofs", e, vec![2, 1, 4, 5]);
+    assert_eq!(falls.falls, vec![(0, 0, 4.0)], "{:?}", falls.log);
+    assert!(falls.log.iter().any(|l| l.ends_with("a 1, it falls")), "{:?}", falls.log);
+    for (sys, epoch) in [("gff", e - 1), ("gf", e)] {
+        let shot = land_jump(sys, epoch, vec![2, 1, 4, 5]);
+        assert!(jump(&shot).is_empty() && shot.falls.is_empty(), "{sys} at {epoch}: {:?}", shot.rolls);
+    }
+}

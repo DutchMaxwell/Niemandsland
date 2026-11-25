@@ -632,6 +632,9 @@ pub struct ShootResult {
     pub log: Vec<String>,
     /// The skirmish Blast spread: one entry per weapon that spread, in firing order. Empty when the volley spread nothing.
     pub blast_spill: Vec<BlastSpill>,
+    /// The skirmish Jumping rule: each model of the activating unit whose jump failed - (unit, model, inches it fell) -
+    /// for the fall (step 17). Empty when nobody jumped or every jump landed.
+    pub falls: Vec<(usize, usize, f64)>,
     /// The skirmish Blast spread in melee: each neighbour a strike's spill wounded, once, with its living models and wounds
     /// left before (`sim::land_blast_spill`), kept until the melee's own morale test is done. Never absorbed.
     pub melee_spilled: Vec<(usize, i64, i64)>,
