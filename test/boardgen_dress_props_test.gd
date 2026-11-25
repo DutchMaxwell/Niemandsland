@@ -40,6 +40,34 @@ func _distance(at: Vector2, r: Rect2) -> float:
 	return at.distance_to(near)
 
 
+## The test's own door zones (R12, independent of the planner): every opening from the ground up
+## of a house placement, widened 0.5 in either side, 0..1.0 in out from the face (board inches).
+func _doors(ctx: DressContext) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for pl: DressPlacement in BoardgenDressHouses.new().plan(ctx):
+		for op: Array in ctx.spec(pl.module).openings:
+			if float(op[2]) <= 0.05:
+				var b := pl.transform.basis
+				var p := Vector2(pl.transform.origin.x, pl.transform.origin.z) / IN
+				var a := Vector2(b.x.x, b.x.z).normalized()
+				out.append(
+					{
+						"p": p,
+						"a": a,
+						"o": Vector2(b.z.x, b.z.z).normalized(),
+						"s0": float(op[0]) - 0.5,
+						"s1": float(op[1]) + 0.5
+					}
+				)
+	return out
+
+
+func _blocks(z: Dictionary, q: Vector2, r: float) -> bool:
+	var s: float = (q - z["p"]).dot(z["a"])
+	var o: float = (q - z["p"]).dot(z["o"])
+	return s > z["s0"] - r and s < z["s1"] + r and o > -0.3 - r and o < 1.0 + r
+
+
 func test_one_lamp_visual_per_lantern_point_within_a_fifth_of_an_inch() -> void:
 	var kinds := {}
 	for board_seed: int in SEEDS:
@@ -49,8 +77,11 @@ func test_one_lamp_visual_per_lantern_point_within_a_fifth_of_an_inch() -> void:
 			func(p: DressPlacement) -> bool: return p.module.begins_with("dr_lamp_")
 		)
 		var points: Array[Dictionary] = BoardgenTownDressing.lanterns(layout)
-		assert_int(lamps.size()).is_equal(points.size())
+		var doors := _doors(ctx)
+		assert_int(lamps.size()).is_less_equal(points.size())
 		for l: Dictionary in points:
+			if doors.any(func(z: Dictionary) -> bool: return _blocks(z, l["at"], 0.4)):
+				continue  # a point at a door: its lamp moves along the face or is dropped (R12)
 			var hits := 0
 			for p: DressPlacement in lamps:
 				kinds[p.module] = true
@@ -166,3 +197,45 @@ func test_a_town_with_the_prop_modules_dresses_its_lamps() -> void:
 	for b: Dictionary in BoardgenTownDressing.lantern_boxes(_layout(41)):
 		assert_bool(BoardgenGreybox.draws_itself(b, dress.classes())).is_false()
 		assert_bool(BoardgenGreybox.draws_itself(b, {})).is_true()
+
+
+## R12 (maintainer 25.11.): a lamp never stands in front of a door - no post or bracket within the
+## door opening + 0.5 in either side, 1.0 in out from the face, on seeds 41, 25 and 1-20.
+func test_no_lamp_stands_in_front_of_a_door() -> void:
+	var near := 0
+	var seeds: Array[int] = [41, 25]
+	for s in range(1, 21):
+		seeds.append(s)
+	for board_seed in seeds:
+		var layout := _layout(board_seed)
+		var ctx := _ctx(layout)
+		var doors := _doors(ctx)
+		assert_int(doors.size()).is_greater(0)
+		for l: Dictionary in BoardgenTownDressing.lanterns(layout):
+			if doors.any(func(z: Dictionary) -> bool: return _blocks(z, l["at"], 0.4)):
+				near += 1
+				if board_seed == 41:
+					print("R12 seed 41 lantern at a door: ", l["at"])
+		for p: DressPlacement in BoardgenDressProps.new().plan(ctx):
+			if not p.module.begins_with("dr_lamp_"):
+				continue
+			var r := _rect(ctx, p)
+			for z: Dictionary in doors:
+				var hit := false
+				for q: Vector2 in [
+					r.position,
+					r.end,
+					Vector2(r.position.x, r.end.y),
+					Vector2(r.end.x, r.position.y),
+					r.get_center()
+				]:
+					hit = hit or _blocks(z, q, 0.0)
+				(
+					assert_bool(hit)
+					. override_failure_message(
+						"seed %d: %s at %s blocks a door" % [board_seed, p.module, r.get_center()]
+					)
+					. is_false()
+				)
+	print("R12 lantern points at a door over 22 seeds: ", near)
+	assert_int(near).is_greater(0)  # the case occurs on real boards (else this test proves nothing)
