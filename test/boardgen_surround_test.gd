@@ -58,6 +58,16 @@ func test_the_surround_fades_into_the_sky_by_the_same_formula() -> void:
 	var surround := FileAccess.get_file_as_string("res://shaders/ruintown_surround.gdshader")
 	for src: String in [sky, surround]:
 		assert_str(src).contains('#include "res://shaders/ruintown_sky.gdshaderinc"')
-	assert_str(sky).contains("COLOR = town_sky(EYEDIR)")
+	assert_str(sky).contains("vec3 col = town_sky(EYEDIR);")
 	assert_str(surround).contains("EMISSION = town_sky(")
 	assert_str(surround).contains("* (1.0 - f)")   # the albedo goes to 0 where the sky colour takes over
+
+
+## Look review 3: the key light has a visible disc in the town sky, exactly at the light's direction (LIGHT0_DIRECTION) - a pale moon for a cool key, a warm sun for a
+## warm one. Sky shader only: nothing on the board.
+func test_the_town_sky_shows_the_key_lights_disc_where_its_light_comes_from() -> void:
+	var sky := FileAccess.get_file_as_string("res://shaders/ruintown_sky.gdshader")
+	assert_str(sky).contains("dot(EYEDIR, LIGHT0_DIRECTION)")
+	assert_str(sky).contains("LIGHT0_ENABLED")
+	assert_str(sky).contains("uniform float disc_strength = 1.0;")
+	assert_str(sky).contains("LIGHT0_COLOR")
