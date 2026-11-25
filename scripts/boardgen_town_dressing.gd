@@ -9,6 +9,7 @@ const INCHES_TO_METERS := 0.0254
 const BODY_IN := 2.5   # the intact house's body: the core's solid height
 const OVERHANG_IN := 0.3
 const CHIMNEY_IN := 0.62
+var lamp_glass := {}   # {lantern point: Vector2 | null} from the dressed props (BoardgenDress.lamp_glass): a light follows its moved lamp, a dropped lamp has none
 const MAX_LIGHTS := 14   # 8 before the outer streets got their lamps (silhouette round 21.11.); only the SHADOWED_LANTERNS nearest the centre cast shadows
 const LANTERN_COLOUR := Color(1.0, 0.74, 0.48)
 ## (train 3) the four square lamps (the shadowed, widest cones - the one beside the street camera among them): a paler flame, so their pools stay warm-in-grey
@@ -323,6 +324,12 @@ func _add_lights(layout: Dictionary) -> void:
 	var list := lanterns(layout)
 	list.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a["at"] as Vector2).length() < (b["at"] as Vector2).length())
 	var cookie := lantern_projector()
+	if not lamp_glass.is_empty():   # the lights follow the dressed lamps' glass; a dropped lamp has no light
+		var moved: Array[Dictionary] = []
+		for l: Dictionary in list:
+			if lamp_glass.get(l["at"], l["at"]) != null:
+				moved.append({"at": lamp_glass.get(l["at"], l["at"]), "half": l["half"]})
+		list = moved
 	for i in mini(list.size(), MAX_LIGHTS):
 		var at: Vector2 = list[i]["at"]
 		var light := SpotLight3D.new()
