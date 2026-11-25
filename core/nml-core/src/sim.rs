@@ -11786,6 +11786,12 @@ fn resolve_with(
         // S1: a placement past the host's models moves the joined heroes with it (host first, then each hero in
         // `attached` order); a host-only placement leaves them where they stood, as before.
         let host_n = next.positions[si].len();
+        // The skirmish Jumping rule: the jumps `check_move` accepted for this placement, read off the START positions.
+        let jumps = match (cover, dice.is_some()) {
+            (Cover::Board(t), true) => crate::activation::jump_dice_of(&next, si, seams, t,
+                &crate::activation::Drop { mode: kind, placed: p.clone(), trails: trails.clone().unwrap_or_default() }),
+            _ => Vec::new(),
+        };
         if seams.hero_attach && p.len() == crate::activation::placed_chain_len(&next, si) {
             let mut at = host_n;
             for h in next.attached[si].clone() {
@@ -11797,6 +11803,23 @@ fn resolve_with(
         next.positions[si] = p.into_iter().take(host_n).collect();
         moved = true;
         stamp_moved(&mut next, si, seams.hero_attach, seams.rules_epoch);
+        // Jumping (3.6 skirmish p.15): each jumping model rolls one die per inch at 2+; any miss and that model falls.
+        if let Some((tray, shot)) = dice.as_mut() {
+            let name = statics[pi_s].name.clone();
+            for (m, n, h) in jumps {
+                tray.owner_next(Some(si));
+                let faces = tray.roll(n as usize);
+                let lands = crate::mv::jump::jump_passes(&faces);
+                let line = format!("Jump: {name} model {} jumps down {h:.0} in - {faces:?} at 2+ - {}", m + 1,
+                    if lands { "it lands" } else { "a 1, it falls" });
+                shot.rolls.push(crate::dice::Roll { kind: "jump", count: n as i64, target: crate::mv::jump::JUMP_TARGET as i64, faces, owner: name.clone() });
+                shot.log.push(line.clone());
+                say_rule(tray, "jump", next.player[si], || line);
+                if !lands {
+                    shot.falls.push((si, m, h));
+                }
+            }
+        }
         if let (Some(trails), Cover::Board(t)) = (trails, cover) {
             let land = crate::mv::step::placed_landing(&next, si, t, &trails, band_in, seams.hero_attach, seams.rules_epoch);
             if let (true, Some((_, shot))) = (land.climb_in > 0.0, dice.as_mut()) {
