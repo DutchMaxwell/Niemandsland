@@ -9,6 +9,9 @@ extends SceneTree
 ## `macro_ground`: 30 deg down, 3 in above a street cell beside an earth border, no pawn - the paving close-up. `grit_debug=1`: beside every still a
 ## <still>_grit.png (`grit_debug=2`: <still>_gritmap.png, the raw map) with the board shader's `grit_debug` on (the grit classes as flat colours), every light, the ambient, fog and glow off and a linear tonemap, so the class colours
 ## survive exactly (the instrument tools/boardgen/grit_metrics.py reads them). `manifest.json` gains `still_info`: per still its camera and pixels per inch at the camera's target.
+## `mood=night|dusk|night_tween|sunset_tween|day_tween` (the look audit's instrument): the game's own table and sky, no fixed Overcast, stills at the full 1920 px,
+## the mood applied on the first still of every board as a player gets it (`night` = the Night atmosphere, then the Night lighting preset; `dusk` = the
+## start mood; `*_tween` = the lighting panel's blended pick, kept 3.5 s later), and after `play` also `<tag>_start` = the game's own start view.
 
 const IN := 0.0254
 const ZOOM := 1.25
@@ -47,6 +50,8 @@ var _south: Array[int] = []
 var _manifest := {"stills": [], "plans": [], "godot": "", "gpu": "", "still_info": {}}
 var _grit_debug := 0   # grit_debug=1 (classes) / 2 (the raw map): a debug still beside every still
 var _cam_target := Vector3.ZERO
+var _mood := ""   # mood= : the look audit's mood (empty = the fixed bright Overcast of every other mode)
+var _mooded: Object = null   # the board the mood was last applied to (a new board re-applies the town's own dusk)
 
 
 func _initialize() -> void:
@@ -98,6 +103,10 @@ func _run() -> void:
 			_rounds = int(a.trim_prefix("rounds="))
 		elif a.begins_with("grit_debug="):
 			_grit_debug = int(a.trim_prefix("grit_debug="))
+		elif a.begins_with("mood="):
+			_mood = a.trim_prefix("mood=")
+			_town_sky = true
+			_real_table = true
 	DirAccess.make_dir_recursive_absolute(_out)
 	if _kit == "off":
 		OS.unset_environment("NML_RUINTOWN_KIT_DIR")
@@ -127,11 +136,12 @@ func _run() -> void:
 	while Time.get_ticks_msec() - t0 < 9000:
 		await process_frame
 	_main.table.setup_table(Vector2(4, 4))
-	_main.atmosphere_controller.apply_atmosphere("Overcast", true)
-	var lc: Node = _main.lighting_controller   # a bright neutral overcast: the Day sun draws fine stripes on the big flat faces
-	lc.set_sun_energy(1.1)
-	lc.set_ambient_energy(1.1)
-	lc.set_exposure(1.0)
+	if _mood.is_empty():
+		_main.atmosphere_controller.apply_atmosphere("Overcast", true)
+		var lc: Node = _main.lighting_controller   # a bright neutral overcast: the Day sun draws fine stripes on the big flat faces
+		lc.set_sun_energy(1.1)
+		lc.set_ambient_energy(1.1)
+		lc.set_exposure(1.0)
 	_clear_table()
 	_split_armies()
 	_manifest["godot"] = Engine.get_version_info()["string"]
@@ -260,6 +270,9 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 	if _want("play"):
 		_pose(_play_yaw, PLAY_PITCH, PLAY_ZOOM)
 		await _still(tag, "play")
+		if not _mood.is_empty():
+			_game_pose()   # the game's own start view on this side
+			await _still(tag, "start")
 		if _baseline:
 			_game_pose()
 			await _readability(tag, _suffix)
@@ -948,17 +961,25 @@ func _stand_ins(board: Node3D, spots: Array) -> Node3D:
 
 func _still(tag: String, cam: String) -> void:
 	var file := "%s_%s%s.jpg" % [tag, cam, _suffix]
+	if not _mood.is_empty():
+		if _mooded != _cur_board:
+			_mooded = _cur_board
+			await _apply_mood()
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < 400:
+			await process_frame
 	for _i in 6:
 		if _baseline:
 			_backdrop()   # the render state rewrites the environment whenever a layer changes (dusk, a preset): set it again right before every frame we keep
 		await process_frame
 		_hide_scatter()
 	var img := root.get_texture().get_image()
-	img.resize(WIDTH, int(float(WIDTH) * img.get_height() / img.get_width()), Image.INTERPOLATE_LANCZOS)
-	img.save_jpg(_out.path_join(file), 0.9)
+	if _mood.is_empty():
+		img.resize(WIDTH, int(float(WIDTH) * img.get_height() / img.get_width()), Image.INTERPOLATE_LANCZOS)
+	img.save_jpg(_out.path_join(file), 0.9 if _mood.is_empty() else 0.95)
 	_manifest["stills"].append(file)
 	var cam3 := root.get_viewport().get_camera_3d()
-	var k := float(WIDTH) / root.get_visible_rect().size.x
+	var k := float(img.get_width()) / root.get_visible_rect().size.x
 	_manifest["still_info"][file] = {"cam": cam, "px_per_in": snappedf((cam3.unproject_position(_cam_target + cam3.global_transform.basis.x * IN) - cam3.unproject_position(_cam_target)).length() * k, 0.01)}
 	if _grit_debug > 0:
 		await _grit_still(file.get_basename() + ("_grit.png" if _grit_debug == 1 else "_gritmap.png"))
@@ -1166,6 +1187,30 @@ func _hide_by_name(node: Node) -> void:
 			(c as Node3D).visible = false
 		else:
 			_hide_by_name(c)
+
+
+## `mood=`: the mood as a player applies it (the look audit's recipe). `night` = the held night default: Night atmosphere, then the Night lighting preset;
+## `dusk` = the start mood; `*_tween` = a pick in the lighting panel, which blends for two seconds.
+func _apply_mood() -> void:
+	var atm: Object = _main.atmosphere_controller
+	var wait_ms := 1500
+	match _mood:
+		"night":
+			atm.apply_atmosphere("Night", true)
+			for _i in 12:
+				await process_frame
+			_main.lighting_controller.apply_preset("Night")
+		"dusk":
+			atm.apply_atmosphere("Sunset", true)
+		"night_tween", "sunset_tween", "day_tween":
+			atm.apply_atmosphere({"night_tween": "Night", "sunset_tween": "Sunset", "day_tween": "Day"}[_mood])
+			wait_ms += 3500   # the blend, then the same settle as an instant change
+		_:
+			_fail("unknown mood " + _mood)
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < wait_ms:
+		await process_frame
+	_manifest["mood"] = _mood
 
 
 ## Gate change 22.11.: the GAME's start view (CameraPivot.reset_view + adjust_for_table_size on the capture's 4 x 4 ft table, as main.gd sets it), turned to the
