@@ -196,6 +196,11 @@ func set_board_look(look: Dictionary) -> void:
 			call("set_" + key, current_preset[key])
 
 
+## A value of the board's look (`fallback` without one): the table rig reads the fill light's direction here.
+func board_look_value(key: String, fallback: Variant) -> Variant:
+	return _board_look.get(key, fallback)
+
+
 ## Individual parameter setters
 func set_sun_energy(value: float) -> void:
 	if _directional_light:

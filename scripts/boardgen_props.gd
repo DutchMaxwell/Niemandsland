@@ -103,10 +103,17 @@ static func plan(layout: Dictionary, kit := false) -> Array[Dictionary]:
 			_run_prims(out, runs[key])
 		_run_streaks(out, runs[key])
 	var chosen: Array[Dictionary] = []
-	while not lamps.is_empty() and chosen.size() < MAX_LIGHTS:   # a seeded pick, at least LAMP_GAP_IN apart
+	var wall_of := func(l: Dictionary) -> bool:   # the floor cell behind `at` and the wall in direction `d` exist at the same height
+		var c := Vector2i(((l["at"] - Vector2(l["d"]) * cell * 0.5 - origin) / cell).floor())
+		var o: Vector2i = c + l["d"]
+		return c.x >= 0 and c.y >= 0 and c.x < nx and c.y < nz and o.x >= 0 and o.y >= 0 and o.x < nx and o.y < nz \
+			and cells[c.y * nx + c.x]["level"] == 0 and cells[c.y * nx + c.x]["lot_kind"] != "Hazard" and not feet.has(c) and cells[o.y * nx + o.x]["level"] > 0 and float(layout["level_in"][cells[o.y * nx + o.x]["level"]]) == l["h"]
+	while not lamps.is_empty() and chosen.size() + 2 <= MAX_LIGHTS:   # seeded picks in half-turn pairs, all at least LAMP_GAP_IN apart: both players see the same lamps (D-G5)
 		var l: Dictionary = lamps.pop_at(rng.randi() % lamps.size())
-		if chosen.all(func(o: Dictionary) -> bool: return o["at"].distance_to(l["at"]) >= LAMP_GAP_IN):
-			chosen.append(l)
+		var twin := {"at": -l["at"], "d": -l["d"], "yaw": l["yaw"] + PI, "h": l["h"]}
+		if l["at"].distance_to(twin["at"]) >= LAMP_GAP_IN and wall_of.call(twin) \
+				and chosen.all(func(o: Dictionary) -> bool: return o["at"].distance_to(l["at"]) >= LAMP_GAP_IN and o["at"].distance_to(twin["at"]) >= LAMP_GAP_IN):
+			chosen.append_array([l, twin])
 	for l in chosen:
 		var d: Vector2i = l["d"]
 		var y: float = l["h"] - 0.8

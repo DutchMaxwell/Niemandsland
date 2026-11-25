@@ -30,5 +30,5 @@ static func apply(main: Node, profile: Dictionary, mood: String) -> void:
 		light.call("set_" + key, v[key])
 	light.set_sun_angles(v.sun_angle_h, v.sun_angle_v)
 	var fill: DirectionalLight3D = main.get_node("FillLight")
-	fill.rotation_degrees = Vector3(-42,20,0)
+	fill.rotation_degrees = light.board_look_value("fill_rotation", Vector3(-42,20,0)) if light.has_method("board_look_value") else Vector3(-42,20,0)   # a board may hold its fill across the axis (D-G5)
 	fill.light_volumetric_fog_energy = 0.0
