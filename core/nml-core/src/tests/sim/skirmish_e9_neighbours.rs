@@ -52,7 +52,7 @@ fn a_spilled_hit_rolls_the_neighbours_save_and_lands() {
         let mut st = four_unit_line();
         let mut shot = ShootResult::default();
         let mut tray = Tray::supplied(vec![vec![face]]);
-        let hit = land_blast_spill(&statics, &mut st, &parts, &spill, &[3], (12.0, 12.0), seams, &mut tray, &mut shot);
+        let hit = land_blast_spill(&statics, &mut st, &parts, &spill, &[3], (12.0, 12.0), false, seams, &mut tray, &mut shot);
         assert_eq!(st.alive[3] == 0, dies, "face {face}");
         assert_eq!(hit.iter().map(|h| h.0).collect::<Vec<_>>(), if dies { vec![3] } else { vec![] }, "face {face}");
         assert_eq!(shot.rolls.len(), 1, "only the save: {:?}", shot.rolls);
@@ -171,4 +171,48 @@ fn a_skirmish_blast_spell_reaches_the_unit_behind_its_target_from_the_epoch() {
         assert!(!spilled(&shot) && !shot.rolls.iter().any(|r| r.owner == "Neighbours"), "{sys} at {epoch}: {:?}", shot.log);
         assert_eq!((st.alive[3], st.wounds[3].clone()), (2, vec![1, 1]), "{sys} at {epoch}: the neighbour is untouched");
     }
+}
+
+/// End to end in `sys` at `epoch`: "a" charges "b" (3 in east, saves on 2+) with a Blast(3) hammer (3 attacks); "b" has
+/// no weapon and strikes nothing back; "bh" (two models) stands 1.5 in behind "b".
+fn melee_game(sys: &str, epoch: u32, seed: i64) -> (State, ShootResult) {
+    let (mut st, mut statics) = blast_board(sys);
+    let at = |x: f64, z: f64| [x * IN2M, 0.0, z * IN2M];
+    st.positions[2] = vec![at(3.0, 0.0)];
+    st.positions[3] = vec![at(5.5, 0.0), at(5.5, 1.2)];
+    statics[0].melee = vec![ShootProfile { name: "Hammer".into(), attacks: 3, count: 1, blast: 3, ..Default::default() }];
+    statics[2].ctx.defense = 2; // the target mostly saves, so a charge that wounds only the bystander turns up
+    let action = Action { kind: CHARGE, unit: "a".into(), dest: Some(at(2.0, 0.0)), shoot: None, charge: Some("b".into()), patient: false, split: None, traced: None, teleport: None };
+    let seams = Seams { rules_epoch: epoch, tray_exact: true, ..Seams::default() };
+    let (mut rng, mut tray) = (GodotRng::new(0), Tray::seeded(seed));
+    resolve_stochastic_tray_on_board(&statics, &st, &action, &crate::terrain::Terrain::default(), seams, &mut rng, &mut tray).unwrap()
+}
+
+/// From the skirmish Blast epoch a melee Blast spills onto the unit behind its target too; one epoch below - and in gf
+/// at the epoch - the neighbour is never touched.
+#[test]
+fn a_skirmish_melee_blast_reaches_the_unit_behind_its_target_from_the_epoch() {
+    let e = crate::acts::PENDING_EPOCH_SKIRMISH_BLAST;
+    let rolled = |shot: &ShootResult| shot.rolls.iter().any(|r| r.owner == "Neighbours");
+    let seed = (0..200).find(|&s| rolled(&melee_game("gff", e, s).1)).expect("a seed where the Hammer hits and spills");
+    let (_, shot) = melee_game("gff", e, seed);
+    assert!(shot.log.iter().any(|l| l.starts_with("Blast(3): ") && l.contains("on units within reach")), "{:?}", shot.log);
+    for (sys, epoch) in [("gff", e - 1), ("gf", e)] {
+        let (st, shot) = melee_game(sys, epoch, seed);
+        assert!(!rolled(&shot), "{sys} at {epoch}: {:?}", shot.log);
+        assert_eq!((st.alive[3], st.wounds[3].clone()), (2, vec![1, 1]), "{sys} at {epoch}: the neighbour is untouched");
+    }
+}
+
+/// Ruling D12: the bystander's wounds never join the melee's tally - a charge that wounds only the neighbour is a tie
+/// (no morale die for the target, which struck nothing back) - and a bystander left at half strength tests morale.
+#[test]
+fn a_melee_blast_bystander_is_no_part_of_the_melee_result() {
+    let e = crate::acts::PENDING_EPOCH_SKIRMISH_BLAST;
+    let morale = |shot: &ShootResult, who: &str| shot.rolls.iter().any(|r| r.owner == who && r.kind != "defense" && r.count == 1);
+    let (_, shot) = (0..400).map(|s| melee_game("gff", e, s))
+        .find(|(st, _)| st.alive[2] == 1 && st.alive[3] == 1)
+        .expect("a seed where the target survives unwounded and one neighbour falls");
+    assert!(morale(&shot, "Neighbours"), "the bystander at half strength tests: {:?}", shot.rolls);
+    assert!(!morale(&shot, "Target"), "a tie: the target takes no morale test: {:?}", shot.rolls);
 }
