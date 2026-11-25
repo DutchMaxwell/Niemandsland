@@ -340,6 +340,8 @@ func build(layout: Dictionary, dress: BoardgenDress = null) -> void:
 		var town := BoardgenTownDressing.new()   # the gable roofs of the intact houses
 		town.name = "TownDressing"
 		var frames: bool = kit_town and town_kit.kit.usable(BoardgenTownFrames.MODULES)   # (train 3) the half-timber shells as geometry: the paint keeps the infill only
+		if skip.has("props"):
+			town.lamp_glass = dress.lamp_glass(layout)   # the lantern lights follow the dressed lamps
 		town.build(layout, _material, not kit_town and not skip.has("houses"), BoardgenTownFrames.timber_lots(layout) if frames else {}, skip)
 		_material.set_shader_parameter("real_frames", frames)
 		add_child(town)
