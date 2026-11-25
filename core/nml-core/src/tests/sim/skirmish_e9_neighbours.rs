@@ -118,7 +118,7 @@ fn spell_game(sys: &str, epoch: u32, seed: i64) -> (State, ShootResult) {
 /// and takes the wounds; one epoch below - and in gf at the epoch - the neighbour is never touched.
 #[test]
 fn a_skirmish_blast_reaches_the_unit_behind_its_target_from_the_epoch() {
-    let e = crate::acts::PENDING_EPOCH_SKIRMISH_BLAST;
+    let e = crate::acts::EPOCH_99_SKIRMISH_BLAST;
     let seed = (0..200).find(|&s| blast_game("gff", e, s).1.log.iter().any(|l| l.starts_with("Blast: Neighbours takes")))
         .expect("a seed where the Mortar hits and spills");
     let (st, shot) = blast_game("gff", e, seed);
@@ -131,11 +131,24 @@ fn a_skirmish_blast_reaches_the_unit_behind_its_target_from_the_epoch() {
     }
 }
 
+/// A game recorded at epoch 98 (the live epoch before the bump) replays unchanged: a gff Blast(3) that spills onto the unit
+/// behind its target at 99 leaves that unit untouched at 98 - both models standing at full wounds, no neighbour roll.
+#[test]
+fn a_record_at_epoch_98_leaves_the_neighbour_of_a_gff_blast_untouched() {
+    let seed = (0..200).find(|&s| blast_game("gff", 99, s).1.log.iter().any(|l| l.starts_with("Blast: Neighbours takes")))
+        .expect("a seed where the Mortar hits and spills at 99");
+    let (st, shot) = blast_game("gff", 98, seed);
+    assert_eq!((st.alive[3], st.wounds[3].clone()), (2, vec![1, 1]), "98: the neighbour is untouched");
+    assert!(!shot.rolls.iter().any(|r| r.owner == "Neighbours"), "98: no neighbour roll: {:?}", shot.rolls);
+    let (_, shot) = blast_game("gff", 99, seed);
+    assert!(shot.rolls.iter().any(|r| r.owner == "Neighbours"), "99: the neighbour rolls its saves: {:?}", shot.rolls);
+}
+
 /// A neighbour the spread leaves at half strength (one of its two models down) tests morale like a shot target: one
 /// morale roll signed by it after its saves.
 #[test]
 fn a_neighbour_at_half_strength_tests_morale() {
-    let e = crate::acts::PENDING_EPOCH_SKIRMISH_BLAST;
+    let e = crate::acts::EPOCH_99_SKIRMISH_BLAST;
     let (st, shot) = (0..400).map(|s| blast_game("gff", e, s)).find(|(st, _)| st.alive[3] == 1)
         .expect("a seed where the spread kills one of the two neighbours");
     let own: Vec<&crate::dice::Roll> = shot.rolls.iter().filter(|r| r.owner == "Neighbours").collect();
@@ -147,7 +160,7 @@ fn a_neighbour_at_half_strength_tests_morale() {
 /// the skip is said once, naming Blast.
 #[test]
 fn a_spilled_blast_hit_ignores_the_neighbours_cover() {
-    let e = crate::acts::PENDING_EPOCH_SKIRMISH_BLAST;
+    let e = crate::acts::EPOCH_99_SKIRMISH_BLAST;
     let (_, shot) = (0..200).map(|s| blast_game_in("gff", e, s, true))
         .find(|(_, shot)| shot.log.iter().any(|l| l.starts_with("Blast: Neighbours takes")))
         .expect("a seed where the Mortar hits and spills");
@@ -160,7 +173,7 @@ fn a_spilled_blast_hit_ignores_the_neighbours_cover() {
 /// epoch below - and in gf at the epoch - the spell keeps the plain multiply and the neighbour is never touched.
 #[test]
 fn a_skirmish_blast_spell_reaches_the_unit_behind_its_target_from_the_epoch() {
-    let e = crate::acts::PENDING_EPOCH_SKIRMISH_BLAST;
+    let e = crate::acts::EPOCH_99_SKIRMISH_BLAST;
     let spilled = |shot: &ShootResult| shot.log.iter().any(|l| l.starts_with("Blast(3): ") && l.contains("on units within reach"));
     let seed = (0..200).find(|&s| spell_game("gff", e, s).1.rolls.iter().any(|r| r.owner == "Neighbours"))
         .expect("a seed where Storm is cast and spills");
@@ -192,7 +205,7 @@ fn melee_game(sys: &str, epoch: u32, seed: i64) -> (State, ShootResult) {
 /// at the epoch - the neighbour is never touched.
 #[test]
 fn a_skirmish_melee_blast_reaches_the_unit_behind_its_target_from_the_epoch() {
-    let e = crate::acts::PENDING_EPOCH_SKIRMISH_BLAST;
+    let e = crate::acts::EPOCH_99_SKIRMISH_BLAST;
     let rolled = |shot: &ShootResult| shot.rolls.iter().any(|r| r.owner == "Neighbours");
     let seed = (0..200).find(|&s| rolled(&melee_game("gff", e, s).1)).expect("a seed where the Hammer hits and spills");
     let (_, shot) = melee_game("gff", e, seed);
@@ -208,7 +221,7 @@ fn a_skirmish_melee_blast_reaches_the_unit_behind_its_target_from_the_epoch() {
 /// (no morale die for the target, which struck nothing back) - and a bystander left at half strength tests morale.
 #[test]
 fn a_melee_blast_bystander_is_no_part_of_the_melee_result() {
-    let e = crate::acts::PENDING_EPOCH_SKIRMISH_BLAST;
+    let e = crate::acts::EPOCH_99_SKIRMISH_BLAST;
     let morale = |shot: &ShootResult, who: &str| shot.rolls.iter().any(|r| r.owner == who && r.kind != "defense" && r.count == 1);
     let (_, shot) = (0..400).map(|s| melee_game("gff", e, s))
         .find(|(st, _)| st.alive[2] == 1 && st.alive[3] == 1)
@@ -237,7 +250,7 @@ fn a_strafe_never_spreads_its_blast() {
     st.wounds.push(vec![1]);
     Rc::make_mut(&mut st.radii).push(vec![IN2M]);
     statics[0].strafe_shoot[0].blast = 3;
-    let seams = Seams { rules_epoch: crate::acts::PENDING_EPOCH_SKIRMISH_BLAST, ..Seams::default() };
+    let seams = Seams { rules_epoch: crate::acts::EPOCH_99_SKIRMISH_BLAST, ..Seams::default() };
     for seed in 0..40 {
         let (next, shot) = resolve_stochastic_tray_on_board(&statics, &st, &advance_to(12.0), &crate::terrain::Terrain::default(),
             seams, &mut GodotRng::new(0), &mut Tray::seeded(seed)).unwrap();
