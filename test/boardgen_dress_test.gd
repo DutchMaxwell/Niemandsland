@@ -44,8 +44,8 @@ func test_every_box_that_draws_itself_has_a_class() -> void:
 		var layout := _layout(s)
 		for b: Dictionary in BoardgenGreybox.plan(layout):
 			var c := BoardgenDress.box_class(b)
-			if BoardgenGreybox.draws_itself(b):
-				assert_bool(CLASSES.has(c)).is_true()   # a drawn box no class takes would stay as the old look forever
+			if BoardgenGreybox.draws_itself(b) and b.get("lm", "") != "PumpHouse":
+				assert_bool(CLASSES.has(c)).is_true()   # a drawn box no class takes would stay as the old look forever (a hall's rim on purpose)
 			seen[c] = int(seen.get(c, 0)) + 1
 	print("DRESS box classes: ", seen)
 	for c in ["houses", "tiers", "ladders", "walls", "ground", "props", "clutter"]:
@@ -78,6 +78,7 @@ func test_the_rules_of_the_mapping_on_hand_made_boxes() -> void:
 	assert_str(BoardgenDress.box_class({"kind": "ladder", "lantern": true})).is_equal("props")
 	assert_str(BoardgenDress.box_class({"kind": "hazard", "lm": "Sump"})).is_equal("ground")
 	assert_str(BoardgenDress.box_class({"kind": "stone", "lm": "Crane"})).is_equal("props")
+	assert_str(BoardgenDress.box_class({"kind": "rim", "lm": "PumpHouse"})).is_empty()
 	assert_str(BoardgenDress.box_class({"kind": "wood", "prop": true})).is_equal("clutter")
 	assert_str(BoardgenDress.box_class({"kind": "street"})).is_equal("ground")
 	assert_str(BoardgenDress.box_class({"kind": "roofed"})).is_empty()
@@ -134,3 +135,15 @@ func test_a_build_with_a_supplied_planner_has_both_nodes_the_expected_triangles_
 	assert_str(mesh.mesh.surface_get_material(0).resource_name).is_equal(mesh.mesh.surface_get_name(0))   # bound by name
 	assert_int((shadow.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX] as PackedInt32Array).size()).is_equal(7 * 36)
 	assert_object(dress.get_node_or_null("Extra")).is_not_null()   # build_extra ran
+
+
+## No kit module draws a PumpHouse's rim, so a dressed props class (lamps, fountain, plinth) must
+## not take it: the rim boxes keep their old look on every board.
+func test_a_pump_house_rim_draws_even_when_the_props_are_dressed() -> void:
+	var rims := 0
+	for s in [41, 25, 3]:
+		for b: Dictionary in BoardgenGreybox.plan(_layout(s)):
+			if b.get("lm", "") == "PumpHouse":
+				rims += 1
+				assert_bool(BoardgenGreybox.draws_itself(b, {"props": true})).is_true()
+	assert_int(rims).is_greater(0)

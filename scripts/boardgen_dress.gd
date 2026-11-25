@@ -60,6 +60,8 @@ static func box_class(box: Dictionary) -> String:
 		return "ladders"
 	if box.get("lm", "") == "Sump":
 		return "ground"
+	if box.get("lm", "") == "PumpHouse":
+		return ""  # no kit module draws a hall's rim: it keeps the old look in every case
 	if box.has("lantern") or box.has("lm"):
 		return "props"
 	if box.has("prop"):
