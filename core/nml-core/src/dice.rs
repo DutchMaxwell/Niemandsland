@@ -978,6 +978,26 @@ fn say_regen_bypass(tray: &mut Tray, side: i64, p: &ShootProfile, att: &Ctx, def
     }
 }
 
+/// The skirmish Blast(X) spread (Firefight / AoF: Skirmish p.13), per ORIGINAL hit: each hit becomes `x` hits dealt
+/// one at a time in turn over the target (index 0) and the `neighbour_models` units (indices 1..), each unit capped at
+/// its own living models; what no unit can take is lost. The turn starts at the target, so an odd hit lands there
+/// (the default when the defender places none). Returns the hits per unit; `x` <= 1 leaves every hit on the target.
+/// No neighbours = today's `hits * x.clamp(1, models)` (the shooting leg's Blast multiply). Not wired yet.
+pub fn blast_split(hits: i64, x: i64, target_models: i64, neighbour_models: &[i64]) -> Vec<i64> {
+    let caps: Vec<i64> = std::iter::once(target_models.max(1)).chain(neighbour_models.iter().map(|m| (*m).max(0))).collect();
+    let mut one = vec![0i64; caps.len()];
+    let mut left = x.max(1);
+    while left > 0 && one.iter().zip(&caps).any(|(n, c)| n < c) {
+        for (n, c) in one.iter_mut().zip(&caps) {
+            if left > 0 && *n < *c {
+                *n += 1;
+                left -= 1;
+            }
+        }
+    }
+    one.iter().map(|n| n * hits.max(0)).collect()
+}
+
 /// The table's `blast_log_text`: names Blast(X) and, when the model count clamps the multiplier, the cap.
 fn blast_log(x: i64, hits: i64, boosted: i64, models: i64, stale: bool) -> String {
     let mult = boosted / hits.max(1);
