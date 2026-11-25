@@ -745,7 +745,7 @@ fn a_town_wall_run_has_one_tower_at_its_end_nearer_the_middle() {
 }
 
 #[test]
-fn two_thirds_of_the_town_houses_are_intact_solid_roofs_and_the_rest_ruined_walkable_ones() {
+fn most_town_houses_are_intact_solid_roofs_and_the_rest_ruined_walkable_ones() {
     use nml_core::boardgen::LotKind;
     let (mut intact, mut ruined) = (0, 0);
     for seed in 1..=300 {
@@ -767,7 +767,7 @@ fn two_thirds_of_the_town_houses_are_intact_solid_roofs_and_the_rest_ruined_walk
     }
     let share = intact as f64 / (intact + ruined) as f64;
     eprintln!("intact {intact}, ruined {ruined}: {share:.2}");
-    assert!((0.59..=0.75).contains(&share), "{share:.2} of the houses are intact");   // roofs plan K3: the infill houses lift the share to 0.67 (was 0.40 - 0.60, silhouette round 21.11.)
+    assert!((0.72..=0.88).contains(&share), "{share:.2} of the houses are intact");   // look plan D-R2 = C 25.11.: intact 90 %, at least 8 houses -> 0.80 (was 0.59 - 0.75 at 0.67)
 }
 
 /// What "grown" means in numbers (ruintown AAA step G1): per town board the shares the growth stage has to move.
@@ -951,7 +951,7 @@ fn g2_gate() {
         touching += l.lots.iter().filter(|lot| house(lot.kind) && (lot.z..lot.z + lot.h).any(|z| (lot.x..lot.x + lot.w).any(|x| nbrs(z * GRID + x).iter().any(|&j| l.cells[j].street)))).count();
     }
     let f = n as f64;
-    eprintln!("G2 over {n}: lots {:.1}, opening rays blocked {:.1} % (reported, <= 99), mid rays blocked {:.1} % (62-87), party walls {:.2} per board ({:.0} % of boards), houses touching a street {:.1} % (>= 85), first sub-seed lane-free {:.1} % (>= 99), first sub-seed valid {:.1} %, mean sub-seed {:.1}, boards still failing after all sub-seeds {failed}, walkable raised cells {:.1} per board (9 in: {:.1}), intact houses {:.1}",
+    eprintln!("G2 over {n}: lots {:.1}, opening rays blocked {:.1} % (reported, <= 99), mid rays blocked {:.1} % (62-88), party walls {:.2} per board ({:.0} % of boards), houses touching a street {:.1} % (>= 85), first sub-seed lane-free {:.1} % (>= 99), first sub-seed valid {:.1} %, mean sub-seed {:.1}, boards still failing after all sub-seeds {failed}, walkable raised cells {:.1} per board (9 in: {:.1}), intact houses {:.1}",
         lots as f64 / f, 100.0 * open_r / f, 100.0 * mid_r / f, party as f64 / f, 100.0 * with_party as f64 / f, 100.0 * touching as f64 / houses as f64, 100.0 * lane0 as f64 / f, 100.0 * valid0 as f64 / f, attempts as f64 / f, walk_up as f64 / f, walk_l3 as f64 / f, intact as f64 / f);
 }
 
@@ -1014,7 +1014,7 @@ fn a_town_has_one_half_turn_pair_of_tall_towers_outside_the_bands_and_the_wall()
 }
 
 /// Sight plan S3, the always-on red proof of the mid-board bar (the N = 1000 census is ignored in CI): on town boards 1-200 the true model (house 4.5 in)
-/// keeps the mid share inside 62-87 %, and the any-height reading (house 1000 in, F8) lands above 87 - so the bar can fail.
+/// keeps the mid share inside 62-88 %, and the any-height reading (house 1000 in, F8) lands above 88 - so the bar can fail.
 #[test]
 fn the_mid_board_bar_separates_the_true_model_from_any_height() {
     let (mut truth, mut any) = (0.0, 0.0);
@@ -1024,20 +1024,20 @@ fn the_mid_board_bar_separates_the_true_model_from_any_height() {
         any += blocked_share_roofs(&l, 3, &mid_pairs(), true, 1000.0) / 200.0;
     }
     eprintln!("mid rays blocked over 200 town boards: true model {:.2} %, any height {:.2} %", 100.0 * truth, 100.0 * any);
-    assert!((0.62..=0.87).contains(&truth), "the true model leaves the mid band: {:.2} %", 100.0 * truth);
-    assert!(any > 0.87, "the any-height reading must break the bar, or the bar proves nothing: {:.2} %", 100.0 * any);
+    assert!((0.62..=0.88).contains(&truth), "the true model leaves the mid band: {:.2} %", 100.0 * truth);   // ceiling 87 -> 88: maintainer, D-R2 = C 25.11.
+    assert!(any > 0.88, "the any-height reading must break the bar, or the bar proves nothing: {:.2} %", 100.0 * any);
 }
 
 /// Roofs plan K4: every town board has at least four intact (roofed) houses - a skyline on every board, not only on the average one.
 #[test]
-fn every_town_has_at_least_four_intact_houses() {
+fn every_town_has_at_least_eight_intact_houses() {
     let mut few = Vec::new();
     for seed in 1..=1000 {
         let l = generate_themed(seed, Symmetry::Point180, Theme::RuinTown);
         let houses = l.lots.iter().filter(|lot| lot.kind == nml_core::boardgen::LotKind::Roofed).count();
-        if houses < 4 { few.push((seed, houses)); }
+        if houses < 8 { few.push((seed, houses)); }   // floor 4 -> 8: look plan D-R2 = C 25.11.
     }
-    assert!(few.is_empty(), "{} of 1000 town boards have fewer than 4 intact houses: {:?}", few.len(), &few[..few.len().min(20)]);
+    assert!(few.is_empty(), "{} of 1000 town boards have fewer than 8 intact houses: {:?}", few.len(), &few[..few.len().min(20)]);
 }
 
 /// Sight plan S1: the census puts no eye inside a house - on town boards 1-60 the opening and mid sight lines with an end on a solid cell are left out, and
@@ -1076,16 +1076,17 @@ fn a_town_grows_few_filler_slabs() {
 }
 
 /// BASELINE: origin/main 6a2972697, town theme, Point180, seeds 1..=1000 (means per board, sq in, percent).
-/// Re-pinned as the town generator grew (a raised minimum, infill houses, at least 4 houses, a tall tower pair read at 12 in), 1000 seeds. Later steps move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
+/// Re-pinned as the town generator grew (a raised minimum, infill houses, at least 4 houses, a tall tower pair read at 12 in; look plan D-R2 = C 25.11.: 90 % of the
+/// building lots intact, raised minimum 10 %, at least 8 houses), 1000 seeds. Later steps move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
 const ROOFS_BASELINE: [(&str, f64); 25] = [
-    ("intact houses", 8.27), ("boards with <= 2 houses %", 0.0), ("roofed cells", 19.37), ("raised cells in house plots", 13.07), ("raised cells on free earth", 22.64), ("raised cells in the city wall", 34.25),
-    ("roof share of footprints %", 35.17), ("walkable sq in 0 in", 1374.21), ("walkable sq in 3 in", 352.48), ("walkable sq in 6 in", 207.58), ("walkable sq in 9 in", 69.53), ("ladders", 44.27),
-    ("opening rays blocked %", 98.5), ("mid rays blocked %", 83.73), ("tier-to-tier rays blocked, eaves 2.5 in (old model) %", 53.4), ("tier-to-tier rays blocked, ridge 4.5 in %", 58.07),
-    ("roofed cells in the bands", 8.88), ("raised cells in the bands", 30.17), ("asymmetric cells", 0.0),
+    ("intact houses", 11.1), ("boards with <= 2 houses %", 0.0), ("roofed cells", 26.36), ("raised cells in house plots", 10.0), ("raised cells on free earth", 14.25), ("raised cells in the city wall", 33.96),
+    ("roof share of footprints %", 52.07), ("walkable sq in 0 in", 1416.96), ("walkable sq in 3 in", 257.76), ("walkable sq in 6 in", 197.77), ("walkable sq in 9 in", 68.47), ("ladders", 41.33),
+    ("opening rays blocked %", 98.73), ("mid rays blocked %", 87.28), ("tier-to-tier rays blocked, eaves 2.5 in (old model) %", 51.29), ("tier-to-tier rays blocked, ridge 4.5 in %", 56.56),
+    ("roofed cells in the bands", 13.19), ("raised cells in the bands", 22.06), ("asymmetric cells", 0.0),
     // halfroofs plan H0 (inventory rows): solid cells outside an intact-house lot, the 3 in filler slabs, the open ground of the thinnest band, lone 3 in perches,
     // and the POCKETS shape of the gate lane (an open ground cell with a tier or a solid on two opposite sides / on three or four sides)
-    ("half-roof cells", 0.0), ("raised cells on free earth, 3 in", 13.82), ("open ground per band, min over boards", 30.0), ("single-cell 3 in perches", 1.39),
-    ("pocket cells, tall on two opposite sides", 10.83), ("pocket cells, tall on three or four sides", 6.96),
+    ("half-roof cells", 0.0), ("raised cells on free earth, 3 in", 6.24), ("open ground per band, min over boards", 33.0), ("single-cell 3 in perches", 1.13),
+    ("pocket cells, tall on two opposite sides", 12.47), ("pocket cells, tall on three or four sides", 6.08),
 ];
 
 /// Roofs census over `NML_N` town seeds (default 1000, the baseline's size; the baseline is asserted only at 1000, within +-0.5 on every number). `NML_ROOFS_OUT=<file>` also writes the report.
@@ -1157,7 +1158,8 @@ fn census_of_roofs() {
         // the bars of D-S1c first (sight plan S3, true model: house 4.5 in, tower 12 in, no eye in a house), then the pinned baseline.
         // PROVISIONAL lead numbers, pending the maintainer's D-S1 answer: mid 62-87 is the old 60-85 band shifted by the measured model change
         // (derived, +2.4 on the board it was set on); opening <= 99 and tier-to-tier <= 62 are reported bounds without derivation.
-        assert!((62.0..=87.0).contains(&got[13]), "mid rays blocked {:.2} % outside 62-87", got[13]);
+        // mid 62-88: the maintainer moved the ceiling 87 -> 88 with D-R2 = C (look plan 25.11.: more gable houses close more mid-board rays).
+        assert!((62.0..=88.0).contains(&got[13]), "mid rays blocked {:.2} % outside 62-88", got[13]);
         assert!(got[15] <= 62.0, "tier-to-tier rays blocked {:.2} % over 62", got[15]);
         assert!(got[12] <= 99.0, "opening rays blocked {:.2} % over the 99 ceiling", got[12]);
         assert!(off.is_empty(), "the town moved off the K0 baseline (re-pin ROOFS_BASELINE on purpose): {off:?}");

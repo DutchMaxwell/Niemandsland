@@ -206,6 +206,14 @@ mod tests {
             let deep = Terrain::build(&deep_plain);
             assert!(d.cells.iter().all(|c| ![RUINS, FOREST].contains(&deep.type_at(ground(c.x, c.z)))), "seed {seed}: a Deepworks board reads a town class");
         }
+        // Since D-R2 = C (look plan 25.11.: intact 90 %) a level-0 terrace yard is rare (24 of 1000 town boards, none may fall in seeds 1-60):
+        // the RUINS arm is also proven on a seed-1 house cell turned into a level-0 terrace yard.
+        let mut l = generate_themed(1, Symmetry::Point180, Theme::RuinTown);
+        let i = l.cells.iter().position(|c| c.lot_kind == LotKind::Roofed && !c.street && c.level == 0).expect("seed 1 has a house");
+        l.cells[i].lot_kind = LotKind::Terrace;
+        let (x, z) = (l.cells[i].x, l.cells[i].z);
+        assert_eq!(Terrain::build(&to_plain(&l)).type_at(ground(x, z)), RUINS, "a level-0 terrace yard cell reads ruins");
+        ruins += 1;
         assert!(ruins > 0 && forest > 0 && container > 0, "the class mapping proved nothing: {ruins} ruins, {forest} forest, {container} container cells");
     }
 
@@ -238,6 +246,7 @@ mod tests {
     // re-pinned 22.11. (roofs plan K3, 719d45f5c81b7df2 -> c35f70fddda0af2c): infill houses between the bands
     // re-pinned 22.11. (towers plan T2, c35f70fddda0af2c -> e0da3e93e0e428d0): one half-turn pair of tall towers between the bands
     // re-pinned 22.11. (sight plan S2, e0da3e93e0e428d0 -> fae627164db9c408): a house is its ridge (4.5 in) high in level_in
-    const PINNED_TOWN_42: &str = "fae627164db9c408";
+    // re-pinned 25.11. (look plan D-R2 = C, fae627164db9c408 -> 25f0f5d83c862cfe): intact 90 %, raised minimum 10 %, at least 8 houses
+    const PINNED_TOWN_42: &str = "25f0f5d83c862cfe";
     const PINNED_SEED_42: &str = "cbcd64fada596527";
 }

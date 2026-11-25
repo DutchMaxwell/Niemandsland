@@ -2,13 +2,14 @@ extends GdUnitTestSuite
 ## A byte-exact snapshot of the dressing output on the stub kit for seeds 41 and 25: the house
 ## placements (module and transform), the honesty-rule report, the merged mesh and the shadow proxy.
 ## Pure refactors of the dressing scripts must keep these hashes; a change of the look re-pins them
-## on purpose.
+## on purpose. Re-pinned 25.11. by the layout change D-R2 = C (more intact houses:
+## 114 -> 183 and 97 -> 154 placements).
 
 const SEEDS: Array[int] = [41, 25]
 ## SHA-256 of the snapshot bytes per seed; printed by the test when they differ.
 const PINNED := {
-	41: "114:5f716dae9c22d5ec051bb99ef3e51ea932d50df3f4afacf1d28b32b2f25de3c3",
-	25: "97:1fb66121eb1216a507d1715bf942e63fad9d44e679c0e7db68535ec37c0f37ed",
+	41: "183:bda393586ea7166f335197d4b8c75af5ff1d47d4e9e802d91d8c726fb173ed99",
+	25: "154:6487cdce633e5ace46dec410860f247f3df8254fb5f835fd4ddaae3882577866",
 }
 
 
