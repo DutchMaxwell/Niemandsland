@@ -1062,6 +1062,10 @@ pub const CURRENT_RULES_EPOCH: u32 = 98;
 /// `CURRENT_RULES_EPOCH`. Records stamped 98 or below replay byte-exact. Read only through
 /// `rules::Book::blast_spread_in_at`.
 pub const PENDING_EPOCH_SKIRMISH_BLAST: u32 = 99;
+/// PENDING (the 3.6 Firefight and AoF: Skirmish books, Jumping): a drop of over 3 in and up to 6 in is a jump - one die per
+/// inch at 2+, its height not counted toward the move; deeper drops stay refused. A placeholder one past the Blast one.
+/// Records stamped 99 or below replay byte-exact. Read only by `activation::check_move` and `activation::jump_dice_of`.
+pub const PENDING_EPOCH_SKIRMISH_JUMP: u32 = 100;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
