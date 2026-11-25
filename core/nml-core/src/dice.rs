@@ -632,6 +632,9 @@ pub struct ShootResult {
     pub log: Vec<String>,
     /// The skirmish Blast spread: one entry per weapon that spread, in firing order. Empty when the volley spread nothing.
     pub blast_spill: Vec<BlastSpill>,
+    /// The skirmish Blast spread in melee: each neighbour a strike's spill wounded, once, with its living models and wounds
+    /// left before (`sim::land_blast_spill`), kept until the melee's own morale test is done. Never absorbed.
+    pub melee_spilled: Vec<(usize, i64, i64)>,
     /// WAVE 3 — the family's alias/boost arm ACTUALLY lowered a save target
     /// this activation (main.gd's `ap < ap_before` guard), as read by
     /// `save_batch`; the orchestrators turn it into the rules-must-log line.
@@ -3327,7 +3330,7 @@ pub fn resolve_melee_leg(
 ) -> ShootResult {
     resolve_melee_leg_wipe(
         strikers, def, def_owner, charging, cond_ap_dice, shred_alias_dice, deadly_per_model, charge_from_in,
-        screened_melee, tray_exact, hits_first, fatigue_mutes_sixes, tally_post_regen, None, tray,
+        screened_melee, tray_exact, hits_first, fatigue_mutes_sixes, tally_post_regen, None, &[], tray,
     )
 }
 
@@ -3353,6 +3356,8 @@ pub fn resolve_melee_leg_wipe(
     // MEL-10r (`EPOCH_73_V36`) — the melee tally counts only wounds Regeneration did NOT cancel.
     tally_post_regen: bool,
     deadly_wipes: Option<&dyn Fn(&ShootResult) -> bool>,
+    // The skirmish Blast spread's neighbour models, as the volley's `blast_spread`; empty = the plain multiply.
+    blast_spread: &[i64],
     tray: &mut Tray,
 ) -> ShootResult {
     // The alias's charged leg fires on the CHARGER's strikes only — a
@@ -3641,7 +3646,16 @@ pub fn resolve_melee_leg_wipe(
             if p.sergeant_attacks > 0 {
                 hits += sixes(trig).min(p.sergeant_attacks);
             }
-            if hits > 0 && p.blast > 1 {
+            if hits > 0 && p.blast > 1 && !blast_spread.is_empty() && !(tray_exact && p.takedown) {
+                let split = blast_split(hits, p.blast, def.blast_models.unwrap_or(def.models).max(1), blast_spread);
+                out.blast_spill.push(BlastSpill { shooter: si, profile: pi, hits: split[1..].to_vec() });
+                let (kept, spread) = (split[0], split[1..].iter().sum::<i64>());
+                let line = format!("Blast({}): {hits} hit{} -> {kept} on {def_owner}, {spread} on units within reach, {} lost",
+                    p.blast, if hits == 1 { "" } else { "s" }, hits * p.blast - kept - spread);
+                out.log.push(line.clone());
+                say_rule(tray, "blast", sh.att.side, || line);
+                hits = kept;
+            } else if hits > 0 && p.blast > 1 {
                 let cap = if tray_exact && p.takedown { 1 } else { def.blast_models.unwrap_or(def.models).max(1) };
                 let boosted = hits * p.blast.clamp(1, cap);
                 if def.blast_models.is_some() {

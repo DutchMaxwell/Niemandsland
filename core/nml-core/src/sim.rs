@@ -1132,7 +1132,7 @@ fn blast_spread_units(state: &State, ti: usize, seams: Seams) -> Vec<(usize, i64
 /// The skirmish Blast spread's morale: each neighbour `land_blast_spill` wounded tests like a shot target - the same
 /// half-strength trigger and line, then the test.
 fn blast_spill_morale(
-    statics: &[UnitStatic], next: &mut State, spilled: &[(usize, i64, i64)], mod_d: f64, seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
+    statics: &[UnitStatic], next: &mut State, spilled: &[(usize, i64, i64)], over_in: Option<f64>, seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
 ) {
     for &(nj, alive_before, wounds_before) in spilled {
         let un = &statics[next.roster.profile[nj]];
@@ -1142,7 +1142,7 @@ fn blast_spill_morale(
         if let Some(line) = shooting_morale_line(next, statics, seams, un, nj, alive_before, wounds_before) {
             say_rule(tray, "morale", next.player[nj], || line);
         }
-        tray_morale(next, statics, nj, false, seams, tray, shot, Some(mod_d), None);
+        tray_morale(next, statics, nj, false, seams, tray, shot, over_in, None);
     }
 }
 
@@ -1154,7 +1154,7 @@ fn blast_spill_morale(
 #[allow(clippy::too_many_arguments)]
 fn land_blast_spill(
     statics: &[UnitStatic], next: &mut State, parts: &[(usize, Scratch, Ctx)], spill: &[crate::dice::BlastSpill],
-    neighbours: &[usize], (d, mod_d): (f64, f64), seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
+    neighbours: &[usize], (d, mod_d): (f64, f64), melee: bool, seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
 ) -> Vec<(usize, i64, i64)> {
     let mut hit: Vec<(usize, i64, i64)> = Vec::new();
     for (j, &nj) in neighbours.iter().enumerate() {
@@ -1164,7 +1164,12 @@ fn land_blast_spill(
             if h <= 0 || next.alive[nj] <= 0 {
                 continue;
             }
-            let mut p = statics[next.roster.profile[*mi]].shoot[s.profile].clone();
+            let us = &statics[next.roster.profile[*mi]];
+            let mut p = if melee { us.melee[s.profile].clone() } else { us.shoot[s.profile].clone() };
+            // A melee weapon's copy reaches the neighbour it spilled onto (range 0 would read as out of reach).
+            if melee {
+                p.range = p.range.max(1);
+            }
             (p.fixed_hits, p.blast, p.takedown, p.extra_attack_q, p.hazardous, p.sergeant_attacks) = (Some(h), 0, false, 0, false, 0);
             // Blast ignores cover, and so does every hit it spills; the skip says itself once, naming Blast.
             (p.ignores_cover, p.cover_rule) = (true, "Blast".into());
@@ -7228,7 +7233,9 @@ fn strike_phase(
         combined_alive(&scratch, ti, seams) == 0
     };
     let wipes: Option<&dyn Fn(&ShootResult) -> bool> = rule_on(seams.rules_epoch, EPOCH_73_V36).then_some(&deadly_wipes);
-    let r = crate::dice::resolve_melee_leg_wipe(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), charge_from_in, rule_on(seams.rules_epoch, EPOCH_22_SCREENED_MELEE), seams.tray_exact, rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36), rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36), rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36), wipes, tray);
+    let spread = blast_spread_units(next, ti, seams);
+    let spread_models: Vec<i64> = spread.iter().map(|n| n.1).collect();
+    let mut r = crate::dice::resolve_melee_leg_wipe(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING), charge_from_in, rule_on(seams.rules_epoch, EPOCH_22_SCREENED_MELEE), seams.tray_exact, rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36), rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36), rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36), wipes, &spread_models, tray);
     // WAVE 3, rules-must-log — the melee leg's Boost shape fired (no distance
     // here; the gated aliases never reach a melee save batch, exactly the
     // table's own `dist_in: -1.0` read, main.gd:6119).
@@ -7267,6 +7274,7 @@ fn strike_phase(
     // all-ignored roll still reads as wounding and a zero-wound exchange not.
     let def_incoming = r.caused > 0 || gs_caused > 0;
     let raw_deadly = r.deadly_tally;
+    let spill = std::mem::take(&mut r.blast_spill);
     let w = shot.absorb(r);
     let members: Vec<usize> = parts.iter().map(|(mi, _, _)| *mi).collect();
     let hazard_self = land_hazardous_self(statics, next, &members, seams, tray, shot);
@@ -7420,6 +7428,14 @@ fn strike_phase(
         let before = chain_snapshot(next, si, tray);
         land_wounds_with(next, si, landed, seams.tray_exact);
         land_chain_report(statics, next, tray, si, before);
+    }
+    // The skirmish Blast spread (ruling D12): the neighbours are no part of this melee - their wounds never join its tally,
+    // and each one wounded tests morale after the melee's own test (`melee_spilled`).
+    let neighbours: Vec<usize> = spread.iter().map(|n| n.0).collect();
+    for hit in land_blast_spill(statics, next, &parts, &spill, &neighbours, (0.0, 0.0), true, seams, tray, shot) {
+        if shot.melee_spilled.iter().all(|m| m.0 != hit.0) {
+            shot.melee_spilled.push(hit);
+        }
     }
     let att_wounded = att_incoming > 0;
     spend_exchange_wounded(next, si, ti, true, att_wounded, def_incoming, seams.rules_epoch); // main.gd:6152, per strike phase
@@ -12781,7 +12797,7 @@ fn resolve_with(
                             let inline_said = ((inline_lines || td_marked) && deadly_dealt + takedown_dealt > 0).then_some(InlineSaid { said: ia.said, pool: w });
                             land_chain_report_said(statics, &next, tray, rep, chain_before, deadly_dealt + takedown_dealt, inline_said.as_ref());
                             let neighbours: Vec<usize> = spread.iter().map(|&(u, _)| u).collect();
-                            let spilled = land_blast_spill(statics, &mut next, &parts, &spill, &neighbours, (g.d, g.mod_d), seams, tray, shot);
+                            let spilled = land_blast_spill(statics, &mut next, &parts, &spill, &neighbours, (g.d, g.mod_d), false, seams, tray, shot);
                             // rules-wave3-growthmark (epoch 6) — the
                             // ignore-wound marker AFTER the landing.
                             if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
@@ -12832,7 +12848,7 @@ fn resolve_with(
                                 tray_morale(&mut next, statics, g.ti, false, seams, tray, shot, Some(g.mod_d), None);
                             }
                             // The skirmish Blast spread: every neighbour that took wounds tests morale like the target, in order.
-                            blast_spill_morale(statics, &mut next, &spilled, g.mod_d, seams, tray, shot);
+                            blast_spill_morale(statics, &mut next, &spilled, Some(g.mod_d), seams, tray, shot);
                             // the table says the Mark's consumption after the volley's morale test (state spent above, ahead of it)
                             say_marks_consumed(statics, &next, tray, shot);
                         }
@@ -12966,6 +12982,9 @@ fn resolve_with(
                             land_chain_report(statics, &next, tray, li, routed);
                         }
                     }
+                    // Ruling D12: a bystander the melee's Blast wounded tests at the end of the activation like a shot target.
+                    let spilled = std::mem::take(&mut shot.melee_spilled);
+                    blast_spill_morale(statics, &mut next, &spilled, None, seams, tray, shot);
                     // Coverage wave — growth markers (Defensive Frenzy):
                     // main.gd:8137-8140 credits the WIPING side's own kill
                     // marker, win-by-wipe only — a mutual wipe or a fight
