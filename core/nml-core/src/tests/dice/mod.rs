@@ -431,6 +431,7 @@ mod morale_rating;
 mod rung_i_dice;
 mod counter_param;
 mod shooting_order;
+mod skirmish_e9_blast;
 mod precision_base;
 mod shot_modifier;
 mod shot_modifier_flat;
