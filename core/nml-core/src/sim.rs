@@ -1166,6 +1166,8 @@ fn land_blast_spill(
             }
             let mut p = statics[next.roster.profile[*mi]].shoot[s.profile].clone();
             (p.fixed_hits, p.blast, p.takedown, p.extra_attack_q, p.hazardous, p.sergeant_attacks) = (Some(h), 0, false, 0, false, 0);
+            // Blast ignores cover, and so does every hit it spills; the skip says itself once, naming Blast.
+            (p.ignores_cover, p.cover_rule) = (true, "Blast".into());
             let un = &statics[next.roster.profile[nj]];
             let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(un, next, nj), statics, next, nj, false, seams.rules_epoch), statics, next, nj, seams), seams.rules_epoch);
             stamp_blast_models(&mut def, next, nj, seams);
