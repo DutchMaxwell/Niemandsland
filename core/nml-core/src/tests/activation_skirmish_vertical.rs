@@ -29,7 +29,7 @@ fn drop_off(h: f64, sys: &str, rules: &[&str], epoch: u32) -> (Check, Vec<(usize
     let (st, statics, t) = ledge(h, sys, rules);
     let seams = Seams { rules_epoch: epoch, tray_exact: true, ..Seams::default() };
     let drop = Drop { mode: ADVANCE, placed: vec![[-INCHES_TO_METERS, 0.0, 1.5 * INCHES_TO_METERS]], ..Default::default() };
-    (check_move(&statics, &st, 0, seams, &t, &drop, true), jump_dice_of(&st, 0, seams, &t, &drop))
+    (check_move(&statics, &st, 0, seams, &t, &drop, true), jump_dice_of(&st, 0, seams, &t, &drop).into_iter().map(|j| (j.0, j.1, j.2)).collect())
 }
 
 fn cliff() -> Check {
@@ -113,4 +113,48 @@ fn a_placed_jump_rolls_its_dice_and_a_miss_falls() {
         let shot = land_jump(sys, epoch, vec![2, 1, 4, 5]);
         assert!(jump(&shot).is_empty() && shot.falls.is_empty(), "{sys} at {epoch}: {:?}", shot.rolls);
     }
+}
+
+/// The ledge with another unit's single model standing at `at_in` (x, z) on the ground, radius `r_in`.
+fn ledge_with_blocker(at_in: [f64; 2], r_in: f64) -> (State, Vec<UnitStatic>, Terrain) {
+    let (mut st, statics, t) = ledge(4.0, "gff", &[]);
+    st.positions[2] = vec![[at_in[0] * INCHES_TO_METERS, 0.0, at_in[1] * INCHES_TO_METERS]];
+    Rc::make_mut(&mut st.radii)[2] = vec![r_in * INCHES_TO_METERS];
+    st.alive[2] = 1;
+    for u in [1, 3] {
+        st.alive[u] = 0;
+    }
+    (st, statics, t)
+}
+
+fn foot_of(st: &State, statics: &[UnitStatic], t: &Terrain) -> (Check, Vec<[f64; 3]>) {
+    let seams = Seams { rules_epoch: PENDING_EPOCH_SKIRMISH_JUMP, tray_exact: true, ..Seams::default() };
+    let drop = Drop { mode: ADVANCE, placed: vec![[-INCHES_TO_METERS, 0.0, 1.5 * INCHES_TO_METERS]], ..Default::default() };
+    (check_move(statics, st, 0, seams, t, &drop, true), jump_dice_of(st, 0, seams, t, &drop).into_iter().map(|j| j.3).collect())
+}
+
+/// Ruling D13: a failed jump lands at the foot of the drop on the model's own path - its base just clear of the edge, on
+/// the ground; a model standing there pushes the foot further out along the path; with no room within 2 in the jump is
+/// refused before any die is rolled.
+#[test]
+fn a_jumps_foot_is_the_first_free_spot_below_the_edge() {
+    let r = crate::sim::tests::four_unit_line().radii[0][0] / INCHES_TO_METERS;
+    let (st, statics, t) = ledge_with_blocker([30.0, 30.0], 0.5);
+    let (c, feet) = foot_of(&st, &statics, &t);
+    assert!(ok(&c), "{c:?}");
+    assert_eq!(feet.len(), 1);
+    assert!((feet[0][0] / INCHES_TO_METERS + r + 0.01).abs() < 1e-6 && feet[0][1] == 0.0, "at the foot, on the ground: {feet:?}");
+    // a 0.5 in model standing 1 in to the side, just past the edge: the first spots touch it, so the foot moves out along
+    // the path until the bases clear, still within 2 in
+    let (st, statics, t) = ledge_with_blocker([-0.5, 2.5], 0.5);
+    let (c, feet) = foot_of(&st, &statics, &t);
+    assert!(ok(&c), "{c:?}");
+    let x = feet[0][0] / INCHES_TO_METERS;
+    assert!(x < -(r + 0.01) - 1e-6 && x >= -2.0 - 1e-9, "moved out, within 2 in: {feet:?}");
+    assert!((x + 0.5).hypot(1.5 - 2.5) >= r + 0.5 - 1e-6, "clear of the blocker: {feet:?}");
+    // a 3 in wide model covering the whole 2 in: no room, refused before any roll
+    let (st, statics, t) = ledge_with_blocker([-1.0, 1.5], 3.0);
+    let (c, feet) = foot_of(&st, &statics, &t);
+    assert_eq!(c, Check::Refused { reason: "Squad: model 1 has no room to land at the foot of the drop".into() });
+    assert!(feet.is_empty());
 }

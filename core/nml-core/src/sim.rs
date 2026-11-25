@@ -11806,7 +11806,7 @@ fn resolve_with(
         // Jumping (3.6 skirmish p.15): each jumping model rolls one die per inch at 2+; any miss and that model falls.
         if let Some((tray, shot)) = dice.as_mut() {
             let name = statics[pi_s].name.clone();
-            for (m, n, h) in jumps {
+            for (m, n, h, _) in jumps {
                 tray.owner_next(Some(si));
                 let faces = tray.roll(n as usize);
                 let lands = crate::mv::jump::jump_passes(&faces);

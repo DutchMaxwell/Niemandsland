@@ -252,9 +252,9 @@ pub fn placed_chain_len(state: &State, si: usize) -> usize {
 /// 3 in is regular movement where the book prints drops (`drops`: gff / aofs, BG36 p.15) and counts its height (D4), every
 /// other drop is refused. A leg through a grid vertex, where the segment test sees no edge, counts as the cliff it grazed
 /// when the tier level changes on it with no ladder. A flat board has no edges and no levels: `Some(0.0)`. With `jumps`
-/// (the skirmish Jumping rule) a drop over 3 in and up to 6 in is a jump: its height is listed in the second field and not
-/// counted in the first.
-fn cliff_drop_in(terrain: &Terrain, path: &[[f64; 2]], drops: bool, jumps: bool) -> Option<(f64, Vec<f64>)> {
+/// (the skirmish Jumping rule) a drop over 3 in and up to 6 in is a jump: it is listed in the second field and its height
+/// is not counted in the first.
+fn cliff_drop_in(terrain: &Terrain, path: &[[f64; 2]], drops: bool, jumps: bool) -> Option<(f64, Vec<Jump>)> {
     let at = |p: [f64; 2]| [p[0] / terrain.in2m(), p[1] / terrain.in2m()];
     let (mut dropped, mut jumped) = (0.0, Vec::new());
     for w in path.windows(2) {
@@ -264,12 +264,13 @@ fn cliff_drop_in(terrain: &Terrain, path: &[[f64; 2]], drops: bool, jumps: bool)
         let (la, lb) = (terrain.tier_in_at(a[0], a[1]), terrain.tier_in_at(b[0], b[1]));
         let grazed = cliffs.is_empty() && la != lb && !hits.iter().any(|c| c.kind == TierKind::Ladder);
         // (rise of the step, down?) per cliff the leg takes
-        let steps: Vec<(f64, bool)> = if grazed { vec![((la - lb).abs(), la > lb)] } else { cliffs.iter().map(|c| (c.dy_in, c.down)).collect() };
-        for (dy, down) in steps {
+        let steps: Vec<(f64, bool, f64)> = if grazed { vec![((la - lb).abs(), la > lb, 0.5)] } else { cliffs.iter().map(|c| (c.dy_in, c.down, c.t)).collect() };
+        for (dy, down, t) in steps {
             if drops && down && dy <= LEDGE_CLIMB_MAX_IN {
                 dropped += dy;
             } else if jumps && down && matches!(crate::mv::jump::drop_kind(dy), crate::mv::jump::JumpKind::Jump { .. }) {
-                jumped.push(dy);
+                let (d, len) = ([w[1][0] - w[0][0], w[1][1] - w[0][1]], (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]));
+                jumped.push(Jump { dy, at: [w[0][0] + d[0] * t, w[0][1] + d[1] * t], dir: [d[0] / len, d[1] / len] });
             } else {
                 return None;
             }
@@ -278,10 +279,32 @@ fn cliff_drop_in(terrain: &Terrain, path: &[[f64; 2]], drops: bool, jumps: bool)
     Some((dropped, jumped))
 }
 
-/// The dice one model rolls for the jumps `drops` (inches each): one per inch begun, halved rounding up with Strider.
-fn jump_dice_for(state: &State, si: usize, drops: &[f64]) -> u32 {
+/// One jump on a walked path: its height (in), where the path crosses the edge and the path's direction there (world XZ).
+#[derive(Debug, Clone, Copy)]
+struct Jump { dy: f64, at: [f64; 2], dir: [f64; 2] }
+
+/// Ruling D13: where model `m` of unit `si` lands when its jump at `j` fails - the first legal spot on its own path past the
+/// edge, from where its base clears the edge out to 2 in from it: on the low side, not solid, overlapping no other model
+/// (its unit's others where `placed` puts them, every other unit where it stands). `None`: no room, the jump is refused.
+fn jump_foot(state: &State, si: usize, m: usize, terrain: &Terrain, placed: &[[f64; 3]], j: &Jump) -> Option<[f64; 3]> {
+    let (r, i2m) = (state.radii[si][m], terrain.in2m());
+    let high = terrain.tier_in_at(j.at[0] / i2m - j.dir[0] * 0.01, j.at[1] / i2m - j.dir[1] * 0.01);
+    let clear = |p: [f64; 2], q: [f64; 3], rq: f64| (p[0] - q[0]).hypot(p[1] - q[2]) >= r + rq - 1e-6;
+    (0..=40).map(|k| r + 0.01 * i2m + k as f64 * 0.05 * i2m).take_while(|&d| d <= 2.0 * i2m + 1e-9).find_map(|d| {
+        let p = [j.at[0] + j.dir[0] * d, j.at[1] + j.dir[1] * d];
+        let low = terrain.tier_in_at(p[0] / i2m, p[1] / i2m);
+        let free = !terrain.solid_at(p[0] / i2m, p[1] / i2m) && low < high - 0.01
+            && placed.iter().enumerate().filter(|&(k, _)| k != m).all(|(k, q)| clear(p, *q, state.radii[si].get(k).copied().unwrap_or(r)))
+            && (0..state.positions.len()).filter(|&u| u != si && state.alive[u] > 0)
+                .all(|u| state.positions[u].iter().zip(state.radii[u].iter()).all(|(q, &rq)| clear(p, *q, rq)));
+        free.then_some([p[0], low * i2m, p[1]])
+    })
+}
+
+/// The dice one model rolls for its jumps: one per inch begun, halved rounding up with Strider.
+fn jump_dice_for(state: &State, si: usize, jumps: &[Jump]) -> u32 {
     let strider = state.profile(si).special_rules.iter().any(|r| r == "Strider");
-    drops.iter().map(|&dy| match crate::mv::jump::drop_kind(dy) {
+    jumps.iter().map(|j| match crate::mv::jump::drop_kind(j.dy) {
         crate::mv::jump::JumpKind::Jump { dice } => crate::mv::jump::jump_dice(dice, false, strider),
         _ => 0,
     }).sum()
@@ -293,9 +316,9 @@ fn jumps_on(state: &State, si: usize, seams: Seams) -> bool {
 }
 
 /// The jumps a drop that `check_move` accepts asks of unit `si`: per host model (`state.positions` order) that jumps, its
-/// dice and the inches it jumps down (a fall's height, step 17). Flying never jumps; empty below the Jumping epoch and in
-/// every book without drops.
-pub fn jump_dice_of(state: &State, si: usize, seams: Seams, terrain: &Terrain, drop: &Drop) -> Vec<(usize, u32, f64)> {
+/// dice, the inches it jumps down (a fall's height, step 17) and where it lands if it falls (`jump_foot`, ruling D13; the
+/// first jump's foot). Flying never jumps; empty below the Jumping epoch and in every book without drops.
+pub fn jump_dice_of(state: &State, si: usize, seams: Seams, terrain: &Terrain, drop: &Drop) -> Vec<(usize, u32, f64, [f64; 3])> {
     if !jumps_on(state, si, seams) || state.profile(si).special_rules.iter().any(|r| r == "Flying") {
         return Vec::new();
     }
@@ -303,7 +326,8 @@ pub fn jump_dice_of(state: &State, si: usize, seams: Seams, terrain: &Terrain, d
         let path = walked_path([a[0], a[2]], [b[0], b[2]], drop.trails.get(i).filter(|t| t.len() >= 2));
         let jumps = cliff_drop_in(terrain, &path, true, true)?.1;
         let dice = jump_dice_for(state, si, &jumps);
-        (dice > 0).then(|| (i, dice, jumps.iter().sum()))
+        let foot = jump_foot(state, si, i, terrain, &drop.placed, jumps.first()?)?;
+        (dice > 0).then(|| (i, dice, jumps.iter().map(|j| j.dy).sum(), foot))
     }).collect()
 }
 
@@ -400,10 +424,13 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
             Some(Some((d, jumps))) => {
                 // Jumping (3.6 skirmish p.15): one line per jumping model; the jump's height is not counted toward the move.
                 let dice = jump_dice_for(state, si, &jumps);
+                if dice > 0 && jump_foot(state, si, i, terrain, &drop.placed, &jumps[0]).is_none() {
+                    return Check::Refused { reason: format!("{}: model {} has no room to land at the foot of the drop", statics[state.roster.profile[si]].name, i + 1) };
+                }
                 if dice > 0 {
                     jump_lines.push(LogLine { rule: "jump", category: Category::Movement, side: state.player[si], detail: None,
                         text: format!("{}: model {} jumps down {:.0} in - {dice} dice at 2+, the jump does not count toward the move",
-                            statics[state.roster.profile[si]].name, i + 1, jumps.iter().sum::<f64>()) });
+                            statics[state.roster.profile[si]].name, i + 1, jumps.iter().map(|j| j.dy).sum::<f64>()) });
                 }
                 d
             }
