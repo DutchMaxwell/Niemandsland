@@ -891,6 +891,8 @@ func _ready() -> void:
 	# table-dependent fire/war-sound layers.)
 	atmosphere_controller.apply_saved_lighting()
 	lighting_panel.set_atmosphere_controller(atmosphere_controller)
+	if opr_army_manager != null:   # a skirmish system starts at Night unless the player picked a mood himself (look review 4)
+		opr_army_manager.table_system_changed.connect(atmosphere_controller.apply_default_for_system)
 
 	# Table biomes: dress the game table with the accepted reference biome look. Display only; it
 	# rebuilds itself on biome / size / load / start-of-play / setup layout changes.
@@ -16970,7 +16972,7 @@ func apply_table_theme(theme_id: String) -> bool:
 		"biome_get": func() -> String: return table.biome,
 		"biome_set": func(b: String) -> void: table.set_biome(b),
 		"mood_get": func() -> String: return str(atmosphere_controller.get_current_atmosphere()),
-		"mood_set": func(m: String) -> void: atmosphere_controller.apply_atmosphere(m),
+		"mood_set": func(m: String) -> void: atmosphere_controller.choose_atmosphere(m),
 		"relayout": _redress_table_layout,
 		"paths_get": func() -> Array: return TablePaths.of(table).paths,   # the worn paths (D14)
 		"paths_set": func(p: Array) -> void: TablePaths.of(table).set_paths(p),
