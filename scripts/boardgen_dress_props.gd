@@ -19,6 +19,7 @@ const DOOR_SIDE_IN := 0.5
 const DOOR_OUT_IN := 1.0
 const LAMP_RADIUS_IN := 0.1  # the post's / lantern's half width (the 0.2 in envelope)
 const MAX_SHIFT_IN := 2.0  # a lamp moves at most this far along the face, else it is dropped
+const BRACKET_GLASS_OUT_IN := 0.205  # the bracket lantern's glass centre out from the wall face
 
 
 func plan(context: DressContext) -> Array[DressPlacement]:
@@ -40,6 +41,26 @@ func plan(context: DressContext) -> Array[DressPlacement]:
 					DressPlacement.new("dr_statue_plinth", _at_landmark(context, lm, yaw), "props")
 				)
 	return out
+
+
+## Where each lantern point's lamp carries its glass (board inches, xz): {at: Vector2, or null when
+## the lamp is dropped}. BoardgenTownDressing puts the lantern's lights there.
+func glass(context: DressContext) -> Dictionary:
+	var out := {}
+	var doors := door_zones(context, BoardgenDressHouses.new().plan(context))
+	for l: Dictionary in BoardgenTownDressing.lanterns(context.layout):
+		var lamp := place_lamp(context, l["at"], doors)
+		out[l["at"]] = null if lamp == null else glass_of(lamp)
+	return out
+
+
+## The xz glass centre of a lamp placement, board inches.
+static func glass_of(lamp: DressPlacement) -> Vector2:
+	var at := Vector2(lamp.transform.origin.x, lamp.transform.origin.z) / Units.INCHES_TO_METERS
+	if lamp.module == "dr_lamp_bracket":
+		var o := lamp.transform.basis.z
+		at += Vector2(o.x, o.z).normalized() * BRACKET_GLASS_OUT_IN
+	return at
 
 
 ## The lamp for lantern point `at` clear of every door zone: as placed when it is clear, else moved

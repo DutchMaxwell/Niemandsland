@@ -98,6 +98,18 @@ func classes() -> Dictionary:
 	return out
 
 
+## Where the dressed lamps carry their glass ({lantern point: Vector2 or null = dropped}, board
+## inches), so the lantern lights follow a lamp the props planner moved; {} without dressed props.
+func lamp_glass(layout: Dictionary) -> Dictionary:
+	var script: Script = _classes.get("props")
+	if script == null:
+		return {}
+	var planner: Object = script.new()
+	if not planner.has_method("glass"):
+		return {}
+	return planner.call("glass", DressContext.new(layout, kit, story, int(layout.get("seed", 0))))
+
+
 ## The dressed board: every usable planner's placements, merged into DressMesh (no shadows of its
 ## own) and DressShadow (shadows only), then each planner's own extras.
 func build(layout: Dictionary) -> void:
