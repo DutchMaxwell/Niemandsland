@@ -81,7 +81,8 @@ func test_every_lantern_light_stands_at_its_lamp_glass() -> void:
 		add_child(table)
 		var board := BoardgenGreybox.attach(table, layout, dress)
 		var lights := board.find_children("Lantern*", "Light3D", true, false)
-		assert_int(lights.size()).is_equal(2 * mini(kept.size(), BoardgenTownDressing.MAX_LIGHTS))
+		# one spot per lamp (look review 2: no warm omni fill beside it)
+		assert_int(lights.size()).is_equal(mini(kept.size(), BoardgenTownDressing.MAX_LIGHTS))
 		for light: Light3D in lights:
 			var xz := Vector2(light.position.x, light.position.z) / IN
 			(

@@ -427,6 +427,8 @@ void fragment() {
 			alb = mix(alb, palette[0].rgb * GROUND_EARTH * 0.75, gone);
 			rel = mix(rel, 0.15, gone);
 			alb = mix(alb, vec3(0.07, 0.09, 0.045), 0.7 * ne * (1.0 - sett.y) * (1.0 - gone));
+			float trod = smoothstep(0.25, 0.85, ne) * (1.0 - gone);   // (look review 2) where the street meets earth: a broken band of trodden mud, darker in the joints (no light needed)
+			alb = mix(alb, grit_mud_colour() * mix(0.7, 0.95, vnoise(xz * 2.7 + seed)), 0.6 * trod * mix(1.0, 0.6, sett.y));
 			emis += grit_fill(alb);
 		} else if (k == 0) {   // earth: packed, with pebbles, weeds and broken stones
 			alb = tint * GROUND_EARTH * mix(0.78, 1.15, fbm(xz * 1.6 + seed));   // 0.32 (was 1.0): the packed earth of the deployment bands sits below the models too (readability gate)
