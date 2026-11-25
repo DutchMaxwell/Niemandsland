@@ -1,6 +1,6 @@
 //! The coherency chain per skirmish book: Firefight 9 in (3.6 book p.7), AoF: Skirmish 6 in, read through
-//! `Book::chain_in_at` from `PENDING_EPOCH_FIREFIGHT_CHAIN` on. One straight line of 32 mm bases, centres 2 in apart.
-use crate::acts::PENDING_EPOCH_FIREFIGHT_CHAIN as E;
+//! `Book::chain_in_at` from `EPOCH_98_FIREFIGHT_CHAIN` on. One straight line of 32 mm bases, centres 2 in apart.
+use crate::acts::EPOCH_98_FIREFIGHT_CHAIN as E;
 use crate::mv::gate::{coherent_placement, GateFlags};
 
 /// 32 mm round base, radius in inches.
