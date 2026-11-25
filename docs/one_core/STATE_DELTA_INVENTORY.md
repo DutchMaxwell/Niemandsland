@@ -71,6 +71,7 @@ same commit as the struct change.
 | `radii` | battle_sim.gd:2098 | no | no | no (capture input) |
 | `kits` | battle_sim.gd:2099 | no | no | no (capture input) |
 | `kit_names` | battle_sim.gd:2040 | no | no | no (capture input) |
+| `cmd_bearer` | not yet (AoF: Skirmish command groups) | no | no | yes - the table must carry it each call (CMD-ROUNDTRIP, table side) |
 | `mods` | battle_sim.gd:2119 | no | no | no (capture input) |
 | `mods_base` | battle_sim.gd:2122 | no | no | no (capture input) |
 | `attached` | battle_sim.gd:2100 | no | no | no (structural input) |

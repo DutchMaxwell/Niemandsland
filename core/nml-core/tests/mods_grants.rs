@@ -83,6 +83,7 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
         radii: Rc::new(vec![vec![IN2M]; 2]),
         kits: Vec::new(),
         kit_names: Vec::new(),
+        cmd_bearer: Vec::new(),
         mods: vec![Mods::default(); 2],
         mods_base: (0..2).map(|_| Rc::new(Mods::default())).collect(),
         attached: Rc::new(vec![vec![], vec![]]),
