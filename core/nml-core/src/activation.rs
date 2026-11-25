@@ -251,10 +251,12 @@ pub fn placed_chain_len(state: &State, si: usize) -> usize {
 /// `None` when it crosses a cliff it may not. A tier edge without a ladder is a sheer face: never climbed; a DROP of up to
 /// 3 in is regular movement where the book prints drops (`drops`: gff / aofs, BG36 p.15) and counts its height (D4), every
 /// other drop is refused. A leg through a grid vertex, where the segment test sees no edge, counts as the cliff it grazed
-/// when the tier level changes on it with no ladder. A flat board has no edges and no levels: `Some(0.0)`.
-fn cliff_drop_in(terrain: &Terrain, path: &[[f64; 2]], drops: bool) -> Option<f64> {
+/// when the tier level changes on it with no ladder. A flat board has no edges and no levels: `Some(0.0)`. With `jumps`
+/// (the skirmish Jumping rule) a drop over 3 in and up to 6 in is a jump: its height is listed in the second field and not
+/// counted in the first.
+fn cliff_drop_in(terrain: &Terrain, path: &[[f64; 2]], drops: bool, jumps: bool) -> Option<(f64, Vec<f64>)> {
     let at = |p: [f64; 2]| [p[0] / terrain.in2m(), p[1] / terrain.in2m()];
-    let mut dropped = 0.0;
+    let (mut dropped, mut jumped) = (0.0, Vec::new());
     for w in path.windows(2) {
         let (a, b) = (at(w[0]), at(w[1]));
         let hits = tier_crossings(a, b, terrain.tier_edges());
@@ -264,13 +266,45 @@ fn cliff_drop_in(terrain: &Terrain, path: &[[f64; 2]], drops: bool) -> Option<f6
         // (rise of the step, down?) per cliff the leg takes
         let steps: Vec<(f64, bool)> = if grazed { vec![((la - lb).abs(), la > lb)] } else { cliffs.iter().map(|c| (c.dy_in, c.down)).collect() };
         for (dy, down) in steps {
-            if !(drops && down && dy <= LEDGE_CLIMB_MAX_IN) {
+            if drops && down && dy <= LEDGE_CLIMB_MAX_IN {
+                dropped += dy;
+            } else if jumps && down && matches!(crate::mv::jump::drop_kind(dy), crate::mv::jump::JumpKind::Jump { .. }) {
+                jumped.push(dy);
+            } else {
                 return None;
             }
-            dropped += dy;
         }
     }
-    Some(dropped)
+    Some((dropped, jumped))
+}
+
+/// The dice one model rolls for the jumps `drops` (inches each): one per inch begun, halved rounding up with Strider.
+fn jump_dice_for(state: &State, si: usize, drops: &[f64]) -> u32 {
+    let strider = state.profile(si).special_rules.iter().any(|r| r == "Strider");
+    drops.iter().map(|&dy| match crate::mv::jump::drop_kind(dy) {
+        crate::mv::jump::JumpKind::Jump { dice } => crate::mv::jump::jump_dice(dice, false, strider),
+        _ => 0,
+    }).sum()
+}
+
+/// Whether the skirmish Jumping rule holds for unit `si` at this epoch (the books that print drops).
+fn jumps_on(state: &State, si: usize, seams: Seams) -> bool {
+    state.book(si).vertical_moves && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SKIRMISH_JUMP)
+}
+
+/// The jumps a drop that `check_move` accepts asks of unit `si`: per host model (`state.positions` order) that jumps, its
+/// dice and the inches it jumps down (a fall's height, step 17). Flying never jumps; empty below the Jumping epoch and in
+/// every book without drops.
+pub fn jump_dice_of(state: &State, si: usize, seams: Seams, terrain: &Terrain, drop: &Drop) -> Vec<(usize, u32, f64)> {
+    if !jumps_on(state, si, seams) || state.profile(si).special_rules.iter().any(|r| r == "Flying") {
+        return Vec::new();
+    }
+    state.positions[si].iter().zip(&drop.placed).enumerate().filter_map(|(i, (a, b))| {
+        let path = walked_path([a[0], a[2]], [b[0], b[2]], drop.trails.get(i).filter(|t| t.len() >= 2));
+        let jumps = cliff_drop_in(terrain, &path, true, true)?.1;
+        let dice = jump_dice_for(state, si, &jumps);
+        (dice > 0).then(|| (i, dice, jumps.iter().sum()))
+    }).collect()
 }
 
 /// L-RF1 (GF BG 3.6 p.11-12: a building is Impassable): does a walked path (world XZ metres) touch a solid tier cell? Sampled
@@ -338,6 +372,7 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
     let flying = state.profile(si).special_rules.iter().any(|r| r == "Flying");
     let ledges = crate::mv::step::world_ledges_of(terrain, flying, seams.rules_epoch);
     let (mut x, mut dropped) = (0.0f64, 0.0f64);
+    let mut jump_lines: Vec<LogLine> = Vec::new();
     // Teleport / Ethereal (army book): once per activation, before attacking, the unit is PLACED within the rule's reach of
     // where it stands - a placement, not a walk. The table pays it before the core call (`teleport_used`), so a trail ends
     // where the walk ended and the hop on to the placed model is held to the reach, never to the move allowance.
@@ -360,9 +395,18 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
         }
         // Heightfield plan steps 13 / 13b (`EPOCH_94_PARITY_BATCH`): the AI planner never walks a cliff, a placed move is stopped
         // the same way unless it is a drop the book allows, which pays its height. A Flying unit ignores the edges.
-        let drop_in = match (rule_on(seams.rules_epoch, EPOCH_94_PARITY_BATCH) && !flying).then(|| cliff_drop_in(terrain, &path, state.book(si).vertical_moves)) {
+        let drop_in = match (rule_on(seams.rules_epoch, EPOCH_94_PARITY_BATCH) && !flying).then(|| cliff_drop_in(terrain, &path, state.book(si).vertical_moves, jumps_on(state, si, seams))) {
             Some(None) => return Check::Refused { reason: format!("{}: cliff: no ladder here", statics[state.roster.profile[si]].name) },
-            Some(Some(d)) => d,
+            Some(Some((d, jumps))) => {
+                // Jumping (3.6 skirmish p.15): one line per jumping model; the jump's height is not counted toward the move.
+                let dice = jump_dice_for(state, si, &jumps);
+                if dice > 0 {
+                    jump_lines.push(LogLine { rule: "jump", category: Category::Movement, side: state.player[si], detail: None,
+                        text: format!("{}: model {} jumps down {:.0} in - {dice} dice at 2+, the jump does not count toward the move",
+                            statics[state.roster.profile[si]].name, i + 1, jumps.iter().sum::<f64>()) });
+                }
+                d
+            }
             None => 0.0,
         };
         dropped = dropped.max(drop_in);
@@ -378,7 +422,7 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
     let drop_line = (dropped > 0.0).then(|| LogLine { rule: "drop", category: Category::Movement, side: state.player[si],
         text: format!("{}: Drop {dropped:.0} in - a drop is regular movement and counts its height", statics[state.roster.profile[si]].name), detail: None });
     if x <= y + 0.01 {
-        return Check::Ok { lines: drop_line.into_iter().collect() };
+        return Check::Ok { lines: drop_line.into_iter().chain(jump_lines).collect() };
     }
     // The Difficult cap names itself: "the Rush allowance is 6.0"" alone read as a wrong Rush band to the player.
     let why = if capped { " in Difficult terrain" } else { "" };
@@ -387,7 +431,7 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
         return Check::Refused { reason: text };
     }
     let detail = if capped { Some("Difficult terrain".to_string()) } else { (!a.widened_by.is_empty()).then(|| a.widened_by.join(", ")) };
-    Check::Ok { lines: drop_line.into_iter().chain([LogLine { rule: "move_overrun", category: Category::Movement, side: state.player[si], text, detail }]).collect() }
+    Check::Ok { lines: drop_line.into_iter().chain(jump_lines).chain([LogLine { rule: "move_overrun", category: Category::Movement, side: state.player[si], text, detail }]).collect() }
 }
 
 /// P4.0-5: the one choice the step API offers so far — the Takedown model pick (`sim::takedown_pick`'s
@@ -4308,3 +4352,7 @@ mod tests {
         assert_eq!(go(&forest_bar_board(), RUSH, east(0.05), vec![]), OK, "a model that stayed crosses nothing");
     }
 }
+
+#[cfg(test)]
+#[path = "tests/activation_skirmish_vertical.rs"]
+mod skirmish_vertical_tests;
