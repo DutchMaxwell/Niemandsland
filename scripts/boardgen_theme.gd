@@ -37,14 +37,15 @@ const TOWN_SETS_MAX_BYTES := 16000000
 ## The mean linear albedo of each set (measured on the staged masters): the shader multiplies its palette tone by texture / mean, so a tint survives and only the detail changes.
 const TOWN_SET_MEANS := {"stone": Vector3(0.377, 0.244, 0.137), "plaster": Vector3(0.4065, 0.3669, 0.3513), "timber": Vector3(0.1207, 0.0743, 0.0443), "earth": Vector3(0.1747, 0.1326, 0.0824)}
 const DEEPWORKS_DRESSING := ["Props", "Landmarks", "Debris", "Sumps", "Rails"]
-## The air of a board: the Tiefwerk ground mist and steam. The town has none yet (its dusk mist is a later look step).
+## The air of a board: the Tiefwerk ground mist and steam; the town's ground fog with its lamp pools (BoardgenGroundFog).
 const DEEPWORKS_ATMOSPHERE := ["Mist", "Steam"]
+const TOWN_ATMOSPHERE := ["GroundFog"]
 
 
 ## The theme of `layout`: {id, shader, kinds, palette, dressing}. Unknown ids read as Deepworks (the core names only known ones).
 static func of(layout: Dictionary) -> Dictionary:
 	if str(layout.get("theme", DEEPWORKS)) == RUIN_TOWN:
 		return {"id": RUIN_TOWN, "shader": preload("res://shaders/ruintown_board.gdshader"), "kinds": TOWN_KINDS,
-			"palette": TOWN_PALETTE, "dressing": [], "atmosphere": []}
+			"palette": TOWN_PALETTE, "dressing": [], "atmosphere": TOWN_ATMOSPHERE}
 	return {"id": DEEPWORKS, "shader": preload("res://shaders/tiefwerk_board.gdshader"), "kinds": DEEPWORKS_KINDS,
 		"palette": [], "dressing": DEEPWORKS_DRESSING, "atmosphere": DEEPWORKS_ATMOSPHERE}

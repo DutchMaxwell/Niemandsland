@@ -397,7 +397,7 @@ func refresh_atmosphere() -> void:
 	var settings := _settings()
 	var want: bool = settings == null or settings.board_mist_enabled()
 	var air: Array = BoardgenTheme.of(_layout)["atmosphere"]
-	for part: Array in [["Mist", BoardgenMist], ["Steam", BoardgenSteam]]:
+	for part: Array in [["Mist", BoardgenMist], ["Steam", BoardgenSteam], ["GroundFog", BoardgenGroundFog]]:
 		var node: Node = get_node_or_null(part[0])
 		if not air.has(part[0]):
 			continue   # the theme has no such air (the town)
@@ -405,10 +405,26 @@ func refresh_atmosphere() -> void:
 			node = part[1].new()
 			node.name = part[0]
 			node.call("build", _layout)
+			if node is BoardgenGroundFog:   # the town's lanterns glow in its fog
+				node.call("set_lamps", _lantern_points())
 			add_child(node)
 		elif not want and node != null:
 			remove_child(node)
 			node.free()
+
+
+## The board's shown town lanterns (`Lantern*` lights) in the board's own space: the pools of the ground fog.
+func _lantern_points() -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for light: Node in find_children("Lantern*", "SpotLight3D", true, false):
+		var t := Transform3D()
+		var n: Node = light
+		while n != self and n is Node3D:
+			t = (n as Node3D).transform * t
+			n = n.get_parent()
+		if (light as Node3D).visible:
+			out.append(t.origin)
+	return out
 
 
 ## The dressing builders of `names` that the theme switches on (the ruin town draws none of the Deepworks ones: no pipe, lamp or tank).
