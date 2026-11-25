@@ -449,6 +449,10 @@ void fragment() {
 			vec3 soil = alb;
 			alb = mix(alb, vec3(0.13, 0.16, 0.10) * mix(0.55, 1.25, fbm(xz * 3.1 + seed)), cover);   // a dull dark yellow-grey green between the tufts, mottled
 			alb = mix(alb, vec3(0.13, 0.14, 0.08) * mix(0.7, 1.2, h21(ci + 9.0)) * (1.0 + 0.9 * cover), 0.75 * tuft);   // a dull green-brown tuft, never a yellow coin
+			float dry = smoothstep(0.35, 0.65, vnoise(xz * 0.2 + seed * 2.3));   // (look review R11) dry straw patches and greener ones over 3-8 in
+			alb *= mix(vec3(1.0), mix(vec3(0.9, 1.04, 0.88), vec3(1.1, 1.0, 0.78), dry), cover);
+			float clump = fbm(xz * 5.5 + seed * 3.1);   // the cover is clumped, not a carpet: dark hollows between the clumps
+			alb *= 1.0 - 0.22 * cover * (1.0 - tuft) * smoothstep(0.55, 0.3, clump) * keep(xz.x, 0.18);
 			alb *= min(1.0, (dot(soil, LUMA) + 0.03 * tuft) / max(dot(alb, LUMA), 0.001));   // the cover is never brighter than the soil, a tuft at most 0.03 (the ground stays under the models)
 			alb = mix(alb, vec3(0.13, 0.12, 0.11) * mix(0.6, 1.3, h21(ci + 4.0)), pebble);   // a dark stone
 			alb = mix(alb, tint * vec3(1.3, 1.3, 1.28), 0.75 * path);   // (was 1.4 1.34 1.2: an orange path; plan TARGET C, E1)
@@ -456,8 +460,9 @@ void fragment() {
 				vec3 r = ratio_of(t_earth, xz / t_tile.w, MEAN_EARTH);   // real rock and soil under the pebbles, the tufts and the paths
 				tex_ratio = mix(vec3(dot(r, vec3(0.333))), r, 0.5);   // halfway to its own grey: the soil keeps its detail and loses its orange (plan TARGET C, E1)
 			}
-			rel = clamp(0.2 + 0.6 * fbm(xz * 3.0 + seed) - 0.15 * path + 0.35 * pebble, 0.0, 1.0);   // packed earth: lumps, and the worn paths lie lower
-			depth_in = 0.05;
+			rel = clamp(0.2 + 0.6 * fbm(xz * 3.0 + seed) - 0.15 * path + 0.35 * pebble + cover * (0.45 * clump - 0.15) + 0.3 * tuft, 0.0, 1.0);   // packed earth: lumps, the worn paths lower; (R11) the cover stands in clumps, a tuft on top
+			depth_in = mix(0.05, 0.08, cover);
+			ao = mix(1.0, mix(0.7, 1.0, smoothstep(0.2, 0.6, rel)), cover);
 			rough = 0.95;
 			grit_earth(gw, alb, rough);
 			emis += grit_fill(alb);
@@ -550,6 +555,12 @@ void fragment() {
 			alb = tint * 0.55 * mix(0.6, 1.25, fbm(xz * 2.4 + seed)) * mix(1.0, 0.7, step(0.9, h21(floor(xz * 9.0))));   // x0.55: the plots in the deployment bands sit below the models' own values (readability gate)
 			vec2 pf = fract(xz / cell_in) * cell_in;
 			alb = grit_plot(alb, xz, min(min(pf.x, cell_in - pf.x), min(pf.y, cell_in - pf.y)), palette[0].rgb * GROUND_EARTH * 0.85);   // (lead: no flat green square)
+			float clump = fbm(xz * 5.5 + seed * 3.1);   // (look review R11) a plot is rank growth in clumps, not a flat green: relief, dark hollows, dry patches
+			alb *= mix(vec3(0.92, 1.03, 0.9), vec3(1.08, 1.0, 0.8), smoothstep(0.35, 0.65, vnoise(xz * 0.2 + seed * 2.3)));
+			alb *= 1.0 - 0.22 * smoothstep(0.55, 0.3, clump) * keep(xz.x, 0.18);
+			rel = clamp(0.15 + 0.7 * clump + 0.15 * vnoise(xz * 11.0 + seed), 0.0, 1.0);
+			depth_in = 0.08;
+			ao = mix(0.7, 1.0, smoothstep(0.2, 0.6, rel));
 		} else if (k == 14) {   // rubble: broken stones
 			alb = tint * mix(0.55, 1.2, h21(floor(xz * 4.0) + seed)) * mix(0.8, 1.0, vnoise(xz * 8.0));
 		} else {
