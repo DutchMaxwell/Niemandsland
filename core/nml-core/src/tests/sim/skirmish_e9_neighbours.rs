@@ -216,3 +216,33 @@ fn a_melee_blast_bystander_is_no_part_of_the_melee_result() {
     assert!(morale(&shot, "Neighbours"), "the bystander at half strength tests: {:?}", shot.rolls);
     assert!(!morale(&shot, "Target"), "a tie: the target takes no morale test: {:?}", shot.rolls);
 }
+
+/// The strafe is the skirmish spread's deny entry (no Aircraft in either skirmish book): even a gff strafe at the epoch
+/// keeps its Blast on the unit it crossed - a unit 1 in behind that unit is never touched.
+#[test]
+fn a_strafe_never_spreads_its_blast() {
+    let (mut st, mut statics) = super::strafing::strafe_line();
+    let keys: Vec<String> = vec!["a".into(), "b".into(), "c".into()];
+    st.roster = Rc::new(Roster { index: keys.iter().cloned().zip(0..).collect(), keys, profile: vec![0, 1, 1] });
+    let mut list = st.profiles.list.clone();
+    for p in list.iter_mut() {
+        p.game_system = "gff".into();
+    }
+    st.profiles = Rc::new(Profiles { list, index: HashMap::new() });
+    st.player = vec![0, 1, 1];
+    st.alive = vec![1, 1, 1];
+    st.attached = Rc::new(vec![vec![], vec![], vec![]]);
+    st.attached_to = Rc::new(vec![None, None, None]);
+    st.positions.push(vec![[5.0 * IN2M, 0.0, 3.0 * IN2M]]);
+    st.wounds.push(vec![1]);
+    Rc::make_mut(&mut st.radii).push(vec![IN2M]);
+    statics[0].strafe_shoot[0].blast = 3;
+    let seams = Seams { rules_epoch: crate::acts::PENDING_EPOCH_SKIRMISH_BLAST, ..Seams::default() };
+    for seed in 0..40 {
+        let (next, shot) = resolve_stochastic_tray_on_board(&statics, &st, &advance_to(12.0), &crate::terrain::Terrain::default(),
+            seams, &mut GodotRng::new(0), &mut Tray::seeded(seed)).unwrap();
+        assert!(shot.rolls.iter().any(|r| r.owner == "Strafer"), "seed {seed}: the strafe fired");
+        assert!(!shot.log.iter().any(|l| l.contains("on units within reach")), "seed {seed}: {:?}", shot.log);
+        assert_eq!((next.alive[2], next.wounds[2].clone()), (1, vec![1]), "seed {seed}: the unit behind is untouched");
+    }
+}
