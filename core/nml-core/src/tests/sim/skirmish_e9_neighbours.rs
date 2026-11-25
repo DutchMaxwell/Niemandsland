@@ -60,14 +60,9 @@ fn a_spilled_hit_rolls_the_neighbours_save_and_lands() {
     }
 }
 
-/// End to end in `sys` at `epoch`: unit "a" (player 0) holds and fires a Blast(3) gun (3 attacks, Quality 2) at "b" (one
-/// model, 12 in east); "bh" (two models) stands 1.5 in behind "b", on b's side; every save is a 6+.
-fn blast_game(sys: &str, epoch: u32, seed: i64) -> (State, ShootResult) {
-    blast_game_in(sys, epoch, seed, false)
-}
-
-/// `blast_game` with the neighbour "bh" in cover (`cover`).
-fn blast_game_in(sys: &str, epoch: u32, seed: i64, cover: bool) -> (State, ShootResult) {
+/// The Blast board in `sys`: unit "a" (player 0) holds a Blast(3) gun (3 attacks, Quality 2) and casts "Storm" (2 hits,
+/// Blast(3)); "b" (one model) stands 12 in east; "bh" (two models) stands 1.5 in behind "b", on b's side; every save is a 6+.
+fn blast_board(sys: &str) -> (State, Vec<UnitStatic>) {
     let mut st = four_unit_line();
     let keys = st.roster.keys.clone();
     st.roster = Rc::new(Roster { index: keys.iter().cloned().zip(0..).collect(), keys, profile: vec![0, 1, 2, 3] });
@@ -80,17 +75,43 @@ fn blast_game_in(sys: &str, epoch: u32, seed: i64, cover: bool) -> (State, Shoot
     st.radii = Rc::new(vec![vec![r], vec![r], vec![r], vec![r, r]]);
     st.wounds = vec![vec![1], vec![1], vec![1], vec![1, 1]];
     st.alive = vec![1, 1, 1, 2];
-    st.in_cover[3] = cover;
+    st.casts = vec![2, 0, 0, 0];
     let gun = ShootProfile { name: "Mortar".into(), attacks: 3, count: 1, range: 24, blast: 3, ..Default::default() };
     let unit = |name: &str, n: i64, shoot: Vec<ShootProfile>| UnitStatic {
         name: name.into(), shoot, model_count: n, wounds_max: vec![1; n as usize],
         ctx: Ctx { quality: 2, defense: 6, models: n, ..Default::default() }, ..Default::default()
     };
-    let statics = vec![unit("Gunners", 1, vec![gun]), unit("Spare", 1, vec![]), unit("Target", 1, vec![]), unit("Neighbours", 2, vec![])];
+    let storm = crate::rules::Spell {
+        name: "Storm".into(), status: "modeled".into(), range_in: 18.0, target_count: 1, effect_kind: "damage".into(),
+        effect_hits: 2, weapon_rules: vec!["Blast(3)".into()], ..Default::default()
+    };
+    let caster = UnitStatic { is_caster: true, spells: vec![storm], casts_per_round: 2, ..unit("Gunners", 1, vec![gun]) };
+    (st, vec![caster, unit("Spare", 1, vec![]), unit("Target", 1, vec![]), unit("Neighbours", 2, vec![])])
+}
+
+/// End to end in `sys` at `epoch`: "a" fires its Mortar at "b".
+fn blast_game(sys: &str, epoch: u32, seed: i64) -> (State, ShootResult) {
+    blast_game_in(sys, epoch, seed, false)
+}
+
+/// `blast_game` with the neighbour "bh" in cover (`cover`).
+fn blast_game_in(sys: &str, epoch: u32, seed: i64, cover: bool) -> (State, ShootResult) {
+    let (mut st, statics) = blast_board(sys);
+    st.in_cover[3] = cover;
     let action = Action { kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None, patient: false, split: None, traced: None, teleport: None };
     let seams = Seams { rules_epoch: epoch, tray_exact: true, ..Seams::default() };
     let (mut rng, mut tray) = (GodotRng::new(0), Tray::seeded(seed));
     resolve_stochastic_tray_on_board(&statics, &st, &action, &crate::terrain::Terrain::default(), seams, &mut rng, &mut tray).unwrap()
+}
+
+/// End to end in `sys` at `epoch`: "a" casts Storm at "b".
+fn spell_game(sys: &str, epoch: u32, seed: i64) -> (State, ShootResult) {
+    let (mut st, statics) = blast_board(sys);
+    let c = crate::activation::CastInput { seq: 0, caster: "a".into(), spell: "Storm".into(), targets: vec!["b".into()], base: 4, threshold: 1, ..Default::default() };
+    let seams = Seams { rules_epoch: epoch, tray_exact: true, ..Seams::default() };
+    let (mut tray, mut shot) = (Tray::seeded(seed), ShootResult::default());
+    crate::sim::tray_cast(&statics, &mut st, 0, &c, seams, &mut tray, &mut shot);
+    (st, shot)
 }
 
 /// From the skirmish Blast epoch a gff Blast that hits spills onto the unit behind its target, which rolls its own saves
@@ -133,4 +154,21 @@ fn a_spilled_blast_hit_ignores_the_neighbours_cover() {
     let saves: Vec<i64> = shot.rolls.iter().filter(|r| r.kind == "defense" && r.owner == "Neighbours").map(|r| r.target).collect();
     assert!(!saves.is_empty() && saves.iter().all(|&t| t == 6), "the neighbour saves at 6+, cover skipped: {:?}", shot.rolls);
     assert!(shot.log.iter().any(|l| l.starts_with("Blast: ") && l.contains("cover save is skipped")), "{:?}", shot.log);
+}
+
+/// From the skirmish Blast epoch a gff Blast spell spills onto the unit behind its target, which rolls its own saves; one
+/// epoch below - and in gf at the epoch - the spell keeps the plain multiply and the neighbour is never touched.
+#[test]
+fn a_skirmish_blast_spell_reaches_the_unit_behind_its_target_from_the_epoch() {
+    let e = crate::acts::PENDING_EPOCH_SKIRMISH_BLAST;
+    let spilled = |shot: &ShootResult| shot.log.iter().any(|l| l.starts_with("Blast(3): ") && l.contains("on units within reach"));
+    let seed = (0..200).find(|&s| spell_game("gff", e, s).1.rolls.iter().any(|r| r.owner == "Neighbours"))
+        .expect("a seed where Storm is cast and spills");
+    let (_, shot) = spell_game("gff", e, seed);
+    assert!(spilled(&shot), "{:?}", shot.log);
+    for (sys, epoch) in [("gff", e - 1), ("gf", e)] {
+        let (st, shot) = spell_game(sys, epoch, seed);
+        assert!(!spilled(&shot) && !shot.rolls.iter().any(|r| r.owner == "Neighbours"), "{sys} at {epoch}: {:?}", shot.log);
+        assert_eq!((st.alive[3], st.wounds[3].clone()), (2, vec![1, 1]), "{sys} at {epoch}: the neighbour is untouched");
+    }
 }

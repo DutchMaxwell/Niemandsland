@@ -9340,7 +9340,7 @@ pub(crate) fn tray_cast(statics: &[UnitStatic], state: &mut State, si: usize, c:
     match spell.effect_kind.as_str() {
         "damage" => {
             for &t in &standing_idx {
-                tray_spell_damage(statics, state, ci, si, t, c.seq, spell, seams, tray, shot);
+                tray_spell_damage(statics, state, ci, si, t, c.seq, spell, None, seams, tray, shot);
             }
             CastEnd::Landed
         }
@@ -9427,8 +9427,10 @@ fn spell_applied_facets(spell: &Spell, facets: &crate::spell::Facets, def: &Ctx,
 /// family do not count against a spell (NML-104); saves are `spell_defense` and Regeneration / Resistance (at the spell threshold,
 /// obeying `ignores_regen`) are `spell_attack`. CC-6b lands Deadly(X) per model and honours `wound_alloc` when open; CC-7a lands
 /// Hazardous trigger-1 wounds on `host` (no save/regen) before the target's morale test (`spell_morale`, O2).
+/// `fixed`: a skirmish Blast spill's share for a neighbour of the spell's target - exactly that many hits, no trigger roll
+/// (a spilled hit carries no unmodified 6) and no Blast of its own.
 #[allow(clippy::too_many_arguments)]
-fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, host: usize, ti: usize, seq: i64, spell: &Spell, seams: Seams, tray: &mut Tray, shot: &mut ShootResult) {
+fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, host: usize, ti: usize, seq: i64, spell: &Spell, fixed: Option<i64>, seams: Seams, tray: &mut Tray, shot: &mut ShootResult) {
     if spell.effect_hits <= 0 {
         return;
     }
@@ -9449,7 +9451,7 @@ fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, host:
     }
     let hazardous = crate::rules::has_special_rule(&spell.weapon_rules, "Hazardous");
     let (mut trigger_sixes, mut trigger_ones) = (0i64, 0i64);
-    if facets.surge || facets.on6_ap > 0 || hazardous {
+    if fixed.is_none() && (facets.surge || facets.on6_ap > 0 || hazardous) {
         tray.owner_next(Some(ci));
         let faces = tray.roll(spell.effect_hits as usize);
         trigger_sixes = faces.iter().filter(|&&f| f == 6).count() as i64;
@@ -9459,14 +9461,28 @@ fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, host:
             faces, owner: statics[state.roster.profile[ci]].name.clone(),
         });
     }
-    let mut total_hits = spell.effect_hits + if facets.surge { trigger_sixes } else { 0 };
+    let mut total_hits = fixed.unwrap_or(spell.effect_hits + if facets.surge { trigger_sixes } else { 0 });
     // CC-7b: Blast ×min(X, models) — a "model"-targeted spell resolves as a unit of 1 (no fan-out, main.gd:5804-5805).
     let fanout = if spell.target_kind == "model" {
         1
     } else {
         blast_cap_models(state, ti, seams, state.book(ti))
     };
-    if facets.blast > 1 {
+    // The skirmish Blast spread (3.6 Firefight / AoF: Skirmish): the hits split over the target and its side's units within
+    // reach, each capped at its models; a "model"-targeted spell resolves as a unit of 1 and keeps the plain multiply.
+    let spread = if fixed.is_none() && facets.blast > 1 && spell.target_kind != "model" { blast_spread_units(state, ti, seams) } else { Vec::new() };
+    let mut spill: Vec<(usize, i64)> = Vec::new();
+    if !spread.is_empty() {
+        let models: Vec<i64> = spread.iter().map(|n| n.1).collect();
+        let split = crate::dice::blast_split(total_hits, facets.blast, fanout.max(1), &models);
+        let (kept, out) = (split[0], split[1..].iter().sum::<i64>());
+        let line = format!("Blast({}): {total_hits} hit{} -> {kept} on {}, {out} on units within reach, {} lost", facets.blast,
+            if total_hits == 1 { "" } else { "s" }, ut.name, total_hits * facets.blast - kept - out);
+        shot.log.push(line.clone());
+        say_rule(tray, "blast", caster_side, || line);
+        spill = spread.iter().map(|n| n.0).zip(split[1..].iter().copied()).filter(|n| n.1 > 0).collect();
+        total_hits = kept;
+    } else if fixed.is_none() && facets.blast > 1 {
         total_hits *= facets.blast.clamp(1, fanout.max(1));
     }
     if state.in_cover[ti] {
@@ -9537,6 +9553,11 @@ fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, host:
         tray_morale_for(state, statics, ti, false, true, Some(&spell.name), seams, tray, shot, None, None);
         tray.tag_spell_morale(draw0);
         land_chain_report(statics, state, tray, ti, before_m);
+    }
+    for (nj, h) in spill {
+        if state.alive[nj] > 0 {
+            tray_spell_damage(statics, state, ci, host, nj, seq, spell, Some(h), seams, tray, shot);
+        }
     }
 }
 
