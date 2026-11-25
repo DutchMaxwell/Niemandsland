@@ -308,3 +308,14 @@ fn a_falls_wounds_land_on_the_model_that_fell() {
     assert_eq!(after.wounds[0], vec![3, 2], "the first faller died, the second took its one wound: {:?}", shot.log);
     assert_eq!(after.alive[0], 2);
 }
+
+/// The push offer rides with the declared action: after the Intent, before the first die, once.
+#[test]
+fn a_push_is_declared_with_the_action_before_the_first_die_once() {
+    let push = || Input::Push(PushInput { target: "b".into(), model: 0, to: [0.0; 3] });
+    let intent = || Input::Intent { kind: HOLD, shoot: Some("b".into()), split: None, charge: None, no_step: false };
+    assert_eq!(order_check("Squad", &[Input::Begin, push()]), Err((1, "a push before the action was declared".into())));
+    assert_eq!(order_check("Squad", &[Input::Begin, intent(), Input::Faces(vec![6]), push()]), Err((3, "a push after the first die".into())));
+    assert_eq!(order_check("Squad", &[Input::Begin, intent(), push(), push()]), Err((3, "one push per activation".into())));
+    assert_eq!(order_check("Squad", &[Input::Begin, intent(), push(), Input::Faces(vec![6])]), Ok(()));
+}
