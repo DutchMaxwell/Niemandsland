@@ -25,7 +25,7 @@
   },
   "deck_flags": {
    "set": "flags",
-   "tile_in": 1.8,
+   "tile_in": 1.1,
    "tone": [
     0.45,
     0.45,
@@ -72,7 +72,7 @@
   },
   "walk_flags": {
    "set": "flags",
-   "tile_in": 1.8,
+   "tile_in": 1.1,
    "tone": [
     0.42,
     0.42,
@@ -81,7 +81,7 @@
   },
   "yard_flags": {
    "set": "flags",
-   "tile_in": 1.8,
+   "tile_in": 1.1,
    "tone": [
     0.45,
     0.45,
