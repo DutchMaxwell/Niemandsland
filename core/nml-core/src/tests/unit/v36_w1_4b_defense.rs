@@ -17,6 +17,7 @@ fn host_profile(rule: &str) -> Profile {
         model_count: 3,
         weapons: vec![],
         special_rules: if rule.is_empty() { vec![] } else { vec![rule.into()] },
+        command_picks: Vec::new(),
         caster_value: 0,
         base_radius: 0.0,
         base_shape: String::new(),

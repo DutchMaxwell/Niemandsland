@@ -274,6 +274,8 @@ pub fn profile_of(d: &VarDictionary) -> Profile {
             })
             .collect(),
         special_rules: strings(&darr(d, "special_rules")),
+        // Ruling D16: the deployer's command-group picks; absent = none.
+        command_picks: strings(&darr(d, "command_picks")),
         caster_value: dint(d, "caster_value", 0),
         base_radius: dnum(d, "base_radius", 0.0),
         // D5-4b (#447): the shape the radius cannot carry. Read here so the

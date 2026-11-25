@@ -30,6 +30,7 @@ fn mark_carrier(rule: &str, faction: &str, rules_epoch: u32) -> UnitStatic {
             Weapon { name: "CCW".into(), range: 0.0, attacks: 6, count: 1, ap: 0, rules: vec![] },
         ],
         special_rules: vec![rule.into()],
+        command_picks: Vec::new(),
         caster_value: 0,
         base_radius: 0.0,
         base_shape: String::new(),

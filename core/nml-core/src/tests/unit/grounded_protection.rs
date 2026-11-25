@@ -64,6 +64,7 @@ fn state_of(in_cover: bool) -> crate::state::State {
         unit_id: "gp".into(), name: "Hammer Guard".into(), quality: 3, defense: 3, tough: 1,
         wounds_max: vec![1], model_count: 1, weapons: vec![],
         special_rules: vec!["Grounded Protection".into()], caster_value: 0, base_radius: 0.0,
+        command_picks: Vec::new(),
         base_shape: String::new(), base_w_mm: 0.0, base_d_mm: 0.0,
         game_system: "aof".into(), faction_folder: "volcanic_dwarves".into(),
         item_grants: vec![], attached_hero_rules: vec![], move_bands: Default::default(),

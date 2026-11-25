@@ -239,6 +239,7 @@ mod mor_16a {
     /// The bearer read through the LIVE registry (pattern 11).
     fn bearer(faction: &str, epoch: u32) -> UnitStatic {
         let p = Profile {
+            command_picks: Vec::new(),
             cost: 0, unit_id: "a".into(), name: "a".into(),
             quality: 4, defense: 4, tough: 1, wounds_max: vec![1], model_count: 1,
             weapons: vec![], special_rules: vec!["Spell Drain".into()],
@@ -416,6 +417,7 @@ mod mor_16c {
     /// The bearer read through the LIVE registry (pattern 11).
     fn bearer(epoch: u32) -> UnitStatic {
         let p = Profile {
+            command_picks: Vec::new(),
             cost: 0, unit_id: "a".into(), name: "a".into(),
             quality: 4, defense: 4, tough: 1, wounds_max: vec![1], model_count: 1,
             weapons: vec![], special_rules: vec!["Spell Drain".into()],

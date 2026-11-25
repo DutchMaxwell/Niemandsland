@@ -38,6 +38,7 @@ fn make_profile(
             rules: weapon_rules.iter().map(|s| (*s).into()).collect(),
         }],
         special_rules: unit_rules.iter().map(|s| (*s).into()).collect(),
+        command_picks: Vec::new(),
         caster_value: 0,
         base_radius: 0.016,
         base_shape: "round".into(),

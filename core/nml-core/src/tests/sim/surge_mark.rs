@@ -47,6 +47,7 @@ fn surge_carrier(rules: &[&str], rules_epoch: u32) -> UnitStatic {
             },
         ],
         special_rules: rules.iter().map(|s| s.to_string()).collect(),
+        command_picks: Vec::new(),
         caster_value: 0,
         base_radius: 0.0,
         base_shape: String::new(),

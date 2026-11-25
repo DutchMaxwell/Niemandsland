@@ -43,6 +43,7 @@ fn carrier(system: &str, faction: &str, rules: &[&str]) -> Profile {
             rules: vec![],
         }],
         special_rules: rules.iter().map(|s| s.to_string()).collect(),
+        command_picks: Vec::new(),
         caster_value: 0,
         base_radius: 0.0,
         base_shape: String::new(),

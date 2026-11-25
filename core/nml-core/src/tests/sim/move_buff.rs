@@ -19,6 +19,7 @@ use super::*;
             model_count: 1,
             weapons: vec![],
             special_rules: vec!["Great Musician".into()],
+            command_picks: Vec::new(),
             caster_value: 0,
             base_radius: 0.0,
             base_shape: String::new(),
