@@ -21,12 +21,12 @@ const LANTERN_CONE_DEG := 48.0
 const LANTERN_CONE_SHADOWED_DEG := 58.0
 ## A spot's energy is not an omni's: the cone, the cookie (mean ~0.4) and the 1 / d fall-off over 2.5 in of height set it; 3.5 keeps the plaster beside a post under the clip cap.
 const LANTERN_ENERGY := 3.5
-## The moons (the blue hour, D-R4, as two pale lights): the key and its half turn, equal in colour and nearly in energy, so the board looks the same from both players' sides.
+## The moons (the blue hour, D-R4, as two pale lights): the key and its half turn, equal in colour; the second is weaker (D-R5 = b), so the relief reads - the gate checks both players' sides.
 const MOON_COLOUR := Color(0.93, 0.95, 1.0)
 const MOON_AZIMUTH := -20.0
 const MOON_ELEVATION := 52.0
 const MOON_ENERGY := 2.0
-const MOON2_ENERGY := 2.0
+const MOON2_ENERGY := 1.2   # (decision D-R5 = b, look review 25.11.) weaker than the key: two equal moons from opposite sides cancel the cobble relief's shading
 const MOON2_SHADOWS := true
 ## Maintainer 21.11. "too dark": the whole board one step brighter, evenly (exposure, a paler and stronger sky fill); was exposure 1.0, ambient 0.9 at (0.42, 0.47, 0.62).
 const EXPOSURE := 1.6

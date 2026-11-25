@@ -297,9 +297,10 @@ func test_dusk_is_a_blue_hour_two_pale_moons_a_half_turn_apart_and_a_cool_sky() 
 	var sun: Color = lc.calls["set_sun_color"]
 	assert_float(sun.b).is_greater(sun.r)   # the key is a cool pale moon
 	assert_float(lc.calls["set_sun_angles"][1]).is_greater_equal(40.0)   # high
-	# the second moon (the scene's fill light): the same colour, nearly the same energy, the half turn of the key - the board is a half-turn mirror, so its light is too (gate at both players' sides)
+	# the second moon (the scene's fill light): the same colour, the half turn of the key, but WEAKER (decision D-R5 = b, look review 25.11.): two equal moons from opposite sides
+	# cancel the horizontal part of every bent normal, so the cobble relief read flat under the moon; at 0.5 - 0.7 of the key it reads (gate at both players' sides)
 	assert_object(lc.calls["set_fill_light_color"]).is_equal(sun)
-	assert_float(lc.calls["set_fill_light_energy"]).is_between(0.85 * lc.calls["set_sun_energy"], 1.15 * lc.calls["set_sun_energy"])
+	assert_float(lc.calls["set_fill_light_energy"]).override_failure_message("the moons are equal: the relief cancels").is_between(0.5 * lc.calls["set_sun_energy"], 0.7 * lc.calls["set_sun_energy"])
 	var h: float = deg_to_rad(lc.calls["set_sun_angles"][0])
 	var v: float = deg_to_rad(lc.calls["set_sun_angles"][1])
 	var key := Vector3(cos(v) * sin(h), sin(v), cos(v) * cos(h))
