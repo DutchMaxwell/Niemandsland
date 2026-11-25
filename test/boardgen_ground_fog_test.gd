@@ -30,3 +30,38 @@ func test_the_fog_shader_has_compact_lamp_pools_where_the_ray_ends() -> void:
 	var msg := "a lamp term with long tails paints the street brown"
 	assert_bool(src.contains("exp(-length(")).override_failure_message(msg).is_false()
 	assert_bool(src.contains("TIME")).is_false()
+
+
+func _fog(layout: Dictionary) -> BoardgenGroundFog:
+	var fog: BoardgenGroundFog = auto_free(BoardgenGroundFog.new())
+	fog.build(layout)
+	return fog
+
+
+func test_the_fog_plane_covers_the_board_and_casts_nothing() -> void:
+	var fog := _fog({"nx": 12, "nz": 8, "cell_in": 3.0})
+	var plane := fog.mesh as PlaneMesh
+	assert_object(plane).is_not_null()
+	var board_m := Vector2(12, 8) * 3.0 * BoardgenGroundFog.INCHES_TO_METERS
+	assert_vector(plane.size).is_equal_approx(board_m, Vector2(0.0001, 0.0001))
+	assert_int(fog.cast_shadow).is_equal(GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	assert_int(fog.find_children("*", "CollisionObject3D", true, false).size()).is_equal(0)
+	assert_float(fog.position.y).is_greater(0.0)  # at the fog's top, above the street
+
+
+func test_the_noise_is_an_image_texture_never_a_noise_texture() -> void:
+	var noise := _fog({"nx": 4, "nz": 4, "cell_in": 3.0}).noise()
+	var msg := "a NoiseTexture2D fills itself late: its first frames are the pink-table race"
+	assert_bool(noise is ImageTexture).override_failure_message(msg).is_true()
+
+
+func test_fourteen_lamps_are_capped_at_twelve() -> void:
+	var fog := _fog({"nx": 4, "nz": 4, "cell_in": 3.0})
+	var points := PackedVector3Array()
+	for i in 14:
+		points.append(Vector3(i, 0, 0))
+	fog.set_lamps(points)
+	assert_int(fog.lamp_count()).is_equal(BoardgenGroundFog.MAX_LAMPS)
+	assert_int(BoardgenGroundFog.MAX_LAMPS).is_equal(12)
+	fog.set_lamps(PackedVector3Array([Vector3.ZERO]))
+	assert_int(fog.lamp_count()).is_equal(1)
