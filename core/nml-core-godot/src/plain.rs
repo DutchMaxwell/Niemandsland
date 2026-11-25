@@ -1408,7 +1408,7 @@ mod tests {
         assert!(nml_core::casualty::casualty_order(&st, 0).is_some());
         // The most valuable model (slot 0) soaks last: one wound lands on the far, plain slot 2.
         let mut st = st;
-        nml_core::sim::land_wounds_with(&mut st, 0, 1, true);
+        nml_core::sim::land_wounds_with(&mut st, 0, 1, true, EPOCH_75_TABLE_FIXES);
         assert_eq!(st.positions[0], vec![[0.0, 0.0, 0.0], [0.05, 0.0, 0.0]]);
     }
 
@@ -1421,7 +1421,7 @@ mod tests {
         assert!(kits.is_empty() && names.is_empty());
         let mut st = state_with_kits(EPOCH_74_CLIMB_COST);
         assert!(nml_core::casualty::casualty_order(&st, 0).is_none());
-        nml_core::sim::land_wounds_with(&mut st, 0, 1, true);
+        nml_core::sim::land_wounds_with(&mut st, 0, 1, true, EPOCH_74_CLIMB_COST);
         assert_eq!(st.positions[0], vec![[0.05, 0.0, 0.0], [0.5, 0.0, 0.0]]);
     }
 

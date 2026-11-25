@@ -88,7 +88,7 @@ fn gap_in(pa: [f64; 3], sa: BaseShape, ra: f64, pb: [f64; 3], sb: BaseShape, rb:
 /// (`CoherencyChecker.LinkTable` with MEASURING_SLACK 0.01": one 1" chain, 3" across a height step
 /// over 1", every pair within 9" or 6" Skirmish), else the value order's lead. `max_picks`: how
 /// many leading picks the caller uses; the tail keeps the value order. `None` = no kits.
-pub fn chain_casualty_order(state: &State, u: usize, max_picks: Option<usize>) -> Option<Vec<usize>> {
+pub fn chain_casualty_order(state: &State, u: usize, max_picks: Option<usize>, rules_epoch: u32) -> Option<Vec<usize>> {
     let order = casualty_order(state, u)?;
     if order.len() <= 2 {
         return Some(order);
@@ -99,9 +99,9 @@ pub fn chain_casualty_order(state: &State, u: usize, max_picks: Option<usize>) -
         group.extend((0..state.positions[h].len()).map(|m| (h, m)));
     }
     let n = group.len();
-    // The recorded chain: this order carries no rules epoch yet, so the later Firefight chain (`Book::chain_in_at`)
-    // does not reach it (it changes no game while that epoch is pending).
-    let max_chain = state.book(host).chain_in;
+    // The unit's chain at this epoch (`Book::chain_in_at`): the Firefight 9 in from its own placeholder on, so records
+    // stamped before it keep the 6 in they played with.
+    let max_chain = if crate::acts::rule_on(rules_epoch, crate::acts::PENDING_EPOCH_CASUALTY_CHAIN) { state.book(host).chain_in_at(rules_epoch) } else { state.book(host).chain_in };
     let (slack, mut gap, mut linked) = (0.01, vec![0.0; n * n], vec![false; n * n]);
     for i in 0..n {
         for j in i + 1..n {
@@ -261,7 +261,7 @@ mod tests {
                 Kit { weapons: vec![0], equipment: 0, wounds_max: 1 },
                 Kit { weapons: vec![], equipment: 0, wounds_max: 1 },
             ])];
-            chain_casualty_order(&st, 0, Some(1)).unwrap()
+            chain_casualty_order(&st, 0, Some(1), 0).unwrap()
         };
         assert_eq!(run("gf")[0], 5, "gf 9 in chain keeps the 6.6 in line coherent, picking cheap slot 5");
         assert_ne!(run("gff")[0], 5, "gff 6 in chain rejects slot 5 because the 6.6 in line exceeds 6 in");
