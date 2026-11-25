@@ -216,3 +216,74 @@ func test_the_graded_play_and_overview_stills_are_not_darker_than_the_ungraded_o
 	assert_int((luma["ungraded"] as Dictionary).size()).is_equal(6)   # three boards x overview and play
 	for key: String in luma["ungraded"]:
 		assert_float(float(luma["graded"][key])).override_failure_message("%s: the grade darkens the town (%s -> %s of 255); the exposure gain has to bring it back" % [key, luma["ungraded"][key], luma["graded"][key]]).is_greater_equal(float(luma["ungraded"][key]))
+
+
+## Night on a town board (plan N1, decision D-N1): a stand-in for the atmosphere controller (its mood name and its signal) and a lighting controller with a fill light.
+func _town_night_main() -> Node:
+	var atm_script := GDScript.new()
+	atm_script.source_code = "extends Node\nsignal atmosphere_changed(preset_name: String)\nvar current := \"Night\"\nfunc get_current_atmosphere() -> String:\n\treturn current\n"
+	atm_script.reload()
+	var atmosphere: Node = auto_free(Node.new())
+	atmosphere.set_script(atm_script)
+	add_child(atmosphere)
+	var sun: DirectionalLight3D = auto_free(DirectionalLight3D.new())
+	var fill: DirectionalLight3D = auto_free(DirectionalLight3D.new())
+	var world: WorldEnvironment = auto_free(WorldEnvironment.new())
+	world.environment = Environment.new()
+	var lc: Node = auto_free(load("res://scripts/lighting_controller.gd").new())
+	for n: Node in [sun, fill, world, lc]:
+		add_child(n)
+	lc.initialize(sun, world, fill)
+	lc.set_meta("sun", sun)
+	lc.set_meta("fill", fill)
+	lc.set_meta("env", world.environment)
+	var script := GDScript.new()
+	script.source_code = "extends Node\nvar render_state\nvar lighting_controller\nvar atmosphere_controller\n"
+	script.reload()
+	var main: Node = auto_free(Node.new())
+	main.set_script(script)
+	main.set("render_state", RenderState.new(Environment.new()))
+	main.set("lighting_controller", lc)
+	main.set("atmosphere_controller", atmosphere)
+	add_child(main)
+	var table := Node3D.new()
+	table.name = "Table"
+	main.add_child(table)
+	return main
+
+
+func test_under_night_at_medium_the_town_keeps_the_dusks_sky_fill_and_the_presets_moon() -> void:
+	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.MEDIUM
+	var main := _town_night_main()
+	var lc: Node = main.get("lighting_controller")
+	BoardgenMood.apply(_board_on(main), true, true)
+	lc.apply_preset("Night")
+	var env: Environment = lc.get_meta("env")
+	assert_float(env.ambient_light_energy).override_failure_message("Night at Medium crushed the town's sky fill: %.2f" % env.ambient_light_energy).is_greater_equal(BoardgenTownDressing.AMBIENT_ENERGY)
+	assert_float((lc.get_meta("fill") as DirectionalLight3D).light_energy).is_greater_equal(BoardgenTownDressing.MOON2_ENERGY)
+	assert_float((lc.get_meta("sun") as DirectionalLight3D).light_energy).is_equal_approx(1.6, 0.0001)   # the Night preset's own moon key
+	assert_float(float(lc.current_preset["ambient_energy"])).is_equal_approx(0.3, 0.0001)   # the mood keeps its own value for when the board leaves
+
+
+func test_another_mood_takes_the_night_floor_away_and_gives_the_presets_own_fill() -> void:
+	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.MEDIUM
+	var main := _town_night_main()
+	var lc: Node = main.get("lighting_controller")
+	BoardgenMood.apply(_board_on(main), true, true)
+	var atmosphere: Node = main.get("atmosphere_controller")
+	atmosphere.set("current", "Sunset")
+	atmosphere.emit_signal("atmosphere_changed", "Sunset")
+	assert_bool(lc.get("_board_look").has("ambient_energy_min")).is_false()
+	assert_bool(lc.get("_board_look").has("fill_light_energy_min")).is_false()
+	lc.apply_preset("Warm Sunset")
+	assert_float((lc.get_meta("env") as Environment).ambient_light_energy).is_equal_approx(0.7, 0.0001)   # Warm Sunset's own sky fill
+
+
+func test_with_bounce_light_night_gets_no_floor() -> void:
+	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.ULTRA
+	var main := _town_night_main()
+	var lc: Node = main.get("lighting_controller")
+	BoardgenMood.apply(_board_on(main), true, true)
+	assert_bool(lc.get("_board_look").has("ambient_energy_min")).override_failure_message("High / Ultra have SDFGI and SSIL: no Night floor there").is_false()
+	var mood: Variant = BoardgenMood   # (untyped: the two-argument look is the change under test)
+	assert_dict(mood.town_look(true, true)).is_equal({"exposure": BoardgenTownDressing.EXPOSURE * BoardgenMood.TOWN_EXPOSURE_GAIN})
