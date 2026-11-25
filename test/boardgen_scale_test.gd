@@ -107,3 +107,14 @@ func test_the_ground_ambient_follows_the_bent_normal() -> void:
 	assert_int(at).override_failure_message("no sky term on up-facing ground").is_greater(0)
 	var body := src.substr(at, 400)
 	assert_bool(body.contains("AO *= sky;") and body.contains("emis *= sky;")).override_failure_message("the ambient or the grit fill ignores the sky term").is_true()
+
+
+## Look review 2 (R14): beside a wall or ruin cell the street's bent border wandered into the neighbour's ground class; the setts then lost their run and centre
+## and drew a plain grey strip along the wall foot. A street pixel whose bent lookup lands on a closed class keeps its own cell's ground.
+func test_a_street_beside_a_wall_keeps_its_setts_to_the_wall_foot() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	(
+		assert_bool(src.contains("if (int(g.r * 255.0 + 0.5) > 1 && int(ground_at(xz).r * 255.0 + 0.5) <= 1) {"))
+		. override_failure_message("no fallback to the cell's own ground beside a wall")
+		. is_true()
+	)
