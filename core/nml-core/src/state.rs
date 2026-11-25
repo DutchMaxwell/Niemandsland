@@ -509,6 +509,10 @@ pub struct State {
     /// unit-local weapon ids back to names for `plain_of`.
     pub kits: Vec<Rc<Vec<Kit>>>,
     pub kit_names: Vec<Rc<Vec<String>>>,
+    /// The AoF: Skirmish command groups (ruling D16): per unit, the CURRENT slot of the model that carries its Banner or
+    /// Musician, `None` once it is killed (or none carried). Kept by `kit_remove` / `kits_drop` as models leave; EMPTY =
+    /// no unit carries one (every record before it: readers use `get`).
+    pub cmd_bearer: Vec<Option<usize>>,
     pub mods: Vec<Mods>,
     pub mods_base: Vec<Rc<Mods>>,
     /// `capture()`'s attachment keys resolved to ROSTER indices — battle_sim.gd:
@@ -767,6 +771,14 @@ impl State {
         if let Some(k) = self.kits.get_mut(u).filter(|k| i < k.len()) {
             Rc::make_mut(k).remove(i);
         }
+        // the command-group bearer: killed with its slot, else it moves up past a removed slot before it
+        if let Some(b) = self.cmd_bearer.get_mut(u) {
+            *b = match *b {
+                Some(s) if s == i => None,
+                Some(s) if s > i => Some(s - 1),
+                other => other,
+            };
+        }
     }
 
     /// Tray-exact S1b: the unit's slots changed in a way no kit can follow (all models gone,
@@ -774,6 +786,12 @@ impl State {
     pub fn kits_drop(&mut self, u: usize) {
         if let Some(k) = self.kits.get_mut(u).filter(|k| !k.is_empty()) {
             *k = Rc::new(Vec::new());
+        }
+        // a unit with no model left has no bearer; a revived body is not the bearer come back
+        if self.positions.get(u).is_some_and(|p| p.is_empty()) {
+            if let Some(b) = self.cmd_bearer.get_mut(u) {
+                *b = None;
+            }
         }
     }
 

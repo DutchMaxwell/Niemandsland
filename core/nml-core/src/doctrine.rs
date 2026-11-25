@@ -162,6 +162,7 @@ pub fn synth_state(a: &Value, b: &Value, zone_a: &Zone, zone_b: &Zone, markers: 
         radii: Rc::new(radii),
         kits: Vec::new(),
         kit_names: Vec::new(),
+        cmd_bearer: Vec::new(),
         mods: vec![Mods::default(); n], mods_base: vec![mods_base_default; n],
         attached: Rc::new(vec![Vec::new(); n]), attached_to: Rc::new(vec![None; n]),
         los: vec![None; n], sees_tab: None, los_pairs: None,

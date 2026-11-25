@@ -70,6 +70,7 @@
             radii: Rc::new(vec![vec![IN2M]; 4]),
             kits: Vec::new(),
             kit_names: Vec::new(),
+            cmd_bearer: Vec::new(),
             mods: vec![Mods::default(); 4],
             mods_base: (0..4).map(|_| Rc::new(Mods::default())).collect(),
             attached: Rc::new(vec![vec![1], vec![], vec![3], vec![]]),

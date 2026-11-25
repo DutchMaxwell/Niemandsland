@@ -171,6 +171,9 @@ pub(crate) struct PlainUnit {
     /// Tray-exact series S1, slot-aligned with `positions`; absent = none carried.
     #[serde(default)]
     kits: Vec<PlainKit>,
+    /// Ruling D16: the command-group bearer's current slot; absent = none (every record before it).
+    #[serde(default)]
+    cmd_bearer: Option<usize>,
     #[serde(default)]
     mods: Mods,
     #[serde(default)]
@@ -1113,6 +1116,7 @@ pub(crate) fn state_of(
         radii: Rc::new(Vec::with_capacity(n)),
         kits: Vec::with_capacity(n),
         kit_names: Vec::with_capacity(n),
+        cmd_bearer: Vec::with_capacity(n),
         mods: Vec::with_capacity(n),
         mods_base: Vec::with_capacity(n),
         attached: Rc::new(Vec::new()),
@@ -1211,6 +1215,7 @@ pub(crate) fn state_of(
         let (kits, kit_names) = carry_plain_kits(ui, u.kits, st.positions[ui].len());
         st.kits.push(Rc::new(kits));
         st.kit_names.push(Rc::new(kit_names));
+        st.cmd_bearer.push(u.cmd_bearer);
         st.mods.push(u.mods);
         st.mods_base.push(Rc::new(u.mods_base));
         st.los.push(u.los.map(Rc::new));
@@ -1557,6 +1562,10 @@ pub fn plain_of(st: &State) -> serde_json::Value {
                 "weapons": k.weapons.iter().map(|&w| named(w)).collect::<Vec<_>>(),
                 "equipment": k.equipment, "wounds_max": k.wounds_max,
             })).collect()));
+        }
+        // Ruling D16: written only while a bearer lives, so a record without one keeps its bytes.
+        if let Some(b) = st.cmd_bearer.get(i).copied().flatten() {
+            u.insert("cmd_bearer".into(), b.into());
         }
         u.insert("mods".into(), serde_json::to_value(st.mods[i]).unwrap_or(Value::Null));
         u.insert("mods_base".into(), serde_json::to_value(*st.mods_base[i]).unwrap_or(Value::Null));
@@ -1921,6 +1930,25 @@ mod tests {
         assert_eq!(u["dormant_models"], serde_json::json!(3));
         assert_eq!(u["dormant_wounds"], serde_json::json!([2, 3, 3]));
         assert_eq!(u["earliest_arrival_round"], serde_json::json!(2));
+    }
+
+    /// Ruling D16: the command-group bearer's slot survives `plain -> State -> plain`; a record without the key reads no
+    /// bearer and writes none back (byte identity); a killed bearer is written as absent.
+    #[test]
+    fn a_cmd_bearer_survives_the_round_trip_and_an_old_record_gets_none() {
+        let old: serde_json::Value = serde_json::from_str(LEDGER_PLAIN).unwrap();
+        let st = state_of(&old.to_string());
+        assert!(st.cmd_bearer.iter().all(Option::is_none));
+        assert_eq!(plain_of(&st), plain_of(&state_of(LEDGER_PLAIN)));
+        assert!(plain_of(&st)["units"].as_object().unwrap().values().all(|u| u.get("cmd_bearer").is_none()), "an old record gets no key");
+        let mut v = old.clone();
+        v["units"]["p1_0_a"]["cmd_bearer"] = serde_json::json!(0);
+        let mut st = state_of(&v.to_string());
+        let ui = st.roster.index["p1_0_a"];
+        assert_eq!(st.cmd_bearer[ui], Some(0));
+        assert_eq!(plain_of(&st)["units"]["p1_0_a"]["cmd_bearer"], serde_json::json!(0));
+        st.kit_remove(ui, 0);
+        assert!(plain_of(&st)["units"]["p1_0_a"].get("cmd_bearer").is_none(), "killed: absent");
     }
 
     /// Tray-exact series S1 RED/GREEN — the per-model `kits` survive `plain ->

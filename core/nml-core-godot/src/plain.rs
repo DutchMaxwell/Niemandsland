@@ -29,7 +29,7 @@ use nml_core::{
 /// writes, minus the two this port does not model (see `DROPPED`). Bit `i` of a
 /// capture mask says "the plain form carried key `i`", so `plain_of` writes back
 /// exactly the key set that came in — `state_to_plain` is `if su.has(k)` too.
-pub const UNIT_KEYS: [&str; 21] = [
+pub const UNIT_KEYS: [&str; 22] = [
     "alive",
     "wounds",
     "radii",
@@ -58,6 +58,8 @@ pub const UNIT_KEYS: [&str; 21] = [
     // Appended last (bit 20), so a corpus without them still round-trips without the key. Set only
     // from epoch 75 (`seam_reads_kits`); below it the seam carries none and writes none back.
     "kits",
+    // Ruling D16: the command-group bearer's current slot (bit 21); -1 = killed. Absent on every record before it.
+    "cmd_bearer",
 ];
 
 /// A unit's capture mask: bit `i` = `UNIT_KEYS[i]` is in the plain form. `kits` below epoch 75 stays out, so
@@ -524,6 +526,7 @@ pub fn build_state(
         radii: Rc::new(Vec::with_capacity(n)),
         kits: Vec::with_capacity(n),
         kit_names: Vec::with_capacity(n),
+        cmd_bearer: Vec::with_capacity(n),
         mods: Vec::with_capacity(n),
         mods_base: Vec::with_capacity(n),
         attached: Rc::new(Vec::new()),
@@ -622,6 +625,7 @@ pub fn build_state(
         let (kits, kit_names) = nml_core::io::carry_kits(st.kits.len(), raw_kits(&u), st.positions[st.kits.len()].len(), rules_epoch);
         st.kits.push(Rc::new(kits));
         st.kit_names.push(Rc::new(kit_names));
+        st.cmd_bearer.push(u.get("cmd_bearer").map(|v| int(&v)).filter(|&b| b >= 0).map(|b| b as usize));
         st.mods.push(mods_of(&ddict(&u, "mods")));
         st.mods_base.push(Rc::new(mods_of(&ddict(&u, "mods_base"))));
         attached_keys.push(strings(&darr(&u, "attached")));
@@ -854,6 +858,9 @@ pub fn plain_of(cap: &Captured) -> VarDictionary {
         }
         if has("earliest_arrival_round") {
             u.set("earliest_arrival_round", st.earliest_arrival_round[i]);
+        }
+        if has("cmd_bearer") {
+            u.set("cmd_bearer", st.cmd_bearer.get(i).copied().flatten().map_or(-1, |b| b as i64));
         }
         if has("kits") {
             let mut a = VarArray::new();
@@ -1443,12 +1450,12 @@ mod tests {
         assert_eq!(fresh.piercing_spot_round, before.piercing_spot_round);
     }
 
-    /// The capture mask carries the `kits` bit (the last) from epoch 75 and not below it; no other bit moves.
+    /// The capture mask carries the `kits` bit (bit 20) from epoch 75 and not below it; no other bit moves.
     #[test]
     fn the_capture_mask_has_the_kits_bit_from_epoch_75_only() {
         let all = (1u32 << super::UNIT_KEYS.len()) - 1;
-        let kits_bit = 1u32 << (super::UNIT_KEYS.len() - 1);
-        assert_eq!(super::UNIT_KEYS[super::UNIT_KEYS.len() - 1], "kits");
+        let kits_bit = 1u32 << 20;
+        assert_eq!(super::UNIT_KEYS[20], "kits");
         assert_eq!(super::unit_mask(|_| true, EPOCH_75_TABLE_FIXES), all);
         assert_eq!(super::unit_mask(|_| true, EPOCH_74_CLIMB_COST), all & !kits_bit);
         assert_eq!(super::unit_mask(|k| k == "kits", EPOCH_74_CLIMB_COST), 0);
@@ -1460,5 +1467,18 @@ mod tests {
         let two = vec![(vec!["Rifle".to_string()], 0, 1); 2];
         assert!(carry_kits(0, two, 3, EPOCH_75_TABLE_FIXES).0.is_empty());
         assert!(carry_kits(0, Vec::new(), 3, EPOCH_75_TABLE_FIXES).0.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod cmd_bearer_tests {
+    use super::*;
+
+    /// Ruling D16: the command-group bearer rides the capture mask as its own key (bit 21, after `kits`), at every epoch.
+    #[test]
+    fn the_capture_mask_carries_cmd_bearer_as_its_own_bit() {
+        assert_eq!(UNIT_KEYS[21], "cmd_bearer");
+        assert_eq!(unit_mask(|k| k == "cmd_bearer", 0), 1u32 << 21);
+        assert_eq!(unit_mask(|k| k != "cmd_bearer", 0) & (1u32 << 21), 0, "absent key, absent bit");
     }
 }

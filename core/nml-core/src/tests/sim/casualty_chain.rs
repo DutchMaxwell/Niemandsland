@@ -110,3 +110,27 @@ use super::*;
         assert_eq!(survivors(crate::acts::CURRENT_RULES_EPOCH), vec![1, 0], "the live epoch plays the tray-exact order");
     }
 
+
+/// Ruling D16: the command-group bearer's slot follows the models out - it moves up past a removed slot before it, goes
+/// to `None` when its own slot is removed, and a unit with no model left has none; a wound landed in slot order on a
+/// three-model unit whose bearer is the last slot leaves the bearer at slot 1.
+#[test]
+fn the_cmd_bearer_slot_follows_the_models_out() {
+    let mut st = four_unit_line();
+    st.cmd_bearer = vec![Some(2), None, None, None];
+    st.kit_remove(0, 0);
+    assert_eq!(st.cmd_bearer[0], Some(1), "a slot before it left");
+    st.kit_remove(0, 3);
+    assert_eq!(st.cmd_bearer[0], Some(1), "a slot after it left");
+    st.kit_remove(0, 1);
+    assert_eq!(st.cmd_bearer[0], None, "its own slot left");
+    let mut st = four_unit_line();
+    st.positions[0] = vec![[0.0; 3], [0.05, 0.0, 0.0], [0.1, 0.0, 0.0]];
+    (st.wounds[0], Rc::make_mut(&mut st.radii)[0], st.alive[0]) = (vec![1, 1, 1], vec![0.016; 3], 3);
+    st.cmd_bearer = vec![Some(2), None, None, None];
+    crate::sim::land_wounds_with(&mut st, 0, 1, false);
+    assert_eq!((st.alive[0], st.cmd_bearer[0]), (2, Some(1)), "slot 0 fell: the bearer is now slot 1");
+    st.positions[0].clear();
+    st.kits_drop(0);
+    assert_eq!(st.cmd_bearer[0], None, "no model left, no bearer");
+}
