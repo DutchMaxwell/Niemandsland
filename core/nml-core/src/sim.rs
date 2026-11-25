@@ -11806,7 +11806,7 @@ fn resolve_with(
         // Jumping (3.6 skirmish p.15): each jumping model rolls one die per inch at 2+; any miss and that model falls.
         if let Some((tray, shot)) = dice.as_mut() {
             let name = statics[pi_s].name.clone();
-            for (m, n, h, _) in jumps {
+            for (m, n, h, foot) in jumps {
                 tray.owner_next(Some(si));
                 let faces = tray.roll(n as usize);
                 let lands = crate::mv::jump::jump_passes(&faces);
@@ -11817,6 +11817,25 @@ fn resolve_with(
                 say_rule(tray, "jump", next.player[si], || line);
                 if !lands {
                     shot.falls.push((si, m, h));
+                    // Falling (3.6 skirmish p.15, ruling D13): the model lands at the foot of the drop on its own path, rolls one
+                    // die per inch fallen and takes one wound per 1-3; the unit's other models keep the player's placement.
+                    if let Some(p) = next.positions[si].get_mut(m) {
+                        *p = foot;
+                    }
+                    tray.owner_next(Some(si));
+                    let n = (h - 1e-6).ceil().max(0.0) as usize;
+                    let faces = tray.roll(n);
+                    let w = faces.iter().filter(|&&f| f <= 3).count() as i64;
+                    let line = format!("Falling: {name} model {} falls {h:.0} in and lands at the foot of the drop ({:.1} in, {:.1} in) - {faces:?}, {w} wound{} on 1-3",
+                        m + 1, foot[0] / IN2M, foot[2] / IN2M, if w == 1 { "" } else { "s" });
+                    shot.rolls.push(crate::dice::Roll { kind: "fall", count: n as i64, target: 4, faces, owner: name.clone() });
+                    shot.log.push(line.clone());
+                    say_rule(tray, "fall", next.player[si], || line);
+                    if w > 0 {
+                        let before = chain_snapshot(&next, si, tray);
+                        land_pool_wounds(&mut next, si, w, seams.tray_exact, seams, &mut shot.log);
+                        land_chain_report(statics, &next, tray, si, before);
+                    }
                 }
             }
         }

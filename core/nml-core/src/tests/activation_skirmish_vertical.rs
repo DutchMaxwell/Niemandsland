@@ -158,3 +158,30 @@ fn a_jumps_foot_is_the_first_free_spot_below_the_edge() {
     assert_eq!(c, Check::Refused { reason: "Squad: model 1 has no room to land at the foot of the drop".into() });
     assert!(feet.is_empty());
 }
+
+/// GFF/AOFS-E11-03: a 4 in jump on [2, 1, 4, 5] fails; the fall rolls 4 dice, [1, 3, 4, 6] is two wounds (1 and 3), and
+/// the model (3 wounds here, so it survives) stands at the foot of the drop on its own path, on the ground.
+#[test]
+fn e11_03_a_failed_jump_falls_takes_its_wounds_and_lands_at_the_foot() {
+    let (mut st, statics, t) = ledge(4.0, "gff", &[]);
+    st.wounds[0] = vec![3];
+    let seams = Seams { rules_epoch: PENDING_EPOCH_SKIRMISH_JUMP, tray_exact: true, ..Seams::default() };
+    let drop = Drop { mode: ADVANCE, placed: vec![[-INCHES_TO_METERS, 0.0, 1.5 * INCHES_TO_METERS]], ..Default::default() };
+    let foot = jump_dice_of(&st, 0, seams, &t, &drop)[0].3;
+    let mut tray = Tray::supplied(vec![vec![2, 1, 4, 5], vec![1, 3, 4, 6]]);
+    tray.place(drop.placed.clone(), Vec::new());
+    let action = Action { kind: ADVANCE, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None };
+    let (after, shot) = crate::sim::resolve_stochastic_tray_on_board(&statics, &st, &action, &t, seams, &mut crate::rng::GodotRng::new(0), &mut tray).unwrap();
+    let fall: Vec<(i64, Vec<u8>)> = shot.rolls.iter().filter(|r| r.kind == "fall").map(|r| (r.count, r.faces.clone())).collect();
+    assert_eq!(fall, vec![(4, vec![1, 3, 4, 6])]);
+    assert_eq!(after.wounds[0], vec![1], "two wounds landed: {:?}", shot.log);
+    assert_eq!(after.positions[0], vec![foot], "the model stands at the foot, not where it was placed");
+    assert!(foot[1] == 0.0 && foot[0] > -1.1 * INCHES_TO_METERS, "the foot is on the ground just past the edge: {foot:?}");
+    assert!(shot.log.iter().any(|l| l.starts_with("Falling: Squad model 1 falls 4 in and lands at the foot of the drop") && l.ends_with("2 wounds on 1-3")), "{:?}", shot.log);
+    // the book's faces cannot tell 1-3 from 4-6 (two each); [1, 2, 3, 6] can: three wounds, not one
+    let mut tray = Tray::supplied(vec![vec![2, 1, 4, 5], vec![1, 2, 3, 6]]);
+    tray.place(drop.placed.clone(), Vec::new());
+    st.wounds[0] = vec![4];
+    let (after, _) = crate::sim::resolve_stochastic_tray_on_board(&statics, &st, &action, &t, seams, &mut crate::rng::GodotRng::new(0), &mut tray).unwrap();
+    assert_eq!(after.wounds[0], vec![1], "three wounds on 1-3");
+}
