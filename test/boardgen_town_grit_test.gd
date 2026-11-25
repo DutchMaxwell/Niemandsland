@@ -121,7 +121,7 @@ func test_street_mud_never_covers_more_than_40_percent_of_the_setts() -> void:
 	assert_object(m).is_not_null()
 	assert_float(float(m.get_string(1))).is_less_equal(0.4)
 	assert_bool(src.contains("float cover = min(GRIT_MUD_COVER, ")).override_failure_message("the mud film is not capped by GRIT_MUD_COVER").is_true()
-	assert_int(src.count("alb = mix(alb, mudc * 1.15, cover);")).is_equal(1)
+	assert_int(src.count("alb = mix(alb, mudc * 1.15, cover")).is_equal(1)   # (look review 2: times a crown share <= 1, so still capped)
 	for s: int in SEEDS:
 		var layout := _layout(s)
 		var img := BoardgenTownGrit.map(layout)
@@ -198,7 +198,7 @@ func test_a_puddle_is_never_the_hazard_pool() -> void:
 	assert_object(m).is_not_null()
 	var tn := m.get_string(1).split(",")
 	var teal := Color(float(tn[0]), float(tn[1]), float(tn[2]))
-	assert_bool(grit.contains("alb = mix(alb, alb * 0.45 + GRIT_PUDDLE_TINT, 0.75 * pud);")).is_true()
+	assert_bool(grit.contains("alb = mix(alb, alb * 0.45 + GRIT_PUDDLE_TINT, 0.75 * pud")).is_true()
 	var mean := _vec3(grit, "const vec3 GRIT_COOL = vec3(") * 0.5   # a dark street sett under the water
 	var water := mean.lerp(mean * 0.45 + tint, 0.75)
 	var dh := absf(water.h - teal.h) * 360.0
@@ -324,3 +324,23 @@ func test_a_putlog_hole_is_a_share_of_the_wall_not_a_black_square() -> void:
 	for v in RegEx.create_from_string("vec3\\(([^)]*)\\)").search_all(colour):
 		for ch: String in v.get_string(1).split(","):
 			assert_float(float(ch)).override_failure_message("putlog hole channel %s" % ch).is_greater_equal(0.06)
+
+
+## THE LOOK MUST NOT LIE (look review 2, R9): a puddle and the mud sat ON the setts as flat, hard-edged stickers that the lamps lit orange. A puddle keeps the
+## setts' relief (no flat water), lies in the joints (the crowns break it), stays matte on the crowns, and has a soft edge; the mud film is thinner on the crowns;
+## where a street meets earth a broken band of trodden mud darkens the setts without any light.
+func test_puddles_and_mud_sit_in_the_setts() -> void:
+	var grit := FileAccess.get_file_as_string("res://shaders/ruintown_grit.gdshaderinc")
+	var board := FileAccess.get_file_as_string("res://shaders/ruintown_board.gdshader")
+	assert_bool(grit.contains("rel = mix(rel, 0.5, pud);")).override_failure_message("a puddle is flat water again").is_false()
+	var edge := RegEx.create_from_string("float pud = smoothstep\\(([0-9.]+), ([0-9.]+),").search(grit)
+	assert_object(edge).is_not_null()
+	if edge != null:
+		assert_float(float(edge.get_string(2)) - float(edge.get_string(1))).override_failure_message("the puddle edge is hard").is_greater_equal(0.05)
+	assert_bool(grit.contains("0.75 * pud * in_water")).override_failure_message("the water does not lie in the joints").is_true()
+	var rough := RegEx.create_from_string("rough = mix\\(rough, mix\\(([0-9.]+), ([0-9.]+), joint\\), pud\\);").search(grit)
+	assert_object(rough).override_failure_message("no matte crowns in a puddle").is_not_null()
+	if rough != null:
+		assert_float(minf(float(rough.get_string(1)), float(rough.get_string(2)))).is_greater_equal(0.3)
+	assert_bool(grit.contains("alb = mix(alb, mudc * 1.15, cover * mix(")).override_failure_message("the mud film lies on the crowns").is_true()
+	assert_bool(board.contains("float trod = smoothstep(")).override_failure_message("no trodden mud where the street meets earth").is_true()
