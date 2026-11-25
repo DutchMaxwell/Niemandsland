@@ -131,12 +131,12 @@ vec3 grit_street(vec2 xz, vec2 w, vec4 sett, float run, inout vec3 alb, inout fl
 	float ken = grit_kennel(g, run);
 	alb = mix(alb, mudc * 0.8, 0.6 * ken);   // the kennel: dark, wet, a channel
 	rel = mix(rel, 0.25, ken);
-	rough = mix(rough, 0.65, ken);   // matte (look review R6: a smooth kennel traced the lamp's highlight as a bright wavy streak)
+	rough = mix(rough, 0.9, ken);   // matte (look review R6: a smooth kennel traced the lamp's highlight as a bright wavy streak)
 	float b = g.b * 255.0;   // the cart ruts of an artery: a pair of 0.12 in grooves 1.4 in apart, mud and water in them
 	float rut = (1.0 - smoothstep(0.04, 0.08, abs(abs((b - 192.0) / 16.0) - 0.7))) * step(127.5, b) * step(b, 254.5) * step(0.25, abs(run - 0.5));
 	alb = mix(alb, mudc * 0.95, 0.5 * rut);
 	rel = mix(rel, 0.12, rut);
-	rough = mix(rough, 0.65, rut);
+	rough = mix(rough, 0.9, rut);
 	float pud = smoothstep(0.765, 0.79, g.g + (vnoise(xz * 3.1 + 11.0) - 0.5) * 0.03);   // a puddle: its edge broken a little
 	alb = mix(alb, alb * 0.45 + GRIT_PUDDLE_TINT, 0.75 * pud);
 	rough = mix(rough, 0.25, pud);
@@ -447,7 +447,7 @@ void grit_wall(vec3 p, vec3 n, int k, float seed, float d_top, float street_side
 	float cx = floor(uv.x / 1.6);
 	vec2 hd = abs(vec2(fract(uv.x / 1.6) * 1.6 - 0.8, uv.y - lv)) - vec2(0.05);
 	float hole = step(max(hd.x, hd.y), 0.0) * step(0.3, h21(vec2(cx, lv + seed)));
-	alb = mix(alb, alb * 0.35, 0.9 * hole);   // a darker share of the wall, never a black square (look review R8)
+	alb = mix(alb, alb * 0.6, 0.9 * hole);   // a darker share of the wall, never a black square (look review R8)
 	rel = mix(rel, 0.0, hole);
 	float cc = floor(uv.x / 7.3);   // a long vertical crack in some 7.3 in stretches
 	float ch = h21(vec2(cc, seed + 41.0));
