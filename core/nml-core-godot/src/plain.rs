@@ -625,7 +625,13 @@ pub fn build_state(
         let (kits, kit_names) = nml_core::io::carry_kits(st.kits.len(), raw_kits(&u), st.positions[st.kits.len()].len(), rules_epoch);
         st.kits.push(Rc::new(kits));
         st.kit_names.push(Rc::new(kit_names));
-        st.cmd_bearer.push(u.get("cmd_bearer").map(|v| int(&v)).filter(|&b| b >= 0).map(|b| b as usize));
+        // Ruling D16: absent = never set (a command group starts with its last slot), -1 = killed.
+        let bearer = match u.get("cmd_bearer").map(|v| int(&v)) {
+            None => st.initial_cmd_bearer(st.cmd_bearer.len()),
+            Some(b) if b < 0 => None,
+            Some(b) => Some(b as usize),
+        };
+        st.cmd_bearer.push(bearer);
         st.mods.push(mods_of(&ddict(&u, "mods")));
         st.mods_base.push(Rc::new(mods_of(&ddict(&u, "mods_base"))));
         attached_keys.push(strings(&darr(&u, "attached")));
