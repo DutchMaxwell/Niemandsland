@@ -7,6 +7,11 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Changed — rules corrections
+- **Rules epoch 100 is live: jumping and falling in the two skirmish games.** In Grimdark Future:
+  Firefight and Age of Fantasy: Skirmish, a drop of over 3" and up to 6", or a gap, is a jump: one
+  die per inch, every die needs a 2+. A failed jump falls: one die per inch, each 1-3 is a wound on
+  the falling model, it lands at the foot of the drop and its activation ends. Games recorded
+  before epoch 100 replay unchanged.
 - **Rules epoch 99 is live: Blast in the two skirmish games spreads to nearby units.** In Grimdark
   Future: Firefight and Age of Fantasy: Skirmish, Blast hits beyond the target's models spread to
   enemy units within 3" of it. Spilled hits ignore cover and carry no unmodified six. Bystanders of a
