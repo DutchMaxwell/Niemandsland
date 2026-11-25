@@ -246,13 +246,26 @@ func test_the_wall_and_the_towers_are_crowned_with_merlons_inside_the_edge_strip
 	assert_int(count.call(true)).is_greater(count.call(false))   # the north half keeps more of its battlements
 
 
-func test_the_town_has_no_tiefwerk_mist_or_steam_and_a_deepworks_board_keeps_both() -> void:
-	assert_array(BoardgenTheme.of(_town())["atmosphere"]).is_empty()
+func test_the_town_air_is_its_ground_fog_and_a_deepworks_board_keeps_mist_and_steam() -> void:
+	assert_array(BoardgenTheme.of(_town())["atmosphere"]).is_equal(["GroundFog"])
 	assert_array(BoardgenTheme.of(_fixture())["atmosphere"]).is_equal(["Mist", "Steam"])
+	GraphicsSettings.show_board_mist = true
 	var node := _built(_town())
 	node.refresh_atmosphere()
 	assert_object(node.get_node_or_null("Mist")).is_null()
 	assert_object(node.get_node_or_null("Steam")).is_null()
+	assert_int(node.find_children("GroundFog", "", false, false).size()).is_equal(1)
+	var fog := node.get_node_or_null("GroundFog") as BoardgenGroundFog
+	if fog == null:
+		return
+	var lit := node.find_children("Lantern*", "SpotLight3D", true, false).filter(func(l: Node3D) -> bool: return l.visible).size()
+	assert_int(lit).is_greater(0)
+	assert_int(fog.lamp_count()).override_failure_message("the lanterns do not glow in the fog").is_equal(mini(lit, BoardgenGroundFog.MAX_LAMPS))
+	GraphicsSettings.show_board_mist = false   # the board-mist setting gates the town's fog as it gates Tiefwerk's mist
+	assert_object(node.get_node_or_null("GroundFog")).is_null()
+	GraphicsSettings.show_board_mist = true
+	assert_object(node.get_node_or_null("GroundFog")).is_not_null()
+	assert_object(_built(_fixture()).get_node_or_null("GroundFog")).is_null()
 
 
 func test_the_town_has_lanterns_at_the_square_and_the_gates_inside_the_edge_strip_and_at_most_eight_lights() -> void:
