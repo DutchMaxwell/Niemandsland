@@ -146,12 +146,12 @@ func test_ruined_tops_break_only_in_the_outer_edge_strip() -> void:
 	assert_bool(src.contains("abs(vnoise(xz * 1.6 + seed * 2.0) - 0.5)")).override_failure_message("the curly scribble cracks are back").is_false()
 
 
-## Texture plan step 6 (the "car park"): the flag tops are irregular - courses of 0.45 / 0.6 / 0.75 in in an order hashed per band of three, flags 0.5 - 1.1 in
-## long, 0.85 of the wall stone's tone spread - and their joints are never near black (fix-up 6b below sets their tone).
+## Texture plan step 6 (the "car park"): the flag tops are irregular - courses of 0.27 / 0.36 / 0.45 in (look review 25.11. R1, was 0.45 / 0.6 / 0.75) in an order hashed
+## per band of three, flags 0.3 - 0.65 in long, 0.85 of the wall stone's tone spread - and their joints are never near black (fix-up 6b below sets their tone).
 func test_the_flag_tops_are_irregular_flags_with_mid_dark_joints() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
-	assert_bool(src.contains("alb = stone_rows(xz, seed, fr, 0.72, tint, ")).override_failure_message("the flags are still one 0.45 in course").is_true()
-	assert_bool(src.contains("float c0 = 0.45 + 0.15 * mod(o, 3.0);")).is_true()
+	assert_bool(src.contains("alb = stone_rows(xz, seed, fr, 0.43, tint, ")).override_failure_message("the flags are not laid at 0.43 in").is_true()
+	assert_bool(src.contains("float c0 = 0.27 + 0.09 * mod(o, 3.0);")).is_true()
 	assert_bool(src.contains("grit_stone_tone(h21(fc + seed + 41.0)), 0.85);")).override_failure_message("the flag tone spread is not 0.85").is_true()
 	assert_bool(src.contains("vec3(0.07, 0.06, 0.05), 0.75 * joint")).override_failure_message("the near-black flag joint is back").is_false()
 
@@ -159,11 +159,11 @@ func test_the_flag_tops_are_irregular_flags_with_mid_dark_joints() -> void:
 ## relief and a near-black moss tint drew a black grid at play zoom and eye level.
 func test_the_flag_joints_are_worn_mortar_not_a_black_grid() -> void:
 	var src := FileAccess.get_file_as_string(SHADER)
-	assert_bool(src.contains("alb = stone_rows(xz, seed, fr, 0.72, tint, tint * 0.8, rel);")).override_failure_message("the flag mortar is not taken from the flag's own tint").is_true()
+	assert_bool(src.contains("alb = stone_rows(xz, seed, fr, 0.43, tint, tint * 0.8, rel);")).override_failure_message("the flag mortar is not taken from the flag's own tint").is_true()
 	assert_bool(src.contains("vec3 laid = mix(mortar, tint")).override_failure_message("stone_rows() still lays a fixed dark mortar").is_true()
 	assert_bool(src.contains("course), len, tint, vec3(0.15, 0.14, 0.13), rel);")).override_failure_message("the wall stone must keep its dark mortar").is_true()
 	assert_bool(src.contains("alb * vec3(0.7, 0.85, 0.6) : alb * 0.8, 0.6 * joint * keep(xz.y, fr.z));")).override_failure_message("the flag joint tint is still dark").is_true()
-	var at := src.find("alb = stone_rows(xz, seed, fr, 0.72")
+	var at := src.find("alb = stone_rows(xz, seed, fr, 0.43")
 	assert_bool(src.substr(at, 400).contains("depth_in = 0.015;")).override_failure_message("the flag joint is still deeply recessed").is_true()
 
 ## Texture plan step 7: a flag top weathers as a whole - a 3 - 9 in value drift, one flag in ten gone or sunk (earth-dark, lower), and in the outer

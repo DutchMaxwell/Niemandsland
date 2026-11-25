@@ -55,3 +55,22 @@ func test_the_nogging_and_lath_are_one_dull_tone_with_a_thin_joint_that_fades_on
 	assert_bool(grit.contains("keep(uv.y, 0.0225)")).override_failure_message("the lath behind lost plaster does not fade").is_true()
 	for pin: String in ["step(0.5, fract(y / 0.12))", "step(0.5, fract(uv.y / 0.09))", "vec3(0.42, 0.22, 0.16)", "wood * 1.4, wood * 0.6", "wood * 1.3, wood * 0.55"]:
 		assert_bool((src + grit).contains(pin)).override_failure_message("the half-and-half zebra is back: " + pin).is_false()
+
+
+## Look review 25.11. (R1): the flat tops of tiers, towers and the wall were laid in 1.8 in bands of 0.45 - 0.75 in courses with 0.5 - 1.1 in flags, 1.5 - 2.5 x
+## the accepted fine house stone. The flag band is now <= 1.1 in, its widest course <= 0.45 in, the flags <= 0.45 in base length, and the fracture lines the flag
+## length that stone_rows() lays (one constant, or the cracks run across the joints).
+func test_the_flag_tops_are_laid_in_fine_courses() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	var fn := src.substr(src.find("vec3 flag_row("), 700)
+	var band := RegEx.create_from_string("float band = floor\\(y / ([0-9.]+)\\);").search(fn)
+	assert_object(band).is_not_null()
+	assert_float(float(band.get_string(1))).override_failure_message("flag band %s in" % band.get_string(1)).is_less_equal(1.1)
+	var course := RegEx.create_from_string("float c0 = ([0-9.]+) \\+ ([0-9.]+) \\* mod").search(fn)
+	assert_object(course).is_not_null()
+	var widest := float(course.get_string(1)) + 2.0 * float(course.get_string(2))
+	assert_float(widest).override_failure_message("widest flag course %.2f in" % widest).is_less_equal(0.45)
+	var lay := RegEx.create_from_string("stone_rows\\(xz, seed, fr, ([0-9.]+),").search(src)
+	assert_object(lay).is_not_null()
+	assert_float(float(lay.get_string(1))).override_failure_message("flag length %s in" % lay.get_string(1)).is_less_equal(0.45)
+	assert_bool(src.contains("float fl_l = %s * (" % lay.get_string(1))).override_failure_message("the fracture does not use the flag length").is_true()
