@@ -185,3 +185,48 @@ fn e11_03_a_failed_jump_falls_takes_its_wounds_and_lands_at_the_foot() {
     let (after, _) = crate::sim::resolve_stochastic_tray_on_board(&statics, &st, &action, &t, seams, &mut crate::rng::GodotRng::new(0), &mut tray).unwrap();
     assert_eq!(after.wounds[0], vec![1], "three wounds on 1-3");
 }
+
+/// A two-model squad on the 4 in ledge: model 1 jumps off (placed 1 in below the edge), model 2 stays on top; the
+/// ADVANCE names "b" as its shooting target. Landed with the supplied dice; the result and the state after.
+fn squad_jump(dice: Vec<Vec<u8>>) -> (State, crate::dice::ShootResult) {
+    let (mut st, mut statics, t) = ledge(4.0, "gff", &[]);
+    let top = [1.0 * INCHES_TO_METERS, 4.0 * INCHES_TO_METERS, -1.5 * INCHES_TO_METERS];
+    st.positions[0].push(top);
+    Rc::make_mut(&mut st.radii)[0].push(INCHES_TO_METERS);
+    st.wounds[0] = vec![1, 1];
+    st.alive[0] = 2;
+    st.positions[2] = vec![[-5.0 * INCHES_TO_METERS, 0.0, 1.5 * INCHES_TO_METERS]]; // "b", on the ground in sight
+    statics[0].model_count = 2;
+    statics[0].wounds_max = vec![1, 1];
+    statics[0].ctx.models = 2;
+    let seams = Seams { rules_epoch: PENDING_EPOCH_SKIRMISH_JUMP, tray_exact: true, moved_shoot: true, ..Seams::default() };
+    let mut tray = Tray::supplied(dice);
+    tray.place(vec![[-INCHES_TO_METERS, 0.0, 1.5 * INCHES_TO_METERS], top], Vec::new());
+    // a damage spell offered for this activation: cast only when the activation goes on
+    statics[0].is_caster = true;
+    statics[0].spells = vec![crate::rules::Spell { name: "Bolt".into(), status: "modeled".into(), range_in: 18.0, target_count: 1,
+        effect_kind: "damage".into(), effect_hits: 1, ..Default::default() }];
+    st.casts[0] = 2;
+    tray.offer_casts(vec![CastInput { seq: 0, caster: "a".into(), spell: "Bolt".into(), targets: vec!["b".into()], base: 4, threshold: 1, ..Default::default() }]);
+    let action = Action { kind: ADVANCE, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None, patient: false, split: None, traced: None, teleport: None };
+    crate::sim::resolve_stochastic_tray_on_board(&statics, &st, &action, &t, seams, &mut crate::rng::GodotRng::new(0), &mut tray).unwrap()
+}
+
+/// 3.6 p.15: after a fall "the unit's activation ends immediately" - its planned shot is dropped and said - and the fall's
+/// wounds count at the end like any end-of-activation wounds: the squad, down to one of two models, tests morale once.
+/// A jump that lands keeps the activation going and tests nothing.
+#[test]
+fn a_fall_ends_the_activation_and_tests_morale_at_its_end() {
+    let ends = "Falling: Squad's activation ends, so it does not shoot";
+    let (after, shot) = squad_jump(vec![vec![2, 1, 4, 5], vec![1, 6, 6, 6], vec![6]]);
+    assert_eq!(after.alive[0], 1, "the fallen model died: {:?}", shot.log);
+    assert!(shot.log.iter().any(|l| l == ends), "{:?}", shot.log);
+    let morale: Vec<&crate::dice::Roll> = shot.rolls.iter().filter(|r| !matches!(r.kind, "jump" | "fall") && r.owner == "Squad").collect();
+    assert_eq!(morale.iter().filter(|r| r.kind != "cast").count(), 1, "one morale die at the end: {:?}", shot.rolls);
+    assert!(!shot.rolls.iter().any(|r| r.kind == "cast"), "no cast after the fall: {:?}", shot.rolls);
+    let (after, shot) = squad_jump(vec![vec![2, 3, 5, 6], vec![6]]);
+    assert_eq!(after.alive[0], 2);
+    assert!(shot.rolls.iter().any(|r| r.kind == "cast"), "the fixture casts when nobody fell: {:?}", shot.rolls);
+    assert!(!shot.log.iter().any(|l| l == ends), "{:?}", shot.log);
+    assert!(shot.falls.is_empty());
+}
