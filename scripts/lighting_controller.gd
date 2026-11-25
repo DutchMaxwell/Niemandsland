@@ -191,9 +191,11 @@ func apply_preset(preset_name: String) -> void:
 ## Set the board's light ({} = none) and re-apply the mood's current values through it.
 func set_board_look(look: Dictionary) -> void:
 	_board_look = look.duplicate()
-	for key: String in ["sun_energy", "sun_color", "ambient_energy", "ambient_color", "exposure", "fill_light_energy"]:
+	for key: String in ["sun_energy", "sun_color", "ambient_energy", "ambient_color", "exposure", "fill_light_energy", "fill_light_color"]:
 		if current_preset.has(key):
 			call("set_" + key, current_preset[key])
+	if current_preset.has("sun_angle_h") and current_preset.has("sun_angle_v"):
+		set_sun_angles(current_preset.sun_angle_h, current_preset.sun_angle_v)
 
 
 ## A value of the board's look (`fallback` without one): the table rig reads the fill light's direction here.
@@ -224,9 +226,9 @@ func set_sun_color(color: Color) -> void:
 
 func set_sun_angles(horizontal: float, vertical: float) -> void:
 	if _directional_light:
-		# Convert angles to transform
-		var h_rad = deg_to_rad(horizontal)
-		var v_rad = deg_to_rad(vertical)
+		# Convert angles to transform (a board's look may hold its own key direction)
+		var h_rad = deg_to_rad(float(_board_look.get("sun_angle_h", horizontal)))
+		var v_rad = deg_to_rad(float(_board_look.get("sun_angle_v", vertical)))
 
 		# Position light in a sphere around origin
 		var distance = 10.0
@@ -285,13 +287,13 @@ func set_shadow_normal_bias(value: float) -> void:
 
 func set_fill_light_energy(value: float) -> void:
 	if _fill_light:
-		_fill_light.light_energy = maxf(value, float(_board_look.get("fill_light_energy_min", 0.0)))
+		_fill_light.light_energy = maxf(float(_board_look.get("fill_light_energy", value)), float(_board_look.get("fill_light_energy_min", 0.0)))
 		current_preset.fill_light_energy = value
 
 
 func set_fill_light_color(color: Color) -> void:
 	if _fill_light:
-		_fill_light.light_color = color
+		_fill_light.light_color = _board_look.get("fill_light_color", color)
 		current_preset.fill_light_color = color
 
 
