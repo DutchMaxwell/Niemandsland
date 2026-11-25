@@ -50,7 +50,7 @@ func test_bulky_junk_stands_wholly_inside_terrain_cells_and_never_on_a_street() 
 		var placements := BoardgenDressClutter.new().plan(ctx)
 		var bulky := placements.filter(
 			func(p: DressPlacement) -> bool:
-				return not BoardgenDressClutter.FLAT_SITES.has(p.module)
+				return p.module.begins_with("dr_junk") or p.module.begins_with("dr_yard")
 		)
 		assert_int(bulky.size()).override_failure_message("seed %d: no junk" % s).is_greater(0)
 		for p: DressPlacement in bulky:
@@ -83,8 +83,13 @@ func test_no_rule_breaks_no_overlap_no_ladder_strip_or_doorway_and_flat_sites_st
 		var seen: Array[Rect2] = []
 		var yard := 0
 		for p: DressPlacement in placements:
-			if BoardgenDressClutter.FLAT_SITES.has(p.module):
-				var top := p.transform.origin.y / IN + ctx.spec(p.module).aabb_hi.y
+			if (
+				BoardgenDressClutter.FLAT_SITES.has(p.module)
+				or BoardgenDressClutter.LITTER.has(p.module)
+			):
+				var o := p.transform.origin / IN
+				var at := Vector2i(((Vector2(o.x, o.z) - ctx.origin_in) / ctx.cell_in).floor())
+				var top := o.y + ctx.spec(p.module).aabb_hi.y - ctx.top_in(at.x, at.y)
 				assert_float(top).is_less_equal(BoardgenDressRules.FLAT + TOL_IN)
 				continue
 			yard += 1 if p.module.begins_with("dr_yard") else 0
@@ -94,3 +99,50 @@ func test_no_rule_breaks_no_overlap_no_ladder_strip_or_doorway_and_flat_sites_st
 			seen.append(r)
 		yards += yard
 	assert_int(yards).override_failure_message("no ruin-yard piece on any seed").is_greater(0)
+
+
+## Step 32: flat litter lies under FLAT, never on a kept-clear cell or in a ladder strip, and a
+## street cell carries at least twice the litter of an open-earth cell (over 20 seeds).
+func test_flat_litter_stays_flat_off_kept_clear_cells_and_streets_get_twice_the_earths() -> void:
+	var per := {"street": [0, 0], "earth": [0, 0]}  # [pieces, cells]
+	for s in range(1, 21):
+		var ctx := _ctx(s)
+		var strips: Array[Rect2] = BoardgenDressRules._ladder_zones(ctx.layout)
+		var litter := BoardgenDressClutter.new().plan(ctx).filter(
+			func(p: DressPlacement) -> bool: return BoardgenDressClutter.LITTER.has(p.module)
+		)
+		assert_int(litter.size()).override_failure_message("seed %d: little litter" % s).is_greater(
+			50
+		)
+		for p: DressPlacement in litter:
+			var o := p.transform.origin / IN
+			var cell := Vector2i(((Vector2(o.x, o.z) - ctx.origin_in) / ctx.cell_in).floor())
+			var i := cell.y * ctx.nx + cell.x
+			var top := o.y + ctx.spec(p.module).aabb_hi.y - ctx.top_in(cell.x, cell.y)
+			assert_float(top).is_less_equal(BoardgenDressRules.FLAT + TOL_IN)
+			assert_bool(ctx.kept_clear_cell(i)).is_false()
+			(
+				assert_bool(
+					strips.any(func(z: Rect2) -> bool: return z.has_point(Vector2(o.x, o.z)))
+				)
+				. is_false()
+			)
+			var c: Dictionary = ctx.layout["cells"][i]
+			if int(c["level"]) == 0 and str(c["lot_kind"]) != "Hazard":
+				per["street" if c["street"] else "earth"][0] += 1
+		for i in (ctx.layout["cells"] as Array).size():
+			var c: Dictionary = ctx.layout["cells"][i]
+			if (
+				int(c["level"]) == 0
+				and ctx.walkable(i)
+				and not ctx.kept_clear_cell(i)
+				and str(c["lot_kind"]) != "Hazard"
+			):
+				per["street" if c["street"] else "earth"][1] += 1
+	var street := float(per["street"][0]) / maxf(per["street"][1], 1.0)
+	var earth := float(per["earth"][0]) / maxf(per["earth"][1], 1.0)
+	(
+		assert_float(street)
+		. override_failure_message("street %.2f vs earth %.2f per cell" % [street, earth])
+		. is_greater_equal(2.0 * earth)
+	)
