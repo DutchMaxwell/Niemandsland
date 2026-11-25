@@ -1075,6 +1075,11 @@ pub const CURRENT_RULES_EPOCH: u32 = 100;
 /// PENDING (the 3.6 Firefight and AoF: Skirmish books, Pushing): a unit Shaken by an attack may be pushed by the attacker
 /// (`activation::Input::Push`). A placeholder one past `CURRENT_RULES_EPOCH`. Records stamped 100 or below replay byte-exact.
 pub const PENDING_EPOCH_SKIRMISH_PUSH: u32 = 101;
+/// PENDING (the 3.6 Firefight book, step 9c): the casualty order keeps a gff unit's chain at the Firefight 9 in
+/// (`Book::chain_in_at`), where it kept the recorded 6 in while the movement chain was already 9 in (`EPOCH_98_FIREFIGHT_CHAIN`).
+/// A placeholder one past the Pushing one. Records stamped 101 or below replay byte-exact. Read only by
+/// `casualty::chain_casualty_order`.
+pub const PENDING_EPOCH_CASUALTY_CHAIN: u32 = 102;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff

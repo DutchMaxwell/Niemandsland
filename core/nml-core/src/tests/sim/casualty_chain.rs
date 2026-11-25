@@ -34,7 +34,7 @@ use super::*;
             (st.positions[1], Rc::make_mut(&mut st.radii)[1], st.wounds[1], st.alive[1]) = (vec![], vec![], vec![], 0);
             let want: Vec<usize> =
                 c["expected"].as_array().unwrap().iter().map(|x| x.as_u64().unwrap() as usize).collect();
-            assert_eq!(crate::casualty::chain_casualty_order(&st, 0, None), Some(want), "{}", c["name"]);
+            assert_eq!(crate::casualty::chain_casualty_order(&st, 0, None, 0), Some(want), "{}", c["name"]);
         }
     }
 
@@ -56,10 +56,10 @@ use super::*;
         };
         let kit_ids = |st: &State| st.kits[0].iter().map(|k| k.weapons[0]).collect::<Vec<_>>();
         let mut st = line();
-        crate::sim::land_wounds_with(&mut st, 0, 1, true);
+        crate::sim::land_wounds_with(&mut st, 0, 1, true, 0);
         assert_eq!((st.alive[0], kit_ids(&st)), (2, vec![1, 0]), "the end Rifle died, the launcher stands");
         let mut old = line();
-        crate::sim::land_wounds_with(&mut old, 0, 1, false);
+        crate::sim::land_wounds_with(&mut old, 0, 1, false, 0);
         assert_eq!(kit_ids(&old), vec![0, 0], "without the switch slot 0 (the launcher) dies");
         let exact = Seams { rules_epoch: crate::acts::CURRENT_RULES_EPOCH, tray_exact: true, ..Seams::default() };
         let mut st = line();
@@ -102,7 +102,7 @@ use super::*;
             let k = |w: Vec<u16>| crate::state::Kit { weapons: w, equipment: 0, wounds_max: 1 };
             st.kits = vec![Rc::new(vec![k(vec![1]), k(vec![0]), k(vec![0])])]; // 1 = the launcher
             (st.positions[1], Rc::make_mut(&mut st.radii)[1], st.wounds[1], st.alive[1]) = (vec![], vec![], vec![], 0);
-            crate::sim::land_wounds_with(&mut st, 0, 1, exact_at(e));
+            crate::sim::land_wounds_with(&mut st, 0, 1, exact_at(e), e);
             st.kits[0].iter().map(|k| k.weapons[0]).collect::<Vec<_>>()
         };
         assert_eq!(survivors(crate::acts::EPOCH_69_HERO_FOLD), vec![0, 0], "69: slot 0, the launcher, dies");
@@ -110,3 +110,31 @@ use super::*;
         assert_eq!(survivors(crate::acts::CURRENT_RULES_EPOCH), vec![1, 0], "the live epoch plays the tray-exact order");
     }
 
+
+/// Step 9c: the casualty pick reads the unit's chain at the epoch. Six models in a line, 1 in edge gaps (32 mm bases), both
+/// end models carry the launcher (kept last in the value order): the line spans 10 in, so no pick keeps every pair within
+/// 6 in, but dropping an end keeps them within 9 in. A gff unit at the Firefight 9 in drops an end (slot 0) from the
+/// casualty-chain epoch; one epoch below it still plays the recorded 6 in (no coherent pick: the value order's lead,
+/// slot 1, which breaks the line). aofs keeps its 6 in; gf keeps its 9 in at every epoch.
+#[test]
+fn the_casualty_pick_reads_the_firefight_9_in_chain_from_its_epoch() {
+    let pick = |sys: &str, e: u32| {
+        let mut st = four_unit_line();
+        let s = 0.0574;
+        st.positions[0] = (0..6).map(|i| [i as f64 * s, 0.0, 0.0]).collect();
+        (st.wounds[0], Rc::make_mut(&mut st.radii)[0], st.alive[0]) = (vec![1; 6], vec![0.016; 6], 6);
+        let k = |w: Vec<u16>| crate::state::Kit { weapons: w, equipment: 0, wounds_max: 1 };
+        st.kits = vec![Rc::new((0..6).map(|i| k(vec![u16::from(i == 0 || i == 5)])).collect())];
+        (st.positions[1], Rc::make_mut(&mut st.radii)[1], st.wounds[1], st.alive[1]) = (vec![], vec![], vec![], 0);
+        let mut p = st.profiles.list[0].clone();
+        p.game_system = sys.into();
+        st.profiles = Rc::new(crate::state::Profiles { list: vec![p; st.profiles.list.len()], index: Default::default() });
+        crate::casualty::chain_casualty_order(&st, 0, Some(1), e).and_then(|o| o.first().copied())
+    };
+    let e = crate::acts::PENDING_EPOCH_CASUALTY_CHAIN;
+    assert!(e > crate::acts::CURRENT_RULES_EPOCH, "a placeholder no record has played");
+    assert_eq!(pick("gff", e), Some(0), "the Firefight 9 in: an end model goes, the line stays whole");
+    assert_eq!(pick("gff", e - 1), Some(1), "one epoch below: the recorded 6 in, no coherent pick, the value order's lead");
+    assert_eq!(pick("aofs", e), Some(1), "AoF: Skirmish keeps 6 in");
+    assert_eq!((pick("gf", e), pick("gf", e - 1)), (Some(0), Some(0)), "gf is 9 in at every epoch");
+}
