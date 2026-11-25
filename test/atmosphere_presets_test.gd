@@ -119,3 +119,62 @@ func test_blend_fades_the_moon_in_the_sky_shader() -> void:
 	assert_float(float(sky.get_shader_parameter("moon_strength"))).is_equal(1.0)
 	atmosphere._apply_blend(0.5, {}, LightingScript.PRESETS["Night"], {"moon": 0.0}, preset, Color.WHITE, 1.0)
 	assert_float(float(sky.get_shader_parameter("moon_strength"))).is_equal(0.5)
+
+
+## Look review 4: the skirmish systems (Firefight gff, AoF Skirmish aofs) start at Night when the player has not picked a mood himself - and the look is the
+## Night LIGHTING preset the maintainer approved (look1125d), even on the ruin town, which re-applies its own dusk one frame after every atmosphere change.
+## Every other system keeps the standard Sunset; a mood the player picked is saved and wins over every system default, also after a restart.
+func test_skirmish_systems_default_to_the_night_look_unless_the_player_picked_a_mood() -> void:
+	assert_str(AtmosphereScript.default_preset_for("gff", "")).is_equal("Night")
+	assert_str(AtmosphereScript.default_preset_for("aofs", "")).is_equal("Night")
+	for big: String in ["gf", "aof", "aofr", ""]:
+		assert_str(AtmosphereScript.default_preset_for(big, "")).override_failure_message("%s changed its default" % big).is_equal(AtmosphereScript.DEFAULT_PRESET)
+	assert_str(AtmosphereScript.default_preset_for("gff", "Rain")).is_equal("Rain")
+	var path := "user://atmosphere_default_test.cfg"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	var light: DirectionalLight3D = auto_free(DirectionalLight3D.new())
+	add_child(light)
+	var env := WorldEnvironment.new()
+	env.environment = Environment.new()
+	add_child(auto_free(env))
+	var lighting: Node = auto_free(Node.new())
+	lighting.set_script(LightingScript)
+	add_child(lighting)
+	lighting.initialize(light, env, null)
+	var atmosphere: Node = auto_free(AtmosphereScript.new())
+	atmosphere.config_path = path
+	add_child(atmosphere)
+	atmosphere.initialize(lighting, env, null, null)
+	# a stand-in for the ruin town: one frame after every atmosphere change it re-applies its own dusk (BoardgenGreybox._dusk_again)
+	atmosphere.atmosphere_changed.connect(func(_n: String) -> void: (func() -> void: lighting.set_sun_energy(99.0)).call_deferred())
+	atmosphere.apply_default_for_system("gff")
+	await await_idle_frame()
+	assert_str(atmosphere.get_current_atmosphere()).is_equal("Night")
+	assert_str(str(lighting.current_preset.get("name", ""))).override_failure_message("the skirmish default is not the Night lighting look").is_equal(str(LightingScript.PRESETS["Night"]["name"]))
+	assert_float(light.light_energy).override_failure_message("the town's dusk replaced the Night look").is_equal_approx(float(LightingScript.PRESETS["Night"]["sun_energy"]), 0.001)
+	atmosphere.apply_default_for_system("gf")
+	await await_idle_frame()
+	assert_str(atmosphere.get_current_atmosphere()).is_equal("Sunset")
+	atmosphere.choose_atmosphere("Rain")
+	atmosphere.apply_default_for_system("gff")
+	await await_idle_frame()
+	assert_str(atmosphere.get_current_atmosphere()).override_failure_message("the system default beat the player's pick").is_equal("Rain")
+	var again: Node = auto_free(AtmosphereScript.new())   # a restart: the saved pick comes back and still wins
+	again.config_path = path
+	add_child(again)
+	again.initialize(lighting, env, null, null)
+	assert_str(again.get_chosen_atmosphere()).override_failure_message("the pick was not saved").is_equal("Rain")
+	again.apply_default_for_system("aofs")
+	assert_str(again.get_current_atmosphere()).is_equal("Rain")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+## Look review 4: the table's game system announces a change, so the mood can follow the system's default.
+func test_the_army_manager_announces_the_table_system() -> void:
+	var manager: Node = auto_free(OPRArmyManager.new())
+	var seen: Array = []
+	manager.table_system_changed.connect(func(s: String) -> void: seen.append(s))
+	manager.table_system = "gff"
+	manager.table_system = "gff"
+	manager.table_system = "gf"
+	assert_array(seen).is_equal(["gff", "gf"])

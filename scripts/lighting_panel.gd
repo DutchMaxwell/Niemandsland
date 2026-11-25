@@ -71,7 +71,7 @@ func set_atmosphere_controller(atmosphere_ctrl: Node) -> void:
 		var btn := Button.new()
 		btn.text = preset_name
 		btn.pressed.connect(func() -> void:
-			atmosphere_controller.apply_atmosphere(preset_name))
+			atmosphere_controller.choose_atmosphere(preset_name))   # a pick of his own: saved, it wins over the game system's default
 		grid.add_child(btn)
 
 	var fires_toggle := CheckButton.new()

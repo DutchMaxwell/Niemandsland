@@ -185,7 +185,13 @@ var rules_automation: int = RulesAutomation.Level.MANUAL
 
 ## The table's game system: one of GameSystem.IDS, "" = never set (old saves, harness,
 ## tutorial, lesson boards). Host-owned in MP. Main._table_system() resolves it; "" falls back to the loaded lists.
-var table_system: String = ""
+var table_system: String = "":
+	set(value):
+		var changed := value != table_system
+		table_system = value
+		if changed:
+			table_system_changed.emit(value)
+signal table_system_changed(system: String)   # (look review 4) the mood follows the system's default
 
 ## NML-949 — match-level RULE state that is not per-unit: once-per-game / per-round
 ## bookkeeping that used to live only in Main or in the SoloController and was therefore
