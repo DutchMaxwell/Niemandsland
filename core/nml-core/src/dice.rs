@@ -590,6 +590,15 @@ pub struct Roll {
     pub owner: String,
 }
 
+/// One weapon's share of a skirmish Blast spread: the shooter (index into the volley's `shooters`), the profile (index into
+/// its `profiles`) and the hits each neighbour unit takes, in the order the caller passed `blast_spread`.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct BlastSpill {
+    pub shooter: usize,
+    pub profile: usize,
+    pub hits: Vec<i64>,
+}
+
 /// What one shooting activation did on the tray.
 #[derive(Debug, Default, Clone)]
 pub struct ShootResult {
@@ -621,6 +630,8 @@ pub struct ShootResult {
     /// hits", main.gd:6162-6165). Carried beside the dice stream, never a roll
     /// of its own.
     pub log: Vec<String>,
+    /// The skirmish Blast spread: one entry per weapon that spread, in firing order. Empty when the volley spread nothing.
+    pub blast_spill: Vec<BlastSpill>,
     /// WAVE 3 — the family's alias/boost arm ACTUALLY lowered a save target
     /// this activation (main.gd's `ap < ap_before` guard), as read by
     /// `save_batch`; the orchestrators turn it into the rules-must-log line.
@@ -982,7 +993,7 @@ fn say_regen_bypass(tray: &mut Tray, side: i64, p: &ShootProfile, att: &Ctx, def
 /// one at a time in turn over the target (index 0) and the `neighbour_models` units (indices 1..), each unit capped at
 /// its own living models; what no unit can take is lost. The turn starts at the target, so an odd hit lands there
 /// (the default when the defender places none). Returns the hits per unit; `x` <= 1 leaves every hit on the target.
-/// No neighbours = today's `hits * x.clamp(1, models)` (the shooting leg's Blast multiply). Not wired yet.
+/// No neighbours = today's `hits * x.clamp(1, models)` (the shooting leg's Blast multiply). Read by the shooting volley when a book spreads Blast.
 pub fn blast_split(hits: i64, x: i64, target_models: i64, neighbour_models: &[i64]) -> Vec<i64> {
     let caps: Vec<i64> = std::iter::once(target_models.max(1)).chain(neighbour_models.iter().map(|m| (*m).max(0))).collect();
     let mut one = vec![0i64; caps.len()];
@@ -1635,7 +1646,7 @@ pub fn resolve_volley_leg(
 ) -> ShootResult {
     resolve_volley_with_pick_label(shooters, def, def_owner, dist_in, mod_dist_in, cond_ap_dice, surge_gates,
         shred_alias_dice, shred_boost_dice, deadly_per_model, takedown_exact,
-        &|gr| (takedown_cover(gr), "trooper".into(), 0), sighted, None, None, tray)
+        &|gr| (takedown_cover(gr), "trooper".into(), 0), sighted, None, None, &[], tray)
 }
 
 /// `resolve_volley_leg` whose Takedown pick callback also answers the picked model's label (the table's `_solo_model_label`),
@@ -1652,7 +1663,11 @@ pub(crate) fn resolve_volley_with_pick_label(
     inline_land: Option<InlineLand<'_>>,
     // `EPOCH_95_PARITY_BATCH`: on the finished Deadly groups, is the target's chain dead? Its Deadly wounds left then roll no
     // ignore dice (the melee leg's `deadly_wipes`). `None` below 95.
-    deadly_wipes: Option<&dyn Fn(&ShootResult) -> bool>, tray: &mut Tray,
+    deadly_wipes: Option<&dyn Fn(&ShootResult) -> bool>,
+    // The skirmish Blast spread: the living models of each enemy unit within the book's spread distance of the target
+    // (`sim::blast_neighbours`). Empty = no spread, the plain multiply below.
+    blast_spread: &[i64],
+    tray: &mut Tray,
 ) -> ShootResult {
     let mut inline_land = inline_land;
     let mut wiped = false;
@@ -2360,7 +2375,18 @@ pub(crate) fn resolve_volley_with_pick_label(
         }
         // Tray-exact S8: a Takedown resolves as a unit of [1] — Blast has one model to spill onto
         // (main.gd `_solo_hits`, TC-023) and the save reads the pick's own square.
-        if hits > 0 && p.blast > 1 {
+        if hits > 0 && p.blast > 1 && !blast_spread.is_empty() && !unit_of_one {
+            let cap = def.blast_models.unwrap_or(def.models).max(1);
+            let split = blast_split(hits, p.blast, cap, blast_spread);
+            let shooter = shooters.iter().position(|s| std::ptr::eq(s, sh)).unwrap_or(0);
+            out.blast_spill.push(BlastSpill { shooter, profile: pi, hits: split[1..].to_vec() });
+            let (kept, spread) = (split[0], split[1..].iter().sum::<i64>());
+            let line = format!("Blast({}): {hits} hit{} -> {kept} on {def_owner}, {spread} on units within reach, {} lost",
+                p.blast, if hits == 1 { "" } else { "s" }, hits * p.blast - kept - spread);
+            out.log.push(line.clone());
+            say_rule(tray, "blast", att.side, || line);
+            hits = kept;
+        } else if hits > 0 && p.blast > 1 {
             let cap = if unit_of_one { 1 } else { def.blast_models.unwrap_or(def.models).max(1) };
             let boosted = hits * p.blast.clamp(1, cap);
             if def.blast_models.is_some() {

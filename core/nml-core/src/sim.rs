@@ -1120,9 +1120,18 @@ fn blast_cap_models(state: &State, ti: usize, seams: Seams, book: &crate::rules:
     }
 }
 
+/// The living models of each unit a Blast on `ti` spreads to, in `blast_neighbours`' order, when the target's book spreads
+/// Blast at this epoch (`Book::blast_spread_in_at`); empty otherwise, which keeps the shot's plain multiply.
+fn blast_spread_models(state: &State, ti: usize, seams: Seams) -> Vec<i64> {
+    match state.book(ti).blast_spread_in_at(seams.rules_epoch) {
+        Some(d) => blast_neighbours(state, ti, d).into_iter().map(|(_, m)| m).collect(),
+        None => Vec::new(),
+    }
+}
+
 /// The skirmish Blast(X) spread's neighbours (`dice::blast_split`): every other unit of the target's side on the table
 /// with a model whose base edge is within `spread_in` of a target model's base edge, as `(unit, living models)` in unit
-/// order. Not wired yet.
+/// order. Read by `blast_spread_models` for the shooting leg.
 pub fn blast_neighbours(state: &State, ti: usize, spread_in: f64) -> Vec<(usize, i64)> {
     let gap_in = |u: usize, k: usize, v: usize, j: usize| {
         let (p, q) = (state.positions[u][k], state.positions[v][j]);
@@ -1921,6 +1930,7 @@ pub(crate) fn tray_strafing(
         &|_, _| None,
         None,
         rule_on(seams.rules_epoch, crate::acts::EPOCH_95_PARITY_BATCH).then_some(&|r: &ShootResult| deadly_wiped(next, target, r, seams)),
+        &blast_spread_models(next, target, seams),
         tray,
     );
     // The volley tail, the shoot branch's own shape: spent Limited marks,
@@ -12559,6 +12569,7 @@ fn resolve_with(
                                     .map(|&n| (n, next.alive[*mi], msc.silent.get(pi).copied().unwrap_or("")))),
                                 if inline_on { Some(&mut inline_land) } else { None },
                                 rule_on(seams.rules_epoch, crate::acts::EPOCH_95_PARITY_BATCH).then_some(&|r: &ShootResult| deadly_wiped(&next, g.ti, r, seams)),
+                                &blast_spread_models(&next, g.ti, seams),
                                 tray,
                             );
                             // WAVE 3, rules-must-log — the arm lowered a

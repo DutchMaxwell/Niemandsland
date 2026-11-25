@@ -43,6 +43,9 @@ pub struct Book {
     /// A later hero aura and the epoch it starts at (`hero_aura_at`); `None` = `hero_aura` at every epoch.
     pub hero_aura_from: Option<(u32, HeroAura)>,
     pub blast_spread_in: Option<f64>,
+    /// A later Blast spread distance and the epoch it starts at (`blast_spread_in_at`); `None` = `blast_spread_in` at every
+    /// epoch.
+    pub blast_spread_from: Option<(u32, f64)>,
     pub vertical_moves: bool,
     pub default_board_in: [f64; 2],
     /// At most one model per ARMY with each command upgrade (`COMMAND_UPGRADES`); `command_limit` checks a list.
@@ -66,6 +69,7 @@ const BOOK_GF: Book = Book {
     hero_aura: DEFAULT_HERO_AURA,
     hero_aura_from: None,
     blast_spread_in: None,
+    blast_spread_from: None,
     vertical_moves: false,
     default_board_in: [72.0, 48.0],
     one_command_upgrade_each: false,
@@ -82,6 +86,7 @@ const BOOK_GFF: Book = Book {
     hero_aura: DEFAULT_HERO_AURA,
     hero_aura_from: SKIRMISH_HERO_FROM,
     blast_spread_in: None,
+    blast_spread_from: None,
     vertical_moves: true,
     default_board_in: [48.0, 48.0],
     one_command_upgrade_each: false,
@@ -94,6 +99,7 @@ const BOOK_AOF: Book = Book {
     hero_aura: DEFAULT_HERO_AURA,
     hero_aura_from: None,
     blast_spread_in: None,
+    blast_spread_from: None,
     vertical_moves: false,
     default_board_in: [72.0, 48.0],
     one_command_upgrade_each: false,
@@ -107,6 +113,7 @@ const BOOK_AOFS: Book = Book {
     hero_aura: DEFAULT_HERO_AURA,
     hero_aura_from: SKIRMISH_HERO_FROM,
     blast_spread_in: None,
+    blast_spread_from: None,
     vertical_moves: true,
     default_board_in: [48.0, 48.0],
     one_command_upgrade_each: true,
@@ -119,6 +126,7 @@ const BOOK_AOFR: Book = Book {
     hero_aura: DEFAULT_HERO_AURA,
     hero_aura_from: None,
     blast_spread_in: None,
+    blast_spread_from: None,
     vertical_moves: false,
     default_board_in: [72.0, 48.0],
     one_command_upgrade_each: false,
@@ -130,6 +138,15 @@ impl Book {
         match self.chain_in_from {
             Some((since, chain)) if crate::acts::rule_on(rules_epoch, since) => chain,
             _ => self.chain_in,
+        }
+    }
+
+    /// The Blast spread distance a game at `rules_epoch` plays: `blast_spread_in`, or the later one from its starting epoch
+    /// on. `None` = Blast stays on the target unit.
+    pub fn blast_spread_in_at(&self, rules_epoch: u32) -> Option<f64> {
+        match self.blast_spread_from {
+            Some((since, d)) if crate::acts::rule_on(rules_epoch, since) => Some(d),
+            _ => self.blast_spread_in,
         }
     }
 
@@ -1082,6 +1099,16 @@ mod tests {
         assert_eq!(command_limit("aofs", &two_banners), Err("Spears: only one Banner per army in this game system".into()));
         for sys in SYSTEMS.iter().filter(|s| **s != "aofs") {
             assert_eq!(command_limit(sys, &two_banners), Ok(()), "{sys} has no army-wide limit");
+        }
+    }
+
+    /// No book spreads Blast yet at any epoch: the shooting leg's spread wiring is byte-identical until a book turns it on.
+    #[test]
+    fn no_book_spreads_blast_yet() {
+        for sys in SYSTEMS {
+            for e in [0, crate::acts::CURRENT_RULES_EPOCH, crate::acts::CURRENT_RULES_EPOCH + 1, u32::MAX] {
+                assert_eq!(book(sys).blast_spread_in_at(e), None, "{sys} at {e}");
+            }
         }
     }
 

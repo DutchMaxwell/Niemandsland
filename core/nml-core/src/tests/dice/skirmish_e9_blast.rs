@@ -58,3 +58,25 @@ fn without_neighbours_the_split_is_todays_multiply() {
     }
     assert_eq!(blast_split(2, 1, 3, &[3]), vec![2, 0]);
 }
+
+/// The volley's spread wiring: one Blast(4) hit on a 3-model unit with a 3-model neighbour keeps 2 hits on the target (2
+/// saves rolled) and spills 2; with no neighbours passed it is today's multiply (3 saves) and spills nothing.
+#[test]
+fn the_volley_keeps_the_targets_share_and_spills_the_rest() {
+    let att = Ctx { quality: 4, ..Default::default() };
+    let def = Ctx { quality: 4, defense: 4, tough: 3, models: 3, ..Default::default() };
+    let guns = [blast_gun(4, 1)];
+    let sh = [Shooter { profiles: &guns, keep: &[0], attacks: &[1], att: &att, owner: "Gunner" }];
+    let volley = |spread: &[i64]| {
+        let mut tray = Tray::supplied(vec![vec![5], vec![1, 1, 1]]);
+        resolve_volley_with_pick_label(&sh, &def, "Squad", 12.0, 12.0, true, true, true, true, true, true,
+            &|_| (false, "trooper".into(), 0), &|_, _| None, None, None, spread, &mut tray)
+    };
+    let spread = volley(&[3]);
+    assert_eq!(spread.rolls[1].count, 2, "the target's share: {:?}", spread.rolls);
+    assert_eq!(spread.blast_spill, vec![crate::dice::BlastSpill { shooter: 0, profile: 0, hits: vec![2] }]);
+    assert!(spread.log.iter().any(|l| l == "Blast(4): 1 hit -> 2 on Squad, 2 on units within reach, 0 lost"), "{:?}", spread.log);
+    let plain = volley(&[]);
+    assert_eq!(plain.rolls[1].count, 3, "no neighbours: 1 x min(4, 3)");
+    assert!(plain.blast_spill.is_empty());
+}
