@@ -174,7 +174,6 @@ _solo_ai_core_call 7
 _solo_ai_delayed_action_pass 3
 _solo_ai_slot 1
 _solo_ai_took_last_activation 6
-_solo_ai_volley_distance_in 1
 _solo_alternation_active 7
 _solo_ambush_arrival_text 2
 _solo_ambush_human_turn 4
@@ -301,7 +300,6 @@ _solo_log_dangerous_test 1
 _solo_log_ebr_spell_exclusion 1
 _solo_log_grade 1
 _solo_log_melee_result 2
-_solo_log_reach_shrink 2
 _solo_log_shaken_lenders 1
 _solo_log_unmodeled_rules 8
 _solo_log_vanguard_notes 1

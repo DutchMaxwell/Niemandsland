@@ -236,7 +236,7 @@ func test_ai_volley_modifiers_use_the_nearest_base_gap(timeout := 120000) -> voi
 	assert_float(_main.solo_controller.nearest_melee_gap_in(gunner, target)).is_equal_approx(7.0, 0.1)
 	assert_float(MoveIntent.distance_inches(_main.solo_controller.unit_centre(gunner),
 		_main.solo_controller.unit_centre(target))).is_equal_approx(10.5, 0.1)
-	var ai_dist: float = _main._solo_ai_volley_distance_in(gunner, target)
+	var ai_dist: float = _main.solo_controller.nearest_melee_gap_in(gunner, target)
 	assert_float(ai_dist).is_equal_approx(7.0, 0.1)
 	var mod_info: Dictionary = _main._solo_hit_mod_info(gunner, target, ai_dist, false)
 	assert_str(str(mod_info.get("note", ""))).contains("Artillery: no +1 (target within 9\")")
