@@ -115,7 +115,7 @@ vec3 grit_street(vec2 xz, vec2 w, vec4 sett, float run, inout vec3 alb, inout fl
 	rough = mix(rough, 0.3, smoothstep(0.35, 0.75, g.g) * mix(1.0, 0.5, sett.y));   // wet in the low, damp places: a sheen in the joints first (train 2)
 	rel = mix(rel, max(rel, 0.45), joint * fill);
 	float cover = min(GRIT_MUD_COVER, 0.75 * mud) * smoothstep(0.35, 0.65, vnoise(xz * 1.9 + 7.0));   // a broken film: the setts show through
-	alb = mix(alb, mudc * 1.15, cover);
+	alb = mix(alb, mudc * 1.15, cover * mix(0.55, 1.0, joint));   // (look review 2) thinner on the crowns: the film lies in the setts, not on them
 	rough = mix(rough, 0.55, 0.6 * mud);
 	int fate = grit_fate(sett.x, g.a, min(g.g, 0.7), lane);
 	float f1 = kp * float(fate == 1);   // every fate fades out below ~3 px (keep): nothing crawls at the play camera
@@ -137,10 +137,14 @@ vec3 grit_street(vec2 xz, vec2 w, vec4 sett, float run, inout vec3 alb, inout fl
 	alb = mix(alb, mudc * 0.95, 0.5 * rut);
 	rel = mix(rel, 0.12, rut);
 	rough = mix(rough, 0.9, rut);
-	float pud = smoothstep(0.765, 0.79, g.g + (vnoise(xz * 3.1 + 11.0) - 0.5) * 0.03);   // a puddle: its edge broken a little
-	alb = mix(alb, alb * 0.45 + GRIT_PUDDLE_TINT, 0.75 * pud);
-	rough = mix(rough, 0.25, pud);
-	rel = mix(rel, 0.5, pud);   // flat water
+	// a puddle SITS IN the setts (look review 2: a flat, hard-edged sticker that the lamps lit orange): a soft broken edge, the water in the joints, the crowns
+	// breaking its surface a step darker and only damp, the setts' relief kept
+	float pud = smoothstep(0.75, 0.805, g.g + (vnoise(xz * 3.1 + 11.0) - 0.5) * 0.05);
+	float in_water = mix(0.45, 1.0, joint);
+	alb = mix(alb, alb * 0.45 + GRIT_PUDDLE_TINT, 0.75 * pud * in_water);
+	alb *= mix(1.0, 0.82, pud);
+	rough = mix(rough, mix(0.55, 0.3, joint), pud);
+	rel = mix(rel, max(rel, 0.35), pud * joint);
 	int c = pud > 0.5 ? 4 : (ken > 0.5 || rut > 0.5 ? 3 : (mud > 0.35 ? 2 : (walked > 0.5 ? 1 : 0)));
 	c = fate > 0 && c != 4 ? 6 + fate : c;   // the instrument counts the fate where it is, even where the look fades it out
 	return grit_class_colour(c);
