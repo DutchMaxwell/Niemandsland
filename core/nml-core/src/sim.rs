@@ -1120,13 +1120,67 @@ fn blast_cap_models(state: &State, ti: usize, seams: Seams, book: &crate::rules:
     }
 }
 
-/// The living models of each unit a Blast on `ti` spreads to, in `blast_neighbours`' order, when the target's book spreads
-/// Blast at this epoch (`Book::blast_spread_in_at`); empty otherwise, which keeps the shot's plain multiply.
-fn blast_spread_models(state: &State, ti: usize, seams: Seams) -> Vec<i64> {
+/// The units a Blast on `ti` spreads to, with their living models, in `blast_neighbours`' order, when the target's book
+/// spreads Blast at this epoch (`Book::blast_spread_in_at`); empty otherwise, which keeps the shot's plain multiply.
+fn blast_spread_units(state: &State, ti: usize, seams: Seams) -> Vec<(usize, i64)> {
     match state.book(ti).blast_spread_in_at(seams.rules_epoch) {
-        Some(d) => blast_neighbours(state, ti, d).into_iter().map(|(_, m)| m).collect(),
+        Some(d) => blast_neighbours(state, ti, d),
         None => Vec::new(),
     }
+}
+
+/// The skirmish Blast spread's neighbour leg: each weapon's spilled hits on each neighbour resolve as a fixed-hits copy of
+/// that weapon (no Blast, Takedown, Hazardous or extra attack) against the neighbour's live context, through the same
+/// volley resolver, then land - the pool, then the Deadly groups. One line per neighbour and weapon. Returns the
+/// neighbours that took wounds, once each, in order.
+#[allow(clippy::too_many_arguments)]
+fn land_blast_spill(
+    statics: &[UnitStatic], next: &mut State, parts: &[(usize, Scratch, Ctx)], spill: &[crate::dice::BlastSpill],
+    neighbours: &[usize], (d, mod_d): (f64, f64), seams: Seams, tray: &mut Tray, shot: &mut ShootResult,
+) -> Vec<usize> {
+    let mut hit: Vec<usize> = Vec::new();
+    for (j, &nj) in neighbours.iter().enumerate() {
+        for s in spill {
+            let h = s.hits.get(j).copied().unwrap_or(0);
+            let Some((mi, _, att)) = parts.get(s.shooter) else { continue };
+            if h <= 0 || next.alive[nj] <= 0 {
+                continue;
+            }
+            let mut p = statics[next.roster.profile[*mi]].shoot[s.profile].clone();
+            (p.fixed_hits, p.blast, p.takedown, p.extra_attack_q, p.hazardous, p.sergeant_attacks) = (Some(h), 0, false, 0, false, 0);
+            let un = &statics[next.roster.profile[nj]];
+            let mut def = with_modifier_sum(with_cond_ap_state(ctx_live(ctx_of(un, next, nj), statics, next, nj, false, seams.rules_epoch), statics, next, nj, seams), seams.rules_epoch);
+            stamp_blast_models(&mut def, next, nj, seams);
+            def.side = next.player[nj];
+            let owner = statics[next.roster.profile[*mi]].name.as_str();
+            let sh = [crate::dice::Shooter { profiles: std::slice::from_ref(&p), keep: &[0], attacks: &[1], att, owner }];
+            let r = crate::dice::resolve_volley_with_pick_label(
+                &sh, &def, &un.name, d, mod_d,
+                seams.cond_ap_dice || rule_on(seams.rules_epoch, 1),
+                rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES),
+                rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES),
+                shred_boost_active(seams.rules_epoch),
+                rule_on(seams.rules_epoch, EPOCH_14_DEADLY_LANDING),
+                seams.tray_exact,
+                &|_| (false, "trooper".into(), 0), &|_, _| None, None, None, &[], tray,
+            );
+            let before = (morale_alive(next, nj, seams), morale_wounds_left(next, nj, seams));
+            land_pool_wounds(next, nj, r.wounds, seams.tray_exact, seams, &mut shot.log);
+            for &(post, gx) in &r.deadly_groups {
+                land_deadly_group(next, nj, post, gx, seams, &mut None, &mut 0);
+            }
+            let took = before != (morale_alive(next, nj, seams), morale_wounds_left(next, nj, seams));
+            let line = format!("Blast: {} takes {h} hit{} from {owner}'s {} - {} unsaved", un.name, if h == 1 { "" } else { "s" }, p.name, r.wounds + r.deadly_groups.iter().map(|g| g.0).sum::<i64>());
+            shot.log.push(line.clone());
+            say_rule(tray, "blast", att.side, || line);
+            shot.rolls.extend(r.rolls);
+            shot.log.extend(r.log);
+            if took && !hit.contains(&nj) {
+                hit.push(nj);
+            }
+        }
+    }
+    hit
 }
 
 /// The skirmish Blast(X) spread's neighbours (`dice::blast_split`): every other unit of the target's side on the table
@@ -1930,7 +1984,7 @@ pub(crate) fn tray_strafing(
         &|_, _| None,
         None,
         rule_on(seams.rules_epoch, crate::acts::EPOCH_95_PARITY_BATCH).then_some(&|r: &ShootResult| deadly_wiped(next, target, r, seams)),
-        &blast_spread_models(next, target, seams),
+        &[], // the strafe's Blast stays on the unit it crossed; spreading it is the melee / spell step's
         tray,
     );
     // The volley tail, the shoot branch's own shape: spent Limited marks,
@@ -12547,7 +12601,8 @@ fn resolve_with(
                                 }
                                 combined_alive(sc, g.ti, seams)
                             };
-                            let r = crate::dice::resolve_volley_with_pick_label(
+                            let spread: Vec<(usize, i64)> = blast_spread_units(&next, g.ti, seams);
+                            let mut r = crate::dice::resolve_volley_with_pick_label(
                                 &shooters_of(&parts, statics, &next),
                                 &def, &ut_g.name, g.d, g.mod_d,
                                 seams.cond_ap_dice || rule_on(seams.rules_epoch, 1),
@@ -12569,7 +12624,7 @@ fn resolve_with(
                                     .map(|&n| (n, next.alive[*mi], msc.silent.get(pi).copied().unwrap_or("")))),
                                 if inline_on { Some(&mut inline_land) } else { None },
                                 rule_on(seams.rules_epoch, crate::acts::EPOCH_95_PARITY_BATCH).then_some(&|r: &ShootResult| deadly_wiped(&next, g.ti, r, seams)),
-                                &blast_spread_models(&next, g.ti, seams),
+                                &spread.iter().map(|&(_, m)| m).collect::<Vec<i64>>(),
                                 tray,
                             );
                             // WAVE 3, rules-must-log — the arm lowered a
@@ -12605,6 +12660,7 @@ fn resolve_with(
                             // not on the post-roll count that `wounds_before_g` measures.
                             let def_incoming = r.caused > 0;
                             let phantom = r.scourge_wounds;
+                            let spill = std::mem::take(&mut r.blast_spill);
                             let w = shot.absorb(r);
                             let members: Vec<usize> = parts.iter().map(|(mi, _, _)| *mi).collect();
                             let att_incoming = land_hazardous_self(statics, &mut next, &members, seams, tray, shot);
@@ -12683,6 +12739,8 @@ fn resolve_with(
                             // One-core P3 steps 7/25/27: the landing's lines and its landings, stamped BEFORE the group's morale test below draws.
                             let inline_said = ((inline_lines || td_marked) && deadly_dealt + takedown_dealt > 0).then_some(InlineSaid { said: ia.said, pool: w });
                             land_chain_report_said(statics, &next, tray, rep, chain_before, deadly_dealt + takedown_dealt, inline_said.as_ref());
+                            let neighbours: Vec<usize> = spread.iter().map(|&(u, _)| u).collect();
+                            land_blast_spill(statics, &mut next, &parts, &spill, &neighbours, (g.d, g.mod_d), seams, tray, shot);
                             // rules-wave3-growthmark (epoch 6) — the
                             // ignore-wound marker AFTER the landing.
                             if rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
