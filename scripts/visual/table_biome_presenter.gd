@@ -28,6 +28,9 @@ const PRESET_DENSITY := {2: 1.0, 3: 1.0, 4: 1.0}   # MEDIUM, HIGH, ULTRA
 ## Maintainer decision D4: the game's ground mist is hidden while a biome is dressed — the accepted
 ## look had none (the reference scene hides it too). The mist comes back on teardown.
 const HIDE_GROUND_MIST := true
+## A board that must not stand in the table's landscape puts itself in this group (a generated Tiefwerk board: an
+## undercity has no meadow round it). The table is not dressed while one lies on it and is dressed again when it leaves.
+const HIDES_LANDSCAPE_GROUP := "hides_table_landscape"
 ## Scatter counts are per m²; above a 6x4 ft table the density falls instead of the frame rate.
 const REFERENCE_AREA_M2 := 6.0 * 0.3048 * 4.0 * 0.3048
 ## The sun values only the reference sets (the profile's shadow bias included: no mood sets it back).
@@ -125,19 +128,13 @@ func should_dress() -> bool:
 	if DisplayServer.get_name() != "headless" and RenderingServer.get_current_rendering_method() != "forward_plus":
 		return false
 	for child in _table.get_children():
-		if is_undercity_board(child):
+		if child.is_in_group(HIDES_LANDSCAPE_GROUP):
 			return false
 	return _current_density() > 0.0
 
 
-## A generated Tiefwerk board is an undercity: no meadow round it, so the table is not dressed while one lies on it. The ruin town keeps
-## the biome as distant land.
-static func is_undercity_board(node: Node) -> bool:
-	return node.is_in_group(BoardgenGreybox.TABLE_OVERLAY_GROUP) and str(node.get("layout_theme")) == BoardgenTheme.DEEPWORKS
-
-
 func _on_table_child(node: Node) -> void:
-	if is_undercity_board(node):
+	if node.is_in_group(HIDES_LANDSCAPE_GROUP):
 		request_rebuild("board")
 
 

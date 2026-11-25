@@ -15,6 +15,9 @@ const ENV_SEED := "NML_BOARDGEN_SEED"
 const ENV_THEME := "NML_BOARDGEN_THEME"
 ## setup_table (load, resize) frees the table's other children; this group keeps the board.
 const TABLE_OVERLAY_GROUP := "table_overlay"
+## The table's landscape is not dressed round a board in this group (TableBiomePresenter.HIDES_LANDSCAPE_GROUP; spelled out here: a
+## board script that names the presenter no longer compiles before the autoloads exist, as in a tool run with -s).
+const HIDES_LANDSCAPE_GROUP := "hides_table_landscape"
 ## The table's ground scatter (tufts, leaves, straw) is off on the board AND round it, whatever the table size: no biome dressing
 ## while a generated board is on the table (a board is the whole playing surface; the rest of the table is its frame).
 const SCATTER_OFF_M := 3.0
@@ -91,6 +94,8 @@ static func attach(table: Node, layout: Dictionary, dress: BoardgenDress = null)
 	node.name = "BoardgenGreybox"
 	node.add_to_group(TABLE_OVERLAY_GROUP)
 	node.build(layout, dress)
+	if node.layout_theme == BoardgenTheme.DEEPWORKS:   # an undercity: no meadow round it (the town keeps the landscape as distant land)
+		node.add_to_group(HIDES_LANDSCAPE_GROUP)
 	if node.layout_theme == BoardgenTheme.RUIN_TOWN:   # the gaming table round the town instead of the void (texture plan step 8)
 		var feet: Variant = table.get("table_size")
 		var surround := BoardgenSurround.make(layout, feet if feet is Vector2 else Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) / 12.0)

@@ -20,8 +20,13 @@ func test_the_deepworks_board_has_no_surround() -> void:
 	add_child(table)
 	var board := BoardgenGreybox.attach(table, str_to_var(FileAccess.get_file_as_string(FIXTURE)))
 	assert_object(board.get_node_or_null("Surround")).is_null()
+	assert_bool(board.is_in_group(BoardgenGreybox.HIDES_LANDSCAPE_GROUP)).override_failure_message("a meadow round the undercity").is_true()
 	table.remove_child(board)
 	board.free()
+
+
+func test_the_board_and_the_presenter_name_the_same_landscape_group() -> void:
+	assert_str(BoardgenGreybox.HIDES_LANDSCAPE_GROUP).is_equal(TableBiomePresenter.HIDES_LANDSCAPE_GROUP)
 
 
 func test_the_town_stands_on_a_plank_table_that_leaves_with_it() -> void:
@@ -31,6 +36,7 @@ func test_the_town_stands_on_a_plank_table_that_leaves_with_it() -> void:
 	var table: StubTable = auto_free(StubTable.new())
 	add_child(table)
 	var board := BoardgenGreybox.attach(table, layout)
+	assert_bool(board.is_in_group(BoardgenGreybox.HIDES_LANDSCAPE_GROUP)).override_failure_message("the town keeps its landscape").is_false()
 	var s := board.get_node_or_null("Surround") as MeshInstance3D
 	assert_object(s).override_failure_message("the town has no surround: the void is back").is_not_null()
 	if s == null:
