@@ -47,8 +47,10 @@ fn push_line(shot: &ShootResult) -> Option<&String> {
 /// and one that was Shaken before are each told no; one epoch below, and in gf, no push is read at all.
 #[test]
 fn a_push_holds_only_against_the_target_this_attack_shook() {
-    let e = crate::acts::PENDING_EPOCH_SKIRMISH_PUSH;
-    assert!(e > crate::acts::CURRENT_RULES_EPOCH, "a placeholder no record has played");
+    let e = crate::acts::EPOCH_101_SKIRMISH_PUSH;
+    assert_eq!(e, 101);
+    assert!(!crate::acts::rule_on(100, e), "a record at 100 replays as recorded");
+    assert!(crate::acts::rule_on(crate::acts::CURRENT_RULES_EPOCH, e), "a fresh play_game() stamps it on");
     let shook = (0..200).find(|&s| push_line(&push_game("gff", e, s, "b", false)).is_some_and(|l| l.starts_with("Push: Gunners rolls")))
         .expect("a seed where the volley shakes b");
     assert!(push_line(&push_game("aofs", e, shook, "b", false)).is_some_and(|l| l.starts_with("Push: Gunners rolls")), "aofs holds too");
@@ -79,11 +81,23 @@ fn push_holds_reads_enemy_hit_newly_shaken_and_standing() {
     assert!(!push_holds(&before, &now, 0, 2, &hit), "gone");
 }
 
+/// A game recorded at epoch 100 (the live epoch before the bump) replays unchanged: on the seed where a gff push rolls 4+
+/// and moves Target model 1 to 13 in east at 101, at 100 no push die is rolled, no push line is said and the model stays put.
+#[test]
+fn a_record_at_epoch_100_rolls_no_push() {
+    let pushed = [13.0 * IN2M, 0.0, 0.0];
+    let seed = (0..400).find(|&s| push_game_at("gff", 101, s, "b", false).0.positions[2].first() == Some(&pushed)).expect("a seed where the push lands at 101");
+    let (st, shot) = push_game_at("gff", 100, seed, "b", false);
+    assert_eq!(shot.rolls.iter().filter(|r| r.kind == "push").count(), 0, "100: no push die: {:?}", shot.rolls);
+    assert_eq!(push_line(&shot), None, "100: no push line");
+    assert!(st.positions[2].iter().all(|q| *q != pushed), "100: no Target model is pushed: {:?}", st.positions[2]);
+}
+
 /// GFF/AOFS-E10-01 / -02: a holding push rolls one die for the attacker; 4+ moves the named model to its spot (1 in east
 /// here), 1-3 moves nothing.
 #[test]
 fn e10_01_02_a_push_moves_the_model_on_4_plus_only() {
-    let e = crate::acts::PENDING_EPOCH_SKIRMISH_PUSH;
+    let e = crate::acts::EPOCH_101_SKIRMISH_PUSH;
     let face = |shot: &ShootResult| shot.rolls.iter().find(|r| r.kind == "push").map(|r| (r.owner.clone(), r.target, r.faces.clone()));
     let runs: Vec<(State, ShootResult)> = (0..400).map(|s| push_game_at("gff", e, s, "b", false)).filter(|(_, shot)| face(shot).is_some()).collect();
     let (st, shot) = runs.iter().find(|(_, shot)| face(shot).is_some_and(|f| f.2[0] >= 4)).expect("a seed where the push rolls 4+");
@@ -123,7 +137,7 @@ fn push_spot_takes_a_free_spot_within_2_in_on_the_same_ground() {
 /// Ruling D15, spells: a damage spell whose hits leave its target Shaken attacked it, so the caster may push it.
 #[test]
 fn a_target_shaken_by_a_damage_spell_may_be_pushed() {
-    let e = crate::acts::PENDING_EPOCH_SKIRMISH_PUSH;
+    let e = crate::acts::EPOCH_101_SKIRMISH_PUSH;
     let game = |cast_lands: bool| {
         let mut st = four_unit_line();
         let keys = st.roster.keys.clone();
@@ -187,7 +201,7 @@ fn push_regroup_puts_the_rest_within_1_in() {
 /// Four Target models, a spell drops two, the morale fails, the push (5) moves model 1 2 in east.
 #[test]
 fn a_landed_push_regroups_the_rest_of_the_unit() {
-    let e = crate::acts::PENDING_EPOCH_SKIRMISH_PUSH;
+    let e = crate::acts::EPOCH_101_SKIRMISH_PUSH;
     let game4 = || {
         let mut st = four_unit_line();
         let keys = st.roster.keys.clone();
@@ -249,7 +263,7 @@ fn ledge_push(strip: f64, to_x: f64, dice: Vec<Vec<u8>>) -> (State, ShootResult)
     let mut tray = Tray::supplied(dice);
     tray.offer_casts(vec![crate::activation::CastInput { seq: 0, caster: "a".into(), spell: "Bolt".into(), targets: vec!["b".into()], base: 2, threshold: 1, ..Default::default() }]);
     tray.offer_push(Some(PushInput { target: "b".into(), model: 0, to: at(to_x, 0.0, 0.0) }));
-    let seams = Seams { rules_epoch: crate::acts::PENDING_EPOCH_SKIRMISH_PUSH, tray_exact: true, ..Seams::default() };
+    let seams = Seams { rules_epoch: crate::acts::EPOCH_101_SKIRMISH_PUSH, tray_exact: true, ..Seams::default() };
     resolve_stochastic_tray_on_board(&statics, &st, &action, &t, seams, &mut GodotRng::new(0), &mut tray).unwrap()
 }
 
@@ -272,7 +286,7 @@ fn e12_01_02_a_push_off_2_in_or_more_falls() {
 /// that it does not push - and nothing else changes. One epoch below, and in gf, it says nothing.
 #[test]
 fn an_undeclared_push_is_said_and_declined() {
-    let e = crate::acts::PENDING_EPOCH_SKIRMISH_PUSH;
+    let e = crate::acts::EPOCH_101_SKIRMISH_PUSH;
     let declined = |shot: &ShootResult| shot.log.iter().filter(|l| l.starts_with("Push: ")).cloned().collect::<Vec<_>>();
     let shook = (0..200).find(|&s| push_game_at("gff", e, s, "", false).0.shaken[2]).expect("a seed where the volley shakes b");
     assert_eq!(declined(&push_game("gff", e, shook, "", false)), vec!["Push: Gunners does not push Target".to_string()]);

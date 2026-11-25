@@ -13232,7 +13232,7 @@ fn resolve_with(
     // --- PUSH (3.6 skirmish p.15: "When a unit is Shaken after being attacked, the attacker may try to push it") --- the
     // attacker's offer (`Input::Push`), see `push_holds`.
     if let Some((tray, shot)) = dice.as_mut() {
-        if let (Some(p), true) = (tray.push().cloned(), next.book(si).vertical_moves && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SKIRMISH_PUSH)) {
+        if let (Some(p), true) = (tray.push().cloned(), next.book(si).vertical_moves && rule_on(seams.rules_epoch, crate::acts::EPOCH_101_SKIRMISH_PUSH)) {
             let name = statics[pi_s].name.clone();
             let line = match next.roster.index.get(&p.target).copied() {
                 Some(ti) if push_holds(state, &next, si, ti, &shot.attacked) => {
@@ -13272,7 +13272,7 @@ fn resolve_with(
             };
             shot.log.push(line.clone());
             say_rule(tray, "push", next.player[si], || line);
-        } else if tray.push().is_none() && next.book(si).vertical_moves && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SKIRMISH_PUSH) {
+        } else if tray.push().is_none() && next.book(si).vertical_moves && rule_on(seams.rules_epoch, crate::acts::EPOCH_101_SKIRMISH_PUSH) {
             // No push declared (the AI never declares one; ruling D10 / step 19): where one would hold, say so once per unit.
             let mut seen: Vec<usize> = Vec::new();
             for &ti in &shot.attacked.clone() {

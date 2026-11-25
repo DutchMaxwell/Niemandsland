@@ -264,7 +264,7 @@ fn a_strafe_never_spreads_its_blast() {
 /// epoch, which lies past the Blast one). The neighbours test on 6+ here, so a lost model usually shakes them.
 #[test]
 fn a_blast_bystander_shaken_by_the_spill_may_be_pushed() {
-    let e = crate::acts::PENDING_EPOCH_SKIRMISH_PUSH;
+    let e = crate::acts::EPOCH_101_SKIRMISH_PUSH;
     let game = |seed: i64| {
         let (st, mut statics) = blast_board("gff");
         statics[3].ctx.quality = 6;
@@ -280,7 +280,7 @@ fn a_blast_bystander_shaken_by_the_spill_may_be_pushed() {
 /// Ruling D15, melee: the charged target that loses the fight and turns Shaken was attacked; the push holds.
 #[test]
 fn a_charged_target_shaken_by_the_melee_may_be_pushed() {
-    let e = crate::acts::PENDING_EPOCH_SKIRMISH_PUSH;
+    let e = crate::acts::EPOCH_101_SKIRMISH_PUSH;
     let game = |seed: i64| {
         let (mut st, mut statics) = blast_board("gff");
         let at = |x: f64, z: f64| [x * IN2M, 0.0, z * IN2M];
