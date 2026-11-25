@@ -49,7 +49,14 @@ pub enum Input {
     /// not resolve it again: `start` = the activation-start triggers (Reanimation, Surprise Attack), `dangerous` = the move's
     /// Dangerous terrain test, `beats` = the pre-attack phase. Only directly after `Begin`.
     Paid { start: bool, dangerous: bool, beats: bool },
+    /// The skirmish Pushing rule (3.6 p.15): the attacker's offer to push one model of `target` to `to` (world, metres) if
+    /// this activation's attack leaves `target` Shaken. Declared with the action, before the first die, at most once.
+    Push(PushInput),
 }
+
+/// One push offer: the target unit's key, its model's slot (`state.positions` order) and where the attacker moves it.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct PushInput { pub target: String, pub model: usize, pub to: [f64; 3] }
 
 /// meleefix: what the table's goal for a melee winner's "may move up to 3 in" reads besides the board
 /// (`SoloController.consolidate_after_melee_win` -> `_nearest_uncontrolled_objective`): whether the unit's side runs the
@@ -120,7 +127,7 @@ pub enum ActStep {
 /// The order rules, checked in their numbered order on each input; the error
 /// is the first offending input's index and its sentence. `name` is the unit's.
 pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
-    let (mut declared, mut shot, mut rolled, mut over) = (false, false, false, false);
+    let (mut declared, mut shot, mut rolled, mut over, mut pushed) = (false, false, false, false, false);
     let mut last_seq: Option<i64> = None;
     let mut consolidated: Vec<&str> = Vec::new();
     for (i, x) in t.iter().enumerate() {
@@ -140,6 +147,9 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
             Input::Consolidate(_) if rolled => Some("consolidation inputs after the first die".to_string()),
             Input::Consolidate(c) if consolidated.contains(&c.unit.as_str()) => Some(format!("consolidation inputs for {} twice", c.unit)),
             Input::Cast(c) if c.seq < last_seq.map_or(0, |p| p + 1) => Some(format!("cast seq {} is too low: seq is 0 or more and higher than the cast before", c.seq)),
+            Input::Push(_) if !declared => Some("a push before the action was declared".to_string()),
+            Input::Push(_) if rolled => Some("a push after the first die".to_string()),
+            Input::Push(_) if pushed => Some("one push per activation".to_string()),
             Input::Intent { .. } if declared => Some("one action per activation".to_string()),
             Input::Placed { .. } if shot => Some(format!("{name} has already shot this round — it cannot move now")),
             Input::Intent { kind, .. } if *kind == REPOSITION => Some("not on the step path yet".to_string()),
@@ -155,6 +165,7 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
             Input::Cancel => over = true,
             Input::Cast(c) => last_seq = Some(c.seq),
             Input::Consolidate(c) => consolidated.push(c.unit.as_str()),
+            Input::Push(_) => pushed = true,
             _ => {}
         }
     }
@@ -661,6 +672,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         _ => (false, false, false),
     };
     let casts: Vec<CastInput> = t.iter().filter_map(|x| if let Input::Cast(c) = x { Some(c.clone()) } else { None }).collect();
+    let push: Option<PushInput> = t.iter().find_map(|x| if let Input::Push(p) = x { Some(p.clone()) } else { None });
     if paid_beats && !casts.is_empty() {
         return ActStep::Refused { index: 1, reason: "the table paid the pre-attack phase, so it cast already: no cast input".to_string() };
     }
@@ -805,6 +817,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
                 tray.offer_strike_back(id.clone(), *answer);
             }
             tray.offer_casts(casts.clone());
+            tray.offer_push(push.clone());
             tray.offer_consolidation(consolidate.clone());
             let out = resolve_stochastic_tray_on_board(statics, state, &action, terrain, seams, &mut GodotRng::new(0), tray);
             *reached_wound.borrow_mut() = tray.feed().map(|f| f.wound_choices.clone()).unwrap_or_default();

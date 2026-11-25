@@ -259,3 +259,41 @@ fn a_strafe_never_spreads_its_blast() {
         assert_eq!((next.alive[2], next.wounds[2].clone()), (1, vec![1]), "seed {seed}: the unit behind is untouched");
     }
 }
+
+/// Ruling D15: a Blast bystander the spilled hits shook "was attacked", so the attacker may push it (gff, at the push
+/// epoch, which lies past the Blast one). The neighbours test on 6+ here, so a lost model usually shakes them.
+#[test]
+fn a_blast_bystander_shaken_by_the_spill_may_be_pushed() {
+    let e = crate::acts::PENDING_EPOCH_SKIRMISH_PUSH;
+    let game = |seed: i64| {
+        let (st, mut statics) = blast_board("gff");
+        statics[3].ctx.quality = 6;
+        let action = Action { kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None, patient: false, split: None, traced: None, teleport: None };
+        let mut tray = Tray::seeded(seed);
+        tray.offer_push(Some(crate::activation::PushInput { target: "bh".into(), model: 0, to: st.positions[3][0] }));
+        resolve_stochastic_tray_on_board(&statics, &st, &action, &crate::terrain::Terrain::default(), Seams { rules_epoch: e, tray_exact: true, ..Seams::default() }, &mut GodotRng::new(0), &mut tray).unwrap()
+    };
+    let (st, shot) = (0..400).map(game).find(|(st, _)| st.shaken[3] && st.alive[3] > 0).expect("a seed where the spill shakes the neighbours");
+    assert!(shot.log.iter().any(|l| l == "Push: Gunners may push Neighbours (Shaken by this attack)"), "{:?} {:?}", st.shaken, shot.log);
+}
+
+/// Ruling D15, melee: the charged target that loses the fight and turns Shaken was attacked; the push holds.
+#[test]
+fn a_charged_target_shaken_by_the_melee_may_be_pushed() {
+    let e = crate::acts::PENDING_EPOCH_SKIRMISH_PUSH;
+    let game = |seed: i64| {
+        let (mut st, mut statics) = blast_board("gff");
+        let at = |x: f64, z: f64| [x * IN2M, 0.0, z * IN2M];
+        st.positions[2] = vec![at(3.0, 0.0)];
+        st.positions[3] = vec![at(30.0, 30.0), at(30.0, 31.2)];
+        st.wounds[2] = vec![3];
+        statics[2].ctx.quality = 6;
+        statics[0].melee = vec![ShootProfile { name: "Blade".into(), attacks: 3, count: 1, ..Default::default() }];
+        let action = Action { kind: CHARGE, unit: "a".into(), dest: Some(at(2.0, 0.0)), shoot: None, charge: Some("b".into()), patient: false, split: None, traced: None, teleport: None };
+        let mut tray = Tray::seeded(seed);
+        tray.offer_push(Some(crate::activation::PushInput { target: "b".into(), model: 0, to: at(4.0, 0.0) }));
+        resolve_stochastic_tray_on_board(&statics, &st, &action, &crate::terrain::Terrain::default(), Seams { rules_epoch: e, tray_exact: true, ..Seams::default() }, &mut GodotRng::new(0), &mut tray).unwrap()
+    };
+    let (_, shot) = (0..400).map(game).find(|(st, _)| st.shaken[2] && st.alive[2] > 0).expect("a seed where the charge shakes the target");
+    assert!(shot.log.iter().any(|l| l == "Push: Gunners may push Target (Shaken by this attack)"), "{:?}", shot.log);
+}

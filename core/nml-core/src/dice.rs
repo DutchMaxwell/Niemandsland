@@ -72,6 +72,8 @@ pub struct Tray {
     aimed: Option<String>,
     /// meleefix: the planner's consolidation inputs (`Tray::offer_consolidation`); empty = the core's own goal.
     consolidate: Vec<ConsolidatePlan>,
+    /// The skirmish Pushing rule: the attacker's push offer (`Tray::offer_push`); `None` = no push.
+    push: Option<crate::activation::PushInput>,
 }
 
 impl Tray {
@@ -86,13 +88,13 @@ impl Tray {
     /// engine and what `GodotRng::new` mirrors; a negative seed must land on
     /// the same stream on both sides.
     pub fn seeded(seed: i64) -> Tray {
-        Tray { rng: GodotRng::new(seed), feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None, consolidate: Vec::new() }
+        Tray { rng: GodotRng::new(seed), feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None, consolidate: Vec::new(), push: None }
     }
 
     /// A tray that continues a generator already in flight — how a replay
     /// reaches a recorded position in the stream.
     pub fn from_rng(rng: GodotRng) -> Tray {
-        Tray { rng, feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None, consolidate: Vec::new() }
+        Tray { rng, feed: None, zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None, consolidate: Vec::new(), push: None }
     }
 
     /// Re-seeds in place, as a second `seed_tray_rng` call would.
@@ -127,7 +129,7 @@ impl Tray {
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
         let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), interference_choices: Vec::new(), strike_back_choices: Vec::new(), choice_seq: 0, casts: Vec::new(), cast_refused: None, paid: (false, false), no_step: false };
-        Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None, consolidate: Vec::new() }
+        Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None, consolidate: Vec::new(), push: None }
     }
 
     /// The supplied feed, if this tray has one.
@@ -324,6 +326,16 @@ impl Tray {
 
     /// meleefix: the planner's consolidation inputs, one per melee unit: the step path's `Input::Consolidate`, or a replay that
     /// read them off the record's `consolidate` line. Nobody else offers any, so every other path keeps the core's own goal.
+    /// The step path's `Input::Push`, offered for this activation; nobody else offers one.
+    pub fn offer_push(&mut self, push: Option<crate::activation::PushInput>) {
+        self.push = push;
+    }
+
+    /// The push offered for this activation, if any.
+    pub fn push(&self) -> Option<&crate::activation::PushInput> {
+        self.push.as_ref()
+    }
+
     pub fn offer_consolidation(&mut self, plans: Vec<ConsolidatePlan>) {
         self.consolidate = plans;
     }
@@ -635,6 +647,9 @@ pub struct ShootResult {
     /// The skirmish Jumping rule: each model of the activating unit whose jump failed - (unit, model, inches it fell) -
     /// for the fall (step 17). Empty when nobody jumped or every jump landed.
     pub falls: Vec<(usize, usize, f64)>,
+    /// Ruling D15: every unit this activation's attack hit (a volley's or a strike's target, a Blast bystander, a damage
+    /// spell's target), for the push. Never absorbed.
+    pub attacked: Vec<usize>,
     /// The skirmish Blast spread in melee: each neighbour a strike's spill wounded, once, with its living models and wounds
     /// left before (`sim::land_blast_spill`), kept until the melee's own morale test is done. Never absorbed.
     pub melee_spilled: Vec<(usize, i64, i64)>,
