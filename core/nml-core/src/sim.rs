@@ -2009,7 +2009,9 @@ pub(crate) fn tray_strafing(
         &|_, _| None,
         None,
         rule_on(seams.rules_epoch, crate::acts::EPOCH_95_PARITY_BATCH).then_some(&|r: &ShootResult| deadly_wiped(next, target, r, seams)),
-        &[], // the strafe's Blast stays on the unit it crossed; spreading it is the melee / spell step's
+        // Deny (skirmish Blast spread): the 3.6 Firefight and AoF: Skirmish books have no Aircraft and no Strafing, so no
+        // skirmish game ever strafes; the strafe's Blast stays on the unit it crossed in every book.
+        &[],
         tray,
     );
     // The volley tail, the shoot branch's own shape: spent Limited marks,
