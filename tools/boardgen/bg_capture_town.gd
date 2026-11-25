@@ -274,7 +274,7 @@ func _one_seed(board_seed: int, preset := 2) -> void:
 			_game_pose()   # the game's own start view on this side
 			await _still(tag, "start")
 		if _baseline:
-			_game_pose()
+			_gate_pose()
 			await _readability(tag, _suffix)
 			if _gate_test:
 				await _gate_self_test()
@@ -1215,6 +1215,23 @@ func _apply_mood() -> void:
 
 ## Gate change 22.11.: the GAME's start view (CameraPivot.reset_view + adjust_for_table_size on the capture's 4 x 4 ft table, as main.gd sets it), turned to the
 ## gate's yaw (180 = the second player's side).
+## GATE-R's own camera: the game's play camera at a FIXED distance, GATE_VIEW_FACTOR x the table diagonal with no tilt, at every yaw. The gate measures
+## the board, not the player's start-view setting: when a generated board's start view came in to 0.70 (22.11., decision D-TEX3) the gate's four
+## quarter views came in with it and lost pawns on edge cells that no wall hides - new "pockets" on a board that had not changed.
+const GATE_VIEW_FACTOR := 0.95
+
+
+func _gate_pose() -> void:
+	var pivot: Node = _main.get_node("CameraPivot")
+	var factor: float = pivot.table_view_factor
+	var tilt: float = pivot.table_view_tilt
+	pivot.table_view_factor = GATE_VIEW_FACTOR
+	pivot.table_view_tilt = 0.0
+	_game_pose()
+	pivot.table_view_factor = factor   # the board's own start view stays what the player gets
+	pivot.table_view_tilt = tilt
+
+
 func _game_pose() -> void:
 	var pivot: Node = _main.get_node("CameraPivot")
 	pivot.reset_view()
