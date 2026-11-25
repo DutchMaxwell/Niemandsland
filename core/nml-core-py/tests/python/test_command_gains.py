@@ -41,7 +41,7 @@ def _rules(epoch: int) -> tuple[list[str], list[str]]:
 
 
 def test_the_epoch_is_live_from_98():
-    assert E == 98 == nml_core.CURRENT_RULES_EPOCH
+    assert E == 98 <= nml_core.CURRENT_RULES_EPOCH
 
 
 def test_a_record_at_epoch_97_builds_no_banner():

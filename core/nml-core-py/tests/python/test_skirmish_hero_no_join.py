@@ -50,7 +50,7 @@ def _joins(system: str, epoch: int) -> tuple[str, dict]:
 
 
 def test_the_epoch_is_the_frozen_skirmish_hero_epoch():
-    assert E == 98 == nml_core.CURRENT_RULES_EPOCH
+    assert E == 98 <= nml_core.CURRENT_RULES_EPOCH
     assert nml_core.hero_join_refusal("gff", E - 1) is None
 
 

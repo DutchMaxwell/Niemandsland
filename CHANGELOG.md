@@ -7,6 +7,11 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Changed — rules corrections
+- **Rules epoch 99 is live: Blast in the two skirmish games spreads to nearby units.** In Grimdark
+  Future: Firefight and Age of Fantasy: Skirmish, Blast hits beyond the target's models spread to
+  enemy units within 3" of it. Spilled hits ignore cover and carry no unmodified six. Bystanders of a
+  melee Blast test morale at half strength and do not count towards the melee result. Games recorded
+  before epoch 99 replay unchanged.
 - **Rules epoch 98 is live: three rules corrections reach the AI and the rules core.** In Grimdark
   Future: Firefight a unit's models stay in coherency up to 9" apart (the book's chain), not 6". In
   the two skirmish games (Firefight and Age of Fantasy: Skirmish) heroes never join units, and every

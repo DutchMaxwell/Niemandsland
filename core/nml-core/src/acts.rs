@@ -1056,14 +1056,16 @@ pub const EPOCH_98_SKIRMISH_HERO: u32 = 98;
 ///   from the selected option's `gains`, the way the table's `_apply_selected_upgrade_rules` reads a real Army Forge export. Read
 ///   only by the Python list loader (`list_to_profile._units_from_list`).
 pub const EPOCH_98_COMMAND_GAINS: u32 = 98;
-pub const CURRENT_RULES_EPOCH: u32 = 98;
-/// PENDING (the 3.6 Firefight and AoF: Skirmish books): a Blast's hits spread over the target's side's units within 3 in,
-/// each capped at its models; the neighbours roll their own saves, take wounds and test morale. A placeholder one past
-/// `CURRENT_RULES_EPOCH`. Records stamped 98 or below replay byte-exact. Read only through
-/// `rules::Book::blast_spread_in_at`.
-pub const PENDING_EPOCH_SKIRMISH_BLAST: u32 = 99;
+/// The EPOCH 99 BATCH: one outcome change that sat behind the `PENDING_EPOCH_SKIRMISH_BLAST` placeholder (99) is now one frozen
+/// constant, and `CURRENT_RULES_EPOCH` is bumped to 99 in the same change. Records stamped 98 or below replay byte-exact. Every call
+/// site reads THIS constant, not the literal `99` or `CURRENT_RULES_EPOCH`. The recorder mirror (`act_recorder.gd`) stamps 99 in the same change.
+/// - SKIRMISH_BLAST (the 3.6 Firefight and AoF: Skirmish books): a Blast's hits spread over the target's side's units within 3 in,
+///   each capped at its models; the neighbours roll their own saves, take wounds and test morale. Read only through
+///   `rules::Book::blast_spread_in_at`.
+pub const EPOCH_99_SKIRMISH_BLAST: u32 = 99;
+pub const CURRENT_RULES_EPOCH: u32 = 99;
 /// PENDING (the 3.6 Firefight and AoF: Skirmish books, Jumping): a drop of over 3 in and up to 6 in is a jump - one die per
-/// inch at 2+, its height not counted toward the move; deeper drops stay refused. A placeholder one past the Blast one.
+/// inch at 2+, its height not counted toward the move; deeper drops stay refused. A placeholder one past `CURRENT_RULES_EPOCH`.
 /// Records stamped 99 or below replay byte-exact. Read only by `activation::check_move` and `activation::jump_dice_of`.
 pub const PENDING_EPOCH_SKIRMISH_JUMP: u32 = 100;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
@@ -2519,7 +2521,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 98, "the live epoch is the EPOCH 98 batch");
+        assert_eq!(CURRENT_RULES_EPOCH, 99, "the live epoch is EPOCH_99_SKIRMISH_BLAST");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2529,11 +2531,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":98}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":99}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 98"
+            "a fresh play_game() now stamps the bumped epoch, 99"
         );
     }
 

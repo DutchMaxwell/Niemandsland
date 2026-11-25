@@ -63,7 +63,7 @@ const SKIRMISH_HERO_AURA: HeroAura = HeroAura { reach_in: crate::sim::HERO_AURA_
 const SKIRMISH_HERO_FROM: Option<(u32, HeroAura)> = Some((crate::acts::EPOCH_98_SKIRMISH_HERO, SKIRMISH_HERO_AURA));
 
 /// The 3.6 Firefight and AoF: Skirmish Blast (p.13): the hits spread over units within 3 in of the target.
-const SKIRMISH_BLAST_FROM: Option<(u32, f64)> = Some((crate::acts::PENDING_EPOCH_SKIRMISH_BLAST, 3.0));
+const SKIRMISH_BLAST_FROM: Option<(u32, f64)> = Some((crate::acts::EPOCH_99_SKIRMISH_BLAST, 3.0));
 
 const BOOK_GF: Book = Book {
     system: "gf",
@@ -1106,12 +1106,14 @@ mod tests {
         }
     }
 
-    /// The skirmish Blast spread waits for its pending epoch: gff and aofs spread over 3 in from it on, every other book
-    /// never; one epoch below, no book spreads (the recorded single-unit Blast).
+    /// The skirmish Blast spread starts at epoch 99: gff and aofs spread over 3 in from it on, every other book never; one
+    /// epoch below, no book spreads (the recorded single-unit Blast).
     #[test]
-    fn skirmish_blast_spreads_from_its_pending_epoch() {
-        let e = crate::acts::PENDING_EPOCH_SKIRMISH_BLAST;
-        assert_eq!(e, crate::acts::CURRENT_RULES_EPOCH + 1);
+    fn skirmish_blast_spreads_from_99() {
+        let e = crate::acts::EPOCH_99_SKIRMISH_BLAST;
+        assert_eq!(e, 99);
+        assert!(!crate::acts::rule_on(98, e), "a record at 98 replays as recorded");
+        assert!(crate::acts::rule_on(crate::acts::CURRENT_RULES_EPOCH, e), "a fresh play_game() stamps it on");
         for sys in SYSTEMS {
             assert_eq!(book(sys).blast_spread_in_at(e - 1), None, "{sys} one epoch below");
             let want = if sys == "gff" || sys == "aofs" { Some(3.0) } else { None };
