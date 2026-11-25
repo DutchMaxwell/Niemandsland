@@ -639,10 +639,17 @@ static func _square_and_walls(layout: Dictionary, out: Dictionary) -> void:
 
 
 ## Large hanging SIGNS (kit batch A8) on the street fronts off the square: an iron arm at 2.45 in with a framed board (a key, a fish, a mug or shears, no lettering) on the face of a raised
-## house cell (not the wall, not an intact house) that looks at a street, everything above 1.85 in - over the heads of the models, a thin edge from above. One face in five, at most three a
-## half; never on a ladder face, an ivy cluster's face or within 1 in of a lamp post.
+## house cell (not the wall) that looks at a street, everything above 1.85 in - over the heads of the models, a thin edge from above. One face in five, at most three a half; never on a
+## ladder face, an ivy cluster's face or within 1 in of a lamp post. Halfroofs plan H1: the street front of a half roof (a Roofed cell outside a house lot) carries them too, and so does an
+## intact house whose drawn eaves stand at 2.6 in or more (the arm stays under its roof).
 const SIGN_BOARDS := ["sign_large_key", "sign_large_fish", "sign_large_mug", "sign_large_shears"]
 const SIGNS_PER_HALF := 3
+const SIGN_EAVES_IN := 2.6
+
+
+## Whether a lot id names an intact house (a lot of kind Roofed); 0 and every other lot do not - a Roofed cell outside one is a half roof (halfroofs plan H1).
+static func _house_lot(layout: Dictionary, lot_id: int) -> bool:
+	return lot_id != 0 and (layout["lots"] as Array).any(func(l: Dictionary) -> bool: return int(l["id"]) == lot_id and l["kind"] == "Roofed")
 
 
 static func _signs(layout: Dictionary, out: Dictionary) -> void:
@@ -654,9 +661,19 @@ static func _signs(layout: Dictionary, out: Dictionary) -> void:
 	var clear := _kept_clear(layout)
 	var lamps := BoardgenTownDressing.lanterns(layout).map(func(l: Dictionary) -> Vector2: return l["at"])
 	var per_half := [0, 0]
+	var tall := {}   # the intact houses whose eaves are high enough for the arm: lot id -> how far the drawn body is inset (the arm sits on the drawn face)
+	var widths := {}
+	for l: Dictionary in layout["lots"]:
+		widths[int(l["id"])] = float(l["w"]) * cell_in
+	for b: Dictionary in BoardgenTownDressing.house_bodies(layout):
+		if float(b["top"]) >= SIGN_EAVES_IN:
+			tall[int(b["lot"])] = (float(widths[int(b["lot"])]) - Vector2(b["size"]).x) * 0.5
 	for cd: Dictionary in cells:
 		var i: int = cd["z"] * nx + cd["x"]
-		if int(cd["level"]) < 1 or ["Wall", "Roofed"].has(cd["lot_kind"]) or clear.has(i):
+		var face: bool = int(cd["level"]) >= 1 and cd["lot_kind"] != "Wall"
+		if cd["lot_kind"] == "Roofed":
+			face = tall.has(int(cd["lot_id"])) or not _house_lot(layout, int(cd["lot_id"]))
+		if not face or clear.has(i):
 			continue
 		var half := 1 if cd["z"] >= nz / 2 else 0
 		for side in 4:
@@ -677,6 +694,7 @@ static func _signs(layout: Dictionary, out: Dictionary) -> void:
 			var lo := origin + Vector2(cd["x"], cd["z"]) * cell_in
 			var along := 0.8 + 1.4 * BoardgenTownDressing._hash(i, half, 234 + side)
 			var pos := Vector2(lo.x + along, lo.y if d.y < 0 else lo.y + cell_in) if d.x == 0 else Vector2(lo.x if d.x < 0 else lo.x + cell_in, lo.y + along)
+			pos -= Vector2(d) * float(tall.get(int(cd["lot_id"]), 0.0)) if cd["lot_kind"] == "Roofed" else Vector2.ZERO
 			if lamps.any(func(l: Vector2) -> bool: return l.distance_to(pos) < 1.0):
 				continue
 			per_half[half] += 1

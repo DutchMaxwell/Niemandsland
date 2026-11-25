@@ -87,7 +87,7 @@ pub fn stack(seed: i64, g: &SectorGraph, b: &Budgets) -> (Vec<Lot>, Vec<Cell>) {
             if one_piece(&cells) { break } else { (cells[a].level, cells[b].level) = (2, 2) }
         }
     }
-    if b.rows && sym == Symmetry::Point180 { cut_lanes(&mut lots, &mut cells, &mut rng); infill_houses(&mut lots, &mut cells, &mut rng, b.infill_pairs); }
+    if b.rows && sym == Symmetry::Point180 { cut_lanes(&mut lots, &mut cells, &mut rng); infill_houses(&mut lots, &mut cells, &mut rng, b.infill_pairs); if b.half_roofs { half_roof_slabs(&mut cells, &mut rng); } }
     (lots, cells)
 }
 
@@ -197,6 +197,37 @@ fn row_of(cells: &[Cell], id: u16) -> usize {
         }}
     }
     ids.len()
+}
+
+/// Halfroofs plan H1: a filler slab (a connected group of raised cells on free earth, no lot) keeps half its 3 in floor; the first half of its 3 in cells along the
+/// group's longer side (which end: rng) and their half-turn twins become a half roof - `Roofed`, level 0, solid like a house. A group that holds its own twin is left
+/// alone; a cut that would split the walkable board tries the other end, then nothing.
+fn half_roof_slabs(cells: &mut [Cell], rng: &mut GodotRng) {
+    let filler = |c: &Cell| c.level >= 1 && c.lot_id == 0 && c.lot_kind == LotKind::Street;
+    let mut seen = vec![false; cells.len()];
+    for s in 0..cells.len() / 2 {
+        if seen[s] || !filler(&cells[s]) { continue; }
+        let (mut group, mut stack) = (vec![s], vec![s]);
+        seen[s] = true;
+        while let Some(i) = stack.pop() { for j in neighbours(i) { if !seen[j] && filler(&cells[j]) { seen[j] = true; group.push(j); stack.push(j); } } }
+        for &i in &group { seen[mirror(i)] = true; }
+        if group.iter().any(|&i| group.contains(&mirror(i))) { continue; }
+        let (xs, zs) = (group.iter().map(|&i| i % GRID), group.iter().map(|&i| i / GRID));
+        let along_x = xs.clone().max().unwrap() - xs.min().unwrap() >= zs.clone().max().unwrap() - zs.min().unwrap();
+        let mut low: Vec<usize> = group.iter().copied().filter(|&i| cells[i].level == 1).collect();
+        if low.len() < 2 { continue; }
+        low.sort_by_key(|&i| if along_x { (i % GRID, i / GRID) } else { (i / GRID, i % GRID) });
+        let half = low.len() / 2;
+        let first = rng.randi_range(0, 1) == 0;
+        for end in [first, !first] {
+            let cut: Vec<usize> = if end { low[..half].to_vec() } else { low[low.len() - half..].to_vec() };
+            let cut: Vec<usize> = cut.iter().copied().filter(|&i| neighbours(i).any(|j| cells[j].level == 1 && group.contains(&j) && !cut.contains(&j))).collect();   // a half roof always leans on 3 in floor it keeps
+            let snap = cells.to_vec();
+            for &i in &cut { for j in [i, mirror(i)] { (cells[j].lot_kind, cells[j].level) = (LotKind::Roofed, 0); } }
+            if one_piece_without(cells, LotKind::Roofed) { break; }
+            cells.clone_from_slice(&snap);
+        }
+    }
 }
 
 /// [`one_piece`] over the cells that are not `skip` (solid houses are no ground).
