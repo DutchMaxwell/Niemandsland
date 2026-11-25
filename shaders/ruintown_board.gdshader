@@ -101,6 +101,8 @@ const float SETT_W = 0.14;
 const float SETT_H = 0.11;
 const float SETT_DEPTH_IN = 0.09;   // the setts' relief depth (look review R5: the relief read only under a lamp)
 const float SETT_CAVITY = 0.45;   // light-independent: the joints a share darker, the crowns a little lighter (the mean stays), so the setts read under the moon too
+const float SKY_AMBIENT = 1.0;   // (look review 2, R13) the ambient follows the bent normal on up-facing ground: a sett's crown sees more sky than its sides and joints
+const float SKY_AMBIENT_FLOOR = 0.1;   // the share of the ambient a face tilted ~50 deg off the sky keeps
 const float COURSE = 0.24;   // wall stone: courses 0.24 in high, stones 0.3 - 0.8 in long (len 0.5 x 0.7 .. 1.5)
 const float TILE_W = 0.16;
 const float TILE_H = 0.13;
@@ -656,6 +658,10 @@ void fragment() {
 		grad *= min(1.0, 1.2 / max(tilt, 0.0001));
 		NORMAL = normalize(abs(det) * NORMAL - grad);
 		AO = ao;
+		float up = clamp((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).y, 0.0, 1.0);   // the bent normal's view of the sky (symmetric: no light direction)
+		float sky = mix(1.0, mix(SKY_AMBIENT_FLOOR, 1.0, up * up), SKY_AMBIENT * step(0.5, wnrm.y));
+		AO *= sky;
+		emis *= sky;   // the grit's flat fill (an emission, the street's own ambient) follows the sky too: unshaded, it flattened the setts outside the lamps
 		AO_LIGHT_AFFECT = 0.35;
 	}
 	ALBEDO = pow(alb, vec3(2.2)) * tex_ratio;
