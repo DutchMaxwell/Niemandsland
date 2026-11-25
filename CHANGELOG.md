@@ -11,7 +11,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   grant their rule on the army list's selected upgrade, not in the unit's equipment. The rules core's
   list loader now reads them there, as the table already does for an Army Forge export, so an AI
   army's Banner, Musician, Sergeant and Great Banner take effect. Behind the next rules epoch; games
-  recorded before it replay unchanged.
+  recorded before it replay unchanged. (#3570)
 - **A Crossing Strike volley shreds like any shooting attack.** The attack on the unit a Crossing
   Strike bearer moved through counts as shooting, so a bearer with a unit-level Shred rule (Shred
   when Shooting and its aliases) now deals the extra wound on unmodified Defense 1s, and the battle
