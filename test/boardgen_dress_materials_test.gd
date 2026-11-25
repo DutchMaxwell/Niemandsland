@@ -179,3 +179,18 @@ func test_each_veg_shader_declares_exactly_the_uniforms_the_script_sets_and_keep
 	var solid := FileAccess.get_file_as_string(VEG_SOLID_SHADER)
 	assert_bool(solid.contains("discard;") or solid.contains("texture(") or solid.contains("ALPHA")).override_failure_message("the solid shader must keep early depth: no discard, no texture, no alpha").is_false()
 	assert_bool(FileAccess.get_file_as_string(VEG_CARD_SHADER).contains("ALPHA_SCISSOR_THRESHOLD = alpha_scissor;")).is_true()
+
+
+## Look review 25.11. (R8): a plain material with every channel under 0.05 renders as a black hole under the specular-free moons (dark window glass on the
+## tower caps and slits read as black rectangles). Dark, not a hole: no plain non-metal material of the bundled manifest is below 0.1 in every channel
+## (measured at the play distance: glass at 0.06 still rendered at luma 2, at 0.12 / 0.132 / 0.15 at luma 15).
+func test_no_plain_material_is_black() -> void:
+	if not FileAccess.file_exists(BUNDLED):
+		return
+	var mats: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(BUNDLED))["materials"]
+	for name: String in mats:
+		var m: Dictionary = mats[name]
+		if m.has("set") or not m.has("colour") or float(m.get("metallic", 0.0)) >= 0.5:
+			continue   # (a metal's colour is its reflectance: ct_iron is its own question, not this case's)
+		var c: Array = m["colour"]
+		assert_float(maxf(maxf(float(c[0]), float(c[1])), float(c[2]))).override_failure_message("%s colour %s is black" % [name, c]).is_greater_equal(0.1)
