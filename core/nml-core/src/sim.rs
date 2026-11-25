@@ -11808,6 +11808,8 @@ fn resolve_with(
         // Jumping (3.6 skirmish p.15): each jumping model rolls one die per inch at 2+; any miss and that model falls.
         if let Some((tray, shot)) = dice.as_mut() {
             let name = statics[pi_s].name.clone();
+            // Models a fall removed, by their index at the start: a later jumper's slot moves up past each of them.
+            let mut gone: Vec<usize> = Vec::new();
             for (m, n, h, foot) in jumps {
                 tray.owner_next(Some(si));
                 let faces = tray.roll(n as usize);
@@ -11821,7 +11823,8 @@ fn resolve_with(
                     shot.falls.push((si, m, h));
                     // Falling (3.6 skirmish p.15, ruling D13): the model lands at the foot of the drop on its own path, rolls one
                     // die per inch fallen and takes one wound per 1-3; the unit's other models keep the player's placement.
-                    if let Some(p) = next.positions[si].get_mut(m) {
+                    let slot = m - gone.iter().filter(|&&g| g < m).count();
+                    if let Some(p) = next.positions[si].get_mut(slot) {
                         *p = foot;
                     }
                     tray.owner_next(Some(si));
@@ -11836,7 +11839,13 @@ fn resolve_with(
                     if w > 0 {
                         fall_morale_due.get_or_insert((morale_alive(&next, si, seams), morale_wounds_left(&next, si, seams)));
                         let before = chain_snapshot(&next, si, tray);
-                        land_pool_wounds(&mut next, si, w, seams.tray_exact, seams, &mut shot.log);
+                        // The model that fell takes the wounds (3.6 p.15), not the unit's casualty order; past its last wound
+                        // they are lost.
+                        let (take, models) = (w.min(next.wounds[si].get(slot).copied().unwrap_or(0)), next.positions[si].len());
+                        land_wounds_in_order(&mut next, si, take, vec![slot]);
+                        if next.positions[si].len() < models {
+                            gone.push(m);
+                        }
                         land_chain_report(statics, &next, tray, si, before);
                     }
                 }
