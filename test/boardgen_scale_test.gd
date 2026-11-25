@@ -74,3 +74,18 @@ func test_the_flag_tops_are_laid_in_fine_courses() -> void:
 	assert_object(lay).is_not_null()
 	assert_float(float(lay.get_string(1))).override_failure_message("flag length %s in" % lay.get_string(1)).is_less_equal(0.45)
 	assert_bool(src.contains("float fl_l = %s * (" % lay.get_string(1))).override_failure_message("the fracture does not use the flag length").is_true()
+
+
+## Look review 25.11. (R5): the cobble relief read only under a lamp - under the two moons its bent normals cancel. The setts carry a light-independent
+## cavity term (joints darker, crowns a little lighter, the mean kept; it fades with the pixel footprint like the setts) and a 0.09 in relief depth. Measured
+## at the market square from both player sides: luma std / mean 0.178 / 0.161 -> 0.268 / 0.259, board mean luma +0.6 %, the lamp's saturated streak 0.205 -> 0.178.
+func test_the_setts_carry_their_own_relief_without_a_light() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	for name: String in ["SETT_DEPTH_IN", "SETT_CAVITY"]:
+		assert_bool(src.contains("const float %s = " % name)).override_failure_message("const %s missing" % name).is_true()
+		if not src.contains("const float %s = " % name):
+			return
+	assert_float(_const(src, "SETT_DEPTH_IN")).is_greater_equal(0.09)
+	assert_float(_const(src, "SETT_CAVITY")).override_failure_message("no cavity term on the setts").is_greater_equal(0.4)
+	assert_bool(src.contains("depth_in = SETT_DEPTH_IN;")).is_true()
+	assert_bool(src.contains("alb *= mix(1.0, mix(1.0 - SETT_CAVITY, 1.0 + 0.35 * SETT_CAVITY, smoothstep(0.1, 0.6, crown)), keep(xz.x, SETT_W));")).override_failure_message("the cavity term is not keyed on the crown and faded with the footprint").is_true()
