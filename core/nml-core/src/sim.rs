@@ -13272,6 +13272,17 @@ fn resolve_with(
             };
             shot.log.push(line.clone());
             say_rule(tray, "push", next.player[si], || line);
+        } else if tray.push().is_none() && next.book(si).vertical_moves && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SKIRMISH_PUSH) {
+            // No push declared (the AI never declares one; ruling D10 / step 19): where one would hold, say so once per unit.
+            let mut seen: Vec<usize> = Vec::new();
+            for &ti in &shot.attacked.clone() {
+                if !seen.contains(&ti) && push_holds(state, &next, si, ti, &shot.attacked) {
+                    seen.push(ti);
+                    let line = format!("Push: {} does not push {}", statics[pi_s].name, statics[next.roster.profile[ti]].name);
+                    shot.log.push(line.clone());
+                    say_rule(tray, "push", next.player[si], || line);
+                }
+            }
         }
     }
 

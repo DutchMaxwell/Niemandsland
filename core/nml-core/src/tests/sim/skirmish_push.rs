@@ -5,7 +5,7 @@ use crate::activation::PushInput;
 
 /// Unit "a" (player 0, `sys`) fires 6 shots (Quality 2) at "b": two models 12 in east, Defense 6, Quality 6, so a lost
 /// model usually fails its morale test. `shaken_before` marks "b" Shaken at the start. A push of b's first model 1 in east
-/// is offered for `target`.
+/// is offered for `target` (empty: no push declared).
 fn push_game(sys: &str, epoch: u32, seed: i64, target: &str, shaken_before: bool) -> ShootResult {
     push_game_at(sys, epoch, seed, target, shaken_before).1
 }
@@ -33,7 +33,9 @@ fn push_game_at(sys: &str, epoch: u32, seed: i64, target: &str, shaken_before: b
     let action = Action { kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()), charge: None, patient: false, split: None, traced: None, teleport: None };
     let seams = Seams { rules_epoch: epoch, tray_exact: true, ..Seams::default() };
     let mut tray = Tray::seeded(seed);
-    tray.offer_push(Some(PushInput { target: target.into(), model: 0, to: at(13.0, 0.0) }));
+    if !target.is_empty() {
+        tray.offer_push(Some(PushInput { target: target.into(), model: 0, to: at(13.0, 0.0) }));
+    }
     resolve_stochastic_tray_on_board(&statics, &st, &action, &crate::terrain::Terrain::default(), seams, &mut GodotRng::new(0), &mut tray).unwrap()
 }
 
@@ -264,4 +266,20 @@ fn e12_01_02_a_push_off_2_in_or_more_falls() {
     let (st, shot) = ledge_push(1.0, 8.7, vec![vec![6], vec![1, 6, 6], vec![1], vec![5]]);
     assert!(!shot.rolls.iter().any(|r| r.kind == "fall"), "1 in is no fall: {:?}", shot.log);
     assert_eq!((st.alive[2], st.positions[2][0][0]), (1, 8.7 * IN2M), "pushed down the 1 in, standing");
+}
+
+/// Step 19, the AI default: an activation that declares no push (the AI never does) says once, where a push would hold,
+/// that it does not push - and nothing else changes. One epoch below, and in gf, it says nothing.
+#[test]
+fn an_undeclared_push_is_said_and_declined() {
+    let e = crate::acts::PENDING_EPOCH_SKIRMISH_PUSH;
+    let declined = |shot: &ShootResult| shot.log.iter().filter(|l| l.starts_with("Push: ")).cloned().collect::<Vec<_>>();
+    let shook = (0..200).find(|&s| push_game_at("gff", e, s, "", false).0.shaken[2]).expect("a seed where the volley shakes b");
+    assert_eq!(declined(&push_game("gff", e, shook, "", false)), vec!["Push: Gunners does not push Target".to_string()]);
+    assert!(!push_game("gff", e, shook, "", false).rolls.iter().any(|r| r.kind == "push"), "nothing rolled");
+    let steady = (0..200).find(|&s| !push_game_at("gff", e, s, "", false).0.shaken[2]).expect("a seed where b holds");
+    assert!(declined(&push_game("gff", e, steady, "", false)).is_empty(), "hit but steady: no push to decline");
+    for (sys, epoch) in [("gff", e - 1), ("gf", e)] {
+        assert!(declined(&push_game(sys, epoch, shook, "", false)).is_empty(), "{sys} at {epoch}");
+    }
 }
