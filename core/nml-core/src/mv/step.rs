@@ -3098,11 +3098,11 @@ pub(crate) mod tests {
         assert!((gff - 3.0).abs() < 0.05, "gff takes the full 3 in step: {gff:.2} in");
     }
 
-    /// From `PENDING_EPOCH_FIREFIGHT_CHAIN` a gff unit chains at 9 in; one epoch below it keeps the recorded 6 in. gf
+    /// From `EPOCH_98_FIREFIGHT_CHAIN` a gff unit chains at 9 in; one epoch below it keeps the recorded 6 in. gf
     /// reads 9 in and aofs 6 in on both sides. Five in a row spread 8 in: torn under 6 in, whole under 9 in.
     #[test]
     fn firefight_chain_is_nine_inches_from_its_epoch() {
-        let e = crate::acts::PENDING_EPOCH_FIREFIGHT_CHAIN;
+        let e = crate::acts::EPOCH_98_FIREFIGHT_CHAIN;
         let whole = |sys: &str, epoch: u32| {
             MoveRules { rules_epoch: epoch }.unit_coherent_now(&five_in_a_row(sys, vec![]), &board(vec![]), 0, true)
         };

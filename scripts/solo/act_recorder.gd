@@ -216,7 +216,7 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## endpoints and Melee Shrouding band, Counter / Destructive / Piercing Hunter in melee) are stamped 92 with EPOCH_92_MELEE_CAUSES.
 ## The AI skirting Dangerous ground (a plain move's goal read and the sideways re-plan), the 3.6 faction folders resolving their rules
 ## and the volley's spell rider switched off are stamped 93 with EPOCH_93_DANGER_RULES_RIDER.
-static var rules_epoch: int = 97
+static var rules_epoch: int = 98
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -312,6 +312,13 @@ const EPOCH_96_PARITY_BATCH := 96
 ## still to fire keep the target's to-hit penalties as declared (Stealth family, Evasive family, Aircraft, the Artillery target). Nothing in
 ## the table gates on it; the human table path already applies the penalty.
 const EPOCH_97_WIPED_TO_HIT_DECLARED := 97
+## The core's frozen epoch-98 batch (acts.rs): `EPOCH_98_FIREFIGHT_CHAIN` (a Firefight unit's coherency chain is 9 in),
+## `EPOCH_98_SKIRMISH_HERO` (the skirmish Hero aura: every friendly Hero within 6 in, no Tough minimum, Heroes never join units) and
+## `EPOCH_98_COMMAND_GAINS` (Banner, Musician, Sergeant and Great Banner reach their unit from the list's gains). Nothing in the table
+## gates on them; they mirror the core's live epoch.
+const EPOCH_98_FIREFIGHT_CHAIN := 98
+const EPOCH_98_SKIRMISH_HERO := 98
+const EPOCH_98_COMMAND_GAINS := 98
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

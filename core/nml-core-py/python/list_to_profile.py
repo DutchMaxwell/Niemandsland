@@ -395,7 +395,7 @@ def _selected_upgrade_rules(ud: dict[str, Any], rules: list[str]) -> None:
     """opr_api_client.gd:_apply_selected_upgrade_rules (:1187) - a rule-only upgrade (Banner, Musician, Sergeant, ...)
     grants its ArmyBookRule on the selected option's `gains`, not in the loadout; each one joins the rule line once.
     The table's per-model `equipment_items` entry for a subset bearer only marks the base ring (the kits sidecar
-    carries bearers here), so it is not ported. Read from `PENDING_EPOCH_COMMAND_GAINS` on (`_units_from_list`)."""
+    carries bearers here), so it is not ported. Read from `EPOCH_98_COMMAND_GAINS` on (`_units_from_list`)."""
     for su in ud.get("selectedUpgrades", []) or []:
         option = su.get("option") if isinstance(su, dict) else None
         if not isinstance(option, dict):
@@ -1500,7 +1500,7 @@ def _units_from_list(
     raw: list[dict] = data.get("units", [])
     game_system = str(data.get("gameSystem", "gf"))
     import nml_core
-    gains = (nml_core.CURRENT_RULES_EPOCH if rules_epoch is None else int(rules_epoch)) >= nml_core.PENDING_EPOCH_COMMAND_GAINS
+    gains = (nml_core.CURRENT_RULES_EPOCH if rules_epoch is None else int(rules_epoch)) >= nml_core.EPOCH_98_COMMAND_GAINS
     units: dict[str, dict] = {}
     by_sel: dict[str, dict] = {}
     order: list[str] = []
