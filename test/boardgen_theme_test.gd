@@ -390,3 +390,28 @@ func test_the_blue_hour_sets_board_scale_occlusion_and_the_board_has_one_probe_r
 	assert_float((probes[0] as ReflectionProbe).size.x).is_greater(0.8)   # it covers the board
 	var src := FileAccess.get_file_as_string("res://shaders/ruintown_board.gdshader")
 	assert_bool(src.contains("float glow = step(0.875, h21(vec2(cell, seed + 5.0)));")).override_failure_message("one window in eight").is_true()
+
+
+## Look review 2 (R14): a wooden prop stood 0.05 in off its wall (and further off a wall the silhouette draws thinner above its foot) and was painted a saturated
+## orange that read as a flat orange box at dusk and a black one at Night. A prop now stands flush against its wall face, in a weathered dark-wood colour.
+func test_a_wooden_prop_stands_flush_against_its_wall_in_a_weathered_wood_colour() -> void:
+	var layout := _town()
+	var cell := float(layout["cell_in"])
+	var origin := Vector2(int(layout["nx"]), int(layout["nz"])) * cell * -0.5
+	for b: Dictionary in BoardgenTownDressing.props(layout):
+		var d: Vector2i = b["face"]
+		var at: Vector2i = b["at"]
+		var lo := origin + Vector2(at) * cell
+		var gap := 0.0
+		if d.y < 0:
+			gap = b["lo"].z - lo.y
+		elif d.y > 0:
+			gap = lo.y + cell - b["hi"].z
+		elif d.x < 0:
+			gap = b["lo"].x - lo.x
+		else:
+			gap = lo.x + cell - b["hi"].x
+		assert_float(gap).override_failure_message("a prop %.3f in off its wall" % gap).is_less_equal(0.001)
+	var wood: Color = BoardgenTheme.TOWN_PALETTE[BoardgenTheme.TOWN_KINDS.find("wood")]
+	assert_float(wood.s).override_failure_message("the prop wood is a saturated orange (s %.2f)" % wood.s).is_less_equal(0.4)
+	assert_float(wood.v).override_failure_message("the prop wood is near black").is_greater_equal(0.4)

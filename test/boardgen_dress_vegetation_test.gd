@@ -161,3 +161,35 @@ func test_every_board_is_green_and_honest() -> void:
 		)
 	print("VEG over boards 1-20: %s" % totals)
 	assert_int(totals["plot"]).is_greater(0)
+
+
+## Density pass (lead 25.11.): the clump pieces stand at about 1.5 x their kit size but never over
+## 0.4 in, and the wall feet carry weeds (heads within 0.8 in of a raised or solid neighbour).
+func test_pieces_are_larger_but_soft_and_wall_feet_carry_weeds() -> void:
+	for board_seed: int in SEEDS:
+		var ctx := _ctx(_layout(board_seed))
+		var scales: Array[float] = []
+		var weeds := 0
+		for p: DressPlacement in BoardgenDressVegetation.new().plan(ctx):
+			if p.module.contains("foot_run") or p.module.contains("plot"):
+				continue
+			var sc := p.transform.basis.get_scale().x
+			scales.append(sc)
+			assert_float(ctx.spec(p.module).aabb_hi.y * sc).is_less_equal(0.4)
+			var q := p.transform.origin / IN
+			var cell := Vector2i(((Vector2(q.x, q.z) - ctx.origin_in) / ctx.cell_in).floor())
+			var f := Vector2(q.x, q.z) - (ctx.origin_in + Vector2(cell) * ctx.cell_in)
+			for k in 4:
+				var d: Vector2i = BoardgenDressVegetation.DIRS[k]
+				var n := cell + d
+				var gap := [f.y, ctx.cell_in - f.x, ctx.cell_in - f.y, f.x][k] as float
+				if gap < 0.8 and ctx.top_in(n.x, n.y) > 0.0:
+					weeds += 1
+					break
+		scales.sort()
+		assert_float(scales[scales.size() / 2]).is_greater_equal(1.2)
+		(
+			assert_int(weeds)
+			. override_failure_message("seed %d: %d weeds" % [board_seed, weeds])
+			. is_greater(60)
+		)

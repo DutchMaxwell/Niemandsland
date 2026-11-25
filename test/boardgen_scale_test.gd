@@ -91,6 +91,24 @@ func test_the_setts_carry_their_own_relief_without_a_light() -> void:
 	assert_bool(src.contains("alb *= mix(1.0, mix(1.0 - SETT_CAVITY, 1.0 + 0.35 * SETT_CAVITY, smoothstep(0.1, 0.6, crown)), keep(xz.x, SETT_W));")).override_failure_message("the cavity term is not keyed on the crown and faded with the footprint").is_true()
 
 
+## Look review 2 (R13): under the Night lighting the setts outside a lamp read flat - the grit's fill is an EMISSION (no normal response) and the ambient a flat
+## colour, so a sett in the moon's shadow had no shading at all. On up-facing ground both now follow the bent normal's view of the sky (the crown sees more of it
+## than its sides): symmetric, no light direction, board material only. Measured under Night at two lamp-free streets, both yaws: luma std / mean 0.32-0.35 ->
+## 0.47-0.51, board mean luma -4 %.
+func test_the_ground_ambient_follows_the_bent_normal() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	for name: String in ["SKY_AMBIENT", "SKY_AMBIENT_FLOOR"]:
+		assert_bool(src.contains("const float %s = " % name)).override_failure_message("const %s missing" % name).is_true()
+		if not src.contains("const float %s = " % name):
+			return
+	assert_float(_const(src, "SKY_AMBIENT")).is_greater_equal(0.8)
+	assert_float(_const(src, "SKY_AMBIENT_FLOOR")).is_less_equal(0.35)
+	var at := src.find("float sky = mix(1.0, mix(SKY_AMBIENT_FLOOR, 1.0, up * up), SKY_AMBIENT * step(0.5, wnrm.y));")
+	assert_int(at).override_failure_message("no sky term on up-facing ground").is_greater(0)
+	var body := src.substr(at, 400)
+	assert_bool(body.contains("AO *= sky;") and body.contains("emis *= sky;")).override_failure_message("the ambient or the grit fill ignores the sky term").is_true()
+
+
 ## Look review 2 (R14): beside a wall or ruin cell the street's bent border wandered into the neighbour's ground class; the setts then lost their run and centre
 ## and drew a plain grey strip along the wall foot. A street pixel whose bent lookup lands on a closed class keeps its own cell's ground.
 func test_a_street_beside_a_wall_keeps_its_setts_to_the_wall_foot() -> void:
