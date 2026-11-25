@@ -171,6 +171,22 @@ pub const COMMAND_UPGRADES: [&str; 3] = ["Sergeant", "Musician", "Banner"];
 /// A list's command upgrades checked against `system`'s book: `units` holds each unit's name and its picked upgrade
 /// labels, in list order. Where the book allows one model per army with each command upgrade, the second pick of one
 /// is refused, naming that unit and the upgrade; every other book accepts any list.
+/// Ruling D16: whether a unit of `system` with `rules` carries an AoF: Skirmish command group - its book limits them
+/// (`one_command_upgrade_each`) and it has Banner or Musician.
+pub fn carries_command(system: &str, rules: &[String]) -> bool {
+    book(system).one_command_upgrade_each && rules.iter().any(|r| r == "Banner" || r == "Musician")
+}
+
+/// Ruling D16: the default command-group picks of a unit of `player` whose models' centre is `at` (world XZ): the two
+/// nearest LIVING friendly units of `others` (key, player, alive, centre), ties by key. The deployer calls it once at
+/// deployment end (selfplay through the binding, `State::default_command_picks` in the core).
+pub fn default_command_picks_of(player: i64, at: [f64; 2], others: &[(String, i64, bool, [f64; 2])]) -> Vec<String> {
+    let mut near: Vec<(f64, &String)> = others.iter().filter(|o| o.1 == player && o.2)
+        .map(|o| ((o.3[0] - at[0]).hypot(o.3[1] - at[1]), &o.0)).collect();
+    near.sort_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(b.1)));
+    near.into_iter().take(2).map(|(_, k)| k.clone()).collect()
+}
+
 pub fn command_limit(system: &str, units: &[(String, Vec<String>)]) -> Result<(), String> {
     if !book(system).one_command_upgrade_each {
         return Ok(());

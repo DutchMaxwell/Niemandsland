@@ -2417,6 +2417,18 @@ fn command_limit(system: &str, units: Vec<(String, Vec<String>)>) -> Option<Stri
     nmlcore::rules::command_limit(system, &units).err()
 }
 
+/// Ruling D16: the default command-group picks the deployer writes into a unit's profile at deployment end - empty unless
+/// a unit of `system` with `rules` carries a command group; else the two nearest living friendly units of `others`
+/// `(key, player, alive, (x, z))`, ties by key. `at` = the unit's model centre (x, z), world metres.
+#[pyfunction]
+fn default_command_picks(system: &str, rules: Vec<String>, player: i64, at: (f64, f64), others: Vec<(String, i64, bool, (f64, f64))>) -> Vec<String> {
+    if !nmlcore::rules::carries_command(system, &rules) {
+        return Vec::new();
+    }
+    let others: Vec<(String, i64, bool, [f64; 2])> = others.into_iter().map(|(k, p, a, (x, z))| (k, p, a, [x, z])).collect();
+    nmlcore::rules::default_command_picks_of(player, [at.0, at.1], &others)
+}
+
 #[pyfunction]
 fn rule_vocab_version() -> i64 {
     nmlcore::RULE_VOCAB_VERSION
@@ -3237,6 +3249,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(rule_vocab_version, m)?)?;
     m.add_function(wrap_pyfunction!(hero_join_refusal, m)?)?;
     m.add_function(wrap_pyfunction!(command_limit, m)?)?;
+    m.add_function(wrap_pyfunction!(default_command_picks, m)?)?;
     m.add("RULE_VOCAB_VERSION", nmlcore::RULE_VOCAB_VERSION)?;
     m.add("LEGACY_VOCAB_VERSION", nmlcore::LEGACY_VOCAB_VERSION)?;
     // The CLASS FIX (external review 03.09. item 3 / F9): the epoch a fresh

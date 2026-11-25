@@ -791,8 +791,7 @@ impl State {
     /// Ruling D16: whether unit `u` carries an AoF: Skirmish command group (its book limits them, `one_command_upgrade_each`,
     /// and its profile has Banner or Musician).
     pub fn carries_command(&self, u: usize) -> bool {
-        self.book(u).one_command_upgrade_each
-            && self.profile(u).special_rules.iter().any(|r| r == "Banner" || r == "Musician")
+        crate::rules::carries_command(&self.profile(u).game_system, &self.profile(u).special_rules)
     }
 
     /// Ruling D16: the bearer a command group starts with when nothing names one - the LAST slot (no per-model data
@@ -808,16 +807,10 @@ impl State {
         if !self.carries_command(u) || self.positions[u].is_empty() {
             return Vec::new();
         }
-        let c = crate::geom::centre(&self.positions[u]);
-        let mut near: Vec<(f64, &String)> = (0..self.units())
-            .filter(|&o| o != u && self.player[o] == self.player[u] && self.alive[o] > 0 && !self.positions[o].is_empty())
-            .map(|o| {
-                let d = crate::geom::centre(&self.positions[o]);
-                (f64::from((d[0] - c[0]).hypot(d[2] - c[2])), &self.roster.keys[o])
-            })
-            .collect();
-        near.sort_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(b.1)));
-        near.into_iter().take(2).map(|(_, k)| k.clone()).collect()
+        let xz = |o: usize| { let c = crate::geom::centre(&self.positions[o]); [f64::from(c[0]), f64::from(c[2])] };
+        let others: Vec<(String, i64, bool, [f64; 2])> = (0..self.units()).filter(|&o| o != u && !self.positions[o].is_empty())
+            .map(|o| (self.roster.keys[o].clone(), self.player[o], self.alive[o] > 0, xz(o))).collect();
+        crate::rules::default_command_picks_of(self.player[u], xz(u), &others)
     }
 
     pub fn kits_drop(&mut self, u: usize) {

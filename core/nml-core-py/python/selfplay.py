@@ -506,6 +506,7 @@ def _deploy_arena(
             pos[host_key] = pos.get(host_key, [])[:offset]
             if host_key in held:
                 held.add(hero_key)
+    _write_command_picks(units1, units2, pos)
     # The reserve KEYS ride out with the positions: `capture` needs them to
     # mark a unit dormant (battle_sim.gd:1483 asks `unit_in_reserve`), and an
     # empty placement list is not the same signal — a folded hero of a reserved
@@ -516,6 +517,32 @@ def _deploy_arena(
         held,
         sequence,
     )
+
+
+def _write_command_picks(units1: list[dict[str, Any]], units2: list[dict[str, Any]], pos: dict[str, list[list[float]]]) -> None:
+    """Ruling D16: an AoF: Skirmish Banner or Musician lends its bonus to two friendly units "picked before the start of the
+    game". The picks are fixed ONCE, here at deployment end, and written into the unit's profile (`command_picks`); the
+    core only reads them. The default is the core's (`nml_core.default_command_picks`): the two nearest placed friendly
+    units, ties by key; nothing for any other unit, so no other profile changes."""
+    def centre(key: str) -> tuple[float, float] | None:
+        models = pos.get(key) or []
+        if not models:
+            return None
+        return (sum(m[0] for m in models) / len(models), sum(m[2] for m in models) / len(models))
+
+    others = [(u["unit_id"], side, True, c) for side, units in ((1, units1), (2, units2)) for u in units
+              if (c := centre(u["unit_id"])) is not None]
+    for side, units in ((1, units1), (2, units2)):
+        for u in units:
+            at = centre(u["unit_id"])
+            if at is None:
+                continue
+            picks = nml_core.default_command_picks(
+                str(u.get("game_system", "")), list(u.get("special_rules") or []), side, at,
+                [o for o in others if o[0] != u["unit_id"]],
+            )
+            if picks:
+                u["command_picks"] = picks
 
 
 # ----------------------------------------------------------------- capture ---
