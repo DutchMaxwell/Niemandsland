@@ -44,6 +44,7 @@ class StubAtmosphere extends Node:
 	var war := false
 	func get_atmosphere_names() -> Array: return PRESETS
 	func apply_atmosphere(n: String) -> void: applied = n
+	func choose_atmosphere(n: String) -> void: applied = n   # (the panel picks through this: a pick of the player's own)
 	func is_fires_enabled() -> bool: return fires
 	func set_fires_enabled(on: bool) -> void: fires = on
 	func is_war_sounds_enabled() -> bool: return war
