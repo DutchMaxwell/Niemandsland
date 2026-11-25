@@ -256,32 +256,58 @@ pub fn placed_chain_len(state: &State, si: usize) -> usize {
 /// is not counted in the first.
 fn cliff_drop_in(terrain: &Terrain, path: &[[f64; 2]], drops: bool, jumps: bool) -> Option<(f64, Vec<Jump>)> {
     let at = |p: [f64; 2]| [p[0] / terrain.in2m(), p[1] / terrain.in2m()];
-    let (mut dropped, mut jumped) = (0.0, Vec::new());
+    // Every cliff the path takes, in walking order.
+    let mut ev: Vec<Edge> = Vec::new();
+    let mut walked = 0.0;
     for w in path.windows(2) {
         let (a, b) = (at(w[0]), at(w[1]));
         let hits = tier_crossings(a, b, terrain.tier_edges());
         let cliffs: Vec<_> = hits.iter().filter(|c| c.kind == TierKind::Cliff).collect();
         let (la, lb) = (terrain.tier_in_at(a[0], a[1]), terrain.tier_in_at(b[0], b[1]));
         let grazed = cliffs.is_empty() && la != lb && !hits.iter().any(|c| c.kind == TierKind::Ladder);
-        // (rise of the step, down?) per cliff the leg takes
+        // (rise of the step, down?, where on the leg) per cliff the leg takes
         let steps: Vec<(f64, bool, f64)> = if grazed { vec![((la - lb).abs(), la > lb, 0.5)] } else { cliffs.iter().map(|c| (c.dy_in, c.down, c.t)).collect() };
+        let (d, len) = ([w[1][0] - w[0][0], w[1][1] - w[0][1]], (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]));
         for (dy, down, t) in steps {
-            if drops && down && dy <= LEDGE_CLIMB_MAX_IN {
-                dropped += dy;
-            } else if jumps && down && matches!(crate::mv::jump::drop_kind(dy), crate::mv::jump::JumpKind::Jump { .. }) {
-                let (d, len) = ([w[1][0] - w[0][0], w[1][1] - w[0][1]], (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]));
-                jumped.push(Jump { dy, at: [w[0][0] + d[0] * t, w[0][1] + d[1] * t], dir: [d[0] / len, d[1] / len] });
-            } else {
-                return None;
+            ev.push(Edge { s: walked + len * t, dy, down, at: [w[0][0] + d[0] * t, w[0][1] + d[1] * t], dir: [d[0] / len.max(1e-12), d[1] / len.max(1e-12)] });
+        }
+        walked += len;
+    }
+    let (mut dropped, mut jumped) = (0.0, Vec::new());
+    let mut k = 0;
+    while k < ev.len() {
+        let Edge { s, dy, down, at, dir } = ev[k];
+        // A gap (3.6 skirmish p.15): down an edge and straight back up to the same height - a jump across, one die per inch of
+        // width (1 in free); the gap's depth is never walked.
+        if let (true, true, Some(&Edge { s: s2, dy: dy2, down: false, .. })) = (jumps, down, ev.get(k + 1)) {
+            if (dy2 - dy).abs() < 1e-6 {
+                if let crate::mv::jump::JumpKind::Jump { dice } = crate::mv::jump::gap_kind((s2 - s) / terrain.in2m()) {
+                    jumped.push(Jump { dy, dice, gap_in: Some((s2 - s) / terrain.in2m()), at, dir });
+                }
+                k += 2;
+                continue;
             }
         }
+        if drops && down && dy <= LEDGE_CLIMB_MAX_IN {
+            dropped += dy;
+        } else if let (true, true, crate::mv::jump::JumpKind::Jump { dice }) = (jumps, down, crate::mv::jump::drop_kind(dy)) {
+            jumped.push(Jump { dy, dice, gap_in: None, at, dir });
+        } else {
+            return None;
+        }
+        k += 1;
     }
     Some((dropped, jumped))
 }
 
-/// One jump on a walked path: its height (in), where the path crosses the edge and the path's direction there (world XZ).
+/// One cliff a walked path takes: metres walked to it, its rise (in), down?, where (world XZ) and the leg's direction.
 #[derive(Debug, Clone, Copy)]
-struct Jump { dy: f64, at: [f64; 2], dir: [f64; 2] }
+struct Edge { s: f64, dy: f64, down: bool, at: [f64; 2], dir: [f64; 2] }
+
+/// One jump on a walked path: its height (in; a gap's depth), its dice before Strider, a gap's width (in), where the path
+/// crosses the (first) edge and the path's direction there (world XZ).
+#[derive(Debug, Clone, Copy)]
+struct Jump { dy: f64, dice: u32, gap_in: Option<f64>, at: [f64; 2], dir: [f64; 2] }
 
 /// Ruling D13: where model `m` of unit `si` lands when its jump at `j` fails - the first legal spot on its own path past the
 /// edge, from where its base clears the edge out to 2 in from it: on the low side, not solid, overlapping no other model
@@ -304,10 +330,7 @@ fn jump_foot(state: &State, si: usize, m: usize, terrain: &Terrain, placed: &[[f
 /// The dice one model rolls for its jumps: one per inch begun, halved rounding up with Strider.
 fn jump_dice_for(state: &State, si: usize, jumps: &[Jump]) -> u32 {
     let strider = state.profile(si).special_rules.iter().any(|r| r == "Strider");
-    jumps.iter().map(|j| match crate::mv::jump::drop_kind(j.dy) {
-        crate::mv::jump::JumpKind::Jump { dice } => crate::mv::jump::jump_dice(dice, false, strider),
-        _ => 0,
-    }).sum()
+    jumps.iter().map(|j| crate::mv::jump::jump_dice(j.dice, false, strider)).sum()
 }
 
 /// Whether the skirmish Jumping rule holds for unit `si` at this epoch (the books that print drops).
@@ -429,8 +452,11 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
                 }
                 if dice > 0 {
                     jump_lines.push(LogLine { rule: "jump", category: Category::Movement, side: state.player[si], detail: None,
-                        text: format!("{}: model {} jumps down {:.0} in - {dice} dice at 2+, the jump does not count toward the move",
-                            statics[state.roster.profile[si]].name, i + 1, jumps.iter().map(|j| j.dy).sum::<f64>()) });
+                        text: format!("{}: model {} jumps {} - {dice} dice at 2+, the jump does not count toward the move",
+                            statics[state.roster.profile[si]].name, i + 1, jumps.iter().map(|j| match j.gap_in {
+                                Some(w) => format!("a {w:.0} in gap"),
+                                None => format!("down {:.0} in", j.dy),
+                            }).collect::<Vec<_>>().join(" and ")) });
                 }
                 d
             }
