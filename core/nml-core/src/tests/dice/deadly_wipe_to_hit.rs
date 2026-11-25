@@ -13,7 +13,7 @@ use super::*;
         let mut tray = Tray::supplied(vec![vec![6], vec![1], vec![3, 1, 4, 1, 6], vec![1, 1, 1]]);
         let mut land = |_: &[(i64, i64)]| -> i64 { 0 }; // the Deadly group wipes the lone model
         let r = resolve_volley_with_pick_label(&sh, &def, "Lone Hero", 12.0, 12.0, true, true, true, true, true, true,
-            &|_| (false, "trooper".into(), 0), &|_, _| None, Some(&mut land), None, &mut tray);
+            &|_| (false, "trooper".into(), 0), &|_, _| None, Some(&mut land), None, &[], &mut tray);
         let attacks: Vec<&Roll> = r.rolls.iter().filter(|x| x.kind == "attack").collect();
         assert_eq!(attacks.len(), 2, "fixture: two attack rolls {:?}", r.rolls);
         assert_eq!(attacks[0].count, 1, "fixture: the Deadly launcher fires first");
