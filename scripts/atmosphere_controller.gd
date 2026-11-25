@@ -102,6 +102,7 @@ var _rng := RandomNumberGenerator.new()
 
 var _current_name := DEFAULT_PRESET
 var _chosen := ""   # the mood the player picked himself (saved); "" = none, the game system's default applies
+var _system := ""   # the table's game system (apply_default_for_system)
 var config_path := CONFIG_PATH   # (tests point it elsewhere)
 # War-torn ruin fires + distant war sounds default ON — a lived-in battlefield is the
 # intended first impression. Both persist, so toggling either off in-game sticks; this
@@ -185,8 +186,17 @@ func choose_atmosphere(preset_name: String) -> void:
 
 ## The table's game system changed (or was set): without a saved pick of his own the player gets that system's default mood.
 func apply_default_for_system(system: String) -> void:
+	_system = system.strip_edges().to_lower()
 	if _chosen.is_empty():
-		apply_atmosphere(default_preset_for(system, ""), true)
+		apply_atmosphere(default_preset_for(_system, ""), true)
+
+
+## While the skirmish Night default is in force, the Night LIGHTING preset is the last word after every atmosphere change: that preset is the look the
+## maintainer approved (look1125d), and the ruin town re-applies its own dusk on every atmosphere change one frame later (deferred), which would
+## otherwise replace it. Queued after that dusk, so it wins.
+func _hold_system_night() -> void:
+	if _chosen.is_empty() and NIGHT_DEFAULT_SYSTEMS.has(_system) and _current_name == NIGHT_PRESET and _lighting != null:
+		_lighting.apply_preset(str(PRESETS[NIGHT_PRESET]["lighting"]))
 
 
 func get_chosen_atmosphere() -> String:
@@ -241,6 +251,7 @@ func apply_atmosphere(preset_name: String, instant: bool = false) -> void:
 
 	_save_config()
 	atmosphere_changed.emit(preset_name)
+	_hold_system_night.call_deferred()
 
 
 ## Stop a running preset blend (e.g. when the user grabs a lighting slider).
