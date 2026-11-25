@@ -16,6 +16,9 @@ const CONFIG_PATH := "user://atmosphere.cfg"
 const CONFIG_SECTION := "atmosphere"
 const TRANSITION_SECONDS := 2.0
 const DEFAULT_PRESET := "Sunset"
+## Look review 4: the skirmish games (Firefight, AoF Skirmish) start at Night - unless the player picked a mood himself (that choice is saved and wins).
+const NIGHT_DEFAULT_SYSTEMS := ["gff", "aofs"]
+const NIGHT_PRESET := "Night"
 
 const LIGHTNING_MIN_INTERVAL_S := 8.0
 const LIGHTNING_MAX_INTERVAL_S := 25.0
@@ -98,6 +101,8 @@ var _transition_tween: Tween = null
 var _rng := RandomNumberGenerator.new()
 
 var _current_name := DEFAULT_PRESET
+var _chosen := ""   # the mood the player picked himself (saved); "" = none, the game system's default applies
+var config_path := CONFIG_PATH   # (tests point it elsewhere)
 # War-torn ruin fires + distant war sounds default ON — a lived-in battlefield is the
 # intended first impression. Both persist, so toggling either off in-game sticks; this
 # default only applies to a fresh install (no saved atmosphere config).
@@ -160,6 +165,32 @@ func restore_saved() -> void:
 		_terrain_overlay.set_fires_enabled(true)
 	if _war_sounds_enabled:
 		_war.set_war_sounds_enabled(true)
+
+
+## The mood a table starts in: the player's own saved pick, else Night for the skirmish systems, else the standard DEFAULT_PRESET. Pure.
+static func default_preset_for(system: String, chosen: String) -> String:
+	if PRESETS.has(chosen):
+		return chosen
+	return NIGHT_PRESET if NIGHT_DEFAULT_SYSTEMS.has(system.strip_edges().to_lower()) else DEFAULT_PRESET
+
+
+## The player picks a mood (the lighting panel, the table setup): applied and saved, so it wins over every system default from now on.
+func choose_atmosphere(preset_name: String) -> void:
+	if not PRESETS.has(preset_name):
+		return
+	_chosen = preset_name
+	apply_atmosphere(preset_name)
+	_save_config()
+
+
+## The table's game system changed (or was set): without a saved pick of his own the player gets that system's default mood.
+func apply_default_for_system(system: String) -> void:
+	if _chosen.is_empty():
+		apply_atmosphere(default_preset_for(system, ""), true)
+
+
+func get_chosen_atmosphere() -> String:
+	return _chosen
 
 
 func get_atmosphere_names() -> Array:
@@ -335,14 +366,18 @@ func _on_fires_rebuilt() -> void:
 
 
 func _load_config() -> void:
-	# The atmosphere PRESET is NOT persisted across launches: every game starts in the
-	# DEFAULT_PRESET (Sunset) as the standard look. In-game switching still works for the
-	# session; it just doesn't carry over to the next start. The war-torn / war-sound
-	# toggles do persist (they're independent of the lighting mood).
+	# The mood the player PICKED himself is saved (look review 4) and wins; without one a table starts in
+	# DEFAULT_PRESET (Sunset) and takes its game system's default (Night for the skirmish systems) once the system is known.
+	# The war-torn / war-sound toggles persist as before.
 	_current_name = DEFAULT_PRESET
+	_chosen = ""
 	var config := ConfigFile.new()
-	if config.load(CONFIG_PATH) != OK:
+	if config.load(config_path) != OK:
 		return
+	var chosen := str(config.get_value(CONFIG_SECTION, "chosen_preset", ""))
+	if PRESETS.has(chosen):
+		_chosen = chosen
+		_current_name = chosen
 	_fires_enabled = config.get_value(CONFIG_SECTION, "fires_enabled", true)
 	_war_sounds_enabled = config.get_value(CONFIG_SECTION, "war_sounds_enabled", true)
 
@@ -351,4 +386,5 @@ func _save_config() -> void:
 	var config := ConfigFile.new()
 	config.set_value(CONFIG_SECTION, "fires_enabled", _fires_enabled)
 	config.set_value(CONFIG_SECTION, "war_sounds_enabled", _war_sounds_enabled)
-	config.save(CONFIG_PATH)
+	config.set_value(CONFIG_SECTION, "chosen_preset", _chosen)
+	config.save(config_path)
