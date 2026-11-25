@@ -31,6 +31,7 @@ fn profile(name: &str, range: f64, attacks: i64, weapon_rules: Vec<&str>) -> Pro
             rules: weapon_rules.into_iter().map(str::to_string).collect(),
         }],
         special_rules: vec![],
+        command_picks: Vec::new(),
         caster_value: 0,
         base_radius: 0.0,
         base_shape: String::new(),

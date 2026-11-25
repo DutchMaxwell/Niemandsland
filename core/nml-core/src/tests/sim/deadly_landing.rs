@@ -197,6 +197,7 @@ use super::*;
 
     fn host_profile(id: &str) -> Profile {
         Profile {
+            command_picks: Vec::new(),
             cost: 0,
             unit_id: id.into(), name: id.into(), quality: 4, defense: 4, tough: 1,
             wounds_max: vec![], model_count: 1, weapons: vec![], special_rules: vec![],

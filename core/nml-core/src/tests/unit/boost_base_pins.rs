@@ -27,6 +27,7 @@ fn boost_carrier(faction: &str, rules: &[&str], attacks: i64) -> Profile {
             Weapon { name: "Blade".into(), range: 0.0, attacks: 1, count: 1, ap: 0, rules: vec![] },
         ],
         special_rules: rules.iter().map(|s| s.to_string()).collect(),
+        command_picks: Vec::new(),
         caster_value: 0,
         base_radius: 0.0,
         base_shape: String::new(),

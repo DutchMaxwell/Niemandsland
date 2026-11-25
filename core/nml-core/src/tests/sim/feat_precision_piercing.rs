@@ -38,6 +38,7 @@ use super::*;
                 rules: vec![],
             }],
             special_rules: rules.iter().map(|r| r.to_string()).collect(),
+            command_picks: Vec::new(),
             caster_value: 0,
             base_radius: 0.0,
             base_shape: String::new(),

@@ -31,6 +31,7 @@ use super::*;
                 rules: vec![],
             }],
             special_rules: vec![rule.into()],
+            command_picks: Vec::new(),
             caster_value: 0,
             base_radius: 0.0,
             base_shape: String::new(),

@@ -61,6 +61,11 @@ pub struct Profile {
     pub weapons: Vec<Weapon>,
     #[serde(default)]
     pub special_rules: Vec<String>,
+    /// Ruling D16: the (up to two) friendly units an AoF: Skirmish Banner or Musician lends its bonus to besides its own,
+    /// by unit key - fixed ONCE at deployment end by whoever deploys (selfplay, the table) and only read here; absent =
+    /// none (every record before it), the bonus then reaches the bearer's own unit only.
+    #[serde(default)]
+    pub command_picks: Vec<String>,
     #[serde(default)]
     pub caster_value: i64,
     #[serde(default)]
@@ -794,6 +799,25 @@ impl State {
     /// marks the carrier yet; KIT-BEARER-NAME), so it is removed last under slot order. `None` for every other unit.
     pub fn initial_cmd_bearer(&self, u: usize) -> Option<usize> {
         (self.carries_command(u) && !self.positions.get(u).is_none_or(|p| p.is_empty())).then(|| self.positions[u].len() - 1)
+    }
+
+    /// Ruling D16: the default command-group picks for unit `u` at deployment end - the two nearest living friendly units by
+    /// unit-centre distance, ties by unit key; empty for a unit without a command group. Pure: the deployer calls it once
+    /// and writes the answer into the profile (`Profile::command_picks`); the core never recomputes it mid-game.
+    pub fn default_command_picks(&self, u: usize) -> Vec<String> {
+        if !self.carries_command(u) || self.positions[u].is_empty() {
+            return Vec::new();
+        }
+        let c = crate::geom::centre(&self.positions[u]);
+        let mut near: Vec<(f64, &String)> = (0..self.units())
+            .filter(|&o| o != u && self.player[o] == self.player[u] && self.alive[o] > 0 && !self.positions[o].is_empty())
+            .map(|o| {
+                let d = crate::geom::centre(&self.positions[o]);
+                (f64::from((d[0] - c[0]).hypot(d[2] - c[2])), &self.roster.keys[o])
+            })
+            .collect();
+        near.sort_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(b.1)));
+        near.into_iter().take(2).map(|(_, k)| k.clone()).collect()
     }
 
     pub fn kits_drop(&mut self, u: usize) {

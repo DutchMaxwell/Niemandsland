@@ -20,6 +20,7 @@
             model_count: 1,
             weapons: vec![],
             special_rules: vec![],
+            command_picks: Vec::new(),
             caster_value: 0,
             base_radius: 0.0,
             base_shape: String::new(),
@@ -179,6 +180,7 @@
             model_count: 1,
             weapons: vec![],
             special_rules: vec![rule.into()],
+            command_picks: Vec::new(),
             caster_value: 0,
             base_radius: 0.0,
             base_shape: String::new(),
@@ -1279,6 +1281,7 @@
                 rules: vec![],
             }],
             special_rules: rules.iter().map(|s| s.to_string()).collect(),
+            command_picks: Vec::new(),
             caster_value: 0,
             base_radius: 0.0,
             base_shape: String::new(),
@@ -1752,6 +1755,7 @@ mod skirmish_b4_chain;
 mod skirmish_e1_hero;
 mod skirmish_e9_neighbours;
 mod skirmish_push;
+mod command_groups;
 mod utility_buff_family;
 mod utility_spells;
 mod counter_first;

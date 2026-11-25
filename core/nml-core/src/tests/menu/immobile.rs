@@ -25,6 +25,7 @@ use super::*;
             model_count: 1,
             weapons: vec![],
             special_rules: carrier_rules.iter().map(|s| s.to_string()).collect(),
+            command_picks: Vec::new(),
             caster_value: 0,
             base_radius: 0.0,
             base_shape: String::new(),

@@ -24,6 +24,7 @@ fn profile(name: &str, models: i64, rules: Vec<&str>, weapon_rules: Vec<&str>) -
             rules: weapon_rules.into_iter().map(str::to_string).collect(),
         }],
         special_rules: rules.into_iter().map(str::to_string).collect(),
+        command_picks: Vec::new(),
         caster_value: 0,
         base_radius: 0.0,
         base_shape: String::new(),
