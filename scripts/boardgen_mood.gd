@@ -37,6 +37,7 @@ const TOWN_SATURATION := 1.15
 const TOWN_EXPOSURE_GAIN := 1.4
 
 const OWNER_META := "boardgen_mood_owner"
+const MOOD_HOOK_META := "boardgen_mood_hook"   # on a town board: its atmosphere_changed hook (the Night floor follows the mood)
 ## The ruin town's blue-hour sky (reversible): replaces the star field while a town board is on the table. A pure backdrop:
 ## the scene's ambient light is a colour and its reflections are off, so it lights nothing; the smallest radiance map, since nothing reads it.
 const TOWN_SKY_SHADER := preload("res://shaders/ruintown_sky.gdshader")
@@ -77,9 +78,40 @@ static func town_sky() -> Sky:
 	return _town_sky
 
 
-## The lighting controller's board look of the ruin town: only the exposure (the dusk's, raised by the gain that cancels the grade's darkening).
-static func town_look() -> Dictionary:
-	return {"exposure": BoardgenTownDressing.EXPOSURE * TOWN_EXPOSURE_GAIN}
+## The lighting controller's board look of the ruin town: the exposure (the dusk's, raised by the gain that cancels the grade's darkening) and, under
+## Night without bounce light (Medium: High / Ultra have SDFGI and SSIL), the dusk's sky fill as a floor (decision D-N1: half the board was below luma 8).
+static func town_look(bounce := false, night := false) -> Dictionary:
+	var look := {"exposure": BoardgenTownDressing.EXPOSURE * TOWN_EXPOSURE_GAIN}
+	if night and not bounce:
+		look["ambient_energy_min"] = BoardgenTownDressing.AMBIENT_ENERGY
+		look["fill_light_energy_min"] = BoardgenTownDressing.MOON2_ENERGY
+	return look
+
+
+## The town look for the mood and preset in force now.
+static func _town_look_now(main: Node) -> Dictionary:
+	var graphics: Node = main.get_node_or_null("/root/GraphicsSettings")
+	var bounce: bool = graphics != null and int(graphics.current_preset) >= GraphicsSettings.QualityPreset.HIGH
+	var atmosphere: Variant = main.get("atmosphere_controller")
+	return town_look(bounce, is_instance_valid(atmosphere) and atmosphere.get_current_atmosphere() == "Night")
+
+
+## One atmosphere_changed hook per town board (kept in its meta): a new mood sets the town look again; off or leaving, the hook goes.
+static func _hook_mood(board: Node, main: Node, lighting: Variant, on: bool) -> void:
+	var atmosphere: Variant = main.get("atmosphere_controller")
+	if not is_instance_valid(atmosphere) or not atmosphere.has_signal("atmosphere_changed"):
+		return
+	if board.has_meta(MOOD_HOOK_META):
+		var old: Callable = board.get_meta(MOOD_HOOK_META)
+		if atmosphere.atmosphere_changed.is_connected(old):
+			atmosphere.atmosphere_changed.disconnect(old)
+		board.remove_meta(MOOD_HOOK_META)
+	if on and lighting != null:
+		var hook := func(_name: String) -> void:
+			if is_instance_valid(board) and is_instance_valid(lighting) and main.get_meta(OWNER_META, 0) == board.get_instance_id():
+				lighting.set_board_look(_town_look_now(main))
+		atmosphere.atmosphere_changed.connect(hook)
+		board.set_meta(MOOD_HOOK_META, hook)
 
 
 ## A per-channel curve: the blacks lean cool and are lifted a hair, the highlights lean warm (the lamps), the middle stays.
@@ -125,14 +157,17 @@ static func apply(board: Node, on: bool, town := false) -> void:
 	var main := board.get_parent().get_parent() if board.get_parent() != null else null
 	if main == null:
 		return
+	var lighting: Variant = main.get("lighting_controller")   # (untyped: at teardown the controller can already be freed)
+	if not is_instance_valid(lighting):
+		lighting = null
+	_hook_mood(board, main, lighting, on and town)
 	if not on and main.get_meta(OWNER_META, 0) != board.get_instance_id():
 		return   # another board took the look over (a re-attach frees the old board after the new one is ready)
 	var render_state: RenderState = main.get("render_state")
 	if render_state != null:
 		render_state.set_layer("board", (town_values() if town else environment_values()) if on else {})
-	var lighting: Node = main.get("lighting_controller")
 	if lighting != null and lighting.has_method("set_board_look"):
-		lighting.set_board_look((town_look() if town else light_look()) if on else {})
+		lighting.set_board_look((_town_look_now(main) if town else light_look()) if on else {})
 	if on:
 		main.set_meta(OWNER_META, board.get_instance_id())
 	else:

@@ -191,7 +191,7 @@ func apply_preset(preset_name: String) -> void:
 ## Set the board's light ({} = none) and re-apply the mood's current values through it.
 func set_board_look(look: Dictionary) -> void:
 	_board_look = look.duplicate()
-	for key: String in ["sun_energy", "sun_color", "ambient_energy", "ambient_color", "exposure"]:
+	for key: String in ["sun_energy", "sun_color", "ambient_energy", "ambient_color", "exposure", "fill_light_energy"]:
 		if current_preset.has(key):
 			call("set_" + key, current_preset[key])
 
@@ -238,7 +238,7 @@ func set_sun_angles(horizontal: float, vertical: float) -> void:
 
 func set_ambient_energy(value: float) -> void:
 	if _environment:
-		_environment.ambient_light_energy = float(_board_look.get("ambient_energy", value))
+		_environment.ambient_light_energy = maxf(float(_board_look.get("ambient_energy", value)), float(_board_look.get("ambient_energy_min", 0.0)))   # a board's floor under a dark mood
 		current_preset.ambient_energy = value
 
 
@@ -280,7 +280,7 @@ func set_shadow_normal_bias(value: float) -> void:
 
 func set_fill_light_energy(value: float) -> void:
 	if _fill_light:
-		_fill_light.light_energy = value
+		_fill_light.light_energy = maxf(value, float(_board_look.get("fill_light_energy_min", 0.0)))
 		current_preset.fill_light_energy = value
 
 
