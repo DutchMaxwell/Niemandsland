@@ -108,10 +108,10 @@ fn push_spot_takes_a_free_spot_within_2_in_on_the_same_ground() {
     let lv = |c: usize| match c { 0 => 4.0, 1 => 3.0, _ => 1.0 };
     let t = crate::terrain::tier_board_for_test(4, 4, (0..16).map(|i| lv(i % 4)).collect(), Vec::new());
     let go = |to: [f64; 3]| push_spot(&st, 2, &crate::activation::PushInput { target: "b".into(), model: 0, to }, Cover::Board(&t));
-    assert!(go(at(-2.5, 3.0, 1.5)).is_ok_and(|d| (d - 1.0).abs() < 1e-9), "1 in along the strip");
+    assert!(go(at(-2.5, 3.0, 1.5)).is_ok_and(|(d, fall)| (d - 1.0).abs() < 1e-9 && fall.is_none()), "1 in along the strip");
     assert_eq!(go(at(-1.5, 3.0, 4.0)), Err("2.5 in is over the 2 in".to_string()));
     assert_eq!(go(at(-3.2, 4.0, 1.5)), Err("a push never goes up a ledge".to_string()));
-    assert_eq!(go(at(0.3, 1.0, 1.5)), Err("a push off 2 in falls, which the core does not play yet".to_string()));
+    assert!(go(at(0.3, 1.0, 1.5)).is_ok_and(|(d, fall)| (d - 1.8).abs() < 1e-9 && fall == Some(2.0)), "off the 2 in edge: a fall");
     assert_eq!(go(at(-1.5, 3.0, 0.5)), Err("another model stands there".to_string()));
     let mut gone = st.clone();
     gone.positions[2].clear();
@@ -218,4 +218,50 @@ fn a_landed_push_regroups_the_rest_of_the_unit() {
     let (m, others) = (st.positions[2][0], &st.positions[2][1..]);
     assert!(others.iter().all(|q| (q[0] - m[0]).hypot(q[2] - m[2]) - IN2M <= IN2M + 1e-9), "the rest within 1 in: {:?}", st.positions[2]);
     assert!(shot.log.iter().any(|l| l.starts_with("Push: Mystic rolls 5 and pushes Target model 1") && l.ends_with("placed within 1 in of it")), "{:?}", shot.log);
+}
+
+/// The spell-and-push fixture on a tier board: "Mystic" at the centre on the ground casts a 3-hit Bolt (no sight needed) at
+/// the two-model "Target" standing on a raised strip x 9..12 in of `strip` in; the push moves its model 1 to `to_x` (z 0).
+fn ledge_push(strip: f64, to_x: f64, dice: Vec<Vec<u8>>) -> (State, ShootResult) {
+    let mut st = four_unit_line();
+    let keys = st.roster.keys.clone();
+    st.roster = Rc::new(Roster { index: keys.iter().cloned().zip(0..).collect(), keys, profile: vec![0, 1, 2, 3] });
+    let mut p = st.profiles.list[0].clone();
+    p.game_system = "gff".into();
+    st.profiles = Rc::new(Profiles { list: vec![p; 4], index: HashMap::new() });
+    let at = |x: f64, y: f64, z: f64| [x * IN2M, y * IN2M, z * IN2M];
+    st.positions = vec![vec![at(0.0, 0.0, 0.0)], vec![at(-10.0, 0.0, -10.0)], vec![at(10.0, strip, 0.0), at(10.0, strip, 1.2)], vec![at(-10.0, 0.0, 10.0)]];
+    st.radii = Rc::new(vec![vec![0.5 * IN2M], vec![0.5 * IN2M], vec![0.5 * IN2M; 2], vec![0.5 * IN2M]]);
+    st.wounds = vec![vec![1], vec![1], vec![1, 1], vec![1]];
+    st.alive = vec![1, 1, 2, 1];
+    st.casts = vec![2, 0, 0, 0];
+    let unit = |name: &str, n: i64, q: i64| UnitStatic {
+        name: name.into(), model_count: n, wounds_max: vec![1; n as usize],
+        ctx: Ctx { quality: q, defense: 6, models: n, ..Default::default() }, ..Default::default()
+    };
+    let bolt = crate::rules::Spell { name: "Bolt".into(), status: "modeled".into(), range_in: 18.0, target_count: 1, needs_los: false,
+        effect_kind: "damage".into(), effect_hits: 3, ..Default::default() };
+    let statics = vec![UnitStatic { is_caster: true, spells: vec![bolt], casts_per_round: 2, ..unit("Mystic", 1, 4) }, unit("Spare", 1, 4), unit("Target", 2, 6), unit("Far", 1, 4)];
+    let t = crate::terrain::tier_board_for_test(8, 8, (0..64).map(|i| if i % 8 == 7 { strip } else { 0.0 }).collect(), Vec::new());
+    let action = Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None };
+    let mut tray = Tray::supplied(dice);
+    tray.offer_casts(vec![crate::activation::CastInput { seq: 0, caster: "a".into(), spell: "Bolt".into(), targets: vec!["b".into()], base: 2, threshold: 1, ..Default::default() }]);
+    tray.offer_push(Some(PushInput { target: "b".into(), model: 0, to: at(to_x, 0.0, 0.0) }));
+    let seams = Seams { rules_epoch: crate::acts::PENDING_EPOCH_SKIRMISH_PUSH, tray_exact: true, ..Seams::default() };
+    resolve_stochastic_tray_on_board(&statics, &st, &action, &t, seams, &mut GodotRng::new(0), &mut tray).unwrap()
+}
+
+/// GFF/AOFS-E12-01: pushed off a 3 in strip the model falls - three dice, each 1-3 a wound on it ([1, 6, 6]: one, its last).
+/// GFF/AOFS-E12-02: off a 1 in strip there is no fall (under 2 in), only the push. (cast 6, saves [1, 6, 6] -> one of two
+/// down, morale 1 -> Shaken, push 5.)
+#[test]
+fn e12_01_02_a_push_off_2_in_or_more_falls() {
+    let (st, shot) = ledge_push(3.0, 8.7, vec![vec![6], vec![1, 6, 6], vec![1], vec![5], vec![1, 6, 6]]);
+    let fall: Vec<(String, Vec<u8>)> = shot.rolls.iter().filter(|r| r.kind == "fall").map(|r| (r.owner.clone(), r.faces.clone())).collect();
+    assert_eq!(fall, vec![("Target".to_string(), vec![1, 6, 6])], "{:?}", shot.log);
+    assert_eq!(st.alive[2], 0, "the fall's wound was the model's last");
+    assert!(shot.log.iter().any(|l| l.starts_with("Push: Mystic rolls 5 and pushes Target model 1") && l.contains("off a 3 in drop - it falls, [1, 6, 6], 1 wound on 1-3")), "{:?}", shot.log);
+    let (st, shot) = ledge_push(1.0, 8.7, vec![vec![6], vec![1, 6, 6], vec![1], vec![5]]);
+    assert!(!shot.rolls.iter().any(|r| r.kind == "fall"), "1 in is no fall: {:?}", shot.log);
+    assert_eq!((st.alive[2], st.positions[2][0][0]), (1, 8.7 * IN2M), "pushed down the 1 in, standing");
 }
