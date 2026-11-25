@@ -1041,22 +1041,22 @@ pub const EPOCH_96_PARITY_BATCH: u32 = 96;
 ///   to-hit penalties as declared (Stealth family, Evasive family, Aircraft, the Artillery target); the per-hit carrier reads
 ///   (Fortified, the Regeneration family) still drop (`Ctx::wiped` -> `keep_to_hit_of`).
 pub const EPOCH_97_WIPED_TO_HIT_DECLARED: u32 = 97;
-pub const CURRENT_RULES_EPOCH: u32 = 97;
-/// PENDING (the 3.6 Firefight book): a `gff` unit's coherency chain is 9 in, not 6 in; AoF: Skirmish keeps 6 in. A
-/// placeholder one past `CURRENT_RULES_EPOCH`: no record plays it until the next batch freezes it into an `EPOCH_<n>_*`
-/// constant and bumps `CURRENT_RULES_EPOCH`. Records stamped 97 or below replay byte-exact. Read only through
-/// `rules::Book::chain_in_at`.
-pub const PENDING_EPOCH_FIREFIGHT_CHAIN: u32 = 98;
-/// PENDING (the 3.6 Firefight and AoF: Skirmish books): every friendly Hero within 6 in lends its Quality to a morale test,
-/// with no Tough minimum, and Heroes never join units, so the Blast cap counts the target unit alone. A placeholder one past
-/// `CURRENT_RULES_EPOCH`, like the one above. Records stamped 97 or below replay byte-exact. Read only through
-/// `rules::Book::hero_aura_at`.
-pub const PENDING_EPOCH_SKIRMISH_HERO: u32 = 98;
-/// PENDING (table realism, every system): a rule-only upgrade (Banner, Musician, Sergeant, Great Banner) reaches its unit
-/// from the selected option's `gains`, the way the table's `_apply_selected_upgrade_rules` reads a real Army Forge export.
-/// A placeholder one past `CURRENT_RULES_EPOCH`, like the two above. Read only by the Python list loader
-/// (`list_to_profile._units_from_list`); records stamped 97 or below build their units without it.
-pub const PENDING_EPOCH_COMMAND_GAINS: u32 = 98;
+/// The EPOCH 98 BATCH: three outcome changes that sat behind the `PENDING_EPOCH_FIREFIGHT_CHAIN`, `PENDING_EPOCH_SKIRMISH_HERO` and
+/// `PENDING_EPOCH_COMMAND_GAINS` placeholders (all 98) are now three frozen constants, and `CURRENT_RULES_EPOCH` is bumped to 98 in the
+/// same change. Records stamped 97 or below replay byte-exact. Every call site reads these constants, not the literal `98` or
+/// `CURRENT_RULES_EPOCH`. The recorder mirror (`act_recorder.gd`) stamps 98 in the same change.
+/// - FIREFIGHT_CHAIN (the 3.6 Firefight book): a `gff` unit's coherency chain is 9 in, not 6 in; AoF: Skirmish keeps 6 in. Read only
+///   through `rules::Book::chain_in_at`.
+pub const EPOCH_98_FIREFIGHT_CHAIN: u32 = 98;
+/// - SKIRMISH_HERO (the 3.6 Firefight and AoF: Skirmish books): every friendly Hero within 6 in lends its Quality to a morale test,
+///   with no Tough minimum, and Heroes never join units, so the Blast cap counts the target unit alone. Read only through
+///   `rules::Book::hero_aura_at`.
+pub const EPOCH_98_SKIRMISH_HERO: u32 = 98;
+/// - COMMAND_GAINS (table realism, every system): a rule-only upgrade (Banner, Musician, Sergeant, Great Banner) reaches its unit
+///   from the selected option's `gains`, the way the table's `_apply_selected_upgrade_rules` reads a real Army Forge export. Read
+///   only by the Python list loader (`list_to_profile._units_from_list`).
+pub const EPOCH_98_COMMAND_GAINS: u32 = 98;
+pub const CURRENT_RULES_EPOCH: u32 = 98;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2370,12 +2370,12 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
 
 #[cfg(test)]
 mod tests {
-    /// The command-upgrade gains pass waits for its placeholder: a record at the current epoch builds its units without it.
+    /// The command-upgrade gains pass starts at 98: a record at 97 builds its units without it, a fresh one with it.
     #[test]
-    fn command_gains_wait_for_their_pending_epoch() {
-        assert_eq!(super::PENDING_EPOCH_COMMAND_GAINS, CURRENT_RULES_EPOCH + 1);
-        assert!(!rule_on(CURRENT_RULES_EPOCH, super::PENDING_EPOCH_COMMAND_GAINS));
-        assert!(rule_on(super::PENDING_EPOCH_COMMAND_GAINS, super::PENDING_EPOCH_COMMAND_GAINS));
+    fn command_gains_start_at_98() {
+        assert_eq!(super::EPOCH_98_COMMAND_GAINS, 98);
+        assert!(!rule_on(97, super::EPOCH_98_COMMAND_GAINS), "a record at 97 replays as recorded");
+        assert!(rule_on(CURRENT_RULES_EPOCH, super::EPOCH_98_COMMAND_GAINS), "a fresh play_game() stamps it on");
     }
 
     use super::{
@@ -2502,7 +2502,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 97, "the live epoch is EPOCH_97_WIPED_TO_HIT_DECLARED");
+        assert_eq!(CURRENT_RULES_EPOCH, 98, "the live epoch is the EPOCH 98 batch");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2512,11 +2512,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":97}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":98}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 97"
+            "a fresh play_game() now stamps the bumped epoch, 98"
         );
     }
 

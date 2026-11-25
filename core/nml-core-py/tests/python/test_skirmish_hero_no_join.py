@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
 import selfplay as sp  # noqa: E402
 from list_to_profile import deploy_unit_specs, selections_from_army_forge_json  # noqa: E402
 
-E = nml_core.PENDING_EPOCH_SKIRMISH_HERO
+E = nml_core.EPOCH_98_SKIRMISH_HERO
 
 JOIN_LIST = {
     "gameSystem": "gf",
@@ -49,8 +49,8 @@ def _joins(system: str, epoch: int) -> tuple[str, dict]:
     return sels[HERO][1], fold
 
 
-def test_the_epoch_is_the_skirmish_hero_placeholder():
-    assert E == nml_core.CURRENT_RULES_EPOCH + 1
+def test_the_epoch_is_the_frozen_skirmish_hero_epoch():
+    assert E == 98 == nml_core.CURRENT_RULES_EPOCH
     assert nml_core.hero_join_refusal("gff", E - 1) is None
 
 

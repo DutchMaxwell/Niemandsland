@@ -60,7 +60,7 @@ const DEFAULT_HERO_AURA: HeroAura = HeroAura {
 
 /// The 3.6 Firefight and AoF: Skirmish Hero (p.14): any friendly Hero within 6 in, no Tough minimum, never joined.
 const SKIRMISH_HERO_AURA: HeroAura = HeroAura { reach_in: crate::sim::HERO_AURA_REACH_IN, min_tough: 0, joins: false };
-const SKIRMISH_HERO_FROM: Option<(u32, HeroAura)> = Some((crate::acts::PENDING_EPOCH_SKIRMISH_HERO, SKIRMISH_HERO_AURA));
+const SKIRMISH_HERO_FROM: Option<(u32, HeroAura)> = Some((crate::acts::EPOCH_98_SKIRMISH_HERO, SKIRMISH_HERO_AURA));
 
 const BOOK_GF: Book = Book {
     system: "gf",
@@ -75,14 +75,14 @@ const BOOK_GF: Book = Book {
     one_command_upgrade_each: false,
 };
 
-// The 3.6 Firefight book prints a 9 in chain (p.7); the recorded 6 in stays below `PENDING_EPOCH_FIREFIGHT_CHAIN`,
+// The 3.6 Firefight book prints a 9 in chain (p.7); the recorded 6 in stays below `EPOCH_98_FIREFIGHT_CHAIN`,
 // because a different chain changes how a `gff` game plays.
 // The Firefight and Skirmish books print jumps and drops (beginner's guide p.15): `vertical_moves` is true for these two
 // only. Read by the heightfield drop rule behind `EPOCH_94_PARITY_BATCH` (`activation::check_move`) and nothing else yet.
 const BOOK_GFF: Book = Book {
     system: "gff",
     chain_in: crate::mv::SKIRMISH_CHAIN_IN,
-    chain_in_from: Some((crate::acts::PENDING_EPOCH_FIREFIGHT_CHAIN, crate::mv::MAX_CHAIN_IN)),
+    chain_in_from: Some((crate::acts::EPOCH_98_FIREFIGHT_CHAIN, crate::mv::MAX_CHAIN_IN)),
     hero_aura: DEFAULT_HERO_AURA,
     hero_aura_from: SKIRMISH_HERO_FROM,
     blast_spread_in: None,
@@ -1070,12 +1070,13 @@ mod tests {
         assert_eq!(book("unknown-system").system, "gf");
     }
 
-    /// The skirmish hero aura waits for its pending epoch: gff and aofs only, every Hero, 6 in, never joined.
+    /// The skirmish hero aura starts at epoch 98: gff and aofs only, every Hero, 6 in, never joined.
     #[test]
-    fn skirmish_hero_aura_waits_for_its_pending_epoch() {
-        let e = crate::acts::PENDING_EPOCH_SKIRMISH_HERO;
-        assert_eq!(e, crate::acts::CURRENT_RULES_EPOCH + 1);
-        assert!(!crate::acts::rule_on(crate::acts::CURRENT_RULES_EPOCH, e), "a record at the current epoch plays the old aura");
+    fn skirmish_hero_aura_starts_at_98() {
+        let e = crate::acts::EPOCH_98_SKIRMISH_HERO;
+        assert_eq!(e, 98);
+        assert!(!crate::acts::rule_on(97, e), "a record at 97 plays the old aura");
+        assert!(crate::acts::rule_on(crate::acts::CURRENT_RULES_EPOCH, e), "a fresh play_game() stamps it on");
         for sys in SYSTEMS {
             let b = book(sys);
             assert_eq!(b.hero_aura_at(e - 1), b.hero_aura, "{sys} one epoch below");
@@ -1114,8 +1115,8 @@ mod tests {
 
     /// A joined Hero is refused in gff and aofs from the skirmish hero epoch on; gf and aof keep joining.
     #[test]
-    fn skirmish_heroes_are_refused_a_join_from_their_pending_epoch() {
-        let e = crate::acts::PENDING_EPOCH_SKIRMISH_HERO;
+    fn skirmish_heroes_are_refused_a_join_from_epoch_98() {
+        let e = crate::acts::EPOCH_98_SKIRMISH_HERO;
         for sys in SYSTEMS {
             assert_eq!(hero_join_refusal(sys, e - 1), None, "{sys} one epoch below still joins");
             let want = if sys == "gff" || sys == "aofs" { Some(HERO_JOIN_REFUSED) } else { None };
@@ -1123,12 +1124,13 @@ mod tests {
         }
     }
 
-    /// The Firefight 9 in chain waits for its pending epoch: the current epoch and every other book play as recorded.
+    /// The Firefight 9 in chain starts at epoch 98: a record at 97 and every other book play as recorded.
     #[test]
-    fn firefight_chain_waits_for_its_pending_epoch() {
-        let e = crate::acts::PENDING_EPOCH_FIREFIGHT_CHAIN;
-        assert_eq!(e, crate::acts::CURRENT_RULES_EPOCH + 1);
-        assert!(!crate::acts::rule_on(crate::acts::CURRENT_RULES_EPOCH, e), "a record at the current epoch plays 6 in");
+    fn firefight_chain_starts_at_98() {
+        let e = crate::acts::EPOCH_98_FIREFIGHT_CHAIN;
+        assert_eq!(e, 98);
+        assert!(!crate::acts::rule_on(97, e), "a record at 97 plays 6 in");
+        assert!(crate::acts::rule_on(crate::acts::CURRENT_RULES_EPOCH, e), "a fresh play_game() stamps it on");
         assert_eq!(book("gff").chain_in_at(e - 1), crate::mv::SKIRMISH_CHAIN_IN);
         assert_eq!(book("gff").chain_in_at(e), 9.0);
         for sys in SYSTEMS.iter().filter(|s| **s != "gff") {

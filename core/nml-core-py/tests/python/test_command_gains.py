@@ -1,5 +1,5 @@
 """A rule-only upgrade (Banner, Musician, Sergeant, Great Banner) reaches its unit from the selected option's `gains`,
-the way the table reads a real Army Forge export - from `PENDING_EPOCH_COMMAND_GAINS` on; one epoch below the list
+the way the table reads a real Army Forge export - from `EPOCH_98_COMMAND_GAINS` on; one epoch below the list
 builds its units without it. A rule that already reaches the unit another way (a loadout item's Caster(2)) stays one
 entry on both legs."""
 from __future__ import annotations
@@ -12,7 +12,7 @@ import nml_core
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
 import list_to_profile as l2p  # noqa: E402
 
-E = nml_core.PENDING_EPOCH_COMMAND_GAINS
+E = nml_core.EPOCH_98_COMMAND_GAINS
 
 
 def _list() -> dict:
@@ -40,8 +40,8 @@ def _rules(epoch: int) -> tuple[list[str], list[str]]:
     return squad["special_rules"], lord["special_rules"]
 
 
-def test_the_epoch_is_a_placeholder_one_past_the_current():
-    assert E == nml_core.CURRENT_RULES_EPOCH + 1
+def test_the_epoch_is_live_from_98():
+    assert E == 98 == nml_core.CURRENT_RULES_EPOCH
 
 
 def test_a_banner_reaches_its_unit_from_the_epoch_on():
