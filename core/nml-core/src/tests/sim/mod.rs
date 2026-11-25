@@ -1750,6 +1750,7 @@ mod courage_buff;
 mod skirmish_b4_chain;
 mod skirmish_e1_hero;
 mod skirmish_e9_neighbours;
+mod skirmish_push;
 mod utility_buff_family;
 mod utility_spells;
 mod counter_first;

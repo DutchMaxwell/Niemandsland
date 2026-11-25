@@ -1068,6 +1068,9 @@ pub const CURRENT_RULES_EPOCH: u32 = 99;
 /// inch at 2+, its height not counted toward the move; deeper drops stay refused. A placeholder one past `CURRENT_RULES_EPOCH`.
 /// Records stamped 99 or below replay byte-exact. Read only by `activation::check_move` and `activation::jump_dice_of`.
 pub const PENDING_EPOCH_SKIRMISH_JUMP: u32 = 100;
+/// PENDING (the 3.6 Firefight and AoF: Skirmish books, Pushing): a unit Shaken by an attack may be pushed by the attacker
+/// (`activation::Input::Push`). A placeholder one past the Jumping one. Records stamped 100 or below replay byte-exact.
+pub const PENDING_EPOCH_SKIRMISH_PUSH: u32 = 101;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff

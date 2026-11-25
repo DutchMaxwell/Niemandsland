@@ -1129,6 +1129,13 @@ fn blast_spread_units(state: &State, ti: usize, seams: Seams) -> Vec<(usize, i64
     }
 }
 
+/// The skirmish Pushing rule (3.6 p.15, ruling D15): a push holds against an enemy unit this activation's attack hit
+/// (`attacked`: the target, a Blast bystander, a damage spell's target) and left Shaken - not Shaken at the activation's
+/// start (`before`), Shaken and standing now. The attacker's own side never, nor a unit Shaken by anything but the attack.
+fn push_holds(before: &State, now: &State, si: usize, ti: usize, attacked: &[usize]) -> bool {
+    now.player[ti] != now.player[si] && attacked.contains(&ti) && !before.shaken[ti] && now.shaken[ti] && now.alive[ti] > 0
+}
+
 /// The skirmish Blast spread's morale: each neighbour `land_blast_spill` wounded tests like a shot target - the same
 /// half-strength trigger and line, then the test.
 fn blast_spill_morale(
@@ -1164,6 +1171,7 @@ fn land_blast_spill(
             if h <= 0 || next.alive[nj] <= 0 {
                 continue;
             }
+            shot.attacked.push(nj);
             let us = &statics[next.roster.profile[*mi]];
             let mut p = if melee { us.melee[s.profile].clone() } else { us.shoot[s.profile].clone() };
             // A melee weapon's copy reaches the neighbour it spilled onto (range 0 would read as out of reach).
@@ -7276,6 +7284,7 @@ fn strike_phase(
     // all-ignored roll still reads as wounding and a zero-wound exchange not.
     let def_incoming = r.caused > 0 || gs_caused > 0;
     let raw_deadly = r.deadly_tally;
+    shot.attacked.push(ti);
     let spill = std::mem::take(&mut r.blast_spill);
     let w = shot.absorb(r);
     let members: Vec<usize> = parts.iter().map(|(mi, _, _)| *mi).collect();
@@ -9452,6 +9461,7 @@ fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, host:
     if spell.effect_hits <= 0 {
         return;
     }
+    shot.attacked.push(ti);
     let ut = &statics[state.roster.profile[ti]];
     let alive_before = morale_alive(state, ti, seams);
     let wounds_before = morale_wounds_left(state, ti, seams);
@@ -12782,6 +12792,7 @@ fn resolve_with(
                             // not on the post-roll count that `wounds_before_g` measures.
                             let def_incoming = r.caused > 0;
                             let phantom = r.scourge_wounds;
+                            shot.attacked.push(g.ti);
                             let spill = std::mem::take(&mut r.blast_spill);
                             let w = shot.absorb(r);
                             let members: Vec<usize> = parts.iter().map(|(mi, _, _)| *mi).collect();
@@ -13144,6 +13155,21 @@ fn resolve_with(
                     format!("{sname}'s charge falls short ({gap:.1}\" gap, move budget spent) — {CITE} 'as close as possible'")
                 });
             }
+        }
+    }
+
+    // --- PUSH (3.6 skirmish p.15: "When a unit is Shaken after being attacked, the attacker may try to push it") --- the
+    // attacker's offer (`Input::Push`), see `push_holds`.
+    if let Some((tray, shot)) = dice.as_mut() {
+        if let (Some(p), true) = (tray.push().cloned(), next.book(si).vertical_moves && rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_SKIRMISH_PUSH)) {
+            let line = match next.roster.index.get(&p.target).copied() {
+                Some(ti) if push_holds(state, &next, si, ti, &shot.attacked) =>
+                    format!("Push: {} may push {} (Shaken by this attack)", statics[pi_s].name, statics[next.roster.profile[ti]].name),
+                Some(ti) => format!("Push: no push - {} is not Shaken by this attack", statics[next.roster.profile[ti]].name),
+                None => format!("Push: no push - {} is no unit of this game", p.target),
+            };
+            shot.log.push(line.clone());
+            say_rule(tray, "push", next.player[si], || line);
         }
     }
 
