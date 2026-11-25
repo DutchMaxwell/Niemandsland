@@ -381,7 +381,7 @@ func test_large_signs_hang_on_street_fronts_off_the_square() -> void:
 			assert_bool(sc["street"] and int(sc["level"]) == 0).override_failure_message("seed %d: a sign over no street" % s).is_true()
 			per_half[1 if at.y >= 24.0 else 0] += 1
 		assert_int(per_half.max()).is_less_equal(BoardgenTownClutter.SIGNS_PER_HALF)
-	assert_int(total).is_greater(6)   # look plan D-R2 = C 25.11.: only the tower-site pair is a ruined house now, 22 -> 8 signs over 40 boards
+	assert_int(total).is_greater(6)   # look plan D-R2 = C 25.11.: fewer ruined houses carry signs, 22 -> 8 over 40 boards
 
 
 ## Green feet (plan TARGET C, train 2, V1): every weed clump stands with its origin on a raised face, +z out onto open level-0 ground that is no ladder end, its 1.03 in inside the

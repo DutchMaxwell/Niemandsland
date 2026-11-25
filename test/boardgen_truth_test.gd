@@ -3,7 +3,7 @@ extends GdUnitTestSuite
 ## the colliders of their plan (the solid boxes) and the number of them are pinned to what origin/main made on 22.11. (the plan's
 ## header); a built board carries exactly one collider per solid box (size and centre) and no other. A generator change re-pins
 ## and states old -> new in its commit; a dressing change must not touch a pin. Run with NO NML_RUINTOWN_* variable set.
-## Re-pinned 25.11. (look plan D-R2 = C: every building lot intact, raised minimum 10 %, at least 8 houses; solids 89 -> 77, 75 -> 73).
+## Re-pinned 25.11. (look plan D-R2 = C: intact 90 %, raised minimum 10 %, at least 8 houses; solids 89 -> 77, 75 -> 73).
 
 const Census := preload("res://tools/boardgen/truth_census.gd")
 const IN := 0.0254

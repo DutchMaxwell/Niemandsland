@@ -767,7 +767,7 @@ fn most_town_houses_are_intact_solid_roofs_and_the_rest_ruined_walkable_ones() {
     }
     let share = intact as f64 / (intact + ruined) as f64;
     eprintln!("intact {intact}, ruined {ruined}: {share:.2}");
-    assert!((0.75..=0.91).contains(&share), "{share:.2} of the houses are intact");   // look plan D-R2 = C 25.11.: every building lot but the tower-site pair is intact -> 0.83 (was 0.59 - 0.75 at 0.67)
+    assert!((0.72..=0.88).contains(&share), "{share:.2} of the houses are intact");   // look plan D-R2 = C 25.11.: intact 90 %, at least 8 houses -> 0.80 (was 0.59 - 0.75 at 0.67)
 }
 
 /// What "grown" means in numbers (ruintown AAA step G1): per town board the shares the growth stage has to move.
@@ -1076,17 +1076,17 @@ fn a_town_grows_few_filler_slabs() {
 }
 
 /// BASELINE: origin/main 6a2972697, town theme, Point180, seeds 1..=1000 (means per board, sq in, percent).
-/// Re-pinned as the town generator grew (a raised minimum, infill houses, at least 4 houses, a tall tower pair read at 12 in; look plan D-R2 = C 25.11.: every building
-/// lot intact, raised minimum 10 %, at least 8 houses), 1000 seeds. Later steps move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
+/// Re-pinned as the town generator grew (a raised minimum, infill houses, at least 4 houses, a tall tower pair read at 12 in; look plan D-R2 = C 25.11.: 90 % of the
+/// building lots intact, raised minimum 10 %, at least 8 houses), 1000 seeds. Later steps move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
 const ROOFS_BASELINE: [(&str, f64); 25] = [
-    ("intact houses", 11.47), ("boards with <= 2 houses %", 0.0), ("roofed cells", 27.56), ("raised cells in house plots", 8.7), ("raised cells on free earth", 15.2), ("raised cells in the city wall", 33.75),
-    ("roof share of footprints %", 53.55), ("walkable sq in 0 in", 1411.2), ("walkable sq in 3 in", 250.97), ("walkable sq in 6 in", 199.55), ("walkable sq in 9 in", 68.35), ("ladders", 40.99),
-    ("opening rays blocked %", 98.83), ("mid rays blocked %", 87.29), ("tier-to-tier rays blocked, eaves 2.5 in (old model) %", 51.86), ("tier-to-tier rays blocked, ridge 4.5 in %", 56.86),
-    ("roofed cells in the bands", 14.48), ("raised cells in the bands", 21.01), ("asymmetric cells", 0.0),
+    ("intact houses", 11.1), ("boards with <= 2 houses %", 0.0), ("roofed cells", 26.36), ("raised cells in house plots", 10.0), ("raised cells on free earth", 14.25), ("raised cells in the city wall", 33.96),
+    ("roof share of footprints %", 52.07), ("walkable sq in 0 in", 1416.96), ("walkable sq in 3 in", 257.76), ("walkable sq in 6 in", 197.77), ("walkable sq in 9 in", 68.47), ("ladders", 41.33),
+    ("opening rays blocked %", 98.73), ("mid rays blocked %", 87.28), ("tier-to-tier rays blocked, eaves 2.5 in (old model) %", 51.29), ("tier-to-tier rays blocked, ridge 4.5 in %", 56.56),
+    ("roofed cells in the bands", 13.19), ("raised cells in the bands", 22.06), ("asymmetric cells", 0.0),
     // halfroofs plan H0 (inventory rows): solid cells outside an intact-house lot, the 3 in filler slabs, the open ground of the thinnest band, lone 3 in perches,
     // and the POCKETS shape of the gate lane (an open ground cell with a tier or a solid on two opposite sides / on three or four sides)
-    ("half-roof cells", 0.0), ("raised cells on free earth, 3 in", 6.63), ("open ground per band, min over boards", 30.0), ("single-cell 3 in perches", 1.24),
-    ("pocket cells, tall on two opposite sides", 12.46), ("pocket cells, tall on three or four sides", 5.99),
+    ("half-roof cells", 0.0), ("raised cells on free earth, 3 in", 6.24), ("open ground per band, min over boards", 33.0), ("single-cell 3 in perches", 1.13),
+    ("pocket cells, tall on two opposite sides", 12.47), ("pocket cells, tall on three or four sides", 6.08),
 ];
 
 /// Roofs census over `NML_N` town seeds (default 1000, the baseline's size; the baseline is asserted only at 1000, within +-0.5 on every number). `NML_ROOFS_OUT=<file>` also writes the report.
