@@ -391,6 +391,10 @@ void fragment() {
 		if (k <= 1) {   // the open ground (earth, street): the border between the two wanders off the grid; RUINS, FOREST and DANGEROUS ground keep their exact cell edge
 			vec2 w = xz + wander(xz);
 			vec4 g = ground_at(w);
+			if (int(g.r * 255.0 + 0.5) > 1 && int(ground_at(xz).r * 255.0 + 0.5) <= 1) {   // (look review 2, R14) the bent border wandered into a wall / ruin cell: keep this cell's own ground, or the setts lost their run and drew a plain strip
+				w = xz;
+				g = ground_at(w);
+			}
 			gw = w;
 			if (int(g.r * 255.0 + 0.5) <= 1) {
 				k = int(g.r * 255.0 + 0.5);

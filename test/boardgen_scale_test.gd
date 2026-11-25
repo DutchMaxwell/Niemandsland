@@ -89,3 +89,14 @@ func test_the_setts_carry_their_own_relief_without_a_light() -> void:
 	assert_float(_const(src, "SETT_CAVITY")).override_failure_message("no cavity term on the setts").is_greater_equal(0.4)
 	assert_bool(src.contains("depth_in = SETT_DEPTH_IN;")).is_true()
 	assert_bool(src.contains("alb *= mix(1.0, mix(1.0 - SETT_CAVITY, 1.0 + 0.35 * SETT_CAVITY, smoothstep(0.1, 0.6, crown)), keep(xz.x, SETT_W));")).override_failure_message("the cavity term is not keyed on the crown and faded with the footprint").is_true()
+
+
+## Look review 2 (R14): beside a wall or ruin cell the street's bent border wandered into the neighbour's ground class; the setts then lost their run and centre
+## and drew a plain grey strip along the wall foot. A street pixel whose bent lookup lands on a closed class keeps its own cell's ground.
+func test_a_street_beside_a_wall_keeps_its_setts_to_the_wall_foot() -> void:
+	var src := FileAccess.get_file_as_string(SHADER)
+	(
+		assert_bool(src.contains("if (int(g.r * 255.0 + 0.5) > 1 && int(ground_at(xz).r * 255.0 + 0.5) <= 1) {"))
+		. override_failure_message("no fallback to the cell's own ground beside a wall")
+		. is_true()
+	)
