@@ -187,7 +187,7 @@ _solo_apply_mind_control 14
 _solo_apply_mission_if_chosen 21
 _solo_apply_picked_wound 1
 _solo_apply_piercing_tag 24
-_solo_apply_precision_tag 17
+_solo_apply_precision_tag 16
 _solo_apply_precision_target 4
 _solo_apply_reanimation 1
 _solo_apply_reckless_piercing 2
@@ -229,8 +229,6 @@ _solo_confirm_rule_unit 2
 _solo_confirm_strike_back 6
 _solo_consolidate_melee 2
 _solo_consume_once_mods 13
-_solo_consume_spot_markers 8
-_solo_consume_tag_markers 3
 _solo_coordinate_click 1
 _solo_coordinate_decline 1
 _solo_coordinate_hold_active 2
@@ -325,14 +323,13 @@ _solo_mods_of_chain 5
 _solo_morale_quality 2
 _solo_morale_test 34
 _solo_most_models_note 2
-_solo_offer_spot_markers 1
 _solo_over9_defense_rule 3
 _solo_pending_replies 30
 _solo_phase_gates 5
 _solo_pick_interference 2
 _solo_pick_unit_at 6
 _solo_place_spell_tokens 14
-_solo_place_spot_marker 15
+_solo_place_spot_marker 9
 _solo_player_label 3
 _solo_points_advice_text 4
 _solo_present_move_start 1

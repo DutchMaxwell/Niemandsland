@@ -75,7 +75,7 @@ func test_begin_spot_marks_candidates_within_36_and_click_stamps_the_round() -> 
 	assert_str(_log_text()).contains("already spotted this round")
 
 
-func test_marker_placement_is_visible_and_consumption_is_partial() -> void:
+func test_marker_placement_is_visible() -> void:
 	var spotter := _spotter(Vector3.ZERO)
 	var target := E2EBoot.make_unit(_main, 2, "Marked", [Vector3(10.0 * INCH, 0, 0)])
 	_main._solo_place_spot_marker(spotter, target)
@@ -86,24 +86,6 @@ func test_marker_placement_is_visible_and_consumption_is_partial() -> void:
 	assert_bool(lib != null and lib.has("Spotted")) \
 		.override_failure_message("the mark must exist as a VISIBLE token definition") \
 		.is_true()
-	# Partial removal (the attacker's choice): one of two — one stays lying.
-	assert_int(_main._solo_consume_spot_markers(target, 1)).is_equal(1)
-	assert_int(int(target.unit_properties.get("spot_markers", 0))).is_equal(1)
-	assert_str(_log_text()).contains("1 marker removed — +1 to hit this volley (1 remains)")
-	# Take-all clears the property.
-	assert_int(_main._solo_consume_spot_markers(target)).is_equal(1)
-	assert_int(int(target.unit_properties.get("spot_markers", 0))).is_equal(0)
-
-
-func test_headless_offer_keeps_take_all_policy() -> void:
-	var spotter := _spotter(Vector3.ZERO)
-	var attacker := E2EBoot.make_unit(_main, 1, "Guns", [Vector3(0, 0, 5.0 * INCH)])
-	var target := E2EBoot.make_unit(_main, 2, "Marked", [Vector3(10.0 * INCH, 0, 0)])
-	_main._solo_place_spot_marker(spotter, target)
-	_main._solo_place_spot_marker(spotter, target)
-	var got: int = await _main._solo_offer_spot_markers(attacker, target)
-	assert_int(got).is_equal(2)
-	assert_int(int(target.unit_properties.get("spot_markers", 0))).is_equal(0)
 
 
 ## A shooter whose OPR source carries one ranged weapon — the shape _solo_attack_groups reads
