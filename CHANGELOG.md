@@ -7,6 +7,12 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Changed — rules corrections
+- **Rules epoch 98 is live: three rules corrections reach the AI and the rules core.** In Grimdark
+  Future: Firefight a unit's models stay in coherency up to 9" apart (the book's chain), not 6". In
+  the two skirmish games (Firefight and Age of Fantasy: Skirmish) heroes never join units, and every
+  friendly hero within 6" lends its Quality to a morale test, whatever its Tough. Banner, Musician,
+  Sergeant and Great Banner bought in an army list now reach their unit: 830 command upgrades in the
+  AI's lists were lost before. Games recorded before epoch 98 replay unchanged.
 - **Banner, Musician, Sergeant and Great Banner reach their unit in the rules core.** These upgrades
   grant their rule on the army list's selected upgrade, not in the unit's equipment. The rules core's
   list loader now reads them there, as the table already does for an Army Forge export, so an AI

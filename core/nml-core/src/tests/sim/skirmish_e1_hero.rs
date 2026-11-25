@@ -1,8 +1,8 @@
 //! The Hero in the 3.6 Firefight and AoF: Skirmish books (p.14): units within 6 in of a friendly Hero may use its Quality
 //! for morale tests while the Hero is not Shaken; no Tough minimum, and Heroes never join units. Read through
-//! `Book::hero_aura_at` from `PENDING_EPOCH_SKIRMISH_HERO` on; one epoch below, the recorded big-game aura (Tough 9+).
+//! `Book::hero_aura_at` from `EPOCH_98_SKIRMISH_HERO` on; one epoch below, the recorded big-game aura (Tough 9+).
 use super::*;
-use crate::acts::PENDING_EPOCH_SKIRMISH_HERO as E;
+use crate::acts::EPOCH_98_SKIRMISH_HERO as E;
 
 /// Unit 0 = "Recruit" (Q5, one model at y 20 in), unit 1 = "Captain" (Hero, Q3, Tough 3, one model at y 25 in):
 /// 5 in centre to centre, 32 mm bases -> 3.74 in edge gap. Both players' 0. Built on `four_unit_line`, units 2-3 parked far away.
