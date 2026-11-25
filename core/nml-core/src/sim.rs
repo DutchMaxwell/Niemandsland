@@ -11772,6 +11772,8 @@ fn resolve_with(
             }
         }
     }
+    // The skirmish Falling rule: the unit's (alive, wounds) before its first fall wound, for the end-of-activation test.
+    let mut fall_morale_due: Option<(i64, i64)> = None;
     // One-core P3: a supplied placement IS the move — every model lands where the player put it.
     if let Some(p) = placed {
         // One-core P3 step 61: the walked paths the tray carries become the move's landing, so the Dangerous test
@@ -11832,6 +11834,7 @@ fn resolve_with(
                     shot.log.push(line.clone());
                     say_rule(tray, "fall", next.player[si], || line);
                     if w > 0 {
+                        fall_morale_due.get_or_insert((morale_alive(&next, si, seams), morale_wounds_left(&next, si, seams)));
                         let before = chain_snapshot(&next, si, tray);
                         land_pool_wounds(&mut next, si, w, seams.tray_exact, seams, &mut shot.log);
                         land_chain_report(statics, &next, tray, si, before);
@@ -11959,7 +11962,9 @@ fn resolve_with(
     // charge move's own self-wounds ride `charger_self_wounds` separately.
     // D-PAR3 14b: `Input::Paid { beats }` - the table resolved the pre-attack phase before its capture (its casts, every beat below,
     // the move-through attacks), so none of it runs again here.
-    let beats = !dice.as_ref().is_some_and(|(tray, _)| tray.paid_beats());
+    // Falling (3.6 skirmish p.15): a unit whose model fell ends its activation - no cast, pre-attack beat or attack follows.
+    let fell = dice.as_ref().is_some_and(|(_, shot)| shot.falls.iter().any(|f| f.0 == si));
+    let beats = !dice.as_ref().is_some_and(|(tray, _)| tray.paid_beats()) && !fell;
     let cast_wounds_before_su = wounds_left(&next, si);
     let cast_wounds_before_tu = ci.map_or(0, |t| wounds_left(&next, t));
     // CC-5a: casts offered on a supplied tray are the tray path's own (`tray_cast`); the expectation model never runs beside them.
@@ -11973,7 +11978,7 @@ fn resolve_with(
     // CC-5b/7a/8b: the casts offered on the tray, in plan order; their wounds (CC-6) join the melee tally like the expectation cast's.
     // Activating unit wiped by Dangerous or by its own cast ends the activation here (main.gd:1290-1301); host dead + hero alive goes on.
     if let Some((tray, shot)) = dice.as_mut() {
-        let casts = tray.casts().to_vec();
+        let casts = if fell { Vec::new() } else { tray.casts().to_vec() };
         if !casts.is_empty() {
             if !side_up(&next, si, seams) {
                 for c in casts {
@@ -12106,7 +12111,14 @@ fn resolve_with(
         statics[pi_s].quick_shot_active || mods::granted(&next, si, "Quick Shot");
     // Rules 3.6 Cumbersome (SHO-16): a unit that moved fires no volley. The key
     // is dropped here, so the Hit & Run shot leg below sees no attack either.
-    let shoot_key = if !shoot_key.is_empty()
+    let shoot_key = if fell && !shoot_key.is_empty() {
+        if let Some((tray, shot)) = dice.as_mut() {
+            let line = format!("Falling: {}'s activation ends, so it does not shoot", statics[pi_s].name);
+            say_rule(tray, "fall", next.player[si], || line.clone());
+            shot.log.push(line);
+        }
+        String::new()
+    } else if !shoot_key.is_empty()
         && moved
         && statics[pi_s].cumbersome
         && rule_on(seams.rules_epoch, crate::acts::EPOCH_73_V36)
@@ -13196,6 +13208,15 @@ fn resolve_with(
                 if shooting_morale_trigger(&next, statics, seams, us, si, alive_before, wounds_before) {
                     tray_morale_for(&mut next, statics, si, false, true, Some("Dangerous terrain"), seams, tray, shot, None, None);
                 }
+            }
+        }
+    }
+
+    // --- FALLING END MORALE (3.6 skirmish p.15: the fall's wounds count at the end of the activation, like Dangerous's) ---
+    if let (Some((alive_before, wounds_before)), true) = (fall_morale_due, next.alive[si] > 0) {
+        if let Some((tray, shot)) = dice.as_mut() {
+            if shooting_morale_trigger(&next, statics, seams, &statics[pi_s], si, alive_before, wounds_before) {
+                tray_morale_for(&mut next, statics, si, false, true, Some("Falling"), seams, tray, shot, None, None);
             }
         }
     }
