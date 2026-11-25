@@ -15,13 +15,16 @@ const PLOTS: Array[String] = ["dr_veg_plot_a", "dr_veg_plot_b"]
 const STALKS: Array[String] = ["dr_veg_dead_stalks"]
 const MODULES: Array[String] = HEADS + FOOT_HEADS + CARDS + RUNS + PLOTS + STALKS
 const DOOR_CLEAR_IN := 1.0  # inches in front of a door kept free (lead 25.11.)
-const MARGIN_IN := 0.33  # a piece stays this far inside its cell (a turned card reaches 0.3)
-const RADIUS_IN := 0.25  # a piece's reach, for the ladder / door keep-outs
+const MARGIN_IN := 0.55  # a piece stays this far inside its cell (a turned, scaled card: 0.52)
+const RADIUS_IN := 0.45  # a piece's reach, for the ladder / door keep-outs
 const RUN_DEPTH_IN := 0.7  # how far a foot run reaches out of its wall
-const CLUMPS := [2, 5]  # clumps per cell outside / inside a thick patch (half the 2 x 2 blocks)
+const CLUMPS := [3, 12]  # clumps per cell outside / inside a thick patch (half the 2 x 2 blocks)
 const FOOT_CLUMPS := 2  # extra clumps on a cell beside a raised or solid neighbour
 const CLUMP_CARDS := 2  # cards round each clump's head (10 tris each)
-const FOOT_RUN_IN_TEN := 7  # share of the wall-foot edges that carry a run
+const FOOT_RUN_IN_TEN := 10  # share of the wall-foot edges that carry a run (all, lead 25.11.)
+const WALL_WEEDS := 3  # weed heads along every wall-foot edge, 0.5 in out of the wall
+const SCALE := 1.5  # every piece 1.5 x its kit size, capped under the soft_veg 0.4 in
+const MAX_TOP_IN := 0.38
 const SALT := 0x7E6
 const DIRS: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 
@@ -56,6 +59,19 @@ func plan(ctx: DressContext) -> Array[DressPlacement]:
 			var along := Vector2(-DIRS[k].y, DIRS[k].x)
 			var away := -Vector2(DIRS[k])
 			var start := lo + c * (Vector2.ONE * 0.5 + Vector2(DIRS[k]) * 0.5 - along * 0.5)
+			for w in WALL_WEEDS:
+				var q := (
+					start + along * c * (w + 0.3 + 0.4 * _unit(i, 140 + k * 5 + w)) / WALL_WEEDS
+				)
+				q += away * (0.5 + 0.15 * _unit(i, 150 + k * 5 + w))
+				q = q.clamp(lo + Vector2.ONE * MARGIN_IN, lo + Vector2.ONE * (c - MARGIN_IN))
+				var weed: String = FOOT_HEADS[_pick(i, 160 + k * 5 + w, FOOT_HEADS.size())]
+				if not _hits(
+					Rect2(q - Vector2.ONE * RADIUS_IN, Vector2.ONE * 2.0 * RADIUS_IN), keep_out
+				):
+					out.append(
+						_piece(ctx, weed, q, _unit(i, 170 + k * 5 + w), _unit(i, 180 + k * 5 + w))
+					)
 			var run := Rect2(start, Vector2.ZERO).expand(start + along * c + away * RUN_DEPTH_IN)
 			if _pick(i, 20 + k, 10) >= FOOT_RUN_IN_TEN or _hits(run, keep_out):
 				continue
@@ -86,13 +102,23 @@ func plan(ctx: DressContext) -> Array[DressPlacement]:
 				):
 					continue
 				var module := head if m == 0 else CARDS[_pick(i, 110 + j * 7 + m, CARDS.size())]
-				var basis := Basis(Vector3.UP, _unit(i, 13 + j * 3 + m * 17) * TAU)
-				var xf := Transform3D(
-					basis.scaled(Vector3.ONE * (0.85 + 0.35 * _unit(i, 60 + j + m * 19))),
-					Vector3(q.x, 0, q.y)
+				out.append(
+					_piece(ctx, module, q, _unit(i, 13 + j * 3 + m * 17), _unit(i, 60 + j + m * 19))
 				)
-				out.append(DressPlacement.new(module, _metres(xf), "vegetation"))
 	return out
+
+
+## One clump piece at `q` (board inches): turned by `u_yaw`, SCALE x 0.85-1.2 by `u_size`, never
+## taller than MAX_TOP_IN.
+static func _piece(
+	ctx: DressContext, module: String, q: Vector2, u_yaw: float, u_size: float
+) -> DressPlacement:
+	var top := ctx.spec(module).aabb_hi.y if ctx.spec(module) != null else 0.2
+	var sc := minf(SCALE * (0.85 + 0.35 * u_size), MAX_TOP_IN / maxf(top, 0.01))
+	var xf := Transform3D(
+		Basis(Vector3.UP, u_yaw * TAU).scaled(Vector3.ONE * sc), Vector3(q.x, 0, q.y)
+	)
+	return DressPlacement.new(module, _metres(xf), "vegetation")
 
 
 ## The ground a cell offers vegetation: "earth" (plain level-0 ground off the streets), "yard" (a
