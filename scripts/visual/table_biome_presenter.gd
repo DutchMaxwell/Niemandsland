@@ -70,6 +70,8 @@ func setup(main: Node) -> void:
 	_tree_pass.trees_dressed.connect(func(b: String) -> void: trees_dressed.emit(b))
 	_table.biome_changed.connect(func(_b: String) -> void: request_rebuild("biome"))
 	_table.table_resized.connect(func(_s: Vector2) -> void: request_rebuild("resize"))
+	_table.child_entered_tree.connect(_on_table_child)
+	_table.child_exiting_tree.connect(_on_table_child)
 	main.save_manager.load_completed.connect(func(_n: int) -> void: request_rebuild("load"))
 	main.opr_army_manager.game_phase_changed.connect(_on_game_phase_changed)
 	if main.map_layout_editor != null:
@@ -122,7 +124,21 @@ func should_dress() -> bool:
 	# The reference shaders are Forward+ only (the web export runs gl_compatibility).
 	if DisplayServer.get_name() != "headless" and RenderingServer.get_current_rendering_method() != "forward_plus":
 		return false
+	for child in _table.get_children():
+		if is_undercity_board(child):
+			return false
 	return _current_density() > 0.0
+
+
+## A generated Tiefwerk board is an undercity: no meadow round it, so the table is not dressed while one lies on it. The ruin town keeps
+## the biome as distant land.
+static func is_undercity_board(node: Node) -> bool:
+	return node.is_in_group(BoardgenGreybox.TABLE_OVERLAY_GROUP) and str(node.get("layout_theme")) == BoardgenTheme.DEEPWORKS
+
+
+func _on_table_child(node: Node) -> void:
+	if is_undercity_board(node):
+		request_rebuild("board")
 
 
 ## Ask for a rebuild. Layout reasons count only during setup (DEPLOYMENT); everything else always.
