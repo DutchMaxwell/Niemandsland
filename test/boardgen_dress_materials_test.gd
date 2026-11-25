@@ -194,3 +194,13 @@ func test_no_plain_material_is_black() -> void:
 			continue   # (a metal's colour is its reflectance: ct_iron is its own question, not this case's)
 		var c: Array = m["colour"]
 		assert_float(maxf(maxf(float(c[0]), float(c[1])), float(c[2]))).override_failure_message("%s colour %s is black" % [name, c]).is_greater_equal(0.1)
+
+
+## Look review 25.11. (lane DRESS-P): the ct_matte modules (litter, sacks, crates, the fountain's leaves) paint their tones as vertex colours; a plain
+## material that ignores them draws every one of them pure white (the litter read as snow). The bundled ct_matte uses them; an entry without the key does not.
+func test_ct_matte_takes_the_modules_vertex_colours_and_other_plain_materials_do_not() -> void:
+	if not FileAccess.file_exists(BUNDLED):
+		return
+	var mats := BoardgenDressMaterials.make(JSON.parse_string(FileAccess.get_file_as_string(BUNDLED)), null)
+	assert_bool((mats["ct_matte"] as StandardMaterial3D).vertex_color_use_as_albedo).override_failure_message("ct_matte ignores the modules' vertex colours: they draw white").is_true()
+	assert_bool((BoardgenDressMaterials.make(META, null)["ct_clay"] as StandardMaterial3D).vertex_color_use_as_albedo).is_false()

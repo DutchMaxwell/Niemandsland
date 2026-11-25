@@ -4,7 +4,8 @@ extends RefCounted
 ## (docs/adr/0004-dressing-materials-and-kit-manifest.md). A textured entry (`set`) becomes one
 ## ShaderMaterial of ruintown_dress.gdshader with the set's maps from the TiefwerkLibrary; while
 ## that set is not cached it is a flat StandardMaterial3D in the entry's tone (never null). A plain
-## entry (`colour`) is a StandardMaterial3D with colour / roughness / metallic / emission. The
+## entry (`colour`) is a StandardMaterial3D with colour / roughness / metallic / emission and, with
+## `vertex_colour`, the modules' own vertex colours as albedo (times the colour). The
 ## merged mesh binds them by surface name.
 
 const SHADER: Shader = preload("res://shaders/ruintown_dress.gdshader")
@@ -112,6 +113,9 @@ static func _plain(e: Dictionary) -> StandardMaterial3D:
 	m.albedo_color = _colour(e.get("colour", e.get("tone", [1.0, 1.0, 1.0])))
 	m.roughness = float(e.get("roughness", 0.9))
 	m.metallic = float(e.get("metallic", 0.0))
+	# the modules paint their own tones as vertex colours (straw, rags, sacks):
+	# the material only shades them
+	m.vertex_color_use_as_albedo = bool(e.get("vertex_colour", false))
 	if e.has("emission"):
 		m.emission_enabled = true
 		m.emission = _colour(e["emission"])

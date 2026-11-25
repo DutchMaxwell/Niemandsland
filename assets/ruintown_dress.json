@@ -161,6 +161,7 @@
    "roughness": 0.55
   },
   "ct_matte": {
+   "vertex_colour": true,
    "colour": [
     1.0,
     1.0,
