@@ -285,5 +285,25 @@ func test_with_bounce_light_night_gets_no_floor() -> void:
 	var lc: Node = main.get("lighting_controller")
 	BoardgenMood.apply(_board_on(main), true, true)
 	assert_bool(lc.get("_board_look").has("ambient_energy_min")).override_failure_message("High / Ultra have SDFGI and SSIL: no Night floor there").is_false()
-	var mood: Variant = BoardgenMood   # (untyped: the two-argument look is the change under test)
-	assert_dict(mood.town_look(true, true)).is_equal({"exposure": BoardgenTownDressing.EXPOSURE * BoardgenMood.TOWN_EXPOSURE_GAIN})
+	assert_bool(BoardgenMood.town_look(true, true).has("ambient_energy_min") or BoardgenMood.town_look(true, true).has("fill_light_energy_min")).is_false()
+
+
+## D-G5 (both player sides see the same board under Night): after a blended pick the table rig turns the scene's fill light to (-42, 20), from one
+## player's side. Under Night a town board keeps it across the axis between the deployment zones, where the dusk put it; other moods keep the rig's own.
+func test_under_night_the_table_rig_leaves_the_town_fill_across_the_axis() -> void:
+	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.MEDIUM
+	var main := _town_night_main()
+	var fill := DirectionalLight3D.new()
+	fill.name = "FillLight"
+	main.add_child(fill)
+	BoardgenMood.apply(_board_on(main), true, true)
+	var rig := load("res://scripts/visual/table_lighting.gd")
+	var biomes := load("res://scripts/visual/reference_biomes.gd")
+	rig.apply(main, biomes.GRASSLAND, "Night")
+	var across := Vector3(-BoardgenTownDressing.MOON_ELEVATION, BoardgenTownDressing.MOON_AZIMUTH - 180.0, 0.0)
+	assert_bool(fill.rotation_degrees.is_equal_approx(across)).override_failure_message("the fill came from one side: %s" % fill.rotation_degrees).is_true()
+	var atmosphere: Node = main.get("atmosphere_controller")
+	atmosphere.set("current", "Sunset")
+	atmosphere.emit_signal("atmosphere_changed", "Sunset")
+	rig.apply(main, biomes.GRASSLAND, "Sunset")
+	assert_bool(fill.rotation_degrees.is_equal_approx(Vector3(-42.0, 20.0, 0.0))).is_true()

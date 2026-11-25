@@ -96,6 +96,16 @@ func test_at_most_eight_lights_and_no_two_lamps_cluster() -> void:
 			assert_float(gap).is_greater(BoardgenProps.LAMP_GAP_IN - 2.0)
 
 
+## Decision D-G5: both players see the same lamps. Every lamp has its half-turn twin (the board is half-turn symmetric), so the warm pools are the same from either side.
+func test_every_lamp_has_its_half_turn_twin() -> void:
+	var lights := BoardgenProps.plan(_fixture()).filter(func(p: Dictionary) -> bool: return p["shape"] == "light")
+	assert_int(lights.size()).is_greater(1)
+	for l: Dictionary in lights:
+		var at: Vector3 = l["xf"].origin
+		var twin := lights.filter(func(o: Dictionary) -> bool: return o["xf"].origin.is_equal_approx(Vector3(-at.x, at.y, -at.z)) and o["out"].is_equal_approx(-l["out"]))
+		assert_int(twin.size()).override_failure_message("the lamp at %s has no twin across the board centre" % at).is_equal(1)
+
+
 func test_build_makes_three_multimeshes_and_the_lights_and_nothing_physical() -> void:
 	var layout := _fixture()
 	var node: BoardgenProps = auto_free(BoardgenProps.new())
