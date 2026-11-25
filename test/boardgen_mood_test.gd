@@ -147,7 +147,7 @@ func after_test() -> void:
 	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.MEDIUM
 
 
-func test_the_ruin_town_gets_only_the_grade_in_the_board_layer_and_no_light_look() -> void:
+func test_the_ruin_town_gets_the_grade_in_the_board_layer_and_its_own_dusk_as_the_light_look() -> void:
 	var values := BoardgenMood.town_values()
 	assert_array(values.keys()).contains_exactly_in_any_order(["tonemap_agx_contrast", "adjustment_enabled", "adjustment_contrast", "adjustment_saturation", "sky", "reflected_light_source"])
 	var env := Environment.new()
@@ -164,7 +164,7 @@ func test_the_ruin_town_gets_only_the_grade_in_the_board_layer_and_no_light_look
 	assert_float(env.tonemap_agx_contrast).is_equal_approx(BoardgenMood.TOWN_AGX_CONTRAST, 0.0001)
 	assert_float(env.adjustment_contrast).is_equal_approx(BoardgenMood.TOWN_CONTRAST, 0.0001)
 	assert_float(env.adjustment_saturation).is_equal_approx(BoardgenMood.TOWN_SATURATION, 0.0001)
-	assert_float(sun.light_energy).override_failure_message("the town took the Tiefwerk light look").is_equal_approx(1.5, 0.0001)   # Warm Sunset's own sun
+	assert_float(sun.light_energy).override_failure_message("the town did not keep its dusk's moon (decision D-N3)").is_equal_approx(BoardgenTownDressing.MOON_ENERGY, 0.0001)   # was Warm Sunset's own 1.5 (re-pinned by plan N4)
 	BoardgenMood.apply(board, false, true)
 	assert_float(env.adjustment_saturation).is_equal_approx(1.0, 0.0001)
 	assert_float(lit.tonemap_exposure).is_equal_approx(mood_exposure, 0.0001)
@@ -265,7 +265,7 @@ func test_under_night_at_medium_the_town_keeps_the_dusks_sky_fill_and_the_preset
 	assert_float(float(lc.current_preset["ambient_energy"])).is_equal_approx(0.3, 0.0001)   # the mood keeps its own value for when the board leaves
 
 
-func test_another_mood_takes_the_night_floor_away_and_gives_the_presets_own_fill() -> void:
+func test_another_mood_takes_the_night_floor_away_and_gives_the_towns_dusk() -> void:
 	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.MEDIUM
 	var main := _town_night_main()
 	var lc: Node = main.get("lighting_controller")
@@ -276,7 +276,7 @@ func test_another_mood_takes_the_night_floor_away_and_gives_the_presets_own_fill
 	assert_bool(lc.get("_board_look").has("ambient_energy_min")).is_false()
 	assert_bool(lc.get("_board_look").has("fill_light_energy_min")).is_false()
 	lc.apply_preset("Warm Sunset")
-	assert_float((lc.get_meta("env") as Environment).ambient_light_energy).is_equal_approx(0.7, 0.0001)   # Warm Sunset's own sky fill
+	assert_float((lc.get_meta("env") as Environment).ambient_light_energy).is_equal_approx(BoardgenTownDressing.AMBIENT_ENERGY, 0.0001)   # the dusk's sky fill (was Warm Sunset's own 0.7 before plan N4)
 
 
 func test_with_bounce_light_night_gets_no_floor() -> void:
@@ -289,8 +289,8 @@ func test_with_bounce_light_night_gets_no_floor() -> void:
 
 
 ## D-G5 (both player sides see the same board under Night): after a blended pick the table rig turns the scene's fill light to (-42, 20), from one
-## player's side. Under Night a town board keeps it across the axis between the deployment zones, where the dusk put it; other moods keep the rig's own.
-func test_under_night_the_table_rig_leaves_the_town_fill_across_the_axis() -> void:
+## player's side. A town board keeps it across the axis between the deployment zones, where the dusk put it, under every mood.
+func test_the_table_rig_leaves_the_town_fill_across_the_axis() -> void:
 	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.MEDIUM
 	var main := _town_night_main()
 	var fill := DirectionalLight3D.new()
@@ -306,4 +306,33 @@ func test_under_night_the_table_rig_leaves_the_town_fill_across_the_axis() -> vo
 	atmosphere.set("current", "Sunset")
 	atmosphere.emit_signal("atmosphere_changed", "Sunset")
 	rig.apply(main, biomes.GRASSLAND, "Sunset")
-	assert_bool(fill.rotation_degrees.is_equal_approx(Vector3(-42.0, 20.0, 0.0))).is_true()
+	assert_bool(fill.rotation_degrees.is_equal_approx(across)).is_true()   # (was the rig's own (-42, 20) before plan N4: then Sunset was the biome's light)
+
+
+## Decision D-N3 (plan N4): a mood picked in the lighting panel ends in the town's own light - the dusk for every mood but Night, Night's moon under Night -
+## not in the table biome's light (audit X7: the blend ends with the table rig writing the biome's sunset through these setters).
+func test_a_picked_mood_ends_in_the_towns_dusk_and_night_in_the_presets_moon() -> void:
+	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.MEDIUM
+	var main := _town_night_main()
+	var fill := DirectionalLight3D.new()
+	fill.name = "FillLight"
+	main.add_child(fill)
+	var lc: Node = main.get("lighting_controller")
+	var sun: DirectionalLight3D = lc.get_meta("sun")
+	var env: Environment = lc.get_meta("env")
+	var atmosphere: Node = main.get("atmosphere_controller")
+	BoardgenMood.apply(_board_on(main), true, true)
+	var rig := load("res://scripts/visual/table_lighting.gd")
+	var biomes := load("res://scripts/visual/reference_biomes.gd")
+	atmosphere.set("current", "Sunset")
+	atmosphere.emit_signal("atmosphere_changed", "Sunset")
+	lc.apply_preset("Warm Sunset")   # the blend's end ...
+	rig.apply(main, biomes.GRASSLAND, "Sunset")   # ... and the table rig after it
+	assert_float(sun.light_energy).override_failure_message("a picked Sunset ended in the biome's sun %.2f" % sun.light_energy).is_equal_approx(BoardgenTownDressing.MOON_ENERGY, 0.0001)
+	assert_float(env.ambient_light_energy).is_equal_approx(BoardgenTownDressing.AMBIENT_ENERGY, 0.0001)
+	assert_float(sun.position.normalized().y).is_equal_approx(sin(deg_to_rad(BoardgenTownDressing.MOON_ELEVATION)), 0.001)   # the moon's height, not the biome's sunset
+	atmosphere.set("current", "Night")
+	atmosphere.emit_signal("atmosphere_changed", "Night")
+	lc.apply_preset("Night")
+	rig.apply(main, biomes.GRASSLAND, "Night")
+	assert_float(sun.light_energy).is_equal_approx(1.6, 0.0001)   # Night's own moon key

@@ -80,10 +80,16 @@ static func town_sky() -> Sky:
 
 ## The lighting controller's board look of the ruin town: the exposure (the dusk's, raised by the gain that cancels the grade's darkening) and, under
 ## Night without bounce light (Medium: High / Ultra have SDFGI and SSIL), the dusk's sky fill as a floor (decision D-N1: half the board was below luma 8).
+## Every other mood is the town's own blue hour (decision D-N3): the dusk's moon, sky fill and cool rim as a look, so a picked or blended mood
+## ends in it instead of the table biome's light (audit X7). What a look cannot carry (SSAO, bounce, specular) stays with BoardgenTownDressing.dusk.
 static func town_look(bounce := false, night := false) -> Dictionary:
-	var look := {"exposure": BoardgenTownDressing.EXPOSURE * TOWN_EXPOSURE_GAIN}
-	if night:   # the fill stays the dusk's, across the axis between the deployment zones (D-G5): the table rig turns it to one player's side after a blended pick
-		look["fill_rotation"] = Vector3(-BoardgenTownDressing.MOON_ELEVATION, BoardgenTownDressing.MOON_AZIMUTH - 180.0, 0.0)
+	var look := {"exposure": BoardgenTownDressing.EXPOSURE * TOWN_EXPOSURE_GAIN,   # the fill stays the dusk's, across the axis between the deployment zones (D-G5): the table rig turns it to one player's side after a blended pick
+		"fill_rotation": Vector3(-BoardgenTownDressing.MOON_ELEVATION, BoardgenTownDressing.MOON_AZIMUTH - 180.0, 0.0)}
+	if not night:
+		look.merge({"sun_energy": BoardgenTownDressing.MOON_ENERGY, "sun_color": BoardgenTownDressing.MOON_COLOUR,
+			"sun_angle_h": BoardgenTownDressing.MOON_AZIMUTH, "sun_angle_v": BoardgenTownDressing.MOON_ELEVATION,
+			"ambient_energy": BoardgenTownDressing.AMBIENT_ENERGY, "ambient_color": BoardgenTownDressing.AMBIENT_COLOUR,
+			"fill_light_energy": BoardgenTownDressing.MOON2_ENERGY, "fill_light_color": BoardgenTownDressing.MOON2_COLOUR})
 	if night and not bounce:
 		look["ambient_energy_min"] = BoardgenTownDressing.AMBIENT_ENERGY
 		look["fill_light_energy_min"] = BoardgenTownDressing.MOON2_ENERGY
