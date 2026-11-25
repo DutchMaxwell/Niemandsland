@@ -2204,7 +2204,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         }
         // Table's `_solo_log_hit_mod` (main.gd:5392, 9053-9058): once per shot after Reliable/Versatile,
         // right before the attack roll, whenever `hit_mod_worth_logging` holds (`info_mod != 0 || !note.is_empty()`).
-        let base_hit_note = if tray.feed().is_some() {
+        let base_hit_note = if tray.feed().is_some() && p.fixed_hits.is_none() {
             let target_art_applies = def.artillery && if v36_target_art {
                 target_art && mod_dist_in > def.artillery_target_over_in
             } else {
@@ -2227,16 +2227,16 @@ pub(crate) fn resolve_volley_with_pick_label(
         // plain `to_hit` (main.gd:3200) and `_solo_hits` applies the +1 when it
         // COUNTS (:4405-4406) — so the die count is scored one better while the
         // RECORDED target stays raw, which is what `dice.jsonl` carries.
-        tray.owner_next(sh.att.unit);
-        let faces = tray.roll(n as usize);
+        // A fixed-hits weapon (the Blast spread's neighbour leg) rolls no attack die: no faces, no attack roll.
+        let faces = if p.fixed_hits.is_some() {
+            Vec::new()
+        } else {
+            tray.owner_next(sh.att.unit);
+            let faces = tray.roll(n as usize);
+            out.rolls.push(Roll { kind: "attack", count: n, target, faces: faces.clone(), owner: sh.owner.into() });
+            faces
+        };
         let roll_mark = tray.feed().is_some().then(|| tray.mark());
-        out.rolls.push(Roll {
-            kind: "attack",
-            count: n,
-            target,
-            faces: faces.clone(),
-            owner: sh.owner.into(),
-        });
         // AIG-G2: a weapon-borne Imprecise is Precise's mirror, the -1 read from `EPOCH_73_V36`.
         let imprecise = att.v36_rules && p.imprecise;
         let weapon_mod = p.precise as i64 - imprecise as i64;
@@ -2285,7 +2285,7 @@ pub(crate) fn resolve_volley_with_pick_label(
                 p.name, sh.owner, p.extra_attack_q, p.ap, p.deadly));
         }
         // --- `_solo_hits` :4404-4487 ---
-        let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
+        let mut hits = p.fixed_hits.unwrap_or_else(|| faces_to_hits(&faces, count_target as u8) as i64);
         if (p.relentless || att.relentless_grant) && mod_dist_in > LONG_RANGE_IN {
             hits += sixes(&faces);
             // The table's line, a Mark's grant names its source and the marked unit.

@@ -80,3 +80,19 @@ fn the_volley_keeps_the_targets_share_and_spills_the_rest() {
     assert_eq!(plain.rolls[1].count, 3, "no neighbours: 1 x min(4, 3)");
     assert!(plain.blast_spill.is_empty());
 }
+
+/// The neighbour leg's fixed-hits weapon rolls no attack die and no face-read extra: 3 fixed hits roll exactly 3 saves
+/// and wound on every failed one; the same tray with a normal weapon spends its first face on the attack roll.
+#[test]
+fn a_fixed_hits_weapon_rolls_only_the_saves() {
+    let att = Ctx { quality: 4, ..Default::default() };
+    let def = Ctx { quality: 4, defense: 4, models: 3, ..Default::default() };
+    let fixed = [ShootProfile { name: "Gun".into(), attacks: 1, count: 1, range: 24, rending: true, fixed_hits: Some(3), ..Default::default() }];
+    let sh = [Shooter { profiles: &fixed, keep: &[0], attacks: &[1], att: &att, owner: "Gunner" }];
+    let mut tray = Tray::supplied(vec![vec![1, 6, 2]]);
+    let r = resolve_volley_with_pick_label(&sh, &def, "Squad", 12.0, 12.0, true, true, true, true, true, true,
+        &|_| (false, "trooper".into(), 0), &|_, _| None, None, None, &[], &mut tray);
+    assert_eq!(r.rolls.len(), 1, "no attack roll: {:?}", r.rolls);
+    assert_eq!((r.rolls[0].kind, r.rolls[0].count, r.rolls[0].target), ("defense", 3, 4), "{:?}", r.rolls);
+    assert_eq!(r.wounds, 2, "two saves fail (1, 2); Rending reads no attack faces");
+}
