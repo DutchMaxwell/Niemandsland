@@ -7,6 +7,11 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Changed — rules corrections
+- **Rules epoch 101 is live: pushing in the two skirmish games.** In Grimdark Future: Firefight and
+  Age of Fantasy: Skirmish, when an attack leaves an enemy unit Shaken, the attacker may try to push
+  it: on a 4+ one of its models moves up to 2" and the rest regroup within 1" of it. A model pushed
+  off a drop of 2" or more falls. The AI does not push yet. Games recorded before epoch 101 replay
+  unchanged.
 - **Rules epoch 100 is live: jumping and falling in the two skirmish games.** In Grimdark Future:
   Firefight and Age of Fantasy: Skirmish, a drop of over 3" and up to 6", or a gap, is a jump: one
   die per inch, every die needs a 2+. A failed jump falls: one die per inch, each 1-3 is a wound on

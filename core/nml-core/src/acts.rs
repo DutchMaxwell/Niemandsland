@@ -1071,13 +1071,17 @@ pub const EPOCH_99_SKIRMISH_BLAST: u32 = 99;
 ///   the fall's wounds, lands at the foot of the drop and its activation ends. Read only by `activation::check_move` and
 ///   `activation::jump_dice_of`.
 pub const EPOCH_100_SKIRMISH_JUMP: u32 = 100;
-pub const CURRENT_RULES_EPOCH: u32 = 100;
-/// PENDING (the 3.6 Firefight and AoF: Skirmish books, Pushing): a unit Shaken by an attack may be pushed by the attacker
-/// (`activation::Input::Push`). A placeholder one past `CURRENT_RULES_EPOCH`. Records stamped 100 or below replay byte-exact.
-pub const PENDING_EPOCH_SKIRMISH_PUSH: u32 = 101;
+/// The EPOCH 101 BATCH: one outcome change that sat behind the `PENDING_EPOCH_SKIRMISH_PUSH` placeholder (101) is now one frozen
+/// constant, and `CURRENT_RULES_EPOCH` is bumped to 101 in the same change. Records stamped 100 or below replay byte-exact. Every call
+/// site reads THIS constant, not the literal `101` or `CURRENT_RULES_EPOCH`. The recorder mirror (`act_recorder.gd`) stamps 101 in the same change.
+/// - SKIRMISH_PUSH (the 3.6 Firefight and AoF: Skirmish books, Pushing): a unit Shaken by an attack may be pushed by the attacker
+///   (`activation::Input::Push`): on 4+ one model moves up to 2 in and the rest regroup within 1 in; pushed off 2 in or more it falls.
+///   An activation that declares no push says so where one would hold. Read only by `sim.rs` (the push step after an attack).
+pub const EPOCH_101_SKIRMISH_PUSH: u32 = 101;
+pub const CURRENT_RULES_EPOCH: u32 = 101;
 /// PENDING (the 3.6 Firefight book, step 9c): the casualty order keeps a gff unit's chain at the Firefight 9 in
 /// (`Book::chain_in_at`), where it kept the recorded 6 in while the movement chain was already 9 in (`EPOCH_98_FIREFIGHT_CHAIN`).
-/// A placeholder one past the Pushing one. Records stamped 101 or below replay byte-exact. Read only by
+/// A placeholder one past `CURRENT_RULES_EPOCH`. Records stamped 101 or below replay byte-exact. Read only by
 /// `casualty::chain_casualty_order`.
 pub const PENDING_EPOCH_CASUALTY_CHAIN: u32 = 102;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
@@ -2533,7 +2537,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 100, "the live epoch is EPOCH_100_SKIRMISH_JUMP");
+        assert_eq!(CURRENT_RULES_EPOCH, 101, "the live epoch is EPOCH_101_SKIRMISH_PUSH");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2543,11 +2547,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":100}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":101}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 100"
+            "a fresh play_game() now stamps the bumped epoch, 101"
         );
     }
 
