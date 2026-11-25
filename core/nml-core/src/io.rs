@@ -171,9 +171,10 @@ pub(crate) struct PlainUnit {
     /// Tray-exact series S1, slot-aligned with `positions`; absent = none carried.
     #[serde(default)]
     kits: Vec<PlainKit>,
-    /// Ruling D16: the command-group bearer's current slot; absent = none (every record before it).
+    /// Ruling D16: the command-group bearer's current slot, -1 = killed; absent = never set (a command group then starts
+    /// with its last slot, `State::initial_cmd_bearer`; every other unit has none, as every record before it).
     #[serde(default)]
-    cmd_bearer: Option<usize>,
+    cmd_bearer: Option<i64>,
     #[serde(default)]
     mods: Mods,
     #[serde(default)]
@@ -1215,7 +1216,11 @@ pub(crate) fn state_of(
         let (kits, kit_names) = carry_plain_kits(ui, u.kits, st.positions[ui].len());
         st.kits.push(Rc::new(kits));
         st.kit_names.push(Rc::new(kit_names));
-        st.cmd_bearer.push(u.cmd_bearer);
+        st.cmd_bearer.push(match u.cmd_bearer {
+            None => st.initial_cmd_bearer(ui),
+            Some(b) if b < 0 => None,
+            Some(b) => Some(b as usize),
+        });
         st.mods.push(u.mods);
         st.mods_base.push(Rc::new(u.mods_base));
         st.los.push(u.los.map(Rc::new));
@@ -1563,9 +1568,16 @@ pub fn plain_of(st: &State) -> serde_json::Value {
                 "equipment": k.equipment, "wounds_max": k.wounds_max,
             })).collect()));
         }
-        // Ruling D16: written only while a bearer lives, so a record without one keeps its bytes.
-        if let Some(b) = st.cmd_bearer.get(i).copied().flatten() {
-            u.insert("cmd_bearer".into(), b.into());
+        // Ruling D16: a command group's bearer slot, -1 once killed; no key for any other unit, so a record without one keeps
+        // its bytes.
+        match st.cmd_bearer.get(i).copied().flatten() {
+            Some(b) => {
+                u.insert("cmd_bearer".into(), b.into());
+            }
+            None if st.carries_command(i) => {
+                u.insert("cmd_bearer".into(), (-1).into());
+            }
+            None => {}
         }
         u.insert("mods".into(), serde_json::to_value(st.mods[i]).unwrap_or(Value::Null));
         u.insert("mods_base".into(), serde_json::to_value(*st.mods_base[i]).unwrap_or(Value::Null));
@@ -1930,6 +1942,32 @@ mod tests {
         assert_eq!(u["dormant_models"], serde_json::json!(3));
         assert_eq!(u["dormant_wounds"], serde_json::json!([2, 3, 3]));
         assert_eq!(u["earliest_arrival_round"], serde_json::json!(2));
+    }
+
+    /// Ruling D16 / S3b: with no key, an AoF: Skirmish unit with Banner starts with its LAST slot as the bearer and writes it
+    /// back; -1 reads as killed and is written as -1; the same Banner in gf (no command-group limit) gets no bearer and no key.
+    #[test]
+    fn a_command_group_starts_with_its_last_slot_and_a_killed_bearer_stays_killed() {
+        let state_in = |sys: &str, bearer: Option<i64>| {
+            let header = LEDGER_HEADER.replacen(r#""game_system":"gf","faction_folder":"robot_legions","special_rules":[]"#,
+                &format!(r#""game_system":"{sys}","faction_folder":"robot_legions","special_rules":["Banner"]"#), 1);
+            let mut v: serde_json::Value = serde_json::from_str(LEDGER_PLAIN).unwrap();
+            if let Some(b) = bearer {
+                v["units"]["p1_0_a"]["cmd_bearer"] = serde_json::json!(b);
+            }
+            let mut cache = ProfileCache::new(read_act_header(&header).expect("header").profiles);
+            state_from_json(&v.to_string(), &mut cache, &mut None).expect("state")
+        };
+        let st = state_in("aofs", None);
+        let ui = st.roster.index["p1_0_a"];
+        assert_eq!(st.cmd_bearer[ui], Some(st.positions[ui].len() - 1), "the last slot");
+        assert_eq!(plain_of(&st)["units"]["p1_0_a"]["cmd_bearer"], serde_json::json!(st.positions[ui].len() - 1));
+        let st = state_in("aofs", Some(-1));
+        assert_eq!(st.cmd_bearer[ui], None, "killed stays killed");
+        assert_eq!(plain_of(&st)["units"]["p1_0_a"]["cmd_bearer"], serde_json::json!(-1));
+        let st = state_in("gf", None);
+        assert_eq!(st.cmd_bearer[ui], None);
+        assert!(plain_of(&st)["units"]["p1_0_a"].get("cmd_bearer").is_none(), "no command groups in gf: no key");
     }
 
     /// Ruling D16: the command-group bearer's slot survives `plain -> State -> plain`; a record without the key reads no

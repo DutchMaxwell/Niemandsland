@@ -783,6 +783,19 @@ impl State {
 
     /// Tray-exact S1b: the unit's slots changed in a way no kit can follow (all models gone,
     /// or a body came back whose kit is unknown) — it carries none from here (slot order).
+    /// Ruling D16: whether unit `u` carries an AoF: Skirmish command group (its book limits them, `one_command_upgrade_each`,
+    /// and its profile has Banner or Musician).
+    pub fn carries_command(&self, u: usize) -> bool {
+        self.book(u).one_command_upgrade_each
+            && self.profile(u).special_rules.iter().any(|r| r == "Banner" || r == "Musician")
+    }
+
+    /// Ruling D16: the bearer a command group starts with when nothing names one - the LAST slot (no per-model data
+    /// marks the carrier yet; KIT-BEARER-NAME), so it is removed last under slot order. `None` for every other unit.
+    pub fn initial_cmd_bearer(&self, u: usize) -> Option<usize> {
+        (self.carries_command(u) && !self.positions.get(u).is_none_or(|p| p.is_empty())).then(|| self.positions[u].len() - 1)
+    }
+
     pub fn kits_drop(&mut self, u: usize) {
         if let Some(k) = self.kits.get_mut(u).filter(|k| !k.is_empty()) {
             *k = Rc::new(Vec::new());
