@@ -369,6 +369,11 @@ func build(layout: Dictionary, dress: BoardgenDress = null) -> void:
 		_life.build(layout, self)
 	if theme["id"] == BoardgenTheme.DEEPWORKS:
 		add_child(BoardgenMood.make_fill_light())   # lights the models only (render layer), shown with the finer look
+	elif theme["id"] == BoardgenTheme.RUIN_TOWN:   # (look review 3) under the one side moon the models get a soft fill from straight above (model layer only): both player sides alike
+		var fill := BoardgenMood.make_fill_light()
+		fill.light_energy = BoardgenTownDressing.MODEL_FILL_ENERGY
+		fill.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
+		add_child(fill)
 	_anchor()
 	_layout = layout
 	var settings := _settings()
