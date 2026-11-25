@@ -20,7 +20,7 @@ const LANTERN_CONE_DEG := 48.0
 ## The four lanterns that cast shadows (the square's corners) throw a wider pool - the walls stop it; the others stay narrow. 58 (was 75: a 9.5 in pool that flooded the
 ## whole square warm, 48 % of it; target C keeps warm light inside small pools, plan TARGET C train 2, C2).
 const LANTERN_CONE_SHADOWED_DEG := 58.0
-## A spot's energy is not an omni's: the cone, the cookie (mean ~0.4) and the 1 / d fall-off over 2.5 in of height set it; 3.5 keeps the plaster beside a post under the clip cap.
+## A spot's energy is not an omni's: the cone, its soft edge and the 1 / d fall-off over 2.5 in of height set it; 3.5 keeps the plaster beside a post under the clip cap.
 const LANTERN_ENERGY := 3.5
 ## The moons (the blue hour, D-R4, as two pale lights): the key and its half turn, equal in colour and nearly in energy, so the board looks the same from both players' sides.
 const MOON_COLOUR := Color(0.93, 0.95, 1.0)
@@ -40,11 +40,12 @@ const SSAO_INTENSITY := 1.4
 ## gate: with both off the worst row went 0.62 -> 0.72). The blue hour turns them down, not off.
 const SDFGI_ENERGY := 0.45
 const SSIL_INTENSITY := 0.4
-## A weak wide fill inside every lantern's pool (lead 21.11.): an omni with no shadow map, so the cone's pool has no hard black rim; weak enough that light leaking through a wall is a glow, not a pool.
-const FILL_ENERGY := 0.05
+## The cone's edge fades (spot_angle_attenuation) instead of a projector cookie (look review 2: the cookie drew hard frame-bar bands through the pool and, until the
+## renderer's projector atlas held it, no pool at all on a fresh board) and instead of a warm omni fill (it washed the walls beside a lamp orange and lit every
+## stone edge from below: the orange seams).
+const LANTERN_EDGE_ATTENUATION := 3.0
 const BESIDE_ROOF_IN := 1.5   # a lamp this close to an intact house or a tall tower stands at its eaves
-const DIM_BESIDE_ROOF := 0.3   # ... and burns at this share, without its warm fill
-const FILL_RANGE_M := 0.12   # (was 0.2, train 2: the warm fill stays near its post)
+const DIM_BESIDE_ROOF := 0.3   # ... and burns at this share
 const EMBER_COLOUR := Color(1.0, 0.5, 0.2)
 const EMBER_ENERGY := 0.7
 const EMBER_RANGE_M := 0.18
@@ -291,23 +292,8 @@ static func lantern_boxes(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
-## The lantern's projector cookie, 128 px (plan R7a, the "IES read"): a hot core, a smooth fall-off to the pool's rim and the four bars of the lantern frame as thin dark lines through the pool.
-static func lantern_projector() -> Texture2D:
-	var size := 128
-	var img := Image.create(size, size, false, Image.FORMAT_L8)
-	for y in size:
-		for x in size:
-			var d := Vector2(x + 0.5 - size * 0.5, y + 0.5 - size * 0.5) / (size * 0.5)
-			var r := d.length()
-			var v := 1.0 - smoothstep(0.7, 1.0, r)   # the pool fades at the cone's rim
-			v *= 0.55 + 0.45 * (1.0 - smoothstep(0.0, 0.35, r))   # the hot core
-			var bar := minf(absf(d.x), absf(d.y))   # the frame bars: a cross of thin shadow lines
-			v *= 1.0 - 0.7 * (1.0 - smoothstep(0.02, 0.06, bar)) * smoothstep(0.1, 0.25, r)
-			img.set_pixel(x, y, Color(v, v, v))
-	return ImageTexture.create_from_image(img)
 
-
-## The warm lights of the first MAX_LIGHTS lanterns (the square's four first, then the gates nearest the centre): SpotLight3D down-cones with the projector cookie, colour (1.0, 0.74, 0.48),
+## The warm lights of the first MAX_LIGHTS lanterns (the square's four first, then the gates nearest the centre): SpotLight3D down-cones with a soft edge, colour (1.0, 0.74, 0.48),
 ## the four nearest the centre cast shadows.
 ## Does a lamp post at `at` (board inches) stand within BESIDE_ROOF_IN of an intact house or a tall tower? Its head (2.55 in) is at the eaves there.
 static func beside_a_roof(layout: Dictionary, at: Vector2) -> bool:
@@ -323,7 +309,6 @@ static func beside_a_roof(layout: Dictionary, at: Vector2) -> bool:
 func _add_lights(layout: Dictionary) -> void:
 	var list := lanterns(layout)
 	list.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a["at"] as Vector2).length() < (b["at"] as Vector2).length())
-	var cookie := lantern_projector()
 	if not lamp_glass.is_empty():   # the lights follow the dressed lamps' glass; a dropped lamp has no light
 		var moved: Array[Dictionary] = []
 		for l: Dictionary in list:
@@ -337,27 +322,16 @@ func _add_lights(layout: Dictionary) -> void:
 		light.position = Vector3(at.x, LANTERN_HEIGHT_IN, at.y) * INCHES_TO_METERS
 		light.rotation_degrees = Vector3(-90.0, 0.0, 0.0)   # straight down
 		light.light_color = LANTERN_SQUARE_COLOUR if i < SHADOWED_LANTERNS else LANTERN_COLOUR
-		var dim := beside_a_roof(layout, at)   # (lead 22.11.: a lamp at the eaves of a house lit its roof like a furnace) - a lamp beside a house or a tall tower burns low, no fill
+		var dim := beside_a_roof(layout, at)   # (lead 22.11.: a lamp at the eaves of a house lit its roof like a furnace) - a lamp beside a house or a tall tower burns low
 		light.light_energy = LANTERN_ENERGY * (DIM_BESIDE_ROOF if dim else 1.0)   # measured: <= 0.2 % of pixels above 0.95 luminance in street, wall and fountain
 		light.spot_range = 0.2   # (was 0.34; 8 in still reaches the ground 2.55 in below at the widest cone)
 		light.spot_angle = lantern_cone_deg(i)
 		light.spot_attenuation = 1.0
-		light.light_projector = cookie
+		light.spot_angle_attenuation = LANTERN_EDGE_ATTENUATION
 		light.light_specular = 0.4
 		light.light_cull_mask &= ~BoardgenMood.LAMP_IRON_LAYER   # the lamp's own iron is lit by the moon and the other lamps, not from inside its cage
 		light.shadow_enabled = i < SHADOWED_LANTERNS
 		add_child(light)
-		var fill := OmniLight3D.new()
-		fill.name = "LanternFill%d" % i
-		fill.position = light.position
-		fill.light_color = LANTERN_COLOUR
-		fill.light_energy = 0.0 if dim else FILL_ENERGY
-		fill.omni_range = FILL_RANGE_M
-		fill.omni_attenuation = 2.0
-		fill.light_specular = 0.0
-		fill.light_cull_mask &= ~BoardgenMood.LAMP_IRON_LAYER
-		fill.shadow_enabled = false
-		add_child(fill)
 
 
 ## The ember glows: warm omni lights 0.6 in over the ground, no shadow (a cheap light), range 7 in.
