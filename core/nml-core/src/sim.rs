@@ -1167,6 +1167,47 @@ fn push_spot(state: &State, ti: usize, p: &crate::activation::PushInput, cover: 
     Ok(moved_in)
 }
 
+/// Ruling D14: after a push the pushed unit's other models stand within 1 in of the moved model `m` (base edge to base edge;
+/// 3.6 p.15 lets the opponent place them, PUSH-REPLACE): a model already within 1 in stays; else it goes to the legal spot
+/// 1 in from the moved model's base nearest to where it stood (24 bearings around it, the straight line first) - not solid,
+/// overlapping no model; none -> it stays. Returns the line's tail naming the models that moved or stayed.
+fn push_regroup(state: &mut State, ti: usize, m: usize, cover: Cover) -> String {
+    let (c, rm) = (state.positions[ti][m], state.radii[ti].get(m).copied().unwrap_or(0.0));
+    let (mut moved, mut stuck) = (Vec::new(), Vec::new());
+    for k in (0..state.positions[ti].len()).filter(|&k| k != m) {
+        let (q, rk) = (state.positions[ti][k], state.radii[ti].get(k).copied().unwrap_or(0.0));
+        let d = (q[0] - c[0]).hypot(q[2] - c[2]);
+        if d - rm - rk <= IN2M + 1e-9 {
+            continue;
+        }
+        let base = (q[2] - c[2]).atan2(q[0] - c[0]);
+        let reach = rm + rk + IN2M;
+        let free = |p: [f64; 3], state: &State| {
+            !matches!(cover, Cover::Board(t) if t.solid_at(p[0] / IN2M, p[2] / IN2M))
+                && (0..state.positions.len()).filter(|&u| state.alive[u] > 0).all(|u| state.positions[u].iter().zip(state.radii[u].iter()).enumerate()
+                    .all(|(j, (o, &ro))| (u == ti && j == k) || (p[0] - o[0]).hypot(p[2] - o[2]) >= rk + ro - 1e-9))
+        };
+        let spot = (0..24).map(|i| base + std::f64::consts::PI * f64::from((i + 1) / 2) / 12.0 * if i % 2 == 0 { 1.0 } else { -1.0 })
+            .map(|a| [c[0] + reach * a.cos(), q[1], c[2] + reach * a.sin()]).find(|&p| free(p, state));
+        match spot {
+            Some(p) => {
+                state.positions[ti][k] = p;
+                moved.push(k + 1);
+            }
+            None => stuck.push(k + 1),
+        }
+    }
+    let list = |v: &[usize]| v.iter().map(|k| format!("model {k}")).collect::<Vec<_>>().join(", ");
+    let mut tail = String::new();
+    if !moved.is_empty() {
+        tail += &format!("; {} placed within 1 in of it", list(&moved));
+    }
+    if !stuck.is_empty() {
+        tail += &format!("; {} found no room within 1 in and stays", list(&stuck));
+    }
+    tail
+}
+
 /// The skirmish Blast spread's morale: each neighbour `land_blast_spill` wounded tests like a shot target - the same
 /// half-strength trigger and line, then the test.
 fn blast_spill_morale(
@@ -13208,7 +13249,8 @@ fn resolve_with(
                         match push_spot(&next, ti, &p, cover) {
                             Ok(moved_in) => {
                                 next.positions[ti][p.model] = p.to;
-                                format!("Push: {name} rolls {face} and pushes {tname} model {} {moved_in:.1} in", p.model + 1)
+                                let rest = push_regroup(&mut next, ti, p.model, cover);
+                                format!("Push: {name} rolls {face} and pushes {tname} model {} {moved_in:.1} in{rest}", p.model + 1)
                             }
                             Err(why) => format!("Push: {name} rolls {face}, but {why} - nothing moves"),
                         }
