@@ -355,12 +355,32 @@ func test_titles_and_the_main_action_use_inter_weights() -> void:
 ## Settings was a 13 px link in the top right corner, the least findable control of the menu. RED on main: its
 ## parent is the masthead.
 func test_settings_is_the_fifth_row_of_the_list_after_learn() -> void:
+	_view.set_save({"name": "x", "modified_unix": 1727000000})   # with a save Learn is the fourth row
 	var settings: Control = _view.buttons.SettingsBtn
 	assert_str(String(settings.get_parent().name)).is_equal("MenuButtons")
 	assert_int(settings.get_index()).is_equal(4)
 	assert_object(_view.buttons.LearnBtn.get_parent().get_child(3)).is_same(_view.buttons.LearnBtn)
 	var order: Array = _view.main_buttons().map(func(b: Control) -> String: return String(b.name))
 	assert_int(order.find("SettingsBtn")).is_equal(order.find("LearnBtn") + 1)
+
+
+## A first launch points at Learn: second in the list, lit at rest and tagged "NEW HERE?"; with a save it is back in
+## fourth place and plain; the main buttons follow the shown order (red on main: always fourth, never tagged).
+func test_first_launch_points_at_learn() -> void:
+	_view.set_save({})
+	var rows: Control = _view.buttons.LearnBtn.get_parent()
+	assert_int(_view.buttons.LearnBtn.get_index()).override_failure_message("Learn is not second").is_equal(1)
+	assert_bool(_view.buttons.LearnBtn.get("highlighted")).is_true()
+	assert_str(str(_view.buttons.LearnBtn.get("tag"))).is_equal("NEW HERE?")
+	var order: Array = _view.main_buttons().map(func(b: Control) -> String: return String(b.name))
+	assert_int(order.find("LearnBtn")).is_equal(order.find("StartBattleBtn") + 1)
+	_view.set_save({"name": "x", "modified_unix": 1727000000})
+	assert_int(_view.buttons.LearnBtn.get_index()).is_equal(3)
+	assert_bool(_view.buttons.LearnBtn.get("highlighted")).is_false()
+	assert_str(str(_view.buttons.LearnBtn.get("tag"))).is_empty()
+	assert_int(rows.get_child_count()).is_equal(5)
+	assert_str(_view.buttons.StartBattleBtn.description).is_equal(
+		"Choose a game system, a biome and a size")
 
 
 ## The menu arrives, once per start: every row ends at alpha 1 on its resting place. RED on main: no arrival.
