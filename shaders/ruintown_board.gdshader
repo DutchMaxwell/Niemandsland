@@ -6,6 +6,7 @@ shader_type spatial;
 // and the stone pieces are coursed stone, a chimney is brick. The two halves of the board draw their stones, plaster and tiles with other seeds.
 #include "res://shaders/tiefwerk_noise.gdshaderinc"
 #include "res://shaders/ruintown_green.gdshaderinc"
+#include "res://shaders/ruintown_soil.gdshaderinc"   // (LOOK5 S1) the ground as a material - inert until S4 calls soil_blend
 
 uniform vec4 palette[19];   // display colours by kind index (BoardgenTheme.TOWN_KINDS)
 uniform vec3 board_origin;   // world position of the board centre
