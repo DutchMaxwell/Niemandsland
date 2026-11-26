@@ -249,3 +249,13 @@ func test_core_missing_warning_stays_silent_outside_the_live_scene() -> void:
 	_menu._maybe_warn_core_missing()
 	var after := _menu.get_children().filter(func(n: Node) -> bool: return n is AcceptDialog).size()
 	assert_int(after).is_equal(before)
+
+## Footer links lost letters on hover ("Help & feedba"): only the resting state had the 10 px box, the theme's
+## own hover box is wider and left the text less room. RED on main (hover and pressed differ), GREEN with one box.
+func test_footer_links_keep_one_box_for_every_state() -> void:
+	for id: String in ["HelpBtn","CreditsBtn","ExitGameBtn"]:
+		var link: Button = _menu.view.buttons[id]
+		var rest := link.get_theme_stylebox("normal").get_minimum_size()
+		for state: String in ["hover","pressed"]:
+			var box := link.get_theme_stylebox(state).get_minimum_size()
+			assert_vector(box).override_failure_message("%s: the %s box needs %s, the resting box %s" % [id,state,box,rest]).is_equal(rest)
