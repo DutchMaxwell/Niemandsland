@@ -20,6 +20,9 @@ config/version="0.3.15.0-alpha"
 run/main_scene="res://scenes/startup_menu.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.png"
+boot_splash/bg_color=Color(0.054902, 0.086275, 0.109804, 1)
+boot_splash/image="res://assets/ui/boot_wordmark.png"
+boot_splash/fullsize=false
 
 [autoload]
 
