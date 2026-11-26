@@ -94,3 +94,18 @@ func test_the_chooser_takes_the_house_palette() -> void:
 	for name in ["const INK :=", "const MUTED :=", "const CYAN :=", "const GOLD :="]:
 		assert_str(src).override_failure_message("table_size_dialog.gd still defines its own %s instead of using HouseStyle" % name).not_contains(name)
 	assert_str(src).contains("HouseStyle.INK")
+## Inches | Centimeters is a segment pair over the same handler (red on main: an engine dropdown, no segments).
+func test_the_unit_switch_is_a_segment_pair_with_the_same_values() -> void:
+	var pair: HBoxContainer = dialog.get("_unit_segments") if "_unit_segments" in dialog else null
+	assert_object(pair).override_failure_message("no segment pair").is_not_null()
+	if pair == null:
+		return
+	assert_bool(dialog._unit_option.visible).is_false()
+	dialog._select_size("custom")
+	(pair.get_child(1) as Button).pressed.emit()
+	assert_int(dialog._unit_option.selected).is_equal(1)
+	assert_str(dialog._unit_labels[0].text).is_equal("Width (cm)")
+	assert_bool(HouseStyle.is_selected(pair.get_child(1) as Button)).override_failure_message("Centimeters is not marked").is_true()
+	(pair.get_child(0) as Button).pressed.emit()
+	assert_str(dialog._unit_labels[0].text).is_equal("Width (in)")
+	assert_bool(HouseStyle.is_selected(pair.get_child(1) as Button)).is_false()

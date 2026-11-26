@@ -59,6 +59,10 @@ static func should_build_diorama(tier: int) -> bool:
 	return tier > GraphicsSettings.QualityPreset.PERFORMANCE
 
 
+static func shows_still_without_scene(backdrop_mode: Mode, has_still: bool, display_name: String) -> bool:
+	return backdrop_mode == Mode.AUTO and has_still and display_name != "headless"
+
+
 func _diorama_active() -> bool:
 	if mode == Mode.FORCED:
 		return true
@@ -124,8 +128,11 @@ func _setup() -> void:
 	_place_camera()
 	# Cover the live scene until it is complete: the player sees the finished backdrop at once and never
 	# watches placeholders pop in. The cover is drawn here, so the menu UI above stays usable.
-	_cover_alpha = 1.0 if _diorama_active() else 0.0
 	_poster = load(POSTER_PATH % biome) if ResourceLoader.exists(POSTER_PATH % biome) else null
+	# Without the live scene (the lowest tier) the finished still stands in for it; a test or the headless
+	# display keeps the bare sky.
+	var still_stands_in := shows_still_without_scene(mode,_poster != null,DisplayServer.get_name())
+	_cover_alpha = 1.0 if _diorama_active() or still_stands_in else 0.0
 	_reveal_frame = -1
 	queue_redraw()
 	await get_tree().process_frame
@@ -133,7 +140,7 @@ func _setup() -> void:
 		return
 	first_frame_rendered.emit()
 	if not _diorama_active():
-		_cover_alpha = 0.0
+		_cover_alpha = 1.0 if still_stands_in else 0.0
 		queue_redraw()
 		diorama_ready.emit()
 		return

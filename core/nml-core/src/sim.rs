@@ -7956,7 +7956,9 @@ fn drop_banner_for_cause(
 
 /// Ruling D16: unit `u` carries an AoF: Skirmish command group with `rule` (Banner or Musician).
 fn command_rule(state: &State, u: usize, rule: &str) -> bool {
-    state.carries_command(u) && state.profile(u).special_rules.iter().any(|r| r == rule)
+    // read the way `State::book` does: a synthetic state without its profile list carries no command group
+    let Some(p) = state.roster.profile.get(u).and_then(|&pi| state.profiles.list.get(pi)) else { return false };
+    crate::rules::carries_command(&p.game_system, &p.special_rules) && p.special_rules.iter().any(|r| r == rule)
 }
 
 /// Ruling D16: unit `u`'s command-group bearer is killed. A State built without the bearer list (an empty vector) knows
@@ -7972,11 +7974,11 @@ fn command_lender(state: &State, i: usize, rule: &str) -> Option<usize> {
         && state.profile(k).command_picks.iter().any(|p| p == key))
 }
 
-/// Ruling D17 for the Musician (AoF: Skirmish p.13, `PENDING_EPOCH_COMMAND_BANNER`): the +1 in on move actions lives with
+/// Ruling D17 for the Musician (AoF: Skirmish p.13, `EPOCH_103_COMMAND_BANNER`): the +1 in on move actions lives with
 /// the bearer. The unit's own Musician inch already rides its recorded bands, so a killed bearer takes it back (-1); a unit
 /// a friendly living bearer's Musician unit picked gets +1. The line says which, or `None` when nothing changes.
 pub(crate) fn command_musician_in(statics: &[UnitStatic], state: &State, i: usize, kind: i64, rules_epoch: u32) -> (f64, Option<String>) {
-    if !rule_on(rules_epoch, crate::acts::PENDING_EPOCH_COMMAND_BANNER) || !matches!(kind, ADVANCE | RUSH | CHARGE) {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_103_COMMAND_BANNER) || !matches!(kind, ADVANCE | RUSH | CHARGE) {
         return (0.0, None);
     }
     let name = |u: usize| statics.get(state.roster.profile[u]).map_or("", |us| us.name.as_str());
@@ -7994,7 +7996,7 @@ pub(crate) fn command_musician_in(statics: &[UnitStatic], state: &State, i: usiz
 /// The AoF: Skirmish Musician's inch on move actions (its rules-map entry's `move_bonus_in`, which the recorded bands carry).
 const MUSICIAN_MOVE_IN: f64 = 1.0;
 
-/// Ruling D17 (AoF: Skirmish p.13, `PENDING_EPOCH_COMMAND_BANNER`): the command-group Banner lives with its bearer. A unit
+/// Ruling D17 (AoF: Skirmish p.13, `EPOCH_103_COMMAND_BANNER`): the command-group Banner lives with its bearer. A unit
 /// whose own bearer is killed loses its Banner +1 (returned, so the bonus line counts without it); a unit another living
 /// bearer's Banner unit picked gets +1 on a test that shooting or melee caused. The bearer is the last model (no per-model
 /// data names it, KIT-BEARER-NAME), and a test from the attack that killed him reads him as gone. Table games carry no picks
@@ -8004,7 +8006,7 @@ fn command_banner(
     statics: &[UnitStatic], state: &State, i: usize, cause: Option<&str>, seams: Seams,
     ctx: &mut Ctx, shot: &mut ShootResult, tray: &mut Tray,
 ) -> i64 {
-    if !rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_COMMAND_BANNER) || unit_shaken(state, i, seams) {
+    if !rule_on(seams.rules_epoch, crate::acts::EPOCH_103_COMMAND_BANNER) || unit_shaken(state, i, seams) {
         return 0;
     }
     let banner = |u: usize| command_rule(state, u, "Banner");

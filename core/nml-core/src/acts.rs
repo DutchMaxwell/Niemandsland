@@ -1078,18 +1078,20 @@ pub const EPOCH_100_SKIRMISH_JUMP: u32 = 100;
 ///   (`activation::Input::Push`): on 4+ one model moves up to 2 in and the rest regroup within 1 in; pushed off 2 in or more it falls.
 ///   An activation that declares no push says so where one would hold. Read only by `sim.rs` (the push step after an attack).
 pub const EPOCH_101_SKIRMISH_PUSH: u32 = 101;
-pub const CURRENT_RULES_EPOCH: u32 = 101;
-/// PENDING (the 3.6 Firefight book, step 9c): the casualty order keeps a gff unit's chain at the Firefight 9 in
-/// (`Book::chain_in_at`), where it kept the recorded 6 in while the movement chain was already 9 in (`EPOCH_98_FIREFIGHT_CHAIN`).
-/// A placeholder one past `CURRENT_RULES_EPOCH`. Records stamped 101 or below replay byte-exact. Read only by
-/// `casualty::chain_casualty_order`.
-pub const PENDING_EPOCH_CASUALTY_CHAIN: u32 = 102;
-/// PENDING (the AoF: Skirmish book, step S4a, ruling D17): a command group's Banner (+1 to morale test rolls that shooting or
-/// melee caused) reaches the units its profile picked (`Profile::command_picks`) while its bearer (`State::cmd_bearer`) lives,
-/// and its own unit and the picks lose it when the bearer is killed; the Musician's +1 in on move actions the same way (step
-/// S4b). A placeholder one past `PENDING_EPOCH_CASUALTY_CHAIN`. Records stamped 102 or below replay byte-exact. Read only by
-/// `sim.rs` (`command_banner` in the rolled morale test, `command_musician_in` in the move band).
-pub const PENDING_EPOCH_COMMAND_BANNER: u32 = 103;
+/// The EPOCH 103 BATCH: two outcome changes that sat behind the `PENDING_EPOCH_CASUALTY_CHAIN` (102) and
+/// `PENDING_EPOCH_COMMAND_BANNER` (103) placeholders are now two frozen constants, and `CURRENT_RULES_EPOCH` is bumped to 103 in the
+/// same change. Records stamped 101 or below replay byte-exact; no record was ever stamped 102. Every call site reads these
+/// constants, not the literals or `CURRENT_RULES_EPOCH`. The recorder mirror (`act_recorder.gd`) stamps 103 in the same change.
+/// - CASUALTY_CHAIN (the 3.6 Firefight book, step 9c): the casualty order keeps a gff unit's chain at the Firefight 9 in
+///   (`Book::chain_in_at`), where it kept the recorded 6 in while the movement chain was already 9 in (`EPOCH_98_FIREFIGHT_CHAIN`).
+///   Read only by `casualty::chain_casualty_order`.
+pub const EPOCH_102_CASUALTY_CHAIN: u32 = 102;
+/// - COMMAND_BANNER (the AoF: Skirmish book, steps S4a/S4b, ruling D17): a command group's Banner (+1 to morale test rolls that
+///   shooting or melee caused) reaches the units its profile picked (`Profile::command_picks`) while its bearer
+///   (`State::cmd_bearer`) lives, and its own unit and the picks lose it when the bearer is killed; the Musician's +1 in on move
+///   actions the same way. Read only by `sim.rs` (`command_banner` in the rolled morale test, `command_musician_in` in the move band).
+pub const EPOCH_103_COMMAND_BANNER: u32 = 103;
+pub const CURRENT_RULES_EPOCH: u32 = 103;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2543,7 +2545,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 101, "the live epoch is EPOCH_101_SKIRMISH_PUSH");
+        assert_eq!(CURRENT_RULES_EPOCH, 103, "the live epoch is EPOCH_103_COMMAND_BANNER");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2553,11 +2555,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":101}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":103}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 101"
+            "a fresh play_game() now stamps the bumped epoch, 103"
         );
     }
 
