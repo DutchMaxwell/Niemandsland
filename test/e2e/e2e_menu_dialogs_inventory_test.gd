@@ -230,6 +230,32 @@ func test_update_prompt_keeps_its_headline_versions_notes_skip_and_buttons() -> 
 	assert_int(empty.find_children("*", "RichTextLabel", true, false).size()).is_equal(0)
 
 
+## The update's progress window shows the stage, the per cent in mono gold, a 4 px bar and the restart line instead of one
+## text line (sheet 08; red on main: an AcceptDialog with "Stage… 62%" as its text).
+func test_the_update_progress_window_shows_stage_percent_bar_and_note() -> void:
+	assert_bool(ClassDB.class_exists("UpdateProgressDialog") or FileAccess.file_exists("res://scripts/update_progress_dialog.gd")).override_failure_message("no update progress window").is_true()
+	var d := UpdateProgressDialog.new()
+	_menu.add_child(d)
+	d.popup_centered()
+	await _frames(3)
+	d.show_progress("Downloading", 0.62)
+	await _frames(2)
+	var texts: Array[String] = []
+	for l: Node in d.find_children("*", "Label", true, false):
+		texts.append((l as Label).text)
+	assert_bool(texts.has("Downloading…")).override_failure_message(str(texts)).is_true()
+	assert_bool(texts.has("62 %")).is_true()
+	assert_bool(texts.has("The game restarts by itself when the files are in place.")).is_true()
+	var fill: TextureRect = d._fill
+	assert_float(fill.anchor_right).is_equal_approx(0.62, 0.001)
+	assert_float(fill.size.y).is_equal(4.0)
+	assert_float(fill.size.x).is_equal_approx(d._track.size.x * 0.62, 0.5)
+	d.show_progress("Installing", -1.0)
+	assert_str(d._percent.text).is_empty()
+	assert_bool(d.get_ok_button().visible).is_false()
+	d.queue_free()
+
+
 ## The update prompt as the mockup draws it (sheet 08): 560 px wide and as high as its content, the versions in one mono
 ## card, the notes in a 132 px card that scrolls, Later and Update & Restart as two 44 px buttons in one row of the content
 ## that answer like the dialog's own (hidden) buttons (red on main: the dialog's buttons, an 800 px window).
