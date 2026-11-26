@@ -160,9 +160,11 @@ func test_a_tall_tower_is_a_twelve_inch_body_in_its_footprint_with_merlons_on_it
 		assert_bool(block.grow(EPS).encloses(Rect2(Vector2(b["lo"].x, b["lo"].z), Vector2(b["hi"].x - b["lo"].x, b["hi"].z - b["lo"].z)))).override_failure_message("a tower part leaves the footprint").is_true()
 	assert_float(top).is_equal_approx(12.0, EPS)
 	var crown := BoardgenTownDressing.merlons(layout).filter(func(m: Dictionary) -> bool: return block.has_point(Vector2(m["lo"].x, m["lo"].z) + Vector2(0.01, 0.01)))
-	assert_int(crown.size()).is_greater(4)
+	assert_int(crown.size()).is_greater(12)
+	assert_int(crown.size()).override_failure_message("a tall tower's crown keeps all 24 merlons: none broken away").is_less(24)   # (second pass: about one in five broken)
 	for m: Dictionary in crown:
 		assert_float(m["hi"].y).is_less_equal(13.5)
+		assert_float(m["hi"].y - m["lo"].y).override_failure_message("a tall tower's merlon is as slight as a wall's").is_greater(0.8)
 		var outer: bool = m["lo"].x <= block.position.x + EPS or m["hi"].x >= block.end.x - EPS or m["lo"].z <= block.position.y + EPS or m["hi"].z >= block.end.y - EPS
 		assert_bool(outer).override_failure_message("a merlon on the seam inside the tower").is_true()
 	var colliders := BoardgenGreybox.plan(layout).filter(func(b: Dictionary) -> bool: return b["solid"] and tower.has(_cell_at(layout, Vector2(b["lo"].x, b["lo"].z) + Vector2(0.01, 0.01))))
