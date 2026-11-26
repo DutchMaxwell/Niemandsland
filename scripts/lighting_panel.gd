@@ -221,7 +221,7 @@ func _build_ui() -> void:
 	visibility_changed.connect(func() -> void:
 		if visible:
 			_restyle())
-	_add_help_lines.call_deferred()   # a sheet shown at once never fires visibility_changed; late rows join next frame
+	_restyle.call_deferred()   # a sheet shown at once never fires visibility_changed: house look and help lines next frame
 
 	# Lighting moods are chosen through the ATMOSPHERE section only (added at the top by
 	# set_atmosphere_controller); the old standalone lighting "PRESETS" were a parallel,
