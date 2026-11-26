@@ -52,7 +52,7 @@ func _has_label(d: Node, prefix: String) -> bool:
 
 func _host_missing(d: AcceptDialog) -> Array:
 	var missing: Array = []
-	for p: String in ["Create a room", "NET-01", "Your name:", "Relay server:", "Your invitation code appears"]:
+	for p: String in ["Create a room", "Your name:", "Relay server:", "Your invitation code appears"]:
 		if not _has_label(d, p) and not _texts(d, "Label").any(func(t: String) -> bool: return t.to_upper().contains(p.to_upper())):
 			missing.append("label: %s" % p)
 	if not _texts(d, "CheckBox").has("List room publicly"):
@@ -79,7 +79,7 @@ func test_join_dialog_has_every_field_and_keeps_an_unusable_code_open() -> void:
 	_menu._on_join_online_pressed()
 	await _frames(2)
 	var d: AcceptDialog = _menu._join_popup
-	for p: String in ["NET-02", "Your name:", "Invitation code:", "Relay server:"]:
+	for p: String in ["Your name:", "Invitation code:", "Relay server:"]:
 		assert_bool((_texts(d, "Label") + _texts(d, "Button")).any(func(t: String) -> bool: return t.contains(p))).override_failure_message("join dialog lost %s" % p).is_true()
 	assert_str(d.ok_button_text).is_equal("Join")
 	assert_int(_menu._join_code_input.max_length).is_equal(7)
@@ -99,7 +99,7 @@ func test_public_tables_has_fields_refresh_status_and_room_rows() -> void:
 	_menu._on_browse_online_pressed()
 	await _frames(2)
 	var d: AcceptDialog = _menu._browse_popup
-	assert_bool(_texts(d, "Label").any(func(t: String) -> bool: return t.contains("NET-03"))).is_true()
+	assert_bool(_texts(d, "Label").any(func(t: String) -> bool: return t.contains("NET-0"))).is_false()
 	assert_str(d.ok_button_text).is_equal("Close")
 	assert_bool(_texts(d, "Button").has("Refresh list")).is_true()
 	assert_bool(_texts(d, "Label").has("Loading rooms…")).is_true()
@@ -129,7 +129,7 @@ func test_net_dialog_builder_gives_the_in_game_dialogs_header_and_content() -> v
 	add_child(d)
 	assert_object(NetDialog.content(d)).is_not_null()
 	assert_str(d.ok_button_text).is_equal("Start Hosting")
-	assert_bool(_texts(d, "Label").any(func(t: String) -> bool: return t.contains("NET-01"))).is_true()
+	assert_bool(_texts(d, "Label").any(func(t: String) -> bool: return t.contains("NET-0"))).is_false()
 	d.queue_free()
 
 
@@ -212,3 +212,19 @@ func test_relay_address_is_folded_away_in_the_three_online_windows() -> void:
 		toggle.pressed.emit()
 		assert_bool(field.visible).is_false()
 
+
+
+## A working index never stands on a player's screen, and the three online windows join the menu's family: a close box in
+## the header and a scrim that dims the menu while one is open (red on main: "NET-01..03" labels, no scrim, no close box).
+func test_the_online_windows_show_no_working_codes_and_dim_the_menu() -> void:
+	var regex := RegEx.create_from_string("NET-\\d+")
+	_menu._on_host_online_pressed()
+	_menu._on_join_online_pressed()
+	_menu._on_browse_online_pressed()
+	await _frames(2)
+	for d: AcceptDialog in [_menu._host_popup, _menu._join_popup, _menu._browse_popup]:
+		for text in _texts(d, "Label") + _texts(d, "Button"):
+			assert_bool(regex.search(text) != null).override_failure_message("%s shows %s" % [d.title, text]).is_false()
+		assert_object(d.find_child("CloseButton", true, false)).override_failure_message("%s has no close box" % d.title).is_not_null()
+	var scrims := _menu.get_children().filter(func(n: Node) -> bool: return n is ColorRect and n.name == "DialogScrim" and n.visible)
+	assert_int(scrims.size()).override_failure_message("no scrim over the menu").is_greater(0)

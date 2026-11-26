@@ -766,6 +766,7 @@ func _show_host_popup() -> void:
 
 	_host_popup.confirmed.connect(_on_host_confirmed)
 	add_child(_host_popup)
+	MenuDialog.attach_scrim(_host_popup)
 	_host_popup.popup_centered()
 	UiPolish.keep_window_reachable(_host_popup, Vector2i(460, 300))
 	_host_name_input.grab_focus()
@@ -830,6 +831,7 @@ func _show_join_popup() -> void:
 	_join_popup.dialog_hide_on_ok = false
 	_join_popup.confirmed.connect(_on_join_confirmed)
 	add_child(_join_popup)
+	MenuDialog.attach_scrim(_join_popup)
 	_join_popup.popup_centered()
 	UiPolish.keep_window_reachable(_join_popup, Vector2i(460, 340))
 	_join_code_input.grab_focus()
@@ -920,6 +922,7 @@ func _show_browse_popup() -> void:
 	_browse_popup.confirmed.connect(_on_browse_closed)
 	_browse_popup.canceled.connect(_on_browse_closed)
 	add_child(_browse_popup)
+	MenuDialog.attach_scrim(_browse_popup)
 	_browse_popup.popup_centered()
 	UiPolish.keep_window_reachable(_browse_popup, Vector2i(460, 460))
 	_refresh_browse_list()
