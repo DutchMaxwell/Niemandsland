@@ -658,7 +658,7 @@ static func table_biome(key: String) -> String:
 	return MENU_TO_TABLE.get(key,key)
 
 
-func _preview_path(key: String) -> String:
+static func _preview_path(key: String) -> String:
 	return "res://assets/ui/table_setup/"+str(PREVIEW_FILE.get(key,key))+".webp"
 
 
