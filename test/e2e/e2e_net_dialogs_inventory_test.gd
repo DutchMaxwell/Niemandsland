@@ -162,6 +162,26 @@ func test_inventory_check_names_a_removed_control() -> void:
 	assert_array(missing).contains_exactly(["checkbox: List room publicly"])
 
 
+## The code field reads as a code: upper case as you type, the hyphen after the third character, mono 30 px.
+## RED on main: the typed text stayed as typed and the field was 24 px in the text font.
+func test_join_code_field_reads_as_a_code() -> void:
+	var net: GDScript = load("res://scripts/net_dialog.gd")
+	assert_bool(net.has_method("code_as_typed")).override_failure_message("no code formatting").is_true()
+	if net.has_method("code_as_typed"):
+		for pair: Array in [["abc123", "ABC-123"], ["ab", "AB"], ["abc", "ABC"], ["abcd", "ABC-D"],
+				["a-b c12 3x", "ABC-123"], ["", ""]]:
+			assert_str(net.call("code_as_typed", pair[0])).is_equal(pair[1])
+	_menu._on_join_online_pressed()
+	await _frames(2)
+	var field: LineEdit = _menu._join_code_input
+	field.text = "abcd"
+	field.text_changed.emit("abcd")
+	assert_str(field.text).override_failure_message("the code was not formatted as typed").is_equal("ABC-D")
+	assert_int(field.get_theme_font_size("font_size")).is_equal(30)
+	assert_str(field.get_theme_font("font").resource_path).is_equal(HouseStyle.FONT_MONO_PATH)
+	assert_str(field.placeholder_text).is_equal("ABC-123")
+
+
 func _relay_toggle(d: Node) -> Button:
 	for n: Node in d.find_children("*", "Button", true, false):
 		if (n as Button).text.begins_with("Relay server:"):

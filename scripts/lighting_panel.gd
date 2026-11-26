@@ -221,7 +221,7 @@ func _build_ui() -> void:
 	visibility_changed.connect(func() -> void:
 		if visible:
 			_restyle())
-	_add_help_lines.call_deferred()   # a sheet shown at once never fires visibility_changed; late rows join next frame
+	_restyle.call_deferred()   # a sheet shown at once never fires visibility_changed: house look and help lines next frame
 
 	# Lighting moods are chosen through the ATMOSPHERE section only (added at the top by
 	# set_atmosphere_controller); the old standalone lighting "PRESETS" were a parallel,
@@ -298,7 +298,7 @@ func _build_ui() -> void:
 	# player's choices and restoring them when switched off. DEFAULT OFF.
 	var calm_cb := CheckButton.new()
 	calm_cb.text = "Calm Mode"
-	calm_cb.tooltip_text = "Turns down combat effects, motion and pulsing selection aids in one click. / Reduziert Effekte, Bewegung und pulsierende Auswahl in einem Klick."
+	calm_cb.tooltip_text = "Turns down combat effects, motion and pulsing selection aids in one click."
 	calm_cb.button_pressed = GraphicsSettings.calm_mode
 	calm_cb.toggled.connect(func(on: bool) -> void:
 		GraphicsSettings.set_calm_mode(on))

@@ -1103,6 +1103,12 @@ pub const PENDING_EPOCH_TWO_BEARERS: u32 = 104;
 /// `CURRENT_RULES_EPOCH` (104 is the two-bearers placeholder). Records stamped 104 or below replay byte-exact. Read only by
 /// `deployment::zone_admits_base`.
 pub const PENDING_EPOCH_ZONE_BASE_EDGE: u32 = 105;
+/// PENDING (plan step 27-pre): the table hands the core a generated board's ledges - the `tiers` and `solid_cells` of
+/// `boardgen::plain::to_plain` for the board on the table - so a table game's jumps, falls and climbs (and the AI's moves)
+/// play on the board the player sees, where the core played a flat board. A placeholder one past
+/// `PENDING_EPOCH_ZONE_BASE_EDGE`. Records stamped 105 or below replay byte-exact (their terrain line has no `tiers`). Read
+/// only by the recorder mirror (`act_recorder.gd` `_tiers_for_line`); the core reads whatever terrain it is handed.
+pub const PENDING_EPOCH_CORE_TIERS: u32 = 106;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff

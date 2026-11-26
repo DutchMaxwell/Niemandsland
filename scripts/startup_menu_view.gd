@@ -2,6 +2,7 @@ extends Control
 ## Native Control implementation of the approved menu, independent of game routing.
 signal route_opened
 signal route_closed
+signal arrived
 const FONT = preload("res://assets/ui_glassmorphism/fonts/Inter.ttf")
 const LOGO = preload("res://assets/ui_glassmorphism/fonts/Orbitron.ttf")
 const MONO = preload("res://assets/ui_glassmorphism/fonts/SourceCodePro.ttf")
@@ -26,6 +27,10 @@ var _main: VBoxContainer
 var _footer: HBoxContainer
 var _masthead: HBoxContainer
 var _route_body: VBoxContainer
+var _arrived := false
+## The arrival (motion table): the rows rise this far while they fade in, one every ARRIVAL_STAGGER seconds.
+const ARRIVAL_RISE := 12.0
+const ARRIVAL_STAGGER := 0.06
 var _route_tween: Tween
 var _route_rest := Vector2.ZERO
 var _route_closing := false
@@ -48,10 +53,23 @@ class Action extends Button:
 	var row_icon: Texture2D  # not "icon": a Button already draws that one itself
 	var primary := false
 	var outlined := false
+	var key_hint := ""  # the key that takes this row while it is the main action ("Enter")
+	var key_cap: Label
 
 	func _ready() -> void:
 		focus_mode = Control.FOCUS_ALL
 		set_meta(UiMotion.META_FLAT,true)
+		if not key_hint.is_empty():
+			key_cap = HouseStyle.key_cap(key_hint)
+			key_cap.theme = HouseStyle.theme()
+			key_cap.add_theme_font_size_override("font_size",14)
+			key_cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			key_cap.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+			key_cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+			key_cap.grow_vertical = Control.GROW_DIRECTION_BOTH
+			key_cap.offset_left = -52
+			key_cap.offset_right = -52
+			add_child(key_cap)
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		add_theme_font_override("font",FONT)
 		add_theme_font_size_override("font_size",22)
@@ -69,6 +87,8 @@ class Action extends Button:
 
 	func refresh_style() -> void:
 		custom_minimum_size = Vector2(0,54 if description.is_empty() else 76 if primary else 64)
+		if key_cap != null:
+			key_cap.visible = primary
 		for state in ["normal","hover","pressed","focus"]:
 			var box := StyleBoxFlat.new()
 			var lit: bool = state != "normal"
@@ -166,13 +186,16 @@ func _ready() -> void:
 	save_date = _label("",15,HouseStyle.MUTED)
 	text.add_child(save_date)
 	var cont := _action("ContinueBtn","Continue","",null,true)
+	cont.key_hint = "Enter"
 	cont.custom_minimum_size.y = 54
 	saved.add_child(cont)
 	var actions := VBoxContainer.new()
 	actions.name = "MenuButtons"
 	actions.add_theme_constant_override("separation",5)
 	_main.add_child(actions)
-	actions.add_child(_action("StartBattleBtn","Prepare a new table","Choose a size and biome",_icon(&"table"),false,true))
+	var start := _action("StartBattleBtn","Prepare a new table","Choose a size and biome",_icon(&"table"),false,true)
+	start.key_hint = "Enter"
+	actions.add_child(start)
 	actions.add_child(_action("OnlineBtn","Play online","Create a room or join a table",_icon(&"globe")))
 	actions.add_child(_action("LoadBattleBtn","Load game","Open a saved game",_icon(&"folder")))
 	actions.add_child(_action("LearnBtn","Learn to play","Learn the controls and explore Trial by Fire",_icon(&"book")))
@@ -181,7 +204,17 @@ func _ready() -> void:
 	_footer.add_theme_constant_override("separation",24)
 	add_child(_footer)
 	for row in [["HelpBtn","Help & feedback"],["CreditsBtn","Credits & licenses"],["ExitGameBtn","Quit"]]:
-		_footer.add_child(_utility(row[0],row[1]))
+		if row[0] == "ExitGameBtn":
+			var quit := HBoxContainer.new()
+			quit.add_theme_constant_override("separation",4)
+			quit.add_child(_utility(row[0],row[1]))
+			var esc := HouseStyle.key_cap("Esc")
+			esc.theme = HouseStyle.theme()
+			esc.add_theme_font_size_override("font_size",14)
+			quit.add_child(esc)
+			_footer.add_child(quit)
+		else:
+			_footer.add_child(_utility(row[0],row[1]))
 	version = _label("",14,HouseStyle.MUTED,MONO)
 	add_child(version)
 	status = _label("Preparing background …",14,HouseStyle.MUTED,MONO)
@@ -228,6 +261,36 @@ func _build_routes() -> void:
 		button.pressed.connect(close_route)
 	route_back.pressed.connect(close_route)
 	route_panel.hide()
+
+
+## The menu arrives, once per start (never again after the table setup or a rebuilt backdrop): the wordmark
+## fades in over a screen beat, the Continue card and the rows rise and fade in one after the other. Reduce
+## Motion shows everything at once.
+func play_arrival() -> void:
+	if _arrived:
+		return
+	_arrived = true
+	if UiMotion.reduced():
+		arrived.emit()
+		return
+	var rows: Array[Control] = []
+	if resume.visible:
+		rows.append(resume)
+	for row in _main.get_node("MenuButtons").get_children():
+		rows.append(row as Control)
+	var tween := create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_masthead.modulate.a = 0.0
+	tween.tween_property(_masthead,"modulate:a",1.0,HudTokens.DUR_SCREEN)
+	var delay := 0.0
+	for row in rows:
+		var rest := row.position.y
+		row.modulate.a = 0.0
+		row.position.y = rest+ARRIVAL_RISE
+		tween.tween_property(row,"modulate:a",1.0,HudTokens.DUR_PANEL_IN).set_delay(delay)
+		tween.tween_property(row,"position:y",rest,HudTokens.DUR_PANEL_IN).set_delay(delay)
+		delay += ARRIVAL_STAGGER
+	await tween.finished
+	arrived.emit()
 
 
 func show_route(key: String) -> void:
@@ -398,7 +461,9 @@ func _utility(id: String, title: String) -> Button:
 	var rest := _box(Color.TRANSPARENT,Color.TRANSPARENT,10)
 	for state in ["normal","hover","pressed"]:
 		button.add_theme_stylebox_override(state,rest)
-	button.add_theme_stylebox_override("focus",_box(Color.TRANSPARENT,HouseStyle.GOLD,10))
+	var ring := _box(Color.TRANSPARENT,HouseStyle.ACCENT,10)
+	ring.set_border_width_all(2)
+	button.add_theme_stylebox_override("focus",ring)
 	buttons[id] = button
 	return button
 

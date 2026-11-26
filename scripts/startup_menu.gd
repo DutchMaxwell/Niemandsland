@@ -106,6 +106,7 @@ func _ready() -> void:
 	view.buttons.SettingsBtn.pressed.connect(_on_settings_pressed)
 	view.buttons.HelpTutorialBtn.pressed.connect(_on_tutorial_pressed)
 	view.buttons.WhatsNewBtn.pressed.connect(_show_whats_new)
+	diorama.first_frame_rendered.connect(_on_first_frame_rendered, CONNECT_ONE_SHOT)
 	diorama.loading_progress.connect(_on_diorama_loading)
 	diorama.diorama_ready.connect(_on_diorama_ready)
 	diorama.rebuild_started.connect(_on_diorama_rebuild_started)
@@ -149,6 +150,12 @@ func _show_whats_new() -> void:
 		add_child(_whats_new)
 		MenuDialog.attach_scrim(_whats_new)
 	_whats_new.open()
+
+
+## The menu arrives once the backdrop has put its first frame up; tests mounting the menu stay still.
+func _on_first_frame_rendered() -> void:
+	if get_tree().current_scene == self:
+		view.play_arrival()
 
 
 ## The boot splash is the house sheet colour: a full-screen cover of that colour stands between the backdrop and
@@ -717,7 +724,8 @@ func _show_join_popup() -> void:
 	content.add_child(NetDialog.label("Invitation code:"))
 	_join_code_input = NetDialog.line_edit("", "ABC-123")
 	_join_code_input.max_length = 7  # 6 chars + optional hyphen
-	_join_code_input.add_theme_font_size_override("font_size", 24)
+	_join_code_input.add_theme_font_override("font", load(HouseStyle.FONT_MONO_PATH) as Font)
+	_join_code_input.add_theme_font_size_override("font_size", 30)
 	_join_code_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(_join_code_input)
 	_join_popup.register_text_enter(_join_code_input)  # Enter in the code field = Join
@@ -729,7 +737,11 @@ func _show_join_popup() -> void:
 	_join_error_label.visible = false
 	content.add_child(_join_error_label)
 	# Editing the code is the fix for the message, so the message must not outlive the edit.
-	_join_code_input.text_changed.connect(func(_new_text: String) -> void:
+	_join_code_input.text_changed.connect(func(new_text: String) -> void:
+		var typed := NetDialog.code_as_typed(new_text)
+		if typed != new_text:
+			_join_code_input.text = typed
+			_join_code_input.caret_column = typed.length()
 		_join_error_label.visible = false)
 	_join_relay_url_input = NetDialog.advanced_relay(content, InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 
