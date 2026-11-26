@@ -118,3 +118,83 @@ fn a_picked_unit_gets_the_banner_while_its_bearer_lives() {
     assert!(banner_test(S4A, None, Some((false, true)), None).is_empty(), "the enemy's Banner lends nothing");
     assert!(banner_test(S4A - 1, None, Some((true, true)), None).is_empty(), "old leg: no picks");
 }
+
+/// `picks_line`'s "a" (unit 0) carries a Musician that picked "ah" (unit 1); `bearer` alive or killed. Advance and Rush
+/// allowance of every unit at `epoch`, and the names that widened them.
+fn musician_allowance(epoch: u32, bearer: bool) -> Vec<(f64, f64, Vec<String>)> {
+    let mut st = picks_line("aofs", &["Musician"], None);
+    let mut list = st.profiles.list.clone();
+    list[0].command_picks = vec!["ah".into(), "b".into()]; // "b" is the enemy: no pick
+    st.profiles = Rc::new(Profiles { list, index: HashMap::new() });
+    st.cmd_bearer = vec![Some(0), None, None, None];
+    if !bearer {
+        st.kit_remove(0, 0);
+    }
+    st.bands = vec![Bands { advance: 6.0, rush: 12.0, charge: None }; 4];
+    let statics: Vec<UnitStatic> = ["A", "Ah", "B", "Bh"].iter().map(|n| UnitStatic { name: (*n).into(), ..Default::default() }).collect();
+    let seams = Seams { rules_epoch: epoch, ..Seams::default() };
+    (0..3).map(|u| {
+        let a = crate::activation::allowance(&statics, &st, u, seams, &crate::terrain::Terrain::default());
+        (a.advance, a.rush, a.widened_by)
+    }).collect()
+}
+
+/// Ruling D17 for the Musician (E15-03): the pick moves +1 in on move actions while the bearer lives and the allowance
+/// names it; a killed bearer takes the own unit's recorded inch back and lends the pick nothing; the enemy is never a pick;
+/// below the placeholder every band is the recorded one.
+#[test]
+fn the_musician_inch_lives_with_its_bearer() {
+    let m = vec!["Musician".to_string()];
+    assert_eq!(musician_allowance(S4A, true), [(6.0, 12.0, vec![]), (7.0, 13.0, m.clone()), (6.0, 12.0, vec![])]);
+    assert_eq!(musician_allowance(S4A, false), [(5.0, 11.0, vec![]), (6.0, 12.0, vec![]), (6.0, 12.0, vec![])]);
+    assert_eq!(musician_allowance(S4A - 1, false), [(6.0, 12.0, vec![]), (6.0, 12.0, vec![]), (6.0, 12.0, vec![])], "old leg");
+}
+
+/// Each change says so on the move: the inch given to the pick, the one a killed bearer takes back, and the pick's loss.
+#[test]
+fn the_musician_says_what_it_gives_and_takes() {
+    let mut st = picks_line("aofs", &["Musician"], None);
+    let mut list = st.profiles.list.clone();
+    list[0].command_picks = vec!["ah".into()];
+    st.profiles = Rc::new(Profiles { list, index: HashMap::new() });
+    st.cmd_bearer = vec![Some(0), None, None, None];
+    let statics: Vec<UnitStatic> = ["A", "Ah", "B", "Bh"].iter().map(|n| UnitStatic { name: (*n).into(), ..Default::default() }).collect();
+    assert_eq!(crate::sim::command_musician_in(&statics, &st, 1, ADVANCE, S4A),
+        (1.0, Some("Musician (from A, the last model carries it - no per-model data): Ah moves +1\"".into())));
+    assert_eq!(crate::sim::command_musician_in(&statics, &st, 0, RUSH, S4A), (0.0, None), "the own inch is already in the bands");
+    assert_eq!(crate::sim::command_musician_in(&statics, &st, 1, HOLD, S4A), (0.0, None), "Hold is no move action");
+    st.kit_remove(0, 0);
+    assert_eq!(crate::sim::command_musician_in(&statics, &st, 0, CHARGE, S4A),
+        (-1.0, Some("Musician: A's bearer (the last model carries it - no per-model data) is dead - no +1\" move".into())));
+    assert_eq!(crate::sim::command_musician_in(&statics, &st, 1, ADVANCE, S4A),
+        (0.0, Some("Musician (from A): its bearer is dead - Ah gets no +1\" move".into())));
+}
+
+/// The real charge spends the same band: a Musician whose bearer is dead falls 1 in short of a charge the recorded band
+/// reaches (no melee is fought), and the move log says why.
+#[test]
+fn a_dead_musician_bearer_shortens_the_charge() {
+    let (mut st, statics) = vr_charge_line(11.5);
+    let mut list = st.profiles.list.clone();
+    for p in &mut list {
+        p.game_system = "aofs".into();
+    }
+    list[0].special_rules = vec!["Musician".into()];
+    st.profiles = Rc::new(Profiles { list, index: HashMap::new() });
+    st.cmd_bearer = vec![None, None];
+    let charge = vr_charge();
+    let run = |epoch| {
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        resolve_stochastic_tray_on_board(&statics, &st, &charge, &small_board(),
+            Seams { rules_epoch: epoch, movement: true, ..Seams::default() }, &mut rng, &mut tray).unwrap()
+    };
+    let fought = |log: &[String]| log.iter().any(|l| l.starts_with("[Melee result]"));
+    let (_, old_log) = run(S4A - 1);
+    assert!(fought(&old_log.log), "the recorded 12 in band reaches 11.5 in: {:?}", old_log.log);
+    assert!(old_log.log.iter().all(|l| !l.starts_with("Musician")));
+    let (_, new_log) = run(S4A);
+    assert!(!fought(&new_log.log), "11 in falls short: {:?}", new_log.log);
+    assert!(new_log.log.iter().any(|l| l == "Musician: Charger's bearer (the last model carries it - no per-model data) is dead - no +1\" move"),
+        "{:?}", new_log.log);
+}

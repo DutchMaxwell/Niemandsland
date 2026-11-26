@@ -1086,8 +1086,9 @@ pub const CURRENT_RULES_EPOCH: u32 = 101;
 pub const PENDING_EPOCH_CASUALTY_CHAIN: u32 = 102;
 /// PENDING (the AoF: Skirmish book, step S4a, ruling D17): a command group's Banner (+1 to morale test rolls that shooting or
 /// melee caused) reaches the units its profile picked (`Profile::command_picks`) while its bearer (`State::cmd_bearer`) lives,
-/// and its own unit and the picks lose it when the bearer is killed. A placeholder one past `PENDING_EPOCH_CASUALTY_CHAIN`.
-/// Records stamped 102 or below replay byte-exact. Read only by `sim.rs` (`command_banner`, in the rolled morale test).
+/// and its own unit and the picks lose it when the bearer is killed; the Musician's +1 in on move actions the same way (step
+/// S4b). A placeholder one past `PENDING_EPOCH_CASUALTY_CHAIN`. Records stamped 102 or below replay byte-exact. Read only by
+/// `sim.rs` (`command_banner` in the rolled morale test, `command_musician_in` in the move band).
 pub const PENDING_EPOCH_COMMAND_BANNER: u32 = 103;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
