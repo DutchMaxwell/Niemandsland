@@ -616,7 +616,7 @@ static func wire_surfaces(material: ShaderMaterial, lib: TiefwerkLibrary) -> boo
 	return true
 
 
-## The bases' ground (ticket BASE-GROUND): the board's surfaces baked from above, handed to the table's shared base-top material. Once per
+## The bases' ground: the board's surfaces baked from above, handed to the table's shared base-top material. Once per
 ## frame at most; a later look change (detail, the Tiefwerk sets) bakes again.
 func _queue_ground_bake() -> void:
 	if not _bake_queued and _surfaces != null:

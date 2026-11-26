@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Ticket BASE-GROUND: a model on a generated board stood on a disc of the BIOME ground (a base on cobbles showed grass). The board bakes its own
+## A model on a generated board stood on a disc of the BIOME ground (a base on cobbles showed grass). The board bakes its own
 ## surfaces from above (BoardgenGroundBake) and hands the texture to the table's shared base-top material; both base-top shaders sample it by
 ## world xz; the board leaving hands the bases back to the biome.
 

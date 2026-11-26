@@ -1,6 +1,6 @@
 class_name BoardgenGroundBake
 extends RefCounted
-## The ground a model's base shows on a generated board (ticket BASE-GROUND): the board's own surfaces drawn ONCE from straight above
+## The ground a model's base shows on a generated board: the board's own surfaces drawn ONCE from straight above
 ## (orthographic, unshaded = albedo only) into a texture that the shared base-top material samples by world xz (Table.set_board_ground,
 ## shaders/base_board_ground.gdshaderinc). The top-most surface is what a base stands on: the street, the earth, a wall walk, a tier top.
 

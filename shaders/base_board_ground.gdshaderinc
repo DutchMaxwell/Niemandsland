@@ -1,4 +1,4 @@
-// The ground of a GENERATED BOARD under a model's base (ticket BASE-GROUND): a one-time top-down albedo bake of the board's own
+// The ground of a GENERATED BOARD under a model's base: a one-time top-down albedo bake of the board's own
 // surfaces (scripts/boardgen_ground_bake.gd), pushed by Table.set_board_ground(). Shared by both base-top shaders. has_board false
 // (no board on the table) leaves every base exactly as before.
 uniform sampler2D board_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_disable;

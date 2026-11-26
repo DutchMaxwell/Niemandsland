@@ -348,7 +348,7 @@ func get_base_top_material() -> ShaderMaterial:
 	return _base_top_material
 
 
-## A generated board's own ground under every base (ticket BASE-GROUND): `albedo` is the board's top-down bake (BoardgenGroundBake), `rect` its
+## A generated board's own ground under every base: `albedo` is the board's top-down bake (BoardgenGroundBake), `rect` its
 ## world xz in metres. A null texture or an empty rect hands the bases back to the biome ground.
 func set_board_ground(albedo: Texture2D, rect: Rect2) -> void:
 	var mat := get_base_top_material()
