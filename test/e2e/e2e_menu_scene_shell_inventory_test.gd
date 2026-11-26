@@ -348,3 +348,17 @@ func test_continue_card_shows_two_mono_lines_with_the_facts() -> void:
 	_view.set_save({"name": "plain", "modified_unix": 1727000000})
 	assert_bool(lines[0].visible).is_false()
 	assert_bool(lines[1].visible).is_false()
+
+
+func test_continue_card_shows_the_biome_picture_when_the_biome_is_known() -> void:
+	var picture: Variant = _view.get("save_picture")
+	assert_bool(picture is TextureRect).override_failure_message("the card has no picture").is_true()
+	if picture is not TextureRect:
+		return
+	_view.set_save(SaveManager.latest_save_info(CARD_FIXTURES))
+	assert_bool(picture.visible).is_true()
+	assert_object(picture.texture).is_not_null()
+	assert_vector(picture.custom_minimum_size).is_equal(Vector2(150, 112))
+	_view.set_save({"name": "odd", "modified_unix": 1727000000, "biome": "no_such_biome"})
+	assert_bool(picture.visible).is_false()
+
