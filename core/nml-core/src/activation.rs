@@ -9,7 +9,6 @@ use crate::io::{Action, Seams, SplitShot};
 use crate::landing::Landing;
 use crate::logline::{Category, LogLine};
 use crate::mods::LiveMod;
-use crate::mv::cost::LEDGE_CLIMB_MAX_IN;
 use crate::mv::step::{leg_crosses, DIFFICULT_MOVE_CAP_IN};
 use crate::mv::tier::{tier_crossings, TierKind};
 use crate::rng::GodotRng;
@@ -269,7 +268,10 @@ pub fn placed_chain_len(state: &State, si: usize) -> usize {
 /// when the tier level changes on it with no ladder. A flat board has no edges and no levels: `Some(0.0)`. With `jumps`
 /// (the skirmish Jumping rule) a drop over 3 in and up to 6 in is a jump: it is listed in the second field and its height
 /// is not counted in the first.
-fn cliff_drop_in(terrain: &Terrain, path: &[[f64; 2]], drops: bool, jumps: bool) -> Option<(f64, Vec<Jump>)> {
+///
+/// Plan step 27-pre-R R2: `floor_y` (the walker's start height, world metres; `Some` from `PENDING_EPOCH_RUIN_LEDGES`) adds
+/// the drops off a free ruin's floors (`Terrain::slab_drops`) to the same walk-ordered edges, so every band above applies.
+fn cliff_drop_in(terrain: &Terrain, path: &[[f64; 2]], drops: bool, jumps: bool, floor_y: Option<f64>) -> Option<(f64, Vec<Jump>)> {
     let at = |p: [f64; 2]| [p[0] / terrain.in2m(), p[1] / terrain.in2m()];
     // Every cliff the path takes, in walking order.
     let mut ev: Vec<Edge> = Vec::new();
@@ -288,6 +290,10 @@ fn cliff_drop_in(terrain: &Terrain, path: &[[f64; 2]], drops: bool, jumps: bool)
         }
         walked += len;
     }
+    if let Some(y) = floor_y {
+        ev.extend(terrain.slab_drops(path, y).into_iter().map(|d| Edge { s: d.s, dy: d.dy_in, down: true, at: d.at, dir: d.dir }));
+        ev.sort_by(|a, b| a.s.total_cmp(&b.s));
+    }
     let (mut dropped, mut jumped) = (0.0, Vec::new());
     let mut k = 0;
     while k < ev.len() {
@@ -303,7 +309,9 @@ fn cliff_drop_in(terrain: &Terrain, path: &[[f64; 2]], drops: bool, jumps: bool)
                 continue;
             }
         }
-        if drops && down && dy <= LEDGE_CLIMB_MAX_IN {
+        // the plain-drop band read where the jump band is read (`mv::jump::drop_kind`, with its tolerance): a floor's
+        // 3.00000014 in (float32 heights) is the 3 in drop it was built as, not a cliff (found by the R3 ruin e2e)
+        if drops && down && matches!(crate::mv::jump::drop_kind(dy), crate::mv::jump::JumpKind::Free) {
             dropped += dy;
         } else if let (true, true, crate::mv::jump::JumpKind::Jump { dice }) = (jumps, down, crate::mv::jump::drop_kind(dy)) {
             jumped.push(Jump { dy, dice, gap_in: None, at, dir });
@@ -329,7 +337,10 @@ struct Jump { dy: f64, dice: u32, gap_in: Option<f64>, at: [f64; 2], dir: [f64; 
 /// (its unit's others where `placed` puts them, every other unit where it stands). `None`: no room, the jump is refused.
 fn jump_foot(state: &State, si: usize, m: usize, terrain: &Terrain, placed: &[[f64; 3]], j: &Jump) -> Option<[f64; 3]> {
     let (r, i2m) = (state.radii[si][m], terrain.in2m());
-    let high = terrain.tier_in_at(j.at[0] / i2m - j.dir[0] * 0.01, j.at[1] / i2m - j.dir[1] * 0.01);
+    // the height the model drops from: the tier behind the edge, or - off a ruin's floor (27-pre-R), where the tier grid is
+    // flat - the ground past the edge plus the drop; on a tier cliff both are the same height
+    let past = terrain.tier_in_at(j.at[0] / i2m + j.dir[0] * 0.01, j.at[1] / i2m + j.dir[1] * 0.01);
+    let high = terrain.tier_in_at(j.at[0] / i2m - j.dir[0] * 0.01, j.at[1] / i2m - j.dir[1] * 0.01).max(past + j.dy);
     let clear = |p: [f64; 2], q: [f64; 3], rq: f64| (p[0] - q[0]).hypot(p[1] - q[2]) >= r + rq - 1e-6;
     (0..=40).map(|k| r + 0.01 * i2m + k as f64 * 0.05 * i2m).take_while(|&d| d <= 2.0 * i2m + 1e-9).find_map(|d| {
         let p = [j.at[0] + j.dir[0] * d, j.at[1] + j.dir[1] * d];
@@ -349,6 +360,12 @@ fn jump_dice_for(state: &State, si: usize, jumps: &[Jump]) -> u32 {
 }
 
 /// Whether the skirmish Jumping rule holds for unit `si` at this epoch (the books that print drops).
+/// Plan step 27-pre-R R2: the walker's height for the ruin-floor ledges (`cliff_drop_in`'s `floor_y`), from
+/// `PENDING_EPOCH_RUIN_LEDGES` on; `None` below it, so a record before it replays without them.
+fn ruin_floor_y(seams: Seams, at: &[f64; 3]) -> Option<f64> {
+    rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_RUIN_LEDGES).then_some(at[1])
+}
+
 fn jumps_on(state: &State, si: usize, seams: Seams) -> bool {
     state.book(si).vertical_moves && rule_on(seams.rules_epoch, crate::acts::EPOCH_100_SKIRMISH_JUMP)
 }
@@ -362,7 +379,7 @@ pub fn jump_dice_of(state: &State, si: usize, seams: Seams, terrain: &Terrain, d
     }
     state.positions[si].iter().zip(&drop.placed).enumerate().filter_map(|(i, (a, b))| {
         let path = walked_path([a[0], a[2]], [b[0], b[2]], drop.trails.get(i).filter(|t| t.len() >= 2));
-        let jumps = cliff_drop_in(terrain, &path, true, true)?.1;
+        let jumps = cliff_drop_in(terrain, &path, true, true, ruin_floor_y(seams, a))?.1;
         let dice = jump_dice_for(state, si, &jumps);
         let foot = jump_foot(state, si, i, terrain, &drop.placed, jumps.first()?)?;
         (dice > 0).then(|| (i, dice, jumps.iter().map(|j| j.dy).sum(), foot))
@@ -457,7 +474,8 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
         }
         // Heightfield plan steps 13 / 13b (`EPOCH_94_PARITY_BATCH`): the AI planner never walks a cliff, a placed move is stopped
         // the same way unless it is a drop the book allows, which pays its height. A Flying unit ignores the edges.
-        let drop_in = match (rule_on(seams.rules_epoch, EPOCH_94_PARITY_BATCH) && !flying).then(|| cliff_drop_in(terrain, &path, state.book(si).vertical_moves, jumps_on(state, si, seams))) {
+        let drop_in = match (rule_on(seams.rules_epoch, EPOCH_94_PARITY_BATCH) && !flying).then(|| cliff_drop_in(terrain, &path, state.book(si).vertical_moves, jumps_on(state, si, seams),
+            ruin_floor_y(seams, &state.positions[si][i]))) {
             Some(None) => return Check::Refused { reason: format!("{}: cliff: no ladder here", statics[state.roster.profile[si]].name) },
             Some(Some((d, jumps))) => {
                 // Jumping (3.6 skirmish p.15): one line per jumping model; the jump's height is not counted toward the move.
@@ -4426,3 +4444,86 @@ mod tests {
 #[cfg(test)]
 #[path = "tests/activation_skirmish_vertical.rs"]
 mod skirmish_vertical_tests;
+
+#[cfg(test)]
+mod ruin_ledge_tests {
+    use super::*;
+    use crate::terrain::{CellParams, Obb, PlainTerrain, Slab, TierGrid};
+    const I: f64 = crate::IN2M;
+
+    /// A 2 x 1 board of 3 in cells, board-centred: cell 0 (x in -3..0 in) and cell 1 (0..3 in). `tier` raises cell 0 to
+    /// `h`; else cell 0 carries a free ruin's floor `h` up.
+    fn board(h: f64, tier: bool) -> Terrain {
+        let slab = Slab { c: [-1.5 * I, 0.0], he: [1.5 * I, 1.5 * I], yaw: 0.0, y0: h * I - 0.01, y1: h * I };
+        Terrain::build(&PlainTerrain {
+            cell_params: CellParams { table_size_feet: [0.5, 0.25], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: I },
+            tiers: Some(TierGrid { nx: 2, nz: 1, cell_in: 3.0, level_in: if tier { vec![h, 0.0] } else { vec![0.0, 0.0] }, ladders: vec![], stairs: vec![] }),
+            sandbox: if tier { vec![] } else { vec![Obb { c: slab.c, he: slab.he, yaw: 0.0, kind: 0, slabs: vec![slab] }] },
+            ..Default::default()
+        })
+    }
+
+    /// What `cliff_drop_in` makes of a skirmish walk from cell 0 to cell 1: the height dropped as movement, and each jump's
+    /// (height, dice) - `None` when it refuses.
+    fn walk(t: &Terrain, h: f64, floor: bool) -> Option<(f64, Vec<(f64, u32)>)> {
+        cliff_drop_in(t, &[[-1.5 * I, 0.0], [1.5 * I, 0.0]], true, true, floor.then_some(h * I))
+            .map(|(d, j)| ((d * 1000.0).round() / 1000.0, j.iter().map(|x| ((x.dy * 1000.0).round() / 1000.0, x.dice)).collect()))
+    }
+
+    /// Lead 26.11.: no restated thresholds - the same drop off a tier cliff and off a ruin floor ends the same way at
+    /// 3.5, 4, 6 and 6.5 in (and at 2 in, a plain drop), because both are edges of one walk.
+    #[test]
+    fn a_ruin_floor_drops_like_a_tier_cliff() {
+        for h in [2.0, 3.5, 4.0, 6.0, 6.5] {
+            assert_eq!(walk(&board(h, false), h, true), walk(&board(h, true), h, false), "{h} in");
+        }
+        assert!(walk(&board(6.5, true), 6.5, false).is_none(), "over 6 in: refused on both");
+        assert_eq!(walk(&board(4.0, true), 4.0, false).map(|w| w.1.len()), Some(1), "4 in: a jump on both");
+    }
+
+    /// The old leg: below `PENDING_EPOCH_RUIN_LEDGES` the walker's height is not read, so a ruin floor is no ledge (as every
+    /// record before it played); from it, it is.
+    #[test]
+    fn ruin_ledges_ride_their_epoch() {
+        let e = crate::acts::PENDING_EPOCH_RUIN_LEDGES;
+        assert!(!rule_on(crate::acts::CURRENT_RULES_EPOCH, e), "a placeholder no record has played");
+        let seams = |epoch: u32| Seams { rules_epoch: epoch, ..Seams::default() };
+        assert_eq!(ruin_floor_y(seams(e - 1), &[0.0, 0.1, 0.0]), None);
+        assert_eq!(ruin_floor_y(seams(e), &[0.0, 0.1, 0.0]), Some(0.1));
+        let t = board(4.0, false);
+        let path = [[-1.5 * I, 0.0], [1.5 * I, 0.0]];
+        assert_eq!(cliff_drop_in(&t, &path, true, true, ruin_floor_y(seams(e - 1), &[0.0, 4.0 * I, 0.0])).map(|r| r.1.len()), Some(0));
+        assert_eq!(cliff_drop_in(&t, &path, true, true, ruin_floor_y(seams(e), &[0.0, 4.0 * I, 0.0])).map(|r| r.1.len()), Some(1));
+    }
+}
+
+#[cfg(test)]
+mod ruin_floor_geometry_tests {
+    use super::*;
+    use crate::terrain::{CellParams, Obb, PlainTerrain, Slab};
+
+    /// The three-storey sandbox ruin as the table hands it (`ruin_large_3f` at the origin, read off a real e2e): two 3 in
+    /// arms and two 6 in arms, heights as float32 metres.
+    fn ruin() -> Terrain {
+        let s = |c: [f64; 2], he: [f64; 2], y0: f64, y1: f64| Slab { c, he, yaw: 0.0, y0, y1 };
+        let (lo, hi) = (f64::from(0.0762f32), f64::from(0.1524f32));
+        let slabs = vec![s([-0.0381, -0.04445], [0.0762, 0.03175], lo - 0.01, lo), s([-0.08255, -0.0254], [0.03175, 0.0508], lo - 0.01, lo),
+            s([-0.075438, -0.04445], [0.038862, 0.03175], hi - 0.01, hi), s([-0.08255, -0.050292], [0.03175, 0.025908], hi - 0.01, hi)];
+        Terrain::build(&PlainTerrain {
+            cell_params: CellParams { table_size_feet: [4.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 1.0, inches_to_meters: crate::IN2M },
+            sandbox: vec![Obb { c: [0.0, 0.0], he: [0.1143, 0.0762], yaw: 0.0, kind: 1, slabs }],
+            ..Default::default()
+        })
+    }
+
+    /// Off the top floor over the 3 in floor: two plain 3 in drops (float32 puts the first at 3.00000014 in - still the
+    /// 3 in drop, not a cliff); off the top floor's other side straight to the ground: one 6 in jump.
+    #[test]
+    fn a_real_ruin_steps_down_floor_by_floor_or_jumps_to_the_ground() {
+        let (t, hi) = (ruin(), f64::from(0.1524f32));
+        let down = |to: [f64; 2]| cliff_drop_in(&t, &[[-0.075438, -0.04445], to], true, true, Some(hi))
+            .map(|(d, j)| ((d * 1000.0).round() / 1000.0, j.len()));
+        assert_eq!(down([-0.075438, 0.0635]), Some((6.0, 0)), "two plain drops, 3 in each");
+        assert_eq!(down([-0.075438, -0.1270]), Some((0.0, 1)), "one 6 in jump");
+    }
+}
