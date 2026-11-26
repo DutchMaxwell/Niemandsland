@@ -944,11 +944,40 @@ static func latest_save_info(dir_path: String = "") -> Dictionary:
 			best_path = path
 	if best_path.is_empty():
 		return {}
-	return {
+	var info := {
 		"path": best_path,
 		"name": best_path.get_file().get_basename(),
 		"modified_unix": best_time,
 	}
+	info.merge(save_facts(best_path))
+	return info
+
+
+## What the menu's Continue card tells about a save, read from its plain JSON: { "system", "round", "biome",
+## "size_feet" }, each only when the save holds it. A file above `max_bytes` or one that does not parse
+## leaves them all out.
+static func save_facts(path: String, max_bytes: int = 8 * 1024 * 1024) -> Dictionary:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null or file.get_length() > max_bytes:
+		return {}
+	var state: Variant = JSON.parse_string(file.get_as_text())
+	if state is not Dictionary:
+		return {}
+	var facts := {}
+	var game_state: Variant = state.get("game_state", {})
+	if game_state is Dictionary:
+		if not str(game_state.get("game_system", "")).is_empty():
+			facts["system"] = str(game_state["game_system"])
+		if game_state.has("current_round"):
+			facts["round"] = int(game_state["current_round"])
+	var table: Variant = state.get("table", {})
+	if table is Dictionary:
+		if not str(table.get("biome", "")).is_empty():
+			facts["biome"] = str(table["biome"])
+		var size: Variant = table.get("size_feet", [])
+		if size is Array and size.size() == 2:
+			facts["size_feet"] = [float(size[0]), float(size[1])]
+	return facts
 
 
 # ===== GameUnit Deserialization =====

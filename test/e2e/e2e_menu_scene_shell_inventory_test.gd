@@ -310,3 +310,41 @@ func test_settings_is_the_fifth_row_of_the_list_after_learn() -> void:
 	var order: Array = _view.main_buttons().map(func(b: Control) -> String: return String(b.name))
 	assert_int(order.find("SettingsBtn")).is_equal(order.find("LearnBtn") + 1)
 
+
+const CARD_FIXTURES := "res://test/fixtures/continue_card"
+
+
+## The Continue card named only the save and its date. RED on main: the lookup has no facts.
+func test_latest_save_info_carries_the_facts_of_the_save() -> void:
+	var info := SaveManager.latest_save_info(CARD_FIXTURES)
+	assert_str(str(info.get("name", ""))).is_equal("save_with_facts")
+	assert_str(str(info.get("system", ""))).is_equal("gf")
+	assert_int(int(info.get("round", 0))).is_equal(3)
+	assert_str(str(info.get("biome", ""))).is_equal("temperate_grassland")
+	assert_array(info.get("size_feet", [])).is_equal([6.0, 4.0])
+
+
+func test_save_facts_are_left_out_of_a_file_that_is_too_large_or_broken() -> void:
+	var manager: GDScript = load("res://scripts/save_manager.gd")
+	assert_bool(manager.has_method("save_facts")).override_failure_message("no save_facts").is_true()
+	if not manager.has_method("save_facts"):
+		return
+	var path := CARD_FIXTURES.path_join("save_with_facts.nml")
+	assert_dict(manager.call("save_facts", path, 10)).is_empty()
+	var broken := "user://broken_continue_card.nml"
+	FileAccess.open(broken, FileAccess.WRITE).store_string("{ not json")
+	assert_dict(manager.call("save_facts", broken)).is_empty()
+	DirAccess.remove_absolute(broken)
+
+
+func test_continue_card_shows_two_mono_lines_with_the_facts() -> void:
+	var lines: Variant = _view.get("save_facts")
+	assert_bool(lines is Array).override_failure_message("the card has no fact lines").is_true()
+	if lines is not Array:
+		return
+	_view.set_save(SaveManager.latest_save_info(CARD_FIXTURES))
+	assert_str(lines[0].text).is_equal("GRIMDARK FUTURE · ROUND 3")
+	assert_str(lines[1].text).is_equal("GRASSLAND · 6 x 4 FT")
+	_view.set_save({"name": "plain", "modified_unix": 1727000000})
+	assert_bool(lines[0].visible).is_false()
+	assert_bool(lines[1].visible).is_false()
