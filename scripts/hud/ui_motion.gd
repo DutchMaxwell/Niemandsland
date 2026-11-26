@@ -8,6 +8,9 @@ extends RefCounted
 
 const T := preload("res://scripts/hud/hud_tokens.gd")
 const META_TWEEN := "_ui_motion_tw"
+## A control with this meta answers the pointer with its own fill and tick, never with a scale: a row that
+## draws its own text turns soft when scaled, and a focused row stays soft.
+const META_FLAT := "ui_motion_flat"
 
 
 ## True when motion should be suppressed. Reads the GraphicsSettings autoload if present
@@ -40,7 +43,7 @@ static func attach_button(c: Control) -> void:
 
 
 static func _scale_to(c: Control, s: float, dur: float) -> void:
-	if not is_instance_valid(c) or not c.is_inside_tree():
+	if not is_instance_valid(c) or not c.is_inside_tree() or c.has_meta(META_FLAT):
 		return
 	if c is BaseButton and (c as BaseButton).disabled:
 		return
@@ -55,7 +58,7 @@ static func _scale_to(c: Control, s: float, dur: float) -> void:
 
 
 static func _punch(c: Control) -> void:
-	if not is_instance_valid(c) or not c.is_inside_tree():
+	if not is_instance_valid(c) or not c.is_inside_tree() or c.has_meta(META_FLAT):
 		return
 	c.pivot_offset = c.size * 0.5
 	_kill(c)
