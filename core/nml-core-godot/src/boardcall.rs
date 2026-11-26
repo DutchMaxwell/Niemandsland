@@ -34,9 +34,40 @@ pub fn layout_value_themed(seed: i64, theme: &str) -> Value {
     v
 }
 
+/// Plan step 27-pre P1: the ledges the core plays on for the board of `seed` / `theme` - the `tiers` (per-cell height in
+/// inches, ladders) and the `solid_cells` of `boardgen::plain::to_plain`, the same conversion every selfplay board takes,
+/// for the table to put into the terrain line it hands the core. The same layout as [`layout_value_themed`] draws.
+pub fn tiers_value_themed(seed: i64, theme: &str) -> Value {
+    let layout = boardgen::generate_themed(seed, Symmetry::Point180, theme_of(theme).unwrap_or_default());
+    let plain = boardgen::plain::to_plain(&layout);
+    json!({ "tiers": plain.tiers, "solid_cells": plain.solid_cells })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 27-pre P1: the binding's ledges are `to_plain`'s for both themes, and each cell's height is the level the drawn
+    /// layout gives that cell (a ground cell 0, a raised one its LEVEL_IN step), so the core's board is the one on the table.
+    #[test]
+    fn the_tiers_are_the_drawn_layouts_own() {
+        for (seed, theme) in [(7, ""), (42, "ruintown")] {
+            let v = tiers_value_themed(seed, theme);
+            let layout = boardgen::generate_themed(seed, Symmetry::Point180, theme_of(theme).unwrap());
+            let want = boardgen::plain::to_plain(&layout);
+            assert_eq!(v["tiers"], serde_json::to_value(&want.tiers).unwrap(), "seed {seed} {theme}");
+            assert_eq!(v["solid_cells"], serde_json::to_value(&want.solid_cells).unwrap());
+            let drawn = layout_value_themed(seed, theme);
+            let heights = v["tiers"]["level_in"].as_array().unwrap();
+            assert_eq!(heights.len(), drawn["cells"].as_array().unwrap().len());
+            let plain_cells = drawn["cells"].as_array().unwrap().iter().zip(heights)
+                .filter(|(c, _)| matches!(c["lot_kind"].as_str(), Some(k) if k != "Roofed" && k != "Tower"));
+            for (c, h) in plain_cells {
+                assert_eq!(h.as_f64().unwrap(), f64::from(LEVEL_IN[c["level"].as_u64().unwrap() as usize]), "seed {seed} {theme}");
+            }
+            assert!(heights.iter().any(|h| h.as_f64().unwrap() > 0.0), "a board with ledges");
+        }
+    }
 
     #[test]
     fn layout_is_a_full_board_with_heights_and_no_problems() {
