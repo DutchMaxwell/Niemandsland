@@ -230,7 +230,7 @@ func test_update_prompt_keeps_its_headline_versions_notes_skip_and_buttons() -> 
 
 
 func _wears_house_chrome(d: AcceptDialog) -> bool:
-	return d.theme == HouseStyle.theme() and d.get_ok_button().theme_type_variation == HouseStyle.PRIMARY
+	return d.theme == HouseStyle.menu_theme() and d.get_ok_button().theme_type_variation == HouseStyle.PRIMARY
 
 
 ## One title: the window has no frame of its own, its title stands as the first row of its content.
@@ -278,6 +278,32 @@ func test_dialog_buttons_stand_at_action_height() -> void:
 	var ok := credits.get_ok_button().size
 	assert_float(ok.y).override_failure_message("OK button is %s px tall" % ok.y).is_greater_equal(float(HouseStyle.H_ACTION))
 	assert_float(ok.x).override_failure_message("OK button is %s px wide" % ok.x).is_greater_equal(120.0)
+
+
+## The menu's windows are drawn at the menu's type scale (sheet 08): 18 px text, 16 px actions 44 px high; the table's
+## windows keep 14 / 15 / 40 (red on main: one scale for both).
+func test_menu_windows_stand_at_the_menus_type_scale() -> void:
+	_menu._on_credits_pressed()
+	_menu._on_exit_pressed()
+	await _frames(3)
+	var quit: PromptCard = _menu._exit_card
+	var text: Label = null
+	for l: Node in quit.find_children("*", "Label", true, false):
+		if (l as Label).text.begins_with("Are you sure"):
+			text = l as Label
+	assert_object(text).is_not_null()
+	if text == null:
+		return
+	assert_int(text.get_theme_font_size(&"font_size")).override_failure_message("quit text is %d px" % text.get_theme_font_size(&"font_size")).is_equal(HouseStyle.MENU_FONT_BODY)
+	assert_int(quit.ok_button.get_theme_font_size(&"font_size")).is_equal(HouseStyle.MENU_FONT_ACTION)
+	assert_float(quit.ok_button.size.y).is_greater_equal(float(HouseStyle.MENU_H_ACTION))
+	var credits := _dialog_titled("Credits & licenses") as AcceptDialog
+	assert_object(credits.theme).is_same(HouseStyle.menu_theme())
+	var at_table := AcceptDialog.new()
+	MenuDialog.style(at_table, false, true)
+	assert_object(at_table.theme).is_same(HouseStyle.theme())
+	at_table.free()
+	quit.cancel_button.pressed.emit()   # never press Quit: it ends the test run
 
 
 func test_dialogs_define_no_colour_literals() -> void:

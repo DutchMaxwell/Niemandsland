@@ -7,8 +7,11 @@ extends RefCounted
 # === Public (static) ===
 
 
-## Builds the framed AcceptDialog. Caller fills the content via content().
-static func build(title_text: String, index: String, ok_text: String) -> AcceptDialog:
+## Builds the framed AcceptDialog. Caller fills the content via content(). The table's callers pass `at_table`:
+## their window keeps the table's type scale, the menu's wears the menu's.
+static func build(
+	title_text: String, index: String, ok_text: String, at_table: bool = false
+) -> AcceptDialog:
 	var dialog := AcceptDialog.new()
 	dialog.title = title_text.capitalize()
 	dialog.ok_button_text = ok_text
@@ -24,7 +27,7 @@ static func build(title_text: String, index: String, ok_text: String) -> AcceptD
 	vbox.add_child(head)
 	dialog.add_child(vbox)
 	# Styled when it opens: the caller has added every field by then.
-	dialog.about_to_popup.connect(func() -> void: MenuDialog.style(dialog))
+	dialog.about_to_popup.connect(func() -> void: MenuDialog.style(dialog, false, at_table))
 	return dialog
 
 

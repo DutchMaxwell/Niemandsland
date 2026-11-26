@@ -33,6 +33,7 @@ var _pages: Dictionary = {}          # page name -> its content box
 var _page_buttons: Dictionary = {}   # page name -> its rail button
 var _page_shown := ""
 var _reset_button: Button = null
+var _modal := false   # in the menu (set_modal(true)): the menu's scale and a scrim
 ## Accessibility preset (GH #1634): the Calm toggle plus the individual switches it
 ## forces, kept in sync so the panel never shows a stale state.
 var _calm_cb: CheckButton = null
@@ -537,7 +538,9 @@ func _on_preset_applied(_preset_name: String) -> void:
 ## Modal with the scrim (the menu: nothing behind the sheet is tuned by eye) or, as at the table, without a scrim and
 ## letting the clicks through (the lighting is tuned by eye there).
 func set_modal(on: bool) -> void:
+	_modal = on
 	var root := get_child(0) as Control
+	root.theme = HouseStyle.menu_theme() if on else HouseStyle.theme()
 	root.mouse_filter = Control.MOUSE_FILTER_STOP if on else Control.MOUSE_FILTER_IGNORE
 	(root.get_node("Scrim") as ColorRect).visible = on
 
@@ -560,6 +563,7 @@ func show_page(page_name: String) -> void:
 ## "Reset this page": a prompt card first, then reset_page.
 func _ask_reset(page_name: String) -> void:
 	var card := PromptCard.new("Reset %s?" % page_name, "Puts the settings of this page back to how the game ships.", "Reset", "Cancel")
+	card.menu_scale = _modal
 	add_child(card)
 	if await card.answer():
 		reset_page(page_name)

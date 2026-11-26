@@ -24,9 +24,14 @@ var ok_value: Variant = true
 ## 220 ms in, 180 ms out). Off by default, so the questions during play stay instant; Reduce Motion is always
 ## instant.
 var animate := false
+## The menu's cards stand at the menu's scale (HouseStyle.menu_theme, 44 px actions, a 32 px close box). Off by
+## default: the questions during play keep the table's type scale. Set before the card enters the tree.
+var menu_scale := false
 var cancel_value: Variant = false
 var _outcome: Array = []
 var _scrim: ColorRect
+var _title_label: Label
+var _text_label: Label
 
 
 func _init(title_text: String, text: String = "", ok_text: String = "OK", cancel_text: String = "Cancel") -> void:
@@ -51,10 +56,12 @@ func _init(title_text: String, text: String = "", ok_text: String = "OK", cancel
 	box.add_theme_constant_override(&"separation", HouseStyle.GAP_SECTION)
 	card.add_child(box)
 	var header := HouseStyle.panel_header(title_text, true)
-	_wrap(header.get_child(0) as Label, WIDTH - 2 * HouseStyle.PAD_PANEL - HouseStyle.ICON_BUTTON - HouseStyle.GAP_ROW)
+	_title_label = _wrap(header.get_child(0) as Label,
+			WIDTH - 2 * HouseStyle.PAD_PANEL - HouseStyle.ICON_BUTTON - HouseStyle.GAP_ROW)
 	box.add_child(header)
 	if text != "":
-		box.add_child(_wrap(HouseStyle.label(text, HouseStyle.BODY), WIDTH - 2 * HouseStyle.PAD_PANEL))
+		_text_label = _wrap(HouseStyle.label(text, HouseStyle.BODY), WIDTH - 2 * HouseStyle.PAD_PANEL)
+		box.add_child(_text_label)
 	rows = VBoxContainer.new()
 	rows.add_theme_constant_override(&"separation", HouseStyle.GAP_ROW)
 	box.add_child(rows)
@@ -73,8 +80,25 @@ func _init(title_text: String, text: String = "", ok_text: String = "OK", cancel
 
 func _ready() -> void:
 	rows.visible = rows.get_child_count() > 0
+	if menu_scale:
+		_apply_menu_scale()
 	if animate and not UiMotion.reduced():
 		_fade(true)
+
+
+## The menu's scale: the menu theme, 44 px actions, a 32 px close box, and the wrapping floors measured against
+## the wider padding (else the text would force the card wider than WIDTH).
+func _apply_menu_scale() -> void:
+	($Shield as Control).theme = HouseStyle.menu_theme()
+	for b: Button in [ok_button, cancel_button]:
+		if b != null:
+			b.custom_minimum_size.y = HouseStyle.MENU_H_ACTION
+	var close := find_child("CloseButton", true, false) as Control
+	close.custom_minimum_size = Vector2.ONE * HouseStyle.MENU_ICON_BUTTON
+	_title_label.custom_minimum_size.x = \
+			WIDTH - 2 * HouseStyle.MENU_PAD_PANEL - HouseStyle.MENU_ICON_BUTTON - HouseStyle.GAP_ROW
+	if _text_label != null:
+		_text_label.custom_minimum_size.x = WIDTH - 2 * HouseStyle.MENU_PAD_PANEL
 
 
 ## Ends the question with `value`; the first answer wins.

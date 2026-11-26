@@ -139,7 +139,7 @@ func test_all_three_dialogs_wear_the_house_chrome() -> void:
 	_menu._on_browse_online_pressed()
 	await _frames(2)
 	for d: AcceptDialog in [_menu._host_popup, _menu._join_popup, _menu._browse_popup]:
-		assert_object(d.theme).override_failure_message("%s is not in the house theme" % d.title).is_same(HouseStyle.theme())
+		assert_object(d.theme).override_failure_message("%s is not in the house theme" % d.title).is_same(HouseStyle.menu_theme())
 		assert_str(String(d.get_ok_button().theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
 		var head := NetDialog.content(d).get_child(0) as HBoxContainer
 		assert_str(String((head.get_child(0) as Label).theme_type_variation)).is_equal(String(HouseStyle.EYEBROW))

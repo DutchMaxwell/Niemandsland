@@ -220,6 +220,19 @@ func test_panel_is_a_house_style_sheet_that_is_not_modal() -> void:
 	assert_object(root.theme).is_same(HouseStyle.theme())
 
 
+## In the menu the sheet is drawn at the menu's scale, at the table at the table's (red on main: one theme).
+func test_the_modal_sheet_wears_the_menus_scale() -> void:
+	var root := _panel.get_child(0) as Control
+	_panel.hide()
+	_panel.show()
+	_panel.set_modal(true)
+	assert_object(root.theme).is_same(HouseStyle.menu_theme())
+	assert_int(_label("Sun Color").get_theme_font_size(&"font_size")).is_equal(HouseStyle.MENU_FONT_BODY)
+	_panel.set_modal(false)
+	assert_object(root.theme).is_same(HouseStyle.theme())
+	assert_int(_label("Sun Color").get_theme_font_size(&"font_size")).is_equal(HouseStyle.FONT_BODY)
+
+
 func test_controls_wear_the_house_look_once_the_sheet_opens() -> void:
 	_panel.hide()
 	_panel.show()

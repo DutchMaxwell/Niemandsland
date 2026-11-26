@@ -31,6 +31,23 @@ func test_enter_takes_the_button_that_holds_focus() -> void:
 	assert_bool(await card.answer()).is_false()
 
 
+## The menu's cards stand at the menu's type scale, the questions during play keep the table's (red on main: 14 both).
+func test_a_card_without_the_menu_flag_keeps_the_tables_type_scale() -> void:
+	var plain := _card()
+	await get_tree().process_frame
+	var text := plain.find_children("*", "Label", true, false).filter(func(l: Node) -> bool: return (l as Label).text == "Body")[0] as Label
+	assert_int(text.get_theme_font_size(&"font_size")).is_equal(HouseStyle.FONT_BODY)
+	assert_float(plain.ok_button.size.y).is_equal(float(HouseStyle.H_ACTION))
+	var menu: PromptCard = auto_free(PromptCard.new("Title", "Body", "Yes", "No"))
+	menu.menu_scale = true
+	add_child(menu)
+	await get_tree().process_frame
+	var big := menu.find_children("*", "Label", true, false).filter(func(l: Node) -> bool: return (l as Label).text == "Body")[0] as Label
+	assert_int(big.get_theme_font_size(&"font_size")).is_equal(HouseStyle.MENU_FONT_BODY)
+	assert_float(menu.ok_button.size.y).is_equal(float(HouseStyle.MENU_H_ACTION))
+	assert_float((menu.find_child("CloseButton", true, false) as Control).size.x).is_equal(float(HouseStyle.MENU_ICON_BUTTON))
+
+
 func _collect_answer(card: PromptCard, into: Array) -> void:
 	into[0] = await card.answer()
 
