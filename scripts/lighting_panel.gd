@@ -55,6 +55,9 @@ var _columns: HBoxContainer
 var _rail: VBoxContainer
 var _rail_head: VBoxContainer
 var _lab_sep: VBoxContainer
+var _footer: HBoxContainer
+var _footer_note: Label
+var _footer_close: Button
 var _scroll: ScrollContainer
 ## Accessibility preset (GH #1634): the Calm toggle plus the individual switches it
 ## forces, kept in sync so the panel never shows a stale state.
@@ -249,10 +252,35 @@ func _build_ui() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	(root.get_node("Scrim") as ColorRect).visible = false
 	add_child(parts["root"] as Control)
+	# The footer row under the pages: in the menu the note at the left, Reset this page and a gold Close at the right.
+	_footer = HBoxContainer.new()
+	_footer.name = "Footer"
+	_footer.alignment = BoxContainer.ALIGNMENT_END
+	_footer.add_theme_constant_override(&"separation", HouseStyle.GAP_CONTROL)
+	_footer_note = HouseStyle.label("Changes apply at once and are saved.", HouseStyle.CAPTION)
+	_footer_note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_footer_note.visible = false
+	_footer.add_child(_footer_note)
 	_reset_button = HouseStyle.button("Reset this page", HouseStyle.BUTTON)
 	_reset_button.size_flags_horizontal = Control.SIZE_SHRINK_END
 	_reset_button.pressed.connect(func() -> void: _ask_reset(_page_shown))
-	(parts["body"] as VBoxContainer).add_child(_reset_button)
+	_footer.add_child(_reset_button)
+	_footer_close = HouseStyle.button("Close", HouseStyle.PRIMARY, HouseStyle.MENU_H_ACTION)
+	_footer_close.name = "FooterClose"
+	_footer_close.size_flags_horizontal = Control.SIZE_SHRINK_END
+	_footer_close.custom_minimum_size.x = 180
+	_footer_close.visible = false
+	_footer_close.pressed.connect(hide)
+	var cap := HouseStyle.key_cap_on_gold("Esc")
+	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cap.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	cap.grow_vertical = Control.GROW_DIRECTION_BOTH
+	cap.offset_left = -10
+	cap.offset_right = -10
+	_footer_close.add_child(cap)
+	_footer.add_child(_footer_close)
+	(parts["body"] as VBoxContainer).add_child(_footer)
 	show_page(_page_shown)
 	visibility_changed.connect(func() -> void:
 		if visible:
@@ -632,6 +660,8 @@ func _apply_menu_layout() -> void:
 	var close := _header.get_node("CloseButton") as Control
 	close.size_flags_horizontal = (Control.SIZE_SHRINK_END | Control.SIZE_EXPAND) if on else Control.SIZE_SHRINK_END
 	_lab_sep.visible = on
+	_footer_note.visible = on
+	_footer_close.visible = on
 	for page_name: String in PAGES:
 		_style_page_button(_page_buttons[page_name] as Button, page_name)
 	_sync_page_ticks()
