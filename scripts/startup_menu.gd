@@ -165,12 +165,12 @@ func _on_settings_pressed() -> void:
 		_settings.initialize(diorama.get_lighting_controller())
 		var label := Label.new()
 		label.text = "Menu background"
-		_settings._main_vbox.add_child(label)
+		_settings._page("Display").add_child(label)
 		var choices := OptionButton.new()
 		for title in ["Urban ruins","Alien jungle","Grassland","Arid desert","Frozen tundra","Volcanic ash"]:
 			choices.add_item(title)
 		choices.select(MenuDiorama.Battlefield.BIOMES.find(diorama.biome))
-		_settings._main_vbox.add_child(choices)
+		_settings._page("Display").add_child(choices)
 		choices.item_selected.connect(func(index: int) -> void:
 			diorama.set_biome(MenuDiorama.Battlefield.BIOMES[index])
 			var config := ConfigFile.new()
