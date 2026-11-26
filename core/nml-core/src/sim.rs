@@ -18,7 +18,7 @@ use crate::combat::{
     shielded_defense,
     shoot_ev, should_test_shooting_morale, shrouded_reach, RAVAGE_WOUND_TARGET,
     ANGELIC_BLESSING_BOOST_TARGET_SPELL, BEST_HIT_TARGET, CURSED_UNDEAD_BOOST_TARGET,
-    HOLD_THE_LINE_BOOST_MORALE_BONUS, REGENERATION_TARGET, SELF_REPAIR_BOOST_TARGET, UNMODIFIED_SIX,
+    BANNER_MORALE_BONUS, HOLD_THE_LINE_BOOST_MORALE_BONUS, REGENERATION_TARGET, SELF_REPAIR_BOOST_TARGET, UNMODIFIED_SIX,
 };
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
@@ -7954,6 +7954,57 @@ fn drop_banner_for_cause(
     vt
 }
 
+/// Ruling D17 (AoF: Skirmish p.13, `PENDING_EPOCH_COMMAND_BANNER`): the command-group Banner lives with its bearer. A unit
+/// whose own bearer is killed loses its Banner +1 (returned, so the bonus line counts without it); a unit another living
+/// bearer's Banner unit picked gets +1 on a test that shooting or melee caused. The bearer is the last model (no per-model
+/// data names it, KIT-BEARER-NAME), and a test from the attack that killed him reads him as gone. Table games carry no picks
+/// until CMD-ROUNDTRIP, so only the own-unit half reaches them.
+#[allow(clippy::too_many_arguments)]
+fn command_banner(
+    statics: &[UnitStatic], state: &State, i: usize, cause: Option<&str>, seams: Seams,
+    ctx: &mut Ctx, shot: &mut ShootResult, tray: &mut Tray,
+) -> i64 {
+    if !rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_COMMAND_BANNER) || unit_shaken(state, i, seams) {
+        return 0;
+    }
+    let banner = |u: usize| state.carries_command(u) && state.profile(u).special_rules.iter().any(|r| r == "Banner");
+    // a State built without the bearer list (an empty vector) knows no death; `Some(None)` is a killed bearer
+    let bearer_dead = |u: usize| matches!(state.cmd_bearer.get(u), Some(None));
+    let shown = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
+    if cause.is_some() {
+        return 0; // a test no shooting or melee caused gets no Banner at all (`drop_banner_for_cause` took it out)
+    }
+    let mut lost = 0;
+    if banner(i) && bearer_dead(i) {
+        let us = &statics[state.roster.profile[i]];
+        lost = (state.morale_bonus[i] - us.ctx.morale_rating).clamp(0, BANNER_MORALE_BONUS);
+        if lost > 0 {
+            ctx.morale_bonus -= lost;
+            let line = format!("Banner: {shown}'s bearer (the last model carries it - no per-model data) is dead - no +{lost}");
+            shot.log.push(line.clone());
+            say_rule(tray, "banner", state.player[i], || line);
+        }
+    }
+    let key = &state.roster.keys[i];
+    let from = (0..state.units()).find(|&k| k != i && state.player[k] == state.player[i] && banner(k)
+        && state.profile(k).command_picks.iter().any(|p| p == key));
+    if let Some(k) = from {
+        let name = &statics[state.roster.profile[k]].name;
+        if bearer_dead(k) || state.alive[k] == 0 {
+            let line = format!("Banner (from {name}): its bearer is dead - {shown}'s morale test gets no +{BANNER_MORALE_BONUS}");
+            shot.log.push(line.clone());
+            say_rule(tray, "banner", state.player[i], || line);
+        } else {
+            ctx.morale_bonus += BANNER_MORALE_BONUS;
+            let line = format!("Banner (from {name}, the last model carries it - no per-model data): {shown} gets +{BANNER_MORALE_BONUS} to its morale test roll (passes on {}+)",
+                morale_target(ctx.quality, ctx.morale_bonus));
+            shot.log.push(line.clone());
+            say_rule(tray, "banner", state.player[i], || line);
+        }
+    }
+    lost
+}
+
 /// The table's lines before the test die (`_solo_morale_test`), for a unit that rolls one: the rating and the Banner family name the
 /// bonus they add (the bonus is the stamped share minus what a cause or the Valiant band took back out, so spell tokens stay out of
 /// it), then the live spell tokens ("<spell> +1: ... passes on N+"), a Great Banner token left out when a rule forced the test.
@@ -8032,6 +8083,7 @@ pub(crate) fn tray_morale_for(
     let mut ctx = live_morale_ctx(statics, state, i, melee, seams, shot, tray);
     ctx.side = state.player[i]; // the seat the morale dice lines (Fearless, No Retreat) are said for
     let banner_dropped = drop_banner_for_cause(statics, state, i, melee, charged_by_enemy, cause, over_in, charge_from_in, seams, &mut ctx, shot, tray);
+    let banner_dropped = banner_dropped + command_banner(statics, state, i, cause, seams, &mut ctx, shot, tray);
     // G4R4 C-LONEHERO-SHAKEN: the unit's flag, the dead host's included (rules-must-log names the Shaken rule).
     let shaken = unit_shaken(state, i, seams);
     if shaken && !state.shaken[i] {
