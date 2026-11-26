@@ -63,14 +63,37 @@ func test_a_board_has_several_kinds_of_roof_and_a_catslide_hangs_towards_the_bac
 	assert_int(rooflines.size()).is_greater_equal(4)
 
 
-func test_the_ridge_follows_the_street_for_most_houses() -> void:
+func test_most_houses_turn_a_gable_to_the_street() -> void:
 	var layout := _street_of_houses()
 	var eaves_on := 0
 	var mains := BoardgenTownDressing.roofs(layout).filter(func(r: Dictionary) -> bool: return not r["annex"])
 	for r: Dictionary in mains:
 		eaves_on += int(r["along_x"])   # the street runs along x
-	assert_int(eaves_on).is_greater(mains.size() / 2)   # a planted "ridge always across the street" fails here
-	assert_int(eaves_on).is_less(mains.size())   # and some roofs are gable-on
+	assert_int(eaves_on).is_less(mains.size() / 2)   # a planted "ridge always along the street" fails here
+	assert_int(eaves_on).is_greater(0)   # and some roofs are eaves-on
+
+
+func test_over_fifty_boards_most_street_houses_are_gable_on_and_never_hipped() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var fronted := 0
+	var gable_on := 0
+	var hipped := 0
+	for s in range(1, 51):
+		var layout: Dictionary = core.boardgen_layout_themed(s, "ruintown")
+		var fronts := {}
+		for f: Dictionary in BoardgenTownDressing.frontage(layout):
+			fronts[f["lot"]] = f["front"]
+		for r: Dictionary in BoardgenTownDressing.roofs(layout).filter(func(r: Dictionary) -> bool: return not r["annex"]):
+			if not fronts.has(r["lot"]):
+				continue
+			fronted += 1
+			if r["along_x"] == (fronts[r["lot"]] in ["E", "W"]):   # the ridge points at the street
+				gable_on += 1
+				hipped += int(r["type"] != "gable")
+	print("GABLE-ON %d of %d street houses, %d of them hipped" % [gable_on, fronted, hipped])
+	assert_int(fronted).is_greater(100)
+	assert_float(float(gable_on) / fronted).is_greater_equal(0.6)
+	assert_int(hipped).override_failure_message("a gable-on house shows a hip to the street").is_equal(0)
 
 
 func test_the_hip_and_catslide_meshes_have_outward_normals_and_close_over_the_eaves() -> void:

@@ -134,7 +134,7 @@ static func roofs(layout: Dictionary) -> Array[Dictionary]:
 		var half := 1 if centre.y > 0.0 else 0
 		var front: String = fronts.get(id, "")
 		var along_x := size.x > size.y or (size.x == size.y and _hash(id, half, 1) < 0.5)
-		if front != "" and _hash(id, half, 8) < 0.7:
+		if front != "" and _hash(id, half, 8) < 0.3:   # most houses turn a gable to the street (R16)
 			along_x = front in ["N", "S"]   # eaves-on: the ridge parallels the street
 		elif front != "":
 			along_x = front in ["E", "W"]   # gable-on: the ridge points at it
@@ -143,7 +143,7 @@ static func roofs(layout: Dictionary) -> Array[Dictionary]:
 		var look := house_look(id, half, size)
 		var pick := _hash(id, half, 9)
 		var eaves_on := front != "" and along_x == (front in ["N", "S"])
-		var type := "gable" if pick < 0.45 or (pick >= 0.75 and not eaves_on) else ("hip" if pick < 0.75 else "catslide")
+		var type := "gable" if pick < 0.45 or not eaves_on else ("hip" if pick < 0.75 else "catslide")   # a gable-on house never shows a hip to the street
 		var back := 1 if front in ["N", "W"] else -1   # the side of the ridge away from the street (+z / +x for a front on the north / west)
 		var height := 1.5 + 1.2 * _hash(id, half, 2)
 		var yaw: float = look["yaw"] + (2.0 * _hash(id, half, 10) - 1.0) * deg_to_rad(2.0)
