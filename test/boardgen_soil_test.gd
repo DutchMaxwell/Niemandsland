@@ -5,15 +5,18 @@ extends GdUnitTestSuite
 const INC := "res://shaders/ruintown_soil.gdshaderinc"
 
 
-func test_the_board_shader_includes_the_soil_and_the_soil_is_folded_and_a_ratio() -> void:
+func test_the_board_shader_includes_the_soil_and_the_soil_keeps_each_sets_colour() -> void:
 	var board := FileAccess.get_file_as_string("res://shaders/ruintown_board.gdshader")
 	assert_bool(board.contains('#include "res://shaders/ruintown_soil.gdshaderinc"')).is_true()
 	var inc := FileAccess.get_file_as_string(INC)
 	assert_str(inc).is_not_empty()
 	for u in ["uniform sampler2DArray soil_alb", "uniform sampler2DArray soil_nrm", "uniform sampler2DArray soil_orh", "uniform float soil_on = 0.0", "uniform float soil_tile", "uniform vec3 soil_mean[4]"]:
 		assert_bool(inc.contains(u)).override_failure_message("missing: %s" % u).is_true()
-	assert_bool(inc.contains("vnoise(green_fold(xz_in) * 0.083)")).is_true()   # the tile break is folded by the half turn (D-G5)
-	assert_bool(inc.contains("a / max(soil_mean[i]")).is_true()   # albedo as a ratio: the palette tone survives
+	assert_bool(inc.contains("/ max(soil_mean[")).override_failure_message("v2: no per-channel divide by the set's mean (it greyed every set, attempt 1)").is_false()
+	assert_bool(inc.contains("r.c = a * (soil_ceiling(l) / la);")).is_true()   # a SCALAR gain: the set keeps its hue and grain
+	assert_bool(inc.contains("textureGrad(soil_alb")).is_true()   # explicit gradients: no mip line at a layer seam
+	for c in ["uniform float soil_tier = 1.0", "uniform float soil_fill_sat = 0.35", "const vec4 SOIL_RANK = vec4(1.15, 0.92, 0.85, 0.75)", "const float SOIL_BAND = 0.10"]:
+		assert_bool(inc.contains(c)).override_failure_message("missing: %s" % c).is_true()
 	assert_bool(inc.contains("SoilSample soil_blend(vec4 w, vec2 xz_in)")).is_true()
 	assert_bool(board.contains("soil_blend(")).override_failure_message("S1 is inert: nothing calls soil_blend yet").is_false()
 
