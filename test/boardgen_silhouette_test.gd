@@ -170,3 +170,44 @@ func test_a_tall_tower_is_a_twelve_inch_body_in_its_footprint_with_merlons_on_it
 	for b: Dictionary in colliders:
 		assert_float(b["hi"].y).is_equal_approx(12.0, EPS)
 		assert_bool(b.get("hidden", false)).is_true()
+
+
+## LOOK5 T1 (R21 "no flat top without a reason"): on seeds 1..40 every ruined house lot (Block / Deck, not a hall) with a level 1-2 cell that drops along its axis carries at least
+## one gable stub - at its end or at a step inside it - unless every gable face it has holds a ladder top; every stub stands in its cell's 0.3 in strip, on a 1-2 level top, below the peak.
+func test_every_ruin_shell_with_a_drop_along_its_axis_carries_a_gable_stub() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var shells := 0
+	for s in range(1, 41):
+		var layout: Dictionary = core.boardgen_layout_themed(s, "ruintown")
+		var tiers := BoardgenTownDressing.tier_parts(layout)
+		var halls := BoardgenTownSilhouette._hall_cells(layout)
+		var faces: Array = []
+		var boxes := BoardgenTownSilhouette.ruin_gables(layout, {}, faces)
+		for b: Dictionary in boxes:
+			var i := _cell_at(layout, Vector2(b["lo"].x + b["hi"].x, b["lo"].z + b["hi"].z) * 0.5)
+			var level := int(layout["cells"][i]["level"])
+			assert_int(level).override_failure_message("a gable on a %d level top" % level).is_between(1, 2)
+			assert_float(minf(b["hi"].x - b["lo"].x, b["hi"].z - b["lo"].z)).is_less_equal(BoardgenTownSilhouette.GABLE_T_IN + EPS)
+			var r := _cell_rect(layout, i)
+			assert_float(minf(minf(b["lo"].x - r.position.x, r.end.x - b["hi"].x), minf(b["lo"].z - r.position.y, r.end.y - b["hi"].z))).is_less(EPS)
+			assert_float(b["hi"].y).is_less_equal(float(layout["level_in"][level]) + BoardgenTownSilhouette.GABLE_PEAK_IN.y + EPS)
+		for lot: Dictionary in layout["lots"]:
+			if not tiers["axis_x"].has(lot["id"]):
+				continue
+			var d := Vector2i(1, 0) if tiers["axis_x"][lot["id"]] else Vector2i(0, 1)
+			var drop := false
+			var hall := false
+			for dz in int(lot["h"]):
+				for dx in int(lot["w"]):
+					var x := int(lot["x"]) + dx
+					var z := int(lot["z"]) + dz
+					hall = hall or halls.has(z * int(layout["nx"]) + x)
+					var level := BoardgenTownSilhouette._level(layout, x, z)
+					drop = drop or (level >= 1 and level < 3 and (BoardgenTownSilhouette._level(layout, x + d.x, z + d.y) < level or BoardgenTownSilhouette._level(layout, x - d.x, z - d.y) < level))
+			if not drop or hall:
+				continue
+			shells += 1
+			var own := faces.filter(func(f: Dictionary) -> bool: return f["lot"] == lot["id"])
+			var stubs := boxes.filter(func(b: Dictionary) -> bool: return b["lot"] == lot["id"]).size()
+			assert_bool(stubs > 0 or (not own.is_empty() and own.all(func(f: Dictionary) -> bool: return not f["free"]))).override_failure_message("seed %d: ruin lot %d has a drop along its axis and no gable stub" % [s, lot["id"]]).is_true()
+	assert_int(shells).is_greater(40)
