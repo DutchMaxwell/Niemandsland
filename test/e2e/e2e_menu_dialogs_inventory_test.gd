@@ -313,6 +313,7 @@ func test_menu_windows_dim_the_menu_while_open() -> void:
 	if scrim == null:
 		return
 	assert_bool(scrim.visible).is_true()
+	await get_tree().create_timer(0.45).timeout  # the scrim fades in
 	assert_bool(scrim.color.is_equal_approx(HouseStyle.SCRIM)).is_true()
 	var credits := _dialog_titled("Credits & licenses") as AcceptDialog
 	credits.confirmed.emit()

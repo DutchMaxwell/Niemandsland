@@ -246,8 +246,7 @@ func test_core_missing_dialog_shows_the_notice_and_frees_itself() -> void:
 	assert_object(card.cancel_button).is_null()
 	assert_bool(_label_texts(card).has(CoreLoadNotice.TEXT)).is_true()
 	card.ok_button.pressed.emit()
-	for _i in 3:
-		await get_tree().process_frame
+	await get_tree().create_timer(0.45).timeout  # the card fades out first
 	assert_bool(not is_instance_valid(card) or card.is_queued_for_deletion()).is_true()
 
 func test_core_missing_warning_stays_silent_outside_the_live_scene() -> void:
@@ -281,8 +280,7 @@ func test_notice_is_an_ok_only_card_that_frees_itself() -> void:
 	assert_str(card.title).is_equal("Report a problem")
 	assert_object(card.cancel_button).is_null()
 	card.ok_button.pressed.emit()
-	for _i in 3:
-		await get_tree().process_frame
+	await get_tree().create_timer(0.45).timeout  # the card fades out first
 	assert_bool(not is_instance_valid(card) or card.is_queued_for_deletion()).is_true()
 
 
