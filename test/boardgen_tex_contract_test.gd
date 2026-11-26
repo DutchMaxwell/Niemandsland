@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## The scale contract of the town's authored sets (texture plan step 16, D-TEX2): every set has 110-180 texels per board inch, so no two
-## neighbouring surfaces differ by x2 or more; every patterned set's feature reads from the start camera (>= 0.30 in); the sets stay <= 16 MB.
+## neighbouring surfaces differ by x2 or more; every patterned set's feature reads from the start camera (>= 0.30 in); the sets stay <= 32 MB (TOWN_SETS_MAX_BYTES).
 ## With NML_RUINTOWN_DEV_LIB=<staged library folder> the staged files are held to it too: their real pixel size (the .ctex header) over the
 ## manifest's tile_in. Unset (CI): only the contract itself is checked.
 

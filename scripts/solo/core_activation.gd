@@ -2161,6 +2161,12 @@ static func session_open(unit_id: String) -> bool:
 	return _sessions.has(unit_id)
 
 
+## Plan step 27-pre P3: whether the core listed a jump for `unit_id`'s current placement - it sees that ledge and rolls the
+## jump when the activation resolves (`place` records it from the drop check's "jump" lines).
+static func core_sees_jump(unit_id: String) -> bool:
+	return _sessions.has(unit_id) and bool((_sessions[unit_id] as Dictionary).get("core_jump", false))
+
+
 ## The name of ANOTHER unit whose session is open ("" when none; `except` null = any unit): check_begin's input.
 static func open_unit_name(main, except: GameUnit) -> String:
 	for id in _sessions:
@@ -2347,6 +2353,8 @@ static func place(main, gu: GameUnit, mode: int, now: Dictionary) -> Dictionary:
 		return r
 	s["transcript"] = (s["transcript"] as Array).filter(func(e: Dictionary) -> bool: return str(e["t"]) != "placed") \
 		+ [{"t": "placed", "positions": at, "trails": trails}]
+	# Plan step 27-pre P3: the core listed a jump for this placement, so it rolls it when the activation resolves
+	s["core_jump"] = (r.get("lines", []) as Array).any(func(l: Dictionary) -> bool: return str(l.get("rule", "")) == "jump")
 	if CoreSlice.carries(gu, ["Strafing"]) and not table_struck(gu):   # P4.D-37c: sticky for the activation (one strike, one resolver)
 		var from: Dictionary = {}
 		for e in s["start_models"]:

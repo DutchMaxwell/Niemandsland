@@ -6,6 +6,11 @@ extends Control
 
 const MUSIC_VOLUME_DB := -12.0
 const MUSIC_FADE_IN_S := 2.5
+## While a sheet is open the music sits lower (the sheet is what the player listens to); it ends in silence
+## over this long when the menu hands over to the table instead of being cut.
+const MUSIC_SHEET_DB := -18.0
+const MUSIC_BOW_OUT_S := 0.6
+const MUSIC_RAMP_DB_PER_S := 30.0
 
 ## Fail the room-list request if neither rooms nor an error arrive in this time
 ## (safety net for a relay that accepts the socket but never replies).
@@ -59,6 +64,7 @@ var _browse_lobby: InternetLobby
 var _browse_request_gen: int = 0  # invalidates a stale request's timeout/reply
 var _continue_path := ""
 var _music_player: AudioStreamPlayer = null
+var _music_tween: Tween
 var _whats_new: WhatsNewDialog
 
 # === Lifecycle ===
@@ -114,6 +120,9 @@ func _ready() -> void:
 		if is_instance_valid(_settings):
 			_settings.lighting_controller = controller)
 	_start_menu_music()
+	child_entered_tree.connect(func(node: Node) -> void:
+		if node is Window:
+			node.visibility_changed.connect(_duck_music_for_sheets))
 	_maybe_check_for_updates()
 	_maybe_warn_core_missing()
 	if get_tree().current_scene == self:
@@ -956,6 +965,7 @@ func _transition_to_game() -> void:
 		return
 	_transitioning = true
 	view.hide()
+	_hand_over_music()
 	const GAME_SCENE := "res://scenes/main.tscn"
 	# Black loading overlay added to the SceneTree root so it survives the scene swap
 	# (no grey flash). The game scene takes a few seconds to load; show the bar against
@@ -1075,8 +1085,41 @@ func _start_menu_music() -> void:
 	else:
 		_music_player.stream = stream
 	_music_player.play()
-	var fade := create_tween()
-	fade.tween_property(_music_player, "volume_db", MUSIC_VOLUME_DB, MUSIC_FADE_IN_S)
+	_ramp_music(MUSIC_VOLUME_DB, MUSIC_FADE_IN_S)
+
+
+## The music moves to `target_db` over `seconds` (by default at MUSIC_RAMP_DB_PER_S, at least 200 ms); a ramp in
+## progress is replaced from where it stands.
+func _ramp_music(target_db: float, seconds: float = -1.0) -> void:
+	if _music_player == null or not is_instance_valid(_music_player):
+		return
+	if _music_tween != null:
+		_music_tween.kill()
+	if seconds < 0.0:
+		seconds = maxf(0.2, absf(target_db - _music_player.volume_db) / MUSIC_RAMP_DB_PER_S)
+	_music_tween = create_tween()
+	_music_tween.tween_property(_music_player, "volume_db", target_db, seconds)
+
+
+## A sheet (a menu window) open -> the music sits at MUSIC_SHEET_DB, closed -> back at the bed.
+func _duck_music_for_sheets() -> void:
+	var sheet_open := get_children().any(func(n: Node) -> bool: return n is Window and (n as Window).visible)
+	_ramp_music(MUSIC_SHEET_DB if sheet_open else MUSIC_VOLUME_DB)
+
+
+## The music bows out into the hand-over: its player moves to the root (it must outlive this scene) and fades
+## to silence, then frees itself.
+func _hand_over_music() -> void:
+	if _music_player == null or not is_instance_valid(_music_player):
+		return
+	var player := _music_player
+	_music_player = null
+	if _music_tween != null:
+		_music_tween.kill()
+	player.reparent(get_tree().root)
+	var bow := player.create_tween()
+	bow.tween_property(player, "volume_db", -80.0, MUSIC_BOW_OUT_S)
+	bow.tween_callback(player.queue_free)
 
 
 func _fetch_menu_drone(library: AmbienceLibrary) -> void:

@@ -46,6 +46,25 @@ func test_menu_choice_builds_the_table_and_reveals_the_ui() -> void:
 	assert_object(ProjectSettings.get_setting(SETUP_KEY, null)).is_null()
 
 
+## MENU step 32: the menu's loading picture holds until the table can be shown - it is still up, opaque, after
+## Main's _ready and leaves once TableRevealGate reveals (red on main: it starts fading at the end of _ready).
+func test_the_loading_picture_holds_until_the_table_is_ready() -> void:
+	ProjectSettings.set_setting(SETUP_KEY, {"size": Vector2(6, 4), "biome": "urban_ruins"})
+	var overlay := LoadingOverlay.new()
+	overlay.add_to_group("transition_overlay")
+	get_tree().root.add_child(overlay)
+	var runner := scene_runner(Boot.MAIN_SCENE)
+	var main: Node = runner.scene()
+	await runner.simulate_frames(3, 100)
+	var gate: Node = main.get_node_or_null("TableRevealGate")
+	if gate != null:   # not revealed yet (the battlemap may already be cached on this machine)
+		assert_bool(is_instance_valid(overlay) and overlay._content.modulate.a >= 0.99) \
+			.override_failure_message("the loading picture left before the table was ready").is_true()
+		main.table.battlemap_settled.emit(main.table.biome, true)
+	await runner.simulate_frames(10, 100)
+	assert_bool(is_instance_valid(overlay)).override_failure_message("the loading picture never left").is_false()
+
+
 func test_the_picked_game_system_reaches_the_table_and_the_log() -> void:
 	# PLAN_GAME_SYSTEM_SWITCH step 3: the setup dict's "system" is applied once, beside the rules level.
 	ProjectSettings.set_setting(SETUP_KEY, {"size": Vector2(4, 4), "biome": "temperate_grassland", "system": "aofs"})

@@ -85,3 +85,20 @@ static func split_fire(main: Node, att: GameUnit, a: GameUnit, b: GameUnit, b_na
 		"unit": att, "split_first": a, "split_second": b, "split_b_names": b_names
 	}
 	await main._solo_split_commit()
+
+
+## The autosave's lesson pause (no save prompt mid-test).
+static func lesson_paused(main: Node, on := true) -> void:
+	main._autosave_controller.set_lesson_paused(on)
+
+
+## A player's drop of `moves` as the drop signal hands it to main
+## (`ObjectManager.selection_dropped`).
+static func drop(main: Node, moves: Array) -> void:
+	await main._on_units_dropped(moves)
+
+
+## Plan step 27-pre P3: a drawn generated board of `seed_value` / `theme` on the table,
+## through main's test-only door.
+static func generated_board(main: Node, seed_value: int, theme: String) -> void:
+	main._attach_generated_board_for_test(seed_value, theme)

@@ -371,6 +371,45 @@ func test_the_loading_picture_names_a_new_table() -> void:
 	ProjectSettings.set_setting("niemandsland/pending_table_setup", previous)
 	assert_bool(plain._title.visible).override_failure_message("a load must keep the plain overlay").is_false()
 
+## The music bows out: its player moves to the root, outlives the menu's scene change and ends in silence
+## instead of being cut. RED on main: nothing hands the player over.
+func test_music_bows_out_to_silence_on_the_root() -> void:
+	assert_bool(_menu.has_method("_hand_over_music")).override_failure_message("no hand-over of the music").is_true()
+	if not _menu.has_method("_hand_over_music") or _menu._music_player == null:
+		return
+	var player: AudioStreamPlayer = _menu._music_player
+	player.volume_db = -12.0
+	_menu.call("_hand_over_music")
+	assert_bool(player.get_parent() == get_tree().root).is_true()
+	_menu.queue_free()
+	await get_tree().create_timer(0.35).timeout
+	assert_bool(is_instance_valid(player)).override_failure_message("the player did not outlive the menu").is_true()
+	var last := 0.0
+	var deadline := Time.get_ticks_msec() + 1500
+	while is_instance_valid(player) and Time.get_ticks_msec() < deadline:
+		last = player.volume_db
+		await get_tree().process_frame
+	assert_bool(is_instance_valid(player)).override_failure_message("the player never went away").is_false()
+	assert_float(last).override_failure_message("the music was not silent at the end: %s dB" % last).is_less(-60.0)
+
+
+## While a sheet is open the music sits at -18 dB and returns to the bed when it closes. RED on main: no ducking.
+func test_music_sits_lower_while_a_sheet_is_open() -> void:
+	var player: AudioStreamPlayer = _menu._music_player
+	if player == null:
+		return
+	player.volume_db = -12.0
+	_menu._on_credits_pressed()
+	await get_tree().create_timer(0.5).timeout
+	assert_float(player.volume_db).override_failure_message("the music stayed at %s dB" % player.volume_db).is_equal_approx(-18.0, 0.5)
+	for child: Node in _menu.get_children():
+		if child is AcceptDialog:
+			(child as AcceptDialog).hide()
+	await get_tree().create_timer(0.5).timeout
+	assert_float(player.volume_db).is_equal_approx(-12.0, 0.5)
+
+
+
 ## Step 62, the commit beat: Create table sweeps a fill across its button over DUR_COMMIT and plays the commit tone,
 ## and only then does the screen change (red on main: the screen changes at once, no sweep).
 func test_create_table_commits_with_a_sweep_before_the_screen_changes() -> void:
