@@ -249,3 +249,21 @@ func test_core_missing_warning_stays_silent_outside_the_live_scene() -> void:
 	_menu._maybe_warn_core_missing()
 	var after := _menu.get_children().filter(func(n: Node) -> bool: return n is AcceptDialog).size()
 	assert_int(after).is_equal(before)
+
+## Step 61: the setup fades in from the menu and out to the table over the screen time (red on main: it pops in
+## at full opacity and is gone at once). Reduce Motion stays off here (the test profile's default).
+func test_the_table_setup_fades_in_and_out() -> void:
+	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	probe.set_script(MenuTransitionProbe)
+	add_child(probe)
+	probe._on_start_battle_pressed()
+	var dialog: Window = probe._table_setup
+	var content := dialog.get_child(0) as Control
+	assert_float(content.modulate.a).override_failure_message("the setup pops in").is_less(0.5)
+	await get_tree().create_timer(HudTokens.DUR_SCREEN + 0.15).timeout
+	assert_float(content.modulate.a).is_equal_approx(1.0, 0.01)
+	dialog._confirm()
+	assert_bool(probe.entered_game).is_true()
+	assert_bool(is_instance_valid(dialog) and dialog.visible).override_failure_message("the setup is gone at once").is_true()
+	await get_tree().create_timer(HudTokens.DUR_SCREEN + 0.15).timeout
+	assert_bool(is_instance_valid(dialog)).override_failure_message("the faded setup is not freed").is_false()
