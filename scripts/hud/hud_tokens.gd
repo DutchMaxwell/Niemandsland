@@ -67,10 +67,9 @@ static func body_font() -> FontFile:
 static func mono_font() -> FontFile:
 	return load(FONT_DIR + "SourceCodePro.ttf")
 
-## Bold face for [b] text. Inter ships here as a single static weight (no usable variable
-## axis), so faux-bold frays and a FontVariation can't add weight — use the Orbitron
-## display face instead: real heavy glyphs, crisp at any size (MSDF). Use as the
-## RichTextLabel "bold_font".
+## Bold face for [b] text: the Orbitron display face, real heavy glyphs, crisp at any size (MSDF). Use as the
+## RichTextLabel "bold_font". Inter itself carries the whole weight axis: HouseStyle.font(weight) gives it at
+## any weight.
 static func bold_font() -> Font:
 	return head_font()
 

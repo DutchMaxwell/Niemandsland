@@ -166,11 +166,23 @@ const DICE_LOOK := &"classic"
 const _META_EXPANDED_OFFSET := &"hs_expanded_offset"
 
 static var _theme: Theme = null
+static var _fonts: Dictionary = {}
 
 
 # ===== Theme =====
 
 ## The shared Theme: every variant above as a type variation. Built once, reused by every window.
+## Inter at one weight (the bundled font carries the whole weight axis): a cached FontVariation, so a title can
+## stand at 500 and a main action at 600 without a new colour.
+static func font(weight: int) -> Font:
+	if not _fonts.has(weight):
+		var variation := FontVariation.new()
+		variation.base_font = load(FONT_PATH) as Font
+		variation.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): weight}
+		_fonts[weight] = variation
+	return _fonts[weight]
+
+
 static func theme() -> Theme:
 	if _theme != null:
 		return _theme
