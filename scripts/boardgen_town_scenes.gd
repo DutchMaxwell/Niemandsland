@@ -54,6 +54,10 @@ static func plan(layout: Dictionary) -> Dictionary:
 		if typeof(b.get("face")) == TYPE_VECTOR2I:
 			var c: Vector2 = b["at"]
 			taken_faces["%d/%d/%s" % [int(c.x), int(c.y), b["face"]]] = true
+	var doors := {}   # lot id -> the outward direction of an intact house's front (its door and jetty side): a scene leans on the other faces only
+	for f: Dictionary in BoardgenTownDressing.frontage(layout):
+		if f["front"] != "":
+			doors[f["lot"]] = {"N": Vector2i(0, -1), "E": Vector2i(1, 0), "S": Vector2i(0, 1), "W": Vector2i(-1, 0)}[f["front"]]
 	var spot_set := {}   # "i/d" -> true: an open cell with a free wall face in direction d and open ground in front
 	var strip_spots: Array = [[], []]
 	var yard_spots: Array = [[], []]
@@ -72,7 +76,8 @@ static func plan(layout: Dictionary) -> Dictionary:
 			var back := Vector2i(cd["x"], cd["z"]) - d
 			if n.x < 0 or n.y < 0 or n.x >= nx or n.y >= nz or back.x < 0 or back.y < 0 or back.x >= nx or back.y >= nz:
 				continue
-			if int(cells[n.y * nx + n.x]["level"]) == 0 or taken_faces.has("%d/%d/%s" % [int(cd["x"]), int(cd["z"]), d]):
+			var wall: Dictionary = cells[n.y * nx + n.x]   # a raised cell, or an intact house (solid at level 0, D-R16: the town's rows of houses) off its door side
+			if (int(wall["level"]) == 0 and (wall["lot_kind"] != "Roofed" or doors.get(wall["lot_id"], Vector2i.ZERO) == -d)) or taken_faces.has("%d/%d/%s" % [int(cd["x"]), int(cd["z"]), d]):
 				continue
 			var front: Dictionary = cells[back.y * nx + back.x]
 			if int(front["level"]) != 0 or front["lot_kind"] == "Hazard":
