@@ -95,3 +95,26 @@ func test_menu_left_mid_miniatures_places_no_further_model(timeout := 120000) ->
 	assert_int(field.model_count) \
 		.override_failure_message("the diorama placed more miniatures after the menu left the tree").is_equal(1)
 	field.free()
+
+
+## The boot splash carries the signature rule and the tagline under the wordmark (sheet 10a): the picture grew in height
+## only, and below the glyphs there is a gold-ticked rule and a line of tagline pixels (red on main: nothing under the
+## wordmark, the picture ends 160 px high).
+func test_the_boot_splash_picture_carries_the_rule_and_the_tagline() -> void:
+	var image := Image.load_from_file("res://assets/ui/boot_wordmark.png")
+	assert_object(image).is_not_null()
+	if image == null:
+		return
+	assert_int(image.get_width()).is_equal(891)
+	assert_int(image.get_height()).override_failure_message("the picture did not grow").is_greater(200)
+	var rule_row := 137
+	var left := (image.get_width() - 696) / 2
+	assert_float(image.get_pixel(left + 10, rule_row).a).override_failure_message("no gold tick").is_greater(0.9)
+	assert_bool(image.get_pixel(left + 10, rule_row).r > image.get_pixel(left + 10, rule_row).b).is_true()   # gold, not accent
+	assert_float(image.get_pixel(left + 300, rule_row).a).is_greater(0.2)   # the accent still fading
+	var tagline_pixels := 0
+	for y in range(160, 185):
+		for x in range(image.get_width()):
+			if image.get_pixel(x, y).a > 0.5:
+				tagline_pixels += 1
+	assert_int(tagline_pixels).override_failure_message("no tagline under the rule").is_greater(100)
