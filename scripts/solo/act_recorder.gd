@@ -336,6 +336,9 @@ const EPOCH_103_COMMAND_BANNER := 103
 ## The core's `PENDING_EPOCH_CORE_TIERS` (acts.rs, plan step 27-pre): from it the terrain line carries a generated board's
 ## ledges (`_tiers_for_line`).
 const PENDING_EPOCH_CORE_TIERS := 106
+## The core's `PENDING_EPOCH_RUIN_LEDGES` (acts.rs, plan step 27-pre-R): from it a free ruin's floors are ledges to the
+## core's move check. Nothing in the table gates on it; it mirrors the core's placeholder for the tests.
+const PENDING_EPOCH_RUIN_LEDGES := 107
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
