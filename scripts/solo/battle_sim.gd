@@ -2077,6 +2077,27 @@ static func _living_centre(u: GameUnit) -> Variant:
 	return sum / n if n > 0 else null
 
 
+## KIT-BEARER-NAME: the index in `u.models` of the model carrying `rule` (Banner or Musician) - the first whose equipment
+## holds it, else the last model.
+static func _command_bearer(u: GameUnit, rule: String) -> int:
+	for k in u.models.size():
+		if ((u.models[k] as ModelInstance).properties.get("equipment", []) as Array).has(rule):
+			return k
+	return u.models.size() - 1
+
+
+## The slot of model `k` among the unit's living models on the table (the core's slot order), -1 once it is killed.
+static func _bearer_slot(u: GameUnit, k: int) -> int:
+	var m := u.models[k] as ModelInstance
+	if not m.is_alive or m.node == null:
+		return -1
+	var slot := 0
+	for i in k:
+		var o := u.models[i] as ModelInstance
+		slot += 1 if o.is_alive and o.node != null else 0
+	return slot
+
+
 ## Tray-exact S2 — what SoloController.casualty_order (solo_controller.gd:9151-9220) ranks ONE model by:
 ## its weapon entries by name (duplicates kept), its equipment count and its own Tough. The Rust core
 ## reads the list as the plain state's per-unit `kits` (core/nml-core/src/io.rs PlainKit).
@@ -2169,11 +2190,18 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 			"casts": u.casts_current,
 		}
 		# Ruling D16 (CMD-ROUNDTRIP): an AoF: Skirmish command group's bearer as the core counts it (io.rs `cmd_bearer`):
-		# the LAST model of the unit carries it (no per-model data names it yet, KIT-BEARER-NAME), so the key is its slot
-		# while it lives, -1 once it is killed. No key for every other unit and for a unit waiting off the table.
+		# its slot among the living models while it lives, -1 once it is killed. KIT-BEARER-NAME: the bearer is the model
+		# the import gave the Banner or Musician (opr_api_client `_apply_selected_upgrade_rules` -> its equipment, the base
+		# ring); a list that names none falls back to the LAST model. No key for every other unit or one off the table.
+		# Lead ruling 26.11.: the Musician on another model than the Banner's dies with its own model - `cmd_musician`,
+		# written only then (absent = it rides with `cmd_bearer`).
 		if not dormant and _carries_command(u):
-			var last := u.models[u.models.size() - 1] as ModelInstance
-			units[uid]["cmd_bearer"] = positions.size() - 1 if last.is_alive and last.node != null else -1
+			var kit: Array = u.get_special_rules()
+			var bearer := _command_bearer(u, "Banner" if kit.has("Banner") else "Musician")
+			units[uid]["cmd_bearer"] = _bearer_slot(u, bearer)
+			var musician := _command_bearer(u, "Musician")
+			if kit.has("Banner") and kit.has("Musician") and musician != bearer:
+				units[uid]["cmd_musician"] = _bearer_slot(u, musician)
 		if dormant:
 			var du: Dictionary = units[uid]
 			du["dormant"] = true
@@ -2280,7 +2308,8 @@ const _UNIT_DYNAMIC := ["alive", "wounds", "radii", "in_cover", "shaken", "fatig
 	"earliest_arrival_round", "wound_frac",   # wound_frac: _apply_expected_wounds :1039/:1041
 	"attached", "attached_to",   # NML-1073 S1: capture()'s attachment keys, verbatim
 	"kits",   # tray-exact S2: casualty_order's per-model read, aligned with positions (io.rs PlainKit)
-	"cmd_bearer"]   # ruling D16: the command-group bearer's slot, -1 = killed (io.rs `cmd_bearer`)
+	"cmd_bearer",   # ruling D16: the command-group bearer's slot, -1 = killed (io.rs `cmd_bearer`)
+	"cmd_musician"]   # KIT-BEARER-NAME: the Musician's own bearer slot when another model carries it (io.rs `cmd_musician`)
 ## `with_profile` false skips the per-unit STATIC profile (identical on every
 ## node of one game — a recorder that already wrote it once, e.g. NML-1073's
 ## nodes.jsonl header line, passes false to save the recompute AND the bytes).
