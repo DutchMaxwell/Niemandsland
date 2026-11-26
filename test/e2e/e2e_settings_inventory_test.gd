@@ -163,6 +163,35 @@ func test_close_hides_the_window() -> void:
 	assert_bool(_panel.visible).is_false()
 
 
+## "Reset this page" on the pages whose settings live in GraphicsSettings: the Gameplay page goes back to the shipped
+## defaults (a fresh GraphicsSettings); Audio has no reset (red on main: no reset). The changed values are put back.
+func test_reset_puts_a_page_back_to_the_shipped_defaults() -> void:
+	assert_bool(_panel.has_method("reset_page")).override_failure_message("no reset").is_true()
+	if not _panel.has_method("reset_page"):
+		return
+	var fields := ["show_move_trails", "show_rule_floats", "gore_level", "combat_stage_hold_s", "enforce_movement_limit"]
+	var before := {}
+	for f: String in fields:
+		before[f] = GraphicsSettings.get(f)
+	_toggle("Show Move Trails").button_pressed = false
+	_toggle("Enforce Movement Limit").button_pressed = false
+	var gore := _label("Gore").get_parent().get_child(1) as OptionButton
+	gore.select(2)
+	gore.item_selected.emit(2)
+	_panel.reset_page("Gameplay")
+	var after := {}
+	for f: String in fields:
+		after[f] = GraphicsSettings.get(f)
+		GraphicsSettings.set(f, before[f])
+	GraphicsSettings.save_settings()
+	assert_dict(after).is_equal({"show_move_trails": true, "show_rule_floats": true, "gore_level": 1,
+		"combat_stage_hold_s": 2.5, "enforce_movement_limit": true})
+	_panel.show_page("Audio")
+	assert_bool(_panel._reset_button.visible).override_failure_message("Audio offers a reset").is_false()
+	_panel.show_page("Gameplay")
+	assert_bool(_panel._reset_button.visible).is_true()
+
+
 func test_escape_and_the_x_hide_the_panel() -> void:
 	_panel.show()
 	var esc := InputEventAction.new()

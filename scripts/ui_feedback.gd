@@ -16,6 +16,8 @@ var _snd_back: AudioStreamWAV
 var _snd_hover: AudioStreamWAV
 var _snd_focus: AudioStreamWAV
 var _snd_card: AudioStreamWAV
+var _snd_panel_in: AudioStreamWAV
+var _snd_panel_out: AudioStreamWAV
 var _snd_commit: AudioStreamWAV
 
 
@@ -44,6 +46,10 @@ func _setup_audio() -> void:
 	_snd_focus = _tone([1000.0], 0.025, 0.07)
 	# Card deal-in: a soft low two-tone swish for the unit-dock present (D5).
 	_snd_card = _tone([420.0, 630.0], 0.09, 0.13)
+	# A panel or sheet opening / closing: a soft noise sweep, rising on the way in, falling on the way
+	# out.
+	_snd_panel_in = _sweep(400.0, 1600.0, 0.18, 0.06)
+	_snd_panel_out = _sweep(1600.0, 400.0, 0.14, 0.06)
 	# Commit (Create table, Continue, Join): the confirm pair over a 110 Hz body, longer, louder.
 	_snd_commit = _tone([110.0, 880.0, 1320.0], 0.22, 0.10)
 
@@ -53,6 +59,11 @@ func _setup_audio() -> void:
 ## global BaseButton hook, so no extra wiring is needed there.
 func play_card_deal() -> void:
 	_play(_snd_card)
+
+
+## A panel or sheet opens (`opening`) or closes: the soft noise sweep of the sound table.
+func play_panel(opening: bool) -> void:
+	_play(_snd_panel_in if opening else _snd_panel_out)
 
 
 ## Plays the commit tone: the menu hands over to a table (the sound table's "Commit" row).
@@ -94,6 +105,39 @@ func _tone(freqs: Array, dur: float, vol: float) -> AudioStreamWAV:
 			s += sin(TAU * float(f) * t)
 		s = s / float(freqs.size()) * env * vol
 		data.encode_s16(i * 2, int(clampf(s, -1.0, 1.0) * 32767.0))
+	var w := AudioStreamWAV.new()
+	w.format = AudioStreamWAV.FORMAT_16_BITS
+	w.mix_rate = rate
+	w.stereo = false
+	w.data = data
+	return w
+
+
+## A filtered-noise sweep: white noise (a fixed seed, so the sound is always the same) through a
+## resonant band-pass whose centre glides from `from_hz` to `to_hz`, shaped by a smooth envelope,
+## peak `vol`.
+func _sweep(from_hz: float, to_hz: float, dur: float, vol: float) -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(dur * float(rate))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var samples := PackedFloat32Array()
+	samples.resize(n)
+	var low := 0.0
+	var band := 0.0
+	var peak := 0.0001
+	for i in n:
+		var u := float(i) / float(n)
+		var f := 2.0 * sin(PI * from_hz * pow(to_hz / from_hz, u) / float(rate))
+		var high := rng.randf_range(-1.0, 1.0) - low - 0.35 * band
+		band += f * high
+		low += f * band
+		samples[i] = band * sin(PI * u)
+		peak = maxf(peak, absf(samples[i]))
+	var data := PackedByteArray()
+	data.resize(n * 2)
+	for i in n:
+		data.encode_s16(i * 2, int(clampf(samples[i] / peak * vol, -1.0, 1.0) * 32767.0))
 	var w := AudioStreamWAV.new()
 	w.format = AudioStreamWAV.FORMAT_16_BITS
 	w.mix_rate = rate

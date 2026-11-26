@@ -26,6 +26,13 @@ const CAMERA_LOOK := Vector3(0.17,0.030,0.09)
 const CAMERA_FOV := 30.0
 ## Shifts the picture left so the forces sit clear of the menu column.
 const CAMERA_H_OFFSET := -0.045
+## The backdrop breathes: the camera drifts sideways along its right vector and pushes in slowly, back and
+## forth. The stills are taken at rest (t = 0).
+const DRIFT_M := 0.012
+const DRIFT_PERIOD_S := 40.0
+## Share of the way to the look target at the deepest push-in; 60 s in, 60 s out.
+const PUSH_IN := 0.02
+const PUSH_PERIOD_S := 120.0
 ## Cover tone for a biome without a still: the night sky's own.
 const COVER_COLOR := Color(0.02,0.03,0.05)
 var _poster: Texture2D
@@ -196,10 +203,18 @@ func _draw() -> void:
 	draw_texture_rect_region(_poster,Rect2(Vector2.ZERO,size),region,Color(1,1,1,_cover_alpha))
 
 
+## Where the camera stands `t` seconds into the menu; `still` (Reduce Motion) keeps it at rest.
+static func camera_position(t: float, still: bool) -> Vector3:
+	if still:
+		return CAMERA_REST
+	var ahead := CAMERA_LOOK-CAMERA_REST
+	var right := ahead.normalized().cross(Vector3.UP).normalized()
+	var push := PUSH_IN*(0.5-0.5*cos(TAU*t/PUSH_PERIOD_S))
+	return CAMERA_REST+right*DRIFT_M*sin(TAU*t/DRIFT_PERIOD_S)+ahead*push
+
+
 func _place_camera() -> void:
-	# Small drift preserves both five-model units in frame throughout the cycle.
-	var drift := 0.0 if GraphicsSettings.reduce_motion else sin(_drift_t*TAU/40.0)
-	_camera.position = CAMERA_REST+Vector3(drift*0.007,0,-drift*0.004)
+	_camera.position = camera_position(_drift_t,GraphicsSettings.reduce_motion)
 	_camera.look_at(CAMERA_LOOK)
 	_camera.fov = CAMERA_FOV if GraphicsSettings.reduce_motion else CAMERA_FOV+_fov_bias
 
