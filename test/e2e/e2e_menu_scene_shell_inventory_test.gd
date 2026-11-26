@@ -258,3 +258,14 @@ func test_menu_view_defines_no_private_palette() -> void:
 		assert_str(src).override_failure_message(
 			"startup_menu_view.gd still defines its own %s instead of using HouseStyle" % name).not_contains(name)
 	assert_str(src).contains("HouseStyle.INK")
+
+
+## The platform guideline asks 18 px body text at 1080p; the menu's small labels were 10 px. RED on main (10),
+## GREEN once no label or button of the view asks for less than 14.
+func test_menu_view_text_is_at_least_14_px() -> void:
+	var smallest := 1000
+	for type_name: String in ["Label", "Button"]:
+		for n: Node in _view.find_children("*", type_name, true, false):
+			smallest = mini(smallest, (n as Control).get_theme_font_size("font_size"))
+	assert_int(smallest).override_failure_message(
+		"the smallest text of the menu view asks for %d px" % smallest).is_greater_equal(14)
