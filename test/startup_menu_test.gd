@@ -250,6 +250,13 @@ func test_core_missing_warning_stays_silent_outside_the_live_scene() -> void:
 	var after := _menu.get_children().filter(func(n: Node) -> bool: return n is AcceptDialog).size()
 	assert_int(after).is_equal(before)
 
+## The one-line notice made a window as wide as its text (1,489 px). RED on main, GREEN once the text wraps.
+func test_core_missing_dialog_wraps_its_line() -> void:
+	var dialog: AcceptDialog = _menu._show_core_missing_dialog()
+	assert_int(dialog.size.x).override_failure_message("the notice window is %d px wide" % dialog.size.x).is_less(700)
+	assert_bool(dialog.get_label().autowrap_mode != TextServer.AUTOWRAP_OFF).is_true()
+	dialog.confirmed.emit()
+
 ## Step 61: the setup fades in from the menu and out to the table over the screen time (red on main: it pops in
 ## at full opacity and is gone at once). Reduce Motion stays off here (the test profile's default).
 func test_the_table_setup_fades_in_and_out() -> void:

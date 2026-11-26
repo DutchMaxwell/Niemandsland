@@ -5,6 +5,7 @@
 uniform int path_count = 0;
 uniform vec4 path_segments[64];
 uniform bool clip_base = false;
+#include "res://shaders/base_board_ground.gdshaderinc"
 uniform bool surface_relief = false;
 // The small-scale noise relief (+-5.5 mm everywhere). Off on the game table, where props and miniatures stand at
 // y = 0; the mounds and ridges of drift_height() stay (grassland_reference.apply sets it per tier).
@@ -152,5 +153,13 @@ void fragment() {
 		vec3 flat_up = normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
 		vec2 ripple = vec2(shape - 0.5, lows - 0.5);   // reuse the pool noise: no extra taps for the drip texture
 		NORMAL = normalize(mix(NORMAL, flat_up, pool * 0.9) + (VIEW_MATRIX * vec4(ripple.x, 0.0, ripple.y, 0.0)).xyz * 0.08 * pool);
+	}
+	// A model's base on a generated board shows the board's ground and its relief (not the biome's bump).
+	vec3 board_col;
+	if (clip_base && board_ground(ground_xz, board_col)) {
+		ALBEDO = board_col;
+		ROUGHNESS = 0.85;
+		SPECULAR = 0.3;
+		NORMAL = board_bump(board_col, VERTEX, normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz));
 	}
 }
