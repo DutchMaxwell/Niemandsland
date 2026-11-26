@@ -236,19 +236,62 @@ func test_grassland_card_hands_main_a_table_biome_id() -> void:
 	assert_bool(preload("res://scripts/table.gd").BIOMES.has(setup.biome)).is_true()
 
 func test_core_missing_dialog_shows_the_notice_and_frees_itself() -> void:
-	var dialog: AcceptDialog = _menu._show_core_missing_dialog()
-	assert_bool(dialog.get_parent() == _menu).is_true()
-	assert_bool(dialog.visible).is_true()
-	assert_str(dialog.title).is_equal(CoreLoadNotice.TITLE)
-	assert_str(dialog.dialog_text).is_equal(CoreLoadNotice.TEXT)
-	dialog.confirmed.emit()
-	assert_bool(dialog.is_queued_for_deletion()).is_true()
+	var card: Variant = _menu._show_core_missing_dialog()
+	assert_bool(card is PromptCard).override_failure_message("the core notice is not a prompt card").is_true()
+	if card is not PromptCard:
+		return
+	assert_bool(card.get_parent() == _menu).is_true()
+	assert_str(card.title).is_equal(CoreLoadNotice.TITLE)
+	assert_str(card.ok_button.text).is_equal("OK")
+	assert_object(card.cancel_button).is_null()
+	assert_bool(_label_texts(card).has(CoreLoadNotice.TEXT)).is_true()
+	card.ok_button.pressed.emit()
+	for _i in 3:
+		await get_tree().process_frame
+	assert_bool(not is_instance_valid(card) or card.is_queued_for_deletion()).is_true()
 
 func test_core_missing_warning_stays_silent_outside_the_live_scene() -> void:
-	var before := _menu.get_children().filter(func(n: Node) -> bool: return n is AcceptDialog).size()
+	var before := _menu.get_children().filter(func(n: Node) -> bool: return n is AcceptDialog or n is PromptCard).size()
 	_menu._maybe_warn_core_missing()
-	var after := _menu.get_children().filter(func(n: Node) -> bool: return n is AcceptDialog).size()
+	var after := _menu.get_children().filter(func(n: Node) -> bool: return n is AcceptDialog or n is PromptCard).size()
 	assert_int(after).is_equal(before)
+
+## The one-line notice made a window as wide as its text (1,489 px); the card wraps at its own width.
+func test_core_missing_notice_wraps_its_line() -> void:
+	var card: Variant = _menu._show_core_missing_dialog()
+	assert_bool(card is PromptCard).override_failure_message("the core notice is not a prompt card").is_true()
+	if card is not PromptCard:
+		return
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var panel: Control = card.find_child("Card", true, false)
+	assert_float(panel.size.x).override_failure_message("the notice card is %s px wide" % panel.size.x).is_less(700.0)
+	for label: Node in card.find_children("*", "Label", true, false):
+		if (label as Label).text == CoreLoadNotice.TEXT:
+			assert_bool((label as Label).autowrap_mode != TextServer.AUTOWRAP_OFF).is_true()
+	card.ok_button.pressed.emit()
+
+
+## Auto-update unavailable and Report a problem are the same OK-only card; the helper is what they call.
+func test_notice_is_an_ok_only_card_that_frees_itself() -> void:
+	assert_bool(_menu.has_method("_show_notice")).override_failure_message("no notice helper").is_true()
+	if not _menu.has_method("_show_notice"):
+		return
+	var card: PromptCard = _menu.call("_show_notice", "Report a problem", "Saved an anonymised diagnostics file to:\nx")
+	assert_str(card.title).is_equal("Report a problem")
+	assert_object(card.cancel_button).is_null()
+	card.ok_button.pressed.emit()
+	for _i in 3:
+		await get_tree().process_frame
+	assert_bool(not is_instance_valid(card) or card.is_queued_for_deletion()).is_true()
+
+
+func _label_texts(root: Node) -> Array[String]:
+	var texts: Array[String] = []
+	for label: Node in root.find_children("*", "Label", true, false):
+		texts.append((label as Label).text)
+	return texts
+
 
 ## Footer links lost letters on hover ("Help & feedba"): only the resting state had the 10 px box, the theme's
 ## own hover box is wider and left the text less room. RED on main (hover and pressed differ), GREEN with one box.
@@ -259,13 +302,6 @@ func test_footer_links_keep_one_box_for_every_state() -> void:
 		for state: String in ["hover","pressed"]:
 			var box := link.get_theme_stylebox(state).get_minimum_size()
 			assert_vector(box).override_failure_message("%s: the %s box needs %s, the resting box %s" % [id,state,box,rest]).is_equal(rest)
-
-## The one-line notice made a window as wide as its text (1,489 px). RED on main, GREEN once the text wraps.
-func test_core_missing_dialog_wraps_its_line() -> void:
-	var dialog: AcceptDialog = _menu._show_core_missing_dialog()
-	assert_int(dialog.size.x).override_failure_message("the notice window is %d px wide" % dialog.size.x).is_less(700)
-	assert_bool(dialog.get_label().autowrap_mode != TextServer.AUTOWRAP_OFF).is_true()
-	dialog.confirmed.emit()
 
 ## Step 61: the setup fades in from the menu and out to the table over the screen time (red on main: it pops in
 ## at full opacity and is gone at once). Reduce Motion stays off here (the test profile's default).
