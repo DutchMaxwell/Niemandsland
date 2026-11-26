@@ -1,0 +1,28 @@
+{
+ "schema": "nml-parity-frozen-table-v1",
+ "what": "The table half of the melee parity gate, recorded once from the table's melee path (test/parity/parity_table_melee.gd run(), 200 seeds per scenario) before plan steps 27-29 change the core paths GF melee and morale share. One JSONL record per seed: {seed, epoch, def_alive, rolls[{kind,count,target,faces,owner}]}; the rolls include the loser's morale test.",
+ "recorded_at_git_sha": "811f46dafd6bfd223a03cd8772c03af7df793460",
+ "seeds": 200,
+ "scenarios": {
+  "ap1": {
+   "epoch": 73,
+   "records": 200
+  },
+  "parry_carriers_e75": {
+   "epoch": 75,
+   "records": 200
+  },
+  "plain_aof": {
+   "epoch": 73,
+   "records": 200
+  },
+  "plain": {
+   "epoch": 73,
+   "records": 200
+  },
+  "strike_back_bearers_e75": {
+   "epoch": 75,
+   "records": 200
+  }
+ }
+}
