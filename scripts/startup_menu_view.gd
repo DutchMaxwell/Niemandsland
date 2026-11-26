@@ -43,6 +43,7 @@ class Action extends Button:
 
 	func _ready() -> void:
 		focus_mode = Control.FOCUS_ALL
+		set_meta(UiMotion.META_FLAT,true)
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		add_theme_font_override("font",FONT)
 		add_theme_font_size_override("font_size",22)
@@ -58,11 +59,14 @@ class Action extends Button:
 		custom_minimum_size = Vector2(0,54 if description.is_empty() else 76 if primary else 64)
 		for state in ["normal","hover","pressed","focus"]:
 			var box := StyleBoxFlat.new()
+			var lit: bool = state != "normal"
 			box.bg_color = HouseStyle.GOLD if primary else Color("1823296b") if outlined else Color.TRANSPARENT
-			if state in ["hover","pressed"]:
-				box.bg_color = Color("ebd19a") if primary else Color("26333b9c")
-			box.border_color = HouseStyle.GOLD if primary or state == "focus" else Color("a4b8bd44")
-			box.set_border_width_all(1 if primary or outlined or state == "focus" else 0)
+			if lit and not primary:
+				box.bg_color = HouseStyle.ROW_PRESS if state == "pressed" else HouseStyle.ROW_HOVER
+			elif state in ["hover","pressed"]:
+				box.bg_color = Color("ebd19a")
+			box.border_color = HouseStyle.GOLD if primary else HouseStyle.LINE_SOFT if lit else Color("a4b8bd44")
+			box.set_border_width_all(1 if primary or outlined or lit else 0)
 			box.set_corner_radius_all(4)
 			add_theme_stylebox_override(state,box)
 		queue_redraw()
@@ -77,7 +81,10 @@ class Action extends Button:
 			draw_string(FONT,Vector2(left,size.y*0.5+17),description,HORIZONTAL_ALIGNMENT_LEFT,size.x-left-25,15,Color("344c54") if primary else HouseStyle.MUTED)
 		if row_icon != null:
 			draw_texture_rect(row_icon,Rect2(16,size.y*0.5-ICON_PX*0.5,ICON_PX,ICON_PX),false,color if primary else HouseStyle.ACCENT)
-		draw_string(FONT,Vector2(size.x-31,size.y*0.5+6),HouseStyle.GLYPH_GO,HORIZONTAL_ALIGNMENT_LEFT,24,28,color)
+		var lit := not primary and (is_hovered() or has_focus())
+		if lit:
+			draw_rect(Rect2(0,12,3,size.y-24),HouseStyle.GOLD)
+		draw_string(FONT,Vector2(size.x-31,size.y*0.5+6),HouseStyle.GLYPH_GO,HORIZONTAL_ALIGNMENT_LEFT,24,28,HouseStyle.GOLD if lit else color)
 
 
 func _ready() -> void:
@@ -101,9 +108,6 @@ func _ready() -> void:
 	rule.custom_minimum_size = Vector2(500,1)
 	rule.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	identity.add_child(rule)
-	var settings := _utility("SettingsBtn","Settings")
-	settings.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	_masthead.add_child(settings)
 	_main = VBoxContainer.new()
 	_main.add_theme_constant_override("separation",5)
 	_scroll = ScrollContainer.new()
@@ -141,6 +145,7 @@ func _ready() -> void:
 	actions.add_child(_action("OnlineBtn","Play online","Create a room or join a table",_icon(&"globe")))
 	actions.add_child(_action("LoadBattleBtn","Load game","Open a saved game",_icon(&"folder")))
 	actions.add_child(_action("LearnBtn","Learn to play","Learn the controls and explore Trial by Fire",_icon(&"book")))
+	actions.add_child(_action("SettingsBtn","Settings","Display, graphics, audio and accessibility",_icon(&"sliders")))
 	_footer = HBoxContainer.new()
 	_footer.add_theme_constant_override("separation",24)
 	add_child(_footer)
@@ -297,7 +302,10 @@ func _utility(id: String, title: String) -> Button:
 	button.add_theme_font_size_override("font_size",16)
 	button.add_theme_color_override("font_color",HouseStyle.MUTED)
 	button.add_theme_color_override("font_hover_color",HouseStyle.GOLD)
-	button.add_theme_stylebox_override("normal",_box(Color.TRANSPARENT,Color.TRANSPARENT,10))
+	# One box for every state: the theme's own hover box is wider, so the text got less room on hover.
+	var rest := _box(Color.TRANSPARENT,Color.TRANSPARENT,10)
+	for state in ["normal","hover","pressed"]:
+		button.add_theme_stylebox_override(state,rest)
 	button.add_theme_stylebox_override("focus",_box(Color.TRANSPARENT,HouseStyle.GOLD,10))
 	buttons[id] = button
 	return button

@@ -7967,6 +7967,12 @@ fn bearer_dead(state: &State, u: usize) -> bool {
     matches!(state.cmd_bearer.get(u), Some(None))
 }
 
+/// KIT-BEARER-NAME (lead ruling 26.11., `PENDING_EPOCH_TWO_BEARERS`): the Musician dies with the model that carries it,
+/// which may not be the Banner's; below the placeholder it rides with the one bearer (`bearer_dead`), as recorded.
+fn musician_dead(state: &State, u: usize, rules_epoch: u32) -> bool {
+    if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_TWO_BEARERS) { matches!(state.musician_bearer(u), Some(None)) } else { bearer_dead(state, u) }
+}
+
 /// Ruling D16: the friendly command-group unit with `rule` whose profile picked unit `i` (`Profile::command_picks`).
 fn command_lender(state: &State, i: usize, rule: &str) -> Option<usize> {
     let key = &state.roster.keys[i];
@@ -7982,11 +7988,11 @@ pub(crate) fn command_musician_in(statics: &[UnitStatic], state: &State, i: usiz
         return (0.0, None);
     }
     let name = |u: usize| statics.get(state.roster.profile[u]).map_or("", |us| us.name.as_str());
-    if command_rule(state, i, "Musician") && bearer_dead(state, i) {
+    if command_rule(state, i, "Musician") && musician_dead(state, i, rules_epoch) {
         return (-MUSICIAN_MOVE_IN, Some(format!("Musician: {}'s bearer (the last model carries it - no per-model data) is dead - no +1\" move", name(i))));
     }
     match command_lender(state, i, "Musician") {
-        Some(k) if bearer_dead(state, k) || state.alive[k] == 0 =>
+        Some(k) if musician_dead(state, k, rules_epoch) || state.alive[k] == 0 =>
             (0.0, Some(format!("Musician (from {}): its bearer is dead - {} gets no +1\" move", name(k), name(i)))),
         Some(k) => (MUSICIAN_MOVE_IN, Some(format!("Musician (from {}, the last model carries it - no per-model data): {} moves +1\"", name(k), name(i)))),
         None => (0.0, None),

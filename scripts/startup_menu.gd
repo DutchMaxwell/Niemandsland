@@ -44,7 +44,7 @@ var _load_dialog: FileDialog
 var _host_popup: AcceptDialog
 var _join_popup: AcceptDialog
 var _browse_popup: AcceptDialog
-var _exit_confirm: ConfirmationDialog
+var _exit_card: PromptCard
 var _relay_url_input: LineEdit
 var _host_name_input: LineEdit
 var _host_public_check: CheckBox
@@ -125,6 +125,9 @@ func _ready() -> void:
 func _maybe_show_whats_new() -> void:
 	if get_tree().current_scene != self or not WhatsNewContent.should_show():
 		return
+	if _is_fresh_profile():
+		WhatsNewContent.mark_seen()
+		return
 	# Let another startup dialog (for example the chapter picker) finish first.
 	for child in get_children():
 		if child is Window and child.visible:
@@ -132,6 +135,10 @@ func _maybe_show_whats_new() -> void:
 			_maybe_show_whats_new.call_deferred()
 			return
 	_show_whats_new()
+
+
+func _is_fresh_profile() -> bool:
+	return WhatsNewContent.is_fresh_profile()
 
 
 func _show_whats_new() -> void:
@@ -165,12 +172,12 @@ func _on_settings_pressed() -> void:
 		_settings.initialize(diorama.get_lighting_controller())
 		var label := Label.new()
 		label.text = "Menu background"
-		_settings._main_vbox.add_child(label)
+		_settings._page("Display").add_child(label)
 		var choices := OptionButton.new()
 		for title in ["Urban ruins","Alien jungle","Grassland","Arid desert","Frozen tundra","Volcanic ash"]:
 			choices.add_item(title)
 		choices.select(MenuDiorama.Battlefield.BIOMES.find(diorama.biome))
-		_settings._main_vbox.add_child(choices)
+		_settings._page("Display").add_child(choices)
 		choices.item_selected.connect(func(index: int) -> void:
 			diorama.set_biome(MenuDiorama.Battlefield.BIOMES[index])
 			var config := ConfigFile.new()
@@ -204,6 +211,22 @@ func _show_table_setup(host_settings: Dictionary = {}) -> void:
 	_table_setup.cancelled.connect(_on_table_setup_cancelled)
 	view.hide()
 	_table_setup.popup()
+	_fade_setup(_table_setup, 0.0, 1.0)
+
+
+## The setup page fades in from the menu and out to the table (its content, over the screen time), as the
+## table's own chooser does in main.gd. Instant with Reduce Motion. `free_after` frees the dialog at the end.
+func _fade_setup(dialog: Window, from: float, to: float, free_after := false) -> void:
+	var content := dialog.get_child(0) as Control
+	if UiMotion.reduced() or content == null:
+		if free_after:
+			dialog.queue_free()
+		return
+	content.modulate.a = from
+	var tween := dialog.create_tween()
+	tween.tween_property(content, "modulate:a", to, HudTokens.DUR_SCREEN).set_trans(Tween.TRANS_SINE)
+	if free_after:
+		tween.tween_callback(dialog.queue_free)
 
 
 func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> void:
@@ -213,8 +236,9 @@ func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> vo
 		RulesAutomation.remember_pick(_table_setup.selected_rules)
 	for key in host_settings:
 		ProjectSettings.set_setting(key,host_settings[key])
-	_table_setup.hide()
-	_table_setup.queue_free()
+	if UiMotion.reduced():
+		_table_setup.hide()
+	_fade_setup(_table_setup, 1.0, 0.0, true)   # fades out under the loading picture's fade-in
 	_table_setup = null
 	_transition_to_game()
 
@@ -458,21 +482,17 @@ func _on_credits_pressed() -> void:
 ## language — and unrecoverable (a CONTINUE save one keypress away is not the same thing).
 func _on_exit_pressed() -> void:
 	# is_instance_valid still reports true for the rest of the frame after queue_free, so the
-	# very ESC that closes this dialog cannot immediately open a second one.
-	if is_instance_valid(_exit_confirm):
+	# very ESC that closes this card cannot immediately open a second one. The card takes every key
+	# while it stands (Enter = Quit, Esc = Back), so the menu's own Esc handler never sees them.
+	if is_instance_valid(_exit_card):
 		return
-	_exit_confirm = ConfirmationDialog.new()
-	_exit_confirm.title = "Quit Niemandsland"
-	_exit_confirm.dialog_text = "Are you sure you want to quit Niemandsland?"
-	_exit_confirm.ok_button_text = "Quit"
-	_exit_confirm.cancel_button_text = "Back"
-	_exit_confirm.confirmed.connect(func() -> void: get_tree().quit())
-	_exit_confirm.canceled.connect(_exit_confirm.queue_free)
-	MenuDialog.style(_exit_confirm)
-	add_child(_exit_confirm)
-	_exit_confirm.popup_centered()
-	# CANCEL is the safe answer, so it — not QUIT — starts focused.
-	_exit_confirm.get_cancel_button().grab_focus()
+	_exit_card = PromptCard.new("Quit Niemandsland", "Are you sure you want to quit Niemandsland?", "Quit", "Back")
+	add_child(_exit_card)
+	# CANCEL is the safe answer, so it — not QUIT — starts focused, and Enter takes it.
+	_exit_card.cancel_button.focus_mode = Control.FOCUS_ALL
+	_exit_card.cancel_button.grab_focus()
+	if await _exit_card.answer():
+		get_tree().quit()
 
 # === Update check =====
 
@@ -881,6 +901,22 @@ func _set_browse_status(text: String) -> void:
 
 # ===== Shared =====
 
+## A new table (the setup just stored it; continue, load and join keep the plain overlay): the overlay names it -
+## "Urban ruins", "Grimdark Future · 6 × 4 ft" - over the biome's picture (sheet 06).
+func _name_the_table(overlay: LoadingOverlay) -> void:
+	var setup: Variant = ProjectSettings.get_setting("niemandsland/pending_table_setup", null)
+	var loading := not str(ProjectSettings.get_setting("niemandsland/pending_load_path", "")).is_empty()
+	if loading or not setup is Dictionary or not (setup as Dictionary).has("biome"):
+		return
+	var biome := str(setup.biome)
+	var feet: Vector2 = setup.get("size", Vector2(6, 4))
+	overlay.set_label("PREPARING YOUR TABLE")
+	overlay.set_title(TableSizeDialog.BIOMES.get(biome, [biome])[0])
+	overlay.set_subtitle("%s · %s × %s ft" % [GameSystem.label(str(setup.get("system", GameSystem.DEFAULT_ID))),
+		TableSizeDialog.number(feet.x), TableSizeDialog.number(feet.y)])
+	overlay.set_backdrop(load(TableSizeDialog._preview_path(biome)) as Texture2D)
+
+
 func _transition_to_game() -> void:
 	if _transitioning:
 		return
@@ -895,6 +931,7 @@ func _transition_to_game() -> void:
 	overlay.add_to_group("transition_overlay")
 	get_tree().root.add_child(overlay)
 	overlay.set_label("LOADING")
+	_name_the_table(overlay)
 
 	if ResourceLoader.load_threaded_request(GAME_SCENE) != OK:
 		get_tree().change_scene_to_file(GAME_SCENE)  # fallback: no progress, but works

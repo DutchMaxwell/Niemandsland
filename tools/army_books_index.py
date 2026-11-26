@@ -20,6 +20,10 @@ generation time — never by the game.
 
     python3 tools/army_books_index.py --lists gf=~/farm/ai_lists_gf --lists aof=~/farm/ai_lists_aof
     python3 tools/army_books_index.py --books gf=~/farm/army_books_gf --lists gf=~/farm/ai_lists_gf
+    python3 tools/army_books_index.py --merge --known-only --books gff=<snapshot>/gff --books aofs=<snapshot>/aofs
+
+`--merge` keeps every system section already in the file and replaces only the systems given, so the
+skirmish books (same armyIds as their GF/AoF twins, own book names) join without re-reading the rest.
 """
 
 from __future__ import annotations
@@ -59,7 +63,8 @@ def books_in_dir(book_dir: str) -> dict:
             continue
         with open(path, encoding="utf-8") as handle:
             book = json.load(handle)
-        army_id = str(book.get("armyId", "")).strip()
+        # a list-shaped export carries `armyId`; a book as the API serves it (the snapshot files) names itself `uid`
+        army_id = str(book.get("armyId") or book.get("uid") or "").strip()
         if army_id:
             books[army_id] = book
     return books
@@ -92,6 +97,24 @@ def build_index(pools: dict, book_dirs: dict) -> dict:
     return index
 
 
+def drop_unknown(index: dict, repo_root: str) -> dict:
+    """`--known-only`: every entry whose slug its rules map does not know yet is left out and named on stderr (a book
+    renamed in a newer edition than the map, e.g. the 3.6 Daemons of Change against a 3.5 map), so the rest can land."""
+    kept = {}
+    for system, section in sorted(index.items()):
+        path = os.path.join(repo_root, "assets/solo/rules_mechanics_%s.json" % system)
+        with open(path, encoding="utf-8") as handle:
+            known = set(json.load(handle).get("factions", {}).keys())
+        kept[system] = {}
+        for army_id, entry in sorted(section.items()):
+            if entry["faction_folder"] in known:
+                kept[system][army_id] = entry
+            else:
+                print("army_books_index: left out %s/%s '%s' - no faction section of rules_mechanics_%s.json yet"
+                      % (system, army_id, entry["faction_folder"], system), file=sys.stderr)
+    return kept
+
+
 def check_hygiene(index: dict, repo_root: str) -> None:
     """No stray key (a text leak), and every slug is a known registry faction section."""
     for system, section in sorted(index.items()):
@@ -113,6 +136,11 @@ def main() -> int:
                         help="AI-list pool to read armyIds from, e.g. gf=~/farm/ai_lists_gf")
     parser.add_argument("--books", action="append", default=[], metavar="SYSTEM=DIR",
                         help="local army-book dir, e.g. gf=~/farm/army_books_gf")
+    parser.add_argument("--known-only", action="store_true",
+                        help="leave out (and name on stderr) a book whose slug is no faction section of its rules map "
+                             "yet, instead of refusing the whole run")
+    parser.add_argument("--merge", action="store_true",
+                        help="keep the other systems' sections already in the index; replace only the given ones")
     args = parser.parse_args()
     pools, book_dirs = {}, {}
     for option, dest in (("lists", pools), ("books", book_dirs)):
@@ -125,6 +153,11 @@ def main() -> int:
         raise SystemExit("no --lists or --books given")
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     index = build_index(pools, book_dirs)
+    if args.known_only:
+        index = drop_unknown(index, repo_root)
+    if args.merge:
+        with open(os.path.join(repo_root, OUT_PATH), encoding="utf-8") as handle:
+            index = {**json.load(handle), **index}
     check_hygiene(index, repo_root)
     with open(os.path.join(repo_root, OUT_PATH), "w", encoding="utf-8") as handle:
         handle.write(json.dumps(index, indent="\t", sort_keys=True, ensure_ascii=False) + "\n")

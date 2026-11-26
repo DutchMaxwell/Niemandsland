@@ -29,7 +29,7 @@ use nml_core::{
 /// writes, minus the two this port does not model (see `DROPPED`). Bit `i` of a
 /// capture mask says "the plain form carried key `i`", so `plain_of` writes back
 /// exactly the key set that came in — `state_to_plain` is `if su.has(k)` too.
-pub const UNIT_KEYS: [&str; 22] = [
+pub const UNIT_KEYS: [&str; 23] = [
     "alive",
     "wounds",
     "radii",
@@ -60,6 +60,8 @@ pub const UNIT_KEYS: [&str; 22] = [
     "kits",
     // Ruling D16: the command-group bearer's current slot (bit 21); -1 = killed. Absent on every record before it.
     "cmd_bearer",
+    // KIT-BEARER-NAME: the Musician's own bearer slot when another model than the Banner's carries it (bit 22); -1 = killed.
+    "cmd_musician",
 ];
 
 /// A unit's capture mask: bit `i` = `UNIT_KEYS[i]` is in the plain form. `kits` below epoch 75 stays out, so
@@ -529,6 +531,7 @@ pub fn build_state(
         kits: Vec::with_capacity(n),
         kit_names: Vec::with_capacity(n),
         cmd_bearer: Vec::with_capacity(n),
+        cmd_musician: Vec::with_capacity(n),
         mods: Vec::with_capacity(n),
         mods_base: Vec::with_capacity(n),
         attached: Rc::new(Vec::new()),
@@ -634,6 +637,12 @@ pub fn build_state(
             Some(b) => Some(b as usize),
         };
         st.cmd_bearer.push(bearer);
+        // KIT-BEARER-NAME: absent = the Musician rides with the Banner's bearer
+        st.cmd_musician.push(match u.get("cmd_musician").map(|v| int(&v)) {
+            None => bearer,
+            Some(b) if b < 0 => None,
+            Some(b) => Some(b as usize),
+        });
         st.mods.push(mods_of(&ddict(&u, "mods")));
         st.mods_base.push(Rc::new(mods_of(&ddict(&u, "mods_base"))));
         attached_keys.push(strings(&darr(&u, "attached")));
@@ -869,6 +878,9 @@ pub fn plain_of(cap: &Captured) -> VarDictionary {
         }
         if has("cmd_bearer") {
             u.set("cmd_bearer", st.cmd_bearer.get(i).copied().flatten().map_or(-1, |b| b as i64));
+        }
+        if has("cmd_musician") {
+            u.set("cmd_musician", st.cmd_musician.get(i).copied().flatten().map_or(-1, |b| b as i64));
         }
         if has("kits") {
             let mut a = VarArray::new();
@@ -1488,5 +1500,7 @@ mod cmd_bearer_tests {
         assert_eq!(UNIT_KEYS[21], "cmd_bearer");
         assert_eq!(unit_mask(|k| k == "cmd_bearer", 0), 1u32 << 21);
         assert_eq!(unit_mask(|k| k != "cmd_bearer", 0) & (1u32 << 21), 0, "absent key, absent bit");
+        assert_eq!(UNIT_KEYS[22], "cmd_musician", "KIT-BEARER-NAME: appended after cmd_bearer, no bit moves");
+        assert_eq!(unit_mask(|k| k == "cmd_musician", 0), 1u32 << 22);
     }
 }

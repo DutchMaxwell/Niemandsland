@@ -35,6 +35,9 @@ func test_menu_can_reopen_dismissed_news() -> void:
 	assert_int(menu.find_children("WhatsNewDialog", "", false, false).size()).is_equal(1)
 
 class OfflineMenu extends "res://scripts/startup_menu.gd":
+	var fresh_profile := false
+	func _is_fresh_profile() -> bool:
+		return fresh_profile
 	func _maybe_check_for_updates() -> void:
 		pass
 	func _start_menu_music() -> void:
@@ -73,9 +76,66 @@ func test_update_offer_waits_for_news_to_close() -> void:
 	assert_int(prompts.size()).is_equal(1)
 	assert_bool(prompts[0].visible).is_true()
 
-func _mount_live_menu() -> Control:
+func _mount_live_menu(fresh_profile := false) -> Control:
 	var menu: Control = load("res://scenes/startup_menu.tscn").instantiate()
 	menu.set_script(OfflineMenu)
+	menu.fresh_profile = fresh_profile
 	get_tree().root.add_child(menu)
 	get_tree().current_scene = menu
 	return menu
+
+
+## The marks of a first launch (D2), each on its own: no recorded version, no menu.cfg, no
+## player_identity.cfg, no save. RED on main: the rule does not exist.
+func test_fresh_profile_needs_all_four_marks_absent() -> void:
+	var script: GDScript = load("res://scripts/whats_new_content.gd")
+	assert_bool(script.has_method("is_fresh_profile")).override_failure_message(
+		"no rule for a first launch").is_true()
+	if not script.has_method("is_fresh_profile"):
+		return
+	var dir := "user://whats_new_fresh_test"
+	var saves := dir.path_join("saves")
+	var menu_cfg := dir.path_join("menu.cfg")
+	var identity := dir.path_join("player_identity.cfg")
+	var state := dir.path_join("whats_new.cfg")
+	DirAccess.make_dir_recursive_absolute(saves)
+	var fresh := func() -> bool:
+		return script.call("is_fresh_profile", menu_cfg, identity, saves, state)
+	assert_bool(fresh.call()).is_true()
+	for mark: String in [menu_cfg, identity, saves.path_join("a.nml")]:
+		FileAccess.open(mark, FileAccess.WRITE).store_string("x")
+		assert_bool(fresh.call()).override_failure_message(
+			"%s did not end the first launch" % mark).is_false()
+		DirAccess.remove_absolute(mark)
+	var record := ConfigFile.new()
+	record.set_value("news", "last_seen_version", "0.0.1")
+	record.save(state)
+	assert_bool(fresh.call()).override_failure_message(
+		"a recorded version did not end the first launch").is_false()
+	DirAccess.remove_absolute(state)
+	DirAccess.remove_absolute(saves)
+	DirAccess.remove_absolute(dir)
+
+
+## RED on main: the first launch opened the release notes before the player had seen the menu.
+func test_fresh_profile_opens_on_the_menu_and_records_the_version() -> void:
+	var previous := get_tree().current_scene
+	var menu := _mount_live_menu(true)
+	await get_tree().process_frame
+	assert_object(menu._whats_new).override_failure_message(
+		"the first launch opened the release notes").is_null()
+	assert_bool(WhatsNewContent.should_show()).override_failure_message(
+		"the version was not recorded").is_false()
+	menu.free()
+	get_tree().current_scene = previous
+
+
+## A profile that has prepared a table before but never recorded a version (an install from before
+## the sheet existed) still gets the sheet.
+func test_profile_with_a_menu_cfg_and_no_record_still_gets_the_sheet() -> void:
+	var previous := get_tree().current_scene
+	var menu := _mount_live_menu(false)
+	await get_tree().process_frame
+	assert_object(menu._whats_new).is_not_null()
+	menu.free()
+	get_tree().current_scene = previous

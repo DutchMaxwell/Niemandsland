@@ -14,7 +14,7 @@ extends GdUnitTestSuite
 ## test_menu_view_defines_no_private_palette is added WITH the restyle: RED on main (the file still
 ## defines its own INK/MUTED/GOLD/CYAN), GREEN once row 43-44's palette is re-plumbed to HouseStyle.
 
-const MAIN_ACTIONS := ["Prepare a new table", "Play online", "Load game", "Learn to play"]
+const MAIN_ACTIONS := ["Prepare a new table", "Play online", "Load game", "Learn to play", "Settings"]
 const FOOTER := ["Help & feedback", "Credits & licenses", "Quit"]
 const ONLINE_ROUTE := ["Create a room", "Join with a code", "Public tables"]
 const LEARN_ROUTE := ["Learn the controls", "Trial by Fire · In development"]
@@ -240,16 +240,24 @@ func test_credits_dialog_keeps_the_legal_notice_verbatim() -> void:
 
 func test_quit_asks_first_with_back_focused_and_never_quits() -> void:
 	await _click(_button("Quit"))
-	var dialog := _dialog_titled("Quit Niemandsland") as ConfirmationDialog
-	assert_object(dialog).is_not_null()
-	assert_str(dialog.dialog_text).is_equal("Are you sure you want to quit Niemandsland?")
-	assert_object(dialog.get_viewport().gui_get_focus_owner()).is_same(dialog.get_cancel_button())
-	# A ConfirmationDialog is its own Window: a coordinate click cannot land on it reliably in
-	# headless mode (as e2e_hero_morale_prompt_test.gd works around too). Its own "canceled" signal
-	# is exactly what pressing Back fires, so trigger the effect there instead of the coordinates.
-	dialog.canceled.emit()
-	await _frames(2)
-	assert_bool(is_instance_valid(_menu._exit_confirm)).is_false()
+	var card: PromptCard = _menu.get("_exit_card")
+	assert_object(card).override_failure_message("Quit opens no prompt card").is_not_null()
+	if card == null:
+		return
+	assert_str(card.title).is_equal("Quit Niemandsland")
+	assert_bool(_card_has_text(card, "Are you sure you want to quit Niemandsland?")).is_true()
+	assert_object(card.get_viewport().gui_get_focus_owner()).is_same(card.cancel_button)
+	# The card lives in the menu's own viewport, so Back takes a real click; Quit is never pressed here.
+	await _click(card.cancel_button)
+	await _frames(3)
+	assert_bool(is_instance_valid(_menu._exit_card)).is_false()
+
+
+func _card_has_text(card: PromptCard, text: String) -> bool:
+	for n: Node in card.find_children("*", "Label", true, false):
+		if (n as Label).text == text:
+			return true
+	return false
 
 
 func test_menu_view_defines_no_private_palette() -> void:
@@ -290,3 +298,15 @@ func test_menu_view_uses_no_text_glyph_icons() -> void:
 	assert_array(found).override_failure_message("text glyphs still in the view: %s" % str(found)).is_empty()
 	for id: String in ["StartBattleBtn", "OnlineBtn", "LoadBattleBtn", "LearnBtn"]:
 		assert_object(_view.buttons[id].get("row_icon")).override_failure_message("%s has no icon" % id).is_not_null()
+
+
+## Settings was a 13 px link in the top right corner, the least findable control of the menu. RED on main: its
+## parent is the masthead.
+func test_settings_is_the_fifth_row_of_the_list_after_learn() -> void:
+	var settings: Control = _view.buttons.SettingsBtn
+	assert_str(String(settings.get_parent().name)).is_equal("MenuButtons")
+	assert_int(settings.get_index()).is_equal(4)
+	assert_object(_view.buttons.LearnBtn.get_parent().get_child(3)).is_same(_view.buttons.LearnBtn)
+	var order: Array = _view.main_buttons().map(func(b: Control) -> String: return String(b.name))
+	assert_int(order.find("SettingsBtn")).is_equal(order.find("LearnBtn") + 1)
+

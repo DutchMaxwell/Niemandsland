@@ -79,3 +79,22 @@ func test_other_buttons_keep_the_click_tone() -> void:
 func test_ui_bus_exists_and_is_persisted() -> void:
 	assert_int(AudioServer.get_bus_index(AudioManager.BUS_UI)).is_greater_equal(0)
 	assert_bool(AudioManager.PERSISTED_BUSES.has(AudioManager.BUS_UI)).is_true()
+
+
+## A row that draws its own text answers the pointer with a fill and a tick, never with a scale
+## (scaled, the text turns soft). RED on main: the row grew to 1.02. The plain button proves the
+## hover scale itself still works.
+func test_flat_control_keeps_scale_one_on_hover() -> void:
+	var flat: Button = auto_free(Button.new())
+	flat.set_meta("ui_motion_flat", true)
+	var plain: Button = auto_free(Button.new())
+	add_child(flat)
+	add_child(plain)
+	await get_tree().process_frame
+	flat.mouse_entered.emit()
+	plain.mouse_entered.emit()
+	await get_tree().create_timer(0.3).timeout
+	assert_float(plain.scale.x).override_failure_message(
+		"the plain button no longer scales on hover").is_greater(1.0)
+	assert_float(flat.scale.x).override_failure_message(
+		"a flat control scaled to %s on hover" % flat.scale.x).is_equal(1.0)
