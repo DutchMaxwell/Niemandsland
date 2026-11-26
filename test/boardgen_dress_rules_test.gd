@@ -349,7 +349,9 @@ func _rules(lines: PackedStringArray) -> Array:
 
 func test_top_in_and_walkable_follow_the_grid() -> void:
 	var seen := {}
-	for s in SEEDS:
+	for s in range(1, 41):   # walks seeds until every kind below was seen (a grid-mapping check, not a count; D-R16 = b left fewer slabs per board)
+		if ["Roofed0", "Tower0", "Deck1", "Block2", "Wall0"].all(func(k: String) -> bool: return seen.has(k)):
+			break
 		var layout := _layout(s)
 		for i in (layout["cells"] as Array).size():
 			var c: Dictionary = layout["cells"][i]

@@ -4,14 +4,15 @@ extends GdUnitTestSuite
 ## header); a built board carries exactly one collider per solid box (size and centre) and no other. A generator change re-pins
 ## and states old -> new in its commit; a dressing change must not touch a pin. Run with NO NML_RUINTOWN_* variable set.
 ## Re-pinned 25.11. (look plan D-R2 = C: intact 90 %, raised minimum 10 %, at least 8 houses; solids 89 -> 77, 75 -> 73).
+## Re-pinned 26.11. (look plan round 4, D-R16 = b: raised minimum 4 %, 3 infill pairs; solids 77 -> 69, 73 -> 73).
 
 const Census := preload("res://tools/boardgen/truth_census.gd")
 const IN := 0.0254
 const PINS := {
-	41: {"layout": "a7cbb602d34ac1e5041494e1c8510244bfb812aa7cc214a97a101f1b59b72714", "solids": 77,
-		"colliders": "7a101f7102133d6076194e2f5c496b630d90159bb656627a485fc45ffc2ce575"},
-	25: {"layout": "66e8302e1d65af655f4b02d29430399dc8899b222e3e5ce1d6c20b2cc3f594e8", "solids": 73,
-		"colliders": "417395614bfe1bcc6d43e800ad8f7bb69eb0888dc3308becdfc101202e05dc2d"},
+	41: {"layout": "c10ea4e9607b1a6afe07e8a52eb5dc887ac62dc70ea591ddb8a27db940164a0c", "solids": 69,
+		"colliders": "7b0a1346e847eac72719e7b6937077c500882ae3173fe89d3c58d1153f5b5ac4"},
+	25: {"layout": "a4c209c543d95746e6648d3d66bcd9e6a8af05d7ee2c8d6cdbc0eac4055fd274", "solids": 73,
+		"colliders": "795ed50d195802f1297cd7b2d7ba4ee0b0cd955a176fa99d9bcd1b8514778542"},
 }
 const BUILT_SEEDS := 20   # seeds 1..20 are built whole
 

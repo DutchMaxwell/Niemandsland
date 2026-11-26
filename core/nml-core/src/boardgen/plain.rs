@@ -247,6 +247,7 @@ mod tests {
     // re-pinned 22.11. (towers plan T2, c35f70fddda0af2c -> e0da3e93e0e428d0): one half-turn pair of tall towers between the bands
     // re-pinned 22.11. (sight plan S2, e0da3e93e0e428d0 -> fae627164db9c408): a house is its ridge (4.5 in) high in level_in
     // re-pinned 25.11. (look plan D-R2 = C, fae627164db9c408 -> 25f0f5d83c862cfe): intact 90 %, raised minimum 10 %, at least 8 houses
-    const PINNED_TOWN_42: &str = "25f0f5d83c862cfe";
+    // re-pinned 26.11. (look plan round 4, D-R16 = b, 25f0f5d83c862cfe -> acda780062931af3): raised minimum 4 %, 3 infill pairs
+    const PINNED_TOWN_42: &str = "acda780062931af3";
     const PINNED_SEED_42: &str = "cbcd64fada596527";
 }
