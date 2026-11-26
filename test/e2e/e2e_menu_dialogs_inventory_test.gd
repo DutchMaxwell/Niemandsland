@@ -189,12 +189,19 @@ func test_credits_and_quit_dialogs_keep_their_words() -> void:
 	await _frames(2)
 	var credits := _dialog_titled("Credits & licenses")
 	assert_object(credits).is_not_null()
-	var quit := _dialog_titled("Quit Niemandsland") as ConfirmationDialog
-	assert_object(quit).is_not_null()
-	assert_str(quit.ok_button_text).is_equal("Quit")
-	assert_str(quit.cancel_button_text).is_equal("Back")
-	assert_str(quit.dialog_text).is_equal("Are you sure you want to quit Niemandsland?")
-	assert_object(quit.get_viewport().gui_get_focus_owner()).is_same(quit.get_cancel_button())
+	var quit: PromptCard = _menu.get("_exit_card")
+	assert_object(quit).override_failure_message("Quit opens no prompt card").is_not_null()
+	if quit == null:
+		return
+	assert_str(quit.title).is_equal("Quit Niemandsland")
+	assert_str(quit.ok_button.text).is_equal("Quit")
+	assert_str(quit.cancel_button.text).is_equal("Back")
+	var words: Array[String] = []
+	for l: Node in quit.find_children("*", "Label", true, false):
+		words.append((l as Label).text)
+	assert_bool(words.has("Are you sure you want to quit Niemandsland?")).is_true()
+	assert_object(quit.get_viewport().gui_get_focus_owner()).is_same(quit.cancel_button)
+	quit.cancel_button.pressed.emit()   # never press Quit: it ends the test run
 	assert_bool(credits.get_ok_button() != null).is_true()
 
 
@@ -240,23 +247,22 @@ func test_dialogs_wear_the_house_chrome() -> void:
 	_menu._on_exit_pressed()
 	await _frames(2)
 	assert_bool(_wears_house_chrome(_dialog_titled("Credits & licenses"))).override_failure_message("credits is not in the house style").is_true()
-	var quit := _dialog_titled("Quit Niemandsland") as ConfirmationDialog
-	assert_bool(_wears_house_chrome(quit)).override_failure_message("quit is not in the house style").is_true()
-	assert_str(String(quit.get_cancel_button().theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	var quit: PromptCard = _menu._exit_card
+	assert_str(String(quit.ok_button.theme_type_variation)).override_failure_message("quit is not in the house style").is_equal(String(HouseStyle.PRIMARY))
+	assert_str(String(quit.cancel_button.theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
 	assert_bool(_wears_house_chrome(_update_prompt("notes"))).override_failure_message("update prompt is not in the house style").is_true()
 
 
 ## The dialog ignores a script minimum size for its buttons: only the theme constant reaches them (red on
-## main: 19 px tall).
-func test_quit_dialog_buttons_stand_at_action_height() -> void:
-	_menu._on_exit_pressed()
+## main: 19 px tall). The credits window stands for every window that is still an AcceptDialog (Quit is a
+## prompt card now).
+func test_dialog_buttons_stand_at_action_height() -> void:
+	_menu._on_credits_pressed()
 	await _frames(2)
-	var quit := _dialog_titled("Quit Niemandsland") as ConfirmationDialog
-	assert_object(quit).is_not_null()
-	var ok := quit.get_ok_button().size
-	var cancel := quit.get_cancel_button().size
+	var credits := _dialog_titled("Credits & licenses") as AcceptDialog
+	assert_object(credits).is_not_null()
+	var ok := credits.get_ok_button().size
 	assert_float(ok.y).override_failure_message("OK button is %s px tall" % ok.y).is_greater_equal(float(HouseStyle.H_ACTION))
-	assert_float(cancel.y).override_failure_message("Back button is %s px tall" % cancel.y).is_greater_equal(float(HouseStyle.H_ACTION))
 	assert_float(ok.x).override_failure_message("OK button is %s px wide" % ok.x).is_greater_equal(120.0)
 
 

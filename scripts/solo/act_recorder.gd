@@ -216,7 +216,7 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## endpoints and Melee Shrouding band, Counter / Destructive / Piercing Hunter in melee) are stamped 92 with EPOCH_92_MELEE_CAUSES.
 ## The AI skirting Dangerous ground (a plain move's goal read and the sideways re-plan), the 3.6 faction folders resolving their rules
 ## and the volley's spell rider switched off are stamped 93 with EPOCH_93_DANGER_RULES_RIDER.
-static var rules_epoch: int = 101
+static var rules_epoch: int = 103
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -328,6 +328,11 @@ const EPOCH_100_SKIRMISH_JUMP := 100
 ## The core's frozen `EPOCH_101_SKIRMISH_PUSH` (acts.rs): in the two skirmish games an attacker may push a unit its attack left Shaken.
 ## Nothing in the table gates on it; it mirrors the core's live epoch.
 const EPOCH_101_SKIRMISH_PUSH := 101
+## The core's frozen `EPOCH_102_CASUALTY_CHAIN` and `EPOCH_103_COMMAND_BANNER` (acts.rs): a gff casualty order keeps the 9 in chain;
+## an AoF: Skirmish command group's Banner and Musician reach the picked units and live with their bearer. Nothing in the table gates
+## on them; they mirror the core's live epoch.
+const EPOCH_102_CASUALTY_CHAIN := 102
+const EPOCH_103_COMMAND_BANNER := 103
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

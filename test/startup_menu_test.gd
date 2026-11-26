@@ -54,7 +54,7 @@ func test_escape_closes_group_without_quit_dialog() -> void:
 	event.pressed = true
 	_menu._unhandled_key_input(event)
 	assert_bool(_menu.view.route_panel.visible).is_false()
-	assert_object(_menu._exit_confirm).is_null()
+	assert_object(_menu._exit_card).is_null()
 	assert_bool(_menu.view.buttons.LearnBtn.has_focus()).is_true()
 
 func test_group_focus_cycles_inside_group() -> void:

@@ -2403,7 +2403,7 @@ static func _unit_profile(u: GameUnit) -> Dictionary:
 	for m in u.models:
 		wounds_max.append((m as ModelInstance).wounds_max)
 	var bands := SoloController.sim_move_bands(u)
-	return {
+	var profile := {
 		"unit_id": u.unit_id, "name": u.get_name(), "quality": u.get_quality(),
 		"defense": u.get_defense(), "tough": maxi(AiEv.unit_rating(u, "Tough"), 1),
 		# The army list's own points cost (base + selected upgrades), read the
@@ -2450,6 +2450,11 @@ static func _unit_profile(u: GameUnit) -> Dictionary:
 		"item_grants": _granted_rules(u),
 		"attached_hero_rules": _attached_hero_rules(u),
 	}
+	# Ruling D16: the units a command group's Banner and Musician reach, as unit ids; absent = none, as the core reads it.
+	var picks: Array = u.unit_properties.get("command_picks", [])
+	if not picks.is_empty():
+		profile["command_picks"] = picks.duplicate()
+	return profile
 
 
 ## NML-1073 M2-5b: the DYNAMIC half of the profile above — every field whose

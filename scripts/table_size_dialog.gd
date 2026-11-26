@@ -34,7 +34,8 @@ var selected_size := "standard"
 var custom_inches := Vector2(72,48)
 var _biome_keys: Array = BIOMES.keys()
 var _emitted := false
-var _unit_option: OptionButton
+var _unit_option: OptionButton   # hidden twin of the segment pair: holds the unit (0 = in, 1 = cm)
+var _unit_segments: HBoxContainer   # Inches | Centimeters
 var _width_input: LineEdit
 var _length_input: LineEdit
 var _biome_buttons: Dictionary = {}
@@ -228,7 +229,18 @@ func _build_ui() -> void:
 	_unit_option.add_theme_font_override("font",FONT)
 	_unit_option.add_theme_font_size_override("font_size",12)
 	_unit_option.item_selected.connect(_on_units_changed)
+	_unit_option.visible = false
 	size_header.add_child(_unit_option)
+	_unit_segments = HouseStyle.button_row(["Inches","Centimeters"],HouseStyle.SEGMENT,HouseStyle.H_CHIP)
+	_unit_segments.theme = HouseStyle.theme()
+	_unit_segments.size_flags_horizontal = Control.SIZE_SHRINK_END
+	for i in 2:
+		var segment := _unit_segments.get_child(i) as Button
+		segment.focus_mode = Control.FOCUS_ALL   # reachable by keyboard, as the dropdown was
+		segment.pressed.connect(func() -> void:
+			_unit_option.select(i)
+			_on_units_changed(i))
+	size_header.add_child(_unit_segments)
 	var presets := HBoxContainer.new()
 	presets.add_theme_constant_override("separation",10)
 	left.add_child(presets)
@@ -466,6 +478,8 @@ func _refresh() -> void:
 		_style(_biome_buttons[key],key == selected_biome)
 	for key in _size_buttons:
 		_style(_size_buttons[key],key == selected_size)
+	for i in 2:
+		HouseStyle.set_selected(_unit_segments.get_child(i) as Button,i == _unit_option.selected)
 	_size_labels.standard.text = _size_text(Vector2(72,48))
 	_size_labels.square.text = _size_text(Vector2(48,48))
 	_custom.visible = selected_size == "custom"
