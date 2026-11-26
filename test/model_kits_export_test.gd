@@ -27,3 +27,15 @@ func test_the_export_writes_the_tables_own_per_model_loadout() -> void:
 	assert_int(count.call("Flame-Mount")).is_equal(3)
 	assert_int(count.call("Custodian Axe")).is_equal(2)
 	assert_int(count.call("Custodian Spear")).is_equal(1)
+
+
+## KIT-BEARER-NAME K3: an AoF: Skirmish command group names its bearers in the sidecar (the models the import gave the
+## Banner and the Musician); a gf list names none, so its sidecar keeps its shape.
+func test_the_export_names_the_command_group_bearers() -> void:
+	var fx: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://test/fixtures/ratmen_warriors_export.json"))
+	var holder: Node = auto_free(Node.new())
+	add_child(holder)
+	var res := ModelKitsExport.kits_of_list({"name": "t", "gameSystem": "aofs", "units": [fx["drill"]]}, holder)
+	assert_dict(res.get("bearers", {})).is_equal({"0_%s" % str(fx["drill"]["id"]): {"cmd_bearer": 2, "cmd_musician": 3}})
+	var gf: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(FIXTURE))
+	assert_bool(ModelKitsExport.kits_of_list(gf, holder).has("bearers")).is_false()

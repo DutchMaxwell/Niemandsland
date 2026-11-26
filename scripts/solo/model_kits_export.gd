@@ -11,7 +11,8 @@ class_name ModelKitsExport
 const FORMAT := "nml-kits-v1"
 
 
-## {"format", "units": {"<index>_<id>": [kit per model, model order]}}, or {} when the list does
+## {"format", "units": {"<index>_<id>": [kit per model, model order]}, "bearers": {"<index>_<id>": {"cmd_bearer": slot,
+## "cmd_musician": slot}} (only when a unit has a command group)}, or {} when the list does
 ## not import. Model nodes are bare Node3Ds parented under `parent`; the caller frees it.
 static func kits_of_list(data: Dictionary, parent: Node) -> Dictionary:
 	var client := OPRApiClient.new()
@@ -33,9 +34,32 @@ static func kits_of_list(data: Dictionary, parent: Node) -> Dictionary:
 	OPRArmyManager.attach_joined_heroes_of(army.units, by_unit)
 	OPRArmyManager.expand_auras_of(army.units, by_unit)
 	var units := {}
+	var bearers := {}
 	for i in range(order.size()):
 		var kits: Array = []
-		for m in (order[i][1] as GameUnit).models:
+		var gu := order[i][1] as GameUnit
+		for m in gu.models:
 			kits.append(BattleSim._model_kit(m as ModelInstance))
-		units["%d_%s" % [i, str((order[i][0] as OPRApiClient.OPRUnit).id)]] = kits
-	return {"format": FORMAT, "units": units}
+		var key := "%d_%s" % [i, str((order[i][0] as OPRApiClient.OPRUnit).id)]
+		units[key] = kits
+		var b := bearers_of(gu)
+		if not b.is_empty():
+			bearers[key] = b
+	var out := {"format": FORMAT, "units": units}
+	if not bearers.is_empty():
+		out["bearers"] = bearers
+	return out
+
+
+## KIT-BEARER-NAME K3: an AoF: Skirmish command group's bearers at full strength, the plain keys BattleSim.capture
+## writes (`cmd_bearer`; `cmd_musician` only when another model carries the Musician); {} for every other unit.
+static func bearers_of(gu: GameUnit) -> Dictionary:
+	if not BattleSim._carries_command(gu):
+		return {}
+	var rules: Array = gu.get_special_rules()
+	var bearer := BattleSim._command_bearer(gu, "Banner" if rules.has("Banner") else "Musician")
+	var out := {"cmd_bearer": bearer}
+	var musician := BattleSim._command_bearer(gu, "Musician")
+	if rules.has("Banner") and rules.has("Musician") and musician != bearer:
+		out["cmd_musician"] = musician
+	return out
