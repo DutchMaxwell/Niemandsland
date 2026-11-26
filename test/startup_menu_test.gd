@@ -14,7 +14,7 @@ func after_test() -> void:
 
 func test_primary_routes_are_grouped() -> void:
 	var actions := _menu.find_child("MenuButtons",true,false)
-	assert_int(actions.get_child_count()).is_equal(4)
+	assert_int(actions.get_child_count()).is_equal(5)
 	assert_bool(_menu.host_online_btn.is_visible_in_tree()).is_false()
 	assert_bool(_menu.tutorial_btn.is_visible_in_tree()).is_false()
 	_menu.view.buttons.OnlineBtn.pressed.emit()
