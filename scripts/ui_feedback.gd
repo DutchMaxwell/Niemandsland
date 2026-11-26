@@ -64,9 +64,9 @@ func _play(stream: AudioStream) -> void:
 
 func _sound_for(b: BaseButton) -> AudioStreamWAV:
 	match b.theme_type_variation:
-		&"PrimaryButton":
+		&"PrimaryButton", HouseStyle.PRIMARY, HouseStyle.BAR_PRIMARY:
 			return _snd_confirm
-		&"DangerButton":
+		&"DangerButton", HouseStyle.DANGER_BUTTON:
 			return _snd_back
 		_:
 			return _snd_click
