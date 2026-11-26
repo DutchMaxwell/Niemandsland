@@ -1092,6 +1092,11 @@ pub const EPOCH_102_CASUALTY_CHAIN: u32 = 102;
 ///   actions the same way. Read only by `sim.rs` (`command_banner` in the rolled morale test, `command_musician_in` in the move band).
 pub const EPOCH_103_COMMAND_BANNER: u32 = 103;
 pub const CURRENT_RULES_EPOCH: u32 = 103;
+/// PENDING (KIT-BEARER-NAME, lead ruling 26.11.): each command upgrade lives with the model that carries it - the Musician
+/// is lost only when ITS model dies (`State::cmd_musician`, named by the table from the model's equipment), where it rode
+/// with the Banner's bearer. A list that names none keeps one bearer for both (the last model). A placeholder one past
+/// `CURRENT_RULES_EPOCH`. Records stamped 103 or below replay byte-exact. Read only by `sim.rs` (`musician_dead`).
+pub const PENDING_EPOCH_TWO_BEARERS: u32 = 104;
 /// PENDING (step 8b, the 3.6 books p.6 "fully within 12 in", every system): a deployment zone admits a model only when its
 /// whole base is inside (centre + 8 rim points, `deployment::zone_admits_base`), where it tested the base centre and a base
 /// overhung the line by up to one radius. Moves AI deployment spots in every system. A placeholder two past

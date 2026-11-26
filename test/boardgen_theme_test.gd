@@ -246,9 +246,9 @@ func test_the_wall_and_the_towers_are_crowned_with_merlons_inside_the_edge_strip
 	assert_int(count.call(true)).is_greater(count.call(false))   # the north half keeps more of its battlements
 
 
-func test_the_town_air_is_its_ground_fog_and_a_deepworks_board_keeps_mist_and_steam() -> void:
+func test_the_town_air_is_its_ground_fog_and_a_deepworks_board_breathes_the_same_fog_and_keeps_its_steam() -> void:
 	assert_array(BoardgenTheme.of(_town())["atmosphere"]).is_equal(["GroundFog"])
-	assert_array(BoardgenTheme.of(_fixture())["atmosphere"]).is_equal(["Mist", "Steam"])
+	assert_array(BoardgenTheme.of(_fixture())["atmosphere"]).is_equal(["GroundFog", "Steam"])
 	GraphicsSettings.show_board_mist = true
 	var node := _built(_town())
 	node.refresh_atmosphere()
@@ -265,7 +265,22 @@ func test_the_town_air_is_its_ground_fog_and_a_deepworks_board_keeps_mist_and_st
 	assert_object(node.get_node_or_null("GroundFog")).is_null()
 	GraphicsSettings.show_board_mist = true
 	assert_object(node.get_node_or_null("GroundFog")).is_not_null()
-	assert_object(_built(_fixture()).get_node_or_null("GroundFog")).is_null()
+	assert_object(_built(_fixture()).get_node_or_null("GroundFog")).is_not_null()
+
+
+## LOOK5 F2r: a Tiefwerk board's fog keeps the models clear as the town's does (BoardgenFogClearing).
+func test_a_deepworks_board_fog_clears_round_a_model() -> void:
+	GraphicsSettings.show_board_mist = true
+	var node := _built(_fixture())
+	var fog := node.get_node_or_null("GroundFog") as BoardgenGroundFog
+	assert_object(fog).is_not_null()
+	var model := Node3D.new()
+	model.add_to_group(BoardgenFogClearing.MODEL_GROUP)
+	node.add_child(model)
+	model.position = Vector3(5.0, 0.0, 3.0) * BoardgenGroundFog.INCHES_TO_METERS
+	fog.update_clearing(node)
+	assert_float(fog.clearing_at(Vector2(5.0, 3.0))).is_greater(0.9)
+	assert_float(fog.clearing_at(Vector2(5.0 + 2.0, 3.0))).is_equal(0.0)
 
 
 func test_the_town_has_lanterns_at_the_square_and_the_gates_inside_the_edge_strip_and_at_most_eight_lights() -> void:

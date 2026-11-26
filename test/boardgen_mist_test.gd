@@ -76,17 +76,17 @@ func _board(layout: Dictionary) -> BoardgenGreybox:
 
 func test_the_board_has_a_mist_node_while_the_setting_is_on_and_loses_it_at_once_when_it_goes_off() -> void:
 	var node := _board(_layout([Vector2i(2, 2)]))
-	assert_object(node.get_node_or_null("Mist")).is_not_null()
+	assert_object(node.get_node_or_null("GroundFog")).is_not_null()
 	GraphicsSettings.show_board_mist = false   # the setter tells every board
-	assert_object(node.get_node_or_null("Mist")).is_null()
+	assert_object(node.get_node_or_null("GroundFog")).is_null()
 	GraphicsSettings.show_board_mist = true
-	assert_object(node.get_node_or_null("Mist")).is_not_null()
+	assert_object(node.get_node_or_null("GroundFog")).is_not_null()
 	assert_int((node.find_child("Colliders", false, false) as StaticBody3D).get_child_count()).is_equal(0)   # the mist never blocks standing room
 
 
 func test_a_board_built_while_the_setting_is_off_has_no_mist_and_the_low_presets_and_calm_mode_turn_it_off() -> void:
 	GraphicsSettings.show_board_mist = false
-	assert_object(_board(_layout([])).get_node_or_null("Mist")).is_null()
+	assert_object(_board(_layout([])).get_node_or_null("GroundFog")).is_null()
 	GraphicsSettings.show_board_mist = true
 	assert_bool(GraphicsSettings.board_mist_enabled()).is_true()
 	for preset in [GraphicsSettings.QualityPreset.PERFORMANCE, GraphicsSettings.QualityPreset.LOW]:

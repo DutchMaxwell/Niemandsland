@@ -8,7 +8,7 @@ extends GdUnitTestSuite
 ## console side effects). test_inventory_check_names_a_removed_control proves the presence check can fail.
 
 const PRESETS := ["Day", "Sunset", "Night", "Overcast", "Rain"]
-const TOGGLES := ["War-torn (fires at ruins)", "Distant war sounds", "Calm Mode (Ruhiger Modus)", "Reduce Motion", "Fullscreen", "Show Move Trails",
+const TOGGLES := ["War-torn (fires at ruins)", "Distant war sounds", "Calm Mode", "Reduce Motion", "Fullscreen", "Show Move Trails",
 	"Show Rule Texts at the Table", "Tilt-Shift (Depth of Field)", "Combat Stage (paces the resolution)",
 	"Enforce Movement Limit", "AI Explanations Stay Up", "Combat Effects"]
 const LABELS := ["ATMOSPHERE:", "PARAMETERS:", "Sun Color", "Ambient Color", "AUDIO:", "DISPLAY:", "UI Scale",
@@ -232,6 +232,21 @@ func test_display_toggles_reach_graphics_settings_and_are_put_back() -> void:
 	assert_bool(_toggle("Fullscreen").button_pressed).is_equal(GraphicsSettings.fullscreen)
 
 
+## Graphics, Audio and Gameplay hold their controls (sheet 05; red on main: they are still on Lighting lab).
+func test_graphics_audio_and_gameplay_hold_their_controls() -> void:
+	var pages := {"Graphics": ["Tilt-Shift (Depth of Field)", "Board Mist and Steam", "Combat Effects", "Miniature Idle Motion"],
+		"Audio": ["Distant war sounds"],
+		"Gameplay": ["Show Move Trails", "Show Rule Texts at the Table", "Combat Stage (paces the resolution)",
+			"Enforce Movement Limit", "AI Explanations Stay Up"]}
+	for page: String in pages:
+		for text: String in pages[page]:
+			assert_bool(_panel._page(page).is_ancestor_of(_toggle(text))).override_failure_message("%s is not on %s" % [text, page]).is_true()
+	assert_bool(_panel._page("Graphics").is_ancestor_of(_panel.find_child("TableFrameOption", true, false))).override_failure_message("the frame is not on Graphics").is_true()
+	assert_bool(_panel._page("Gameplay").is_ancestor_of(_label("Gore"))).override_failure_message("Gore is not on Gameplay").is_true()
+	for bus: String in _panel.volume_sliders:
+		assert_bool(_panel._page("Audio").is_ancestor_of(_panel.volume_sliders[bus])).override_failure_message("%s volume is not on Audio" % bus).is_true()
+
+
 func test_ui_scale_and_stage_beat_sliders_reach_graphics_settings_and_are_put_back() -> void:
 	var scale_slider := _label("UI Scale").get_parent().get_parent().get_child(1) as HSlider
 	var before_scale: float = GraphicsSettings.ui_scale
@@ -252,7 +267,7 @@ func test_ui_scale_and_stage_beat_sliders_reach_graphics_settings_and_are_put_ba
 
 
 func test_calm_toggle_is_a_preset_over_the_display_switches_and_is_put_back() -> void:
-	var calm := _toggle("Calm Mode (Ruhiger Modus)")
+	var calm := _toggle("Calm Mode")
 	assert_object(calm).is_not_null()
 	var before := {}
 	for f: String in ["show_combat_effects", "idle_motion", "reduce_motion", "tilt_shift"]:
@@ -292,8 +307,20 @@ func test_the_sheet_has_six_pages_and_shows_one_at_a_time() -> void:
 		return
 	var names: Array = rail.get_children().map(func(n: Node) -> String: return (n as Button).text)
 	assert_array(names).is_equal(["Display", "Graphics", "Audio", "Gameplay", "Accessibility", "Lighting lab"])
-	assert_bool(_panel._page("Lighting lab").visible).is_true()
-	(rail.get_child(0) as Button).pressed.emit()
+	assert_bool(_panel._page("Display").visible).override_failure_message("the sheet does not open on Display").is_true()
+	(rail.get_child(5) as Button).pressed.emit()
 	for p: String in names:
-		assert_bool(_panel._page(p).visible).override_failure_message("page %s" % p).is_equal(p == "Display")
-	assert_bool((rail.get_child(0) as Button).button_pressed).is_true()
+		assert_bool(_panel._page(p).visible).override_failure_message("page %s" % p).is_equal(p == "Lighting lab")
+	assert_bool((rail.get_child(5) as Button).button_pressed).is_true()
+
+
+## Display holds Fullscreen and UI Scale, Accessibility holds Calm Mode and Reduce Motion (sheet 05; red on main:
+## everything is on Lighting lab).
+func test_display_and_accessibility_hold_their_controls() -> void:
+	for text: String in ["Fullscreen", "Calm Mode", "Reduce Motion"]:
+		var page := "Display" if text == "Fullscreen" else "Accessibility"
+		var t := _toggle(text)
+		assert_object(t).override_failure_message("no toggle %s" % text).is_not_null()
+		if t != null:
+			assert_bool(_panel._page(page).is_ancestor_of(t)).override_failure_message("%s is not on %s" % [text, page]).is_true()
+	assert_bool(_panel._page("Display").is_ancestor_of(_label("UI Scale"))).override_failure_message("UI Scale is not on Display").is_true()
