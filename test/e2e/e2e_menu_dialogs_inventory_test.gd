@@ -234,6 +234,20 @@ func test_dialogs_wear_the_house_chrome() -> void:
 	assert_bool(_wears_house_chrome(_update_prompt("notes"))).override_failure_message("update prompt is not in the house style").is_true()
 
 
+## The dialog ignores a script minimum size for its buttons: only the theme constant reaches them (red on
+## main: 19 px tall).
+func test_quit_dialog_buttons_stand_at_action_height() -> void:
+	_menu._on_exit_pressed()
+	await _frames(2)
+	var quit := _dialog_titled("Quit Niemandsland") as ConfirmationDialog
+	assert_object(quit).is_not_null()
+	var ok := quit.get_ok_button().size
+	var cancel := quit.get_cancel_button().size
+	assert_float(ok.y).override_failure_message("OK button is %s px tall" % ok.y).is_greater_equal(float(HouseStyle.H_ACTION))
+	assert_float(cancel.y).override_failure_message("Back button is %s px tall" % cancel.y).is_greater_equal(float(HouseStyle.H_ACTION))
+	assert_float(ok.x).override_failure_message("OK button is %s px wide" % ok.x).is_greater_equal(120.0)
+
+
 func test_dialogs_define_no_colour_literals() -> void:
 	var src := FileAccess.get_file_as_string("res://scripts/startup_menu.gd")
 	var mine := src.substr(src.find("func _show_tutorial_picker"), src.find("func _launch_scenario") - src.find("func _show_tutorial_picker"))
