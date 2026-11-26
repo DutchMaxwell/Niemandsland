@@ -43,6 +43,8 @@ uniform vec3 fallback_color = vec3(0.2, 0.35, 0.2);
 uniform float vignette_strength : hint_range(0.0, 1.0) = 0.0;
 uniform float vignette_start : hint_range(0.0, 1.0) = 0.80;
 
+#include "res://shaders/base_board_ground.gdshaderinc"
+
 varying vec2 world_xz;
 // Centred shape coordinate (base centre = 0, shape boundary = length 1). Baked into UV at
 // mesh-build time. The top is a flat QUAD (like a PlaneMesh, which the sun answers identically);
@@ -69,11 +71,14 @@ void fragment() {
 	// Same centre-crop as table_ground.gdshader (clamp keeps samples inside the battlemap).
 	vec2 macro_uv = clamp(0.5 + (plane_uv - 0.5) * uv_scale, vec2(0.0), vec2(1.0));
 	vec3 base_col = has_texture ? texture(albedo_tex, macro_uv).rgb : fallback_color;
+	vec3 board_col;
+	bool on_board = board_ground(world_xz, board_col);
+	base_col = on_board ? board_col : base_col;
 
 	// Same micro colour variation as the table so the window blends seamlessly. Uses the SAME
 	// detail UV (plane_uv * detail_tiling == the table's UV * detail_tiling at this world point).
 	vec2 duv = plane_uv * detail_tiling;
-	if (has_texture) {
+	if (has_texture && !on_board) {
 		float h = texture(detail_height, duv).r;
 		base_col *= 1.0 + (h - 0.5) * 2.0 * detail_albedo_strength;
 	}
@@ -83,6 +88,9 @@ void fragment() {
 	base_col *= 1.0 - v * vignette_strength;
 
 	ALBEDO = base_col;
+	if (on_board) {
+		EMISSION = pow(base_col, vec3(2.2)) * board_fill;
+	}
 	ROUGHNESS = roughness_value;
 	METALLIC = 0.0;
 
