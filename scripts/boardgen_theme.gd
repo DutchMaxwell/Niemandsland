@@ -35,6 +35,13 @@ const TOWN_TEXELS_PER_IN := Vector2(110.0, 180.0)
 const TOWN_FEATURE_MIN_IN := 0.30
 const TOWN_SETS_MAX_BYTES := 16000000
 ## The mean linear albedo of each set (measured on the staged masters): the shader multiplies its palette tone by texture / mean, so a tint survives and only the detail changes.
+## The four SOIL sets of the yards (LOOK5 R20, S2; lead pick 26.11.: green direction (b) realistic dark), in the order of the shader's soil layers: bare, mud, grass, verge / wet.
+## Albedo and normal 1024 px, ORH (R ao, G roughness, B height) 512 px; read only as texture arrays by ruintown_soil.gdshaderinc (S4 calls it).
+const TOWN_SOIL := ["soil_bare", "soil_mud", "soil_grass", "soil_verge"]
+const TOWN_SOIL_CONTRACT := {"soil_bare": {"tile_in": 6.0, "px": 1024, "feature_in": 0.0}, "soil_mud": {"tile_in": 6.0, "px": 1024, "feature_in": 0.0},
+		"soil_grass": {"tile_in": 6.0, "px": 1024, "feature_in": 0.0}, "soil_verge": {"tile_in": 6.0, "px": 1024, "feature_in": 0.0}}
+## Their mean linear albedo (the 1k sources: polyhaven stony_dirt_path, muddy_tracks, sparse_grass, brown_mud_03): the shader's ratio denominator.
+const TOWN_SOIL_MEANS := [Vector3(0.0806, 0.048, 0.0257), Vector3(0.0807, 0.0292, 0.0114), Vector3(0.0819, 0.0489, 0.0083), Vector3(0.0936, 0.0733, 0.048)]
 const TOWN_SET_MEANS := {"stone": Vector3(0.377, 0.244, 0.137), "plaster": Vector3(0.4065, 0.3669, 0.3513), "timber": Vector3(0.1207, 0.0743, 0.0443), "earth": Vector3(0.1747, 0.1326, 0.0824)}
 const DEEPWORKS_DRESSING := ["Props", "Landmarks", "Debris", "Sumps", "Rails"]
 ## The air of a board: the town's ground fog with its lamp pools (BoardgenGroundFog) on both themes (maintainer 26.11.: the town's fog goes to Tiefwerk);
