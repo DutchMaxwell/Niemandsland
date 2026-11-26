@@ -91,6 +91,7 @@ func test_join_dialog_has_every_field_and_keeps_an_unusable_code_open() -> void:
 	assert_bool(d.visible).is_true()
 	_menu._join_code_input.text = "ABC-123"
 	d.confirmed.emit()
+	await get_tree().create_timer(HudTokens.DUR_COMMIT + 0.1).timeout   # the commit beat, then the screen change
 	assert_bool(_menu.entered_game).override_failure_message("a usable code did not join").is_true()
 
 

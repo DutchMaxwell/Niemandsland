@@ -214,6 +214,7 @@ func test_host_creation_commits_selected_table_and_network_settings_together() -
 	probe._table_setup._select_biome("arid_desert")
 	probe._table_setup._select_size("square")
 	probe._table_setup._confirm()
+	await get_tree().create_timer(HudTokens.DUR_COMMIT + 0.1).timeout   # the commit beat, then the screen change
 	var result := {}
 	for key in keys:
 		result[key] = ProjectSettings.get_setting(key,null)
@@ -328,6 +329,7 @@ func test_the_table_setup_fades_in_and_out() -> void:
 	await get_tree().create_timer(HudTokens.DUR_SCREEN + 0.15).timeout
 	assert_float(content.modulate.a).is_equal_approx(1.0, 0.01)
 	dialog._confirm()
+	await get_tree().create_timer(HudTokens.DUR_COMMIT + 0.05).timeout   # the commit beat (step 62) comes first
 	assert_bool(probe.entered_game).is_true()
 	assert_bool(is_instance_valid(dialog) and dialog.visible).override_failure_message("the setup is gone at once").is_true()
 	await get_tree().create_timer(HudTokens.DUR_SCREEN + 0.15).timeout
@@ -368,3 +370,18 @@ func test_the_loading_picture_names_a_new_table() -> void:
 		_menu._name_the_table(plain)   # no pending setup any more: the plain overlay
 	ProjectSettings.set_setting("niemandsland/pending_table_setup", previous)
 	assert_bool(plain._title.visible).override_failure_message("a load must keep the plain overlay").is_false()
+
+## Step 62, the commit beat: Create table sweeps a fill across its button over DUR_COMMIT and plays the commit tone,
+## and only then does the screen change (red on main: the screen changes at once, no sweep).
+func test_create_table_commits_with_a_sweep_before_the_screen_changes() -> void:
+	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	probe.set_script(MenuTransitionProbe)
+	add_child(probe)
+	probe._on_start_battle_pressed()
+	var create: Button = probe._table_setup._create
+	probe._table_setup._confirm()
+	assert_bool(probe.entered_game).override_failure_message("the screen changed before the beat").is_false()
+	assert_object(create.find_child("CommitSweep", false, false)).override_failure_message("no sweep on Create table").is_not_null()
+	await get_tree().create_timer(HudTokens.DUR_COMMIT + 0.1).timeout
+	assert_bool(probe.entered_game).is_true()
+	assert_bool(UiFeedback.has_method("play_commit")).override_failure_message("no commit tone").is_true()

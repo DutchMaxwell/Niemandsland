@@ -64,6 +64,7 @@ var _kit: BoardgenKit
 var _tiefwerk: TiefwerkLibrary = null   # the authored surfaces (R2, on demand); the board is procedural until they are cached
 var _decals: BoardgenDecals = null
 var _life: BoardgenTownLife = null
+var _soil_ok := false   # (LOOK5 S2) the four soil arrays are on the material
 var _surfaces: MultiMeshInstance3D   # the board's own surfaces: what the bases' ground bake draws (BoardgenGroundBake)
 var _ground_rect := Rect2()   # the board itself in board-local metres (x, z)
 var _bake_queued := false
@@ -557,6 +558,7 @@ func _apply_detail() -> void:
 	var on: bool = graphics != null and detail_for(int(graphics.current_preset), RenderingServer.get_current_rendering_method() == "gl_compatibility")
 	if _material != null and graphics != null:
 		_material.set_shader_parameter("detail", 1.0 if on else 0.0)
+		_material.set_shader_parameter("soil_on", 1.0 if on and _soil_ok else 0.0)   # (LOOK5 S2) Medium and up, not Compatibility, all four soil sets cached
 		BoardgenTownWater.apply_preset(get_node_or_null("TownWater"), int(graphics.current_preset))
 		if _decals != null:
 			_decals.visible = on   # no decals on Low, Performance and in the Compatibility renderer
@@ -657,6 +659,26 @@ func _anchor() -> void:
 
 ## The authored surface sets of the town as shader parameters (plan R9 hook, T-R1): for coursed stone, plaster, timber and earth the albedo and normal textures when BOTH are cached, and `t_on`
 ## (x stone, y plaster, z timber, w earth) = 1 for each set that is complete. A missing set stays 0 and the shader keeps its procedural surface. Pure but for the library's cache.
+## The yards' soil (LOOK5 S2): the four BoardgenTheme.TOWN_SOIL sets as three Texture2DArray (albedo, normal, ORH) with their tile and means, or {} unless
+## every map of every set is cached and the arrays build (then the shader's soil_on stays 0: today's ground).
+static func town_soil(lib: TiefwerkLibrary) -> Dictionary:
+	var layers := {"albedo": [], "normal": [], "orm": []}
+	for set_name: String in BoardgenTheme.TOWN_SOIL:
+		for map: String in layers:
+			var t := lib.set_texture(set_name, map)
+			var img := t.get_image() if t != null else null
+			if img == null:
+				return {}
+			(layers[map] as Array).append(img)
+	var out := {"soil_tile": lib.tile_in(BoardgenTheme.TOWN_SOIL[0]), "soil_mean": PackedVector3Array(BoardgenTheme.TOWN_SOIL_MEANS)}
+	for map: String in layers:
+		var arr := Texture2DArray.new()
+		if arr.create_from_images(Array(layers[map], TYPE_OBJECT, "Image", null)) != OK:
+			return {}
+		out[{"albedo": "soil_alb", "normal": "soil_nrm", "orm": "soil_orh"}[map]] = arr
+	return out
+
+
 static func town_sets(lib: TiefwerkLibrary) -> Dictionary:
 	var out := {"t_on": Vector4.ZERO}
 	var on := [0.0, 0.0, 0.0, 0.0]
@@ -752,6 +774,10 @@ func _make_material(layout: Dictionary, theme: Dictionary) -> ShaderMaterial:
 		var sets := town_sets(lib)
 		for key: String in sets:
 			mat.set_shader_parameter(key, sets[key])
+		var soil := town_soil(lib)   # (LOOK5 S2) the yards' four soil sets as texture arrays, when all are cached
+		for key: String in soil:
+			mat.set_shader_parameter(key, soil[key])
+		_soil_ok = not soil.is_empty()
 		return mat
 	var bytes := PackedByteArray()
 	var feet := {}

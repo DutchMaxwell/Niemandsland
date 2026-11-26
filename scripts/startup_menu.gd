@@ -218,7 +218,25 @@ func _on_continue_pressed() -> void:
 	if _continue_path.is_empty():
 		return
 	ProjectSettings.set_setting("niemandsland/pending_load_path", _continue_path)
+	await _commit_beat(continue_btn)
 	_transition_to_game()
+
+
+## The commit beat (motion table): the commit tone, then a fill sweeps across the pressed button over
+## HudTokens.DUR_COMMIT (ease-in) before the screen changes. With Reduce Motion only the tone.
+func _commit_beat(button: Control) -> void:
+	UiFeedback.play_commit()
+	if UiMotion.reduced() or not is_instance_valid(button) or not button.is_visible_in_tree():
+		return
+	var sweep := ColorRect.new()
+	sweep.name = "CommitSweep"
+	sweep.color = Color(HouseStyle.INK, HouseStyle.PRESS_ALPHA)
+	sweep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sweep.size = Vector2(0.0, button.size.y)
+	button.add_child(sweep)
+	var tween := button.create_tween()
+	tween.tween_property(sweep, "size:x", button.size.x, HudTokens.DUR_COMMIT).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	await tween.finished
 
 
 func _on_start_battle_pressed() -> void:
@@ -262,10 +280,12 @@ func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> vo
 		RulesAutomation.remember_pick(_table_setup.selected_rules)
 	for key in host_settings:
 		ProjectSettings.set_setting(key,host_settings[key])
-	if UiMotion.reduced():
-		_table_setup.hide()
-	_fade_setup(_table_setup, 1.0, 0.0, true)   # fades out under the loading picture's fade-in
+	var setup := _table_setup
 	_table_setup = null
+	await _commit_beat(setup._create)
+	if UiMotion.reduced():
+		setup.hide()
+	_fade_setup(setup, 1.0, 0.0, true)   # fades out under the loading picture's fade-in
 	_transition_to_game()
 
 
@@ -752,6 +772,7 @@ func _on_join_confirmed() -> void:
 		url = InternetLobby.DEFAULT_RELAY_URL
 	# We took the close over from the dialog (dialog_hide_on_ok), so hide it before the
 	# scene swap — an embedded dialog would otherwise sit on top of the loading overlay.
+	await _commit_beat(_join_popup.get_ok_button())
 	_join_popup.hide()
 	_join_room_and_transition(code, url, PlayerIdentity.sanitize(_join_name_input.text))
 
