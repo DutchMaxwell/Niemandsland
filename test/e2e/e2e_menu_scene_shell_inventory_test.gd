@@ -90,6 +90,12 @@ func _click(c: Control) -> void:
 	await _frames(3)
 
 
+## A route closes with a motion; the panel is hidden when route_closed fires (at once with Reduce Motion).
+func _route_gone() -> void:
+	if _view.route_panel.visible:
+		await _view.route_closed
+
+
 func _button(text: String) -> Button:
 	for n: Node in _menu.find_children("*", "Button", true, false):
 		var b := n as Button
@@ -184,6 +190,7 @@ func test_online_route_lists_its_three_actions_and_closes_on_a_pick() -> void:
 	for t: String in ONLINE_ROUTE:
 		assert_object(_button(t)).override_failure_message("%s is missing from the online route" % t).is_not_null()
 	await _click(_button("Public tables"))
+	await _route_gone()
 	assert_bool(_view.route_panel.visible).override_failure_message("the route did not close on a pick").is_false()
 	assert_object(_menu._browse_popup).is_not_null()
 
@@ -196,6 +203,7 @@ func test_learn_route_lists_its_two_actions_and_back_returns_focus() -> void:
 	for t: String in LEARN_ROUTE:
 		assert_object(_button(t)).override_failure_message("%s is missing from the learn route" % t).is_not_null()
 	await _click(_button(HouseStyle.GLYPH_BACK + "  Back"))
+	await _route_gone()
 	assert_bool(_view.route_panel.visible).is_false()
 	assert_object(_view.get_viewport().gui_get_focus_owner()).is_same(learn_btn)
 
@@ -310,3 +318,33 @@ func test_settings_is_the_fifth_row_of_the_list_after_learn() -> void:
 	var order: Array = _view.main_buttons().map(func(b: Control) -> String: return String(b.name))
 	assert_int(order.find("SettingsBtn")).is_equal(order.find("LearnBtn") + 1)
 
+
+## A sub-menu panel moves (motion table): it fades and slides in, and it is still on screen the moment after
+## Close until its out motion has run. RED on main: it appeared and vanished at once.
+func test_route_panel_fades_and_slides_in_and_out() -> void:
+	var before_motion: bool = GraphicsSettings.reduce_motion
+	GraphicsSettings.reduce_motion = false
+	_view.show_route("help")
+	assert_float(_view.route_panel.modulate.a).override_failure_message("the panel opened at once").is_less(1.0)
+	await get_tree().create_timer(0.5).timeout
+	assert_float(_view.route_panel.modulate.a).is_equal(1.0)
+	_view.close_route()
+	assert_bool(_view.route_panel.visible).override_failure_message("the panel vanished at once").is_true()
+	if _view.route_panel.visible:
+		await _view.route_closed
+	assert_bool(_view.route_panel.visible).is_false()
+	assert_float(_view.route_panel.modulate.a).is_equal(1.0)
+	GraphicsSettings.reduce_motion = before_motion
+
+
+func test_route_panel_is_instant_with_reduce_motion() -> void:
+	var before_motion: bool = GraphicsSettings.reduce_motion
+	GraphicsSettings.reduce_motion = true
+	_view.show_route("help")
+	assert_float(_view.route_panel.modulate.a).is_equal(1.0)
+	var closed := [false]
+	_view.route_closed.connect(func() -> void: closed[0] = true)
+	_view.close_route()
+	assert_bool(_view.route_panel.visible).is_false()
+	assert_bool(closed[0]).is_true()
+	GraphicsSettings.reduce_motion = before_motion

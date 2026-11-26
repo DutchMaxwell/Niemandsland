@@ -53,6 +53,8 @@ func test_escape_closes_group_without_quit_dialog() -> void:
 	event.keycode = KEY_ESCAPE
 	event.pressed = true
 	_menu._unhandled_key_input(event)
+	if _menu.view.route_panel.visible:
+		await _menu.view.route_closed
 	assert_bool(_menu.view.route_panel.visible).is_false()
 	assert_object(_menu._exit_card).is_null()
 	assert_bool(_menu.view.buttons.LearnBtn.has_focus()).is_true()
@@ -72,6 +74,8 @@ func test_existing_routes_keep_their_own_handlers() -> void:
 func test_host_route_opens_existing_dialog_and_keeps_public_checkbox_focusable() -> void:
 	_menu.view.show_route("online")
 	_menu.host_online_btn.pressed.emit()
+	if _menu.view.route_panel.visible:
+		await _menu.view.route_closed
 	assert_bool(_menu.view.route_panel.visible).is_false()
 	assert_bool(_menu._host_popup.visible).is_true()
 	assert_object(_menu._relay_url_input).is_not_null()
