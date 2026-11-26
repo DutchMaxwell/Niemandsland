@@ -42,6 +42,17 @@ static func label(text_value: String) -> Label:
 	return lbl
 
 
+## An invitation code as it is typed: upper case, letters and digits only, six at most, the hyphen after the
+## third character ("abc123" -> "ABC-123").
+static func code_as_typed(raw: String) -> String:
+	var kept := ""
+	for ch: String in raw.to_upper():
+		if (ch >= "A" and ch <= "Z") or (ch >= "0" and ch <= "9"):
+			kept += ch
+	kept = kept.substr(0, 6)
+	return kept if kept.length() <= 3 else kept.substr(0, 3) + "-" + kept.substr(3)
+
+
 ## The relay address, folded away: a "Relay server:" row that opens the address field below it. Nobody needs
 ## the address unless the default relay is down, so it stays out of the way; the field keeps its default text
 ## and is read as before. Adds the row and the field to `content` and returns the field.
