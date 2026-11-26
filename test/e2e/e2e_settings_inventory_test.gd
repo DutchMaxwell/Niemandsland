@@ -496,3 +496,31 @@ func test_the_menus_page_buttons_are_rows_with_an_icon_and_a_tick() -> void:
 		assert_float(b.custom_minimum_size.y).is_equal(float(HouseStyle.H_ACTION))
 		assert_object(b.icon).is_null()
 		assert_bool((b.get_node("Tick") as Control).visible).is_false()
+
+
+## The menu's sheet has a footer under the pages (the note, Reset this page, a gold Close with its Esc cap) and draws its
+## switches as the 46 x 26 pill; the table's sheet has neither (sheet 05; red on main: no footer, Godot's own switch).
+func test_the_modal_sheet_has_a_footer_and_pill_switches() -> void:
+	var footer := _panel.find_child("Footer", true, false) as Control
+	assert_object(footer).override_failure_message("no footer row").is_not_null()
+	if footer == null:
+		return
+	var close := footer.get_node("FooterClose") as Button
+	assert_bool(close.visible).override_failure_message("the footer Close shows at the table").is_false()
+	_panel.set_modal(true)
+	assert_bool(close.visible).is_true()
+	assert_float(close.size.y if close.size.y > 0.0 else close.custom_minimum_size.y).is_equal(44.0)
+	assert_str((close.get_child(0) as Label).text).is_equal("Esc")
+	var note := footer.get_child(0) as Label
+	assert_str(note.text).is_equal("Changes apply at once and are saved.")
+	assert_bool(note.visible).is_true()
+	var pill := HouseStyle.menu_theme().get_icon(&"checked", &"CheckButton")
+	assert_that(pill.get_size()).is_equal(Vector2(46, 26))
+	assert_object(HouseStyle.menu_theme().get_icon(&"unchecked", &"CheckButton")).is_not_same(pill)
+	assert_int(HouseStyle.menu_theme().get_icon(&"grabber", &"HSlider").get_width()).is_equal(20)
+	_panel.show()
+	close.pressed.emit()
+	assert_bool(_panel.visible).override_failure_message("the footer Close did not hide the sheet").is_false()
+	_panel.set_modal(false)
+	assert_bool(close.visible).is_false()
+	assert_bool(note.visible).is_false()

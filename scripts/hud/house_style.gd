@@ -118,6 +118,9 @@ const MENU_FONT_ACTION := 16     # every button's text
 const MENU_H_ACTION := 44
 const MENU_PAD_PANEL := 22
 const MENU_ICON_BUTTON := 32     # the close box of a menu window
+const SWITCH_W := 46             # the menu's switch (CheckButton): a pill 46 x 26 with a 18 px knob
+const SWITCH_H := 26
+const MENU_KNOB := 20            # the menu's slider knob; its groove is 8 px high
 const H_PAGE_ROW := 56           # a page row of the settings rail (sheet 05)
 const FONT_PAGE_ROW := 19
 const ICON_PAGE_ROW := 24
@@ -267,6 +270,18 @@ static func menu_theme() -> Theme:
 			t.set_font_size(&"font_size", v, MENU_FONT_ACTION)
 	t.set_constant(&"buttons_min_height", &"AcceptDialog", MENU_H_ACTION)
 	t.set_stylebox(&"panel", PANEL_VARIANT, _box(PANEL, LINE_SOFT, RADIUS_PANEL, MENU_PAD_PANEL, MENU_PAD_PANEL))
+	# Switches (settings): the pill of the mockups - off a well with a rim and a muted knob, on a gold 25 % fill, gold rim
+	# and gold knob; sliders: an 8 px groove and a 20 px gold knob.
+	for pair: Array in [[&"unchecked", false, 1.0], [&"checked", true, 1.0], [&"unchecked_disabled", false, 0.4],
+			[&"checked_disabled", true, 0.4]]:
+		t.set_icon(pair[0], &"CheckButton", _switch(pair[1], pair[2]))
+		t.set_icon(StringName(String(pair[0]) + "_mirrored"), &"CheckButton", _switch(pair[1], pair[2]))
+	var menu_groove := _box(WELL, LINE, 4, 0, 0)
+	menu_groove.content_margin_top = 3
+	menu_groove.content_margin_bottom = 3
+	t.set_stylebox(&"slider", &"HSlider", menu_groove)
+	for icon_name: StringName in [&"grabber", &"grabber_highlight", &"grabber_disabled"]:
+		t.set_icon(icon_name, &"HSlider", _knob(GOLD if icon_name != &"grabber_disabled" else LINE, MENU_KNOB))
 	_menu_theme = t
 	return t
 
@@ -451,9 +466,34 @@ static func theme() -> Theme:
 	return t
 
 
+## The menu's switch: a pill SWITCH_W x SWITCH_H with a knob at its left (off) or right (on), at `alpha`.
+static func _switch(on: bool, alpha: float) -> ImageTexture:
+	var img := Image.create(SWITCH_W, SWITCH_H, false, Image.FORMAT_RGBA8)
+	var radius := SWITCH_H * 0.5
+	var fill := _alpha(GOLD, 0.25) if on else WELL
+	var rim := GOLD if on else LINE
+	var knob_at := Vector2(SWITCH_W - radius if on else radius, radius)
+	var knob_colour := GOLD if on else MUTED
+	for y in SWITCH_H:
+		for x in SWITCH_W:
+			var p := Vector2(x + 0.5, y + 0.5)
+			var along := clampf(p.x, radius, SWITCH_W - radius)
+			var d := p.distance_to(Vector2(along, radius)) - radius   # the pill's signed distance
+			var colour := Color(0, 0, 0, 0)
+			var cover := clampf(0.5 - d, 0.0, 1.0)
+			if cover > 0.0:
+				var edge := clampf(d + 1.5, 0.0, 1.0)   # the outer pixel of the pill is its rim
+				colour = fill.lerp(rim, edge)
+				colour.a *= cover
+			var knob := clampf(0.5 - (p.distance_to(knob_at) - (radius - 4.0)), 0.0, 1.0)
+			if knob > 0.0:
+				colour = colour.blend(Color(knob_colour, knob))
+			img.set_pixel(x, y, Color(colour.r, colour.g, colour.b, colour.a * alpha))
+	return ImageTexture.create_from_image(img)
+
+
 ## A round knob texture (slider grabber) in `color`.
-static func _knob(color: Color) -> ImageTexture:
-	var d := 16
+static func _knob(color: Color, d: int = 16) -> ImageTexture:
 	var img := Image.create(d, d, false, Image.FORMAT_RGBA8)
 	for y in d:
 		for x in d:
