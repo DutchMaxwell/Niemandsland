@@ -648,9 +648,7 @@ func _show_host_popup() -> void:
 	_host_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
 	content.add_child(_host_name_input)
 	_host_popup.register_text_enter(_host_name_input)  # Enter in the name field = Prepare table
-	content.add_child(NetDialog.label("Relay server:"))
-	_relay_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
-	content.add_child(_relay_url_input)
+	_relay_url_input = NetDialog.advanced_relay(content, InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 	_host_public_check = CheckBox.new()
 	_host_public_check.text = "List room publicly"
 	_host_public_check.focus_mode = Control.FOCUS_ALL
@@ -713,9 +711,7 @@ func _show_join_popup() -> void:
 	# Editing the code is the fix for the message, so the message must not outlive the edit.
 	_join_code_input.text_changed.connect(func(_new_text: String) -> void:
 		_join_error_label.visible = false)
-	content.add_child(NetDialog.label("Relay server:"))
-	_join_relay_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
-	content.add_child(_join_relay_url_input)
+	_join_relay_url_input = NetDialog.advanced_relay(content, InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 
 	# The dialog must NOT close itself on OK: an unusable room code has to leave the mask
 	# open with its reason on screen (a window that just vanishes and does nothing reads
@@ -786,9 +782,7 @@ func _show_browse_popup() -> void:
 	_browse_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Player name")
 	_browse_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
 	content.add_child(_browse_name_input)
-	content.add_child(NetDialog.label("Relay server:"))
-	_browse_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
-	content.add_child(_browse_url_input)
+	_browse_url_input = NetDialog.advanced_relay(content, InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 
 	var refresh_btn := Button.new()
 	refresh_btn.text = "Refresh list"
