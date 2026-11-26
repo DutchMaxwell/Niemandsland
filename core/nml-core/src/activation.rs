@@ -230,9 +230,13 @@ pub struct Allowance { pub advance: f64, pub rush: f64, pub charge: f64, pub wid
 pub fn allowance(statics: &[UnitStatic], state: &State, si: usize, seams: Seams, terrain: &Terrain) -> Allowance {
     let parts = [ADVANCE, RUSH, CHARGE].map(|k| band_parts(statics, state, state, si, k, None, 0.0, Cover::Board(terrain), seams, false));
     let grants: Vec<&str> = ["Fast", "Rapid Advance", "Rapid Rush", "Slow"].into_iter().filter(|g| crate::mods::granted(state, si, g)).collect();
-    let names: [&[&str]; 7] = [&["Bounding"], &["Versatile Reach"], &["Grounded Speed"], &["Speed Feat"], &["Great Musician"], &grants, &["Rapid Charge"]];
-    let on = |i: usize| parts.iter().any(|p| [p.bounding, p.vr, p.gs, p.feat, p.buff, p.grant, p.rapid_mark][i] != 0.0);
-    let widened_by = (0..7).filter(|&i| on(i)).flat_map(|i| names[i].iter().map(|n| n.to_string())).collect();
+    let names: [&[&str]; 8] = [&["Bounding"], &["Versatile Reach"], &["Grounded Speed"], &["Speed Feat"], &["Great Musician"], &grants, &["Rapid Charge"], &["Musician"]];
+    // a Musician inch taken back with its bearer widens nothing, so only a given one is named
+    let on = |i: usize| parts.iter().any(|p| {
+        let v = [p.bounding, p.vr, p.gs, p.feat, p.buff, p.grant, p.rapid_mark, p.cmd][i];
+        if i == 7 { v > 0.0 } else { v != 0.0 }
+    });
+    let widened_by = (0..8).filter(|&i| on(i)).flat_map(|i| names[i].iter().map(|n| n.to_string())).collect();
     Allowance { advance: parts[0].total(), rush: parts[1].total(), charge: parts[2].total(), widened_by }
 }
 

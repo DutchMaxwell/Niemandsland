@@ -7954,6 +7954,46 @@ fn drop_banner_for_cause(
     vt
 }
 
+/// Ruling D16: unit `u` carries an AoF: Skirmish command group with `rule` (Banner or Musician).
+fn command_rule(state: &State, u: usize, rule: &str) -> bool {
+    state.carries_command(u) && state.profile(u).special_rules.iter().any(|r| r == rule)
+}
+
+/// Ruling D16: unit `u`'s command-group bearer is killed. A State built without the bearer list (an empty vector) knows
+/// no death; `Some(None)` is a killed bearer.
+fn bearer_dead(state: &State, u: usize) -> bool {
+    matches!(state.cmd_bearer.get(u), Some(None))
+}
+
+/// Ruling D16: the friendly command-group unit with `rule` whose profile picked unit `i` (`Profile::command_picks`).
+fn command_lender(state: &State, i: usize, rule: &str) -> Option<usize> {
+    let key = &state.roster.keys[i];
+    (0..state.units()).find(|&k| k != i && state.player[k] == state.player[i] && command_rule(state, k, rule)
+        && state.profile(k).command_picks.iter().any(|p| p == key))
+}
+
+/// Ruling D17 for the Musician (AoF: Skirmish p.13, `PENDING_EPOCH_COMMAND_BANNER`): the +1 in on move actions lives with
+/// the bearer. The unit's own Musician inch already rides its recorded bands, so a killed bearer takes it back (-1); a unit
+/// a friendly living bearer's Musician unit picked gets +1. The line says which, or `None` when nothing changes.
+pub(crate) fn command_musician_in(statics: &[UnitStatic], state: &State, i: usize, kind: i64, rules_epoch: u32) -> (f64, Option<String>) {
+    if !rule_on(rules_epoch, crate::acts::PENDING_EPOCH_COMMAND_BANNER) || !matches!(kind, ADVANCE | RUSH | CHARGE) {
+        return (0.0, None);
+    }
+    let name = |u: usize| statics.get(state.roster.profile[u]).map_or("", |us| us.name.as_str());
+    if command_rule(state, i, "Musician") && bearer_dead(state, i) {
+        return (-MUSICIAN_MOVE_IN, Some(format!("Musician: {}'s bearer (the last model carries it - no per-model data) is dead - no +1\" move", name(i))));
+    }
+    match command_lender(state, i, "Musician") {
+        Some(k) if bearer_dead(state, k) || state.alive[k] == 0 =>
+            (0.0, Some(format!("Musician (from {}): its bearer is dead - {} gets no +1\" move", name(k), name(i)))),
+        Some(k) => (MUSICIAN_MOVE_IN, Some(format!("Musician (from {}, the last model carries it - no per-model data): {} moves +1\"", name(k), name(i)))),
+        None => (0.0, None),
+    }
+}
+
+/// The AoF: Skirmish Musician's inch on move actions (its rules-map entry's `move_bonus_in`, which the recorded bands carry).
+const MUSICIAN_MOVE_IN: f64 = 1.0;
+
 /// Ruling D17 (AoF: Skirmish p.13, `PENDING_EPOCH_COMMAND_BANNER`): the command-group Banner lives with its bearer. A unit
 /// whose own bearer is killed loses its Banner +1 (returned, so the bonus line counts without it); a unit another living
 /// bearer's Banner unit picked gets +1 on a test that shooting or melee caused. The bearer is the last model (no per-model
@@ -7967,9 +8007,8 @@ fn command_banner(
     if !rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_COMMAND_BANNER) || unit_shaken(state, i, seams) {
         return 0;
     }
-    let banner = |u: usize| state.carries_command(u) && state.profile(u).special_rules.iter().any(|r| r == "Banner");
-    // a State built without the bearer list (an empty vector) knows no death; `Some(None)` is a killed bearer
-    let bearer_dead = |u: usize| matches!(state.cmd_bearer.get(u), Some(None));
+    let banner = |u: usize| command_rule(state, u, "Banner");
+    let bearer_dead = |u: usize| bearer_dead(state, u);
     let shown = &statics[state.roster.profile[morale_root(state, i, seams)]].name;
     if cause.is_some() {
         return 0; // a test no shooting or melee caused gets no Banner at all (`drop_banner_for_cause` took it out)
@@ -7985,10 +8024,7 @@ fn command_banner(
             say_rule(tray, "banner", state.player[i], || line);
         }
     }
-    let key = &state.roster.keys[i];
-    let from = (0..state.units()).find(|&k| k != i && state.player[k] == state.player[i] && banner(k)
-        && state.profile(k).command_picks.iter().any(|p| p == key));
-    if let Some(k) = from {
+    if let Some(k) = command_lender(state, i, "Banner") {
         let name = &statics[state.roster.profile[k]].name;
         if bearer_dead(k) || state.alive[k] == 0 {
             let line = format!("Banner (from {name}): its bearer is dead - {shown}'s morale test gets no +{BANNER_MORALE_BONUS}");
@@ -11459,11 +11495,13 @@ fn land_cover(statics: &[UnitStatic], next: &mut State, si: usize, t: &Terrain, 
 pub(crate) struct BandParts {
     pub base: f64, pub bounding: f64, pub vr: f64, pub gs: f64,
     pub feat: f64, pub buff: f64, pub grant: f64, pub rapid_mark: f64,
+    /// Ruling D17: the command-group Musician's inch (`command_musician_in`), 0.0 below its placeholder.
+    pub cmd: f64,
 }
 
 impl BandParts {
     pub(crate) fn total(&self) -> f64 {
-        self.base + self.bounding + self.vr + self.gs + self.feat + self.buff + self.grant + self.rapid_mark
+        self.base + self.bounding + self.vr + self.gs + self.feat + self.buff + self.grant + self.rapid_mark + self.cmd
     }
 }
 
@@ -11491,7 +11529,8 @@ pub(crate) fn band_parts(
         CHARGE => b.rush,
         _ => 0.0,
     };
-    BandParts { base, bounding: bounding_in, vr, gs, feat, buff, grant, rapid_mark }
+    let cmd = command_musician_in(statics, next, si, kind, seams.rules_epoch).0;
+    BandParts { base, bounding: bounding_in, vr, gs, feat, buff, grant, rapid_mark, cmd }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -11616,6 +11655,11 @@ fn resolve_with(
         );
     }
     let band_in = parts.total();
+    if let (Some(line), Some((tray, shot))) = (command_musician_in(statics, &next, si, kind, seams.rules_epoch).1, dice.as_mut()) {
+        // ruling D17: the Musician's inch, given, taken back or gone with its bearer
+        say_rule(tray, "musician", state.player[si], || line.clone());
+        shot.log.push(line);
+    }
     // DS-GMC2 (`EPOCH_92_MELEE_CAUSES`, table twin `SoloController.melee_shroud_charge_in`):
     // Melee Shrouding shortens the working CHARGE band (-2"/-3", floor 6") against a shrouded target.
     let band_in = if kind == CHARGE && rule_on(seams.rules_epoch, EPOCH_92_MELEE_CAUSES) {
