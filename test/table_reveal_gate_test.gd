@@ -36,6 +36,10 @@ class StubMain:
 	var table := StubTable.new()
 	var save_manager := StubSaves.new()
 	var opr_army_manager := StubArmies.new()
+	var toasts: Array[String] = []
+
+	func _show_toast(text: String) -> void:
+		toasts.append(text)
 
 
 var _main: StubMain
@@ -124,3 +128,12 @@ func test_the_cap_reveals_once_and_a_late_signal_changes_nothing() -> void:
 	_main.table.battlemap_settled.emit("urban_ruins", true)
 	assert_array(_reveals).is_equal([true])
 	assert_float(load(GATE).CAP_S).is_equal(20.0)
+
+
+## MENU step 32 (lead, 26.11.): a join whose host never answers opens at the cap with one line of notice.
+func test_a_join_past_the_cap_opens_with_one_line_of_notice() -> void:
+	var gate := _start("join")
+	if gate == null:
+		return
+	gate._reveal(true)
+	assert_array(_main.toasts).is_equal([gate.HOST_LATE])
