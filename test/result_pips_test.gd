@@ -122,3 +122,67 @@ func test_marks_leave_the_game_rng_alone() -> void:
 	p.mark(ResultPipsScript.Kind.WOUND, Vector3.ZERO, 2)
 	p.mark_model(ResultPipsScript.Kind.KILL, _model_at(Vector3.ONE), 1)
 	assert_int(randi()).is_equal(expected)
+
+
+func test_base_rim_pips_never_occlude_coalesce_badge_flash_and_free(timeout := 5000) -> void:
+	var motion_before: bool = GraphicsSettings.reduce_motion
+	var preset_before: int = GraphicsSettings.current_preset
+	GraphicsSettings.reduce_motion = false
+	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.MEDIUM
+	var p = _pips()
+	assert_bool(ResultPipsScript.SHADER.contains("depth_test_disabled")).override_failure_message("never paint over miniature torsos").is_false()
+	var mi := _model_at(Vector3(0.2, 0.0, 0.1))
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	mi.node.add_child(mesh)
+	var pip1: MeshInstance3D = p.mark_model(ResultPipsScript.Kind.WOUND, mi, 2)
+	var pip2: MeshInstance3D = p.mark(ResultPipsScript.Kind.SAVE, Vector3(0.24, 0.03, 0.1), 1)
+	assert_float(float((pip1.material_override as ShaderMaterial).get_shader_parameter("ring_y"))) \
+		.is_equal_approx(ResultPipsScript.RIM_Y_M, 1e-5)
+	assert_float(float(mesh.get_instance_shader_parameter(&"hit_flash"))).override_failure_message("hit rim-flash armed").is_greater(0.5)
+	var visible_badges := [pip1.get_node("UnitDeltaBadge"), pip2.get_node("UnitDeltaBadge")].filter(func(b: Node) -> bool: return (b as Node3D).visible)
+	assert_int(visible_badges.size()).override_failure_message("coalesced to 1 unit delta badge").is_equal(1)
+	assert_str((visible_badges[0] as Label3D).text).contains("-2 WOUNDS").contains("SAVED x1")
+	await get_tree().create_timer(ResultPipsScript.FLASH_S + 0.08).timeout
+	assert_float(float(mesh.get_instance_shader_parameter(&"hit_flash"))).override_failure_message("hit flash decayed to 0").is_equal_approx(0.0, 0.02)
+	await get_tree().create_timer(ResultPipsScript.LIFE_S + 0.25).timeout
+	GraphicsSettings.reduce_motion = motion_before
+	GraphicsSettings.current_preset = preset_before
+	assert_int(p.get_child_count()).override_failure_message("pips and badges freed with no orphans").is_equal(0)
+
+
+func test_reduce_motion_keeps_badge_static_and_suppresses_hit_flash(timeout := 5000) -> void:
+	var motion_before: bool = GraphicsSettings.reduce_motion
+	var preset_before: int = GraphicsSettings.current_preset
+	GraphicsSettings.reduce_motion = true
+	GraphicsSettings.current_preset = GraphicsSettings.QualityPreset.HIGH
+	var p = _pips()
+	var mi := _model_at(Vector3(0.4, 0.0, 0.0))
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	mi.node.add_child(mesh)
+	var pip: MeshInstance3D = p.mark_model(ResultPipsScript.Kind.WOUND, mi, 3)
+	var badge := pip.get_node("UnitDeltaBadge") as Label3D
+	var y0 := badge.position.y
+	assert_bool(mesh.get_instance_shader_parameter(&"hit_flash") == null).override_failure_message("no strobe flash under reduce motion").is_true()
+	await get_tree().create_timer(0.25).timeout
+	assert_float(badge.position.y).override_failure_message("static badge does not rise").is_equal_approx(y0, 1e-6)
+	GraphicsSettings.reduce_motion = motion_before
+	GraphicsSettings.current_preset = preset_before
+
+
+func test_wound_color_is_distinct_rings_sit_outside_base_and_kill_wound_badge_is_explicit() -> void:
+	var wound_col: Color = ResultPipsScript.COLORS[ResultPipsScript.Kind.WOUND]
+	assert_float(wound_col.g).override_failure_message("amber-gold wound colour distinct from red unit outline").is_greater(0.6)
+	var p = _pips()
+	var mi1 := _model_at(Vector3(0.0, 0.0, 0.0))
+	var mi2 := _model_at(Vector3(0.04, 0.0, 0.0))
+	var base_r := VolumetricLos.model_base_radius_m(mi1)
+	var w_pip: MeshInstance3D = p.mark_model(ResultPipsScript.Kind.WOUND, mi1, 1)
+	var k_pip: MeshInstance3D = p.mark_model(ResultPipsScript.Kind.KILL, mi2, 1)
+	var w_ring_r := float((w_pip.material_override as ShaderMaterial).get_shader_parameter("ring_radius"))
+	var k_ring_r := float((k_pip.material_override as ShaderMaterial).get_shader_parameter("ring_radius"))
+	assert_float(w_ring_r * 0.76).override_failure_message("wound arc sits outside the model base disc").is_greater(base_r)
+	assert_float(k_ring_r * 0.76).override_failure_message("kill ring sits outside the model base disc").is_greater(base_r)
+	var badge := k_pip.get_node("UnitDeltaBadge") as Label3D
+	assert_str(badge.text).override_failure_message("explicit kill and wound labels, no bare -1").is_equal("1 KILLED · -1 WOUND")
