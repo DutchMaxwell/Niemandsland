@@ -531,6 +531,8 @@ func _ask_reset(page_name: String) -> void:
 ## fresh GraphicsSettings starts with - through the control itself, so its own handler applies and saves it.
 func reset_page(page_name: String) -> void:
 	var fresh: Object = (GraphicsSettings.get_script() as Script).new()
+	if page_name == "Graphics" and GraphicsSettings.current_preset != fresh.get("current_preset"):
+		GraphicsSettings.apply_preset(fresh.get("current_preset"))   # first: a preset also sets Idle Motion
 	for n: Node in _page(page_name).find_children("*", "Control", true, false):
 		var field := str(SWITCH_FIELDS.get((n as Button).text, "")) if n is CheckButton else str(n.get_meta("setting", ""))
 		if field.is_empty():
