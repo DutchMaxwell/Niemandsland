@@ -518,6 +518,10 @@ pub struct State {
     /// Musician, `None` once it is killed (or none carried). Kept by `kit_remove` / `kits_drop` as models leave; EMPTY =
     /// no unit carries one (every record before it: readers use `get`).
     pub cmd_bearer: Vec<Option<usize>>,
+    /// KIT-BEARER-NAME (lead ruling 26.11.): the Musician's own bearer when another model than the Banner's carries it,
+    /// kept like `cmd_bearer`. EMPTY (or a unit past its end) = the Musician rides with `cmd_bearer` (one model carries
+    /// both, every record before it). Read through `musician_bearer`.
+    pub cmd_musician: Vec<Option<usize>>,
     pub mods: Vec<Mods>,
     pub mods_base: Vec<Rc<Mods>>,
     /// `capture()`'s attachment keys resolved to ROSTER indices — battle_sim.gd:
@@ -776,14 +780,20 @@ impl State {
         if let Some(k) = self.kits.get_mut(u).filter(|k| i < k.len()) {
             Rc::make_mut(k).remove(i);
         }
-        // the command-group bearer: killed with its slot, else it moves up past a removed slot before it
-        if let Some(b) = self.cmd_bearer.get_mut(u) {
+        // the command-group bearers: killed with their slot, else they move up past a removed slot before them
+        for b in [self.cmd_bearer.get_mut(u), self.cmd_musician.get_mut(u)].into_iter().flatten() {
             *b = match *b {
                 Some(s) if s == i => None,
                 Some(s) if s > i => Some(s - 1),
                 other => other,
             };
         }
+    }
+
+    /// KIT-BEARER-NAME: the Musician's bearer of unit `u` - its own slot when one is kept, else the Banner's (`cmd_bearer`).
+    /// `None` = no list of bearers at all, `Some(None)` = killed.
+    pub fn musician_bearer(&self, u: usize) -> Option<Option<usize>> {
+        self.cmd_musician.get(u).or(self.cmd_bearer.get(u)).copied()
     }
 
     /// Tray-exact S1b: the unit's slots changed in a way no kit can follow (all models gone,
@@ -819,7 +829,7 @@ impl State {
         }
         // a unit with no model left has no bearer; a revived body is not the bearer come back
         if self.positions.get(u).is_some_and(|p| p.is_empty()) {
-            if let Some(b) = self.cmd_bearer.get_mut(u) {
+            for b in [self.cmd_bearer.get_mut(u), self.cmd_musician.get_mut(u)].into_iter().flatten() {
                 *b = None;
             }
         }

@@ -121,7 +121,7 @@ func set_atmosphere_controller(atmosphere_ctrl: Node) -> void:
 	war_toggle.button_pressed = atmosphere_controller.is_war_sounds_enabled()
 	war_toggle.toggled.connect(func(on: bool) -> void:
 		atmosphere_controller.set_war_sounds_enabled(on))
-	section.add_child(war_toggle)
+	_page("Audio").add_child(war_toggle)
 
 	section.add_child(HSeparator.new())
 	_main_vbox.add_child(section)
@@ -252,7 +252,7 @@ func _build_ui() -> void:
 	var audio_label = Label.new()
 	audio_label.text = "AUDIO:"
 	audio_label.add_theme_font_size_override("font_size", 16)
-	vbox.add_child(audio_label)
+	_page("Audio").add_child(audio_label)
 
 	var audio_buses = {
 		AudioManager.BUS_MASTER: "Master Volume",
@@ -264,7 +264,7 @@ func _build_ui() -> void:
 
 	for bus_name: String in audio_buses:
 		var bus_label_text: String = audio_buses[bus_name]
-		_add_volume_slider(vbox, bus_name, bus_label_text)
+		_add_volume_slider(_page("Audio"), bus_name, bus_label_text)
 
 	# === Display Section ===
 	vbox.add_child(HSeparator.new())
@@ -272,7 +272,7 @@ func _build_ui() -> void:
 	var display_label = Label.new()
 	display_label.text = "DISPLAY:"
 	display_label.add_theme_font_size_override("font_size", 16)
-	vbox.add_child(display_label)
+	_page("Display").add_child(display_label)
 
 	# Calm mode (GH #1634, accessibility, from a player with ADHD): one switch that dials
 	# the sensory load down — it is a preset over the switches below, snapshotting the
@@ -307,7 +307,7 @@ func _build_ui() -> void:
 	idle_cb.toggled.connect(func(on: bool) -> void:
 		GraphicsSettings.idle_motion = on
 		GraphicsSettings.save_settings())
-	vbox.add_child(idle_cb)
+	_page("Graphics").add_child(idle_cb)
 	_switch_toggles["idle_motion"] = idle_cb
 
 	# Fullscreen (safe borderless mode, not the crash-prone exclusive fullscreen).
@@ -358,7 +358,7 @@ func _build_ui() -> void:
 		else:
 			GraphicsSettings.show_move_trails = on
 			GraphicsSettings.save_settings())
-	vbox.add_child(trails_cb)
+	_page("Gameplay").add_child(trails_cb)
 
 	# Show Rule Texts (transparency stage 2): the floats' discoverable switch — the
 	# maintainer's release pass could not find the toggle because only the setting existed.
@@ -371,7 +371,7 @@ func _build_ui() -> void:
 		var rf := get_node_or_null("/root/Main/FloatingRuleText")
 		if rf != null:
 			rf.enabled = on)
-	vbox.add_child(floats_cb)
+	_page("Gameplay").add_child(floats_cb)
 
 	# Combat effects (result marks, shots, falls, spells, hero auras): one switch for all of them; an effect that is
 	# not in the game yet is skipped.
@@ -385,7 +385,7 @@ func _build_ui() -> void:
 			var fx := get_node_or_null("/root/Main/" + fx_name)
 			if fx != null:
 				fx.enabled = on)
-	vbox.add_child(vfx_cb)
+	_page("Graphics").add_child(vfx_cb)
 	_switch_toggles["show_combat_effects"] = vfx_cb
 
 	# Tilt-Shift (cinematic depth of field): sharp while zoomed out, softly blurred in
@@ -400,7 +400,7 @@ func _build_ui() -> void:
 		var pivot := get_node_or_null("/root/Main/CameraPivot")
 		if pivot != null and pivot.has_method("set_tilt_shift_enabled"):
 			pivot.set_tilt_shift_enabled(on))
-	vbox.add_child(tilt_cb)
+	_page("Graphics").add_child(tilt_cb)
 	_switch_toggles["tilt_shift"] = tilt_cb
 
 	# Low ground mist and wall steam on a generated board (dev flag): shader-only; off on Low/Performance and in calm mode.
@@ -411,7 +411,7 @@ func _build_ui() -> void:
 	mist_cb.toggled.connect(func(on: bool) -> void:
 		GraphicsSettings.show_board_mist = on
 		GraphicsSettings.save_settings())
-	vbox.add_child(mist_cb)
+	_page("Graphics").add_child(mist_cb)
 	var frame := OptionButton.new()
 	frame.name = "TableFrameOption"
 	for title in ["Frame: Today's look", "Frame: Walnut", "Frame: Oak", "Frame: Ivory"]:
@@ -419,7 +419,7 @@ func _build_ui() -> void:
 	frame.select(GraphicsSettings.table_frame_style)
 	frame.tooltip_text = "Frame finish. Active at Medium quality and above."
 	frame.item_selected.connect(GraphicsSettings.set_table_frame_style)
-	vbox.add_child(frame)
+	_page("Graphics").add_child(frame)
 
 	# Gore (combat effects): how bloody wounds and casualties look — Off shows dust instead of blood.
 	var gore_row := HBoxContainer.new()
@@ -435,7 +435,7 @@ func _build_ui() -> void:
 		GraphicsSettings.gore_level = index
 		GraphicsSettings.save_settings())
 	gore_row.add_child(gore_ob)
-	vbox.add_child(gore_row)
+	_page("Gameplay").add_child(gore_row)
 
 	# Pacing grill 31.07.: the combat stage's discoverable switch + its beat length.
 	var stage_cb := CheckButton.new()
@@ -444,7 +444,7 @@ func _build_ui() -> void:
 	stage_cb.toggled.connect(func(on: bool) -> void:
 		GraphicsSettings.show_combat_stage = on
 		GraphicsSettings.save_settings())
-	vbox.add_child(stage_cb)
+	_page("Gameplay").add_child(stage_cb)
 	var beat_row := HBoxContainer.new()
 	beat_row.add_theme_constant_override("separation", 8)
 	var beat := HSlider.new()
@@ -463,7 +463,7 @@ func _build_ui() -> void:
 		GraphicsSettings.combat_stage_hold_s = v
 		beat_lbl.text = "Stage beat: %.1fs" % v
 		GraphicsSettings.save_settings())
-	vbox.add_child(beat_row)
+	_page("Gameplay").add_child(beat_row)
 
 	# Enforce Movement Limit (path-painting "dry brush"): Strict = a movement drag hard-stops
 	# at the model's max legal band; off = Casual (free drag). DEFAULT ON. Persisted. Movement
@@ -475,7 +475,7 @@ func _build_ui() -> void:
 	limit_cb.toggled.connect(func(on: bool) -> void:
 		GraphicsSettings.enforce_movement_limit = on
 		GraphicsSettings.save_settings())
-	vbox.add_child(limit_cb)
+	_page("Gameplay").add_child(limit_cb)
 
 	# NML-955: AI EXPLANATION toasts (which unit NACHTMAHR picked, what it shot, what the roll did)
 	# stay up until the next event replaces them or you click them away. DEFAULT ON. Persisted.
@@ -487,7 +487,7 @@ func _build_ui() -> void:
 	explain_cb.toggled.connect(func(on: bool) -> void:
 		GraphicsSettings.ai_explain_persistent = on
 		GraphicsSettings.save_settings())
-	vbox.add_child(explain_cb)
+	_page("Gameplay").add_child(explain_cb)
 
 
 ## The content box of the page `page_name` (one of PAGES): the place a control is added to.

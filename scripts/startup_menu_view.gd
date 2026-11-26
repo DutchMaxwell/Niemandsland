@@ -108,9 +108,6 @@ func _ready() -> void:
 	rule.custom_minimum_size = Vector2(500,1)
 	rule.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	identity.add_child(rule)
-	var settings := _utility("SettingsBtn","Settings")
-	settings.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	_masthead.add_child(settings)
 	_main = VBoxContainer.new()
 	_main.add_theme_constant_override("separation",5)
 	_scroll = ScrollContainer.new()
@@ -148,6 +145,7 @@ func _ready() -> void:
 	actions.add_child(_action("OnlineBtn","Play online","Create a room or join a table",_icon(&"globe")))
 	actions.add_child(_action("LoadBattleBtn","Load game","Open a saved game",_icon(&"folder")))
 	actions.add_child(_action("LearnBtn","Learn to play","Learn the controls and explore Trial by Fire",_icon(&"book")))
+	actions.add_child(_action("SettingsBtn","Settings","Display, graphics, audio and accessibility",_icon(&"sliders")))
 	_footer = HBoxContainer.new()
 	_footer.add_theme_constant_override("separation",24)
 	add_child(_footer)
