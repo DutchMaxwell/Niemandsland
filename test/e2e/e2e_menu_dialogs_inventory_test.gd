@@ -215,7 +215,8 @@ func test_update_prompt_keeps_its_headline_versions_notes_skip_and_buttons() -> 
 	for l: Node in p.find_children("*", "Label", true, false):
 		texts.append((l as Label).text)
 	assert_bool(texts.has("A newer version of Niemandsland is available.")).is_true()
-	assert_bool(texts.has("Installed: 0.3.13.1    →    Latest: 0.3.14.0")).is_true()
+	assert_bool("".join(texts).contains("INSTALLED 0.3.13.1  →  LATEST 0.3.14.0")).override_failure_message(
+		"versions line: %s" % str(texts)).is_true()
 	assert_int(p.find_children("*", "RichTextLabel", true, false).size()).is_equal(1)
 	var skip := _button(p, "Skip this version")
 	if skip == null:
@@ -227,6 +228,32 @@ func test_update_prompt_keeps_its_headline_versions_notes_skip_and_buttons() -> 
 	assert_bool(p.is_skip_checked()).is_true()
 	var empty := _update_prompt("  ")
 	assert_int(empty.find_children("*", "RichTextLabel", true, false).size()).is_equal(0)
+
+
+## The update prompt as the mockup draws it (sheet 08): 560 px wide and as high as its content, the versions in one mono
+## card, the notes in a 132 px card that scrolls, Later and Update & Restart as two 44 px buttons in one row of the content
+## that answer like the dialog's own (hidden) buttons (red on main: the dialog's buttons, an 800 px window).
+func test_update_prompt_has_its_actions_in_the_content_row() -> void:
+	var p := _update_prompt("- fixed a thing\n- added a thing")
+	await _frames(3)
+	var later := _button(p, "Later")
+	var update := _button(p, "Update & Restart")
+	assert_object(later).is_not_null()
+	assert_object(update).is_not_null()
+	if later == null or update == null:
+		return
+	assert_bool(p.get_ok_button().visible).override_failure_message("the dialog's own button row is shown").is_false()
+	assert_float(later.size.y).is_equal(float(HouseStyle.MENU_H_ACTION))
+	assert_float(later.size.x).is_equal_approx(update.size.x, 1.0)
+	assert_bool(later.global_position.x < update.global_position.x).is_true()
+	assert_int(p.size.x).is_equal(560)
+	assert_int(p.size.y).override_failure_message("window is %d px high" % p.size.y).is_less(600)
+	var answers: Array[String] = []
+	p.confirmed.connect(func() -> void: answers.append("update"))
+	p.canceled.connect(func() -> void: answers.append("later"))
+	update.pressed.emit()
+	later.pressed.emit()
+	assert_array(answers).is_equal(["update", "later"])
 
 
 func _wears_house_chrome(d: AcceptDialog) -> bool:

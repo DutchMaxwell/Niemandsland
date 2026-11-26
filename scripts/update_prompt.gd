@@ -12,9 +12,13 @@ const DOWNLOAD_LABEL: String = "Update & Restart"
 const LATER_LABEL: String = "Later"
 const SKIP_LABEL: String = "Skip this version"
 const CONTENT_SEPARATION: int = 10
-## Fixed size of the changelog box — a long changelog SCROLLS inside it instead of growing the
-## dialog past the screen (which pushed the Download/Later buttons out of reach).
-const NOTES_MIN_SIZE: Vector2 = Vector2(440, 220)
+## The window is 560 px wide (its sheet pads 22 px each side) and as high as its content; the changelog stands in
+## a card of fixed height and SCROLLS inside it instead of growing the dialog past the screen (which pushed the
+## Download/Later buttons out of reach).
+const CONTENT_WIDTH: int = 516
+const NOTES_HEIGHT: int = 132
+const HEADLINE_PX: int = 22
+const NOTES_PX: int = 15
 
 # ===== Public state =====
 
@@ -40,35 +44,63 @@ func setup(current_version: String, offered_version: String, url: String, notes:
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", CONTENT_SEPARATION)
 
-	var headline := Label.new()
-	headline.text = "A newer version of Niemandsland is available."
+	content.custom_minimum_size.x = CONTENT_WIDTH
+	var headline := HouseStyle.label("A newer version of Niemandsland is available.", HouseStyle.BODY)
+	headline.add_theme_font_override("font", HouseStyle.font(500))
+	headline.add_theme_font_size_override("font_size", HEADLINE_PX)
 	content.add_child(headline)
 
-	var versions := Label.new()
-	versions.text = "Installed: %s    →    Latest: %s" % [current_version, offered_version]
-	content.add_child(versions)
+	# One mono line in a card: INSTALLED a  →  LATEST b, the offered version in gold.
+	var versions := HBoxContainer.new()
+	versions.add_theme_constant_override("separation", 0)
+	for part: Array in [["INSTALLED %s  →  LATEST " % current_version, HouseStyle.INK],
+			[offered_version.to_upper(), HouseStyle.GOLD]]:
+		var piece := HouseStyle.label(part[0], HouseStyle.BODY)
+		piece.add_theme_font_override("font", HouseStyle.mono())
+		piece.add_theme_font_size_override("font_size", HouseStyle.MENU_FONT_EYEBROW)
+		piece.add_theme_color_override("font_color", part[1])
+		versions.add_child(piece)
+	content.add_child(HouseStyle.card(versions))
 
 	if not notes.strip_edges().is_empty():
 		var notes_label := RichTextLabel.new()
 		notes_label.bbcode_enabled = false
 		notes_label.fit_content = false  # don't grow to the full changelog height — scroll instead,
 		notes_label.scroll_active = true # so the dialog stays small and its buttons stay reachable
-		notes_label.custom_minimum_size = NOTES_MIN_SIZE
+		notes_label.add_theme_font_size_override("normal_font_size", NOTES_PX)
+		notes_label.add_theme_color_override("default_color", HouseStyle.MUTED)
+		notes_label.custom_minimum_size.y = NOTES_HEIGHT
 		notes_label.text = notes
-		content.add_child(notes_label)
+		content.add_child(HouseStyle.card(notes_label))
 
 	var howto := Label.new()
 	howto.text = "Niemandsland downloads the update and restarts itself. If that isn't possible, the download page opens instead."
 	howto.autowrap_mode = TextServer.AUTOWRAP_WORD
+	howto.custom_minimum_size.x = CONTENT_WIDTH   # a wrapping label measures at width 0 without a floor
 	content.add_child(howto)
 
 	_skip_checkbox = CheckBox.new()
 	_skip_checkbox.text = SKIP_LABEL
 	content.add_child(_skip_checkbox)
 
+	# Later left, Update & Restart right: two equal 44 px buttons in the content's own row, wired to the dialog's
+	# own buttons (which stay, hidden), so every handler and test sees the same signals.
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
+	row.add_child(_row_button(LATER_LABEL, HouseStyle.BUTTON, get_cancel_button()))
+	row.add_child(_row_button(DOWNLOAD_LABEL, HouseStyle.PRIMARY, get_ok_button()))
+	content.add_child(row)
 	MenuDialog.add_header(self, content)
 	add_child(content)
 	MenuDialog.style(self)
+	get_ok_button().hide()
+	get_cancel_button().hide()
+
+
+func _row_button(text: String, variant: StringName, target: Button) -> Button:
+	var b := HouseStyle.button(text, variant, HouseStyle.MENU_H_ACTION)
+	b.pressed.connect(func() -> void: target.pressed.emit())
+	return b
 
 
 ## Whether the player ticked "Skip this version".
