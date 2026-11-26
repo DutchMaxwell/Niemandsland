@@ -43,6 +43,10 @@ const ICON_PATHS := {
 	&"folder": "<path d='M3 7.5a1.5 1.5 0 0 1 1.5-1.5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 10v7.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z'/>",
 	&"book": "<path d='M12 6.5c-2-1.3-4.7-1.7-8-1.5v13c3.3-.2 6 .2 8 1.5 2-1.3 4.7-1.7 8-1.5V5c-3.3-.2-6 .2-8 1.5zM12 6.5v13'/>",
 	&"sliders": "<path d='M4 7h10M18 7h2M4 17h4M12 17h8M14 4.5v5M8 14.5v5'/>",
+	&"go": "<path d='M9 5l7 7-7 7'/>",
+	&"help": "<circle cx='12' cy='12' r='9'/><path d='M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01'/>",
+	&"info": "<circle cx='12' cy='12' r='9'/><path d='M12 11v5.5M12 7.5h.01'/>",
+	&"power": "<path d='M12 3v8M6.6 6.6a8 8 0 1 0 10.8 0'/>",
 }
 const ICON_PX := 24
 static var _icons: Dictionary = {}
@@ -50,6 +54,7 @@ static var _icons: Dictionary = {}
 class Action extends Button:
 	var description := ""
 	var row_icon: Texture2D  # not "icon": a Button already draws that one itself
+	var end_mark: Texture2D  # the chevron at the row's end; the Continue button has none
 	var primary := false
 	var outlined := false
 	var key_hint := ""  # the key that takes this row while it is the main action ("Enter")
@@ -59,9 +64,7 @@ class Action extends Button:
 		focus_mode = Control.FOCUS_ALL
 		set_meta(UiMotion.META_FLAT,true)
 		if not key_hint.is_empty():
-			key_cap = HouseStyle.key_cap(key_hint)
-			key_cap.theme = HouseStyle.theme()
-			key_cap.add_theme_font_size_override("font_size",14)
+			key_cap = HouseStyle.key_cap_on_gold(key_hint)
 			key_cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			key_cap.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
 			key_cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
@@ -115,7 +118,9 @@ class Action extends Button:
 		var lit := not primary and (is_hovered() or has_focus())
 		if lit:
 			draw_rect(Rect2(0,12,3,size.y-24),HouseStyle.GOLD)
-		draw_string(FONT,Vector2(size.x-31,size.y*0.5+6),HouseStyle.GLYPH_GO,HORIZONTAL_ALIGNMENT_LEFT,24,28,HouseStyle.GOLD if lit else color)
+		if end_mark != null:
+			var mark := HouseStyle.GOLD if lit else color if primary else HouseStyle.MUTED
+			draw_texture_rect(end_mark,Rect2(size.x-40,size.y*0.5-ICON_PX*0.5,ICON_PX,ICON_PX),false,mark)
 
 
 func _ready() -> void:
@@ -196,20 +201,20 @@ func _ready() -> void:
 	actions.add_child(_action("LearnBtn","Learn to play","Learn the controls and explore Trial by Fire",_icon(&"book")))
 	actions.add_child(_action("SettingsBtn","Settings","Display, graphics, audio and accessibility",_icon(&"sliders")))
 	_footer = HBoxContainer.new()
-	_footer.add_theme_constant_override("separation",24)
+	_footer.add_theme_constant_override("separation",34)
 	add_child(_footer)
-	for row in [["HelpBtn","Help & feedback"],["CreditsBtn","Credits & licenses"],["ExitGameBtn","Quit"]]:
+	for row in [["HelpBtn","Help & feedback",&"help"],["CreditsBtn","Credits & licenses",&"info"],["ExitGameBtn","Quit",&"power"]]:
 		if row[0] == "ExitGameBtn":
 			var quit := HBoxContainer.new()
 			quit.add_theme_constant_override("separation",4)
-			quit.add_child(_utility(row[0],row[1]))
+			quit.add_child(_utility(row[0],row[1],row[2]))
 			var esc := HouseStyle.key_cap("Esc")
 			esc.theme = HouseStyle.theme()
 			esc.add_theme_font_size_override("font_size",14)
 			quit.add_child(esc)
 			_footer.add_child(quit)
 		else:
-			_footer.add_child(_utility(row[0],row[1]))
+			_footer.add_child(_utility(row[0],row[1],row[2]))
 	version = _label("",14,HouseStyle.MUTED,HouseStyle.mono())
 	version.uppercase = true
 	add_child(version)
@@ -438,17 +443,26 @@ func _action(id: String, title: String, description: String, icon_texture: Textu
 	button.text = title
 	button.description = description
 	button.row_icon = icon_texture
+	button.end_mark = null if description.is_empty() else _icon(&"go")
 	button.primary = primary
 	button.outlined = outlined
 	buttons[id] = button
 	return button
 
 
-func _utility(id: String, title: String) -> Button:
+func _utility(id: String, title: String, icon_key: StringName = &"") -> Button:
 	var button := Button.new()
 	button.name = id
 	button.text = title
 	button.flat = true
+	if icon_key != &"":   # an 18 px icon tinted with the text, 9 px before it
+		button.icon = _icon(icon_key)
+		button.add_theme_constant_override("icon_max_width",18)
+		button.add_theme_constant_override("h_separation",9)
+		for state in ["icon_normal_color","icon_pressed_color","icon_focus_color"]:
+			button.add_theme_color_override(state,HouseStyle.MUTED)
+		for state in ["icon_hover_color","icon_hover_pressed_color"]:
+			button.add_theme_color_override(state,HouseStyle.GOLD)
 	button.add_theme_font_override("font",FONT)
 	button.add_theme_font_size_override("font_size",16)
 	button.add_theme_color_override("font_color",HouseStyle.MUTED)

@@ -168,6 +168,30 @@
       "albedo": {"url": "46ccd9cc35a9c1d45a315e8ae0af50a462e929c23c9d7ba50f5843e5f8bf139c.ctex", "sha256": "46ccd9cc35a9c1d45a315e8ae0af50a462e929c23c9d7ba50f5843e5f8bf139c", "size": 349604},
       "dry": {"url": "36017a3588c943b0cdbc31a75bda339c9097b3e69c8db36a617ee12793eb966f.ctex", "sha256": "36017a3588c943b0cdbc31a75bda339c9097b3e69c8db36a617ee12793eb966f", "size": 349604},
       "normal": {"url": "ef1180224dd2a366a8dacbd5b164f39f12277a59bef57cce45fe7d18ce2b28d2.ctex", "sha256": "ef1180224dd2a366a8dacbd5b164f39f12277a59bef57cce45fe7d18ce2b28d2", "size": 349604}
+    },
+    "soil_bare": {
+      "tile_in": 6.0, "source": "polyhaven:stony_dirt_path", "license": "CC0-1.0", "px": 1024,
+      "albedo": {"url": "22f884c363422ee46866271c9abdbf5d5251e3ab6b0d12969abf360c53ff2941.ctex", "sha256": "22f884c363422ee46866271c9abdbf5d5251e3ab6b0d12969abf360c53ff2941", "size": 1398180},
+      "normal": {"url": "2ca5b8d32fce0f0663b28993785309ec8afc5a3a7e01cd434052ba268c949f1e.ctex", "sha256": "2ca5b8d32fce0f0663b28993785309ec8afc5a3a7e01cd434052ba268c949f1e", "size": 1398180},
+      "orm": {"url": "8426f168ef3e93fa9a6b9e04acde1b8157966dcc6a0056958feec2539d311168.ctex", "sha256": "8426f168ef3e93fa9a6b9e04acde1b8157966dcc6a0056958feec2539d311168", "size": 349604}
+    },
+    "soil_mud": {
+      "tile_in": 6.0, "source": "polyhaven:muddy_tracks", "license": "CC0-1.0", "px": 1024,
+      "albedo": {"url": "67216dd1511b59f2a6186827d0614e105de928a345a49d1587b0228eea50c49a.ctex", "sha256": "67216dd1511b59f2a6186827d0614e105de928a345a49d1587b0228eea50c49a", "size": 1398180},
+      "normal": {"url": "0f2edef55b9efe0a999e3864f9f77d3e83c6e309d1bff6636309fdcede38d7e7.ctex", "sha256": "0f2edef55b9efe0a999e3864f9f77d3e83c6e309d1bff6636309fdcede38d7e7", "size": 1398180},
+      "orm": {"url": "85b63df0870dbc356a68c6584f88ac181837326a1f33d094dec14acfe6769331.ctex", "sha256": "85b63df0870dbc356a68c6584f88ac181837326a1f33d094dec14acfe6769331", "size": 349604}
+    },
+    "soil_grass": {
+      "tile_in": 6.0, "source": "polyhaven:sparse_grass", "license": "CC0-1.0", "px": 1024,
+      "albedo": {"url": "183658e14e3e00c91b6e0d41255b84a33567c0886bdfca47cc1b5f221b1f41f1.ctex", "sha256": "183658e14e3e00c91b6e0d41255b84a33567c0886bdfca47cc1b5f221b1f41f1", "size": 1398180},
+      "normal": {"url": "00e5cf0b34298067d728e231dc04899eaa30b74c02c4cbaf855bef5f0bab0a4a.ctex", "sha256": "00e5cf0b34298067d728e231dc04899eaa30b74c02c4cbaf855bef5f0bab0a4a", "size": 1398180},
+      "orm": {"url": "8818f8a1237b4c556a976a755b98a63bf9e380d8822df7955ddbf5cca3bd9ce3.ctex", "sha256": "8818f8a1237b4c556a976a755b98a63bf9e380d8822df7955ddbf5cca3bd9ce3", "size": 349604}
+    },
+    "soil_verge": {
+      "tile_in": 6.0, "source": "polyhaven:brown_mud_03", "license": "CC0-1.0", "px": 1024,
+      "albedo": {"url": "f69b791427ecd4aa4f32d2a4cae315c894230bdaa352240872d019e8e3da8cb0.ctex", "sha256": "f69b791427ecd4aa4f32d2a4cae315c894230bdaa352240872d019e8e3da8cb0", "size": 1398180},
+      "normal": {"url": "bb93cb9276e79af627b9f0e4ffb72c7607f97cab6b673b1f0ee0411a64872454.ctex", "sha256": "bb93cb9276e79af627b9f0e4ffb72c7607f97cab6b673b1f0ee0411a64872454", "size": 1398180},
+      "orm": {"url": "3d09585ed196816ccf74fa59041251283318b9c539b8f0ce9935c58ecaffeeea.ctex", "sha256": "3d09585ed196816ccf74fa59041251283318b9c539b8f0ce9935c58ecaffeeea", "size": 349604}
     }
   }
 }

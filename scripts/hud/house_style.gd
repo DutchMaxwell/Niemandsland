@@ -106,7 +106,7 @@ const RULE_H := 2            # the signature rule: 2 px high ...
 const RULE_TICK_W := 28      # ... its gold tick 28 px wide, then the accent fading out
 const FONT_RAIL := 11        # a rail button's label
 const FONT_EYEBROW_LARGE := 14   # the eyebrow of a full screen (the loading screen)
-const FONT_DISPLAY := 44         # the one big title of a full screen (the table being prepared)
+const FONT_DISPLAY := 56         # the one big title of a full screen (the table being prepared)
 const FONT_WORDMARK_SMALL := 28  # the wordmark in a screen's corner
 const PAD_SCREEN := 96           # a full screen's text column from the left edge (the menu's masthead)
 
@@ -118,6 +118,7 @@ const MENU_FONT_ACTION := 16     # every button's text
 const MENU_H_ACTION := 44
 const MENU_PAD_PANEL := 22
 const MENU_ICON_BUTTON := 32     # the close box of a menu window
+const FONT_PAGE_TITLE := 30      # "Settings" at the head of the rail
 
 # ===== Variants (theme type variations; pick one per control) =====
 const PANEL_VARIANT := &"HsPanel"   # a window root
@@ -595,6 +596,17 @@ static func panel_header(title: String, closes: bool = false) -> HBoxContainer:
 ## A key of a shortcut hint ("Shift", "G") — a label, not a button.
 static func key_cap(text: String) -> Label:
 	var l := label(text, KEYCAP)
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return l
+
+
+## A key cap on a gold row or button (mockup .key.on-gold): the dark ink at 16 % as fill and 35 % as rim, mono 14 px (the menu view's 14 px floor).
+static func key_cap_on_gold(text: String) -> Label:
+	var l := label(text, KEYCAP)
+	l.add_theme_font_override(&"font", mono())
+	l.add_theme_font_size_override(&"font_size", 14)
+	l.add_theme_color_override(&"font_color", ON_GOLD)
+	l.add_theme_stylebox_override(&"normal", _box(_alpha(ON_GOLD, 0.16), _alpha(ON_GOLD, 0.35), RADIUS_KEYCAP, 6, 1))
 	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	return l
 

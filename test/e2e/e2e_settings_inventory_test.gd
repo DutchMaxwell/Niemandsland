@@ -444,3 +444,27 @@ func test_display_and_accessibility_hold_their_controls() -> void:
 		if t != null:
 			assert_bool(_panel._page(page).is_ancestor_of(t)).override_failure_message("%s is not on %s" % [text, page]).is_true()
 	assert_bool(_panel._page("Display").is_ancestor_of(_label("UI Scale"))).override_failure_message("UI Scale is not on Display").is_true()
+
+
+## In the menu the sheet is drawn at the mockup's size with a wider rail headed by the eyebrow and the title; the table's
+## sheet keeps its compact form (sheet 05; red on main: 760 px and a 620 px scroll box in both).
+func test_the_modal_sheet_is_drawn_at_the_mockups_size() -> void:
+	var sheet := _panel.find_child("Sheet", true, false) as Control
+	var rail := _panel.find_child("PageRail", true, false) as Control
+	var window := _panel.get_viewport().get_visible_rect().size
+	_panel.set_modal(true)
+	assert_float(sheet.custom_minimum_size.x).is_equal(minf(1340.0, window.x - 128.0))
+	assert_float(sheet.custom_minimum_size.y).is_equal(minf(840.0, window.y - 120.0))
+	assert_float(rail.custom_minimum_size.x).is_equal(290.0)
+	var head := _panel.find_child("RailHead", true, false) as Control
+	assert_object(head).override_failure_message("no head over the rail").is_not_null()
+	if head == null:
+		return
+	assert_bool(head.visible).is_true()
+	var header := sheet.find_child("Header", true, false)
+	assert_bool((header.get_child(0) as Control).visible).override_failure_message("the header row still carries the title").is_false()
+	_panel.set_modal(false)
+	assert_float(sheet.custom_minimum_size.x).is_equal(760.0)
+	assert_float(rail.custom_minimum_size.x).is_equal(200.0)
+	assert_bool(head.visible).is_false()
+	assert_bool((header.get_child(0) as Control).visible).is_true()
