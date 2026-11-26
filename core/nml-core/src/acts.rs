@@ -1097,6 +1097,12 @@ pub const CURRENT_RULES_EPOCH: u32 = 103;
 /// with the Banner's bearer. A list that names none keeps one bearer for both (the last model). A placeholder one past
 /// `CURRENT_RULES_EPOCH`. Records stamped 103 or below replay byte-exact. Read only by `sim.rs` (`musician_dead`).
 pub const PENDING_EPOCH_TWO_BEARERS: u32 = 104;
+/// PENDING (step 8b, the 3.6 books p.6 "fully within 12 in", every system): a deployment zone admits a model only when its
+/// whole base is inside (centre + 8 rim points, `deployment::zone_admits_base`), where it tested the base centre and a base
+/// overhung the line by up to one radius. Moves AI deployment spots in every system. A placeholder two past
+/// `CURRENT_RULES_EPOCH` (104 is the two-bearers placeholder). Records stamped 104 or below replay byte-exact. Read only by
+/// `deployment::zone_admits_base`.
+pub const PENDING_EPOCH_ZONE_BASE_EDGE: u32 = 105;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff

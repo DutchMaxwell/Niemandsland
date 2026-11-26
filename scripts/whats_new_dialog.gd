@@ -10,6 +10,7 @@ var _locale := TranslationServer.get_locale()
 var _in_game := false
 var _cards: VBoxContainer
 var _language_button: Button
+var _header_title: Label
 
 func _ready() -> void:
 	name = "WhatsNewDialog"
@@ -17,6 +18,7 @@ func _ready() -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", HouseStyle.GAP_SECTION)
 	add_child(column)
+	_header_title = MenuDialog.add_header(self, column)
 	_language_button = HouseStyle.button(_content.text_for(_locale, "language"))
 	_language_button.pressed.connect(_switch_language)
 	column.add_child(_language_button)
@@ -57,6 +59,7 @@ func _switch_language() -> void:
 
 func _refresh() -> void:
 	title = _content.text_for(_locale, "title") % WhatsNewContent.version()
+	_header_title.text = title.to_upper()
 	ok_button_text = _content.text_for(_locale, "back" if _in_game else "close")
 	for child in _cards.get_children():
 		child.free()
