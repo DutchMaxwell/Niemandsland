@@ -1109,6 +1109,12 @@ pub const PENDING_EPOCH_ZONE_BASE_EDGE: u32 = 105;
 /// `PENDING_EPOCH_ZONE_BASE_EDGE`. Records stamped 105 or below replay byte-exact (their terrain line has no `tiers`). Read
 /// only by the recorder mirror (`act_recorder.gd` `_tiers_for_line`); the core reads whatever terrain it is handed.
 pub const PENDING_EPOCH_CORE_TIERS: u32 = 106;
+/// PENDING (plan step 27-pre-R, lead 26.11.): a free ruin's floors are ledges to the core - a model on a floor that walks
+/// off it drops (`Terrain::slab_drops`), in the SAME walk-ordered edges as a tier board's cliffs, so the same bands decide
+/// (a plain drop up to `LEDGE_CLIMB_MAX_IN`, a jump by `mv::jump::drop_kind`, else refused). Sight is unchanged. A
+/// placeholder past `PENDING_EPOCH_CORE_TIERS` (106). Records stamped 106 or below replay byte-exact. Read only by
+/// `activation::cliff_drop_in`'s two callers (`check_move`, `jump_dice_of`).
+pub const PENDING_EPOCH_RUIN_LEDGES: u32 = 107;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
