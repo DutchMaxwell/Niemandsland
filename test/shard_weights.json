@@ -68,7 +68,6 @@
 "test/casualty_order_parity_test.gd": 0.1,
 "test/casualty_show_test.gd": 0.7,
 "test/charge_diag_test.gd": 1.3,
-"test/cinematic_intro_test.gd": 0.1,
 "test/cloud_light_test.gd": 0.1,
 "test/coherency_checker_test.gd": 0.4,
 "test/combat_log_text_test.gd": 0.1,

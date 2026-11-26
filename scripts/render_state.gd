@@ -1,7 +1,7 @@
 class_name RenderState
 extends RefCounted
 ## ONE owner of the game table's contested Environment values. The quality preset, the mood / lighting-panel light,
-## the biome reference and the cinematic intro each hand their values in as a LAYER; this class computes the effective
+## the biome reference and Calm mode each hand their values in as a LAYER; this class computes the effective
 ## value per property and is the only one that writes it. Before, each of them wrote the shared Environment directly
 ## and the call order decided the look (graphics council 03.10.: Overcast -> Ultra switched SDFGI on, Ultra -> Overcast
 ## did not; Low after a dressed Medium kept the reference's glow).
@@ -10,8 +10,8 @@ extends RefCounted
 ## touched it (the scene's own value).
 ##
 ## "board" sits above the grading: while a generated Tiefwerk board is on the table (BoardgenMood) its SSAO scale, glow and colour
-## grade replace the biome's, since a board is the whole playing surface. The intro and Calm mode still win over it.
-const LAYERS: Array[String] = ["preset", "light", "reference", "world", "grading", "board", "intro", "calm"]
+## grade replace the biome's, since a board is the whole playing surface. Calm mode still wins over it.
+const LAYERS: Array[String] = ["preset", "light", "reference", "world", "grading", "board", "calm"]
 
 var _env: Environment
 var _base := {}

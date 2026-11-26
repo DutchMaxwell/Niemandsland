@@ -62,7 +62,7 @@ func test_the_light_is_dimmer_than_the_moods_sun_and_cool() -> void:
 	assert_bool((look["ambient_color"] as Color).b > (look["ambient_color"] as Color).r).is_true()
 
 
-func test_the_board_layer_beats_the_biome_grade_and_the_mood_but_not_the_intro_or_calm() -> void:
+func test_the_board_layer_beats_the_biome_grade_and_the_mood_but_not_calm() -> void:
 	var env := Environment.new()
 	var state := RenderState.new(env)
 	state.set_layer("preset", {"ssao_radius": 0.8})
@@ -72,8 +72,6 @@ func test_the_board_layer_beats_the_biome_grade_and_the_mood_but_not_the_intro_o
 	assert_float(env.ssao_radius).is_equal_approx(BoardgenMood.SSAO_RADIUS_M, 0.0001)
 	assert_float(env.ssao_intensity).is_equal_approx(BoardgenMood.SSAO_INTENSITY, 0.0001)
 	assert_float(env.adjustment_saturation).is_equal_approx(0.97, 0.0001)
-	state.set_layer("intro", {"glow_intensity": 0.9})
-	assert_float(env.glow_intensity).is_equal_approx(0.9, 0.0001)
 	state.set_layer("calm", {"glow_intensity": 0.0})
 	assert_float(env.glow_intensity).is_equal_approx(0.0, 0.0001)
 	state.set_layer("board", {})   # the board leaves: the mood's own values are back
