@@ -106,6 +106,7 @@ func _ready() -> void:
 	view.buttons.SettingsBtn.pressed.connect(_on_settings_pressed)
 	view.buttons.HelpTutorialBtn.pressed.connect(_on_tutorial_pressed)
 	view.buttons.WhatsNewBtn.pressed.connect(_show_whats_new)
+	diorama.first_frame_rendered.connect(_on_first_frame_rendered, CONNECT_ONE_SHOT)
 	diorama.loading_progress.connect(_on_diorama_loading)
 	diorama.diorama_ready.connect(_on_diorama_ready)
 	diorama.rebuild_started.connect(_on_diorama_rebuild_started)
@@ -149,6 +150,12 @@ func _show_whats_new() -> void:
 		add_child(_whats_new)
 		MenuDialog.attach_scrim(_whats_new)
 	_whats_new.open()
+
+
+## The menu arrives once the backdrop has put its first frame up; tests mounting the menu stay still.
+func _on_first_frame_rendered() -> void:
+	if get_tree().current_scene == self:
+		view.play_arrival()
 
 
 ## The boot splash is the house sheet colour: a full-screen cover of that colour stands between the backdrop and
