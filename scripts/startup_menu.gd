@@ -333,6 +333,16 @@ func _launch_tutorial(lesson_id: String) -> void:
 	_transition_to_game()
 
 
+## The position a lesson shows to the player: the digits of its code ("T-04" -> 4, "S-01" -> 1). The code itself stays
+## what it is in the data and in saves; it is never shown.
+static func lesson_number(id: String) -> int:
+	var digits := ""
+	for character: String in id:
+		if character >= "0" and character <= "9":
+			digits += character
+	return int(digits) if not digits.is_empty() else 0
+
+
 ## The chapter picker: RESUME on top, then one button per lesson (checkmarked when
 ## completed — everything stays replayable, MTG-Arena model), plus a progress reset.
 func _show_tutorial_picker(progress: TutorialProgress, track: Array) -> void:
@@ -345,22 +355,25 @@ func _show_tutorial_picker(progress: TutorialProgress, track: Array) -> void:
 	var lesson_ids := TutorialFlow.ids(track)
 	var next_id := progress.first_incomplete(lesson_ids)
 	var resume_btn := Button.new()
+	resume_btn.theme_type_variation = HouseStyle.PRIMARY
 	if next_id.is_empty():
-		resume_btn.text = "ALL CHAPTERS DONE — PICK ONE TO REPLAY"
+		resume_btn.text = "All lessons done - pick one to replay"
 		resume_btn.disabled = true
 	else:
-		resume_btn.text = "RESUME — NEXT: %s · %s" % [next_id, TutorialFlow.title_of(track, next_id).to_upper()]
+		var started := lesson_ids.any(func(id: String) -> bool: return progress.is_lesson_completed(id))
+		resume_btn.text = "Continue with lesson %d" % (lesson_ids.find(next_id) + 1) if started else "Start"
 		resume_btn.pressed.connect(func() -> void:
 			dialog.queue_free()
 			_launch_tutorial(""))
 	vbox.add_child(resume_btn)
 	vbox.add_child(HSeparator.new())
 
-	for lesson in track:
+	for position in track.size():   # a lesson shows its place in the track; codes like T-09b share digits
+		var lesson: Dictionary = track[position]
 		var lesson_id := String(lesson.get("id", ""))
 		var done := progress.is_lesson_completed(lesson_id)
 		var btn := Button.new()
-		btn.text = "%s  %s · %s" % [("✓" if done else "•"), lesson_id, String(lesson.get("title", "")).to_upper()]
+		btn.text = "%02d  %s%s" % [position + 1, String(lesson.get("title", "")), "   ·   done" if done else ""]
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		btn.pressed.connect(func() -> void:
 			dialog.queue_free()
@@ -369,7 +382,7 @@ func _show_tutorial_picker(progress: TutorialProgress, track: Array) -> void:
 
 	vbox.add_child(HSeparator.new())
 	var reset_btn := Button.new()
-	reset_btn.text = "RESET TUTORIAL PROGRESS"
+	reset_btn.text = "Reset tutorial progress"
 	reset_btn.theme_type_variation = HouseStyle.DANGER_BUTTON
 	reset_btn.pressed.connect(func() -> void:
 		progress.reset()
@@ -441,13 +454,12 @@ func _add_chapter_row(vbox: VBoxContainer, chapter: Dictionary, progress: Spiels
 
 	var btn := Button.new()
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	var glyph := "✓" if done else "•"
-	var suffix := ""
+	var suffix := "   ·   done" if done else ""
 	if reserved:
 		suffix = "   —   coming with the spell wave"
 	elif not available:
 		suffix = "   —   scenario coming soon"
-	btn.text = "%s  %s · %s%s" % [glyph, id, title.to_upper(), suffix]
+	btn.text = "%02d  %s%s" % [lesson_number(id), title, suffix]
 	btn.disabled = not available
 	if available:
 		btn.pressed.connect(func() -> void:
