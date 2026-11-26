@@ -70,19 +70,27 @@ func tile_in(set_name: String) -> float:
 func ensure_sets() -> bool:
 	var ok := true
 	for set_name: String in _sets:
-		for map in MAPS:
-			var e: Dictionary = _sets[set_name].get(map, {})
-			if e.is_empty() or (await _ctex_downloader.ensure(_resolve_url(e), e.get("sha256", ""))).is_empty():
+		for e: Dictionary in set_files(set_name):
+			if (await _ctex_downloader.ensure(_resolve_url(e), e.get("sha256", ""))).is_empty():
 				ok = false
 	return ok
 
 
 func sets_cached() -> bool:
 	for set_name: String in _sets:
-		for map in MAPS:
-			if _cached_path(_ctex_downloader, _sets[set_name].get(map, {})).is_empty():
+		for e: Dictionary in set_files(set_name):
+			if _cached_path(_ctex_downloader, e).is_empty():
 				return false
 	return not _sets.is_empty()
+
+
+## Every file of a set: its maps (albedo / normal / orm) and any extra one the manifest names (the town's height and dry maps).
+func set_files(set_name: String) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for v: Variant in (_sets.get(set_name, {}) as Dictionary).values():
+		if typeof(v) == TYPE_DICTIONARY and (v as Dictionary).has("sha256"):
+			out.append(v)
+	return out
 
 
 ## The GPU-compressed texture of one map of a set, or null while it is not cached.
