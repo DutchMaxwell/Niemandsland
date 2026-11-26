@@ -8,7 +8,7 @@ extends RefCounted
 ##   0 in every ladder strip (BoardgenDressRules._ladder_zones) and every kept-clear cell (ladder ends, landmarks).
 ## G (LOOK5 S3) = WEAR 0..1 on the same earth texels, where feet and wheels went: 1 - d / WEAR_VERGE_IN within WEAR_VERGE_IN of a street cell (the trodden verge),
 ## and a lane WEAR_LANE_IN wide (falling off over as much again) along the shortest cell path over open level-0 cells from every ladder foot on earth and every
-## backyard house (frontage front "") to the nearest street; R is multiplied by 1 - wear. G is folded by the half turn (max with its twin): symmetric by construction.
+## backyard house (frontage front "") to the nearest street; R is multiplied by 1 - wear. B (LOOK5 S5) = the VERGE: 1 - d / VERGE_SOIL_IN to the nearest street cell. G is folded by the half turn (max with its twin): symmetric by construction.
 ## Pure data: the rules never read it; the board shader and the blades do (later steps).
 
 const TEXELS_PER_IN := 4
@@ -21,6 +21,7 @@ const DEPLOY_DEPTH_IN := 12.0   # the deployment band runs this far in from each
 const PLOT := 0.3
 const VERGE_IN := 0.6
 const WEAR_VERGE_IN := 0.9
+const VERGE_SOIL_IN := 0.5   # (LOOK5 S5) the verge channel B falls from 1 at a street cell to 0 at this distance
 const WEAR_LANE_IN := 0.4   # the lane's half width; it falls off to 0 over another WEAR_LANE_IN
 const OPEN := ["street", "ground", "rough", "yard", "hazard", "rubble"]   # level-0 kinds: everything else is raised or solid
 
@@ -52,7 +53,7 @@ static func map(layout: Dictionary) -> Image:
 				var q := Vector2((tx + 0.5) / TEXELS_PER_IN, (tz + 0.5) / TEXELS_PER_IN) - half
 				lane[tz * w + tx] = maxf(lane[tz * w + tx], 1.0 - smoothstep(WEAR_LANE_IN, 2.0 * WEAR_LANE_IN, Geometry2D.get_closest_point_to_segment(q, seg[0], seg[1]).distance_to(q)))
 	var bytes := PackedByteArray()
-	bytes.resize(w * h * 2)
+	bytes.resize(w * h * 3)
 	for tz in h:
 		for tx in w:
 			var p := Vector2((tx + 0.5) / TEXELS_PER_IN, (tz + 0.5) / TEXELS_PER_IN) - half
@@ -67,10 +68,12 @@ static func map(layout: Dictionary) -> Image:
 			v += BAND if absf(p.y) >= half.y - DEPLOY_DEPTH_IN else 0.0
 			v += PLOT if kinds[i] == "rough" else 0.0
 			v *= smoothstep(0.0, VERGE_IN, _near(kinds, nx, nz, cell, half, p, cx, cz, true))
-			var wear := maxf(1.0 - _near(kinds, nx, nz, cell, half, p, cx, cz, true) / WEAR_VERGE_IN, maxf(lane[tz * w + tx], lane[(h - 1 - tz) * w + w - 1 - tx]))   # folded: a lane and its twin wear alike
-			bytes[(tz * w + tx) * 2] = int(round(clampf(v, 0.0, 1.0) * (1.0 - wear) * 255.0))
-			bytes[(tz * w + tx) * 2 + 1] = int(round(clampf(wear, 0.0, 1.0) * 255.0))
-	return Image.create_from_data(w, h, false, Image.FORMAT_RG8, bytes)
+			var to_street := _near(kinds, nx, nz, cell, half, p, cx, cz, true)
+			var wear := maxf(1.0 - to_street / WEAR_VERGE_IN, maxf(lane[tz * w + tx], lane[(h - 1 - tz) * w + w - 1 - tx]))   # folded: a lane and its twin wear alike
+			bytes[(tz * w + tx) * 3] = int(round(clampf(v, 0.0, 1.0) * (1.0 - wear) * 255.0))
+			bytes[(tz * w + tx) * 3 + 1] = int(round(clampf(wear, 0.0, 1.0) * 255.0))
+			bytes[(tz * w + tx) * 3 + 2] = int(round(clampf(1.0 - to_street / VERGE_SOIL_IN, 0.0, 1.0) * 255.0))   # (LOOK5 S5) B = the verge: the wet soil at a street's edge
+	return Image.create_from_data(w, h, false, Image.FORMAT_RGB8, bytes)
 
 
 ## The worn lanes as segments between cell centres (board inches): from every ladder foot on earth and every backyard house to the nearest street cell,

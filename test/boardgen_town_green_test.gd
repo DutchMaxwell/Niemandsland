@@ -18,7 +18,7 @@ func test_the_map_is_half_turn_symmetric_and_four_texels_per_inch() -> void:
 		var layout := _layout(s)
 		var img := BoardgenTownGreen.map(layout)
 		assert_int(img.get_width()).is_equal(int(layout["nx"]) * int(layout["cell_in"]) * 4)
-		assert_int(img.get_format()).is_equal(Image.FORMAT_RG8)   # (LOOK5 S3) R cover, G wear
+		assert_int(img.get_format()).is_equal(Image.FORMAT_RGB8)   # (LOOK5 S3 / S5) R cover, G wear, B verge
 		var w := img.get_width()
 		var h := img.get_height()
 		var off := 0
@@ -84,3 +84,30 @@ func test_the_wear_channel_is_symmetric_on_earth_only_and_the_cover_gives_way() 
 			boards += 1
 			assert_float(best).override_failure_message("seed %d: a backyard house and no worn lane" % s).is_greater(0.5)
 	assert_int(boards).is_greater(0)
+
+
+## LOOK5 S5: B is the VERGE - half-turn symmetric, high on an earth texel beside a street (the nearest texel centre is 0.125 in off the cell edge: 1 - 0.125 / 0.5),
+## 0 from 0.5 in on and on every texel that is not open earth.
+func test_the_verge_channel_is_symmetric_and_lies_only_at_a_streets_edge() -> void:
+	var near_street := 0
+	for s in range(1, 21):
+		var layout := _layout(s)
+		var img := BoardgenTownGreen.map(layout)
+		var w := img.get_width()
+		var h := img.get_height()
+		var per := int(float(layout["cell_in"]) * BoardgenTownGreen.TEXELS_PER_IN)
+		for tz in h:
+			for tx in w:
+				var b := img.get_pixel(tx, tz).b
+				assert_float(absf(b - img.get_pixel(w - 1 - tx, h - 1 - tz).b)).is_less(0.003)
+				var i := _cell_of(layout, tx, tz)
+				var kind := BoardgenGreybox._cell_kind(layout["cells"][i], true)
+				if kind not in ["ground", "rough"]:
+					assert_float(b).override_failure_message("seed %d: verge %.2f on a %s texel" % [s, b, kind]).is_equal(0.0)
+					continue
+				var inner := mini(mini(tx % per, per - 1 - tx % per), mini(tz % per, per - 1 - tz % per))   # texels to the cell's nearest edge
+				if inner >= 2:
+					assert_float(b).override_failure_message("seed %d: verge %.2f at >= 0.5 in from a cell edge" % [s, b]).is_equal(0.0)
+				elif b >= 0.7:
+					near_street += 1
+	assert_int(near_street).is_greater(100)
