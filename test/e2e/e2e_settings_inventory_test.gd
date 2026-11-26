@@ -192,6 +192,13 @@ func test_reset_puts_a_page_back_to_the_shipped_defaults() -> void:
 	assert_bool(_panel._reset_button.visible).is_true()
 
 
+## English only (repository rule): the Calm Mode tooltip carried a German half after " / " (red on main).
+func test_the_calm_mode_tooltip_is_english_only() -> void:
+	var tip := _toggle("Calm Mode").tooltip_text
+	assert_bool(tip.contains(" / ")).override_failure_message("a second language in the tooltip: %s" % tip).is_false()
+	assert_str(tip).is_equal("Turns down combat effects, motion and pulsing selection aids in one click.")
+
+
 func test_escape_and_the_x_hide_the_panel() -> void:
 	_panel.show()
 	var esc := InputEventAction.new()
