@@ -22804,6 +22804,15 @@ func generated_board() -> Dictionary:
 	return {"seed": int(_board_look.get("layout_seed")), "theme": str(_board_look.get("layout_theme")).to_lower()}
 
 
+## Plan step 27-pre P3, TEST-ONLY door (lead 26.11.; remove when the player-facing generate path D-GEN exists - the e2e then
+## uses that path): a rules e2e puts a drawn generated board of `seed_value` / `theme` on the table without the dev flag the
+## class keeps to itself. Debug builds only, like the dev-view door above.
+func _attach_generated_board_for_test(seed_value: int, theme: String) -> void:
+	if not OS.is_debug_build() or not ClassDB.class_exists("NmlCore"):
+		return
+	_board_look = BoardgenGreybox.attach(table, (ClassDB.instantiate("NmlCore") as Object).call("boardgen_layout_themed", seed_value, theme))
+
+
 ## Plan step 27-pre P3: the core listed a jump for this unit's placement (its open session's drop check), so the core
 ## rolls it when the activation resolves; the table rolling it too would roll it twice. Every other drop - no session, or a
 ## ledge the core does not see (a free ruin's floor until 27-pre-R) - stays the table's.

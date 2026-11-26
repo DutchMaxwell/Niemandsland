@@ -3,7 +3,7 @@ extends GdUnitTestSuite
 ## model that drops off a ledge in its open activation is rolled ONCE - by the core, when the activation resolves. Its drop
 ## check lists the jump (the session's `core_jump`), so the table's own jump branch stands aside. One run observes both
 ## halves: the table's line ("<unit> jumps ...") and the core's ("Jump: <unit> model 1 jumps down ...").
-## Real: the main scene, NmlCore, the BoardgenGreybox, the drop door, the drop signal, the End door.
+## Real: the main scene, NmlCore, the drawn generated board (main's test-only door), the drop door, the drop signal, End.
 
 const INCH := 0.0254
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
@@ -64,7 +64,7 @@ func test_a_jump_the_core_sees_is_rolled_once(do_skip := not ClassDB.class_exist
 	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_CORE_TIERS
 	var core: Object = ClassDB.instantiate("NmlCore")
 	var layout: Dictionary = core.boardgen_layout_themed(7, "")
-	BoardgenGreybox.attach(_main.table, layout)
+	_main._attach_generated_board_for_test(7, "")   # main's test-only door: the drawn board, the class never named here
 	var ledge := _ledge(layout)
 	assert_array(ledge).override_failure_message("seed 7 has a 6 in ledge without a ladder").is_not_empty()
 	var att := ParityTable._make_unit(_main, {"player": 1, "name": "Leaper", "models": 1, "x_in": 0.0, "z_step_in": 1.0,
