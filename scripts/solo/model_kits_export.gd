@@ -11,8 +11,9 @@ class_name ModelKitsExport
 const FORMAT := "nml-kits-v1"
 
 
-## {"format", "units": {"<index>_<id>": [kit per model, model order]}, "bearers": {"<index>_<id>": {"cmd_bearer": slot,
-## "cmd_musician": slot}} (only when a unit has a command group)}, or {} when the list does
+## {"format", "units": {"<index>_<id>": [kit per model, model order]},
+## "bearers": {"<index>_<id>": {"cmd_bearer": slot, "cmd_musician": slot}}
+## (only when a unit has a command group)}, or {} when the list does
 ## not import. Model nodes are bare Node3Ds parented under `parent`; the caller frees it.
 static func kits_of_list(data: Dictionary, parent: Node) -> Dictionary:
 	var client := OPRApiClient.new()
@@ -51,8 +52,9 @@ static func kits_of_list(data: Dictionary, parent: Node) -> Dictionary:
 	return out
 
 
-## KIT-BEARER-NAME K3: an AoF: Skirmish command group's bearers at full strength, the plain keys BattleSim.capture
-## writes (`cmd_bearer`; `cmd_musician` only when another model carries the Musician); {} for every other unit.
+## KIT-BEARER-NAME K3: an AoF: Skirmish command group's bearers at full strength, the
+## plain keys BattleSim.capture writes (`cmd_bearer`; `cmd_musician` only when another
+## model carries the Musician); {} for every other unit.
 static func bearers_of(gu: GameUnit) -> Dictionary:
 	if not BattleSim._carries_command(gu):
 		return {}
