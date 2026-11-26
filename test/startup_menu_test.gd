@@ -41,8 +41,10 @@ func test_saved_title_is_not_replaced_with_mockup_data() -> void:
 
 func test_visible_focus_chain_loops_and_skips_hidden_routes() -> void:
 	_menu.view.set_save({})
-	assert_object(_menu.start_battle_btn.get_node(_menu.start_battle_btn.focus_neighbor_top)).is_same(_menu.exit_game_btn)
-	assert_object(_menu.exit_game_btn.get_node(_menu.exit_game_btn.focus_neighbor_bottom)).is_same(_menu.start_battle_btn)
+	var news: Control = _menu.view.news_card   # the news card joins the chain after Quit
+	assert_object(_menu.start_battle_btn.get_node(_menu.start_battle_btn.focus_neighbor_top)).is_same(news)
+	assert_object(_menu.exit_game_btn.get_node(_menu.exit_game_btn.focus_neighbor_bottom)).is_same(news)
+	assert_object(news.get_node(news.focus_neighbor_bottom)).is_same(_menu.start_battle_btn)
 	for button in _menu.view.main_buttons():
 		assert_int(button.focus_mode).is_equal(Control.FOCUS_ALL)
 

@@ -141,3 +141,34 @@ func test_profile_with_a_menu_cfg_and_no_record_still_gets_the_sheet() -> void:
 	assert_object(menu._whats_new).is_not_null()
 	menu.free()
 	get_tree().current_scene = previous
+
+
+## The news card at the right edge shows the first highlight, opens the release notes, steps
+## aside for a route panel and is not there without notes (sheet 01; red on main: no card).
+func test_the_news_card_shows_the_first_title_and_opens_the_notes() -> void:
+	var runner := scene_runner("res://scenes/startup_menu.tscn")
+	var menu := runner.scene()
+	var card: Button = menu.view.get("news_card")
+	assert_object(card).override_failure_message("the menu has no news card").is_not_null()
+	if card == null:
+		return
+	var first: Dictionary = WhatsNewContent.new().cards()[0]
+	var texts: Dictionary = first[WhatsNewContent.language(TranslationServer.get_locale())]
+	var words: Array[String] = []
+	for l: Node in card.find_children("*", "Label", true, false):
+		words.append((l as Label).text)
+	assert_bool(card.visible).is_true()
+	assert_bool(words.has(str(texts.title))) \
+		.override_failure_message("card words: %s" % str(words)).is_true()
+	var count := WhatsNewContent.new().cards().size()
+	assert_bool(words.has("%d highlights" % count)).is_true()
+	menu.view.show_route("help")
+	assert_bool(card.visible) \
+		.override_failure_message("the card stays over an open route panel").is_false()
+	menu.view.close_route()
+	await menu.view.route_closed
+	assert_bool(card.visible).is_true()
+	card.pressed.emit()
+	assert_bool((menu.get_node("WhatsNewDialog") as AcceptDialog).visible).is_true()
+	menu.view.set_news([])
+	assert_bool(card.visible).override_failure_message("a card without notes").is_false()
