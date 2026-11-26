@@ -118,6 +118,9 @@ const MENU_FONT_ACTION := 16     # every button's text
 const MENU_H_ACTION := 44
 const MENU_PAD_PANEL := 22
 const MENU_ICON_BUTTON := 32     # the close box of a menu window
+const H_PAGE_ROW := 56           # a page row of the settings rail (sheet 05)
+const FONT_PAGE_ROW := 19
+const ICON_PAGE_ROW := 24
 const FONT_PAGE_TITLE := 30      # "Settings" at the head of the rail
 
 # ===== Variants (theme type variations; pick one per control) =====

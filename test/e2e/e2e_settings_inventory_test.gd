@@ -425,13 +425,14 @@ func test_the_sheet_has_six_pages_and_shows_one_at_a_time() -> void:
 	assert_object(rail).override_failure_message("the sheet has no page rail").is_not_null()
 	if rail == null:
 		return
-	var names: Array = rail.get_children().map(func(n: Node) -> String: return (n as Button).text)
+	var buttons: Array = rail.get_children().filter(func(n: Node) -> bool: return n is Button)
+	var names: Array = buttons.map(func(n: Node) -> String: return (n as Button).text)
 	assert_array(names).is_equal(["Display", "Graphics", "Audio", "Gameplay", "Accessibility", "Lighting lab"])
 	assert_bool(_panel._page("Display").visible).override_failure_message("the sheet does not open on Display").is_true()
-	(rail.get_child(5) as Button).pressed.emit()
+	(buttons[5] as Button).pressed.emit()
 	for p: String in names:
 		assert_bool(_panel._page(p).visible).override_failure_message("page %s" % p).is_equal(p == "Lighting lab")
-	assert_bool((rail.get_child(5) as Button).button_pressed).is_true()
+	assert_bool((buttons[5] as Button).button_pressed).is_true()
 
 
 ## Display holds Fullscreen and UI Scale, Accessibility holds Calm Mode and Reduce Motion (sheet 05; red on main:
@@ -468,3 +469,30 @@ func test_the_modal_sheet_is_drawn_at_the_mockups_size() -> void:
 	assert_float(rail.custom_minimum_size.x).is_equal(200.0)
 	assert_bool(head.visible).is_false()
 	assert_bool((header.get_child(0) as Control).visible).is_true()
+
+
+## In the menu the page buttons are flat 56 px rows with an icon, 19 px text and a gold tick at the open page; the table's
+## sheet keeps its segments (sheet 05; red on main: segments of 40 px, no icon, no tick).
+func test_the_menus_page_buttons_are_rows_with_an_icon_and_a_tick() -> void:
+	var rail := _panel.find_child("PageRail", true, false) as Control
+	var buttons: Array = rail.get_children().filter(func(n: Node) -> bool: return n is Button)
+	_panel.set_modal(true)
+	_panel.show_page("Graphics")
+	for b: Button in buttons:
+		assert_float(b.custom_minimum_size.y).is_equal(56.0)
+		assert_object(b.icon).override_failure_message("%s has no icon" % b.text).is_not_null()
+		assert_int(b.get_theme_font_size(&"font_size")).is_equal(19)
+		var tick := b.get_node_or_null("Tick") as Control
+		assert_object(tick).override_failure_message("%s has no tick" % b.text).is_not_null()
+		if tick != null:
+			assert_bool(tick.visible).override_failure_message("tick of %s" % b.text).is_equal(b.text == "Graphics")
+	var separator := _panel.find_child("LabSeparator", true, false) as Control
+	assert_object(separator).override_failure_message("no rule above the Lighting lab").is_not_null()
+	if separator == null:
+		return
+	assert_bool(separator.visible).is_true()
+	_panel.set_modal(false)
+	for b: Button in buttons:
+		assert_float(b.custom_minimum_size.y).is_equal(float(HouseStyle.H_ACTION))
+		assert_object(b.icon).is_null()
+		assert_bool((b.get_node("Tick") as Control).visible).is_false()
