@@ -22574,6 +22574,10 @@ func _on_game_phase_changed(phase: int) -> void:
 	if phase == OPRArmyManager.GamePhase.PLAYING:
 		_drag_refusal_logged.clear()   # a new game logs its first drag refusals again
 		_log_aura_grants()   # AIG-G2: the import expansion's silent grants surface at battle start
+		# Ruling D16 (CR3): an AoF: Skirmish command group without picks gets the core's default two at battle start.
+		if opr_army_manager != null and battle_log != null:
+			for line in BattleSim.default_command_picks(opr_army_manager):
+				battle_log.log_event(BattleLog.Category.GENERAL, line)
 	_solo_grade_logged = ""   # every phase change opens a new game's grade line
 	_solo_log_grade()
 	# Step 2.9: a hotseat Automatic table has no AI-seat handoff to print the rule inventory at, so print

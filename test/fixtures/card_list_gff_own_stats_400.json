@@ -1,0 +1,23 @@
+{
+	"name": "Own-stats Firefight test list",
+	"gameSystem": "gff",
+	"pointsLimit": 400,
+	"units": [
+		{
+			"id": "ownSquad01",
+			"selectionId": "sel01",
+			"name": "Test Squad",
+			"size": 5,
+			"cost": 100,
+			"quality": 4,
+			"defense": 5,
+			"armyId": "1wj1ysgxpuuz9bc7",
+			"bases": {"round": "25", "square": "20"},
+			"rules": [],
+			"items": [],
+			"weapons": [{"name": "Test Rifle", "count": 5, "range": 24, "attacks": 1, "specialRules": []}],
+			"loadout": [{"name": "Test Rifle", "count": 5, "range": 24, "attacks": 1, "specialRules": [], "type": "ArmyBookWeapon"}],
+			"selectedUpgrades": []
+		}
+	]
+}
