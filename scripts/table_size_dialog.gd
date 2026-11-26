@@ -39,7 +39,10 @@ var _unit_segments: HBoxContainer   # Inches | Centimeters
 var _width_input: LineEdit
 var _length_input: LineEdit
 var _biome_buttons: Dictionary = {}
-var _system_option: OptionButton   # the first row: the game system (item index = index into GameSystem.IDS)
+var _system_option: OptionButton   # hidden twin of the system cards (item index = index into GameSystem.IDS)
+var _system_buttons: Dictionary = {}   # GameSystem id -> its card in step 01
+var _system_step: BoxContainer   # heading over the cards; one line below 800 px window height
+var _intro_line: Label           # the intro's second line; hidden below 800 px so the page fits without scrolling
 var _title_row: BoxContainer
 var _size_buttons: Dictionary = {}
 var _size_labels: Dictionary = {}
@@ -165,19 +168,23 @@ func _build_ui() -> void:
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title_row.add_child(title)
 	var system_caption := _label("Game system",12,HouseStyle.MUTED)
+	system_caption.visible = false   # step 01 below is the visible switch; the dropdown stays as its hidden twin
 	system_caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_title_row.add_child(system_caption)
 	_system_option = OptionButton.new()
 	_system_option.name = "SystemOption"
 	_system_option.tooltip_text = "Sets the terrain on offer, the table size it starts on and the army lists the table accepts."
 	_system_option.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_system_option.visible = false
 	for id in GameSystem.IDS:
 		_system_option.add_item(GameSystem.label(id))
 	_system_option.add_theme_font_override("font",FONT)
 	_system_option.add_theme_font_size_override("font_size",13)
 	_system_option.item_selected.connect(func(index: int) -> void: set_system(GameSystem.IDS[index]))
 	_title_row.add_child(_system_option)
-	intro.add_child(_label("Choose the setting and the space. Build the battlefield your way.",13,HouseStyle.MUTED,true))
+	_intro_line = _label("Choose the setting and the space. Build the battlefield your way.",13,HouseStyle.MUTED,true)
+	intro.add_child(_intro_line)
+	_add_system_cards()
 	_columns = BoxContainer.new()
 	_columns.add_theme_constant_override("separation",36)
 	_page.add_child(_columns)
@@ -187,7 +194,7 @@ func _build_ui() -> void:
 	left.size_flags_stretch_ratio = 1
 	left.add_theme_constant_override("separation",14)
 	_columns.add_child(left)
-	left.add_child(_label("01   Choose a biome",17))
+	left.add_child(_label("02   Choose a biome",17))
 	_grid = GridContainer.new()
 	_grid.columns = 3
 	_grid.add_theme_constant_override("h_separation",10)
@@ -220,7 +227,7 @@ func _build_ui() -> void:
 	_add_left_air(left)
 	var size_header := HBoxContainer.new()
 	left.add_child(size_header)
-	var size_title := _label("02   Set the table size",17)
+	var size_title := _label("03   Set the table size",17)
 	size_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_header.add_child(size_title)
 	_unit_option = OptionButton.new()
@@ -363,6 +370,41 @@ func _build_ui() -> void:
 	_style(_create,true,true)
 
 
+## Step 01 of the setup: one card per game system (its name, Battle or Skirmish, the board it starts on).
+func _add_system_cards() -> void:
+	var step := BoxContainer.new()
+	step.vertical = true
+	step.add_theme_constant_override("separation",10)
+	_page.add_child(step)
+	_system_step = step
+	var heading := _label("01   Choose a game system",17)
+	heading.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	step.add_child(heading)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation",10)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	step.add_child(row)
+	for id: String in GameSystem.IDS:
+		var button := _button(GameSystem.label(id))
+		button.set_meta("visual_card",true)
+		button.custom_minimum_size.y = 64
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var column := VBoxContainer.new()
+		column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		column.offset_left = 12
+		column.alignment = BoxContainer.ALIGNMENT_CENTER   # name and tag centred at either card height
+		column.offset_right = -8
+		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		button.add_child(column)
+		column.add_child(_label(GameSystem.label(id),14))
+		var board := GameSystem.default_board_feet(id)
+		var tag := "Skirmish" if GameSystem.scale(id) == GameSystem.SCALE_SKIRMISH else "Battle"
+		column.add_child(_label("%s  ·  %d × %d ft" % [tag,board.x,board.y],11,HouseStyle.MUTED))
+		button.pressed.connect(func() -> void: set_system(id))
+		row.add_child(button)
+		_system_buttons[id] = button
+
+
 ## The pick a fresh table starts on; the visible switch is the in-game rules chip/toggle (step 2.10),
 ## not a chooser section — the chooser renders exactly as it did before the flip.
 func _select_rules(level: int) -> void:
@@ -473,6 +515,8 @@ func _size_text(inches: Vector2) -> String:
 func _refresh() -> void:
 	var shown := _shown_biomes()
 	_system_option.select(GameSystem.IDS.find(selected_system))
+	for id in _system_buttons:
+		_style(_system_buttons[id],id == selected_system)
 	for key in _biome_buttons:
 		_biome_buttons[key].visible = key in shown
 		_style(_biome_buttons[key],key == selected_biome)
@@ -541,7 +585,7 @@ func _layout(refill := true) -> void:
 		_margin.add_theme_constant_override("margin_"+side,padding)
 	for side in ["top","bottom"]:
 		_margin.add_theme_constant_override("margin_"+side,20 if compact else 36)
-	_page.add_theme_constant_override("separation",12 if compact else 24)
+	_page.add_theme_constant_override("separation",8 if compact else 24)
 	_left.add_theme_constant_override("separation",11 if compact else 14)
 	_columns.vertical = narrow
 	_columns.add_theme_constant_override("separation",24 if compact else 36)
@@ -550,12 +594,16 @@ func _layout(refill := true) -> void:
 		photo.custom_minimum_size.y = 24   # expands to its card, which _fill_height may make flatter
 	for button in _biome_buttons.values():
 		button.custom_minimum_size.y = 76 if compact else 106
+	for button in _system_buttons.values():
+		button.custom_minimum_size.y = 38 if compact else 64
+	_system_step.vertical = not compact   # below 800 px: the heading shares the cards' line ...
+	_intro_line.visible = not compact     # ... and the intro's second line goes, so nothing scrolls at 720
 	_hero.custom_minimum_size.y = 250 if compact else 370
 	_footprint.custom_minimum_size.y = 110
 	for air in _left_air:
 		air.visible = false
 	if not narrow:
-		_fill_height(area.y-2*(20 if compact else 36),12 if compact else 24)
+		_fill_height(area.y-2*(20 if compact else 36),8 if compact else 24)
 	# Wrapped labels measure their height at their CURRENT width, which the containers set only after this
 	# pass (a 1 px wide label reports ~1500 px): fill once more on the next frame, with every width final.
 	if refill and not get_tree().process_frame.is_connected(_layout.bind(false)):
