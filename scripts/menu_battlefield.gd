@@ -9,6 +9,23 @@ const BIOMES := ["urban_ruins", "alien_jungle", "grassland", "arid_desert", "fro
 const FORMATION := [Vector2(-0.043,0), Vector2(0,0.01), Vector2(0.043,0), Vector2(-0.0215,-0.043), Vector2(0.0215,-0.043)]
 ## Offline or a failed download: reveal the placeholders after this long rather than never.
 const TERRAIN_MODELS_WAIT_MS := 30000
+## The hero shot's light, matched to MenuDiorama.CAMERA_REST: a cool moon and key light from the front left
+## light every face, a warm fire spill at the Warriors' side gives the picture its second colour. Both are
+## fill and spill: they cast no shadows at any quality tier.
+const MOON_COLOR := Color(0.50,0.80,0.92)
+const KEY_POSITION := Vector3(-0.20,0.25,0.35)
+const KEY_ENERGY := 0.9
+const KEY_RANGE := 1.0
+const FIRE_POSITION := Vector3(0.24,0.05,0.02)
+const FIRE_COLOR := Color(1.0,0.52,0.22)
+const FIRE_ENERGY := 0.7
+const FIRE_RANGE := 0.30
+## Depth of field (Medium and up): blur beyond the forces and a soft near edge keep the eye on the miniatures.
+const DOF_FAR_DISTANCE := 0.60
+const DOF_FAR_TRANSITION := 0.30
+const DOF_NEAR_DISTANCE := 0.20
+const DOF_NEAR_TRANSITION := 0.06
+const DOF_AMOUNT := 0.09
 var terrain_overlay: Node3D
 var object_manager: ObjectManager
 var lighting_controller: Node
@@ -108,6 +125,8 @@ func build(selected_biome: String, world_env: WorldEnvironment, sun: Directional
 		label.hide()
 	_add_spill(Vector3(0.12,0.12,0.20),Color(0.78,0.84,1),0.10,0.42)
 	_add_spill(Vector3(-0.03,0.045,-0.13),Color(1,0.42,0.16),0.12,0.27)
+	_add_spill(KEY_POSITION,MOON_COLOR,KEY_ENERGY,KEY_RANGE)
+	_add_spill(FIRE_POSITION,FIRE_COLOR,FIRE_ENERGY,FIRE_RANGE)
 	progress.emit("Ready",1.0)
 	finished.emit()
 
@@ -174,25 +193,27 @@ func _build_units(table: Node3D) -> void:
 func apply_night() -> void:
 	if not is_instance_valid(lighting_controller):
 		return
-	lighting_controller.set_sun_energy(0.28)
-	lighting_controller.set_sun_color(Color(0.58,0.70,1))
-	lighting_controller.set_sun_angles(-39,120)
-	lighting_controller.set_ambient_energy(0.10)
+	# The hero shot's grade: a brighter moon, fuller colour and a lifted fog, so the lit faces carry the picture.
+	lighting_controller.set_sun_energy(0.55)
+	lighting_controller.set_sun_color(MOON_COLOR)
+	lighting_controller.set_sun_angles(-40,38)
+	lighting_controller.set_ambient_energy(0.13)
 	lighting_controller.set_ambient_color(Color(0.32,0.43,0.67))
 	lighting_controller.set_fill_light_energy(0.08)
 	lighting_controller.set_fill_light_color(Color(0.55,0.66,0.95))
-	lighting_controller.set_exposure(0.94)
-	lighting_controller.set_saturation(0.85)
-	lighting_controller.set_glow_intensity(0.20)
+	lighting_controller.set_exposure(0.98)
+	lighting_controller.set_saturation(1.08)
+	lighting_controller.set_contrast(1.08)
+	lighting_controller.set_glow_intensity(0.45)
 	var env: Environment = get_node("WorldEnvironment").environment
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.035,0.045,0.065)
-	env.fog_light_energy = 0.3
-	env.fog_density = 0.16
-	env.fog_sky_affect = 0
-	env.glow_bloom = 0.06
+	env.fog_light_color = Color(0.09,0.13,0.19)
+	env.fog_light_energy = 0.7
+	env.fog_density = 0.13
+	env.fog_sky_affect = 0.35
+	env.glow_bloom = 0.10
 	env.sdfgi_enabled = false
 	env.ssil_enabled = false
 	get_viewport().scaling_3d_scale = 1.0
@@ -202,6 +223,20 @@ func apply_night() -> void:
 	env.ssao_enabled = GraphicsSettings.current_preset >= GraphicsSettings.QualityPreset.MEDIUM
 	env.ssr_enabled = GraphicsSettings.current_preset >= GraphicsSettings.QualityPreset.HIGH
 	env.volumetric_fog_enabled = GraphicsSettings.current_preset >= GraphicsSettings.QualityPreset.HIGH
+	if is_instance_valid(camera):
+		camera.attributes = _depth_of_field() if GraphicsSettings.current_preset >= GraphicsSettings.QualityPreset.MEDIUM else null
+
+
+func _depth_of_field() -> CameraAttributesPractical:
+	var attributes := CameraAttributesPractical.new()
+	attributes.dof_blur_far_enabled = true
+	attributes.dof_blur_far_distance = DOF_FAR_DISTANCE
+	attributes.dof_blur_far_transition = DOF_FAR_TRANSITION
+	attributes.dof_blur_near_enabled = true
+	attributes.dof_blur_near_distance = DOF_NEAR_DISTANCE
+	attributes.dof_blur_near_transition = DOF_NEAR_TRANSITION
+	attributes.dof_blur_amount = DOF_AMOUNT
+	return attributes
 
 
 func _add_spill(position_value: Vector3, color: Color, energy: float, radius: float) -> void:
