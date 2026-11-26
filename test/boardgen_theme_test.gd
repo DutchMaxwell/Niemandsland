@@ -143,7 +143,7 @@ func test_the_town_fountain_is_an_octagonal_basin_over_one_undrawn_footprint_col
 		assert_float(at.length()).is_equal_approx(2.4, 0.001)
 		bearings[roundi(rad_to_deg(at.angle()))] = true
 	assert_int(bearings.size()).is_equal(8)   # one side per eighth turn: an octagon
-	assert_bool(parts.any(func(b: Dictionary) -> bool: return b["kind"] == "hazard")).is_true()
+	assert_bool(parts.any(func(b: Dictionary) -> bool: return b["kind"] == "hazard")).override_failure_message("the water is BoardgenTownWater, not hazard strips").is_false()
 	assert_bool(parts.any(func(b: Dictionary) -> bool: return b["kind"] == "stone" and not b["solid"] and is_equal_approx(b["hi"].y, 1.3))).is_true()
 
 

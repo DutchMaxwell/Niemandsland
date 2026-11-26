@@ -221,20 +221,16 @@ static func _town_landmarks(layout: Dictionary, origin: Vector2) -> Array[Dictio
 
 
 ## The fountain round `c` (kit off): eight wall segments on an octagon FOUNTAIN_APOTHEM_IN out (axis-aligned boxes yawed about their centre),
-## water as four yawed strips whose union is exactly the basin's inside (each covers the two opposite sectors of one side pair; tops a
-## hair apart, no z-fight), and a column. Nothing here is solid: the collider is the footprint box.
+## and a column; the water is BoardgenTownWater's octagon. Nothing here is solid: the collider is the footprint box.
 static func _fountain(c: Vector2) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var a := FOUNTAIN_APOTHEM_IN
 	var t := FOUNTAIN_WALL_IN
 	var side := 2.0 * (a + t * 0.5) * tan(PI / 8.0)   # the outer corners meet
-	var inner := a - t * 0.5 - 0.01
 	for i in 8:
 		var yaw := i * PI / 4.0
 		var m := c + Vector2(sin(yaw), cos(yaw)) * a
 		out.append(_yawed(m, Vector2(side, t) * 0.5, i, FOUNTAIN_RIM_IN, "wall"))
-	for i in 4:
-		out.append(_yawed(c, Vector2(inner, inner * tan(PI / 8.0) - 0.01), i, FOUNTAIN_WATER_IN - i * 0.005, "hazard"))
 	out.append(_box(c - Vector2.ONE * 0.2, c + Vector2.ONE * 0.2, 0.0, 1.3, "stone", false))
 	return out
 
@@ -360,6 +356,9 @@ func build(layout: Dictionary, dress: BoardgenDress = null) -> void:
 			dress.name = "Dress"
 			dress.build(layout)
 			add_child(dress)
+		var water := BoardgenTownWater.build(layout, skip.has("props"))   # the fountain's water (look plan R18)
+		if water != null:
+			add_child(water)
 		if kit_town:
 			town_kit.name = "TownKit"
 			town_kit.build(layout)
@@ -549,6 +548,7 @@ func _apply_detail() -> void:
 	var on: bool = graphics != null and detail_for(int(graphics.current_preset), RenderingServer.get_current_rendering_method() == "gl_compatibility")
 	if _material != null and graphics != null:
 		_material.set_shader_parameter("detail", 1.0 if on else 0.0)
+		BoardgenTownWater.apply_preset(get_node_or_null("TownWater"), int(graphics.current_preset))
 		if _decals != null:
 			_decals.visible = on   # no decals on Low, Performance and in the Compatibility renderer
 		if _life != null:
