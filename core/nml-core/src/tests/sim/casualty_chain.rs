@@ -131,8 +131,10 @@ fn the_casualty_pick_reads_the_firefight_9_in_chain_from_its_epoch() {
         st.profiles = Rc::new(crate::state::Profiles { list: vec![p; st.profiles.list.len()], index: Default::default() });
         crate::casualty::chain_casualty_order(&st, 0, Some(1), e).and_then(|o| o.first().copied())
     };
-    let e = crate::acts::PENDING_EPOCH_CASUALTY_CHAIN;
-    assert!(e > crate::acts::CURRENT_RULES_EPOCH, "a placeholder no record has played");
+    let e = crate::acts::EPOCH_102_CASUALTY_CHAIN;
+    assert_eq!(e, 102);
+    assert!(!crate::acts::rule_on(crate::acts::EPOCH_101_SKIRMISH_PUSH, e), "a record at 101 replays as recorded");
+    assert!(crate::acts::rule_on(crate::acts::CURRENT_RULES_EPOCH, e), "a fresh play_game() stamps it on");
     assert_eq!(pick("gff", e), Some(0), "the Firefight 9 in: an end model goes, the line stays whole");
     assert_eq!(pick("gff", e - 1), Some(1), "one epoch below: the recorded 6 in, no coherent pick, the value order's lead");
     assert_eq!(pick("aofs", e), Some(1), "AoF: Skirmish keeps 6 in");
