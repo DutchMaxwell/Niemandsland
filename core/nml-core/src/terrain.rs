@@ -93,6 +93,21 @@ pub struct Obb {
     pub slabs: Vec<Slab>,
 }
 
+/// Plan step 27-pre-R R1: a model stands on a floor when its height is the slab's top within a quarter inch.
+pub const SLAB_STAND_TOL_M: f64 = 0.25 * crate::IN2M;
+
+/// One drop off a ruin floor on a walked path: metres walked to it, its height (in), where (world XZ) and the leg's
+/// direction - the fields `activation::cliff_drop_in`'s own edges carry.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SlabDrop { pub s: f64, pub dy_in: f64, pub at: [f64; 2], pub dir: [f64; 2] }
+
+/// Whether the slab's footprint (its yawed rectangle, world XZ metres) holds the point; a border point is inside.
+fn slab_holds(sl: &Slab, p: [f64; 2]) -> bool {
+    let (dx, dz, (s, c)) = (p[0] - sl.c[0], p[1] - sl.c[1], sl.yaw.sin_cos());
+    // the same local frame as sight.rs `BoxFoot::local`, so a floor's footprint is the one sight reads
+    (dx * c - dz * s).abs() <= sl.he[0] + 1e-9 && (dx * s + dz * c).abs() <= sl.he[1] + 1e-9
+}
+
 /// One floor slab of a free ruin - a thin SOLID box from `y0` to `y1` (metres), `yaw` as in `Obb`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Slab {
@@ -388,6 +403,36 @@ impl Terrain {
     #[inline]
     pub fn board_in(&self) -> [f64; 2] {
         self.board_in
+    }
+
+    /// Plan step 27-pre-R R1: the drops a walked path (world XZ metres) takes off a free ruin's floors. The floor underfoot
+    /// at the start is the slab whose top is the start height (`start_y_m`, within `SLAB_STAND_TOL_M`) and whose footprint
+    /// holds the start; where the path leaves that footprint, the floor below is the highest LOWER slab top under the exit
+    /// point, else the tier level there: ONE down edge per floor left. Never an up edge - climbing onto a floor is not a
+    /// ledge the path drops off. A start on the ground (no floor underfoot) gives none. Data only until step R2 reads it.
+    pub fn slab_drops(&self, path: &[[f64; 2]], start_y_m: f64) -> Vec<SlabDrop> {
+        let slabs: Vec<&Slab> = self.sandbox.iter().flat_map(|o| o.slabs.iter()).collect();
+        let Some(&start) = path.first() else { return Vec::new() };
+        let mut floor = slabs.iter().copied().find(|sl| (sl.y1 - start_y_m).abs() <= SLAB_STAND_TOL_M && slab_holds(sl, start));
+        let (mut out, mut walked) = (Vec::new(), 0.0);
+        for w in path.windows(2) {
+            let (d, len) = ([w[1][0] - w[0][0], w[1][1] - w[0][1]], (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]));
+            while let Some(sl) = floor {
+                // the first point of this leg outside the floor (32 halvings of the leg: well under a millimetre)
+                if slab_holds(sl, w[1]) { break; }
+                let (mut lo, mut hi) = (0.0, 1.0);
+                for _ in 0..32 { let m = (lo + hi) / 2.0; if slab_holds(sl, [w[0][0] + d[0] * m, w[0][1] + d[1] * m]) { lo = m } else { hi = m } }
+                let at = [w[0][0] + d[0] * hi, w[0][1] + d[1] * hi];
+                let below = slabs.iter().copied().filter(|o| o.y1 < sl.y1 - SLAB_STAND_TOL_M && slab_holds(o, at))
+                    .max_by(|a, b| a.y1.total_cmp(&b.y1));
+                let ground = self.tier_in_at(at[0] / crate::IN2M, at[1] / crate::IN2M) * crate::IN2M;
+                let to = below.map_or(ground, |o| o.y1.max(ground));
+                out.push(SlabDrop { s: walked + len * hi, dy_in: (sl.y1 - to) / crate::IN2M, at, dir: [d[0] / len.max(1e-12), d[1] / len.max(1e-12)] });
+                floor = below.filter(|o| o.y1 >= ground);
+            }
+            walked += len;
+        }
+        out
     }
 
     /// Heightfield plan step 5 - the height of the tier under a point, inches above the table; `0.0` on a board without
@@ -1394,5 +1439,49 @@ mod tests {
             counts.push(boxes.len());
         }
         assert!(counts.iter().all(|&n| n <= 80), "a board's blocks are sight zones, keep them few: {counts:?}");
+    }
+}
+
+#[cfg(test)]
+mod slab_drop_tests {
+    use super::*;
+    const I: f64 = crate::IN2M;
+
+    fn board(slabs: Vec<Slab>) -> Terrain {
+        Terrain::build(&PlainTerrain { sandbox: vec![Obb { c: [0.0, 0.0], he: [3.0 * I, 3.0 * I], yaw: 0.0, kind: 0, slabs }], ..Default::default() })
+    }
+
+    fn slab(he_in: [f64; 2], top_in: f64, yaw: f64) -> Slab {
+        Slab { c: [0.0, 0.0], he: [he_in[0] * I, he_in[1] * I], yaw, y0: top_in * I - 0.01, y1: top_in * I }
+    }
+
+    /// R1: a model on a 4 in floor walking off its edge drops ONCE, 4 in, where the path leaves the floor; staying on it,
+    /// or starting on the ground beside or under it, is no drop - and walking ONTO it is never an edge (no up edge).
+    #[test]
+    fn a_ruin_floor_drops_once_where_the_path_leaves_it_and_never_up() {
+        let t = board(vec![slab([1.0, 1.0], 4.0, 0.0)]);
+        let off = t.slab_drops(&[[0.0, 0.0], [3.0 * I, 0.0]], 4.0 * I);
+        assert_eq!(off.len(), 1);
+        assert!((off[0].dy_in - 4.0).abs() < 1e-9 && (off[0].at[0] - I).abs() < 1e-6, "{off:?}");
+        assert!(t.slab_drops(&[[0.0, 0.0], [0.5 * I, 0.5 * I]], 4.0 * I).is_empty(), "stays on the floor");
+        assert!(t.slab_drops(&[[0.0, 0.0], [3.0 * I, 0.0]], 0.0).is_empty(), "under the floor, on the ground");
+        assert!(t.slab_drops(&[[3.0 * I, 0.0], [0.0, 0.0]], 0.0).is_empty(), "onto the floor: no up edge");
+    }
+
+    /// Two storeys: off the 6 in top onto the 2 in floor below (4 in), then off that floor to the ground (2 in).
+    #[test]
+    fn two_storeys_drop_floor_by_floor() {
+        let t = board(vec![slab([2.0, 2.0], 2.0, 0.0), slab([1.0, 1.0], 6.0, 0.0)]);
+        let d = t.slab_drops(&[[0.0, 0.0], [1.5 * I, 0.0], [3.0 * I, 0.0]], 6.0 * I);
+        assert_eq!(d.iter().map(|e| (e.dy_in * 1000.0).round() / 1000.0).collect::<Vec<_>>(), vec![4.0, 2.0], "{d:?}");
+        assert!(d[0].s < d[1].s, "walk order");
+    }
+
+    /// The footprint turns with the slab's yaw the way sight's `BoxFoot` turns it: a floor 4 in long along z at yaw 90 deg.
+    #[test]
+    fn the_footprint_turns_like_sight() {
+        let t = board(vec![slab([2.0, 0.5], 4.0, std::f64::consts::FRAC_PI_2)]);
+        assert!(t.slab_drops(&[[0.0, 0.0], [0.0, 1.5 * I]], 4.0 * I).is_empty(), "along its length: still on it");
+        assert_eq!(t.slab_drops(&[[0.0, 0.0], [1.5 * I, 0.0]], 4.0 * I).len(), 1, "across its width: off it");
     }
 }
