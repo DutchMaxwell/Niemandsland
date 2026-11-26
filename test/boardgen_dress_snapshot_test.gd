@@ -3,7 +3,8 @@ extends GdUnitTestSuite
 ## placements (module and transform), the honesty-rule report, the merged mesh and the shadow proxy.
 ## Pure refactors of the dressing scripts must keep these hashes; a change of the look re-pins them
 ## on purpose. Re-pinned 25.11. by the layout change D-R2 = C (more intact houses:
-## 114 -> 183 and 97 -> 154 placements). Re-pinned 26.11. by D-R16 = b (fewer filler slabs: 180 -> 183 and 155 -> 157 placements).
+## 114 -> 183 and 97 -> 154 placements). Re-pinned 26.11. by D-R16 = b (fewer filler slabs:
+## 180 -> 183 and 155 -> 157 placements).
 
 const SEEDS: Array[int] = [41, 25]
 ## SHA-256 of the snapshot bytes per seed; printed by the test when they differ.
