@@ -266,3 +266,22 @@ func test_core_missing_dialog_wraps_its_line() -> void:
 	assert_int(dialog.size.x).override_failure_message("the notice window is %d px wide" % dialog.size.x).is_less(700)
 	assert_bool(dialog.get_label().autowrap_mode != TextServer.AUTOWRAP_OFF).is_true()
 	dialog.confirmed.emit()
+
+## Step 29: a new table's loading picture names it - biome, system and size over the biome's picture; a load keeps
+## the plain overlay (red on main: the overlay only says LOADING).
+func test_the_loading_picture_names_a_new_table() -> void:
+	var previous = ProjectSettings.get_setting("niemandsland/pending_table_setup", null)
+	ProjectSettings.set_setting("niemandsland/pending_table_setup", {"size": Vector2(6, 4), "biome": "urban_ruins", "system": "gf"})
+	var overlay: LoadingOverlay = auto_free(LoadingOverlay.new())
+	add_child(overlay)
+	if _menu.has_method("_name_the_table"):
+		_menu._name_the_table(overlay)
+	ProjectSettings.set_setting("niemandsland/pending_table_setup", previous)
+	assert_str(overlay._title.text).override_failure_message("the overlay does not name the table").is_equal("Urban ruins")
+	assert_str(overlay._subtitle.text if overlay.get("_subtitle") != null else "").is_equal("Grimdark Future · 6 × 4 ft")
+	assert_object(overlay.find_child("Backdrop", true, false)).override_failure_message("no biome picture").is_not_null()
+	var plain: LoadingOverlay = auto_free(LoadingOverlay.new())
+	add_child(plain)
+	if _menu.has_method("_name_the_table"):
+		_menu._name_the_table(plain)   # no pending setup any more: the plain overlay
+	assert_bool(plain._title.visible).override_failure_message("a load must keep the plain overlay").is_false()
