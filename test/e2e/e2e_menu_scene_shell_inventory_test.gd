@@ -249,7 +249,7 @@ func test_quit_asks_first_with_back_focused_and_never_quits() -> void:
 	assert_object(card.get_viewport().gui_get_focus_owner()).is_same(card.cancel_button)
 	# The card lives in the menu's own viewport, so Back takes a real click; Quit is never pressed here.
 	await _click(card.cancel_button)
-	await _frames(3)
+	await get_tree().create_timer(0.45).timeout  # the card fades out first
 	assert_bool(is_instance_valid(_menu._exit_card)).is_false()
 
 
