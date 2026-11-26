@@ -57,6 +57,11 @@ func test_the_bake_keeps_the_board_aspect_and_caps_its_size() -> void:
 	assert_that(bake.pixels(Vector2(6.0, 3.0))).is_equal(Vector2i(4096, 2048))
 
 
+func test_the_base_top_sits_on_the_board_layer_so_the_model_fill_skips_it() -> void:
+	assert_int(BaseDecor.TOP_LAYER).is_equal(BoardgenMood.BOARD_LAYER)
+	assert_int(BaseDecor.TOP_LAYER & BoardgenMood.MODEL_LAYER).is_equal(0)
+
+
 func test_a_board_leaving_gives_the_bases_back_to_the_biome() -> void:
 	var table: StubTable = auto_free(StubTable.new())
 	add_child(table)
