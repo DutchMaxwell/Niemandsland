@@ -433,7 +433,10 @@ func _on_credits_pressed() -> void:
 	# its window size is always the contents' minimum — an outer keep_window_reachable() would
 	# be overruled the moment it pops up (measured: clamped to 520x400, popped up at 452x317).
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(420, 240)
+	# 520 x 420 shows whole lines; never larger than the window leaves room for.
+	var room := get_viewport().get_visible_rect().size - Vector2(160, 220)
+	scroll.custom_minimum_size = Vector2(minf(520.0, room.x), minf(420.0, room.y))
+	scroll.follow_focus = true
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var body := Label.new()
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
