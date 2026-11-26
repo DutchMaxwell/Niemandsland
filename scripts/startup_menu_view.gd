@@ -253,8 +253,8 @@ func _layout() -> void:
 	version.position = Vector2(left,size.y-35)
 	status.position = Vector2(size.x-450,size.y-35)
 	status.size.x = 354
-	route_panel.position = Vector2(maxf(24,size.x-620),minf(215,size.y*0.2))
-	route_panel.size.x = 500
+	route_panel.position = Vector2(left+_scroll.size.x+24,_scroll.position.y)
+	route_panel.custom_minimum_size.x = 560
 
 
 func _action(id: String, title: String, description: String, glyph: String, primary := false, outlined := false) -> Action:
