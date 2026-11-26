@@ -120,7 +120,7 @@ func test_build_draws_the_whole_board_in_one_multimesh_and_a_ground_layer_collid
 	var boxes := BoardgenGreybox.plan(layout)
 	var surfaces := node.find_child("Surfaces", false, false) as MultiMeshInstance3D
 	assert_int(surfaces.multimesh.instance_count).is_equal(boxes.size())
-	assert_int(node.find_children("*", "MeshInstance3D", false, false).size()).is_equal(0)   # one draw call, not one node per box
+	assert_int(node.find_children("*", "MeshInstance3D", false, false).filter(func(n: Node) -> bool: return not n is BoardgenGroundFog).size()).is_equal(0)   # one draw call, not one node per box (LOOK5 F2r: the fog plane is no box)
 	var body := node.find_child("Colliders", false, false) as StaticBody3D
 	assert_int(body.get_child_count()).is_equal(boxes.filter(func(b: Dictionary) -> bool: return b["solid"]).size())
 	assert_int(body.collision_layer).is_equal(BoardgenGreybox.GROUND_COLLISION_LAYER)
