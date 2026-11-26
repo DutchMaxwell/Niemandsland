@@ -18,7 +18,7 @@ func test_the_map_is_half_turn_symmetric_and_four_texels_per_inch() -> void:
 		var layout := _layout(s)
 		var img := BoardgenTownGreen.map(layout)
 		assert_int(img.get_width()).is_equal(int(layout["nx"]) * int(layout["cell_in"]) * 4)
-		assert_int(img.get_format()).is_equal(Image.FORMAT_R8)
+		assert_int(img.get_format()).is_equal(Image.FORMAT_RG8)   # (LOOK5 S3) R cover, G wear
 		var w := img.get_width()
 		var h := img.get_height()
 		var off := 0
@@ -59,3 +59,28 @@ func test_the_open_earth_is_rough_not_a_carpet() -> void:
 	var mean := total / n
 	print("GREEN mean cover on earth %.3f over %d texels" % [mean, n])
 	assert_float(mean).is_between(0.35, 0.6)
+
+
+## LOOK5 S3: G is the WEAR where feet went - half-turn symmetric, 0 off the open earth, a worn lane on every board with a backyard house, and the cover gives way
+## to it (R + G <= 1).
+func test_the_wear_channel_is_symmetric_on_earth_only_and_the_cover_gives_way() -> void:
+	var boards := 0
+	for s in range(1, 21):
+		var layout := _layout(s)
+		var img := BoardgenTownGreen.map(layout)
+		var w := img.get_width()
+		var h := img.get_height()
+		var best := 0.0
+		for tz in h:
+			for tx in w:
+				var c := img.get_pixel(tx, tz)
+				var kind := BoardgenGreybox._cell_kind(layout["cells"][_cell_of(layout, tx, tz)], true)
+				assert_float(absf(c.g - img.get_pixel(w - 1 - tx, h - 1 - tz).g)).override_failure_message("seed %d: wear not symmetric at (%d, %d)" % [s, tx, tz]).is_less(0.003)
+				if kind not in ["ground", "rough"]:
+					assert_float(c.g).override_failure_message("seed %d: wear %.2f on a %s texel" % [s, c.g, kind]).is_equal(0.0)
+				assert_float(c.r + c.g).is_less_equal(1.0 + 1.0 / 255.0)
+				best = maxf(best, c.g)
+		if BoardgenTownDressing.frontage(layout).any(func(f: Dictionary) -> bool: return f["front"] == ""):
+			boards += 1
+			assert_float(best).override_failure_message("seed %d: a backyard house and no worn lane" % s).is_greater(0.5)
+	assert_int(boards).is_greater(0)
