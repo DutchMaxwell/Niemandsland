@@ -16,6 +16,17 @@ static func should_show(path: String = STATE_PATH) -> bool:
 	config.load(path)
 	return not version().is_empty() and str(config.get_value("news", "last_seen_version", "")) != version()
 
+## A profile with no recorded version, no table prepared (menu.cfg), no player name (player_identity.cfg) and no
+## save is a first launch: the menu opens on itself and the notes wait for the next update.
+static func is_fresh_profile(menu_path: String = GameSystem.MENU_CFG, identity_path: String = PlayerIdentity.CONFIG_PATH, save_dir: String = "", state_path: String = STATE_PATH) -> bool:
+	if FileAccess.file_exists(menu_path) or FileAccess.file_exists(identity_path):
+		return false
+	var config := ConfigFile.new()
+	config.load(state_path)
+	if not str(config.get_value("news", "last_seen_version", "")).is_empty():
+		return false
+	return SaveManager.latest_save_info(save_dir).is_empty()
+
 ## Save only after the screen has actually been opened; callers can retry a failed write.
 static func mark_seen(path: String = STATE_PATH) -> Error:
 	var config := ConfigFile.new()

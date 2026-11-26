@@ -14,7 +14,7 @@ func after_test() -> void:
 
 func test_primary_routes_are_grouped() -> void:
 	var actions := _menu.find_child("MenuButtons",true,false)
-	assert_int(actions.get_child_count()).is_equal(4)
+	assert_int(actions.get_child_count()).is_equal(5)
 	assert_bool(_menu.host_online_btn.is_visible_in_tree()).is_false()
 	assert_bool(_menu.tutorial_btn.is_visible_in_tree()).is_false()
 	_menu.view.buttons.OnlineBtn.pressed.emit()
@@ -303,6 +303,26 @@ func test_footer_links_keep_one_box_for_every_state() -> void:
 			var box := link.get_theme_stylebox(state).get_minimum_size()
 			assert_vector(box).override_failure_message("%s: the %s box needs %s, the resting box %s" % [id,state,box,rest]).is_equal(rest)
 
+## Step 61: the setup fades in from the menu and out to the table over the screen time (red on main: it pops in
+## at full opacity and is gone at once). Reduce Motion stays off here (the test profile's default).
+func test_the_table_setup_fades_in_and_out() -> void:
+	var previous = ProjectSettings.get_setting("niemandsland/pending_table_setup", null)
+	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	probe.set_script(MenuTransitionProbe)
+	add_child(probe)
+	probe._on_start_battle_pressed()
+	var dialog: Window = probe._table_setup
+	var content := dialog.get_child(0) as Control
+	assert_float(content.modulate.a).override_failure_message("the setup pops in").is_less(0.5)
+	await get_tree().create_timer(HudTokens.DUR_SCREEN + 0.15).timeout
+	assert_float(content.modulate.a).is_equal_approx(1.0, 0.01)
+	dialog._confirm()
+	assert_bool(probe.entered_game).is_true()
+	assert_bool(is_instance_valid(dialog) and dialog.visible).override_failure_message("the setup is gone at once").is_true()
+	await get_tree().create_timer(HudTokens.DUR_SCREEN + 0.15).timeout
+	ProjectSettings.set_setting("niemandsland/pending_table_setup", previous)
+	assert_bool(is_instance_valid(dialog)).override_failure_message("the faded setup is not freed").is_false()
+
 ## Step 29: a new table's loading picture names it - biome, system and size over the biome's picture; a load keeps
 ## the plain overlay (red on main: the overlay only says LOADING).
 func test_the_loading_picture_names_a_new_table() -> void:
@@ -312,7 +332,7 @@ func test_the_loading_picture_names_a_new_table() -> void:
 	add_child(overlay)
 	if _menu.has_method("_name_the_table"):
 		_menu._name_the_table(overlay)
-	ProjectSettings.set_setting("niemandsland/pending_table_setup", previous)
+	ProjectSettings.set_setting("niemandsland/pending_table_setup", null)   # the plain case below: no setup pending
 	assert_str(overlay._title.text).override_failure_message("the overlay does not name the table").is_equal("Urban ruins")
 	assert_str(overlay._subtitle.text if overlay.get("_subtitle") != null else "").is_equal("Grimdark Future · 6 × 4 ft")
 	assert_object(overlay.find_child("Backdrop", true, false)).override_failure_message("no biome picture").is_not_null()
@@ -320,4 +340,5 @@ func test_the_loading_picture_names_a_new_table() -> void:
 	add_child(plain)
 	if _menu.has_method("_name_the_table"):
 		_menu._name_the_table(plain)   # no pending setup any more: the plain overlay
+	ProjectSettings.set_setting("niemandsland/pending_table_setup", previous)
 	assert_bool(plain._title.visible).override_failure_message("a load must keep the plain overlay").is_false()

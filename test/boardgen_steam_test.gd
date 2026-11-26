@@ -87,10 +87,10 @@ func test_the_setting_removes_and_restores_the_steam_with_the_mist() -> void:
 	assert_object(node.get_node_or_null("Steam")).is_not_null()
 	GraphicsSettings.show_board_mist = false
 	assert_object(node.get_node_or_null("Steam")).is_null()
-	assert_object(node.get_node_or_null("Mist")).is_null()
+	assert_object(node.get_node_or_null("GroundFog")).is_null()
 	GraphicsSettings.show_board_mist = true
 	assert_object(node.get_node_or_null("Steam")).is_not_null()
-	assert_object(node.get_node_or_null("Mist")).is_not_null()
+	assert_object(node.get_node_or_null("GroundFog")).is_not_null()
 
 
 func test_the_floor_in_front_of_a_vent_gets_thicker_mist() -> void:

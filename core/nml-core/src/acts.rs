@@ -1092,6 +1092,11 @@ pub const EPOCH_102_CASUALTY_CHAIN: u32 = 102;
 ///   actions the same way. Read only by `sim.rs` (`command_banner` in the rolled morale test, `command_musician_in` in the move band).
 pub const EPOCH_103_COMMAND_BANNER: u32 = 103;
 pub const CURRENT_RULES_EPOCH: u32 = 103;
+/// PENDING (KIT-BEARER-NAME, lead ruling 26.11.): each command upgrade lives with the model that carries it - the Musician
+/// is lost only when ITS model dies (`State::cmd_musician`, named by the table from the model's equipment), where it rode
+/// with the Banner's bearer. A list that names none keeps one bearer for both (the last model). A placeholder one past
+/// `CURRENT_RULES_EPOCH`. Records stamped 103 or below replay byte-exact. Read only by `sim.rs` (`musician_dead`).
+pub const PENDING_EPOCH_TWO_BEARERS: u32 = 104;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff

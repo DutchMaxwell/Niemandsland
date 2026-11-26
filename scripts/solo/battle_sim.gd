@@ -2033,6 +2033,50 @@ static func _carries_command(u: GameUnit) -> bool:
 	return rules.has("Banner") or rules.has("Musician")
 
 
+## Ruling D16, CMD-ROUNDTRIP step CR3: at game start each AoF: Skirmish command-group unit without picks gets the core's
+## default (`NmlCore.default_command_picks`, the two nearest living friendly units) in `unit_properties["command_picks"]`.
+## Returns one battle-log line per such unit. The rule lives in the core only: without the extension no unit gets picks
+## and its line says so. `core` is for the tests; null builds one when a unit needs it.
+static func default_command_picks(army: OPRArmyManager, core: Object = null) -> Array[String]:
+	var lines: Array[String] = []
+	var others: Array = []
+	for uid in army.game_units:
+		var c: Variant = _living_centre(army.game_units[uid])
+		if c != null:
+			others.append([str(uid), int((army.game_units[uid] as GameUnit).unit_properties.get("player_id", 0)), true, c])
+	for uid in army.game_units:
+		var u := army.game_units[uid] as GameUnit
+		var at: Variant = _living_centre(u)
+		if not _carries_command(u) or at == null or not (u.unit_properties.get("command_picks", []) as Array).is_empty():
+			continue
+		var kit := " and ".join(PackedStringArray(["Banner", "Musician"].filter(func(r: String) -> bool: return u.get_special_rules().has(r))))
+		if core == null and ClassDB.class_exists("NmlCore"):
+			core = ClassDB.instantiate("NmlCore")
+		if core == null:
+			lines.append("Command group: %s's %s reaches no other unit - the rules core is not loaded" % [u.get_name(), kit])
+			continue
+		var rest := others.filter(func(o: Array) -> bool: return o[0] != str(uid))
+		var picks := Array(core.default_command_picks("aofs", PackedStringArray(u.get_special_rules()),
+			int(u.unit_properties.get("player_id", 0)), at, rest))
+		u.unit_properties["command_picks"] = picks
+		var names := PackedStringArray(picks.map(func(k: String) -> String: return (army.game_units[k] as GameUnit).get_name()))
+		lines.append("Command group: %s's %s reaches %s" % [u.get_name(), kit, " and ".join(names)] if not names.is_empty()
+			else "Command group: %s's %s reaches no other unit - no living friendly unit" % [u.get_name(), kit])
+	return lines
+
+
+## The centre (world XZ) of a unit's living models on the table, the core's `geom::centre`; null when none stands.
+static func _living_centre(u: GameUnit) -> Variant:
+	var sum := Vector2.ZERO
+	var n := 0
+	for m in u.models:
+		var mi := m as ModelInstance
+		if mi.is_alive and mi.node != null:
+			sum += Vector2(mi.node.global_position.x, mi.node.global_position.z)
+			n += 1
+	return sum / n if n > 0 else null
+
+
 ## Tray-exact S2 — what SoloController.casualty_order (solo_controller.gd:9151-9220) ranks ONE model by:
 ## its weapon entries by name (duplicates kept), its equipment count and its own Tough. The Rust core
 ## reads the list as the plain state's per-unit `kits` (core/nml-core/src/io.rs PlainKit).
