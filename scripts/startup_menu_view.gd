@@ -9,6 +9,7 @@ var buttons: Dictionary = {}
 var resume: PanelContainer
 var save_name: Label
 var save_date: Label
+var save_facts: Array[Label] = []
 var welcome: Label
 var welcome_kicker: Label
 var status: Label
@@ -132,6 +133,10 @@ func _ready() -> void:
 	save_name = _label("",26,HouseStyle.INK)
 	save_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	saved.add_child(save_name)
+	for _i in 2:
+		var fact := _label("",14,HouseStyle.MUTED,MONO)
+		saved.add_child(fact)
+		save_facts.append(fact)
 	save_date = _label("",15,HouseStyle.MUTED)
 	saved.add_child(save_date)
 	var cont := _action("ContinueBtn","Continue","",null,true)
@@ -236,6 +241,10 @@ func set_save(info: Dictionary) -> void:
 	if resume.visible:
 		save_name.text = str(info.name)
 		save_name.tooltip_text = str(info.name)
+		var lines := facts_lines(info)
+		for i in save_facts.size():
+			save_facts[i].text = lines[i] if i < lines.size() else ""
+			save_facts[i].visible = i < lines.size()
 		var stamp := Time.get_datetime_dict_from_unix_time(info.modified_unix)
 		save_date.text = "Saved on %04d-%02d-%02d" % [stamp.year,stamp.month,stamp.day]
 	var start: Action = buttons.StartBattleBtn
@@ -243,6 +252,27 @@ func set_save(info: Dictionary) -> void:
 	# Rebuild only the state styles, once after the save lookup.
 	start.refresh_style()
 	set_focus_chain(main_buttons())
+
+
+## The Continue card's two mono lines, e.g. "GRIMDARK FUTURE · ROUND 1" and "GRASSLAND · 6 x 4 FT"; a line
+## whose facts the save does not hold is left out.
+static func facts_lines(info: Dictionary) -> Array[String]:
+	var lines: Array[String] = []
+	var first: Array[String] = []
+	if info.has("system"):
+		first.append(GameSystem.label(str(info.system)).to_upper())
+	if info.has("round"):
+		first.append("ROUND %d" % int(info.round))
+	var second: Array[String] = []
+	var biome := TableSizeDialog.table_biome(str(info.get("biome","")))
+	if TableSizeDialog.BIOMES.has(biome):
+		second.append(str(TableSizeDialog.BIOMES[biome][0]).to_upper())
+	if info.has("size_feet"):
+		second.append("%s x %s FT" % [String.num(info.size_feet[0],1).trim_suffix(".0"),String.num(info.size_feet[1],1).trim_suffix(".0")])
+	for parts: Array[String] in [first,second]:
+		if not parts.is_empty():
+			lines.append(" · ".join(parts))
+	return lines
 
 
 func main_buttons() -> Array[Control]:
