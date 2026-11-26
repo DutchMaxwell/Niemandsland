@@ -402,17 +402,10 @@ func _on_load_battle_pressed() -> void:
 func _on_report_problem_pressed() -> void:
 	var stamp := Time.get_datetime_string_from_system().replace(":", "-")
 	var path := DiagnosticsReporter.export_report(stamp)
-	var dialog := AcceptDialog.new()
-	dialog.title = "Report a problem"
 	if path.is_empty():
-		dialog.dialog_text = "Could not write the diagnostics file.\nThe log lives at user://logs/niemandsland.log."
+		_show_notice("Report a problem", "Could not write the diagnostics file.\nThe log lives at user://logs/niemandsland.log.")
 	else:
-		dialog.dialog_text = "Saved an anonymised diagnostics file to:\n%s\n\nAttach it to a bug report — it carries no player names, room codes or your username." % path
-	MenuDialog.style(dialog)
-	add_child(dialog)
-	dialog.popup_centered()
-	dialog.confirmed.connect(dialog.queue_free)
-	dialog.canceled.connect(dialog.queue_free)
+		_show_notice("Report a problem", "Saved an anonymised diagnostics file to:\n%s\n\nAttach it to a bug report — it carries no player names, room codes or your username." % path)
 
 
 ## In-app credits / license summary, so the model attribution (CC-BY-SA) is visible to players,
@@ -500,19 +493,17 @@ func _maybe_warn_core_missing() -> void:
 	_show_core_missing_dialog()
 
 
-func _show_core_missing_dialog() -> AcceptDialog:
-	var dialog := AcceptDialog.new()
-	dialog.title = CoreLoadNotice.TITLE
-	dialog.dialog_text = CoreLoadNotice.TEXT
-	# One long line made the window as wide as the text (1,489 px); it wraps at a readable width instead.
-	dialog.dialog_autowrap = true
-	dialog.get_label().custom_minimum_size.x = 420
-	MenuDialog.style(dialog)
-	dialog.confirmed.connect(dialog.queue_free)
-	dialog.canceled.connect(dialog.queue_free)
-	add_child(dialog)
-	dialog.popup_centered()
-	return dialog
+func _show_core_missing_dialog() -> PromptCard:
+	return _show_notice(CoreLoadNotice.TITLE, CoreLoadNotice.TEXT)
+
+
+## A plain notice: one house card with an OK (Enter or Esc closes it); it wraps at the card's own width and
+## frees itself once answered.
+func _show_notice(title: String, text: String) -> PromptCard:
+	var card := PromptCard.new(title, text, "OK", "")
+	add_child(card)
+	card.answer()
+	return card
 
 
 func _on_update_available(latest_version: String, release_url: String, release_notes: String) -> void:
@@ -582,16 +573,7 @@ func _on_update_failed(reason: String, dialog: AcceptDialog, updater: SelfUpdate
 		updater.queue_free()
 	if is_instance_valid(dialog):
 		dialog.queue_free()
-	var msg := AcceptDialog.new()
-	msg.title = "Auto-update unavailable"
-	msg.dialog_text = "Couldn't auto-update (%s).\nThe download page has opened — unzip it over your Niemandsland folder." % reason
-	# An AcceptDialog only HIDES itself on OK — without both close paths freeing it, the
-	# node stays in the tree for the rest of the session.
-	msg.confirmed.connect(msg.queue_free)
-	msg.canceled.connect(msg.queue_free)
-	MenuDialog.style(msg)
-	add_child(msg)
-	msg.popup_centered()
+	_show_notice("Auto-update unavailable", "Couldn't auto-update (%s).\nThe download page has opened — unzip it over your Niemandsland folder." % reason)
 	# Open the browser only AFTER the message is up: shell_open raises the browser over the
 	# game window, so a dialog shown afterwards is hidden behind it and never read.
 	OS.shell_open(url)  # fallback: the player downloads + unzips manually
