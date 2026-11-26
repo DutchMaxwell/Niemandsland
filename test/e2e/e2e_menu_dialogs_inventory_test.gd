@@ -74,15 +74,25 @@ func _update_prompt(notes: String) -> UpdatePrompt:
 	return p
 
 
+## The picker's top button: "Start", "Continue with lesson n" or the all-done line.
+func _resume_button(d: Node) -> Button:
+	for prefix: String in ["Start", "Continue with lesson", "All lessons done"]:
+		var b := _button(d, prefix)
+		if b != null:
+			return b
+	return null
+
+
 func _picker_missing(d: Window) -> Array:
 	var missing: Array = []
 	var track := TutorialFlow.build_tool_track()
-	if _button(d, "RESUME") == null and _button(d, "ALL CHAPTERS DONE") == null:
+	if _resume_button(d) == null:
 		missing.append("button: RESUME")
-	for lesson: Dictionary in track:
-		if _button(d, "•  %s" % lesson.get("id", "")) == null and _button(d, "✓  %s" % lesson.get("id", "")) == null:
+	for position in track.size():
+		var lesson: Dictionary = track[position]
+		if _button(d, "%02d  %s" % [position + 1, lesson.get("title", "")]) == null:
 			missing.append("button: lesson %s" % lesson.get("id", ""))
-	if _button(d, "RESET TUTORIAL PROGRESS") == null:
+	if _button(d, "Reset tutorial progress") == null:
 		missing.append("button: RESET TUTORIAL PROGRESS")
 	if d.get_ok_button().text != "Close":
 		missing.append("button: Close")
@@ -93,19 +103,19 @@ func test_tutorial_picker_has_resume_every_lesson_reset_and_close() -> void:
 	var d := await _open_picker()
 	assert_object(d).is_not_null()
 	assert_array(_picker_missing(d)).override_failure_message("picker controls missing: %s" % str(_picker_missing(d))).is_empty()
-	assert_bool(_button(d, "RESET TUTORIAL PROGRESS").disabled).is_false()
+	assert_bool(_button(d, "Reset tutorial progress").disabled).is_false()
 
 
 func test_tutorial_picker_resume_and_lesson_buttons_launch_the_tutorial() -> void:
 	var mode: Variant = ProjectSettings.get_setting("niemandsland/tutorial_mode", false)
 	var lesson: Variant = ProjectSettings.get_setting("niemandsland/tutorial_lesson", "")
 	var d := await _open_picker()
-	_button(d, "RESUME").pressed.emit()
+	_resume_button(d).pressed.emit()
 	await _frames(2)
 	var launched: bool = _menu.entered_game
 	var picked: Window = await _open_picker()
 	var first_id: String = String(TutorialFlow.build_tool_track()[0].get("id", ""))
-	_button(picked, "•  %s" % first_id).pressed.emit()
+	_button(picked, "01  ").pressed.emit()
 	await _frames(2)
 	var armed: Variant = ProjectSettings.get_setting("niemandsland/tutorial_lesson", "")
 	ProjectSettings.set_setting("niemandsland/tutorial_mode", mode)
@@ -134,7 +144,7 @@ func test_trial_by_fire_lists_every_chapter_with_goal_and_availability() -> void
 	assert_int(rows.size()).is_equal(chapters.size())
 	for i in chapters.size():
 		var c: Dictionary = chapters[i]
-		assert_bool(rows[i].text.contains(String(c.get("title", "")).to_upper())).override_failure_message("chapter %s row lost its title" % c.get("id", "")).is_true()
+		assert_bool(rows[i].text.contains(String(c.get("title", "")))).override_failure_message("chapter %s row lost its title" % c.get("id", "")).is_true()
 		assert_bool(rows[i].disabled).is_equal(not Spielschule.is_available(c))
 		var goal := String(c.get("goal", ""))
 		var seen := false
@@ -300,8 +310,8 @@ func test_dialogs_wear_the_house_chrome() -> void:
 	var picker := await _open_picker()
 	assert_bool(_wears_house_chrome(picker)).override_failure_message("tutorial picker is not in the house style").is_true()
 	assert_bool(_has_one_title(picker)).override_failure_message("tutorial picker has no header title").is_true()
-	assert_str(String(_button(picker, "RESUME").theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
-	assert_str(String(_button(picker, "RESET TUTORIAL PROGRESS").theme_type_variation)).is_equal(String(HouseStyle.DANGER_BUTTON))
+	assert_str(String(_resume_button(picker).theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+	assert_str(String(_button(picker, "Reset tutorial progress").theme_type_variation)).is_equal(String(HouseStyle.DANGER_BUTTON))
 	var trial := await _open_trial()
 	assert_bool(_wears_house_chrome(trial)).override_failure_message("Trial by Fire is not in the house style").is_true()
 	assert_bool(_has_one_title(trial)).override_failure_message("Trial by Fire has no header title").is_true()
@@ -369,7 +379,7 @@ func test_dialogs_define_no_colour_literals() -> void:
 func test_inventory_check_names_a_removed_control() -> void:
 	var d := await _open_picker()
 	assert_array(_picker_missing(d)).is_empty()
-	var reset := _button(d, "RESET TUTORIAL PROGRESS")
+	var reset := _button(d, "Reset tutorial progress")
 	reset.get_parent().remove_child(reset)
 	var missing := _picker_missing(d)
 	d.add_child(reset)
@@ -415,3 +425,17 @@ func test_credits_box_is_large_enough_to_read_and_inside_the_window() -> void:
 	assert_bool(scroll.follow_focus).is_true()
 	assert_float(float(credits.size.y)).is_less(_menu.get_viewport().get_visible_rect().size.y)
 
+
+
+## Lessons have numbers, not working codes (D7): a row reads "01  Camera & table", the resume button "Start" or "Continue
+## with lesson n"; no visible text of the picker or the Trial by Fire list matches a code like T-01, S-01 or W3 (red on
+## main: "T-01 · CAMERA & TABLE", "RESUME - NEXT: T-01").
+func test_lessons_show_numbers_not_working_codes() -> void:
+	var regex := RegEx.create_from_string("[ST]-\\d\\d|W\\d")
+	for d: Window in [await _open_picker(), await _open_trial()]:
+		for b in _buttons(d):
+			assert_bool(regex.search(b.text) != null).override_failure_message("%s shows %s" % [d.title, b.text]).is_false()
+		for l: Node in d.find_children("*", "Label", true, false):
+			assert_bool(regex.search((l as Label).text) != null).override_failure_message("%s shows %s" % [d.title, (l as Label).text]).is_false()
+	var picker := await _open_picker()
+	assert_str(_resume_button(picker).text).is_equal("Start")
