@@ -123,3 +123,25 @@ func test_preview_path_names_the_picture_of_a_known_biome_only() -> void:
 	assert_str(script.call("preview_path", "no_such_biome")).is_empty()
 	assert_str(script.call("preview_path", "")).is_empty()
 
+## Step 35: the summary names System / Biome / Size above Create table, Enter creates when the choice is valid,
+## and a key legend shows Tab, arrows, Enter and Esc (red on main: one summary line, Enter does nothing).
+func test_summary_rows_keys_and_enter_create() -> void:
+	var summary: Variant = dialog.get("_summary")
+	assert_bool(summary is Dictionary).override_failure_message("no summary rows").is_true()
+	if not summary is Dictionary:
+		return
+	assert_str((summary["System"] as Label).text).is_equal(GameSystem.label(dialog.selected_system))
+	assert_str((summary["Size"] as Label).text).is_equal(dialog._size_text(Vector2(72,48)))
+	var legend := dialog.find_child("KeyLegend", true, false)
+	assert_object(legend).override_failure_message("no key legend").is_not_null()
+	var enter := InputEventKey.new()
+	enter.keycode = KEY_ENTER
+	enter.pressed = true
+	dialog._select_size("custom")
+	dialog._width_input.text = "nan"
+	dialog._on_dimensions_edited("")
+	dialog._unhandled_key_input(enter)
+	assert_int(selections.size()).override_failure_message("Enter created an invalid table").is_equal(0)
+	dialog._select_size("standard")
+	dialog._unhandled_key_input(enter)
+	assert_int(selections.size()).override_failure_message("Enter did not create the table").is_equal(1)
