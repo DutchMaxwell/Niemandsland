@@ -196,6 +196,26 @@ func test_controls_wear_the_house_look_once_the_sheet_opens() -> void:
 	assert_object(HouseStyle.theme().get_stylebox(&"grabber_area", &"HSlider")).is_not_null()
 
 
+## One line of help under each setting, in the caption style, once per open (sheet 05; red on main: no help lines).
+func test_settings_carry_one_line_of_help_each() -> void:
+	_panel.hide()
+	_panel.show()
+	_panel.hide()
+	_panel.show()   # twice: the lines are added once
+	var help: Dictionary = _panel.get_script().get_script_constant_map().get("HELP", {})
+	assert_bool(help.is_empty()).override_failure_message("no help lines").is_false()
+	if help.is_empty():
+		return
+	for name: String in ["Fullscreen", "Calm Mode", "Combat Effects", "Gore", "UI Scale", "Master Volume"]:
+		var found := _panel.find_children("*", "Label", true, false).filter(func(l: Node) -> bool: return (l as Label).text == help.get(name, "?"))
+		assert_int(found.size()).override_failure_message("%s has %d help lines" % [name, found.size()]).is_equal(1)
+		if found.size() == 1:
+			assert_str(String((found[0] as Label).theme_type_variation)).is_equal(String(HouseStyle.CAPTION))
+	var tilt := _toggle("Tilt-Shift (Depth of Field)")
+	var below := tilt.get_parent().get_child(tilt.get_index() + 1) as Label
+	assert_str(below.text if below != null else "").override_failure_message("the help line is not under its switch").is_equal(help["Tilt-Shift (Depth of Field)"])
+
+
 func test_volume_sliders_set_their_bus_and_are_put_back() -> void:
 	for bus: String in _panel.volume_sliders:
 		var s: HSlider = _panel.volume_sliders[bus]
