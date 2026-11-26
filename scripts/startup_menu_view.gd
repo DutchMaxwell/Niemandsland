@@ -21,6 +21,12 @@ var route_title: Label
 var routes: Dictionary = {}
 var route_back: Button
 var _return_focus: Control
+var news_card: Button
+var _news_eyebrow: Label
+var _news_title: Label
+var _news_count: Label
+var _news_picture: TextureRect
+var _news_shown := false   # the release notes have cards
 var _scroll: ScrollContainer
 var _main: VBoxContainer
 var _footer: HBoxContainer
@@ -49,6 +55,8 @@ const ICON_PATHS := {
 	&"power": "<path d='M12 3v8M6.6 6.6a8 8 0 1 0 10.8 0'/>",
 }
 const ICON_PX := 24
+const NEWS_W := 396   # the news card: 64 px from the right edge, 96 px from the bottom
+const NEWS_H := 116
 static var _icons: Dictionary = {}
 
 class Action extends Button:
@@ -223,11 +231,90 @@ func _ready() -> void:
 	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(status)
 	_build_routes()
+	_build_news_card()
 	buttons.OnlineBtn.pressed.connect(func() -> void: show_route("online"))
 	buttons.LearnBtn.pressed.connect(func() -> void: show_route("learn"))
 	buttons.HelpBtn.pressed.connect(func() -> void: show_route("help"))
 	resized.connect(_layout)
 	_layout()
+
+
+## The news card (sheet 01): the release's first highlight at the right edge, a way into the release notes.
+func _build_news_card() -> void:
+	news_card = Button.new()
+	news_card.name = "NewsCard"
+	news_card.focus_mode = Control.FOCUS_ALL
+	news_card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	news_card.custom_minimum_size = Vector2(NEWS_W,NEWS_H)
+	var rest := _box(HouseStyle.PANEL,HouseStyle.LINE_SOFT,16)
+	var lit := _box(HouseStyle.PANEL,HouseStyle.ACCENT,16)
+	for state in ["normal","disabled"]:
+		news_card.add_theme_stylebox_override(state,rest)
+	for state in ["hover","pressed","focus"]:
+		news_card.add_theme_stylebox_override(state,lit)
+	add_child(news_card)
+	buttons["NewsCard"] = news_card
+	var row := HBoxContainer.new()
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT,Control.PRESET_MODE_MINSIZE,16)
+	row.add_theme_constant_override("separation",14)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	news_card.add_child(row)
+	_news_picture = TextureRect.new()   # only when the card names a picture
+	_news_picture.custom_minimum_size = Vector2(132,84)
+	_news_picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_news_picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_news_picture.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_news_picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(_news_picture)
+	var column := VBoxContainer.new()
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	column.alignment = BoxContainer.ALIGNMENT_CENTER
+	column.add_theme_constant_override("separation",6)
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(column)
+	_news_eyebrow = _label("",14,HouseStyle.ACCENT,HouseStyle.eyebrow_font())
+	_news_title = _label("",18,HouseStyle.INK,HouseStyle.font(500))
+	_news_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation",4)
+	_news_count = _label("",15,HouseStyle.MUTED)
+	_news_count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.add_child(_news_count)
+	line.add_child(_label("Read",15,HouseStyle.GOLD))
+	var chevron := TextureRect.new()
+	chevron.texture = _icon(&"go")
+	chevron.custom_minimum_size = Vector2(16,16)
+	chevron.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	chevron.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	chevron.modulate = HouseStyle.GOLD
+	line.add_child(chevron)
+	for part: Control in [_news_eyebrow,_news_title,_news_count,line,chevron]:
+		part.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(_news_eyebrow)
+	column.add_child(_news_title)
+	column.add_child(line)
+	set_news(WhatsNewContent.new().cards())
+
+
+## Fills the news card from the release notes' cards (the first one, in the shown language); no cards, no card.
+func set_news(cards: Array) -> void:
+	_news_shown = not cards.is_empty()
+	if _news_shown:
+		var locale := TranslationServer.get_locale()
+		var first: Dictionary = cards[0]
+		var texts: Dictionary = first.get(WhatsNewContent.language(locale),{})
+		_news_eyebrow.text = (WhatsNewContent.new().text_for(locale,"title") % WhatsNewContent.version()).to_upper()
+		_news_title.text = str(texts.get("title",""))
+		_news_count.text = "%d highlights" % cards.size()
+		var picture := str(first.get("image",""))
+		_news_picture.texture = load(picture) if not picture.is_empty() and ResourceLoader.exists(picture) else null
+		_news_picture.visible = _news_picture.texture != null
+	_sync_news_card()
+
+
+## The card stands while the main list does: not with a route panel open, not without notes.
+func _sync_news_card() -> void:
+	news_card.visible = _news_shown and not route_panel.visible
 
 
 func _build_routes() -> void:
@@ -303,6 +390,7 @@ func show_route(key: String) -> void:
 	route_title.text = {"online":"Meet around the table.","learn":"Find your starting point.","help":"Help & feedback."}[key]
 	route_panel.reset_size()
 	route_panel.show()
+	_sync_news_card()
 	UiFeedback.play_panel(true)
 	_slide_route(true)
 	# Trap keyboard focus within the open route, including Shift+Tab and arrows.
@@ -321,6 +409,7 @@ func close_route() -> void:
 	if is_instance_valid(_return_focus):
 		_return_focus.grab_focus()
 	await _slide_route(false)
+	_sync_news_card()
 	route_closed.emit()
 
 
@@ -400,7 +489,7 @@ static func facts_lines(info: Dictionary) -> Array[String]:
 
 func main_buttons() -> Array[Control]:
 	var result: Array[Control] = []
-	for key in ["ContinueBtn","StartBattleBtn","OnlineBtn","LoadBattleBtn","LearnBtn","SettingsBtn","HelpBtn","CreditsBtn","ExitGameBtn"]:
+	for key in ["ContinueBtn","StartBattleBtn","OnlineBtn","LoadBattleBtn","LearnBtn","SettingsBtn","HelpBtn","CreditsBtn","ExitGameBtn","NewsCard"]:
 		if buttons[key].is_visible_in_tree():
 			result.append(buttons[key])
 	return result
@@ -426,6 +515,8 @@ func _layout() -> void:
 	version.position = Vector2(left,size.y-50)
 	status.position = Vector2(size.x-450,size.y-50)
 	status.size.x = 354
+	news_card.size = Vector2(NEWS_W,NEWS_H)
+	news_card.position = Vector2(size.x-64-NEWS_W,size.y-96-NEWS_H)
 	_route_rest = Vector2(left+_scroll.size.x+24,_scroll.position.y)
 	route_panel.position = _route_rest
 	route_panel.custom_minimum_size.x = 560

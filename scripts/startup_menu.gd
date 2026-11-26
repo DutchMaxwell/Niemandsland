@@ -112,6 +112,7 @@ func _ready() -> void:
 	view.buttons.SettingsBtn.pressed.connect(_on_settings_pressed)
 	view.buttons.HelpTutorialBtn.pressed.connect(_on_tutorial_pressed)
 	view.buttons.WhatsNewBtn.pressed.connect(_show_whats_new)
+	view.news_card.pressed.connect(_show_whats_new)
 	diorama.first_frame_rendered.connect(_on_first_frame_rendered, CONNECT_ONE_SHOT)
 	diorama.loading_progress.connect(_on_diorama_loading)
 	diorama.diorama_ready.connect(_on_diorama_ready)
@@ -192,7 +193,8 @@ func _on_diorama_rebuild_started() -> void:
 
 
 func _on_diorama_ready() -> void:
-	view.status.text = ""
+	var biome := TableSizeDialog.table_biome(diorama.biome)
+	view.status.text = "ON THE TABLE · %s · NIGHT" % str(TableSizeDialog.BIOMES.get(biome,[diorama.biome])[0]).to_upper()
 	if is_instance_valid(_settings):
 		_settings.lighting_controller = diorama.get_lighting_controller()
 		_settings._sync_ui_from_controller()
