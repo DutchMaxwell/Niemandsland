@@ -16,6 +16,9 @@ extends RefCounted
 ## HudTokens stays for the windows that are not migrated yet.
 
 const FONT_PATH := "res://assets/ui_glassmorphism/fonts/Inter.ttf"
+const FONT_MONO_PATH := "res://assets/ui_glassmorphism/fonts/SourceCodePro.ttf"   # technical facts (stage lines)
+const FONT_WORDMARK_PATH := "res://assets/ui_glassmorphism/fonts/Orbitron.ttf"    # the wordmark only
+const DUR_SCREEN_IN := 0.20   # a full screen fading in (the loading screen)
 
 # ===== Palette (mockup :root) =====
 const INK := Color("e9e9df")          # text
@@ -100,6 +103,10 @@ const FONT_EYEBROW := 12
 const FONT_VALUE := 22
 const EYEBROW_SPACING := 2   # extra px per glyph (mockup letter-spacing .12em)
 const FONT_RAIL := 11        # a rail button's label
+const FONT_EYEBROW_LARGE := 14   # the eyebrow of a full screen (the loading screen)
+const FONT_DISPLAY := 44         # the one big title of a full screen (the table being prepared)
+const FONT_WORDMARK_SMALL := 28  # the wordmark in a screen's corner
+const PAD_SCREEN := 96           # a full screen's text column from the left edge (the menu's masthead)
 
 # ===== Variants (theme type variations; pick one per control) =====
 const PANEL_VARIANT := &"HsPanel"   # a window root

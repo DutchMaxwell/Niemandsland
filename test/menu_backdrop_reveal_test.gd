@@ -55,6 +55,22 @@ func test_live_backdrop_stays_covered_until_built_then_fades_in(timeout := 24000
 	assert_int(Time.get_ticks_msec() - fade_start).is_greater_equal(500)
 
 
+## On the lowest tier the live scene is not built; the finished still must stand in for it instead of the bare
+## sky. A test and the headless display keep their cover-free state. RED on main: the rule does not exist.
+func test_lowest_tier_shows_the_still_not_an_empty_sky() -> void:
+	var script: GDScript = load("res://scripts/menu_diorama.gd")
+	assert_bool(script.has_method("shows_still_without_scene")).override_failure_message(
+		"nothing decides whether the lowest tier shows the still").is_true()
+	if not script.has_method("shows_still_without_scene"):
+		return
+	var auto := MenuDiorama.Mode.AUTO
+	assert_bool(script.call("shows_still_without_scene", auto, true, "x11")).is_true()
+	assert_bool(script.call("shows_still_without_scene", auto, true, "headless")).is_false()
+	assert_bool(script.call("shows_still_without_scene", auto, false, "x11")).is_false()
+	assert_bool(script.call("shows_still_without_scene", MenuDiorama.Mode.FORCED, true, "x11")).is_false()
+	assert_bool(script.call("shows_still_without_scene", MenuDiorama.Mode.SKY_ONLY, true, "x11")).is_false()
+
+
 ## The cover's opacity; -1 where the diorama has no cover at all (the old menu).
 func _cover(diorama: Node) -> float:
 	var alpha: Variant = diorama.get("_cover_alpha")
