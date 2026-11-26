@@ -2,6 +2,7 @@ extends Control
 ## Native Control implementation of the approved menu, independent of game routing.
 signal route_opened
 signal route_closed
+signal arrived
 const FONT = preload("res://assets/ui_glassmorphism/fonts/Inter.ttf")
 const LOGO = preload("res://assets/ui_glassmorphism/fonts/Orbitron.ttf")
 const MONO = preload("res://assets/ui_glassmorphism/fonts/SourceCodePro.ttf")
@@ -26,6 +27,10 @@ var _main: VBoxContainer
 var _footer: HBoxContainer
 var _masthead: HBoxContainer
 var _route_body: VBoxContainer
+var _arrived := false
+## The arrival (motion table): the rows rise this far while they fade in, one every ARRIVAL_STAGGER seconds.
+const ARRIVAL_RISE := 12.0
+const ARRIVAL_STAGGER := 0.06
 var _route_tween: Tween
 var _route_rest := Vector2.ZERO
 var _route_closing := false
@@ -256,6 +261,36 @@ func _build_routes() -> void:
 		button.pressed.connect(close_route)
 	route_back.pressed.connect(close_route)
 	route_panel.hide()
+
+
+## The menu arrives, once per start (never again after the table setup or a rebuilt backdrop): the wordmark
+## fades in over a screen beat, the Continue card and the rows rise and fade in one after the other. Reduce
+## Motion shows everything at once.
+func play_arrival() -> void:
+	if _arrived:
+		return
+	_arrived = true
+	if UiMotion.reduced():
+		arrived.emit()
+		return
+	var rows: Array[Control] = []
+	if resume.visible:
+		rows.append(resume)
+	for row in _main.get_node("MenuButtons").get_children():
+		rows.append(row as Control)
+	var tween := create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_masthead.modulate.a = 0.0
+	tween.tween_property(_masthead,"modulate:a",1.0,HudTokens.DUR_SCREEN)
+	var delay := 0.0
+	for row in rows:
+		var rest := row.position.y
+		row.modulate.a = 0.0
+		row.position.y = rest+ARRIVAL_RISE
+		tween.tween_property(row,"modulate:a",1.0,HudTokens.DUR_PANEL_IN).set_delay(delay)
+		tween.tween_property(row,"position:y",rest,HudTokens.DUR_PANEL_IN).set_delay(delay)
+		delay += ARRIVAL_STAGGER
+	await tween.finished
+	arrived.emit()
 
 
 func show_route(key: String) -> void:

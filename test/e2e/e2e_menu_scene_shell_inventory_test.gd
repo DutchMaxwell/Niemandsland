@@ -59,7 +59,8 @@ func after_test() -> void:
 	_view = null
 
 
-# === helpers ============================================================================
+# === helpers =====================================================================
+
 
 
 func _frames(n: int) -> void:
@@ -135,7 +136,8 @@ func _dialog_titled(title: String) -> Window:
 	return null
 
 
-# === tests ===============================================================================
+# === tests ========================================================================
+
 
 
 func test_every_control_of_rows_43_44_is_in_the_menu() -> void:
@@ -339,6 +341,27 @@ func test_settings_is_the_fifth_row_of_the_list_after_learn() -> void:
 	assert_object(_view.buttons.LearnBtn.get_parent().get_child(3)).is_same(_view.buttons.LearnBtn)
 	var order: Array = _view.main_buttons().map(func(b: Control) -> String: return String(b.name))
 	assert_int(order.find("SettingsBtn")).is_equal(order.find("LearnBtn") + 1)
+
+
+## The menu arrives, once per start: every row ends at alpha 1 on its resting place. RED on main: no arrival.
+func test_menu_arrives_once_and_every_row_rests_at_alpha_one() -> void:
+	assert_bool(_view.has_method("play_arrival")).override_failure_message("the menu has no arrival").is_true()
+	if not _view.has_method("play_arrival"):
+		return
+	var before_motion: bool = GraphicsSettings.reduce_motion
+	GraphicsSettings.reduce_motion = false
+	var rows: Array = _view.find_child("MenuButtons", true, false).get_children()
+	var rest: Array = rows.map(func(row: Control) -> float: return row.position.y)
+	_view.call("play_arrival")
+	assert_float(rows[0].modulate.a).override_failure_message("the first row was not hidden at the start").is_equal(0.0)
+	assert_float(rows[0].position.y).is_greater(rest[0])
+	await _view.arrived
+	for i in rows.size():
+		assert_float(rows[i].modulate.a).is_equal(1.0)
+		assert_float(rows[i].position.y).is_equal(rest[i])
+	assert_float(_view.get("_masthead").modulate.a).is_equal(1.0)
+	_view.call("play_arrival")
+	assert_float(rows[0].modulate.a).override_failure_message("the arrival played a second time").is_equal(1.0)
 
 
 ## A sub-menu panel moves (motion table): it fades and slides in, and it is still on screen the moment after
