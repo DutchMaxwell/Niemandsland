@@ -39,3 +39,24 @@ func _find_by_script(root: Node, script_file: String) -> Node:
 		if found != null:
 			return found
 	return null
+
+
+## The backdrop breathes: 0.012 m sideways along the camera's right vector on a 40 s sine, plus a 2 % push-in
+## over 60 s and back; at rest at t = 0 and with Reduce Motion. RED on main: no such path.
+func test_camera_drifts_sideways_and_pushes_in_and_rests_at_zero() -> void:
+	var script: GDScript = load("res://scripts/menu_diorama.gd")
+	assert_bool(script.has_method("camera_position")).override_failure_message(
+		"the backdrop camera has no breathing path").is_true()
+	if not script.has_method("camera_position"):
+		return
+	var rest: Vector3 = MenuDiorama.CAMERA_REST
+	var look: Vector3 = MenuDiorama.CAMERA_LOOK
+	var ahead := look - rest
+	var right := ahead.normalized().cross(Vector3.UP).normalized()
+	assert_vector(script.call("camera_position", 0.0, false)).is_equal_approx(rest, Vector3.ONE * 0.000001)
+	var quarter: Vector3 = script.call("camera_position", 10.0, false)
+	assert_float((quarter - rest).dot(right)).is_equal_approx(0.012, 0.000001)
+	var deepest: Vector3 = script.call("camera_position", 60.0, false)
+	assert_float(deepest.distance_to(rest)).is_equal_approx(0.02 * ahead.length(), 0.00001)
+	assert_vector(script.call("camera_position", 33.0, true)).is_equal(rest)
+
