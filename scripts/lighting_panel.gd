@@ -671,6 +671,7 @@ func _apply_menu_layout() -> void:
 	if on and not _graphics_rows:
 		_build_graphics_rows()
 		_build_switch_rows("Accessibility", ["Calm Mode", "Reduce Motion"])
+		_build_audio_rows()
 	for page_name: String in PAGES:
 		_style_page_button(_page_buttons[page_name] as Button, page_name)
 	_sync_page_ticks()
@@ -705,6 +706,40 @@ func _build_graphics_rows() -> void:
 		var help_key := "TableFrameOption" if row_name == "Table frame" else row_name
 		page.add_child(_as_row(control, row_name,
 				str(HELP.get(help_key, ""))))
+
+
+## The Audio page as rows: each volume is a row with the slider and its per cent (mono, gold) in the right column.
+func _build_audio_rows() -> void:
+	var page := _page("Audio")
+	for n: Node in page.get_children():
+		if n is Label and (n as Label).text == "AUDIO:":   # the page's name stands as an eyebrow now
+			page.remove_child(n)
+			n.queue_free()
+	var eyebrow := HouseStyle.label("AUDIO", HouseStyle.EYEBROW)
+	page.add_child(eyebrow)
+	page.move_child(eyebrow, 0)
+	for bus: String in volume_sliders:
+		var slider := volume_sliders[bus] as HSlider
+		var block := slider.get_parent()
+		var head := block.get_child(0)
+		var name_label := head.get_child(0) as Label
+		var value_label := head.get_child(1) as Label
+		_drop_help_line(name_label)
+		head.remove_child(value_label)
+		block.remove_child(slider)
+		slider.custom_minimum_size.x = 300.0
+		slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		value_label.custom_minimum_size.x = 62.0
+		value_label.add_theme_font_override(&"font", HouseStyle.mono())
+		value_label.add_theme_color_override(&"font_color", HouseStyle.GOLD)
+		var control := HBoxContainer.new()
+		control.add_theme_constant_override(&"separation", HouseStyle.GAP_SECTION)
+		control.add_child(slider)
+		control.add_child(value_label)
+		page.remove_child(block)
+		block.queue_free()
+		page.add_child(_as_row(control, name_label.text, str(HELP.get(name_label.text, ""))))
 
 
 ## A page that holds only switches (Accessibility) as rows, in `names` order, under the page's name as an eyebrow.
