@@ -50,8 +50,29 @@ func test_no_key_outside_an_aofs_command_group() -> void:
 	assert_bool(_plain("aofs", ["Sergeant"], [true, true]).has("cmd_bearer")).override_failure_message("no Banner or Musician").is_false()
 
 
+var _epoch_before: int
+
+
+func before_test() -> void:
+	_epoch_before = AiActRecorder.rules_epoch
+
+
+func after_test() -> void:
+	AiActRecorder.rules_epoch = _epoch_before
+
+
+## Lead 26.11.: the named models ride the two-bearers epoch. One below it the marked model is ignored - the last model
+## carries both, one key, as recorded.
+func test_below_the_two_bearers_epoch_the_last_model_carries_both() -> void:
+	AiActRecorder.rules_epoch = BattleSim.TWO_BEARERS_EPOCH - 1
+	var two := _plain("aofs", ["Banner", "Musician"], [true, true, true], [[], ["Banner"], ["Musician"]])
+	assert_int(int(two.get("cmd_bearer", -9))).is_equal(2)
+	assert_bool(two.has("cmd_musician")).is_false()
+
+
 ## KIT-BEARER-NAME: the model the import gave the Banner carries it, wherever it stands in the unit.
 func test_the_marked_model_is_the_bearer() -> void:
+	AiActRecorder.rules_epoch = BattleSim.TWO_BEARERS_EPOCH
 	assert_int(int(_plain("aofs", ["Banner"], [true, true, true], [[], ["Banner"], []]).get("cmd_bearer", -9))).is_equal(1)
 	assert_int(int(_plain("aofs", ["Musician"], [false, true, true], [[], ["Musician"], []]).get("cmd_bearer", -9))) \
 		.override_failure_message("a dead model before it moves its slot up").is_equal(0)
@@ -61,6 +82,7 @@ func test_the_marked_model_is_the_bearer() -> void:
 
 ## Lead ruling 26.11.: Banner and Musician on two models are two bearers; on one model, or named by none, one key.
 func test_two_models_two_bearers() -> void:
+	AiActRecorder.rules_epoch = BattleSim.TWO_BEARERS_EPOCH
 	var two := _plain("aofs", ["Banner", "Musician"], [true, true, true], [[], ["Banner"], ["Musician"]])
 	assert_array([two.get("cmd_bearer", -9), two.get("cmd_musician", -9)]).is_equal([1, 2])
 	var gone := _plain("aofs", ["Banner", "Musician"], [true, false, true], [[], ["Banner"], ["Musician"]])
