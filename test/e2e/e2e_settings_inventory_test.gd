@@ -591,3 +591,26 @@ func test_the_menus_accessibility_page_is_two_rows() -> void:
 	for n: Node in page.find_children("*", "CheckButton", true, false):
 		names.append(str(n.get_meta("row_name", "")))
 	assert_array(names).contains_exactly(["Calm Mode", "Reduce Motion"])
+
+
+## The Audio page stands as one row per volume - the slider and its per cent (mono, gold) at the right - and a slider still
+## sets its bus and its own per-cent text.
+func test_the_menus_audio_page_is_one_row_per_volume() -> void:
+	_panel.set_modal(true)
+	var page: Node = _panel._page("Audio")
+	var rows: Array = page.get_children().filter(func(n: Node) -> bool: return String(n.name).begins_with("Row"))
+	assert_int(rows.size()).override_failure_message("rows: %d" % rows.size()).is_equal(_panel.volume_sliders.size())
+	var help: Dictionary = _panel.get_script().get_script_constant_map().get("HELP", {})
+	for bus: String in _panel.volume_sliders:
+		var slider: HSlider = _panel.volume_sliders[bus]
+		assert_bool(page.is_ancestor_of(slider)).is_true()
+		assert_bool(slider.get_parent().get_child(1) is Label).override_failure_message("no per cent beside the slider").is_true()
+		var value_label: Label = slider.get_parent().get_child(1)
+		assert_object(value_label.get_theme_font("font")).is_same(HouseStyle.mono())
+		var before: float = slider.value
+		slider.value = before - 1.0 if before > slider.min_value else before + 1.0
+		assert_bool(value_label.text.ends_with("%")).is_true()
+		slider.value = before
+	for key: String in ["Master Volume", "Music Volume"]:
+		var lines := page.find_children("*", "Label", true, false).filter(func(l: Node) -> bool: return (l as Label).text == help[key])
+		assert_int(lines.size()).override_failure_message("%s has %d help lines" % [key, lines.size()]).is_equal(1)
