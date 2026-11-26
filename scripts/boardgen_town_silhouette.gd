@@ -93,8 +93,8 @@ static func wall_parts(layout: Dictionary) -> Array[Dictionary]:
 	return out
 
 
-## Broken crow-stepped gable ends on the END faces (across the lot's long axis) of every ruined, walkable house lot (Block / Deck) whose end column is one level and drops on its whole
-## face: masonry 0.3 in thick, flush inside the face, 3-5 steps from each corner up to a 1.4-2.6 in peak (GABLE_PEAK_IN), one side broken off at a step the lot's hash picks; a gable that lost its
+## Broken crow-stepped gable ends across the long axis of every ruined, walkable house lot (Block / Deck): one per run of cells of one level 1-2 that drops along the axis, at the
+## lot's end or at a step inside it (LOOK5 T1: before, only a whole end face of one level got one): masonry 0.3 in thick, flush inside the face, 3-5 steps from each corner up to a 1.4-2.6 in peak (GABLE_PEAK_IN), one side broken off at a step the lot's hash picks; a gable that lost its
 ## middle keeps only its two corner stubs. Nothing within LADDER_GAP_IN of a ladder's top. [{lo, hi, kind, lot}]
 ## `timber` (train 3, H4): lots whose ladder-free gable faces carry the kit's timber gable instead (no masonry there); `faces` collects every gable face found
 ## ({lot, side, mid (Vector2, the face's outer middle), width, top, peak, free (no ladder top on it)}).
@@ -112,27 +112,36 @@ static func ruin_gables(layout: Dictionary, timber: Dictionary = {}, faces: Arra
 			continue
 		var axis_x: bool = tiers["axis_x"][lot["id"]]
 		var half := 1 if int(lot["z"]) * 2 >= nz else 0
-		for end in 2:   # the low end, the high end along the axis
+		var runs: Array = []   # [end, cells]: across every column of the lot, each run of one level 1-2 whose neighbour along the axis is lower (the lot's end or a drop inside it)
+		for end in 2:   # towards the low end, towards the high end along the axis
+			var d := DIRS[(3 if end == 0 else 1) if axis_x else (0 if end == 0 else 2)]
+			var across: int = lot["h"] if axis_x else lot["w"]
+			for a in (int(lot["w"]) if axis_x else int(lot["h"])):
+				var run: Array[int] = []
+				for k in across + 1:
+					var x: int = int(lot["x"]) + (a if axis_x else k)
+					var z: int = int(lot["z"]) + (k if axis_x else a)
+					var level := _level(layout, x, z) if k < across else -1
+					var ok := level >= 1 and level < 3 and _level(layout, x + d.x, z + d.y) < level   # (towers plan T2 sweep: a gable on a 9 in top would rise into the tower crown)
+					if ok and not run.is_empty() and int(layout["cells"][run[0]]["level"]) == level:
+						run.append(z * nx + x)
+						continue
+					if not run.is_empty():
+						runs.append([end, run])
+					run = []
+					if ok:
+						run.append(z * nx + x)
+		for r: Array in runs:
+			var end: int = r[0]
+			var face: Array[int] = r[1]
 			var side := (3 if end == 0 else 1) if axis_x else (0 if end == 0 else 2)
-			var d := DIRS[side]
-			var span: int = lot["h"] if axis_x else lot["w"]
-			var face: Array[int] = []
-			for k in span:
-				var x: int = int(lot["x"]) + (0 if end == 0 else int(lot["w"]) - 1) if axis_x else int(lot["x"]) + k
-				var z: int = int(lot["z"]) + k if axis_x else int(lot["z"]) + (0 if end == 0 else int(lot["h"]) - 1)
-				face.append(z * nx + x)
+			var span := face.size()
 			var level: int = layout["cells"][face[0]]["level"]
-			var ok := level >= 1 and level < 3   # (towers plan T2 sweep: a gable on a 9 in top would rise into the tower crown)
-			for i in face:
-				var cd: Dictionary = layout["cells"][i]
-				ok = ok and int(cd["level"]) == level and _level(layout, int(cd["x"]) + d.x, int(cd["z"]) + d.y) < level
-			if not ok:
-				continue
 			var top: float = layout["level_in"][level]
 			var width := float(span) * cell_in
 			var c0 := origin + Vector2(layout["cells"][face[0]]["x"], layout["cells"][face[0]]["z"]) * cell_in   # the low corner of the face's first cell
 			var plane := c0 + (Vector2(cell_in - GABLE_T_IN, 0.0) if side == 1 else Vector2(0.0, cell_in - GABLE_T_IN) if side == 2 else Vector2.ZERO)
-			var salt := int(lot["id"]) * 4 + end
+			var salt := (int(lot["id"]) * 4 + end) * 4096 + face[0]
 			var steps := 3 + int(_h(salt, half, 200) * 3.0)
 			var peak := GABLE_PEAK_IN.x + (GABLE_PEAK_IN.y - GABLE_PEAK_IN.x) * _h(salt, half, 201)
 			var broken_at := int(_h(salt, half, 202) * float(2 * steps))   # the step from which on one side is gone

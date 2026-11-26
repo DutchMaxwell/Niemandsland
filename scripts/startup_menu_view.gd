@@ -23,10 +23,21 @@ var _main: VBoxContainer
 var _footer: HBoxContainer
 var _masthead: HBoxContainer
 var _route_body: VBoxContainer
+## Row icons: own drawings in the tool rail's style (24 x 24 view box), built once as crisp textures.
+const ICON_SVG := "<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='none' stroke='#fff' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'>%s</svg>"
+const ICON_PATHS := {
+	&"table": "<path d='M3 17l4-9h10l4 9z'/><path d='M5.2 12h13.6M10 8l-1.5 9M14 8l1.5 9'/>",
+	&"globe": "<circle cx='12' cy='12' r='9'/><path d='M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18'/>",
+	&"folder": "<path d='M3 7.5a1.5 1.5 0 0 1 1.5-1.5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 10v7.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z'/>",
+	&"book": "<path d='M12 6.5c-2-1.3-4.7-1.7-8-1.5v13c3.3-.2 6 .2 8 1.5 2-1.3 4.7-1.7 8-1.5V5c-3.3-.2-6 .2-8 1.5zM12 6.5v13'/>",
+	&"sliders": "<path d='M4 7h10M18 7h2M4 17h4M12 17h8M14 4.5v5M8 14.5v5'/>",
+}
+const ICON_PX := 24
+static var _icons: Dictionary = {}
 
 class Action extends Button:
 	var description := ""
-	var glyph := ""
+	var row_icon: Texture2D  # not "icon": a Button already draws that one itself
 	var primary := false
 	var outlined := false
 
@@ -58,15 +69,15 @@ class Action extends Button:
 
 	func _draw() -> void:
 		var color := Color("192125") if primary else HouseStyle.INK
-		var left := 18.0 if glyph.is_empty() else 52.0
+		var left := 18.0 if row_icon == null else 52.0
 		# 28 and 49 on the 64 px row; centred on the taller first-run row, as the mockup draws it.
 		var baseline := size.y*0.5-4 if not description.is_empty() else size.y*0.5+8
 		draw_string(FONT,Vector2(left,baseline),text,HORIZONTAL_ALIGNMENT_LEFT,size.x-left-35,22,color)
 		if not description.is_empty():
 			draw_string(FONT,Vector2(left,size.y*0.5+17),description,HORIZONTAL_ALIGNMENT_LEFT,size.x-left-25,15,Color("344c54") if primary else HouseStyle.MUTED)
-		if not glyph.is_empty():
-			draw_string(FONT,Vector2(14,size.y*0.5+7),glyph,HORIZONTAL_ALIGNMENT_LEFT,28,24,color if primary else HouseStyle.ACCENT)
-		draw_string(FONT,Vector2(size.x-31,size.y*0.5+6),"→",HORIZONTAL_ALIGNMENT_LEFT,24,21,color)
+		if row_icon != null:
+			draw_texture_rect(row_icon,Rect2(16,size.y*0.5-ICON_PX*0.5,ICON_PX,ICON_PX),false,color if primary else HouseStyle.ACCENT)
+		draw_string(FONT,Vector2(size.x-31,size.y*0.5+6),HouseStyle.GLYPH_GO,HORIZONTAL_ALIGNMENT_LEFT,24,28,color)
 
 
 func _ready() -> void:
@@ -90,7 +101,7 @@ func _ready() -> void:
 	rule.custom_minimum_size = Vector2(500,1)
 	rule.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	identity.add_child(rule)
-	var settings := _utility("SettingsBtn","⚙  Settings")
+	var settings := _utility("SettingsBtn","Settings")
 	settings.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	_masthead.add_child(settings)
 	_main = VBoxContainer.new()
@@ -119,17 +130,17 @@ func _ready() -> void:
 	saved.add_child(save_name)
 	save_date = _label("",15,HouseStyle.MUTED)
 	saved.add_child(save_date)
-	var cont := _action("ContinueBtn","Continue","","",true)
+	var cont := _action("ContinueBtn","Continue","",null,true)
 	cont.custom_minimum_size.y = 54
 	saved.add_child(cont)
 	var actions := VBoxContainer.new()
 	actions.name = "MenuButtons"
 	actions.add_theme_constant_override("separation",5)
 	_main.add_child(actions)
-	actions.add_child(_action("StartBattleBtn","Prepare a new table","Choose a size and biome","+",false,true))
-	actions.add_child(_action("OnlineBtn","Play online","Create a room or join a table","⊕"))
-	actions.add_child(_action("LoadBattleBtn","Load game","Open a saved game","□"))
-	actions.add_child(_action("LearnBtn","Learn to play","Learn the controls and explore Trial by Fire","≡"))
+	actions.add_child(_action("StartBattleBtn","Prepare a new table","Choose a size and biome",_icon(&"table"),false,true))
+	actions.add_child(_action("OnlineBtn","Play online","Create a room or join a table",_icon(&"globe")))
+	actions.add_child(_action("LoadBattleBtn","Load game","Open a saved game",_icon(&"folder")))
+	actions.add_child(_action("LearnBtn","Learn to play","Learn the controls and explore Trial by Fire",_icon(&"book")))
 	_footer = HBoxContainer.new()
 	_footer.add_theme_constant_override("separation",24)
 	add_child(_footer)
@@ -156,7 +167,7 @@ func _build_routes() -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation",18)
 	route_panel.add_child(column)
-	route_back = _utility("RouteBackBtn","←  Back")
+	route_back = _utility("RouteBackBtn",HouseStyle.GLYPH_BACK+"  Back")
 	column.add_child(route_back)
 	route_title = _label("",28,HouseStyle.INK)
 	column.add_child(route_title)
@@ -176,7 +187,7 @@ func _build_routes() -> void:
 		["help","HelpTutorialBtn","Learn the controls","Open the tutorial"],
 		["help","WhatsNewBtn",WhatsNewContent.new().text_for(TranslationServer.get_locale(), "menu"),""],
 		["help","ReportProblemBtn","Report a problem","Create a diagnostics file to share"]]:
-		var button := _action(row[1],row[2],row[3],"",false,true)
+		var button := _action(row[1],row[2],row[3],null,false,true)
 		routes[row[0]].add_child(button)
 		button.pressed.connect(close_route)
 	route_back.pressed.connect(close_route)
@@ -259,12 +270,18 @@ func _layout() -> void:
 	route_panel.custom_minimum_size.x = 560
 
 
-func _action(id: String, title: String, description: String, glyph: String, primary := false, outlined := false) -> Action:
+static func _icon(key: StringName) -> Texture2D:
+	if not _icons.has(key):
+		_icons[key] = HouseStyle.svg_icon(ICON_SVG % ICON_PATHS[key])
+	return _icons[key]
+
+
+func _action(id: String, title: String, description: String, icon_texture: Texture2D, primary := false, outlined := false) -> Action:
 	var button := Action.new()
 	button.name = id
 	button.text = title
 	button.description = description
-	button.glyph = glyph
+	button.row_icon = icon_texture
 	button.primary = primary
 	button.outlined = outlined
 	buttons[id] = button

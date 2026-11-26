@@ -259,3 +259,10 @@ func test_footer_links_keep_one_box_for_every_state() -> void:
 		for state: String in ["hover","pressed"]:
 			var box := link.get_theme_stylebox(state).get_minimum_size()
 			assert_vector(box).override_failure_message("%s: the %s box needs %s, the resting box %s" % [id,state,box,rest]).is_equal(rest)
+
+## The one-line notice made a window as wide as its text (1,489 px). RED on main, GREEN once the text wraps.
+func test_core_missing_dialog_wraps_its_line() -> void:
+	var dialog: AcceptDialog = _menu._show_core_missing_dialog()
+	assert_int(dialog.size.x).override_failure_message("the notice window is %d px wide" % dialog.size.x).is_less(700)
+	assert_bool(dialog.get_label().autowrap_mode != TextServer.AUTOWRAP_OFF).is_true()
+	dialog.confirmed.emit()
