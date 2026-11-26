@@ -453,8 +453,13 @@ def test_the_tables_kits_ride_the_capture_and_the_arrival_from_their_sidecar(tmp
     kit = {"weapons": ["Rifle"], "equipment": 0, "wounds_max": 3}
     lone = {"weapons": ["Rifle"], "equipment": 0, "wounds_max": 1}
     (tmp_path / "kits" / "robot_legions_1000.kits.json").write_text(json.dumps(
-        {"units": {"0_h": [kit, kit], "1_a": [kit, kit], "2_b": [lone]}}), encoding="utf-8")
+        {"units": {"0_h": [kit, kit], "1_a": [kit, kit], "2_b": [lone]},
+         "bearers": {"1_a": {"cmd_bearer": 0, "cmd_musician": 1}}}), encoding="utf-8")
     kits = {**sp.kits_sidecar(paths[1], 1), **sp.kits_sidecar(paths[2], 2)}
+    # KIT-BEARER-NAME K3: the named bearers from the two-bearers epoch only
+    assert sp.named_bearers(paths[1], paths[2], nml_core.PENDING_EPOCH_TWO_BEARERS - 1) == {}
+    bearers = sp.named_bearers(paths[1], paths[2], nml_core.PENDING_EPOCH_TWO_BEARERS)
+    assert bearers == {"p1_1_a": {"cmd_bearer": 0, "cmd_musician": 1}, "p2_1_a": {"cmd_bearer": 0, "cmd_musician": 1}}
     profiles = {s: profiles_from_army_forge_json(d, "robot_legions", s) for s, d in lists.items()}
     units = {s: list(profiles[s].values()) for s in lists}
     hero1, host1, lone1 = (u["unit_id"] for u in units[1])
@@ -469,13 +474,16 @@ def test_the_tables_kits_ride_the_capture_and_the_arrival_from_their_sidecar(tmp
     objs = [[0.0, 0.0, 0.0]]
     p1, p2, reserved, _ = sp._deploy_arena(7, units[1], units[2], paths[1], paths[2], board, objs, 1)
     plain = sp.capture(units[1] + units[2], p1 + p2, core.capture_reads(), board, objs, attached,
-                       attached_to, reserved, {}, kits)
+                       attached_to, reserved, {}, kits, bearers)
     u = plain["units"]
     assert u[host1]["kits"] == [kit, kit] and u[lone1]["kits"] == [lone]
+    assert (u[host1]["cmd_bearer"], u[host1]["cmd_musician"]) == (0, 1) and "cmd_bearer" not in u[lone1]
     assert "kits" not in u[hero1] and "1 models - none carried" in capsys.readouterr().err
     assert "kits" not in u[host2] and "kits" not in u[hero2], "a reserve has no table presence"
-    sp._arrive_reserves(plain, core.arrival_reads(), board, objs, 1, 2, kits=kits)
+    assert "cmd_bearer" not in u[host2], "a reserve names no bearer on the table"
+    sp._arrive_reserves(plain, core.arrival_reads(), board, objs, 1, 2, kits=kits, bearers=bearers)
     assert u[host2]["kits"] == [kit, kit] and "kits" not in u[hero2], "the host's 2 back, the hero's 2 != 1"
+    assert (u[host2]["cmd_bearer"], u[host2]["cmd_musician"]) == (0, 1), "the arrival names its bearers again"
 
 
 def test_the_arena_fixture_carries_four_joined_heroes():
