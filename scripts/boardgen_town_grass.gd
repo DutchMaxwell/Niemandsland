@@ -10,7 +10,7 @@ const ROOT_W_IN := 0.035
 const CLUMP_R_IN := 0.07
 const MIN_IN := 0.16
 const GROW_IN := 0.22
-const MAX_IN := 0.38
+const MAX_IN := 0.28   # (LOOK4 G4) lowered from 0.38 by the readability gate
 const JITTER := 0.45
 const DRY_SHARE := 0.15
 

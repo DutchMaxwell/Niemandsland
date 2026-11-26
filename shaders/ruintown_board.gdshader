@@ -25,6 +25,8 @@ uniform sampler2D n_plaster : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform sampler2D n_timber : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform sampler2D n_earth : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform vec4 story = vec4(1.0, 0.0, 0.0, 1.0);   // the board's decay story (plan R5): xy = the way the fire came from (a unit vector), zw = the shade side (moss grows there)
+uniform sampler2D green_map : filter_linear, repeat_disable;   // (LOOK4 G4) BoardgenTownGreen.map: where the cover grows, 0..1
+uniform bool blades_on = false;   // the blade clumps stand on the earth: cover from the green map, no painted tufts, the soil darkens under them
 uniform vec4 t_on = vec4(0.0);   // stone, plaster, timber, earth
 uniform vec4 t_tile = vec4(1.3, 3.0, 3.0, 3.0);
 uniform bool real_frames = false;   // (train 3) the kit draws the half-timber frames of the houses and the ruins' timber storey as geometry: the paint keeps only the infill
@@ -454,7 +456,12 @@ void fragment() {
 			float band = smoothstep(9.0, 13.0, abs(xz.y));   // (townC4, lead 22.11.: the green lives on the earth - the deployment strips overgrow most, like C's)
 			float cover = smoothstep(COVER_CUT - 0.04, COVER_CUT + 0.04, fbm(xz * 0.35 + seed * 0.37) + 0.35 * near - 0.4 * path + BAND_COVER * band)
 				* smoothstep(0.28, 0.48, vnoise(xz * 1.3 + seed * 1.7) + 0.3 * near + 0.25 * band);   // rough, not turf: bare earth between the clumps in the open
-			float tuft = max(step(0.915, sp) * step(sp, 0.955), cover * step(sp, 0.6)) * smoothstep(0.26, 0.12, length(lf));   // in the cover 60 % of the 0.33 in cells carry a tuft (4 % outside)
+			if (blades_on) {   // the green map, height-blended: the grass starts in the soil's hollows (a ragged edge, never a ruled one)
+				float green = texture(green_map, xz / (board_cells * cell_in) + 0.5).r;
+				cover = smoothstep(-0.12, 0.12, green - 0.5 + 0.35 * (0.5 - (0.2 + 0.6 * fbm(xz * 3.0 + seed))));
+				alb *= mix(1.0, 0.7, cover);   // contact shade under the blades
+			}
+			float tuft = (blades_on ? 0.0 : 1.0) * max(step(0.915, sp) * step(sp, 0.955), cover * step(sp, 0.6)) * smoothstep(0.26, 0.12, length(lf));   // in the cover 60 % of the 0.33 in cells carry a tuft (4 % outside)
 			vec3 soil = alb;
 			alb = mix(alb, GREEN_COVER * mix(0.55, 1.25, fbm(xz * 3.1 + seed)), cover);   // a dull dark yellow-grey green between the tufts, mottled
 			alb = mix(alb, vec3(0.13, 0.14, 0.08) * mix(0.7, 1.2, h21(ci + 9.0)) * (1.0 + 0.9 * cover), 0.75 * tuft);   // a dull green-brown tuft, never a yellow coin

@@ -66,6 +66,9 @@ var _decals: BoardgenDecals = null
 var _life: BoardgenTownLife = null
 var _footprint := Rect2()   # the ground kept free of the table's scatter, in table-local metres: the board and all round it
 var _layout: Dictionary = {}
+var _green: Image = null   # (LOOK4 G4) the town's green map, baked once per board
+var _grass_n := -1.0   # the clump density the blades were last built with (-1 none)
+const GRASS_PER_SQ_IN := {GraphicsSettings.QualityPreset.MEDIUM: 6.0, GraphicsSettings.QualityPreset.HIGH: 10.0, GraphicsSettings.QualityPreset.ULTRA: 16.0}
 var _atmosphere: Object = null   # the town re-applies its dusk after every mood change while it is on the table
 
 
@@ -555,6 +558,7 @@ func _apply_detail() -> void:
 			_life.apply_settings()
 		if on:
 			_attach_surfaces()   # a later switch up to Medium fetches them then
+		_grow_grass(int(graphics.current_preset), on, bool(graphics.reduce_motion))
 	BoardgenMood.apply(self, on and (layout_theme == BoardgenTheme.DEEPWORKS or layout_theme == BoardgenTheme.RUIN_TOWN), layout_theme == BoardgenTheme.RUIN_TOWN)   # the dim industrial light, board-scale SSAO, the grade and the model fill come with the finer look; the ruin town has its own dusk and only the grade
 
 
@@ -620,6 +624,32 @@ func _scatter_off(rect: Rect2) -> void:
 func _anchor() -> void:
 	if _material != null and is_inside_tree():
 		_material.set_shader_parameter("board_origin", global_position)
+		var grass := get_node_or_null("Grass")
+		if grass != null:
+			((grass.get_child(0) as MultiMeshInstance3D).material_override as ShaderMaterial).set_shader_parameter("board_origin", global_position)
+
+
+## (LOOK4 G4) The yards grow: blade clumps on the town's earth from Medium up (GRASS_PER_SQ_IN by preset), rebuilt when the density changes; the board shader
+## then takes its cover from the same green map, paints no tufts and darkens the soil under the blades. Still when the clock is pinned or motion is reduced.
+func _grow_grass(preset: int, on: bool, reduce_motion: bool) -> void:
+	if layout_theme != BoardgenTheme.RUIN_TOWN or _layout.is_empty():
+		return
+	var n: float = GRASS_PER_SQ_IN.get(mini(preset, GraphicsSettings.QualityPreset.ULTRA), 0.0) if on else 0.0
+	if n != _grass_n:
+		_grass_n = n
+		var old := get_node_or_null("Grass")
+		if old != null:
+			old.free()
+		if n > 0.0:
+			if _green == null:
+				_green = BoardgenTownGreen.map(_layout)
+				_material.set_shader_parameter("green_map", ImageTexture.create_from_image(_green))   # = BoardgenTownGreen.apply, without a second bake
+			add_child(BoardgenTownGrass.build(_layout, _green, n))
+			_anchor()
+	_material.set_shader_parameter("blades_on", n > 0.0)
+	var grass := get_node_or_null("Grass")
+	if grass != null:
+		((grass.get_child(0) as MultiMeshInstance3D).material_override as ShaderMaterial).set_shader_parameter("wind", 0.0 if BoardgenTownLife.pinned or reduce_motion else 1.0)
 
 
 ## The authored surface sets of the town as shader parameters (plan R9 hook, T-R1): for coursed stone, plaster, timber and earth the albedo and normal textures when BOTH are cached, and `t_on`
