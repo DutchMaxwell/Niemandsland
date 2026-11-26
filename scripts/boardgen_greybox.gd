@@ -644,7 +644,13 @@ func _grow_grass(preset: int, on: bool, reduce_motion: bool) -> void:
 			if _green == null:
 				_green = BoardgenTownGreen.map(_layout)
 				_material.set_shader_parameter("green_map", ImageTexture.create_from_image(_green))   # = BoardgenTownGreen.apply, without a second bake
-			add_child(BoardgenTownGrass.build(_layout, _green, n))
+			var grass := BoardgenTownGrass.build(_layout, _green, n)
+			var gm := (grass.get_child(0) as MultiMeshInstance3D).material_override as ShaderMaterial
+			var earth: Color = (_material.get_shader_parameter("palette") as PackedColorArray)[0]
+			gm.set_shader_parameter("soil", Vector3(earth.r, earth.g, earth.b) * 0.55)   # = GROUND_EARTH of the board shader
+			gm.set_shader_parameter("green_map", _material.get_shader_parameter("green_map"))
+			gm.set_shader_parameter("board_in", Vector2(_layout["nx"], _layout["nz"]) * float(_layout["cell_in"]))
+			add_child(grass)
 			_anchor()
 	_material.set_shader_parameter("blades_on", n > 0.0)
 	var grass := get_node_or_null("Grass")
