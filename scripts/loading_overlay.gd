@@ -120,7 +120,7 @@ func _ready() -> void:
 	_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_percent = _text(line, "0 %", HouseStyle.GOLD, HouseStyle.FONT_CAPTION)
 	for mono: Label in [_stage, _percent]:
-		mono.add_theme_font_override("font", load(HouseStyle.FONT_MONO_PATH) as Font)
+		mono.add_theme_font_override("font", HouseStyle.mono())
 	if not UiMotion.reduced():
 		_content.modulate.a = 0.0
 		_fade_in = create_tween()

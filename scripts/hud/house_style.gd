@@ -102,6 +102,8 @@ const FONT_SMALL := 12
 const FONT_EYEBROW := 12
 const FONT_VALUE := 22
 const EYEBROW_SPACING := 2   # extra px per glyph (mockup letter-spacing .12em)
+const RULE_H := 2            # the signature rule: 2 px high ...
+const RULE_TICK_W := 28      # ... its gold tick 28 px wide, then the accent fading out
 const FONT_RAIL := 11        # a rail button's label
 const FONT_EYEBROW_LARGE := 14   # the eyebrow of a full screen (the loading screen)
 const FONT_DISPLAY := 44         # the one big title of a full screen (the table being prepared)
@@ -180,6 +182,55 @@ static var _fonts: Dictionary = {}
 
 
 # ===== Theme =====
+
+## Source Code Pro at one weight, one pixel of tracking: technical facts, stage lines, codes. The bundled file is a
+## variable font whose default instance is ExtraLight (thin and dim), so every mono line asks for its weight.
+static func mono(weight: int = 400) -> Font:
+	var key := "mono%d" % weight
+	if not _fonts.has(key):
+		var variation := FontVariation.new()
+		variation.base_font = load(FONT_MONO_PATH) as Font
+		variation.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): weight}
+		variation.spacing_glyph = 1
+		_fonts[key] = variation
+	return _fonts[key]
+
+
+## Inter at weight 500 with the eyebrow's tracking: a kicker above a title (mockups .eyebrow).
+static func eyebrow_font() -> Font:
+	if not _fonts.has("eyebrow"):
+		var variation := FontVariation.new()
+		variation.base_font = font(500)
+		variation.spacing_glyph = EYEBROW_SPACING
+		_fonts["eyebrow"] = variation
+	return _fonts["eyebrow"]
+
+
+## The signature of the tactical layer under a wordmark (mockups .sig): a 2 px rule, 28 px of gold, then the accent
+## fading from 85 % to 10 % over the rest of `width`.
+static func signature_rule(width: int) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "SignatureRule"
+	row.add_theme_constant_override(&"separation", 0)
+	row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	var tick := ColorRect.new()
+	tick.color = GOLD
+	tick.custom_minimum_size = Vector2(RULE_TICK_W, RULE_H)
+	row.add_child(tick)
+	var gradient := Gradient.new()
+	gradient.set_color(0, _alpha(ACCENT, 0.85))
+	gradient.set_color(1, _alpha(ACCENT, 0.10))
+	var texture := GradientTexture1D.new()
+	texture.gradient = gradient
+	texture.width = maxi(width - RULE_TICK_W, 1)
+	var fade := TextureRect.new()
+	fade.texture = texture
+	fade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	fade.stretch_mode = TextureRect.STRETCH_SCALE
+	fade.custom_minimum_size = Vector2(texture.width, RULE_H)
+	row.add_child(fade)
+	return row
+
 
 ## The shared Theme: every variant above as a type variation. Built once, reused by every window.
 ## Inter at one weight (the bundled font carries the whole weight axis): a cached FontVariation, so a title can

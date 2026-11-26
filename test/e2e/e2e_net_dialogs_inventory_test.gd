@@ -178,7 +178,7 @@ func test_join_code_field_reads_as_a_code() -> void:
 	field.text_changed.emit("abcd")
 	assert_str(field.text).override_failure_message("the code was not formatted as typed").is_equal("ABC-D")
 	assert_int(field.get_theme_font_size("font_size")).is_equal(30)
-	assert_str(field.get_theme_font("font").resource_path).is_equal(HouseStyle.FONT_MONO_PATH)
+	assert_object(field.get_theme_font("font")).is_same(HouseStyle.mono())
 	assert_str(field.placeholder_text).is_equal("ABC-123")
 
 
