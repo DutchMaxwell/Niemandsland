@@ -57,5 +57,9 @@ static func attach_scrim(dialog: Window) -> void:
 	scrim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	scrim.visible = dialog.visible
 	dialog.get_parent().add_child(scrim)
-	dialog.visibility_changed.connect(func() -> void: scrim.visible = dialog.visible)
+	dialog.visibility_changed.connect(
+		func() -> void:
+			scrim.visible = dialog.visible
+			UiFeedback.play_panel(dialog.visible)
+	)
 	dialog.tree_exited.connect(scrim.queue_free)
