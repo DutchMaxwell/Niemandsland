@@ -4,6 +4,7 @@ signal route_opened
 signal route_closed
 const FONT = preload("res://assets/ui_glassmorphism/fonts/Inter.ttf")
 const LOGO = preload("res://assets/ui_glassmorphism/fonts/Orbitron.ttf")
+const MONO = preload("res://assets/ui_glassmorphism/fonts/SourceCodePro.ttf")
 var buttons: Dictionary = {}
 var resume: PanelContainer
 var save_name: Label
@@ -30,11 +31,10 @@ class Action extends Button:
 	var outlined := false
 
 	func _ready() -> void:
-		custom_minimum_size = Vector2(0,54 if description.is_empty() else 75)
 		focus_mode = Control.FOCUS_ALL
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		add_theme_font_override("font",FONT)
-		add_theme_font_size_override("font_size",17)
+		add_theme_font_size_override("font_size",22)
 		for state in ["font_color","font_hover_color","font_focus_color","font_pressed_color"]:
 			add_theme_color_override(state,Color.TRANSPARENT)
 		refresh_style()
@@ -44,6 +44,7 @@ class Action extends Button:
 		focus_exited.connect(queue_redraw)
 
 	func refresh_style() -> void:
+		custom_minimum_size = Vector2(0,54 if description.is_empty() else 76 if primary else 64)
 		for state in ["normal","hover","pressed","focus"]:
 			var box := StyleBoxFlat.new()
 			box.bg_color = HouseStyle.GOLD if primary else Color("1823296b") if outlined else Color.TRANSPARENT
@@ -58,10 +59,11 @@ class Action extends Button:
 	func _draw() -> void:
 		var color := Color("192125") if primary else HouseStyle.INK
 		var left := 18.0 if glyph.is_empty() else 52.0
-		var baseline := 34.0 if not description.is_empty() else size.y*0.5+6
-		draw_string(FONT,Vector2(left,baseline),text,HORIZONTAL_ALIGNMENT_LEFT,size.x-left-35,17,color)
+		# 28 and 49 on the 64 px row; centred on the taller first-run row, as the mockup draws it.
+		var baseline := size.y*0.5-4 if not description.is_empty() else size.y*0.5+8
+		draw_string(FONT,Vector2(left,baseline),text,HORIZONTAL_ALIGNMENT_LEFT,size.x-left-35,22,color)
 		if not description.is_empty():
-			draw_string(FONT,Vector2(left,baseline+22),description,HORIZONTAL_ALIGNMENT_LEFT,size.x-left-25,12,Color("344c54") if primary else HouseStyle.MUTED)
+			draw_string(FONT,Vector2(left,size.y*0.5+17),description,HORIZONTAL_ALIGNMENT_LEFT,size.x-left-25,15,Color("344c54") if primary else HouseStyle.MUTED)
 		if not glyph.is_empty():
 			draw_string(FONT,Vector2(14,size.y*0.5+7),glyph,HORIZONTAL_ALIGNMENT_LEFT,28,24,color if primary else HouseStyle.ACCENT)
 		draw_string(FONT,Vector2(size.x-31,size.y*0.5+6),"→",HORIZONTAL_ALIGNMENT_LEFT,24,21,color)
@@ -75,17 +77,17 @@ func _ready() -> void:
 	var identity := VBoxContainer.new()
 	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_masthead.add_child(identity)
-	identity.add_child(_label("TABLETOP FOR ONEPAGERULES",10,HouseStyle.MUTED))
+	identity.add_child(_label("TABLETOP FOR ONEPAGERULES",14,HouseStyle.MUTED))
 	var wordmark := HBoxContainer.new()
 	wordmark.add_theme_constant_override("separation",0)
 	identity.add_child(wordmark)
 	for part in ["NIEMANDS","LAND"]:
-		var letter := _label(part,48,HouseStyle.ACCENT if part == "LAND" else HouseStyle.INK)
+		var letter := _label(part,54,HouseStyle.ACCENT if part == "LAND" else HouseStyle.INK)
 		letter.add_theme_font_override("font",LOGO)
 		wordmark.add_child(letter)
 	var rule := ColorRect.new()
 	rule.color = Color("819f9e65")
-	rule.custom_minimum_size = Vector2(450,1)
+	rule.custom_minimum_size = Vector2(500,1)
 	rule.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	identity.add_child(rule)
 	var settings := _utility("SettingsBtn","⚙  Settings")
@@ -98,9 +100,9 @@ func _ready() -> void:
 	add_child(_scroll)
 	_scroll.add_child(_main)
 	_main.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	welcome_kicker = _label("WELCOME TO NIEMANDSLAND",10,HouseStyle.MUTED)
+	welcome_kicker = _label("WELCOME TO NIEMANDSLAND",14,HouseStyle.MUTED)
 	_main.add_child(welcome_kicker)
-	welcome = _label("Your first table awaits.",35,HouseStyle.INK)
+	welcome = _label("Your first table awaits.",44,HouseStyle.INK)
 	_main.add_child(welcome)
 	var gap := Control.new()
 	gap.custom_minimum_size.y = 18
@@ -111,11 +113,11 @@ func _ready() -> void:
 	var saved := VBoxContainer.new()
 	saved.add_theme_constant_override("separation",12)
 	resume.add_child(saved)
-	saved.add_child(_label("LATEST SAVE",10,HouseStyle.MUTED))
-	save_name = _label("",21,HouseStyle.INK)
+	saved.add_child(_label("LATEST SAVE",14,HouseStyle.MUTED))
+	save_name = _label("",26,HouseStyle.INK)
 	save_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	saved.add_child(save_name)
-	save_date = _label("",12,HouseStyle.MUTED)
+	save_date = _label("",15,HouseStyle.MUTED)
 	saved.add_child(save_date)
 	var cont := _action("ContinueBtn","Continue","","",true)
 	cont.custom_minimum_size.y = 54
@@ -133,9 +135,9 @@ func _ready() -> void:
 	add_child(_footer)
 	for row in [["HelpBtn","Help & feedback"],["CreditsBtn","Credits & licenses"],["ExitGameBtn","Quit"]]:
 		_footer.add_child(_utility(row[0],row[1]))
-	version = _label("",11,HouseStyle.MUTED)
+	version = _label("",14,HouseStyle.MUTED,MONO)
 	add_child(version)
-	status = _label("Preparing background …",11,HouseStyle.MUTED)
+	status = _label("Preparing background …",14,HouseStyle.MUTED,MONO)
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(status)
@@ -245,13 +247,13 @@ static func set_focus_chain(controls: Array[Control]) -> void:
 
 func _layout() -> void:
 	var left := maxf(28,size.x*0.05)
-	_masthead.position = Vector2(left,42)
+	_masthead.position = Vector2(left,58)
 	_masthead.size.x = size.x-left*2
-	_scroll.position = Vector2(left,clampf(size.y*0.185,165,200))
-	_scroll.size = Vector2(minf(450,size.x-left*2),maxf(150,size.y-_scroll.position.y-140))
-	_footer.position = Vector2(left,size.y-85)
-	version.position = Vector2(left,size.y-35)
-	status.position = Vector2(size.x-450,size.y-35)
+	_scroll.position = Vector2(left,clampf(size.y*0.19,180,206))
+	_scroll.size = Vector2(minf(500,size.x-left*2),maxf(150,size.y-_scroll.position.y-140))
+	_footer.position = Vector2(left,size.y-108)
+	version.position = Vector2(left,size.y-50)
+	status.position = Vector2(size.x-450,size.y-50)
 	status.size.x = 354
 	route_panel.position = Vector2(maxf(24,size.x-620),minf(215,size.y*0.2))
 	route_panel.size.x = 500
@@ -275,7 +277,7 @@ func _utility(id: String, title: String) -> Button:
 	button.text = title
 	button.flat = true
 	button.add_theme_font_override("font",FONT)
-	button.add_theme_font_size_override("font_size",13)
+	button.add_theme_font_size_override("font_size",16)
 	button.add_theme_color_override("font_color",HouseStyle.MUTED)
 	button.add_theme_color_override("font_hover_color",HouseStyle.GOLD)
 	button.add_theme_stylebox_override("normal",_box(Color.TRANSPARENT,Color.TRANSPARENT,10))
@@ -284,10 +286,10 @@ func _utility(id: String, title: String) -> Button:
 	return button
 
 
-func _label(text_value: String, font_size: int, color: Color) -> Label:
+func _label(text_value: String, font_size: int, color: Color, font: Font = FONT) -> Label:
 	var label := Label.new()
 	label.text = text_value
-	label.add_theme_font_override("font",FONT)
+	label.add_theme_font_override("font",font)
 	label.add_theme_font_size_override("font_size",font_size)
 	label.add_theme_color_override("font_color",color)
 	return label
