@@ -144,6 +144,18 @@ func test_trial_by_fire_lists_every_chapter_with_goal_and_availability() -> void
 		assert_bool(seen).override_failure_message("chapter %s lost its goal line" % c.get("id", "")).is_true()
 
 
+## The labels wrapped at one letter and the window grew to a whole list tall: its Close button stood far below
+## the screen (red on main: bottom edge 2,519 in a 1,080 px window).
+func test_trial_by_fire_window_fits_inside_the_viewport() -> void:
+	var d := await _open_trial()
+	assert_object(d).is_not_null()
+	var viewport_h := int(get_tree().root.get_visible_rect().size.y)
+	var bottom := d.position.y + d.size.y
+	assert_int(bottom).override_failure_message("window bottom edge %s in a %s px viewport" % [bottom, viewport_h]).is_less_equal(viewport_h)
+	var close_bottom: float = d.get_ok_button().get_global_rect().end.y
+	assert_float(close_bottom).override_failure_message("Close button bottom %s is outside its window (%s px tall)" % [close_bottom, d.size.y]).is_less_equal(float(d.size.y))
+
+
 func test_trial_by_fire_playable_row_launches_its_scenario() -> void:
 	var keys := ["niemandsland/scenario_mode", "niemandsland/scenario_path", "niemandsland/scenario_chapter"]
 	var before := {}
