@@ -40,7 +40,7 @@ func before_test() -> void:
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
 	_main = _runner.scene()
-	# _on_intro_finished is call_deferred by the harness branch and reveals $UI; containers only lay
+	# _on_table_revealed is call_deferred by the harness branch and reveals $UI; containers only lay
 	# out once they are visible in tree, so the frames here are what makes the rects below real.
 	await _runner.simulate_frames(10)
 
@@ -327,3 +327,11 @@ func test_the_closing_menu_keeps_owning_its_clicks_while_it_fades(timeout := 120
 	assert_bool(started) \
 		.override_failure_message("a click on the still-visible CLOSING menu fell through to the battlefield — click ownership was dropped at the start of the fade instead of at its end") \
 		.is_false()
+
+
+## The harness start reveals the HUD through the deferred call `_on_table_revealed` (a renamed target would leave the
+## HUD hidden and the call silently unanswered).
+func test_the_harness_start_reveals_the_hud_through_the_table_revealed_method() -> void:
+	assert_bool(_main.has_method("_on_table_revealed")).is_true()
+	var ui: Node = _main.get_node("UI")
+	assert_bool(ui.visible).override_failure_message("the HUD stayed hidden after the harness start").is_true()
