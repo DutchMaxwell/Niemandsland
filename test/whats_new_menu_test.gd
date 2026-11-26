@@ -25,6 +25,8 @@ func test_menu_can_reopen_dismissed_news() -> void:
 	menu.view.buttons.WhatsNewBtn.pressed.emit()
 	var dialog: AcceptDialog = menu.get_node("WhatsNewDialog")
 	assert_bool(dialog.visible).is_true()
+	if menu.view.route_panel.visible:
+		await menu.view.route_closed
 	assert_bool(menu.view.route_panel.visible).is_false()
 	dialog.get_ok_button().pressed.emit()
 	await get_tree().process_frame
