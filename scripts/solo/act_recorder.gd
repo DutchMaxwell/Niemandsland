@@ -333,6 +333,9 @@ const EPOCH_101_SKIRMISH_PUSH := 101
 ## on them; they mirror the core's live epoch.
 const EPOCH_102_CASUALTY_CHAIN := 102
 const EPOCH_103_COMMAND_BANNER := 103
+## The core's `PENDING_EPOCH_CORE_TIERS` (acts.rs, plan step 27-pre): from it the terrain line carries a generated board's
+## ledges (`_tiers_for_line`).
+const PENDING_EPOCH_CORE_TIERS := 106
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
@@ -860,7 +863,23 @@ static func _terrain_line(terrain_cb: Callable, school_world: Dictionary = {}) -
 			"grid_size_inches": ov.GRID_SIZE_INCHES, "inches_to_meters": ov.INCHES_TO_METERS}}
 	if rules_epoch >= EPOCH_73_V36:
 		line["containers"] = _container_boxes(ov)
+	line.merge(_tiers_for_line(ov, rules_epoch))
 	return line
+
+
+## Plan step 27-pre: a generated board's ledges for the terrain line - `{"tiers", "solid_cells"}` of the board on the
+## table (the BoardgenGreybox's own seed and theme, through `NmlCore.boardgen_tiers`, the core's `to_plain`) from
+## `PENDING_EPOCH_CORE_TIERS`; {} below it, with no generated board or without the core, so that line keeps its bytes.
+static func _tiers_for_line(ov: Object, epoch: int) -> Dictionary:
+	if epoch < PENDING_EPOCH_CORE_TIERS or not (ov is Node) or not (ov as Node).is_inside_tree() or not ClassDB.class_exists("NmlCore"):
+		return {}
+	for n in (ov as Node).get_tree().get_nodes_in_group(BoardgenGreybox.TABLE_OVERLAY_GROUP):
+		if n is BoardgenGreybox:
+			var g := n as BoardgenGreybox
+			var core: Object = ClassDB.instantiate("NmlCore")
+			var t: Dictionary = core.boardgen_tiers(g.layout_seed, g.layout_theme.to_lower())
+			return {"tiers": t["tiers"], "solid_cells": t["solid_cells"]} if t.has("tiers") else {}
+	return {}
 
 
 ## F-CONT (rules 3.6, EPOCH_73_V36, lead ruling D5): the placed containers' exact 6x3 boxes `{c, he, yaw}` in world
