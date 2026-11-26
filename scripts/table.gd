@@ -8,6 +8,9 @@ extends StaticBody3D
 signal table_resized(size_feet: Vector2)
 ## Wave-3 tutorial seam: the biome switch was silent (set_biome had no signal).
 signal biome_changed(biome_name: String)
+## The battlemap of `biome_name` is on the table (`applied`), or none will come (no library, not published, unreadable):
+## the bundled surface stays. The menu's hand-over waits for it (TableRevealGate).
+signal battlemap_settled(biome_name: String, applied: bool)
 
 @export var default_color: Color = Color(0.2, 0.35, 0.2)  # Gaming mat green
 @export var show_grid: bool = true
@@ -203,6 +206,8 @@ func set_biome(biome_name: String, force: bool = false) -> void:
 	if biome_name == biome and not force:
 		if _battlemap_biome != biome_name and _battlemap_loading != biome_name:
 			_apply_biome(biome_name)
+		elif _battlemap_biome == biome_name:
+			battlemap_settled.emit(biome_name, true)   # already on the table: a waiter hears it at once
 		return
 	biome = biome_name
 	_apply_biome(biome_name)
@@ -225,12 +230,15 @@ func get_biomes() -> Array:
 func _apply_biome(biome_name: String) -> void:
 	mesh_instance.material_override = _build_ground_material()  # show fallback immediately
 	if not is_instance_valid(_biome_library):
+		battlemap_settled.emit(biome_name, false)
 		return
 	_battlemap_loading = biome_name
 	var path: String = await _biome_library.ensure_biome(biome_name)
 	if biome != biome_name or path.is_empty():
 		if _battlemap_loading == biome_name:
 			_battlemap_loading = ""
+		if biome == biome_name:
+			battlemap_settled.emit(biome_name, false)   # not available: the bundled surface stays
 		return  # selection changed during the download / not available yet — keep the current surface
 	_start_battlemap_job(biome_name, path)
 
@@ -259,11 +267,15 @@ func _collect_battlemaps(wait: bool) -> void:
 		print("TABLE battlemap %s prepared off the main thread in %d ms" % [job.biome, Time.get_ticks_msec() - job.started])
 		if _battlemap_loading == job.biome:
 			_battlemap_loading = ""
-		if biome != job.biome or job.out[0] == null:
-			continue  # selection changed meanwhile (stale) or the file was unreadable
+		if biome != job.biome:
+			continue  # selection changed meanwhile (stale)
+		if job.out[0] == null:
+			battlemap_settled.emit(job.biome, false)   # the file was unreadable
+			continue
 		_default_texture = ImageTexture.create_from_image(job.out[0])   # the upload stays on the main thread
 		_battlemap_biome = job.biome
 		mesh_instance.material_override = _build_ground_material()
+		battlemap_settled.emit(job.biome, true)
 	set_process(not _battlemap_jobs.is_empty())
 
 
