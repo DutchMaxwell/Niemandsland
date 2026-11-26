@@ -699,8 +699,10 @@ func _ready() -> void:
 	# Connect Graphics Settings UI
 	graphics_quality_option.item_selected.connect(_on_graphics_quality_changed)
 	DropdownPlacement.keep_button_clear(graphics_quality_option)
-	# Set initial selection based on current preset (UI index matches enum directly)
-	graphics_quality_option.selected = GraphicsSettings.current_preset
+	# Selection = the current preset (UI index matches enum directly), also after Settings > Graphics changed it
+	var show_preset := func(_preset_name := "") -> void: graphics_quality_option.selected = GraphicsSettings.current_preset
+	show_preset.call()
+	GraphicsSettings.settings_applied.connect(show_preset)
 
 	# Casual sandbox terrain shelf (free 3D-table terrain placement). The legacy TTS
 	# terrain browser it superseded has been removed.

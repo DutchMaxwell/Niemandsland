@@ -677,3 +677,14 @@ func test_rows_5_and_6_wear_the_house_style(timeout := 120000) -> void:
 			assert_bool(c.has_theme_font_size_override(&"font_size")).override_failure_message("%s keeps its own font size" % where).is_false()
 			assert_bool(c.has_theme_color_override(&"font_color")).override_failure_message("%s keeps its own colour" % where).is_false()
 	await E2EBoot.settle(get_tree())
+
+
+## Settings > Graphics > Quality and this dropdown agree: a preset set elsewhere shows here (red on main: the dropdown
+## kept its old pick). The preset is put back.
+func test_the_quality_dropdown_follows_a_preset_set_elsewhere(timeout := 120000) -> void:
+	var before: int = GraphicsSettings.current_preset
+	var other: int = GraphicsSettings.QualityPreset.LOW if before != GraphicsSettings.QualityPreset.LOW else GraphicsSettings.QualityPreset.HIGH
+	GraphicsSettings.apply_preset(other)
+	var shown: int = _main.graphics_quality_option.selected
+	GraphicsSettings.apply_preset(before)
+	assert_int(shown).override_failure_message("the dropdown shows %d after preset %d" % [shown, other]).is_equal(other)
