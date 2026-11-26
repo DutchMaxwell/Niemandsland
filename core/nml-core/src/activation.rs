@@ -9,7 +9,6 @@ use crate::io::{Action, Seams, SplitShot};
 use crate::landing::Landing;
 use crate::logline::{Category, LogLine};
 use crate::mods::LiveMod;
-use crate::mv::cost::LEDGE_CLIMB_MAX_IN;
 use crate::mv::step::{leg_crosses, DIFFICULT_MOVE_CAP_IN};
 use crate::mv::tier::{tier_crossings, TierKind};
 use crate::rng::GodotRng;
@@ -310,7 +309,9 @@ fn cliff_drop_in(terrain: &Terrain, path: &[[f64; 2]], drops: bool, jumps: bool,
                 continue;
             }
         }
-        if drops && down && dy <= LEDGE_CLIMB_MAX_IN {
+        // the plain-drop band read where the jump band is read (`mv::jump::drop_kind`, with its tolerance): a floor's
+        // 3.00000014 in (float32 heights) is the 3 in drop it was built as, not a cliff (found by the R3 ruin e2e)
+        if drops && down && matches!(crate::mv::jump::drop_kind(dy), crate::mv::jump::JumpKind::Free) {
             dropped += dy;
         } else if let (true, true, crate::mv::jump::JumpKind::Jump { dice }) = (jumps, down, crate::mv::jump::drop_kind(dy)) {
             jumped.push(Jump { dy, dice, gap_in: None, at, dir });
@@ -4490,5 +4491,36 @@ mod ruin_ledge_tests {
         let path = [[-1.5 * I, 0.0], [1.5 * I, 0.0]];
         assert_eq!(cliff_drop_in(&t, &path, true, true, ruin_floor_y(seams(e - 1), &[0.0, 4.0 * I, 0.0])).map(|r| r.1.len()), Some(0));
         assert_eq!(cliff_drop_in(&t, &path, true, true, ruin_floor_y(seams(e), &[0.0, 4.0 * I, 0.0])).map(|r| r.1.len()), Some(1));
+    }
+}
+
+#[cfg(test)]
+mod ruin_floor_geometry_tests {
+    use super::*;
+    use crate::terrain::{CellParams, Obb, PlainTerrain, Slab};
+
+    /// The three-storey sandbox ruin as the table hands it (`ruin_large_3f` at the origin, read off a real e2e): two 3 in
+    /// arms and two 6 in arms, heights as float32 metres.
+    fn ruin() -> Terrain {
+        let s = |c: [f64; 2], he: [f64; 2], y0: f64, y1: f64| Slab { c, he, yaw: 0.0, y0, y1 };
+        let (lo, hi) = (f64::from(0.0762f32), f64::from(0.1524f32));
+        let slabs = vec![s([-0.0381, -0.04445], [0.0762, 0.03175], lo - 0.01, lo), s([-0.08255, -0.0254], [0.03175, 0.0508], lo - 0.01, lo),
+            s([-0.075438, -0.04445], [0.038862, 0.03175], hi - 0.01, hi), s([-0.08255, -0.050292], [0.03175, 0.025908], hi - 0.01, hi)];
+        Terrain::build(&PlainTerrain {
+            cell_params: CellParams { table_size_feet: [4.0, 4.0], grid_rotation_degrees: 0.0, grid_size_inches: 1.0, inches_to_meters: crate::IN2M },
+            sandbox: vec![Obb { c: [0.0, 0.0], he: [0.1143, 0.0762], yaw: 0.0, kind: 1, slabs }],
+            ..Default::default()
+        })
+    }
+
+    /// Off the top floor over the 3 in floor: two plain 3 in drops (float32 puts the first at 3.00000014 in - still the
+    /// 3 in drop, not a cliff); off the top floor's other side straight to the ground: one 6 in jump.
+    #[test]
+    fn a_real_ruin_steps_down_floor_by_floor_or_jumps_to_the_ground() {
+        let (t, hi) = (ruin(), f64::from(0.1524f32));
+        let down = |to: [f64; 2]| cliff_drop_in(&t, &[[-0.075438, -0.04445], to], true, true, Some(hi))
+            .map(|(d, j)| ((d * 1000.0).round() / 1000.0, j.len()));
+        assert_eq!(down([-0.075438, 0.0635]), Some((6.0, 0)), "two plain drops, 3 in each");
+        assert_eq!(down([-0.075438, -0.1270]), Some((0.0, 1)), "one 6 in jump");
     }
 }
