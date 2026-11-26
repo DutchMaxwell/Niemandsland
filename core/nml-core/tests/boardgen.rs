@@ -1078,15 +1078,16 @@ fn a_town_grows_few_filler_slabs() {
 /// BASELINE: origin/main 6a2972697, town theme, Point180, seeds 1..=1000 (means per board, sq in, percent).
 /// Re-pinned as the town generator grew (a raised minimum, infill houses, at least 4 houses, a tall tower pair read at 12 in; look plan D-R2 = C 25.11.: 90 % of the
 /// building lots intact, raised minimum 10 %, at least 8 houses), 1000 seeds. Later steps move these numbers ON PURPOSE: each re-pins the entries it changes, in the same commit, with the old -> new values in its message.
+// re-pinned 26.11. (look plan round 4, D-R16 = b: raised minimum 40 permille, 3 infill pairs; the filler slabs on free earth 14.25 -> 3.1)
 const ROOFS_BASELINE: [(&str, f64); 25] = [
-    ("intact houses", 11.1), ("boards with <= 2 houses %", 0.0), ("roofed cells", 26.36), ("raised cells in house plots", 10.0), ("raised cells on free earth", 14.25), ("raised cells in the city wall", 33.96),
-    ("roof share of footprints %", 52.07), ("walkable sq in 0 in", 1416.96), ("walkable sq in 3 in", 257.76), ("walkable sq in 6 in", 197.77), ("walkable sq in 9 in", 68.47), ("ladders", 41.33),
-    ("opening rays blocked %", 98.73), ("mid rays blocked %", 87.28), ("tier-to-tier rays blocked, eaves 2.5 in (old model) %", 51.29), ("tier-to-tier rays blocked, ridge 4.5 in %", 56.56),
-    ("roofed cells in the bands", 13.19), ("raised cells in the bands", 22.06), ("asymmetric cells", 0.0),
+    ("intact houses", 11.05), ("boards with <= 2 houses %", 0.0), ("roofed cells", 25.86), ("raised cells in house plots", 9.37), ("raised cells on free earth", 3.1), ("raised cells in the city wall", 34.71),
+    ("roof share of footprints %", 67.46), ("walkable sq in 0 in", 1520.68), ("walkable sq in 3 in", 205.56), ("walkable sq in 6 in", 154.94), ("walkable sq in 9 in", 64.17), ("ladders", 35.93),
+    ("opening rays blocked %", 98.4), ("mid rays blocked %", 87.5), ("tier-to-tier rays blocked, eaves 2.5 in (old model) %", 46.53), ("tier-to-tier rays blocked, ridge 4.5 in %", 52.97),
+    ("roofed cells in the bands", 12.11), ("raised cells in the bands", 17.48), ("asymmetric cells", 0.0),
     // halfroofs plan H0 (inventory rows): solid cells outside an intact-house lot, the 3 in filler slabs, the open ground of the thinnest band, lone 3 in perches,
     // and the POCKETS shape of the gate lane (an open ground cell with a tier or a solid on two opposite sides / on three or four sides)
-    ("half-roof cells", 0.0), ("raised cells on free earth, 3 in", 6.24), ("open ground per band, min over boards", 33.0), ("single-cell 3 in perches", 1.13),
-    ("pocket cells, tall on two opposite sides", 12.47), ("pocket cells, tall on three or four sides", 6.08),
+    ("half-roof cells", 0.0), ("raised cells on free earth, 3 in", 0.52), ("open ground per band, min over boards", 38.0), ("single-cell 3 in perches", 1.02),
+    ("pocket cells, tall on two opposite sides", 11.27), ("pocket cells, tall on three or four sides", 4.92),
 ];
 
 /// Roofs census over `NML_N` town seeds (default 1000, the baseline's size; the baseline is asserted only at 1000, within +-0.5 on every number). `NML_ROOFS_OUT=<file>` also writes the report.

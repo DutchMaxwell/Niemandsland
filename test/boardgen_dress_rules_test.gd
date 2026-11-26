@@ -6,6 +6,7 @@ extends GdUnitTestSuite
 ## (inches); R3 and R5 have their own tests below.
 
 const SEEDS := [41, 25, 3]
+const KINDS := ["Roofed0", "Tower0", "Deck1", "Block2", "Wall0"]
 const R := preload("res://scripts/boardgen_dress_rules.gd")
 
 
@@ -349,7 +350,11 @@ func _rules(lines: PackedStringArray) -> Array:
 
 func test_top_in_and_walkable_follow_the_grid() -> void:
 	var seen := {}
-	for s in SEEDS:
+	# walks seeds until every kind below was seen (a grid-mapping check, not a count;
+	# D-R16 = b left fewer slabs per board)
+	for s in range(1, 41):
+		if KINDS.all(func(k: String) -> bool: return seen.has(k)):
+			break
 		var layout := _layout(s)
 		for i in (layout["cells"] as Array).size():
 			var c: Dictionary = layout["cells"][i]
