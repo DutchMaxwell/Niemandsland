@@ -541,6 +541,7 @@ func _on_exit_pressed() -> void:
 		return
 	_exit_card = PromptCard.new("Quit Niemandsland", "Are you sure you want to quit Niemandsland?", "Quit", "Back")
 	_exit_card.animate = true
+	_exit_card.menu_scale = true
 	add_child(_exit_card)
 	# CANCEL is the safe answer, so it — not QUIT — starts focused, and Enter takes it.
 	_exit_card.cancel_button.focus_mode = Control.FOCUS_ALL
@@ -587,6 +588,7 @@ func _show_core_missing_dialog() -> PromptCard:
 func _show_notice(title: String, text: String) -> PromptCard:
 	var card := PromptCard.new(title, text, "OK", "")
 	card.animate = true
+	card.menu_scale = true
 	add_child(card)
 	card.answer()
 	return card

@@ -46,7 +46,7 @@ func test_cards_use_house_style_and_can_switch_to_german() -> void:
 	dialog.state_path = STATE
 	add_child(dialog)
 	dialog.open()
-	assert_object(dialog.theme).is_same(HouseStyle.theme())
+	assert_object(dialog.theme).is_same(HouseStyle.menu_theme())
 	assert_int(dialog._cards.get_child_count()).is_equal(5)
 	for card: PanelContainer in dialog._cards.get_children():
 		assert_str(card.theme_type_variation).is_equal(HouseStyle.CARD)

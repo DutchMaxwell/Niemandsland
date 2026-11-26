@@ -108,6 +108,15 @@ const FONT_DISPLAY := 44         # the one big title of a full screen (the table
 const FONT_WORDMARK_SMALL := 28  # the wordmark in a screen's corner
 const PAD_SCREEN := 96           # a full screen's text column from the left edge (the menu's masthead)
 
+# ===== The menu's scale (mockups/css/house.css --t-body, --t-caption, --t-eyebrow, .btn): menu_theme() =====
+const MENU_FONT_BODY := 18
+const MENU_FONT_CAPTION := 15
+const MENU_FONT_EYEBROW := 14
+const MENU_FONT_ACTION := 16     # every button's text
+const MENU_H_ACTION := 44
+const MENU_PAD_PANEL := 22
+const MENU_ICON_BUTTON := 32     # the close box of a menu window
+
 # ===== Variants (theme type variations; pick one per control) =====
 const PANEL_VARIANT := &"HsPanel"   # a window root
 const CARD := &"HsCard"             # sunken card: counter, result, log
@@ -166,6 +175,7 @@ const DICE_LOOK := &"classic"
 const _META_EXPANDED_OFFSET := &"hs_expanded_offset"
 
 static var _theme: Theme = null
+static var _menu_theme: Theme = null
 static var _fonts: Dictionary = {}
 
 
@@ -181,6 +191,29 @@ static func font(weight: int) -> Font:
 		variation.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): weight}
 		_fonts[weight] = variation
 	return _fonts[weight]
+
+
+## `theme()` at the menu's scale (type sizes, action height, window padding of the mockups); the windows of the
+## table keep `theme()`.
+static func menu_theme() -> Theme:
+	if _menu_theme != null:
+		return _menu_theme
+	var t := Theme.new()
+	t.merge_with(theme())
+	t.default_font = theme().default_font
+	t.default_font_size = MENU_FONT_BODY
+	for v: StringName in [BODY, HIT]:
+		t.set_font_size(&"font_size", v, MENU_FONT_BODY)
+	for v: StringName in [CAPTION, NOTE, SMALL]:
+		t.set_font_size(&"font_size", v, MENU_FONT_CAPTION)
+	t.set_font_size(&"font_size", EYEBROW, MENU_FONT_EYEBROW)
+	for v: StringName in t.get_type_list():
+		if t.get_type_variation_base(v) == &"Button":
+			t.set_font_size(&"font_size", v, MENU_FONT_ACTION)
+	t.set_constant(&"buttons_min_height", &"AcceptDialog", MENU_H_ACTION)
+	t.set_stylebox(&"panel", PANEL_VARIANT, _box(PANEL, LINE_SOFT, RADIUS_PANEL, MENU_PAD_PANEL, MENU_PAD_PANEL))
+	_menu_theme = t
+	return t
 
 
 static func theme() -> Theme:

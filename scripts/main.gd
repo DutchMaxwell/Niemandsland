@@ -19331,7 +19331,7 @@ func connection_state() -> int:
 func _on_host_pressed() -> void:
 	if _net_host_popup:
 		_net_host_popup.queue_free()
-	_net_host_popup = NetDialog.build("HOST ONLINE GAME", "NET-01", "Start Hosting")
+	_net_host_popup = NetDialog.build("HOST ONLINE GAME", "NET-01", "Start Hosting", true)
 	var content := NetDialog.content(_net_host_popup)
 	content.add_child(NetDialog.label("Player Name:"))
 	_net_host_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Your name")
@@ -19363,7 +19363,7 @@ func _on_net_host_confirmed() -> void:
 func _on_join_pressed() -> void:
 	if _net_join_popup:
 		_net_join_popup.queue_free()
-	_net_join_popup = NetDialog.build("JOIN ONLINE GAME", "NET-02", "Join")
+	_net_join_popup = NetDialog.build("JOIN ONLINE GAME", "NET-02", "Join", true)
 	var content := NetDialog.content(_net_join_popup)
 	content.add_child(NetDialog.label("Player Name:"))
 	_net_join_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Your name")

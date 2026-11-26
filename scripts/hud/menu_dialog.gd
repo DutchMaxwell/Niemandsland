@@ -6,15 +6,18 @@ extends RefCounted
 
 ## The menu's windows have no frame of their own (borderless): the title and a close button stand as the first
 ## row of their content (add_header) and a scrim dims the menu behind them (open). `framed` keeps the engine's
-## title bar for the in-game dialogs that have no header of their own.
-static func style(d: AcceptDialog, framed: bool = false) -> void:
-	d.theme = HouseStyle.theme()
+## title bar for the in-game dialogs that have no header of their own. The menu's windows wear the menu's
+## scale (HouseStyle.menu_theme); a framed window and a window `at_table` keep the table's theme.
+static func style(d: AcceptDialog, framed: bool = false, at_table: bool = false) -> void:
+	var menu_scale := not framed and not at_table
+	var action_h := HouseStyle.MENU_H_ACTION if menu_scale else HouseStyle.H_ACTION
+	d.theme = HouseStyle.menu_theme() if menu_scale else HouseStyle.theme()
 	d.borderless = not framed
 	d.get_ok_button().theme_type_variation = HouseStyle.PRIMARY
-	d.get_ok_button().custom_minimum_size.y = HouseStyle.H_ACTION
+	d.get_ok_button().custom_minimum_size.y = action_h
 	if d is ConfirmationDialog:
 		(d as ConfirmationDialog).get_cancel_button().theme_type_variation = HouseStyle.BUTTON
-		(d as ConfirmationDialog).get_cancel_button().custom_minimum_size.y = HouseStyle.H_ACTION
+		(d as ConfirmationDialog).get_cancel_button().custom_minimum_size.y = action_h
 	for n: Node in d.find_children("*", "Button", true, false):
 		var b := n as Button
 		if b == d.get_ok_button() or b.theme_type_variation != &"" or b is CheckBox or b is CheckButton:
