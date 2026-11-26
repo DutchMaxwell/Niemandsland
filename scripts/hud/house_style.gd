@@ -599,6 +599,17 @@ static func key_cap(text: String) -> Label:
 	return l
 
 
+## A key cap on a gold row or button (mockup .key.on-gold): the dark ink at 16 % as fill and 35 % as rim, mono 14 px (the menu view's 14 px floor).
+static func key_cap_on_gold(text: String) -> Label:
+	var l := label(text, KEYCAP)
+	l.add_theme_font_override(&"font", mono())
+	l.add_theme_font_size_override(&"font_size", 14)
+	l.add_theme_color_override(&"font_color", ON_GOLD)
+	l.add_theme_stylebox_override(&"normal", _box(_alpha(ON_GOLD, 0.16), _alpha(ON_GOLD, 0.35), RADIUS_KEYCAP, 6, 1))
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return l
+
+
 ## A key cap you can click: pressing it does what pressing that key does (the caller wires it).
 static func key_button(text: String, tooltip: String) -> Button:
 	var b := button(text, KEY, H_KEYCAP)
