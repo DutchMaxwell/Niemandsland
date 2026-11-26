@@ -462,6 +462,8 @@ func _ready() -> void:
 			_atmosphere = atmosphere
 	if _kit != null and layout_theme == BoardgenTheme.DEEPWORKS:   # a module missing now is cached for the next board (the town uses no kit)
 		_kit.prefetch(KIT_LADDERS + BoardgenRails.KIT_MODULES + BoardgenProps.KIT_MODULES)
+	if layout_theme == BoardgenTheme.RUIN_TOWN:
+		_fetch_town_kit()
 	_scatter_off(_footprint)
 	_assign_layers()
 	visibility_changed.connect(_queue_ground_bake)
@@ -566,6 +568,23 @@ func _apply_detail() -> void:
 			_attach_surfaces()   # a later switch up to Medium fetches them then
 	_queue_ground_bake()   # the detail changes the board's look: the bases follow
 	BoardgenMood.apply(self, on and (layout_theme == BoardgenTheme.DEEPWORKS or layout_theme == BoardgenTheme.RUIN_TOWN), layout_theme == BoardgenTheme.RUIN_TOWN)   # the dim industrial light, board-scale SSAO, the grade and the model fill come with the finer look; the ruin town has its own dusk and only the grade
+
+
+## The ruin town's kit modules and texture sets (assets/ruintown_manifest.json, R2): fetched in the background, so the NEXT town board
+## is dressed (offline or refused: the procedural look stays). Like _attach_surfaces: never headless, never below Medium or on Compatibility;
+## with NML_RUINTOWN_KIT_DIR / _LIB_DIR set everything is already local and nothing is fetched.
+func _fetch_town_kit() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var kit := BoardgenKit.new(BoardgenTheme.TOWN_LIBRARY)
+	kit.name = "TownKitFetch"
+	add_child(kit)
+	if not kit.usable([]):   # (no names: only the preset / renderer question)
+		return
+	kit.prefetch(kit.module_names())
+	var lib := get_node_or_null("TownLibrary") as TiefwerkLibrary
+	if lib != null and not lib.sets_cached():
+		lib.ensure_sets()
 
 
 ## The board's visuals sit on their own render layer: the models' fill light (BoardgenMood) never reaches them.

@@ -58,6 +58,11 @@ func apply_manifest_text(text: String) -> void:
 	_modules = data.get("models", {}) if typeof(data.get("models", {})) == TYPE_DICTIONARY else {}
 
 
+## Every module the manifest lists (what a board may ask for).
+func module_names() -> Array:
+	return _modules.keys()
+
+
 func has_module(module: String) -> bool:
 	return _modules.has(module) or not _local_path(module).is_empty()
 
