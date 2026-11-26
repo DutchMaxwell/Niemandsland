@@ -12012,6 +12012,10 @@ fn resolve_with(
                     if let Some(p) = next.positions[si].get_mut(slot) {
                         *p = foot;
                     }
+                    // Plan step 27b (H-8, as the push): the fall is its own landing, before its wounds, so the table moves
+                    // the model to its foot first and the wounds' `at` finds it there
+                    let moved_to = next.positions[si].clone();
+                    tray.land(|| Landing { unit: si, models: Vec::new(), loss_line: false, moved_to });
                     tray.owner_next(Some(si));
                     let n = (h - 1e-6).ceil().max(0.0) as usize;
                     let faces = tray.roll(n);

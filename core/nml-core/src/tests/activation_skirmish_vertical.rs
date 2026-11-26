@@ -309,6 +309,33 @@ fn a_falls_wounds_land_on_the_model_that_fell() {
     assert_eq!(after.alive[0], 2);
 }
 
+/// Plan step 27b (found by an e2e of a core fall on the table): the fall is its own landing, before its wounds - the unit's
+/// models with the faller at its foot (`moved_to`), then the wound whose `at` is that foot - so the table moves the model
+/// first and finds it there. Without it the table looked for the wounded model at the foot, found none and landed nothing.
+#[test]
+fn a_fall_lands_the_move_before_its_wounds() {
+    let (mut st, mut statics, t) = ledge(4.0, "gff", &[]);
+    let zs = [-4.5, 1.5, 4.5];
+    st.positions[0] = zs.iter().map(|z| [INCHES_TO_METERS, 4.0 * INCHES_TO_METERS, z * INCHES_TO_METERS]).collect();
+    Rc::make_mut(&mut st.radii)[0] = vec![INCHES_TO_METERS; 3];
+    st.wounds[0] = vec![3, 3, 3];
+    st.alive = vec![3, 0, 0, 0];
+    (statics[0].model_count, statics[0].wounds_max, statics[0].ctx.models, statics[0].ctx.tough) = (3, vec![3; 3], 3, 3);
+    let placed: Vec<[f64; 3]> = (0..3).map(|i| if i == 2 { [-1.5 * INCHES_TO_METERS, 0.0, zs[i] * INCHES_TO_METERS] } else { st.positions[0][i] }).collect();
+    let seams = Seams { rules_epoch: EPOCH_100_SKIRMISH_JUMP, tray_exact: true, ..Seams::default() };
+    let mut tray = Tray::supplied(vec![vec![1, 2, 2, 2], vec![1, 3, 4, 6]]);
+    tray.place(placed, Vec::new());
+    let action = Action { kind: ADVANCE, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None, teleport: None };
+    let (after, _) = crate::sim::resolve_stochastic_tray_on_board(&statics, &st, &action, &t, seams, &mut crate::rng::GodotRng::new(0), &mut tray).unwrap();
+    let landings = tray.landings_upto(usize::MAX);
+    let mv = landings.iter().position(|l| l.unit == 0 && !l.moved_to.is_empty()).expect("the fall's move lands");
+    let foot = landings[mv].moved_to[2];
+    assert!((foot[0] - after.positions[0][2][0]).abs() < 1e-9 && (foot[2] - after.positions[0][2][2]).abs() < 1e-9, "the faller at its foot");
+    let hurt = landings.iter().position(|l| l.unit == 0 && l.models.iter().any(|m| m.slot == 2)).expect("the fall's wounds land");
+    assert!(mv < hurt, "the move lands before the wounds: {mv} vs {hurt}");
+    assert!(landings[hurt].models.iter().all(|m| (m.at[0] - foot[0]).abs() < 1e-9), "the wounds' `at` is the foot");
+}
+
 /// The push offer rides with the declared action: after the Intent, before the first die, once.
 #[test]
 fn a_push_is_declared_with_the_action_before_the_first_die_once() {
