@@ -2,6 +2,8 @@ extends GdUnitTestSuite
 ## The table round the ruin town (plan PLAN_RUINTOWN_TEXTURES step 8, D-TEX4 (a)): a plane of board size + 36 in a side under the town only, no collider, no shadow,
 ## gone with the board, its contact shadow on the table's rim; its far edge fades into the town sky's own colour (one shared formula, so the two cannot drift apart).
 
+const GrasslandReference := preload("res://scripts/visual/grassland_reference.gd")
+
 const FIXTURE := "res://test/fixtures/boardgen/layout_42.txt"
 
 
@@ -29,6 +31,17 @@ func test_the_board_and_the_presenter_name_the_same_landscape_group() -> void:
 	assert_str(BoardgenGreybox.HIDES_LANDSCAPE_GROUP).is_equal(TableBiomePresenter.HIDES_LANDSCAPE_GROUP)
 
 
+func test_a_board_in_the_world_group_keeps_the_world_off_the_table_until_it_leaves() -> void:
+	assert_str(BoardgenGreybox.HIDES_WORLD_GROUP).is_equal(TableBiomePresenter.HIDES_WORLD_GROUP)
+	var table: Node3D = auto_free(Node3D.new())
+	assert_bool(GrasslandReference.table_hides_world(table)).is_false()
+	var board: Node3D = auto_free(Node3D.new())
+	board.add_to_group(TableBiomePresenter.HIDES_WORLD_GROUP)
+	table.add_child(board)
+	assert_bool(GrasslandReference.table_hides_world(table)).override_failure_message("a town on the table and the world still built").is_true()
+	assert_bool(GrasslandReference.table_hides_world(table, board)).override_failure_message("the town leaves and the world stays gone").is_false()
+
+
 func test_the_town_stands_on_a_plank_table_that_leaves_with_it() -> void:
 	var layout := _town()
 	if layout.is_empty():
@@ -37,6 +50,7 @@ func test_the_town_stands_on_a_plank_table_that_leaves_with_it() -> void:
 	add_child(table)
 	var board := BoardgenGreybox.attach(table, layout)
 	assert_bool(board.is_in_group(BoardgenGreybox.HIDES_LANDSCAPE_GROUP)).override_failure_message("the town keeps its landscape").is_false()
+	assert_bool(board.is_in_group(BoardgenGreybox.HIDES_WORLD_GROUP)).override_failure_message("hills and groves round the town at High / Ultra").is_true()
 	var s := board.get_node_or_null("Surround") as MeshInstance3D
 	assert_object(s).override_failure_message("the town has no surround: the void is back").is_not_null()
 	if s == null:

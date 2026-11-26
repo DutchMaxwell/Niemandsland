@@ -31,6 +31,8 @@ const HIDE_GROUND_MIST := true
 ## A board that must not stand in the table's landscape puts itself in this group (a generated Tiefwerk board: an
 ## undercity has no meadow round it). The table is not dressed while one lies on it and is dressed again when it leaves.
 const HIDES_LANDSCAPE_GROUP := "hides_table_landscape"
+## A board in this group keeps the dressed table but no world beyond it (GrasslandReference builds none while one lies on the table).
+const HIDES_WORLD_GROUP := "hides_table_world"
 ## Scatter counts are per m²; above a 6x4 ft table the density falls instead of the frame rate.
 const REFERENCE_AREA_M2 := 6.0 * 0.3048 * 4.0 * 0.3048
 ## The sun values only the reference sets (the profile's shadow bias included: no mood sets it back).
