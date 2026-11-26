@@ -27,7 +27,7 @@ func before_test() -> void:
 	_main.opr_army_manager.current_round = 1
 	SoloHarness.instant(_main)
 	SoloHarness.fast(_main)
-	_main._autosave_controller.set_lesson_paused(true)
+	SoloHarness.lesson_paused(_main)
 
 
 func after_test() -> void:
@@ -64,7 +64,7 @@ func test_a_jump_the_core_sees_is_rolled_once(do_skip := not ClassDB.class_exist
 	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_CORE_TIERS
 	var core: Object = ClassDB.instantiate("NmlCore")
 	var layout: Dictionary = core.boardgen_layout_themed(7, "")
-	_main._attach_generated_board_for_test(7, "")   # main's test-only door: the drawn board, the class never named here
+	SoloHarness.generated_board(_main, 7, "")   # main's test-only door: the drawn board, the class never named here
 	var ledge := _ledge(layout)
 	assert_array(ledge).override_failure_message("seed 7 has a 6 in ledge without a ladder").is_not_empty()
 	var att := ParityTable._make_unit(_main, {"player": 1, "name": "Leaper", "models": 1, "x_in": 0.0, "z_step_in": 1.0,
@@ -82,7 +82,7 @@ func test_a_jump_the_core_sees_is_rolled_once(do_skip := not ClassDB.class_exist
 	att.unit_properties["moved_round"] = 1
 	assert_bool(_main.attacked_unit_drag_refused(att, 3.0)).override_failure_message("the drop was refused").is_false()
 	assert_bool(CoreActivation.core_sees_jump(att.unit_id)).override_failure_message("the core lists the jump").is_true()
-	await _main._on_units_dropped([{"node": node, "inches": 3.0, "from_raw": from,
+	await SoloHarness.drop(_main, [{"node": node, "inches": 3.0, "from_raw": from,
 		"path": PackedVector2Array([Vector2(from.x, from.z), Vector2(ledge[1].x, ledge[1].z)])}])
 	await CoreActivation.end(_main, att)
 	_main.battle_log.entry_added.disconnect(tap)
