@@ -8,6 +8,7 @@ const GROUND = preload("res://shaders/visual/reference_ground.gdshader")
 const GROUND_TABLE = preload("res://shaders/visual/reference_ground_table.gdshader")
 const ReferenceMaterials = preload("res://scripts/visual/reference_materials.gd")
 var _main: Node
+var _table_hooked := false
 var _ground: ShaderMaterial
 var _base: ShaderMaterial
 var _trees: Array[ArrayMesh] = []
@@ -74,6 +75,10 @@ func apply(main: Node) -> void:
 	_main = main
 	_profile = Biomes.get_profile(biome)
 	var table: Node3D = main.get_node("Table")
+	if not _table_hooked:   # a board that hides the world comes or goes: build or drop the world
+		table.child_entered_tree.connect(_on_table_child.bind(false))
+		table.child_exiting_tree.connect(_on_table_child.bind(true))
+		_table_hooked = true
 	# Re-theme the ruin walls and trees to the biome before dressing. The overlay is themed
 	# directly: table.set_biome also rebuilds the production battlemap material, which would
 	# replace the reference ground and reset the shared base-top material under us.
@@ -733,9 +738,19 @@ func _exit_tree() -> void:
 		RenderingServer.directional_shadow_atlas_set_size(graphics.PRESETS[graphics.current_preset]["shadow_size"],true)
 
 
-func _sync_world() -> void:
+func _on_table_child(node: Node, leaving: bool) -> void:
+	if table_tier and node.is_in_group(TableBiomePresenter.HIDES_WORLD_GROUP):
+		_sync_world(node if leaving else null)
+
+
+## True when a child of `table` other than `leaving` is in TableBiomePresenter.HIDES_WORLD_GROUP.
+static func table_hides_world(table: Node, leaving: Node = null) -> bool:
+	return table != null and table.get_children().any(func(c: Node) -> bool: return c != leaving and c.is_in_group(TableBiomePresenter.HIDES_WORLD_GROUP))
+
+
+func _sync_world(leaving: Node = null) -> void:
 	var world := get_node_or_null("TableWorld")
-	if GraphicsSettings.world_enabled(GraphicsSettings.current_preset):
+	if GraphicsSettings.world_enabled(GraphicsSettings.current_preset) and not table_hides_world(_main.get_node_or_null("Table") if _main != null else null, leaving):
 		if world == null:
 			world = preload("res://scripts/visual/table_world.gd").new()
 			world.name = "TableWorld"

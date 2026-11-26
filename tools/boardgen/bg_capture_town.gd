@@ -107,6 +107,8 @@ func _run() -> void:
 			_mood = a.trim_prefix("mood=")
 			_town_sky = true
 			_real_table = true
+	if not _mood.is_empty() and not " ".join(args).contains("presets="):
+		_presets = [2]   # a mood run without presets= stays Medium only
 	DirAccess.make_dir_recursive_absolute(_out)
 	if _kit == "off":
 		OS.unset_environment("NML_RUINTOWN_KIT_DIR")
@@ -162,6 +164,15 @@ func _run() -> void:
 			for _i in 20:
 				await process_frame
 			_backdrop()
+			for board_seed: int in seeds:
+				await _one_seed(board_seed, preset)
+	elif not _mood.is_empty():   # the look audit per preset: a look bar is measured at Medium AND Ultra (Medium only without presets=)
+		for preset: int in _presets:
+			root.get_node("GraphicsSettings").apply_preset(preset)
+			pivot.set_tilt_shift_enabled(false)
+			_suffix = {2: "", 4: "_ultra", 1: "_low"}[preset]
+			for _i in 20:
+				await process_frame
 			for board_seed: int in seeds:
 				await _one_seed(board_seed, preset)
 	else:
