@@ -8,7 +8,7 @@
 
 use crate::acts::{
     rule_on, EPOCH_16_FREE_PLACEMENT, EPOCH_33_REDEPLOYMENT, EPOCH_64_DEPLOY_LARGE_RESPOT, EPOCH_72_PLAYTEST_RULES,
-    EPOCH_73_V36,
+    EPOCH_73_V36, PENDING_EPOCH_ZONE_BASE_EDGE,
 };
 use crate::objectives::Zone;
 use crate::rng::GodotRng;
@@ -579,6 +579,17 @@ pub fn deploy_footprint_offsets(model_count: usize, base_r: f64, skirmish: bool)
 // least_blocked_spot (ai_deployment.gd:125-165). Draw-free; f32 at every
 // Godot Vector2/Rect2 boundary (real_t), f64 arithmetic between them —
 // exactly GDScript's floats (its scalar `float` is a double).
+
+/// Step 8b (the 3.6 books p.6, "fully within 12 in"): is a base of radius `r_m` centred at world-metre `p` wholly inside
+/// the zones - its centre and the eight rim points of `base_edge_offsets`?
+pub fn zones_contain_base(zones: &[Zone], p: (f64, f64), r_m: f64) -> bool {
+    base_edge_offsets(r_m).iter().all(|o| zones_contain(zones, (p.0 + f64::from(o[0]), p.1 + f64::from(o[1]))))
+}
+
+/// The deploy placer's zone test for one base: from `PENDING_EPOCH_ZONE_BASE_EDGE` the whole base, below it the centre.
+pub(crate) fn zone_admits_base(zones: &[Zone], p: (f64, f64), base_r: f64, rules_epoch: u32) -> bool {
+    if rule_on(rules_epoch, PENDING_EPOCH_ZONE_BASE_EDGE) { zones_contain_base(zones, p, base_r) } else { zones_contain(zones, p) }
+}
 
 /// D5: is the world-metre point inside a catalog zone list (the twin of the table's
 /// `DeploymentCatalog.zone_test`; the disc boundary counts as inside)?
@@ -1264,12 +1275,13 @@ pub fn deploy_place_id_gated(
         v.extend(gate_occ.iter().copied());
         v
     };
-    // wholly within the zone: EVERY footprint base counts, not just the unit's centre
+    // wholly within the zone: EVERY footprint base counts, not just the unit's centre - and from step 8b's epoch each
+    // whole base, not its centre
     let outside = |z: &[Zone], p: (f64, f64)| {
         if footprint.is_empty() {
-            !zones_contain(z, p)
+            !zone_admits_base(z, p, base_r, rules_epoch)
         } else {
-            footprint.iter().any(|o| !zones_contain(z, (p.0 + o.0, p.1 + o.1)))
+            footprint.iter().any(|o| !zone_admits_base(z, (p.0 + o.0, p.1 + o.1), base_r, rules_epoch))
         }
     };
     let zone_blocked = |p: (f64, f64)| zones.is_some_and(|z| outside(z, p)) || terrain_only(p);
