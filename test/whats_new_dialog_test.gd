@@ -61,3 +61,39 @@ func test_cards_use_house_style_and_can_switch_to_german() -> void:
 	assert_str(dialog.get_ok_button().text).is_equal("Zurück zum Spieltisch")
 	assert_str(dialog._cards.get_child(0).get_child(0).get_child(0).text).is_equal("Regeln 3.6 auf deinem Tisch")
 
+
+
+## Release notes as drawn (sheet 08): an English | Deutsch segment pair in the header row, a full-width Close with its Esc
+## cap, a card with a picture is a row (150 x 84), a card without one is the text alone and no placeholder is drawn
+## (red on main: one switch button, a 760 x 650 window, a placeholder slot).
+func test_release_notes_have_the_language_pair_a_full_width_close_and_no_placeholder() -> void:
+	var dialog = auto_free(load(SCRIPT).new())
+	dialog.state_path = STATE
+	add_child(dialog)
+	dialog._locale = "en"
+	dialog.open()
+	await get_tree().process_frame
+	assert_that(dialog.DIALOG_SIZE).is_equal(Vector2i(708, 884))
+	var close: Node = dialog.find_child("CloseButton", true, false)
+	var pair: Node = close.get_parent().get_child(close.get_index() - 1)
+	var names: Array = pair.get_children().map(func(b: Node) -> String: return (b as Button).text)
+	assert_array(names).is_equal(["English", "Deutsch"])
+	assert_bool(HouseStyle.is_selected(pair.get_child(0) as Button)).is_true()
+	dialog._language_button.pressed.emit()
+	assert_bool(HouseStyle.is_selected(pair.get_child(1) as Button)).is_true()
+	assert_bool(HouseStyle.is_selected(pair.get_child(0) as Button)).is_false()
+	var closer: Button = dialog._close_button
+	assert_str(closer.text).is_equal("Schließen")
+	assert_float(closer.size.y).is_equal(float(HouseStyle.MENU_H_ACTION))
+	assert_float(closer.size.x).is_greater(500.0)
+	assert_str((closer.get_child(0) as Label).text).is_equal("Esc")
+	assert_bool(dialog.get_ok_button().visible).is_false()
+	for l: Node in dialog.find_children("*", "Label", true, false):
+		assert_bool((l as Label).text in ["Image coming soon", "Bild folgt"]).is_false()
+	assert_object(dialog._picture("")).is_null()
+	assert_object(dialog._picture("res://nowhere.png")).is_null()
+	var picture: TextureRect = dialog._picture(TableSizeDialog.preview_path("urban_ruins"))
+	assert_object(picture).is_not_null()
+	if picture != null:
+		assert_that(picture.custom_minimum_size).is_equal(Vector2(150, 84))
+		picture.free()
