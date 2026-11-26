@@ -294,7 +294,7 @@ func test_menu_view_text_is_at_least_14_px() -> void:
 ## Inter has no U+2261, U+2699, U+2295 (they come from a fallback font, or not at all) and U+25A1 is a stand-in.
 ## The rows draw icons now. RED on main: the rows carry "⊕", "□", "≡" as text and Settings carries the gear.
 func test_menu_view_uses_no_text_glyph_icons() -> void:
-	var banned := [0x2261, 0x2699, 0x2295, 0x25A1]
+	var banned := [0x2261, 0x2699, 0x2295, 0x25A1, 0x203A]
 	var found: Array[String] = []
 	for n: Node in _view.find_children("*", "Control", true, false):
 		var texts: Array[String] = []
@@ -483,6 +483,29 @@ func _cap_text(parent: Node) -> String:
 
 ## The main action says its key and so does Quit; a footer link's focus is a 2 px accent ring.
 ## RED on main: no key caps and a 1 px gold focus line.
+## The rows end in a drawn chevron (no text glyph), Continue in none; the key cap on a gold row is the dark ink at 16 %
+## in mono 14 px (the view's floor); the footer links carry an 18 px icon (sheet 01; red on main: a "›" glyph, a plain cap, no icons).
+func test_rows_end_in_a_chevron_caps_sit_on_gold_and_footer_links_have_icons() -> void:
+	_view.set_save({})
+	for id: String in ["StartBattleBtn", "OnlineBtn", "LoadBattleBtn", "LearnBtn", "SettingsBtn"]:
+		assert_object(_view.buttons[id].get("end_mark")).override_failure_message("%s has no drawn end mark" % id).is_not_null()
+	assert_object(_view.buttons.ContinueBtn.get("end_mark")).override_failure_message("Continue draws an end mark").is_null()
+	assert_str(FileAccess.get_file_as_string("res://scripts/startup_menu_view.gd")).override_failure_message(
+		"the view still draws the text glyph").not_contains("GLYPH_GO")
+	var cap: Label = _view.buttons.StartBattleBtn.get("key_cap")
+	assert_object(cap).is_not_null()
+	if cap != null:
+		var box := cap.get_theme_stylebox("normal") as StyleBoxFlat
+		assert_float(box.bg_color.a).is_equal_approx(0.16, 0.001)
+		assert_float(box.border_color.a).is_equal_approx(0.35, 0.001)
+		assert_object(cap.get_theme_color("font_color")).is_equal(HouseStyle.ON_GOLD)
+		assert_int(cap.get_theme_font_size("font_size")).is_equal(14)
+	for id: String in ["HelpBtn", "CreditsBtn", "ExitGameBtn"]:
+		var link := _view.buttons[id] as Button
+		assert_object(link.icon).override_failure_message("%s has no icon" % id).is_not_null()
+		assert_int(link.get_theme_constant("icon_max_width")).is_equal(18)
+
+
 func test_main_action_and_quit_show_key_caps_and_links_focus_with_a_ring() -> void:
 	_view.set_save({})
 	assert_str(_cap_text(_view.buttons.StartBattleBtn)).override_failure_message(
