@@ -57,6 +57,7 @@ const ICON_PATHS := {
 const ICON_PX := 24
 const NEWS_W := 396   # the news card: 64 px from the right edge, 96 px from the bottom
 const NEWS_H := 116
+const MONTHS := ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
 static var _icons: Dictionary = {}
 
 class Action extends Button:
@@ -164,7 +165,9 @@ func _ready() -> void:
 	gap.custom_minimum_size.y = 18
 	_main.add_child(gap)
 	resume = PanelContainer.new()
-	resume.add_theme_stylebox_override("panel",_box(Color("182329dc"),Color("b8a67955"),20))
+	resume.add_theme_stylebox_override("panel",_box(Color("182329dc"),Color("b8a67955"),18))
+	resume.draw.connect(_draw_card_corners)
+	resume.resized.connect(resume.queue_redraw)
 	_main.add_child(resume)
 	var saved := VBoxContainer.new()
 	saved.add_theme_constant_override("separation",12)
@@ -181,12 +184,15 @@ func _ready() -> void:
 	head.add_child(save_picture)
 	var text := VBoxContainer.new()
 	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	text.add_theme_constant_override("separation",12)
+	text.add_theme_constant_override("separation",4)
 	head.add_child(text)
 	text.add_child(_label("LATEST SAVE",14,HouseStyle.MUTED,HouseStyle.eyebrow_font()))
 	save_name = _label("",26,HouseStyle.INK)
 	save_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	text.add_child(save_name)
+	var name_row := MarginContainer.new()   # 6 px between the kicker and the name (4 of separation, 2 of margin)
+	name_row.add_theme_constant_override("margin_top",2)
+	name_row.add_child(save_name)
+	text.add_child(name_row)
 	for _i in 2:
 		var fact := _label("",14,HouseStyle.MUTED,HouseStyle.mono())
 		text.add_child(fact)
@@ -315,6 +321,15 @@ func set_news(cards: Array) -> void:
 ## The card stands while the main list does: not with a route panel open, not without notes.
 func _sync_news_card() -> void:
 	news_card.visible = _news_shown and not route_panel.visible
+
+
+## The Continue card's two gold corner brackets (top left, bottom right): 14 px legs, 1.5 px strokes.
+func _draw_card_corners() -> void:
+	for corner: Array in [[Vector2.ONE,Vector2(1,1)],[resume.size-Vector2.ONE,Vector2(-1,-1)]]:
+		var at: Vector2 = corner[0]
+		var way: Vector2 = corner[1]
+		resume.draw_line(at,at+Vector2(14*way.x,0),HouseStyle.GOLD,1.5,true)
+		resume.draw_line(at,at+Vector2(0,14*way.y),HouseStyle.GOLD,1.5,true)
 
 
 func _build_routes() -> void:
@@ -458,7 +473,7 @@ func set_save(info: Dictionary) -> void:
 			save_facts[i].text = lines[i] if i < lines.size() else ""
 			save_facts[i].visible = i < lines.size()
 		var stamp := Time.get_datetime_dict_from_unix_time(info.modified_unix)
-		save_date.text = "Saved on %04d-%02d-%02d" % [stamp.year,stamp.month,stamp.day]
+		save_date.text = "Saved on %d %s %d" % [stamp.day,MONTHS[stamp.month-1],stamp.year]
 	var start: Action = buttons.StartBattleBtn
 	start.primary = not resume.visible
 	# Rebuild only the state styles, once after the save lookup.

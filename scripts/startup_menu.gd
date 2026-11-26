@@ -488,7 +488,33 @@ func _on_report_problem_pressed() -> void:
 	if path.is_empty():
 		_show_notice("Report a problem", "Could not write the diagnostics file.\nThe log lives at user://logs/niemandsland.log.")
 	else:
-		_show_notice("Report a problem", "Saved an anonymised diagnostics file to:\n%s\n\nAttach it to a bug report — it carries no player names, room codes or your username." % path)
+		_report_saved(_show_report_saved(path), path)
+
+
+## The report card: the path in a mono well, "Open folder" beside OK, the privacy line in the caption style.
+func _show_report_saved(path: String) -> PromptCard:
+	var card := PromptCard.new("Report a problem", "Saved an anonymised diagnostics file to:", "OK", "")
+	card.animate = true
+	card.menu_scale = true
+	var well := HouseStyle.label(path, HouseStyle.BODY)
+	well.add_theme_font_override("font", HouseStyle.mono())
+	well.add_theme_font_size_override("font_size", 14)
+	well.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	well.custom_minimum_size.x = PromptCard.WIDTH - 2 * HouseStyle.MENU_PAD_PANEL - 2 * HouseStyle.PAD_CARD_X
+	card.rows.add_child(HouseStyle.card(well))
+	var privacy := HouseStyle.label("Attach it to a bug report — it carries no player names, room codes or your username.", HouseStyle.CAPTION)
+	privacy.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	privacy.custom_minimum_size.x = PromptCard.WIDTH - 2 * HouseStyle.MENU_PAD_PANEL
+	card.rows.add_child(privacy)
+	card.add_action("Open folder", "folder")
+	add_child(card)
+	return card
+
+
+## Waits for the report card; "Open folder" shows the file in the system's file manager.
+func _report_saved(card: PromptCard, path: String) -> void:
+	if await card.answer() == "folder":
+		OS.shell_show_in_file_manager(ProjectSettings.globalize_path(path))
 
 
 ## In-app credits / license summary, so the model attribution (CC-BY-SA) is visible to players,
@@ -507,19 +533,22 @@ func _on_credits_pressed() -> void:
 	scroll.custom_minimum_size = Vector2(minf(520.0, room.x), minf(420.0, room.y))
 	scroll.follow_focus = true
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var head := Label.new()
+	head.autowrap_mode = TextServer.AUTOWRAP_WORD
+	head.text = "Niemandsland — © the Niemandsland project."
 	var body := Label.new()
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD
-	body.text = "Niemandsland — © the Niemandsland project.\n\n" \
-		+ "Game code: MIT License.\n" \
-		+ "3D miniatures & terrain: generated project assets, CC-BY-SA 4.0.\n" \
-		+ "Fonts: SIL Open Font License.\n" \
-		+ "UI icons: Phosphor Icons (MIT).\n" \
-		+ "Engine: Godot Engine (MIT).\n\n" \
-		+ "OnePageRules army data is loaded at runtime via the Army Forge API; it is not bundled.\n\n" \
+	body.text = "OnePageRules army data is loaded at runtime via the Army Forge API; it is not bundled.\n\n" \
 		+ "Full details: THIRD_PARTY.md in the project repository.\n\n" \
 		+ "Niemandsland is a free, non-profit, open-source fan project (MIT code, CC-BY-SA generated assets). It is not affiliated with, endorsed by, or sponsored by OnePageRules. It bundles no OPR rules text, files, art or marks; the rules are OPR's, available free at onepagerules.com, and army lists come from OPR's Army Forge. Responsible: Andreas Kesberg, privacy@niemandsland.xyz."
-	scroll.add_child(body)
+	var column := VBoxContainer.new()
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	column.add_theme_constant_override("separation", HouseStyle.GAP_SECTION)
+	column.add_child(head)
+	column.add_child(_licence_rows())
+	column.add_child(body)
+	scroll.add_child(column)
 	var content := VBoxContainer.new()
 	content.add_child(scroll)
 	MenuDialog.add_header(dialog, content)
@@ -530,6 +559,33 @@ func _on_credits_pressed() -> void:
 	MenuDialog.open(self, dialog)
 	dialog.confirmed.connect(dialog.queue_free)
 	dialog.canceled.connect(dialog.queue_free)
+
+
+## The five licence lines as a table (credits): the name muted at the left, the licence at the right, 36 px rows with
+## a hairline between them.
+func _licence_rows() -> VBoxContainer:
+	var rows := VBoxContainer.new()
+	rows.name = "LicenceRows"
+	rows.add_theme_constant_override("separation", 0)
+	var lines := [["Game code", "MIT License"], ["3D miniatures & terrain", "generated project assets, CC-BY-SA 4.0"],
+			["Fonts", "SIL Open Font License"], ["UI icons", "Phosphor Icons (MIT)"], ["Engine", "Godot Engine (MIT)"]]
+	for i in lines.size():
+		var row := HBoxContainer.new()
+		row.custom_minimum_size.y = 36
+		var name_label := HouseStyle.label(lines[i][0], HouseStyle.CAPTION)
+		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var licence := HouseStyle.label(lines[i][1], HouseStyle.BODY)
+		licence.add_theme_font_size_override("font_size", HouseStyle.MENU_FONT_CAPTION)
+		licence.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		row.add_child(name_label)
+		row.add_child(licence)
+		rows.add_child(row)
+		if i < lines.size() - 1:
+			var rule := ColorRect.new()
+			rule.color = HouseStyle.LINE
+			rule.custom_minimum_size.y = 1
+			rows.add_child(rule)
+	return rows
 
 
 ## EXIT GAME / ESC ask first. Everywhere else in the project ESC only closes a surface, so
@@ -582,7 +638,9 @@ func _maybe_warn_core_missing() -> void:
 
 
 func _show_core_missing_dialog() -> PromptCard:
-	return _show_notice(CoreLoadNotice.TITLE, CoreLoadNotice.TEXT)
+	# The closing instruction stands in its own paragraph (the same words).
+	var text := CoreLoadNotice.TEXT.replace(" Download the full game", "\n\nDownload the full game")
+	return _show_notice(CoreLoadNotice.TITLE, text)
 
 
 ## A plain notice: one house card with an OK (Enter or Esc closes it); it wraps at the card's own width and

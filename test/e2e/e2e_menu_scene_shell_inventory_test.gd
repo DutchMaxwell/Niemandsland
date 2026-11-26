@@ -250,6 +250,26 @@ func test_credits_dialog_keeps_the_legal_notice_verbatim() -> void:
 	assert_bool(found).override_failure_message("the non-affiliation notice changed or is gone").is_true()
 
 
+## The five licence lines are a table: the name left, the licence right, 36 px rows (sheet 08; red on main: five lines
+## of one text label).
+func test_credits_licences_are_rows_of_a_table() -> void:
+	await _click(_button("Credits & licenses"))
+	var dialog := _dialog_titled("Credits & licenses")
+	assert_object(dialog).is_not_null()
+	var rows := dialog.find_child("LicenceRows", true, false)
+	assert_object(rows).override_failure_message("no licence table").is_not_null()
+	if rows == null:
+		return
+	var pairs: Array = []
+	for row: Node in rows.get_children():
+		if row is HBoxContainer:
+			assert_float((row as Control).custom_minimum_size.y).is_equal(36.0)
+			pairs.append([(row.get_child(0) as Label).text, (row.get_child(1) as Label).text])
+	assert_array(pairs).is_equal([["Game code", "MIT License"],
+		["3D miniatures & terrain", "generated project assets, CC-BY-SA 4.0"],
+		["Fonts", "SIL Open Font License"], ["UI icons", "Phosphor Icons (MIT)"], ["Engine", "Godot Engine (MIT)"]])
+
+
 func test_quit_asks_first_with_back_focused_and_never_quits() -> void:
 	await _click(_button("Quit"))
 	var card: PromptCard = _menu.get("_exit_card")
@@ -458,6 +478,19 @@ func test_continue_card_shows_two_mono_lines_with_the_facts() -> void:
 	_view.set_save({"name": "plain", "modified_unix": 1727000000})
 	assert_bool(lines[0].visible).is_false()
 	assert_bool(lines[1].visible).is_false()
+
+
+## The Continue card is tighter (kicker, name and lines 4 px apart, 18 px of padding), dates the save as "22 Sep 2024"
+## and draws two gold corner brackets (sheet 01; red on main: 12 px gaps, 20 px padding, "2024-09-22", no corners).
+func test_continue_card_is_tight_dated_in_words_and_has_corner_brackets() -> void:
+	_view.set_save({"name": "plain", "modified_unix": 1727000000})
+	assert_str(_view.save_date.text).is_equal("Saved on 22 Sep 2024")
+	var panel := _view.resume.get_theme_stylebox("panel") as StyleBoxFlat
+	assert_float(panel.content_margin_left).is_equal(18.0)
+	var column: Control = _view.save_date.get_parent()
+	assert_int(column.get_theme_constant("separation")).is_equal(4)
+	assert_int(_view.resume.get_signal_connection_list("draw").size()).override_failure_message(
+		"the card draws no corner brackets").is_greater(0)
 
 
 func test_continue_card_shows_the_biome_picture_when_the_biome_is_known() -> void:

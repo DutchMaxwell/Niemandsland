@@ -111,14 +111,42 @@ func test_fade_and_free_frees_without_forcing_100_percent() -> void:
 func test_overlay_wears_the_house_style_in_both_modes() -> void:
 	_overlay = await _make(false)
 	assert_str(String(_overlay._label.theme_type_variation)).is_equal(String(HouseStyle.EYEBROW))
-	assert_that(_overlay._fill.color).is_equal(HouseStyle.ACCENT)
+	var gradient := ((_overlay._fill as TextureRect).texture as GradientTexture1D).gradient
+	assert_that(gradient.get_color(0)).is_equal(HouseStyle.ACCENT)   # the full bar runs accent to gold
+	assert_that(gradient.get_color(1)).is_equal(HouseStyle.GOLD)
 	var full := _overlay
 	_overlay = await _make(true)
+	assert_that((_overlay._fill as ColorRect).color).is_equal(HouseStyle.ACCENT)
 	var panel := _overlay.find_children("*", "PanelContainer", true, false)[0] as PanelContainer
 	assert_str(String(panel.theme_type_variation)).is_equal(String(HouseStyle.PANEL_VARIANT))
 	assert_object(panel.theme).is_same(HouseStyle.theme())
 	full.queue_free()
 	assert_bool(FileAccess.get_file_as_string("res://scripts/loading_overlay.gd").contains("HudTokens")).is_false()
+
+
+## Sheet 06 at the mockup's measures: a 760 px bar, a 56 px title, a 20 px subtitle, mono capitals for the stage line and the
+## per cent, the signature rule under the wordmark, the legal line at the foot (red on main: 560 px, 44 px, no rule, no line).
+func test_the_full_overlay_measures_as_sheet_06() -> void:
+	_overlay = await _make(false)
+	assert_float(_overlay._track_w()).is_equal(760.0)
+	assert_int(_overlay._title.get_theme_font_size("font_size")).is_equal(56)
+	assert_int(_overlay._subtitle.get_theme_font_size("font_size")).is_equal(20)
+	for line: Label in [_overlay._stage, _overlay._percent]:
+		assert_int(line.get_theme_font_size("font_size")).is_equal(14)
+		assert_object(line.get_theme_font("font")).is_same(HouseStyle.mono())
+	var rule := _overlay.find_child("SignatureRule", true, false) as Control
+	assert_object(rule).override_failure_message("no signature rule under the wordmark").is_not_null()
+	if rule != null:
+		assert_float(rule.get_combined_minimum_size().x).is_equal(250.0)
+	var legal := _overlay.find_child("LegalLine", true, false) as Label
+	assert_object(legal).override_failure_message("no legal line").is_not_null()
+	if legal != null:
+		assert_bool(legal.uppercase).is_true()
+		assert_str(legal.text).contains("OnePageRules")
+	_overlay.free()
+	_overlay = await _make(true)
+	assert_float(_overlay._track_w()).is_equal(360.0)
+	assert_object(_overlay.find_child("LegalLine", true, false)).override_failure_message("the compact panel shows the legal line").is_null()
 
 
 func test_inventory_check_names_a_removed_control() -> void:
