@@ -59,7 +59,8 @@ func after_test() -> void:
 	_view = null
 
 
-# === helpers ===================================================================================
+# === helpers ============================================================================
+
 
 func _frames(n: int) -> void:
 	for _i in n:
@@ -128,7 +129,8 @@ func _dialog_titled(title: String) -> Window:
 	return null
 
 
-# === tests ======================================================================================
+# === tests ===============================================================================
+
 
 func test_every_control_of_rows_43_44_is_in_the_menu() -> void:
 	assert_array(_missing_controls()).override_failure_message(
@@ -298,6 +300,26 @@ func test_menu_view_uses_no_text_glyph_icons() -> void:
 	assert_array(found).override_failure_message("text glyphs still in the view: %s" % str(found)).is_empty()
 	for id: String in ["StartBattleBtn", "OnlineBtn", "LoadBattleBtn", "LearnBtn"]:
 		assert_object(_view.buttons[id].get("row_icon")).override_failure_message("%s has no icon" % id).is_not_null()
+
+
+## Inter carries the whole weight axis: row titles stand at 500, the main action at 600, the headline at 500.
+## RED on main: there is no weighted font.
+func test_titles_and_the_main_action_use_inter_weights() -> void:
+	var house: GDScript = load("res://scripts/hud/house_style.gd")
+	assert_bool(house.has_method("font")).override_failure_message("no HouseStyle.font").is_true()
+	if not house.has_method("font"):
+		return
+	var tag: int = TextServerManager.get_primary_interface().name_to_tag("wght")
+	for weight: int in [500, 600]:
+		var font: FontVariation = house.call("font", weight)
+		assert_object(font).is_not_null()
+		assert_int(int(font.variation_opentype.get(tag, 0))).is_equal(weight)
+		assert_object(house.call("font", weight)).override_failure_message("not cached").is_same(font)
+	assert_object(house.call("font", 500)).is_not_same(house.call("font", 600))
+	assert_object(_view.buttons.OnlineBtn.title_font()).is_same(house.call("font", 500))
+	_view.set_save({"name": "x", "modified_unix": 1727000000})
+	assert_object(_view.buttons.ContinueBtn.title_font()).is_same(house.call("font", 600))
+	assert_object(_view.welcome.get_theme_font("font")).is_same(house.call("font", 500))
 
 
 ## Settings was a 13 px link in the top right corner, the least findable control of the menu. RED on main: its

@@ -58,6 +58,10 @@ class Action extends Button:
 		focus_entered.connect(queue_redraw)
 		focus_exited.connect(queue_redraw)
 
+	## Row titles stand at weight 500, the main action (the gold row, Continue) at 600: hierarchy without a new colour.
+	func title_font() -> Font:
+		return HouseStyle.font(600 if primary else 500)
+
 	func refresh_style() -> void:
 		custom_minimum_size = Vector2(0,54 if description.is_empty() else 76 if primary else 64)
 		for state in ["normal","hover","pressed","focus"]:
@@ -79,7 +83,7 @@ class Action extends Button:
 		var left := 18.0 if row_icon == null else 52.0
 		# 28 and 49 on the 64 px row; centred on the taller first-run row, as the mockup draws it.
 		var baseline := size.y*0.5-4 if not description.is_empty() else size.y*0.5+8
-		draw_string(FONT,Vector2(left,baseline),text,HORIZONTAL_ALIGNMENT_LEFT,size.x-left-35,22,color)
+		draw_string(title_font(),Vector2(left,baseline),text,HORIZONTAL_ALIGNMENT_LEFT,size.x-left-35,22,color)
 		if not description.is_empty():
 			draw_string(FONT,Vector2(left,size.y*0.5+17),description,HORIZONTAL_ALIGNMENT_LEFT,size.x-left-25,15,Color("344c54") if primary else HouseStyle.MUTED)
 		if row_icon != null:
@@ -121,6 +125,7 @@ func _ready() -> void:
 	welcome_kicker = _label("WELCOME TO NIEMANDSLAND",14,HouseStyle.MUTED)
 	_main.add_child(welcome_kicker)
 	welcome = _label("Your first table awaits.",44,HouseStyle.INK)
+	welcome.add_theme_font_override("font",HouseStyle.font(500))
 	_main.add_child(welcome)
 	var gap := Control.new()
 	gap.custom_minimum_size.y = 18
