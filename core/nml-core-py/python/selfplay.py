@@ -603,6 +603,24 @@ def kits_sidecar(list_path, player: int) -> dict[str, list[dict[str, Any]]] | No
     return {"p%d_%s" % (player, k): v for k, v in units.items()}
 
 
+def bearers_sidecar(list_path, player: int) -> dict[str, dict[str, int]]:
+    """KIT-BEARER-NAME K3: the command-group bearers the kits sidecar names (`ModelKitsExport.bearers_of`), keyed like
+    `kits_sidecar`: `{"cmd_bearer": slot, "cmd_musician": slot}` at full strength. {} without a sidecar or bearers."""
+    p = Path(list_path)
+    side = Path(os.environ.get("NML_KITS_DIR") or p.parent) / (p.stem + ".kits.json")
+    if not side.is_file():
+        return {}
+    bearers = json.loads(side.read_text(encoding="utf-8")).get("bearers", {})
+    return {"p%d_%s" % (player, k): dict(v) for k, v in bearers.items()}
+
+
+def named_bearers(list_p1, list_p2, rules_epoch: int) -> dict[str, dict[str, int]]:
+    """K3: both seats' named bearers, only from `PENDING_EPOCH_TWO_BEARERS`; below it {} - the core's last slot, as recorded."""
+    if rules_epoch < nml_core.PENDING_EPOCH_TWO_BEARERS:
+        return {}
+    return {**bearers_sidecar(list_p1, 1), **bearers_sidecar(list_p2, 2)}
+
+
 def capture(
     units: list[dict[str, Any]],
     positions: list[list[list[float]]],
@@ -614,6 +632,7 @@ def capture(
     reserved: set[str] | None = None,
     earliest: dict[str, int] | None = None,
     kits: dict[str, list[dict[str, Any]]] | None = None,
+    bearers: dict[str, dict[str, int]] | None = None,
 ) -> dict[str, Any]:
     """`_capture` (core_selfplay.gd:608-637) through `BattleSim.capture` and
     `BattleSim.state_to_plain(state, false)` — the plain state the search reads.
@@ -707,6 +726,7 @@ def capture(
         if kit is not None and not us[key].get("dormant"):
             if len(kit) == len(pos):
                 us[key]["kits"] = [dict(k) for k in kit]
+                us[key].update((bearers or {}).get(key, {}))  # K3: the bearers, named in the same model order
             else:
                 print("kits: %s has %d kits for %d models - none carried" % (key, len(kit), len(pos)),
                       file=sys.stderr)
@@ -1231,7 +1251,8 @@ LEGACY_FIDELITY_KNOBS: dict[str, Any] = dict(
 
 def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int,
                      mission: dict[str, Any] | None = None,
-                     kits: dict[str, list[dict[str, Any]]] | None = None) -> int:
+                     kits: dict[str, list[dict[str, Any]]] | None = None,
+                     bearers: dict[str, dict[str, int]] | None = None) -> int:
     """The table's round-start ambush beat (`main._solo_round_start` :10096-10106
     through `_solo_alternate_ambush_arrivals` :10419-10485), over the PLAIN
     state — the same layer `_round_start` already works on.
@@ -1324,6 +1345,7 @@ def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int
             kit = (kits or {}).get(k)  # tray-exact S3: a full-strength arrival gets its table kits back
             if kit is not None and len(kit) == n:
                 g["kits"] = [dict(x) for x in kit]
+                g.update((bearers or {}).get(k, {}))  # K3: a full-strength arrival names its bearers again
             g["alive"] = n
             g["dormant"] = False
             g["ambush_arrived_round"] = round_no
@@ -2922,6 +2944,7 @@ def play_game(
     units2 = load_army(list_p2, 2, rules_epoch)
     # Tray-exact S3: the table's per-model kits, when the lists have sidecars ({} = none).
     kits = {**(kits_sidecar(list_p1, 1) or {}), **(kits_sidecar(list_p2, 2) or {})}
+    bearers = named_bearers(list_p1, list_p2, rules_epoch)
     if not units1 or not units2:
         raise ValueError("empty army (%s / %s)" % (list_p1, list_p2))
     units = units1 + units2
@@ -3403,7 +3426,7 @@ def play_game(
         earliest[k] = int(reserve_cfg.get("from_round", 2))
     plain = capture(
         units, pos1 + pos2, reads, board, objectives, attached, attached_to,
-        reserved if arrivals is not None else None, earliest, kits or None,
+        reserved if arrivals is not None else None, earliest, kits or None, bearers or None,
     )
     mission_def = resolve_mission(mission, repo_root)  # SoloController.mission_reset mirrored
     eff_scoring = mission_def.get("scoring", "end")
@@ -3471,7 +3494,7 @@ def play_game(
             _arrive_reserves(plain, arrivals, board, objectives, opener, round_no, mission=(
                 {"keys": mission_reserved, "cfg": reserve_cfg, "rng": rng,
                  "zones": _style_zone_args(_style_by_id(reserve_cfg.get("zone", "anywhere"), repo_root), "1")[1]}
-                if mission_reserved else None), kits=kits or None)
+                if mission_reserved else None), kits=kits or None, bearers=bearers or None)
         if live_ledger:
             _write_ledger(plain, led)
         state = core.state_of(plain)

@@ -188,6 +188,7 @@ func _on_settings_pressed() -> void:
 		_settings = load("res://scripts/lighting_panel.gd").new()
 		add_child(_settings)
 		_settings.initialize(diorama.get_lighting_controller())
+		_settings.set_modal(true)   # in the menu the sheet is modal with the scrim; at the table it stays see-through
 		var label := Label.new()
 		label.text = "Menu background"
 		_settings._page("Display").add_child(label)
