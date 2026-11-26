@@ -18,6 +18,7 @@ var _snd_focus: AudioStreamWAV
 var _snd_card: AudioStreamWAV
 var _snd_panel_in: AudioStreamWAV
 var _snd_panel_out: AudioStreamWAV
+var _snd_commit: AudioStreamWAV
 
 
 func _ready() -> void:
@@ -49,6 +50,8 @@ func _setup_audio() -> void:
 	# out.
 	_snd_panel_in = _sweep(400.0, 1600.0, 0.18, 0.06)
 	_snd_panel_out = _sweep(1600.0, 400.0, 0.14, 0.06)
+	# Commit (Create table, Continue, Join): the confirm pair over a 110 Hz body, longer, louder.
+	_snd_commit = _tone([110.0, 880.0, 1320.0], 0.22, 0.10)
 
 
 ## Plays the unit-card deal-in cue (the dock calls this on present). Procedural, on the UI bus, and
@@ -61,6 +64,11 @@ func play_card_deal() -> void:
 ## A panel or sheet opens (`opening`) or closes: the soft noise sweep of the sound table.
 func play_panel(opening: bool) -> void:
 	_play(_snd_panel_in if opening else _snd_panel_out)
+
+
+## Plays the commit tone: the menu hands over to a table (the sound table's "Commit" row).
+func play_commit() -> void:
+	_play(_snd_commit)
 
 
 func _play(stream: AudioStream) -> void:

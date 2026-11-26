@@ -50,6 +50,7 @@ const DUR_PRESS := 0.06
 const DUR_PANEL_IN := 0.22
 const DUR_PANEL_OUT := 0.18
 const DUR_SCREEN := 0.35
+const DUR_COMMIT := 0.24   # the fill sweep across a committing button (Create table, Continue, Join)
 const SCALE_HOVER := 1.02
 const SCALE_PRESS := 0.97
 const SCALE_PUNCH := 1.06
