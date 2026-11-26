@@ -561,6 +561,7 @@ func _apply_detail() -> void:
 	if _material != null and graphics != null:
 		_material.set_shader_parameter("detail", 1.0 if on else 0.0)
 		_material.set_shader_parameter("soil_on", 1.0 if on and _soil_ok else 0.0)   # (LOOK5 S2) Medium and up, not Compatibility, all four soil sets cached
+		_material.set_shader_parameter("soil_tier", clampf(float(int(graphics.current_preset)) - 1.0, 1.0, 3.0))   # (LOOK5 S6) 1 Medium, 2 High, 3 Ultra
 		BoardgenTownWater.apply_preset(get_node_or_null("TownWater"), int(graphics.current_preset))
 		if _decals != null:
 			_decals.visible = on   # no decals on Low, Performance and in the Compatibility renderer
@@ -787,6 +788,7 @@ func _make_material(layout: Dictionary, theme: Dictionary) -> ShaderMaterial:
 		var tale := BoardgenTownDressing.story(int(layout.get("seed", 0)))
 		mat.set_shader_parameter("story", Vector4(tale.r, tale.g, tale.b, tale.a))
 		BoardgenTownGrit.apply(mat, layout)   # why the ground is dirty where it is
+		BoardgenTownGreen.apply(mat, layout)   # (LOOK5 S6) where the yards grow, wear and meet the street: the soil blend reads it
 		var lib := TiefwerkLibrary.new(BoardgenTheme.TOWN_LIBRARY)   # the authored T-R1 surfaces when they are cached (NML_RUINTOWN_LIB_DIR in dev); the shader keeps its procedural look otherwise
 		lib.name = "TownLibrary"
 		add_child(lib)

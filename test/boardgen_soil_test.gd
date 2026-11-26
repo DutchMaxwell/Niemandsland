@@ -18,7 +18,6 @@ func test_the_board_shader_includes_the_soil_and_the_soil_keeps_each_sets_colour
 	for c in ["uniform float soil_tier = 1.0", "uniform float soil_fill_sat = 0.35", "const vec4 SOIL_RANK = vec4(1.15, 0.92, 0.85, 0.75)", "const float SOIL_BAND = 0.10"]:
 		assert_bool(inc.contains(c)).override_failure_message("missing: %s" % c).is_true()
 	assert_bool(inc.contains("SoilSample soil_blend(vec4 w, vec2 xz_in)")).is_true()
-	assert_bool(board.contains("soil_blend(")).override_failure_message("S1 is inert: nothing calls soil_blend yet").is_false()
 
 
 ## A library whose maps are tiny in-memory textures (the headless renderer cannot load the GPU-compressed sets); `missing` names a set it does not have.
@@ -57,3 +56,16 @@ func test_four_cached_soil_sets_become_three_arrays_and_one_missing_set_keeps_th
 	assert_dict(BoardgenGreybox.town_soil(lib)).is_empty()
 	var src := FileAccess.get_file_as_string("res://scripts/boardgen_greybox.gd")
 	assert_bool(src.contains('_material.set_shader_parameter("soil_on", 1.0 if on and _soil_ok else 0.0)')).is_true()   # Medium and up, not Compatibility, all cached
+
+
+## LOOK5 S6 (Lane S v2): the earth reads the soil under soil_on - the painted branch is skipped, not computed and overwritten; the weights come from the green map's
+## three channels; the Night fill carries the soil colour (soil_fill_sat); soil_tier follows the preset.
+func test_the_yard_is_a_material_and_the_fill_carries_the_soil() -> void:
+	var board := FileAccess.get_file_as_string("res://shaders/ruintown_board.gdshader")
+	assert_bool(board.contains("if (soil_on < 0.5) {\n\t\t\t\tvec2 cp = xz * 3.0;")).override_failure_message("the painted earth must be skipped under soil_on").is_true()
+	assert_bool(board.contains("vec4 w = vec4(max(1.0 - gm.r - gm.g, 0.0) * (1.0 - gm.b), gm.g * (1.0 - gm.b), gm.r * (1.0 - gm.b), gm.b);")).is_true()
+	assert_bool(board.contains("vec3 f = mix(vec3(dot(soil_s, LUMA)) * vec3(0.92, 1.0, 1.10), soil_s, soil_fill_sat);")).is_true()
+	assert_bool(board.contains("uniform float soil_debug = 0.0;")).is_true()
+	var grey := FileAccess.get_file_as_string("res://scripts/boardgen_greybox.gd")
+	assert_bool(grey.contains("BoardgenTownGreen.apply(mat, layout)")).is_true()
+	assert_bool(grey.contains('_material.set_shader_parameter("soil_tier"')).is_true()
