@@ -44,7 +44,7 @@ var _load_dialog: FileDialog
 var _host_popup: AcceptDialog
 var _join_popup: AcceptDialog
 var _browse_popup: AcceptDialog
-var _exit_confirm: ConfirmationDialog
+var _exit_card: PromptCard
 var _relay_url_input: LineEdit
 var _host_name_input: LineEdit
 var _host_public_check: CheckBox
@@ -458,21 +458,17 @@ func _on_credits_pressed() -> void:
 ## language — and unrecoverable (a CONTINUE save one keypress away is not the same thing).
 func _on_exit_pressed() -> void:
 	# is_instance_valid still reports true for the rest of the frame after queue_free, so the
-	# very ESC that closes this dialog cannot immediately open a second one.
-	if is_instance_valid(_exit_confirm):
+	# very ESC that closes this card cannot immediately open a second one. The card takes every key
+	# while it stands (Enter = Quit, Esc = Back), so the menu's own Esc handler never sees them.
+	if is_instance_valid(_exit_card):
 		return
-	_exit_confirm = ConfirmationDialog.new()
-	_exit_confirm.title = "Quit Niemandsland"
-	_exit_confirm.dialog_text = "Are you sure you want to quit Niemandsland?"
-	_exit_confirm.ok_button_text = "Quit"
-	_exit_confirm.cancel_button_text = "Back"
-	_exit_confirm.confirmed.connect(func() -> void: get_tree().quit())
-	_exit_confirm.canceled.connect(_exit_confirm.queue_free)
-	MenuDialog.style(_exit_confirm)
-	add_child(_exit_confirm)
-	_exit_confirm.popup_centered()
-	# CANCEL is the safe answer, so it — not QUIT — starts focused.
-	_exit_confirm.get_cancel_button().grab_focus()
+	_exit_card = PromptCard.new("Quit Niemandsland", "Are you sure you want to quit Niemandsland?", "Quit", "Back")
+	add_child(_exit_card)
+	# CANCEL is the safe answer, so it — not QUIT — starts focused, and Enter takes it.
+	_exit_card.cancel_button.focus_mode = Control.FOCUS_ALL
+	_exit_card.cancel_button.grab_focus()
+	if await _exit_card.answer():
+		get_tree().quit()
 
 # === Update check =====
 

@@ -240,16 +240,24 @@ func test_credits_dialog_keeps_the_legal_notice_verbatim() -> void:
 
 func test_quit_asks_first_with_back_focused_and_never_quits() -> void:
 	await _click(_button("Quit"))
-	var dialog := _dialog_titled("Quit Niemandsland") as ConfirmationDialog
-	assert_object(dialog).is_not_null()
-	assert_str(dialog.dialog_text).is_equal("Are you sure you want to quit Niemandsland?")
-	assert_object(dialog.get_viewport().gui_get_focus_owner()).is_same(dialog.get_cancel_button())
-	# A ConfirmationDialog is its own Window: a coordinate click cannot land on it reliably in
-	# headless mode (as e2e_hero_morale_prompt_test.gd works around too). Its own "canceled" signal
-	# is exactly what pressing Back fires, so trigger the effect there instead of the coordinates.
-	dialog.canceled.emit()
-	await _frames(2)
-	assert_bool(is_instance_valid(_menu._exit_confirm)).is_false()
+	var card: PromptCard = _menu.get("_exit_card")
+	assert_object(card).override_failure_message("Quit opens no prompt card").is_not_null()
+	if card == null:
+		return
+	assert_str(card.title).is_equal("Quit Niemandsland")
+	assert_bool(_card_has_text(card, "Are you sure you want to quit Niemandsland?")).is_true()
+	assert_object(card.get_viewport().gui_get_focus_owner()).is_same(card.cancel_button)
+	# The card lives in the menu's own viewport, so Back takes a real click; Quit is never pressed here.
+	await _click(card.cancel_button)
+	await _frames(3)
+	assert_bool(is_instance_valid(_menu._exit_card)).is_false()
+
+
+func _card_has_text(card: PromptCard, text: String) -> bool:
+	for n: Node in card.find_children("*", "Label", true, false):
+		if (n as Label).text == text:
+			return true
+	return false
 
 
 func test_menu_view_defines_no_private_palette() -> void:
