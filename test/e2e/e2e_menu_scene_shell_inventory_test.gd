@@ -423,3 +423,28 @@ func test_continue_card_shows_the_biome_picture_when_the_biome_is_known() -> voi
 	_view.set_save({"name": "odd", "modified_unix": 1727000000, "biome": "no_such_biome"})
 	assert_bool(picture.visible).is_false()
 
+
+func _cap_text(parent: Node) -> String:
+	for n: Node in parent.find_children("*", "Label", true, false):
+		var label := n as Label
+		if label.theme_type_variation == HouseStyle.KEYCAP and label.is_visible_in_tree():
+			return label.text
+	return ""
+
+
+## The main action says its key and so does Quit; a footer link's focus is a 2 px accent ring.
+## RED on main: no key caps and a 1 px gold focus line.
+func test_main_action_and_quit_show_key_caps_and_links_focus_with_a_ring() -> void:
+	_view.set_save({})
+	assert_str(_cap_text(_view.buttons.StartBattleBtn)).override_failure_message(
+		"the first-run main action has no Enter key cap").is_equal("Enter")
+	_view.set_save({"name": "x", "modified_unix": 1727000000})
+	assert_str(_cap_text(_view.buttons.ContinueBtn)).override_failure_message(
+		"Continue has no Enter key cap").is_equal("Enter")
+	assert_str(_cap_text(_view.buttons.StartBattleBtn)).override_failure_message(
+		"a row that is not the main action shows the Enter cap").is_equal("")
+	assert_str(_cap_text(_view.buttons.ExitGameBtn.get_parent())).override_failure_message(
+		"Quit has no Esc key cap").is_equal("Esc")
+	var ring := _view.buttons.HelpBtn.get_theme_stylebox("focus") as StyleBoxFlat
+	assert_int(ring.border_width_left).is_equal(2)
+	assert_object(ring.border_color).is_equal(HouseStyle.ACCENT)

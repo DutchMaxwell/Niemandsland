@@ -1056,6 +1056,8 @@ func _ready() -> void:
 		# Loaded battle / joining client: size comes from the saved/host data, so there is
 		# no chooser — go straight into the intro.
 		_start_cinematic_intro()
+	if not (harness_mode or _tutorial_mode or _scenario_mode):   # the menu's hand-over: its overlay names the stages
+		TableRevealGate.start(self, "load" if not pending_load.is_empty() else "join" if joining_client else "new")
 	# Our own black backdrop (chooser prompt or intro) is up now — fade out the menu's
 	# transition loading overlay so the hand-off stays black, never grey.
 	_dismiss_transition_overlay()

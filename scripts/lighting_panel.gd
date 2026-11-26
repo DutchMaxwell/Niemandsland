@@ -298,7 +298,7 @@ func _build_ui() -> void:
 	# player's choices and restoring them when switched off. DEFAULT OFF.
 	var calm_cb := CheckButton.new()
 	calm_cb.text = "Calm Mode"
-	calm_cb.tooltip_text = "Turns down combat effects, motion and pulsing selection aids in one click. / Reduziert Effekte, Bewegung und pulsierende Auswahl in einem Klick."
+	calm_cb.tooltip_text = "Turns down combat effects, motion and pulsing selection aids in one click."
 	calm_cb.button_pressed = GraphicsSettings.calm_mode
 	calm_cb.toggled.connect(func(on: bool) -> void:
 		GraphicsSettings.set_calm_mode(on))
