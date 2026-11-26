@@ -1057,11 +1057,11 @@ func _ready() -> void:
 		# Loaded battle / joining client: size comes from the saved/host data, so there is
 		# no chooser — go straight into the intro.
 		_start_cinematic_intro()
-	if not (harness_mode or _tutorial_mode or _scenario_mode):   # the menu's hand-over: its overlay names the stages
-		TableRevealGate.start(self, "load" if not pending_load.is_empty() else "join" if joining_client else "new")
-	# Our own black backdrop (chooser prompt or intro) is up now — fade out the menu's
-	# transition loading overlay so the hand-off stays black, never grey.
-	_dismiss_transition_overlay()
+	if harness_mode or _tutorial_mode or _scenario_mode:
+		_dismiss_transition_overlay()
+	else:   # the menu's hand-over: its loading picture holds until the table can be shown (TableRevealGate)
+		TableRevealGate.start(self, "load" if not pending_load.is_empty() else "join" if joining_client else "new") \
+			.revealed.connect(func(_by_cap: bool) -> void: _dismiss_transition_overlay())
 	# AI ARENA: arm native both-AI mode from the environment (no-op in normal play).
 	_solo_init_arena_from_env()
 

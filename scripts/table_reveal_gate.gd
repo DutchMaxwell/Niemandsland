@@ -13,11 +13,15 @@ const STAGES: Array[String] = ["Table", "Battlemap", "Terrain", "Miniatures"]
 ## shows with its bundled surface and the battlemap swaps in when it arrives.
 const CAP_S := 20.0
 const WAITING_FOR_HOST := "Waiting for the host"
+## A join whose host has not answered by the cap: the table opens anyway, with this one line.
+const HOST_LATE := "The host has not sent the table yet. It arrives as soon as the host answers."
 
 var done: Array[String] = []
 var _table: Node = null
 var _caching := false
 var _revealed := false
+var _main: Node = null
+var _mode := ""
 
 
 ## Starts the gate under `main` for `mode`: "new" (a table from the setup), "load" or "join".
@@ -30,6 +34,8 @@ static func start(main: Node, mode: String) -> TableRevealGate:
 
 
 func _watch(main: Node, mode: String) -> void:
+	_main = main
+	_mode = mode
 	_table = main.get("table")
 	get_tree().create_timer(CAP_S).timeout.connect(_reveal.bind(true))
 	_table.battlemap_settled.connect(
@@ -96,5 +102,7 @@ func _reveal(by_cap: bool) -> void:
 	if _revealed:
 		return
 	_revealed = true
+	if by_cap and _mode == "join" and not done.has("Table") and _main.has_method("_show_toast"):
+		_main._show_toast(HOST_LATE)
 	revealed.emit(by_cap)
 	queue_free.call_deferred()
