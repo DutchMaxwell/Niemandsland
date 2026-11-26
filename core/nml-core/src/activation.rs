@@ -337,7 +337,10 @@ struct Jump { dy: f64, dice: u32, gap_in: Option<f64>, at: [f64; 2], dir: [f64; 
 /// (its unit's others where `placed` puts them, every other unit where it stands). `None`: no room, the jump is refused.
 fn jump_foot(state: &State, si: usize, m: usize, terrain: &Terrain, placed: &[[f64; 3]], j: &Jump) -> Option<[f64; 3]> {
     let (r, i2m) = (state.radii[si][m], terrain.in2m());
-    let high = terrain.tier_in_at(j.at[0] / i2m - j.dir[0] * 0.01, j.at[1] / i2m - j.dir[1] * 0.01);
+    // the height the model drops from: the tier behind the edge, or - off a ruin's floor (27-pre-R), where the tier grid is
+    // flat - the ground past the edge plus the drop; on a tier cliff both are the same height
+    let past = terrain.tier_in_at(j.at[0] / i2m + j.dir[0] * 0.01, j.at[1] / i2m + j.dir[1] * 0.01);
+    let high = terrain.tier_in_at(j.at[0] / i2m - j.dir[0] * 0.01, j.at[1] / i2m - j.dir[1] * 0.01).max(past + j.dy);
     let clear = |p: [f64; 2], q: [f64; 3], rq: f64| (p[0] - q[0]).hypot(p[1] - q[2]) >= r + rq - 1e-6;
     (0..=40).map(|k| r + 0.01 * i2m + k as f64 * 0.05 * i2m).take_while(|&d| d <= 2.0 * i2m + 1e-9).find_map(|d| {
         let p = [j.at[0] + j.dir[0] * d, j.at[1] + j.dir[1] * d];

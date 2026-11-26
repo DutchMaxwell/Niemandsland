@@ -319,3 +319,32 @@ fn a_push_is_declared_with_the_action_before_the_first_die_once() {
     assert_eq!(order_check("Squad", &[Input::Begin, intent(), push(), push()]), Err((3, "one push per activation".into())));
     assert_eq!(order_check("Squad", &[Input::Begin, intent(), push(), Input::Faces(vec![6])]), Ok(()));
 }
+
+/// Plan step 27-pre-R (found by the R3 ruin e2e): the same 4 in ledge as `ledge`, but as a free ruin's FLOOR on a flat board
+/// (x >= 0 in, top 4 in). From `PENDING_EPOCH_RUIN_LEDGES` the drop off it is the tier ledge's: the same check, the same
+/// jump dice and the same foot to land a fall on - `jump_foot` read the drop's top from the flat tier grid and found none.
+#[test]
+fn a_ruin_floor_ledge_plays_like_a_tier_ledge() {
+    let e = crate::acts::PENDING_EPOCH_RUIN_LEDGES;
+    let seams = Seams { rules_epoch: e, tray_exact: true, ..Seams::default() };
+    let drop = Drop { mode: ADVANCE, placed: vec![[-INCHES_TO_METERS, 0.0, 1.5 * INCHES_TO_METERS]], ..Default::default() };
+    let (st, statics, tier) = ledge(4.0, "gff", &[]);
+    let i = INCHES_TO_METERS;
+    let slab = crate::terrain::Slab { c: [3.0 * i, 0.0], he: [3.0 * i, 6.0 * i], yaw: 0.0, y0: 4.0 * i - 0.01, y1: 4.0 * i };
+    let floor = Terrain::build(&crate::terrain::PlainTerrain {
+        cell_params: crate::terrain::CellParams { table_size_feet: [1.0, 1.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: i },
+        tiers: Some(crate::terrain::TierGrid { nx: 4, nz: 4, cell_in: 3.0, level_in: vec![0.0; 16], ladders: vec![], stairs: vec![] }),
+        sandbox: vec![crate::terrain::Obb { c: slab.c, he: slab.he, yaw: 0.0, kind: 1, slabs: vec![slab] }],
+        ..Default::default()
+    });
+    let run = |t: &Terrain| (ok(&check_move(&statics, &st, 0, seams, t, &drop, true)), jump_dice_of(&st, 0, seams, t, &drop));
+    let (tier_ok, tier_jumps) = run(&tier);
+    let (floor_ok, floor_jumps) = run(&floor);
+    assert!(tier_ok && floor_ok, "both drops are allowed");
+    assert_eq!(floor_jumps.len(), 1, "one jump off the floor, with a foot to land on");
+    let key = |j: &[(usize, u32, f64, [f64; 3])]| j.iter().map(|x| (x.0, x.1, x.2)).collect::<Vec<_>>();
+    assert_eq!(key(&floor_jumps), key(&tier_jumps), "the same model, dice and height as off the tier ledge");
+    // the foot to the micrometre (the floor's edge is found by halving the leg, the cliff's exactly)
+    assert!((0..3).all(|k| (floor_jumps[0].3[k] - tier_jumps[0].3[k]).abs() < 1e-6), "{floor_jumps:?} vs {tier_jumps:?}");
+}
+
