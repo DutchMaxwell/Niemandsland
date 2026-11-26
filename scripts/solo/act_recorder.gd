@@ -333,6 +333,9 @@ const EPOCH_101_SKIRMISH_PUSH := 101
 ## on them; they mirror the core's live epoch.
 const EPOCH_102_CASUALTY_CHAIN := 102
 const EPOCH_103_COMMAND_BANNER := 103
+## The core's `PENDING_EPOCH_CORE_TIERS` (acts.rs, plan step 27-pre): from it the terrain line carries a generated board's
+## ledges (`_tiers_for_line`).
+const PENDING_EPOCH_CORE_TIERS := 106
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
@@ -860,7 +863,34 @@ static func _terrain_line(terrain_cb: Callable, school_world: Dictionary = {}) -
 			"grid_size_inches": ov.GRID_SIZE_INCHES, "inches_to_meters": ov.INCHES_TO_METERS}}
 	if rules_epoch >= EPOCH_73_V36:
 		line["containers"] = _container_boxes(ov)
+	line.merge(_tiers_for_line(ov, rules_epoch))
 	return line
+
+
+## Plan step 27-pre: a generated board's ledges for the terrain line - `{"tiers", "solid_cells"}` of the board on the table
+## (main's `generated_board()`, main being the overlay's ancestor: its seed and theme, through `NmlCore.boardgen_tiers`, the
+## core's `to_plain`) from
+## `PENDING_EPOCH_CORE_TIERS`; {} below it, with no generated board or without the core, so that line keeps its bytes.
+static func _tiers_for_line(ov: Object, epoch: int) -> Dictionary:
+	# main owns the overlay: the nearest ancestor that answers `generated_board` (the tree's current scene is not main
+	# under every runner, so it is not asked)
+	var n: Node = ov as Node if ov is Node else null
+	while n != null and not n.has_method("generated_board"):
+		n = n.get_parent()
+	return tiers_at_epoch(n.call("generated_board") if n != null else {}, epoch)
+
+
+## `tiers_of_board` from `PENDING_EPOCH_CORE_TIERS` on; {} below it (the line a record before it played keeps its bytes).
+static func tiers_at_epoch(board: Dictionary, epoch: int) -> Dictionary:
+	return tiers_of_board(board) if epoch >= PENDING_EPOCH_CORE_TIERS else {}
+
+
+## The ledges of `board` (`{"seed", "theme"}`, main's `generated_board()`): {} for none or without the core.
+static func tiers_of_board(board: Dictionary) -> Dictionary:
+	if board.is_empty() or not ClassDB.class_exists("NmlCore"):
+		return {}
+	var t: Dictionary = (ClassDB.instantiate("NmlCore") as Object).call("boardgen_tiers", int(board["seed"]), str(board["theme"]))
+	return {"tiers": t["tiers"], "solid_cells": t["solid_cells"]} if t.has("tiers") else {}
 
 
 ## F-CONT (rules 3.6, EPOCH_73_V36, lead ruling D5): the placed containers' exact 6x3 boxes `{c, he, yaw}` in world
