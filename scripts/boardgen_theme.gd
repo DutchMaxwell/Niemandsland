@@ -33,7 +33,7 @@ const TOWN_SET_CONTRACT := {"coursed_stone": {"tile_in": 3.0, "px": 512, "featur
 		"roof_tiles": {"tile_in": 3.3, "px": 512, "feature_in": 0.30}}
 const TOWN_TEXELS_PER_IN := Vector2(110.0, 180.0)
 const TOWN_FEATURE_MIN_IN := 0.30
-const TOWN_SETS_MAX_BYTES := 16000000
+const TOWN_SETS_MAX_BYTES := 32000000   # (lead 26.11.) was 16 MB; the four soil sets (12.6 MB, LOOK5 S2) took the staged library to 27.7 MB. The real limit is the download time (ticket KIT-DL-SPEED), not this number
 ## The mean linear albedo of each set (measured on the staged masters): the shader multiplies its palette tone by texture / mean, so a tint survives and only the detail changes.
 ## The four SOIL sets of the yards (LOOK5 R20, S2; lead pick 26.11.: green direction (b) realistic dark), in the order of the shader's soil layers: bare, mud, grass, verge / wet.
 ## Albedo and normal 1024 px, ORH (R ao, G roughness, B height) 512 px; read only as texture arrays by ruintown_soil.gdshaderinc (S4 calls it).
