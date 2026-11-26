@@ -16,6 +16,7 @@ var _snd_back: AudioStreamWAV
 var _snd_hover: AudioStreamWAV
 var _snd_focus: AudioStreamWAV
 var _snd_card: AudioStreamWAV
+var _snd_commit: AudioStreamWAV
 
 
 func _ready() -> void:
@@ -43,6 +44,8 @@ func _setup_audio() -> void:
 	_snd_focus = _tone([1000.0], 0.025, 0.07)
 	# Card deal-in: a soft low two-tone swish for the unit-dock present (D5).
 	_snd_card = _tone([420.0, 630.0], 0.09, 0.13)
+	# Commit (Create table, Continue, Join): the confirm pair over a 110 Hz body, longer, louder.
+	_snd_commit = _tone([110.0, 880.0, 1320.0], 0.22, 0.10)
 
 
 ## Plays the unit-card deal-in cue (the dock calls this on present). Procedural, on the UI bus, and
@@ -50,6 +53,11 @@ func _setup_audio() -> void:
 ## global BaseButton hook, so no extra wiring is needed there.
 func play_card_deal() -> void:
 	_play(_snd_card)
+
+
+## Plays the commit tone: the menu hands over to a table (the sound table's "Commit" row).
+func play_commit() -> void:
+	_play(_snd_commit)
 
 
 func _play(stream: AudioStream) -> void:
