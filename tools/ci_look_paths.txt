@@ -11,5 +11,6 @@ assets/ruintown_manifest.json
 assets/ruintown_dress.json
 test/boardgen_*_test.gd
 test/tiefwerk_*_test.gd
+test/ruintown_*_test.gd
 tools/boardgen/*
 tools/kit_forge/*
