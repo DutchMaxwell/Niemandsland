@@ -462,3 +462,14 @@ func test_the_town_lights_its_models_with_a_top_fill_on_the_model_layer() -> voi
 		assert_float((fill.global_transform.basis * Vector3.FORWARD).y).override_failure_message("the model fill is not from above").is_less(-0.99)
 		assert_float(fill.light_energy).is_equal_approx(float((BoardgenTownDressing as Script).get_script_constant_map().get("MODEL_FILL_ENERGY", -1.0)), 0.0001)
 	board.free()
+
+
+## LOOK5 F3r: Tiefwerk's lamps glow in its fog as the town's lanterns do.
+func test_a_deepworks_board_hands_its_lamps_to_its_fog() -> void:
+	GraphicsSettings.show_board_mist = true
+	var node := _built(_fixture())
+	var fog := node.get_node_or_null("GroundFog") as BoardgenGroundFog
+	assert_object(fog).is_not_null()
+	var lit := node.find_children("Lantern*", "SpotLight3D", true, false).filter(func(l: Node3D) -> bool: return l.visible).size()
+	assert_int(lit).override_failure_message("no shown lamp spot on the Tiefwerk fixture").is_greater(0)
+	assert_int(fog.lamp_count()).is_equal(mini(lit, BoardgenGroundFog.MAX_LAMPS))

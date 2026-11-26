@@ -275,6 +275,7 @@ func build(layout: Dictionary, kit: BoardgenKit = null) -> void:
 		add_child(light)
 		_omnis.append(light)
 		var spot := SpotLight3D.new()
+		spot.name = "Lantern%d" % _spots.size()   # (LOOK5 F3r) the ground fog's lamp pools find a board's lamps by this name
 		spot.transform = Transform3D(spot_basis(l["out"]), l["xf"].origin)
 		spot.light_color = LAMP_COLOUR
 		spot.light_energy = 0.3
