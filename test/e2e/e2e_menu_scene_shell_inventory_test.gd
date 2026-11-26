@@ -59,7 +59,8 @@ func after_test() -> void:
 	_view = null
 
 
-# === helpers ============================================================================
+# === helpers =====================================================================
+
 
 
 func _frames(n: int) -> void:
@@ -89,6 +90,12 @@ func _click(c: Control) -> void:
 		ev.global_position = ev.position
 		vp.push_input(ev)
 	await _frames(3)
+
+
+## A route closes with a motion; the panel is hidden when route_closed fires (at once with Reduce Motion).
+func _route_gone() -> void:
+	if _view.route_panel.visible:
+		await _view.route_closed
 
 
 func _button(text: String) -> Button:
@@ -129,7 +136,8 @@ func _dialog_titled(title: String) -> Window:
 	return null
 
 
-# === tests ===============================================================================
+# === tests ========================================================================
+
 
 
 func test_every_control_of_rows_43_44_is_in_the_menu() -> void:
@@ -186,6 +194,7 @@ func test_online_route_lists_its_three_actions_and_closes_on_a_pick() -> void:
 	for t: String in ONLINE_ROUTE:
 		assert_object(_button(t)).override_failure_message("%s is missing from the online route" % t).is_not_null()
 	await _click(_button("Public tables"))
+	await _route_gone()
 	assert_bool(_view.route_panel.visible).override_failure_message("the route did not close on a pick").is_false()
 	assert_object(_menu._browse_popup).is_not_null()
 
@@ -198,6 +207,7 @@ func test_learn_route_lists_its_two_actions_and_back_returns_focus() -> void:
 	for t: String in LEARN_ROUTE:
 		assert_object(_button(t)).override_failure_message("%s is missing from the learn route" % t).is_not_null()
 	await _click(_button(HouseStyle.GLYPH_BACK + "  Back"))
+	await _route_gone()
 	assert_bool(_view.route_panel.visible).is_false()
 	assert_object(_view.get_viewport().gui_get_focus_owner()).is_same(learn_btn)
 
@@ -332,6 +342,36 @@ func test_menu_arrives_once_and_every_row_rests_at_alpha_one() -> void:
 	assert_float(_view.get("_masthead").modulate.a).is_equal(1.0)
 	_view.call("play_arrival")
 	assert_float(rows[0].modulate.a).override_failure_message("the arrival played a second time").is_equal(1.0)
+
+
+## A sub-menu panel moves (motion table): it fades and slides in, and it is still on screen the moment after
+## Close until its out motion has run. RED on main: it appeared and vanished at once.
+func test_route_panel_fades_and_slides_in_and_out() -> void:
+	var before_motion: bool = GraphicsSettings.reduce_motion
+	GraphicsSettings.reduce_motion = false
+	_view.show_route("help")
+	assert_float(_view.route_panel.modulate.a).override_failure_message("the panel opened at once").is_less(1.0)
+	await get_tree().create_timer(0.5).timeout
+	assert_float(_view.route_panel.modulate.a).is_equal(1.0)
+	_view.close_route()
+	assert_bool(_view.route_panel.visible).override_failure_message("the panel vanished at once").is_true()
+	if _view.route_panel.visible:
+		await _view.route_closed
+	assert_bool(_view.route_panel.visible).is_false()
+	assert_float(_view.route_panel.modulate.a).is_equal(1.0)
+	GraphicsSettings.reduce_motion = before_motion
+
+
+func test_route_panel_is_instant_with_reduce_motion() -> void:
+	var before_motion: bool = GraphicsSettings.reduce_motion
+	GraphicsSettings.reduce_motion = true
+	_view.show_route("help")
+	assert_float(_view.route_panel.modulate.a).is_equal(1.0)
+	var closed := [false]
+	_view.route_closed.connect(func() -> void: closed[0] = true)
+	_view.close_route()
+	assert_bool(_view.route_panel.visible).is_false()
+	assert_bool(closed[0]).is_true()
 	GraphicsSettings.reduce_motion = before_motion
 
 
@@ -372,3 +412,17 @@ func test_continue_card_shows_two_mono_lines_with_the_facts() -> void:
 	_view.set_save({"name": "plain", "modified_unix": 1727000000})
 	assert_bool(lines[0].visible).is_false()
 	assert_bool(lines[1].visible).is_false()
+
+
+func test_continue_card_shows_the_biome_picture_when_the_biome_is_known() -> void:
+	var picture: Variant = _view.get("save_picture")
+	assert_bool(picture is TextureRect).override_failure_message("the card has no picture").is_true()
+	if picture is not TextureRect:
+		return
+	_view.set_save(SaveManager.latest_save_info(CARD_FIXTURES))
+	assert_bool(picture.visible).is_true()
+	assert_object(picture.texture).is_not_null()
+	assert_vector(picture.custom_minimum_size).is_equal(Vector2(150, 112))
+	_view.set_save({"name": "odd", "modified_unix": 1727000000, "biome": "no_such_biome"})
+	assert_bool(picture.visible).is_false()
+

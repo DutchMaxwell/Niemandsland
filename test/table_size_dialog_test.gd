@@ -109,3 +109,17 @@ func test_the_unit_switch_is_a_segment_pair_with_the_same_values() -> void:
 	(pair.get_child(0) as Button).pressed.emit()
 	assert_str(dialog._unit_labels[0].text).is_equal("Width (in)")
 	assert_bool(HouseStyle.is_selected(pair.get_child(1) as Button)).is_false()
+
+
+
+func test_preview_path_names_the_picture_of_a_known_biome_only() -> void:
+	var script: GDScript = load("res://scripts/table_size_dialog.gd")
+	assert_bool(script.has_method("preview_path")).override_failure_message("no preview_path").is_true()
+	if not script.has_method("preview_path"):
+		return
+	assert_str(script.call("preview_path", "temperate_grassland")).is_equal("res://assets/ui/table_setup/grassland.webp")
+	assert_str(script.call("preview_path", "grassland")).is_equal("res://assets/ui/table_setup/grassland.webp")
+	assert_bool(ResourceLoader.exists(script.call("preview_path", "urban_ruins"))).is_true()
+	assert_str(script.call("preview_path", "no_such_biome")).is_empty()
+	assert_str(script.call("preview_path", "")).is_empty()
+

@@ -23,4 +23,6 @@ func test_feuertaufe_still_opens_real_chapter_picker() -> void:
 		if child is AcceptDialog and child.title == "TRIAL BY FIRE":
 			found = child.visible
 	assert_bool(found).is_true()
+	if menu.view.route_panel.visible:
+		await menu.view.route_closed
 	assert_bool(menu.view.route_panel.visible).is_false()

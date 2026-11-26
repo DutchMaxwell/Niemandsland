@@ -11,6 +11,8 @@ var resume: PanelContainer
 var save_name: Label
 var save_date: Label
 var save_facts: Array[Label] = []
+var save_picture: TextureRect
+const PICTURE_SIZE := Vector2(150,112)
 var welcome: Label
 var welcome_kicker: Label
 var status: Label
@@ -29,6 +31,11 @@ var _arrived := false
 ## The arrival (motion table): the rows rise this far while they fade in, one every ARRIVAL_STAGGER seconds.
 const ARRIVAL_RISE := 12.0
 const ARRIVAL_STAGGER := 0.06
+var _route_tween: Tween
+var _route_rest := Vector2.ZERO
+var _route_closing := false
+## How far the sub-menu panel slides while it fades in and out.
+const ROUTE_SLIDE := 16.0
 ## Row icons: own drawings in the tool rail's style (24 x 24 view box), built once as crisp textures.
 const ICON_SVG := "<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='none' stroke='#fff' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'>%s</svg>"
 const ICON_PATHS := {
@@ -134,16 +141,30 @@ func _ready() -> void:
 	var saved := VBoxContainer.new()
 	saved.add_theme_constant_override("separation",12)
 	resume.add_child(saved)
-	saved.add_child(_label("LATEST SAVE",14,HouseStyle.MUTED))
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation",18)
+	saved.add_child(head)
+	save_picture = TextureRect.new()
+	save_picture.custom_minimum_size = PICTURE_SIZE
+	save_picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	save_picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	save_picture.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	save_picture.visible = false
+	head.add_child(save_picture)
+	var text := VBoxContainer.new()
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text.add_theme_constant_override("separation",12)
+	head.add_child(text)
+	text.add_child(_label("LATEST SAVE",14,HouseStyle.MUTED))
 	save_name = _label("",26,HouseStyle.INK)
 	save_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	saved.add_child(save_name)
+	text.add_child(save_name)
 	for _i in 2:
 		var fact := _label("",14,HouseStyle.MUTED,MONO)
-		saved.add_child(fact)
+		text.add_child(fact)
 		save_facts.append(fact)
 	save_date = _label("",15,HouseStyle.MUTED)
-	saved.add_child(save_date)
+	text.add_child(save_date)
 	var cont := _action("ContinueBtn","Continue","",null,true)
 	cont.custom_minimum_size.y = 54
 	saved.add_child(cont)
@@ -249,6 +270,7 @@ func show_route(key: String) -> void:
 	route_panel.reset_size()
 	route_panel.show()
 	UiFeedback.play_panel(true)
+	_slide_route(true)
 	# Trap keyboard focus within the open route, including Shift+Tab and arrows.
 	var focus: Array[Control] = [route_back]
 	for button in routes[key].get_children():
@@ -259,13 +281,42 @@ func show_route(key: String) -> void:
 
 
 func close_route() -> void:
-	if not route_panel.visible:
+	if not route_panel.visible or _route_closing:
 		return
 	UiFeedback.play_panel(false)
-	route_panel.hide()
 	if is_instance_valid(_return_focus):
 		_return_focus.grab_focus()
+	await _slide_route(false)
 	route_closed.emit()
+
+
+## The panel's motion (motion table: in 220 ms with an ease-out, out 180 ms with an ease-in, both cubic):
+## it slides ROUTE_SLIDE px and fades. Reduce Motion shows and hides it at once. A close ends with the
+## panel hidden; route_closed fires after that.
+func _slide_route(opening: bool) -> void:
+	if _route_tween != null:
+		_route_tween.kill()
+	_route_closing = not opening
+	if UiMotion.reduced():
+		route_panel.position.x = _route_rest.x
+		route_panel.modulate.a = 1.0
+		route_panel.visible = opening
+		_route_closing = false
+		return
+	if opening:
+		route_panel.position.x = _route_rest.x-ROUTE_SLIDE
+		route_panel.modulate.a = 0.0
+	var duration := HudTokens.DUR_PANEL_IN if opening else HudTokens.DUR_PANEL_OUT
+	_route_tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC)
+	_route_tween.set_ease(Tween.EASE_OUT if opening else Tween.EASE_IN)
+	_route_tween.tween_property(route_panel,"position:x",_route_rest.x if opening else _route_rest.x-ROUTE_SLIDE,duration)
+	_route_tween.tween_property(route_panel,"modulate:a",1.0 if opening else 0.0,duration)
+	await _route_tween.finished
+	if not opening:
+		route_panel.hide()
+		route_panel.position.x = _route_rest.x
+		route_panel.modulate.a = 1.0
+		_route_closing = false
 
 
 func set_save(info: Dictionary) -> void:
@@ -276,6 +327,9 @@ func set_save(info: Dictionary) -> void:
 	if resume.visible:
 		save_name.text = str(info.name)
 		save_name.tooltip_text = str(info.name)
+		var picture := TableSizeDialog.preview_path(str(info.get("biome","")))
+		save_picture.texture = load(picture) if not picture.is_empty() else null
+		save_picture.visible = save_picture.texture != null
 		var lines := facts_lines(info)
 		for i in save_facts.size():
 			save_facts[i].text = lines[i] if i < lines.size() else ""
@@ -338,7 +392,8 @@ func _layout() -> void:
 	version.position = Vector2(left,size.y-50)
 	status.position = Vector2(size.x-450,size.y-50)
 	status.size.x = 354
-	route_panel.position = Vector2(left+_scroll.size.x+24,_scroll.position.y)
+	_route_rest = Vector2(left+_scroll.size.x+24,_scroll.position.y)
+	route_panel.position = _route_rest
 	route_panel.custom_minimum_size.x = 560
 
 
