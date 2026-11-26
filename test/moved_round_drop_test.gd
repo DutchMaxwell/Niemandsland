@@ -6,39 +6,6 @@ class DropMain extends "res://scripts/main.gd":
 	func _solo_tray_roll(_count: int, _target: int, _owner: String, kind: String = "attack", _purpose: String = "") -> Array:
 		return [1, 6] if kind == "jump" else [6]
 
-
-## Step 27a: a unit whose open core session owns the move (CoreActivation: the core rolls the jump when the activation
-## resolves). Counts every jump roll the table makes.
-class CoreOwnedMain extends "res://scripts/main.gd":
-	var jump_rolls := 0
-	func _solo_tray_roll(_count: int, _target: int, _owner: String, kind: String = "attack", _purpose: String = "") -> Array:
-		jump_rolls += 1 if kind == "jump" else 0
-		return [1, 6] if kind == "jump" else [6]
-	func _core_owns_drop(_unit: GameUnit) -> bool:
-		return true
-
-
-func test_a_drop_the_core_owns_rolls_no_table_jump() -> void:
-	var f := _fixture(CoreOwnedMain)
-	add_child(f.model)
-	f.main.battle_log = auto_free(BattleLog.new())
-	f.unit.unit_properties.merge({"game_system": "gff", "special_rules": []})
-	var model := ModelInstance.new()
-	model.node = f.model
-	f.unit.models.append(model)
-	f.army.start_game()
-	await f.main._on_units_dropped([{"node": f.model, "inches": 4.0, "from_raw": Vector3(0, 0.1016, 0),
-		"path": PackedVector2Array([Vector2.ZERO, Vector2(0.1, 0)])}])
-	assert_int(f.main.jump_rolls).override_failure_message("the core rolls this jump; the table rolled it too").is_equal(0)
-	assert_bool(f.unit.is_activated).override_failure_message("no table fall, no table activation end").is_false()
-	assert_bool(model.is_alive).is_true()
-
-
-func test_without_a_core_session_the_table_owns_the_drop() -> void:
-	var f := _fixture()
-	f.unit.unit_id = "no_session_unit"
-	assert_bool(f.main._core_owns_drop(f.unit)).is_false()
-
 func test_skirmish_flying_passes_and_failed_jump_ends_activation() -> void:
 	var f := _fixture(DropMain)
 	add_child(f.model)

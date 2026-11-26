@@ -22792,15 +22792,9 @@ func _on_units_dropped(moves: Array) -> void:
 	await _solo_human_strafing(moves)
 
 
-## Plan step 27a: a unit whose open core session owns its move gets its jump from the core - `check_move` lists it and
-## the activation's resolve rolls it on the tray (sim.rs `jump_dice_of`). The table rolling it too would roll every jump twice.
-func _core_owns_drop(unit: GameUnit) -> bool:
-	return CoreActivation.session_open(unit.unit_id) and CoreActivation.on_move_path(self, unit)
-
-
 ## Human drops use the same surface truth, tray, casualties and activation flow as combat.
 func _resolve_skirmish_drop(mv: Dictionary, unit: GameUnit) -> void:
-	if not CoherencyChecker.is_skirmish_system(unit) or object_manager == null or _core_owns_drop(unit):
+	if not CoherencyChecker.is_skirmish_system(unit) or object_manager == null:
 		return
 	var node: Node3D = mv.node
 	var model := unit.get_model_for_node(node)
