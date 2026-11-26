@@ -10,6 +10,17 @@ const PAGE_RAIL_W := 200   # the column of page buttons left of the content (she
 const SHEET_MENU_W := 1340
 const SHEET_MENU_H := 840
 const PAGE_RAIL_MENU_W := 290
+## The rail's page icons: own drawings in the menu rows' style (24 x 24 view box, white strokes, tinted by the button).
+const PAGE_ICON_SVG := "<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='none' stroke='#fff' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'>%s</svg>"
+const PAGE_ICONS := {
+	"Display": "<rect x='3' y='4' width='18' height='12' rx='2'/><path d='M8 20h8M12 16v4'/>",
+	"Graphics": "<path d='M4 7h10M18 7h2M4 17h4M12 17h8M14 4.5v5M8 14.5v5'/>",
+	"Audio": "<path d='M4 9.5v5h3.5L13 19V5L7.5 9.5z'/><path d='M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11'/>",
+	"Gameplay": "<rect x='4' y='4' width='16' height='16' rx='3'/><circle cx='9' cy='9' r='1'/><circle cx='15' cy='9' r='1'/><circle cx='12' cy='12' r='1'/><circle cx='9' cy='15' r='1'/><circle cx='15' cy='15' r='1'/>",
+	"Accessibility": "<circle cx='12' cy='5' r='2'/><path d='M5 9h14M12 9v5M9 21l3-7 3 7'/>",
+	"Lighting lab": "<path d='M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.3 1 2.1h5c0-.8.4-1.6 1-2.1A6 6 0 0 0 12 3z'/>",
+}
+static var _page_icons: Dictionary = {}
 ## The sheet's pages, in rail order. Controls not sorted onto a page yet live on "Lighting lab".
 const PAGES := ["Display", "Graphics", "Audio", "Gameplay", "Accessibility", "Lighting lab"]
 const FIRST_PAGE := "Display"
@@ -43,6 +54,7 @@ var _header: HBoxContainer
 var _columns: HBoxContainer
 var _rail: VBoxContainer
 var _rail_head: VBoxContainer
+var _lab_sep: VBoxContainer
 var _scroll: ScrollContainer
 ## Accessibility preset (GH #1634): the Calm toggle plus the individual switches it
 ## forces, kept in sync so the panel never shows a stale state.
@@ -223,6 +235,9 @@ func _build_ui() -> void:
 		tab.custom_minimum_size.y = HouseStyle.H_ACTION
 		tab.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		tab.pressed.connect(show_page.bind(page_name))
+		if page_name == "Lighting lab":
+			_lab_sep = _build_lab_separator()
+			rail.add_child(_lab_sep)
 		rail.add_child(tab)
 		_page_buttons[page_name] = tab
 	var vbox := _page("Lighting lab")
@@ -586,8 +601,23 @@ func _build_rail_head() -> VBoxContainer:
 	return head
 
 
-## The sheet in the menu (sheet 05): up to 1340 x 840 px with a 290 px rail headed by the eyebrow and the title;
-## at the table the compact sheet of today.
+## A rule with air above the Lighting lab, which stands apart from the settings pages (menu only).
+func _build_lab_separator() -> VBoxContainer:
+	var sep := VBoxContainer.new()
+	sep.name = "LabSeparator"
+	sep.visible = false
+	var air := Control.new()
+	air.custom_minimum_size.y = 18
+	sep.add_child(air)
+	var rule := ColorRect.new()
+	rule.color = HouseStyle.LINE
+	rule.custom_minimum_size.y = 1
+	sep.add_child(rule)
+	return sep
+
+
+## The sheet in the menu (sheet 05): up to 1340 x 840 px with a 290 px rail headed by the eyebrow and the title, its
+## page buttons flat rows with an icon; at the table the compact sheet of today.
 func _apply_menu_layout() -> void:
 	var on := _modal
 	var window := get_viewport().get_visible_rect().size
@@ -601,6 +631,85 @@ func _apply_menu_layout() -> void:
 	(_header.get_child(0) as Control).visible = not on
 	var close := _header.get_node("CloseButton") as Control
 	close.size_flags_horizontal = (Control.SIZE_SHRINK_END | Control.SIZE_EXPAND) if on else Control.SIZE_SHRINK_END
+	_lab_sep.visible = on
+	for page_name: String in PAGES:
+		_style_page_button(_page_buttons[page_name] as Button, page_name)
+	_sync_page_ticks()
+
+
+## A page button as a segment (the table's sheet) or, in the menu, a flat 56 px row: icon, 19 px text, a soft fill
+## under the pointer, the open page with its rim and a gold tick (the tick is its child, shown by _sync_page_ticks).
+func _style_page_button(tab: Button, page_name: String) -> void:
+	var states: Array[StringName] = [&"normal", &"hover", &"pressed", &"hover_pressed", &"focus"]
+	var colours: Array[StringName] = [&"font_color", &"font_hover_color", &"font_pressed_color",
+		&"font_hover_pressed_color", &"font_focus_color", &"icon_normal_color", &"icon_hover_color",
+		&"icon_pressed_color", &"icon_hover_pressed_color", &"icon_focus_color"]
+	var tick := tab.get_node_or_null("Tick") as Control
+	if not _modal:
+		tab.theme_type_variation = HouseStyle.SEGMENT
+		tab.custom_minimum_size.y = HouseStyle.H_ACTION
+		tab.icon = null
+		for state: StringName in states:
+			tab.remove_theme_stylebox_override(state)
+		for colour: StringName in colours:
+			tab.remove_theme_color_override(colour)
+		tab.remove_theme_font_override(&"font")
+		tab.remove_theme_font_size_override(&"font_size")
+		if tick != null:
+			tick.visible = false
+		return
+	tab.theme_type_variation = HouseStyle.BUTTON
+	tab.custom_minimum_size.y = HouseStyle.H_PAGE_ROW
+	tab.icon = _page_icon(page_name)
+	tab.expand_icon = true
+	tab.add_theme_constant_override(&"icon_max_width", HouseStyle.ICON_PAGE_ROW)
+	tab.add_theme_constant_override(&"h_separation", 14)
+	tab.add_theme_font_override(&"font", HouseStyle.font(500))
+	tab.add_theme_font_size_override(&"font_size", HouseStyle.FONT_PAGE_ROW)
+	var clear := Color(0, 0, 0, 0)
+	var boxes := {&"normal": _page_box(clear, clear), &"hover": _page_box(HouseStyle.ROW_HOVER, clear),
+		&"pressed": _page_box(HouseStyle.ROW_HOVER, HouseStyle.LINE_SOFT),
+		&"hover_pressed": _page_box(HouseStyle.ROW_HOVER, HouseStyle.LINE_SOFT), &"focus": _page_box(clear, HouseStyle.ACCENT)}
+	for state: StringName in states:
+		tab.add_theme_stylebox_override(state, boxes[state] as StyleBox)
+	for colour: StringName in colours:
+		var ink := HouseStyle.MUTED if colour.ends_with("normal_color") or colour == &"font_color" else HouseStyle.INK
+		tab.add_theme_color_override(colour, ink)
+	if tick == null:
+		var mark := ColorRect.new()
+		mark.name = "Tick"
+		mark.color = HouseStyle.GOLD
+		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mark.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
+		mark.offset_right = 3.0
+		mark.offset_top = 10.0
+		mark.offset_bottom = -10.0
+		tab.add_child(mark)
+
+
+func _page_box(fill: Color, rim: Color) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = fill
+	box.border_color = rim
+	box.set_border_width_all(1 if rim.a > 0.0 else 0)
+	box.set_corner_radius_all(HouseStyle.RADIUS_CARD)
+	box.content_margin_left = 16
+	box.content_margin_right = 12
+	return box
+
+
+func _page_icon(page_name: String) -> Texture2D:
+	if not _page_icons.has(page_name):
+		_page_icons[page_name] = HouseStyle.svg_icon(PAGE_ICON_SVG % PAGE_ICONS[page_name])
+	return _page_icons[page_name]
+
+
+## The gold tick stands at the open page's button, in the menu only.
+func _sync_page_ticks() -> void:
+	for page_name: String in _page_buttons:
+		var tick := (_page_buttons[page_name] as Button).get_node_or_null("Tick") as Control
+		if tick != null:
+			tick.visible = _modal and page_name == _page_shown
 
 
 ## The content box of the page `page_name` (one of PAGES): the place a control is added to.
@@ -614,6 +723,7 @@ func show_page(page_name: String) -> void:
 		(_pages[n] as Control).visible = n == page_name
 		(_page_buttons[n] as Button).set_pressed_no_signal(n == page_name)
 	_page_shown = page_name
+	_sync_page_ticks()
 	if _reset_button != null:
 		_reset_button.visible = page_name in RESETTABLE
 
