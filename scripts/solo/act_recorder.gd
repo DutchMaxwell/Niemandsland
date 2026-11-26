@@ -867,19 +867,27 @@ static func _terrain_line(terrain_cb: Callable, school_world: Dictionary = {}) -
 	return line
 
 
-## Plan step 27-pre: a generated board's ledges for the terrain line - `{"tiers", "solid_cells"}` of the board on the
-## table (the BoardgenGreybox's own seed and theme, through `NmlCore.boardgen_tiers`, the core's `to_plain`) from
+## Plan step 27-pre: a generated board's ledges for the terrain line - `{"tiers", "solid_cells"}` of the board on the table
+## (main's `generated_board()`: its seed and theme, through `NmlCore.boardgen_tiers`, the core's `to_plain`) from
 ## `PENDING_EPOCH_CORE_TIERS`; {} below it, with no generated board or without the core, so that line keeps its bytes.
 static func _tiers_for_line(ov: Object, epoch: int) -> Dictionary:
-	if epoch < PENDING_EPOCH_CORE_TIERS or not (ov is Node) or not (ov as Node).is_inside_tree() or not ClassDB.class_exists("NmlCore"):
+	if not (ov is Node) or not (ov as Node).is_inside_tree():
 		return {}
-	for n in (ov as Node).get_tree().get_nodes_in_group(BoardgenGreybox.TABLE_OVERLAY_GROUP):
-		if n is BoardgenGreybox:
-			var g := n as BoardgenGreybox
-			var core: Object = ClassDB.instantiate("NmlCore")
-			var t: Dictionary = core.boardgen_tiers(g.layout_seed, g.layout_theme.to_lower())
-			return {"tiers": t["tiers"], "solid_cells": t["solid_cells"]} if t.has("tiers") else {}
-	return {}
+	var scene: Node = (ov as Node).get_tree().current_scene
+	return tiers_at_epoch(scene.call("generated_board") if scene != null and scene.has_method("generated_board") else {}, epoch)
+
+
+## `tiers_of_board` from `PENDING_EPOCH_CORE_TIERS` on; {} below it (the line a record before it played keeps its bytes).
+static func tiers_at_epoch(board: Dictionary, epoch: int) -> Dictionary:
+	return tiers_of_board(board) if epoch >= PENDING_EPOCH_CORE_TIERS else {}
+
+
+## The ledges of `board` (`{"seed", "theme"}`, main's `generated_board()`): {} for none or without the core.
+static func tiers_of_board(board: Dictionary) -> Dictionary:
+	if board.is_empty() or not ClassDB.class_exists("NmlCore"):
+		return {}
+	var t: Dictionary = (ClassDB.instantiate("NmlCore") as Object).call("boardgen_tiers", int(board["seed"]), str(board["theme"]))
+	return {"tiers": t["tiers"], "solid_cells": t["solid_cells"]} if t.has("tiers") else {}
 
 
 ## F-CONT (rules 3.6, EPOCH_73_V36, lead ruling D5): the placed containers' exact 6x3 boxes `{c, he, yaw}` in world
