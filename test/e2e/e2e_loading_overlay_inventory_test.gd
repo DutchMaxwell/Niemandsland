@@ -38,6 +38,20 @@ func test_full_overlay_has_label_and_bar_and_owns_the_clicks() -> void:
 	assert_int(_overlay.layer).is_equal(200)
 	_overlay.set_label("BUILDING TABLE")
 	assert_str(_overlay._label.text).is_equal("BUILDING TABLE")
+	# Sheet 06 (red on main: none of these parts): the wordmark, an optional title, the stage line and the per cent.
+	var parts := ["_title", "_stage", "_percent"].filter(func(p: String) -> bool: return _overlay.get(p) == null)
+	assert_array(parts).override_failure_message("full overlay parts missing: %s" % str(parts)).is_empty()
+	if not parts.is_empty():
+		return
+	assert_object(_overlay.find_child("Wordmark", true, false)).is_not_null()
+	assert_bool(_overlay._title.visible).override_failure_message("no title until one is set").is_false()
+	_overlay.set_title("Urban ruins")
+	assert_bool(_overlay._title.visible).is_true()
+	_overlay.set_stage("Raising terrain")
+	assert_str(_overlay._stage.text).is_equal("RAISING TERRAIN")
+	_overlay._current = 0.62
+	_overlay._process(0.0)
+	assert_str(_overlay._percent.text).is_equal("62 %")
 	var covers := false
 	for c in _overlay._content.get_children():
 		if c is ColorRect and (c as ColorRect).color.a >= 0.99:
@@ -60,7 +74,7 @@ func test_progress_eases_toward_its_target_and_never_jumps() -> void:
 		await get_tree().process_frame
 	assert_float(_overlay._current).is_greater(0.0)
 	assert_float(_overlay._current).is_less(0.5)
-	assert_float(_overlay._fill.size.x).is_equal_approx(_overlay._current * LoadingOverlay.TRACK_W, 0.01)
+	assert_float(_overlay._fill.size.x).is_equal_approx(_overlay._current * _overlay._track_w(), 0.01)
 	_overlay.set_progress(2.0)
 	assert_float(_overlay._target).is_equal(1.0)
 
