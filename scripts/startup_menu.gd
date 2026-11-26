@@ -125,6 +125,9 @@ func _ready() -> void:
 func _maybe_show_whats_new() -> void:
 	if get_tree().current_scene != self or not WhatsNewContent.should_show():
 		return
+	if _is_fresh_profile():
+		WhatsNewContent.mark_seen()
+		return
 	# Let another startup dialog (for example the chapter picker) finish first.
 	for child in get_children():
 		if child is Window and child.visible:
@@ -132,6 +135,10 @@ func _maybe_show_whats_new() -> void:
 			_maybe_show_whats_new.call_deferred()
 			return
 	_show_whats_new()
+
+
+func _is_fresh_profile() -> bool:
+	return WhatsNewContent.is_fresh_profile()
 
 
 func _show_whats_new() -> void:
