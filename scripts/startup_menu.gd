@@ -881,6 +881,22 @@ func _set_browse_status(text: String) -> void:
 
 # ===== Shared =====
 
+## A new table (the setup just stored it; continue, load and join keep the plain overlay): the overlay names it -
+## "Urban ruins", "Grimdark Future · 6 × 4 ft" - over the biome's picture (sheet 06).
+func _name_the_table(overlay: LoadingOverlay) -> void:
+	var setup: Variant = ProjectSettings.get_setting("niemandsland/pending_table_setup", null)
+	var loading := not str(ProjectSettings.get_setting("niemandsland/pending_load_path", "")).is_empty()
+	if loading or not setup is Dictionary or not (setup as Dictionary).has("biome"):
+		return
+	var biome := str(setup.biome)
+	var feet: Vector2 = setup.get("size", Vector2(6, 4))
+	overlay.set_label("PREPARING YOUR TABLE")
+	overlay.set_title(TableSizeDialog.BIOMES.get(biome, [biome])[0])
+	overlay.set_subtitle("%s · %s × %s ft" % [GameSystem.label(str(setup.get("system", GameSystem.DEFAULT_ID))),
+		TableSizeDialog.number(feet.x), TableSizeDialog.number(feet.y)])
+	overlay.set_backdrop(load(TableSizeDialog._preview_path(biome)) as Texture2D)
+
+
 func _transition_to_game() -> void:
 	if _transitioning:
 		return
@@ -895,6 +911,7 @@ func _transition_to_game() -> void:
 	overlay.add_to_group("transition_overlay")
 	get_tree().root.add_child(overlay)
 	overlay.set_label("LOADING")
+	_name_the_table(overlay)
 
 	if ResourceLoader.load_threaded_request(GAME_SCENE) != OK:
 		get_tree().change_scene_to_file(GAME_SCENE)  # fallback: no progress, but works
