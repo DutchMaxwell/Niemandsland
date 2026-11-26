@@ -22804,9 +22804,16 @@ func generated_board() -> Dictionary:
 	return {"seed": int(_board_look.get("layout_seed")), "theme": str(_board_look.get("layout_theme")).to_lower()}
 
 
+## Plan step 27-pre P3: the core listed a jump for this unit's placement (its open session's drop check), so the core
+## rolls it when the activation resolves; the table rolling it too would roll it twice. Every other drop - no session, or a
+## ledge the core does not see (a free ruin's floor until 27-pre-R) - stays the table's.
+func _core_owns_drop(unit: GameUnit) -> bool:
+	return CoreActivation.core_sees_jump(unit.unit_id)
+
+
 ## Human drops use the same surface truth, tray, casualties and activation flow as combat.
 func _resolve_skirmish_drop(mv: Dictionary, unit: GameUnit) -> void:
-	if not CoherencyChecker.is_skirmish_system(unit) or object_manager == null:
+	if not CoherencyChecker.is_skirmish_system(unit) or object_manager == null or _core_owns_drop(unit):
 		return
 	var node: Node3D = mv.node
 	var model := unit.get_model_for_node(node)
