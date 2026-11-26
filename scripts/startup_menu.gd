@@ -212,6 +212,22 @@ func _show_table_setup(host_settings: Dictionary = {}) -> void:
 	_table_setup.cancelled.connect(_on_table_setup_cancelled)
 	view.hide()
 	_table_setup.popup()
+	_fade_setup(_table_setup, 0.0, 1.0)
+
+
+## The setup page fades in from the menu and out to the table (its content, over the screen time), as the
+## table's own chooser does in main.gd. Instant with Reduce Motion. `free_after` frees the dialog at the end.
+func _fade_setup(dialog: Window, from: float, to: float, free_after := false) -> void:
+	var content := dialog.get_child(0) as Control
+	if UiMotion.reduced() or content == null:
+		if free_after:
+			dialog.queue_free()
+		return
+	content.modulate.a = from
+	var tween := dialog.create_tween()
+	tween.tween_property(content, "modulate:a", to, HudTokens.DUR_SCREEN).set_trans(Tween.TRANS_SINE)
+	if free_after:
+		tween.tween_callback(dialog.queue_free)
 
 
 func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> void:
@@ -221,8 +237,9 @@ func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> vo
 		RulesAutomation.remember_pick(_table_setup.selected_rules)
 	for key in host_settings:
 		ProjectSettings.set_setting(key,host_settings[key])
-	_table_setup.hide()
-	_table_setup.queue_free()
+	if UiMotion.reduced():
+		_table_setup.hide()
+	_fade_setup(_table_setup, 1.0, 0.0, true)   # fades out under the loading picture's fade-in
 	_table_setup = null
 	_transition_to_game()
 
@@ -436,7 +453,10 @@ func _on_credits_pressed() -> void:
 	# its window size is always the contents' minimum — an outer keep_window_reachable() would
 	# be overruled the moment it pops up (measured: clamped to 520x400, popped up at 452x317).
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(420, 240)
+	# 520 x 420 shows whole lines; never larger than the window leaves room for.
+	var room := get_viewport().get_visible_rect().size - Vector2(160, 220)
+	scroll.custom_minimum_size = Vector2(minf(520.0, room.x), minf(420.0, room.y))
+	scroll.follow_focus = true
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var body := Label.new()
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
