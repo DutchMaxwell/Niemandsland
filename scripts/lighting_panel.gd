@@ -3,8 +3,12 @@ extends CanvasLayer
 ## Interactive UI with sliders for all lighting and volume parameters
 
 const LAYER := 0   # under the HUD layer (1): the menu, rail and top bar stay clickable, as with the old OS window
-const SHEET_W := 520
+const SHEET_W := 760
 const SCROLL_H := 620
+const PAGE_RAIL_W := 200   # the column of page buttons left of the content (sheet 05)
+## The sheet's pages, in rail order. Until the controls are sorted, everything lives on "Lighting lab".
+const PAGES := ["Display", "Graphics", "Audio", "Gameplay", "Accessibility", "Lighting lab"]
+const FIRST_PAGE := "Lighting lab"
 
 var lighting_controller: Node
 var atmosphere_controller: Node = null
@@ -15,6 +19,8 @@ var sliders: Dictionary = {}
 var color_pickers: Dictionary = {}
 var volume_sliders: Dictionary = {}
 var _main_vbox: VBoxContainer = null
+var _pages: Dictionary = {}          # page name -> its content box
+var _page_buttons: Dictionary = {}   # page name -> its rail button
 ## Accessibility preset (GH #1634): the Calm toggle plus the individual switches it
 ## forces, kept in sync so the panel never shows a stale state.
 var _calm_cb: CheckButton = null
@@ -122,14 +128,43 @@ func _build_ui() -> void:
 	layer = LAYER
 	var parts := HouseStyle.overlay_sheet("Settings", SHEET_W)
 	(parts["close"] as Button).pressed.connect(hide)
+	var columns := HBoxContainer.new()
+	columns.add_theme_constant_override(&"separation", HouseStyle.GAP_SECTION)
+	(parts["body"] as VBoxContainer).add_child(columns)
+	var rail := VBoxContainer.new()
+	rail.name = "PageRail"
+	rail.custom_minimum_size = Vector2(PAGE_RAIL_W, 0)
+	rail.add_theme_constant_override(&"separation", HouseStyle.GAP_CONTROL)
+	columns.add_child(rail)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.custom_minimum_size = Vector2(0, SCROLL_H)
-	(parts["body"] as VBoxContainer).add_child(scroll)
-	var vbox := VBoxContainer.new()
-	vbox.set_h_size_flags(Control.SIZE_EXPAND_FILL)
-	scroll.add_child(vbox)
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	columns.add_child(scroll)
+	var holder := VBoxContainer.new()
+	holder.set_h_size_flags(Control.SIZE_EXPAND_FILL)
+	scroll.add_child(holder)
+	var group := ButtonGroup.new()
+	for page_name: String in PAGES:
+		var page := VBoxContainer.new()
+		page.name = "Page" + page_name.replace(" ", "")
+		page.set_h_size_flags(Control.SIZE_EXPAND_FILL)
+		holder.add_child(page)
+		_pages[page_name] = page
+		var tab := Button.new()
+		tab.name = "PageButton" + page_name.replace(" ", "")
+		tab.text = page_name
+		tab.toggle_mode = true
+		tab.button_group = group
+		tab.theme_type_variation = HouseStyle.SEGMENT
+		tab.custom_minimum_size.y = HouseStyle.H_ACTION
+		tab.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		tab.pressed.connect(show_page.bind(page_name))
+		rail.add_child(tab)
+		_page_buttons[page_name] = tab
+	var vbox := _page("Lighting lab")
 	_main_vbox = vbox
+	show_page(FIRST_PAGE)
 	# Not modal, like the old window: no scrim over the table (the lighting is tuned by eye) and its clicks pass through.
 	var root := parts["root"] as Control
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -423,6 +458,18 @@ func _build_ui() -> void:
 		GraphicsSettings.ai_explain_persistent = on
 		GraphicsSettings.save_settings())
 	vbox.add_child(explain_cb)
+
+
+## The content box of the page `page_name` (one of PAGES): the place a control is added to.
+func _page(page_name: String) -> VBoxContainer:
+	return _pages[page_name] as VBoxContainer
+
+
+## Shows the page `page_name` and marks its rail button; the other pages are hidden.
+func show_page(page_name: String) -> void:
+	for n: String in _pages:
+		(_pages[n] as Control).visible = n == page_name
+		(_page_buttons[n] as Button).set_pressed_no_signal(n == page_name)
 
 
 ## Calm mode changed (from this panel or elsewhere): reflect the toggle and the

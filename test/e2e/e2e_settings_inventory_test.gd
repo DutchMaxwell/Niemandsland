@@ -281,3 +281,19 @@ func test_inventory_check_names_a_removed_control() -> void:
 	var missing := _missing()
 	parent.add_child(rain)
 	assert_array(missing).contains_exactly(["button: Rain"])
+
+
+## Sheet 05: a rail of six pages, one page shown at a time, the sheet opening on the one that holds the
+## controls (red on main: the sheet has no page rail).
+func test_the_sheet_has_six_pages_and_shows_one_at_a_time() -> void:
+	var rail := _panel.find_child("PageRail", true, false) as Control
+	assert_object(rail).override_failure_message("the sheet has no page rail").is_not_null()
+	if rail == null:
+		return
+	var names: Array = rail.get_children().map(func(n: Node) -> String: return (n as Button).text)
+	assert_array(names).is_equal(["Display", "Graphics", "Audio", "Gameplay", "Accessibility", "Lighting lab"])
+	assert_bool(_panel._page("Lighting lab").visible).is_true()
+	(rail.get_child(0) as Button).pressed.emit()
+	for p: String in names:
+		assert_bool(_panel._page(p).visible).override_failure_message("page %s" % p).is_equal(p == "Display")
+	assert_bool((rail.get_child(0) as Button).button_pressed).is_true()
