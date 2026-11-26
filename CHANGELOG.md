@@ -7,6 +7,11 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Changed — rules corrections
+- **Rules epoch 103 is live: command groups in Age of Fantasy: Skirmish, and the Firefight casualty chain.** A
+  command group's Banner (+1 to morale test rolls after shooting or melee) and Musician (+1" on move actions) also reach
+  the units its list picked, and both are lost - for the own unit and the picks - once the model carrying them is
+  killed. In Grimdark Future: Firefight, removing casualties keeps the unit's 9" chain instead of 6". Games recorded
+  before epoch 103 replay unchanged.
 - **Rules epoch 101 is live: pushing in the two skirmish games.** In Grimdark Future: Firefight and
   Age of Fantasy: Skirmish, when an attack leaves an enemy unit Shaken, the attacker may try to push
   it: on a 4+ one of its models moves up to 2" and the rest regroup within 1" of it. A model pushed

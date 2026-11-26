@@ -101,7 +101,7 @@ pub fn chain_casualty_order(state: &State, u: usize, max_picks: Option<usize>, r
     let n = group.len();
     // The unit's chain at this epoch (`Book::chain_in_at`): the Firefight 9 in from its own placeholder on, so records
     // stamped before it keep the 6 in they played with.
-    let max_chain = if crate::acts::rule_on(rules_epoch, crate::acts::PENDING_EPOCH_CASUALTY_CHAIN) { state.book(host).chain_in_at(rules_epoch) } else { state.book(host).chain_in };
+    let max_chain = if crate::acts::rule_on(rules_epoch, crate::acts::EPOCH_102_CASUALTY_CHAIN) { state.book(host).chain_in_at(rules_epoch) } else { state.book(host).chain_in };
     let (slack, mut gap, mut linked) = (0.01, vec![0.0; n * n], vec![false; n * n]);
     for i in 0..n {
         for j in i + 1..n {
