@@ -64,6 +64,9 @@ var _kit: BoardgenKit
 var _tiefwerk: TiefwerkLibrary = null   # the authored surfaces (R2, on demand); the board is procedural until they are cached
 var _decals: BoardgenDecals = null
 var _life: BoardgenTownLife = null
+var _surfaces: MultiMeshInstance3D   # the board's own surfaces: what the bases' ground bake draws (BoardgenGroundBake)
+var _ground_rect := Rect2()   # the board itself in board-local metres (x, z)
+var _bake_queued := false
 var _footprint := Rect2()   # the ground kept free of the table's scatter, in table-local metres: the board and all round it
 var _layout: Dictionary = {}
 var _atmosphere: Object = null   # the town re-applies its dusk after every mood change while it is on the table
@@ -332,11 +335,13 @@ func build(layout: Dictionary, dress: BoardgenDress = null) -> void:
 			body.add_child(col)
 	_dress(layout, theme, ["Props", "Landmarks", "Debris", "Sumps"], kit)
 	var board := Vector2(layout["nx"], layout["nz"]) * float(layout["cell_in"]) * INCHES_TO_METERS
-	_footprint = Rect2(board * -0.5, board).grow(SCATTER_OFF_M)
+	_ground_rect = Rect2(board * -0.5, board)
+	_footprint = _ground_rect.grow(SCATTER_OFF_M)
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = "Surfaces"
 	mmi.layers |= BoardgenDecals.RENDER_LAYER   # the only mesh the board's decals project onto
 	mmi.multimesh = mm
+	_surfaces = mmi
 	_material = _make_material(layout, theme)
 	mmi.material_override = _material
 	add_child(mmi)
@@ -459,6 +464,7 @@ func _ready() -> void:
 		_kit.prefetch(KIT_LADDERS + BoardgenRails.KIT_MODULES + BoardgenProps.KIT_MODULES)
 	_scatter_off(_footprint)
 	_assign_layers()
+	visibility_changed.connect(_queue_ground_bake)
 	child_entered_tree.connect(func(_child: Node) -> void: _assign_layers.call_deferred())   # whatever a builder adds later joins the board layer too
 	var graphics := get_node_or_null("/root/GraphicsSettings")
 	if graphics != null:
@@ -521,6 +527,9 @@ func _dusk_again(lighting: Object) -> void:
 
 func _exit_tree() -> void:
 	_scatter_off(Rect2())
+	var table := get_parent()
+	if table != null and table.has_method("set_board_ground"):
+		table.set_board_ground(null, Rect2())   # the bases show the biome again
 	_frame_view(false)
 	if _atmosphere != null and is_instance_valid(_atmosphere):
 		for c: Dictionary in _atmosphere.atmosphere_changed.get_connections():
@@ -555,6 +564,7 @@ func _apply_detail() -> void:
 			_life.apply_settings()
 		if on:
 			_attach_surfaces()   # a later switch up to Medium fetches them then
+	_queue_ground_bake()   # the detail changes the board's look: the bases follow
 	BoardgenMood.apply(self, on and (layout_theme == BoardgenTheme.DEEPWORKS or layout_theme == BoardgenTheme.RUIN_TOWN), layout_theme == BoardgenTheme.RUIN_TOWN)   # the dim industrial light, board-scale SSAO, the grade and the model fill come with the finer look; the ruin town has its own dusk and only the grade
 
 
@@ -577,7 +587,8 @@ func _attach_surfaces() -> void:
 	add_child(_tiefwerk)
 	if not _tiefwerk.sets_cached():
 		await _tiefwerk.ensure_sets()
-	wire_surfaces(_material, _tiefwerk)
+	if wire_surfaces(_material, _tiefwerk):
+		_queue_ground_bake()
 	if not _tiefwerk.decals_cached():
 		await _tiefwerk.ensure_decals()
 	if is_inside_tree() and _decals == null and _tiefwerk.decals_cached():
@@ -603,6 +614,28 @@ static func wire_surfaces(material: ShaderMaterial, lib: TiefwerkLibrary) -> boo
 		material.set_shader_parameter(uniform, found[uniform])
 	material.set_shader_parameter("t1_on", 1.0)
 	return true
+
+
+## The bases' ground (ticket BASE-GROUND): the board's surfaces baked from above, handed to the table's shared base-top material. Once per
+## frame at most; a later look change (detail, the Tiefwerk sets) bakes again.
+func _queue_ground_bake() -> void:
+	if not _bake_queued and _surfaces != null:
+		_bake_queued = true
+		_bake_ground.call_deferred()
+
+
+func _bake_ground() -> void:
+	_bake_queued = false
+	var table := get_parent()
+	if table == null or not table.has_method("set_board_ground") or not is_inside_tree():
+		return
+	if not is_visible_in_tree():   # a hidden board (a capture's bare-table baseline) leaves the bases on the biome
+		table.set_board_ground(null, Rect2())
+		return
+	var rect := Rect2(_ground_rect.position + Vector2(global_position.x, global_position.z), _ground_rect.size)
+	var tex: ImageTexture = await BoardgenGroundBake.bake(self, _surfaces, rect)
+	if tex != null and is_inside_tree() and is_visible_in_tree():
+		table.set_board_ground(tex, rect, BoardgenGroundBake.fill_for(_material))
 
 
 ## The table's own ground scatter (grass tufts, the biome dressing's straw, leaves and puddles) stays off under the board, and so does its ground relief.

@@ -134,6 +134,7 @@ static func build_base(
 	top.position.y = TOP_Y
 	top.material_override = top_material if top_material != null else _fallback_top_material()
 	top.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	top.layers = BoardgenMood.BOARD_LAYER   # the top is ground: lit like a generated board's ground, not by the models' fill (no light tells the layers apart without a board)
 	top.set_meta(SHARED_MATERIAL_META, true)
 	root.add_child(top)
 
