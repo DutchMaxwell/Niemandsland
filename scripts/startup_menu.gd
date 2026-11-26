@@ -580,7 +580,9 @@ func _maybe_warn_core_missing() -> void:
 
 
 func _show_core_missing_dialog() -> PromptCard:
-	return _show_notice(CoreLoadNotice.TITLE, CoreLoadNotice.TEXT)
+	# The closing instruction stands in its own paragraph (the same words).
+	var text := CoreLoadNotice.TEXT.replace(" Download the full game", "\n\nDownload the full game")
+	return _show_notice(CoreLoadNotice.TITLE, text)
 
 
 ## A plain notice: one house card with an OK (Enter or Esc closes it); it wraps at the card's own width and

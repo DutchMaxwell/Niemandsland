@@ -99,6 +99,38 @@ func _apply_menu_scale() -> void:
 			WIDTH - 2 * HouseStyle.MENU_PAD_PANEL - HouseStyle.MENU_ICON_BUTTON - HouseStyle.GAP_ROW
 	if _text_label != null:
 		_text_label.custom_minimum_size.x = WIDTH - 2 * HouseStyle.MENU_PAD_PANEL
+		_split_paragraphs()
+	if cancel_button != null:
+		_add_esc_cap(cancel_button)
+
+
+## A text with a blank line is split there: every paragraph after the first steps back (muted, caption size).
+func _split_paragraphs() -> void:
+	var paragraphs := _text_label.text.split("\n\n", false)
+	if paragraphs.size() < 2:
+		return
+	_text_label.text = paragraphs[0]
+	var after: Node = _text_label
+	for i in range(1, paragraphs.size()):
+		var more := _wrap(HouseStyle.label(paragraphs[i], HouseStyle.CAPTION),
+				WIDTH - 2 * HouseStyle.MENU_PAD_PANEL)
+		after.add_sibling(more)
+		after = more
+
+
+## The way out shows its key: an Esc cap right after the button's text.
+func _add_esc_cap(button: Button) -> void:
+	var cap := HouseStyle.key_cap("Esc")
+	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(cap)
+	var place := func() -> void:
+		var font := button.get_theme_font(&"font")
+		var text_w := font.get_string_size(button.text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+				button.get_theme_font_size(&"font_size")).x
+		cap.position = Vector2((button.size.x + text_w) * 0.5 + 10.0,
+				(button.size.y - cap.get_combined_minimum_size().y) * 0.5)
+	button.resized.connect(place)
+	place.call_deferred()
 
 
 ## Ends the question with `value`; the first answer wins.

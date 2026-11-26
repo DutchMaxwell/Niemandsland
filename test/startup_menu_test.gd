@@ -258,7 +258,8 @@ func test_core_missing_dialog_shows_the_notice_and_frees_itself() -> void:
 	assert_str(card.title).is_equal(CoreLoadNotice.TITLE)
 	assert_str(card.ok_button.text).is_equal("OK")
 	assert_object(card.cancel_button).is_null()
-	assert_bool(_label_texts(card).has(CoreLoadNotice.TEXT)).is_true()
+	var words := _label_texts(card).filter(func(t: String) -> bool: return CoreLoadNotice.TEXT.contains(t))
+	assert_str(" ".join(words)).is_equal(CoreLoadNotice.TEXT)   # the same words, in two paragraphs
 	card.ok_button.pressed.emit()
 	await get_tree().create_timer(0.45).timeout  # the card fades out first
 	assert_bool(not is_instance_valid(card) or card.is_queued_for_deletion()).is_true()
@@ -280,7 +281,7 @@ func test_core_missing_notice_wraps_its_line() -> void:
 	var panel: Control = card.find_child("Card", true, false)
 	assert_float(panel.size.x).override_failure_message("the notice card is %s px wide" % panel.size.x).is_less(700.0)
 	for label: Node in card.find_children("*", "Label", true, false):
-		if (label as Label).text == CoreLoadNotice.TEXT:
+		if CoreLoadNotice.TEXT.contains((label as Label).text):
 			assert_bool((label as Label).autowrap_mode != TextServer.AUTOWRAP_OFF).is_true()
 	card.ok_button.pressed.emit()
 
