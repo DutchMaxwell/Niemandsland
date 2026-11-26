@@ -534,6 +534,14 @@ func _on_preset_applied(_preset_name: String) -> void:
 	_on_calm_changed()   # a preset also sets Idle Motion: the switches show it at once
 
 
+## Modal with the scrim (the menu: nothing behind the sheet is tuned by eye) or, as at the table, without a scrim and
+## letting the clicks through (the lighting is tuned by eye there).
+func set_modal(on: bool) -> void:
+	var root := get_child(0) as Control
+	root.mouse_filter = Control.MOUSE_FILTER_STOP if on else Control.MOUSE_FILTER_IGNORE
+	(root.get_node("Scrim") as ColorRect).visible = on
+
+
 ## The content box of the page `page_name` (one of PAGES): the place a control is added to.
 func _page(page_name: String) -> VBoxContainer:
 	return _pages[page_name] as VBoxContainer

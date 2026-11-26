@@ -157,6 +157,15 @@ func test_menu_never_creates_game_or_atmosphere_controllers() -> void:
 	assert_object(_menu.find_child("AtmosphereController",true,false)).is_null()
 	assert_bool(_menu.diorama._diorama_built).is_false()
 
+## Step 44: from the menu the settings sheet is modal with the scrim (red on main: no scrim, clicks pass through to the
+## menu behind it). The table keeps it see-through (e2e_settings_inventory_test).
+func test_settings_from_the_menu_are_modal_with_the_scrim() -> void:
+	_menu._on_settings_pressed()
+	var root := _menu._settings.get_child(0) as Control
+	assert_bool((root.get_node("Scrim") as ColorRect).visible).override_failure_message("no scrim in the menu").is_true()
+	assert_int(root.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
+	_menu._settings.hide()
+
 func test_rebuild_keeps_main_actions_usable() -> void:
 	_menu._on_diorama_rebuild_started()
 	assert_bool(_menu.start_battle_btn.is_visible_in_tree()).is_true()
