@@ -63,6 +63,7 @@ func test_the_pick_reaches_the_pending_setup_and_the_next_dialog_opens_on_it() -
 	assert_str(menu._table_setup.selected_system).is_equal("gf")
 	menu._table_setup.set_system("aofs")
 	menu._table_setup._confirm()
+	await get_tree().create_timer(HudTokens.DUR_COMMIT + 0.1).timeout   # the commit beat, then the screen change
 	assert_bool(menu.entered_game).is_true()
 	var setup: Dictionary = ProjectSettings.get_setting(SETUP_KEY, {})
 	assert_str(str(setup.get("system", "<missing>"))).is_equal("aofs")
