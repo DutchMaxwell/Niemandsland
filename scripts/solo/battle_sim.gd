@@ -2024,6 +2024,15 @@ static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionar
 		loser["shaken"] = true
 
 
+## Ruling D16: the twin of the core's `rules::carries_command` - the AoF: Skirmish book limits command groups
+## (`Book::one_command_upgrade_each`) and the unit has a Banner or a Musician.
+static func _carries_command(u: GameUnit) -> bool:
+	if str(u.unit_properties.get("game_system", "")) != "aofs" or u.models.is_empty():
+		return false
+	var rules: Array = u.get_special_rules()
+	return rules.has("Banner") or rules.has("Musician")
+
+
 ## Tray-exact S2 — what SoloController.casualty_order (solo_controller.gd:9151-9220) ranks ONE model by:
 ## its weapon entries by name (duplicates kept), its equipment count and its own Tough. The Rust core
 ## reads the list as the plain state's per-unit `kits` (core/nml-core/src/io.rs PlainKit).
@@ -2115,6 +2124,12 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 			"activated": u.is_activated,
 			"casts": u.casts_current,
 		}
+		# Ruling D16 (CMD-ROUNDTRIP): an AoF: Skirmish command group's bearer as the core counts it (io.rs `cmd_bearer`):
+		# the LAST model of the unit carries it (no per-model data names it yet, KIT-BEARER-NAME), so the key is its slot
+		# while it lives, -1 once it is killed. No key for every other unit and for a unit waiting off the table.
+		if not dormant and _carries_command(u):
+			var last := u.models[u.models.size() - 1] as ModelInstance
+			units[uid]["cmd_bearer"] = positions.size() - 1 if last.is_alive and last.node != null else -1
 		if dormant:
 			var du: Dictionary = units[uid]
 			du["dormant"] = true
@@ -2220,7 +2235,8 @@ const _UNIT_DYNAMIC := ["alive", "wounds", "radii", "in_cover", "shaken", "fatig
 	"player", "morale_bonus", "dormant", "dormant_models", "dormant_wounds",
 	"earliest_arrival_round", "wound_frac",   # wound_frac: _apply_expected_wounds :1039/:1041
 	"attached", "attached_to",   # NML-1073 S1: capture()'s attachment keys, verbatim
-	"kits"]   # tray-exact S2: casualty_order's per-model read, aligned with positions (io.rs PlainKit)
+	"kits",   # tray-exact S2: casualty_order's per-model read, aligned with positions (io.rs PlainKit)
+	"cmd_bearer"]   # ruling D16: the command-group bearer's slot, -1 = killed (io.rs `cmd_bearer`)
 ## `with_profile` false skips the per-unit STATIC profile (identical on every
 ## node of one game — a recorder that already wrote it once, e.g. NML-1073's
 ## nodes.jsonl header line, passes false to save the recompute AND the bytes).
