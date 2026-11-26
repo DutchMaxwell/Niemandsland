@@ -122,3 +122,18 @@ func test_a_fantasy_dialog_with_four_biomes_still_fits_1280x720() -> void:
 	assert_float(d._page.get_combined_minimum_size().y).override_failure_message("the page needs scrolling").is_less_equal(d._scroll.size.y)
 	assert_bool(Rect2(Vector2.ZERO, d.get_visible_rect().size).encloses(d._create.get_global_rect())).override_failure_message("Create is outside the window").is_true()
 	get_tree().root.size = original
+
+
+## Step 01 of the setup (sheet 03): one card per game system in the official order; a card drives the dialog and the hidden
+## dropdown follows, so the e2e handles keep working (red on main: the system is a dropdown on the title line, no cards).
+func test_step_01_has_a_card_per_game_system_and_the_hidden_dropdown_follows() -> void:
+	var cards: Dictionary = dialog.get("_system_buttons") if "_system_buttons" in dialog else {}
+	assert_array(cards.keys()).override_failure_message("no system cards").is_equal(GameSystem.IDS)
+	if cards.is_empty():
+		return
+	assert_bool(dialog._system_option.visible).override_failure_message("the dropdown is still shown").is_false()
+	(cards["aofs"] as Button).pressed.emit()
+	assert_str(dialog.selected_system).is_equal("aofs")
+	assert_str(dialog.selected_size).is_equal("square")
+	assert_int(dialog._system_option.selected).is_equal(3)
+	assert_bool((cards["aofs"] as Button).get_theme_stylebox("normal").border_color == HouseStyle.GOLD).override_failure_message("the picked card is not marked").is_true()
