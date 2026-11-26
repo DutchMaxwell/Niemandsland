@@ -6,6 +6,10 @@ const LAYER := 0   # under the HUD layer (1): the menu, rail and top bar stay cl
 const SHEET_W := 760
 const SCROLL_H := 620
 const PAGE_RAIL_W := 200   # the column of page buttons left of the content (sheet 05)
+## In the menu the sheet is drawn at the mockup's size (up to this, with 128 px / 120 px of air) and its rail is wider.
+const SHEET_MENU_W := 1340
+const SHEET_MENU_H := 840
+const PAGE_RAIL_MENU_W := 290
 ## The sheet's pages, in rail order. Controls not sorted onto a page yet live on "Lighting lab".
 const PAGES := ["Display", "Graphics", "Audio", "Gameplay", "Accessibility", "Lighting lab"]
 const FIRST_PAGE := "Display"
@@ -34,6 +38,12 @@ var _page_buttons: Dictionary = {}   # page name -> its rail button
 var _page_shown := ""
 var _reset_button: Button = null
 var _modal := false   # in the menu (set_modal(true)): the menu's scale and a scrim
+var _sheet: Control
+var _header: HBoxContainer
+var _columns: HBoxContainer
+var _rail: VBoxContainer
+var _rail_head: VBoxContainer
+var _scroll: ScrollContainer
 ## Accessibility preset (GH #1634): the Calm toggle plus the individual switches it
 ## forces, kept in sync so the panel never shows a stale state.
 var _calm_cb: CheckButton = null
@@ -171,15 +181,25 @@ func _build_ui() -> void:
 	layer = LAYER
 	var parts := HouseStyle.overlay_sheet("Settings", SHEET_W)
 	(parts["close"] as Button).pressed.connect(hide)
+	_sheet = parts["sheet"] as Control
+	_header = (parts["body"] as VBoxContainer).get_child(0) as HBoxContainer
 	var columns := HBoxContainer.new()
+	_columns = columns
 	columns.add_theme_constant_override(&"separation", HouseStyle.GAP_SECTION)
 	(parts["body"] as VBoxContainer).add_child(columns)
 	var rail := VBoxContainer.new()
 	rail.name = "PageRail"
 	rail.custom_minimum_size = Vector2(PAGE_RAIL_W, 0)
 	rail.add_theme_constant_override(&"separation", HouseStyle.GAP_CONTROL)
-	columns.add_child(rail)
+	var left := VBoxContainer.new()   # the rail, headed in the menu by the eyebrow and the title
+	left.add_theme_constant_override(&"separation", 0)
+	columns.add_child(left)
+	_rail = rail
+	_rail_head = _build_rail_head()
+	left.add_child(_rail_head)
+	left.add_child(rail)
 	var scroll := ScrollContainer.new()
+	_scroll = scroll
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.custom_minimum_size = Vector2(0, SCROLL_H)
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -541,8 +561,46 @@ func set_modal(on: bool) -> void:
 	_modal = on
 	var root := get_child(0) as Control
 	root.theme = HouseStyle.menu_theme() if on else HouseStyle.theme()
+	_apply_menu_layout()
+	if on and not get_viewport().size_changed.is_connected(_apply_menu_layout):
+		get_viewport().size_changed.connect(_apply_menu_layout)
 	root.mouse_filter = Control.MOUSE_FILTER_STOP if on else Control.MOUSE_FILTER_IGNORE
 	(root.get_node("Scrim") as ColorRect).visible = on
+
+
+## The head of the rail in the menu: the eyebrow and the title "Settings" (the sheet's own header row then shows only
+## the close box).
+func _build_rail_head() -> VBoxContainer:
+	var head := VBoxContainer.new()
+	head.name = "RailHead"
+	head.add_theme_constant_override(&"separation", 6)
+	head.visible = false
+	head.add_child(HouseStyle.label("NIEMANDSLAND", HouseStyle.EYEBROW))
+	var title := HouseStyle.label("Settings", HouseStyle.BODY)
+	title.add_theme_font_override(&"font", HouseStyle.font(500))
+	title.add_theme_font_size_override(&"font_size", HouseStyle.FONT_PAGE_TITLE)
+	head.add_child(title)
+	var air := Control.new()
+	air.custom_minimum_size.y = HouseStyle.GAP_SECTION
+	head.add_child(air)
+	return head
+
+
+## The sheet in the menu (sheet 05): up to 1340 x 840 px with a 290 px rail headed by the eyebrow and the title;
+## at the table the compact sheet of today.
+func _apply_menu_layout() -> void:
+	var on := _modal
+	var window := get_viewport().get_visible_rect().size
+	_sheet.custom_minimum_size = Vector2(minf(SHEET_MENU_W, window.x - 128.0), minf(SHEET_MENU_H, window.y - 120.0)) if on \
+			else Vector2(SHEET_W, 0)
+	_columns.size_flags_vertical = Control.SIZE_EXPAND_FILL if on else Control.SIZE_FILL
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL if on else Control.SIZE_FILL
+	_scroll.custom_minimum_size.y = 0.0 if on else float(SCROLL_H)
+	_rail.custom_minimum_size.x = PAGE_RAIL_MENU_W if on else PAGE_RAIL_W
+	_rail_head.visible = on
+	(_header.get_child(0) as Control).visible = not on
+	var close := _header.get_node("CloseButton") as Control
+	close.size_flags_horizontal = (Control.SIZE_SHRINK_END | Control.SIZE_EXPAND) if on else Control.SIZE_SHRINK_END
 
 
 ## The content box of the page `page_name` (one of PAGES): the place a control is added to.
