@@ -95,7 +95,10 @@ func _input(event: InputEvent) -> void:
 	if not event.pressed or event.echo:
 		return
 	if event.is_action(&"ui_accept"):
-		_press(ok_button)
+		# A button of the card that holds focus takes Enter (the menu's quit card focuses its safe answer);
+		# the in-game cards have no focusable button, so Enter keeps taking OK there.
+		var focused := get_viewport().gui_get_focus_owner() as Button
+		_press(focused if focused != null and is_ancestor_of(focused) else ok_button)
 	elif event.is_action(&"ui_cancel"):
 		if cancel_button != null:
 			_press(cancel_button)

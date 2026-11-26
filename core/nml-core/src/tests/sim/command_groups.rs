@@ -93,7 +93,17 @@ fn banner_test(epoch: u32, own: Option<bool>, pick: Option<(bool, bool)>, cause:
     tray.lines_upto(0).into_iter().map(|l| l.text).collect()
 }
 
-const S4A: u32 = crate::acts::PENDING_EPOCH_COMMAND_BANNER;
+const S4A: u32 = crate::acts::EPOCH_103_COMMAND_BANNER;
+
+/// Epoch 103: the command-group gate is closed for a record at 102 (no record carries it; 101 is the last live one) and open
+/// for a fresh record.
+#[test]
+fn epoch_103_command_gate_is_closed_at_102_and_open_from_103() {
+    assert_eq!(S4A, 103);
+    assert!(!crate::acts::rule_on(crate::acts::EPOCH_102_CASUALTY_CHAIN, S4A), "a record at 102 replays without the bearer");
+    assert!(!crate::acts::rule_on(crate::acts::EPOCH_101_SKIRMISH_PUSH, S4A), "a record at 101 replays as recorded");
+    assert!(crate::acts::rule_on(crate::acts::CURRENT_RULES_EPOCH, S4A), "a fresh play_game() stamps the command gate on");
+}
 
 /// Ruling D17, the own half (E15-04): a command group's own Banner counts while its bearer lives; once he is killed the unit
 /// loses the +1 and says so. Below the placeholder the stamped +1 stays, as every record before it.
