@@ -70,3 +70,24 @@ func test_forced_same_biome_rebuilds() -> void:
 	table.set_biome("arid_desert")
 	table.set_biome("arid_desert", true)
 	assert_int(library.requests).is_equal(2)
+
+
+## The menu's hand-over waits for the battlemap (MENU step 31): battlemap_settled once per settled biome - applied
+## after a decode, not applied when no battlemap comes, applied at once for a biome already on the table
+## (red on main: no such signal).
+func test_battlemap_settled_tells_when_the_surface_is_final() -> void:
+	var library: FakeLibrary = auto_free(FakeLibrary.new())
+	library.path = _map()
+	var table := _table(library)
+	assert_bool(table.has_signal("battlemap_settled")).override_failure_message("no battlemap_settled signal").is_true()
+	if not table.has_signal("battlemap_settled"):
+		return
+	var heard: Array = []
+	table.connect("battlemap_settled", func(b: String, applied: bool) -> void: heard.append([b, applied]))
+	table.set_biome("arid_desert")
+	await get_tree().process_frame
+	table.set_biome("arid_desert")   # already on the table
+	library.path = ""                # the next biome has no battlemap
+	table.set_biome("frozen_tundra")
+	await get_tree().process_frame
+	assert_array(heard).is_equal([["arid_desert", true], ["arid_desert", true], ["frozen_tundra", false]])

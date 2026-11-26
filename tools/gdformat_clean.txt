@@ -97,3 +97,5 @@ tools/rng_range_fixture.gd
 tools/tutorial_text_strip.gd
 scripts/boardgen_dress_grid_index.gd
 test/boardgen_dress_grid_index_test.gd
+scripts/table_reveal_gate.gd
+test/table_reveal_gate_test.gd
