@@ -623,11 +623,7 @@ func _start_self_update(url: String) -> void:
 	if not url.ends_with(".zip"):
 		OS.shell_open(url)
 		return
-	var dialog := AcceptDialog.new()
-	dialog.title = "Updating Niemandsland"
-	dialog.dialog_text = "Starting…"
-	dialog.get_ok_button().hide()
-	MenuDialog.style(dialog)
+	var dialog := UpdateProgressDialog.new()
 	add_child(dialog)
 	dialog.popup_centered()
 	var updater := SelfUpdater.new()
@@ -640,7 +636,7 @@ func _start_self_update(url: String) -> void:
 
 func _on_update_progress(stage: String, ratio: float, dialog: AcceptDialog) -> void:
 	if is_instance_valid(dialog):
-		dialog.dialog_text = ("%s… %d%%" % [stage, int(ratio * 100.0)]) if ratio >= 0.0 else ("%s…" % stage)
+		(dialog as UpdateProgressDialog).show_progress(stage, ratio)
 
 
 ## Files are staged, the relaunch is starting. Clean up like the failure path does: the
