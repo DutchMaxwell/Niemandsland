@@ -65,6 +65,23 @@ func test_the_loading_picture_holds_until_the_table_is_ready() -> void:
 	assert_bool(is_instance_valid(overlay)).override_failure_message("the loading picture never left").is_false()
 
 
+## MENU step 33 (D4: no intro): from the menu's setup to the revealed table no intro is ever in the tree, and the
+## HUD arrives with the reveal (red before: the 11.5 s take started after the chooser).
+func test_the_table_opens_without_the_intro() -> void:
+	ProjectSettings.set_setting(SETUP_KEY, {"size": Vector2(6, 4), "biome": "urban_ruins"})
+	var runner := scene_runner(Boot.MAIN_SCENE)
+	var main: Node = runner.scene()
+	var ui: Node = main.get_node("UI")
+	var intro_seen := false
+	var frames := 0
+	while not ui.visible and frames < MAX_FRAMES:
+		await runner.simulate_frames(10, 100)
+		frames += 10
+		intro_seen = intro_seen or main.find_child("CinematicIntro", true, false) != null
+	assert_bool(intro_seen).override_failure_message("the intro was in the tree").is_false()
+	assert_bool(ui.visible).override_failure_message("the HUD never arrived (%d frames)" % frames).is_true()
+
+
 func test_the_picked_game_system_reaches_the_table_and_the_log() -> void:
 	# PLAN_GAME_SYSTEM_SWITCH step 3: the setup dict's "system" is applied once, beside the rules level.
 	ProjectSettings.set_setting(SETUP_KEY, {"size": Vector2(4, 4), "biome": "temperate_grassland", "system": "aofs"})

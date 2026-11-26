@@ -60,10 +60,8 @@ var undo_manager: UndoManager = null
 @onready var fill_light: DirectionalLight3D = $FillLight
 @onready var world_environment: WorldEnvironment = $WorldEnvironment
 
-# Cinematic Intro
-var cinematic_intro: CinematicIntro = null
-## Opaque black backdrop shown behind the table-size chooser, so selection happens on
-## black and dissolves cleanly into the intro (freed once the intro's own black is up).
+## Opaque black backdrop behind the direct table-size chooser (main started without the menu's setup): held until
+## the table can be shown, then it fades with the HUD's arrival (_on_intro_finished).
 var _prompt_overlay: CanvasLayer = null
 
 ## One owner of the table's contested Environment values (preset, mood light, biome reference, intro).
@@ -939,10 +937,6 @@ func _ready() -> void:
 	# Opt-in game record (PR B1): same central seams, in memory only, no disk and no network.
 	_setup_game_record_collector()
 
-	# The intro is started AFTER the table size is chosen (on dialog confirm, see below),
-	# so the size chooser never overlaps the cinematic. Loaded/joined games skip the
-	# chooser and start the intro directly.
-
 	# Guided tutorial (startup menu -> TUTORIAL): read-and-clear the runtime-only flags
 	# FIRST, so the bundled tutorial board can ride the normal pending-load path below.
 	# Never persisted to project.godot — exactly like harness_mode.
@@ -1044,23 +1038,23 @@ func _ready() -> void:
 				table.set_biome(table_setup.biome)
 		call_deferred("_on_intro_finished")
 	elif pending_load.is_empty() and not joining_client:
-		# Choose the table size FIRST on a black backdrop, then dissolve into the intro —
-		# the chooser must never overlap the cinematic. UI stays hidden until the intro ends.
+		# The menu's setup: its loading picture covers the preparation. Without one, the chooser on black.
+		# The UI stays hidden until the table is revealed (TableRevealGate below).
 		$UI.visible = false
-		_show_prompt_black()
 		if table_setup.has("size") and table_setup.has("biome"):
 			call_deferred("_on_table_size_chosen",table_setup.size,null,table_setup.biome)
 		else:
+			_show_prompt_black()
 			call_deferred("_prompt_table_size")
 	else:
-		# Loaded battle / joining client: size comes from the saved/host data, so there is
-		# no chooser — go straight into the intro.
-		_start_cinematic_intro()
+		$UI.visible = false   # a load or a join: size from the save / the host; the HUD comes with the reveal
 	if harness_mode or _tutorial_mode or _scenario_mode:
 		_dismiss_transition_overlay()
 	else:   # the menu's hand-over: its loading picture holds until the table can be shown (TableRevealGate)
 		TableRevealGate.start(self, "load" if not pending_load.is_empty() else "join" if joining_client else "new") \
-			.revealed.connect(func(_by_cap: bool) -> void: _dismiss_transition_overlay())
+			.revealed.connect(func(_by_cap: bool) -> void:
+				_dismiss_transition_overlay()
+				_on_intro_finished())
 	# AI ARENA: arm native both-AI mode from the environment (no-op in normal play).
 	_solo_init_arena_from_env()
 
@@ -19214,8 +19208,7 @@ func _get_random_table_position() -> Vector3:
 
 
 ## Show the one-time table-size chooser at the start of a fresh game.
-## Opaque black backdrop behind the chooser (3D scene hidden), on its own layer below the
-## intro's overlay so the intro can cover and then reveal through it seamlessly.
+## Opaque black backdrop behind the chooser (3D scene hidden), held until the table is revealed.
 func _show_prompt_black() -> void:
 	_prompt_overlay = CanvasLayer.new()
 	_prompt_overlay.layer = 95
@@ -19243,7 +19236,7 @@ func _prompt_table_size() -> void:
 		fade_in.tween_property(content, "modulate:a", 1.0, 0.5).set_trans(Tween.TRANS_SINE)
 
 
-## Apply the chosen table size, dissolve the chooser into black, then play the intro.
+## Apply the chosen table size and dissolve the chooser into black; the reveal follows (TableRevealGate).
 func _on_table_setup_cancelled() -> void:
 	# Direct-to-Main entry fallback: unwind any live session before returning.
 	_end_online_session()
@@ -19270,19 +19263,10 @@ func _on_table_size_chosen(size_feet: Vector2, dialog: Window = null, biome_name
 		t.tween_property(content, "modulate:a", 0.0, 0.8).set_trans(Tween.TRANS_SINE)
 	else:
 		t.tween_interval(0.4)
-	t.tween_callback(func() -> void:
+	t.tween_callback(func() -> void:   # the black backdrop stays until the table is revealed
 		if is_instance_valid(dialog):
 			dialog.hide()
-			dialog.queue_free()
-		# Start the intro (its own opaque black covers the screen). Keep our black backdrop
-		# up a few frames longer so the hand-off stays black -> never a grey flash if the
-		# intro's overlay isn't covering on the very first frame.
-		_start_cinematic_intro())
-	t.tween_interval(0.2)
-	t.tween_callback(func() -> void:
-		if is_instance_valid(_prompt_overlay):
-			_prompt_overlay.queue_free()
-			_prompt_overlay = null)
+			dialog.queue_free())
 
 
 ## Set table to specific size and clear objects
@@ -21554,28 +21538,6 @@ func _on_selection_changed_update_card(selected_objects: Array[Node3D]) -> void:
 	unit_dock.present_unit(primary)
 
 
-## ============================================================================
-## Cinematic Intro Animation
-## ============================================================================
-
-## Start the cinematic intro animation
-func _start_cinematic_intro() -> void:
-	# Create intro node
-	cinematic_intro = CinematicIntro.new()
-	cinematic_intro.name = "CinematicIntro"
-	add_child(cinematic_intro)
-
-	# Connect signals
-	cinematic_intro.intro_finished.connect(_on_intro_finished)
-	cinematic_intro.intro_skipped.connect(_on_intro_finished)
-
-	# Hide UI during intro
-	$UI.visible = false
-
-	# Start the intro
-	cinematic_intro.play_intro(self)
-
-
 ## Toggle the Settings window (lighting / atmosphere / audio) — left-panel button + F7.
 func _toggle_settings_panel() -> void:
 	if lighting_panel.visible:
@@ -21584,7 +21546,7 @@ func _toggle_settings_panel() -> void:
 		lighting_panel.show()
 
 
-## Called when intro finishes or is skipped
+## The table is revealed (TableRevealGate; harness, tutorial and scenario starts call it directly): HUD, mist, mood.
 func _on_intro_finished() -> void:
 	# Slowly bring in the ground mist now that the table is built (hidden during the intro).
 	if atmospheric_clouds and atmospheric_clouds.has_method("fade_in"):
@@ -21597,7 +21559,7 @@ func _on_intro_finished() -> void:
 	if hud:
 		hud.modulate.a = 0.0
 		var ui_fade := create_tween()
-		ui_fade.tween_property(hud, "modulate:a", 1.0, 1.5) \
+		ui_fade.tween_property(hud, "modulate:a", 1.0, HudTokens.DUR_SCREEN) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 	# Restore the player's persisted atmosphere (preset + war-torn/war-sound toggles) —
@@ -21605,12 +21567,13 @@ func _on_intro_finished() -> void:
 	if atmosphere_controller:
 		atmosphere_controller.restore_saved()
 
-	# Clean up intro after a delay
-	if cinematic_intro:
-		await get_tree().create_timer(1.0).timeout
-		if is_instance_valid(cinematic_intro):
-			cinematic_intro.queue_free()
-			cinematic_intro = null
+	# The direct chooser's black backdrop fades out with the HUD's arrival.
+	if is_instance_valid(_prompt_overlay):
+		var backdrop := _prompt_overlay
+		_prompt_overlay = null
+		var fade := create_tween()
+		fade.tween_property(backdrop.get_child(0), "modulate:a", 0.0, HudTokens.DUR_SCREEN)
+		fade.tween_callback(backdrop.queue_free)
 
 	# Guided tutorial: the UI is now revealed, so start the director on the live table.
 	if _tutorial_mode:
