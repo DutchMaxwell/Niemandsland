@@ -71,7 +71,7 @@ func test_tutorial_entry_routes_to_the_bundled_board_and_logs_it(timeout := 6000
 		.contains("Tutorial started")
 	assert_str(log_text).contains("tool track")
 
-	# Stop here, and do it BEFORE any further frame simulation. _on_intro_finished (itself
+	# Stop here, and do it BEFORE any further frame simulation. _on_table_revealed (itself
 	# deferred) would call_deferred("_start_tutorial"), which awaits the board load in a
 	# 120s poll loop — the routing facts are already asserted above, so the director must
 	# never actually run in this suite.

@@ -15,8 +15,8 @@ extends RefCounted
 const MAIN_SCENE := "res://scenes/main.tscn"
 
 ## main.gd:737 reads this ProjectSetting in _ready(). Set, it skips the interactive table-size chooser
-## (an EXCLUSIVE modal that would await a click no headless test can make) and the cinematic intro, and
-## call_deferred("_on_intro_finished") instead. Must be set BEFORE the scene is instantiated.
+## (an EXCLUSIVE modal that would await a click no headless test can make) and
+## call_deferred("_on_table_revealed") instead. Must be set BEFORE the scene is instantiated.
 ## Same seam the shipped test/mp/mp_harness.gd and tools/tutorial_smoke.gd already use.
 static func arm_harness_mode() -> void:
 	ProjectSettings.set_setting("niemandsland/harness_mode", true)

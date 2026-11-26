@@ -62,7 +62,7 @@ var _board_look: Node = null   # the dev-view board the door in _ready drew (gen
 @onready var world_environment: WorldEnvironment = $WorldEnvironment
 
 ## Opaque black backdrop behind the direct table-size chooser (main started without the menu's setup): held until
-## the table can be shown, then it fades with the HUD's arrival (_on_intro_finished).
+## the table can be shown, then it fades with the HUD's arrival (_on_table_revealed).
 var _prompt_overlay: CanvasLayer = null
 
 ## One owner of the table's contested Environment values (preset, mood light, biome reference, Calm mode).
@@ -1037,7 +1037,7 @@ func _ready() -> void:
 			_set_table_size(table_setup.get("size",DEFAULT_TABLE_SIZE_FEET))
 			if table_setup.has("biome"):
 				table.set_biome(table_setup.biome)
-		call_deferred("_on_intro_finished")
+		call_deferred("_on_table_revealed")
 	elif pending_load.is_empty() and not joining_client:
 		# The menu's setup: its loading picture covers the preparation. Without one, the chooser on black.
 		# The UI stays hidden until the table is revealed (TableRevealGate below).
@@ -1055,7 +1055,7 @@ func _ready() -> void:
 		TableRevealGate.start(self, "load" if not pending_load.is_empty() else "join" if joining_client else "new") \
 			.revealed.connect(func(_by_cap: bool) -> void:
 				_dismiss_transition_overlay()
-				_on_intro_finished())
+				_on_table_revealed())
 	# AI ARENA: arm native both-AI mode from the environment (no-op in normal play).
 	_solo_init_arena_from_env()
 
@@ -21548,13 +21548,13 @@ func _toggle_settings_panel() -> void:
 
 
 ## The table is revealed (TableRevealGate; harness, tutorial and scenario starts call it directly): HUD, mist, mood.
-func _on_intro_finished() -> void:
-	# Slowly bring in the ground mist now that the table is built (hidden during the intro).
+func _on_table_revealed() -> void:
+	# Slowly bring in the ground mist now that the table is built (hidden until the reveal).
 	if atmospheric_clouds and atmospheric_clouds.has_method("fade_in"):
 		atmospheric_clouds.fade_in()
 
-	# Reveal the gameplay UI only now that the intro is fully built — fade it in gently
-	# so the panels don't pop in during the build.
+	# Reveal the gameplay UI only now that the table is ready — fade it in gently
+	# so the panels don't pop in.
 	$UI.visible = true
 	var hud := $UI.get_node_or_null("HUD") as Control
 	if hud:
