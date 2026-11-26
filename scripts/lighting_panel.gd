@@ -6,9 +6,9 @@ const LAYER := 0   # under the HUD layer (1): the menu, rail and top bar stay cl
 const SHEET_W := 760
 const SCROLL_H := 620
 const PAGE_RAIL_W := 200   # the column of page buttons left of the content (sheet 05)
-## The sheet's pages, in rail order. Until the controls are sorted, everything lives on "Lighting lab".
+## The sheet's pages, in rail order. Controls not sorted onto a page yet live on "Lighting lab".
 const PAGES := ["Display", "Graphics", "Audio", "Gameplay", "Accessibility", "Lighting lab"]
-const FIRST_PAGE := "Lighting lab"
+const FIRST_PAGE := "Display"
 
 var lighting_controller: Node
 var atmosphere_controller: Node = null
@@ -248,17 +248,17 @@ func _build_ui() -> void:
 	# the sensory load down — it is a preset over the switches below, snapshotting the
 	# player's choices and restoring them when switched off. DEFAULT OFF.
 	var calm_cb := CheckButton.new()
-	calm_cb.text = "Calm Mode (Ruhiger Modus)"
+	calm_cb.text = "Calm Mode"
 	calm_cb.tooltip_text = "Turns down combat effects, motion and pulsing selection aids in one click. / Reduziert Effekte, Bewegung und pulsierende Auswahl in einem Klick."
 	calm_cb.button_pressed = GraphicsSettings.calm_mode
 	calm_cb.toggled.connect(func(on: bool) -> void:
 		GraphicsSettings.set_calm_mode(on))
 	calm_cb.set_meta("calm", true)
 	_calm_cb = calm_cb
-	vbox.add_child(calm_cb)
+	_page("Accessibility").add_child(calm_cb)
 	GraphicsSettings.calm_mode_changed.connect(_on_calm_changed)
 
-	_add_ui_scale_slider(vbox)
+	_add_ui_scale_slider(_page("Display"))
 
 	# Reduce Motion (accessibility) — collapses UI micro-interactions.
 	var reduce_cb := CheckButton.new()
@@ -267,7 +267,7 @@ func _build_ui() -> void:
 	reduce_cb.toggled.connect(func(on: bool) -> void:
 		GraphicsSettings.reduce_motion = on
 		GraphicsSettings.save_settings())
-	vbox.add_child(reduce_cb)
+	_page("Accessibility").add_child(reduce_cb)
 	_switch_toggles["reduce_motion"] = reduce_cb
 
 	var idle_cb := CheckButton.new()
@@ -286,7 +286,7 @@ func _build_ui() -> void:
 	fs_cb.button_pressed = GraphicsSettings.fullscreen
 	fs_cb.toggled.connect(func(on: bool) -> void:
 		GraphicsSettings.apply_fullscreen(on))
-	vbox.add_child(fs_cb)
+	_page("Display").add_child(fs_cb)
 
 	# Monitor (NML-1078 / GH #363): pick which screen the window opens/moves to. Only shown
 	# with more than one screen attached — nothing to choose between on a single monitor.
@@ -313,7 +313,7 @@ func _build_ui() -> void:
 			GraphicsSettings.apply_screen(value)
 			GraphicsSettings.save_settings())
 		monitor_row.add_child(monitor_ob)
-		vbox.add_child(monitor_row)
+		_page("Display").add_child(monitor_row)
 
 	# Show Move Trails (path painting): the discoverable twin of the T hotkey. Persisted
 	# via GraphicsSettings; also pushed to the live MoveTrails node so it toggles at once.
