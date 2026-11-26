@@ -146,6 +146,7 @@ func _show_whats_new() -> void:
 	if not is_instance_valid(_whats_new):
 		_whats_new = WhatsNewDialog.new()
 		add_child(_whats_new)
+		MenuDialog.attach_scrim(_whats_new)
 	_whats_new.open()
 
 
@@ -304,12 +305,12 @@ func _show_tutorial_picker(progress: TutorialProgress, track: Array) -> void:
 		dialog.queue_free())
 	vbox.add_child(reset_btn)
 
+	MenuDialog.add_header(dialog, vbox)
 	dialog.add_child(vbox)
 	MenuDialog.style(dialog)
 	dialog.confirmed.connect(dialog.queue_free)
 	dialog.canceled.connect(dialog.queue_free)
-	add_child(dialog)
-	dialog.popup_centered()
+	MenuDialog.open(self, dialog)
 
 
 ## GAME SCHOOL (working name "Spielschule") pressed: open the chapter list. The full game-school
@@ -345,12 +346,14 @@ func _on_spielschule_pressed() -> void:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(vbox)
-	dialog.add_child(scroll)
+	var content := VBoxContainer.new()
+	content.add_child(scroll)
+	MenuDialog.add_header(dialog, content)
+	dialog.add_child(content)
 	MenuDialog.style(dialog)
 	dialog.confirmed.connect(dialog.queue_free)
 	dialog.canceled.connect(dialog.queue_free)
-	add_child(dialog)
-	dialog.popup_centered()
+	MenuDialog.open(self, dialog)
 	# Keep the ten-row list (and its CLOSE button) reachable on small displays.
 	UiPolish.keep_window_reachable(dialog, Vector2i(520, 560))
 
@@ -448,14 +451,14 @@ func _on_credits_pressed() -> void:
 		+ "Full details: THIRD_PARTY.md in the project repository.\n\n" \
 		+ "Niemandsland is a free, non-profit, open-source fan project (MIT code, CC-BY-SA generated assets). It is not affiliated with, endorsed by, or sponsored by OnePageRules. It bundles no OPR rules text, files, art or marks; the rules are OPR's, available free at onepagerules.com, and army lists come from OPR's Army Forge. Responsible: Andreas Kesberg, privacy@niemandsland.xyz."
 	scroll.add_child(body)
-	dialog.add_child(scroll)
+	var content := VBoxContainer.new()
+	content.add_child(scroll)
+	MenuDialog.add_header(dialog, content)
+	dialog.add_child(content)
 	MenuDialog.style(dialog)
-	add_child(dialog)
-	# popup_centered() centres whatever size the window carries at that moment, and the wrap to
-	# the contents happens afterwards — so take the wrapped size FIRST or the window opens off
-	# centre by half the difference.
-	dialog.reset_size()
-	dialog.popup_centered()
+	# MenuDialog.open takes the wrapped size FIRST: popup_centered() centres whatever size the window
+	# carries at that moment, and the wrap to the contents happens afterwards.
+	MenuDialog.open(self, dialog)
 	dialog.confirmed.connect(dialog.queue_free)
 	dialog.canceled.connect(dialog.queue_free)
 
@@ -530,8 +533,7 @@ func _on_update_available(latest_version: String, release_url: String, release_n
 	prompt.setup(UpdateChecker.get_current_version(), latest_version, release_url, release_notes)
 	prompt.confirmed.connect(_on_update_prompt_closed.bind(prompt, true))
 	prompt.canceled.connect(_on_update_prompt_closed.bind(prompt, false))
-	add_child(prompt)
-	prompt.popup_centered()
+	MenuDialog.open(self, prompt)
 	# Keep the dialog (and its buttons) on screen even on small displays / long changelogs.
 	UiPolish.keep_window_reachable(prompt, Vector2i(480, 460))
 
