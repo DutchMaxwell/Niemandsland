@@ -868,13 +868,16 @@ static func _terrain_line(terrain_cb: Callable, school_world: Dictionary = {}) -
 
 
 ## Plan step 27-pre: a generated board's ledges for the terrain line - `{"tiers", "solid_cells"}` of the board on the table
-## (main's `generated_board()`: its seed and theme, through `NmlCore.boardgen_tiers`, the core's `to_plain`) from
+## (main's `generated_board()`, main being the overlay's ancestor: its seed and theme, through `NmlCore.boardgen_tiers`, the
+## core's `to_plain`) from
 ## `PENDING_EPOCH_CORE_TIERS`; {} below it, with no generated board or without the core, so that line keeps its bytes.
 static func _tiers_for_line(ov: Object, epoch: int) -> Dictionary:
-	if not (ov is Node) or not (ov as Node).is_inside_tree():
-		return {}
-	var scene: Node = (ov as Node).get_tree().current_scene
-	return tiers_at_epoch(scene.call("generated_board") if scene != null and scene.has_method("generated_board") else {}, epoch)
+	# main owns the overlay: the nearest ancestor that answers `generated_board` (the tree's current scene is not main
+	# under every runner, so it is not asked)
+	var n: Node = ov as Node if ov is Node else null
+	while n != null and not n.has_method("generated_board"):
+		n = n.get_parent()
+	return tiers_at_epoch(n.call("generated_board") if n != null else {}, epoch)
 
 
 ## `tiers_of_board` from `PENDING_EPOCH_CORE_TIERS` on; {} below it (the line a record before it played keeps its bytes).

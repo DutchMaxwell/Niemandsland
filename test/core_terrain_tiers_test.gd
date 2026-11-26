@@ -7,9 +7,31 @@ extends GdUnitTestSuite
 var _ov: Node
 
 
+## main's shape as `_tiers_for_line` reads it: an ancestor of the overlay that answers `generated_board()`.
+class BoardOwner extends Node:
+	var board := {}
+	func generated_board() -> Dictionary:
+		return board
+
+
 func before_test() -> void:
 	_ov = auto_free(Node.new())
 	add_child(_ov)
+
+
+## The line finds the board through the overlay's owner (main), at any depth - not through the tree's current scene.
+func test_the_line_reads_the_board_of_the_overlays_owner() -> void:
+	if _core() == null:
+		return
+	var owner_node: BoardOwner = auto_free(BoardOwner.new())
+	owner_node.board = {"seed": 7, "theme": "deepworks"}
+	add_child(owner_node)
+	var mid: Node = auto_free(Node.new())
+	owner_node.add_child(mid)
+	var ov: Node = auto_free(Node.new())
+	mid.add_child(ov)
+	assert_bool(AiActRecorder._tiers_for_line(ov, AiActRecorder.PENDING_EPOCH_CORE_TIERS).has("tiers")).is_true()
+	assert_dict(AiActRecorder._tiers_for_line(ov, AiActRecorder.PENDING_EPOCH_CORE_TIERS - 1)).is_empty()
 
 
 func _core() -> Object:
