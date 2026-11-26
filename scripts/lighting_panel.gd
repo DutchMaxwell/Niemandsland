@@ -591,7 +591,7 @@ func _add_volume_slider(parent: Control, bus_name: String, label_text: String) -
 	slider.max_value = 6.0
 	slider.step = 1.0
 	slider.value = AudioManager.get_bus_volume(bus_name)
-	value_label.text = "%d dB" % int(slider.value)
+	_show_volume(slider, value_label)
 	slider.value_changed.connect(_on_volume_slider_changed.bind(bus_name, value_label))
 	container.add_child(slider)
 
@@ -599,8 +599,15 @@ func _add_volume_slider(parent: Control, bus_name: String, label_text: String) -
 
 
 func _on_volume_slider_changed(value: float, bus_name: String, value_label: Label) -> void:
-	value_label.text = "%d dB" % int(value)
+	_show_volume(volume_sliders[bus_name], value_label)
 	AudioManager.set_bus_volume(bus_name, value)
+
+
+## A volume reads 0-100 % of its slider's travel; the stored value and the bus stay in dB, shown in the tooltip.
+func _show_volume(slider: HSlider, value_label: Label) -> void:
+	value_label.text = "%d %%" % roundi(slider.ratio * 100.0)
+	value_label.tooltip_text = "%d dB" % int(slider.value)
+	value_label.mouse_filter = Control.MOUSE_FILTER_PASS   # a label shows its tooltip only when it takes the mouse
 
 
 func _on_slider_changed(value: float, key: String, value_label: Label) -> void:

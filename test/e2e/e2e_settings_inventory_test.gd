@@ -205,6 +205,22 @@ func test_volume_sliders_set_their_bus_and_are_put_back() -> void:
 		s.value = before
 
 
+## Volumes read in per cent of the slider (0 % at the bottom, 100 % at the top); the dB value moves to the tooltip
+## and the stored value stays in dB (red on main: the label reads "-6 dB").
+func test_volumes_read_in_per_cent_with_the_db_in_the_tooltip() -> void:
+	for bus: String in _panel.volume_sliders:
+		var s: HSlider = _panel.volume_sliders[bus]
+		var value_label := s.get_parent().get_child(0).get_child(1) as Label
+		var before := s.value
+		s.value = s.min_value
+		assert_str(value_label.text).override_failure_message("%s reads %s" % [bus, value_label.text]).is_equal("0 %")
+		s.value = s.max_value
+		assert_str(value_label.text).is_equal("100 %")
+		assert_str(value_label.tooltip_text).is_equal("%d dB" % int(s.max_value))
+		s.value = before
+		assert_float(AudioManager.get_bus_volume(bus)).is_equal_approx(before, 0.01)
+
+
 ## The wheel scrolls the settings list and never sets a value: a slider under the pointer must not take
 ## the wheel (red on main: 19 of 19 sliders are scrollable, so scrolling the list changed the UI scale and
 ## the audio settings file).
