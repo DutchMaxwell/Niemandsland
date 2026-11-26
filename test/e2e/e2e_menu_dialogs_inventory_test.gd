@@ -281,3 +281,19 @@ func test_inventory_check_names_a_removed_control() -> void:
 	var missing := _picker_missing(d)
 	d.add_child(reset)
 	assert_array(missing).contains_exactly(["button: RESET TUTORIAL PROGRESS"])
+
+
+## The credits text was cut mid-line in a 420 x 240 box. RED on main: 420 x 240.
+func test_credits_box_is_large_enough_to_read_and_inside_the_window() -> void:
+	_menu._on_credits_pressed()
+	await _frames(2)
+	var credits := _dialog_titled("Credits & licenses") as AcceptDialog
+	assert_object(credits).is_not_null()
+	var boxes := credits.find_children("*", "ScrollContainer", true, false)
+	assert_int(boxes.size()).is_equal(1)
+	var scroll := boxes[0] as ScrollContainer
+	assert_float(scroll.size.x).override_failure_message("the credits box is %s px wide" % scroll.size.x).is_greater_equal(520.0)
+	assert_float(scroll.size.y).override_failure_message("the credits box is %s px tall" % scroll.size.y).is_greater_equal(420.0)
+	assert_bool(scroll.follow_focus).is_true()
+	assert_float(float(credits.size.y)).is_less(_menu.get_viewport().get_visible_rect().size.y)
+
