@@ -691,6 +691,8 @@ func _visibility(models: Array[Node3D], img: Image) -> Dictionary:
 	var saved := {}
 	for m: Node3D in models:
 		for g: GeometryInstance3D in m.find_children("*", "GeometryInstance3D", true, false):
+			if g.name == "BaseTop":   # the base top shows the ground under the pawn (#3661): ground, not body - the pawn is judged against the board
+				continue
 			saved[g] = g.material_override
 			g.material_override = mark
 	var out := {"share": {}, "body": {}, "mask": Image.create(img.get_width(), img.get_height(), false, Image.FORMAT_RGBA8)}
