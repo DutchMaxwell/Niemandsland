@@ -22,6 +22,8 @@ const SMOOTH_RATE := 2.6
 const CREEP_TARGET := 0.9
 const CREEP_RATE := 0.18  # ratio per second
 const FADE_S := 0.4
+const FULL_TRACK_W := 560.0   # full mode (sheet 06): a wider, thicker bar under the title block
+const FULL_BAR_H := 5.0
 
 # === Private variables ===
 
@@ -31,6 +33,10 @@ var _fill: ColorRect = null
 var _target := 0.0
 var _current := 0.0
 var _indeterminate := false
+var _title: Label = null     # full mode: the optional big title (set_title)
+var _stage: Label = null     # full mode: the mono stage line under the bar (set_stage)
+var _percent: Label = null   # full mode: the per cent right of the stage line
+var _fade_in: Tween = null
 
 # === Exports ===
 
@@ -74,15 +80,20 @@ func _ready() -> void:
 		panel.add_child(box)
 		center.add_child(panel)
 	else:
-		center.add_child(box)
+		_place_full(box)
 
 	_label = HouseStyle.label("", HouseStyle.EYEBROW)
 	_label.theme = HouseStyle.theme()
-	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER if compact else HORIZONTAL_ALIGNMENT_LEFT
 	box.add_child(_label)
+	if not compact:
+		_label.add_theme_font_size_override("font_size", HouseStyle.FONT_EYEBROW_LARGE)
+		_title = _text(box, "", HouseStyle.INK, HouseStyle.FONT_DISPLAY)
+		_title.visible = false
 
 	var track := Control.new()
-	track.custom_minimum_size = Vector2(TRACK_W, BAR_H)
+	track.custom_minimum_size = Vector2(_track_w(), FULL_BAR_H if not compact else BAR_H)
+	track.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN if not compact else Control.SIZE_FILL
 	track.clip_contents = true
 	box.add_child(track)
 	var track_bg := ColorRect.new()
@@ -92,9 +103,59 @@ func _ready() -> void:
 	track.add_child(track_bg)
 	_fill = ColorRect.new()
 	_fill.color = HouseStyle.ACCENT
-	_fill.size = Vector2(0.0, BAR_H)
+	_fill.size = Vector2(0.0, track.custom_minimum_size.y)
 	_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	track.add_child(_fill)
+	if compact:
+		return
+	var line := HBoxContainer.new()
+	line.custom_minimum_size.x = FULL_TRACK_W
+	line.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	box.add_child(line)
+	_stage = _text(line, "", HouseStyle.MUTED, HouseStyle.FONT_CAPTION)
+	_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_percent = _text(line, "0 %", HouseStyle.GOLD, HouseStyle.FONT_CAPTION)
+	for mono: Label in [_stage, _percent]:
+		mono.add_theme_font_override("font", load(HouseStyle.FONT_MONO_PATH) as Font)
+	if not UiMotion.reduced():
+		_content.modulate.a = 0.0
+		_fade_in = create_tween()
+		_fade_in.tween_property(_content, "modulate:a", 1.0, HouseStyle.DUR_SCREEN_IN)
+
+
+## Full mode (sheet 06): the small wordmark top left, and `box` (eyebrow, title, bar, stage line) low on the left.
+func _place_full(box: VBoxContainer) -> void:
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.theme = HouseStyle.theme()
+	margin.add_theme_constant_override("margin_left", HouseStyle.PAD_SCREEN)
+	margin.add_theme_constant_override("margin_top", HouseStyle.PAD_SCREEN / 2)
+	margin.add_theme_constant_override("margin_bottom", HouseStyle.PAD_SCREEN * 2)
+	_content.add_child(margin)
+	var column := VBoxContainer.new()
+	margin.add_child(column)
+	var brand := HBoxContainer.new()
+	brand.name = "Wordmark"
+	brand.add_theme_constant_override("separation", 0)
+	column.add_child(brand)
+	for part: String in ["NIEMANDS", "LAND"]:
+		_text(brand, part, HouseStyle.ACCENT if part == "LAND" else HouseStyle.INK, HouseStyle.FONT_WORDMARK_SMALL) \
+			.add_theme_font_override("font", load(HouseStyle.FONT_WORDMARK_PATH) as Font)
+	box.size_flags_vertical = Control.SIZE_EXPAND | Control.SIZE_SHRINK_END
+	column.add_child(box)
+
+
+func _text(parent: Control, text: String, colour: Color, font_size: int) -> Label:
+	var l := HouseStyle.label(text, HouseStyle.BODY)
+	l.add_theme_color_override("font_color", colour)
+	l.add_theme_font_size_override("font_size", font_size)
+	parent.add_child(l)
+	return l
+
+
+func _track_w() -> float:
+	return TRACK_W if compact else FULL_TRACK_W
 
 
 func _process(delta: float) -> void:
@@ -103,13 +164,28 @@ func _process(delta: float) -> void:
 	# Exponential smoothing: a continuous, frame-rate-independent glide to the target.
 	_current += (_target - _current) * (1.0 - exp(-delta * SMOOTH_RATE))
 	if _fill != null:
-		_fill.size.x = _current * TRACK_W
+		_fill.size.x = _current * _track_w()
+	if _percent != null:
+		_percent.text = "%d %%" % roundi(_current * 100.0)
 
 # === Public API ===
 
 func set_label(text: String) -> void:
 	if _label != null:
 		_label.text = text
+
+
+## Full mode: the big title above the bar (the table being prepared); an empty text hides it.
+func set_title(text: String) -> void:
+	if _title != null:
+		_title.text = text
+		_title.visible = not text.is_empty()
+
+
+## Full mode: the stage line under the bar, in mono capitals.
+func set_stage(text: String) -> void:
+	if _stage != null:
+		_stage.text = text.to_upper()
 
 
 ## Set the real progress 0..1 (turns off indeterminate creep). The visible fill eases
@@ -131,6 +207,8 @@ func complete_and_free() -> void:
 	await get_tree().create_timer(0.3).timeout
 	if not is_instance_valid(self):
 		return
+	if _fade_in != null:
+		_fade_in.kill()
 	var fade := create_tween()
 	fade.tween_property(_content, "modulate:a", 0.0, FADE_S)
 	await fade.finished
@@ -139,6 +217,8 @@ func complete_and_free() -> void:
 
 ## Fade out and free without forcing the bar to 100% (caller already knows it's done).
 func fade_and_free() -> void:
+	if _fade_in != null:
+		_fade_in.kill()
 	if _content != null:
 		var fade := create_tween()
 		fade.tween_property(_content, "modulate:a", 0.0, FADE_S)

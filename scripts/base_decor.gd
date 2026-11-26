@@ -17,6 +17,10 @@ extends RefCounted
 
 # ===== Constants =====
 
+## The base top is ground, not model: render layer 2 (bit value 2), where a generated board draws its surfaces, so a light that only reaches the models
+## (cull mask 1: a board's model fill) leaves it lit like the ground around it. No light or camera tells the layers apart without a board.
+const TOP_LAYER := 2
+
 ## Base puck thickness (metres) — unchanged from the legacy solid disc so collision/tokens line up.
 const BASE_HEIGHT_M: float = 0.003
 ## Terrain-top radius as a fraction of the base radius. The outer band (TOP..RIM..1.0) is the rim.
@@ -134,6 +138,7 @@ static func build_base(
 	top.position.y = TOP_Y
 	top.material_override = top_material if top_material != null else _fallback_top_material()
 	top.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	top.layers = TOP_LAYER
 	top.set_meta(SHARED_MATERIAL_META, true)
 	root.add_child(top)
 

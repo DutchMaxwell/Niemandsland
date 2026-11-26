@@ -133,7 +133,7 @@ func _dialog_titled(title: String) -> Window:
 func test_every_control_of_rows_43_44_is_in_the_menu() -> void:
 	assert_array(_missing_controls()).override_failure_message(
 		"today's menu controls missing: %s" % str(_missing_controls())).is_empty()
-	assert_str(_button("⚙  Settings").text).is_equal("⚙  Settings")
+	assert_str(_button("Settings").text).is_equal("Settings")
 
 
 func test_inventory_check_names_a_removed_control() -> void:
@@ -156,7 +156,7 @@ func test_welcome_card_matches_todays_save_lookup() -> void:
 
 
 func test_settings_button_opens_the_settings_window() -> void:
-	await _click(_button("⚙  Settings"))
+	await _click(_button("Settings"))
 	assert_object(_menu._settings).is_not_null()
 	assert_bool(_menu._settings.visible).is_true()
 
@@ -195,7 +195,7 @@ func test_learn_route_lists_its_two_actions_and_back_returns_focus() -> void:
 	assert_str(_view.route_title.text).is_equal("Find your starting point.")
 	for t: String in LEARN_ROUTE:
 		assert_object(_button(t)).override_failure_message("%s is missing from the learn route" % t).is_not_null()
-	await _click(_button("←  Back"))
+	await _click(_button(HouseStyle.GLYPH_BACK + "  Back"))
 	assert_bool(_view.route_panel.visible).is_false()
 	assert_object(_view.get_viewport().gui_get_focus_owner()).is_same(learn_btn)
 
@@ -269,3 +269,24 @@ func test_menu_view_text_is_at_least_14_px() -> void:
 			smallest = mini(smallest, (n as Control).get_theme_font_size("font_size"))
 	assert_int(smallest).override_failure_message(
 		"the smallest text of the menu view asks for %d px" % smallest).is_greater_equal(14)
+
+
+## Inter has no U+2261, U+2699, U+2295 (they come from a fallback font, or not at all) and U+25A1 is a stand-in.
+## The rows draw icons now. RED on main: the rows carry "⊕", "□", "≡" as text and Settings carries the gear.
+func test_menu_view_uses_no_text_glyph_icons() -> void:
+	var banned := [0x2261, 0x2699, 0x2295, 0x25A1]
+	var found: Array[String] = []
+	for n: Node in _view.find_children("*", "Control", true, false):
+		var texts: Array[String] = []
+		if n is Label or n is Button:
+			texts.append(n.get("text"))
+		var glyph: Variant = n.get("glyph")
+		if glyph is String:
+			texts.append(glyph)
+		for t: String in texts:
+			for code: int in banned:
+				if t.contains(String.chr(code)):
+					found.append("%s: U+%04X" % [n.name, code])
+	assert_array(found).override_failure_message("text glyphs still in the view: %s" % str(found)).is_empty()
+	for id: String in ["StartBattleBtn", "OnlineBtn", "LoadBattleBtn", "LearnBtn"]:
+		assert_object(_view.buttons[id].get("row_icon")).override_failure_message("%s has no icon" % id).is_not_null()
