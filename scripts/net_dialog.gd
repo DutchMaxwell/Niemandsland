@@ -19,7 +19,7 @@ static func build(
 	var vbox := VBoxContainer.new()
 	vbox.name = "NetContent"
 	vbox.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
-	MenuDialog.add_header(dialog, vbox)   # the title and a close box; the working index is never shown (`index` stays for callers)
+	MenuDialog.add_header(dialog, vbox)  # the title and a close box; the working index is never shown (`index` stays for callers)
 	dialog.add_child(vbox)
 	# Styled when it opens: the caller has added every field by then.
 	dialog.about_to_popup.connect(func() -> void: MenuDialog.style(dialog, false, at_table))
