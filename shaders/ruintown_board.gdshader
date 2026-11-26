@@ -5,6 +5,7 @@ shader_type spatial;
 // plaster and small shuttered windows, 6 in up ashlar; an intact house is half-timber on a stone plinth under its tiled gable roof; the city wall
 // and the stone pieces are coursed stone, a chimney is brick. The two halves of the board draw their stones, plaster and tiles with other seeds.
 #include "res://shaders/tiefwerk_noise.gdshaderinc"
+#include "res://shaders/ruintown_green.gdshaderinc"
 
 uniform vec4 palette[19];   // display colours by kind index (BoardgenTheme.TOWN_KINDS)
 uniform vec3 board_origin;   // world position of the board centre
@@ -455,11 +456,10 @@ void fragment() {
 				* smoothstep(0.28, 0.48, vnoise(xz * 1.3 + seed * 1.7) + 0.3 * near + 0.25 * band);   // rough, not turf: bare earth between the clumps in the open
 			float tuft = max(step(0.915, sp) * step(sp, 0.955), cover * step(sp, 0.6)) * smoothstep(0.26, 0.12, length(lf));   // in the cover 60 % of the 0.33 in cells carry a tuft (4 % outside)
 			vec3 soil = alb;
-			alb = mix(alb, vec3(0.13, 0.16, 0.10) * mix(0.55, 1.25, fbm(xz * 3.1 + seed)), cover);   // a dull dark yellow-grey green between the tufts, mottled
+			alb = mix(alb, GREEN_COVER * mix(0.55, 1.25, fbm(xz * 3.1 + seed)), cover);   // a dull dark yellow-grey green between the tufts, mottled
 			alb = mix(alb, vec3(0.13, 0.14, 0.08) * mix(0.7, 1.2, h21(ci + 9.0)) * (1.0 + 0.9 * cover), 0.75 * tuft);   // a dull green-brown tuft, never a yellow coin
-			float dry = smoothstep(0.35, 0.65, vnoise(xz * 0.2 + seed * 2.3));   // (look review R11) dry straw patches and greener ones over 3-8 in
-			alb *= mix(vec3(1.0), mix(vec3(0.9, 1.04, 0.88), vec3(1.1, 1.0, 0.78), dry), cover);
-			float clump = fbm(xz * 5.5 + seed * 3.1);   // the cover is clumped, not a carpet: dark hollows between the clumps
+			alb *= mix(vec3(1.0), green_drift(xz, 0.0), cover);   // (look review R11) dry straw patches and greener ones over 3-8 in (ruintown_green: the one green, folded)
+			float clump = green_break(xz, 0.0);   // the cover is clumped, not a carpet: dark hollows between the clumps
 			alb *= 1.0 - 0.22 * cover * (1.0 - tuft) * smoothstep(0.55, 0.3, clump) * keep(xz.x, 0.18);
 			alb *= min(1.0, (dot(soil, LUMA) + 0.03 * tuft) / max(dot(alb, LUMA), 0.001));   // the cover is never brighter than the soil, a tuft at most 0.03 (the ground stays under the models)
 			alb = mix(alb, vec3(0.13, 0.12, 0.11) * mix(0.6, 1.3, h21(ci + 4.0)), pebble);   // a dark stone
@@ -563,8 +563,8 @@ void fragment() {
 			alb = tint * 0.55 * mix(0.6, 1.25, fbm(xz * 2.4 + seed)) * mix(1.0, 0.7, step(0.9, h21(floor(xz * 9.0))));   // x0.55: the plots in the deployment bands sit below the models' own values (readability gate)
 			vec2 pf = fract(xz / cell_in) * cell_in;
 			alb = grit_plot(alb, xz, min(min(pf.x, cell_in - pf.x), min(pf.y, cell_in - pf.y)), palette[0].rgb * GROUND_EARTH * 0.85);   // (lead: no flat green square)
-			float clump = fbm(xz * 5.5 + seed * 3.1);   // (look review R11) a plot is rank growth in clumps, not a flat green: relief, dark hollows, dry patches
-			alb *= mix(vec3(0.92, 1.03, 0.9), vec3(1.08, 1.0, 0.8), smoothstep(0.35, 0.65, vnoise(xz * 0.2 + seed * 2.3)));
+			float clump = green_break(xz, 0.0);   // (look review R11) a plot is rank growth in clumps, not a flat green: relief, dark hollows, dry patches
+			alb *= mix(vec3(1.0), green_drift(xz, 0.0), 0.8);   // the earth's dry / green drift at 0.8 strength
 			alb *= 1.0 - 0.22 * smoothstep(0.55, 0.3, clump) * keep(xz.x, 0.18);
 			rel = clamp(0.15 + 0.7 * clump + 0.15 * vnoise(xz * 11.0 + seed), 0.0, 1.0);
 			depth_in = 0.08;
