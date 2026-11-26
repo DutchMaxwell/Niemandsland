@@ -10,6 +10,8 @@ var resume: PanelContainer
 var save_name: Label
 var save_date: Label
 var save_facts: Array[Label] = []
+var save_picture: TextureRect
+const PICTURE_SIZE := Vector2(150,112)
 var welcome: Label
 var welcome_kicker: Label
 var status: Label
@@ -129,16 +131,30 @@ func _ready() -> void:
 	var saved := VBoxContainer.new()
 	saved.add_theme_constant_override("separation",12)
 	resume.add_child(saved)
-	saved.add_child(_label("LATEST SAVE",14,HouseStyle.MUTED))
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation",18)
+	saved.add_child(head)
+	save_picture = TextureRect.new()
+	save_picture.custom_minimum_size = PICTURE_SIZE
+	save_picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	save_picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	save_picture.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	save_picture.visible = false
+	head.add_child(save_picture)
+	var text := VBoxContainer.new()
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text.add_theme_constant_override("separation",12)
+	head.add_child(text)
+	text.add_child(_label("LATEST SAVE",14,HouseStyle.MUTED))
 	save_name = _label("",26,HouseStyle.INK)
 	save_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	saved.add_child(save_name)
+	text.add_child(save_name)
 	for _i in 2:
 		var fact := _label("",14,HouseStyle.MUTED,MONO)
-		saved.add_child(fact)
+		text.add_child(fact)
 		save_facts.append(fact)
 	save_date = _label("",15,HouseStyle.MUTED)
-	saved.add_child(save_date)
+	text.add_child(save_date)
 	var cont := _action("ContinueBtn","Continue","",null,true)
 	cont.custom_minimum_size.y = 54
 	saved.add_child(cont)
@@ -241,6 +257,9 @@ func set_save(info: Dictionary) -> void:
 	if resume.visible:
 		save_name.text = str(info.name)
 		save_name.tooltip_text = str(info.name)
+		var picture := TableSizeDialog.preview_path(str(info.get("biome","")))
+		save_picture.texture = load(picture) if not picture.is_empty() else null
+		save_picture.visible = save_picture.texture != null
 		var lines := facts_lines(info)
 		for i in save_facts.size():
 			save_facts[i].text = lines[i] if i < lines.size() else ""

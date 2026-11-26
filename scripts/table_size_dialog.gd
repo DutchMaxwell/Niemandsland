@@ -662,6 +662,14 @@ static func _preview_path(key: String) -> String:
 	return "res://assets/ui/table_setup/"+str(PREVIEW_FILE.get(key,key))+".webp"
 
 
+## The biome's picture (a menu or table biome id); "" for a biome the setup does not know.
+static func preview_path(biome: String) -> String:
+	var key := table_biome(biome)
+	if not BIOMES.has(key):
+		return ""
+	return _preview_path(key)
+
+
 func _image(key: String) -> TextureRect:
 	var image := TextureRect.new()
 	image.texture = load(_preview_path(key))
