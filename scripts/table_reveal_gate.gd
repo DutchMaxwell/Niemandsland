@@ -36,6 +36,9 @@ static func start(main: Node, mode: String) -> TableRevealGate:
 func _watch(main: Node, mode: String) -> void:
 	_main = main
 	_mode = mode
+	for overlay: Node in get_tree().get_nodes_in_group("transition_overlay"):
+		if overlay.has_method("set_stages"):
+			overlay.set_stages(PackedStringArray(STAGES))
 	_table = main.get("table")
 	if mode != "new":  # a new table counts from its size (the direct chooser may stand open for long)
 		_start_cap()
