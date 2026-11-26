@@ -504,6 +504,9 @@ func _show_core_missing_dialog() -> AcceptDialog:
 	var dialog := AcceptDialog.new()
 	dialog.title = CoreLoadNotice.TITLE
 	dialog.dialog_text = CoreLoadNotice.TEXT
+	# One long line made the window as wide as the text (1,489 px); it wraps at a readable width instead.
+	dialog.dialog_autowrap = true
+	dialog.get_label().custom_minimum_size.x = 420
 	MenuDialog.style(dialog)
 	dialog.confirmed.connect(dialog.queue_free)
 	dialog.canceled.connect(dialog.queue_free)
