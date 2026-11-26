@@ -60,6 +60,7 @@
     mod v36_ux_13;
     mod v36_ux_14;
     mod vanguard_free;
+    mod skirmish_a_setup;
 
     /// The 6x4 ft board's own rectangle, world metres — the table a circle
     /// zone clamps its bounding square against (the driver's own read,
