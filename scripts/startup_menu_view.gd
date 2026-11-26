@@ -297,7 +297,10 @@ func _utility(id: String, title: String) -> Button:
 	button.add_theme_font_size_override("font_size",16)
 	button.add_theme_color_override("font_color",HouseStyle.MUTED)
 	button.add_theme_color_override("font_hover_color",HouseStyle.GOLD)
-	button.add_theme_stylebox_override("normal",_box(Color.TRANSPARENT,Color.TRANSPARENT,10))
+	# One box for every state: the theme's own hover box is wider, so the text got less room on hover.
+	var rest := _box(Color.TRANSPARENT,Color.TRANSPARENT,10)
+	for state in ["normal","hover","pressed"]:
+		button.add_theme_stylebox_override(state,rest)
 	button.add_theme_stylebox_override("focus",_box(Color.TRANSPARENT,HouseStyle.GOLD,10))
 	buttons[id] = button
 	return button

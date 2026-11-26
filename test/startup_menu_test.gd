@@ -291,3 +291,14 @@ func _label_texts(root: Node) -> Array[String]:
 	for label: Node in root.find_children("*", "Label", true, false):
 		texts.append((label as Label).text)
 	return texts
+
+
+## Footer links lost letters on hover ("Help & feedba"): only the resting state had the 10 px box, the theme's
+## own hover box is wider and left the text less room. RED on main (hover and pressed differ), GREEN with one box.
+func test_footer_links_keep_one_box_for_every_state() -> void:
+	for id: String in ["HelpBtn","CreditsBtn","ExitGameBtn"]:
+		var link: Button = _menu.view.buttons[id]
+		var rest := link.get_theme_stylebox("normal").get_minimum_size()
+		for state: String in ["hover","pressed"]:
+			var box := link.get_theme_stylebox(state).get_minimum_size()
+			assert_vector(box).override_failure_message("%s: the %s box needs %s, the resting box %s" % [id,state,box,rest]).is_equal(rest)
