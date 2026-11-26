@@ -5,9 +5,9 @@ extends GdUnitTestSuite
 ## is loaded), Esc = cancel. No test here fetches from the Army Forge API: a loaded army is set directly.
 ## test_inventory_check_names_a_removed_control proves the presence check can fail.
 
-const WORDS := ["FROM CLIPBOARD", "LOAD ARMY", "CANCEL", "IMPORT ARMY"]
-const LABELS := ["ARMY IMPORT", "ENTER ARMY FORGE SHARE LINK / LIST ID", "e.g. https://army-forge.onepagerules.com/share?id=XXX",
-	"ASSIGN PLAYER", "PREVIEW"]
+const WORDS := ["From clipboard", "Load army", "Cancel", "Import army"]
+const LABELS := ["ARMY IMPORT", "Army Forge share link or list ID", "e.g. https://army-forge.onepagerules.com/share?id=XXX",
+	"Assign player", "Preview"]
 
 var _dlg: OPRImportDialog
 var _imported: Array = []
@@ -80,7 +80,7 @@ func test_set_player_preselects_the_callers_slot() -> void:
 
 
 func test_load_army_without_a_link_says_so_and_touches_nothing() -> void:
-	_button("LOAD ARMY").pressed.emit()
+	_button("Load army").pressed.emit()
 	assert_str(_dlg.link_status_label.text).is_equal("No link entered")
 	assert_bool(_dlg.import_btn.disabled).is_true()
 
@@ -91,7 +91,7 @@ func test_import_army_emits_the_army_slot_and_ai_flag_then_hides_and_resets() ->
 	_dlg.set_player(2)
 	_dlg.ai_check.button_pressed = true
 	_dlg.share_link_input.text = "https://example.invalid/x"
-	_button("IMPORT ARMY").pressed.emit()
+	_button("Import army").pressed.emit()
 	assert_int(_imported.size()).override_failure_message("IMPORT ARMY did not emit army_imported").is_equal(1)
 	if _imported.is_empty():
 		return
@@ -107,7 +107,7 @@ func test_import_army_emits_the_army_slot_and_ai_flag_then_hides_and_resets() ->
 func test_cancel_and_escape_hide_and_reset_without_importing() -> void:
 	_dlg.show()
 	_dlg.share_link_input.text = "abc"
-	_button("CANCEL").pressed.emit()
+	_button("Cancel").pressed.emit()
 	assert_bool(_dlg.visible).is_false()
 	assert_str(_dlg.share_link_input.text).is_empty()
 	_dlg.show()
@@ -135,9 +135,9 @@ func test_the_x_cancels_and_the_sheet_is_house_style_and_owns_its_clicks() -> vo
 	var root := _dlg.get_child(0) as Control
 	assert_int(root.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
 	assert_object(root.theme).is_same(HouseStyle.theme())
-	assert_str(String(_button("IMPORT ARMY").theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
-	assert_str(String(_button("LOAD ARMY").theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
-	assert_str(String(_button("CANCEL").theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	assert_str(String(_button("Import army").theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+	assert_str(String(_button("Load army").theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+	assert_str(String(_button("Cancel").theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
 	_dlg.show()
 	_dlg.share_link_input.text = "abc"
 	(_dlg.find_child("CloseButton", true, false) as Button).pressed.emit()
@@ -147,9 +147,21 @@ func test_the_x_cancels_and_the_sheet_is_house_style_and_owns_its_clicks() -> vo
 
 func test_inventory_check_names_a_removed_control() -> void:
 	assert_array(_missing()).is_empty()
-	var cancel := _button("CANCEL")
+	var cancel := _button("Cancel")
 	var parent := cancel.get_parent()
 	parent.remove_child(cancel)
 	var missing := _missing()
 	parent.add_child(cancel)
-	assert_array(missing).contains_exactly(["button: CANCEL"])
+	assert_array(missing).contains_exactly(["button: Cancel"])
+
+
+## The window loses the old layer's marks: no "///" line, sentence-case captions and buttons, the empty state in the body
+## and caption styles instead of the wordmark font (sheet 04; red on main: "/// NODE-01", capitals, the wordmark font).
+func test_the_window_has_no_old_layer_marks() -> void:
+	for l: Node in _dlg.find_children("*", "Label", true, false):
+		assert_bool((l as Label).text.begins_with("///")).override_failure_message("old mark: %s" % (l as Label).text).is_false()
+	var headline: Label = _dlg.state_panel._headline
+	assert_str(headline.text).is_equal("No army loaded")
+	assert_str(String(headline.theme_type_variation)).is_equal(String(HouseStyle.BODY))
+	assert_bool(headline.has_theme_font_override("font")).override_failure_message("the headline still wears the wordmark font").is_false()
+	assert_str(String(_dlg.state_panel._detail.theme_type_variation)).is_equal(String(HouseStyle.CAPTION))
