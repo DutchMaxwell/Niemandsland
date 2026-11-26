@@ -733,7 +733,7 @@ func _show_join_popup() -> void:
 	content.add_child(NetDialog.label("Invitation code:"))
 	_join_code_input = NetDialog.line_edit("", "ABC-123")
 	_join_code_input.max_length = 7  # 6 chars + optional hyphen
-	_join_code_input.add_theme_font_override("font", load(HouseStyle.FONT_MONO_PATH) as Font)
+	_join_code_input.add_theme_font_override("font", HouseStyle.mono())
 	_join_code_input.add_theme_font_size_override("font_size", 30)
 	_join_code_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(_join_code_input)

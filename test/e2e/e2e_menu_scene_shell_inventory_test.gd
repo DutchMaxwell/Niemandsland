@@ -421,6 +421,32 @@ func test_save_facts_are_left_out_of_a_file_that_is_too_large_or_broken() -> voi
 	DirAccess.remove_absolute(broken)
 
 
+## The bundled Source Code Pro is a variable font whose default instance is ExtraLight: every mono line of the
+## first screen asks for weight 400 (red on main: the plain font, thin and dim).
+func test_mono_lines_carry_weight_400() -> void:
+	var tag: int = TextServerManager.get_primary_interface().name_to_tag("wght")
+	var lines: Array = [_view.version, _view.status] + (_view.get("save_facts") as Array)
+	assert_int(lines.size()).is_equal(4)
+	for line: Label in lines:
+		var font := line.get_theme_font("font") as FontVariation
+		assert_object(font).override_failure_message("a mono line has the plain font").is_not_null()
+		if font != null:
+			assert_int(int(font.variation_opentype.get(tag, 0))).is_equal(400)
+
+
+## The kickers are eyebrows (tracked, the welcome one in the accent), the version reads in capitals and the rule under
+## the wordmark is the signature: 28 px of gold, then the accent fading out, 2 px high (red on main: a 1 px grey rule).
+func test_kickers_are_eyebrows_and_the_rule_is_the_signature() -> void:
+	assert_object(_view.welcome_kicker.get_theme_font("font")).is_same(HouseStyle.eyebrow_font())
+	assert_that(_view.welcome_kicker.get_theme_color("font_color")).is_equal(HouseStyle.ACCENT)
+	assert_bool(_view.version.uppercase).is_true()
+	var rule := _view.find_child("SignatureRule", true, false) as Control
+	assert_object(rule).override_failure_message("no signature rule under the wordmark").is_not_null()
+	if rule != null:
+		assert_that(rule.get_combined_minimum_size()).is_equal(Vector2(470, HouseStyle.RULE_H))
+		assert_that((rule.get_child(0) as ColorRect).color).is_equal(HouseStyle.GOLD)
+
+
 func test_continue_card_shows_two_mono_lines_with_the_facts() -> void:
 	var lines: Variant = _view.get("save_facts")
 	assert_bool(lines is Array).override_failure_message("the card has no fact lines").is_true()

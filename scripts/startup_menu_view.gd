@@ -5,7 +5,6 @@ signal route_closed
 signal arrived
 const FONT = preload("res://assets/ui_glassmorphism/fonts/Inter.ttf")
 const LOGO = preload("res://assets/ui_glassmorphism/fonts/Orbitron.ttf")
-const MONO = preload("res://assets/ui_glassmorphism/fonts/SourceCodePro.ttf")
 var buttons: Dictionary = {}
 var resume: PanelContainer
 var save_name: Label
@@ -127,7 +126,7 @@ func _ready() -> void:
 	var identity := VBoxContainer.new()
 	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_masthead.add_child(identity)
-	identity.add_child(_label("TABLETOP FOR ONEPAGERULES",14,HouseStyle.MUTED))
+	identity.add_child(_label("TABLETOP FOR ONEPAGERULES",14,HouseStyle.MUTED,HouseStyle.eyebrow_font()))
 	var wordmark := HBoxContainer.new()
 	wordmark.add_theme_constant_override("separation",0)
 	identity.add_child(wordmark)
@@ -135,11 +134,7 @@ func _ready() -> void:
 		var letter := _label(part,54,HouseStyle.ACCENT if part == "LAND" else HouseStyle.INK)
 		letter.add_theme_font_override("font",LOGO)
 		wordmark.add_child(letter)
-	var rule := ColorRect.new()
-	rule.color = Color("819f9e65")
-	rule.custom_minimum_size = Vector2(500,1)
-	rule.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	identity.add_child(rule)
+	identity.add_child(HouseStyle.signature_rule(470))
 	_main = VBoxContainer.new()
 	_main.add_theme_constant_override("separation",5)
 	_scroll = ScrollContainer.new()
@@ -147,7 +142,7 @@ func _ready() -> void:
 	add_child(_scroll)
 	_scroll.add_child(_main)
 	_main.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	welcome_kicker = _label("WELCOME TO NIEMANDSLAND",14,HouseStyle.MUTED)
+	welcome_kicker = _label("WELCOME TO NIEMANDSLAND",14,HouseStyle.ACCENT,HouseStyle.eyebrow_font())
 	_main.add_child(welcome_kicker)
 	welcome = _label("Your first table awaits.",44,HouseStyle.INK)
 	welcome.add_theme_font_override("font",HouseStyle.font(500))
@@ -175,12 +170,12 @@ func _ready() -> void:
 	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	text.add_theme_constant_override("separation",12)
 	head.add_child(text)
-	text.add_child(_label("LATEST SAVE",14,HouseStyle.MUTED))
+	text.add_child(_label("LATEST SAVE",14,HouseStyle.MUTED,HouseStyle.eyebrow_font()))
 	save_name = _label("",26,HouseStyle.INK)
 	save_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	text.add_child(save_name)
 	for _i in 2:
-		var fact := _label("",14,HouseStyle.MUTED,MONO)
+		var fact := _label("",14,HouseStyle.MUTED,HouseStyle.mono())
 		text.add_child(fact)
 		save_facts.append(fact)
 	save_date = _label("",15,HouseStyle.MUTED)
@@ -215,9 +210,10 @@ func _ready() -> void:
 			_footer.add_child(quit)
 		else:
 			_footer.add_child(_utility(row[0],row[1]))
-	version = _label("",14,HouseStyle.MUTED,MONO)
+	version = _label("",14,HouseStyle.MUTED,HouseStyle.mono())
+	version.uppercase = true
 	add_child(version)
-	status = _label("Preparing background …",14,HouseStyle.MUTED,MONO)
+	status = _label("Preparing background …",14,HouseStyle.MUTED,HouseStyle.mono())
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(status)
