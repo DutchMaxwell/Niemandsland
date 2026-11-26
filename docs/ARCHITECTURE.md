@@ -19,7 +19,8 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 ## Scenes
 
 - `startup_menu.tscn` — main scene; menu over a live battlefield diorama (`menu_diorama.gd`).
-  `cinematic_intro.gd` is the table's opening flight, started by `main.gd`.
+  The table opens without a flight: the loading picture holds until the table is ready
+  (`table_reveal_gate.gd`), then the HUD fades in.
 - `main.tscn` — the game table; instantiates the subsystems below.
 - Dialog/overlay scenes: `map_layout`, `radial_menu`, `opr_stats_tooltip`; the
   import/wounds/marker/casts dialogs are code-built (`*_dialog.gd`).
@@ -180,7 +181,7 @@ ruleset (the old root-level `ai_*.gd` / `battle_simulator.gd` were removed and *
   war-torn fires and CC0 battlefield ambience (see [`ATMOSPHERE.md`](ATMOSPHERE.md)).
 - `glassmorphism_theme.gd` + `hud/` (`hud_frame`, `hud_tokens`,
   `state_panel`, `ui_motion`) — the HUD tokens and overlay; `hud/house_style.gd` is the dark-panel house style the in-game windows use.
-- `grass_field.gd`, `atmospheric_clouds.gd`, `cinematic_intro.gd`,
+- `grass_field.gd`, `atmospheric_clouds.gd`,
   `opr_stats_tooltip.gd`, `selection_spill_light.gd`.
 
 ## Rust rules core (required)

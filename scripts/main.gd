@@ -65,7 +65,7 @@ var _board_look: Node = null   # the dev-view board the door in _ready drew (gen
 ## the table can be shown, then it fades with the HUD's arrival (_on_intro_finished).
 var _prompt_overlay: CanvasLayer = null
 
-## One owner of the table's contested Environment values (preset, mood light, biome reference, intro).
+## One owner of the table's contested Environment values (preset, mood light, biome reference, Calm mode).
 var render_state: RenderState = null
 # Lighting Controller
 var lighting_controller: Node = null
@@ -713,7 +713,7 @@ func _ready() -> void:
 	_adjust_camera_for_table_size(DEFAULT_TABLE_SIZE_FEET)
 
 	# The quality preset is the render state's lowest layer, applied by rule at the start (the autoload ran at the
-	# startup menu, before this scene existed); the light, the biome reference and the intro add theirs above it.
+	# startup menu, before this scene existed); the light, the biome reference and Calm mode add theirs above it.
 	render_state = RenderState.new(world_environment.environment)
 	GraphicsSettings.apply_environment_settings(GraphicsSettings.PRESETS[GraphicsSettings.current_preset])
 	# The window (fullscreen + present mode, frame cap, UI scale) is re-asserted here too, as the removed duplicate

@@ -87,7 +87,6 @@ test/boardgen_dress_placement_test.gd
 test/boardgen_dress_rules_test.gd
 test/boardgen_dress_snapshot_test.gd
 test/bone_texture_idle_test.gd
-test/cinematic_intro_test.gd
 test/combat_log_text_test.gd
 test/combat_stage_test.gd
 test/console_header_breadth_test.gd
