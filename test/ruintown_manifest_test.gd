@@ -45,6 +45,9 @@ static func problems(m: Dictionary) -> Array[String]:
 	for pair: Array in BoardgenTheme.TOWN_SETS:
 		if not sets.has(pair[0]):
 			out.append("set %s missing" % pair[0])
+	for soil: String in BoardgenTheme.TOWN_SOIL:   # (LOOK5 S2) the yards' four soil sets reach the players too
+		if not sets.has(soil) or not (sets[soil] as Dictionary).has("orm"):
+			out.append("soil set %s missing" % soil)
 	for set_name: String in sets:
 		for map: String in ["albedo", "normal"]:
 			if not sets[set_name].has(map):
