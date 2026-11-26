@@ -10,7 +10,8 @@ const FORMATION := [Vector2(-0.043,0), Vector2(0,0.01), Vector2(0.043,0), Vector
 ## Offline or a failed download: reveal the placeholders after this long rather than never.
 const TERRAIN_MODELS_WAIT_MS := 30000
 ## The hero shot's light, matched to MenuDiorama.CAMERA_REST: a cool moon and key light from the front left
-## light every face, a warm fire spill at the Warriors' side gives the picture its second colour.
+## light every face, a warm fire spill at the Warriors' side gives the picture its second colour. Both are
+## fill and spill: they cast no shadows at any quality tier.
 const MOON_COLOR := Color(0.50,0.80,0.92)
 const KEY_POSITION := Vector3(-0.20,0.25,0.35)
 const KEY_ENERGY := 0.9
@@ -32,8 +33,6 @@ var presentation: Node3D
 var camera: Camera3D
 var biome := "urban_ruins"
 var model_count := 0
-var _key_light: OmniLight3D
-var _fire_light: OmniLight3D
 
 class MenuObjects extends ObjectManager:
 	# Visual-only container: no deferred network discovery, selection lights or
@@ -120,15 +119,14 @@ func build(selected_biome: String, world_env: WorldEnvironment, sun: Directional
 	# must not turn the menu into a daytime scene after a live preset change.
 	if GraphicsSettings.settings_applied.is_connected(presentation._on_graphics_settings_applied):
 		GraphicsSettings.settings_applied.disconnect(presentation._on_graphics_settings_applied)
+	apply_night()
 	terrain_overlay.set_fires_enabled(true)
 	for label in terrain_overlay._terrain_labels:
 		label.hide()
 	_add_spill(Vector3(0.12,0.12,0.20),Color(0.78,0.84,1),0.10,0.42)
 	_add_spill(Vector3(-0.03,0.045,-0.13),Color(1,0.42,0.16),0.12,0.27)
-	_key_light = _add_spill(KEY_POSITION,MOON_COLOR,KEY_ENERGY,KEY_RANGE)
-	_fire_light = _add_spill(FIRE_POSITION,FIRE_COLOR,FIRE_ENERGY,FIRE_RANGE)
-	# After the lights exist: the tier switches in here reach them.
-	apply_night()
+	_add_spill(KEY_POSITION,MOON_COLOR,KEY_ENERGY,KEY_RANGE)
+	_add_spill(FIRE_POSITION,FIRE_COLOR,FIRE_ENERGY,FIRE_RANGE)
 	progress.emit("Ready",1.0)
 	finished.emit()
 
@@ -225,9 +223,6 @@ func apply_night() -> void:
 	env.ssao_enabled = GraphicsSettings.current_preset >= GraphicsSettings.QualityPreset.MEDIUM
 	env.ssr_enabled = GraphicsSettings.current_preset >= GraphicsSettings.QualityPreset.HIGH
 	env.volumetric_fog_enabled = GraphicsSettings.current_preset >= GraphicsSettings.QualityPreset.HIGH
-	for light in [_key_light,_fire_light]:
-		if is_instance_valid(light):
-			light.shadow_enabled = GraphicsSettings.current_preset >= GraphicsSettings.QualityPreset.HIGH
 	if is_instance_valid(camera):
 		camera.attributes = _depth_of_field() if GraphicsSettings.current_preset >= GraphicsSettings.QualityPreset.MEDIUM else null
 
@@ -244,11 +239,10 @@ func _depth_of_field() -> CameraAttributesPractical:
 	return attributes
 
 
-func _add_spill(position_value: Vector3, color: Color, energy: float, radius: float) -> OmniLight3D:
+func _add_spill(position_value: Vector3, color: Color, energy: float, radius: float) -> void:
 	var light := OmniLight3D.new()
 	light.position = position_value
 	light.light_color = color
 	light.light_energy = energy
 	light.omni_range = radius
 	add_child(light)
-	return light
