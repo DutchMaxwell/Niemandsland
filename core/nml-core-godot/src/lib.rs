@@ -959,6 +959,24 @@ impl NmlCore {
         self.dropped.iter().map(GString::from).collect()
     }
 
+    /// Ruling D16 (CMD-ROUNDTRIP CR3): the default command-group picks the table writes into a unit at game start - empty
+    /// unless a unit of `system` with `rules` carries a command group; else the two nearest living friendly units of
+    /// `others` (each `[key, player, alive, Vector2 centre]`, world XZ metres), ties by key. `at` = the unit's model centre.
+    /// The rule itself is `rules::default_command_picks_of`; this only converts.
+    #[func]
+    fn default_command_picks(&self, system: GString, rules: PackedStringArray, player: i64, at: Vector2, others: VarArray) -> PackedStringArray {
+        let rules: Vec<String> = rules.as_slice().iter().map(|r| r.to_string()).collect();
+        if !nml_core::rules::carries_command(&system.to_string(), &rules) {
+            return PackedStringArray::new();
+        }
+        let others: Vec<(String, i64, bool, [f64; 2])> = others.iter_shared().filter_map(|v| {
+            let o = v.try_to::<VarArray>().ok()?;
+            let c = o.get(3)?.try_to::<Vector2>().ok()?;
+            Some((o.get(0)?.to_string(), o.get(1)?.try_to::<i64>().ok()?, o.get(2)?.try_to::<bool>().ok()?, [f64::from(c.x), f64::from(c.y)]))
+        }).collect();
+        nml_core::rules::default_command_picks_of(player, [f64::from(at.x), f64::from(at.y)], &others).iter().map(GString::from).collect()
+    }
+
     /// The seeded 48 x 48 in heightfield board for `seed` (`nml_core::boardgen`, point-symmetric): `cells` (`level` 0-3,
     /// inches in `level_in`), `lots`, `arteries`, `connectors` (all `Ladder`, with `edge_in`), `landmarks` (kind, footprint, core
     /// `terrain` class, `solid`), `problems` (empty = accepted).
