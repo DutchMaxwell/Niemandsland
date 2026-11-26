@@ -250,6 +250,26 @@ func test_credits_dialog_keeps_the_legal_notice_verbatim() -> void:
 	assert_bool(found).override_failure_message("the non-affiliation notice changed or is gone").is_true()
 
 
+## The five licence lines are a table: the name left, the licence right, 36 px rows (sheet 08; red on main: five lines
+## of one text label).
+func test_credits_licences_are_rows_of_a_table() -> void:
+	await _click(_button("Credits & licenses"))
+	var dialog := _dialog_titled("Credits & licenses")
+	assert_object(dialog).is_not_null()
+	var rows := dialog.find_child("LicenceRows", true, false)
+	assert_object(rows).override_failure_message("no licence table").is_not_null()
+	if rows == null:
+		return
+	var pairs: Array = []
+	for row: Node in rows.get_children():
+		if row is HBoxContainer:
+			assert_float((row as Control).custom_minimum_size.y).is_equal(36.0)
+			pairs.append([(row.get_child(0) as Label).text, (row.get_child(1) as Label).text])
+	assert_array(pairs).is_equal([["Game code", "MIT License"],
+		["3D miniatures & terrain", "generated project assets, CC-BY-SA 4.0"],
+		["Fonts", "SIL Open Font License"], ["UI icons", "Phosphor Icons (MIT)"], ["Engine", "Godot Engine (MIT)"]])
+
+
 func test_quit_asks_first_with_back_focused_and_never_quits() -> void:
 	await _click(_button("Quit"))
 	var card: PromptCard = _menu.get("_exit_card")

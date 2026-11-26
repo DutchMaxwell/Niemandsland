@@ -270,6 +270,28 @@ func test_core_missing_warning_stays_silent_outside_the_live_scene() -> void:
 	var after := _menu.get_children().filter(func(n: Node) -> bool: return n is AcceptDialog or n is PromptCard).size()
 	assert_int(after).is_equal(before)
 
+## The report card: the saved path in a mono well, "Open folder" beside OK (sheet 08; red on main: one text with the path).
+func test_the_report_card_shows_the_path_in_a_well_with_an_open_folder_action() -> void:
+	var card: Variant = _menu._show_report_saved("/home/x/niemandsland_report_2026-11-26.zip")
+	assert_bool(card is PromptCard).override_failure_message("no report card").is_true()
+	if card is not PromptCard:
+		return
+	await get_tree().process_frame
+	var well: Label = null
+	for label: Node in card.find_children("*", "Label", true, false):
+		if (label as Label).text.ends_with("niemandsland_report_2026-11-26.zip"):
+			well = label as Label
+	assert_object(well).is_not_null()
+	if well != null:
+		assert_object(well.get_theme_font("font")).is_same(HouseStyle.mono())
+		assert_str(String(well.get_parent().theme_type_variation)).is_equal(String(HouseStyle.CARD))
+	var actions: Array = card.ok_button.get_parent().get_children()
+	assert_str((actions[0] as Button).text).is_equal("Open folder")
+	assert_str((actions[1] as Button).text).is_equal("OK")
+	(actions[0] as Button).pressed.emit()
+	assert_str(str(await card.answer())).is_equal("folder")
+
+
 ## The one-line notice made a window as wide as its text (1,489 px); the card wraps at its own width.
 func test_core_missing_notice_wraps_its_line() -> void:
 	var card: Variant = _menu._show_core_missing_dialog()

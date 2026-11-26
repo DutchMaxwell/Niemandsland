@@ -200,8 +200,9 @@ func _input(event: InputEvent) -> void:
 
 ## A third answer between the way out and the OK button (split fire: "All at <target>").
 func add_action(text: String, value: Variant) -> Button:
-	var b := _action(cancel_button.get_parent() as HBoxContainer, text, HouseStyle.BUTTON, func() -> void: resolve(value))
-	b.get_parent().move_child(b, cancel_button.get_index() + 1)
+	var anchor := cancel_button if cancel_button != null else ok_button   # without a way out: just before OK
+	var b := _action(anchor.get_parent() as HBoxContainer, text, HouseStyle.BUTTON, func() -> void: resolve(value))
+	b.get_parent().move_child(b, anchor.get_index() + (1 if cancel_button != null else 0))
 	return b
 
 
