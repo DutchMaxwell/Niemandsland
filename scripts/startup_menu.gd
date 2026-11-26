@@ -76,6 +76,7 @@ func _ready() -> void:
 	view = MenuView.new()
 	view.name = "SafeArea"
 	add_child(view)
+	_add_boot_cover()
 	continue_btn = view.buttons.ContinueBtn
 	start_battle_btn = view.buttons.StartBattleBtn
 	tutorial_btn = view.buttons.TutorialBtn
@@ -148,6 +149,22 @@ func _show_whats_new() -> void:
 		add_child(_whats_new)
 		MenuDialog.attach_scrim(_whats_new)
 	_whats_new.open()
+
+
+## The boot splash is the house sheet colour: a full-screen cover of that colour stands between the backdrop and
+## the menu until the backdrop's first frame, then fades off, so boot and menu share one colour.
+func _add_boot_cover() -> void:
+	var cover := ColorRect.new()
+	cover.name = "BootCover"
+	cover.color = HouseStyle.SHEET_FILL
+	cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(cover)
+	move_child(cover,view.get_index())
+	diorama.first_frame_rendered.connect(func() -> void:
+		var fade := create_tween()
+		fade.tween_property(cover,"color:a",0.0,MenuDiorama.REVEAL_FADE_S)
+		fade.tween_callback(cover.queue_free),CONNECT_ONE_SHOT)
 
 
 func _on_diorama_loading(label: String, ratio: float) -> void:

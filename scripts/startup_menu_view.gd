@@ -213,6 +213,7 @@ func show_route(key: String) -> void:
 	route_title.text = {"online":"Meet around the table.","learn":"Find your starting point.","help":"Help & feedback."}[key]
 	route_panel.reset_size()
 	route_panel.show()
+	UiFeedback.play_panel(true)
 	_slide_route(true)
 	# Trap keyboard focus within the open route, including Shift+Tab and arrows.
 	var focus: Array[Control] = [route_back]
@@ -226,6 +227,7 @@ func show_route(key: String) -> void:
 func close_route() -> void:
 	if not route_panel.visible or _route_closing:
 		return
+	UiFeedback.play_panel(false)
 	if is_instance_valid(_return_focus):
 		_return_focus.grab_focus()
 	await _slide_route(false)
