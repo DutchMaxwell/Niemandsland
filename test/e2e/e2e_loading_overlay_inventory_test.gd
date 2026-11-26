@@ -149,6 +149,33 @@ func test_the_full_overlay_measures_as_sheet_06() -> void:
 	assert_object(_overlay.find_child("LegalLine", true, false)).override_failure_message("the compact panel shows the legal line").is_null()
 
 
+## The loading picture names its stages as a row of marks under the subtitle: the ones before the stage in hand are done,
+## it is gold, the rest pending; a text that is no stage leaves them; the plain and the compact overlay show none
+## (sheet 06; red on main: no marks, no set_stages).
+func test_stage_marks_follow_the_stage_in_hand() -> void:
+	_overlay = await _make(false)
+	assert_bool(_overlay.has_method("set_stages")).override_failure_message("no set_stages").is_true()
+	if not _overlay.has_method("set_stages"):
+		return
+	assert_object(_overlay.find_child("StageMarks", true, false)).override_failure_message("marks without names").is_null()
+	_overlay.set_stages(PackedStringArray(["Table", "Battlemap", "Terrain", "Miniatures"]))
+	var states := func() -> Array: return _overlay._stage_marks.map(func(m: Control) -> int: return m.state)
+	assert_array(states.call()).is_equal([1, 0, 0, 0])
+	_overlay.set_stage("Terrain")
+	assert_array(states.call()).is_equal([2, 2, 1, 0])
+	assert_that(_overlay._stage_labels[2].get_theme_color("font_color")).is_equal(HouseStyle.GOLD)
+	assert_that(_overlay._stage_labels[0].get_theme_color("font_color")).is_equal(HouseStyle.INK)
+	assert_that(_overlay._stage_labels[3].get_theme_color("font_color")).is_equal(HouseStyle.MUTED)
+	_overlay.set_stage("Waiting for the host")
+	assert_array(states.call()).is_equal([2, 2, 1, 0])
+	_overlay.set_stage("")
+	assert_array(states.call()).is_equal([2, 2, 2, 2])
+	_overlay.free()
+	_overlay = await _make(true)
+	_overlay.set_stages(PackedStringArray(["Table"]))
+	assert_object(_overlay.find_child("StageMarks", true, false)).override_failure_message("the compact panel shows marks").is_null()
+
+
 func test_inventory_check_names_a_removed_control() -> void:
 	_overlay = await _make(false)
 	assert_array(_missing(_overlay)).is_empty()

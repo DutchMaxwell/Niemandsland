@@ -30,7 +30,35 @@ const FULL_RULE_W := 250      # the signature rule under the small wordmark
 const LEGAL_ABOVE_BOTTOM := 50
 const BACKDROP_LIGHT := 0.62   # full mode: the table's picture behind the text, at 62 % brightness (sheet 06)
 
+# === Stage marks (full mode, sheet 06) ===
+
+## One mark of the row under the subtitle: a ring (pending), a gold ring with a faint halo (now) or a filled accent
+## disc with a tick (done).
+class StageMark:
+	extends Control
+	var state := 0   # 0 pending, 1 now, 2 done
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(22, 22)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var middle := size * 0.5
+		if state == 2:
+			draw_circle(middle, 10.0, HouseStyle.ACCENT)
+			draw_polyline(PackedVector2Array([middle + Vector2(-4, 0), middle + Vector2(-1, 3), middle + Vector2(4, -3)]),
+					HouseStyle.ON_ACCENT, 2.0, true)
+		elif state == 1:
+			draw_circle(middle, 11.0, Color(HouseStyle.GOLD, 0.16))
+			draw_arc(middle, 9.0, 0.0, TAU, 32, HouseStyle.GOLD, 2.0, true)
+		else:
+			draw_arc(middle, 9.0, 0.0, TAU, 32, HouseStyle.LINE, 2.0, true)
+
 # === Private variables ===
+
+var _stage_names := PackedStringArray()
+var _stage_marks: Array[StageMark] = []
+var _stage_labels: Array[Label] = []
 
 var _content: Control = null
 var _label: Label = null
@@ -262,10 +290,56 @@ func set_backdrop(texture: Texture2D) -> void:
 		_content.move_child(layer, 1 if layer == picture else 2)   # above the cover, under the text
 
 
-## Full mode: the stage line under the bar, in mono capitals.
+## Full mode: the stage line under the bar, in mono capitals; the marks follow it (see set_stages).
 func set_stage(text: String) -> void:
 	if _stage != null:
 		_stage.text = text.to_upper()
+	_mark_stages(text)
+
+
+## Full mode: a row of marks under the subtitle, one per stage name; the first is the one in hand. The plain overlay
+## (no names) shows none.
+func set_stages(names: PackedStringArray) -> void:
+	if compact or _subtitle == null or names.is_empty():
+		return
+	_stage_names = names
+	var row := HBoxContainer.new()
+	row.name = "StageMarks"
+	row.add_theme_constant_override("separation", 26)
+	_stage_marks.clear()
+	_stage_labels.clear()
+	for stage_name: String in names:
+		var part := HBoxContainer.new()
+		part.add_theme_constant_override("separation", 8)
+		var mark := StageMark.new()
+		part.add_child(mark)
+		var label := _text(part, stage_name, HouseStyle.MUTED, 16)
+		_stage_marks.append(mark)
+		_stage_labels.append(label)
+		row.add_child(part)
+	var air := MarginContainer.new()   # room above and below, as the sheet leaves it
+	air.add_theme_constant_override("margin_top", 12)
+	air.add_theme_constant_override("margin_bottom", 20)
+	air.add_child(row)
+	_subtitle.get_parent().add_child(air)
+	_subtitle.get_parent().move_child(air, _subtitle.get_index() + 1)
+	_mark_stages(names[0])
+
+
+## Every name before `text` is done, `text` is in hand, the rest pending; an empty text means all done; a text that is not
+## a stage name ("Waiting for the host") leaves the marks as they are.
+func _mark_stages(text: String) -> void:
+	if _stage_marks.is_empty():
+		return
+	var at := _stage_names.size() if text.is_empty() else _stage_names.find(text)
+	if at < 0:
+		return
+	for i in _stage_marks.size():
+		var state := 2 if i < at else 1 if i == at else 0
+		_stage_marks[i].state = state
+		_stage_marks[i].queue_redraw()
+		_stage_labels[i].add_theme_color_override("font_color",
+				HouseStyle.INK if state == 2 else HouseStyle.GOLD if state == 1 else HouseStyle.MUTED)
 
 
 ## Set the real progress 0..1 (turns off indeterminate creep). The visible fill eases

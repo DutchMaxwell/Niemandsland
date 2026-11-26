@@ -114,8 +114,18 @@ func test_a_join_waits_for_the_host_and_names_that_wait() -> void:
 		overlay.queue_free()
 		return
 	assert_str(overlay._stage.text).is_equal("WAITING FOR THE HOST")
+	(
+		assert_int(overlay._stage_marks.size())
+		. override_failure_message("the gate names no stages")
+		. is_equal(4)
+	)
+	assert_int(overlay._stage_marks[0].state).is_equal(1)  # the wait leaves the marks as they are
 	_main.save_manager._restore_unlocked.emit()
 	assert_str(overlay._stage.text).is_equal("BATTLEMAP")
+	(
+		assert_array(overlay._stage_marks.map(func(m: Control) -> int: return m.state))
+		. is_equal([2, 1, 0, 0])
+	)
 	overlay.queue_free()
 
 
