@@ -250,6 +250,16 @@ func test_core_missing_warning_stays_silent_outside_the_live_scene() -> void:
 	var after := _menu.get_children().filter(func(n: Node) -> bool: return n is AcceptDialog).size()
 	assert_int(after).is_equal(before)
 
+## Footer links lost letters on hover ("Help & feedba"): only the resting state had the 10 px box, the theme's
+## own hover box is wider and left the text less room. RED on main (hover and pressed differ), GREEN with one box.
+func test_footer_links_keep_one_box_for_every_state() -> void:
+	for id: String in ["HelpBtn","CreditsBtn","ExitGameBtn"]:
+		var link: Button = _menu.view.buttons[id]
+		var rest := link.get_theme_stylebox("normal").get_minimum_size()
+		for state: String in ["hover","pressed"]:
+			var box := link.get_theme_stylebox(state).get_minimum_size()
+			assert_vector(box).override_failure_message("%s: the %s box needs %s, the resting box %s" % [id,state,box,rest]).is_equal(rest)
+
 ## The one-line notice made a window as wide as its text (1,489 px). RED on main, GREEN once the text wraps.
 func test_core_missing_dialog_wraps_its_line() -> void:
 	var dialog: AcceptDialog = _menu._show_core_missing_dialog()
@@ -260,6 +270,7 @@ func test_core_missing_dialog_wraps_its_line() -> void:
 ## Step 61: the setup fades in from the menu and out to the table over the screen time (red on main: it pops in
 ## at full opacity and is gone at once). Reduce Motion stays off here (the test profile's default).
 func test_the_table_setup_fades_in_and_out() -> void:
+	var previous = ProjectSettings.get_setting("niemandsland/pending_table_setup", null)
 	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
 	probe.set_script(MenuTransitionProbe)
 	add_child(probe)
@@ -273,4 +284,25 @@ func test_the_table_setup_fades_in_and_out() -> void:
 	assert_bool(probe.entered_game).is_true()
 	assert_bool(is_instance_valid(dialog) and dialog.visible).override_failure_message("the setup is gone at once").is_true()
 	await get_tree().create_timer(HudTokens.DUR_SCREEN + 0.15).timeout
+	ProjectSettings.set_setting("niemandsland/pending_table_setup", previous)
 	assert_bool(is_instance_valid(dialog)).override_failure_message("the faded setup is not freed").is_false()
+
+## Step 29: a new table's loading picture names it - biome, system and size over the biome's picture; a load keeps
+## the plain overlay (red on main: the overlay only says LOADING).
+func test_the_loading_picture_names_a_new_table() -> void:
+	var previous = ProjectSettings.get_setting("niemandsland/pending_table_setup", null)
+	ProjectSettings.set_setting("niemandsland/pending_table_setup", {"size": Vector2(6, 4), "biome": "urban_ruins", "system": "gf"})
+	var overlay: LoadingOverlay = auto_free(LoadingOverlay.new())
+	add_child(overlay)
+	if _menu.has_method("_name_the_table"):
+		_menu._name_the_table(overlay)
+	ProjectSettings.set_setting("niemandsland/pending_table_setup", null)   # the plain case below: no setup pending
+	assert_str(overlay._title.text).override_failure_message("the overlay does not name the table").is_equal("Urban ruins")
+	assert_str(overlay._subtitle.text if overlay.get("_subtitle") != null else "").is_equal("Grimdark Future · 6 × 4 ft")
+	assert_object(overlay.find_child("Backdrop", true, false)).override_failure_message("no biome picture").is_not_null()
+	var plain: LoadingOverlay = auto_free(LoadingOverlay.new())
+	add_child(plain)
+	if _menu.has_method("_name_the_table"):
+		_menu._name_the_table(plain)   # no pending setup any more: the plain overlay
+	ProjectSettings.set_setting("niemandsland/pending_table_setup", previous)
+	assert_bool(plain._title.visible).override_failure_message("a load must keep the plain overlay").is_false()

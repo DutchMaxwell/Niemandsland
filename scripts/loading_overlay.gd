@@ -24,6 +24,7 @@ const CREEP_RATE := 0.18  # ratio per second
 const FADE_S := 0.4
 const FULL_TRACK_W := 560.0   # full mode (sheet 06): a wider, thicker bar under the title block
 const FULL_BAR_H := 5.0
+const BACKDROP_LIGHT := 0.62   # full mode: the table's picture behind the text, at 62 % brightness (sheet 06)
 
 # === Private variables ===
 
@@ -36,6 +37,7 @@ var _indeterminate := false
 var _title: Label = null     # full mode: the optional big title (set_title)
 var _stage: Label = null     # full mode: the mono stage line under the bar (set_stage)
 var _percent: Label = null   # full mode: the per cent right of the stage line
+var _subtitle: Label = null  # full mode: the line under the title (system and size)
 var _fade_in: Tween = null
 
 # === Exports ===
@@ -90,6 +92,8 @@ func _ready() -> void:
 		_label.add_theme_font_size_override("font_size", HouseStyle.FONT_EYEBROW_LARGE)
 		_title = _text(box, "", HouseStyle.INK, HouseStyle.FONT_DISPLAY)
 		_title.visible = false
+		_subtitle = _text(box, "", HouseStyle.MUTED, HouseStyle.FONT_VALUE)
+		_subtitle.visible = false
 
 	var track := Control.new()
 	track.custom_minimum_size = Vector2(_track_w(), FULL_BAR_H if not compact else BAR_H)
@@ -180,6 +184,40 @@ func set_title(text: String) -> void:
 	if _title != null:
 		_title.text = text
 		_title.visible = not text.is_empty()
+
+
+## Full mode: the line under the title (the game system and the table size); an empty text hides it.
+func set_subtitle(text: String) -> void:
+	if _subtitle != null:
+		_subtitle.text = text
+		_subtitle.visible = not text.is_empty()
+
+
+## Full mode: `texture` fills the screen behind the text at BACKDROP_LIGHT, under a shade that keeps the left
+## side (the text) dark. Call after the overlay is in the tree.
+func set_backdrop(texture: Texture2D) -> void:
+	if compact or _content == null or texture == null:
+		return
+	var picture := TextureRect.new()
+	picture.name = "Backdrop"
+	picture.texture = texture
+	picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	picture.self_modulate = Color(BACKDROP_LIGHT, BACKDROP_LIGHT, BACKDROP_LIGHT)
+	var gradient := Gradient.new()
+	gradient.set_color(0, HouseStyle.SHEET_FILL)
+	gradient.set_color(1, Color(HouseStyle.SHEET_FILL, 0.0))
+	var fill := GradientTexture2D.new()
+	fill.gradient = gradient
+	fill.fill_to = Vector2(1, 0)   # left to right
+	var shade := TextureRect.new()
+	shade.texture = fill
+	shade.stretch_mode = TextureRect.STRETCH_SCALE
+	for layer: TextureRect in [picture, shade]:
+		layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+		layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_content.add_child(layer)
+		_content.move_child(layer, 1 if layer == picture else 2)   # above the cover, under the text
 
 
 ## Full mode: the stage line under the bar, in mono capitals.
