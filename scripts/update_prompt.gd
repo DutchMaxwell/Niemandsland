@@ -66,6 +66,7 @@ func setup(current_version: String, offered_version: String, url: String, notes:
 	_skip_checkbox.text = SKIP_LABEL
 	content.add_child(_skip_checkbox)
 
+	MenuDialog.add_header(self, content)
 	add_child(content)
 	MenuDialog.style(self)
 

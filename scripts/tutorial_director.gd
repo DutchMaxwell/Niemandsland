@@ -696,7 +696,7 @@ func _show_assessment() -> void:
 	sim_check.text = "I have used a tabletop simulator before"
 	vbox.add_child(sim_check)
 	_assessment_dialog.add_child(vbox)
-	MenuDialog.style(_assessment_dialog)
+	MenuDialog.style(_assessment_dialog, true)
 	_assessment_dialog.confirmed.connect(func() -> void:
 		_on_assessment_answered(rules_check.button_pressed, sim_check.button_pressed))
 	_assessment_dialog.canceled.connect(func() -> void:
@@ -725,7 +725,7 @@ func _on_assessment_answered(knows_rules: bool, used_sim: bool) -> void:
 			progress.save_to_disk()
 		_start_from_progress())
 	skip_dialog.canceled.connect(func() -> void: _start_from_progress())
-	MenuDialog.style(skip_dialog)
+	MenuDialog.style(skip_dialog, true)
 	add_child(skip_dialog)
 	skip_dialog.popup_centered()
 

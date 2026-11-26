@@ -129,7 +129,7 @@ func test_trial_by_fire_lists_every_chapter_with_goal_and_availability() -> void
 	var chapters := Spielschule.chapters()
 	var rows: Array[Button] = []
 	for b in _buttons(d):
-		if b != d.get_ok_button():
+		if b != d.get_ok_button() and b.name != "CloseButton":
 			rows.append(b)
 	assert_int(rows.size()).is_equal(chapters.size())
 	for i in chapters.size():
@@ -172,7 +172,7 @@ func test_trial_by_fire_playable_row_launches_its_scenario() -> void:
 		return
 	var rows: Array[Button] = []
 	for b in _buttons(d):
-		if b != d.get_ok_button():
+		if b != d.get_ok_button() and b.name != "CloseButton":
 			rows.append(b)
 	rows[idx].pressed.emit()
 	await _frames(2)
@@ -233,24 +233,38 @@ func _wears_house_chrome(d: AcceptDialog) -> bool:
 	return d.theme == HouseStyle.theme() and d.get_ok_button().theme_type_variation == HouseStyle.PRIMARY
 
 
+## One title: the window has no frame of its own, its title stands as the first row of its content.
+func _has_one_title(d: AcceptDialog) -> bool:
+	if not d.borderless:
+		return false
+	for n: Node in d.find_children("*", "Label", true, false):
+		if (n as Label).text == d.title.to_upper():
+			return true
+	return false
+
+
 func test_dialogs_wear_the_house_chrome() -> void:
 	var picker := await _open_picker()
 	assert_bool(_wears_house_chrome(picker)).override_failure_message("tutorial picker is not in the house style").is_true()
+	assert_bool(_has_one_title(picker)).override_failure_message("tutorial picker has no header title").is_true()
 	assert_str(String(_button(picker, "RESUME").theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
 	assert_str(String(_button(picker, "RESET TUTORIAL PROGRESS").theme_type_variation)).is_equal(String(HouseStyle.DANGER_BUTTON))
 	var trial := await _open_trial()
 	assert_bool(_wears_house_chrome(trial)).override_failure_message("Trial by Fire is not in the house style").is_true()
+	assert_bool(_has_one_title(trial)).override_failure_message("Trial by Fire has no header title").is_true()
 	for b in _buttons(trial):
-		if b != trial.get_ok_button():
+		if b != trial.get_ok_button() and b.name != "CloseButton":
 			assert_str(String(b.theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
 	_menu._on_credits_pressed()
 	_menu._on_exit_pressed()
 	await _frames(2)
 	assert_bool(_wears_house_chrome(_dialog_titled("Credits & licenses"))).override_failure_message("credits is not in the house style").is_true()
+	assert_bool(_has_one_title(_dialog_titled("Credits & licenses"))).override_failure_message("credits has no header title").is_true()
 	var quit: PromptCard = _menu._exit_card
 	assert_str(String(quit.ok_button.theme_type_variation)).override_failure_message("quit is not in the house style").is_equal(String(HouseStyle.PRIMARY))
 	assert_str(String(quit.cancel_button.theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
 	assert_bool(_wears_house_chrome(_update_prompt("notes"))).override_failure_message("update prompt is not in the house style").is_true()
+	assert_bool(_has_one_title(_update_prompt("notes"))).override_failure_message("update prompt has no header title").is_true()
 
 
 ## The dialog ignores a script minimum size for its buttons: only the theme constant reaches them (red on
@@ -281,6 +295,30 @@ func test_inventory_check_names_a_removed_control() -> void:
 	var missing := _picker_missing(d)
 	d.add_child(reset)
 	assert_array(missing).contains_exactly(["button: RESET TUTORIAL PROGRESS"])
+
+
+func _scrim() -> ColorRect:
+	for n: Node in _menu.get_children():
+		if n is ColorRect and n.name == "DialogScrim" and not n.is_queued_for_deletion():
+			return n as ColorRect
+	return null
+
+
+## A menu window dims the menu behind it while it is open and the scrim goes with it. RED on main: no scrim.
+func test_menu_windows_dim_the_menu_while_open() -> void:
+	_menu._on_credits_pressed()
+	await _frames(2)
+	var scrim := _scrim()
+	assert_object(scrim).override_failure_message("no scrim behind the credits window").is_not_null()
+	if scrim == null:
+		return
+	assert_bool(scrim.visible).is_true()
+	assert_bool(scrim.color.is_equal_approx(HouseStyle.SCRIM)).is_true()
+	var credits := _dialog_titled("Credits & licenses") as AcceptDialog
+	credits.confirmed.emit()
+	credits.hide()
+	await _frames(3)
+	assert_object(_scrim()).override_failure_message("the scrim outlived the window").is_null()
 
 
 ## The credits text was cut mid-line in a 420 x 240 box. RED on main: 420 x 240.
