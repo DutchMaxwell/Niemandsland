@@ -68,5 +68,6 @@ func build(layout: Dictionary) -> void:
 	mat.shader = SHADER
 	mat.set_shader_parameter("cells", ImageTexture.create_from_image(Image.create_from_data(layout["nx"], layout["nz"], false, Image.FORMAT_RG8, density(layout, BoardgenSteam.vents(layout).map(func(v: Dictionary) -> Vector2i: return v["cell"])))))
 	mat.set_shader_parameter("board_in", board)
+	mat.set_shader_parameter("sump_only", 1.0)   # (LOOK5 F4r') the ground fog veils the board; the mist stays as the green shimmer over the sumps
 	material_override = mat
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

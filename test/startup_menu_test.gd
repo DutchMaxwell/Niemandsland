@@ -332,6 +332,21 @@ func test_the_table_setup_fades_in_and_out() -> void:
 	ProjectSettings.set_setting("niemandsland/pending_table_setup", previous)
 	assert_bool(is_instance_valid(dialog)).override_failure_message("the faded setup is not freed").is_false()
 
+## Boot and menu share one colour: a cover in the sheet colour stands over the backdrop and fades off after the
+## backdrop's first frame. RED on main: no cover.
+func test_boot_cover_has_the_sheet_colour_and_fades_off() -> void:
+	var cover := _menu.find_child("BootCover", true, false) as ColorRect
+	assert_object(cover).override_failure_message("the menu has no boot cover").is_not_null()
+	if cover == null:
+		return
+	assert_vector(Vector3(cover.color.r, cover.color.g, cover.color.b)).is_equal_approx(
+		Vector3(HouseStyle.SHEET_FILL.r, HouseStyle.SHEET_FILL.g, HouseStyle.SHEET_FILL.b), Vector3.ONE * 0.001)
+	assert_int(cover.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)
+	assert_int(cover.get_index()).is_less(_menu.view.get_index())
+	await get_tree().create_timer(1.2).timeout
+	assert_bool(not is_instance_valid(cover) or cover.is_queued_for_deletion()).override_failure_message(
+		"the cover stayed over the menu").is_true()
+
 ## Step 29: a new table's loading picture names it - biome, system and size over the biome's picture; a load keeps
 ## the plain overlay (red on main: the overlay only says LOADING).
 func test_the_loading_picture_names_a_new_table() -> void:
