@@ -32,6 +32,35 @@ var _switch_toggles: Dictionary = {}
 ## into the controller — clobbering e.g. the sun angle. Guard the handlers with this.
 var _syncing := false
 
+## One line of help under each setting (D7 defaults, sheet 05), keyed by the name the player reads (or the node name of
+## a control without one). Shown in the caption style; a setting not in the table has no line.
+const HELP := {
+	"Quality": "Shadows, reflections and effects in one step. Lower it if the table stutters.",
+	"UI Scale": "The size of every window and label. Raise it on a small or distant screen.",
+	"Fullscreen": "Fills the screen without a window frame.",
+	"Monitor": "The screen the game opens on.",
+	"Menu background": "The scene behind the main menu.",
+	"Tilt-Shift (Depth of Field)": "Blurs the far edge so the table reads as miniatures.",
+	"Board Mist and Steam": "Low haze over the board. Off on Performance and Low.",
+	"Combat Effects": "Muzzle flashes, impacts and auras during play.",
+	"Miniature Idle Motion": "Small breathing and head turns while models stand.",
+	"TableFrameOption": "The look of the table's rim.",
+	"Distant war sounds": "Far-off battle noise under the table's ambience.",
+	"Master Volume": "Everything you hear.",
+	"Music Volume": "The menu and table music.",
+	"SFX Volume": "Dice, shots and impacts.",
+	"Ambience Volume": "Wind, rain and the sound of the table.",
+	"UI Volume": "Clicks and confirmations in the menus.",
+	"Show Move Trails": "Chalk lines of this round's moves. The T key switches them too.",
+	"Show Rule Texts at the Table": "A short rule text floats over the table when a rule applies.",
+	"Combat Stage (paces the resolution)": "Plays a fight step by step instead of all at once.",
+	"Enforce Movement Limit": "A move stops at the model's legal range. Off: free drag.",
+	"AI Explanations Stay Up": "The opponent's explanation stays until the next event.",
+	"Gore": "How wounds and casualties look. Off shows dust instead of blood.",
+	"Calm Mode": "Turns down effects, motion and pulsing selection aids in one click.",
+	"Reduce Motion": "Interface movements become short fades.",
+}
+
 # Parameters to control
 const PARAMS = {
 	"sun_energy": {"label": "Sun Energy", "min": 0.0, "max": 3.0, "step": 0.1},
@@ -173,6 +202,7 @@ func _build_ui() -> void:
 	visibility_changed.connect(func() -> void:
 		if visible:
 			_restyle())
+	_add_help_lines.call_deferred()   # a sheet shown at once never fires visibility_changed; late rows join next frame
 
 	# Lighting moods are chosen through the ATMOSPHERE section only (added at the top by
 	# set_atmosphere_controller); the old standalone lighting "PRESETS" were a parallel,
@@ -662,6 +692,7 @@ func _on_color_changed(color: Color, key: String) -> void:
 ## dropdown) included: section titles are eyebrows, lines are ghost buttons, the rest is body text. A control
 ## that already carries a variation keeps it. Runs on every open, so it is cheap and idempotent.
 func _restyle() -> void:
+	_add_help_lines()
 	for n: Node in find_children("*", "Control", true, false):
 		if n is Label:
 			var l := n as Label
@@ -673,6 +704,26 @@ func _restyle() -> void:
 		elif n is Button and not (n is CheckButton or n is ColorPickerButton) and (n as Button).theme_type_variation == &"":
 			(n as Button).theme_type_variation = HouseStyle.BUTTON
 			(n as Button).custom_minimum_size.y = HouseStyle.H_SEGMENT
+
+
+## Puts each HELP line under its setting, once (late additions such as the menu background included): a switch or a
+## dropdown gets it right below; a name in a row gets it below the row (Gore) or below its slider (the volumes).
+func _add_help_lines() -> void:
+	for n: Node in find_children("*", "Control", true, false):
+		var key := String(n.name)
+		if not HELP.has(key) and (n is Label or n is Button):
+			key = str(n.get("text"))
+		if not HELP.has(key) or n.has_meta("help_line") or n is ColorPickerButton:
+			continue
+		n.set_meta("help_line", true)
+		var anchor := n as Control
+		if n is Label and n.get_parent() is HBoxContainer:   # a name in a row: the line goes under the row,
+			anchor = n.get_parent()   # and under the whole block when the row heads a slider block
+			if not anchor.get_parent() in _pages.values():
+				anchor = anchor.get_parent()
+		var line := HouseStyle.label(HELP[key], HouseStyle.CAPTION)
+		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		anchor.add_sibling(line)
 
 
 func _unhandled_input(event: InputEvent) -> void:
