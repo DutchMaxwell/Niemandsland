@@ -25,6 +25,7 @@ var _page_buttons: Dictionary = {}   # page name -> its rail button
 ## forces, kept in sync so the panel never shows a stale state.
 var _calm_cb: CheckButton = null
 var _switch_toggles: Dictionary = {}
+var _quality_row: HBoxContainer = null   # Graphics: one segment per GraphicsSettings.QualityPreset, in enum order
 
 ## True while _sync_ui_from_controller is pushing controller values INTO the widgets.
 ## Setting slider.value / picker.color emits value_changed/color_changed, which would
@@ -165,6 +166,7 @@ func _build_ui() -> void:
 	var vbox := _page("Lighting lab")
 	_main_vbox = vbox
 	show_page(FIRST_PAGE)
+	_add_quality_row(_page("Graphics"))
 	# Not modal, like the old window: no scrim over the table (the lighting is tuned by eye) and its clicks pass through.
 	var root := parts["root"] as Control
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -458,6 +460,28 @@ func _build_ui() -> void:
 		GraphicsSettings.ai_explain_persistent = on
 		GraphicsSettings.save_settings())
 	vbox.add_child(explain_cb)
+
+
+## Graphics > Quality: the five presets as a segment row. It sets the preset like the in-game dropdown does and
+## follows every change of it (that dropdown, the auto-tier), so the two always agree.
+func _add_quality_row(parent: Control) -> void:
+	var quality := Label.new()
+	quality.text = "Quality"
+	parent.add_child(quality)
+	var names: Array = GraphicsSettings.PRESETS.keys().map(func(p: int) -> String: return GraphicsSettings.PRESETS[p]["name"])
+	_quality_row = HouseStyle.button_row(names, HouseStyle.SEGMENT)
+	_quality_row.name = "QualityRow"
+	for i in _quality_row.get_child_count():
+		(_quality_row.get_child(i) as Button).pressed.connect(GraphicsSettings.apply_preset.bind(i))
+	parent.add_child(_quality_row)
+	GraphicsSettings.settings_applied.connect(_on_preset_applied)
+	_on_preset_applied("")
+
+
+func _on_preset_applied(_preset_name: String) -> void:
+	for i in _quality_row.get_child_count():
+		HouseStyle.set_selected(_quality_row.get_child(i) as Button, i == GraphicsSettings.current_preset)
+	_on_calm_changed()   # a preset also sets Idle Motion: the switches show it at once
 
 
 ## The content box of the page `page_name` (one of PAGES): the place a control is added to.

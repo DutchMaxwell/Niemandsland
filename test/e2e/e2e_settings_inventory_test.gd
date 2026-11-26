@@ -232,6 +232,25 @@ func test_display_toggles_reach_graphics_settings_and_are_put_back() -> void:
 	assert_bool(_toggle("Fullscreen").button_pressed).is_equal(GraphicsSettings.fullscreen)
 
 
+## Graphics > Quality: five segments in preset order; a press sets the preset, a preset set elsewhere (the in-game
+## dropdown) moves the mark (red on main: no quality row). The preset is put back.
+func test_the_quality_row_sets_and_follows_the_preset() -> void:
+	var row := _panel.find_child("QualityRow", true, false) as HBoxContainer
+	assert_object(row).override_failure_message("no quality row").is_not_null()
+	if row == null:
+		return
+	assert_bool(_panel._page("Graphics").is_ancestor_of(row)).is_true()
+	assert_array(row.get_children().map(func(b: Node) -> String: return (b as Button).text)).is_equal(["Performance", "Low", "Medium", "High", "Ultra"])
+	var before: int = GraphicsSettings.current_preset
+	var other: int = GraphicsSettings.QualityPreset.LOW if before != GraphicsSettings.QualityPreset.LOW else GraphicsSettings.QualityPreset.HIGH
+	(row.get_child(other) as Button).pressed.emit()
+	var set_by_row: int = GraphicsSettings.current_preset
+	GraphicsSettings.apply_preset(before)
+	var marked: bool = HouseStyle.is_selected(row.get_child(before) as Button) and not HouseStyle.is_selected(row.get_child(other) as Button)
+	assert_int(set_by_row).is_equal(other)
+	assert_bool(marked).override_failure_message("the row does not follow a preset set elsewhere").is_true()
+
+
 func test_ui_scale_and_stage_beat_sliders_reach_graphics_settings_and_are_put_back() -> void:
 	var scale_slider := _label("UI Scale").get_parent().get_parent().get_child(1) as HSlider
 	var before_scale: float = GraphicsSettings.ui_scale
