@@ -9,6 +9,16 @@ const PAGE_RAIL_W := 200   # the column of page buttons left of the content (she
 ## The sheet's pages, in rail order. Controls not sorted onto a page yet live on "Lighting lab".
 const PAGES := ["Display", "Graphics", "Audio", "Gameplay", "Accessibility", "Lighting lab"]
 const FIRST_PAGE := "Display"
+## The pages whose settings live in GraphicsSettings: they get "Reset this page". Audio has none yet (its start values
+## have no names in audio_manager.gd); Lighting lab tunes the light controller.
+const RESETTABLE := ["Display", "Graphics", "Gameplay", "Accessibility"]
+## The GraphicsSettings field behind each switch, by its label (sliders and dropdowns carry theirs as meta "setting").
+const SWITCH_FIELDS := {"Fullscreen": "fullscreen", "Calm Mode": "calm_mode", "Reduce Motion": "reduce_motion",
+	"Miniature Idle Motion": "idle_motion", "Show Move Trails": "show_move_trails",
+	"Show Rule Texts at the Table": "show_rule_floats", "Combat Effects": "show_combat_effects",
+	"Tilt-Shift (Depth of Field)": "tilt_shift", "Board Mist and Steam": "show_board_mist",
+	"Combat Stage (paces the resolution)": "show_combat_stage", "Enforce Movement Limit": "enforce_movement_limit",
+	"AI Explanations Stay Up": "ai_explain_persistent"}
 
 var lighting_controller: Node
 var atmosphere_controller: Node = null
@@ -21,6 +31,8 @@ var volume_sliders: Dictionary = {}
 var _main_vbox: VBoxContainer = null
 var _pages: Dictionary = {}          # page name -> its content box
 var _page_buttons: Dictionary = {}   # page name -> its rail button
+var _page_shown := ""
+var _reset_button: Button = null
 ## Accessibility preset (GH #1634): the Calm toggle plus the individual switches it
 ## forces, kept in sync so the panel never shows a stale state.
 var _calm_cb: CheckButton = null
@@ -170,6 +182,11 @@ func _build_ui() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	(root.get_node("Scrim") as ColorRect).visible = false
 	add_child(parts["root"] as Control)
+	_reset_button = HouseStyle.button("Reset this page", HouseStyle.BUTTON)
+	_reset_button.size_flags_horizontal = Control.SIZE_SHRINK_END
+	_reset_button.pressed.connect(func() -> void: _ask_reset(_page_shown))
+	(parts["body"] as VBoxContainer).add_child(_reset_button)
+	show_page(_page_shown)
 	visibility_changed.connect(func() -> void:
 		if visible:
 			_restyle())
@@ -387,6 +404,7 @@ func _build_ui() -> void:
 	for title in ["Frame: Today's look", "Frame: Walnut", "Frame: Oak", "Frame: Ivory"]:
 		frame.add_item(title)
 	frame.select(GraphicsSettings.table_frame_style)
+	frame.set_meta("setting", "table_frame_style")
 	frame.tooltip_text = "Frame finish. Active at Medium quality and above."
 	frame.item_selected.connect(GraphicsSettings.set_table_frame_style)
 	_page("Graphics").add_child(frame)
@@ -401,6 +419,7 @@ func _build_ui() -> void:
 	for item in ["Off", "Normal", "Extra"]:
 		gore_ob.add_item(item)
 	gore_ob.select(clampi(GraphicsSettings.gore_level, 0, 2))
+	gore_ob.set_meta("setting", "gore_level")
 	gore_ob.item_selected.connect(func(index: int) -> void:
 		GraphicsSettings.gore_level = index
 		GraphicsSettings.save_settings())
@@ -424,6 +443,7 @@ func _build_ui() -> void:
 	beat.step = 0.5
 	beat.value = GraphicsSettings.combat_stage_hold_s
 	beat.custom_minimum_size = Vector2(140, 0)
+	beat.set_meta("setting", "combat_stage_hold_s")
 	beat.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	beat_row.add_child(beat)
 	var beat_lbl := Label.new()
@@ -470,6 +490,36 @@ func show_page(page_name: String) -> void:
 	for n: String in _pages:
 		(_pages[n] as Control).visible = n == page_name
 		(_page_buttons[n] as Button).set_pressed_no_signal(n == page_name)
+	_page_shown = page_name
+	if _reset_button != null:
+		_reset_button.visible = page_name in RESETTABLE
+
+
+## "Reset this page": a prompt card first, then reset_page.
+func _ask_reset(page_name: String) -> void:
+	var card := PromptCard.new("Reset %s?" % page_name, "Puts the settings of this page back to how the game ships.", "Reset", "Cancel")
+	add_child(card)
+	if await card.answer():
+		reset_page(page_name)
+
+
+## Every switch, slider and dropdown of `page_name` that stands for a GraphicsSettings field goes back to the value a
+## fresh GraphicsSettings starts with - through the control itself, so its own handler applies and saves it.
+func reset_page(page_name: String) -> void:
+	var fresh: Object = (GraphicsSettings.get_script() as Script).new()
+	for n: Node in _page(page_name).find_children("*", "Control", true, false):
+		var field := str(SWITCH_FIELDS.get((n as Button).text, "")) if n is CheckButton else str(n.get_meta("setting", ""))
+		if field.is_empty():
+			continue
+		var value: Variant = fresh.get(field)
+		if n is CheckButton:
+			(n as CheckButton).button_pressed = value   # toggled fires only on a change, as with a click
+		elif n is Range:
+			(n as Range).value = value
+		elif n is OptionButton and (n as OptionButton).selected != int(value):
+			(n as OptionButton).select(value)
+			(n as OptionButton).item_selected.emit(value)
+	fresh.free()
 
 
 ## Calm mode changed (from this panel or elsewhere): reflect the toggle and the
@@ -509,6 +559,7 @@ func _add_ui_scale_slider(parent: Control) -> void:
 	slider.max_value = GraphicsSettings.UI_SCALE_MAX
 	slider.step = 0.05
 	slider.value = GraphicsSettings.ui_scale
+	slider.set_meta("setting", "ui_scale")
 	slider.value_changed.connect(func(v: float) -> void:
 		GraphicsSettings.apply_ui_scale(v)
 		value_label.text = "%.2fx" % v)
