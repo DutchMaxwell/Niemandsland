@@ -36,6 +36,17 @@ func _init() -> void:
 	add_child(_action)
 
 
+## House-style type for a panel inside a house window: the headline in the body style, the detail in the caption
+## style (the June layer's wordmark and mono fonts stay the default for every other user).
+func use_house_style() -> void:
+	_headline.theme_type_variation = HouseStyle.BODY
+	_detail.theme_type_variation = HouseStyle.CAPTION
+	for label: Label in [_headline, _detail]:
+		label.remove_theme_font_override("font")
+		label.remove_theme_font_size_override("font_size")
+		label.remove_theme_color_override("font_color")
+
+
 func _centred_label(font: FontFile, font_size: int, color: Color) -> Label:
 	var l := Label.new()
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

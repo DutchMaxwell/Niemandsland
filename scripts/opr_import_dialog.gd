@@ -38,12 +38,11 @@ func _setup_ui() -> void:
 	(parts["close"] as Button).pressed.connect(_on_cancel)
 	add_child(parts["root"] as Control)
 	var vbox: VBoxContainer = parts["body"]
-	vbox.add_child(HouseStyle.label("/// NODE-01", HouseStyle.CAPTION))
 
 	var link_section := VBoxContainer.new()
 	link_section.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 	vbox.add_child(link_section)
-	link_section.add_child(HouseStyle.label("ENTER ARMY FORGE SHARE LINK / LIST ID", HouseStyle.CAPTION))
+	link_section.add_child(HouseStyle.label("Army Forge share link or list ID", HouseStyle.CAPTION))
 	link_section.add_child(HouseStyle.label("e.g. https://army-forge.onepagerules.com/share?id=XXX", HouseStyle.CAPTION))
 	share_link_input = LineEdit.new()
 	share_link_input.placeholder_text = "Paste a share link or list ID here..."
@@ -53,10 +52,10 @@ func _setup_ui() -> void:
 	var link_btn_row := HBoxContainer.new()
 	link_btn_row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 	link_section.add_child(link_btn_row)
-	var paste_link_btn := HouseStyle.button("FROM CLIPBOARD", HouseStyle.BUTTON, HouseStyle.H_ACTION)
+	var paste_link_btn := HouseStyle.button("From clipboard", HouseStyle.BUTTON, HouseStyle.H_ACTION)
 	paste_link_btn.pressed.connect(_on_paste_link)
 	link_btn_row.add_child(paste_link_btn)
-	fetch_btn = HouseStyle.button("LOAD ARMY", HouseStyle.PRIMARY)
+	fetch_btn = HouseStyle.button("Load army", HouseStyle.PRIMARY)
 	fetch_btn.pressed.connect(_on_fetch_from_link)
 	link_btn_row.add_child(fetch_btn)
 	link_status_label = HouseStyle.label("", HouseStyle.CAPTION)
@@ -66,7 +65,7 @@ func _setup_ui() -> void:
 	var player_row := HBoxContainer.new()
 	player_row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 	vbox.add_child(player_row)
-	player_row.add_child(HouseStyle.label("ASSIGN PLAYER", HouseStyle.CAPTION))
+	player_row.add_child(HouseStyle.label("Assign player", HouseStyle.CAPTION))
 	player_option = OptionButton.new()
 	player_option.theme_type_variation = HouseStyle.BUTTON
 	player_option.add_item("Player 1 (Blue)", 1)
@@ -82,7 +81,7 @@ func _setup_ui() -> void:
 	ai_check.focus_mode = Control.FOCUS_NONE
 	player_row.add_child(ai_check)
 
-	vbox.add_child(HouseStyle.label("PREVIEW", HouseStyle.CAPTION))
+	vbox.add_child(HouseStyle.label("Preview", HouseStyle.CAPTION))
 	army_preview = RichTextLabel.new()
 	army_preview.bbcode_enabled = true
 	army_preview.add_theme_color_override("default_color", HouseStyle.INK)
@@ -98,6 +97,7 @@ func _setup_ui() -> void:
 	state_panel = StatePanel.new()
 	state_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	state_panel.action_pressed.connect(_on_fetch_from_link)
+	state_panel.use_house_style()
 	preview_panel.add_child(state_panel)
 	_show_empty_state()
 
@@ -105,11 +105,11 @@ func _setup_ui() -> void:
 	btn_row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 	btn_row.alignment = BoxContainer.ALIGNMENT_END
 	vbox.add_child(btn_row)
-	cancel_btn = HouseStyle.button("CANCEL", HouseStyle.BUTTON, HouseStyle.H_ACTION)
+	cancel_btn = HouseStyle.button("Cancel", HouseStyle.BUTTON, HouseStyle.H_ACTION)
 	cancel_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
 	cancel_btn.pressed.connect(_on_cancel)
 	btn_row.add_child(cancel_btn)
-	import_btn = HouseStyle.button("IMPORT ARMY", HouseStyle.PRIMARY)
+	import_btn = HouseStyle.button("Import army", HouseStyle.PRIMARY)
 	import_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
 	import_btn.disabled = true
 	import_btn.pressed.connect(_on_import)
@@ -140,7 +140,7 @@ func _on_fetch_from_link() -> void:
 
 	_set_status("Loading…", HouseStyle.TONE_ACCENT)
 	army_preview.visible = false
-	state_panel.show_loading("LOADING ARMY", "Fetching from the Army Forge API…")
+	state_panel.show_loading("Loading army", "Fetching from the Army Forge API…")
 	import_btn.disabled = true
 	fetch_btn.disabled = true
 
@@ -154,18 +154,18 @@ func _on_fetch_from_link() -> void:
 		import_btn.disabled = false
 	elif _preview_army and _preview_army.units.size() == 0:
 		_set_status("Empty", HouseStyle.TONE_WARN)
-		state_panel.show_empty("EMPTY LIST", "This list contains no units. Add some in Army Forge first.")
+		state_panel.show_empty("Empty list", "This list contains no units. Add some in Army Forge first.")
 		import_btn.disabled = true
 	else:
 		_set_status("Error", HouseStyle.TONE_DANGER)
-		state_panel.show_error("LOAD FAILED", "Check the link and your internet connection.", "RETRY")
+		state_panel.show_error("Load failed", "Check the link and your internet connection.", "RETRY")
 		import_btn.disabled = true
 
 
 ## Toggle the preview well between the live army list and the state panel.
 func _show_empty_state() -> void:
 	army_preview.visible = false
-	state_panel.show_empty("NO ARMY LOADED", "Paste an Army Forge share link or list ID above, then Load Army.")
+	state_panel.show_empty("No army loaded", "Paste an Army Forge share link or list ID above, then Load army.")
 
 
 func _show_loaded() -> void:

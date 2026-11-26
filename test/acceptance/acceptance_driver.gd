@@ -154,13 +154,13 @@ func _online_table(host: bool) -> bool:   # Create a room / Join with a code, on
 		return false
 	return (not host or await _press("Create table", 30.0, true)) and await _at_table()
 
-func _import(p: int, ai := false) -> bool:   # Import OPR Army... -> share link -> LOAD ARMY -> player -> IMPORT ARMY
+func _import(p: int, ai := false) -> bool:   # Import OPR Army... -> share link -> Load army -> player -> Import army
 	var tray := "on Player %d's tray" % (p + 1)
 	var before := _game_log().count(tray)
 	if not await _press("ImportOPRArmy"):
 		return false
 	_type("Paste a share link", LISTS[p])
-	await _press("LOAD ARMY")
+	await _press("Load army")
 	var opt := _first("OptionButton", func(x: OptionButton) -> bool: return x.get_item_text(0).begins_with("Player 1")) as OptionButton
 	if opt != null:
 		opt.select(opt.get_item_index(p + 1))
@@ -168,7 +168,7 @@ func _import(p: int, ai := false) -> bool:   # Import OPR Army... -> share link 
 	var tick := _first("CheckBox", func(x: CheckBox) -> bool: return x.text.begins_with("AI-controlled")) as CheckBox
 	if tick != null:
 		tick.button_pressed = ai
-	if not (await _press("IMPORT ARMY", 90.0) and await _wait("army %d spawns" % (p + 1),
+	if not (await _press("Import army", 90.0) and await _wait("army %d spawns" % (p + 1),
 		func() -> Variant: return _game_log().count(tray) > before, 300.0) != null):
 		return false
 	if p == 0:   # P1's source is live: say it loudly when Army Forge no longer serves what the steps need
