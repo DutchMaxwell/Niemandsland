@@ -1,13 +1,16 @@
 extends GdUnitTestSuite
 ## Plan step 20(a): GF/AoF must not move when Firefight work lands. Every in-repo GF/AoF golden is replayed by a gdUnit
 ## suite on every PR - the one-core goldens through test/one_core (the golden_witness harness and its suites), the frozen
-## shoot-parity tables through test/parity/shoot_parity_test.gd. This guard keeps that true: a golden nobody replays fails
+## shoot-parity tables through test/parity/shoot_parity_test.gd, the frozen melee tables (step 20b) through
+## test/parity/melee_frozen_parity_test.gd. This guard keeps that true: a golden nobody replays fails
 ## here, so a new fixture cannot sit in the repo looking like protection it does not give.
 
 const ONE_CORE_GOLDENS := "res://test/fixtures/one_core/"
 const ONE_CORE_SUITES := "res://test/one_core/"
 const PARITY_TABLES := "res://test/parity/golden/shoot/"
 const PARITY_SUITE := "res://test/parity/shoot_parity_test.gd"
+const MELEE_TABLES := "res://test/parity/golden/melee/"
+const MELEE_SUITE := "res://test/parity/melee_frozen_parity_test.gd"
 
 
 static func _texts(dir: String) -> String:
@@ -38,3 +41,17 @@ func test_every_shoot_parity_table_is_replayed() -> void:
 			assert_bool(suite.contains("_gate(\"%s\"" % scenario)) \
 				.override_failure_message("%s: shoot_parity_test.gd has no _gate(\"%s\")" % [f, scenario]).is_true()
 	assert_int(seen).override_failure_message("the shoot-parity tables are gone").is_greater(0)
+
+
+## Step 20b: every frozen melee table (GF and AoF melee and the loser's morale test) is gated by the frozen melee suite.
+func test_every_frozen_melee_table_is_replayed() -> void:
+	var suite := FileAccess.get_file_as_string(MELEE_SUITE)
+	var seen := 0
+	for f in DirAccess.get_files_at(MELEE_TABLES):
+		if f.ends_with("_table.jsonl"):
+			seen += 1
+			var scenario := f.trim_suffix("_table.jsonl")
+			assert_bool(suite.contains("\"%s\")" % scenario)) \
+				.override_failure_message("%s: melee_frozen_parity_test.gd never gates \"%s\"" % [f, scenario]).is_true()
+	assert_int(seen).override_failure_message("the frozen melee tables are gone").is_greater(0)
+
