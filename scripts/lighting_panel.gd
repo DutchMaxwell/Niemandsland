@@ -383,6 +383,7 @@ func _build_ui() -> void:
 	var beat_row := HBoxContainer.new()
 	beat_row.add_theme_constant_override("separation", 8)
 	var beat := HSlider.new()
+	beat.scrollable = false  # the wheel scrolls the list, it never sets a value
 	beat.min_value = 1.0
 	beat.max_value = 6.0
 	beat.step = 0.5
@@ -456,6 +457,7 @@ func _add_ui_scale_slider(parent: Control) -> void:
 	label_hbox.add_child(value_label)
 
 	var slider := HSlider.new()
+	slider.scrollable = false  # the wheel scrolls the list, it never sets a value
 	slider.min_value = GraphicsSettings.UI_SCALE_MIN
 	slider.max_value = GraphicsSettings.UI_SCALE_MAX
 	slider.step = 0.05
@@ -488,6 +490,7 @@ func _add_slider(parent: Control, key: String, data: Dictionary) -> void:
 
 	# Slider
 	var slider = HSlider.new()
+	slider.scrollable = false  # the wheel scrolls the list, it never sets a value
 	slider.min_value = data.min
 	slider.max_value = data.max
 	slider.step = data.step
@@ -536,6 +539,7 @@ func _add_volume_slider(parent: Control, bus_name: String, label_text: String) -
 	label_hbox.add_child(value_label)
 
 	var slider = HSlider.new()
+	slider.scrollable = false  # the wheel scrolls the list, it never sets a value
 	slider.min_value = -40.0
 	slider.max_value = 6.0
 	slider.step = 1.0
