@@ -98,5 +98,8 @@ void fragment() {
 	// The fan mesh carries a world-aligned tangent (+X) — see BaseDecor._top_mesh.
 	vec3 n = texture(detail_normal, duv).xyz;
 	NORMAL_MAP = n;
-	NORMAL_MAP_DEPTH = detail_normal_strength;
+	NORMAL_MAP_DEPTH = on_board ? 0.0 : detail_normal_strength;   // on a board: the board's own relief instead of the biome's
+	if (on_board) {
+		NORMAL = board_bump(board_col, VERTEX, NORMAL);
+	}
 }

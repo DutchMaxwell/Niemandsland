@@ -154,13 +154,13 @@ void fragment() {
 		vec2 ripple = vec2(shape - 0.5, lows - 0.5);   // reuse the pool noise: no extra taps for the drip texture
 		NORMAL = normalize(mix(NORMAL, flat_up, pool * 0.9) + (VIEW_MATRIX * vec4(ripple.x, 0.0, ripple.y, 0.0)).xyz * 0.08 * pool);
 	}
-	// A model's base on a generated board shows the board's ground, flat (the biome's bump would draw its own pattern over it).
+	// A model's base on a generated board shows the board's ground and its relief (not the biome's bump).
 	vec3 board_col;
 	if (clip_base && board_ground(ground_xz, board_col)) {
 		ALBEDO = board_col;
 		EMISSION = pow(board_col, vec3(2.2)) * board_fill;
 		ROUGHNESS = 0.85;
 		SPECULAR = 0.3;
-		NORMAL = normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+		NORMAL = board_bump(board_col, VERTEX, normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz));
 	}
 }
