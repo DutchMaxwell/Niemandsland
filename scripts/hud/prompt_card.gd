@@ -20,8 +20,13 @@ var rows: VBoxContainer         # the caller's controls, between the text and th
 var ok_button: Button           # null without an OK ("" as its text)
 var cancel_button: Button       # null when the question has no way out (the saves)
 var ok_value: Variant = true
+## The menu's cards fade in and out (motion table: the scrim to 66 % and the card from alpha 0 and scale 0.98,
+## 220 ms in, 180 ms out). Off by default, so the questions during play stay instant; Reduce Motion is always
+## instant.
+var animate := false
 var cancel_value: Variant = false
 var _outcome: Array = []
+var _scrim: ColorRect
 
 
 func _init(title_text: String, text: String = "", ok_text: String = "OK", cancel_text: String = "Cancel") -> void:
@@ -68,6 +73,8 @@ func _init(title_text: String, text: String = "", ok_text: String = "OK", cancel
 
 func _ready() -> void:
 	rows.visible = rows.get_child_count() > 0
+	if animate and not UiMotion.reduced():
+		_fade(true)
 
 
 ## Ends the question with `value`; the first answer wins.
@@ -82,8 +89,37 @@ func answer(unanswered: Variant = false) -> Variant:
 	while _outcome.is_empty() and is_inside_tree():
 		await get_tree().process_frame
 	var result: Variant = unanswered if _outcome.is_empty() else _outcome[0]
+	if animate and is_inside_tree() and not UiMotion.reduced():
+		await _fade(false)
 	queue_free()
 	return result
+
+
+## The scrim and the card come in (`opening`) or go out: alpha and a 0.98 -> 1 scale, cubic.
+func _fade(opening: bool) -> void:
+	var card := find_child("Card", true, false) as Control
+	if _scrim == null:
+		_scrim = ColorRect.new()
+		_scrim.color = Color(HouseStyle.SCRIM, 0.0)
+		_scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_scrim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		$Shield.add_child(_scrim)
+		$Shield.move_child(_scrim, 0)
+	# The card sits in a container, which resets its scale: the scale goes on the full-screen holder that
+	# centres it, so the card scales about the screen centre.
+	var holder := card.get_parent() as Control
+	if opening:
+		card.modulate.a = 0.0
+		holder.scale = Vector2.ONE * 0.98
+		await get_tree().process_frame  # the pivot needs the laid-out size
+	holder.pivot_offset = holder.size * 0.5
+	var duration := HudTokens.DUR_PANEL_IN if opening else HudTokens.DUR_PANEL_OUT
+	var tween := create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC)
+	tween.set_ease(Tween.EASE_OUT if opening else Tween.EASE_IN)
+	tween.tween_property(card, "modulate:a", 1.0 if opening else 0.0, duration)
+	tween.tween_property(holder, "scale", Vector2.ONE if opening else Vector2.ONE * 0.98, duration)
+	tween.tween_property(_scrim, "color:a", HouseStyle.SCRIM.a if opening else 0.0, duration)
+	await tween.finished
 
 
 ## The old dialogs' keys: Enter takes the OK button, Esc the cancel button (Esc also ended a question

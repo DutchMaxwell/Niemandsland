@@ -76,6 +76,7 @@ func _ready() -> void:
 	view = MenuView.new()
 	view.name = "SafeArea"
 	add_child(view)
+	_add_boot_cover()
 	continue_btn = view.buttons.ContinueBtn
 	start_battle_btn = view.buttons.StartBattleBtn
 	tutorial_btn = view.buttons.TutorialBtn
@@ -105,6 +106,7 @@ func _ready() -> void:
 	view.buttons.SettingsBtn.pressed.connect(_on_settings_pressed)
 	view.buttons.HelpTutorialBtn.pressed.connect(_on_tutorial_pressed)
 	view.buttons.WhatsNewBtn.pressed.connect(_show_whats_new)
+	diorama.first_frame_rendered.connect(_on_first_frame_rendered, CONNECT_ONE_SHOT)
 	diorama.loading_progress.connect(_on_diorama_loading)
 	diorama.diorama_ready.connect(_on_diorama_ready)
 	diorama.rebuild_started.connect(_on_diorama_rebuild_started)
@@ -150,6 +152,28 @@ func _show_whats_new() -> void:
 	_whats_new.open()
 
 
+## The menu arrives once the backdrop has put its first frame up; tests mounting the menu stay still.
+func _on_first_frame_rendered() -> void:
+	if get_tree().current_scene == self:
+		view.play_arrival()
+
+
+## The boot splash is the house sheet colour: a full-screen cover of that colour stands between the backdrop and
+## the menu until the backdrop's first frame, then fades off, so boot and menu share one colour.
+func _add_boot_cover() -> void:
+	var cover := ColorRect.new()
+	cover.name = "BootCover"
+	cover.color = HouseStyle.SHEET_FILL
+	cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(cover)
+	move_child(cover,view.get_index())
+	diorama.first_frame_rendered.connect(func() -> void:
+		var fade := create_tween()
+		fade.tween_property(cover,"color:a",0.0,MenuDiorama.REVEAL_FADE_S)
+		fade.tween_callback(cover.queue_free),CONNECT_ONE_SHOT)
+
+
 func _on_diorama_loading(label: String, ratio: float) -> void:
 	view.status.text = "%s … %d %%" % [label,roundi(ratio*100)]
 
@@ -171,6 +195,7 @@ func _on_settings_pressed() -> void:
 		_settings = load("res://scripts/lighting_panel.gd").new()
 		add_child(_settings)
 		_settings.initialize(diorama.get_lighting_controller())
+		_settings.set_modal(true)   # in the menu the sheet is modal with the scrim; at the table it stays see-through
 		var label := Label.new()
 		label.text = "Menu background"
 		_settings._page("Display").add_child(label)
@@ -193,7 +218,25 @@ func _on_continue_pressed() -> void:
 	if _continue_path.is_empty():
 		return
 	ProjectSettings.set_setting("niemandsland/pending_load_path", _continue_path)
+	await _commit_beat(continue_btn)
 	_transition_to_game()
+
+
+## The commit beat (motion table): the commit tone, then a fill sweeps across the pressed button over
+## HudTokens.DUR_COMMIT (ease-in) before the screen changes. With Reduce Motion only the tone.
+func _commit_beat(button: Control) -> void:
+	UiFeedback.play_commit()
+	if UiMotion.reduced() or not is_instance_valid(button) or not button.is_visible_in_tree():
+		return
+	var sweep := ColorRect.new()
+	sweep.name = "CommitSweep"
+	sweep.color = Color(HouseStyle.INK, HouseStyle.PRESS_ALPHA)
+	sweep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sweep.size = Vector2(0.0, button.size.y)
+	button.add_child(sweep)
+	var tween := button.create_tween()
+	tween.tween_property(sweep, "size:x", button.size.x, HudTokens.DUR_COMMIT).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	await tween.finished
 
 
 func _on_start_battle_pressed() -> void:
@@ -237,10 +280,12 @@ func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> vo
 		RulesAutomation.remember_pick(_table_setup.selected_rules)
 	for key in host_settings:
 		ProjectSettings.set_setting(key,host_settings[key])
-	if UiMotion.reduced():
-		_table_setup.hide()
-	_fade_setup(_table_setup, 1.0, 0.0, true)   # fades out under the loading picture's fade-in
+	var setup := _table_setup
 	_table_setup = null
+	await _commit_beat(setup._create)
+	if UiMotion.reduced():
+		setup.hide()
+	_fade_setup(setup, 1.0, 0.0, true)   # fades out under the loading picture's fade-in
 	_transition_to_game()
 
 
@@ -486,6 +531,7 @@ func _on_exit_pressed() -> void:
 	if is_instance_valid(_exit_card):
 		return
 	_exit_card = PromptCard.new("Quit Niemandsland", "Are you sure you want to quit Niemandsland?", "Quit", "Back")
+	_exit_card.animate = true
 	add_child(_exit_card)
 	# CANCEL is the safe answer, so it — not QUIT — starts focused, and Enter takes it.
 	_exit_card.cancel_button.focus_mode = Control.FOCUS_ALL
@@ -531,6 +577,7 @@ func _show_core_missing_dialog() -> PromptCard:
 ## frees itself once answered.
 func _show_notice(title: String, text: String) -> PromptCard:
 	var card := PromptCard.new(title, text, "OK", "")
+	card.animate = true
 	add_child(card)
 	card.answer()
 	return card
@@ -628,9 +675,7 @@ func _show_host_popup() -> void:
 	_host_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
 	content.add_child(_host_name_input)
 	_host_popup.register_text_enter(_host_name_input)  # Enter in the name field = Prepare table
-	content.add_child(NetDialog.label("Relay server:"))
-	_relay_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
-	content.add_child(_relay_url_input)
+	_relay_url_input = NetDialog.advanced_relay(content, InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 	_host_public_check = CheckBox.new()
 	_host_public_check.text = "List room publicly"
 	_host_public_check.focus_mode = Control.FOCUS_ALL
@@ -679,7 +724,8 @@ func _show_join_popup() -> void:
 	content.add_child(NetDialog.label("Invitation code:"))
 	_join_code_input = NetDialog.line_edit("", "ABC-123")
 	_join_code_input.max_length = 7  # 6 chars + optional hyphen
-	_join_code_input.add_theme_font_size_override("font_size", 24)
+	_join_code_input.add_theme_font_override("font", load(HouseStyle.FONT_MONO_PATH) as Font)
+	_join_code_input.add_theme_font_size_override("font_size", 30)
 	_join_code_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(_join_code_input)
 	_join_popup.register_text_enter(_join_code_input)  # Enter in the code field = Join
@@ -691,11 +737,13 @@ func _show_join_popup() -> void:
 	_join_error_label.visible = false
 	content.add_child(_join_error_label)
 	# Editing the code is the fix for the message, so the message must not outlive the edit.
-	_join_code_input.text_changed.connect(func(_new_text: String) -> void:
+	_join_code_input.text_changed.connect(func(new_text: String) -> void:
+		var typed := NetDialog.code_as_typed(new_text)
+		if typed != new_text:
+			_join_code_input.text = typed
+			_join_code_input.caret_column = typed.length()
 		_join_error_label.visible = false)
-	content.add_child(NetDialog.label("Relay server:"))
-	_join_relay_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
-	content.add_child(_join_relay_url_input)
+	_join_relay_url_input = NetDialog.advanced_relay(content, InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 
 	# The dialog must NOT close itself on OK: an unusable room code has to leave the mask
 	# open with its reason on screen (a window that just vanishes and does nothing reads
@@ -725,6 +773,7 @@ func _on_join_confirmed() -> void:
 		url = InternetLobby.DEFAULT_RELAY_URL
 	# We took the close over from the dialog (dialog_hide_on_ok), so hide it before the
 	# scene swap — an embedded dialog would otherwise sit on top of the loading overlay.
+	await _commit_beat(_join_popup.get_ok_button())
 	_join_popup.hide()
 	_join_room_and_transition(code, url, PlayerIdentity.sanitize(_join_name_input.text))
 
@@ -766,9 +815,7 @@ func _show_browse_popup() -> void:
 	_browse_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Player name")
 	_browse_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
 	content.add_child(_browse_name_input)
-	content.add_child(NetDialog.label("Relay server:"))
-	_browse_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
-	content.add_child(_browse_url_input)
+	_browse_url_input = NetDialog.advanced_relay(content, InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 
 	var refresh_btn := Button.new()
 	refresh_btn.text = "Refresh list"

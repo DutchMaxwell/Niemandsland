@@ -2,6 +2,7 @@ extends Control
 ## Native Control implementation of the approved menu, independent of game routing.
 signal route_opened
 signal route_closed
+signal arrived
 const FONT = preload("res://assets/ui_glassmorphism/fonts/Inter.ttf")
 const LOGO = preload("res://assets/ui_glassmorphism/fonts/Orbitron.ttf")
 const MONO = preload("res://assets/ui_glassmorphism/fonts/SourceCodePro.ttf")
@@ -9,6 +10,9 @@ var buttons: Dictionary = {}
 var resume: PanelContainer
 var save_name: Label
 var save_date: Label
+var save_facts: Array[Label] = []
+var save_picture: TextureRect
+const PICTURE_SIZE := Vector2(150,112)
 var welcome: Label
 var welcome_kicker: Label
 var status: Label
@@ -23,6 +27,15 @@ var _main: VBoxContainer
 var _footer: HBoxContainer
 var _masthead: HBoxContainer
 var _route_body: VBoxContainer
+var _arrived := false
+## The arrival (motion table): the rows rise this far while they fade in, one every ARRIVAL_STAGGER seconds.
+const ARRIVAL_RISE := 12.0
+const ARRIVAL_STAGGER := 0.06
+var _route_tween: Tween
+var _route_rest := Vector2.ZERO
+var _route_closing := false
+## How far the sub-menu panel slides while it fades in and out.
+const ROUTE_SLIDE := 16.0
 ## Row icons: own drawings in the tool rail's style (24 x 24 view box), built once as crisp textures.
 const ICON_SVG := "<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='none' stroke='#fff' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'>%s</svg>"
 const ICON_PATHS := {
@@ -40,10 +53,23 @@ class Action extends Button:
 	var row_icon: Texture2D  # not "icon": a Button already draws that one itself
 	var primary := false
 	var outlined := false
+	var key_hint := ""  # the key that takes this row while it is the main action ("Enter")
+	var key_cap: Label
 
 	func _ready() -> void:
 		focus_mode = Control.FOCUS_ALL
 		set_meta(UiMotion.META_FLAT,true)
+		if not key_hint.is_empty():
+			key_cap = HouseStyle.key_cap(key_hint)
+			key_cap.theme = HouseStyle.theme()
+			key_cap.add_theme_font_size_override("font_size",14)
+			key_cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			key_cap.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+			key_cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+			key_cap.grow_vertical = Control.GROW_DIRECTION_BOTH
+			key_cap.offset_left = -52
+			key_cap.offset_right = -52
+			add_child(key_cap)
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		add_theme_font_override("font",FONT)
 		add_theme_font_size_override("font_size",22)
@@ -55,8 +81,14 @@ class Action extends Button:
 		focus_entered.connect(queue_redraw)
 		focus_exited.connect(queue_redraw)
 
+	## Row titles stand at weight 500, the main action (the gold row, Continue) at 600: hierarchy without a new colour.
+	func title_font() -> Font:
+		return HouseStyle.font(600 if primary else 500)
+
 	func refresh_style() -> void:
 		custom_minimum_size = Vector2(0,54 if description.is_empty() else 76 if primary else 64)
+		if key_cap != null:
+			key_cap.visible = primary
 		for state in ["normal","hover","pressed","focus"]:
 			var box := StyleBoxFlat.new()
 			var lit: bool = state != "normal"
@@ -76,7 +108,7 @@ class Action extends Button:
 		var left := 18.0 if row_icon == null else 52.0
 		# 28 and 49 on the 64 px row; centred on the taller first-run row, as the mockup draws it.
 		var baseline := size.y*0.5-4 if not description.is_empty() else size.y*0.5+8
-		draw_string(FONT,Vector2(left,baseline),text,HORIZONTAL_ALIGNMENT_LEFT,size.x-left-35,22,color)
+		draw_string(title_font(),Vector2(left,baseline),text,HORIZONTAL_ALIGNMENT_LEFT,size.x-left-35,22,color)
 		if not description.is_empty():
 			draw_string(FONT,Vector2(left,size.y*0.5+17),description,HORIZONTAL_ALIGNMENT_LEFT,size.x-left-25,15,Color("344c54") if primary else HouseStyle.MUTED)
 		if row_icon != null:
@@ -118,6 +150,7 @@ func _ready() -> void:
 	welcome_kicker = _label("WELCOME TO NIEMANDSLAND",14,HouseStyle.MUTED)
 	_main.add_child(welcome_kicker)
 	welcome = _label("Your first table awaits.",44,HouseStyle.INK)
+	welcome.add_theme_font_override("font",HouseStyle.font(500))
 	_main.add_child(welcome)
 	var gap := Control.new()
 	gap.custom_minimum_size.y = 18
@@ -128,20 +161,41 @@ func _ready() -> void:
 	var saved := VBoxContainer.new()
 	saved.add_theme_constant_override("separation",12)
 	resume.add_child(saved)
-	saved.add_child(_label("LATEST SAVE",14,HouseStyle.MUTED))
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation",18)
+	saved.add_child(head)
+	save_picture = TextureRect.new()
+	save_picture.custom_minimum_size = PICTURE_SIZE
+	save_picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	save_picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	save_picture.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	save_picture.visible = false
+	head.add_child(save_picture)
+	var text := VBoxContainer.new()
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text.add_theme_constant_override("separation",12)
+	head.add_child(text)
+	text.add_child(_label("LATEST SAVE",14,HouseStyle.MUTED))
 	save_name = _label("",26,HouseStyle.INK)
 	save_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	saved.add_child(save_name)
+	text.add_child(save_name)
+	for _i in 2:
+		var fact := _label("",14,HouseStyle.MUTED,MONO)
+		text.add_child(fact)
+		save_facts.append(fact)
 	save_date = _label("",15,HouseStyle.MUTED)
-	saved.add_child(save_date)
+	text.add_child(save_date)
 	var cont := _action("ContinueBtn","Continue","",null,true)
+	cont.key_hint = "Enter"
 	cont.custom_minimum_size.y = 54
 	saved.add_child(cont)
 	var actions := VBoxContainer.new()
 	actions.name = "MenuButtons"
 	actions.add_theme_constant_override("separation",5)
 	_main.add_child(actions)
-	actions.add_child(_action("StartBattleBtn","Prepare a new table","Choose a size and biome",_icon(&"table"),false,true))
+	var start := _action("StartBattleBtn","Prepare a new table","Choose a size and biome",_icon(&"table"),false,true)
+	start.key_hint = "Enter"
+	actions.add_child(start)
 	actions.add_child(_action("OnlineBtn","Play online","Create a room or join a table",_icon(&"globe")))
 	actions.add_child(_action("LoadBattleBtn","Load game","Open a saved game",_icon(&"folder")))
 	actions.add_child(_action("LearnBtn","Learn to play","Learn the controls and explore Trial by Fire",_icon(&"book")))
@@ -150,7 +204,17 @@ func _ready() -> void:
 	_footer.add_theme_constant_override("separation",24)
 	add_child(_footer)
 	for row in [["HelpBtn","Help & feedback"],["CreditsBtn","Credits & licenses"],["ExitGameBtn","Quit"]]:
-		_footer.add_child(_utility(row[0],row[1]))
+		if row[0] == "ExitGameBtn":
+			var quit := HBoxContainer.new()
+			quit.add_theme_constant_override("separation",4)
+			quit.add_child(_utility(row[0],row[1]))
+			var esc := HouseStyle.key_cap("Esc")
+			esc.theme = HouseStyle.theme()
+			esc.add_theme_font_size_override("font_size",14)
+			quit.add_child(esc)
+			_footer.add_child(quit)
+		else:
+			_footer.add_child(_utility(row[0],row[1]))
 	version = _label("",14,HouseStyle.MUTED,MONO)
 	add_child(version)
 	status = _label("Preparing background …",14,HouseStyle.MUTED,MONO)
@@ -199,6 +263,36 @@ func _build_routes() -> void:
 	route_panel.hide()
 
 
+## The menu arrives, once per start (never again after the table setup or a rebuilt backdrop): the wordmark
+## fades in over a screen beat, the Continue card and the rows rise and fade in one after the other. Reduce
+## Motion shows everything at once.
+func play_arrival() -> void:
+	if _arrived:
+		return
+	_arrived = true
+	if UiMotion.reduced():
+		arrived.emit()
+		return
+	var rows: Array[Control] = []
+	if resume.visible:
+		rows.append(resume)
+	for row in _main.get_node("MenuButtons").get_children():
+		rows.append(row as Control)
+	var tween := create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_masthead.modulate.a = 0.0
+	tween.tween_property(_masthead,"modulate:a",1.0,HudTokens.DUR_SCREEN)
+	var delay := 0.0
+	for row in rows:
+		var rest := row.position.y
+		row.modulate.a = 0.0
+		row.position.y = rest+ARRIVAL_RISE
+		tween.tween_property(row,"modulate:a",1.0,HudTokens.DUR_PANEL_IN).set_delay(delay)
+		tween.tween_property(row,"position:y",rest,HudTokens.DUR_PANEL_IN).set_delay(delay)
+		delay += ARRIVAL_STAGGER
+	await tween.finished
+	arrived.emit()
+
+
 func show_route(key: String) -> void:
 	if not routes.has(key):
 		return
@@ -208,6 +302,8 @@ func show_route(key: String) -> void:
 	route_title.text = {"online":"Meet around the table.","learn":"Find your starting point.","help":"Help & feedback."}[key]
 	route_panel.reset_size()
 	route_panel.show()
+	UiFeedback.play_panel(true)
+	_slide_route(true)
 	# Trap keyboard focus within the open route, including Shift+Tab and arrows.
 	var focus: Array[Control] = [route_back]
 	for button in routes[key].get_children():
@@ -218,12 +314,42 @@ func show_route(key: String) -> void:
 
 
 func close_route() -> void:
-	if not route_panel.visible:
+	if not route_panel.visible or _route_closing:
 		return
-	route_panel.hide()
+	UiFeedback.play_panel(false)
 	if is_instance_valid(_return_focus):
 		_return_focus.grab_focus()
+	await _slide_route(false)
 	route_closed.emit()
+
+
+## The panel's motion (motion table: in 220 ms with an ease-out, out 180 ms with an ease-in, both cubic):
+## it slides ROUTE_SLIDE px and fades. Reduce Motion shows and hides it at once. A close ends with the
+## panel hidden; route_closed fires after that.
+func _slide_route(opening: bool) -> void:
+	if _route_tween != null:
+		_route_tween.kill()
+	_route_closing = not opening
+	if UiMotion.reduced():
+		route_panel.position.x = _route_rest.x
+		route_panel.modulate.a = 1.0
+		route_panel.visible = opening
+		_route_closing = false
+		return
+	if opening:
+		route_panel.position.x = _route_rest.x-ROUTE_SLIDE
+		route_panel.modulate.a = 0.0
+	var duration := HudTokens.DUR_PANEL_IN if opening else HudTokens.DUR_PANEL_OUT
+	_route_tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC)
+	_route_tween.set_ease(Tween.EASE_OUT if opening else Tween.EASE_IN)
+	_route_tween.tween_property(route_panel,"position:x",_route_rest.x if opening else _route_rest.x-ROUTE_SLIDE,duration)
+	_route_tween.tween_property(route_panel,"modulate:a",1.0 if opening else 0.0,duration)
+	await _route_tween.finished
+	if not opening:
+		route_panel.hide()
+		route_panel.position.x = _route_rest.x
+		route_panel.modulate.a = 1.0
+		_route_closing = false
 
 
 func set_save(info: Dictionary) -> void:
@@ -234,6 +360,13 @@ func set_save(info: Dictionary) -> void:
 	if resume.visible:
 		save_name.text = str(info.name)
 		save_name.tooltip_text = str(info.name)
+		var picture := TableSizeDialog.preview_path(str(info.get("biome","")))
+		save_picture.texture = load(picture) if not picture.is_empty() else null
+		save_picture.visible = save_picture.texture != null
+		var lines := facts_lines(info)
+		for i in save_facts.size():
+			save_facts[i].text = lines[i] if i < lines.size() else ""
+			save_facts[i].visible = i < lines.size()
 		var stamp := Time.get_datetime_dict_from_unix_time(info.modified_unix)
 		save_date.text = "Saved on %04d-%02d-%02d" % [stamp.year,stamp.month,stamp.day]
 	var start: Action = buttons.StartBattleBtn
@@ -241,6 +374,27 @@ func set_save(info: Dictionary) -> void:
 	# Rebuild only the state styles, once after the save lookup.
 	start.refresh_style()
 	set_focus_chain(main_buttons())
+
+
+## The Continue card's two mono lines, e.g. "GRIMDARK FUTURE · ROUND 1" and "GRASSLAND · 6 x 4 FT"; a line
+## whose facts the save does not hold is left out.
+static func facts_lines(info: Dictionary) -> Array[String]:
+	var lines: Array[String] = []
+	var first: Array[String] = []
+	if info.has("system"):
+		first.append(GameSystem.label(str(info.system)).to_upper())
+	if info.has("round"):
+		first.append("ROUND %d" % int(info.round))
+	var second: Array[String] = []
+	var biome := TableSizeDialog.table_biome(str(info.get("biome","")))
+	if TableSizeDialog.BIOMES.has(biome):
+		second.append(str(TableSizeDialog.BIOMES[biome][0]).to_upper())
+	if info.has("size_feet"):
+		second.append("%s x %s FT" % [String.num(info.size_feet[0],1).trim_suffix(".0"),String.num(info.size_feet[1],1).trim_suffix(".0")])
+	for parts: Array[String] in [first,second]:
+		if not parts.is_empty():
+			lines.append(" · ".join(parts))
+	return lines
 
 
 func main_buttons() -> Array[Control]:
@@ -271,7 +425,8 @@ func _layout() -> void:
 	version.position = Vector2(left,size.y-50)
 	status.position = Vector2(size.x-450,size.y-50)
 	status.size.x = 354
-	route_panel.position = Vector2(left+_scroll.size.x+24,_scroll.position.y)
+	_route_rest = Vector2(left+_scroll.size.x+24,_scroll.position.y)
+	route_panel.position = _route_rest
 	route_panel.custom_minimum_size.x = 560
 
 
@@ -306,7 +461,9 @@ func _utility(id: String, title: String) -> Button:
 	var rest := _box(Color.TRANSPARENT,Color.TRANSPARENT,10)
 	for state in ["normal","hover","pressed"]:
 		button.add_theme_stylebox_override(state,rest)
-	button.add_theme_stylebox_override("focus",_box(Color.TRANSPARENT,HouseStyle.GOLD,10))
+	var ring := _box(Color.TRANSPARENT,HouseStyle.ACCENT,10)
+	ring.set_border_width_all(2)
+	button.add_theme_stylebox_override("focus",ring)
 	buttons[id] = button
 	return button
 

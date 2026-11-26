@@ -44,7 +44,7 @@ func _texts(d: Node, kind: String) -> Array[String]:
 
 
 func _has_label(d: Node, prefix: String) -> bool:
-	for t in _texts(d, "Label"):
+	for t in _texts(d, "Label") + _texts(d, "Button"):
 		if t.begins_with(prefix):
 			return true
 	return false
@@ -80,7 +80,7 @@ func test_join_dialog_has_every_field_and_keeps_an_unusable_code_open() -> void:
 	await _frames(2)
 	var d: AcceptDialog = _menu._join_popup
 	for p: String in ["NET-02", "Your name:", "Invitation code:", "Relay server:"]:
-		assert_bool(_texts(d, "Label").any(func(t: String) -> bool: return t.contains(p))).override_failure_message("join dialog lost %s" % p).is_true()
+		assert_bool((_texts(d, "Label") + _texts(d, "Button")).any(func(t: String) -> bool: return t.contains(p))).override_failure_message("join dialog lost %s" % p).is_true()
 	assert_str(d.ok_button_text).is_equal("Join")
 	assert_int(_menu._join_code_input.max_length).is_equal(7)
 	assert_str(_menu._join_code_input.placeholder_text).is_equal("ABC-123")
@@ -91,6 +91,7 @@ func test_join_dialog_has_every_field_and_keeps_an_unusable_code_open() -> void:
 	assert_bool(d.visible).is_true()
 	_menu._join_code_input.text = "ABC-123"
 	d.confirmed.emit()
+	await get_tree().create_timer(HudTokens.DUR_COMMIT + 0.1).timeout   # the commit beat, then the screen change
 	assert_bool(_menu.entered_game).override_failure_message("a usable code did not join").is_true()
 
 
@@ -159,3 +160,55 @@ func test_inventory_check_names_a_removed_control() -> void:
 	var missing := _host_missing(d)
 	parent.add_child(check)
 	assert_array(missing).contains_exactly(["checkbox: List room publicly"])
+
+
+## The code field reads as a code: upper case as you type, the hyphen after the third character, mono 30 px.
+## RED on main: the typed text stayed as typed and the field was 24 px in the text font.
+func test_join_code_field_reads_as_a_code() -> void:
+	var net: GDScript = load("res://scripts/net_dialog.gd")
+	assert_bool(net.has_method("code_as_typed")).override_failure_message("no code formatting").is_true()
+	if net.has_method("code_as_typed"):
+		for pair: Array in [["abc123", "ABC-123"], ["ab", "AB"], ["abc", "ABC"], ["abcd", "ABC-D"],
+				["a-b c12 3x", "ABC-123"], ["", ""]]:
+			assert_str(net.call("code_as_typed", pair[0])).is_equal(pair[1])
+	_menu._on_join_online_pressed()
+	await _frames(2)
+	var field: LineEdit = _menu._join_code_input
+	field.text = "abcd"
+	field.text_changed.emit("abcd")
+	assert_str(field.text).override_failure_message("the code was not formatted as typed").is_equal("ABC-D")
+	assert_int(field.get_theme_font_size("font_size")).is_equal(30)
+	assert_str(field.get_theme_font("font").resource_path).is_equal(HouseStyle.FONT_MONO_PATH)
+	assert_str(field.placeholder_text).is_equal("ABC-123")
+
+
+func _relay_toggle(d: Node) -> Button:
+	for n: Node in d.find_children("*", "Button", true, false):
+		if (n as Button).text.begins_with("Relay server:"):
+			return n as Button
+	return null
+
+
+## The relay address is folded away in all three online windows and opens on its row; its default text and
+## the way it is read are unchanged. RED on main: the field stood open under its label.
+func test_relay_address_is_folded_away_in_the_three_online_windows() -> void:
+	_menu._on_host_online_pressed()
+	_menu._on_join_online_pressed()
+	_menu._on_browse_online_pressed()
+	await _frames(2)
+	var rows := [[_menu._host_popup, _menu._relay_url_input], [_menu._join_popup, _menu._join_relay_url_input],
+		[_menu._browse_popup, _menu._browse_url_input]]
+	for row: Array in rows:
+		var dialog: AcceptDialog = row[0]
+		var field: LineEdit = row[1]
+		var toggle := _relay_toggle(dialog)
+		assert_object(toggle).override_failure_message("%s has no Relay server row" % dialog.title).is_not_null()
+		if toggle == null:
+			continue
+		assert_bool(field.visible).override_failure_message("%s shows the relay address" % dialog.title).is_false()
+		assert_str(field.text).is_equal(InternetLobby.DEFAULT_RELAY_URL)
+		toggle.pressed.emit()
+		assert_bool(field.visible).is_true()
+		toggle.pressed.emit()
+		assert_bool(field.visible).is_false()
+

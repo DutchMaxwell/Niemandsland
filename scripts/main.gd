@@ -55,6 +55,7 @@ const FEET_TO_METERS: float = 0.3048
 ## Undo/redo history for table actions (created in _init_radial_menu).
 var undo_manager: UndoManager = null
 @onready var table: StaticBody3D = $Table
+var _board_look: Node = null   # the dev-view board the door in _ready drew (generated_board reads its seed)
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var directional_light: DirectionalLight3D = $DirectionalLight3D
 @onready var fill_light: DirectionalLight3D = $FillLight
@@ -871,7 +872,7 @@ func _ready() -> void:
 	# Dev view (debug build, NML_BOARDGEN_SEED=<seed>): the seeded boardgen board as a greybox on the table. Visual only.
 	# The switch is decided HERE, outside the board-look files (CI's LOOK short run relies on it): they cannot turn it on alone.
 	if OS.is_debug_build() and OS.get_environment("NML_BOARDGEN_SEED").strip_edges().is_valid_int():
-		BoardgenGreybox.attach_from_env(table)
+		_board_look = BoardgenGreybox.attach_from_env(table)
 
 	# Connect object_manager signals for deployment checking
 	object_manager.drag_ended.connect(_on_unit_moved)
@@ -1056,6 +1057,8 @@ func _ready() -> void:
 		# Loaded battle / joining client: size comes from the saved/host data, so there is
 		# no chooser — go straight into the intro.
 		_start_cinematic_intro()
+	if not (harness_mode or _tutorial_mode or _scenario_mode):   # the menu's hand-over: its overlay names the stages
+		TableRevealGate.start(self, "load" if not pending_load.is_empty() else "join" if joining_client else "new")
 	# Our own black backdrop (chooser prompt or intro) is up now — fade out the menu's
 	# transition loading overlay so the hand-off stays black, never grey.
 	_dismiss_transition_overlay()
@@ -22790,6 +22793,15 @@ func _on_units_dropped(moves: Array) -> void:
 			_sync_unit_property(unit, "moved_round", opr_army_manager.current_round)   # MP: the other table's AI shoots at a unit that moved
 			await _resolve_skirmish_drop(mv, unit)
 	await _solo_human_strafing(moves)
+
+
+## Plan step 27-pre P2: the generated board on the table as the rules see it - `{"seed", "theme"}` of the board the door
+## above drew (the theme lower-cased, as `NmlCore.boardgen_tiers` takes it), or {} when none stands. Data only, so the rules
+## side never names a board-look class (tools/ci_path_classes.py).
+func generated_board() -> Dictionary:
+	if _board_look == null or not is_instance_valid(_board_look):
+		return {}
+	return {"seed": int(_board_look.get("layout_seed")), "theme": str(_board_look.get("layout_theme")).to_lower()}
 
 
 ## Human drops use the same surface truth, tray, casualties and activation flow as combat.

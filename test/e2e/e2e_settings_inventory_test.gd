@@ -192,6 +192,13 @@ func test_reset_puts_a_page_back_to_the_shipped_defaults() -> void:
 	assert_bool(_panel._reset_button.visible).is_true()
 
 
+## English only (repository rule): the Calm Mode tooltip carried a German half after " / " (red on main).
+func test_the_calm_mode_tooltip_is_english_only() -> void:
+	var tip := _toggle("Calm Mode").tooltip_text
+	assert_bool(tip.contains(" / ")).override_failure_message("a second language in the tooltip: %s" % tip).is_false()
+	assert_str(tip).is_equal("Turns down combat effects, motion and pulsing selection aids in one click.")
+
+
 func test_escape_and_the_x_hide_the_panel() -> void:
 	_panel.show()
 	var esc := InputEventAction.new()
@@ -243,6 +250,22 @@ func test_settings_carry_one_line_of_help_each() -> void:
 	var tilt := _toggle("Tilt-Shift (Depth of Field)")
 	var below := tilt.get_parent().get_child(tilt.get_index() + 1) as Label
 	assert_str(below.text if below != null else "").override_failure_message("the help line is not under its switch").is_equal(help["Tilt-Shift (Depth of Field)"])
+
+
+## A sheet that is shown at once (the menu builds it visible, so visibility_changed never fires) still wears the house
+## look on its first open (red on main: the section titles stay plain until the sheet is closed and opened again).
+func test_a_sheet_shown_at_once_wears_the_house_look() -> void:
+	var fresh: Node = load("res://scripts/lighting_panel.gd").new()
+	add_child(fresh)
+	fresh.initialize(_light)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var title: Label = null
+	for n: Node in fresh.find_children("*", "Label", true, false):
+		if (n as Label).text == "PARAMETERS:":
+			title = n as Label
+	assert_str(String(title.theme_type_variation)).override_failure_message("the first open is not restyled").is_equal(String(HouseStyle.EYEBROW))
+	fresh.queue_free()
 
 
 func test_volume_sliders_set_their_bus_and_are_put_back() -> void:

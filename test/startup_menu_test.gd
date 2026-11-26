@@ -53,6 +53,8 @@ func test_escape_closes_group_without_quit_dialog() -> void:
 	event.keycode = KEY_ESCAPE
 	event.pressed = true
 	_menu._unhandled_key_input(event)
+	if _menu.view.route_panel.visible:
+		await _menu.view.route_closed
 	assert_bool(_menu.view.route_panel.visible).is_false()
 	assert_object(_menu._exit_card).is_null()
 	assert_bool(_menu.view.buttons.LearnBtn.has_focus()).is_true()
@@ -72,6 +74,8 @@ func test_existing_routes_keep_their_own_handlers() -> void:
 func test_host_route_opens_existing_dialog_and_keeps_public_checkbox_focusable() -> void:
 	_menu.view.show_route("online")
 	_menu.host_online_btn.pressed.emit()
+	if _menu.view.route_panel.visible:
+		await _menu.view.route_closed
 	assert_bool(_menu.view.route_panel.visible).is_false()
 	assert_bool(_menu._host_popup.visible).is_true()
 	assert_object(_menu._relay_url_input).is_not_null()
@@ -157,6 +161,15 @@ func test_menu_never_creates_game_or_atmosphere_controllers() -> void:
 	assert_object(_menu.find_child("AtmosphereController",true,false)).is_null()
 	assert_bool(_menu.diorama._diorama_built).is_false()
 
+## Step 44: from the menu the settings sheet is modal with the scrim (red on main: no scrim, clicks pass through to the
+## menu behind it). The table keeps it see-through (e2e_settings_inventory_test).
+func test_settings_from_the_menu_are_modal_with_the_scrim() -> void:
+	_menu._on_settings_pressed()
+	var root := _menu._settings.get_child(0) as Control
+	assert_bool((root.get_node("Scrim") as ColorRect).visible).override_failure_message("no scrim in the menu").is_true()
+	assert_int(root.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
+	_menu._settings.hide()
+
 func test_rebuild_keeps_main_actions_usable() -> void:
 	_menu._on_diorama_rebuild_started()
 	assert_bool(_menu.start_battle_btn.is_visible_in_tree()).is_true()
@@ -201,6 +214,7 @@ func test_host_creation_commits_selected_table_and_network_settings_together() -
 	probe._table_setup._select_biome("arid_desert")
 	probe._table_setup._select_size("square")
 	probe._table_setup._confirm()
+	await get_tree().create_timer(HudTokens.DUR_COMMIT + 0.1).timeout   # the commit beat, then the screen change
 	var result := {}
 	for key in keys:
 		result[key] = ProjectSettings.get_setting(key,null)
@@ -246,8 +260,7 @@ func test_core_missing_dialog_shows_the_notice_and_frees_itself() -> void:
 	assert_object(card.cancel_button).is_null()
 	assert_bool(_label_texts(card).has(CoreLoadNotice.TEXT)).is_true()
 	card.ok_button.pressed.emit()
-	for _i in 3:
-		await get_tree().process_frame
+	await get_tree().create_timer(0.45).timeout  # the card fades out first
 	assert_bool(not is_instance_valid(card) or card.is_queued_for_deletion()).is_true()
 
 func test_core_missing_warning_stays_silent_outside_the_live_scene() -> void:
@@ -281,8 +294,7 @@ func test_notice_is_an_ok_only_card_that_frees_itself() -> void:
 	assert_str(card.title).is_equal("Report a problem")
 	assert_object(card.cancel_button).is_null()
 	card.ok_button.pressed.emit()
-	for _i in 3:
-		await get_tree().process_frame
+	await get_tree().create_timer(0.45).timeout  # the card fades out first
 	assert_bool(not is_instance_valid(card) or card.is_queued_for_deletion()).is_true()
 
 
@@ -317,11 +329,27 @@ func test_the_table_setup_fades_in_and_out() -> void:
 	await get_tree().create_timer(HudTokens.DUR_SCREEN + 0.15).timeout
 	assert_float(content.modulate.a).is_equal_approx(1.0, 0.01)
 	dialog._confirm()
+	await get_tree().create_timer(HudTokens.DUR_COMMIT + 0.05).timeout   # the commit beat (step 62) comes first
 	assert_bool(probe.entered_game).is_true()
 	assert_bool(is_instance_valid(dialog) and dialog.visible).override_failure_message("the setup is gone at once").is_true()
 	await get_tree().create_timer(HudTokens.DUR_SCREEN + 0.15).timeout
 	ProjectSettings.set_setting("niemandsland/pending_table_setup", previous)
 	assert_bool(is_instance_valid(dialog)).override_failure_message("the faded setup is not freed").is_false()
+
+## Boot and menu share one colour: a cover in the sheet colour stands over the backdrop and fades off after the
+## backdrop's first frame. RED on main: no cover.
+func test_boot_cover_has_the_sheet_colour_and_fades_off() -> void:
+	var cover := _menu.find_child("BootCover", true, false) as ColorRect
+	assert_object(cover).override_failure_message("the menu has no boot cover").is_not_null()
+	if cover == null:
+		return
+	assert_vector(Vector3(cover.color.r, cover.color.g, cover.color.b)).is_equal_approx(
+		Vector3(HouseStyle.SHEET_FILL.r, HouseStyle.SHEET_FILL.g, HouseStyle.SHEET_FILL.b), Vector3.ONE * 0.001)
+	assert_int(cover.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)
+	assert_int(cover.get_index()).is_less(_menu.view.get_index())
+	await get_tree().create_timer(1.2).timeout
+	assert_bool(not is_instance_valid(cover) or cover.is_queued_for_deletion()).override_failure_message(
+		"the cover stayed over the menu").is_true()
 
 ## Step 29: a new table's loading picture names it - biome, system and size over the biome's picture; a load keeps
 ## the plain overlay (red on main: the overlay only says LOADING).
@@ -342,3 +370,18 @@ func test_the_loading_picture_names_a_new_table() -> void:
 		_menu._name_the_table(plain)   # no pending setup any more: the plain overlay
 	ProjectSettings.set_setting("niemandsland/pending_table_setup", previous)
 	assert_bool(plain._title.visible).override_failure_message("a load must keep the plain overlay").is_false()
+
+## Step 62, the commit beat: Create table sweeps a fill across its button over DUR_COMMIT and plays the commit tone,
+## and only then does the screen change (red on main: the screen changes at once, no sweep).
+func test_create_table_commits_with_a_sweep_before_the_screen_changes() -> void:
+	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	probe.set_script(MenuTransitionProbe)
+	add_child(probe)
+	probe._on_start_battle_pressed()
+	var create: Button = probe._table_setup._create
+	probe._table_setup._confirm()
+	assert_bool(probe.entered_game).override_failure_message("the screen changed before the beat").is_false()
+	assert_object(create.find_child("CommitSweep", false, false)).override_failure_message("no sweep on Create table").is_not_null()
+	await get_tree().create_timer(HudTokens.DUR_COMMIT + 0.1).timeout
+	assert_bool(probe.entered_game).is_true()
+	assert_bool(UiFeedback.has_method("play_commit")).override_failure_message("no commit tone").is_true()

@@ -59,7 +59,9 @@ func after_test() -> void:
 	_view = null
 
 
-# === helpers ===================================================================================
+# === helpers =====================================================================
+
+
 
 func _frames(n: int) -> void:
 	for _i in n:
@@ -88,6 +90,12 @@ func _click(c: Control) -> void:
 		ev.global_position = ev.position
 		vp.push_input(ev)
 	await _frames(3)
+
+
+## A route closes with a motion; the panel is hidden when route_closed fires (at once with Reduce Motion).
+func _route_gone() -> void:
+	if _view.route_panel.visible:
+		await _view.route_closed
 
 
 func _button(text: String) -> Button:
@@ -128,7 +136,9 @@ func _dialog_titled(title: String) -> Window:
 	return null
 
 
-# === tests ======================================================================================
+# === tests ========================================================================
+
+
 
 func test_every_control_of_rows_43_44_is_in_the_menu() -> void:
 	assert_array(_missing_controls()).override_failure_message(
@@ -184,6 +194,7 @@ func test_online_route_lists_its_three_actions_and_closes_on_a_pick() -> void:
 	for t: String in ONLINE_ROUTE:
 		assert_object(_button(t)).override_failure_message("%s is missing from the online route" % t).is_not_null()
 	await _click(_button("Public tables"))
+	await _route_gone()
 	assert_bool(_view.route_panel.visible).override_failure_message("the route did not close on a pick").is_false()
 	assert_object(_menu._browse_popup).is_not_null()
 
@@ -196,6 +207,7 @@ func test_learn_route_lists_its_two_actions_and_back_returns_focus() -> void:
 	for t: String in LEARN_ROUTE:
 		assert_object(_button(t)).override_failure_message("%s is missing from the learn route" % t).is_not_null()
 	await _click(_button(HouseStyle.GLYPH_BACK + "  Back"))
+	await _route_gone()
 	assert_bool(_view.route_panel.visible).is_false()
 	assert_object(_view.get_viewport().gui_get_focus_owner()).is_same(learn_btn)
 
@@ -249,7 +261,7 @@ func test_quit_asks_first_with_back_focused_and_never_quits() -> void:
 	assert_object(card.get_viewport().gui_get_focus_owner()).is_same(card.cancel_button)
 	# The card lives in the menu's own viewport, so Back takes a real click; Quit is never pressed here.
 	await _click(card.cancel_button)
-	await _frames(3)
+	await get_tree().create_timer(0.45).timeout  # the card fades out first
 	assert_bool(is_instance_valid(_menu._exit_card)).is_false()
 
 
@@ -300,6 +312,26 @@ func test_menu_view_uses_no_text_glyph_icons() -> void:
 		assert_object(_view.buttons[id].get("row_icon")).override_failure_message("%s has no icon" % id).is_not_null()
 
 
+## Inter carries the whole weight axis: row titles stand at 500, the main action at 600, the headline at 500.
+## RED on main: there is no weighted font.
+func test_titles_and_the_main_action_use_inter_weights() -> void:
+	var house: GDScript = load("res://scripts/hud/house_style.gd")
+	assert_bool(house.has_method("font")).override_failure_message("no HouseStyle.font").is_true()
+	if not house.has_method("font"):
+		return
+	var tag: int = TextServerManager.get_primary_interface().name_to_tag("wght")
+	for weight: int in [500, 600]:
+		var font: FontVariation = house.call("font", weight)
+		assert_object(font).is_not_null()
+		assert_int(int(font.variation_opentype.get(tag, 0))).is_equal(weight)
+		assert_object(house.call("font", weight)).override_failure_message("not cached").is_same(font)
+	assert_object(house.call("font", 500)).is_not_same(house.call("font", 600))
+	assert_object(_view.buttons.OnlineBtn.title_font()).is_same(house.call("font", 500))
+	_view.set_save({"name": "x", "modified_unix": 1727000000})
+	assert_object(_view.buttons.ContinueBtn.title_font()).is_same(house.call("font", 600))
+	assert_object(_view.welcome.get_theme_font("font")).is_same(house.call("font", 500))
+
+
 ## Settings was a 13 px link in the top right corner, the least findable control of the menu. RED on main: its
 ## parent is the masthead.
 func test_settings_is_the_fifth_row_of_the_list_after_learn() -> void:
@@ -310,3 +342,132 @@ func test_settings_is_the_fifth_row_of_the_list_after_learn() -> void:
 	var order: Array = _view.main_buttons().map(func(b: Control) -> String: return String(b.name))
 	assert_int(order.find("SettingsBtn")).is_equal(order.find("LearnBtn") + 1)
 
+
+## The menu arrives, once per start: every row ends at alpha 1 on its resting place. RED on main: no arrival.
+func test_menu_arrives_once_and_every_row_rests_at_alpha_one() -> void:
+	assert_bool(_view.has_method("play_arrival")).override_failure_message("the menu has no arrival").is_true()
+	if not _view.has_method("play_arrival"):
+		return
+	var before_motion: bool = GraphicsSettings.reduce_motion
+	GraphicsSettings.reduce_motion = false
+	var rows: Array = _view.find_child("MenuButtons", true, false).get_children()
+	var rest: Array = rows.map(func(row: Control) -> float: return row.position.y)
+	_view.call("play_arrival")
+	assert_float(rows[0].modulate.a).override_failure_message("the first row was not hidden at the start").is_equal(0.0)
+	assert_float(rows[0].position.y).is_greater(rest[0])
+	await _view.arrived
+	for i in rows.size():
+		assert_float(rows[i].modulate.a).is_equal(1.0)
+		assert_float(rows[i].position.y).is_equal(rest[i])
+	assert_float(_view.get("_masthead").modulate.a).is_equal(1.0)
+	_view.call("play_arrival")
+	assert_float(rows[0].modulate.a).override_failure_message("the arrival played a second time").is_equal(1.0)
+
+
+## A sub-menu panel moves (motion table): it fades and slides in, and it is still on screen the moment after
+## Close until its out motion has run. RED on main: it appeared and vanished at once.
+func test_route_panel_fades_and_slides_in_and_out() -> void:
+	var before_motion: bool = GraphicsSettings.reduce_motion
+	GraphicsSettings.reduce_motion = false
+	_view.show_route("help")
+	assert_float(_view.route_panel.modulate.a).override_failure_message("the panel opened at once").is_less(1.0)
+	await get_tree().create_timer(0.5).timeout
+	assert_float(_view.route_panel.modulate.a).is_equal(1.0)
+	_view.close_route()
+	assert_bool(_view.route_panel.visible).override_failure_message("the panel vanished at once").is_true()
+	if _view.route_panel.visible:
+		await _view.route_closed
+	assert_bool(_view.route_panel.visible).is_false()
+	assert_float(_view.route_panel.modulate.a).is_equal(1.0)
+	GraphicsSettings.reduce_motion = before_motion
+
+
+func test_route_panel_is_instant_with_reduce_motion() -> void:
+	var before_motion: bool = GraphicsSettings.reduce_motion
+	GraphicsSettings.reduce_motion = true
+	_view.show_route("help")
+	assert_float(_view.route_panel.modulate.a).is_equal(1.0)
+	var closed := [false]
+	_view.route_closed.connect(func() -> void: closed[0] = true)
+	_view.close_route()
+	assert_bool(_view.route_panel.visible).is_false()
+	assert_bool(closed[0]).is_true()
+	GraphicsSettings.reduce_motion = before_motion
+
+
+const CARD_FIXTURES := "res://test/fixtures/continue_card"
+
+
+## The Continue card named only the save and its date. RED on main: the lookup has no facts.
+func test_latest_save_info_carries_the_facts_of_the_save() -> void:
+	var info := SaveManager.latest_save_info(CARD_FIXTURES)
+	assert_str(str(info.get("name", ""))).is_equal("save_with_facts")
+	assert_str(str(info.get("system", ""))).is_equal("gf")
+	assert_int(int(info.get("round", 0))).is_equal(3)
+	assert_str(str(info.get("biome", ""))).is_equal("temperate_grassland")
+	assert_array(info.get("size_feet", [])).is_equal([6.0, 4.0])
+
+
+func test_save_facts_are_left_out_of_a_file_that_is_too_large_or_broken() -> void:
+	var manager: GDScript = load("res://scripts/save_manager.gd")
+	assert_bool(manager.has_method("save_facts")).override_failure_message("no save_facts").is_true()
+	if not manager.has_method("save_facts"):
+		return
+	var path := CARD_FIXTURES.path_join("save_with_facts.nml")
+	assert_dict(manager.call("save_facts", path, 10)).is_empty()
+	var broken := "user://broken_continue_card.nml"
+	FileAccess.open(broken, FileAccess.WRITE).store_string("{ not json")
+	assert_dict(manager.call("save_facts", broken)).is_empty()
+	DirAccess.remove_absolute(broken)
+
+
+func test_continue_card_shows_two_mono_lines_with_the_facts() -> void:
+	var lines: Variant = _view.get("save_facts")
+	assert_bool(lines is Array).override_failure_message("the card has no fact lines").is_true()
+	if lines is not Array:
+		return
+	_view.set_save(SaveManager.latest_save_info(CARD_FIXTURES))
+	assert_str(lines[0].text).is_equal("GRIMDARK FUTURE · ROUND 3")
+	assert_str(lines[1].text).is_equal("GRASSLAND · 6 x 4 FT")
+	_view.set_save({"name": "plain", "modified_unix": 1727000000})
+	assert_bool(lines[0].visible).is_false()
+	assert_bool(lines[1].visible).is_false()
+
+
+func test_continue_card_shows_the_biome_picture_when_the_biome_is_known() -> void:
+	var picture: Variant = _view.get("save_picture")
+	assert_bool(picture is TextureRect).override_failure_message("the card has no picture").is_true()
+	if picture is not TextureRect:
+		return
+	_view.set_save(SaveManager.latest_save_info(CARD_FIXTURES))
+	assert_bool(picture.visible).is_true()
+	assert_object(picture.texture).is_not_null()
+	assert_vector(picture.custom_minimum_size).is_equal(Vector2(150, 112))
+	_view.set_save({"name": "odd", "modified_unix": 1727000000, "biome": "no_such_biome"})
+	assert_bool(picture.visible).is_false()
+
+
+func _cap_text(parent: Node) -> String:
+	for n: Node in parent.find_children("*", "Label", true, false):
+		var label := n as Label
+		if label.theme_type_variation == HouseStyle.KEYCAP and label.is_visible_in_tree():
+			return label.text
+	return ""
+
+
+## The main action says its key and so does Quit; a footer link's focus is a 2 px accent ring.
+## RED on main: no key caps and a 1 px gold focus line.
+func test_main_action_and_quit_show_key_caps_and_links_focus_with_a_ring() -> void:
+	_view.set_save({})
+	assert_str(_cap_text(_view.buttons.StartBattleBtn)).override_failure_message(
+		"the first-run main action has no Enter key cap").is_equal("Enter")
+	_view.set_save({"name": "x", "modified_unix": 1727000000})
+	assert_str(_cap_text(_view.buttons.ContinueBtn)).override_failure_message(
+		"Continue has no Enter key cap").is_equal("Enter")
+	assert_str(_cap_text(_view.buttons.StartBattleBtn)).override_failure_message(
+		"a row that is not the main action shows the Enter cap").is_equal("")
+	assert_str(_cap_text(_view.buttons.ExitGameBtn.get_parent())).override_failure_message(
+		"Quit has no Esc key cap").is_equal("Esc")
+	var ring := _view.buttons.HelpBtn.get_theme_stylebox("focus") as StyleBoxFlat
+	assert_int(ring.border_width_left).is_equal(2)
+	assert_object(ring.border_color).is_equal(HouseStyle.ACCENT)

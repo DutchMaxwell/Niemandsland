@@ -53,9 +53,17 @@ static func open(host: Node, dialog: AcceptDialog) -> void:
 static func attach_scrim(dialog: Window) -> void:
 	var scrim := ColorRect.new()
 	scrim.name = "DialogScrim"
-	scrim.color = HouseStyle.SCRIM
+	scrim.color = Color(HouseStyle.SCRIM, 0.0 if not UiMotion.reduced() else HouseStyle.SCRIM.a)
 	scrim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	scrim.visible = dialog.visible
 	dialog.get_parent().add_child(scrim)
-	dialog.visibility_changed.connect(func() -> void: scrim.visible = dialog.visible)
+	dialog.visibility_changed.connect(
+		func() -> void:
+			scrim.visible = dialog.visible
+			UiFeedback.play_panel(dialog.visible)
+			if dialog.visible and not UiMotion.reduced():
+				scrim.color.a = 0.0
+				var fade := scrim.create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+				fade.tween_property(scrim, "color:a", HouseStyle.SCRIM.a, HudTokens.DUR_PANEL_IN)
+	)
 	dialog.tree_exited.connect(scrim.queue_free)

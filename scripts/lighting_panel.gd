@@ -221,7 +221,7 @@ func _build_ui() -> void:
 	visibility_changed.connect(func() -> void:
 		if visible:
 			_restyle())
-	_add_help_lines.call_deferred()   # a sheet shown at once never fires visibility_changed; late rows join next frame
+	_restyle.call_deferred()   # a sheet shown at once never fires visibility_changed: house look and help lines next frame
 
 	# Lighting moods are chosen through the ATMOSPHERE section only (added at the top by
 	# set_atmosphere_controller); the old standalone lighting "PRESETS" were a parallel,
@@ -298,7 +298,7 @@ func _build_ui() -> void:
 	# player's choices and restoring them when switched off. DEFAULT OFF.
 	var calm_cb := CheckButton.new()
 	calm_cb.text = "Calm Mode"
-	calm_cb.tooltip_text = "Turns down combat effects, motion and pulsing selection aids in one click. / Reduziert Effekte, Bewegung und pulsierende Auswahl in einem Klick."
+	calm_cb.tooltip_text = "Turns down combat effects, motion and pulsing selection aids in one click."
 	calm_cb.button_pressed = GraphicsSettings.calm_mode
 	calm_cb.toggled.connect(func(on: bool) -> void:
 		GraphicsSettings.set_calm_mode(on))
@@ -532,6 +532,14 @@ func _on_preset_applied(_preset_name: String) -> void:
 	for i in _quality_row.get_child_count():
 		HouseStyle.set_selected(_quality_row.get_child(i) as Button, i == GraphicsSettings.current_preset)
 	_on_calm_changed()   # a preset also sets Idle Motion: the switches show it at once
+
+
+## Modal with the scrim (the menu: nothing behind the sheet is tuned by eye) or, as at the table, without a scrim and
+## letting the clicks through (the lighting is tuned by eye there).
+func set_modal(on: bool) -> void:
+	var root := get_child(0) as Control
+	root.mouse_filter = Control.MOUSE_FILTER_STOP if on else Control.MOUSE_FILTER_IGNORE
+	(root.get_node("Scrim") as ColorRect).visible = on
 
 
 ## The content box of the page `page_name` (one of PAGES): the place a control is added to.
