@@ -1895,6 +1895,7 @@ pub(crate) mod tests {
             kits: Vec::new(),
             kit_names: Vec::new(),
             cmd_bearer: Vec::new(),
+            cmd_musician: Vec::new(),
             mods: vec![Mods::default(); n],
             mods_base: (0..n).map(|_| Rc::new(Mods::default())).collect(),
             attached: Rc::new(attached),
