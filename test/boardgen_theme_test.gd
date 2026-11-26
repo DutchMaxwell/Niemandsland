@@ -248,7 +248,7 @@ func test_the_wall_and_the_towers_are_crowned_with_merlons_inside_the_edge_strip
 
 func test_the_town_air_is_its_ground_fog_and_a_deepworks_board_breathes_the_same_fog_and_keeps_its_steam() -> void:
 	assert_array(BoardgenTheme.of(_town())["atmosphere"]).is_equal(["GroundFog"])
-	assert_array(BoardgenTheme.of(_fixture())["atmosphere"]).is_equal(["GroundFog", "Steam"])
+	assert_array(BoardgenTheme.of(_fixture())["atmosphere"]).is_equal(["GroundFog", "Steam", "Mist"])
 	GraphicsSettings.show_board_mist = true
 	var node := _built(_town())
 	node.refresh_atmosphere()

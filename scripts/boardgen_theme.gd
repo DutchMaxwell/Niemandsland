@@ -38,8 +38,8 @@ const TOWN_SETS_MAX_BYTES := 16000000
 const TOWN_SET_MEANS := {"stone": Vector3(0.377, 0.244, 0.137), "plaster": Vector3(0.4065, 0.3669, 0.3513), "timber": Vector3(0.1207, 0.0743, 0.0443), "earth": Vector3(0.1747, 0.1326, 0.0824)}
 const DEEPWORKS_DRESSING := ["Props", "Landmarks", "Debris", "Sumps", "Rails"]
 ## The air of a board: the town's ground fog with its lamp pools (BoardgenGroundFog) on both themes (maintainer 26.11.: the town's fog goes to Tiefwerk);
-## Tiefwerk keeps its vent steam.
-const DEEPWORKS_ATMOSPHERE := ["GroundFog", "Steam"]
+## Tiefwerk keeps its vent steam and, over its acid sumps only, the green mist shimmer (maintainer 26.11., D-FOG3).
+const DEEPWORKS_ATMOSPHERE := ["GroundFog", "Steam", "Mist"]
 const TOWN_ATMOSPHERE := ["GroundFog"]
 
 

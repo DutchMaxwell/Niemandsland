@@ -1,13 +1,15 @@
 shader_type spatial;
 render_mode cull_disabled, depth_draw_never, specular_disabled;
 // Low ground mist of a generated board (BoardgenMist): three translucent planes, one per instance layer (INSTANCE_CUSTOM.x), a
-// drifting noise cloud on each. The density comes from a one-texel-per-cell texture (R = thickness, G = toxic), filtered, so the mist
+// drifting noise cloud on each. Since the town's ground fog veils Tiefwerk (LOOK5, 26.11.) it is drawn over the acid sumps only
+// (`sump_only`): the green shimmer the maintainer kept. The density comes from a one-texel-per-cell texture (R = thickness, G = toxic), filtered, so the mist
 // pools in wells and over sumps and thins out at a tier wall. It fades where it meets geometry (soft depth), and stays thin.
 
 uniform sampler2D cells : filter_linear, repeat_disable;
 uniform sampler2D depth_tex : hint_depth_texture, repeat_disable, filter_nearest;
 uniform vec2 board_in = vec2(48.0);
 uniform float strength = 0.5;
+uniform float sump_only = 0.0;   // 1: only over a sump and its rim (G), feathered; nothing on the open floor
 
 varying vec2 bpos;   // board inches off the centre
 varying flat float layer;
@@ -49,6 +51,7 @@ void fragment() {
 	float cloud = pow(smoothstep(thr, thr + 0.2, n), 1.6);   // soft shoulders, a core that thickens: no flat plateau
 	float a = cloud * strength * (0.5 + 0.5 * c.r) * (1.0 - 0.2 * layer) * edge;   // the layer at the ankles is the thickest
 	a *= 1.0 - 0.6 * c.g;   // over a sump and round it the mist is thinner: it must not hide the liquid (a feathered cap, no hard streak)
+	a *= mix(1.0, smoothstep(0.05, 0.45, c.g), sump_only);
 	// Soft depth: no hard line where the plane meets a wall, a crate or a base.
 	float d = texture(depth_tex, SCREEN_UV).r;
 	vec4 up = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, d, 1.0);

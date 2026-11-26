@@ -67,6 +67,19 @@ func test_the_mist_is_three_thin_planes_below_the_knee_in_one_multimesh_with_not
 	assert_bool(mat.shader.code.contains("ALPHA = clamp(a, 0.0, mix(0.3, 0.14, c.g));")).is_true()   # never a wall, and softer still over a sump (no hard streak across the liquid)
 
 
+## LOOK5 F4r' (D-FOG3: the green shimmer over the acid sumps stays): the ground fog veils the board, the mist is drawn over the sumps only.
+func test_the_mist_is_the_sump_shimmer_under_the_ground_fog() -> void:
+	var mist: BoardgenMist = auto_free(BoardgenMist.new())
+	add_child(mist)
+	mist.build(_layout([Vector2i(2, 2)]))
+	var mat := mist.material_override as ShaderMaterial
+	assert_float(float(mat.get_shader_parameter("sump_only"))).is_equal(1.0)
+	assert_bool(mat.shader.code.contains("a *= mix(1.0, smoothstep(0.05, 0.45, c.g), sump_only);")).is_true()
+	var node := _board(_layout([Vector2i(2, 2)]))
+	for air: String in ["GroundFog", "Steam", "Mist"]:
+		assert_object(node.get_node_or_null(air)).override_failure_message("no %s on a Tiefwerk board" % air).is_not_null()
+
+
 func _board(layout: Dictionary) -> BoardgenGreybox:
 	var node: BoardgenGreybox = auto_free(BoardgenGreybox.new())
 	add_child(node)
