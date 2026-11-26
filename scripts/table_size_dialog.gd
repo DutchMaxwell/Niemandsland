@@ -48,7 +48,7 @@ var _size_buttons: Dictionary = {}
 var _size_labels: Dictionary = {}
 var _custom: HBoxContainer
 var _error: Label
-var _summary: Label
+var _summary: Dictionary = {}   # "System" / "Biome" / "Size" -> its value in the summary row above Create table
 var _create: Button
 var _back: Button
 var _preview: TextureRect
@@ -361,8 +361,24 @@ func _build_ui() -> void:
 	summary_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_footer.add_child(summary_column)
 	summary_column.add_child(_label("YOUR TABLE",10,HouseStyle.MUTED))
-	_summary = _label("",16)
-	summary_column.add_child(_summary)
+	var rows := HBoxContainer.new()   # System / Biome / Size on one line, so the 720 page keeps its height
+	rows.add_theme_constant_override("separation",10)
+	summary_column.add_child(rows)
+	for row: String in ["System","Biome","Size"]:
+		var row_name := _label(row,12,HouseStyle.MUTED)
+		row_name.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		rows.add_child(row_name)
+		_summary[row] = _label("",16)
+		rows.add_child(_summary[row])
+	var keys := HBoxContainer.new()   # the key legend: what the keyboard does on this page
+	keys.name = "KeyLegend"
+	keys.theme = HouseStyle.theme()
+	keys.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	keys.add_theme_constant_override("separation",HouseStyle.GAP_CONTROL)
+	_footer.add_child(keys)
+	for pair: Array in [["Tab","next step"],["← →","choose"],["Enter","create table"],["Esc","back"]]:
+		keys.add_child(HouseStyle.label(pair[0],HouseStyle.KEYCAP))
+		keys.add_child(_label(pair[1]+"   ",12,HouseStyle.MUTED))
 	_create = _button("Create table     →")
 	_create.custom_minimum_size = Vector2(230,50)
 	_create.pressed.connect(_confirm)
@@ -532,7 +548,9 @@ func _refresh() -> void:
 	_create.disabled = not _valid or _emitted
 	_error.visible = not _valid
 	_error.text = "Enter width and depth from 30.48 to 609.6 cm." if _unit_option.selected == 1 else "Enter width and depth from 12 to 240 in."
-	_summary.text = "%s · %s" % [BIOMES.get(selected_biome,["Choose a biome"])[0],_size_text(inches) if _valid else "Choose valid dimensions"]
+	_summary.System.text = GameSystem.label(selected_system)
+	_summary.Biome.text = BIOMES.get(selected_biome,["Choose a biome"])[0]
+	_summary.Size.text = _size_text(inches) if valid_dimensions(inches) else "Choose valid dimensions"
 	if BIOMES.has(selected_biome):
 		_preview.texture = load(_preview_path(selected_biome))
 		_preview_title.text = BIOMES[selected_biome][0]
@@ -566,6 +584,9 @@ func _on_close() -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	if visible and event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		_on_close()
+		get_viewport().set_input_as_handled()
+	elif visible and event is InputEventKey and event.pressed and event.keycode in [KEY_ENTER,KEY_KP_ENTER]:
+		_confirm()   # creates only when the choice is valid
 		get_viewport().set_input_as_handled()
 
 
