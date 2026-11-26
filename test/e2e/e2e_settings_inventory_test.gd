@@ -205,6 +205,16 @@ func test_volume_sliders_set_their_bus_and_are_put_back() -> void:
 		s.value = before
 
 
+## The wheel scrolls the settings list and never sets a value: a slider under the pointer must not take
+## the wheel (red on main: 19 of 19 sliders are scrollable, so scrolling the list changed the UI scale and
+## the audio settings file).
+func test_no_slider_of_the_sheet_takes_the_mouse_wheel() -> void:
+	var sliders := _panel.find_children("*", "HSlider", true, false)
+	assert_int(sliders.size()).override_failure_message("the check found only %d sliders" % sliders.size()).is_greater_equal(19)
+	var scrollable := sliders.filter(func(n: Node) -> bool: return (n as HSlider).scrollable)
+	assert_int(scrollable.size()).override_failure_message("%d of %d sliders take the mouse wheel" % [scrollable.size(), sliders.size()]).is_equal(0)
+
+
 func test_display_toggles_reach_graphics_settings_and_are_put_back() -> void:
 	var fields := {"Reduce Motion": "reduce_motion", "Show Move Trails": "show_move_trails",
 		"Show Rule Texts at the Table": "show_rule_floats", "Tilt-Shift (Depth of Field)": "tilt_shift",

@@ -85,6 +85,26 @@ func test_join_invalid_code_keeps_dialog_open_and_does_not_transition() -> void:
 	assert_bool(_menu._join_error_label.visible).is_true()
 	assert_bool(_menu._transitioning).is_false()
 
+## Enter in the code field is Join: a short code is refused with the inline line, like the Join button
+## (red on main: Enter was not connected to anything).
+func test_enter_in_the_join_code_field_joins_like_the_button() -> void:
+	_menu._on_join_online_pressed()
+	_menu._join_code_input.text = "AB1"
+	_menu._join_code_input.text_submitted.emit("AB1")
+	assert_bool(_menu._join_error_label.visible).is_true()
+	assert_bool(_menu._join_popup.visible).is_true()
+	assert_bool(_menu._transitioning).is_false()
+
+
+## Enter in the host's name field is "Prepare table" (red on main: nothing happened).
+func test_enter_in_the_host_name_field_prepares_the_table() -> void:
+	_menu._on_host_online_pressed()
+	assert_object(_menu._table_setup).is_null()
+	_menu._host_name_input.text_submitted.emit(_menu._host_name_input.text)
+	assert_object(_menu._table_setup).is_not_null()
+	assert_bool(_menu._host_popup.visible).is_false()
+
+
 func test_load_opens_real_nml_file_dialog() -> void:
 	_menu.load_battle_btn.pressed.emit()
 	assert_object(_menu._load_dialog).is_not_null()

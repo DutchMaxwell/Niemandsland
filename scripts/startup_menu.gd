@@ -13,6 +13,10 @@ const BROWSE_TIMEOUT_S := 8.0
 ## Room-code length the relay hands out (CODE_LENGTH in relay_server.py). Only used to
 ## reject input the relay could never accept before the dialog closes on it.
 const JOIN_CODE_LEN := 6
+## Trial by Fire: the width (px) every wrapping label of the list is given, and the least size (px) of the
+## scrolling list. Without a width floor the labels wrap at one letter and the window grows past the screen.
+const TRIAL_LABEL_WIDTH := 460
+const TRIAL_LIST_MIN := Vector2(500, 560)
 
 
 # === Native menu view and preserved game routes ===
@@ -319,13 +323,22 @@ func _on_spielschule_pressed() -> void:
 	intro.text = "Eleven short lessons — play them in any order, replay any time."
 	intro.theme_type_variation = HouseStyle.CAPTION
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD
+	intro.custom_minimum_size.x = TRIAL_LABEL_WIDTH
 	vbox.add_child(intro)
 	vbox.add_child(HSeparator.new())
 
 	for chapter in Spielschule.chapters():
 		_add_chapter_row(vbox, chapter, progress, dialog)
 
-	dialog.add_child(vbox)
+	# The list scrolls inside the window, so the window (and its Close button) stays on screen however
+	# many lessons come.
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = TRIAL_LIST_MIN
+	scroll.follow_focus = true
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(vbox)
+	dialog.add_child(scroll)
 	MenuDialog.style(dialog)
 	dialog.confirmed.connect(dialog.queue_free)
 	dialog.canceled.connect(dialog.queue_free)
@@ -365,6 +378,7 @@ func _add_chapter_row(vbox: VBoxContainer, chapter: Dictionary, progress: Spiels
 	goal.text = "      " + String(chapter.get("goal", ""))
 	goal.theme_type_variation = HouseStyle.CAPTION
 	goal.autowrap_mode = TextServer.AUTOWRAP_WORD
+	goal.custom_minimum_size.x = TRIAL_LABEL_WIDTH
 	vbox.add_child(goal)
 
 
@@ -603,6 +617,7 @@ func _show_host_popup() -> void:
 	_host_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Player name")
 	_host_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
 	content.add_child(_host_name_input)
+	_host_popup.register_text_enter(_host_name_input)  # Enter in the name field = Prepare table
 	content.add_child(NetDialog.label("Relay server:"))
 	_relay_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 	content.add_child(_relay_url_input)
@@ -657,6 +672,7 @@ func _show_join_popup() -> void:
 	_join_code_input.add_theme_font_size_override("font_size", 24)
 	_join_code_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(_join_code_input)
+	_join_popup.register_text_enter(_join_code_input)  # Enter in the code field = Join
 	# Validation feedback right under the field it belongs to; hidden until Join is
 	# pressed with an unusable code (see _on_join_confirmed).
 	_join_error_label = NetDialog.label("")

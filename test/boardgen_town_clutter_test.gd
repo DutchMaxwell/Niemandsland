@@ -381,8 +381,7 @@ func test_large_signs_hang_on_street_fronts_off_the_square() -> void:
 			assert_bool(sc["street"] and int(sc["level"]) == 0).override_failure_message("seed %d: a sign over no street" % s).is_true()
 			per_half[1 if at.y >= 24.0 else 0] += 1
 		assert_int(per_half.max()).is_less_equal(BoardgenTownClutter.SIGNS_PER_HALF)
-	# CLUTTER-RETUNE (due 28.11.): restore > 6 signs / >= 0.40 lane-mouth share after the planners follow the D-R16 layouts
-	assert_int(total).is_greater_equal(2)   # look plan D-R2 = C 25.11.: 22 -> 8 over 40 boards; D-R16 = b 26.11. (fewer filler slabs): 8 -> 2
+	assert_int(total).is_greater(6)   # look plan D-R2 = C 25.11.: 22 -> 8 over 40 boards; D-R16 = b 26.11.: 8 -> 2, back to 11 with ladder-top house cells (a ladder foot kept 1 in clear)
 
 
 ## Green feet (plan TARGET C, train 2, V1): every weed clump stands with its origin on a raised face, +z out onto open level-0 ground that is no ladder end, its 1.03 in inside the

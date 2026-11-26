@@ -60,6 +60,7 @@ const CAPTION_W := 72       # the label column of a field row
 const H_SEGMENT := 32
 const H_PIP := 30
 const H_ACTION := 40
+const W_DIALOG_BUTTON := 120  # the least width of a window's own buttons (OK, Back, Close)
 const H_CHIP := 28
 const ICON_BUTTON := 28
 const W_RAIL := 54          # a tool-rail button (mockup .rail-btn in a 66 px rail)
@@ -300,6 +301,9 @@ static func theme() -> Theme:
 
 	# Native dialogs of the menu scene (MenuDialog): the sheet box, light text on it.
 	t.set_stylebox(&"panel", &"AcceptDialog", _box(SHEET_FILL, LINE_SOFT, RADIUS_SHEET, PAD_SHEET, PAD_SHEET))
+	# The dialog ignores a script minimum size for its buttons (19 px tall); only these constants reach them.
+	t.set_constant(&"buttons_min_height", &"AcceptDialog", H_ACTION)
+	t.set_constant(&"buttons_min_width", &"AcceptDialog", W_DIALOG_BUTTON)
 	t.set_color(&"default_color", &"RichTextLabel", INK)
 	for c: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color", &"font_focus_color"]:
 		t.set_color(c, &"CheckBox", INK)

@@ -640,7 +640,7 @@ static func _square_and_walls(layout: Dictionary, out: Dictionary) -> void:
 
 ## Large hanging SIGNS (kit batch A8) on the street fronts off the square: an iron arm at 2.45 in with a framed board (a key, a fish, a mug or shears, no lettering) on the face of a raised
 ## house cell (not the wall, not an intact house) that looks at a street, everything above 1.85 in - over the heads of the models, a thin edge from above. One face in five, at most three a
-## half; never on a ladder face, an ivy cluster's face or within 1 in of a lamp post.
+## half; never on a ladder face, a landmark, an ivy cluster's face or within 1 in of a lamp post or a ladder's foot (a ladder's top cell may carry one on another face).
 const SIGN_BOARDS := ["sign_large_key", "sign_large_fish", "sign_large_mug", "sign_large_shears"]
 const SIGNS_PER_HALF := 3
 
@@ -653,10 +653,18 @@ static func _signs(layout: Dictionary, out: Dictionary) -> void:
 	var cells: Array = layout["cells"]
 	var clear := _kept_clear(layout)
 	var lamps := BoardgenTownDressing.lanterns(layout).map(func(l: Dictionary) -> Vector2: return l["at"])
+	var marks := {}   # (a landmark keeps its faces; a ladder's top cell may carry a sign on another face - its foot is kept clear by distance below, D-R16)
+	for lm: Dictionary in layout["landmarks"]:
+		for dz in int(lm["h"]):
+			for dx in int(lm["w"]):
+				marks[(int(lm["z"]) + dz) * nx + int(lm["x"]) + dx] = true
+	for c: Dictionary in layout["connectors"]:
+		if c.has("edge_in"):
+			lamps.append(Vector2(c["edge_in"][0], c["edge_in"][1]) + origin)
 	var per_half := [0, 0]
 	for cd: Dictionary in cells:
 		var i: int = cd["z"] * nx + cd["x"]
-		if int(cd["level"]) < 1 or ["Wall", "Roofed"].has(cd["lot_kind"]) or clear.has(i):
+		if int(cd["level"]) < 1 or ["Wall", "Roofed"].has(cd["lot_kind"]) or marks.has(i):
 			continue
 		var half := 1 if cd["z"] >= nz / 2 else 0
 		for side in 4:
