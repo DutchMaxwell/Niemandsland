@@ -43,6 +43,7 @@ class Action extends Button:
 
 	func _ready() -> void:
 		focus_mode = Control.FOCUS_ALL
+		set_meta(UiMotion.META_FLAT,true)
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		add_theme_font_override("font",FONT)
 		add_theme_font_size_override("font_size",22)
@@ -58,11 +59,14 @@ class Action extends Button:
 		custom_minimum_size = Vector2(0,54 if description.is_empty() else 76 if primary else 64)
 		for state in ["normal","hover","pressed","focus"]:
 			var box := StyleBoxFlat.new()
+			var lit: bool = state != "normal"
 			box.bg_color = HouseStyle.GOLD if primary else Color("1823296b") if outlined else Color.TRANSPARENT
-			if state in ["hover","pressed"]:
-				box.bg_color = Color("ebd19a") if primary else Color("26333b9c")
-			box.border_color = HouseStyle.GOLD if primary or state == "focus" else Color("a4b8bd44")
-			box.set_border_width_all(1 if primary or outlined or state == "focus" else 0)
+			if lit and not primary:
+				box.bg_color = HouseStyle.ROW_PRESS if state == "pressed" else HouseStyle.ROW_HOVER
+			elif state in ["hover","pressed"]:
+				box.bg_color = Color("ebd19a")
+			box.border_color = HouseStyle.GOLD if primary else HouseStyle.LINE_SOFT if lit else Color("a4b8bd44")
+			box.set_border_width_all(1 if primary or outlined or lit else 0)
 			box.set_corner_radius_all(4)
 			add_theme_stylebox_override(state,box)
 		queue_redraw()
@@ -77,7 +81,10 @@ class Action extends Button:
 			draw_string(FONT,Vector2(left,size.y*0.5+17),description,HORIZONTAL_ALIGNMENT_LEFT,size.x-left-25,15,Color("344c54") if primary else HouseStyle.MUTED)
 		if row_icon != null:
 			draw_texture_rect(row_icon,Rect2(16,size.y*0.5-ICON_PX*0.5,ICON_PX,ICON_PX),false,color if primary else HouseStyle.ACCENT)
-		draw_string(FONT,Vector2(size.x-31,size.y*0.5+6),HouseStyle.GLYPH_GO,HORIZONTAL_ALIGNMENT_LEFT,24,28,color)
+		var lit := not primary and (is_hovered() or has_focus())
+		if lit:
+			draw_rect(Rect2(0,12,3,size.y-24),HouseStyle.GOLD)
+		draw_string(FONT,Vector2(size.x-31,size.y*0.5+6),HouseStyle.GLYPH_GO,HORIZONTAL_ALIGNMENT_LEFT,24,28,HouseStyle.GOLD if lit else color)
 
 
 func _ready() -> void:
