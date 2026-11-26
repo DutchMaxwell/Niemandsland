@@ -88,9 +88,6 @@ void fragment() {
 	base_col *= 1.0 - v * vignette_strength;
 
 	ALBEDO = base_col;
-	if (on_board) {
-		EMISSION = pow(base_col, vec3(2.2)) * board_fill;
-	}
 	ROUGHNESS = roughness_value;
 	METALLIC = 0.0;
 

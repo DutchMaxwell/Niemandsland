@@ -158,7 +158,6 @@ void fragment() {
 	vec3 board_col;
 	if (clip_base && board_ground(ground_xz, board_col)) {
 		ALBEDO = board_col;
-		EMISSION = pow(board_col, vec3(2.2)) * board_fill;
 		ROUGHNESS = 0.85;
 		SPECULAR = 0.3;
 		NORMAL = board_bump(board_col, VERTEX, normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz));

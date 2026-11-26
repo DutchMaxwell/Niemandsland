@@ -4,7 +4,6 @@
 uniform sampler2D board_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform bool has_board = false;
 uniform vec4 board_rect = vec4(0.0);   // xy = world x / z of the bake's corner, zw = 1 / its size in metres
-uniform float board_fill = 0.0;   // the town's emission floor on its open ground (grit_fill in ruintown_grit.gdshaderinc): pow(albedo, 2.2) x this
 
 // The board's relief, approximated from the bake's own light and dark (sett tops bright, joints dark), as a view-space normal: screen-space
 // derivatives of the luma on the base's flat top (as the table tier of reference_ground_body.gdshaderinc does). `pos` / `n` in view space.

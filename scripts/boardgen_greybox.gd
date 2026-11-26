@@ -635,7 +635,7 @@ func _bake_ground() -> void:
 	var rect := Rect2(_ground_rect.position + Vector2(global_position.x, global_position.z), _ground_rect.size)
 	var tex: ImageTexture = await BoardgenGroundBake.bake(self, _surfaces, rect)
 	if tex != null and is_inside_tree() and is_visible_in_tree():
-		table.set_board_ground(tex, rect, BoardgenGroundBake.fill_for(_material))
+		table.set_board_ground(tex, rect)
 
 
 ## The table's own ground scatter (grass tufts, the biome dressing's straw, leaves and puddles) stays off under the board, and so does its ground relief.

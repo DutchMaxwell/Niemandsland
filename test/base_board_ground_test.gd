@@ -17,7 +17,7 @@ class StubTable extends Node3D:   # what the board needs of table.gd
 	func set_flat_rect(_rect: Rect2) -> void:
 		pass
 
-	func set_board_ground(albedo: Texture2D, at: Rect2, _fill := 0.0) -> void:
+	func set_board_ground(albedo: Texture2D, at: Rect2) -> void:
 		ground = albedo
 		rect = at
 		calls += 1

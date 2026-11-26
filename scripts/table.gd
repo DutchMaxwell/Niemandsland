@@ -349,13 +349,12 @@ func get_base_top_material() -> ShaderMaterial:
 
 
 ## A generated board's own ground under every base (ticket BASE-GROUND): `albedo` is the board's top-down bake (BoardgenGroundBake), `rect` its
-## world xz in metres, `fill` the board's emission floor on open ground (BoardgenGroundBake.fill_for). A null texture or an empty rect hands the bases back to the biome ground.
-func set_board_ground(albedo: Texture2D, rect: Rect2, fill := 0.0) -> void:
+## world xz in metres. A null texture or an empty rect hands the bases back to the biome ground.
+func set_board_ground(albedo: Texture2D, rect: Rect2) -> void:
 	var mat := get_base_top_material()
 	var on := albedo != null and rect.has_area()
 	mat.set_shader_parameter("has_board", on)
 	mat.set_shader_parameter("board_albedo", albedo if on else null)
-	mat.set_shader_parameter("board_fill", fill if on else 0.0)
 	mat.set_shader_parameter("board_rect", Vector4(rect.position.x, rect.position.y, 1.0 / rect.size.x, 1.0 / rect.size.y) if on else Vector4.ZERO)
 
 

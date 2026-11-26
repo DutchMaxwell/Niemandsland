@@ -7,13 +7,6 @@ extends RefCounted
 const TEXEL_M := 0.0006   # 0.6 mm per texel: a 25 mm base gets ~40 texels across
 const MAX_PX := 4096
 const CAMERA_ABOVE_M := 3.0   # above the board's origin: over the tallest tower
-const TOWN_FILL := 2.4   # = GRIT_FILL in shaders/ruintown_grit.gdshaderinc: the town's open ground glows faintly at night, so does a base on it
-
-
-## The emission floor a base on this board gets: the town's grit fill when its grit map is on, else none. Pure.
-static func fill_for(board_material: Material) -> float:
-	var on: Variant = board_material.get_shader_parameter("grit_on") if board_material is ShaderMaterial else null
-	return TOWN_FILL if on is float and on > 0.5 else 0.0
 
 
 ## The bake's size in pixels for `size_m` metres of board, aspect kept, the longer side capped at MAX_PX. Pure.
