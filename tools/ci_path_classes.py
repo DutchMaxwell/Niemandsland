@@ -22,7 +22,10 @@ CLASSES = {
         "globs": [g.strip() for g in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "ci_look_paths.txt"))
                   if g.strip() and not g.startswith("#")],
         "list": "tools/ci_look_paths.txt",
-        "doors": [("scripts/main.gd", "BoardgenGreybox.attach_from_env(")],
+        "doors": [("scripts/main.gd", "BoardgenGreybox.attach_from_env("),
+                  # test-only (plan step 27-pre P3, lead 26.11.): a rules e2e on a drawn board. Remove when the
+                  # player-facing generate path (D-GEN) exists; the e2e then uses that path.
+                  ("scripts/main.gd", "_board_look = BoardgenGreybox.attach(table, ")],
         "env": "NML_BOARDGEN_SEED",
     },
 }
