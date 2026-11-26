@@ -175,6 +175,10 @@ pub(crate) struct PlainUnit {
     /// with its last slot, `State::initial_cmd_bearer`; every other unit has none, as every record before it).
     #[serde(default)]
     cmd_bearer: Option<i64>,
+    /// KIT-BEARER-NAME: the Musician's own bearer slot when another model carries it, -1 = killed; absent = it rides with
+    /// `cmd_bearer`.
+    #[serde(default)]
+    cmd_musician: Option<i64>,
     #[serde(default)]
     mods: Mods,
     #[serde(default)]
@@ -1118,6 +1122,7 @@ pub(crate) fn state_of(
         kits: Vec::with_capacity(n),
         kit_names: Vec::with_capacity(n),
         cmd_bearer: Vec::with_capacity(n),
+        cmd_musician: Vec::with_capacity(n),
         mods: Vec::with_capacity(n),
         mods_base: Vec::with_capacity(n),
         attached: Rc::new(Vec::new()),
@@ -1218,6 +1223,11 @@ pub(crate) fn state_of(
         st.kit_names.push(Rc::new(kit_names));
         st.cmd_bearer.push(match u.cmd_bearer {
             None => st.initial_cmd_bearer(ui),
+            Some(b) if b < 0 => None,
+            Some(b) => Some(b as usize),
+        });
+        st.cmd_musician.push(match u.cmd_musician {
+            None => st.cmd_bearer[ui],
             Some(b) if b < 0 => None,
             Some(b) => Some(b as usize),
         });
@@ -1578,6 +1588,10 @@ pub fn plain_of(st: &State) -> serde_json::Value {
                 u.insert("cmd_bearer".into(), (-1).into());
             }
             None => {}
+        }
+        // KIT-BEARER-NAME: the Musician's own bearer, only where it is not the Banner's (a record without one keeps its bytes)
+        if let Some(m) = st.cmd_musician.get(i).copied().filter(|m| Some(*m) != st.cmd_bearer.get(i).copied()) {
+            u.insert("cmd_musician".into(), m.map_or(-1, |b| b as i64).into());
         }
         u.insert("mods".into(), serde_json::to_value(st.mods[i]).unwrap_or(Value::Null));
         u.insert("mods_base".into(), serde_json::to_value(*st.mods_base[i]).unwrap_or(Value::Null));
@@ -1968,6 +1982,33 @@ mod tests {
         let st = state_in("gf", None);
         assert_eq!(st.cmd_bearer[ui], None);
         assert!(plain_of(&st)["units"]["p1_0_a"].get("cmd_bearer").is_none(), "no command groups in gf: no key");
+    }
+
+    /// KIT-BEARER-NAME: a Musician with its own model round-trips as `cmd_musician` (-1 = killed); absent, it rides with
+    /// the Banner's bearer and writes no key back, so a record without one keeps its bytes.
+    #[test]
+    fn a_musician_with_its_own_model_round_trips_and_absent_rides_with_the_banner() {
+        let state_in = |musician: Option<i64>| {
+            let header = LEDGER_HEADER.replacen(r#""game_system":"gf","faction_folder":"robot_legions","special_rules":[]"#,
+                r#""game_system":"aofs","faction_folder":"robot_legions","special_rules":["Banner","Musician"]"#, 1);
+            let mut v: serde_json::Value = serde_json::from_str(LEDGER_PLAIN).unwrap();
+            v["units"]["p1_0_a"]["cmd_bearer"] = serde_json::json!(1);
+            if let Some(m) = musician {
+                v["units"]["p1_0_a"]["cmd_musician"] = serde_json::json!(m);
+            }
+            let mut cache = ProfileCache::new(read_act_header(&header).expect("header").profiles);
+            state_from_json(&v.to_string(), &mut cache, &mut None).expect("state")
+        };
+        let st = state_in(None);
+        let ui = st.roster.index["p1_0_a"];
+        assert_eq!(st.musician_bearer(ui), Some(Some(1)), "rides with the Banner's bearer");
+        assert!(plain_of(&st)["units"]["p1_0_a"].get("cmd_musician").is_none(), "no key written back");
+        let st = state_in(Some(0));
+        assert_eq!(st.musician_bearer(ui), Some(Some(0)));
+        assert_eq!(plain_of(&st)["units"]["p1_0_a"]["cmd_musician"], serde_json::json!(0));
+        let st = state_in(Some(-1));
+        assert_eq!(st.musician_bearer(ui), Some(None), "killed");
+        assert_eq!(plain_of(&st)["units"]["p1_0_a"]["cmd_musician"], serde_json::json!(-1));
     }
 
     /// Ruling D16: the command-group bearer's slot survives `plain -> State -> plain`; a record without the key reads no
