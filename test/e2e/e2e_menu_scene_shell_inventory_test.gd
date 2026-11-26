@@ -460,6 +460,19 @@ func test_continue_card_shows_two_mono_lines_with_the_facts() -> void:
 	assert_bool(lines[1].visible).is_false()
 
 
+## The Continue card is tighter (kicker, name and lines 4 px apart, 18 px of padding), dates the save as "22 Sep 2024"
+## and draws two gold corner brackets (sheet 01; red on main: 12 px gaps, 20 px padding, "2024-09-22", no corners).
+func test_continue_card_is_tight_dated_in_words_and_has_corner_brackets() -> void:
+	_view.set_save({"name": "plain", "modified_unix": 1727000000})
+	assert_str(_view.save_date.text).is_equal("Saved on 22 Sep 2024")
+	var panel := _view.resume.get_theme_stylebox("panel") as StyleBoxFlat
+	assert_float(panel.content_margin_left).is_equal(18.0)
+	var column: Control = _view.save_date.get_parent()
+	assert_int(column.get_theme_constant("separation")).is_equal(4)
+	assert_int(_view.resume.get_signal_connection_list("draw").size()).override_failure_message(
+		"the card draws no corner brackets").is_greater(0)
+
+
 func test_continue_card_shows_the_biome_picture_when_the_biome_is_known() -> void:
 	var picture: Variant = _view.get("save_picture")
 	assert_bool(picture is TextureRect).override_failure_message("the card has no picture").is_true()
