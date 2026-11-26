@@ -104,13 +104,12 @@ static func ruin_gables(layout: Dictionary, timber: Dictionary = {}, faces: Arra
 	var nz: int = layout["nz"]
 	var cell_in := float(layout["cell_in"])
 	var origin := Vector2(nx, nz) * cell_in * -0.5
-	var tiers := BoardgenTownDressing.tier_parts(layout)
 	var ladders := _ladder_tops(layout)
 	var halls := _hall_cells(layout)
-	for lot: Dictionary in layout["lots"]:
-		if not tiers["axis_x"].has(lot["id"]) or tiers["cells"].keys().any(func(i: int) -> bool: return halls.has(i) and int(layout["cells"][i]["lot_id"]) == int(lot["id"])):
+	for lot: Dictionary in shell_lots(layout):
+		if (lot["cells"] as Dictionary).keys().any(func(i: int) -> bool: return halls.has(i)):
 			continue
-		var axis_x: bool = tiers["axis_x"][lot["id"]]
+		var axis_x: bool = lot["axis_x"]
 		var half := 1 if int(lot["z"]) * 2 >= nz else 0
 		var runs: Array = []   # [end, cells]: across every column of the lot, each run of one level 1-2 whose neighbour along the axis is lower (the lot's end or a drop inside it)
 		for end in 2:   # towards the low end, towards the high end along the axis
@@ -121,7 +120,7 @@ static func ruin_gables(layout: Dictionary, timber: Dictionary = {}, faces: Arra
 				for k in across + 1:
 					var x: int = int(lot["x"]) + (a if axis_x else k)
 					var z: int = int(lot["z"]) + (k if axis_x else a)
-					var level := _level(layout, x, z) if k < across else -1
+					var level := _level(layout, x, z) if k < across and (lot["cells"] as Dictionary).has(z * nx + x) else -1
 					var ok := level >= 1 and level < 3 and _level(layout, x + d.x, z + d.y) < level   # (towers plan T2 sweep: a gable on a 9 in top would rise into the tower crown)
 					if ok and not run.is_empty() and int(layout["cells"][run[0]]["level"]) == level:
 						run.append(z * nx + x)
@@ -169,6 +168,44 @@ static func ruin_gables(layout: Dictionary, timber: Dictionary = {}, faces: Arra
 	return out
 
 
+## The ruined shells that carry gable ends and rafters (LOOK5 T2): every Block / Deck lot (axis from tier_parts), every Terrace lot that holds a raised cell, and one
+## pseudo-lot per 4-connected run of free raised cells (no lot, level 1-2, not wall; id 1000 + its first cell, the run's bounding box, axis = its longer side).
+## tier_parts itself is unchanged (its other readers paint per lot). [{id, x, z, w, h, axis_x, cells {cell index: true}}]
+static func shell_lots(layout: Dictionary) -> Array[Dictionary]:
+	var nx: int = layout["nx"]
+	var tiers := BoardgenTownDressing.tier_parts(layout)
+	var out: Array[Dictionary] = []
+	for lot: Dictionary in layout["lots"]:
+		var cells := {}
+		for dz in int(lot["h"]):
+			for dx in int(lot["w"]):
+				cells[(int(lot["z"]) + dz) * nx + int(lot["x"]) + dx] = true
+		var raised := cells.keys().any(func(i: int) -> bool: return int(layout["cells"][i]["level"]) in [1, 2])
+		if tiers["axis_x"].has(lot["id"]) or (lot["kind"] == "Terrace" and raised):
+			out.append({"id": lot["id"], "x": lot["x"], "z": lot["z"], "w": lot["w"], "h": lot["h"], "axis_x": tiers["axis_x"].get(lot["id"], int(lot["w"]) >= int(lot["h"])), "cells": cells})
+	var free := func(i: int) -> bool: return int(layout["cells"][i]["lot_id"]) == 0 and int(layout["cells"][i]["level"]) in [1, 2] and layout["cells"][i]["lot_kind"] != "Wall"
+	var seen := {}
+	for i in (layout["cells"] as Array).size():
+		if seen.has(i) or not free.call(i):
+			continue
+		var run := {i: true}
+		var todo: Array[int] = [i]
+		while not todo.is_empty():
+			var j: int = todo.pop_back()
+			for d: Vector2i in DIRS:
+				var k := j + d.y * nx + d.x
+				if _level(layout, j % nx + d.x, j / nx + d.y) >= 0 and not run.has(k) and free.call(k):
+					run[k] = true
+					todo.append(k)
+		seen.merge(run)
+		var xs: Array = run.keys().map(func(c: int) -> int: return c % nx)
+		var zs: Array = run.keys().map(func(c: int) -> int: return c / nx)
+		var w: int = xs.max() - xs.min() + 1
+		var h: int = zs.max() - zs.min() + 1
+		out.append({"id": 1000 + i, "x": xs.min(), "z": zs.min(), "w": w, "h": h, "axis_x": w >= h, "cells": run})
+	return out
+
+
 ## Charred rafter stubs on the LONG faces of the same houses (open drop, one level): a wall plate along the edge and rafters every 0.8 in leaning inward at 38 degrees, a third of them
 ## gone; a rafter's top stays inside the 0.75 in strip. None within LADDER_GAP_IN of a ladder's top. [{centre (Vector3), size (Vector3: section, section, length), yaw, pitch, kind}]
 static func rafters(layout: Dictionary) -> Array[Dictionary]:
@@ -177,15 +214,18 @@ static func rafters(layout: Dictionary) -> Array[Dictionary]:
 	var nz: int = layout["nz"]
 	var cell_in := float(layout["cell_in"])
 	var origin := Vector2(nx, nz) * cell_in * -0.5
-	var tiers := BoardgenTownDressing.tier_parts(layout)
+	var shell_axis := {}   # cell index -> the axis of its ruined shell
+	for lot: Dictionary in shell_lots(layout):
+		for i: int in lot["cells"]:
+			shell_axis[i] = lot["axis_x"]
 	var ladders := _ladder_tops(layout)
 	var halls := _hall_cells(layout)
-	for i: int in tiers["cells"]:
+	for i: int in shell_axis:
 		var cd: Dictionary = layout["cells"][i]
 		var level: int = cd["level"]
-		if level < 1 or halls.has(i):
+		if level < 1 or level > 2 or halls.has(i):
 			continue
-		var axis_x: bool = tiers["axis_x"][int(cd["lot_id"])]
+		var axis_x: bool = shell_axis[i]
 		var half := 1 if int(cd["z"]) * 2 >= nz else 0
 		for side: int in ([0, 2] if axis_x else [1, 3]):
 			var d := DIRS[side]

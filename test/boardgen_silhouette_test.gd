@@ -79,7 +79,7 @@ func test_gables_stand_in_the_edge_strip_of_a_ruined_house_and_keep_a_ladder_top
 			var mid := Vector2(b["lo"].x + b["hi"].x, b["lo"].z + b["hi"].z) * 0.5
 			var i := _cell_at(layout, mid)
 			var cd: Dictionary = layout["cells"][i]
-			assert_array(["Block", "Deck"]).contains([str(cd["lot_kind"])])
+			assert_array(["Wall", "Roofed", "Tower"]).not_contains([str(cd["lot_kind"])])   # (LOOK5 T2) a ruined shell: Block, Deck, Terrace or a free raised run
 			assert_float(b["lo"].y).is_equal_approx(float(layout["level_in"][cd["level"]]), EPS)   # stands ON the top
 			assert_float(b["hi"].y - b["lo"].y).is_less_equal(BoardgenTownSilhouette.GABLE_PEAK_IN.y + EPS)
 			assert_float(b["hi"].y).is_less(9.0)   # never as high as the tower crown
@@ -104,7 +104,7 @@ func test_rafters_lean_in_from_the_edge_of_a_ruined_house_and_stay_inside_the_st
 			var foot: Vector3 = r["centre"] - half_len
 			var i := _cell_at(layout, Vector2(foot.x, foot.z))
 			var cd: Dictionary = layout["cells"][i]
-			assert_array(["Block", "Deck"]).contains([str(cd["lot_kind"])])
+			assert_array(["Wall", "Roofed", "Tower"]).not_contains([str(cd["lot_kind"])])   # (LOOK5 T2) a ruined shell: Block, Deck, Terrace or a free raised run
 			assert_int(_cell_at(layout, Vector2(top.x, top.z))).is_equal(i)
 			var rect := _cell_rect(layout, i)
 			var to_edge := minf(minf(top.x - rect.position.x, rect.end.x - top.x), minf(top.z - rect.position.y, rect.end.y - top.z))
@@ -211,3 +211,50 @@ func test_every_ruin_shell_with_a_drop_along_its_axis_carries_a_gable_stub() -> 
 			var stubs := boxes.filter(func(b: Dictionary) -> bool: return b["lot"] == lot["id"]).size()
 			assert_bool(stubs > 0 or (not own.is_empty() and own.all(func(f: Dictionary) -> bool: return not f["free"]))).override_failure_message("seed %d: ruin lot %d has a drop along its axis and no gable stub" % [s, lot["id"]]).is_true()
 	assert_int(shells).is_greater(40)
+
+
+## LOOK5 T2: Terrace lots and free raised cells are shells too - on seeds 1..40 every island of level 1-2 cells that are not city wall, house or tower and not under a hall
+## carries at least one gable stub, unless every gable face it has holds a ladder top; tier_parts (the paint's lots) is unchanged.
+func test_every_raised_island_outside_wall_and_hall_carries_a_gable_stub() -> void:
+	var core: Object = ClassDB.instantiate("NmlCore")
+	var islands := 0
+	for s in range(1, 41):
+		var layout: Dictionary = core.boardgen_layout_themed(s, "ruintown")
+		var nx: int = layout["nx"]
+		var halls := BoardgenTownSilhouette._hall_cells(layout)
+		var faces: Array = []
+		var boxes := BoardgenTownSilhouette.ruin_gables(layout, {}, faces)
+		var stub_cells := {}
+		for b: Dictionary in boxes:
+			stub_cells[_cell_at(layout, Vector2(b["lo"].x + b["hi"].x, b["lo"].z + b["hi"].z) * 0.5)] = true
+		var lot_of := {}
+		for lot: Dictionary in BoardgenTownSilhouette.shell_lots(layout):
+			for i: int in lot["cells"]:
+				lot_of[i] = lot["id"]
+		var raised := func(i: int) -> bool: return int(layout["cells"][i]["level"]) in [1, 2] and not ["Wall", "Roofed", "Tower"].has(str(layout["cells"][i]["lot_kind"]))
+		var seen := {}
+		for i in (layout["cells"] as Array).size():
+			if seen.has(i) or not raised.call(i):
+				continue
+			var isl := {i: true}
+			var todo: Array[int] = [i]
+			while not todo.is_empty():
+				var j: int = todo.pop_back()
+				for d: Vector2i in BoardgenTownSilhouette.DIRS:
+					var k := j + d.y * nx + d.x
+					if BoardgenTownSilhouette._level(layout, j % nx + d.x, j / nx + d.y) >= 0 and not isl.has(k) and raised.call(k):
+						isl[k] = true
+						todo.append(k)
+			seen.merge(isl)
+			if isl.keys().any(func(c: int) -> bool: return halls.has(c)):
+				continue
+			islands += 1
+			var ids := {}
+			for c: int in isl:
+				ids[lot_of.get(c, -1)] = true
+			var own := faces.filter(func(f: Dictionary) -> bool: return ids.has(f["lot"]))
+			var ok := isl.keys().any(func(c: int) -> bool: return stub_cells.has(c)) or (not own.is_empty() and own.all(func(f: Dictionary) -> bool: return not f["free"]))
+			assert_bool(ok).override_failure_message("seed %d: raised island at cell %d (%d cells, kinds %s) has no gable stub" % [s, i, isl.size(), str(isl.keys().map(func(c: int) -> String: return str(layout["cells"][c]["lot_kind"])))]).is_true()
+	assert_int(islands).is_greater(40)
+	var tiers := BoardgenTownDressing.tier_parts(core.boardgen_layout_themed(41, "ruintown"))
+	assert_bool(tiers["axis_x"].keys().all(func(id: int) -> bool: return id < 1000)).is_true()   # the paint's lots stay the real Block / Deck lots
