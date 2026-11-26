@@ -42,6 +42,37 @@ func test_all_feedback_tones_exist() -> void:
 	assert_object(UiFeedback._snd_hover).is_not_null()
 	assert_object(UiFeedback._snd_focus).is_not_null()
 
+# ===== Which tone a button plays =====
+
+
+## The house gold main actions confirm, the house danger button goes back; every other button clicks
+## (red on main: the lookup still named the pre-September variants, so both returned the click).
+func _tone_of(variant: StringName) -> AudioStreamWAV:
+	var btn: Button = auto_free(Button.new())
+	btn.theme_type_variation = variant
+	return UiFeedback._sound_for(btn)
+
+
+func test_house_primary_variants_play_the_confirm_tone() -> void:
+	for variant: StringName in [HouseStyle.PRIMARY, HouseStyle.BAR_PRIMARY, &"PrimaryButton"]:
+		assert_object(_tone_of(variant)) \
+			.override_failure_message("%s does not confirm" % variant) \
+			.is_same(UiFeedback._snd_confirm)
+
+
+func test_house_danger_variant_plays_the_back_tone() -> void:
+	for variant: StringName in [HouseStyle.DANGER_BUTTON, &"DangerButton"]:
+		assert_object(_tone_of(variant)) \
+			.override_failure_message("%s does not go back" % variant) \
+			.is_same(UiFeedback._snd_back)
+
+
+func test_other_buttons_keep_the_click_tone() -> void:
+	for variant: StringName in [&"", HouseStyle.BUTTON, HouseStyle.SEGMENT]:
+		assert_object(_tone_of(variant)) \
+			.override_failure_message("%s does not click" % variant) \
+			.is_same(UiFeedback._snd_click)
+
 # ===== Persisted buses =====
 
 
