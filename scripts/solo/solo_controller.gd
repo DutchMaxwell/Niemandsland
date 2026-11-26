@@ -7485,7 +7485,9 @@ static func rule_is_aura_granted(unit: GameUnit, rule_name: String) -> bool:
 ## The chain (unit + attached heroes) whose models Reanimation may restore RIGHT NOW.
 ## A LIVING aura carrier projects the rule over the whole chain ("this model and its unit"); without
 ## one, only members that own the base rule themselves qualify — so a fallen Re-Animator takes the
-## rule with him even though the import stamped "Reanimation" onto the unit. Empty = no reanimation.
+## rule with him even though the import stamped "Reanimation" onto the unit. REVIVE-MEMBERS (lead
+## ruling): the rule needs EVERY model of the unit to carry it, a joined hero included — a standing
+## member without its own rule means no reanimation for the chain. Empty = no reanimation.
 static func reanimation_members(unit: GameUnit) -> Array:
 	if unit == null:
 		return []
@@ -7504,7 +7506,29 @@ static func reanimation_members(unit: GameUnit) -> Array:
 		if member != null and has_exact_rule(member, REANIMATION_RULE) \
 				and not rule_is_aura_granted(member, REANIMATION_RULE):
 			out.append(member)
+		elif member != null and member.get_alive_count() > 0:
+			return []
 	return out
+
+
+## REVIVE-MEMBERS: a standing member of the chain owns no Reanimation (its rule is not its own) while no Aura bearer, living or
+## fallen, is in the chain - the "a joined model lacks the rule" refusal. A fallen Aura bearer is the Aura-ends case instead.
+static func reanimation_member_lacks_rule(unit: GameUnit) -> bool:
+	var chain: Array = [unit] + (unit.get_attached_heroes() if unit != null and unit.has_method("get_attached_heroes") else [])
+	if unit == null or chain.any(func(c) -> bool: return c is GameUnit and has_exact_rule(c, REANIMATION_AURA)):
+		return false
+	return chain.any(func(c) -> bool: return c is GameUnit and (c as GameUnit).get_alive_count() > 0 \
+		and (not has_exact_rule(c, REANIMATION_RULE) or rule_is_aura_granted(c, REANIMATION_RULE)))
+
+
+## Something in the chain to restore: a fallen or a wounded model.
+static func reanimation_chain_missing(unit: GameUnit) -> bool:
+	var chain: Array = [unit] + (unit.get_attached_heroes() if unit != null and unit.has_method("get_attached_heroes") else [])
+	for c in chain:
+		for m in (c as GameUnit).models if c is GameUnit else []:
+			if m is ModelInstance and (not (m as ModelInstance).is_alive or (m as ModelInstance).wounds_current < (m as ModelInstance).wounds_max):
+				return true
+	return false
 
 
 ## A member that carries the aura (alive when `alive_only`) — the carrier named in the aura-ends line.

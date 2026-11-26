@@ -7376,6 +7376,11 @@ func _solo_try_reanimation(unit: GameUnit) -> void:
 		return
 	if not _solo_reanimation_mapped(unit):
 		return
+	if SoloController.reanimation_member_lacks_rule(unit):
+		if SoloController.reanimation_chain_missing(unit):   # nothing to restore: no line (the core is quiet too)
+			_log_rule_event(BattleLog.Category.COMBAT, "Reanimation: %s does not reanimate — a joined model lacks the rule" \
+				% unit.get_name(), _solo_is_ai_unit(unit))
+		return
 	if SoloController.reanimation_members(unit).is_empty():
 		_solo_reanimation_aura_end(unit)
 		return
@@ -7889,18 +7894,13 @@ func _solo_base_radius(model: ModelInstance) -> float:
 
 
 ## Where a restored model may stand: "new models may only be restored if they can be placed in
-## coherency with non-restored models". First choice is the spot where it FELL (dead-parking stashed
-## it as revive_transform) when that still touches a survivor; otherwise a free ring position beside
-## the nearest anchor. Vector3.INF = nowhere legal, and the success expires.
+## coherency with non-restored models". The first free ring position beside the anchors, in anchor
+## order (REVIVE-SPOT: no "where it fell" spot - the core keeps no such position and the book does not
+## ask for it). Vector3.INF = nowhere legal, and the success expires.
 func _solo_reanimation_spot(model: ModelInstance, anchors: Array, taken: Array) -> Vector3:
 	if model == null or model.node == null or not is_instance_valid(model.node) or anchors.is_empty():
 		return Vector3.INF
 	var r: float = _solo_base_radius(model)
-	var fell: Vector3 = model.node.global_position
-	if model.node.has_meta("revive_transform"):
-		fell = (model.node.get_meta("revive_transform") as Transform3D).origin
-	if _solo_reanimation_spot_ok(fell, r, model, anchors, taken):
-		return fell
 	var coherency_m: float = CoherencyChecker.COHERENCY_DISTANCE_INCHES * CoherencyChecker.INCHES_TO_METERS
 	for a in anchors:
 		var anchor := a as ModelInstance
@@ -7916,15 +7916,37 @@ func _solo_reanimation_spot(model: ModelInstance, anchors: Array, taken: Array) 
 			for k in 16:
 				var ang: float = TAU * float(k) / 16.0
 				var cand := Vector3(a_pos.x + cos(ang) * dist, a_pos.y, a_pos.z + sin(ang) * dist)
-				if _solo_reanimation_spot_ok(cand, r, model, anchors, taken):
-					return cand
+				if not _solo_reanimation_line_blocked(a_pos, cand) and _solo_reanimation_spot_ok(cand, r, model, anchors, taken):
+					return _solo_reanimation_on_surface(cand)
 	return Vector3.INF
 
 
-## Spot test: within 1" (base edge to base edge) of at least one anchor, and clear of every other
-## live base on the table plus the spots this activation already claimed.
+## REVIVE-SPOT (the core's `revive_line_blocked`): the line from the anchor to a ring candidate crosses a ruin / container
+## wall, or ends on another level - the model would come back behind a thin wall or across a tier step.
+func _solo_reanimation_line_blocked(a: Vector3, c: Vector3) -> bool:
+	if solo_controller == null:
+		return false
+	if MovementPlanner.path_crosses_wall(Vector2(a.x, a.z), Vector2(c.x, c.z), solo_controller._rest_walls()):
+		return true
+	var sy: Callable = solo_controller.surface_y_provider
+	return sy.is_valid() and absf(float(sy.call(Vector2(a.x, a.z))) - float(sy.call(Vector2(c.x, c.z)))) > 0.001
+
+
+## REVIVE-SPOT: a restored model stands ON the surface under its spot (the core settles it; the anchor's height could float).
+func _solo_reanimation_on_surface(p: Vector3) -> Vector3:
+	var sy: Callable = solo_controller.surface_y_provider if solo_controller != null else Callable()
+	return Vector3(p.x, float(sy.call(Vector2(p.x, p.z))), p.z) if sy.is_valid() else p
+
+
+## Spot test: the whole base on the table, a legal rest (REVIVE-SPOT: no impassable terrain, no wall or
+## cliff - `_world_forbidden`), within 1" (base edge to base edge) of at least one anchor, and clear of
+## every other live base on the table plus the spots this activation already claimed.
 func _solo_reanimation_spot_ok(pos: Vector3, r: float, model: ModelInstance, anchors: Array,
 		taken: Array) -> bool:
+	if solo_controller != null:
+		var half: Vector2 = solo_controller._table_half_extents()
+		if absf(pos.x) + r > half.x or absf(pos.z) + r > half.y or solo_controller._world_forbidden(pos, r):
+			return false
 	var coherency_m: float = CoherencyChecker.COHERENCY_DISTANCE_INCHES * CoherencyChecker.INCHES_TO_METERS
 	var coherent := false
 	for a in anchors:

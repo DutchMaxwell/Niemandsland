@@ -175,3 +175,30 @@ func test_a_regiment_member_is_left_to_its_block(timeout := 120000) -> void:
 	assert_array(_moves()) \
 		.override_failure_message("a per-model position was sent for a model that lives inside a tray") \
 		.is_empty()
+
+
+
+## REVIVE-SPOT (#3385): the placer no longer uses the fall point, even a legal and coherent one, so the peer depends on the
+## position message for EVERY revive: a casualty that fell 50 mm from its comrade comes back on the ring and that spot travels.
+func test_a_legal_fall_point_is_not_used_and_the_ring_spot_travels(timeout := 120000) -> void:
+	var u := E2EBoot.make_unit(_main, 2, "Bots", [Vector3.ZERO, Vector3(0, 0, 0.05)])
+	_main.opr_army_manager.game_units[u.unit_id] = u
+	u.unit_properties["special_rules"] = ["Reanimation"]
+	u.unit_properties["faction_folder"] = "robot_legions"
+	for i in u.models.size():
+		var m := u.models[i] as ModelInstance
+		m.model_index = i
+		m.node.set_meta("network_id", 4300 + i)
+	var back := u.models[1] as ModelInstance
+	back.wounds_current = 0
+	back.is_alive = false
+	_main.opr_army_manager.set_loose_model_dead(back.node, 2, true, u.unit_id)
+	var fell: Vector3 = _fall_point(back)
+	await _main._solo_resolve_reanimation(u, 1, 5, 1)
+	assert_bool(back.is_alive).is_true()
+	var here: Vector3 = back.node.global_position
+	assert_float(here.distance_to(fell)).override_failure_message("the legal fall point was used").is_greater(0.01)
+	var moves := _moves()
+	var msg: Dictionary = (moves[0] as Dictionary) if not moves.is_empty() else {}
+	assert_int(moves.size()).is_equal(1)
+	assert_float((msg.get("pos", Vector3.INF) as Vector3).distance_to(here)).is_less(0.001)
