@@ -176,6 +176,29 @@ func test_stage_marks_follow_the_stage_in_hand() -> void:
 	assert_object(_overlay.find_child("StageMarks", true, false)).override_failure_message("the compact panel shows marks").is_null()
 
 
+## One tip under the bar of the named loading picture, and only there: not on the plain overlay, not on the compact panel,
+## not in a window lower than 800 px (sheet 06; red on main: no tip).
+func test_the_named_overlay_shows_one_tip() -> void:
+	_overlay = await _make(false)
+	var card := _overlay.find_child("TipCard", true, false) as Control
+	assert_object(card).override_failure_message("no tip card").is_not_null()
+	if card == null:
+		return
+	assert_bool(card.visible).override_failure_message("a tip on the plain overlay").is_false()
+	_overlay.set_title("Urban ruins")
+	assert_bool(card.visible).is_equal(LoadingOverlay.tip_fits(_overlay.get_viewport().get_visible_rect().size.y))
+	var words: Array[String] = []
+	for l: Node in card.find_children("*", "Label", true, false):
+		words.append((l as Label).text)
+	assert_bool(words.has("AT THE TABLE")).is_true()
+	assert_bool(words.has(LoadingOverlay.TIPS[0])).is_true()
+	assert_bool(LoadingOverlay.tip_fits(1080.0)).is_true()
+	assert_bool(LoadingOverlay.tip_fits(720.0)).is_false()
+	_overlay.free()
+	_overlay = await _make(true)
+	assert_object(_overlay.find_child("TipCard", true, false)).override_failure_message("the compact panel shows a tip").is_null()
+
+
 func test_inventory_check_names_a_removed_control() -> void:
 	_overlay = await _make(false)
 	assert_array(_missing(_overlay)).is_empty()

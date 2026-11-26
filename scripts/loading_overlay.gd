@@ -28,6 +28,11 @@ const FULL_BOTTOM := 280      # full mode: the bar stands at y = 800 of 1080, as
 const FULL_SUBTITLE_PX := 20
 const FULL_RULE_W := 250      # the signature rule under the small wordmark
 const LEGAL_ABOVE_BOTTOM := 50
+const TIP_W := 760
+const TIP_MIN_HEIGHT := 800.0   # the tip card stays away from windows lower than this
+## The tips of the named loading picture (one at random); a text-only change adds more.
+const TIPS: Array[String] = ["The ? Controls button in the top bar lists every key and mouse action."]
+const TIP_BULB_SVG := "<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='none' stroke='#fff' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.3 1 2.1h5c0-.8.4-1.6 1-2.1A6 6 0 0 0 12 3z'/></svg>"
 const BACKDROP_LIGHT := 0.62   # full mode: the table's picture behind the text, at 62 % brightness (sheet 06)
 
 # === Stage marks (full mode, sheet 06) ===
@@ -56,6 +61,7 @@ class StageMark:
 
 # === Private variables ===
 
+var _tip_card: Control = null   # full mode: one tip under the bar, only on the named overlay
 var _stage_names := PackedStringArray()
 var _stage_marks: Array[StageMark] = []
 var _stage_labels: Array[Label] = []
@@ -182,6 +188,8 @@ func _place_full(box: VBoxContainer) -> void:
 	box.size_flags_vertical = Control.SIZE_EXPAND | Control.SIZE_SHRINK_END
 	column.add_child(box)
 	_content.add_child(_legal_line())
+	_tip_card = _tip()
+	_content.add_child(_tip_card)
 
 
 ## The bar's fill: the accent in the compact panel; in full mode a gradient from the accent to the gold.
@@ -200,6 +208,44 @@ func _make_fill() -> Control:
 	bar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	bar.stretch_mode = TextureRect.STRETCH_SCALE
 	return bar
+
+
+## Whether a window of this height has room for the tip card.
+static func tip_fits(window_height: float) -> bool:
+	return window_height >= TIP_MIN_HEIGHT
+
+
+## Full mode: one tip in a card under the bar (a gold bulb, the eyebrow "AT THE TABLE", the line); hidden until a title is
+## set and below 800 px of height.
+func _tip() -> Control:
+	var card := PanelContainer.new()
+	card.name = "TipCard"
+	card.theme = HouseStyle.theme()
+	card.theme_type_variation = HouseStyle.PANEL_VARIANT
+	card.custom_minimum_size.x = TIP_W
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	card.offset_left = HouseStyle.PAD_SCREEN
+	card.offset_right = HouseStyle.PAD_SCREEN + TIP_W
+	card.offset_bottom = -(LEGAL_ABOVE_BOTTOM + 40)
+	card.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	card.visible = false
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", HouseStyle.GAP_SECTION)
+	var bulb := TextureRect.new()
+	bulb.texture = HouseStyle.svg_icon(TIP_BULB_SVG)
+	bulb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bulb.custom_minimum_size = Vector2(24, 24)
+	bulb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	bulb.modulate = HouseStyle.GOLD
+	row.add_child(bulb)
+	var words := VBoxContainer.new()
+	words.add_theme_constant_override("separation", 2)
+	words.add_child(HouseStyle.label("AT THE TABLE", HouseStyle.EYEBROW))
+	words.add_child(HouseStyle.label(TIPS[randi() % TIPS.size()], HouseStyle.BODY))
+	row.add_child(words)
+	card.add_child(row)
+	return card
 
 
 ## Full mode: the line at the foot of the sheet, the menu's own (fan project, version, rules).
@@ -254,6 +300,8 @@ func set_title(text: String) -> void:
 	if _title != null:
 		_title.text = text
 		_title.visible = not text.is_empty()
+	if _tip_card != null:
+		_tip_card.visible = not text.is_empty() and tip_fits(get_viewport().get_visible_rect().size.y)
 
 
 ## Full mode: the line under the title (the game system and the table size); an empty text hides it.
